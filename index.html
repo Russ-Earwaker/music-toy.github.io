@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Music Toy</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#111" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="./assets/icons/icon-192.png" />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header>
+    <h1>Music Toy</h1>
+    <div class="controls">
+      <label>BPM <input id="bpm" type="number" min="40" max="240" step="1" value="120" /></label>
+      <button id="play">Play</button>
+      <button id="stop">Stop</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="grid"></section>
+    <canvas id="bouncer" width="600" height="240" aria-label="Bouncing synth"></canvas>
+  </main>
+
+  <!-- Required for mobile: user gesture to start audio -->
+  <div id="unlock">
+    <div>
+      <p>Tap to start audio</p>
+      <button id="unlock-btn">Start</button>
+    </div>
+  </div>
+
+  <script src="./app.js" type="module" defer></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./service-worker.js');
+    }
+  </script>
+</body>
+</html>
