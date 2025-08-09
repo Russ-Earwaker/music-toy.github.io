@@ -1,3 +1,4 @@
+<!-- index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -19,24 +20,45 @@
     </div>
   </header>
 
-  <main>
-    <section id="grid"></section>
-    <canvas id="bouncer" width="600" height="240" aria-label="Bouncing synth"></canvas>
-  </main>
+<main>
+  <div id="board">
+    <div class="toy-panel" id="toy-grid" data-toy="grid" style="left:20px; top:20px; width:760px;">
+      <div class="toy-header">Grid Sequencer</div>
+      <div class="toy-body">
+        <section id="grid"></section>
+      </div>
+    </div>
 
-  <!-- Required for mobile: user gesture to start audio -->
-  <div id="unlock">
-    <div>
-      <p>Tap to start audio</p>
-      <button id="unlock-btn">Start</button>
+    <div class="toy-panel" id="toy-b1" data-toy="bouncer" style="left:20px; top:260px; width:400px; height:400px;">
+      <div class="toy-header">Bouncer</div>
+      <div class="toy-body"><canvas class="bouncer-canvas"></canvas></div>
+    </div>
+
+    <div class="toy-panel" id="toy-b2" data-toy="bouncer" style="left:440px; top:260px; width:400px; height:400px;">
+      <div class="toy-header">Bouncer</div>
+      <div class="toy-body"><canvas class="bouncer-canvas"></canvas></div>
+    </div>
+
+    <div class="toy-panel" id="toy-b3" data-toy="bouncer" style="left:860px; top:260px; width:400px; height:400px;">
+      <div class="toy-header">Bouncer</div>
+      <div class="toy-body"><canvas class="bouncer-canvas"></canvas></div>
     </div>
   </div>
+</main>
 
-  <script src="./app.js" type="module" defer></script>
-  <script>
-    if ('serviceWorker' in navigator) {
+
+
+
+  <script type="module" src="./src/main.js" defer></script>
+<!-- index.html -->
+<script>
+  if ('serviceWorker' in navigator) {
+    // Only register in production (https + not localhost)
+    if (location.protocol === 'https:' && location.hostname !== 'localhost') {
       navigator.serviceWorker.register('./service-worker.js');
     }
-  </script>
+  }
+</script>
+
 </body>
 </html>
