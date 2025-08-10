@@ -1,59 +1,180 @@
-// src/audio.js
-import { noteToFreq, freqRatio } from './utils.js';
-
+// src/audio.js (consolidated: CSV loader + legacy tones)
 export const DEFAULT_BPM = 120;
 export const NUM_STEPS = 8;
 export const BEATS_PER_BAR = 4;
 
-export const TOYS = [
-  { name: 'Kick',  url: './assets/samples/RP4_KICK_1.mp3' },
-  { name: 'Snare', url: './assets/samples/Brk_Snr.mp3' },
-  { name: 'Hat',   url: './assets/samples/Cev_H2.mp3' },
-  { name: 'Clap',  url: './assets/samples/Heater-6.mp3' }
-];
-
 export let ac;
-export let buffers = {};         // sampleName -> AudioBuffer
 export let bpm = DEFAULT_BPM;
 
-let currentStep = 0;
-let nextNoteTime = 0;
-let loopStartTime = 0;
-
-const scheduleAheadTime = 0.12;
-const lookahead = 25; // ms
-
-export function setBpm(val){ bpm = val; }
+// ---------- Time helpers ----------
+export function setBpm(v){ bpm = v; }
 export function beatSeconds(){ return 60 / bpm; }
 export function barSeconds(){ return beatSeconds() * BEATS_PER_BAR; }
 export function stepSeconds(){ return barSeconds() / NUM_STEPS; }
 
-async function loadSample(url){
-  const res = await fetch(url);
-  const ab = await res.arrayBuffer();
-  return new Promise((ok, err) => ac.decodeAudioData(ab, ok, err));
-}
-export async function loadBuffers(){
-  for (const t of TOYS) buffers[t.name] = await loadSample(t.url);
-}
-
+// ---------- AudioContext ----------
 export function ensureAudioContext(){
-  const Ctx = window.AudioContext || window.webkitAudioContext;
-  if (!ac) ac = new Ctx({ latencyHint: 'interactive' });
+  const C = window.AudioContext || window.webkitAudioContext;
+  if (!ac) ac = new C({ latencyHint: 'interactive' });
   return ac;
 }
 
-export function playSampleAt(buffer, when, rate=1){
-  const src = ac.createBufferSource();
-  src.buffer = buffer;
-  src.playbackRate.value = rate; // TODO: replace with time-preserving pitch engine
-  src.connect(ac.destination);
-  src.start(when);
+// ---------- Note helpers ----------
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+export function noteToFreq(note='C4'){
+  const m = /^([A-G]#?)(-?\d)$/.exec(String(note).trim());
+  if (!m){ return 440; }
+  const [_, n, o] = m;
+  const idx = NOTE_NAMES.indexOf(n);
+  const midi = (Number(o) + 1) * 12 + idx;
+  return 440 * Math.pow(2, (midi - 69)/12);
+}
+export function freqRatio(fromNote='C4', toNote='C4'){
+  const f1 = noteToFreq(fromNote);
+  const f2 = noteToFreq(toNote);
+  return f2 / f1;
 }
 
-// --- Additional global synth voices ---
-function envGain(ac, startTime, points){
-  const g = ac.createGain();
+// ---------- CSV-backed instruments ----------
+const FALLBACK_SAMPLES = [
+  { name: 'RP4 Kick',      url: './assets/samples/RP4_KICK_1.mp3' },
+  { name: 'Break Snare',   url: './assets/samples/Brk_Snr.mp3' },
+  { name: 'Hi-Hat Closed', url: './assets/samples/Cev_H2.mp3' },
+  { name: 'Clap Heater',   url: './assets/samples/Heater-6.mp3' },
+];
+
+let entries = new Map(); // name -> { url? , synth? }
+let buffers = new Map(); // name -> AudioBuffer
+let csvOk = false;
+
+function dispatchReady(src){
+  const names = getInstrumentNames();
+  window.dispatchEvent(new CustomEvent('samples-ready', { detail: { ok: csvOk, names, src } }));
+}
+
+function dirname(url){
+  const i = url.lastIndexOf('/');
+  return i === -1 ? '' : url.slice(0, i);
+}
+
+function parseCsvSmart(text, csvUrl){
+  const lines = text.trim().split(/[\r\n]+/).filter(Boolean);
+  if (!lines.length) throw new Error('CSV empty');
+  const headRaw = lines[0];
+  const head = headRaw.split(',').map(s => s.trim().toLowerCase());
+
+  // Schema A: name,url
+  if (head.includes('name') && head.includes('url')){
+    const rest = lines.slice(1);
+    const out = [];
+    for (const line of rest){
+      if (!line || line.startsWith('#')) continue;
+      const parts = line.split(',');
+      const name = (parts.shift() || '').trim();
+      const url  = parts.join(',').trim();
+      if (name && url) out.push({ name, url });
+    }
+    if (!out.length) throw new Error('CSV had no valid rows (name,url)');
+    return out;
+  }
+
+  // Schema B: filename,*,*,*,display_name,synth_id
+  const fnIdx = head.indexOf('filename');
+  const dnIdx = head.indexOf('display_name');
+  const siIdx = head.indexOf('synth_id');
+  if (fnIdx !== -1 && dnIdx !== -1){
+    const base = dirname(csvUrl);
+    const rest = lines.slice(1);
+    const out = [];
+    for (const line of rest){
+      if (!line || line.startsWith('#')) continue;
+      const cols = line.split(',');
+      const filename = (cols[fnIdx] || '').trim();
+      const display  = (cols[dnIdx] || '').trim() || filename;
+      const synth    = siIdx !== -1 ? (cols[siIdx] || '').trim() : '';
+      if (synth && !filename){
+        out.push({ name: display, synth });
+      } else if (filename){
+        const url = (base ? (base + '/') : './') + filename;
+        out.push({ name: display || filename, url });
+      }
+    }
+    if (!out.length) throw new Error('CSV had no valid rows (filename/display_name/synth_id)');
+    return out;
+  }
+
+  throw new Error('Unrecognized CSV headers');
+}
+
+async function fetchCsvList(csvUrl){
+  const res = await fetch(csvUrl, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`CSV fetch failed: ${res.status}`);
+  const text = await res.text();
+  return parseCsvSmart(text, csvUrl);
+}
+async function loadSample(url){
+  const res = await fetch(url);
+  const ab = await res.arrayBuffer();
+  return new Promise((ok, err)=> ensureAudioContext().decodeAudioData(ab, ok, err));
+}
+async function loadFromList(list){
+  buffers.clear();
+  entries.clear();
+  for (const it of list){
+    entries.set(it.name, { url: it.url, synth: it.synth });
+    if (it.url){
+      try{
+        const b = await loadSample(it.url);
+        buffers.set(it.name, b);
+      }catch(e){
+        console.warn('[audio] decode failed', it, e);
+      }
+    }
+  }
+}
+
+async function tryCsvPaths(paths){
+  for (const p of paths){
+    try{
+      const list = await fetchCsvList(p);
+      await loadFromList(list);
+      if (entries.size > 0){
+        csvOk = true;
+        dispatchReady(p);
+        return true;
+      }
+    }catch(e){
+      console.warn('[audio] CSV try failed', p, e.message || e);
+    }
+  }
+  return false;
+}
+
+export async function initAudioAssets(csvUrl){
+  ensureAudioContext();
+  csvOk = false;
+  entries.clear();
+  buffers.clear();
+
+  const candidates = csvUrl
+    ? [csvUrl]
+    : ['./instruments.csv','./samples.csv','./samples/samples.csv','./assets/samples/samples.csv'];
+
+  const ok = await tryCsvPaths(candidates);
+  if (!ok){
+    await loadFromList(FALLBACK_SAMPLES).catch(()=>{});
+    csvOk = false;
+    dispatchReady('fallback');
+  }
+}
+
+export function getInstrumentNames(){
+  return ['tone', ...entries.keys()];
+}
+
+// ---------- Legacy tone engine ----------
+function envGain(acx, startTime, points){
+  const g = acx.createGain();
   const p0 = points[0];
   g.gain.setValueAtTime(p0.v, startTime + p0.t);
   for (let i=1;i<points.length;i++){
@@ -66,7 +187,6 @@ function envGain(ac, startTime, points){
 function playKeypadAt(freq, when){
   const t0 = when;
   const acx = ac;
-  // base sine + triangle + high overtone ping
   const osc1 = acx.createOscillator(); osc1.type='sine';    osc1.frequency.value=freq;
   const osc2 = acx.createOscillator(); osc2.type='triangle';osc2.frequency.value=freq*2;
   const ping = acx.createOscillator(); ping.type='sine';    ping.frequency.value=freq*3.2;
@@ -90,7 +210,6 @@ function playKeypadAt(freq, when){
 function playPopAt(freq, when){
   const t0 = when;
   const acx = ac;
-  // simple noise burst through bandpass
   const noise = acx.createBufferSource();
   const len = Math.max(1, Math.floor(acx.sampleRate * 0.25));
   const buffer = acx.createBuffer(1, len, acx.sampleRate);
@@ -136,7 +255,6 @@ function playRetroAt(freq, when, wave){
     {t:0.01, v:0.22},
     {t:0.18, v:0.0008},
   ]);
-  // light high-cut to smooth aliasing a touch
   const lp = acx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value = Math.min(12000, freq*6);
   osc.connect(lp).connect(g).connect(acx.destination);
   osc.start(t0); osc.stop(t0+0.25);
@@ -218,6 +336,7 @@ function playDropletAt(freq, when){
   osc.start(t0); osc.stop(t0+0.26);
 }
 
+// Simple sine "tone" used elsewhere
 export function playToneAt(freq, when){
   const o = ac.createOscillator();
   const g = ac.createGain();
@@ -229,18 +348,21 @@ export function playToneAt(freq, when){
   o.start(when); o.stop(when + 0.26);
 }
 
-export function getLoopInfo(){ return { loopStartTime, barLen: barSeconds() }; }
+// ---------- Scheduler ----------
+let currentStep = 0;
+let nextNoteTime = 0;
+let loopStartTime = 0;
+const scheduleAheadTime = 0.12;
+const lookahead = 25; // ms
 
 export function createScheduler(scheduleCallback, onLoop){
   let timer = null;
 
   function tick(){
-    while (nextNoteTime < ac.currentTime + scheduleAheadTime){
+    while (nextNoteTime < ensureAudioContext().currentTime + scheduleAheadTime){
       scheduleCallback(currentStep, nextNoteTime);
-
       nextNoteTime += stepSeconds();
       currentStep = (currentStep + 1) % NUM_STEPS;
-
       if (currentStep === 0){
         loopStartTime = nextNoteTime;
         onLoop && onLoop(loopStartTime);
@@ -250,17 +372,15 @@ export function createScheduler(scheduleCallback, onLoop){
 
   return {
     async start(){
-      ensureAudioContext();
-      if (ac.state === 'suspended') await ac.resume();
+      const ctx = ensureAudioContext();
+      if (ctx.state === 'suspended') await ctx.resume();
 
-      // tiny blip (iOS unlock), non-blocking
-      const g = ac.createGain(); g.gain.value = 0.0001; g.connect(ac.destination);
-      const o = ac.createOscillator(); o.connect(g);
-      const t = ac.currentTime + 0.01; o.start(t); o.stop(t+0.02);
+      // iOS unlock blip
+      const g = ctx.createGain(); g.gain.value = 0.0001; g.connect(ctx.destination);
+      const o = ctx.createOscillator(); o.connect(g);
+      const t = ctx.currentTime + 0.01; o.start(t); o.stop(t+0.02);
 
-      if (!Object.keys(buffers).length) { loadBuffers().catch(()=>{}); }
-
-      nextNoteTime = loopStartTime = ac.currentTime + 0.05;
+      nextNoteTime = loopStartTime = ctx.currentTime + 0.05;
       currentStep = 0;
       timer = setInterval(tick, lookahead);
     },
@@ -272,36 +392,44 @@ export function createScheduler(scheduleCallback, onLoop){
   };
 }
 
-// instrument helper used by scheduler and bouncer
-export function triggerInstrument(instrument, noteName, when){
-  const freq = noteToFreq(noteName);
-  if (instrument === 'tone') {
-    playToneAt(freq, when);
-  } else if (instrument === 'keypad' || instrument === 'chime') {
-    playKeypadAt(freq, when);
-  } else if (instrument === 'pop' || instrument === 'pluck') {
-    playPopAt(freq, when);
-  } else if (instrument === 'pad') {
-    playPadAt(freq, when);
-  } else if (instrument === 'retro-square') {
-    playRetroAt(freq, when, 'square');
-  } else if (instrument === 'retro-saw') {
-    playRetroAt(freq, when, 'sawtooth');
-  } else if (instrument === 'retro-tri') {
-    playRetroAt(freq, when, 'triangle');
-  } else if (instrument === 'laser') {
-    playLaserAt(freq, when);
-  } else if (instrument === 'windy') {
-    playWindyAt(freq, when);
-  } else if (instrument === 'alien') {
-    playAlienAt(freq, when);
-  } else if (instrument === 'organish') {
-    playOrganishAt(freq, when);
-  } else if (instrument === 'droplet') {
-    playDropletAt(freq, when);
-  } else {
-    const buf = buffers[instrument];
-    if (buf) playSampleAt(buf, when, freqRatio('C4', noteName)); // base C4
-  }
+export function getLoopInfo(){ return { loopStartTime, barLen: barSeconds() }; }
+
+// ---------- Dispatcher ----------
+function playSampleAt(name, when, rate=1){
+  const ctx = ensureAudioContext();
+  const buf = buffers.get(name);
+  if (!buf) return;
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.playbackRate.value = rate;
+  src.connect(ctx.destination);
+  src.start(when);
 }
 
+export function triggerInstrument(instrument, noteName, when){
+  const freq = noteToFreq(noteName);
+  if (instrument === 'tone'){ playToneAt(freq, when); return; }
+
+  // Lookup CSV entry (if any)
+  const e = entries.get(instrument);
+  const id = (e && e.synth) ? e.synth.toLowerCase() : (instrument||'').toLowerCase();
+
+  // Map to legacy tone functions (by synth_id or display_name)
+  if (id.includes('keypad') || id.includes('chime')) { playKeypadAt(freq, when); return; }
+  if (id.includes('pop')   || id.includes('pluck')) { playPopAt(freq, when); return; }
+  if (id.includes('pad')) { playPadAt(freq, when); return; }
+  if (id.includes('retro-square')) { playRetroAt(freq, when, 'square'); return; }
+  if (id.includes('retro-saw'))    { playRetroAt(freq, when, 'sawtooth'); return; }
+  if (id.includes('retro-tri') || id.includes('retro-triangle')) { playRetroAt(freq, when, 'triangle'); return; }
+  if (id.includes('laser')) { playLaserAt(freq, when); return; }
+  if (id.includes('wind') || id.includes('windy')) { playWindyAt(freq, when); return; }
+  if (id.includes('alien')) { playAlienAt(freq, when); return; }
+  if (id.includes('organ')) { playOrganishAt(freq, when); return; }
+  if (id.includes('drop'))  { playDropletAt(freq, when); return; }
+
+  // Sample-based?
+  if (buffers.has(instrument)){ playSampleAt(instrument, when, freqRatio('C4', noteName)); return; }
+
+  // Fallback
+  playToneAt(freq, when);
+}

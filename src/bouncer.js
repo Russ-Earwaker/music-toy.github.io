@@ -1,84 +1,80 @@
-// src/bouncer.js
+// src/bouncer.js (unified cubes + cannon handle + toyui header)
 import { resizeCanvasForDPR, getCanvasPos, noteList, clamp } from './utils.js';
 import { ensureAudioContext, triggerInstrument, getLoopInfo } from './audio.js';
-import { NOTE_BTN_H, EDGE_PAD, randomizeRects, clampRectWithin, drawNoteStripsAndLabel, hitRect, hitTopStrip, hitBottomStrip, findTopmostHit } from './toyhelpers.js';
-import { initToyUI, DEFAULT_INSTRUMENTS } from './toyui.js';
+import { initToyUI } from './toyui.js';
+import { drawBlock, drawNoteStripsAndLabel, NOTE_BTN_H } from './toyhelpers.js';
 
-const INSTRUMENTS = DEFAULT_INSTRUMENTS;
 const BLOCK_SIZE = 48;
+const EDGE_PAD   = 6;
+const CANNON_R   = 12;
 const LONG_PRESS_MS = 600;
-const TAP_PX = 6;
-const TAP_MS = 300;
+const MAX_BLOCKS = 5;
 
-export function createBouncer(target) {
-  // target: selector or .toy-panel element that contains .toy-header and .bouncer-canvas
+export function createBouncer(target){
   const shell  = (typeof target === 'string') ? document.querySelector(target) : target;
-  const canvas = shell.querySelector('canvas.bouncer-canvas');
+  const canvas = shell.querySelector('canvas.bouncer-canvas') || shell.querySelector('canvas') || (()=>{
+    const c = document.createElement('canvas'); c.className='bouncer-canvas'; c.style.width='100%'; c.style.height='328px'; shell.appendChild(c); return c;
+  })();
   const ctx    = canvas.getContext('2d');
 
-  // ---------------- Header UI via toyui ----------------
+  // UI header
   const ui = initToyUI(shell, {
-    instrumentOptions: INSTRUMENTS,
-    defaultInstrument: 'tone',
-    addText: 'Add Cube',
-    delText: 'Delete Cube',
-    hintAdd: 'Tap inside to place a cube',
-    hintDelete: 'Tap a cube to delete it'
+    addText: 'Add Node',
+    hintAdd: 'Tap to place a cube',
+    hintDelete: 'Tap cubes to delete',
+    showAdd: true,
+    showDelete: true,
+    deleteMode: 'until-empty',
+    getDeletableCount: () => blocks.length
   });
-  let instrument = ui.instrument;
-  // Tool mode handled by toyui
 
-  // ---------------- Blocks ----------------
+  console.log('[bouncer] init, tool=', ui.tool);
+
+  // Blocks
   let blocks = [
-    { x:  96, y:  96, w: BLOCK_SIZE, h: BLOCK_SIZE, noteIndex: noteList.indexOf('C4') },
-    { x: 192, y:  32, w: BLOCK_SIZE, h: BLOCK_SIZE, noteIndex: noteList.indexOf('E4') },
-    { x: 320, y: 128, w: BLOCK_SIZE, h: BLOCK_SIZE, noteIndex: noteList.indexOf('G4') },
-    { x: 416, y:  80, w: BLOCK_SIZE, h: BLOCK_SIZE, noteIndex: noteList.indexOf('B4') }
+    { x:  96, y:  96, w: BLOCK_SIZE, h: BLOCK_SIZE, noteIndex: noteList.indexOf('C4'), activeFlash:0 },
+    { x: 192, y:  32, w: BLOCK_SIZE, h: BLOCK_SIZE, noteIndex: noteList.indexOf('E4'), activeFlash:0 },
+    { x: 320, y: 128, w: BLOCK_SIZE, h: BLOCK_SIZE, noteIndex: noteList.indexOf('G4'), activeFlash:0 },
+    { x: 416, y:  80, w: BLOCK_SIZE, h: BLOCK_SIZE, noteIndex: noteList.indexOf('B4'), activeFlash:0 }
   ];
+
   const noteName = (i)=> noteList[clamp(i,0,noteList.length-1)];
 
-  // ---------------- Ball + timing (anti-desync) ----------------
-  let ball = null;                     // {x,y,vx,vy,r}
-  let startPos = { x: 60, y: 60 };     // “armed” spawn point for reset
-  let lastLaunch = null;               // {x,y,vx,vy,offset}
-  let nextLaunchAt = null;             // ac.currentTime at which to re-spawn
-  let armed = false;
+  // Ball + cannon
+  let ball = null; // {x,y,vx,vy,r}
+  let cannon = { x: 60, y: 60, r: CANNON_R };
+  let lastLaunch = null;
+  let nextLaunchAt = null;
 
   const spawnBall = (x,y,vx,vy)=> { ball = { x, y, vx, vy, r: 10 }; };
   const stopBall  = ()=> { ball = null; };
 
-  // ---------------- Size & DPR ----------------
   function ensureSized(){
     if (!canvas._vw || !canvas._vh) resizeCanvasForDPR(canvas, ctx);
   }
   const doResize = ()=> resizeCanvasForDPR(canvas, ctx);
-  requestAnimationFrame(() => { // allow CSS layout to apply
-    doResize();
-    if (blocks.length) randomizeRects(blocks, canvas); // scatter if any blocks exist
-  });
+  requestAnimationFrame(() => { doResize(); randomizeBlocks(); });
   window.addEventListener('resize', doResize);
 
-  // ---------------- Helpers ----------------
-    const hitBlock = (p)=> findTopmostHit(p, blocks);
-
-  function addBlockAt(x,y,idx = Math.floor(Math.random()*noteList.length)){
-    ensureSized();
+  function randomizeBlocks(){
     const vw = canvas._vw ?? canvas.width, vh = canvas._vh ?? canvas.height;
-    const b = { x: x - BLOCK_SIZE/2, y: y - BLOCK_SIZE/2, w: BLOCK_SIZE, h: BLOCK_SIZE, noteIndex: clamp(idx,0,noteList.length-1) };
-    clampRectWithin(canvas, b, EDGE_PAD);
-    blocks.push(b);
+    blocks.forEach(b=>{
+      b.x = Math.floor(Math.random()*(vw - 2*EDGE_PAD - b.w)) + EDGE_PAD;
+      b.y = Math.floor(Math.random()*(vh - 2*EDGE_PAD - b.h)) + EDGE_PAD;
+    });
   }
-  function deleteBlock(b){ blocks = blocks.filter(x => x !== b); }
 
-  // ---------------- Pointer input ----------------
+  // Hit helpers
+  const hitBlock = (p)=> blocks.slice().reverse().find(b => p.x>=b.x && p.x<=b.x+b.w && p.y>=b.y && p.y<=b.y+b.h);
+  const hitCannon = (p)=> ((p.x-cannon.x)**2 + (p.y-cannon.y)**2) <= (cannon.r*cannon.r);
+
+  // Input
   let aiming = false, aimStart={x:0,y:0}, aimCurrent={x:0,y:0};
   let draggingBlock = null, dragOff={x:0,y:0}, movedDuringDrag=false;
-
-  // touch-friendly long-press delete while in aim mode
+  let draggingCannon = false, cannonOff={x:0,y:0};
   let longPressTimer = null, longPressVictim = null;
   function clearLongPress(){ if (longPressTimer){ clearTimeout(longPressTimer); longPressTimer=null; } longPressVictim=null; }
 
-  // prevent OS context menu (we’ve removed right-click delete anyway)
   canvas.addEventListener('contextmenu', (e)=> e.preventDefault());
 
   canvas.addEventListener('pointerdown', (e) => {
@@ -87,48 +83,51 @@ export function createBouncer(target) {
     const p = getCanvasPos(canvas, e);
     const b = hitBlock(p);
     movedDuringDrag = false;
-    
-    // ADD tool: place once then exit tool
+
     if (ui.tool === 'add') {
-      addBlockAt(p.x, p.y);
-      ui.toast('Cube added');
-      ui.setTool('aim');
+      const bx = clamp(p.x - BLOCK_SIZE/2, EDGE_PAD, (canvas._vw ?? canvas.width) - EDGE_PAD - BLOCK_SIZE);
+      const by = clamp(p.y - BLOCK_SIZE/2, EDGE_PAD, (canvas._vh ?? canvas.height) - EDGE_PAD - BLOCK_SIZE);
+      if (blocks.length < MAX_BLOCKS) {
+        blocks.push({ x: bx, y: by, w: BLOCK_SIZE, h: BLOCK_SIZE, noteIndex: noteList.indexOf('C4'), activeFlash:0 });
+        ui.toast?.('Node added');
+      }
+      if (blocks.length >= MAX_BLOCKS) { ui.setAddEnabled?.(false); ui.setTool('aim'); }
       return;
     }
-
-    // DELETE tool: tap a cube to delete, then exit tool
     if (ui.tool === 'delete') {
-      if (b) { deleteBlock(b); ui.toast('Cube deleted'); }
-      ui.setTool('aim');
+      if (b){ blocks = blocks.filter(x => x!==b); ui.toast?.('Deleted'); }
+      if (blocks.length < MAX_BLOCKS) { ui.setAddEnabled?.(true); }
+      if (typeof ui.onDeleted === 'function') ui.onDeleted();
       return;
     }
 
-    // AIM tool
+    if (hitCannon(p)){
+      draggingCannon = true;
+      cannonOff.x = p.x - cannon.x; cannonOff.y = p.y - cannon.y;
+      return;
+    }
+
     if (b) {
-      // Grid-like note change via top/bottom strip
-            if (hitTopStrip(p, b)) { b.noteIndex = clamp(b.noteIndex + 1, 0, noteList.length-1); return; }
-      if (hitBottomStrip(p, b)) { b.noteIndex = clamp(b.noteIndex - 1, 0, noteList.length-1); return; }
-
-      // Otherwise start dragging
+      const localY = p.y - b.y;
+      if (localY <= NOTE_BTN_H) { b.noteIndex = clamp(b.noteIndex + 1, 0, noteList.length-1); return; }
+      if (localY >= b.h - NOTE_BTN_H) { b.noteIndex = clamp(b.noteIndex - 1, 0, noteList.length-1); return; }
       draggingBlock = b;
-      dragOff.x = p.x - b.x;
-      dragOff.y = p.y - b.y;
-
-      // long-press delete (if user holds still)
+      dragOff.x = p.x - b.x; dragOff.y = p.y - b.y;
       longPressVictim = b;
       clearLongPress();
       longPressTimer = setTimeout(()=>{
         if (longPressVictim === b && !movedDuringDrag){
-          deleteBlock(b);
+          blocks = blocks.filter(x => x!==b);
           draggingBlock = null;
-          ui.toast('Cube deleted');
+          ui.toast?.('Deleted');
+          if (blocks.length < MAX_BLOCKS) { ui.setAddEnabled?.(true); }
         }
         clearLongPress();
       }, LONG_PRESS_MS);
       return;
     }
 
-    // Not on a block → aim shot
+    // Aim shot
     aiming = true;
     aimStart   = { x: p.x, y: p.y };
     aimCurrent = { x: p.x, y: p.y };
@@ -136,11 +135,17 @@ export function createBouncer(target) {
 
   canvas.addEventListener('pointermove', (e) => {
     const p = getCanvasPos(canvas, e);
+    if (draggingCannon){
+      const vw = canvas._vw ?? canvas.width, vh = canvas._vh ?? canvas.height;
+      cannon.x = clamp(p.x - cannonOff.x, EDGE_PAD + CANNON_R, vw - EDGE_PAD - CANNON_R);
+      cannon.y = clamp(p.y - cannonOff.y, EDGE_PAD + CANNON_R, vh - EDGE_PAD - CANNON_R);
+      return;
+    }
     if (draggingBlock) {
       movedDuringDrag = true;
       const vw = canvas._vw ?? canvas.width, vh = canvas._vh ?? canvas.height;
-      draggingBlock.x = p.x - dragOff.x; draggingBlock.y = p.y - dragOff.y;
-      clampRectWithin(canvas, draggingBlock, EDGE_PAD);
+      draggingBlock.x = clamp(p.x - dragOff.x, EDGE_PAD, vw - EDGE_PAD - draggingBlock.w);
+      draggingBlock.y = clamp(p.y - dragOff.y, EDGE_PAD, vh - EDGE_PAD - draggingBlock.h);
       return;
     }
     if (aiming) { aimCurrent = { x: p.x, y: p.y }; }
@@ -148,61 +153,33 @@ export function createBouncer(target) {
 
   canvas.addEventListener('pointerup', (e) => {
     canvas.releasePointerCapture?.(e.pointerId);
-    // ensure one-shot tool resets even if earlier return paths missed
-    if (ui && (ui.tool === 'add' || ui.tool === 'delete')) { ui.setTool('aim'); } /*__AIM_RESET__*/
     clearLongPress();
     const p = getCanvasPos(canvas, e);
 
+    if (draggingCannon){ draggingCannon=false; return; }
     if (draggingBlock) { draggingBlock = null; return; }
     if (!aiming) return;
     aiming = false;
 
-    // Fire the ball
+    // Fire
     const vx = (p.x - aimStart.x) / 10;
     const vy = (p.y - aimStart.y) / 10;
     spawnBall(aimStart.x, aimStart.y, vx, vy);
-    armed = true;
 
-    // Record launch offset for repeat
+    // Sync with loop
     const { loopStartTime, barLen } = getLoopInfo();
     const audio = ensureAudioContext();
     const offset = ((audio.currentTime - loopStartTime) % barLen + barLen) % barLen;
     lastLaunch = { x: aimStart.x, y: aimStart.y, vx, vy, offset };
-    startPos   = { x: aimStart.x, y: aimStart.y };
-
-    // schedule next (exact audio time; no setTimeout drift)
     nextLaunchAt = loopStartTime + barLen + offset;
   });
-function reset(){
-  // kill any active ball
-  stopBall();                 // sets ball = null
 
-  // clear launch scheduling
-  armed = false;
-  lastLaunch   = null;
-  nextLaunchAt = null;
+  function onLoop(loopStartTime){
+    if (!lastLaunch) return;
+    const { barLen } = getLoopInfo();
+    nextLaunchAt = loopStartTime + lastLaunch.offset;
+  }
 
-  // clear any aim/drag in progress
-  aiming        = false;
-  aimStart      = null;
-  aimCurrent    = null;
-  draggingBlock = null;
-  dragOff       = null;
-
-  // (optional) visually re-arm at the spawn point next draw
-  // startPos is your default launch point; if you want a dot again:
-  // aimStart = { ...startPos }; aimCurrent = { ...startPos }; aiming = false;
-
-  draw?.();
-}
-
-function onLoop(loopStartTime){
-  if (!armed || !lastLaunch) return;        // don’t respawn if we were reset
-  const { barLen } = getLoopInfo();
-  nextLaunchAt = loopStartTime + lastLaunch.offset;
-}
-
-  // ---------------- Physics ----------------
   function bounceOffRect(b, c) {
     const prevX = c.x - c.vx;
     const prevY = c.y - c.vy;
@@ -218,46 +195,15 @@ function onLoop(loopStartTime){
     } else {
       c.vy *= -1;
     }
-    const vw = canvas._vw ?? canvas.width, vh = canvas._vh ?? canvas.height;
-    c.x = clamp(c.x, c.r, vw - c.r);
-    c.y = clamp(c.y, c.r, vh - c.r);
   }
 
-  // ---------------- Render loop (and anti-desync relaunch) ----------------
-  function draw() {
+  function draw(){
+    ensureSized();
     const vw = canvas._vw ?? canvas.width;
     const vh = canvas._vh ?? canvas.height;
     ctx.clearRect(0, 0, vw, vh);
 
-    // Draw cubes with ▲ / ▼ zones + note label
-    blocks.forEach(b => {
-      // body
-      ctx.fillStyle = '#ff8c00';
-      ctx.fillRect(b.x, b.y, b.w, b.h);
-
-      // draw note strips and label
-      drawNoteStripsAndLabel(ctx, b, noteName(b.noteIndex));
-
-      // top ▲ zone (hit area preserved)
-      ctx.fillStyle = 'rgba(0,0,0,.25)';
-      ctx.fillRect(b.x, b.y, b.w, NOTE_BTN_H);
-      ctx.fillStyle = '#fff';
-      ctx.font = '12px system-ui, sans-serif';
-      ctx.fillText('▲', b.x + b.w - 14, b.y + 11);
-
-      // bottom ▼ zone
-      ctx.fillStyle = 'rgba(0,0,0,.25)';
-      ctx.fillRect(b.x, b.y + b.h - NOTE_BTN_H, b.w, NOTE_BTN_H);
-      ctx.fillStyle = '#fff';
-      ctx.fillText('▼', b.x + b.w - 14, b.y + b.h - 4);
-
-      // note label
-      ctx.fillStyle = '#000';
-      ctx.font = '12px system-ui, sans-serif';
-      ctx.fillText(noteName(b.noteIndex), b.x + 6, b.y + 16);
-    });
-
-    // aiming guide
+    // Aiming
     if (aiming) {
       ctx.strokeStyle = 'lime';
       ctx.beginPath();
@@ -266,26 +212,21 @@ function onLoop(loopStartTime){
       ctx.stroke();
     }
 
-    // exact-time relaunch from audio clock
-    if (armed && nextLaunchAt != null) {
+    // Relaunch
+    if (nextLaunchAt != null) {
       const audio = ensureAudioContext();
       if (audio.currentTime >= nextLaunchAt) {
-        const { x, y, vx, vy } = lastLaunch || { x: startPos.x, y: startPos.y, vx: 0, vy: 0 };
+        const { x, y, vx, vy } = lastLaunch || { x: cannon.x, y: cannon.y, vx: 0, vy: 0 };
         spawnBall(x, y, vx, vy);
-        nextLaunchAt = null; // will be reset on next loop boundary
+        nextLaunchAt = null;
       }
     }
 
-    // ball physics + sound hits
+    // Physics + hits
     if (ball) {
       ball.x += ball.vx; ball.y += ball.vy;
-
-      if (ball.x - ball.r < EDGE_PAD || ball.x + ball.r > (vw - EDGE_PAD)) {
-        ball.vx *= -1; ball.x = clamp(ball.x, ball.r + EDGE_PAD, vw - EDGE_PAD - ball.r);
-      }
-      if (ball.y - ball.r < EDGE_PAD || ball.y + ball.r > (vh - EDGE_PAD)) {
-        ball.vy *= -1; ball.y = clamp(ball.y, ball.r + EDGE_PAD, vh - EDGE_PAD - ball.r);
-      }
+      if (ball.x - ball.r < EDGE_PAD || ball.x + ball.r > (vw - EDGE_PAD)) { ball.vx *= -1; }
+      if (ball.y - ball.r < EDGE_PAD || ball.y + ball.r > (vh - EDGE_PAD)) { ball.vy *= -1; }
 
       blocks.forEach(b=>{
         const hit = (ball.x + ball.r > b.x && ball.x - ball.r < b.x + b.w &&
@@ -293,6 +234,7 @@ function onLoop(loopStartTime){
         if (hit){
           bounceOffRect(b, ball);
           triggerInstrument(ui.instrument, noteName(b.noteIndex), ensureAudioContext().currentTime);
+          b.activeFlash = 1.0;
         }
       });
 
@@ -301,16 +243,50 @@ function onLoop(loopStartTime){
       ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2);
       ctx.fill();
     } else {
-      // show “armed” dot
+      // armed dot at cannon
       ctx.fillStyle = '#777';
       ctx.beginPath();
-      ctx.arc(startPos.x, startPos.y, 4, 0, Math.PI*2);
+      ctx.arc(cannon.x, cannon.y, 4, 0, Math.PI*2);
       ctx.fill();
     }
+
+    // Draw blocks unified
+    blocks.forEach(b => {
+      drawBlock(ctx, b, { baseColor: '#ff8c00', active: b.activeFlash>0 });
+      drawNoteStripsAndLabel(ctx, b, '');
+      // centered label only
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const ts = Math.floor(Math.min(b.w, b.h) * 0.44);
+      ctx.font = `${ts}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto`;
+      ctx.fillStyle = b.activeFlash>0 ? '#000000' : '#ffffff';
+      ctx.fillText(noteName(b.noteIndex), b.x + b.w/2, b.y + b.h/2 + 0.5);
+      ctx.restore();
+      if (b.activeFlash>0) b.activeFlash = Math.max(0, b.activeFlash - 0.06);
+    });
+
+    // Draw cannon handle
+    ctx.fillStyle = '#22c55e';
+    ctx.beginPath();
+    ctx.arc(cannon.x, cannon.y, CANNON_R, 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = '#14532d';
+    ctx.lineWidth = 2;
+    ctx.stroke();
 
     requestAnimationFrame(draw);
   }
   draw();
 
-  return { onLoop, reset, element: canvas };
+  function reset(){
+    stopBall();
+    lastLaunch = null;
+    nextLaunchAt = null;
+    aiming = false;
+    draggingBlock = null;
+    draggingCannon = false;
+  }
+
+  return { onLoop, reset, setInstrument: ui.setInstrument, element: canvas };
 }

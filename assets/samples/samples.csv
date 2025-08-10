@@ -1,0 +1,34 @@
+filename,instrument_type,instrument,function,display_name,synth_id
+# --- Samples ---,,,,,
+8-bit-punch.wav,retro,drum,short note,Punch,
+drums1.mp3,percussion,drum,short note,Drum 1,
+drums2.mp3,percussion,drum,short note,Drum 2,
+drums3.mp3,percussion,drum,short note,Drum 3,
+hi-hat-closed.wav,percussion,drum,short note,Hi-Hat Closed,
+hi-hat-open.wav,percussion,drum,short note,Hi-Hat Open,
+PianoMiddleC.wav,piano,piano,short note,Piano,
+Brk_Snr.mp3,percussion,drum,short note,Snare,
+Cev_H2.mp3,percussion,drum,short note,Hi-Hat Closed,
+Heater-6.mp3,percussion,clap,short note,Hand clap,
+RP4_KICK_1.mp3,percussion,drum,short note,Kick drum,
+c-bass guitar- slap.wav,string,bass guitar,short note,slap bass guitar,
+c-bass guitar-pickmuted.wav,string,bass guitar,short note,muted bass guitar,
+c-kalimba.wav,percussion,kalimba,short note,kalimba,
+c-nylon-guitar.wav,string,guitar,short note,guitar,
+c-old-piano.wav,piano,piano,short note,old timey piano,
+c-solid-tone.wav,solid tone,solid tone,loop,solid tone,
+C-xylophone.wav,percussion,xylophone,short note,xylophone,
+,,,,,
+# --- Synths (no filename; specify synth_id from engine) ---,,,,,
+,synth,synth,sustain,Tone (Sine),tone
+,synth,synth,short note,Keypad,keypad
+,synth,synth,short note,Pop,pop
+,synth,synth,sustain,Pad,pad
+,synth,synth,short note,Retro Square,retro-square
+,synth,synth,short note,Retro Saw,retro-saw
+,synth,synth,short note,Retro Triangle,retro-tri
+,synth,synth,short note,Laser,laser
+,synth,synth,sustain,Windy,windy
+,synth,synth,short note,Alien,alien
+,synth,synth,short note,Organish,organish
+,synth,synth,short note,Droplet,droplet
