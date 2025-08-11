@@ -4,7 +4,7 @@ import { NUM_STEPS, ensureAudioContext, triggerInstrument } from './audio.js';
 import { initToyUI } from './toyui.js';
 import { drawBlock, drawNoteStripsAndLabel, hitTopStrip, hitBottomStrip } from './toyhelpers.js';
 
-export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='Tone (Sine)', title='' } = {}){
+export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='tone', title='' } = {}){
   const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector;
   if (!shell){ console.warn('[grid] missing panel', selector); return null; }
 
@@ -38,9 +38,7 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='T
     showAdd: false,
     showDelete: false
   });
-  panel.addEventListener('toy-zoom', (e)=>{ zoomed = !!(e?.detail?.zoomed);
-    try{ if (!zoomed){ panel.style.width=''; panel.style.removeProperty('width'); } }catch{}
-    draw(); });
+  panel.addEventListener('toy-zoom', (e)=>{ zoomed = !!(e?.detail?.zoomed); draw(); });
   panel.addEventListener('toy-random', ()=>{ steps.forEach(s=>{ s.active = Math.random() < 0.35; s.flash = s.active ? 1.0 : 0; }); draw(); });
   panel.addEventListener('toy-reset', ()=>{ steps.forEach(s=>{ s.active=false; s.flash=0; }); draw(); });
 
@@ -93,17 +91,7 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='T
     const startX = Math.max(pad, Math.floor((vw - totalWidth) / 2));
     const x = startX + i * (w + gap);
     const y = pad;
-    return { x, y, w, h }
-  function desiredCanvasSize(){
-    const pad = 6;
-    const gap = zoomed ? 6 : 0;
-    const base = zoomed ? 72 : 36;
-    const w = base;
-    const widthPx  = pad*2 + numSteps * w + (numSteps - 1) * gap;
-    const heightPx = pad*2 + base;
-    return { widthPx, heightPx };
-  }
-;
+    return { x, y, w, h };
   }
 
   // Input
@@ -148,17 +136,16 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='T
 ;
 
   function draw(){
-    // Fit canvas size to nodes every frame (cheap) so panel can shrink
-    const { widthPx, heightPx } = desiredCanvasSize();
-    const wantW = widthPx + 'px';
-    const wantH = heightPx + 'px';
-    let changed=false;
-    if (canvas.style.width !== wantW){ canvas.style.width = wantW; changed = true; }
-    if (canvas.style.height !== wantH){ canvas.style.height = wantH; changed = true; }
-    // If panel had an inline width (from markup/drag), drop it so it can shrink
-    try{ if (!zoomed){ panel.style.width=''; panel.style.removeProperty('width'); } }catch{}
-    if (changed) resizeCanvasForDPR(canvas, ctx);
-
+    // Fit canvas to nodes (both directions)
+    const pad = 6; const gap = zoomed ? 6 : 0; const baseH = zoomed ? 72 : 36; const h = baseH; const w = h;
+    const desiredH = (h + pad*2) + 'px';
+    const desiredW = (numSteps * w + (numSteps - 1) * gap + pad*2) + 'px';
+    if (canvas.style.height !== desiredH || canvas.style.width !== desiredW){
+      canvas.style.height = desiredH; canvas.style.width = desiredW;
+      canvas.style.minWidth = desiredW; canvas.style.maxWidth = desiredW;
+      canvas.style.alignSelf = 'flex-start';
+      resizeCanvasForDPR(canvas, ctx);
+    } else { ensureSized(); }
     const vw = canvas._vw ?? canvas.width, vh = canvas._vh ?? canvas.height;
     ctx.clearRect(0,0,vw,vh);
 
