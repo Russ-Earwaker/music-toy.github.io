@@ -1,110 +1,56 @@
-// src/grid.js (safe for <section id="gridX"> inside a .toy-panel)
+// src/grid.js — clean rebuild
 import { resizeCanvasForDPR } from './utils.js';
 import { NUM_STEPS, ensureAudioContext, triggerInstrument } from './audio.js';
 import { initToyUI } from './toyui.js';
-import { drawBlock, drawNoteStripsAndLabel, hitTopStrip, hitBottomStrip } from './toyhelpers.js';
 
-export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='Tone (Sine)', title='' } = {}){
+export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='tone', title='' } = {}){
   const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector;
-  if (!shell){ console.warn('[grid] missing panel', selector); return null; }
+  if (!shell){ console.warn('[grid] missing', selector); return null; }
 
-  // Find the nearest .toy-panel to host the header controls
   const panel = shell.closest('.toy-panel') || shell;
 
-  // Ensure a header exists on the panel (initToyUI will also create one if missing)
-  let header = panel.querySelector('.toy-header');
-  if (!header){
-    header = document.createElement('div');
-    header.className = 'toy-header';
-    panel.prepend(header);
-  }
+  // Header controls
+  const ui = initToyUI(panel, { toyName: 'LoopGrid', defaultInstrument });
 
-  // Ensure the canvas lives inside the section (shell)
+  // Canvas
   let canvas = shell.querySelector('canvas.grid-canvas');
   if (!canvas){
     canvas = document.createElement('canvas');
     canvas.className = 'grid-canvas';
     shell.appendChild(canvas);
   }
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { alpha: false });
 
-  // Header UI goes on the panel's header; hide add/delete
-  const ui = initToyUI(panel, {
-    defaultInstrument,
-    addText: '',
-    delText: '',
-    hintAdd: '',
-    hintDelete: '',
-    showAdd: false,
-    showDelete: false
-  });
-  panel.addEventListener('toy-zoom', (e)=>{ zoomed = !!(e?.detail?.zoomed);
-    try{ if (!zoomed){ panel.style.width=''; panel.style.removeProperty('width'); } }catch{}
-    draw(); });
-  panel.addEventListener('toy-random', ()=>{ steps.forEach(s=>{ s.active = Math.random() < 0.35; s.flash = s.active ? 1.0 : 0; }); draw(); });
-  panel.addEventListener('toy-reset', ()=>{ steps.forEach(s=>{ s.active=false; s.flash=0; }); draw(); });
-
-
-  // Optional title
-  if (title){
-    const chip = document.createElement('span');
-    chip.textContent = title;
-    chip.style.marginLeft = '8px';
-    chip.style.opacity = '0.7';
-    panel.querySelector('.toy-header')?.appendChild(chip);
-  }
-
-  
-  function auditionStep(i){
-    try{
-      const ac = ensureAudioContext();
-      const when = ac.currentTime + 0.001;
-      const n = steps[i]?.noteIndex ?? 48;
-      const N = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-      const nn = `${N[((n%12)+12)%12]}${Math.floor(n/12)-1}`;
-      const inst = ui?.instrument || 'tone';
-      triggerInstrument(inst, nn, when);
-    }catch(e){}
-  }
-// State
-  const steps = new Array(numSteps).fill(null).map(()=>({ active:false, noteIndex: 48, flash:0 })); // C4-ish
+  // State
+  const steps = new Array(numSteps).fill(null).map(()=>({ active:false, noteIndex:48, flash:0 })); // C4-ish
   let zoomed = false;
   let currentStep = -1;
 
-  // Note naming
+  // Note helpers
   const N = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
   const idxToName = (i)=>{ const n=((i%12)+12)%12; const o=Math.floor(i/12)-1; return `${N[n]}${o}`; };
 
-  // Sizing
-  function ensureSized(){ if (!canvas._vw || !canvas._vh) resizeCanvasForDPR(canvas, ctx); }
-  const doResize = ()=> resizeCanvasForDPR(canvas, ctx);
-  window.addEventListener('resize', doResize);
-  requestAnimationFrame(doResize);
-
-  function cellRect(i){
-    const vw = canvas._vw ?? canvas.width, vh = canvas._vh ?? canvas.height;
-    const pad = 6;
-    const gap = zoomed ? 6 : 0;
-    // base square size
-    const baseH = zoomed ? 72 : 36;
-    const h = Math.min(baseH, vh - pad*2);
-    const w = h;
-    const totalWidth = numSteps * w + (numSteps - 1) * gap;
-    const startX = Math.max(pad, Math.floor((vw - totalWidth) / 2));
-    const x = startX + i * (w + gap);
-    const y = pad;
-    return { x, y, w, h }
+  // Layout helpers
   function desiredCanvasSize(){
-    const pad = 6;
-    const gap = zoomed ? 6 : 0;
-    const base = zoomed ? 72 : 36;
+    const pad = 6, gap = zoomed ? 6 : 0, base = zoomed ? 72 : 36;
     const w = base;
     const widthPx  = pad*2 + numSteps * w + (numSteps - 1) * gap;
     const heightPx = pad*2 + base;
-    return { widthPx, heightPx };
+    return { widthPx, heightPx, pad, gap, base };
   }
-;
+  function cellRect(i){
+    const { pad, gap, base } = desiredCanvasSize();
+    const w = base, h = base;
+    const startX = pad;
+    const x = startX + i * (w + gap);
+    const y = pad;
+    return { x, y, w, h };
   }
+
+  // Events from header
+  panel.addEventListener('toy-zoom', (e)=>{ zoomed = !!(e?.detail?.zoomed); if (!zoomed){ try{ panel.style.width=''; panel.style.removeProperty('width'); }catch{} } draw(); });
+  panel.addEventListener('toy-random', ()=>{ steps.forEach(s=>{ s.active = Math.random() < 0.35; s.flash = s.active ? 1.0 : 0; }); draw(); });
+  panel.addEventListener('toy-reset',  ()=>{ steps.forEach(s=>{ s.active = false; s.flash = 0; }); draw(); });
 
   // Input
   canvas.addEventListener('pointerdown', (e)=>{
@@ -128,13 +74,11 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='T
       const btnH = Math.max(Math.floor(r.h * 0.38), Math.floor(22 * dpr));
       if (py <= r.y + btnH){
         steps[hit].noteIndex = Math.min(87, steps[hit].noteIndex+1);
-        steps[hit].active = true; steps[hit].flash = 1.0; auditionStep(hit);
-        draw(); return;
+        steps[hit].active = true; steps[hit].flash = 1.0; auditionStep(hit); draw(); return;
       }
       if (py >= r.y + r.h - btnH){
         steps[hit].noteIndex = Math.max(0, steps[hit].noteIndex-1);
-        steps[hit].active = true; steps[hit].flash = 1.0; auditionStep(hit);
-        draw(); return;
+        steps[hit].active = true; steps[hit].flash = 1.0; auditionStep(hit); draw(); return;
       }
       steps[hit].active = !steps[hit].active;
       if (steps[hit].active){ steps[hit].flash = 1.0; auditionStep(hit); }
@@ -145,18 +89,25 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='T
       draw(); return;
     }
   });
-;
+
+  function auditionStep(i){
+    try{
+      const ac = ensureAudioContext();
+      const when = ac.currentTime + 0.001;
+      const n = steps[i]?.noteIndex ?? 48;
+      const nn = `${N[((n%12)+12)%12]}${Math.floor(n/12)-1}`;
+      const inst = ui?.instrument || 'tone';
+      triggerInstrument(inst, nn, when);
+    }catch{}
+  }
 
   function draw(){
-    // Fit canvas size to nodes every frame (cheap) so panel can shrink
+    // Fit canvas size to nodes both directions
     const { widthPx, heightPx } = desiredCanvasSize();
-    const wantW = widthPx + 'px';
-    const wantH = heightPx + 'px';
+    const wantW = widthPx + 'px', wantH = heightPx + 'px';
     let changed=false;
     if (canvas.style.width !== wantW){ canvas.style.width = wantW; changed = true; }
     if (canvas.style.height !== wantH){ canvas.style.height = wantH; changed = true; }
-    // If panel had an inline width (from markup/drag), drop it so it can shrink
-    try{ if (!zoomed){ panel.style.width=''; panel.style.removeProperty('width'); } }catch{}
     if (changed) resizeCanvasForDPR(canvas, ctx);
 
     const vw = canvas._vw ?? canvas.width, vh = canvas._vh ?? canvas.height;
@@ -164,31 +115,36 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='T
 
     for (let i=0;i<numSteps;i++){
       const r = cellRect(i);
-      // playhead strip
-      if (i===currentStep){
-        ctx.fillStyle = 'rgba(255,255,255,0.07)';
-        ctx.fillRect(r.x-3, 0, r.w+6, vh);
+
+      // background
+      ctx.fillStyle = steps[i].active ? '#ff8c00' : '#2a3140';
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+
+      // flash overlay
+      if (steps[i].flash>0){
+        ctx.fillStyle = `rgba(255,255,255,${(0.20*steps[i].flash).toFixed(3)})`;
+        ctx.fillRect(r.x, r.y, r.w, r.h);
+        steps[i].flash = Math.max(0, steps[i].flash - 0.06);
       }
-      const block = { x:r.x, y:r.y, w:r.w, h:r.h, noteIndex: steps[i].noteIndex };
-      const activePulse = steps[i].flash>0 || (i===currentStep && steps[i].active);
-      const base = steps[i].active ? '#ff8c00' : '#000000';
-      drawBlock(ctx, block, { baseColor: base, active: activePulse });
+
+      // zoomed arrows + label
       if (zoomed){
         const dpr = canvas._dpr || 1;
-        const stripH = Math.max(Math.floor(block.h*0.38), Math.floor(22 * dpr));
+        const stripH = Math.max(Math.floor(r.h*0.38), Math.floor(22 * dpr));
         ctx.fillStyle = 'rgba(255,255,255,0.10)';
-        ctx.fillRect(block.x, block.y, block.w, stripH);
-        ctx.fillRect(block.x, block.y + block.h - stripH, block.w, stripH);
+        ctx.fillRect(r.x, r.y, r.w, stripH);
+        ctx.fillRect(r.x, r.y + r.h - stripH, r.w, stripH);
         ctx.fillStyle = 'rgba(255,255,255,0.9)';
         ctx.textAlign='center'; ctx.textBaseline='middle';
         ctx.font = `${Math.floor(stripH*0.7)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto`;
-        ctx.fillText('▲', block.x + block.w/2, block.y + Math.floor(stripH*0.52));
-        ctx.fillText('▼', block.x + block.w/2, block.y + block.h - Math.floor(stripH*0.48));
+        ctx.fillText('▲', r.x + r.w/2, r.y + Math.floor(stripH*0.52));
+        ctx.fillText('▼', r.x + r.w/2, r.y + r.h - Math.floor(stripH*0.48));
         ctx.fillStyle = steps[i].active ? '#0b0f14' : '#d7dbe7';
-        ctx.font = `${Math.floor(block.h*0.42)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto`;
-        ctx.fillText(idxToName(steps[i].noteIndex), block.x + block.w/2, block.y + block.h/2 + 0.5*dpr);
+        ctx.font = `${Math.floor(r.h*0.42)}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto`;
+        ctx.fillText(idxToName(steps[i].noteIndex), r.x + r.w/2, r.y + r.h/2 + 0.5*dpr);
       }
-      // current column outline for tracking (even if inactive)
+
+      // current column outline
       if (i===currentStep){
         ctx.save();
         ctx.lineWidth = 2;
@@ -196,32 +152,17 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='T
         ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
         ctx.restore();
       }
-      // vibrant center label (keeps arrow strips visible)
-      ctx.save();
-      if (!zoomed){
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        const label = idxToName(steps[i].noteIndex);
-        const size = Math.floor(Math.min(block.w, block.h) * 0.44);
-        ctx.font = `${size}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto`;
-        ctx.fillStyle = steps[i].active ? '#000000' : '#ffffff';
-        ctx.fillText(label, block.x + block.w/2, block.y + block.h/2 + 0.5);
-        if (!steps[i].active){
-          ctx.lineWidth = 2;
-          ctx.strokeStyle = '#ff8c00';
-          ctx.strokeRect(block.x + 1, block.y + 1, block.w - 2, block.h - 2);
-        }
-      }
-      ctx.restore();
-      if (steps[i].flash>0) steps[i].flash = Math.max(0, steps[i].flash - 0.06);
     }
+
     requestAnimationFrame(draw);
   }
-  draw();
 
   function markPlayingColumn(i){ currentStep = i; }
-  function ping(i){ if (i>=0 && i<numSteps) steps[i].flash = 1.0; }
-  function reset(){ steps.forEach(s => s.active=false); currentStep = -1; }
+  function ping(i){ steps[i] && (steps[i].flash = 1.0); }
+  function reset(){ steps.forEach(s=> s.flash = 0); currentStep = -1; }
+
+  // Kick it off
+  draw();
 
   return {
     element: canvas,

@@ -275,3 +275,15 @@ main { flex: 1 1 auto; display: block; }
 }
 .app-fs-toggle:hover{ background:#121826; border-color:#364055; }
 .app-fs-toggle svg{ width: 26px; height: 26px; fill: currentColor; stroke: currentColor; }
+
+
+/* Shrink-to-fit for unzoomed toys */
+.toy-panel.toy-unzoomed{
+  width: -moz-fit-content;
+  width: fit-content;
+  max-width: none;
+  flex: 0 0 auto;
+}
+.toy-panel.toy-unzoomed .toy-body{
+  display: inline-block;
+}

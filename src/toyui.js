@@ -136,6 +136,13 @@ export function initToyUI(panel, {
   function setZoom(z){
     zoomed = !!z;
     instWrap.style.display = zoomed ? 'flex' : 'none';
+    // toggle classes + width so the entire toy can shrink/grow
+    panel.classList.toggle('toy-zoomed', zoomed);
+    panel.classList.toggle('toy-unzoomed', !zoomed);
+    try{
+      if (zoomed){ panel.style.removeProperty('width'); }
+      else { panel.style.width = 'fit-content'; }
+    }catch{}
     panel.dispatchEvent(new CustomEvent('toy-zoom', { detail: { zoomed } }));
   }
   setZoom(false);
