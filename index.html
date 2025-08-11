@@ -1,85 +1,26 @@
-<!-- index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Music Toy</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#111" />
-  <link rel="manifest" href="./manifest.webmanifest" />
-  <link rel="apple-touch-icon" href="./assets/icons/icon-192.png" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>LoopGrid • Music Toy</title>
   <link rel="stylesheet" href="./style.css" />
+  <link rel="icon" href="../assets/icons/icon-192.png" />
 </head>
 <body>
-  <header>
-    <h1>Music Toy</h1>
-    <div class="controls">
-      <label>BPM <input id="bpm" type="number" min="40" max="240" step="1" value="120" /></label>
+  <div id="board">
+    <div id="grid1" class="toy-panel">
+      <!-- Header/UI injected by toyui.js. No hardcoded "Grid" text here. -->
+      <canvas class="grid-canvas"></canvas>
+    </div>
+
+    <div id="transport">
       <button id="play">Play</button>
       <button id="stop">Stop</button>
-    </div>
-  </header>
-
-<main>
-  <div id="board">
-    <div class="toy-panel" id="toy-grid" data-toy="grid" style="left:20px; top:20px; width:760px;">
-      <div class="toy-header">Grid Sequencer</div>
-      <div class="toy-body">
-        <section id="grid1"></section>
-      </div>
-    </div>
-    <div class="toy-panel" id="toy-g2" data-toy="grid" style="left:20px; top:120px; width:760px;">
-      <div class="toy-header">Grid Sequencer</div>
-      <div class="toy-body">
-        <section id="grid2"></section>
-      </div>
-    </div>
-
-    <div class="toy-panel" id="toy-g3" data-toy="grid" style="left:20px; top:220px; width:760px;">
-      <div class="toy-header">Grid Sequencer</div>
-      <div class="toy-body">
-        <section id="grid3"></section>
-      </div>
-    </div>
-
-    <div class="toy-panel" id="toy-g4" data-toy="grid" style="left:20px; top:320px; width:760px;">
-      <div class="toy-header">Grid Sequencer</div>
-      <div class="toy-body">
-        <section id="grid4"></section>
-      </div>
-    </div>
-    
-
-    <div class="toy-panel" id="toy-b1" data-toy="bouncer" style="left:20px; top:260px; width:400px; height:400px;">
-      <div class="toy-header">Bouncer</div>
-      <div class="toy-body"><canvas class="bouncer-canvas"></canvas></div>
-    </div>
-
-    <div class="toy-panel" id="toy-b2" data-toy="bouncer" style="left:440px; top:260px; width:400px; height:400px;">
-      <div class="toy-header">Bouncer</div>
-      <div class="toy-body"><canvas class="bouncer-canvas"></canvas></div>
-    </div>
-
-    <div class="toy-panel" id="toy-b3" data-toy="bouncer" style="left:860px; top:260px; width:400px; height:400px;">
-      <div class="toy-header">Bouncer</div>
-      <div class="toy-body"><canvas class="bouncer-canvas"></canvas></div>
+      <label>BPM <input id="bpm" type="number" min="40" max="240" value="120" /></label>
     </div>
   </div>
-</main>
 
-
-
-
-  <script type="module" src="./src/main.js" defer></script>
-<!-- index.html -->
-<script>
-  if ('serviceWorker' in navigator) {
-    // Only register in production (https + not localhost)
-    if (location.protocol === 'https:' && location.hostname !== 'localhost') {
-      navigator.serviceWorker.register('./service-worker.js');
-    }
-  }
-</script>
-
+  <script type="module" src="./src/main.js"></script>
 </body>
 </html>

@@ -1,168 +1,145 @@
-// src/toyui.js (dynamic instruments + CSV status indicator)
-import { ensureAudioContext, getInstrumentNames } from './audio.js';
+// src/toyui.js — header draggable (pointer-events:auto); robust click routing for all buttons
+import { ensureAudioContext, getInstrumentNames, createChannel } from './audio.js';
+
+const ICONS = {
+  zoom: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10V4h6v2H5v4H3zm10-6h6v6h-2V6h-4V4zM5 14h4v4h2v-6H3v2zm10 4v-2h4v-4h2v6h-6z"/></svg>`,
+  muteOn: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6h4l5 5V4L7 9H3z"/><path d="m16 9 5 5m0-5-5 5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>`,
+  muteOff:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6h4l5 5V4L7 9H3z"/><path d="M17 8a5 5 0 0 1 0 8" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>`,
+  dice:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h9v9H4zM11 11h9v9h-9z"/></svg>`,
+  reset:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v4l3-3-3-3v2a6 6 0 1 0 6 6h-2A4 4 0 1 1 12 6z"/></svg>`,
+};
 
 export function initToyUI(shell, {
-  defaultInstrument = 'Tone (Sine)',
-  addText = 'Add Node',
-  delText = '',
-  hintAdd = 'Tap to add a node',
-  hintDelete = 'Tap to delete',
-  autoReturnAdd = true,
-  autoReturnDelete = true,
-  showAdd = true,
-  showDelete = true
-, deleteMode = 'toggle', getDeletableCount = null } = {}){
+  defaultInstrument = 'tone',
+  onRandom = null,
+  onReset  = null,
+} = {}){
+  // Build or reset header
   let header = shell.querySelector('.toy-header');
-  if (!header) {
+  if (!header){
     header = document.createElement('div');
     header.className = 'toy-header';
-    header.style.display = 'flex';
-    header.style.justifyContent = 'space-between';
-    header.style.alignItems = 'center';
-    header.style.padding = '6px 8px';
     shell.prepend(header);
+  } else {
+    header.innerHTML = '';
   }
 
-  const right  = document.createElement('div');
-  right.style.display = 'flex';
-  right.style.gap = '8px';
-  right.style.alignItems = 'center';
-  header.style.position='relative'; header.style.zIndex='5';
-
-  // CSV status dot (left)
-  const left = document.createElement('div');
-  left.style.display='flex'; left.style.alignItems='center'; left.style.gap='6px';
-  const dot = document.createElement('span');
-  dot.title = 'Sample CSV status';
-  dot.style.width='10px'; dot.style.height='10px'; dot.style.borderRadius='50%';
-  dot.style.display='inline-block'; dot.style.background='#b91c1c'; // red until ready
-  left.appendChild(dot);
+  // Left: Zoom + LoopGrid name
+  const left = document.createElement('div'); left.className = 'toy-left';
+  const zoomBtn = document.createElement('button'); zoomBtn.className = 'toy-btn icon large primary'; zoomBtn.type='button'; zoomBtn.dataset.role='zoom'; zoomBtn.innerHTML = ICONS.zoom;
+  const nameEl = document.createElement('span'); nameEl.className = 'toy-name'; nameEl.textContent = 'LoopGrid';
+  left.appendChild(zoomBtn); left.appendChild(nameEl);
   header.appendChild(left);
 
-  const label  = document.createElement('span'); label.textContent = 'Instrument:';
-  const select = document.createElement('select');
-
-  function rebuild(){
-    const names = getInstrumentNames();
-    const cur = select.value;
-    select.innerHTML = '';
-    names.forEach(n => {
-      const o = document.createElement('option'); o.value=o.textContent=n; select.appendChild(o);
-    });
-    select.value = names.includes(cur) ? cur : (names[0] || defaultInstrument);
-  }
-
-  // initial + async rebuild when CSV finishes
-  rebuild();
-  setTimeout(()=>{ try{ rebuild(); }catch(e){} }, 800);
-  window.addEventListener('samples-ready', ()=>{
-    try{ rebuild(); dot.style.background = '#16a34a'; }catch(e){}
-  });
-
-  let addBtn = null, delBtn = null;
-  if (showAdd){ addBtn = document.createElement('button'); addBtn.textContent = addText; }
-  if (showDelete){
-    delBtn = document.createElement('button');
-    delBtn.setAttribute('aria-label','Delete (trash)');
-    delBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-      <path fill="currentColor" d="M9 3h6a1 1 0 0 1 1 1v2h4v2h-1l-1 12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 8H4V6h4V4a1 1 0 0 1 1-1Zm2 3h2V5h-2v1Zm-3 4h2v8H8V10Zm6 0h2v8h-2V10Z"/></svg>`;
-  }
-
-  // compose right side
-  right.appendChild(label);
-  right.appendChild(select);
-  if (addBtn) right.appendChild(addBtn);
-  if (delBtn) right.appendChild(delBtn);
+  // Right: Random, Reset, Instrument (zoom-only), BIG Mute
+  const right = document.createElement('div'); right.className = 'toy-right';
+  const randBtn  = document.createElement('button'); randBtn.className='toy-btn'; randBtn.type='button'; randBtn.dataset.role='random'; randBtn.innerHTML = ICONS.dice + '<span>Random</span>';
+  const resetBtn = document.createElement('button'); resetBtn.className='toy-btn'; resetBtn.type='button'; resetBtn.dataset.role='reset';  resetBtn.innerHTML = ICONS.reset + '<span>Reset</span>';
+  const instWrap = document.createElement('div'); instWrap.className='inst-wrap';
+  const instSel  = document.createElement('select'); instSel.className='inst-select'; instWrap.appendChild(instSel);
+  const muteBtn  = document.createElement('button'); muteBtn.className='toy-btn icon large'; muteBtn.type='button'; muteBtn.dataset.role='mute'; muteBtn.innerHTML = ICONS.muteOff;
+  right.appendChild(randBtn); right.appendChild(resetBtn); right.appendChild(instWrap); right.appendChild(muteBtn);
   header.appendChild(right);
 
-  const styleBtn = (btn, on)=>{
-    const disabled = btn?.disabled === true;
+  // Instrument list
+  function rebuildSelect(){
+    const names = getInstrumentNames();
+    const cur = instSel.value;
+    instSel.innerHTML = '';
+    names.forEach(n => { const o = document.createElement('option'); o.value=o.textContent=n; instSel.appendChild(o); });
+    instSel.value = names.includes(cur) ? cur : (names[0] || defaultInstrument || 'tone');
+  }
+  rebuildSelect();
+  setTimeout(()=>{ try{ rebuildSelect(); }catch{} }, 600);
+  window.addEventListener('samples-ready', ()=>{ try{ rebuildSelect(); }catch{} });
+
+  // Floating volume
+  const volWrap = document.createElement('div'); volWrap.className = 'toy-volwrap floating';
+  const vol = document.createElement('input'); vol.type='range'; vol.min='0'; vol.max='100'; vol.value='100'; vol.className='toy-volume';
+  volWrap.appendChild(vol);
+  shell.appendChild(volWrap);
+
+  function positionVolume(){
+    const shellRect  = shell.getBoundingClientRect();
+    const headerRect = header.getBoundingClientRect();
+    const top = headerRect.top - shellRect.top;
+    volWrap.style.top = `${Math.round(top)}px`;
+    volWrap.style.left = '100%';
+  }
+  requestAnimationFrame(positionVolume);
+  window.addEventListener('resize', positionVolume);
+
+  // State
+  let zoomed = false;
+  let instrument = instSel.value || defaultInstrument || 'tone';
+  instSel.addEventListener('change', ()=> { instrument = instSel.value; });
+
+  ensureAudioContext();
+  const channel = createChannel(1);
+  let muted = false;
+  function applyGain(){ channel.gain.value = muted ? 0 : (Number(vol.value)/100); }
+  vol.addEventListener('input', applyGain);
+
+  // Click handler
+  function handle(role){
+    if (role === 'zoom'){ console.log('[LoopGrid] zoom click'); setZoom(!zoomed); return; }
+    if (role === 'mute'){ console.log('[LoopGrid] mute click'); muted = !muted; muteBtn.innerHTML = muted ? ICONS.muteOn : ICONS.muteOff; applyGain(); return; }
+    if (role === 'random'){ console.log('[LoopGrid] random click'); onRandom && onRandom(); return; }
+    if (role === 'reset'){ console.log('[LoopGrid] reset click'); if (!zoomed || confirm('Reset this toy?')) onReset && onReset(); return; }
+  }
+
+  // Direct listeners
+  zoomBtn.addEventListener('click', ()=> handle('zoom'));
+  muteBtn.addEventListener('click', ()=> handle('mute'));
+  randBtn.addEventListener('click', ()=> handle('random'));
+  resetBtn.addEventListener('click', ()=> handle('reset'));
+
+  // Delegation backup (header still draggable)
+  header.addEventListener('click', (e)=>{
+    const btn = e.target.closest && e.target.closest('button.toy-btn');
     if (!btn) return;
-    btn.style.transform   = on && !disabled ? 'translateY(1px)' : '';
-    btn.style.boxShadow   = on && !disabled ? 'inset 0 2px 4px rgba(0,0,0,.25)' : '';
-    btn.style.background  = disabled ? '#222' : (on ? '#333' : '');
-    btn.style.color       = disabled ? '#777' : (on ? '#fff' : '');
-    btn.style.border      = '1px solid #444';
-    btn.style.padding     = '4px 8px';
-    btn.style.borderRadius= '6px';
-    btn.style.display     = 'inline-flex';
-    btn.style.alignItems  = 'center';
-    btn.style.gap         = '6px';
-    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-  };
+    handle(btn.dataset.role);
+  });
 
-  let instrument = select.value;
-  let tool = 'aim';
-
-  function reflectTool(){
-    styleBtn(addBtn, tool==='add');
-    styleBtn(delBtn, tool==='delete');
+  // Capture-phase rect routing (works even if target is the header or child span/svg)
+  function routeByRect(ev){
+    const h = header;
+    if (!h) return;
+    const r = h.getBoundingClientRect();
+    const x = ev.clientX; const y = ev.clientY;
+    if (x < r.left || x > r.right || y < r.top || y > r.bottom) return;
+    const targets = [
+      { el: zoomBtn, role: 'zoom' },
+      { el: randBtn, role: 'random' },
+      { el: resetBtn, role: 'reset' },
+      { el: muteBtn, role: 'mute' },
+    ].filter(t => t.el && t.el.offsetParent !== null);
+    for (const t of targets){
+      const br = t.el.getBoundingClientRect();
+      if (x >= br.left && x <= br.right && y >= br.top && y <= br.bottom){
+        handle(t.role);
+        ev.stopPropagation(); ev.preventDefault();
+        return;
+      }
+    }
   }
-  reflectTool();
-  maybeExitDeleteMode();
+  document.addEventListener('click', routeByRect, true);
 
-  const setTool = (t)=>{ tool = t; reflectTool();
-  maybeExitDeleteMode(); updateHint(); console.log('[toyui] tool ->', tool); };
-  const setInstrument = (name)=>{ instrument = name; select.value = name; };
-  select.addEventListener('change', ()=>{ instrument = select.value; });
+  console.log('[LoopGrid] header wired; buttons=', header.querySelectorAll('button.toy-btn').length);
 
-  const stop = ev => { ev.stopPropagation(); };
-  addBtn && addBtn.addEventListener('click', e=>{ e.preventDefault(); stop(e); });
-  delBtn && delBtn.addEventListener('click', e=>{ e.preventDefault(); stop(e); });
-  addBtn && addBtn.addEventListener('pointerdown', (e)=>{ e.preventDefault(); stop(e); setTool(tool==='add'?'aim':'add'); });
-  delBtn && delBtn.addEventListener('pointerdown', (e)=>{ e.preventDefault(); stop(e); setTool(tool==='delete'?'aim':'delete'); });
-  select.addEventListener('pointerdown', stop);
-  select.addEventListener('click', stop);
-
-  // Hint / toast
-  const hint = document.createElement('div');
-  hint.style.cssText = `position:absolute; left:12px; bottom:12px; z-index:4;
-    background:rgba(0,0,0,.7); color:#fff; padding:6px 8px;
-    border:1px solid #333; border-radius:8px; font:12px system-ui,sans-serif;
-    pointer-events:none; display:none;`;
-  shell.appendChild(hint);
-  let toastTimer = null;
-  
-function maybeExitDeleteMode(){
-    if (tool !== 'delete') return;
-    if (deleteMode !== 'until-empty') return;
-    try{
-      const n = typeof getDeletableCount === 'function' ? Number(getDeletableCount()) : NaN;
-      if (!Number.isFinite(n)) return;
-      if (n <= 0){ setTool('aim'); }
-      else { styleBtn(delBtn, true); }
-    }catch{}
+  function setZoom(z){
+    zoomed = !!z;
+    instWrap.style.display = zoomed ? 'block' : 'none';
+    shell.dispatchEvent(new CustomEvent('toy-zoom', { detail: { zoomed } }));
+    requestAnimationFrame(positionVolume);
   }
+  setZoom(false);
 
-  function updateHint(){
-    if (tool === 'add')      { hint.textContent = hintAdd;    hint.style.display='block'; }
-    else if (tool === 'delete'){ hint.textContent = hintDelete; hint.style.display='block'; }
-    else                     { hint.style.display='none'; }
-  }
-  function toast(msg){
-    hint.textContent = msg;
-    hint.style.display = 'block';
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(updateHint, 900);
-  }
-  function setAddEnabled(on){ if (addBtn){ addBtn.disabled = !on; styleBtn(addBtn, tool==='add'); } }
   return {
+    channel,
     get instrument(){ return instrument; },
-    setInstrument,
-    get tool(){ return tool; },
-    setTool,
-    setAddEnabled,
-    onDeleted: maybeExitDeleteMode,
-    toast,
-    autoReturnAdd,
-    autoReturnDelete
+    setInstrument(name){ instrument = name; instSel.value = name; },
+    get zoomed(){ return zoomed; },
+    setZoom,
   };
 }
-
-
-// Legacy compatibility (top-level)
-export const DEFAULT_INSTRUMENTS = [
-  'Tone (Sine)','Keypad','Pop','Pad',
-  'Retro Square','Retro Saw','Retro Triangle',
-  'Laser','Windy','Alien','Organish','Droplet'
-];

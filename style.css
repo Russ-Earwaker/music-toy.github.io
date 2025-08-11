@@ -1,237 +1,95 @@
-:root {
-  --bg: #111;
-  --panel: #1c1c1c;
+/* style.css — compact outer padding; buttons visible; volume aligned */
+:root{
+  --bg: #0f1115;
+  --panel: #141821;
+  --panel-border: #1e2330;
+  --text: #e6e8ef;
+  --muted: #2b313b;
   --accent: #ff8c00;
-  --text: #eee;
-  --muted: #666;
-  --border: #333;
 }
+html, body{ height:100%; background: var(--bg); color: var(--text); margin:0; font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+#board{ max-width: 1000px; margin: 18px auto; padding: 8px; }
 
-* { box-sizing: border-box; }
-
-html, body {
-  margin: 0;
-  height: 100%;
-  background: var(--bg);
-  color: var(--text);
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-}
-
-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-}
-
-h1 { font-size: 18px; margin: 0; }
-
-.controls {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-.controls input {
-  width: 72px;
+.toy-panel{
+  position: relative;
   background: var(--panel);
-  border: 1px solid var(--border);
-  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 6px 8px 10px 8px; /* compact; canvas has internal safe area */
+  box-shadow: 0 2px 12px rgba(0,0,0,.35);
+  overflow: visible;
+}
+
+.toy-header{
+  position: relative;
+  z-index: 20;
+  pointer-events: auto;
+  display:flex; align-items:center; justify-content:space-between;
   padding: 4px 6px;
-  border-radius: 6px;
+  margin-bottom: 2px;
 }
 
-.controls button {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 6px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-.controls button:hover { border-color: var(--accent); }
+.toy-left, .toy-right{ display:flex; align-items:center; gap:12px; }
 
-main {
-  flex: 1 1 auto;
-  display: block;
-  padding: 16px;
-  width: 100%;
-}
+.toy-name{ font-weight: 600; letter-spacing: 0.2px; opacity: .9; }
 
-#grid {
-  display: grid;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.row {
-  display: grid;
-  grid-template-columns: 100px repeat(8, 1fr);
-  gap: 8px;
-  align-items: center;
-}
-
-.row .label {
-  text-align: right;
-  color: var(--muted);
-  padding-right: 8px;
-}
-
-.step {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  height: 56px;
-  border-radius: 6px;
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  place-items: center;
-  cursor: pointer;
-  font-size: 11px;
-}
-.step.active { outline: 2px solid var(--accent); }
-.step.playing { border-color: #fff; }
-
-.note {
-  font-size: 12px;
-  user-select: none;
-}
-.note-controls {
-  display: flex;
-  gap: 4px;
-}
-.note-controls button {
-  font-size: 12px;
-  padding: 0 6px;
-  height: 22px;
-  border-radius: 4px;
-  border: 1px solid var(--border);
-  background: #222;
-  color: var(--text);
-  cursor: pointer;
-}
-.note-controls button:hover { border-color: var(--accent); }
-
-#bouncer-row {
-  display: flex;
-  gap: 20px;
-  flex-wrap: nowrap;     /* no wrapping */
-  overflow-x: auto;      /* scroll horizontally if needed */
-  padding-bottom: 8px;
-}
-
-.bouncer-shell {
+.toy-btn{
   position: relative;
-  width: 400px;
-  height: 400px;         /* square */
-  flex: 0 0 auto;        /* stay in a row */
-  background: #1a1a1a;
-  border: 2px solid var(--border);
-  border-radius: 10px;
+  z-index: 25;
+  pointer-events: auto;
+  display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  background:#0d1117; color: var(--text);
+  border:1px solid #252b36; border-radius: 12px;
+  padding:6px 10px; cursor:pointer;
+  transition: transform .06s ease, background .12s ease, border-color .12s ease, color .12s ease;
 }
+.toy-btn svg{ fill: currentColor; stroke: currentColor; }
+.toy-btn.icon{ padding:8px; }
+.toy-btn.large{ padding:10px; }
+.toy-btn.icon svg{ width:22px; height:22px; }
+.toy-btn.icon.large svg{ width:28px; height:28px; }
+.toy-btn.primary{ background:#101520; border-color:#2b3342; }
+.toy-btn:hover{ transform: translateY(1px); background:#121826; border-color:#364055; color:#fff; }
 
-.bouncer-shell canvas {
-  width: 100%;
-  height: 100%;
-  display: block;        /* no layout gaps */
-}
+.inst-wrap{ display:none; }
+.inst-select{ background:#0d1117; color:#e6e8ef; border:1px solid #252b36; border-radius:10px; padding:8px 10px; }
 
-/* header overlay inside each bouncer */
-.bouncer-ui {
-  position: absolute;
-  left: 8px; right: 8px; top: 8px;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  justify-content: space-between;
-  background: rgba(0,0,0,.6);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 6px 8px;
-  font: 12px system-ui, sans-serif;
-  color: #ddd;
-}
+.grid-canvas{ position: relative; z-index: 1; display:block; width: 100%; height:auto; }
 
-.bouncer-ui select {
-  background: #222;
-  color: #eee;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 2px 6px;
-  height: 24px;
-}
-
-
-/* Tap-to-unlock overlay */
-#unlock {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,.85);
-  display: grid;
-  place-items: center;
-  z-index: 9999;
-}
-#unlock > div {
-  background: #141414;
-  border: 1px solid var(--border);
-  padding: 20px;
-  border-radius: 10px;
-  text-align: center;
-}
-#unlock button {
-  margin-top: 8px;
-  padding: 8px 14px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--panel);
-  color: var(--text);
-  cursor: pointer;
-}
-#unlock.hidden { display: none; }
-
-html, body { height: 100%; }
-body { display: flex; flex-direction: column; margin: 0; }
-
-header { flex: 0 0 auto; }         /* your top bar */
-main { flex: 1 1 auto; display: block; }
-
-#board {
-  position: relative;
-  height: 100%;                     /* fill all space under the top bar */
-  width: 100%;
-  background:
-    radial-gradient(transparent 98%, rgba(255,255,255,.05) 100%) 0 0/24px 24px,
-    #0e0e0e;
-  border: 2px solid var(--border);
+.toy-volwrap.floating{
+  position:absolute;
+  left: 100%;
+  width: 44px; height: 150px;
+  display:flex; align-items:center; justify-content:center;
+  pointer-events:auto;
+  background: #0d1117;
+  border: 1px solid #252b36;
   border-radius: 12px;
-  margin-top: 16px;
-  overflow: hidden;
+  box-shadow: 0 6px 18px rgba(0,0,0,.35);
+  z-index: 10;
 }
 
-/* panel + bouncer sizing */
-.toy-panel { position: absolute; background:#111; border:2px solid var(--border); border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.35); }
-
-.toy-header { cursor: move; padding:8px 10px; background:linear-gradient(#191919,#141414); border-bottom:1px solid #222; font:13px/1.2 system-ui,sans-serif; color:#ddd; display:flex; align-items:center; justify-content:space-between; }
-
-.toy-body { position: relative; padding: 10px; }
-
-/* Make bouncer canvas actually fill its panel body */
-.toy-panel[data-toy="bouncer"] .toy-body {
-  position: absolute;
-  left: 10px; right: 10px; bottom: 10px; top: 38px; /* header ~28px + padding */
+.toy-volume{
+  writing-mode: vertical-lr;
+  direction: rtl;
+  height: 120px; width: 28px;
+  background: transparent;
+  appearance: none; -webkit-appearance: none;
 }
-.bouncer-canvas {
-  display: block; width: 100%; height: 100%;
-  background: #1a1a1a; border-radius: 8px;
+.toy-volume::-webkit-slider-runnable-track{
+  height: 100%; width: 4px; background: #2b313b; border-radius: 3px; margin: 0 auto;
 }
-
-.toy-panel .bouncer-canvas {
-  display:block;
-  width:100%;
-  height:100%;
-  aspect-ratio: 1/1; /* stay square if only width set */
-  background:#1a1a1a;
-  border-radius:8px;
+.toy-volume::-webkit-slider-thumb{
+  -webkit-appearance:none; appearance:none;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--accent); border: 1px solid #503200;
+  margin-top: -7px;
+  margin-left: -7px;
 }
+.toy-volume::-moz-range-track{ height: 100%; width: 4px; background: #2b313b; border-radius: 3px; }
+.toy-volume::-moz-range-thumb{ width: 18px; height: 18px; border-radius: 50%; background: var(--accent); border: 1px solid #503200; }
 
-.toy-header button.active { outline: 2px solid #ff8c00; }
+/* Transport */
+#transport{ display:flex; gap:10px; align-items:center; justify-content:center; margin: 10px auto; }
+#transport button{ background:#0d1117; color:#e6e8ef; border:1px solid #252b36; border-radius:10px; padding:8px 12px; cursor:pointer; }
+#transport input{ background:#0d1117; color:#e6e8ef; border:1px solid #252b36; border-radius:8px; padding:6px 8px; }
