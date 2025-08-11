@@ -11,7 +11,7 @@ import { initDragBoard } from './board.js';
 import { createRippleSynth } from './ripplesynth.js';
 
 // <<< EDIT THIS if your CSV lives elsewhere >>>
-const CSV_PATH = './assets/samples/samples.csv';
+const CSV_PATH = null; // auto-discover common CSV paths
 
 let grids = [];
 let bouncers = [];
@@ -53,7 +53,7 @@ function setupTransport(){
   playBtn.addEventListener('click', async ()=>{
     const ctx = ensureAudioContext();
     if (ctx.state === 'suspended') await ctx.resume();
-    await initAudioAssets(CSV_PATH).catch(()=>{});
+    await initAudioAssets(CSV_PATH || undefined).catch(()=>{});
     scheduler.start();
   });
 
@@ -129,7 +129,7 @@ async function boot(){
     try{
       const ctx = ensureAudioContext();
       if (ctx.state === 'suspended') await ctx.resume();
-      await initAudioAssets(CSV_PATH).catch(()=>{});
+      await initAudioAssets(CSV_PATH || undefined).catch(()=>{});
       scheduler.start();
     }catch{}
   }, { once:true });

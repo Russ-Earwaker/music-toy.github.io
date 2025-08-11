@@ -83,13 +83,16 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='T
 
   function cellRect(i){
     const vw = canvas._vw ?? canvas.width, vh = canvas._vh ?? canvas.height;
-    const pad = 8, gap = 6;
-    const h = Math.min(72, vh - pad*2);     // cap height (bigger squares)
-    const w = h;                             // squares
+    const pad = 6;
+    const gap = zoomed ? 6 : 0;
+    // base square size
+    const baseH = zoomed ? 72 : 36;
+    const h = Math.min(baseH, vh - pad*2);
+    const w = h;
     const totalWidth = numSteps * w + (numSteps - 1) * gap;
     const startX = Math.max(pad, Math.floor((vw - totalWidth) / 2));
     const x = startX + i * (w + gap);
-    const y = Math.floor((vh - h)/2);
+    const y = pad;
     return { x, y, w, h };
   }
 
@@ -146,8 +149,7 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='T
         ctx.fillStyle = 'rgba(255,255,255,0.07)';
         ctx.fillRect(r.x-3, 0, r.w+6, vh);
       }
-      const block = zoomed ? { x:r.x, y:r.y, w:r.w, h:r.h, noteIndex: steps[i].noteIndex }
-                              : (function(){ const s=0.25; const nx=r.x + (r.w*(1-s))/2; const ny=r.y + (r.h*(1-s))/2; return { x:nx, y:ny, w:r.w*s, h:r.h*s, noteIndex: steps[i].noteIndex }; })();
+      const block = { x:r.x, y:r.y, w:r.w, h:r.h, noteIndex: steps[i].noteIndex };
       const activePulse = steps[i].flash>0 || (i===currentStep && steps[i].active);
       const base = steps[i].active ? '#ff8c00' : '#000000';
       drawBlock(ctx, block, { baseColor: base, active: activePulse });

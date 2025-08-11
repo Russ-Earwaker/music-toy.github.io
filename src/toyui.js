@@ -16,6 +16,7 @@ export function initToyUI(panel, {
 
   // Ensure a header exists
   let header = panel.querySelector('.toy-header');
+  if (header) header.textContent = '';
   if (!header){
     header = document.createElement('div');
     header.className = 'toy-header';
@@ -68,12 +69,67 @@ export function initToyUI(panel, {
     if (names.includes(defaultInstrument)) instSel.value = defaultInstrument;
   }
   rebuildInstruments();
+  window.addEventListener('samples-ready', rebuildInstruments);
+
   instWrap.append(instSel);
 
   const muteBtn = makeBtn('Mute', 'Mute toy');
 
   right.append(randBtn, resetBtn, instWrap, muteBtn);
   header.appendChild(right);
+
+  // Volume slider anchored near mute
+  const volWrap = document.createElement('div');
+  volWrap.className = 'toy-volwrap';
+  volWrap.style.position = 'absolute';
+  volWrap.style.zIndex = '5';
+  volWrap.style.pointerEvents = 'auto';
+  volWrap.style.display = 'block';
+  volWrap.style.width = '36px';
+  volWrap.style.height = '160px';
+  volWrap.style.padding = '8px 10px';
+  volWrap.style.background = 'rgba(13,17,23,0.92)';
+  volWrap.style.border = '1px solid #252b36';
+  volWrap.style.borderRadius = '12px';
+  volWrap.style.boxShadow = '0 10px 24px rgba(0,0,0,.35)';
+  volWrap.style.backdropFilter = 'blur(6px)';
+  volWrap.style.userSelect = 'none';
+
+  const vol = document.createElement('input');
+  vol.type = 'range';
+  vol.min = '0'; vol.max = '100'; vol.value = '100'; vol.step = '1';
+  vol.style.writingMode = 'vertical-rl';
+  vol.style.direction = 'rtl';
+  vol.style.width = '24px';
+  vol.style.height = '120px';
+  vol.style.margin = '0';
+  vol.style.padding = '0';
+  vol.style.appearance = 'none';
+  vol.style.background = 'transparent';
+  // track
+  vol.addEventListener('input', (e)=>{ /* TODO: wire to per-toy gain; for now treat 0 as mute */ setMuted(vol.value === '0'); });
+  vol.addEventListener('pointerdown', ev => ev.stopPropagation(), { capture:true });
+
+  volWrap.appendChild(vol);
+  panel.appendChild(volWrap);
+
+  function positionVolume(){
+    // Anchor to the mute button's visual position at the header's right edge
+    try{
+      const rectP = panel.getBoundingClientRect();
+      const rectH = header.getBoundingClientRect();
+      const rectM = muteBtn.getBoundingClientRect();
+      const x = (rectM.right - rectP.left) - rectP.width + panel.clientWidth + 10; // right edge + offset
+      const y = (rectH.bottom - rectP.top) + 8;
+      volWrap.style.left = `calc(100% + 10px)`;
+      volWrap.style.top  = `${rectH.height + 8}px`;
+    }catch{}
+  }
+  // initial & on resize/zoom
+  positionVolume();
+  window.addEventListener('resize', positionVolume);
+  panel.addEventListener('toy-zoom', positionVolume);
+
 
   // Zoom state + dispatch
   let zoomed = false;
