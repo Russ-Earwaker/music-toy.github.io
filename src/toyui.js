@@ -1,6 +1,11 @@
 // src/toyui.js — header controls for toys (Zoom, Random, Reset, Mute + per-toy volume hook)
 import { getInstrumentNames } from './audio.js';
 
+const ICONS = {
+  volume: `<svg viewBox='0 0 24 24' aria-hidden='true'><path d='M3 10v4h4l5 4V6L7 10H3z'/><path d='M16.5 12a4.5 4.5 0 0 0-2.5-4.03v8.06A4.5 4.5 0 0 0 16.5 12z'/></svg>`,
+  mute:   `<svg viewBox='0 0 24 24' aria-hidden='true'><path d='M3 10v4h4l5 4V6L7 10H3z'/><path d='M19 5l-3 3'/><path d='M16 8l3 3'/></svg>`
+};
+
 export function initToyUI(panel, {
   toyName = 'LoopGrid',
   defaultInstrument = 'tone',
@@ -56,7 +61,7 @@ export function initToyUI(panel, {
   const right = document.createElement('div'); right.style.display='flex'; right.style.alignItems='center'; right.style.gap='8px';
 
   const randBtn  = makeBtn('Random', 'Randomize pattern');
-  const resetBtn = makeBtn('Reset',  'Clear pattern');
+  const resetBtn = makeBtn('Clear',  'Clear pattern');
 
   const instWrap = document.createElement('div'); instWrap.style.display='none'; instWrap.style.alignItems='center'; instWrap.style.gap='6px';
   const instSel = document.createElement('select');
@@ -73,21 +78,34 @@ export function initToyUI(panel, {
 
   instWrap.append(instSel);
 
-  const muteBtn = makeBtn('Mute', 'Mute toy');
+  const muteBtn = makeBtn('', 'Mute'); muteBtn.innerHTML = ICONS.volume;
 
-  right.append(randBtn, resetBtn, instWrap, muteBtn);
+  right.append(randBtn, resetBtn, instWrap);
   header.appendChild(right);
 
-  // Volume slider anchored near mute
+  // Backdrop overlay for zoom
+  let overlay = document.querySelector('.toy-overlay');
+  if (!overlay){
+    overlay = document.createElement('div');
+    overlay.className = 'toy-overlay';
+    overlay.style.display = 'none';
+    document.body.appendChild(overlay);
+  }
+  overlay.addEventListener('click', ()=> setZoom(false));
+
+
+  // External volume pod (Mute + vertical slider)
   const volWrap = document.createElement('div');
   volWrap.className = 'toy-volwrap';
   volWrap.style.position = 'absolute';
   volWrap.style.zIndex = '5';
   volWrap.style.pointerEvents = 'auto';
-  volWrap.style.display = 'block';
-  volWrap.style.width = '36px';
-  volWrap.style.height = '160px';
-  volWrap.style.padding = '8px 10px';
+  volWrap.style.display = 'flex';
+  volWrap.style.flexDirection = 'column';
+  volWrap.style.alignItems = 'center';
+  volWrap.style.gap = '8px';
+  volWrap.style.width = '56px';
+  volWrap.style.padding = '10px 10px';
   volWrap.style.background = 'rgba(13,17,23,0.92)';
   volWrap.style.border = '1px solid #252b36';
   volWrap.style.borderRadius = '12px';
@@ -95,37 +113,38 @@ export function initToyUI(panel, {
   volWrap.style.backdropFilter = 'blur(6px)';
   volWrap.style.userSelect = 'none';
 
+  // Move Mute button into the pod
+  muteBtn.style.width = '100%';
+  muteBtn.style.textAlign = 'center';
+  volWrap.appendChild(muteBtn);
+
+  // Vertical range slider
   const vol = document.createElement('input');
   vol.type = 'range';
   vol.min = '0'; vol.max = '100'; vol.value = '100'; vol.step = '1';
+  vol.className = 'toy-volrange';
   vol.style.writingMode = 'vertical-rl';
   vol.style.direction = 'rtl';
-  vol.style.width = '24px';
-  vol.style.height = '120px';
+  vol.style.width = '28px';
+  vol.style.height = '140px';
   vol.style.margin = '0';
   vol.style.padding = '0';
   vol.style.appearance = 'none';
-  vol.style.background = 'transparent';
-  // track
-  vol.addEventListener('input', (e)=>{ /* TODO: wire to per-toy gain; for now treat 0 as mute */ setMuted(vol.value === '0'); });
+  vol.style.background = 'linear-gradient(to right, transparent calc(50% - 3px), #5b6378 calc(50% - 3px), #5b6378 calc(50% + 3px), transparent calc(50% + 3px))';
+  vol.style.borderRadius = '8px';
+
+  vol.addEventListener('input', ()=>{ setMuted(vol.value === '0'); });
   vol.addEventListener('pointerdown', ev => ev.stopPropagation(), { capture:true });
 
   volWrap.appendChild(vol);
   panel.appendChild(volWrap);
 
   function positionVolume(){
-    // Anchor to the mute button's visual position at the header's right edge
-    try{
-      const rectP = panel.getBoundingClientRect();
-      const rectH = header.getBoundingClientRect();
-      const rectM = muteBtn.getBoundingClientRect();
-      const x = (rectM.right - rectP.left) - rectP.width + panel.clientWidth + 10; // right edge + offset
-      const y = (rectH.bottom - rectP.top) + 8;
-      volWrap.style.left = `calc(100% + 10px)`;
-      volWrap.style.top  = `${rectH.height + 8}px`;
-    }catch{}
+    // Anchor pod to the right outside the panel, top aligned just below header
+    const rectH = header.getBoundingClientRect();
+    volWrap.style.left = 'calc(100% + 10px)';
+    volWrap.style.top = '0px';
   }
-  // initial & on resize/zoom
   positionVolume();
   window.addEventListener('resize', positionVolume);
   panel.addEventListener('toy-zoom', positionVolume);
@@ -136,12 +155,25 @@ export function initToyUI(panel, {
   function setZoom(z){
     zoomed = !!z;
     instWrap.style.display = zoomed ? 'flex' : 'none';
-    // toggle classes + width so the entire toy can shrink/grow
     panel.classList.toggle('toy-zoomed', zoomed);
     panel.classList.toggle('toy-unzoomed', !zoomed);
+    // Overlay + center
     try{
-      if (zoomed){ panel.style.removeProperty('width'); }
-      else { panel.style.width = 'fit-content'; }
+      if (zoomed){
+        overlay.style.display = 'block';
+        // remember original style to restore
+        if (!panel.dataset.prevStyle) panel.dataset.prevStyle = panel.getAttribute('style') || '';
+        panel.classList.add('toy-zoomed-floating');
+        panel.style.removeProperty('left'); panel.style.removeProperty('top'); panel.style.removeProperty('width');
+      } else {
+        overlay.style.display = 'none';
+        panel.classList.remove('toy-zoomed-floating');
+        // restore original inline styles
+        const prev = panel.dataset.prevStyle || '';
+        panel.setAttribute('style', prev);
+        delete panel.dataset.prevStyle;
+        panel.style.width = 'fit-content';
+      }
     }catch{}
     panel.dispatchEvent(new CustomEvent('toy-zoom', { detail: { zoomed } }));
   }
@@ -163,7 +195,7 @@ export function initToyUI(panel, {
 
   // Mute flag (toy code can read ui.muted)
   let muted = false;
-  function setMuted(m){ muted = !!m; muteBtn.style.opacity = muted ? '0.6' : '1.0'; }
+  function setMuted(m){ muted = !!m; muteBtn.style.opacity = muted ? '0.6' : '1.0'; muteBtn.innerHTML = muted ? ICONS.mute : ICONS.volume; }
   muteBtn.addEventListener('click', ()=> setMuted(!muted));
 
   // Public API for toys

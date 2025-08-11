@@ -32,7 +32,7 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
 
   // Layout helpers
   function desiredCanvasSize(){
-    const pad = 6, gap = zoomed ? 6 : 0, base = zoomed ? 72 : 36;
+    const pad = 6, gap = zoomed ? 6 : 2, base = zoomed ? 72 : 36;
     const w = base;
     const widthPx  = pad*2 + numSteps * w + (numSteps - 1) * gap;
     const heightPx = pad*2 + base;
@@ -62,6 +62,14 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
     const py = (e.clientY - rect.top)  * scaleY;
 
     let hit = -1, r;
+    // draw vertical strip behind the active column for clarity
+    if (currentStep >= 0){
+      const { pad, heightPx } = (function(){ const ds=desiredCanvasSize(); return { pad:6, heightPx: ds.heightPx }; })();
+      const rcs = cellRect(currentStep);
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.fillRect(rcs.x - 2, 0, rcs.w + 4, heightPx);
+    }
+
     for (let i=0;i<numSteps;i++){
       r = cellRect(i);
       if (px>=r.x && px<=r.x+r.w && py>=r.y && py<=r.y+r.h){ hit = i; break; }
@@ -112,6 +120,14 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
 
     const vw = canvas._vw ?? canvas.width, vh = canvas._vh ?? canvas.height;
     ctx.clearRect(0,0,vw,vh);
+
+    // draw vertical strip behind the active column for clarity
+    if (currentStep >= 0){
+      const { pad, heightPx } = (function(){ const ds=desiredCanvasSize(); return { pad:6, heightPx: ds.heightPx }; })();
+      const rcs = cellRect(currentStep);
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.fillRect(rcs.x - 2, 0, rcs.w + 4, heightPx);
+    }
 
     for (let i=0;i<numSteps;i++){
       const r = cellRect(i);

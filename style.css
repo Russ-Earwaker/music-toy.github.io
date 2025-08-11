@@ -287,3 +287,54 @@ main { flex: 1 1 auto; display: block; }
 .toy-panel.toy-unzoomed .toy-body{
   display: inline-block;
 }
+
+
+/* Volume pod and slider */
+.toy-volwrap .toy-volrange {
+  -webkit-appearance: none;
+  appearance: none;
+  background: linear-gradient(to right, transparent calc(50% - 3px), #5b6378 calc(50% - 3px), #5b6378 calc(50% + 3px), transparent calc(50% + 3px));
+}
+.toy-volwrap .toy-volrange::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: #e6e8ef; border: 2px solid #252b36;
+  box-shadow: 0 2px 10px rgba(0,0,0,.35);
+}
+.toy-volwrap .toy-volrange::-moz-range-thumb {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: #e6e8ef; border: 2px solid #252b36;
+  box-shadow: 0 2px 10px rgba(0,0,0,.35);
+}
+.toy-volwrap .toy-volrange::-webkit-slider-runnable-track {
+  -webkit-appearance: none;
+  background: transparent;
+  border: none;
+}
+.toy-volwrap .toy-volrange::-moz-range-track {
+  background: transparent;
+  border: none;
+}
+
+
+/* Dark backdrop when zoomed */
+.toy-overlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.55);
+  z-index: 10000;
+}
+
+/* Centered, elevated toy while zoomed */
+.toy-panel.toy-zoomed-floating{
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  z-index: 10001 !important;
+  box-shadow: 0 16px 44px rgba(0,0,0,.5);
+  border-radius: 14px;
+}
+
+/* Icon-only button tweaks */
+.toy-btn svg{ width: 20px; height: 20px; display:block; }
