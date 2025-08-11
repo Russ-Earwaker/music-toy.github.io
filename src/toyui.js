@@ -133,7 +133,10 @@ export function initToyUI(panel, {
   vol.style.background = 'linear-gradient(to right, transparent calc(50% - 3px), #5b6378 calc(50% - 3px), #5b6378 calc(50% + 3px), transparent calc(50% + 3px))';
   vol.style.borderRadius = '8px';
 
-  vol.addEventListener('input', ()=>{ setMuted(vol.value === '0'); });
+  vol.addEventListener('input', ()=>{
+    const v = Math.max(0, Math.min(1, (parseInt(vol.value,10)||0)/100));
+    try { window.dispatchEvent(new CustomEvent('master-volume', { detail: { value: v } })); } catch{}
+  });
   vol.addEventListener('pointerdown', ev => ev.stopPropagation(), { capture:true });
 
   volWrap.appendChild(vol);
@@ -195,7 +198,12 @@ export function initToyUI(panel, {
 
   // Mute flag (toy code can read ui.muted)
   let muted = false;
-  function setMuted(m){ muted = !!m; muteBtn.style.opacity = muted ? '0.6' : '1.0'; muteBtn.innerHTML = muted ? ICONS.mute : ICONS.volume; }
+  function setMuted(m){
+    muted = !!m;
+    try { muteBtn.innerHTML = muted ? ICONS.mute : ICONS.volume; } catch{}
+    try { muteBtn.style.color = muted ? '#7b8193' : '#ffffff'; } catch{}
+    try { window.dispatchEvent(new CustomEvent('master-mute', { detail: { muted } })); } catch{}
+  }
   muteBtn.addEventListener('click', ()=> setMuted(!muted));
 
   // Public API for toys

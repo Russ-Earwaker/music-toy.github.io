@@ -1,77 +1,34 @@
-<!-- index.html -->
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Music Toy</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#111" />
-  <link rel="manifest" href="./manifest.webmanifest" />
-  <link rel="apple-touch-icon" href="./assets/icons/icon-192.png" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Music Toys</title>
   <link rel="stylesheet" href="./style.css" />
+  <!-- Single, versioned loader -->
+ <script type="module" src="./src/main.js?v=toy17" defer></script>
 </head>
 <body>
-  <main>
-  <div id="board">
-    <div class="toy-panel" id="toy-grid" data-toy="grid" style="left:20px; top:20px; width:760px;">
-      <div class="toy-header">Grid Sequencer</div>
-      <div class="toy-body">
-        <section id="grid1"></section>
-      </div>
-    </div>
-    <div class="toy-panel" id="toy-g2" data-toy="grid" style="left:20px; top:120px; width:760px;">
-      <div class="toy-header">Grid Sequencer</div>
-      <div class="toy-body">
-        <section id="grid2"></section>
-      </div>
-    </div>
+  <!-- Top transport -->
+  <header id="topbar" class="topbar">
+    <button id="play" aria-label="Play">▶</button>
+    <button id="stop" aria-label="Stop">■</button>
+    <label for="bpm">BPM</label>
+    <input id="bpm" type="number" value="120" min="40" max="240" step="1" />
+  </header>
 
-    <div class="toy-panel" id="toy-g3" data-toy="grid" style="left:20px; top:220px; width:760px;">
-      <div class="toy-header">Grid Sequencer</div>
-      <div class="toy-body">
-        <section id="grid3"></section>
-      </div>
-    </div>
+  <!-- Board -->
+  <main id="board">
+    <!-- Four LoopGrid panels -->
+    <section id="grid1" class="toy-panel" data-toy="loopgrid"></section>
+    <section id="grid2" class="toy-panel" data-toy="loopgrid"></section>
+    <section id="grid3" class="toy-panel" data-toy="loopgrid"></section>
+    <section id="grid4" class="toy-panel" data-toy="loopgrid"></section>
 
-    <div class="toy-panel" id="toy-g4" data-toy="grid" style="left:20px; top:320px; width:760px;">
-      <div class="toy-header">Grid Sequencer</div>
-      <div class="toy-body">
-        <section id="grid4"></section>
-      </div>
-    </div>
-    
-
-    <div class="toy-panel" id="toy-b1" data-toy="bouncer" style="left:20px; top:260px; width:400px; height:400px;">
-      <div class="toy-header">Bouncer</div>
-      <div class="toy-body"><canvas class="bouncer-canvas"></canvas></div>
-    </div>
-
-    <div class="toy-panel" id="toy-b2" data-toy="bouncer" style="left:440px; top:260px; width:400px; height:400px;">
-      <div class="toy-header">Bouncer</div>
-      <div class="toy-body"><canvas class="bouncer-canvas"></canvas></div>
-    </div>
-
-    <div class="toy-panel" id="toy-b3" data-toy="bouncer" style="left:860px; top:260px; width:400px; height:400px;">
-      <div class="toy-header">Bouncer</div>
-      <div class="toy-body"><canvas class="bouncer-canvas"></canvas></div>
-    </div>
-  </div>
-</main>
-
-
-
-
-  <script type="module" src="./src/topbar.js"></script>
-  <script type="module" src="./src/main.js" defer></script>
-<!-- index.html -->
-<script>
-  if ('serviceWorker' in navigator) {
-    // Only register in production (https + not localhost)
-    if (location.protocol === 'https:' && location.hostname !== 'localhost') {
-      navigator.serviceWorker.register('./service-worker.js');
-    }
-  }
-</script>
-
+    <!-- Other toys -->
+    <section id="toy-b1" class="toy-panel" data-toy="bouncer"></section>
+    <section id="toy-r1" class="toy-panel" data-toy="rippler"></section>
+    <section id="toy-b2" class="toy-panel" data-toy="bouncer"></section>
+  </main>
 </body>
 </html>

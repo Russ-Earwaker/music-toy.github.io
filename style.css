@@ -338,3 +338,12 @@ main { flex: 1 1 auto; display: block; }
 
 /* Icon-only button tweaks */
 .toy-btn svg{ width: 20px; height: 20px; display:block; }
+
+
+/* Icon-only header buttons */
+.toy-header .icon-btn{ color:#fff; background:transparent; border:1px solid var(--border); border-radius:10px; width:40px; height:40px; display:inline-flex; align-items:center; justify-content:center; }
+.toy-header .icon-btn svg{ width:22px; height:22px; fill: currentColor; }
+.toy-header .icon-btn:hover{ background: rgba(255,255,255,0.06); border-color:#3a4153; }
+
+.toy-panel{ position:relative; }
+.toy-panel .toy-body{ position:absolute; left:10px; right:10px; top:56px; bottom:10px; min-height:260px; min-width:320px; }
