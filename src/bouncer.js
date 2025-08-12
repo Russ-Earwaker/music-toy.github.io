@@ -1,7 +1,7 @@
 
 import { noteList, clamp } from './utils.js?toy18';
-import { ensureAudioContext, triggerInstrument, getLoopInfo } from './audio.js?toy18';
-import { initToyUI } from './toyui.js?toy18';
+import { ensureAudioContext, triggerInstrument, getLoopInfo } from './audio.js';
+import { initToyUI } from './toyui.js';
 import { drawBlock, drawNoteStripsAndLabel, NOTE_BTN_H, randomizeRects } from './toyhelpers.js?toy18';
 
 const BASE_BLOCK_SIZE = 48;
@@ -288,7 +288,13 @@ export function createBouncer(target){
           bounceOffRect(b, ball);
           b.activeFlash = 1.0;
           try {
-            triggerInstrument(currentInstrument || ui.instrument, noteList[b.noteIndex], ensureAudioContext().currentTime);
+            {
+              const _inst = currentInstrument || ui.instrument || 'tone';
+              const _isTone = /tone|laser|sine|square|saw|tri|synth|fm|pluck/i.test(_inst);
+              const _note = _isTone ? noteList[b.noteIndex] : 'C4';
+              triggerInstrument(_inst, _note, ensureAudioContext().currentTime);
+            }
+
           } catch(e) {
             // swallow audio errors to keep draw loop alive
             // console.warn('instrument trigger failed', e);
@@ -354,6 +360,8 @@ export function createBouncer(target){
   if (instSel){
     instSel.addEventListener('change', ()=> { currentInstrument = instSel.value; });
   }
+  // Also respond to bubbled changes from toyui
+  shell.addEventListener('toy-instrument', (e)=>{ const v = e?.detail?.value; if (v) currentInstrument = v; });
 
 
   

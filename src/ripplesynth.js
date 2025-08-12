@@ -1,7 +1,7 @@
 // src/ripplesynth.js (toy18: guard tiny panels; stable header)
 import { noteList } from './utils.js?toy18';
-import { ensureAudioContext, triggerInstrument } from './audio.js?toy18';
-import { initToyUI } from './toyui.js?toy18';
+import { ensureAudioContext, triggerInstrument } from './audio.js';
+import { initToyUI } from './toyui.js';
 
 function hardResize(canvas, host){
   const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
@@ -82,8 +82,8 @@ export function createRippleSynth(target){
 
   const ui = initToyUI(shell, { toyName: 'Ripple', showAdd:false, showDelete:false });
   
-const instEl = shell.querySelector('.toy-instrument');
-if (instEl) instEl.addEventListener('change', (e)=> { instrument = e.target.value; });
+const _instEl = shell.querySelector('.toy-instrument');
+if (_instEl) _instEl.addEventListener('change', (e)=> { instrument = e.target.value; });
 shell.addEventListener('toy-instrument', (e)=> { const v = e?.detail?.value; if (v) instrument = v; });
 setHeaderTitle(shell, 'Ripple');
   requestAnimationFrame(() => setHeaderTitle(shell, 'Ripple'));
@@ -99,7 +99,12 @@ setHeaderTitle(shell, 'Ripple');
     if (ripples.length >= MAX_RIPPLES) ripples.shift();
     ripples.push({ x, y, r: 4, life: 1, noteIndex });
     const nn = noteListLocal[Math.max(0, Math.min(noteListLocal.length-1, noteIndex))] || 'C4';
-    triggerInstrument(instrument, nn, ensureAudioContext().currentTime);
+    {
+      const _isTone = /tone|laser|sine|square|saw|tri|synth|fm|pluck/i.test(instrument || 'tone');
+      const _note = _isTone ? nn : 'C4';
+      triggerInstrument(instrument, _note, ensureAudioContext().currentTime);
+    }
+
   }
 
   function maybeStartDemo(){
