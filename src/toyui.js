@@ -70,7 +70,15 @@ export function initToyUI(panel, {
 
   const instWrap = document.createElement('div'); instWrap.style.display='none'; instWrap.style.alignItems='center'; instWrap.style.gap='6px';
   const instSel = document.createElement('select');
-  instSel.style.background='#0d1117'; instSel.style.color='#e6e8ef';
+  instSel.className = 'toy-instrument';
+  instSel.style.background='#0d1117';
+  instSel.style.color='#e6e8ef';
+  // prevent zoom overlay/handlers from interpreting clicks on the select
+  ['pointerdown','mousedown','touchstart','click'].forEach(evt => instSel.addEventListener(evt, ev => { ev.stopPropagation(); }, { capture:true }));
+  // bubble an explicit instrument-change event to the toy panel
+  instSel.addEventListener('change', ()=>{
+    panel.dispatchEvent(new CustomEvent('toy-instrument', { detail: { value: instSel.value } }));
+  });
   instSel.style.border='1px solid #252b36'; instSel.style.borderRadius='8px'; instSel.style.padding='4px 6px';
   function rebuildInstruments(){
     const names = getInstrumentNames();

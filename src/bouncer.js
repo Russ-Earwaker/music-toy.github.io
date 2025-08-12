@@ -354,39 +354,25 @@ export function createBouncer(target){
   if (instSel){
     instSel.addEventListener('change', ()=> { currentInstrument = instSel.value; });
   }
-  // Also handle bubbled instrument events from toyui header
-  shell.addEventListener('toy-instrument', (e)=>{
-    const v = e?.detail?.value;
-    if (v) currentInstrument = v;
-  });
-
 
 
   
 shell.addEventListener('toy-zoom', (e)=>{
   applyZoom(!!e?.detail?.zoomed);
   const header = shell.querySelector('.toy-header');
-  if (header){
-    if (e?.detail?.zoomed){
-      header.style.userSelect = 'none';
-      header.style.touchAction = 'none';
-      header.dataset._pd = '1';
-      header.addEventListener('_pd_dummy', ()=>{}); // no-op to keep reference
-      const onPD = (ev)=> { ev.preventDefault(); };
-      // store ref so we can remove later
-      header._onPD && header.removeEventListener('pointerdown', header._onPD, { capture:true });
-      header._onPD = onPD;
-      header.addEventListener('pointerdown', onPD, { capture:true });
-    } else {
-      header.style.userSelect = '';
-      header.style.touchAction = '';
-      if (header._onPD){ header.removeEventListener('pointerdown', header._onPD, { capture:true }); header._onPD = null; }
-    }
+  if (!header) return;
+  if (e?.detail?.zoomed){
+    header.style.userSelect = 'none';
+    header.style.touchAction = 'none';
+  } else {
+    header.style.userSelect = '';
+    header.style.touchAction = '';
   }
 });
-  shell.addEventListener('toy-random', ()=> { blocks = makeBlocks(MAX_BLOCKS); });
-  shell.addEventListener('toy-reset',  ()=> { reset(); });
+
+shell.addEventListener('toy-random', ()=> { blocks = makeBlocks(MAX_BLOCKS); });
+shell.addEventListener('toy-reset',  ()=> { reset(); });
 
   applyZoom(false);
-  return { onLoop, reset, setInstrument: ui.setInstrument, element: canvas };
+return { onLoop, reset, setInstrument: ui.setInstrument, element: canvas };
 }
