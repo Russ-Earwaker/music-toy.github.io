@@ -1,6 +1,11 @@
 // src/toyui.js — header controls for toys (Zoom, Random, Reset, Mute + per-toy volume hook)
 import { getInstrumentNames } from './audio.js';
 
+// --- DEBUG helpers (set localStorage.toyuiDebug='1' to enable persistently) ---
+const DEBUG = (typeof localStorage !== 'undefined' && localStorage.toyuiDebug === '1');
+function dbg(...args){ if (DEBUG) { try { console.log('[toyui]', ...args); } catch {} } }
+
+
 const ICONS = {
   volume: `<svg viewBox='0 0 24 24' aria-hidden='true'><path d='M3 10v4h4l5 4V6L7 10H3z'/><path d='M16.5 12a4.5 4.5 0 0 0-2.5-4.03v8.06A4.5 4.5 0 0 0 16.5 12z'/></svg>`,
   mute:   `<svg viewBox='0 0 24 24' aria-hidden='true'><path d='M3 10v4h4l5 4V6L7 10H3z'/><path d='M19 5l-3 3'/><path d='M16 8l3 3'/></svg>`
@@ -158,6 +163,7 @@ export function initToyUI(panel, {
   let zoomed = false;
   
 function setZoom(z){
+  dbg('setZoom call', { to: !!z });
   zoomed = !!z;
   instWrap.style.display = zoomed ? 'flex' : 'none';
   panel.classList.toggle('toy-zoomed', zoomed);
@@ -182,18 +188,26 @@ function setZoom(z){
       // Header: non-interactive background, interactive controls
       const header = panel.querySelector('.toy-header');
       if (header){
-        header.style.pointerEvents = 'none';
+        header.style.pointerEvents = 'none'; dbg('header inert in zoom');
         const clickable = header.querySelectorAll('button, select, input, label, [role="button"], [data-interactive="true"]');
         clickable.forEach(el => { el.style.pointerEvents = 'auto'; });
       // Close zoom when background (outside panel) is clicked
       if (!overlay._onClickOutside){
         overlay._onClickOutside = (ev)=>{
+          dbg('overlay click', { target: ev.target && (ev.target.tagName+'.'+(ev.target.className||'')), x: ev.clientX, y: ev.clientY });
           const r = panel.getBoundingClientRect();
           const inside = (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom);
           if (!inside) setZoom(false);
         };
       }
       overlay.addEventListener('click', overlay._onClickOutside);
+      if (DEBUG && !document._toyuiTracePD){
+        document._toyuiTracePD = (e)=>{ dbg('doc pointerdown', {t:(e.target&&e.target.tagName)||'', c:e.target&&e.target.className}); };
+        document._toyuiTraceClick = (e)=>{ dbg('doc click', {t:(e.target&&e.target.tagName)||'', c:e.target&&e.target.className}); };
+        document.addEventListener('pointerdown', document._toyuiTracePD, { capture:true });
+        document.addEventListener('click', document._toyuiTraceClick, { capture:true });
+      }
+
     
       }
     } else {
@@ -212,7 +226,7 @@ function setZoom(z){
       // restore header pointer-events
       const header = panel.querySelector('.toy-header');
       if (header){
-        header.style.pointerEvents = '';
+        header.style.pointerEvents = ''; dbg('header restored');
         const clickable = header.querySelectorAll('button, select, input, label, [role="button"], [data-interactive="true"]');
         clickable.forEach(el => { el.style.pointerEvents = ''; });
       }
