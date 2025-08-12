@@ -81,7 +81,11 @@ export function createRippleSynth(target){
   console.log('[Ripple] ctx ok, canvas css=', canvas.style.width, canvas.style.height);
 
   const ui = initToyUI(shell, { toyName: 'Ripple', showAdd:false, showDelete:false });
-  setHeaderTitle(shell, 'Ripple');
+  
+const instEl = shell.querySelector('.toy-instrument');
+if (instEl) instEl.addEventListener('change', (e)=> { instrument = e.target.value; });
+shell.addEventListener('toy-instrument', (e)=> { const v = e?.detail?.value; if (v) instrument = v; });
+setHeaderTitle(shell, 'Ripple');
   requestAnimationFrame(() => setHeaderTitle(shell, 'Ripple'));
 
   let instrument = 'tone';

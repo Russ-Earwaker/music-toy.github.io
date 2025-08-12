@@ -70,7 +70,13 @@ export function initToyUI(panel, {
 
   const instWrap = document.createElement('div'); instWrap.style.display='none'; instWrap.style.alignItems='center'; instWrap.style.gap='6px';
   const instSel = document.createElement('select');
-  instSel.style.background='#0d1117'; instSel.style.color='#e6e8ef';
+  instSel.className = 'toy-instrument';
+instSel.addEventListener('pointerdown', ev => ev.stopPropagation(), { capture: true });
+instSel.addEventListener('click', ev => ev.stopPropagation(), { capture: true });
+instSel.addEventListener('change', ()=>{
+  panel.dispatchEvent(new CustomEvent('toy-instrument', { detail: { value: instSel.value } }));
+});
+instSel.style.background='#0d1117'; instSel.style.color='#e6e8ef';
   instSel.style.border='1px solid #252b36'; instSel.style.borderRadius='8px'; instSel.style.padding='4px 6px';
   function rebuildInstruments(){
     const names = getInstrumentNames();

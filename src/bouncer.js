@@ -354,6 +354,12 @@ export function createBouncer(target){
   if (instSel){
     instSel.addEventListener('change', ()=> { currentInstrument = instSel.value; });
   }
+  // Also handle bubbled instrument events from toyui header
+  shell.addEventListener('toy-instrument', (e)=>{
+    const v = e?.detail?.value;
+    if (v) currentInstrument = v;
+  });
+
 
 
   
