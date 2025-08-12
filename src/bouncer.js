@@ -12,6 +12,8 @@ const BASE_BALL_R     = 10;
 const LONG_PRESS_MS = 600;
 const MAX_BLOCKS = 5;
 const ZOOM_FACTOR = 2;
+const RAND_MIN_NOTE = 48; // C3
+const RAND_MAX_NOTE = 72; // C5
 
 function resizeBacking(canvas){
   const dpr = window.devicePixelRatio || 1;
@@ -66,7 +68,7 @@ export function createBouncer(target){
     const size = blockSize();
     const arr = Array.from({length:n}, ()=>({
       x: edgePad(), y: edgePad(), w: size, h: size,
-      noteIndex: Math.floor(Math.random()*noteList.length),
+      noteIndex: Math.min(noteList.length-1, Math.max(0, RAND_MIN_NOTE + Math.floor(Math.random() * (RAND_MAX_NOTE - RAND_MIN_NOTE + 1)))),
       activeFlash: 0
     }));
     randomizeRects(arr, worldW(), worldH(), edgePad());
@@ -286,7 +288,7 @@ export function createBouncer(target){
           bounceOffRect(b, ball);
           b.activeFlash = 1.0;
           try {
-            triggerInstrument(ui.instrument, noteList[b.noteIndex], ensureAudioContext().currentTime);
+            triggerInstrument(currentInstrument || ui.instrument, noteList[b.noteIndex], ensureAudioContext().currentTime);
           } catch(e) {
             // swallow audio errors to keep draw loop alive
             // console.warn('instrument trigger failed', e);
@@ -346,6 +348,13 @@ export function createBouncer(target){
     onReset: () => { reset(); }
   });
   setHeaderTitle(shell, 'Bouncer');
+  // Track instrument from this panel's header <select>
+  let currentInstrument = ui.instrument;
+  const instSel = shell.querySelector('.toy-instrument');
+  if (instSel){
+    instSel.addEventListener('change', ()=> { currentInstrument = instSel.value; });
+  }
+
 
   
 shell.addEventListener('toy-zoom', (e)=>{

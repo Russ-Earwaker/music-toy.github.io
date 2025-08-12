@@ -51,14 +51,14 @@ export function initToyUI(panel, {
   }
 
   // Left: Zoom + name
-  const left = document.createElement('div'); left.style.display='flex'; left.style.alignItems='center'; left.style.gap='8px';
+  const left = document.createElement('div'); left.style.display='flex'; left.className = 'toy-controls toy-controls-left'; left.style.alignItems='center'; left.style.gap='8px';
   const zoomBtn = makeBtn('Zoom', 'Zoom / Edit');
   const nameEl  = document.createElement('span'); nameEl.textContent = toyName; nameEl.style.opacity='.85';
   left.append(zoomBtn, nameEl);
   header.appendChild(left);
 
   // Right: Random, Reset, (Instrument), Mute
-  const right = document.createElement('div'); right.style.display='flex'; right.style.alignItems='center'; right.style.gap='8px';
+  const right = document.createElement('div'); right.style.display='flex'; right.className = 'toy-controls toy-controls-right'; right.style.alignItems='center'; right.style.gap='8px';
 
   const randBtn  = makeBtn('Random', 'Randomize pattern');
   const resetBtn = makeBtn('Clear',  'Clear pattern');
@@ -88,7 +88,7 @@ export function initToyUI(panel, {
   if (!overlay){
     overlay = document.createElement('div');
     overlay.className = 'toy-overlay';
-    overlay.style.display = 'none';
+    overlay.style.display = 'none'; overlay.style.pointerEvents = 'none';
     document.body.appendChild(overlay);
   }
   overlay.addEventListener('click', ()=> setZoom(false));
@@ -155,31 +155,61 @@ export function initToyUI(panel, {
 
   // Zoom state + dispatch
   let zoomed = false;
-  function setZoom(z){
-    zoomed = !!z;
-    instWrap.style.display = zoomed ? 'flex' : 'none';
-    panel.classList.toggle('toy-zoomed', zoomed);
-    panel.classList.toggle('toy-unzoomed', !zoomed);
-    // Overlay + center
-    try{
-      if (zoomed){
-        overlay.style.display = 'block';
-        // remember original style to restore
-        if (!panel.dataset.prevStyle) panel.dataset.prevStyle = panel.getAttribute('style') || '';
-        panel.classList.add('toy-zoomed-floating');
-        panel.style.removeProperty('left'); panel.style.removeProperty('top'); panel.style.removeProperty('width');
-      } else {
-        overlay.style.display = 'none';
-        panel.classList.remove('toy-zoomed-floating');
-        // restore original inline styles
-        const prev = panel.dataset.prevStyle || '';
-        panel.setAttribute('style', prev);
-        delete panel.dataset.prevStyle;
-        panel.style.width = 'fit-content';
+  
+function setZoom(z){
+  zoomed = !!z;
+  instWrap.style.display = zoomed ? 'flex' : 'none';
+  panel.classList.toggle('toy-zoomed', zoomed);
+  panel.classList.toggle('toy-unzoomed', !zoomed);
+  // Overlay + center
+  try{
+    if (zoomed){
+      overlay.style.display = 'block'; overlay.style.pointerEvents = 'none';
+      overlay.style.zIndex = '9000';
+      // remember original style to restore
+      if (!panel.dataset.prevStyle) panel.dataset.prevStyle = panel.getAttribute('style') || '';
+      panel.classList.add('toy-zoomed-floating');
+      // Center and elevate panel in viewport
+      panel.style.position = 'fixed';
+      panel.style.left = '50%'; panel.style.top = '50%';
+      panel.style.transform = 'translate(-50%, -50%)';
+      panel.style.zIndex = '10000';
+      panel.style.width = 'fit-content';
+      // Freeze page scroll
+      if (!document.body.dataset._prevOverflow){ document.body.dataset._prevOverflow = document.body.style.overflow || ''; }
+      document.body.style.overflow = 'hidden';
+      // Header: non-interactive background, interactive controls
+      const header = panel.querySelector('.toy-header');
+      if (header){
+        header.style.pointerEvents = 'none';
+        const clickable = header.querySelectorAll('.toy-controls, button, select, input, label, [role="button"], [data-interactive="true"]');
+        clickable.forEach(el => { el.style.pointerEvents = 'auto'; });
       }
-    }catch{}
-    panel.dispatchEvent(new CustomEvent('toy-zoom', { detail: { zoomed } }));
-  }
+    } else {
+      overlay.style.display = 'none'; overlay.style.pointerEvents = 'none';
+      panel.classList.remove('toy-zoomed-floating');
+      // restore original inline styles
+      const prev = panel.dataset.prevStyle || '';
+      panel.setAttribute('style', prev);
+      delete panel.dataset.prevStyle;
+      // restore page scroll
+      if (document.body.dataset._prevOverflow !== undefined){
+        document.body.style.overflow = document.body.dataset._prevOverflow;
+        delete document.body.dataset._prevOverflow;
+      }
+      // restore header pointer-events
+      const header = panel.querySelector('.toy-header');
+      if (header){
+        header.style.pointerEvents = '';
+        const clickable = header.querySelectorAll('.toy-controls, button, select, input, label, [role="button"], [data-interactive="true"]');
+        clickable.forEach(el => { el.style.pointerEvents = ''; });
+      }
+    }
+  }catch{}
+  // Notify toy
+  panel.dispatchEvent(new CustomEvent('toy-zoom', { detail: { zoomed } }));
+}
+
   setZoom(false);
 
   zoomBtn.addEventListener('click', ()=> setZoom(!zoomed));
