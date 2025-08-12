@@ -70,13 +70,7 @@ export function initToyUI(panel, {
 
   const instWrap = document.createElement('div'); instWrap.style.display='none'; instWrap.style.alignItems='center'; instWrap.style.gap='6px';
   const instSel = document.createElement('select');
-  instSel.className = 'toy-instrument';
-instSel.addEventListener('pointerdown', ev => ev.stopPropagation(), { capture: true });
-instSel.addEventListener('click', ev => ev.stopPropagation(), { capture: true });
-instSel.addEventListener('change', ()=>{
-  panel.dispatchEvent(new CustomEvent('toy-instrument', { detail: { value: instSel.value } }));
-});
-instSel.style.background='#0d1117'; instSel.style.color='#e6e8ef';
+  instSel.style.background='#0d1117'; instSel.style.color='#e6e8ef';
   instSel.style.border='1px solid #252b36'; instSel.style.borderRadius='8px'; instSel.style.padding='4px 6px';
   function rebuildInstruments(){
     const names = getInstrumentNames();
@@ -99,7 +93,7 @@ instSel.style.background='#0d1117'; instSel.style.color='#e6e8ef';
   if (!overlay){
     overlay = document.createElement('div');
     overlay.className = 'toy-overlay';
-    overlay.style.display = 'none'; overlay.style.pointerEvents = 'none';
+    overlay.style.display = 'none'; overlay.style.pointerEvents = 'none'; overlay.style.position='fixed'; overlay.style.left='0'; overlay.style.top='0'; overlay.style.right='0'; overlay.style.bottom='0';
       if (overlay._onClickOutside){ overlay.removeEventListener('click', overlay._onClickOutside); }
     document.body.appendChild(overlay);
   }
@@ -179,8 +173,8 @@ function setZoom(z){
     if (zoomed){
       overlay.style.display = 'block'; overlay.style.pointerEvents = 'auto';
       overlay.style.zIndex = '9000';
-      // remember original style to restore
-      if (!panel.dataset.prevStyle) panel.dataset.prevStyle = panel.getAttribute('style') || '';
+      // remember original inline style to restore (save every time)
+      panel.dataset.prevStyle = panel.getAttribute('style') || '';
       panel.classList.add('toy-zoomed-floating');
       // Center and elevate panel in viewport
       panel.style.position = 'fixed';
@@ -197,28 +191,20 @@ function setZoom(z){
         header.style.pointerEvents = 'none'; dbg('header inert in zoom');
         const clickable = header.querySelectorAll('button, select, input, label, [role="button"], [data-interactive="true"]');
         clickable.forEach(el => { el.style.pointerEvents = 'auto'; });
+      }
       // Close zoom when background (outside panel) is clicked
       if (!overlay._onClickOutside){
         overlay._onClickOutside = (ev)=>{
-          dbg('overlay click', { target: ev.target && (ev.target.tagName+'.'+(ev.target.className||'')), x: ev.clientX, y: ev.clientY });
+          dbg('overlay click', { target: ev.target && (ev.target.tagName + '.' + (ev.target.className||'')), x: ev.clientX, y: ev.clientY });
           const r = panel.getBoundingClientRect();
           const inside = (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom);
           if (!inside) setZoom(false);
         };
-      }
-      overlay.addEventListener('click', overlay._onClickOutside);
-      if (DEBUG && !document._toyuiTracePD){
-        document._toyuiTracePD = (e)=>{ dbg('doc pointerdown', {t:(e.target&&e.target.tagName)||'', c:e.target&&e.target.className}); };
-        document._toyuiTraceClick = (e)=>{ dbg('doc click', {t:(e.target&&e.target.tagName)||'', c:e.target&&e.target.className}); };
-        document.addEventListener('pointerdown', document._toyuiTracePD, { capture:true });
-        document.addEventListener('click', document._toyuiTraceClick, { capture:true });
-      }
-
-    
+        overlay.addEventListener('click', overlay._onClickOutside);
       }
     } else {
-      overlay.style.display = 'none'; overlay.style.pointerEvents = 'none';
-      if (overlay._onClickOutside){ overlay.removeEventListener('click', overlay._onClickOutside); }
+      overlay.style.display = 'none'; overlay.style.pointerEvents = 'none'; overlay.style.position='fixed'; overlay.style.left='0'; overlay.style.top='0'; overlay.style.right='0'; overlay.style.bottom='0';
+      if (overlay._onClickOutside){ overlay.removeEventListener('click', overlay._onClickOutside); overlay._onClickOutside = null; }
       panel.classList.remove('toy-zoomed-floating');
       // restore original inline styles
       const prev = panel.dataset.prevStyle || '';
