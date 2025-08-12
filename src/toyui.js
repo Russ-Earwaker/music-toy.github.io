@@ -89,6 +89,7 @@ export function initToyUI(panel, {
     overlay = document.createElement('div');
     overlay.className = 'toy-overlay';
     overlay.style.display = 'none'; overlay.style.pointerEvents = 'none';
+      if (overlay._onClickOutside){ overlay.removeEventListener('click', overlay._onClickOutside); }
     document.body.appendChild(overlay);
   }
   overlay.addEventListener('click', ()=> setZoom(false));
@@ -164,7 +165,7 @@ function setZoom(z){
   // Overlay + center
   try{
     if (zoomed){
-      overlay.style.display = 'block'; overlay.style.pointerEvents = 'none';
+      overlay.style.display = 'block'; overlay.style.pointerEvents = 'auto';
       overlay.style.zIndex = '9000';
       // remember original style to restore
       if (!panel.dataset.prevStyle) panel.dataset.prevStyle = panel.getAttribute('style') || '';
@@ -182,11 +183,22 @@ function setZoom(z){
       const header = panel.querySelector('.toy-header');
       if (header){
         header.style.pointerEvents = 'none';
-        const clickable = header.querySelectorAll('.toy-controls, button, select, input, label, [role="button"], [data-interactive="true"]');
+        const clickable = header.querySelectorAll('button, select, input, label, [role="button"], [data-interactive="true"]');
         clickable.forEach(el => { el.style.pointerEvents = 'auto'; });
+      // Close zoom when background (outside panel) is clicked
+      if (!overlay._onClickOutside){
+        overlay._onClickOutside = (ev)=>{
+          const r = panel.getBoundingClientRect();
+          const inside = (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom);
+          if (!inside) setZoom(false);
+        };
+      }
+      overlay.addEventListener('click', overlay._onClickOutside);
+    
       }
     } else {
       overlay.style.display = 'none'; overlay.style.pointerEvents = 'none';
+      if (overlay._onClickOutside){ overlay.removeEventListener('click', overlay._onClickOutside); }
       panel.classList.remove('toy-zoomed-floating');
       // restore original inline styles
       const prev = panel.dataset.prevStyle || '';
@@ -201,7 +213,7 @@ function setZoom(z){
       const header = panel.querySelector('.toy-header');
       if (header){
         header.style.pointerEvents = '';
-        const clickable = header.querySelectorAll('.toy-controls, button, select, input, label, [role="button"], [data-interactive="true"]');
+        const clickable = header.querySelectorAll('button, select, input, label, [role="button"], [data-interactive="true"]');
         clickable.forEach(el => { el.style.pointerEvents = ''; });
       }
     }
