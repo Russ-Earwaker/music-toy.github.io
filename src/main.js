@@ -136,7 +136,7 @@ if (!window.__booted__) {
           return;
         }
         const ni = getInstrumentNames();
-        inst?.setInstrument?.(ni[0] || 'tone');
+        inst?.setInstrument?.( (ni.find(n=>n.toLowerCase().includes('kalimba')) || ni[0] || 'tone') );
         toys.push(inst);
         panel.dataset.toyInit = '1';
       }catch(e){
