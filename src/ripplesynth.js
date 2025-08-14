@@ -1,246 +1,324 @@
-// src/ripplesynth.js — Rippler: 5 draggable boxes, up to 3 draggable generators; ripples per loop at X-offset
-import { noteList, resizeCanvasForDPR, getCanvasPos, clamp } from './utils.js';
+// src/ripplesynth.js — Rippler (clean build with ASAP click + loop phase from click)
+import { noteList, getCanvasPos, clamp, resizeCanvasForDPR } from './utils.js';
 import { ensureAudioContext, triggerInstrument, NUM_STEPS, stepSeconds } from './audio.js';
 import { initToyUI } from './toyui.js';
-import { drawBlock, drawNoteStripsAndLabel, NOTE_BTN_H, hitTopStrip, hitBottomStrip, clampRectWithin, randomizeRects } from './toyhelpers.js';
-import { initToySizing } from './toyhelpers.js';
+import { initToySizing, drawBlock, drawNoteStripsAndLabel, NOTE_BTN_H, hitTopStrip, hitBottomStrip, clampRectWithin, randomizeRects, EDGE_PAD as EDGE } from './toyhelpers.js';
 
 const BASE_BLOCK_SIZE = 48;
+const HIT_COOLDOWN = 0.08; // per-block cooldown to avoid double-fires
+
+// --- Note helpers (tight major pentatonic near C4) ---
+function noteIndexOf(name){ const i = noteList.indexOf(name); return (i>=0? i : Math.floor(noteList.length/2)); }
+const C4_INDEX = noteIndexOf('C4');
+const MAJOR_PENT = new Set([0,2,4,7,9]); // semitone classes
+function pentIndices(centerIdx=C4_INDEX, radius=7){
+  const arr=[];
+  for (let off=-radius; off<=radius; off++){
+    const idx = centerIdx + off;
+    if (idx>=0 && idx<noteList.length){
+      const cls = ((off % 12) + 12) % 12;
+      if (MAJOR_PENT.has(cls)) arr.push(idx);
+    }
+  }
+  return arr.length? arr : [centerIdx];
+}
+const PENTA_NEAR_C4 = pentIndices(C4_INDEX, 7);
+function randomPent(){ return PENTA_NEAR_C4[Math.floor(Math.random()*PENTA_NEAR_C4.length)]; }
 
 export function createRippleSynth(panel){
-  // --- Canvas & UI ---
+  // --- Canvas ---
   const shell  = panel;
-  const host = shell.querySelector('.toy-body') || shell;
+  const host   = shell.querySelector('.toy-body') || shell;
   const canvas = (host.querySelector && (host.querySelector('.rippler-canvas') || host.querySelector('canvas'))) || (function(){
     const c = document.createElement('canvas');
-    c.className='rippler-canvas';
+    c.className = 'rippler-canvas';
     c.style.display = 'block';
     c.style.touchAction = 'none';
-    host.appendChild(c); return c;
+    host.appendChild(c);
+    return c;
   })();
   const ctx = canvas.getContext('2d', { alpha:false });
 
-  const ui = initToyUI(shell, { toyName: 'Rippler', defaultInstrument: 'tone' });
+  // --- UI ---
+  const ui = initToyUI(shell, { toyName: 'Rippler', defaultInstrument: 'kalimba' });
 
-  // --- Sizing (shared) ---
+  // --- Sizing ---
   const sizing = initToySizing(shell, canvas, ctx, { squareFromWidth: true });
   const vw = sizing.vw, vh = sizing.vh;
 
-  // --- World & Entities ---
-  const EDGE = 6;
+  // --- World ---
   function makeBlocks(n=5){
     const size = BASE_BLOCK_SIZE;
     const arr = [];
     for (let i=0;i<n;i++){
-      arr.push({ x: EDGE+10, y: EDGE+10, w: size, h: size, noteIndex: (i*5)%noteList.length, activeFlash: 0, cooldownUntil: 0 });
+      arr.push({ x: EDGE+10, y: EDGE+10, w: size, h: size, noteIndex: randomPent(), activeFlash: 0, cooldownUntil: 0 });
     }
     return arr;
   }
   let blocks = makeBlocks(5);
   randomizeRects(blocks, vw(), vh(), EDGE);
 
-  const generators = []; // { x, y, stepOffset }
-  const HIT_COOLDOWN = 0.08; // seconds between hits per block
-  const ripples = [];    // { gx, gy, startTime, firedFor:Set(idx) }
+  // Single user-placed generator (none at start)
+  let generator = null; // { x, y, loopStep:number|null, placedTime:number }
 
-  function xToStep(x){
-    const usable = Math.max(1, vw() - EDGE*2);
-    const t = clamp((x - EDGE) / usable, 0, 0.9999);
-    return Math.floor(t * NUM_STEPS);
-  }
+  // Ripples and scheduling
+  const ripples = []; // { startTime:number, firedFor:Set<number> }
+  let lastLoopStartTime = 0;
+  let lastQueuedTime = -1;
 
-  function addGenerator(x, y){
-    if (generators.length >= 3) return null;
-    const g = { x: clamp(x, EDGE, vw()-EDGE), y: clamp(y, EDGE, vh()-EDGE), stepOffset: 0 };
-    g.stepOffset = xToStep(g.x);
-    generators.push(g);
-    // fire a ripple immediately
-    const now = ensureAudioContext().currentTime;
-    ripples.push({ gx: g.x, gy: g.y, startTime: now, firedFor: new Set() });
-    return g;
-  }
-
-  function scheduleLoopRipples(loopStartTime){
-    const ss = stepSeconds();
-    for (const g of generators){
-      ripples.push({ gx: g.x, gy: g.y, startTime: loopStartTime + g.stepOffset * ss, firedFor: new Set() });
+  
+  // Quantize 'now' to the next half-beat (aligned to lastLoopStartTime if known)
+  function quantizeNextStep(now){
+    const q = stepSeconds();
+    if (lastLoopStartTime){
+      return lastLoopStartTime + Math.ceil((now - lastLoopStartTime) / q) * q;
     }
+    return Math.ceil(now / q) * q;
   }
 
-  function hitBlock(p){
-    for (let i = blocks.length-1; i>=0; i--){
-      const b = blocks[i];
-      if (p.x>=b.x && p.x<=b.x+b.w && p.y>=b.y && p.y<=b.y+b.h) return { b, idx: i };
-    }
-    return null;
+  function loopStepFromTime(time, loopStart){
+    const q = stepSeconds();
+    const steps = Math.round((time - loopStart) / q);
+    return ((steps % NUM_STEPS) + NUM_STEPS) % NUM_STEPS;
+  }
+// Prevent near-duplicate ripples
+  function enqueueRippleAt(tQ){
+    // Only suppress exact-duplicate timestamps (floating tolerance)
+    if (lastQueuedTime >= 0 && Math.abs(tQ - lastQueuedTime) < 1e-4) return;
+    ripples.push({ startTime: tQ, firedFor: new Set() });
+    lastQueuedTime = tQ;
   }
 
-  function hitGenerator(p){
-    for (let i = generators.length-1; i>=0; i--){
-      const g = generators[i];
-      const r = 9;
-      if (p.x>=g.x-r && p.x<=g.x+r && p.y>=g.y-r && p.y<=g.y+r) return { g, idx: i };
-    }
-    return null;
-  }
+  // Push a ripple right now (ASAP, no quantization)
 
-  // --- Pointer interactions ---
-  let draggingGen = null, dragDx = 0, dragDy = 0;
-  let draggingBlock = null, dragOff = {x:0,y:0};
+
+  // --- Input state ---
+  let draggingGen = false;
+  let draggingBlock = null;
+  const dragOff = { x:0, y:0 };
 
   function pointerDown(e){
     const p = getCanvasPos(canvas, e);
 
-    // Box first: drag (and note arrows in zoom)
-    const hb = hitBlock(p);
-    if (hb){
-      const b = hb.b;
-      if (sizing.scale > 1){
-        if (hitTopStrip(p, b)){ b.noteIndex = (b.noteIndex + 1) % noteList.length; e.preventDefault(); return; }
-        if (hitBottomStrip(p, b)){ b.noteIndex = (b.noteIndex - 1 + noteList.length) % noteList.length; e.preventDefault(); return; }
+    // If no generator yet: place immediately (ignore blocks)
+    if (!generator){
+      generator = { x: clamp(p.x, EDGE, vw()-EDGE), y: clamp(p.y, EDGE, vh()-EDGE), anchorTime: 0, placedTime: 0 };
+      const now = ensureAudioContext().currentTime;
+      const tQ = quantizeNextStep(now);
+      generator.placedTime = now;
+      generator.anchorTime = tQ;
+      ripples.length = 0;
+      enqueueRippleAt(tQ); // quantized first hit
+      e.preventDefault(); return;
+    }
+
+    // Blocks first
+    for (let i = blocks.length-1; i>=0; i--){
+      const b = blocks[i];
+      if (p.x>=b.x && p.x<=b.x+b.w && p.y>=b.y && p.y<=b.y+b.h){
+        if (sizing.scale > 1){
+          if (hitTopStrip(p, b)){ b.noteIndex = (b.noteIndex + 1) % noteList.length; e.preventDefault(); return; }
+          if (hitBottomStrip(p, b)){ b.noteIndex = (b.noteIndex - 1 + noteList.length) % noteList.length; e.preventDefault(); return; }
+        }
+        draggingBlock = b;
+        dragOff.x = p.x - b.x; dragOff.y = p.y - b.y;
+        e.preventDefault(); return;
       }
-      draggingBlock = b;
-      dragOff = { x: p.x - b.x, y: p.y - b.y };
+    }
+
+    // Generator handle?
+    const r = 12;
+    if (p.x>=generator.x-r && p.x<=generator.x+r && p.y>=generator.y-r && p.y<=generator.y+r){
+      draggingGen = true;
+      dragOff.x = p.x - generator.x; dragOff.y = p.y - generator.y;
       e.preventDefault(); return;
     }
 
-    // Generator second: drag
-    const hg = hitGenerator(p);
-    if (hg){
-      draggingGen = hg.g;
-      dragDx = p.x - draggingGen.x; dragDy = p.y - draggingGen.y;
-      e.preventDefault(); return;
-    }
-
-    // Else: create a generator on click (limit 3)
-    if (generators.length < 3){
-      addGenerator(p.x, p.y);
-      e.preventDefault(); return;
-    }
-  }
-  function pointerMove(e){
-    const p = getCanvasPos(canvas, e);
-    if (draggingGen){
-      draggingGen.x = clamp(p.x - dragDx, EDGE, vw()-EDGE);
-      draggingGen.y = clamp(p.y - dragDy, EDGE, vh()-EDGE);
-      draggingGen.stepOffset = xToStep(draggingGen.x);
-    } else if (draggingBlock){
-      draggingBlock.x = clamp(p.x - dragOff.x, EDGE, vw()-EDGE - draggingBlock.w);
-      draggingBlock.y = clamp(p.y - dragOff.y, EDGE, vh()-EDGE - draggingBlock.h);
-    }
+    // Empty-space: snap generator and fire
+    generator.x = clamp(p.x, EDGE, vw()-EDGE);
+    generator.y = clamp(p.y, EDGE, vh()-EDGE);
+    const now = ensureAudioContext().currentTime;
+    const tQ = quantizeNextStep(now);
+    generator.anchorTime = tQ;
+    ripples.length = 0;
+    enqueueRippleAt(tQ);
     e.preventDefault();
   }
-  function pointerUp(e){
-    draggingGen = null; draggingBlock = null;
+
+  function pointerMove(e){
+    const p = getCanvasPos(canvas, e);
+    if (draggingGen && generator){
+      generator.x = clamp(p.x - dragOff.x, EDGE, vw()-EDGE);
+      generator.y = clamp(p.y - dragOff.y, EDGE, vh()-EDGE);
+      ripples.length = 0; // clear while moving to avoid overlaps
+      e.preventDefault(); return;
+    }
+    if (draggingBlock){
+      draggingBlock.x = clamp(p.x - dragOff.x, EDGE, vw()-EDGE - draggingBlock.w);
+      draggingBlock.y = clamp(p.y - dragOff.y, EDGE, vh()-EDGE - draggingBlock.h);
+      e.preventDefault(); return;
+    }
   }
 
-  canvas.addEventListener('mousedown', pointerDown);
-  canvas.addEventListener('mousemove', pointerMove);
-  window.addEventListener('mouseup', pointerUp);
-  canvas.addEventListener('touchstart', pointerDown, { passive:false });
-  canvas.addEventListener('touchmove', pointerMove, { passive:false });
-  window.addEventListener('touchend', pointerUp);
+  function pointerUp(){
+    if (draggingGen && generator){
+      const now = ensureAudioContext().currentTime;
+      const tQ = quantizeNextStep(now);
+      generator.anchorTime = tQ;
+      enqueueRippleAt(tQ);
+    }
+    draggingBlock = null; draggingGen = false;
+  }
 
-  // --- Draw ---
+  canvas.addEventListener('pointerdown', pointerDown);
+  window.addEventListener('pointermove', pointerMove);
+  window.addEventListener('pointerup', pointerUp);
+  window.addEventListener('pointercancel', pointerUp);
+  window.addEventListener('blur', pointerUp);
+
+  // --- Drawing & audio ---
   function draw(){
+    // clear
     resizeCanvasForDPR(canvas, ctx);
-    const dpr = window.devicePixelRatio || 1;
-    // Clear and paint using full CSS pixel size mapped to backing
-    const cssW = Math.max(1, Math.floor((canvas.width||1)/dpr));
-    const cssH = Math.max(1, Math.floor((canvas.height||1)/dpr));
-    ctx.clearRect(0, 0, cssW, cssH);
-    // background + border
+    ctx.clearRect(0,0,vw(),vh());
+    // bg
     ctx.fillStyle = '#0b0f15';
-    ctx.fillRect(0, 0, vw(), vh());
+    ctx.fillRect(0,0,vw(),vh());
     ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-    ctx.strokeRect(0.5, 0.5, vw()-1, vh()-1);
+    ctx.strokeRect(0.5,0.5,vw()-1,vh()-1);
 
     const now = ensureAudioContext().currentTime;
 
-    // ripples
-    const speed = Math.max(vw(), vh()) * 0.75; // px per second
+    // Ripple center for drawing
+    const hasGen = !!generator;
+    const cx = hasGen ? generator.x : vw()/2;
+    const cy = hasGen ? generator.y : vh()/2;
+
+    // Constant speed based on CANVAS CENTER to nearest edge over one loop
+    const loopDur = NUM_STEPS * stepSeconds();
+    const ccx = vw()/2, ccy = vh()/2;
+    const minEdgeDistCenter = Math.min(ccx - EDGE, vw()-EDGE - ccx, ccy - EDGE, vh()-EDGE - ccy);
+    const speed = loopDur > 0 ? Math.max(0, minEdgeDistCenter) / loopDur : 0;
+
+    // Draw ripples & cull
     ctx.save();
     ctx.lineWidth = 2;
     ctx.strokeStyle = 'rgba(255,255,255,0.25)';
     for (let i = ripples.length-1; i>=0; i--){
-      const r = (now - ripples[i].startTime) * speed;
-      if (r > Math.max(vw(), vh()) * 1.5){ ripples.splice(i,1); continue; }
+      const rp = ripples[i];
+      const r = Math.max(0, (now - rp.startTime) * speed);
+      const cornerMax = Math.max(
+        Math.hypot(cx - 0,    cy - 0),
+        Math.hypot(cx - vw(), cy - 0),
+        Math.hypot(cx - 0,    cy - vh()),
+        Math.hypot(cx - vw(), cy - vh())
+      );
+      if (r > cornerMax + 50){ ripples.splice(i,1); continue; }
       ctx.beginPath();
-      ctx.arc(ripples[i].gx, ripples[i].gy, Math.max(1, r), 0, Math.PI*2);
+      ctx.arc(cx, cy, r, 0, Math.PI*2);
       ctx.stroke();
     }
     ctx.restore();
 
-    // trigger notes when ripple crosses a block center
-    for (let ri = 0; ri < ripples.length; ri++){
-      const rp = ripples[ri];
-      const radius = (now - rp.startTime) * speed;
-      for (let bi = 0; bi < blocks.length; bi++){
+    // Trigger blocks (once per ripple) — quantize hits to next half-beat
+    const q = stepSeconds();
+    const ls = lastLoopStartTime || now;
+    for (const rp of ripples){
+      const radius = Math.max(0, (now - rp.startTime) * speed);
+      for (let bi=0; bi<blocks.length; bi++){
         const b = blocks[bi];
-        const cx = b.x + b.w/2, cy = b.y + b.h/2;
-        const dist = Math.hypot(cx - rp.gx, cy - rp.gy);
-        if (Math.abs(dist - radius) < Math.max(8, Math.min(b.w, b.h) * 0.25)){
+        const bx = b.x + b.w/2, by = b.y + b.h/2;
+        const dist = Math.hypot(bx - cx, by - cy);
+        const threshold = Math.max(8, Math.min(b.w, b.h) * 0.25);
+        if (Math.abs(dist - radius) < threshold){
+          if (!rp.firedFor) rp.firedFor = new Set();
           if (!rp.firedFor.has(bi)){
+            const steps = Math.ceil((now - ls) / q);
+            const tQ = ls + steps * q;
+            triggerInstrument(ui.instrument, noteList[b.noteIndex % noteList.length], tQ);
             rp.firedFor.add(bi);
-            if (now >= (b.cooldownUntil||0)) { triggerInstrument(ui.instrument, noteList[b.noteIndex % noteList.length], now); b.cooldownUntil = now + HIT_COOLDOWN; }
+            b.cooldownUntil = now + HIT_COOLDOWN;
             b.activeFlash = 1.0;
           }
         }
       }
     }
 
-    // boxes
+    // Draw blocks
     for (const b of blocks){
       drawBlock(ctx, b, { baseColor: '#ff8c00', active: b.activeFlash > 0 });
-      if (sizing.scale > 1){
-        drawNoteStripsAndLabel(ctx, b, noteList[b.noteIndex % noteList.length]);
+      if (sizing.scale > 1){ drawNoteStripsAndLabel(ctx, b, noteList[b.noteIndex % noteList.length]); }
+      if (b.activeFlash > 0){
+        // Extra activation pulse
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,255,255,' + (0.35 * b.activeFlash) + ')';
+        ctx.lineWidth = 2 + 3 * b.activeFlash;
+        ctx.strokeRect(b.x - 2*b.activeFlash, b.y - 2*b.activeFlash, b.w + 4*b.activeFlash, b.h + 4*b.activeFlash);
+        ctx.restore();
+        b.activeFlash = Math.max(0, b.activeFlash - 0.06);
       }
-      if (b.activeFlash > 0){ b.activeFlash = Math.max(0, b.activeFlash - 0.04); }
     }
 
-    // generators
-    ctx.save();
-    for (const g of generators){
+    // Draw generator handle
+    if (generator){
+      ctx.save();
       ctx.strokeStyle = '#ffd95e';
       ctx.fillStyle = 'rgba(255,217,94,0.15)';
-      ctx.beginPath();
-      ctx.arc(g.x, g.y, 9, 0, Math.PI*2);
-      ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, 9, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.restore();
     }
-    ctx.restore();
 
     requestAnimationFrame(draw);
   }
   requestAnimationFrame(draw);
 
-  // --- Events from header ---
+  // --- UI Events ---
   panel.addEventListener('toy-zoom', (e)=>{
     const ratio = sizing.setZoom(!!(e?.detail?.zoomed));
     if (ratio !== 1){
-      blocks.forEach(b=>{ b.x*=ratio; b.y*=ratio; b.w*=ratio; b.h*=ratio; });
-      generators.forEach(g=>{ g.x*=ratio; g.y*=ratio; });
-      ripples.forEach(rp=>{ rp.gx*=ratio; rp.gy*=ratio; });
+      blocks.forEach(b => { b.x *= ratio; b.y *= ratio; b.w *= ratio; b.h *= ratio; });
+      if (generator){ generator.x *= ratio; generator.y *= ratio; }
     }
   });
 
   panel.addEventListener('toy-random', ()=>{
-    // If blocks were cleared, recreate; otherwise randomize positions
-    if (!blocks || !blocks.length){ blocks = makeBlocks(5); }
     randomizeRects(blocks, vw(), vh(), EDGE);
-    for (const b of blocks){ b.noteIndex = Math.floor(Math.random()*noteList.length); b.activeFlash = 0; }
+    for (const b of blocks){ b.noteIndex = randomPent(); b.activeFlash = 0; }
   });
 
   panel.addEventListener('toy-reset', ()=>{
-    generators.splice(0, generators.length);
-    ripples.splice(0, ripples.length);
-    blocks.splice(0, blocks.length); // clear everything
+    ripples.length = 0;
+    generator = null;
+    for (const b of blocks){ b.noteIndex = C4_INDEX; b.activeFlash = 0; }
   });
 
-  // --- Loop Hook ---
-  function onLoop(loopStartTime){ scheduleLoopRipples(loopStartTime); }
-  function reset(){ generators.splice(0,generators.length); ripples.splice(0,ripples.length); blocks = makeBlocks(5); }
-  function setInstrument(name){ /* no-op */ }
-  function destroy(){ /* nothing to disconnect here */ }
+  
+  // Loop scheduler: anchor-based (exactly 1 loop after the first)
+  function scheduleLoopRipple(loopStartTime){
+    lastLoopStartTime = loopStartTime;
+    if (!generator || !generator.anchorTime) return;
+    const q = stepSeconds();
+    const loopDur = NUM_STEPS * q;
+    const anchor = generator.anchorTime;
+    // Compute the next occurrence strictly after the current loopStart (unless anchor is still ahead)
+    let n = Math.floor((loopStartTime - anchor) / loopDur) + 1;
+    if (loopStartTime < anchor) n = 0; // anchor is still upcoming in this loop
+    const t = anchor + Math.max(0, n) * loopDur;
+    enqueueRippleAt(t);
+  }
+// --- Loop hook ---
+  function onLoop(loopStartTime){ scheduleLoopRipple(loopStartTime); }
 
-  return { onLoop, reset, setInstrument, element: canvas, destroy };
+  // API
+  function reset(){ ripples.length = 0; generator = null; for (const b of blocks){ b.noteIndex = C4_INDEX; b.activeFlash = 0; } }
+  function setInstrument(_name){ /* managed by UI */ }
+  function destroy(){
+    canvas.removeEventListener('pointerdown', pointerDown);
+    window.removeEventListener('pointermove', pointerMove);
+    window.removeEventListener('pointerup', pointerUp);
+    window.removeEventListener('pointercancel', pointerUp);
+    window.removeEventListener('blur', pointerUp);
+  }
+
+  return { onLoop, reset, setInstrument, destroy };
 }
