@@ -1,171 +1,244 @@
-// src/ripplesynth.js (toy18: guard tiny panels; stable header)
-import { noteList } from './utils.js?toy18';
-import { ensureAudioContext, triggerInstrument } from './audio.js';
+// src/ripplesynth.js — Rippler: 5 draggable boxes, up to 3 draggable generators; ripples per loop at X-offset
+import { noteList, resizeCanvasForDPR, getCanvasPos, clamp } from './utils.js';
+import { ensureAudioContext, triggerInstrument, NUM_STEPS, stepSeconds } from './audio.js';
 import { initToyUI } from './toyui.js';
+import { drawBlock, drawNoteStripsAndLabel, NOTE_BTN_H, hitTopStrip, hitBottomStrip, clampRectWithin, randomizeRects } from './toyhelpers.js';
+import { initToySizing } from './toyhelpers.js';
 
-function hardResize(canvas, host){
-  const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
-  const rect = host.getBoundingClientRect();
-  const cssW = Math.max(1, Math.floor(rect.width));
-  const cssH = Math.max(1, Math.floor(rect.height));
-  if (canvas.width !== Math.floor(cssW * dpr) || canvas.height !== Math.floor(cssH * dpr)) {
-    canvas.width  = Math.floor(cssW * dpr);
-    canvas.height = Math.floor(cssH * dpr);
-    canvas.style.width = cssW + 'px';
-    canvas.style.height = cssH + 'px';
-    const ctx = canvas.getContext('2d');
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    canvas._vw = cssW;
-    canvas._vh = cssH;
-  }
-}
-
-
-function ensurePanelSizing(shell, host, headH){
-  try{
-    const cs = getComputedStyle(shell);
-    if (cs.position === 'static') shell.style.position = 'relative';
-  }catch{ shell.style.position = shell.style.position || 'relative'; }
-
-  // Provide sensible defaults only if panel is tiny (e.g., 20x20)
-  const w = Math.max(0, shell.clientWidth|0);
-  const h = Math.max(0, shell.clientHeight|0);
-
-  if (w < 220) shell.style.width = shell.style.width || '380px';
-  if (h < (headH + 140)) shell.style.height = shell.style.height || (headH + 300) + 'px';
-
-  // Make body fill the interior and have a minimum drawing area
-  host.style.minHeight = host.style.minHeight || '260px';
-  host.style.minWidth  = host.style.minWidth  || '320px';
-}
-
-
-function setHeaderTitle(shell, name){
-  const h = shell?.querySelector?.('.toy-header');
-  if (!h) return;
-  let span = h.querySelector('.toy-title');
-  if (!span) { span = document.createElement('span'); span.className='toy-title'; h.appendChild(span); }
-  span.textContent = name;
-}
-
-const MAX_RIPPLES = 12;
-
-export function createRippleSynth(target){
-  const shell  = (typeof target === 'string') ? document.querySelector(target) : target;
-  console.log('[Ripple] mount on', shell?.id || shell);
-
-  let host = shell?.querySelector?.('.toy-body');
-  if (!host){
-    host = document.createElement('div');
-    host.className = 'toy-body';
-    shell?.appendChild?.(host);
-  }
-
-  const header = shell?.querySelector?.('.toy-header');
-  const headH = header ? Math.max(44, Math.round(header.getBoundingClientRect().height)) : 44;
-  Object.assign(host.style, {
-    position: 'absolute',
-    left: '10px', right: '10px', bottom: '10px',
-    top: (headH + 6) + 'px',
-    display: 'block',
-    background: 'rgba(0,128,255,0.08)'
-  });
-
-  ensurePanelSizing(shell, host, headH);
-
-  const canvas = (host && host.querySelector && host.querySelector('canvas.ripple-canvas')) || (()=>{
-    const c = document.createElement('canvas'); c.className='ripple-canvas'; host.appendChild(c); return c;
+export function createRippleSynth(panel){
+  // --- Canvas & UI ---
+  const shell  = panel;
+  const host = shell.querySelector('.toy-body') || shell;
+  const canvas = (host.querySelector && (host.querySelector('.rippler-canvas') || host.querySelector('canvas'))) || (function(){
+    const c = document.createElement('canvas');
+    c.className='rippler-canvas';
+    c.style.display = 'block';
+    c.style.touchAction = 'none';
+    host.appendChild(c); return c;
   })();
-  const ctx = canvas.getContext('2d');
-  hardResize(canvas, host);
-  console.log('[Ripple] ctx ok, canvas css=', canvas.style.width, canvas.style.height);
+  const ctx = canvas.getContext('2d', { alpha:false });
 
-  const ui = initToyUI(shell, { toyName: 'Ripple', showAdd:false, showDelete:false });
-  
-const _instEl = shell.querySelector('.toy-instrument');
-if (_instEl) _instEl.addEventListener('change', (e)=> { instrument = e.target.value; });
-shell.addEventListener('toy-instrument', (e)=> { const v = e?.detail?.value; if (v) instrument = v; });
-setHeaderTitle(shell, 'Ripple');
-  requestAnimationFrame(() => setHeaderTitle(shell, 'Ripple'));
+  const ui = initToyUI(shell, { toyName: 'Rippler', defaultInstrument: 'tone' });
 
-  let instrument = 'tone';
-  ui?.setInstrument && ui.setInstrument(instrument);
+  // --- Sizing (shared) ---
+  const sizing = initToySizing(shell, canvas, ctx, { squareFromWidth: true });
+  const vw = sizing.vw, vh = sizing.vh;
+  // --- World & Entities ---
 
-  const ripples = []; // {x,y,r,life,noteIndex}
-  const noteListLocal = noteList || ['C4','D4','E4','F4','G4','A4','B4'];
-  const cIdx = noteListLocal.indexOf('C4') !== -1 ? noteListLocal.indexOf('C4') : 0;
 
-  function addRipple(x, y, noteIndex){
-    if (ripples.length >= MAX_RIPPLES) ripples.shift();
-    ripples.push({ x, y, r: 4, life: 1, noteIndex });
-    const nn = noteListLocal[Math.max(0, Math.min(noteListLocal.length-1, noteIndex))] || 'C4';
-    {
-      const _isTone = /tone|laser|sine|square|saw|tri|synth|fm|pluck/i.test(instrument || 'tone');
-      const _note = _isTone ? nn : 'C4';
-      triggerInstrument(instrument, _note, ensureAudioContext().currentTime);
+  const EDGE = 6;
+// removed local vw() (using sizing.vw)
+// removed local vh() (using sizing.vh)
+function makeBlocks(n=5){
+    const size = Math.max(32, Math.min(64, Math.floor(Math.min(vw(), vh()) / 4)));
+    const arr = [];
+    for (let i=0;i<n;i++){
+      arr.push({ x: EDGE+10, y: EDGE+10, w: size, h: size, noteIndex: (i*5)%noteList.length, activeFlash: 0 });
     }
+    return arr;
+  }
+  let blocks = makeBlocks(5);
+  randomizeRects(blocks, vw(), vh(), EDGE);
 
+  const generators = []; // { x, y, stepOffset }
+  const ripples = [];    // { gx, gy, startTime, firedFor:Set(idx) }
+
+  function xToStep(x){
+    const usable = Math.max(1, vw() - EDGE*2);
+    const t = clamp((x - EDGE) / usable, 0, 0.9999);
+    return Math.floor(t * NUM_STEPS);
   }
 
-  function maybeStartDemo(){
-    const seed = () => { addRipple(80, 120, cIdx); addRipple(160, 120, cIdx+4); addRipple(240, 120, cIdx+7); };
-    const pulse = () => { addRipple(40 + Math.random()*300, 40 + Math.random()*180, cIdx + (Math.random()*7|0)); };
-    if (window.__audioUnlocked) {
-      seed();
-      setInterval(pulse, 1200);
-    } else {
-      const once = () => { seed(); setInterval(pulse, 1200); window.removeEventListener('audio-unlocked', once); };
-      window.addEventListener('audio-unlocked', once);
+  function addGenerator(x, y){
+    if (generators.length >= 3) return null;
+    const g = { x: clamp(x, EDGE, vw()-EDGE), y: clamp(y, EDGE, vh()-EDGE), stepOffset: 0 };
+    g.stepOffset = xToStep(g.x);
+    generators.push(g);
+    // fire a ripple immediately
+    const now = ensureAudioContext().currentTime;
+    ripples.push({ gx: g.x, gy: g.y, startTime: now, firedFor: new Set() });
+    return g;
+  }
+
+  function scheduleLoopRipples(loopStartTime){
+    const ss = stepSeconds();
+    for (const g of generators){
+      ripples.push({ gx: g.x, gy: g.y, startTime: loopStartTime + g.stepOffset * ss, firedFor: new Set() });
     }
   }
-  maybeStartDemo();
 
-  canvas.addEventListener('pointerdown', (e)=>{
-    const rect = canvas.getBoundingClientRect();
-    const px = (e.clientX - rect.left);
-    const py = (e.clientY - rect.top);
-    const rows = 8;
-    const row = Math.max(0, Math.min(rows-1, Math.floor((py / (canvas._vh || rect.height)) * rows)));
-    addRipple(px, py, cIdx + (rows-1 - row));
-  });
+  // --- Interaction ---
+  let draggingGen = null;
+  let draggingBlock = null;
+  let dragDx = 0, dragDy = 0;
+  let dragOff = {x:0,y:0};
 
-  const doResize = ()=> hardResize(canvas, host);
-  window.addEventListener('resize', doResize);
-  new ResizeObserver(() => hardResize(canvas, host)).observe(host);
-  requestAnimationFrame(doResize);
+  function hitGenerator(p){
+    for (let i = generators.length-1; i>=0; i--){
+      const g = generators[i];
+      const dx = p.x - g.x, dy = p.y - g.y;
+      if (dx*dx + dy*dy <= 8*8) return { g, idx: i };
+    }
+    return null;
+  }
+  function hitBlock(p){
+    for (let i = blocks.length-1; i>=0; i--){
+      const b = blocks[i];
+      if (p.x>=b.x && p.x<=b.x+b.w && p.y>=b.y && p.y<=b.y+b.h) return { b, idx: i };
+    }
+    return null;
+  }
 
-  let running = true;
+  function pointerDown(e){
+    const p = getCanvasPos(canvas, e);
+
+    // Box first: drag (and note arrows in zoom)
+    const hb = hitBlock(p);
+    if (hb){
+      const b = hb.b;
+      if (sizing.scale > 1){
+        if (hitTopStrip(p, b)){ b.noteIndex = (b.noteIndex + 1) % noteList.length; e.preventDefault(); return; }
+        if (hitBottomStrip(p, b)){ b.noteIndex = (b.noteIndex - 1 + noteList.length) % noteList.length; e.preventDefault(); return; }
+      }
+      draggingBlock = b;
+      dragOff = { x: p.x - b.x, y: p.y - b.y };
+      e.preventDefault(); return;
+    }
+
+    // Generator second: drag
+    const hg = hitGenerator(p);
+    if (hg){
+      draggingGen = hg.g;
+      dragDx = p.x - draggingGen.x; dragDy = p.y - draggingGen.y;
+      e.preventDefault(); return;
+    }
+
+    // Else create a new generator
+    const g = addGenerator(p.x, p.y);
+    if (g){
+      draggingGen = g; dragDx = 0; dragDy = 0;
+    }
+    e.preventDefault();
+  }
+
+  function pointerMove(e){
+    if (!draggingGen && !draggingBlock) return;
+    const p = getCanvasPos(canvas, e);
+    if (draggingGen){
+      draggingGen.x = clamp(p.x - dragDx, EDGE, vw()-EDGE);
+      draggingGen.y = clamp(p.y - dragDy, EDGE, vh()-EDGE);
+      draggingGen.stepOffset = xToStep(draggingGen.x);
+    } else if (draggingBlock){
+      draggingBlock.x = clamp(p.x - dragOff.x, EDGE, vw()-EDGE - draggingBlock.w);
+      draggingBlock.y = clamp(p.y - dragOff.y, EDGE, vh()-EDGE - draggingBlock.h);
+    }
+    e.preventDefault();
+  }
+  function pointerUp(e){
+    draggingGen = null; draggingBlock = null;
+  }
+
+  canvas.addEventListener('mousedown', pointerDown);
+  canvas.addEventListener('mousemove', pointerMove);
+  window.addEventListener('mouseup', pointerUp);
+  canvas.addEventListener('touchstart', pointerDown, { passive:false });
+  canvas.addEventListener('touchmove', pointerMove, { passive:false });
+  window.addEventListener('touchend', pointerUp);
+
+  // --- Draw ---
   function draw(){
-    if (!running) return;
-    hardResize(canvas, host);
-    const vw = canvas._vw ?? canvas.width;
-    const vh = canvas._vh ?? canvas.height;
-    ctx.clearRect(0, 0, vw, vh);
+    resizeCanvasForDPR(canvas, ctx);
+    resizeCanvasForDPR(canvas, ctx);
+    const dpr = window.devicePixelRatio || 1;
+    // Clear and paint using full CSS pixel size mapped to backing
+    const cssW = canvas._vw || Math.max(1, Math.floor((canvas.width||1)/dpr));
+    const cssH = canvas._vh || Math.max(1, Math.floor((canvas.height||1)/dpr));
+    ctx.clearRect(0, 0, cssW, cssH);
+    // background + border
+    ctx.fillStyle = '#0b0f15';
+    ctx.fillRect(0, 0, vw(), vh());
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.strokeRect(0.5, 0.5, vw()-1, vh()-1);
 
-    ctx.fillStyle = '#0f131a';
-    ctx.fillRect(0, 0, vw, vh);
+    // blocks
+    for (const b of blocks){
+      drawBlock(ctx, b, { baseColor: '#ff8c00', active: b.activeFlash>0 });
+      if (sizing.scale > 1) drawNoteStripsAndLabel(ctx, b, noteList[b.noteIndex]);
+      if (b.activeFlash>0) b.activeFlash = Math.max(0, b.activeFlash - 0.06);
+    }
 
-    for (let i=0;i<ripples.length;i++){
-      const r = ripples[i];
-      r.r += 1.8;
-      r.life -= 0.01;
-      if (r.life <= 0){ ripples.splice(i,1); i--; continue; }
-      const alpha = Math.max(0, Math.min(1, r.life));
-      ctx.strokeStyle = `rgba(255,255,255,${0.8*alpha})`;
-      ctx.lineWidth = 2;
+    // generators (yellow handle)
+    for (const g of generators){
       ctx.beginPath();
-      ctx.arc(r.x, r.y, r.r, 0, Math.PI*2);
+      ctx.arc(g.x, g.y, 6, 0, Math.PI*2);
+      ctx.fillStyle = '#ffd166';
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#ffffff44';
       ctx.stroke();
+    }
+
+    // ripples
+    const now = ensureAudioContext().currentTime;
+    for (let i = ripples.length-1; i>=0; i--){
+      const r = ripples[i];
+      const age = now - r.startTime;
+      if (age < 0) continue;
+      const speed = Math.max(vw(), vh()) * 0.6;
+      const rad = age * speed;
+
+      ctx.beginPath();
+      ctx.arc(r.gx, r.gy, rad, 0, Math.PI*2);
+      ctx.strokeStyle = 'rgba(255,255,255,.25)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      for (let bi=0; bi<blocks.length; bi++){
+        if (r.firedFor.has(bi)) continue;
+        const b = blocks[bi];
+        const cx = b.x + b.w/2, cy = b.y + b.h/2;
+        const dist = Math.hypot(cx - r.gx, cy - r.gy);
+        if (Math.abs(dist - rad) < 6){
+          triggerInstrument(ui.instrument, noteList[b.noteIndex], now);
+          b.activeFlash = 1.0;
+          r.firedFor.add(bi);
+        }
+      }
+
+      if (rad > Math.hypot(vw(), vh())) ripples.splice(i,1);
     }
 
     requestAnimationFrame(draw);
   }
   requestAnimationFrame(draw);
 
-  function onLoop(loopStartTime){ /* optional */ }
-  function reset(){ ripples.splice(0, ripples.length); }
-  function setInstrument(name){ instrument = name || 'tone'; ui?.setInstrument?.(instrument); }
-  function destroy(){ running=false; }
+  // --- Toy events ---
+  shell.addEventListener('toy-random', ()=> {
+    if (blocks.length === 0){
+      blocks = makeBlocks(5);
+    }
+    randomizeRects(blocks, vw(), vh(), EDGE);
+    for (const b of blocks){ b.noteIndex = Math.floor(Math.random() * noteList.length); }
+  });
+  shell.addEventListener('toy-reset', ()=> {
+    generators.splice(0, generators.length);
+    ripples.splice(0, ripples.length);
+    blocks.splice(0, blocks.length);
+  });
+  
+  shell.addEventListener('toy-zoom', (e)=>{
+    const ratio = sizing.setZoom(!!(e?.detail?.zoomed));
+    if (ratio !== 1){
+      blocks.forEach(b=>{ b.x*=ratio; b.y*=ratio; b.w*=ratio; b.h*=ratio; });
+      generators.forEach(g=>{ g.x*=ratio; g.y*=ratio; });
+    }
+  });
+
+  // --- Loop Hook ---
+  function onLoop(loopStartTime){ scheduleLoopRipples(loopStartTime); }
+  function reset(){ generators.splice(0,generators.length); ripples.splice(0,ripples.length); blocks = makeBlocks(5); }
+  function setInstrument(name){ /* no-op */ }
+  function destroy(){ try{ sizing.disconnect(); }catch{} }
 
   return { onLoop, reset, setInstrument, element: canvas, destroy };
 }

@@ -2,7 +2,17 @@
 import { noteList, clamp } from './utils.js?toy18';
 import { ensureAudioContext, triggerInstrument, getLoopInfo } from './audio.js';
 import { initToyUI } from './toyui.js';
+import { initToySizing } from './toyhelpers.js';
 import { drawBlock, drawNoteStripsAndLabel, NOTE_BTN_H, randomizeRects } from './toyhelpers.js?toy18';
+
+// Friendly scale for randomization: C major pentatonic (no sharps)
+const PENTATONIC_PITCHES = new Set(['C','D','E','G','A']);
+const ALLOWED_NOTE_INDICES = noteList
+  .map((n, i) => (/^([A-G]#?)(\d)$/.exec(n) || [])[1] && !n.includes('#') && PENTATONIC_PITCHES.has(n[0]) ? i : -1)
+  .filter(i => i >= 0);
+function randomScaleIndex(){
+  return ALLOWED_NOTE_INDICES[Math.floor(Math.random() * ALLOWED_NOTE_INDICES.length)];
+}
 
 const BASE_BLOCK_SIZE = 48;
 const BASE_EDGE_PAD   = 6;
@@ -38,7 +48,7 @@ export function createBouncer(target){
   const shell  = (typeof target === 'string') ? document.querySelector(target) : target;
   const host = shell.querySelector('.toy-body') || shell;
 
-  const canvas = (host.querySelector && (host.querySelector('canvas.bouncer-canvas') || host.querySelector('canvas'))) || (function(){
+  const canvas = (host.querySelector && (host.querySelector('.bouncer-canvas') || host.querySelector('canvas'))) || (function(){
     const c = document.createElement('canvas');
     c.className='bouncer-canvas';
     c.style.display = 'block';
@@ -46,7 +56,10 @@ export function createBouncer(target){
   })();
   const ctx = canvas.getContext('2d', { alpha:false });
 
-  // Capture base CSS size once and treat it as immutable world base
+  // Shared sizing/zoom (square from width)
+  const sizing = initToySizing(shell, canvas, ctx, { squareFromWidth: true });
+  const vw = sizing.vw, vh = sizing.vh;
+// Capture base CSS size once and treat it as immutable world base
   let baseCssW = host.clientWidth  || canvas.clientWidth || 300;
   let baseCssH = host.clientHeight || canvas.clientHeight || 300;
   canvas.style.width  = baseCssW + 'px';
@@ -64,18 +77,23 @@ export function createBouncer(target){
   const cannonR = () => BASE_CANNON_R * worldScale;
   const ballR   = () => BASE_BALL_R * worldScale;
 
+  
   function makeBlocks(n = MAX_BLOCKS){
     const size = blockSize();
-    const arr = Array.from({length:n}, ()=>({
-      x: edgePad(), y: edgePad(), w: size, h: size,
-      noteIndex: Math.min(noteList.length-1, Math.max(0, RAND_MIN_NOTE + Math.floor(Math.random() * (RAND_MAX_NOTE - RAND_MIN_NOTE + 1)))),
+    const arr = Array.from({ length: n }, () => ({
+      x: edgePad(),
+      y: edgePad(),
+      w: size,
+      h: size,
+      noteIndex: randomScaleIndex(),
       activeFlash: 0
     }));
     randomizeRects(arr, worldW(), worldH(), edgePad());
     return arr;
   }
-  let blocks = makeBlocks(MAX_BLOCKS);
+let blocks = makeBlocks(MAX_BLOCKS);
   let ball = null;
+  let showHandle = false; // hide handle on boot; show after first aim
   let cannon = { x: 60, y: 60, r: cannonR() };
 
   // Launch bookkeeping
@@ -148,6 +166,7 @@ export function createBouncer(target){
 
     if (hitCannon(p)){
       draggingCannon = true;
+      showHandle = true;
       cannonOff.x = p.x - cannon.x; cannonOff.y = p.y - cannon.y;
       return;
     }
@@ -172,8 +191,13 @@ export function createBouncer(target){
       return;
     }
 
+    // Move handle to click and start aim
+    const vw = worldW(), vh = worldH();
+    cannon.x = clamp(p.x, edgePad() + cannon.r, vw - edgePad() - cannon.r);
+    cannon.y = clamp(p.y, edgePad() + cannon.r, vh - edgePad() - cannon.r);
+    showHandle = true;
     aiming = true;
-    aimStart   = { x: p.x, y: p.y };
+    aimStart   = { x: cannon.x, y: cannon.y };
     aimCurrent = { x: p.x, y: p.y };
   });
 
@@ -204,14 +228,14 @@ export function createBouncer(target){
     if (!aiming) return;
     aiming = false;
 
-    const vx = ((p.x - aimStart.x) / 10) * worldScale;
-    const vy = ((p.y - aimStart.y) / 10) * worldScale;
-    spawnBall(aimStart.x, aimStart.y, vx, vy);
+    const vx = ((p.x - cannon.x) / 10);
+    const vy = ((p.y - cannon.y) / 10);
+    spawnBall(cannon.x, cannon.y, vx, vy);
 
     const { loopStartTime, barLen } = getLoopInfo();
     const audio = ensureAudioContext();
     const offset = ((audio.currentTime - loopStartTime) % barLen + barLen) % barLen;
-    lastLaunch = { x: aimStart.x, y: aimStart.y, vx, vy, offset };
+    lastLaunch = { x: cannon.x, y: cannon.y, vx, vy, offset };
     nextLaunchAt = loopStartTime + barLen + offset;
   });
 
@@ -256,7 +280,7 @@ export function createBouncer(target){
     ctx.strokeRect(0.5, 0.5, vw-1, vh-1);
 
     if (aiming){
-      ctx.lineWidth = 2;
+      ctx.lineWidth = (canvasScale>1?3:2);
       ctx.setLineDash([6,4]);
       ctx.strokeStyle = '#bbbbbb';
       ctx.beginPath(); ctx.moveTo(aimStart.x, aimStart.y); ctx.lineTo(aimCurrent.x, aimCurrent.y); ctx.stroke();
@@ -281,6 +305,21 @@ export function createBouncer(target){
       if (ball.y - ball.r < ep){ ball.y = ep + ball.r; ball.vy *= -1; }
       if (ball.y + ball.r > (vh - ep)){ ball.y = vh - ep - ball.r; ball.vy *= -1; }
 
+    { ctx.save(); if (ball) ctx.globalAlpha = 0.6;
+      ctx.fillStyle = '#ffd166';
+      ctx.beginPath(); ctx.arc(cannon.x, cannon.y, (canvasScale>1?10:6), 0, Math.PI*2); ctx.fill();
+      ctx.lineWidth = (canvasScale>1?3:2); ctx.strokeStyle = '#ffffff44'; ctx.stroke();
+      ctx.restore();
+    }
+    // Draw cannon handle only after first user aim/drag
+    if (showHandle) {
+      ctx.save();
+      // solid yellow handle (matches Rippler generator style)
+      ctx.fillStyle = '#ffd166';
+      ctx.beginPath(); ctx.arc(cannon.x, cannon.y, (canvasScale>1?10:6), 0, Math.PI*2); ctx.fill();
+      ctx.lineWidth = (canvasScale>1?3:2); ctx.strokeStyle = '#ffffff44'; ctx.stroke();
+      ctx.restore();
+    }
       for (const b of blocks){
         const hit = (ball.x + ball.r > b.x && ball.x - ball.r < b.x + b.w &&
                      ball.y + ball.r > b.y && ball.y - ball.r < b.y + b.h);
@@ -305,8 +344,8 @@ export function createBouncer(target){
       ctx.fillStyle = '#fff';
       ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2); ctx.fill();
     } else {
-      ctx.fillStyle = '#777';
-      ctx.beginPath(); ctx.arc(cannon.x, cannon.y, 4, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#ffd166';
+      // initial handle hidden
     }
 
     for (const b of blocks){
@@ -332,15 +371,15 @@ export function createBouncer(target){
   function applyZoom(zIn){
     const targetScale = zIn ? ZOOM_FACTOR : 1;
     if (targetScale === canvasScale) return;
-    // 1) Set canvas CSS size from immutable base
+    // 1 Set canvas CSS size from immutable base
     canvasScale = targetScale;
     canvas.style.width  = (baseCssW * canvasScale) + 'px';
     canvas.style.height = (baseCssH * canvasScale) + 'px';
     resizeBacking(canvas);
-    // 2) Scale entities to match world
+    // 2 Scale entities to match world
     const s = targetScale / worldScale;
     if (s !== 1){ scaleEntities(s); }
-    // 3) Clamp to deterministic bounds
+    // 3 Clamp to deterministic bounds
     clampEntitiesTo(worldW(), worldH());
   }
 
@@ -365,22 +404,26 @@ export function createBouncer(target){
 
 
   
+
 shell.addEventListener('toy-zoom', (e)=>{
-  applyZoom(!!e?.detail?.zoomed);
-  const header = shell.querySelector('.toy-header');
-  if (!header) return;
-  if (e?.detail?.zoomed){
-    header.style.userSelect = 'none';
-    header.style.touchAction = 'none';
-  } else {
-    header.style.userSelect = '';
-    header.style.touchAction = '';
+  const zoomed = !!(e?.detail?.zoomed);
+  const ratio = sizing.setZoom(zoomed);
+  if (ratio !== 1){
+    if (cannon){ cannon.x *= ratio; cannon.y *= ratio; }
+    if (blocks && Array.isArray(blocks)){ blocks.forEach(b=>{ b.x*=ratio; b.y*=ratio; b.w*=ratio; b.h*=ratio; }); }
+    if (ball){ ball.x *= ratio; ball.y *= ratio; ball.vx *= ratio; ball.vy *= ratio; }
+    clampEntitiesTo(worldW(), worldH());
   }
 });
 
-shell.addEventListener('toy-random', ()=> { blocks = makeBlocks(MAX_BLOCKS); });
-shell.addEventListener('toy-reset',  ()=> { reset(); });
+shell.addEventListener('toy-random', ()=> {
+  randomizeRects(blocks, worldW(), worldH(), edgePad());
+  for (const b of blocks){ b.noteIndex = Math.floor(Math.random()*noteList.length); b.activeFlash = 0; }
+  stopBall(); nextLaunchAt = null;
+});
 
-  applyZoom(false);
+shell.addEventListener('toy-reset', ()=> { reset(); });
+
+applyZoom(false);
 return { onLoop, reset, setInstrument: ui.setInstrument, element: canvas };
 }
