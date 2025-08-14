@@ -5,6 +5,8 @@ import { initToyUI } from './toyui.js';
 import { drawBlock, drawNoteStripsAndLabel, NOTE_BTN_H, hitTopStrip, hitBottomStrip, clampRectWithin, randomizeRects } from './toyhelpers.js';
 import { initToySizing } from './toyhelpers.js';
 
+const BASE_BLOCK_SIZE = 48;
+
 export function createRippleSynth(panel){
   // --- Canvas & UI ---
   const shell  = panel;
@@ -27,10 +29,10 @@ export function createRippleSynth(panel){
   // --- World & Entities ---
   const EDGE = 6;
   function makeBlocks(n=5){
-    const size = Math.max(32, Math.min(64, Math.floor(Math.min(vw(), vh()) / 4)));
+    const size = BASE_BLOCK_SIZE;
     const arr = [];
     for (let i=0;i<n;i++){
-      arr.push({ x: EDGE+10, y: EDGE+10, w: size, h: size, noteIndex: (i*5)%noteList.length, activeFlash: 0 });
+      arr.push({ x: EDGE+10, y: EDGE+10, w: size, h: size, noteIndex: (i*5)%noteList.length, activeFlash: 0, cooldownUntil: 0 });
     }
     return arr;
   }
@@ -38,6 +40,7 @@ export function createRippleSynth(panel){
   randomizeRects(blocks, vw(), vh(), EDGE);
 
   const generators = []; // { x, y, stepOffset }
+  const HIT_COOLDOWN = 0.08; // seconds between hits per block
   const ripples = [];    // { gx, gy, startTime, firedFor:Set(idx) }
 
   function xToStep(x){
@@ -179,7 +182,7 @@ export function createRippleSynth(panel){
         if (Math.abs(dist - radius) < Math.max(8, Math.min(b.w, b.h) * 0.25)){
           if (!rp.firedFor.has(bi)){
             rp.firedFor.add(bi);
-            triggerInstrument(ui.instrument, b.noteIndex, now);
+            if (now >= (b.cooldownUntil||0)) { triggerInstrument(ui.instrument, noteList[b.noteIndex % noteList.length], now); b.cooldownUntil = now + HIT_COOLDOWN; }
             b.activeFlash = 1.0;
           }
         }

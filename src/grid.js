@@ -1,4 +1,4 @@
-// src/grid.js — unified sizing/zoom + simple step grid (clean)
+// src/grid.js — unified sizing/zoom + simple step grid (clean, C4 defaults)
 import { resizeCanvasForDPR, noteList } from './utils.js';
 import { NUM_STEPS, ensureAudioContext, triggerInstrument } from './audio.js';
 import { initToyUI } from './toyui.js';
@@ -24,8 +24,11 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
   const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: false, aspectFrom: (w)=> Math.round(Math.max(80, w*0.22)) });
   const vw = sizing.vw, vh = sizing.vh;
 
-  // Model
-  const steps = new Array(numSteps).fill(0).map((_,i)=>({ active: false, flash: 0, noteIndex: (48 + i) % noteList.length }));
+  // Model (default all steps to C4)
+  const c4Index = (noteList.indexOf('C4') >= 0 ? noteList.indexOf('C4') : 60) % noteList.length;
+  const steps = new Array(numSteps).fill(0).map(()=>(
+    { active:false, flash:0, noteIndex: c4Index }
+  ));
   let currentStep = -1;
 
   function layout(){
@@ -99,7 +102,7 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
     }
   });
   panel.addEventListener('toy-reset', ()=>{
-    for (const s of steps){ s.active = false; s.flash = 0; }
+    for (const s of steps){ s.active = false; s.flash = 0; s.noteIndex = c4Index; }
   });
 
   // Input
@@ -132,12 +135,12 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
   function markPlayingColumn(i){
     currentStep = (i >= 0 && i < numSteps) ? i : -1;
     if (i >= 0 && steps[i]?.active){
-      triggerInstrument(ui.instrument, steps[i].noteIndex, ensureAudioContext().currentTime);
+      triggerInstrument(ui.instrument, noteList[steps[i].noteIndex % noteList.length], ensureAudioContext().currentTime);
       steps[i].flash = 1.0;
     }
   }
   function ping(i){ if (i>=0 && i<numSteps) steps[i].flash = 1.0; }
-  function reset(){ for (const s of steps){ s.active=false; s.flash=0; } }
+  function reset(){ for (const s of steps){ s.active=false; s.flash=0; s.noteIndex=c4Index; } }
 
   return {
     element: canvas,

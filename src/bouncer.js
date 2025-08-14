@@ -1,12 +1,14 @@
-// src/bouncer.js — rebuilt cleanly with shared sizing/zoom
+// src/bouncer.js — clean rebuild (no ellipses)
 import { noteList, clamp, resizeCanvasForDPR } from './utils.js';
 import { ensureAudioContext, triggerInstrument } from './audio.js';
 import { initToyUI } from './toyui.js';
 import { initToySizing, drawBlock, drawNoteStripsAndLabel, NOTE_BTN_H, randomizeRects, EDGE_PAD as EDGE } from './toyhelpers.js';
 
 const BASE_BLOCK_SIZE = 48;
-const BASE_CANNON_R   = 12;
+const BASE_CANNON_R   = 10; // slightly smaller anchor
 const BASE_BALL_R     = 7;
+const BASE_MAX_SPEED = 18; // px/frame at 1x
+
 
 export function createBouncer(selector){
   const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector;
@@ -34,6 +36,7 @@ export function createBouncer(selector){
   const blockSize = () => Math.round(BASE_BLOCK_SIZE * (sizing.scale || 1));
   const cannonR   = () => Math.round(BASE_CANNON_R   * (sizing.scale || 1));
   const ballR     = () => Math.round(BASE_BALL_R     * (sizing.scale || 1));
+  const maxSpeed  = () => BASE_MAX_SPEED * (sizing.scale || 1);
 
   // State
   let blocks = new Array(5).fill(0).map((_,i)=>({ x: EDGE+6, y: EDGE+6, w: blockSize(), h: blockSize(), noteIndex: i*3 % noteList.length, activeFlash: 0 }));
@@ -48,55 +51,103 @@ export function createBouncer(selector){
   let lastLaunch = null; // {x,y,vx,vy,r}
   let drawingPath = false; // dragging to define a path
   let dragStart = null;
+  let dragCurr = null;
 
   function spawnBallFrom(launch){
-    const r = ballR();
-    ball = { x: launch.x, y: launch.y, vx: launch.vx, vy: launch.vy, r };
+    ball = { x: launch.x, y: launch.y, vx: launch.vx, vy: launch.vy, r: ballR() };
   }
 
   // Physics helpers
   function circleRectMTV(cx, cy, r, rect){
-    // Minimum translation vector for circle vs rect
+    // Nearest point on rect to circle center
     const nearestX = clamp(cx, rect.x, rect.x + rect.w);
     const nearestY = clamp(cy, rect.y, rect.y + rect.h);
     const dx = cx - nearestX;
     const dy = cy - nearestY;
     const dist2 = dx*dx + dy*dy;
-    if (dist2 > r*r) return null;
+    if (dist2 >= r*r) return null; // tangent or outside = no collision
     const dist = Math.sqrt(Math.max(1e-6, dist2));
-    const overlap = r - dist;
-    // Normalized push
-    const nx = (dist === 0) ? (cx < rect.x+rect.w/2 ? -1 : 1) : dx/dist;
-    const ny = (dist === 0) ? (cy < rect.y+rect.h/2 ? -1 : 1) : dy/dist;
+
+    // Default normal from nearest point vector
+    let nx = dx / (dist || 1);
+    let ny = dy / (dist || 1);
+    let overlap = r - dist;
+
+    // If we are at a corner or fully inside, bias to the nearer axis to prevent sliding
+    if (dist < 1e-6){
+      const midX = rect.x + rect.w/2;
+      const midY = rect.y + rect.h/2;
+      const penL = Math.abs(cx - rect.x);
+      const penR = Math.abs(rect.x + rect.w - cx);
+      const penT = Math.abs(cy - rect.y);
+      const penB = Math.abs(rect.y + rect.h - cy);
+      const minX = Math.min(penL, penR);
+      const minY = Math.min(penT, penB);
+      if (minX < minY){
+        nx = (cx < midX) ? -1 : 1; ny = 0;
+      } else {
+        nx = 0; ny = (cy < midY) ? -1 : 1;
+      }
+      overlap = r;
+    }
     return { nx, ny, overlap };
   }
 
   function updateBall(){
     if (!ball) return;
-    // move
-    ball.x += ball.vx;
-    ball.y += ball.vy;
 
-    // wall bounces
-    if (ball.x - ball.r < EDGE){ ball.x = EDGE + ball.r; ball.vx *= -1; }
-    if (ball.x + ball.r > worldW()-EDGE){ ball.x = worldW()-EDGE - ball.r; ball.vx *= -1; }
-    if (ball.y - ball.r < EDGE){ ball.y = EDGE + ball.r; ball.vy *= -1; }
-    if (ball.y + ball.r > worldH()-EDGE){ ball.y = worldH()-EDGE - ball.r; ball.vy *= -1; }
+    // Sub-steps to reduce tunneling (more when zoomed)
+    const SUBSTEPS = (sizing.scale > 1 ? 3 : 2);
+    for (let step=0; step<SUBSTEPS; step++){
+      {
+        const sp = Math.hypot(ball.vx, ball.vy);
+        const ms = maxSpeed();
+        if (sp > ms && sp > 0){ const s = ms / sp; ball.vx *= s; ball.vy *= s; }
+      }
+      ball.x += ball.vx / SUBSTEPS;
+      ball.y += ball.vy / SUBSTEPS;
 
-    // block collisions
-    const now = ensureAudioContext().currentTime;
-    for (const b of blocks){
-      const mtv = circleRectMTV(ball.x, ball.y, ball.r, b);
-      if (mtv){
-        // move out
-        ball.x += mtv.nx * mtv.overlap;
-        ball.y += mtv.ny * mtv.overlap;
-        // reflect velocity along the dominant axis
-        if (Math.abs(mtv.nx) > Math.abs(mtv.ny)) ball.vx *= -1;
-        else ball.vy *= -1;
-        // trigger note + flash
-        triggerInstrument(ui.instrument, b.noteIndex, now);
-        b.activeFlash = 1.0;
+      // wall bounces
+      if (ball.x - ball.r < EDGE){ ball.x = EDGE + ball.r; ball.vx = Math.abs(ball.vx); }
+      if (ball.x + ball.r > worldW()-EDGE){ ball.x = worldW()-EDGE - ball.r; ball.vx = -Math.abs(ball.vx); }
+      if (ball.y - ball.r < EDGE){ ball.y = EDGE + ball.r; ball.vy = Math.abs(ball.vy); }
+      if (ball.y + ball.r > worldH()-EDGE){ ball.y = worldH()-EDGE - ball.r; ball.vy = -Math.abs(ball.vy); }
+
+      // Iterative resolution to avoid sticking
+      let iter = 0, collided = true;
+      const now = ensureAudioContext().currentTime;
+      const firedThisIter = new Set();
+      while (collided && iter < 4){
+        collided = false;
+        for (let bi=0; bi<blocks.length; bi++){
+          const b = blocks[bi];
+          const mtv = circleRectMTV(ball.x, ball.y, ball.r, b);
+          if (mtv){
+            const SEP_EPS = 0.25;
+            ball.x += (mtv.nx * (mtv.overlap + SEP_EPS));
+            ball.y += (mtv.ny * (mtv.overlap + SEP_EPS));
+            // reflect along normal
+            const vn = ball.vx * mtv.nx + ball.vy * mtv.ny;
+            if (vn < 0){
+              ball.vx -= 2 * vn * mtv.nx;
+              ball.vy -= 2 * vn * mtv.ny;
+            }
+            // trigger once per iter per block
+            if (!firedThisIter.has(bi)){
+              triggerInstrument(ui.instrument, noteList[b.noteIndex % noteList.length], now);
+              b.activeFlash = 1.0;
+              firedThisIter.add(bi);
+            }
+            collided = true;
+            /* clamp speed */
+            {
+              const sp = Math.hypot(ball.vx, ball.vy);
+              const ms = maxSpeed();
+              if (sp > ms && sp > 0){ const s = ms / sp; ball.vx *= s; ball.vy *= s; }
+            }
+          }
+        }
+        iter++;
       }
     }
   }
@@ -118,7 +169,7 @@ export function createBouncer(selector){
       draggingHandle = true;
       return;
     }
-    // If clicking a block (and zoomed), maybe adjust pitch
+    // If clicking a block (and zoomed), maybe adjust pitch; otherwise drag
     const over = blocks.slice().reverse().find(b => p.x>=b.x && p.x<=b.x+b.w && p.y>=b.y && p.y<=b.y+b.h);
     if (over){
       if (sizing.scale > 1){
@@ -126,7 +177,6 @@ export function createBouncer(selector){
         if (localY <= NOTE_BTN_H){ over.noteIndex = (over.noteIndex + 1) % noteList.length; return; }
         if (localY >= over.h - NOTE_BTN_H){ over.noteIndex = (over.noteIndex - 1 + noteList.length) % noteList.length; return; }
       }
-      // allow dragging block
       over.drag = { dx: p.x - over.x, dy: p.y - over.y };
       over.dragging = true;
       return;
@@ -134,6 +184,7 @@ export function createBouncer(selector){
     // Else: draw a path (single handle)
     drawingPath = true;
     dragStart = p;
+    dragCurr = p;
     handle.x = p.x; handle.y = p.y;
   }
   function onMove(e){
@@ -149,17 +200,24 @@ export function createBouncer(selector){
       draggingBlock.y = clamp(p.y - draggingBlock.drag.dy, EDGE, worldH()-EDGE - draggingBlock.h);
       return;
     }
+    if (drawingPath){ dragCurr = p; }
   }
   function onUp(e){
     const p = dragStart;
     if (drawingPath && p){
-      const end = getPos(e.changedTouches ? e.changedTouches[0]||e : e);
-      const vx = (end.x - p.x) * 0.12; // power factor
-      const vy = (end.y - p.y) * 0.12;
+      const end = dragCurr || getPos(e.changedTouches ? e.changedTouches[0]||e : e);
+      let vx = (end.x - p.x) * 0.12; // power factor
+      let vy = (end.y - p.y) * 0.12;
+      // clamp to max speed
+      {
+        const mag = Math.hypot(vx, vy);
+        const ms = maxSpeed();
+        if (mag > ms && mag > 0){ const s = ms / mag; vx *= s; vy *= s; }
+      }
       lastLaunch = { x: handle.x, y: handle.y, vx, vy, r: ballR() };
       spawnBallFrom(lastLaunch);
     }
-    drawingPath = false; dragStart = null; draggingHandle = false;
+    drawingPath = false; dragStart = null; dragCurr = null; draggingHandle = false;
     for (const b of blocks){ b.dragging = false; b.drag = null; }
   }
 
@@ -174,7 +232,7 @@ export function createBouncer(selector){
   // Draw
   function draw(){
     resizeCanvasForDPR(canvas, ctx);
-    if (ball){ ball.r = ballR(); }
+    if (ball){ ball.r = ballR(); } // keep radius synced to zoom
     const W = worldW(), H = worldH();
     ctx.clearRect(0,0,W,H);
 
@@ -197,13 +255,18 @@ export function createBouncer(selector){
     ctx.arc(handle.x, handle.y, cannonR(), 0, Math.PI*2);
     ctx.fill();
 
-    // drag path preview
+    // drag path preview (dotted)
     if (drawingPath && dragStart){
       const m = dragStart;
-      ctx.strokeStyle = 'rgba(255,217,94,0.7)';
+      ctx.save();
+      ctx.setLineDash([5,4]);
+      ctx.strokeStyle = 'rgba(255,217,94,0.9)';
       ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(m.x, m.y);
-      ctx.lineTo(handle.x, handle.y); ctx.stroke();
+      const d = dragCurr || m;
+      ctx.lineTo(d.x, d.y);
+      ctx.stroke();
+      ctx.restore();
     }
 
     // ball
@@ -224,14 +287,20 @@ export function createBouncer(selector){
       blocks.forEach(b=>{ b.x*=ratio; b.y*=ratio; b.w*=ratio; b.h*=ratio; });
       handle.x *= ratio; handle.y *= ratio;
       if (ball){ ball.x *= ratio; ball.y *= ratio; ball.vx *= ratio; ball.vy *= ratio; }
-      if (lastLaunch){ lastLaunch.x *= ratio; lastLaunch.y *= ratio; lastLaunch.vx *= ratio; lastLaunch.vy *= ratio; lastLaunch.r = ballR(); }
+      if (lastLaunch){
+        lastLaunch.x *= ratio;
+        lastLaunch.y *= ratio;
+        lastLaunch.vx *= ratio;
+        lastLaunch.vy *= ratio;
+        lastLaunch.r = ballR();
+      }
     }
   });
 
   panel.addEventListener('toy-random', ()=>{
     randomizeRects(blocks, worldW(), worldH(), EDGE);
     for (const b of blocks){ b.noteIndex = Math.floor(Math.random()*noteList.length); b.activeFlash = 0; }
-    // Kill ball; next path sets proper spawn; (respawn will occur on next drag)
+    // Kill ball; next path sets proper spawn
     ball = null;
   });
 
