@@ -80,7 +80,9 @@ export function createRippleSynth(panel){
   let rejoinNextLoop = new Set();   // blocks to rejoin on next loop after drag
   let scheduledThisLoop = new Set();// which blocks have been scheduled for the current loop
   let currentLoopRippleStart = null;// start time of the ripple for this loop
-  const LOOKAHEAD = 0.08;           // seconds of scheduling lookahead
+  const LOOKAHEAD = 0.02;           // seconds of scheduling lookahead
+
+  let suspendAudio = false;          // mute scheduling while dragging generator
 
   let lastLoopProcessedAt = null;    // guard against duplicate onLoop processing
 
@@ -157,6 +159,7 @@ export function createRippleSynth(panel){
   // Just-in-time scheduler for recorded blocks
   function scheduleDueHits(now){
     if (!generator || currentLoopRippleStart == null) return;
+    if (suspendAudio) return;
     const t0 = currentLoopRippleStart;
     const q = stepSeconds();
     const windowStart = now - 0.01;
@@ -197,6 +200,7 @@ export function createRippleSynth(panel){
       enqueueRippleAt(tQ);
       const loopDur = NUM_STEPS * stepSeconds();
       generator.nextTime = tQ + loopDur;
+      suspendAudio = false;
       e.preventDefault(); return;
     }
 
@@ -222,6 +226,11 @@ export function createRippleSynth(panel){
     if (p.x>=generator.x-r && p.x<=generator.x+r && p.y>=generator.y-r && p.y<=generator.y+r){
       draggingGen = true;
       dragOff.x = p.x - generator.x; dragOff.y = p.y - generator.y;
+      // Mute and clear while dragging
+      suspendAudio = true;
+      ripples.length = 0;
+      scheduledThisLoop.clear();
+      currentLoopRippleStart = null;
       e.preventDefault(); return;
     }
 
@@ -240,6 +249,7 @@ export function createRippleSynth(panel){
     enqueueRippleAt(tQ);
     const loopDur = NUM_STEPS * stepSeconds();
     generator.nextTime = tQ + loopDur;
+      suspendAudio = false;
     e.preventDefault();
   }
 
@@ -271,6 +281,7 @@ export function createRippleSynth(panel){
       enqueueRippleAt(tQ);
       const loopDur = NUM_STEPS * stepSeconds();
       generator.nextTime = tQ + loopDur;
+      suspendAudio = false;
     }
     if (draggingBlock){
       // compute new phase and rejoin in the next loop
@@ -342,12 +353,12 @@ export function createRippleSynth(panel){
             rp.firedFor.add(bi);
             b.cooldownUntil = now + HIT_COOLDOWN;
             b.activeFlash = 1.0;
-            // If dragging this block, schedule an immediate quantized hit
-            if (draggingBlock === b){
+            // Live-hit if not enrolled (e.g., just released) or currently dragging
+            if (!suspendAudio && (draggingBlock === b || !enrolled.has(bi))){
               const ls = (gridEpoch != null ? gridEpoch : (lastLoopStartTime || now));
-              const stepsDrag = Math.floor((now - ls + 1e-4) / q) + 1;
-              const tQdrag = ls + stepsDrag * q;
-              triggerInstrument(ui.instrument, noteList[b.noteIndex % noteList.length], tQdrag);
+              const stepsLive = Math.floor((now - ls + 1e-4) / q) + 1;
+              const tQlive = ls + stepsLive * q;
+              triggerInstrument(ui.instrument, noteList[b.noteIndex % noteList.length], tQlive);
             }
           }
         }
@@ -368,7 +379,23 @@ export function createRippleSynth(panel){
       }
     }
 
-    // Debug overlay
+    
+    // Anchor marker
+    if (generator){
+      ctx.save();
+      ctx.strokeStyle = '#ffd95e';
+      ctx.fillStyle = 'rgba(255,217,94,0.20)';
+      ctx.lineWidth = 2;
+      // ring
+      ctx.beginPath(); ctx.arc(cx, cy, 10, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+      // crosshair
+      ctx.beginPath();
+      ctx.moveTo(cx-8, cy); ctx.lineTo(cx+8, cy);
+      ctx.moveTo(cx, cy-8); ctx.lineTo(cx, cy+8);
+      ctx.stroke();
+      ctx.restore();
+    }
+// Debug overlay
     if (DEBUG){
       ctx.save();
       ctx.font = '12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
@@ -419,12 +446,12 @@ lastDrawTime = now;
   panel.addEventListener('toy-random', ()=>{
     randomizeRects(blocks, vw(), vh(), EDGE);
     for (const b of blocks){ b.noteIndex = randomPent(); b.activeFlash = 0; }
-    // Full clear: stop any future scheduling
-    ripples.length = 0;
-    generator = null;
-    blockPhases = [];
-    enrolled.clear(); rejoinNextLoop.clear(); scheduledThisLoop.clear();
-    currentLoopRippleStart = null; lastQueuedTime = -1;
+    // Keep the generator + anchor; just update the recording to match new geometry
+    recalcBlockPhases();
+    enrolled = new Set(blocks.map((_,i)=>i));
+    rejoinNextLoop.clear();
+    scheduledThisLoop.clear();
+    // Leave ripples/currentLoopRippleStart/lastQueuedTime as-is so playback continues
   });
 
   panel.addEventListener('toy-reset', ()=>{
@@ -433,7 +460,8 @@ lastDrawTime = now;
     blockPhases = [];
     enrolled.clear(); rejoinNextLoop.clear(); scheduledThisLoop.clear();
     currentLoopRippleStart = null; lastQueuedTime = -1;
-    for (const b of blocks){ b.noteIndex = C4_INDEX; b.activeFlash = 0; }
+    // Keep existing notes; just clear visual flashes
+    for (const b of blocks){ b.activeFlash = 0; }
   });
 
   // --- Loop hook ---
@@ -451,7 +479,7 @@ lastDrawTime = now;
     blockPhases = [];
     enrolled.clear(); rejoinNextLoop.clear(); scheduledThisLoop.clear();
     currentLoopRippleStart = null; lastQueuedTime = -1;
-    for (const b of blocks){ b.noteIndex = C4_INDEX; b.activeFlash = 0; }
+    for (const b of blocks){ b.activeFlash = 0; }
   }
   function setInstrument(_name){ /* via UI */ }
   function destroy(){
