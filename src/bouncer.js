@@ -1,10 +1,8 @@
-
-import { noteList, clamp } from './utils.js?toy18';
+import { noteList, clamp, resizeCanvasForDPR } from './utils.js?toy18';
 import { ensureAudioContext, triggerInstrument, getLoopInfo } from './audio.js';
 import { initToyUI } from './toyui.js';
 import { initToySizing } from './toyhelpers.js';
 import { drawBlock, drawNoteStripsAndLabel, NOTE_BTN_H, randomizeRects } from './toyhelpers.js?toy18';
-
 // Friendly scale for randomization: C major pentatonic (no sharps)
 const PENTATONIC_PITCHES = new Set(['C','D','E','G','A']);
 const ALLOWED_NOTE_INDICES = noteList
@@ -13,18 +11,15 @@ const ALLOWED_NOTE_INDICES = noteList
 function randomScaleIndex(){
   return ALLOWED_NOTE_INDICES[Math.floor(Math.random() * ALLOWED_NOTE_INDICES.length)];
 }
-
 const BASE_BLOCK_SIZE = 48;
 const BASE_EDGE_PAD   = 6;
 const BASE_CANNON_R   = 12;
 const BASE_BALL_R     = 10;
-
 const LONG_PRESS_MS = 600;
 const MAX_BLOCKS = 5;
 const ZOOM_FACTOR = 2;
 const RAND_MIN_NOTE = 48; // C3
 const RAND_MAX_NOTE = 72; // C5
-
 function resizeBacking(canvas){
   const dpr = window.devicePixelRatio || 1;
   const cssW = Math.max(1, Math.floor(parseFloat(canvas.style.width) || canvas.clientWidth || 1));
@@ -38,16 +33,14 @@ function resizeBacking(canvas){
   canvas._cssW = cssW;
   canvas._cssH = cssH;
 }
-
 function setHeaderTitle(shell, name){
   const head = shell.querySelector('.toy-header h2');
   if (head) head.textContent = name;
 }
-
 export function createBouncer(target){
   const shell  = (typeof target === 'string') ? document.querySelector(target) : target;
   const host = shell.querySelector('.toy-body') || shell;
-
+  const panel = shell.closest?.('.toy-panel') || shell;
   const canvas = (host.querySelector && (host.querySelector('.bouncer-canvas') || host.querySelector('canvas'))) || (function(){
     const c = document.createElement('canvas');
     c.className='bouncer-canvas';
@@ -55,28 +48,19 @@ export function createBouncer(target){
     host.appendChild(c); return c;
   })();
   const ctx = canvas.getContext('2d', { alpha:false });
-
   // Shared sizing/zoom (square from width)
   const sizing = initToySizing(shell, canvas, ctx, { squareFromWidth: true });
+  const worldW = () => sizing.vw();
+  const worldH = () => sizing.vh();
   const vw = sizing.vw, vh = sizing.vh;
 // Capture base CSS size once and treat it as immutable world base
-  let baseCssW = host.clientWidth  || canvas.clientWidth || 300;
-  let baseCssH = host.clientHeight || canvas.clientHeight || 300;
-  canvas.style.width  = baseCssW + 'px';
-  canvas.style.height = baseCssH + 'px';
   resizeBacking(canvas);
-
   // Zoom state
-  let canvasScale = 1;   // 1 or 2
   let worldScale  = 1;   // scales entity sizes/vels
-  const worldW = () => Math.max(1, Math.floor(baseCssW * canvasScale));
-  const worldH = () => Math.max(1, Math.floor(baseCssH * canvasScale));
-
   const edgePad = () => BASE_EDGE_PAD * worldScale;
   const blockSize = () => BASE_BLOCK_SIZE * worldScale;
   const cannonR = () => BASE_CANNON_R * worldScale;
   const ballR   = () => BASE_BALL_R * worldScale;
-
   
   function makeBlocks(n = MAX_BLOCKS){
     const size = blockSize();
@@ -95,19 +79,15 @@ let blocks = makeBlocks(MAX_BLOCKS);
   let ball = null;
   let showHandle = false; // hide handle on boot; show after first aim
   let cannon = { x: 60, y: 60, r: cannonR() };
-
   // Launch bookkeeping
   let lastLaunch = null;   // { x, y, vx, vy, offset }
   let nextLaunchAt = null;
-
   function spawnBall(x,y,vx,vy){ ball = { x, y, vx, vy, r: ballR() }; }
   const stopBall  = ()=> { ball = null; };
-
   function screenToWorld(e){
     const rect = canvas.getBoundingClientRect();
     return { x: (e.clientX - rect.left), y: (e.clientY - rect.top) };
   }
-
   function scaleEntities(s){
     if (s === 1) return;
     blocks.forEach(b=>{ b.x*=s; b.y*=s; b.w*=s; b.h*=s; });
@@ -116,7 +96,6 @@ let blocks = makeBlocks(MAX_BLOCKS);
     if (lastLaunch){ lastLaunch.x*=s; lastLaunch.y*=s; lastLaunch.vx*=s; lastLaunch.vy*=s; }
     worldScale *= s;
   }
-
   function clampEntitiesTo(vw, vh){
     const ep = edgePad();
     const maxX = Math.max(ep, vw - ep);
@@ -132,7 +111,6 @@ let blocks = makeBlocks(MAX_BLOCKS);
       ball.y = clamp(ball.y, ep + ball.r, Math.max(ep + ball.r, maxY - ball.r));
     }
   }
-
   // Resize backing only (doesn't affect world size now)
   let resizeRAF = 0;
   const requestResize = ()=>{
@@ -140,42 +118,35 @@ let blocks = makeBlocks(MAX_BLOCKS);
     resizeRAF = requestAnimationFrame(()=>{ resizeBacking(canvas); });
   };
   window.addEventListener('resize', requestResize);
-
   const ro = new ResizeObserver(requestResize);
   ro.observe(host);
   ro.observe(shell);
   ro.observe(canvas);
-
   function hitBlock(p){ return blocks.slice().reverse().find(b => p.x>=b.x && p.x<=b.x+b.w && p.y>=b.y && p.y<=b.y+b.h); }
   const hitCannon = (p)=> ((p.x-cannon.x)**2 + (p.y-cannon.y)**2) <= (cannon.r*cannon.r);
-
   let aiming = false, aimStart={x:0,y:0}, aimCurrent={x:0,y:0};
   let draggingBlock = null, dragOff={x:0,y:0}, movedDuringDrag=false;
   let draggingCannon = false, cannonOff={x:0,y:0};
   let longPressTimer = null, longPressVictim = null;
   function clearLongPress(){ if (longPressTimer){ clearTimeout(longPressTimer); longPressTimer=null; } longPressVictim=null; }
-
   canvas.addEventListener('contextmenu', (e)=> e.preventDefault());
-
   canvas.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     canvas.setPointerCapture?.(e.pointerId);
     const p = screenToWorld(e);
     const b = hitBlock(p);
     movedDuringDrag = false;
-
     if (hitCannon(p)){
       draggingCannon = true;
       showHandle = true;
       cannonOff.x = p.x - cannon.x; cannonOff.y = p.y - cannon.y;
       return;
     }
-
     if (b) {
-      if (canvasScale > 1) {
+      if (sizing.scale > 1) {
         const localY = p.y - b.y;
-        if (localY <= NOTE_BTN_H) { b.noteIndex = clamp(b.noteIndex + 1, 0, noteList.length-1); return; }
-        if (localY >= b.h - NOTE_BTN_H) { b.noteIndex = clamp(b.noteIndex - 1, 0, noteList.length-1); return; }
+        if (sizing.scale > 1 && localY <= NOTE_BTN_H) { b.noteIndex = clamp(b.noteIndex + 1, 0, noteList.length-1); return; }
+        if (sizing.scale > 1 && localY >= b.h - NOTE_BTN_H) { b.noteIndex = clamp(b.noteIndex - 1, 0, noteList.length-1); return; }
       }
       draggingBlock = b;
       dragOff.x = p.x - b.x; dragOff.y = p.y - b.y;
@@ -190,7 +161,6 @@ let blocks = makeBlocks(MAX_BLOCKS);
       }, LONG_PRESS_MS);
       return;
     }
-
     // Move handle to click and start aim
     const vw = worldW(), vh = worldH();
     cannon.x = clamp(p.x, edgePad() + cannon.r, vw - edgePad() - cannon.r);
@@ -200,7 +170,6 @@ let blocks = makeBlocks(MAX_BLOCKS);
     aimStart   = { x: cannon.x, y: cannon.y };
     aimCurrent = { x: p.x, y: p.y };
   });
-
   canvas.addEventListener('pointermove', (e) => {
     const p = screenToWorld(e);
     const vw = worldW(), vh = worldH();
@@ -217,34 +186,28 @@ let blocks = makeBlocks(MAX_BLOCKS);
     }
     if (aiming) { aimCurrent = { x: p.x, y: p.y }; }
   });
-
   canvas.addEventListener('pointerup', (e) => {
     canvas.releasePointerCapture?.(e.pointerId);
     clearLongPress();
     const p = screenToWorld(e);
-
     if (draggingCannon){ draggingCannon=false; return; }
     if (draggingBlock) { draggingBlock = null; return; }
     if (!aiming) return;
     aiming = false;
-
     const vx = ((p.x - cannon.x) / 10);
     const vy = ((p.y - cannon.y) / 10);
     spawnBall(cannon.x, cannon.y, vx, vy);
-
     const { loopStartTime, barLen } = getLoopInfo();
     const audio = ensureAudioContext();
     const offset = ((audio.currentTime - loopStartTime) % barLen + barLen) % barLen;
     lastLaunch = { x: cannon.x, y: cannon.y, vx, vy, offset };
     nextLaunchAt = loopStartTime + barLen + offset;
   });
-
   function onLoop(loopStartTime){
     if (!lastLaunch) return;
     const { barLen } = getLoopInfo();
     nextLaunchAt = loopStartTime + lastLaunch.offset;
   }
-
   function bounceOffRect(rect, ball){
     const dxLeft   = (ball.x + ball.r) - rect.x;
     const dxRight  = (rect.x + rect.w) - (ball.x - ball.r);
@@ -261,33 +224,27 @@ let blocks = makeBlocks(MAX_BLOCKS);
       else { ball.y = rect.y + rect.h + ball.r; ball.vy = Math.abs(ball.vy); }
     }
   }
-
   function draw(){
+    resizeCanvasForDPR(canvas, ctx);
     // Backing store updated to current style sizes
     resizeBacking(canvas);
-
     const dpr = window.devicePixelRatio || 1;
-    ctx.resetTransform?.();
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
+    
+    
     const vw = worldW(), vh = worldH();
-
     ctx.clearRect(0, 0, canvas.width/dpr, canvas.height/dpr);
-
     ctx.fillStyle = '#0b0f15';
     ctx.fillRect(0, 0, vw, vh);
     ctx.strokeStyle = 'rgba(255,255,255,0.12)';
     ctx.strokeRect(0.5, 0.5, vw-1, vh-1);
-
     if (aiming){
-      ctx.lineWidth = (canvasScale>1?3:2);
+      ctx.lineWidth = (sizing.scale>1?3:2);
       ctx.setLineDash([6,4]);
       ctx.strokeStyle = '#bbbbbb';
       ctx.beginPath(); ctx.moveTo(aimStart.x, aimStart.y); ctx.lineTo(aimCurrent.x, aimCurrent.y); ctx.stroke();
       ctx.setLineDash([]);
       ctx.fillStyle = '#bbbbbb'; ctx.beginPath(); ctx.arc(aimStart.x, aimStart.y, 4, 0, Math.PI*2); ctx.fill();
     }
-
     if (lastLaunch && nextLaunchAt != null){
       const audio = ensureAudioContext();
       if (audio.currentTime + 0.002 >= nextLaunchAt){
@@ -296,7 +253,6 @@ let blocks = makeBlocks(MAX_BLOCKS);
         nextLaunchAt += barLen;
       }
     }
-
     if (ball) {
       ball.x += ball.vx; ball.y += ball.vy;
       const ep = edgePad();
@@ -304,11 +260,10 @@ let blocks = makeBlocks(MAX_BLOCKS);
       if (ball.x + ball.r > (vw - ep)){ ball.x = vw - ep - ball.r; ball.vx *= -1; }
       if (ball.y - ball.r < ep){ ball.y = ep + ball.r; ball.vy *= -1; }
       if (ball.y + ball.r > (vh - ep)){ ball.y = vh - ep - ball.r; ball.vy *= -1; }
-
     { ctx.save(); if (ball) ctx.globalAlpha = 0.6;
       ctx.fillStyle = '#ffd166';
-      ctx.beginPath(); ctx.arc(cannon.x, cannon.y, (canvasScale>1?10:6), 0, Math.PI*2); ctx.fill();
-      ctx.lineWidth = (canvasScale>1?3:2); ctx.strokeStyle = '#ffffff44'; ctx.stroke();
+      ctx.beginPath(); ctx.arc(cannon.x, cannon.y, (sizing.scale>1?10:6), 0, Math.PI*2); ctx.fill();
+      ctx.lineWidth = (sizing.scale>1?3:2); ctx.strokeStyle = '#ffffff44'; ctx.stroke();
       ctx.restore();
     }
     // Draw cannon handle only after first user aim/drag
@@ -316,8 +271,8 @@ let blocks = makeBlocks(MAX_BLOCKS);
       ctx.save();
       // solid yellow handle (matches Rippler generator style)
       ctx.fillStyle = '#ffd166';
-      ctx.beginPath(); ctx.arc(cannon.x, cannon.y, (canvasScale>1?10:6), 0, Math.PI*2); ctx.fill();
-      ctx.lineWidth = (canvasScale>1?3:2); ctx.strokeStyle = '#ffffff44'; ctx.stroke();
+      ctx.beginPath(); ctx.arc(cannon.x, cannon.y, (sizing.scale>1?10:6), 0, Math.PI*2); ctx.fill();
+      ctx.lineWidth = (sizing.scale>1?3:2); ctx.strokeStyle = '#ffffff44'; ctx.stroke();
       ctx.restore();
     }
       for (const b of blocks){
@@ -333,31 +288,26 @@ let blocks = makeBlocks(MAX_BLOCKS);
               const _note = _isTone ? noteList[b.noteIndex] : 'C4';
               triggerInstrument(_inst, _note, ensureAudioContext().currentTime);
             }
-
           } catch(e) {
             // swallow audio errors to keep draw loop alive
             // console.warn('instrument trigger failed', e);
           }
         }
       }
-
       ctx.fillStyle = '#fff';
       ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2); ctx.fill();
     } else {
       ctx.fillStyle = '#ffd166';
       // initial handle hidden
     }
-
     for (const b of blocks){
       drawBlock(ctx, b, { baseColor: '#ff8c00', active: b.activeFlash>0 });
-      if (canvasScale > 1) drawNoteStripsAndLabel(ctx, b, noteList[b.noteIndex]);
+      if (sizing.scale > 1) drawNoteStripsAndLabel(ctx, b, noteList[b.noteIndex]);
       if (b.activeFlash>0) b.activeFlash = Math.max(0, b.activeFlash - 0.06);
     }
-
     requestAnimationFrame(draw);
   }
   requestAnimationFrame(draw);
-
   function reset(){
     stopBall();
     lastLaunch = null;
@@ -367,14 +317,11 @@ let blocks = makeBlocks(MAX_BLOCKS);
     draggingCannon = false;
     blocks = [];
   }
-
-  function applyZoom(zIn){
+  function legacyApplyZoom(zIn){
     const targetScale = zIn ? ZOOM_FACTOR : 1;
     if (targetScale === canvasScale) return;
     // 1 Set canvas CSS size from immutable base
     canvasScale = targetScale;
-    canvas.style.width  = (baseCssW * canvasScale) + 'px';
-    canvas.style.height = (baseCssH * canvasScale) + 'px';
     resizeBacking(canvas);
     // 2 Scale entities to match world
     const s = targetScale / worldScale;
@@ -382,7 +329,6 @@ let blocks = makeBlocks(MAX_BLOCKS);
     // 3 Clamp to deterministic bounds
     clampEntitiesTo(worldW(), worldH());
   }
-
   const ui = initToyUI(shell, {
     toyName: 'Bouncer',
     showAdd: true,
@@ -401,29 +347,24 @@ let blocks = makeBlocks(MAX_BLOCKS);
   }
   // Also respond to bubbled changes from toyui
   shell.addEventListener('toy-instrument', (e)=>{ const v = e?.detail?.value; if (v) currentInstrument = v; });
-
-
   
+panel.addEventListener('toy-zoom', (e)=>{
+    const zoomed = !!(e?.detail?.zoomed);
+    const ratio = sizing.setZoom(zoomed);
+    if (ratio !== 1){
+      if (cannon){ cannon.x *= ratio; cannon.y *= ratio; }
+      if (blocks && Array.isArray(blocks)){ blocks.forEach(b=>{ b.x*=ratio; b.y*=ratio; b.w*=ratio; b.h*=ratio; }); }
+      if (ball){ ball.x *= ratio; ball.y *= ratio; ball.vx *= ratio; ball.vy *= ratio; }
+      clampEntitiesTo(worldW(), worldH());
+    }
+  });
 
-shell.addEventListener('toy-zoom', (e)=>{
-  const zoomed = !!(e?.detail?.zoomed);
-  const ratio = sizing.setZoom(zoomed);
-  if (ratio !== 1){
-    if (cannon){ cannon.x *= ratio; cannon.y *= ratio; }
-    if (blocks && Array.isArray(blocks)){ blocks.forEach(b=>{ b.x*=ratio; b.y*=ratio; b.w*=ratio; b.h*=ratio; }); }
-    if (ball){ ball.x *= ratio; ball.y *= ratio; ball.vx *= ratio; ball.vy *= ratio; }
-    clampEntitiesTo(worldW(), worldH());
-  }
-});
-
-shell.addEventListener('toy-random', ()=> {
+panel.addEventListener('toy-random', ()=> {
   randomizeRects(blocks, worldW(), worldH(), edgePad());
   for (const b of blocks){ b.noteIndex = Math.floor(Math.random()*noteList.length); b.activeFlash = 0; }
   stopBall(); nextLaunchAt = null;
 });
-
-shell.addEventListener('toy-reset', ()=> { reset(); });
-
-applyZoom(false);
+panel.addEventListener('toy-reset', ()=> { reset(); });
+// legacyApplyZoom(false); // disabled; using shared sizing.setZoom
 return { onLoop, reset, setInstrument: ui.setInstrument, element: canvas };
 }

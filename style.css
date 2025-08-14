@@ -347,3 +347,16 @@ main { flex: 1 1 auto; display: block; }
 
 .toy-panel{ position:relative; }
 .toy-panel .toy-body{ position:absolute; left:10px; right:10px; top:56px; bottom:10px; min-height:260px; min-width:320px; }
+
+
+/* When zoomed, let the toy body size to content rather than fill the panel */
+.toy-panel.toy-zoomed-floating .toy-body {
+  position: static !important;
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+  bottom: auto !important;
+  width: auto !important;
+  height: auto !important;
+  padding: 10px !important;
+}
