@@ -1,370 +1,255 @@
-import { noteList, clamp, resizeCanvasForDPR } from './utils.js?toy18';
-import { ensureAudioContext, triggerInstrument, getLoopInfo } from './audio.js';
+// src/bouncer.js — rebuilt cleanly with shared sizing/zoom
+import { noteList, clamp, resizeCanvasForDPR } from './utils.js';
+import { ensureAudioContext, triggerInstrument } from './audio.js';
 import { initToyUI } from './toyui.js';
-import { initToySizing } from './toyhelpers.js';
-import { drawBlock, drawNoteStripsAndLabel, NOTE_BTN_H, randomizeRects } from './toyhelpers.js?toy18';
-// Friendly scale for randomization: C major pentatonic (no sharps)
-const PENTATONIC_PITCHES = new Set(['C','D','E','G','A']);
-const ALLOWED_NOTE_INDICES = noteList
-  .map((n, i) => (/^([A-G]#?)(\d)$/.exec(n) || [])[1] && !n.includes('#') && PENTATONIC_PITCHES.has(n[0]) ? i : -1)
-  .filter(i => i >= 0);
-function randomScaleIndex(){
-  return ALLOWED_NOTE_INDICES[Math.floor(Math.random() * ALLOWED_NOTE_INDICES.length)];
-}
+import { initToySizing, drawBlock, drawNoteStripsAndLabel, NOTE_BTN_H, randomizeRects, EDGE_PAD as EDGE } from './toyhelpers.js';
+
 const BASE_BLOCK_SIZE = 48;
-const BASE_EDGE_PAD   = 6;
 const BASE_CANNON_R   = 12;
-const BASE_BALL_R     = 10;
-const LONG_PRESS_MS = 600;
-const MAX_BLOCKS = 5;
-const ZOOM_FACTOR = 2;
-const RAND_MIN_NOTE = 48; // C3
-const RAND_MAX_NOTE = 72; // C5
-function resizeBacking(canvas){
-  const dpr = window.devicePixelRatio || 1;
-  const cssW = Math.max(1, Math.floor(parseFloat(canvas.style.width) || canvas.clientWidth || 1));
-  const cssH = Math.max(1, Math.floor(parseFloat(canvas.style.height) || canvas.clientHeight || 1));
-  const targetW = Math.floor(cssW * dpr);
-  const targetH = Math.floor(cssH * dpr);
-  if (canvas.width !== targetW || canvas.height !== targetH){
-    canvas.width = targetW;
-    canvas.height = targetH;
-  }
-  canvas._cssW = cssW;
-  canvas._cssH = cssH;
-}
-function setHeaderTitle(shell, name){
-  const head = shell.querySelector('.toy-header h2');
-  if (head) head.textContent = name;
-}
-export function createBouncer(target){
-  const shell  = (typeof target === 'string') ? document.querySelector(target) : target;
-  const host = shell.querySelector('.toy-body') || shell;
+const BASE_BALL_R     = 7;
+
+export function createBouncer(selector){
+  const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector;
+  if (!shell){ console.warn('[bouncer] missing', selector); return null; }
   const panel = shell.closest?.('.toy-panel') || shell;
+  const host  = shell.querySelector('.toy-body') || shell;
+
+  // Canvas
   const canvas = (host.querySelector && (host.querySelector('.bouncer-canvas') || host.querySelector('canvas'))) || (function(){
     const c = document.createElement('canvas');
-    c.className='bouncer-canvas';
+    c.className = 'bouncer-canvas';
     c.style.display = 'block';
+    c.style.touchAction = 'none';
     host.appendChild(c); return c;
   })();
   const ctx = canvas.getContext('2d', { alpha:false });
-  // Shared sizing/zoom (square from width)
-  const sizing = initToySizing(shell, canvas, ctx, { squareFromWidth: true });
+
+  // UI/instrument
+  const ui = initToyUI(panel, { toyName: 'Bouncer', defaultInstrument: 'tone' });
+
+  // Sizing
+  const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true });
   const worldW = () => sizing.vw();
   const worldH = () => sizing.vh();
-  const vw = sizing.vw, vh = sizing.vh;
-// Capture base CSS size once and treat it as immutable world base
-  resizeBacking(canvas);
-  // Zoom state
-  let worldScale  = 1;   // scales entity sizes/vels
-  const edgePad = () => BASE_EDGE_PAD * worldScale;
-  const blockSize = () => BASE_BLOCK_SIZE * worldScale;
-  const cannonR = () => BASE_CANNON_R * worldScale;
-  const ballR   = () => BASE_BALL_R * worldScale;
-  
-  function makeBlocks(n = MAX_BLOCKS){
-    const size = blockSize();
-    const arr = Array.from({ length: n }, () => ({
-      x: edgePad(),
-      y: edgePad(),
-      w: size,
-      h: size,
-      noteIndex: randomScaleIndex(),
-      activeFlash: 0
-    }));
-    randomizeRects(arr, worldW(), worldH(), edgePad());
-    return arr;
+  const blockSize = () => Math.round(BASE_BLOCK_SIZE * (sizing.scale || 1));
+  const cannonR   = () => Math.round(BASE_CANNON_R   * (sizing.scale || 1));
+  const ballR     = () => Math.round(BASE_BALL_R     * (sizing.scale || 1));
+
+  // State
+  let blocks = new Array(5).fill(0).map((_,i)=>({ x: EDGE+6, y: EDGE+6, w: blockSize(), h: blockSize(), noteIndex: i*3 % noteList.length, activeFlash: 0 }));
+  randomizeRects(blocks, worldW(), worldH(), EDGE);
+
+  // Handle (spawn anchor)
+  let handle = { x: worldW()*0.25, y: worldH()*0.5 };
+  let draggingHandle = false;
+
+  // Ball + last launch
+  let ball = null; // {x,y,vx,vy,r}
+  let lastLaunch = null; // {x,y,vx,vy,r}
+  let drawingPath = false; // dragging to define a path
+  let dragStart = null;
+
+  function spawnBallFrom(launch){
+    const r = ballR();
+    ball = { x: launch.x, y: launch.y, vx: launch.vx, vy: launch.vy, r };
   }
-let blocks = makeBlocks(MAX_BLOCKS);
-  let ball = null;
-  let showHandle = false; // hide handle on boot; show after first aim
-  let cannon = { x: 60, y: 60, r: cannonR() };
-  // Launch bookkeeping
-  let lastLaunch = null;   // { x, y, vx, vy, offset }
-  let nextLaunchAt = null;
-  function spawnBall(x,y,vx,vy){ ball = { x, y, vx, vy, r: ballR() }; }
-  const stopBall  = ()=> { ball = null; };
-  function screenToWorld(e){
-    const rect = canvas.getBoundingClientRect();
-    return { x: (e.clientX - rect.left), y: (e.clientY - rect.top) };
+
+  // Physics helpers
+  function circleRectMTV(cx, cy, r, rect){
+    // Minimum translation vector for circle vs rect
+    const nearestX = clamp(cx, rect.x, rect.x + rect.w);
+    const nearestY = clamp(cy, rect.y, rect.y + rect.h);
+    const dx = cx - nearestX;
+    const dy = cy - nearestY;
+    const dist2 = dx*dx + dy*dy;
+    if (dist2 > r*r) return null;
+    const dist = Math.sqrt(Math.max(1e-6, dist2));
+    const overlap = r - dist;
+    // Normalized push
+    const nx = (dist === 0) ? (cx < rect.x+rect.w/2 ? -1 : 1) : dx/dist;
+    const ny = (dist === 0) ? (cy < rect.y+rect.h/2 ? -1 : 1) : dy/dist;
+    return { nx, ny, overlap };
   }
-  function scaleEntities(s){
-    if (s === 1) return;
-    blocks.forEach(b=>{ b.x*=s; b.y*=s; b.w*=s; b.h*=s; });
-    cannon.x*=s; cannon.y*=s; cannon.r*=s;
-    if (ball){ ball.x*=s; ball.y*=s; ball.r*=s; ball.vx*=s; ball.vy*=s; }
-    if (lastLaunch){ lastLaunch.x*=s; lastLaunch.y*=s; lastLaunch.vx*=s; lastLaunch.vy*=s; }
-    worldScale *= s;
-  }
-  function clampEntitiesTo(vw, vh){
-    const ep = edgePad();
-    const maxX = Math.max(ep, vw - ep);
-    const maxY = Math.max(ep, vh - ep);
-    blocks.forEach(b=>{
-      b.x = clamp(b.x, ep, Math.max(ep, vw - ep - b.w));
-      b.y = clamp(b.y, ep, Math.max(ep, vh - ep - b.h));
-    });
-    cannon.x = clamp(cannon.x, ep + cannon.r, Math.max(ep + cannon.r, vw - ep - cannon.r));
-    cannon.y = clamp(cannon.y, ep + cannon.r, Math.max(ep + cannon.r, vh - ep - cannon.r));
-    if (ball){
-      ball.x = clamp(ball.x, ep + ball.r, Math.max(ep + ball.r, maxX - ball.r));
-      ball.y = clamp(ball.y, ep + ball.r, Math.max(ep + ball.r, maxY - ball.r));
-    }
-  }
-  // Resize backing only (doesn't affect world size now)
-  let resizeRAF = 0;
-  const requestResize = ()=>{
-    if (resizeRAF) cancelAnimationFrame(resizeRAF);
-    resizeRAF = requestAnimationFrame(()=>{ resizeBacking(canvas); });
-  };
-  window.addEventListener('resize', requestResize);
-  const ro = new ResizeObserver(requestResize);
-  ro.observe(host);
-  ro.observe(shell);
-  ro.observe(canvas);
-  function hitBlock(p){ return blocks.slice().reverse().find(b => p.x>=b.x && p.x<=b.x+b.w && p.y>=b.y && p.y<=b.y+b.h); }
-  const hitCannon = (p)=> ((p.x-cannon.x)**2 + (p.y-cannon.y)**2) <= (cannon.r*cannon.r);
-  let aiming = false, aimStart={x:0,y:0}, aimCurrent={x:0,y:0};
-  let draggingBlock = null, dragOff={x:0,y:0}, movedDuringDrag=false;
-  let draggingCannon = false, cannonOff={x:0,y:0};
-  let longPressTimer = null, longPressVictim = null;
-  function clearLongPress(){ if (longPressTimer){ clearTimeout(longPressTimer); longPressTimer=null; } longPressVictim=null; }
-  canvas.addEventListener('contextmenu', (e)=> e.preventDefault());
-  canvas.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    canvas.setPointerCapture?.(e.pointerId);
-    const p = screenToWorld(e);
-    const b = hitBlock(p);
-    movedDuringDrag = false;
-    if (hitCannon(p)){
-      draggingCannon = true;
-      showHandle = true;
-      cannonOff.x = p.x - cannon.x; cannonOff.y = p.y - cannon.y;
-      return;
-    }
-    if (b) {
-      if (sizing.scale > 1) {
-        const localY = p.y - b.y;
-        if (sizing.scale > 1 && localY <= NOTE_BTN_H) { b.noteIndex = clamp(b.noteIndex + 1, 0, noteList.length-1); return; }
-        if (sizing.scale > 1 && localY >= b.h - NOTE_BTN_H) { b.noteIndex = clamp(b.noteIndex - 1, 0, noteList.length-1); return; }
+
+  function updateBall(){
+    if (!ball) return;
+    // move
+    ball.x += ball.vx;
+    ball.y += ball.vy;
+
+    // wall bounces
+    if (ball.x - ball.r < EDGE){ ball.x = EDGE + ball.r; ball.vx *= -1; }
+    if (ball.x + ball.r > worldW()-EDGE){ ball.x = worldW()-EDGE - ball.r; ball.vx *= -1; }
+    if (ball.y - ball.r < EDGE){ ball.y = EDGE + ball.r; ball.vy *= -1; }
+    if (ball.y + ball.r > worldH()-EDGE){ ball.y = worldH()-EDGE - ball.r; ball.vy *= -1; }
+
+    // block collisions
+    const now = ensureAudioContext().currentTime;
+    for (const b of blocks){
+      const mtv = circleRectMTV(ball.x, ball.y, ball.r, b);
+      if (mtv){
+        // move out
+        ball.x += mtv.nx * mtv.overlap;
+        ball.y += mtv.ny * mtv.overlap;
+        // reflect velocity along the dominant axis
+        if (Math.abs(mtv.nx) > Math.abs(mtv.ny)) ball.vx *= -1;
+        else ball.vy *= -1;
+        // trigger note + flash
+        triggerInstrument(ui.instrument, b.noteIndex, now);
+        b.activeFlash = 1.0;
       }
-      draggingBlock = b;
-      dragOff.x = p.x - b.x; dragOff.y = p.y - b.y;
-      longPressVictim = b;
-      clearLongPress();
-      longPressTimer = setTimeout(()=>{
-        if (longPressVictim === b && !movedDuringDrag){
-          blocks = blocks.filter(x => x!==b);
-          draggingBlock = null;
-        }
-        clearLongPress();
-      }, LONG_PRESS_MS);
-      return;
-    }
-    // Move handle to click and start aim
-    const vw = worldW(), vh = worldH();
-    cannon.x = clamp(p.x, edgePad() + cannon.r, vw - edgePad() - cannon.r);
-    cannon.y = clamp(p.y, edgePad() + cannon.r, vh - edgePad() - cannon.r);
-    showHandle = true;
-    aiming = true;
-    aimStart   = { x: cannon.x, y: cannon.y };
-    aimCurrent = { x: p.x, y: p.y };
-  });
-  canvas.addEventListener('pointermove', (e) => {
-    const p = screenToWorld(e);
-    const vw = worldW(), vh = worldH();
-    if (draggingCannon){
-      cannon.x = clamp(p.x - cannonOff.x, edgePad() + cannon.r, vw - edgePad() - cannon.r);
-      cannon.y = clamp(p.y - cannonOff.y, edgePad() + cannon.r, vh - edgePad() - cannon.r);
-      return;
-    }
-    if (draggingBlock) {
-      movedDuringDrag = true;
-      draggingBlock.x = clamp(p.x - dragOff.x, edgePad(), vw - edgePad() - draggingBlock.w);
-      draggingBlock.y = clamp(p.y - dragOff.y, edgePad(), vh - edgePad() - draggingBlock.h);
-      return;
-    }
-    if (aiming) { aimCurrent = { x: p.x, y: p.y }; }
-  });
-  canvas.addEventListener('pointerup', (e) => {
-    canvas.releasePointerCapture?.(e.pointerId);
-    clearLongPress();
-    const p = screenToWorld(e);
-    if (draggingCannon){ draggingCannon=false; return; }
-    if (draggingBlock) { draggingBlock = null; return; }
-    if (!aiming) return;
-    aiming = false;
-    const vx = ((p.x - cannon.x) / 10);
-    const vy = ((p.y - cannon.y) / 10);
-    spawnBall(cannon.x, cannon.y, vx, vy);
-    const { loopStartTime, barLen } = getLoopInfo();
-    const audio = ensureAudioContext();
-    const offset = ((audio.currentTime - loopStartTime) % barLen + barLen) % barLen;
-    lastLaunch = { x: cannon.x, y: cannon.y, vx, vy, offset };
-    nextLaunchAt = loopStartTime + barLen + offset;
-  });
-  function onLoop(loopStartTime){
-    if (!lastLaunch) return;
-    const { barLen } = getLoopInfo();
-    nextLaunchAt = loopStartTime + lastLaunch.offset;
-  }
-  function bounceOffRect(rect, ball){
-    const dxLeft   = (ball.x + ball.r) - rect.x;
-    const dxRight  = (rect.x + rect.w) - (ball.x - ball.r);
-    const dyTop    = (ball.y + ball.r) - rect.y;
-    const dyBottom = (rect.y + rect.h) - (ball.y - ball.r);
-    if (dxLeft <= 0 || dxRight <= 0 || dyTop <= 0 || dyBottom <= 0) return;
-    const minX = Math.min(dxLeft, dxRight);
-    const minY = Math.min(dyTop, dyBottom);
-    if (minX < minY){
-      if (dxLeft < dxRight){ ball.x = rect.x - ball.r; ball.vx = -Math.abs(ball.vx); }
-      else { ball.x = rect.x + rect.w + ball.r; ball.vx = Math.abs(ball.vx); }
-    } else {
-      if (dyTop < dyBottom){ ball.y = rect.y - ball.r; ball.vy = -Math.abs(ball.vy); }
-      else { ball.y = rect.y + rect.h + ball.r; ball.vy = Math.abs(ball.vy); }
     }
   }
+
+  // Input
+  function getPos(e){
+    const r = canvas.getBoundingClientRect();
+    const x = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
+    const y = (e.touches ? e.touches[0].clientY : e.clientY) - r.top;
+    return { x, y };
+  }
+
+  function onDown(e){
+    e.preventDefault();
+    const p = getPos(e);
+    // If near handle, drag it
+    const d = Math.hypot(p.x - handle.x, p.y - handle.y);
+    if (d <= Math.max(12, cannonR()+4)){
+      draggingHandle = true;
+      return;
+    }
+    // If clicking a block (and zoomed), maybe adjust pitch
+    const over = blocks.slice().reverse().find(b => p.x>=b.x && p.x<=b.x+b.w && p.y>=b.y && p.y<=b.y+b.h);
+    if (over){
+      if (sizing.scale > 1){
+        const localY = p.y - over.y;
+        if (localY <= NOTE_BTN_H){ over.noteIndex = (over.noteIndex + 1) % noteList.length; return; }
+        if (localY >= over.h - NOTE_BTN_H){ over.noteIndex = (over.noteIndex - 1 + noteList.length) % noteList.length; return; }
+      }
+      // allow dragging block
+      over.drag = { dx: p.x - over.x, dy: p.y - over.y };
+      over.dragging = true;
+      return;
+    }
+    // Else: draw a path (single handle)
+    drawingPath = true;
+    dragStart = p;
+    handle.x = p.x; handle.y = p.y;
+  }
+  function onMove(e){
+    const p = getPos(e);
+    if (draggingHandle){
+      handle.x = clamp(p.x, EDGE, worldW()-EDGE);
+      handle.y = clamp(p.y, EDGE, worldH()-EDGE);
+      return;
+    }
+    const draggingBlock = blocks.find(b => b.dragging);
+    if (draggingBlock){
+      draggingBlock.x = clamp(p.x - draggingBlock.drag.dx, EDGE, worldW()-EDGE - draggingBlock.w);
+      draggingBlock.y = clamp(p.y - draggingBlock.drag.dy, EDGE, worldH()-EDGE - draggingBlock.h);
+      return;
+    }
+  }
+  function onUp(e){
+    const p = dragStart;
+    if (drawingPath && p){
+      const end = getPos(e.changedTouches ? e.changedTouches[0]||e : e);
+      const vx = (end.x - p.x) * 0.12; // power factor
+      const vy = (end.y - p.y) * 0.12;
+      lastLaunch = { x: handle.x, y: handle.y, vx, vy, r: ballR() };
+      spawnBallFrom(lastLaunch);
+    }
+    drawingPath = false; dragStart = null; draggingHandle = false;
+    for (const b of blocks){ b.dragging = false; b.drag = null; }
+  }
+
+  canvas.addEventListener('pointerdown', onDown);
+  canvas.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
+
+  canvas.addEventListener('touchstart', onDown, { passive:false });
+  canvas.addEventListener('touchmove', onMove, { passive:false });
+  window.addEventListener('touchend', onUp);
+
+  // Draw
   function draw(){
     resizeCanvasForDPR(canvas, ctx);
-    // Backing store updated to current style sizes
-    resizeBacking(canvas);
-    const dpr = window.devicePixelRatio || 1;
-    
-    
-    const vw = worldW(), vh = worldH();
-    ctx.clearRect(0, 0, canvas.width/dpr, canvas.height/dpr);
-    ctx.fillStyle = '#0b0f15';
-    ctx.fillRect(0, 0, vw, vh);
-    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-    ctx.strokeRect(0.5, 0.5, vw-1, vh-1);
-    if (aiming){
-      ctx.lineWidth = (sizing.scale>1?3:2);
-      ctx.setLineDash([6,4]);
-      ctx.strokeStyle = '#bbbbbb';
-      ctx.beginPath(); ctx.moveTo(aimStart.x, aimStart.y); ctx.lineTo(aimCurrent.x, aimCurrent.y); ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.fillStyle = '#bbbbbb'; ctx.beginPath(); ctx.arc(aimStart.x, aimStart.y, 4, 0, Math.PI*2); ctx.fill();
-    }
-    if (lastLaunch && nextLaunchAt != null){
-      const audio = ensureAudioContext();
-      if (audio.currentTime + 0.002 >= nextLaunchAt){
-        spawnBall(lastLaunch.x, lastLaunch.y, lastLaunch.vx, lastLaunch.vy);
-        const { barLen } = getLoopInfo();
-        nextLaunchAt += barLen;
+    if (ball){ ball.r = ballR(); }
+    const W = worldW(), H = worldH();
+    ctx.clearRect(0,0,W,H);
+
+    // bg + border
+    ctx.fillStyle = '#0b0f15'; ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.strokeRect(0.5,0.5,W-1,H-1);
+
+    // blocks
+    for (const b of blocks){
+      drawBlock(ctx, b, { baseColor:'#ff8c00', active: b.activeFlash > 0 });
+      if (sizing.scale > 1){
+        drawNoteStripsAndLabel(ctx, b, noteList[b.noteIndex]);
       }
+      if (b.activeFlash > 0) b.activeFlash = Math.max(0, b.activeFlash - 0.05);
     }
-    if (ball) {
-      ball.x += ball.vx; ball.y += ball.vy;
-      const ep = edgePad();
-      if (ball.x - ball.r < ep){ ball.x = ep + ball.r; ball.vx *= -1; }
-      if (ball.x + ball.r > (vw - ep)){ ball.x = vw - ep - ball.r; ball.vx *= -1; }
-      if (ball.y - ball.r < ep){ ball.y = ep + ball.r; ball.vy *= -1; }
-      if (ball.y + ball.r > (vh - ep)){ ball.y = vh - ep - ball.r; ball.vy *= -1; }
-    { ctx.save(); if (ball) ctx.globalAlpha = 0.6;
-      ctx.fillStyle = '#ffd166';
-      ctx.beginPath(); ctx.arc(cannon.x, cannon.y, (sizing.scale>1?10:6), 0, Math.PI*2); ctx.fill();
-      ctx.lineWidth = (sizing.scale>1?3:2); ctx.strokeStyle = '#ffffff44'; ctx.stroke();
-      ctx.restore();
+
+    // cannon/handle
+    ctx.fillStyle = '#ffd95e';
+    ctx.beginPath();
+    ctx.arc(handle.x, handle.y, cannonR(), 0, Math.PI*2);
+    ctx.fill();
+
+    // drag path preview
+    if (drawingPath && dragStart){
+      const m = dragStart;
+      ctx.strokeStyle = 'rgba(255,217,94,0.7)';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(m.x, m.y);
+      ctx.lineTo(handle.x, handle.y); ctx.stroke();
     }
-    // Draw cannon handle only after first user aim/drag
-    if (showHandle) {
-      ctx.save();
-      // solid yellow handle (matches Rippler generator style)
-      ctx.fillStyle = '#ffd166';
-      ctx.beginPath(); ctx.arc(cannon.x, cannon.y, (sizing.scale>1?10:6), 0, Math.PI*2); ctx.fill();
-      ctx.lineWidth = (sizing.scale>1?3:2); ctx.strokeStyle = '#ffffff44'; ctx.stroke();
-      ctx.restore();
-    }
-      for (const b of blocks){
-        const hit = (ball.x + ball.r > b.x && ball.x - ball.r < b.x + b.w &&
-                     ball.y + ball.r > b.y && ball.y - ball.r < b.y + b.h);
-        if (hit){
-          bounceOffRect(b, ball);
-          b.activeFlash = 1.0;
-          try {
-            {
-              const _inst = currentInstrument || ui.instrument || 'tone';
-              const _isTone = /tone|laser|sine|square|saw|tri|synth|fm|pluck/i.test(_inst);
-              const _note = _isTone ? noteList[b.noteIndex] : 'C4';
-              triggerInstrument(_inst, _note, ensureAudioContext().currentTime);
-            }
-          } catch(e) {
-            // swallow audio errors to keep draw loop alive
-            // console.warn('instrument trigger failed', e);
-          }
-        }
-      }
+
+    // ball
+    if (ball){
       ctx.fillStyle = '#fff';
       ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2); ctx.fill();
-    } else {
-      ctx.fillStyle = '#ffd166';
-      // initial handle hidden
+      updateBall();
     }
-    for (const b of blocks){
-      drawBlock(ctx, b, { baseColor: '#ff8c00', active: b.activeFlash>0 });
-      if (sizing.scale > 1) drawNoteStripsAndLabel(ctx, b, noteList[b.noteIndex]);
-      if (b.activeFlash>0) b.activeFlash = Math.max(0, b.activeFlash - 0.06);
-    }
+
     requestAnimationFrame(draw);
   }
   requestAnimationFrame(draw);
-  function reset(){
-    stopBall();
-    lastLaunch = null;
-    nextLaunchAt = null;
-    aiming = false;
-    draggingBlock = null;
-    draggingCannon = false;
-    blocks = [];
-  }
-  function legacyApplyZoom(zIn){
-    const targetScale = zIn ? ZOOM_FACTOR : 1;
-    if (targetScale === canvasScale) return;
-    // 1 Set canvas CSS size from immutable base
-    canvasScale = targetScale;
-    resizeBacking(canvas);
-    // 2 Scale entities to match world
-    const s = targetScale / worldScale;
-    if (s !== 1){ scaleEntities(s); }
-    // 3 Clamp to deterministic bounds
-    clampEntitiesTo(worldW(), worldH());
-  }
-  const ui = initToyUI(shell, {
-    toyName: 'Bouncer',
-    showAdd: true,
-    showDelete: true,
-    deleteMode: 'until-empty',
-    getDeletableCount: () => blocks.length,
-    onRandom: () => { blocks = makeBlocks(MAX_BLOCKS); },
-    onReset: () => { reset(); }
-  });
-  setHeaderTitle(shell, 'Bouncer');
-  // Track instrument from this panel's header <select>
-  let currentInstrument = ui.instrument;
-  const instSel = shell.querySelector('.toy-instrument');
-  if (instSel){
-    instSel.addEventListener('change', ()=> { currentInstrument = instSel.value; });
-  }
-  // Also respond to bubbled changes from toyui
-  shell.addEventListener('toy-instrument', (e)=>{ const v = e?.detail?.value; if (v) currentInstrument = v; });
-  
-panel.addEventListener('toy-zoom', (e)=>{
-    const zoomed = !!(e?.detail?.zoomed);
-    const ratio = sizing.setZoom(zoomed);
+
+  // Header events
+  panel.addEventListener('toy-zoom', (e)=>{
+    const ratio = sizing.setZoom(!!(e?.detail?.zoomed));
     if (ratio !== 1){
-      if (cannon){ cannon.x *= ratio; cannon.y *= ratio; }
-      if (blocks && Array.isArray(blocks)){ blocks.forEach(b=>{ b.x*=ratio; b.y*=ratio; b.w*=ratio; b.h*=ratio; }); }
+      blocks.forEach(b=>{ b.x*=ratio; b.y*=ratio; b.w*=ratio; b.h*=ratio; });
+      handle.x *= ratio; handle.y *= ratio;
       if (ball){ ball.x *= ratio; ball.y *= ratio; ball.vx *= ratio; ball.vy *= ratio; }
-      clampEntitiesTo(worldW(), worldH());
+      if (lastLaunch){ lastLaunch.x *= ratio; lastLaunch.y *= ratio; lastLaunch.vx *= ratio; lastLaunch.vy *= ratio; lastLaunch.r = ballR(); }
     }
   });
 
-panel.addEventListener('toy-random', ()=> {
-  randomizeRects(blocks, worldW(), worldH(), edgePad());
-  for (const b of blocks){ b.noteIndex = Math.floor(Math.random()*noteList.length); b.activeFlash = 0; }
-  stopBall(); nextLaunchAt = null;
-});
-panel.addEventListener('toy-reset', ()=> { reset(); });
-// legacyApplyZoom(false); // disabled; using shared sizing.setZoom
-return { onLoop, reset, setInstrument: ui.setInstrument, element: canvas };
+  panel.addEventListener('toy-random', ()=>{
+    randomizeRects(blocks, worldW(), worldH(), EDGE);
+    for (const b of blocks){ b.noteIndex = Math.floor(Math.random()*noteList.length); b.activeFlash = 0; }
+    // Kill ball; next path sets proper spawn; (respawn will occur on next drag)
+    ball = null;
+  });
+
+  panel.addEventListener('toy-reset', ()=>{
+    ball = null;
+    blocks = new Array(5).fill(0).map((_,i)=>({ x: EDGE+6, y: EDGE+6, w: blockSize(), h: blockSize(), noteIndex: i*3 % noteList.length, activeFlash: 0 }));
+    randomizeRects(blocks, worldW(), worldH(), EDGE);
+  });
+
+  // Loop hook: relaunch each loop if we have a lastLaunch
+  function onLoop(){
+    if (lastLaunch){
+      const L = { x: handle.x, y: handle.y, vx: lastLaunch.vx, vy: lastLaunch.vy, r: ballR() };
+      spawnBallFrom(L);
+    }
+  }
+
+  function reset(){ ball=null; lastLaunch=null; }
+
+  return { onLoop, reset, setInstrument: ui.setInstrument, element: canvas };
 }

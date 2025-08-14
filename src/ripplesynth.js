@@ -216,6 +216,7 @@ export function createRippleSynth(panel){
     if (ratio !== 1){
       blocks.forEach(b=>{ b.x*=ratio; b.y*=ratio; b.w*=ratio; b.h*=ratio; });
       generators.forEach(g=>{ g.x*=ratio; g.y*=ratio; });
+      ripples.forEach(rp=>{ rp.gx*=ratio; rp.gy*=ratio; });
     }
   });
 
