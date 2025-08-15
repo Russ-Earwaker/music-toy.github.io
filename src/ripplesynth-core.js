@@ -335,11 +335,7 @@ export function createRippleSynth(panel){
       );
       if (r > cornerMax + 60){ ripples.splice(i,1); continue; }
 
-      // Visual design: strong leading edge -> trailing fade band -> gap -> softer secondary wave
-      const tailW = 14;
-      const gap   = 10;
-      const secW  = 10;
-
+      // Helper to safely stroke a ring
       function strokeRing(rad, width, alpha){
         const rr = Math.max(0.0001, rad);
         if (!isFinite(rr) || rr <= 0) return;
@@ -351,15 +347,44 @@ export function createRippleSynth(panel){
         ctx.globalAlpha = 1;
       }
 
-      // trailing band (wide & soft)
-      strokeRing(r - tailW*0.5, tailW, 0.14);
-      // leading edge (thin & bright)
-      strokeRing(r, 2, 0.6);
+      // Three distinct waves:
+      // r1: primary (brightest), r2: secondary (~0.6s behind), r3: tertiary (~1.2s behind)
+      const r1 = Math.max(0, r);
+      const r2 = Math.max(0, r - speed * 0.60);
+      const r3 = Math.max(0, r - speed * 1.20);
+      const tailW = 14;
+      const secW  = 12;
 
-      // secondary wave
-      const r2 = r + gap;
-      strokeRing(r2 - secW*0.5, secW, 0.10);
-      strokeRing(r2, 1.5, 0.35);
+      // PRIMARY: strong tail band + bright edge + 90% white trigger accent
+      strokeRing(r1 - tailW*0.5, tailW, 0.22);
+      strokeRing(r1, 3.2, 1.0);
+      {
+        const loopDur = NUM_STEPS * stepSeconds();
+        const prog = Math.max(0, (now - rp.startTime)) / Math.max(0.001, loopDur);
+        const ang = (prog * Math.PI * 2) % (Math.PI * 2);
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.globalAlpha = 0.90; // 90% white accent
+        ctx.lineWidth = 4.0;
+        ctx.beginPath();
+        ctx.arc(cx, cy, Math.max(0.0001, r1), ang - 0.22, ang + 0.22);
+        ctx.stroke();
+        // soft glow
+        ctx.globalAlpha = 0.18;
+        ctx.lineWidth = 9.0;
+        ctx.beginPath();
+        ctx.arc(cx, cy, Math.max(0.0001, r1), ang - 0.18, ang + 0.18);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // SECONDARY: clearly softer
+      strokeRing(r2 - secW*0.5, secW * 1.30, 0.20);
+      strokeRing(r2, 2.2, 0.55);
+
+      // TERTIARY: subtle/dark
+      strokeRing(r3 - 8*0.5, 8, 0.12);
+      strokeRing(r3, 1.6, 0.30);
     }
     ctx.restore();
 
@@ -406,8 +431,7 @@ export function createRippleSynth(panel){
           b.activeFlash = 0;
         }
       }
-      
-      // Buoy-like push from ripples
+      // Buoy-like push from ripples (subtle + eased)
       let pushX = 0, pushY = 0;
       const bx = b.x + b.w/2, by = b.y + b.h/2;
       const dirx = bx - cx, diry = by - cy;
@@ -417,32 +441,37 @@ export function createRippleSynth(panel){
       for (const rp2 of ripples){
         const rNow = Math.max(0, (now - rp2.startTime) * speed);
         const d = Math.abs(dist - rNow);
-        const fall = Math.exp(- (d*d) / (2 * 20 * 20));
+        const fall = Math.exp(- (d*d) / (2 * 22 * 22));
         if (fall > accum) accum = fall;
       }
-      b.nudge = (b.nudge || 0) * 0.88;
-      const maxPush = Math.min(b.w, b.h) * 0.12;
-      const disp = maxPush * Math.max(accum, b.nudge);
-      pushX = nx * disp; pushY = ny * disp;
+      b.nudge = (b.nudge || 0) * 0.95;
+      const maxPush = Math.min(b.w, b.h) * 0.10;
+      const targetDisp = maxPush * Math.max(accum * 0.7, b.nudge);
+      b.pushX = (b.pushX ?? 0) + (nx * targetDisp - (b.pushX ?? 0)) * 0.14;
+      b.pushY = (b.pushY ?? 0) + (ny * targetDisp - (b.pushY ?? 0)) * 0.14;
+      pushX = b.pushX; pushY = b.pushY;
 
-      drawBlock(ctx, b, { baseColor: '#ff8c00', active: b.activeFlash > 0, offsetX: pushX, offsetY: pushY, noteLabel: noteList[b.noteIndex % noteList.length] });
+      drawBlock(ctx, b, { baseColor: '#ff8c00', active: b.activeFlash > 0, offsetX: pushX, offsetY: pushY, noteLabel: (sizing.scale > 1 ? noteList[b.noteIndex % noteList.length] : ''), showArrows: sizing.scale > 1 });
 
-      // Square ripples around blocks
+      // Square ripples around blocks (start at block extents, expand outward)
       if (b.sqrRipples){
         for (let si = b.sqrRipples.length - 1; si >= 0; si--){
           const sr = b.sqrRipples[si];
           const age = now - sr.start;
-          const dur = 0.8;
+          const dur = 1.4;
           if (age > dur){ b.sqrRipples.splice(si,1); continue; }
           const t = age / dur;
-          const grow = (Math.min(b.w, b.h) * 0.5) + t * 20;
-          const alpha = 0.18 * (1 - t);
+          const expand = t * 36;
+          const alpha = 0.40 * (1 - t);
           ctx.save();
           ctx.globalAlpha = alpha;
           ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 1;
-          const cxr = b.x + b.w/2 + pushX, cyr = b.y + b.h/2 + pushY;
-          ctx.strokeRect(cxr - grow/2, cyr - grow/2, grow, grow);
+          ctx.lineWidth = 2.0;
+          const rx = (b.x + pushX) - expand;
+          const ry = (b.y + pushY) - expand;
+          const rw = b.w + expand * 2;
+          const rh = b.h + expand * 2;
+          ctx.strokeRect(rx, ry, rw, rh);
           ctx.restore();
         }
       }

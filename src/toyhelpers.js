@@ -51,8 +51,8 @@ export function randomizeRects(rects, boundsOrW, hMaybe, pad = EDGE_PAD){
 
 // ---------- drawing ----------
 // ---------- drawing ----------
-export function drawBlock(ctx, b, opts = {}) {
-  const { baseColor = '#ff8c00', active = false, offsetX = 0, offsetY = 0, noteLabel = null } = opts;
+export function drawBlock(ctx, b, opts = {}){
+  const { baseColor = '#ff8c00', active = false, offsetX = 0, offsetY = 0, noteLabel = null, showArrows = true } = opts;
   const x = b.x + offsetX, y = b.y + offsetY, w = b.w, h = b.h;
 
   // background
@@ -74,24 +74,27 @@ export function drawBlock(ctx, b, opts = {}) {
   ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
   ctx.globalAlpha = 1;
 
-  // up/down triangles for note steps
-  ctx.fillStyle = 'rgba(255,255,255,0.75)';
-  // up
-  ctx.beginPath();
-  ctx.moveTo(x + w - 12, y + 4);
-  ctx.lineTo(x + w - 4,  y + 4);
-  ctx.lineTo(x + w - 8,  y + 10);
-  ctx.closePath();
-  ctx.fill();
-  // down
-  ctx.beginPath();
-  ctx.moveTo(x + w - 12, y + h - 4);
-  ctx.lineTo(x + w - 4,  y + h - 4);
-  ctx.lineTo(x + w - 8,  y + h - 10);
-  ctx.closePath();
-  ctx.fill();
+  // up/down triangles for note steps (only in zoom/edit)
+  if (showArrows) {
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    // up
+    ctx.beginPath();
+    ctx.moveTo(x + w - 12, y + 4);
+    ctx.lineTo(x + w - 4,  y + 4);
+    ctx.lineTo(x + w - 8,  y + 10);
+    ctx.closePath();
+    ctx.fill();
+    // down
+    ctx.beginPath();
+    ctx.moveTo(x + w - 12, y + h - 4);
+    ctx.lineTo(x + w - 4,  y + h - 4);
+    ctx.lineTo(x + w - 8,  y + h - 10);
+    ctx.closePath();
+    ctx.fill();
+  }
 
   // label
+
   ctx.fillStyle = '#fff';
   ctx.font = '12px system-ui, sans-serif';
   ctx.textBaseline = 'middle';
