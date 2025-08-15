@@ -1,4 +1,3 @@
-// src/ripplesynth-core.js — moved from ripplesynth.js to reduce file size
 // src/ripplesynth.js — Rippler (recorded loop + JIT scheduling + drag-exempt blocks)
 import { noteList, getCanvasPos, clamp, resizeCanvasForDPR } from './utils.js';
 import { ensureAudioContext, triggerInstrument, NUM_STEPS, stepSeconds } from './audio.js';
@@ -323,20 +322,44 @@ export function createRippleSynth(panel){
     const speed = computeSpeed();
 
     // Draw ripples and cull
+    
     ctx.save();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
     for (let i = ripples.length-1; i>=0; i--){
       const rp = ripples[i];
-      const radius = Math.max(0, (now - rp.startTime) * speed);
+      const r = Math.max(0, (now - rp.startTime) * speed);
       const cornerMax = Math.max(
         Math.hypot(cx - 0,    cy - 0),
         Math.hypot(cx - vw(), cy - 0),
         Math.hypot(cx - 0,    cy - vh()),
         Math.hypot(cx - vw(), cy - vh())
       );
-      if (radius > cornerMax + 50){ ripples.splice(i,1); continue; }
-      ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI*2); ctx.stroke();
+      if (r > cornerMax + 60){ ripples.splice(i,1); continue; }
+
+      // Visual design: strong leading edge -> trailing fade band -> gap -> softer secondary wave
+      const tailW = 14;
+      const gap   = 10;
+      const secW  = 10;
+
+      function strokeRing(rad, width, alpha){
+        const rr = Math.max(0.0001, rad);
+        if (!isFinite(rr) || rr <= 0) return;
+        ctx.globalAlpha = alpha;
+        ctx.lineWidth = Math.max(0.5, width);
+        ctx.beginPath();
+        ctx.arc(cx, cy, rr, 0, Math.PI*2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+
+      // trailing band (wide & soft)
+      strokeRing(r - tailW*0.5, tailW, 0.14);
+      // leading edge (thin & bright)
+      strokeRing(r, 2, 0.6);
+
+      // secondary wave
+      const r2 = r + gap;
+      strokeRing(r2 - secW*0.5, secW, 0.10);
+      strokeRing(r2, 1.5, 0.35);
     }
     ctx.restore();
 
@@ -355,6 +378,9 @@ export function createRippleSynth(panel){
           if (!rp.firedFor.has(bi)){
             rp.firedFor.add(bi);
             b.cooldownUntil = now + HIT_COOLDOWN;
+            if (!b.sqrRipples) b.sqrRipples = [];
+            b.sqrRipples.push({ start: now });
+            b.nudge = Math.max(b.nudge || 0, 1.0);
             // visual flash is now synced to audio, not ripple-crossing
             // Live-hit if not enrolled (e.g., just released) or currently dragging
             if (!suspendAudio && (draggingBlock === b || !enrolled.has(bi))){
@@ -380,7 +406,47 @@ export function createRippleSynth(panel){
           b.activeFlash = 0;
         }
       }
-      drawBlock(ctx, b, { baseColor: '#ff8c00', active: b.activeFlash > 0 });
+      
+      // Buoy-like push from ripples
+      let pushX = 0, pushY = 0;
+      const bx = b.x + b.w/2, by = b.y + b.h/2;
+      const dirx = bx - cx, diry = by - cy;
+      const dist = Math.hypot(dirx, diry) || 1;
+      const nx = dirx / dist, ny = diry / dist;
+      let accum = 0;
+      for (const rp2 of ripples){
+        const rNow = Math.max(0, (now - rp2.startTime) * speed);
+        const d = Math.abs(dist - rNow);
+        const fall = Math.exp(- (d*d) / (2 * 20 * 20));
+        if (fall > accum) accum = fall;
+      }
+      b.nudge = (b.nudge || 0) * 0.88;
+      const maxPush = Math.min(b.w, b.h) * 0.12;
+      const disp = maxPush * Math.max(accum, b.nudge);
+      pushX = nx * disp; pushY = ny * disp;
+
+      drawBlock(ctx, b, { baseColor: '#ff8c00', active: b.activeFlash > 0, offsetX: pushX, offsetY: pushY, noteLabel: noteList[b.noteIndex % noteList.length] });
+
+      // Square ripples around blocks
+      if (b.sqrRipples){
+        for (let si = b.sqrRipples.length - 1; si >= 0; si--){
+          const sr = b.sqrRipples[si];
+          const age = now - sr.start;
+          const dur = 0.8;
+          if (age > dur){ b.sqrRipples.splice(si,1); continue; }
+          const t = age / dur;
+          const grow = (Math.min(b.w, b.h) * 0.5) + t * 20;
+          const alpha = 0.18 * (1 - t);
+          ctx.save();
+          ctx.globalAlpha = alpha;
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1;
+          const cxr = b.x + b.w/2 + pushX, cyr = b.y + b.h/2 + pushY;
+          ctx.strokeRect(cxr - grow/2, cyr - grow/2, grow, grow);
+          ctx.restore();
+        }
+      }
+
       if (sizing.scale > 1){ drawNoteStripsAndLabel(ctx, b, noteList[b.noteIndex % noteList.length]); }
       if (b.activeFlash > 0){
         ctx.save();

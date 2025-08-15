@@ -50,14 +50,17 @@ export function randomizeRects(rects, boundsOrW, hMaybe, pad = EDGE_PAD){
 }
 
 // ---------- drawing ----------
-export function drawBlock(ctx, b, { baseColor = '#ff8c00', active = false } = {}){
-  const { x, y, w, h } = b;
+// ---------- drawing ----------
+export function drawBlock(ctx, b, opts = {}) {
+  const { baseColor = '#ff8c00', active = false, offsetX = 0, offsetY = 0, noteLabel = null } = opts;
+  const x = b.x + offsetX, y = b.y + offsetY, w = b.w, h = b.h;
+
   // background
   ctx.fillStyle = baseColor;
   ctx.fillRect(x, y, w, h);
 
   // active pulse overlay
-  if (active){
+  if (active) {
     ctx.save();
     ctx.fillStyle = 'rgba(255,255,255,0.25)';
     ctx.fillRect(x, y, w, h);
@@ -68,31 +71,23 @@ export function drawBlock(ctx, b, { baseColor = '#ff8c00', active = false } = {}
   ctx.strokeStyle = 'rgba(0,0,0,0.8)';
   ctx.globalAlpha = 0.35;
   ctx.lineWidth = 1.5;
-  ctx.strokeRect(x+0.5, y+0.5, w-1, h-1);
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
   ctx.globalAlpha = 1;
-}
 
-export function drawNoteStripsAndLabel(ctx, b, noteLabel){
-  // top strip
-  ctx.fillStyle = 'rgba(0,0,0,.25)';
-  ctx.fillRect(b.x, b.y, b.w, NOTE_BTN_H);
-  // bottom strip
-  ctx.fillRect(b.x, b.y + b.h - NOTE_BTN_H, b.w, NOTE_BTN_H);
-
-  // arrows
-  ctx.fillStyle = '#fff';
-  // up (top)
+  // up/down triangles for note steps
+  ctx.fillStyle = 'rgba(255,255,255,0.75)';
+  // up
   ctx.beginPath();
-  ctx.moveTo(b.x + b.w - 12, b.y + 4);
-  ctx.lineTo(b.x + b.w - 4, b.y + 4);
-  ctx.lineTo(b.x + b.w - 8, b.y + 10);
+  ctx.moveTo(x + w - 12, y + 4);
+  ctx.lineTo(x + w - 4,  y + 4);
+  ctx.lineTo(x + w - 8,  y + 10);
   ctx.closePath();
   ctx.fill();
-  // down (bottom)
+  // down
   ctx.beginPath();
-  ctx.moveTo(b.x + b.w - 12, b.y + b.h - 4);
-  ctx.lineTo(b.x + b.w - 4, b.y + b.h - 4);
-  ctx.lineTo(b.x + b.w - 8, b.y + b.h - 10);
+  ctx.moveTo(x + w - 12, y + h - 4);
+  ctx.lineTo(x + w - 4,  y + h - 4);
+  ctx.lineTo(x + w - 8,  y + h - 10);
   ctx.closePath();
   ctx.fill();
 
@@ -100,8 +95,21 @@ export function drawNoteStripsAndLabel(ctx, b, noteLabel){
   ctx.fillStyle = '#fff';
   ctx.font = '12px system-ui, sans-serif';
   ctx.textBaseline = 'middle';
-  ctx.fillText(String(noteLabel ?? ''), b.x + 6, b.y + b.h/2);
+  ctx.fillText(String(noteLabel ?? ''), x + 6, y + h / 2);
 }
+
+export function drawNoteStripsAndLabel(ctx, b, label) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(255,255,255,0.06)';
+  ctx.fillRect(b.x, b.y, b.w, NOTE_BTN_H);
+  ctx.fillRect(b.x, b.y + b.h - NOTE_BTN_H, b.w, NOTE_BTN_H);
+  ctx.fillStyle = '#fff';
+  ctx.font = '12px system-ui, sans-serif';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(String(label ?? ''), b.x + 6, b.y + b.h / 2);
+  ctx.restore();
+}
+
 
 export function hitTopStrip(p, b){
   return p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + NOTE_BTN_H;
