@@ -6,6 +6,7 @@ import { initToySizing, drawBlock, drawNoteStripsAndLabel, NOTE_BTN_H, hitTopStr
 
 const BASE_BLOCK_SIZE = 48;
 const HIT_COOLDOWN = 0.08;
+const FLASH_DUR = 0.12; // quick flash synced to audio
 
 // --- Notes ---
 function noteIndexOf(name){ const i = noteList.indexOf(name); return (i>=0? i : Math.floor(noteList.length/2)); }
@@ -59,7 +60,7 @@ export function createRippleSynth(panel){
     const s = BASE_BLOCK_SIZE;
     const arr = [];
     for (let i=0;i<n;i++){
-      arr.push({ x: EDGE+10, y: EDGE+10, w: s, h: s, noteIndex: randomPent(), activeFlash: 0, cooldownUntil: 0 });
+      arr.push({ x: EDGE+10, y: EDGE+10, w: s, h: s, noteIndex: randomPent(), activeFlash: 0, flashAt: null, cooldownUntil: 0 });
     }
     return arr;
   }
@@ -171,6 +172,7 @@ export function createRippleSynth(panel){
       if (tHit > windowStart && tHit <= windowEnd){
         const b = blocks[i];
         triggerInstrument(ui.instrument, noteList[b.noteIndex % noteList.length], tHit);
+        b.flashAt = tHit;
         scheduledThisLoop.add(i);
       }
     }
@@ -352,13 +354,14 @@ export function createRippleSynth(panel){
           if (!rp.firedFor.has(bi)){
             rp.firedFor.add(bi);
             b.cooldownUntil = now + HIT_COOLDOWN;
-            b.activeFlash = 1.0;
+            // visual flash is now synced to audio, not ripple-crossing
             // Live-hit if not enrolled (e.g., just released) or currently dragging
             if (!suspendAudio && (draggingBlock === b || !enrolled.has(bi))){
               const ls = (gridEpoch != null ? gridEpoch : (lastLoopStartTime || now));
               const stepsLive = Math.floor((now - ls + 1e-4) / q) + 1;
               const tQlive = ls + stepsLive * q;
               triggerInstrument(ui.instrument, noteList[b.noteIndex % noteList.length], tQlive);
+              b.flashAt = tQlive;
             }
           }
         }
@@ -367,6 +370,15 @@ export function createRippleSynth(panel){
 
     // Draw blocks
     for (const b of blocks){
+      // flash precisely when its audio plays
+      if (b.flashAt != null) {
+        const f = (now - b.flashAt);
+        if (f >= 0 && f <= FLASH_DUR) {
+          b.activeFlash = 1.0 - (f / FLASH_DUR);
+        } else if (f > FLASH_DUR && b.activeFlash > 0) {
+          b.activeFlash = 0;
+        }
+      }
       drawBlock(ctx, b, { baseColor: '#ff8c00', active: b.activeFlash > 0 });
       if (sizing.scale > 1){ drawNoteStripsAndLabel(ctx, b, noteList[b.noteIndex % noteList.length]); }
       if (b.activeFlash > 0){
@@ -445,7 +457,7 @@ lastDrawTime = now;
 
   panel.addEventListener('toy-random', ()=>{
     randomizeRects(blocks, vw(), vh(), EDGE);
-    for (const b of blocks){ b.noteIndex = randomPent(); b.activeFlash = 0; }
+    for (const b of blocks){ b.noteIndex = randomPent(); b.activeFlash = 0; b.flashAt = null; }
     // Keep the generator + anchor; just update the recording to match new geometry
     recalcBlockPhases();
     enrolled = new Set(blocks.map((_,i)=>i));
@@ -461,7 +473,7 @@ lastDrawTime = now;
     enrolled.clear(); rejoinNextLoop.clear(); scheduledThisLoop.clear();
     currentLoopRippleStart = null; lastQueuedTime = -1;
     // Keep existing notes; just clear visual flashes
-    for (const b of blocks){ b.activeFlash = 0; }
+    for (const b of blocks){ b.activeFlash = 0; b.flashAt = null; }
   });
 
   // --- Loop hook ---
@@ -479,7 +491,7 @@ lastDrawTime = now;
     blockPhases = [];
     enrolled.clear(); rejoinNextLoop.clear(); scheduledThisLoop.clear();
     currentLoopRippleStart = null; lastQueuedTime = -1;
-    for (const b of blocks){ b.activeFlash = 0; }
+    for (const b of blocks){ b.activeFlash = 0; b.flashAt = null; }
   }
   function setInstrument(_name){ /* via UI */ }
   function destroy(){
