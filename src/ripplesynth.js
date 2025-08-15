@@ -3,4 +3,3 @@
 export { createRippleSynth } from './ripplesynth-core.js';
 export * from './ripplesynth-ui.js';
 export * from './ripplesynth-audio.js';
-export * from './ripplesynth-utils.js';
