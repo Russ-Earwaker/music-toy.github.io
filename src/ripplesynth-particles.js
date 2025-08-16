@@ -1,53 +1,81 @@
 // src/ripplesynth-particles.js
-let _particles = [];
+// Particle layer: randomized rest positions (no grid), spring + knockback from ripples.
+let P = []; // particles
+let WIDTH = 0, HEIGHT = 0;
+const P_SPRING = 0.10;
+const P_DAMP   = 0.90;
+const P_MAXV   = 160;
+const P_IMPULSE = 6;     // impulse on ring hit (small)
+const P_HIT_BAND = 8;    // tolerance around ring radius
+let EDGE_KEEP = 10;
 
-export function initParticles(vw, vh, EDGE = 16, count = 56){
-  _particles.length = 0;
-  const margin = EDGE + 10;
-  const W = typeof vw === 'function' ? vw() : vw;
-  const H = typeof vh === 'function' ? vh() : vh;
-  for (let i=0;i<count;i++){
-    const x = margin + Math.random() * Math.max(1, W - margin*2);
-    const y = margin + Math.random() * Math.max(1, H - margin*2);
-    _particles.push({ x, y, pushX: 0, pushY: 0, phase: Math.random() * Math.PI * 2 });
+function rand(min, max){ return Math.random() * (max - min) + min; }
+
+export function initParticles(w, h, EDGE = 10, count = 56){
+  WIDTH = w; HEIGHT = h; EDGE_KEEP = EDGE;
+  P = [];
+  for (let i=0; i<count; i++){
+    const rx = rand(EDGE, w - EDGE);
+    const ry = rand(EDGE, h - EDGE);
+    P.push({ x: rx, y: ry, rx, ry, vx: 0, vy: 0 });
   }
-  try { console.log('[particles]', _particles.length); } catch {}
 }
 
-export function drawParticles(ctx, cx, cy, nowSec, speed, ripples){
-  if (!_particles.length) return;
-  const RADIUS = 4.0;
-  const ALPHA  = 1.0;
-  const pMaxPush = 6;
+export function reshuffleParticles(){
+  // Assign new random rest positions; move particles there and zero velocities
+  for (let i=0; i<P.length; i++){
+    const rx = rand(EDGE_KEEP, WIDTH - EDGE_KEEP);
+    const ry = rand(EDGE_KEEP, HEIGHT - EDGE_KEEP);
+    P[i].rx = rx; P[i].ry = ry;
+    P[i].x = rx;  P[i].y = ry;
+    P[i].vx = 0;  P[i].vy = 0;
+  }
+}
 
-  ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
+export function scaleParticles(ratio){
+  for (const p of P){
+    p.x*=ratio; p.y*=ratio; p.rx*=ratio; p.ry*=ratio;
+    p.vx*=ratio; p.vy*=ratio;
+  }
+  WIDTH*=ratio; HEIGHT*=ratio;
+}
 
-  for (const pt of _particles){
-    const dx = pt.x - cx, dy = pt.y - cy;
-    const dist = Math.hypot(dx, dy) || 1;
-    const nx = dx / dist, ny = dy / dist;
-
-    let accum = 0;
-    if (Array.isArray(ripples)){
-      for (const rp of ripples){
-        const rr = Math.max(0, (nowSec - rp.startTime) * speed);
-        const d  = Math.abs(dist - rr);
-        const fall = Math.exp(-(d*d) / (2*24*24));
-        if (fall > accum) accum = fall;
+export function drawParticles(ctx, now, ripples, generator){
+  // physics
+  const dt = 1/60;
+  for (const p of P){
+    // spring
+    const ax = (p.rx - p.x) * P_SPRING;
+    const ay = (p.ry - p.y) * P_SPRING;
+    p.vx = (p.vx + ax) * P_DAMP;
+    p.vy = (p.vy + ay) * P_DAMP;
+    // ripple knockback
+    if (generator && generator.x!=null && ripples && ripples.length){
+      for (let r=0; r<ripples.length; r++){
+        const R = ripples[r];
+        const radius = Math.max(0, (now - R.startTime) * R.speed);
+        const dist = Math.hypot(p.x - R.x, p.y - R.y);
+        if (Math.abs(dist - radius) <= P_HIT_BAND){
+          const dx = p.x - R.x, dy = p.y - R.y;
+          const d = Math.max(1, Math.hypot(dx, dy));
+          const k = P_IMPULSE / d;
+          p.vx += dx * k; p.vy += dy * k;
+        }
       }
     }
-
-    const targetDisp = pMaxPush * accum * 0.6;
-    pt.pushX = (pt.pushX || 0) + (nx * targetDisp - (pt.pushX || 0)) * 0.10;
-    pt.pushY = (pt.pushY || 0) + (ny * targetDisp - (pt.pushY || 0)) * 0.10;
-
-    ctx.globalAlpha = ALPHA;
-    ctx.beginPath();
-    ctx.arc(pt.x + pt.pushX, pt.y + pt.pushY, RADIUS, 0, Math.PI*2);
-    ctx.fillStyle = '#ffffff';
-    ctx.fill();
+    // cap + integrate
+    const sp = Math.hypot(p.vx, p.vy);
+    if (sp > P_MAXV){ const s = P_MAXV/sp; p.vx*=s; p.vy*=s; }
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
   }
 
+  // render
+  ctx.save();
+  ctx.globalAlpha = 0.5;
+  ctx.fillStyle = '#ffffff';
+  for (const p of P){
+    ctx.fillRect(p.x, p.y, 1.5, 1.5);
+  }
   ctx.restore();
 }
