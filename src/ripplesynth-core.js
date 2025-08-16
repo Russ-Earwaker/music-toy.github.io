@@ -263,11 +263,12 @@ export function createRippleSynth(selector, { title = 'Rippler', defaultInstrume
     if (inputState && inputState.generatorDragEnded){
       clearRipples();
       const s = spawnRipple(true);
-      playbackActive = false;
-      loopRecording = true;
+      loopEvents = []; recordArm.clear();
+      playbackActive = false; loopRecording = true;
+      playbackPrevT = 0;
       skipPlaybackFrame = true;
       scheduleNextFrom(s);
-      if (loopStartAt == null) loopStartAt = s;
+      loopStartAt = s; // anchor the timeline to the first ripple's start
       inputState.generatorDragEnded = false;
     }
     if (lastDragIdx != null){ recordArm.add(lastDragIdx); mutedBlocks.delete(lastDragIdx); lastDragIdx = null; }
