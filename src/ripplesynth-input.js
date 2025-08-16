@@ -87,7 +87,9 @@ export function makePointerHandlers(cfg) {
       if (typeof generatorRef.set === 'function') generatorRef.set(nx, ny);
     } else {
       b.x = clamp(p.x - cfg.state.dragOff.x, EDGE, vw() - EDGE - b.w);
-      b.y = clamp(p.y - cfg.state.dragOff.y, EDGE, vh() - EDGE - b.h);
+    b.y = clamp(p.y - cfg.state.dragOff.y, EDGE, vh() - EDGE - b.h);
+    // keep rest synced while dragging so there is no drift
+    b.rx = b.x; b.ry = b.y; b.vx = 0; b.vy = 0;
     }
   }
 
