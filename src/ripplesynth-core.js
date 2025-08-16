@@ -66,16 +66,13 @@ export function createRippleSynth(selector, { title = 'Rippler', defaultInstrume
   let lastDragIdx = null;
   let skipPlaybackFrame = false;
 
+  let justWrapped = false;
   // Input handlers
   const inputState = { dragIndex: -1, dragOff:{x:0,y:0} };
   const generatorRef = {
     get x(){ return generator.x; }, get y(){ return generator.y; }, r: generator.r,
-    set(x,y){
-      generator.x=x; generator.y=y;
-      // reset loop when moving generator
-      loopRecording = true; playbackActive = false; loopEvents = []; recordArm.clear();
-      mutedBlocks.clear(); loopStartAt = null; nextLoopAt = null;
-    },
+    get placed(){ return generator.placed; },
+    set(x,y){ generator.x = x; generator.y = y; },
     exists(){ return generator.placed; },
     place(x,y){
       generator.placed = true; generator.x=x; generator.y=y;
@@ -116,6 +113,7 @@ export function createRippleSynth(selector, { title = 'Rippler', defaultInstrume
 
   function loopScheduler(now){
     if (!generator.placed) return;
+    if (inputState && inputState.draggingGenerator) return;
     const bar = Math.max(0.001, barDur());
     if (nextLoopAt == null){ nextLoopAt = now + bar; if (loopStartAt == null) loopStartAt = now; }
     if (now + 1/180 >= nextLoopAt){
@@ -124,6 +122,7 @@ export function createRippleSynth(selector, { title = 'Rippler', defaultInstrume
       loopStartAt = anchor;
       nextLoopAt = anchor + bar;
 
+      justWrapped = true;
       if (loopRecording){
         loopRecording = false; playbackActive = true;
       } else if (recordArm.size){
@@ -133,7 +132,7 @@ export function createRippleSynth(selector, { title = 'Rippler', defaultInstrume
         loopEvents = kept.concat(recent);
         recordArm.clear();
       }
-      playbackPrevT = 0;
+      // playbackPrevT preserved across wraps
       skipPlaybackFrame = true;
     }
 
@@ -142,6 +141,7 @@ export function createRippleSynth(selector, { title = 'Rippler', defaultInstrume
       const tNow = (now - loopStartAt);
       const curT = ((tNow % bar) + bar) % bar;
       const prevT = playbackPrevT;
+      if (justWrapped) { playbackPrevT = curT; justWrapped = false; return; }
       if (curT >= prevT){
         for (const ev of loopEvents){
           if (ev.t > prevT && ev.t <= curT && !mutedBlocks.has(ev.idx)){
@@ -254,15 +254,22 @@ export function createRippleSynth(selector, { title = 'Rippler', defaultInstrume
     if (!wasPlaced && generator.placed){
       clearRipples();
       const s = spawnRipple(false); scheduleNextFrom(s); if (loopStartAt == null) loopStartAt = s;
-    } else if (wasPlaced){
-      clearRipples();
-      const s = spawnRipple(true);  scheduleNextFrom(s); if (loopStartAt == null) loopStartAt = s;
     }
   }
   canvas.addEventListener('pointerdown', onPointerDown);
   canvas.addEventListener('pointermove', handlers.pointerMove);
   window.addEventListener('pointerup', (e)=>{
     handlers.pointerUp(e);
+    if (inputState && inputState.generatorDragEnded){
+      clearRipples();
+      const s = spawnRipple(true);
+      playbackActive = false;
+      loopRecording = true;
+      skipPlaybackFrame = true;
+      scheduleNextFrom(s);
+      if (loopStartAt == null) loopStartAt = s;
+      inputState.generatorDragEnded = false;
+    }
     if (lastDragIdx != null){ recordArm.add(lastDragIdx); mutedBlocks.delete(lastDragIdx); lastDragIdx = null; }
     for (const b of blocks){ b.rx = b.x; b.ry = b.y; b.vx = 0; b.vy = 0; }
   });
