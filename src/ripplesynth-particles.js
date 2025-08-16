@@ -9,6 +9,8 @@ const P_IMPULSE = 6;     // impulse on ring hit (small)
 const P_HIT_BAND = 8;    // tolerance around ring radius
 let EDGE_KEEP = 10;
 
+export function setParticleBounds(w, h){ WIDTH = w; HEIGHT = h; }
+
 function rand(min, max){ return Math.random() * (max - min) + min; }
 
 export function initParticles(w, h, EDGE = 10, count = 56){
@@ -17,7 +19,7 @@ export function initParticles(w, h, EDGE = 10, count = 56){
   for (let i=0; i<count; i++){
     const rx = rand(EDGE, w - EDGE);
     const ry = rand(EDGE, h - EDGE);
-    P.push({ x: rx, y: ry, rx, ry, vx: 0, vy: 0 });
+    P.push({ x: rx, y: ry, rx, ry, vx: 0, vy: 0, flash: 0 });
   }
 }
 
@@ -28,7 +30,7 @@ export function reshuffleParticles(){
     const ry = rand(EDGE_KEEP, HEIGHT - EDGE_KEEP);
     P[i].rx = rx; P[i].ry = ry;
     P[i].x = rx;  P[i].y = ry;
-    P[i].vx = 0;  P[i].vy = 0;
+    P[i].vx = 0;  P[i].vy = 0; P[i].flash = 0; P[i].flash = 0;
   }
 }
 
@@ -59,23 +61,26 @@ export function drawParticles(ctx, now, ripples, generator){
           const dx = p.x - R.x, dy = p.y - R.y;
           const d = Math.max(1, Math.hypot(dx, dy));
           const k = P_IMPULSE / d;
-          p.vx += dx * k; p.vy += dy * k;
+          p.vx += dx * k; p.vy += dy * k; p.flash = 1; p.flash = 1;
         }
       }
     }
     // cap + integrate
     const sp = Math.hypot(p.vx, p.vy);
     if (sp > P_MAXV){ const s = P_MAXV/sp; p.vx*=s; p.vy*=s; }
+    p.flash = Math.max(0, p.flash - dt*2);
     p.x += p.vx * dt;
     p.y += p.vy * dt;
   }
 
-  // render
+  // render — white points with brightness bump on flash, NO scaling
   ctx.save();
-  ctx.globalAlpha = 0.5;
-  ctx.fillStyle = '#ffffff';
   for (const p of P){
+    const alpha = 0.3 + 0.7 * p.flash;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#ffffff';
     ctx.fillRect(p.x, p.y, 1.5, 1.5);
   }
   ctx.restore();
 }
+

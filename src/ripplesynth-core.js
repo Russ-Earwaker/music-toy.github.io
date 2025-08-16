@@ -1,22 +1,27 @@
 // src/ripplesynth-core.js
-// Ripple synth toy core — stable zoom, solid loop timing, particles, <400 lines.
+// Clean rebuild: stable zoom, no drift, correct ripple timing, clamped randomization.
 
 import { initToyUI } from './toyui.js';
 import { initToySizing, randomizeRects, clamp } from './toyhelpers.js';
-import { resizeCanvasForDPR, getCanvasPos, noteList } from './utils.js';
+import { resizeCanvasForDPR, getCanvasPos, noteList, barSeconds } from './utils.js';
 import { makePointerHandlers } from './ripplesynth-input.js';
 import { drawWaves } from './ripplesynth-waves.js';
 import { drawBlocksSection } from './ripplesynth-blocks.js';
-import { initParticles, drawParticles, scaleParticles, reshuffleParticles } from './ripplesynth-particles.js';
-import { ensureAudioContext, triggerInstrument, beatSeconds, barSeconds } from './audio.js';
+import { initParticles, drawParticles, scaleParticles, reshuffleParticles, setParticleBounds } from './ripplesynth-particles.js';
+import { ensureAudioContext, triggerInstrument } from './audio.js';
 
-const EDGE = 10, NUM_CUBES = 5;
-const LOOP_FALLBACK_SEC = 4, HIT_BAND = 8;
-const KNOCKBACK = 16, SPRING = 0.11, DAMPING = 0.90, MAX_V = 250;
-const PENTATONIC = ['C4','D4','E4','G4','A4'];
+const DEBUG = false;
 
-export function createRippleSynth(selector, { title='Rippler', defaultInstrument='kalimba' } = {}){
-  const shell = typeof selector === 'string' ? document.querySelector(selector) : selector;
+const EDGE = 10;
+const NUM_CUBES = 5;
+const SPRING = 0.10;
+const DAMPING = 0.90;
+const MAX_V = 480;
+const HIT_BAND = 10;
+const PENTATONIC = [0,2,4,7,9,12,14,16];
+
+export function createRippleSynth(selector, { title = 'Rippler', defaultInstrument = 'kalimba' } = {}){
+  const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector;
   if (!shell) { console.warn('[rippler] missing selector', selector); return null; }
 
   const panel = shell.closest?.('.toy-panel') || shell;
@@ -32,20 +37,24 @@ export function createRippleSynth(selector, { title='Rippler', defaultInstrument
     canvas.style.touchAction = 'none';
     body.appendChild(canvas);
   }
-  const ctx = canvas.getContext('2d', { alpha: false });
+  const ctx = canvas.getContext('2d', { alpha:false });
 
-  // Sizing baseline (square from width)
-  initToySizing(panel, canvas, ctx, { squareFromWidth: true });
-  let zoomFactor = 1;
-  let logicalSide = 0;
+  // Sizing
+  const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true });
+  const worldW = () => sizing.vw();
+  const worldH = () => sizing.vh();
 
   // State
   const blocks = makeBlocks(NUM_CUBES); assignPentatonic(blocks);
-  const ripples = []; const hitsFired = new Set();
-  const generator = { placed:false, x:0, y:0, r:12 };
+  randomizeRects(blocks, worldW(), worldH(), EDGE);
+  for (const b of blocks){ b.rx=b.x; b.ry=b.y; }
+  const ripples = [];
+  const hitsFired = new Set();
+  const generator = { placed:false, x: worldW()*0.5, y: worldH()*0.5, r: 10 };
+
   let suppressPointerUntil = 0;
   let particlesInitialized = false;
-  let nextLoopAt = null; // seconds
+  let nextLoopAt = null;
 
   // Input API
   const generatorRef = {
@@ -56,11 +65,11 @@ export function createRippleSynth(selector, { title='Rippler', defaultInstrument
   };
 
   const handlers = makePointerHandlers({
-    canvas, vw: () => logicalSide || canvas.clientWidth || 1, vh: () => logicalSide || canvas.clientHeight || 1,
+    canvas, vw: worldW, vh: worldH,
     EDGE, blocks, ripples, generatorRef, clamp, getCanvasPos, state:{}
   });
 
-  const onPointerDown = (e)=>{
+  function onPointerDown(e){
     if (performance.now() < suppressPointerUntil) return;
     const wasPlaced = generator.placed;
     handlers.pointerDown(e);
@@ -73,16 +82,14 @@ export function createRippleSynth(selector, { title='Rippler', defaultInstrument
       const s = spawnRipple(true);  // quantised
       scheduleNextFrom(s);
     }
-  };
+  }
   canvas.addEventListener('pointerdown', onPointerDown);
   canvas.addEventListener('pointermove', handlers.pointerMove);
   window.addEventListener('pointerup', handlers.pointerUp);
 
   // Helpers
   function clearRipples(){ ripples.length = 0; hitsFired.clear(); }
-
-  function barDur(){ return (typeof barSeconds === 'function') ? barSeconds() : LOOP_FALLBACK_SEC; }
-
+  function barDur(){ return (typeof barSeconds === 'function') ? barSeconds() : 2.0; }
   function scheduleNextFrom(startTime){
     const s = (typeof startTime === 'number') ? startTime : performance.now()*0.001;
     nextLoopAt = s + barDur();
@@ -92,26 +99,124 @@ export function createRippleSynth(selector, { title='Rippler', defaultInstrument
     if (!generator.placed) return null;
     const now = performance.now()*0.001;
     let start = now;
-    if (quantise && typeof beatSeconds === 'function'){
-      const half = Math.max(0.001, beatSeconds()*0.5);
+    if (quantise && typeof barSeconds === 'function'){
+      const half = Math.max(0.001, (barSeconds()/4)); // half-beat if bar=4 beats
       start = Math.round(now/half)*half;
     }
-    ripples.push({ id: Math.random().toString(36).slice(2), startTime:start, speed:120, x:generator.x, y:generator.y });
+    const w = worldW(), h = worldH();
+    const maxDx = Math.max(generator.x, w - generator.x);
+    const maxDy = Math.max(generator.y, h - generator.y);
+    const targetR = Math.max(maxDx, maxDy);
+    const dur = Math.max(0.001, barDur());
+    const ringSpeed = targetR / dur; // reach edge in one bar
+    ripples.push({ id: Math.random().toString(36).slice(2), startTime:start, speed:ringSpeed, x:generator.x, y:generator.y });
+    if (DEBUG) console.debug('[rippler] spawn', {quantise, start, now, ringSpeed, targetR, dur});
     return start;
   }
 
   function loopScheduler(now){
     if (!generator.placed) return;
     if (nextLoopAt == null){ nextLoopAt = now + barDur(); }
-    // Small epsilon for frame granularity
     if (now + 1/180 >= nextLoopAt){
       const s = spawnRipple(true);
       nextLoopAt = (s ?? now) + barDur();
+      if (DEBUG) console.debug('[rippler] loop tick', { now, nextLoopAt, bar: barDur() });
     }
   }
 
+  function clampAllBlocksToBounds(){
+    const w = worldW(), h = worldH();
+    for (const b of blocks){
+      b.x = clamp(b.x, EDGE, Math.max(EDGE, w - EDGE - b.w));
+      b.y = clamp(b.y, EDGE, Math.max(EDGE, h - EDGE - b.h));
+    }
+  }
+
+  // Events
+  panel.addEventListener('toy-random', ()=>{
+    randomizeRects(blocks, worldW(), worldH(), EDGE);
+    assignPentatonic(blocks);
+    for (const b of blocks){ b.rx=b.x; b.ry=b.y; b.vx=0; b.vy=0; }
+    clampAllBlocksToBounds();
+    try { reshuffleParticles(); } catch {}
+    if (DEBUG) console.debug('[rippler] randomize blocks + particles');
+  });
+
+  panel.addEventListener('toy-reset', ()=>{ clearRipples(); if (DEBUG) console.debug('[rippler] reset'); });
+
+  panel.addEventListener('toy-zoom', (e)=>{
+    const zoomed = !!(e?.detail?.zoomed);
+    const ratio = sizing.setZoom(zoomed);
+    if (ratio !== 1){
+      for (const b of blocks){
+        b.x*=ratio; b.y*=ratio; b.w*=ratio; b.h*=ratio; b.rx=b.x; b.ry=b.y;
+      }
+      generator.x *= ratio; generator.y *= ratio; generator.r *= ratio;
+      try { scaleParticles(ratio); } catch {}
+      clampAllBlocksToBounds();
+    }
+    // Recompute ripple speeds & progress at new scale
+    const now = performance.now()*0.001;
+    const w = worldW(), h = worldH();
+    try { setParticleBounds(w, h); } catch {}
+    const dur = Math.max(0.001, barDur());
+    for (const r of ripples){
+      const maxDx = Math.max(generator.x, w - generator.x);
+      const maxDy = Math.max(generator.y, h - generator.y);
+      const targetR = Math.max(maxDx, maxDy);
+      const oldR = Math.max(0, (now - r.startTime) * r.speed);
+      const newR = oldR * (ratio || 1);
+      const newSpeed = targetR / dur;
+      r.speed = newSpeed;
+      r.startTime = now - (newR / Math.max(1e-6, newSpeed));
+    }
+    suppressPointerUntil = performance.now() + 150;
+  });
+
+  // Draw
+  function draw(){
+    resizeCanvasForDPR(canvas, ctx);
+    const w = worldW(), h = worldH();
+
+    if (!particlesInitialized && w>0 && h>0){ try { initParticles(w, h, EDGE, 56); setParticleBounds(w,h); particlesInitialized = true; } catch {} }
+
+    // bg + border
+    ctx.fillStyle = '#0b0f15'; ctx.fillRect(0,0,w,h);
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.strokeRect(0.5,0.5,w-1,h-1);
+
+    const now = performance.now()*0.001;
+
+    // waves (visual only; uses its own speed param)
+    const visSpeed = Math.max(20, Math.max(w,h) / Math.max(0.001, barDur()));
+    drawWaves(ctx, generator.x, generator.y, now, visSpeed, ripples, 16, ()=>Math.max(0.03, barDur()/16));
+
+    // collisions + physics
+    updatePhysics(dt());
+    checkRippleHits(now);
+
+    // particles & blocks
+    drawParticles(ctx, now, ripples, generator);
+    drawBlocksSection(ctx, blocks, generator.x, generator.y, ripples, 1.0, noteList, sizing, null, null, now);
+
+    if (generator.placed){
+      ctx.fillStyle = '#ff9500';
+      ctx.beginPath();
+      ctx.arc(generator.x, generator.y, generator.r, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    loopScheduler(now);
+    requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+
+  function dt(){
+    // simple fixed-step approximation tied to 60fps
+    return 1/60;
+  }
+
   function updatePhysics(dt){
-    const w = logicalSide || canvas.clientWidth || 1, h = w; // square
+    const w = worldW(), h = worldH();
     for (let i=0;i<blocks.length;i++){
       const b = blocks[i];
       const ax = (b.rx - b.x) * SPRING, ay = (b.ry - b.y) * SPRING;
@@ -121,10 +226,9 @@ export function createRippleSynth(selector, { title='Rippler', defaultInstrument
       b.y = clamp(b.y + b.vy*dt, EDGE, h-EDGE-b.h);
       if (b.rippleAge != null && b.rippleMax != null){ b.rippleAge = Math.min(b.rippleAge + dt, b.rippleMax); }
     }
-    hitsFired.forEach((_, key)=>{ const rid = key.split(':')[0]; if (!ripples.find(r=>r.id===rid)) hitsFired.delete(key); });
   }
 
-  function detectHits(now){
+  function checkRippleHits(now){
     for (let rIndex=0; rIndex<ripples.length; rIndex++){
       const r = ripples[rIndex]; const radius = Math.max(0, (now - r.startTime) * r.speed);
       for (let i=0;i<blocks.length;i++){
@@ -136,94 +240,18 @@ export function createRippleSynth(selector, { title='Rippler', defaultInstrument
         }
       }
     }
+    // Clean up hits for old ripples
+    hitsFired.forEach((_, key)=>{ const rid = key.split(':')[0]; if (!ripples.find(rp=>rp.id===rid)) hitsFired.delete(key); });
   }
 
   function onBlockHit(b, now){
     b.flashDur = 0.18; b.flashEnd = now + 0.18; b.rippleAge = 0; b.rippleMax = 0.35;
     const cx = b.x + b.w/2, cy = b.y + b.h/2;
     const dx = cx - generator.x, dy = cy - generator.y; const d = Math.max(1, Math.hypot(dx, dy));
+    const KNOCKBACK = 16;
     const k = KNOCKBACK / d; b.vx += dx * k; b.vy += dy * k;
-    try{ ensureAudioContext(); const note = PENTATONIC[b.noteIndex % PENTATONIC.length] || PENTATONIC[0]; triggerInstrument(ui.instrument, note, 0.9); }catch{}
+    try { ensureAudioContext(); const note = PENTATONIC[b.noteIndex % PENTATONIC.length] ?? PENTATONIC[0]; triggerInstrument(ui.instrument, note, 0.9); } catch {}
   }
-
-  function sizeCanvasBox(){
-    // Canvas scales with zoomFactor (like bouncer), clamped to visible viewport to avoid page stretch
-    const bw = body.clientWidth || 1;
-    const desired = Math.round(bw * zoomFactor);
-    const panelTop = panel.getBoundingClientRect ? panel.getBoundingClientRect().top : 0;
-    const available = Math.max(200, (window.innerHeight || desired) - panelTop - 24);
-    const side = Math.min(desired, available);
-    logicalSide = side;
-    canvas.style.width = side+'px'; canvas.style.height = side+'px';
-    resizeCanvasForDPR(canvas, side, side);
-  }
-
-  function drawBackground(w,h){
-    const g = ctx.createLinearGradient(0,0,0,h); g.addColorStop(0,'#0b0b0b'); g.addColorStop(1,'#000');
-    ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
-    ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1; ctx.strokeRect(0.5,0.5,w-1,h-1);
-  }
-
-  function draw(){
-    const now = performance.now()*0.001;
-    sizeCanvasBox();
-    const w = logicalSide || canvas.clientWidth || 1, h = w;
-
-    if (!particlesInitialized && w>0 && h>0){ try { initParticles(w, h, EDGE, 56); } catch {} particlesInitialized = true; }
-
-    loopScheduler(now);
-    updatePhysics(1/60);
-    detectHits(now);
-
-    drawBackground(w,h);
-    drawWaves(ctx, generator.x, generator.y, now, 120, ripples, 16, ()=> (typeof barSeconds==='function' ? barSeconds()/16 : LOOP_FALLBACK_SEC/16));
-    try { drawParticles(ctx, now, ripples, generator); } catch {}
-    drawBlocksSection(ctx, blocks, generator.x, generator.y, ripples, 1.0, noteList, null, null, null, now);
-
-    if (generator.placed){ ctx.fillStyle = '#ff9500'; ctx.beginPath(); ctx.arc(generator.x, generator.y, generator.r, 0, Math.PI*2); ctx.fill(); }
-    requestAnimationFrame(draw);
-  }
-  requestAnimationFrame(draw);
-
-  // UI
-  panel.addEventListener('toy-random', ()=>{
-    randomizeRects(blocks, logicalSide||480, logicalSide||480, EDGE);
-    assignPentatonic(blocks);
-    for (const b of blocks){ b.rx=b.x; b.ry=b.y; b.vx=0; b.vy=0; }
-    try { reshuffleParticles(); } catch {}
-  });
-
-  panel.addEventListener('toy-reset', ()=>{ clearRipples(); });
-
-  panel.addEventListener('toy-zoom', (ev)=>{
-    const newZ = !!(ev?.detail?.zoomed) ? 2 : 1;
-    const ratio = newZ / zoomFactor;
-    const side = logicalSide || canvas.clientWidth || 1;
-    const cx = side * 0.5, cy = cx;
-
-    for (const b of blocks){
-      b.x = cx + (b.x - cx) * ratio;
-      b.y = cy + (b.y - cy) * ratio;
-      b.rx = cx + (b.rx - cx) * ratio;
-      b.ry = cy + (b.ry - cy) * ratio;
-      b.w *= ratio; b.h *= ratio;
-      b.vx = (b.vx * ratio) * 0.25;
-      b.vy = (b.vy * ratio) * 0.25;
-      b.x = clamp(b.x, EDGE, side-EDGE-b.w);
-      b.y = clamp(b.y, EDGE, side-EDGE-b.h);
-    }
-    if (generator.placed){
-      generator.x = cx + (generator.x - cx)*ratio;
-      generator.y = cy + (generator.y - cy)*ratio;
-      generator.r *= ratio;
-    }
-    try { scaleParticles(ratio); } catch {}
-
-    zoomFactor = newZ;
-    // re-size canvas to match the new zoom factor (clamped to viewport)
-    sizeCanvasBox();
-    suppressPointerUntil = performance.now() + 200;
-  });
 
   return { panel, canvas, markPlayingColumn: ()=>{}, ping: ()=>{} };
 }
@@ -234,8 +262,6 @@ function makeBlocks(n){
   for (let i=0;i<n;i++){
     arr.push({ x:0,y:0,w:40,h:40, rx:0,ry:0, vx:0,vy:0, rippleAge:999, rippleMax:0, noteIndex:i % PENTATONIC.length });
   }
-  randomizeRects(arr, 480, 480, EDGE);
-  for (const b of arr){ b.rx=b.x; b.ry=b.y; }
   return arr;
 }
 function assignPentatonic(blocks){ for (let i=0;i<blocks.length;i++){ blocks[i].noteIndex = i % PENTATONIC.length; } }

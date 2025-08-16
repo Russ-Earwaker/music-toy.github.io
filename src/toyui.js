@@ -189,7 +189,7 @@ function setZoom(z){
       panel.style.left = '50%'; panel.style.top = '50%';
       panel.style.transform = 'translate(-50%, -50%)';
       panel.style.zIndex = '10000';
-      panel.style.width = 'fit-content';
+      
       // Freeze page scroll
       if (!document.body.dataset._prevOverflow){ document.body.dataset._prevOverflow = document.body.style.overflow || ''; }
       document.body.style.overflow = 'hidden';
