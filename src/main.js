@@ -5,6 +5,7 @@ import { initAudioAssets, triggerInstrument, getInstrumentNames } from './audio-
 import { buildGrid, markPlayingColumn as markGridCol } from './grid.js';
 import { createBouncer } from './bouncer.js';
 import { createRippleSynth } from './ripplesynth.js';
+import { assertRipplerContracts, runRipplerSmoke } from './ripplesynth-safety.js';
 import { createLoopIndicator } from './loopindicator.js';
 import { initDragBoard } from './board.js';
 
@@ -141,6 +142,7 @@ if (!window.__booted__) {
       }
     });
     console.log('[boot] toys:', toys.length);
+    try { assertRipplerContracts(); runRipplerSmoke(); } catch {}
 
     setupTransport();
 
