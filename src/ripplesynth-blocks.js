@@ -1,6 +1,8 @@
 // src/ripplesynth-blocks.js
 // Draws orange blocks with flash + white edge ripples and gentle spring UI overlays when zoomed.
 
+const SHOW_TOP_UI = false;
+
 export function drawBlocksSection(ctx, blocks, gx, gy, ripples, volume, noteList, sizing, _a, _b, now){
   for (let i=0;i<blocks.length;i++){
     const b = blocks[i];
@@ -33,7 +35,7 @@ export function drawBlocksSection(ctx, blocks, gx, gy, ripples, volume, noteList
     // zoomed edit UI (simple up/down + note label)
     if (sizing && typeof sizing.vw === 'function' && sizing.vw() >= 600){
       const label = (noteList && b.noteIndex != null) ? (noteList[b.noteIndex % noteList.length] || '') : '';
-      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      if (SHOW_TOP_UI) { ctx.fillStyle = 'rgba(0,0,0,0.45)';
       ctx.fillRect(x, y-18, Math.max(34, ctx.measureText(label).width+12), 16);
       ctx.fillStyle = '#fff';
       ctx.font = '12px ui-sans-serif, system-ui';
@@ -44,6 +46,7 @@ export function drawBlocksSection(ctx, blocks, gx, gy, ripples, volume, noteList
       ctx.fill();
       ctx.beginPath(); ctx.moveTo(x+w-16, y-2); ctx.lineTo(x+w-8, y-2); ctx.lineTo(x+w-12, y-8); ctx.closePath();
       ctx.fill();
+      }
     }
   }
 }

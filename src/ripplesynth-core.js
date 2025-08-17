@@ -113,9 +113,14 @@ export function createRippleSynth(selector){
         const rx = n2x(blocks[i].nx) - s/2, ry = n2y(blocks[i].ny) - s/2;
         if (p.x>=rx && p.x<=rx+s && p.y>=ry && p.y<=ry+s){
           const t1=ry+s/3, t2=ry+2*s/3;
-          if (p.y < t1) blocks[i].noteIndex = Math.min(noteList.length-1, blocks[i].noteIndex+1);
-          else if (p.y < t2) blocks[i].active = !blocks[i].active;
-          else blocks[i].noteIndex = Math.max(0, blocks[i].noteIndex-1);
+          if (p.y < t1) { 
+            blocks[i].noteIndex = Math.max(0, Math.min(noteList.length-1, (blocks[i].noteIndex|0) + 1)); 
+          } else if (p.y < t2) { 
+            blocks[i].active = !blocks[i].active; 
+            if (!blocks[i].active) { for (const s of pattern){ s.delete(i); } } 
+          } else { 
+            blocks[i].noteIndex = Math.max(0, Math.min(noteList.length-1, (blocks[i].noteIndex|0) - 1)); 
+          }
           blocks[i].flashEnd = performance.now()/1000 + 0.18;
           return;
         }
