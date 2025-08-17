@@ -161,7 +161,6 @@ if (loopEvents.length){ const ctxAudio=ensureAudioContext(); try{ if (ctxAudio.s
   playbackPrevT = curT;
 }
   }
-
   function clampAllBlocksToBounds(){
     const w = worldW(), h = worldH();
     for (const b of blocks){
@@ -298,7 +297,7 @@ if (loopEvents.length){ const ctxAudio=ensureAudioContext(); try{ if (ctxAudio.s
   });
 
   // UI
-  panel.addEventListener('toy-random', ()=>{
+  panel.addEventListener('toy-random', ()=>{ clearRipples();
     loopRecording = true; playbackActive = false; loopEvents = []; recordArm.clear();
     mutedBlocks.clear(); loopStartAt = null; nextLoopAt = null;
     randomizeRects(blocks, worldW(), worldH(), EDGE);
@@ -306,6 +305,7 @@ if (loopEvents.length){ const ctxAudio=ensureAudioContext(); try{ if (ctxAudio.s
     for (const b of blocks){ b.rx=b.x; b.ry=b.y; b.vx=0; b.vy=0; }
     clampAllBlocksToBounds();
     try { reshuffleParticles(); } catch(e) {}
+    const s = spawnRipple(true); if (typeof s==='number'){ scheduleNextFrom(s); loopStartAt = s; } dbg && dbg('random->spawn', {s});
   });
 
   panel.addEventListener('toy-reset', ()=>{

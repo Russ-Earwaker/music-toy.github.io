@@ -43,10 +43,7 @@ export function getCanvasPos(canvas, evt) {
 }
 
 // Pentatonic note list (C4–A5)
-export const noteList = [
-  'C4','D4','E4','G4','A4',
-  'C5','D5','E5','G5','A5'
-];
+export const noteList = [ 'C4','D4','E4','G4','A4' ];
 
 // Simple random integer in range [min, max]
 export function randInt(min, max) {

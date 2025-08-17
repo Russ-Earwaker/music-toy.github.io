@@ -29,6 +29,8 @@ export function clampRectWithin(rect, boundsOrW, hMaybe, pad = EDGE_PAD){
 
 // Randomize .x/.y for an array of rect-like objects within bounds.
 // Usage: randomizeRects(blocks, canvasWidth, canvasHeight) OR randomizeRects(blocks, {x:0,y:0,w:W,h:H})
+
+
 export function randomizeRects(rects, boundsOrW, hMaybe, pad = EDGE_PAD){
   if (!Array.isArray(rects) || !rects.length) return rects;
   let bx, by, bw, bh;
@@ -40,14 +42,56 @@ export function randomizeRects(rects, boundsOrW, hMaybe, pad = EDGE_PAD){
     bw = (b.w ?? b.width ?? 0) - pad*2;
     bh = (b.h ?? b.height ?? 0) - pad*2;
   }
+
+  // Uniform random placement with no intentional clumping
+  const placed = [];
+  const MAX_TRIES = 300;
   for (const r of rects){
     const maxX = Math.max(bx, bx + bw - r.w);
     const maxY = Math.max(by, by + bh - r.h);
-    r.x = Math.floor(bx + Math.random() * Math.max(1, (maxX - bx)));
-    r.y = Math.floor(by + Math.random() * Math.max(1, (maxY - by)));
+    let tries = 0, ok = false;
+    while (tries < MAX_TRIES && !ok){
+      r.x = Math.floor(bx + Math.random() * Math.max(1, (maxX - bx)));
+      r.y = Math.floor(by + Math.random() * Math.max(1, (maxY - by)));
+      ok = !placed.some(p => (r.x < p.x + p.w) && (r.x + r.w > p.x) && (r.y < p.y + p.h) && (r.y + r.h > p.y));
+      tries++;
+    }
+    // If we couldn't find a free spot, just place and let separation pass resolve it
+    placed.push({ x:r.x, y:r.y, w:r.w, h:r.h });
   }
+
+  // Iterative separation to remove any overlaps (edges may touch)
+  const MAX_ITERS = 400;
+  for (let iter=0; iter<MAX_ITERS; iter++){
+    let moved = false;
+    for (let i=0; i<rects.length; i++){
+      for (let j=i+1; j<rects.length; j++){
+        const a = rects[i], b = rects[j];
+        const overlapX = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+        const overlapY = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+        if (overlapX > 0 && overlapY > 0){
+          if (overlapX < overlapY){
+            const dir = (a.x + a.w/2) < (b.x + b.w/2) ? -1 : 1;
+            const push = Math.ceil(overlapX/2);
+            a.x = clamp(a.x + dir*push, bx, bx + bw - a.w);
+            b.x = clamp(b.x - dir*push, bx, bx + bw - b.w);
+          } else {
+            const dir = (a.y + a.h/2) < (b.y + b.h/2) ? -1 : 1;
+            const push = Math.ceil(overlapY/2);
+            a.y = clamp(a.y + dir*push, by, by + bh - a.h);
+            b.y = clamp(b.y - dir*push, by, by + bh - b.h);
+          }
+          moved = true;
+        }
+      }
+    }
+    if (!moved) break;
+  }
+
   return rects;
 }
+
+
 
 // ---------- drawing ----------
 // ---------- drawing ----------
