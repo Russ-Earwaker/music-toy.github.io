@@ -8,9 +8,9 @@ import { drawBlocksSection } from './ripplesynth-blocks.js';
 import { initParticles, drawParticles, scaleParticles, reshuffleParticles, setParticleBounds } from './ripplesynth-particles.js';
 import { ensureAudioContext, triggerInstrument, barSeconds as audioBarSeconds } from './audio.js';
 const EDGE = 10;
-const DEBUG_RIPPLER = true;
+const DEBUG_RIPPLER = false;
 const dbg=(...a)=>{ if(DEBUG_RIPPLER) console.log('[rippler]',...a); };
-const NUM_CUBES = 5;
+const NUM_CUBES = 8;
 const SPRING = 0.10;
 const DAMPING = 0.90;
 const MAX_V = 480;
@@ -87,7 +87,6 @@ export function createRippleSynth(selector, { title = 'Rippler', defaultInstrume
     const s = (typeof startTime === 'number') ? startTime : performance.now()*0.001;
     nextLoopAt = s + barDur();
   }
-
   function spawnRipple(quantise=true){ if (!generator.placed) return null;
     const now = performance.now()*0.001;
     let start = now;
@@ -107,7 +106,6 @@ export function createRippleSynth(selector, { title = 'Rippler', defaultInstrume
     ripples.push({ id: Math.random().toString(36).slice(2), startTime:start, speed:ringSpeed, x:generator.x, y:generator.y });
     return start;
   }
-
   function loopScheduler(now){
     if (!generator.placed) return;
     if (inputState && inputState.draggingGenerator) return;
@@ -122,7 +120,6 @@ export function createRippleSynth(selector, { title = 'Rippler', defaultInstrume
       loopStartAt = boundary; dbg('wrap', {boundary, events: loopEvents.length});
       nextLoopAt = boundary + bar;
       justWrapped = true; wrapIndex++;
-
       if (loopRecording){
         loopRecording = false; playbackActive = true;
         {
@@ -137,7 +134,6 @@ export function createRippleSynth(selector, { title = 'Rippler', defaultInstrume
       playbackPrevT = 0;
       skipPlaybackFrame = true;
     }
-
 if (loopEvents.length){ const ctxAudio=ensureAudioContext(); try{ if (ctxAudio.state==='suspended') ctxAudio.resume(); }catch{}
   if (skipPlaybackFrame){ skipPlaybackFrame = false; return; }
   const tNow = (now - loopStartAt);
@@ -268,8 +264,12 @@ if (loopEvents.length){ const ctxAudio=ensureAudioContext(); try{ if (ctxAudio.s
     const wasPlaced = generator.placed;
     handlers.pointerDown(e);
     if (typeof inputState.dragIndex === 'number' && inputState.dragIndex >= 0){
-      mutedBlocks.add(inputState.dragIndex);
-      lastDragIdx = inputState.dragIndex;
+      const idx = inputState.dragIndex;
+      // remove any existing scheduled event for this block; re-arm to capture new timing
+      loopEvents = loopEvents.filter(ev => ev.idx !== idx);
+      recordArm.add(idx);
+      mutedBlocks.delete(idx);
+      lastDragIdx = idx;
     }
     if (!wasPlaced && generator.placed){
       clearRipples();
