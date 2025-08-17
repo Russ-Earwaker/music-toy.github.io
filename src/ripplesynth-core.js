@@ -9,28 +9,26 @@ import { initParticles, setParticleBounds, drawParticles } from './ripplesynth-p
 import { drawWaves } from './ripplesynth-waves.js';
 import { handleBlockTap } from './ripplesynth-zoomtap.js';
 import { makeGetBlockRects } from './ripplesynth-rects.js';
+import { installLoopGuards } from './rippler-loopguard.js';
 export function createRippleSynth(selector){
   const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector;
-  if (!shell){ console.warn('[rippler] missing', selector); return null; }
-  const panel  = shell.closest?.('.toy-panel') || shell;
+  const panel  = shell?.closest?.('.toy-panel') || shell;
   const canvas = document.createElement('canvas');
   canvas.className = 'rippler-canvas';
   canvas.style.display = 'block';
-  shell.appendChild(canvas);
-  const ctx = canvas.getContext('2d');
-  const ui  = initToyUI(panel, { toyName: 'Rippler' });
+  (panel.querySelector?.('.toy-body') || panel).appendChild(canvas);
+  try{const host=panel.querySelector?.('.toy-body')||panel;if((host.clientHeight|0)<40){canvas.style.display='block';canvas.style.width='100%';canvas.style.minHeight='240px';}}catch{}
+  const ctx = canvas.getContext('2d'); const ui  = initToyUI(panel, { toyName: 'Rippler' });
   let currentInstrument = (ui.instrument && ui.instrument !== 'tone') ? ui.instrument : 'kalimba';
   try { ui.setInstrument(currentInstrument); } catch {}
-  const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true });
-  const isZoomed = ()=> panel.classList.contains('toy-zoomed');
-  panel.addEventListener('toy-zoom', (ev)=>{ try{ const z=!!(ev.detail && ev.detail.zoomed); sizing.setZoom(z); canvas.style.aspectRatio = z ? '1 / 1' : ''; setParticleBounds(canvas.width, canvas.height); }catch{} });
-  const EDGE = 10;
-  const W = ()=> canvas.clientWidth|0, H = ()=> canvas.clientHeight|0;
-  const n2x = (nx)=>{ const z=isZoomed(); const side=z? Math.max(1, Math.min(W(),H())-EDGE*2): Math.max(1, W()-EDGE*2); const offX = z? Math.max(EDGE, (W()-side)/2): EDGE; return offX + nx*side; };
-  const n2y = (ny)=>{ const z=isZoomed(); const side=z? Math.max(1, Math.min(W(),H())-EDGE*2): Math.max(1, H()-EDGE*2); const offY = z? Math.max(EDGE, (H()-side)/2): EDGE; return offY + ny*side; };
-  const x2n = (x)=>{ const z=isZoomed(); const side=z? Math.max(1, Math.min(W(),H())-EDGE*2): Math.max(1, W()-EDGE*2); const offX = z? Math.max(EDGE, (W()-side)/2): EDGE; return Math.min(1, Math.max(0, (x-offX)/side)); };
-  const y2n = (y)=>{ const z=isZoomed(); const side=z? Math.max(1, Math.min(W(),H())-EDGE*2): Math.max(1, H()-EDGE*2); const offY = z? Math.max(EDGE, (H()-side)/2): EDGE; return Math.min(1, Math.max(0, (y-offY)/side)); };
+  const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true }); const isZoomed = ()=> panel.classList.contains('toy-zoomed');
+  panel.addEventListener('toy-zoom', (ev)=>{ try{ const z = isZoomed(); canvas.style.aspectRatio = z ? '1 / 1' : ''; setParticleBounds(canvas.width, canvas.height); }catch{} });
+  const EDGE=10; const W=()=>canvas.width|0, H=()=>canvas.height|0;
   const clamp = (v,min,max)=> Math.max(min, Math.min(max, v));
+  const n2x = (nx)=>{ const z=isZoomed(); const side=z? Math.max(0, Math.min(W(),H())-2*EDGE) : (W()-2*EDGE); const offX = z? Math.max(EDGE, (W()-side)/2): EDGE; return offX + nx*side; };
+  const n2y = (ny)=>{ const z=isZoomed(); const side=z? Math.max(0, Math.min(W(),H())-2*EDGE) : (H()-2*EDGE); const offY = z? Math.max(EDGE, (H()-side)/2): EDGE; return offY + ny*side; };
+  const x2n = (x)=>{ const z=isZoomed(); const side=z? Math.max(0, Math.min(W(),H())-2*EDGE) : (W()-2*EDGE); const offX = z? Math.max(EDGE, (W()-side)/2): EDGE; return Math.min(1, Math.max(0, (x-offX)/side)); };
+  const y2n = (y)=>{ const z=isZoomed(); const side=z? Math.max(0, Math.min(W(),H())-2*EDGE) : (H()-2*EDGE); const offY = z? Math.max(EDGE, (H()-side)/2): EDGE; return Math.min(1, Math.max(0, (y-offY)/side)); };
   const getCanvasPos = (el, e)=>{ const r = el.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
   const CUBES = 8, BASE = 56 * 0.75;
   const blocks = Array.from({length:CUBES}, (_,i)=>({ nx:0.5, ny:0.5, nx0:0.5, ny0:0.5, vx:0, vy:0, flashEnd:0, flashDur:0.18, active:true, noteIndex:(noteList.indexOf('C4')>=0?noteList.indexOf('C4'):48)+i }));
@@ -53,7 +51,6 @@ export function createRippleSynth(selector){
     }
     didLayout = true;
   }
-
   layoutBlocks();
   const generator = { nx:0.5, ny:0.5, r:10, placed:false };
   let ripples = []; // {x,y,startTime (perf), startAT (audio), speed}
@@ -77,15 +74,12 @@ export function createRippleSynth(selector){
   function randomizeAll(){
     didLayout = false; layoutBlocks();
     for (const b of blocks){ b.vx=0; b.vy=0; b.flashEnd=0; }
-    blocks.forEach((b)=>{ const d=(-2+Math.floor(Math.random()*5)); b.noteIndex = Math.max(0, Math.min(noteList.length-1, (b.noteIndex|0) + d)); });
   }
-  function clearPattern(){ pattern.forEach(s=> s.clear()); }
-  panel.addEventListener('toy-random', randomizeAll);
-  panel.addEventListener('toy-clear', (ev)=>{ try{ ev.stopImmediatePropagation(); ev.stopPropagation(); }catch{}; clearPattern(); ripples.length=0; generator.placed=false; });
-  panel.addEventListener('toy-reset', ()=>{ clearPattern(); ripples.length=0; generator.placed=false; });
+  function clearPattern(){ pattern.forEach(s=> s.clear()); }  panel.addEventListener('toy-random', randomizeAll);
+  panel.addEventListener('toy-clear', (ev)=>{ try{ ev.stopImmediatePropagation?.(); }catch{}; clearPattern(); ripples.length=0; generator.placed=false; });  panel.addEventListener('toy-reset', ()=>{ clearPattern(); ripples.length=0; generator.placed=false; });
   const getBlockRects = makeGetBlockRects(n2x, n2y, sizing, BASE, blocks);
   const input = makePointerHandlers({ generatorRef: {
-      get x(){ return n2x(generator.nx); }, 
+      get x(){ return n2x(generator.nx); },
       get y(){ return n2y(generator.ny); },
       place(x,y){ this.set(x,y); },
       set(x,y){ generator.nx = x2n(x); generator.ny = y2n(y); generator.placed = true; },
@@ -128,7 +122,6 @@ export function createRippleSynth(selector){
     dragMuteActive = nearGen; playbackMuted = nearGen; if (nearGen){ ripples.length = 0; }
     _genDownPos = { x: gx0, y: gy0 };
     if (isZoomed()){
-      // zoom taps handled via onBlockTap in input
     }
 const wasPlaced = generator.placed; _wasPlacedAtDown = wasPlaced;
     input.pointerDown(e);
@@ -157,7 +150,7 @@ const wasPlaced = generator.placed; _wasPlacedAtDown = wasPlaced;
     _genDownPos=null; _wasPlacedAtDown=false;
   });
 function spawnRipple(manual=false){
-    const nowAT = ac.currentTime, nowPerf = performance.now()/1000;
+    const nowAT = ac.currentTime, nowPerf = ac.currentTime;
     if (nowPerf - lastSpawnPerf < 0.15) return; // debounce double fires
     lastSpawnPerf = nowPerf;
     const gx = n2x(generator.nx), gy = n2y(generator.ny);
@@ -167,7 +160,6 @@ function spawnRipple(manual=false){
     ripples.push({ x: gx, y: gy, startAT: nowAT, startTime: nowPerf, speed: RING_SPEED(), offR, hit: new Set() });
     if (manual) skipNextBarRing = true;
   }
-
   function ringFront(nowAT){
     if (!ripples.length) return -1;
     return Math.max(0, (nowAT - (ripples[0].startAT||nowAT)) * RING_SPEED());
@@ -187,14 +179,13 @@ function spawnRipple(manual=false){
       const dEdge = Math.max(0, dC - Math.SQRT2*(s/2));
       if (Math.abs(dEdge - R) <= band){
         rMain.hit.add(i);
-        b.flashEnd = performance.now()/1000 + 0.18;
+        b.flashEnd = ac.currentTime + 0.18;
         const ang = Math.atan2(cy - gy, cx - gx), push = 64 * (sizing.scale || 1);
         b.vx += Math.cos(ang)*push; b.vy += Math.sin(ang)*push;
         const whenAT = ac.currentTime, slotLen = stepSeconds();
           let k = Math.ceil((whenAT - barStartAT)/slotLen); if (k<0) k=0;
           const slotIx = k % NUM_STEPS;
           const name = noteList[b.noteIndex] || 'C4';
-          // liveBlocks: play immediately (responsive), no record
           if (liveBlocks.has(i)) {
             triggerInstrument(currentInstrument, name, whenAT + 0.0005);
           }
@@ -228,7 +219,7 @@ function spawnRipple(manual=false){
             triggerInstrument(currentInstrument, name, nextSlotAT + 0.0005);
             scheduled.add(name);
           }
-          blocks[i].flashEnd = Math.max(blocks[i].flashEnd, performance.now()/1000 + 0.12);
+          blocks[i].flashEnd = Math.max(blocks[i].flashEnd, ac.currentTime + 0.12);
         });
       }
       nextSlotIx = (nextSlotIx+1) & (NUM_STEPS-1);
@@ -247,9 +238,18 @@ function spawnRipple(manual=false){
     }
   }
   function draw(){
+  try {
     resizeCanvasForDPR(canvas, ctx);
     if (!didLayout) layoutBlocks();
     ctx.clearRect(0,0,W(),H());
+    if (!(W() && H())){
+      if (!window.__ripplerZeroWarned){
+        window.__ripplerZeroWarned = true;
+      }
+      return;
+    }
+    ctx.fillStyle = '#0b0f16';
+    ctx.fillRect(0,0,W(),H());
     if (!particlesInit && canvas.width && canvas.height){
       try { initParticles(canvas.width, canvas.height, EDGE, 110); setParticleBounds(canvas.width, canvas.height); particlesInit = true; } catch {}
     }
@@ -259,15 +259,14 @@ function spawnRipple(manual=false){
       try { initParticles(canvas.width, canvas.height, EDGE, 110); setParticleBounds(canvas.width, canvas.height); } catch {}
     }
     if (generator.placed){
-      ctx.save();
-      ctx.strokeStyle='rgba(255,255,255,0.65)'; ctx.lineWidth=1.5;
-      drawWaves(ctx, n2x(generator.nx), n2y(generator.ny), performance.now()/1000, RING_SPEED(), ripples, NUM_STEPS, stepSeconds);
+      ctx.save(); ctx.strokeStyle='rgba(255,255,255,0.65)'; ctx.lineWidth=1.5;
+      drawWaves(ctx, n2x(generator.nx), n2y(generator.ny), ac.currentTime, RING_SPEED(), ripples, NUM_STEPS, stepSeconds);
       ctx.restore();
     }
-    drawParticles(ctx, performance.now()/1000, ripples, { x:n2x(generator.nx), y:n2y(generator.ny) });
+    drawParticles(ctx, ac.currentTime, ripples, { x:n2x(generator.nx), y:n2y(generator.ny) });
     const size = Math.round(BASE*(sizing.scale||1));
     const blockRects = blocks.map(b=>({ ...b, x:n2x(b.nx)-size/2, y:n2y(b.ny)-size/2, w:size, h:size }));
-    drawBlocksSection(ctx, blockRects, n2x(generator.nx), n2y(generator.ny), ripples, 1.0, noteList, { vw: ()=> isZoomed()? 640: 0 }, null, null, performance.now()/1000);
+    drawBlocksSection(ctx, blockRects, n2x(generator.nx), n2y(generator.ny), ripples, 1, noteList, sizing, null, null, ac.currentTime);
     if (isZoomed()){
       ctx.save(); ctx.strokeStyle='rgba(255,255,255,0.7)'; ctx.lineWidth=1;
       for (const b of blockRects){
@@ -278,7 +277,9 @@ function spawnRipple(manual=false){
       }
       ctx.restore();
     }
-    if (generator.placed){ ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(n2x(generator.nx), n2y(generator.ny), Math.round(generator.r*(sizing.scale||1)), 0, Math.PI*2); ctx.fill(); }
+    if (generator.placed){
+      ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(n2x(generator.nx), n2y(generator.ny), generator.r|0, 0, Math.PI*2); ctx.fill();
+    }
     springBlocks(1/60);
     handleRingHits(ac.currentTime);
     playbackTick();
@@ -287,13 +288,13 @@ function spawnRipple(manual=false){
       const nowAT = ac.currentTime; spawnRipple(true);
       barStartAT=nowAT; nextSlotAT=barStartAT+stepSeconds(); nextSlotIx=1; clearPattern(); recording=true;
     }
-    requestAnimationFrame(draw);
-  }
-  requestAnimationFrame(draw);
-  function reset(){
+  } catch (err) { console.error('[rippler draw]', err); } finally { requestAnimationFrame(draw); }
+}
+function reset(){
     ripples.length=0; for (const b of blocks){ b.vx=b.vy=0; b.nx=b.nx0; b.ny=b.ny0; b.flashEnd=0; }
     pattern.forEach(s=> s.clear());
     barStartAT = ac.currentTime; nextSlotAT = barStartAT + stepSeconds(); nextSlotIx = 1; recording = true;
   }
-  return { setInstrument: (name)=> { currentInstrument = name; try{ ui.setInstrument(name); }catch{} }, reset, element: canvas };
+    requestAnimationFrame(draw);
+return { setInstrument: (name)=> { currentInstrument = name || currentInstrument; try{ ui.setInstrument(name); }catch{} }, reset, element: canvas };
 }
