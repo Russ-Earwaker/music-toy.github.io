@@ -1,400 +1,387 @@
-// src/ripplesynth-core.js — clean structured build
+// src/ripplesynth-core.js — Rippler (full) with unified cube-thirds UI, waves, particles
 import { initToyUI } from './toyui.js';
-import { initToySizing, randomizeRects, clamp } from './toyhelpers.js';
+import { initToySizing, randomizeRects, clamp, whichThirdRect, drawThirdsGuides } from './toyhelpers.js';
 import { resizeCanvasForDPR, getCanvasPos, noteList } from './utils.js';
-import { makePointerHandlers } from './ripplesynth-input.js';
-import { drawWaves } from './ripplesynth-waves.js';
-import { drawBlocksSection } from './ripplesynth-blocks.js';
-import { initParticles, drawParticles, scaleParticles, reshuffleParticles, setParticleBounds } from './ripplesynth-particles.js';
-import { ensureAudioContext, triggerInstrument, barSeconds as audioBarSeconds } from './audio.js';
+import { ensureAudioContext, triggerInstrument, barSeconds, stepSeconds, NUM_STEPS } from './audio.js';
+
 const EDGE = 10;
-const DEBUG_RIPPLER = false;
-const dbg=(...a)=>{ if(DEBUG_RIPPLER) console.log('[rippler]',...a); };
-const NUM_CUBES = 8;
-const SPRING = 0.10;
-const DAMPING = 0.90;
-const MAX_V = 480;
-const HIT_BAND = 10;
-const PENTATONIC = [0,2,4,7,9,12,14,16];
-export function createRippleSynth(selector, { title = 'Rippler', defaultInstrument = 'kalimba' } = {}){
+const N_BLOCKS = 8;
+
+// Simple RNG helpers
+function rand(min, max){ return Math.random() * (max - min) + min; }
+
+export function createRippleSynth(selector, { title='Rippler', defaultInstrument='kalimba' } = {}){
   const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector;
-  if (!shell) { console.warn('[rippler] missing selector', selector); return null; }
+  if (!shell){ console.warn('[rippler] missing', selector); return null; }
   const panel = shell.closest?.('.toy-panel') || shell;
   const ui = initToyUI(panel, { toyName: title, defaultInstrument });
+
   // Canvas
-  const body = panel.querySelector('.toy-body') || panel;
-  let canvas = body.querySelector('canvas.rippler-canvas');
-  if (!canvas){
-    canvas = document.createElement('canvas');
-    canvas.className = 'rippler-canvas';
-    canvas.style.display = 'block';
-    canvas.style.touchAction = 'none';
-    body.appendChild(canvas);
-  }
-  const ctx = canvas.getContext('2d', { alpha:false });
-  // Sizing
+  const canvas = document.createElement('canvas');
+  canvas.className = 'rippler-canvas';
+  canvas.style.display = 'block';
+  shell.appendChild(canvas);
+  const ctx = canvas.getContext('2d');
+
+  // Sizing (square canvas)
   const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true });
+  panel.addEventListener('toy-zoom', (e)=> { try { sizing.setZoom(!!e.detail.zoomed); } catch {} });
+
+  // World size accessors
   const worldW = () => sizing.vw();
   const worldH = () => sizing.vh();
-  // State
-  // Hit test for zoom note arrows drawn in drawBlocksSection (above block)
-  function hitNoteArrow(b, px, py){
-    const pad=2;
-    const up = { x: b.x + b.w - 16 - pad, y: b.y - 16 - pad, w: 8 + pad*2, h: 8 + pad*2 };
-    const dn = { x: b.x + b.w - 16 - pad, y: b.y - 8  - pad, w: 8 + pad*2, h: 8 + pad*2 };
-    const inRect = (r)=> px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h;
-    if (inRect(up)) return 'up';
-    if (inRect(dn)) return 'down';
-    return null;
-  }
-  const blocks = makeBlocks(NUM_CUBES); assignPentatonic(blocks);
+
+  // Blocks (cubes): square, slightly smaller for this toy
+  const BASE = 56;
+  function cubeSize(){ return Math.max(30, Math.round(BASE * (sizing.scale || 1) * 0.75)); } // 25% smaller
+  const blocks = new Array(N_BLOCKS).fill(0).map((_,i)=>({ 
+    x: EDGE+6, y: EDGE+6, w: cubeSize(), h: cubeSize(),
+    noteIndex: Math.max(0, noteList.indexOf('C4')) + i*2,
+    muted: false, flash: 0,
+    jx: 0, jy: 0, vx: 0, vy: 0
+  }));
   randomizeRects(blocks, worldW(), worldH(), EDGE);
-  for (const b of blocks){ b.rx=b.x; b.ry=b.y; }
-  const ripples = [];
-  const hitsFired = new Set();
-  const generator = { placed:false, x: worldW()*0.5, y: worldH()*0.5, r: 10 };
-  // Loop / particles / time
-  let suppressPointerUntil = 0;
-  let particlesInitialized = false;
-  let nextLoopAt = null;
-  let lastZoomAt = 0;
-  // Loop recorder
-  let loopRecording = true;
-  let playbackActive = false;
-  let loopStartAt = null;
-  let loopEvents = [];
-  let playbackPrevT = 0;
-  const firedThisCycle = new Set();
-  let lastCycle = -1;
-  let wrapIndex = 0;
-  let lastScanT = performance.now()*0.001;
-  const mutedBlocks = new Set();
-  const recordArm = new Set();
-  let lastDragIdx = null;
-  let skipPlaybackFrame = false;
-  let justWrapped = false;
-  // Input handlers
-  const inputState = { dragIndex: -1, dragOff:{x:0,y:0} };
-  const generatorRef = {
-    get x(){ return generator.x; }, get y(){ return generator.y; }, r: generator.r,
-    get placed(){ return generator.placed; },
-    set(x,y){ generator.x=x; generator.y=y; },
-    exists(){ return generator.placed; },
-    place(x,y){
-      generator.placed = true; generator.x=x; generator.y=y;
-      loopRecording = true; playbackActive = false; loopEvents = []; recordArm.clear();
-      mutedBlocks.clear(); loopStartAt = null; nextLoopAt = null;
+
+  // Generator (placed by first click)
+  const generator = { placed: false, x: worldW()*0.5, y: worldH()*0.5, r: 9 };
+
+  // Ripple rings + dedupe (per-ring/per-block)
+  const ripples = []; // {id, startTime, speed}
+  let ringIdCounter = 1;
+  const fired = new Set(); // `${id}:${blockIndex}`
+
+  // Particles: spring-to-rest field, impulse on ring pass
+  const P_COUNT = 70;
+  const particles = [];
+  function initParticles(){
+    particles.length = 0;
+    for (let i=0;i<P_COUNT;i++){
+      const rx = rand(EDGE, worldW()-EDGE);
+      const ry = rand(EDGE, worldH()-EDGE);
+      particles.push({ rx, ry, x: rx, y: ry, vx: 0, vy: 0, flash: 0 });
     }
-  };
-  const handlers = makePointerHandlers({
-    canvas, vw: worldW, vh: worldH,
-    EDGE, blocks, ripples, generatorRef, clamp, getCanvasPos, state: inputState
-  });
-  // ---- helpers INSIDE factory ----
-  function clearRipples(){ ripples.length = 0; hitsFired.clear(); }
-  function barDur(){ return (typeof audioBarSeconds === 'function') ? audioBarSeconds() : 2.0; }
-  function scheduleNextFrom(startTime){
-    const s = (typeof startTime === 'number') ? startTime : performance.now()*0.001;
-    nextLoopAt = s + barDur();
   }
-  function spawnRipple(quantise=true){ if (!generator.placed) return null;
+  initParticles();
+
+  // Loop timing
+  let loopStartPerf = null;
+  function startLoop(now){
+    loopStartPerf = now;
+  }
+  function stepLen(){ try { return stepSeconds(); } catch { return barSeconds()/NUM_STEPS; } }
+  function barLen(){ try { return barSeconds(); } catch { return 2.0; } }
+
+  function spawnRipple(){
+    if (!generator.placed) return;
     const now = performance.now()*0.001;
-    let start = now;
-    if (quantise && typeof barSeconds === 'function'){
-      const step = Math.max(0.001, barDur()/8);
-      start = Math.ceil(now/step)*step;
-    }
+    if (!loopStartPerf) startLoop(now);
+    // speed so ring reaches farthest corner by one bar
     const w = worldW(), h = worldH();
-    const cornerMax = Math.max(
+    const far = Math.max(
       Math.hypot(generator.x - 0,        generator.y - 0),
       Math.hypot(generator.x - w,        generator.y - 0),
       Math.hypot(generator.x - 0,        generator.y - h),
       Math.hypot(generator.x - w,        generator.y - h)
     );
-    const dur = Math.max(0.001, barDur());
-    const ringSpeed = cornerMax / dur;
-    ripples.push({ id: Math.random().toString(36).slice(2), startTime:start, speed:ringSpeed, x:generator.x, y:generator.y });
-    return start;
+    const speed = Math.max(60, far / Math.max(0.001, barLen()));
+    ripples.push({ id: ringIdCounter++, startTime: now, speed });
   }
-  function loopScheduler(now){
-    if (!generator.placed) return;
-    if (inputState && inputState.draggingGenerator) return;
-    const bar = Math.max(0.001, barDur());
-    if (nextLoopAt == null){ nextLoopAt = now + bar; if (loopStartAt == null) loopStartAt = now; }
-    if (now + 1/180 >= nextLoopAt){
-      // lock to scheduled boundary to keep cycles stable
-      dbg('wrap check', {now, nextLoopAt});
-      const boundary = nextLoopAt;
-      const s = spawnRipple(false);
-      if (ripples.length) ripples[ripples.length-1].startTime = boundary;
-      loopStartAt = boundary; dbg('wrap', {boundary, events: loopEvents.length});
-      nextLoopAt = boundary + bar;
-      justWrapped = true; wrapIndex++;
-      if (loopRecording){
-        loopRecording = false; playbackActive = true;
-        {
-          { const best=new Map(); for (const ev of loopEvents){ const cur=best.get(ev.idx); if(!cur||(ev.t||0)<(cur.t||0)) best.set(ev.idx,{t:ev.t||0,q:(ev.q!=null?ev.q:null),idx:ev.idx}); } loopEvents=Array.from(best.values()).sort((a,b)=>a.t-b.t); }}
-      } else if (recordArm.size){
-        const armed = new Set(recordArm);
-        const kept = loopEvents.filter(ev => !armed.has(ev.idx));
-        const recent = loopEvents.filter(ev => armed.has(ev.idx));
-        loopEvents = kept.concat(recent);
-        recordArm.clear();
-      }
-      playbackPrevT = 0;
-      skipPlaybackFrame = true;
-    }
-if (loopEvents.length){ const ctxAudio=ensureAudioContext(); try{ if (ctxAudio.state==='suspended') ctxAudio.resume(); }catch{}
-  if (skipPlaybackFrame){ skipPlaybackFrame = false; return; }
-  const tNow = (now - loopStartAt);
-  const curT = ((tNow % bar) + bar) % bar;
-  const prevT = playbackPrevT;
-  if (justWrapped){ playbackPrevT = curT; justWrapped = false; return; }
-  const NB = 8; const step = Math.max(1e-6, bar/NB);
-  const bPrev = Math.floor(prevT/step), bCur = Math.floor(curT/step);
-  const cycleNow = wrapIndex;
-  if (cycleNow !== lastCycle){ firedThisCycle.clear(); lastCycle = cycleNow; }
-  function triggerBucket(k){ dbg('bucket', {k, cycle:cycleNow});
-    for (const ev of loopEvents){
-      const q = (ev.q != null) ? (ev.q % NB) : (Math.round((ev.t||0)/step) % NB);
-      if (q === (k % NB) && !mutedBlocks.has(ev.idx)){
-        const key = ev.idx + ':' + (q%NB) + ':' + cycleNow;
-        if (!firedThisCycle.has(key)){
-          firedThisCycle.add(key);
-          const b = blocks[ev.idx]; if (b){ const ctxA=ensureAudioContext(); const when=(ctxA.currentTime||0)+0.001; dbg('TRIG', {idx:ev.idx, q, when, curTime:ctxA.currentTime}); onBlockHit(b, now, true);}
-        }
-      }
-    }
-  }
-  if (curT >= prevT){ for (let k=bPrev+1; k<=bCur; k++) triggerBucket(k); }
-  else { for (let k=bPrev+1; k<NB; k++) triggerBucket(k); for (let k=0; k<=bCur; k++) triggerBucket(k); }
-  playbackPrevT = curT;
-}
-  }
-  function clampAllBlocksToBounds(){
-    const w = worldW(), h = worldH();
-    for (const b of blocks){
-      b.x = clamp(b.x, EDGE, Math.max(EDGE, w - EDGE - b.w));
-      b.y = clamp(b.y, EDGE, Math.max(EDGE, h - EDGE - b.h));
-    }
-  }
-  function onBlockHit(b, now, scan=false){
-    // Only flash + knockback on scheduled (scan===true) playback
-    if (scan){
-      b.flashDur = 0.12; b.flashEnd = now + b.flashDur; b.rippleAge = 0; b.rippleMax = 0.25; b.lastVisualAt = now;
-      const KNOCKBACK = 28;
-      const cx = b.x + b.w/2, cy = b.y + b.h/2;
-      const dx = cx - generator.x, dy = cy - generator.y;
-      const d = Math.max(1, Math.hypot(dx, dy));
-      const k = KNOCKBACK / d; b.vx += dx * k; b.vy += dy * k;
-    }
-    // record into loop (normalized, quantized)
-    const idx = blocks.indexOf(b);
-    if (idx >= 0 && loopStartAt != null){
-      const bar = Math.max(0.001, barDur());
-      const step = Math.max(1e-6, bar/8);
-      let t = ((now - loopStartAt) % bar + bar) % bar;
-      // forward quantize to avoid first-loop misses
-      let tQ = Math.round(t/step)*step; if (tQ < t - 1e-6) tQ += step; if (tQ >= bar) tQ -= bar;
-      const EPS = step*0.25;
-      if (loopRecording || recordArm.has(idx)){
-        const q = Math.round(tQ/step) % 8;
-        const exists=loopEvents.some(ev=>ev.idx===idx); if(!exists) loopEvents.push({t:tQ,q,idx});
-      }
-    }
-    // trigger note
+
+  function scheduleHit(noteIdx){
     try {
-      if (scan){
-        const ctx = ensureAudioContext();
-        const note = noteList[b.noteIndex % noteList.length];
-        const when = (ctx.currentTime || 0) + 0.001;
-        triggerInstrument(ui.instrument, note, when);
-      }
-    } catch (e) { console.warn('triggerInstrument failed', e); }
-  }
-  function catchUpHits(now){
-    const WIDEN = 2.5;
-    for (let rIndex=0; rIndex<ripples.length; rIndex++){
-      const r = ripples[rIndex]; const radius = Math.max(0, (now - r.startTime) * r.speed);
-      for (let i=0;i<blocks.length;i++){
-        const b = blocks[i], cx = b.x + b.w/2, cy = b.y + b.h/2;
-        const dist = Math.hypot(cx - r.x, cy - r.y);
-        if (Math.abs(dist - radius) <= HIT_BAND*WIDEN){
-          const key = r.id+':'+i;
-          if (!hitsFired.has(key)){ hitsFired.add(key); onBlockHit(b, now); }
-        }
-      }
+      const ac = ensureAudioContext();
+      const now = performance.now()*0.001;
+      if (!loopStartPerf) loopStartPerf = now;
+      const step = stepLen();
+      const tFromStart = now - loopStartPerf;
+      const nextQ = Math.ceil(tFromStart / step) * step;
+      const delta = Math.max(0.01, nextQ - tFromStart);
+      const when = ac.currentTime + delta;
+      const name = noteList[(noteIdx % noteList.length + noteList.length) % noteList.length] || 'C4';
+      triggerInstrument(ui.instrument || defaultInstrument, name, when);
+    } catch (e) {
+      // Fallback immediate if scheduling fails
+      try {
+        const name = noteList[(noteIdx % noteList.length + noteList.length) % noteList.length] || 'C4';
+        triggerInstrument(ui.instrument || defaultInstrument, name);
+      } catch {}
     }
-    hitsFired.forEach((_, key)=>{ const rid = key.split(':')[0]; if (!ripples.some(rp=>rp.id===rid)) hitsFired.delete(key); });
-}
-  function checkRippleHits(now){
-    const prev = lastScanT; lastScanT = now;
-    for (let rIndex=0; rIndex<ripples.length; rIndex++){
-      const r = ripples[rIndex];
-      const r0 = Math.max(0, (prev - r.startTime) * r.speed);
-      const r1 = Math.max(0, (now  - r.startTime) * r.speed);
-      const lo = Math.min(r0, r1), hi = Math.max(r0, r1);
-      const dynBand = Math.max(HIT_BAND, (hi - lo) * 1.25);
-      for (let i=0;i<blocks.length;i++){
-        const b = blocks[i], cx = b.x + b.w/2, cy = b.y + b.h/2;
-        const dist = Math.hypot(cx - r.x, cy - r.y);
-        if (dist >= lo - dynBand && dist <= hi + dynBand){
-          const key = r.id+':'+i;
-          if (!hitsFired.has(key)){ hitsFired.add(key); onBlockHit(b, now); }
-        }
-      }
-    }
-    hitsFired.forEach((_, key)=>{ const rid = key.split(':')[0]; if (!ripples.some(rp=>rp.id===rid)) hitsFired.delete(key); });
   }
-  function updatePhysics(dt){
-    const w = worldW(), h = worldH();
+
+  // Hit a block (flash + schedule)
+  function fireHit(bi){
+    const b = blocks[bi];
+    if (!b || b.muted) return;
+    b.flash = 0.9;
+    scheduleHit(b.noteIndex);
+  }
+
+  // Drawing helpers
+  function drawCubes(zoomed){
+    const s = cubeSize();
     for (let i=0;i<blocks.length;i++){
       const b = blocks[i];
-      const ax = (b.rx - b.x) * SPRING, ay = (b.ry - b.y) * SPRING;
-      b.vx = (b.vx + ax) * DAMPING; b.vy = (b.vy + ay) * DAMPING;
-      const sp = Math.hypot(b.vx, b.vy); if (sp > MAX_V){ const s = MAX_V/sp; b.vx*=s; b.vy*=s; }
-      b.x = clamp(b.x + b.vx*dt, EDGE, w-EDGE-b.w);
-      b.y = clamp(b.y + b.vy*dt, EDGE, h-EDGE-b.h);
-      if (b.rippleAge != null && b.rippleMax != null){ b.rippleAge = Math.min(b.rippleAge + dt, b.rippleMax); }
+      // enforce square + keep inside bounds
+      b.w = b.h = s;
+      b.x = clamp(b.x, EDGE, worldW()-EDGE - b.w);
+      b.y = clamp(b.y, EDGE, worldH()-EDGE - b.h);
+
+      const sx = b.x + b.jx, sy = b.y + b.jy;
+      // cube base
+      ctx.fillStyle = b.muted ? '#293042' : '#f4932f';
+      ctx.fillRect(sx, sy, b.w, b.h);
+      // flash overlay
+      if (b.flash > 0){
+        ctx.globalAlpha = Math.min(1, b.flash);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(sx, sy, b.w, b.h);
+        ctx.globalAlpha = 1;
+        b.flash = Math.max(0, b.flash - 0.05);
+      }
+      // thirds guides only in zoom
+      if (zoomed) drawThirdsGuides(ctx, b);
+      // label only in zoom
+      if (zoomed){
+        const label = noteList[(b.noteIndex % noteList.length + noteList.length) % noteList.length] || '';
+        ctx.fillStyle = b.muted ? '#e6e8ef' : '#0b0f16';
+        ctx.font = '12px ui-sans-serif, system-ui';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, b.x + b.w/2, b.y + b.h/2);
+      }
     }
   }
-  // Pointer
-  function onPointerDown(e){
-    if (performance.now() < suppressPointerUntil) return;
-    lastDragIdx = null;
-    const wasPlaced = generator.placed;
-    handlers.pointerDown(e);
-    if (typeof inputState.dragIndex === 'number' && inputState.dragIndex >= 0){
-      const idx = inputState.dragIndex;
-      // remove any existing scheduled event for this block; re-arm to capture new timing
-      loopEvents = loopEvents.filter(ev => ev.idx !== idx);
-      recordArm.add(idx);
-      mutedBlocks.delete(idx);
-      lastDragIdx = idx;
-    }
-    if (!wasPlaced && generator.placed){
-      clearRipples();
-      const s = spawnRipple(false); scheduleNextFrom(s); if (loopStartAt == null) loopStartAt = s;
-    } else if (wasPlaced){
-      // no ripple on drag start
-    }
-  }
-  canvas.addEventListener('pointerdown', onPointerDown);
-  canvas.addEventListener('pointermove', handlers.pointerMove);
-  window.addEventListener('pointerup', (e)=>{
-    handlers.pointerUp(e);
-    if (lastDragIdx != null){ recordArm.add(lastDragIdx); mutedBlocks.delete(lastDragIdx); lastDragIdx = null; }
-    for (const b of blocks){ b.rx = b.x; b.ry = b.y; b.vx = 0; b.vy = 0; }
-    if (inputState && inputState.generatorDragEnded){
-      clearRipples();
-      const s = spawnRipple(true);
-      playbackActive = false; loopRecording = true;
-      loopEvents = []; recordArm.clear();
-      loopStartAt = (typeof s === 'number') ? s : (performance.now()*0.001);
-      playbackPrevT = 0; skipPlaybackFrame = true; justWrapped = false;
-      scheduleNextFrom(loopStartAt);
-      inputState.generatorDragEnded = false;
-    }
-  });
-  // UI
-  panel.addEventListener('toy-random', ()=>{ clearRipples();
-    loopRecording = true; playbackActive = false; loopEvents = []; recordArm.clear();
-    mutedBlocks.clear(); loopStartAt = null; nextLoopAt = null;
-    randomizeRects(blocks, worldW(), worldH(), EDGE);
-    assignPentatonic(blocks);
-    for (const b of blocks){ b.rx=b.x; b.ry=b.y; b.vx=0; b.vy=0; }
-    clampAllBlocksToBounds();
-    try { reshuffleParticles(); } catch(e) {}
-    const s = spawnRipple(true); if (typeof s==='number'){ scheduleNextFrom(s); loopStartAt = s; } dbg && dbg('random->spawn', {s});
-  });
 
-  panel.addEventListener('toy-reset', ()=>{
-    clearRipples();
-    generator.placed = false;
-    loopRecording = true; playbackActive = false; loopEvents = []; recordArm.clear();
-    mutedBlocks.clear(); loopStartAt = null; nextLoopAt = null;
-  });
-
-  panel.addEventListener('toy-zoom', (e)=>{
-    const nowSec = performance.now()*0.001;
-    if ((nowSec - lastZoomAt) < 0.12) return;
-    lastZoomAt = nowSec;
-    const zoomed = !!(e?.detail?.zoomed);
-    const ratio = sizing.setZoom(zoomed);
-    if (ratio !== 1){
-      for (const b of blocks){ b.x*=ratio; b.y*=ratio; b.w*=ratio; b.h*=ratio; b.rx=b.x; b.ry=b.y; }
-      generator.x *= ratio; generator.y *= ratio; generator.r *= ratio;
-      try { scaleParticles(ratio); } catch(e) {}
-      clampAllBlocksToBounds();
-    }
-    const w = worldW(), h = worldH();
-    try { setParticleBounds(w, h); } catch(e) {}
-    const dur = Math.max(0.001, barDur());
-    for (const r of ripples){
-      const oldR = Math.max(0, (nowSec - r.startTime) * r.speed);
-      const newR = oldR * (ratio || 1);
-      const cornerMaxR = Math.max(
+  function drawRings(now){
+    // stylized multi-band rings
+    for (let i=ripples.length-1; i>=0; i--){
+      const rp = ripples[i];
+      const r = Math.max(0, (now - rp.startTime) * rp.speed);
+      // cull after it leaves canvas bounds
+      const far = Math.max(
         Math.hypot(generator.x - 0,        generator.y - 0),
-        Math.hypot(generator.x - w,        generator.y - 0),
-        Math.hypot(generator.x - 0,        generator.y - h),
-        Math.hypot(generator.x - w,        generator.y - h)
+        Math.hypot(generator.x - worldW(), generator.y - 0),
+        Math.hypot(generator.x - 0,        generator.y - worldH()),
+        Math.hypot(generator.x - worldW(), generator.y - worldH())
       );
-      const newSpeed = cornerMaxR / dur;
-      r.speed = newSpeed;
-      r.startTime = nowSec - (newR / Math.max(1e-6, newSpeed));
+      if (r > far + 10){ ripples.splice(i,1); continue; }
+
+      // sequential rings: main + two echoes
+      ctx.save();
+      ctx.lineCap = 'round';
+      const bar = barSeconds();
+      const E1 = 0.20 * bar, E2 = 0.40 * bar; // echo delays
+      const rMain = r;
+      const rEcho1 = Math.max(0, (now - (rp.startTime + E1)) * rp.speed);
+      const rEcho2 = Math.max(0, (now - (rp.startTime + E2)) * rp.speed);
+
+      function strokeRing(rad, w, a){
+        if (rad <= 0) return;
+        ctx.globalAlpha = a;
+        ctx.lineWidth = w;
+        ctx.beginPath();
+        ctx.arc(generator.x, generator.y, Math.max(0.1, rad), 0, Math.PI*2);
+        ctx.strokeStyle = '#ffffff';
+        ctx.stroke();
+      }
+      // main ring slightly less intense, a bit thicker
+      strokeRing(rMain, 3.0, 0.48);
+      // echoes later, thinner + faint
+      if (now >= rp.startTime + E1) strokeRing(rEcho1, 2.5, 0.18);
+      if (now >= rp.startTime + E2) strokeRing(rEcho2, 2.0, 0.12);
+      ctx.restore();
+      // Check hits per block (dedupe)
+      for (let bi=0; bi<blocks.length; bi++){
+        const key = rp.id + ':' + bi;
+        if (fired.has(key)) continue;
+        const b = blocks[bi];
+        // Distance from generator to block edge (closest point)
+        const cx = clamp(generator.x, b.x, b.x + b.w);
+        const cy = clamp(generator.y, b.y, b.y + b.h);
+        const dist = Math.hypot(generator.x - cx, generator.y - cy);
+              if (Math.abs(dist - rMain) <= 2){
+                fired.add(key);
+                fireHit(bi);
+                // direction from generator to block center/closest point
+                const ang = Math.atan2(cy - generator.y, cx - generator.x);
+                // cube buoy impulse
+                const bx = Math.cos(ang) * 48, by = Math.sin(ang) * 48;
+                b.vx += bx; b.vy += by;
+                // particle impulse near the ring front
+                const kick = 34;
+                for (const p of particles){
+                  const pd = Math.hypot(p.x - generator.x, p.y - generator.y);
+                  if (Math.abs(pd - rMain) < 10){
+                    p.vx += Math.cos(ang) * kick * 0.02;
+                    p.vy += Math.sin(ang) * kick * 0.02;
+                    p.flash = 1;
+                  }
+                }
+              }
     }
-    // catchUpHits disabled (bracketed hits handle gaps)
-    
-    suppressPointerUntil = performance.now() + 150;
+    }
+
+  }
+
+  function updateBuoy(dt){
+    const K = 40.0, D = 0.82; // spring constant, damping
+    for (const b of blocks){
+      // spring back to 0,0
+      const fx = -b.jx * K;
+      const fy = -b.jy * K;
+      b.vx = (b.vx + fx * dt) * D;
+      b.vy = (b.vy + fy * dt) * D;
+      // clamp
+      if (b.vx > 200) b.vx = 200; if (b.vx < -200) b.vx = -200;
+      if (b.vy > 200) b.vy = 200; if (b.vy < -200) b.vy = -200;
+      b.jx += b.vx * dt;
+      b.jy += b.vy * dt;
+    }
+  }
+
+  function updateParticles(dt){
+    const K = 10.0, DAMP = 0.90, MAXV = 120;
+    for (const p of particles){
+      const fx = (p.rx - p.x) * K;
+      const fy = (p.ry - p.y) * K;
+      p.vx = (p.vx + fx * dt) * DAMP;
+      p.vy = (p.vy + fy * dt) * DAMP;
+      // clamp velocity
+      const sp = Math.hypot(p.vx, p.vy);
+      if (sp > MAXV){ const s = MAXV / Math.max(1e-6, sp); p.vx *= s; p.vy *= s; }
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      if (p.flash > 0) p.flash = Math.max(0, p.flash - 1.5*dt);
+    }
+  }
+
+  function drawParticles(){
+    ctx.save();
+    for (const p of particles){
+      const a = 0.25 + 0.75 * p.flash;
+      ctx.globalAlpha = a;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(p.x, p.y, 2.2, 2.2);
+    }
+    ctx.restore();
+  }
+
+  // Interaction
+  let draggingGen = false;
+  let dragOffset = {dx:0, dy:0};
+  let draggingBlock = null;
+
+  function isZoomed(){ return panel.classList.contains('toy-zoomed'); }
+
+  canvas.addEventListener('pointerdown', (e)=>{
+    const p = getCanvasPos(canvas, e);
+    // Hit cubes first
+    for (let i=blocks.length-1;i>=0;i--){
+      const b = blocks[i];
+      const sx = b.x + b.jx, sy = b.y + b.jy;
+      if (p.x>=sx && p.x<=sx+b.w && p.y>=sy && p.y<=sy+b.h){
+        if (isZoomed()){
+          const third = whichThirdRect({x:sx,y:sy,w:b.w,h:b.h}, p.y);
+          if (third === 'up')   { b.noteIndex = Math.min(noteList.length-1, b.noteIndex + 1); }
+          else if (third==='down'){ b.noteIndex = Math.max(0, b.noteIndex - 1); }
+          else { b.muted = !b.muted; }
+          b.flash = 0.35;
+        } else {
+          // zero buoy offsets during drag to keep stable
+          b.jx = 0; b.jy = 0; b.vx = 0; b.vy = 0;
+          draggingBlock = { i, dx: p.x - b.x, dy: p.y - b.y };
+        }
+        return;
+      }
+    }
+    // Generator hit?
+    const dx = p.x - generator.x, dy = p.y - generator.y;
+    if (!isZoomed() && generator.placed && Math.hypot(dx,dy) <= generator.r + 10){
+      draggingGen = true;
+      dragOffset = { dx, dy };
+      // suspend hits: clear rings & fired
+      ripples.length = 0; fired.clear();
+      return;
+    }
+    // Otherwise: place/move generator and start one ripple
+    generator.x = clamp(p.x, EDGE, worldW()-EDGE);
+    generator.y = clamp(p.y, EDGE, worldH()-EDGE);
+    generator.placed = true;
+    ripples.length = 0; fired.clear();
+    spawnRipple();
   });
 
-  // Draw
+  canvas.addEventListener('pointermove', (e)=>{
+    const p = getCanvasPos(canvas, e);
+    if (draggingGen){
+      generator.x = clamp(p.x - dragOffset.dx, EDGE, worldW()-EDGE);
+      generator.y = clamp(p.y - dragOffset.dy, EDGE, worldH()-EDGE);
+    } else if (draggingBlock){
+      const b = blocks[draggingBlock.i];
+      b.x = clamp(p.x - draggingBlock.dx, EDGE, worldW()-EDGE - b.w);
+      b.y = clamp(p.y - draggingBlock.dy, EDGE, worldH()-EDGE - b.h);
+    }
+  });
+
+  function endDrag(){
+    if (draggingGen){
+      // one clean ripple on release
+      ripples.length = 0; fired.clear();
+      spawnRipple();
+    }
+    draggingGen = false; draggingBlock = null;
+  }
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
+  window.addEventListener('pointerup', endDrag, true);
+
+  // Draw loop
+  let prevT = performance.now()*0.001;
   function draw(){
     resizeCanvasForDPR(canvas, ctx);
-    const w = worldW(), h = worldH();
-    if (!particlesInitialized && w>0 && h>0){ try { initParticles(w, h, EDGE, 56); setParticleBounds(w,h); particlesInitialized = true; } catch(e) {} }
-
-    ctx.fillStyle = '#0b0f15'; ctx.fillRect(0,0,w,h);
-    ctx.strokeStyle='rgba(255,255,255,0.12)';ctx.strokeRect(0.5,0.5,w-1,h-1);if(DEBUG_RIPPLER){ctx.fillStyle='#0f0';ctx.font='10px monospace';ctx.fillText(`ev:${loopEvents.length} rip:${ripples.length} act:${playbackActive?'1':'0'}`,6,12);}
-
+    const W = worldW(), H = worldH();
+    ctx.clearRect(0,0,W,H);
     const now = performance.now()*0.001;
-    const dur = Math.max(0.001, barDur());
-    const cornerMaxV = Math.max(
-      Math.hypot(generator.x - 0,        generator.y - 0),
-      Math.hypot(generator.x - w,        generator.y - 0),
-      Math.hypot(generator.x - 0,        generator.y - h),
-      Math.hypot(generator.x - w,        generator.y - h)
-    );
-    const visSpeed = cornerMaxV / dur;
-    drawWaves(ctx, generator.x, generator.y, now, visSpeed, ripples, 16, ()=>Math.max(0.03, barDur()/16));
+    const dt = Math.max(0.001, Math.min(0.05, now - prevT));
+    prevT = now;
 
-    updatePhysics(1/60);
-    checkRippleHits(now);
+    // Background particles & waves
+    updateParticles(dt);
+    drawParticles();
+    drawRings(now);
+    updateBuoy(dt);
 
-    drawParticles(ctx, now, ripples, generator);
-    drawBlocksSection(ctx, blocks, generator.x, generator.y, ripples, 1.0, noteList, sizing, null, null, now);
-
+    // Cubes + generator handle
+    drawCubes(isZoomed());
     if (generator.placed){
-      ctx.fillStyle = '#ff9500';
+      ctx.fillStyle = '#ffffff';
       ctx.beginPath();
       ctx.arc(generator.x, generator.y, generator.r, 0, Math.PI*2);
       ctx.fill();
     }
 
-    loopScheduler(now);
+    // Auto-spawn a ripple at bar wrap
+    if (generator.placed && loopStartPerf){
+      const elapsed = now - loopStartPerf;
+      const bar = barLen();
+      if (elapsed >= bar){
+        // wrap
+        loopStartPerf = now;
+        fired.clear();
+        ripples.length = 0;
+        spawnRipple();
+      }
+    }
+
     requestAnimationFrame(draw);
   }
   requestAnimationFrame(draw);
 
-  return { panel, canvas, markPlayingColumn: ()=>{}, ping: ()=>{} };
-}
-
-// helpers (outside factory)
-function makeBlocks(n){
-  const arr = [];
-  for (let i=0;i<n;i++){
-    arr.push({ x:0,y:0,w:40,h:40, rx:0,ry:0, vx:0,vy:0, rippleAge:999, rippleMax:0, noteIndex: i % PENTATONIC.length, lastVisualAt:-1 });
+  function onLoop(){ /* engine spawns ripples based on bar wrap */ }
+  function reset(){
+    ripples.length = 0; fired.clear();
+    for (const b of blocks){ b.muted = false; b.flash = 0; }
   }
-  return arr;
+
+  return { onLoop, reset, setInstrument: ui.setInstrument, element: canvas };
 }
-function assignPentatonic(blocks){ for (let i=0;i<blocks.length;i++){ blocks[i].noteIndex = i % PENTATONIC.length; } }

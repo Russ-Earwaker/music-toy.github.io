@@ -1,55 +1,44 @@
-// src/bouncer.js — clean rebuild (no ellipses)
+// src/bouncer.js — bouncer with zoom-only cube controls (top=up, mid=toggle, bot=down)
 import { noteList, clamp, resizeCanvasForDPR } from './utils.js';
 import { ensureAudioContext, triggerInstrument } from './audio.js';
 import { initToyUI } from './toyui.js';
-import { initToySizing, drawBlock, drawNoteStripsAndLabel, NOTE_BTN_H, randomizeRects, EDGE_PAD as EDGE } from './toyhelpers.js';
+import { initToySizing, randomizeRects, EDGE_PAD as EDGE, whichThirdRect, drawThirdsGuides} from './toyhelpers.js';
 
 const BASE_BLOCK_SIZE = 48;
-const BASE_CANNON_R   = 10; // slightly smaller anchor
+const BASE_CANNON_R   = 10;
 const BASE_BALL_R     = 7;
-const BASE_MAX_SPEED = 18; // px/frame at 1x
-
+const BASE_MAX_SPEED  = 18;
 
 export function createBouncer(selector){
   const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector;
   if (!shell){ console.warn('[bouncer] missing', selector); return null; }
+
   const panel = shell.closest?.('.toy-panel') || shell;
-  const host  = shell.querySelector('.toy-body') || shell;
+  const ui = initToyUI(panel, { toyName: 'Bouncer' });
 
-  // Canvas
-  const canvas = (host.querySelector && (host.querySelector('.bouncer-canvas') || host.querySelector('canvas'))) || (function(){
-    const c = document.createElement('canvas');
-    c.className = 'bouncer-canvas';
-    c.style.display = 'block';
-    c.style.touchAction = 'none';
-    host.appendChild(c); return c;
-  })();
-  const ctx = canvas.getContext('2d', { alpha:false });
+  const canvas = document.createElement('canvas');
+  canvas.className = 'bouncer-canvas';
+  canvas.style.display = 'block';
+  shell.appendChild(canvas);
+  const ctx = canvas.getContext('2d');
 
-  // UI/instrument
-  const ui = initToyUI(panel, { toyName: 'Bouncer', defaultInstrument: 'tone' });
-
-  // Sizing
-  const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true });
-  const worldW = () => sizing.vw();
-  const worldH = () => sizing.vh();
+  const sizing = initToySizing(panel, canvas, ctx);
+  function worldW(){ return panel.clientWidth  || 356; }
+  function worldH(){ return panel.clientHeight || 280; }
   const blockSize = () => Math.round(BASE_BLOCK_SIZE * (sizing.scale || 1));
   const cannonR   = () => Math.round(BASE_CANNON_R   * (sizing.scale || 1));
   const ballR     = () => Math.round(BASE_BALL_R     * (sizing.scale || 1));
   const maxSpeed  = () => BASE_MAX_SPEED * (sizing.scale || 1);
 
-  // State
-  let blocks = new Array(5).fill(0).map((_,i)=>({ x: EDGE+6, y: EDGE+6, w: blockSize(), h: blockSize(), noteIndex: i*3 % noteList.length, activeFlash: 0 }));
+  let blocks = new Array(5).fill(0).map((_,i)=>({ x: EDGE+6, y: EDGE+6, w: blockSize(), h: blockSize(), noteIndex: (i*3)%noteList.length, active:true, flash:0 }));
   randomizeRects(blocks, worldW(), worldH(), EDGE);
 
-  // Handle (spawn anchor)
   let handle = { x: worldW()*0.25, y: worldH()*0.5 };
   let draggingHandle = false;
 
-  // Ball + last launch
   let ball = null; // {x,y,vx,vy,r}
   let lastLaunch = null; // {x,y,vx,vy,r}
-  let drawingPath = false; // dragging to define a path
+  let drawingPath = false;
   let dragStart = null;
   let dragCurr = null;
 
@@ -57,268 +46,137 @@ export function createBouncer(selector){
     ball = { x: launch.x, y: launch.y, vx: launch.vx, vy: launch.vy, r: ballR() };
   }
 
-  // Physics helpers
-  function circleRectMTV(cx, cy, r, rect){
-    // Nearest point on rect to circle center
-    const nearestX = clamp(cx, rect.x, rect.x + rect.w);
-    const nearestY = clamp(cy, rect.y, rect.y + rect.h);
-    const dx = cx - nearestX;
-    const dy = cy - nearestY;
-    const dist2 = dx*dx + dy*dy;
-    if (dist2 >= r*r) return null; // tangent or outside = no collision
-    const dist = Math.sqrt(Math.max(1e-6, dist2));
-
-    // Default normal from nearest point vector
-    let nx = dx / (dist || 1);
-    let ny = dy / (dist || 1);
-    let overlap = r - dist;
-
-    // If we are at a corner or fully inside, bias to the nearer axis to prevent sliding
-    if (dist < 1e-6){
-      const midX = rect.x + rect.w/2;
-      const midY = rect.y + rect.h/2;
-      const penL = Math.abs(cx - rect.x);
-      const penR = Math.abs(rect.x + rect.w - cx);
-      const penT = Math.abs(cy - rect.y);
-      const penB = Math.abs(rect.y + rect.h - cy);
-      const minX = Math.min(penL, penR);
-      const minY = Math.min(penT, penB);
-      if (minX < minY){
-        nx = (cx < midX) ? -1 : 1; ny = 0;
-      } else {
-        nx = 0; ny = (cy < midY) ? -1 : 1;
-      }
-      overlap = r;
-    }
-    return { nx, ny, overlap };
+  function drawRoundedRect(x, y, w, h, r=10){
+    ctx.beginPath();
+    ctx.moveTo(x+r, y);
+    ctx.arcTo(x+w, y, x+w, y+h, r);
+    ctx.arcTo(x+w, y+h, x, y+h, r);
+    ctx.arcTo(x, y+h, x, y, r);
+    ctx.arcTo(x, y, x+w, y, r);
+    ctx.closePath();
   }
 
-  function updateBall(){
-    if (!ball) return;
-
-    // Sub-steps to reduce tunneling (more when zoomed)
-    const SUBSTEPS = (sizing.scale > 1 ? 3 : 2);
-    for (let step=0; step<SUBSTEPS; step++){
-      {
-        const sp = Math.hypot(ball.vx, ball.vy);
-        const ms = maxSpeed();
-        if (sp > ms && sp > 0){ const s = ms / sp; ball.vx *= s; ball.vy *= s; }
-      }
-      ball.x += ball.vx / SUBSTEPS;
-      ball.y += ball.vy / SUBSTEPS;
-
-      // wall bounces
-      if (ball.x - ball.r < EDGE){ ball.x = EDGE + ball.r; ball.vx = Math.abs(ball.vx); }
-      if (ball.x + ball.r > worldW()-EDGE){ ball.x = worldW()-EDGE - ball.r; ball.vx = -Math.abs(ball.vx); }
-      if (ball.y - ball.r < EDGE){ ball.y = EDGE + ball.r; ball.vy = Math.abs(ball.vy); }
-      if (ball.y + ball.r > worldH()-EDGE){ ball.y = worldH()-EDGE - ball.r; ball.vy = -Math.abs(ball.vy); }
-
-      // Iterative resolution to avoid sticking
-      let iter = 0, collided = true;
-      const now = ensureAudioContext().currentTime;
-      const firedThisIter = new Set();
-      while (collided && iter < 4){
-        collided = false;
-        for (let bi=0; bi<blocks.length; bi++){
-          const b = blocks[bi];
-          const mtv = circleRectMTV(ball.x, ball.y, ball.r, b);
-          if (mtv){
-            const SEP_EPS = 0.25;
-            ball.x += (mtv.nx * (mtv.overlap + SEP_EPS));
-            ball.y += (mtv.ny * (mtv.overlap + SEP_EPS));
-            // reflect along normal
-            const vn = ball.vx * mtv.nx + ball.vy * mtv.ny;
-            if (vn < 0){
-              ball.vx -= 2 * vn * mtv.nx;
-              ball.vy -= 2 * vn * mtv.ny;
-            }
-            // trigger once per iter per block
-            if (!firedThisIter.has(bi)){
-              triggerInstrument(ui.instrument, noteList[b.noteIndex % noteList.length], now);
-              b.activeFlash = 1.0;
-              firedThisIter.add(bi);
-            }
-            collided = true;
-            /* clamp speed */
-            {
-              const sp = Math.hypot(ball.vx, ball.vy);
-              const ms = maxSpeed();
-              if (sp > ms && sp > 0){ const s = ms / sp; ball.vx *= s; ball.vy *= s; }
-            }
-          }
-        }
-        iter++;
-      }
-    }
-  }
-
-  // Input
-  function getPos(e){
-    const r = canvas.getBoundingClientRect();
-    const x = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
-    const y = (e.touches ? e.touches[0].clientY : e.clientY) - r.top;
-    return { x, y };
-  }
-
-  function onDown(e){
-    e.preventDefault();
-    const p = getPos(e);
-    // If near handle, drag it
-    const d = Math.hypot(p.x - handle.x, p.y - handle.y);
-    if (d <= Math.max(12, cannonR()+4)){
-      draggingHandle = true;
-      return;
-    }
-    // If clicking a block (and zoomed), maybe adjust pitch; otherwise drag
-    const over = blocks.slice().reverse().find(b => p.x>=b.x && p.x<=b.x+b.w && p.y>=b.y && p.y<=b.y+b.h);
-    if (over){
-      if (sizing.scale > 1){
-        const localY = p.y - over.y;
-        if (localY <= NOTE_BTN_H){ over.noteIndex = (over.noteIndex + 1) % noteList.length; return; }
-        if (localY >= over.h - NOTE_BTN_H){ over.noteIndex = (over.noteIndex - 1 + noteList.length) % noteList.length; return; }
-      }
-      over.drag = { dx: p.x - over.x, dy: p.y - over.y };
-      over.dragging = true;
-      return;
-    }
-    // Else: draw a path (single handle)
-    drawingPath = true;
-    dragStart = p;
-    dragCurr = p;
-    handle.x = p.x; handle.y = p.y;
-  }
-  function onMove(e){
-    const p = getPos(e);
-    if (draggingHandle){
-      handle.x = clamp(p.x, EDGE, worldW()-EDGE);
-      handle.y = clamp(p.y, EDGE, worldH()-EDGE);
-      return;
-    }
-    const draggingBlock = blocks.find(b => b.dragging);
-    if (draggingBlock){
-      draggingBlock.x = clamp(p.x - draggingBlock.drag.dx, EDGE, worldW()-EDGE - draggingBlock.w);
-      draggingBlock.y = clamp(p.y - draggingBlock.drag.dy, EDGE, worldH()-EDGE - draggingBlock.h);
-      return;
-    }
-    if (drawingPath){ dragCurr = p; }
-  }
-  function onUp(e){
-    const p = dragStart;
-    if (drawingPath && p){
-      const end = dragCurr || getPos(e.changedTouches ? e.changedTouches[0]||e : e);
-      let vx = (end.x - p.x) * 0.12; // power factor
-      let vy = (end.y - p.y) * 0.12;
-      // clamp to max speed
-      {
-        const mag = Math.hypot(vx, vy);
-        const ms = maxSpeed();
-        if (mag > ms && mag > 0){ const s = ms / mag; vx *= s; vy *= s; }
-      }
-      lastLaunch = { x: handle.x, y: handle.y, vx, vy, r: ballR() };
-      spawnBallFrom(lastLaunch);
-    }
-    drawingPath = false; dragStart = null; dragCurr = null; draggingHandle = false;
-    for (const b of blocks){ b.dragging = false; b.drag = null; }
-  }
-
-  canvas.addEventListener('pointerdown', onDown);
-  canvas.addEventListener('pointermove', onMove);
-  window.addEventListener('pointerup', onUp);
-
-  canvas.addEventListener('touchstart', onDown, { passive:false });
-  canvas.addEventListener('touchmove', onMove, { passive:false });
-  window.addEventListener('touchend', onUp);
-
-  // Draw
   function draw(){
     resizeCanvasForDPR(canvas, ctx);
-    if (ball){ ball.r = ballR(); } // keep radius synced to zoom
-    const W = worldW(), H = worldH();
-    ctx.clearRect(0,0,W,H);
+    const w = worldW(), h = worldH();
+    ctx.clearRect(0,0,w,h);
 
-    // bg + border
-    ctx.fillStyle = '#0b0f15'; ctx.fillRect(0,0,W,H);
-    ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.strokeRect(0.5,0.5,W-1,H-1);
+    // draw cannon handle
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(handle.x|0, handle.y|0, cannonR(), 0, Math.PI*2); ctx.fill();
 
     // blocks
     for (const b of blocks){
-      drawBlock(ctx, b, { baseColor:'#ff8c00', active: b.activeFlash > 0 });
-      if (sizing.scale > 1){
-        drawNoteStripsAndLabel(ctx, b, noteList[b.noteIndex]);
+      ctx.fillStyle = b.active ? '#f4932f' : '#293042';
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+      if (b.flash>0){
+        ctx.globalAlpha = Math.min(1, b.flash);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        b.flash = Math.max(0, b.flash - 0.04);
       }
-      if (b.activeFlash > 0) b.activeFlash = Math.max(0, b.activeFlash - 0.05);
+      if (panel.classList.contains('toy-zoomed')){ drawThirdsGuides(ctx, b); }
+      // label
+      const label = noteList[(b.noteIndex % noteList.length + noteList.length) % noteList.length] || '';
+      ctx.fillStyle = b.active ? '#0b0f16' : '#e6e8ef';
+      ctx.font = '12px ui-sans-serif, system-ui';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, b.x + b.w/2, b.y + b.h/2);
+      ctx.strokeStyle = '#11151d'; ctx.lineWidth = 2; ctx.strokeRect(b.x+0.5,b.y+0.5,b.w-1,b.h-1);
     }
 
-    // cannon/handle
-    ctx.fillStyle = '#ffd95e';
-    ctx.beginPath();
-    ctx.arc(handle.x, handle.y, cannonR(), 0, Math.PI*2);
-    ctx.fill();
-
-    // drag path preview (dotted)
-    if (drawingPath && dragStart){
-      const m = dragStart;
-      ctx.save();
-      ctx.setLineDash([5,4]);
-      ctx.strokeStyle = 'rgba(255,217,94,0.9)';
-      ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(m.x, m.y);
-      const d = dragCurr || m;
-      ctx.lineTo(d.x, d.y);
-      ctx.stroke();
-      ctx.restore();
-    }
-
-    // ball
+    // draw ball (simple)
     if (ball){
       ctx.fillStyle = '#fff';
       ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2); ctx.fill();
-      updateBall();
+      // simple movement with bounce
+      ball.x += ball.vx; ball.y += ball.vy;
+      if (ball.x - ball.r < EDGE || ball.x + ball.r > w-EDGE){ ball.vx *= -1; }
+      if (ball.y - ball.r < EDGE || ball.y + ball.r > h-EDGE){ ball.vy *= -1; }
+      // hit blocks
+      for (const b of blocks){
+        if (ball.x > b.x && ball.x < b.x+b.w && ball.y > b.y && ball.y < b.y+b.h){
+          b.flash = 0.5;
+          if (b.active){
+            const nn = noteList[b.noteIndex] || 'C4';
+            try { triggerInstrument(ui.instrument || 'tone', nn); } catch {}
+          }
+        }
+      }
     }
 
     requestAnimationFrame(draw);
   }
   requestAnimationFrame(draw);
 
-  // Header events
-  panel.addEventListener('toy-zoom', (e)=>{
-    const ratio = sizing.setZoom(!!(e?.detail?.zoomed));
-    if (ratio !== 1){
-      blocks.forEach(b=>{ b.x*=ratio; b.y*=ratio; b.w*=ratio; b.h*=ratio; });
-      handle.x *= ratio; handle.y *= ratio;
-      if (ball){ ball.x *= ratio; ball.y *= ratio; ball.vx *= ratio; ball.vy *= ratio; }
-      if (lastLaunch){
-        lastLaunch.x *= ratio;
-        lastLaunch.y *= ratio;
-        lastLaunch.vx *= ratio;
-        lastLaunch.vy *= ratio;
-        lastLaunch.r = ballR();
+  /* unified via whichThirdRect in toyhelpers */
+  function whichThird(b, py){
+    const t1 = b.y + b.h/3, t2 = b.y + 2*b.h/3;
+    if (py < t1) return 'up'; if (py < t2) return 'toggle'; return 'down';
+  }
+
+  let drag = null;
+  canvas.addEventListener('pointerdown', (e)=>{
+    const r = canvas.getBoundingClientRect();
+    const px = e.clientX - r.left, py = e.clientY - r.top;
+    // handle?
+    const dx = px - handle.x, dy = py - handle.y;
+    if (Math.hypot(dx,dy) <= cannonR()+6 && !panel.classList.contains('toy-zoomed')){
+      draggingHandle = true;
+      dragStart = {x:px, y:py};
+      dragCurr  = {x:px, y:py};
+      drawingPath = true;
+      return;
+    }
+    // blocks
+    for (let i=blocks.length-1;i>=0;i--){
+      const b = blocks[i];
+      if (px>=b.x && px<=b.x+b.w && py>=b.y && py<=b.y+b.h){
+        if (panel.classList.contains('toy-zoomed')){
+          const third = whichThirdRect(b, py);
+          if (third==='up') b.noteIndex = Math.min(noteList.length-1, b.noteIndex+1);
+          else if (third==='down') b.noteIndex = Math.max(0, b.noteIndex-1);
+          else b.active = !b.active;
+          b.flash = 0.3;
+        } else {
+          drag = { i, dx: px - b.x, dy: py - b.y };
+        }
+        return;
       }
     }
   });
-
-  panel.addEventListener('toy-random', ()=>{
-    randomizeRects(blocks, worldW(), worldH(), EDGE);
-    for (const b of blocks){ b.noteIndex = Math.floor(Math.random()*noteList.length); b.activeFlash = 0; }
-    // Kill ball; next path sets proper spawn
-    ball = null;
+  canvas.addEventListener('pointermove', (e)=>{
+    const r = canvas.getBoundingClientRect();
+    const px = e.clientX - r.left, py = e.clientY - r.top;
+    if (draggingHandle){
+      dragCurr = {x:px, y:py};
+    } else if (drag){
+      const b = blocks[drag.i];
+      b.x = clamp(px - drag.dx, EDGE, worldW()-b.w-EDGE);
+      b.y = clamp(py - drag.dy, EDGE, worldH()-b.h-EDGE);
+    }
   });
+  function endDrag(){
+    if (draggingHandle){
+      const vx = (dragStart.x - dragCurr.x) * 0.25 * (sizing.scale||1);
+      const vy = (dragStart.y - dragCurr.y) * 0.25 * (sizing.scale||1);
+      lastLaunch = { x: handle.x, y: handle.y, vx, vy, r: ballR() };
+      spawnBallFrom(lastLaunch);
+    }
+    draggingHandle = false; drawingPath=false; drag=null;
+  }
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
+  window.addEventListener('pointerup', endDrag, true);
 
-  panel.addEventListener('toy-reset', ()=>{
-    ball = null;
-    blocks = new Array(5).fill(0).map((_,i)=>({ x: EDGE+6, y: EDGE+6, w: blockSize(), h: blockSize(), noteIndex: i*3 % noteList.length, activeFlash: 0 }));
-    randomizeRects(blocks, worldW(), worldH(), EDGE);
-  });
-
-  // Loop hook: relaunch each loop if we have a lastLaunch
   function onLoop(){
     if (lastLaunch){
       const L = { x: handle.x, y: handle.y, vx: lastLaunch.vx, vy: lastLaunch.vy, r: ballR() };
       spawnBallFrom(L);
     }
   }
-
   function reset(){ ball=null; lastLaunch=null; }
-
   return { onLoop, reset, setInstrument: ui.setInstrument, element: canvas };
 }

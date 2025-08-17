@@ -245,3 +245,37 @@ export function initToySizing(shell, canvas, ctx, { squareFromWidth = false, asp
 export function findTopmostHit(p, blocks){
   return blocks.slice().reverse().find(b => hitRect(p, b));
 }
+
+
+// ---------- shared cube UI helpers ----------
+/** Return 'up' | 'toggle' | 'down' based on Y position within rect */
+export function whichThirdRect(rect, py){
+  const t1 = rect.y + rect.h/3, t2 = rect.y + 2*rect.h/3;
+  if (py < t1) return 'up';
+  if (py < t2) return 'toggle';
+  return 'down';
+}
+
+/** Draw two horizontal divider lines at 1/3 and 2/3 inside rect (zoom-only hint) */
+export function drawThirdsGuides(ctx, rect){
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(rect.x+6, rect.y + rect.h/3); ctx.lineTo(rect.x + rect.w - 6, rect.y + rect.h/3);
+  ctx.moveTo(rect.x+6, rect.y + 2*rect.h/3); ctx.lineTo(rect.x + rect.w - 6, rect.y + 2*rect.h/3);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Round-rect path helper (no fill/stroke) */
+export function roundRectPath(ctx, x, y, w, h, r=10){
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y, x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r);
+  ctx.arcTo(x, y, x+w, y, r);
+  ctx.closePath();
+}
+

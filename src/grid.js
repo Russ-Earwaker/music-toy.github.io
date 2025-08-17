@@ -1,8 +1,8 @@
-// src/grid.js — unified sizing/zoom + simple step grid (clean, C4 defaults)
+// src/grid.js — step grid with zoom-only cube controls (top=up, mid=toggle, bot=down)
 import { resizeCanvasForDPR, noteList } from './utils.js';
-import { NUM_STEPS, ensureAudioContext, triggerInstrument } from './audio.js';
+import { NUM_STEPS } from './audio.js';
 import { initToyUI } from './toyui.js';
-import { initToySizing, drawNoteStripsAndLabel, NOTE_BTN_H } from './toyhelpers.js';
+import { initToySizing, drawNoteStripsAndLabel, NOTE_BTN_H, whichThirdRect, drawThirdsGuides } from './toyhelpers.js';
 
 export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='tone', title='LoopGrid' } = {}){
   const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector;
@@ -11,135 +11,107 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
   const panel = shell.closest?.('.toy-panel') || shell;
   const ui = initToyUI(panel, { toyName: title, defaultInstrument });
 
-  // Canvas
   const canvas = document.createElement('canvas');
   canvas.className = 'grid-canvas';
   canvas.style.display = 'block';
-  canvas.style.touchAction = 'none';
-  const ctx = canvas.getContext('2d', { alpha: false });
-  const body = panel.querySelector?.('.toy-body') || panel;
-  body.appendChild(canvas);
+  shell.appendChild(canvas);
+  const ctx = canvas.getContext('2d');
 
-  // Shared sizing/zoom: width-driven; aspect ties height to width
-  const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: false, aspectFrom: (w)=> Math.round(Math.max(80, w*0.22)) });
-  const vw = sizing.vw, vh = sizing.vh;
+  const sizing = initToySizing(panel, canvas, ctx);
+  function worldW(){ return panel.clientWidth  || 356; }
+  function worldH(){ return panel.clientHeight || 280; }
 
-  // Model (default all steps to C4)
-  const c4Index = (noteList.indexOf('C4') >= 0 ? noteList.indexOf('C4') : 60) % noteList.length;
-  const steps = new Array(numSteps).fill(0).map(()=>(
-    { active:false, flash:0, noteIndex: c4Index }
-  ));
-  let currentStep = -1;
+  const c4Index = Math.max(0, noteList.indexOf('C4')) || 36;
+  const steps = Array.from({length:numSteps}, ()=>({ active:false, flash:0, noteIndex:c4Index }));
 
   function layout(){
-    const w = vw(), h = vh();
-    const pad = 6;
-    const innerW = w - pad*2;
-    const innerH = h - pad*2;
-    const colW = innerW / numSteps;
-    return { pad, innerW, innerH, colW, w, h };
+    const pad = 10;
+    const w = worldW(), h = worldH();
+    const boxW = Math.max(24, (w - pad*2) / numSteps - 6);
+    const boxH = Math.max(40, Math.min(90, h - pad*2 - NOTE_BTN_H));
+    const y = pad + NOTE_BTN_H;
+    for (let i=0;i<numSteps;i++){
+      const x = pad + i * (boxW + 6);
+      steps[i]._rect = { x, y, w: boxW, h: boxH };
+    }
   }
 
   function draw(){
     resizeCanvasForDPR(canvas, ctx);
-    const { w, h, pad, innerH, colW } = layout();
+    layout();
 
-    // bg
-    ctx.fillStyle = '#0b0f15';
-    ctx.fillRect(0,0,w,h);
-    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-    ctx.strokeRect(0.5,0.5,w-1,h-1);
+    const now = performance.now()/1000;
+    const w = worldW(), h = worldH();
 
-    // playing column strip
-    if (currentStep >= 0){
-      ctx.fillStyle = 'rgba(255,255,255,0.06)';
-      const x = pad + currentStep * colW;
-      ctx.fillRect(x, pad, colW, innerH);
-    }
+    // background strips/label at top
+    drawNoteStripsAndLabel(ctx, panel, 0, 0, w, NOTE_BTN_H, ui.instrument || defaultInstrument);
 
-    // steps
-    for (let i=0;i<numSteps;i++){
+    // draw steps
+    for (let i=0;i<steps.length;i++){
       const s = steps[i];
-      const x = pad + i * colW + 3;
-      const wBox = colW - 6;
-      const hBox = Math.min(innerH - 6, wBox);
-      const y = pad + 3 + Math.max(0, ((innerH - 6) - hBox) / 2);
-
-      // fill
-      ctx.fillStyle = s.active ? '#ff8c00' : '#1e2a38';
-      ctx.fillRect(x,y,wBox,hBox);
-
-      // flash overlay
-      if (s.flash > 0){
-        ctx.fillStyle = `rgba(255,255,255,${0.35*Math.min(1,s.flash)})`;
-        ctx.fillRect(x,y,wBox,hBox);
+      const r = s._rect;
+      // block base
+      ctx.save();
+      ctx.beginPath();
+      const rad = 8 * (sizing.scale || 1);
+      ctx.fillStyle = s.active ? '#f4932f' : '#293042';
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      if (s.flash>0){
+        ctx.globalAlpha = Math.min(1, s.flash);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.globalAlpha = 1;
         s.flash = Math.max(0, s.flash - 0.06);
       }
 
-      // outline
-      ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-      ctx.strokeRect(x+0.5,y+0.5,wBox-1,hBox-1);
+      // zoom-only thirds boundaries
+      if (panel.classList.contains('toy-zoomed')){ drawThirdsGuides(ctx, r); }
 
-      // advanced zoom UI
-      if (sizing.scale > 1){
-        drawNoteStripsAndLabel(ctx, {x, y, w: wBox, h: hBox}, noteList[s.noteIndex % noteList.length]);
-      }
+      // label
+      const label = noteList[(s.noteIndex % noteList.length + noteList.length) % noteList.length] || '';
+      ctx.fillStyle = s.active ? '#0b0f16' : '#e6e8ef';
+      ctx.font = '12px ui-sans-serif, system-ui';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, r.x + r.w/2, r.y + r.h/2);
+      ctx.strokeStyle = '#11151d'; ctx.lineWidth = 2; ctx.strokeRect(r.x+0.5, r.y+0.5, r.w-1, r.h-1);
+      ctx.restore();
     }
 
     requestAnimationFrame(draw);
   }
   requestAnimationFrame(draw);
 
-  // Events
-  panel.addEventListener('toy-zoom', (e)=>{
-    sizing.setZoom(!!(e?.detail?.zoomed));
-  });
-  panel.addEventListener('toy-random', ()=>{
-    for (const s of steps){
-      s.active = Math.random() < 0.4;
-      s.flash = s.active ? 1.0 : 0;
-      s.noteIndex = Math.floor(Math.random() * noteList.length);
-    }
-  });
-  panel.addEventListener('toy-reset', ()=>{
-    for (const s of steps){ s.active = false; s.flash = 0; s.noteIndex = c4Index; }
-  });
-
-  // Input
-  canvas.addEventListener('pointerdown', (e)=>{
-    e.preventDefault();
-    const rect = canvas.getBoundingClientRect();
-    const px = e.clientX - rect.left;
-    const py = e.clientY - rect.top;
-    const { pad, colW, innerH } = layout();
-    const i = Math.max(0, Math.min(numSteps-1, Math.floor((px - pad) / colW)));
-    const x = pad + i * colW + 3;
-    const wBox = colW - 6;
-    const hBox = Math.min(innerH - 6, wBox);
-    const y = pad + 3 + Math.max(0, ((innerH - 6) - hBox) / 2);
-
-    const within = (px >= x && px <= x + wBox && py >= y && py <= y + hBox);
-    if (!within) return;
-    const s = steps[i];
-
-    if (sizing.scale > 1){
-      const localY = py - y;
-      if (localY <= NOTE_BTN_H){ s.noteIndex = (s.noteIndex + 1) % noteList.length; return; }
-      if (localY >= hBox - NOTE_BTN_H){ s.noteIndex = (s.noteIndex - 1 + noteList.length) % noteList.length; return; }
-    }
-    s.active = !s.active;
-    s.flash = s.active ? 1.0 : 0;
-  });
-
-  // API for scheduler
-  function markPlayingColumn(i){
-    currentStep = (i >= 0 && i < numSteps) ? i : -1;
-    if (i >= 0 && steps[i]?.active){
-      triggerInstrument(ui.instrument, noteList[steps[i].noteIndex % noteList.length], ensureAudioContext().currentTime);
-      steps[i].flash = 1.0;
-    }
+  /* unified via whichThirdRect in toyhelpers */
+  function whichThird(r, y){
+    const t1 = r.y + r.h/3, t2 = r.y + 2*r.h/3;
+    if (y < t1) return 'up';
+    if (y < t2) return 'toggle';
+    return 'down';
   }
-  function ping(i){ if (i>=0 && i<numSteps) steps[i].flash = 1.0; }
+
+  canvas.addEventListener('pointerdown', (e)=>{
+    const rect = canvas.getBoundingClientRect();
+    const px = e.clientX - rect.left, py = e.clientY - rect.top;
+    for (let i=0;i<steps.length;i++){
+      const r = steps[i]._rect; if (!r) continue;
+      if (px>=r.x && px<=r.x+r.w && py>=r.y && py<=r.y+r.h){
+        if (panel.classList.contains('toy-zoomed')){
+          const third = whichThirdRect(r, py);
+          if (third==='up') steps[i].noteIndex = Math.min(noteList.length-1, steps[i].noteIndex+1);
+          else if (third==='down') steps[i].noteIndex = Math.max(0, steps[i].noteIndex-1);
+          else steps[i].active = !steps[i].active;
+        } else {
+          steps[i].active = !steps[i].active;
+        }
+        steps[i].flash = 0.4;
+        break;
+      }
+    }
+  });
+
+  function markPlayingColumn(i){ if (i>=0 && i<steps.length) { steps[i].flash = 0.6; } }
+  function ping(i){ if (i>=0 && i<steps.length) { steps[i].flash = 1.0; } }
   function reset(){ for (const s of steps){ s.active=false; s.flash=0; s.noteIndex=c4Index; } }
 
   return {
