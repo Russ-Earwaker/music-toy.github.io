@@ -5,6 +5,8 @@
 import { drawWaves } from './ripplesynth-waves.js';
 import { drawParticles } from './ripplesynth-particles.js';
 import { makeGetBlockRects } from './ripplesynth-rects.js';
+import { drawBlocksSection } from './ripplesynth-blocks.js';
+import './rippler.contracts.js';
 
 /** Lightweight assertions to catch signature drift early */
 export function assertRipplerContracts(){
@@ -18,6 +20,10 @@ export function assertRipplerContracts(){
     if (typeof makeGetBlockRects !== 'function' || makeGetBlockRects.length < 5){
       console.warn('[rippler/contracts] makeGetBlockRects signature unexpected (expected >=5 args)');
     }
+    if (typeof drawBlocksSection !== 'function' || drawBlocksSection.length < 10){
+      console.warn('[rippler/contracts] drawBlocksSection signature unexpected (expected >=10 args)');
+    }
+
     // Clock rule reminder
     console.info('[rippler/contracts] Clock: prefer ac.currentTime; avoid performance.now() in rippler modules.');
   }catch(e){
