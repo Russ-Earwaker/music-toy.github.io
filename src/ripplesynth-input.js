@@ -5,8 +5,11 @@
 
 export function makePointerHandlers(cfg) {
   const { canvas, vw, vh, EDGE, blocks = [], ripples, generatorRef, clamp, getCanvasPos } = cfg;
+  const _clamp = (typeof clamp === 'function') ? clamp : ((v,min,max)=> Math.max(min, Math.min(max, v)));
   const getRects = typeof cfg.getBlockRects === 'function' ? cfg.getBlockRects : (() => blocks);
   const onBlockDrag = typeof cfg.onBlockDrag === 'function' ? cfg.onBlockDrag : (() => {});
+  const onBlockTap  = typeof cfg.onBlockTap  === 'function' ? cfg.onBlockTap  : (() => {});
+  const isZoomed    = typeof cfg.isZoomed    === 'function' ? cfg.isZoomed    : (()=>false);
   const onBlockGrab = typeof cfg.onBlockGrab === 'function' ? cfg.onBlockGrab : (() => {});
   const onBlockDrop = typeof cfg.onBlockDrop === 'function' ? cfg.onBlockDrop : (() => {});
 
@@ -18,11 +21,16 @@ export function makePointerHandlers(cfg) {
 
   let capturedId = null;
 
+  // tap/drag thresholds
+  const HOLD_DELAY_MS = 220; const DRAG_THRESHOLD = 12;
+  let tapCand = null; // { index, x, y, t }
+
   const HANDLE_HIT_PAD = 18; // slightly tighter to avoid stealing block clicks
 
-  function posFromEvent(e){
-    return getCanvasPos(canvas, e);
-  }
+  const _getPos = (typeof getCanvasPos === 'function')
+    ? (e)=> getCanvasPos(canvas, e)
+    : (e)=>{ const r = canvas.getBoundingClientRect(); const dpr = window.devicePixelRatio || 1; return { x:(e.clientX - r.left)*dpr, y:(e.clientY - r.top)*dpr }; };
+  function posFromEvent(e){ return _getPos(e); }
 
   function nearGenerator(p){
     const gx = generatorRef.x, gy = generatorRef.y;
@@ -42,17 +50,24 @@ export function makePointerHandlers(cfg) {
 
   function pointerDown(e) {
     const p = posFromEvent(e);
+    const hitIx = findHitBlock(p);
 
-    // First-time placement
+    // First-time placement: only on empty space (not on a block)
     if (!generatorRef.placed && e.isTrusted) {
-      generatorRef.place(p.x, p.y);
-      try { if (canvas.setPointerCapture) { canvas.setPointerCapture(e.pointerId); capturedId = e.pointerId; } } catch {}
+      if (hitIx < 0) {
+        generatorRef.place(p.x, p.y);
+        try { if (canvas.setPointerCapture) { canvas.setPointerCapture(e.pointerId); capturedId = e.pointerId; } } catch {}
+      } else {
+        // Allow dragging blocks even before a generator is placed
+        const rects = getRects();
+        const b = rects[hitIx];
+        tapCand = { index: hitIx, x: p.x, y: p.y, t: performance.now() };
+        try { if (canvas.setPointerCapture) { canvas.setPointerCapture(e.pointerId); capturedId = e.pointerId; } } catch {}
+      }
       return;
     }
 
-    // Generator drag if clicking near the generator (easier than pixel-perfect on a small handle)
-    // Only if we're NOT clicking a block
-    const hitIx = findHitBlock(p);
+    // If clicking near generator and not on a block, start generator drag
     if (generatorRef.placed && hitIx < 0 && nearGenerator(p)) {
       cfg.state.draggingGenerator = true;
       cfg.state.generatorDragEnded = false;
@@ -61,49 +76,58 @@ export function makePointerHandlers(cfg) {
       return;
     }
 
-    // Otherwise, start block drag if a block is hit
+    // Block interaction (tap or drag begins)
     if (hitIx >= 0) {
-      onBlockGrab(hitIx);
       const rects = getRects();
       const b = rects[hitIx];
-      cfg.state.draggingBlock = { index: hitIx, offX: p.x - b.x, offY: p.y - b.y };
-      cfg.state.dragIndex = hitIx;
+      tapCand = { index: hitIx, x: p.x, y: p.y, t: performance.now() };
       try { if (canvas.setPointerCapture) { canvas.setPointerCapture(e.pointerId); capturedId = e.pointerId; } } catch {}
       return;
     }
 
-    // Empty-space click re-places generator (only if far from generator and not on a block)
-    if (generatorRef.placed && !nearGenerator(p)) {
-      const nx = clamp(p.x, EDGE, vw() - EDGE);
-      const ny = clamp(p.y, EDGE, vh() - EDGE);
+    // Empty-space click re-places generator (only if not on a block and far from generator)
+    if (generatorRef.placed && hitIx < 0 && !nearGenerator(p)) {
+      const nx = _clamp(p.x, EDGE, vw() - EDGE);
+      const ny = _clamp(p.y, EDGE, vh() - EDGE);
       generatorRef.set(nx, ny);
       if (Array.isArray(ripples)) ripples.length = 0;
       cfg.state.generatorDragEnded = true; // trigger a clean re-sync on pointerup
       return;
     }
-  }
+}
 
   function pointerMove(e) {
     const p = posFromEvent(e);
 
     if (cfg.state.draggingGenerator) {
-      generatorRef.set(clamp(p.x, EDGE, vw() - EDGE), clamp(p.y, EDGE, vh() - EDGE));
+      generatorRef.set(_clamp(p.x, EDGE, vw() - EDGE), _clamp(p.y, EDGE, vh() - EDGE));
       return;
+    }
+
+    if (tapCand && isZoomed()) {
+      const dt = performance.now() - tapCand.t; const dx = Math.abs(p.x - tapCand.x), dy = Math.abs(p.y - tapCand.y);
+      if (dt >= HOLD_DELAY_MS || dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD) {
+        const rects = getRects(); const b = rects[tapCand.index];
+        cfg.state.draggingBlock = { index: tapCand.index, offX: p.x - b.x, offY: p.y - b.y };
+        cfg.state.dragIndex = tapCand.index;
+        onBlockGrab(tapCand.index);
+        tapCand = null;
+      }
     }
 
     const db = cfg.state.draggingBlock;
     if (db) {
       const rects = getRects();
       const b = rects[db.index];
-      const newX = clamp(p.x - db.offX, EDGE, vw() - EDGE - (b.w ?? b.size));
-      const newY = clamp(p.y - db.offY, EDGE, vh() - EDGE - (b.h ?? b.size));
+      const newX = _clamp(p.x - db.offX, EDGE, vw() - EDGE - (b.w ?? b.size));
+      const newY = _clamp(p.y - db.offY, EDGE, vh() - EDGE - (b.h ?? b.size));
       onBlockDrag(db.index, newX, newY);
       return;
     }
   }
 
   function pointerUp(e) {
-    const wasDraggingBlock = !!cfg.state.draggingBlock; const wasIndex = wasDraggingBlock ? cfg.state.draggingBlock.index : -1;
+    const wasDraggingBlock = !!cfg.state.draggingBlock; const wasIndex = wasDraggingBlock ? cfg.state.draggingBlock.index : -1; const localTap = tapCand; tapCand = null;
     if (cfg.state.draggingGenerator) {
       cfg.state.draggingGenerator = false;
       cfg.state.generatorDragEnded = true;
@@ -111,6 +135,10 @@ export function makePointerHandlers(cfg) {
     cfg.state.draggingBlock = null;
     if (wasDraggingBlock && wasIndex>=0) onBlockDrop(wasIndex);
     cfg.state.dragIndex = -1;
+    if (!wasDraggingBlock && localTap && isZoomed()) {
+      const p = getCanvasPos(canvas, e);
+      onBlockTap(localTap.index, p);
+    }
     if (capturedId != null && canvas.hasPointerCapture) {
       try { if (canvas.hasPointerCapture(capturedId)) canvas.releasePointerCapture(capturedId); } catch {}
     }

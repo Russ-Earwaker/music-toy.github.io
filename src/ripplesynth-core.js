@@ -7,6 +7,8 @@ import { drawBlocksSection } from './ripplesynth-blocks.js';
 import { makePointerHandlers } from './ripplesynth-input.js';
 import { initParticles, setParticleBounds, drawParticles } from './ripplesynth-particles.js';
 import { drawWaves } from './ripplesynth-waves.js';
+import { handleBlockTap } from './ripplesynth-zoomtap.js';
+import { makeGetBlockRects } from './ripplesynth-rects.js';
 export function createRippleSynth(selector){
   const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector;
   if (!shell){ console.warn('[rippler] missing', selector); return null; }
@@ -51,16 +53,6 @@ export function createRippleSynth(selector){
     }
     didLayout = true;
   }
-  // Return up-to-date pixel rects for blocks (for hit-testing/drag)
-  function getBlockRects(){
-    const size = Math.max(20, Math.round(BASE * (sizing.scale||1)));
-    const rects = [];
-    for (let i=0;i<blocks.length;i++){
-      const cx = n2x(blocks[i].nx), cy = n2y(blocks[i].ny);
-      rects.push({ x: cx - size/2, y: cy - size/2, w: size, h: size, index: i });
-    }
-    return rects;
-  }
 
   layoutBlocks();
   const generator = { nx:0.5, ny:0.5, r:10, placed:false };
@@ -89,16 +81,45 @@ export function createRippleSynth(selector){
   }
   function clearPattern(){ pattern.forEach(s=> s.clear()); }
   panel.addEventListener('toy-random', randomizeAll);
-  panel.addEventListener('toy-clear', (ev)=>{ try{ ev.stopImmediatePropagation(); ev.stopPropagation(); }catch{}; ripples.length=0; generator.placed=false; });
-  panel.addEventListener('toy-reset', ()=>{ clearPattern(); randomizeAll(); });
-  const input = makePointerHandlers({ canvas, vw:W, vh:H, EDGE, blocks:[], ripples, getBlockRects, onBlockDrag: (idx, newX, newY)=>{ const size=Math.max(20, Math.round(BASE * (sizing.scale||1))); const cx=newX+size/2, cy=newY+size/2; const nx=x2n(cx), ny=y2n(cy); const b=blocks[idx]; b.nx=nx; b.ny=ny; b.nx0=nx; b.ny0=ny; b.vx=0; b.vy=0; }, onBlockGrab: (idx)=>{ for (const s of pattern) s.delete(idx); liveBlocks.add(idx); }, onBlockDrop: (idx)=>{ liveBlocks.delete(idx); recordOnly.add(idx); },
-    generatorRef: {
-      get x(){ return n2x(generator.nx); }, get y(){ return n2y(generator.ny); },
+  panel.addEventListener('toy-clear', (ev)=>{ try{ ev.stopImmediatePropagation(); ev.stopPropagation(); }catch{}; clearPattern(); ripples.length=0; generator.placed=false; });
+  panel.addEventListener('toy-reset', ()=>{ clearPattern(); ripples.length=0; generator.placed=false; });
+  const getBlockRects = makeGetBlockRects(n2x, n2y, sizing, BASE, blocks);
+  const input = makePointerHandlers({ generatorRef: {
+      get x(){ return n2x(generator.nx); }, 
+      get y(){ return n2y(generator.ny); },
       place(x,y){ this.set(x,y); },
-      set(x,y){ generator.nx=x2n(x); generator.ny=y2n(y); generator.placed=true; },
-      get placed(){ return generator.placed; }, set placed(v){ generator.placed=!!v; }
+      set(x,y){ generator.nx = x2n(x); generator.ny = y2n(y); generator.placed = true; },
+      get placed(){ return !!generator.placed; },
+      set placed(v){ generator.placed = !!v; },
+      get r(){ return generator.r || 12; }
+    }, canvas, vw:W, vh:H, EDGE, blocks:[], ripples, getBlockRects, isZoomed, clamp, getCanvasPos,
+    onBlockTap: (idx, p)=>{
+      const size = Math.max(20, Math.round(BASE*(sizing.scale||1)));
+      const b = blocks[idx];
+      const rect = { x:n2x(b.nx)-size/2, y:n2y(b.ny)-size/2, w:size, h:size };
+      const t1 = rect.y + rect.h/3, t2 = rect.y + 2*rect.h/3;
+      if (p.y < t1){
+        b.noteIndex = Math.max(0, Math.min(noteList.length-1, (b.noteIndex|0)+1));
+        const name = noteList[b.noteIndex] || 'C4';
+        triggerInstrument(currentInstrument, name, ac.currentTime + 0.0005);
+      } else if (p.y < t2){
+        b.active = !b.active;
+        if (!b.active){ for (const s of pattern) s.delete(idx); }
+      } else {
+        b.noteIndex = Math.max(0, Math.min(noteList.length-1, (b.noteIndex|0)-1));
+        const name = noteList[b.noteIndex] || 'C4';
+        triggerInstrument(currentInstrument, name, ac.currentTime + 0.0005);
+      }
     },
-    clamp, getCanvasPos
+    onBlockDrag: (idx, newX, newY)=>{
+      const size=Math.max(20, Math.round(BASE * (sizing.scale||1)));
+      const cx=newX+size/2, cy=newY+size/2;
+      const nx=x2n(cx), ny=y2n(cy);
+      const b=blocks[idx];
+      b.nx=nx; b.ny=ny; b.nx0=nx; b.ny0=ny; b.vx=0; b.vy=0;
+    },
+    onBlockGrab: (idx)=>{ for (const s of pattern) s.delete(idx); liveBlocks.add(idx); },
+    onBlockDrop: (idx)=>{ liveBlocks.delete(idx); recordOnly.add(idx); }
   });
   canvas.addEventListener('pointerdown', (e)=>{
     const gp = getCanvasPos(canvas, e);
@@ -107,26 +128,9 @@ export function createRippleSynth(selector){
     dragMuteActive = nearGen; playbackMuted = nearGen; if (nearGen){ ripples.length = 0; }
     _genDownPos = { x: gx0, y: gy0 };
     if (isZoomed()){
-      const p = getCanvasPos(canvas, e);
-      const s = Math.max(20, Math.round(BASE * (sizing.scale||1)));
-      for (let i=blocks.length-1;i>=0;i--){
-        const rx = n2x(blocks[i].nx) - s/2, ry = n2y(blocks[i].ny) - s/2;
-        if (p.x>=rx && p.x<=rx+s && p.y>=ry && p.y<=ry+s){
-          const t1=ry+s/3, t2=ry+2*s/3;
-          if (p.y < t1) { 
-            blocks[i].noteIndex = Math.max(0, Math.min(noteList.length-1, (blocks[i].noteIndex|0) + 1)); 
-          } else if (p.y < t2) { 
-            blocks[i].active = !blocks[i].active; 
-            if (!blocks[i].active) { for (const s of pattern){ s.delete(i); } } 
-          } else { 
-            blocks[i].noteIndex = Math.max(0, Math.min(noteList.length-1, (blocks[i].noteIndex|0) - 1)); 
-          }
-          blocks[i].flashEnd = performance.now()/1000 + 0.18;
-          return;
-        }
-      }
+      // zoom taps handled via onBlockTap in input
     }
-    const wasPlaced = generator.placed; _wasPlacedAtDown = wasPlaced;
+const wasPlaced = generator.placed; _wasPlacedAtDown = wasPlaced;
     input.pointerDown(e);
     if (!wasPlaced && generator.placed){
       pattern.forEach(s=> s.clear());
@@ -163,7 +167,6 @@ function spawnRipple(manual=false){
     ripples.push({ x: gx, y: gy, startAT: nowAT, startTime: nowPerf, speed: RING_SPEED(), offR, hit: new Set() });
     if (manual) skipNextBarRing = true;
   }
-  function reRecordFromNow(){ clearPattern(); recording = true; barStartAT = ac.currentTime; nextSlotAT = barStartAT + stepSeconds(); nextSlotIx = 1; }
 
   function ringFront(nowAT){
     if (!ripples.length) return -1;
@@ -185,7 +188,7 @@ function spawnRipple(manual=false){
       if (Math.abs(dEdge - R) <= band){
         rMain.hit.add(i);
         b.flashEnd = performance.now()/1000 + 0.18;
-        const ang = Math.atan2(cy - gy, cx - gx), push = 48;
+        const ang = Math.atan2(cy - gy, cx - gx), push = 64 * (sizing.scale || 1);
         b.vx += Math.cos(ang)*push; b.vy += Math.sin(ang)*push;
         const whenAT = ac.currentTime, slotLen = stepSeconds();
           let k = Math.ceil((whenAT - barStartAT)/slotLen); if (k<0) k=0;

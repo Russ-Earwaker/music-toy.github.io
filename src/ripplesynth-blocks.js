@@ -13,6 +13,13 @@ export function drawBlocksSection(ctx, blocks, gx, gy, ripples, volume, noteList
     // block
     ctx.fillStyle = '#f4932f';
     ctx.fillRect(x, y, w, h);
+    if (!b.active) {
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.fillRect(x, y, w, h);
+      // diagonal slash
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(x+2, y+h-2); ctx.lineTo(x+w-2, y+2); ctx.stroke();
+    }
     if (flashA > 0){
       ctx.fillStyle = `rgba(255,255,255,${0.35*flashA})`;
       ctx.fillRect(x, y, w, h);
