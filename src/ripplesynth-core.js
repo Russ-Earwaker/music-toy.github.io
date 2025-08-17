@@ -37,6 +37,16 @@ export function createRippleSynth(selector, { title = 'Rippler', defaultInstrume
   const worldW = () => sizing.vw();
   const worldH = () => sizing.vh();
   // State
+  // Hit test for zoom note arrows drawn in drawBlocksSection (above block)
+  function hitNoteArrow(b, px, py){
+    const pad=2;
+    const up = { x: b.x + b.w - 16 - pad, y: b.y - 16 - pad, w: 8 + pad*2, h: 8 + pad*2 };
+    const dn = { x: b.x + b.w - 16 - pad, y: b.y - 8  - pad, w: 8 + pad*2, h: 8 + pad*2 };
+    const inRect = (r)=> px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h;
+    if (inRect(up)) return 'up';
+    if (inRect(dn)) return 'down';
+    return null;
+  }
   const blocks = makeBlocks(NUM_CUBES); assignPentatonic(blocks);
   randomizeRects(blocks, worldW(), worldH(), EDGE);
   for (const b of blocks){ b.rx=b.x; b.ry=b.y; }
@@ -168,8 +178,6 @@ if (loopEvents.length){ const ctxAudio=ensureAudioContext(); try{ if (ctxAudio.s
       b.y = clamp(b.y, EDGE, Math.max(EDGE, h - EDGE - b.h));
     }
   }
-
-  
   function onBlockHit(b, now, scan=false){
     // Only flash + knockback on scheduled (scan===true) playback
     if (scan){
@@ -180,7 +188,6 @@ if (loopEvents.length){ const ctxAudio=ensureAudioContext(); try{ if (ctxAudio.s
       const d = Math.max(1, Math.hypot(dx, dy));
       const k = KNOCKBACK / d; b.vx += dx * k; b.vy += dy * k;
     }
-
     // record into loop (normalized, quantized)
     const idx = blocks.indexOf(b);
     if (idx >= 0 && loopStartAt != null){
@@ -195,7 +202,6 @@ if (loopEvents.length){ const ctxAudio=ensureAudioContext(); try{ if (ctxAudio.s
         const exists=loopEvents.some(ev=>ev.idx===idx); if(!exists) loopEvents.push({t:tQ,q,idx});
       }
     }
-
     // trigger note
     try {
       if (scan){
@@ -206,7 +212,6 @@ if (loopEvents.length){ const ctxAudio=ensureAudioContext(); try{ if (ctxAudio.s
       }
     } catch (e) { console.warn('triggerInstrument failed', e); }
   }
-
   function catchUpHits(now){
     const WIDEN = 2.5;
     for (let rIndex=0; rIndex<ripples.length; rIndex++){
@@ -222,7 +227,6 @@ if (loopEvents.length){ const ctxAudio=ensureAudioContext(); try{ if (ctxAudio.s
     }
     hitsFired.forEach((_, key)=>{ const rid = key.split(':')[0]; if (!ripples.some(rp=>rp.id===rid)) hitsFired.delete(key); });
 }
-
   function checkRippleHits(now){
     const prev = lastScanT; lastScanT = now;
     for (let rIndex=0; rIndex<ripples.length; rIndex++){
@@ -242,7 +246,6 @@ if (loopEvents.length){ const ctxAudio=ensureAudioContext(); try{ if (ctxAudio.s
     }
     hitsFired.forEach((_, key)=>{ const rid = key.split(':')[0]; if (!ripples.some(rp=>rp.id===rid)) hitsFired.delete(key); });
   }
-
   function updatePhysics(dt){
     const w = worldW(), h = worldH();
     for (let i=0;i<blocks.length;i++){
@@ -255,7 +258,6 @@ if (loopEvents.length){ const ctxAudio=ensureAudioContext(); try{ if (ctxAudio.s
       if (b.rippleAge != null && b.rippleMax != null){ b.rippleAge = Math.min(b.rippleAge + dt, b.rippleMax); }
     }
   }
-
   // Pointer
   function onPointerDown(e){
     if (performance.now() < suppressPointerUntil) return;
@@ -283,7 +285,6 @@ if (loopEvents.length){ const ctxAudio=ensureAudioContext(); try{ if (ctxAudio.s
     handlers.pointerUp(e);
     if (lastDragIdx != null){ recordArm.add(lastDragIdx); mutedBlocks.delete(lastDragIdx); lastDragIdx = null; }
     for (const b of blocks){ b.rx = b.x; b.ry = b.y; b.vx = 0; b.vy = 0; }
-  
     if (inputState && inputState.generatorDragEnded){
       clearRipples();
       const s = spawnRipple(true);
@@ -295,7 +296,6 @@ if (loopEvents.length){ const ctxAudio=ensureAudioContext(); try{ if (ctxAudio.s
       inputState.generatorDragEnded = false;
     }
   });
-
   // UI
   panel.addEventListener('toy-random', ()=>{ clearRipples();
     loopRecording = true; playbackActive = false; loopEvents = []; recordArm.clear();
