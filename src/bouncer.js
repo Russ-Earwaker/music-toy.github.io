@@ -1,6 +1,7 @@
 // src/bouncer.js — bouncer with zoom-only cube controls (top=up, mid=toggle, bot=down)
 import { noteList, clamp, resizeCanvasForDPR } from './utils.js';
-import { ensureAudioContext, triggerInstrument } from './audio.js';
+import { ensureAudioContext } from './audio-core.js';
+import { triggerInstrument } from './audio-samples.js';
 import { initToyUI } from './toyui.js';
 import { initToySizing, randomizeRects, EDGE_PAD as EDGE, whichThirdRect, drawThirdsGuides} from './toyhelpers.js';
 

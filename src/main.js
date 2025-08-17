@@ -1,9 +1,6 @@
 // src/main.js (final: no version suffixes; instruments populate on boot; single boot; robust samples-ready)
-import {
-  DEFAULT_BPM, NUM_STEPS, ac,
-  setBpm, ensureAudioContext, initAudioAssets,
-  triggerInstrument, createScheduler, getInstrumentNames
-} from './audio.js';
+import { DEFAULT_BPM, NUM_STEPS, ac, setBpm, ensureAudioContext, createScheduler, getLoopInfo } from './audio-core.js';
+import { initAudioAssets, triggerInstrument, getInstrumentNames } from './audio-samples.js';
 
 import { buildGrid, markPlayingColumn as markGridCol } from './grid.js';
 import { createBouncer } from './bouncer.js';

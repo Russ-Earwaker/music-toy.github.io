@@ -1,7 +1,8 @@
 import { initToyUI } from './toyui.js';
 import { initToySizing, randomizeRects } from './toyhelpers.js';
 import { resizeCanvasForDPR, noteList } from './utils.js';
-import { ensureAudioContext, triggerInstrument, barSeconds as audioBarSeconds } from './audio.js';
+import { ensureAudioContext, barSeconds as audioBarSeconds } from './audio-core.js';
+import { triggerInstrument } from './audio-samples.js';
 import { drawBlocksSection } from './ripplesynth-blocks.js';
 import { makePointerHandlers } from './ripplesynth-input.js';
 import { initParticles, setParticleBounds, drawParticles } from './ripplesynth-particles.js';
@@ -50,6 +51,17 @@ export function createRippleSynth(selector){
     }
     didLayout = true;
   }
+  // Return up-to-date pixel rects for blocks (for hit-testing/drag)
+  function getBlockRects(){
+    const size = Math.max(20, Math.round(BASE * (sizing.scale||1)));
+    const rects = [];
+    for (let i=0;i<blocks.length;i++){
+      const cx = n2x(blocks[i].nx), cy = n2y(blocks[i].ny);
+      rects.push({ x: cx - size/2, y: cy - size/2, w: size, h: size, index: i });
+    }
+    return rects;
+  }
+
   layoutBlocks();
   const generator = { nx:0.5, ny:0.5, r:10, placed:false };
   let ripples = []; // {x,y,startTime (perf), startAT (audio), speed}
@@ -62,6 +74,8 @@ export function createRippleSynth(selector){
   let barStartAT = ac.currentTime, nextSlotAT = barStartAT + stepSeconds(), nextSlotIx = 1;
   let recording = true;
   const pattern = Array.from({length:NUM_STEPS}, ()=> new Set());
+  const liveBlocks = new Set(); // blocks that play from ripple while dragging
+  const recordOnly = new Set(); // blocks to (re)record on next ripple hit
   let skipNextBarRing = false;
   let dragMuteActive = false;
   let playbackMuted = false;
@@ -77,9 +91,7 @@ export function createRippleSynth(selector){
   panel.addEventListener('toy-random', randomizeAll);
   panel.addEventListener('toy-clear', (ev)=>{ try{ ev.stopImmediatePropagation(); ev.stopPropagation(); }catch{}; ripples.length=0; generator.placed=false; });
   panel.addEventListener('toy-reset', ()=>{ clearPattern(); randomizeAll(); });
-  const input = makePointerHandlers({
-    canvas, vw:W, vh:H, EDGE, blocks:[],
-    ripples,
+  const input = makePointerHandlers({ canvas, vw:W, vh:H, EDGE, blocks:[], ripples, getBlockRects, onBlockDrag: (idx, newX, newY)=>{ const size=Math.max(20, Math.round(BASE * (sizing.scale||1))); const cx=newX+size/2, cy=newY+size/2; const nx=x2n(cx), ny=y2n(cy); const b=blocks[idx]; b.nx=nx; b.ny=ny; b.nx0=nx; b.ny0=ny; b.vx=0; b.vy=0; }, onBlockGrab: (idx)=>{ for (const s of pattern) s.delete(idx); liveBlocks.add(idx); }, onBlockDrop: (idx)=>{ liveBlocks.delete(idx); recordOnly.add(idx); },
     generatorRef: {
       get x(){ return n2x(generator.nx); }, get y(){ return n2y(generator.ny); },
       place(x,y){ this.set(x,y); },
@@ -125,12 +137,12 @@ export function createRippleSynth(selector){
     if (prevDrag){
       playbackMuted=false;
       spawnRipple(false);
-      barStartAT=nowAT; nextSlotAT=barStartAT+stepSeconds(); nextSlotIx=1;
+      barStartAT=nowAT; nextSlotAT=barStartAT+stepSeconds(); nextSlotIx=1; clearPattern(); recording=true;
     } else {
       const gx=n2x(generator.nx), gy=n2y(generator.ny);
       if (_wasPlacedAtDown && _genDownPos && Math.hypot((_genDownPos.x-gx),(_genDownPos.y-gy))>4){
         spawnRipple(false);
-        barStartAT=nowAT; nextSlotAT=barStartAT+stepSeconds(); nextSlotIx=1;
+        barStartAT=nowAT; nextSlotAT=barStartAT+stepSeconds(); nextSlotIx=1; clearPattern(); recording=true;
       }
     }
     _genDownPos=null; _wasPlacedAtDown=false;
@@ -146,6 +158,8 @@ function spawnRipple(manual=false){
     ripples.push({ x: gx, y: gy, startAT: nowAT, startTime: nowPerf, speed: RING_SPEED(), offR, hit: new Set() });
     if (manual) skipNextBarRing = true;
   }
+  function reRecordFromNow(){ clearPattern(); recording = true; barStartAT = ac.currentTime; nextSlotAT = barStartAT + stepSeconds(); nextSlotIx = 1; }
+
   function ringFront(nowAT){
     if (!ripples.length) return -1;
     return Math.max(0, (nowAT - (ripples[0].startAT||nowAT)) * RING_SPEED());
@@ -168,23 +182,29 @@ function spawnRipple(manual=false){
         b.flashEnd = performance.now()/1000 + 0.18;
         const ang = Math.atan2(cy - gy, cx - gx), push = 48;
         b.vx += Math.cos(ang)*push; b.vy += Math.sin(ang)*push;
-        if (recording){
-          const whenAT = ac.currentTime, slotLen = stepSeconds();
+        const whenAT = ac.currentTime, slotLen = stepSeconds();
           let k = Math.ceil((whenAT - barStartAT)/slotLen); if (k<0) k=0;
           const slotIx = k % NUM_STEPS;
           const name = noteList[b.noteIndex] || 'C4';
-          triggerInstrument(currentInstrument, name, barStartAT + k*slotLen + 0.0005);
-          /* dedupe by pitch per slot */
-          const slot = pattern[slotIx];
-          let existsSame=false; for (const jj of slot){ if ((noteList[blocks[jj].noteIndex]||'') === name){ existsSame=true; break; } }
-          if (!existsSame) slot.add(i);
-        }
+          // liveBlocks: play immediately (responsive), no record
+          if (liveBlocks.has(i)) {
+            triggerInstrument(currentInstrument, name, whenAT + 0.0005);
+          }
+          // recording / recordOnly: schedule on the quantized slot and write pattern
+          if (recording || recordOnly.has(i)){
+            triggerInstrument(currentInstrument, name, barStartAT + k*slotLen + 0.0005);
+            const slot = pattern[slotIx];
+            let existsSame=false; for (const jj of slot){ if ((noteList[blocks[jj].noteIndex]||'') === name){ existsSame=true; break; } }
+            if (!existsSame) slot.add(i);
+            if (recordOnly.has(i)) recordOnly.delete(i);
+          }
       }
     }
   }
   function playbackTick(){
     const nowAT = ac.currentTime;
     if (nowAT >= barStartAT + barSec()){
+      recordOnly.clear();
       barStartAT += barSec(); nextSlotAT = barStartAT; nextSlotIx = 0;
       if (generator.placed && !playbackMuted){ if (skipNextBarRing) skipNextBarRing=false; else spawnRipple(false); }
       recording = false;
@@ -257,7 +277,7 @@ function spawnRipple(manual=false){
     if (input && input.state && input.state.generatorDragEnded){
       input.state.generatorDragEnded=false;
       const nowAT = ac.currentTime; spawnRipple(true);
-      barStartAT=nowAT; nextSlotAT=barStartAT+stepSeconds(); nextSlotIx=1;
+      barStartAT=nowAT; nextSlotAT=barStartAT+stepSeconds(); nextSlotIx=1; clearPattern(); recording=true;
     }
     requestAnimationFrame(draw);
   }

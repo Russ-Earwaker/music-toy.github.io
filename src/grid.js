@@ -1,6 +1,6 @@
 // src/grid.js — step grid with zoom-only cube controls (top=up, mid=toggle, bot=down)
 import { resizeCanvasForDPR, noteList } from './utils.js';
-import { NUM_STEPS } from './audio.js';
+import { NUM_STEPS } from './audio-core.js';
 import { initToyUI } from './toyui.js';
 import { initToySizing, drawNoteStripsAndLabel, NOTE_BTN_H, whichThirdRect, drawThirdsGuides } from './toyhelpers.js';
 

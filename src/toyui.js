@@ -1,5 +1,5 @@
 // src/toyui.js — header controls for toys (Zoom, Random, Reset, Mute + per-toy volume hook)
-import { getInstrumentNames } from './audio.js';
+import { getInstrumentNames } from './audio-samples.js';
 
 // --- DEBUG helpers (set localStorage.toyuiDebug='1' to enable persistently) ---
 const DEBUG = (typeof localStorage !== 'undefined' && localStorage.toyuiDebug === '1');

@@ -1,5 +1,5 @@
 // src/loopindicator.js
-import { ensureAudioContext, getLoopInfo } from './audio.js';
+import { ensureAudioContext, getLoopInfo } from './audio-core.js';
 
 /**
  * Create a single pulsing red loop indicator.
