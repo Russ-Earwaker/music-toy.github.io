@@ -17,8 +17,9 @@ export function drawWaves(ctx, cx, cy, now, speed, ripples, NUM_STEPS, stepSecon
       Math.hypot(cx - 0,        cy - cssH),
       Math.hypot(cx - cssW,     cy - cssH)
     );
-    const offR = Math.max(cornerMax + 96, rp.offR || 0);
-    if (r > offR) { ripples.splice(i,1); continue; }
+    const offR = (Math.max(cornerMax, rp.offR||0) * 1.6) + 480;
+    const outer = r;
+    if (outer > offR) { ripples.splice(i,1); continue; }
     if (r > cornerMax + 120){ ripples.splice(i,1); continue; }
 
     const strokeRing = (rad, width, alpha) => {
@@ -37,7 +38,23 @@ export function drawWaves(ctx, cx, cy, now, speed, ripples, NUM_STEPS, stepSecon
     const r3 = Math.max(0, r - speed * 1.20);
     const tailW = 16, ambW = 10;
 
-    strokeRing(r1 - tailW*0.5, tailW, 0.26);
+    
+    // Interleaved black waves between light waves
+    const interleave = (ra, rb)=>{
+      const mid = 0.5*(ra+rb);
+      if (mid <= 0) return;
+      ctx.save();
+      ctx.globalAlpha = 0.6;
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 16.0;
+      ctx.beginPath();
+      ctx.arc(cx, cy, Math.max(0.0001, mid), 0, Math.PI*2);
+      ctx.stroke();
+      ctx.restore();
+    };
+    interleave(r1, r2);
+    interleave(r2, r3);
+strokeRing(r1 - tailW*0.5, tailW, 0.26);
     strokeRing(r1, 3.6, 1.0);
     {
       const loopDur = NUM_STEPS * stepSeconds();

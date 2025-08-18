@@ -23,6 +23,7 @@ export function drawBlocksSection(ctx, blocks, gx, gy, ripples, volume, noteList
     if (flashA > 0){
       ctx.fillStyle = `rgba(255,255,255,${0.35*flashA})`;
       ctx.fillRect(x, y, w, h);
+      ctx.save(); ctx.strokeStyle = `rgba(255,255,255,${0.9*flashA})`; ctx.lineWidth = 3; ctx.strokeRect(x+0.5, y+0.5, w-1, h-1); ctx.restore();
     }
     // outline
     ctx.strokeStyle = 'rgba(0,0,0,0.4)';

@@ -129,7 +129,7 @@ const EDGE=10; const W=()=>canvas.width|0, H=()=>canvas.height|0;
       if (p.y < t1){
         b.noteIndex = Math.max(0, Math.min(noteList.length-1, (b.noteIndex|0)+1));
         const name = noteList[b.noteIndex] || 'C4';
-        triggerInstrument(currentInstrument, name, ac.currentTime + 0.0005);
+        b.rippleAge = 0; b.rippleMax = 0.85; triggerInstrument(currentInstrument, name, ac.currentTime + 0.0005);
       } else if (p.y < t2){
         const wasActive = !!b.active;
         b.active = !b.active; // soft-mute: keep pattern membership
@@ -194,7 +194,6 @@ function spawnRipple(manual=false){
     ripples.push({ x: gx, y: gy, startAT: nowAT, startTime: nowPerf, speed: RING_SPEED(), offR, hit: new Set() });
     if (manual) skipNextBarRing = true;
   }
-
   function ringFront(nowAT){
     if (!ripples.length) return -1;
     return Math.max(0, (nowAT - (ripples[0].startAT||nowAT)) * RING_SPEED());
@@ -243,7 +242,8 @@ function spawnRipple(manual=false){
       b.ny = y2n(py + b.vy*dt);
     }
   }
-  function draw(){
+  let __lastDrawAT = 0;
+function draw(){
   try {
     resizeCanvasForDPR(canvas, ctx);
     if (!didLayout) layoutBlocks();
@@ -254,9 +254,7 @@ function spawnRipple(manual=false){
  } return; }
     ctx.fillStyle = '#0b0f16';
     ctx.fillRect(0,0,W(),H());
-    if (!particlesInit && canvas.width && canvas.height){
-      try { initParticles(canvas.width, canvas.height, EDGE, 110);  particlesInit = true; } catch {}
-    }
+    if (!particlesInit && canvas.width && canvas.height){ try { initParticles(canvas.width, canvas.height, EDGE, 110); particlesInit = true; } catch {} }
     if (typeof window.__rpW === 'undefined'){ window.__rpW = canvas.width; window.__rpH = canvas.height; } if (canvas.width !== window.__rpW || canvas.height !== window.__rpH){
       window.__rpW = canvas.width; window.__rpH = canvas.height;
       try { initParticles(canvas.width, canvas.height, EDGE, 110);  } catch {}
@@ -266,7 +264,11 @@ function spawnRipple(manual=false){
       ctx.restore();
     }
     drawParticles(ctx, ac.currentTime, ripples, { x:n2x(generator.nx), y:n2y(generator.ny) });
-    const size=Math.round(BASE*(sizing.scale||1)); const blockRects=blocks.map(b=>({...b,x:n2x(b.nx)-size/2,y:n2y(b.ny)-size/2,w:size,h:size}));
+    const size=Math.round(BASE*(sizing.scale||1)); const blockRects=blocks.map(b=>({...b,x:n2x(b.nx)-size/2,y:n2y(b.ny)-size/2,
+    w:size,h:size}));
+    // advance block edge ripples
+    const __nowAT = ac.currentTime; const __dt = (__lastDrawAT? (__nowAT-__lastDrawAT): 0); __lastDrawAT = __nowAT;
+    for (let i=0;i<blocks.length;i++){ const b=blocks[i]; if (b.rippleAge!=null && b.rippleMax){ b.rippleAge = Math.min(b.rippleMax, b.rippleAge + __dt); } }
     drawBlocksSection(ctx, blockRects, n2x(generator.nx), n2y(generator.ny), ripples, 1, noteList, sizing, null, null, ac.currentTime);
     if (isZoomed()){
       ctx.save(); ctx.strokeStyle='rgba(255,255,255,0.7)'; ctx.lineWidth=1; for (const b of blockRects){
@@ -277,9 +279,7 @@ function spawnRipple(manual=false){
       }
       ctx.restore();
     }
-    if (generator.placed){
-      ctx.fillStyle='#fff'; ctx.beginPath();ctx.arc(n2x(generator.nx),n2y(generator.ny),generator.r|0,0,Math.PI*2);ctx.fill();
-    }
+    if (generator.placed){ ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(n2x(generator.nx),n2y(generator.ny),generator.r|0,0,Math.PI*2); ctx.fill(); }
     springBlocks(1/60);
     handleRingHits(ac.currentTime);
     scheduler.tick();
