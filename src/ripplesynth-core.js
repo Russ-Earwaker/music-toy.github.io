@@ -1,6 +1,8 @@
 import { initToyUI } from './toyui.js';
+import { randomizeAllImpl } from './ripplesynth-random.js';
 import { initToySizing, randomizeRects } from './toyhelpers.js';
-import { resizeCanvasForDPR, noteList, clamp } from './utils.js';
+import { resizeCanvasForDPR, noteList } from './utils.js';
+import { PENTATONIC_OFFSETS } from './ripplesynth-scale.js';
 import { ensureAudioContext, barSeconds as audioBarSeconds } from './audio-core.js';
 import { triggerInstrument } from './audio-samples.js';
 import { drawBlocksSection } from './ripplesynth-blocks.js';
@@ -21,16 +23,16 @@ export function createRippleSynth(selector){
   const ctx = canvas.getContext('2d'); const ui  = initToyUI(panel, { toyName: 'Rippler' });
   let currentInstrument = (ui.instrument && ui.instrument !== 'tone') ? ui.instrument : 'kalimba'; try { ui.setInstrument(currentInstrument); } catch {}
   const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true }); const isZoomed = ()=> panel.classList.contains('toy-zoomed');
-  panel.addEventListener('toy-zoom', (ev)=>{ try{ const z = !!(ev?.detail?.zoomed); sizing.setZoom(z); try{ setParticleBounds(canvas.width|0, canvas.height|0); }catch{} }catch{} });
-  const EDGE=10; const W=()=>canvas.width|0, H=()=>canvas.height|0;
+  panel.addEventListener('toy-zoom', (ev)=>{ try { const z = !!(ev?.detail?.zoomed); sizing.setZoom(z); try { setParticleBounds(canvas.width|0, canvas.height|0); } catch (e) {} } catch (e) {} });
+const EDGE=10; const W=()=>canvas.width|0, H=()=>canvas.height|0;
+  const clamp = (v,min,max)=> Math.max(min, Math.min(max, v));
   const n2x = (nx)=>{ const z=isZoomed(); const side=z? Math.max(0, Math.min(W(),H())-2*EDGE) : (W()-2*EDGE); const offX = z? Math.max(EDGE, (W()-side)/2): EDGE; return offX + nx*side; };
   const n2y = (ny)=>{ const z=isZoomed(); const side=z? Math.max(0, Math.min(W(),H())-2*EDGE) : (H()-2*EDGE); const offY = z? Math.max(EDGE, (H()-side)/2): EDGE; return offY + ny*side; };
   const x2n = (x)=>{ const z=isZoomed(); const side=z? Math.max(0, Math.min(W(),H())-2*EDGE) : (W()-2*EDGE); const offX = z? Math.max(EDGE, (W()-side)/2): EDGE; return Math.min(1, Math.max(0, (x-offX)/side)); };
   const y2n = (y)=>{ const z=isZoomed(); const side=z? Math.max(0, Math.min(W(),H())-2*EDGE) : (H()-2*EDGE); const offY = z? Math.max(EDGE, (H()-side)/2): EDGE; return Math.min(1, Math.max(0, (y-offY)/side)); };
   const getCanvasPos = (el, e)=>{ const r = el.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
   const CUBES = 8, BASE = 56 * 0.75;
-  const MAJOR_SCALE_OFFSETS = [0,2,4,7,9,12,14,16] // pentatonic (two octaves): C D E G A C D E; // 8-note major scale (incl. octave)
-  const blocks = Array.from({length:CUBES}, (_,i)=>({ nx:0.5, ny:0.5, nx0:0.5, ny0:0.5, vx:0, vy:0, flashEnd:0, flashDur:0.18, active:true, noteIndex:(noteList.indexOf('C4')>=0?noteList.indexOf('C4'):48)+ MAJOR_SCALE_OFFSETS[i % 8] , userEditedNote:false }));
+  const blocks = Array.from({length:CUBES}, (_,i)=>({ nx:0.5, ny:0.5, nx0:0.5, ny0:0.5, vx:0, vy:0, flashEnd:0, flashDur:0.18, active:true, noteIndex: ((noteList.indexOf('C4')>=0?noteList.indexOf('C4'):48) + PENTATONIC_OFFSETS[i % 8]) }));
     let didLayout=false;
   function layoutBlocks(){
     if (didLayout || !W() || !H()) return;
@@ -48,18 +50,15 @@ export function createRippleSynth(selector){
       blocks[i].nx = blocks[i].nx0 = x2n(cx);
       blocks[i].ny = blocks[i].ny0 = y2n(cy);
     }
-    
-    // Assign scale notes for non-edited blocks (keeps user edits across randomize)
+    // Assign pentatonic notes for non-edited blocks
     try {
       const baseIx = (noteList.indexOf('C4')>=0?noteList.indexOf('C4'):48);
       for (let i=0;i<CUBES;i++){
         const b = blocks[i];
-        if (!b.userEditedNote){
-          b.noteIndex = baseIx + MAJOR_SCALE_OFFSETS[i % 8];
-        }
+        if (!b.userEditedNote) b.noteIndex = baseIx + PENTATONIC_OFFSETS[i % 8];
       }
     } catch {}
-didLayout = true;
+    didLayout = true;
   }
   layoutBlocks();
   const generator = { nx:0.5, ny:0.5, r:10, placed:false };
@@ -98,27 +97,21 @@ didLayout = true;
     isPlaybackMuted: ()=> playbackMuted
   });
   function randomizeAll(){
-    // Re-layout blocks without killing the current ring; preserve flow cadence
     didLayout = false;
-    layoutBlocks();
-    for (let i=0; i<blocks.length; i++){ const b = blocks[i]; b.vx=0; b.vy=0; b.flashEnd=0; }
-
-    // Clear old pattern so no legacy notes play
-    clearPattern();
-
-    // Ask to re-record all active blocks on the next ripple hit
-    try { recordOnly.clear(); } catch {}
-    for (let i=0; i<blocks.length; i++){ if (blocks[i].active) recordOnly.add(i); }
-
-    // Pause playback scheduling until the next bar rollover (cadence preserved)
-    recording = true;
-
-    // Make sure the scheduler will spawn the usual next-bar ripple
-    skipNextBarRing = false;
-    playbackMuted = false;
-}
-function clearPattern(){ pattern.forEach(s=> s.clear()); }  panel.addEventListener('toy-random', randomizeAll);
-  panel.addEventListener('toy-clear', (ev)=>{ try{ ev.stopImmediatePropagation?.(); }catch{}; clearPattern(); ripples.length=0; generator.placed=false; });  panel.addEventListener('toy-reset', ()=>{ clearPattern(); ripples.length=0; generator.placed=false; });
+    randomizeAllImpl({
+      blocks, noteList,
+      layoutBlocks,
+      clearPattern: ()=> pattern.forEach(s=> s.clear()),
+      recordOnly,
+      isActive: (b)=> !!b.active,
+      setRecording: (v)=>{ recording = !!v; },
+      setSkipNextBarRing: (v)=>{ skipNextBarRing = !!v; },
+      setPlaybackMuted: (v)=>{ playbackMuted = !!v; },
+      baseIndex: (list)=> (list.indexOf('C4')>=0? list.indexOf('C4'):48),
+      pentatonicOffsets: PENTATONIC_OFFSETS
+    });
+  } panel.addEventListener('toy-random', randomizeAll);
+  panel.addEventListener('toy-clear', (ev)=>{ try{ ev.stopImmediatePropagation?.(); }catch{}; pattern.forEach(s=> s.clear()); ripples.length=0; generator.placed=false; });  panel.addEventListener('toy-reset', ()=>{ pattern.forEach(s=> s.clear()); ripples.length=0; generator.placed=false; });
   const getBlockRects = makeGetBlockRects(n2x, n2y, sizing, BASE, blocks);
   const input = makePointerHandlers({ generatorRef: {
       get x(){ return n2x(generator.nx); },
@@ -129,11 +122,24 @@ function clearPattern(){ pattern.forEach(s=> s.clear()); }  panel.addEventListen
       set placed(v){ generator.placed = !!v; },
       get r(){ return generator.r || 12; }
     }, canvas, vw:W, vh:H, EDGE, blocks:[], ripples, getBlockRects, isZoomed, clamp, getCanvasPos,
-    onBlockTap: (idx, p)=> handleBlockTap(blocks, idx, p, { x:n2x(blocks[idx].nx)-Math.max(20, Math.round(BASE*(sizing.scale||1)))/2,
-  y:n2y(blocks[idx].ny)-Math.max(20, Math.round(BASE*(sizing.scale||1)))/2,
-  w:Math.max(20, Math.round(BASE*(sizing.scale||1))),
-  h:Math.max(20, Math.round(BASE*(sizing.scale||1))) },
-{ noteList, ac, pattern, trigger: triggerInstrument, instrument: currentInstrument, __schedState }),
+    onBlockTap: (idx, p)=>{
+      const size = Math.max(20, Math.round(BASE*(sizing.scale||1)));
+      const b = blocks[idx];
+      const rect = { x:n2x(b.nx)-size/2, y:n2y(b.ny)-size/2, w:size, h:size };
+      const t1 = rect.y + rect.h/3, t2 = rect.y + 2*rect.h/3;
+      if (p.y < t1){
+        b.noteIndex = Math.max(0, Math.min(noteList.length-1, (b.noteIndex|0)+1));
+        const name = noteList[b.noteIndex] || 'C4';
+        triggerInstrument(currentInstrument, name, ac.currentTime + 0.0005);
+      } else if (p.y < t2){
+        b.active = !b.active;
+        if (!b.active){ for (const s of pattern) s.delete(idx); }
+      } else {
+        b.noteIndex = Math.max(0, Math.min(noteList.length-1, (b.noteIndex|0)-1));
+        const name = noteList[b.noteIndex] || 'C4';
+        triggerInstrument(currentInstrument, name, ac.currentTime + 0.0005);
+      }
+    },
     onBlockDrag: (idx, newX, newY)=>{
       const size=Math.max(20, Math.round(BASE * (sizing.scale||1)));
       const cx=newX+size/2, cy=newY+size/2;
@@ -141,7 +147,7 @@ function clearPattern(){ pattern.forEach(s=> s.clear()); }  panel.addEventListen
       const b=blocks[idx];
       b.nx=nx; b.ny=ny; b.nx0=nx; b.ny0=ny; b.vx=0; b.vy=0;
     },
-    onBlockGrab: (idx)=>{ liveBlocks.add(idx); },
+    onBlockGrab: (idx)=>{ for (const s of pattern) s.delete(idx); liveBlocks.add(idx); },
     onBlockDrop: (idx)=>{ liveBlocks.delete(idx); recordOnly.add(idx); }
   });
   canvas.addEventListener('pointerdown', (e)=>{
@@ -168,12 +174,12 @@ const wasPlaced = generator.placed; _wasPlacedAtDown = wasPlaced;
     if (prevDrag){
       playbackMuted=false;
       spawnRipple(false);
-      barStartAT=nowAT; nextSlotAT=barStartAT+stepSeconds(); nextSlotIx=1; clearPattern(); recording=true;
+      barStartAT=nowAT; nextSlotAT=barStartAT+stepSeconds(); nextSlotIx=1; pattern.forEach(s=> s.clear()); recording=true;
     } else {
       const gx=n2x(generator.nx), gy=n2y(generator.ny);
       if (_wasPlacedAtDown && _genDownPos && Math.hypot((_genDownPos.x-gx),(_genDownPos.y-gy))>4){
         spawnRipple(false);
-        barStartAT=nowAT; nextSlotAT=barStartAT+stepSeconds(); nextSlotIx=1; clearPattern(); recording=true;
+        barStartAT=nowAT; nextSlotAT=barStartAT+stepSeconds(); nextSlotIx=1; pattern.forEach(s=> s.clear()); recording=true;
       }
     }
     _genDownPos=null; _wasPlacedAtDown=false;
@@ -216,7 +222,7 @@ function spawnRipple(manual=false){
         let k = Math.ceil((whenAT - barStartAT)/slotLen); if (k<0) k=0;
         const slotIx = k % NUM_STEPS;
         const name = noteList[b.noteIndex] || 'C4';
-        if (liveBlocks.has(i)) { try{ triggerInstrument(currentInstrument, name, whenAT + 0.0005); }catch{} }
+        if (liveBlocks.has(i) && !recording) { try{ triggerInstrument(currentInstrument, name, whenAT + 0.0005); }catch{} }
         if (recording || recordOnly.has(i)){
           try{ triggerInstrument(currentInstrument, name, barStartAT + k*slotLen + 0.0005); }catch{}
           const slot = pattern[slotIx];
@@ -249,11 +255,11 @@ function spawnRipple(manual=false){
     ctx.fillStyle = '#0b0f16';
     ctx.fillRect(0,0,W(),H());
     if (!particlesInit && canvas.width && canvas.height){
-      try { initParticles(canvas.width, canvas.height, EDGE, 110); setParticleBounds(canvas.width, canvas.height); particlesInit = true; } catch {}
+      try { initParticles(canvas.width, canvas.height, EDGE, 110);  particlesInit = true; } catch {}
     }
     if (typeof window.__rpW === 'undefined'){ window.__rpW = canvas.width; window.__rpH = canvas.height; } if (canvas.width !== window.__rpW || canvas.height !== window.__rpH){
       window.__rpW = canvas.width; window.__rpH = canvas.height;
-      try { initParticles(canvas.width, canvas.height, EDGE, 110); setParticleBounds(canvas.width, canvas.height); } catch {}
+      try { initParticles(canvas.width, canvas.height, EDGE, 110);  } catch {}
     }
     if (generator.placed){
       ctx.save(); ctx.strokeStyle='rgba(255,255,255,0.65)'; ctx.lineWidth=1.5; drawWaves(ctx, n2x(generator.nx), n2y(generator.ny), ac.currentTime, RING_SPEED(), ripples, NUM_STEPS, stepSeconds);
@@ -280,7 +286,7 @@ function spawnRipple(manual=false){
     if (input && input.state && input.state.generatorDragEnded){
       input.state.generatorDragEnded=false;
       const nowAT = ac.currentTime; spawnRipple(true);
-      barStartAT=nowAT; nextSlotAT=barStartAT+stepSeconds(); nextSlotIx=1; clearPattern(); recording=true;
+      barStartAT=nowAT; nextSlotAT=barStartAT+stepSeconds(); nextSlotIx=1; pattern.forEach(s=> s.clear()); recording=true;
     }
   } catch (err) { console.error('[rippler draw]', err); } finally { requestAnimationFrame(draw); }
 }

@@ -13,7 +13,7 @@ export function createScheduler(cfg){
   function tick(){
     const nowAT = ac.currentTime;
     if (nowAT >= state.barStartAT + barSec()){
-      // state.recordOnly?.clear?.(); // keep queued re-records alive across bar
+      // state.recordOnly?.clear?.(); // keep queued re-records
       state.barStartAT += barSec();
       state.nextSlotAT = state.barStartAT;
       state.nextSlotIx = 0;
@@ -28,7 +28,7 @@ export function createScheduler(cfg){
       const s = pattern[state.nextSlotIx];
       if (s && s.size){
         const scheduled = new Set();
-        s.forEach(i=>{ if (!blocks[i] || !blocks[i].active) return;
+        s.forEach(i=>{
           const name = noteList[blocks[i].noteIndex] || 'C4';
           if (!scheduled.has(name)){
             triggerInstrument(getInstrument(), name, state.nextSlotAT + 0.0005);
