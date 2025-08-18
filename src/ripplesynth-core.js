@@ -1,6 +1,6 @@
 import { initToyUI } from './toyui.js';
 import { initToySizing, randomizeRects } from './toyhelpers.js';
-import { resizeCanvasForDPR, noteList } from './utils.js';
+import { resizeCanvasForDPR, noteList, clamp } from './utils.js';
 import { ensureAudioContext, barSeconds as audioBarSeconds } from './audio-core.js';
 import { triggerInstrument } from './audio-samples.js';
 import { drawBlocksSection } from './ripplesynth-blocks.js';
@@ -23,7 +23,6 @@ export function createRippleSynth(selector){
   const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true }); const isZoomed = ()=> panel.classList.contains('toy-zoomed');
   panel.addEventListener('toy-zoom', (ev)=>{ try{ const z = isZoomed(); canvas.style.aspectRatio = z ? '1 / 1' : ''; setParticleBounds(canvas.width, canvas.height); }catch{} });
   const EDGE=10; const W=()=>canvas.width|0, H=()=>canvas.height|0;
-  const clamp = (v,min,max)=> Math.max(min, Math.min(max, v));
   const n2x = (nx)=>{ const z=isZoomed(); const side=z? Math.max(0, Math.min(W(),H())-2*EDGE) : (W()-2*EDGE); const offX = z? Math.max(EDGE, (W()-side)/2): EDGE; return offX + nx*side; };
   const n2y = (ny)=>{ const z=isZoomed(); const side=z? Math.max(0, Math.min(W(),H())-2*EDGE) : (H()-2*EDGE); const offY = z? Math.max(EDGE, (H()-side)/2): EDGE; return offY + ny*side; };
   const x2n = (x)=>{ const z=isZoomed(); const side=z? Math.max(0, Math.min(W(),H())-2*EDGE) : (W()-2*EDGE); const offX = z? Math.max(EDGE, (W()-side)/2): EDGE; return Math.min(1, Math.max(0, (x-offX)/side)); };
@@ -99,18 +98,26 @@ didLayout = true;
     isPlaybackMuted: ()=> playbackMuted
   });
   function randomizeAll(){
-    // Clear ripple hits so new positions get fresh ring interactions
-    if (Array.isArray(ripples)) ripples.length = 0;
-    didLayout = false; layoutBlocks();
-    for (const b of blocks){ b.vx=0; b.vy=0; b.flashEnd=0; }
-    // Restart scheduler/bar so timing recalculates with new layout/scale
-    try {
-      barStartAT = ac.currentTime;
-      nextSlotIx = 1;
-      nextSlotAT = barStartAT + stepSeconds();
-    } catch {}
-  }
-  function clearPattern(){ pattern.forEach(s=> s.clear()); }  panel.addEventListener('toy-random', randomizeAll);
+    // Re-layout blocks without killing the current ring; preserve flow cadence
+    didLayout = false;
+    layoutBlocks();
+    for (let i=0; i<blocks.length; i++){ const b = blocks[i]; b.vx=0; b.vy=0; b.flashEnd=0; }
+
+    // Clear old pattern so no legacy notes play
+    clearPattern();
+
+    // Ask to re-record all active blocks on the next ripple hit
+    try { recordOnly.clear(); } catch {}
+    for (let i=0; i<blocks.length; i++){ if (blocks[i].active) recordOnly.add(i); }
+
+    // Pause playback scheduling until the next bar rollover (cadence preserved)
+    recording = true;
+
+    // Make sure the scheduler will spawn the usual next-bar ripple
+    skipNextBarRing = false;
+    playbackMuted = false;
+}
+function clearPattern(){ pattern.forEach(s=> s.clear()); }  panel.addEventListener('toy-random', randomizeAll);
   panel.addEventListener('toy-clear', (ev)=>{ try{ ev.stopImmediatePropagation?.(); }catch{}; clearPattern(); ripples.length=0; generator.placed=false; });  panel.addEventListener('toy-reset', ()=>{ clearPattern(); ripples.length=0; generator.placed=false; });
   const getBlockRects = makeGetBlockRects(n2x, n2y, sizing, BASE, blocks);
   const input = makePointerHandlers({ generatorRef: {

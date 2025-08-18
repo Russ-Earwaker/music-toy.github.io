@@ -13,7 +13,7 @@ export function createScheduler(cfg){
   function tick(){
     const nowAT = ac.currentTime;
     if (nowAT >= state.barStartAT + barSec()){
-      state.recordOnly?.clear?.();
+      // state.recordOnly?.clear?.(); // keep queued re-records alive across bar
       state.barStartAT += barSec();
       state.nextSlotAT = state.barStartAT;
       state.nextSlotIx = 0;
