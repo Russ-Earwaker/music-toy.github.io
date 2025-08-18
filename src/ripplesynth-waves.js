@@ -17,10 +17,10 @@ export function drawWaves(ctx, cx, cy, now, speed, ripples, NUM_STEPS, stepSecon
       Math.hypot(cx - 0,        cy - cssH),
       Math.hypot(cx - cssW,     cy - cssH)
     );
-    const offR = (Math.max(cornerMax, rp.offR||0) * 1.6) + 480;
-    const outer = r;
-    if (outer > offR) { ripples.splice(i,1); continue; }
-    if (r > cornerMax + 120){ ripples.splice(i,1); continue; }
+    // CSS-unit culling to match cx,cy and r units
+const farCss = Math.hypot(Math.max(cx, cssW - cx), Math.max(cy, cssH - cy));
+const offR = farCss + 720; // generous margin beyond far corner
+if (r > offR) { ripples.splice(i,1); continue; }
 
     const strokeRing = (rad, width, alpha) => {
       const rr = Math.max(0.0001, rad);
