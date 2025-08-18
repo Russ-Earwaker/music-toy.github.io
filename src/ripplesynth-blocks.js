@@ -11,7 +11,7 @@ export function drawBlocksSection(ctx, blocks, gx, gy, ripples, volume, noteList
     // flash overlay
     const flashA = (b.flashEnd && b.flashDur) ? Math.max(0, Math.min(1, (b.flashEnd - now) / b.flashDur)) : 0;
     // block
-    ctx.fillStyle = '#f4932f';
+    ctx.fillStyle = '#e58b2b';
     ctx.fillRect(x, y, w, h);
     if (!b.active) {
       ctx.fillStyle = 'rgba(0,0,0,0.45)';

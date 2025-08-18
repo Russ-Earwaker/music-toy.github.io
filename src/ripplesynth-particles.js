@@ -9,6 +9,10 @@ const P_IMPULSE = 6;     // impulse on ring hit (small)
 const P_HIT_BAND = 8;    // tolerance around ring radius
 let EDGE_KEEP = 10;
 
+// Flash intensities for rings
+const FLASH_MAIN = 1.0;      // primary bright ring
+const FLASH_SECOND = 0.55;    // secondary bright ring (less bright)
+
 export function setParticleBounds(w, h){ WIDTH = w; HEIGHT = h; }
 
 function rand(min, max){ return Math.random() * (max - min) + min; }
@@ -61,7 +65,19 @@ export function drawParticles(ctx, now, ripples, generator){
           const dx = p.x - R.x, dy = p.y - R.y;
           const d = Math.max(1, Math.hypot(dx, dy));
           const k = P_IMPULSE / d;
-          p.vx += dx * k; p.vy += dy * k; p.flash = 1; p.flash = 1;
+          // movement same for primary ring
+          p.vx += dx * k; p.vy += dy * k;
+          // full flash for primary ring
+          p.flash = Math.max(p.flash, FLASH_MAIN);
+        }
+        // secondary bright ring: same movement, reduced flash
+        const radius3 = Math.max(0, radius - R.speed * 1.20);
+        if (radius3 > 0 && Math.abs(dist - radius3) <= P_HIT_BAND){
+          const dx2 = p.x - R.x, dy2 = p.y - R.y;
+          const d2 = Math.max(1, Math.hypot(dx2, dy2));
+          const k2 = P_IMPULSE / d2;
+          p.vx += dx2 * k2; p.vy += dy2 * k2; // same impulse
+          p.flash = Math.max(p.flash, FLASH_SECOND);
         }
       }
     }
@@ -76,10 +92,10 @@ export function drawParticles(ctx, now, ripples, generator){
   // render — white points with brightness bump on flash, NO scaling
   ctx.save();
   for (const p of P){
-    const alpha = 0.3 + 0.7 * p.flash;
+    const alpha = 0.2 + 0.8 * Math.max(0, Math.min(1, p.flash));
     ctx.globalAlpha = alpha;
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(p.x, p.y, 1.5, 1.5);
+    ctx.fillRect(p.x, p.y, 1.2, 1.2);
   }
   ctx.restore();
 }

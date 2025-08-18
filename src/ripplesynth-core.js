@@ -8,7 +8,7 @@ import { triggerInstrument } from './audio-samples.js';
 import { drawBlocksSection } from './ripplesynth-blocks.js';
 import { makePointerHandlers } from './ripplesynth-input.js';
 import { initParticles, setParticleBounds, drawParticles } from './ripplesynth-particles.js';
-import { drawWaves } from './ripplesynth-waves.js';
+import { drawWaves, drawGenerator } from './ripplesynth-waves.js';
 import { handleBlockTap } from './ripplesynth-zoomtap.js';
 import { makeGetBlockRects } from './ripplesynth-rects.js';
 import { installLoopGuards } from './rippler-loopguard.js';
@@ -254,10 +254,10 @@ function draw(){
  } return; }
     ctx.fillStyle = '#0b0f16';
     ctx.fillRect(0,0,W(),H());
-    if (!particlesInit && canvas.width && canvas.height){ try { initParticles(canvas.width, canvas.height, EDGE, 110); particlesInit = true; } catch {} }
+    if (!particlesInit && canvas.width && canvas.height){ try { initParticles(canvas.width, canvas.height, EDGE, 85); particlesInit = true; } catch {} }
     if (typeof window.__rpW === 'undefined'){ window.__rpW = canvas.width; window.__rpH = canvas.height; } if (canvas.width !== window.__rpW || canvas.height !== window.__rpH){
       window.__rpW = canvas.width; window.__rpH = canvas.height;
-      try { initParticles(canvas.width, canvas.height, EDGE, 110);  } catch {}
+      try { initParticles(canvas.width, canvas.height, EDGE, 85);  } catch {}
     }
     if (generator.placed){
       ctx.save(); ctx.strokeStyle='rgba(255,255,255,0.65)'; ctx.lineWidth=1.5; drawWaves(ctx, n2x(generator.nx), n2y(generator.ny), ac.currentTime, RING_SPEED(), ripples, NUM_STEPS, stepSeconds);
@@ -266,7 +266,6 @@ function draw(){
     drawParticles(ctx, ac.currentTime, ripples, { x:n2x(generator.nx), y:n2y(generator.ny) });
     const size=Math.round(BASE*(sizing.scale||1)); const blockRects=blocks.map(b=>({...b,x:n2x(b.nx)-size/2,y:n2y(b.ny)-size/2,
     w:size,h:size}));
-    // advance block edge ripples
     const __nowAT = ac.currentTime; const __dt = (__lastDrawAT? (__nowAT-__lastDrawAT): 0); __lastDrawAT = __nowAT;
     for (let i=0;i<blocks.length;i++){ const b=blocks[i]; if (b.rippleAge!=null && b.rippleMax){ b.rippleAge = Math.min(b.rippleMax, b.rippleAge + __dt); } }
     drawBlocksSection(ctx, blockRects, n2x(generator.nx), n2y(generator.ny), ripples, 1, noteList, sizing, null, null, ac.currentTime);
@@ -279,7 +278,7 @@ function draw(){
       }
       ctx.restore();
     }
-    if (generator.placed){ ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(n2x(generator.nx),n2y(generator.ny),generator.r|0,0,Math.PI*2); ctx.fill(); }
+    if (generator.placed){ drawGenerator(ctx, n2x(generator.nx), n2y(generator.ny), Math.max(2, generator.r), ac.currentTime); }
     springBlocks(1/60);
     handleRingHits(ac.currentTime);
     scheduler.tick();
