@@ -10,17 +10,16 @@ import { drawWaves } from './ripplesynth-waves.js';
 import { handleBlockTap } from './ripplesynth-zoomtap.js';
 import { makeGetBlockRects } from './ripplesynth-rects.js';
 import { installLoopGuards } from './rippler-loopguard.js';
+import { createScheduler } from './ripplesynth-scheduler.js';
 export function createRippleSynth(selector){
-  const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector;
-  const panel  = shell?.closest?.('.toy-panel') || shell;
+  const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector; const panel  = shell?.closest?.('.toy-panel') || shell;
   const canvas = document.createElement('canvas');
   canvas.className = 'rippler-canvas';
   canvas.style.display = 'block';
   (panel.querySelector?.('.toy-body') || panel).appendChild(canvas);
   try{const host=panel.querySelector?.('.toy-body')||panel;if((host.clientHeight|0)<40){canvas.style.display='block';canvas.style.width='100%';canvas.style.minHeight='240px';}}catch{}
   const ctx = canvas.getContext('2d'); const ui  = initToyUI(panel, { toyName: 'Rippler' });
-  let currentInstrument = (ui.instrument && ui.instrument !== 'tone') ? ui.instrument : 'kalimba';
-  try { ui.setInstrument(currentInstrument); } catch {}
+  let currentInstrument = (ui.instrument && ui.instrument !== 'tone') ? ui.instrument : 'kalimba'; try { ui.setInstrument(currentInstrument); } catch {}
   const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true }); const isZoomed = ()=> panel.classList.contains('toy-zoomed');
   panel.addEventListener('toy-zoom', (ev)=>{ try{ const z = isZoomed(); canvas.style.aspectRatio = z ? '1 / 1' : ''; setParticleBounds(canvas.width, canvas.height); }catch{} });
   const EDGE=10; const W=()=>canvas.width|0, H=()=>canvas.height|0;
@@ -53,7 +52,7 @@ export function createRippleSynth(selector){
   }
   layoutBlocks();
   const generator = { nx:0.5, ny:0.5, r:10, placed:false };
-  let ripples = []; // {x,y,startTime (perf), startAT (audio), speed}
+  let ripples = []; // {x,y,startAT,speed}
   const RING_SPEED = ()=> Math.hypot(W(), H()) / (audioBarSeconds() || 2.0); // px/sec
   let particlesInit = false;
   const ac = ensureAudioContext();
@@ -61,16 +60,32 @@ export function createRippleSynth(selector){
   const barSec = ()=> audioBarSeconds() || 2.0;
   const stepSeconds = ()=> barSec()/NUM_STEPS;
   let barStartAT = ac.currentTime, nextSlotAT = barStartAT + stepSeconds(), nextSlotIx = 1;
-  let recording = true;
   const pattern = Array.from({length:NUM_STEPS}, ()=> new Set());
   const liveBlocks = new Set(); // blocks that play from ripple while dragging
   const recordOnly = new Set(); // blocks to (re)record on next ripple hit
   let skipNextBarRing = false;
+  let recording = false;
   let dragMuteActive = false;
   let playbackMuted = false;
   let _genDownPos = null;
   let lastSpawnPerf = 0;
   let _wasPlacedAtDown = false;
+  const __schedState = {
+    get barStartAT(){ return barStartAT; }, set barStartAT(v){ barStartAT = v; },
+    get nextSlotAT(){ return nextSlotAT; }, set nextSlotAT(v){ nextSlotAT = v; },
+    get nextSlotIx(){ return nextSlotIx; }, set nextSlotIx(v){ nextSlotIx = v; },
+    get recording(){ return recording; }, set recording(v){ recording = v; },
+    get skipNextBarRing(){ return skipNextBarRing; }, set skipNextBarRing(v){ skipNextBarRing = v; },
+    recordOnly, liveBlocks
+  };
+  const scheduler = createScheduler({
+    ac, NUM_STEPS, barSec, stepSeconds,
+    pattern, blocks, noteList,
+    triggerInstrument, getInstrument: ()=> currentInstrument,
+    generator, RING_SPEED, spawnRipple,
+    state: __schedState,
+    isPlaybackMuted: ()=> playbackMuted
+  });
   function randomizeAll(){
     didLayout = false; layoutBlocks();
     for (const b of blocks){ b.vx=0; b.vy=0; b.flashEnd=0; }
@@ -167,63 +182,35 @@ function spawnRipple(manual=false){
   function handleRingHits(nowAT){ if (playbackMuted) return;
     if (!ripples.length || !generator.placed) return;
     const rMain = ripples[ripples.length-1];
+    rMain.hit = rMain.hit || new Set();
     const R = Math.max(0, (nowAT - (rMain.startAT||nowAT)) * (rMain.speed||RING_SPEED()));
     const band = 9;
     const gx = n2x(generator.nx), gy = n2y(generator.ny);
+    const size = Math.max(20, Math.round(BASE * (sizing.scale||1)));
     for (let i=0;i<blocks.length;i++){
       const b = blocks[i];
       if (!b.active || rMain.hit.has(i)) continue;
-      const s = Math.max(20, Math.round(BASE * (sizing.scale||1)));
       const cx = n2x(b.nx), cy = n2y(b.ny);
       const dC = Math.hypot(cx - gx, cy - gy);
-      const dEdge = Math.max(0, dC - Math.SQRT2*(s/2));
+      const dEdge = Math.max(0, dC - Math.SQRT2*(size/2));
       if (Math.abs(dEdge - R) <= band){
         rMain.hit.add(i);
         b.flashEnd = ac.currentTime + 0.18;
         const ang = Math.atan2(cy - gy, cx - gx), push = 64 * (sizing.scale || 1);
         b.vx += Math.cos(ang)*push; b.vy += Math.sin(ang)*push;
-        const whenAT = ac.currentTime, slotLen = stepSeconds();
-          let k = Math.ceil((whenAT - barStartAT)/slotLen); if (k<0) k=0;
-          const slotIx = k % NUM_STEPS;
-          const name = noteList[b.noteIndex] || 'C4';
-          if (liveBlocks.has(i)) {
-            triggerInstrument(currentInstrument, name, whenAT + 0.0005);
-          }
-          // recording / recordOnly: schedule on the quantized slot and write pattern
-          if (recording || recordOnly.has(i)){
-            triggerInstrument(currentInstrument, name, barStartAT + k*slotLen + 0.0005);
-            const slot = pattern[slotIx];
-            let existsSame=false; for (const jj of slot){ if ((noteList[blocks[jj].noteIndex]||'') === name){ existsSame=true; break; } }
-            if (!existsSame) slot.add(i);
-            if (recordOnly.has(i)) recordOnly.delete(i);
-          }
+        const whenAT = ac.currentTime; const slotLen = stepSeconds();
+        let k = Math.ceil((whenAT - barStartAT)/slotLen); if (k<0) k=0;
+        const slotIx = k % NUM_STEPS;
+        const name = noteList[b.noteIndex] || 'C4';
+        if (liveBlocks.has(i)) { try{ triggerInstrument(currentInstrument, name, whenAT + 0.0005); }catch{} }
+        if (recording || recordOnly.has(i)){
+          try{ triggerInstrument(currentInstrument, name, barStartAT + k*slotLen + 0.0005); }catch{}
+          const slot = pattern[slotIx];
+          let existsSame=false; for (const jj of slot){ const nm = noteList[blocks[jj].noteIndex] || 'C4'; if (nm === name){ existsSame=true; break; } }
+          if (!existsSame) slot.add(i);
+          if (recordOnly.has(i)) recordOnly.delete(i);
+        }
       }
-    }
-  }
-  function playbackTick(){
-    const nowAT = ac.currentTime;
-    if (nowAT >= barStartAT + barSec()){
-      recordOnly.clear();
-      barStartAT += barSec(); nextSlotAT = barStartAT; nextSlotIx = 0;
-      if (generator.placed && !playbackMuted){ if (skipNextBarRing) skipNextBarRing=false; else spawnRipple(false); }
-      recording = false;
-    }
-    const lookahead = 0.03;
-    while (!recording && !playbackMuted && nowAT + lookahead >= nextSlotAT){
-      const s = pattern[nextSlotIx];
-      if (s && s.size){
-        const scheduled = new Set();
-        s.forEach(i=>{
-          const name = noteList[blocks[i].noteIndex] || 'C4';
-          if (!scheduled.has(name)){
-            triggerInstrument(currentInstrument, name, nextSlotAT + 0.0005);
-            scheduled.add(name);
-          }
-          blocks[i].flashEnd = Math.max(blocks[i].flashEnd, ac.currentTime + 0.12);
-        });
-      }
-      nextSlotIx = (nextSlotIx+1) & (NUM_STEPS-1);
-      nextSlotAT += stepSeconds();
     }
   }
   function springBlocks(dt){
@@ -231,8 +218,7 @@ function spawnRipple(manual=false){
     for (const b of blocks){
       const px = n2x(b.nx), py = n2y(b.ny);
       const tx = n2x(b.nx0), ty = n2y(b.ny0);
-      const ax=(tx-px)*K*dt, ay=(ty-py)*K*dt;
-      b.vx=(b.vx+ax)*D; b.vy=(b.vy+ay)*D;
+      const ax=(tx-px)*K*dt, ay=(ty-py)*K*dt; b.vx=(b.vx+ax)*D; b.vy=(b.vy+ay)*D;
       b.nx = x2n(px + b.vx*dt);
       b.ny = y2n(py + b.vy*dt);
     }
@@ -245,44 +231,38 @@ function spawnRipple(manual=false){
     if (!(W() && H())){
       if (!window.__ripplerZeroWarned){
         window.__ripplerZeroWarned = true;
-      }
-      return;
-    }
+ } return; }
     ctx.fillStyle = '#0b0f16';
     ctx.fillRect(0,0,W(),H());
     if (!particlesInit && canvas.width && canvas.height){
       try { initParticles(canvas.width, canvas.height, EDGE, 110); setParticleBounds(canvas.width, canvas.height); particlesInit = true; } catch {}
     }
-    if (typeof window.__rpW === 'undefined'){ window.__rpW = canvas.width; window.__rpH = canvas.height; }
-    if (canvas.width !== window.__rpW || canvas.height !== window.__rpH){
+    if (typeof window.__rpW === 'undefined'){ window.__rpW = canvas.width; window.__rpH = canvas.height; } if (canvas.width !== window.__rpW || canvas.height !== window.__rpH){
       window.__rpW = canvas.width; window.__rpH = canvas.height;
       try { initParticles(canvas.width, canvas.height, EDGE, 110); setParticleBounds(canvas.width, canvas.height); } catch {}
     }
     if (generator.placed){
-      ctx.save(); ctx.strokeStyle='rgba(255,255,255,0.65)'; ctx.lineWidth=1.5;
-      drawWaves(ctx, n2x(generator.nx), n2y(generator.ny), ac.currentTime, RING_SPEED(), ripples, NUM_STEPS, stepSeconds);
+      ctx.save(); ctx.strokeStyle='rgba(255,255,255,0.65)'; ctx.lineWidth=1.5; drawWaves(ctx, n2x(generator.nx), n2y(generator.ny), ac.currentTime, RING_SPEED(), ripples, NUM_STEPS, stepSeconds);
       ctx.restore();
     }
     drawParticles(ctx, ac.currentTime, ripples, { x:n2x(generator.nx), y:n2y(generator.ny) });
-    const size = Math.round(BASE*(sizing.scale||1));
-    const blockRects = blocks.map(b=>({ ...b, x:n2x(b.nx)-size/2, y:n2y(b.ny)-size/2, w:size, h:size }));
+    const size=Math.round(BASE*(sizing.scale||1)); const blockRects=blocks.map(b=>({...b,x:n2x(b.nx)-size/2,y:n2y(b.ny)-size/2,w:size,h:size}));
     drawBlocksSection(ctx, blockRects, n2x(generator.nx), n2y(generator.ny), ripples, 1, noteList, sizing, null, null, ac.currentTime);
     if (isZoomed()){
-      ctx.save(); ctx.strokeStyle='rgba(255,255,255,0.7)'; ctx.lineWidth=1;
-      for (const b of blockRects){
+      ctx.save(); ctx.strokeStyle='rgba(255,255,255,0.7)'; ctx.lineWidth=1; for (const b of blockRects){
         ctx.beginPath(); ctx.moveTo(b.x+4, b.y+b.h/3); ctx.lineTo(b.x+b.w-4, b.y+b.h/3);
         ctx.moveTo(b.x+4, b.y+2*b.h/3); ctx.lineTo(b.x+b.w-4, b.y+2*b.h/3); ctx.stroke();
-        ctx.fillStyle = '#0b0f16'; ctx.font='12px ui-sans-serif, system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillStyle = '#0b0f16'; ctx.font='12px ui-sans-serif, system-ui'; ctx.textAlign='center';ctx.textBaseline='middle';
         ctx.fillText(noteList[Math.max(0, Math.min(noteList.length-1, b.noteIndex|0))]||'', b.x+b.w/2, b.y+b.h/2);
       }
       ctx.restore();
     }
     if (generator.placed){
-      ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(n2x(generator.nx), n2y(generator.ny), generator.r|0, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle='#fff'; ctx.beginPath();ctx.arc(n2x(generator.nx),n2y(generator.ny),generator.r|0,0,Math.PI*2);ctx.fill();
     }
     springBlocks(1/60);
     handleRingHits(ac.currentTime);
-    playbackTick();
+    scheduler.tick();
     if (input && input.state && input.state.generatorDragEnded){
       input.state.generatorDragEnded=false;
       const nowAT = ac.currentTime; spawnRipple(true);
