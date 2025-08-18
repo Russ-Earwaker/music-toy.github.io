@@ -191,10 +191,10 @@ function spawnRipple(manual=false){
     const gx = n2x(generator.nx), gy = n2y(generator.ny);
     const corners = [[0,0],[W(),0],[0,H()],[W(),H()]];
     const offR = Math.max(...corners.map(([x,y])=> Math.hypot(x-gx, y-gy))) + 64;
-    ripples = ripples.filter(r => ((nowPerf - r.startTime) * (r.speed||RING_SPEED())) < Math.max(r.offR||0, Math.hypot(W(),H())+64));
     ripples.push({ x: gx, y: gy, startAT: nowAT, startTime: nowPerf, speed: RING_SPEED(), offR, hit: new Set() });
     if (manual) skipNextBarRing = true;
   }
+
   function ringFront(nowAT){
     if (!ripples.length) return -1;
     return Math.max(0, (nowAT - (ripples[0].startAT||nowAT)) * RING_SPEED());

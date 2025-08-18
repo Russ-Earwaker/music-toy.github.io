@@ -5,6 +5,9 @@ export function drawWaves(ctx, cx, cy, now, speed, ripples, NUM_STEPS, stepSecon
   const cssW = ctx.canvas.clientWidth || ctx.canvas.width;
   const cssH = ctx.canvas.clientHeight || ctx.canvas.height;
   for (let i = ripples.length - 1; i >= 0; i--) {
+    const canvasW = ctx.canvas.width || (ctx.canvas.clientWidth || 0);
+    const canvasH = ctx.canvas.height || (ctx.canvas.clientHeight || 0);
+
     const rp = ripples[i];
     const r = Math.max(0, (now - rp.startTime) * speed);
 
@@ -13,7 +16,9 @@ export function drawWaves(ctx, cx, cy, now, speed, ripples, NUM_STEPS, stepSecon
       Math.hypot(cx - cssW,     cy - 0),
       Math.hypot(cx - 0,        cy - cssH),
       Math.hypot(cx - cssW,     cy - cssH)
-    ); // no auto-cull; core will clear previous ripples per bar
+    );
+    const offR = Math.max(cornerMax + 96, rp.offR || 0);
+    if (r > offR) { ripples.splice(i,1); continue; }
     if (r > cornerMax + 120){ ripples.splice(i,1); continue; }
 
     const strokeRing = (rad, width, alpha) => {

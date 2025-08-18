@@ -104,7 +104,7 @@ export function makePointerHandlers(cfg) {
       return;
     }
 
-    if (tapCand && isZoomed()) {
+    if (tapCand) {
       const dt = performance.now() - tapCand.t; const dx = Math.abs(p.x - tapCand.x), dy = Math.abs(p.y - tapCand.y);
       if (dt >= HOLD_DELAY_MS || dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD) {
         const rects = getRects(); const b = rects[tapCand.index];
