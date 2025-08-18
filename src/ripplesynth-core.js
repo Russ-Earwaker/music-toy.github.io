@@ -134,7 +134,7 @@ didLayout = true;
       const b=blocks[idx];
       b.nx=nx; b.ny=ny; b.nx0=nx; b.ny0=ny; b.vx=0; b.vy=0;
     },
-    onBlockGrab: (idx)=>{ for (const s of pattern) s.delete(idx); liveBlocks.add(idx); },
+    onBlockGrab: (idx)=>{ liveBlocks.add(idx); },
     onBlockDrop: (idx)=>{ liveBlocks.delete(idx); recordOnly.add(idx); }
   });
   canvas.addEventListener('pointerdown', (e)=>{
