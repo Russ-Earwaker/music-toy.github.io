@@ -99,8 +99,16 @@ didLayout = true;
     isPlaybackMuted: ()=> playbackMuted
   });
   function randomizeAll(){
+    // Clear ripple hits so new positions get fresh ring interactions
+    if (Array.isArray(ripples)) ripples.length = 0;
     didLayout = false; layoutBlocks();
     for (const b of blocks){ b.vx=0; b.vy=0; b.flashEnd=0; }
+    // Restart scheduler/bar so timing recalculates with new layout/scale
+    try {
+      barStartAT = ac.currentTime;
+      nextSlotIx = 1;
+      nextSlotAT = barStartAT + stepSeconds();
+    } catch {}
   }
   function clearPattern(){ pattern.forEach(s=> s.clear()); }  panel.addEventListener('toy-random', randomizeAll);
   panel.addEventListener('toy-clear', (ev)=>{ try{ ev.stopImmediatePropagation?.(); }catch{}; clearPattern(); ripples.length=0; generator.placed=false; });  panel.addEventListener('toy-reset', ()=>{ clearPattern(); ripples.length=0; generator.placed=false; });
@@ -114,24 +122,11 @@ didLayout = true;
       set placed(v){ generator.placed = !!v; },
       get r(){ return generator.r || 12; }
     }, canvas, vw:W, vh:H, EDGE, blocks:[], ripples, getBlockRects, isZoomed, clamp, getCanvasPos,
-    onBlockTap: (idx, p)=>{
-      const size = Math.max(20, Math.round(BASE*(sizing.scale||1)));
-      const b = blocks[idx];
-      const rect = { x:n2x(b.nx)-size/2, y:n2y(b.ny)-size/2, w:size, h:size };
-      const t1 = rect.y + rect.h/3, t2 = rect.y + 2*rect.h/3;
-      if (p.y < t1){
-        b.noteIndex = Math.max(0, Math.min(noteList.length-1, (b.noteIndex|0)+1));
-        const name = noteList[b.noteIndex] || 'C4';
-        triggerInstrument(currentInstrument, name, ac.currentTime + 0.0005);
-      } else if (p.y < t2){
-        b.active = !b.active;
-        if (!b.active){ for (const s of pattern) s.delete(idx); }
-      } else {
-        b.noteIndex = Math.max(0, Math.min(noteList.length-1, (b.noteIndex|0)-1));
-        const name = noteList[b.noteIndex] || 'C4';
-        triggerInstrument(currentInstrument, name, ac.currentTime + 0.0005);
-      }
-    },
+    onBlockTap: (idx, p)=> handleBlockTap(blocks, idx, p, { x:n2x(blocks[idx].nx)-Math.max(20, Math.round(BASE*(sizing.scale||1)))/2,
+  y:n2y(blocks[idx].ny)-Math.max(20, Math.round(BASE*(sizing.scale||1)))/2,
+  w:Math.max(20, Math.round(BASE*(sizing.scale||1))),
+  h:Math.max(20, Math.round(BASE*(sizing.scale||1))) },
+{ noteList, ac, pattern, trigger: triggerInstrument, instrument: currentInstrument, __schedState }),
     onBlockDrag: (idx, newX, newY)=>{
       const size=Math.max(20, Math.round(BASE * (sizing.scale||1)));
       const cx=newX+size/2, cy=newY+size/2;

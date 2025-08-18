@@ -28,7 +28,7 @@ export function createScheduler(cfg){
       const s = pattern[state.nextSlotIx];
       if (s && s.size){
         const scheduled = new Set();
-        s.forEach(i=>{
+        s.forEach(i=>{ if (!blocks[i] || !blocks[i].active) return;
           const name = noteList[blocks[i].noteIndex] || 'C4';
           if (!scheduled.has(name)){
             triggerInstrument(getInstrument(), name, state.nextSlotAT + 0.0005);
