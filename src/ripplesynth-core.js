@@ -21,7 +21,7 @@ export function createRippleSynth(selector){
   const ctx = canvas.getContext('2d'); const ui  = initToyUI(panel, { toyName: 'Rippler' });
   let currentInstrument = (ui.instrument && ui.instrument !== 'tone') ? ui.instrument : 'kalimba'; try { ui.setInstrument(currentInstrument); } catch {}
   const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true }); const isZoomed = ()=> panel.classList.contains('toy-zoomed');
-  panel.addEventListener('toy-zoom', (ev)=>{ try{ const z = isZoomed(); canvas.style.aspectRatio = z ? '1 / 1' : ''; setParticleBounds(canvas.width, canvas.height); }catch{} });
+  panel.addEventListener('toy-zoom', (ev)=>{ try{ const z = !!(ev?.detail?.zoomed); sizing.setZoom(z); try{ setParticleBounds(canvas.width|0, canvas.height|0); }catch{} }catch{} });
   const EDGE=10; const W=()=>canvas.width|0, H=()=>canvas.height|0;
   const n2x = (nx)=>{ const z=isZoomed(); const side=z? Math.max(0, Math.min(W(),H())-2*EDGE) : (W()-2*EDGE); const offX = z? Math.max(EDGE, (W()-side)/2): EDGE; return offX + nx*side; };
   const n2y = (ny)=>{ const z=isZoomed(); const side=z? Math.max(0, Math.min(W(),H())-2*EDGE) : (H()-2*EDGE); const offY = z? Math.max(EDGE, (H()-side)/2): EDGE; return offY + ny*side; };
