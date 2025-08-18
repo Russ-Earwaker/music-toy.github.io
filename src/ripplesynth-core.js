@@ -30,7 +30,8 @@ export function createRippleSynth(selector){
   const y2n = (y)=>{ const z=isZoomed(); const side=z? Math.max(0, Math.min(W(),H())-2*EDGE) : (H()-2*EDGE); const offY = z? Math.max(EDGE, (H()-side)/2): EDGE; return Math.min(1, Math.max(0, (y-offY)/side)); };
   const getCanvasPos = (el, e)=>{ const r = el.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
   const CUBES = 8, BASE = 56 * 0.75;
-  const blocks = Array.from({length:CUBES}, (_,i)=>({ nx:0.5, ny:0.5, nx0:0.5, ny0:0.5, vx:0, vy:0, flashEnd:0, flashDur:0.18, active:true, noteIndex:(noteList.indexOf('C4')>=0?noteList.indexOf('C4'):48)+i }));
+  const MAJOR_SCALE_OFFSETS = [0,2,4,7,9,12,14,16] // pentatonic (two octaves): C D E G A C D E; // 8-note major scale (incl. octave)
+  const blocks = Array.from({length:CUBES}, (_,i)=>({ nx:0.5, ny:0.5, nx0:0.5, ny0:0.5, vx:0, vy:0, flashEnd:0, flashDur:0.18, active:true, noteIndex:(noteList.indexOf('C4')>=0?noteList.indexOf('C4'):48)+ MAJOR_SCALE_OFFSETS[i % 8] , userEditedNote:false }));
     let didLayout=false;
   function layoutBlocks(){
     if (didLayout || !W() || !H()) return;
@@ -48,7 +49,18 @@ export function createRippleSynth(selector){
       blocks[i].nx = blocks[i].nx0 = x2n(cx);
       blocks[i].ny = blocks[i].ny0 = y2n(cy);
     }
-    didLayout = true;
+    
+    // Assign scale notes for non-edited blocks (keeps user edits across randomize)
+    try {
+      const baseIx = (noteList.indexOf('C4')>=0?noteList.indexOf('C4'):48);
+      for (let i=0;i<CUBES;i++){
+        const b = blocks[i];
+        if (!b.userEditedNote){
+          b.noteIndex = baseIx + MAJOR_SCALE_OFFSETS[i % 8];
+        }
+      }
+    } catch {}
+didLayout = true;
   }
   layoutBlocks();
   const generator = { nx:0.5, ny:0.5, r:10, placed:false };
