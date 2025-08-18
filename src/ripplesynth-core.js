@@ -260,7 +260,7 @@ function draw(){
       try { initParticles(canvas.width, canvas.height, EDGE, 85);  } catch {}
     }
     if (generator.placed){
-      ctx.save(); ctx.strokeStyle='rgba(255,255,255,0.65)'; ctx.lineWidth=1.5; drawWaves(ctx, n2x(generator.nx), n2y(generator.ny), ac.currentTime, RING_SPEED(), ripples, NUM_STEPS, stepSeconds);
+      ctx.save(); ctx.strokeStyle='rgba(255,255,255,0.65)'; ctx.lineWidth=1.5; drawWaves(ctx, n2x(generator.nx), n2y(generator.ny), ac.currentTime, RING_SPEED(), ripples, NUM_STEPS, stepSeconds, (sizing.scale||1));
       ctx.restore();
     }
     drawParticles(ctx, ac.currentTime, ripples, { x:n2x(generator.nx), y:n2y(generator.ny) });
@@ -278,7 +278,7 @@ function draw(){
       }
       ctx.restore();
     }
-    if (generator.placed){ drawGenerator(ctx, n2x(generator.nx), n2y(generator.ny), Math.max(2, generator.r), ac.currentTime); }
+    if (generator.placed){ drawGenerator(ctx, n2x(generator.nx), n2y(generator.ny), Math.max(2, generator.r) * (sizing.scale||1), ac.currentTime, ripples, NUM_STEPS, stepSeconds, (sizing.scale||1)); }
     springBlocks(1/60);
     handleRingHits(ac.currentTime);
     scheduler.tick();
