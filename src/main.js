@@ -5,6 +5,7 @@ import { initAudioAssets, triggerInstrument, getInstrumentNames } from './audio-
 import { buildGrid, markPlayingColumn as markGridCol } from './grid.js';
 import { createBouncer } from './bouncer.js';
 import { createRippleSynth } from './ripplesynth.js';
+import { buildWheel } from './wheel.js';
 import { assertRipplerContracts, runRipplerSmoke } from './ripplesynth-safety.js';
 import { createLoopIndicator } from './loopindicator.js';
 import { initDragBoard, organizeBoard } from './board.js';
@@ -155,6 +156,7 @@ if (!window.__booted__) {
 
     // Other toys
     toys = [];
+    let wheelUsed = false;
     document.querySelectorAll('.toy-panel').forEach((panel) => {
       if (panel.dataset.toyInit === '1') return;
       const kind = (panel.getAttribute('data-toy') || '').toLowerCase();
@@ -163,12 +165,29 @@ if (!window.__booted__) {
         if (kind === 'rippler' || kind === 'ripple') {
           inst = createRippleSynth(panel);
         } else if (kind === 'bouncer') {
-          inst = createBouncer(panel);
+          if (!wheelUsed) {
+            let wheelInstrument = 'slap bass guitar';
+            buildWheel(panel, {
+              onNote: (midi, name, vel)=> { try { triggerInstrument(wheelInstrument || 'slap bass guitar', name); } catch(e){} },
+              getBpm: ()=> ((getLoopInfo && getLoopInfo().bpm) || DEFAULT_BPM)
+            });
+            inst = { setInstrument: (n)=> { wheelInstrument = n; } };
+            wheelUsed = true;
+          } else {
+            inst = createBouncer(panel);
+          }
         } else {
           return;
         }
         const ni = getInstrumentNames();
-        inst?.setInstrument?.( (ni.find(n=>n.toLowerCase().includes('kalimba')) || ni[0] || 'tone') );
+        let _def = (ni.find(n => n.toLowerCase().includes('kalimba')) || ni[0] || 'tone');
+        if ((panel.dataset.toy||'').toLowerCase()==='wheel'){
+          _def = (ni.find(n => /slap.*bass|bass.*slap/i.test(n))
+               || ni.find(n => /slap/i.test(n))
+               || ni.find(n => /bass/i.test(n))
+               || _def);
+        }
+        inst?.setInstrument?.(_def);
         toys.push(inst);
         panel.dataset.toyInit = '1';
       }catch(e){
