@@ -67,22 +67,14 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
 
       // zoom-only thirds boundaries
       if (panel.classList.contains('toy-zoomed')){ drawThirdsGuides(ctx, r); }
+      // zoom-only thirds boundaries
+      if (panel.classList.contains('toy-zoomed')){ drawThirdsGuides(ctx, r); }
 
-      // label
-      const label = noteList[(s.noteIndex % noteList.length + noteList.length) % noteList.length] || '';
-      drawTileLabelAndArrows(ctx, r, { label, active: s.active, zoomed: panel.classList.contains('toy-zoomed') });
-      // arrows moved to shared helper
-      if (panel.classList.contains('toy-zoomed')){
-        // up triangle (top-right)
-        ctx.beginPath(); ctx.moveTo(r.x + r.w - 16, r.y + 6); ctx.lineTo(r.x + r.w - 8, r.y + 6); ctx.lineTo(r.x + r.w - 12, r.y + 12); ctx.closePath();
-        ctx.fillStyle = '#ffffff'; ctx.fill();
-        // down triangle (bottom-right)
-        ctx.beginPath(); ctx.moveTo(r.x + r.w - 16, r.y + r.h - 6); ctx.lineTo(r.x + r.w - 8, r.y + r.h - 6); ctx.lineTo(r.x + r.w - 12, r.y + r.h - 12); ctx.closePath();
-        ctx.fill();
-      }
-
+      // outline
       ctx.strokeStyle = '#11151d'; ctx.lineWidth = 2; ctx.strokeRect(r.x+0.5, r.y+0.5, r.w-1, r.h-1);
-      ctx.restore();
+            const label = noteList[(s.noteIndex % noteList.length + noteList.length) % noteList.length] || '';
+      drawTileLabelAndArrows(ctx, r, { label, active: s.active, zoomed: panel.classList.contains('toy-zoomed') });
+ctx.restore();
     }
 
     requestAnimationFrame(draw);

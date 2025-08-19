@@ -69,8 +69,11 @@ export function createBouncer(selector){
 
     // blocks
     for (const b of blocks){
+      // base fill
       ctx.fillStyle = b.active ? '#f4932f' : '#293042';
       ctx.fillRect(b.x, b.y, b.w, b.h);
+
+      // flash overlay
       if (b.flash>0){
         ctx.globalAlpha = Math.min(1, b.flash);
         ctx.fillStyle = '#ffffff';
@@ -78,24 +81,16 @@ export function createBouncer(selector){
         ctx.globalAlpha = 1;
         b.flash = Math.max(0, b.flash - 0.04);
       }
+
+      // zoom-only thirds boundaries
       if (panel.classList.contains('toy-zoomed')){ drawThirdsGuides(ctx, b); }
-      // label
-      const label = noteList[(b.noteIndex % noteList.length + noteList.length) % noteList.length] || '';
-      drawTileLabelAndArrows(ctx, b, { label, active: b.active, zoomed: panel.classList.contains('toy-zoomed') });
-      // arrows moved to shared helper
-      if (panel.classList.contains('toy-zoomed')){
-        // up triangle (top-right)
-        ctx.beginPath(); ctx.moveTo(b.x + b.w - 16, b.y + 6); ctx.lineTo(b.x + b.w - 8, b.y + 6); ctx.lineTo(b.x + b.w - 12, b.y + 12); ctx.closePath();
-        ctx.fillStyle = '#ffffff'; ctx.fill();
-        // down triangle (bottom-right)
-        ctx.beginPath(); ctx.moveTo(b.x + b.w - 16, b.y + b.h - 6); ctx.lineTo(b.x + b.w - 8, b.y + b.h - 6); ctx.lineTo(b.x + b.w - 12, b.y + b.h - 12); ctx.closePath();
-        ctx.fill();
-      }
 
+      // outline
       ctx.strokeStyle = '#11151d'; ctx.lineWidth = 2; ctx.strokeRect(b.x+0.5,b.y+0.5,b.w-1,b.h-1);
-    }
-
-    // draw ball (simple)
+            const label = noteList[(b.noteIndex % noteList.length + noteList.length) % noteList.length] || '';
+      drawTileLabelAndArrows(ctx, b, { label, active: b.active, zoomed: panel.classList.contains('toy-zoomed') });
+}
+// draw ball (simple)
     if (ball){
       ctx.fillStyle = '#fff';
       ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2); ctx.fill();

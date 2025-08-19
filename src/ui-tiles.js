@@ -4,13 +4,25 @@ export function drawTileLabelAndArrows(ctx, rect, { label='', active=true, zoome
   const { x, y, w, h } = rect;
   ctx.save();
 
-  // Label: only in zoomed mode
+  // Label: only in zoomed mode (solid band behind text; black active / white inactive)
   if (zoomed && label){
-    ctx.fillStyle = active ? '#0b0f16' : '#e6e8ef';
-    ctx.font = '12px ui-sans-serif, system-ui';
+    ctx.save();
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.font = '14px ui-sans-serif, system-ui';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(label, x + w/2, y + h/2);
+
+    const cx = x + w/2;
+    const cy = y + h/2;
+    const bandH = Math.max(16, Math.round(Math.min(h * 0.36, 22)));
+    const bandW = Math.max(32, Math.round(w - 10)); // leave border visible
+    ctx.fillStyle = active ? '#f4932f' : '#293042';
+    ctx.fillRect(cx - bandW/2, cy - bandH/2, bandW, bandH);
+
+    ctx.fillStyle = active ? '#000000' : '#FFFFFF';
+    ctx.fillText(label, cx, cy);
+    ctx.restore();
   }
 
   // Centered up/down arrows (zoom-only), constrained to top/bottom thirds
@@ -19,7 +31,7 @@ export function drawTileLabelAndArrows(ctx, rect, { label='', active=true, zoome
     const margin = Math.max(6, Math.min(w,h) * 0.08);
     const thirdH = h / 3;
 
-    // Base arrow size (slightly reduced)
+    // Slightly reduced arrow size
     let baseSize = Math.max(9, Math.min(w,h) * 0.22);
 
     ctx.fillStyle = '#ffffff';
@@ -27,7 +39,6 @@ export function drawTileLabelAndArrows(ctx, rect, { label='', active=true, zoome
     // --- UP arrow (top third) ---
     {
       const apexY = y + margin;
-      // Limit size so base does not exceed top third minus margin
       const maxSizeTop = Math.max(0, (y + thirdH - margin) - apexY);
       const size = Math.min(baseSize, maxSizeTop);
       const halfW = size * 0.65;
@@ -35,9 +46,9 @@ export function drawTileLabelAndArrows(ctx, rect, { label='', active=true, zoome
 
       if (size > 0.5){
         ctx.beginPath();
-        ctx.moveTo(cx, apexY);                 // apex (top)
-        ctx.lineTo(cx - halfW, baseY);         // base left
-        ctx.lineTo(cx + halfW, baseY);         // base right
+        ctx.moveTo(cx, apexY);
+        ctx.lineTo(cx - halfW, baseY);
+        ctx.lineTo(cx + halfW, baseY);
         ctx.closePath();
         ctx.fill();
       }
@@ -46,7 +57,6 @@ export function drawTileLabelAndArrows(ctx, rect, { label='', active=true, zoome
     // --- DOWN arrow (bottom third) ---
     {
       const apexY = y + h - margin;
-      // Limit size so base does not cross above bottom third + margin
       const minBaseY = y + 2*thirdH + margin;
       const maxSizeBottom = Math.max(0, apexY - minBaseY);
       const size = Math.min(baseSize, maxSizeBottom);
@@ -55,9 +65,9 @@ export function drawTileLabelAndArrows(ctx, rect, { label='', active=true, zoome
 
       if (size > 0.5){
         ctx.beginPath();
-        ctx.moveTo(cx, apexY);                 // apex (bottom)
-        ctx.lineTo(cx - halfW, baseY);         // base left
-        ctx.lineTo(cx + halfW, baseY);         // base right
+        ctx.moveTo(cx, apexY);
+        ctx.lineTo(cx - halfW, baseY);
+        ctx.lineTo(cx + halfW, baseY);
         ctx.closePath();
         ctx.fill();
       }

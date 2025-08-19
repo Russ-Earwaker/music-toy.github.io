@@ -269,15 +269,6 @@ function draw(){
     const __nowAT = ac.currentTime; const __dt = (__lastDrawAT? (__nowAT-__lastDrawAT): 0); __lastDrawAT = __nowAT;
     for (let i=0;i<blocks.length;i++){ const b=blocks[i]; if (b.rippleAge!=null && b.rippleMax){ b.rippleAge = Math.min(b.rippleMax, b.rippleAge + __dt); } }
     drawBlocksSection(ctx, blockRects, n2x(generator.nx), n2y(generator.ny), ripples, 1, noteList, sizing, null, null, ac.currentTime);
-    if (isZoomed()){
-      ctx.save(); ctx.strokeStyle='rgba(255,255,255,0.7)'; ctx.lineWidth=1; for (const b of blockRects){
-        ctx.beginPath(); ctx.moveTo(b.x+4, b.y+b.h/3); ctx.lineTo(b.x+b.w-4, b.y+b.h/3);
-        ctx.moveTo(b.x+4, b.y+2*b.h/3); ctx.lineTo(b.x+b.w-4, b.y+2*b.h/3); ctx.stroke();
-        ctx.fillStyle = '#0b0f16'; ctx.font='12px ui-sans-serif, system-ui'; ctx.textAlign='center';ctx.textBaseline='middle';
-        ctx.fillText(noteList[Math.max(0, Math.min(noteList.length-1, b.noteIndex|0))]||'', b.x+b.w/2, b.y+b.h/2);
-      }
-      ctx.restore();
-    }
     if (generator.placed){ drawGenerator(ctx, n2x(generator.nx), n2y(generator.ny), Math.max(2, generator.r) * (sizing.scale||1), ac.currentTime, ripples, NUM_STEPS, stepSeconds, (sizing.scale||1)); }
     springBlocks(1/60);
     handleRingHits(ac.currentTime);

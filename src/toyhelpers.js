@@ -261,10 +261,27 @@ export function drawThirdsGuides(ctx, rect){
   ctx.save();
   ctx.strokeStyle = 'rgba(255,255,255,0.7)';
   ctx.lineWidth = 1;
+  const cx = rect.x + rect.w/2;
+  const left = rect.x + 6;
+  const right = rect.x + rect.w - 6;
+  const gap = Math.max(40, rect.w * 0.75); // center gap to avoid label area
+  const halfGap = gap / 2;
+
+  const y1 = rect.y + rect.h/3;
+  const y2 = rect.y + 2*rect.h/3;
+
+  // top line with center gap
   ctx.beginPath();
-  ctx.moveTo(rect.x+6, rect.y + rect.h/3); ctx.lineTo(rect.x + rect.w - 6, rect.y + rect.h/3);
-  ctx.moveTo(rect.x+6, rect.y + 2*rect.h/3); ctx.lineTo(rect.x + rect.w - 6, rect.y + 2*rect.h/3);
+  ctx.moveTo(left, y1); ctx.lineTo(cx - halfGap, y1);
+  ctx.moveTo(cx + halfGap, y1); ctx.lineTo(right, y1);
   ctx.stroke();
+
+  // bottom line with center gap
+  ctx.beginPath();
+  ctx.moveTo(left, y2); ctx.lineTo(cx - halfGap, y2);
+  ctx.moveTo(cx + halfGap, y2); ctx.lineTo(right, y2);
+  ctx.stroke();
+
   ctx.restore();
 }
 
