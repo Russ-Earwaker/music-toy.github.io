@@ -1,6 +1,6 @@
 // src/bouncer.js — Bouncer toy (square canvas, zoom-aware, standardized tiles, WYSIWYG)
 import { noteList, clamp, resizeCanvasForDPR } from './utils.js';
-import { ensureAudioContext } from './audio-core.js';
+import { ensureAudioContext, getLoopInfo } from './audio-core.js';
 import { triggerInstrument } from './audio-samples.js';
 import { initToyUI } from './toyui.js';
 import { initToySizing } from './toyhelpers-sizing.js';
@@ -37,7 +37,7 @@ export function createBouncer(selector){
   const ballR     = () => Math.round(BASE_BALL_R     * (sizing.scale || 1));
 
   // Blocks (standardized tiles)
-  const N_BLOCKS = 6;
+  const N_BLOCKS = 8;
   let blocks = Array.from({length:N_BLOCKS}, (_,i)=> ({
     x: EDGE, y: EDGE, w: blockSize(), h: blockSize(),
     noteIndex: (i*3) % noteList.length, active: true, flash: 0, lastHitAT: 0
@@ -47,7 +47,7 @@ export function createBouncer(selector){
   // Cannon & ball state
   let handle = { x: worldW()*0.22, y: worldH()*0.5 };
   let draggingHandle = false, dragStart = null, dragCurr = null;
-  let lastLaunch = null;
+  let lastLaunch = null; let launchPhase = 0; let nextLaunchAt = null;
   let ball = null; // {x,y,vx,vy,r}
 
   // Zoom rescale: keep positions/speeds consistent when scale changes
@@ -56,7 +56,8 @@ export function createBouncer(selector){
     if (!f || f === 1) return;
     for (const b of blocks){ b.x *= f; b.y *= f; b.w = blockSize(); b.h = blockSize(); }
     handle.x *= f; handle.y *= f;
-    if (ball){ ball.x *= f; ball.y *= f; ball.r = ballR(); }
+    if (ball){ ball.x *= f; ball.y *= f; ball.vx *= f; ball.vy *= f; ball.r = ballR(); }
+    if (lastLaunch){ lastLaunch.vx *= f; lastLaunch.vy *= f; }
   }
   panel.addEventListener('toy-zoom', (e)=>{
     sizing.setZoom?.(!!e?.detail?.zoomed);
@@ -125,8 +126,11 @@ export function createBouncer(selector){
       if (sp > 1){
         const scl = Math.min(1, MAX_SPEED / sp); vx *= scl; vy *= scl;
         lastLaunch = { vx, vy };
+        const ac2 = ensureAudioContext(); const li = getLoopInfo?.();
+        if (ac2 && li){ const now2 = ac2.currentTime; const off = ((now2 - (li.loopStartTime||0)) % (li.barLen||1) + (li.barLen||1)) % (li.barLen||1); launchPhase = off; }
         spawnBallFrom({ x: handle.x, y: handle.y, vx, vy, r: ballR() });
-      }
+        nextLaunchAt = null;
+        }
     }
     dragStart = dragCurr = null;
     try { if (e?.pointerId != null) canvas.releasePointerCapture(e.pointerId); } catch {}
@@ -140,6 +144,8 @@ export function createBouncer(selector){
   
   
 function step(nowAT){
+    // Scheduled relaunch at loop phase
+    { const acS = ensureAudioContext(); if (lastLaunch && nextLaunchAt != null && acS){ const nowS = acS.currentTime; if (nowS >= nextLaunchAt - 0.005){ spawnBallFrom({ x: handle.x, y: handle.y, vx: lastLaunch.vx, vy: lastLaunch.vy, r: ballR() }); nextLaunchAt = null; } } }
   const ac = ensureAudioContext();
   const now = nowAT || (ac ? ac.currentTime : 0);
   const dt = Math.min(0.04, Math.max(0, now - (lastAT || now)));
@@ -253,12 +259,28 @@ function step(nowAT){
   }
   requestAnimationFrame(draw);
 
-  // Loop callback (bar re-launch)
+  
+// Loop callback (bar re-launch)
   function onLoop(){
-    if (lastLaunch){
+    if (!lastLaunch) return;
+    const ac = ensureAudioContext();
+    const li = getLoopInfo?.();
+    const barLen = (li && li.barLen) ? li.barLen : 0;
+    const phase = (launchPhase || 0) % (barLen || 1);
+    if (!ac){
+      // Fallback: just spawn immediately if we don't have an audio clock
       spawnBallFrom({ x: handle.x, y: handle.y, vx: lastLaunch.vx, vy: lastLaunch.vy, r: ballR() });
+      nextLaunchAt = null;
+      return;
+    }
+    if (barLen && phase < 0.001){
+      // Fire right at bar start if your phase is (near) zero
+      spawnBallFrom({ x: handle.x, y: handle.y, vx: lastLaunch.vx, vy: lastLaunch.vy, r: ballR() });
+      nextLaunchAt = null;
+    } else {
+      // Schedule relative to 'now' since main.js doesn't pass loopStartTime
+      nextLaunchAt = ac.currentTime + (phase || 0);
     }
   }
-
-  return { onLoop, reset: doReset, setInstrument: (n)=>{ instrument = n || instrument; }, element: canvas };
+return { onLoop, reset: doReset, setInstrument: (n)=>{ instrument = n || instrument; }, element: canvas };
 }
