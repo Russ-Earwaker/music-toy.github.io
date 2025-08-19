@@ -1,17 +1,14 @@
-// src/bouncer.js — Bouncer toy (square canvas, zoom-aware, standardized tiles, WYSIWYG)
-import { noteList, clamp, resizeCanvasForDPR } from './utils.js';
+// src/bouncer.js — Bouncer (simple: click → music). No recording/options; visual FX only.
+import { noteList, resizeCanvasForDPR } from './utils.js';
 import { ensureAudioContext, getLoopInfo } from './audio-core.js';
 import { triggerInstrument } from './audio-samples.js';
 import { initToyUI } from './toyui.js';
 import { initToySizing } from './toyhelpers-sizing.js';
 import { randomizeRects, EDGE_PAD as EDGE, hitRect, whichThirdRect, drawThirdsGuides } from './toyhelpers.js';
 import { drawBlocksSection } from './ripplesynth-blocks.js';
-
-const BASE_BLOCK_SIZE = 36;
-const BASE_CANNON_R   = 11;
-const BASE_BALL_R     = 7;
-const MAX_SPEED       = 18;
-const LAUNCH_K       = 0.175; // launch sensitivity per px (zoom-invariant)
+import { circleRectHit } from './bouncer-helpers.js';
+import { BASE_BLOCK_SIZE, BASE_CANNON_R, BASE_BALL_R, MAX_SPEED, LAUNCH_K } from './bouncer-consts.js';
+import { createImpactFX } from './bouncer-impact.js';
 
 export function createBouncer(selector){
   const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector;
@@ -28,15 +25,15 @@ export function createBouncer(selector){
   host.appendChild(canvas);
   const ctx = canvas.getContext('2d', { alpha:false });
 
-  // Sizing (same as Wheel/Rippler)
+  // Sizing (square like Wheel/Rippler)
   const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true });
-  function worldW(){ return canvas.clientWidth  || panel.clientWidth  || 356; }
-  function worldH(){ return canvas.clientHeight || panel.clientHeight || 260; }
+  const worldW = ()=> (canvas.clientWidth  || panel.clientWidth  || 356);
+  const worldH = ()=> (canvas.clientHeight || panel.clientHeight || 260);
   const blockSize = () => Math.round(BASE_BLOCK_SIZE * (sizing.scale || 1));
   const cannonR   = () => Math.round(BASE_CANNON_R   * (sizing.scale || 1));
   const ballR     = () => Math.round(BASE_BALL_R     * (sizing.scale || 1));
 
-  // Blocks (standardized tiles)
+  // Blocks (8) — WYSIWYG notes
   const N_BLOCKS = 8;
   let blocks = Array.from({length:N_BLOCKS}, (_,i)=> ({
     x: EDGE, y: EDGE, w: blockSize(), h: blockSize(),
@@ -47,10 +44,13 @@ export function createBouncer(selector){
   // Cannon & ball state
   let handle = { x: worldW()*0.22, y: worldH()*0.5 };
   let draggingHandle = false, dragStart = null, dragCurr = null;
-  let lastLaunch = null; let launchPhase = 0; let nextLaunchAt = null;
-  let ball = null; // {x,y,vx,vy,r}
+  let lastLaunch = null;      // {vx, vy}
+  let launchPhase = 0;        // seconds into bar
+  let nextLaunchAt = null;    // audio time to relaunch
+  let ball = null;            // {x,y,vx,vy,r}
+  const fx = createImpactFX();
 
-  // Zoom rescale: keep positions/speeds consistent when scale changes
+  // Zoom rescale: keep positions AND speeds consistent when scale changes
   let lastScale = sizing.scale || 1;
   function rescaleAll(f){
     if (!f || f === 1) return;
@@ -66,20 +66,9 @@ export function createBouncer(selector){
     lastScale = s;
   });
 
-  // Helpers
-  function spawnBallFrom(L){ ball = { x:L.x, y:L.y, vx:L.vx, vy:L.vy, r:L.r }; }
-  function circleRectHit(cx, cy, r, R){
-    const nx = clamp(cx, R.x, R.x + R.w);
-    const ny = clamp(cy, R.y, R.y + R.h);
-    const dx = cx - nx, dy = cy - ny;
-    return (dx*dx + dy*dy) <= (r*r);
-  }
-
   // UI buttons
-  function doRandom(){
-    randomizeRects(blocks, worldW(), worldH(), EDGE);
-  }
-  function doReset(){ ball = null; lastLaunch = null; for (const b of blocks){ b.flash = 0; b.lastHitAT = 0; } }
+  function doRandom(){ randomizeRects(blocks, worldW(), worldH(), EDGE); }
+  function doReset(){ ball = null; lastLaunch = null; nextLaunchAt = null; for (const b of blocks){ b.flash = 0; b.lastHitAT = 0; } }
   panel.addEventListener('toy-random', doRandom);
   panel.addEventListener('toy-reset', doReset);
   panel.addEventListener('toy-clear', doReset);
@@ -111,26 +100,27 @@ export function createBouncer(selector){
       e.preventDefault();
     }
   });
-  canvas.addEventListener('pointermove', (e)=>{
-    if (!draggingHandle) return;
-    dragCurr = localPoint(e);
-  });
+  canvas.addEventListener('pointermove', (e)=>{ if (draggingHandle) dragCurr = localPoint(e); });
   function endDrag(e){
     if (!draggingHandle) return;
     draggingHandle = false;
     if (dragStart && dragCurr){
-      const __scale = (sizing.scale || 1);
-      let vx = (dragCurr.x - dragStart.x) * (LAUNCH_K / __scale);
-      let vy = (dragCurr.y - dragStart.y) * (LAUNCH_K / __scale);
+      const sc = (sizing.scale || 1);
+      let vx = (dragCurr.x - dragStart.x) * (LAUNCH_K / sc);
+      let vy = (dragCurr.y - dragStart.y) * (LAUNCH_K / sc);
       const sp = Math.hypot(vx, vy);
       if (sp > 1){
         const scl = Math.min(1, MAX_SPEED / sp); vx *= scl; vy *= scl;
         lastLaunch = { vx, vy };
-        const ac2 = ensureAudioContext(); const li = getLoopInfo?.();
-        if (ac2 && li){ const now2 = ac2.currentTime; const off = ((now2 - (li.loopStartTime||0)) % (li.barLen||1) + (li.barLen||1)) % (li.barLen||1); launchPhase = off; }
+        const ac = ensureAudioContext(); const li = getLoopInfo?.();
+        if (ac && li){
+          const now = ac.currentTime;
+          const off = ((now - (li.loopStartTime||0)) % (li.barLen||1) + (li.barLen||1)) % (li.barLen||1);
+          launchPhase = off;
+        } else { launchPhase = 0; }
         spawnBallFrom({ x: handle.x, y: handle.y, vx, vy, r: ballR() });
         nextLaunchAt = null;
-        }
+      }
     }
     dragStart = dragCurr = null;
     try { if (e?.pointerId != null) canvas.releasePointerCapture(e.pointerId); } catch {}
@@ -139,116 +129,108 @@ export function createBouncer(selector){
   canvas.addEventListener('pointercancel', endDrag);
   window.addEventListener('pointerup', endDrag, true);
 
+  function spawnBallFrom(L){ ball = { x:L.x, y:L.y, vx:L.vx, vy:L.vy, r:L.r }; fx.onLaunch(L.x, L.y); }
+
   // Physics/update
   let lastAT = 0;
-  
-  
-function step(nowAT){
-    // Scheduled relaunch at loop phase
-    { const acS = ensureAudioContext(); if (lastLaunch && nextLaunchAt != null && acS){ const nowS = acS.currentTime; if (nowS >= nextLaunchAt - 0.005){ spawnBallFrom({ x: handle.x, y: handle.y, vx: lastLaunch.vx, vy: lastLaunch.vy, r: ballR() }); nextLaunchAt = null; } } }
-  const ac = ensureAudioContext();
-  const now = nowAT || (ac ? ac.currentTime : 0);
-  const dt = Math.min(0.04, Math.max(0, now - (lastAT || now)));
-  lastAT = now;
-  if (!ball) return;
+  function step(nowAT){
+    const ac = ensureAudioContext();
+    const now = nowAT || (ac ? ac.currentTime : 0);
+    const dt = Math.min(0.04, Math.max(0, now - (lastAT || now)));
+    // Scheduled relaunch at phase
+    { if (lastLaunch && nextLaunchAt != null && ac && now >= nextLaunchAt - 0.005){ spawnBallFrom({ x: handle.x, y: handle.y, vx: lastLaunch.vx, vy: lastLaunch.vy, r: ballR() }); nextLaunchAt = null; } }
+    lastAT = now;
 
-  // Decay flashes and reset hit flags
-  for (const b of blocks){ b.flash = Math.max(0, b.flash - dt); b.__hitThisStep = false; }
+    fx.onStep(ball);
+    // Decay flashes
+    for (const b of blocks){ b.flash = Math.max(0, b.flash - dt); b.__hitThisStep = false; }
 
-  const L=EDGE, T=EDGE, R=worldW()-EDGE, B=worldH()-EDGE;
-  const eps = 0.001;
+    if (!ball) return;
 
-  // Sub-stepped integration to reduce tunneling
-  const speedX = Math.abs(ball.vx), speedY = Math.abs(ball.vy);
-  const maxComp = Math.max(speedX, speedY);
-  const maxStep = Math.max(1, ball.r * 0.4); // finer steps than before
-  const steps = Math.max(1, Math.ceil(maxComp / maxStep));
-  const stepx = ball.vx / steps, stepy = ball.vy / steps;
+    const L=EDGE, T=EDGE, R=worldW()-EDGE, B=worldH()-EDGE;
+    const eps = 0.001;
 
-  for (let s=0; s<steps; s++){
-    ball.x += stepx; ball.y += stepy;
+    // Sub-stepped integration to reduce tunneling
+    const maxComp = Math.max(Math.abs(ball.vx), Math.abs(ball.vy));
+    const maxStep = Math.max(1, ball.r * 0.4);
+    const steps = Math.max(1, Math.ceil(maxComp / maxStep));
+    const stepx = ball.vx / steps, stepy = ball.vy / steps;
 
-    // Wall bounces
-    if (ball.x - ball.r < L){ ball.x = L + ball.r + eps; ball.vx = Math.abs(ball.vx); }
-    if (ball.x + ball.r > R){ ball.x = R - ball.r - eps; ball.vx = -Math.abs(ball.vx); }
-    if (ball.y - ball.r < T){ ball.y = T + ball.r + eps; ball.vy = Math.abs(ball.vy); }
-    if (ball.y + ball.r > B){ ball.y = B - ball.r - eps; ball.vy = -Math.abs(ball.vy); }
+    for (let s=0; s<steps; s++){
+      ball.x += stepx; ball.y += stepy;
 
-    // Block collisions
-    for (const b of blocks){
-      if (!b.active) continue;
-      if (circleRectHit(ball.x, ball.y, ball.r, b)){
-        const cx = clamp(ball.x, b.x, b.x + b.w), cy = clamp(ball.y, b.y, b.y + b.h);
-        const dx = ball.x - cx, dy = ball.y - cy;
-        if (Math.abs(dx) > Math.abs(dy)){
-          ball.vx = (dx>0? Math.abs(ball.vx): -Math.abs(ball.vx));
-          ball.x = cx + (dx>0 ? ball.r + eps : -ball.r - eps);
-        } else {
-          ball.vy = (dy>0? Math.abs(ball.vy): -Math.abs(ball.vy));
-          ball.y = cy + (dy>0 ? ball.r + eps : -ball.r - eps);
-        }
-        b.__hitThisStep = true;
+      // Walls
+      if (ball.x - ball.r < L){ ball.x = L + ball.r + eps; ball.vx = Math.abs(ball.vx); }
+      if (ball.x + ball.r > R){ ball.x = R - ball.r - eps; ball.vx = -Math.abs(ball.vx); }
+      if (ball.y - ball.r < T){ ball.y = T + ball.r + eps; ball.vy = Math.abs(ball.vy); }
+      if (ball.y + ball.r > B){ ball.y = B - ball.r - eps; ball.vy = -Math.abs(ball.vy); }
 
-        // Ensure a minimum bounce speed so it doesn't stall on faces/corners
-        const minSpeed = 1.2;
-        if (Math.abs(ball.vx) < minSpeed && Math.abs(dx) > Math.abs(dy)){
-          ball.vx = (ball.vx >= 0 ? minSpeed : -minSpeed);
-        }
-        if (Math.abs(ball.vy) < minSpeed && Math.abs(dy) >= Math.abs(dx)){
-          ball.vy = (ball.vy >= 0 ? minSpeed : -minSpeed);
+      // Blocks
+      for (const b of blocks){
+        if (!b.active) continue;
+        if (circleRectHit(ball.x, ball.y, ball.r, b)){
+          const cx = Math.max(b.x, Math.min(ball.x, b.x + b.w));
+          const cy = Math.max(b.y, Math.min(ball.y, b.y + b.h));
+          const dx = ball.x - cx, dy = ball.y - cy;
+          if (Math.abs(dx) > Math.abs(dy)){
+            ball.vx = (dx>0? Math.abs(ball.vx): -Math.abs(ball.vx));
+            ball.x = cx + (dx>0 ? ball.r + eps : -ball.r - eps);
+          } else {
+            ball.vy = (dy>0? Math.abs(ball.vy): -Math.abs(ball.vy));
+            ball.y = cy + (dy>0 ? ball.r + eps : -ball.r - eps);
+          }
+          b.__hitThisStep = true;
         }
       }
     }
-  }
 
-  // Light friction
-  ball.vx *= 0.999; ball.vy *= 0.999;
+    // Friction
+    ball.vx *= 0.999; ball.vy *= 0.999;
 
-  // Trigger notes for hits (cooldown 90ms)
-  for (const b of blocks){
-    if (b.__hitThisStep && (now - (b.lastHitAT || 0) > 0.09)){
-      const name = noteList[b.noteIndex] || 'C4';
-      try { triggerInstrument(instrument, name, now + 0.0005); } catch {}
-      b.lastHitAT = now; b.flash = 0.18;
+    // Triggers
+    for (const b of blocks){
+      if (b.__hitThisStep && (now - (b.lastHitAT || 0) > 0.09)){
+        const name = noteList[b.noteIndex] || 'C4';
+        try { triggerInstrument(instrument, name, now + 0.0005); } catch {}
+        b.lastHitAT = now; b.flash = 0.18;
+      }
+      b.__hitThisStep = false;
     }
-    b.__hitThisStep = false;
   }
-}
 
-
-  // Draw loop
+  // Draw
   function draw(){
-    // sync scale if layout changed (e.g., zoom toggle)
+    // Sync scale on layout/zoom change
     const sNow = sizing.scale || 1;
     if (sNow !== lastScale){ rescaleAll(sNow / lastScale); lastScale = sNow; }
 
     resizeCanvasForDPR(canvas, ctx);
     const w = canvas.width, h = canvas.height;
-    // background
     ctx.fillStyle = '#0b0f16'; ctx.fillRect(0,0,w,h);
 
-    // playfield border
+    // Border
     ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 2;
     ctx.strokeRect(EDGE, EDGE, w-EDGE*2, h-EDGE*2);
 
-    // keep block size in sync with zoom
+    // Blocks (standardized look)
     for (const b of blocks){ b.w = blockSize(); b.h = blockSize(); }
-
-    // standardized blocks
     { const ac = ensureAudioContext(); const now = (ac?ac.currentTime:0); drawBlocksSection(ctx, blocks, 0, 0, null, 1, noteList, sizing, null, null, now); }
 
-    // cannon
+    // FX
+    fx.draw(ctx);
+
+    // Cannon
     ctx.beginPath(); ctx.arc(handle.x, handle.y, cannonR(), 0, Math.PI*2);
     ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fill();
     ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.stroke();
 
-    // drag vector preview
+    // Drag vector
     if (draggingHandle && dragStart && dragCurr){
       ctx.beginPath(); ctx.moveTo(handle.x, handle.y); ctx.lineTo(dragCurr.x, dragCurr.y);
       ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 2; ctx.stroke();
     }
 
-    // ball
+    // Ball
     if (ball){
       ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2);
       ctx.fillStyle = 'white'; ctx.globalAlpha = 0.9; ctx.fill(); ctx.globalAlpha = 1;
@@ -259,28 +241,19 @@ function step(nowAT){
   }
   requestAnimationFrame(draw);
 
-  
-// Loop callback (bar re-launch)
+  // Loop callback (relaunch at captured phase each bar)
   function onLoop(){
     if (!lastLaunch) return;
     const ac = ensureAudioContext();
-    const li = getLoopInfo?.();
-    const barLen = (li && li.barLen) ? li.barLen : 0;
+    const li = getLoopInfo?.(); const barLen = (li && li.barLen) ? li.barLen : 0;
     const phase = (launchPhase || 0) % (barLen || 1);
-    if (!ac){
-      // Fallback: just spawn immediately if we don't have an audio clock
-      spawnBallFrom({ x: handle.x, y: handle.y, vx: lastLaunch.vx, vy: lastLaunch.vy, r: ballR() });
-      nextLaunchAt = null;
-      return;
-    }
+    if (!ac){ spawnBallFrom({ x: handle.x, y: handle.y, vx: lastLaunch.vx, vy: lastLaunch.vy, r: ballR() }); nextLaunchAt = null; return; }
     if (barLen && phase < 0.001){
-      // Fire right at bar start if your phase is (near) zero
-      spawnBallFrom({ x: handle.x, y: handle.y, vx: lastLaunch.vx, vy: lastLaunch.vy, r: ballR() });
-      nextLaunchAt = null;
+      spawnBallFrom({ x: handle.x, y: handle.y, vx: lastLaunch.vx, vy: lastLaunch.vy, r: ballR() }); nextLaunchAt = null;
     } else {
-      // Schedule relative to 'now' since main.js doesn't pass loopStartTime
       nextLaunchAt = ac.currentTime + (phase || 0);
     }
   }
-return { onLoop, reset: doReset, setInstrument: (n)=>{ instrument = n || instrument; }, element: canvas };
+
+  return { onLoop, reset: doReset, setInstrument: (n)=>{ instrument = n || instrument; }, element: canvas };
 }
