@@ -7,7 +7,7 @@ import { createBouncer } from './bouncer.js';
 import { createRippleSynth } from './ripplesynth.js';
 import { assertRipplerContracts, runRipplerSmoke } from './ripplesynth-safety.js';
 import { createLoopIndicator } from './loopindicator.js';
-import { initDragBoard } from './board.js';
+import { initDragBoard, organizeBoard } from './board.js';
 
 if (!window.__booted__) {
   window.__booted__ = true;
@@ -62,7 +62,8 @@ if (!window.__booted__) {
       toys.forEach(t => t?.onLoop?.(loopStartTime));
     }
   );
-
+  // --- Transport (top bar) ---
+  
   // --- Transport (top bar) ---
   function setupTransport(){
     const playBtn = document.getElementById('play');
@@ -76,12 +77,45 @@ if (!window.__booted__) {
         setBpm(v);
       });
     }
-    playBtn?.addEventListener('click', async ()=>{ await unlockAudioAndStart(); });
-    stopBtn?.addEventListener('click', ()=>{
-      scheduler.stop();
-      grids.forEach(g => markGridCol(g, 0));
-      toys.forEach(t => t?.reset?.());
-    });
+
+    // Hide/remove play/stop (auto-play system)
+    if (playBtn) { playBtn.style.display = 'none'; playBtn.disabled = true; }
+    if (stopBtn) { stopBtn.style.display = 'none'; stopBtn.disabled = true; }
+
+    // Create "Organise" button in the header/toolbar
+    try {
+      // Prefer the same container as BPM control if present
+      const host = (bpmInput && bpmInput.parentElement) || document.getElementById('toolbar') || document.querySelector('header') || document.body;
+      let orgBtn = document.getElementById('organise-toys-btn');
+      if (!orgBtn){
+        orgBtn = document.createElement('button');
+        orgBtn.id = 'organise-toys-btn';
+        orgBtn.type = 'button';
+        orgBtn.textContent = 'Organise';
+        orgBtn.title = 'Arrange all toys neatly on screen';
+        orgBtn.style.marginLeft = '8px';
+        orgBtn.style.padding = '6px 10px';
+        orgBtn.style.border = '1px solid #252b36';
+        orgBtn.style.borderRadius = '10px';
+        orgBtn.style.background = '#0d1117';
+        orgBtn.style.color = '#e6e8ef';
+        orgBtn.style.cursor = 'pointer';
+        // Ensure visible if appended to body fallback
+        if (host === document.body){
+          orgBtn.style.position = 'fixed';
+          orgBtn.style.top = '10px';
+          orgBtn.style.right = '10px';
+          orgBtn.style.zIndex = '10001';
+        }
+        host.appendChild(orgBtn);
+        orgBtn.addEventListener('click', ()=> {
+          try { organizeBoard(); } catch {}
+          try { window.dispatchEvent(new Event('organise-toys')); } catch {}
+        });
+      }
+    } catch (e) {
+      console.warn('organise button add failed', e);
+    }
   }
 
   // --- Audio Unlock & Asset Load ---

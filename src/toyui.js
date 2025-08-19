@@ -185,10 +185,11 @@ function setZoom(z){
       panel.dataset.prevStyle = panel.getAttribute('style') || '';
       panel.classList.add('toy-zoomed-floating');
       // Center and elevate panel in viewport
-      panel.style.position = 'fixed';
-      panel.style.left = '50%'; panel.style.top = '50%';
-      panel.style.transform = 'translate(-50%, -50%)';
-      panel.style.zIndex = '10000';
+      panel.style.setProperty('position','fixed','important');
+      panel.style.setProperty('left','50%','important');
+      panel.style.setProperty('top','50%','important');
+      panel.style.setProperty('transform','translate(-50%, -50%)','important');
+      panel.style.setProperty('z-index','10000','important');
       
       // Freeze page scroll
       if (!document.body.dataset._prevOverflow){ document.body.dataset._prevOverflow = document.body.style.overflow || ''; }

@@ -165,3 +165,31 @@ export function initDragBoard(boardSel = '#board') {
   document.addEventListener('lostpointercapture', endDrag, true);
   window.addEventListener('beforeunload', saveAll);
 }
+
+
+export function organizeBoard(boardSel = '#board'){
+  const board = document.querySelector(boardSel);
+  if (!board) return;
+  const panels = Array.from(board.querySelectorAll('.toy-panel'));
+  const GAP = 16;
+  const maxW = Math.max(480, board.clientWidth || window.innerWidth);
+  const colW = 380, colH = 280;
+  const cols = Math.max(1, Math.floor((maxW - GAP) / (colW + GAP)));
+  const saved = JSON.parse(localStorage.getItem('toyPositions') || '{}');
+  panels.forEach((el, i) => {
+    // ensure id
+    if (!el.id) { const kind = (el.getAttribute('data-toy') || 'toy').toLowerCase(); el.id = `${kind}-${i+1}`; }
+    const c = i % cols;
+    const r = Math.floor(i / cols);
+    const left = (GAP + c * (colW + GAP)) + 'px';
+    const top  = (GAP + r * (colH + GAP)) + 'px';
+    el.style.setProperty('position','absolute','important');
+    el.style.setProperty('left', left, 'important');
+    el.style.setProperty('top',  top,  'important');
+    saved[el.id] = { left, top };
+  });
+  localStorage.setItem('toyPositions', JSON.stringify(saved));
+}
+
+
+window.addEventListener('organise-toys', ()=> organizeBoard());
