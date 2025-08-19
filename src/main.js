@@ -157,26 +157,43 @@ if (!window.__booted__) {
     // Other toys
     toys = [];
     let wheelUsed = false;
-    document.querySelectorAll('.toy-panel').forEach((panel) => {
+    
+    // Ensure at least one Wheel panel exists
+    try {
+      const board = document.getElementById('board');
+      const panels = Array.from(document.querySelectorAll('.toy-panel'));
+      const hasWheel = panels.some(p => (p.getAttribute('data-toy')||'').toLowerCase()==='wheel');
+      if (!hasWheel) {
+        // Prefer converting an extra bouncer if present
+        const extraBouncer = panels.filter(p => (p.getAttribute('data-toy')||'').toLowerCase()==='bouncer')[1];
+        if (extraBouncer) {
+          extraBouncer.setAttribute('data-toy', 'wheel');
+        } else if (board) {
+          const sec = document.createElement('section');
+          sec.className = 'toy-panel';
+          sec.setAttribute('data-toy', 'wheel');
+          board.appendChild(sec);
+        }
+      }
+    } catch{}
+document.querySelectorAll('.toy-panel').forEach((panel) => {
       if (panel.dataset.toyInit === '1') return;
       const kind = (panel.getAttribute('data-toy') || '').toLowerCase();
       let inst = null;
+      
       try{
         if (kind === 'rippler' || kind === 'ripple') {
           inst = createRippleSynth(panel);
         } else if (kind === 'bouncer') {
-          if (!wheelUsed) {
-            let wheelInstrument = 'slap bass guitar';
-            buildWheel(panel, {
-              onNote: (midi, name, vel)=> { try { const ac = ensureAudioContext(); triggerInstrument(wheelInstrument || 'slap bass guitar', name, ac.currentTime + 0.0005); } catch(e){} },
-              getBpm: ()=> ((getLoopInfo && getLoopInfo().bpm) || DEFAULT_BPM)
-            });
-            inst = { setInstrument: (n)=> { wheelInstrument = n; } };
-            try { panel.addEventListener('toy-instrument', (e)=>{ wheelInstrument = (e?.detail?.value) || wheelInstrument; }); } catch {}
-            wheelUsed = true;
-          } else {
-            inst = createBouncer(panel);
-          }
+          inst = createBouncer(panel);
+        } else if (kind === 'wheel') {
+          let wheelInstrument = 'slap bass guitar';
+          buildWheel(panel, {
+            onNote: (midi, name, vel)=> { try { const ac = ensureAudioContext(); triggerInstrument(wheelInstrument || 'slap bass guitar', name, ac.currentTime + 0.0005); } catch(e){} },
+            getBpm: ()=> ((getLoopInfo && getLoopInfo().bpm) || DEFAULT_BPM)
+          });
+          inst = { setInstrument: (n)=> { wheelInstrument = n; } };
+          try { panel.addEventListener('toy-instrument', (e)=>{ wheelInstrument = (e?.detail?.value) || wheelInstrument; }); } catch {}
         } else {
           return;
         }
@@ -194,7 +211,7 @@ if (!window.__booted__) {
       }catch(e){
         console.error('[boot] toy init failed for', kind, e);
       }
-    });
+});
     console.log('[boot] toys:', toys.length);
     try { assertRipplerContracts(); runRipplerSmoke(); } catch {}
 
