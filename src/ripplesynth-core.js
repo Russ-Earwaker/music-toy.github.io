@@ -221,7 +221,7 @@ function spawnRipple(manual=false){
         let k = Math.ceil((whenAT - barStartAT)/slotLen); if (k<0) k=0;
         const slotIx = k % NUM_STEPS;
         const name = noteList[b.noteIndex] || 'C4';
-        if (liveBlocks.has(i) && !recording) { try{ triggerInstrument(currentInstrument, name, whenAT + 0.0005); }catch{} }
+        if (liveBlocks.has(i) && !recording) { try{ triggerInstrument(currentInstrument, name, whenAT + 0.0005); __schedState?.suppressSlots?.add?.(slotIx); __schedState.suppressUntilAT = Math.max(__schedState.suppressUntilAT||0, whenAT + 0.12); }catch{} }
         if (recording || recordOnly.has(i)){
           try{ __schedState?.suppressSlots?.add?.(slotIx); __schedState.suppressUntilAT = barStartAT + (NUM_STEPS*slotLen) - 0.001; triggerInstrument(currentInstrument, name, barStartAT + k*slotLen + 0.0005); }catch{}
           const slot = pattern[slotIx];
@@ -285,6 +285,7 @@ function reset(){
     pattern.forEach(s=> s.clear());
     barStartAT = ac.currentTime; nextSlotAT = barStartAT + stepSeconds(); nextSlotIx = 1; recording = true;
   }
+    randomizeAll();
     requestAnimationFrame(draw);
 return { setInstrument: (name)=> { currentInstrument = name || currentInstrument; try{ ui.setInstrument(name); }catch{} }, reset, element: canvas };
 }

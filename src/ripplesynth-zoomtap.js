@@ -16,6 +16,8 @@ export function handleBlockTap(blocks, index, point, rect, deps){
     b.active = !b.active; // soft-mute: keep pattern membership so it can rejoin on re-enable
     if (!wasActive && b.active){
       try { __schedState?.recordOnly?.add?.(index); } catch {}
+      // Immediate feedback when enabling mid-ripple (does not alter scheduling)
+      try { const name = noteList[b.noteIndex] || 'C4'; trigger(instrument, name, ac.currentTime + 0.0005); } catch {}
     }
   } else {
     b.noteIndex = Math.max(0, Math.min(noteList.length-1, (b.noteIndex|0) - 1));
