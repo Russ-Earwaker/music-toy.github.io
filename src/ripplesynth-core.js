@@ -79,7 +79,7 @@ const EDGE=10; const W=()=> (canvas.clientWidth  || panel.clientWidth  || 356)|0
   let _genDownPos = null;
   let lastSpawnPerf = 0;
   let _wasPlacedAtDown = false;
-  const __schedState = { suppressSlots: new Set(),
+  const __schedState = { suppressSlots: new Set(), suppressUntilMap: new Map(),
     get barStartAT(){ return barStartAT; }, set barStartAT(v){ barStartAT = v; },
     get nextSlotAT(){ return nextSlotAT; }, set nextSlotAT(v){ nextSlotAT = v; },
     get nextSlotIx(){ return nextSlotIx; }, set nextSlotIx(v){ nextSlotIx = v; },
@@ -153,7 +153,7 @@ const EDGE=10; const W=()=> (canvas.clientWidth  || panel.clientWidth  || 356)|0
   canvas.addEventListener('pointerdown', (e)=>{
     const gp = getCanvasPos(canvas, e);
     const gx0 = n2x(generator.nx), gy0 = n2y(generator.ny);
-    const nearGen = generator.placed && !isZoomed() && (Math.hypot(gp.x-gx0, gp.y-gy0) <= Math.max(20, generator.r*(sizing.scale||1)+10));
+    const nearGen = generator.placed && !isZoomed() && (Math.hypot(gp.x - gx0, gp.y - gy0) <= Math.max(20, generator.r*(sizing.scale||1)+10));
     dragMuteActive = nearGen; playbackMuted = nearGen; if (nearGen){ ripples.length = 0; }
     _genDownPos = { x: gx0, y: gy0 };
     if (isZoomed()){
@@ -214,9 +214,12 @@ function spawnRipple(manual=false){
         const ang = Math.atan2(cy - gy, cx - gx), push = 64 * (sizing.scale || 1); b.vx += Math.cos(ang)*push; b.vy += Math.sin(ang)*push;
         const whenAT = ac.currentTime, slotLen = stepSeconds(); let k = Math.ceil((whenAT - barStartAT)/slotLen); if (k<0) k=0;
         const slotIx = k % NUM_STEPS; const name = noteList[b.noteIndex] || 'C4';
-        if (liveBlocks.has(i)) { try { triggerInstrument(currentInstrument, name, whenAT + 0.0005); __schedState?.suppressSlots?.add?.(slotIx); } catch {} }
+        if (liveBlocks.has(i)) { try { triggerInstrument(currentInstrument, name, whenAT + 0.0005); } catch {} }
+          try { } catch {}
+            try { } catch {}
         if (!liveBlocks.has(i) && (recording || recordOnly.has(i))){
-          try { __schedState?.suppressSlots?.add?.(slotIx); triggerInstrument(currentInstrument, name, barStartAT + k*slotLen + 0.0005); } catch {}
+          try { triggerInstrument(currentInstrument, name, barStartAT + k*slotLen + 0.0005); } catch {}
+          try { } catch {}
           const slot = pattern[slotIx]; let existsSame = false;
           for (const jj of slot){ const nm = noteList[blocks[jj].noteIndex] || 'C4'; if (nm === name){ existsSame = true; break; } }
           if (!existsSame) slot.add(i); if (recordOnly.has(i)) recordOnly.delete(i);
@@ -252,18 +255,23 @@ function draw(){
       try { initParticles(canvas.width, canvas.height, EDGE, 85);  } catch {}
     }
     if (generator.placed){
-      ctx.save(); ctx.strokeStyle='rgba(255,255,255,0.65)'; ctx.lineWidth=1.5; drawWaves(ctx, n2x(generator.nx), n2y(generator.ny), ac.currentTime, RING_SPEED(), ripples, NUM_STEPS, stepSeconds, (sizing.scale||1));
+      ctx.save();
+      ctx.strokeStyle='rgba(255,255,255,0.65)';
+      drawWaves(ctx, n2x(generator.nx), n2y(generator.ny), ac.currentTime, RING_SPEED(), ripples, NUM_STEPS, stepSeconds, (sizing.scale||1));
       ctx.restore();
     }
     drawParticles(ctx, ac.currentTime, ripples, { x:n2x(generator.nx), y:n2y(generator.ny) });
-    const size=Math.round(BASE*(sizing.scale||1)); const blockRects=blocks.map(b=>({...b,x:n2x(b.nx)-size/2,y:n2y(b.ny)-size/2,
-    w:size,h:size}));
-    const __nowAT = ac.currentTime; const __dt = (__lastDrawAT? (__nowAT-__lastDrawAT): 0); __lastDrawAT = __nowAT;
-    for (let i=0;i<blocks.length;i++){ const b=blocks[i]; if (b.rippleAge!=null && b.rippleMax){ b.rippleAge = Math.min(b.rippleMax, b.rippleAge + __dt); } }
+    const size = Math.round(BASE*(sizing.scale||1));
+    const blockRects = blocks.map(b=> ({...b, x: n2x(b.nx)-size/2, y: n2y(b.ny)-size/2, w: size, h: size}));
+    const __nowAT = ac.currentTime; const __dt = (__lastDrawAT ? (__nowAT-__lastDrawAT) : 0); __lastDrawAT = __nowAT;
+    for (let i=0;i<blocks.length;i++){ const b=blocks[i]; if (b.rippleAge != null && b.rippleMax){ b.rippleAge = Math.min(b.rippleMax, Math.max(0, b.rippleAge + __dt)); } }
     drawBlocksSection(ctx, blockRects, n2x(generator.nx), n2y(generator.ny), ripples, 1, noteList, sizing, null, null, ac.currentTime);
-    if (generator.placed){ drawGenerator(ctx, n2x(generator.nx), n2y(generator.ny), Math.max(2, generator.r) * (sizing.scale||1), ac.currentTime, ripples, NUM_STEPS, stepSeconds, (sizing.scale||1)); }
+    if (generator.placed){
+      drawGenerator(ctx, n2x(generator.nx), n2y(generator.ny), ac.currentTime, ripples, NUM_STEPS, stepSeconds, (sizing.scale||1));
+    }
     springBlocks(1/60);
     handleRingHits(ac.currentTime);
+    scheduler.tick();
     scheduler.tick();
     if (input && input.state && input.state.generatorDragEnded){
       input.state.generatorDragEnded=false;
