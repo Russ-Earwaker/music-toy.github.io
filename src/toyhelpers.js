@@ -173,75 +173,9 @@ export function hitBottomStrip(p, b){
  * - Exposes vw/vh (CSS px), setZoom(zoomed) -> ratio, and scale (1 or 2).
  */
 
-export function initToySizing(shell, canvas, ctx, { squareFromWidth = false, aspectFrom = null, minH = 60 } = {}){
-  const host = shell.querySelector?.('.toy-body') || shell;
+export { initToySizing } from './toyhelpers-sizing.js';
 
-  // Measure a stable "slot width" once (or when unzoomed) and use it for both zoom states
-  function measureWidthFallback(){
-    const r = host.getBoundingClientRect?.();
-    const w = Math.max(1, Math.floor(r?.width || host.clientWidth || shell.clientWidth || 360));
-    return w;
-  }
 
-  let slotW = measureWidthFallback();
-  let scale = 1; // 1x standard, 2x zoom
-
-  function baseHeightFor(w){
-    if (typeof aspectFrom === 'function') return Math.max(minH, Math.floor(aspectFrom(w)));
-    if (squareFromWidth) return w;
-    const r = host.getBoundingClientRect?.();
-    const hSnap = Math.max(minH, Math.floor(r?.height || host.clientHeight || shell.clientHeight || 200));
-    return hSnap;
-  }
-
-  function applySize(){
-    const cssW = Math.max(1, Math.floor(slotW * scale));
-    const cssH = Math.max(1, Math.floor(baseHeightFor(slotW) * scale));
-    canvas.style.width  = cssW + 'px';
-    canvas.style.height = cssH + 'px';
-    // Keep canvas from influencing ancestor reflow weirdly
-    canvas.style.maxWidth = '100%';
-    resizeCanvasForDPR(canvas, ctx);
-  }
-
-  function ensureFit(){
-    // Only update slotW when unzoomed; avoid feedback during zoom
-    if (scale === 1){
-      const wNow = measureWidthFallback();
-      if (wNow !== slotW) slotW = wNow;
-    }
-    applySize();
-  }
-
-  // Window resize is enough; avoid ResizeObserver feedback entirely
-  const onResize = ()=> ensureFit();
-  window.addEventListener('resize', onResize);
-  // Initial apply
-  ensureFit();
-
-  function setZoom(zoomed){
-    const target = zoomed ? 2 : 1;
-    if (target === scale) return 1;
-    const ratio = target / scale;
-    scale = target;
-    applySize();
-    return ratio;
-  }
-
-  function vw(){ return Math.max(1, Math.floor(canvas.clientWidth || slotW * scale)); }
-  function vh(){ return Math.max(1, Math.floor(canvas.clientHeight || baseHeightFor(slotW) * scale)); }
-
-  return {
-    host,
-    vw, vh,
-    setZoom,
-    get scale(){ return scale; },
-    disconnect(){
-      try { window.removeEventListener('resize', onResize); } catch {}
-    }
-  };
-}
-// Utilities
 export function findTopmostHit(p, blocks){
   return blocks.slice().reverse().find(b => hitRect(p, b));
 }
@@ -295,4 +229,3 @@ export function roundRectPath(ctx, x, y, w, h, r=10){
   ctx.arcTo(x, y, x+w, y, r);
   ctx.closePath();
 }
-
