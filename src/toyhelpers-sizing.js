@@ -26,14 +26,15 @@ export function initToySizing(shell, canvas, ctx, { squareFromWidth = false, asp
   }
 
   let scale = 1; // 1 = standard, 2 = zoomed
-  let slotW = measureWidthFallback();
+  const baseSlotW = measureWidthFallback();
+  let slotW = baseSlotW;
 
   function baseHeightFor(wCss){
     if (squareFromWidth) return wCss;
     if (typeof aspectFrom === 'function'){
       try { const r = aspectFrom(wCss); if (r && isFinite(r)) return Math.max(minH, Math.floor(r)); } catch {}
     }
-    // fallback: fixed minimum
+    // fallback: 3:4-ish
     return Math.max(minH, Math.floor(wCss * 0.75));
   }
 
@@ -53,27 +54,24 @@ export function initToySizing(shell, canvas, ctx, { squareFromWidth = false, asp
   }
 
   function applySize(){
-    const cssW = Math.max(1, Math.floor(slotW * scale));
+const cssW = Math.max(1, Math.floor(slotW * scale));
     const cssH = Math.max(1, Math.floor(baseHeightFor(slotW) * scale));
     canvas.style.width  = cssW + 'px';
     canvas.style.height = cssH + 'px';
+
     // Center horizontally
     canvas.style.marginLeft = 'auto';
     canvas.style.marginRight = 'auto';
     // Keep canvas from influencing ancestor reflow weirdly
-    canvas.style.maxWidth = '100%';
+    canvas.style.maxWidth = 'none';
     resizeCanvasForDPR(canvas, ctx);
   }
 
   function ensureFit(){
-    if (scale === 1){
-      const wNow = measureWidthFallback();
-      if (Math.abs(wNow - slotW) >= 2) slotW = wNow;
-    }
-    applySize();
-  }
-
-  // resize observer (suspended during zoom to avoid feedback)
+  // Standard view size is frozen; only re-apply sizing on resize to keep DPR sharp.
+  applySize();
+}
+// resize observer (suspended during zoom to avoid feedback)
   let ro;
   try {
     ro = new ResizeObserver(()=> ensureFit());
