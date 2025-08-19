@@ -171,26 +171,5 @@ export function drawGenerator(ctx, gx, gy, r, now, ripples, NUM_STEPS, stepSecon
   ctx.fillStyle = '#fff';
   ctx.beginPath(); ctx.arc(gx, gy, Math.max(2, inner), 0, Math.PI * 2); ctx.fill();
 
-  // micro "splash" ripples just after spawn
-  if (tSinceSpawn != null && tSinceSpawn >= 0 && speed){
-    const splashWindow = Math.min(0.45, loopDur * 0.25);
-    if (tSinceSpawn < splashWindow){
-      const a = 1 - (tSinceSpawn / splashWindow);
-      const rr1 = Math.max(0.0001, tSinceSpawn * speed * 0.65);
-      const rr2 = Math.max(0.0001, tSinceSpawn * speed * 1.0);
-      ctx.strokeStyle = '#fff';
-
-      ctx.globalAlpha = 0.30 * a;
-      ctx.lineWidth = Math.max(1, r * 0.30 * (scale||1));
-      ctx.beginPath(); ctx.arc(gx, gy, rr1*(scale||1), 0, Math.PI * 2); ctx.stroke();
-
-      ctx.globalAlpha = 0.20 * a;
-      ctx.lineWidth = Math.max(1, r * 0.24 * (scale||1));
-      ctx.beginPath(); ctx.arc(gx, gy, rr2*(scale||1), 0, Math.PI * 2); ctx.stroke();
-
-      ctx.globalAlpha = 1;
-    }
-  }
-
   ctx.restore();
 }
