@@ -1,5 +1,6 @@
 // src/toyui.js — header controls for toys (Zoom, Random, Reset, Mute + per-toy volume hook)
 import { getInstrumentNames } from './audio-samples.js';
+import { zoomInPanel, zoomOutPanel } from './zoom-overlay.js';
 
 // --- DEBUG helpers (set localStorage.toyuiDebug='1' to enable persistently) ---
 const DEBUG = (typeof localStorage !== 'undefined' && localStorage.toyuiDebug === '1');
@@ -176,66 +177,16 @@ function setZoom(z){
   instWrap.style.display = zoomed ? 'flex' : 'none';
   panel.classList.toggle('toy-zoomed', zoomed);
   panel.classList.toggle('toy-unzoomed', !zoomed);
-  // Overlay + center
-  try{
-    if (zoomed){
-      overlay.style.display = 'block'; overlay.style.pointerEvents = 'auto';
-      overlay.style.zIndex = '9000';
-      // remember original inline style to restore (save every time)
-      panel.dataset.prevStyle = panel.getAttribute('style') || '';
-      panel.classList.add('toy-zoomed-floating');
-      // Center and elevate panel in viewport
-      panel.style.setProperty('position','fixed','important');
-      panel.style.setProperty('left','50%','important');
-      panel.style.setProperty('top','50%','important');
-      panel.style.setProperty('transform','translate(-50%, -50%)','important');
-      panel.style.setProperty('z-index','10000','important');
-      
-      // Freeze page scroll
-      if (!document.body.dataset._prevOverflow){ document.body.dataset._prevOverflow = document.body.style.overflow || ''; }
-      document.body.style.overflow = 'hidden';
-      // Header: non-interactive background, interactive controls
-      const header = panel.querySelector('.toy-header');
-      if (header){
-        header.style.pointerEvents = 'none'; dbg('header inert in zoom');
-        const clickable = header.querySelectorAll('button, select, input, label, [role="button"], [data-interactive="true"]');
-        clickable.forEach(el => { el.style.pointerEvents = 'auto'; });
-      }
-      // Close zoom when background (outside panel) is clicked
-      if (!overlay._onClickOutside){
-        overlay._onClickOutside = (ev)=>{
-          dbg('overlay click', { target: ev.target && (ev.target.tagName + '.' + (ev.target.className||'')), x: ev.clientX, y: ev.clientY });
-          const r = panel.getBoundingClientRect();
-          const inside = (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom);
-          if (!inside) setZoom(false);
-        };
-        overlay.addEventListener('click', overlay._onClickOutside);
-      }
-    } else {
-      overlay.style.display = 'none'; overlay.style.pointerEvents = 'none'; overlay.style.position='fixed'; overlay.style.left='0'; overlay.style.top='0'; overlay.style.right='0'; overlay.style.bottom='0';
-      if (overlay._onClickOutside){ overlay.removeEventListener('click', overlay._onClickOutside); overlay._onClickOutside = null; }
-      panel.classList.remove('toy-zoomed-floating');
-      // restore original inline styles
-      const prev = panel.dataset.prevStyle || '';
-      panel.setAttribute('style', prev);
-      delete panel.dataset.prevStyle;
-      // restore page scroll
-      if (document.body.dataset._prevOverflow !== undefined){
-        document.body.style.overflow = document.body.dataset._prevOverflow;
-        delete document.body.dataset._prevOverflow;
-      }
-      // restore header pointer-events
-      const header = panel.querySelector('.toy-header');
-      if (header){
-        header.style.pointerEvents = ''; dbg('header restored');
-        const clickable = header.querySelectorAll('button, select, input, label, [role="button"], [data-interactive="true"]');
-        clickable.forEach(el => { el.style.pointerEvents = ''; });
-      }
-    }
-  }catch{}
+
+  if (zoomed){
+    zoomInPanel(panel, ()=> setZoom(false));
+  } else {
+    zoomOutPanel(panel);
+  }
   // Notify toy
   panel.dispatchEvent(new CustomEvent('toy-zoom', { detail: { zoomed } }));
 }
+
 
   setZoom(false);
 
