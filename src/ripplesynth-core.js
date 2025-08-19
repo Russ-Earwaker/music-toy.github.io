@@ -24,7 +24,7 @@ export function createRippleSynth(selector){
   let currentInstrument = (ui.instrument && ui.instrument !== 'tone') ? ui.instrument : 'kalimba'; try { ui.setInstrument(currentInstrument); } catch {}
   const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true }); const isZoomed = ()=> panel.classList.contains('toy-zoomed');
   panel.addEventListener('toy-zoom', (ev)=>{ try { const z = !!(ev?.detail?.zoomed); sizing.setZoom(z); try { setParticleBounds(canvas.width|0, canvas.height|0); } catch (e) {} } catch (e) {} });
-const EDGE=10; const W=()=> (panel.clientWidth  || canvas.clientWidth  || 356)|0, H=()=> (panel.clientHeight || canvas.clientHeight || 280)|0;
+const EDGE=10; const W=()=> (canvas.clientWidth  || panel.clientWidth  || 356)|0, H=()=> (canvas.clientHeight || panel.clientHeight || 280)|0;
   const clamp = (v,min,max)=> Math.max(min, Math.min(max, v));
   const n2x = (nx)=>{ const z=isZoomed(); const side=z? Math.max(0, Math.min(W(),H())-2*EDGE) : (W()-2*EDGE); const offX = z? Math.max(EDGE, (W()-side)/2): EDGE; return offX + nx*side; };
   const n2y = (ny)=>{ const z=isZoomed(); const side=z? Math.max(0, Math.min(W(),H())-2*EDGE) : (H()-2*EDGE); const offY = z? Math.max(EDGE, (H()-side)/2): EDGE; return offY + ny*side; };
@@ -278,7 +278,7 @@ function draw(){
       const nowAT = ac.currentTime; spawnRipple(true);
       barStartAT=nowAT; nextSlotAT=barStartAT+stepSeconds(); nextSlotIx=1; pattern.forEach(s=> s.clear()); recording=true;
     }
-  } catch (err) { console.error('[rippler draw]', err); } finally { requestAnimationFrame(draw); }
+  } catch (err) { constole.error('[rippler draw]', err); } finally { requestAnimationFrame(draw); }
 }
 function reset(){
     ripples.length=0; for (const b of blocks){ b.vx=b.vy=0; b.nx=b.nx0; b.ny=b.ny0; b.flashEnd=0; }
