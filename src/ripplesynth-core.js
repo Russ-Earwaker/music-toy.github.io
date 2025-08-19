@@ -267,7 +267,7 @@ function draw(){
     for (let i=0;i<blocks.length;i++){ const b=blocks[i]; if (b.rippleAge != null && b.rippleMax){ b.rippleAge = Math.min(b.rippleMax, Math.max(0, b.rippleAge + __dt)); } }
     drawBlocksSection(ctx, blockRects, n2x(generator.nx), n2y(generator.ny), ripples, 1, noteList, sizing, null, null, ac.currentTime);
     if (generator.placed){
-      drawGenerator(ctx, n2x(generator.nx), n2y(generator.ny), ac.currentTime, ripples, NUM_STEPS, stepSeconds, (sizing.scale||1));
+      drawGenerator(ctx, n2x(generator.nx), n2y(generator.ny), Math.max(8, Math.round(generator.r*(sizing.scale||1))), ac.currentTime, ripples, NUM_STEPS, stepSeconds, (sizing.scale||1));
     }
     springBlocks(1/60);
     handleRingHits(ac.currentTime);
