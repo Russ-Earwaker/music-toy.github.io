@@ -147,7 +147,7 @@ const EDGE=10; const W=()=> (canvas.clientWidth  || panel.clientWidth  || 356)|0
       const b=blocks[idx];
       b.nx=nx; b.ny=ny; b.nx0=nx; b.ny0=ny; b.vx=0; b.vy=0;
     },
-    onBlockGrab: (idx)=>{ liveBlocks.add(idx); },
+    onBlockGrab: (idx)=>{ liveBlocks.add(idx); try { for (let s=0; s<pattern.length; s++){ pattern[s].delete(idx); } } catch {} },
     onBlockDrop: (idx)=>{ liveBlocks.delete(idx); recordOnly.add(idx); }
   });
   canvas.addEventListener('pointerdown', (e)=>{
@@ -221,8 +221,8 @@ function spawnRipple(manual=false){
         let k = Math.ceil((whenAT - barStartAT)/slotLen); if (k<0) k=0;
         const slotIx = k % NUM_STEPS;
         const name = noteList[b.noteIndex] || 'C4';
-        if (liveBlocks.has(i) && !recording) { try{ triggerInstrument(currentInstrument, name, whenAT + 0.0005); __schedState?.suppressSlots?.add?.(slotIx); __schedState.suppressUntilAT = Math.max(__schedState.suppressUntilAT||0, whenAT + 0.12); }catch{} }
-        if (recording || recordOnly.has(i)){
+        if (liveBlocks.has(i)) { try{ triggerInstrument(currentInstrument, name, whenAT + 0.0005); __schedState?.suppressSlots?.add?.(slotIx); __schedState.suppressUntilAT = Math.max(__schedState.suppressUntilAT||0, whenAT + 0.12); }catch{} }
+        if (!liveBlocks.has(i) && (recording || recordOnly.has(i))){
           try{ __schedState?.suppressSlots?.add?.(slotIx); __schedState.suppressUntilAT = barStartAT + (NUM_STEPS*slotLen) - 0.001; triggerInstrument(currentInstrument, name, barStartAT + k*slotLen + 0.0005); }catch{}
           const slot = pattern[slotIx];
           let existsSame=false; for (const jj of slot){ const nm = noteList[blocks[jj].noteIndex] || 'C4'; if (nm === name){ existsSame=true; break; } }
