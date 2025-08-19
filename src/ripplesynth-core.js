@@ -200,34 +200,26 @@ function spawnRipple(manual=false){
   }
   function handleRingHits(nowAT){ if (playbackMuted && !dragMuteActive) return;
     if (!ripples.length || !generator.placed) return;
-    const rMain = ripples[ripples.length-1];
-    rMain.hit = rMain.hit || new Set();
+    const rMain = ripples[ripples.length-1]; rMain.hit = rMain.hit || new Set();
     const R = Math.max(0, (nowAT - (rMain.startAT||nowAT)) * (rMain.speed||RING_SPEED()));
-    const band = 9;
-    const gx = n2x(generator.nx), gy = n2y(generator.ny);
+    const band = 9; const gx = n2x(generator.nx), gy = n2y(generator.ny);
     const size = Math.max(20, Math.round(BASE * (sizing.scale||1)));
     for (let i=0;i<blocks.length;i++){
-      const b = blocks[i];
-      if (!b.active || rMain.hit.has(i)) continue;
+      const b = blocks[i]; if (!b.active || rMain.hit.has(i)) continue;
       const cx = n2x(b.nx), cy = n2y(b.ny);
-      const dC = Math.hypot(cx - gx, cy - gy);
-      const dEdge = Math.max(0, dC - Math.SQRT2*(size/2));
+      const dx = Math.max(Math.abs(cx - gx) - size/2, 0), dy = Math.max(Math.abs(cy - gy) - size/2, 0);
+      const dEdge = Math.hypot(dx, dy);
       if (Math.abs(dEdge - R) <= band){
-        rMain.hit.add(i);
-        if (!liveBlocks.has(i)) { b.flashEnd = Math.max(b.flashEnd, ac.currentTime + 0.18); }
-        const ang = Math.atan2(cy - gy, cx - gx), push = 64 * (sizing.scale || 1);
-        b.vx += Math.cos(ang)*push; b.vy += Math.sin(ang)*push;
-        const whenAT = ac.currentTime; const slotLen = stepSeconds();
-        let k = Math.ceil((whenAT - barStartAT)/slotLen); if (k<0) k=0;
-        const slotIx = k % NUM_STEPS;
-        const name = noteList[b.noteIndex] || 'C4';
-        if (liveBlocks.has(i)) { try{ triggerInstrument(currentInstrument, name, whenAT + 0.0005); __schedState?.suppressSlots?.add?.(slotIx); __schedState.suppressUntilAT = Math.max(__schedState.suppressUntilAT||0, whenAT + 0.12); }catch{} }
+        rMain.hit.add(i); if (!liveBlocks.has(i)) { b.flashEnd = Math.max(b.flashEnd, ac.currentTime + 0.18); }
+        const ang = Math.atan2(cy - gy, cx - gx), push = 64 * (sizing.scale || 1); b.vx += Math.cos(ang)*push; b.vy += Math.sin(ang)*push;
+        const whenAT = ac.currentTime, slotLen = stepSeconds(); let k = Math.ceil((whenAT - barStartAT)/slotLen); if (k<0) k=0;
+        const slotIx = k % NUM_STEPS; const name = noteList[b.noteIndex] || 'C4';
+        if (liveBlocks.has(i)) { try { triggerInstrument(currentInstrument, name, whenAT + 0.0005); __schedState?.suppressSlots?.add?.(slotIx); } catch {} }
         if (!liveBlocks.has(i) && (recording || recordOnly.has(i))){
-          try{ __schedState?.suppressSlots?.add?.(slotIx); __schedState.suppressUntilAT = barStartAT + (NUM_STEPS*slotLen) - 0.001; triggerInstrument(currentInstrument, name, barStartAT + k*slotLen + 0.0005); }catch{}
-          const slot = pattern[slotIx];
-          let existsSame=false; for (const jj of slot){ const nm = noteList[blocks[jj].noteIndex] || 'C4'; if (nm === name){ existsSame=true; break; } }
-          if (!existsSame) slot.add(i);
-          if (recordOnly.has(i)) recordOnly.delete(i);
+          try { __schedState?.suppressSlots?.add?.(slotIx); triggerInstrument(currentInstrument, name, barStartAT + k*slotLen + 0.0005); } catch {}
+          const slot = pattern[slotIx]; let existsSame = false;
+          for (const jj of slot){ const nm = noteList[blocks[jj].noteIndex] || 'C4'; if (nm === name){ existsSame = true; break; } }
+          if (!existsSame) slot.add(i); if (recordOnly.has(i)) recordOnly.delete(i);
         }
       }
     }

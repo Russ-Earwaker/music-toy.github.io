@@ -26,7 +26,7 @@ export function createScheduler(cfg){
     const lookahead = 0.03;
     while (!state.recording && !isPlaybackMuted() && nowAT + lookahead >= state.nextSlotAT){
       // If a bar-aligned preview was already scheduled for this slot, skip once
-      if (state.suppressSlots && state.suppressSlots.has(state.nextSlotIx) && nowAT < (state.suppressUntilAT||0)){
+      if (state.suppressSlots && state.suppressSlots.has(state.nextSlotIx)) {
         try { state.suppressSlots.delete(state.nextSlotIx); } catch(e) {}
       } else {
       const s = pattern[state.nextSlotIx];
