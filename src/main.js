@@ -172,6 +172,7 @@ if (!window.__booted__) {
               getBpm: ()=> ((getLoopInfo && getLoopInfo().bpm) || DEFAULT_BPM)
             });
             inst = { setInstrument: (n)=> { wheelInstrument = n; } };
+            try { panel.addEventListener('toy-instrument', (e)=>{ wheelInstrument = (e?.detail?.value) || wheelInstrument; }); } catch {}
             wheelUsed = true;
           } else {
             inst = createBouncer(panel);

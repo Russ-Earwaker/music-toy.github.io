@@ -22,7 +22,9 @@ export function createRippleSynth(selector){
   try{const host=panel.querySelector?.('.toy-body')||panel;if((host.clientHeight|0)<40){canvas.style.display='block';canvas.style.width='100%';canvas.style.minHeight='240px';}}catch{}
   const ctx = canvas.getContext('2d'); const ui  = initToyUI(panel, { toyName: 'Rippler' });
   let currentInstrument = (ui.instrument && ui.instrument !== 'tone') ? ui.instrument : 'kalimba'; try { ui.setInstrument(currentInstrument); } catch {}
-  const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true }); const isZoomed = ()=> panel.classList.contains('toy-zoomed');
+  
+  panel.addEventListener('toy-instrument', (e)=>{ try{ currentInstrument = (e?.detail?.value)||currentInstrument; }catch{} });
+const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true }); const isZoomed = ()=> panel.classList.contains('toy-zoomed');
   panel.addEventListener('toy-zoom', (ev)=>{ try { const z = !!(ev?.detail?.zoomed); sizing.setZoom(z); try { setParticleBounds(canvas.width|0, canvas.height|0); } catch (e) {} } catch (e) {} });
 const EDGE=10; const W=()=> (canvas.clientWidth  || panel.clientWidth  || 356)|0, H=()=> (canvas.clientHeight || panel.clientHeight || 280)|0;
   const clamp = (v,min,max)=> Math.max(min, Math.min(max, v));
