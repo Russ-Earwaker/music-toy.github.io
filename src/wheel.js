@@ -1,11 +1,11 @@
 // src/wheel.js — unified with generic toy UI/frames
 // 16 spokes (16ths). Higher pitch = farther from center (0..11 semitones).
 // Starts empty. Click to add/delete. Drag moves nearest handle.
-// Uses toyui.js (header: Zoom / Random / Reset / Mute) + toyhelpers.js sizing.
+// Uses toyui.js (header: Zoom / Random / Reset / Mute) + toyhelpers-sizing.js for sizing.
 
 import { resizeCanvasForDPR, clamp } from './utils.js';
 import { initToyUI } from './toyui.js';
-import { initToySizing } from './toyhelpers.js';
+import { initToySizing } from './toyhelpers-sizing.js';
 
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 const STEPS = 16, SEMIS = 12;
@@ -39,10 +39,12 @@ export function buildWheel(selector, opts = {}){
   (panel.querySelector?.('.toy-body') || panel).appendChild(canvas);
   const ctx = canvas.getContext('2d');
 
-  // Sizing (consistent with other toys)
-  const sizing = initToySizing(panel, canvas, ctx);
-  const worldW = ()=> (panel.clientWidth  || 356);
-  const worldH = ()=> (panel.clientHeight || 260);
+  // Sizing (consistent with Rippler): squareFromWidth + proper zoom
+  const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true });
+
+  // World size helpers (use canvas size, which already excludes header)
+  const worldW = ()=> (canvas.clientWidth  || panel.clientWidth  || 356);
+  const worldH = ()=> (canvas.clientHeight || panel.clientHeight || 260);
 
   // Model
   const handles = Array(STEPS).fill(null); // per-step semitone or null
@@ -52,10 +54,20 @@ export function buildWheel(selector, opts = {}){
   let lastTime = performance.now();
   let phase = 0;
 
-  // Geometry
+  // Geometry (with top/bottom padding to avoid touching header)
   function radii(){
     const s = Math.min(worldW(), worldH());
-    return { cx: worldW()/2, cy: worldH()/2, Rmin: s*0.18, Rmax: s*0.44, Rout: s*0.46 };
+    const padTop = Math.max(12, s*0.06);
+    const padBottom = Math.max(12, s*0.06);
+    const usableH = Math.max(40, worldH() - (padTop + padBottom));
+    const baseRout = s*0.46;
+    const rscale = Math.min(1, (usableH/2) / baseRout);
+    const Rmin = s*0.18 * rscale;
+    const Rmax = s*0.44 * rscale;
+    const Rout = s*0.46 * rscale;
+    const cx = worldW()/2;
+    const cy = padTop + usableH/2;
+    return { cx, cy, Rmin, Rmax, Rout };
   }
   const spokeAngle = (i)=> (-Math.PI/2 + (i/STEPS)*Math.PI*2); // 0 at 12 o'clock, clockwise
 
@@ -142,14 +154,89 @@ export function buildWheel(selector, opts = {}){
   }, true);
   window.addEventListener('pointercancel', ()=>{ drag=null; }, true);
 
-  // Random / Reset
+  // Random / Reset (musical)
   function doRandom(){
-    const minC = Math.ceil(STEPS*0.5), maxC = Math.floor(STEPS*0.75);
-    const count = Math.floor(minC + Math.random()*(maxC-minC+1));
-    const idxs = Array.from({length:STEPS}, (_,i)=>i);
-    for (let i=idxs.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [idxs[i], idxs[j]]=[idxs[j], idxs[i]]; }
+    // MUSICAL random: minor pentatonic, Euclidean placement, motif/stepwise, anchors on beats.
+    const SCALE = [0,3,5,7,10]; // minor pentatonic
+    const N = STEPS;
+
+    // choose count between 1/2 and 3/4 of steps
+    const minC = Math.ceil(N*0.5), maxC = Math.floor(N*0.75);
+    const k = Math.floor(minC + Math.random()*(maxC-minC+1));
+
+    // Euclidean-ish spread
+    const active = Array(N).fill(false);
+    let pos = 0;
+    const stepSize = N / k;
+    for (let i=0;i<k;i++){
+      active[Math.round(pos) % N] = true;
+      pos += stepSize;
+    }
+    // fill any collisions if needed
+    let need = k - active.filter(v=>v).length;
+    if (need > 0){
+      for (let i=0;i<N && need>0;i++){
+        if (!active[i]){ active[i] = true; need--; }
+      }
+    }
+
+    // Motif (3..5 notes) as scale indices with small steps
+    const motifLen = 3 + Math.floor(Math.random()*3);
+    const motif = [];
+    let si = Math.floor(Math.random()*SCALE.length);
+    motif.push(si);
+    for (let i=1;i<motifLen;i++){
+      const delta = (-1 + Math.floor(Math.random()*3)); // -1, 0, +1
+      si = Math.max(0, Math.min(SCALE.length-1, si + delta));
+      motif.push(si);
+    }
+
+    // Anchors on strong beats: root/fifth/b7
+    const ANCH = [0, 7, 10];
+
     handles.fill(null);
-    for (let i=0;i<count;i++){ handles[idxs[i]] = Math.floor(Math.random()*SEMIS); }
+    let prevSemi = null;
+    let motifPos = 0;
+    for (let stepIdx=0; stepIdx<N; stepIdx++){
+      if (!active[stepIdx]) continue;
+      let semi = null;
+
+      if (stepIdx % 4 === 0){
+        // choose anchor near previous if exists
+        const choices = ANCH.map(a => a % 12);
+        if (prevSemi != null){
+          choices.sort((a,b)=> Math.abs(a-prevSemi)-Math.abs(b-prevSemi));
+        }
+        semi = choices[0];
+      } else {
+        // motif-driven in-scale, stepwise contour (up then down)
+        const scaleIdx = motif[motifPos % motif.length];
+        motifPos++;
+        semi = SCALE[scaleIdx];
+        const isRise = stepIdx < 8;
+        if (prevSemi != null){
+          const dir = isRise ? 1 : -1;
+          const currIdx = SCALE.indexOf(semi);
+          let nextIdx = currIdx + dir;
+          if (nextIdx < 0 || nextIdx >= SCALE.length) nextIdx = currIdx;
+          semi = SCALE[nextIdx];
+        }
+      }
+
+      semi = ((semi % 12)+12)%12;
+      handles[stepIdx] = semi;
+      prevSemi = semi;
+    }
+
+    // Small variation in second half
+    if (Math.random() < 0.7){
+      for (let i=8;i<16;i++){
+        if (handles[i] != null && (i%4)!==0){
+          const trans = Math.random()<0.5 ? 2 : 0;
+          handles[i] = (handles[i] + trans) % 12;
+        }
+      }
+    }
   }
   function doReset(){ for (let i=0;i<STEPS;i++) handles[i] = null; }
 
@@ -223,7 +310,7 @@ export function buildWheel(selector, opts = {}){
 
   // Zoom + keys
   panel.dataset.toy = 'wheel';
-  panel.addEventListener('toy-zoom', (e)=> ui.setZoom?.(!!e?.detail?.zoomed));
+  panel.addEventListener('toy-zoom', (e)=> sizing.setZoom?.(!!e?.detail?.zoomed));
   panel.tabIndex = 0;
   panel.addEventListener('keydown', (e)=>{
     if (e.key === 'ArrowUp'){ baseMidi += 12; e.preventDefault(); }
