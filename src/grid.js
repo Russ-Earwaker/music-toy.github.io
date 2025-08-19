@@ -2,6 +2,7 @@
 import { resizeCanvasForDPR, noteList } from './utils.js';
 import { NUM_STEPS } from './audio-core.js';
 import { initToyUI } from './toyui.js';
+import { drawTileLabelAndArrows } from './ui-tiles.js';
 import { initToySizing, drawNoteStripsAndLabel, NOTE_BTN_H, whichThirdRect, drawThirdsGuides } from './toyhelpers.js';
 
 export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='tone', title='LoopGrid' } = {}){
@@ -69,11 +70,17 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
 
       // label
       const label = noteList[(s.noteIndex % noteList.length + noteList.length) % noteList.length] || '';
-      ctx.fillStyle = s.active ? '#0b0f16' : '#e6e8ef';
-      ctx.font = '12px ui-sans-serif, system-ui';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(label, r.x + r.w/2, r.y + r.h/2);
+      drawTileLabelAndArrows(ctx, r, { label, active: s.active, zoomed: panel.classList.contains('toy-zoomed') });
+      // arrows moved to shared helper
+      if (panel.classList.contains('toy-zoomed')){
+        // up triangle (top-right)
+        ctx.beginPath(); ctx.moveTo(r.x + r.w - 16, r.y + 6); ctx.lineTo(r.x + r.w - 8, r.y + 6); ctx.lineTo(r.x + r.w - 12, r.y + 12); ctx.closePath();
+        ctx.fillStyle = '#ffffff'; ctx.fill();
+        // down triangle (bottom-right)
+        ctx.beginPath(); ctx.moveTo(r.x + r.w - 16, r.y + r.h - 6); ctx.lineTo(r.x + r.w - 8, r.y + r.h - 6); ctx.lineTo(r.x + r.w - 12, r.y + r.h - 12); ctx.closePath();
+        ctx.fill();
+      }
+
       ctx.strokeStyle = '#11151d'; ctx.lineWidth = 2; ctx.strokeRect(r.x+0.5, r.y+0.5, r.w-1, r.h-1);
       ctx.restore();
     }

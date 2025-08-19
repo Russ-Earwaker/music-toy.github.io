@@ -4,6 +4,7 @@ import { ensureAudioContext } from './audio-core.js';
 import { triggerInstrument } from './audio-samples.js';
 import { initToyUI } from './toyui.js';
 import { initToySizing, randomizeRects, EDGE_PAD as EDGE, whichThirdRect, drawThirdsGuides} from './toyhelpers.js';
+import { drawTileLabelAndArrows } from './ui-tiles.js';
 
 const BASE_BLOCK_SIZE = 48;
 const BASE_CANNON_R   = 10;
@@ -80,11 +81,17 @@ export function createBouncer(selector){
       if (panel.classList.contains('toy-zoomed')){ drawThirdsGuides(ctx, b); }
       // label
       const label = noteList[(b.noteIndex % noteList.length + noteList.length) % noteList.length] || '';
-      ctx.fillStyle = b.active ? '#0b0f16' : '#e6e8ef';
-      ctx.font = '12px ui-sans-serif, system-ui';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(label, b.x + b.w/2, b.y + b.h/2);
+      drawTileLabelAndArrows(ctx, b, { label, active: b.active, zoomed: panel.classList.contains('toy-zoomed') });
+      // arrows moved to shared helper
+      if (panel.classList.contains('toy-zoomed')){
+        // up triangle (top-right)
+        ctx.beginPath(); ctx.moveTo(b.x + b.w - 16, b.y + 6); ctx.lineTo(b.x + b.w - 8, b.y + 6); ctx.lineTo(b.x + b.w - 12, b.y + 12); ctx.closePath();
+        ctx.fillStyle = '#ffffff'; ctx.fill();
+        // down triangle (bottom-right)
+        ctx.beginPath(); ctx.moveTo(b.x + b.w - 16, b.y + b.h - 6); ctx.lineTo(b.x + b.w - 8, b.y + b.h - 6); ctx.lineTo(b.x + b.w - 12, b.y + b.h - 12); ctx.closePath();
+        ctx.fill();
+      }
+
       ctx.strokeStyle = '#11151d'; ctx.lineWidth = 2; ctx.strokeRect(b.x+0.5,b.y+0.5,b.w-1,b.h-1);
     }
 

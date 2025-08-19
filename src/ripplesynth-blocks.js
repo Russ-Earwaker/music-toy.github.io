@@ -1,7 +1,8 @@
 // src/ripplesynth-blocks.js
-// Draws orange blocks with flash + white edge ripples and gentle spring UI overlays when zoomed.
+import { drawTileLabelAndArrows } from './ui-tiles.js';
+// Draws orange blocks with flash + unified label/arrows via shared helper.
 
-const SHOW_TOP_UI = false;
+const SHOW_TOP_UI = true;
 
 export function drawBlocksSection(ctx, blocks, gx, gy, ripples, volume, noteList, sizing, _a, _b, now){
   for (let i=0;i<blocks.length;i++){
@@ -11,15 +12,8 @@ export function drawBlocksSection(ctx, blocks, gx, gy, ripples, volume, noteList
     // flash overlay
     const flashA = (b.flashEnd && b.flashDur) ? Math.max(0, Math.min(1, (b.flashEnd - now) / b.flashDur)) : 0;
     // block
-    ctx.fillStyle = '#e58b2b';
+    ctx.fillStyle = b.active ? '#f4932f' : '#293042';
     ctx.fillRect(x, y, w, h);
-    if (!b.active) {
-      ctx.fillStyle = 'rgba(0,0,0,0.45)';
-      ctx.fillRect(x, y, w, h);
-      // diagonal slash
-      ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(x+2, y+h-2); ctx.lineTo(x+w-2, y+2); ctx.stroke();
-    }
     if (flashA > 0){
       ctx.fillStyle = `rgba(255,255,255,${0.35*flashA})`;
       ctx.fillRect(x, y, w, h);
@@ -40,21 +34,12 @@ export function drawBlocksSection(ctx, blocks, gx, gy, ripples, volume, noteList
       ctx.strokeRect(x - expand + 0.5, y - expand + 0.5, w + expand*2 - 1, h + expand*2 - 1);
     }
 
-    // zoomed edit UI (simple up/down + note label)
-    if (sizing && typeof sizing.vw === 'function' && sizing.vw() >= 600){
+        // unified label + arrows
+    {
+      const rect = {x, y, w, h};
       const label = (noteList && b.noteIndex != null) ? (noteList[b.noteIndex % noteList.length] || '') : '';
-      if (SHOW_TOP_UI) { ctx.fillStyle = 'rgba(0,0,0,0.45)';
-      ctx.fillRect(x, y-18, Math.max(34, ctx.measureText(label).width+12), 16);
-      ctx.fillStyle = '#fff';
-      ctx.font = '12px ui-sans-serif, system-ui';
-      ctx.textBaseline = 'top';
-      ctx.fillText(label, x+6, y-16);
-      // Up/Down hints (triangles)
-      ctx.beginPath(); ctx.moveTo(x+w-16, y-15); ctx.lineTo(x+w-8, y-15); ctx.lineTo(x+w-12, y-9); ctx.closePath();
-      ctx.fill();
-      ctx.beginPath(); ctx.moveTo(x+w-16, y-2); ctx.lineTo(x+w-8, y-2); ctx.lineTo(x+w-12, y-8); ctx.closePath();
-      ctx.fill();
-      }
+      const zoomed = !!(sizing && typeof sizing.vw==='function' && sizing.vw()>=600);
+      drawTileLabelAndArrows(ctx, rect, { label, active: !!b.active, zoomed });
     }
   }
 }
