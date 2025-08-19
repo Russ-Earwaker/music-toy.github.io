@@ -168,7 +168,7 @@ if (!window.__booted__) {
           if (!wheelUsed) {
             let wheelInstrument = 'slap bass guitar';
             buildWheel(panel, {
-              onNote: (midi, name, vel)=> { try { triggerInstrument(wheelInstrument || 'slap bass guitar', name); } catch(e){} },
+              onNote: (midi, name, vel)=> { try { const ac = ensureAudioContext(); triggerInstrument(wheelInstrument || 'slap bass guitar', name, ac.currentTime + 0.0005); } catch(e){} },
               getBpm: ()=> ((getLoopInfo && getLoopInfo().bpm) || DEFAULT_BPM)
             });
             inst = { setInstrument: (n)=> { wheelInstrument = n; } };
