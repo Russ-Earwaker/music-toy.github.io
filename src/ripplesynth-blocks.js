@@ -37,7 +37,7 @@ export function drawBlocksSection(ctx, blocks, gx, gy, ripples, volume, noteList
         // unified label + arrows
     {
       const rect = {x, y, w, h};
-      const label = (noteList && b.noteIndex != null) ? (noteList[b.noteIndex % noteList.length] || '') : '';
+      const label = (noteList && b.noteIndex!=null) ? String(noteList[b.noteIndex % noteList.length]||'') : '';
       const zoomed = !!(sizing && typeof sizing.vw==='function' && sizing.vw()>=600);
       drawTileLabelAndArrows(ctx, rect, { label, active: !!b.active, zoomed });
     }

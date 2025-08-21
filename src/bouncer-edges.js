@@ -1,107 +1,107 @@
-// src/bouncer-edges.js — edge controller cubes & visuals
-const WEDGE_DEBUG = true; const WEDGE_BIG_DEBUG = true;
-export function makeEdgeControllers(w, h, s, EDGE_PAD, noteList){
-  const mk = (edge, x, y)=>({ edge, x, y, w:s, h:s, active:true, noteIndex: Math.floor(Math.random()*noteList.length), oct:4, fixed:true, collide:true, flash:0, lastHitAT:0 });
+// src/bouncer-edges.js — edge controller cubes & visuals (minimal, wedges off)
+import { stepIndexUp, stepIndexDown } from './note-helpers.js';
+
+export const WEDGE_DEBUG = false;
+export const WEDGE_BIG_DEBUG = false;
+
+// Create 4 edge controller cubes (locked, collidable, oct=4)
+export function makeEdgeControllers(w, h, size, EDGE_PAD, noteList){
+  const mk = (edge, x, y) => ({
+    edge, x, y, w:size, h:size,
+    active: true, noteIndex: Math.floor(Math.random()*Math.max(1, (noteList && noteList.length) || 12)), oct: 4,
+    fixed: true, collide: true, flash: 0, lastHitAT: 0
+  });
   return [
-    mk('left',  EDGE_PAD+10,       (h/2 - s/2)),
-    mk('right', w-EDGE_PAD-s-10,   (h/2 - s/2)),
-    mk('top',   (w/2 - s/2),       EDGE_PAD+10),
-    mk('bot',   (w/2 - s/2),       h-EDGE_PAD-s-10),
+    mk('left',  EDGE_PAD+10,        (h/2 - size/2)),
+    mk('right', w-EDGE_PAD-size-10, (h/2 - size/2)),
+    mk('top',   (w/2 - size/2),     EDGE_PAD+10),
+    mk('bot',   (w/2 - size/2),     h-EDGE_PAD-size-10),
   ];
 }
 
-export function drawEdgeBondLines(ctx, w, h, EDGE_PAD){
-  ctx.save();
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = 'rgba(255,140,0,0.9)';
+// Orange inner bond lines; dim when corresponding controller is disabled.
+export function drawEdgeBondLines(ctx, w, h, EDGE_PAD, ctrls=null){
+  const map = ctrls ? mapControllersByEdge(ctrls) : null;
+  const activeCol = 'rgba(255,140,0,0.9)';
+  const inactiveCol = '#293042';
+  ctx.save(); ctx.lineWidth = 2;
+
   // top
-  ctx.beginPath(); ctx.moveTo(EDGE_PAD+1, EDGE_PAD+1); ctx.lineTo(w-EDGE_PAD-1, EDGE_PAD+1); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(EDGE_PAD+1, EDGE_PAD+1); ctx.lineTo(w-EDGE_PAD-1, EDGE_PAD+1);
+  ctx.strokeStyle = (map && map.top && !map.top.active) ? inactiveCol : activeCol; ctx.stroke();
+
   // bottom
-  ctx.beginPath(); ctx.moveTo(EDGE_PAD+1, h-EDGE_PAD-1); ctx.lineTo(w-EDGE_PAD-1, h-EDGE_PAD-1); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(EDGE_PAD+1, h-EDGE_PAD-1); ctx.lineTo(w-EDGE_PAD-1, h-EDGE_PAD-1);
+  ctx.strokeStyle = (map && map.bot && !map.bot.active) ? inactiveCol : activeCol; ctx.stroke();
+
   // left
-  ctx.beginPath(); ctx.moveTo(EDGE_PAD+1, EDGE_PAD+1); ctx.lineTo(EDGE_PAD+1, h-EDGE_PAD-1); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(EDGE_PAD+1, EDGE_PAD+1); ctx.lineTo(EDGE_PAD+1, h-EDGE_PAD-1);
+  ctx.strokeStyle = (map && map.left && !map.left.active) ? inactiveCol : activeCol; ctx.stroke();
+
   // right
-  ctx.beginPath(); ctx.moveTo(w-EDGE_PAD-1, EDGE_PAD+1); ctx.lineTo(w-EDGE_PAD-1, h-EDGE_PAD-1); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(w-EDGE_PAD-1, EDGE_PAD+1); ctx.lineTo(w-EDGE_PAD-1, h-EDGE_PAD-1);
+  ctx.strokeStyle = (map && map.right && !map.right.active) ? inactiveCol : activeCol; ctx.stroke();
+
   ctx.restore();
 }
 
+// Zoom edit helper: thirds on the controller rect.
 export function handleEdgeControllerEdit(hit, py, whichThirdRect, noteList){
   const t = whichThirdRect(hit, py);
   if (t === 'toggle'){ hit.active = !hit.active; return true; }
-  let changed=false, prev=hit.noteIndex, prevOct=hit.oct||4;
-  if (t === 'up'){ hit.noteIndex = (hit.noteIndex + 1) % noteList.length; if (hit.noteIndex < prev) hit.oct = Math.min(6, prevOct + 1); changed=true; }
-  else if (t === 'down'){ hit.noteIndex = (hit.noteIndex + noteList.length - 1) % noteList.length; if (hit.noteIndex > prev) hit.oct = Math.max(2, prevOct - 1); changed=true; }
-  return changed;
+  if (t === 'up'){ return stepIndexUp(hit, noteList); }
+  if (t === 'down'){ return stepIndexDown(hit, noteList); }
+  return false;
 }
 
 export function mapControllersByEdge(ctrls){
   const m = { left:null, right:null, top:null, bot:null };
-  for (const c of ctrls){ m[c.edge] = c; }
+  for (const c of ctrls){ if (c && c.edge) m[c.edge] = c; }
   return m;
 }
 
 export function randomizeControllers(ctrls, noteList){
+  const n = Math.max(1, (noteList && noteList.length) || 12);
   for (const c of ctrls){
-    c.noteIndex = Math.floor(Math.random()*noteList.length);
-    c.active = Math.random() < 0.9;
+    c.noteIndex = Math.floor(Math.random() * n);
+    // keep active state as-is to respect user
   }
 }
 
+// Minimal decorations: small orange tab + lock glyph; wedges disabled.
 export function drawEdgeDecorations(ctx, ctrls, EDGE_PAD, CW, CH){
   ctx.save();
   for (const c of ctrls){
     const x=c.x, y=c.y, bw=c.w, bh=c.h;
-    ctx.fillStyle = 'rgba(255,140,0,0.95)';
+    // Orange tab indicating connection
+    ctx.fillStyle = '#f4932f';
     ctx.strokeStyle = 'rgba(0,0,0,0.6)';
     ctx.lineWidth = 2;
     ctx.beginPath();
     if (c.edge==='left'){
-      ctx.moveTo(x, y + bh*0.33);
+      ctx.moveTo(x, y + bh*0.25);
       ctx.lineTo(EDGE_PAD+1, y + bh*0.5);
-      ctx.lineTo(x, y + bh*0.67);
+      ctx.lineTo(x, y + bh*0.75);
     } else if (c.edge==='right'){
-      ctx.moveTo(x + bw, y + bh*0.33);
-      ctx.lineTo(x + bw, y + bh*0.67);
+      ctx.moveTo(x + bw, y + bh*0.25);
       ctx.lineTo(CW - EDGE_PAD - 1, y + bh*0.5);
+      ctx.lineTo(x + bw, y + bh*0.75);
     } else if (c.edge==='top'){
-      ctx.moveTo(x + bw*0.33, y);
-      ctx.lineTo(x + bw*0.67, y);
+      ctx.moveTo(x + bw*0.25, y);
       ctx.lineTo(x + bw*0.5, EDGE_PAD+1);
+      ctx.lineTo(x + bw*0.75, y);
     } else if (c.edge==='bot'){
-      ctx.moveTo(x + bw*0.33, y + bh);
-      ctx.lineTo(x + bw*0.67, y + bh);
+      ctx.moveTo(x + bw*0.25, y + bh);
       ctx.lineTo(x + bw*0.5, CH - EDGE_PAD - 1);
+      ctx.lineTo(x + bw*0.75, y + bh);
     }
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    if (WEDGE_DEBUG){
-      // Draw a bold magenta wedge outline + dots clearly outside the wall line
-      let cx=x+bw*0.5, cy=y+bh*0.5; let tipA=[cx,cy], tipB=[cx,cy];
-      if (c.edge==='left'){ cx=x; cy=y+bh*0.5; tipA=[EDGE_PAD - bw*0.6, y]; tipB=[EDGE_PAD - bw*0.6, y+bh]; }
-      else if (c.edge==='right'){ cx=x+bw; cy=y+bh*0.5; tipA=[CW-EDGE_PAD + bw*0.6, y]; tipB=[CW-EDGE_PAD + bw*0.6, y+bh]; }
-      else if (c.edge==='top'){ cx=x+bw*0.5; cy=y; tipA=[x, EDGE_PAD - bh*0.6]; tipB=[x+bw, EDGE_PAD - bh*0.6]; }
-      else if (c.edge==='bot'){ cx=x+bw*0.5; cy=y+bh; tipA=[x, CH-EDGE_PAD + bh*0.6]; tipB=[x+bw, CH-EDGE_PAD + bh*0.6]; }
-      ctx.strokeStyle='magenta'; ctx.lineWidth=3;
-      ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(tipA[0],tipA[1]); ctx.moveTo(cx,cy); ctx.lineTo(tipB[0],tipB[1]); ctx.stroke();
-      ctx.beginPath(); ctx.arc(tipA[0],tipA[1],4,0,Math.PI*2); ctx.arc(tipB[0],tipB[1],4,0,Math.PI*2); ctx.fillStyle='magenta'; ctx.fill();
-      // Yellow triangle overlay
-      ctx.beginPath();
-      if (c.edge==='left'){ ctx.moveTo(x, y+bh*0.33); ctx.lineTo(EDGE_PAD+1, y+bh*0.5); ctx.lineTo(x, y+bh*0.67); }
-      if (c.edge==='right'){ ctx.moveTo(x+bw, y+bh*0.33); ctx.lineTo(CW-EDGE_PAD-1, y+bh*0.5); ctx.lineTo(x+bw, y+bh*0.67); }
-      if (c.edge==='top'){ ctx.moveTo(x+bw*0.33, y); ctx.lineTo(x+bw*0.5, EDGE_PAD+1); ctx.lineTo(x+bw*0.67, y); }
-      if (c.edge==='bot'){ ctx.moveTo(x+bw*0.33, y+bh); ctx.lineTo(x+bw*0.5, CH-EDGE_PAD-1); ctx.lineTo(x+bw*0.67, y+bh); }
-      ctx.closePath(); ctx.fillStyle='rgba(255,255,0,0.35)'; ctx.fill();
-    }
-    // lock glyph
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+
+    // Lock glyph
     const gx = x + bw - 12, gy = y + 7;
-    ctx.beginPath();
-    ctx.rect(gx, gy+3, 7, 6);
-    ctx.moveTo(gx+1, gy+3);
-    ctx.arc(gx+3.5, gy+3, 2, Math.PI, 0);
-    ctx.lineWidth=1.5;
-    ctx.strokeStyle='rgba(0,0,0,0.75)';
-    ctx.stroke();
+    ctx.beginPath(); ctx.rect(gx, gy+3, 7, 6);
+    ctx.moveTo(gx+1, gy+3); ctx.arc(gx+3.5, gy+3, 2, Math.PI, 0);
+    ctx.lineWidth=1.5; ctx.strokeStyle='rgba(0,0,0,0.75)'; ctx.stroke();
   }
   ctx.restore();
 }
