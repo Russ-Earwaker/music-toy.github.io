@@ -1,4 +1,5 @@
 import { makeEdgeControllers, drawEdgeBondLines, handleEdgeControllerEdit, mapControllersByEdge, randomizeControllers, drawEdgeDecorations } from './bouncer-edges.js';
+import { stepBouncer } from './bouncer-step.js';
 import { noteList, resizeCanvasForDPR } from './utils.js';
 import { ensureAudioContext, getLoopInfo } from './audio-core.js';
 import { triggerInstrument } from './audio-samples.js';
@@ -37,6 +38,9 @@ export function createBouncer(selector){ const shell = (typeof selector === 'str
   let nextLaunchAt = null; let prevNow = 0;    // audio time to relaunch
   let ball = null;            // {x,y,vx,vy,r}
   const fx = createImpactFX(); let lastScale = sizing.scale || 1;
+
+  // Shared state bag for step/draw helpers (populated each frame)
+  const S = {};
   function rescaleAll(f){
     if (!f || f === 1) return;
     for (const b of blocks){ b.x *= f; b.y *= f; b.w = blockSize(); b.h = blockSize(); }
@@ -162,114 +166,7 @@ canvas.addEventListener('pointerup', endDrag);
   window.addEventListener('pointerup', endDrag, true);
   function spawnBallFrom(L){ ball = { x:L.x, y:L.y, vx:L.vx, vy:L.vy, r:L.r }; fx.onLaunch(L.x, L.y); }
   let lastAT = 0;
-  function step(nowAT){
-    const ac = ensureAudioContext(); const now = nowAT || (ac ? ac.currentTime : 0); const dt = Math.min(0.04, Math.max(0, now - (lastAT || now)));
-    { if (lastLaunch && nextLaunchAt != null && ac && now >= nextLaunchAt - 0.005){ spawnBallFrom({ x: handle.x, y: handle.y, vx: lastLaunch.vx, vy: lastLaunch.vy, r: ballR() }); nextLaunchAt = null; } }
-    lastAT = now;
-    fx.onStep(ball);
-    for (const b of blocks){ b.flash = Math.max(0, b.flash - dt); b.__hitThisStep = false; }
-    if (!ball) return; const L=EDGE, T=EDGE, R=worldW()-EDGE, B=worldH()-EDGE; const eps = 0.001; const maxComp = Math.max(Math.abs(ball.vx), Math.abs(ball.vy)); const maxStep = Math.max(1, ball.r * 0.4); const steps = Math.max(1, Math.ceil(maxComp / maxStep)); const stepx = ball.vx / steps, stepy = ball.vy / steps;
-    for (let s=0; s<steps; s++){
-      ball.x += stepx; ball.y += stepy;
-      for (const b of edgeControllers){
-        if (!b || !b.collide) continue;
-        if (circleRectHit(ball.x, ball.y, ball.r, b)){ b.flash = Math.max(0.9, (b.flash||0)); b.flash = Math.max(0.9, (b.flash||0));
-          b.flashDur=0.12; b.flashEnd=now+0.12; const cx = Math.max(b.x, Math.min(ball.x, b.x + b.w)); const cy = Math.max(b.y, Math.min(ball.y, b.y + b.h)); const dx = ball.x - cx; const dy = ball.y - cy;
-          if (Math.abs(dx) > Math.abs(dy)){ b.flash = Math.max(0.9, (b.flash||0));
-            ball.vx = (dx>0? Math.abs(ball.vx): -Math.abs(ball.vx)); b.flashDur=0.15; const __ac=ensureAudioContext(); const __now=(__ac?__ac.currentTime:0); b.flashEnd=__now+0.15; b.rippleAge=0; b.rippleMax=18; ball.x = cx + (dx>0 ? ball.r + 0.0001 : -ball.r - 0.0001);
-          } else {
-            ball.vy = (dy>0? Math.abs(ball.vy): -Math.abs(ball.vy));
-            ball.y = cy + (dy>0 ? ball.r + 0.0001 : -ball.r - 0.0001);
-          }
-          if (b.edge==='left')  edgeHitThisStep.left  = true;
-          if (b.edge==='right') edgeHitThisStep.right = true;
-          if (b.edge==='top')   edgeHitThisStep.top   = true;
-          if (b.edge==='bot')   edgeHitThisStep.bot   = true; const __ac = ensureAudioContext(); const __n = (__ac?__ac.currentTime:0); b.__hitThisStep = true; b.lastHitAT = __n; b.flash = 1;
-          if (b.edge) flashEdge(b.edge);
-        }
-      }
-      if (ball.x - ball.r < L) {
-        ball.x = L + ball.r + eps; ball.vx = Math.abs(ball.vx);                        
-        flashEdge('left'); const __m = mapControllersByEdge(edgeControllers).left; if (__m) __m.flash = 1;
-        edgeHitThisStep.left = true;
-      }
-      if (ball.x + ball.r > R) {
-                ball.x = R - ball.r - eps; ball.vx = -Math.abs(ball.vx);                
-        flashEdge('right'); const __m = mapControllersByEdge(edgeControllers).right; if (__m) __m.flash = 1;
-        edgeHitThisStep.right = true;
-      }
-      if (ball.y - ball.r < T) {
-                        ball.y = T + ball.r + eps; ball.vy = Math.abs(ball.vy);        
-        flashEdge('top'); const __m = mapControllersByEdge(edgeControllers).top; if (__m) __m.flash = 1;
-        edgeHitThisStep.top = true;
-      }
-      if (ball.y + ball.r > B) {
-                                ball.y = B - ball.r - eps; ball.vy = -Math.abs(ball.vy);
-        flashEdge('bot'); const __m = mapControllersByEdge(edgeControllers).bot; if (__m) __m.flash = 1;
-        edgeHitThisStep.bot = true;
-      }
-      for (const b of blocks){
-        /* keep colliding even when disabled */
-        if (circleRectHit(ball.x, ball.y, ball.r, b)){ if (b.active){ b.flashDur=0.12; b.flashEnd=now+0.12; b.flash = Math.max(0.9, (b.flash||0)); }
-          const cx = Math.max(b.x, Math.min(ball.x, b.x + b.w)); const cy = Math.max(b.y, Math.min(ball.y, b.y + b.h)); const dx = ball.x - cx, dy = ball.y - cy;
-          if (Math.abs(dx) > Math.abs(dy)){
-            ball.vx = (dx>0? Math.abs(ball.vx): -Math.abs(ball.vx));
-            ball.x = cx + (dx>0 ? ball.r + eps : -ball.r - eps);
-          } else {
-            ball.vy = (dy>0? Math.abs(ball.vy): -Math.abs(ball.vy));
-            ball.y = cy + (dy>0 ? ball.r + eps : -ball.r - eps);
-          }
-          b.__hitThisStep = true;
-        }
-      }
-    }
-    ball.vx *= 0.999; ball.vy *= 0.999;
-    for (const b of blocks){ if (b.__hitThisStep && b.active && (now - (b.lastHitAT || 0) > 0.09)){
-        const name = noteValue(noteList, b.noteIndex);
-        try { triggerInstrument(instrument, name, now + 0.0005); } catch (e) {}
-        b.lastHitAT = now; b.flash = 0.18;
-      }
-      b.__hitThisStep = false;
-    }
-    if (edgeHitThisStep.left && now - edgeLastHitAT.left > 0.07){
-  const __map = mapControllersByEdge(edgeControllers);
-  const ctrl = __map.left;
-  if (ctrl && ctrl.active){
-    const nm = noteValue(noteList, ctrl.noteIndex);
-    try { triggerInstrument(instrument, nm, now+0.0005); } catch (e) {}
-    edgeLastHitAT.left = now;
-  }
-}
-if (edgeHitThisStep.right && now - edgeLastHitAT.right > 0.07){
-  const __map = mapControllersByEdge(edgeControllers);
-  const ctrl = __map.right;
-  if (ctrl && ctrl.active){
-    const nm = noteValue(noteList, ctrl.noteIndex);
-    try { triggerInstrument(instrument, nm, now+0.0005); } catch (e) {}
-    edgeLastHitAT.right = now;
-  }
-}
-if (edgeHitThisStep.top && now - edgeLastHitAT.top > 0.07){
-  const __map = mapControllersByEdge(edgeControllers);
-  const ctrl = __map.top;
-  if (ctrl && ctrl.active){
-    const nm = noteValue(noteList, ctrl.noteIndex);
-    try { triggerInstrument(instrument, nm, now+0.0005); } catch (e) {}
-    edgeLastHitAT.top = now;
-  }
-}
-if (edgeHitThisStep.bot && now - edgeLastHitAT.bot > 0.07){
-  const __map = mapControllersByEdge(edgeControllers);
-  const ctrl = __map.bot;
-  if (ctrl && ctrl.active){
-    const nm = noteValue(noteList, ctrl.noteIndex);
-    try { triggerInstrument(instrument, nm, now+0.0005); } catch (e) {}
-    edgeLastHitAT.bot = now;
-  }
-}
-edgeHitThisStep.left = edgeHitThisStep.right = edgeHitThisStep.top = edgeHitThisStep.bot = false;
-
-  }
+  
   const edgeNotes = {
     left:  { noteIndex: Math.floor(Math.random()*noteList.length) },
     right: { noteIndex: Math.floor(Math.random()*noteList.length) },
@@ -320,8 +217,10 @@ function draw(){
       ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2);
       ctx.fillStyle = 'white'; ctx.globalAlpha = 0.9; ctx.fill(); ctx.globalAlpha = 1;
     }
-    step();
-    requestAnimationFrame(draw);
+    Object.assign(S, { ball, blocks, edgeControllers, EDGE, worldW, worldH, ballR, blockSize, edgeFlash, mapControllersByEdge,
+  ensureAudioContext, triggerInstrument, noteValue, noteList, instrument, fx, lastLaunch, nextLaunchAt, lastAT, flashEdge, handle, spawnBallFrom, edgeHitThisStep, edgeLastHitAT });
+    stepBouncer(S);
+  requestAnimationFrame(draw);
   }
   requestAnimationFrame(draw);
   function onLoop(){
