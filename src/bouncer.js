@@ -11,7 +11,9 @@ import { stepIndexUp, stepIndexDown, noteValue } from './note-helpers.js';
 import { circleRectHit } from './bouncer-helpers.js';
 import { BASE_BLOCK_SIZE, BASE_CANNON_R, BASE_BALL_R, MAX_SPEED, LAUNCH_K } from './bouncer-consts.js';
 import { createImpactFX } from './bouncer-impact.js';
-export function createBouncer(selector){ const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector; if (!shell) return null; const panel = shell.closest('.toy-panel') || shell; const ui = initToyUI(panel, { toyName: 'Bouncer', defaultInstrument: 'Retro-Square' }); let instrument = 'Retro-Square'; // locked for testing
+export function createBouncer(selector){
+  const BOUNCER_BARS_PER_LIFE = 1; // duration of a shot in bars
+ const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector; if (!shell) return null; const panel = shell.closest('.toy-panel') || shell; const ui = initToyUI(panel, { toyName: 'Bouncer', defaultInstrument: 'Retro-Square' }); let instrument = 'Retro-Square'; // locked for testing
   const edgeFlash = { left: 0, right: 0, top: 0, bot: 0 }; function flashEdge(which){ const m = mapControllersByEdge(edgeControllers); const c = m && m[which]; if (!c || !c.active) return; if (edgeFlash[which] !== undefined) edgeFlash[which] = 1.0; } const edgeLastHitAT = { left: 0, right: 0, top: 0, bot: 0 }; const edgeHitThisStep = { left: false, right: false, top: false, bot: false }; panel.addEventListener('toy-instrument', (e)=>{ instrument = (e.detail.value) || instrument; }); const host = panel.querySelector('.toy-body') || panel; const canvas = document.createElement('canvas'); canvas.style.width = '100%'; canvas.style.display='block'; host.appendChild(canvas); const ctx = canvas.getContext('2d', { alpha:false }); const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true }); let edgeControllers = []; function ensureEdgeControllers(w,h){ if (!edgeControllers.length){ edgeControllers = makeEdgeControllers(w, h, blockSize(), EDGE, noteList); } else { const s = blockSize(); const half = s/2; const map = mapControllersByEdge(edgeControllers); if (map.left){  map.left.x = EDGE;        map.left.y = h/2 - half; map.left.w = s; map.left.h = s; } if (map.right){ map.right.x = w-EDGE-s;   map.right.y = h/2 - half; map.right.w = s; map.right.h = s; }
       if (map.top){   map.top.x = w/2 - half;   map.top.y = EDGE;        map.top.w = s; map.top.h = s; }
       if (map.bot){   map.bot.x = w/2 - half;   map.bot.y = h-EDGE-s;    map.bot.w = s; map.bot.h = s; }
@@ -155,8 +157,14 @@ function endDrag(e){
         launchPhase = off;
       } else { launchPhase = 0; }
       spawnBallFrom({ x: handle.x, y: handle.y, vx, vy, r: ballR() });
-      nextLaunchAt = null;
-    }
+      const __li = (typeof getLoopInfo==='function' ? getLoopInfo() : null);
+      const __bl = __li ? __li.barLen : 0;
+      if (__bl){ const __now = (ensureAudioContext()?.currentTime || 0);
+        const __lifeEnd = __now + __bl * BOUNCER_BARS_PER_LIFE;
+        ball.flightEnd = __lifeEnd;
+        nextLaunchAt = __lifeEnd;
+      } else { nextLaunchAt = null; }
+      }
   }
   draggingHandle = false; dragCurr = dragStart = null;
   try{ if (e && e.pointerId != null) canvas.releasePointerCapture(e.pointerId); }catch(e){}
@@ -164,7 +172,11 @@ function endDrag(e){
 canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
   window.addEventListener('pointerup', endDrag, true);
-  function spawnBallFrom(L){ ball = { x:L.x, y:L.y, vx:L.vx, vy:L.vy, r:L.r }; fx.onLaunch(L.x, L.y); }
+  function spawnBallFrom(L){ const o = {  x:L.x, y:L.y, vx:L.vx, vy:L.vy, r:L.r }; ball = o; fx.onLaunch(L.x, L.y); return o; }
+
+  // setters for step module to persist primitive state
+  function setNextLaunchAt(t){ nextLaunchAt = t; }
+  function setBallOut(o){ ball = o; }
   let lastAT = 0;
   
   const edgeNotes = {
@@ -218,19 +230,15 @@ function draw(){
       ctx.fillStyle = 'white'; ctx.globalAlpha = 0.9; ctx.fill(); ctx.globalAlpha = 1;
     }
     Object.assign(S, { ball, blocks, edgeControllers, EDGE, worldW, worldH, ballR, blockSize, edgeFlash, mapControllersByEdge,
-  ensureAudioContext, triggerInstrument, noteValue, noteList, instrument, fx, lastLaunch, nextLaunchAt, lastAT, flashEdge, handle, spawnBallFrom, edgeHitThisStep, edgeLastHitAT });
+  ensureAudioContext, triggerInstrument, noteValue, noteList, instrument, fx, lastLaunch, nextLaunchAt, lastAT, flashEdge, handle, spawnBallFrom, edgeHitThisStep, edgeLastHitAT, getLoopInfo , BOUNCER_BARS_PER_LIFE, setNextLaunchAt , setBallOut });
     stepBouncer(S);
   requestAnimationFrame(draw);
   }
   requestAnimationFrame(draw);
-  function onLoop(){
-    if (!lastLaunch) return; const ac = ensureAudioContext(); const li = (typeof getLoopInfo==='function' ? getLoopInfo() : null); const barLen = (li && li.barLen) ? li.barLen : 0; const phase = (launchPhase || 0) % (barLen || 1);
-    if (!ac){ spawnBallFrom({ x: handle.x, y: handle.y, vx: lastLaunch.vx, vy: lastLaunch.vy, r: ballR() }); nextLaunchAt = null; return; }
-    if (barLen && phase < 0.001){
-      spawnBallFrom({ x: handle.x, y: handle.y, vx: lastLaunch.vx, vy: lastLaunch.vy, r: ballR() }); nextLaunchAt = null;
-    } else {
-      nextLaunchAt = ac.currentTime + (phase || 0);
-    }
-  }
+  
+function onLoop(loopStartTime){ /* scheduling driven by absolute times; no-op */ }
+
+
+
   return { onLoop, reset: doReset, setInstrument: (n)=>{ instrument = n || instrument; }, element: canvas };
 }
