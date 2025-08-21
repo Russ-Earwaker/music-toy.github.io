@@ -1,5 +1,5 @@
 // src/bouncer-edges.js — edge controller cubes & visuals
-const WEDGE_DEBUG = true;
+const WEDGE_DEBUG = true; const WEDGE_BIG_DEBUG = true;
 export function makeEdgeControllers(w, h, s, EDGE_PAD, noteList){
   const mk = (edge, x, y)=>({ edge, x, y, w:s, h:s, active:true, noteIndex: Math.floor(Math.random()*noteList.length), oct:4, fixed:true, collide:true, flash:0, lastHitAT:0 });
   return [
@@ -76,24 +76,22 @@ export function drawEdgeDecorations(ctx, ctrls, EDGE_PAD, CW, CH){
     ctx.fill();
     ctx.stroke();
     if (WEDGE_DEBUG){
-      // two tips per edge: half cube width out along the wall line
-      let tips = [];
-      if (c.edge==='left' || c.edge==='right'){
-        const tx = (c.edge==='left') ? EDGE_PAD+1 : (CW - EDGE_PAD - 1);
-        tips = [[tx, y + bh*0.5 - bw*0.5], [tx, y + bh*0.5 + bw*0.5]];
-      } else if (c.edge==='top' || c.edge==='bot'){
-        const ty = (c.edge==='top') ? EDGE_PAD+1 : (CH - EDGE_PAD - 1);
-        tips = [[x + bw*0.5 - bw*0.5, ty], [x + bw*0.5 + bw*0.5, ty]];
-      }
-      // draw connector from cube face center to each tip
-      ctx.strokeStyle = 'magenta'; ctx.lineWidth = 1.5;
-      for (const [tx,ty] of tips){
-        ctx.beginPath();
-        const cx = (c.edge==='left') ? x : (c.edge==='right') ? x+bw : x+bw*0.5;
-        const cy = (c.edge==='top') ? y : (c.edge==='bot') ? y+bh : y+bh*0.5;
-        ctx.moveTo(cx, cy); ctx.lineTo(tx, ty); ctx.stroke();
-        ctx.beginPath(); ctx.arc(tx, ty, 4, 0, Math.PI*2); ctx.fillStyle='magenta'; ctx.fill();
-      }
+      // Draw a bold magenta wedge outline + dots clearly outside the wall line
+      let cx=x+bw*0.5, cy=y+bh*0.5; let tipA=[cx,cy], tipB=[cx,cy];
+      if (c.edge==='left'){ cx=x; cy=y+bh*0.5; tipA=[EDGE_PAD - bw*0.6, y]; tipB=[EDGE_PAD - bw*0.6, y+bh]; }
+      else if (c.edge==='right'){ cx=x+bw; cy=y+bh*0.5; tipA=[CW-EDGE_PAD + bw*0.6, y]; tipB=[CW-EDGE_PAD + bw*0.6, y+bh]; }
+      else if (c.edge==='top'){ cx=x+bw*0.5; cy=y; tipA=[x, EDGE_PAD - bh*0.6]; tipB=[x+bw, EDGE_PAD - bh*0.6]; }
+      else if (c.edge==='bot'){ cx=x+bw*0.5; cy=y+bh; tipA=[x, CH-EDGE_PAD + bh*0.6]; tipB=[x+bw, CH-EDGE_PAD + bh*0.6]; }
+      ctx.strokeStyle='magenta'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(tipA[0],tipA[1]); ctx.moveTo(cx,cy); ctx.lineTo(tipB[0],tipB[1]); ctx.stroke();
+      ctx.beginPath(); ctx.arc(tipA[0],tipA[1],4,0,Math.PI*2); ctx.arc(tipB[0],tipB[1],4,0,Math.PI*2); ctx.fillStyle='magenta'; ctx.fill();
+      // Yellow triangle overlay
+      ctx.beginPath();
+      if (c.edge==='left'){ ctx.moveTo(x, y+bh*0.33); ctx.lineTo(EDGE_PAD+1, y+bh*0.5); ctx.lineTo(x, y+bh*0.67); }
+      if (c.edge==='right'){ ctx.moveTo(x+bw, y+bh*0.33); ctx.lineTo(CW-EDGE_PAD-1, y+bh*0.5); ctx.lineTo(x+bw, y+bh*0.67); }
+      if (c.edge==='top'){ ctx.moveTo(x+bw*0.33, y); ctx.lineTo(x+bw*0.5, EDGE_PAD+1); ctx.lineTo(x+bw*0.67, y); }
+      if (c.edge==='bot'){ ctx.moveTo(x+bw*0.33, y+bh); ctx.lineTo(x+bw*0.5, CH-EDGE_PAD-1); ctx.lineTo(x+bw*0.67, y+bh); }
+      ctx.closePath(); ctx.fillStyle='rgba(255,255,0,0.35)'; ctx.fill();
     }
     // lock glyph
     const gx = x + bw - 12, gy = y + 7;
