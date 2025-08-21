@@ -1,4 +1,3 @@
-// src/bouncer.js — Bouncer (simple: click → music). No recording/options; visual FX only.
 import { noteList, resizeCanvasForDPR } from './utils.js';
 import { ensureAudioContext, getLoopInfo } from './audio-core.js';
 import { triggerInstrument } from './audio-samples.js';
@@ -9,23 +8,25 @@ import { drawBlocksSection } from './ripplesynth-blocks.js';
 import { circleRectHit } from './bouncer-helpers.js';
 import { BASE_BLOCK_SIZE, BASE_CANNON_R, BASE_BALL_R, MAX_SPEED, LAUNCH_K } from './bouncer-consts.js';
 import { createImpactFX } from './bouncer-impact.js';
-
 export function createBouncer(selector){
   const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector;
   if (!shell) return null;
   const panel = shell.closest('.toy-panel') || shell;
   const ui = initToyUI(panel, { toyName: 'Bouncer' });
-  let instrument = ui.instrument || 'tone';
-  panel.addEventListener('toy-instrument', (e)=>{ instrument = (e?.detail?.value) || instrument; });
-
-  // Canvas
+  let instrument = 'Retro-Square'; // locked for testing
+  const edgeFlash = { left: 0, right: 0, top: 0, bot: 0 };
+  function flashEdge(which){ if (edgeFlash[which] !== undefined) edgeFlash[which] = 1.0; }
+  const edgeLastHitAT = { left: 0, right: 0, top: 0, bot: 0 };
+  const edgeHitThisStep = { left: false, right: false, top: false, bot: false };
+  function setNoteOctave(name, oct){
+    return String(name || 'C4').replace(/(\d)$/,(m)=> String(oct));
+  }
+  panel.addEventListener('toy-instrument', ()=>{ instrument = 'Retro-Square'; });
   const host = panel.querySelector('.toy-body') || panel;
   const canvas = document.createElement('canvas');
   canvas.style.width = '100%';
   host.appendChild(canvas);
   const ctx = canvas.getContext('2d', { alpha:false });
-
-  // Sizing (square like Wheel/Rippler)
   const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true });
   const worldW = ()=> (canvas.clientWidth  || panel.clientWidth  || 356);
   const worldH = ()=> (canvas.clientHeight || panel.clientHeight || 260);
@@ -33,7 +34,6 @@ export function createBouncer(selector){
   const cannonR   = () => Math.round(BASE_CANNON_R   * (sizing.scale || 1));
   const ballR     = () => Math.round(BASE_BALL_R     * (sizing.scale || 1));
 
-  // Blocks (8) — WYSIWYG notes
   const N_BLOCKS = 8;
   let blocks = Array.from({length:N_BLOCKS}, (_,i)=> ({
     x: EDGE, y: EDGE, w: blockSize(), h: blockSize(),
@@ -41,7 +41,6 @@ export function createBouncer(selector){
   }));
   randomizeRects(blocks, worldW(), worldH(), EDGE);
 
-  // Cannon & ball state
   let handle = { x: worldW()*0.22, y: worldH()*0.5 };
   let draggingHandle = false, dragStart = null, dragCurr = null;
   let lastLaunch = null;      // {vx, vy}
@@ -50,7 +49,6 @@ export function createBouncer(selector){
   let ball = null;            // {x,y,vx,vy,r}
   const fx = createImpactFX();
 
-  // Zoom rescale: keep positions AND speeds consistent when scale changes
   let lastScale = sizing.scale || 1;
   function rescaleAll(f){
     if (!f || f === 1) return;
@@ -66,14 +64,12 @@ export function createBouncer(selector){
     lastScale = s;
   });
 
-  // UI buttons
-  function doRandom(){ randomizeRects(blocks, worldW(), worldH(), EDGE); }
-  function doReset(){ ball = null; lastLaunch = null; nextLaunchAt = null; for (const b of blocks){ b.flash = 0; b.lastHitAT = 0; } }
+  function doRandom(){ randomizeRects(blocks, worldW(), worldH(), EDGE);   randomizeEdgeNotes(); }
+  function doReset(){ ball = null; lastLaunch = null; nextLaunchAt = null; for (const b of blocks){ b.flash = 0; b.lastHitAT = 0; }   randomizeEdgeNotes(); }
   panel.addEventListener('toy-random', doRandom);
   panel.addEventListener('toy-reset', doReset);
   panel.addEventListener('toy-clear', doReset);
 
-  // Input
   function localPoint(evt){
     const rect = canvas.getBoundingClientRect();
     return { x: (evt.clientX - rect.left), y: (evt.clientY - rect.top) };
@@ -93,7 +89,6 @@ export function createBouncer(selector){
       else if (t === 'top'){ hit.noteIndex = (hit.noteIndex + 1) % noteList.length; }
       else if (t === 'bot'){ hit.noteIndex = (hit.noteIndex + noteList.length - 1) % noteList.length; }
     } else {
-      // empty space: start a shot from this point
       handle.x = p.x; handle.y = p.y;
       draggingHandle = true; dragStart = { x: handle.x, y: handle.y }; dragCurr = p;
       try { canvas.setPointerCapture(e.pointerId); } catch {}
@@ -131,18 +126,15 @@ export function createBouncer(selector){
 
   function spawnBallFrom(L){ ball = { x:L.x, y:L.y, vx:L.vx, vy:L.vy, r:L.r }; fx.onLaunch(L.x, L.y); }
 
-  // Physics/update
   let lastAT = 0;
   function step(nowAT){
     const ac = ensureAudioContext();
     const now = nowAT || (ac ? ac.currentTime : 0);
     const dt = Math.min(0.04, Math.max(0, now - (lastAT || now)));
-    // Scheduled relaunch at phase
     { if (lastLaunch && nextLaunchAt != null && ac && now >= nextLaunchAt - 0.005){ spawnBallFrom({ x: handle.x, y: handle.y, vx: lastLaunch.vx, vy: lastLaunch.vy, r: ballR() }); nextLaunchAt = null; } }
     lastAT = now;
 
     fx.onStep(ball);
-    // Decay flashes
     for (const b of blocks){ b.flash = Math.max(0, b.flash - dt); b.__hitThisStep = false; }
 
     if (!ball) return;
@@ -150,7 +142,6 @@ export function createBouncer(selector){
     const L=EDGE, T=EDGE, R=worldW()-EDGE, B=worldH()-EDGE;
     const eps = 0.001;
 
-    // Sub-stepped integration to reduce tunneling
     const maxComp = Math.max(Math.abs(ball.vx), Math.abs(ball.vy));
     const maxStep = Math.max(1, ball.r * 0.4);
     const steps = Math.max(1, Math.ceil(maxComp / maxStep));
@@ -159,13 +150,35 @@ export function createBouncer(selector){
     for (let s=0; s<steps; s++){
       ball.x += stepx; ball.y += stepy;
 
-      // Walls
-      if (ball.x - ball.r < L){ ball.x = L + ball.r + eps; ball.vx = Math.abs(ball.vx); }
-      if (ball.x + ball.r > R){ ball.x = R - ball.r - eps; ball.vx = -Math.abs(ball.vx); }
-      if (ball.y - ball.r < T){ ball.y = T + ball.r + eps; ball.vy = Math.abs(ball.vy); }
-      if (ball.y + ball.r > B){ ball.y = B - ball.r - eps; ball.vy = -Math.abs(ball.vy); }
+      if (ball.x - ball.r < L) {
+        ball.x = L + ball.r + eps; ball.vx = Math.abs(ball.vx);                        
+        flashEdge('left');
+        try { console.log('[bouncer] edge-hit:left'); } catch {}
+        edgeHitThisStep.left = true;
+      }
+        try { console.debug('[bouncer] edge-hit:left'); } catch {}
+      if (ball.x + ball.r > R) {
+                ball.x = R - ball.r - eps; ball.vx = -Math.abs(ball.vx);                
+        flashEdge('right');
+        try { console.log('[bouncer] edge-hit:right'); } catch {}
+        edgeHitThisStep.right = true;
+      }
+        try { console.debug('[bouncer] edge-hit:right'); } catch {}
+      if (ball.y - ball.r < T) {
+                        ball.y = T + ball.r + eps; ball.vy = Math.abs(ball.vy);        
+        flashEdge('top');
+        try { console.log('[bouncer] edge-hit:top'); } catch {}
+        edgeHitThisStep.top = true;
+      }
+        try { console.debug('[bouncer] edge-hit:top'); } catch {}
+      if (ball.y + ball.r > B) {
+                                ball.y = B - ball.r - eps; ball.vy = -Math.abs(ball.vy);
+        flashEdge('bot');
+        try { console.log('[bouncer] edge-hit:bot'); } catch {}
+        edgeHitThisStep.bot = true;
+      }
+        try { console.debug('[bouncer] edge-hit:bot'); } catch {}
 
-      // Blocks
       for (const b of blocks){
         if (!b.active) continue;
         if (circleRectHit(ball.x, ball.y, ball.r, b)){
@@ -184,23 +197,49 @@ export function createBouncer(selector){
       }
     }
 
-    // Friction
     ball.vx *= 0.999; ball.vy *= 0.999;
 
-    // Triggers
     for (const b of blocks){
       if (b.__hitThisStep && (now - (b.lastHitAT || 0) > 0.09)){
-        const name = noteList[b.noteIndex] || 'C4';
+        const name = setNoteOctave(noteList[b.noteIndex] || 'C4', 4);
         try { triggerInstrument(instrument, name, now + 0.0005); } catch {}
         b.lastHitAT = now; b.flash = 0.18;
       }
       b.__hitThisStep = false;
     }
+    if (edgeHitThisStep.left  && now - edgeLastHitAT.left  > 0.07){
+      const nm = setNoteOctave(noteList[edgeNotes.left.noteIndex]||'C4',4);
+      try { triggerInstrument(instrument, nm, now+0.0005); edgeLastHitAT.left = now; } catch {}
+    }
+    if (edgeHitThisStep.right && now - edgeLastHitAT.right > 0.07){
+      const nm = setNoteOctave(noteList[edgeNotes.right.noteIndex]||'C4',4);
+      try { triggerInstrument(instrument, nm, now+0.0005); edgeLastHitAT.right = now; } catch {}
+    }
+    if (edgeHitThisStep.top   && now - edgeLastHitAT.top   > 0.07){
+      const nm = setNoteOctave(noteList[edgeNotes.top.noteIndex]||'C4',4);
+      try { triggerInstrument(instrument, nm, now+0.0005); edgeLastHitAT.top = now; } catch {}
+    }
+    if (edgeHitThisStep.bot   && now - edgeLastHitAT.bot   > 0.07){
+      const nm = setNoteOctave(noteList[edgeNotes.bot.noteIndex]||'C4',4);
+      try { triggerInstrument(instrument, nm, now+0.0005); edgeLastHitAT.bot = now; } catch {}
+    }
+    edgeHitThisStep.left = edgeHitThisStep.right = edgeHitThisStep.top = edgeHitThisStep.bot = false;
   }
 
-  // Draw
-  function draw(){
-    // Sync scale on layout/zoom change
+  // Edge notes for wall hits
+  const edgeNotes = {
+    left:  { noteIndex: Math.floor(Math.random()*noteList.length) },
+    right: { noteIndex: Math.floor(Math.random()*noteList.length) },
+    top:   { noteIndex: Math.floor(Math.random()*noteList.length) },
+    bot:   { noteIndex: Math.floor(Math.random()*noteList.length) },
+  };
+  function randomizeEdgeNotes(){
+    edgeNotes.left.noteIndex  = Math.floor(Math.random()*noteList.length);
+    edgeNotes.right.noteIndex = Math.floor(Math.random()*noteList.length);
+    edgeNotes.top.noteIndex   = Math.floor(Math.random()*noteList.length);
+    edgeNotes.bot.noteIndex   = Math.floor(Math.random()*noteList.length);
+  }
+function draw(){
     const sNow = sizing.scale || 1;
     if (sNow !== lastScale){ rescaleAll(sNow / lastScale); lastScale = sNow; }
 
@@ -208,40 +247,43 @@ export function createBouncer(selector){
     const w = canvas.width, h = canvas.height;
     ctx.fillStyle = '#0b0f16'; ctx.fillRect(0,0,w,h);
 
-    // Border
     ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 2;
     ctx.strokeRect(EDGE, EDGE, w-EDGE*2, h-EDGE*2);
+    if (edgeFlash.left > 0 || edgeFlash.right > 0 || edgeFlash.top > 0 || edgeFlash.bot > 0){
+      ctx.lineWidth = 4;
+      if (edgeFlash.top > 0){ ctx.strokeStyle = `rgba(255,255,255,${edgeFlash.top})`; ctx.beginPath(); ctx.moveTo(EDGE, EDGE); ctx.lineTo(w-EDGE, EDGE); ctx.stroke(); }
+      if (edgeFlash.bot > 0){ ctx.strokeStyle = `rgba(255,255,255,${edgeFlash.bot})`; ctx.beginPath(); ctx.moveTo(EDGE, h-EDGE); ctx.lineTo(w-EDGE, h-EDGE); ctx.stroke(); }
+      if (edgeFlash.left > 0){ ctx.strokeStyle = `rgba(255,255,255,${edgeFlash.left})`; ctx.beginPath(); ctx.moveTo(EDGE, EDGE); ctx.lineTo(EDGE, h-EDGE); ctx.stroke(); }
+      if (edgeFlash.right > 0){ ctx.strokeStyle = `rgba(255,255,255,${edgeFlash.right})`; ctx.beginPath(); ctx.moveTo(w-EDGE, EDGE); ctx.lineTo(w-EDGE, h-EDGE); ctx.stroke(); }
+      edgeFlash.top *= 0.85; edgeFlash.bot *= 0.85; edgeFlash.left *= 0.85; edgeFlash.right *= 0.85;
+      if (edgeFlash.top < 0.03) edgeFlash.top = 0;
+      if (edgeFlash.bot < 0.03) edgeFlash.bot = 0;
+      if (edgeFlash.left < 0.03) edgeFlash.left = 0;
+      if (edgeFlash.right < 0.03) edgeFlash.right = 0;
+    }
 
-    // Blocks (standardized look)
     for (const b of blocks){ b.w = blockSize(); b.h = blockSize(); }
     { const ac = ensureAudioContext(); const now = (ac?ac.currentTime:0); drawBlocksSection(ctx, blocks, 0, 0, null, 1, noteList, sizing, null, null, now); }
 
-    // FX
     fx.draw(ctx);
 
-    // Cannon
     ctx.beginPath(); ctx.arc(handle.x, handle.y, cannonR(), 0, Math.PI*2);
     ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fill();
     ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.stroke();
 
-    // Drag vector
     if (draggingHandle && dragStart && dragCurr){
       ctx.beginPath(); ctx.moveTo(handle.x, handle.y); ctx.lineTo(dragCurr.x, dragCurr.y);
       ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 2; ctx.stroke();
     }
 
-    // Ball
     if (ball){
       ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2);
       ctx.fillStyle = 'white'; ctx.globalAlpha = 0.9; ctx.fill(); ctx.globalAlpha = 1;
     }
-
     step();
     requestAnimationFrame(draw);
   }
   requestAnimationFrame(draw);
-
-  // Loop callback (relaunch at captured phase each bar)
   function onLoop(){
     if (!lastLaunch) return;
     const ac = ensureAudioContext();
@@ -254,6 +296,5 @@ export function createBouncer(selector){
       nextLaunchAt = ac.currentTime + (phase || 0);
     }
   }
-
   return { onLoop, reset: doReset, setInstrument: (n)=>{ instrument = n || instrument; }, element: canvas };
 }
