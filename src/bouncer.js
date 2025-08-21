@@ -1,4 +1,4 @@
-import { makeEdgeControllers, drawEdgeBondLines, handleEdgeControllerEdit, mapControllersByEdge, randomizeControllers, drawControllers } from './bouncer-edges.js';
+import { makeEdgeControllers, drawEdgeBondLines, handleEdgeControllerEdit, mapControllersByEdge, randomizeControllers, drawEdgeDecorations } from './bouncer-edges.js';
 import { noteList, resizeCanvasForDPR } from './utils.js';
 import { ensureAudioContext, getLoopInfo } from './audio-core.js';
 import { triggerInstrument } from './audio-samples.js';
@@ -29,7 +29,7 @@ export function createBouncer(selector){
   let edgeControllers = [];
   function ensureEdgeControllers(w,h){
     if (!edgeControllers.length){
-      edgeControllers = makeEdgeControllers(w, h, blockSize(), EDGE, noteList);
+      edgeControllers = makeEdgeControllers(w, h, blockSize(), EDGE, noteList); try{console.log('[bouncer] controllers:created', edgeControllers.length);}catch{}
     } else {
       const s = blockSize(); const half = s/2;
       const map = mapControllersByEdge(edgeControllers);
@@ -44,7 +44,7 @@ export function createBouncer(selector){
   const blockSize = () => Math.round(BASE_BLOCK_SIZE * (sizing.scale || 1));
   const cannonR   = () => Math.round(BASE_CANNON_R   * (sizing.scale || 1));
   const ballR     = () => Math.round(BASE_BALL_R     * (sizing.scale || 1));
-  const N_BLOCKS = 8;
+  const N_BLOCKS = 4;
   let blocks = Array.from({length:N_BLOCKS}, (_,i)=> ({
     x: EDGE, y: EDGE, w: blockSize(), h: blockSize(),
     noteIndex: (i*3) % noteList.length, active: true, flash: 0, lastHitAT: 0
@@ -96,7 +96,7 @@ export function createBouncer(selector){
       else if (t === 'top'){ hit.noteIndex = (hit.noteIndex + 1) % noteList.length; }
     else if (panel.classList.contains('toy-zoomed') && hitCtrl){
       if (handleEdgeControllerEdit(p, hitCtrl, whichThirdRect, noteList)){
-        hitCtrl.flash = 1;
+        hitCtrl.flash = 1; try{console.log('[bouncer] ctrl-edit:', hitCtrl.edge);}catch{}
       }
     }
       else if (t === 'bot'){ hit.noteIndex = (hit.noteIndex + noteList.length - 1) % noteList.length; }
@@ -154,6 +154,30 @@ export function createBouncer(selector){
     const stepx = ball.vx / steps, stepy = ball.vy / steps;
     for (let s=0; s<steps; s++){
       ball.x += stepx; ball.y += stepy;
+      // Controller collisions first (so they take precedence over wall hits)
+      for (const b of edgeControllers){
+        if (!b || !b.collide) continue;
+        if (circleRectHit(ball.x, ball.y, ball.r, b)){
+          const cx = Math.max(b.x, Math.min(ball.x, b.x + b.w));
+          const cy = Math.max(b.y, Math.min(ball.y, b.y + b.h));
+          const dx = ball.x - cx;
+          const dy = ball.y - cy;
+          if (Math.abs(dx) > Math.abs(dy)){
+            ball.vx = (dx>0? Math.abs(ball.vx): -Math.abs(ball.vx));
+            ball.x = cx + (dx>0 ? ball.r + 0.0001 : -ball.r - 0.0001);
+          } else {
+            ball.vy = (dy>0? Math.abs(ball.vy): -Math.abs(ball.vy));
+            ball.y = cy + (dy>0 ? ball.r + 0.0001 : -ball.r - 0.0001);
+          }
+          if (b.edge==='left')  edgeHitThisStep.left  = true;
+          if (b.edge==='right') edgeHitThisStep.right = true;
+          if (b.edge==='top')   edgeHitThisStep.top   = true;
+          if (b.edge==='bot')   edgeHitThisStep.bot   = true;
+          const __ac = ensureAudioContext(); const __n = (__ac?__ac.currentTime:0); b.__hitThisStep = true; b.lastHitAT = __n; b.flash = 1;
+          if (b.edge) flashEdge(b.edge);
+          try{console.log('[bouncer] ctrl-collide:', b.edge);}catch{}
+        }
+      }
       if (ball.x - ball.r < L) {
         ball.x = L + ball.r + eps; ball.vx = Math.abs(ball.vx);                        
         flashEdge('left');
@@ -252,7 +276,9 @@ function draw(){
     ctx.strokeRect(EDGE, EDGE, w-EDGE*2, h-EDGE*2);
     ensureEdgeControllers(w,h);
     drawEdgeBondLines(ctx, w, h, EDGE);
-    drawControllers(ctx, edgeControllers);
+    const __ac2 = ensureAudioContext(); const __now2 = (__ac2?__ac2.currentTime:0);
+    drawBlocksSection(ctx, edgeControllers, 0, 0, null, 1, noteList, sizing, null, null, __now2);
+    drawEdgeDecorations(ctx, edgeControllers, EDGE);
     for (const c of edgeControllers){ if (c.flash>0){ c.flash *= 0.85; if (c.flash < 0.03) c.flash = 0; } }
     if (edgeFlash.left > 0 || edgeFlash.right > 0 || edgeFlash.top > 0 || edgeFlash.bot > 0){
       ctx.lineWidth = 4;

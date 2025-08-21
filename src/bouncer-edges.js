@@ -2,12 +2,12 @@
 import { clamp } from './utils.js';
 
 export function makeEdgeControllers(w, h, s, EDGE_PAD, noteList){
-  const mk = (edge, x, y)=>({ edge, x, y, w:s, h:s, active:true, noteIndex: Math.floor(Math.random()*noteList.length), fixed:true, collide:false, flash:0, lastHitAT:0 });
+  const mk = (edge, x, y)=>({ edge, x, y, w:s, h:s, active:true, noteIndex: Math.floor(Math.random()*noteList.length), fixed:true, collide:true, flash:0, lastHitAT:0 });
   return [
-    mk('left',  EDGE_PAD,         (h/2 - s/2)),
-    mk('right', w-EDGE_PAD-s,     (h/2 - s/2)),
-    mk('top',   (w/2 - s/2),      EDGE_PAD),
-    mk('bot',   (w/2 - s/2),      h-EDGE_PAD-s),
+    mk('left',  EDGE_PAD+2,       (h/2 - s/2)),
+    mk('right', w-EDGE_PAD-s-2,   (h/2 - s/2)),
+    mk('top',   (w/2 - s/2),      EDGE_PAD+2),
+    mk('bot',   (w/2 - s/2),      h-EDGE_PAD-s-2),
   ];
 }
 
@@ -73,4 +73,25 @@ export function drawControllers(ctx, ctrls){
     ctx.moveTo(gx+1, gy+3); ctx.arc(gx+3, gy+3, 2, Math.PI, 0);
     ctx.lineWidth=1.5; ctx.strokeStyle='rgba(255,255,255,0.55)'; ctx.stroke();
   }
+}
+
+
+export function drawEdgeDecorations(ctx, ctrls, EDGE_PAD){
+  ctx.save();
+  for (const c of ctrls){
+    // Wedge connecting block to wall
+    const x=c.x, y=c.y, w=c.w, h=c.h, n=Math.max(6, Math.min(12, Math.floor(h*0.18)));
+    ctx.fillStyle = '#f4932f';
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    if (c.edge==='left'){ ctx.moveTo(x, y+h*0.33); ctx.lineTo(EDGE_PAD+1, y+h*0.5); ctx.lineTo(x, y+h*0.67); }
+    if (c.edge==='right'){ ctx.moveTo(x+w, y+h*0.33); ctx.lineTo(x+w, y+h*0.67); ctx.lineTo(x+w+(EDGE_PAD?-1:1), y+h*0.5); }
+    if (c.edge==='top'){ ctx.moveTo(x+w*0.33, y); ctx.lineTo(x+w*0.67, y); ctx.lineTo(x+w*0.5, EDGE_PAD+1); }
+    if (c.edge==='bot'){ ctx.moveTo(x+w*0.33, y+h); ctx.lineTo(x+w*0.67, y+h); ctx.lineTo(x+w*0.5, y+h+(EDGE_PAD?-1:1)); }
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    // Lock glyph at top-right of block
+    const gx = x+w-12, gy=y+7;
+    ctx.beginPath(); ctx.rect(gx, gy+3, 7, 6); ctx.moveTo(gx+1, gy+3); ctx.arc(gx+3.5, gy+3, 2, Math.PI, 0); ctx.lineWidth=1.5; ctx.strokeStyle='rgba(0,0,0,0.7)'; ctx.stroke();
+  }
+  ctx.restore();
 }
