@@ -11,53 +11,35 @@ import { BASE_BLOCK_SIZE, BASE_CANNON_R, BASE_BALL_R, MAX_SPEED, LAUNCH_K } from
 import { createImpactFX } from './bouncer-impact.js';
 export function createBouncer(selector){
   const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector;
-  if (!shell) return null; const panel = shell.closest('.toy-panel') || shell; const ui = initToyUI(panel, { toyName: 'Bouncer' });
-  let instrument = 'Retro-Square'; // locked for testing
+  if (!shell) return null; const panel = shell.closest('.toy-panel') || shell; const ui = initToyUI(panel, { toyName: 'Bouncer', defaultInstrument: 'Retro-Square' }); let instrument = 'Retro-Square'; // locked for testing
   const edgeFlash = { left: 0, right: 0, top: 0, bot: 0 };
   function flashEdge(which){ if (edgeFlash[which] !== undefined) edgeFlash[which] = 1.0; }
   const edgeLastHitAT = { left: 0, right: 0, top: 0, bot: 0 }; const edgeHitThisStep = { left: false, right: false, top: false, bot: false };
   function setNoteOctave(name, oct){
     return String(name || 'C4').replace(/(\d)$/,(m)=> String(oct));
   }
-  panel.addEventListener('toy-instrument', (e)=>{ instrument = (e?.detail?.value) || instrument; });
-  const host = panel.querySelector('.toy-body') || panel;
-  const canvas = document.createElement('canvas');
+  panel.addEventListener('toy-instrument', (e)=>{ instrument = (e?.detail?.value) || instrument; }); const host = panel.querySelector('.toy-body') || panel; const canvas = document.createElement('canvas');
   canvas.style.width = '100%';
-  host.appendChild(canvas);
-  const ctx = canvas.getContext('2d', { alpha:false });
-  const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true });
-  let edgeControllers = [];
+  host.appendChild(canvas); const ctx = canvas.getContext('2d', { alpha:false }); const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true }); let edgeControllers = [];
   function ensureEdgeControllers(w,h){
-    if (!edgeControllers.length){
-      edgeControllers = makeEdgeControllers(w, h, blockSize(), EDGE, noteList); try{console.log('[bouncer] controllers:created', edgeControllers.length);}catch{}
-    } else {
-      const s = blockSize(); const half = s/2;
-      const map = mapControllersByEdge(edgeControllers);
+    if (!edgeControllers.length){ edgeControllers = makeEdgeControllers(w, h, blockSize(), EDGE, noteList); }
+    else {
+      const s = blockSize(); const half = s/2; const map = mapControllersByEdge(edgeControllers);
       if (map.left){  map.left.x = EDGE;        map.left.y = h/2 - half; map.left.w = s; map.left.h = s; }
       if (map.right){ map.right.x = w-EDGE-s;   map.right.y = h/2 - half; map.right.w = s; map.right.h = s; }
       if (map.top){   map.top.x = w/2 - half;   map.top.y = EDGE;        map.top.w = s; map.top.h = s; }
       if (map.bot){   map.bot.x = w/2 - half;   map.bot.y = h-EDGE-s;    map.bot.w = s; map.bot.h = s; }
     }
   }
-  const worldW = ()=> (canvas.clientWidth  || panel.clientWidth  || 356);
-  const worldH = ()=> (canvas.clientHeight || panel.clientHeight || 260);
-  const blockSize = () => Math.round(BASE_BLOCK_SIZE * (sizing.scale || 1));
-  const cannonR   = () => Math.round(BASE_CANNON_R   * (sizing.scale || 1));
-  const ballR     = () => Math.round(BASE_BALL_R     * (sizing.scale || 1));
-  const N_BLOCKS = 4;
-  let blocks = Array.from({length:N_BLOCKS}, (_,i)=> ({
+  const worldW = ()=> (canvas.clientWidth  || panel.clientWidth  || 356); const worldH = ()=> (canvas.clientHeight || panel.clientHeight || 260); const blockSize = () => Math.round(BASE_BLOCK_SIZE * (sizing.scale || 1)); const cannonR   = () => Math.round(BASE_CANNON_R   * (sizing.scale || 1)); const ballR     = () => Math.round(BASE_BALL_R     * (sizing.scale || 1)); const N_BLOCKS = 4; let blocks = Array.from({length:N_BLOCKS}, (_,i)=> ({
     x: EDGE, y: EDGE, w: blockSize(), h: blockSize(),
     noteIndex: (i*3) % noteList.length, active: true, flash: 0, lastHitAT: 0
-  }));
-  randomizeRects(blocks, worldW(), worldH(), EDGE);
-  let handle = { x: worldW()*0.22, y: worldH()*0.5 };
-  let draggingHandle = false, dragStart = null, dragCurr = null;
-  let lastLaunch = null;      // {vx, vy}
+  , oct:4 }));
+  randomizeRects(blocks, worldW(), worldH(), EDGE); let handle = { x: worldW()*0.22, y: worldH()*0.5 }; let draggingHandle = false, dragStart = null, dragCurr = null; let draggingBlock = false; let dragBlockRef = null; let dragOffset = {dx:0,dy:0}; let lastLaunch = null;      // {vx, vy}
   let launchPhase = 0;        // seconds into bar
   let nextLaunchAt = null;    // audio time to relaunch
   let ball = null;            // {x,y,vx,vy,r}
-  const fx = createImpactFX();
-  let lastScale = sizing.scale || 1;
+  const fx = createImpactFX(); let lastScale = sizing.scale || 1;
   function rescaleAll(f){
     if (!f || f === 1) return;
     for (const b of blocks){ b.x *= f; b.y *= f; b.w = blockSize(); b.h = blockSize(); }
@@ -66,14 +48,21 @@ export function createBouncer(selector){
     if (lastLaunch){ lastLaunch.vx *= f; lastLaunch.vy *= f; }
   }
   panel.addEventListener('toy-zoom', (e)=>{
-    sizing.setZoom?.(!!e?.detail?.zoomed);
-    const s = sizing.scale || 1;
+    sizing.setZoom?.(!!e?.detail?.zoomed); const s = sizing.scale || 1;
     rescaleAll(s / lastScale);
     lastScale = s;
   });
-  function doRandom(){ randomizeRects(blocks, worldW(), worldH(), EDGE);   randomizeEdgeNotes();  randomizeControllers(edgeControllers, noteList); }
-  function doReset(){ ball = null; lastLaunch = null; nextLaunchAt = null; for (const b of blocks){ b.flash = 0; b.lastHitAT = 0; }   randomizeEdgeNotes(); }
-  panel.addEventListener('toy-random', doRandom);
+  function doRandom(){
+    const w = worldW(), h = worldH(); const bx = Math.round(w*0.2), by = Math.round(h*0.2); const bw = Math.round(w*0.6), bh = Math.round(h*0.6);
+    randomizeRects(blocks, {x:bx, y:by, w:bw, h:bh}, EDGE);
+    randomizeControllers(edgeControllers, noteList);
+  }
+  function doReset(){
+    ball = null; lastLaunch = null;
+    for (const b of blocks){ b.flash = 0; b.lastHitAT = 0; }
+    if (edgeControllers){ for (const c of edgeControllers){ c.flash = 0; c.lastHitAT = 0; } }
+  }
+panel.addEventListener('toy-random', doRandom);
   panel.addEventListener('toy-reset', doReset);
   panel.addEventListener('toy-clear', doReset);
   function localPoint(evt){
@@ -81,48 +70,50 @@ export function createBouncer(selector){
     return { x: (evt.clientX - rect.left), y: (evt.clientY - rect.top) };
   }
   canvas.addEventListener('pointerdown', (e)=>{
-    const p = localPoint(e);
-    const near = Math.hypot(p.x - handle.x, p.y - handle.y) <= cannonR() + 14;
-    const hit = blocks.find(b => hitRect(p, b));
-      const hitCtrl = edgeControllers.find(b => hitRect(p, b));
-    if (near){
-      handle.x = p.x; handle.y = p.y;
-      draggingHandle = true; dragStart = { x: handle.x, y: handle.y }; dragCurr = p;
-      try { canvas.setPointerCapture(e.pointerId); } catch {}
-      e.preventDefault();
-    } else if (panel.classList.contains('toy-zoomed') && hit){
-      const t = whichThirdRect(p, hit);
-      if (t === 'mid'){ hit.active = !hit.active; }
-      else if (t === 'top'){ hit.noteIndex = (hit.noteIndex + 1) % noteList.length; }
-    else if (panel.classList.contains('toy-zoomed') && hitCtrl){
-      if (handleEdgeControllerEdit(p, hitCtrl, whichThirdRect, noteList)){
-        hitCtrl.flash = 1; try{console.log('[bouncer] ctrl-edit:', hitCtrl.edge);}catch{}
+    const p = localPoint(e); // CSS-space (matches block coords)
+    const zoomed = panel.classList.contains('toy-zoomed'); const hitCtrl = edgeControllers.find(b => hitRect(p, b)); const hit = blocks.find(b => hitRect(p, b));
+    if (zoomed){
+      if (hit){
+        const t = whichThirdRect(hit, p.y);
+        if (t === 'toggle'){ hit.active = !hit.active; return; }
+        let changed=false, prev=hit.noteIndex, prevOct=hit.oct||4;
+        if (t === 'up'){ hit.noteIndex = (hit.noteIndex + 1) % noteList.length; if (hit.noteIndex < prev) hit.oct = Math.min(6, prevOct+1); changed=true; }
+        else if (t === 'down'){ hit.noteIndex = (hit.noteIndex + noteList.length - 1) % noteList.length; if (hit.noteIndex > prev) hit.oct = Math.max(2, prevOct-1); changed=true; }
+        if (changed){ const ac=ensureAudioContext(); const now=(ac?ac.currentTime:0); const nm=setNoteOctave(noteList[hit.noteIndex]||'C4', hit.oct||4); try{ triggerInstrument(instrument, nm, now+0.0005); }catch{} }
+        return;
       }
-    }
-      else if (t === 'bot'){ hit.noteIndex = (hit.noteIndex + noteList.length - 1) % noteList.length; }
+      if (hitCtrl){
+        const beforeI = hitCtrl.noteIndex, beforeO = hitCtrl.oct||4; const ok = handleEdgeControllerEdit(hitCtrl, p.y, whichThirdRect, noteList);
+        if (ok && (hitCtrl.noteIndex!==beforeI || (hitCtrl.oct||4)!==beforeO)){
+          const ac=ensureAudioContext(); const now=(ac?ac.currentTime:0); const nm=setNoteOctave(noteList[hitCtrl.noteIndex]||'C4', hitCtrl.oct||4);
+          try{ triggerInstrument(instrument, nm, now+0.0005); }catch{}
+        }
+        return;
+      }
     } else {
-      handle.x = p.x; handle.y = p.y;
-      draggingHandle = true; dragStart = { x: handle.x, y: handle.y }; dragCurr = p;
-      try { canvas.setPointerCapture(e.pointerId); } catch {}
-      e.preventDefault();
+      if (hit && !hit.fixed){
+        draggingBlock = true; dragBlockRef = hit; dragOffset = { dx: p.x - hit.x, dy: p.y - hit.y };
+        try { canvas.setPointerCapture(e.pointerId); } catch {}
+        e.preventDefault(); return;
+      }
+      if (hitCtrl) return; // no shot on controllers
     }
+    handle.x = p.x; handle.y = p.y;
+    draggingHandle = true; dragStart = { x: handle.x, y: handle.y }; dragCurr = p;
+    try { canvas.setPointerCapture(e.pointerId); } catch {}
+    e.preventDefault();
   });
-  canvas.addEventListener('pointermove', (e)=>{ if (draggingHandle) dragCurr = localPoint(e); });
-  function endDrag(e){
+  canvas.addEventListener('pointermove', (e)=>{ if (draggingBlock && dragBlockRef){ const p=localPoint(e); let nx=p.x-dragOffset.dx, ny=p.y-dragOffset.dy; const w=canvas.clientWidth||356, h=canvas.clientHeight||260; nx=Math.max(EDGE, Math.min(nx, w-EDGE-dragBlockRef.w)); ny=Math.max(EDGE, Math.min(ny, h-EDGE-dragBlockRef.h)); dragBlockRef.x=nx; dragBlockRef.y=ny; e.preventDefault(); return; } if (draggingHandle) dragCurr = localPoint(e); });function endDrag(e){
+    if (draggingBlock){ draggingBlock=false; dragBlockRef=null; try { if (e?.pointerId != null) canvas.releasePointerCapture(e.pointerId); } catch {} return; }
     if (!draggingHandle) return;
     draggingHandle = false;
     if (dragStart && dragCurr){
-      const sc = (sizing.scale || 1);
-      let vx = (dragCurr.x - dragStart.x) * (LAUNCH_K / sc);
-      let vy = (dragCurr.y - dragStart.y) * (LAUNCH_K / sc);
-      const sp = Math.hypot(vx, vy);
+      const sc = (sizing.scale || 1); let vx = (dragCurr.x - dragStart.x) * (LAUNCH_K / sc); let vy = (dragCurr.y - dragStart.y) * (LAUNCH_K / sc); const sp = Math.hypot(vx, vy);
       if (sp > 1){
         const scl = Math.min(1, MAX_SPEED / sp); vx *= scl; vy *= scl;
-        lastLaunch = { vx, vy };
-        const ac = ensureAudioContext(); const li = getLoopInfo?.();
+        lastLaunch = { vx, vy }; const ac = ensureAudioContext(); const li = getLoopInfo?.();
         if (ac && li){
-          const now = ac.currentTime;
-          const off = ((now - (li.loopStartTime||0)) % (li.barLen||1) + (li.barLen||1)) % (li.barLen||1);
+          const now = ac.currentTime; const off = ((now - (li.loopStartTime||0)) % (li.barLen||1) + (li.barLen||1)) % (li.barLen||1);
           launchPhase = off;
         } else { launchPhase = 0; }
         spawnBallFrom({ x: handle.x, y: handle.y, vx, vy, r: ballR() });
@@ -138,23 +129,16 @@ export function createBouncer(selector){
   function spawnBallFrom(L){ ball = { x:L.x, y:L.y, vx:L.vx, vy:L.vy, r:L.r }; fx.onLaunch(L.x, L.y); }
   let lastAT = 0;
   function step(nowAT){
-    const ac = ensureAudioContext();
-    const now = nowAT || (ac ? ac.currentTime : 0);
-    const dt = Math.min(0.04, Math.max(0, now - (lastAT || now)));
+    const ac = ensureAudioContext(); const now = nowAT || (ac ? ac.currentTime : 0); const dt = Math.min(0.04, Math.max(0, now - (lastAT || now)));
     { if (lastLaunch && nextLaunchAt != null && ac && now >= nextLaunchAt - 0.005){ spawnBallFrom({ x: handle.x, y: handle.y, vx: lastLaunch.vx, vy: lastLaunch.vy, r: ballR() }); nextLaunchAt = null; } }
     lastAT = now;
     fx.onStep(ball);
     for (const b of blocks){ b.flash = Math.max(0, b.flash - dt); b.__hitThisStep = false; }
-    if (!ball) return;
-    const L=EDGE, T=EDGE, R=worldW()-EDGE, B=worldH()-EDGE;
-    const eps = 0.001;
-    const maxComp = Math.max(Math.abs(ball.vx), Math.abs(ball.vy));
-    const maxStep = Math.max(1, ball.r * 0.4);
+    if (!ball) return; const L=EDGE, T=EDGE, R=worldW()-EDGE, B=worldH()-EDGE; const eps = 0.001; const maxComp = Math.max(Math.abs(ball.vx), Math.abs(ball.vy)); const maxStep = Math.max(1, ball.r * 0.4);
     const steps = Math.max(1, Math.ceil(maxComp / maxStep));
     const stepx = ball.vx / steps, stepy = ball.vy / steps;
     for (let s=0; s<steps; s++){
       ball.x += stepx; ball.y += stepy;
-      // Controller collisions first (so they take precedence over wall hits)
       for (const b of edgeControllers){
         if (!b || !b.collide) continue;
         if (circleRectHit(ball.x, ball.y, ball.r, b)){
@@ -175,41 +159,32 @@ export function createBouncer(selector){
           if (b.edge==='bot')   edgeHitThisStep.bot   = true;
           const __ac = ensureAudioContext(); const __n = (__ac?__ac.currentTime:0); b.__hitThisStep = true; b.lastHitAT = __n; b.flash = 1;
           if (b.edge) flashEdge(b.edge);
-          try{console.log('[bouncer] ctrl-collide:', b.edge);}catch{}
         }
       }
       if (ball.x - ball.r < L) {
         ball.x = L + ball.r + eps; ball.vx = Math.abs(ball.vx);                        
         flashEdge('left');
         const __m = mapControllersByEdge(edgeControllers).left; if (__m) __m.flash = 1;
-        try { console.log('[bouncer] edge-hit:left'); } catch {}
         edgeHitThisStep.left = true;
       }
-        try { console.debug('[bouncer] edge-hit:left'); } catch {}
       if (ball.x + ball.r > R) {
                 ball.x = R - ball.r - eps; ball.vx = -Math.abs(ball.vx);                
         flashEdge('right');
         const __m = mapControllersByEdge(edgeControllers).right; if (__m) __m.flash = 1;
-        try { console.log('[bouncer] edge-hit:right'); } catch {}
         edgeHitThisStep.right = true;
       }
-        try { console.debug('[bouncer] edge-hit:right'); } catch {}
       if (ball.y - ball.r < T) {
                         ball.y = T + ball.r + eps; ball.vy = Math.abs(ball.vy);        
         flashEdge('top');
         const __m = mapControllersByEdge(edgeControllers).top; if (__m) __m.flash = 1;
-        try { console.log('[bouncer] edge-hit:top'); } catch {}
         edgeHitThisStep.top = true;
       }
-        try { console.debug('[bouncer] edge-hit:top'); } catch {}
       if (ball.y + ball.r > B) {
                                 ball.y = B - ball.r - eps; ball.vy = -Math.abs(ball.vy);
         flashEdge('bot');
         const __m = mapControllersByEdge(edgeControllers).bot; if (__m) __m.flash = 1;
-        try { console.log('[bouncer] edge-hit:bot'); } catch {}
         edgeHitThisStep.bot = true;
       }
-        try { console.debug('[bouncer] edge-hit:bot'); } catch {}
       for (const b of blocks){
         if (!b.active) continue;
         if (circleRectHit(ball.x, ball.y, ball.r, b)){
@@ -228,9 +203,8 @@ export function createBouncer(selector){
       }
     }
     ball.vx *= 0.999; ball.vy *= 0.999;
-    for (const b of blocks){
-      if (b.__hitThisStep && (now - (b.lastHitAT || 0) > 0.09)){
-        const name = setNoteOctave(noteList[b.noteIndex] || 'C4', 4);
+    for (const b of blocks){ if (b.__hitThisStep && b.active && (now - (b.lastHitAT || 0) > 0.09)){
+        const name = setNoteOctave(noteList[b.noteIndex]||'C4', Math.max(2, Math.min(6, b.oct||4)));
         try { triggerInstrument(instrument, name, now + 0.0005); } catch {}
         b.lastHitAT = now; b.flash = 0.18;
       }
@@ -278,7 +252,7 @@ function draw(){
     drawEdgeBondLines(ctx, w, h, EDGE);
     const __ac2 = ensureAudioContext(); const __now2 = (__ac2?__ac2.currentTime:0);
     drawBlocksSection(ctx, edgeControllers, 0, 0, null, 1, noteList, sizing, null, null, __now2);
-    drawEdgeDecorations(ctx, edgeControllers, EDGE);
+    drawEdgeDecorations(ctx, edgeControllers, EDGE, w, h);
     for (const c of edgeControllers){ if (c.flash>0){ c.flash *= 0.85; if (c.flash < 0.03) c.flash = 0; } }
     if (edgeFlash.left > 0 || edgeFlash.right > 0 || edgeFlash.top > 0 || edgeFlash.bot > 0){
       ctx.lineWidth = 4;
