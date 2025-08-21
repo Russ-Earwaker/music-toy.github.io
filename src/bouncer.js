@@ -16,8 +16,19 @@ export function createBouncer(selector){ const shell = (typeof selector === 'str
       if (map.bot){   map.bot.x = w/2 - half;   map.bot.y = h-EDGE-s;    map.bot.w = s; map.bot.h = s; }
     }
   }
-  const worldW = ()=> { const dpr = (window.devicePixelRatio||1); return Math.round((canvas.width||Math.max(1, canvas.clientWidth||panel.clientWidth||356)) / dpr); };
-  const worldH = ()=> { const dpr = (window.devicePixelRatio||1); return Math.round((canvas.height||Math.max(1, canvas.clientHeight||panel.clientHeight||260)) / dpr); }; const blockSize = () => Math.round(BASE_BLOCK_SIZE * (sizing.scale || 1)); const cannonR   = () => Math.round(BASE_CANNON_R   * (sizing.scale || 1)); const ballR     = () => Math.round(BASE_BALL_R     * (sizing.scale || 1)); const N_BLOCKS = 4; let blocks = Array.from({length:N_BLOCKS}, (_,i)=> ({
+  
+  // --- Canvas world dimensions in CSS pixels (match what we draw) ---
+  function __getCssCanvasSize(){
+    try {
+      const r = canvas.getBoundingClientRect();
+      const w = Math.floor(r.width || canvas.clientWidth || canvas.offsetWidth || 0);
+      const h = Math.floor(r.height || canvas.clientHeight || canvas.offsetHeight || 0);
+      return { w: Math.max(1, w), h: Math.max(1, h) };
+    } catch { return { w: Math.max(1, canvas.clientWidth||0), h: Math.max(1, canvas.clientHeight||0) }; }
+  }
+  const worldW = ()=> __getCssCanvasSize().w;
+  const worldH = ()=> __getCssCanvasSize().h;
+ const blockSize = () => Math.round(BASE_BLOCK_SIZE * (sizing.scale || 1)); const cannonR   = () => Math.round(BASE_CANNON_R   * (sizing.scale || 1)); const ballR     = () => Math.round(BASE_BALL_R     * (sizing.scale || 1)); const N_BLOCKS = 4; let blocks = Array.from({length:N_BLOCKS}, (_,i)=> ({
     x: EDGE, y: EDGE, w: blockSize(), h: blockSize(),
     noteIndex: (i*3) % 12, active: true, flash: 0, lastHitAT: 0
   , oct:4 }));
@@ -274,7 +285,7 @@ edgeHitThisStep.left = edgeHitThisStep.right = edgeHitThisStep.top = edgeHitThis
 function draw(){
     const sNow = sizing.scale || 1;
     if (sNow !== lastScale){ rescaleAll(sNow / lastScale); lastScale = sNow; }
-    resizeCanvasForDPR(canvas, ctx); const w = canvas.width, h = canvas.height;
+    const __s=resizeCanvasForDPR(canvas, ctx); const w = __s.width, h = __s.height;
     ctx.fillStyle = '#0b0f16'; ctx.fillRect(0,0,w,h);
     ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 2;
     ctx.strokeRect(EDGE, EDGE, w-EDGE*2, h-EDGE*2);
