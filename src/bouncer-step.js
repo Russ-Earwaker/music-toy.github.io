@@ -1,5 +1,5 @@
 import { circleRectHit } from './bouncer-helpers.js';
-
+  
 // src/bouncer-step.js — physics & collisions for Bouncer (clean, balanced)
 const DBG = (...a)=>{ try { console.log('[bouncer]', ...a); } catch(e){} };
 export function stepBouncer(S, nowAT){

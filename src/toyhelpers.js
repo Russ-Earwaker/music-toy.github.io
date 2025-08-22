@@ -3,7 +3,7 @@ import { resizeCanvasForDPR } from './utils.js';
 
 export const NOTE_BTN_H = 14;
 export const EDGE_PAD   = 6;
-
+  
 // ---------- math / geometry ----------
 export function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
 

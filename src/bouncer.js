@@ -19,7 +19,7 @@ export function createBouncer(selector){
       if (map.bot){   map.bot.x = w/2 - half;   map.bot.y = h-EDGE-s;    map.bot.w = s; map.bot.h = s; }
     }
   }
-  
+    
   // --- Canvas world dimensions in CSS pixels (match what we draw) ---
   function __getCssCanvasSize(){
     try {
