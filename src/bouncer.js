@@ -3,6 +3,7 @@ import { stepBouncer } from './bouncer-step.js';
 import { noteList, resizeCanvasForDPR } from './utils.js';
 import { ensureAudioContext, getLoopInfo } from './audio-core.js';
 import { triggerInstrument } from './audio-samples.js';
+import { gateTriggerForToy, isToyMuted } from './toy-audio.js';
 import { initToyUI } from './toyui.js';
 import { initToySizing } from './toyhelpers-sizing.js';
 import { randomizeRects, EDGE_PAD as EDGE, hitRect, whichThirdRect, drawThirdsGuides } from './toyhelpers.js';
@@ -11,38 +12,17 @@ import { stepIndexUp, stepIndexDown, noteValue } from './note-helpers.js';
 import { circleRectHit } from './bouncer-helpers.js';
 import { BASE_BLOCK_SIZE, BASE_CANNON_R, BASE_BALL_R, MAX_SPEED, LAUNCH_K } from './bouncer-consts.js';
 import { createImpactFX } from './bouncer-impact.js';
-// palette helpers: minor pentatonic aligned with Wheel/Rippler
-function buildPentatonicPalette(noteList, rootName='C4', mode='minor', octaves=2){
-  const baseIx = noteList.indexOf(rootName)>=0 ? noteList.indexOf(rootName) : 48; // C4 fallback
-  const minor = [0,3,5,7,10]; // semitone offsets
-  const major = [0,2,4,7,9];
-  const offs = (mode==='major') ? major : minor;
-  const out = [];
-  const span = Math.max(1, Math.min(octaves, 3));
-  for (let o=0;o<span;o++){
-    for (let k=0;k<offs.length;k++){
-      const ix = baseIx + offs[k] + o*12;
-      if (ix >= 0 && ix < noteList.length) out.push(ix);
-    }
-  }
-  return out.length ? out : [baseIx];
-}
 export function createBouncer(selector){
-  // Runtime state predecl (avoid TDZ in handlers/draw)
-  let handle;
-  let draggingHandle, dragStart, dragCurr;
-  let draggingBlock, dragBlockRef, dragOffset;
-  let zoomDragCand, zoomDragStart, zoomTapT;
-  let lastLaunch, launchPhase, nextLaunchAt, prevNow, ball;
-  // Predeclare interaction/state vars to avoid TDZ issues in handlers/draw
   const BOUNCER_BARS_PER_LIFE = 1; // duration of a shot in bars
- const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector; if (!shell) return null; const panel = shell.closest('.toy-panel') || shell; const ui = initToyUI(panel, { toyName: 'Bouncer', defaultInstrument: 'Retro-Square' }); let instrument = 'Retro-Square'; // locked for testing
-  const edgeFlash = { left: 0, right: 0, top: 0, bot: 0 }; function flashEdge(which){ const m = mapControllersByEdge(edgeControllers); const c = m && m[which]; if (!c || !c.active) return; if (edgeFlash[which] !== undefined) edgeFlash[which] = 1.0; } const edgeLastHitAT = { left: 0, right: 0, top: 0, bot: 0 }; const edgeHitThisStep = { left: false, right: false, top: false, bot: false }; panel.addEventListener('toy-instrument', (e)=>{ instrument = (e.detail.value) || instrument; }); const host = panel.querySelector('.toy-body') || panel; const canvas = document.createElement('canvas'); canvas.style.width = '100%'; canvas.style.display='block'; host.appendChild(canvas); const ctx = canvas.getContext('2d', { alpha:false }); const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true }); let edgeControllers = [];
-  let __edgeAligned = false; function ensureEdgeControllers(w,h){ if (!edgeControllers.length){ edgeControllers = makeEdgeControllers(w, h, blockSize(), EDGE, noteList); } else { const s = blockSize(); const half = s/2; const map = mapControllersByEdge(edgeControllers); if (map.left){  map.left.x = EDGE;        map.left.y = h/2 - half; map.left.w = s; map.left.h = s; } if (map.right){ map.right.x = w-EDGE-s;   map.right.y = h/2 - half; map.right.w = s; map.right.h = s; }
+ const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector; if (!shell) return null; const panel = shell.closest('.toy-panel') || shell;
+  const toyId = (panel && panel.dataset && panel.dataset.toy ? String(panel.dataset.toy) : 'bouncer').toLowerCase();
+ const ui = initToyUI(panel, { toyName: 'Bouncer', defaultInstrument: 'Retro Square' }); let instrument = 'Retro Square'; // locked for testing
+  const edgeFlash = { left: 0, right: 0, top: 0, bot: 0 }; function flashEdge(which){ const m = mapControllersByEdge(edgeControllers); const c = m && m[which]; if (!c || !c.active) return; if (edgeFlash[which] !== undefined) edgeFlash[which] = 1.0; } const edgeLastHitAT = { left: 0, right: 0, top: 0, bot: 0 }; const edgeHitThisStep = { left: false, right: false, top: false, bot: false }; panel.addEventListener('toy-instrument', (e)=>{ instrument = (e.detail.value) || instrument; }); const host = panel.querySelector('.toy-body') || panel; const canvas = document.createElement('canvas'); canvas.style.width = '100%'; canvas.style.display='block'; host.appendChild(canvas); const ctx = canvas.getContext('2d', { alpha:false }); const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true }); let edgeControllers = []; function ensureEdgeControllers(w,h){ if (!edgeControllers.length){ edgeControllers = makeEdgeControllers(w, h, blockSize(), EDGE, noteList); } else { const s = blockSize(); const half = s/2; const map = mapControllersByEdge(edgeControllers); if (map.left){  map.left.x = EDGE;        map.left.y = h/2 - half; map.left.w = s; map.left.h = s; } if (map.right){ map.right.x = w-EDGE-s;   map.right.y = h/2 - half; map.right.w = s; map.right.h = s; }
       if (map.top){   map.top.x = w/2 - half;   map.top.y = EDGE;        map.top.w = s; map.top.h = s; }
       if (map.bot){   map.bot.x = w/2 - half;   map.bot.y = h-EDGE-s;    map.bot.w = s; map.bot.h = s; }
     }
   }
+  
   // --- Canvas world dimensions in CSS pixels (match what we draw) ---
   function __getCssCanvasSize(){
     try {
@@ -54,43 +34,21 @@ export function createBouncer(selector){
   }
   const worldW = ()=> __getCssCanvasSize().w;
   const worldH = ()=> __getCssCanvasSize().h;
-  // Initialize interaction state early to avoid TDZ/undefined during UI init
-  handle = { x: worldW()*0.22, y: worldH()*0.5 }; draggingHandle = false; dragStart = null; dragCurr = null;
-  draggingBlock = false; dragBlockRef = null; dragOffset = {dx:0, dy:0}; zoomDragCand = null; zoomDragStart = null; zoomTapT = null; lastLaunch = null; launchPhase = 0; nextLaunchAt = null; prevNow = 0; ball = null;
-  draggingBlock = false; dragBlockRef = null; dragOffset = {dx:0, dy:0};
-  zoomDragCand = null; zoomDragStart = null; zoomTapT = null; lastLaunch = null; launchPhase = 0; nextLaunchAt = null; prevNow = 0; ball = null;
- const blockSize = () => Math.round(BASE_BLOCK_SIZE * (sizing.scale || 1)); const cannonR   = () => Math.round(BASE_CANNON_R   * (sizing.scale || 1)); const ballR     = () => Math.round(BASE_BALL_R     * (sizing.scale || 1)); const N_BLOCKS = 4; let visQ = [];
-  let blocks = Array.from({length:N_BLOCKS}, (_,i)=> ({
+ const blockSize = () => Math.round(BASE_BLOCK_SIZE * (sizing.scale || 1)); const cannonR   = () => Math.round(BASE_CANNON_R   * (sizing.scale || 1)); const ballR     = () => Math.round(BASE_BALL_R     * (sizing.scale || 1)); const N_BLOCKS = 4; let blocks = Array.from({length:N_BLOCKS}, (_,i)=> ({
     x: EDGE, y: EDGE, w: blockSize(), h: blockSize(),
-    noteIndex: 0, active: true, flash: 0, lastHitAT: 0
+    noteIndex: (i*3) % 12, active: true, flash: 0, lastHitAT: 0
   , oct:4 }));
-  (()=>{ const w=worldW(), h=worldH(); const bx=Math.round(w*0.2), by=Math.round(h*0.2), bw=Math.round(w*0.6), bh=Math.round(h*0.6); 
-  // Build shared minor pentatonic palette aligned with Wheel/Rippler (root C4)
-  const palette = buildPentatonicPalette(noteList, 'C4', 'minor', 1);
-  function stepIdxInPalette(currIdx, dir){
-    // Find nearest index in palette, then move ±1 in palette order
-    if (!Array.isArray(palette) || !palette.length) return currIdx||0;
-    let nearest = 0, bestd = Infinity;
-    for (let i=0;i<palette.length;i++){
-      const d = Math.abs((currIdx||0) - palette[i]);
-      if (d < bestd){ bestd = d; nearest = i; }
-    }
-    const next = (nearest + (dir>0?1:-1) + palette.length) % palette.length;
-    return palette[next];
-  }
-  // Assign initial block notes from palette (even spread)
-  for (let i=0;i<blocks.length;i++){
-    blocks[i].noteIndex = palette[i % palette.length];
-  }
-randomizeRects(blocks, {x:bx,y:by,w:bw,h:bh}, EDGE); })(); // removed legacy chromatic random; palette-based assignment now; handle = { x: worldW()*0.22, y: worldH()*0.5 }; draggingHandle = false, dragStart = null, dragCurr = null; draggingBlock = false; zoomDragCand=null, zoomDragStart=null, zoomTapT=null; dragBlockRef = null; dragOffset = {dx:0,dy:0}; lastLaunch =  null;      // {vx, vy}
-  launchPhase =  0;        // seconds into bar
-  nextLaunchAt =  null; prevNow =  0;    // audio time to relaunch
-  ball =  null;            // {x,y,vx,vy,r}
+  randomizeRects(blocks, worldW(), worldH(), EDGE); for (const b of blocks){ b.noteIndex = Math.floor(Math.random()*12);}; let handle = { x: worldW()*0.22, y: worldH()*0.5 }; let draggingHandle = false, dragStart = null, dragCurr = null; let draggingBlock = false; let zoomDragCand=null, zoomDragStart=null, zoomTapT=null; let dragBlockRef = null; let dragOffset = {dx:0,dy:0}; let lastLaunch = null;      // {vx, vy}
+  let launchPhase = 0;        // seconds into bar
+  let nextLaunchAt = null; let prevNow = 0;    // audio time to relaunch
+  let ball = null;            // {x,y,vx,vy,r}
   const fx = createImpactFX(); let lastScale = sizing.scale || 1;
+
   // Shared state bag for step/draw helpers (populated each frame)
   const S = {};
-  function processVisQ(S, now){ if (!S.visQ||!S.visQ.length) return; const due=[]; const rest=[]; for (const e of S.visQ){ if (e.t <= now + 1e-4) due.push(e); else rest.push(e); } S.visQ = rest; for (const e of due){ if (e.kind==='block'){ const bi = e.idx|0; if (blocks[bi]){ blocks[bi].flash = 1.0; blocks[bi].lastHitAT = now; } if (fx && fx.onHit) fx.onHit(e.x||handle.x, e.y||handle.y); } else if (e.kind==='edge'){ if (typeof flashEdge==='function') flashEdge(e.edge); } } }
-  function rescaleAll(f){
+// Gate audio triggers by bouncer's mute state
+const __bouncerTrigger = gateTriggerForToy(toyId, (i,n,w)=>triggerInstrument(i,n,w,toyId));
+function rescaleAll(f){
     if (!f || f === 1) return;
     for (const b of blocks){ b.x *= f; b.y *= f; b.w = blockSize(); b.h = blockSize(); }
     handle.x *= f; handle.y *= f;
@@ -103,10 +61,18 @@ randomizeRects(blocks, {x:bx,y:by,w:bw,h:bh}, EDGE); })(); // removed legacy chr
     lastScale = s;
   });
   function doRandom(){
-    const w = worldW(), h = worldH(); const bx = Math.round(w*0.2), by = Math.round(h*0.2); const bw = Math.round(w*0.6), bh = Math.round(h*0.6);
-    randomizeRects(blocks, {x:bx, y:by, w:bw, h:bh}, EDGE);
-    randomizeControllers(edgeControllers, noteList);
-  }
+  // Randomize floating blocks within the central 60% of the canvas (same as Random button)
+  const r = canvas.getBoundingClientRect();
+  const W = r.width|0, H = r.height|0;
+  const cw = Math.max(1, Math.floor(W * 0.60));
+  const ch = Math.max(1, Math.floor(H * 0.60));
+  const cx = Math.floor((W - cw) * 0.5);
+  const cy = Math.floor((H - ch) * 0.5);
+  const centerRect = { x: cx, y: cy, w: cw, h: ch };
+  randomizeRects(blocks, centerRect, undefined, EDGE);
+  lastLaunch = 0; // reset launch timer so launch visuals/music stay consistent after random
+}
+
   function doReset(){
     ball = null; lastLaunch = null;
     for (const b of blocks){ b.flash = 0; b.lastHitAT = 0; }
@@ -114,6 +80,8 @@ randomizeRects(blocks, {x:bx,y:by,w:bw,h:bh}, EDGE); })(); // removed legacy chr
   }
 panel.addEventListener('toy-random', doRandom);
   panel.addEventListener('toy-reset', doReset);
+  // First-load: randomize within central 60% to match Random button
+  try { doRandom(); } catch(e){}
   panel.addEventListener('toy-clear', doReset);
   function localPoint(evt){
     const rect = canvas.getBoundingClientRect();
@@ -124,6 +92,7 @@ panel.addEventListener('toy-random', doRandom);
     const zoomed = (sizing && typeof sizing.scale==='number') ? (sizing.scale > 1.01) : false;
     const hit = blocks.find(b => hitRect(p, b));
     const hitCtrl = edgeControllers.find(b => hitRect(p, b));
+
     if (zoomed){
       // In zoom: drag floating cubes; edit edge controllers
       if (hit && !hit.fixed){
@@ -137,7 +106,7 @@ panel.addEventListener('toy-random', doRandom);
         if (ok && (hitCtrl.noteIndex !== beforeI || (hitCtrl.oct||4) !== beforeO)){
           const ac = ensureAudioContext(); const now = (ac ? ac.currentTime : 0);
           const nm = noteValue(noteList, hitCtrl.noteIndex);
-          try { triggerInstrument(instrument, nm, now+0.0005); } catch (err) {}
+          try { __bouncerTrigger(instrument, nm, now+0.0005); } catch (err) {}
         }
         return;
       }
@@ -150,6 +119,7 @@ panel.addEventListener('toy-random', doRandom);
       }
       if (hitCtrl) return;
     }
+
     // Otherwise, start aiming handle (will launch a ball on pointerup)
     handle.x = p.x; handle.y = p.y;
     draggingHandle = true; dragStart = { x: handle.x, y: handle.y }; dragCurr = p;
@@ -174,10 +144,10 @@ function endDrag(e){
     if (t==='toggle'){ zoomDragCand.active=!zoomDragCand.active; }
     else {
       let prev=zoomDragCand.noteIndex, prevOct=zoomDragCand.oct||4;
-      if (t==='up'){ zoomDragCand.noteIndex = stepIdxInPalette(zoomDragCand.noteIndex, +1); } else if (t==='down'){ zoomDragCand.noteIndex = stepIdxInPalette(zoomDragCand.noteIndex, -1); }
+      if (t==='up'){ stepIndexUp(zoomDragCand, noteList); } else if (t==='down'){ stepIndexDown(zoomDragCand, noteList); }
       const ac=ensureAudioContext(); const now=(ac?ac.currentTime:0);
       const nm=noteValue(noteList, zoomDragCand.noteIndex);
-      try{ triggerInstrument(instrument, nm, now+0.0005); }catch(e){}
+      try{ __bouncerTrigger(instrument, nm, now+0.0005); }catch(e){}
     }
     zoomDragCand=null;
     try{ if (e && e.pointerId != null) canvas.releasePointerCapture(e.pointerId); }catch(e){}
@@ -218,6 +188,7 @@ canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
   window.addEventListener('pointerup', endDrag, true);
   function spawnBallFrom(L){ const o = {  x:L.x, y:L.y, vx:L.vx, vy:L.vy, r:L.r }; ball = o; fx.onLaunch(L.x, L.y); return o; }
+
   // setters for step module to persist primitive state
   function setNextLaunchAt(t){ nextLaunchAt = t; }
   function setBallOut(o){ ball = o; }
@@ -230,13 +201,11 @@ canvas.addEventListener('pointerup', endDrag);
     bot:   { noteIndex: Math.floor(Math.random()*noteList.length) },
   };
   function randomizeEdgeNotes(){
-  const pal = (typeof palette!=='undefined' && Array.isArray(palette) && palette.length) ? palette : [0];
-  const r = Math.floor(Math.random()*pal.length);
-  edgeNotes.left.noteIndex  = pal[(r+0) % pal.length];
-  edgeNotes.right.noteIndex = pal[(r+2) % pal.length];
-  edgeNotes.top.noteIndex   = pal[(r+3) % pal.length];
-  edgeNotes.bot.noteIndex   = pal[(r+1) % pal.length];
-}
+    edgeNotes.left.noteIndex  = Math.floor(Math.random()*noteList.length);
+    edgeNotes.right.noteIndex = Math.floor(Math.random()*noteList.length);
+    edgeNotes.top.noteIndex   = Math.floor(Math.random()*noteList.length);
+    edgeNotes.bot.noteIndex   = Math.floor(Math.random()*noteList.length);
+  }
 function draw(){
     const sNow = sizing.scale || 1;
     if (sNow !== lastScale){ rescaleAll(sNow / lastScale); lastScale = sNow; }
@@ -245,16 +214,6 @@ function draw(){
     ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 2;
     ctx.strokeRect(EDGE, EDGE, w-EDGE*2, h-EDGE*2);
     ensureEdgeControllers(w,h);
-    if (!__edgeAligned) {
-      const pal = (typeof palette!=='undefined' && Array.isArray(palette) && palette.length) ? palette : null;
-      if (pal){
-        const m = mapControllersByEdge(edgeControllers);
-        const order = ['left','right','top','bot'];
-        let r = Math.floor(Math.random() * pal.length);
-        order.forEach((k, idx)=>{ if(m && m[k]) m[k].noteIndex = pal[(r+idx*2)%pal.length]; });
-        __edgeAligned = true;
-      }
-    }
     drawEdgeBondLines(ctx, w, h, EDGE, edgeControllers); const __ac2 = ensureAudioContext(); const __now2 = (__ac2?__ac2.currentTime:0);
     drawBlocksSection(ctx, edgeControllers, 0, 0, null, 1, noteList, sizing, null, null, __now2);
     drawEdgeDecorations(ctx, edgeControllers, EDGE, w, h);
@@ -272,8 +231,7 @@ function draw(){
       if (edgeFlash.right < 0.03) edgeFlash.right = 0;
     }
     for (const b of blocks){ b.w = blockSize(); b.h = blockSize(); }
-    { const ac = ensureAudioContext(); const now = (ac?ac.currentTime:0); processVisQ(S, now);
-    drawBlocksSection(ctx, blocks, 0, 0, null, 1, noteList, sizing, null, null, now); }
+    { const ac = ensureAudioContext(); const now = (ac?ac.currentTime:0); drawBlocksSection(ctx, blocks, 0, 0, null, 1, noteList, sizing, null, null, now); }
     fx.draw(ctx);
     ctx.beginPath(); ctx.arc(handle.x, handle.y, cannonR(), 0, Math.PI*2);
     ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fill();
@@ -287,12 +245,15 @@ function draw(){
       ctx.fillStyle = 'white'; ctx.globalAlpha = 0.9; ctx.fill(); ctx.globalAlpha = 1;
     }
     Object.assign(S, { ball, blocks, edgeControllers, EDGE, worldW, worldH, ballR, blockSize, edgeFlash, mapControllersByEdge,
-  ensureAudioContext, noteValue, noteList, instrument, fx, lastLaunch, nextLaunchAt, lastAT, flashEdge, handle, spawnBallFrom, edgeHitThisStep, edgeLastHitAT, getLoopInfo , triggerInstrument: (i,n,t)=>triggerInstrument(i,n,t,'bouncer'), BOUNCER_BARS_PER_LIFE, setNextLaunchAt , setBallOut });
+  ensureAudioContext, triggerInstrument, noteValue, noteList, instrument, fx, lastLaunch, nextLaunchAt, lastAT, flashEdge, handle, spawnBallFrom, edgeHitThisStep, edgeLastHitAT, getLoopInfo , BOUNCER_BARS_PER_LIFE, setNextLaunchAt , setBallOut });
     stepBouncer(S);
-    visQ = S.visQ || visQ;
   requestAnimationFrame(draw);
   }
   requestAnimationFrame(draw);
-function onLoop(loopStartTime){ /* no-op */ }
+  
+function onLoop(loopStartTime){ /* scheduling driven by absolute times; no-op */ }
+
+
+
   return { onLoop, reset: doReset, setInstrument: (n)=>{ instrument = n || instrument; }, element: canvas };
 }

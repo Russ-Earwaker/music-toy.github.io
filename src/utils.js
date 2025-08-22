@@ -1,5 +1,4 @@
-
-// src/utils.js -- shared helpers (under 400 lines)
+// utils.js — shared helpers (<= 300 lines)
 
 // Clamp a number between min and max
 export function clamp(value, min, max) {
@@ -16,38 +15,44 @@ export function barSeconds(bpm = 120) {
   return beatSeconds(bpm) * 4;
 }
 
-// Resize canvas to match device pixel ratio; keep CSS size set by layout.
-// We accept (canvas, ctx) to match existing callers.
-export function resizeCanvasForDPR(canvas, ctx){
-  const dpr = window.devicePixelRatio || 1;
-  const cssW = Math.max(1, canvas.clientWidth || 0);
-  const cssH = Math.max(1, canvas.clientHeight || 0);
-  const needW = Math.round(cssW * dpr);
-  const needH = Math.round(cssH * dpr);
-  if (canvas.width !== needW || canvas.height !== needH){
-    canvas.width = needW;
-    canvas.height = needH;
+// Device-pixel-ratio canvas sizing.
+// Compatible signatures:
+//   resizeCanvasForDPR(canvas, ctx)
+//   resizeCanvasForDPR(canvas, cssW, cssH)
+export function resizeCanvasForDPR(canvas, a, b){
+  const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) ? window.devicePixelRatio : 1;
+  // If second arg looks like a 2D context, treat it as ctx; else treat as cssW/cssH
+  const looksLikeCtx = a && typeof a === 'object' && typeof a.canvas === 'object' && typeof a.setTransform === 'function';
+  const ctx = looksLikeCtx ? a : (canvas.getContext && canvas.getContext('2d') || null);
+  // If numeric sizing provided, apply CSS size
+  if (!looksLikeCtx && typeof a === 'number') {
+    canvas.style.width = a + 'px';
+    if (typeof b === 'number') canvas.style.height = b + 'px';
   }
-  if (ctx && ctx.setTransform){
+  // Measure CSS size
+  let rect;
+  try {
+    rect = canvas.getBoundingClientRect();
+  } catch {
+    rect = { width: canvas.clientWidth || 0, height: canvas.clientHeight || 0 };
+  }
+  const cssW = Math.max(1, Math.floor(rect.width || 0));
+  const cssH = Math.max(1, Math.floor(rect.height || 0));
+  const dpW = Math.max(1, Math.floor(cssW * dpr));
+  const dpH = Math.max(1, Math.floor(cssH * dpr));
+
+  if (canvas.width !== dpW) canvas.width = dpW;
+  if (canvas.height !== dpH) canvas.height = dpH;
+
+  if (ctx && typeof ctx.setTransform === 'function') {
+    // Set scale so drawing coordinates are in CSS pixels
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
-  return { dpr, width: cssW, height: cssH };
+
+  return { width: cssW, height: cssH, dpr };
 }
 
-// Get the position inside the canvas for a pointer event (accounts for CSS scale)
-export function getCanvasPos(canvas, evt) {
-  const rect = canvas.getBoundingClientRect();
-  const x = (evt.clientX - rect.left);
-  const y = (evt.clientY - rect.top);
-  return { x, y };
-}
-
-// Pentatonic note list (C4–A5)
-export const noteList = [
-  'C2', 'C#2', 'D2', 'D#2', 'E2', 'F2', 'F#2', 'G2', 'G#2', 'A2', 'A#2', 'B2', 'C3', 'C#3', 'D3', 'D#3', 'E3', 'F3', 'F#3', 'G3', 'G#3', 'A3', 'A#3', 'B3', 'C4', 'C#4', 'D4', 'D#4', 'E4', 'F4', 'F#4', 'G4', 'G#4', 'A4', 'A#4', 'B4', 'C5', 'C#5', 'D5', 'D#5', 'E5', 'F5', 'F#5', 'G5', 'G#5', 'A5', 'A#5', 'B5', 'C6', 'C#6', 'D6', 'D#6', 'E6', 'F6', 'F#6', 'G6', 'G#6', 'A6', 'A#6', 'B6', 'C7'
-];
-
-// Simple random integer in range [min, max]
+// Random integer in range [min, max]
 export function randInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
@@ -60,3 +65,25 @@ export function shuffleArray(array) {
   }
   return array;
 }
+
+// ----------------------------
+// Note palette
+// ----------------------------
+// If a global note list is provided by the app, use it; otherwise default to a
+// musical, mix-friendly palette (C minor pentatonic across two octaves).
+function _defaultNoteList(){
+  return ['C3','D#3','F3','G3','A#3','C4','D#4','F4','G4','A#4','C5'];
+}
+
+// Allow external override via window.NOTE_LIST or window.APP_NOTE_LIST
+let __noteList = null;
+try {
+  if (typeof window !== 'undefined'){
+    const g = window;
+    __noteList = (Array.isArray(g.NOTE_LIST) && g.NOTE_LIST.length) ? g.NOTE_LIST.slice()
+                : (Array.isArray(g.APP_NOTE_LIST) && g.APP_NOTE_LIST.length) ? g.APP_NOTE_LIST.slice()
+                : null;
+  }
+} catch(e){}
+
+export const noteList = (__noteList && __noteList.length) ? __noteList : _defaultNoteList();
