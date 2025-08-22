@@ -169,30 +169,38 @@ export function stepBouncer(S, nowAT){
 
           // Trigger block effects if we hit a block
           if (bestIdx >= 0){
-            const b = blocks[bestIdx];
-            try {
-              const nm = S.noteValue ? S.noteValue(S.noteList, b.noteIndex) : null;
-              const t = qSixteenth();
-              if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t); if(c){ c.flashDur = 0.12; c.flashEnd = (((S.ensureAudioContext&&S.ensureAudioContext())?.currentTime)||S.lastAT||0) + c.flashDur; } if (c){ c.flash=1.0; c.lastHitAT=(S.lastAT||0); c.flashDur=0.12; c.flashEnd=(((S.ensureAudioContext&&S.ensureAudioContext())?.currentTime)||S.lastAT||0) + c.flashDur; } if(c){ c.flashDur = 0.12; c.flashEnd = (((S.ensureAudioContext&&S.ensureAudioContext())?.currentTime)||S.lastAT||0) + c.flashDur; } if (S.fx&&S.fx.onHit) S.fx.onHit(S.ball.x,S.ball.y); b.flashDur = 0.12; b.flashEnd = (((S.ensureAudioContext&&S.ensureAudioContext())?.currentTime)||S.lastAT||0) + b.flashDur; if (S.fx && S.fx.onHit) S.fx.onHit(S.ball.x, S.ball.y); if (c) { c.flash = 1.0; c.lastHitAT = (S.lastAT || 0); } c.flashDur = 0.12; c.flashEnd = (((S.ensureAudioContext&&S.ensureAudioContext())?.currentTime)||S.lastAT||0) + c.flashDur; c.flashDur=0.12; c.flashEnd=(((S.ensureAudioContext&&S.ensureAudioContext())?.currentTime)||S.lastAT||0) + c.flashDur;
-            } catch(e){}
-            if (S.fx && S.fx.onHit) S.fx.onHit(S.ball.x, S.ball.y);
-            b.flash = 1.0; b.flashDur = 0.12; b.flashEnd = (((S.ensureAudioContext&&S.ensureAudioContext())?.currentTime)||S.lastAT||0) + b.flashDur;
-          }
-          
-else if (bestIdx <= -1000){
-  const ei = (-1000 - bestIdx)|0;
-  const c = (S.edgeControllers && S.edgeControllers[ei]) ? S.edgeControllers[ei] : null;
-  try {
-    const nm = c && S.noteValue ? S.noteValue(S.noteList, c.noteIndex) : null;
-    const t = (typeof qSixteenth==='function') ? qSixteenth() : ((((S.ensureAudioContext&&S.ensureAudioContext())?.currentTime)||S.lastAT||0)+0.0005);
+  const b = blocks[bestIdx];
+  // Gate playback by visual active state
+  const isActive = !!(b && b.active !== false);
+  if (isActive) {
+    const nm = S.noteValue ? S.noteValue(S.noteList, b.noteIndex) : null;
+    const ac = (S.ensureAudioContext && S.ensureAudioContext()) || null;
+    const nowt = (ac && ac.currentTime) ? ac.currentTime : (S.lastAT || 0);
+    const t = (typeof qSixteenth==='function') ? qSixteenth() : (nowt + 0.0005);
     if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t);
-  } catch(e){}
-  if (S.fx && S.fx.onHit) S.fx.onHit(S.ball.x, S.ball.y);
-  if (c){
-    c.flash = 1.0;
-    c.lastHitAT = (S.lastAT||0);
-    c.flashDur = 0.12;
-    c.flashEnd = ((((S.ensureAudioContext&&S.ensureAudioContext())?.currentTime)||S.lastAT||0) + c.flashDur);
+    if (S.fx && S.fx.onHit) S.fx.onHit(S.ball.x, S.ball.y);
+    // Flash only when an audible hit occurs
+    b.flash = 1.0; b.flashDur = 0.12;
+    const ac2 = (S.ensureAudioContext && S.ensureAudioContext()) || null;
+    const now2 = (ac2 && ac2.currentTime) ? ac2.currentTime : (S.lastAT || 0);
+    b.flashEnd = now2 + b.flashDur;
+  }
+}
+else if (bestIdx <= -1000){
+  const ei = (-1000 - bestIdx) | 0;
+  const c = (S.edgeControllers && S.edgeControllers[ei]) ? S.edgeControllers[ei] : null;
+  if (c && c.active !== false) {
+    const nm = S.noteValue ? S.noteValue(S.noteList, c.noteIndex) : null;
+    const ac = (S.ensureAudioContext && S.ensureAudioContext()) || null;
+    const nowt = (ac && ac.currentTime) ? ac.currentTime : (S.lastAT || 0);
+    const t = (typeof qSixteenth==='function') ? qSixteenth() : (nowt + 0.0005);
+    if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t);
+    if (S.fx && S.fx.onHit) S.fx.onHit(S.ball.x, S.ball.y);
+    // Flash only when an audible hit occurs
+    c.flash = 1.0; c.flashDur = 0.12;
+    const ac2 = (S.ensureAudioContext && S.ensureAudioContext()) || null;
+    const now2 = (ac2 && ac2.currentTime) ? ac2.currentTime : (S.lastAT || 0);
+    c.flashEnd = now2 + c.flashDur;
   }
 }
 

@@ -155,7 +155,11 @@ export function buildWheel(selector, opts = {}){
   }, true);
   window.addEventListener('pointercancel', ()=>{ drag=null; }, true);
   // Random / Reset (musical)
-  function doRandom(){ randomizeWheel(handles); }
+  function doRandom(){
+    const pr = Number(panel?.dataset?.priority || '1') || 1;
+    const toyId = (panel?.dataset?.toy || 'wheel').toLowerCase();
+    randomizeWheel(handles, { toyId, priority: pr });
+  }
   function doReset(){ for (let i=0;i<STEPS;i++) handles[i] = null; }
 
   panel.addEventListener('toy-random', doRandom);
