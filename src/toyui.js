@@ -1,4 +1,5 @@
 // src/toyui.js — header controls for toys (Zoom, Random, Reset, Mute + per-toy volume hook)
+import './toy-audio.js';
 import { getInstrumentNames } from './audio-samples.js';
 import { zoomInPanel, zoomOutPanel } from './zoom-overlay.js';
 

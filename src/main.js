@@ -53,7 +53,7 @@ if (!window.__booted__) {
         const s = g.steps[stepIndex];
         if (!s || !s.active) return;
         const nn = g.getNoteName ? g.getNoteName(stepIndex) : 'C4';
-        triggerInstrument(g.instrument || 'tone', nn, time);
+        triggerInstrument(g.instrument || 'tone', nn, time, (g.toyId || 'grid'));
         g.ping && g.ping(stepIndex);
       });
       const delayMs = Math.max(0, (ac ? (time - ac.currentTime) : 0) * 1000);

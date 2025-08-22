@@ -11,6 +11,8 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
 
   const panel = shell.closest?.('.toy-panel') || shell;
   const ui = initToyUI(panel, { toyName: title, defaultInstrument });
+  const toyId = (panel && panel.dataset && panel.dataset.toy ? String(panel.dataset.toy) : (title||'grid')).toLowerCase();
+  panel.dataset.toy = toyId;
 
   const canvas = document.createElement('canvas');
   canvas.className = 'grid-canvas';
@@ -114,6 +116,7 @@ ctx.restore();
   function reset(){ for (const s of steps){ s.active=false; s.flash=0; s.noteIndex=c4Index; } }
 
   return {
+    toyId,
     element: canvas,
     steps,
     setInstrument: ui.setInstrument,
