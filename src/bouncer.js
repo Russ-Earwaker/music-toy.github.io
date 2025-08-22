@@ -88,6 +88,7 @@ randomizeRects(blocks, {x:bx,y:by,w:bw,h:bh}, EDGE); })(); // removed legacy chr
   const fx = createImpactFX(); let lastScale = sizing.scale || 1;
   // Shared state bag for step/draw helpers (populated each frame)
   const S = {};
+  function processVisQ(S, now){ if (!S.visQ||!S.visQ.length) return; const due=[]; const rest=[]; for (const e of S.visQ){ if (e.t <= now + 1e-4) due.push(e); else rest.push(e); } S.visQ = rest; for (const e of due){ if (e.kind==='block'){ const bi = e.idx|0; if (blocks[bi]){ blocks[bi].flash = 1.0; blocks[bi].lastHitAT = now; } if (fx && fx.onHit) fx.onHit(e.x||handle.x, e.y||handle.y); } else if (e.kind==='edge'){ if (typeof flashEdge==='function') flashEdge(e.edge); } } }
   function rescaleAll(f){
     if (!f || f === 1) return;
     for (const b of blocks){ b.x *= f; b.y *= f; b.w = blockSize(); b.h = blockSize(); }
@@ -270,7 +271,8 @@ function draw(){
       if (edgeFlash.right < 0.03) edgeFlash.right = 0;
     }
     for (const b of blocks){ b.w = blockSize(); b.h = blockSize(); }
-    { const ac = ensureAudioContext(); const now = (ac?ac.currentTime:0); drawBlocksSection(ctx, blocks, 0, 0, null, 1, noteList, sizing, null, null, now); }
+    { const ac = ensureAudioContext(); const now = (ac?ac.currentTime:0); processVisQ(S, now);
+    drawBlocksSection(ctx, blocks, 0, 0, null, 1, noteList, sizing, null, null, now); }
     fx.draw(ctx);
     ctx.beginPath(); ctx.arc(handle.x, handle.y, cannonR(), 0, Math.PI*2);
     ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fill();

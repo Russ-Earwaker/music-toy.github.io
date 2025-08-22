@@ -5,6 +5,22 @@ export function stepBouncer(S, nowAT){
   // Clock & dt
   const ac = S.ensureAudioContext();
   const now = nowAT || (ac ? ac.currentTime : (S.lastAT || 0));
+  
+  // Quantize scheduling: snap to next half-beat (eighth-note) boundary
+  function qHalf(){
+    try {
+      const li = S.getLoopInfo ? S.getLoopInfo() : null;
+      const at = (ac ? ac.currentTime : now);
+      if (li && typeof li.loopStartTime === 'number' && li.barLen){
+        const half = li.barLen / 8; // 0.5 beat = 1/8 of 4/4 bar
+        const rel  = Math.max(0, at - li.loopStartTime);
+        const k    = Math.ceil((rel + 1e-6) / half);
+        return li.loopStartTime + k * half;
+      }
+      return at + 0.0005;
+    } catch { return (ac ? ac.currentTime : now) + 0.0005; }
+  }
+S.visQ = S.visQ || [];
   const dt  = Math.min(0.04, Math.max(0, now - (S.lastAT || now)));
 
   // Clear per-frame edge flags
@@ -121,7 +137,7 @@ if (S.ball && S.__justSpawnedUntil){
               try {
                 const ac2 = ac || S.ensureAudioContext();
                 const nm  = S.noteValue(S.noteList, b.noteIndex);
-                S.triggerInstrument(S.instrument, nm, (ac2?ac2.currentTime:now)+0.0005);
+                S.triggerInstrument(S.instrument, nm, qHalf());
               } catch(e){ /* ignore */ }
               if (b.edge==='left')  S.edgeHitThisStep.left  = true;
               if (b.edge==='right') S.edgeHitThisStep.right = true;
@@ -151,7 +167,7 @@ if (S.ball && S.__justSpawnedUntil){
                 try {
                   const ac2 = ac || S.ensureAudioContext();
                   const nm  = S.noteValue(S.noteList, b.noteIndex);
-                  S.triggerInstrument(S.instrument, nm, (ac2?ac2.currentTime:now)+0.0005);
+                  S.triggerInstrument(S.instrument, nm, qHalf());
                 } catch(e){ /* ignore */ }
               }
             }
@@ -162,26 +178,26 @@ if (S.ball && S.__justSpawnedUntil){
       // Collide with world bounds (also flash & sound on edge controllers)
       if (S.ball.x - S.ball.r < L){
         S.ball.x = L + S.ball.r + eps; S.ball.vx =  Math.abs(S.ball.vx);
-        if (S.flashEdge) S.flashEdge('left');
-        const m = S.mapControllersByEdge(S.edgeControllers).left;  if (m){ m.flash=1; try{ const nm=S.noteValue(S.noteList, m.noteIndex); const t=(ac?ac.currentTime:now)+0.0005; S.triggerInstrument(S.instrument, nm, t);}catch(e){} }
+        S.visQ.push({ t:qHalf(), kind:'edge', edge:'left' });
+        const m = S.mapControllersByEdge(S.edgeControllers).left;  if (m){ m.flash=1; try{ const nm=S.noteValue(S.noteList, m.noteIndex); S.triggerInstrument(S.instrument, nm, qHalf());}catch(e){} }
         S.edgeHitThisStep.left  = true;
       }
       if (S.ball.x + S.ball.r > R){
         S.ball.x = R - S.ball.r - eps; S.ball.vx = -Math.abs(S.ball.vx);
-        if (S.flashEdge) S.flashEdge('right');
-        const m = S.mapControllersByEdge(S.edgeControllers).right; if (m){ m.flash=1; try{ const nm=S.noteValue(S.noteList, m.noteIndex); const t=(ac?ac.currentTime:now)+0.0005; S.triggerInstrument(S.instrument, nm, t);}catch(e){} }
+        S.visQ.push({ t:qHalf(), kind:'edge', edge:'right' });
+        const m = S.mapControllersByEdge(S.edgeControllers).right; if (m){ m.flash=1; try{ const nm=S.noteValue(S.noteList, m.noteIndex); S.triggerInstrument(S.instrument, nm, qHalf());}catch(e){} }
         S.edgeHitThisStep.right = true;
       }
       if (S.ball.y - S.ball.r < T){
         S.ball.y = T + S.ball.r + eps; S.ball.vy =  Math.abs(S.ball.vy);
-        if (S.flashEdge) S.flashEdge('top');
-        const m = S.mapControllersByEdge(S.edgeControllers).top;   if (m){ m.flash=1; try{ const nm=S.noteValue(S.noteList, m.noteIndex); const t=(ac?ac.currentTime:now)+0.0005; S.triggerInstrument(S.instrument, nm, t);}catch(e){} }
+        S.visQ.push({ t:qHalf(), kind:'edge', edge:'top' });
+        const m = S.mapControllersByEdge(S.edgeControllers).top;   if (m){ m.flash=1; try{ const nm=S.noteValue(S.noteList, m.noteIndex); S.triggerInstrument(S.instrument, nm, qHalf());}catch(e){} }
         S.edgeHitThisStep.top   = true;
       }
       if (S.ball.y + S.ball.r > B){
         S.ball.y = B - S.ball.r - eps; S.ball.vy = -Math.abs(S.ball.vy);
-        if (S.flashEdge) S.flashEdge('bot');
-        const m = S.mapControllersByEdge(S.edgeControllers).bot;   if (m){ m.flash=1; try{ const nm=S.noteValue(S.noteList, m.noteIndex); const t=(ac?ac.currentTime:now)+0.0005; S.triggerInstrument(S.instrument, nm, t);}catch(e){} }
+        S.visQ.push({ t:qHalf(), kind:'edge', edge:'bot' });
+        const m = S.mapControllersByEdge(S.edgeControllers).bot;   if (m){ m.flash=1; try{ const nm=S.noteValue(S.noteList, m.noteIndex); S.triggerInstrument(S.instrument, nm, qHalf());}catch(e){} }
         S.edgeHitThisStep.bot   = true;
       }
     }
