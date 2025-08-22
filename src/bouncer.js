@@ -11,6 +11,7 @@ import { stepIndexUp, stepIndexDown, noteValue } from './note-helpers.js';
 import { circleRectHit } from './bouncer-helpers.js';
 import { BASE_BLOCK_SIZE, BASE_CANNON_R, BASE_BALL_R, MAX_SPEED, LAUNCH_K } from './bouncer-consts.js';
 import { createImpactFX } from './bouncer-impact.js';
+import { getPoliteDensityForToy } from './polite-random.js';
 // palette helpers: minor pentatonic aligned with Wheel/Rippler
 function buildPentatonicPalette(noteList, rootName='C4', mode='minor', octaves=2){
   const baseIx = noteList.indexOf(rootName)>=0 ? noteList.indexOf(rootName) : 48; // C4 fallback
@@ -103,11 +104,50 @@ randomizeRects(blocks, {x:bx,y:by,w:bw,h:bh}, EDGE); })(); // removed legacy chr
     rescaleAll(s / lastScale);
     lastScale = s;
   });
-  function doRandom(){
-    const w = worldW(), h = worldH(); const bx = Math.round(w*0.2), by = Math.round(h*0.2); const bw = Math.round(w*0.6), bh = Math.round(h*0.6);
-    randomizeRects(blocks, {x:bx, y:by, w:bw, h:bh}, EDGE);
+  
+function doRandom(){
+    const pr = Number(panel?.dataset?.priority || '1') || 1;
+    const density = getPoliteDensityForToy(toyId, 1, pr); // emits a polite debug event
+
+    // Determine how many blocks to keep active out of N (1..N), scale by density
+    const N = blocks.length;
+    const K = Math.max(1, Math.min(N, Math.round(1 + density * (N - 1))));
+
+    // Base random area (60% of panel), then scale range with density (busy mix => smaller area)
+    const w = worldW(), h = worldH();
+    const baseBW = Math.round(w * 0.6), baseBH = Math.round(h * 0.6);
+    const areaScale = 0.5 + 0.5 * density; // 0.5..1.0
+    const bw = Math.max(EDGE*4, Math.round(baseBW * areaScale));
+    const bh = Math.max(EDGE*4, Math.round(baseBH * areaScale));
+    const bx = Math.round((w - bw) / 2);
+    const by = Math.round((h - bh) / 2);
+
+    // Position blocks within shrunk/expanded area
+    randomizeRects(blocks, { x: bx, y: by, w: bw, h: bh }, EDGE);
+
+    // Choose K blocks to keep active (others off) — evenly across the set
+    const picks = [];
+    if (K >= N) {
+      for (let i=0;i<N;i++) picks.push(i);
+    } else {
+      const step = N / K;
+      let pos = 0;
+      for (let i=0;i<K;i++){ picks.push(Math.round(pos) % N); pos += step; }
+      // de-dupe if rounding collided
+      const uniq = Array.from(new Set(picks));
+      while (uniq.length < K){
+        const r = Math.floor(Math.random() * N);
+        if (!uniq.includes(r)) uniq.push(r);
+      }
+      picks.length = 0; picks.push(...uniq);
+    }
+    for (let i=0;i<N;i++) blocks[i].active = false;
+    for (const i of picks) if (blocks[i]) blocks[i].active = true;
+
+    // Randomize edge controller notes as before
     randomizeControllers(edgeControllers, noteList);
-  }
+}
+
   function doReset(){
     ball = null; lastLaunch = null;
     for (const b of blocks){ b.flash = 0; b.lastHitAT = 0; }

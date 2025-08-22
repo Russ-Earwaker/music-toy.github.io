@@ -1,4 +1,4 @@
-// src/auto-mix.js — polite per-toy mixer (adds a post-user auto GainNode per toy)
+// src/auto-mix.js — polite per-toy mixer (adds a post-user auto GainNode per toy) + debug events
 import { ensureAudioContext, getToyGain } from './audio-core.js';
 import { getIntensity, listToys } from './intensity.js';
 
@@ -14,9 +14,7 @@ function ensureAutoNode(id){
   const base = getToyGain(key);
   const auto = ctx.createGain();
   auto.gain.value = 1.0;
-  try {
-    base.disconnect(); // rewire: base -> auto -> destination
-  } catch{}
+  try { base.disconnect(); } catch{}
   try { base.connect(auto); auto.connect(ctx.destination); } catch{}
   const st = { node: auto, value: 1.0 };
   state.set(key, st);
@@ -42,6 +40,7 @@ function loop(){
   const dt = lastT ? (t - lastT) / 1000 : 0.016;
   lastT = t;
 
+  const gains = {};
   if (enabled){
     let ids = listToys();
     if (!ids.length) ids = ['master'];
@@ -50,8 +49,10 @@ function loop(){
       const target = targetFor(id);
       st.value = stepTowards(st.value, target, dt);
       try { st.node.gain.setTargetAtTime(st.value, ensureAudioContext().currentTime, 0.015); } catch { st.node.gain.value = st.value; }
+      gains[id] = st.value;
     }
   }
+  try { window.dispatchEvent(new CustomEvent('auto-mix-update', { detail: { perToy: gains }})); } catch {}
   raf = requestAnimationFrame(loop);
 }
 

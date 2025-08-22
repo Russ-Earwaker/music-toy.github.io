@@ -1,115 +1,98 @@
 // src/ripplesynth-random.js
-// Random seeding for Rippler that aligns musically with Wheel
-// Constraints: DO NOT change notes/timing once set; this only prepares the initial state.
-// Choices:
-//  - Minor pentatonic scale (0,3,5,7,10) relative to base
-//  - High register bias (one octave above C4 baseline)
-//  - 2–3 active cubes, evenly spread across 8 using a simple Euclidean-ish spacing
-//  - First pick biased to chord tones (root/5th/b7 -> for minor pent: 0,7,10)
-//  - No adjacent semitone clumping across picks
-//  - Respects userEditedNote: only overwrites noteIndex for blocks the user hasn't edited
+// Random seeding for Rippler, now respecting Polite Random *and* mapping degrees to noteList indices.
+
+import { noteList } from './utils.js';
+import { getPoliteDensity } from './polite-random.js';
+
+// Map semitone offsets (e.g., [0,3,5,7,10]) to index positions within an octave of noteList.
+// Assumes noteList is a minor-pentatonic listing per octave (5 notes), which matches this project.
+function makeDegreeIndexMap(pentatonicOffsets){
+  const map = new Map();
+  for (let i=0;i<pentatonicOffsets.length;i++) map.set(pentatonicOffsets[i], i);
+  return map;
+}
 
 export function randomizeAllImpl(ctx){
   const {
-    blocks, noteList, layoutBlocks, clearPattern,
+    blocks, layoutBlocks, clearPattern,
     recordOnly, isActive, setRecording,
     setSkipNextBarRing, setPlaybackMuted,
     baseIndex, pentatonicOffsets
   } = ctx;
 
-  // Layout & visual reset
-  layoutBlocks?.();
+  if (!Array.isArray(blocks) || !blocks.length) return;
+
+  // Layout reset
+  try { layoutBlocks?.(); } catch {}
   for (const b of blocks){ b.vx=0; b.vy=0; b.flashEnd=0; }
 
-  // --- Helpers ---
-  const N_BLOCKS = blocks.length || 8;
+  const N = blocks.length;
   const clamp = (v,min,max)=> v<min?min:(v>max?max:v);
   const uniq = (arr)=> Array.from(new Set(arr));
   const randInt = (a,b)=> (Math.floor(Math.random()*(b-a+1))+a);
-  const shuffle = (arr)=> { for (let i=arr.length-1;i>0;i--){ const j=randInt(0,i); [arr[i],arr[j]]=[arr[j],arr[i]]; } return arr; };
 
-  // Scale: minor pentatonic (Wheel's default)
-  const SCALE = [0,3,5,7,10];
+  // Group size (notes per octave in noteList). Project uses minor pentatonic → 5.
+  const GROUP = 5;
 
-  // Euclidean-ish picks across N indices
+  // Build degree→index map from semitone offsets (fallback to canonical minor pent).
+  const DEG = (Array.isArray(pentatonicOffsets) && pentatonicOffsets.length) ? pentatonicOffsets : [0,3,5,7,10];
+  const DEGIDX = makeDegreeIndexMap(DEG);
+
+  // How many blocks to activate (polite with global intensity)
+  const baseK = 2 + (Math.random() < 0.6 ? 1 : 0); // 2 or 3
+  const density = getPoliteDensity(1, 1);          // neutral priority
+  const K = clamp(Math.round(baseK * density), 1, Math.min(4, N));
+
+  // Evenly distributed picks across N
   function evenlyPickK(k, n, rotate=0){
-    const step = n / k;
-    const out = [];
-    let pos = 0;
+    const step = n / Math.max(1,k);
+    const out = []; let pos = 0;
     for (let i=0;i<k;i++){ out.push(Math.round(pos) % n); pos += step; }
-    // resolve duplicates (rare when n/k is not integer)
-    let u = uniq(out);
-    let need = k - u.length;
-    if (need>0){
-      for (let i=0;i<n && need>0;i++){
-        if (!u.includes(i)) { u.push(i); need--; }
-      }
-    }
-    // rotate
+    const u = uniq(out); let need = k - u.length;
+    for (let i=0;i<n && need>0;i++){ if (!u.includes(i)) { u.push(i); need--; } }
     return u.map(i => (i + rotate) % n);
   }
+  const rotation = randInt(0, N-1);
+  const picks = evenlyPickK(K, N, rotation);
 
-  // --- Choose which blocks are active ---
-  const K = 2 + (Math.random() < 0.6 ? 1 : 0); // 2 or 3
-  const rotation = 1 + randInt(0,2); // small rotation so it changes feel
-  const picks = evenlyPickK(K, N_BLOCKS, rotation);
+  // Find the base 'C4' index and align to its octave start within noteList
+  const bi = (typeof baseIndex === 'function') ? baseIndex(noteList) : Math.max(0, noteList.indexOf('C4'));
+  const baseOct = Math.floor((bi >= 0 ? bi : 0) / GROUP) * GROUP;
+  const hiBiasOctaves = 1; // slight high-register bias
 
-  // --- Assign notes (only for blocks user hasn't edited) ---
-  // Push register up so Rippler sparkles above Wheel
-  const baseIx = baseIndex?.(noteList) ?? 48; // index of C4 fallback
-  const baseHi = baseIx + 12; // one octave above
+  // Reset actives, then set chosen ones
+  for (let i=0;i<N;i++) blocks[i].active = false;
 
-  // First degree bias: chord tones (minor: 0, 7, 10)
-  const ANCH = [0,7,10];
-  const degrees = [];
-  // pick anchor closest to current block's note if present, else random from ANCH
-  const firstDeg = ANCH[randInt(0,ANCH.length-1)];
-  degrees.push(firstDeg);
-  // remaining degrees from SCALE but avoid exact repeats
-  while (degrees.length < picks.length){
-    const d = SCALE[randInt(0, SCALE.length-1)];
-    if (d !== degrees[degrees.length-1]) degrees.push(d);
-  }
-
-  // Apply: deactivate all; activate picks; set noteIndex for unedited
-  for (let i=0;i<N_BLOCKS;i++){ blocks[i].active = false; }
   for (let j=0;j<picks.length;j++){
-    const bi = picks[j];
-    const b = blocks[bi];
+    const idxBlock = picks[j];
+    const b = blocks[idxBlock]; if (!b) continue;
     b.active = true;
+
     if (!b.userEditedNote){
-      const deg = degrees[j % degrees.length];
-      const idx = clamp(baseHi + deg, 0, (noteList?.length ?? 1)-1);
-      b.noteIndex = idx;
-      b.userEditedNote = false;
-    }  // Also assign harmonically aligned notes to INACTIVE blocks (if not user-edited)
-  // so if the user later enables them, they already sit well with Wheel.
-  for (let i=0;i<N_BLOCKS;i++){
-    const b = blocks[i];
-    if (b.active) continue;
-    if (!b.userEditedNote){
-      // Choose a scale degree (minor pent). De-emphasize anchors slightly so actives stand out.
-      const pool = SCALE.slice();
-      let deg = pool[randInt(0, pool.length-1)];
-      // Avoid exact duplicate degree of immediate left neighbor when possible
-      const left = blocks[(i-1+N_BLOCKS)%N_BLOCKS];
-      if (left && typeof left.noteIndex === 'number'){
-        const ldeg = ((left.noteIndex - baseHi) % 12 + 12) % 12;
-        let tries=0; while (tries<3 && ldeg === deg){ deg = pool[randInt(0, pool.length-1)]; tries++; }
-      }
-      const idx = clamp(baseHi + deg, 0, (noteList?.length ?? 1)-1);
+      // First pick: chord tones (0,7,10). Others: any pent degree.
+      const firstPool = [0,7,10]; // semitone degrees
+      const degSemi = (j === 0) ? firstPool[randInt(0, firstPool.length-1)]
+                                : DEG[randInt(0, DEG.length-1)];
+
+      // Convert semitone degree → index within the octave group
+      const degIndexInGroup = DEGIDX.has(degSemi) ? DEGIDX.get(degSemi) : 0;
+
+      // Choose an octave around C4 with a slight high bias
+      const octOffset = (hiBiasOctaves + (Math.random()<0.5 ? 0 : -1)); // 0 or +1 most of the time, sometimes -1
+      let idx = baseOct + degIndexInGroup + (octOffset * GROUP);
+
+      // Keep inside bounds
+      idx = clamp(idx, 0, (noteList?.length ?? 1)-1);
+
       b.noteIndex = idx;
       b.userEditedNote = false;
     }
   }
 
-
-  }
-
-  // --- Reset playback state & arm recording for active blocks ---
+  // Reset playback state & arm recording for active blocks
   try { clearPattern?.(); } catch {}
   try { recordOnly?.clear?.(); } catch {}
-  for (let i=0;i<N_BLOCKS;i++){ if (isActive?.(blocks[i])) recordOnly?.add?.(i); }
+  for (let i=0;i<N;i++){ if (isActive?.(blocks[i])) recordOnly?.add?.(i); }
   setRecording?.(true);
   setSkipNextBarRing?.(false);
   setPlaybackMuted?.(false);

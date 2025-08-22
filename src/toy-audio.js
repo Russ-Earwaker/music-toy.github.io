@@ -36,7 +36,8 @@ export function toyVolume(id){ return getState(id).volume; }
 export function gateTriggerForToy(toyId, triggerFn){
   const id = String(toyId || 'master').toLowerCase();
   return function(inst, noteName, when){
-    if (!isToyMuted(id)) return triggerFn(inst, noteName, when);
-    // muted: swallow the trigger (visuals can still respond elsewhere)
+    if (isToyMuted(id)) return; // swallow when muted
+    try { window.dispatchEvent(new CustomEvent('toy-hit', { detail: { id, note: noteName, when } })); } catch {}
+    return triggerFn(inst, noteName, when);
   };
 }
