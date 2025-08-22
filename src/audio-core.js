@@ -86,18 +86,26 @@ export function getToyGain(id='master'){
 }
 
 export function setToyVolume(id='master', v=1.0){
-  const g = getToyGain(id);
-  g.gain.value = Math.max(0, Math.min(1, Number(v)||0));
+  const key = String(id||'master');
+  const g = getToyGain(key);
+  const vol = Math.max(0, Math.min(1, Number(v)||0));
+  __toyGainValues.set(key, vol);
+  const muted = __toyMutes.get(key) === true;
+  g.gain.value = muted ? 0 : vol;
 }
 
 export function setToyMuted(id='master', muted=true){
-  const g = getToyGain(id);
-  __toyMutes.set(String(id||'master'), !!muted);
-  g.gain.value = muted ? 0 : (g.gain.value || 1);
+  const key = String(id||'master');
+  const g = getToyGain(key);
+  __toyMutes.set(key, !!muted);
+  const vol = __toyGainValues.has(key) ? __toyGainValues.get(key) : 1.0;
+  g.gain.value = muted ? 0 : vol;
 }
 
 export function getToyVolume(id='master'){
-  const g = getToyGain(id);
+  const key = String(id||'master');
+  if (__toyGainValues.has(key)) return __toyGainValues.get(key);
+  const g = getToyGain(key);
   return g.gain.value;
 }
 

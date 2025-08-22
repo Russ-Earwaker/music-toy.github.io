@@ -1,3 +1,4 @@
+import { setToyVolume, setToyMuted } from './audio-core.js';
 // toy-audio.js — shared per-toy mute/volume policy (keeps mute while scrubbing)
 const __toyState = new Map(); // id -> { muted:boolean, volume:number }
 
@@ -14,7 +15,9 @@ try {
     var id = String(d.toyId || 'master').toLowerCase();
     var st = getState(id);
     st.muted = !!d.muted;
-  });
+  
+  try { setToyMuted(id, st.muted); } catch(e){}
+});
   window.addEventListener('toy-volume', function(e){
     var d = (e && e.detail) || {};
     var id = String(d.toyId || 'master').toLowerCase();
@@ -22,7 +25,9 @@ try {
     var st = getState(id);
     if (!isNaN(v)) st.volume = Math.max(0, Math.min(1, v));
     // Do not change st.muted — stay muted until user unmutes explicitly.
-  });
+  
+  try { setToyVolume(id, st.volume); } catch(e){}
+});
 } catch (err) {}
 
 // Query helpers
