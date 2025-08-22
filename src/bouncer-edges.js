@@ -3,12 +3,22 @@ import { stepIndexUp, stepIndexDown } from './note-helpers.js';
 
 export const WEDGE_DEBUG = false;
 export const WEDGE_BIG_DEBUG = false;
+// Local minor-pentatonic palette around C4 (single octave) for edges
+function __edgePentatonic(noteList){
+  if (!Array.isArray(noteList) || !noteList.length) return [0];
+  const base = noteList.indexOf('C4'); const offs = [0,3,5,7,10];
+  const out=[]; if (base >= 0){
+    for (let k=0;k<offs.length;k++){ const ix = base + offs[k]; if (ix>=0 && ix<noteList.length) out.push(ix); }
+  }
+  return out.length ? out : [Math.floor(noteList.length/2)];
+}
+
 
 // Create 4 edge controller cubes (locked, collidable, oct=4)
 export function makeEdgeControllers(w, h, size, EDGE_PAD, noteList){
   const mk = (edge, x, y) => ({
     edge, x, y, w:size, h:size,
-    active: true, noteIndex: Math.floor(Math.random()*Math.max(1, (noteList && noteList.length) || 12)), oct: 4,
+    active: true, noteIndex: (function(){ const pal = __edgePentatonic(noteList); return pal[Math.floor(Math.random()*pal.length)] })(), oct: 4,
     fixed: true, collide: true, flash: 0, lastHitAT: 0
   });
   return [
@@ -61,11 +71,8 @@ export function mapControllersByEdge(ctrls){
 }
 
 export function randomizeControllers(ctrls, noteList){
-  const n = Math.max(1, (noteList && noteList.length) || 12);
-  for (const c of ctrls){
-    c.noteIndex = Math.floor(Math.random() * n);
-    // keep active state as-is to respect user
-  }
+  const pal = __edgePentatonic(noteList);
+  for (const c of ctrls){ c.noteIndex = pal[Math.floor(Math.random()*pal.length)]; }
 }
 
 // Minimal decorations: small orange tab + lock glyph; wedges disabled.

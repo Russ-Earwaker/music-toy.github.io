@@ -65,7 +65,7 @@ export function createBouncer(selector){
   , oct:4 }));
   (()=>{ const w=worldW(), h=worldH(); const bx=Math.round(w*0.2), by=Math.round(h*0.2), bw=Math.round(w*0.6), bh=Math.round(h*0.6); 
   // Build shared minor pentatonic palette aligned with Wheel/Rippler (root C4)
-  const palette = buildPentatonicPalette(noteList, 'C4', 'minor', 2);
+  const palette = buildPentatonicPalette(noteList, 'C4', 'minor', 1);
   function stepIdxInPalette(currIdx, dir){
     // Find nearest index in palette, then move ±1 in palette order
     if (!Array.isArray(palette) || !palette.length) return currIdx||0;
