@@ -173,39 +173,36 @@ export function stepBouncer(S, nowAT){
             try {
               const nm = S.noteValue ? S.noteValue(S.noteList, b.noteIndex) : null;
               const t = qSixteenth();
-              if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t); if(c){ c.flashDur = 0.12; c.flashEnd = (((S.ensureAudioContext&&S.ensureAudioContext())?.currentTime)||S.lastAT||0) + c.flashDur; } if (c){ c.flash=1.0; c.lastHitAT=(S.lastAT||0);} if(c){ c.flashDur = 0.12; c.flashEnd = (((S.ensureAudioContext&&S.ensureAudioContext())?.currentTime)||S.lastAT||0) + c.flashDur; } if (S.fx&&S.fx.onHit) S.fx.onHit(S.ball.x,S.ball.y); b.flashDur = 0.12; b.flashEnd = (((S.ensureAudioContext&&S.ensureAudioContext())?.currentTime)||S.lastAT||0) + b.flashDur; if (S.fx && S.fx.onHit) S.fx.onHit(S.ball.x, S.ball.y); if (c) { c.flash = 1.0; c.lastHitAT = (S.lastAT || 0); }
+              if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t); if(c){ c.flashDur = 0.12; c.flashEnd = (((S.ensureAudioContext&&S.ensureAudioContext())?.currentTime)||S.lastAT||0) + c.flashDur; } if (c){ c.flash=1.0; c.lastHitAT=(S.lastAT||0); c.flashDur=0.12; c.flashEnd=(((S.ensureAudioContext&&S.ensureAudioContext())?.currentTime)||S.lastAT||0) + c.flashDur; } if(c){ c.flashDur = 0.12; c.flashEnd = (((S.ensureAudioContext&&S.ensureAudioContext())?.currentTime)||S.lastAT||0) + c.flashDur; } if (S.fx&&S.fx.onHit) S.fx.onHit(S.ball.x,S.ball.y); b.flashDur = 0.12; b.flashEnd = (((S.ensureAudioContext&&S.ensureAudioContext())?.currentTime)||S.lastAT||0) + b.flashDur; if (S.fx && S.fx.onHit) S.fx.onHit(S.ball.x, S.ball.y); if (c) { c.flash = 1.0; c.lastHitAT = (S.lastAT || 0); } c.flashDur = 0.12; c.flashEnd = (((S.ensureAudioContext&&S.ensureAudioContext())?.currentTime)||S.lastAT||0) + c.flashDur; c.flashDur=0.12; c.flashEnd=(((S.ensureAudioContext&&S.ensureAudioContext())?.currentTime)||S.lastAT||0) + c.flashDur;
             } catch(e){}
             if (S.fx && S.fx.onHit) S.fx.onHit(S.ball.x, S.ball.y);
             b.flash = 1.0; b.flashDur = 0.12; b.flashEnd = (((S.ensureAudioContext&&S.ensureAudioContext())?.currentTime)||S.lastAT||0) + b.flashDur;
           }
-          else if (bestIdx <= -1000){
-            const ei = (-1000 - bestIdx)|0;
-            const c = (S.edgeControllers && S.edgeControllers[ei]) ? S.edgeControllers[ei] : null;
-            try {
-              const nm = c && S.noteValue ? S.noteValue(S.noteList, c.noteIndex) : null;
-              const t = qSixteenth ? qSixteenth() : (qEighth ? qEighth() : ((S.ensureAudioContext&&S.ensureAudioContext())?.currentTime||S.lastAT||0)+0.0005);
-              if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t);
-            } catch(e){}
-            if (S.fx && S.fx.onHit) S.fx.onHit(S.ball.x, S.ball.y);
-            if (c){ c.flash = 1.0; c.lastHitAT = (S.lastAT||0); }
-          }
-          else if (bestIdx <= -1000){
-            const ei = (-1000 - bestIdx)|0;
-            const c = (S.edgeControllers && S.edgeControllers[ei]) ? S.edgeControllers[ei] : null;
-            try {
-              const nm = c && S.noteValue ? S.noteValue(S.noteList, c.noteIndex) : null;
-              const t = (typeof qSixteenth==='function') ? qSixteenth() : (((S.ensureAudioContext&&S.ensureAudioContext())?.currentTime)||S.lastAT||0)+0.0005;
-              if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t);
-            } catch(e){}
-            if (S.fx && S.fx.onHit) S.fx.onHit(S.ball.x, S.ball.y);
-            if (c){ c.flash = 1.0; c.lastHitAT = (S.lastAT || 0); }
-          } else {
+          
+else if (bestIdx <= -1000){
+  const ei = (-1000 - bestIdx)|0;
+  const c = (S.edgeControllers && S.edgeControllers[ei]) ? S.edgeControllers[ei] : null;
+  try {
+    const nm = c && S.noteValue ? S.noteValue(S.noteList, c.noteIndex) : null;
+    const t = (typeof qSixteenth==='function') ? qSixteenth() : ((((S.ensureAudioContext&&S.ensureAudioContext())?.currentTime)||S.lastAT||0)+0.0005);
+    if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t);
+  } catch(e){}
+  if (S.fx && S.fx.onHit) S.fx.onHit(S.ball.x, S.ball.y);
+  if (c){
+    c.flash = 1.0;
+    c.lastHitAT = (S.lastAT||0);
+    c.flashDur = 0.12;
+    c.flashEnd = ((((S.ensureAudioContext&&S.ensureAudioContext())?.currentTime)||S.lastAT||0) + c.flashDur);
+  }
+}
+
+           else {
 
             // Edge controller triggers
             try {
               const m=S.mapControllersByEdge?S.mapControllersByEdge(S.edgeControllers):null;
-              const c = (best.nx<0)?(m&&m.left) : (best.nx>0)?(m&&m.right) : (best.ny<0)?(m&&m.top):(m&&m.bot);
-              if (c && (c.active!==false)){ const nm=S.noteValue?S.noteValue(S.noteList,c.noteIndex):null; const t = qSixteenth(); if (nm&&S.triggerInstrument) S.triggerInstrument(S.instrument,nm,t); }
+              const c = (best.nx>0)?(m&&m.left) : (best.nx<0)?(m&&m.right) : (best.ny>0)?(m&&m.top):(m&&m.bot);
+              if (c && (c.active!==false)){ const nm=S.noteValue?S.noteValue(S.noteList,c.noteIndex):null; const t = qSixteenth(); if (nm&&S.triggerInstrument) S.triggerInstrument(S.instrument,nm,t); if (typeof S.flashEdge==='function') S.flashEdge((best.nx>0)?'left':(best.nx<0)?'right':(best.ny>0)?'top':'bot'); if (c){ c.flash = 1.0; c.lastHitAT = (S.lastAT||0); } c.flashDur=0.12; c.flashEnd=(((S.ensureAudioContext&&S.ensureAudioContext())?.currentTime)||S.lastAT||0) + c.flashDur; }
             } catch(e){}
           }
 
