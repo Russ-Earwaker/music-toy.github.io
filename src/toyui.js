@@ -8,8 +8,8 @@ function dbg(...args){ if (DEBUG) { try { console.log('[toyui]', ...args); } cat
 
 
 const ICONS = {
-  volume: `<svg viewBox='0 0 24 24' aria-hidden='true'><path d='M3 10v4h4l5 4V6L7 10H3z'/><path d='M16.5 12a4.5 4.5 0 0 0-2.5-4.03v8.06A4.5 4.5 0 0 0 16.5 12z'/></svg>`,
-  mute:   `<svg viewBox='0 0 24 24' aria-hidden='true'><path d='M3 10v4h4l5 4V6L7 10H3z'/><path d='M19 5l-3 3'/><path d='M16 8l3 3'/></svg>`
+  volume: `<svg viewBox='0 0 24 24' aria-hidden='true' width='18' height='18' style='display:block'><path fill='currentColor' d='M3 10v4h4l5 4V6L7 10H3z'/><path fill='currentColor' d='M16.5 12a4.5 4.5 0 0 0-2.5-4.03v8.06A4.5 4.5 0 0 0 16.5 12z'/></svg>`,
+  mute:   `<svg viewBox='0 0 24 24' aria-hidden='true' width='18' height='18' style='display:block'><path fill='currentColor' d='M3 10v4h4l5 4V6L7 10H3z'/><path stroke='currentColor' stroke-width='2' stroke-linecap='round' d='M19 5l-3 3'/><path stroke='currentColor' stroke-width='2' stroke-linecap='round' d='M16 8l3 3'/></svg>`
 };
 
 export function initToyUI(panel, {
@@ -24,6 +24,9 @@ export function initToyUI(panel, {
   onRandom = null,
   onReset = null
 } = {}){
+
+  const toyId = (panel?.dataset?.toy || toyName || 'toy').toLowerCase();
+  panel.dataset.toy = toyId;
 
   // Ensure a header exists
   let header = panel.querySelector('.toy-header');
@@ -150,7 +153,7 @@ export function initToyUI(panel, {
 
   vol.addEventListener('input', ()=>{
     const v = Math.max(0, Math.min(1, (parseInt(vol.value,10)||0)/100));
-    try { window.dispatchEvent(new CustomEvent('master-volume', { detail: { value: v } })); } catch{}
+    try { window.dispatchEvent(new CustomEvent('toy-volume', { detail: { toyId, value: v } })); } catch{}
   });
   vol.addEventListener('pointerdown', ev => ev.stopPropagation(), { capture:true });
 
@@ -207,10 +210,11 @@ function setZoom(z){
   // Mute flag (toy code can read ui.muted)
   let muted = false;
   function setMuted(m){
+    try { muteBtn.setAttribute('aria-pressed', m ? 'true' : 'false'); } catch{}
     muted = !!m;
     try { muteBtn.innerHTML = muted ? ICONS.mute : ICONS.volume; } catch{}
-    try { muteBtn.style.color = muted ? '#7b8193' : '#ffffff'; } catch{}
-    try { window.dispatchEvent(new CustomEvent('master-mute', { detail: { muted } })); } catch{}
+    try { muteBtn.style.color = muted ? '#7b8193' : '#ffffff'; muteBtn.classList.toggle('muted', muted); } catch{}
+    try { window.dispatchEvent(new CustomEvent('toy-mute', { detail: { toyId, muted } })); } catch{}
   }
   muteBtn.addEventListener('click', ()=> setMuted(!muted));
 

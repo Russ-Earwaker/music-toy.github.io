@@ -1,5 +1,5 @@
 // src/main.js (final: no version suffixes; instruments populate on boot; single boot; robust samples-ready)
-import { DEFAULT_BPM, NUM_STEPS, ac, setBpm, ensureAudioContext, createScheduler, getLoopInfo } from './audio-core.js';
+import { DEFAULT_BPM, NUM_STEPS, ac, setBpm, ensureAudioContext, createScheduler, getLoopInfo, setToyVolume, setToyMuted } from './audio-core.js';
 import { initAudioAssets, triggerInstrument, getInstrumentNames } from './audio-samples.js';
 
 import { buildGrid, markPlayingColumn as markGridCol } from './grid.js';
@@ -189,7 +189,7 @@ document.querySelectorAll('.toy-panel').forEach((panel) => {
         } else if (kind === 'wheel') {
           let wheelInstrument = 'slap bass guitar';
           buildWheel(panel, {
-            onNote: (midi, name, vel)=> { try { const ac = ensureAudioContext(); triggerInstrument(wheelInstrument || 'slap bass guitar', name, ac.currentTime + 0.0005); } catch(e){} },
+            onNote: (midi, name, vel)=>{ try { const ac = ensureAudioContext(); /* wheel */ triggerInstrument(wheelInstrument || 'slap bass guitar', name, ac.currentTime + 0.0005, 'wheel'); } catch(e){} },
             getBpm: ()=> ((getLoopInfo && getLoopInfo().bpm) || DEFAULT_BPM)
           });
           inst = { setInstrument: (n)=> { wheelInstrument = n; } };
@@ -216,6 +216,10 @@ document.querySelectorAll('.toy-panel').forEach((panel) => {
     try { assertRipplerContracts(); runRipplerSmoke(); } catch {}
 
     setupTransport();
+
+    // Per-toy volume + mute
+    window.addEventListener('toy-volume', (e)=>{ try { setToyVolume(e?.detail?.toyId, e?.detail?.value); } catch{} });
+    window.addEventListener('toy-mute',   (e)=>{ try { setToyMuted(e?.detail?.toyId, e?.detail?.muted); } catch{} });
 
     // Auto-unlock on first gesture anywhere
     let armed = true;

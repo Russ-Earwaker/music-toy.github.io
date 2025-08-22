@@ -287,7 +287,7 @@ function draw(){
       ctx.fillStyle = 'white'; ctx.globalAlpha = 0.9; ctx.fill(); ctx.globalAlpha = 1;
     }
     Object.assign(S, { ball, blocks, edgeControllers, EDGE, worldW, worldH, ballR, blockSize, edgeFlash, mapControllersByEdge,
-  ensureAudioContext, triggerInstrument, noteValue, noteList, instrument, fx, lastLaunch, nextLaunchAt, lastAT, flashEdge, handle, spawnBallFrom, edgeHitThisStep, edgeLastHitAT, getLoopInfo , BOUNCER_BARS_PER_LIFE, setNextLaunchAt , setBallOut });
+  ensureAudioContext, noteValue, noteList, instrument, fx, lastLaunch, nextLaunchAt, lastAT, flashEdge, handle, spawnBallFrom, edgeHitThisStep, edgeLastHitAT, getLoopInfo , triggerInstrument: (i,n,t)=>triggerInstrument(i,n,t,'bouncer'), BOUNCER_BARS_PER_LIFE, setNextLaunchAt , setBallOut });
     stepBouncer(S);
     visQ = S.visQ || visQ;
   requestAnimationFrame(draw);

@@ -1,5 +1,5 @@
 // src/audio-samples.js — CSV samples + instrument dispatcher (tones included)
-import { ensureAudioContext } from './audio-core.js';
+import { ensureAudioContext, getToyGain } from './audio-core.js';
 import { playById, playToneAt, TONE_NAMES } from './audio-tones.js';
 
 const FALLBACK_SAMPLES = [
@@ -124,9 +124,10 @@ export async function initAudioAssets(csvUrl){
 }
 
 export function getInstrumentNames(){
-  // Combine tone names + CSV names (tone names first)
-  return Array.from(new Set([ ...TONE_NAMES, ...entries.keys() ]));
+  // Only show CSV-provided instruments in UI.
+  return Array.from(entries.keys());
 }
+
 
 function noteToFreq(note='C4'){
   const NOTE = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
@@ -144,39 +145,37 @@ function freqRatio(fromNote='C4', toNote='C4'){
   return f2 / f1;
 }
 
-function playSampleAt(name, when, rate=1){
+function playSampleAt(name, when, rate=1, toyId){
   const ctx = ensureAudioContext();
   const buf = buffers.get(name);
   if (!buf) return;
   const src = ctx.createBufferSource();
   src.buffer = buf;
   src.playbackRate.value = rate;
-  src.connect(ctx.destination);
+  src.connect(getToyGain(toyId||'master'));
   src.start(when);
 }
 
-export function triggerInstrument(instrument, noteName, when){
+export function triggerInstrument(instrument, noteName, when, toyId){
   // 1) Tone synths by name/id
   const id = (instrument||'').toLowerCase();
   const knownTone = TONE_NAMES.map(n=>n.toLowerCase());
-  if (knownTone.includes(id)){
-    const freq = noteToFreq(noteName);
-    return playById(id, freq, when);
+  if (knownTone.includes(id)) { const freq = noteToFreq(noteName); return playById(id, freq, when, getToyGain(toyId||'master'));
   }
 
   // 2) CSV row with synth_id mapping (e.synth)
   const e = entries.get(instrument);
   if (e && e.synth){
     const freq = noteToFreq(noteName);
-    return playById(e.synth.toLowerCase(), freq, when);
+    return playById(e.synth.toLowerCase(), freq, when, getToyGain(toyId||'master'));
   }
 
   // 3) Sample buffer by name (pitch-shift relative to C4)
   if (buffers.has(instrument)){
-    return playSampleAt(instrument, when, freqRatio('C4', noteName));
+    return playSampleAt(instrument, when, freqRatio('C4', noteName), toyId);
   }
 
   // 4) Fallback simple tone
   const freq = noteToFreq(noteName);
-  return playToneAt(freq, when);
+  return playToneAt(freq, when, getToyGain(toyId||'master'));
 }

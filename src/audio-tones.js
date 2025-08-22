@@ -1,5 +1,11 @@
-// src/audio-tones.js — tone synths (includes 'alien')
+// src/audio-tones.js — tone synths (compact + per-toy dest support)
 import { ensureAudioContext } from './audio-core.js';
+export const TONE_NAMES = [
+  'keypad','chime','pop','pluck','pad',
+  'retro-square','retro-saw','retro-triangle',
+  'laser','wind','alien','fm','organ','drop','bleep','sine','tone'
+];
+
 
 function envGain(acx, startTime, points){
   const g = acx.createGain();
@@ -14,63 +20,71 @@ function envGain(acx, startTime, points){
 
 export function noteToFreq(note='C4'){
   const NOTE = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-  const m = /^([A-G]#?)(-?\d)$/.exec(String(note).trim());
+  const m = /^([A-G]#?)(-?\d+)$/.exec(String(note).toUpperCase().trim());
   if (!m) return 440;
-  const [_, n, o] = m;
-  const idx = NOTE.indexOf(n);
-  const midi = (Number(o) + 1) * 12 + idx;
-  return 440 * Math.pow(2, (midi - 69)/12);
+  const nn = NOTE.indexOf(m[1]);
+  const oct = parseInt(m[2],10);
+  const midi = (oct+1)*12 + nn; // MIDI number
+  return 440 * Math.pow(2, (midi-69)/12);
 }
 
-function playKeypadAt(freq, when){
+// --- Simple voices ---
+export function playToneAt(freq, when, dest){
+  const acx = ensureAudioContext();
+  const o = acx.createOscillator();
+  const g = acx.createGain();
+  o.type='sine'; o.frequency.setValueAtTime(freq, when);
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.exponentialRampToValueAtTime(0.25, when+0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, when+0.25);
+  o.connect(g); g.connect(dest || acx.destination);
+  o.start(when); o.stop(when+0.26);
+}
+
+function playKeypadAt(freq, when, dest){
   const acx = ensureAudioContext(); const t0 = when;
-  const osc1 = acx.createOscillator(); osc1.type='sine';    osc1.frequency.value=freq;
-  const osc2 = acx.createOscillator(); osc2.type='triangle';osc2.frequency.value=freq*2;
-  const ping = acx.createOscillator(); ping.type='sine';    ping.frequency.value=freq*3.2;
-  const bp = acx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=freq*2; bp.Q.value=6;
-  const g = envGain(acx, t0, [{t:0.00,v:0.0001},{t:0.01,v:0.28},{t:0.18,v:0.14},{t:0.45,v:0.0008}]);
-  osc1.connect(bp); osc2.connect(bp); ping.connect(bp); bp.connect(g).connect(acx.destination);
-  osc1.start(t0); osc2.start(t0); ping.start(t0+0.005);
-  osc1.stop(t0+0.55); osc2.stop(t0+0.55); ping.stop(t0+0.25);
+  const g = envGain(acx, t0, [{t:0.00,v:0.0001},{t:0.01,v:0.28},{t:0.18,v:0.0008}]);
+  const o1 = acx.createOscillator(); o1.type='square'; o1.frequency.setValueAtTime(freq, t0);
+  const o2 = acx.createOscillator(); o2.type='square'; o2.frequency.setValueAtTime(freq*2, t0);
+  o1.connect(g); o2.connect(g); g.connect(dest || acx.destination);
+  o1.start(t0); o2.start(t0); o1.stop(t0+0.2); o2.stop(t0+0.2);
 }
-function playPopAt(freq, when){
+
+function playPopAt(freq, when, dest){
+  const acx = ensureAudioContext(); const t0 = when;
+  const o = acx.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(freq, t0);
+  const g = envGain(acx, t0, [{t:0.00,v:0.0001},{t:0.006,v:0.35},{t:0.12,v:0.0008}]);
+  o.connect(g).connect(dest || acx.destination);
+  o.start(t0); o.stop(t0+0.14);
+}
+
+function playPadAt(freq, when, dest){
   const acx = ensureAudioContext(); const t0=when;
-  const noise = acx.createBufferSource();
-  const len = Math.max(1, Math.floor(acx.sampleRate * 0.25));
-  const buffer = acx.createBuffer(1, len, acx.sampleRate);
-  const data = buffer.getChannelData(0);
-  for (let i=0;i<data.length;i++){ const amp = 1 - i/len; data[i] = (Math.random()*2-1)*amp; }
-  noise.buffer = buffer;
-  const bp = acx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=freq; bp.Q.value=10;
-  const g = envGain(acx, t0, [{t:0.00,v:0.0001},{t:0.004,v:0.6},{t:0.20,v:0.001}]);
-  noise.connect(bp).connect(g).connect(acx.destination);
-  noise.start(t0); noise.stop(t0+0.22);
+  const o = acx.createOscillator(); o.type='triangle'; o.frequency.setValueAtTime(freq, t0);
+  const g = envGain(acx, t0, [{t:0.00,v:0.0001},{t:0.20,v:0.3},{t:0.80,v:0.15},{t:1.20,v:0.0008}]);
+  const lp = acx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value = freq*2; lp.Q.value=0.5;
+  o.connect(lp).connect(g).connect(dest || acx.destination);
+  o.start(t0); o.stop(t0+1.25);
 }
-function playPadAt(freq, when){
+
+function playRetroAt(freq, when, wave, dest){
   const acx = ensureAudioContext(); const t0=when;
-  const osc = acx.createOscillator(); osc.type='triangle'; osc.frequency.value=freq;
-  const lp  = acx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=freq*3;
-  const g = envGain(acx, t0, [{t:0.00,v:0.0001},{t:0.05,v:0.20},{t:0.35,v:0.10},{t:0.65,v:0.0008}]);
-  osc.connect(lp).connect(g).connect(acx.destination);
-  osc.start(t0); osc.stop(t0+0.7);
+  const o = acx.createOscillator(); o.type = wave; o.frequency.setValueAtTime(freq, t0);
+  const g = envGain(acx, t0, [{t:0.00,v:0.0001},{t:0.01,v:0.25},{t:0.25,v:0.0008}]);
+  o.connect(g).connect(dest || acx.destination);
+  o.start(t0); o.stop(t0+0.27);
 }
-function playRetroAt(freq, when, wave){
+
+function playLaserAt(freq, when, dest){
   const acx = ensureAudioContext(); const t0=when;
-  const osc = acx.createOscillator(); osc.type=wave; osc.frequency.value=freq;
-  const g = envGain(acx, t0, [{t:0.00,v:0.0001},{t:0.01,v:0.22},{t:0.18,v:0.0008}]);
-  const lp = acx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=Math.min(12000, freq*6);
-  osc.connect(lp).connect(g).connect(acx.destination);
-  osc.start(t0); osc.stop(t0+0.25);
+  const o = acx.createOscillator(); o.type='sawtooth'; o.frequency.setValueAtTime(freq*2, t0);
+  o.frequency.exponentialRampToValueAtTime(freq/4, t0+0.30);
+  const g = envGain(acx, t0, [{t:0.00,v:0.0001},{t:0.01,v:0.35},{t:0.30,v:0.0008}]);
+  o.connect(g).connect(dest || acx.destination);
+  o.start(t0); o.stop(t0+0.31);
 }
-function playLaserAt(freq, when){
-  const acx = ensureAudioContext(); const t0=when;
-  const osc = acx.createOscillator(); osc.type='sawtooth'; osc.frequency.setValueAtTime(freq*2, t0);
-  osc.frequency.exponentialRampToValueAtTime(freq/4, t0+0.3);
-  const g = envGain(acx, t0, [{t:0.00,v:0.0001},{t:0.01,v:0.35},{t:0.3,v:0.0008}]);
-  osc.connect(g).connect(acx.destination);
-  osc.start(t0); osc.stop(t0+0.31);
-}
-function playWindyAt(freq, when){
+
+function playWindyAt(freq, when, dest){
   const acx = ensureAudioContext(); const t0=when;
   const noise = acx.createBufferSource();
   const len = Math.floor(acx.sampleRate * 0.4);
@@ -79,61 +93,57 @@ function playWindyAt(freq, when){
   for (let i=0;i<data.length;i++) data[i] = (Math.random()*2-1) * (1 - i/len);
   noise.buffer = buffer;
   const bp = acx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=freq; bp.Q.value=1;
-  const g = envGain(acx, t0, [{t:0.00,v:0.0001},{t:0.05,v:0.28},{t:0.4,v:0.0008}]);
-  noise.connect(bp).connect(g).connect(acx.destination);
+  const g = envGain(acx, t0, [{t:0.00,v:0.0001},{t:0.05,v:0.28},{t:0.40,v:0.0008}]);
+  noise.connect(bp).connect(g).connect(dest || acx.destination);
   noise.start(t0); noise.stop(t0+0.42);
 }
-function playAlienAt(freq, when){
+
+function playAlienAt(freq, when, dest){
   const acx = ensureAudioContext(); const t0=when;
   const carrier = acx.createOscillator(); carrier.type='sine'; carrier.frequency.value=freq;
   const mod = acx.createOscillator(); mod.type='sine'; mod.frequency.value=6;
   const modGain = acx.createGain(); modGain.gain.value = freq*0.5;
   mod.connect(modGain).connect(carrier.frequency);
-  const g = envGain(acx, t0, [{t:0.00,v:0.0001},{t:0.01,v:0.25},{t:0.6,v:0.0008}]);
-  carrier.connect(g).connect(acx.destination);
-  carrier.start(t0); mod.start(t0);
-  carrier.stop(t0+0.62); mod.stop(t0+0.62);
+  const g = envGain(acx, t0, [{t:0.00,v:0.0001},{t:0.02,v:0.25},{t:0.5,v:0.0008}]);
+  carrier.connect(g).connect(dest || acx.destination);
+  mod.start(t0); carrier.start(t0); mod.stop(t0+0.52); carrier.stop(t0+0.52);
 }
-function playOrganishAt(freq, when){
+
+function playOrganishAt(freq, when, dest){
   const acx = ensureAudioContext(); const t0=when;
-  const g = envGain(acx, t0, [{t:0.00,v:0.0001},{t:0.02,v:0.22},{t:0.4,v:0.0008}]);
+  const g = envGain(acx, t0, [{t:0.00,v:0.0001},{t:0.02,v:0.22},{t:0.40,v:0.0008}]);
   [0,0.5,-0.5].forEach(detune => {
-    const osc = acx.createOscillator(); osc.type='triangle'; osc.frequency.value=freq * Math.pow(2, detune/12);
-    osc.connect(g);
-    osc.start(t0); osc.stop(t0+0.42);
+    const osc = acx.createOscillator(); osc.type='triangle'; 
+    osc.frequency.value=freq * Math.pow(2, detune/12);
+    osc.connect(g); osc.start(t0); osc.stop(t0+0.42);
   });
-  g.connect(acx.destination);
+  g.connect(dest || acx.destination);
 }
-function playDropletAt(freq, when){
+
+function playDropletAt(freq, when, dest){
   const acx = ensureAudioContext(); const t0=when;
-  const osc = acx.createOscillator(); osc.type='sine';
-  osc.frequency.setValueAtTime(freq*2, t0);
-  osc.frequency.exponentialRampToValueAtTime(freq/3, t0+0.25);
-  const g = envGain(acx, t0, [{t:0.00,v:0.0001},{t:0.01,v:0.3},{t:0.25,v:0.0008}]);
-  osc.connect(g).connect(acx.destination);
-  osc.start(t0); osc.stop(t0+0.26);
-}
-export function playToneAt(freq, when){
-  const acx = ensureAudioContext(); const o = acx.createOscillator(); const g = acx.createGain();
-  o.type='sine'; o.frequency.value=freq; g.gain.setValueAtTime(0.22, when); g.gain.exponentialRampToValueAtTime(0.0001, when+0.25);
-  o.connect(g); g.connect(acx.destination); o.start(when); o.stop(when+0.26);
+  const o = acx.createOscillator(); o.type='sine';
+  o.frequency.setValueAtTime(freq*2, t0);
+  o.frequency.exponentialRampToValueAtTime(freq/3, t0+0.25);
+  const g = envGain(acx, t0, [{t:0.00,v:0.0001},{t:0.01,v:0.30},{t:0.25,v:0.0008}]);
+  o.connect(g).connect(dest || acx.destination);
+  o.start(t0); o.stop(t0+0.26);
 }
 
-export function playById(id, freq, when){
+// Route name/id -> voice
+export function playById(id, freq, when, dest){
   const s = (id||'').toLowerCase();
-  if (s.includes('keypad') || s.includes('chime')) return playKeypadAt(freq, when);
-  if (s.includes('pop') || s.includes('pluck'))  return playPopAt(freq, when);
-  if (s.includes('pad'))                         return playPadAt(freq, when);
-  if (s.includes('retro-square'))                return playRetroAt(freq, when, 'square');
-  if (s.includes('retro-saw'))                   return playRetroAt(freq, when, 'sawtooth');
-  if (s.includes('retro-tri') || s.includes('retro-triangle')) return playRetroAt(freq, when, 'triangle');
-  if (s.includes('laser'))                       return playLaserAt(freq, when);
-  if (s.includes('wind') || s.includes('windy')) return playWindyAt(freq, when);
-  if (s.includes('alien'))                       return playAlienAt(freq, when);
-  if (s.includes('organ'))                       return playOrganishAt(freq, when);
-  if (s.includes('drop'))                        return playDropletAt(freq, when);
-  return playToneAt(freq, when);
+  if (s.includes('keypad') || s.includes('chime')) return playKeypadAt(freq, when, dest);
+  if (s.includes('pop') || s.includes('pluck'))  return playPopAt(freq, when, dest);
+  if (s.includes('pad'))                         return playPadAt(freq, when, dest);
+  if (s.includes('retro-square'))                return playRetroAt(freq, when, 'square', dest);
+  if (s.includes('retro-saw'))                   return playRetroAt(freq, when, 'sawtooth', dest);
+  if (s.includes('retro-tri') || s.includes('retro-triangle')) return playRetroAt(freq, when, 'triangle', dest);
+  if (s.includes('laser'))                       return playLaserAt(freq, when, dest);
+  if (s.includes('wind'))                        return playWindyAt(freq, when, dest);
+  if (s.includes('alien') || s.includes('fm'))   return playAlienAt(freq, when, dest);
+  if (s.includes('organ'))                       return playOrganishAt(freq, when, dest);
+  if (s.includes('drop') || s.includes('bleep')) return playDropletAt(freq, when, dest);
+  // default
+  return playToneAt(freq, when, dest);
 }
-
-// for instrument list convenience
-export const TONE_NAMES = ['tone','Alien','Retro-Square','Retro-Saw','Retro-Triangle','Keypad','Pop','Pad','Laser','Windy','Organ','Droplet'];

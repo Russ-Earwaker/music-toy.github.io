@@ -65,4 +65,40 @@ export function createScheduler(scheduleCallback, onLoop){
   };
 }
 
+
+// --- Per-toy bus (GainNodes) ---
+const __toyGains = new Map();
+const __toyGainValues = new Map(); // desired volumes (0..1)
+
+const __toyMutes = new Map();
+
+export function getToyGain(id='master'){
+  const ctx = ensureAudioContext();
+  const key = String(id||'master');
+  let g = __toyGains.get(key);
+  if (!g){
+    g = ctx.createGain();
+    g.gain.value = 1.0;
+    g.connect(ctx.destination);
+    __toyGains.set(key, g);
+  }
+  return g;
+}
+
+export function setToyVolume(id='master', v=1.0){
+  const g = getToyGain(id);
+  g.gain.value = Math.max(0, Math.min(1, Number(v)||0));
+}
+
+export function setToyMuted(id='master', muted=true){
+  const g = getToyGain(id);
+  __toyMutes.set(String(id||'master'), !!muted);
+  g.gain.value = muted ? 0 : (g.gain.value || 1);
+}
+
+export function getToyVolume(id='master'){
+  const g = getToyGain(id);
+  return g.gain.value;
+}
+
 export function getLoopInfo(){ return { loopStartTime, barLen: barSeconds() }; }
