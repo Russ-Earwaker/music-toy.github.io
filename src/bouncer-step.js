@@ -1,7 +1,6 @@
 import { circleRectHit } from './bouncer-helpers.js';
-  
+
 // src/bouncer-step.js — physics & collisions for Bouncer (clean, balanced)
-const DBG = (...a)=>{ try { console.log('[bouncer]', ...a); } catch(e){} };
 export function stepBouncer(S, nowAT){
   // Clock & dt
   const ac = S.ensureAudioContext();
@@ -15,8 +14,7 @@ export function stepBouncer(S, nowAT){
   }
 
   // Scheduled relaunch
-  if (S.lastLaunch && S.nextLaunchAt != null && ac && now >= S.nextLaunchAt - 0.001){ DBG('spawn due', {now, next:S.nextLaunchAt, lastLaunch:S.lastLaunch});
-    const nb = S.spawnBallFrom({ x: S.handle.x, y: S.handle.y, vx: S.lastLaunch.vx, vy: S.lastLaunch.vy, r: S.ballR() });
+  if (S.lastLaunch && S.nextLaunchAt != null && ac && now >= S.nextLaunchAt - 0.001){ const nb = S.spawnBallFrom({ x: S.handle.x, y: S.handle.y, vx: S.lastLaunch.vx, vy: S.lastLaunch.vy, r: S.ballR() });
     S.ball = nb; 
     // Clamp spawn safely inside bounds and offset along velocity
     try {
@@ -28,7 +26,6 @@ export function stepBouncer(S, nowAT){
       S.ball.x += (S.ball.vx || 0) * 0.6;
       S.ball.y += (S.ball.vy || 0) * 0.6;
     } catch(e) {}
-    DBG('spawned', {pos:{x:S.ball.x,y:S.ball.y}, vel:{vx:S.ball.vx,vy:S.ball.vy}});
     // Life & next relaunch: exactly N bars (default 1)
     try {
       const li = S.getLoopInfo ? S.getLoopInfo() : null;
@@ -44,7 +41,7 @@ export function stepBouncer(S, nowAT){
   }
 
   S.lastAT = now;
-  if (!S.__dbgT || now - S.__dbgT > 1){ S.__dbgT = now; DBG('tick', {now, hasBall: !!S.ball, nextAt: S.nextLaunchAt, flightEnd: S.ball && S.ball.flightEnd}); }
+  if (!S.__dbgT || now - S.__dbgT > 1){ S.__dbgT = now; }
   if (S.fx && S.fx.onStep) S.fx.onStep(S.ball);
 
   // First-frame velocity guard (if something zeroed it)
@@ -52,7 +49,6 @@ export function stepBouncer(S, nowAT){
   if (S.ball){
     if (S.__spawnFrames == null) S.__spawnFrames = 0;
     if (S.__spawnFrames < 3){
-      DBG('post-spawn frame', S.__spawnFrames, {pos:{x:S.ball.x,y:S.ball.y}, vel:{vx:S.ball.vx,vy:S.ball.vy}});
       S.__spawnFrames++;
     }
   }
@@ -63,8 +59,7 @@ if (S.ball && S.__justSpawnedUntil){
       const spdLL = Math.hypot(S.lastLaunch.vx||0, S.lastLaunch.vy||0) || 1;
       const k = Math.max(minV, spdLL);
       const nx = (S.lastLaunch.vx||0) / spdLL, ny = (S.lastLaunch.vy||0) / spdLL;
-      S.ball.vx = nx * k; S.ball.vy = ny * k; DBG('kickstart vel', {vx:S.ball.vx, vy:S.ball.vy});
-    }
+      S.ball.vx = nx * k; S.ball.vy = ny * k; }
     if (now <= S.__justSpawnedUntil){
       const spd = Math.abs(S.ball.vx||0) + Math.abs(S.ball.vy||0);
       if (spd < 1e-6 && S.lastLaunch){ S.ball.vx = S.lastLaunch.vx; S.ball.vy = S.lastLaunch.vy; }
@@ -75,7 +70,7 @@ if (S.ball && S.__justSpawnedUntil){
 
   // Expire life at end-of-bar(s)
   if (S.ball && S.ball.flightEnd && now >= S.ball.flightEnd - 0.001){
-    DBG('expire life', {t:now}); if (S.setBallOut) S.setBallOut(null); S.ball = null; S.__spawnFrames = 0;
+    if (S.setBallOut) S.setBallOut(null); S.ball = null; S.__spawnFrames = 0;
   }
 
   // Fade block flashes & reset their step hit
