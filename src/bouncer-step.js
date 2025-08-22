@@ -173,10 +173,10 @@ export function stepBouncer(S, nowAT){
             try {
               const nm = S.noteValue ? S.noteValue(S.noteList, b.noteIndex) : null;
               const t = qSixteenth();
-              if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t); if (c){ c.flash=1.0; c.lastHitAT=(S.lastAT||0);} if (S.fx&&S.fx.onHit) S.fx.onHit(S.ball.x,S.ball.y); if (S.fx && S.fx.onHit) S.fx.onHit(S.ball.x, S.ball.y); if (c) { c.flash = 1.0; c.lastHitAT = (S.lastAT || 0); }
+              if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t); if(c){ c.flashDur = 0.12; c.flashEnd = (((S.ensureAudioContext&&S.ensureAudioContext())?.currentTime)||S.lastAT||0) + c.flashDur; } if (c){ c.flash=1.0; c.lastHitAT=(S.lastAT||0);} if(c){ c.flashDur = 0.12; c.flashEnd = (((S.ensureAudioContext&&S.ensureAudioContext())?.currentTime)||S.lastAT||0) + c.flashDur; } if (S.fx&&S.fx.onHit) S.fx.onHit(S.ball.x,S.ball.y); b.flashDur = 0.12; b.flashEnd = (((S.ensureAudioContext&&S.ensureAudioContext())?.currentTime)||S.lastAT||0) + b.flashDur; if (S.fx && S.fx.onHit) S.fx.onHit(S.ball.x, S.ball.y); if (c) { c.flash = 1.0; c.lastHitAT = (S.lastAT || 0); }
             } catch(e){}
             if (S.fx && S.fx.onHit) S.fx.onHit(S.ball.x, S.ball.y);
-            b.flash = 1.0;
+            b.flash = 1.0; b.flashDur = 0.12; b.flashEnd = (((S.ensureAudioContext&&S.ensureAudioContext())?.currentTime)||S.lastAT||0) + b.flashDur;
           }
           else if (bestIdx <= -1000){
             const ei = (-1000 - bestIdx)|0;
