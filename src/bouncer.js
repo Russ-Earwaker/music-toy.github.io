@@ -59,7 +59,8 @@ export function createBouncer(selector){
   draggingBlock = false; dragBlockRef = null; dragOffset = {dx:0, dy:0}; zoomDragCand = null; zoomDragStart = null; zoomTapT = null; lastLaunch = null; launchPhase = 0; nextLaunchAt = null; prevNow = 0; ball = null;
   draggingBlock = false; dragBlockRef = null; dragOffset = {dx:0, dy:0};
   zoomDragCand = null; zoomDragStart = null; zoomTapT = null; lastLaunch = null; launchPhase = 0; nextLaunchAt = null; prevNow = 0; ball = null;
- const blockSize = () => Math.round(BASE_BLOCK_SIZE * (sizing.scale || 1)); const cannonR   = () => Math.round(BASE_CANNON_R   * (sizing.scale || 1)); const ballR     = () => Math.round(BASE_BALL_R     * (sizing.scale || 1)); const N_BLOCKS = 4; let blocks = Array.from({length:N_BLOCKS}, (_,i)=> ({
+ const blockSize = () => Math.round(BASE_BLOCK_SIZE * (sizing.scale || 1)); const cannonR   = () => Math.round(BASE_CANNON_R   * (sizing.scale || 1)); const ballR     = () => Math.round(BASE_BALL_R     * (sizing.scale || 1)); const N_BLOCKS = 4; let visQ = [];
+  let blocks = Array.from({length:N_BLOCKS}, (_,i)=> ({
     x: EDGE, y: EDGE, w: blockSize(), h: blockSize(),
     noteIndex: 0, active: true, flash: 0, lastHitAT: 0
   , oct:4 }));
@@ -288,6 +289,7 @@ function draw(){
     Object.assign(S, { ball, blocks, edgeControllers, EDGE, worldW, worldH, ballR, blockSize, edgeFlash, mapControllersByEdge,
   ensureAudioContext, triggerInstrument, noteValue, noteList, instrument, fx, lastLaunch, nextLaunchAt, lastAT, flashEdge, handle, spawnBallFrom, edgeHitThisStep, edgeLastHitAT, getLoopInfo , BOUNCER_BARS_PER_LIFE, setNextLaunchAt , setBallOut });
     stepBouncer(S);
+    visQ = S.visQ || visQ;
   requestAnimationFrame(draw);
   }
   requestAnimationFrame(draw);
