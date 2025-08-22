@@ -153,6 +153,7 @@ if (!window.__booted__) {
       const inst = [pick0('kick'), pick0('snare'), pick0('hat'), pick0('clap')][i] || names0[0] || 'tone';
       return buildGrid(sel, NUM_STEPS, { defaultInstrument: inst, title: titles[i] });
     }).filter(Boolean);
+    try{ console.log('[boot] grids:', grids.length); }catch{}
 
     // Other toys
     toys = [];

@@ -167,7 +167,7 @@ main { flex: 1 1 auto; display: block; }
 }
 
 /* panel + bouncer sizing */
-.toy-panel { position: absolute; background:#111; border:2px solid var(--border); border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.35); }
+.toy-panel { z-index: 1; min-height: 200px; position: absolute; background:#111; border:2px solid var(--border); border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.35); }
 
 .toy-header { cursor: move; padding:8px 10px; background:linear-gradient(#191919,#141414); border-bottom:1px solid #222; font:13px/1.2 system-ui,sans-serif; color:#ddd; display:flex; align-items:center; justify-content:space-between; }
 
