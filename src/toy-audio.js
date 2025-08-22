@@ -1,5 +1,6 @@
+// src/toy-audio.js — shared per-toy mute/volume policy (keeps mute while scrubbing)
 import { setToyVolume, setToyMuted } from './audio-core.js';
-// toy-audio.js — shared per-toy mute/volume policy (keeps mute while scrubbing)
+
 const __toyState = new Map(); // id -> { muted:boolean, volume:number }
 
 function getState(id){
@@ -8,27 +9,24 @@ function getState(id){
   return __toyState.get(key);
 }
 
-// Global listeners: update state, but do NOT auto-unmute on volume changes.
+// Listener: update state + drive audio-core; do NOT auto-unmute on volume changes.
 try {
   window.addEventListener('toy-mute', function(e){
-    var d = (e && e.detail) || {};
-    var id = String(d.toyId || 'master').toLowerCase();
-    var st = getState(id);
+    const d = (e && e.detail) || {};
+    const id = String(d.toyId || 'master').toLowerCase();
+    const st = getState(id);
     st.muted = !!d.muted;
-  
-  try { setToyMuted(id, st.muted); } catch(e){}
-});
+    try { setToyMuted(id, st.muted); } catch {}
+  });
   window.addEventListener('toy-volume', function(e){
-    var d = (e && e.detail) || {};
-    var id = String(d.toyId || 'master').toLowerCase();
-    var v = Number(d.value);
-    var st = getState(id);
-    if (!isNaN(v)) st.volume = Math.max(0, Math.min(1, v));
-    // Do not change st.muted — stay muted until user unmutes explicitly.
-  
-  try { setToyVolume(id, st.volume); } catch(e){}
-});
-} catch (err) {}
+    const d = (e && e.detail) || {};
+    const id = String(d.toyId || 'master').toLowerCase();
+    const v = Number(d.value);
+    const st = getState(id);
+    if (!Number.isNaN(v)) st.volume = Math.max(0, Math.min(1, v));
+    try { setToyVolume(id, st.volume); } catch {}
+  });
+} catch {}
 
 // Query helpers
 export function isToyMuted(id){ return getState(id).muted === true; }

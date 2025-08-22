@@ -5,16 +5,23 @@ import { initToyUI } from './toyui.js';
 import { drawTileLabelAndArrows } from './ui-tiles.js';
 import { initToySizing, drawNoteStripsAndLabel, NOTE_BTN_H, whichThirdRect, drawThirdsGuides } from './toyhelpers.js';
 
+function nextGridId(){ try { const g = (typeof window!=='undefined'?window:globalThis); g.__GRID_ID_COUNTER = (g.__GRID_ID_COUNTER|0) + 1; return `grid-${g.__GRID_ID_COUNTER}`; } catch { return `grid-${Math.floor(Math.random()*1e6)}`; } }
+
 export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='tone', title='LoopGrid' } = {}){
   const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector;
   if (!shell){ console.warn('[grid] missing', selector); return null; }
 
   const panel = shell.closest?.('.toy-panel') || shell;
   const ui = initToyUI(panel, { toyName: title, defaultInstrument });
-  const toyId = (panel && panel.dataset && panel.dataset.toy ? String(panel.dataset.toy) : (title||'grid')).toLowerCase();
-  panel.dataset.toy = toyId;
-
-  const canvas = document.createElement('canvas');
+  /*__GRID_TOYID_INSERTED__*/
+  let toyId = (panel && panel.dataset && panel.dataset.toy) ? String(panel.dataset.toy).toLowerCase() : '';
+  if (!toyId || /^(grid|loopgrid)(?:-\d+)?$/.test(toyId)) {
+    toyId = nextGridId();
+    if (panel && panel.dataset) panel.dataset.toy = toyId;
+  } else {
+    if (panel && panel.dataset) panel.dataset.toy = toyId;
+  }
+const canvas = document.createElement('canvas');
   canvas.className = 'grid-canvas';
   canvas.style.display = 'block';
   shell.appendChild(canvas);

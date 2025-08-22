@@ -26,8 +26,9 @@ export function initToyUI(panel, {
   onReset = null
 } = {}){
 
-  const toyId = (panel?.dataset?.toy || toyName || 'toy').toLowerCase();
-  panel.dataset.toy = toyId;
+  const __toyIdBase = (panel?.dataset?.toy || toyName || 'toy').toLowerCase();
+  function __getToyId(){ try { return (panel?.dataset?.toy || __toyIdBase).toLowerCase(); } catch { return __toyIdBase; } }
+  panel.dataset.toy = __getToyId();
 
   // Ensure a header exists
   let header = panel.querySelector('.toy-header');
@@ -154,7 +155,7 @@ export function initToyUI(panel, {
 
   vol.addEventListener('input', ()=>{
     const v = Math.max(0, Math.min(1, (parseInt(vol.value,10)||0)/100));
-    try { window.dispatchEvent(new CustomEvent('toy-volume', { detail: { toyId, value: v } })); } catch{}
+    try { window.dispatchEvent(new CustomEvent('toy-volume', { detail: { toyId: __getToyId(), value: v  } })); } catch{}
   });
   vol.addEventListener('pointerdown', ev => ev.stopPropagation(), { capture:true });
 
