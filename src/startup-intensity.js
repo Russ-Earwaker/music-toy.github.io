@@ -1,35 +1,33 @@
-// src/startup-intensity.js — boot glue for intensity, visual bg, auto-mix, and polite random toggles
+// src/startup-intensity.js — boot intensity + visual + toggles
 import { startIntensityMonitor } from './intensity.js';
 import { startIntensityVisual } from './visual-bg.js';
 import { startAutoMix, setAutoMixEnabled, isAutoMixEnabled } from './auto-mix.js';
-import { setPoliteRandomEnabled } from './polite-random.js';
+import { setPoliteRandomEnabled, isPoliteRandomEnabled } from './polite-random.js';
 
-function persist(key, val){
-  try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
-}
-function load(key, def){
-  try { const v = localStorage.getItem(key); return (v!=null) ? JSON.parse(v) : def; } catch { return def; }
-}
+function persist(key, val){ try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }
+function load(key, def){ try { const v = localStorage.getItem(key); return (v!=null)?JSON.parse(v):def; } catch { return def; } }
 
 function makeToggle(label, key, initial, onChange){
   const el = document.createElement('label');
-  el.className = 'mini-toggle';
-  const input = document.createElement('input'); input.type = 'checkbox'; input.checked = !!initial;
-  const span = document.createElement('span'); span.textContent = ' ' + label;
-  el.appendChild(input); el.appendChild(span);
-  input.addEventListener('change', ()=>{ onChange(input.checked); persist(key, !!input.checked); });
+  el.style.fontSize='12px'; el.style.color='#cbd1df'; el.style.cursor='pointer';
+  el.style.marginRight='12px'; el.style.userSelect='none';
+  const box = document.createElement('input'); box.type='checkbox'; box.checked = !!initial;
+  box.style.verticalAlign='middle';
+  box.addEventListener('change', ()=>{ onChange(box.checked); persist(key, box.checked); });
+  el.appendChild(box);
+  el.appendChild(document.createTextNode(' ' + label));
   return el;
 }
 
 function ensureMiniToolbar(){
-  let bar = document.querySelector('#mix-toolbar');
+  let bar = document.getElementById('intensity-mini-toolbar');
   if (!bar){
     bar = document.createElement('div');
-    bar.id = 'mix-toolbar';
+    bar.id = 'intensity-mini-toolbar';
     Object.assign(bar.style, {
-      position:'fixed', right:'12px', bottom:'12px', zIndex:'10',
-      background:'rgba(0,0,0,0.35)', color:'#fff', backdropFilter:'blur(6px)',
-      padding:'8px 10px', borderRadius:'10px', font: '14px/1.2 system-ui, sans-serif'
+      position:'fixed', right:'10px', bottom:'10px', zIndex:'10000',
+      background:'#0b0f14dd', border:'1px solid #232a36', borderRadius:'10px',
+      padding:'6px 10px', backdropFilter:'blur(4px)'
     });
     document.body.appendChild(bar);
   }
@@ -37,6 +35,7 @@ function ensureMiniToolbar(){
 }
 
 function boot(){
+  console.log('[intensity] starting…');
   startIntensityMonitor();
   startIntensityVisual();
   startAutoMix();
@@ -48,10 +47,11 @@ function boot(){
 
   const bar = ensureMiniToolbar();
   bar.replaceChildren(
-    makeToggle('Auto‑mix', 'autoMix', autoOn, setAutoMixEnabled),
+    makeToggle('Auto‑mix', 'autoMix', isAutoMixEnabled(), setAutoMixEnabled),
     document.createTextNode(' \u00A0 '),
-    makeToggle('Polite random', 'politeRandom', politeOn, setPoliteRandomEnabled)
+    makeToggle('Polite random', 'politeRandom', isPoliteRandomEnabled(), setPoliteRandomEnabled)
   );
+  console.log('[intensity] ready');
 }
 
 if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', boot);

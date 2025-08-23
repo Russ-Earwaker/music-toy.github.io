@@ -1,26 +1,28 @@
 // src/intensity.js — global intensity service (per-toy analysers + event-based fallback)
-import { ensureAudioContext } from './audio-core.js';
-import { getToyGain } from './audio-core.js'; // if not present, analyser taps will be inert (event fallback still works)
+// Keep under 300 lines
+import { ensureAudioContext, getToyGain } from './audio-core.js';
 
-const perToy = new Map(); // id -> { analyser, data, smoothed, connected, hits: number[] }
-let globalIntensity = 0, raf = 0;
+const perToy = new Map(); // id -> { analyser, buf, smoothed, connected, hits:number[] }
+let globalIntensity = 0;
+let intervalId = 0;
 
 // Config
-const WINDOW_S = 1.5;
-const SMOOTH = 0.7; // 0=raw, 1=very smooth
-const REFRESH_HZ = 30;
+const WINDOW_S   = 1.5;   // lookback window for event hits
+const SMOOTH     = 0.75;  // 0=raw, 1=very smooth
+const REFRESH_HZ = 30;    // UI update rate
 
-// Helpers
 function clamp01(v){ return Math.max(0, Math.min(1, v)); }
+function nowMs(){ return performance.now(); }
 
 function ensureToyState(id){
   const key = String(id || 'master').toLowerCase();
   if (!perToy.has(key)){
     const ctx = ensureAudioContext();
-    const analyser = ctx.createAnalyser();
-    analyser.fftSize = 1024;
-    analyser.smoothingTimeConstant = 0.5;
-    perToy.set(key, { analyser, data: new Uint8Array(analyser.frequencyBinCount), smoothed:0, connected:false, hits: [] });
+    const an = ctx.createAnalyser();
+    an.fftSize = 256;
+    an.smoothingTimeConstant = 0.5;
+    const buf = new Uint8Array(an.fftSize);
+    perToy.set(key, { analyser: an, buf, smoothed: 0, connected:false, hits: [] });
   }
   const st = perToy.get(key);
   if (!st.connected){
@@ -30,74 +32,75 @@ function ensureToyState(id){
         g.connect(st.analyser); // tap as a side-branch (read-only)
         st.connected = true;
       }
-    } catch(e){ /* silently ignore if API not available */ }
+    } catch {}
   }
   return st;
 }
 
-// Frequency-domain loudness estimate (mid band)
-function measure(analyser, data){
-  analyser.getByteFrequencyData(data);
-  let sum = 0, n = data.length, lo = Math.floor(n*0.05), hi = Math.floor(n*0.7);
-  for (let i = lo; i < hi; i++) sum += data[i];
-  const avg = sum / Math.max(1, (hi-lo));
-  return clamp01(avg / 160); // empirical scale
+// Audio amplitude -> 0..1
+function measureAnalyser(st){
+  try{
+    st.analyser.getByteTimeDomainData(st.buf);
+    // Compute RMS around 128 (silence), normalize
+    let sum=0;
+    for (let i=0;i<st.buf.length;i++){
+      const v = (st.buf[i] - 128) / 128;
+      sum += v*v;
+    }
+    const rms = Math.sqrt(sum / st.buf.length);
+    // Map RMS (typ ~0..0.5) into 0..1 with a gentle curve
+    return clamp01(Math.pow(rms*2.0, 0.9));
+  }catch{ return 0; }
 }
 
-// Event-based fallback: count toy-hit events in a sliding window
-function noteIntensityFor(st, now){
-  const WIN_MS = Math.floor(WINDOW_S * 1000);
-  st.hits = (st.hits || []).filter(t => now - t <= WIN_MS);
+// Event-based note-rate -> 0..1
+function measureNoteRate(st, tNow){
+  const cutoff = tNow - WINDOW_S*1000;
+  // prune old hits
+  st.hits = st.hits.filter(t => t >= cutoff);
   const rate = st.hits.length / WINDOW_S; // hits per second
-  // ~6 hits/sec feels "busy" => intensity ~1
+  // map 0..(~6/sec) to 0..1
   return clamp01(rate / 6);
 }
 
-// Tick
 function tick(){
-  const dt = 1 / REFRESH_HZ;
-  let g = 0, count = 0;
+  let g=0, n=0;
+  const tNow = nowMs();
   for (const [id, st] of perToy){
-    const now = performance.now();
-    const audioAmt = measure(st.analyser, st.data);
-    const noteAmt  = noteIntensityFor(st, now);
-    const amt = Math.max(audioAmt, noteAmt);
-    st.smoothed = st.smoothed * SMOOTH + amt * (1 - SMOOTH);
-    g += st.smoothed; count++;
+    const a = measureAnalyser(st);
+    const r = measureNoteRate(st, tNow);
+    const amt = Math.max(a, r);
+    st.smoothed = st.smoothed*SMOOTH + amt*(1-SMOOTH);
+    g += st.smoothed; n++;
   }
-  globalIntensity = clamp01(count ? (g / count) : 0);
-  const detail = { perToy: Object.fromEntries([...perToy.entries()].map(([k,v]) => [k, v.smoothed])), global: globalIntensity };
-  window.dispatchEvent(new CustomEvent('intensity-update', { detail }));
-  raf = window.setTimeout(tick, dt * 1000);
+  globalIntensity = clamp01(n ? g/n : 0);
+  // broadcast
+  try {
+    const detail = { global: globalIntensity, perToy: Object.fromEntries([...perToy].map(([k,v])=>[k, v.smoothed])) };
+    window.dispatchEvent(new CustomEvent('intensity-update', { detail }));
+  } catch {}
 }
 
-// Public
 export function startIntensityMonitor(){
-  if (raf) return;
-  // Seed from known toys
-  document.querySelectorAll('.toy-panel[data-toy]').forEach((el, i) => {
-    const id = (el.dataset.toy || ('toy'+i)).toLowerCase();
-    ensureToyState(id);
-  });
-  ensureToyState('master');
-  tick();
+  if (!intervalId){
+    // Ensure at least master exists so we always emit
+    ensureToyState('master');
+    intervalId = setInterval(tick, 1000/REFRESH_HZ);
+  }
 }
-
 export function stopIntensityMonitor(){
-  if (raf){ window.clearTimeout(raf); raf = 0; }
+  if (intervalId){ clearInterval(intervalId); intervalId=0; }
 }
-
 export function getIntensity(id){
   if (!id) return globalIntensity;
   const st = perToy.get(String(id).toLowerCase());
   return st ? st.smoothed : 0;
 }
-
 export function listToys(){ return [...perToy.keys()]; }
 
 // Listen for toy-hit events to build event-based intensity
 window.addEventListener('toy-hit', (e)=>{
   const id = e?.detail?.id || 'master';
   const st = ensureToyState(id);
-  try { st.hits.push(performance.now()); } catch { st.hits = [performance.now()]; }
+  st.hits.push(nowMs());
 });
