@@ -42,16 +42,41 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
   const gatedTrigger = gateTriggerForToy(toyId, triggerInstrument);
 
   const canvas = document.createElement('canvas');
+  canvas.style.display = 'block';
+  canvas.style.background = '#1b2233';
   canvas.className = 'grid-canvas';
   canvas.style.display = 'block';
   panel.classList.add('toy-unzoomed');
   body.style.paddingTop = '6px';
   body.style.paddingBottom = '6px';
   body.appendChild(canvas);
+  
+  // Redraw when zoom class changes
+  try {
+    const mo = new MutationObserver(()=> draw());
+    mo.observe(panel, { attributes: true, attributeFilter: ['class'] });
+  } catch {}
+// Redraw on size changes
+  try {
+    const ro = new ResizeObserver(()=> draw());
+    ro.observe(panel);
+    ro.observe(body);
+    // Fallback redraw: try a few times after boot in case layout is late
+    try {
+      let tries = 0;
+      const id = setInterval(()=>{
+        if (paintedOnce || ++tries > 20) { clearInterval(id); return; }
+        draw();
+      }, 50);
+    } catch {}
+    /*__fallbackRAF__*/
+    
+  } catch {}
+
   const ctx = canvas.getContext('2d');
   try{ console.log('[grid] canvas created', {panel, toyId}); }catch{}
 
-  const sizing = initToySizing(panel, canvas, ctx);
+  const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true });
   /* sizing init hook */
   try { sizing.setZoom(panel.classList.contains('toy-zoomed')); } catch {}
   const worldW = ()=> (canvas.clientWidth || sizing?.vw?.() || body.clientWidth || 356);
@@ -59,6 +84,7 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
 
   const c4Index = Math.max(0, noteList.indexOf('C4'));
   let currentCol = -1;
+  let paintedOnce = false;
   // Explicit square size & spacing (keeps visuals consistent across toys)
   function squareSize(){
     const scale = (sizing && typeof sizing.scale==='number') ? sizing.scale : 1;
@@ -67,12 +93,11 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
   }
   function squareGap(){ return Math.max(8, Math.round(squareSize() * 0.40)); }
 
-  const steps = Array.from({length:numSteps}, ()=>({ active:false, flash:0, noteIndex:c4Index }));
+  const steps = Array.from({length:NUM_STEPS}, ()=>({ active:false, flash:0, noteIndex:c4Index }));
 
   function layout(){
     const pad = 10;
     const w = worldW(), h = worldH();
-    resizeCanvasForDPR(canvas, ctx);
     const isZoomed = panel.classList.contains('toy-zoomed');
     const gridTop = 6;
     const cellW = Math.max(20, Math.floor((w - pad*2) / steps.length));
@@ -81,11 +106,12 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
   }
 
   
-  function blockRectForIndex(i){
-    const L = layout();
+  function blockRectForIndex(i, L){
     const { pad, gridTop, cellW, cellH } = L;
-    const margin = 4;
-    const s = Math.max(16, Math.min(cellW, cellH) - margin*2);
+    const isZoomed = L.isZoomed;
+    const TARGET_S = isZoomed ? 84 : 42;
+    const MARGIN = 4;
+    const s = Math.min(TARGET_S, Math.min(cellW, cellH) - MARGIN*2);
     const xCell = pad + i * cellW;
     const yCell = gridTop;
     const bx = Math.floor(xCell + (cellW - s)/2);
@@ -94,36 +120,69 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
   }
 
 function draw(){
-    let L = layout();
-    let { w, h, pad, gridTop, cellH, isZoomed, s, gap } = L;
+    // Reset transform/state like other toys
+    try { ctx.setTransform(1,0,0,1,0,0); } catch {}
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
 
+    const isZoomedNow = panel.classList.contains('toy-zoomed');
+    const TARGET_S = isZoomedNow ? 84 : 42;
+    const MARGIN = 4;
+    const pad = 10;
+    const desiredH = 6 + TARGET_S + 6;
+    const desiredW = pad*2 + steps.length * (TARGET_S + MARGIN*2);
+
+    // Let the shared sizer apply CSS sizing (consistent with other toys)
+    try { sizing.setContentCssSize?.({ w: desiredW, h: desiredH }); } catch {}
+
+    // Now match backing store to CSS and read actual drawing size
+    const __s = resizeCanvasForDPR(canvas, ctx);
+    const w = __s.width, h = __s.height;
+
+    // Layout based on the actual pixel size (like bouncer)
+    const L = {
+      pad, w, h,
+      gridTop: 6,
+      cellW: Math.max(20, Math.floor((w - pad*2) / steps.length)),
+      cellH: Math.max(24, Math.floor(h - 6 - 6)),
+      isZoomed: isZoomedNow
+    };
+
+    // Clear
     ctx.clearRect(0,0,canvas.width,canvas.height);
-ctx.clearRect(0,0,canvas.width,canvas.height);
-            if (!window.__gridLoggedOnce){ window.__gridLoggedOnce = true; try {
-      const r = canvas.getBoundingClientRect();
-      console.log('[grid] draw', {w, h});
-      console.log('[grid] rect', r);
-    } catch{} }
 
+    
 
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+
+    // One-time log (post-size)
+    if (!window.__gridLoggedOnce){
+      window.__gridLoggedOnce = true;
+      try {
+        const r = canvas.getBoundingClientRect();
+        console.log('[grid] draw', {w, h});
+        console.log('[grid] rect', r);
+      } catch {}
+    }
     // Background guides + note strips
     
     
     // Cells
         for (let i=0;i<steps.length;i++){
       const s = steps[i];
-      const b = blockRectForIndex(i);
+      const b = blockRectForIndex(i, L);
       // Use shared cube visual
       drawBlock(ctx, b, {
       baseColor: s.active ? '#f4932f' : '#293042',
       active: !!s.active,
       noteLabel: null,
       showArrows: false,
-      variant: isZoomed ? 'block' : 'button'
+      variant: L.isZoomed ? 'block' : 'button'
     });
+    // visibility outline (debug-safety)
+    ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1; ctx.strokeRect(b.x+0.5,b.y+0.5,b.w-1,b.h-1); ctx.restore();
     // flash overlay on click
     if (s.flash && s.flash > 0){ ctx.save(); ctx.globalAlpha = Math.min(0.35, 0.25 * s.flash); ctx.fillStyle = '#ffffff'; ctx.fillRect(b.x, b.y, b.w, b.h); ctx.restore(); }
-    if (isZoomed){
+    if (L.isZoomed){
       const label = noteList[s.noteIndex] || '?';
       drawTileLabelAndArrows(ctx, b, { label, active: !!s.active, zoomed: true });
     }
@@ -131,14 +190,21 @@ ctx.clearRect(0,0,canvas.width,canvas.height);
 
   // Playhead overlay (match square height)
     if (currentCol >= 0){
-      const br = blockRectForIndex(currentCol);
+      const br = blockRectForIndex(currentCol, L);
       ctx.fillStyle = 'rgba(255,255,255,0.06)';
       ctx.fillRect(br.x, br.y, br.w, br.h);
       ctx.strokeStyle = 'rgba(255,255,255,0.25)';
       ctx.lineWidth = 2;
       ctx.strokeRect(br.x+1, br.y+1, br.w-2, br.h-2);
     }
+  
+    // debug pixel last so it can't be overdrawn
+    ctx.save(); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = '#fff'; ctx.fillRect(2,2,2,2);
+    ctx.restore();
+    paintedOnce = true;
   }
+
 
   function ping(i){
     const s = steps[i]; if (!s) return;
@@ -158,11 +224,18 @@ ctx.clearRect(0,0,canvas.width,canvas.height);
   function toggle(i){ const s = steps[i]; if (s) s.active = !s.active; }
 
   function whichCell(pt){
-    const { pad, cellW, gridTop, cellH } = layout();
+    // Use current canvas size via computed layout (same math as draw)
+    const isZoomedNow = panel.classList.contains('toy-zoomed');
+    const TARGET_S = isZoomedNow ? 84 : 42;
+    const MARGIN = 4;
+    const pad = 10;
+    const w = canvas.clientWidth || 0;
+    const cellW = Math.max(20, Math.floor((w - pad*2) / steps.length)) || (TARGET_S + MARGIN*2);
+    const gridTop = 6;
+    const cellH = Math.max(24, Math.floor((6+TARGET_S+6) - 6 - 6));
     const i = Math.floor((pt.x - pad) / cellW);
     if (i < 0 || i >= steps.length) return null;
-    const rect = blockRectForIndex(i);
-    // Hit test against the square rect (not the full column)
+    const rect = blockRectForIndex(i, { pad, gridTop, cellW, cellH, isZoomed: isZoomedNow });
     if (pt.x < rect.x || pt.x > rect.x + rect.w || pt.y < rect.y || pt.y > rect.y + rect.h) return null;
     return { i, rect };
   }
@@ -266,7 +339,13 @@ ctx.clearRect(0,0,canvas.width,canvas.height);
   panel.addEventListener('toy-zoom', (ev)=>{ try { sizing.setZoom(ev?.detail?.zoomed); } catch {} draw(); });
   try{ console.log('[grid] init complete', toyId); }catch{}
 
-  return {
+  
+  // kick off initial draw reliably (in case layout isn't settled yet)
+  try { draw(); } catch {}
+  try { requestAnimationFrame(()=> draw()); } catch {}
+  try { setTimeout(draw, 50); } catch {}
+  /*__initdraw__*/
+return {
     toyId,
     element: canvas,
     steps,
