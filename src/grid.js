@@ -63,19 +63,18 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
     const ro = new ResizeObserver(()=> draw());
     ro.observe(panel);
     ro.observe(body);
-    // Fallback redraw: try a few times after boot in case layout is late
-    try {
-      let tries = 0;
-      const id = setInterval(()=>{
-        if (paintedOnce || ++tries > 20) { clearInterval(id); return; }
-        draw();
-      }, 50);
-    } catch {}
-    /*__fallbackRAF__*/
-    
   } catch {}
 
-  const ctx = canvas.getContext('2d');
+  // Fallback redraw: try a few times after boot in case layout is late
+  try {
+    let tries = 0;
+    const id = setInterval(()=>{
+      if (paintedOnce || ++tries > 20) { clearInterval(id); return; }
+      draw();
+    }, 50);
+  } catch {}
+  /*__fallbackRAF__*/
+const ctx = canvas.getContext('2d');
   try{ console.log('[grid] canvas created', {panel, toyId}); }catch{}
 
   const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true });
@@ -129,14 +128,23 @@ function draw(){
     try { ctx.setTransform(1,0,0,1,0,0); } catch {}
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
 
+    
     const isZoomedNow = panel.classList.contains('toy-zoomed');
-    const TARGET_S = Math.round(BASE_BLOCK_SIZE_LOCAL * (sizing?.scale || 1)); /*__TARGET_FROM_BASE__*/
+    const TARGET_S = Math.round(BASE_BLOCK_SIZE_LOCAL * (sizing?.scale || 1));
     const MARGIN = 2;
     const pad = 10;
-    const desiredH = 6 + TARGET_S + 6;
-    const desiredW = null; // width controlled by container; we only set height
-// Let the shared sizer apply CSS sizing (consistent with other toys)
-    try { sizing.setContentCssSize?.({ w: desiredW, h: desiredH }); } catch {}
+
+    // Compute height from available width so squares determine height
+    const containerW = canvas.clientWidth || panel.clientWidth || body.clientWidth || canvas.getBoundingClientRect().width || 0;
+    const stepsLen = steps.length || 1;
+    const cellW = Math.max(20, Math.floor((containerW - pad*2) / stepsLen));
+    const squareFromW = Math.max(16, cellW - MARGIN*2);
+    const square = isZoomedNow ? squareFromW : Math.min(TARGET_S, squareFromW);
+
+    const desiredH = 6 + square + 6;
+    const scaleNow = (typeof sizing?.scale === 'number') ? sizing.scale : 1;
+    const desiredBaseH = Math.max(1, Math.round(desiredH / (scaleNow || 1)));
+    try { sizing.setContentCssSize?.({ h: desiredBaseH }); } catch {}
 
     // Now match backing store to CSS and read actual drawing size
     const __s = resizeCanvasForDPR(canvas, ctx);
