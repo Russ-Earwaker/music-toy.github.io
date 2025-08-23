@@ -20,7 +20,7 @@ export function randomizeWheel(handles, opts = {}){
   // busy (≈0.6) ⇒ near minFrac; quiet (≈1.2) ⇒ near maxFrac
   
   // Absolute minimum presence (user-asked): at least 6 spokes if possible
-  const MIN_SPOKES = Math.min(STEPS, 6);
+  const MIN_SPOKES = Math.min(STEPS, 3);
 
   // Map density -> fraction of active spokes:
   // busy (≈0.6) ⇒ near minFrac; quiet (≈1.2) ⇒ near maxFrac

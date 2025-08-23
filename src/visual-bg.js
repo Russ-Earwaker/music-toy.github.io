@@ -3,6 +3,15 @@ import { getIntensity, listToys } from './intensity.js';
 
 let canvas, ctx, raf=0, host=null;
 
+function hueForId(id){
+  try{
+    let h=0>>>0; const s=String(id);
+    for (let i=0;i<s.length;i++){ h = ((h*31) + s.charCodeAt(i)) >>> 0; }
+    return h % 360;
+  }catch{ return 30; }
+}
+
+
 function pickHost(){
   const a = document.getElementById('board');
   const b = document.querySelector('.board');
@@ -54,8 +63,9 @@ function draw(){
 
   // backdrop tint with global intensity (slightly stronger baseline so it's visible)
   const g = getIntensity();
+  const g2 = Math.min(1, g*2.0); // reaction boost
   ctx.globalAlpha = 1.0;
-  ctx.fillStyle = `rgba(20,24,32, ${0.28 + 0.22*g})`;
+  ctx.fillStyle = `rgba(20,24,32, ${0.24 + 0.32*g2})`;
   ctx.fillRect(0,0,w,h);
 
   // layered sine waves (baseline amplitude so you see motion even at idle)
@@ -71,25 +81,42 @@ function draw(){
       const y = baseY + Math.sin((x/dpr)*0.012 + t*speed) * amp;
       if (x===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
     }
-    ctx.strokeStyle = `rgba(240,142,43, ${0.12 + g*0.18})`;
-    ctx.lineWidth = Math.max(1, dpr*1.2);
+    ctx.strokeStyle = `rgba(240,142,43, ${0.12 + g2*0.24})`;
+    ctx.lineWidth = Math.max(1, dpr*1.5);
     ctx.stroke();
   }
 
   // subtle per-toy bars at bottom
+  const barH = Math.max(12*dpr, Math.min(144*dpr, h*0.24));
   const toys = listToys();
-  const barH = Math.max(2*dpr, Math.min(10*dpr, h*0.014));
+  ;
   const gap = 3*dpr;
   const usableW = w - gap*(toys.length+1);
   const bw = toys.length ? Math.max(2*dpr, usableW / Math.max(1,toys.length)) : 0;
   let x = gap;
-  ctx.fillStyle = `rgba(203,209,223, ${0.16 + 0.22*g})`;
+  ctx.fillStyle = `rgba(203,209,223, ${0.28 + 0.32*g})`;
   for (const id of toys){
     const v = getIntensity(id);
-    const bh = barH * (0.6 + 0.4*v);
+    const v2 = Math.min(1, v*2.2);
+    const vv = Math.pow(v2, 0.85);
+    const bh = barH * (0.12 + 0.88*vv);
+    const hue = hueForId(id);
+    // Saturation/Luma/Alpha rise with activity
+    const sat = (50 + 45*vv).toFixed(1);
+    const lum = (42 + 12*vv).toFixed(1);
+    const alp = (0.30 + 0.55*vv).toFixed(3);
+    ctx.fillStyle = `hsla(${hue}, ${sat}%, ${lum}%, ${alp})`;
     ctx.fillRect(x, h - bh - gap, bw, bh);
+    // Outline + small glow cap
+    ctx.strokeStyle = `hsla(${hue}, ${Math.max(30, 60-20*vv)}%, ${Math.max(20, 34-10*vv)}%, ${0.8})`;
+    ctx.lineWidth = Math.max(1, dpr*0.9);
+    ctx.strokeRect(x+0.5*dpr, h - bh - gap + 0.5*dpr, bw - 1*dpr, bh - 1*dpr);
+    // Add a brighter inner cap proportional to vv
+    const capH = Math.max(1.5*dpr, bh*0.25*vv);
+    ctx.fillStyle = `hsla(${hue}, ${Math.min(100, 70+30*vv)}%, ${Math.min(85, 60+25*vv)}%, ${0.35 + 0.45*vv})`;
+    ctx.fillRect(x, h - bh - gap, bw, capH);
     x += bw + gap;
-  }
+}
 }
 
 function loop(){

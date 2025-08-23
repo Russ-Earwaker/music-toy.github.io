@@ -9,7 +9,7 @@ import { initToySizing } from './toyhelpers-sizing.js';
 import { randomizeWheel } from './wheel-random.js';
 
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-const STEPS = 16, SEMIS = 12;
+const STEPS = 8, SEMIS = 12;
 
 function midiName(m){ const n = ((m%12)+12)%12, o = Math.floor(m/12)-1; return NOTE_NAMES[n] + o; }
 
@@ -157,7 +157,14 @@ export function buildWheel(selector, opts = {}){
   // Random / Reset (musical)
   function doRandom(){
     const pr = Number(panel?.dataset?.priority || '1') || 1;
-    const toyId = (panel?.dataset?.toy || 'wheel').toLowerCase();
+    let toyId = (panel && panel.dataset && panel.dataset.toyid) ? String(panel.dataset.toyid) : null;
+  if (!toyId){
+    const kind = (panel && panel.dataset && panel.dataset.toy ? String(panel.dataset.toy) : 'wheel').toLowerCase();
+    const c = (window.__wheelIds__ = window.__wheelIds__ || { n: 0 });
+    toyId = `${kind}-${++c.n}`;
+    try { panel.dataset.toyid = toyId; } catch {}
+  }
+  toyId = String(toyId).toLowerCase();
     randomizeWheel(handles, { toyId, priority: pr });
   }
   function doReset(){ for (let i=0;i<STEPS;i++) handles[i] = null; }
@@ -208,7 +215,7 @@ export function buildWheel(selector, opts = {}){
   // Timing loop
   function tick(dt){
     const bpm = getBpm ? getBpm() : 120;
-    const stepDur = (60/bpm)/4; // 16th
+    const stepDur = (60/bpm) * 4 / STEPS; // 1 bar / cycle
     phase += dt/1000/stepDur;
     while (phase >= 1){
       phase -= 1;

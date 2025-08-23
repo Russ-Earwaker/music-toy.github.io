@@ -81,10 +81,29 @@ function tick(){
   } catch {}
 }
 
+
+/* --- Discover toy ids from DOM so analyser taps work even without toy-hit --- */
+function seedFromDOM(){
+  try{
+    const panels = Array.from(document.querySelectorAll('.toy-panel'));
+    for (const p of panels){
+      const id = (p && p.dataset && (p.dataset.toyid || p.dataset.toy)) ? String(p.dataset.toyid || p.dataset.toy).toLowerCase() : null;
+      if (id) ensureToyState(id);
+    }
+  } catch {}
+}
+function watchDOM(){
+  try {
+    const board = document.getElementById('board') || document.querySelector('.board') || document.body;
+    const mo = new MutationObserver(()=> seedFromDOM());
+    mo.observe(board, { childList:true, subtree:true, attributes:true, attributeFilter:['data-toy','class'] });
+  } catch {}
+}
 export function startIntensityMonitor(){
   if (!intervalId){
-    // Ensure at least master exists so we always emit
     ensureToyState('master');
+    seedFromDOM();
+    watchDOM();
     intervalId = setInterval(tick, 1000/REFRESH_HZ);
   }
 }

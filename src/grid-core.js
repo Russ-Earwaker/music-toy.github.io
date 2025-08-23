@@ -23,7 +23,14 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
   const shell = document.querySelector(selector);
   if (!shell){ console.warn('[grid] missing', selector); return null; }
   const panel = shell.closest?.('.toy-panel') || shell;
-  const toyId = panel.dataset.toy || nextGridId();
+  let toyId = (panel && panel.dataset && panel.dataset.toyid) ? String(panel.dataset.toyid) : null;
+  if (!toyId){
+    const kind = (panel && panel.dataset && panel.dataset.toy ? String(panel.dataset.toy) : 'grid').toLowerCase();
+    const g = (window.__gridIds__ = window.__gridIds__ || { n: 0 });
+    toyId = `${kind}-${++g.n}`;
+    try { panel.dataset.toyid = toyId; } catch {}
+  }
+  toyId = String(toyId).toLowerCase();
   panel.dataset.toy = toyId;
   if (!panel.id) panel.id = 'panel-' + toyId;
   const ui = initToyUI(panel, { toyName: title, defaultInstrument });

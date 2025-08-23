@@ -2,7 +2,7 @@
 // Random seeding for Rippler, now respecting Polite Random *and* mapping degrees to noteList indices.
 
 import { noteList } from './utils.js';
-import { getPoliteDensity } from './polite-random.js';
+import { getPoliteDensityForToy } from './polite-random.js';
 
 // Map semitone offsets (e.g., [0,3,5,7,10]) to index positions within an octave of noteList.
 // Assumes noteList is a minor-pentatonic listing per octave (5 notes), which matches this project.
@@ -13,6 +13,7 @@ function makeDegreeIndexMap(pentatonicOffsets){
 }
 
 export function randomizeAllImpl(ctx){
+  const toyId = (ctx?.toyId || ctx?.panel?.dataset?.toyid || ctx?.panel?.dataset?.toy || 'rippler').toLowerCase();
   const {
     blocks, layoutBlocks, clearPattern,
     recordOnly, isActive, setRecording,
@@ -40,7 +41,7 @@ export function randomizeAllImpl(ctx){
 
   // How many blocks to activate (polite with global intensity)
   const baseK = 2 + (Math.random() < 0.6 ? 1 : 0); // 2 or 3
-  const density = getPoliteDensity(1, 1);          // neutral priority
+  const density = getPoliteDensityForToy(toyId, 1, { priority: 0.25, minScale: 0.10 });
   const K = clamp(Math.round(baseK * density), 1, Math.min(4, N));
 
   // Evenly distributed picks across N
