@@ -7,6 +7,8 @@ import { drawTileLabelAndArrows } from './ui-tiles.js';
 import { initToySizing, drawNoteStripsAndLabel, NOTE_BTN_H, whichThirdRect, drawThirdsGuides, drawBlock } from './toyhelpers.js';
 import { gateTriggerForToy } from './toy-audio.js';
 import { getPoliteDensity } from './polite-random.js';
+const BASE_BLOCK_SIZE_LOCAL = 42;
+
 
 function nextGridId(){
   try {
@@ -43,7 +45,7 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
 
   const canvas = document.createElement('canvas');
   canvas.style.display = 'block';
-  canvas.style.background = '#1b2233';
+  
   canvas.className = 'grid-canvas';
   canvas.style.display = 'block';
   panel.classList.add('toy-unzoomed');
@@ -110,7 +112,7 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
     const { pad, gridTop, cellW, cellH } = L;
     const isZoomed = L.isZoomed;
     const TARGET_S = isZoomed ? 84 : 42;
-    const MARGIN = 4;
+    const MARGIN = 2;
     const s = Math.min(TARGET_S, Math.min(cellW, cellH) - MARGIN*2);
     const xCell = pad + i * cellW;
     const yCell = gridTop;
@@ -125,8 +127,8 @@ function draw(){
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
 
     const isZoomedNow = panel.classList.contains('toy-zoomed');
-    const TARGET_S = isZoomedNow ? 84 : 42;
-    const MARGIN = 4;
+    const TARGET_S = Math.round(BASE_BLOCK_SIZE_LOCAL * (sizing?.scale || 1)); /*__TARGET_FROM_BASE__*/
+    const MARGIN = 2;
     const pad = 10;
     const desiredH = 6 + TARGET_S + 6;
     const desiredW = pad*2 + steps.length * (TARGET_S + MARGIN*2);
@@ -199,11 +201,7 @@ function draw(){
     }
   
     // debug pixel last so it can't be overdrawn
-    ctx.save(); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
-    ctx.fillStyle = '#fff'; ctx.fillRect(2,2,2,2);
-    ctx.restore();
-    paintedOnce = true;
-  }
+}
 
 
   function ping(i){
@@ -226,8 +224,8 @@ function draw(){
   function whichCell(pt){
     // Use current canvas size via computed layout (same math as draw)
     const isZoomedNow = panel.classList.contains('toy-zoomed');
-    const TARGET_S = isZoomedNow ? 84 : 42;
-    const MARGIN = 4;
+    const TARGET_S = Math.round(BASE_BLOCK_SIZE_LOCAL * (sizing?.scale || 1)); /*__TARGET_FROM_BASE__*/
+    const MARGIN = 2;
     const pad = 10;
     const w = canvas.clientWidth || 0;
     const cellW = Math.max(20, Math.floor((w - pad*2) / steps.length)) || (TARGET_S + MARGIN*2);
