@@ -1,15 +1,14 @@
 // src/main.js (final: no version suffixes; instruments populate on boot; single boot; robust samples-ready)
-import { DEFAULT_BPM, NUM_STEPS, ac, setBpm, ensureAudioContext, createScheduler, getLoopInfo } from './audio-core.js';
+import { DEFAULT_BPM, NUM_STEPS, ac, setBpm, ensureAudioContext, createScheduler, getLoopInfo, setToyVolume, setToyMuted } from './audio-core.js';
 import { initAudioAssets, triggerInstrument, getInstrumentNames } from './audio-samples.js';
 
 import { buildGrid, markPlayingColumn as markGridCol } from './grid.js';
 import { createBouncer } from './bouncer.js';
 import { createRippleSynth } from './ripplesynth.js';
+import { buildWheel } from './wheel.js';
 import { assertRipplerContracts, runRipplerSmoke } from './ripplesynth-safety.js';
 import { createLoopIndicator } from './loopindicator.js';
 import { initDragBoard, organizeBoard } from './board.js';
-
-
 
 if (!window.__booted__) {
   window.__booted__ = true;
@@ -54,7 +53,7 @@ if (!window.__booted__) {
         const s = g.steps[stepIndex];
         if (!s || !s.active) return;
         const nn = g.getNoteName ? g.getNoteName(stepIndex) : 'C4';
-        triggerInstrument(g.instrument || 'tone', nn, time);
+        triggerInstrument(g.instrument || 'tone', nn, time, (g.toyId || 'grid'));
         g.ping && g.ping(stepIndex);
       });
       const delayMs = Math.max(0, (ac ? (time - ac.currentTime) : 0) * 1000);
@@ -154,33 +153,75 @@ if (!window.__booted__) {
       const inst = [pick0('kick'), pick0('snare'), pick0('hat'), pick0('clap')][i] || names0[0] || 'tone';
       return buildGrid(sel, NUM_STEPS, { defaultInstrument: inst, title: titles[i] });
     }).filter(Boolean);
+    try{ console.log('[boot] grids:', grids.length); }catch{}
 
     // Other toys
     toys = [];
-    document.querySelectorAll('.toy-panel').forEach((panel) => {
+    let wheelUsed = false;
+    
+    // Ensure at least one Wheel panel exists
+    try {
+      const board = document.getElementById('board');
+      const panels = Array.from(document.querySelectorAll('.toy-panel'));
+      const hasWheel = panels.some(p => (p.getAttribute('data-toy')||'').toLowerCase()==='wheel');
+      if (!hasWheel) {
+        const extras = panels.filter(p => (p.getAttribute('data-toy')||'').toLowerCase()==='bouncer');
+        const carrier = extras.length ? extras[extras.length-1] : null;
+        if (carrier) {
+          carrier.setAttribute('data-toy', 'wheel');
+        } else if (board) {
+          const sec = document.createElement('section');
+          sec.className = 'toy-panel';
+          sec.setAttribute('data-toy', 'wheel');
+          board.appendChild(sec);
+        }
+      }
+    } catch{}
+document.querySelectorAll('.toy-panel').forEach((panel) => {
       if (panel.dataset.toyInit === '1') return;
       const kind = (panel.getAttribute('data-toy') || '').toLowerCase();
       let inst = null;
+      
       try{
         if (kind === 'rippler' || kind === 'ripple') {
           inst = createRippleSynth(panel);
         } else if (kind === 'bouncer') {
           inst = createBouncer(panel);
+        } else if (kind === 'wheel') {
+          console.log('[wheel] build start', panel);
+          let wheelInstrument = 'slap bass guitar';
+          buildWheel(panel, {
+            onNote: (midi, name, vel)=>{ try { const ac = ensureAudioContext(); /* wheel */ triggerInstrument(wheelInstrument || 'slap bass guitar', name, ac.currentTime + 0.0005, 'wheel'); } catch(e){} },
+            getBpm: ()=> ((getLoopInfo && getLoopInfo().bpm) || DEFAULT_BPM)
+          });
+          inst = { setInstrument: (n)=> { wheelInstrument = n; } };
+          try { panel.addEventListener('toy-instrument', (e)=>{ wheelInstrument = (e?.detail?.value) || wheelInstrument; }); } catch {}
         } else {
           return;
         }
         const ni = getInstrumentNames();
-        inst?.setInstrument?.( (ni.find(n=>n.toLowerCase().includes('kalimba')) || ni[0] || 'tone') );
+        let _def = (ni.find(n => n.toLowerCase().includes('kalimba')) || ni[0] || 'tone');
+        if ((panel.dataset.toy||'').toLowerCase()==='wheel'){
+          _def = (ni.find(n => /slap.*bass|bass.*slap/i.test(n))
+               || ni.find(n => /slap/i.test(n))
+               || ni.find(n => /bass/i.test(n))
+               || _def);
+        }
+        inst?.setInstrument?.(_def);
         toys.push(inst);
         panel.dataset.toyInit = '1';
       }catch(e){
         console.error('[boot] toy init failed for', kind, e);
       }
-    });
+});
     console.log('[boot] toys:', toys.length);
     try { assertRipplerContracts(); runRipplerSmoke(); } catch {}
 
     setupTransport();
+
+    // Per-toy volume + mute
+    window.addEventListener('toy-volume', (e)=>{ try { setToyVolume(e?.detail?.toyId, e?.detail?.value); } catch{} });
+    window.addEventListener('toy-mute',   (e)=>{ try { setToyMuted(e?.detail?.toyId, e?.detail?.muted); } catch{} });
 
     // Auto-unlock on first gesture anywhere
     let armed = true;
