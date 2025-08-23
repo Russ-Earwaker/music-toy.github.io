@@ -109,11 +109,14 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
 
   
   function blockRectForIndex(i, L){
-    const { pad, gridTop, cellW, cellH } = L;
-    const isZoomed = L.isZoomed;
-    const TARGET_S = isZoomed ? 84 : 42;
+    const { pad, gridTop, cellW, cellH, isZoomed } = L;
     const MARGIN = 2;
-    const s = Math.min(TARGET_S, Math.min(cellW, cellH) - MARGIN*2);
+    const target = Math.round(BASE_BLOCK_SIZE_LOCAL * ( (typeof sizing?.scale==='number' ? sizing.scale : 1) ));
+    // Preferred square size per mode
+    let s = Math.min(cellW, cellH) - MARGIN*2;
+    if (!isZoomed){
+      s = Math.min(s, target); // standard: cap to target so cubes match bouncer
+    } // zoom: fill the cell
     const xCell = pad + i * cellW;
     const yCell = gridTop;
     const bx = Math.floor(xCell + (cellW - s)/2);
@@ -131,9 +134,8 @@ function draw(){
     const MARGIN = 2;
     const pad = 10;
     const desiredH = 6 + TARGET_S + 6;
-    const desiredW = pad*2 + steps.length * (TARGET_S + MARGIN*2);
-
-    // Let the shared sizer apply CSS sizing (consistent with other toys)
+    const desiredW = null; // width controlled by container; we only set height
+// Let the shared sizer apply CSS sizing (consistent with other toys)
     try { sizing.setContentCssSize?.({ w: desiredW, h: desiredH }); } catch {}
 
     // Now match backing store to CSS and read actual drawing size
@@ -222,17 +224,16 @@ function draw(){
   function toggle(i){ const s = steps[i]; if (s) s.active = !s.active; }
 
   function whichCell(pt){
-    // Use current canvas size via computed layout (same math as draw)
     const isZoomedNow = panel.classList.contains('toy-zoomed');
-    const TARGET_S = Math.round(BASE_BLOCK_SIZE_LOCAL * (sizing?.scale || 1)); /*__TARGET_FROM_BASE__*/
     const MARGIN = 2;
     const pad = 10;
     const w = canvas.clientWidth || 0;
-    const cellW = Math.max(20, Math.floor((w - pad*2) / steps.length)) || (TARGET_S + MARGIN*2);
+    const stepsLen = steps.length || 1;
+    const cellW = Math.max(20, Math.floor((w - pad*2) / stepsLen));
     const gridTop = 6;
-    const cellH = Math.max(24, Math.floor((6+TARGET_S+6) - 6 - 6));
+    const cellH = Math.max(24, Math.floor(( (6 + (Math.round(BASE_BLOCK_SIZE_LOCAL * (sizing?.scale || 1))) + 6)) - 6 - 6 ));
     const i = Math.floor((pt.x - pad) / cellW);
-    if (i < 0 || i >= steps.length) return null;
+    if (i < 0 || i >= stepsLen) return null;
     const rect = blockRectForIndex(i, { pad, gridTop, cellW, cellH, isZoomed: isZoomedNow });
     if (pt.x < rect.x || pt.x > rect.x + rect.w || pt.y < rect.y || pt.y > rect.y + rect.h) return null;
     return { i, rect };
