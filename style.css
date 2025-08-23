@@ -171,7 +171,7 @@ main { flex: 1 1 auto; display: block; }
 
 .toy-header { cursor: move; padding:8px 10px; background:linear-gradient(#191919,#141414); border-bottom:1px solid #222; font:13px/1.2 system-ui,sans-serif; color:#ddd; display:flex; align-items:center; justify-content:space-between; }
 
-.toy-body { position: relative; padding: 10px; }
+.toy-body { position: relative; padding: 10px; overflow: hidden; }
 
 .toy-header button.active { outline: 2px solid #ff8c00; }
 /* Top app header bar */

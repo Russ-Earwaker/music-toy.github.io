@@ -4,7 +4,7 @@ import { NUM_STEPS } from './audio-core.js';
 import { triggerInstrument } from './audio-samples.js';
 import { initToyUI } from './toyui.js';
 import { drawTileLabelAndArrows } from './ui-tiles.js';
-import { initToySizing, drawNoteStripsAndLabel, NOTE_BTN_H, whichThirdRect, drawThirdsGuides } from './toyhelpers.js';
+import { initToySizing, drawNoteStripsAndLabel, NOTE_BTN_H, whichThirdRect, drawThirdsGuides, drawBlock } from './toyhelpers.js';
 import { gateTriggerForToy } from './toy-audio.js';
 import { getPoliteDensity } from './polite-random.js';
 
@@ -48,92 +48,104 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
   const ctx = canvas.getContext('2d');
   try{ console.log('[grid] canvas created', {panel, toyId}); }catch{}
 
-  const sizing = initToySizing(panel, canvas, ctx);
+  const sizing = initToySizing(panel, canvas, ctx, { aspectFrom: (wCss)=> 10 + 42 + 10 });
+  /* sizing init hook */
+  try { sizing.setZoom(panel.classList.contains('toy-zoomed')); } catch {}
   const worldW = ()=> (sizing?.vw?.() || body.clientWidth || 356);
   const worldH = ()=> (sizing?.vh?.() || body.clientHeight || 240);
 
   const c4Index = Math.max(0, noteList.indexOf('C4'));
   let currentCol = -1;
+  // Explicit square size & spacing (keeps visuals consistent across toys)
+  function squareSize(){
+    const scale = (sizing && typeof sizing.scale==='number') ? sizing.scale : 1;
+    const BASE = 42; // matches other toys at zoom=1
+    return Math.max(20, Math.round(BASE * scale));
+  }
+  function squareGap(){ return Math.max(6, Math.round(squareSize() * 0.35)); }
+
   const steps = Array.from({length:numSteps}, ()=>({ active:false, flash:0, noteIndex:c4Index }));
 
   function layout(){
     const pad = 10;
     const w = worldW(), h = worldH();
     resizeCanvasForDPR(canvas, ctx);
-    const gridTop = NOTE_BTN_H + pad*1.2;
-    const cellW = Math.max(24, Math.floor((w - pad*2) / steps.length));
-    const cellH = Math.floor((h - gridTop - pad*1.5));
-    return { pad, w, h, gridTop, cellW, cellH };
+    const isZoomed = panel.classList.contains('toy-zoomed');
+    const gridTop = pad;
+    // cellH is just remaining height; vertical size is driven by squareSize()
+    const s = squareSize();
+    const gap = squareGap();
+    const cellH = Math.floor(h - gridTop - pad);
+    return { pad, w, h, gridTop, cellH, isZoomed, s, gap };
   }
 
-  function draw(){
+  
+  function blockRectForIndex(i){
     const L = layout();
-    const { w, h, pad, gridTop, cellW, cellH } = L;
-    ctx.clearRect(0,0,w,h);
-    // DEBUG draw probe: light tint to confirm paint (remove later)
-    ctx.fillStyle = 'rgba(0,128,255,0.05)';
-    ctx.fillRect(0,0,w,h);
-    if (!window.__gridLoggedOnce){ window.__gridLoggedOnce = true; try {
+    const { pad, gridTop, s, gap } = L;
+    const bx = pad + i * (s + gap);
+    const by = gridTop + 4;
+    return { x: bx|0, y: by|0, w: s|0, h: s|0 };
+  }
+
+function draw(){
+    let L = layout();
+    let { w, h, pad, gridTop, cellH, isZoomed, s, gap } = L;
+    // compute desired width from content
+    const desiredW = pad*2 + steps.length * s + (steps.length - 1) * gap;
+    const currentCssW = (canvas.clientWidth|0);
+    if (currentCssW !== desiredW){
+      // Expand canvas and body so the panel (fit-content) grows
+      canvas.style.width = desiredW + 'px';
+      if (body && body.style) body.style.width = (desiredW + pad*2) + 'px';
+      resizeCanvasForDPR(canvas, ctx);
+      L = layout(); // refresh after width change
+      ({ w, h, pad, gridTop, cellH, isZoomed, s, gap } = L);
+    }
+
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+            if (!window.__gridLoggedOnce){ window.__gridLoggedOnce = true; try {
       const r = canvas.getBoundingClientRect();
       console.log('[grid] draw', {w, h});
       console.log('[grid] rect', r);
     } catch{} }
-    canvas.style.background = 'rgba(0,128,255,0.08)';
-
-    // Guard: if panel hasn't laid out yet, assign a minimum drawing area
-    const minW = Math.max(200, w || 0);
-    const minH = Math.max(140, h || 0);
-    if (minW !== w || minH !== h){
-      resizeCanvasForDPR(canvas, minW, minH);
-    }
 
 
     // Background guides + note strips
-    const headerBounds = { x: 0, y: 0, w, h };
-    drawNoteStripsAndLabel(ctx, headerBounds, ui.instrument);
-
+    
+    
     // Cells
-    for (let i=0;i<steps.length;i++){
-      const x = pad + i * cellW;
-      const y = gridTop;
+        for (let i=0;i<steps.length;i++){
       const s = steps[i];
-
-      // Cell background
-      ctx.fillStyle = 'rgba(255,255,255,0.10)';
-      ctx.fillRect(x+1, y, cellW-2, cellH);
-      ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(x+0.5, y+0.5, cellW-1, cellH-1);
-
-      // Active fill
-      if (s.active){
-        const hue = 200;
-        const a = 0.55; // make clearly visible
-        ctx.fillStyle = `hsla(${hue},70%,52%,${a})`;
-        ctx.fillRect(x+3, y+3, cellW-6, cellH-6);
-        ctx.strokeStyle = `hsla(${hue},80%,70%,0.9)`;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x+2.5, y+2.5, cellW-5, cellH-5);
-      }
-
-      // Note label+arrows at the top of each cell
-      const r = { x, y: y- NOTE_BTN_H, w: cellW, h: NOTE_BTN_H };
+      const b = blockRectForIndex(i);
+      // Use shared cube visual
+      drawBlock(ctx, b, {
+      baseColor: s.active ? '#f4932f' : '#293042',
+      active: !!s.active,
+      noteLabel: null,
+      showArrows: false,
+      variant: isZoomed ? 'block' : 'button'
+    });
+    if (isZoomed){
       const label = noteList[s.noteIndex] || '?';
-      drawTileLabelAndArrows(ctx, r, { label, active: s.active, zoomed: panel.classList.contains('toy-zoomed') });
+      drawTileLabelAndArrows(ctx, b, { label, active: !!s.active, zoomed: true });
     }
+  }
 
-    // Playhead overlay
+  // Playhead overlay (match square height)
     if (currentCol >= 0){
-      const xph = pad + currentCol * cellW;
+      const br = blockRectForIndex(currentCol);
       ctx.fillStyle = 'rgba(255,255,255,0.06)';
-      ctx.fillRect(xph, gridTop, cellW, cellH);
+      ctx.fillRect(br.x, br.y, br.w, br.h);
       ctx.strokeStyle = 'rgba(255,255,255,0.25)';
       ctx.lineWidth = 2;
-      ctx.strokeRect(xph+1, gridTop+1, cellW-2, cellH-2);
+      ctx.strokeRect(br.x+1, br.y+1, br.w-2, br.h-2);
     }
-
-    // Thirds guides overlay (tap areas)
-    drawThirdsGuides(ctx, { x:0, y:gridTop, w, h: cellH });
+    // Thirds guides overlay (tap areas) only in zoom
+    if (panel.classList.contains('toy-zoomed')){
+      const { w, gridTop, cellH } = layout();
+      drawThirdsGuides(ctx, { x:0, y:gridTop, w, h: cellH });
+    }
   }
 
   function ping(i){
@@ -154,14 +166,13 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
   function toggle(i){ const s = steps[i]; if (s) s.active = !s.active; }
 
   function whichCell(pt){
-    const L = layout();
-    const { pad, gridTop, cellW, cellH } = L;
-    if (pt.y < gridTop) return null;
-    const i = Math.floor((pt.x - pad) / cellW);
+    const { pad, s, gap } = layout();
+    const stepW = s + gap;
+    const i = Math.floor((pt.x - pad + gap*0.5) / stepW);
     if (i < 0 || i >= steps.length) return null;
-    const x = pad + i * cellW;
-    const y = gridTop;
-    return { i, rect: { x, y, w: cellW, h: cellH } };
+    const rect = blockRectForIndex(i);
+    if (pt.x < rect.x || pt.x > rect.x + rect.w || pt.y < rect.y || pt.y > rect.y + rect.h) return null;
+    return { i, rect };
   }
 
   function onPointer(ev){
@@ -171,14 +182,19 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
     const hit = whichCell({ x, y });
     if (!hit) return;
     const { i, rect } = hit;
-    const where = whichThirdRect(rect, y);
-    if (where === 'up') setNoteIndex(i, +1);
-    else if (where === 'toggle') toggle(i);
-    else if (where === 'down') setNoteIndex(i, -1);
+    if (panel.classList.contains('toy-zoomed')){
+      const where = whichThirdRect(rect, y);
+      if (where === 'up') setNoteIndex(i, +1);
+      else if (where === 'toggle') toggle(i);
+      else if (where === 'down') setNoteIndex(i, -1);
+    } else {
+      // standard mode: toggle-only
+      toggle(i);
+    }
     draw();
   }
 
-  canvas.addEventListener('click', onPointer);
+  canvas.addEventListener('pointerdown', onPointer);
 
   function clear(){
     for (const s of steps){ s.active=false; s.flash=0; s.noteIndex=c4Index; }
@@ -247,7 +263,7 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
   draw();
   requestAnimationFrame(draw);
   window.addEventListener('resize', draw);
-  panel.addEventListener('toy-zoom', draw);
+  panel.addEventListener('toy-zoom', (ev)=>{ try { sizing.setZoom(ev?.detail?.zoomed); } catch {} draw(); });
   try{ console.log('[grid] init complete', toyId); }catch{}
 
   return {

@@ -95,55 +95,77 @@ export function randomizeRects(rects, boundsOrW, hMaybe, pad = EDGE_PAD){
 
 // ---------- drawing ----------
 // ---------- drawing ----------
+
 export function drawBlock(ctx, b, opts = {}){
-  const { baseColor = '#ff8c00', active = false, offsetX = 0, offsetY = 0, noteLabel = null, showArrows = true } = opts;
-  const x = b.x + offsetX, y = b.y + offsetY, w = b.w, h = b.h;
+  const {
+    baseColor = '#ff8c00',
+    active = false,
+    offsetX = 0,
+    offsetY = 0,
+    noteLabel = null,
+    showArrows = true,
+    variant = 'block' // 'block' | 'button'
+  } = opts;
+  const x = (b.x|0) + offsetX, y = (b.y|0) + offsetY, w = (b.w|0), h = (b.h|0);
 
   // background
   ctx.fillStyle = baseColor;
   ctx.fillRect(x, y, w, h);
 
-  // active pulse overlay
-  if (active) {
-    ctx.save();
-    ctx.fillStyle = 'rgba(255,255,255,0.25)';
-    ctx.fillRect(x, y, w, h);
-    ctx.restore();
+  // variant styling
+  if (variant === 'button'){
+    // Beveled button look
+    // base bevel
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x+1, y+1, w-2, 2);
+    ctx.globalAlpha = 0.2;
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(x+1, y + h - 3, w-2, 2);
+    // if active, add inner glow
+    if (active){
+      ctx.globalAlpha = 0.12;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(x+2, y+2, w-4, Math.max(2, Math.floor(h*0.35)));
+      ctx.globalAlpha = 1;
+    }
+  } else {
+    // active pulse overlay (legacy block look)
+    if (active) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.fillRect(x, y, w, h);
+      ctx.restore();
+    }
   }
 
-  // border
-  ctx.strokeStyle = 'rgba(0,0,0,0.8)';
-  ctx.globalAlpha = 0.35;
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-  ctx.globalAlpha = 1;
+  // stroke
+  ctx.strokeStyle = active ? 'rgba(255,255,255,0.50)' : 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x+0.5, y+0.5, w-1, h-1);
 
-  // up/down triangles for note steps (only in zoom/edit)
-  if (showArrows) {
-    ctx.fillStyle = 'rgba(255,255,255,0.75)';
-    // up
-    ctx.beginPath();
-    ctx.moveTo(x + w - 12, y + 4);
-    ctx.lineTo(x + w - 4,  y + 4);
-    ctx.lineTo(x + w - 8,  y + 10);
-    ctx.closePath();
-    ctx.fill();
-    // down
-    ctx.beginPath();
-    ctx.moveTo(x + w - 12, y + h - 4);
-    ctx.lineTo(x + w - 4,  y + h - 4);
-    ctx.lineTo(x + w - 8,  y + h - 10);
-    ctx.closePath();
-    ctx.fill();
+  // arrows + label (only if requested by caller)
+  if (showArrows || noteLabel != null){
+    // small top band behind label to separate visually (used in zoom mode)
+    if (noteLabel != null){
+      ctx.save();
+      ctx.globalAlpha = 0.06;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(x, y - NOTE_BTN_H, w, NOTE_BTN_H);
+      ctx.restore();
+    }
+
+    // arrows we draw via UI helper elsewhere; just render text label if provided
+    if (noteLabel != null){
+      ctx.fillStyle = '#fff';
+      ctx.font = '12px system-ui, sans-serif';
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'center';
+      ctx.fillText(String(noteLabel), x + w/2, y - NOTE_BTN_H/2);
+    }
   }
-
-  // label
-
-  ctx.fillStyle = '#fff';
-  ctx.font = '12px system-ui, sans-serif';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(String(noteLabel ?? ''), x + 6, y + h / 2);
 }
+
 
 export function drawNoteStripsAndLabel(ctx, b, label) {
   ctx.save();
