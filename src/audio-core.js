@@ -80,6 +80,7 @@ export function getToyGain(id='master'){
     g.gain.value = __toyGainValues.has(key) ? __toyGainValues.get(key) : 1.0;
     g.connect(getMaster());
     __toyGains.set(key, g);
+    if (!__toyGainValues.has(key)) __toyGainValues.set(key, 1.0);
   }
   return g;
 }
@@ -103,6 +104,10 @@ export function setToyMuted(id='master', muted=false){
 
 export function getToyVolume(id='master'){
   const key = String(id||'master').toLowerCase();
-  if (__toyGainValues.has(key)) return __toyGainValues.get(key);
-  return getToyGain(key).gain.value;
+  return __toyGainValues.has(key) ? __toyGainValues.get(key) : 1.0;
+}
+
+export function isToyMuted(id='master'){
+  const key = String(id||'master').toLowerCase();
+  return __toyMutes.get(key) === true;
 }
