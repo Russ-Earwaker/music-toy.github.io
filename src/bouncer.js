@@ -113,7 +113,7 @@ randomizeRects(blocks, {x:bx,y:by,w:bw,h:bh}, EDGE); })(); // removed legacy chr
   });
   
 function doRandom(){
-    const pr = Number(panel?.dataset?.priority ?? '0.25');
+    const pr = Number(panel?.dataset?.priority ?? '0.3');
     const density = getPoliteDensityForToy(toyId, 1, { priority: pr, minScale: 0.05 });
     // Determine how many blocks to keep active out of N (0..N), scale by density
     const N = blocks.length;
@@ -122,7 +122,7 @@ function doRandom(){
     // Base random area (60% of panel), then scale range with density (busy mix => smaller area)
     const w = worldW(), h = worldH();
     const baseBW = Math.round(w * 0.6), baseBH = Math.round(h * 0.6);
-    const areaScale = 0.2 + 0.8 * density; // busier => smaller area
+    const areaScale = 0.6 + 0.4 * density; // keep a wider distribution area
     const bw = Math.max(EDGE*4, Math.round(baseBW * areaScale));
     const bh = Math.max(EDGE*4, Math.round(baseBH * areaScale));
     const bx = Math.round((w - bw) / 2);
