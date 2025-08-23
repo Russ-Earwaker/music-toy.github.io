@@ -138,11 +138,6 @@ ctx.clearRect(0,0,canvas.width,canvas.height);
       ctx.lineWidth = 2;
       ctx.strokeRect(br.x+1, br.y+1, br.w-2, br.h-2);
     }
-    // Thirds guides overlay (tap areas) only in zoom
-    if (panel.classList.contains('toy-zoomed')){
-      const { w, gridTop, cellH } = layout();
-      drawThirdsGuides(ctx, { x:0, y:gridTop, w, h: cellH });
-    }
   }
 
   function ping(i){
@@ -163,11 +158,11 @@ ctx.clearRect(0,0,canvas.width,canvas.height);
   function toggle(i){ const s = steps[i]; if (s) s.active = !s.active; }
 
   function whichCell(pt){
-    const { pad, s, gap } = layout();
-    const stepW = s + gap;
-    const i = Math.floor((pt.x - pad + gap*0.5) / stepW);
+    const { pad, cellW, gridTop, cellH } = layout();
+    const i = Math.floor((pt.x - pad) / cellW);
     if (i < 0 || i >= steps.length) return null;
     const rect = blockRectForIndex(i);
+    // Hit test against the square rect (not the full column)
     if (pt.x < rect.x || pt.x > rect.x + rect.w || pt.y < rect.y || pt.y > rect.y + rect.h) return null;
     return { i, rect };
   }
@@ -185,9 +180,16 @@ ctx.clearRect(0,0,canvas.width,canvas.height);
       else if (where === 'toggle') toggle(i);
       else if (where === 'down') setNoteIndex(i, -1);
     } else {
-      // standard mode: toggle-only + flash
+      // standard mode: toggle-only + flash + play
       toggle(i);
       try{ ping(i); }catch{}
+      try{
+        const s = steps[i];
+        if (s && s.active){
+          const noteName = noteList[s.noteIndex] || 'C4';
+          gatedTrigger(ui.instrument, noteName);
+        }
+      }catch{}
     }
     draw();
   }
