@@ -227,11 +227,12 @@ function draw(){
     const isZoomedNow = panel.classList.contains('toy-zoomed');
     const MARGIN = 2;
     const pad = 10;
-    const w = canvas.clientWidth || 0;
+    const w = canvas.clientWidth  || (canvas.getBoundingClientRect?.().width|0)  || 0;
+    const h = canvas.clientHeight || (canvas.getBoundingClientRect?.().height|0) || 0;
     const stepsLen = steps.length || 1;
     const cellW = Math.max(20, Math.floor((w - pad*2) / stepsLen));
     const gridTop = 6;
-    const cellH = Math.max(24, Math.floor(( (6 + (Math.round(BASE_BLOCK_SIZE_LOCAL * (sizing?.scale || 1))) + 6)) - 6 - 6 ));
+    const cellH = Math.max(24, Math.floor(h - 6 - 6)); // match draw()
     const i = Math.floor((pt.x - pad) / cellW);
     if (i < 0 || i >= stepsLen) return null;
     const rect = blockRectForIndex(i, { pad, gridTop, cellW, cellH, isZoomed: isZoomedNow });
