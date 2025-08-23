@@ -296,3 +296,19 @@ main { flex: 1 1 auto; display: block; }
   /* Prevent content from extending the panel */
   overflow: hidden !important;
 }
+
+/* Allow compact height for unzoomed toys */
+.toy-panel.toy-unzoomed{ min-height: 0; }
+
+/* Compact body padding for grid (unzoomed) */
+.toy-panel.toy-unzoomed .toy-body{ padding-top: 6px; padding-bottom: 6px; }
+
+/* Grid: collapse unzoomed panel height by letting body size to content */
+.toy-panel.toy-unzoomed .toy-body{
+  position: relative !important;
+  left: auto !important; right: auto !important;
+  top: auto !important; bottom: auto !important;
+  min-height: 0 !important; min-width: 0 !important;
+  height: auto !important; width: auto !important;
+  overflow: visible !important;
+}

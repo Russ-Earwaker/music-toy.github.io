@@ -28,6 +28,8 @@ export function initToySizing(shell, canvas, ctx, { squareFromWidth = false, asp
   let scale = 1; // 1 = standard, 2 = zoomed
   const baseSlotW = measureWidthFallback();
   let slotW = baseSlotW;
+  let overrideCssW = null;
+  let overrideCssH = null;
 
   function baseHeightFor(wCss){
     if (squareFromWidth) return wCss;
@@ -54,8 +56,8 @@ export function initToySizing(shell, canvas, ctx, { squareFromWidth = false, asp
   }
 
   function applySize(){
-const cssW = Math.max(1, Math.floor(slotW * scale));
-    const cssH = Math.max(1, Math.floor(baseHeightFor(slotW) * scale));
+const cssW = Math.max(1, Math.floor((overrideCssW ?? (slotW)) * scale));
+    const cssH = Math.max(1, Math.floor((overrideCssH ?? baseHeightFor(slotW)) * scale));
     canvas.style.width  = cssW + 'px';
     canvas.style.height = cssH + 'px';
 
@@ -93,5 +95,18 @@ const cssW = Math.max(1, Math.floor(slotW * scale));
   // initial
   applySize();
 
-  return { vw, vh, setZoom, get scale(){ return scale; } };
+  function setContentWidth(w){
+    if (Number.isFinite(w)){
+      slotW = Math.max(1, Math.floor(w));
+      applySize();
+    }
+  }
+  function setContentCssSize({w=null,h=null}={}){
+    if (w!=null && Number.isFinite(w)) overrideCssW = Math.max(1, Math.floor(w));
+    if (h!=null && Number.isFinite(h)) overrideCssH = Math.max(1, Math.floor(h));
+    applySize();
+  }
+  function setContentCssHeight(h){ if (Number.isFinite(h)){ overrideCssH = Math.max(1, Math.floor(h)); applySize(); } }
+
+  return { vw, vh, setZoom, setContentWidth, setContentCssSize, setContentCssHeight, get scale(){ return scale; } };
 }

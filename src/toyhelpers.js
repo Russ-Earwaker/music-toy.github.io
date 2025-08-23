@@ -108,6 +108,12 @@ export function drawBlock(ctx, b, opts = {}){
   } = opts;
   const x = (b.x|0) + offsetX, y = (b.y|0) + offsetY, w = (b.w|0), h = (b.h|0);
 
+  // Clip to block rect to prevent any bevel/outline bleed
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.clip();
+
   // background
   ctx.fillStyle = baseColor;
   ctx.fillRect(x, y, w, h);
@@ -164,6 +170,7 @@ export function drawBlock(ctx, b, opts = {}){
       ctx.fillText(String(noteLabel), x + w/2, y - NOTE_BTN_H/2);
     }
   }
+  ctx.restore(); /*__restore_marker__*/
 }
 
 
@@ -250,4 +257,5 @@ export function roundRectPath(ctx, x, y, w, h, r=10){
   ctx.arcTo(x, y+h, x, y, r);
   ctx.arcTo(x, y, x+w, y, r);
   ctx.closePath();
+  ctx.restore();
 }
