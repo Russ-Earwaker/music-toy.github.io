@@ -9,6 +9,7 @@ export function makePointerHandlers(cfg) {
   const getRects = typeof cfg.getBlockRects === 'function' ? cfg.getBlockRects : (() => blocks);
   const onBlockDrag = typeof cfg.onBlockDrag === 'function' ? cfg.onBlockDrag : (() => {});
   const onBlockTap  = typeof cfg.onBlockTap  === 'function' ? cfg.onBlockTap  : (() => {});
+  const onBlockTapStd  = typeof cfg.onBlockTapStd  === 'function' ? cfg.onBlockTapStd  : (() => {});
   const isZoomed    = typeof cfg.isZoomed    === 'function' ? cfg.isZoomed    : (()=>false);
   const onBlockGrab = typeof cfg.onBlockGrab === 'function' ? cfg.onBlockGrab : (() => {});
   const onBlockDrop = typeof cfg.onBlockDrop === 'function' ? cfg.onBlockDrop : (() => {});
@@ -135,9 +136,9 @@ export function makePointerHandlers(cfg) {
     cfg.state.draggingBlock = null;
     if (wasDraggingBlock && wasIndex>=0) onBlockDrop(wasIndex);
     cfg.state.dragIndex = -1;
-    if (!wasDraggingBlock && localTap && isZoomed()) {
+    if (!wasDraggingBlock && localTap) {
       const p = getCanvasPos(canvas, e);
-      onBlockTap(localTap.index, p);
+      if (isZoomed()) onBlockTap(localTap.index, p); else onBlockTapStd(localTap.index, p);
     }
     if (capturedId != null && canvas.hasPointerCapture) {
       try { if (canvas.hasPointerCapture(capturedId)) canvas.releasePointerCapture(capturedId); } catch {}

@@ -26,7 +26,8 @@ const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d'); const ui  = initToyUI(panel, { toyName: 'Rippler' });
   let currentInstrument = (ui.instrument && ui.instrument !== 'tone') ? ui.instrument : 'kalimba'; try { ui.setInstrument(currentInstrument); } catch {}
   
-  panel.addEventListener('toy-instrument', (e)=>{ try{ currentInstrument = (e?.detail?.value)||currentInstrument; }catch{} });
+  const baseNoteName = (panel?.dataset?.ripplerOct || 'C4');
+panel.addEventListener('toy-instrument', (e)=>{ try{ currentInstrument = (e?.detail?.value)||currentInstrument; }catch{} });
 const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true }); const isZoomed = ()=> panel.classList.contains('toy-zoomed');
   panel.addEventListener('toy-zoom', (ev)=>{ try { const z = !!(ev?.detail?.zoomed); sizing.setZoom(z); try { setParticleBounds(canvas.width|0, canvas.height|0); } catch (e) {} } catch (e) {} });
 const EDGE=10; const W=()=> (canvas.clientWidth  || panel.clientWidth  || 356)|0, H=()=> (canvas.clientHeight || panel.clientHeight || 280)|0;
@@ -111,7 +112,7 @@ const EDGE=10; const W=()=> (canvas.clientWidth  || panel.clientWidth  || 356)|0
       setRecording: (v)=>{ recording = !!v; },
       setSkipNextBarRing: (v)=>{ skipNextBarRing = !!v; },
       setPlaybackMuted: (v)=>{ playbackMuted = !!v; },
-      baseIndex: (list)=> (list.indexOf('C4')>=0? list.indexOf('C4'):48),
+      baseIndex: (list)=> (list.indexOf(baseNoteName)>=0? list.indexOf(baseNoteName): (list.indexOf('C4')>=0? list.indexOf('C4'):48)),
       pentatonicOffsets: PENTATONIC_OFFSETS
     });
   } panel.addEventListener('toy-random', randomizeAll);
@@ -130,21 +131,15 @@ const EDGE=10; const W=()=> (canvas.clientWidth  || panel.clientWidth  || 356)|0
       const size = Math.max(20, Math.round(BASE*(sizing.scale||1)));
       const b = blocks[idx];
       const rect = { x:n2x(b.nx)-size/2, y:n2y(b.ny)-size/2, w:size, h:size };
-      const t1 = rect.y + rect.h/3, t2 = rect.y + 2*rect.h/3;
-      if (p.y < t1){
-        b.noteIndex = Math.max(0, Math.min(noteList.length-1, (b.noteIndex|0)+1));
-        const name = noteList[b.noteIndex] || 'C4';
-        b.rippleAge = 0; b.rippleMax = 0.85; triggerInstrument(currentInstrument, name, ac.currentTime + 0.0005);
-      } else if (p.y < t2){
-        const wasActive = !!b.active;
-        b.active = !b.active; // soft-mute: keep pattern membership
-        if (!wasActive && b.active){ try{ __schedState?.recordOnly?.add?.(idx); }catch{} }
-      } else {
-        b.noteIndex = Math.max(0, Math.min(noteList.length-1, (b.noteIndex|0)-1));
-        const name = noteList[b.noteIndex] || 'C4';
-        triggerInstrument(currentInstrument, name, ac.currentTime + 0.0005);
-      }
+      handleBlockTap(blocks, idx, p, rect, { noteList, ac, pattern, trigger: triggerInstrument, instrument: currentInstrument, __schedState });
     },
+    onBlockTapStd: (idx, p)=>{
+      const b = blocks[idx];
+      const was = !!b.active; b.active = !b.active;
+      if (!was && b.active){ try{ __schedState?.recordOnly?.add?.(idx); }catch{} }
+      try { const name = noteList[b.noteIndex] || 'C4'; triggerInstrument(currentInstrument, name, ac.currentTime + 0.0005); } catch {}
+    },
+
     onBlockDrag: (idx, newX, newY)=>{
       const size=Math.max(20, Math.round(BASE * (sizing.scale||1)));
       const cx=newX+size/2, cy=newY+size/2;
