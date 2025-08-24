@@ -7,6 +7,7 @@ import { resizeCanvasForDPR, clamp } from './utils.js';
 import { initToyUI } from './toyui.js';
 import { initToySizing } from './toyhelpers-sizing.js';
 import { randomizeWheel } from './wheel-random.js';
+import { ensureAudioContext, getLoopInfo } from './audio-core.js';
 
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 const STEPS = 8, SEMIS = 12;
@@ -48,10 +49,25 @@ export function buildWheel(selector, opts = {}){
   const worldH = ()=> (canvas.clientHeight || panel.clientHeight || 260);
 
   // Model
+
+  // Sync with global loop timing
+  function currentStepFromLoop(){
+    try{
+      const ac = ensureAudioContext();
+      const info = getLoopInfo ? getLoopInfo() : null;
+      const barLen = info?.barLen || ((60/ (typeof getBpm==='function' ? getBpm() : 120)) * 4);
+      const loopStart = info?.loopStartTime ?? ac.currentTime;
+      const t = ((ac.currentTime - loopStart) % barLen + barLen) % barLen;
+      const stepDur = barLen / STEPS;
+      const stepIdx = Math.floor(t / stepDur);
+      const stepPhase = (t - stepIdx*stepDur) / stepDur;
+      return { stepIdx, stepPhase };
+    }catch{ return { stepIdx: 0, stepPhase: 0 }; }
+  }
   const handles = Array(STEPS).fill(null); // per-step semitone or null
   let baseMidi = 60;   // C4
   let playing = true;
-  let step = 0;
+  let step = 0; let lastStep = -1;
   let lastTime = performance.now();
   let phase = 0;
 
@@ -182,12 +198,14 @@ export function buildWheel(selector, opts = {}){
     ctx.clearRect(0,0,W,H);
     ctx.fillStyle = '#0d1117'; ctx.fillRect(0,0,W,H);
 
-    // spokes
-    ctx.strokeStyle = '#252b36'; ctx.lineWidth = 2;
+    // spokes with current-step highlight
+    const { stepIdx } = currentStepFromLoop();
     for (let i=0;i<STEPS;i++){
       const a = spokeAngle(i);
       const x1 = cx + Math.cos(a)*Rmin, y1 = cy + Math.sin(a)*Rmin;
       const x2 = cx + Math.cos(a)*Rout, y2 = cy + Math.sin(a)*Rout;
+      ctx.strokeStyle = (i === stepIdx) ? '#a8b3cf' : '#252b36';
+      ctx.lineWidth = (i === stepIdx) ? 3 : 2;
       ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
     }
 
@@ -214,19 +232,20 @@ export function buildWheel(selector, opts = {}){
 
   // Timing loop
   function tick(dt){
-    const bpm = getBpm ? getBpm() : 120;
-    const stepDur = (60/bpm) * 4 / STEPS; // 1 bar / cycle
-    phase += dt/1000/stepDur;
-    while (phase >= 1){
-      phase -= 1;
+    // Align to global loop; trigger notes exactly at step boundaries
+    const { stepIdx } = currentStepFromLoop();
+    if (stepIdx !== lastStep){
+      step = stepIdx;
       const semi = handles[step];
       if (semi != null){
-        const midi = baseMidi + semi;
-        const name = midiName(midi);
-        const vel = 0.9;
-        if (typeof onNote === 'function') { try { onNote(midi, name, vel); } catch {} }
+        try{
+          const ac = ensureAudioContext();
+          const midi = baseMidi + semi;
+          const name = midiName(midi);
+          if (typeof onNote === 'function') onNote(midi, name, 0.9);
+        }catch{}
       }
-      step = (step + 1) % STEPS;
+      lastStep = stepIdx;
     }
   }
 
@@ -252,6 +271,6 @@ export function buildWheel(selector, opts = {}){
     setInstrument: ui.setInstrument,
     get instrument(){ return ui.instrument; },
     reset: doReset,
-    onLoop: ()=>{} // no-op; timing handled internally
+    onLoop: ()=>{ lastStep = -1; step = 0; }
   };
 }
