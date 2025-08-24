@@ -12,34 +12,15 @@ import { circleRectHit } from './bouncer-helpers.js';
 import { BASE_BLOCK_SIZE, BASE_CANNON_R, BASE_BALL_R, MAX_SPEED, LAUNCH_K } from './bouncer-consts.js';
 import { createImpactFX } from './bouncer-impact.js';
 import { getPoliteDensityForToy } from './polite-random.js';
-// palette helpers: minor pentatonic aligned with Wheel/Rippler
-function buildPentatonicPalette(noteList, rootName='C4', mode='minor', octaves=2){
-  const baseIx = noteList.indexOf(rootName)>=0 ? noteList.indexOf(rootName) : 48; // C4 fallback
-  const minor = [0,3,5,7,10]; // semitone offsets
-  const major = [0,2,4,7,9];
-  const offs = (mode==='major') ? major : minor;
-  const out = [];
-  const span = Math.max(1, Math.min(octaves, 3));
-  for (let o=0;o<span;o++){
-    for (let k=0;k<offs.length;k++){
-      const ix = baseIx + offs[k] + o*12;
-      if (ix >= 0 && ix < noteList.length) out.push(ix);
-    }
-  }
-  return out.length ? out : [baseIx];
-}
+import { buildPentatonicPalette, processVisQ as processVisQBouncer, doRandomImpl, drawEdgeFlash } from './bouncer-actions.js';
 export function createBouncer(selector){
-  // Runtime state predecl (avoid TDZ in handlers/draw)
   let handle;
   let draggingHandle, dragStart, dragCurr;
   let draggingBlock, dragBlockRef, dragOffset;
   let zoomDragCand, zoomDragStart, zoomTapT;
   let lastLaunch, launchPhase, nextLaunchAt, prevNow, ball;
-  // Predeclare interaction/state vars to avoid TDZ issues in handlers/draw
   const BOUNCER_BARS_PER_LIFE = 1; // duration of a shot in bars
  const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector; if (!shell) return null; const panel = shell.closest('.toy-panel') || shell; const ui = initToyUI(panel, { toyName: 'Bouncer', defaultInstrument: 'Retro Square' });
-  
-  // Sync instrument from UI default and listen for changes
   let instrument = ui.instrument;
   panel.addEventListener('toy-instrument', (e)=>{ try{ instrument = (e?.detail?.value)||instrument; }catch{} });
 const toyId = (panel && panel.dataset && panel.dataset.toy ? String(panel.dataset.toy) : 'bouncer').toLowerCase(); 
@@ -49,7 +30,6 @@ const toyId = (panel && panel.dataset && panel.dataset.toy ? String(panel.datase
       if (map.bot){   map.bot.x = w/2 - half;   map.bot.y = h-EDGE-s;    map.bot.w = s; map.bot.h = s; }
     }
   }
-  // --- Canvas world dimensions in CSS pixels (match what we draw) ---
   function __getCssCanvasSize(){
     try {
       const r = canvas.getBoundingClientRect();
@@ -60,7 +40,6 @@ const toyId = (panel && panel.dataset && panel.dataset.toy ? String(panel.datase
   }
   const worldW = ()=> __getCssCanvasSize().w;
   const worldH = ()=> __getCssCanvasSize().h;
-  // Initialize interaction state early to avoid TDZ/undefined during UI init
   handle = { x: worldW()*0.22, y: worldH()*0.5 }; draggingHandle = false; dragStart = null; dragCurr = null;
   draggingBlock = false; dragBlockRef = null; dragOffset = {dx:0, dy:0}; zoomDragCand = null; zoomDragStart = null; zoomTapT = null; lastLaunch = null; launchPhase = 0; nextLaunchAt = null; prevNow = 0; ball = null;
   draggingBlock = false; dragBlockRef = null; dragOffset = {dx:0, dy:0};
@@ -71,10 +50,8 @@ const toyId = (panel && panel.dataset && panel.dataset.toy ? String(panel.datase
     noteIndex: 0, active: true, flash: 0, lastHitAT: 0
   , oct:4 }));
   (()=>{ const w=worldW(), h=worldH(); const bx=Math.round(w*0.2), by=Math.round(h*0.2), bw=Math.round(w*0.6), bh=Math.round(h*0.6); 
-  // Build shared minor pentatonic palette aligned with Wheel/Rippler (root C4)
   const palette = buildPentatonicPalette(noteList, 'C4', 'minor', 1);
   function stepIdxInPalette(currIdx, dir){
-    // Find nearest index in palette, then move ±1 in palette order
     if (!Array.isArray(palette) || !palette.length) return currIdx||0;
     let nearest = 0, bestd = Infinity;
     for (let i=0;i<palette.length;i++){
@@ -84,7 +61,6 @@ const toyId = (panel && panel.dataset && panel.dataset.toy ? String(panel.datase
     const next = (nearest + (dir>0?1:-1) + palette.length) % palette.length;
     return palette[next];
   }
-  // Assign initial block notes from palette (even spread)
   for (let i=0;i<blocks.length;i++){
     blocks[i].noteIndex = palette[i % palette.length];
   }
@@ -93,7 +69,6 @@ randomizeRects(blocks, {x:bx,y:by,w:bw,h:bh}, EDGE); })(); // removed legacy chr
   nextLaunchAt =  null; prevNow =  0;    // audio time to relaunch
   ball =  null;            // {x,y,vx,vy,r}
   const fx = createImpactFX(); let lastScale = sizing.scale || 1;
-  // Shared state bag for step/draw helpers (populated each frame)
   const S = {};
   function processVisQ(S, now){ if (!S.visQ||!S.visQ.length) return; const due=[]; const rest=[]; for (const e of S.visQ){ if (e.t <= now + 1e-4) due.push(e); else rest.push(e); } S.visQ = rest; for (const e of due){ if (e.kind==='block'){ const bi = e.idx|0; if (blocks[bi]){ blocks[bi].flash = 1.0; blocks[bi].lastHitAT = now; } if (fx && fx.onHit) fx.onHit(e.x||handle.x, e.y||handle.y); } else if (e.kind==='edge'){ if (typeof flashEdge==='function') flashEdge(e.edge); } } }
   function rescaleAll(f){
@@ -108,16 +83,11 @@ randomizeRects(blocks, {x:bx,y:by,w:bw,h:bh}, EDGE); })(); // removed legacy chr
     rescaleAll(s / lastScale);
     lastScale = s;
   });
-  
 function doRandom(){
     const pr = Number(panel?.dataset?.priority || '1') || 1;
     const density = getPoliteDensityForToy(toyId, 1, pr); // emits a polite debug event
-
-    // Determine how many blocks to keep active out of N (1..N), scale by density
     const N = blocks.length;
     const K = Math.max(1, Math.min(N, Math.round(1 + density * (N - 1))));
-
-    // Base random area (60% of panel), then scale range with density (busy mix => smaller area)
     const w = worldW(), h = worldH();
     const baseBW = Math.round(w * 0.6), baseBH = Math.round(h * 0.6);
     const areaScale = 0.5 + 0.5 * density; // 0.5..1.0
@@ -125,11 +95,7 @@ function doRandom(){
     const bh = Math.max(EDGE*4, Math.round(baseBH * areaScale));
     const bx = Math.round((w - bw) / 2);
     const by = Math.round((h - bh) / 2);
-
-    // Position blocks within shrunk/expanded area
     randomizeRects(blocks, { x: bx, y: by, w: bw, h: bh }, EDGE);
-
-    // Choose K blocks to keep active (others off) — evenly across the set
     const picks = [];
     if (K >= N) {
       for (let i=0;i<N;i++) picks.push(i);
@@ -137,7 +103,6 @@ function doRandom(){
       const step = N / K;
       let pos = 0;
       for (let i=0;i<K;i++){ picks.push(Math.round(pos) % N); pos += step; }
-      // de-dupe if rounding collided
       const uniq = Array.from(new Set(picks));
       while (uniq.length < K){
         const r = Math.floor(Math.random() * N);
@@ -147,11 +112,8 @@ function doRandom(){
     }
     for (let i=0;i<N;i++) blocks[i].active = false;
     for (const i of picks) if (blocks[i]) blocks[i].active = true;
-
-    // Randomize edge controller notes as before
     randomizeControllers(edgeControllers, noteList);
 }
-
   function doReset(){
     ball = null; lastLaunch = null;
     for (const b of blocks){ b.flash = 0; b.lastHitAT = 0; }
@@ -170,7 +132,6 @@ panel.addEventListener('toy-random', doRandom);
     const hit = blocks.find(b => hitRect(p, b));
     const hitCtrl = edgeControllers.find(b => hitRect(p, b));
     if (zoomed){
-      // In zoom: drag floating cubes; edit edge controllers
       if (hit && !hit.fixed){
         zoomDragCand = hit; zoomDragStart = {x:p.x, y:p.y}; zoomTapT = whichThirdRect(hit, p.y);
         try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
@@ -187,7 +148,6 @@ panel.addEventListener('toy-random', doRandom);
         return;
       }
     } else {
-      // Normal view: drag floating cubes; ignore edge cubes
       if (hit && !hit.fixed){
         draggingBlock = true; dragBlockRef = hit; dragOffset = { dx: p.x - hit.x, dy: p.y - hit.y };
         try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
@@ -195,7 +155,6 @@ panel.addEventListener('toy-random', doRandom);
       }
       if (hitCtrl) return;
     }
-    // Otherwise, start aiming handle (will launch a ball on pointerup)
     handle.x = p.x; handle.y = p.y;
     draggingHandle = true; dragStart = { x: handle.x, y: handle.y }; dragCurr = p;
     try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
@@ -263,11 +222,9 @@ canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
   window.addEventListener('pointerup', endDrag, true);
   function spawnBallFrom(L){ const o = {  x:L.x, y:L.y, vx:L.vx, vy:L.vy, r:L.r }; ball = o; fx.onLaunch(L.x, L.y); return o; }
-  // setters for step module to persist primitive state
   function setNextLaunchAt(t){ nextLaunchAt = t; }
   function setBallOut(o){ ball = o; }
   let lastAT = 0;
-  
   const edgeNotes = {
     left:  { noteIndex: Math.floor(Math.random()*noteList.length) },
     right: { noteIndex: Math.floor(Math.random()*noteList.length) },

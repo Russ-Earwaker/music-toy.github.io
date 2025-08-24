@@ -1,6 +1,6 @@
-// src/audio-core.js — core clock + per‑toy buses (<=300 lines)
+// src/audio-core.js — epoch-based transport + per‑toy buses (<=300 lines)
 export const DEFAULT_BPM = 120;
-export const NUM_STEPS = 8;
+export const NUM_STEPS = 8;       // scheduler grid (eighths by default)
 export const BEATS_PER_BAR = 4;
 
 export let ac;
@@ -17,19 +17,26 @@ export function ensureAudioContext(){
   return ac;
 }
 
-// --- scheduler (bar-synchronous, step granularity) ---
-let timer = null, currentStep = 0, nextNoteTime = 0, loopStartTime = 0;
+// --- epoch-based scheduler (bar-synchronous, step granularity) ---
+let timer = null, currentStep = 0, nextNoteTime = 0;
+let __epochStart = 0;         // NEVER mutates after start; used by getLoopInfo
+let __barIndex = 0;           // current bar index from the epoch
+
 export function createScheduler(onStep, onLoop){
-  const lookahead = 25;            // ms
-  const scheduleAhead = 0.10;      // s
+  const lookahead = 25;       // ms
+  const scheduleAhead = 0.12; // s
   function tick(){
     const ctx = ensureAudioContext();
     while (nextNoteTime < ctx.currentTime + scheduleAhead){
       try { onStep && onStep(currentStep, nextNoteTime); } catch(e){}
+      // advance
       currentStep = (currentStep + 1) % NUM_STEPS;
-      if (currentStep === 0){
-        loopStartTime = nextNoteTime + stepSeconds();
-        try { onLoop && onLoop(loopStartTime); } catch(e){}
+      const elapsed = nextNoteTime + stepSeconds() - __epochStart;
+      const newBarIndex = Math.floor(elapsed / barSeconds());
+      if (newBarIndex !== __barIndex){
+        __barIndex = newBarIndex;
+        const thisBarStart = __epochStart + __barIndex * barSeconds();
+        try { onLoop && onLoop(thisBarStart); } catch(e){}
       }
       nextNoteTime += stepSeconds();
     }
@@ -38,22 +45,36 @@ export function createScheduler(onStep, onLoop){
     async start(){
       const ctx = ensureAudioContext();
       if (ctx.state === 'suspended') await ctx.resume();
-      // nudge unlock
+      // tiny unlock nudge
       try{
         const o = ctx.createOscillator(), g = ctx.createGain();
         g.gain.value = 0.0001; o.connect(g).connect(ctx.destination);
         const t = ctx.currentTime + 0.01; o.start(t); o.stop(t+0.02);
       }catch{}
-      nextNoteTime = loopStartTime = ensureAudioContext().currentTime + 0.05;
+      // Align epoch to the next step boundary for a clean downbeat
+      const now = ctx.currentTime + 0.05;
+      const grid = stepSeconds();
+      const k = Math.ceil(now / grid);
+      __epochStart = k * grid;
+      __barIndex = 0;
       currentStep = 0;
+      nextNoteTime = __epochStart;
+      if (timer) clearInterval(timer);
       timer = setInterval(tick, lookahead);
     },
-    stop(){ if (timer) clearInterval(timer); timer=null; currentStep=0; },
+    stop(){ if (timer){ clearInterval(timer); timer=null; } currentStep=0; },
     get currentStep(){ return currentStep; }
   };
 }
 
-export function getLoopInfo(){ return { loopStartTime, barLen: barSeconds() }; }
+// Back-compat: expose loopStartTime as the fixed epoch
+export function getLoopInfo(){
+  const ctx = ensureAudioContext();
+  const now = ctx.currentTime;
+  const bl = barSeconds();
+  const phase01 = ((now - __epochStart) % bl + bl) % bl / bl;
+  return { loopStartTime: __epochStart, barLen: bl, beatLen: beatSeconds(), phase01, now, barIndex: __barIndex };
+}
 
 // --- per‑toy buses ---
 const __toyGains = new Map();      // id -> GainNode
