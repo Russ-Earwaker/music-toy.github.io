@@ -1,6 +1,6 @@
 // src/main.js (final: no version suffixes; instruments populate on boot; single boot; robust samples-ready)
 import { DEFAULT_BPM, NUM_STEPS, ac, setBpm, ensureAudioContext, createScheduler, getLoopInfo, setToyVolume, setToyMuted } from './audio-core.js';
-import { initAudioAssets, triggerInstrument, getInstrumentNames } from './audio-samples.js';
+import { initAudioAssets, triggerInstrument, getInstrumentNames, reloadSamples } from './audio-samples.js';
 import './auto-mix.js';
 import { buildGrid, markPlayingColumn as markGridCol } from './grid.js';
 import { createBouncer } from './bouncer.js';
@@ -31,8 +31,9 @@ if (!window.__booted__) {
         opt.value = n; opt.textContent = n;
         sel.appendChild(opt);
       });
+      const prev = sel.value;
       sel.value = (names && names.includes(current)) ? current : (names?.[0] || 'tone');
-      sel.dispatchEvent(new Event('change', { bubbles:true }));
+      if (sel.value !== prev) sel.dispatchEvent(new Event('change', { bubbles:true }));
     });
   }
 
@@ -43,7 +44,8 @@ if (!window.__booted__) {
     console.log('[samples-ready]', e?.detail);
     rebuildInstrumentSelects(names);
     const pick = (hint) => names.find(n => n.toLowerCase().includes(hint)) || names[0] || 'tone';
-    if (ok && grids.length) {
+    const isReload = (e && e.detail && e.detail.source === 'reload');
+    if (!isReload && ok && grids.length) {
       const prefs = [pick('kick'), pick('snare'), pick('hat'), pick('clap')];
       grids.forEach((g, i) => { try { g.setInstrument && g.setInstrument(prefs[i] || names[0] || 'tone'); } catch{} });
     }
@@ -236,5 +238,15 @@ document.querySelectorAll('.toy-panel').forEach((panel) => {
     window.addEventListener('pointerdown', onFirstPointer, true);
   }
 
+
+    // Dev: reload samples (bypass SW cache via query bust). Ctrl+Shift+R or custom event.
+    window.addEventListener('keydown', (e)=>{
+      if (e.key.toLowerCase() === 'r' && e.ctrlKey && e.shiftKey){
+        try { reloadSamples(CSV_PATH); } catch {}
+        e.preventDefault();
+      }
+    });
+    window.addEventListener('dev-reload-samples', ()=>{ try { reloadSamples(CSV_PATH); } catch {} });
+    try { window.reloadSamples = ()=> reloadSamples(CSV_PATH); } catch {}
   boot();
 }

@@ -173,7 +173,8 @@ function draw(){
   function setNoteIndex(i, delta){
     const s = steps[i]; if (!s) return;
     const N = noteList.length;
-    let ni = (s.noteIndex + delta + N) % N;
+    let ni = s.noteIndex + delta;
+    if (ni < 0) ni = 0; else if (ni >= N) ni = N - 1;
     s.noteIndex = ni;
   }
   function toggle(i){ const s = steps[i]; if (s) s.active = !s.active; }

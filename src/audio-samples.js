@@ -12,6 +12,7 @@ const FALLBACK_SAMPLES = [
 let entries = new Map(); // name -> { url? , synth? }
 let buffers = new Map(); // name -> AudioBuffer
 let csvOk = false;
+let __sampleBust = 0; // cache-bust token for dev reloads
 
 function dispatchReady(src){
   const names = getInstrumentNames();
@@ -65,16 +66,21 @@ function parseCsvSmart(text, csvUrl){
 }
 
 async function fetchCsvList(csvUrl){
-  const res = await fetch(csvUrl, { cache: 'no-store' });
+  const u = new URL(csvUrl, location.href);
+  if (__sampleBust) u.searchParams.set('__v', String(__sampleBust));
+  const res = await fetch(u.toString(), { cache: 'no-store' });
   if (!res.ok) throw new Error(`CSV fetch failed: ${res.status}`);
   const text = await res.text();
   return parseCsvSmart(text, csvUrl);
 }
 async function loadSample(url){
-  const res = await fetch(url);
+  const u = new URL(url, location.href);
+  if (__sampleBust) u.searchParams.set('__v', String(__sampleBust));
+  const res = await fetch(u.toString(), { cache: 'no-store' });
   const ab = await res.arrayBuffer();
   return new Promise((ok, err)=> ensureAudioContext().decodeAudioData(ab, ok, err));
 }
+
 async function loadFromList(list){
   buffers.clear();
   entries.clear();
@@ -178,4 +184,17 @@ export function triggerInstrument(instrument, noteName, when, toyId){
   // 4) Fallback simple tone
   const freq = noteToFreq(noteName);
   return playToneAt(freq, when, getToyGain(toyId||'master'));
+}
+
+
+/** Dev-only: force re-fetch CSV and sample files with a unique cache-bust token. */
+export async function reloadSamples(csvUrl){
+  try {
+    __sampleBust = Date.now();
+    await initAudioAssets(csvUrl);
+    // re-dispatch samples-ready so UIs update instrument menus, etc.
+    try { window.dispatchEvent(new CustomEvent('samples-ready', { detail: { source: 'reload' } })); } catch {}
+  } catch (e) {
+    console.warn('[audio] reloadSamples failed', e);
+  }
 }

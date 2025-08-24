@@ -19,6 +19,48 @@ function makeHud(){
   list = document.createElement('div');
   list.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
   hud.appendChild(title); hud.appendChild(list);
+
+  // Controls row
+  const ctrls = document.createElement('div');
+  ctrls.style.display='flex'; ctrls.style.gap='8px'; ctrls.style.marginTop='8px';
+
+  const btnReloadSamples = document.createElement('button');
+  btnReloadSamples.textContent = 'Reload Samples';
+  Object.assign(btnReloadSamples.style, { padding:'6px 10px', borderRadius:'8px', border:'1px solid #252b36', background:'#0d1117', color:'#e6e8ef', cursor:'pointer' });
+  btnReloadSamples.addEventListener('click', ()=>{
+    try { window.dispatchEvent(new CustomEvent('dev-reload-samples')); } catch {}
+  });
+
+  const btnHardReload = document.createElement('button');
+  btnHardReload.textContent = 'Hard Reload (clear cache)';
+  Object.assign(btnHardReload.style, { padding:'6px 10px', borderRadius:'8px', border:'1px solid #252b36', background:'#0d1117', color:'#e6e8ef', cursor:'pointer' });
+  btnHardReload.addEventListener('click', async ()=>{
+    try {
+      // Clear SW caches
+      if (window.caches && caches.keys) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+      // Unregister service workers
+      if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations){
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      }
+    } catch {}
+    // Force a reload; adding cache-buster to URL to bypass any intermediaries
+    try {
+      const u = new URL(location.href);
+      u.searchParams.set('__hard', String(Date.now()));
+      location.replace(u.toString());
+    } catch {
+      location.reload();
+    }
+  });
+
+  ctrls.appendChild(btnReloadSamples);
+  ctrls.appendChild(btnHardReload);
+  hud.appendChild(ctrls);
+
   const toys = document.createElement('div'); toys.id = 'dev-hud-toys'; toys.style.marginTop = '6px'; hud.appendChild(toys);
   document.body.appendChild(hud);
   return hud;

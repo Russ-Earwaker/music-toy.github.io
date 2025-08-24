@@ -219,7 +219,7 @@ function endDrag(e){
     if (t==='toggle'){ zoomDragCand.active=!zoomDragCand.active; }
     else {
       let prev=zoomDragCand.noteIndex, prevOct=zoomDragCand.oct||4;
-      if (t==='up'){ zoomDragCand.noteIndex = stepIdxInPalette(zoomDragCand.noteIndex, +1); } else if (t==='down'){ zoomDragCand.noteIndex = stepIdxInPalette(zoomDragCand.noteIndex, -1); }
+      if (t==='up'){ zoomDragCand.noteIndex = Math.min(noteList.length-1, (zoomDragCand.noteIndex|0) + 1); } else if (t==='down'){ zoomDragCand.noteIndex = Math.max(0, (zoomDragCand.noteIndex|0) - 1); }
       const ac=ensureAudioContext(); const now=(ac?ac.currentTime:0);
       const nm=noteValue(noteList, zoomDragCand.noteIndex);
       try{ triggerInstrument(instrument, nm, now+0.0005, toyId); }catch(e){}
