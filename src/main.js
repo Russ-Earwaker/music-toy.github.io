@@ -1,7 +1,7 @@
 // src/main.js (final: no version suffixes; instruments populate on boot; single boot; robust samples-ready)
 import { DEFAULT_BPM, NUM_STEPS, ac, setBpm, ensureAudioContext, createScheduler, getLoopInfo, setToyVolume, setToyMuted } from './audio-core.js';
 import { initAudioAssets, triggerInstrument, getInstrumentNames } from './audio-samples.js';
-
+import './auto-mix.js';
 import { buildGrid, markPlayingColumn as markGridCol } from './grid.js';
 import { createBouncer } from './bouncer.js';
 import { createRippleSynth } from './ripplesynth.js';
@@ -9,6 +9,9 @@ import { buildWheel } from './wheel.js';
 import { assertRipplerContracts, runRipplerSmoke } from './ripplesynth-safety.js';
 import { createLoopIndicator } from './loopindicator.js';
 import { initDragBoard, organizeBoard } from './board.js';
+import './debug-automix.js';
+import './mute-bridge.js';
+import './roles-assign.js';
 
 if (!window.__booted__) {
   window.__booted__ = true;

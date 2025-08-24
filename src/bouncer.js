@@ -38,14 +38,11 @@ export function createBouncer(selector){
   // Predeclare interaction/state vars to avoid TDZ issues in handlers/draw
   const BOUNCER_BARS_PER_LIFE = 1; // duration of a shot in bars
  const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector; if (!shell) return null; const panel = shell.closest('.toy-panel') || shell; const ui = initToyUI(panel, { toyName: 'Bouncer', defaultInstrument: 'Retro Square' });
-  let toyId = (panel && panel.dataset && panel.dataset.toyid) ? String(panel.dataset.toyid) : null;
-  if (!toyId){
-    const kind = (panel && panel.dataset && panel.dataset.toy ? String(panel.dataset.toy) : 'bouncer').toLowerCase();
-    const c = (window.__bouncerIds__ = window.__bouncerIds__ || { n: 0 });
-    toyId = `${kind}-${++c.n}`;
-    try { panel.dataset.toyid = toyId; } catch {}
-  }
-  toyId = String(toyId).toLowerCase(); let instrument = 'Retro-Square'; // locked for testing
+  
+  // Sync instrument from UI default and listen for changes
+  let instrument = ui.instrument;
+  panel.addEventListener('toy-instrument', (e)=>{ try{ instrument = (e?.detail?.value)||instrument; }catch{} });
+const toyId = (panel && panel.dataset && panel.dataset.toy ? String(panel.dataset.toy) : 'bouncer').toLowerCase(); 
   const edgeFlash = { left: 0, right: 0, top: 0, bot: 0 }; function flashEdge(which){ const m = mapControllersByEdge(edgeControllers); const c = m && m[which]; if (!c || !c.active) return; if (edgeFlash[which] !== undefined) edgeFlash[which] = 1.0; } const edgeLastHitAT = { left: 0, right: 0, top: 0, bot: 0 }; const edgeHitThisStep = { left: false, right: false, top: false, bot: false }; panel.addEventListener('toy-instrument', (e)=>{ instrument = (e.detail.value) || instrument; }); const host = panel.querySelector('.toy-body') || panel; const canvas = document.createElement('canvas'); canvas.style.width = '100%'; canvas.style.display='block'; host.appendChild(canvas); const ctx = canvas.getContext('2d', { alpha:false }); const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true }); let edgeControllers = [];
   let __edgeAligned = false; function ensureEdgeControllers(w,h){ if (!edgeControllers.length){ edgeControllers = makeEdgeControllers(w, h, blockSize(), EDGE, noteList); } else { const s = blockSize(); const half = s/2; const map = mapControllersByEdge(edgeControllers); if (map.left){  map.left.x = EDGE;        map.left.y = h/2 - half; map.left.w = s; map.left.h = s; } if (map.right){ map.right.x = w-EDGE-s;   map.right.y = h/2 - half; map.right.w = s; map.right.h = s; }
       if (map.top){   map.top.x = w/2 - half;   map.top.y = EDGE;        map.top.w = s; map.top.h = s; }
@@ -113,16 +110,17 @@ randomizeRects(blocks, {x:bx,y:by,w:bw,h:bh}, EDGE); })(); // removed legacy chr
   });
   
 function doRandom(){
-    const pr = Number(panel?.dataset?.priority ?? '0.3');
-    const density = getPoliteDensityForToy(toyId, 1, { priority: pr, minScale: 0.05 });
-    // Determine how many blocks to keep active out of N (0..N), scale by density
+    const pr = Number(panel?.dataset?.priority || '1') || 1;
+    const density = getPoliteDensityForToy(toyId, 1, pr); // emits a polite debug event
+
+    // Determine how many blocks to keep active out of N (1..N), scale by density
     const N = blocks.length;
-    const K = Math.max(0, Math.min(N, Math.round(density * N)));
+    const K = Math.max(1, Math.min(N, Math.round(1 + density * (N - 1))));
 
     // Base random area (60% of panel), then scale range with density (busy mix => smaller area)
     const w = worldW(), h = worldH();
     const baseBW = Math.round(w * 0.6), baseBH = Math.round(h * 0.6);
-    const areaScale = 0.6 + 0.4 * density; // keep a wider distribution area
+    const areaScale = 0.5 + 0.5 * density; // 0.5..1.0
     const bw = Math.max(EDGE*4, Math.round(baseBW * areaScale));
     const bh = Math.max(EDGE*4, Math.round(baseBH * areaScale));
     const bx = Math.round((w - bw) / 2);

@@ -312,3 +312,26 @@ main { flex: 1 1 auto; display: block; }
   height: auto !important; width: auto !important;
   overflow: visible !important;
 }
+
+
+
+
+/* --- Auto-mix badge (percentage, no layout shift) --- */
+.toy-panel .toy-header{ position: relative; }
+.toy-panel .toy-header::after{
+  content: attr(data-duck);
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-size: 11px;
+  background:#202735;
+  color:#5bd4a4;
+  opacity: 0;
+  transition: opacity .15s ease;
+  pointer-events: none;
+}
+.toy-panel .toy-header[data-ducking="1"]::after{
+  opacity: 1;
+}

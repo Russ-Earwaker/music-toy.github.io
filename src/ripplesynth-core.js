@@ -5,7 +5,6 @@ import { resizeCanvasForDPR, noteList } from './utils.js';
 import { PENTATONIC_OFFSETS } from './ripplesynth-scale.js';
 import { ensureAudioContext, barSeconds as audioBarSeconds } from './audio-core.js';
 import { triggerInstrument as __rawTrig } from './audio-samples.js';
-const triggerInstrument = (inst, name, when)=> __rawTrig(inst, name, when, 'rippler');
 import { drawBlocksSection } from './ripplesynth-blocks.js';
 import { makePointerHandlers } from './ripplesynth-input.js';
 import { initParticles, setParticleBounds, drawParticles } from './ripplesynth-particles.js';
@@ -16,7 +15,10 @@ import { installLoopGuards } from './rippler-loopguard.js';
 import { createScheduler } from './ripplesynth-scheduler.js';
 export function createRippleSynth(selector){
   const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector; const panel  = shell?.closest?.('.toy-panel') || shell;
-  const canvas = document.createElement('canvas');
+  
+  const toyId = (panel?.dataset?.toyid || panel?.dataset?.toy || 'rippler').toLowerCase();
+  const triggerInstrument = (inst, name, when)=> __rawTrig(inst, name, when, toyId);
+const canvas = document.createElement('canvas');
   canvas.className = 'rippler-canvas';
   canvas.style.display = 'block';
   (panel.querySelector?.('.toy-body') || panel).appendChild(canvas);

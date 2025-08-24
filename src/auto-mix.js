@@ -1,82 +1,170 @@
-// src/auto-mix.js — post-fader auto-mix (<=300 lines)
+// src/auto-mix.js — role‑aware Auto‑mix with zoom focus dip (<=300 lines)
 import { ensureAudioContext, getToyGain, getToyVolume, isToyMuted } from './audio-core.js';
-import { getIntensity, listToys } from './intensity.js';
+import { listToys, getIntensity } from './intensity.js';
 
-// Tunables
-let ALPHA = 0.25;       // global reduction
-let BETA  = 0.35;       // self reduction
-let MIN_GAIN = 0.65;    // floor for autoMix multiplier
-const ATTACK_S  = 0.050; // fast duck
-const RELEASE_S = 0.300; // slower recovery
-const REFRESH_HZ = 30;   // control-rate
+/* ---------- utils ---------- */
+const clamp01 = (x)=> Math.max(0, Math.min(1, x));
+const lerp = (a,b,t)=> a + (b-a)*t;
 
-let enabled = true;
-let timer = null;
-
-const clamp01 = v => Math.max(0, Math.min(1, v));
-const lerp = (a,b,t) => a + (b-a)*t;
-
-function getPriorityFor(id){
+/* ---------- DOM helpers ---------- */
+function panelForId(id){
   try{
-    const el = document.querySelector(`.toy-panel[data-toyid="${id}"]`);
-    if (!el) return 0.5;
-    const p = Number(el.dataset.priority);
-    return Number.isFinite(p) ? Math.max(0, Math.min(1, p)) : 0.5;
-  }catch{ return 0.5; }
+    const q = `.toy-panel[data-toyid="${id}"], .toy-panel[data-toy="${id}"]`;
+    return document.querySelector(q);
+  }catch{ return null; }
+}
+function isZoomed(id){
+  const el = panelForId(id);
+  return !!(el && (el.classList.contains('toy-zoomed') || el.dataset.zoomed === 'true'));
+}
+function anyZoomed(){
+  try{
+    return Array.from(document.querySelectorAll('.toy-panel'))
+      .some(el => el.classList.contains('toy-zoomed') || el.dataset.zoomed === 'true');
+  }catch{ return false; }
+}
+function getRoleFor(id){
+  const el = panelForId(id);
+  return (el?.dataset?.role || '').toLowerCase();
 }
 
-function computeTarget(id){
-  const G = clamp01(getIntensity());       // room
-  const T = clamp01(getIntensity(id));     // this toy
-  const P = getPriorityFor(id);            // 0..1
-  if (G < 0.02 && T < 0.02) return 1.0;    // idle dead-zone
-  const base = 1 - ALPHA*G;
-  const self = 1 - BETA*T;
-  const prio = lerp(0.6, 1.0, P);
-  return Math.max(MIN_GAIN, Math.min(1, base * self * prio));
+/* ---------- role curves ---------- */
+function roleDefaults(role){
+  switch(role){
+    case 'lead':       return { prio: 0.85, minGain: 0.80, alpha: 0.15, beta: 0.25 };
+    case 'bass':       return { prio: 0.75, minGain: 0.70, alpha: 0.22, beta: 0.30 };
+    case 'percussion': return { prio: 0.60, minGain: 0.65, alpha: 0.30, beta: 0.35 };
+    case 'perform':    return { prio: 0.95, minGain: 0.85, alpha: 0.12, beta: 0.20 };
+    case 'pad':
+    case 'fx':
+    default:           return { prio: 0.50, minGain: 0.65, alpha: 0.25, beta: 0.35 };
+  }
 }
+function leadHeat(){
+  try{
+    let h = 0;
+    for (const id of listToys()){
+      if (getRoleFor(id) === 'lead'){
+        h = Math.max(h, clamp01(getIntensity(id)));
+      }
+    }
+    return h;
+  }catch{ return 0; }
+}
+
+/* ---------- public target function ---------- */
+export function getAutoMixTarget(id){
+  const G = clamp01(getIntensity());       // room energy
+  const T = clamp01(getIntensity(id));     // this toy energy
+  const role = getRoleFor(id);
+  const d = roleDefaults(role);
+
+  // priority: dataset override or role default
+  const el = panelForId(id);
+  const pAttr = el ? Number(el.dataset.priority) : NaN;
+  let P = Number.isFinite(pAttr) ? clamp01(pAttr) : d.prio;
+  if (isZoomed(id)) P = Math.max(P, 0.95); // zoom focus bump
+
+  // idle dead‑zone
+  if (G < 0.02 && T < 0.02) return 1.0;
+
+  const alpha = d.alpha;      // global scaling
+  const beta  = d.beta;       // self scaling
+  const L = leadHeat();       // lead activity (0..1)
+
+  let base = 1 - alpha*G;
+  let self = 1 - beta*T;
+  // non‑lead/perform yield a bit more when a lead is hot
+  if (role !== 'lead' && role !== 'perform'){
+    base *= (1 - 0.25*L);
+  }
+
+  const prio = lerp(0.6, 1.0, P);
+  let target = base * self * prio;
+
+  // If any toy is zoomed, push non‑zoomed toys down (flat scale to ~25%).
+  const ZOOM_OTHERS_SCALE = 0.25;
+  if (anyZoomed() && !isZoomed(id)){
+    target *= ZOOM_OTHERS_SCALE;
+    // allow below role minGain so the zoomed toy clearly stands out
+    return clamp01(target);
+  }
+
+  const MIN_GAIN = 0.65; // global floor
+  const minG = Math.max(MIN_GAIN, d.minGain);
+  return Math.max(minG, clamp01(target));
+}
+
+/* ---------- engine loop ---------- */
+const DUCK_ON_THRESH = 0.12;  // 12% drop to declare 'ducking on'
+const DUCK_OFF_THRESH = 0.06; // 6% within base to declare 'ducking off' (hysteresis)
+
+let ATTACK = 0.05;   // fast duck
+let RELEASE = 0.30;  // recover
+let __timer = null;
 
 function step(){
-  const ctx = ensureAudioContext();
-  const toys = listToys();
-  for (const id of toys){
-    if (isToyMuted(id)) continue;           // respect hard mutes
-    const userVol = getToyVolume(id);       // slider value (stored)
-    const node = getToyGain(id);            // per-toy bus
-    const desired = userVol * computeTarget(id);
-    const now = ctx.currentTime;
-    const cur = node.gain.value;
-    const tau = desired < cur ? ATTACK_S : RELEASE_S;
+  const ac = ensureAudioContext();
+  const now = ac.currentTime;
+  const ids = listToys();
+
+  for (const id of ids){
+    const panel = panelForId(id);
+
+    // hard mute path
+    if (isToyMuted(id)){
+      const node = getToyGain(id);
+      try{ node.gain.cancelAndHoldAtTime(now); node.gain.setTargetAtTime(0, now, 0.02); }
+      catch{ node.gain.value = 0; }
+      if (panel){ panel.dataset.automixG = '0'; panel.dataset.ducking='1'; }
+      continue;
+    }
+
+    const userVol = getToyVolume(id);             // slider/base
+    const tgt = getAutoMixTarget(id);
+    const desired = clamp01(userVol * tgt);
+
+    const node = getToyGain(id);
     try{
       node.gain.cancelAndHoldAtTime(now);
+      const tau = (desired < node.gain.value) ? ATTACK : RELEASE;
       node.gain.setTargetAtTime(desired, now, tau);
     }catch{
       node.gain.value = desired;
     }
-  }
+
+    if (panel){
+      panel.dataset.automixG = String(desired.toFixed(2));
+      const header = panel.querySelector('.toy-header');
+      const base = (userVol>0.0001) ? (desired/userVol) : 1.0;
+      const reduction = Math.max(0, Math.min(1, 1 - base));
+      // hysteresis on header ducking flag: ON at 15%, OFF at 10%
+      const prev = header && (header.dataset.ducking === '1');
+      const on  = reduction >= 0.15;
+      const off = reduction <= 0.10;
+      const next = prev ? (!off ? true : false) : (on ? true : false);
+      if (header){
+        header.dataset.ducking = next ? '1' : '0';
+        const pct = Math.round(reduction*100);
+        header.dataset.duck = pct >= 1 ? `Auto −${pct}%` : '';
+      }
+    }}
 }
 
-export function setAutoMixEnabled(v){
-  enabled = !!v;
-  if (!enabled && timer){ clearInterval(timer); timer=null; }
-  if (enabled && !timer){ timer = setInterval(step, 1000/REFRESH_HZ); }
+export function enable(){
+  if (__timer) return;
+  __timer = setInterval(step, 33); // ~30 Hz
 }
-export function isAutoMixEnabled(){ return !!enabled; }
-
-export function startAutoMix(){
-  if (!timer && enabled) timer = setInterval(step, 1000/REFRESH_HZ);
-  // expose for quick debugging
-  window.autoMix = {
-    enable: ()=>setAutoMixEnabled(true),
-    disable: ()=>setAutoMixEnabled(false),
-    set: (opts={})=>{
-      if (opts.minGain!=null) MIN_GAIN = Math.max(0, Math.min(1, +opts.minGain));
-      if (opts.alpha!=null) ALPHA = Math.max(0, Math.min(1, +opts.alpha));
-      if (opts.beta!=null)  BETA  = Math.max(0, Math.min(1, +opts.beta));
-    },
-    get enabled(){ return enabled; }
-  };
+export function disable(){
+  if (!__timer) return;
+  clearInterval(__timer);
+  __timer = null;
+}
+export function set(opts={}){
+  if (typeof opts.attack === 'number')  ATTACK  = Math.max(0.005, opts.attack);
+  if (typeof opts.release === 'number') RELEASE = Math.max(0.02, opts.release);
 }
 
-// Auto-start when module is loaded (safe if imported once)
-startAutoMix();
+enable(); // auto-start
+
+try{ window.autoMix = { enable, disable, set, get enabled(){ return !!__timer; } }; }catch{}
