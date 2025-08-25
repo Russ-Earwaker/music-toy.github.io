@@ -5,6 +5,7 @@ import './auto-mix.js';
 import { buildGrid, markPlayingColumn as markGridCol } from './grid.js';
 import { createBouncer } from './bouncer.js';
 import { createRippleSynth } from './ripplesynth.js';
+import { createAmbientGlide } from './ambient-glide.js';
 import { buildWheel } from './wheel.js';
 import { assertRipplerContracts, runRipplerSmoke } from './ripplesynth-safety.js';
 import { createLoopIndicator } from './loopindicator.js';
@@ -34,6 +35,19 @@ if (!window.__booted__) {
       const prev = sel.value;
       sel.value = (names && names.includes(current)) ? current : (names?.[0] || 'tone');
       if (sel.value !== prev) sel.dispatchEvent(new Event('change', { bubbles:true }));
+      // Prefer 'Kalimba' for rippler panels
+      try {
+        const panel = sel.closest('.toy-panel');
+        const isRippler = panel && ((panel.dataset.toy||'').toLowerCase()==='rippler' || (panel.dataset.toyid||'').toLowerCase()==='rippler');
+        if (isRippler) {
+          const kal = (names||[]).find(n => /kalimba/i.test(n));
+          if (kal) {
+            const before = sel.value;
+            sel.value = kal;
+            if (sel.value !== before) sel.dispatchEvent(new Event('change', { bubbles:true }));
+          }
+        }
+      } catch {}
     });
   }
 
@@ -192,6 +206,8 @@ document.querySelectorAll('.toy-panel').forEach((panel) => {
           inst = createRippleSynth(panel);
         } else if (kind === 'bouncer') {
           inst = createBouncer(panel);
+        } else if (kind === 'ambient' || kind === 'ambient-glide') {
+          inst = createAmbientGlide(panel);
         } else if (kind === 'wheel') {
           console.log('[wheel] build start', panel);
           let wheelInstrument = 'slap bass guitar';

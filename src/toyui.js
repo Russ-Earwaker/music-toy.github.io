@@ -80,18 +80,40 @@ export function initToyUI(panel, {
 
 // Apply default instrument once (or when list first appears)
 let __instInitialised = false;
+
 function applyDefaultInstrument(){
   try{
     const opts = Array.from(instSel.options).map(o=>o.value);
-    if (!__instInitialised && defaultInstrument && opts.includes(defaultInstrument)){
-      instSel.value = defaultInstrument;
-      panel.dispatchEvent(new CustomEvent('toy-instrument', { detail: { value: instSel.value, toyId: getToyId() } }));
-      __instInitialised = true;
+    if (!__instInitialised && defaultInstrument){
+      const match = opts.find(n => n.toLowerCase() === String(defaultInstrument).toLowerCase()) || opts.find(n => /kalimba/i.test(n));
+      if (match) defaultInstrument = match;
+      if (match && opts.includes(defaultInstrument)){
+        instSel.value = defaultInstrument;
+        panel.dispatchEvent(new CustomEvent('toy-instrument', { detail: { value: instSel.value, toyId: getToyId() } }));
+        __instInitialised = true;
+      }
     }
-  }catch{}
+  } catch {}
 }
 
-  right.append(randBtn, resetBtn, instWrap);
+// Reassert default instrument on zoom (some flows repopulate selects)
+function enforceDefaultOnZoom(){
+  try{
+    const names = getInstrumentNames();
+    if (!names || !names.length) return;
+    if (defaultInstrument){
+      const match = names.find(n => n.toLowerCase() === String(defaultInstrument).toLowerCase()) || names.find(n => /kalimba/i.test(n));
+      if (match){ defaultInstrument = match; }
+      const before = instSel.value;
+      if (instSel.value !== defaultInstrument){
+        instSel.value = defaultInstrument;
+        if (instSel.value !== before) panel.dispatchEvent(new CustomEvent('toy-instrument', { detail: { value: instSel.value, toyId: getToyId() } }));
+      }
+    }
+  } catch {}
+}
+
+right.append(randBtn, resetBtn, instWrap);
   header.appendChild(right);
 
   // Overlay for zoom
@@ -151,6 +173,7 @@ function applyDefaultInstrument(){
     panel.classList.toggle('toy-unzoomed', !zoomed);
     if (zoomed){ zoomInPanel(panel, ()=> setZoom(false)); } else { zoomOutPanel(panel); }
     panel.dispatchEvent(new CustomEvent('toy-zoom', { detail: { zoomed } }));
+    if (zoomed) enforceDefaultOnZoom();
   }
   setZoom(false);
   zoomBtn.addEventListener('click', ()=> setZoom(!zoomed));

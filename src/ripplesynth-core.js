@@ -103,8 +103,9 @@ const EDGE=10; const W=()=> (canvas.clientWidth  || panel.clientWidth  || 356)|0
   });
   function randomizeAll(){
     didLayout = false;
-    randomizeAllImpl({
-      blocks, noteList,
+    randomizeAllImpl(panel, {
+      toyId,
+blocks, noteList,
       layoutBlocks,
       clearPattern: ()=> pattern.forEach(s=> s.clear()),
       recordOnly,

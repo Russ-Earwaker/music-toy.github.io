@@ -76,7 +76,7 @@ window.addEventListener('samples-ready', ()=>{
     document.querySelectorAll('.toy-panel').forEach(el => {
       const id = el.dataset.toyid || el.dataset.toy;
       if (id && !TOY_INST.has(id)){
-        const pick = pickForRole((el.dataset.role||'').toLowerCase());
+        let pick = (id==='rippler' ? (names().find(n=>/kalimba/i.test(n)) || null) : null) || pickForRole((el.dataset.role||'').toLowerCase());
         if (pick) TOY_INST.set(id, pick);
       }
     });
