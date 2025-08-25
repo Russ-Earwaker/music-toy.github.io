@@ -209,13 +209,7 @@ function draw(){
     } else {
       toggle(i);
       try{ ping(i); }catch{}
-      try{
-        const s = steps[i];
-        if (s && s.active){
-          const noteName = noteList[s.noteIndex] || 'C4';
-          gatedTrigger(ui.instrument, noteName);
-        }
-      }catch{}
+      // (disabled) no immediate audio preview on click; wait for sequencer
     }
     draw();
   }
