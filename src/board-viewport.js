@@ -1,203 +1,170 @@
 // src/board-viewport.js
-// Camera for the board: independent pan & zoom (no tilt) + perspective. Phone & PC friendly. <300 lines>.
+// Pan & zoom camera for the board (no tilt/perspective).
+// Minimal, non-destructive, and phone/PC friendly. <300 lines>
 (function initBoardViewport(){
   const BOARD_ID = "board";
   const STAGE_ID = "board-viewport";
   const PAN_ID = "camera-pan";
   const SCALE_ID = "camera-scale";
-  const VIS_ID = "visual-layer";
 
   const board = document.getElementById(BOARD_ID);
   if (!board) return;
 
-  // ---- Stage wrapper (provides perspective, handles input) ----
-  let stage = board.parentElement;
-  if (!stage || stage.id !== STAGE_ID){
+  // Create a wrapper stage around #board if not present
+  let stage = board.parentElement && board.parentElement.id === STAGE_ID
+    ? board.parentElement
+    : null;
+  if (!stage){
     stage = document.createElement("div");
     stage.id = STAGE_ID;
-    Object.assign(stage.style, {
-      position: "relative",
-      width: "100%",
-      height: "100%",
-      overflow: "hidden",
-      perspective: "900px",
-      touchAction: "none",
-    });
-    board.parentElement && board.parentElement.insertBefore(stage, board);
+    // Inherit layout; don't alter parent's flow
+    stage.style.width = "100%";
+    stage.style.height = "100%";
+    stage.style.position = "relative";
+    stage.style.overflow = "hidden";
+    // Replace #board in DOM with stage, then move #board inside
+    const parent = board.parentNode;
+    parent.replaceChild(stage, board);
+    stage.appendChild(board);
   }
 
-  // ---- Camera nodes: pan (translate) outside, scale inside ----
+  // Camera nodes
   let camPan = stage.querySelector("#"+PAN_ID);
   if (!camPan){
     camPan = document.createElement("div");
     camPan.id = PAN_ID;
-    Object.assign(camPan.style, {
-      position: "absolute",
-      inset: "0",
-      transform: "translate3d(0,0,0)",
-      transformStyle: "preserve-3d",
-    });
+    camPan.style.position = "absolute";
+    camPan.style.inset = "0";
+    camPan.style.transform = "translate3d(0,0,0)";
     stage.appendChild(camPan);
   }
-
   let camScale = camPan.querySelector("#"+SCALE_ID);
   if (!camScale){
     camScale = document.createElement("div");
     camScale.id = SCALE_ID;
-    Object.assign(camScale.style, {
-      position: "absolute",
-      inset: "0",
-      transformOrigin: "50% 50%",
-      transform: "scale(1)",
-      transformStyle: "preserve-3d",
-    });
+    camScale.style.position = "absolute";
+    camScale.style.inset = "0";
+    camScale.style.transformOrigin = "50% 50%";
+    camScale.style.transform = "scale(1)";
     camPan.appendChild(camScale);
   }
 
-  // Visual layer (for visualisers that should follow the camera)
-  let vis = camScale.querySelector("#"+VIS_ID);
-  if (!vis){
-    vis = document.createElement("div");
-    vis.id = VIS_ID;
-    Object.assign(vis.style, {
-      position: "absolute",
-      inset: "0",
-      pointerEvents: "none",
-    });
-    camScale.appendChild(vis);
-  }
-
-  // Move board into camera scale node
+  // Move board into camScale (preserve its own styles)
   if (board.parentElement !== camScale){
     camScale.appendChild(board);
-    // Ensure board fills the camera scale region
-    Object.assign(board.style, {
-      position: "absolute",
-      inset: "0",
-      transform: "none",
-    });
   }
 
-  // ---- Camera state ----
-  const state = {
-    scale: 1,
-    x: 0,
-    y: 0,
-    persp: 900,        // px. larger = flatter perspective
-    minScale: 0.5,
-    maxScale: 2.5,
-    minPersp: 300,
-    maxPersp: 2000,
-  };
-
-  function clamp(n, a, b){ return Math.min(b, Math.max(a, n)); }
-
-  function emit(){
-    const ev = new CustomEvent("board-camera", { detail: { ...state } });
-    stage.dispatchEvent(ev);
-  }
+  // Camera state
+  const state = { scale: 1, x: 0, y: 0, minScale: 0.5, maxScale: 2.5 };
+  function clamp(n,a,b){ return Math.min(b, Math.max(a,n)); }
   function apply(){
-    stage.style.setProperty("--bv-scale", String(state.scale));
-    stage.style.setProperty("--bv-x", String(state.x));
-    stage.style.setProperty("--bv-y", String(state.y));
-    stage.style.setProperty("--bv-persp", String(state.persp));
-    stage.style.perspective = state.persp + "px";
     camPan.style.transform = `translate3d(${state.x}px, ${state.y}px, 0)`;
     camScale.style.transform = `scale(${state.scale})`;
-    emit();
   }
-
-  // Zoom keeping cursor point stable
   function zoomAt(cx, cy, delta){
     const prev = state.scale;
     const next = clamp(prev * (delta > 0 ? 0.9 : 1.1), state.minScale, state.maxScale);
     if (next === prev) return;
-    const r = next / prev;
     const rect = stage.getBoundingClientRect();
     const p = { x: cx - rect.left, y: cy - rect.top };
     const c = { x: rect.width/2, y: rect.height/2 };
-    // pan' = r*pan + (1 - r)*(p - c)
+    const r = next / prev;
     state.x = r*state.x + (1 - r)*(p.x - c.x);
     state.y = r*state.y + (1 - r)*(p.y - c.y);
     state.scale = next;
     apply();
   }
+  function reset(){ state.scale = 1; state.x = 0; state.y = 0; apply(); }
 
-  // Public API
+  // Expose API
   window.BoardViewport = {
     zoomIn(){ zoomAt(stage.clientWidth/2, stage.clientHeight/2, -1); },
     zoomOut(){ zoomAt(stage.clientWidth/2, stage.clientHeight/2, +1); },
-    zoomReset(){ state.scale = 1; state.x = 0; state.y = 0; state.persp = 900; apply(); },
-    setPerspective(px){ state.persp = clamp(Number(px)||900, state.minPersp, state.maxPersp); apply(); },
+    zoomReset: reset,
     pan(dx, dy){ state.x += dx; state.y += dy; apply(); },
-    attachToVisualLayer(el){ if (el && el.parentElement !== vis) vis.appendChild(el); },
     getState(){ return { ...state }; },
   };
 
-  // ---- Input handling ----
-  let panning = false, lastX = 0, lastY = 0, pointers = new Map(), lastDist = 0;
+  // --- Input handling ---
+  let isPanning = false, lastX = 0, lastY = 0;
+  let zoomDrag = false, zoomAnchor = {x:0,y:0};
 
   function beganOnPanel(target){ return !!(target && target.closest && target.closest(".toy-panel")); }
 
+  // Left-drag background to pan
   stage.addEventListener("pointerdown", (e)=>{
-    if (beganOnPanel(e.target)) return;
-    stage.setPointerCapture?.(e.pointerId);
-    pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
-    if (pointers.size === 1){
-      panning = true; lastX = e.clientX; lastY = e.clientY;
-    } else if (pointers.size === 2){
-      const ps = Array.from(pointers.values());
-      lastDist = Math.hypot(ps[0].x - ps[1].x, ps[0].y - ps[1].y);
+    if (e.button === 1){ // middle button: drag to zoom
+      zoomDrag = true;
+      zoomAnchor.x = e.clientX; zoomAnchor.y = e.clientY;
+      stage.setPointerCapture?.(e.pointerId);
+      e.preventDefault();
+      return;
     }
+    if (e.button !== 0) return;
+    if (beganOnPanel(e.target)) return;
+    isPanning = true;
+    lastX = e.clientX; lastY = e.clientY;
+    stage.setPointerCapture?.(e.pointerId);
     e.preventDefault();
   });
-
   stage.addEventListener("pointermove", (e)=>{
-    if (!pointers.has(e.pointerId)) return;
-    pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
-
-    if (pointers.size === 1 && panning){
-      const dx = e.clientX - lastX, dy = e.clientY - lastY;
-      lastX = e.clientX; lastY = e.clientY;
-      state.x += dx; state.y += dy; apply();
-      e.preventDefault();
-    } else if (pointers.size === 2){
-      const ps = Array.from(pointers.values());
-      const dist = Math.hypot(ps[0].x - ps[1].x, ps[0].y - ps[1].y);
-      if (lastDist){
-        const delta = dist - lastDist;
-        zoomAt((ps[0].x + ps[1].x)/2, (ps[0].y + ps[1].y)/2, delta < 0 ? +1 : -1);
+    if (zoomDrag){
+      const dy = e.clientY - zoomAnchor.y;
+      if (Math.abs(dy) > 0){
+        const steps = -dy * 0.02; // drag up to zoom in
+        const times = Math.max(1, Math.min(10, Math.floor(Math.abs(steps))));
+        const dir = steps > 0 ? -1 : +1;
+        for (let i=0;i<times;i++) zoomAt(e.clientX, e.clientY, dir);
       }
-      lastDist = dist;
+      zoomAnchor.x = e.clientX; zoomAnchor.y = e.clientY;
       e.preventDefault();
+      return;
     }
+    if (!isPanning) return;
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    lastX = e.clientX; lastY = e.clientY;
+    state.x += dx; state.y += dy; apply();
+    e.preventDefault();
   });
+  function endPointer(e){ isPanning = false; zoomDrag = false; }
+  stage.addEventListener("pointerup", endPointer);
+  stage.addEventListener("pointercancel", endPointer);
+  stage.addEventListener("pointerleave", endPointer);
 
-  stage.addEventListener("pointerup", (e)=>{
-    pointers.delete(e.pointerId);
-    if (pointers.size < 2) lastDist = 0;
-    if (pointers.size === 0) panning = false;
-  });
-  stage.addEventListener("pointercancel", (e)=>{
-    pointers.delete(e.pointerId);
-    if (pointers.size < 2) lastDist = 0;
-    if (pointers.size === 0) panning = false;
-  });
-
-  // Wheel: default = ZOOM scale; hold Alt to adjust perspective instead
+  // Wheel = zoom
   stage.addEventListener("wheel", (e)=>{
-    if (e.altKey){
-      const step = (state.maxPersp - state.minPersp) / 30;
-      const next = (e.deltaY > 0) ? state.persp + step : state.persp - step;
-      window.BoardViewport.setPerspective(next);
-    } else {
-      zoomAt(e.clientX, e.clientY, e.deltaY);
-    }
+    zoomAt(e.clientX, e.clientY, e.deltaY);
     e.preventDefault();
   }, { passive:false });
 
-  // Double-click to reset
-  stage.addEventListener("dblclick", ()=> window.BoardViewport.zoomReset());
+  // Pinch to zoom (2 pointers)
+  let p1=null,p2=null,lastDist=0;
+  stage.addEventListener("pointerdown", (e)=>{
+    if (e.pointerType !== "touch") return;
+    if (!p1) p1 = {id:e.pointerId,x:e.clientX,y:e.clientY};
+    else if (!p2) p2 = {id:e.pointerId,x:e.clientX,y:e.clientY};
+  });
+  stage.addEventListener("pointermove", (e)=>{
+    if (e.pointerType !== "touch") return;
+    if (p1 && e.pointerId===p1.id){ p1.x=e.clientX; p1.y=e.clientY; }
+    if (p2 && e.pointerId===p2.id){ p2.x=e.clientX; p2.y=e.clientY; }
+    if (p1 && p2){
+      const dist = Math.hypot(p1.x-p2.x, p1.y-p2.y);
+      if (lastDist){
+        const delta = dist - lastDist;
+        zoomAt((p1.x+p2.x)/2, (p1.y+p2.y)/2, delta<0 ? +1 : -1);
+      }
+      lastDist = dist;
+    }
+  });
+  function clearTouch(e){
+    if (p1 && e.pointerId===p1.id) p1=null;
+    if (p2 && e.pointerId===p2.id) p2=null;
+    if (!p1 || !p2) lastDist=0;
+  }
+  stage.addEventListener("pointerup", clearTouch);
+  stage.addEventListener("pointercancel", clearTouch);
 
-  apply();
+  // Double-click to reset
+  stage.addEventListener("dblclick", ()=> reset());
 })();

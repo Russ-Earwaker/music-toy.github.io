@@ -22,7 +22,7 @@ const canvas = document.createElement('canvas');
   canvas.className = 'rippler-canvas';
   canvas.style.display = 'block';
   (panel.querySelector?.('.toy-body') || panel).appendChild(canvas);
-  try{const host=panel.querySelector?.('.toy-body')||panel;if((host.clientHeight|0)<40){canvas.style.display='block';canvas.style.width='100%';canvas.style.minHeight='240px';}}catch{}
+  try{const host=panel.querySelector?.('.toy-body')||panel;if((host.clientHeight|0)<40){canvas.style.display='block';canvas.style.width='100%';canvas.style.height='100%';canvas.style.minHeight='0px';}}catch{}
   const ctx = canvas.getContext('2d'); const ui  = initToyUI(panel, { toyName: 'Rippler' });
   let currentInstrument = (ui.instrument && ui.instrument !== 'tone') ? ui.instrument : 'kalimba'; try { ui.setInstrument(currentInstrument); } catch {}
   

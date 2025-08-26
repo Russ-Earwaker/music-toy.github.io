@@ -53,7 +53,7 @@ export function createBouncer(selector){
   const toyId = (panel?.dataset?.toy || 'bouncer').toLowerCase();
 
   const host = panel.querySelector('.toy-body') || panel;
-  const canvas = document.createElement('canvas'); canvas.style.width='100%'; canvas.style.display='block'; host.appendChild(canvas);
+  const canvas = document.createElement('canvas'); canvas.style.width='100%'; canvas.style.display='block';canvas.style.height='100%'; host.appendChild(canvas);
   const ctx = canvas.getContext('2d', { alpha:false });
   const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true });
 

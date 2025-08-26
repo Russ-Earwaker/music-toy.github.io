@@ -54,7 +54,7 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
   const canvas = document.createElement('canvas');
   canvas.style.display = 'block';
   canvas.className = 'grid-canvas';
-  canvas.style.display = 'block';
+  canvas.style.display = 'block';canvas.style.width='100%';canvas.style.height='100%';
   panel.classList.add('toy-unzoomed');
   body.style.paddingTop = '6px';
   body.style.paddingBottom = '6px';
