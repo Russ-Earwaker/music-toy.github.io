@@ -37,7 +37,10 @@ export function buildWheel(selector, opts = {}){
   // Canvas in body
   const canvas = document.createElement('canvas');
   canvas.className = 'wheel-canvas';
-  canvas.style.display = 'block';canvas.style.width='100%';canvas.style.height='100%';
+  canvas.style.display = 'block';
+  // Fill toy frame regardless of board zoom
+  try { canvas.style.setProperty('width','100%','important'); canvas.style.setProperty('height','100%','important'); } catch {}
+
   (panel.querySelector?.('.toy-body') || panel).appendChild(canvas);
   const ctx = canvas.getContext('2d');
 
