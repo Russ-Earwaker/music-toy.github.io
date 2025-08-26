@@ -1,4 +1,7 @@
-// src/main.js (final: no version suffixes; instruments populate on boot; single boot; robust samples-ready)
+// src/main.js
+// Themed boot: assigns instruments per active theme without destructive changes.
+// Keeps file < 300 lines. Splits and helpers should go in separate modules if needed.
+
 import { DEFAULT_BPM, NUM_STEPS, ac, setBpm, ensureAudioContext, createScheduler, getLoopInfo, setToyVolume, setToyMuted } from './audio-core.js';
 import { initAudioAssets, triggerInstrument, getInstrumentNames, reloadSamples } from './audio-samples.js';
 import './auto-mix.js';
@@ -13,6 +16,33 @@ import { initDragBoard, organizeBoard } from './board.js';
 import './debug-automix.js';
 import './mute-bridge.js';
 import './roles-assign.js';
+
+// --- Theme integration (non-destructive) ---
+import {
+  resolveGridSamples,
+  resolveWheelSamples,
+  resolveBouncerSamples,
+  resolveRipplerSamples,
+} from './theme-manager.js';
+
+// --- Instrument name normalization & matching ---
+function normId(s){
+  if (s == null) return s;
+  return String(s).toLowerCase().trim()
+    .replace(/[\s\-]+/g, "_")
+    .replace(/[^a-z0-9_]/g, "")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+function makeNameResolver(list){
+  const map = new Map();
+  (list||[]).forEach(n => map.set(normId(n), n));
+  return function resolveName(desired){
+    const key = normId(desired);
+    return map.get(key) || null;
+  };
+}
+
 
 if (!window.__booted__) {
   window.__booted__ = true;
@@ -35,33 +65,25 @@ if (!window.__booted__) {
       const prev = sel.value;
       sel.value = (names && names.includes(current)) ? current : (names?.[0] || 'tone');
       if (sel.value !== prev) sel.dispatchEvent(new Event('change', { bubbles:true }));
-      // Prefer 'Kalimba' for rippler panels
-      try {
-        const panel = sel.closest('.toy-panel');
-        const isRippler = panel && ((panel.dataset.toy||'').toLowerCase()==='rippler' || (panel.dataset.toyid||'').toLowerCase()==='rippler');
-        if (isRippler) {
-          const kal = (names||[]).find(n => /kalimba/i.test(n));
-          if (kal) {
-            const before = sel.value;
-            sel.value = kal;
-            if (sel.value !== before) sel.dispatchEvent(new Event('change', { bubbles:true }));
-          }
-        }
-      } catch {}
+
     });
   }
 
-  // Repopulate selects + set sensible grid defaults when samples are ready
+  // Repopulate selects + set grid defaults from THEME when samples are ready
   window.addEventListener('samples-ready', (e)=>{
     const ok = !!e?.detail?.ok;
     const names = e?.detail?.names || [];
+    const resolveName = makeNameResolver(names);
     console.log('[samples-ready]', e?.detail);
     rebuildInstrumentSelects(names);
-    const pick = (hint) => names.find(n => n.toLowerCase().includes(hint)) || names[0] || 'tone';
     const isReload = (e && e.detail && e.detail.source === 'reload');
     if (!isReload && ok && grids.length) {
-      const prefs = [pick('kick'), pick('snare'), pick('hat'), pick('clap')];
-      grids.forEach((g, i) => { try { g.setInstrument && g.setInstrument(prefs[i] || names[0] || 'tone'); } catch{} });
+      const themed = resolveGridSamples();
+      grids.forEach((g, i) => { try {
+        const wanted = themed[i];
+        const inst = resolveName(wanted) || names.find(n=>/djembe|hand.?clap|clap/.test(n)) || names[0] || 'tone';
+        g.setInstrument && g.setInstrument(inst);
+      } catch{} });
     }
   });
 
@@ -82,8 +104,7 @@ if (!window.__booted__) {
       toys.forEach(t => t?.onLoop?.(loopStartTime));
     }
   );
-  // --- Transport (top bar) ---
-  
+
   // --- Transport (top bar) ---
   function setupTransport(){
     const playBtn = document.getElementById('play');
@@ -102,9 +123,8 @@ if (!window.__booted__) {
     if (playBtn) { playBtn.style.display = 'none'; playBtn.disabled = true; }
     if (stopBtn) { stopBtn.style.display = 'none'; stopBtn.disabled = true; }
 
-    // Create "Organise" button in the header/toolbar
+    // "Organise" button
     try {
-      // Prefer the same container as BPM control if present
       const host = (bpmInput && bpmInput.parentElement) || document.getElementById('toolbar') || document.querySelector('header') || document.body;
       let orgBtn = document.getElementById('organise-toys-btn');
       if (!orgBtn){
@@ -120,7 +140,6 @@ if (!window.__booted__) {
         orgBtn.style.background = '#0d1117';
         orgBtn.style.color = '#e6e8ef';
         orgBtn.style.cursor = 'pointer';
-        // Ensure visible if appended to body fallback
         if (host === document.body){
           orgBtn.style.position = 'fixed';
           orgBtn.style.top = '10px';
@@ -143,7 +162,6 @@ if (!window.__booted__) {
     try {
       const ctx = ensureAudioContext();
       if (ctx.state === 'suspended') await ctx.resume();
-      // No-op if assets already loaded
       await initAudioAssets(CSV_PATH).catch(()=>{});
       window.__audioUnlocked = true;
       window.dispatchEvent(new CustomEvent('audio-unlocked'));
@@ -158,29 +176,26 @@ if (!window.__booted__) {
     try { createLoopIndicator(document.body); } catch(e) { console.warn('[loopindicator] init failed', e); }
     initDragBoard();
 
-    // Kick off asset load NOW so instrument names populate before first tap
+    // Preload assets so names exist
     try { await initAudioAssets(CSV_PATH); } catch{}
 
-    // Build 4 grids
+    // Build 4 grids with THEME instruments
+    const themedGrids = resolveGridSamples();
     const names0 = getInstrumentNames();
-    const pick0 = (hint) => names0.find(n => n.toLowerCase().includes(hint)) || names0[0] || 'tone';
+    const resolveName = makeNameResolver(names0);
     const gridIds = ['#grid1', '#grid2', '#grid3', '#grid4'];
+    const titles = ['Simple Beat','Simple Beat','Simple Beat','Simple Beat'];
     grids = gridIds.map((sel, i) => {
       const el = document.querySelector(sel);
       if (!el) return null;
-      const titles = ['Kick','Snare','Hat-Closed','Clap'];
-      const inst = [pick0('kick'), pick0('snare'), pick0('hat'), pick0('clap')][i] || names0[0] || 'tone';
+      const wanted = themedGrids[i];
+      const inst = resolveName(wanted) || names0.find(n=>/djembe|hand.?clap|clap/.test(n)) || names0[0] || 'tone';
       return buildGrid(sel, NUM_STEPS, { defaultInstrument: inst, title: titles[i] });
     }).filter(Boolean);
     try{ console.log('[boot] grids:', grids.length); }catch{}
 
-    // Other toys
-    toys = [];
-    let wheelUsed = false;
-    
     // Ensure at least one Wheel panel exists
     try {
-      const board = document.getElementById('board');
       const panels = Array.from(document.querySelectorAll('.toy-panel'));
       const hasWheel = panels.some(p => (p.getAttribute('data-toy')||'').toLowerCase()==='wheel');
       if (!hasWheel) {
@@ -188,53 +203,77 @@ if (!window.__booted__) {
         const carrier = extras.length ? extras[extras.length-1] : null;
         if (carrier) {
           carrier.setAttribute('data-toy', 'wheel');
-        } else if (board) {
-          const sec = document.createElement('section');
-          sec.className = 'toy-panel';
-          sec.setAttribute('data-toy', 'wheel');
-          board.appendChild(sec);
+        } else {
+          const board = document.getElementById('board');
+          if (board) {
+            const sec = document.createElement('section');
+            sec.className = 'toy-panel';
+            sec.setAttribute('data-toy', 'wheel');
+            board.appendChild(sec);
+          }
         }
       }
     } catch{}
-document.querySelectorAll('.toy-panel').forEach((panel) => {
+
+    // Build other toys & assign THEME instruments
+    toys = [];
+    document.querySelectorAll('.toy-panel').forEach((panel) => {
       if (panel.dataset.toyInit === '1') return;
       const kind = (panel.getAttribute('data-toy') || '').toLowerCase();
       let inst = null;
-      
+
       try{
         if (kind === 'rippler' || kind === 'ripple') {
           inst = createRippleSynth(panel);
+          const want = resolveRipplerSamples()[0];
+          if (inst?.setInstrument){ const sel = panel.querySelector('.toy-instrument, select'); const fromPanel = panel.dataset && panel.dataset.instrument; const r = fromPanel || (sel && sel.value) || (resolveName ? resolveName(want) : want) || want; inst.setInstrument(r); }
         } else if (kind === 'bouncer') {
           inst = createBouncer(panel);
+          const want = resolveBouncerSamples()[0];
+          if (inst?.setInstrument){ const sel = panel.querySelector('.toy-instrument, select'); const fromPanel = panel.dataset && panel.dataset.instrument; const r = fromPanel || (sel && sel.value) || (resolveName ? resolveName(want) : want) || want; inst.setInstrument(r); }
         } else if (kind === 'ambient' || kind === 'ambient-glide') {
           inst = createAmbientGlide(panel);
         } else if (kind === 'wheel') {
           console.log('[wheel] build start', panel);
-          let wheelInstrument = 'slap bass guitar';
+          const sel = panel.querySelector('.toy-instrument, select');
+          const fromPanel = panel.dataset && panel.dataset.instrument;
+          let wheelInstrument = fromPanel || (sel && sel.value) || (resolveName ? resolveName(resolveWheelSamples()[0]) : null) || resolveWheelSamples()[0] || 'acoustic_guitar';
           buildWheel(panel, {
-            onNote: (midi, name, vel)=>{ try { const ac = ensureAudioContext(); /* wheel */ triggerInstrument(wheelInstrument || 'slap bass guitar', name, ac.currentTime + 0.0005, 'wheel'); } catch(e){} },
+            onNote: (midi, name, vel)=>{
+              try {
+                const acx = ensureAudioContext();
+                triggerInstrument(wheelInstrument, name, acx.currentTime + 0.0005, 'wheel');
+              } catch(e){}
+            },
             getBpm: ()=> ((getLoopInfo && getLoopInfo().bpm) || DEFAULT_BPM)
           });
           inst = { setInstrument: (n)=> { wheelInstrument = n; } };
-          try { panel.addEventListener('toy-instrument', (e)=>{ wheelInstrument = (e?.detail?.value) || wheelInstrument; }); } catch {}
+          try {
+            panel.addEventListener('toy-instrument', (e)=>{
+              wheelInstrument = (e?.detail?.value) || wheelInstrument;
+            });
+          } catch {}
+        } else if (kind === 'loopgrid' || kind === 'grid') {
+          // already built above
         } else {
           return;
         }
-        const ni = getInstrumentNames();
-        let _def = (ni.find(n => n.toLowerCase().includes('kalimba')) || ni[0] || 'tone');
-        if ((panel.dataset.toy||'').toLowerCase()==='wheel'){
-          _def = (ni.find(n => /slap.*bass|bass.*slap/i.test(n))
-               || ni.find(n => /slap/i.test(n))
-               || ni.find(n => /bass/i.test(n))
-               || _def);
+
+        // Set a sensible default if not set above
+        if (inst && !inst.__themedDefaultApplied) {
+          const ni = getInstrumentNames();
+          let _def = ni[0] || 'tone';
+          inst?.setInstrument?.(_def);
+          inst.__themedDefaultApplied = true;
         }
-        inst?.setInstrument?.(_def);
+
         toys.push(inst);
         panel.dataset.toyInit = '1';
       }catch(e){
         console.error('[boot] toy init failed for', kind, e);
       }
-});
+    });
+
     console.log('[boot] toys:', toys.length);
     try { assertRipplerContracts(); runRipplerSmoke(); } catch {}
 
@@ -254,15 +293,14 @@ document.querySelectorAll('.toy-panel').forEach((panel) => {
     window.addEventListener('pointerdown', onFirstPointer, true);
   }
 
-
-    // Dev: reload samples (bypass SW cache via query bust). Ctrl+Shift+R or custom event.
-    window.addEventListener('keydown', (e)=>{
-      if (e.key.toLowerCase() === 'r' && e.ctrlKey && e.shiftKey){
-        try { reloadSamples(CSV_PATH); } catch {}
-        e.preventDefault();
-      }
-    });
-    window.addEventListener('dev-reload-samples', ()=>{ try { reloadSamples(CSV_PATH); } catch {} });
-    try { window.reloadSamples = ()=> reloadSamples(CSV_PATH); } catch {}
+  // Dev: reload samples
+  window.addEventListener('keydown', (e)=>{
+    if (e.key.toLowerCase() === 'r' && e.ctrlKey && e.shiftKey){
+      try { reloadSamples(CSV_PATH); } catch {}
+      e.preventDefault();
+    }
+  });
+  window.addEventListener('dev-reload-samples', ()=>{ try { reloadSamples(CSV_PATH); } catch {} });
+  try { window.reloadSamples = ()=> reloadSamples(CSV_PATH); } catch {}
   boot();
 }
