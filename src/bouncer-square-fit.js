@@ -1,19 +1,17 @@
 // src/bouncer-square-fit.js
-// Keep BOUNCER toy window square (height = width) and make canvas fill it. <120 lines>
+// Keep BOUNCER toy body square (height = width) and make canvas fill it.
 (function(){
-  
-function forceCanvasFill(body){
-  const c = body.querySelector('canvas') || body.querySelector('svg');
-  if (!c) return;
-  c.style.setProperty('width','100%','important');
-  c.style.setProperty('height','100%','important');
-  c.style.display = 'block';
-}
-function squareBodyToWidth(body){
-  const w = Math.max(1, Math.round(body.clientWidth));
-  body.style.height = w + 'px';
-}
-
+  function forceCanvasFill(body){
+    const c = body?.querySelector('canvas,svg');
+    if (!c) return;
+    c.style.setProperty('width','100%','important');
+    c.style.setProperty('height','100%','important');
+    c.style.display = 'block';
+  }
+  function squareBodyToWidth(body){
+    const w = Math.max(1, Math.round(body.clientWidth));
+    body.style.height = w + 'px';
+  }
   function apply(panel){
     const body = panel.querySelector('.toy-body') || panel;
     squareBodyToWidth(body);

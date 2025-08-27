@@ -5,3 +5,27 @@
   height: 100% !important;
   display: block;
 }
+
+/* === Shared header & volume alignment === */
+.toy-header { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.toy-header .toy-vol, .toy-header .volbar { margin-left:auto; display:flex; align-items:center; gap:8px; }
+
+/* Show .adv-only controls only in zoomed state */
+.toy-header .adv-only { display:none; }
+.toy-panel.toy-zoomed .toy-header .adv-only { display:inline-flex; }
+
+/* Keep square toys square and contained */
+[data-toy="bouncer"] .toy-body,
+[data-toy="rippler"] .toy-body,
+[data-toy="wheel"]   .toy-body { width:100%; aspect-ratio: 1 / 1; overflow:hidden; position:relative; }
+
+/* Ensure canvases fill their toy body */
+[data-toy="bouncer"] .toy-body canvas,
+[data-toy="rippler"] .toy-body canvas,
+[data-toy="wheel"]   .toy-body canvas { width:100% !important; height:100% !important; display:block; }
+
+/* Bouncer bottom border visible */
+.toy-panel[data-toy="bouncer"] .toy-body { border-bottom: 1px solid var(--border, #333); }
+
+/* Grid volume bar stays in header rather than dropping below */
+.toy-panel[data-toy="loopgrid"] .toy-header input[type="range"] { max-width: 160px; }
