@@ -348,3 +348,10 @@ main { flex: 1 1 auto; display: block; }
   left: -9999px !important; 
   top: -9999px !important; 
 }
+
+
+/* Center zoomed toys and limit size */
+#zoom-overlay { display:none; position:fixed; inset:0; z-index:9999; }
+#zoom-overlay.active { display:grid; place-items:center; }
+#zoom-overlay .toy-panel { max-width: min(94vw, 900px); width: 100%; }
+#zoom-overlay .toy-panel .toy-body { aspect-ratio: 1 / 1; }
