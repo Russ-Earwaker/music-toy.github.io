@@ -98,15 +98,17 @@ export function zoomOutPanel(panel){
       else body.removeAttribute('style');
     }
     panel.classList.remove('toy-zoomed');
+        // Clear temporary sizing before reattach
+    try{ panel.style.width=''; panel.style.height=''; panel.style.minHeight=''; }catch{}
+    const bodyEl = panel.querySelector('.toy-body')||panel;
+    try{ if (bodyEl){ bodyEl.style.height=''; bodyEl.style.width=''; bodyEl.style.inset=''; } }catch{}
     if (info.parent){ info.parent.insertBefore(panel, info.next || null); }
     if (info.prevPanelStyle != null){
       if (info.prevPanelStyle) panel.setAttribute('style', info.prevPanelStyle);
       else panel.removeAttribute('style');
     }
-    try{ panel.style.width=''; panel.style.height=''; panel.style.minHeight=''; }catch{}
-    const bodyEl = panel.querySelector('.toy-body')||panel;
-    try{ if (bodyEl){ bodyEl.style.height=''; bodyEl.style.width=''; bodyEl.style.inset=''; } }catch{}
     panel._portalInfo = null;
+    try{ window.dispatchEvent(new Event('resize')); }catch{}
   }catch{}
 
   try{ panel.dispatchEvent(new CustomEvent('toy-zoom', { detail:{ zoomed:false } })); }catch{}

@@ -101,8 +101,7 @@ export function initToyUI(panel, {
 right.className = 'toy-controls-right';
 right.append(randBtn, clearBtn, instWrap);
 header.appendChild(right);
-
-  // Safety: if right-side controls vanished (e.g., DOM moved), rebuild them
+// Safety: if right-side controls vanished (e.g., DOM moved), rebuild them
   function ensureRightControls(){
     const rightNow = header.querySelector('.toy-controls-right');
     if (!rightNow){
@@ -192,7 +191,38 @@ header.appendChild(right);
   } catch {}
 
 
-  function positionVolume(){ try{}catch{} }
+  function positionVolume(){
+    try{
+      const inOverlay = !!panel.closest('#zoom-overlay');
+      if (inOverlay){
+        // Advanced: keep it glued to the panel bottom
+        volWrap.style.top = 'auto';
+        volWrap.style.bottom = '0';
+        volWrap.style.left = '0';
+        volWrap.style.right = '0';
+        volWrap.style.pointerEvents = 'auto';
+        return;
+      }
+      // Standard: place immediately below the gameplay square (account for board zoom)
+      const bodyEl = panel.querySelector('.toy-body') || panel;
+      const pr = panel.getBoundingClientRect();
+      const br = bodyEl.getBoundingClientRect();
+      let scale = 1;
+      try {
+        if (window.BoardViewport && BoardViewport.getState){
+          const st = BoardViewport.getState();
+          if (st && st.scale) scale = st.scale;
+        }
+      } catch {}
+      let topCss = ((br.top - pr.top) + br.height) / (scale || 1);
+      topCss = Math.max(0, Math.round(topCss));
+      volWrap.style.bottom = 'auto';
+      volWrap.style.top = topCss + 'px';
+      volWrap.style.left = '0';
+      volWrap.style.right = '0';
+      volWrap.style.pointerEvents = 'auto';
+    }catch{}
+  }
   positionVolume();
   window.addEventListener('resize', positionVolume);
   try{ panel.addEventListener('toy-zoom', positionVolume); }catch{}
@@ -210,6 +240,7 @@ header.appendChild(right);
     const zoomed = panel.classList.contains('toy-zoomed');
     instWrap.style.display = zoomed ? 'flex' : 'none';
     try{ updateRightActions(); }catch{}
+    try{ updateRightActions(); }catch{}
   }
   syncAdvancedUI();
   try {
@@ -218,6 +249,7 @@ header.appendChild(right);
       panel.classList.toggle('toy-zoomed', z);
       syncAdvancedUI();
       positionVolume();
+      try{ (typeof updateRightActions==='function') && updateRightActions(); }catch{}
       try{ updateRightActions(); }catch{}
     });
   } catch {}
