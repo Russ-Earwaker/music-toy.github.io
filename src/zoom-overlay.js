@@ -107,6 +107,7 @@ export function zoomOutPanel(panel){
       if (info.prevPanelStyle) panel.setAttribute('style', info.prevPanelStyle);
       else panel.removeAttribute('style');
     }
+    panel.classList.remove('toy-zoomed');
     panel._portalInfo = null;
     try{ window.dispatchEvent(new Event('resize')); }catch{}
   }catch{}

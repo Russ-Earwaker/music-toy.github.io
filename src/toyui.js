@@ -195,7 +195,6 @@ header.appendChild(right);
     try{
       const inOverlay = !!panel.closest('#zoom-overlay');
       if (inOverlay){
-        // Advanced: keep it glued to the panel bottom
         volWrap.style.top = 'auto';
         volWrap.style.bottom = '0';
         volWrap.style.left = '0';
@@ -203,21 +202,16 @@ header.appendChild(right);
         volWrap.style.pointerEvents = 'auto';
         return;
       }
-      // Standard: place immediately below the gameplay square (account for board zoom)
       const bodyEl = panel.querySelector('.toy-body') || panel;
-      const pr = panel.getBoundingClientRect();
-      const br = bodyEl.getBoundingClientRect();
-      let scale = 1;
-      try {
-        if (window.BoardViewport && BoardViewport.getState){
-          const st = BoardViewport.getState();
-          if (st && st.scale) scale = st.scale;
-        }
-      } catch {}
-      let topCss = ((br.top - pr.top) + br.height) / (scale || 1);
-      topCss = Math.max(0, Math.round(topCss));
+      const canvas = bodyEl.querySelector('canvas');
+      let topCss = (bodyEl.offsetTop || 0);
+      if (canvas){
+        topCss += (canvas.offsetTop || 0) + (canvas.clientHeight || 0);
+      } else {
+        topCss += (bodyEl.clientHeight || 0);
+      }
       volWrap.style.bottom = 'auto';
-      volWrap.style.top = topCss + 'px';
+      volWrap.style.top = Math.max(0, Math.round(topCss)) + 'px';
       volWrap.style.left = '0';
       volWrap.style.right = '0';
       volWrap.style.pointerEvents = 'auto';
@@ -232,9 +226,11 @@ header.appendChild(right);
     const isGridToy = /grid/.test(idBase);
     function updateRightActions(){
       const zoomed = panel.classList.contains('toy-zoomed');
-      const showRC = !(isGridToy && zoomed); // hide in advanced for grid only
-      randBtn.style.display = showRC ? '' : 'none';
-      clearBtn.style.display = showRC ? '' : 'none';
+      const buttons = Array.from(header.querySelectorAll('button'));
+      const otherHasRandom = buttons.some(b => (b!==randBtn) && /random/i.test(b.textContent||''));
+      const otherHasClear  = buttons.some(b => (b!==clearBtn) && /clear/i.test(b.textContent||''));
+      randBtn.style.display  = otherHasRandom ? 'none' : '';
+      clearBtn.style.display = otherHasClear  ? 'none' : '';
     }
 
     const zoomed = panel.classList.contains('toy-zoomed');
