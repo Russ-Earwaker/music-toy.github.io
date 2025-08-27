@@ -62,7 +62,7 @@ export function randomizeWheel(handles, opts = {}){
     const n = pool.length;
     if (k >= n){ pool.forEach(i=>active.add(i)); return active; }
     const step = n / k;
-    let pos = 0;
+    let pos = Math.random() * step;
     for (let i=0;i<k;i++){ active.add(pool[Math.round(pos) % n]); pos += step; }
     if (active.size < k){ // repair rounding
       for (let i=0;i<n && active.size<k;i++){ active.add(pool[i]); }

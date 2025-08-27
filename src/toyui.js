@@ -133,7 +133,7 @@ right.append(randBtn, resetBtn, instWrap);
   Object.assign(volWrap.style, {
     position:'absolute', zIndex:'5', pointerEvents:'auto',
     display:'flex', alignItems:'center', gap:'10px',
-    left:'0', right:'0', bottom:'0',
+    left:'0', right:'0', top:'100%',
     padding:'8px 10px',
     background:'rgba(13,17,23,0.92)', border:'1px solid #252b36', borderRadius:'12px',
     boxShadow:'0 10px 24px rgba(0,0,0,0.35)', backdropFilter:'blur(6px)', userSelect:'none'
@@ -147,13 +147,15 @@ right.append(randBtn, resetBtn, instWrap);
   vol.className='toy-volrange';
   Object.assign(vol.style, {
     flex:'1 1 auto', height:'8px', margin:'0', padding:'0', appearance:'none',
-    background:'linear-gradient(to right, transparent calc(50% - 3px), #5b6378 calc(50% - 3px), #5b6378 calc(50% + 3px), transparent calc(50% + 3px))',
+    background:'#394150',
     borderRadius:'4px'
   });
+  function updateVolBg(){ const pct = Math.max(0, Math.min(100, parseInt(vol.value,10)||0)); vol.style.background = `linear-gradient(to right, #6adf7a 0% ${pct}%, #394150 ${pct}% 100%)`; }
   vol.addEventListener('input', ()=>{
-    const v = Math.max(0, Math.min(1, (parseInt(vol.value,10)||0)/100));
+    const v = Math.max(0, Math.min(1, (parseInt(vol.value,10)||0)/100)); updateVolBg();
     try{ window.dispatchEvent(new CustomEvent('toy-volume', { detail: { toyId: getToyId(), value: v } })); }catch{}
   });
+  updateVolBg();
   vol.addEventListener('pointerdown', ev => ev.stopPropagation(), { capture:true });
 
   volWrap.append(muteBtn, vol);

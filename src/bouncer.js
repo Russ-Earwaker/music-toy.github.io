@@ -19,30 +19,28 @@ const BASE_BLOCK_SIZE = 44, BASE_CANNON_R = 10, BASE_BALL_R = 7;
 function computeLaunchVelocity(hx, hy, px, py, worldW, worldH, getLoopInfo, speedFactor){
   const dx = (px - hx), dy = (py - hy);
   const dist = Math.hypot(dx, dy) || 1;
-  const nx = dx / dist, ny = dy / dist;
-
-  // Approximate frames per second
-  const FPS = 60;
-
-  // Target: cross the diagonal in ~1 bar at 100% speed
-  const w = Math.max(1, worldW()) - EDGE*2, h = Math.max(1, worldH()) - EDGE*2;
+  let ux = dx / dist, uy = dy / dist;
+  // Canvas geometry (usable area inside frame)
+  const w = Math.max(1, worldW()) - EDGE*2;
+  const h = Math.max(1, worldH()) - EDGE*2;
   const diag = Math.max(1, Math.hypot(w, h));
+  // Fallback direction for simple clicks (tiny drags)
+  const minDrag = Math.max(4, diag*0.005);
+  if (dist < minDrag){ ux = 0; uy = -1; }
+  // Time base
+  const FPS = 60;
   let barLen = 1.0;
-  try { const li = (typeof getLoopInfo==='function') ? getLoopInfo() : null; if (li && li.barLen) barLen = li.barLen; } catch{}
-
-  // Pixels per frame to traverse diag in 1 bar
-  const basePPF = diag / (FPS * barLen);
-
-  // Drag factor (short drags still move, long drags a bit faster but clamped)
-  const dragK = Math.min(1, Math.max(0.1, dist / (diag*0.6)));
-
-  // User speed factor (0.2..1.6) and friendly clamp (ppf band)
+  try{ const li = (typeof getLoopInfo==='function') ? getLoopInfo() : null; if (li && li.barLen) barLen = li.barLen; }catch{}
+  // Base pixels-per-frame so the ball roughly crosses the diagonal in ~1 bar at sf=1
+  const basePPF = (diag / (FPS * barLen));
   const sf = Math.max(0.2, Math.min(1.6, speedFactor || 1));
-  let desiredPPF = Math.min(8.0, Math.max(0.4, basePPF * sf * (0.6 + 0.6*dragK)));
-  desiredPPF *= 4.0; // global speed boost x4
-
-  return { vx: nx * desiredPPF, vy: ny * desiredPPF };
+  let desiredPPF = Math.min(8.0, Math.max(0.4, basePPF * sf));
+  desiredPPF *= 4.0; // keep prior global boost so it feels lively
+  return { vx: ux * desiredPPF, vy: uy * desiredPPF };
 }
+
+
+
 export function createBouncer(selector){
   const shell = (typeof selector==='string') ? document.querySelector(selector) : selector; if (!shell) return null;
   const panel = shell.closest('.toy-panel') || shell;
@@ -251,9 +249,9 @@ if (draggingHandle){
     const sNow=sizing.scale||1; if (sNow!==lastScale){ rescaleAll(sNow/lastScale); lastScale=sNow; }
     const cs=resizeCanvasForDPR(canvas, ctx), w=cs.width, h=cs.height;
     if (!lastCanvasW) { lastCanvasW = w; lastCanvasH = h; }
-    const fx = (w && lastCanvasW ? w/lastCanvasW : 1);
-    const fy = (h && lastCanvasH ? h/lastCanvasH : 1);
-    if (Math.abs(fx-1) > 0.001 || Math.abs(fy-1) > 0.001){ rescaleAll(fx, fy); lastCanvasW = w; lastCanvasH = h; }
+    const sx = (w && lastCanvasW ? w/lastCanvasW : 1);
+    const sy = (h && lastCanvasH ? h/lastCanvasH : 1);
+    if (Math.abs(sx-1) > 0.001 || Math.abs(sy-1) > 0.001){ rescaleAll(sx, sy); lastCanvasW = w; lastCanvasH = h; }
     ctx.fillStyle='#0b0f16'; ctx.fillRect(0,0,w,h);
     ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.lineWidth=2; ctx.strokeRect(EDGE,EDGE,w-EDGE*2,h-EDGE*2);
 

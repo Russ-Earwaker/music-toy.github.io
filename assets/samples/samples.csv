@@ -26,6 +26,7 @@ djembe_tone.wav,percussion,djembe,short note,Djembe Tone,
 djembe_slap.wav,percussion,djembe,short note,Djembe Slap,
 guitar_acoustic_c.wav,string,guitar,short note,Acoustic Guitar,
 clapElectro.mp3,percussion,clap,short note,Hand clap (electro),
+tamborine.wav,percussion,tamborine,short note,tamborine,
 ,,,,,
 # --- Synths (no filename; specify synth_id from engine) ---,,,,,
 ,synth,synth,sustain,Tone (Sine),tone

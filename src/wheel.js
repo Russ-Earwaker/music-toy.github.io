@@ -46,19 +46,32 @@ export function buildWheel(selector, opts = {}){
   let semiOffsets = Array.from({length:STEPS}, ()=> 0);
   let baseMidi = 60; // C4
   let playing = true;
+  let __lastRandSig = null;
 
   function doReset(){ active = Array.from({length:STEPS}, ()=> false); }
   function doRandom(){
     try{
-      const handles = Array.from({length:STEPS}, ()=> null);
-      randomizeWheel(handles, { toyId:'wheel', priority:1 });
-      for (let i=0;i<STEPS;i++){ const h = handles[i]; active[i] = (h!=null); semiOffsets[i] = (h!=null ? (h|0) : 0); }
+      const tries = 4;
+      for (let attempt=0; attempt<tries; attempt++){
+        const handles = Array.from({length:STEPS}, ()=> null);
+        const prio = 1 + Math.random()*0.001*attempt; // tiny jitter to impact density selection
+        randomizeWheel(handles, { toyId:'wheel', priority: prio });
+        const pattern = handles.map(h=> (h==null?0:1)).join('');
+        if (pattern !== __lastRandSig || attempt === tries-1){
+          for (let i=0;i<STEPS;i++){
+            const h = handles[i];
+            active[i] = (h!=null);
+            semiOffsets[i] = (h!=null ? (h|0) : 0);
+          }
+          __lastRandSig = pattern;
+          break;
+        }
+      }
     }catch(e){
       for (let i=0;i<STEPS;i++){ active[i] = (i%4===0); semiOffsets[i] = 0; }
     }
   }
-
-  // Transport helpers
+// Transport helpers
   function currentStepFromLoop(){
     try{
       const ac = ensureAudioContext();
@@ -78,10 +91,11 @@ export function buildWheel(selector, opts = {}){
   const worldW = ()=> canvas.width|0;
   const worldH = ()=> canvas.height|0;
   const spokeAngle = (i)=> (-Math.PI/2 + (i/STEPS)*Math.PI*2);
+  const EDGE_WHEEL = 10;
   function radii(){
     const W = worldW(), H = worldH();
     const s = Math.min(W, H);
-    const Rmin = s*0.22, Rout = s*0.46, Rbtn = Math.max(10, s*0.045);
+    const Rmin = s*0.22, Rout = s*0.42, Rbtn = Math.max(10, s*0.045);
     const cx = W/2, cy = H/2;
     return { cx, cy, Rmin, Rout, Rbtn };
   }
@@ -140,7 +154,10 @@ export function buildWheel(selector, opts = {}){
       ctx.lineWidth = (i === stepIdx) ? 3 : 2;
       ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
 
-      blocks.push({ x: Math.round(x2 - sBtn/2), y: Math.round(y2 - sBtn/2), w: sBtn, h: sBtn, active: !!active[i], noteIndex: 0 });
+      const pad = EDGE_WHEEL + sBtn*0.5;
+      const bx = Math.max(pad, Math.min(W - pad, x2)) - Math.round(sBtn/2);
+      const by = Math.max(pad, Math.min(H - pad, y2)) - Math.round(sBtn/2);
+      blocks.push({ x: bx, y: by, w: sBtn, h: sBtn, active: !!active[i], noteIndex: 0 });
     }
     const nowSec = (performance.now()/1000);
     drawBlocksSection(ctx, blocks, 0, 0, null, 1, null, sizing, null, null, nowSec);

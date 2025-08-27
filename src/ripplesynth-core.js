@@ -32,7 +32,7 @@ canvas.className = 'rippler-canvas';
 panel.addEventListener('toy-instrument', (e)=>{ try{ currentInstrument = (e?.detail?.value)||currentInstrument; }catch{} });
 const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true }); const isZoomed = ()=> panel.classList.contains('toy-zoomed');
   panel.addEventListener('toy-zoom', ()=>{ try { setParticleBounds(canvas.width|0, canvas.height|0); } catch {} });
-const EDGE=10; const W = ()=> ((canvas.getBoundingClientRect?.().width|0)  || canvas.clientWidth  || (panel.querySelector?.('.toy-body')||panel).clientWidth  || 360);
+const EDGE=8; const W = ()=> ((canvas.getBoundingClientRect?.().width|0)  || canvas.clientWidth  || (panel.querySelector?.('.toy-body')||panel).clientWidth  || 360);
   const H = ()=> ((canvas.getBoundingClientRect?.().height|0) || canvas.clientHeight || (panel.querySelector?.('.toy-body')||panel).clientHeight || 280);
   const clamp = (v,min,max)=> Math.max(min, Math.min(max, v));
 
