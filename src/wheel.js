@@ -6,6 +6,7 @@ import { resizeCanvasForDPR, clamp } from './utils.js';
 import { initToyUI } from './toyui.js';
 import { initToySizing } from './toyhelpers-sizing.js';
 import { ensureAudioContext, getLoopInfo } from './audio-core.js';
+import { drawBlocksSection } from './ripplesynth-blocks.js';
 import { addWheelToSequence } from './wheel-sequencer.js';
 
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
@@ -105,6 +106,7 @@ export function buildWheel(selector, opts = {}){
   function hitSpokeButton(x,y){
     const { Rbtn } = radii();
     let best=-1, bestD=Rbtn*1.3;
+    const blocks = []; const sBtn = Math.max(8, Math.round(Rbtn*2));
     for (let i=0;i<STEPS;i++){
       const p = spokeEnd(i);
       const d = Math.hypot(x-p.x, y-p.y);
@@ -130,8 +132,9 @@ export function buildWheel(selector, opts = {}){
     ctx.clearRect(0,0,W,H);
     ctx.fillStyle = '#0d1117'; ctx.fillRect(0,0,W,H);
 
-    // spokes + step highlight
+    // spokes + step highlight + grid cubes
     const { stepIdx } = currentStepFromLoop();
+    const blocks = []; const sBtn = Math.max(8, Math.round(Rbtn*2));
     for (let i=0;i<STEPS;i++){
       const a = spokeAngle(i);
       const x1 = cx + Math.cos(a)*Rmin, y1 = cy + Math.sin(a)*Rmin;
@@ -140,12 +143,8 @@ export function buildWheel(selector, opts = {}){
       ctx.lineWidth = (i === stepIdx) ? 3 : 2;
       ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
 
-      // end button
-      const on = !!active[i];
-      ctx.beginPath(); ctx.arc(x2, y2, Rbtn, 0, Math.PI*2);
-      ctx.fillStyle = on ? '#4caf50' : '#1a1f29';
-      ctx.fill();
-      ctx.strokeStyle = on ? '#6adf7a' : '#394150'; ctx.lineWidth = 1.5; ctx.stroke();
+      // push cube for end button
+      blocks.push({ x: Math.round(x2 - sBtn/2), y: Math.round(y2 - sBtn/2), w: sBtn, h: sBtn, active: !!active[i], noteIndex: 0 });
     }
   }
 

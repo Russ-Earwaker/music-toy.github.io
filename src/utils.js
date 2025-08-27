@@ -19,37 +19,19 @@ export function barSeconds(bpm = 120) {
 // Compatible signatures:
 //   resizeCanvasForDPR(canvas, ctx)
 //   resizeCanvasForDPR(canvas, cssW, cssH)
-export function resizeCanvasForDPR(canvas, a, b){
-  const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) ? window.devicePixelRatio : 1;
-  // If second arg looks like a 2D context, treat it as ctx; else treat as cssW/cssH
-  const looksLikeCtx = a && typeof a === 'object' && typeof a.canvas === 'object' && typeof a.setTransform === 'function';
-  const ctx = looksLikeCtx ? a : (canvas.getContext && canvas.getContext('2d') || null);
-  // If numeric sizing provided, apply CSS size
-  if (!looksLikeCtx && typeof a === 'number') {
-    canvas.style.width = a + 'px';
-    if (typeof b === 'number') canvas.style.height = b + 'px';
+export function resizeCanvasForDPR(canvas, ctx){
+  const dpr = window.devicePixelRatio || 1;
+  const rect = (canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : {width:canvas.clientWidth||0,height:canvas.clientHeight||0});
+  const W = Math.max(1, Math.floor(rect.width || canvas.clientWidth || 0));
+  const H = Math.max(1, Math.floor(rect.height || canvas.clientHeight || 0));
+  const needW = Math.floor(W * dpr);
+  const needH = Math.floor(H * dpr);
+  if (canvas.width !== needW || canvas.height !== needH){
+    canvas.width = needW;
+    canvas.height = needH;
+    ctx.setTransform(1,0,0,1,0,0);
   }
-  // Measure CSS size
-  let rect;
-  try {
-    rect = canvas.getBoundingClientRect();
-  } catch {
-    rect = { width: canvas.clientWidth || 0, height: canvas.clientHeight || 0 };
-  }
-  const cssW = Math.max(1, Math.floor(rect.width || 0));
-  const cssH = Math.max(1, Math.floor(rect.height || 0));
-  const dpW = Math.max(1, Math.floor(cssW * dpr));
-  const dpH = Math.max(1, Math.floor(cssH * dpr));
-
-  if (canvas.width !== dpW) canvas.width = dpW;
-  if (canvas.height !== dpH) canvas.height = dpH;
-
-  if (ctx && typeof ctx.setTransform === 'function') {
-    // Set scale so drawing coordinates are in CSS pixels
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  }
-
-  return { width: cssW, height: cssH, dpr };
+  return {width: canvas.width, height: canvas.height};
 }
 
 // Random integer in range [min, max]

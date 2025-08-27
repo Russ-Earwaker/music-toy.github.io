@@ -85,9 +85,16 @@ export function createBouncer(selector){
 
   const worldW = ()=> Math.max(1, Math.floor(canvas.getBoundingClientRect().width||canvas.clientWidth||0));
   const worldH = ()=> Math.max(1, Math.floor(canvas.getBoundingClientRect().height||canvas.clientHeight||0));
-  const blockSize = ()=> Math.round(BASE_BLOCK_SIZE * (sizing.scale||1));
-  const cannonR  = ()=> Math.round(BASE_CANNON_R  * (sizing.scale||1));
-  const ballR    = ()=> Math.round(BASE_BALL_R    * (sizing.scale||1));
+  // board zoom scaling based on visual width ratio (like Rippler)
+  let __baseAttrW = 0;
+  function rectScale(){
+    const w = canvas.width || 0; // device-pixel width after DPR & board zoom via utils.js
+    if (!__baseAttrW && w>0) __baseAttrW = w;
+    return (__baseAttrW>0 && w>0) ? (w/__baseAttrW) : 1;
+  }
+  const blockSize = ()=> Math.round(BASE_BLOCK_SIZE * (sizing.scale||1) * rectScale());
+  const cannonR  = ()=> Math.round(BASE_CANNON_R  * (sizing.scale||1) * rectScale());
+  const ballR    = ()=> Math.round(BASE_BALL_R    * (sizing.scale||1) * rectScale());
 
   // interaction state
   let handle = { x: worldW()*0.22, y: worldH()*0.5 };
