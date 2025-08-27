@@ -162,7 +162,12 @@ export function createBouncer(selector){
   }
 
   // interactions (tap-to-toggle in standard view; thirds edit in zoom)
-  function localPoint(evt){ const r=canvas.getBoundingClientRect(); return { x: evt.clientX - r.left, y: evt.clientY - r.top }; }
+  function localPoint(evt){
+    const r = canvas.getBoundingClientRect();
+    const sx = (r.width ? (canvas.width / r.width) : 1);
+    const sy = (r.height? (canvas.height/ r.height): 1);
+    return { x: (evt.clientX - r.left) * sx, y: (evt.clientY - r.top) * sy };
+  }
   
   canvas.addEventListener('pointerdown', (e)=>{
     const p = localPoint(e);
