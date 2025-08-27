@@ -72,7 +72,11 @@ export function initDragBoard(boardSel = '#board') {
       el,
       startX: e.clientX,
       startY: e.clientY,
-      baseLeft: parseFloat(el.style.left || (rect.left - bRect.left) + 'px') || 0,
+      baseLeft: (function(){
+        const s = (window.BoardViewport && BoardViewport.getState && BoardViewport.getState().scale) ? BoardViewport.getState().scale : 1;
+        if (el.style.left) return parseFloat(el.style.left) || 0;
+        return ((rect.left - bRect.left) / s) || 0;
+      })(),
       baseTop:  parseFloat(el.style.top  || (rect.top  - bRect.top)  + 'px') || 0,
       moved: false
     };
@@ -86,13 +90,14 @@ export function initDragBoard(boardSel = '#board') {
     const dy = e.clientY - drag.startY;
     if (!drag.moved && (Math.abs(dx) > 2 || Math.abs(dy) > 2)) drag.moved = true;
 
-    // clamp within board bounds
-    const bRect = board.getBoundingClientRect();
-    const elRect = drag.el.getBoundingClientRect();
-    const maxLeft = (bRect.width - elRect.width);
-    const maxTop  = (bRect.height - elRect.height);
-    const nextLeft = clamp(drag.baseLeft + dx, 0, Math.max(0, Math.floor(maxLeft)));
-    const nextTop  = clamp(drag.baseTop  + dy,  0, Math.max(0, Math.floor(maxTop)));
+    // clamp within board bounds (world space, not screen space)
+    const scale = (window.BoardViewport && BoardViewport.getState && BoardViewport.getState().scale) ? BoardViewport.getState().scale : 1;
+    const adjDx = dx / scale;
+    const adjDy = dy / scale;
+    const maxLeft = (board.clientWidth - drag.el.offsetWidth);
+    const maxTop  = (board.clientHeight - drag.el.offsetHeight);
+    const nextLeft = clamp(drag.baseLeft + adjDx, 0, Math.max(0, Math.floor(maxLeft)));
+    const nextTop  = clamp(drag.baseTop  + adjDy,  0, Math.max(0, Math.floor(maxTop)));
     drag.el.style.left = nextLeft + 'px';
     drag.el.style.top  = nextTop  + 'px';
   }

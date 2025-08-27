@@ -1,15 +1,22 @@
-// src/toyui.js — header controls for toys (Zoom, Random, Reset, Mute + per‑toy volume)
-import './toy-audio.js';
+// src/toyui.js — ES module export + window fallback + auto-init
+// Builds header (title, Advanced, Random, Clear, Instrument) and a volume bar.
+// Instrument selector is hidden in standard view and shown only in Advanced.
+
 import { getInstrumentNames } from './audio-samples.js';
 import { zoomInPanel, zoomOutPanel } from './zoom-overlay.js';
 
-const DEBUG = (typeof localStorage !== 'undefined' && localStorage.toyuiDebug === '1');
-const dbg = (...args)=>{ if (DEBUG) { try { console.log('[toyui]', ...args); } catch{} } };
-
-const ICONS = {
-  volume: `<svg viewBox='0 0 24 24' aria-hidden='true' width='18' height='18' style='display:block'><path fill='currentColor' d='M3 10v4h4l5 4V6L7 10H3z'/><path fill='currentColor' d='M16.5 12a4.5 4.5 0 0 0-2.5-4.03v8.06A4.5 4.5 0 0 0 16.5 12z'/></svg>`,
-  mute:   `<svg viewBox='0 0 24 24' aria-hidden='true' width='18' height='18' style='display:block'><path fill='currentColor' d='M3 10v4h4l5 4V6L7 10H3z'/><path stroke='currentColor' stroke-width='2' stroke-linecap='round' d='M19 5l-3 3'/><path stroke='currentColor' stroke-width='2' stroke-linecap='round' d='M16 8l3 3'/></svg>`
-};
+function makeBtn(label, title){
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'toy-btn';
+  b.title = title || label;
+  Object.assign(b.style, {
+    padding:'6px 10px', border:'1px solid #252b36', borderRadius:'10px',
+    background:'#0d1117', color:'#e6e8ef', cursor:'pointer'
+  });
+  b.textContent = label;
+  return b;
+}
 
 export function initToyUI(panel, {
   toyName = 'Toy',
@@ -17,195 +24,232 @@ export function initToyUI(panel, {
   onRandom = null,
   onReset = null
 } = {}){
-  const idBase = (panel?.dataset?.toy || toyName || 'toy').toLowerCase();
-  const getToyId = ()=> { try { return (panel?.dataset?.toy || idBase).toLowerCase(); } catch { return idBase; } };
-  // Normalise identifiers
-  panel.dataset.toy = getToyId();
-  panel.dataset.toyid = panel.dataset.toy;
+  // Normalize IDs
+  const idBase = (panel?.dataset?.toy || panel?.dataset?.toyid || toyName || 'toy').toLowerCase();
+  panel.dataset.toy = idBase;
+  panel.dataset.toyid = idBase;
 
-  // Ensure header
+  // Header container
   let header = panel.querySelector('.toy-header');
   if (header) header.textContent = '';
   if (!header){
     header = document.createElement('div');
     header.className = 'toy-header';
-    Object.assign(header.style, { display:'flex', alignItems:'center', justifyContent:'space-between', gap:'10px', padding:'8px 10px' });
+    Object.assign(header.style, {
+      display:'flex', alignItems:'center', justifyContent:'space-between',
+      gap:'10px', padding:'8px 10px', position:'relative', zIndex:'20'
+    });
+    // Do NOT stopPropagation on header: board needs pointerdown on it to drag toys.
     panel.prepend(header);
   }
 
-  function makeBtn(txt, title){
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'toy-btn';
-    if (txt && txt.indexOf('<') === -1) b.textContent = txt; else b.innerHTML = txt || '';
-    b.title = title || txt || '';
-    Object.assign(b.style, { padding:'6px 10px', border:'1px solid #252b36', borderRadius:'10px', background:'#0d1117', color:'#e6e8ef', cursor:'pointer' });
-    b.addEventListener('pointerdown', ev => ev.stopPropagation(), { capture:true });
-    return b;
-  }
-
-  // Left: Zoom + name
+  // Left: title + Advanced
   const left = document.createElement('div');
-  left.className = 'toy-controls toy-controls-left';
   Object.assign(left.style, { display:'flex', alignItems:'center', gap:'8px' });
-  const zoomBtn = makeBtn('Advanced', 'Advanced Edit Mode');
-  const nameEl  = document.createElement('span'); nameEl.textContent = toyName; nameEl.style.opacity='.85';
-  left.append(zoomBtn, nameEl);
+  const titleEl = document.createElement('div');
+  titleEl.textContent = toyName;
+  Object.assign(titleEl.style, { fontWeight:'600', color:'#e6e8ef' });
+  const advBtn = makeBtn('Advanced', 'Open advanced edit');
+  // Prevent drag-start when clicking the button itself
+  advBtn.addEventListener('pointerdown', e=> e.stopPropagation());
+  function setAdvLabel(){ advBtn.textContent = panel.classList.contains('toy-zoomed') ? 'Exit' : 'Advanced'; }
+  advBtn.addEventListener('click', ()=>{
+    const inZoom = panel.classList.contains('toy-zoomed') || !!panel.closest('#zoom-overlay');
+    if (inZoom) { try{ zoomOutPanel(panel); }catch{} } else { zoomInPanel(panel, ()=>{ try{ zoomOutPanel(panel); }catch{} }); }
+    setTimeout(setAdvLabel, 0);
+  });
+  setTimeout(setAdvLabel, 0);
+  left.append(titleEl, advBtn);
   header.appendChild(left);
 
-  // Right: Random & Reset + instrument (visible in zoom only)
+  // Right: Random / Clear / Instrument (instrument only in Advanced)
   const right = document.createElement('div');
-  right.className = 'toy-controls toy-controls-right';
   Object.assign(right.style, { display:'flex', alignItems:'center', gap:'8px' });
 
   const randBtn  = makeBtn('Random', 'Randomize pattern');
-  const resetBtn = makeBtn('Clear',  'Clear pattern');
+  const clearBtn = makeBtn('Clear',  'Clear pattern');
+  randBtn.addEventListener('pointerdown', e=> e.stopPropagation());
+  clearBtn.addEventListener('pointerdown', e=> e.stopPropagation());
+  randBtn.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    if (typeof onRandom === 'function'){ try{ onRandom(); }catch{} }
+    try{ panel.dispatchEvent(new CustomEvent('toy-random', { bubbles:true })); }catch{}
+  });
+  clearBtn.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    if (typeof onReset === 'function'){ try{ onReset(); }catch{} }
+    try{ panel.dispatchEvent(new CustomEvent('toy-reset', { bubbles:true })); }catch{}
+  });
 
-  const instWrap = document.createElement('div'); instWrap.style.display='none'; instWrap.style.alignItems='center'; instWrap.style.gap='6px';
+  const instWrap = document.createElement('div');
+  Object.assign(instWrap.style, { display:'none', alignItems:'center', gap:'6px' });
   const instSel = document.createElement('select');
   instSel.className = 'toy-instrument';
-  instSel.style.background='#0d1117'; instSel.style.color='#e6e8ef';
-  ;['pointerdown','mousedown','touchstart','click'].forEach(evt => instSel.addEventListener(evt, ev => ev.stopPropagation(), { capture:true }));
-  instSel.addEventListener('change', ()=> panel.dispatchEvent(new CustomEvent('toy-instrument', { detail: { value: instSel.value } })));
-  instSel.style.border='1px solid #252b36'; instSel.style.borderRadius='8px'; instSel.style.padding='4px 6px';
-
-  function rebuildInstruments(){
-    const names = getInstrumentNames();
-    instSel.innerHTML='';
-    names.forEach(n => { const o=document.createElement('option'); o.value=o.textContent=n; instSel.appendChild(o); });
-  }
-  try{ rebuildInstruments(); applyDefaultInstrument(); }catch{}
-  window.addEventListener('samples-ready', ()=>{ rebuildInstruments(); applyDefaultInstrument(); });
-  instWrap.append(instSel);
-
-// Apply default instrument once (or when list first appears)
-let __instInitialised = false;
-
-function applyDefaultInstrument(){
-  try{
-    const opts = Array.from(instSel.options).map(o=>o.value);
-    if (!__instInitialised && defaultInstrument){
-      const match = opts.find(n => n.toLowerCase() === String(defaultInstrument).toLowerCase()) || opts.find(n => /kalimba/i.test(n));
-      if (match) defaultInstrument = match;
-      if (match && opts.includes(defaultInstrument)){
-        instSel.value = defaultInstrument;
-        panel.dispatchEvent(new CustomEvent('toy-instrument', { detail: { value: instSel.value, toyId: getToyId() } }));
-        __instInitialised = true;
-      }
-    }
+  Object.assign(instSel.style, { background:'#0d1117', color:'#e6e8ef', border:'1px solid #252b36', borderRadius:'8px', padding:'4px 6px' });
+  instSel.addEventListener('pointerdown', e=> e.stopPropagation());
+  try {
+    const names = (getInstrumentNames && getInstrumentNames()) || [];
+    names.forEach(n => { const opt = document.createElement('option'); opt.value = n; opt.textContent = n; instSel.appendChild(opt); });
   } catch {}
-}
-
-// Reassert default instrument on zoom (some flows repopulate selects)
-function enforceDefaultOnZoom(){
-  try{
-    const names = getInstrumentNames();
-    if (!names || !names.length) return;
-    if (defaultInstrument){
-      const match = names.find(n => n.toLowerCase() === String(defaultInstrument).toLowerCase()) || names.find(n => /kalimba/i.test(n));
-      if (match){ defaultInstrument = match; }
-      const before = instSel.value;
-      if (instSel.value !== defaultInstrument){
-        instSel.value = defaultInstrument;
-        if (instSel.value !== before) panel.dispatchEvent(new CustomEvent('toy-instrument', { detail: { value: instSel.value, toyId: getToyId() } }));
-      }
-    }
-  } catch {}
-}
-
-right.append(randBtn, resetBtn, instWrap);
-  header.appendChild(right);
-
-  // Overlay for zoom
-  let overlay = document.querySelector('.toy-overlay');
-  if (!overlay){
-    overlay = document.createElement('div');
-    overlay.className = 'toy-overlay';
-    Object.assign(overlay.style, { display:'none', pointerEvents:'none', position:'fixed', left:'0', top:'0', right:'0', bottom:'0' });
-    document.body.appendChild(overlay);
-  }
-  overlay.addEventListener('click', ()=> setZoom(false));
-
-  
-  // Volume bar (Mute + horizontal slider) along the bottom
-  const volWrap = document.createElement('div');
-  volWrap.className = 'toy-volwrap';
-  Object.assign(volWrap.style, {
-    position:'absolute', zIndex:'5', pointerEvents:'auto',
-    display:'flex', alignItems:'center', gap:'10px',
-    left:'0', right:'0', top:'100%',
-    padding:'8px 10px',
-    background:'rgba(13,17,23,0.92)', border:'1px solid #252b36', borderRadius:'12px',
-    boxShadow:'0 10px 24px rgba(0,0,0,0.35)', backdropFilter:'blur(6px)', userSelect:'none'
+  instSel.value = defaultInstrument;
+  instSel.addEventListener('change', ()=>{
+    try{ panel.dispatchEvent(new CustomEvent('toy-instrument', { detail:{ value: instSel.value }, bubbles:true })); }catch{}
   });
 
-  const muteBtn = makeBtn(ICONS.volume, 'Mute'); muteBtn.dataset.action='mute';
-  Object.assign(muteBtn.style, { width:'28px', height:'28px', padding:'4px', display:'grid', placeItems:'center' });
+  instWrap.appendChild(instSel);
+  const isGridToy = /grid/.test(idBase);
+right.className = 'toy-controls-right';
+right.append(randBtn, clearBtn, instWrap);
+header.appendChild(right);
+
+  // Safety: if right-side controls vanished (e.g., DOM moved), rebuild them
+  function ensureRightControls(){
+    const rightNow = header.querySelector('.toy-controls-right');
+    if (!rightNow){
+      const r = document.createElement('div');
+      r.className = 'toy-controls-right';
+      Object.assign(r.style, { display:'flex', alignItems:'center', gap:'8px' });
+      const rb = makeBtn('Random','Randomize pattern'); rb.addEventListener('pointerdown', e=> e.stopPropagation());
+      const cb = makeBtn('Clear','Clear pattern'); cb.addEventListener('pointerdown', e=> e.stopPropagation());
+      rb.addEventListener('click', (e)=>{ e.stopPropagation(); try{ panel.dispatchEvent(new CustomEvent('toy-random', { bubbles:true })); }catch{} });
+      cb.addEventListener('click', (e)=>{ e.stopPropagation(); try{ panel.dispatchEvent(new CustomEvent('toy-reset', { bubbles:true })); }catch{} });
+      r.append(rb, cb, instWrap);
+      header.appendChild(r);
+    }
+  }
+  panel.addEventListener('toy-zoom', ensureRightControls);
+
+
+  // Volume (single instance, absolute under the body)
+  let volWrap = panel.querySelector('.toy-volwrap');
+  if (!volWrap){
+    volWrap = document.createElement('div');
+    volWrap.className = 'toy-volwrap';
+    panel.appendChild(volWrap);
+  }
+  try {
+    const dups = panel.querySelectorAll('.toy-volwrap');
+    dups.forEach(el => { if (el !== volWrap) el.remove(); });
+  } catch {}
+  volWrap.innerHTML = '';
+  Object.assign(volWrap.style, {
+    position:'absolute', zIndex:'10',
+    display:'flex', alignItems:'center', gap:'10px',
+    left:'0', right:'0', bottom:'0', top:'auto',
+    height:'44px', maxHeight:'44px',
+    padding:'6px 10px',
+    background:'rgba(13,17,23,0.92)', border:'1px solid #252b36', borderRadius:'12px',
+    boxShadow:'0 10px 24px rgba(0,0,0,0.35)', backdropFilter:'blur(6px)',
+    userSelect:'none'
+  });
+
+  const muteBtn = document.createElement('button');
+  muteBtn.type = 'button';
+  muteBtn.title = 'Mute';
+  muteBtn.innerHTML = "<svg viewBox='0 0 24 24' width='18' height='18' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M11 5L6 9H3v6h3l5 4V5z'/><path d='M23 9l-6 6M17 9l6 6'/></svg>";
+  Object.assign(muteBtn.style, { width:'32px', height:'32px', display:'grid', placeItems:'center', background:'transparent', color:'#e6e8ef', border:'none', borderRadius:'8px', cursor:'pointer' });
+  muteBtn.addEventListener('pointerdown', e=> e.stopPropagation());
 
   const vol = document.createElement('input');
-  vol.type='range'; vol.min='0'; vol.max='100'; vol.value='100'; vol.step='1';
-  vol.className='toy-volrange';
-  Object.assign(vol.style, {
-    flex:'1 1 auto', height:'8px', margin:'0', padding:'0', appearance:'none',
-    background:'#394150',
-    borderRadius:'4px'
-  });
-  function updateVolBg(){ const pct = Math.max(0, Math.min(100, parseInt(vol.value,10)||0)); vol.style.background = `linear-gradient(to right, #6adf7a 0% ${pct}%, #394150 ${pct}% 100%)`; }
+  vol.type = 'range'; vol.min = '0'; vol.max = '100'; vol.step = '1'; vol.value = '100';
+  Object.assign(vol.style, { flex:'1', height:'8px', borderRadius:'999px', appearance:'none', background:'#394150' });
+  vol.addEventListener('pointerdown', e=> e.stopPropagation());
+
+  function updateVolBg(){
+    const pct = Math.max(0, Math.min(100, (parseInt(vol.value,10)||0)));
+    vol.style.background = `linear-gradient(to right, #6adf7a 0% ${pct}%, #394150 ${pct}% 100%)`;
+  }
   vol.addEventListener('input', ()=>{
-    const v = Math.max(0, Math.min(1, (parseInt(vol.value,10)||0)/100)); updateVolBg();
-    try{ window.dispatchEvent(new CustomEvent('toy-volume', { detail: { toyId: getToyId(), value: v } })); }catch{}
+    const v = Math.max(0, Math.min(1, (parseInt(vol.value,10)||0)/100));
+    updateVolBg();
+    try{ window.dispatchEvent(new CustomEvent('toy-volume', { detail: { toyId: idBase, value: v } })); }catch{}
   });
   updateVolBg();
-  vol.addEventListener('pointerdown', ev => ev.stopPropagation(), { capture:true });
 
   volWrap.append(muteBtn, vol);
+  // Clean up any stray mute SVGs/buttons outside the canonical volume wrap
+  try {
+    const allMuteButtons = panel.querySelectorAll('button[title="Mute"]');
+    allMuteButtons.forEach(btn => { if (!btn.closest('.toy-volwrap')) btn.remove(); });
+    const allSvgs = panel.querySelectorAll('svg');
+    allSvgs.forEach(sv => {
+      const html = (sv.outerHTML || '').toLowerCase();
+      if (html.includes("m11 5l6 9h3v6h3l5 4v5z".toLowerCase()) || html.includes("m11 5l6 9h3v6h3l5 4v5z")) {
+        if (!sv.closest('.toy-volwrap')) {
+          const maybeBtn = sv.closest('button'); 
+          if (maybeBtn && !maybeBtn.closest('.toy-volwrap')) maybeBtn.remove();
+          else sv.remove();
+        }
+      }
+    });
+  } catch {}
 
-  const bodyEl = panel.querySelector('.toy-body') || panel;
-  bodyEl.appendChild(volWrap);
 
-  function positionVolume(){
-    // already bottom-aligned, but keep width synced if needed
-  }
+  // Clean up any stray mute buttons outside the volume wrap
+  try {
+    const stray = panel.querySelectorAll('button[title="Mute"]');
+    stray.forEach(btn => { if (!btn.closest('.toy-volwrap')) btn.remove(); });
+  } catch {}
+
+
+  function positionVolume(){ try{}catch{} }
   positionVolume();
   window.addEventListener('resize', positionVolume);
-  panel.addEventListener('toy-zoom', positionVolume);
+  try{ panel.addEventListener('toy-zoom', positionVolume); }catch{}
 
-// Zoom state
-  let zoomed = false;
-  function setZoom(z){
-    dbg('setZoom call', { to: !!z });
-    zoomed = !!z;
+  // Advanced-only UI (instrument)
+  function syncAdvancedUI(){
+    const isGridToy = /grid/.test(idBase);
+    function updateRightActions(){
+      const zoomed = panel.classList.contains('toy-zoomed');
+      const showRC = !(isGridToy && zoomed); // hide in advanced for grid only
+      randBtn.style.display = showRC ? '' : 'none';
+      clearBtn.style.display = showRC ? '' : 'none';
+    }
+
+    const zoomed = panel.classList.contains('toy-zoomed');
     instWrap.style.display = zoomed ? 'flex' : 'none';
-    panel.classList.toggle('toy-zoomed', zoomed);
-    panel.classList.toggle('toy-unzoomed', !zoomed);
-    if (zoomed){ zoomInPanel(panel, ()=> setZoom(false)); } else { zoomOutPanel(panel); }
-    panel.dispatchEvent(new CustomEvent('toy-zoom', { detail: { zoomed } }));
-    if (zoomed) enforceDefaultOnZoom();
+    try{ updateRightActions(); }catch{}
   }
-  setZoom(false);
-  zoomBtn.addEventListener('click', ()=> setZoom(!zoomed));
+  syncAdvancedUI();
+  try {
+    panel.addEventListener('toy-zoom', (e)=>{ try{ setAdvLabel(); }catch{};
+      const z = !!(e?.detail?.zoomed);
+      panel.classList.toggle('toy-zoomed', z);
+      syncAdvancedUI();
+      positionVolume();
+      try{ updateRightActions(); }catch{}
+    });
+  } catch {}
 
-  // Random/Reset dispatch
-  randBtn.addEventListener('click', ()=>{ panel.dispatchEvent(new CustomEvent('toy-random', { bubbles:true })); onRandom && onRandom(); });
-  resetBtn.addEventListener('click', ()=>{ panel.dispatchEvent(new CustomEvent('toy-reset', { bubbles:true })); onReset && onReset(); });
-
-  // Mute flag + dispatch
-  let muted = false;
-  function setMuted(m){
-    muted = !!m;
-    try { muteBtn.setAttribute('aria-pressed', muted ? 'true' : 'false'); } catch{}
-    try { muteBtn.innerHTML = muted ? ICONS.mute : ICONS.volume; } catch{}
-    try { muteBtn.style.color = muted ? '#7b8193' : '#ffffff'; muteBtn.classList.toggle('muted', muted); } catch{}
-    try { window.dispatchEvent(new CustomEvent('toy-mute', { detail: { toyId: getToyId(), muted } })); } catch{}
-  }
-  muteBtn.addEventListener('click', ()=> setMuted(!muted));
-
-  // Public API (minimal)
   return {
-    get instrument(){ return instSel.value; },
     setInstrument: (name)=>{ instSel.value = name; },
-    setZoom,
-    get muted(){ return muted; },
-    setMuted
+    get instrument(){ return instSel.value; }
   };
 }
+
+// Auto-init any panel that didn't call initToyUI itself
+function __autoInitToyUI(){
+  try{
+    const panels = document.querySelectorAll('.toy-panel');
+    panels.forEach(p => {
+      if (!p.querySelector('.toy-header')){
+        const name = p.dataset.toyid || p.dataset.toy || 'Toy';
+        const instr = p.dataset.instrument || 'tone';
+        try { initToyUI(p, { toyName: name, defaultInstrument: instr }); } catch {}
+      }
+    });
+  }catch{}
+}
+
+try{
+  if (typeof window !== 'undefined'){
+    window.initToyUI = initToyUI;
+    if (document.readyState === 'loading'){
+      document.addEventListener('DOMContentLoaded', __autoInitToyUI);
+    } else {
+      __autoInitToyUI();
+    }
+    setTimeout(__autoInitToyUI, 200);
+  }
+}catch{}

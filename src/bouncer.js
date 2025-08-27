@@ -87,9 +87,9 @@ export function createBouncer(selector){
     if (!__baseAttrW && w>0) __baseAttrW = w;
     return (__baseAttrW>0 && w>0) ? (w/__baseAttrW) : 1;
   }
-  const blockSize = ()=> Math.round(BASE_BLOCK_SIZE * (sizing.scale||1) * rectScale());
-  const cannonR  = ()=> Math.round(BASE_CANNON_R  * (sizing.scale||1) * rectScale());
-  const ballR    = ()=> Math.round(BASE_BALL_R    * (sizing.scale||1) * rectScale());
+  const blockSize = ()=> Math.round(BASE_BLOCK_SIZE * rectScale());
+  const cannonR  = ()=> Math.round(BASE_CANNON_R  * rectScale());
+  const ballR    = ()=> Math.round(BASE_BALL_R    * rectScale());
 
   // interaction state
   let handle = { x: worldW()*0.22, y: worldH()*0.5 };

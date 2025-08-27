@@ -65,7 +65,7 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
 const ctx = canvas.getContext('2d');
   let __lastCssH = -1;
   try{ console.log('[grid] canvas created', {panel, toyId}); }catch{}
-  const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true });
+  const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: false });
   /* sizing init hook */
   try { sizing.setZoom(panel.classList.contains('toy-zoomed')); } catch {}
   const worldW = ()=> ((canvas.getBoundingClientRect?.().width|0) || canvas.clientWidth || sizing?.vw?.() || body.clientWidth || 356);

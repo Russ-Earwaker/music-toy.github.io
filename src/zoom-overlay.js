@@ -1,96 +1,114 @@
-// src/zoom-overlay.js
-// Reliable zoom: portal the entire panel into a fixed, centered overlay.
-// Moving DOM nodes preserves event listeners; positions persist since we restore exactly.
-
+// src/zoom-overlay.js — centers panel and keeps body square inside viewport
 export function ensureOverlay(){
   let overlay = document.getElementById('zoom-overlay');
   if (!overlay){
     overlay = document.createElement('div');
     overlay.id = 'zoom-overlay';
-    overlay.style.position = 'fixed';
-    overlay.style.left = '0';
-    overlay.style.top = '0';
-    overlay.style.right = '0';
-    overlay.style.bottom = '0';
-    overlay.style.display = 'none';
-    overlay.style.alignItems = 'center';
-    overlay.style.justifyContent = 'center';
-    overlay.style.pointerEvents = 'none'; // enabled when active
-    overlay.style.zIndex = '10000';
-    overlay.style.background = 'transparent'; // no backdrop, stays visually consistent
+    Object.assign(overlay.style, {
+      position:'fixed', inset:'0', display:'none', placeItems:'center',
+      zIndex:'9999', background:'rgba(0,0,0,0.35)', backdropFilter:'blur(2px)'
+    });
     document.body.appendChild(overlay);
   }
   return overlay;
 }
 
-export function zoomInPanel(panel, onRequestUnzoom){
-  const overlay = ensureOverlay();
-  overlay.style.display = 'flex';
-  overlay.style.pointerEvents = 'auto';
-  // keep header visible
-  try{ const h = panel.querySelector('.toy-header'); if (h){ h.style.display='flex'; } }catch{}
+function px(n){ return Math.max(0, Math.round(n)) + 'px'; }
 
-  // remember original placement & inline style
-  const info = panel._portalInfo || {};
-  if (!info.parent) info.parent = panel.parentNode;
-  if (info.next === undefined) info.next = panel.nextSibling;
-  info.prevStyle = panel.getAttribute('style') || '';
+export function zoomInPanel(panel, onClose){
+  const overlay = ensureOverlay();
+  overlay.innerHTML = '';
+
+  const frame = document.createElement('div');
+  Object.assign(frame.style, { position:'relative' });
+
+  const info = {
+    parent: panel.parentNode,
+    next: panel.nextSibling,
+    prevPanelStyle: panel.getAttribute('style'),
+    prevBodyStyle: null
+  };
   panel._portalInfo = info;
 
-  // clear absolute offsets so overlay centering is correct
-  panel.style.position = '';
-  panel.style.left = '';
-  panel.style.top = '';
-  panel.style.transform = '';
+  // Normalize panel
+  panel.style.position = 'relative';
+  panel.style.left = '0'; panel.style.top = '0';
+  panel.style.width = 'min(92vmin, 92vw)';
+  panel.style.minHeight = '0';
+  panel.classList.add('toy-zoomed');
 
-  overlay.appendChild(panel);
-  // preserve aspect sizing
-  /* preserve aspect sizing */
-  try{
-    const body = panel.querySelector('.toy-body') || panel;
-    const header = panel.querySelector('.toy-header');
-    const br = body.getBoundingClientRect();
-    const headerH = header ? header.offsetHeight : 0;
-    const maxW = Math.max(360, Math.min(window.innerWidth - 80, 1080));
-    // Use current body aspect
-    const ratio = (br && br.width>0) ? (br.height / br.width) : 0.75;
-    const ww = Math.round(Math.min(maxW, Math.max(br.width*1.4, 480)));
-    const hh = Math.round(ww * ratio + headerH);
-    panel.style.width = ww + 'px';
-    panel.style.height = hh + 'px';
-    if (header){ header.style.display='flex'; header.style.zIndex='5'; }
-  }catch{}
+  const body = panel.querySelector('.toy-body') || panel;
+  info.prevBodyStyle = body.getAttribute('style');
+  body.style.position = 'relative';
+  body.style.inset = 'auto';
+  body.style.marginTop = '0';
+  body.style.width = '100%';
 
-  // click outside to request unzoom
-  const outside = (e)=>{
-    if (e.target === overlay){
-      if (onRequestUnzoom) try { onRequestUnzoom(); } catch {}
-    }
-  };
-  // store handler for removal
-  overlay._outsideHandler && overlay.removeEventListener('click', overlay._outsideHandler);
-  overlay._outsideHandler = outside;
-  overlay.addEventListener('click', outside);
+  frame.appendChild(panel);
+  overlay.appendChild(frame);
+  overlay.style.display = 'grid';
+  try{ panel.dispatchEvent(new CustomEvent('toy-zoom', { detail:{ zoomed:true } })); }catch{}
+
+  function layout(){
+    try{
+      const vw = Math.max(320, window.innerWidth || 0);
+      const vh = Math.max(320, window.innerHeight || 0);
+      const header = panel.querySelector('.toy-header');
+      const vol = panel.querySelector('.toy-volwrap');
+      const hh = header ? header.getBoundingClientRect().height : 0;
+      const hv = vol ? Math.max(40, vol.getBoundingClientRect().height || 0) : 48;
+
+      const maxW = Math.floor(vw * 0.92);
+      const maxH = Math.floor(vh * 0.92);
+      // Square size limited by width and by height minus header + volume + padding
+      const limitByHeight = Math.floor(maxH - hh - hv - 16);
+      const w = Math.max(160, Math.min(maxW, limitByHeight));
+
+      panel.style.width = px(w);
+      body.style.height = px(w);
+
+      // Panel height includes header + body + volume (volume will be positioned at bottom)
+      const totalH = Math.round(hh + w + hv);
+      panel.style.height = px(totalH);
+      panel.style.minHeight = px(totalH);
+    }catch{}
+  }
+
+  const ro = new ResizeObserver(layout);
+  ro.observe(overlay);
+  window.addEventListener('resize', layout);
+  panel._zoomRO = ro;
+  layout();
+
+  overlay.addEventListener('click', (e)=>{
+    if (e.target === overlay){ if (onClose) onClose(); }
+  }, { once:true });
 }
 
 export function zoomOutPanel(panel){
   const overlay = ensureOverlay();
-  // remove outside handler & hide overlay
-  if (overlay._outsideHandler){
-    overlay.removeEventListener('click', overlay._outsideHandler);
-    overlay._outsideHandler = null;
-  }
   overlay.style.display = 'none';
-  overlay.style.pointerEvents = 'none';
 
-  // restore original placement and inline style
-  const info = panel._portalInfo || {};
-  if (info.parent){
-    info.parent.insertBefore(panel, info.next || null);
-  }
-  if ('prevStyle' in info){
-    if (info.prevStyle) panel.setAttribute('style', info.prevStyle);
-    else panel.removeAttribute('style');
-  }
-  panel._portalInfo = null;
+  try{
+    const body = panel.querySelector('.toy-body') || panel;
+    if (panel._zoomRO){ panel._zoomRO.disconnect(); panel._zoomRO = null; }
+    const info = panel._portalInfo || {};
+    if (info.prevBodyStyle != null){
+      if (info.prevBodyStyle) body.setAttribute('style', info.prevBodyStyle);
+      else body.removeAttribute('style');
+    }
+    panel.classList.remove('toy-zoomed');
+    if (info.parent){ info.parent.insertBefore(panel, info.next || null); }
+    if (info.prevPanelStyle != null){
+      if (info.prevPanelStyle) panel.setAttribute('style', info.prevPanelStyle);
+      else panel.removeAttribute('style');
+    }
+    try{ panel.style.width=''; panel.style.height=''; panel.style.minHeight=''; }catch{}
+    const bodyEl = panel.querySelector('.toy-body')||panel;
+    try{ if (bodyEl){ bodyEl.style.height=''; bodyEl.style.width=''; bodyEl.style.inset=''; } }catch{}
+    panel._portalInfo = null;
+  }catch{}
+
+  try{ panel.dispatchEvent(new CustomEvent('toy-zoom', { detail:{ zoomed:false } })); }catch{}
+  try{ window.dispatchEvent(new Event('resize')); }catch{}
 }
