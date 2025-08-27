@@ -8,16 +8,13 @@ import { initToySizing } from './toyhelpers-sizing.js';
 import { randomizeRects, EDGE_PAD as EDGE, hitRect, whichThirdRect, drawThirdsGuides } from './toyhelpers.js';
 import { drawBlocksSection } from './ripplesynth-blocks.js';
 // board scale via rect baseline (rippler-style)
-
 import { createImpactFX } from './bouncer-impact.js';
 import { getPoliteDensityForToy } from './polite-random.js';
 import { buildPentatonicPalette, processVisQ as processVisQBouncer } from './bouncer-actions.js';
-
 const noteValue = (list, idx)=> list[Math.max(0, Math.min(list.length-1, (idx|0)))];
 const BOUNCER_BARS_PER_LIFE = 1;
 const MAX_SPEED = 700, LAUNCH_K = 0.9;
 const BASE_BLOCK_SIZE = 44, BASE_CANNON_R = 10, BASE_BALL_R = 7;
-
 
 function computeLaunchVelocity(hx, hy, px, py, worldW, worldH, getLoopInfo, speedFactor){
   const dx = (px - hx), dy = (py - hy);
@@ -103,6 +100,7 @@ export function createBouncer(selector){
   let zoomDragCand=null, zoomDragStart=null, zoomTapT=null;
   let tapCand=null, tapStart=null, tapMoved=false;
   let lastLaunch=null, launchPhase=0, nextLaunchAt=null, prevNow=0, ball=null;
+  let lastCanvasW=0, lastCanvasH=0;
   let visQ = []; const fx = createImpactFX(); let lastScale = sizing.scale||1;
 
   // edge controllers + flash
@@ -153,12 +151,13 @@ export function createBouncer(selector){
   panel.addEventListener('toy-clear', doReset);
   panel.addEventListener('toy-zoom', (e)=>{ sizing.setZoom && sizing.setZoom(!!e.detail.zoomed); const s=sizing.scale||1; rescaleAll(s/lastScale); lastScale=s; });
 
-  function rescaleAll(f){
-    if (!f || f===1) return;
-    for (const b of blocks){ b.x=Math.round(b.x*f); b.y=Math.round(b.y*f); b.w=blockSize(); b.h=blockSize(); }
-    handle.x=Math.round(handle.x*f); handle.y=Math.round(handle.y*f);
-    if (ball){ ball.x*=f; ball.y*=f; ball.vx*=f; ball.vy*=f; ball.r=ballR(); }
-    if (lastLaunch){ lastLaunch.vx*=f; lastLaunch.vy*=f; }
+  function rescaleAll(fx, fy){
+    if (!fx || fx===1) fx = 1; if (fy==null) fy = fx; if (!fy) fy = 1;
+    if (fx===1 && fy===1) return;
+    for (const b of blocks){ b.x=Math.round(b.x*fx); b.y=Math.round(b.y*fy); b.w=blockSize(); b.h=blockSize(); }
+    for (const c of edgeControllers){ if (c){ c.x=Math.round(c.x*fx); c.y=Math.round(c.y*fy); c.w=blockSize(); c.h=blockSize(); } }
+    handle.x=Math.round(handle.x*fx); handle.y=Math.round(handle.y*fy);
+    if (ball){ ball.x*=fx; ball.y*=fy; ball.vx*=fx; ball.vy*=fy; ball.r=ballR(); }
   }
 
   // interactions (tap-to-toggle in standard view; thirds edit in zoom)
@@ -251,10 +250,15 @@ if (draggingHandle){
   function draw(){
     const sNow=sizing.scale||1; if (sNow!==lastScale){ rescaleAll(sNow/lastScale); lastScale=sNow; }
     const cs=resizeCanvasForDPR(canvas, ctx), w=cs.width, h=cs.height;
+    if (!lastCanvasW) { lastCanvasW = w; lastCanvasH = h; }
+    const fx = (w && lastCanvasW ? w/lastCanvasW : 1);
+    const fy = (h && lastCanvasH ? h/lastCanvasH : 1);
+    if (Math.abs(fx-1) > 0.001 || Math.abs(fy-1) > 0.001){ rescaleAll(fx, fy); lastCanvasW = w; lastCanvasH = h; }
     ctx.fillStyle='#0b0f16'; ctx.fillRect(0,0,w,h);
     ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.lineWidth=2; ctx.strokeRect(EDGE,EDGE,w-EDGE*2,h-EDGE*2);
 
     ensureEdgeControllers(w,h);
+    for (const c of edgeControllers){ if (c){ c.w=blockSize(); c.h=blockSize(); } }
     drawEdgeBondLines(ctx, w, h, EDGE, edgeControllers);
     const ac2=ensureAudioContext(); const now2=(ac2?ac2.currentTime:0);
     drawBlocksSection(ctx, edgeControllers, 0, 0, null, 1, noteList, sizing, null, null, now2);

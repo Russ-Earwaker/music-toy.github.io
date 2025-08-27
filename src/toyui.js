@@ -126,25 +126,29 @@ right.append(randBtn, resetBtn, instWrap);
   }
   overlay.addEventListener('click', ()=> setZoom(false));
 
-  // Volume pod (Mute + vertical slider)
+  
+  // Volume bar (Mute + horizontal slider) along the bottom
   const volWrap = document.createElement('div');
   volWrap.className = 'toy-volwrap';
   Object.assign(volWrap.style, {
-    position: 'absolute', zIndex: '5', pointerEvents: 'auto',
-    display:'flex', flexDirection:'column', alignItems:'center', gap:'8px',
-    width:'56px', padding:'10px 10px',
-    background:'rgba(13,17,23,0.92)', border:'1px solid #252b36', borderRadius:'12px', boxShadow:'0 10px 24px rgba(0,0,0,.35)', backdropFilter:'blur(6px)', userSelect:'none'
+    position:'absolute', zIndex:'5', pointerEvents:'auto',
+    display:'flex', alignItems:'center', gap:'10px',
+    left:'0', right:'0', bottom:'0',
+    padding:'8px 10px',
+    background:'rgba(13,17,23,0.92)', border:'1px solid #252b36', borderRadius:'12px',
+    boxShadow:'0 10px 24px rgba(0,0,0,0.35)', backdropFilter:'blur(6px)', userSelect:'none'
   });
 
   const muteBtn = makeBtn(ICONS.volume, 'Mute'); muteBtn.dataset.action='mute';
-  muteBtn.style.width='100%'; muteBtn.style.textAlign='center';
+  Object.assign(muteBtn.style, { width:'28px', height:'28px', padding:'4px', display:'grid', placeItems:'center' });
 
   const vol = document.createElement('input');
   vol.type='range'; vol.min='0'; vol.max='100'; vol.value='100'; vol.step='1';
   vol.className='toy-volrange';
-  Object.assign(vol.style, { writingMode:'vertical-rl', direction:'rtl', width:'28px', height:'140px', margin:'0', padding:'0', appearance:'none',
+  Object.assign(vol.style, {
+    flex:'1 1 auto', height:'8px', margin:'0', padding:'0', appearance:'none',
     background:'linear-gradient(to right, transparent calc(50% - 3px), #5b6378 calc(50% - 3px), #5b6378 calc(50% + 3px), transparent calc(50% + 3px))',
-    borderRadius:'8px'
+    borderRadius:'4px'
   });
   vol.addEventListener('input', ()=>{
     const v = Math.max(0, Math.min(1, (parseInt(vol.value,10)||0)/100));
@@ -153,17 +157,18 @@ right.append(randBtn, resetBtn, instWrap);
   vol.addEventListener('pointerdown', ev => ev.stopPropagation(), { capture:true });
 
   volWrap.append(muteBtn, vol);
-  panel.appendChild(volWrap);
+
+  const bodyEl = panel.querySelector('.toy-body') || panel;
+  bodyEl.appendChild(volWrap);
 
   function positionVolume(){
-    volWrap.style.left = 'calc(100% + 10px)';
-    volWrap.style.top = '0px';
+    // already bottom-aligned, but keep width synced if needed
   }
   positionVolume();
   window.addEventListener('resize', positionVolume);
   panel.addEventListener('toy-zoom', positionVolume);
 
-  // Zoom state
+// Zoom state
   let zoomed = false;
   function setZoom(z){
     dbg('setZoom call', { to: !!z });
