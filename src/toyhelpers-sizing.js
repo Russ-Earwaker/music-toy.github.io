@@ -56,18 +56,17 @@ export function initToySizing(shell, canvas, ctx, { squareFromWidth = false, asp
   }
 
   function applySize(){
-const cssW = Math.max(1, Math.floor((overrideCssW ?? (slotW)) * scale));
-    const cssH = Math.max(1, Math.floor((overrideCssH ?? baseHeightFor(slotW)) * scale));
-    canvas.style.width  = cssW + 'px';
-    canvas.style.height = cssH + 'px';
-
-    // Center horizontally
-    canvas.style.marginLeft = 'auto';
-    canvas.style.marginRight = 'auto';
-    // Keep canvas from influencing ancestor reflow weirdly
-    canvas.style.maxWidth = 'none';
-    resizeCanvasForDPR(canvas, ctx);
-  }
+  const cssW = Math.max(1, Math.floor((overrideCssW ?? slotW)));
+  const cssH = Math.max(1, Math.floor((overrideCssH ?? baseHeightFor(slotW))));
+  canvas.style.width  = cssW + 'px';
+  canvas.style.height = cssH + 'px';
+  // Center horizontally
+  canvas.style.marginLeft = 'auto';
+  canvas.style.marginRight = 'auto';
+  // Keep canvas from influencing ancestor reflow weirdly
+  canvas.style.maxWidth = 'none';
+  resizeCanvasForDPR(canvas, ctx);
+}
 
   function ensureFit(){
   // Standard view size is frozen; only re-apply sizing on resize to keep DPR sharp.
@@ -81,13 +80,11 @@ const cssW = Math.max(1, Math.floor((overrideCssW ?? (slotW)) * scale));
   } catch {}
 
   function setZoom(zoomed){
-    const nextScale = zoomed ? 2 : 1;
-    if (nextScale !== scale){
-      scale = nextScale;
-      applySize();
-    }
-    return scale;
-  }
+  // Advanced edit mode may change panel size via CSS; we keep internal scale=1
+  scale = 1;
+  applySize();
+  return scale;
+}
 
   function vw(){ return host.clientWidth  || (host.getBoundingClientRect?.().width|0) || 0; }
   function vh(){ return host.clientHeight || (host.getBoundingClientRect?.().height|0) || 0; }

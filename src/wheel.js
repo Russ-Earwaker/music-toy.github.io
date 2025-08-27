@@ -48,8 +48,8 @@ export function buildWheel(selector, opts = {}){
   const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true });
 
   // World size helpers (use canvas size, which already excludes header)
-  const worldW = ()=> (canvas.clientWidth  || panel.clientWidth  || 356);
-  const worldH = ()=> (canvas.clientHeight || panel.clientHeight || 260);
+  const worldW = ()=> ((canvas.getBoundingClientRect?.().width|0) || canvas.clientWidth || panel.clientWidth  || 356);
+  const worldH = ()=> ((canvas.getBoundingClientRect?.().height|0) || canvas.clientHeight || panel.clientHeight || 260);
 
   // Model
 

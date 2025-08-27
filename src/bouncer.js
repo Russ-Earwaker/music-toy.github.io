@@ -54,6 +54,7 @@ export function createBouncer(selector){
 
   const host = panel.querySelector('.toy-body') || panel;
   const canvas = document.createElement('canvas'); canvas.style.width='100%'; canvas.style.display='block';canvas.style.height='100%'; host.appendChild(canvas);
+  try{ canvas.removeAttribute('data-lock-scale'); canvas.style.transform=''; }catch{};
   const ctx = canvas.getContext('2d', { alpha:false });
   const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true });
 
@@ -76,7 +77,7 @@ export function createBouncer(selector){
   try { hostForDock.appendChild(spDock); } catch {}
   const updateSpeedVisibility = ()=>{ const zoomed = (sizing?.scale||1) > 1.01; spDock.style.display = zoomed ? 'flex' : 'none'; };
   // Update on zoom, both immediately and in next frame to absorb scale updates
-  panel.addEventListener('toy-zoom', ()=>{ updateSpeedVisibility(); requestAnimationFrame(updateSpeedVisibility); });
+  panel.addEventListener('toy-zoom', ()=>{});
   // Initialize once
   updateSpeedVisibility();
 

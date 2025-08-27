@@ -60,6 +60,11 @@
   function apply(){
     camPan.style.transform = `translate3d(${state.x}px, ${state.y}px, 0)`;
     camScale.style.transform = `scale(${state.scale})`;
+    // Expose scale to CSS for scale-lock consumers
+    try {
+      stage.style.setProperty('--bv-scale', String(state.scale));
+      stage.style.setProperty('--bv-inv-scale', String(1/state.scale));
+    } catch {}
   }
   function zoomAt(cx, cy, delta){
     const prev = state.scale;

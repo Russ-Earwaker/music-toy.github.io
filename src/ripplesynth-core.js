@@ -19,7 +19,8 @@ export function createRippleSynth(selector){
   const toyId = (panel?.dataset?.toyid || panel?.dataset?.toy || 'rippler').toLowerCase();
   const triggerInstrument = (inst, name, when)=> __rawTrig(inst, name, when, toyId);
 const canvas = document.createElement('canvas');
-  canvas.className = 'rippler-canvas';
+  try{ canvas.style.setProperty('width','100%','important'); canvas.style.setProperty('height','100%','important'); canvas.style.display='block'; }catch{};
+canvas.className = 'rippler-canvas';
   canvas.style.display = 'block';
   (panel.querySelector?.('.toy-body') || panel).appendChild(canvas);
   try{const host=panel.querySelector?.('.toy-body')||panel;if((host.clientHeight|0)<40){canvas.style.display='block';canvas.style.width='100%';canvas.style.height='100%';canvas.style.minHeight='0px';}}catch{}
@@ -29,8 +30,9 @@ const canvas = document.createElement('canvas');
   const baseNoteName = (panel?.dataset?.ripplerOct || 'C4');
 panel.addEventListener('toy-instrument', (e)=>{ try{ currentInstrument = (e?.detail?.value)||currentInstrument; }catch{} });
 const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true }); const isZoomed = ()=> panel.classList.contains('toy-zoomed');
-  panel.addEventListener('toy-zoom', (ev)=>{ try { const z = !!(ev?.detail?.zoomed); sizing.setZoom(z); try { setParticleBounds(canvas.width|0, canvas.height|0); } catch (e) {} } catch (e) {} });
-const EDGE=10; const W=()=> (canvas.clientWidth  || panel.clientWidth  || 356)|0, H=()=> (canvas.clientHeight || panel.clientHeight || 280)|0;
+  panel.addEventListener('toy-zoom', ()=>{ try { setParticleBounds(canvas.width|0, canvas.height|0); } catch {} });
+const EDGE=10; const W = ()=> ((canvas.getBoundingClientRect?.().width|0)  || canvas.clientWidth  || (panel.querySelector?.('.toy-body')||panel).clientWidth  || 360);
+  const H = ()=> ((canvas.getBoundingClientRect?.().height|0) || canvas.clientHeight || (panel.querySelector?.('.toy-body')||panel).clientHeight || 280);
   const clamp = (v,min,max)=> Math.max(min, Math.min(max, v));
   const n2x = (nx)=>{ const z=isZoomed(); const side=z? Math.max(0, Math.min(W(),H())-2*EDGE) : (W()-2*EDGE); const offX = z? Math.max(EDGE, (W()-side)/2): EDGE; return offX + nx*side; };
   const n2y = (ny)=>{ const z=isZoomed(); const side=z? Math.max(0, Math.min(W(),H())-2*EDGE) : (H()-2*EDGE); const offY = z? Math.max(EDGE, (H()-side)/2): EDGE; return offY + ny*side; };

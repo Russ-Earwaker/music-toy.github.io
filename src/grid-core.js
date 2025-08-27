@@ -52,6 +52,7 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
   }
   const gatedTrigger = gateTriggerForToy(toyId, triggerInstrument);
   const canvas = document.createElement('canvas');
+  try{ canvas.removeAttribute('data-lock-scale'); canvas.style.transform=''; }catch{};
   canvas.style.display = 'block';
   canvas.className = 'grid-canvas';
   canvas.style.display = 'block';canvas.style.width='100%';canvas.style.height='100%';
@@ -66,8 +67,8 @@ const ctx = canvas.getContext('2d');
   const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true });
   /* sizing init hook */
   try { sizing.setZoom(panel.classList.contains('toy-zoomed')); } catch {}
-  const worldW = ()=> (canvas.clientWidth || sizing?.vw?.() || body.clientWidth || 356);
-  const worldH = ()=> (canvas.clientHeight || sizing?.vh?.() || body.clientHeight || 240);
+  const worldW = ()=> ((canvas.getBoundingClientRect?.().width|0) || canvas.clientWidth || sizing?.vw?.() || body.clientWidth || 356);
+  const worldH = ()=> ((canvas.getBoundingClientRect?.().height|0) || canvas.clientHeight || sizing?.vh?.() || body.clientHeight || 240);
   const c4Index = Math.max(0, noteList.indexOf('C4'));
   let currentCol = -1;
   let paintedOnce = false;
@@ -83,20 +84,17 @@ const ctx = canvas.getContext('2d');
   function layout(){
     const pad = 10;
     const w = worldW(), h = worldH();
-    const isZoomed = panel.classList.contains('toy-zoomed');
     const gridTop = 6;
     const cellW = Math.max(20, Math.floor((w - pad*2) / steps.length));
     const cellH = Math.max(24, Math.floor(h - gridTop - 6));
     return { pad, w, h, gridTop, cellW, cellH, isZoomed };
   }
   function blockRectForIndex(i, L){
-    const { pad, gridTop, cellW, cellH, isZoomed } = L;
+    const { pad, gridTop, cellW, cellH } = L;
     const MARGIN = 2;
     const target = Math.round(BASE_BLOCK_SIZE_LOCAL * ( (typeof sizing?.scale==='number' ? sizing.scale : 1) ));
     let s = Math.min(cellW, cellH) - MARGIN*2;
-    if (!isZoomed){
-      s = Math.min(s, target); // standard: cap to target so cubes match bouncer
-    } // zoom: fill the cell
+    s = Math.min(s, target); // cap to target so cubes match bouncer
     const xCell = pad + i * cellW;
     const yCell = gridTop;
     const bx = Math.floor(xCell + (cellW - s)/2);
@@ -110,7 +108,7 @@ function draw(){
     const TARGET_S = Math.round(BASE_BLOCK_SIZE_LOCAL * (sizing?.scale || 1));
     const MARGIN = 2;
     const pad = 10;
-    const containerW = canvas.clientWidth || panel.clientWidth || body.clientWidth || canvas.getBoundingClientRect().width || 0;
+    const containerW = (canvas.getBoundingClientRect?.().width || 0) || canvas.clientWidth || panel.clientWidth || body.clientWidth || 0;
     const stepsLen = steps.length || 1;
     const cellW = Math.max(20, Math.floor((containerW - pad*2) / stepsLen));
     const squareFromW = Math.max(16, cellW - MARGIN*2);
@@ -182,8 +180,9 @@ function draw(){
     const isZoomedNow = panel.classList.contains('toy-zoomed');
     const MARGIN = 2;
     const pad = 10;
-    const w = canvas.clientWidth  || (canvas.getBoundingClientRect?.().width|0)  || 0;
-    const h = canvas.clientHeight || (canvas.getBoundingClientRect?.().height|0) || 0;
+    const b = canvas.getBoundingClientRect();
+    const w = Math.max(1, (b.width|0));
+    const h = Math.max(1, (b.height|0));
     const stepsLen = steps.length || 1;
     const cellW = Math.max(20, Math.floor((w - pad*2) / stepsLen));
     const gridTop = 6;

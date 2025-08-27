@@ -48,7 +48,7 @@ export function initToyUI(panel, {
   const left = document.createElement('div');
   left.className = 'toy-controls toy-controls-left';
   Object.assign(left.style, { display:'flex', alignItems:'center', gap:'8px' });
-  const zoomBtn = makeBtn('Zoom', 'Zoom / Edit');
+  const zoomBtn = makeBtn('Advanced', 'Advanced Edit Mode');
   const nameEl  = document.createElement('span'); nameEl.textContent = toyName; nameEl.style.opacity='.85';
   left.append(zoomBtn, nameEl);
   header.appendChild(left);
