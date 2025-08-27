@@ -3,7 +3,7 @@ import { randomizeAllImpl } from './ripplesynth-random.js';
 import { initToySizing, randomizeRects } from './toyhelpers.js';
 import { resizeCanvasForDPR, noteList } from './utils.js';
 import { PENTATONIC_OFFSETS } from './ripplesynth-scale.js';
-import { bvScaleFromCSS } from './board-scale-helpers.js';
+import { boardScale } from './board-scale-helpers.js';
 import { ensureAudioContext, barSeconds as audioBarSeconds } from './audio-core.js';
 import { triggerInstrument as __rawTrig } from './audio-samples.js';
 import { drawBlocksSection } from './ripplesynth-blocks.js';
@@ -46,7 +46,7 @@ const EDGE=10; const W = ()=> ((canvas.getBoundingClientRect?.().width|0)  || ca
     let didLayout=false;
   function layoutBlocks(){
     if (didLayout || !W() || !H()) return;
-    const size = Math.round(BASE*(sizing.scale||1)*bvScaleFromCSS(canvas));
+    const size = Math.round(BASE*(sizing.scale||1)*boardScale(canvas));
     const bounds = { x: EDGE, y: EDGE, w: Math.max(1, W()-EDGE*2), h: Math.max(1, H()-EDGE*2) };
     const rects = Array.from({length:CUBES}, ()=>({
       x: Math.round(bounds.x + Math.random()*(bounds.w - size)),
@@ -144,7 +144,7 @@ blocks, noteList,
       get r(){ return generator.r || 12; }
     }, canvas, vw:W, vh:H, EDGE, blocks:[], ripples, getBlockRects, isZoomed, clamp, getCanvasPos,
     onBlockTap: (idx, p)=>{
-      const size = Math.max(20, Math.round(BASE*(sizing.scale||1)*bvScaleFromCSS(canvas)));
+      const size = Math.max(20, Math.round(BASE*(sizing.scale||1)*boardScale(canvas)));
       const b = blocks[idx];
       const rect = { x:n2x(b.nx)-size/2, y:n2y(b.ny)-size/2, w:size, h:size };
       handleBlockTap(blocks, idx, p, rect, { noteList, ac, pattern, trigger: triggerInstrument, instrument: currentInstrument, __schedState });
@@ -157,7 +157,7 @@ blocks, noteList,
     },
 
     onBlockDrag: (idx, newX, newY)=>{
-      const size = Math.max(20, Math.round(BASE*(sizing.scale||1)*bvScaleFromCSS(canvas)));
+      const size = Math.max(20, Math.round(BASE*(sizing.scale||1)*boardScale(canvas)));
       const cx=newX+size/2, cy=newY+size/2;
       const nx=x2n(cx), ny=y2n(cy);
       const b=blocks[idx];
@@ -219,7 +219,7 @@ function spawnRipple(manual=false){
     const rMain = ripples[ripples.length-1]; rMain.hit = rMain.hit || new Set();
     const R = Math.max(0, (nowAT - (rMain.startAT||nowAT)) * (rMain.speed||RING_SPEED()));
     const band = 9; const gx = n2x(generator.nx), gy = n2y(generator.ny);
-    const size = Math.max(20, Math.round(BASE*(sizing.scale||1)*bvScaleFromCSS(canvas)));
+    const size = Math.max(20, Math.round(BASE*(sizing.scale||1)*boardScale(canvas)));
     for (let i=0;i<blocks.length;i++){
       const b = blocks[i]; if (!b.active || rMain.hit.has(i)) continue;
       const cx = n2x(b.nx), cy = n2y(b.ny);
@@ -277,7 +277,7 @@ function draw(){
       ctx.restore();
     }
     drawParticles(ctx, ac.currentTime, ripples, { x:n2x(generator.nx), y:n2y(generator.ny) });
-    const size = Math.round(BASE*(sizing.scale||1)*bvScaleFromCSS(canvas));
+    const size = Math.round(BASE*(sizing.scale||1)*boardScale(canvas));
     const blockRects = blocks.map(b=> ({...b, x: n2x(b.nx)-size/2, y: n2y(b.ny)-size/2, w: size, h: size}));
     const __nowAT = ac.currentTime; const __dt = (__lastDrawAT ? (__nowAT-__lastDrawAT) : 0); __lastDrawAT = __nowAT;
     for (let i=0;i<blocks.length;i++){ const b=blocks[i]; if (b.rippleAge != null && b.rippleMax){ b.rippleAge = Math.min(b.rippleMax, Math.max(0, b.rippleAge + __dt)); } }

@@ -1,16 +1,15 @@
-// src/wheel.js — unified with generic toy UI/frames
-// 16 spokes (16ths). Higher pitch = farther from center (0..11 semitones).
-// Starts empty. Click to add/delete. Drag moves nearest handle.
-// Uses toyui.js (header: Zoom / Random / Reset / Mute) + toyhelpers-sizing.js for sizing.
+// src/wheel.js — 16‑spoke on/off wheel (<=300 lines)
+// Standard view: toggle spokes via end buttons. Advanced keeps instrument + zoom.
+// Triggers 1 bar loop synced to audio-core epoch.
 
 import { resizeCanvasForDPR, clamp } from './utils.js';
 import { initToyUI } from './toyui.js';
 import { initToySizing } from './toyhelpers-sizing.js';
-import { randomizeWheel } from './wheel-random.js';
 import { ensureAudioContext, getLoopInfo } from './audio-core.js';
+import { addWheelToSequence } from './wheel-sequencer.js';
 
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-const STEPS = 8, SEMIS = 12;
+const STEPS = 16;
 
 function midiName(m){ const n = ((m%12)+12)%12, o = Math.floor(m/12)-1; return NOTE_NAMES[n] + o; }
 
@@ -26,7 +25,7 @@ export function buildWheel(selector, opts = {}){
   if (!shell){ console.warn('[wheel] missing', selector); return null; }
   const panel = shell?.closest?.('.toy-panel') || shell;
 
-  // Generic header & controls
+  // Header & controls
   const ui = initToyUI(panel, {
     toyName: title,
     defaultInstrument,
@@ -34,26 +33,44 @@ export function buildWheel(selector, opts = {}){
     onReset: () => doReset()
   });
 
-  // Canvas in body
+  // "+ Next" sequencing button (prototype)
+  try{
+    const header = panel.querySelector('.toy-controls.toy-controls-right');
+    const nextBtn = document.createElement('button');
+    nextBtn.type='button'; nextBtn.className='toy-btn'; nextBtn.textContent='+';
+    nextBtn.title='Duplicate this toy and play in sequence';
+    Object.assign(nextBtn.style,{padding:'6px 10px',border:'1px solid #252b36',borderRadius:'10px',background:'#0d1117',color:'#e6e8ef',cursor:'pointer'});
+    nextBtn.addEventListener('click', (e)=>{ e.stopPropagation(); addWheelToSequence(panel); });
+    header && header.prepend(nextBtn);
+  }catch{}
+
+  // Canvas
   const canvas = document.createElement('canvas');
   canvas.className = 'wheel-canvas';
   canvas.style.display = 'block';
-  // Fill toy frame regardless of board zoom
   try { canvas.style.setProperty('width','100%','important'); canvas.style.setProperty('height','100%','important'); } catch {}
-
   (panel.querySelector?.('.toy-body') || panel).appendChild(canvas);
   const ctx = canvas.getContext('2d');
 
-  // Sizing (consistent with Rippler): squareFromWidth + proper zoom
+  // Sizing (square)
   const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true });
 
-  // World size helpers (use canvas size, which already excludes header)
+  // World size helpers (exclude header)
   const worldW = ()=> ((canvas.getBoundingClientRect?.().width|0) || canvas.clientWidth || panel.clientWidth  || 356);
   const worldH = ()=> ((canvas.getBoundingClientRect?.().height|0) || canvas.clientHeight || panel.clientHeight || 260);
 
-  // Model
+  // Model: on/off per spoke
+  let active = Array.from({length:STEPS}, ()=> false);
+  let baseMidi = 60; // C4 root
+  let playing = true; // gated by sequencer
 
-  // Sync with global loop timing
+  function doReset(){ active = Array.from({length:STEPS}, ()=> false); }
+  function doRandom(){
+    const want = Math.round(STEPS * 0.5); // simple density
+    active = active.map((_,i)=> (i%4===0) || (Math.random() < (want/STEPS)));
+  }
+
+  // Loop sync helpers
   function currentStepFromLoop(){
     try{
       const ac = ensureAudioContext();
@@ -63,145 +80,57 @@ export function buildWheel(selector, opts = {}){
       const t = ((ac.currentTime - loopStart) % barLen + barLen) % barLen;
       const stepDur = barLen / STEPS;
       const stepIdx = Math.floor(t / stepDur);
-      const stepPhase = (t - stepIdx*stepDur) / stepDur;
-      return { stepIdx, stepPhase };
-    }catch{ return { stepIdx: 0, stepPhase: 0 }; }
+      const phase = (t - stepIdx*stepDur) / stepDur;
+      return { stepIdx, phase01: phase, barLen };
+    }catch{ return { stepIdx:0, phase01:0, barLen:1 }; }
   }
-  const handles = Array(STEPS).fill(null); // per-step semitone or null
-  let baseMidi = 60;   // C4
-  let playing = true;
-  let step = 0; let lastStep = -1;
-  let lastTime = performance.now();
-  let phase = 0;
 
-  // Geometry (with top/bottom padding to avoid touching header)
   function radii(){
-    const s = Math.min(worldW(), worldH());
-    const padTop = Math.max(12, s*0.06);
-    const padBottom = Math.max(12, s*0.06);
-    const usableH = Math.max(40, worldH() - (padTop + padBottom));
-    const baseRout = s*0.46;
-    const rscale = Math.min(1, (usableH/2) / baseRout);
-    const Rmin = s*0.18 * rscale;
-    const Rmax = s*0.44 * rscale;
-    const Rout = s*0.46 * rscale;
-    const cx = worldW()/2;
-    const cy = padTop + usableH/2;
-    return { cx, cy, Rmin, Rmax, Rout };
+    const w = worldW(), h = worldH();
+    const padTop = 6, usableH = Math.max(0, h - padTop);
+    const s = Math.min(w, usableH);
+    const rscale = Math.max(0.88, Math.min(1.12, s/Math.max(1,s))); // ~1
+    const Rmin = s*0.22*rscale, Rout = s*0.46*rscale, Rbtn = s*0.055*rscale;
+    const cx = w/2, cy = padTop + usableH/2;
+    return { cx, cy, Rmin, Rout, Rbtn };
   }
-  const spokeAngle = (i)=> (-Math.PI/2 + (i/STEPS)*Math.PI*2); // 0 at 12 o'clock, clockwise
+  const spokeAngle = (i)=> (-Math.PI/2 + (i/STEPS)*Math.PI*2);
 
-  function angleToSpokeFromAtan(ang){
-    const TWO = Math.PI*2;
-    while (ang < 0) ang += TWO;
-    while (ang >= TWO) ang -= TWO;
-    let diff = ang + Math.PI/2; if (diff >= TWO) diff -= TWO;
-    return Math.round((diff / TWO) * STEPS) % STEPS;
-  }
-
-  function handlePos(i){
-    const v = handles[i]; if (v == null) return null;
-    const { cx, cy, Rmin, Rmax } = radii();
-    const t = v/(SEMIS-1);
-    const r = Rmin + t*(Rmax - Rmin);
+  // Hit testing for end buttons
+  function spokeEnd(i){
+    const { cx, cy, Rout } = radii();
     const a = spokeAngle(i);
-    return { x: cx + Math.cos(a)*r, y: cy + Math.sin(a)*r, r, a };
+    return { x: cx + Math.cos(a)*Rout, y: cy + Math.sin(a)*Rout };
   }
-
-  function nearestHandle(x, y, maxPx=18){
-    let best=null, bestD=maxPx;
+  function hitSpokeButton(x,y){
+    const { Rbtn } = radii();
+    let best=-1, bestD=Rbtn*1.3;
     for (let i=0;i<STEPS;i++){
-      const p = handlePos(i); if (!p) continue;
-      const d = Math.hypot(p.x-x, p.y-y);
-      if (d < bestD){ bestD=d; best={spoke:i, ...p, d}; }
+      const p = spokeEnd(i);
+      const d = Math.hypot(x-p.x, y-p.y);
+      if (d < bestD){ best=i; bestD=d; }
     }
     return best;
   }
 
-  function posToSpokeSemi(x, y){
-    const { cx, cy, Rmin, Rmax } = radii();
-    const dx = x - cx, dy = y - cy;
-    const ang = Math.atan2(dy, dx); // screen-down y; matches draw
-    const spoke = angleToSpokeFromAtan(ang);
-    const dist = Math.hypot(dx, dy);
-    const t = clamp((dist - Rmin)/(Rmax - Rmin), 0, 1);
-    const semi = Math.round(t*(SEMIS-1));
-    return { spoke, semi, dist };
-  }
-
-  // Interaction (click to add/delete; drag moves nearest existing handle)
-  let drag = null; // { startX, startY, wasOnHandle, moved }
+  // Input: toggle buttons only
+  function local(ev){ const r = canvas.getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top }; }
   canvas.addEventListener('pointerdown', (e)=>{
-    const r = canvas.getBoundingClientRect();
-    const x = e.clientX - r.left, y = e.clientY - r.top;
-    const near = nearestHandle(x, y, 16);
-    if (near){
-      drag = { startX:x, startY:y, wasOnHandle:true, moved:false };
-    } else {
-      const { cx, cy, Rmin, Rmax } = radii();
-      const dist = Math.hypot(x-cx, y-cy);
-      if (dist >= Rmin - 6 && dist <= Rmax + 6){
-        const { spoke, semi } = posToSpokeSemi(x, y);
-        handles[spoke] = semi;
-        drag = { startX:x, startY:y, wasOnHandle:false, moved:false };
-      } else {
-        drag = null;
-      }
-    }
-    if (drag){ canvas.setPointerCapture?.(e.pointerId); e.preventDefault(); }
-  });
-  window.addEventListener('pointermove', (e)=>{
-    if (!drag) return;
-    const r = canvas.getBoundingClientRect();
-    const x = e.clientX - r.left, y = e.clientY - r.top;
-    if (Math.abs(x-drag.startX)>2 || Math.abs(y-drag.startY)>2) drag.moved = true;
-    const near = nearestHandle(x, y, 64);
-    if (near){
-      const { semi } = posToSpokeSemi(x, y);
-      handles[near.spoke] = semi;
-    }
-  }, true);
-  window.addEventListener('pointerup', (e)=>{
-    if (!drag) return;
-    const r = canvas.getBoundingClientRect();
-    const x = e.clientX - r.left, y = e.clientY - r.top;
-    if (drag.wasOnHandle && !drag.moved){
-      const near = nearestHandle(x, y, 18);
-      if (near) handles[near.spoke] = null;
-    }
-    drag = null;
-    canvas.releasePointerCapture?.(e.pointerId);
-  }, true);
-  window.addEventListener('pointercancel', ()=>{ drag=null; }, true);
-  // Random / Reset (musical)
-  function doRandom(){
-    const pr = Number(panel?.dataset?.priority || '1') || 1;
-    let toyId = (panel && panel.dataset && panel.dataset.toyid) ? String(panel.dataset.toyid) : null;
-  if (!toyId){
-    const kind = (panel && panel.dataset && panel.dataset.toy ? String(panel.dataset.toy) : 'wheel').toLowerCase();
-    const c = (window.__wheelIds__ = window.__wheelIds__ || { n: 0 });
-    toyId = `${kind}-${++c.n}`;
-    try { panel.dataset.toyid = toyId; } catch {}
-  }
-  toyId = String(toyId).toLowerCase();
-    randomizeWheel(handles, { toyId, priority: pr });
-  }
-  function doReset(){ for (let i=0;i<STEPS;i++) handles[i] = null; }
+    const p = local(e);
+    const i = hitSpokeButton(p.x, p.y);
+    if (i >= 0){ active[i] = !active[i]; e.preventDefault(); e.stopPropagation(); }
+  }, { passive:false });
 
-  panel.addEventListener('toy-random', doRandom);
-  panel.addEventListener('toy-reset', doReset);
-
-  // Draw
+  // Draw -----------------------------------------------------------------
+  let lastTime = performance.now(), lastStep = -1, step = 0;
   function draw(){
     resizeCanvasForDPR(canvas, ctx);
     const W = canvas.width, H = canvas.height;
-    const { cx, cy, Rmin, Rout } = radii();
-
-    // bg
+    const { cx, cy, Rmin, Rout, Rbtn } = radii();
     ctx.clearRect(0,0,W,H);
     ctx.fillStyle = '#0d1117'; ctx.fillRect(0,0,W,H);
 
-    // spokes with current-step highlight
+    // spokes + step highlight
     const { stepIdx } = currentStepFromLoop();
     for (let i=0;i<STEPS;i++){
       const a = spokeAngle(i);
@@ -210,70 +139,51 @@ export function buildWheel(selector, opts = {}){
       ctx.strokeStyle = (i === stepIdx) ? '#a8b3cf' : '#252b36';
       ctx.lineWidth = (i === stepIdx) ? 3 : 2;
       ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
-    }
 
-    // connection loop through active handles
-    const pts = [];
-    for (let i=0;i<STEPS;i++){ const p = handlePos(i); if (p) pts.push({i, x:p.x, y:p.y}); }
-    if (pts.length > 1){
-      ctx.strokeStyle = '#394150'; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
-      for (let k=1;k<pts.length;k++){ ctx.lineTo(pts[k].x, pts[k].y); }
-      ctx.lineTo(pts[0].x, pts[0].y);
-      ctx.stroke();
-    }
-
-    // handles (highlight current step)
-    for (let i=0;i<STEPS;i++){
-      const p = handlePos(i); if (!p) continue;
-      const isNow = (i === step);
-      ctx.fillStyle = isNow ? '#f4932f' : '#e6e8ef';
-      ctx.beginPath(); ctx.arc(p.x|0, p.y|0, isNow?7:5, 0, Math.PI*2); ctx.fill();
-      ctx.strokeStyle = '#11151d'; ctx.lineWidth = 1; ctx.stroke();
+      // end button
+      const on = !!active[i];
+      ctx.beginPath(); ctx.arc(x2, y2, Rbtn, 0, Math.PI*2);
+      ctx.fillStyle = on ? '#4caf50' : '#1a1f29';
+      ctx.fill();
+      ctx.strokeStyle = on ? '#6adf7a' : '#394150'; ctx.lineWidth = 1.5; ctx.stroke();
     }
   }
 
-  // Timing loop
-  function tick(dt){
-    // Align to global loop; trigger notes exactly at step boundaries
+  // Trigger at step boundaries
+  function tick(){
     const { stepIdx } = currentStepFromLoop();
     if (stepIdx !== lastStep){
-      step = stepIdx;
-      const semi = handles[step];
-      if (semi != null){
-        try{
-          const ac = ensureAudioContext();
-          const midi = baseMidi + semi;
-          const name = midiName(midi);
-          if (typeof onNote === 'function') onNote(midi, name, 0.9);
-        }catch{}
+      step = stepIdx; lastStep = stepIdx;
+      if (playing && active[step]){
+        try { const midi = baseMidi; const name = midiName(midi); if (typeof onNote==='function') onNote(midi, name, 0.9); } catch{}
       }
-      lastStep = stepIdx;
     }
   }
 
   function loop(now){
     const dt = Math.min(100, now - lastTime); lastTime = now;
-    if (playing) tick(dt);
-    draw(); requestAnimationFrame(loop);
+    draw(); tick(); requestAnimationFrame(loop);
   }
   requestAnimationFrame(loop);
 
-  // Zoom + keys
-  panel.dataset.toy = 'wheel';
-  panel.addEventListener('toy-zoom', (e)=> sizing.setZoom?.(!!e?.detail?.zoomed));
   panel.tabIndex = 0;
   panel.addEventListener('keydown', (e)=>{
     if (e.key === 'ArrowUp'){ baseMidi += 12; e.preventDefault(); }
     else if (e.key === 'ArrowDown'){ baseMidi -= 12; e.preventDefault(); }
   });
 
-  // Public API (match other toys)
-  return {
+  function setPlaying(v){ playing = !!v; }
+  function getState(){ return { active:[...active], baseMidi }; }
+  function setState(s){ try{ if (s?.active) active = s.active.slice(0,STEPS); if (s?.baseMidi!=null) baseMidi = s.baseMidi|0; }catch{} }
+
+  const api = {
     element: canvas,
     setInstrument: ui.setInstrument,
     get instrument(){ return ui.instrument; },
     reset: doReset,
-    onLoop: ()=>{ lastStep = -1; step = 0; }
+    onLoop: ()=>{ lastStep = -1; step = 0; },
+    setPlaying, getState, setState
   };
+  try{ panel.__wheelInst = api; }catch{}
+  return api;
 }

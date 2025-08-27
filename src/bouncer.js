@@ -7,6 +7,8 @@ import { initToyUI } from './toyui.js';
 import { initToySizing } from './toyhelpers-sizing.js';
 import { randomizeRects, EDGE_PAD as EDGE, hitRect, whichThirdRect, drawThirdsGuides } from './toyhelpers.js';
 import { drawBlocksSection } from './ripplesynth-blocks.js';
+// board scale via rect baseline (rippler-style)
+
 import { createImpactFX } from './bouncer-impact.js';
 import { getPoliteDensityForToy } from './polite-random.js';
 import { buildPentatonicPalette, processVisQ as processVisQBouncer } from './bouncer-actions.js';
@@ -251,6 +253,7 @@ if (draggingHandle){
     const ac=ensureAudioContext(); const now=(ac?ac.currentTime:0);
     processVisQBouncer({ visQ, fx }, now, blocks, fx, flashEdge);
     for (const b of blocks){ b.flash=Math.max(0, b.flash-0.06); }
+    { const s = blockSize(); for (const b of blocks){ b.w = s; b.h = s; } }
     drawBlocksSection(ctx, blocks, 0, 0, null, 1, noteList, sizing, null, null, now);
 
     fx.draw(ctx);
