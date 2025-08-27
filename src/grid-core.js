@@ -63,6 +63,7 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
   attachGridRedrawObservers(panel, body, draw, ()=>paintedOnce);
 
 const ctx = canvas.getContext('2d');
+  let __lastCssH = -1;
   try{ console.log('[grid] canvas created', {panel, toyId}); }catch{}
   const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true });
   /* sizing init hook */
@@ -85,6 +86,7 @@ const ctx = canvas.getContext('2d');
     const pad = 10;
     const w = worldW(), h = worldH();
     const gridTop = 6;
+    const zoomed = panel.classList.contains('toy-zoomed');
     const cellW = Math.max(20, Math.floor((w - pad*2) / steps.length));
     const cellH = Math.max(24, Math.floor(h - gridTop - 6));
     return { pad, w, h, gridTop, cellW, cellH, isZoomed };
@@ -94,7 +96,7 @@ const ctx = canvas.getContext('2d');
     const MARGIN = 2;
     const target = Math.round(BASE_BLOCK_SIZE_LOCAL * ( (typeof sizing?.scale==='number' ? sizing.scale : 1) ));
     let s = Math.min(cellW, cellH) - MARGIN*2;
-    s = Math.min(s, target); // cap to target so cubes match bouncer
+    if (!L.isZoomed) s = Math.min(s, target); // in advanced, fill cell
     const xCell = pad + i * cellW;
     const yCell = gridTop;
     const bx = Math.floor(xCell + (cellW - s)/2);
@@ -116,7 +118,7 @@ function draw(){
     const desiredH = 6 + square + 6;
     const scaleNow = (typeof sizing?.scale === 'number') ? sizing.scale : 1;
     const desiredBaseH = Math.max(1, Math.round(desiredH / (scaleNow || 1)));
-    try { sizing.setContentCssSize?.({ h: desiredBaseH }); } catch {}
+    try { if (__lastCssH !== desiredBaseH) { if (__lastCssH !== desiredBaseH) { sizing.setContentCssSize?.({ h: desiredBaseH }); __lastCssH = desiredBaseH; } __lastCssH = desiredBaseH; } } catch {}
     const __s = resizeCanvasForDPR(canvas, ctx);
     const w = __s.width, h = __s.height;
     const L = {
@@ -139,11 +141,7 @@ function draw(){
         for (let i=0;i<steps.length;i++){
       const s = steps[i];
       const b = blockRectForIndex(i, L);
-      drawBlock(ctx, b, {
-      baseColor: s.active ? '#f4932f' : '#293042',
-      active: !!s.active,
-      noteLabel: null,
-      showArrows: false,
+      drawBlock(ctx, b, {      baseColor: s.active ? '#f4932f' : '#293042',      active: !!s.active,      noteLabel: L.isZoomed ? (noteList && s.noteIndex!=null ? String(noteList[s.noteIndex % noteList.length]||'') : '') : null,      showArrows: L.isZoomed,
       variant: L.isZoomed ? 'block' : 'button'
     });
     ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1; ctx.strokeRect(b.x+0.5,b.y+0.5,b.w-1,b.h-1); ctx.restore();

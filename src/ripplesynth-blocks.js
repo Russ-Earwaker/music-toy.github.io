@@ -38,7 +38,13 @@ export function drawBlocksSection(ctx, blocks, gx, gy, ripples, volume, noteList
     {
       const rect = {x, y, w, h};
       const label = (noteList && b.noteIndex!=null) ? String(noteList[b.noteIndex % noteList.length]||'') : '';
-      const zoomed = !!(sizing && typeof sizing.vw==='function' && sizing.vw()>=600);
+      let zoomed = false;
+      try {
+        const cnv = ctx && ctx.canvas;
+        const p = cnv && cnv.closest ? cnv.closest('.toy-panel') : null;
+        zoomed = !!(p && p.classList && p.classList.contains('toy-zoomed'));
+      } catch {}
+      if (!zoomed && sizing && typeof sizing.vw==='function') zoomed = sizing.vw()>=600;
       drawTileLabelAndArrows(ctx, rect, { label, active: !!b.active, zoomed });
     }
   }

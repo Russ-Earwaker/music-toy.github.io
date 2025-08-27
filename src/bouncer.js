@@ -77,7 +77,7 @@ export function createBouncer(selector){
   try { hostForDock.appendChild(spDock); } catch {}
   const updateSpeedVisibility = ()=>{ const zoomed = (sizing?.scale||1) > 1.01; spDock.style.display = zoomed ? 'flex' : 'none'; };
   // Update on zoom, both immediately and in next frame to absorb scale updates
-  panel.addEventListener('toy-zoom', ()=>{});
+  panel.addEventListener('toy-zoom', (ev)=>{ try{ sizing.setZoom(ev?.detail?.zoomed); }catch{} });
   // Initialize once
   updateSpeedVisibility();
 
@@ -176,6 +176,7 @@ export function createBouncer(selector){
         }
         return;
       }
+          if (hit && !hit.fixed){ tapCand = hit; tapStart = { x:p.x, y:p.y }; tapMoved=false; dragBlockRef = hit; dragOffset = { dx: p.x - hit.x, dy: p.y - hit.y }; return; }
     } else {
       if (hit && !hit.fixed){
         tapCand = hit; tapStart = { x:p.x, y:p.y }; tapMoved = false;

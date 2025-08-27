@@ -80,6 +80,13 @@
     const vis = pickVisual(panel);
     if (vis && vis.parentElement !== body) body.appendChild(vis);
     styleVisual(vis);
+    /* recompute body top on Advanced */
+    try{ panel.addEventListener('toy-zoom', ()=>{ body.style.top = chromeTop(panel) + 'px'; }); }catch{}
+    try{ const header = panel.querySelector('.toy-header'); if (header){ header.style.zIndex='7'; } body.style.zIndex='0'; }catch{}
+    // Recompute body top when Advanced toggles (header/controls may change height)
+    try{ panel.addEventListener('toy-zoom', ()=>{ body.style.top = chromeTop(panel) + 'px'; }); }catch{}
+    // Ensure header sits above body
+    try{ const header = panel.querySelector('.toy-header'); if (header){ header.style.zIndex = '5'; } body.style.zIndex = '0'; }catch{}
 
     // DPR backing store sync (layout-neutral)
     if (vis && vis.tagName === 'CANVAS'){

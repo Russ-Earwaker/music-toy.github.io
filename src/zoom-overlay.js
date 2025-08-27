@@ -27,6 +27,8 @@ export function zoomInPanel(panel, onRequestUnzoom){
   const overlay = ensureOverlay();
   overlay.style.display = 'flex';
   overlay.style.pointerEvents = 'auto';
+  // keep header visible
+  try{ const h = panel.querySelector('.toy-header'); if (h){ h.style.display='flex'; } }catch{}
 
   // remember original placement & inline style
   const info = panel._portalInfo || {};
@@ -42,6 +44,22 @@ export function zoomInPanel(panel, onRequestUnzoom){
   panel.style.transform = '';
 
   overlay.appendChild(panel);
+  // preserve aspect sizing
+  /* preserve aspect sizing */
+  try{
+    const body = panel.querySelector('.toy-body') || panel;
+    const header = panel.querySelector('.toy-header');
+    const br = body.getBoundingClientRect();
+    const headerH = header ? header.offsetHeight : 0;
+    const maxW = Math.max(360, Math.min(window.innerWidth - 80, 1080));
+    // Use current body aspect
+    const ratio = (br && br.width>0) ? (br.height / br.width) : 0.75;
+    const ww = Math.round(Math.min(maxW, Math.max(br.width*1.4, 480)));
+    const hh = Math.round(ww * ratio + headerH);
+    panel.style.width = ww + 'px';
+    panel.style.height = hh + 'px';
+    if (header){ header.style.display='flex'; header.style.zIndex='5'; }
+  }catch{}
 
   // click outside to request unzoom
   const outside = (e)=>{

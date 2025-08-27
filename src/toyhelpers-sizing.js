@@ -69,7 +69,9 @@ export function initToySizing(shell, canvas, ctx, { squareFromWidth = false, asp
 }
 
   function ensureFit(){
-  // Standard view size is frozen; only re-apply sizing on resize to keep DPR sharp.
+  try{ slotW = measureWidthFallback(); }catch{}
+  const ratio = Math.max(0.5, Math.min(4, (slotW / Math.max(1, baseSlotW))));
+  scale = ratio;
   applySize();
 }
 // resize observer (suspended during zoom to avoid feedback)
@@ -80,8 +82,10 @@ export function initToySizing(shell, canvas, ctx, { squareFromWidth = false, asp
   } catch {}
 
   function setZoom(zoomed){
-  // Advanced edit mode may change panel size via CSS; we keep internal scale=1
-  scale = 1;
+  // Advanced edit mode: re-measure host and set scale relative to the initial width.
+  try{ const w = measureWidthFallback(); slotW = w; }catch{}
+  const ratio = Math.max(0.5, Math.min(4, (slotW / Math.max(1, baseSlotW))));
+  scale = ratio;
   applySize();
   return scale;
 }
