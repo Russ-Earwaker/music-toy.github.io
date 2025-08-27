@@ -1,4 +1,4 @@
-// src/wheel.js — 16‑spoke on/off wheel with Grid-style cubes (<=300 lines)
+// src/wheel.js — 16‑spoke on/off wheel with Grid-style cubes
 import { resizeCanvasForDPR } from './utils.js';
 import { initToyUI } from './toyui.js';
 import { initToySizing } from './toyhelpers-sizing.js';
@@ -47,8 +47,10 @@ export function buildWheel(selector, opts = {}){
   let baseMidi = 60; // C4
   let playing = true;
   let __lastRandSig = null;
+  let flashUntil = new Float32Array(STEPS).fill(0);
 
   function doReset(){ active = Array.from({length:STEPS}, ()=> false); }
+
   function doRandom(){
     try{
       const tries = 4;
@@ -64,6 +66,9 @@ export function buildWheel(selector, opts = {}){
             semiOffsets[i] = (h!=null ? (h|0) : 0);
           }
           __lastRandSig = pattern;
+          // small post-jitter: flip up to 2 steps randomly to avoid overly-regular 011 pattern
+          const idxs = [...Array(STEPS).keys()]; for (let r=idxs.length-1;r>0;r--){ const j=(Math.random()* (r+1))|0; const t=idxs[r]; idxs[r]=idxs[j]; idxs[j]=t; }
+          let flips = 0; for (let k=0;k<idxs.length && flips<2;k++){ const ii = idxs[k]; if (Math.random()<0.25){ active[ii] = !active[ii]; flips++; } }
           break;
         }
       }
@@ -71,14 +76,15 @@ export function buildWheel(selector, opts = {}){
       for (let i=0;i<STEPS;i++){ active[i] = (i%4===0); semiOffsets[i] = 0; }
     }
   }
-// Transport helpers
+
+  // Transport helpers
   function currentStepFromLoop(){
     try{
       const ac = ensureAudioContext();
       const info = (typeof getLoopInfo==='function') ? getLoopInfo() : null;
       const bpm = (typeof getBpm==='function') ? getBpm() : 120;
-      const barLen = info?.barLen || ((60/bpm)*4);
-      const loopStart = (info?.loopStartTime ?? ac.currentTime);
+      const barLen = (info && info.barLen) ? info.barLen : ((60/bpm)*4);
+      const loopStart = (info && 'loopStartTime' in info) ? info.loopStartTime : ac.currentTime;
       const t = ((ac.currentTime - loopStart) % barLen + barLen) % barLen;
       const stepDur = barLen / STEPS;
       const stepIdx = Math.floor(t / stepDur);
@@ -88,10 +94,10 @@ export function buildWheel(selector, opts = {}){
   }
 
   // Geometry (device-pixel space)
+  const EDGE_WHEEL = 10;
   const worldW = ()=> canvas.width|0;
   const worldH = ()=> canvas.height|0;
   const spokeAngle = (i)=> (-Math.PI/2 + (i/STEPS)*Math.PI*2);
-  const EDGE_WHEEL = 10;
   function radii(){
     const W = worldW(), H = worldH();
     const s = Math.min(W, H);
@@ -127,15 +133,16 @@ export function buildWheel(selector, opts = {}){
     if (i >= 0){
       active[i] = !active[i];
       if (active[i] && !semiOffsets[i]){ semiOffsets[i] = (semiOffsets[(i+STEPS-1)%STEPS]||0); }
-     e.preventDefault(); e.stopPropagation(); }
+      e.preventDefault(); e.stopPropagation();
+    }
   }, { passive:false });
 
   // Draw
   let lastTime = performance.now(), lastStep = -1, step = 0;
   function draw(){
-    resizeCanvasForDPR(canvas, ctx);
-    const W = worldW(), H = worldH();
-    const { cx, cy, Rmin, Rout, Rbtn } = radii();
+    const cs = resizeCanvasForDPR(canvas, ctx);
+    const W = cs.width, H = cs.height;
+    const { cx, cy, Rmin, Rout } = radii();
     ctx.clearRect(0,0,W,H);
     ctx.fillStyle = '#0d1117'; ctx.fillRect(0,0,W,H);
 
@@ -155,9 +162,11 @@ export function buildWheel(selector, opts = {}){
       ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
 
       const pad = EDGE_WHEEL + sBtn*0.5;
-      const bx = Math.max(pad, Math.min(W - pad, x2)) - Math.round(sBtn/2);
-      const by = Math.max(pad, Math.min(H - pad, y2)) - Math.round(sBtn/2);
-      blocks.push({ x: bx, y: by, w: sBtn, h: sBtn, active: !!active[i], noteIndex: 0 });
+      const bxC = Math.max(pad, Math.min(W - pad, x2));
+      const byC = Math.max(pad, Math.min(H - pad, y2));
+      const bx = Math.round(bxC - sBtn/2);
+      const by = Math.round(byC - sBtn/2);
+      blocks.push({ x: bx, y: by, w: sBtn, h: sBtn, active: !!active[i], noteIndex: 0, flashEnd: flashUntil[i], flashDur: 0.12 });
     }
     const nowSec = (performance.now()/1000);
     drawBlocksSection(ctx, blocks, 0, 0, null, 1, null, sizing, null, null, nowSec);
@@ -170,6 +179,7 @@ export function buildWheel(selector, opts = {}){
       step = stepIdx; lastStep = stepIdx;
       if (playing && active[step]){
         try { const midi = baseMidi + (semiOffsets[step]|0); const name = midiName(midi); if (typeof onNote==='function') onNote(midi, name, 0.9); } catch{}
+        try { flashUntil[step] = (performance.now()/1000) + 0.12; } catch {}
       }
     }
   }
@@ -187,8 +197,14 @@ export function buildWheel(selector, opts = {}){
   });
 
   function setPlaying(v){ playing = !!v; }
-  function getState(){ return { active:[...active], baseMidi }; }
-  function setState(s){ try{ if (s?.active) active = s.active.slice(0,STEPS); if (s?.baseMidi!=null) baseMidi = s.baseMidi|0; }catch{} }
+  function getState(){ return { active:[...active], baseMidi, offsets:[...semiOffsets] }; }
+  function setState(s){
+    try{
+      if (s && s.active) active = s.active.slice(0,STEPS);
+      if (s && s.offsets) semiOffsets = s.offsets.slice(0,STEPS);
+      if (s && s.baseMidi!=null) baseMidi = s.baseMidi|0;
+    }catch{}
+  }
 
   const api = {
     element: canvas,

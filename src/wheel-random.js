@@ -5,6 +5,16 @@ import { getPoliteDensityForToy } from './polite-random.js';
 
 function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
 
+function rand01(){
+  try{
+    if (typeof crypto!=='undefined' && crypto.getRandomValues){
+      const u = new Uint32Array(1); crypto.getRandomValues(u);
+      return (u[0] >>> 0) / 4294967296; // [0,1)
+    }
+  }catch{}
+  return rand01();
+}
+
 export function randomizeWheel(handles, opts = {}){
   const STEPS = handles.length|0;
   const SEMIS = 12;
@@ -62,7 +72,7 @@ export function randomizeWheel(handles, opts = {}){
     const n = pool.length;
     if (k >= n){ pool.forEach(i=>active.add(i)); return active; }
     const step = n / k;
-    let pos = Math.random() * step;
+    let pos = rand01() * step;
     for (let i=0;i<k;i++){ active.add(pool[Math.round(pos) % n]); pos += step; }
     if (active.size < k){ // repair rounding
       for (let i=0;i<n && active.size<k;i++){ active.add(pool[i]); }
@@ -76,12 +86,12 @@ export function randomizeWheel(handles, opts = {}){
   const SCALE = (density < 0.9) ? [0,3,7,10] : SCALE_FULL;
 
   // Motif shorter & more stepwise when busy
-  const motifLen = (density < 0.85) ? 3 : 4 + Math.floor(Math.random()*2); // 3..5
+  const motifLen = (density < 0.85) ? 3 : 4 + Math.floor(rand01()*2); // 3..5
   const motif = [];
-  let si = Math.floor(Math.random()*SCALE.length);
+  let si = Math.floor(rand01()*SCALE.length);
   motif.push(si);
   for (let i=1;i<motifLen;i++){
-    const delta = (-1 + Math.floor(Math.random()*3)); // -1,0,+1
+    const delta = (-1 + Math.floor(rand01()*3)); // -1,0,+1
     si = clamp(si + delta, 0, SCALE.length-1);
     motif.push(si);
   }
@@ -101,7 +111,7 @@ export function randomizeWheel(handles, opts = {}){
         choices.sort((a,b)=> Math.abs(a-prevSemi)-Math.abs(b-prevSemi));
         semi = choices[0];
       } else {
-        semi = choices[Math.floor(Math.random() * choices.length)];
+        semi = choices[Math.floor(rand01() * choices.length)];
       }
     } else {
       // motif-driven in-scale, stepwise contour (up then down)
@@ -125,10 +135,10 @@ export function randomizeWheel(handles, opts = {}){
 
   // Light second-half variation (less when busy)
   const vary = (q > 0.5) ? 0.7 : 0.35;
-  if (Math.random() < vary){
+  if (rand01() < vary){
     for (let i=Math.floor(STEPS/2); i<STEPS; i++){
       if (handles[i] != null && (i%4)!==0){
-        const trans = (q > 0.5 && Math.random()<0.5) ? 2 : 0;
+        const trans = (q > 0.5 && rand01()<0.5) ? 2 : 0;
         handles[i] = (handles[i] + trans) % SEMIS;
       }
     }
