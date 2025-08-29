@@ -1,17 +1,17 @@
 // src/zoom-overlay.js
-// Viewport-anchored overlay (centers to the WINDOW, not the toy's prior layout).
-// - Uses a dedicated host absolutely centered via translate(-50%,-50%).
-// - No blur/pointer capture after exit.
-// - No first-frame jump (measure invisible, then reveal).
-// - Restores panel/header/body/volume + canvases on exit.
-// - Keeps standard mode untouched (CSS handles header/volume width = 100%).
+// STRICT viewport centering + safe sizing for Advanced mode.
+// Fixes Rippler cubes jumping to top-left by:
+//  - Measuring header/body/footer BEFORE moving the panel
+//  - Applying provisional pixel sizes before DOM move (so body is never 0×0)
+//  - Not forcing `.toy-body` display to grid; we preserve layout and just set width/height/overflow
+//  - Ensuring `.toy-body` is a positioned container (position:relative if it was static)
 
 export function ensureOverlay(){ return _ensureOverlay(); }
 export function zoomInPanel(panel, onExit){ return _zoomIn(panel, onExit); }
 export function zoomOutPanel(panel){ return _zoomOut(panel); }
 
 let overlayEl = null;
-let hostEl = null;
+let frameEl = null;
 let activePanel = null;
 let restoreInfo = null;
 let escHandler = null;
@@ -30,52 +30,51 @@ function _ensureOverlay(){
       zIndex:'9999',
       background:'rgba(0,0,0,0.35)',
       backdropFilter:'none',
-      overflow:'hidden',
       pointerEvents:'none',
+      overflow:'hidden',
+      boxSizing:'border-box',
     });
     overlayEl.addEventListener('pointerdown', (e)=>{
-      if (e.target === overlayEl) _zoomOut(activePanel);
+      // Exit if click is anywhere outside the active panel (covers clicks on frame/background)
+      try{ if (activePanel && !activePanel.contains(e.target)) _zoomOut(activePanel); }catch{}
     });
     document.body.appendChild(overlayEl);
+  }
+  if (!frameEl || frameEl.parentNode !== overlayEl){
+    frameEl = document.createElement('div');
+    frameEl.id = 'zoom-frame';
+    Object.assign(frameEl.style, {
+      position:'absolute',
+      top:'0px',
+      left:'0px',
+      width:'0px',
+      height:'0px',
+      pointerEvents:'auto',
+      display:'block',
+      boxSizing:'border-box',
+    });
+    overlayEl.appendChild(frameEl);
   }
   return overlayEl;
 }
 
-function _ensureHost(){
-  if (hostEl && hostEl.parentNode === overlayEl) return hostEl;
-  hostEl = document.createElement('div');
-  hostEl.id = 'zoom-host';
-  Object.assign(hostEl.style, {
-    position:'absolute',
-    top:'50%', left:'50%',
-    transform:'translate(-50%, -50%)',
-    display:'block',
-    pointerEvents:'none', // clicks should hit children only
-  });
-  overlayEl.appendChild(hostEl);
-  return hostEl;
-}
-
-function _showOverlayVisible(){
-  overlayEl.style.display = 'block';
-  overlayEl.style.pointerEvents = 'auto';
-  overlayEl.style.backdropFilter = 'blur(2px)';
-  overlayEl.style.visibility = 'visible';
-}
-
-function _prepareOverlayInvisible(){
+function _openOverlayInvisible(){
   overlayEl.style.display = 'block';
   overlayEl.style.pointerEvents = 'none';
   overlayEl.style.backdropFilter = 'none';
   overlayEl.style.visibility = 'hidden';
 }
-
+function _revealOverlay(){
+  overlayEl.style.pointerEvents = 'auto';
+  overlayEl.style.backdropFilter = 'blur(2px)';
+  overlayEl.style.visibility = 'visible';
+}
 function _closeOverlay(){
   overlayEl.style.display = 'none';
   overlayEl.style.pointerEvents = 'none';
   overlayEl.style.backdropFilter = 'none';
   overlayEl.style.visibility = 'hidden';
-  if (hostEl){ hostEl.replaceChildren(); }
+  frameEl.replaceChildren();
 }
 
 function _snapStyle(el){ return el ? (el.getAttribute('style') || '') : null; }
@@ -85,9 +84,31 @@ function _restoreStyle(el, styleStr){
   else el.setAttribute('style', styleStr);
 }
 
+function _viewportSize(){
+  const vw = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
+  const vh = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
+  return { vw, vh };
+}
+
+function _centerFramePx(width, height){
+  const { vw, vh } = _viewportSize();
+  const left = Math.round((vw - width) / 2);
+  const top  = Math.round((vh - height) / 2);
+  frameEl.style.left = left + 'px';
+  frameEl.style.top  = top + 'px';
+  frameEl.style.width = width + 'px';
+  frameEl.style.height = height + 'px';
+}
+
+function _ensurePositioned(el){
+  if (!el) return;
+  const cs = getComputedStyle(el);
+  if (cs.position === 'static') el.style.position = 'relative';
+}
+
 function _zoomIn(panel, onExit){
   if (!panel) return;
-  _ensureOverlay(); _ensureHost();
+  _ensureOverlay();
 
   // If something else is open, close it first.
   if (activePanel && activePanel !== panel) _zoomOut(activePanel);
@@ -110,7 +131,7 @@ function _zoomIn(panel, onExit){
     volume: _snapStyle(volume),
   };
 
-  // Apply zoomed look
+  // Apply zoomed look (purely visual)
   panel.classList.add('toy-zoomed');
   panel.style.margin = '0';
   panel.style.position = 'relative';
@@ -120,9 +141,33 @@ function _zoomIn(panel, onExit){
   panel.style.boxShadow = '0 10px 30px rgba(0,0,0,0.5)';
   try{ panel.style.background = getComputedStyle(panel).background || '#1c1c1c'; }catch{}
 
-  // Move into overlay host (invisible first)
-  _prepareOverlayInvisible();
-  hostEl.replaceChildren(panel);
+  // ----- PRE-MEASURE IN ORIGINAL DOM, then set provisional sizes so body is never 0×0 -----
+  const { vw, vh } = _viewportSize();
+  const hH0 = header ? Math.round(header.getBoundingClientRect().height) : 0;
+  const hF0 = volume ? Math.round(volume.getBoundingClientRect().height) : 0;
+  const maxW0 = Math.min(Math.floor(vw * 0.96), 1200);
+  const maxH0 = Math.floor(vh * 0.96);
+  const vPad = 16 + 16;
+  const hPad = 16 + 16;
+  const availW0 = Math.max(0, maxW0 - hPad);
+  const availH0 = Math.max(0, maxH0 - vPad - hH0 - hF0);
+  const side0   = Math.floor(Math.max(0, Math.min(availW0, availH0)));
+  const frameW0 = side0 + hPad;
+  const frameH0 = side0 + vPad + hH0 + hF0;
+
+  _ensurePositioned(body);
+  if (header) header.style.height = hH0 + 'px';
+  if (volume) volume.style.height = hF0 + 'px';
+  // Provisional sizes so observers inside the toy see valid dimensions immediately
+  body.style.width  = side0 + 'px';
+  body.style.height = side0 + 'px';
+  body.style.overflow = 'hidden';
+  panel.style.width  = frameW0 + 'px';
+  panel.style.height = frameH0 + 'px';
+
+  // Move into overlay frame (keep overlay invisible while we confirm layout)
+  _openOverlayInvisible();
+  frameEl.replaceChildren(panel);
   activePanel = panel;
 
   // Snapshot canvases we will touch
@@ -131,34 +176,74 @@ function _zoomIn(panel, onExit){
 
   restoreInfo = { placeholder, parent, original, onExit, header, body, volume, canvases: canvasSnaps };
 
-  // rAF 1: measure header/footer and lock to avoid jumps
+  // rAF: verify/adjust sizes (in case header/footer heights differ in overlay context)
   requestAnimationFrame(()=>{
     const hH = header ? Math.round(header.getBoundingClientRect().height) : 0;
     const hF = volume ? Math.round(volume.getBoundingClientRect().height) : 0;
     if (header) header.style.height = hH + 'px';
     if (volume) volume.style.height = hF + 'px';
 
-    // Layout square using viewport (host is at exact center of the window)
-    _layoutSquare(panel, header, body, volume, { hH, hF });
+    const { vw, vh } = _viewportSize();
+    const maxW = Math.min(Math.floor(vw * 0.96), 1200);
+    const maxH = Math.floor(vh * 0.96);
+    const availW = Math.max(0, maxW - hPad);
+    const availH = Math.max(0, maxH - vPad - hH - hF);
+    const side   = Math.floor(Math.max(0, Math.min(availW, availH)));
+    const frameW = side + hPad;
+    const frameH = side + vPad + hH + hF;
 
-    // Canvases fill body in zoom mode
+    body.style.width  = side + 'px';
+    body.style.height = side + 'px';
+    body.style.overflow = 'hidden';
+    _ensurePositioned(body);
+
+    panel.style.width  = frameW + 'px';
+    panel.style.height = frameH + 'px';
+    panel.style.maxWidth  = panel.style.width;
+    panel.style.maxHeight = panel.style.height;
+
+    _centerFramePx(frameW, frameH);
+
+    // Ensure canvases fill body (without changing drawing buffer size)
     canvases.forEach(cv=>{
       cv.style.width = '100%';
       cv.style.height = '100%';
       cv.style.display = 'block';
     });
 
-    // rAF 2: reveal overlay now that geometry is final
+    // Reveal overlay after geometry is final
     requestAnimationFrame(()=>{
-      _showOverlayVisible();
+      _revealOverlay();
 
-      // Window resize => recompute square from viewport
+      // Window resize => recompute square and recenter
       const relayout = (()=>{
         let raf = 0;
         return ()=>{
           if (raf) return;
           raf = requestAnimationFrame(()=>{
-            _layoutSquare(panel, header, body, volume, { hH, hF });
+            if (header) header.style.height = '';
+            if (volume) volume.style.height = '';
+            const newHH = header ? Math.round(header.getBoundingClientRect().height) : 0;
+            const newHF = volume ? Math.round(volume.getBoundingClientRect().height) : 0;
+            if (header) header.style.height = newHH + 'px';
+            if (volume) volume.style.height = newHF + 'px';
+
+            const { vw, vh } = _viewportSize();
+            const maxW2 = Math.min(Math.floor(vw * 0.96), 1200);
+            const maxH2 = Math.floor(vh * 0.96);
+            const availW2 = Math.max(0, maxW2 - hPad);
+            const availH2 = Math.max(0, maxH2 - vPad - newHH - newHF);
+            const side2   = Math.floor(Math.max(0, Math.min(availW2, availH2)));
+            const frameW2 = side2 + hPad;
+            const frameH2 = side2 + vPad + newHH + newHF;
+
+            body.style.width  = side2 + 'px';
+            body.style.height = side2 + 'px';
+            _ensurePositioned(body);
+            panel.style.width  = frameW2 + 'px';
+            panel.style.height = frameH2 + 'px';
+            _centerFramePx(frameW2, frameH2);
+
             raf = 0;
           });
         };
@@ -205,57 +290,12 @@ function _zoomOut(panel){
     activePanel = null;
     restoreInfo = null;
 
-    // Reflow nudge to avoid “needs two exits” symptoms
+    // Nudge reflow & re-measure
     try{ void parent && parent.offsetHeight; }catch{}
-    // Dispatch resize so toys re-measure naturally
     setTimeout(()=> window.dispatchEvent(new Event('resize')), 0);
   }catch(e){
     console.error('[zoom-overlay] zoomOut failed', e);
     try{ _closeOverlay(); }catch{}
-  }
-}
-
-function _layoutSquare(panel, header, body, volume, locked){
-  if (!panel || !body) return;
-
-  // Compute square from VIEWPORT (not overlay size, not toy position)
-  const vw = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
-  const vh = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
-
-  const maxW = Math.min(vw * 0.96, 1200);
-  const maxH = vh * 0.96;
-
-  const hH = locked ? locked.hH : (header ? header.getBoundingClientRect().height : 0);
-  const hF = locked ? locked.hF : (volume ? volume.getBoundingClientRect().height : 0);
-  const vPad = 16 + 16;
-  const hPad = 16 + 16;
-
-  const availW = Math.max(0, maxW - hPad);
-  const availH = Math.max(0, maxH - vPad - hH - hF);
-  const side = Math.floor(Math.max(0, Math.min(availW, availH)));
-
-  // Size host and panel
-  hostEl.style.width = Math.round(side + hPad) + 'px';
-  hostEl.style.height = Math.round(side + vPad + hH + hF) + 'px';
-
-  panel.style.width = Math.round(side + hPad) + 'px';
-  panel.style.height = Math.round(side + vPad + hH + hF) + 'px';
-  panel.style.maxWidth = panel.style.width;
-  panel.style.maxHeight = panel.style.height;
-
-  // Children
-  if (header){ header.style.flex = '0 0 auto'; }
-  body.style.flex  = '0 0 auto';
-  body.style.width = side + 'px';
-  body.style.height= side + 'px';
-  body.style.overflow = 'hidden';
-  body.style.display  = 'grid';
-  body.style.placeItems = 'center';
-  if (volume){
-    volume.style.flex = '0 0 auto';
-    volume.style.marginTop = 'auto';
-    volume.style.alignSelf = 'stretch';
-    volume.style.width = (side + hPad) + 'px';
   }
 }
 
