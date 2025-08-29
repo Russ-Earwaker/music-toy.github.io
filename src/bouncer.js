@@ -98,7 +98,7 @@ export function createBouncer(selector){
   let zoomDragCand=null, zoomDragStart=null, zoomTapT=null;
   let tapCand=null, tapStart=null, tapMoved=false;
   let lastLaunch=null, launchPhase=0, nextLaunchAt=null, prevNow=0, ball=null;
-  let lastCanvasW=0, lastCanvasH=0; // track **CSS** width/height for proportional rescale
+  let lastCanvasW=0, lastCanvasH=0;
   let visQ = []; const fx = createImpactFX(); let lastScale = sizing.scale||1;
 
   // edge controllers + flash
@@ -247,21 +247,24 @@ if (draggingHandle){
 
   // draw loop
   function draw(){
-    const sNow=sizing.scale||1; if (sNow!==lastScale){ rescaleAll(sNow/lastScale); lastScale=sNow; }
-    const _sized = resizeCanvasForDPR(canvas, ctx);
-const _rect = canvas.getBoundingClientRect();
-const w = Math.max(1, Math.floor(_rect.width||canvas.clientWidth||0));
-const h = Math.max(1, Math.floor(_rect.height||canvas.clientHeight||0));
-// Map CSS px -> device px so we can draw & hit-test in CSS units
-const _sx = (_sized && canvas.width  ? canvas.width  / w : 1);
-const _sy = (_sized && canvas.height ? canvas.height / h : 1);
-try{ ctx.setTransform(_sx, 0, 0, _sy, 0, 0); }catch{}
-// If the CSS size changed (not just DPR), rescale world state proportionally
-if (!lastCanvasW) { lastCanvasW = w; lastCanvasH = h; }
-const _cx = (w && lastCanvasW ? w/lastCanvasW : 1);
-const _cy = (h && lastCanvasH ? h/lastCanvasH : 1);
-if (Math.abs(_cx-1) > 0.001 || Math.abs(_cy-1) > 0.001){ rescaleAll(_cx, _cy); lastCanvasW = w; lastCanvasH = h; }
-    ctx.fillStyle='#0b0f16'; ctx.fillRect(0,0,w,h);
+    
+// CSS-px drawing: map device buffer to CSS space for consistent physics/hit-tests
+const rect = canvas.getBoundingClientRect();
+const cssW = Math.max(1, Math.round(rect.width || canvas.clientWidth || 0));
+const cssH = Math.max(1, Math.round(rect.height || canvas.clientHeight || 0));
+
+const cs = resizeCanvasForDPR(canvas, ctx);
+const sx = (cs.width / cssW), sy = (cs.height / cssH);
+try { ctx.setTransform(sx, 0, 0, sy, 0, 0); } catch {}
+
+if (!lastCanvasW) { lastCanvasW = cssW; lastCanvasH = cssH; }
+const kx = (cssW && lastCanvasW ? cssW/lastCanvasW : 1);
+const ky = (cssH && lastCanvasH ? cssH/lastCanvasH : 1);
+if (Math.abs(kx-1) > 0.001 || Math.abs(ky-1) > 0.001){ rescaleAll(kx, ky); lastCanvasW = cssW; lastCanvasH = cssH; }
+
+const w = cssW, h = cssH;
+ctx.fillStyle='#0b0f16'; ctx.fillRect(0,0,w,h);
+
     ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.lineWidth=2; ctx.strokeRect(EDGE,EDGE,w-EDGE*2,h-EDGE*2);
 
     ensureEdgeControllers(w,h);
