@@ -32,6 +32,7 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
   }
   toyId = String(toyId).toLowerCase();
   panel.dataset.toy = toyId;
+  try{ panel.dataset.steps = String(numSteps||NUM_STEPS); }catch{}
   if (!panel.id) panel.id = 'panel-' + toyId;
   const ui = initToyUI(panel, { toyName: title, defaultInstrument });
   let body = panel.querySelector('.toy-body');
@@ -55,7 +56,7 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
   try{ canvas.removeAttribute('data-lock-scale'); canvas.style.transform=''; }catch{};
   canvas.style.display = 'block';
   canvas.className = 'grid-canvas';
-  canvas.style.display = 'block';canvas.style.width='100%';canvas.style.height='100%';
+  canvas.style.display = 'block';canvas.style.width='100%';canvas.style.height='100%';canvas.style.maxHeight='100%';
   panel.classList.add('toy-unzoomed');
   body.style.paddingTop = '6px';
   body.style.paddingBottom = '6px';
@@ -89,7 +90,7 @@ const ctx = canvas.getContext('2d');
     const zoomed = panel.classList.contains('toy-zoomed');
     const cellW = Math.max(20, Math.floor((w - pad*2) / steps.length));
     const cellH = Math.max(24, Math.floor(h - gridTop - 6));
-    return { pad, w, h, gridTop, cellW, cellH, isZoomed };
+    return { pad, w, h, gridTop, cellW, cellH, isZoomed: zoomed };
   }
   function blockRectForIndex(i, L){
     const { pad, gridTop, cellW, cellH } = L;
@@ -118,7 +119,7 @@ function draw(){
     const desiredH = 6 + square + 6;
     const scaleNow = (typeof sizing?.scale === 'number') ? sizing.scale : 1;
     const desiredBaseH = Math.max(1, Math.round(desiredH / (scaleNow || 1)));
-    try { if (__lastCssH !== desiredBaseH) { if (__lastCssH !== desiredBaseH) { sizing.setContentCssSize?.({ h: desiredBaseH }); __lastCssH = desiredBaseH; } __lastCssH = desiredBaseH; } } catch {}
+    try { if (__lastCssH !== desiredBaseH) { if (!isZoomedNow) { sizing.setContentCssSize?.({ h: desiredBaseH }); } __lastCssH = desiredBaseH; } } catch {}
     const __s = resizeCanvasForDPR(canvas, ctx);
     const w = __s.width, h = __s.height;
     const L = {
