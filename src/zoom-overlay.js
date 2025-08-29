@@ -1,16 +1,16 @@
 // zoom-overlay.js (ES module, <300 lines)
-// Advanced overlay: no ancestor transforms (good for pointer math),
-// centers via CSS Grid, neutralizes any panel-local offsets while zoomed,
-// grid kept wide (clamped height), footer fixed at bottom row, full restore on exit.
-// Emits `toy-zoom` events (enter/exit).
+// Centers toys via CSS Grid, neutralizes panel offsets while zoomed (no drift),
+// special handling for Grid sizing (wide, clamped height), footer fixed at bottom row,
+// inline MUTE wiring (no extra imports), and full restore on exit.
+// Emits `toy-zoom` on enter/exit so toys can reflow.
 
 let overlayEl=null, frameEl=null, activePanel=null, restoreInfo=null;
-let escHandler=null, relayoutHandler=null, roFrame=null, roParts=null;
+let escHandler=null, relayoutHandler=null, roFrame=null, roParts=null, roBody=null;
 
 const VIEWPORT_FRACTION = 0.96;
 const MAXW_SQUARE = 1200;
 const MAXW_GRID   = 960;
-const GRID_MAX_VH_FRAC = 0.48; // cap grid body height to ~half the viewport
+const GRID_MAX_VH_FRAC = 0.40; // ~40% of viewport tall at most
 const SAFE_PAD_X=28, SAFE_PAD_TOP=28, SAFE_PAD_BOTTOM=64;
 const SQUARE_EPS = 0.03;
 
@@ -36,8 +36,8 @@ function _findFooter(panel){
 
 function _isGrid(panel){
   if (!panel) return false;
+  if (panel.getAttribute('data-toy') === 'grid') return true;
   if (panel.querySelector('.grid-canvas')) return true;
-  // Fallbacks: dataset or any descendant with class containing "grid"
   const dt = String(panel.dataset?.toy||'').toLowerCase();
   if (dt.includes('grid')) return true;
   const any = panel.querySelector('[class*="grid"], [data-grid], [data-kind="grid"]');
@@ -68,7 +68,6 @@ function _fitBody(aspect, box, forceSquare, panel){
     const steps=_stepsOf(panel);
     let w=Math.min(usableW, MAXW_GRID);
     let h=_gridHFromW(w, steps);
-    // Clamp grid height to not dominate viewport
     const maxGridH = Math.floor(box.vh * GRID_MAX_VH_FRAC);
     h = Math.min(h, Math.max(0, usableH), maxGridH);
     return { w:Math.max(0,w), h:Math.max(0,h) };
@@ -83,7 +82,6 @@ function _fitBody(aspect, box, forceSquare, panel){
   return { w:Math.max(0,w), h:Math.max(0,h) };
 }
 
-// Prepare panel so header/footer report real heights before measure
 function _bootstrapForMeasure(panel, header, footer){
   panel.style.display='grid';
   panel.style.gridTemplateRows='auto 0 auto';
@@ -125,6 +123,33 @@ function _normalizeFooter(panel){
   }
   panel.querySelectorAll('input,button').forEach(el=>{ el.style.pointerEvents='auto'; });
   return { snapVw };
+}
+
+function _wireMute(panel){
+  try{
+    const wrap = panel.querySelector('.toy-volwrap'); if(!wrap) return;
+    const btn  = wrap.querySelector('button[title="Mute"]'); if(!btn || btn.__wiredMute) return;
+    const rng  = wrap.querySelector('input[type="range"]'); if(!rng) return;
+    btn.__wiredMute = true;
+    let last = Math.max(0, Math.min(100, parseInt(rng.value,10)||100));
+    const idBase = panel.dataset?.toyid || panel.id || '';
+    function dispatchVol(pct){
+      const v = Math.max(0, Math.min(1, (parseInt(pct,10)||0)/100));
+      try{ window.dispatchEvent(new CustomEvent('toy-volume', { detail:{ toyId: idBase, value: v } })); }catch{}
+    }
+    rng.addEventListener('input', ()=>{ const p=parseInt(rng.value,10)||0; if(p>0) last=p; }, { passive:true });
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      const muted = btn.getAttribute('aria-pressed') === 'true';
+      if (!muted){
+        btn.setAttribute('aria-pressed','true'); btn.setAttribute('data-muted','1');
+        last = parseInt(rng.value,10)||last||100; rng.value='0'; rng.dispatchEvent(new Event('input', { bubbles:true })); dispatchVol(0);
+      } else {
+        btn.setAttribute('aria-pressed','false'); btn.removeAttribute('data-muted');
+        const restore = String(Math.max(0, Math.min(100, last||100))); rng.value=restore; rng.dispatchEvent(new Event('input', { bubbles:true })); dispatchVol(restore);
+      }
+    });
+  }catch{}
 }
 
 // Neutralize any panel-local offsets (transform/margins) while zoomed
@@ -172,7 +197,7 @@ export function ensureOverlay(){
     frameEl=document.createElement('div'); frameEl.id='zoom-frame';
     Object.assign(frameEl.style,{
       position:'absolute', inset:'0',
-      display:'grid', placeItems:'center',   // pure centering, no transforms
+      display:'grid', placeItems:'center',
       width:'100%', height:'100%',
       pointerEvents:'auto', boxSizing:'border-box',
       paddingTop:`max(${SAFE_PAD_TOP}px, env(safe-area-inset-top))`,
@@ -218,6 +243,7 @@ export function zoomInPanel(panel, onExit){
   const bodySz=_fitBody(aspect, box, forceSquare, panel);
   _applyLayout(panel, header, body, footer, bodySz.w, bodySz.h);
   const volSnap=_normalizeFooter(panel);
+  _wireMute(panel);
 
   const canvases=[], cvs=body?body.querySelectorAll('canvas,svg'):[];
   for (let i=0;i<cvs.length;i++){ canvases.push({el:cvs[i], style:_snap(cvs[i])}); const c=cvs[i]; c.style.display='block'; c.style.width='100%'; c.style.height='100%'; c.style.zIndex='0'; }
@@ -228,15 +254,13 @@ export function zoomInPanel(panel, onExit){
   try{ panel.dispatchEvent(new CustomEvent('toy-zoom', { detail:{ zoomed:true }, bubbles:true })); }catch{}
   try{ window.dispatchEvent(new Event('resize')); }catch{}
 
-  requestAnimationFrame(()=> requestAnimationFrame(()=>{
-    const s=_fitBody(aspect, _contentBox(header, footer, panel), forceSquare, panel);
-    _applyLayout(panel, header, body, footer, s.w, s.h);
-  }));
-
-  const relayout=()=>{
+  const settle = ()=>{
     const s=_fitBody(aspect, _contentBox(header, footer, panel), forceSquare, panel);
     _applyLayout(panel, header, body, footer, s.w, s.h);
   };
+  requestAnimationFrame(()=>{ settle(); requestAnimationFrame(settle); setTimeout(settle, 50); });
+
+  const relayout=()=>{ settle(); };
   relayoutHandler=relayout;
   addEventListener('resize', relayout, {passive:true});
   if (window.visualViewport){
@@ -248,6 +272,8 @@ export function zoomInPanel(panel, onExit){
     roFrame=new ResizeObserver(relayout); roFrame.observe(frameEl);
     if (roParts) roParts.disconnect();
     roParts=new ResizeObserver(relayout); if (header) roParts.observe(header); if (footer) roParts.observe(footer);
+    if (roBody) roBody.disconnect();
+    roBody=new ResizeObserver(relayout); roBody.observe(body);
   }catch{}
 
   escHandler=(ev)=>{ if(ev.key==='Escape') zoomOutPanel(panel); };
@@ -268,14 +294,11 @@ export function zoomOutPanel(panel){
     }
     try{ if (roFrame){ roFrame.disconnect(); roFrame=null; } }catch{}
     try{ if (roParts){ roParts.disconnect(); roParts=null; } }catch{}
+    try{ if (roBody){ roBody.disconnect(); roBody=null; } }catch{}
 
     if (Array.isArray(info.canvases)){ for (const c of info.canvases){ _rest(c.el, c.style); } }
 
-    try{
-      if (info.footer && info.footerPH && info.footerPH.parent){
-        info.footerPH.parent.insertBefore(info.footer, info.footerPH.next||null);
-      }
-    }catch{}
+    try{ if (info.footer && info.footerPH && info.footerPH.parent){ info.footerPH.parent.insertBefore(info.footer, info.footerPH.next||null); } }catch{}
 
     _rest(panel, info.original && info.original.panel);
     _rest(info.header, info.original && info.original.header);
@@ -294,6 +317,7 @@ export function zoomOutPanel(panel){
 
     try{ panel.dispatchEvent(new CustomEvent('toy-zoom', { detail:{ zoomed:false }, bubbles:true })); }catch{}
     try{ window.dispatchEvent(new Event('resize')); }catch{}
+    setTimeout(()=>{ try{ window.dispatchEvent(new Event('resize')); }catch{} }, 30);
   }catch(e){
     console.error('[zoom-overlay] zoomOut failed', e);
     try{ overlayEl.style.display='none'; }catch{}

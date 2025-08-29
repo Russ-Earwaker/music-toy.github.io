@@ -1,5 +1,6 @@
 // src/bouncer-square-fit.js
 // Keep BOUNCER toy body square (height = width) and make canvas fill it.
+// Also react to Advanced zoom enter/exit so scale is correct on first frame.
 (function(){
   function forceCanvasFill(body){
     const c = body?.querySelector('canvas,svg');
@@ -24,4 +25,14 @@
   else boot();
   let t=0;
   window.addEventListener('resize', ()=>{ cancelAnimationFrame(t); t=requestAnimationFrame(boot); });
-})();
+  // Recalculate on Advanced enter/exit
+  document.addEventListener('toy-zoom', (e)=>{
+    const p = e?.target; if (!p || !(p instanceof HTMLElement)) return;
+    if (p.getAttribute('data-toy')==='bouncer'){
+      // do immediate + next-frame pass for accuracy
+      apply(p);
+      cancelAnimationFrame(t);
+      t = requestAnimationFrame(()=> apply(p));
+    }
+  }, { passive:true });
+})(); 
