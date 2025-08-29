@@ -88,6 +88,9 @@ export function initToySizing(shell, canvas, ctx, { squareFromWidth = false, asp
   scale = ratio;
   applySize();
   return scale;
+  if (!zoomed){ overrideCssW = null; overrideCssH = null; }
+  applySize();
+
 }
 
   function vw(){ return host.clientWidth  || (host.getBoundingClientRect?.().width|0) || 0; }

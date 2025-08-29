@@ -355,3 +355,51 @@ main { flex: 1 1 auto; display: block; }
 #zoom-overlay.active { display:grid; place-items:center; }
 #zoom-overlay .toy-panel { max-width: min(94vw, 900px); width: 100%; }
 #zoom-overlay .toy-panel .toy-body { aspect-ratio: 1 / 1; }
+
+
+/* While zoomed, let body flow under the header and drop absolute positioning */
+.toy-panel.toy-zoomed:not([data-toy="loopgrid"]) .toy-body {
+  position: static !important;
+  inset: auto !important;
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+  bottom: auto !important;
+  width: auto !important;
+  height: auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+  padding: 0 !important;
+}
+/* Keep the toy visually square inside zoom */
+.toy-panel.toy-zoomed .toy-body > canvas,
+.toy-panel.toy-zoomed .toy-body > svg {
+  width: 100% !important;
+  height: auto !important;
+  aspect-ratio: 1 / 1;
+  display: block;
+}
+
+
+/* LoopGrid zoom layout updated to flow + aspect-ratio */
+
+
+/* Zoomed: all toys use flow layout with square body */
+.toy-panel.toy-zoomed .toy-body {
+  position: static !important;
+  inset: auto !important;
+  width: auto !important;
+  height: auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+  padding: 0 !important;
+}
+.toy-panel.toy-zoomed .toy-body { aspect-ratio: 1 / 1; }
+.toy-panel.toy-zoomed .toy-body canvas,
+.toy-panel.toy-zoomed .toy-body svg {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}

@@ -34,6 +34,8 @@ export function zoomInPanel(panel){
     prevPanelStyle: panel.getAttribute('style'),
     prevBodyStyle: bodyEl ? bodyEl.getAttribute('style') : null
   };
+  info.prevTransform = panel.style.transform || null;
+  info.prevPointer = panel.style.pointerEvents || null;;
   panel._portalInfo = info;
 
   // Normalize panel sizing
@@ -41,6 +43,10 @@ export function zoomInPanel(panel){
   panel.style.left = '0'; panel.style.top = '0';
   panel.style.width = 'min(92vmin, 92vw)';
   panel.classList.add('toy-zoomed');
+    panel.classList.add('toy-zoomed-floating');
+    try{ panel.style.margin = '0 auto'; panel.style.width = 'min(94vw, 900px)'; panel.style.transform = 'none'; panel.style.pointerEvents = 'auto'; }catch{}
+    try{ panel.style.margin = '0 auto'; panel.style.width = 'min(94vw, 900px)'; }catch{}
+    panel.classList.add('toy-zoomed-floating');
 
   // Body should try to be square inside panel
   if (bodyEl){
@@ -49,7 +55,7 @@ export function zoomInPanel(panel){
     bodyEl.style.aspectRatio = '1 / 1';
   }
 
-  overlay.style.display = 'grid';
+  overlay.style.display = 'grid'; overlay.classList.add('active');
   overlay.appendChild(panel);
 
   try{ panel.dispatchEvent(new CustomEvent('toy-zoom', { detail:{ zoomed:true } })); }catch{}
@@ -72,11 +78,14 @@ export function zoomOutPanel(panel){
       else bodyEl.removeAttribute('style');
     }
     panel.classList.remove('toy-zoomed');
+    panel.classList.remove('toy-zoomed-floating');
+    if (info.prevTransform!=null) panel.style.transform = info.prevTransform; else panel.style.removeProperty('transform');
+    if (info.prevPointer!=null) panel.style.pointerEvents = info.prevPointer; else panel.style.removeProperty('pointer-events');
     panel._portalInfo = null;
   }catch{}
 
   // Hide overlay if no content
-  if (!overlay.querySelector('.toy-panel')) overlay.style.display = 'none';
+  if (!overlay.querySelector('.toy-panel')) { overlay.style.display = 'none'; overlay.classList.remove('active'); }
 
   try{ panel.dispatchEvent(new CustomEvent('toy-zoom', { detail:{ zoomed:false } })); }catch{}
   try{ window.dispatchEvent(new Event('resize')); }catch{}
