@@ -98,7 +98,7 @@ export function createBouncer(selector){
   let zoomDragCand=null, zoomDragStart=null, zoomTapT=null;
   let tapCand=null, tapStart=null, tapMoved=false;
   let lastLaunch=null, launchPhase=0, nextLaunchAt=null, prevNow=0, ball=null;
-  let lastCanvasW=0, lastCanvasH=0;
+  let lastCanvasW=0, lastCanvasH=0; // track **CSS** width/height for proportional rescale
   let visQ = []; const fx = createImpactFX(); let lastScale = sizing.scale||1;
 
   // edge controllers + flash
@@ -248,11 +248,19 @@ if (draggingHandle){
   // draw loop
   function draw(){
     const sNow=sizing.scale||1; if (sNow!==lastScale){ rescaleAll(sNow/lastScale); lastScale=sNow; }
-    const cs=resizeCanvasForDPR(canvas, ctx), w=cs.width, h=cs.height;
-    if (!lastCanvasW) { lastCanvasW = w; lastCanvasH = h; }
-    const sx = (w && lastCanvasW ? w/lastCanvasW : 1);
-    const sy = (h && lastCanvasH ? h/lastCanvasH : 1);
-    if (Math.abs(sx-1) > 0.001 || Math.abs(sy-1) > 0.001){ rescaleAll(sx, sy); lastCanvasW = w; lastCanvasH = h; }
+    const _sized = resizeCanvasForDPR(canvas, ctx);
+const _rect = canvas.getBoundingClientRect();
+const w = Math.max(1, Math.floor(_rect.width||canvas.clientWidth||0));
+const h = Math.max(1, Math.floor(_rect.height||canvas.clientHeight||0));
+// Map CSS px -> device px so we can draw & hit-test in CSS units
+const _sx = (_sized && canvas.width  ? canvas.width  / w : 1);
+const _sy = (_sized && canvas.height ? canvas.height / h : 1);
+try{ ctx.setTransform(_sx, 0, 0, _sy, 0, 0); }catch{}
+// If the CSS size changed (not just DPR), rescale world state proportionally
+if (!lastCanvasW) { lastCanvasW = w; lastCanvasH = h; }
+const _cx = (w && lastCanvasW ? w/lastCanvasW : 1);
+const _cy = (h && lastCanvasH ? h/lastCanvasH : 1);
+if (Math.abs(_cx-1) > 0.001 || Math.abs(_cy-1) > 0.001){ rescaleAll(_cx, _cy); lastCanvasW = w; lastCanvasH = h; }
     ctx.fillStyle='#0b0f16'; ctx.fillRect(0,0,w,h);
     ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.lineWidth=2; ctx.strokeRect(EDGE,EDGE,w-EDGE*2,h-EDGE*2);
 

@@ -174,6 +174,12 @@ export function zoomInPanel(panel, onExit){
   const volSnap=_normalizeFooter(panel);
   _wireMute(panel);
   const canvases=[], cvs=body?body.querySelectorAll('canvas,svg'):[]; for (let i=0;i<cvs.length;i++){ canvases.push({el:cvs[i], style:_snap(cvs[i])}); const c=cvs[i]; c.style.display='block'; c.style.width='100%'; c.style.height='100%'; c.style.zIndex='0'; }
+  try{
+    if ((panel.getAttribute('data-toy')||'').toLowerCase()==='bouncer'){
+      const cv = body.querySelector('canvas');
+      if (cv){ const r=cv.getBoundingClientRect(); const w=Math.max(1,Math.round(r.width)); const h=Math.max(1,Math.round(r.height)); if(cv.width!==w) cv.width=w; if(cv.height!==h) cv.height=h; }
+    }
+  }catch{}
   restoreInfo={ placeholder,parent,original,onExit, header,body,footer, canvases, volSnap, footerPH, priorOffsets };
   overlayEl.style.pointerEvents='auto'; overlayEl.style.visibility='visible';
   _diag('enter', { isGrid, box, aspect, bodySz, headerH:box.hH, footerH:box.hF });
@@ -214,6 +220,14 @@ export function zoomOutPanel(panel){
     _rest(info.footer, info.original && info.original.footer);
     const vw=panel.querySelector('.toy-volwrap'); if (info.volSnap && vw) _rest(vw, info.volSnap.snapVw||info.volSnap);
     _restoreOffsets(panel, info.priorOffsets);
+    /*__GRID_EXIT_CLEAN__*/
+    try{
+      if ((panel.getAttribute('data-toy')||'').toLowerCase().includes('grid')){
+        const b = panel.querySelector('.toy-body')||panel;
+        b.style.removeProperty('width'); b.style.removeProperty('height'); b.style.removeProperty('max-height'); b.style.removeProperty('aspect-ratio');
+        panel.style.removeProperty('width'); panel.style.removeProperty('height');
+      }
+    }catch{}
     const {placeholder,parent}=info; if (placeholder && parent){ parent.insertBefore(panel, placeholder); parent.removeChild(placeholder); }
     panel.classList.remove('toy-zoomed'); overlayEl.style.display='none'; overlayEl.style.pointerEvents='none'; overlayEl.style.visibility='hidden'; frameEl.replaceChildren(); activePanel=null; restoreInfo=null;
     try{ panel.dispatchEvent(new CustomEvent('toy-zoom',{detail:{zoomed:false},bubbles:true})); }catch{} try{ window.dispatchEvent(new Event('resize')); }catch{}
