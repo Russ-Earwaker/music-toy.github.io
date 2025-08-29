@@ -1,14 +1,21 @@
 // src/zoom-overlay.js
-// Advanced overlay — pixel-perfect centering with transform neutralisation.
-// Symptom you saw (same offset regardless of zoom) points to leftover grid-position
-// transforms on the toy panel. We now neutralise transforms on the panel while zoomed.
+// Advanced overlay (full file) — centered + aspect-aware + phone safety frame.
 //
-// Features:
-// - Viewport-anchored frame at 50%/50% with translate(-50%,-50%)
-// - Post-size self-correction (dx, dy) to cancel any residual drift
-// - Pre-size before move so internals never see 0×0; ensure body is positioned
-// - **NEW**: while zoomed, the panel has transform/translate/left/top neutralised
-// - Click outside or ESC exits; full style restore on exit
+// Goals:
+// - Pixel-perfect viewport centering (multi-monitor safe)
+// - Keep *square toys* square and sized to fit
+// - Keep *rectangular toys* (e.g., Grid) at their natural aspect (no vertical stretch)
+// - Add a safety frame so header/volume aren't flush to screen edges on phones
+// - Pre-size before moving to Advanced (no 0×0 phase), neutralise grid transforms
+// - Click outside or ESC exits; restore everything on exit
+//
+// How it works
+// 1) Measure header/footer and the toy body's *original aspect ratio* in standard mode.
+// 2) Compute a content box from viewport minus a safe padding (and max width).
+/* 3) If nearly square (±3%), make the body a square. Otherwise, preserve aspect.
+      Body size is chosen to fit within the content box after header/footer. */
+// 4) Apply sizes *before* moving into the overlay, so internals don’t glitch.
+// 5) Center a padded frame at 50%/50% (then do a tiny correction if any drift).
 
 export function ensureOverlay(){ return _ensureOverlay(); }
 export function zoomInPanel(panel, onExit){ return _zoomIn(panel, onExit); }
@@ -16,6 +23,11 @@ export function zoomOutPanel(panel){ return _zoomOut(panel); }
 
 let overlayEl=null, frameEl=null, activePanel=null, restoreInfo=null;
 let escHandler=null, relayoutHandler=null;
+
+const VIEWPORT_FRACTION = 0.96;   // leave a little breathing room
+const MAX_CONTENT_W = 1200;       // avoid over-wide panels on desktop
+const SAFE_PAD = 24;              // minimum safety padding (px) around the frame
+const SQUARE_EPS = 0.03;          // +-3% counts as square
 
 function _ensureOverlay(){
   if (overlayEl) return overlayEl;
@@ -39,10 +51,16 @@ function _ensureOverlay(){
     Object.assign(frameEl.style,{
       position:'absolute',
       top:'50%', left:'50%',
-      transform:'translate(-50%, -50%)',
-      width:'0px', height:'0px',
+      transform:'translate(-50%, -50%)', // anchor to viewport center
+      width:'0px', height:'0px',         // set per-layout
       pointerEvents:'auto',
-      display:'block', boxSizing:'border-box'
+      display:'block',
+      boxSizing:'content-box',           // padding is *outside* panel size we compute
+      // Phone safety frame (works on Safari via env/constant and other browsers via 24px):
+      paddingTop: 'max(24px, env(safe-area-inset-top))',
+      paddingRight: 'max(24px, env(safe-area-inset-right))',
+      paddingBottom: 'max(24px, env(safe-area-inset-bottom))',
+      paddingLeft: 'max(24px, env(safe-area-inset-left))'
     });
     overlayEl.appendChild(frameEl);
   }
@@ -64,48 +82,7 @@ function _snap(el){ return el ? (el.getAttribute('style')||'') : null; }
 function _rest(el,str){ if(!el)return; if(str==null) el.removeAttribute('style'); else el.setAttribute('style',str); }
 function _ensurePositioned(el){ if(!el)return; const cs=getComputedStyle(el); if(cs.position==='static') el.style.position='relative'; }
 
-function _computeSquare(header, body, volume){
-  const {vw,vh}=_vsize();
-  const maxW=Math.min(Math.floor(vw*0.96), 1200);
-  const maxH=Math.floor(vh*0.96);
-  const vPad=32, hPad=32;
-  const hH=header?Math.round(header.getBoundingClientRect().height):0;
-  const hF=volume?Math.round(volume.getBoundingClientRect().height):0;
-  const availW=Math.max(0, maxW-hPad);
-  const availH=Math.max(0, maxH-vPad-hH-hF);
-  const side=Math.floor(Math.max(0, Math.min(availW, availH)));
-  return {side,hH,hF,frameW:side+hPad, frameH:side+vPad+hH+hF};
-}
-
-function _applySizes(panel, header, body, volume, s){
-  if (header){ header.style.height=_px(s.hH); header.style.flex='0 0 auto'; header.style.margin='0 auto'; }
-  if (volume){ volume.style.height=_px(s.hF); volume.style.flex='0 0 auto'; volume.style.alignSelf='stretch'; volume.style.width=_px(s.frameW); }
-  if (body){
-    _ensurePositioned(body);
-    body.style.width=_px(s.side);
-    body.style.height=_px(s.side);
-    body.style.overflow='hidden';
-  }
-  panel.style.width=_px(s.frameW);
-  panel.style.height=_px(s.frameH);
-  panel.style.maxWidth=panel.style.width;
-  panel.style.maxHeight=panel.style.height;
-  frameEl.style.width=_px(s.frameW);
-  frameEl.style.height=_px(s.frameH);
-}
-
-function _centerCorrect(){
-  const r = frameEl.getBoundingClientRect();
-  const {vw,vh}=_vsize();
-  const cx = r.left + r.width/2;
-  const cy = r.top  + r.height/2;
-  const dx = Math.round(vw/2 - cx);
-  const dy = Math.round(vh/2 - cy);
-  frameEl.style.transform = `translate(-50%, -50%) translate(${dx}px, ${dy}px)`;
-}
-
 function _neutralisePanelOffsets(panel){
-  // Snapshot inline offsets so we can restore 1:1.
   const prior = {
     transformInline: panel.style.transform || null,
     translateInline: panel.style.translate || null,
@@ -113,10 +90,9 @@ function _neutralisePanelOffsets(panel){
     topInline: panel.style.top || null,
     rightInline: panel.style.right || null,
     bottomInline: panel.style.bottom || null,
-    transformOriginInline: panel.style.transformOrigin || null,
     marginInline: panel.style.margin || null,
+    transformOriginInline: panel.style.transformOrigin || null,
   };
-  // Neutralise offsets that could encode grid position into Advanced.
   panel.style.transform = 'none';
   try{ panel.style.translate = '0 0'; }catch{ panel.style.translate=''; }
   panel.style.left = '0';
@@ -140,6 +116,92 @@ function _restorePanelOffsets(panel, prior){
   if (prior.transformOriginInline !== null) panel.style.transformOrigin = prior.transformOriginInline; else panel.style.removeProperty('transform-origin');
 }
 
+function _measureOriginalAspect(body){
+  if (!body) return 1;
+  const r = body.getBoundingClientRect();
+  const w = Math.max(1, Math.round(r.width));
+  const h = Math.max(1, Math.round(r.height));
+  return w / h;
+}
+
+function _computeContentBox(header, volume){
+  const {vw,vh}=_vsize();
+  // available content box after safety padding
+  const maxW = Math.min(Math.floor(vw*VIEWPORT_FRACTION) - SAFE_PAD*2, MAX_CONTENT_W);
+  const maxH = Math.floor(vh*VIEWPORT_FRACTION) - SAFE_PAD*2;
+  const hH = header ? Math.round(header.getBoundingClientRect().height) : 0;
+  const hF = volume ? Math.round(volume.getBoundingClientRect().height) : 0;
+  return { maxW: Math.max(0, maxW), maxH: Math.max(0, maxH), hH, hF };
+}
+
+function _layoutForAspect(aspect, content){
+  const {maxW, maxH, hH, hF} = content;
+  const usableH = Math.max(0, maxH - hH - hF);
+  const usableW = maxW;
+
+  // If near-square, enforce square body
+  if (Math.abs(aspect - 1) <= SQUARE_EPS){
+    const side = Math.floor(Math.max(0, Math.min(usableW, usableH)));
+    return { bodyW: side, bodyH: side };
+  }
+
+  // Preserve aspect: fit width-first, then height if needed
+  let bodyW = Math.min(usableW, Math.floor(usableH * aspect));
+  let bodyH = Math.floor(bodyW / aspect);
+  if (bodyW > usableW){
+    bodyW = usableW;
+    bodyH = Math.floor(bodyW / aspect);
+  }
+  if (bodyH > usableH){
+    bodyH = usableH;
+    bodyW = Math.floor(bodyH * aspect);
+  }
+  return { bodyW: Math.max(0, bodyW), bodyH: Math.max(0, bodyH) };
+}
+
+function _applySizes(panel, header, body, volume, sizes){
+  const { bodyW, bodyH } = sizes;
+  if (header){ header.style.flex='0 0 auto'; }
+  if (volume){ volume.style.flex='0 0 auto'; volume.style.alignSelf='stretch'; volume.style.width=_px(bodyW); }
+
+  _ensurePositioned(body);
+  body.style.width  = _px(bodyW);
+  body.style.height = _px(bodyH);
+  body.style.overflow='hidden';
+
+  panel.style.width  = _px(bodyW);
+  panel.style.height = _px(bodyH + (header?header.getBoundingClientRect().height:0) + (volume?volume.getBoundingClientRect().height:0));
+
+  frameEl.style.width  = _px(bodyW);
+  frameEl.style.height = _px(bodyH + (header?header.getBoundingClientRect().height:0) + (volume?volume.getBoundingClientRect().height:0));
+}
+
+function _centerCorrect(){
+  // Tiny correction in case sub-pixel layout drifted
+  const r = frameEl.getBoundingClientRect();
+  const {vw,vh}=_vsize();
+  const cx = r.left + r.width/2;
+  const cy = r.top  + r.height/2;
+  const dx = Math.round(vw/2 - cx);
+  const dy = Math.round(vh/2 - cy);
+  frameEl.style.transform = `translate(-50%, -50%) translate(${dx}px, ${dy}px)`;
+}
+
+function _computeSizes(panel, header, body, volume, aspect){
+  // Lock header/footer heights for stability during this layout
+  const hH = header ? Math.round(header.getBoundingClientRect().height) : 0;
+  const hF = volume ? Math.round(volume.getBoundingClientRect().height) : 0;
+  if (header) header.style.height = _px(hH);
+  if (volume) volume.style.height = _px(hF);
+
+  const content = _computeContentBox(header, volume);
+  const bodyBox = _layoutForAspect(aspect, content);
+  return {
+    bodyW: bodyBox.bodyW,
+    bodyH: bodyBox.bodyH,
+  };
+}
+
 function _zoomIn(panel, onExit){
   if (!panel) return;
   _ensureOverlay();
@@ -149,52 +211,57 @@ function _zoomIn(panel, onExit){
   const body  =panel.querySelector('.toy-body');
   const volume=panel.querySelector('.toy-volume, .toy-footer');
 
+  // Snapshot placement + inline styles
   const placeholder=document.createComment('zoom-placeholder');
   const parent=panel.parentNode, next=panel.nextSibling; parent.insertBefore(placeholder,next);
   const original={ panel:_snap(panel), header:_snap(header), body:_snap(body), volume:_snap(volume) };
 
   // Visuals for zoomed panel
   panel.classList.add('toy-zoomed');
-  panel.style.margin='0';
-  panel.style.position='relative';
-  panel.style.display='flex';
-  panel.style.flexDirection='column';
-  panel.style.borderRadius='16px';
-  panel.style.boxShadow='0 10px 30px rgba(0,0,0,0.5)';
+  panel.style.margin='0'; panel.style.position='relative';
+  panel.style.display='flex'; panel.style.flexDirection='column';
+  panel.style.borderRadius='16px'; panel.style.boxShadow='0 10px 30px rgba(0,0,0,0.5)';
   try{ panel.style.background=getComputedStyle(panel).background||'#1c1c1c'; }catch{}
 
-  // Neutralise any leftover grid/cell transforms on the panel while zoomed
+  // Neutralise any grid/cell offsets while zoomed
   const priorOffsets = _neutralisePanelOffsets(panel);
 
-  let s=_computeSquare(header,body,volume);
-  _applySizes(panel,header,body,volume,s);
+  // Measure original aspect before any size changes
+  const aspect0 = _measureOriginalAspect(body) || 1;
 
+  // PRE-SIZE in place so internals don't see 0×0
+  let sizes = _computeSizes(panel, header, body, volume, aspect0);
+  _applySizes(panel, header, body, volume, sizes);
+
+  // Move into overlay (hidden), verify, reveal
   _openHidden();
   frameEl.replaceChildren(panel);
   activePanel=panel;
 
+  // Snapshot canvases to restore later
   const canvases=Array.from(body?body.querySelectorAll('canvas'):[]);
   const canvasSnaps=canvases.map(cv=>({el:cv, style:_snap(cv)}));
   restoreInfo={ placeholder,parent,original,onExit,header,body,volume,canvases:canvasSnaps, priorOffsets };
 
   requestAnimationFrame(()=>{
-    s=_computeSquare(header,body,volume);
-    _applySizes(panel,header,body,volume,s);
-    _centerCorrect();
+    sizes = _computeSizes(panel, header, body, volume, aspect0);
+    _applySizes(panel, header, body, volume, sizes);
 
+    // Canvases fill body visually
     canvases.forEach(cv=>{ cv.style.width='100%'; cv.style.height='100%'; cv.style.display='block'; });
 
     requestAnimationFrame(()=>{
       _reveal();
-      _centerCorrect();
+      _centerCorrect(); // final nudge
 
+      // Live relayout (resize/visualViewport changes)
       const relayout=(()=>{
         let raf=0;
         return ()=>{
           if (raf) return;
           raf=requestAnimationFrame(()=>{
-            const s2=_computeSquare(header,body,volume);
-            _applySizes(panel,header,body,volume,s2);
+            const s2=_computeSizes(panel, header, body, volume, aspect0);
+            _applySizes(panel, header, body, volume, s2);
             _centerCorrect();
             raf=0;
           });
@@ -218,10 +285,12 @@ function _zoomOut(panel){
   const info=restoreInfo||{};
   try{
     if (escHandler){ removeEventListener('keydown', escHandler); escHandler=null; }
-    if (relayoutHandler){ removeEventListener('resize', relayoutHandler); relayoutHandler=null; }
-    if (window.visualViewport){
-      try{ visualViewport.removeEventListener('resize', relayoutHandler); }catch{}
-      try{ visualViewport.removeEventListener('scroll', relayoutHandler); }catch{}
+    if (relayoutHandler){
+      removeEventListener('resize', relayoutHandler); relayoutHandler=null;
+      if (window.visualViewport){
+        try{ visualViewport.removeEventListener('resize', relayoutHandler); }catch{}
+        try{ visualViewport.removeEventListener('scroll', relayoutHandler); }catch{}
+      }
     }
 
     panel.classList.remove('toy-zoomed');
@@ -229,8 +298,6 @@ function _zoomOut(panel){
     _rest(info.header, info.original?.header);
     _rest(info.body, info.original?.body);
     _rest(info.volume, info.original?.volume);
-
-    // Restore any neutralised offsets/transforms
     try{ _restorePanelOffsets(panel, info.priorOffsets); }catch{}
 
     if (Array.isArray(info.canvases)){ info.canvases.forEach(({el,style})=> _rest(el,style)); }
