@@ -1,0 +1,9 @@
+/* ui-fixes.css — standard-mode structure */
+/* Make headers/footers naturally span the panel width; keep body centered inside. */
+.toy-panel{ display:flex; flex-direction:column; width:100%; }
+.toy-panel .toy-header,
+.toy-panel .toy-footer,
+.toy-panel .toy-volume{ width:100%; align-self:stretch; }
+.toy-panel .toy-body{ display:grid; place-items:center; overflow:hidden; }
+/* Zoom visuals are applied inline by JS; keep this minimal */
+.toy-panel.toy-zoomed{ border:1px solid rgba(255,255,255,0.08); border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,0.5); }
