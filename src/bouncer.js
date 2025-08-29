@@ -109,12 +109,48 @@ export function createBouncer(selector){
   const N_BLOCKS = 4;
   let blocks = Array.from({length:N_BLOCKS}, ()=>({ x:EDGE, y:EDGE, w:blockSize(), h:blockSize(), noteIndex:0, active:true, flash:0, lastHitAT:0 }));
 
+// --- maintain fractional anchors for stable layout across zoom ---
+function syncAnchorsFromBlocks(){
+  const w = worldW(), h = worldH();
+  for (const b of blocks){
+    b._fx = (w>0) ? (b.x / w) : 0;
+    b._fy = (h>0) ? (b.y / h) : 0;
+    b._fw = (w>0) ? (b.w / w) : 0;
+    b._fh = (h>0) ? (b.h / h) : 0;
+  }
+}
+function syncBlocksFromAnchors(){
+  const w = worldW(), h = worldH();
+  const br = (typeof ballR==='function'? ballR(): (ballR||0));
+  const minW = Math.max(EDGE*2, Math.round(0.08 * w)); // avoid vanishing blocks
+  const minH = Math.max(EDGE*2, Math.round(0.08 * h));
+  for (const b of blocks){
+    const fx = (b._fx ?? (b.x / (w||1)));
+    const fy = (b._fy ?? (b.y / (h||1)));
+    const fw = (b._fw ?? (b.w / (w||1)));
+    const fh = (b._fh ?? (b.h / (h||1)));
+    b.w = Math.max(minW, Math.round(fw * w));
+    b.h = Math.max(minH, Math.round(fh * h));
+    b.x = Math.round(fx * w);
+    b.y = Math.round(fy * h);
+    // keep inside frame
+    const eL = EDGE + br, eT = EDGE + br, eR = w - EDGE - br, eB = h - EDGE - br;
+    if (b.x < eL) b.x = eL;
+    if (b.y < eT) b.y = eT;
+    if (b.x + b.w > eR) b.x = eR - b.w;
+    if (b.y + b.h > eB) b.y = eB - b.h;
+  }
+}
+
+
   // seed positions + palette
   (function seed(){
     const w=worldW(), h=worldH(); const bx=Math.round(w*0.2), by=Math.round(h*0.2), bw=Math.round(w*0.6), bh=Math.round(h*0.6);
     const pal = buildPentatonicPalette(noteList, 'C4', 'minor', 1);
     for (let i=0;i<blocks.length;i++) blocks[i].noteIndex = pal[i % pal.length];
     randomizeRects(blocks, {x:bx,y:by,w:bw,h:bh}, EDGE);
+    try{syncAnchorsFromBlocks();}catch{}
+    syncAnchorsFromBlocks();
   })();
 
   function ensureEdgeControllers(w,h){
@@ -139,6 +175,7 @@ export function createBouncer(selector){
     const areaScale = 0.5 + 0.5 * density; const bw=Math.max(EDGE*4, Math.round(baseBW*areaScale)), bh=Math.max(EDGE*4, Math.round(baseBH*areaScale));
     const bx = Math.round((w-bw)/2), by = Math.round((h-bh)/2);
     randomizeRects(blocks, {x:bx,y:by,w:bw,h:bh}, EDGE);
+    try{syncAnchorsFromBlocks();}catch{}
     const picks=[]; if (K>=N){ for(let i=0;i<N;i++) picks.push(i); }else{ const step=N/K; let pos=0; for(let i=0;i<K;i++){ picks.push(Math.round(pos)%N); pos+=step; } const uniq=Array.from(new Set(picks)); while(uniq.length<K){ const r = Math.floor(Math.random()*N); if(!uniq.includes(r)) uniq.push(r); } picks.length=0; picks.push(...uniq); }
     for (let i=0;i<N;i++) blocks[i].active=false; for (const i of picks) if(blocks[i]) blocks[i].active=true;
     randomizeControllers(edgeControllers, noteList);
@@ -149,14 +186,13 @@ export function createBouncer(selector){
   panel.addEventListener('toy-clear', doReset);
   panel.addEventListener('toy-zoom', (e)=>{ sizing.setZoom && sizing.setZoom(!!e.detail.zoomed); const s=sizing.scale||1; rescaleAll(s/lastScale); lastScale=s; });
 
-  function rescaleAll(fx, fy){
-    if (!fx || fx===1) fx = 1; if (fy==null) fy = fx; if (!fy) fy = 1;
-    if (fx===1 && fy===1) return;
-    for (const b of blocks){ b.x=Math.round(b.x*fx); b.y=Math.round(b.y*fy); b.w=blockSize(); b.h=blockSize(); }
-    for (const c of edgeControllers){ if (c){ c.x=Math.round(c.x*fx); c.y=Math.round(c.y*fy); c.w=blockSize(); c.h=blockSize(); } }
-    handle.x=Math.round(handle.x*fx); handle.y=Math.round(handle.y*fy);
-    if (ball){ ball.x*=fx; ball.y*=fy; ball.vx*=fx; ball.vy*=fy; ball.r=ballR(); }
-  }
+  
+
+function rescaleAll(kx, ky){
+  // Recompute from normalized anchors; ignore kx/ky
+  syncBlocksFromAnchors();
+}
+
 
   // interactions (tap-to-toggle in standard view; thirds edit in zoom)
 
