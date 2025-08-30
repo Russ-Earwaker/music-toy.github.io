@@ -150,7 +150,7 @@ export function ensureOverlay(){
   }
   return overlayEl;
 }
-function _diag(label, obj){ if(!DIAG) return; try{ console.log('[zoom-diag]', label, obj); }catch{} }
+function _diag(label, obj){ }
 export function zoomInPanel(panel, onExit){
   if(!panel) return;
   ensureOverlay();

@@ -74,7 +74,6 @@ if (!window.__booted__) {
     const ok = !!e?.detail?.ok;
     const names = e?.detail?.names || [];
     const resolveName = makeNameResolver(names);
-    console.log('[samples-ready]', e?.detail);
     rebuildInstrumentSelects(names);
     const isReload = (e && e.detail && e.detail.source === 'reload');
     if (!isReload && ok && grids.length) {
@@ -192,7 +191,6 @@ if (!window.__booted__) {
       const inst = resolveName(wanted) || names0.find(n=>/djembe|hand.?clap|clap/.test(n)) || names0[0] || 'tone';
       return buildGrid(sel, NUM_STEPS, { defaultInstrument: inst, title: titles[i] });
     }).filter(Boolean);
-    try{ console.log('[boot] grids:', grids.length); }catch{}
 
     // Ensure at least one Wheel panel exists
     try {
@@ -234,7 +232,7 @@ if (!window.__booted__) {
         } else if (kind === 'ambient' || kind === 'ambient-glide') {
           inst = createAmbientGlide(panel);
         } else if (kind === 'wheel') {
-          console.log('[wheel] build start', panel);
+
           const sel = panel.querySelector('.toy-instrument, select');
           const fromPanel = panel.dataset && panel.dataset.instrument;
           let wheelInstrument = fromPanel || (sel && sel.value) || (resolveName ? resolveName(resolveWheelSamples()[0]) : null) || resolveWheelSamples()[0] || 'acoustic_guitar';
@@ -274,7 +272,7 @@ if (!window.__booted__) {
       }
     });
 
-    console.log('[boot] toys:', toys.length);
+
     try { assertRipplerContracts(); runRipplerSmoke(); } catch {}
 
     setupTransport();

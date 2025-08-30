@@ -19,9 +19,9 @@ function nextGridId(){
   }
 }
 export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='tone', title='LoopGrid' } = {}){
-  try{ console.log('[grid] build start', selector); }catch{}
+
   const shell = document.querySelector(selector);
-  if (!shell){ console.warn('[grid] missing', selector); return null; }
+
   const panel = shell.closest?.('.toy-panel') || shell;
   let toyId = (panel && panel.dataset && panel.dataset.toyid) ? String(panel.dataset.toyid) : null;
   if (!toyId){
@@ -65,7 +65,7 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
 
 const ctx = canvas.getContext('2d');
   let __lastCssH = -1;
-  try{ console.log('[grid] canvas created', {panel, toyId}); }catch{}
+
   const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: false });
   /* sizing init hook */
   try { sizing.setZoom(panel.classList.contains('toy-zoomed')); } catch {}
@@ -135,8 +135,7 @@ function draw(){
       window.__gridLoggedOnce = true;
       try {
         const r = canvas.getBoundingClientRect();
-        console.log('[grid] draw', {w, h});
-        console.log('[grid] rect', r);
+
       } catch {}
     }
         for (let i=0;i<steps.length;i++){
@@ -267,7 +266,7 @@ function doRandomNotes(){
   requestAnimationFrame(draw);
   window.addEventListener('resize', draw);
   panel.addEventListener('toy-zoom', (ev)=>{ try { sizing.setZoom(ev?.detail?.zoomed); } catch {} draw(); });
-  try{ console.log('[grid] init complete', toyId); }catch{}
+  
   try { draw(); } catch {}
   try { requestAnimationFrame(()=> draw()); } catch {}
   try { setTimeout(draw, 50); } catch {}

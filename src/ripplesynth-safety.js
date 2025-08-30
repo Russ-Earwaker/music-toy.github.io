@@ -25,7 +25,7 @@ export function assertRipplerContracts(){
     }
 
     // Clock rule reminder
-    console.info('[rippler/contracts] Clock: prefer ac.currentTime; avoid performance.now() in rippler modules.');
+    
   }catch(e){
     console.warn('[rippler/contracts] assertion failed', e);
   }

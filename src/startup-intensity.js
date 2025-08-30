@@ -54,7 +54,7 @@ export function boot(){
     document.createTextNode(' \u00A0 '),
     makeToggle('Polite random', 'politeRandom', isPoliteRandomEnabled(), setPoliteRandomEnabled)
   );
-  console.log('[intensity] ready');
+
 }
 
 if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', boot);

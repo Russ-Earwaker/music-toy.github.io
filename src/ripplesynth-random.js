@@ -49,7 +49,6 @@ export function randomizeAllImpl(host, ctx){
     const toyId  = String((rawA||rawB||rawC)||'').toLowerCase();
     const blocks = ctx?.blocks || host?.blocks || host?.__rippler?.blocks;
     const N      = Math.max(1, ctx?.N || (Array.isArray(blocks)? blocks.length : 8));
-    console.log('[randomizeAllImpl]', { toyId, N, from: 'ripplesynth-random.js' });
 
     let density = 0.0;
     let targetActive = Math.max(1, Math.min(N, Math.round(N/2)));
@@ -64,12 +63,10 @@ export function randomizeAllImpl(host, ctx){
   const sEff = (s < 0.002 ? 0 : s);                     // idle clamp
   density    = Math.min(sEff, 0.15);                    // 0..0.15 band
   targetActive = chooseActiveCount(density, N);
-  console.log('[rippler random]', { g, t, s, sEff, density, targetActive, N });
 } else {
       // Others: proportional to polite density (0..1)
       density = getPoliteDensityForToy(toyId || 'toy', 1.0, { priority: 0.5 });
       targetActive = Math.max(1, Math.min(N, Math.round(1 + density*(N-1))));
-      console.log('[randomizer fallback]', { toyId, density, targetActive, N });
     }
 
     // Spread picks, then fill to target
@@ -91,7 +88,6 @@ export function randomizeAllImpl(host, ctx){
       }
     }
 
-    console.log('[randomize chosen]', { toyId, density, targetActive, chosen });
     return { chosen, density, targetActive, N };
   }catch(e){
     console.warn('[rippler random] failed:', e);

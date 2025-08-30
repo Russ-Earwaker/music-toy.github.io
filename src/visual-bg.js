@@ -39,7 +39,7 @@ function ensureCanvas(){
   ctx = canvas.getContext('2d');
   onResize();
   window.addEventListener('resize', onResize);
-  console.log('[intensity-bg] mounted in', host===document.body?'body':'board');
+  
   return canvas;
 }
 

@@ -40,7 +40,7 @@
   function run(){
     const out = [];
     document.querySelectorAll('.toy-panel').forEach(p=> out.push(apply(p)));
-    console.log('[panel-heights]', out);
+
     return out;
   }
   window.__panelHeightsProbe = run;

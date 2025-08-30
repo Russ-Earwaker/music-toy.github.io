@@ -1,28 +1,86 @@
-/* Extracted from bouncer.main.js (behavior-preserving) */
-export function installSpeedUI(panel, sizing, initial=1.0){
+/* Speed control UI — mounts in header, Advanced only */
+export function installSpeedUI(panel, sizing, initial=0.60){
   let speedFactor = initial;
 
-        // Speed control dock (appears only in zoom), placed under the canvas so it never overlaps play space
-  const hostForDock = panel.querySelector('.toy-body') || panel;
-  const spDock = document.createElement('div');
-  Object.assign(spDock.style, {
-    display: 'none', width: '100%%', marginTop: '8px',
-    display: 'none', justifyContent: 'flex-end', alignItems: 'center', gap: '8px',
-    pointerEvents: 'auto'
+  // Build compact header control
+  const spWrap = document.createElement('div');
+  spWrap.className = 'bouncer-speed-ctrl';
+  Object.assign(spWrap.style, {
+    display:'none', alignItems:'center', gap:'6px'
   });
-  const spLabel = document.createElement('span'); spLabel.textContent='Speed'; spLabel.style.fontSize='12px'; spLabel.style.opacity='0.8';
-  const spVal = document.createElement('span'); spVal.style.fontSize='12px'; spVal.style.opacity='0.7';
-  const sp = document.createElement('input'); sp.type='range'; sp.min='0.2'; sp.max='1.6'; sp.step='0.05'; sp.value=String(speedFactor); sp.style.width='140px';
-  ;['pointerdown','pointermove','pointerup','click','mousedown','mouseup'].forEach(t=> sp.addEventListener(t, ev=> ev.stopPropagation()));
-  spVal.textContent = `${Math.round(speedFactor*100)}%%`;
-  sp.addEventListener('input', ()=>{ speedFactor = Math.max(0.2, Math.min(1.6, parseFloat(sp.value)||1)); spVal.textContent = `${Math.round(speedFactor*100)}%%`; panel.dataset.speed = String(speedFactor); });
-  spDock.append(spLabel, sp, spVal);
-  try { hostForDock.appendChild(spDock); } catch {}
-  const updateSpeedVisibility = ()=>{ const zoomed = (sizing?.scale||1) > 1.01; spDock.style.display = zoomed ? 'flex' : 'none'; };
-  // Update on zoom, both immediately and in next frame to absorb scale updates
-  panel.addEventListener('toy-zoom', (ev)=>{ try{ sizing.setZoom(ev?.detail?.zoomed); }catch{} });
-  // Initialize once
+
+  const spLabel = document.createElement('span');
+  spLabel.textContent = 'Speed:';
+  spLabel.style.fontSize = '12px';
+  spLabel.style.opacity = '0.8';
+
+  const spVal = document.createElement('span');
+  spVal.style.fontSize = '12px';
+  spVal.style.opacity = '0.7';
+
+  const sp = document.createElement('input');
+  sp.type = 'range';
+  sp.min = '0.20'; sp.max = '1.60'; sp.step = '0.05';
+  sp.value = String(speedFactor);
+  sp.style.width = '120px';
+
+  ['pointerdown','pointermove','pointerup','click','mousedown','touchstart','touchmove','touchend'].forEach(t=> {
+    sp.addEventListener(t, ev=> ev.stopPropagation(), { passive:true });
+  });
+
+  function updateLabel(){
+    spVal.textContent = `${Math.round(speedFactor*100)}%`;
+  }
+  updateLabel();
+
+  sp.addEventListener('input', ()=>{
+    const v = parseFloat(sp.value);
+    if (!Number.isFinite(v)) return;
+    speedFactor = Math.max(0.2, Math.min(1.6, v));
+    panel.dataset.speed = String(speedFactor);
+    updateLabel();
+  });
+
+  spWrap.append(spLabel, sp, spVal);
+
+  // Mount into header controls (right side if present)
+  function mount(){
+    const header = panel.querySelector('.toy-header');
+    const right = panel.querySelector('.toy-controls-right') || header;
+    try{
+      if (right && !spWrap.parentNode){
+        right.appendChild(spWrap);
+      }
+    }catch{}
+  }
+  mount();
+
+  // Advanced-mode visibility: use the panel class / overlay presence
+  function isAdvanced(){
+    return panel.classList.contains('toy-zoomed') || !!panel.closest('#zoom-overlay');
+  }
+  function updateSpeedVisibility(){
+    spWrap.style.display = isAdvanced() ? 'flex' : 'none';
+  }
   updateSpeedVisibility();
 
-  return () => speedFactor; // simple getter
+  // React to Advanced toggles
+  panel.addEventListener('toy-zoom', ()=>{ updateSpeedVisibility(); });
+  const __obs = new MutationObserver(()=> updateSpeedVisibility());
+  try{ __obs.observe(panel, { attributes:true, attributeFilter:['class'] }); }catch{}
+
+  // Fallback watcher in case external UI swaps DOM around
+  let __lastAdv = null;
+  function __tick(){
+    const adv = isAdvanced();
+    if (__lastAdv === null || adv !== __lastAdv){
+      mount();
+      updateSpeedVisibility();
+      __lastAdv = adv;
+    }
+    requestAnimationFrame(__tick);
+  }
+  requestAnimationFrame(__tick);
+
+  return ()=> speedFactor; // getter for main
 }

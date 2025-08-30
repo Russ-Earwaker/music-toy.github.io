@@ -37,7 +37,7 @@ export function createBouncer(selector){
   const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true });
   // On-screen debug (set panel.dataset.debug='1' to enable)
   const __osd = document.createElement('div');
-  __osd.style.cssText='position:absolute;left:6px;top:6px;padding:4px 6px;background:rgba(0,0,0,0.4);color:#fff;font:12px/1.3 monospace;z-index:10;border-radius:4px;display:none';
+  __osd.style.cssText='position:absolute;left:6px;top:6px;padding:4px 6px;background:rgba(0,0,0,0.4);color:#fff;font:12px/1.3 monospace;z-index:10;border-radius:4px;display:none;pointer-events:none';
   if (panel?.dataset?.debug==='1'){ panel.appendChild(__osd); }
   function __tickOSD(){
     __osd.style.display = (panel?.dataset?.debug==='1') ? 'block' : 'none';
@@ -52,7 +52,7 @@ export function createBouncer(selector){
   }
   requestAnimationFrame(__tickOSD); /*OSD_DEBUG*/
 
-  const __getSpeed = installSpeedUI(panel, sizing, 1.0);
+  const __getSpeed = installSpeedUI(panel, sizing, parseFloat((panel?.dataset?.speed)||'0.60'));
 
 
   /* speed UI moved to bouncer-speed-ui.js */
@@ -174,10 +174,10 @@ function rescaleAll(fx=1, fy=1){
   // Handle position from anchors
   try{
     const w = worldW(), h = worldH();
-    const hfx = (typeof handle._fx==='number') ? handle._fx : (w? handle.x/w : 0.22); if (globalThis.BOUNCER_DEBUG){ console.debug('[bouncer] handle anchors', {hfx, hfy:handle._fy, w, h}); } /*HANDLE_DBG*/
+    const hfx = (typeof handle._fx==='number') ? handle._fx : (w? handle.x/w : 0.22); if (globalThis.BOUNCER_DEBUG){ console.log('[bouncer] handle anchors', {hfx, hfy:handle._fy, w, h}); } /*HANDLE_DBG*/
     const hfy = (typeof handle._fy==='number') ? handle._fy : (h? handle.y/h : 0.5);
-    handle.x = Math.round(hfx * w);
-    handle.y = Math.round(hfy * h);
+    handle.x = Math.round(EDGE + hfx * Math.max(1, w - EDGE*2));
+    handle.y = Math.round(EDGE + hfy * Math.max(1, h - EDGE*2));
   }catch{}
   // Rebuild/position edge controllers to current world
   try{ ensureEdgeControllers(worldW(), worldH()); }catch{}
@@ -187,7 +187,7 @@ function rescaleAll(fx=1, fy=1){
         try{
     // scale current ball position and velocity to preserve relative feel across zoom
     ball.x *= fx; ball.y *= fy;
-    const k = Math.sqrt(Math.max(0.0001, fx*fy)); if (globalThis.BOUNCER_DEBUG){ console.debug('[bouncer] rescaleAll', {fx,fy,k,scale:sizing.scale}); } /*RESCALE_DBG*/
+    const k = Math.sqrt(Math.max(0.0001, fx*fy)); if (globalThis.BOUNCER_DEBUG){ console.log('[bouncer] rescaleAll', {fx,fy,k,scale:sizing.scale}); } /*RESCALE_DBG*/
     if (typeof ball.vx==='number') ball.vx *= k;
     if (typeof ball.vy==='number') ball.vy *= k;
         // Align spawn speed to current active ball speed
@@ -249,7 +249,9 @@ function rescaleAll(fx=1, fy=1){
         e.preventDefault(); return;
       }
     }
-    handle.x = p.x; handle.y = p.y; try{ const w=worldW(), h=worldH(); handle._fx = handle.x/(w||1); handle._fy = handle.y/(h||1); }catch{};
+    handle.x = p.x; handle.y = p.y; try{ const w=worldW(), h=worldH(); const iw = Math.max(1, (w||0) - EDGE*2), ih = Math.max(1, (h||0) - EDGE*2);
+      handle._fx = Math.max(0, Math.min(1, (handle.x-EDGE)/iw));
+      handle._fy = Math.max(0, Math.min(1, (handle.y-EDGE)/ih)); }catch{};
     draggingHandle = true; dragStart = { x: handle.x, y: handle.y }; dragCurr = p;
     try { canvas.setPointerCapture(e.pointerId); } catch {}
     e.preventDefault();
@@ -266,7 +268,7 @@ if (draggingHandle){
       // compute launch from handle to current pointer
       const hsx = handle.x, hsy = handle.y;
       const px = (dragCurr?.x ?? hsx), py = (dragCurr?.y ?? hsy);
-      const vel = computeLaunchVelocity(hsx, hsy, px, py, worldW, worldH, getLoopInfo, speedFactor, EDGE);
+      const vel = computeLaunchVelocity(hsx, hsy, px, py, worldW, worldH, getLoopInfo, __getSpeed(), EDGE);
       const vx = vel.vx, vy = vel.vy;
       lastLaunch = { x: hsx, y: hsy, vx, vy, r: ballR() };
       try{

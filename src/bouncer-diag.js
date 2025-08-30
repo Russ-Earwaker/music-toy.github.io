@@ -2,8 +2,8 @@
 // Toggle pointermove logging by setting: window.BDIAG_LOG_MOVES = true
 (function(){
   const TAG='[bouncer-diag]';
-  const log = (...a)=>{ try{ console.log(TAG, ...a); }catch{} };
-  log('loaded (quiet) — pointerdown/up only; set window.BDIAG_LOG_MOVES=true to enable move logs');
+  const log = (...a)=>{  };
+
 
   window.BDIAG_LOG_MOVES = window.BDIAG_LOG_MOVES || false; // user-toggle
 
@@ -46,7 +46,7 @@
         const cssY = e.clientY - r.top;
         const inf = infoForCanvas(canvas);
         const zoomed = panel.classList.contains('toy-zoomed');
-        log({ evt:e.type, mode: zoomed?'advanced':'standard', cssPos:{x:+cssX.toFixed(2), y:+cssY.toFixed(2)}, canvas:inf });
+        
       }catch{}
     };
 
@@ -59,8 +59,6 @@
 
     const onResize = ()=> log({ evt:'resize', zoomed: panel.classList.contains('toy-zoomed'), canvas: infoForCanvas(canvas) });
     window.addEventListener('resize', onResize, { passive:true });
-
-    log('attached', panel, infoForCanvas(canvas));
   }
 
   function scan(){ panels().forEach(attach); }
