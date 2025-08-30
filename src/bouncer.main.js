@@ -12,6 +12,7 @@ import { createImpactFX } from './bouncer-impact.js';
 import { getPoliteDensityForToy } from './polite-random.js';
 import { buildPentatonicPalette, processVisQ as processVisQBouncer } from './bouncer-actions.js';
 import { computeLaunchVelocity } from './bouncer-geom.js';
+import { localPoint as __localPoint } from './bouncer-pointer.js';
 const noteValue = (list, idx)=> list[Math.max(0, Math.min(list.length-1, (idx|0)))];
 const BOUNCER_BARS_PER_LIFE = 1;
 const MAX_SPEED = 700, LAUNCH_K = 0.9;
@@ -201,19 +202,10 @@ function rescaleAll(fx=1, fy=1){
 }
 
   // interactions (tap-to-toggle in standard view; thirds edit in zoom)
-
-  function localPoint(evt){
-    const r = canvas.getBoundingClientRect();
-    const cssW = canvas.clientWidth || r.width || 1;
-    const cssH = canvas.clientHeight || r.height || 1;
-    const scaleX = (r.width||cssW) / cssW;
-    const scaleY = (r.height||cssH) / cssH;
-    return { x: (evt.clientX - r.left) / (scaleX||1), y: (evt.clientY - r.top) / (scaleY||1) };
-  }
   
   
   canvas.addEventListener('pointerdown', (e)=>{
-    const p = localPoint(e);
+    const p = __localPoint(canvas, e);
     const zoomed = (sizing?.scale || 1) > 1.01;
     const hit = blocks.find(b => hitRect(p, b));
     const hitCtrl = edgeControllers.find(b => hitRect(p, b));
@@ -258,7 +250,7 @@ function rescaleAll(fx=1, fy=1){
     e.preventDefault();
   });
 canvas.addEventListener('pointermove', (e)=>{
-    const p=localPoint(e);
+    const p=__localPoint(canvas, e);
     if (draggingHandle){ dragCurr=p; return; }
     if (!draggingBlock && tapCand){ const dx=p.x-tapStart.x, dy=p.y-tapStart.y; if ((dx*dx+dy*dy)>16){ draggingBlock=true; tapMoved=true; } if (draggingBlock && dragBlockRef){ dragBlockRef.x=Math.round(p.x-dragOffset.dx); dragBlockRef.y=Math.round(p.y-dragOffset.dy); } return; }
     try{ const w=worldW(), h=worldH(); dragBlockRef._fx = dragBlockRef.x/(w||1); dragBlockRef._fy = dragBlockRef.y/(h||1); dragBlockRef._fw = dragBlockRef.w/(w||1); dragBlockRef._fh = dragBlockRef.h/(h||1);}catch{}
@@ -281,7 +273,7 @@ if (draggingHandle){
     }
     if (draggingBlock){ draggingBlock=false; dragBlockRef=null; tapCand=null; tapStart=null; tapMoved=false; try{ if(e&&e.pointerId!=null) canvas.releasePointerCapture(e.pointerId);}catch{} return; }
     if (tapCand && !tapMoved){ tapCand.active = !tapCand.active; const ac=ensureAudioContext(); const now=(ac?ac.currentTime:0)+0.0005; if (tapCand.active){ const nm=noteValue(noteList, tapCand.noteIndex|0); try{ triggerInstrument(instrument, nm, now, toyId);}catch{} } tapCand=null; tapStart=null; tapMoved=false; dragBlockRef=null; try{ if(e&&e.pointerId!=null) canvas.releasePointerCapture(e.pointerId);}catch{} return; }
-    if (zoomDragCand){ const p=localPoint(e); const t=whichThirdRect(zoomDragCand, p.y); if (t==='toggle'){ zoomDragCand.active=!zoomDragCand.active; } else { if (t==='up'){ zoomDragCand.noteIndex=Math.min(noteList.length-1,(zoomDragCand.noteIndex|0)+1); } else if (t==='down'){ zoomDragCand.noteIndex=Math.max(0,(zoomDragCand.noteIndex|0)-1); } const ac=ensureAudioContext(); const now=(ac?ac.currentTime:0); const nm=noteValue(noteList, zoomDragCand.noteIndex|0); try{ triggerInstrument(instrument, nm, now+0.0005, toyId);}catch{} } zoomDragCand=null; try{ if(e&&e.pointerId!=null) canvas.releasePointerCapture(e.pointerId);}catch{} return; }
+    if (zoomDragCand){ const p=__localPoint(canvas, e); const t=whichThirdRect(zoomDragCand, p.y); if (t==='toggle'){ zoomDragCand.active=!zoomDragCand.active; } else { if (t==='up'){ zoomDragCand.noteIndex=Math.min(noteList.length-1,(zoomDragCand.noteIndex|0)+1); } else if (t==='down'){ zoomDragCand.noteIndex=Math.max(0,(zoomDragCand.noteIndex|0)-1); } const ac=ensureAudioContext(); const now=(ac?ac.currentTime:0); const nm=noteValue(noteList, zoomDragCand.noteIndex|0); try{ triggerInstrument(instrument, nm, now+0.0005, toyId);}catch{} } zoomDragCand=null; try{ if(e&&e.pointerId!=null) canvas.releasePointerCapture(e.pointerId);}catch{} return; }
   }
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
