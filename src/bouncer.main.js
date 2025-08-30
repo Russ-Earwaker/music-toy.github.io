@@ -14,6 +14,7 @@ import { buildPentatonicPalette, processVisQ as processVisQBouncer } from './bou
 import { computeLaunchVelocity, updateLaunchBaseline, setSpawnSpeedFromBallSpeed , getLaunchDiag} from './bouncer-geom.js';
 import { localPoint as __localPoint } from './bouncer-pointer.js';
 import { installSpeedUI } from './bouncer-speed-ui.js';
+import { installAdvancedCubeUI } from './bouncer-adv-ui.js';
 const noteValue = (list, idx)=> list[Math.max(0, Math.min(list.length-1, (idx|0)))];
 const BOUNCER_BARS_PER_LIFE = 1;
 const MAX_SPEED = 700, LAUNCH_K = 0.9;
@@ -35,6 +36,13 @@ export function createBouncer(selector){
   try{ canvas.removeAttribute('data-lock-scale'); canvas.style.transform=''; }catch{};
   const ctx = canvas.getContext('2d', { alpha:false });
   const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true });
+  // Fixed-physics world: capture once and keep constant across modes
+  let PHYS_W = 0, PHYS_H = 0;
+  const physW = ()=> (PHYS_W || worldW());
+  const physH = ()=> (PHYS_H || worldH());
+  function renderScale(){ const w = worldW()||1, h = worldH()||1; return { sx: w/physW(), sy: h/physH() }; }
+  function toWorld(pt){ const {sx,sy}=renderScale(); return { x: pt.x/(sx||1), y: pt.y/(sy||1) }; }
+
   // On-screen debug (set panel.dataset.debug='1' to enable)
   const __osd = document.createElement('div');
   __osd.style.cssText='position:absolute;left:6px;top:6px;padding:4px 6px;background:rgba(0,0,0,0.4);color:#fff;font:12px/1.3 monospace;z-index:10;border-radius:4px;display:none;pointer-events:none';
@@ -89,6 +97,15 @@ export function createBouncer(selector){
   // blocks
   const N_BLOCKS = 4;
   let blocks = Array.from({length:N_BLOCKS}, ()=>({ x:EDGE, y:EDGE, w:blockSize(), h:blockSize(), noteIndex:0, active:true, flash:0, lastHitAT:0 }));
+  const isAdvanced = ()=> panel.classList.contains('toy-zoomed') || !!panel.closest('#zoom-overlay');
+  function hitTest(x,y){
+    for (let i=0;i<blocks.length;i++){ const b=blocks[i]; if (x>=b.x && x<b.x+b.w && y>=b.y && y<b.y+b.h) return i; }
+    return -1;
+  }
+  const advUI = installAdvancedCubeUI(panel, canvas, {
+    isAdvanced, toWorld, getBlocks: ()=> blocks, noteList, onChange: ()=>{}, hitTest
+  });
+
 
 // --- anchor-based sizing for blocks & handle (fractions of world size) ---
 function syncAnchorsFromBlocks(){
@@ -124,7 +141,7 @@ function syncBlocksFromAnchors(){
 
   // seed positions + palette
   (function seed(){
-    const w=worldW(), h=worldH(); const bx=Math.round(w*0.2), by=Math.round(h*0.2), bw=Math.round(w*0.6), bh=Math.round(h*0.6);
+    const w=physW(), h=physH(); const bx=Math.round(w*0.2), by=Math.round(h*0.2), bw=Math.round(w*0.6), bh=Math.round(h*0.6);
     const pal = buildPentatonicPalette(noteList, 'C4', 'minor', 1);
     for (let i=0;i<blocks.length;i++) blocks[i].noteIndex = pal[i % pal.length];
     randomizeRects(blocks, {x:bx,y:by,w:bw,h:bh}, EDGE);
@@ -185,13 +202,8 @@ function rescaleAll(fx=1, fy=1){
   try{
     if (ball){
         try{
-    // scale current ball position and velocity to preserve relative feel across zoom
-    ball.x *= fx; ball.y *= fy;
-    const k = Math.sqrt(Math.max(0.0001, fx*fy)); if (globalThis.BOUNCER_DEBUG){ console.log('[bouncer] rescaleAll', {fx,fy,k,scale:sizing.scale}); } /*RESCALE_DBG*/
-    if (typeof ball.vx==='number') ball.vx *= k;
-    if (typeof ball.vy==='number') ball.vy *= k;
-        // Align spawn speed to current active ball speed
-    try{ if (ball){ const vmag = Math.hypot(ball.vx||0, ball.vy||0); setSpawnSpeedFromBallSpeed(vmag, (typeof __getSpeed==='function')?__getSpeed():((typeof speedFactor!=='undefined')?speedFactor:1.0)); } }catch{}
+    // fixed-physics: do not scale current ball position or velocity on resize
+    // (we keep ball.x/ball.y/vx/vy as-is to preserve timing across modes)
     // Update spawn baseline as a fallback
     
   }catch{}
@@ -249,7 +261,7 @@ function rescaleAll(fx=1, fy=1){
         e.preventDefault(); return;
       }
     }
-    handle.x = p.x; handle.y = p.y; try{ const w=worldW(), h=worldH(); const iw = Math.max(1, (w||0) - EDGE*2), ih = Math.max(1, (h||0) - EDGE*2);
+    handle.x = p.x; handle.y = p.y; try{ const w=physW(), h=physH(); const iw = Math.max(1, (w||0) - EDGE*2), ih = Math.max(1, (h||0) - EDGE*2);
       handle._fx = Math.max(0, Math.min(1, (handle.x-EDGE)/iw));
       handle._fy = Math.max(0, Math.min(1, (handle.y-EDGE)/ih)); }catch{};
     draggingHandle = true; dragStart = { x: handle.x, y: handle.y }; dragCurr = p;
@@ -260,7 +272,7 @@ canvas.addEventListener('pointermove', (e)=>{
     const p=__localPoint(canvas, e);
     if (draggingHandle){ dragCurr=p; return; }
     if (!draggingBlock && tapCand){ const dx=p.x-tapStart.x, dy=p.y-tapStart.y; if ((dx*dx+dy*dy)>16){ draggingBlock=true; tapMoved=true; } if (draggingBlock && dragBlockRef){ dragBlockRef.x=Math.round(p.x-dragOffset.dx); dragBlockRef.y=Math.round(p.y-dragOffset.dy); } return; }
-    try{ const w=worldW(), h=worldH(); dragBlockRef._fx = dragBlockRef.x/(w||1); dragBlockRef._fy = dragBlockRef.y/(h||1); dragBlockRef._fw = dragBlockRef.w/(w||1); dragBlockRef._fh = dragBlockRef.h/(h||1);}catch{}
+    try{ const w=physW(), h=physH(); dragBlockRef._fx = dragBlockRef.x/(w||1); dragBlockRef._fy = dragBlockRef.y/(h||1); dragBlockRef._fw = dragBlockRef.w/(w||1); dragBlockRef._fh = dragBlockRef.h/(h||1);}catch{}
     if (draggingBlock && dragBlockRef){ dragBlockRef.x=Math.round(p.x-dragOffset.dx); dragBlockRef.y=Math.round(p.y-dragOffset.dy); return; }
   });
   function endDrag(e){
@@ -270,7 +282,7 @@ if (draggingHandle){
       const px = (dragCurr?.x ?? hsx), py = (dragCurr?.y ?? hsy);
       const __adv = panel.classList.contains('toy-zoomed') || !!panel.closest('#zoom-overlay');
       const __sf = __adv ? __getSpeed() : 1.0;
-      const vel = computeLaunchVelocity(hsx, hsy, px, py, worldW, worldH, getLoopInfo, __sf, EDGE);
+      const vel = computeLaunchVelocity(hsx, hsy, px, py, physW, physH, getLoopInfo, __sf, EDGE);
       const vx = vel.vx, vy = vel.vy;
       lastLaunch = { x: hsx, y: hsy, vx, vy, r: ballR() };
       try{
@@ -278,7 +290,7 @@ if (draggingHandle){
         if (li && li.barLen){ const grid = li.barLen/16; const rel = Math.max(0, (ac?ac.currentTime:0) - li.loopStartTime); const k = Math.ceil((rel+1e-6)/grid); nextLaunchAt = li.loopStartTime + k*grid; }
         else { nextLaunchAt = (ac?ac.currentTime:0) + 0.02; }
 }catch{}
-      try{ const w=worldW(), h=worldH(); handle._fx = (handle.x||0)/(w||1); handle._fy = (handle.y||0)/(h||1); }catch{}
+      try{ const w=physW(), h=physH(); handle._fx = (handle.x||0)/(w||1); handle._fy = (handle.y||0)/(h||1); }catch{}
       draggingHandle=false; dragCurr=dragStart=null; try{ if(e&&e.pointerId!=null) canvas.releasePointerCapture(e.pointerId);}catch{} return;
     }
     if (draggingBlock){ draggingBlock=false; dragBlockRef=null; tapCand=null; tapStart=null; tapMoved=false; try{ if(e&&e.pointerId!=null) canvas.releasePointerCapture(e.pointerId);}catch{} return; }
@@ -317,7 +329,7 @@ function draw(){
     ctx.fillStyle='#0b0f16'; ctx.fillRect(0,0,w,h);
 ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.lineWidth=2; ctx.strokeRect(EDGE,EDGE,w-EDGE*2,h-EDGE*2);
 
-    ensureEdgeControllers(w,h);
+    ensureEdgeControllers(physW(), physH());
     for (const c of edgeControllers){ if (c){ c.w=blockSize(); c.h=blockSize(); } }
     drawEdgeBondLines(ctx, w, h, EDGE, edgeControllers);
     const ac2=ensureAudioContext(); const now2=(ac2?ac2.currentTime:0);

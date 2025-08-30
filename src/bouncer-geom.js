@@ -1,3 +1,4 @@
+let __basePPF = 0;
 let __ppfOverride = 0;
 let __baseDiag = 0;
 /* Extracted from bouncer.main.js (behavior-preserving) */
@@ -12,38 +13,39 @@ export function updateLaunchBaseline(worldW, worldH, EDGE){
 
 export function setSpawnSpeedFromBallSpeed(){ /* no-op: we now use speedFactor only */ }
 
+
 export function computeLaunchVelocity(hx, hy, px, py, worldW, worldH, getLoopInfo, speedFactor, EDGE = 0) {
   const dx = (px - hx), dy = (py - hy);
   const dist = Math.hypot(dx, dy) || 1;
   let ux = dx / dist, uy = dy / dist;
 
-  // Canvas geometry (usable area inside frame)
-  const w = Math.max(1, worldW()) - EDGE*2;
-  const h = Math.max(1, worldH()) - EDGE*2;
-  const diagNow = Math.max(1, Math.hypot(w, h));
-  const baseDiag = (__baseDiag || diagNow);
-  const rel = diagNow / baseDiag;
-  const diag = baseDiag;
+  // Fallback direction for tiny drags
+  if (dist < 3){ ux = 0; uy = -1; }
 
-  // Fallback direction for simple clicks (tiny drags)
-  const minDrag = Math.max(4, diag*0.005);
-  if (dist < minDrag){ ux = 0; uy = -1; }
+  // Simple, size-independent pixels-per-frame baseline
+  // Tuned so Standard feels like before at sf=1.0
+  const LAUNCH_PPF_BASE = 22.0;  // adjust if needed
+  const sf = Math.max(0.2, Math.min(1.6, Number(speedFactor)||1));
 
-  // Time base
-  const FPS = 60;
-  let barLen = 1.0;
-  try{ const li = (typeof getLoopInfo==='function') ? getLoopInfo() : null; if (li && li.barLen) barLen = li.barLen; }catch{}
+  // Optionally incorporate tempo if provided (keeps feel across tempos)
+  let tempoAdj = 1.0;
+  try {
+    const li = (typeof getLoopInfo === 'function') ? getLoopInfo() : null;
+    if (li && li.barLen){ tempoAdj = 1 / Math.max(0.5, Math.min(2.0, li.barLen)); }
+  } catch {}
 
-  // Base pixels-per-frame so the ball roughly crosses the diagonal in ~1 bar at sf=1
-  const basePPF = (diag / (FPS * barLen));
-  const sf = Math.max(0.2, Math.min(1.6, speedFactor || 1));
+    // Scale spawn speed by current frame size so Advanced (bigger) matches Standard relatively
+  let rel = 1.0;
+  try{
+    const w = Math.max(1, (worldW?.()||1) - EDGE*2);
+    const h = Math.max(1, (worldH?.()||1) - EDGE*2);
+    const diagNow = Math.hypot(w,h);
+    if (!__baseDiag) __baseDiag = diagNow;
+    rel = Math.max(0.4, Math.min(3.0, diagNow / __baseDiag));
+  }catch{}
+  const desiredPPF = LAUNCH_PPF_BASE * sf * tempoAdj * rel;
 
-  // Desired speed derived only from slider (consistent across views via baseline diag)
-  let desiredPPF = Math.max(0.4, basePPF * sf * rel);
-  desiredPPF *= 3.2; // softened from 4.0 for calmer default // keep prior global boost so it feels lively
-
-  if (globalThis.BOUNCER_DEBUG){ console.log('[bouncer-geom] launch', {hx,hy,px,py,desiredPPF,EDGE}); } /*DBG*/
+  if (globalThis.BOUNCER_DEBUG){ console.log('[bouncer-geom] launch', {hx,hy,px,py,desiredPPF, EDGE, sf, tempoAdj}); }
   return { vx: ux * desiredPPF, vy: uy * desiredPPF };
 }
-
 export function getLaunchDiag(){ return { baseDiag: __baseDiag, ppfOverride: __ppfOverride }; }

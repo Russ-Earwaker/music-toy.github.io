@@ -44,7 +44,11 @@ export function stepBouncer(S, nowAT){
   const ac = S.ensureAudioContext && S.ensureAudioContext();
   const now = nowAT || (ac ? ac.currentTime : (S.lastAT || 0));
 
-  // scheduled re-spawn (keep behavior but tie life to barLen)
+  
+  // Framescale: keep speed consistent across FPS
+  const dt = Math.max(0, (now - (S.lastAT || now)));
+  const frameFactor = Math.min(3.0, Math.max(0.25, dt * 60));
+// scheduled re-spawn (keep behavior but tie life to barLen)
   if (S.lastLaunch && S.nextLaunchAt != null && now >= (S.nextLaunchAt - 0.001)){
     const nb = S.spawnBallFrom({ x:S.handle.x, y:S.handle.y, vx:S.lastLaunch.vx, vy:S.lastLaunch.vy, r:S.ballR() });
     S.ball = nb;
@@ -78,10 +82,11 @@ export function stepBouncer(S, nowAT){
       const L=S.EDGE, T=S.EDGE, R=S.worldW()-S.EDGE, B=S.worldH()-S.EDGE;
       const rr = S.ball.r || S.ballR();
       const blocks = S.blocks || [];
-      let rem = 1.0, iterations = 0, maxIter = 4;
+      let rem = frameFactor, iterations = 0, maxIter = 4;
 
       while (rem > 1e-4 && iterations++ < maxIter){
-        const vx = S.ball.vx * rem, vy = S.ball.vy * rem;
+        const stepLen = Math.min(1, rem);
+        const vx = S.ball.vx * stepLen, vy = S.ball.vy * stepLen;
 
         // Track earliest hit among blocks
         let best = null, bestIdx = -1;
@@ -191,7 +196,7 @@ export function stepBouncer(S, nowAT){
 
           // Remaining fraction after impact
           const used = tMove;
-          rem = rem * (1 - used);
+          rem -= used * stepLen;
           if (rem <= 1e-4) break;
         }
       }
