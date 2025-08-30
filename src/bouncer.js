@@ -35,7 +35,7 @@ function computeLaunchVelocity(hx, hy, px, py, worldW, worldH, getLoopInfo, spee
   const basePPF = (diag / (FPS * barLen));
   const sf = Math.max(0.2, Math.min(1.6, speedFactor || 1));
   let desiredPPF = Math.min(8.0, Math.max(0.4, basePPF * sf));
-  desiredPPF *= 5.0; // keep prior global boost so it feels lively
+  desiredPPF *= 4.0; // keep prior global boost so it feels lively
   return { vx: ux * desiredPPF, vy: uy * desiredPPF };
 }
 
@@ -83,7 +83,7 @@ export function createBouncer(selector){
   // board zoom scaling based on visual width ratio (like Rippler)
   let __baseAttrW = 0;
   function rectScale(){
-    const w = canvas.clientWidth || 0; // use CSS width to avoid double-scaling under zoom
+    const w = canvas.width || 0; // device-pixel width after DPR & board zoom via utils.js
     if (!__baseAttrW && w>0) __baseAttrW = w;
     return (__baseAttrW>0 && w>0) ? (w/__baseAttrW) : 1;
   }
@@ -111,7 +111,6 @@ export function createBouncer(selector){
   let blocks = Array.from({length:N_BLOCKS}, ()=>({ x:EDGE, y:EDGE, w:blockSize(), h:blockSize(), noteIndex:0, active:true, flash:0, lastHitAT:0 }));
 
 // --- anchor-based sizing for blocks & handle (fractions of world size) ---
-function syncHandleAnchor(){ try{ const w=worldW(), h=worldH(); if (w>0) handle._fx = handle.x / w; if (h>0) handle._fy = handle.y / h; }catch{} }
 function syncAnchorsFromBlocks(){
   const w = worldW(), h = worldH();
   for (const b of blocks){
@@ -153,15 +152,16 @@ function syncBlocksFromAnchors(){
   })();
 
   function ensureEdgeControllers(w,h){
-  if (!edgeControllers.length){ edgeControllers = makeEdgeControllers(w, h, blockSize(), EDGE, noteList); edgeControllers.__w=w; edgeControllers.__h=h; return; }
-  if (edgeControllers.__w!==w || edgeControllers.__h!==h){ edgeControllers = makeEdgeControllers(w, h, blockSize(), EDGE, noteList); edgeControllers.__w=w; edgeControllers.__h=h; return; }
-  try{ const s=blockSize(), half=s/2; const map=mapControllersByEdge(edgeControllers);
-    if (map.left ){ map.left .x=EDGE;      map.left .y=h/2-half; map.left .w=s; map.left .h=s; }
-    if (map.right){ map.right.x=w-EDGE-s; map.right.y=h/2-half; map.right.w=s; map.right.h=s; }
-    if (map.top  ){ map.top  .x=w/2-half; map.top  .y=EDGE;     map.top  .w=s; map.top  .h=s; }
-    if (map.bot  ){ map.bot  .x=w/2-half; map.bot  .y=h-EDGE-s; map.bot  .w=s; map.bot  .h=s; }
-  }catch{}
-}
+    if (!edgeControllers.length){
+      edgeControllers = makeEdgeControllers(w, h, blockSize(), EDGE, noteList);
+    }else{
+      const s=blockSize(), half=s/2; const map=mapControllersByEdge(edgeControllers);
+      if (map.left ){ map.left .x=EDGE;        map.left .y=h/2-half; map.left .w=s; map.left .h=s; }
+      if (map.right){ map.right.x=w-EDGE-s;   map.right.y=h/2-half; map.right.w=s; map.right.h=s; }
+      if (map.top  ){ map.top  .x=w/2-half;   map.top  .y=EDGE;     map.top  .w=s; map.top  .h=s; }
+      if (map.bot  ){ map.bot  .x=w/2-half;   map.bot  .y=h-EDGE-s; map.bot  .w=s; map.bot  .h=s; }
+    }
+  }
 
   // toy controls
   function doRandom(){
@@ -198,16 +198,19 @@ function rescaleAll(fx=1, fy=1){
     const hfy = (typeof handle._fy==='number') ? handle._fy : (h? handle.y/h : 0.5);
     handle.x = Math.round(hfx * w);
     handle.y = Math.round(hfy * h);
-    syncHandleAnchor();
   }catch{}
   // Rebuild/position edge controllers to current world
   try{ ensureEdgeControllers(worldW(), worldH()); }catch{}
   // Update ball radius and keep inside frame, but do not translate by fx/fy
   try{
     if (ball){
-        
+        try{
+    // scale current ball position and velocity to preserve relative feel across zoom
     ball.x *= fx; ball.y *= fy;
-      ball.r = ballR();
+    if (typeof ball.vx==='number') ball.vx *= fx;
+    if (typeof ball.vy==='number') ball.vy *= fy;
+  }catch{}
+ ball.r = ballR();
       const br = ball.r;
       const eL = EDGE + br, eT = EDGE + br, eR = worldW() - EDGE - br, eB = worldH() - EDGE - br;
       if (ball.x < eL) ball.x = eL;
@@ -270,7 +273,7 @@ function rescaleAll(fx=1, fy=1){
         e.preventDefault(); return;
       }
     }
-    handle.x = p.x; handle.y = p.y; syncHandleAnchor();
+    handle.x = p.x; handle.y = p.y;
     draggingHandle = true; dragStart = { x: handle.x, y: handle.y }; dragCurr = p;
     try { canvas.setPointerCapture(e.pointerId); } catch {}
     e.preventDefault();
@@ -278,7 +281,6 @@ function rescaleAll(fx=1, fy=1){
 canvas.addEventListener('pointermove', (e)=>{
     const p=localPoint(e);
     if (draggingHandle){ dragCurr=p; return; }
-    if (zoomed && zoomDragCand){ const dx=p.x-zoomDragStart.x, dy=p.y-zoomDragStart.y; if (Math.hypot(dx,dy)>6 && zoomDragCand.active){ draggingBlock=true; dragBlockRef=zoomDragCand; dragOffset={dx:p.x-zoomDragCand.x, dy:p.y-zoomDragCand.y}; zoomDragCand=null; } }
     if (!draggingBlock && tapCand){ const dx=p.x-tapStart.x, dy=p.y-tapStart.y; if ((dx*dx+dy*dy)>16){ draggingBlock=true; tapMoved=true; } if (draggingBlock && dragBlockRef){ dragBlockRef.x=Math.round(p.x-dragOffset.dx); dragBlockRef.y=Math.round(p.y-dragOffset.dy); } return; }
     try{ const w=worldW(), h=worldH(); dragBlockRef._fx = dragBlockRef.x/(w||1); dragBlockRef._fy = dragBlockRef.y/(h||1); dragBlockRef._fw = dragBlockRef.w/(w||1); dragBlockRef._fh = dragBlockRef.h/(h||1);}catch{}
     if (draggingBlock && dragBlockRef){ dragBlockRef.x=Math.round(p.x-dragOffset.dx); dragBlockRef.y=Math.round(p.y-dragOffset.dy); return; }
@@ -358,7 +360,7 @@ ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.lineWidth=2; ctx.strokeRect(EDGE,E
     if (ball){ ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2); ctx.fillStyle='white'; ctx.globalAlpha=0.9; ctx.fill(); ctx.globalAlpha=1; }
 
     const S = {
-      ball, blocks, edgeControllers, EDGE, worldW, worldH, ballR, blockSize, mapControllersByEdge,
+      ball, blocks, edgeControllers, EDGE, worldW, worldH, ballR, blockSize,
       edgeFlash, ensureAudioContext, noteValue, noteList, instrument, fx,
       lastLaunch, nextLaunchAt, lastAT: prevNow, flashEdge, handle, spawnBallFrom, getLoopInfo,
       triggerInstrument: (i,n,t)=>triggerInstrument(i,n,t,'bouncer', toyId),
