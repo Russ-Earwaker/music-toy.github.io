@@ -11,7 +11,7 @@ import { drawBlocksSection } from './ripplesynth-blocks.js';
 import { createImpactFX } from './bouncer-impact.js';
 import { getPoliteDensityForToy } from './polite-random.js';
 import { buildPentatonicPalette, processVisQ as processVisQBouncer } from './bouncer-actions.js';
-import { computeLaunchVelocity } from './bouncer-geom.js';
+import { computeLaunchVelocity, updateLaunchBaseline, setSpawnSpeedFromBallSpeed , getLaunchDiag} from './bouncer-geom.js';
 import { localPoint as __localPoint } from './bouncer-pointer.js';
 import { installSpeedUI } from './bouncer-speed-ui.js';
 const noteValue = (list, idx)=> list[Math.max(0, Math.min(list.length-1, (idx|0)))];
@@ -35,6 +35,23 @@ export function createBouncer(selector){
   try{ canvas.removeAttribute('data-lock-scale'); canvas.style.transform=''; }catch{};
   const ctx = canvas.getContext('2d', { alpha:false });
   const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true });
+  // On-screen debug (set panel.dataset.debug='1' to enable)
+  const __osd = document.createElement('div');
+  __osd.style.cssText='position:absolute;left:6px;top:6px;padding:4px 6px;background:rgba(0,0,0,0.4);color:#fff;font:12px/1.3 monospace;z-index:10;border-radius:4px;display:none';
+  if (panel?.dataset?.debug==='1'){ panel.appendChild(__osd); }
+  function __tickOSD(){
+    __osd.style.display = (panel?.dataset?.debug==='1') ? 'block' : 'none';
+    if (__osd.style.display==='block' && !__osd.parentNode){ try{ panel.appendChild(__osd); }catch{} } /*OSD_ATTACH*/
+    if (__osd.style.display==='block'){
+      const d = getLaunchDiag?.()||{};
+      const sp = (typeof speedFactor!=='undefined')? speedFactor : (__getSpeed?__getSpeed():1);
+      const vmag = (ball && ball.vx!=null) ? Math.hypot(ball.vx, ball.vy) : 0;
+      __osd.textContent = `scale=${sizing.scale.toFixed(3)} speed=${sp.toFixed(2)} v=${vmag.toFixed(3)} baseDiag=${(d.baseDiag||0).toFixed(1)} ppfOv=${(d.ppfOverride||0).toFixed(3)}`;
+    }
+    requestAnimationFrame(__tickOSD);
+  }
+  requestAnimationFrame(__tickOSD); /*OSD_DEBUG*/
+
   const __getSpeed = installSpeedUI(panel, sizing, 1.0);
 
 
@@ -157,7 +174,7 @@ function rescaleAll(fx=1, fy=1){
   // Handle position from anchors
   try{
     const w = worldW(), h = worldH();
-    const hfx = (typeof handle._fx==='number') ? handle._fx : (w? handle.x/w : 0.22);
+    const hfx = (typeof handle._fx==='number') ? handle._fx : (w? handle.x/w : 0.22); if (globalThis.BOUNCER_DEBUG){ console.debug('[bouncer] handle anchors', {hfx, hfy:handle._fy, w, h}); } /*HANDLE_DBG*/
     const hfy = (typeof handle._fy==='number') ? handle._fy : (h? handle.y/h : 0.5);
     handle.x = Math.round(hfx * w);
     handle.y = Math.round(hfy * h);
@@ -170,8 +187,13 @@ function rescaleAll(fx=1, fy=1){
         try{
     // scale current ball position and velocity to preserve relative feel across zoom
     ball.x *= fx; ball.y *= fy;
-    if (typeof ball.vx==='number') ball.vx *= fx;
-    if (typeof ball.vy==='number') ball.vy *= fy;
+    const k = Math.sqrt(Math.max(0.0001, fx*fy)); if (globalThis.BOUNCER_DEBUG){ console.debug('[bouncer] rescaleAll', {fx,fy,k,scale:sizing.scale}); } /*RESCALE_DBG*/
+    if (typeof ball.vx==='number') ball.vx *= k;
+    if (typeof ball.vy==='number') ball.vy *= k;
+        // Align spawn speed to current active ball speed
+    try{ if (ball){ const vmag = Math.hypot(ball.vx||0, ball.vy||0); setSpawnSpeedFromBallSpeed(vmag, (typeof __getSpeed==='function')?__getSpeed():((typeof speedFactor!=='undefined')?speedFactor:1.0)); } }catch{}
+    // Update spawn baseline as a fallback
+    try{ updateLaunchBaseline(worldW, worldH, EDGE); }catch{}
   }catch{}
  ball.r = ballR();
       const br = ball.r;
@@ -227,7 +249,7 @@ function rescaleAll(fx=1, fy=1){
         e.preventDefault(); return;
       }
     }
-    handle.x = p.x; handle.y = p.y;
+    handle.x = p.x; handle.y = p.y; try{ const w=worldW(), h=worldH(); handle._fx = handle.x/(w||1); handle._fy = handle.y/(h||1); }catch{};
     draggingHandle = true; dragStart = { x: handle.x, y: handle.y }; dragCurr = p;
     try { canvas.setPointerCapture(e.pointerId); } catch {}
     e.preventDefault();
@@ -252,6 +274,7 @@ if (draggingHandle){
         if (li && li.barLen){ const grid = li.barLen/16; const rel = Math.max(0, (ac?ac.currentTime:0) - li.loopStartTime); const k = Math.ceil((rel+1e-6)/grid); nextLaunchAt = li.loopStartTime + k*grid; }
         else { nextLaunchAt = (ac?ac.currentTime:0) + 0.02; }
 }catch{}
+      try{ const w=worldW(), h=worldH(); handle._fx = (handle.x||0)/(w||1); handle._fy = (handle.y||0)/(h||1); }catch{}
       draggingHandle=false; dragCurr=dragStart=null; try{ if(e&&e.pointerId!=null) canvas.releasePointerCapture(e.pointerId);}catch{} return;
     }
     if (draggingBlock){ draggingBlock=false; dragBlockRef=null; tapCand=null; tapStart=null; tapMoved=false; try{ if(e&&e.pointerId!=null) canvas.releasePointerCapture(e.pointerId);}catch{} return; }
@@ -286,7 +309,7 @@ function draw(){
     const ky = (cssH && lastCanvasH ? cssH/lastCanvasH : 1);
     if (Math.abs(kx-1) > 0.001 || Math.abs(ky-1) > 0.001){ rescaleAll(kx, ky); lastCanvasW = cssW; lastCanvasH = cssH; }
 
-    const w = cssW, h = cssH;
+    const w = worldW(), h = worldH();
     ctx.fillStyle='#0b0f16'; ctx.fillRect(0,0,w,h);
 ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.lineWidth=2; ctx.strokeRect(EDGE,EDGE,w-EDGE*2,h-EDGE*2);
 
@@ -295,7 +318,18 @@ ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.lineWidth=2; ctx.strokeRect(EDGE,E
     drawEdgeBondLines(ctx, w, h, EDGE, edgeControllers);
     const ac2=ensureAudioContext(); const now2=(ac2?ac2.currentTime:0);
     drawBlocksSection(ctx, edgeControllers, 0, 0, null, 1, noteList, sizing, null, null, now2);
-    drawEdgeDecorations(ctx, edgeControllers, EDGE, w, h);
+    drawEdgeDecorations(ctx, edgeControllers, edgeFlash);
+    /* EDGE FLASH OVERLAY */
+    try{
+      const w = worldW(), h = worldH();
+      ctx.save(); ctx.fillStyle='white';
+      if (edgeFlash.top>0){ ctx.globalAlpha=Math.min(0.35, edgeFlash.top*0.35); ctx.fillRect(0,0,w,EDGE); edgeFlash.top*=0.92; }
+      if (edgeFlash.bottom>0){ ctx.globalAlpha=Math.min(0.35, edgeFlash.bottom*0.35); ctx.fillRect(0,h-EDGE,w,EDGE); edgeFlash.bottom*=0.92; }
+      if (edgeFlash.left>0){ ctx.globalAlpha=Math.min(0.35, edgeFlash.left*0.35); ctx.fillRect(0,0,EDGE,h); edgeFlash.left*=0.92; }
+      if (edgeFlash.right>0){ ctx.globalAlpha=Math.min(0.35, edgeFlash.right*0.35); ctx.fillRect(w-EDGE,0,EDGE,h); edgeFlash.right*=0.92; }
+      ctx.restore();
+    }catch{}
+
     for (const c of edgeControllers){ if (c.flash>0){ c.flash*=0.85; if (c.flash<0.03) c.flash=0; } }
 
     for (const b of blocks){ b.w=blockSize(); b.h=blockSize(); }
@@ -314,7 +348,7 @@ ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.lineWidth=2; ctx.strokeRect(EDGE,E
     if (ball){ ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2); ctx.fillStyle='white'; ctx.globalAlpha=0.9; ctx.fill(); ctx.globalAlpha=1; }
 
     const S = {
-      ball, blocks, edgeControllers, EDGE, worldW, worldH, ballR, blockSize,
+      ball, blocks, edgeControllers, EDGE, worldW, worldH, ballR, blockSize, mapControllersByEdge,
       edgeFlash, ensureAudioContext, noteValue, noteList, instrument, fx,
       lastLaunch, nextLaunchAt, lastAT: prevNow, flashEdge, handle, spawnBallFrom, getLoopInfo,
       triggerInstrument: (i,n,t)=>triggerInstrument(i,n,t,'bouncer', toyId),
