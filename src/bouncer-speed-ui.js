@@ -1,4 +1,4 @@
-// Extracted from bouncer.main.js (behavior-preserving)
+/* Extracted from bouncer.main.js (behavior-preserving) */
 export function installSpeedUI(panel, sizing, initial=1.0){
   let speedFactor = initial;
 
@@ -23,5 +23,6 @@ export function installSpeedUI(panel, sizing, initial=1.0){
   panel.addEventListener('toy-zoom', (ev)=>{ try{ sizing.setZoom(ev?.detail?.zoomed); }catch{} });
   // Initialize once
   updateSpeedVisibility();
-  return () => speedFactor; // getter function
+
+  return () => speedFactor; // simple getter
 }

@@ -13,6 +13,7 @@ import { getPoliteDensityForToy } from './polite-random.js';
 import { buildPentatonicPalette, processVisQ as processVisQBouncer } from './bouncer-actions.js';
 import { computeLaunchVelocity } from './bouncer-geom.js';
 import { localPoint as __localPoint } from './bouncer-pointer.js';
+import { installSpeedUI } from './bouncer-speed-ui.js';
 const noteValue = (list, idx)=> list[Math.max(0, Math.min(list.length-1, (idx|0)))];
 const BOUNCER_BARS_PER_LIFE = 1;
 const MAX_SPEED = 700, LAUNCH_K = 0.9;
@@ -34,29 +35,11 @@ export function createBouncer(selector){
   try{ canvas.removeAttribute('data-lock-scale'); canvas.style.transform=''; }catch{};
   const ctx = canvas.getContext('2d', { alpha:false });
   const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true });
+  const __getSpeed = installSpeedUI(panel, sizing, 1.0);
 
-  // Speed control (UI)
-        // Speed control dock (appears only in zoom), placed under the canvas so it never overlaps play space
-  const hostForDock = panel.querySelector('.toy-body') || panel;
-  const spDock = document.createElement('div');
-  Object.assign(spDock.style, {
-    display: 'none', width: '100%', marginTop: '8px',
-    display: 'none', justifyContent: 'flex-end', alignItems: 'center', gap: '8px',
-    pointerEvents: 'auto'
-  });
-  const spLabel = document.createElement('span'); spLabel.textContent='Speed'; spLabel.style.fontSize='12px'; spLabel.style.opacity='0.8';
-  const spVal = document.createElement('span'); spVal.style.fontSize='12px'; spVal.style.opacity='0.7';
-  const sp = document.createElement('input'); sp.type='range'; sp.min='0.2'; sp.max='1.6'; sp.step='0.05'; sp.value=String(speedFactor); sp.style.width='140px';
-  ;['pointerdown','pointermove','pointerup','click','mousedown','mouseup'].forEach(t=> sp.addEventListener(t, ev=> ev.stopPropagation()));
-  spVal.textContent = `${Math.round(speedFactor*100)}%`;
-  sp.addEventListener('input', ()=>{ speedFactor = Math.max(0.2, Math.min(1.6, parseFloat(sp.value)||1)); spVal.textContent = `${Math.round(speedFactor*100)}%`; panel.dataset.speed = String(speedFactor); });
-  spDock.append(spLabel, sp, spVal);
-  try { hostForDock.appendChild(spDock); } catch {}
-  const updateSpeedVisibility = ()=>{ const zoomed = (sizing?.scale||1) > 1.01; spDock.style.display = zoomed ? 'flex' : 'none'; };
-  // Update on zoom, both immediately and in next frame to absorb scale updates
-  panel.addEventListener('toy-zoom', (ev)=>{ try{ sizing.setZoom(ev?.detail?.zoomed); }catch{} });
-  // Initialize once
-  updateSpeedVisibility();
+
+  /* speed UI moved to bouncer-speed-ui.js */
+
 
   const worldW = ()=> Math.max(1, Math.floor(canvas.clientWidth||0));
   const worldH = ()=> Math.max(1, Math.floor(canvas.clientHeight||0));
