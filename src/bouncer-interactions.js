@@ -6,7 +6,7 @@ import { stepIndexUp, stepIndexDown } from './note-helpers.js';
 import { ensureAudioContext } from './audio-core.js';
 import { triggerInstrument } from './audio-samples.js';
 
-function fireNote(inst, name, toyId){ try{ const ac=ensureAudioContext(); const t=(ac?ac.currentTime:0)+0.0005; triggerInstrument(inst, name, t, 'bouncer', toyId); }catch{} }
+function fireNote(inst, name, toyId){ try{ const ac = ensureAudioContext(); const t = (ac ? ac.currentTime : 0) + 0.0005; triggerInstrument(inst, name, t, toyId); }catch(e){} }
 
 export function installBouncerInteractions({
   panel, canvas, sizing, toWorld, EDGE, physW, physH, ballR, __getSpeed,
@@ -52,8 +52,8 @@ export function installBouncerInteractions({
 
     if (hitBlock){
       tapBlock = hitBlock;
-      // Prepare for potential drag
-      draggingBlock = true; dragBlockRef = hitBlock; dragOffset = { dx: p.x - hitBlock.x, dy: p.y - hitBlock.y };
+      // Prepare for potential drag but don't start yet
+      dragBlockRef = hitBlock; dragOffset = { dx: p.x - hitBlock.x, dy: p.y - hitBlock.y };
       try{ canvas.setPointerCapture(e.pointerId); }catch{}
       e.preventDefault(); return;
     }
@@ -68,6 +68,10 @@ export function installBouncerInteractions({
 
   function onPointerMove(e){
     const p = toWorld(localPoint(e));
+    if (dragBlockRef && !draggingBlock){
+      const dx = p.x - (tapStart?.x||p.x), dy = p.y - (tapStart?.y||p.y);
+      if (Math.abs(dx)+Math.abs(dy) > 3){ draggingBlock = true; }
+    }
     if (draggingBlock && dragBlockRef){
       dragBlockRef.x = Math.round(p.x - dragOffset.dx);
       dragBlockRef.y = Math.round(p.y - dragOffset.dy);
@@ -87,9 +91,18 @@ export function installBouncerInteractions({
     const p = toWorld(localPoint(e));
 
     // Finish block drag or tap on floating cube
+    if (dragBlockRef && !draggingBlock){
+      // treat as tap
+      const t = whichThirdRect(tapBlock||dragBlockRef, p.y);
+      const blk = tapBlock||dragBlockRef;
+      if (t === 'toggle'){ blk.active = !(blk.active!==false); }
+      else if (t === 'up'){ stepIndexUp(blk, (noteList || [])); }
+      else if (t === 'down'){ stepIndexDown(blk, (noteList || [])); }
+      const nm = (noteList||[])[blk.noteIndex||0] || blk.noteName; if(nm) fireNote(instrument, nm, toyId);
+      dragBlockRef = null; tapBlock = null; return; }
     if (draggingBlock){
       const moved = tapMoved;
-      draggingBlock = false; try{ canvas.releasePointerCapture(e.pointerId); }catch{}
+      draggingBlock = false; dragBlockRef = null; try{ canvas.releasePointerCapture(e.pointerId); }catch{}
       if (!moved && tapBlock){
         // Tap semantics on floating cubes: toggle / up / down by thirds
         const t = whichThirdRect(tapBlock, p.y);

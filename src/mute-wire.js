@@ -16,8 +16,19 @@
       btn.addEventListener('click', (e)=>{
         e.stopPropagation();
         const muted = btn.getAttribute('aria-pressed') === 'true';
-        if (!muted){ btn.setAttribute('aria-pressed','true'); btn.setAttribute('data-muted','1'); last = parseInt(rng.value,10)||last||100; rng.value='0'; rng.dispatchEvent(new Event('input', { bubbles:true })); dispatchVol(0); }
-        else { btn.setAttribute('aria-pressed','false'); btn.removeAttribute('data-muted'); const restore = String(Math.max(0, Math.min(100, last||100))); rng.value=restore; rng.dispatchEvent(new Event('input', { bubbles:true })); dispatchVol(restore); }
+        if (!muted){
+          btn.setAttribute('aria-pressed','true');
+          rng.dataset._preMute = String(last);
+          rng.value = '0';
+          rng.dispatchEvent(new Event('input', { bubbles:true }));
+          dispatchVol(0);
+        } else {
+          btn.setAttribute('aria-pressed','false');
+          const restore = parseInt(rng.dataset._preMute||last,10)||last||100;
+          rng.value = String(restore);
+          rng.dispatchEvent(new Event('input', { bubbles:true }));
+          dispatchVol(restore);
+        }
       });
     }catch{}
   }
