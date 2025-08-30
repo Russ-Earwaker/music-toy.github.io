@@ -1,5 +1,5 @@
 /* Extracted from bouncer.main.js (behavior-preserving) */
-export function computeLaunchVelocity(hx, hy, px, py, worldW, worldH, getLoopInfo, speedFactor){
+export function computeLaunchVelocity(hx, hy, px, py, worldW, worldH, getLoopInfo, speedFactor, EDGE = 0) {
   const dx = (px - hx), dy = (py - hy);
   const dist = Math.hypot(dx, dy) || 1;
   let ux = dx / dist, uy = dy / dist;

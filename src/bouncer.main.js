@@ -244,7 +244,7 @@ if (draggingHandle){
       // compute launch from handle to current pointer
       const hsx = handle.x, hsy = handle.y;
       const px = (dragCurr?.x ?? hsx), py = (dragCurr?.y ?? hsy);
-      const vel = computeLaunchVelocity(hsx, hsy, px, py, worldW, worldH, getLoopInfo, speedFactor);
+      const vel = computeLaunchVelocity(hsx, hsy, px, py, worldW, worldH, getLoopInfo, speedFactor, EDGE);
       const vx = vel.vx, vy = vel.vy;
       lastLaunch = { x: hsx, y: hsy, vx, vy, r: ballR() };
       try{
