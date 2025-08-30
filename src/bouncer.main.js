@@ -15,6 +15,8 @@ import { computeLaunchVelocity, updateLaunchBaseline, setSpawnSpeedFromBallSpeed
 import { localPoint as __localPoint } from './bouncer-pointer.js';
 import { installSpeedUI } from './bouncer-speed-ui.js';
 import { installAdvancedCubeUI } from './bouncer-adv-ui.js';
+import { installBouncerOSD } from './bouncer-osd.js';
+import { initBouncerPhysWorld } from './bouncer-physworld.js';
 const noteValue = (list, idx)=> list[Math.max(0, Math.min(list.length-1, (idx|0)))];
 const BOUNCER_BARS_PER_LIFE = 1;
 const MAX_SPEED = 700, LAUNCH_K = 0.9;
@@ -36,6 +38,9 @@ export function createBouncer(selector){
   try{ canvas.removeAttribute('data-lock-scale'); canvas.style.transform=''; }catch{};
   const ctx = canvas.getContext('2d', { alpha:false });
   const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true });
+
+  // Physics world scaffold (dynamic = no behaviour change)
+  const __phys = initBouncerPhysWorld(panel, canvas, sizing, { mode: 'dynamic' });
   // Fixed-physics world: capture once and keep constant across modes
   let PHYS_W = 0, PHYS_H = 0;
   const physW = ()=> (PHYS_W || worldW());
@@ -88,7 +93,10 @@ export function createBouncer(selector){
   let tapCand=null, tapStart=null, tapMoved=false;
   let lastLaunch=null, launchPhase=0, nextLaunchAt=null, prevNow=0, ball=null;
   let lastCanvasW=0, lastCanvasH=0;
-  let visQ = []; const fx = createImpactFX(); let lastScale = sizing.scale||1;
+  let visQ = []; const fx = createImpactFX()
+  // Debug OSD (toggle with globalThis.BOUNCER_DIAG = true)
+  try{ installBouncerOSD(panel, sizing, (()=>speedFactor), ()=>ball, ()=>getLaunchDiag?.()); }catch{}
+; let lastScale = sizing.scale||1;
 
   // edge controllers + flash
   let edgeControllers = []; const edgeFlash = { left:0, right:0, top:0, bot:0 };
