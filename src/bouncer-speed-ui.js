@@ -1,5 +1,5 @@
 /* Speed control UI — mounts in header, Advanced only */
-export function installSpeedUI(panel, sizing, initial=0.60){
+export function installSpeedUI(panel, sizing, initial=1.00){
   let speedFactor = initial;
 
   // Build compact header control
@@ -17,11 +17,13 @@ export function installSpeedUI(panel, sizing, initial=0.60){
   const spVal = document.createElement('span');
   spVal.style.fontSize = '12px';
   spVal.style.opacity = '0.7';
+  spVal.style.width = '44px';
+  spVal.style.textAlign = 'right';
 
   const sp = document.createElement('input');
   sp.type = 'range';
   sp.min = '0.20'; sp.max = '1.60'; sp.step = '0.05';
-  sp.value = String(speedFactor);
+  sp.value = String(speedFactor.toFixed(2));
   sp.style.width = '120px';
 
   ['pointerdown','pointermove','pointerup','click','mousedown','touchstart','touchmove','touchend'].forEach(t=> {

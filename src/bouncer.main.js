@@ -52,7 +52,7 @@ export function createBouncer(selector){
   }
   requestAnimationFrame(__tickOSD); /*OSD_DEBUG*/
 
-  const __getSpeed = installSpeedUI(panel, sizing, parseFloat((panel?.dataset?.speed)||'0.60'));
+  const __getSpeed = installSpeedUI(panel, sizing, parseFloat((panel?.dataset?.speed)||'1.00'));
 
 
   /* speed UI moved to bouncer-speed-ui.js */
@@ -193,7 +193,7 @@ function rescaleAll(fx=1, fy=1){
         // Align spawn speed to current active ball speed
     try{ if (ball){ const vmag = Math.hypot(ball.vx||0, ball.vy||0); setSpawnSpeedFromBallSpeed(vmag, (typeof __getSpeed==='function')?__getSpeed():((typeof speedFactor!=='undefined')?speedFactor:1.0)); } }catch{}
     // Update spawn baseline as a fallback
-    try{ updateLaunchBaseline(worldW, worldH, EDGE); }catch{}
+    
   }catch{}
  ball.r = ballR();
       const br = ball.r;
@@ -268,7 +268,9 @@ if (draggingHandle){
       // compute launch from handle to current pointer
       const hsx = handle.x, hsy = handle.y;
       const px = (dragCurr?.x ?? hsx), py = (dragCurr?.y ?? hsy);
-      const vel = computeLaunchVelocity(hsx, hsy, px, py, worldW, worldH, getLoopInfo, __getSpeed(), EDGE);
+      const __adv = panel.classList.contains('toy-zoomed') || !!panel.closest('#zoom-overlay');
+      const __sf = __adv ? __getSpeed() : 1.0;
+      const vel = computeLaunchVelocity(hsx, hsy, px, py, worldW, worldH, getLoopInfo, __sf, EDGE);
       const vx = vel.vx, vy = vel.vy;
       lastLaunch = { x: hsx, y: hsy, vx, vy, r: ballR() };
       try{
