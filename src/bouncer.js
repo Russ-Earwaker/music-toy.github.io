@@ -35,7 +35,7 @@ function computeLaunchVelocity(hx, hy, px, py, worldW, worldH, getLoopInfo, spee
   const basePPF = (diag / (FPS * barLen));
   const sf = Math.max(0.2, Math.min(1.6, speedFactor || 1));
   let desiredPPF = Math.min(8.0, Math.max(0.4, basePPF * sf));
-  desiredPPF *= 4.0; // keep prior global boost so it feels lively
+  desiredPPF *= 5.0; // keep prior global boost so it feels lively
   return { vx: ux * desiredPPF, vy: uy * desiredPPF };
 }
 
@@ -78,12 +78,12 @@ export function createBouncer(selector){
   // Initialize once
   updateSpeedVisibility();
 
-  const worldW = ()=> Math.max(1, Math.floor(canvas.getBoundingClientRect().width||canvas.clientWidth||0));
-  const worldH = ()=> Math.max(1, Math.floor(canvas.getBoundingClientRect().height||canvas.clientHeight||0));
+  const worldW = ()=> Math.max(1, Math.floor(canvas.clientWidth||0));
+  const worldH = ()=> Math.max(1, Math.floor(canvas.clientHeight||0));
   // board zoom scaling based on visual width ratio (like Rippler)
   let __baseAttrW = 0;
   function rectScale(){
-    const w = canvas.width || 0; // device-pixel width after DPR & board zoom via utils.js
+    const w = canvas.clientWidth || 0; // use CSS width to avoid double-scaling under zoom
     if (!__baseAttrW && w>0) __baseAttrW = w;
     return (__baseAttrW>0 && w>0) ? (w/__baseAttrW) : 1;
   }
@@ -93,6 +93,7 @@ export function createBouncer(selector){
 
   // interaction state
   let handle = { x: worldW()*0.22, y: worldH()*0.5 };
+  handle._fx = 0.22; handle._fy = 0.5;
   let draggingHandle=false, dragStart=null, dragCurr=null;
   let draggingBlock=false, dragBlockRef=null, dragOffset={dx:0,dy:0};
   let zoomDragCand=null, zoomDragStart=null, zoomTapT=null;
@@ -109,7 +110,8 @@ export function createBouncer(selector){
   const N_BLOCKS = 4;
   let blocks = Array.from({length:N_BLOCKS}, ()=>({ x:EDGE, y:EDGE, w:blockSize(), h:blockSize(), noteIndex:0, active:true, flash:0, lastHitAT:0 }));
 
-// --- maintain fractional anchors for stable layout across zoom ---
+// --- anchor-based sizing for blocks & handle (fractions of world size) ---
+function syncHandleAnchor(){ try{ const w=worldW(), h=worldH(); if (w>0) handle._fx = handle.x / w; if (h>0) handle._fy = handle.y / h; }catch{} }
 function syncAnchorsFromBlocks(){
   const w = worldW(), h = worldH();
   for (const b of blocks){
@@ -122,18 +124,16 @@ function syncAnchorsFromBlocks(){
 function syncBlocksFromAnchors(){
   const w = worldW(), h = worldH();
   const br = (typeof ballR==='function'? ballR(): (ballR||0));
-  const minW = Math.max(EDGE*2, Math.round(0.08 * w)); // avoid vanishing blocks
-  const minH = Math.max(EDGE*2, Math.round(0.08 * h));
   for (const b of blocks){
-    const fx = (b._fx ?? (b.x / (w||1)));
-    const fy = (b._fy ?? (b.y / (h||1)));
-    const fw = (b._fw ?? (b.w / (w||1)));
-    const fh = (b._fh ?? (b.h / (h||1)));
-    b.w = Math.max(minW, Math.round(fw * w));
-    b.h = Math.max(minH, Math.round(fh * h));
+    const fx = (b._fx ?? (w? b.x / w : 0));
+    const fy = (b._fy ?? (h? b.y / h : 0));
+    const fw = (b._fw ?? (w? b.w / w : 0));
+    const fh = (b._fh ?? (h? b.h / h : 0));
+    b.w = Math.max(EDGE*2, Math.round(fw * w));
+    b.h = Math.max(EDGE*2, Math.round(fh * h));
     b.x = Math.round(fx * w);
     b.y = Math.round(fy * h);
-    // keep inside frame
+    // keep inside frame (account for ball radius so edges remain usable)
     const eL = EDGE + br, eT = EDGE + br, eR = w - EDGE - br, eB = h - EDGE - br;
     if (b.x < eL) b.x = eL;
     if (b.y < eT) b.y = eT;
@@ -150,20 +150,18 @@ function syncBlocksFromAnchors(){
     for (let i=0;i<blocks.length;i++) blocks[i].noteIndex = pal[i % pal.length];
     randomizeRects(blocks, {x:bx,y:by,w:bw,h:bh}, EDGE);
     try{syncAnchorsFromBlocks();}catch{}
-    syncAnchorsFromBlocks();
   })();
 
   function ensureEdgeControllers(w,h){
-    if (!edgeControllers.length){
-      edgeControllers = makeEdgeControllers(w, h, blockSize(), EDGE, noteList);
-    }else{
-      const s=blockSize(), half=s/2; const map=mapControllersByEdge(edgeControllers);
-      if (map.left ){ map.left .x=EDGE;        map.left .y=h/2-half; map.left .w=s; map.left .h=s; }
-      if (map.right){ map.right.x=w-EDGE-s;   map.right.y=h/2-half; map.right.w=s; map.right.h=s; }
-      if (map.top  ){ map.top  .x=w/2-half;   map.top  .y=EDGE;     map.top  .w=s; map.top  .h=s; }
-      if (map.bot  ){ map.bot  .x=w/2-half;   map.bot  .y=h-EDGE-s; map.bot  .w=s; map.bot  .h=s; }
-    }
-  }
+  if (!edgeControllers.length){ edgeControllers = makeEdgeControllers(w, h, blockSize(), EDGE, noteList); edgeControllers.__w=w; edgeControllers.__h=h; return; }
+  if (edgeControllers.__w!==w || edgeControllers.__h!==h){ edgeControllers = makeEdgeControllers(w, h, blockSize(), EDGE, noteList); edgeControllers.__w=w; edgeControllers.__h=h; return; }
+  try{ const s=blockSize(), half=s/2; const map=mapControllersByEdge(edgeControllers);
+    if (map.left ){ map.left .x=EDGE;      map.left .y=h/2-half; map.left .w=s; map.left .h=s; }
+    if (map.right){ map.right.x=w-EDGE-s; map.right.y=h/2-half; map.right.w=s; map.right.h=s; }
+    if (map.top  ){ map.top  .x=w/2-half; map.top  .y=EDGE;     map.top  .w=s; map.top  .h=s; }
+    if (map.bot  ){ map.bot  .x=w/2-half; map.bot  .y=h-EDGE-s; map.bot  .w=s; map.bot  .h=s; }
+  }catch{}
+}
 
   // toy controls
   function doRandom(){
@@ -184,22 +182,51 @@ function syncBlocksFromAnchors(){
   panel.addEventListener('toy-random', doRandom);
   panel.addEventListener('toy-reset', doReset);
   panel.addEventListener('toy-clear', doReset);
-  panel.addEventListener('toy-zoom', (e)=>{ sizing.setZoom && sizing.setZoom(!!e.detail.zoomed); const s=sizing.scale||1; rescaleAll(s/lastScale); lastScale=s; });
+  panel.addEventListener('toy-zoom', (e)=>{ try{ sizing.setZoom && sizing.setZoom(!!(e?.detail?.zoomed)); updateSpeedVisibility(); }catch{} });
 
   
-
-function rescaleAll(kx, ky){
-  // Recompute from normalized anchors; ignore kx/ky
+function rescaleAll(fx=1, fy=1){
+    try{
+    if (lastLaunch){ lastLaunch.x *= fx; lastLaunch.y *= fy; }
+  }catch{}
+// Recompute from normalized anchors; ignore incremental multipliers
   syncBlocksFromAnchors();
+  // Handle position from anchors
+  try{
+    const w = worldW(), h = worldH();
+    const hfx = (typeof handle._fx==='number') ? handle._fx : (w? handle.x/w : 0.22);
+    const hfy = (typeof handle._fy==='number') ? handle._fy : (h? handle.y/h : 0.5);
+    handle.x = Math.round(hfx * w);
+    handle.y = Math.round(hfy * h);
+    syncHandleAnchor();
+  }catch{}
+  // Rebuild/position edge controllers to current world
+  try{ ensureEdgeControllers(worldW(), worldH()); }catch{}
+  // Update ball radius and keep inside frame, but do not translate by fx/fy
+  try{
+    if (ball){
+        
+    ball.x *= fx; ball.y *= fy;
+      ball.r = ballR();
+      const br = ball.r;
+      const eL = EDGE + br, eT = EDGE + br, eR = worldW() - EDGE - br, eB = worldH() - EDGE - br;
+      if (ball.x < eL) ball.x = eL;
+      if (ball.y < eT) ball.y = eT;
+      if (ball.x > eR) ball.x = eR;
+      if (ball.y > eB) ball.y = eB;
+    }
+  }catch{}
 }
-
 
   // interactions (tap-to-toggle in standard view; thirds edit in zoom)
 
   function localPoint(evt){
     const r = canvas.getBoundingClientRect();
-    // CSS-pixel coords to match worldW/worldH
-    return { x: (evt.clientX - r.left), y: (evt.clientY - r.top) };
+    const cssW = canvas.clientWidth || r.width || 1;
+    const cssH = canvas.clientHeight || r.height || 1;
+    const scaleX = (r.width||cssW) / cssW;
+    const scaleY = (r.height||cssH) / cssH;
+    return { x: (evt.clientX - r.left) / (scaleX||1), y: (evt.clientY - r.top) / (scaleY||1) };
   }
   
   
@@ -243,7 +270,7 @@ function rescaleAll(kx, ky){
         e.preventDefault(); return;
       }
     }
-    handle.x = p.x; handle.y = p.y;
+    handle.x = p.x; handle.y = p.y; syncHandleAnchor();
     draggingHandle = true; dragStart = { x: handle.x, y: handle.y }; dragCurr = p;
     try { canvas.setPointerCapture(e.pointerId); } catch {}
     e.preventDefault();
@@ -251,7 +278,9 @@ function rescaleAll(kx, ky){
 canvas.addEventListener('pointermove', (e)=>{
     const p=localPoint(e);
     if (draggingHandle){ dragCurr=p; return; }
+    if (zoomed && zoomDragCand){ const dx=p.x-zoomDragStart.x, dy=p.y-zoomDragStart.y; if (Math.hypot(dx,dy)>6 && zoomDragCand.active){ draggingBlock=true; dragBlockRef=zoomDragCand; dragOffset={dx:p.x-zoomDragCand.x, dy:p.y-zoomDragCand.y}; zoomDragCand=null; } }
     if (!draggingBlock && tapCand){ const dx=p.x-tapStart.x, dy=p.y-tapStart.y; if ((dx*dx+dy*dy)>16){ draggingBlock=true; tapMoved=true; } if (draggingBlock && dragBlockRef){ dragBlockRef.x=Math.round(p.x-dragOffset.dx); dragBlockRef.y=Math.round(p.y-dragOffset.dy); } return; }
+    try{ const w=worldW(), h=worldH(); dragBlockRef._fx = dragBlockRef.x/(w||1); dragBlockRef._fy = dragBlockRef.y/(h||1); dragBlockRef._fw = dragBlockRef.w/(w||1); dragBlockRef._fh = dragBlockRef.h/(h||1);}catch{}
     if (draggingBlock && dragBlockRef){ dragBlockRef.x=Math.round(p.x-dragOffset.dx); dragBlockRef.y=Math.round(p.y-dragOffset.dy); return; }
   });
   function endDrag(e){
@@ -282,26 +311,28 @@ if (draggingHandle){
   function setBallOut(o){ ball=o; }
 
   // draw loop
-  function draw(){
-    
-// CSS-px drawing: map device buffer to CSS space for consistent physics/hit-tests
-const rect = canvas.getBoundingClientRect();
-const cssW = Math.max(1, Math.round(rect.width || canvas.clientWidth || 0));
-const cssH = Math.max(1, Math.round(rect.height || canvas.clientHeight || 0));
+  
+function draw(){
+    const sNow = sizing.scale || 1;
+    // Ignore pure zoom scale for world coordinates; only respond to actual CSS size changes below
+    lastScale = sNow;
 
-const cs = resizeCanvasForDPR(canvas, ctx);
-const sx = (cs.width / cssW), sy = (cs.height / cssH);
-try { ctx.setTransform(sx, 0, 0, sy, 0, 0); } catch {}
+    // Use CSS px for world/draw; map device buffer via DPR transform
+    const cssW = Math.max(1, Math.round(canvas.clientWidth || 0));
+    const cssH = Math.max(1, Math.round(canvas.clientHeight || 0));
 
-if (!lastCanvasW) { lastCanvasW = cssW; lastCanvasH = cssH; }
-const kx = (cssW && lastCanvasW ? cssW/lastCanvasW : 1);
-const ky = (cssH && lastCanvasH ? cssH/lastCanvasH : 1);
-if (Math.abs(kx-1) > 0.001 || Math.abs(ky-1) > 0.001){ rescaleAll(kx, ky); lastCanvasW = cssW; lastCanvasH = cssH; }
+    const cs = resizeCanvasForDPR(canvas, ctx);
+    const sx = (cs.width / cssW), sy = (cs.height / cssH);
+    try { ctx.setTransform(sx, 0, 0, sy, 0, 0); } catch {}
 
-const w = cssW, h = cssH;
-ctx.fillStyle='#0b0f16'; ctx.fillRect(0,0,w,h);
+    if (!lastCanvasW) { lastCanvasW = cssW; lastCanvasH = cssH; }
+    const kx = (cssW && lastCanvasW ? cssW/lastCanvasW : 1);
+    const ky = (cssH && lastCanvasH ? cssH/lastCanvasH : 1);
+    if (Math.abs(kx-1) > 0.001 || Math.abs(ky-1) > 0.001){ rescaleAll(kx, ky); lastCanvasW = cssW; lastCanvasH = cssH; }
 
-    ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.lineWidth=2; ctx.strokeRect(EDGE,EDGE,w-EDGE*2,h-EDGE*2);
+    const w = cssW, h = cssH;
+    ctx.fillStyle='#0b0f16'; ctx.fillRect(0,0,w,h);
+ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.lineWidth=2; ctx.strokeRect(EDGE,EDGE,w-EDGE*2,h-EDGE*2);
 
     ensureEdgeControllers(w,h);
     for (const c of edgeControllers){ if (c){ c.w=blockSize(); c.h=blockSize(); } }
@@ -327,8 +358,8 @@ ctx.fillStyle='#0b0f16'; ctx.fillRect(0,0,w,h);
     if (ball){ ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2); ctx.fillStyle='white'; ctx.globalAlpha=0.9; ctx.fill(); ctx.globalAlpha=1; }
 
     const S = {
-      ball, blocks, edgeControllers, EDGE, worldW, worldH, ballR, blockSize,
-      edgeFlash, mapControllersByEdge, ensureAudioContext, noteValue, noteList, instrument, fx,
+      ball, blocks, edgeControllers, EDGE, worldW, worldH, ballR, blockSize, mapControllersByEdge,
+      edgeFlash, ensureAudioContext, noteValue, noteList, instrument, fx,
       lastLaunch, nextLaunchAt, lastAT: prevNow, flashEdge, handle, spawnBallFrom, getLoopInfo,
       triggerInstrument: (i,n,t)=>triggerInstrument(i,n,t,'bouncer', toyId),
       BOUNCER_BARS_PER_LIFE, setNextLaunchAt, setBallOut, visQ

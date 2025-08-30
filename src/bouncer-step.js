@@ -50,11 +50,6 @@ export function stepBouncer(S, nowAT){
     S.ball = nb;
     try {
       const L=S.EDGE, T=S.EDGE, R=S.worldW()-S.EDGE, B=S.worldH()-S.EDGE;
-      const __br = (typeof S.ballR==='function'? S.ballR(): (S.ballR||0));
-      const eL = L + __br, eT = T + __br, eR = R - __br, eB = B - __br;
-        
-// effective bounds account for ball radius
-
       const rr = S.ball.r || S.ballR();
       if (S.ball.x < L+rr+2) S.ball.x = L+rr+2;
       if (S.ball.x > R-rr-2) S.ball.x = R-rr-2;
@@ -81,8 +76,6 @@ export function stepBouncer(S, nowAT){
     else {
       const eps = 0.001;
       const L=S.EDGE, T=S.EDGE, R=S.worldW()-S.EDGE, B=S.worldH()-S.EDGE;
-      const __br = (typeof S.ballR==='function'? S.ballR(): (S.ballR||0));
-      const eL = L + __br, eT = T + __br, eR = R - __br, eB = B - __br;
       const rr = S.ball.r || S.ballR();
       const blocks = S.blocks || [];
       let rem = 1.0, iterations = 0, maxIter = 4;
@@ -100,10 +93,10 @@ export function stepBouncer(S, nowAT){
 
         // World bounds (as rect slabs)
         const wrects = [
-          { x: -1e6, y: eT,   w: (eL - (-1e6)), h: eB-eT,   nx:  1, ny:  0 },
-          { x: eR,    y: eT,   w: 1e6,          h: eB-eT,   nx: -1, ny:  0 },
-          { x: eL,    y:-1e6, w: eR-eL,          h:(eT-(-1e6)), nx: 0, ny: 1 },
-          { x: eL,    y: eB,   w: eR-eL,          h: 1e6,   nx:  0, ny: -1 },
+          { x: -1e6, y: T,   w: (L - (-1e6)), h: B-T,   nx:  1, ny:  0 },
+          { x: R,    y: T,   w: 1e6,          h: B-T,   nx: -1, ny:  0 },
+          { x: L,    y:-1e6, w: R-L,          h:(T-(-1e6)), nx: 0, ny: 1 },
+          { x: L,    y: B,   w: R-L,          h: 1e6,   nx:  0, ny: -1 },
         ];
         for (let wi=0; wi<wrects.length; wi++){
           const wr = wrects[wi];
