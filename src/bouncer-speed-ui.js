@@ -1,5 +1,5 @@
-// Extracted speed control UI from bouncer.main.js (behavior-preserving)
-export function initSpeedUI(panel, initial=0.60){
+// Extracted from bouncer.main.js (behavior-preserving)
+export function installSpeedUI(panel, sizing, initial=1.0){
   let speedFactor = initial;
 
         // Speed control dock (appears only in zoom), placed under the canvas so it never overlaps play space
@@ -23,15 +23,5 @@ export function initSpeedUI(panel, initial=0.60){
   panel.addEventListener('toy-zoom', (ev)=>{ try{ sizing.setZoom(ev?.detail?.zoomed); }catch{} });
   // Initialize once
   updateSpeedVisibility();
-  return {
-    get value(){ return speedFactor; },
-    set value(v){
-      speedFactor = Math.max(0.2, Math.min(1.6, Number(v)||1));
-      sp.value = String(speedFactor);
-      spVal.textContent = `${Math.round(speedFactor*100)}%`;
-      panel.dataset.speed = String(speedFactor);
-    },
-    update: updateSpeedVisibility,
-    dock: spDock
-  };
+  return () => speedFactor; // getter function
 }
