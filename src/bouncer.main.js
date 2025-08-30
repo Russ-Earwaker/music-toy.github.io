@@ -260,13 +260,16 @@ export function createBouncer(selector){
 function setNextLaunchAt(t){ nextLaunchAt = t; }
   function setBallOut(o){ ball = o; }
 
-    const _int = installBouncerInteractions({ panel, canvas, sizing, toWorld, EDGE, physW, physH, ballR, __getSpeed,
+    const __aim = { active:false, sx:0, sy:0, cx:0, cy:0 };
+  function __setAim(a){ try{ if (a && typeof a==='object'){ Object.assign(__aim, a); } }catch(e){} }
+
+  const _int = installBouncerInteractions({ setAim: __setAim, canvas, sizing, toWorld, EDGE, physW, physH, ballR, __getSpeed,
     blocks, edgeControllers, handle, spawnBallFrom, setNextLaunchAt, setBallOut, instrument, toyId, noteList });
 // draw loop
   
   lockPhysWorld();
   // draw loop moved to bouncer-render.js
-const draw = createBouncerDraw({ lockPhysWorld, 
+const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld, 
   canvas, ctx, sizing, resizeCanvasForDPR, renderScale, physW, physH, EDGE,
   ensureEdgeControllers: (w,h)=>ensureEdgeControllers(w,h), edgeControllers,
   blockSize, particles, blocks, handle, drawEdgeBondLines, ensureAudioContext, noteList, drawBlocksSection,

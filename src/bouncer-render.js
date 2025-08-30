@@ -12,6 +12,7 @@ export function createBouncerDraw(env){
   } = env;
 
   let lastCssW = 0, lastCssH = 0;
+  const ballTrail = [];
   let prevNow = 0;
   let didInit = false;
 
@@ -68,6 +69,15 @@ export function createBouncerDraw(env){
       drawBlocksSection(ctx, edgeControllers, 0, 0, null, 1, noteList, sizing, null, null, now2);
     }catch{}
 
+    // Draw aim line
+    try{
+      const A = env.getAim ? env.getAim() : null;
+      if (A && A.active){
+        ctx.beginPath(); ctx.moveTo(A.sx, A.sy); ctx.lineTo(A.cx, A.cy);
+        ctx.globalAlpha = 0.7; ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1.5; ctx.setLineDash([5,4]); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+      }
+    }catch{}
+
     // Draw handle (ball source)
     try{
       if (handle){
@@ -77,6 +87,26 @@ export function createBouncerDraw(env){
         ctx.strokeStyle = 'rgba(255,255,255,0.6)';
         ctx.lineWidth = 1;
         ctx.stroke();
+      }
+    }catch{}
+
+    // Update trail
+    try{
+      const b = getBall ? getBall() : env.ball;
+      if (b){ ballTrail.push({x:b.x, y:b.y}); if (ballTrail.length>48) ballTrail.shift(); }
+    }catch{}
+
+    // Draw trail
+    try{
+      if (ballTrail.length>1){
+        ctx.beginPath();
+        for (let i=1;i<ballTrail.length;i++){
+          const a=i/(ballTrail.length-1);
+          ctx.globalAlpha = 0.15 + 0.35*a;
+          ctx.moveTo(ballTrail[i-1].x, ballTrail[i-1].y);
+          ctx.lineTo(ballTrail[i].x, ballTrail[i].y);
+        }
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth=1; ctx.stroke(); ctx.globalAlpha = 1;
       }
     }catch{}
 
@@ -93,8 +123,28 @@ export function createBouncerDraw(env){
       }
     }catch{}
 
-    // Edge decorations (tabs/caps, flashes handled inside)
-    try{ drawEdgeDecorations(ctx, edgeControllers, EDGE, physW(), physH()); }catch{}
+    // Edge decorations
+    
+
+    // Edge flash overlay
+    try{
+      if (edgeFlash){
+        const w = physW(), h = physH();
+        const f = edgeFlash;
+        const lw = Math.max(1, EDGE*0.6);
+        ctx.save();
+        ctx.lineWidth = lw;
+        ctx.strokeStyle = 'rgba(255,140,0,0.85)';
+        if (f.top>0){ ctx.globalAlpha = f.top; ctx.beginPath(); ctx.moveTo(EDGE, EDGE); ctx.lineTo(w-EDGE, EDGE); ctx.stroke(); f.top = Math.max(0, f.top - 0.08); }
+        if (f.bot>0){ ctx.globalAlpha = f.bot; ctx.beginPath(); ctx.moveTo(EDGE, h-EDGE); ctx.lineTo(w-EDGE, h-EDGE); ctx.stroke(); f.bot = Math.max(0, f.bot - 0.08); }
+        if (f.left>0){ ctx.globalAlpha = f.left; ctx.beginPath(); ctx.moveTo(EDGE, EDGE); ctx.lineTo(EDGE, h-EDGE); ctx.stroke(); f.left = Math.max(0, f.left - 0.08); }
+        if (f.right>0){ ctx.globalAlpha = f.right; ctx.beginPath(); ctx.moveTo(w-EDGE, EDGE); ctx.lineTo(w-EDGE, h-EDGE); ctx.stroke(); f.right = Math.max(0, f.right - 0.08); }
+        ctx.restore(); ctx.globalAlpha=1;
+      }
+    }catch{}
+    
+    // Continue
+    
 
     // Step physics & schedule
     try{

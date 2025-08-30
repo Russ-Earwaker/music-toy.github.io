@@ -3,12 +3,16 @@
 import { whichThirdRect } from './toyhelpers.js';
 import { handleEdgeControllerEdit } from './bouncer-edges.js';
 import { stepIndexUp, stepIndexDown } from './note-helpers.js';
+import { ensureAudioContext } from './audio-core.js';
+import { triggerInstrument } from './audio-samples.js';
+
+function fireNote(inst, name, toyId){ try{ const ac=ensureAudioContext(); const t=(ac?ac.currentTime:0)+0.0005; triggerInstrument(inst, name, t, 'bouncer', toyId); }catch{} }
 
 export function installBouncerInteractions({
   panel, canvas, sizing, toWorld, EDGE, physW, physH, ballR, __getSpeed,
   blocks, edgeControllers, handle,
   spawnBallFrom, setNextLaunchAt, setBallOut,
-  instrument, toyId, noteList
+  instrument, toyId, noteList, setAim
 }){
   let draggingBlock = false, dragBlockRef = null, dragOffset = {dx:0, dy:0};
   let draggingHandle = false, aimStart = null, aimCurr = null;
@@ -55,7 +59,7 @@ export function installBouncerInteractions({
     }
 
     // Click & drag anywhere to launch: anchor handle at start, leave it there
-    aimStart = { x: p.x, y: p.y };
+    aimStart = { x: p.x, y: p.y }; setAim && setAim({ active:true, sx:p.x, sy:p.y, cx:p.x, cy:p.y });
     handle.x = Math.round(p.x); handle.y = Math.round(p.y);
     draggingHandle = true; aimCurr = p;
     try{ canvas.setPointerCapture(e.pointerId); }catch{}
@@ -71,7 +75,7 @@ export function installBouncerInteractions({
       return;
     }
     if (draggingHandle){
-      aimCurr = p; return;
+      aimCurr = p; setAim && setAim({ active:true, cx:p.x, cy:p.y }); return;
     }
     if (!tapMoved && tapStart){
       const dx = p.x - tapStart.x, dy = p.y - tapStart.y;
@@ -92,6 +96,7 @@ export function installBouncerInteractions({
         if (t === 'toggle'){ tapBlock.active = !(tapBlock.active!==false); }
         else if (t === 'up'){ stepIndexUp(tapBlock, noteList || []); }
         else if (t === 'down'){ stepIndexDown(tapBlock, noteList || []); }
+        const nm = (noteList||[])[tapBlock.noteIndex||0] || tapBlock.noteName; if (nm) fireNote(instrument, nm, toyId);
       }
       tapBlock = null; return;
     }
@@ -107,7 +112,7 @@ export function installBouncerInteractions({
       const hsx = aimStart.x, hsy = aimStart.y;
       const vxvy = velFrom(hsx, hsy, p.x, p.y);
       spawnBallFrom({ x: hsx, y: hsy, vx: vxvy.vx, vy: vxvy.vy, r: (ballR?ballR():6) });
-      draggingHandle = false; aimStart = null; aimCurr = null;
+      draggingHandle = false; aimStart = null; aimCurr = null; setAim && setAim({ active:false });
       try{ canvas.releasePointerCapture(e.pointerId); }catch{}; return;
     }
   }

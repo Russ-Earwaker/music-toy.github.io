@@ -32,8 +32,7 @@ export function createBouncerParticles(getW, getH, { count=280 } = {}){
       p.vx *= damp; p.vy *= damp;
       p.x += p.vx * dt * 60;
       p.y += p.vy * dt * 60;
-      if (p.x < 0) p.x += w; else if (p.x >= w) p.x -= w;
-      if (p.y < 0) p.y += h; else if (p.y >= h) p.y -= h;
+      if (p.x < 0 || p.x >= w || p.y < 0 || p.y >= h){ p.x=p.homeX; p.y=p.homeY; p.vx=0; p.vy=0; p.alpha=0.55; p.tSince=0; }
       p.tSince += dt;
       if (p.tSince > 0.4) p.alpha = Math.max(0, p.alpha - dt*0.6);
       if (p.alpha <= 0){
