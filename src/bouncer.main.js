@@ -9,14 +9,18 @@ import { randomizeRects, EDGE_PAD as EDGE, hitRect, whichThirdRect, drawThirdsGu
 import { drawBlocksSection } from './ripplesynth-blocks.js';
 // board scale via rect baseline (rippler-style)
 import { createImpactFX } from './bouncer-impact.js';
+import { createBouncerDraw } from './bouncer-render.js';
+import { installAdvancedCubeUI } from './bouncer-adv-ui.js';
+import { installBouncerInteractions } from './bouncer-interactions.js';
+import { createBouncerParticles } from './bouncer-particles.js';
 import { getPoliteDensityForToy } from './polite-random.js';
 import { buildPentatonicPalette, processVisQ as processVisQBouncer } from './bouncer-actions.js';
 import { computeLaunchVelocity, updateLaunchBaseline, setSpawnSpeedFromBallSpeed , getLaunchDiag} from './bouncer-geom.js';
 import { localPoint as __localPoint } from './bouncer-pointer.js';
 import { installSpeedUI } from './bouncer-speed-ui.js';
-import { installAdvancedCubeUI } from './bouncer-adv-ui.js';
 import { installBouncerOSD } from './bouncer-osd.js';
 import { initBouncerPhysWorld } from './bouncer-physworld.js';
+import './bouncer-scale.js';
 const noteValue = (list, idx)=> list[Math.max(0, Math.min(list.length-1, (idx|0)))];
 const BOUNCER_BARS_PER_LIFE = 1;
 const MAX_SPEED = 700, LAUNCH_K = 0.9;
@@ -46,11 +50,19 @@ export function createBouncer(selector){
 // Fixed-physics world: capture once and keep constant across modes
   let PHYS_W = 0, PHYS_H = 0;
   const physW = ()=> (PHYS_W || worldW());
+  function lockPhysWorld(){ if (!PHYS_W || !PHYS_H){ PHYS_W = worldW(); PHYS_H = worldH(); } }
   const physH = ()=> (PHYS_H || worldH());
-  function renderScale(){ const w = worldW()||1, h = worldH()||1; return { sx: w/physW(), sy: h/physH() }; }
-  function toWorld(pt){ const {sx,sy}=renderScale(); return { x: pt.x/(sx||1), y: pt.y/(sy||1) }; }
-
-  // On-screen debug (set panel.dataset.debug='1' to enable)
+  
+  function renderScale(){
+    const CW = canvas.width || 1;
+    const CH = canvas.height || 1;
+    return { sx: (CW/physW()), sy: (CH/physH()), tx: 0, ty: 0 };
+  }
+  function toWorld(pt){
+    const { sx, sy } = renderScale();
+    return { x: pt.x / (sx || 1), y: pt.y / (sy || 1) };
+  }
+// On-screen debug (set panel.dataset.debug='1' to enable)
   const __osd = document.createElement('div');
   __osd.style.cssText='position:absolute;left:6px;top:6px;padding:4px 6px;background:rgba(0,0,0,0.4);color:#fff;font:12px/1.3 monospace;z-index:10;border-radius:4px;display:none;pointer-events:none';
   if (panel?.dataset?.debug==='1'){ panel.appendChild(__osd); }
@@ -68,6 +80,10 @@ export function createBouncer(selector){
   requestAnimationFrame(__tickOSD); /*OSD_DEBUG*/
 
   const __getSpeed = installSpeedUI(panel, sizing, parseFloat((panel?.dataset?.speed)||'1.00'));
+  // apply speed changes to queued launch
+  let __speedCache = (__getSpeed?__getSpeed():1);
+  panel.addEventListener('toy-speed', (e)=>{ const ns = (e && e.detail && Number(e.detail.value)) ? e.detail.value : (__getSpeed?__getSpeed():1); const os = __speedCache || 1; const ratio = os ? (ns/os) : 1; __speedCache = ns; try{ if (lastLaunch && Number.isFinite(ratio) && ratio>0){ lastLaunch.vx *= ratio; lastLaunch.vy *= ratio; } }catch{} });
+
 
 
   /* speed UI moved to bouncer-speed-ui.js */
@@ -86,6 +102,9 @@ export function createBouncer(selector){
   const blockSize = ()=> Math.round(BASE_BLOCK_SIZE * worldScaleForSize());
   const cannonR  = ()=> Math.round(BASE_CANNON_R  * worldScaleForSize());
   const ballR    = ()=> Math.round(BASE_BALL_R    * worldScaleForSize());
+  // background particles (polite density)
+  const particles = createBouncerParticles(physW, physH, { count: getPoliteDensityForToy(panel, 240, 640) });
+
 
   // interaction state
   let handle = { x: physW()*0.22, y: physH()*0.5 };
@@ -119,35 +138,6 @@ export function createBouncer(selector){
 
 
 // --- anchor-based sizing for blocks & handle (fractions of world size) ---
-function syncAnchorsFromBlocks(){
-  const w = physW(), h = physH();
-  for (const b of blocks){
-    b._fx = (w>0) ? (b.x / w) : 0;
-    b._fy = (h>0) ? (b.y / h) : 0;
-    b._fw = (w>0) ? (b.w / w) : 0;
-    b._fh = (h>0) ? (b.h / h) : 0;
-  }
-}
-function syncBlocksFromAnchors(){
-  const w = physW(), h = physH();
-  const br = (typeof ballR==='function'? ballR(): (ballR||0));
-  for (const b of blocks){
-    const fx = (b._fx ?? (w? b.x / w : 0));
-    const fy = (b._fy ?? (h? b.y / h : 0));
-    const fw = (b._fw ?? (w? b.w / w : 0));
-    const fh = (b._fh ?? (h? b.h / h : 0));
-    b.w = Math.max(EDGE*2, Math.round(fw * w));
-    b.h = Math.max(EDGE*2, Math.round(fh * h));
-    b.x = Math.round(fx * w);
-    b.y = Math.round(fy * h);
-    // keep inside frame (account for ball radius so edges remain usable)
-    const eL = EDGE + br, eT = EDGE + br, eR = w - EDGE - br, eB = h - EDGE - br;
-    if (b.x < eL) b.x = eL;
-    if (b.y < eT) b.y = eT;
-    if (b.x + b.w > eR) b.x = eR - b.w;
-    if (b.y + b.h > eB) b.y = eB - b.h;
-  }
-}
 
 
   // seed positions + palette
@@ -156,7 +146,7 @@ function syncBlocksFromAnchors(){
     const pal = buildPentatonicPalette(noteList, 'C4', 'minor', 1);
     for (let i=0;i<blocks.length;i++) blocks[i].noteIndex = pal[i % pal.length];
     randomizeRects(blocks, {x:bx,y:by,w:bw,h:bh}, EDGE);
-    try{syncAnchorsFromBlocks();}catch{}
+    try{window.syncAnchorsFromBlocks();}catch{}
   })();
 
   function ensureEdgeControllers(w,h){
@@ -186,7 +176,7 @@ function syncBlocksFromAnchors(){
     const bx = Math.round((w - bw) / 2);
     const by = Math.round((h - bh) / 2);
     randomizeRects(blocks, {x:bx, y:by, w:bw, h:bh}, EDGE);
-    try { syncAnchorsFromBlocks(); } catch {}
+    try { window.syncAnchorsFromBlocks(); } catch {}
     const picks = [];
     if (K >= N) {
       for (let i = 0; i < N; i++) picks.push(i);
@@ -216,12 +206,8 @@ function syncBlocksFromAnchors(){
   panel.addEventListener('toy-zoom', (e)=>{ try{ sizing.setZoom && sizing.setZoom(!!(e?.detail?.zoomed)); updateSpeedVisibility && updateSpeedVisibility(); }catch{} });
 
   
-function rescaleAll(fx=1, fy=1){
-    try{
-    if (lastLaunch && !(PHYS_W && PHYS_H)) { lastLaunch.x *= fx; lastLaunch.y *= fy; }
-  }catch{}
 // Recompute from normalized anchors; ignore incremental multipliers
-  syncBlocksFromAnchors();
+  window.syncBlocksFromAnchors({ blocks, physW, physH });
   // Handle position from anchors
   try{
     const w = physW(), h = physH();
@@ -250,166 +236,62 @@ function rescaleAll(fx=1, fy=1){
       if (ball.y > eB) ball.y = eB;
     }
   }catch{}
-}
 
-  // interactions (tap-to-toggle in standard view; thirds edit in zoom)
   
-  
-  canvas.addEventListener('pointerdown', (e)=>{
-    const p = toWorld(__localPoint(canvas, e));
-    const zoomed = (sizing?.scale || 1) > 1.01;
-    const hit = blocks.find(b => hitRect(p, b));
-    const hitCtrl = edgeControllers.find(b => hitRect(p, b));
-    if (zoomed){
-      if (hit && !hit.fixed){
-        zoomDragCand = hit; zoomDragStart = { x:p.x, y:p.y }; zoomTapT = whichThirdRect(hit, p.y);
-        try { canvas.setPointerCapture(e.pointerId); } catch {}
-        e.preventDefault(); return;
-      }
-      if (hitCtrl){
-        const beforeI = hitCtrl.noteIndex, beforeO = hitCtrl.oct || 4;
-        const ok = handleEdgeControllerEdit(hitCtrl, p.y, whichThirdRect, noteList);
-        if (ok && (hitCtrl.noteIndex !== beforeI || (hitCtrl.oct||4)!==beforeO)){
-          const ac = ensureAudioContext(); const now = (ac?ac.currentTime:0);
-          const nm = noteValue(noteList, hitCtrl.noteIndex);
-          try { triggerInstrument(instrument, nm, now+0.0005, toyId); } catch {}
-        }
-        return;
-      }
-          if (hit && !hit.fixed){ tapCand = hit; tapStart = { x:p.x, y:p.y }; tapMoved=false; dragBlockRef = hit; dragOffset = { dx: p.x - hit.x, dy: p.y - hit.y }; return; }
-    } else {
-      if (hit && !hit.fixed){
-        tapCand = hit; tapStart = { x:p.x, y:p.y }; tapMoved = false;
-        dragBlockRef = hit; dragOffset = { dx: p.x - hit.x, dy: p.y - hit.y };
-        try { canvas.setPointerCapture(e.pointerId); } catch {}
-        e.preventDefault(); return;
-      }
-      if (hitCtrl){
-        hitCtrl.active = !hitCtrl.active;
-        const ac = ensureAudioContext(); const now = (ac?ac.currentTime:0)+0.0005;
-        if (hitCtrl.active){
-          const nm = noteValue(noteList, hitCtrl.noteIndex|0);
-          try { triggerInstrument(instrument, nm, now, toyId); } catch {}
-        }
-        try { canvas.setPointerCapture(e.pointerId); } catch {}
-        e.preventDefault(); return;
-      }
-    }
-    handle.x = p.x; handle.y = p.y; try{ const w=physW(), h=physH(); const iw = Math.max(1, (w||0) - EDGE*2), ih = Math.max(1, (h||0) - EDGE*2);
-      handle._fx = Math.max(0, Math.min(1, (handle.x-EDGE)/iw));
-      handle._fy = Math.max(0, Math.min(1, (handle.y-EDGE)/ih)); }catch{};
-    draggingHandle = true; dragStart = { x: handle.x, y: handle.y }; dragCurr = p;
-    try { canvas.setPointerCapture(e.pointerId); } catch {}
-    e.preventDefault();
-  });
-canvas.addEventListener('pointermove', (e)=>{
-    const p=toWorld(__localPoint(canvas, e));
-    if (draggingHandle){ dragCurr=p; return; }
-    if (!draggingBlock && tapCand){ const dx=p.x-tapStart.x, dy=p.y-tapStart.y; if ((dx*dx+dy*dy)>16){ draggingBlock=true; tapMoved=true; } if (draggingBlock && dragBlockRef){ dragBlockRef.x=Math.round(p.x-dragOffset.dx); dragBlockRef.y=Math.round(p.y-dragOffset.dy); } return; }
-    try{ const w=physW(), h=physH(); dragBlockRef._fx = dragBlockRef.x/(w||1); dragBlockRef._fy = dragBlockRef.y/(h||1); dragBlockRef._fw = dragBlockRef.w/(w||1); dragBlockRef._fh = dragBlockRef.h/(h||1);}catch{}
-    if (draggingBlock && dragBlockRef){ dragBlockRef.x=Math.round(p.x-dragOffset.dx); dragBlockRef.y=Math.round(p.y-dragOffset.dy); return; }
-  });
-  function endDrag(e){
-if (draggingHandle){
-      // compute launch from handle to current pointer
-      const hsx = handle.x, hsy = handle.y;
-      const px = (dragCurr?.x ?? hsx), py = (dragCurr?.y ?? hsy);
-      const __adv = panel.classList.contains('toy-zoomed') || !!panel.closest('#zoom-overlay');
-      const __sf = __getSpeed(); // consistent speed across modes
-      const vel = computeLaunchVelocity(hsx, hsy, px, py, physW, physH, getLoopInfo, __sf, EDGE);
-      const vx = vel.vx, vy = vel.vy;
-      lastLaunch = { x: hsx, y: hsy, vx, vy, r: ballR() };
-      try{
-        const ac = ensureAudioContext(); const li = (typeof getLoopInfo==='function') ? getLoopInfo() : null;
-        if (li && li.barLen){ const grid = li.barLen/16; const rel = Math.max(0, (ac?ac.currentTime:0) - li.loopStartTime); const k = Math.ceil((rel+1e-6)/grid); nextLaunchAt = li.loopStartTime + k*grid; }
-        else { nextLaunchAt = (ac?ac.currentTime:0) + 0.02; }
-}catch{}
-      try{ const w=physW(), h=physH(); handle._fx = (handle.x||0)/(w||1); handle._fy = (handle.y||0)/(h||1); }catch{}
-      draggingHandle=false; dragCurr=dragStart=null; try{ if(e&&e.pointerId!=null) canvas.releasePointerCapture(e.pointerId);}catch{} return;
-    }
-    if (draggingBlock){ draggingBlock=false; dragBlockRef=null; tapCand=null; tapStart=null; tapMoved=false; try{ if(e&&e.pointerId!=null) canvas.releasePointerCapture(e.pointerId);}catch{} return; }
-    if (tapCand && !tapMoved){ tapCand.active = !tapCand.active; const ac=ensureAudioContext(); const now=(ac?ac.currentTime:0)+0.0005; if (tapCand.active){ const nm=noteValue(noteList, tapCand.noteIndex|0); try{ triggerInstrument(instrument, nm, now, toyId);}catch{} } tapCand=null; tapStart=null; tapMoved=false; dragBlockRef=null; try{ if(e&&e.pointerId!=null) canvas.releasePointerCapture(e.pointerId);}catch{} return; }
-    if (zoomDragCand){ const p=toWorld(__localPoint(canvas, e)); const t=whichThirdRect(zoomDragCand, p.y); if (t==='toggle'){ zoomDragCand.active=!zoomDragCand.active; } else { if (t==='up'){ zoomDragCand.noteIndex=Math.min(noteList.length-1,(zoomDragCand.noteIndex|0)+1); } else if (t==='down'){ zoomDragCand.noteIndex=Math.max(0,(zoomDragCand.noteIndex|0)-1); } const ac=ensureAudioContext(); const now=(ac?ac.currentTime:0); const nm=noteValue(noteList, zoomDragCand.noteIndex|0); try{ triggerInstrument(instrument, nm, now+0.0005, toyId);}catch{} } zoomDragCand=null; try{ if(e&&e.pointerId!=null) canvas.releasePointerCapture(e.pointerId);}catch{} return; }
-  }
-  canvas.addEventListener('pointerup', endDrag);
-  canvas.addEventListener('pointercancel', endDrag);
-  window.addEventListener('pointerup', endDrag, true);
-
-  function spawnBallFrom(L){ const o={x:L.x,y:L.y,vx:L.vx,vy:L.vy,r:L.r}; ball=o; fx.onLaunch(L.x,L.y); return o; }
-  function setNextLaunchAt(t){ nextLaunchAt=t; }
-  function setBallOut(o){ ball=o; }
-
-  // draw loop
-  
-function draw(){
-    const sNow = sizing.scale || 1;
-    // Ignore pure zoom scale for world coordinates; only respond to actual CSS size changes below
-    lastScale = sNow;
-
-    // Use CSS px for world/draw; map device buffer via DPR transform
-    const cssW = Math.max(1, Math.round(canvas.clientWidth || 0));
-    const cssH = Math.max(1, Math.round(canvas.clientHeight || 0));
-    const cs = resizeCanvasForDPR(canvas, ctx);
-    const sx = (cs.width / cssW), sy = (cs.height / cssH);
-    try { ctx.setTransform(sx, 0, 0, sy, 0, 0); } catch {}
-      /*__WORLD_SCALE__*/{ const __rs = renderScale(); try{ ctx.scale(__rs.sx||1, __rs.sy||1); }catch{} }
-      // Capture fixed physics size once and set launch baseline
-      if (!PHYS_W || !PHYS_H){ PHYS_W = worldW(); PHYS_H = worldH(); try{ updateLaunchBaseline(physW, physH, EDGE); }catch{} }
-
-    if (!lastCanvasW) { lastCanvasW = cssW; lastCanvasH = cssH; }
-    const kx = (cssW && lastCanvasW ? cssW/lastCanvasW : 1);
-    const ky = (cssH && lastCanvasH ? cssH/lastCanvasH : 1);
-    if (Math.abs(kx-1) > 0.001 || Math.abs(ky-1) > 0.001){ if (!(PHYS_W && PHYS_H)) { rescaleAll(kx, ky); } lastCanvasW = cssW; lastCanvasH = cssH; }
-
-    const w = physW(), h = physH();
-    ctx.fillStyle='#0b0f16'; ctx.fillRect(0,0,w,h);
-ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.lineWidth=2; ctx.strokeRect(EDGE,EDGE,w-EDGE*2,h-EDGE*2);
-
-    ensureEdgeControllers(physW(), physH());
-    for (const c of edgeControllers){ if (c){ c.w=blockSize(); c.h=blockSize(); } }
-    drawEdgeBondLines(ctx, w, h, EDGE, edgeControllers);
-    const ac2=ensureAudioContext(); const now2=(ac2?ac2.currentTime:0);
-    drawBlocksSection(ctx, edgeControllers, 0, 0, null, 1, noteList, sizing, null, null, now2);
-    drawEdgeDecorations(ctx, edgeControllers, edgeFlash);
-    /* EDGE FLASH OVERLAY */
+  // interactions moved to bouncer-adv-ui.js
+  // basic ball control helpers (restored after split)
+  function spawnBallFrom(L){
+    const o = { x:L.x, y:L.y, vx:L.vx, vy:L.vy, r: ballR() };
+    ball = o;
+    lastLaunch = { vx: L.vx, vy: L.vy, x: L.x, y: L.y };
     try{
-      const w = physW(), h = physH();
-      ctx.save(); ctx.fillStyle='white';
-      if (edgeFlash.top>0){ ctx.globalAlpha=Math.min(0.35, edgeFlash.top*0.35); ctx.fillRect(0,0,w,EDGE); edgeFlash.top*=0.92; }
-      if (edgeFlash.bottom>0){ ctx.globalAlpha=Math.min(0.35, edgeFlash.bottom*0.35); ctx.fillRect(0,h-EDGE,w,EDGE); edgeFlash.bottom*=0.92; }
-      if (edgeFlash.left>0){ ctx.globalAlpha=Math.min(0.35, edgeFlash.left*0.35); ctx.fillRect(0,0,EDGE,h); edgeFlash.left*=0.92; }
-      if (edgeFlash.right>0){ ctx.globalAlpha=Math.min(0.35, edgeFlash.right*0.35); ctx.fillRect(w-EDGE,0,EDGE,h); edgeFlash.right*=0.92; }
-      ctx.restore();
+      const li = (typeof getLoopInfo==='function') ? getLoopInfo() : null;
+      const ac = (typeof ensureAudioContext==='function') ? ensureAudioContext() : null;
+      const now = ac ? ac.currentTime : 0;
+      if (li && Number.isFinite(li.barLen) && li.barLen > 0){
+        nextLaunchAt = now + li.barLen;
+      } else {
+        nextLaunchAt = null;
+      }
     }catch{}
+    try{ fx.onLaunch && fx.onLaunch(L.x, L.y); }catch{}
+    return o;
+  }
+function setNextLaunchAt(t){ nextLaunchAt = t; }
+  function setBallOut(o){ ball = o; }
 
-    for (const c of edgeControllers){ if (c.flash>0){ c.flash*=0.85; if (c.flash<0.03) c.flash=0; } }
-
-    for (const b of blocks){ b.w=blockSize(); b.h=blockSize(); }
-    const ac=ensureAudioContext(); const now=(ac?ac.currentTime:0);
-    processVisQBouncer({ visQ, fx }, now, blocks, fx, flashEdge);
-    for (const b of blocks){ b.flash=Math.max(0, b.flash-0.06); }
-    { const s = blockSize(); for (const b of blocks){ b.w = s; b.h = s; } }
-    drawBlocksSection(ctx, blocks, 0, 0, null, 1, noteList, sizing, null, null, now);
-
-    fx.draw(ctx);
-
-    ctx.beginPath(); ctx.arc(handle.x, handle.y, cannonR(), 0, Math.PI*2);
-    ctx.fillStyle='rgba(255,255,255,0.15)'; ctx.fill(); ctx.strokeStyle='rgba(255,255,255,0.25)'; ctx.stroke();
-    if (draggingHandle && dragStart && dragCurr){ ctx.beginPath(); ctx.moveTo(handle.x,handle.y); ctx.lineTo(dragCurr.x,dragCurr.y); ctx.strokeStyle='rgba(255,255,255,0.25)'; ctx.lineWidth=2; ctx.stroke(); }
-
-    if (ball){ ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2); ctx.fillStyle='white'; ctx.globalAlpha=0.9; ctx.fill(); ctx.globalAlpha=1; }
-
+    const _int = installBouncerInteractions({ panel, canvas, sizing, toWorld, EDGE, physW, physH, ballR, __getSpeed,
+    blocks, edgeControllers, handle, spawnBallFrom, setNextLaunchAt, setBallOut, instrument, toyId, noteList });
+// draw loop
+  
+  lockPhysWorld();
+  // draw loop moved to bouncer-render.js
+const draw = createBouncerDraw({ lockPhysWorld, 
+  canvas, ctx, sizing, resizeCanvasForDPR, renderScale, physW, physH, EDGE,
+  ensureEdgeControllers: (w,h)=>ensureEdgeControllers(w,h), edgeControllers,
+  blockSize, particles, blocks, handle, drawEdgeBondLines, ensureAudioContext, noteList, drawBlocksSection,
+  drawEdgeDecorations, edgeFlash,
+  stepBouncer,
+  ball,
+        getBall: ()=>ball,
+  rescale: ()=>{ try{ window.rescaleBouncer({ blocks, handle, edgeControllers, physW, physH, EDGE, blockSize, ballRef: ball,
+        getBall: ()=>ball, ballR, ensureEdgeControllers }); }catch{} },
+  updateLaunchBaseline,
+  buildStateForStep: (now, prevNow)=>{
     const S = {
-      ball, blocks, edgeControllers, EDGE, worldW: physW, worldH: physH, ballR, blockSize, mapControllersByEdge,
+      ball,
+        getBall: ()=>ball, blocks, edgeControllers, EDGE, worldW: physW, worldH: physH, ballR, blockSize, mapControllersByEdge,
       edgeFlash, ensureAudioContext, noteValue, noteList, instrument, fx,
       lastLaunch, nextLaunchAt, lastAT: prevNow, flashEdge, handle, spawnBallFrom, getLoopInfo,
       triggerInstrument: (i,n,t)=>triggerInstrument(i,n,t,'bouncer', toyId),
       BOUNCER_BARS_PER_LIFE, setNextLaunchAt, setBallOut, visQ
     };
-    stepBouncer(S); visQ = S.visQ || visQ; prevNow = now;
-    requestAnimationFrame(draw);
-  }
-  requestAnimationFrame(draw);
+    return S;
+  },
+  applyFromStep: (S)=>{ visQ = S.visQ || visQ; }
+});
+requestAnimationFrame(draw);
+
 
   function onLoop(_loopStart){} // no-op
   return { onLoop, reset: doReset, setInstrument: (n)=>{ instrument = n || instrument; }, element: canvas };

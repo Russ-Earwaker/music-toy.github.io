@@ -92,7 +92,7 @@ export function drawParticles(ctx, now, ripples, generator){
   // render — white points with brightness bump on flash, NO scaling
   ctx.save();
   for (const p of P){
-    const alpha = 0.2 + 0.8 * Math.max(0, Math.min(1, p.flash));
+    const alpha = 0.35 + 0.8 * Math.max(0, Math.min(1, p.flash));
     ctx.globalAlpha = alpha;
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(p.x, p.y, 1.2, 1.2);

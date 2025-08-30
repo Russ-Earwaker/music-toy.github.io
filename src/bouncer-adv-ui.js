@@ -1,68 +1,99 @@
-/* Advanced per-cube UI: ALT+Click a cube in Advanced to edit note/active */
+// src/bouncer-adv-ui.js
+// Advanced-mode micro editor (ALT+click a cube).
+// Interactions are in bouncer-interactions.js; rescale helpers in bouncer-scale.js.
+
+// Keep this file lean (<300 lines). No duplicate imports.
+
 export function installAdvancedCubeUI(panel, canvas, {
-  isAdvanced, toWorld, getBlocks, noteList, onChange, hitTest
+  isAdvanced, toWorld, getBlocks, noteList: notes, onChange, hitTest
 }){
-  // Header-mounted compact editor
+  // Small in-canvas editor for a selected floating cube.
   const wrap = document.createElement('div');
   wrap.className = 'bouncer-adv-editor';
-  Object.assign(wrap.style, { display:'none', alignItems:'center', gap:'6px' });
+  Object.assign(wrap.style, {
+    display:'none', alignItems:'center', gap:'6px',
+    position:'absolute', top:'6px', left:'6px', zIndex: 5,
+    padding:'4px 6px', borderRadius:'8px', background:'rgba(0,0,0,0.35)',
+    backdropFilter:'blur(2px)'
+  });
 
-  const lab = document.createElement('span'); lab.textContent = 'Cube:'; lab.style.fontSize='12px'; lab.style.opacity='0.8';
-  const sel = document.createElement('select'); sel.style.fontSize='12px';
-  noteList.forEach(n=>{ const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); });
-  const chk = document.createElement('label'); chk.style.fontSize='12px'; chk.style.opacity='0.8';
-  const cb = document.createElement('input'); cb.type='checkbox'; cb.style.marginRight='4px'; chk.append(cb, document.createTextNode('Active'));
-  const closeBtn = document.createElement('button'); closeBtn.textContent='✕'; Object.assign(closeBtn.style,{fontSize:'12px', padding:'2px 6px'});
+  const lab  = document.createElement('span');
+  lab.textContent = 'Cube:';
+  Object.assign(lab.style, { fontSize:'12px', opacity:'0.85' });
 
-  wrap.append(lab, sel, chk, closeBtn);
+  const sel  = document.createElement('select');
+  sel.style.fontSize = '12px';
+  const list = notes || [];
+  list.forEach(n=>{
+    const o = document.createElement('option');
+    o.value = n; o.textContent = n;
+    sel.appendChild(o);
+  });
 
-  function mount(){
-    const header = panel.querySelector('.toy-controls-right') || panel.querySelector('.toy-header') || panel;
-    if (header && !wrap.parentNode){ header.appendChild(wrap); }
-  }
-  mount();
+  const label = document.createElement('label');
+  Object.assign(label.style, { fontSize:'12px', opacity:'0.9' });
+  const cb = document.createElement('input'); cb.type='checkbox'; cb.style.marginRight='6px';
+  label.append(cb, document.createTextNode('Active'));
 
-  let editIdx = -1;
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = 'Close';
+  Object.assign(closeBtn.style, { fontSize:'12px', padding:'2px 8px', borderRadius:'6px' });
+
+  wrap.append(lab, sel, label, closeBtn);
+  panel.appendChild(wrap);
+
+  let currentIndex = -1;
 
   function show(i){
-    const bs = getBlocks();
-    editIdx = (i|0);
-    if (editIdx<0 || editIdx>=bs.length){ hide(); return; }
-    const b = bs[editIdx];
-    sel.value = String(b.note);
-    cb.checked = !!b.active;
-    wrap.style.display='flex';
+    const blocks = (typeof getBlocks === 'function') ? getBlocks() : [];
+    if (!blocks || !blocks[i]) return hide();
+    currentIndex = i;
+    const b = blocks[i];
+    const name = b.noteName || list[b.noteIndex||0] || list[0] || 'C4';
+    sel.value = name;
+    cb.checked = (b.active !== false);
+    wrap.style.display = (isAdvanced && isAdvanced()) ? 'flex' : 'none';
   }
-  function hide(){ wrap.style.display='none'; editIdx = -1; }
+  function hide(){
+    currentIndex = -1;
+    wrap.style.display='none';
+  }
 
-  // React to changes
   sel.addEventListener('change', ()=>{
-    const bs = getBlocks(); if (editIdx<0 || editIdx>=bs.length) return;
-    bs[editIdx].note = sel.value;
-    onChange?.();
+    const blocks = (typeof getBlocks === 'function') ? getBlocks() : [];
+    if (currentIndex >= 0 && blocks[currentIndex]){
+      blocks[currentIndex].noteName = sel.value;
+      if (typeof onChange === 'function') onChange();
+    }
   });
   cb.addEventListener('change', ()=>{
-    const bs = getBlocks(); if (editIdx<0 || editIdx>=bs.length) return;
-    bs[editIdx].active = !!cb.checked;
-    onChange?.();
+    const blocks = (typeof getBlocks === 'function') ? getBlocks() : [];
+    if (currentIndex >= 0 && blocks[currentIndex]){
+      blocks[currentIndex].active = !!cb.checked;
+      if (typeof onChange === 'function') onChange();
+    }
   });
   closeBtn.addEventListener('click', hide);
 
-  // ALT+click to open editor on a cube (Advanced only)
+  // ALT+click a cube to open the editor (Advanced only)
   canvas.addEventListener('pointerdown', (e)=>{
-    if (!isAdvanced() || !e.altKey) return;
+    if (!isAdvanced || !isAdvanced()) return;
+    if (!e.altKey) return;
     const r = canvas.getBoundingClientRect();
-    const sx = (e.clientX - r.left), sy = (e.clientY - r.top);
-    const pw = toWorld({ x: sx, y: sy });
-    const idx = hitTest(pw.x, pw.y);
-    if (idx>=0){
+    const x = (e.clientX - r.left) * ((canvas.width||1) / Math.max(1, r.width));
+    const y = (e.clientY - r.top)  * ((canvas.height||1) / Math.max(1, r.height));
+    const p = toWorld({ x, y });
+    const idx = typeof hitTest === 'function' ? hitTest(p.x, p.y) : -1;
+    if (idx >= 0){
       e.preventDefault(); e.stopPropagation();
       show(idx);
     }
   }, { capture:true });
 
-  // Update visibility when Advanced toggles
-  const obs = new MutationObserver(()=>{ if (!isAdvanced()) hide(); });
+  // Auto-hide when Advanced mode toggles off
+  const obs = new MutationObserver(()=>{
+    if (!isAdvanced || !isAdvanced()) hide();
+  });
   try{ obs.observe(panel, { attributes:true, attributeFilter:['class'] }); }catch{}
 
   return { show, hide };

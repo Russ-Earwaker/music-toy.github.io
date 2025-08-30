@@ -32,7 +32,7 @@ export function drawTileLabelAndArrows(ctx, rect, { label='', active=true, zoome
     const thirdH = h / 3;
 
     // Slightly reduced arrow size
-    let baseSize = Math.max(9, Math.min(w,h) * 0.22);
+    let baseSize = Math.max(9, Math.min(w,h) * (zoomed ? 0.32 : 0.22));
 
     ctx.fillStyle = '#ffffff';
 

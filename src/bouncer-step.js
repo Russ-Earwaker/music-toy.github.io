@@ -202,7 +202,7 @@ export function stepBouncer(S, nowAT){
       }
 
       // light damping
-      S.ball.vx *= 0.999; S.ball.vy *= 0.999;
+      /* no damping */
     }
   }
 

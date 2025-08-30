@@ -34,6 +34,7 @@ export function installSpeedUI(panel, sizing, initial=1.00){
     spVal.textContent = `${Math.round(speedFactor*100)}%`;
   }
   updateLabel();
+    try{ panel.dispatchEvent(new CustomEvent('toy-speed', { detail:{ value: speedFactor } })); }catch{};
 
   sp.addEventListener('input', ()=>{
     const v = parseFloat(sp.value);
@@ -41,6 +42,7 @@ export function installSpeedUI(panel, sizing, initial=1.00){
     speedFactor = Math.max(0.2, Math.min(1.6, v));
     panel.dataset.speed = String(speedFactor);
     updateLabel();
+    try{ panel.dispatchEvent(new CustomEvent('toy-speed', { detail:{ value: speedFactor } })); }catch{};
   });
 
   spWrap.append(spLabel, sp, spVal);
