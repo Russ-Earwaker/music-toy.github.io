@@ -28,13 +28,12 @@ const BASE_BLOCK_SIZE = 44, BASE_CANNON_R = 10, BASE_BALL_R = 7;
 
 
 
-
 export function createBouncer(selector){
   const shell = (typeof selector==='string') ? document.querySelector(selector) : selector; if (!shell) return null;
   const panel = shell.closest('.toy-panel') || shell;
   const ui = initToyUI(panel, { toyName: 'Bouncer', defaultInstrument: 'Retro Square' }) || {};
   let instrument = ui.instrument; panel.addEventListener('toy-instrument', (e)=>{ instrument = (e?.detail?.value)||instrument; });
-  let speedFactor = parseFloat((panel?.dataset?.speed)||'0.60'); // 0.60 = calmer default
+  let speedFactor = parseFloat((panel?.dataset?.speed)||'1.60'); // +60% faster default // 0.60 = calmer default
   const toyId = (panel?.dataset?.toy || 'bouncer').toLowerCase();
 
   const host = panel.querySelector('.toy-body') || panel;
@@ -79,7 +78,7 @@ export function createBouncer(selector){
   }
   requestAnimationFrame(__tickOSD); /*OSD_DEBUG*/
 
-  const __getSpeed = installSpeedUI(panel, sizing, parseFloat((panel?.dataset?.speed)||'1.00'));
+  const __getSpeed = installSpeedUI(panel, sizing, parseFloat((panel?.dataset?.speed)||'1.60'));
   // apply speed changes to queued launch
   let __speedCache = (__getSpeed?__getSpeed():1);
   panel.addEventListener('toy-speed', (e)=>{ const ns = (e && e.detail && Number(e.detail.value)) ? e.detail.value : (__getSpeed?__getSpeed():1); const os = __speedCache || 1; const ratio = os ? (ns/os) : 1; __speedCache = ns; try{ if (lastLaunch && Number.isFinite(ratio) && ratio>0){ lastLaunch.vx *= ratio; lastLaunch.vy *= ratio; } }catch{} });
