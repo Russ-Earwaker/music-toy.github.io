@@ -132,17 +132,17 @@ const r1 = Math.max(0, r);
     // subtle ambience ring before the main bright ring
     strokeRing(r2 - ambW*0.5, ambW, 0.10);
   drawTrails(r2, baseLW * 0.9,  0.25, baseLW * 1.6, 3);
-    strokeGradientRing(r2, baseLW * 16.00, 0.45);
+    strokeGradientRing(r2, baseLW * 16.00, 0.12);
 
     // front & rear fades around r2
     ctx.save();
     const __oldComp2 = ctx.globalCompositeOperation; ctx.globalCompositeOperation = 'lighter';
-    strokeGradientRing(Math.max(0.0001, r2 - ambW * 10.0), ambW * 20.0, 0.12); // rear fade-in
-    strokeGradientRing(r2 + ambW * 10.0, ambW * 20.0, 0.12); // front fade-out (ahead of crest)
+    strokeGradientRing(Math.max(0.0001, r2 - ambW * 10.0), ambW * 20.0, 0.05); // rear fade-in
+    strokeGradientRing(r2 + ambW * 10.0, ambW * 20.0, 0.05); // front fade-out (ahead of crest)
     ctx.globalCompositeOperation = __oldComp2;
     ctx.restore();
 
-    strokeWobblyRing(r2, Math.max(0.5, baseLW * 0.70), 0.12, baseLW * 1.10, 9, now * 2.0);
+    strokeWobblyRing(r2, Math.max(0.5, baseLW * 0.70), 0.05, baseLW * 1.10, 9, now * 2.0);
     // trailing ripples (water decay) for r2
     (function() {
   const gap = Math.max(2, baseLW * 3.6);
@@ -157,17 +157,17 @@ const r1 = Math.max(0, r);
 })();// faint third ring (was second bright)
     strokeRing(r3 - ambW*0.5, ambW, 0.10);
   drawTrails(r3, baseLW * 1.1,  0.30, baseLW * 1.8, 3);
-    strokeGradientRing(r3, baseLW * 18.00, 0.46);
+    strokeGradientRing(r3, baseLW * 18.00, 0.13);
 
     // front & rear fades around r3
     ctx.save();
     const __oldComp3 = ctx.globalCompositeOperation; ctx.globalCompositeOperation = 'lighter';
-    strokeGradientRing(Math.max(0.0001, r3 - ambW * 12.0), ambW * 24.0, 0.12); // rear fade-in
-    strokeGradientRing(r3 + ambW * 12.0, ambW * 24.0, 0.12); // front fade-out (ahead of crest)
+    strokeGradientRing(Math.max(0.0001, r3 - ambW * 12.0), ambW * 24.0, 0.05); // rear fade-in
+    strokeGradientRing(r3 + ambW * 12.0, ambW * 24.0, 0.05); // front fade-out (ahead of crest)
     ctx.globalCompositeOperation = __oldComp3;
     ctx.restore();
 
-    strokeWobblyRing(r3, Math.max(0.5, baseLW * 0.80), 0.14, baseLW * 1.35, 8, now * 1.8);
+    strokeWobblyRing(r3, Math.max(0.5, baseLW * 0.80), 0.05, baseLW * 1.35, 8, now * 1.8);
     // trailing ripples (water decay) for r3
     (function() {
   const gap = Math.max(2, baseLW * 4.2);
@@ -179,8 +179,9 @@ const r1 = Math.max(0, r);
     const lw = Math.max(0.5, baseWidth * Math.pow(0.82, i));
     strokeRing(rr, lw, a);
   }
-})();}
+})();
   ctx.restore();
+}
 }
 
 export function drawGenerator(ctx, gx, gy, r, now, ripples, NUM_STEPS, stepSeconds, scale=1){
@@ -221,4 +222,5 @@ export function drawGenerator(ctx, gx, gy, r, now, ripples, NUM_STEPS, stepSecon
   ctx.beginPath(); ctx.arc(gx, gy, Math.max(2, inner), 0, Math.PI * 2); ctx.fill();
 
   ctx.restore();
+
 }

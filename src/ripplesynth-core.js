@@ -1,11 +1,4 @@
-import { initToyUI } from './toyui.js';
-import { randomizeAllImpl } from './ripplesynth-random.js';
-import { initToySizing, randomizeRects } from './toyhelpers.js';
-import { resizeCanvasForDPR, noteList } from './utils.js';
-import { PENTATONIC_OFFSETS } from './ripplesynth-scale.js';
-import { boardScale } from './board-scale-helpers.js';
-import { ensureAudioContext, barSeconds as audioBarSeconds } from './audio-core.js';
-import { triggerInstrument as __rawTrig } from './audio-samples.js';
+import { initToyUI } from './toyui.js'; import { randomizeAllImpl } from './ripplesynth-random.js'; import { initToySizing, randomizeRects } from './toyhelpers.js'; import { resizeCanvasForDPR, noteList } from './utils.js'; import { PENTATONIC_OFFSETS } from './ripplesynth-scale.js'; import { boardScale } from './board-scale-helpers.js'; import { ensureAudioContext, barSeconds as audioBarSeconds } from './audio-core.js'; import { triggerInstrument as __rawTrig } from './audio-samples.js';
 import { drawBlocksSection } from './ripplesynth-blocks.js';
 import { makePointerHandlers } from './ripplesynth-input.js';
 import { initParticles, setParticleBounds, drawParticles } from './ripplesynth-particles.js';
@@ -19,6 +12,8 @@ export function createRippleSynth(selector){
   const toyId = (panel?.dataset?.toyid || panel?.dataset?.toy || 'rippler').toLowerCase();
   const triggerInstrument = (inst, name, when)=> __rawTrig(inst, name, when, toyId);
 const canvas = document.createElement('canvas');
+  try{ if (typeof window!=='undefined' && typeof window.__ripplerUserArmed==='undefined'){ window.__ripplerUserArmed=false; } }catch{}
+  try{ canvas.addEventListener('pointerdown', ()=>{ try{ window.__ripplerUserArmed=true; }catch{} }); }catch{}
   try{ canvas.style.setProperty('width','100%','important'); canvas.style.setProperty('height','100%','important'); canvas.style.display='block'; }catch{};
 canvas.className = 'rippler-canvas';
   canvas.style.display = 'block';
@@ -70,7 +65,8 @@ const EDGE=4; const W = ()=> (canvas.width|0);
   const generator = { nx:0.5, ny:0.5, r:10, placed:false };
   let ripples = []; // {x,y,startAT,speed}
   const RING_SPEED = ()=> Math.hypot(W(), H()) / (audioBarSeconds() || 2.0); // px/sec
-  let particlesInit = false; const ac = ensureAudioContext();
+  let particlesInit = false;
+  const ac = ensureAudioContext();
   const NUM_STEPS = 8;
   const barSec = ()=> audioBarSeconds() || 2.0;
   const stepSeconds = ()=> barSec()/NUM_STEPS;
@@ -138,7 +134,7 @@ blocks, noteList,
       get r(){ return generator.r || 12; }
     }, canvas, vw:W, vh:H, EDGE, blocks:[], ripples, getBlockRects, isZoomed, clamp, getCanvasPos,
     onBlockTap: (idx, p)=>{
-      const size = Math.max(20, Math.round(BASE*(sizing.scale||1)*boardScale(canvas)));
+      const size2 = Math.max(20, Math.round(BASE*(sizing.scale||1)*boardScale(canvas)));
       const b = blocks[idx];
       const rect = { x:n2x(b.nx)-size/2, y:n2y(b.ny)-size/2, w:size, h:size };
       handleBlockTap(blocks, idx, p, rect, { noteList, ac, pattern, trigger: triggerInstrument, instrument: currentInstrument, __schedState });
@@ -150,7 +146,7 @@ blocks, noteList,
       try { const name = noteList[b.noteIndex] || 'C4'; triggerInstrument(currentInstrument, name, ac.currentTime + 0.0005); } catch {}
     },
     onBlockDrag: (idx, newX, newY)=>{
-      const size = Math.max(20, Math.round(BASE*(sizing.scale||1)*boardScale(canvas)));
+      const size2 = Math.max(20, Math.round(BASE*(sizing.scale||1)*boardScale(canvas)));
       const cx=newX+size/2, cy=newY+size/2;
       const nx=x2n(cx), ny=y2n(cy);
       const b=blocks[idx];
@@ -194,6 +190,8 @@ const wasPlaced = generator.placed; _wasPlacedAtDown = wasPlaced;
     _genDownPos=null; _wasPlacedAtDown=false;
   });
 function spawnRipple(manual=false){
+    if (!generator?.placed) return;
+    if (typeof window !== 'undefined' && !window.__ripplerUserArmed) return;
     const nowAT = ac.currentTime, nowPerf = ac.currentTime;
     if (nowPerf - lastSpawnPerf < 0.15) return; // debounce double fires
     lastSpawnPerf = nowPerf;
@@ -212,11 +210,11 @@ function spawnRipple(manual=false){
     const rMain = ripples[ripples.length-1]; rMain.hit = rMain.hit || new Set();
     const R = Math.max(0, (nowAT - (rMain.startAT||nowAT)) * (rMain.speed||RING_SPEED()));
     const band = 9; const gx = n2x(generator.nx), gy = n2y(generator.ny);
-    const size = Math.max(20, Math.round(BASE*(sizing.scale||1)*boardScale(canvas)));
+    const size2 = Math.max(20, Math.round(BASE*(sizing.scale||1)*boardScale(canvas)));
     for (let i=0;i<blocks.length;i++){
       const b = blocks[i]; if (!b.active || rMain.hit.has(i)) continue;
       const cx = n2x(b.nx), cy = n2y(b.ny);
-      const dx = Math.max(Math.abs(cx - gx) - size/2, 0), dy = Math.max(Math.abs(cy - gy) - size/2, 0);
+      const dx = Math.max(Math.abs(cx - gx) - size2/2, 0), dy = Math.max(Math.abs(cy - gy) - size2/2, 0);
       const dEdge = Math.hypot(dx, dy);
       if (Math.abs(dEdge - R) <= band){
         rMain.hit.add(i); if (!liveBlocks.has(i)) { b.flashEnd = Math.max(b.flashEnd, ac.currentTime + 0.18); }
@@ -258,6 +256,8 @@ function draw(){
  } return; }
     ctx.fillStyle = '#0b0f16';
     ctx.fillRect(0,0,W(),H());
+    const size = Math.round(BASE*(sizing.scale||1)*boardScale(canvas));
+    const blockRects = blocks.map(b=> ({...b, x: n2x(b.nx)-size/2, y: n2y(b.ny)-size/2, w: size, h: size}));
     if (!particlesInit && canvas.width && canvas.height){ try { initParticles(canvas.width, canvas.height, EDGE, 280); particlesInit = true; } catch {} }
     if (typeof window.__rpW === 'undefined'){ window.__rpW = canvas.width; window.__rpH = canvas.height; } if (canvas.width !== window.__rpW || canvas.height !== window.__rpH){
       window.__rpW = canvas.width; window.__rpH = canvas.height;
@@ -269,9 +269,7 @@ function draw(){
       drawWaves(ctx, n2x(generator.nx), n2y(generator.ny), ac.currentTime, RING_SPEED(), ripples, NUM_STEPS, stepSeconds, (sizing.scale||1));
       ctx.restore();
     }
-    const size = Math.round(BASE*(sizing.scale||1)*boardScale(canvas));
-    const blockRects = blocks.map(b=> ({...b, x: n2x(b.nx)-size/2, y: n2y(b.ny)-size/2, w: size, h: size}));
-    drawParticles(ctx, ac.currentTime, ripples, { x:n2x(generator.nx), y:n2y(generator.ny) }, blockRects);
+      drawParticles(ctx, ac.currentTime, ripples, { x:n2x(generator.nx), y:n2y(generator.ny) }, blockRects);
     const __nowAT = ac.currentTime; const __dt = (__lastDrawAT ? (__nowAT-__lastDrawAT) : 0); __lastDrawAT = __nowAT;
     for (let i=0;i<blocks.length;i++){ const b=blocks[i]; if (b.rippleAge != null && b.rippleMax){ b.rippleAge = Math.min(b.rippleMax, Math.max(0, b.rippleAge + __dt)); } }
     drawBlocksSection(ctx, blockRects, n2x(generator.nx), n2y(generator.ny), ripples, 1, noteList, sizing, null, null, ac.currentTime);
