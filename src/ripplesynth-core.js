@@ -136,7 +136,7 @@ blocks, noteList,
     onBlockTap: (idx, p)=>{
       const size2 = Math.max(20, Math.round(BASE*(sizing.scale||1)*rectScale()));
       const b = blocks[idx];
-      const rect = { x:n2x(b.nx)-size/2, y:n2y(b.ny)-size/2, w:size, h:size };
+      const rect = { x:n2x(b.nx)-size2/2, y:n2y(b.ny)-size2/2, w:size2, h:size2 };
       handleBlockTap(blocks, idx, p, rect, { noteList, ac, pattern, trigger: triggerInstrument, instrument: currentInstrument, __schedState });
     },
     onBlockTapStd: (idx, p)=>{
@@ -259,6 +259,7 @@ function draw(){
     ctx.fillStyle = '#0b0f16';
     ctx.fillRect(0,0,W(),H());
     const size = Math.round(BASE*(sizing.scale||1)*boardScale(canvas));
+      for (let b of blocks){ if (b.pulse){ b.pulse = Math.max(0, b.pulse*0.90 - 0.03); } if (b.cflash){ b.cflash = Math.max(0, b.cflash*0.94 - 0.02); } }
       const blockRects = getBlockRects();
     if (!particlesInit && canvas.width && canvas.height){ try { initParticles(canvas.width, canvas.height, EDGE, 280); particlesInit = true; } catch {} }
     if (typeof window.__rpW === 'undefined'){ window.__rpW = canvas.width; window.__rpH = canvas.height; } if (canvas.width !== window.__rpW || canvas.height !== window.__rpH){
