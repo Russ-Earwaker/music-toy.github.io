@@ -1,5 +1,5 @@
 import { resizeCanvasForDPR, noteList, clamp } from './utils.js';
-import { NUM_STEPS } from './audio-core.js';
+import { NUM_STEPS, ensureAudioContext } from './audio-core.js';
 import { triggerInstrument } from './audio-samples.js';
 import { initToyUI } from './toyui.js';
 import { drawTileLabelAndArrows } from './ui-tiles.js';
@@ -105,6 +105,8 @@ const ctx = canvas.getContext('2d');
     return { x: bx, y: by, w: s, h: s };
   }
 function draw(){
+    const __ac = (typeof ensureAudioContext==='function') ? ensureAudioContext() : null;
+    const nowS = __ac ? __ac.currentTime : ((typeof performance!=='undefined' && performance.now) ? performance.now()/1000 : 0);
     try { ctx.setTransform(1,0,0,1,0,0); } catch {}
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     const isZoomedNow = panel.classList.contains('toy-zoomed');
@@ -141,20 +143,22 @@ function draw(){
         for (let i=0;i<steps.length;i++){
       const s = steps[i];
       const b = blockRectForIndex(i, L);
-            { const __pulse = Math.max(0, Math.min(1, (s.flash||0)));
-        const __scl = __pulse>0 ? (1 + 0.14*__pulse) : 1;
+      { const hitA = (s.hitFlashEnd && s.hitFlashDur) ? Math.max(0, Math.min(1, (s.hitFlashEnd - nowS) / s.hitFlashDur)) : 0;
+        const __scl = hitA>0 ? (1 + 0.14*hitA) : 1;
         const __cx = b.x + b.w/2, __cy = b.y + b.h/2;
         ctx.save(); ctx.translate(__cx, __cy); ctx.scale(__scl, __scl); ctx.translate(-__cx, -__cy);
-        drawBlock(ctx, b, {      baseColor: s.active ? '#f4932f' : '#293042',      active: !!s.active,      noteLabel: L.isZoomed ? (noteList && s.noteIndex!=null ? String(noteList[s.noteIndex % noteList.length]||'') : '') : null,      showArrows: L.isZoomed,
-      variant: L.isZoomed ? 'block' : 'button'
-    });
-            ctx.restore(); }
+        drawBlock(ctx, b, { baseColor: (s.active ? '#f4932f' : '#293042'), active: !!s.active, showArrows: L.isZoomed, variant: (L.isZoomed ? 'block' : 'button') });
+        ctx.restore(); if (!L.isZoomed && hitA > 0){ ctx.save(); ctx.globalAlpha = hitA; ctx.fillStyle = '#ffffff'; ctx.fillRect(b.x, b.y, b.w, b.h); ctx.restore(); }}
 ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1; ctx.strokeRect(b.x+0.5,b.y+0.5,b.w-1,b.h-1); ctx.restore();
-    if (s.flash && s.flash > 0){ ctx.save(); ctx.globalAlpha = Math.min(0.35, 0.25 * s.flash); ctx.fillStyle = '#ffffff'; ctx.fillRect(b.x, b.y, b.w, b.h); ctx.restore(); }
+    if (s.flash && s.flash > 0 && !L.isZoomed){ ctx.save(); ctx.globalAlpha = Math.min(0.22, s.flash*0.22); ctx.fillStyle = '#ffffff'; ctx.fillRect(b.x, b.y, b.w, b.h); ctx.restore(); }
     if (L.isZoomed){
       const label = noteList[s.noteIndex] || '?';
       drawTileLabelAndArrows(ctx, b, { label, active: !!s.active, zoomed: true });
+      // unified hit overlay (full white), drawn last in zoomed mode
+      { const hitA = (s.hitFlashEnd && s.hitFlashDur) ? Math.max(0, Math.min(1, (s.hitFlashEnd - nowS) / s.hitFlashDur)) : 0;
+        if (hitA > 0){ ctx.save(); ctx.globalAlpha = hitA; ctx.fillStyle = '#ffffff'; ctx.fillRect(b.x, b.y, b.w, b.h); ctx.restore(); } }
     }
+
   }
     if (currentCol >= 0){
       const br = blockRectForIndex(currentCol, L);
@@ -262,6 +266,7 @@ function doRandomNotes(){
     const s = steps[i]; if (!s) return;
     ping(i);
     if (s.active){
+      try { const ac = ensureAudioContext(); const nowS = ac.currentTime; s.hitFlashDur = 0.22; s.hitFlashEnd = nowS + s.hitFlashDur; } catch {}
       const noteName = noteList[s.noteIndex] || 'C4';
       gatedTrigger(ui.instrument, noteName);
     }
