@@ -130,7 +130,7 @@ const r1 = Math.max(0, r);
     }
 
     // bright inner-only gradient behind r1 (additive)
-    strokeGradientRing(Math.max(0.0001, r1 - ambW * 5.80), ambW * 14.0, 0.36);
+    strokeGradientRing(Math.max(0.0001, r1 - ambW * 4.00), ambW * 14.0, 0.36);
     // subtle ambience ring before the main bright ring
     strokeRing(r2 - ambW*0.5, ambW, 0.10);
   drawTrails(r2, baseLW * 0.9,  0.25, baseLW * 1.6, 3);
