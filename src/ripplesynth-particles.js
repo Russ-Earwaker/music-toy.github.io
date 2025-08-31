@@ -64,7 +64,19 @@ export function drawParticles(ctx, now, ripples, generator, blocks){
         const radius = Math.max(0, (now - R.startTime) * R.speed);
         const dist = Math.hypot(p.x - R.x, p.y - R.y);
 
-        // r1 (primary)
+        // pre-impulse: gentle inward pull just before crest
+        /*PRE_SUCK_PUSH*/
+        const PRE_BAND = P_HIT_BAND * 1.2;
+        if (dist > radius && (dist - radius) <= PRE_BAND){
+          const dxp = p.x - R.x, dyp = p.y - R.y;
+          const dp = Math.max(1, Math.hypot(dxp, dyp));
+          const closp = 1 - (dist - radius) / PRE_BAND;
+          const kp = (P_IMPULSE * 0.25 * (0.8 + 0.4 * closp)) / dp;
+          // inward (negative) to suggest water rising
+          p.vx -= dxp * kp; p.vy -= dyp * kp;
+        }
+
+// r1 (primary)
         if (Math.abs(dist - radius) <= P_HIT_BAND){
           const dx = p.x - R.x, dy = p.y - R.y;
           const d = Math.max(1, Math.hypot(dx, dy));

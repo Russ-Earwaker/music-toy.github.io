@@ -17,7 +17,7 @@ export function makeGetBlockRects(n2x, n2y, sizing, BASE, blocks){
       let x = cx - size/2, y = cy - size/2;
       x = Math.min(Math.max(x, minX), maxX - size);
       y = Math.min(Math.max(y, minY), maxY - size);
-      rects.push({ x, y, w: size, h: size, index: i });
+      rects.push({ x, y, w: size, h: size, index: i, id: blocks[i].id, active: !!blocks[i].active, noteIndex: blocks[i].noteIndex, flashEnd: blocks[i].flashEnd, flashDur: blocks[i].flashDur, pulse: (blocks[i].pulse||0), cflash: (blocks[i].cflash||0) });
     }
     return rects;
   };

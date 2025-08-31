@@ -11,9 +11,22 @@ export function drawBlocksSection(ctx, blocks, gx, gy, ripples, volume, noteList
 
     // flash overlay
     const flashA = (b.flashEnd && b.flashDur) ? Math.max(0, Math.min(1, (b.flashEnd - now) / b.flashDur)) : 0;
+    if (b.cflash && b.cflash>0){
+      const a = Math.min(1, b.cflash);
+      ctx.save(); const oldG = ctx.globalCompositeOperation; ctx.globalCompositeOperation='lighter';
+      ctx.fillStyle = `rgba(255,255,255,${0.35*a})`;
+      ctx.fillRect(x-2, y-2, w+4, h+4);
+      ctx.globalCompositeOperation = oldG; ctx.restore();
+    }
+    /*CFLASH_VISUAL*/
     // block
+    const scl = (b.pulse && b.pulse>0) ? (1 + 0.06 * b.pulse) : 1;
+    const cx = x + w/2, cy = y + h/2;
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(scl, scl); ctx.translate(-cx, -cy);
     ctx.fillStyle = b.active ? '#f4932f' : '#293042';
     ctx.fillRect(x, y, w, h);
+    ctx.restore();
+    /*PULSE_VISUAL*/
     if (flashA > 0){
       ctx.fillStyle = `rgba(255,255,255,${0.35*flashA})`;
       ctx.fillRect(x, y, w, h);
