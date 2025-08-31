@@ -1,8 +1,12 @@
 // src/ripplesynth-rects.js
 export function makeGetBlockRects(n2x, n2y, sizing, BASE, blocks){
+  // measure baseline span once
+  const __baseSpanW = Math.max(1, Math.abs(n2x(1) - n2x(0)));
   return function getBlockRects(){
     // CLAMPED_INSIDE: ensure blocks stay fully within visible n2x/n2y range
-    const size = Math.max(20, Math.round(BASE * (sizing.scale||1)));
+    /*rectScaleSpan*/ const __spanW = Math.max(1, Math.abs(n2x(1) - n2x(0)));
+    const __rectScale = __spanW / __baseSpanW;
+    const size = Math.max(20, Math.round(BASE * (sizing.scale||1) * __rectScale));
     const rects = [];
     const minX = Math.min(n2x(0), n2x(1));
     const maxX = Math.max(n2x(0), n2x(1));

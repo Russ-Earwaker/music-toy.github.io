@@ -12,6 +12,13 @@ export function createRippleSynth(selector){
   const toyId = (panel?.dataset?.toyid || panel?.dataset?.toy || 'rippler').toLowerCase();
   const triggerInstrument = (inst, name, when)=> __rawTrig(inst, name, when, toyId);
 const canvas = document.createElement('canvas');
+  // rectScale matches Bouncer sizing: scale with canvas attr width vs baseline
+  let __baseAttrW = 0;
+  function rectScale(){
+    const w = canvas.width || 0;
+    if (!__baseAttrW && w>0) __baseAttrW = w;
+    return (__baseAttrW>0 && w>0) ? (w/__baseAttrW) : 1;
+  }
   try{ if (typeof window!=='undefined' && typeof window.__ripplerUserArmed==='undefined'){ window.__ripplerUserArmed=false; } }catch{}
   try{ canvas.addEventListener('pointerdown', ()=>{ try{ window.__ripplerUserArmed=true; }catch{} }); }catch{}
   try{ canvas.style.setProperty('width','100%','important'); canvas.style.setProperty('height','100%','important'); canvas.style.display='block'; }catch{};
