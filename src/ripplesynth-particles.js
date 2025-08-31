@@ -87,7 +87,7 @@ export function drawParticles(ctx, now, ripples, generator, blocks){
         }}
 
         // r2 (mid) — same strength/flash as r3
-        const radius2 = Math.max(0, radius - R.speed * 0.60);
+        const radius2 = Math.max(0, radius - (R.r2off || (R.speed * 0.60)));
         if (radius2 > 0 && Math.abs(dist - radius2) <= P_HIT_BAND){
           const dxm = p.x - R.x, dym = p.y - R.y;
           const dm = Math.max(1, Math.hypot(dxm, dym));
@@ -96,17 +96,7 @@ export function drawParticles(ctx, now, ripples, generator, blocks){
           p.vx += dxm * km; p.vy += dym * km;
           p.flash = Math.max(p.flash, FLASH_SECOND);
         }
-
-        // r3 (tertiary)
-        const radius3 = Math.max(0, radius - R.speed * 1.20);
-        if (radius3 > 0 && Math.abs(dist - radius3) <= P_HIT_BAND){
-          const dx2 = p.x - R.x, dy2 = p.y - R.y;
-          const d2 = Math.max(1, Math.hypot(dx2, dy2));
-          const clos2 = Math.max(0, 1 - Math.abs(dist - radius3) / Math.max(1, P_HIT_BAND));
-          const k2 = (P_IMPULSE * (1.0 + 0.2 * clos2)) / d2;
-          p.vx += dx2 * k2; p.vy += dy2 * k2;
-          p.flash = Math.max(p.flash, FLASH_SECOND);
-        }
+        // r3 removed per spec
       }
     }
     // cube repulsion (optional)

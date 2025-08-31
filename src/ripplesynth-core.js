@@ -200,7 +200,7 @@ function spawnRipple(manual=false){
     const gx = n2x(generator.nx), gy = n2y(generator.ny);
     const corners = [[0,0],[W(),0],[0,H()],[W(),H()]];
     const offR = Math.max(...corners.map(([x,y])=> Math.hypot(x-gx, y-gy))) + 64;
-    ripples.push({ x: gx, y: gy, startAT: nowAT, startTime: nowPerf, speed: RING_SPEED(), offR, hit: new Set() });
+    ripples.push({ x: gx, y: gy, startAT: nowAT, startTime: nowPerf, speed: RING_SPEED(), offR, hit: new Set(), r2off: (RING_SPEED() * (barSec()/2)) });
     if (manual) skipNextBarRing = true;
   }
   function ringFront(nowAT){
