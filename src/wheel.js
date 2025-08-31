@@ -5,6 +5,7 @@ import { initToySizing } from './toyhelpers-sizing.js';
 import { ensureAudioContext, getLoopInfo } from './audio-core.js';
 import { randomizeWheel } from './wheel-random.js';
 import { drawBlocksSection } from './ripplesynth-blocks.js';
+import { cubeGapPx, handleMaxRadius, spokePointAt, semiToRadius, radiusToSemi, handlePos, hitHandle } from './wheel-handles.js';
 
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 const STEPS = 16;
@@ -22,7 +23,6 @@ export function buildWheel(selector, opts = {}){
   if (!shell){ console.warn('[wheel] missing', selector); return null; }
   const panel = shell?.closest?.('.toy-panel') || shell;
 
-  // Header & controls
   const ui = initToyUI(panel, {
     toyName: title,
     defaultInstrument,
@@ -30,7 +30,6 @@ export function buildWheel(selector, opts = {}){
     onReset: () => doReset()
   });
 
-  // Canvas
   const canvas = document.createElement('canvas');
   canvas.className = 'wheel-canvas';
   canvas.style.display = 'block';
@@ -38,10 +37,9 @@ export function buildWheel(selector, opts = {}){
   (panel.querySelector?.('.toy-body') || panel).appendChild(canvas);
   const ctx = canvas.getContext('2d');
 
-  // Sizing
   const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true });
+  /*__RANDOM_ON_BOOT__*/ try{ doRandom(); }catch{};
 
-  // Model
   let active = Array.from({length:STEPS}, ()=> false);
   let semiOffsets = Array.from({length:STEPS}, ()=> 0);
   let baseMidi = 60; // C4
@@ -49,6 +47,8 @@ export function buildWheel(selector, opts = {}){
   let __lastRandSig = null;
   let flashUntil = new Float32Array(STEPS).fill(0);
 
+  let dragIndex = -1;
+  let dragActive = false;
   function doReset(){ active = Array.from({length:STEPS}, ()=> false); }
 
   function doRandom(){
@@ -66,7 +66,6 @@ export function buildWheel(selector, opts = {}){
             semiOffsets[i] = (h!=null ? (h|0) : 0);
           }
           __lastRandSig = pattern;
-          // small post-jitter: flip up to 2 steps randomly to avoid overly-regular 011 pattern
           const idxs = [...Array(STEPS).keys()]; for (let r=idxs.length-1;r>0;r--){ const j=(Math.random()* (r+1))|0; const t=idxs[r]; idxs[r]=idxs[j]; idxs[j]=t; }
           let flips = 0; for (let k=0;k<idxs.length && flips<2;k++){ const ii = idxs[k]; if (Math.random()<0.25){ active[ii] = !active[ii]; flips++; } }
           break;
@@ -77,7 +76,6 @@ export function buildWheel(selector, opts = {}){
     }
   }
 
-  // Transport helpers
   function currentStepFromLoop(){
     try{
       const ac = ensureAudioContext();
@@ -93,7 +91,6 @@ export function buildWheel(selector, opts = {}){
     }catch(e){ return { stepIdx:0, phase01:0, barLen:1 }; }
   }
 
-  // Geometry (device-pixel space)
   const EDGE_WHEEL = 10;
   const worldW = ()=> canvas.width|0;
   const worldH = ()=> canvas.height|0;
@@ -126,9 +123,32 @@ export function buildWheel(selector, opts = {}){
     return best;
   }
 
-  // Input
-  canvas.addEventListener('pointerdown', (e)=>{
+  canvas.addEventListener('pointermove', (e)=>{
+    if (!dragActive) return;
     const p = local(e);
+    const { cx, cy } = radii();
+    const r = Math.hypot(p.x - cx, p.y - cy);
+    const rad = radii(); const semi = radiusToSemi(r, rad.Rmin, handleMaxRadius(rad));
+    if (dragIndex >= 0){
+      semiOffsets[dragIndex] = semi;
+      active[dragIndex] = true;
+    }
+    e.preventDefault(); e.stopPropagation();
+  }, { passive:false });
+  window.addEventListener('pointerup', ()=>{ dragActive = false; dragIndex=-1; }, { passive:true });
+  canvas.addEventListener('pointerdown', (e)=>{
+    
+    const isAdvanced = panel.classList.contains('toy-zoomed');
+    let pt = local(e);
+if (isAdvanced){
+      const hi = hitHandle(pt.x, pt.y, semiOffsets, radii(), spokeAngle);
+      if (hi >= 0){
+        dragIndex = hi; dragActive = true;
+        e.preventDefault(); e.stopPropagation();
+        return;
+      }
+    }
+const p = local(e);
     const i = hitSpokeButton(p.x, p.y);
     if (i >= 0){
       active[i] = !active[i];
@@ -137,42 +157,85 @@ export function buildWheel(selector, opts = {}){
     }
   }, { passive:false });
 
-  // Draw
   let lastTime = performance.now(), lastStep = -1, step = 0;
   function draw(){
+    
     const cs = resizeCanvasForDPR(canvas, ctx);
     const W = cs.width, H = cs.height;
-    const { cx, cy, Rmin, Rout } = radii();
+    const rad = radii(); const { cx, cy, Rmin, Rout, Rbtn } = rad;
     ctx.clearRect(0,0,W,H);
     ctx.fillStyle = '#0d1117'; ctx.fillRect(0,0,W,H);
 
-    const { stepIdx } = currentStepFromLoop();
+    const { stepIdx, phase01 } = currentStepFromLoop();
     const blocks = [];
     const TARGET_S = Math.round(42 * (sizing?.scale || 1));
     const arc = Math.max(12, Math.floor((2*Math.PI*Rout/ STEPS) * 0.7));
     const sBtn = Math.max(12, Math.min(TARGET_S, arc));
 
+    const zoomed = panel.classList.contains('toy-zoomed');
+
+    const gap = cubeGapPx(worldW(), worldH());
+    const spokeEndR = Math.max(Rmin, handleMaxRadius(rad)); // where spoke visually ends
+    const cubeCenterR = Rout; // where cube centers aim for (clamped later)
+
+    const loopPts = [];
     for (let i=0;i<STEPS;i++){
       const a = spokeAngle(i);
-      const x1 = cx + Math.cos(a)*Rmin, y1 = cy + Math.sin(a)*Rmin;
-      const x2 = cx + Math.cos(a)*Rout, y2 = cy + Math.sin(a)*Rout;
+      const p1 = spokePointAt(i, Rmin, rad, spokeAngle);
+      const p2 = spokePointAt(i, spokeEndR, rad, spokeAngle);
 
       ctx.strokeStyle = (i === stepIdx) ? '#a8b3cf' : '#252b36';
       ctx.lineWidth = (i === stepIdx) ? 3 : 2;
-      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
 
+      const hp = handlePos(i, semiOffsets, rad, spokeAngle);
+      ctx.beginPath();
+      ctx.arc(hp.x, hp.y, Math.max(4, sBtn*0.18), 0, Math.PI*2);
+      if (zoomed){
+        ctx.fillStyle = active[i] ? '#8fb3ff' : '#39404f';
+        ctx.strokeStyle = active[i] ? '#a8b3cf' : '#252b36';
+      } else {
+        ctx.fillStyle = '#2b313f';
+        ctx.strokeStyle = '#252b36';
+      }
+      ctx.lineWidth = 2;
+      ctx.fill(); ctx.stroke();
+
+      if (active[i]) loopPts.push({x:hp.x, y:hp.y});
+      
+      const cx2 = cx + Math.cos(a)*cubeCenterR;
+      const cy2 = cy + Math.sin(a)*cubeCenterR;
       const pad = EDGE_WHEEL + sBtn*0.5;
-      const bxC = Math.max(pad, Math.min(W - pad, x2));
-      const byC = Math.max(pad, Math.min(H - pad, y2));
+      const bxC = Math.max(pad, Math.min(W - pad, cx2));
+      const byC = Math.max(pad, Math.min(H - pad, cy2));
       const bx = Math.round(bxC - sBtn/2);
       const by = Math.round(byC - sBtn/2);
       blocks.push({ x: bx, y: by, w: sBtn, h: sBtn, active: !!active[i], noteIndex: 0, flashEnd: flashUntil[i], flashDur: 0.12 });
     }
+
+    if (loopPts.length >= 2){
+      ctx.strokeStyle = '#44516b';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(loopPts[0].x, loopPts[0].y);
+      for (let i=1;i<loopPts.length;i++) ctx.lineTo(loopPts[i].x, loopPts[i].y);
+      ctx.closePath();
+      ctx.stroke();
+    }
+
+    const handA = spokeAngle(stepIdx + phase01);
+    const handR = spokeEndR + Math.max(4, sBtn*0.1);
+    ctx.strokeStyle = '#e6e8ef';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(handA)*handR, cy + Math.sin(handA)*handR);
+    ctx.stroke();
+
     const nowSec = (performance.now()/1000);
     drawBlocksSection(ctx, blocks, 0, 0, null, 1, null, sizing, null, null, nowSec);
-  }
+}
 
-  // Trigger on steps
   function tick(){
     const { stepIdx } = currentStepFromLoop();
     if (stepIdx !== lastStep){
