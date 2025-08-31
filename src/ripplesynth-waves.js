@@ -132,13 +132,13 @@ const r1 = Math.max(0, r);
     // subtle ambience ring before the main bright ring
     strokeRing(r2 - ambW*0.5, ambW, 0.10);
   drawTrails(r2, baseLW * 0.9,  0.25, baseLW * 1.6, 3);
-    strokeGradientRing(r2, baseLW * 8.00, 0.45);
+    strokeGradientRing(r2, baseLW * 16.00, 0.45);
 
     // front & rear fades around r2
     ctx.save();
     const __oldComp2 = ctx.globalCompositeOperation; ctx.globalCompositeOperation = 'lighter';
-    strokeGradientRing(Math.max(0.0001, r2 - ambW * 6.4), ambW * 7.6, 0.16); // rear fade-in
-    strokeGradientRing(r2 + ambW * 6.4, ambW * 7.6, 0.15); // front fade-out (ahead of crest)
+    strokeGradientRing(Math.max(0.0001, r2 - ambW * 10.0), ambW * 20.0, 0.12); // rear fade-in
+    strokeGradientRing(r2 + ambW * 10.0, ambW * 20.0, 0.12); // front fade-out (ahead of crest)
     ctx.globalCompositeOperation = __oldComp2;
     ctx.restore();
 
@@ -157,13 +157,13 @@ const r1 = Math.max(0, r);
 })();// faint third ring (was second bright)
     strokeRing(r3 - ambW*0.5, ambW, 0.10);
   drawTrails(r3, baseLW * 1.1,  0.30, baseLW * 1.8, 3);
-    strokeGradientRing(r3, baseLW * 9.00, 0.46);
+    strokeGradientRing(r3, baseLW * 18.00, 0.46);
 
     // front & rear fades around r3
     ctx.save();
     const __oldComp3 = ctx.globalCompositeOperation; ctx.globalCompositeOperation = 'lighter';
-    strokeGradientRing(Math.max(0.0001, r3 - ambW * 8.0), ambW * 9.2, 0.19); // rear fade-in
-    strokeGradientRing(r3 + ambW * 8.0, ambW * 9.2, 0.17); // front fade-out (ahead of crest)
+    strokeGradientRing(Math.max(0.0001, r3 - ambW * 12.0), ambW * 24.0, 0.12); // rear fade-in
+    strokeGradientRing(r3 + ambW * 12.0, ambW * 24.0, 0.12); // front fade-out (ahead of crest)
     ctx.globalCompositeOperation = __oldComp3;
     ctx.restore();
 
