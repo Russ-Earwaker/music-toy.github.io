@@ -1,18 +1,21 @@
 // src/ripplesynth-blocks.js
 import { drawTileLabelAndArrows } from './ui-tiles.js';
+import { ensureAudioContext } from './audio-core.js';
 // Draws orange blocks with flash + unified label/arrows via shared helper.
 
 const SHOW_TOP_UI = true;
 
 export function drawBlocksSection(ctx, blocks, gx, gy, ripples, volume, noteList, sizing, _a, _b, now){
-  for (let i=0;i<blocks.length;i++){
+    const ac = ensureAudioContext?.(); const nowS = (typeof now==='number' && isFinite(now)) ? now : (ac ? ac.currentTime : ((typeof performance!=='undefined'? performance.now():0)/1000));
+for (let i=0;i<blocks.length;i++){
     const b = blocks[i];
     const x = b.x|0, y = b.y|0, w = b.w|0, h = b.h|0;
 
     // flash overlay
-    const flashA = (b.flashEnd && b.flashDur) ? Math.max(0, Math.min(1, (b.flashEnd - now) / b.flashDur)) : 0;
-    if (b.cflash && b.cflash>0){
-      const a = Math.min(1, b.cflash);
+    const flashA = (b.flashEnd && b.flashDur) ? Math.max(0, Math.min(1, (b.flashEnd - nowS) / b.flashDur)) : 0;
+    const visFlash = Math.max(b.cflash||0, flashA);
+    if (visFlash>0){
+      const a = Math.min(1, visFlash);
       ctx.save(); const oldG = ctx.globalCompositeOperation; ctx.globalCompositeOperation='lighter';
       ctx.fillStyle = `rgba(255,255,255,${0.35*a})`;
       ctx.fillRect(x-3, y-3, w+6, h+6);
@@ -23,8 +26,15 @@ export function drawBlocksSection(ctx, blocks, gx, gy, ripples, volume, noteList
     const scl = (b.pulse && b.pulse>0) ? (1 + 0.14 * b.pulse) : 1;
     const cx = x + w/2, cy = y + h/2;
     ctx.save(); ctx.translate(cx, cy); ctx.scale(scl, scl); ctx.translate(-cx, -cy);
-    ctx.fillStyle = b.active ? '#f4932f' : '#293042';
+    // scale pulse from pulse or visFlash
+      const __pulseA = Math.max(b.pulse||0, (typeof visFlash!=='undefined'? visFlash*0.85 : 0));
+      const __scl = __pulseA>0 ? (1 + 0.14*__pulseA) : 1;
+      const __cx = x + w/2, __cy = y + h/2;
+      ctx.save(); ctx.translate(__cx, __cy); ctx.scale(__scl, __scl); ctx.translate(-__cx, -__cy);
+      ctx.fillStyle = b.active ? '#f4932f' : '#293042';
     ctx.fillRect(x, y, w, h);
+      ctx.restore();
+      /*SHARED_CUBE_PULSE*/
     ctx.restore();
     /*PULSE_VISUAL*/
     if (flashA > 0){
@@ -60,8 +70,8 @@ export function drawBlocksSection(ctx, blocks, gx, gy, ripples, volume, noteList
       if (!zoomed && sizing && typeof sizing.vw==='function') zoomed = sizing.vw()>=600;
       drawTileLabelAndArrows(ctx, rect, { label, active: !!b.active, zoomed });
       // full-white flash overlay drawn last so it covers label background
-      if (b.cflash && b.cflash>0){
-        const a = Math.min(1, b.cflash);
+      if (visFlash>0){
+        const a = Math.min(1, visFlash);
         ctx.save();
         ctx.globalAlpha = a;
         ctx.fillStyle = '#fff';

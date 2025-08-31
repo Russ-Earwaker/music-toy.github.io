@@ -141,10 +141,15 @@ function draw(){
         for (let i=0;i<steps.length;i++){
       const s = steps[i];
       const b = blockRectForIndex(i, L);
-      drawBlock(ctx, b, {      baseColor: s.active ? '#f4932f' : '#293042',      active: !!s.active,      noteLabel: L.isZoomed ? (noteList && s.noteIndex!=null ? String(noteList[s.noteIndex % noteList.length]||'') : '') : null,      showArrows: L.isZoomed,
+            { const __pulse = Math.max(0, Math.min(1, (s.flash||0)));
+        const __scl = __pulse>0 ? (1 + 0.14*__pulse) : 1;
+        const __cx = b.x + b.w/2, __cy = b.y + b.h/2;
+        ctx.save(); ctx.translate(__cx, __cy); ctx.scale(__scl, __scl); ctx.translate(-__cx, -__cy);
+        drawBlock(ctx, b, {      baseColor: s.active ? '#f4932f' : '#293042',      active: !!s.active,      noteLabel: L.isZoomed ? (noteList && s.noteIndex!=null ? String(noteList[s.noteIndex % noteList.length]||'') : '') : null,      showArrows: L.isZoomed,
       variant: L.isZoomed ? 'block' : 'button'
     });
-    ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1; ctx.strokeRect(b.x+0.5,b.y+0.5,b.w-1,b.h-1); ctx.restore();
+            ctx.restore(); }
+ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1; ctx.strokeRect(b.x+0.5,b.y+0.5,b.w-1,b.h-1); ctx.restore();
     if (s.flash && s.flash > 0){ ctx.save(); ctx.globalAlpha = Math.min(0.35, 0.25 * s.flash); ctx.fillStyle = '#ffffff'; ctx.fillRect(b.x, b.y, b.w, b.h); ctx.restore(); }
     if (L.isZoomed){
       const label = noteList[s.noteIndex] || '?';
