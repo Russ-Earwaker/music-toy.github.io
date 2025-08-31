@@ -148,6 +148,27 @@ header.appendChild(right);
   muteBtn.innerHTML = "<svg viewBox='0 0 24 24' width='18' height='18' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M11 5L6 9H3v6h3l5 4V5z'/><path d='M23 9l-6 6M17 9l6 6'/></svg>";
   Object.assign(muteBtn.style, { width:'32px', height:'32px', display:'grid', placeItems:'center', background:'transparent', color:'#e6e8ef', border:'none', borderRadius:'8px', cursor:'pointer' });
   muteBtn.addEventListener('pointerdown', e=> e.stopPropagation());
+  // Mute click: toggle aria-pressed, zero/restore slider, and dispatch events
+  muteBtn.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    const toyId = idBase;
+    const isPressed = muteBtn.getAttribute('aria-pressed') === 'true';
+    const rng = vol;
+    let last = Math.max(0, Math.min(100, parseInt(rng.dataset._preMute||rng.value,10)||100));
+    if (!isPressed){
+      muteBtn.setAttribute('aria-pressed','true');
+      rng.dataset._preMute = String(last);
+      rng.value = '0';
+      rng.dispatchEvent(new Event('input', { bubbles:true }));
+      try{ window.dispatchEvent(new CustomEvent('toy-mute', { detail: { toyId, muted: true } })); }catch{}
+    } else {
+      muteBtn.setAttribute('aria-pressed','false');
+      const restore = parseInt(rng.dataset._preMute||last,10)||last||100;
+      rng.value = String(restore);
+      rng.dispatchEvent(new Event('input', { bubbles:true }));
+      try{ window.dispatchEvent(new CustomEvent('toy-mute', { detail: { toyId, muted: false } })); }catch{}
+    }
+  });
 
   const vol = document.createElement('input');
   vol.type = 'range'; vol.min = '0'; vol.max = '100'; vol.step = '1'; vol.value = '100';

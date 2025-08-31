@@ -264,7 +264,7 @@ function setNextLaunchAt(t){ nextLaunchAt = t; }
   function __setAim(a){ try{ if (a && typeof a==='object'){ Object.assign(__aim, a); } }catch(e){} }
 
   const _int = installBouncerInteractions({ setAim: __setAim, canvas, sizing, toWorld, EDGE, physW, physH, ballR, __getSpeed,
-    blocks, edgeControllers, handle, spawnBallFrom, setNextLaunchAt, setBallOut, instrument, toyId, noteList });
+    blocks, edgeControllers, handle, spawnBallFrom, setNextLaunchAt, setBallOut, instrument: ()=>instrument, toyId, noteList, isAdvanced: ()=>panel.classList.contains('toy-zoomed') });
 // draw loop
   
   lockPhysWorld();

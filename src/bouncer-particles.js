@@ -1,6 +1,7 @@
 // src/bouncer-particles.js
 export function createBouncerParticles(getW, getH, { count=280 } = {}){
   const P = [];
+  let beatGlow = 0;
   const W = ()=> Math.max(1, Math.floor(getW()?getW():0));
   const H = ()=> Math.max(1, Math.floor(getH()?getH():0));
   for (let i=0;i<count;i++){
@@ -28,6 +29,7 @@ export function createBouncerParticles(getW, getH, { count=280 } = {}){
 
   // Beat pulse: radial kick from a point (cx,cy), with brightness pop
   function onBeat(cx, cy){
+    beatGlow = 1;
     const w=W(), h=H();
     const rad = Math.max(24, Math.min(w,h)*0.42);
     for (const p of P){
@@ -84,6 +86,7 @@ export function createBouncerParticles(getW, getH, { count=280 } = {}){
     if (!ctx) return;
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
+    if (beatGlow>0){ ctx.globalAlpha = Math.min(0.6, beatGlow*0.6); ctx.fillStyle='rgba(120,160,255,0.5)'; ctx.fillRect(0,0,W(),H()); ctx.globalAlpha=1; beatGlow *= 0.88; }
     for (const p of P){
       ctx.globalAlpha = Math.max(0.08, Math.min(1, p.alpha));
       ctx.fillStyle = '#8fa8ff';
