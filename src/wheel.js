@@ -210,7 +210,7 @@ const p = local(e);
       const byC = Math.max(pad, Math.min(H - pad, cy2));
       const bx = Math.round(bxC - sBtn/2);
       const by = Math.round(byC - sBtn/2);
-      blocks.push({ x: bx, y: by, w: sBtn, h: sBtn, active: !!active[i], noteIndex: 0, flashEnd: flashUntil[i], flashDur: 0.12 });
+      blocks.push({ x: bx, y: by, w: sBtn, h: sBtn, active: !!active[i], noteIndex: (baseMidi + (semiOffsets[i]|0)) % 12, flashEnd: flashUntil[i], flashDur: 0.12 , hideArrows:true});
     }
 
     if (loopPts.length >= 2){
@@ -233,7 +233,7 @@ const p = local(e);
     ctx.stroke();
 
     const nowSec = (performance.now()/1000);
-    drawBlocksSection(ctx, blocks, 0, 0, null, 1, null, sizing, null, null, nowSec);
+    drawBlocksSection(ctx, blocks, 0, 0, null, 1, NOTE_NAMES, sizing, null, null, nowSec);
 }
 
   function tick(){
@@ -252,6 +252,13 @@ const p = local(e);
     draw(); tick(); requestAnimationFrame(loop);
   }
   requestAnimationFrame(loop);
+
+  // Guard: if samples become ready and wheel hasn't populated yet, randomize once
+  try {
+    window.addEventListener('samples-ready', ()=>{
+      try { if (!active.some(Boolean)) doRandom(); } catch {}
+    });
+  } catch {}
 
   panel.tabIndex = 0;
   panel.addEventListener('keydown', (e)=>{

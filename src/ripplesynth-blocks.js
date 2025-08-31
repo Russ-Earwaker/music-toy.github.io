@@ -68,6 +68,7 @@ for (let i=0;i<blocks.length;i++){
         zoomed = !!(p && p.classList && p.classList.contains('toy-zoomed'));
       } catch {}
       if (!zoomed && sizing && typeof sizing.vw==='function') zoomed = sizing.vw()>=600;
+      if (b && b.hideArrows) zoomed = false;
       drawTileLabelAndArrows(ctx, rect, { label, active: !!b.active, zoomed });
       // full-white flash overlay drawn last so it covers label background
       if (visFlash>0){
