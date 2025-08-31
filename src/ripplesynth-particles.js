@@ -57,50 +57,46 @@ export function drawParticles(ctx, now, ripples, generator, blocks){
     p.vy = (p.vy + ay) * P_DAMP;
     // (spring applied; ripple knockback handled below)
     // ripple knockback
+    // ripple knockback
     if (generator && generator.x!=null && ripples && ripples.length){
       for (let r=0; r<ripples.length; r++){
         const R = ripples[r];
         const radius = Math.max(0, (now - R.startTime) * R.speed);
         const dist = Math.hypot(p.x - R.x, p.y - R.y);
+
+        // r1 (primary)
         if (Math.abs(dist - radius) <= P_HIT_BAND){
           const dx = p.x - R.x, dy = p.y - R.y;
           const d = Math.max(1, Math.hypot(dx, dy));
           const clos = Math.max(0, 1 - Math.abs(dist - radius) / Math.max(1, P_HIT_BAND));
           const k = (P_IMPULSE * (1.0 + 0.2 * clos)) / d;
-          // movement same for primary ring
           p.vx += dx * k; p.vy += dy * k;
-          // full flash for primary ring
           p.flash = Math.max(p.flash, FLASH_MAIN);
-
-          /*MID_RING_R2*/
-          const radius2 = Math.max(0, radius - R.speed * 0.60);
-          if (radius2 > 0 && Math.abs(dist - radius2) <= P_HIT_BAND){
-            const dxm = p.x - R.x, dym = p.y - R.y;
-            const dm = Math.max(1, Math.hypot(dxm, dym));
-            const cm = Math.max(0, 1 - Math.abs(dist - radius2) / Math.max(1, P_HIT_BAND));
-            const km = (P_IMPULSE * 0.65 * (1.0 + 0.2 * cm)) / dm;
-            p.vx += dxm * km; p.vy += dym * km;
-            p.flash = Math.max(p.flash, 0.35 * cm);
-          }
-
         }
-        // secondary bright ring: same movement, reduced flash
+
+        // r2 (mid) — same strength/flash as r3
+        const radius2 = Math.max(0, radius - R.speed * 0.60);
+        if (radius2 > 0 && Math.abs(dist - radius2) <= P_HIT_BAND){
+          const dxm = p.x - R.x, dym = p.y - R.y;
+          const dm = Math.max(1, Math.hypot(dxm, dym));
+          const cm = Math.max(0, 1 - Math.abs(dist - radius2) / Math.max(1, P_HIT_BAND));
+          const km = (P_IMPULSE * (1.0 + 0.2 * cm)) / dm;
+          p.vx += dxm * km; p.vy += dym * km;
+          p.flash = Math.max(p.flash, FLASH_SECOND);
+        }
+
+        // r3 (tertiary)
         const radius3 = Math.max(0, radius - R.speed * 1.20);
         if (radius3 > 0 && Math.abs(dist - radius3) <= P_HIT_BAND){
           const dx2 = p.x - R.x, dy2 = p.y - R.y;
           const d2 = Math.max(1, Math.hypot(dx2, dy2));
           const clos2 = Math.max(0, 1 - Math.abs(dist - radius3) / Math.max(1, P_HIT_BAND));
           const k2 = (P_IMPULSE * (1.0 + 0.2 * clos2)) / d2;
-          p.vx += dx2 * k2; p.vy += dy2 * k2; // same impulse
+          p.vx += dx2 * k2; p.vy += dy2 * k2;
           p.flash = Math.max(p.flash, FLASH_SECOND);
         }
       }
     }
-    // cap + integrate
-    const sp = Math.hypot(p.vx, p.vy);
-    if (sp > P_MAXV){ const s = P_MAXV/sp; p.vx*=s; p.vy*=s; }
-    p.flash = Math.max(0, p.flash - dt*2);
-    p.x += p.vx * dt;
     // cube repulsion (optional)
 
 
@@ -165,6 +161,9 @@ export function drawParticles(ctx, now, ripples, generator, blocks){
 
     // clamp particle speed similar to bouncer feel
     { const sp = Math.hypot(p.vx, p.vy); if (sp > P_MAXV){ const s=P_MAXV/sp; p.vx*=s; p.vy*=s; } }
+    /*GENTLE_DECAY*/
+    p.flash = Math.max(0, (p.flash||0) * 0.92 - 0.01);
+    p.tint  = Math.max(0, (p.tint||0)  * 0.90 - 0.01);
     p.y += p.vy * dt;
   }
 
