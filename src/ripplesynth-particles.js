@@ -76,15 +76,15 @@ export function drawParticles(ctx, now, ripples, generator, blocks){
           p.vx -= dxp * kp; p.vy -= dyp * kp;
         }
 
-// r1 (primary)
-        if (Math.abs(dist - radius) <= P_HIT_BAND){
+// r1 (primary) — stronger & wider band
+        { const r1Band = P_HIT_BAND * 1.25; if (Math.abs(dist - radius) <= r1Band){
           const dx = p.x - R.x, dy = p.y - R.y;
           const d = Math.max(1, Math.hypot(dx, dy));
-          const clos = Math.max(0, 1 - Math.abs(dist - radius) / Math.max(1, P_HIT_BAND));
-          const k = (P_IMPULSE * (1.0 + 0.2 * clos)) / d;
+          const clos = Math.max(0, 1 - Math.abs(dist - radius) / Math.max(1, r1Band));
+          const k = (P_IMPULSE * 1.60 * (1.0 + 0.25 * clos)) / d;
           p.vx += dx * k; p.vy += dy * k;
-          p.flash = Math.max(p.flash, FLASH_MAIN);
-        }
+          p.flash = Math.max(p.flash, Math.max(FLASH_MAIN, 0.90));
+        }}
 
         // r2 (mid) — same strength/flash as r3
         const radius2 = Math.max(0, radius - R.speed * 0.60);
