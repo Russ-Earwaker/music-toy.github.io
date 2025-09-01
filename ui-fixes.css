@@ -1,89 +1,15 @@
-/* ui-fixes.css — keep minimal standard-mode tweaks */
+/* ui-fixes.css — minimal, safe overrides */
+
 .toy-panel{ display:flex; flex-direction:column; width:100%; }
 .toy-panel .toy-header,
 .toy-panel .toy-footer,
 .toy-panel .toy-volume{ width:100%; align-self:stretch; }
 .toy-panel .toy-body{ display:grid; place-items:center; overflow:hidden; }
-.toy-panel.toy-zoomed{ border:1px solid rgba(255,255,255,0.08); border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,0.5); }
 
-/* === Overlay zoom overrides (beat style.css square rules) ===
-   We clear aspect-ratio and allow JS to set explicit px width/height.
-   Use very specific selector + !important to win cascade. */
-#zoom-overlay #zoom-frame .toy-panel .toy-body {
-  aspect-ratio: auto !important;
-}
+/* In overlay/zoom, JS sets explicit px size; remove aspect lock */
+#zoom-overlay #zoom-frame .toy-panel .toy-body { aspect-ratio: auto !important; }
 
-/* Grid: do NOT force square; let overlay clamp height via JS */
-#zoom-overlay #zoom-frame .toy-panel[data-toy="grid"] .toy-body,
-#zoom-overlay #zoom-frame .toy-panel[data-toy="loopgrid"] .toy-body {
-  aspect-ratio: auto !important;
-}
-
-/* Ensure canvases can grow to body (JS sets px size on body) */
-#zoom-overlay #zoom-frame .toy-panel .toy-body canvas,
-#zoom-overlay #zoom-frame .toy-panel .toy-body svg {
-  width: 100% !important;
-  height: 100% !important;
-  display: block;
-}
-
-
-/* Override centering for LoopGrid and DrawGrid toys */
-.toy-panel[data-toy="loopgrid"] .toy-body,
-.toy-panel[data-toy="drawgrid"] .toy-body {
-  display: block !important;
-  place-items: initial !important;
-  align-items: initial !important;
-  justify-items: initial !important;
-}
-.toy-panel[data-toy="drawgrid"] .toy-body canvas {
-  width: 100% !important;
-  height: 100% !important;
-  display: block !important;
-}
-
-
-/* Force LoopGrid & DrawGrid to fill panel in Standard (unzoomed) */
-.toy-panel.toy-unzoomed[data-toy="loopgrid"] .toy-body,
-.toy-panel.toy-unzoomed[data-toy="drawgrid"] .toy-body {
-  position: absolute !important;
-  left: 10px !important; right: 10px !important; top: 56px !important; bottom: 10px !important;
-  min-height: 260px !important; min-width: 320px !important;
-}
-
-
-/* Top-align LoopGrid & DrawGrid bodies and remove global aspect lock for these toys */
-.toy-panel[data-toy="loopgrid"] .toy-body,
-.toy-panel[data-toy="drawgrid"] .toy-body{
-  display:block !important;
-  width: 100% !important;
-  aspect-ratio: auto !important;
-  padding: 10px !important;
-}
-/* Make sure canvas fills body box */
-.toy-panel[data-toy="drawgrid"] .toy-body canvas{
-  display:block !important;
-  width: 100% !important;
-  height: 100% !important;
-}
-
-
-/* Neutralize earlier absolute-position overrides for these toys */
-.toy-panel[data-toy="loopgrid"] .toy-body,
-.toy-panel[data-toy="drawgrid"] .toy-body{
-  position: relative !important;
-  left:auto !important; right:auto !important; top:auto !important; bottom:auto !important;
-  padding: 0 !important;
-  width: 100% !important;
-  height: auto !important;
-  aspect-ratio: auto !important;
-}
-.toy-panel[data-toy="drawgrid"] .toy-body canvas{
-  width: 100% !important; height: 100% !important; display:block !important;
-}
-
-
-/* Top-align panel content for loopgrid/drawgrid to avoid vertical centering */
+/* Top‑align LoopGrid & DrawGrid so content starts under header */
 .toy-panel[data-toy="loopgrid"],
 .toy-panel[data-toy="drawgrid"]{
   align-items: start !important;
@@ -94,3 +20,4 @@
   align-self: start !important;
   justify-self: stretch !important;
 }
+/* Let each toy control its own canvas size; do not force 100% height here */
