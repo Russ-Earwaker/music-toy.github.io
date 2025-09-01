@@ -60,7 +60,8 @@ for (let i=0;i<blocks.length;i++){
         // unified label + arrows
     {
       const rect = {x, y, w, h};
-      const label = (noteList && b.noteIndex!=null) ? String(noteList[b.noteIndex % noteList.length]||'') : '';
+      let label = (noteList && b.noteIndex!=null) ? String(noteList[b.noteIndex % noteList.length]||'') : '';
+      if (b && b.labelOverride) label = String(b.labelOverride);
       let zoomed = false;
       try {
         const cnv = ctx && ctx.canvas;
@@ -68,8 +69,23 @@ for (let i=0;i<blocks.length;i++){
         zoomed = !!(p && p.classList && p.classList.contains('toy-zoomed'));
       } catch {}
       if (!zoomed && sizing && typeof sizing.vw==='function') zoomed = sizing.vw()>=600;
-      if (b && b.hideArrows) zoomed = false;
-      drawTileLabelAndArrows(ctx, rect, { label, active: !!b.active, zoomed });
+      const zoomForArrows = zoomed && !(b && b.hideArrows);
+      drawTileLabelAndArrows(ctx, rect, { label, active: !!b.active, zoomed: zoomForArrows });
+      // If we're dragging (Wheel), force a simple label overlay without arrows
+      if (b && b.showLabelForce && label){
+        ctx.save();
+        ctx.globalAlpha = 1;
+        ctx.font = '14px ui-sans-serif, system-ui';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        // subtle band behind text
+        const px = Math.max(4, Math.min(w, h) * 0.12);
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fillRect(x+px, y+h*0.38, w-2*px, h*0.24);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(label, x + w/2, y + h/2);
+        ctx.restore();
+      }
       // full-white flash overlay drawn last so it covers label background
       if (visFlash>0){
         const a = Math.min(1, visFlash);

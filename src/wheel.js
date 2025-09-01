@@ -26,7 +26,7 @@ export function buildWheel(selector, opts = {}){
   const ui = initToyUI(panel, {
     toyName: title,
     defaultInstrument,
-    onRandom: () => doRandom(),
+    onRandom: () => doRandom({activate:true}),
     onReset: () => doReset()
   });
 
@@ -38,7 +38,6 @@ export function buildWheel(selector, opts = {}){
   const ctx = canvas.getContext('2d');
 
   const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true });
-  /*__RANDOM_ON_BOOT__*/ try{ doRandom(); }catch{};
 
   let active = Array.from({length:STEPS}, ()=> false);
   let semiOffsets = Array.from({length:STEPS}, ()=> 0);
@@ -51,28 +50,43 @@ export function buildWheel(selector, opts = {}){
   let dragActive = false;
   function doReset(){ active = Array.from({length:STEPS}, ()=> false); }
 
-  function doRandom(){
+  function doRandom(opts = {}){
     try{
       const tries = 4;
       for (let attempt=0; attempt<tries; attempt++){
         const handles = Array.from({length:STEPS}, ()=> null);
         const prio = 1 + Math.random()*0.001*attempt; // tiny jitter to impact density selection
         randomizeWheel(handles, { toyId:'wheel', priority: prio });
+        // Fill nulls so every spoke has a pitch (for 'deactivated but already in tune')
+        if (handles.some(h => h == null)){
+          // find first non-null
+          let firstIdx = handles.findIndex(h => h != null);
+          if (firstIdx === -1){
+            // nothing assigned: seed all to 0
+            for (let i=0;i<STEPS;i++) handles[i] = 0;
+          } else {
+            // backward fill leading nulls with the first known value
+            for (let i=firstIdx-1; i>=0; i--){ if (handles[i]==null) handles[i] = handles[i+1]; }
+            // forward fill remaining nulls with previous known
+            for (let i=firstIdx+1; i<STEPS; i++){ if (handles[i]==null) handles[i] = handles[i-1]; }
+          }
+        }
+
         const pattern = handles.map(h=> (h==null?0:1)).join('');
         if (pattern !== __lastRandSig || attempt === tries-1){
           for (let i=0;i<STEPS;i++){
             const h = handles[i];
-            active[i] = (h!=null);
-            semiOffsets[i] = (h!=null ? (h|0) : 0);
+            active[i] = !!(opts && opts.activate && h!=null);
+            semiOffsets[i] = (h!=null ? (h|0) : (semiOffsets[i]||0));
           }
           __lastRandSig = pattern;
           const idxs = [...Array(STEPS).keys()]; for (let r=idxs.length-1;r>0;r--){ const j=(Math.random()* (r+1))|0; const t=idxs[r]; idxs[r]=idxs[j]; idxs[j]=t; }
-          let flips = 0; for (let k=0;k<idxs.length && flips<2;k++){ const ii = idxs[k]; if (Math.random()<0.25){ active[ii] = !active[ii]; flips++; } }
+          if (opts && opts.activate){ let flips = 0; for (let k=0;k<idxs.length && flips<2;k++){ const ii = idxs[k]; if (Math.random()<0.25){ active[ii] = !active[ii]; flips++; } } }
           break;
         }
       }
     }catch(e){
-      for (let i=0;i<STEPS;i++){ active[i] = (i%4===0); semiOffsets[i] = 0; }
+      for (let i=0;i<STEPS;i++){ /* keep all off by default */ active[i] = false; semiOffsets[i] = 0; }
     }
   }
 
@@ -128,7 +142,7 @@ export function buildWheel(selector, opts = {}){
     const p = local(e);
     const { cx, cy } = radii();
     const r = Math.hypot(p.x - cx, p.y - cy);
-    const rad = radii(); const semi = radiusToSemi(r, rad.Rmin, handleMaxRadius(rad));
+    const rad = radii(); const Rinner = Math.max(0, rad.Rmin*0.7); const semi = radiusToSemi(r, Rinner, handleMaxRadius(rad));
     if (dragIndex >= 0){
       semiOffsets[dragIndex] = semi;
       active[dragIndex] = true;
@@ -141,7 +155,7 @@ export function buildWheel(selector, opts = {}){
     const isAdvanced = panel.classList.contains('toy-zoomed');
     let pt = local(e);
 if (isAdvanced){
-      const hi = hitHandle(pt.x, pt.y, semiOffsets, radii(), spokeAngle);
+      const __rad = radii(); const __radInner = { ...__rad, Rmin: Math.max(0, __rad.Rmin*0.7) }; const hi = hitHandle(pt.x, pt.y, semiOffsets, __radInner, spokeAngle);
       if (hi >= 0){
         dragIndex = hi; dragActive = true;
         e.preventDefault(); e.stopPropagation();
@@ -163,6 +177,8 @@ const p = local(e);
     const cs = resizeCanvasForDPR(canvas, ctx);
     const W = cs.width, H = cs.height;
     const rad = radii(); const { cx, cy, Rmin, Rout, Rbtn } = rad;
+    const Rinner = Math.max(0, Rmin * 0.7);
+    const radInner = { ...rad, Rmin: Rinner };
     ctx.clearRect(0,0,W,H);
     ctx.fillStyle = '#0d1117'; ctx.fillRect(0,0,W,H);
 
@@ -181,14 +197,29 @@ const p = local(e);
     const loopPts = [];
     for (let i=0;i<STEPS;i++){
       const a = spokeAngle(i);
-      const p1 = spokePointAt(i, Rmin, rad, spokeAngle);
+      const p1 = spokePointAt(i, Rinner, rad, spokeAngle);
       const p2 = spokePointAt(i, spokeEndR, rad, spokeAngle);
 
       ctx.strokeStyle = (i === stepIdx) ? '#a8b3cf' : '#252b36';
       ctx.lineWidth = (i === stepIdx) ? 3 : 2;
       ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
+      // semitone ticks along the spoke (12 stops)
+      const ticks = 12;
+      for (let k=0;k<ticks;k++){
+        const rr = semiToRadius(k, Rinner, handleMaxRadius(rad));
+        const tp = spokePointAt(i, rr, rad, spokeAngle);
+        const nx = -Math.sin(a), ny = Math.cos(a);
+        const half = Math.max(2, sBtn*0.10);
+        ctx.beginPath();
+        ctx.moveTo(tp.x - nx*half, tp.y - ny*half);
+        ctx.lineTo(tp.x + nx*half, tp.y + ny*half);
+        ctx.strokeStyle = '#2a3040';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
 
-      const hp = handlePos(i, semiOffsets, rad, spokeAngle);
+
+      const hp = handlePos(i, semiOffsets, radInner, spokeAngle);
       ctx.beginPath();
       ctx.arc(hp.x, hp.y, Math.max(4, sBtn*0.18), 0, Math.PI*2);
       if (zoomed){
@@ -210,7 +241,7 @@ const p = local(e);
       const byC = Math.max(pad, Math.min(H - pad, cy2));
       const bx = Math.round(bxC - sBtn/2);
       const by = Math.round(byC - sBtn/2);
-      blocks.push({ x: bx, y: by, w: sBtn, h: sBtn, active: !!active[i], noteIndex: (baseMidi + (semiOffsets[i]|0)) % 12, flashEnd: flashUntil[i], flashDur: 0.12 , hideArrows:true});
+      blocks.push({ x: bx, y: by, w: sBtn, h: sBtn, active: !!active[i], noteIndex: (baseMidi + (semiOffsets[i]|0)) % 12, showLabelForce: (dragActive && (i===dragIndex)), labelOverride: midiName(baseMidi + (semiOffsets[i]|0)), flashEnd: flashUntil[i], flashDur: 0.12 , hideArrows:true});
     }
 
     if (loopPts.length >= 2){
@@ -251,12 +282,19 @@ const p = local(e);
     const dt = Math.min(100, now - lastTime); lastTime = now;
     draw(); tick(); requestAnimationFrame(loop);
   }
+
+  // Boot: assign pitches but keep all spokes deactivated
+  try {
+    doRandom({activate:false});
+    for (let __i=0; __i<STEPS; __i++){ active[__i] = false; }
+  } catch {}
+
   requestAnimationFrame(loop);
 
   // Guard: if samples become ready and wheel hasn't populated yet, randomize once
   try {
     window.addEventListener('samples-ready', ()=>{
-      try { if (!active.some(Boolean)) doRandom(); } catch {}
+      try { if (!active.some(Boolean)) doRandom({activate:false}); } catch {}
     });
   } catch {}
 
