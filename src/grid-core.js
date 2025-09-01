@@ -1,5 +1,5 @@
 import { resizeCanvasForDPR, noteList, clamp } from './utils.js';
-import { NUM_STEPS, ensureAudioContext } from './audio-core.js';
+import { NUM_STEPS, ensureAudioContext, stepSeconds } from './audio-core.js';
 import { triggerInstrument } from './audio-samples.js';
 import { initToyUI } from './toyui.js';
 import { drawTileLabelAndArrows } from './ui-tiles.js';
@@ -66,13 +66,18 @@ export function buildGrid(selector, numSteps = NUM_STEPS, { defaultInstrument='t
 const ctx = canvas.getContext('2d');
   let __lastCssH = -1;
 
-  const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: false });
+  const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true });
+  function enforceSquareIfLoopgrid(){ try{ if(panel.dataset.toy==='loopgrid' && !panel.classList.contains('toy-zoomed')){ const w = sizing.vw?.(); if (Number.isFinite(w) && w>0) sizing.setContentCssHeight?.(w); } }catch{} }
+  enforceSquareIfLoopgrid();
+  new MutationObserver(enforceSquareIfLoopgrid).observe(panel, { attributes:true, attributeFilter:['class'] });
+  try{ new ResizeObserver(enforceSquareIfLoopgrid).observe(panel); }catch{}
   /* sizing init hook */
   try { sizing.setZoom(panel.classList.contains('toy-zoomed')); } catch {}
   const worldW = ()=> ((canvas.getBoundingClientRect?.().width|0) || canvas.clientWidth || sizing?.vw?.() || body.clientWidth || 356);
   const worldH = ()=> ((canvas.getBoundingClientRect?.().height|0) || canvas.clientHeight || sizing?.vh?.() || body.clientHeight || 240);
   const c4Index = Math.max(0, noteList.indexOf('C4'));
   let currentCol = -1;
+  let lastColTs = 0;
   let paintedOnce = false;
   let randBtnRef;
   let notesBtnRef;
@@ -261,14 +266,33 @@ function doRandomNotes(){
     }
     if (clearBtn) clearBtn.addEventListener('click', clear);
   } catch {}
-  function markPlayingColumn(i){
+  
+  // -- Drum tap integration: activate nearest step to current playhead (no deactivation)
+  panel.addEventListener('loopgrid:drum-tap', ()=>{
+  try {
+    const len = steps.length || 1;
+    let idx = (currentCol>=0 && currentCol < len) ? currentCol : 0;
+    const now = (typeof performance!=='undefined' && performance.now) ? performance.now() : Date.now();
+    const msPerStep = (typeof stepSeconds==='function' ? stepSeconds()*1000 : 0);
+    const since = now - (lastColTs||0);
+    const roundedForward = (msPerStep>0 && since > msPerStep*0.66);
+    if (roundedForward) idx = (idx + 1) % len;
+    const s = steps[idx]; if (!s) return;
+    if (!s.active) { s.active = true; s.flash = 1; }
+    // Play immediately only if we rounded forward
+    if (roundedForward){
+      try { const noteName = noteList[s.noteIndex] || 'C4'; triggerInstrument(ui.instrument, noteName); s.lastManualHit = now; } catch {}
+    }
+    draw();
+  } catch(e){ /* noop */ }
+});
+function markPlayingColumn(i){
     currentCol = i;
+    try { lastColTs = (typeof performance!=='undefined' && performance.now) ? performance.now() : Date.now(); } catch { lastColTs = Date.now(); }
     const s = steps[i]; if (!s) return;
     ping(i);
-    if (s.active){
-      try { const ac = ensureAudioContext(); const nowS = ac.currentTime; s.hitFlashDur = 0.22; s.hitFlashEnd = nowS + s.hitFlashDur; } catch {}
-      const noteName = noteList[s.noteIndex] || 'C4';
-      gatedTrigger(ui.instrument, noteName);
+    if (s.active){ try { const ac = ensureAudioContext(); const nowS = ac.currentTime; const nowMs = (typeof performance!=='undefined' && performance.now) ? performance.now() : Date.now(); if (!s.lastManualHit || (nowMs - s.lastManualHit) > 120) {  const ac = ensureAudioContext(); const nowS = ac.currentTime; s.hitFlashDur = 0.22; s.hitFlashEnd = nowS + s.hitFlashDur;  } } catch {} const noteName = noteList[s.noteIndex] || 'C4';
+      triggerInstrument(ui.instrument, noteName);
     }
     draw();
   }

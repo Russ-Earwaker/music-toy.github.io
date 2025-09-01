@@ -55,7 +55,7 @@
   }
 
   // Camera state
-  const state = { scale: 1, x: 0, y: 0, minScale: 0.5, maxScale: 2.5 };
+  const state = { scale: 1, x: 0, y: 0, minScale: 0.35, maxScale: 4.0 };
   function clamp(n,a,b){ return Math.min(b, Math.max(a,n)); }
   function apply(){
     camPan.style.transform = `translate3d(${state.x}px, ${state.y}px, 0)`;

@@ -158,7 +158,7 @@ main { flex: 1 1 auto; display: block; }
   height: 100%;                     /* fill all space under the top bar */
   width: 100%;
   background:
-    radial-gradient(transparent 98%, rgba(255,255,255,.05) 100%) 0 0/24px 24px,
+    radial-gradient(transparent 98%, rgba(255,255,255,.05) 100%) 0 0/48px 48px,
     #0e0e0e;
   border: 2px solid var(--border);
   border-radius: 12px;
@@ -353,7 +353,7 @@ main { flex: 1 1 auto; display: block; }
 /* Center zoomed toys and limit size */
 #zoom-overlay { display:none; position:fixed; inset:0; z-index:9999; }
 #zoom-overlay.active { display:grid; place-items:center; }
-#zoom-overlay .toy-panel { max-width: min(94vw, 900px); width: 100%; }
+#zoom-overlay .toy-panel { max-width: min(98vw, 1800px); width: 100%; }
 #zoom-overlay .toy-panel .toy-body { aspect-ratio: 1 / 1; }
 
 
