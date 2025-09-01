@@ -1,0 +1,23 @@
+/* ui-fixes.css — minimal, safe overrides */
+
+.toy-panel{ display:flex; flex-direction:column; width:100%; }
+.toy-panel .toy-header,
+.toy-panel .toy-footer,
+.toy-panel .toy-volume{ width:100%; align-self:stretch; }
+.toy-panel .toy-body{ display:grid; place-items:center; overflow:hidden; }
+
+/* In overlay/zoom, JS sets explicit px size; remove aspect lock */
+#zoom-overlay #zoom-frame .toy-panel .toy-body { aspect-ratio: auto !important; }
+
+/* Top‑align LoopGrid & DrawGrid so content starts under header */
+.toy-panel[data-toy="loopgrid"],
+.toy-panel[data-toy="drawgrid"]{
+  align-items: start !important;
+  justify-items: stretch !important;
+}
+.toy-panel[data-toy="loopgrid"] > .toy-body,
+.toy-panel[data-toy="drawgrid"] > .toy-body{
+  align-self: start !important;
+  justify-self: stretch !important;
+}
+/* Let each toy control its own canvas size; do not force 100% height here */

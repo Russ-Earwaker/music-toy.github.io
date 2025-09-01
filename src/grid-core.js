@@ -275,14 +275,11 @@ function doRandomNotes(){
     const now = (typeof performance!=='undefined' && performance.now) ? performance.now() : Date.now();
     const msPerStep = (typeof stepSeconds==='function' ? stepSeconds()*1000 : 0);
     const since = now - (lastColTs||0);
-    const roundedForward = (msPerStep>0 && since > msPerStep*0.66);
-    if (roundedForward) idx = (idx + 1) % len;
+    if (msPerStep>0 && since > msPerStep*0.66) idx = (idx + 1) % len; // round near next
     const s = steps[idx]; if (!s) return;
     if (!s.active) { s.active = true; s.flash = 1; }
-    // Play immediately only if we rounded forward
-    if (roundedForward){
-      try { const noteName = noteList[s.noteIndex] || 'C4'; triggerInstrument(ui.instrument, noteName); s.lastManualHit = now; } catch {}
-    }
+    // Immediate play (always), schedule will de-dup
+    try { const noteName = noteList[s.noteIndex] || 'C4'; triggerInstrument(ui.instrument, noteName); s.lastManualHit = now; } catch {}
     draw();
   } catch(e){ /* noop */ }
 });

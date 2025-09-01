@@ -36,7 +36,6 @@
   align-items: initial !important;
   justify-items: initial !important;
 }
-.toy-panel[data-toy="loopgrid"] .toy-body canvas,
 .toy-panel[data-toy="drawgrid"] .toy-body canvas {
   width: 100% !important;
   height: 100% !important;
@@ -62,9 +61,36 @@
   padding: 10px !important;
 }
 /* Make sure canvas fills body box */
-.toy-panel[data-toy="loopgrid"] .toy-body canvas,
 .toy-panel[data-toy="drawgrid"] .toy-body canvas{
   display:block !important;
   width: 100% !important;
   height: 100% !important;
+}
+
+
+/* Neutralize earlier absolute-position overrides for these toys */
+.toy-panel[data-toy="loopgrid"] .toy-body,
+.toy-panel[data-toy="drawgrid"] .toy-body{
+  position: relative !important;
+  left:auto !important; right:auto !important; top:auto !important; bottom:auto !important;
+  padding: 0 !important;
+  width: 100% !important;
+  height: auto !important;
+  aspect-ratio: auto !important;
+}
+.toy-panel[data-toy="drawgrid"] .toy-body canvas{
+  width: 100% !important; height: 100% !important; display:block !important;
+}
+
+
+/* Top-align panel content for loopgrid/drawgrid to avoid vertical centering */
+.toy-panel[data-toy="loopgrid"],
+.toy-panel[data-toy="drawgrid"]{
+  align-items: start !important;
+  justify-items: stretch !important;
+}
+.toy-panel[data-toy="loopgrid"] > .toy-body,
+.toy-panel[data-toy="drawgrid"] > .toy-body{
+  align-self: start !important;
+  justify-self: stretch !important;
 }
