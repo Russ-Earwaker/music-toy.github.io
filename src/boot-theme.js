@@ -1,22 +1,18 @@
-// src/boot-theme.js
-// Wire active theme to toys. Minimal + non-blocking (<300 lines).
-
+// src/boot-theme.js (<=300 lines)
 import { getActiveThemeKey, setActiveThemeKey, resolveGridSamples, resolveWheelSamples, resolveBouncerSamples, resolveRipplerSamples } from "./theme-manager.js";
 import { assignGridInstrument, assignWheelInstrument, assignBouncerInstrument, assignRipplerInstrument } from "./theme-hooks.js";
 
-if (window.__THEME_DEBUG === undefined) window.__THEME_DEBUG = false;
-const dbg = (...a)=>{ if (window.__THEME_DEBUG) try{ console.log(...a); }catch{} };
-
-function wireGrids(){ const ids = resolveGridSamples(); ids.forEach((id,i)=> assignGridInstrument(i,id)); dbg("[wireGrids]", ids); }
-function wireWheel(){ const id = resolveWheelSamples()[0]; if (id) assignWheelInstrument(id); dbg("[wireWheel]", id); }
-function wireBouncer(){ const id = resolveBouncerSamples()[0]; if (id) assignBouncerInstrument(id); dbg("[wireBouncer]", id); }
-function wireRippler(){ const id = resolveRipplerSamples()[0]; if (id) assignRipplerInstrument(id); dbg("[wireRippler]", id); }
-
-export function wireAll(){ wireGrids(); wireWheel(); wireBouncer(); wireRippler(); }
+function wireAll(){ console.log('[THEME] wireAll start');
+  resolveGridSamples().forEach((id,i)=> assignGridInstrument(i,id));
+  const w = resolveWheelSamples()[0];   if (w) assignWheelInstrument(w);
+  const b = resolveBouncerSamples()[0]; if (b) assignBouncerInstrument(b);
+  const r = resolveRipplerSamples()[0]; if (r) assignRipplerInstrument(r);
+}
 
 window.ThemeBoot = {
+  _dbg:true,
   getActiveThemeKey,
-  setTheme: (k)=>{ const kk = setActiveThemeKey(k); requestAnimationFrame(wireAll); return kk; },
+  setTheme: (k)=>{ console.log('[THEME] setTheme', k); const kk = setActiveThemeKey(k); requestAnimationFrame(wireAll); return kk; },
   wireAll,
 };
 

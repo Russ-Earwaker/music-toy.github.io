@@ -1,111 +1,55 @@
 // src/toyhelpers-sizing.js
-import { resizeCanvasForDPR } from './utils.js';
+// Stable legacy sizing shim used by older toys (like LoopGrid).
+// Standard: derive height from width if square/aspect requested (via CSS aspect-ratio).
+// Advanced: read the box. No DPR scaling here.
 
-/**
- * initToySizing
- * - Provides a stable zoom `scale` for Advanced mode without cumulative stretching.
- * - Keeps a simple API used by toys: { vw, vh, setZoom, setContentWidth, setContentCssSize, setContentCssHeight, get scale }.
- * - `applySize()` sets CSS size of the canvas; toys still call `resizeCanvasForDPR` before drawing for DPR pixels.
- */
-export function initToySizing(shell, canvas, ctx, { squareFromWidth = false, aspectFrom = null, minH = 60 } = {}){
+export function initToySizing(shell, canvas, ctx, opts = {}){
+  const { squareFromWidth=false, aspectFrom=null, minH=60 } = opts;
   const host = shell.querySelector?.('.toy-body') || shell;
+  if (getComputedStyle(host).position==='static') host.style.position='relative';
 
-  // Hidden sizer to measure width independent of canvas layout
-  let sizer = host.querySelector?.('.toy-sizer');
-  if (!sizer){
-    try{
-      sizer = document.createElement('div');
-      sizer.className = 'toy-sizer';
-      sizer.style.position = 'absolute';
-      sizer.style.left = '0';
-      sizer.style.top = '0';
-      sizer.style.width = '100%';
-      sizer.style.height = '1px';
-      sizer.style.pointerEvents = 'none';
-      sizer.style.visibility = 'hidden';
-      host.appendChild(sizer);
-    }catch{}
-  }
-
-  // Baseline (captured once) and live slot width
-  const bounds = ()=> (host?.getBoundingClientRect?.() || { width: canvas?.clientWidth||300, height: canvas?.clientHeight||minH });
-  const baseBounds = bounds();
-  const baseSlotW = Math.max(1, Math.floor(baseBounds.width||300));
-
-  let slotW = Math.max(1, Math.floor(bounds().width||baseSlotW));
-  let overrideCssW = null, overrideCssH = null;
-  let scale = 1;
-
-  function vw(){ return Math.max(1, Math.floor(overrideCssW ?? slotW)); }
-  function vh(){
-    /* ZOOMED_SQUARE_ENFORCE */
-    try{ const p = host?.closest ? host.closest('.toy-panel') : host; if (p && p.classList && p.classList.contains('toy-zoomed')){ return Math.max(minH, vw()); } }catch{}
-    if (overrideCssH != null) return Math.max(minH, Math.floor(overrideCssH));
-    if (squareFromWidth) return Math.max(minH, vw());
-    if (aspectFrom && Array.isArray(aspectFrom) && aspectFrom.length===2){
-      const [aw, ah] = aspectFrom;
-      if (aw>0 && ah>0) return Math.max(minH, Math.floor(vw()*ah/aw));
+  // Apply aspect-ratio in Standard so layout is loop-free.
+  const applyAspectCSS = ()=>{
+    const adv = shell.classList?.contains('toy-zoomed') || !!shell.closest?.('#zoom-overlay');
+    if (!adv){
+      if (squareFromWidth) host.style.aspectRatio = '1 / 1';
+      else if (aspectFrom==='16:10') host.style.aspectRatio = '16 / 10';
+      else if (aspectFrom==='4:3') host.style.aspectRatio = '4 / 3';
+      else host.style.removeProperty('aspect-ratio');
+    } else {
+      host.style.removeProperty('aspect-ratio');
     }
-    // Fallback: try host height
-    const h = host?.clientHeight || baseBounds.height || minH;
-    return Math.max(minH, Math.floor(h));
-  }
-
-  function applySize(){
-    try{
-      const cssW = vw(), cssH = vh();
-      if (canvas){
-        canvas.style.width = cssW + 'px';
-        canvas.style.height = cssH + 'px';
-      }
-    }catch{}
-  }
-
-  function setZoom(zoomed){
-    try{
-      // Always re-measure current width to avoid compounding
-      const b = bounds();
-      slotW = Math.max(1, Math.floor(b.width||baseSlotW));
-    }catch{}
-    if (zoomed){
-      const ratio = slotW / baseSlotW;
-      scale = Math.max(0.5, Math.min(4, Number.isFinite(ratio) ? ratio : 1));
-    }else{
-      scale = 1;
-      // Clear overrides so we fully reset on unzoom
-      overrideCssW = null; overrideCssH = null;
-    }
-    applySize();
-    return scale;
-  }
-
-  function setContentWidth(w){
-    if (Number.isFinite(w)){
-      slotW = Math.max(1, Math.floor(w));
-      applySize();
-    }
-  }
-  function setContentCssSize({w=null, h=null}={}){
-    if (w!=null && Number.isFinite(w)) overrideCssW = Math.max(1, Math.floor(w));
-    if (h!=null && Number.isFinite(h)) overrideCssH = Math.max(1, Math.floor(h));
-    applySize();
-  }
-  function setContentCssHeight(h){
-    if (Number.isFinite(h)){ overrideCssH = Math.max(1, Math.floor(h)); applySize(); }
-  }
-
-  // Initial sizing and resize handler
-  applySize();
-  try{
-    const ro = new ResizeObserver(()=>{
-      try{ slotW = Math.max(1, Math.floor(bounds().width||baseSlotW)); }catch{}
-      applySize();
-    });
-    ro.observe(host);
-  }catch{}
-
-  return {
-    vw, vh, setZoom, setContentWidth, setContentCssSize, setContentCssHeight,
-    get scale(){ return scale; }
   };
+
+  let lastW=0, lastH=0;
+  function readSize(){
+    const r = host.getBoundingClientRect();
+    const W = Math.max(1, Math.floor(r.width || canvas?.clientWidth || 300));
+    const adv = shell.classList?.contains('toy-zoomed') || !!shell.closest?.('#zoom-overlay');
+    let H;
+    if (!adv){
+      H = squareFromWidth ? W : (aspectFrom==='16:10' ? Math.floor(W*10/16) : (aspectFrom==='4:3' ? Math.floor(W*3/4) : Math.max(minH, Math.floor(r.height || minH))));
+    } else {
+      H = Math.max(minH, Math.floor(r.height || minH));
+    }
+    return { W, H };
+  }
+
+  function apply(){
+    applyAspectCSS();
+    const {W,H} = readSize();
+    if (W!==lastW || H!==lastH){
+      canvas.style.width = W+'px'; canvas.style.height = H+'px';
+      canvas.width = W; canvas.height = H;
+      lastW=W; lastH=H;
+    }
+    return { w:lastW, h:lastH };
+  }
+
+  try{
+    const ro = new ResizeObserver(()=> apply()); ro.observe(host);
+    const mo = new MutationObserver(()=> apply()); mo.observe(shell,{attributes:true,attributeFilter:['class']});
+  }catch{}
+  apply();
+  return { vw(){return lastW;}, vh(){return lastH;}, applySize:apply, setContentWidth(w){/*noop*/}, setContentCssSize(w,h){/*noop*/}, setContentCssHeight(h){/*noop*/} };
 }

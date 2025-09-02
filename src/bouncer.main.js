@@ -32,7 +32,7 @@ export function createBouncer(selector){
   const shell = (typeof selector==='string') ? document.querySelector(selector) : selector; if (!shell) return null;
   const panel = shell.closest('.toy-panel') || shell;
   const ui = initToyUI(panel, { toyName: 'Bouncer', defaultInstrument: 'Retro Square' }) || {};
-  let instrument = ui.instrument; panel.addEventListener('toy-instrument', (e)=>{ instrument = (e?.detail?.value)||instrument; });
+  let instrument = (panel.dataset.instrument || ui?.instrument || 'retro_square'); panel.addEventListener('toy-instrument', (e)=>{ instrument = (e?.detail?.value)||instrument; });
   let speedFactor = parseFloat((panel?.dataset?.speed)||'1.60'); // +60% faster default // 0.60 = calmer default
   const toyId = (panel?.dataset?.toy || 'bouncer').toLowerCase();
 
@@ -91,11 +91,12 @@ export function createBouncer(selector){
   const worldW = ()=> Math.max(1, Math.floor(canvas.clientWidth||0));
   const worldH = ()=> Math.max(1, Math.floor(canvas.clientHeight||0));
   // board zoom scaling based on visual width ratio (like Rippler)
-  let __baseAttrW = 0;
+  const __BASELINE_ATTR_W = 300;
   function rectScale(){
-    const w = canvas.width || 0; // device-pixel width after DPR & board zoom via utils.js
-    if (!__baseAttrW && w>0) __baseAttrW = w;
-    return (__baseAttrW>0 && w>0) ? (w/__baseAttrW) : 1;
+    const w = canvas.clientWidth || canvas.width || __BASELINE_ATTR_W;
+    // clamp very small/large to avoid extreme tiny/huge artefacts
+    const s = w / __BASELINE_ATTR_W;
+    return Math.max(0.5, Math.min(2.25, s));
   }
   const worldScaleForSize = ()=> ((PHYS_W && PHYS_H) ? 1 : rectScale());
   const blockSize = ()=> Math.round(BASE_BLOCK_SIZE * worldScaleForSize());

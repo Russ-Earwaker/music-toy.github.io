@@ -4,63 +4,59 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Music Toys</title>
-<link rel="stylesheet" href="./style.css" />
-<link rel="stylesheet" href="./bouncer.css" />
-<link rel="stylesheet" href="./rippler-zoom-fix.css" />
-
-<script type="module" src="./src/main.js" defer></script>
-<script type="module" src="./src/dev-hud.js" defer></script>
-<script type="module" src="./src/toy-hit-relay.js" defer></script>
-<script type="module" src="./src/startup-intensity.js" defer></script>
-<script type="module" src="./src/themes.js"></script>
-<script type="module" src="./src/theme-manager.js"></script>
-<script type="module" src="./src/theme-hooks.js"></script>
-<script type="module" src="./src/boot-theme.js"></script>
-<script type="module" src="./src/theme-switcher.js"></script>
-<script type="module" src="./src/board-viewport.js"></script>
-<script type="module" src="./src/disable-scale-lock.js"></script><script type="module" src="./src/viewport-controls.js"></script><script type="module" src="./src/toy-panel-heights.js"></script>
-<script type="module" src="./src/zoom-overlay.js" defer></script>
-<script type="module" src="./src/header-fit.js" defer></script>
-
-<script type="module" src="./src/toy-zoom-debug2.js"></script>
-<script type="module" src="./src/toy-panel-heights.js"></script>   <!-- the one that sets real panel heights -->
-<script type="module" src="./src/toy-visual-onebox.js"></script>   <!-- new: single-box fix -->
-
-<style id="mix-toolbar-style">.mini-toggle input{vertical-align:middle}</style>
-
-<script type="module" src="./src/rippler-square-fit.js" defer></script>
-<script type="module" src="./src/wheel-square-fit.js" defer></script>
-<script type="module" src="./src/grid-advanced-ui.js" defer></script>
-<script type="module" src="./src/bouncer-diag.js"></script>
-
+  <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="./bouncer.css" />
+  <link rel="stylesheet" href="./rippler-zoom-fix.css" />
+  <link rel="stylesheet" href="./ui-fixes.css" />
+  <script type="module" src="./src/themes.js" defer></script>
+  <script type="module" src="./src/theme-manager.js" defer></script>
+  <script type="module" src="./src/theme-switcher.js" defer></script>
+  <script type="module" src="./src/boot-theme.js" defer></script>
+</head>
 <body>
-  <!-- Top transport -->
-  <header id="topbar" class="topbar">
-    <button id="play" aria-label="Play">▶</button>
-    <button id="stop" aria-label="Stop">■</button>
-    <label for="bpm">BPM</label>
-    <input id="bpm" type="number" value="120" min="40" max="240" step="1" />
+  <header id="topbar" class="app-topbar">
+    <div class="brand">Music Toys</div>
+    <div class="topbar-controls">
+      <label style="color:#cbd5e1;margin-right:6px;">Theme</label><select id="theme-select" class="toy-btn" data-action="theme"><option value="">Default</option><option value="dark">Dark</option><option value="neon">Neon</option></select>
+      <button class="toy-btn" data-action="organize">Organize</button>
+      <button class="toy-btn" data-action="reset-view">Reset View</button>
+      <button class="toy-btn" data-action="zoom-out">−</button>
+      <button class="toy-btn" data-action="zoom-in">+</button>
+    </div>
   </header>
 
-  <!-- Board -->
   <main id="board">
-    <!-- Four LoopGrid panels -->
-    <section id="grid1" class="toy-panel" data-toy="loopgrid"></section>
-    <section id="grid2" class="toy-panel" data-toy="loopgrid"></section>
-    <section id="grid3" class="toy-panel" data-toy="loopgrid"></section>
-    <section id="grid4" class="toy-panel" data-toy="loopgrid"></section>
+    <!-- Drum Grid toys (existing) -->
+    <section id="grid1" data-instrument="Djimbe" class="toy-panel" data-toy="loopgrid"></section>
+    <section id="grid2" data-instrument="Djimbe" class="toy-panel" data-toy="loopgrid"></section>
+    <section id="grid3" data-instrument="Djimbe" class="toy-panel" data-toy="loopgrid"></section>
+    <section id="grid4" data-instrument="Djimbe" class="toy-panel" data-toy="loopgrid"></section>
 
-    <!-- Other toys -->
+    <!-- Bouncer / Rippler -->
     <section id="toy-b1" class="toy-panel" data-toy="bouncer"></section>
     <section id="toy-r1" class="toy-panel" data-toy="rippler"></section>
     <section id="toy-b2" class="toy-panel" data-toy="bouncer"></section>
-    
-      
-    <!-- Drawing Grid toy -->
-    <section id="drawgrid1" class="toy-panel" data-toy="drawgrid"></section>
 
+    <!-- Drawing Grid toy -->
+    <section id="drawgrid1" data-instrument="AcousticGuitar" class="toy-panel" data-toy="drawgrid"></section>
   </main>
+
+  <!-- App scripts -->
+  <script type="module" src="./src/adv-safety-reset.js" defer></script>
+  <script type="module" src="./src/main.js" defer></script>
+  <script type="module" src="./src/board.js" defer></script>
+  <script type="module" src="./src/ensure-headers.js" defer></script>
+  <script type="module" src="./src/dev-hud.js" defer></script>
+  <script type="module" src="./src/toy-hit-relay.js" defer></script>
+  <script type="module" src="./src/startup-intensity.js" defer></script>
+  <script type="module" src="./src/board-viewport.js" defer></script>
+
+  <!-- Toys -->
   <script type="module" src="./src/loopgrid-square-drum.js" defer></script>
   <script type="module" src="./src/drawgrid-init.js" defer></script>
+  <script type="module" src="./src/bouncer.main.js" defer></script>
+  <script type="module" src="./src/topbar.js" defer></script>
+  <script type="module" src="./src/advanced-overlay.js" defer></script>
+  <script type="module" src="./src/bouncer-init.js" defer></script>
 </body>
 </html>

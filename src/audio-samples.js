@@ -1,200 +1,93 @@
-// src/audio-samples.js — CSV samples + instrument dispatcher (tones included)
+// src/audio-samples.js — samples + tone fallback (<=300 lines)
 import { ensureAudioContext, getToyGain } from './audio-core.js';
-import { playById, playToneAt, TONE_NAMES } from './audio-tones.js';
+import { playById, noteToFreq, TONE_NAMES } from './audio-tones.js';
 
-const FALLBACK_SAMPLES = [
-  { name: 'RP4 Kick',      url: './assets/samples/RP4_KICK_1.mp3' },
-  { name: 'Break Snare',   url: './assets/samples/Brk_Snr.mp3' },
-  { name: 'Hi-Hat Closed', url: './assets/samples/Cev_H2.mp3' },
-  { name: 'Clap Heater',   url: './assets/samples/Heater-6.mp3' },
-];
+const entries = new Map();   // id -> { url, synth }
+const buffers = new Map();   // id -> AudioBuffer
+const ALIASES = new Map([
+  ['djimbe','djembe'],
+  ['djimbe_bass','djembe_bass'],
+  ['djimbe_tone','djembe_tone'],
+  ['djimbe_slap','djembe_slap'],
+  ['hand_clap','clap'],
+]);
 
-let entries = new Map(); // name -> { url? , synth? }
-let buffers = new Map(); // name -> AudioBuffer
-let csvOk = false;
-let __sampleBust = 0; // cache-bust token for dev reloads
-
-function dispatchReady(src){
-  const names = getInstrumentNames();
-  window.dispatchEvent(new CustomEvent('samples-ready', { detail: { ok: csvOk, names, src } }));
-}
-
-function dirname(url){ const i = url.lastIndexOf('/'); return i === -1 ? '' : url.slice(0, i); }
-
-function parseCsvSmart(text, csvUrl){
-  const lines = text.trim().split(/[\r\n]+/).filter(Boolean);
-  if (!lines.length) throw new Error('CSV empty');
-  const headRaw = lines[0];
-  const head = headRaw.split(',').map(s => s.trim().toLowerCase());
-
-  if (head.includes('name') && head.includes('url')){
-    const rest = lines.slice(1); const out = [];
-    for (const line of rest){
-      if (!line || line.startsWith('#')) continue;
-      const parts = line.split(',');
-      const name = (parts.shift() || '').trim();
-      const url  = parts.join(',').trim();
-      if (name && url) out.push({ name, url });
-    }
-    if (!out.length) throw new Error('CSV had no valid rows (name,url)');
-    return out;
-  }
-
-  const fnIdx = head.indexOf('filename');
-  const dnIdx = head.indexOf('display_name');
-  const siIdx = head.indexOf('synth_id');
-  if (fnIdx !== -1 && dnIdx !== -1){
-    const base = dirname(csvUrl);
-    const rest = lines.slice(1); const out = [];
-    for (const line of rest){
-      if (!line || line.startsWith('#')) continue;
-      const cols = line.split(',');
-      const filename = (cols[fnIdx] || '').trim();
-      const display  = (cols[dnIdx] || '').trim() || filename;
-      const synth    = siIdx !== -1 ? (cols[siIdx] || '').trim() : '';
-      if (synth && !filename){
-        out.push({ name: display, synth });
-      } else if (filename){
-        const url = (base ? (base + '/') : './') + filename;
-        out.push({ name: display || filename, url });
-      }
-    }
-    if (!out.length) throw new Error('CSV had no valid rows (filename/display_name/synth_id)');
-    return out;
-  }
-  throw new Error('Unrecognized CSV headers');
-}
-
-async function fetchCsvList(csvUrl){
-  const u = new URL(csvUrl, location.href);
-  if (__sampleBust) u.searchParams.set('__v', String(__sampleBust));
-  const res = await fetch(u.toString(), { cache: 'no-store' });
-  if (!res.ok) throw new Error(`CSV fetch failed: ${res.status}`);
-  const text = await res.text();
-  return parseCsvSmart(text, csvUrl);
-}
-async function loadSample(url){
-  const u = new URL(url, location.href);
-  if (__sampleBust) u.searchParams.set('__v', String(__sampleBust));
-  const res = await fetch(u.toString(), { cache: 'no-store' });
-  const ab = await res.arrayBuffer();
-  return new Promise((ok, err)=> ensureAudioContext().decodeAudioData(ab, ok, err));
-}
-
-async function loadFromList(list){
-  buffers.clear();
-  entries.clear();
-  for (const it of list){
-    entries.set(it.name, { url: it.url, synth: it.synth });
-    if (it.url){
-      try{
-        const b = await loadSample(it.url);
-        buffers.set(it.name, b);
-      }catch(e){ console.warn('[audio] decode failed', it, e); }
-    }
-  }
-}
-
-async function tryCsvPaths(paths){
-  for (const p of paths){
-    try{
-      const list = await fetchCsvList(p);
-      await loadFromList(list);
-      if (entries.size > 0){
-        csvOk = true;
-        dispatchReady(p);
-        return true;
-      }
-    }catch(e){
-      console.warn('[audio] CSV try failed', p, e.message || e);
-    }
-  }
-  return false;
+export function getInstrumentNames(){
+  const set = new Set(TONE_NAMES);
+  for (const k of entries.keys()) set.add(k);
+  for (const k of buffers.keys()) set.add(k);
+  return Array.from(set).sort();
 }
 
 export async function initAudioAssets(csvUrl){
-  ensureAudioContext();
-  csvOk = false;
-  entries.clear(); buffers.clear();
-
-  const candidates = csvUrl
-    ? [csvUrl]
-    : ['./assets/samples/samples.csv','./samples.csv','./samples/samples.csv'];
-
-  const ok = await tryCsvPaths(candidates);
-  if (!ok){
-    await loadFromList(FALLBACK_SAMPLES).catch(()=>{});
-    csvOk = false;
-    dispatchReady('fallback');
+  console.log('[AUDIO] init start', csvUrl);
+  if (!csvUrl) return;
+  const res = await fetch(csvUrl);
+  if (!res.ok){ console.warn('[AUDIO] csv not found', csvUrl); return; }
+  const text = await res.text();
+  const lines = text.replace(/\r/g,'\n').split('\n').filter(l=>l && !l.trim().startsWith('#'));
+  if (!lines.length) return;
+  const head = lines.shift().split(',').map(s=>s.trim().toLowerCase());
+  const col = { filename: head.indexOf('filename'), instrument: head.indexOf('instrument'), synth: head.indexOf('synth_id') };
+  const base = new URL(csvUrl, window.location.href);
+  const baseDir = base.href.substring(0, base.href.lastIndexOf('/')+1);
+  for (const line of lines){
+    const parts = line.split(',');
+    const fn = (parts[col.filename]||'').trim();
+    const id = (parts[col.instrument]||'').trim().toLowerCase();
+    const synth = (parts[col.synth]||'').trim().toLowerCase();
+    if (!id) continue;
+    const url = fn ? (baseDir + fn) : '';
+    entries.set(id, { url, synth });
+    // also by filename base
+    if (fn){
+      const baseName = fn.replace(/\.[^/.]+$/, '').toLowerCase();
+      if (baseName && baseName !== id) entries.set(baseName, { url, synth });
+    }
+    if (url){
+      try{
+        const ab = await (await fetch(url)).arrayBuffer();
+        const buf = await ensureAudioContext().decodeAudioData(ab);
+        buffers.set(id, buf);
+        if (fn){
+          const baseName = fn.replace(/\.[^/.]+$/, '').toLowerCase();
+          buffers.set(baseName, buf);
+        }
+      }catch(e){ /* skip bad file */ }
+    }
   }
+  console.log('[AUDIO] buffers ready', buffers.size);
+  document.dispatchEvent(new CustomEvent('samples-ready'));
 }
 
-export function getInstrumentNames(){
-  // Only show CSV-provided instruments in UI.
-  return Array.from(entries.keys());
-}
-
-
-function noteToFreq(note='C4'){
-  const NOTE = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-  const m = /^([A-G]#?)(-?\d)$/.exec(String(note).trim());
-  if (!m) return 440;
-  const [_, n, o] = m;
-  const idx = NOTE.indexOf(n);
-  const midi = (Number(o) + 1) * 12 + idx;
-  return 440 * Math.pow(2, (midi - 69)/12);
-}
-
-function freqRatio(fromNote='C4', toNote='C4'){
-  const f1 = noteToFreq(fromNote);
-  const f2 = noteToFreq(toNote);
-  return f2 / f1;
-}
-
-function playSampleAt(name, when, rate=1, toyId){
+function playSampleAt(id, when, gain=1, toyId){
   const ctx = ensureAudioContext();
-  const buf = buffers.get(name);
-  if (!buf) return;
+  const buf = buffers.get(id);
+  if (!buf){ return false; }
   const src = ctx.createBufferSource();
   src.buffer = buf;
-  src.playbackRate.value = rate;
-  src.connect(getToyGain(toyId||'master'));
-  src.start(when);
+  const g = ctx.createGain();
+  g.gain.value = gain;
+  src.connect(g).connect(getToyGain(toyId||'master'));
+  src.start(when||ctx.currentTime);
+  return true;
 }
 
-export function triggerInstrument(instrument, noteName, when, toyId){
-  // 1) Tone synths by name/id
-  const id = (instrument||'').toLowerCase();
-  const knownTone = TONE_NAMES.map(n=>n.toLowerCase());
-  if (knownTone.includes(id)) { const freq = noteToFreq(noteName); return playById(id, freq, when, getToyGain(toyId||'master'));
-  }
+export function triggerInstrument(instrument, noteName='C4', when, toyId){
+  const ctx = ensureAudioContext();
+  const id0 = String(instrument||'tone').toLowerCase(); console.log('[AUDIO] trigger', id0);
+  const id = ALIASES.get(id0) || id0;
+  const t = when || ctx.currentTime;
 
-  // 2) CSV row with synth_id mapping (e.synth)
-  const e = entries.get(instrument);
-  if (e && e.synth){
-    const freq = noteToFreq(noteName);
-    return playById(e.synth.toLowerCase(), freq, when, getToyGain(toyId||'master'));
-  }
+  // exact or base-name sample first
+  if (playSampleAt(id, t, 1, toyId)) return;
+  // try family (e.g., djembe_bass -> djembe)
+  const fam = id.split('_')[0];
+  if (fam !== id && playSampleAt(fam, t, 1, toyId)) return;
 
-  // 3) Sample buffer by name (pitch-shift relative to C4)
-  if (buffers.has(instrument)){
-    return playSampleAt(instrument, when, freqRatio('C4', noteName), toyId);
-  }
-
-  // 4) Fallback simple tone
-  const freq = noteToFreq(noteName);
-  return playToneAt(freq, when, getToyGain(toyId||'master'));
-}
-
-
-/** Dev-only: force re-fetch CSV and sample files with a unique cache-bust token. */
-export async function reloadSamples(csvUrl){
-  try {
-    __sampleBust = Date.now();
-    await initAudioAssets(csvUrl);
-    // re-dispatch samples-ready so UIs update instrument menus, etc.
-    try { window.dispatchEvent(new CustomEvent('samples-ready', { detail: { source: 'reload' } })); } catch {}
-  } catch (e) {
-    console.warn('[audio] reloadSamples failed', e);
-  }
+  // synth fallback
+  const entry = entries.get(id) || entries.get(fam);
+  const synthId = (entry && entry.synth) ? entry.synth : null;
+  const toneId = synthId || (TONE_NAMES.includes(id) ? id : 'tone');
+  return playById(toneId, noteToFreq(noteName), t, getToyGain(toyId||'master'));
 }

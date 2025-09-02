@@ -1,175 +1,92 @@
-// src/board.js
-// Drag + persist positions for .toy-panel elements, with a simple "organise" grid layout.
-// Safe around zoom: skip drag/save while a panel has .toy-zoomed.
-
+// src/board.js — draggable panels + organize, no clamp, persists positions
 export function initDragBoard(boardSel = '#board') {
   const board = document.querySelector(boardSel);
   if (!board) return;
 
-  // Ensure board is a positioning context
-  const csb = getComputedStyle(board);
-  if (csb.position === 'static') board.style.position = 'relative';
+  // position context
+  if (getComputedStyle(board).position === 'static') board.style.position = 'relative';
 
   const KEY = 'toyPositions';
 
-  // ---- storage helpers ----
   function loadAll(){
-    try { return JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch { return {}; }
+    try{ return JSON.parse(localStorage.getItem(KEY)||'{}'); }catch{ return {}; }
   }
-  function saveAll(map){
-    try { localStorage.setItem(KEY, JSON.stringify(map || collectPositions())); } catch {}
+  function saveAll(map){ try{ localStorage.setItem(KEY, JSON.stringify(map)); }catch{} }
+  function savePos(el){
+    const id = el.id || el.dataset.toyid || el.dataset.toy || ('panel'+Math.random());
+    const map = loadAll();
+    map[id] = { left: el.style.left, top: el.style.top };
+    saveAll(map);
   }
-  function collectPositions(){
-    const saved = loadAll();
-    for (const el of board.querySelectorAll('.toy-panel')){
-      const id = ensureId(el);
-      const { left, top } = el.style;
-      if (left && top) saved[id] = { left, top };
-    }
-    return saved;
-  }
-  function ensureId(el){
-    if (!el.id){
-      const kind = (el.getAttribute('data-toy') || 'toy').toLowerCase();
-      el.id = `${kind}-${Array.from(board.querySelectorAll('.toy-panel')).indexOf(el)+1}`;
-    }
-    return el.id;
+  function enforceSavedPositions(){
+    const map = loadAll();
+    document.querySelectorAll('.toy-panel').forEach(el=>{
+      const id = el.id || el.dataset.toyid || el.dataset.toy;
+      const pos = id && map[id];
+      if (pos){
+        el.style.position = 'absolute';
+        if (pos.left) el.style.left = pos.left;
+        if (pos.top)  el.style.top  = pos.top;
+      }else{
+        if (!el.style.left) el.style.left = (Math.random()*200|0)+'px';
+        if (!el.style.top)  el.style.top  = (Math.random()*120|0)+'px';
+      }
+    });
   }
 
-  // ---- apply saved/default positions ----
-  const saved = loadAll();
-  const panels = Array.from(board.querySelectorAll('.toy-panel'));
-  const GAP = 16, colW = 380, colH = 280;
-  let colCount = Math.max(1, Math.floor(((board.clientWidth || window.innerWidth) - GAP) / (colW + GAP)));
-
-  panels.forEach((el, i) => {
-    const id = ensureId(el);
-    const pos = saved[id];
-    el.style.position = 'absolute';
-    if (pos && pos.left && pos.top){
-      el.style.left = pos.left;
-      el.style.top  = pos.top;
-    } else {
-      const c = i % colCount;
-      const r = Math.floor(i / colCount);
-      el.style.left = (GAP + c * (colW + GAP)) + 'px';
-      el.style.top  = (GAP + r * (colH + GAP)) + 'px';
-    }
-  });
-
-  // ---- dragging ----
-  let drag = null; // {el, startX, startY, baseLeft, baseTop, moved}
-  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-
+  let drag=null, sx=0, sy=0, ox=0, oy=0;
   function onPointerDown(e){
     const header = e.target.closest('.toy-header');
     if (!header) return;
     const el = header.closest('.toy-panel');
-    if (!el || el.classList.contains('toy-zoomed')) return; // don't move zoomed
-    const rect = el.getBoundingClientRect();
-    const bRect = board.getBoundingClientRect();
-    drag = {
-      el,
-      startX: e.clientX,
-      startY: e.clientY,
-      baseLeft: (function(){
-        const s = (window.BoardViewport && BoardViewport.getState && BoardViewport.getState().scale) ? BoardViewport.getState().scale : 1;
-        if (el.style.left) return parseFloat(el.style.left) || 0;
-        return ((rect.left - bRect.left) / s) || 0;
-      })(),
-      baseTop:  parseFloat(el.style.top  || (rect.top  - bRect.top)  + 'px') || 0,
-      moved: false
-    };
+    if (!el || el.classList.contains('toy-zoomed')) return;
     el.setPointerCapture?.(e.pointerId);
+    drag = el; sx=e.clientX; sy=e.clientY;
+    const cs = getComputedStyle(el);
+    ox = parseFloat(cs.left)||0; oy=parseFloat(cs.top)||0;
     e.preventDefault();
   }
-
   function onPointerMove(e){
     if (!drag) return;
-    const dx = e.clientX - drag.startX;
-    const dy = e.clientY - drag.startY;
-    if (!drag.moved && (Math.abs(dx) > 2 || Math.abs(dy) > 2)) drag.moved = true;
-
-    // clamp within board bounds (world space, not screen space)
-    const scale = (window.BoardViewport && BoardViewport.getState && BoardViewport.getState().scale) ? BoardViewport.getState().scale : 1;
-    const adjDx = dx / scale;
-    const adjDy = dy / scale;
-    const maxLeft = (board.clientWidth - drag.el.offsetWidth);
-    const maxTop  = (board.clientHeight - drag.el.offsetHeight);
-    const nextLeft = clamp(drag.baseLeft + adjDx, 0, Math.max(0, Math.floor(maxLeft)));
-    const nextTop  = clamp(drag.baseTop  + adjDy,  0, Math.max(0, Math.floor(maxTop)));
-    drag.el.style.left = nextLeft + 'px';
-    drag.el.style.top  = nextTop  + 'px';
+    const sc = (window.__boardScale||1);
+    const nx = ox + (e.clientX - sx) / sc;
+    const ny = oy + (e.clientY - sy) / sc;
+    drag.style.position='absolute';
+    drag.style.left = nx + 'px';
+    drag.style.top  = ny + 'px';
   }
-
   function onPointerUp(e){
     if (!drag) return;
-    const { el, moved } = drag;
-    el.releasePointerCapture?.(e.pointerId);
-    drag = null;
-    if (moved){
-      const map = loadAll();
-      const id = ensureId(el);
-      map[id] = { left: el.style.left, top: el.style.top };
-      saveAll(map);
-    }
+    savePos(drag);
+    drag.releasePointerCapture?.(e.pointerId);
+    drag=null;
   }
-
-  board.addEventListener('pointerdown', onPointerDown);
+  board.addEventListener('pointerdown', onPointerDown, true);
   window.addEventListener('pointermove', onPointerMove, true);
   window.addEventListener('pointerup', onPointerUp, true);
-  window.addEventListener('pointercancel', onPointerUp, true);
-  document.addEventListener('lostpointercapture', onPointerUp, true);
-  window.addEventListener('beforeunload', ()=> saveAll());
 
-  // Recompute column count on resize (no relayout; Organise handles that)
-  window.addEventListener('resize', ()=> {
-    colCount = Math.max(1, Math.floor(((board.clientWidth || window.innerWidth) - GAP) / (colW + GAP)));
-  });
+  // organize: simple grid
+  window.organizeBoard = function organizeBoard(){
+    const panels = Array.from(document.querySelectorAll('.toy-panel'));
+    const GAP=16, colW=380, colH=420;
+    let c=0, r=0;
+    panels.forEach(el=>{
+      el.style.width = colW+'px';
+      el.style.height = '';
+
+      el.style.position='absolute';
+      el.style.left = (GAP + c*(colW+GAP))+'px';
+      el.style.top  = (GAP + r*(colH+GAP))+'px';
+      c++; if (c>=3){ c=0; r++; }
+      savePos(el);
+    });
+  };
+
+  enforceSavedPositions();
+  window.addEventListener('resize', enforceSavedPositions);
+  document.addEventListener('visibilitychange', ()=>{ if (!document.hidden) enforceSavedPositions(); });
 }
 
-// Arrange panels in a neat grid and persist.
-export function organizeBoard(boardSel = '#board'){
-  const board = document.querySelector(boardSel);
-  if (!board) return;
-  const panels = Array.from(board.querySelectorAll('.toy-panel'));
-  const GAP = 16, colW = 380, colH = 280;
-  const maxW = Math.max(480, board.clientWidth || window.innerWidth);
-  const cols = Math.max(1, Math.floor((maxW - GAP) / (colW + GAP)));
-  const saved = {};
-  panels.forEach((el, i) => {
-    const id = el.id || `toy-${i+1}`;
-    const c = i % cols;
-    const r = Math.floor(i / cols);
-    const left = (GAP + c * (colW + GAP)) + 'px';
-    const top  = (GAP + r * (colH + GAP)) + 'px';
-    el.style.position = 'absolute';
-    el.style.left = left;
-    el.style.top  = top;
-    saved[id] = { left, top };
-  });
-  try { localStorage.setItem('toyPositions', JSON.stringify(saved)); } catch {}
-  // ---- defensive guard: while a panel is zoomed, re-apply saved positions to others ----
-  function enforceSavedPositions(){
-    const z = document.querySelector('.toy-panel.toy-zoomed');
-    if (!z) return;
-    const saved = loadAll();
-    for (const el of board.querySelectorAll('.toy-panel')){
-      if (el === z) continue;
-      const id = ensureId(el);
-      const pos = saved[id];
-      if (pos && pos.left && pos.top){
-        el.style.position = 'absolute';
-        el.style.left = pos.left;
-        el.style.top  = pos.top;
-      }
-    }
-  }
-  const enforce = ()=> enforceSavedPositions();
-  ['click','pointerdown','focus'].forEach(ev => window.addEventListener(ev, enforce, true));
-  document.addEventListener('visibilitychange', ()=> { if (!document.hidden) enforceSavedPositions(); });
+export function organizeBoard(){ window.organizeBoard && window.organizeBoard(); }
 
-}
-
-// Broadcast listener (optional external trigger)
-window.addEventListener('organise-toys', ()=> organizeBoard());
+;(()=>{ try{ (typeof initDragBoard==='function') && initDragBoard('#board'); }catch(e){ console.warn('[board] init failed', e); } })();

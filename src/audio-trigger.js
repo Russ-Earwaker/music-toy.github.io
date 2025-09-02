@@ -11,6 +11,7 @@ import { getToyInstrument } from './instrument-map.js';
  */
 export function triggerNoteForToy(toyId, midi, velocity=0.8, when){
   const inst = getToyInstrument(toyId);
+  try{ console.log('[TRIGGER]', {toyId, inst, midi, velocity}); }catch{}
   if (!inst) return;
   try{
     triggerInstrument(inst, midi, velocity, when);

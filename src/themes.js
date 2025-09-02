@@ -10,8 +10,15 @@ export const THEMES = {
     rippler: ["kalimba"],
   },
 
-  // Testing theme: force everything to 'tone'
   default: {
+    grids: ["djembe_bass", "djembe_tone", "djembe_slap", "hand_clap"],
+    wheel: ["acoustic_guitar"],
+    bouncer: ["xylophone"],
+    rippler: ["kalimba"],
+  },
+
+    // Testing theme: force everything to 'tone'
+  test: {
     grids: ["tone", "tone", "tone", "tone"],
     wheel: ["tone"],
     bouncer: ["tone"],

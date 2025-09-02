@@ -1,23 +1,28 @@
-/* ui-fixes.css — minimal, safe overrides */
-
-.toy-panel{ display:flex; flex-direction:column; width:100%; }
+/* ui-fixes.css — keep minimal standard-mode tweaks */
+.toy-panel{ display:flex; flex-direction:column; /* width set in style.css via --panel-w */ }
 .toy-panel .toy-header,
 .toy-panel .toy-footer,
 .toy-panel .toy-volume{ width:100%; align-self:stretch; }
 .toy-panel .toy-body{ display:grid; place-items:center; overflow:hidden; }
+.toy-panel.toy-zoomed{ border:1px solid rgba(255,255,255,0.08); border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,0.5); }
 
-/* In overlay/zoom, JS sets explicit px size; remove aspect lock */
-#zoom-overlay #zoom-frame .toy-panel .toy-body { aspect-ratio: auto !important; }
+/* === Overlay zoom overrides (beat style.css square rules) ===
+   We clear aspect-ratio and allow JS to set explicit px width/height.
+   Use very specific selector + !important to win cascade. */
+#zoom-overlay #zoom-frame .toy-panel .toy-body {
+  aspect-ratio: auto !important;
+}
 
-/* Top‑align LoopGrid & DrawGrid so content starts under header */
-.toy-panel[data-toy="loopgrid"],
-.toy-panel[data-toy="drawgrid"]{
-  align-items: start !important;
-  justify-items: stretch !important;
+/* Grid: do NOT force square; let overlay clamp height via JS */
+#zoom-overlay #zoom-frame .toy-panel[data-toy="grid"] .toy-body,
+#zoom-overlay #zoom-frame .toy-panel[data-toy="loopgrid"] .toy-body {
+  aspect-ratio: auto !important;
 }
-.toy-panel[data-toy="loopgrid"] > .toy-body,
-.toy-panel[data-toy="drawgrid"] > .toy-body{
-  align-self: start !important;
-  justify-self: stretch !important;
+
+/* Ensure canvases can grow to body (JS sets px size on body) */
+#zoom-overlay #zoom-frame .toy-panel .toy-body canvas,
+#zoom-overlay #zoom-frame .toy-panel .toy-body svg {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
 }
-/* Let each toy control its own canvas size; do not force 100% height here */

@@ -1,23 +1,178 @@
-/* ui-fixes.css — minimal, safe overrides */
+/* ui-fixes.css — minimal, stable layout */
 
-.toy-panel{ display:flex; flex-direction:column; width:100%; }
+:root{ --toy-gap: 8px; }
+
+/* Panel uses a simple column layout: header / body / footer */
+.toy-panel{
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* Header & footer do not influence the body's sizing logic */
 .toy-panel .toy-header,
-.toy-panel .toy-footer,
-.toy-panel .toy-volume{ width:100%; align-self:stretch; }
-.toy-panel .toy-body{ display:grid; place-items:center; overflow:hidden; }
-
-/* In overlay/zoom, JS sets explicit px size; remove aspect lock */
-#zoom-overlay #zoom-frame .toy-panel .toy-body { aspect-ratio: auto !important; }
-
-/* Top‑align LoopGrid & DrawGrid so content starts under header */
-.toy-panel[data-toy="loopgrid"],
-.toy-panel[data-toy="drawgrid"]{
-  align-items: start !important;
-  justify-items: stretch !important;
+.toy-panel .toy-footer{
+  flex: 0 0 auto;
 }
-.toy-panel[data-toy="loopgrid"] > .toy-body,
-.toy-panel[data-toy="drawgrid"] > .toy-body{
-  align-self: start !important;
-  justify-self: stretch !important;
+
+/* Body is sized by aspect ratio in Standard; explicit px in Advanced comes from JS */
+.toy-panel .toy-body{
+  position: relative;
+  flex: 0 0 auto;
+  overflow: hidden;
 }
-/* Let each toy control its own canvas size; do not force 100% height here */
+
+/* Give the footer its own space below the toy */
+.toy-panel .toy-footer{
+  padding: 8px 10px 10px;
+  margin-top: var(--toy-gap);
+}
+
+/* Volume layout inside footer */
+.toy-panel .toy-volwrap{
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+}
+.toy-panel .toy-volwrap input[type="range"]{ flex: 1; }
+
+/* Standard-mode aspect ratios (Advanced uses explicit px via JS) */
+.toy-panel[data-toy="drawgrid"]:not(.toy-zoomed) .toy-body{ aspect-ratio: 16 / 10; }
+.toy-panel[data-toy="loopgrid"]:not(.toy-zoomed) .toy-body{ aspect-ratio: 1 / 1; }
+
+/* LoopGrid: canvas is absolutely positioned so it doesn't affect layout height. */
+.toy-panel[data-toy="loopgrid"] .toy-body{ padding: 0; margin: 0; }
+.toy-panel[data-toy="loopgrid"] .toy-body canvas{
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  margin: 0;
+}
+
+/* Prevent any centering rules from previous CSS */
+.toy-panel[data-toy="loopgrid"] .toy-body,
+.toy-panel[data-toy="drawgrid"] .toy-body{ place-items: initial; align-items: initial; justify-content: initial; }
+
+
+/* Volume card visuals (match demo) */
+.toy-panel .toy-footer{ padding:0; margin-top:14px; }
+.toy-panel .toy-volwrap{
+  display:flex; gap:10px; align-items:center;
+  background:#0d141dcc; border:1px solid #1c2430; border-radius:10px; padding:8px 10px;
+  box-sizing:border-box; width:100%; max-width:100%; overflow:hidden;
+}
+.toy-panel .toy-volwrap *{ min-width:0; }
+.toy-panel .toy-volwrap input[type="range"]{ flex:1; width:100%; }
+
+
+/* Ensure header is always clickable above the body canvas */
+.toy-panel .toy-header{ position:relative; z-index: 3; }
+.toy-panel .toy-body{ position:relative; z-index: 1; }
+
+
+/* === Structural overrides (win against legacy absolute layout) === */
+#board{ display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:16px; padding:16px; }
+
+/* Make the camera stage occupy the viewport */
+#board-viewport{ position:relative; width:100%; min-height: calc(100vh - 72px); overflow:hidden; display:block; }
+#camera-pan, #camera-scale{ display:block; transform-origin: 50% 50%; }
+
+/* Panels flow; no absolute positioning */
+#board .toy-panel{ position:relative !important; display:flex !important; flex-direction:column; margin:0; }
+
+/* Headers above canvases */
+.toy-panel .toy-header{ position:relative; z-index:3; display:flex; align-items:center; justify-content:space-between; }
+.toy-panel .toy-body{ position:relative; z-index:1; overflow:hidden; padding:0 !important; }
+
+/* Footer (volume card) */
+.toy-panel .toy-footer{ padding:0; margin-top:14px; }
+.toy-panel .toy-volwrap{
+  display:flex; gap:10px; align-items:center;
+  background:#0d141dcc; border:1px solid #1c2430; border-radius:10px; padding:8px 10px;
+  box-sizing:border-box; width:100%; max-width:100%; overflow:hidden;
+}
+.toy-panel .toy-volwrap *{ min-width:0; }
+.toy-panel .toy-volwrap input[type="range"]{ flex:1; width:100%; }
+
+/* Square bodies for toys that need it */
+.toy-panel[data-toy="loopgrid"] .toy-body,
+.toy-panel[data-toy="rippler"] .toy-body,
+.toy-panel[data-toy="bouncer"] .toy-body,
+.toy-panel[data-toy*="wheel"] .toy-body{ aspect-ratio: 1 / 1; }
+
+/* Make canvases fill their toy body without affecting layout height */
+.toy-panel[data-toy="loopgrid"] .toy-body canvas,
+.toy-panel[data-toy*="wheel"] .toy-body canvas,
+.toy-panel[data-toy="rippler"] .toy-body canvas,
+.toy-panel[data-toy="bouncer"] .toy-body canvas{ position:absolute; inset:0; width:100%; height:100%; display:block; margin:0; }
+
+/* Pretty header buttons (demo style) */
+.toy-btn{
+  appearance:none; cursor:pointer; user-select:none;
+  padding:6px 12px; border-radius:10px;
+  border:1px solid #1c2430; background:#0d141d; color:#e6e8ef;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 2px 6px rgba(0,0,0,0.35);
+  transition: transform .07s ease, background .15s ease, border-color .15s ease;
+}
+.toy-btn:hover{ background:#111a26; border-color:#243244; }
+.toy-btn:active{ transform: translateY(1px) scale(0.99); }
+
+#organise-toys-btn{ position:fixed; top:10px; right:10px; z-index:10001; }
+
+
+/* Reinforcements */
+.toy-panel .toy-header{ position:relative !important; z-index:10 !important; }
+.toy-panel .toy-body{ position:relative !important; z-index:1 !important; }
+.toy-panel .toy-footer{ position:relative !important; z-index:2 !important; }
+.toy-panel[data-toy="loopgrid"] .toy-body canvas,
+.toy-panel[data-toy*="wheel"] .toy-body canvas,
+.toy-panel[data-toy="rippler"] .toy-body canvas,
+.toy-panel[data-toy="bouncer"] .toy-body canvas{ position:absolute !important; inset:0 !important; width:100% !important; height:100% !important; display:block !important; margin:0 !important; }
+
+
+/* Each toy panel is its own stacking context; children cannot overlap other panels */
+.toy-panel{ position:relative !important; isolation:isolate; }
+
+
+/* === Hard overrides to stop panels from absolute-positioning and stretching === */
+#board { display: grid !important; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)) !important; gap: 16px !important; padding: 16px !important; }
+
+.toy-panel { position: relative !important; display: flex !important; flex-direction: column !important; min-height: 0 !important; }
+.toy-panel .toy-header { position: relative !important; z-index: 3 !important; }
+.toy-panel .toy-body { position: relative !important; left: auto !important; right: auto !important; top: auto !important; bottom: auto !important; min-height: 0 !important; min-width: 0 !important; padding: 0 !important; overflow: hidden !important; }
+.toy-panel .toy-footer { position: relative !important; z-index: 2 !important; margin-top: 12px !important; }
+
+/* Only these toys get square bodies; drawgrid remains 4:3 */
+.toy-panel[data-toy="loopgrid"] .toy-body,
+.toy-panel[data-toy*="wheel"] .toy-body,
+.toy-panel[data-toy="rippler"] .toy-body,
+.toy-panel[data-toy="bouncer"] .toy-body { aspect-ratio: 1 / 1 !important; }
+
+.toy-panel[data-toy="drawgrid"] .toy-body { aspect-ratio: 4 / 3 !important; }
+
+/* Canvases fill their own toy's body only */
+.toy-panel[data-toy="loopgrid"] .toy-body canvas,
+.toy-panel[data-toy*="wheel"] .toy-body canvas,
+.toy-panel[data-toy="rippler"] .toy-body canvas,
+.toy-panel[data-toy="bouncer"] .toy-body canvas,
+.toy-panel[data-toy="drawgrid"] .toy-body canvas { position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; display: block !important; margin: 0 !important; }
+
+/* Isolate stacking so children can't spill outside */
+.toy-panel { isolation: isolate !important; }
+
+/* Pretty header buttons */
+.toy-btn{
+  appearance:none; cursor:pointer; user-select:none;
+  padding:6px 12px; border-radius:10px;
+  border:1px solid #1c2430; background:#0d141d; color:#e6e8ef;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 2px 6px rgba(0,0,0,0.35);
+  transition: transform .07s ease, background .15s ease, border-color .15s ease;
+}
+.toy-btn:hover{ background:#111a26; border-color:#243244; }
+.toy-btn:active{ transform: translateY(1px) scale(0.99); }
+
+/* Organise button */
+#organise-toys-btn{ position: fixed !important; top: 10px !important; right: 10px !important; z-index: 10001 !important; }
