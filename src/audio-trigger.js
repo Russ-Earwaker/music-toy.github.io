@@ -1,22 +1,10 @@
-// src/audio-trigger.js — route notes to per‑toy instruments (<=200 lines)
-import { triggerInstrument } from './audio-samples.js';
+// src/audio-trigger.js — consolidated trigger (master-aware)
 import { getToyInstrument } from './instrument-map.js';
+import { triggerInstrument } from './audio-samples.js';
+import { AudioMaster } from './audio-master.js';
 
-/**
- * Trigger a note for a specific toy, using its mapped/default instrument.
- * @param {string} toyId
- * @param {number} midi - MIDI note number
- * @param {number} velocity - 0..1
- * @param {number} when - AudioContext time (optional)
- */
-export function triggerNoteForToy(toyId, midi, velocity=0.8, when){
-  const inst = getToyInstrument(toyId);
-  try{ console.log('[TRIGGER]', {toyId, inst, midi, velocity}); }catch{}
-  if (!inst) return;
-  try{
-    triggerInstrument(inst, midi, velocity, when);
-  }catch(e){
-    // fail-safe: try immediate time
-    try{ triggerInstrument(inst, midi, velocity); }catch{}
-  }
+export function triggerNoteForToy(toyId, midi=60, velocity=0.9){
+  const inst = getToyInstrument && getToyInstrument(toyId);
+  const v = Math.max(0.0001, Math.min(1, (velocity==null?0.9:velocity) * (AudioMaster && AudioMaster.getVolume ? AudioMaster.getVolume() : 1)));
+  return triggerInstrument(inst || 'tone', midi, v, toyId);
 }

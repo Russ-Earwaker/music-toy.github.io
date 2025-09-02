@@ -1,4 +1,4 @@
-// src/drum-tiles-visual.js — drum tiles (one-row, shared renderer, consolidated trigger) (<300 lines)
+// src/drum-tiles-visual.js — drum tiles (one-row, square, consolidated trigger) (<300 lines)
 import { drawBlocksSection } from './ui-tiles.js';
 import { triggerNoteForToy } from './audio-trigger.js';
 
@@ -9,7 +9,6 @@ import { triggerNoteForToy } from './audio-trigger.js';
   function ensureCanvas(panel){
     const host = panel.querySelector('.toy-vbody') || panel.querySelector('.toy-body') || panel;
     if (getComputedStyle(host).position === 'static'){ host.style.position = 'relative'; }
-    // Move existing canvas into host if needed
     let cvs = panel.querySelector('canvas[data-role="drum-tiles"]');
     if (cvs && cvs.parentNode !== host){ try{ host.prepend(cvs); }catch{} }
     if (!cvs){
@@ -17,7 +16,6 @@ import { triggerNoteForToy } from './audio-trigger.js';
       cvs.dataset.role = 'drum-tiles';
       Object.assign(cvs.style, { position:'absolute', left:'50%', transform:'translateX(-50%)', top:'0', display:'block', zIndex:'50', pointerEvents:'auto' });
       host.prepend(cvs);
-      // Click to toggle a cube (persistent)
       cvs.addEventListener('pointerdown', (e)=>{
         const rect = cvs.getBoundingClientRect();
         const col = Math.max(0, Math.min(7, Math.floor((e.clientX - rect.left) / (rect.width/8))));
@@ -41,12 +39,13 @@ import { triggerNoteForToy } from './audio-trigger.js';
     const w = tile * 8;
     cvs.width  = Math.max(2, Math.floor(w * dpr));
     cvs.height = Math.max(2, Math.floor(tile * dpr));
-    try{ cvs.style.setProperty('width', w + 'px', 'important'); }catch{ cvs.style.width = w + 'px'; }
+    try{ cvs.style.setProperty('width',  w + 'px', 'important'); }catch{ cvs.style.width  = w + 'px'; }
     try{ cvs.style.setProperty('height', tile + 'px', 'important'); }catch{ cvs.style.height = tile + 'px'; }
     cvs.style.left = '50%';
     cvs.style.transform = 'translateX(-50%)';
     render(panel);
   }
+
   function render(panel){
     const cvs = ensureCanvas(panel);
     const ctx = cvs.getContext('2d'); if (!ctx) return;
@@ -64,7 +63,6 @@ import { triggerNoteForToy } from './audio-trigger.js';
     STATE.set(panel, { enabled:new Array(8).fill(false), onCol:-1 });
     resize(panel);
 
-    // Scheduler tick: update highlight and trigger if enabled (consolidated path)
     panel.addEventListener('loopgrid:playcol', (e)=>{
       const st = STATE.get(panel); if (!st) return;
       const col = (e && e.detail && typeof e.detail.col==='number') ? e.detail.col : -1;
@@ -78,7 +76,6 @@ import { triggerNoteForToy } from './audio-trigger.js';
       render(panel);
     });
 
-    // Drum tap sets current step ON
     panel.addEventListener('loopgrid:tap', ()=>{
       const st = STATE.get(panel); if (!st) return;
       const idx = (st.onCol>=0 ? st.onCol : 0);
@@ -88,20 +85,16 @@ import { triggerNoteForToy } from './audio-trigger.js';
       try{ panel.dispatchEvent(new CustomEvent('loopgrid:toggle', { detail:{ col: idx, on:true }, bubbles:true })); }catch{}
     });
 
-    // Clear / Random controls
     panel.addEventListener('drumtiles:clear', ()=>{
       const st = STATE.get(panel); if (!st) return;
       st.enabled = new Array(8).fill(false);
-      STATE.set(panel, st);
-      render(panel);
+      STATE.set(panel, st); render(panel);
       try{ panel.dispatchEvent(new CustomEvent('loopgrid:clear', { bubbles:true })); }catch{}
     });
     panel.addEventListener('drumtiles:randomize', ()=>{
       const st = STATE.get(panel); if (!st) return;
-      const prob = 0.35;
-      st.enabled = st.enabled.map(()=> Math.random() < prob);
-      STATE.set(panel, st);
-      render(panel);
+      const prob = 0.35; st.enabled = st.enabled.map(()=> Math.random() < prob);
+      STATE.set(panel, st); render(panel);
       try{ panel.dispatchEvent(new CustomEvent('loopgrid:randomize', { detail:{ prob }, bubbles:true })); }catch{}
     });
   }
