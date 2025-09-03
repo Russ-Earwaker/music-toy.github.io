@@ -133,6 +133,14 @@ function playSampleAt(id, when, gain=1, toyId, noteName){
   const src = buf ? ctx.createBufferSource() : null;
   if (src){
     src.buffer = buf;
+
+    // Adjust playback rate for pitch. Assume base note is C4 for all samples.
+    const baseFreq = noteToFreq('C4');
+    const targetFreq = noteToFreq(noteName || 'C4');
+    if (baseFreq > 0 && targetFreq > 0) {
+      src.playbackRate.value = targetFreq / baseFreq;
+    }
+
     const g = ctx.createGain(); g.gain.value = gain;
     src.connect(g).connect(getToyGain(toyId||'master'));
     src.start(when||ctx.currentTime);
