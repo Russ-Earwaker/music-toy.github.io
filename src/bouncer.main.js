@@ -114,6 +114,53 @@ export function createBouncer(selector){
   let zoomDragCand=null, zoomDragStart=null, zoomTapT=null;
   let tapCand=null, tapStart=null, tapMoved=false;
   let lastLaunch=null, launchPhase=0, nextLaunchAt=null, prevNow=0, ball=null;
+  // --- Loop Recorder (record a bar, replay verbatim) ----------------------
+  const loopRec = {
+    signature: '',
+    mode: 'record',        // 'record' | 'replay'
+    pattern: [],           // [{note, offset}] in seconds within bar
+    lastBarIndex: -1,
+    scheduledBarIndex: -999,
+    seen: new Set(),       // de-dupe within a bar: note@ms
+  };
+  function stateSignature(){
+    try{
+      const parts = [];
+      // blocks (position/size/active/noteIndex)
+      if (Array.isArray(blocks)){
+        for (let i=0;i<blocks.length;i++){
+          const b=blocks[i]; if (!b) continue;
+          parts.push(i, Math.round(b.x), Math.round(b.y), Math.round(b.w||b.size||36), Math.round(b.h||b.size||36), b.active?1:0, b.noteIndex|0);
+        }
+      }
+      // launch vector/pos
+      const L = lastLaunch || {};
+      parts.push('launch', Math.round(L.x||0), Math.round(L.y||0), Math.round((L.vx||0)*100), Math.round((L.vy||0)*100));
+      return parts.join(',');
+    }catch{ return 'sig_err'; }
+  }
+  function barIndexOfTime(li, t){ return Math.floor(Math.max(0, t - li.loopStartTime) / li.barLen); }
+  function barStartOfIndex(li, k){ return li.loopStartTime + k * li.barLen; }
+  function onNewBar(li, k){
+    const sig = stateSignature();
+    const changed = (sig !== loopRec.signature);
+    if (changed){
+      loopRec.signature = sig;
+      loopRec.mode = 'record';
+      loopRec.pattern.length = 0;
+    } else {
+      if (loopRec.pattern.length > 0) loopRec.mode = 'replay';
+    }
+    loopRec.lastBarIndex = k;
+    loopRec.scheduledBarIndex = -999;
+    loopRec.seen = new Set();
+    if (window && window.BOUNCER_LOOP_DBG){
+      console.log('[bouncer-rec] new bar', k, 'mode', loopRec.mode, 'changed', changed, 'patLen', loopRec.pattern.length);
+    }
+  }
+  // Spawn debounce to prevent multiple spawns on a single release
+  let __spawnLastAt = 0;
+  const __spawnCooldown = 0.08; // seconds
   let lastCanvasW=0, lastCanvasH=0;
   let visQ = []; const fx = createImpactFX()
   // Debug OSD (toggle with globalThis.BOUNCER_DIAG = true)
@@ -241,6 +288,17 @@ export function createBouncer(selector){
   // interactions moved to bouncer-adv-ui.js
   // basic ball control helpers (restored after split)
   function spawnBallFrom(L){
+      /*DEBUG_SPAWN*/ try{ if (window && window.BOUNCER_LOOP_DBG) console.log('[bouncer-main] spawn', 'x',L.x,'y',L.y,'vx',L.vx,'vy',L.vy); }catch{}
+      // Debounce rapid duplicate spawns
+      try {
+        const ac = (typeof ensureAudioContext==='function') ? ensureAudioContext() : null;
+        const nowT = ac ? ac.currentTime : 0;
+        if (ball && (nowT - __spawnLastAt) < __spawnCooldown){
+          if (window && window.BOUNCER_LOOP_DBG) console.log('[bouncer-main] spawn ignored (cooldown)');
+          return ball;
+        }
+        __spawnLastAt = nowT;
+      }catch{}
     const o = { x:L.x, y:L.y, vx:L.vx, vy:L.vy, r: ballR() };
     ball = o;
     lastLaunch = { vx: L.vx, vy: L.vy, x: L.x, y: L.y };
@@ -261,6 +319,11 @@ function setNextLaunchAt(t){ nextLaunchAt = t; }
   function setBallOut(o){ ball = o; }
 
     const __aim = { active:false, sx:0, sy:0, cx:0, cy:0 };
+// Persistent per-step state for physics (dedupe & spawn windows)
+let __lastTickByBlock = new Map();
+let __lastTickByEdge  = new Map();
+let __justSpawnedUntil = 0;
+
   function __setAim(a){ try{ if (a && typeof a==='object'){ Object.assign(__aim, a); } }catch(e){} }
 
   const _int = installBouncerInteractions({ setAim: __setAim, canvas, sizing, toWorld, EDGE, physW, physH, ballR, __getSpeed,
@@ -281,17 +344,75 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
         getBall: ()=>ball, ballR, ensureEdgeControllers }); }catch{} },
   updateLaunchBaseline,
   buildStateForStep: (now, prevNow)=>{
-    const S = {
-      ball,
-        getBall: ()=>ball, blocks, edgeControllers, EDGE, worldW: physW, worldH: physH, ballR, blockSize, mapControllersByEdge,
-      edgeFlash, ensureAudioContext, noteValue, noteList, instrument, fx,
-      lastLaunch, nextLaunchAt, lastAT: prevNow, flashEdge, handle, spawnBallFrom, getLoopInfo,
-      triggerInstrument: (i,n,t)=>triggerInstrument(i,n,t,'bouncer', toyId),
-      BOUNCER_BARS_PER_LIFE, setNextLaunchAt, setBallOut, visQ
+    const li0 = (typeof getLoopInfo==='function') ? getLoopInfo() : null;
+    const triggerPhysAware = (i,n,t)=>{
+      try{
+        const li = (typeof getLoopInfo==='function') ? getLoopInfo() : li0;
+        const lr = (visQ && visQ.loopRec) ? visQ.loopRec : null;
+        const nowT = li ? li.now : (t||0);
+        const barLen = li ? li.barLen : 1;
+        const beatDur = barLen/4;
+        const k = li ? Math.floor(Math.max(0,(nowT - li.loopStartTime)/barLen)) : 0;
+        if (lr && lr.mode === 'replay'){ return; }
+        if (lr && lr.mode === 'record'){
+          try { triggerInstrument(i||instrument, n, undefined, toyId); } catch(e){}
+          const barStart = li ? (li.loopStartTime + k*barLen) : 0;
+          const at = (typeof t==='number' ? t : nowT);
+          const offBeats = (at - barStart)/beatDur;
+          const off = Math.max(0, Math.min(4, Math.round(offBeats*16)/16));
+          if (visQ && visQ.loopRec && Array.isArray(visQ.loopRec.pattern)){
+            visQ.loopRec.pattern.push({ note: n, offset: off });
+          }
+          return;
+        }
+      }catch(e){}
+      try { triggerInstrument(i||instrument, n, (typeof t==='number'?t:undefined), toyId); }catch(e){}
     };
+    const S = {
+      now,
+      lastAT: prevNow || 0,
+      EDGE,
+      worldW, worldH,
+      physW, physH,
+      renderScale,
+      ensureAudioContext,
+      mapControllersByEdge,
+      flashEdge,
+      blocks,
+      edgeControllers,
+      instrument,
+      noteList,
+      getLoopInfo,
+      ballR,
+      handle,
+      lastLaunch,
+      nextLaunchAt,
+      spawnBallFrom,
+      triggerInstrument: triggerPhysAware,
+      triggerInstrumentRaw: (i,n,t)=>triggerInstrument(i||instrument, n, t, toyId),
+      BOUNCER_BARS_PER_LIFE,
+      setNextLaunchAt: (t)=>{ nextLaunchAt = t; },
+      setBallOut: (o)=>{ ball = o; },
+      fx,
+      __lastTickByBlock,
+      __lastTickByEdge,
+      __justSpawnedUntil
+    };
+    S.visQ = Object.assign({}, visQ, { loopRec });
+    S.ball = ball;
     return S;
   },
-  applyFromStep: (S)=>{ visQ = S.visQ || visQ; }
+  applyFromStep: (S)=>{
+    if (S){
+      visQ = S.visQ || visQ;
+      if ('ball' in S) ball = S.ball;
+      if ('lastLaunch' in S && S.lastLaunch) lastLaunch = S.lastLaunch;
+      if ('nextLaunchAt' in S) nextLaunchAt = S.nextLaunchAt;
+      if (S.__lastTickByBlock) __lastTickByBlock = S.__lastTickByBlock;
+      if (S.__lastTickByEdge) __lastTickByEdge = S.__lastTickByEdge;
+      if (typeof S.__justSpawnedUntil === 'number') __justSpawnedUntil = S.__justSpawnedUntil;
+    }
+  }
 });
 requestAnimationFrame(draw);
 

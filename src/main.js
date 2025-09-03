@@ -1,15 +1,16 @@
 // --- Module Imports ---
 import './bouncer-init.js';
-import './mute-wire.js';
 import './header-buttons-delegate.js';
 import './rippler-init.js';
+import { initDrawGrid } from './drawgrid-init.js';
+
 import './toy-audio.js';
 import './toy-layout-manager.js';
 import './zoom-overlay.js';
 import { initAudioAssets } from './audio-samples.js';
 import { DEFAULT_BPM, NUM_STEPS, ensureAudioContext, getLoopInfo, setBpm, start, isRunning } from './audio-core.js';
 import { createLoopIndicator } from './loopindicator.js';
-import { buildGrid } from './grid-core.js';
+import { buildGrid } from './drum-core.js';
 
 console.log('[MAIN] module start');
 const CSV_PATH = './assets/samples/samples.csv'; // optional
@@ -22,17 +23,28 @@ function bootTopbar(){
 }
 function bootGrids(){
   const panels = Array.from(document.querySelectorAll('.toy-panel[data-toy="loopgrid"]'));
-  return panels.map(p => buildGrid(p, 8)).filter(Boolean);
+  panels.forEach(p => buildGrid(p, 8));
 }
-function scheduler(grids){
-  let lastCol=-1;
+function bootDrawGrids(){
+  const panels = Array.from(document.querySelectorAll('.toy-panel[data-toy="drawgrid"]'));
+  panels.forEach(initDrawGrid);
+}
+function getSequencedToys() {
+  // Find all panels that have been initialized with a step function.
+  return Array.from(document.querySelectorAll('.toy-panel')).filter(p => typeof p.__sequencerStep === 'function');
+}
+function scheduler(toys){
+  const lastCol = new Map(); // Use a map to track last column per toy
   function step(){
     const info = getLoopInfo();
-    const col = Math.floor(info.phase01 * NUM_STEPS) % NUM_STEPS;
-    if (col !== lastCol){
-      lastCol = col;
-      grids.forEach(g => { try { g.__sequencerStep(col); } catch {} });
-    }
+    toys.forEach(toy => {
+      const steps = parseInt(toy.dataset.steps, 10) || NUM_STEPS;
+      const col = Math.floor(info.phase01 * steps) % steps;
+      if (col !== lastCol.get(toy.id)) {
+        lastCol.set(toy.id, col);
+        try { toy.__sequencerStep(col); } catch (e) { console.warn(`Sequencer step failed for ${toy.id}`, e); }
+      }
+    });
     requestAnimationFrame(step);
   }
   requestAnimationFrame(step);
@@ -49,10 +61,12 @@ async function boot(){
 
   bootTopbar();
   createLoopIndicator('body');
-  const grids = bootGrids();
+  // Initialize loopgrids (this attaches __sequencerStep to them)
+  bootGrids();
+  bootDrawGrids();
   // The theme system will run and may set its own instruments.
   try{ window.ThemeBoot && window.ThemeBoot.wireAll && window.ThemeBoot.wireAll(); }catch{}
-  scheduler(grids);
+  scheduler(getSequencedToys());
   try{ window.setBoardScale && window.setBoardScale(1); }catch{}
   // Arrange panels if available
   try{ window.organizeBoard && window.organizeBoard(); }catch{}

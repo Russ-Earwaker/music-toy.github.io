@@ -193,6 +193,50 @@ export function createBouncerDraw(env){
       const ac = ensureAudioContext(); 
       const now = (ac ? ac.currentTime : 0);
       const S = buildStateForStep(now, prevNow);
+      // Ensure S.ball mirrors the live ball just before step (belt-and-braces)
+      try {
+        const gb = getBall ? getBall() : null;
+        if (gb) S.ball = gb;
+        if (gb && !(window.__BR_seen)) {
+          window.__BR_seen = true;
+          if (window && window.BOUNCER_LOOP_DBG) console.log('[bouncer-render] first-seen ball pre-step');
+        }
+        if (window && window.BOUNCER_LOOP_DBG) {
+          window.__BR_dbg = (window.__BR_dbg||0) + 1;
+      // Loop recorder: schedule replay once per bar (robust timing)
+      try {
+        if (window && window.BOUNCER_LOOP_DBG) {
+          const _lr = S.visQ && S.visQ.loopRec;
+          if (_lr) console.log('[bouncer-rec] pre', 'mode=', _lr.mode, 'patLen=', (_lr.pattern?_lr.pattern.length:0), 'scheduled=', _lr.scheduledBarIndex);
+          else console.log('[bouncer-rec] pre', 'no lr');
+        }
+        const lr = S.visQ && S.visQ.loopRec;
+        if (lr && lr.mode === 'replay' && typeof S.getLoopInfo==='function'){
+          const li = S.getLoopInfo();
+          const nowT = li.now;
+          const k = Math.floor(Math.max(0, (nowT - li.loopStartTime) / li.barLen));
+          if (Array.isArray(lr.pattern) && lr.pattern.length>0){
+            const base = li.loopStartTime + k*li.barLen;
+            const baseNext = base + li.barLen;
+            if (window && window.BOUNCER_LOOP_DBG) console.log('[bouncer-rec] about to schedule bar', k, 'base', base.toFixed(3), 'nowT', nowT.toFixed(3));
+            if (lr.scheduledBarIndex !== k){
+              lr.scheduledBarIndex = k;
+              if (window && window.BOUNCER_LOOP_DBG) console.log('[bouncer-rec] schedule replay', lr.pattern.length, 'at bar', k);
+              if (window && window.BOUNCER_LOOP_DBG && window.BOUNCER_LOOP_DBG_CLICK){ try{ S.triggerInstrumentRaw('hat', 'C5', base + 0.0001); }catch(e){} }
+              for (const ev of lr.pattern){
+                const when0 = base + Math.max(0, ev.offset);
+                const when  = (when0 <= nowT + 0.03) ? (baseNext + Math.max(0, ev.offset)) : when0;
+                if (window && window.BOUNCER_LOOP_DBG) console.log('[bouncer-rec] TRIGGER', ev.note, 'inst', S.instrument, 'when', (when - nowT).toFixed(3));
+                if (S.triggerInstrumentRaw) S.triggerInstrumentRaw(S.instrument, ev.note, when);
+                else if (S.triggerInstrument) S.triggerInstrument(S.instrument, ev.note, when);
+              }
+            }
+          }
+        }
+      }catch(e){}
+          if (window.__BR_dbg <= 6) console.log('[bouncer-render] pre-step hasBall=', !!gb);
+        }
+      } catch(e){}
       stepBouncer(S);
       applyFromStep && applyFromStep(S);
 

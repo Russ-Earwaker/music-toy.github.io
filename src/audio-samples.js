@@ -3,6 +3,17 @@ import { ensureAudioContext, getToyGain } from './audio-core.js';
 import { playById, noteToFreq, TONE_NAMES } from './audio-tones.js';
 
 // id -> { url, synth }
+
+// Ensure scheduled 'when' is safe: convert absolute time to >= now+1ms
+function safeStartTime(ctx, when){
+  const now = ctx.currentTime;
+  if (typeof when === 'number' && isFinite(when)) {
+    // If 'when' is in the past or dangerously near, bump to just-after now
+    return Math.max(now + 0.001, when);
+  }
+  return now;
+}
+
 const entries = new Map();
 // id -> AudioBuffer
 const buffers = new Map();
@@ -143,7 +154,11 @@ function playSampleAt(id, when, gain=1, toyId, noteName){
 
     const g = ctx.createGain(); g.gain.value = gain;
     src.connect(g).connect(getToyGain(toyId||'master'));
-    src.start(when||ctx.currentTime);
+    const __startAt = safeStartTime(ctx, when);
+    if (window && window.BOUNCER_LOOP_DBG) {
+      try { console.log('[audio-samples] start', id, noteName||'C4', 'in', (__startAt - ctx.currentTime).toFixed(3)); } catch (e) {}
+    }
+    src.start(__startAt);
     return true;
   }
 
@@ -160,7 +175,7 @@ export function triggerInstrument(instrument, noteName='C4', when, toyId){
   const ctx = ensureAudioContext();
   const id0 = String(instrument||'tone').toLowerCase();
   const id  = normId(id0);
-  const t   = when || ctx.currentTime;
+  const t   = safeStartTime(ctx, when);
 
   // exact or alias match first
   if (playSampleAt(id, t, 1, toyId, noteName)) return;

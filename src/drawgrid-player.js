@@ -1,0 +1,44 @@
+// src/drawgrid-player.js
+import { triggerInstrument } from './audio-samples.js';
+import { gateTriggerForToy } from './toy-audio.js';
+import { buildPalette, midiToName } from './note-helpers.js';
+
+export function connectDrawGridToPlayer(panel) {
+  if (!panel || panel.__drawGridPlayer) return;
+  panel.__drawGridPlayer = true;
+
+  const toyId = panel.id || 'drawgrid';
+  let instrument = panel.dataset.instrument || 'acoustic_guitar';
+
+  // The grid has 12 rows. A chromatic scale is a perfect fit.
+  // We'll reverse it so the top row is the highest pitch.
+  const notePalette = buildPalette(60, Array.from({length: 12}, (_, i) => i), 1).reverse(); // C4-B4, reversed
+
+  let gridState = {
+    active: Array(16).fill(false),
+    nodes: Array.from({ length: 16 }, () => new Set()),
+  };
+
+  // The gated trigger respects the toy's volume/mute settings.
+  const playNote = gateTriggerForToy(toyId, triggerInstrument);
+
+  panel.addEventListener('drawgrid:update', (e) => {
+    if (e.detail) gridState = e.detail;
+  });
+
+  panel.addEventListener('toy-instrument', (e) => {
+    instrument = e.detail?.value || instrument;
+  });
+
+  function step(col) {
+    if (gridState.active[col] && gridState.nodes[col]?.size > 0) {
+      for (const row of gridState.nodes[col]) {
+        const midiNote = notePalette[row % notePalette.length];
+        playNote(instrument, midiToName(midiNote));
+      }
+    }
+  }
+
+  panel.__sequencerStep = step;
+  panel.dataset.steps = 16;
+}

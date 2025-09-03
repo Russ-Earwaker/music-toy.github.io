@@ -1,6 +1,7 @@
 // src/toyui.js — panel chrome + events (<=300 lines)
 import { zoomInPanel, zoomOutPanel } from './zoom-overlay.js';
 import { getInstrumentNames } from './audio-samples.js';
+import { installVolumeUI } from './volume-ui.js';
 
 const $ = (sel, root=document)=> root.querySelector(sel);
 
@@ -60,6 +61,9 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
   const header = ensureHeader(panel, toyName);
   ensureBody(panel);
   const footer = ensureFooter(panel);
+
+  // Centrally install the volume UI for every toy.
+  installVolumeUI(footer);
 
   // Controls
   const right = header.querySelector('.toy-controls-right');
