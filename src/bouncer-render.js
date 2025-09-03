@@ -15,6 +15,10 @@ export function createBouncerDraw(env){
   let lastCssW = 0, lastCssH = 0;
   const ballTrail = []; let lastBallPos = null; let teleportGuard = false;
   const sparks = [];
+  // Local state for flash animations, to survive state rebuilds from the physics engine.
+  const blockFlashes = [];
+  const edgeFlashes = [];
+
   let prevNow = 0;
   let lastBeat = -1; let lastBar = -1;
   let didInit = false;
@@ -82,28 +86,28 @@ export function createBouncerDraw(env){
 
     // Draw blocks + edge controllers
     try{
-      // Decay flash values for animation. The physics step sets flash to 1.0 on hit.
-      for (const b of blocks) { if (b) b.flash = Math.max(0, (b.flash || 0) - 0.08); }
-      for (const c of edgeControllers) { if (c) c.flash = Math.max(0, (c.flash || 0) - 0.08); }
+      // Decay local flash values for animation.
+      for (let i = 0; i < blocks.length; i++) { blockFlashes[i] = Math.max(0, (blockFlashes[i] || 0) - 0.08); }
+      for (let i = 0; i < edgeControllers.length; i++) { edgeFlashes[i] = Math.max(0, (edgeFlashes[i] || 0) - 0.08); }
 
       // Check if in advanced/zoomed view for showing note labels
       const isAdv = !!canvas.closest('.toy-zoomed');
 
       // Draw with the new 'button' style and flash animation
-      for (const b of blocks) {
-        if (!b) continue;
+      blocks.forEach((b, i) => {
+        if (!b) return;
         drawBlock(ctx, b, {
-          variant: 'button', active: b.active !== false, flash: b.flash,
-          noteLabel: isAdv ? (noteList[b.noteIndex] || '') : null, showArrows: isAdv
+          variant: 'button', active: b.active !== false, flash: blockFlashes[i] || 0,
+          noteLabel: isAdv ? (noteList[b.noteIndex] || '') : null, showArrows: isAdv,
         });
-      }
-      for (const c of edgeControllers) {
-        if (!c) continue;
+      });
+      edgeControllers.forEach((c, i) => {
+        if (!c) return;
         drawBlock(ctx, c, {
-          variant: 'button', active: c.active !== false, flash: c.flash,
-          noteLabel: isAdv ? (noteList[c.noteIndex] || '') : null, showArrows: isAdv
+          variant: 'button', active: c.active !== false, flash: edgeFlashes[i] || 0,
+          noteLabel: isAdv ? (noteList[c.noteIndex] || '') : null, showArrows: isAdv,
         });
-      }
+      });
     }catch(e){ console.error('[bouncer-render] draw blocks failed:', e); }
 
     // Update trail points & sparks
@@ -187,6 +191,20 @@ export function createBouncerDraw(env){
       const S = buildStateForStep(now, prevNow);
       stepBouncer(S);
       applyFromStep && applyFromStep(S);
+
+      // After the physics step, capture any flash events it generated and store
+      // them in our local animation state arrays.
+      if (S.blocks) {
+        S.blocks.forEach((b_step, i) => {
+          if (b_step && b_step.flash > 0) blockFlashes[i] = b_step.flash;
+        });
+      }
+      if (S.edgeControllers) {
+        S.edgeControllers.forEach((c_step, i) => {
+          if (c_step && c_step.flash > 0) edgeFlashes[i] = c_step.flash;
+        });
+      }
+
       prevNow = now;
     }catch{}
 

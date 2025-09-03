@@ -100,13 +100,45 @@ export function drawBlock(ctx, b, opts = {}){
   const {
     baseColor = '#ff8c00',
     active = false,
+    flash = 0,
     offsetX = 0,
     offsetY = 0,
     noteLabel = null,
     showArrows = true,
     variant = 'block' // 'block' | 'button'
   } = opts;
-  const x = (b.x|0) + offsetX, y = (b.y|0) + offsetY, w = (b.w|0), h = (b.h|0);
+  let x = (b.x|0) + offsetX, y = (b.y|0) + offsetY, w = (b.w|0), h = (b.h|0);
+  let color = baseColor;
+
+  ctx.save(); // for potential transform
+
+  // Animate with flash value (squash and flash to white)
+  if (flash > 0) {
+    const f = Math.max(0, Math.min(1, flash));
+    const scale = 1.0 - 0.05 * f;
+    const dw = w * (1 - scale);
+    const dh = h * (1 - scale);
+    ctx.translate(x + dw / 2, y + dh / 2);
+    ctx.scale(scale, scale);
+
+    // Interpolate from the base color to white.
+    let r2=255, g2=140, b2=0; // default to #ff8c00 if parse fails
+    try {
+      if (baseColor.startsWith('#') && baseColor.length === 7) {
+        r2 = parseInt(baseColor.slice(1, 3), 16);
+        g2 = parseInt(baseColor.slice(3, 5), 16);
+        b2 = parseInt(baseColor.slice(5, 7), 16);
+      }
+    } catch(e) { /* use default */ }
+
+    const r1=255, g1=255, b1=255; // Flash target is white
+    const r = Math.round(r2 + (r1 - r2) * f);
+    const g = Math.round(g2 + (g1 - g2) * f);
+    const b_ = Math.round(b2 + (b1 - b2) * f);
+    color = `rgb(${r},${g},${b_})`;
+
+    x = 0; y = 0; // We've translated, so draw at origin
+  }
 
   // Clip to block rect to prevent any bevel/outline bleed
   ctx.save();
@@ -115,7 +147,7 @@ export function drawBlock(ctx, b, opts = {}){
   ctx.clip();
 
   // background
-  ctx.fillStyle = baseColor;
+  ctx.fillStyle = color;
   ctx.fillRect(x, y, w, h);
 
   // variant styling
@@ -205,7 +237,8 @@ export function drawBlock(ctx, b, opts = {}){
       ctx.fill();
     }
   }
-  ctx.restore(); /*__restore_marker__*/
+  ctx.restore(); // clip
+  ctx.restore(); // transform
 }
 
 
@@ -292,5 +325,5 @@ export function roundRectPath(ctx, x, y, w, h, r=10){
   ctx.arcTo(x, y+h, x, y, r);
   ctx.arcTo(x, y, x+w, y, r);
   ctx.closePath();
-  ctx.restore();
+  // ctx.restore(); // This was a bug, caller should restore.
 }
