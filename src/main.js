@@ -20,16 +20,21 @@ function bootTopbar(){
   stopBtn?.addEventListener('click', ()=>{ try{ ensureAudioContext().suspend(); }catch{} });
   bpmInput?.addEventListener('change', (e)=> setBpm(Number(e.target.value)||DEFAULT_BPM));
 }
+
+// Define a hook for the theme system to call. This allows the theme manager
+// to set the correct default instrument for each drum toy. We accept the
+// instrumentId provided by the theme, as it aligns with our desired defaults.
+window.assignGridInstrument = (index, instrumentId) => {
+  const panels = Array.from(document.querySelectorAll('.toy-panel[data-toy="loopgrid"]'));
+  const panel = panels[index];
+  if (panel && instrumentId) {
+    // Dispatch the 'toy-instrument' event that the UI and core logic listen for.
+    panel.dispatchEvent(new CustomEvent('toy-instrument', { detail: { value: instrumentId }, bubbles: true }));
+  }
+}
 function bootGrids(){
   const panels = Array.from(document.querySelectorAll('.toy-panel[data-toy="loopgrid"]'));
-  const defaultInstruments = ['djembe_bass', 'djembe_tone', 'djembe_slap'];
-  return panels.map((p, i) => {
-    // Set a default instrument before building, so toyui can pick it up.
-    if (!p.dataset.instrument) {
-      p.dataset.instrument = defaultInstruments[i % defaultInstruments.length];
-    }
-    return buildGrid(p, 8);
-  }).filter(Boolean);
+  return panels.map(p => buildGrid(p, 8)).filter(Boolean);
 }
 function scheduler(grids){
   let lastCol=-1;
@@ -57,9 +62,9 @@ async function boot(){
   bootTopbar();
   createLoopIndicator('body');
   const grids = bootGrids();
-  // The theme system filters the instrument list, which is not the desired behavior.
-  // Commenting out this call will ensure the full instrument list is always available.
-  // try{ window.ThemeBoot && window.ThemeBoot.wireAll && window.ThemeBoot.wireAll(); }catch{}
+  // The theme system is now used to set default instruments via our hook.
+  // The instrument list filtering will be undone by a change in toyui.js.
+  try{ window.ThemeBoot && window.ThemeBoot.wireAll && window.ThemeBoot.wireAll(); }catch{}
   scheduler(grids);
   try{ window.setBoardScale && window.setBoardScale(1); }catch{}
   // Arrange panels if available

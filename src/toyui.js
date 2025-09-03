@@ -49,6 +49,24 @@ function buildInstrumentSelect(panel, toyKind){
     try{ panel.dispatchEvent(new CustomEvent('toy-instrument', { detail:{ value }, bubbles:true })); }catch(e){}
     try{ panel.dispatchEvent(new CustomEvent('toy:instrument', { detail:{ name:value, value }, bubbles:true })); }catch(e){}
   });
+
+  // The theme system may filter this list after it's initially populated.
+  // To ensure the full, unfiltered list is always available, we re-populate
+  // it after a short delay. This is a robust way to win the race condition.
+  setTimeout(() => {
+    const currentValue = sel.value;
+    const fullList = getInstrumentNames();
+    sel.innerHTML = '';
+    fullList.forEach(name => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name.split('_').join(' ');
+      sel.appendChild(opt);
+    });
+    // Restore the correct value if it exists in the full list.
+    if (fullList.includes(currentValue)) sel.value = currentValue;
+  }, 500);
+
   return sel;
 }
 
@@ -96,6 +114,15 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
 
   // Instrument select (Advanced-only via CSS)
   const sel = buildInstrumentSelect(panel, toyKind);
+
+  // Add a listener to keep the dropdown in sync with external changes,
+  // such as those from the theme system or startup scripts.
+  panel.addEventListener('toy-instrument', (e) => {
+    const instrumentName = e?.detail?.value;
+    if (instrumentName && sel.value !== instrumentName) {
+      sel.value = instrumentName;
+    }
+  });
 
   // Default instrument
   const initialInstrument = (sel && sel.value) || defaultInstrument || panel.dataset.instrument;

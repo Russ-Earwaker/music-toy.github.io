@@ -16,7 +16,10 @@ export function getInstrumentNames(){
   const set = new Set(TONE_NAMES);
   for (const k of entries.keys()) set.add(k);
   for (const k of buffers.keys()) set.add(k);
-  return Array.from(set).sort();
+  const allNames = Array.from(set);
+  // Filter out any names that look like filenames with common audio extensions.
+  const filteredNames = allNames.filter(name => !/\.(wav|mp3|ogg|flac|m4a)$/i.test(name));
+  return filteredNames.sort();
 }
 
 export async function initAudioAssets(csvUrl){
@@ -39,20 +42,21 @@ export async function initAudioAssets(csvUrl){
     if (!id) continue;
     const url = fn ? (baseDir + fn) : '';
     entries.set(id, { url, synth });
-    // also by filename base
-    if (fn){
-      const baseName = fn.replace(/\.[^/.]+$/, '').toLowerCase();
-      if (baseName && baseName !== id) entries.set(baseName, { url, synth });
-    }
+    // The code that added filename-based aliases to the instrument list has been
+    // removed. This ensures the dropdown only shows canonical instrument names.
+    // if (fn){
+    //   const baseName = fn.replace(/\.[^/.]+$/, '').toLowerCase();
+    //   if (baseName && baseName !== id) entries.set(baseName, { url, synth });
+    // }
     if (url){
       try{
         const ab = await (await fetch(url)).arrayBuffer();
         const buf = await ensureAudioContext().decodeAudioData(ab);
         buffers.set(id, buf);
-        if (fn){
-          const baseName = fn.replace(/\.[^/.]+$/, '').toLowerCase();
-          buffers.set(baseName, buf);
-        }
+        // if (fn){
+        //   const baseName = fn.replace(/\.[^/.]+$/, '').toLowerCase();
+        //   buffers.set(baseName, buf);
+        // }
       }catch(e){ /* skip bad file */ }
     }
   }
