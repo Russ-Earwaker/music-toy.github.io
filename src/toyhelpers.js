@@ -108,8 +108,10 @@ export function drawBlock(ctx, b, opts = {}){
     variant = 'block' // 'block' | 'button'
   } = opts;
   let x = (b.x|0) + offsetX, y = (b.y|0) + offsetY, w = (b.w|0), h = (b.h|0);
-  let color = baseColor;
 
+  // Unify color scheme: active is bright orange, inactive is grey.
+  const effectiveBaseColor = active ? baseColor : '#333333';
+  let color = effectiveBaseColor;
   ctx.save(); // for potential transform
 
   // Animate with flash value (squash and flash to white)
@@ -122,14 +124,14 @@ export function drawBlock(ctx, b, opts = {}){
     ctx.scale(scale, scale);
 
     // Interpolate from the base color to white.
-    let r2=255, g2=140, b2=0; // default to #ff8c00 if parse fails
+    let r2=51, g2=51, b2=51; // fallback to #333333
     try {
-      if (baseColor.startsWith('#') && baseColor.length === 7) {
-        r2 = parseInt(baseColor.slice(1, 3), 16);
-        g2 = parseInt(baseColor.slice(3, 5), 16);
-        b2 = parseInt(baseColor.slice(5, 7), 16);
+      if (effectiveBaseColor.startsWith('#') && effectiveBaseColor.length === 7) {
+        r2 = parseInt(effectiveBaseColor.slice(1, 3), 16);
+        g2 = parseInt(effectiveBaseColor.slice(3, 5), 16);
+        b2 = parseInt(effectiveBaseColor.slice(5, 7), 16);
       }
-    } catch(e) { /* use default */ }
+    } catch(e) { /* use fallback */ }
 
     const r1=255, g1=255, b1=255; // Flash target is white
     const r = Math.round(r2 + (r1 - r2) * f);
@@ -166,14 +168,6 @@ export function drawBlock(ctx, b, opts = {}){
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(x+2, y+2, w-4, Math.max(2, Math.floor(h*0.35)));
       ctx.globalAlpha = 1;
-    }
-  } else {
-    // active pulse overlay (legacy block look)
-    if (active) {
-      ctx.save();
-      ctx.fillStyle = 'rgba(255,255,255,0.25)';
-      ctx.fillRect(x, y, w, h);
-      ctx.restore();
     }
   }
 
