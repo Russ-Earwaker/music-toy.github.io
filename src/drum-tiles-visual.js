@@ -67,8 +67,12 @@ export function attachDrumVisuals(panel) {
 
         if (isZoomed && third === 'up') {
           stepIndexUp(state.noteIndices, state.notePalette, clickedIndex);
+          // Play the new note immediately for feedback
+          if (panel.__playCurrent) panel.__playCurrent(clickedIndex);
         } else if (isZoomed && third === 'down') {
           stepIndexDown(state.noteIndices, state.notePalette, clickedIndex);
+          // Play the new note immediately for feedback
+          if (panel.__playCurrent) panel.__playCurrent(clickedIndex);
         } else {
           state.steps[clickedIndex] = !state.steps[clickedIndex];
         }
@@ -104,17 +108,26 @@ function render(panel) {
   const notePalette = state.notePalette || [];
   const isZoomed = panel.classList.contains('toy-zoomed');
 
+  // To prevent highlight clipping and ensure cubes fit in zoomed view,
+  // we calculate cubeSize based on both width and height constraints.
+  const BORDER_MARGIN = 4;
   const totalGapWidth = GAP * (NUM_CUBES - 1);
-  let cubeSize = (w - totalGapWidth) / NUM_CUBES;
-  if (isZoomed) {
-    cubeSize *= 1.5;
-  }
-  const yOffset = (h - cubeSize) / 2; // Center cubes vertically
+
+  // Calculate max possible cube size from both dimensions.
+  const heightBasedSize = h - BORDER_MARGIN * 2;
+  const widthBasedSize = (w - totalGapWidth) / NUM_CUBES;
+  let cubeSize = Math.min(heightBasedSize, widthBasedSize);
+  cubeSize = Math.max(1, Math.floor(cubeSize));
+
+  // Center the entire block of cubes.
+  const actualTotalCubesWidth = (cubeSize * NUM_CUBES) + totalGapWidth;
+  const xOffset = (w - actualTotalCubesWidth) / 2;
+  const yOffset = (h - cubeSize) / 2;
 
   for (let i = 0; i < NUM_CUBES; i++) {
     const flash = st.flash[i] || 0;
     const isEnabled = !!steps[i];
-    const cubeX = i * (cubeSize + GAP);
+    const cubeX = xOffset + i * (cubeSize + GAP);
     const cubeRect = { x: cubeX, y: yOffset, w: cubeSize, h: cubeSize };
 
     // Draw playhead highlight first, so it's underneath the cube

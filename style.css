@@ -140,6 +140,10 @@ html,body{ overflow:hidden; }
   justify-content: center;
   align-items: center; /* Center the drum pad in the remaining space */
   position: relative; /* This contains the absolutely positioned particle canvas. */
+  aspect-ratio: 1 / 1; /* Force it to be square */
+  justify-self: center; /* Prevent horizontal stretching in the parent grid cell */
+  max-width: 100%; /* Ensure it doesn't exceed parent width */
+  max-height: 100%; /* Ensure it doesn't exceed parent height */
   min-height: 0; /* This allows the wrapper to shrink and grow correctly inside a flex container with a fixed aspect-ratio. */
   /* flex-grow is not needed with grid layout. */
 }
