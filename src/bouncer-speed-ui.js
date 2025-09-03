@@ -1,6 +1,7 @@
 /* Speed control UI — mounts in header, Advanced only */
 export function installSpeedUI(panel, sizing, initial=1.00){
-  let speedFactor = initial;
+  // Force default to 100% as requested, ignoring passed initial value.
+  let speedFactor = 1.00;
 
   // Build compact header control
   const spWrap = document.createElement('div');

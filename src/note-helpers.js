@@ -19,5 +19,22 @@ export function buildPalette(baseMidi = 48, offsets = PENTATONIC_OFFSETS, octave
   return palette;
 }
 
-export function stepIndexUp(indices, list, i){ if (!indices || !list?.length) return; indices[i] = (indices[i] + 1) % list.length; }
-export function stepIndexDown(indices, list, i){ if (!indices || !list?.length) return; indices[i] = (indices[i] - 1 + list.length) % list.length; }
+/**
+ * Increments the noteIndex property of an object, wrapping around the list length.
+ * @param {object} obj An object with a `noteIndex` property (e.g., a bouncer block).
+ * @param {Array} list The list of available notes or values to cycle through.
+ */
+export function stepIndexUp(obj, list) {
+  if (!obj || !list?.length) return;
+  obj.noteIndex = ((obj.noteIndex || 0) + 1) % list.length;
+}
+
+/**
+ * Decrements the noteIndex property of an object, wrapping around the list length.
+ * @param {object} obj An object with a `noteIndex` property (e.g., a bouncer block).
+ * @param {Array} list The list of available notes or values to cycle through.
+ */
+export function stepIndexDown(obj, list) {
+  if (!obj || !list?.length) return;
+  obj.noteIndex = ((obj.noteIndex || 0) - 1 + list.length) % list.length;
+}

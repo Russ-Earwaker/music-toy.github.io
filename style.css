@@ -198,7 +198,15 @@ html,body{ overflow:hidden; }
   pointer-events: auto; /* But let the toy itself receive clicks */
 }
 
-.toy-panel[data-toy="bouncer"] .toy-body{ aspect-ratio: 1 / 1; min-height: 0; }
+/* For the bouncer body, we set flex-grow to 0. This prevents it from
+   stretching vertically within the flexbox panel, allowing the aspect-ratio
+   property to correctly determine the height from the width, keeping it square. */
+.toy-panel[data-toy="bouncer"] .toy-body {
+  flex-grow: 0;
+  aspect-ratio: 1 / 1;
+  min-height: 0;
+  display: grid; /* Match loopgrid's body to ensure aspect-ratio is respected when shrinking. */
+}
 
 /* instrument select visibility */
 .toy-instrument{ display:none; }
@@ -233,8 +241,16 @@ html,body{ overflow:hidden; }
 
 /* Scale up the bouncer in advanced view to match the drum toy's height. */
 .toy-zoomed[data-toy="bouncer"] {
-  width: min(90vw, 1000px);
-  height: auto; /* Height will be determined by the body's 1:1 aspect ratio. */
+  /* To make the panel as large as possible while fitting in the safe area,
+     we use a "width-first" sizing model. The height is auto, determined by the
+     width and the body's square aspect ratio.
+
+     The width is calculated to respect both the horizontal and vertical
+     constraints of the safe area (95vw and 90vh, respectively). We subtract
+     an estimate for the header/footer height (8rem) from the vertical
+     constraint to find the maximum width that will allow the panel to fit. */
+  width: min(95vw, calc(90vh - 8rem));
+  height: auto;
 }
 
 #topbar{ position:sticky; top:0; z-index:5000; }
