@@ -165,11 +165,14 @@ export function createDrawGrid(panel, { cols=16, rows=12, toyId, bpm=120 } = {})
   paint.addEventListener('pointermove', onPointerMove);
   window.addEventListener('pointerup', onPointerUp);
 
-  new ResizeObserver(layout).observe(body); layout();
-
-  return {
+  const api = {
     panel,
     clear: ()=>{ strokes.length=0; redraw(); panel.dispatchEvent(new CustomEvent('drawgrid:update',{detail:{active:Array(cols).fill(false),nodes:Array.from({length:cols},()=>new Set())}})); },
     setErase:(v)=>{ erasing=!!v; },
   };
+
+  panel.addEventListener('toy-clear', api.clear);
+  new ResizeObserver(layout).observe(body); layout();
+
+  return api;
 }
