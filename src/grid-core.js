@@ -206,6 +206,14 @@ export function buildGrid(panel, numSteps = 8){
     triggerInstrument(instrument, note, undefined, toyId);
   };
 
+  // Listen for note changes from the visual module to provide audio feedback.
+  panel.addEventListener('grid:notechange', (e) => {
+    const col = e?.detail?.col;
+    if (col >= 0 && panel.__playCurrent) {
+      panel.__playCurrent(col);
+    }
+  });
+
   panel.addEventListener('toy-random', () => {
     if (!panel.__gridState?.steps) return;
     for (let i = 0; i < panel.__gridState.steps.length; i++) {
