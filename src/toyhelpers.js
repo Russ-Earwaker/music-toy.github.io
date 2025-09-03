@@ -114,10 +114,12 @@ export function drawBlock(ctx, b, opts = {}){
   let color = effectiveBaseColor;
   ctx.save(); // for potential transform
 
-  // Animate with flash value (squash and flash to white)
+  // Animate with flash value (bounce and flash to white)
   if (flash > 0) {
     const f = Math.max(0, Math.min(1, flash));
-    const scale = 1.0 - 0.05 * f;
+    // A sine wave provides a smooth "bounce" up and back down.
+    const p = 1 - f; // phase from 0 to 1
+    const scale = 1.0 + Math.sin(p * Math.PI) * 0.1;
     const dw = w * (1 - scale);
     const dh = h * (1 - scale);
     ctx.translate(x + dw / 2, y + dh / 2);
