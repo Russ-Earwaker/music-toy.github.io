@@ -231,6 +231,12 @@ html,body{ overflow:hidden; }
   height: auto; /* Let height be determined by the body's aspect ratio. */
 }
 
+/* Scale up the bouncer in advanced view to match the drum toy's height. */
+.toy-zoomed[data-toy="bouncer"] {
+  width: min(90vw, 1000px);
+  height: auto; /* Height will be determined by the body's 1:1 aspect ratio. */
+}
+
 #topbar{ position:sticky; top:0; z-index:5000; }
 
 #theme-switcher-wrap, #theme-switcher-wrap * { pointer-events:auto !important; }

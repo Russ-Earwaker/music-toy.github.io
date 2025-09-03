@@ -8,7 +8,7 @@ function bootBouncers(){
     if (panel.__toyInstance) return;
     try{
       // Ensure the standard UI (header, body, footer) is created.
-      initToyUI(panel, { toyName: 'Bouncer' });
+      initToyUI(panel, { toyName: 'Bouncer', defaultInstrument: 'pluck' });
       // Now create the toy's specific logic.
       panel.__toyInstance = createBouncer(panel);
     }catch(e){ console.warn('[bouncer-init] failed', panel?.id, e); }
