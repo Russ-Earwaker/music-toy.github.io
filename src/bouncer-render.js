@@ -1,11 +1,12 @@
 // src/bouncer-render.js
 // Encapsulates the Bouncer draw loop to keep bouncer.main.js concise.
+import { drawBlock } from './toyhelpers.js';
 
 export function createBouncerDraw(env){
   const {
     canvas, ctx, sizing, resizeCanvasForDPR, renderScale, physW, physH, EDGE,
     ensureEdgeControllers, edgeControllers, blockSize, blocks, handle,
-    particles, drawEdgeBondLines, ensureAudioContext, noteList, drawBlocksSection,
+    particles, drawEdgeBondLines, ensureAudioContext, noteList,
     drawEdgeDecorations, edgeFlash,
     stepBouncer, buildStateForStep, applyFromStep, updateLaunchBaseline,
     getBall, lockPhysWorld, getAim
@@ -81,11 +82,29 @@ export function createBouncerDraw(env){
 
     // Draw blocks + edge controllers
     try{
-      const ac2 = ensureAudioContext();
-      const now2 = (ac2 ? ac2.currentTime : 0);
-      drawBlocksSection(ctx, blocks, 0, 0, null, 1, noteList, sizing, null, null, now2);
-      drawBlocksSection(ctx, edgeControllers, 0, 0, null, 1, noteList, sizing, null, null, now2);
-    }catch{}
+      // Decay flash values for animation. The physics step sets flash to 1.0 on hit.
+      for (const b of blocks) { if (b) b.flash = Math.max(0, (b.flash || 0) - 0.08); }
+      for (const c of edgeControllers) { if (c) c.flash = Math.max(0, (c.flash || 0) - 0.08); }
+
+      // Check if in advanced/zoomed view for showing note labels
+      const isAdv = !!canvas.closest('.toy-zoomed');
+
+      // Draw with the new 'button' style and flash animation
+      for (const b of blocks) {
+        if (!b) continue;
+        drawBlock(ctx, b, {
+          variant: 'button', active: b.active !== false, flash: b.flash,
+          noteLabel: isAdv ? (noteList[b.noteIndex] || '') : null, showArrows: isAdv
+        });
+      }
+      for (const c of edgeControllers) {
+        if (!c) continue;
+        drawBlock(ctx, c, {
+          variant: 'button', active: c.active !== false, flash: c.flash,
+          noteLabel: isAdv ? (noteList[c.noteIndex] || '') : null, showArrows: isAdv
+        });
+      }
+    }catch(e){ console.error('[bouncer-render] draw blocks failed:', e); }
 
     // Update trail points & sparks
     try{
