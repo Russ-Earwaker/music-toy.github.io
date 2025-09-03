@@ -130,7 +130,7 @@ export function buildGrid(panel, numSteps = 8){
     steps: Array(numSteps).fill(false),
     notes: Array(numSteps).fill(60),
     notePalette: buildPalette(48, chromaticOffsets, 3), // C3 Chromatic, 3 octaves
-    noteIndices: Array(numSteps).fill(7), // Default to G3
+    noteIndices: Array(numSteps).fill(12), // Default to C4 (MIDI 60)
   };
 
   const body = panel.querySelector('.toy-body');
@@ -228,10 +228,27 @@ export function buildGrid(panel, numSteps = 8){
     panel.__gridState.steps.fill(false);
   });
   panel.addEventListener('toy-random-notes', () => {
-    if (!panel.__gridState?.noteIndices) return;
-    const palette = panel.__gridState.notePalette;
-    for (let i = 0; i < panel.__gridState.noteIndices.length; i++) {
-      panel.__gridState.noteIndices[i] = Math.floor(Math.random() * palette.length);
+    if (!panel.__gridState?.noteIndices || !panel.__gridState?.notePalette) return;
+
+    const { noteIndices, notePalette } = panel.__gridState;
+    const paletteSize = notePalette.length;
+
+    // Define a musically pleasing scale (e.g., Minor Pentatonic)
+    const scaleOffsets = [0, 3, 5, 7, 10];
+
+    // Pick a random root note from the first octave of the palette
+    const rootNoteIndex = Math.floor(Math.random() * 12);
+
+    for (let i = 0; i < noteIndices.length; i++) {
+      // Pick a random note from our musical scale
+      const scaleOffset = scaleOffsets[Math.floor(Math.random() * scaleOffsets.length)];
+      // Keep the notes within a single octave for more musical coherence.
+      const octaveOffset = 0;
+
+      let newIndex = rootNoteIndex + scaleOffset + octaveOffset;
+
+      // Ensure the index is within the bounds of the main palette
+      noteIndices[i] = Math.max(0, Math.min(paletteSize - 1, newIndex));
     }
   });
 

@@ -1,7 +1,6 @@
 // src/toyui.js — panel chrome + events (<=300 lines)
 import { zoomInPanel, zoomOutPanel } from './zoom-overlay.js';
 import { getInstrumentNames } from './audio-samples.js';
-import { resolveGridSamples, resolveBouncerSamples, resolveRipplerSamples, resolveWheelSamples } from './theme-manager.js';
 
 const $ = (sel, root=document)=> root.querySelector(sel);
 

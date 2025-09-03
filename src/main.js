@@ -22,7 +22,14 @@ function bootTopbar(){
 }
 function bootGrids(){
   const panels = Array.from(document.querySelectorAll('.toy-panel[data-toy="loopgrid"]'));
-  return panels.map(p => buildGrid(p, 8)).filter(Boolean);
+  const defaultInstruments = ['djembe_bass', 'djembe_tone', 'djembe_slap'];
+  return panels.map((p, i) => {
+    // Set a default instrument before building, so toyui can pick it up.
+    if (!p.dataset.instrument) {
+      p.dataset.instrument = defaultInstruments[i % defaultInstruments.length];
+    }
+    return buildGrid(p, 8);
+  }).filter(Boolean);
 }
 function scheduler(grids){
   let lastCol=-1;
@@ -50,8 +57,9 @@ async function boot(){
   bootTopbar();
   createLoopIndicator('body');
   const grids = bootGrids();
-  // optional theme wire hook guarded
-  try{ window.ThemeBoot && window.ThemeBoot.wireAll && window.ThemeBoot.wireAll(); }catch{}
+  // The theme system filters the instrument list, which is not the desired behavior.
+  // Commenting out this call will ensure the full instrument list is always available.
+  // try{ window.ThemeBoot && window.ThemeBoot.wireAll && window.ThemeBoot.wireAll(); }catch{}
   scheduler(grids);
   try{ window.setBoardScale && window.setBoardScale(1); }catch{}
   // Arrange panels if available
