@@ -15,6 +15,7 @@
         <label for="theme-select" style="color:#cbd5e1;">Theme</label>
         <select id="theme-select" class="toy-btn" data-action="theme"></select>
       </div>
+      
       <button class="toy-btn" data-action="organize">Organize</button>
       <button class="toy-btn" data-action="reset-view">Reset View</button>
       <button class="toy-btn" data-action="zoom-out">−</button>
@@ -49,6 +50,9 @@
   <script type="module" src="./src/theme-manager.js" defer></script>
   <script type="module" src="./src/boot-theme.js" defer></script>
   <script type="module" src="./src/theme-switcher.js" defer></script>
+
+  <!-- Audio boot: load samples first, then apply theme -->
+  <script type="module" src="./src/boot-audio.js" defer></script>
 
   <!-- Individual Toy Initializers (loaded by main.js) -->
   <script type="module" src="./src/drawgrid-init.js" defer></script>

@@ -20,18 +20,6 @@ function bootTopbar(){
   stopBtn?.addEventListener('click', ()=>{ try{ ensureAudioContext().suspend(); }catch{} });
   bpmInput?.addEventListener('change', (e)=> setBpm(Number(e.target.value)||DEFAULT_BPM));
 }
-
-// Define a hook for the theme system to call. This allows the theme manager
-// to set the correct default instrument for each drum toy. We accept the
-// instrumentId provided by the theme, as it aligns with our desired defaults.
-window.assignGridInstrument = (index, instrumentId) => {
-  const panels = Array.from(document.querySelectorAll('.toy-panel[data-toy="loopgrid"]'));
-  const panel = panels[index];
-  if (panel && instrumentId) {
-    // Dispatch the 'toy-instrument' event that the UI and core logic listen for.
-    panel.dispatchEvent(new CustomEvent('toy-instrument', { detail: { value: instrumentId }, bubbles: true }));
-  }
-}
 function bootGrids(){
   const panels = Array.from(document.querySelectorAll('.toy-panel[data-toy="loopgrid"]'));
   return panels.map(p => buildGrid(p, 8)).filter(Boolean);
@@ -62,13 +50,27 @@ async function boot(){
   bootTopbar();
   createLoopIndicator('body');
   const grids = bootGrids();
-  // The theme system is now used to set default instruments via our hook.
-  // The instrument list filtering will be undone by a change in toyui.js.
+  // The theme system will run and may set its own instruments.
   try{ window.ThemeBoot && window.ThemeBoot.wireAll && window.ThemeBoot.wireAll(); }catch{}
   scheduler(grids);
   try{ window.setBoardScale && window.setBoardScale(1); }catch{}
   // Arrange panels if available
   try{ window.organizeBoard && window.organizeBoard(); }catch{}
+
+  // After a short delay to let all other boot scripts (like the theme manager)
+  // finish, forcefully set the instruments for the drum toys to our desired defaults.
+  // This ensures our settings take precedence over the theme system.
+  setTimeout(() => {
+    const panels = Array.from(document.querySelectorAll('.toy-panel[data-toy="loopgrid"]'));
+    const defaultInstruments = ['djembe_bass', 'djembe_tone', 'djembe_slap', 'hand_clap'];
+    panels.forEach((p, i) => {
+      const instrument = defaultInstruments[i % defaultInstruments.length];
+      if (instrument) {
+        p.dispatchEvent(new CustomEvent('toy-instrument', { detail: { value: instrument }, bubbles: true }));
+        p.dispatchEvent(new CustomEvent('toy:instrument', { detail: { name: instrument, value: instrument }, bubbles: true }));
+      }
+    });
+  }, 100);
 }
 if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
 else boot();

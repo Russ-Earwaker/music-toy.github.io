@@ -66,9 +66,13 @@ function wireAll() {
       select.value = instrument;
     }
 
-    // 3. Dispatch an event to notify the toy that its instrument has changed.
+    // 3. Dispatch both event flavors to notify all listeners.
     panel.dispatchEvent(new CustomEvent('toy-instrument', {
       detail: { value: instrument },
+      bubbles: true,
+    }));
+    panel.dispatchEvent(new CustomEvent('toy:instrument', {
+      detail: { name: instrument, value: instrument },
       bubbles: true,
     }));
   }

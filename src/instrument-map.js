@@ -21,13 +21,15 @@ window.addEventListener('samples-ready', ()=>{
   }catch{}
 });
 
-
 // Keep map in sync with UI selections
-document.addEventListener('toy:instrument', (e)=>{
+function syncFromEvent(e){
   try{
     const el = e.target && e.target.closest && e.target.closest('.toy-panel');
     const id = el && (el.dataset.toyid || el.id || el.dataset.toy);
     const name = (e.detail && (e.detail.name || e.detail.value)) || null;
     if (id && name) setToyInstrument(id, name);
   }catch{}
-}, true);
+}
+
+document.addEventListener('toy:instrument', syncFromEvent, true);
+document.addEventListener('toy-instrument', syncFromEvent, true);

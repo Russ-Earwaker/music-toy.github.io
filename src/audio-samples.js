@@ -2,105 +2,172 @@
 import { ensureAudioContext, getToyGain } from './audio-core.js';
 import { playById, noteToFreq, TONE_NAMES } from './audio-tones.js';
 
-const entries = new Map();   // id -> { url, synth }
-const buffers = new Map();   // id -> AudioBuffer
+// id -> { url, synth }
+const entries = new Map();
+// id -> AudioBuffer
+const buffers = new Map();
+
+// Common aliases and misspellings mapped to canonical ids
 const ALIASES = new Map([
   ['djimbe','djembe'],
   ['djimbe_bass','djembe_bass'],
   ['djimbe_tone','djembe_tone'],
   ['djimbe_slap','djembe_slap'],
   ['hand_clap','clap'],
+  ['handclap','clap'],
+  ['acousticguitar','acoustic_guitar'],
+  ['acoustic-guitar','acoustic_guitar'],
 ]);
+
+// Normalize various user/CSV names to canonical lookup ids
+function normId(s){
+  const x = String(s||'').trim();
+  if (!x) return '';
+  const lo = x.toLowerCase();
+  return ALIASES.get(lo) || lo;
+}
+
+// Convenience: add multiple normalized keys to the map for the same entry
+function addAliasesFor(id, data, displayName){
+  const variants = new Set();
+  const base = normId(id);
+  const disp = String(displayName||'').trim().toLowerCase();
+  // canonical
+  variants.add(base);
+  // hyphen/space/underscore variants of id
+  variants.add(base.replace(/[-\s]+/g,'_'));
+  variants.add(base.replace(/[_\s]+/g,'-'));
+  variants.add(base.replace(/[-_\s]+/g,''));
+  // display name variants
+  if (disp){
+    variants.add(disp);
+    variants.add(disp.replace(/[-\s]+/g,'_'));
+    variants.add(disp.replace(/[_\s]+/g,'-'));
+    variants.add(disp.replace(/[-_\s]+/g,''));
+  }
+  for (const k of variants) if (k) entries.set(k, data);
+}
+
+// Fetch and decode a sample file
+async function loadBuffer(url){
+  try{
+    const ab = await (await fetch(url)).arrayBuffer();
+    return await ensureAudioContext().decodeAudioData(ab);
+  }catch(e){
+    return null;
+  }
+}
+
+// Initialize sample library from CSV
+export async function initAudioAssets(csvUrl='./assets/samples/samples.csv'){
+  const res = await fetch(csvUrl);
+  if (!res.ok) throw new Error(`CSV load failed: ${res.status}`);
+  const text = await res.text();
+  const lines = text.replace(/\r/g,'\n').split('\n').filter(l=>l && !l.trim().startsWith('#'));
+  if (!lines.length) return;
+  const head = lines.shift().split(',').map(s=>s.trim().toLowerCase());
+
+  const col = {
+    filename: head.indexOf('filename'),
+    instrument: head.indexOf('instrument'),
+    display: head.findIndex(h=>/^(display\s*_?name|display|label|title)$/.test(h)),
+    synth: head.indexOf('synth_id')
+  };
+
+  // Build entries and decode buffers
+  const base = new URL(csvUrl, window.location.href);
+  const baseDir = base.href.substring(0, base.href.lastIndexOf('/')+1);
+
+  for (const line of lines){
+    const parts = line.split(',');
+    const fn   = (col.filename>=0 ? parts[col.filename] : '').trim();
+    const id   = (col.instrument>=0 ? parts[col.instrument] : '').trim();
+    const disp = (col.display>=0 ? parts[col.display] : '').trim();
+    const synth= (col.synth>=0 ? parts[col.synth] : '').trim().toLowerCase();
+    const url  = fn ? (baseDir + fn) : '';
+    if (!id && !synth) continue;
+
+    const data = { url, synth };
+    addAliasesFor(id||synth, data, disp);
+
+    if (url){
+      const buf = await loadBuffer(url);
+      if (buf){
+        // Mirror the same aliases for buffers
+        const keys = [id||synth, disp].filter(Boolean).map(k=>String(k).toLowerCase());
+        const variants = new Set();
+        for (const k of keys){
+          variants.add(k);
+          variants.add(k.replace(/[-\s]+/g,'_'));
+          variants.add(k.replace(/[_\s]+/g,'-'));
+          variants.add(k.replace(/[-_\s]+/g,''));
+        }
+        for (const k of variants) if (k) buffers.set(normId(k), buf);
+      }
+    }
+  }
+
+  // Signal that samples are ready
+  try{
+    document.dispatchEvent(new CustomEvent('samples-ready'));
+    window.dispatchEvent(new CustomEvent('samples-ready'));
+  }catch{}
+}
 
 export function getInstrumentNames(){
   const set = new Set(TONE_NAMES);
   for (const k of entries.keys()) set.add(k);
   for (const k of buffers.keys()) set.add(k);
-  const allNames = Array.from(set);
-  // Filter out any names that look like filenames with common audio extensions.
-  const filteredNames = allNames.filter(name => !/\.(wav|mp3|ogg|flac|m4a)$/i.test(name));
-  return filteredNames.sort();
+  // Filter out things that look like full filenames
+  return Array.from(set).filter(n=>!/[.](wav|mp3|ogg|flac)$/i.test(n));
 }
 
-export async function initAudioAssets(csvUrl){
-  console.log('[AUDIO] init start', csvUrl);
-  if (!csvUrl) return;
-  const res = await fetch(csvUrl);
-  if (!res.ok){ console.warn('[AUDIO] csv not found', csvUrl); return; }
-  const text = await res.text();
-  const lines = text.replace(/\r/g,'\n').split('\n').filter(l=>l && !l.trim().startsWith('#'));
-  if (!lines.length) return;
-  const head = lines.shift().split(',').map(s=>s.trim().toLowerCase());
-  const col = { filename: head.indexOf('filename'), instrument: head.indexOf('instrument'), synth: head.indexOf('synth_id') };
-  const base = new URL(csvUrl, window.location.href);
-  const baseDir = base.href.substring(0, base.href.lastIndexOf('/')+1);
-  for (const line of lines){
-    const parts = line.split(',');
-    const fn = (parts[col.filename]||'').trim();
-    const id = (parts[col.instrument]||'').trim().toLowerCase();
-    const synth = (parts[col.synth]||'').trim().toLowerCase();
-    if (!id) continue;
-    const url = fn ? (baseDir + fn) : '';
-    entries.set(id, { url, synth });
-    // The code that added filename-based aliases to the instrument list has been
-    // removed. This ensures the dropdown only shows canonical instrument names.
-    // if (fn){
-    //   const baseName = fn.replace(/\.[^/.]+$/, '').toLowerCase();
-    //   if (baseName && baseName !== id) entries.set(baseName, { url, synth });
-    // }
-    if (url){
-      try{
-        const ab = await (await fetch(url)).arrayBuffer();
-        const buf = await ensureAudioContext().decodeAudioData(ab);
-        buffers.set(id, buf);
-        // if (fn){
-        //   const baseName = fn.replace(/\.[^/.]+$/, '').toLowerCase();
-        //   buffers.set(baseName, buf);
-        // }
-      }catch(e){ /* skip bad file */ }
-    }
-  }
-  console.log('[AUDIO] buffers ready', buffers.size);
-  document.dispatchEvent(new CustomEvent('samples-ready'));
-}
+// Try to play a preloaded sample by id
+function playSampleAt(id, when, gain=1, toyId, noteName){
+  const key = normId(id);
+  const buf = buffers.get(key);
+  const ent = entries.get(key);
+  if (!buf && !ent) return false;
 
-function playSampleAt(id, when, gain=1, toyId, noteName='C4'){
   const ctx = ensureAudioContext();
-  const buf = buffers.get(id);
-  if (!buf){ return false; }
-  const src = ctx.createBufferSource();
-  src.buffer = buf;
-
-  // Adjust playback rate for pitch. Assume base note is C4 for all samples.
-  // This allows sample-based instruments to be pitched.
-  const baseFreq = noteToFreq('C4');
-  const targetFreq = noteToFreq(noteName);
-  if (baseFreq > 0 && targetFreq > 0) {
-    src.playbackRate.value = targetFreq / baseFreq;
+  const src = buf ? ctx.createBufferSource() : null;
+  if (src){
+    src.buffer = buf;
+    const g = ctx.createGain(); g.gain.value = gain;
+    src.connect(g).connect(getToyGain(toyId||'master'));
+    src.start(when||ctx.currentTime);
+    return true;
   }
 
-  const g = ctx.createGain();
-  g.gain.value = gain;
-  src.connect(g).connect(getToyGain(toyId||'master'));
-  src.start(when||ctx.currentTime);
-  return true;
+  // synth fallback for entry with synth id
+  const synthId = ent && ent.synth;
+  if (synthId){
+    const toneId = TONE_NAMES.includes(synthId) ? synthId : 'tone';
+    return playById(toneId, noteToFreq(noteName||'C4'), when||ctx.currentTime, getToyGain(toyId||'master'));
+  }
+  return false;
 }
 
 export function triggerInstrument(instrument, noteName='C4', when, toyId){
   const ctx = ensureAudioContext();
   const id0 = String(instrument||'tone').toLowerCase();
-  const id = ALIASES.get(id0) || id0;
-  const t = when || ctx.currentTime;
+  const id  = normId(id0);
+  const t   = when || ctx.currentTime;
 
-  // exact or base-name sample first
+  // exact or alias match first
   if (playSampleAt(id, t, 1, toyId, noteName)) return;
+
   // try family (e.g., djembe_bass -> djembe)
   const fam = id.split('_')[0];
   if (fam !== id && playSampleAt(fam, t, 1, toyId, noteName)) return;
 
   // synth fallback
-  const entry = entries.get(id) || entries.get(fam);
-  const synthId = (entry && entry.synth) ? entry.synth : null;
-  const toneId = synthId || (TONE_NAMES.includes(id) ? id : 'tone');
+  const toneId = TONE_NAMES.includes(id) ? id : 'tone';
   return playById(toneId, noteToFreq(noteName), t, getToyGain(toyId||'master'));
 }
+
+// Tiny debug API
+window.AudioDebug = {
+  list: ()=> Array.from(new Set([ ...entries.keys(), ...buffers.keys() ])).sort(),
+  has: (k)=> entries.has(normId(k)) || buffers.has(normId(k))
+};

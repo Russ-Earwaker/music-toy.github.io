@@ -14,59 +14,43 @@ function ensureHeader(panel, titleText){
   }
   return header;
 }
+
 function ensureBody(panel){
-  let body = panel.querySelector('.toy-body');
-  if (!body){ body = document.createElement('div'); body.className = 'toy-body'; panel.appendChild(body); }
-  return body;
+  if (!panel.querySelector('.toy-body')){
+    const body = document.createElement('div'); body.className='toy-body'; panel.appendChild(body);
+  }
 }
+
 function ensureFooter(panel){
   let footer = panel.querySelector('.toy-footer');
-  if (!footer){ footer = document.createElement('div'); footer.className = 'toy-footer'; panel.appendChild(footer); }
+  if (!footer){ footer = document.createElement('div'); footer.className='toy-footer'; panel.appendChild(footer); }
   return footer;
 }
 
 function btn(label){ const b=document.createElement('button'); b.type='button'; b.className='toy-btn'; b.textContent=label; return b; }
 
-function buildInstrumentSelect(panel, toyKind){
-  // Build once
+function buildInstrumentSelect(panel){
   let sel = panel.querySelector('select.toy-instrument');
+  const header = ensureHeader(panel);
+  const right = header.querySelector('.toy-controls-right');
+
   if (!sel){
     sel = document.createElement('select'); sel.className = 'toy-instrument'; sel.title = 'Instrument';
-    // hidden in standard; shown only in Advanced via CSS
-    const header = panel.querySelector('.toy-controls-right') || ensureHeader(panel).querySelector('.toy-controls-right');
-    header.appendChild(sel);
+    // shown only in Advanced via CSS
+    right.appendChild(sel);
   }
-  // Populate with all available instruments. Theme-based filtering is disabled
-  // to ensure all options are always visible.
-  let list = getInstrumentNames();
-  const cur = sel.value || panel.dataset.instrument || '';
-  sel.innerHTML = '';
-  list.forEach(name=>{ const opt=document.createElement('option'); opt.value=name; opt.textContent=name.split('_').join(' '); sel.appendChild(opt); });
-  if (cur) sel.value = cur;
-  sel.addEventListener('change', ()=>{
-    const value = sel.value;
-    panel.dataset.instrument = value;
-    try{ panel.dispatchEvent(new CustomEvent('toy-instrument', { detail:{ value }, bubbles:true })); }catch(e){}
-    try{ panel.dispatchEvent(new CustomEvent('toy:instrument', { detail:{ name:value, value }, bubbles:true })); }catch(e){}
-  });
 
-  // The theme system may filter this list after it's initially populated.
-  // To ensure the full, unfiltered list is always available, we re-populate
-  // it after a short delay. This is a robust way to win the race condition.
-  setTimeout(() => {
-    const currentValue = sel.value;
-    const fullList = getInstrumentNames();
-    sel.innerHTML = '';
-    fullList.forEach(name => {
-      const opt = document.createElement('option');
-      opt.value = name;
-      opt.textContent = name.split('_').join(' ');
-      sel.appendChild(opt);
+  // (Population handled by ensure-advanced.js after samples-ready)
+  // We only wire the change event here.
+  if (!sel.__wired){
+    sel.__wired = true;
+    sel.addEventListener('change', ()=>{
+      const value = sel.value;
+      panel.dataset.instrument = value;
+      try{ panel.dispatchEvent(new CustomEvent('toy-instrument', { detail:{ value }, bubbles:true })); }catch(e){}
+      try{ panel.dispatchEvent(new CustomEvent('toy:instrument', { detail:{ name:value, value }, bubbles:true })); }catch(e){}
     });
-    // Restore the correct value if it exists in the full list.
-    if (fullList.includes(currentValue)) sel.value = currentValue;
-  }, 500);
-
+  }
   return sel;
 }
 
@@ -80,7 +64,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
   // Controls
   const right = header.querySelector('.toy-controls-right');
 
-  // Add "Advanced" and "Close" buttons, CSS will toggle visibility.
+  // Advanced / Close buttons (CSS toggles visibility)
   if (!right.querySelector('[data-action="advanced"]')) {
     const advBtn = btn('Advanced'); advBtn.dataset.action = 'advanced';
     right.prepend(advBtn);
@@ -89,49 +73,45 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
     const closeBtn = btn('Close'); closeBtn.dataset.action = 'close-advanced';
     right.prepend(closeBtn);
   }
-  // Note: Button wiring is handled globally by `header-buttons-delegate.js`
 
-  let rnd = right.querySelector('[data-action="random"]'); if (!rnd){ rnd = btn('Random'); rnd.dataset.action = 'random'; right.appendChild(rnd); }
-  // Note: Button wiring is handled globally by `header-buttons-delegate.js`
-
-  let clr = right.querySelector('[data-action="clear"]'); if (!clr){ clr = btn('Clear'); clr.dataset.action = 'clear'; right.appendChild(clr); }
-  // Note: Button wiring is handled globally by `header-buttons-delegate.js`
+  // Random / Clear buttons (delegated elsewhere)
+  if (!right.querySelector('[data-action="random"]')) { const b = btn('Random'); b.dataset.action='random'; right.appendChild(b); }
+  if (!right.querySelector('[data-action="clear"]'))  { const b = btn('Clear');  b.dataset.action='clear';  right.appendChild(b); }
 
   // Drum-specific "Random Notes" button
   if (toyKind === 'loopgrid' && !right.querySelector('[data-action="random-notes"]')) {
-    const rndNotesBtn = btn('Rnd Notes'); rndNotesBtn.dataset.action = 'random-notes';
-    right.appendChild(rndNotesBtn);
-  }
-  // Note: Button wiring is handled globally by `header-buttons-delegate.js`
-
-  // Volume (mute + slider)
-  let volWrap = footer.querySelector('.toy-volwrap'); if (!volWrap){ volWrap = document.createElement('div'); volWrap.className='toy-volwrap'; footer.appendChild(volWrap); }
-  if (!volWrap.querySelector('button[title="Mute"]')){
-    const mute = document.createElement('button'); mute.className='toy-mute'; mute.title='Mute'; mute.textContent='🔇'; mute.setAttribute('aria-pressed', 'false');
-    const range = document.createElement('input'); range.type='range'; range.min='0'; range.max='100'; range.step='1'; range.value='100';
-    volWrap.append(mute, range);
+    const b = btn('Random Notes'); b.dataset.action='random-notes'; right.appendChild(b);
   }
 
-  // Instrument select (Advanced-only via CSS)
-  const sel = buildInstrumentSelect(panel, toyKind);
+  // Instrument select (header, hidden in standard)
+  const sel = buildInstrumentSelect(panel);
 
-  // Add a listener to keep the dropdown in sync with external changes,
-  // such as those from the theme system or startup scripts.
+  // Keep select in sync when instrument changes elsewhere
   panel.addEventListener('toy-instrument', (e) => {
     const instrumentName = e?.detail?.value;
     if (instrumentName && sel.value !== instrumentName) {
       sel.value = instrumentName;
     }
   });
+  panel.addEventListener('toy:instrument', (e) => {
+    const instrumentName = (e?.detail?.name || e?.detail?.value);
+    if (instrumentName && sel.value !== instrumentName) {
+      sel.value = instrumentName;
+    }
+  });
 
-  // Default instrument
-  const initialInstrument = (sel && sel.value) || defaultInstrument || panel.dataset.instrument;
+  // SAFER initial instrument resolution:
+  // Prefer existing dataset (e.g., theme), then explicit default, and only then current select value.
+  const cur = (panel.dataset.instrument || '').toLowerCase();
+  const selVal = (sel && sel.value) ? String(sel.value).toLowerCase() : '';
+  const initialInstrument = cur || (defaultInstrument ? String(defaultInstrument).toLowerCase() : '') || selVal || 'tone';
+
+  // Apply initial instrument without letting an empty/unmatched select overwrite the theme
   if (initialInstrument) {
     panel.dataset.instrument = initialInstrument;
-    // Dispatch event so the toy's core logic can update the audio system.
-    // This makes the boot process more robust, ensuring an instrument is
-    // always set, even before the main theme system runs.
-    panel.dispatchEvent(new CustomEvent('toy-instrument', { detail: { value: initialInstrument }, bubbles: true }));
+    // Notify toy code once; listeners will keep UI in sync
+    try{ panel.dispatchEvent(new CustomEvent('toy-instrument', { detail: { value: initialInstrument }, bubbles: true })); }catch{}
+    try{ panel.dispatchEvent(new CustomEvent('toy:instrument',  { detail: { name: initialInstrument, value: initialInstrument }, bubbles: true })); }catch{}
   }
 
   return { header, footer, body: panel.querySelector('.toy-body'), instrument: panel.dataset.instrument || initialInstrument || 'tone' };
