@@ -66,8 +66,8 @@ function createDrumParticles({ getW, getH, count = 150 } = {}) {
     if (!ctx) return;
     ctx.save();
     for (const p of P) {
-      // Increased base and triggered brightness
-      const alpha = 0.4 + 0.9 * p.flash;
+      // Tuned contrast for a good "pop" on activation.
+      const alpha = 0.25 + 1.2 * p.flash;
       ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
       ctx.fillStyle = '#a0b0ff';
       ctx.fillRect(p.x | 0, p.y | 0, 1.5, 1.5);
@@ -90,8 +90,8 @@ function createDrumParticles({ getW, getH, count = 150 } = {}) {
     const centerY = h / 2;
     // The drum pad is 55% width and 65% max-height of its container.
     // Its aspect-ratio is 1/1, so its diameter is the smaller of the two.
-    // Extend the radius by 20% to make the repulsion effect more obvious.
-    const radius = (Math.min(w * 0.55, h * 0.65) / 2) * 1.2;
+    // Extend the radius to make the repulsion effect more obvious.
+    const radius = (Math.min(w * 0.55, h * 0.65) / 2) * 1.5;
     const radiusSq = radius * radius;
 
     for (const p of P) {
@@ -102,7 +102,7 @@ function createDrumParticles({ getW, getH, count = 150 } = {}) {
       if (distSq < radiusSq) {
         const dist = Math.sqrt(distSq) || 1;
         // Push particle away from the center, stronger when closer.
-        const kick = 2.5 * (1 - dist / radius);
+        const kick = 4.0 * (1 - dist / radius); // Tuned kick strength
         p.vx += (dx / dist) * kick;
         p.vy += (dy / dist) * kick;
       }

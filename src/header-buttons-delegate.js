@@ -16,7 +16,8 @@
     if (action === 'advanced' || action === 'close-advanced') {
       e.preventDefault();
       try{
-        const inOverlay = !!panel.closest('#zoom-overlay');
+        // The overlay ID is 'adv-overlay' in the CSS. The selector was mismatched.
+        const inOverlay = !!panel.closest('#adv-overlay');
         if (!inOverlay && window.zoomInPanel) window.zoomInPanel(panel);
         else if (inOverlay && window.zoomOutPanel) window.zoomOutPanel();
         else panel.classList.toggle('toy-zoomed');

@@ -180,6 +180,7 @@ html,body{ overflow:hidden; }
   box-sizing: border-box;
   align-items: center;
   justify-content: center;
+  pointer-events: none; /* Allow clicks to pass through to the backdrop */
 }
 
 /* When a toy is zoomed, it defines its own size. */
@@ -190,6 +191,7 @@ html,body{ overflow:hidden; }
   position: relative !important; /* Override inline styles from board.js */
   left: auto !important;
   top: auto !important;
+  pointer-events: auto; /* But let the toy itself receive clicks */
 }
 
 .toy-panel[data-toy="bouncer"] .toy-body{ aspect-ratio: 1 / 1; min-height: 0; }

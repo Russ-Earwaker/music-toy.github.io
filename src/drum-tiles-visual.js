@@ -119,8 +119,20 @@ function render(panel) {
 
     // Draw playhead highlight first, so it's underneath the cube
     if (i === st.playheadCol) {
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-      ctx.fillRect(cubeRect.x, cubeRect.y, cubeRect.w, cubeRect.h);
+      // A bigger, centered border highlight drawn by filling a slightly
+      // larger rectangle behind the cube. This is more robust than stroking.
+      // We use Math.floor to ensure integer coordinates and avoid sub-pixel
+      // rendering artifacts that can make borders appear uneven.
+      const borderSize = 4;
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+      // To ensure perfect centering, we base the highlight's geometry on the
+      // final, integer-based position and size of the cube itself.
+      ctx.fillRect(
+        Math.trunc(cubeRect.x) - borderSize,
+        Math.trunc(cubeRect.y) - borderSize,
+        Math.trunc(cubeRect.w) + borderSize * 2,
+        Math.trunc(cubeRect.h) + borderSize * 2
+      );
     }
 
     ctx.save();
