@@ -1,108 +1,145 @@
-// src/drum-tiles-visual.js — drum tiles (one-row, square, consolidated trigger) (<300 lines)
-import { drawBlocksSection } from './ui-tiles.js';
-import { triggerNoteForToy } from './audio-trigger.js';
+// src/drum-tiles-visual.js
+// Renders and handles interaction for the 8-step sequencer cubes.
+import { drawBlock, whichThirdRect } from './toyhelpers.js';
+import { midiToName, stepIndexUp, stepIndexDown } from './note-helpers.js';
 
-(function(){
-  const SEL = '.toy-panel[data-toy="loopgrid"]';
-  const STATE = new WeakMap(); // panel -> { enabled:boolean[], onCol:number }
+const NUM_CUBES = 8;
+const GAP = 4; // A few pixels of space between each cube
 
-  function ensureCanvas(panel){
-    const host = panel.querySelector('.toy-vbody') || panel.querySelector('.toy-body') || panel;
-    if (getComputedStyle(host).position === 'static'){ host.style.position = 'relative'; }
-    let cvs = panel.querySelector('canvas[data-role="drum-tiles"]');
-    if (cvs && cvs.parentNode !== host){ try{ host.prepend(cvs); }catch{} }
-    if (!cvs){
-      cvs = document.createElement('canvas');
-      cvs.dataset.role = 'drum-tiles';
-      Object.assign(cvs.style, { position:'absolute', left:'50%', transform:'translateX(-50%)', top:'0', display:'block', zIndex:'50', pointerEvents:'auto' });
-      host.prepend(cvs);
-      cvs.addEventListener('pointerdown', (e)=>{
-        const rect = cvs.getBoundingClientRect();
-        const col = Math.max(0, Math.min(7, Math.floor((e.clientX - rect.left) / (rect.width/8))));
-        const st = STATE.get(panel) || { enabled:new Array(8).fill(false), onCol:-1 };
-        st.enabled[col] = !st.enabled[col];
-        STATE.set(panel, st);
-        render(panel);
-        try{ panel.dispatchEvent(new CustomEvent('loopgrid:toggle', { detail:{ col, on: st.enabled[col] }, bubbles:true })); }catch{}
-        e.preventDefault(); e.stopPropagation();
-      }, {capture:true});
+/**
+ * Attaches the visual renderer to a grid toy panel.
+ * This is called by grid-core.js after the panel's DOM is created.
+ */
+export function attachDrumVisuals(panel) {
+  if (!panel || panel.__drumVisualAttached) return;
+  panel.__drumVisualAttached = true;
+
+  const sequencerWrap = panel.querySelector('.sequencer-wrap');
+  const canvas = sequencerWrap ? sequencerWrap.querySelector('canvas') : null;
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  const st = {
+    panel,
+    canvas,
+    ctx,
+    playheadCol: -1,
+    flash: new Float32Array(NUM_CUBES),
+  };
+  panel.__drumVisualState = st;
+
+  // Listen for playhead movement from grid-core
+  panel.addEventListener('loopgrid:playcol', (e) => {
+    const col = e?.detail?.col;
+    st.playheadCol = col;
+    if (col >= 0 && col < NUM_CUBES) {
+      if (panel.__gridState?.steps[col]) {
+        st.flash[col] = 1.0; // Trigger flash animation only for active steps
+      }
     }
-    return cvs;
-  }
+  });
 
-  function resize(panel){
-    const host = panel.querySelector('.toy-vbody') || panel.querySelector('.toy-body') || panel;
-    const cvs = ensureCanvas(panel);
-    const r = host.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    const tile = Math.max(10, Math.floor(r.width / 8));
-    const w = tile * 8;
-    cvs.width  = Math.max(2, Math.floor(w * dpr));
-    cvs.height = Math.max(2, Math.floor(tile * dpr));
-    try{ cvs.style.setProperty('width',  w + 'px', 'important'); }catch{ cvs.style.width  = w + 'px'; }
-    try{ cvs.style.setProperty('height', tile + 'px', 'important'); }catch{ cvs.style.height = tile + 'px'; }
-    cvs.style.left = '50%';
-    cvs.style.transform = 'translateX(-50%)';
-    render(panel);
-  }
+  // Listen for clicks on the canvas to toggle steps or change notes
+  canvas.addEventListener('pointerdown', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const p = { x: e.clientX - rect.left, y: e.clientY - rect.top };
 
-  function render(panel){
-    const cvs = ensureCanvas(panel);
-    const ctx = cvs.getContext('2d'); if (!ctx) return;
-    const dpr = window.devicePixelRatio || 1;
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-    ctx.clearRect(0,0,cvs.width, cvs.height);
-    const st = STATE.get(panel) || { enabled:new Array(8).fill(false), onCol:-1 };
-    const rect = { x:0, y:0, w:cvs.width/dpr, h:cvs.height/dpr };
-    drawBlocksSection(ctx, rect, { active: st.enabled, onCol: st.onCol, pad: 4, zoomed: panel.classList.contains('toy-zoomed') });
-  }
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const canvasP = { x: p.x * scaleX, y: p.y * scaleY };
 
-  function attach(panel){
-    if (panel.__drumTiles) return;
-    panel.__drumTiles = true;
-    STATE.set(panel, { enabled:new Array(8).fill(false), onCol:-1 });
-    resize(panel);
+    const totalGapWidth = GAP * (NUM_CUBES - 1);
+    const cubeSize = (canvas.width - totalGapWidth) / NUM_CUBES;
+    const blockWidthWithGap = cubeSize + GAP;
 
-    panel.addEventListener('loopgrid:playcol', (e)=>{
-      const st = STATE.get(panel); if (!st) return;
-      const col = (e && e.detail && typeof e.detail.col==='number') ? e.detail.col : -1;
-      if (col>=0){
-        st.onCol = col;
-        if (st.enabled[col]){
-          const toyId = panel.dataset.toyid || panel.id || 'drum';
-          try{ triggerNoteForToy(toyId, 60, 0.9); }catch{ try{ panel.__playCurrent && panel.__playCurrent(); }catch{} }
+    const clickedIndex = Math.floor(canvasP.x / blockWidthWithGap);
+    const xInBlock = canvasP.x % blockWidthWithGap;
+
+    if (xInBlock < cubeSize) { // Ensure the click is on the cube, not the gap
+      if (clickedIndex >= 0 && clickedIndex < NUM_CUBES) {
+        const state = panel.__gridState;
+        if (!state?.noteIndices || !state?.steps) return;
+
+        const yOffset = (canvas.height - cubeSize) / 2;
+        const cubeRect = { x: clickedIndex * blockWidthWithGap, y: yOffset, w: cubeSize, h: cubeSize };
+        const third = whichThirdRect(cubeRect, canvasP.y);
+        const isZoomed = panel.classList.contains('toy-zoomed');
+
+        if (isZoomed && third === 'up') {
+          stepIndexUp(state.noteIndices, state.notePalette, clickedIndex);
+        } else if (isZoomed && third === 'down') {
+          stepIndexDown(state.noteIndices, state.notePalette, clickedIndex);
+        } else {
+          state.steps[clickedIndex] = !state.steps[clickedIndex];
         }
       }
-      render(panel);
-    });
+    }
+  });
 
-    panel.addEventListener('loopgrid:tap', ()=>{
-      const st = STATE.get(panel); if (!st) return;
-      const idx = (st.onCol>=0 ? st.onCol : 0);
-      st.enabled[idx] = true;
-      STATE.set(panel, st);
+  // Start the render loop
+  if (!panel.__drumRenderLoop) {
+    const renderLoop = () => {
+      if (!panel.isConnected) return; // Stop rendering if panel is removed
       render(panel);
-      try{ panel.dispatchEvent(new CustomEvent('loopgrid:toggle', { detail:{ col: idx, on:true }, bubbles:true })); }catch{}
-    });
-
-    panel.addEventListener('drumtiles:clear', ()=>{
-      const st = STATE.get(panel); if (!st) return;
-      st.enabled = new Array(8).fill(false);
-      STATE.set(panel, st); render(panel);
-      try{ panel.dispatchEvent(new CustomEvent('loopgrid:clear', { bubbles:true })); }catch{}
-    });
-    panel.addEventListener('drumtiles:randomize', ()=>{
-      const st = STATE.get(panel); if (!st) return;
-      const prob = 0.35; st.enabled = st.enabled.map(()=> Math.random() < prob);
-      STATE.set(panel, st); render(panel);
-      try{ panel.dispatchEvent(new CustomEvent('loopgrid:randomize', { detail:{ prob }, bubbles:true })); }catch{}
-    });
+      panel.__drumRenderLoop = requestAnimationFrame(renderLoop);
+    };
+    renderLoop();
   }
+}
 
-  function boot(){ document.querySelectorAll(SEL).forEach(attach); }
-  function relayout(){ document.querySelectorAll(SEL).forEach(resize); }
+function render(panel) {
+  const st = panel.__drumVisualState;
+  if (!st) return;
 
-  window.addEventListener('resize', relayout);
-  document.addEventListener('DOMContentLoaded', boot);
-  if (document.readyState!=='loading') boot();
-})();
+  const { ctx, canvas } = st;
+  const w = canvas.width;
+  const h = canvas.height;
+  if (!w || !h) return;
+
+  ctx.clearRect(0, 0, w, h);
+
+  const state = panel.__gridState || {};
+  const steps = state.steps || [];
+  const noteIndices = state.noteIndices || [];
+  const notePalette = state.notePalette || [];
+  const isZoomed = panel.classList.contains('toy-zoomed');
+
+  const totalGapWidth = GAP * (NUM_CUBES - 1);
+  let cubeSize = (w - totalGapWidth) / NUM_CUBES;
+  if (isZoomed) {
+    cubeSize *= 1.5;
+  }
+  const yOffset = (h - cubeSize) / 2; // Center cubes vertically
+
+  for (let i = 0; i < NUM_CUBES; i++) {
+    const flash = st.flash[i] || 0;
+    const isEnabled = !!steps[i];
+    const cubeX = i * (cubeSize + GAP);
+    const cubeRect = { x: cubeX, y: yOffset, w: cubeSize, h: cubeSize };
+
+    // Draw playhead highlight first, so it's underneath the cube
+    if (i === st.playheadCol) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.fillRect(cubeRect.x, cubeRect.y, cubeRect.w, cubeRect.h);
+    }
+
+    ctx.save();
+    if (flash > 0) {
+      const scale = 1 + 0.15 * Math.sin(flash * Math.PI);
+      ctx.translate(cubeRect.x + cubeRect.w / 2, cubeRect.y + cubeRect.h / 2);
+      ctx.scale(scale, scale);
+      ctx.translate(-(cubeRect.x + cubeRect.w / 2), -(cubeRect.y + cubeRect.h / 2));
+      st.flash[i] = Math.max(0, flash - 0.08);
+    }
+
+    const noteMidi = notePalette[noteIndices[i]];
+    drawBlock(ctx, cubeRect, {
+      baseColor: flash > 0.01 ? '#FFFFFF' : (isEnabled ? '#ff8c00' : '#333'),
+      active: flash > 0.01 || isEnabled,
+      variant: 'button',
+      noteLabel: isZoomed ? midiToName(noteMidi) : null,
+      showArrows: isZoomed,
+    });
+    ctx.restore();
+  }
+}

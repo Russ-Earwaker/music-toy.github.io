@@ -9,7 +9,7 @@ function ensureHeader(panel, titleText){
   let header = panel.querySelector('.toy-header');
   if (!header){
     header = document.createElement('div'); header.className = 'toy-header';
-    const left = document.createElement('div'); left.className = 'toy-title'; left.textContent = titleText || (panel.id || panel.dataset.toy || 'Toy');
+    const left = document.createElement('div'); left.className = 'toy-title'; left.textContent = titleText || (panel.id || panel.dataset.toy || 'Toy'); left.setAttribute('data-drag-handle', '1');
     const right = document.createElement('div'); right.className = 'toy-controls-right';
     header.append(left, right); panel.prepend(header);
   }
@@ -27,70 +27,6 @@ function ensureFooter(panel){
 }
 
 function btn(label){ const b=document.createElement('button'); b.type='button'; b.className='toy-btn'; b.textContent=label; return b; }
-
-function wireAdvanced(panel, btn){
-  if (btn.__wired) return; btn.__wired = true;
-  btn.addEventListener('click', (e)=>{
-    e.preventDefault();
-    const pid = panel.id || panel.dataset.toy || '(no-id)';
-    console.log('[ADV][toyui] Advanced clicked for panel:', pid, panel);
-    try {
-      panel.classList.add('adv-debug-pulse'); setTimeout(()=>panel.classList.remove('adv-debug-pulse'), 600);
-      import('./zoom-overlay.js').then(m=>{
-        console.log('[ADV][toyui] zoom-overlay module loaded:', !!m);
-        if (m && typeof m.zoomInPanel === 'function') { console.log('[ADV][toyui] calling m.zoomInPanel'); m.zoomInPanel(panel); }
-        else if (typeof zoomInPanel === 'function') { console.log('[ADV][toyui] calling global zoomInPanel'); zoomInPanel(panel); }
-        else { console.warn('[ADV][toyui] no zoomInPanel function found'); }
-      });
-    } catch (err) {
-      console.error('[ADV][toyui] import failed, trying global zoomInPanel', err);
-      try { zoomInPanel(panel); } catch (e2) { console.error('[ADV][toyui] global zoomInPanel failed', e2); }
-    }
-  });
-}
-
-function wireRandom(panel, btn){
-  if (btn.__wired) return; btn.__wired = true;
-  btn.addEventListener('click', (e)=>{
-    e.preventDefault();
-    const pid = panel.id || panel.dataset.toy || '(no-id)';
-    console.log('[ADV][toyui] Advanced clicked for panel:', pid, panel);
-    try {
-      panel.classList.add('adv-debug-pulse'); setTimeout(()=>panel.classList.remove('adv-debug-pulse'), 600);
-      import('./zoom-overlay.js').then(m=>{
-        console.log('[ADV][toyui] zoom-overlay module loaded:', !!m);
-        if (m && typeof m.zoomInPanel === 'function') { console.log('[ADV][toyui] calling m.zoomInPanel'); m.zoomInPanel(panel); }
-        else if (typeof zoomInPanel === 'function') { console.log('[ADV][toyui] calling global zoomInPanel'); zoomInPanel(panel); }
-        else { console.warn('[ADV][toyui] no zoomInPanel function found'); }
-      });
-    } catch (err) {
-      console.error('[ADV][toyui] import failed, trying global zoomInPanel', err);
-      try { zoomInPanel(panel); } catch (e2) { console.error('[ADV][toyui] global zoomInPanel failed', e2); }
-    }
-  });
-}
-
-function wireClear(panel, btn){
-  if (btn.__wired) return; btn.__wired = true;
-  btn.addEventListener('click', (e)=>{
-    e.preventDefault();
-    const pid = panel.id || panel.dataset.toy || '(no-id)';
-    console.log('[ADV][toyui] Advanced clicked for panel:', pid, panel);
-    try {
-      panel.classList.add('adv-debug-pulse'); setTimeout(()=>panel.classList.remove('adv-debug-pulse'), 600);
-      import('./zoom-overlay.js').then(m=>{
-        console.log('[ADV][toyui] zoom-overlay module loaded:', !!m);
-        if (m && typeof m.zoomInPanel === 'function') { console.log('[ADV][toyui] calling m.zoomInPanel'); m.zoomInPanel(panel); }
-        else if (typeof zoomInPanel === 'function') { console.log('[ADV][toyui] calling global zoomInPanel'); zoomInPanel(panel); }
-        else { console.warn('[ADV][toyui] no zoomInPanel function found'); }
-      });
-    } catch (err) {
-      console.error('[ADV][toyui] import failed, trying global zoomInPanel', err);
-      try { zoomInPanel(panel); } catch (e2) { console.error('[ADV][toyui] global zoomInPanel failed', e2); }
-    }
-  });
-}
-
 
 function buildInstrumentSelect(panel, toyKind){
   // Build once
@@ -132,19 +68,34 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
   // Controls
   const right = header.querySelector('.toy-controls-right');
 
-  let adv = right.querySelector('[data-adv]'); if (!adv){ adv = btn('Advanced'); adv.setAttribute('data-adv','1'); right.prepend(adv); }
-  wireAdvanced(panel, adv);
+  // Add "Advanced" and "Close" buttons, CSS will toggle visibility.
+  if (!right.querySelector('[data-action="advanced"]')) {
+    const advBtn = btn('Advanced'); advBtn.dataset.action = 'advanced';
+    right.prepend(advBtn);
+  }
+  if (!right.querySelector('[data-action="close-advanced"]')) {
+    const closeBtn = btn('Close'); closeBtn.dataset.action = 'close-advanced';
+    right.prepend(closeBtn);
+  }
+  // Note: Button wiring is handled globally by `header-buttons-delegate.js`
 
-  let rnd = right.querySelector('[data-random]'); if (!rnd){ rnd = btn('Random'); rnd.setAttribute('data-random','1'); right.appendChild(rnd); }
-  wireRandom(panel, rnd);
+  let rnd = right.querySelector('[data-action="random"]'); if (!rnd){ rnd = btn('Random'); rnd.dataset.action = 'random'; right.appendChild(rnd); }
+  // Note: Button wiring is handled globally by `header-buttons-delegate.js`
 
-  let clr = right.querySelector('[data-clear]'); if (!clr){ clr = btn('Clear'); clr.setAttribute('data-clear','1'); right.appendChild(clr); }
-  wireClear(panel, clr);
+  let clr = right.querySelector('[data-action="clear"]'); if (!clr){ clr = btn('Clear'); clr.dataset.action = 'clear'; right.appendChild(clr); }
+  // Note: Button wiring is handled globally by `header-buttons-delegate.js`
+
+  // Drum-specific "Random Notes" button
+  if (toyKind === 'loopgrid' && !right.querySelector('[data-action="random-notes"]')) {
+    const rndNotesBtn = btn('Rnd Notes'); rndNotesBtn.dataset.action = 'random-notes';
+    right.appendChild(rndNotesBtn);
+  }
+  // Note: Button wiring is handled globally by `header-buttons-delegate.js`
 
   // Volume (mute + slider)
   let volWrap = footer.querySelector('.toy-volwrap'); if (!volWrap){ volWrap = document.createElement('div'); volWrap.className='toy-volwrap'; footer.appendChild(volWrap); }
   if (!volWrap.querySelector('button[title="Mute"]')){
-    const mute = document.createElement('button'); mute.className='toy-mute'; mute.title='Mute'; mute.textContent='🔇';
+    const mute = document.createElement('button'); mute.className='toy-mute'; mute.title='Mute'; mute.textContent='🔇'; mute.setAttribute('aria-pressed', 'false');
     const range = document.createElement('input'); range.type='range'; range.min='0'; range.max='100'; range.step='1'; range.value='100';
     volWrap.append(mute, range);
   }
@@ -153,8 +104,14 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
   const sel = buildInstrumentSelect(panel, toyKind);
 
   // Default instrument
-  const fromTheme = (sel && sel.value) || defaultInstrument || panel.dataset.instrument;
-  if (fromTheme) panel.dataset.instrument = fromTheme;
+  const initialInstrument = (sel && sel.value) || defaultInstrument || panel.dataset.instrument;
+  if (initialInstrument) {
+    panel.dataset.instrument = initialInstrument;
+    // Dispatch event so the toy's core logic can update the audio system.
+    // This makes the boot process more robust, ensuring an instrument is
+    // always set, even before the main theme system runs.
+    panel.dispatchEvent(new CustomEvent('toy-instrument', { detail: { value: initialInstrument }, bubbles: true }));
+  }
 
-  return { header, footer, body: panel.querySelector('.toy-body'), instrument: panel.dataset.instrument || fromTheme || 'tone' };
+  return { header, footer, body: panel.querySelector('.toy-body'), instrument: panel.dataset.instrument || initialInstrument || 'tone' };
 }

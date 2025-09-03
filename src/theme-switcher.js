@@ -1,31 +1,60 @@
-// src/theme-switcher.js — Floating theme switcher with arrows (<300 lines)
+// src/theme-switcher.js
+// Populates and manages the theme selection dropdown in the topbar.
+
 import { THEMES } from './themes.js';
+import { getActiveThemeKey } from './theme-manager.js';
 
-function build(){
-  const id = 'theme-switcher-wrap';
-  let wrap = document.getElementById(id);
-  if (wrap) return;
-  wrap = document.createElement('div'); wrap.id = id;
-  wrap.style.cssText = 'position:fixed;left:10px;top:8px;z-index:12000;display:flex;gap:8px;align-items:center;background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.2);border-radius:8px;padding:6px 10px;backdrop-filter:blur(4px);pointer-events:auto';
-
-  const label = document.createElement('span'); label.textContent='Theme:';
-  const prev = document.createElement('button'); prev.textContent='◀'; prev.className='btn-theme-prev';
-  const next = document.createElement('button'); next.textContent='▶'; next.className='btn-theme-next';
-  const name = document.createElement('span'); name.id = 'theme-name'; name.style.minWidth='120px'; name.style.textAlign='center';
-
-  const keys = Object.keys(THEMES||{});
-  let i = Math.max(0, keys.indexOf((window.ThemeBoot && window.ThemeBoot.getActiveThemeKey && window.ThemeBoot.getActiveThemeKey()) || keys[0]));
-
-  function apply(){
-    name.textContent = keys[i] ? keys[i].split('_').join(' ') : '';
-    try{ window.ThemeBoot && window.ThemeBoot.setTheme && window.ThemeBoot.setTheme(keys[i]); }catch{}
-    console.log('[THEME][floating] change ->', keys[i]);
-  }
-  prev.addEventListener('click', (e)=>{ e.stopPropagation(); i = (i-1+keys.length)%keys.length; apply(); });
-  next.addEventListener('click', (e)=>{ e.stopPropagation(); i = (i+1)%keys.length; apply(); });
-
-  wrap.append(label, prev, name, next);
-  document.body.appendChild(wrap);
+/**
+ * Formats a string from snake_case or kebab-case to Title Case.
+ * @param {string} str The input string.
+ * @returns {string} The formatted string.
+ */
+function toTitleCase(str) {
+  if (!str) return '';
+  return str.replace(/[_-]/g, ' ').replace(
+    /\w\S*/g,
+    (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()
+  );
 }
-if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', build);
-else build();
+
+function initThemeSwitcher() {
+  const select = document.getElementById('theme-select');
+  if (!select) {
+    console.warn('[theme-switcher] Could not find #theme-select element.');
+    return;
+  }
+
+  // 1. Populate options from themes.js
+  select.innerHTML = ''; // Clear any hardcoded options
+  for (const key in THEMES) {
+    const theme = THEMES[key];
+    const option = document.createElement('option');
+    option.value = key;
+    // Use the theme's display name, or format the key as a fallback
+    option.textContent = theme.name || toTitleCase(key);
+    select.appendChild(option);
+  }
+
+  // 2. Set the initial value from the theme manager
+  try {
+    const activeTheme = getActiveThemeKey();
+    if (activeTheme) select.value = activeTheme;
+  } catch (e) {
+    console.warn('[theme-switcher] Could not get active theme on boot.', e);
+  }
+
+  // 3. Handle changes and call the global ThemeBoot API from boot-theme.js
+  select.addEventListener('change', () => {
+    const newTheme = select.value;
+    if (window.ThemeBoot && window.ThemeBoot.setTheme) {
+      window.ThemeBoot.setTheme(newTheme);
+      if (window.ThemeBoot.wireAll) window.ThemeBoot.wireAll();
+    } else {
+      console.warn('[theme-switcher] window.ThemeBoot API not found. Cannot change theme.');
+    }
+  });
+}
+
+// Wait for the DOM to be ready before manipulating it.
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initThemeSwitcher, { once: true });
+else initThemeSwitcher();

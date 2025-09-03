@@ -75,7 +75,7 @@ function playSampleAt(id, when, gain=1, toyId){
 
 export function triggerInstrument(instrument, noteName='C4', when, toyId){
   const ctx = ensureAudioContext();
-  const id0 = String(instrument||'tone').toLowerCase(); console.log('[AUDIO] trigger', id0);
+  const id0 = String(instrument||'tone').toLowerCase();
   const id = ALIASES.get(id0) || id0;
   const t = when || ctx.currentTime;
 

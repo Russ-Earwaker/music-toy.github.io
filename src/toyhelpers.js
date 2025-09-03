@@ -162,12 +162,47 @@ export function drawBlock(ctx, b, opts = {}){
     }
 
     // arrows we draw via UI helper elsewhere; just render text label if provided
-    if (noteLabel != null){
-      ctx.fillStyle = '#fff';
-      ctx.font = '12px system-ui, sans-serif';
-      ctx.textBaseline = 'middle';
-      ctx.textAlign = 'center';
-      ctx.fillText(String(noteLabel), x + w/2, y - NOTE_BTN_H/2);
+    if (noteLabel != null) {
+      if (showArrows) {
+        // In Advanced view, draw the note label in the center of the cube.
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.font = 'bold 16px system-ui, sans-serif';
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'center';
+        ctx.fillText(String(noteLabel), x + w / 2, y + h / 2);
+      } else {
+        // In Standard view, draw the label above the block (legacy behavior).
+        ctx.fillStyle = '#fff';
+        ctx.font = '12px system-ui, sans-serif';
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'center';
+        ctx.fillText(String(noteLabel), x + w/2, y - NOTE_BTN_H/2);
+      }
+    }
+
+    if (showArrows) {
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      const arrowW = w * 0.2;
+      const arrowH = h * 0.1;
+      const cx = x + w / 2;
+
+      // Up arrow
+      const topY = y + h * 0.15;
+      ctx.beginPath();
+      ctx.moveTo(cx, topY - arrowH / 2);
+      ctx.lineTo(cx + arrowW / 2, topY + arrowH / 2);
+      ctx.lineTo(cx - arrowW / 2, topY + arrowH / 2);
+      ctx.closePath();
+      ctx.fill();
+
+      // Down arrow
+      const botY = y + h * 0.85;
+      ctx.beginPath();
+      ctx.moveTo(cx, botY + arrowH / 2);
+      ctx.lineTo(cx + arrowW / 2, botY - arrowH / 2);
+      ctx.lineTo(cx - arrowW / 2, botY - arrowH / 2);
+      ctx.closePath();
+      ctx.fill();
     }
   }
   ctx.restore(); /*__restore_marker__*/
@@ -202,7 +237,7 @@ export function hitBottomStrip(p, b){
  * - Exposes vw/vh (CSS px), setZoom(zoomed) -> ratio, and scale (1 or 2).
  */
 
-export { initToySizing } from './toyhelpers-sizing.js';
+// The legacy initToySizing helper has been removed and is now handled by toy-layout-manager.js
 
 
 export function findTopmostHit(p, blocks){

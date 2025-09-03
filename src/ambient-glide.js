@@ -1,7 +1,6 @@
 // src/ambient-glide.js — Ambient Glide toy (<=300 lines)
 import { initToyUI } from './toyui.js';
 import { ensureAudioContext } from './audio-core.js';
-import { initToySizing } from './toyhelpers-sizing.js';
 import { getIntensity } from './intensity.js';
 
 export function createAmbientGlide(panel){
@@ -13,9 +12,6 @@ export function createAmbientGlide(panel){
   
   panel.appendChild(canvas);
   const ctx = canvas.getContext('2d');
-
-  // Square sizing like rippler
-  const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true, minH: 180 });
 
   // --- Header UI ---
   const ui = initToyUI(panel, { toyName: 'Ambient Glide' });

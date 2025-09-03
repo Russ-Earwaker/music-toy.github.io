@@ -18,6 +18,8 @@
   document.addEventListener('mousedown', (e)=>{
     const overPanel = !!e.target.closest('.toy-panel');
     if (overPanel) return;        // let panel dragging handle their own
+    const overTopbar = !!e.target.closest('#topbar');
+    if (overTopbar) return;       // let topbar controls handle their own
     if (e.button!==0 && e.button!==1) return;
     panning = true; sx=e.clientX; sy=e.clientY; ox=x; oy=y;
     document.body.classList.add('panning');

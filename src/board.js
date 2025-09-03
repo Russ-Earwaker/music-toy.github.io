@@ -20,7 +20,9 @@ export function initDragBoard(boardSel = '#board') {
   }
   function enforceSavedPositions(){
     const map = loadAll();
-    document.querySelectorAll('.toy-panel').forEach(el=>{
+    // Only apply to panels that are direct children of the board.
+    // This prevents it from interfering with panels in the zoom overlay.
+    board.querySelectorAll(':scope > .toy-panel').forEach(el=>{
       const id = el.id || el.dataset.toyid || el.dataset.toy;
       const pos = id && map[id];
       if (pos){
@@ -36,15 +38,16 @@ export function initDragBoard(boardSel = '#board') {
 
   let drag=null, sx=0, sy=0, ox=0, oy=0;
   function onPointerDown(e){
-    const header = e.target.closest('.toy-header');
-    if (!header) return;
-    const el = header.closest('.toy-panel');
+    // Only start a drag on the specific title handle, not the whole header.
+    const handle = e.target.closest('[data-drag-handle="1"]');
+    // Ignore clicks on buttons or other interactive elements in the header.
+    if (!handle || e.target.closest('button, select, input, a')) return;
+    const el = handle.closest('.toy-panel');
     if (!el || el.classList.contains('toy-zoomed')) return;
     el.setPointerCapture?.(e.pointerId);
     drag = el; sx=e.clientX; sy=e.clientY;
     const cs = getComputedStyle(el);
     ox = parseFloat(cs.left)||0; oy=parseFloat(cs.top)||0;
-    e.preventDefault();
   }
   function onPointerMove(e){
     if (!drag) return;

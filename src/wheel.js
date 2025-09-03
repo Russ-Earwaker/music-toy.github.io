@@ -1,7 +1,6 @@
 // src/wheel.js — 16‑spoke on/off wheel with Grid-style cubes
 import { resizeCanvasForDPR } from './utils.js';
 import { initToyUI } from './toyui.js';
-import { initToySizing } from './toyhelpers-sizing.js';
 import { ensureAudioContext, getLoopInfo } from './audio-core.js';
 import { randomizeWheel } from './wheel-random.js';
 import { drawBlocksSection } from './ripplesynth-blocks.js';
@@ -37,7 +36,10 @@ export function buildWheel(selector, opts = {}){
   (panel.querySelector?.('.toy-body') || panel).appendChild(canvas);
   const ctx = canvas.getContext('2d');
 
-  const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true });
+  // The legacy sizing helper has been removed. The new toy-layout-manager.js
+  // handles canvas sizing automatically. This dummy object prevents runtime
+  // errors from any remaining legacy debug code that might reference it.
+  const sizing = { scale: 1 };
 
   let active = Array.from({length:STEPS}, ()=> false);
   let semiOffsets = Array.from({length:STEPS}, ()=> 0);

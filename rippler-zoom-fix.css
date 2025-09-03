@@ -1,3 +1,1 @@
-/* rippler-zoom-fix.css — minimal, safe (<=300 lines) */
-.toy-panel[data-toy="rippler"] .toy-body{ position:relative; }
-.toy-panel[data-toy="rippler"] .toy-body canvas{ width:100% !important; height:100% !important; display:block; }
+/* This file has been disabled to prevent conflicts with the new layout system. */

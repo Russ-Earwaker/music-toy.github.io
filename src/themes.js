@@ -4,6 +4,7 @@
 export const THEMES = {
   // Music theme from earlier
   djembe_kalimba: {
+    name: "Djembe & Kalimba",
     grids: ["djembe_bass", "djembe_tone", "djembe_slap", "hand_clap"],
     wheel: ["acoustic_guitar"],
     bouncer: ["xylophone"],
@@ -11,16 +12,18 @@ export const THEMES = {
   },
 
   default: {
+    name: "Default (Classic)",
     grids: ["djembe_bass", "djembe_tone", "djembe_slap", "hand_clap"],
     wheel: ["acoustic_guitar"],
     bouncer: ["xylophone"],
     rippler: ["kalimba"],
   },
 
-    // Testing theme: force everything to 'tone'
+  // Testing theme: force everything to 'tone'
   test: {
-    grids: ["tone", "tone", "tone", "tone"],
-    wheel: ["tone"],
+    name: "Test (Tones only)",
+    grids: ["retro-saw", "retro-square", "alien", "tone"],
+    wheel: ["organ"],
     bouncer: ["tone"],
     rippler: ["tone"],
   },

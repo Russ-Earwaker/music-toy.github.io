@@ -1,4 +1,4 @@
-import { initToyUI } from './toyui.js'; import { randomizeAllImpl } from './ripplesynth-random.js'; import { initToySizing, randomizeRects } from './toyhelpers.js'; import { resizeCanvasForDPR, noteList } from './utils.js'; import { PENTATONIC_OFFSETS } from './ripplesynth-scale.js'; import { boardScale } from './board-scale-helpers.js'; import { ensureAudioContext, barSeconds as audioBarSeconds } from './audio-core.js'; import { triggerInstrument as __rawTrig } from './audio-samples.js';
+import { initToyUI } from './toyui.js'; import { randomizeAllImpl } from './ripplesynth-random.js'; import { randomizeRects } from './toyhelpers.js'; import { resizeCanvasForDPR, noteList } from './utils.js'; import { PENTATONIC_OFFSETS } from './ripplesynth-scale.js'; import { boardScale } from './board-scale-helpers.js'; import { ensureAudioContext, barSeconds as audioBarSeconds } from './audio-core.js'; import { triggerInstrument as __rawTrig } from './audio-samples.js';
 import { drawBlocksSection } from './ripplesynth-blocks.js';
 import { makePointerHandlers } from './ripplesynth-input.js';
 import { initParticles, setParticleBounds, drawParticles } from './ripplesynth-particles.js';
@@ -28,8 +28,11 @@ canvas.className = 'rippler-canvas';
   const ctx = canvas.getContext('2d'); const ui  = initToyUI(panel, { toyName: 'Rippler' });
   let currentInstrument = (ui.instrument && ui.instrument !== 'tone') ? ui.instrument : 'kalimba'; try { ui.setInstrument(currentInstrument); } catch {}
   const baseNoteName = (panel?.dataset?.ripplerOct || 'C4');
-panel.addEventListener('toy-instrument', (e)=>{ try{ currentInstrument = (e?.detail?.value)||currentInstrument; }catch{} });
-const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true }); const isZoomed = ()=> panel.classList.contains('toy-zoomed');
+  panel.addEventListener('toy-instrument', (e)=>{ try{ currentInstrument = (e?.detail?.value)||currentInstrument; }catch{} });
+  // The legacy sizing helper has been removed. The new toy-layout-manager.js
+  // handles canvas sizing automatically. This dummy object prevents runtime
+  // errors from any remaining legacy debug code that might reference it.
+  const sizing = { scale: 1 }; const isZoomed = ()=> panel.classList.contains('toy-zoomed');
   panel.addEventListener('toy-zoom', ()=>{ try { setParticleBounds(canvas.width|0, canvas.height|0); } catch {} });
 const EDGE=4; const W = ()=> (canvas.width|0);
   const H = ()=> (canvas.height|0);

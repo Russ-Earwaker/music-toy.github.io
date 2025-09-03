@@ -4,20 +4,17 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Music Toys</title>
+  <!-- The only stylesheet needed is the main style.css. The others were legacy files causing conflicts. -->
   <link rel="stylesheet" href="./style.css" />
-  <link rel="stylesheet" href="./bouncer.css" />
-  <link rel="stylesheet" href="./rippler-zoom-fix.css" />
-  <link rel="stylesheet" href="./ui-fixes.css" />
-  <script type="module" src="./src/themes.js" defer></script>
-  <script type="module" src="./src/theme-manager.js" defer></script>
-  <script type="module" src="./src/theme-switcher.js" defer></script>
-  <script type="module" src="./src/boot-theme.js" defer></script>
 </head>
 <body>
   <header id="topbar" class="app-topbar">
     <div class="brand">Music Toys</div>
     <div class="topbar-controls">
-      <label style="color:#cbd5e1;margin-right:6px;">Theme</label><select id="theme-select" class="toy-btn" data-action="theme"><option value="">Default</option><option value="dark">Dark</option><option value="neon">Neon</option></select>
+      <div id="theme-switcher-wrap" style="display: inline-flex; align-items: center; gap: 6px;">
+        <label for="theme-select" style="color:#cbd5e1;">Theme</label>
+        <select id="theme-select" class="toy-btn" data-action="theme"></select>
+      </div>
       <button class="toy-btn" data-action="organize">Organize</button>
       <button class="toy-btn" data-action="reset-view">Reset View</button>
       <button class="toy-btn" data-action="zoom-out">−</button>
@@ -41,22 +38,19 @@
     <section id="drawgrid1" data-instrument="AcousticGuitar" class="toy-panel" data-toy="drawgrid"></section>
   </main>
 
-  <!-- App scripts -->
-  <script type="module" src="./src/adv-safety-reset.js" defer></script>
+  <!-- App boot scripts -->
   <script type="module" src="./src/main.js" defer></script>
   <script type="module" src="./src/board.js" defer></script>
-  <script type="module" src="./src/ensure-headers.js" defer></script>
-  <script type="module" src="./src/dev-hud.js" defer></script>
-  <script type="module" src="./src/toy-hit-relay.js" defer></script>
-  <script type="module" src="./src/startup-intensity.js" defer></script>
   <script type="module" src="./src/board-viewport.js" defer></script>
-
-  <!-- Toys -->
-  <script type="module" src="./src/loopgrid-square-drum.js" defer></script>
-  <script type="module" src="./src/drawgrid-init.js" defer></script>
-  <script type="module" src="./src/bouncer.main.js" defer></script>
   <script type="module" src="./src/topbar.js" defer></script>
-  <script type="module" src="./src/advanced-overlay.js" defer></script>
-  <script type="module" src="./src/bouncer-init.js" defer></script>
+
+  <!-- Theme System -->
+  <script type="module" src="./src/themes.js" defer></script>
+  <script type="module" src="./src/theme-manager.js" defer></script>
+  <script type="module" src="./src/boot-theme.js" defer></script>
+  <script type="module" src="./src/theme-switcher.js" defer></script>
+
+  <!-- Individual Toy Initializers (loaded by main.js) -->
+  <script type="module" src="./src/drawgrid-init.js" defer></script>
 </body>
 </html>

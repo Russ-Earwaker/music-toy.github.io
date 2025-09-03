@@ -3,8 +3,6 @@ import { stepBouncer } from './bouncer-step.js';
 import { noteList, resizeCanvasForDPR } from './utils.js';
 import { ensureAudioContext, getLoopInfo } from './audio-core.js';
 import { triggerInstrument } from './audio-samples.js';
-import { initToyUI } from './toyui.js';
-import { initToySizing } from './toyhelpers-sizing.js';
 import { randomizeRects, EDGE_PAD as EDGE, hitRect, whichThirdRect, drawThirdsGuides } from './toyhelpers.js';
 import { drawBlocksSection } from './ripplesynth-blocks.js';
 // board scale via rect baseline (rippler-style)
@@ -31,8 +29,7 @@ const BASE_BLOCK_SIZE = 44, BASE_CANNON_R = 10, BASE_BALL_R = 7;
 export function createBouncer(selector){
   const shell = (typeof selector==='string') ? document.querySelector(selector) : selector; if (!shell) return null;
   const panel = shell.closest('.toy-panel') || shell;
-  const ui = initToyUI(panel, { toyName: 'Bouncer', defaultInstrument: 'Retro Square' }) || {};
-  let instrument = (panel.dataset.instrument || ui?.instrument || 'retro_square'); panel.addEventListener('toy-instrument', (e)=>{ instrument = (e?.detail?.value)||instrument; });
+  let instrument = (panel.dataset.instrument || 'retro_square'); panel.addEventListener('toy-instrument', (e)=>{ instrument = (e?.detail?.value)||instrument; });
   let speedFactor = parseFloat((panel?.dataset?.speed)||'1.60'); // +60% faster default // 0.60 = calmer default
   const toyId = (panel?.dataset?.toy || 'bouncer').toLowerCase();
 
@@ -40,7 +37,10 @@ export function createBouncer(selector){
   const canvas = document.createElement('canvas'); canvas.style.width='100%'; canvas.style.display='block';canvas.style.height='100%'; host.appendChild(canvas);
   try{ canvas.removeAttribute('data-lock-scale'); canvas.style.transform=''; }catch{};
   const ctx = canvas.getContext('2d', { alpha:false });
-  const sizing = initToySizing(panel, canvas, ctx, { squareFromWidth: true });
+  // The legacy sizing helper has been removed. The new toy-layout-manager.js
+  // handles canvas sizing automatically. This dummy object prevents runtime
+  // errors from any remaining legacy debug code that might reference it.
+  const sizing = { scale: 1, setZoom: () => {} };
 
   // Physics world scaffold (dynamic = no behaviour change)
   const __phys = initBouncerPhysWorld(panel, canvas, sizing, { mode: 'dynamic' });

@@ -21,28 +21,48 @@ html,body{ height:100%; margin:0; background:var(--bg); color:var(--text); font-
 #board{ padding:16px; display:block; }
 
 /* Panels */
-.toy-panel{ position:relative; display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--border); border-radius:12px; box-shadow: 0 8px 24px rgba(0,0,0,0.35); min-height:200px; overflow:hidden; }
-.toy-header{ position:relative; z-index:200;  display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px; background:linear-gradient(180deg, rgba(13,20,29,0.9), rgba(13,20,29,0.75)); border-bottom:1px solid var(--border); }
+/* This is the single, definitive rule for all toy panels. It ensures
+   they are positioned by board.js and use a vertical flexbox layout
+   for their header, body, and footer. */
+.toy-panel {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  min-height: 200px; overflow: hidden;
+  width: var(--panel-w, 380px); /* Default width, can be overridden per-toy */
+}
+/* Re-stating this rule to fix a potential CSS parsing error. Invalid tokens
+   can cause browsers to ignore properties like padding, leading to squished layouts. */
+.toy-header {
+  position: relative; z-index: 200; display: flex; align-items: center;
+  justify-content: space-between; gap: 10px; padding: 8px 10px;
+  background: linear-gradient(180deg, rgba(13,20,29,0.9), rgba(13,20,29,0.75));
+  border-bottom: 1px solid var(--border);
+}
 .toy-title{ font-weight:700; letter-spacing:0.02em; color:var(--text); }
 .toy-controls-right{ display:flex; gap:8px; align-items:center; }
 
-.toy-body{ position:relative; padding:0; overflow:hidden; }
-.toy-footer{ position:relative; padding:10px; }
+/* Flexbox layout for panel children */
+.toy-header{ flex-shrink: 0; }
+.toy-body{ position:relative; padding:0; overflow:hidden; flex-grow: 1; }
+.toy-footer{ position:relative; padding:10px; flex-shrink: 0; }
 
 /* Volume card */
 .toy-volwrap{ display:flex; gap:10px; align-items:center; background:rgba(13,20,29,0.85); border:1px solid var(--border); border-radius:10px; padding:8px 10px; }
 .toy-volwrap input[type="range"]{ width:100%; flex:1; }
 .toy-volwrap button{ padding:6px 10px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text); }
 
-/* Pretty header buttons */
-.toy-btn{ appearance:none; cursor:pointer; user-select:none; padding:6px 12px; border-radius:10px; border:1px solid var(--border); background:var(--surface); color:var(--text); box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 2px 6px rgba(0,0,0,0.35); transition: transform .07s ease, background .15s ease, border-color .15s ease; }
+/* Re-stating this rule to fix a potential CSS parsing error. */
+.toy-btn {
+  appearance: none; cursor: pointer; user-select: none; padding: 6px 12px;
+  border-radius: 10px; border: 1px solid var(--border); background: var(--surface);
+  color: var(--text);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 2px 6px rgba(0,0,0,0.35);
+  transition: transform .07s ease, background .15s ease, border-color .15s ease;
+}
 .toy-btn:hover{ background:#111a26; border-color:#243244; }
 .toy-btn:active{ transform: translateY(1px) scale(0.99); }
-
-/* Keep headers above canvases */
-.toy-panel .toy-header{ position:relative; z-index:200;  z-index:3; }
-.toy-panel .toy-body{ z-index:1; }
-.toy-panel .toy-footer{ z-index:2; }
 
 /* Organise button */
 #organise-toys-btn{ position:fixed; top:10px; right:10px; z-index:10001; padding:8px 12px; border-radius:10px; border:1px solid var(--border); background:var(--surface); color:var(--text); }
@@ -50,45 +70,15 @@ html,body{ height:100%; margin:0; background:var(--bg); color:var(--text); font-
 #board{ position:absolute; inset:0; }
 
 .topbar{ position:fixed; top:0; left:0; right:0; height:48px; }
-#board{ position:absolute; top:48px; left:0; right:0; bottom:0; }
 html,body{ overflow:hidden; }
 .toy-body{ position:relative; width:100%; }
-
-.toy-footer{ position:relative; }
-
-
-/* Footer below body with spacing */
-.toy-footer{ margin-top:12px; }
-/* Range slider styling for visibility */
-.toy-volwrap input[type="range"]{ -webkit-appearance: none; height:6px; border-radius:6px; background:#1e2a38; outline:none; }
-.toy-volwrap input[type="range"]::-webkit-slider-thumb{ -webkit-appearance: none; width:18px; height:18px; border-radius:50%; background:#c56a1a; border:2px solid #0d141d; box-shadow: 0 2px 6px rgba(0,0,0,.45); margin-top:-6px; }
-.toy-volwrap input[type="range"]::-moz-range-thumb{ width:18px; height:18px; border-radius:50%; background:#c56a1a; border:2px solid #0d141d; box-shadow: 0 2px 6px rgba(0,0,0,.45); }
-
 .toy-body{ position:relative; z-index:1; }
 
 .toy-footer{ position:relative; z-index:2; }
 
-.toy-panel[data-toy="loopgrid"] .toy-body{ aspect-ratio:1 / 1; }
-
-.toy-footer{ position:relative; z-index:2; margin-top:12px; }
-
-
-/* Force visible slider UI */
-.toy-volwrap input[type="range"]{
-  appearance: auto;
-  -webkit-appearance: slider-horizontal;
-  height: 18px;
-}
 .toy-volwrap{ display:flex; gap:10px; align-items:center; background:rgba(13,20,29,0.85); border:1px solid #1c2430; border-radius:8px; padding:8px 10px; }
 .toy-volwrap .toy-btn{ min-width:40px; }
 
-
-/* --- Slider + footer normalization (clean override) --- */
-.toy-panel{ position:relative; display:flex; flex-direction:column; }
-.toy-body{ position:relative; width:100%; z-index:1; }
-.toy-footer{ position:relative; z-index:2; margin-top:12px; }
-
-.toy-volwrap{ display:flex; gap:10px; align-items:center; background:rgba(13,20,29,0.85); border:1px solid #1c2430; border-radius:8px; padding:8px 10px; }
 .toy-volwrap .toy-btn{ min-width:44px; }
 
 .toy-volwrap input[type="range"]{
@@ -98,10 +88,6 @@ html,body{ overflow:hidden; }
 .toy-volwrap input[type="range"]::-webkit-slider-thumb{ -webkit-appearance: none; width:16px; height:16px; border-radius:2px; background:#f4932f; border:1px solid #0d141d; margin-top:-6px; }
 .toy-volwrap input[type="range"]::-moz-range-thumb{ width:16px; height:16px; border-radius:2px; background:#f4932f; border:1px solid #0d141d; }
 
-/* loopgrid square body */
-.toy-panel[data-toy="loopgrid"] .toy-body{ aspect-ratio: 1 / 1; }
-
-
 /* Topbar */
 .app-topbar{ position:fixed; top:0; left:0; right:0; height:48px; display:flex; align-items:center; justify-content:space-between; padding:0 12px; background:#0d141d; border-bottom:1px solid #1c2430; z-index:10; }
 .app-topbar .brand{ color:#cbd5e1; font-weight:600; }
@@ -110,37 +96,101 @@ html,body{ overflow:hidden; }
 /* Board area sits below topbar */
 #board{ position:absolute; top:48px; left:0; right:0; bottom:0; }
 
-/* Draggable header cursor */
-.toy-header{ position:relative; z-index:200;  cursor:move; user-select:none; }
-
-/* Panels absolute stacking default (board.js persists positions) */
-.toy-panel{ position:absolute; }
+/* Draggable header title cursor */
+.toy-title[data-drag-handle] { cursor: move; user-select: none; }
 
 /* Normalize font sizes back to readable */
 :root{ font-size: 16px; }
 .toy-header, .toy-footer, .toy-btn{ font-size: 14px; }
 
 
-/* Panel default sizing to prevent full-width stacking */
-.toy-panel{ width: var(--panel-w, 380px); }
-.toy-panel .toy-body{ min-height: var(--panel-h, 320px); }
 /* Loopgrid uses square body; width controls size */
 .toy-panel[data-toy="loopgrid"]{ --panel-w: 380px; }
-.toy-panel[data-toy="loopgrid"] .toy-body{ aspect-ratio: 1 / 1; min-height: 0; }
 /* Bouncer defaults */
 .toy-panel[data-toy="bouncer"]{ --panel-w:  300px; }
 /* Drawgrid defaults */
 .toy-panel[data-toy="drawgrid"]{ --panel-w: 420px; }
 
+/* --- Loopgrid (Drum Toy) Layout --- */
+.toy-panel[data-toy="loopgrid"] .toy-body {
+  /* We set flex-grow to 0 to override the generic .toy-body rule.
+     This allows aspect-ratio to be the sole determinant of the body's height. */
+  flex-grow: 0;
+  aspect-ratio: 1 / 1;
+  display: grid;
+  grid-template-rows: auto 1fr; /* Sequencer gets its natural height, pad wrapper fills the rest. */
+  padding: 12px;
+  gap: 12px;
+}
+
+.sequencer-wrap {
+  width: 100%;
+  aspect-ratio: 8 / 1; /* Ensure the container is the correct shape for 8 square cubes. */
+  flex-shrink: 0; /* Prevent this container from shrinking. */
+}
+
+.sequencer-wrap canvas {
+  width: 100%;
+  height: 100%;
+  display: block; /* Removes any extra space below the canvas */
+}
+
+.drum-pad-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: center; /* Center the drum pad in the remaining space */
+  position: relative; /* This contains the absolutely positioned particle canvas. */
+  min-height: 0; /* This allows the wrapper to shrink and grow correctly inside a flex container with a fixed aspect-ratio. */
+  /* flex-grow is not needed with grid layout. */
+}
+
+.grid-drum-pad {
+  /* Use aspect-ratio for robust sizing. This ensures the pad is always a
+     square that fits within its container, shrinking as needed. */
+  aspect-ratio: 1 / 1;
+  width: 55%;
+  max-height: 65%;
+  position: relative;
+  border-radius: 50%; /* Makes it a circle */
+  cursor: pointer;
+  user-select: none;
+  background: #2c313a; /* A matte dark grey */
+  border: 1px solid rgba(255,255,255,0.1);
+  transition: transform 0.1s ease-out;
+  z-index: 1; /* Ensure it's on top of the particle canvas. */
+}
+
+.grid-drum-pad:hover { border-color: rgba(255,255,255,0.2); }
+
+.grid-drum-pad::before { content: 'DRUM'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 1.1rem; letter-spacing: 0.2em; opacity: 0.8; color: var(--text); }
+
 
 /* Advanced overlay */
 #adv-overlay{ position:fixed; inset:0; display:none; z-index:2000; }
 #adv-overlay.open{ display:block; }
-#adv-overlay .adv-backdrop{ position:absolute; inset:0; background:rgba(0,0,0,0.55); }
-#adv-overlay .adv-host{ position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); max-width:90vw; max-height:90vh; display:flex; flex-direction:column; gap:10px; }
-#adv-overlay .adv-controls{ display:flex; gap:10px; justify-content:center; }
-#adv-overlay.open .adv-open{ width: var(--adv-w, min(90vw, 880px)) !important; }
-#adv-overlay.open .adv-open .toy-body{ aspect-ratio:auto !important; height: var(--adv-h, min(70vh, 600px)) !important; }
+
+.adv-backdrop{ position:absolute; inset:0; background:rgba(0,0,0,0.65); backdrop-filter: blur(4px); }
+.adv-host{
+  position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+  /* The host defines the "safe area" for the zoomed toy. */
+  display:flex;
+  width: 100vw;
+  height: 100vh;
+  padding: 5vh 2.5vw; /* 10% vertical buffer, 5% horizontal */
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+}
+
+/* When a toy is zoomed, it defines its own size. */
+.toy-zoomed {
+  /* The toy will fill the host's safe area, preserving its aspect ratio. */
+  max-width: 100%;
+  max-height: 100%;
+  position: relative !important; /* Override inline styles from board.js */
+  left: auto !important;
+  top: auto !important;
+}
 
 .toy-panel[data-toy="bouncer"] .toy-body{ aspect-ratio: 1 / 1; min-height: 0; }
 
@@ -148,15 +198,32 @@ html,body{ overflow:hidden; }
 .toy-instrument{ display:none; }
 #zoom-overlay .toy-instrument, .toy-panel.toy-zoomed .toy-instrument{ display:inline-block; }
 
-/* make topbar theme select obviously visible */
-#theme-select{ display:none !important; /* hide legacy header select */  position:relative; z-index:10000;  padding:6px 10px; border:1px solid var(--border, #666); border-radius:6px; cursor:pointer;  appearance: auto !important; -webkit-appearance: menulist !important; background:#fff !important; color:#111 !important;  min-width:180px; padding:6px 8px; border:1px solid var(--border); background:var(--surface); color:var(--text); }
-
 /* debug pulse when Advanced button is clicked */
 @keyframes advPulse { 0%{box-shadow:0 0 0 0 rgba(255,200,80,.9)} 100%{box-shadow:0 0 0 12px rgba(255,200,80,0)} }
 .toy-panel.adv-debug-pulse{ animation: advPulse .6s ease-out 1; }
 
-/* theme select must be clickable */
-#theme-select{ display:none !important; /* hide legacy header select */  position:relative; z-index:10000;  padding:6px 10px; border:1px solid var(--border, #666); border-radius:6px; cursor:pointer;  appearance: auto !important; -webkit-appearance: menulist !important; background:#fff !important; color:#111 !important;  pointer-events:auto; position:relative; z-index:2000; }
+/* Theme select dropdown in topbar. Overrides .toy-btn to look like a dropdown. */
+#theme-select {
+  appearance: auto !important;
+  -webkit-appearance: menulist !important;
+}
+
+/* --- Advanced/Zoomed View Button Visibility --- */
+/* Hide Close and Rnd Notes by default */
+[data-action="close-advanced"], [data-action="random-notes"] { display: none; }
+
+/* When zoomed, hide Advanced and show Close/Rnd Notes */
+.toy-zoomed [data-action="advanced"] { display: none; }
+.toy-zoomed [data-action="close-advanced"] { display: inline-block; }
+
+/* Only show Rnd Notes for loopgrid toy when zoomed */
+.toy-zoomed[data-toy="loopgrid"] [data-action="random-notes"] { display: inline-block; }
+
+/* Widen the drum toy in advanced view to make room for note labels and interaction. */
+.toy-zoomed[data-toy="loopgrid"] {
+  width: min(90vw, 1000px); /* Wider for 1.5x cubes */
+  height: auto; /* Let height be determined by the body's aspect ratio. */
+}
 
 #topbar{ position:sticky; top:0; z-index:5000; }
 

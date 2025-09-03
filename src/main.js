@@ -1,14 +1,17 @@
-import './ui-drum-controls.js';
-import './drum-tiles-visual.js';
-import './ensure-advanced.js';
-import './zoom-overlay.js'; // ensure global [data-adv] delegate is installed
-console.log('[MAIN] module start');
+// --- Module Imports ---
+import './bouncer-init.js';
+import './mute-wire.js';
+import './header-buttons-delegate.js';
+import './rippler-init.js';
+import './toy-audio.js';
+import './toy-layout-manager.js';
+import './zoom-overlay.js';
 import { initAudioAssets } from './audio-samples.js';
-try { initAudioAssets('./assets/samples/samples.csv').then(()=>console.log('[AUDIO] samples loaded')); } catch(e){ console.warn('[AUDIO] init failed', e); }
-// src/main.js — clean boot (<=300 lines)
 import { DEFAULT_BPM, NUM_STEPS, ensureAudioContext, getLoopInfo, setBpm, start, isRunning } from './audio-core.js';
 import { createLoopIndicator } from './loopindicator.js';
-import { buildGrid } from './grid.js';
+import { buildGrid } from './grid-core.js';
+
+console.log('[MAIN] module start');
 const CSV_PATH = './assets/samples/samples.csv'; // optional
 const $ = (sel, root=document)=> root.querySelector(sel);
 function bootTopbar(){
@@ -28,18 +31,27 @@ function scheduler(grids){
     const col = Math.floor(info.phase01 * NUM_STEPS) % NUM_STEPS;
     if (col !== lastCol){
       lastCol = col;
-      grids.forEach(g=>{ try{ g.markPlayingColumn(col); }catch{} });
+      grids.forEach(g => { try { g.__sequencerStep(col); } catch {} });
     }
     requestAnimationFrame(step);
   }
   requestAnimationFrame(step);
 }
 async function boot(){
+  // Await audio assets before setting up toys that might use them.
+  // This prevents a race condition where toys try to play samples before they are loaded.
+  try {
+    await initAudioAssets(CSV_PATH);
+    console.log('[AUDIO] samples loaded');
+  } catch(e) {
+    console.warn('[AUDIO] init failed', e);
+  }
+
   bootTopbar();
   createLoopIndicator('body');
+  const grids = bootGrids();
   // optional theme wire hook guarded
   try{ window.ThemeBoot && window.ThemeBoot.wireAll && window.ThemeBoot.wireAll(); }catch{}
-  const grids = bootGrids();
   scheduler(grids);
   try{ window.setBoardScale && window.setBoardScale(1); }catch{}
   // Arrange panels if available

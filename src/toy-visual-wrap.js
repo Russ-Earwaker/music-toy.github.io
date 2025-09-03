@@ -45,6 +45,12 @@
   }
   function layout(panel){
     const kind = (panel.getAttribute('data-toy')||'').toLowerCase();
+    // This is the critical check. It runs every time the layout is
+    // potentially modified. This catches the 'loopgrid' toy even if the
+    // data-toy attribute was added *after* the initial script wiring,
+    // which is the source of the race condition.
+    if (kind === 'loopgrid') return;
+
     const body = ensureBody(panel);
     const top = headerControlsHeight(panel);
     body.style.top = top + 'px';
