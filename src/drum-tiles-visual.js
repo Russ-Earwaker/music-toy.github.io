@@ -67,12 +67,13 @@ export function attachDrumVisuals(panel) {
 
         if (isZoomed && third === 'up') {
           stepIndexUp(state.noteIndices, state.notePalette, clickedIndex);
-          // Play the new note immediately for feedback
-          if (panel.__playCurrent) panel.__playCurrent(clickedIndex);
+          // Dispatch an event to notify the core logic to play the new note.
+          // This is more robust than a direct call, avoiding initialization order issues.
+          panel.dispatchEvent(new CustomEvent('grid:notechange', { detail: { col: clickedIndex } }));
         } else if (isZoomed && third === 'down') {
           stepIndexDown(state.noteIndices, state.notePalette, clickedIndex);
-          // Play the new note immediately for feedback
-          if (panel.__playCurrent) panel.__playCurrent(clickedIndex);
+          // Dispatch an event to notify the core logic to play the new note.
+          panel.dispatchEvent(new CustomEvent('grid:notechange', { detail: { col: clickedIndex } }));
         } else {
           state.steps[clickedIndex] = !state.steps[clickedIndex];
         }

@@ -37,14 +37,9 @@ function buildInstrumentSelect(panel, toyKind){
     const header = panel.querySelector('.toy-controls-right') || ensureHeader(panel).querySelector('.toy-controls-right');
     header.appendChild(sel);
   }
-  // Populate options from theme for this toy
+  // Populate with all available instruments. Theme-based filtering is disabled
+  // to ensure all options are always visible.
   let list = getInstrumentNames();
-  try{
-    if (toyKind==='loopgrid') list = resolveGridSamples();
-    else if (toyKind==='bouncer') list = resolveBouncerSamples();
-    else if (toyKind && toyKind.includes('wheel')) list = resolveWheelSamples();
-    else if (toyKind==='rippler') list = resolveRipplerSamples();
-  }catch(e){}
   const cur = sel.value || panel.dataset.instrument || '';
   sel.innerHTML = '';
   list.forEach(name=>{ const opt=document.createElement('option'); opt.value=name; opt.textContent=name.split('_').join(' '); sel.appendChild(opt); });

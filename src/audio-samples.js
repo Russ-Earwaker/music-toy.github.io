@@ -60,12 +60,21 @@ export async function initAudioAssets(csvUrl){
   document.dispatchEvent(new CustomEvent('samples-ready'));
 }
 
-function playSampleAt(id, when, gain=1, toyId){
+function playSampleAt(id, when, gain=1, toyId, noteName='C4'){
   const ctx = ensureAudioContext();
   const buf = buffers.get(id);
   if (!buf){ return false; }
   const src = ctx.createBufferSource();
   src.buffer = buf;
+
+  // Adjust playback rate for pitch. Assume base note is C4 for all samples.
+  // This allows sample-based instruments to be pitched.
+  const baseFreq = noteToFreq('C4');
+  const targetFreq = noteToFreq(noteName);
+  if (baseFreq > 0 && targetFreq > 0) {
+    src.playbackRate.value = targetFreq / baseFreq;
+  }
+
   const g = ctx.createGain();
   g.gain.value = gain;
   src.connect(g).connect(getToyGain(toyId||'master'));
@@ -80,10 +89,10 @@ export function triggerInstrument(instrument, noteName='C4', when, toyId){
   const t = when || ctx.currentTime;
 
   // exact or base-name sample first
-  if (playSampleAt(id, t, 1, toyId)) return;
+  if (playSampleAt(id, t, 1, toyId, noteName)) return;
   // try family (e.g., djembe_bass -> djembe)
   const fam = id.split('_')[0];
-  if (fam !== id && playSampleAt(fam, t, 1, toyId)) return;
+  if (fam !== id && playSampleAt(fam, t, 1, toyId, noteName)) return;
 
   // synth fallback
   const entry = entries.get(id) || entries.get(fam);

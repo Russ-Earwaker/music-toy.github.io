@@ -123,11 +123,14 @@ export function buildGrid(panel, numSteps = 8){
   panel.dataset.toy = panel.dataset.toy || 'loopgrid';
   initToyUI(panel, { toyName: 'Loop Grid' });
 
+  // Use a full chromatic scale instead of the default pentatonic scale.
+  // This makes all semitones (sharps/flats) available.
+  const chromaticOffsets = Array.from({length: 12}, (_, i) => i);
   panel.__gridState = {
     steps: Array(numSteps).fill(false),
     notes: Array(numSteps).fill(60),
-    notePalette: buildPalette(),
-    noteIndices: Array(numSteps).fill(7),
+    notePalette: buildPalette(48, chromaticOffsets, 3), // C3 Chromatic, 3 octaves
+    noteIndices: Array(numSteps).fill(7), // Default to G3
   };
 
   const body = panel.querySelector('.toy-body');
