@@ -366,9 +366,14 @@ html, body {
   height: auto;
 }
 
-.toy-zoomed[data-toy="bouncer"],
+.toy-zoomed[data-toy="bouncer"] {
+  /* Fill vertical space inside host (after its 10% top/bottom padding) */
+  height: 100%;
+  width: auto;
+  aspect-ratio: 1 / 1; /* keep panel square in Advanced */
+}
+
 .toy-zoomed[data-toy="rippler"] {
-  /* Width is the smaller of 95% viewport width or a calculation based on viewport height */
   width: min(95vw, calc(90vh - 8rem));
   height: auto;
 }

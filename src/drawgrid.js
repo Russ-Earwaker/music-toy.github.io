@@ -127,10 +127,13 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   panel.addEventListener('toy-zoom', () => {
     // When zooming in or out, the panel's size changes.
     // We force a layout call to ensure everything is redrawn correctly.
-    // A small delay helps ensure the browser has computed the new layout.
+    // A double rAF waits for the browser to finish style recalculation and layout
+    // after the panel is moved in the DOM, preventing a "flash of blank canvas".
     requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
         if (!panel.isConnected) return;
         layout(true);
+      });
     });
   });
 
@@ -299,12 +302,17 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
         // Then draw the animating "ghost" node on top
         if (progress < 1) {
-            const scale = 1 + 1.5 * easedProgress; // Scale up to 2.5x
+            const scale = 1 + 2.5 * easedProgress; // Scale up to 3.5x
             const opacity = 1 - progress; // Fade out
 
             nctx.save();
             nctx.globalAlpha = opacity;
             nctx.fillStyle = 'rgba(255, 255, 255, 1)'; // Bright white
+
+            // Add a bright glow that fades
+            nctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
+            nctx.shadowBlur = 20 * (1 - progress);
+
             nctx.beginPath();
             nctx.arc(node.x, node.y, initialRadius * scale, 0, Math.PI * 2);
             nctx.fill();
@@ -571,7 +579,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
       if (drawing) { // only erase if pointer is down
         eraseAtPoint(p);
-        eraseNodeAtPoint(p);
+        eraseNodeAtPoint(p); // Also check for node collision on move
       }
       return; // Don't do drawing logic if erasing
     }
