@@ -3,6 +3,15 @@
 // below header/controls — without changing your layout (no flex wrappers, no reparenting).
 // Keeps canvas backing store crisp via a throttled ResizeObserver. (<300 lines)
 (function(){
+  function shouldManage(panel){
+    try{
+      const toy = (panel.dataset.toy || '').toLowerCase();
+      if (toy === 'rippler') return false; // skip rippler; keep it in-flow
+      if (panel.classList.contains('visual-managed-off')) return false;
+    }catch{}
+    return true;
+  }
+
   const DPR = ()=> window.devicePixelRatio || 1;
 
   function getTopOffset(panel){
@@ -29,6 +38,17 @@
   }
 
   function wirePanel(panel){
+    if (!shouldManage(panel)){
+      // Clean previously injected inline styles so it behaves normally
+      let body = panel.querySelector('.toy-body');
+      if (body){
+        Object.assign(body.style, {
+          position: '', left: '', right: '', top: '', bottom: '',
+          padding: '', margin: '', border: '', overflow: ''
+        });
+      }
+      return; // do not manage this panel
+    }
     // The loopgrid toy has its own complex grid layout defined in CSS.
     // This generic positioner would break it, so we skip it.
     if (panel.dataset.toy === 'loopgrid') return;

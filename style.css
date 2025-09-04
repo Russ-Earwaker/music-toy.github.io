@@ -202,26 +202,22 @@ html, body {
 .toy-panel[data-toy="loopgrid"] { --panel-w: 380px; }
 .toy-panel[data-toy="bouncer"]  { --panel-w: 300px; }
 .toy-panel[data-toy="rippler"]  { --panel-w: 300px; }
-.toy-panel[data-toy="drawgrid"] { --panel-w: 420px; }
+.toy-panel[data-toy="drawgrid"] { --panel-w: 580px;
+  width: var(--panel-w) !important; /* Override JS-based layout width */ }
 
 /* -------------------------- */
 /* --- Per-Toy Body Style --- */
 /* -------------------------- */
 
 /* Bouncer & Rippler: Simple square body */
-.toy-panel[data-toy="bouncer"] .toy-body,
-.toy-panel[data-toy="rippler"] .toy-body {
+.toy-panel[data-toy="bouncer"] .toy-body {
   flex-grow: 0; /* CRITICAL: This prevents the body from stretching vertically. */
   aspect-ratio: 1 / 1; /* This makes the body a perfect square. */
 }
 
 /* Rippler canvas must fill its square body */
-.toy-panel[data-toy="rippler"] .toy-body canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
+/* (removed) Rippler canvas absolute fill; replaced by centered square wrapper */
+
 
 /* Drawgrid: body should respect aspect ratio */
 .toy-panel[data-toy="drawgrid"] .toy-body {
@@ -285,6 +281,37 @@ html, body {
   letter-spacing: 0.2em;
   opacity: 0.8;
   color: var(--text);
+}
+
+
+/* --- Integrated Rippler body/wrapper rules (centered square inside full-height body) --- */
+.toy-panel[data-toy="rippler"] .toy-body {
+  position: relative;
+  flex-grow: 1;           /* fill available vertical space */
+  min-height: 0;          /* flexbox safety */
+  display: block;         /* allow absolute wrapper positioning */
+}
+
+.toy-panel[data-toy="rippler"] .rippler-square-wrap {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(100%, 100vh); /* size set by JS; this acts as a safe cap */
+  height: auto;
+  aspect-ratio: 1 / 1;     /* keep square if JS hasn't run yet */
+  display: block;
+  overflow: hidden;
+}
+
+.toy-panel[data-toy="rippler"] .rippler-square-wrap > canvas,
+.toy-panel[data-toy="rippler"] .rippler-square-wrap > svg {
+  position: static !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100%;
+  max-height: 100%;
+  display: block;
 }
 
 /* --------------------- */
@@ -365,4 +392,26 @@ html, body {
 }
 .toy-panel.adv-debug-pulse {
   animation: advPulse .6s ease-out 1;
+}
+
+
+/* --- Rippler overrides: ensure in-flow square body, disable absolute fill --- */
+.toy-panel[data-toy="rippler"] .toy-body {
+  position: relative !important;
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+  bottom: auto !important;
+  display: grid;
+  place-items: center;
+  
+  min-height: 0;
+}
+.toy-panel[data-toy="rippler"] .toy-body > canvas, 
+.toy-panel[data-toy="rippler"] .toy-body > svg { position: static !important; 
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  display: block;
 }

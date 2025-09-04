@@ -45,13 +45,18 @@ export function zoomInPanel(panel) {
     },
   };
 
+  // Set the host height to be taller, with a 10% margin top/bottom.
+  host.style.height = '80vh';
+  host.style.maxHeight = '80vh';
+
   // Move panel to the overlay
   host.appendChild(panel);
   // Clear inline positioning so it centers correctly in the host.
   panel.style.left = 'auto';
   panel.style.top = 'auto';
   panel.style.width = '';
-  panel.style.height = '';
+  // Make the panel fill the host's new height.
+  panel.style.height = '100%';
   panel.classList.add('toy-zoomed');
   overlay.classList.add('open');
 
@@ -87,6 +92,10 @@ export function zoomOutPanel() {
     }
     panel.dispatchEvent(new CustomEvent('toy-zoom', { detail: { zoomed: false }, bubbles: true }));
   }
+
+  // Reset host styles
+  host.style.height = '';
+  host.style.maxHeight = '';
 
   overlay.classList.remove('open');
   originalPanelState = null;

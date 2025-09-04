@@ -84,11 +84,6 @@
       ro.observe(body);
       resize();
     }
-    // log
-    const pr = panel.getBoundingClientRect();
-    const br = body.getBoundingClientRect();
-    const vr = vis ? vis.getBoundingClientRect() : null;
-    console.log('[wrap]', { id: panel.id, toy: kind, headerControlsTop: top, panel: {w:pr.width,h:pr.height}, body: {w:br.width,h:br.height}, visual: vr ? {w:vr.width,h:vr.height} : null });
   }
   function wire(panel){
     layout(panel);
@@ -100,7 +95,6 @@
   function boot(){
     document.querySelectorAll('.toy-panel').forEach(wire);
   }
-  window.__wrapProbe = boot;
   if (document.readyState === 'complete') boot();
   else window.addEventListener('load', boot);
 })();

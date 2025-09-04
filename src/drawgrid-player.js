@@ -10,13 +10,15 @@ export function connectDrawGridToPlayer(panel) {
   const toyId = panel.id || 'drawgrid';
   let instrument = panel.dataset.instrument || 'acoustic_guitar';
 
+  const initialSteps = parseInt(panel.dataset.steps, 10) || 8;
+
   // The grid has 12 rows. A chromatic scale is a perfect fit.
   // We'll reverse it so the top row is the highest pitch.
   const notePalette = buildPalette(60, Array.from({length: 12}, (_, i) => i), 1).reverse(); // C4-B4, reversed
 
   let gridState = {
-    active: Array(16).fill(false),
-    nodes: Array.from({ length: 16 }, () => new Set()),
+    active: Array(initialSteps).fill(false),
+    nodes: Array.from({ length: initialSteps }, () => new Set()),
   };
 
   // The gated trigger respects the toy's volume/mute settings.
@@ -40,5 +42,4 @@ export function connectDrawGridToPlayer(panel) {
   }
 
   panel.__sequencerStep = step;
-  panel.dataset.steps = 16;
 }

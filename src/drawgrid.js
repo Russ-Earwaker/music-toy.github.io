@@ -2,10 +2,11 @@
 // Minimal, scoped Drawing Grid — 16x12, draw strokes, build snapped nodes on release.
 // Strictly confined to the provided panel element.
 
-export function createDrawGrid(panel, { cols = 16, rows = 12, toyId, bpm = 120 } = {}) {
+export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId, bpm = 120 } = {}) {
   // The init script now guarantees the panel is a valid HTMLElement with the correct dataset.
   // The .toy-body is now guaranteed to exist by initToyUI, which runs first.
   const body = panel.querySelector('.toy-body');
+
   if (!body) {
     console.error('[drawgrid] Fatal: could not find .toy-body element!');
     return;
@@ -23,10 +24,16 @@ export function createDrawGrid(panel, { cols = 16, rows = 12, toyId, bpm = 120 }
   const pctx = paint.getContext('2d', { willReadFrequently: true });
 
   // State
+  let cols = initialCols;
   let cssW=0, cssH=0, cw=0, ch=0, topPad=0, dpr=1;
   let drawing=false, erasing=false;
   // The `strokes` array is removed. The paint canvas is now the source of truth.
   let cur = null;
+  
+  const safeArea = 40;
+  let gridArea = { x: 0, y: 0, w: 0, h: 0 };
+
+  panel.dataset.steps = String(cols);
 
   // UI: ensure Eraser button exists in header
   const header = panel.querySelector('.toy-header');
@@ -38,17 +45,57 @@ export function createDrawGrid(panel, { cols = 16, rows = 12, toyId, bpm = 120 }
       right.appendChild(er);
     }
     er.addEventListener('click', ()=>{ erasing = !erasing; er.setAttribute('aria-pressed', String(erasing)); });
+
+    // Steps dropdown
+    let stepsSel = right.querySelector('.drawgrid-steps');
+    if (!stepsSel) {
+      stepsSel = document.createElement('select');
+      stepsSel.className = 'drawgrid-steps';
+      stepsSel.innerHTML = `<option value="8">8 steps</option><option value="16">16 steps</option>`;
+      stepsSel.value = String(cols);
+      right.appendChild(stepsSel);
+
+      stepsSel.addEventListener('change', () => {
+        // Grab the current canvas content before it gets cleared by layout().
+        const existingPaintData = (paint.width > 0 && paint.height > 0) ? pctx.getImageData(0, 0, paint.width, paint.height) : null;
+        const hasContent = existingPaintData && Array.from(existingPaintData.data).some(v => v > 0);
+
+        cols = parseInt(stepsSel.value, 10);
+        panel.dataset.steps = String(cols);
+        layout(true); // This redraws the grid and clears the paint canvas.
+
+        if (hasContent) {
+          requestAnimationFrame(() => {
+            if (!panel.isConnected) return;
+
+            // Temporarily restore the old drawing to read it
+            pctx.putImageData(existingPaintData, 0, 0);
+            const map = snapToGrid();
+
+            // Clear the temporary drawing and draw the new snapped nodes
+            pctx.clearRect(0, 0, cssW, cssH);
+            drawNodes(map.nodes);
+
+            // Notify the player of the new state
+            panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: map }));
+          });
+        } else {
+          // If there was no drawing, just clear the state.
+          api.clear();
+        }
+      });
+    }
   }
 
   const observer = new ResizeObserver(layout);
 
-  function layout(){
+  function layout(force = false){
     const newDpr = window.devicePixelRatio || 1;
     const r = body.getBoundingClientRect();
     const newW = Math.max(1, r.width|0);
     const newH = Math.max(1, r.height|0);
 
-    if (newW !== cssW || newH !== cssH || newDpr !== dpr) {
+    if (force || newW !== cssW || newH !== cssH || newDpr !== dpr) {
       dpr = newDpr;
       cssW = newW;
       cssH = newH;
@@ -58,8 +105,20 @@ export function createDrawGrid(panel, { cols = 16, rows = 12, toyId, bpm = 120 }
       paint.width = w; paint.height = h;
       gctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       pctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      topPad = Math.max(24, Math.round(cssH*0.12));
-      cw = cssW/cols; ch=(cssH-topPad)/rows;
+
+      // Define the grid area inset by the safe area
+      gridArea = {
+        x: safeArea,
+        y: safeArea,
+        w: cssW > safeArea * 2 ? cssW - 2 * safeArea : 0,
+        h: cssH > safeArea * 2 ? cssH - 2 * safeArea : 0,
+      };
+
+      // All calculations are now relative to the gridArea
+      topPad = Math.max(24, Math.round(gridArea.h * 0.12));
+      cw = gridArea.w / cols;
+      ch = gridArea.h > topPad ? (gridArea.h - topPad) / rows : 0;
+
       drawGrid();
       // On resize, the drawing is cleared. This is a simple way to handle complex redraw logic.
       pctx.clearRect(0,0,cssW,cssH);
@@ -69,19 +128,23 @@ export function createDrawGrid(panel, { cols = 16, rows = 12, toyId, bpm = 120 }
   function drawGrid(){
     gctx.clearRect(0,0,cssW,cssH);
     // top activation strip
-    gctx.fillStyle = 'rgba(255,255,255,0.08)'; gctx.fillRect(0,0,cssW,topPad);
+    gctx.fillStyle = 'rgba(255,255,255,0.08)';
+    gctx.fillRect(gridArea.x, gridArea.y, gridArea.w, topPad);
 
     // Draw a border between activation strip and grid
     gctx.strokeStyle = 'rgba(255,255,255,0.5)';
     gctx.lineWidth = 1.5;
-    gctx.beginPath(); gctx.moveTo(0, topPad); gctx.lineTo(cssW, topPad); gctx.stroke();
+    gctx.beginPath();
+    gctx.moveTo(gridArea.x, gridArea.y + topPad);
+    gctx.lineTo(gridArea.x + gridArea.w, gridArea.y + topPad);
+    gctx.stroke();
 
     // Internal grid lines
     gctx.strokeStyle='rgba(255,255,255,0.4)';
-    // verticals (full height, to show columns in activation strip)
-    for(let i=1;i<cols;i++){ gctx.beginPath(); gctx.moveTo(i*cw,0); gctx.lineTo(i*cw,cssH); gctx.stroke(); }
+    // verticals (full height of gridArea, to show columns in activation strip)
+    for(let i=1;i<cols;i++){ gctx.beginPath(); gctx.moveTo(gridArea.x + i*cw, gridArea.y); gctx.lineTo(gridArea.x + i*cw, gridArea.y + gridArea.h); gctx.stroke(); }
     // horizontals (grid area only)
-    for(let j=1;j<rows;j++){ gctx.beginPath(); gctx.moveTo(0, topPad+j*ch); gctx.lineTo(cssW, topPad+j*ch); gctx.stroke(); }
+    for(let j=1;j<rows;j++){ gctx.beginPath(); gctx.moveTo(gridArea.x, gridArea.y + topPad + j*ch); gctx.lineTo(gridArea.x + gridArea.w, gridArea.y + topPad + j*ch); gctx.stroke(); }
   }
 
   // A helper to draw a complete stroke from a point array.
@@ -125,8 +188,8 @@ export function createDrawGrid(panel, { cols = 16, rows = 12, toyId, bpm = 120 }
     for (let c = 0; c < cols; c++) {
         if (nodes[c] && nodes[c].size > 0) {
             for (const r of nodes[c]) {
-                const x = c * cw + cw * 0.5;
-                const y = topPad + r * ch + ch * 0.5;
+                const x = gridArea.x + c * cw + cw * 0.5;
+                const y = gridArea.y + topPad + r * ch + ch * 0.5;
                 nodeCoords.push({ x, y, col: c });
             }
         }
@@ -179,13 +242,18 @@ export function createDrawGrid(panel, { cols = 16, rows = 12, toyId, bpm = 120 }
     const data = pctx.getImageData(0, 0, w, h).data;
 
     for (let c=0;c<cols;c++){
-      const xStart = Math.round(c * cw * dpr);
-      const xEnd = Math.round((c + 1) * cw * dpr);
+      // Define the scan area for the column, extending to the canvas edges for the first and last columns.
+      // This allows drawing "outside the lines" to be snapped correctly.
+      const xStart_css = (c === 0) ? 0 : gridArea.x + c * cw;
+      const xEnd_css = (c === cols - 1) ? cssW : gridArea.x + (c + 1) * cw;
+      const xStart = Math.round(xStart_css * dpr);
+      const xEnd = Math.round(xEnd_css * dpr);
       
       let ySum = 0;
       let inkCount = 0;
 
       // Scan the column for all "ink" pixels to find the average Y position
+      // We scan the full canvas height because the user can draw above or below the visual grid.
       for (let x = xStart; x < xEnd; x++) {
         for (let y = 0; y < h; y++) {
           const i = (y * w + x) * 4;
@@ -201,8 +269,9 @@ export function createDrawGrid(panel, { cols = 16, rows = 12, toyId, bpm = 120 }
         const avgY_css = avgY_dpr / dpr;
 
         // Convert average Y position to the nearest row index, if it's in the grid area
-        if (avgY_css >= topPad) {
-          const r = Math.round((avgY_css - topPad) / ch);
+        // The note grid starts at gridArea.y + topPad
+        if (avgY_css >= gridArea.y + topPad) {
+          const r = Math.round((avgY_css - (gridArea.y + topPad)) / ch);
           if (r >= 0 && r < rows) {
             nodes[c].add(r);
             active[c] = true;

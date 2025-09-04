@@ -37,17 +37,28 @@ canvas.className = 'rippler-canvas';
 const EDGE=4; const W = ()=> (canvas.width|0);
   const H = ()=> (canvas.height|0);
   const clamp = (v,min,max)=> Math.max(min, Math.min(max, v));
-  const n2x = (nx)=>{ const z=isZoomed(); const side=z? Math.max(0, Math.min(W(),H())-2*EDGE) : (W()-2*EDGE); const offX = z? Math.max(EDGE, (W()-side)/2): EDGE; return offX + nx*side; };
-  const n2y = (ny)=>{ const z=isZoomed(); const side=z? Math.max(0, Math.min(W(),H())-2*EDGE) : (H()-2*EDGE); const offY = z? Math.max(EDGE, (H()-side)/2): EDGE; return offY + ny*side; };
-  const x2n = (x)=>{ const z=isZoomed(); const side=z? Math.max(0, Math.min(W(),H())-2*EDGE) : (W()-2*EDGE); const offX = z? Math.max(EDGE, (W()-side)/2): EDGE; return Math.min(1, Math.max(0, (x-offX)/side)); };
-  const y2n = (y)=>{ const z=isZoomed(); const side=z? Math.max(0, Math.min(W(),H())-2*EDGE) : (H()-2*EDGE); const offY = z? Math.max(EDGE, (H()-side)/2): EDGE; return Math.min(1, Math.max(0, (y-offY)/side)); };
-  const getCanvasPos = (el, e)=>{ const r = el.getBoundingClientRect(); const sx = r.width? (el.width / r.width) : 1; const sy = r.height? (el.height / r.height) : 1; return { x: (e.clientX - r.left)*sx, y: (e.clientY - r.top)*sy }; };
+
+  // --- Stable coordinate mapping between normalized [0,1] and canvas pixels ---
+  function __squareViewport(){
+    // Use the largest centered square inside the canvas with EDGE padding
+    const w = W(), h = H();
+    const side = Math.max(1, Math.min(w, h) - EDGE*2);
+    const offX = Math.max(EDGE, Math.floor((w - side)/2));
+    const offY = Math.max(EDGE, Math.floor((h - side)/2));
+    return { side, offX, offY };
+  }
+  const n2x = (nx)=>{ const {side, offX} = __squareViewport(); return offX + Math.max(0, Math.min(1, nx)) * side; };
+  const n2y = (ny)=>{ const {side, offY} = __squareViewport(); return offY + Math.max(0, Math.min(1, ny)) * side; };
+  const x2n = (x)=>{ const {side, offX} = __squareViewport(); return Math.max(0, Math.min(1, (x - offX) / side)); };
+  const y2n = (y)=>{ const {side, offY} = __squareViewport(); return Math.max(0, Math.min(1, (y - offY) / side)); };
+
+const getCanvasPos = (el, e)=>{ const r = el.getBoundingClientRect(); const sx = r.width? (el.width / r.width) : 1; const sy = r.height? (el.height / r.height) : 1; return { x: (e.clientX - r.left)*sx, y: (e.clientY - r.top)*sy }; };
   const CUBES = 8, BASE = 56 * 0.75;
   const blocks = Array.from({length:CUBES}, (_,i)=>({ nx:0.5, ny:0.5, nx0:0.5, ny0:0.5, vx:0, vy:0, flashEnd:0, flashDur:0.18, active:true, noteIndex: ((noteList.indexOf('C4')>=0?noteList.indexOf('C4'):48) + PENTATONIC_OFFSETS[i % PENTATONIC_OFFSETS.length]) }));
     let didLayout=false;
   function layoutBlocks(){
     if (didLayout || !W() || !H()) return;
-    const size = Math.round(BASE*(sizing.scale||1)*boardScale(canvas));
+    const size = Math.round(BASE*(sizing.scale||1)*rectScale());
     const bounds = { x: EDGE, y: EDGE, w: Math.max(1, W()-EDGE*2), h: Math.max(1, H()-EDGE*2) };
     const rects = Array.from({length:CUBES}, ()=>({
       x: Math.round(bounds.x + Math.random()*(bounds.w - size)),
@@ -253,6 +264,7 @@ function spawnRipple(manual=false){
 function draw(){
   try {
     resizeCanvasForDPR(canvas, ctx);
+    try{ if(window.RIPPLER_DBG){ console.log('[rippler backing]', {w:canvas.width,h:canvas.height}); } }catch{}
     if (!didLayout) layoutBlocks();
     ctx.clearRect(0,0,W(),H());
     if (!(W() && H())){
@@ -261,7 +273,7 @@ function draw(){
  } return; }
     ctx.fillStyle = '#0b0f16';
     ctx.fillRect(0,0,W(),H());
-    const size = Math.round(BASE*(sizing.scale||1)*boardScale(canvas));
+    const size = Math.round(BASE*(sizing.scale||1)*rectScale());
       for (let b of blocks){ if (b.pulse){ b.pulse = Math.max(0, b.pulse*0.90 - 0.03); } if (b.cflash){ b.cflash = Math.max(0, b.cflash*0.94 - 0.02); } }
       const blockRects = getBlockRects();
     if (!particlesInit && canvas.width && canvas.height){ try { initParticles(canvas.width, canvas.height, EDGE, 280); particlesInit = true; } catch {} }

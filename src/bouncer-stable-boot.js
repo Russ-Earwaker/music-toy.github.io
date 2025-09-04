@@ -67,7 +67,7 @@ export async function bootBouncersSafe(ids = (window.BOUNCER_IDS || [])) {
     mod = await import('./bouncer.main.js');
   } catch (e) {
     // Accept ./src/ when included from a different base
-    try { mod = await import('./src/bouncer.main.js'); }
+    try { mod = await import('new URL('./bouncer.main.js', import.meta.url).href'); }
     catch (e2) {
       warn('cannot import bouncer.main.js', e2?.message || e2);
       return;

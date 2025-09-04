@@ -15,23 +15,54 @@ export function barSeconds(bpm = 120) {
   return beatSeconds(bpm) * 4;
 }
 
-// Device-pixel-ratio canvas sizing.
+// Device-pixel-ratio canvas sizing (transform-immune).
 // Compatible signatures:
 //   resizeCanvasForDPR(canvas, ctx)
 //   resizeCanvasForDPR(canvas, cssW, cssH)
-export function resizeCanvasForDPR(canvas, ctx){
+export function resizeCanvasForDPR(canvas, a, b){
   const dpr = window.devicePixelRatio || 1;
-  const rect = (canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : {width:canvas.clientWidth||0,height:canvas.clientHeight||0});
-  const W = Math.max(1, Math.floor(rect.width || canvas.clientWidth || 0));
-  const H = Math.max(1, Math.floor(rect.height || canvas.clientHeight || 0));
-  const needW = Math.floor(W * dpr);
-  const needH = Math.floor(H * dpr);
-  if (canvas.width !== needW || canvas.height !== needH){
+
+  // Determine CSS pixel size (layout space, not affected by CSS transforms)
+  let cssW = 0, cssH = 0, ctx = null;
+
+  if (typeof a === 'number') {
+    // Signature: (canvas, cssW, cssH)
+    cssW = a|0;
+    cssH = (typeof b === 'number' ? b|0 : 0);
+  } else {
+    // Signature: (canvas, ctx)
+    ctx = a || null;
+  }
+
+  // Prefer explicit cssW/H if provided; otherwise use transform-immune client sizes
+  if (!cssW || !cssH) {
+    const w = canvas.clientWidth|0;
+    const h = canvas.clientHeight|0;
+    cssW = cssW || w;
+    cssH = cssH || h;
+  }
+
+  // Very last resort: fall back to getBoundingClientRect (may be transform-affected)
+  if (!cssW || !cssH) {
+    const rect = canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : {width:0, height:0};
+    cssW = cssW || (rect.width|0);
+    cssH = cssH || (rect.height|0);
+  }
+
+  cssW = Math.max(1, cssW);
+  cssH = Math.max(1, cssH);
+
+  const needW = Math.floor(cssW * dpr);
+  const needH = Math.floor(cssH * dpr);
+
+  if (canvas.width !== needW || canvas.height !== needH) {
     canvas.width = needW;
     canvas.height = needH;
-    ctx.setTransform(1,0,0,1,0,0);
+    if (ctx && ctx.setTransform) ctx.setTransform(1,0,0,1,0,0);
+    try { if (window.RIPPLER_DBG) console.log('[resizeCanvasForDPR]', { cssW, cssH, dpr, needW, needH }); } catch {}
   }
-  return {width: canvas.width, height: canvas.height};
+
+  return { width: canvas.width, height: canvas.height };
 }
 
 // Random integer in range [min, max]
