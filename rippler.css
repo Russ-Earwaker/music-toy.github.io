@@ -1,41 +1,39 @@
+/* rippler.css — robust square wrapper (padding-top trick) */
 
-/* rippler.css — centered square interactive area */
-
-/* Make the toy body a flex container so we can center the square vertically + horizontally */
+/* Let the body expand in the panel; no forced aspect ratio here */
 .toy-panel[data-toy="rippler"] .toy-body {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  /* Let it grow to fill available vertical space between header/footer */
+  position: relative;
+  display: block;
   flex: 1 1 auto;
   min-height: 0;
-  position: relative;
   overflow: hidden;
 }
 
-/* The inner wrapper is the exact square. It scales with width and stays centered */
-.toy-panel[data-toy="rippler"] .rippler-square-wrap {
+/* Square wrapper establishes height via padding-top = 100% of width */
+.toy-panel[data-toy="rippler"] .rippler-wrap {
+  position: relative;
   width: 100%;
-  max-height: 100%;
-  height: auto;
-  aspect-ratio: 1 / 1;
-  /* No absolute centering needed when body is flex-centered */
-  position: relative;
-  overflow: hidden;
+  max-width: 100%;
+  /* The "square" — height becomes 100% of width */
+}
+.toy-panel[data-toy="rippler"] .rippler-wrap::before {
+  content: "";
+  display: block;
+  padding-top: 100%; /* ← the square magic */
 }
 
-/* Ensure canvas (or svg) fills the square wrapper exactly */
-.toy-panel[data-toy="rippler"] .rippler-square-wrap > canvas,
-.toy-panel[data-toy="rippler"] .rippler-square-wrap > svg {
+/* Canvas absolutely fills the square wrapper */
+.toy-panel[data-toy="rippler"] .rippler-wrap > canvas,
+.toy-panel[data-toy="rippler"] .rippler-wrap > svg {
+  position: absolute !important;
+  inset: 0 !important;        /* top:0; right:0; bottom:0; left:0 */
   width: 100% !important;
   height: 100% !important;
   display: block;
-  position: static !important;
-  inset: auto !important;
 }
 
-/* Guard: some global rules may absolutely position canvases under toy-body.
-   Make sure direct children canvas/svg don't get pulled out of flow. */
+/* Guard: if anything accidentally appends a canvas directly to toy-body,
+   don't let global rules yank it around. The real one lives in .rippler-wrap. */
 .toy-panel[data-toy="rippler"] .toy-body > canvas,
 .toy-panel[data-toy="rippler"] .toy-body > svg {
   position: static !important;
