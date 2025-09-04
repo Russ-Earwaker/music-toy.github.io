@@ -3,6 +3,10 @@ import { triggerInstrument } from './audio-samples.js';
 import { gateTriggerForToy } from './toy-audio.js';
 import { buildPalette, midiToName } from './note-helpers.js';
 
+function markPlayingColumn(panel, colIndex){
+  try{ panel.dispatchEvent(new CustomEvent('drawgrid:playcol', { detail:{ col: colIndex }, bubbles:true })); }catch{}
+}
+
 export function connectDrawGridToPlayer(panel) {
   if (!panel || panel.__drawGridPlayer) return;
   panel.__drawGridPlayer = true;
@@ -34,6 +38,7 @@ export function connectDrawGridToPlayer(panel) {
   });
 
   function step(col) {
+    markPlayingColumn(panel, col);
     if (gridState.active[col] && gridState.nodes[col]?.size > 0) {
       for (const row of gridState.nodes[col]) {
         const midiNote = notePalette[row];

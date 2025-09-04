@@ -51,7 +51,8 @@ function buildInstrumentSelect(panel){
 
   if (!sel){
     sel = document.createElement('select'); sel.className='toy-instrument'; sel.title='Instrument';
-    sel.style.display='none'; right.appendChild(sel);
+    // Visibility is controlled by CSS (.toy-zoomed .toy-instrument)
+    right.appendChild(sel);
   }
 
   const fill = async ()=>{
@@ -69,11 +70,18 @@ function buildInstrumentSelect(panel){
     sel.innerHTML='';
     for (const [label, id] of list){
       const opt = document.createElement('option');
-      opt.value = id;         // value stays the id used by the engine
+      opt.value = String(id||'').toLowerCase(); // normalize id for stable matching
       opt.textContent = label; // text shows CSV display_name only
       sel.appendChild(opt);
     }
-    if (cur){ sel.value = cur; }
+    if (cur){
+      // try exact match; if not present, try relaxed variants
+      sel.value = cur;
+      if (sel.value !== cur){
+        const relax = cur.replace(/[\s_-]+/g,'');
+        for (const o of sel.options){ if (String(o.value).replace(/[\s_-]+/g,'') === relax){ sel.value = o.value; break; } }
+      }
+    }
   };
   fill();
 

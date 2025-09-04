@@ -247,6 +247,11 @@ select.toy-instrument {
   will-change: transform;
 }
 
+/* Drawgrid: Hide the generic "Random" button from toyui.js, as drawgrid has its own. */
+.toy-panel[data-toy="drawgrid"] .toy-header [data-action="random"] {
+  display: none;
+}
+
 /* Loopgrid (Drum Toy): Complex grid body */
 .toy-panel[data-toy="loopgrid"] .toy-body {
   flex-grow: 0;

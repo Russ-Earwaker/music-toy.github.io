@@ -1,3 +1,4 @@
+import './bouncer-square-fit.js';
 import { makeEdgeControllers, drawEdgeBondLines, handleEdgeControllerEdit, mapControllersByEdge, randomizeControllers, drawEdgeDecorations } from './bouncer-edges.js';
 import { stepBouncer } from './bouncer-step.js';
 import { noteList, resizeCanvasForDPR } from './utils.js';
@@ -488,3 +489,4 @@ requestAnimationFrame(draw);
   function onLoop(_loopStart){} // no-op
   return { onLoop, reset: doReset, setInstrument: (n)=>{ instrument = n || instrument; }, element: canvas };
 }
+

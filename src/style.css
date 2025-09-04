@@ -366,12 +366,7 @@ html, body {
   height: auto;
 }
 
-.toy-zoomed[data-toy="bouncer"] {
-  /* Fill vertical space inside host (after its 10% top/bottom padding) */
-  height: 100%;
-  width: auto;
-  aspect-ratio: 1 / 1; /* keep panel square in Advanced */
-}
+/* Bouncer advanced sizing is handled in JS (zoom-overlay.js) to preserve standard aspect */
 
 .toy-zoomed[data-toy="rippler"] {
   width: min(95vw, calc(90vh - 8rem));

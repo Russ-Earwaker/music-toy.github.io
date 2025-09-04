@@ -1,28 +1,29 @@
 /* Speed control UI — mounts in header, Advanced only */
 export function installSpeedUI(panel, sizing, initial=1.00){
-  // Force default to 100% as requested, ignoring passed initial value.
+  // Force default to 100%. If a control already exists, reuse it (avoid duplicates).
   let speedFactor = 1.00;
 
   // Build compact header control
-  const spWrap = document.createElement('div');
-  spWrap.className = 'bouncer-speed-ctrl';
+  let spWrap = panel.querySelector('.bouncer-speed-ctrl');
+  if (!spWrap){ spWrap = document.createElement('div'); spWrap.className = 'bouncer-speed-ctrl'; }
   Object.assign(spWrap.style, {
     display:'none', alignItems:'center', gap:'6px'
   });
 
-  const spLabel = document.createElement('span');
-  spLabel.textContent = 'Speed:';
+  let spLabel = spWrap.querySelector('.bouncer-speed-label');
+  if (!spLabel){ spLabel = document.createElement('span'); spLabel.className='bouncer-speed-label'; spLabel.textContent = 'Speed:'; }
   spLabel.style.fontSize = '12px';
   spLabel.style.opacity = '0.8';
 
-  const spVal = document.createElement('span');
+  let spVal = spWrap.querySelector('.bouncer-speed-value');
+  if (!spVal){ spVal = document.createElement('span'); spVal.className='bouncer-speed-value'; }
   spVal.style.fontSize = '12px';
   spVal.style.opacity = '0.7';
   spVal.style.width = '44px';
   spVal.style.textAlign = 'right';
 
-  const sp = document.createElement('input');
-  sp.type = 'range';
+  let sp = spWrap.querySelector('input[type="range"]');
+  if (!sp){ sp = document.createElement('input'); sp.type = 'range'; }
   sp.min = '0.20'; sp.max = '1.60'; sp.step = '0.05';
   sp.value = String(speedFactor.toFixed(2));
   sp.style.width = '120px';
@@ -37,16 +38,18 @@ export function installSpeedUI(panel, sizing, initial=1.00){
   updateLabel();
     try{ panel.dispatchEvent(new CustomEvent('toy-speed', { detail:{ value: speedFactor } })); }catch{};
 
-  sp.addEventListener('input', ()=>{
+  if (!sp.__wired){ sp.__wired = true; sp.addEventListener('input', ()=>{
     const v = parseFloat(sp.value);
     if (!Number.isFinite(v)) return;
     speedFactor = Math.max(0.2, Math.min(1.6, v));
     panel.dataset.speed = String(speedFactor);
     updateLabel();
     try{ panel.dispatchEvent(new CustomEvent('toy-speed', { detail:{ value: speedFactor } })); }catch{};
-  });
+  }); }
 
-  spWrap.append(spLabel, sp, spVal);
+  if (!spLabel.parentNode) spWrap.appendChild(spLabel);
+  if (!sp.parentNode) spWrap.appendChild(sp);
+  if (!spVal.parentNode) spWrap.appendChild(spVal);
 
   // Mount into header controls (right side if present)
   function mount(){

@@ -2,6 +2,7 @@
 // Minimal, scoped Drawing Grid — 16x12, draw strokes, build snapped nodes on release.
 // Strictly confined to the provided panel element.
 import { buildPalette, midiToName } from './note-helpers.js';
+import { drawBlock } from './toyhelpers.js';
 
 export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId, bpm = 120 } = {}) {
   // The init script now guarantees the panel is a valid HTMLElement with the correct dataset.
@@ -29,9 +30,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   body.appendChild(paint);
   body.appendChild(nodesCanvas);
 
-  const gctx = grid.getContext('2d');
+  const gctx = grid.getContext('2d', { willReadFrequently: true });
   const pctx = paint.getContext('2d', { willReadFrequently: true });
-  const nctx = nodesCanvas.getContext('2d');
+  const nctx = nodesCanvas.getContext('2d', { willReadFrequently: true });
 
   // State
   let cols = initialCols;
@@ -42,6 +43,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let lastStroke = null; // Store the last completed stroke object
   let currentMap = null; // Store the current node map {active, nodes}
   let nodeCoordsForHitTest = []; // For draggable nodes
+  let flashes = new Float32Array(cols);
+  let playheadCol = -1;
   let erasedColsThisDrag = new Set(); // For eraser hit-testing
   let draggedNode = null; // { col, row }
   let autoTune = true; // Default to on
@@ -97,19 +100,40 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       stepsSel.addEventListener('change', () => {
         cols = parseInt(stepsSel.value, 10);
         panel.dataset.steps = String(cols);
+        flashes = new Float32Array(cols);
         resnapAndRedraw();
+      });
+    }
+
+    // Randomize button
+    let randomBtn = right.querySelector('.drawgrid-random');
+    if (!randomBtn) {
+      randomBtn = document.createElement('button');
+      randomBtn.type = 'button';
+      randomBtn.className = 'toy-btn drawgrid-random';
+      randomBtn.textContent = 'Randomize';
+      right.appendChild(randomBtn);
+
+      randomBtn.addEventListener('click', () => {
+        if (!currentMap) return;
+        // Randomly toggle active state for columns that have nodes
+        for (let c = 0; c < cols; c++) { if (currentMap.nodes[c]?.size > 0) { currentMap.active[c] = Math.random() < 0.5; } }
+        drawNodes(currentMap.nodes); // Redraw nodes to show muted state
+        drawGrid(); // Redraw grid to show new highlights
+        panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
       });
     }
   }
 
   function resnapAndRedraw() {
     const hasContent = !!lastStroke;
-    layout(true); // This redraws the grid and clears the paint canvas.
+    layout(true); // This redraws the grid and clears the content canvases.
 
     if (hasContent) {
       requestAnimationFrame(() => {
         if (!panel.isConnected) return;
-        // To resnap, we first draw the stored stroke onto the cleared canvas...
+        // Clear the paint canvas, then draw the stroke from its logical data.
+        pctx.clearRect(0, 0, cssW, cssH);
         drawFullStroke(pctx, lastStroke);
         // ...then we can read it to generate the new node map.
         const map = snapToGrid();
@@ -118,6 +142,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: map }));
         currentMap = map;
         drawNodes(map.nodes);
+        drawGrid();
       });
     } else {
       api.clear();
@@ -133,6 +158,14 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       requestAnimationFrame(() => {
         if (!panel.isConnected) return;
         layout(true);
+
+        // After a resize, the canvases are cleared by layout(), so we must redraw the state.
+        if (lastStroke) {
+          drawFullStroke(pctx, lastStroke);
+        }
+        if (currentMap) {
+          drawNodes(currentMap.nodes);
+        }
       });
     });
   });
@@ -165,11 +198,13 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       pctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       nctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      // Scale the last drawn line if the canvas was resized
+      // Scale the logical stroke data if we have it and the canvas was resized
       if (lastStroke && oldW > 0 && oldH > 0) {
         const scaleX = cssW / oldW;
         const scaleY = cssH / oldH;
-        lastStroke.pts = lastStroke.pts.map(p => ({ x: p.x * scaleX, y: p.y * scaleY }));
+        if (scaleX !== 1 || scaleY !== 1) {
+          lastStroke.pts = lastStroke.pts.map(p => ({ x: p.x * scaleX, y: p.y * scaleY }));
+        }
       }
 
       // Define the grid area inset by the safe area
@@ -181,7 +216,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       };
 
       // All calculations are now relative to the gridArea
-      topPad = Math.max(24, Math.round(gridArea.h * 0.12));
+      topPad = Math.max(40, gridArea.h * 0.20); // Larger top pad for cubes
       cw = gridArea.w / cols;
       ch = gridArea.h > topPad ? (gridArea.h - topPad) / rows : 0;
 
@@ -191,17 +226,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       eraserCursor.style.height = `${eraserWidth}px`;
 
       drawGrid();
-      // On resize, the drawing is cleared. This is a simple way to handle complex redraw logic.
-      pctx.clearRect(0,0,cssW,cssH);
-      nctx.clearRect(0,0,cssW,cssH);
-
-      // If a resize happens (like entering advanced mode), restore the visuals.
-      if (lastStroke) {
-        drawFullStroke(pctx, lastStroke);
-      }
-      if (currentMap) {
-        drawNodes(currentMap.nodes);
-      }
+      // Clear content canvases. The caller is responsible for redrawing content.
+      pctx.clearRect(0, 0, cssW, cssH);
+      nctx.clearRect(0, 0, cssW, cssH);
     }
   }
 
@@ -232,25 +259,75 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   }
 
   function drawGrid(){
-    gctx.clearRect(0,0,cssW,cssH);
-    // top activation strip
-    gctx.fillStyle = 'rgba(255,255,255,0.08)';
-    gctx.fillRect(gridArea.x, gridArea.y, gridArea.w, topPad);
+    gctx.clearRect(0, 0, cssW, cssH);
 
-    // Draw a border between activation strip and grid
+    // 1. Draw the note grid area below the cubes
+    const noteGridY = gridArea.y + topPad;
+    const noteGridH = gridArea.h - topPad;
+    gctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+    gctx.fillRect(gridArea.x, noteGridY, gridArea.w, noteGridH);
+
+    // 2. Column highlights for active notes
+    if (currentMap) {
+        for (let c = 0; c < cols; c++) {
+            if (currentMap.nodes[c]?.size > 0) {
+                const isActive = currentMap.active[c];
+                gctx.fillStyle = isActive ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.3)';
+                const x = gridArea.x + c * cw;
+                gctx.fillRect(x, noteGridY, cw, noteGridH);
+            }
+        }
+    }
+
+    // 3. Draw the horizontal and vertical lines for the note grid.
     gctx.strokeStyle = 'rgba(255,255,255,0.5)';
     gctx.lineWidth = 1.5;
     gctx.beginPath();
-    gctx.moveTo(gridArea.x, gridArea.y + topPad);
-    gctx.lineTo(gridArea.x + gridArea.w, gridArea.y + topPad);
+    gctx.moveTo(gridArea.x, noteGridY);
+    gctx.lineTo(gridArea.x + gridArea.w, noteGridY);
     gctx.stroke();
 
-    // Internal grid lines
     gctx.strokeStyle='rgba(255,255,255,0.4)';
-    // verticals (full height of gridArea, to show columns in activation strip)
-    for(let i=1;i<cols;i++){ gctx.beginPath(); gctx.moveTo(gridArea.x + i*cw, gridArea.y); gctx.lineTo(gridArea.x + i*cw, gridArea.y + gridArea.h); gctx.stroke(); }
+    for(let i=1;i<cols;i++){ gctx.beginPath(); gctx.moveTo(gridArea.x + i*cw, noteGridY); gctx.lineTo(gridArea.x + i*cw, gridArea.y + gridArea.h); gctx.stroke(); }
     // horizontals (grid area only)
-    for(let j=1;j<rows;j++){ gctx.beginPath(); gctx.moveTo(gridArea.x, gridArea.y + topPad + j*ch); gctx.lineTo(gridArea.x + gridArea.w, gridArea.y + topPad + j*ch); gctx.stroke(); }
+    for(let j=1;j<rows;j++){ gctx.beginPath(); gctx.moveTo(gridArea.x, noteGridY + j*ch); gctx.lineTo(gridArea.x + gridArea.w, noteGridY + j*ch); gctx.stroke(); }
+
+    // 4. Draw the sequencer cubes at the top
+    const GAP = 4;
+    const cubeSize = Math.min(topPad - 8, (gridArea.w - GAP * (cols - 1)) / cols);
+    const totalCubesWidth = (cubeSize * cols) + GAP * (cols - 1);
+    const xOffset = gridArea.x + (gridArea.w - totalCubesWidth) / 2;
+    const yOffset = gridArea.y + (topPad - cubeSize) / 2;
+
+    for (let i = 0; i < cols; i++) {
+        const flash = flashes[i] || 0;
+        const isEnabled = currentMap?.active?.[i] ?? false;
+        const cubeX = xOffset + i * (cubeSize + GAP);
+        const cubeRect = { x: cubeX, y: yOffset, w: cubeSize, h: cubeSize };
+
+        if (i === playheadCol) {
+            const borderSize = 4;
+            gctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            gctx.fillRect(Math.trunc(cubeRect.x) - borderSize, Math.trunc(cubeRect.y) - borderSize, Math.trunc(cubeRect.w) + borderSize * 2, Math.trunc(cubeRect.h) + borderSize * 2);
+        }
+
+        gctx.save();
+        if (flash > 0) {
+            const scale = 1 + 0.15 * Math.sin(flash * Math.PI);
+            gctx.translate(cubeRect.x + cubeRect.w / 2, cubeRect.y + cubeRect.h / 2);
+            gctx.scale(scale, scale);
+            gctx.translate(-(cubeRect.x + cubeRect.w / 2), -(cubeRect.y + cubeRect.h / 2));
+        }
+
+        drawBlock(gctx, cubeRect, {
+            baseColor: flash > 0.01 ? '#FFFFFF' : (isEnabled ? '#ff8c00' : '#333'),
+            active: flash > 0.01 || isEnabled,
+            variant: 'button',
+            noteLabel: null,
+            showArrows: false,
+        });
+        gctx.restore();
+    }
   }
 
   // A helper to draw a complete stroke from a point array.
@@ -329,7 +406,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
     const nodeCoords = []; // Store coordinates of each node: {x, y, col, row, radius}
     nodeCoordsForHitTest = []; // Clear for new set
-    const radius = Math.max(3, Math.min(cw, ch) * 0.15);
+    const radius = Math.max(4, Math.min(cw, ch) * 0.20); // Bigger nodes
 
     // First, find all node center points
     for (let c = 0; c < cols; c++) {
@@ -345,9 +422,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     }
 
     // --- Draw connecting lines ---
-    nctx.beginPath();
-    nctx.strokeStyle = 'rgba(255, 200, 80, 0.6)';
-    nctx.lineWidth = 2;
+    nctx.lineWidth = 3; // Thicker
 
     // Group nodes by column for easier and more efficient lookup
     const colsMap = new Map();
@@ -356,24 +431,31 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         colsMap.get(node.col).push(node);
     }
 
+    // Stroke per segment to handle color changes for muted columns
     for (let c = 0; c < cols - 1; c++) {
-        const currentColNodes = colsMap.get(c);
-        const nextColNodes = colsMap.get(c + 1);
-        if (currentColNodes && nextColNodes) {
-            for (const node of currentColNodes) {
-                // Connect each node in the current column to all nodes in the next
-                for (const nextNode of nextColNodes) {
-                    nctx.moveTo(node.x, node.y);
-                    nctx.lineTo(nextNode.x, nextNode.y);
-                }
-            }
+      const currentColNodes = colsMap.get(c);
+      const nextColNodes = colsMap.get(c + 1);
+      if (currentColNodes && nextColNodes) {
+        const currentIsActive = currentMap?.active?.[c] ?? true;
+        const nextIsActive = currentMap?.active?.[c + 1] ?? true;
+        const lineIsActive = currentIsActive && nextIsActive;
+
+        nctx.strokeStyle = lineIsActive ? 'rgba(255, 255, 255, 0.8)' : 'rgba(120, 120, 120, 0.7)';
+        nctx.beginPath();
+        for (const node of currentColNodes) {
+          for (const nextNode of nextColNodes) {
+            nctx.moveTo(node.x, node.y);
+            nctx.lineTo(nextNode.x, nextNode.y);
+          }
         }
+        nctx.stroke();
+      }
     }
-    nctx.stroke();
 
     // --- Draw the dots on top of the lines ---
-    nctx.fillStyle = 'rgba(255, 200, 80, 0.95)';
     for (const node of nodeCoords) {
+        const isActive = currentMap?.active?.[node.col] ?? true;
+        nctx.fillStyle = isActive ? 'rgba(255, 255, 255, 0.95)' : 'rgba(120, 120, 120, 0.8)';
         nctx.beginPath();
         nctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
         nctx.fill();
@@ -511,6 +593,21 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     const rect = paint.getBoundingClientRect();
     const p = { x:e.clientX-rect.left, y:e.clientY-rect.top };
 
+    // Check for cube click
+    if (p.y >= gridArea.y && p.y < gridArea.y + topPad) {
+        const col = Math.floor((p.x - gridArea.x) / cw);
+        if (col >= 0 && col < cols) {
+            if (!currentMap) {
+                currentMap = {active:Array(cols).fill(false),nodes:Array.from({length:cols},()=>new Set())};
+            }
+            currentMap.active[col] = !currentMap.active[col];
+            drawGrid();
+            drawNodes(currentMap.nodes);
+            panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
+            return; // Stop further processing
+        }
+    }
+
     // In advanced mode, check for dragging a node first.
     if (panel.classList.contains('toy-zoomed')) {
       for (const node of nodeCoordsForHitTest) {
@@ -568,6 +665,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
           
           // Redraw only the nodes canvas; the blue line on the paint canvas is untouched.
           drawNodes(currentMap.nodes);
+          drawGrid();
       }
       return;
     }
@@ -624,6 +722,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: map }));
         // 4. Draw the nodes on their own canvas.
         drawNodes(map.nodes);
+        drawGrid();
       });
     } else if (erasing) {
       // When erasing, we just stop. State was updated on move. The line is visually gone.
@@ -643,6 +742,31 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   window.addEventListener('pointerup', onPointerUp);
   observer.observe(body);
 
+  panel.addEventListener('drawgrid:playcol', (e) => {
+    const col = e?.detail?.col;
+    playheadCol = col;
+    if (col >= 0 && col < cols) {
+        if (currentMap?.active[col]) {
+            flashes[col] = 1.0;
+        }
+    }
+  });
+
+  let rafId = 0;
+  function renderLoop() {
+      if (!panel.isConnected) { cancelAnimationFrame(rafId); return; }
+      let needsRedraw = false;
+      for (let i = 0; i < flashes.length; i++) {
+          if (flashes[i] > 0) {
+              flashes[i] = Math.max(0, flashes[i] - 0.08);
+              needsRedraw = true;
+          }
+      }
+      if (needsRedraw) drawGrid();
+      rafId = requestAnimationFrame(renderLoop);
+  }
+  rafId = requestAnimationFrame(renderLoop);
+
   const api = {
     panel,
     clear: ()=>{
@@ -653,6 +777,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       const emptyMap = {active:Array(cols).fill(false),nodes:Array.from({length:cols},()=>new Set())};
       currentMap = emptyMap;
       panel.dispatchEvent(new CustomEvent('drawgrid:update',{detail:emptyMap}));
+      drawGrid();
     },
     setErase:(v)=>{ erasing=!!v; },
   };

@@ -11,6 +11,34 @@ import {
   resolveWheelSamples
 } from './theme-manager.js';
 
+// Load instrument entries from CSV and return [{id, display}] with unique display labels
+async function loadInstrumentEntries(){
+  try{
+    const url = './assets/samples/samples.csv';
+    const res = await fetch(url);
+    if (res && res.ok){
+      const txt = await res.text();
+      const lines = txt.split(/\r?\n/).filter(Boolean);
+      if (!lines.length) return [];
+      const header = lines.shift().split(',').map(s=>s.trim());
+      const idIdx   = header.findIndex(h=>/^(id|name|instrument_id|instrument)$/i.test(h));
+      const dispIdx = header.findIndex(h=>/^(display\s*_?name|display|label|title)$/i.test(h));
+      const out = [];
+      for (const line of lines){
+        const cells = line.split(',');
+        const id = (cells[idIdx]||'').trim();
+        const display = (cells[dispIdx]||'').trim();
+        if (id && display){ out.push({ id, display }); }
+      }
+      const byLabel = new Map();
+      for (const ent of out){ if (!byLabel.has(ent.display)) byLabel.set(ent.display, ent.id); }
+      return Array.from(byLabel.entries()).map(([display, id])=>({ id, display }))
+                  .sort((a,b)=> a.display.localeCompare(b.display));
+    }
+  }catch{}
+  return [];
+}
+
 /**
  * Sets the active theme and persists it.
  * @param {string} key The key of the theme to set (e.g., "default").
@@ -37,7 +65,7 @@ function toTitleCase(str) {
  * Finds all toy panels, assigns instruments from the current theme,
  * and updates their instrument selection UI.
  */
-function wireAll() {
+async function wireAll() {
   const activeThemeKey = getActiveThemeKey();
   const theme = THEMES[activeThemeKey];
   if (!theme) {
@@ -45,25 +73,29 @@ function wireAll() {
     return;
   }
   console.log(`[boot-theme] Wiring all toys with theme: ${activeThemeKey}`);
+  // Preload full instrument list (CSV display names) once
+  let allEntries = [];
+  try { allEntries = await loadInstrumentEntries(); } catch {}
 
   /** Helper to apply an instrument to a panel and update its UI */
-  function applyToPanel(panel, instrument, instrumentList) {
+  function applyToPanel(panel, instrument) {
     if (!panel || !instrument) return;
 
     // 1. Set data attribute for the toy's internal logic to use.
-    panel.dataset.instrument = instrument;
+    panel.dataset.instrument = String(instrument||'').toLowerCase();
 
     // 2. Update the instrument <select> dropdown if it exists.
     const select = panel.querySelector('select.toy-instrument');
     if (select) {
+      const list = Array.isArray(allEntries) ? allEntries : [];
       select.innerHTML = '';
-      (instrumentList || []).forEach(name => {
+      for (const ent of list){
         const opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = toTitleCase(name);
+        opt.value = String(ent.id||'').toLowerCase(); // normalize id
+        opt.textContent = ent.display; // CSV display name only
         select.appendChild(opt);
-      });
-      select.value = instrument;
+      }
+      try { select.value = panel.dataset.instrument; } catch {}
     }
 
     // 3. Dispatch both event flavors to notify all listeners.
@@ -81,26 +113,26 @@ function wireAll() {
 
   const gridPanels = document.querySelectorAll('.toy-panel[data-toy="loopgrid"]');
   if (gridPanels.length > 0 && theme.grids) {
-    const instruments = resolveGridSamples();
-    gridPanels.forEach((panel, i) => applyToPanel(panel, theme.grids[i % theme.grids.length], instruments));
+    resolveGridSamples();
+    gridPanels.forEach((panel, i) => applyToPanel(panel, theme.grids[i % theme.grids.length]));
   }
 
   const bouncerPanels = document.querySelectorAll('.toy-panel[data-toy="bouncer"]');
   if (bouncerPanels.length > 0 && theme.bouncer) {
-    const instruments = resolveBouncerSamples();
-    bouncerPanels.forEach((panel, i) => applyToPanel(panel, theme.bouncer[i % theme.bouncer.length], instruments));
+    resolveBouncerSamples();
+    bouncerPanels.forEach((panel, i) => applyToPanel(panel, theme.bouncer[i % theme.bouncer.length]));
   }
 
   const ripplerPanels = document.querySelectorAll('.toy-panel[data-toy="rippler"]');
   if (ripplerPanels.length > 0 && theme.rippler) {
-    const instruments = resolveRipplerSamples();
-    ripplerPanels.forEach((panel, i) => applyToPanel(panel, theme.rippler[i % theme.rippler.length], instruments));
+    resolveRipplerSamples();
+    ripplerPanels.forEach((panel, i) => applyToPanel(panel, theme.rippler[i % theme.rippler.length]));
   }
 
   const wheelPanels = document.querySelectorAll('.toy-panel[data-toy*="wheel"]');
   if (wheelPanels.length > 0 && theme.wheel) {
-    const instruments = resolveWheelSamples();
-    wheelPanels.forEach((panel, i) => applyToPanel(panel, theme.wheel[i % theme.wheel.length], instruments));
+    resolveWheelSamples();
+    wheelPanels.forEach((panel, i) => applyToPanel(panel, theme.wheel[i % theme.wheel.length]));
   }
 }
 
