@@ -186,6 +186,12 @@ export function triggerInstrument(instrument, noteName='C4', when, toyId){
 
   // synth fallback
   const toneId = TONE_NAMES.includes(id) ? id : 'tone';
+  try{
+    if (!TONE_NAMES.includes(id)) {
+      // No sample match and not a known tone name; log for diagnostics
+      console.warn('[audio] instrument not found:', id, '— using', toneId);
+    }
+  }catch{}
   return playById(toneId, noteToFreq(noteName), t, getToyGain(toyId||'master'));
 }
 

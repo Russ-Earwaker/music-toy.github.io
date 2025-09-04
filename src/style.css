@@ -401,6 +401,37 @@ html, body {
   animation: advPulse .6s ease-out 1;
 }
 
+/* ----------------------------- */
+/* --- Instrument Picker UI  --- */
+/* ----------------------------- */
+
+.inst-picker { position: fixed; inset:0; display:none; z-index:10000; pointer-events:auto; }
+.inst-picker.open { display:block; }
+.inst-picker-backdrop { position:absolute; inset:0; background:rgba(0,0,0,0.6); backdrop-filter: blur(3px); }
+.inst-host { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); pointer-events:auto; }
+.inst-panel { position:relative !important; left:auto !important; top:auto !important; width:min(1000px, 96vw); height:80vh; max-height:80vh; display:flex; flex-direction:column; }
+.inst-panel .inst-body { display:grid; grid-template-columns: 220px 1fr; height:100%; }
+.inst-tabs { padding:12px 10px; border-right:1px solid #1c2430; overflow:auto; display:flex; flex-direction:column; gap:8px; }
+.inst-tab { padding:8px 10px; text-align:left; border-radius:8px; border:1px solid #1c2430; background:#121a24; color:#e6e8ef; cursor:pointer; }
+.inst-tab:hover { border-color:#5fb3ff; }
+.inst-tab.selected { background:#1b2e40; border-color:#5fb3ff; }
+.inst-grid { padding:12px; overflow:auto; display:grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap:10px; align-content:start; }
+.inst-picker-footer { display:flex; justify-content:flex-end; gap:8px; padding:10px; border-top:1px solid #1c2430; background:#0d141d; }
+.inst-cat { width:100%; text-align:left; padding:8px 10px; background:#121a24; color:#e6e8ef; border:1px solid #1c2430; border-radius:8px; margin:2px 0; cursor:pointer; }
+.inst-divider { height:8px; }
+.inst-item { padding:10px 12px; background:#121a24; color:#e6e8ef; border:1px solid #1c2430; border-radius:10px; cursor:pointer; text-align:center; }
+.inst-item:hover { border-color:#5fb3ff; }
+.inst-item.selected { border:2px solid #5fb3ff; box-shadow:0 0 0 2px rgba(95,179,255,0.25) inset; }
+.inst-ok, .inst-cancel { min-width:52px; font-weight:700; }
+.inst-ok { background:#0f6; color:#001; }
+.inst-cancel { background:#f33; color:#fff; }
+
+/* Header pulse for accept/cancel */
+@keyframes pulseGreen { 0%{ box-shadow:0 0 0 0 rgba(0,255,120,.8);} 100%{ box-shadow:0 0 0 16px rgba(0,255,120,0);} }
+@keyframes pulseRed { 0%{ box-shadow:0 0 0 0 rgba(255,60,60,.8);} 100%{ box-shadow:0 0 0 16px rgba(255,60,60,0);} }
+.pulse-accept { animation:pulseGreen .6s ease-out 1; }
+.pulse-cancel { animation:pulseRed .6s ease-out 1; }
+
 
 /* --- Rippler overrides: ensure in-flow square body, disable absolute fill --- */
 .toy-panel[data-toy="rippler"] .toy-body {

@@ -4,6 +4,14 @@
 import { buildPalette, midiToName } from './note-helpers.js';
 import { drawBlock } from './toyhelpers.js';
 
+const STROKE_COLORS = [
+  'rgba(95,179,255,0.95)',  // Blue
+  'rgba(255,95,179,0.95)',  // Pink
+  'rgba(95,255,179,0.95)',  // Green
+  'rgba(255,220,95,0.95)', // Yellow
+];
+let colorIndex = 0;
+
 export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId, bpm = 120 } = {}) {
   // The init script now guarantees the panel is a valid HTMLElement with the correct dataset.
   // The .toy-body is now guaranteed to exist by initToyUI, which runs first.
@@ -23,16 +31,20 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const grid = document.createElement('canvas'); grid.setAttribute('data-role','drawgrid-grid');
   const paint = document.createElement('canvas'); paint.setAttribute('data-role','drawgrid-paint');
   const nodesCanvas = document.createElement('canvas'); nodesCanvas.setAttribute('data-role', 'drawgrid-nodes');
+  const flashCanvas = document.createElement('canvas'); flashCanvas.setAttribute('data-role', 'drawgrid-flash');
   Object.assign(grid.style,  { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 1 });
   Object.assign(paint.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 2 });
   Object.assign(nodesCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 3, pointerEvents: 'none' });
+  Object.assign(flashCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 4, pointerEvents: 'none' });
   body.appendChild(grid);
   body.appendChild(paint);
   body.appendChild(nodesCanvas);
+  body.appendChild(flashCanvas);
 
   const gctx = grid.getContext('2d', { willReadFrequently: true });
   const pctx = paint.getContext('2d', { willReadFrequently: true });
   const nctx = nodesCanvas.getContext('2d', { willReadFrequently: true });
+  const fctx = flashCanvas.getContext('2d', { willReadFrequently: true });
 
   // State
   let cols = initialCols;
@@ -40,7 +52,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let drawing=false, erasing=false;
   // The `strokes` array is removed. The paint canvas is now the source of truth.
   let cur = null;
-  let lastStroke = null; // Store the last completed stroke object
+  let strokes = []; // Store all completed stroke objects
   let currentMap = null; // Store the current node map {active, nodes}
   let nodeCoordsForHitTest = []; // For draggable nodes
   let flashes = new Float32Array(cols);
@@ -126,15 +138,15 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   }
 
   function resnapAndRedraw() {
-    const hasContent = !!lastStroke;
+    const hasContent = strokes.length > 0;
     layout(true); // This redraws the grid and clears the content canvases.
 
     if (hasContent) {
       requestAnimationFrame(() => {
         if (!panel.isConnected) return;
-        // Clear the paint canvas, then draw the stroke from its logical data.
+        // Redraw all strokes onto the cleared canvas.
         pctx.clearRect(0, 0, cssW, cssH);
-        drawFullStroke(pctx, lastStroke);
+        for (const s of strokes) { drawFullStroke(pctx, s); }
         // ...then we can read it to generate the new node map.
         const map = snapToGrid();
         // The canvas already has the line from the previous step, so we just draw nodes on top.
@@ -160,8 +172,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         layout(true);
 
         // After a resize, the canvases are cleared by layout(), so we must redraw the state.
-        if (lastStroke) {
-          drawFullStroke(pctx, lastStroke);
+        if (strokes.length > 0) {
+          for (const s of strokes) { drawFullStroke(pctx, s); }
         }
         if (currentMap) {
           drawNodes(currentMap.nodes);
@@ -194,16 +206,17 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       grid.width = w; grid.height = h;
       paint.width = w; paint.height = h;
       nodesCanvas.width = w; nodesCanvas.height = h;
+      flashCanvas.width = w; flashCanvas.height = h;
       gctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       pctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       nctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       // Scale the logical stroke data if we have it and the canvas was resized
-      if (lastStroke && oldW > 0 && oldH > 0) {
+      if (strokes.length > 0 && oldW > 0 && oldH > 0) {
         const scaleX = cssW / oldW;
         const scaleY = cssH / oldH;
         if (scaleX !== 1 || scaleY !== 1) {
-          lastStroke.pts = lastStroke.pts.map(p => ({ x: p.x * scaleX, y: p.y * scaleY }));
+          for (const s of strokes) { s.pts = s.pts.map(p => ({ x: p.x * scaleX, y: p.y * scaleY })); }
         }
       }
 
@@ -229,6 +242,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       // Clear content canvases. The caller is responsible for redrawing content.
       pctx.clearRect(0, 0, cssW, cssH);
       nctx.clearRect(0, 0, cssW, cssH);
+      fctx.clearRect(0, 0, cssW, cssH);
     }
   }
 
@@ -267,12 +281,12 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     gctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
     gctx.fillRect(gridArea.x, noteGridY, gridArea.w, noteGridH);
 
-    // 2. Column highlights for active notes
+    // 2. Column highlights for active/inactive notes
     if (currentMap) {
         for (let c = 0; c < cols; c++) {
             if (currentMap.nodes[c]?.size > 0) {
                 const isActive = currentMap.active[c];
-                gctx.fillStyle = isActive ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.3)';
+                gctx.fillStyle = isActive ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.5)'; // Darker for inactive
                 const x = gridArea.x + c * cw;
                 gctx.fillRect(x, noteGridY, cw, noteGridH);
             }
@@ -326,10 +340,11 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   // This is used to create a clean image for snapping.
   function drawFullStroke(ctx, stroke) {
     if (!stroke || !stroke.pts || stroke.pts.length < 1) return;
+    const color = stroke.color || STROKE_COLORS[0];
     ctx.beginPath();
     if (stroke.pts.length === 1) {
       const lineWidth = getLineWidth();
-      ctx.fillStyle = 'rgba(95,179,255,0.95)';
+      ctx.fillStyle = color;
       ctx.arc(stroke.pts[0].x, stroke.pts[0].y, lineWidth / 2, 0, Math.PI * 2);
       ctx.fill();
     } else {
@@ -339,7 +354,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       }
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       ctx.lineWidth = getLineWidth();
-      ctx.strokeStyle = 'rgba(95,179,255,0.95)';
+      ctx.strokeStyle = color;
       ctx.stroke();
     }
   }
@@ -482,14 +497,14 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const chromaticPalette = buildPalette(60, chromaticOffsets, 1).reverse(); // MIDI 71 (B4) down to 60 (C4)
   const pentatonicPalette = buildPalette(60, pentatonicOffsets, 2).reverse(); // 10 notes from C4-C6 range
 
-  function snapToGrid(){
+  function snapToGrid(sourceCtx = pctx){
     // build a map: for each column, choose at most one row where line crosses
     const active = Array(cols).fill(false);
     const nodes = Array.from({length:cols}, ()=> new Set());
     const w = paint.width;
     const h = paint.height;
     if (!w || !h) return { active, nodes }; // Abort if canvas is not ready
-    const data = pctx.getImageData(0, 0, w, h).data;
+    const data = sourceCtx.getImageData(0, 0, w, h).data;
 
     for (let c=0;c<cols;c++){
       // Define the scan area for the column, extending to the canvas edges for the first and last columns.
@@ -573,7 +588,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
             const w = cw;
             pctx.clearRect(x, 0, w, cssH);
 
-            lastStroke = null;
+            strokes = []; // Erasing invalidates the logical stroke model
 
             // Notify the player of the change
             panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
@@ -631,13 +646,13 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       erasedColsThisDrag.clear(); // Reset on new drag
       eraseNodeAtPoint(p);
       eraseAtPoint(p);
-      lastStroke = null; // Erasing invalidates the logical stroke
     } else {
-      // When starting a new line, clear everything first.
-      pctx.clearRect(0, 0, cssW, cssH);
-      cur = { pts:[p] };
-      drawFullStroke(pctx, cur);
-      lastStroke = null; // A new stroke is in progress
+      // When starting a new line, don't clear the canvas. This makes drawing additive.
+      cur = { 
+        pts:[p],
+        color: STROKE_COLORS[colorIndex++ % STROKE_COLORS.length]
+      };
+      // The full stroke will be drawn on pointermove.
     }
   }
   function onPointerMove(e){
@@ -664,7 +679,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
           currentMap.nodes[draggedNode.col].delete(draggedNode.row);
           currentMap.nodes[draggedNode.col].add(newRow);
           draggedNode.row = newRow;
-          lastStroke = null; // The original gesture is now invalid
+          strokes = []; // The original gesture is now invalid
           
           // Redraw only the nodes canvas; the blue line on the paint canvas is untouched.
           drawNodes(currentMap.nodes);
@@ -689,8 +704,11 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
     if (cur) {
       cur.pts.push(p);
-      // Redraw the entire stroke on each move for reliability
+      // Redraw all strokes plus the current one for clean feedback
       pctx.clearRect(0, 0, cssW, cssH);
+      for (const s of strokes) {
+        drawFullStroke(pctx, s);
+      }
       drawFullStroke(pctx, cur);
     }
   }
@@ -708,29 +726,54 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     cur = null;
 
     if (!erasing && strokeToProcess) {
-      lastStroke = { pts: strokeToProcess.pts }; // Save the completed stroke
+      strokes.push({ pts: strokeToProcess.pts, color: strokeToProcess.color }); // Add the new stroke to our list
       // This is the most robust way to handle the browser's asynchronous rendering.
       // We wait for the next animation frame to do our work, ensuring the browser
       // is ready for new drawing commands.
       requestAnimationFrame(() => {
         if (!panel.isConnected) return; // Safety check
 
-        // 1. Clear the paint canvas to ensure a clean state.
-        pctx.clearRect(0, 0, cssW, cssH);
-        // 2. Draw the final, complete stroke.
-        drawFullStroke(pctx, strokeToProcess);
-        // 3. Now, immediately read the paint canvas to generate the node map.
-        const map = snapToGrid();
-        currentMap = map;
-        panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: map }));
-        // 4. Draw the nodes on their own canvas.
-        drawNodes(map.nodes);
+        // Analyze just the new stroke to get its nodes.
+        const partialMap = snapToGridFromStroke(strokeToProcess);
+
+        if (!currentMap) {
+          currentMap = {active:Array(cols).fill(false),nodes:Array.from({length:cols},()=>new Set())};
+        }
+
+        // Merge the new nodes into the existing map.
+        // A new line's nodes overwrite any existing nodes in the columns it touches.
+        for (let c = 0; c < cols; c++) {
+            if (partialMap.nodes[c]?.size > 0) {
+                // Add new nodes to the existing set for this column
+                for (const node of partialMap.nodes[c]) {
+                    currentMap.nodes[c].add(node);
+                }
+                currentMap.active[c] = true;
+            }
+        }
+
+        panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
+        drawNodes(currentMap.nodes);
         drawGrid();
       });
     } else if (erasing) {
       // When erasing, we just stop. State was updated on move. The line is visually gone.
       erasedColsThisDrag.clear();
     }
+  }
+
+  // A version of snapToGrid that analyzes a single stroke object instead of the whole canvas
+  function snapToGridFromStroke(stroke) {
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = paint.width;
+    tempCanvas.height = paint.height;
+    const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
+    if (!tempCtx) return {active:[], nodes:[]};
+
+    tempCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawFullStroke(tempCtx, stroke);
+    // Pass the temporary context to the main snapToGrid function
+    return snapToGrid(tempCtx);
   }
 
   paint.addEventListener('pointerdown', onPointerDown);
@@ -765,7 +808,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
               needsRedraw = true;
           }
       }
-      if (needsRedraw) drawGrid();
+      if (needsRedraw) {
+        drawGrid(); // Redraws the grid canvas, which includes the cubes
+      }
       rafId = requestAnimationFrame(renderLoop);
   }
   rafId = requestAnimationFrame(renderLoop);
@@ -775,8 +820,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     clear: ()=>{
       pctx.clearRect(0,0,cssW,cssH);
       nctx.clearRect(0,0,cssW,cssH);
-      lastStroke = null;
-      nodeCoordsForHitTest = [];
+      fctx.clearRect(0,0,cssW,cssH);
+      strokes = [];
       const emptyMap = {active:Array(cols).fill(false),nodes:Array.from({length:cols},()=>new Set())};
       currentMap = emptyMap;
       panel.dispatchEvent(new CustomEvent('drawgrid:update',{detail:emptyMap}));

@@ -2,6 +2,7 @@
 import { zoomInPanel, zoomOutPanel } from './zoom-overlay.js';
 import { getInstrumentNames } from './audio-samples.js';
 import { installVolumeUI } from './volume-ui.js';
+import { openInstrumentPicker } from './instrument-picker.js';
 
 const $ = (sel, root=document)=> root.querySelector(sel);
 
@@ -89,6 +90,31 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
 
   // Instrument select (header, hidden in standard)
   const sel = buildInstrumentSelect(panel);
+  // Replace select with a button that opens the picker (keep select for fallback/state only)
+  let instBtn = right.querySelector('.toy-inst-btn');
+  if (!instBtn){
+    instBtn = document.createElement('button'); instBtn.type='button'; instBtn.className='toy-btn toy-inst-btn'; instBtn.textContent='Instrument…';
+    right.appendChild(instBtn);
+  }
+  instBtn.addEventListener('click', async ()=>{
+    try{
+      const chosen = await openInstrumentPicker({ panel, toyId: (panel.dataset.toyid || panel.dataset.toy || panel.id || 'master') });
+      if (!chosen){
+        try{ const h = panel.querySelector('.toy-header'); if (h){ h.classList.remove('pulse-accept'); h.classList.add('pulse-cancel'); setTimeout(()=> h.classList.remove('pulse-cancel'), 650); } }catch{}
+        return; // cancelled
+      }
+      const val = String(chosen||'').toLowerCase();
+      // Update UI select to contain and select it
+      let has = Array.from(sel.options).some(o=> String(o.value).toLowerCase() === val);
+      if (!has){ const o=document.createElement('option'); o.value=val; o.textContent=val.replace(/[_-]/g,' ').replace(/\w\S*/g, t=> t[0].toUpperCase()+t.slice(1).toLowerCase()); sel.appendChild(o); }
+      sel.value = val;
+      // Apply to toy
+      panel.dataset.instrument = val;
+      try{ panel.dispatchEvent(new CustomEvent('toy-instrument', { detail:{ value: val }, bubbles:true })); }catch{}
+      try{ panel.dispatchEvent(new CustomEvent('toy:instrument', { detail:{ name: val, value: val }, bubbles:true })); }catch{}
+      try{ const h = panel.querySelector('.toy-header'); if (h){ h.classList.remove('pulse-cancel'); h.classList.add('pulse-accept'); setTimeout(()=> h.classList.remove('pulse-accept'), 650); } }catch{}
+    }catch{}
+  });
 
   // Keep select in sync when instrument changes elsewhere
   panel.addEventListener('toy-instrument', (e) => {
