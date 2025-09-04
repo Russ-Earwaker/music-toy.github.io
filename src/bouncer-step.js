@@ -63,7 +63,8 @@ export function stepBouncer(S, nowAT){
     const nb = S.spawnBallFrom({ x:S.handle.x, y:S.handle.y, vx:S.lastLaunch.vx, vy:S.lastLaunch.vy, r:S.ballR() });
     S.ball = nb;
     try {
-      const L=S.EDGE, T=S.EDGE, R=S.worldW()-S.EDGE, B=S.worldH()-S.EDGE;
+      // Use locked physics dimensions so collisions line up with the drawn frame
+      const L=S.EDGE, T=S.EDGE, R=S.physW()-S.EDGE, B=S.physH()-S.EDGE;
       const rr = S.ball.r || S.ballR();
       if (S.ball.x < L+rr+2) S.ball.x = L+rr+2;
       if (S.ball.x > R-rr-2) S.ball.x = R-rr-2;
@@ -89,7 +90,8 @@ export function stepBouncer(S, nowAT){
     if (S.ball.flightEnd != null && now >= S.ball.flightEnd){ S.ball = null; }
     else {
       const eps = 0.001;
-      const L=S.EDGE, T=S.EDGE, R=S.worldW()-S.EDGE, B=S.worldH()-S.EDGE;
+      // Collide against the same locked physics bounds as rendering
+      const L=S.EDGE, T=S.EDGE, R=S.physW()-S.EDGE, B=S.physH()-S.EDGE;
       const rr = S.ball.r || S.ballR();
       const blocks = S.blocks || [];
       let rem = frameFactor, iterations = 0, maxIter = 4;

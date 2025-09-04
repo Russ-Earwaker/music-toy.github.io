@@ -228,7 +228,8 @@ export function createBouncerDraw(env){
       try {
         if (S && typeof S.getLoopInfo==='function' && S.visQ && S.visQ.loopRec && typeof S.onNewBar==='function'){
           const li = S.getLoopInfo();
-          const k  = Math.floor(Math.max(0, (li.now - li.loopStartTime) / li.barLen));
+          const anchor = (S.visQ.loopRec && S.visQ.loopRec.anchorStartTime) ? S.visQ.loopRec.anchorStartTime : li.loopStartTime;
+          const k  = Math.floor(Math.max(0, (li.now - anchor) / li.barLen));
           if (S.visQ.loopRec.lastBarIndex !== k){
             S.onNewBar(li, k);
           }
@@ -246,9 +247,10 @@ export function createBouncerDraw(env){
         if (lr && lr.mode === 'replay' && typeof S.getLoopInfo==='function'){
           const li = S.getLoopInfo();
           const nowT = li.now;
-          const k = Math.floor(Math.max(0, (nowT - li.loopStartTime) / li.barLen));
+          const anchor = (lr && lr.anchorStartTime) ? lr.anchorStartTime : li.loopStartTime;
+          const k = Math.floor(Math.max(0, (nowT - anchor) / li.barLen));
           if (Array.isArray(lr.pattern) && lr.pattern.length>0){
-            const base = li.loopStartTime + k*li.barLen;
+            const base = anchor + k*li.barLen;
             const baseNext = base + li.barLen;
             // base computed above; reused here
             // baseNext computed above; reused here
@@ -256,7 +258,7 @@ export function createBouncerDraw(env){
             if ((globalThis.BOUNCER_DBG_LEVEL|0)>=2) console.log('[bouncer-rec] about to schedule bar', k, 'base', base.toFixed(3), 'nowT', nowT.toFixed(3));
 
 // Just-in-time scheduling with short lookahead so state changes can cancel playback
-const LOOKAHEAD = 0.08; // seconds
+const LOOKAHEAD = 0.03; // seconds — reduce overlap risk without starving scheduling
 // Reset per-bar scheduled set when bar advances
 if (lr.scheduledBarIndex !== k){
   lr.scheduledBarIndex = k;

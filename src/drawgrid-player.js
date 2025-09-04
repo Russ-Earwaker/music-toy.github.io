@@ -12,9 +12,10 @@ export function connectDrawGridToPlayer(panel) {
 
   const initialSteps = parseInt(panel.dataset.steps, 10) || 8;
 
-  // The grid has 12 rows. A chromatic scale is a perfect fit.
-  // We'll reverse it so the top row is the highest pitch.
-  const notePalette = buildPalette(60, Array.from({length: 12}, (_, i) => i), 1).reverse(); // C4-B4, reversed
+  // The grid has 12 rows. We'll use a chromatic scale.
+  // The drawgrid component handles auto-tuning visuals and row indices.
+  const chromaticOffsets = Array.from({length: 12}, (_, i) => i);
+  const notePalette = buildPalette(60, chromaticOffsets, 1).reverse(); // C4-B4, reversed
 
   let gridState = {
     active: Array(initialSteps).fill(false),
@@ -35,7 +36,7 @@ export function connectDrawGridToPlayer(panel) {
   function step(col) {
     if (gridState.active[col] && gridState.nodes[col]?.size > 0) {
       for (const row of gridState.nodes[col]) {
-        const midiNote = notePalette[row % notePalette.length];
+        const midiNote = notePalette[row];
         playNote(instrument, midiToName(midiNote));
       }
     }

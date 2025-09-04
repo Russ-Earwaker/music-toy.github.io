@@ -1,7 +1,7 @@
 import { makeEdgeControllers, drawEdgeBondLines, handleEdgeControllerEdit, mapControllersByEdge, randomizeControllers, drawEdgeDecorations } from './bouncer-edges.js';
 import { stepBouncer } from './bouncer-step.js';
 import { noteList, resizeCanvasForDPR } from './utils.js';
-import { ensureAudioContext, getLoopInfo } from './audio-core.js';
+import { ensureAudioContext, getLoopInfo, setToyMuted } from './audio-core.js';
 import { triggerInstrument } from './audio-samples.js';
 import { randomizeRects, EDGE_PAD as EDGE, hitRect, whichThirdRect, drawThirdsGuides } from './toyhelpers.js';
 import { drawBlocksSection } from './ripplesynth-blocks.js';
@@ -114,11 +114,17 @@ export function createBouncer(selector){
   let zoomDragCand=null, zoomDragStart=null, zoomTapT=null;
   let tapCand=null, tapStart=null, tapMoved=false;
   let lastLaunch=null, launchPhase=0, nextLaunchAt=null, prevNow=0, ball=null;
+  // When manually spawning, briefly mute any already-scheduled replay notes;
+  // stepBouncer will unmute on the first new physics hit.
+  // Start with unmute pending so the very first physics hit after boot is audible.
+  let __spawnPendingUnmute = true;
   // --- Loop Recorder (record a bar, replay verbatim) ----------------------
   const loopRec = {
     signature: '',
     mode: 'record',        // 'record' | 'replay'
     pattern: [],           // [{note, offset}] in seconds within bar
+    // Anchor start time for loop (spawn + 1 beat)
+    anchorStartTime: 0,
     lastBarIndex: -1,
     scheduledBarIndex: -999,
     seen: new Set(),       // de-dupe within a bar: note@ms
@@ -152,6 +158,14 @@ export function createBouncer(selector){
     } else {
       if (loopRec.pattern.length > 0) { loopRec.mode = 'replay'; if ((globalThis.BOUNCER_DBG_LEVEL|0)>=1) console.log('[bouncer-rec] loop recorded — switching to replay (events:', loopRec.pattern.length, ')'); }
     }
+    // If entering replay, ensure we are unmuted before scheduler queues playback.
+    // This guarantees the first scheduled notes are audible.
+    try{
+      if (loopRec.mode === 'replay') {
+        setToyMuted(toyId, false);
+        __spawnPendingUnmute = false;
+      }
+    }catch{}
     loopRec.lastBarIndex = k;
     loopRec.scheduledBarIndex = -999;
     loopRec.seen = new Set();
@@ -303,6 +317,27 @@ export function createBouncer(selector){
     const o = { x:L.x, y:L.y, vx:L.vx, vy:L.vy, r: ballR() };
     ball = o;
     lastLaunch = { vx: L.vx, vy: L.vy, x: L.x, y: L.y };
+    // Reset loop recorder immediately to avoid overlap with prior replay
+    try{
+      const lr = (visQ && visQ.loopRec) ? visQ.loopRec : null;
+      if (lr){
+        lr.mode = 'record';
+        lr.pattern.length = 0;
+        lr.scheduledBarIndex = -999;
+        if (lr.scheduledKeys && typeof lr.scheduledKeys.clear === 'function') lr.scheduledKeys.clear();
+        try{ lr.signature = stateSignature(); }catch{}
+        // Set loop anchor to spawn time + 1 beat
+        try{
+          const li = (typeof getLoopInfo==='function') ? getLoopInfo() : null;
+          const ac = (typeof ensureAudioContext==='function') ? ensureAudioContext() : null;
+          const now = ac ? ac.currentTime : 0;
+          const beat = li && Number.isFinite(li.beatLen) ? li.beatLen : (60/120);
+          lr.anchorStartTime = now + beat;
+        }catch{}
+      }
+    }catch{}
+    // Do not mute on spawn; rely on short replay lookahead and recorder reset
+    // to avoid overlap, keeping first-loop hits fully audible.
     try{
       const li = (typeof getLoopInfo==='function') ? getLoopInfo() : null;
       const ac = (typeof ensureAudioContext==='function') ? ensureAudioContext() : null;
@@ -327,9 +362,12 @@ let __justSpawnedUntil = 0;
 
 // Mute old scheduled events immediately; unmute on first new physics hit
 try {
-  try{ if (typeof window?.setToyMuted==="function") window.setToyMuted(toyId, true); }catch{}
+  try{
+    if (typeof window?.setToyMuted==="function") window.setToyMuted(toyId, true);
+    // Mark that the next physics hit should unmute so fresh interactions are audible.
+    __spawnPendingUnmute = true;
+  }catch{}
 } catch {}
-/* removed __spawnPendingUnmute staging; not used */
 
 
 try{
@@ -372,16 +410,20 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
         const nowT = li ? li.now : (t||0);
         const barLen = li ? li.barLen : 1;
         const beatDur = barLen/4;
-        const k = li ? Math.floor(Math.max(0,(nowT - li.loopStartTime)/barLen)) : 0;
+        const anchor = (visQ && visQ.loopRec && visQ.loopRec.anchorStartTime) ? visQ.loopRec.anchorStartTime : (li ? li.loopStartTime : 0);
+        const k = Math.floor(Math.max(0, (nowT - anchor) / barLen));
         if (lr && lr.mode === 'replay'){ return; }
         if (lr && lr.mode === 'record'){
           try { const ac = ensureAudioContext ? ensureAudioContext() : null; const t0 = (ac ? ac.currentTime : 0) + 0.0008; triggerInstrument(i||instrument, n, t0, toyId); } catch(e){}
-const barStart = li ? (li.loopStartTime + k*barLen) : 0;
+          const barStart = anchor + k*barLen;
           const at = (typeof t==='number' ? t : nowT);
-          const offBeats = (at - barStart)/beatDur;
-          const off = Math.max(0, Math.min(4, Math.round(offBeats*16)/16));
-          if (visQ && visQ.loopRec && Array.isArray(visQ.loopRec.pattern)){
-            visQ.loopRec.pattern.push({ note: n, offset: off });
+          // Only start recording once we pass the anchor
+          if (at >= anchor - 1e-4){
+            const offBeats = (at - barStart)/beatDur;
+            const off = Math.max(0, Math.min(4, Math.round(offBeats*16)/16));
+            if (visQ && visQ.loopRec && Array.isArray(visQ.loopRec.pattern)){
+              visQ.loopRec.pattern.push({ note: n, offset: off });
+            }
           }
           return;
         }
@@ -407,6 +449,9 @@ const barStart = li ? (li.loopStartTime + k*barLen) : 0;
       getLoopInfo,
       ballR,
       handle,
+      toyId,
+      setToyMuted,
+      __spawnPendingUnmute,
       lastLaunch,
       nextLaunchAt,
       spawnBallFrom,
@@ -433,6 +478,7 @@ const barStart = li ? (li.loopStartTime + k*barLen) : 0;
       if (S.__lastTickByBlock) __lastTickByBlock = S.__lastTickByBlock;
       if (S.__lastTickByEdge) __lastTickByEdge = S.__lastTickByEdge;
       if (typeof S.__justSpawnedUntil === 'number') __justSpawnedUntil = S.__justSpawnedUntil;
+      if (typeof S.__spawnPendingUnmute === 'boolean') __spawnPendingUnmute = S.__spawnPendingUnmute;
     }
   }
 });

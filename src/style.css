@@ -151,23 +151,6 @@ html, body {
   transform: translateY(1px) scale(0.99);
 }
 
-/* Selects with .toy-btn need their appearance restored to be usable */
-select.toy-btn {
-  appearance: auto !important;
-  -webkit-appearance: menulist !important;
-}
-
-/* Ensure instrument select is also visible and styled consistently */
-select.toy-instrument {
-  appearance: auto;
-  -webkit-appearance: menulist;
-  padding: 4px 8px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-}
-
 /* Volume control in footer */
 .toy-volwrap {
   display: flex;
@@ -226,25 +209,20 @@ select.toy-instrument {
 /* --- Per-Toy Body Style --- */
 /* -------------------------- */
 
-/* Bouncer: Simple square body */
+/* Bouncer & Rippler: Simple square body */
 .toy-panel[data-toy="bouncer"] .toy-body {
   flex-grow: 0; /* CRITICAL: This prevents the body from stretching vertically. */
   aspect-ratio: 1 / 1; /* This makes the body a perfect square. */
 }
+
+/* Rippler canvas must fill its square body */
+/* (removed) Rippler canvas absolute fill; replaced by centered square wrapper */
+
+
+/* Drawgrid: body should respect aspect ratio */
 .toy-panel[data-toy="drawgrid"] .toy-body {
   flex-grow: 0;
   aspect-ratio: 4 / 3;
-}
-
-/* Drawgrid eraser cursor */
-.drawgrid-eraser-cursor {
-  position: absolute;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  background: rgba(255, 255, 255, 0.1);
-  pointer-events: none;
-  display: none; /* Hidden by default, shown via JS */
-  will-change: transform;
 }
 
 /* Loopgrid (Drum Toy): Complex grid body */
@@ -304,6 +282,7 @@ select.toy-instrument {
   opacity: 0.8;
   color: var(--text);
 }
+
 
 /* --- Integrated Rippler body/wrapper rules (centered square inside full-height body) --- */
 .toy-panel[data-toy="rippler"] .toy-body {
@@ -392,12 +371,6 @@ select.toy-instrument {
   /* Width is the smaller of 95% viewport width or a calculation based on viewport height */
   width: min(95vw, calc(90vh - 8rem));
   height: auto;
-}
-
-.toy-zoomed[data-toy="drawgrid"] {
-  /* A wider, fixed-width layout for advanced mode to ensure header controls fit. */
-  width: min(90vw, 900px) !important;
-  height: auto !important; /* Override JS inline style to respect body's aspect-ratio */
 }
 
 /* --- Advanced View UI Visibility --- */

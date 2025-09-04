@@ -62,17 +62,17 @@ function bootOne(createBouncer, el, id) {
  */
 export async function bootBouncersSafe(ids = (window.BOUNCER_IDS || [])) {
   if (!ids.length) return;
+
+  // Robust dynamic import: resolve relative to this module
   let mod;
   try {
-    mod = await import('./bouncer.main.js');
+    const url = new URL('./bouncer.main.js', import.meta.url);
+    mod = await import(url.href);
   } catch (e) {
-    // Accept ./src/ when included from a different base
-    try { mod = await import('new URL('./bouncer.main.js', import.meta.url).href'); }
-    catch (e2) {
-      warn('cannot import bouncer.main.js', e2?.message || e2);
-      return;
-    }
+    warn('cannot import bouncer.main.js', e?.message || e);
+    return;
   }
+
   const createBouncer = mod?.createBouncer || mod?.default?.createBouncer;
   if (typeof createBouncer !== 'function') {
     warn('createBouncer not found in bouncer.main.js');
