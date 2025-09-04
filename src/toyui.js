@@ -92,16 +92,29 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
 
   // Keep select in sync when instrument changes elsewhere
   panel.addEventListener('toy-instrument', (e) => {
-    const instrumentName = e?.detail?.value;
-    if (instrumentName && sel.value !== instrumentName) {
-      sel.value = instrumentName;
+    const instrumentName = (e?.detail?.value||'').toLowerCase();
+    if (!instrumentName) return;
+    // Ensure option exists
+    const has = Array.from(sel.options).some(o=> String(o.value).toLowerCase() === instrumentName);
+    if (!has){
+      const opt = document.createElement('option');
+      opt.value = instrumentName;
+      opt.textContent = instrumentName.replace(/[_-]/g,' ').replace(/\w\S*/g, t=> t[0].toUpperCase()+t.slice(1).toLowerCase());
+      sel.appendChild(opt);
     }
+    if (sel.value !== instrumentName) sel.value = instrumentName;
   });
   panel.addEventListener('toy:instrument', (e) => {
-    const instrumentName = (e?.detail?.name || e?.detail?.value);
-    if (instrumentName && sel.value !== instrumentName) {
-      sel.value = instrumentName;
+    const instrumentName = ((e?.detail?.name || e?.detail?.value)||'').toLowerCase();
+    if (!instrumentName) return;
+    const has = Array.from(sel.options).some(o=> String(o.value).toLowerCase() === instrumentName);
+    if (!has){
+      const opt = document.createElement('option');
+      opt.value = instrumentName;
+      opt.textContent = instrumentName.replace(/[_-]/g,' ').replace(/\w\S*/g, t=> t[0].toUpperCase()+t.slice(1).toLowerCase());
+      sel.appendChild(opt);
     }
+    if (sel.value !== instrumentName) sel.value = instrumentName;
   });
 
   // SAFER initial instrument resolution:

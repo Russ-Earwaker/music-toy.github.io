@@ -55,6 +55,10 @@ function buildInstrumentSelect(panel){
     right.appendChild(sel);
   }
 
+  function toTitleCase(str){
+    try{ return String(str||'').replace(/[_-]/g,' ').replace(/\w\S*/g, t=> t[0].toUpperCase()+t.slice(1).toLowerCase()); }catch{ return String(str||''); }
+  }
+
   const fill = async ()=>{
     const entries = await loadInstrumentEntries();
     // Dedup strictly by display label
@@ -75,6 +79,14 @@ function buildInstrumentSelect(panel){
       sel.appendChild(opt);
     }
     if (cur){
+      // ensure current instrument exists in options
+      const exists = Array.from(sel.options).some(o=> String(o.value).toLowerCase() === cur);
+      if (!exists){
+        const opt = document.createElement('option');
+        opt.value = cur;
+        opt.textContent = toTitleCase(cur);
+        sel.appendChild(opt);
+      }
       // try exact match; if not present, try relaxed variants
       sel.value = cur;
       if (sel.value !== cur){

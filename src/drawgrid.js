@@ -216,9 +216,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       };
 
       // All calculations are now relative to the gridArea
-      topPad = Math.max(40, gridArea.h * 0.20); // Larger top pad for cubes
+      topPad = Math.max(60, gridArea.h * 0.15); // Make space for cubes at the top
       cw = gridArea.w / cols;
-      ch = gridArea.h > topPad ? (gridArea.h - topPad) / rows : 0;
+      ch = (gridArea.h > topPad) ? (gridArea.h - topPad) / rows : 0;
 
       // Update eraser cursor size
       const eraserWidth = getLineWidth() * 2;
@@ -238,8 +238,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
     const x = gridArea.x + col * cw;
     const w = cw;
-    gctx.fillStyle = 'rgba(255, 255, 255, 0.6)'; // Brighter white flash
-    gctx.fillRect(x, 0, w, cssH);
+    gctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    gctx.fillRect(x, gridArea.y, w, gridArea.h);
 
     setTimeout(() => {
         // A fade-out effect for a "fancier" feel
@@ -252,7 +252,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
                 drawGrid(); // Final clean redraw
             } else {
                 gctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
-                gctx.fillRect(x, 0, w, cssH);
+                gctx.fillRect(x, gridArea.y, w, gridArea.h);
             }
         }, 30);
     }, 100); // Start fade after a short hold
@@ -261,7 +261,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   function drawGrid(){
     gctx.clearRect(0, 0, cssW, cssH);
 
-    // 1. Draw the note grid area below the cubes
+    // 1. Draw the note grid area below the top padding
     const noteGridY = gridArea.y + topPad;
     const noteGridH = gridArea.h - topPad;
     gctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
@@ -279,30 +279,24 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         }
     }
 
-    // 3. Draw the horizontal and vertical lines for the note grid.
-    gctx.strokeStyle = 'rgba(255,255,255,0.5)';
-    gctx.lineWidth = 1.5;
-    gctx.beginPath();
-    gctx.moveTo(gridArea.x, noteGridY);
-    gctx.lineTo(gridArea.x + gridArea.w, noteGridY);
-    gctx.stroke();
-
+    // 3. Draw the horizontal and vertical lines for the note grid
     gctx.strokeStyle='rgba(255,255,255,0.4)';
+    gctx.lineWidth = 1.5;
+    // Verticals
     for(let i=1;i<cols;i++){ gctx.beginPath(); gctx.moveTo(gridArea.x + i*cw, noteGridY); gctx.lineTo(gridArea.x + i*cw, gridArea.y + gridArea.h); gctx.stroke(); }
     // horizontals (grid area only)
     for(let j=1;j<rows;j++){ gctx.beginPath(); gctx.moveTo(gridArea.x, noteGridY + j*ch); gctx.lineTo(gridArea.x + gridArea.w, noteGridY + j*ch); gctx.stroke(); }
 
-    // 4. Draw the sequencer cubes at the top
+    // 4. Draw the sequencer cubes in the top row
     const GAP = 4;
-    const cubeSize = Math.min(topPad - 8, (gridArea.w - GAP * (cols - 1)) / cols);
-    const totalCubesWidth = (cubeSize * cols) + GAP * (cols - 1);
-    const xOffset = gridArea.x + (gridArea.w - totalCubesWidth) / 2;
+    // The cube size is now based on the column width to ensure alignment.
+    const cubeSize = Math.min(topPad - 8, cw - GAP * 2);
     const yOffset = gridArea.y + (topPad - cubeSize) / 2;
 
     for (let i = 0; i < cols; i++) {
         const flash = flashes[i] || 0;
         const isEnabled = currentMap?.active?.[i] ?? false;
-        const cubeX = xOffset + i * (cubeSize + GAP);
+        const cubeX = gridArea.x + i * cw + (cw - cubeSize) / 2; // Center cube in its column
         const cubeRect = { x: cubeX, y: yOffset, w: cubeSize, h: cubeSize };
 
         if (i === playheadCol) {
@@ -310,7 +304,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
             gctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
             gctx.fillRect(Math.trunc(cubeRect.x) - borderSize, Math.trunc(cubeRect.y) - borderSize, Math.trunc(cubeRect.w) + borderSize * 2, Math.trunc(cubeRect.h) + borderSize * 2);
         }
-
         gctx.save();
         if (flash > 0) {
             const scale = 1 + 0.15 * Math.sin(flash * Math.PI);
@@ -318,7 +311,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
             gctx.scale(scale, scale);
             gctx.translate(-(cubeRect.x + cubeRect.w / 2), -(cubeRect.y + cubeRect.h / 2));
         }
-
         drawBlock(gctx, cubeRect, {
             baseColor: flash > 0.01 ? '#FFFFFF' : (isEnabled ? '#ff8c00' : '#333'),
             active: flash > 0.01 || isEnabled,
@@ -593,18 +585,29 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     const rect = paint.getBoundingClientRect();
     const p = { x:e.clientX-rect.left, y:e.clientY-rect.top };
 
-    // Check for cube click
+    // Check for cube click in the top row
     if (p.y >= gridArea.y && p.y < gridArea.y + topPad) {
+        // Find which column was clicked based on the column width `cw`
         const col = Math.floor((p.x - gridArea.x) / cw);
         if (col >= 0 && col < cols) {
-            if (!currentMap) {
-                currentMap = {active:Array(cols).fill(false),nodes:Array.from({length:cols},()=>new Set())};
+            // Now check if the click was inside the cube within that column
+            const GAP = 4;
+            const cubeSize = Math.min(topPad - 8, cw - GAP * 2);
+            const yOffset = gridArea.y + (topPad - cubeSize) / 2;
+            const columnX = gridArea.x + col * cw;
+            const cubeX = columnX + (cw - cubeSize) / 2;
+
+            if (p.x >= cubeX && p.x <= cubeX + cubeSize && p.y >= yOffset && p.y <= yOffset + cubeSize) {
+                // Click was on a cube
+                if (!currentMap) {
+                    currentMap = {active:Array(cols).fill(false),nodes:Array.from({length:cols},()=>new Set())};
+                }
+                currentMap.active[col] = !currentMap.active[col];
+                drawGrid();
+                drawNodes(currentMap.nodes);
+                panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
+                return; // Stop further processing
             }
-            currentMap.active[col] = !currentMap.active[col];
-            drawGrid();
-            drawNodes(currentMap.nodes);
-            panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
-            return; // Stop further processing
         }
     }
 
