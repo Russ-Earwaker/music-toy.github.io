@@ -1,4 +1,5 @@
 // src/bouncer-render.js
+const __DBG = (globalThis.BOUNCER_DBG_LEVEL|0)||0; const __d=(lvl,...a)=>{ if(__DBG>=lvl) console.log(...a); };
 // Encapsulates the Bouncer draw loop to keep bouncer.main.js concise.
 import { drawBlock } from './toyhelpers.js';
 
@@ -9,7 +10,7 @@ export function createBouncerDraw(env){
     particles, drawEdgeBondLines, ensureAudioContext, noteList,
     drawEdgeDecorations, edgeFlash,
     stepBouncer, buildStateForStep, applyFromStep, updateLaunchBaseline,
-    getBall, lockPhysWorld, getAim
+    getBall, lockPhysWorld, getAim, spawnBallFrom
   } = env;
 
   let lastCssW = 0, lastCssH = 0;
@@ -195,20 +196,51 @@ export function createBouncerDraw(env){
       const S = buildStateForStep(now, prevNow);
       // Ensure S.ball mirrors the live ball just before step (belt-and-braces)
       try {
-        const gb = getBall ? getBall() : null;
-        if (gb) S.ball = gb;
-        if (gb && !(window.__BR_seen)) {
+        const liveBall = getBall ? getBall() : null;
+        if (liveBall) S.ball = liveBall;
+        if (liveBall && !(window.__BR_seen)) {
           window.__BR_seen = true;
-          if (window && window.BOUNCER_LOOP_DBG) console.log('[bouncer-render] first-seen ball pre-step');
+          if ((globalThis.BOUNCER_DBG_LEVEL|0)>=2) console.log('[bouncer-render] first-seen ball pre-step');
         }
         if (window && window.BOUNCER_LOOP_DBG) {
           window.__BR_dbg = (window.__BR_dbg||0) + 1;
+          if((globalThis.BOUNCER_DBG_LEVEL|0)>=3) console.log('[bouncer-render] pre-step hasBall=', !!S.ball, 'pre ll:', !!S.lastLaunch, 'nla:', S.nextLaunchAt);
+      try{ if (!S.ball && !S.lastLaunch && window && window.BOUNCER_AUTOSPAWN===true) { const ac= S.ensureAudioContext? S.ensureAudioContext(): null; const now= ac?ac.currentTime:0; if (!S.__autoSpawnAt) S.__autoSpawnAt = now + 0.6; if (now >= S.__autoSpawnAt && typeof S.spawnBallFrom==='function'){   const cx = Math.max(S.EDGE+S.ballR()+4, Math.min(S.worldW()-S.EDGE-S.ballR()-4, S.worldW()/2));   const cy = Math.max(S.EDGE+S.ballR()+4, Math.min(S.worldH()-S.EDGE-S.ballR()-4, S.worldH()/2));   S.spawnBallFrom({ x:cx, y:cy, vx: 3.9, vy: 2.6, r: S.ballR() });   console.log('[bouncer-render] AUTOSPAWN'); } } }catch(e){}
+        }
+      } catch(e){}
+
+      // Fallback: if there's no live ball but we have a lastLaunch,
+      // and we're past nextLaunchAt (or it was never set), re-spawn once.
+      try {
+        const ac2 = ensureAudioContext ? ensureAudioContext() : null;
+        const now2 = ac2 ? ac2.currentTime : 0;
+        if (!S.ball && S.lastLaunch && (S.nextLaunchAt==null || now2 >= (S.nextLaunchAt - 0.01))) {
+          if (typeof spawnBallFrom === 'function') {
+            spawnBallFrom(S.lastLaunch);
+            S.__justSpawnedUntil = now2 + 0.15;
+            if ((globalThis.BOUNCER_DBG_LEVEL|0)>=2) console.log('[bouncer-render] fallback spawn fired');
+          }
+        }
+      } catch(e) { try{console.warn('[bouncer-render] fallback spawn error', e);}catch{} }
+
+
+      // Loop recorder: detect new bar and let main decide record/replay
+      try {
+        if (S && typeof S.getLoopInfo==='function' && S.visQ && S.visQ.loopRec && typeof S.onNewBar==='function'){
+          const li = S.getLoopInfo();
+          const k  = Math.floor(Math.max(0, (li.now - li.loopStartTime) / li.barLen));
+          if (S.visQ.loopRec.lastBarIndex !== k){
+            S.onNewBar(li, k);
+          }
+        }
+      } catch(e) { try{ if ((globalThis.BOUNCER_DBG_LEVEL|0)>=2) console.warn('[bouncer-render] onNewBar error', e);}catch{} }
+
       // Loop recorder: schedule replay once per bar (robust timing)
       try {
         if (window && window.BOUNCER_LOOP_DBG) {
           const _lr = S.visQ && S.visQ.loopRec;
-          if (_lr) console.log('[bouncer-rec] pre', 'mode=', _lr.mode, 'patLen=', (_lr.pattern?_lr.pattern.length:0), 'scheduled=', _lr.scheduledBarIndex);
-          else console.log('[bouncer-rec] pre', 'no lr');
+          if (_lr) { if ((globalThis.BOUNCER_DBG_LEVEL|0)>=2) console.log('[bouncer-rec] pre', 'mode=', _lr.mode, 'patLen=', (_lr.pattern?_lr.pattern.length:0), 'scheduled=', _lr.scheduledBarIndex); }
+          else if((globalThis.BOUNCER_DBG_LEVEL|0)>=2) console.log('[bouncer-rec] pre', 'no lr');
         }
         const lr = S.visQ && S.visQ.loopRec;
         if (lr && lr.mode === 'replay' && typeof S.getLoopInfo==='function'){
@@ -218,25 +250,47 @@ export function createBouncerDraw(env){
           if (Array.isArray(lr.pattern) && lr.pattern.length>0){
             const base = li.loopStartTime + k*li.barLen;
             const baseNext = base + li.barLen;
-            if (window && window.BOUNCER_LOOP_DBG) console.log('[bouncer-rec] about to schedule bar', k, 'base', base.toFixed(3), 'nowT', nowT.toFixed(3));
-            if (lr.scheduledBarIndex !== k){
-              lr.scheduledBarIndex = k;
-              if (window && window.BOUNCER_LOOP_DBG) console.log('[bouncer-rec] schedule replay', lr.pattern.length, 'at bar', k);
-              if (window && window.BOUNCER_LOOP_DBG && window.BOUNCER_LOOP_DBG_CLICK){ try{ S.triggerInstrumentRaw('hat', 'C5', base + 0.0001); }catch(e){} }
-              for (const ev of lr.pattern){
-                const when0 = base + Math.max(0, ev.offset);
-                const when  = (when0 <= nowT + 0.03) ? (baseNext + Math.max(0, ev.offset)) : when0;
-                if (window && window.BOUNCER_LOOP_DBG) console.log('[bouncer-rec] TRIGGER', ev.note, 'inst', S.instrument, 'when', (when - nowT).toFixed(3));
-                if (S.triggerInstrumentRaw) S.triggerInstrumentRaw(S.instrument, ev.note, when);
-                else if (S.triggerInstrument) S.triggerInstrument(S.instrument, ev.note, when);
-              }
-            }
+            // base computed above; reused here
+            // baseNext computed above; reused here
+            const beatDur = li.barLen / 4;
+            if ((globalThis.BOUNCER_DBG_LEVEL|0)>=2) console.log('[bouncer-rec] about to schedule bar', k, 'base', base.toFixed(3), 'nowT', nowT.toFixed(3));
+
+// Just-in-time scheduling with short lookahead so state changes can cancel playback
+const LOOKAHEAD = 0.08; // seconds
+// Reset per-bar scheduled set when bar advances
+if (lr.scheduledBarIndex !== k){
+  lr.scheduledBarIndex = k;
+  if (!lr.scheduledKeys || typeof lr.scheduledKeys.clear !== 'function') lr.scheduledKeys = new Set();
+  else lr.scheduledKeys.clear();
+  if ((globalThis.BOUNCER_DBG_LEVEL|0) >= 2) console.log('[bouncer-rec] new bar', k, 'mode', lr.mode, 'patLen', lr.pattern?.length||0);
+}
+const __seen = new Set();
+const __evs = (Array.isArray(lr.pattern)?lr.pattern:[]).filter(ev=>{
+  const key = ev && ev.note ? (ev.note + '@' + (Math.round(((ev.offset||0))*16)/16)) : '';
+  if (__seen.has(key)) return false; __seen.add(key); return true; });
+// beatDur defined above; reused here
+// base computed above; reused here
+// baseNext computed above; reused here
+for (const ev of __evs){
+  if (!ev || !ev.note) continue;
+  const offBeats = Math.max(0, ev.offset||0);
+  let when = base + offBeats * beatDur;
+  // if event time already missed for this bar, roll to next bar
+  if (when < nowT - 0.01) when = baseNext + offBeats * beatDur;
+  if (when <= nowT + LOOKAHEAD){
+    const key = k + '|' + ev.note + '|' + (Math.round(offBeats*16)/16);
+    if (!lr.scheduledKeys.has(key)){
+      if ((globalThis.BOUNCER_DBG_LEVEL|0)>=2) console.log('[bouncer-replay] schedule', ev.note, 'in', (when-nowT).toFixed(3));
+      try { S.triggerInstrumentRaw ? S.triggerInstrumentRaw(S.instrument, ev.note, when) : S.triggerInstrument(S.instrument, ev.note, when); }
+      catch(e){ try{ if ((globalThis.BOUNCER_DBG_LEVEL|0)>=2) console.warn('[bouncer-replay] schedule fail', e); }catch{} }
+      lr.scheduledKeys.add(key);
+    }
+  }
+}
+
           }
         }
       }catch(e){}
-          if (window.__BR_dbg <= 6) console.log('[bouncer-render] pre-step hasBall=', !!gb);
-        }
-      } catch(e){}
       stepBouncer(S);
       applyFromStep && applyFromStep(S);
 

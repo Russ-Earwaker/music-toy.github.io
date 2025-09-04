@@ -116,13 +116,14 @@ export function createBouncer(selector){
   let lastLaunch=null, launchPhase=0, nextLaunchAt=null, prevNow=0, ball=null;
   // --- Loop Recorder (record a bar, replay verbatim) ----------------------
   const loopRec = {
-    signature: '',
-    mode: 'record',        // 'record' | 'replay'
-    pattern: [],           // [{note, offset}] in seconds within bar
-    lastBarIndex: -1,
-    scheduledBarIndex: -999,
-    seen: new Set(),       // de-dupe within a bar: note@ms
-  };
+  signature: '',
+  mode: 'record',        // 'record' | 'replay'
+  pattern: [],           // [{note, offset}] in seconds within bar
+  scheduledKeys: new Set(),      // track scheduled items during replay
+  seen: new Set(),               // de-dupe within a bar: note@ms
+  lastBarIndex: -1,
+  scheduledBarIndex: -999
+};
   function stateSignature(){
     try{
       const parts = [];
@@ -142,23 +143,29 @@ export function createBouncer(selector){
   function barIndexOfTime(li, t){ return Math.floor(Math.max(0, t - li.loopStartTime) / li.barLen); }
   function barStartOfIndex(li, k){ return li.loopStartTime + k * li.barLen; }
   function onNewBar(li, k){
-    const sig = stateSignature();
-    const changed = (sig !== loopRec.signature);
-    if (changed){
-      loopRec.signature = sig;
-      loopRec.mode = 'record';
-      if ((globalThis.BOUNCER_DBG_LEVEL|0)>=1) console.log('[bouncer-rec] loop reset: state changed; recording new bar');
-      loopRec.pattern.length = 0;
-    } else {
-      if (loopRec.pattern.length > 0) { loopRec.mode = 'replay'; if ((globalThis.BOUNCER_DBG_LEVEL|0)>=1) console.log('[bouncer-rec] loop recorded — switching to replay (events:', loopRec.pattern.length, ')'); }
+  const sig = stateSignature();
+  const changed = (sig !== loopRec.signature);
+  if (changed){
+    loopRec.signature = sig;
+    loopRec.mode = 'record';
+    loopRec.pattern.length = 0;
+    if (loopRec.scheduledKeys && typeof loopRec.scheduledKeys.clear==='function') {
+      loopRec.scheduledKeys.clear();
     }
-    loopRec.lastBarIndex = k;
-    loopRec.scheduledBarIndex = -999;
-    loopRec.seen = new Set();
-    if (window && window.BOUNCER_LOOP_DBG){
-      if ((globalThis.BOUNCER_DBG_LEVEL|0)>=1) console.log('[bouncer-rec] new bar', k, 'mode', loopRec.mode, 'changed', changed, 'patLen', loopRec.pattern.length);
+    if ((globalThis.BOUNCER_DBG_LEVEL|0) >= 1) {
+      console.log('[bouncer-rec] loop reset: state changed; recording new bar');
+    }
     }
   }
+  loopRec.lastBarIndex = k;
+  loopRec.scheduledBarIndex = -999;
+  loopRec.seen = new Set();
+  if (window && window.BOUNCER_LOOP_DBG){
+    if ((globalThis.BOUNCER_DBG_LEVEL|0) >= 1) {
+      console.log('[bouncer-rec] new bar', k, 'mode', loopRec.mode, 'changed', changed, 'patLen', loopRec.pattern.length);
+    }
+  }
+}
   // Spawn debounce to prevent multiple spawns on a single release
   let __spawnLastAt = 0;
   const __spawnCooldown = 0.08; // seconds
@@ -327,13 +334,13 @@ let __justSpawnedUntil = 0;
 
 // Mute old scheduled events immediately; unmute on first new physics hit
 try {
-  try{ if (typeof window?.setToyMuted==="function") window.setToyMuted(toyId, true); }catch{}
+  if (S.setToyMuted) S.setToyMuted(S.toyId, true);
 } catch {}
-/* removed __spawnPendingUnmute staging; not used */
+S.__spawnPendingUnmute = true;
 
 
 try{
-  const lr = (visQ && visQ.loopRec) ? visQ.loopRec : null;
+  const lr = S.visQ && S.visQ.loopRec;
   if (lr){
     lr.mode = 'record'; // ensure physics plays immediately, and replay-scheduling pauses
     if (lr.scheduledKeys && typeof lr.scheduledKeys.clear === 'function') lr.scheduledKeys.clear();

@@ -27,8 +27,6 @@ export function createDrawGrid(panel, { cols = 16, rows = 12, toyId, bpm = 120 }
   let drawing=false, erasing=false;
   // The `strokes` array is removed. The paint canvas is now the source of truth.
   let cur = null;
-  // For live-drawing, we save the canvas state and restore it on each move.
-  let savedImageData = null;
 
   // UI: ensure Eraser button exists in header
   const header = panel.querySelector('.toy-header');
@@ -41,6 +39,8 @@ export function createDrawGrid(panel, { cols = 16, rows = 12, toyId, bpm = 120 }
     }
     er.addEventListener('click', ()=>{ erasing = !erasing; er.setAttribute('aria-pressed', String(erasing)); });
   }
+
+  const observer = new ResizeObserver(layout);
 
   function layout(){
     const newDpr = window.devicePixelRatio || 1;
@@ -84,19 +84,27 @@ export function createDrawGrid(panel, { cols = 16, rows = 12, toyId, bpm = 120 }
     for(let j=1;j<rows;j++){ gctx.beginPath(); gctx.moveTo(0, topPad+j*ch); gctx.lineTo(cssW, topPad+j*ch); gctx.stroke(); }
   }
 
-  function drawCurrentStroke(ctx, stroke, isErasing){
-    if (!stroke || stroke.pts.length < 2) return;
+  // A helper to draw a complete stroke from a point array.
+  // This is used to create a clean image for snapping.
+  function drawFullStroke(ctx, stroke) {
+    if (!stroke || !stroke.pts || stroke.pts.length < 1) return;
     ctx.beginPath();
-    for (let i=0; i<stroke.pts.length; i++){
-      const pt=stroke.pts[i];
-      if (!i) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y);
+    if (stroke.pts.length === 1) {
+      const lineWidth = Math.max(4, Math.round(Math.min(cw, ch) * 0.35));
+      ctx.fillStyle = 'rgba(95,179,255,0.95)';
+      ctx.arc(stroke.pts[0].x, stroke.pts[0].y, lineWidth / 2, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.moveTo(stroke.pts[0].x, stroke.pts[0].y);
+      for (let i = 1; i < stroke.pts.length; i++) {
+        ctx.lineTo(stroke.pts[i].x, stroke.pts[i].y);
+      }
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.lineWidth = Math.max(4, Math.round(Math.min(cw, ch) * 0.35));
+      ctx.strokeStyle = 'rgba(95,179,255,0.95)';
+      ctx.stroke();
     }
-    pctx.lineCap='round'; pctx.lineJoin='round';
-    ctx.lineWidth = Math.max(4, Math.round(Math.min(cw,ch)*0.35));
-    ctx.strokeStyle = isErasing ? 'rgba(255,96,96,0.9)' : 'rgba(95,179,255,0.95)';
-    ctx.stroke();
   }
-
   function eraseAtPoint(p) {
     const R = Math.max(8, Math.round(Math.min(cw,ch)*0.30));
     pctx.save();
@@ -108,36 +116,97 @@ export function createDrawGrid(panel, { cols = 16, rows = 12, toyId, bpm = 120 }
     pctx.restore();
   }
 
+  function drawNodes(nodes) {
+    if (!nodes) return;
+
+    const nodeCoords = []; // Store coordinates of each node: {x, y, col}
+
+    // First, find all node center points
+    for (let c = 0; c < cols; c++) {
+        if (nodes[c] && nodes[c].size > 0) {
+            for (const r of nodes[c]) {
+                const x = c * cw + cw * 0.5;
+                const y = topPad + r * ch + ch * 0.5;
+                nodeCoords.push({ x, y, col: c });
+            }
+        }
+    }
+
+    // --- Draw connecting lines ---
+    pctx.beginPath();
+    pctx.strokeStyle = 'rgba(255, 200, 80, 0.6)';
+    pctx.lineWidth = 2;
+
+    // Group nodes by column for easier and more efficient lookup
+    const colsMap = new Map();
+    for (const node of nodeCoords) {
+        if (!colsMap.has(node.col)) colsMap.set(node.col, []);
+        colsMap.get(node.col).push(node);
+    }
+
+    for (let c = 0; c < cols - 1; c++) {
+        const currentColNodes = colsMap.get(c);
+        const nextColNodes = colsMap.get(c + 1);
+        if (currentColNodes && nextColNodes) {
+            for (const node of currentColNodes) {
+                // Connect each node in the current column to all nodes in the next
+                for (const nextNode of nextColNodes) {
+                    pctx.moveTo(node.x, node.y);
+                    pctx.lineTo(nextNode.x, nextNode.y);
+                }
+            }
+        }
+    }
+    pctx.stroke();
+
+    // --- Draw the dots on top of the lines ---
+    pctx.fillStyle = 'rgba(255, 200, 80, 0.95)';
+    const radius = Math.max(3, Math.min(cw, ch) * 0.15);
+    for (const node of nodeCoords) {
+        pctx.beginPath();
+        pctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+        pctx.fill();
+    }
+  }
+
   function snapToGrid(){
     // build a map: for each column, choose at most one row where line crosses
     const active = Array(cols).fill(false);
     const nodes = Array.from({length:cols}, ()=> new Set());
-    const data = pctx.getImageData(0,0,cssW*dpr,cssH*dpr).data;
-    const w = cssW*dpr;
-    const radius = Math.max(1, Math.round(Math.min(cw,ch)*0.10)) * dpr;
-
-    function hasInk(x,y){
-      if (x<0||y<0||x>=w||y>=cssH*dpr) return false;
-      const i=(Math.round(y)*w + Math.round(x))*4;
-      return data[i+3] > 10; // alpha threshold
-    }
+    const w = paint.width;
+    const h = paint.height;
+    if (!w || !h) return { active, nodes }; // Abort if canvas is not ready
+    const data = pctx.getImageData(0, 0, w, h).data;
 
     for (let c=0;c<cols;c++){
-      const x0 = (c*cw + cw*0.5) * dpr;
-      // scan grid area only
-      for (let r=0;r<rows;r++){
-        const yC = (topPad + r*ch + ch*0.5) * dpr;
-        // check a small cross around center
-        let ink=false;
-        const step = Math.max(1, Math.floor(radius/3));
-        for (let dx=-radius; dx<=radius && !ink; dx+=step){
-          for (let dy=-radius; dy<=radius && !ink; dy+=step){
-            if (hasInk(x0+dx, yC+dy)) ink=true;
+      const xStart = Math.round(c * cw * dpr);
+      const xEnd = Math.round((c + 1) * cw * dpr);
+      
+      let ySum = 0;
+      let inkCount = 0;
+
+      // Scan the column for all "ink" pixels to find the average Y position
+      for (let x = xStart; x < xEnd; x++) {
+        for (let y = 0; y < h; y++) {
+          const i = (y * w + x) * 4;
+          if (data[i + 3] > 10) { // alpha threshold
+            ySum += y;
+            inkCount++;
           }
         }
-        if (ink){
-          nodes[c].add(r);
-          active[c]=true;
+      }
+
+      if (inkCount > 0) {
+        const avgY_dpr = ySum / inkCount;
+        const avgY_css = avgY_dpr / dpr;
+
+        // Convert average Y position to the nearest row index, if it's in the grid area
+        if (avgY_css >= topPad) {
+          const r = Math.round((avgY_css - topPad) / ch);
+          if (r >= 0 && r < rows) {
+            nodes[c].add(r);
+            active[c] = true;
+          }
         }
       }
     }
@@ -153,9 +222,10 @@ export function createDrawGrid(panel, { cols = 16, rows = 12, toyId, bpm = 120 }
     if (erasing) {
       eraseAtPoint(p);
     } else {
+      // When starting a new line, clear everything first.
+      pctx.clearRect(0, 0, cssW, cssH);
       cur = { pts:[p] };
-      savedImageData = pctx.getImageData(0, 0, paint.width, paint.height);
-      drawCurrentStroke(pctx, cur, false);
+      drawFullStroke(pctx, cur);
     }
   }
   function onPointerMove(e){
@@ -167,31 +237,46 @@ export function createDrawGrid(panel, { cols = 16, rows = 12, toyId, bpm = 120 }
       eraseAtPoint(p);
     } else if (cur) {
       cur.pts.push(p);
-      if (savedImageData) pctx.putImageData(savedImageData, 0, 0);
-      drawCurrentStroke(pctx, cur, false);
+      // Redraw the entire stroke on each move for reliability
+      pctx.clearRect(0, 0, cssW, cssH);
+      drawFullStroke(pctx, cur);
     }
   }
   function onPointerUp(e){
     if (!drawing) return;
     drawing=false;
 
-    if (!erasing && cur && cur.pts.length > 1) {
-      // Make the current stroke permanent on the canvas
-      if (savedImageData) pctx.putImageData(savedImageData, 0, 0);
-      drawCurrentStroke(pctx, cur, false);
-    }
-
+    const strokeToProcess = cur;
     cur = null;
-    savedImageData = null;
 
-    // rebuild nodes and emit event
-    const map = snapToGrid();
-    panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: map }));
+    if (!erasing && strokeToProcess) {
+      // This is the most robust way to handle the browser's asynchronous rendering.
+      // We wait for the next animation frame to do our work, ensuring the browser
+      // is ready for new drawing commands.
+      requestAnimationFrame(() => {
+        if (!panel.isConnected) return; // Safety check
+
+        // 1. Clear the canvas to ensure a clean state.
+        pctx.clearRect(0, 0, cssW, cssH);
+        // 2. Draw the final, complete stroke.
+        drawFullStroke(pctx, strokeToProcess);
+        // 3. Now, immediately read it. The browser must process the draw command
+        //    we just issued in this same task before moving on.
+        const map = snapToGrid();
+        panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: map }));
+        // 4. Draw the nodes on top of the line we just drew.
+        drawNodes(map.nodes);
+      });
+    } else if (erasing) {
+      const map = snapToGrid();
+      panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: map }));
+    }
   }
 
   paint.addEventListener('pointerdown', onPointerDown);
   paint.addEventListener('pointermove', onPointerMove);
   window.addEventListener('pointerup', onPointerUp);
+  observer.observe(body);
 
   const api = {
     panel,
@@ -200,7 +285,6 @@ export function createDrawGrid(panel, { cols = 16, rows = 12, toyId, bpm = 120 }
   };
 
   panel.addEventListener('toy-clear', api.clear);
-  new ResizeObserver(layout).observe(body);
 
   // The ResizeObserver only fires on *changes*. We must call layout() once
   // manually to render the initial state. requestAnimationFrame ensures

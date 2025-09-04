@@ -56,12 +56,13 @@
 
   <!-- Individual Toy Initializers (loaded by main.js) -->
 
+  <!-- DEBUG helpers -->
+  <script type="module" src="./src/debug-overlay.js"></script>
+  <script type="module" src="./src/toy-hydration-observer.js"></script>
   <!-- Bouncer safe boot (non-invasive) -->
   <script>
     window.BOUNCER_DBG_LEVEL = window.BOUNCER_DBG_LEVEL ?? 1;
     window.BOUNCER_IDS = window.BOUNCER_IDS || ['toy-b1','toy-b2'];
-    // Uncomment to temporarily disable loop engine while debugging physics:
-    // window.BOUNCER_LOOP_DISABLE = true;
   </script>
   <script type="module" src="./src/bouncer-stable-boot.js"></script>
 </body>

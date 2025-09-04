@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Music Toys — safe boot</title>
+  <link rel="stylesheet" href="./style.css" />
+  <style>
+    body{font:14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;background:#0b1020;color:#e5e7eb;margin:0}
+    header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #1f2937;background:#0f172a;position:sticky;top:0}
+    .toy-btn{background:#1f2937;border:1px solid #334155;color:#e5e7eb;border-radius:8px;padding:6px 10px;cursor:pointer}
+    .toy-btn:disabled{opacity:.55;cursor:not-allowed}
+    #board{display:grid;grid-template-columns:repeat(3,minmax(280px,1fr));gap:12px;padding:12px}
+    .toy-panel{min-height:200px;border:1px solid #23314d;border-radius:12px;background:#0f172a;position:relative;overflow:hidden}
+    .hint{color:#94a3b8;font-size:12px}
+    #status{font:12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;color:#9ca3af}
+  </style>
+  <script>
+    // Keep logs quieter
+    window.BOUNCER_DBG_LEVEL = 1;      // 0=silent, 1=bar-level, 2=verbose
+    window.BOUNCER_LOOP_DISABLE = false;
+  </script>
+</head>
+<body>
+  <header>
+    <div>Music Toys — <span class="hint">safe boot</span></div>
+    <div>
+      <button id="btn-audio" class="toy-btn">Init Audio</button>
+      <button id="btn-theme" class="toy-btn">Init Theme</button>
+      <button id="btn-boot"  class="toy-btn">Load Bouncers (safe)</button>
+    </div>
+  </header>
+
+  <div id="status" style="padding:10px 14px">Ready.</div>
+
+  <main id="board">
+    <section id="grid1" class="toy-panel" data-toy="loopgrid" data-instrument="Djimbe"></section>
+    <section id="grid2" class="toy-panel" data-toy="loopgrid" data-instrument="Djimbe"></section>
+    <section id="grid3" class="toy-panel" data-toy="loopgrid" data-instrument="Djimbe"></section>
+
+    <section id="toy-b1" class="toy-panel" data-toy="bouncer"></section>
+    <section id="toy-r1" class="toy-panel" data-toy="rippler"></section>
+    <section id="toy-b2" class="toy-panel" data-toy="bouncer"></section>
+  </main>
+
+  <!-- Core app (no bouncer imports here) -->
+  <script type="module">
+    const $ = s=>document.querySelector(s);
+    const log = (m)=>{ const el=$('#status'); el.textContent = (new Date).toLocaleTimeString()+': '+m; console.log(m); };
+    $('#btn-audio').onclick = async ()=>{
+      log('Loading audio…');
+      const mod = await import('./src/boot-audio.js');
+      log('Audio ready'); window.__AUDIO_READY = true;
+    };
+    $('#btn-theme').onclick = async ()=>{
+      log('Loading theme…');
+      await import('./src/boot-theme.js');
+      await import('./src/theme-switcher.js');
+      log('Theme ready'); window.__THEME_READY = true;
+    };
+    $('#btn-boot').onclick = async ()=>{
+      log('Loading bouncer-stable-boot.js…');
+      const race = (p, ms=1200)=>Promise.race([p, new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout waiting for module evaluation")), ms))]);
+      try {
+        const boot = await race(import('./src/bouncer-stable-boot.js'));
+        log('Boot shim loaded. Importing bouncer.main…');
+        // Inside the shim, import of bouncer.main.js will happen only now:
+        await boot.bootBouncersSafe?.(['toy-b1','toy-b2']);
+        log('Bouncers booted.');
+      } catch (e) {
+        log('[SAFE MODE] Bouncer module did not resolve: '+(e.message||e));
+        alert('Bouncer module appears to hang during evaluation. Staying in safe mode.\n\n'+(e.stack||e));
+      }
+    };
+  </script>
+</body>
+</html>
