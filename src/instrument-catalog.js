@@ -20,8 +20,9 @@ export async function loadInstrumentEntries(){
         const id = String((cells[idIdx]||cells[synthIdx]||'')).trim();
         const display = String((cells[dispIdx]||id)).trim();
         const type = String((cells[typeIdx]||'')).trim();
+        const synth = String((cells[synthIdx]||'')).trim();
         if (!id || !display) continue;
-        out.push({ id: id.toLowerCase(), display, type });
+        out.push({ id: id.toLowerCase(), display, type, synth });
       }
       // Dedup by display label; keep first id per label
       const byLabel = new Map();

@@ -103,15 +103,18 @@ html, body {
 .inst-picker-backdrop { position:absolute; inset:0; background:rgba(0,0,0,0.6); backdrop-filter: blur(3px); }
 .inst-host { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); pointer-events:auto; }
 .inst-panel { position:relative !important; left:auto !important; top:auto !important; width:min(1000px, 96vw); height:80vh; max-height:80vh; display:flex; flex-direction:column; }
-.inst-panel .inst-picker-rows { overflow:auto; display:grid; grid-template-columns: 240px 1fr; gap:8px 14px; padding:14px; align-content:start; }
-.inst-row-title { align-self:start; color:#cbd5e1; font-weight:700; padding:8px 0; border-bottom:1px solid #1c2430; }
-.inst-row-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap:10px; align-content:start; padding-bottom:12px; border-bottom:1px solid #1c2430; }
+.inst-panel .inst-body { display:grid; grid-template-columns: 220px 1fr; height:100%; }
+.inst-tabs { padding:12px 10px; border-right:1px solid #1c2430; overflow:auto; display:flex; flex-direction:column; gap:8px; }
+.inst-tab { padding:8px 10px; text-align:left; border-radius:8px; border:1px solid #1c2430; background:#121a24; color:#e6e8ef; cursor:pointer; }
+.inst-tab:hover { border-color:#5fb3ff; }
+.inst-tab.selected { background:#1b2e40; border-color:#5fb3ff; }
+.inst-grid { padding:12px; overflow:auto; display:grid; grid-template-columns: repeat(auto-fill, minmax(120px, 120px)); grid-auto-rows: 120px; justify-content: start; gap:10px; align-content:start; }
 .inst-picker-footer { display:flex; justify-content:flex-end; gap:8px; padding:10px; border-top:1px solid #1c2430; background:#0d141d; }
 .inst-cat { width:100%; text-align:left; padding:8px 10px; background:#121a24; color:#e6e8ef; border:1px solid #1c2430; border-radius:8px; margin:2px 0; cursor:pointer; }
 .inst-divider { height:8px; }
 .inst-item {
-  padding:10px 12px;
-  background:#182636; /* more standout */
+  padding:10px 8px;
+  background:#182636;
   color:#e6e8ef;
   border:2px solid rgba(95,179,255,0.35);
   border-radius:8px;
@@ -119,7 +122,7 @@ html, body {
   text-align:center;
   display:flex; align-items:center; justify-content:center;
   white-space:normal; word-break:break-word; overflow-wrap:break-word;
-  aspect-ratio: 1 / 1; /* square buttons */
+  width:100%; height:100%;
   transition: transform .08s ease, border-color .12s ease, background .12s ease;
 }
 .inst-item:hover { border-color:#5fb3ff; background:#1b2e40; }

@@ -165,7 +165,8 @@ function playSampleAt(id, when, gain=1, toyId, noteName){
   // synth fallback for entry with synth id
   const synthId = ent && ent.synth;
   if (synthId){
-    const toneId = TONE_NAMES.includes(synthId) ? synthId : 'tone';
+    const sNorm = String(synthId||'').toLowerCase().replace(/_/g,'-');
+    const toneId = TONE_NAMES.includes(sNorm) ? sNorm : 'tone';
     return playById(toneId, noteToFreq(noteName||'C4'), when||ctx.currentTime, getToyGain(toyId||'master'));
   }
   return false;
@@ -177,12 +178,35 @@ export function triggerInstrument(instrument, noteName='C4', when, toyId){
   const id  = normId(id0);
   const t   = safeStartTime(ctx, when);
 
+  // If id looks like a tone name in friendly form, normalize spaces/underscores/parentheses
+  try{
+    const idLoose = id.replace(/[()]/g,'').replace(/[_\s]+/g,'-');
+    // Common "tone (sine)" pattern: prefer the inner token if present
+    const m = /\(([a-z-\s_]+)\)/.exec(id0);
+    const inner = m ? m[1].trim().replace(/[_\s]+/g,'-') : '';
+    if (inner && TONE_NAMES.includes(inner)) return playById(inner, noteToFreq(noteName), t, getToyGain(toyId||'master'));
+    if (TONE_NAMES.includes(idLoose)) return playById(idLoose, noteToFreq(noteName), t, getToyGain(toyId||'master'));
+  }catch{}
+
   // exact or alias match first
   if (playSampleAt(id, t, 1, toyId, noteName)) return;
 
   // try family (e.g., djembe_bass -> djembe)
   const fam = id.split('_')[0];
   if (fam !== id && playSampleAt(fam, t, 1, toyId, noteName)) return;
+
+  // synth alias fallback: if an entry exists whose synth matches the id, use that tone
+  try{
+    for (const ent of entries.values()){
+      const s = (ent && ent.synth) ? String(ent.synth).toLowerCase() : '';
+      const sNorm = s.replace(/_/g,'-');
+      const iNorm = id.replace(/[()]/g,'').replace(/[_\s]+/g,'-');
+      if (s && (s === id || sNorm === id || s === iNorm || sNorm === iNorm)){
+        const toneId2 = TONE_NAMES.includes(sNorm) ? sNorm : (TONE_NAMES.includes(s) ? s : 'tone');
+        return playById(toneId2, noteToFreq(noteName), t, getToyGain(toyId||'master'));
+      }
+    }
+  }catch{}
 
   // synth fallback
   const toneId = TONE_NAMES.includes(id) ? id : 'tone';

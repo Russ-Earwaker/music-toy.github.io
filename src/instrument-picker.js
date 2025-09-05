@@ -78,7 +78,17 @@ export async function openInstrumentPicker({ panel, toyId }){
     const list = (cats.get(activeCat)||[]);
     list.forEach(e=>{
       const b = el('button','inst-item', e.display);
-      b.dataset.value = String(e.id||'').toLowerCase();
+      const disp = String(e.display||'').toLowerCase();
+      const id   = String(e.id||'').toLowerCase();
+      const synth= String(e.synth||'').toLowerCase().replace(/_/g,'-');
+      const hasFn = (k)=>{ try{ return !!(window.AudioDebug && typeof window.AudioDebug.has==='function' && window.AudioDebug.has(k)); }catch{ return false; } };
+      // Prefer synth (tone engine) when available; otherwise prefer a real buffer key
+      let key = (synth || id || disp || '').trim();
+      if (!synth){
+        if (hasFn(disp)) key = disp;
+        else if (hasFn(id)) key = id;
+      }
+      b.dataset.value = key;
       if (b.dataset.value === selected) b.classList.add('selected');
       b.addEventListener('click', (ev)=>{
         ev.stopPropagation();
