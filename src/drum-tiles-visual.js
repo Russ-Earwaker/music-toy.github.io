@@ -126,8 +126,8 @@ function render(panel) {
   const widthBasedSize = (w - totalGapWidth) / NUM_CUBES;
   let cubeSize = Math.min(heightBasedSize, widthBasedSize);
   if (isZoomed) {
-    // Enlarge cubes up to +50% when height was the limiting factor, but never exceed width or height constraints
-    const target = Math.min(Math.floor(heightBasedSize * 1.5), Math.floor(widthBasedSize));
+    // Enlarge cubes up to +100% when height is the limiter, but never exceed width constraint
+    const target = Math.min(Math.floor(heightBasedSize * 2.0), Math.floor(widthBasedSize));
     cubeSize = Math.max(cubeSize, target);
   }
   cubeSize = Math.max(1, Math.floor(cubeSize));

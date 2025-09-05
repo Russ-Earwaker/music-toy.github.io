@@ -112,6 +112,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         btnLine1.classList.toggle('active', nextDrawTarget === 1);
         btnLine2.classList.toggle('active', nextDrawTarget === 2);
     }
+    try { panel.__dgUpdateButtons = updateGeneratorButtons; } catch{}
 
     function handleGeneratorButtonClick(e) {
         const lineNum = parseInt(e.target.dataset.line, 10);
@@ -187,11 +188,11 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   }
 
   // New central helper to redraw the paint canvas and regenerate the node map from the `strokes` array.
-  function clearAndRedrawFromStrokes() {
+function clearAndRedrawFromStrokes() {
     pctx.clearRect(0, 0, cssW, cssH);
     for (const s of strokes) { drawFullStroke(pctx, s); }
     regenerateMapFromStrokes();
-    updateGeneratorButtons();
+    try { (panel.__dgUpdateButtons || updateGeneratorButtons || function(){})() } catch(e) { try { console.warn('[drawgrid] updateGeneratorButtons not available', e); } catch{} }
   }
 
   // Regenerates the node map by snapping all generator strokes.
@@ -231,6 +232,7 @@ function regenerateMapFromStrokes() {
       }
 
       currentMap = newMap;
+      try { (panel.__dgUpdateButtons || function(){})() } catch {}
       panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
       drawNodes(currentMap.nodes);
       drawGrid();
@@ -454,7 +456,7 @@ function regenerateMapFromStrokes() {
     if (stroke.pts.length === 1) {
       const lineWidth = getLineWidth();
       const p = stroke.pts[0];
-      if (stroke.isSpecial) {
+      if (stroke.isSpecial || !panel.classList.contains('toy-zoomed')) {
           const r = lineWidth / 2;
           const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
           const time = (performance.now() / 20);
@@ -485,7 +487,7 @@ function regenerateMapFromStrokes() {
       }
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       ctx.lineWidth = getLineWidth();
-      if (stroke.isSpecial) {
+      if (stroke.isSpecial || !panel.classList.contains('toy-zoomed')) {
           const p1 = stroke.pts[0];
           const pLast = stroke.pts[stroke.pts.length - 1];
           const grad = ctx.createLinearGradient(p1.x, p1.y, pLast.x, pLast.y);
@@ -901,11 +903,6 @@ function regenerateMapFromStrokes() {
             shouldGenerateNodes = true;
             isSpecial = true;
             generatorId = 1;
-        } else if (!hasLine2 && !nextDrawTarget) {
-            // Line 1 exists, so the next natural draw is Line 2.
-            shouldGenerateNodes = true;
-            isSpecial = true;
-            generatorId = 2;
         } else if (nextDrawTarget) {
             // A "Draw Line" button was explicitly clicked.
             shouldGenerateNodes = true;
@@ -915,11 +912,11 @@ function regenerateMapFromStrokes() {
             strokes = strokes.filter(s => s.generatorId !== generatorId);
             nextDrawTarget = null; // consume target so subsequent swipes follow natural order
         } else {
-            // Both lines exist and no redraw is armed, so this is a decorative line.
+            // No target armed: decorative line (no nodes)
             shouldGenerateNodes = false;
         }
         nextDrawTarget = null; // Always reset after a draw completes
-        updateGeneratorButtons();
+        try { (panel.__dgUpdateButtons || updateGeneratorButtons)(); } catch(e){ console.warn('[drawgrid] updateGeneratorButtons missing', e); }
     } else { // Standard view logic (unchanged)
         const hasNodes = currentMap && currentMap.nodes.some(s => s.size > 0);
         if (hasNodes) {
@@ -930,6 +927,8 @@ function regenerateMapFromStrokes() {
         }
     }
     
+    // Debug: log the decision for this stroke
+    try { console.info('[drawgrid] up', { isZoomed, isSpecial, generatorId, shouldGenerateNodes, strokes: strokes.length }); } catch{}
     strokeToProcess.isSpecial = isSpecial;
     strokeToProcess.generatorId = generatorId;
     strokes.push({ pts: strokeToProcess.pts, color: strokeToProcess.color, isSpecial: strokeToProcess.isSpecial, generatorId: strokeToProcess.generatorId });

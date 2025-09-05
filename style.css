@@ -432,14 +432,14 @@ select.toy-instrument {
 
 /* Specific sizing for zoomed toys */
 .toy-zoomed[data-toy="loopgrid"] {
-  width: min(100vw, 1800px);
+  width: min(100vw, 2100px);
   height: auto;
 }
 /* In Advanced, let loopgrid body grow freely (not forced square) */
 .toy-zoomed[data-toy="loopgrid"] .toy-body { aspect-ratio: auto; }
 .toy-zoomed[data-toy="loopgrid"] .toy-body { flex-grow: 1; }
 /* Give loopgrid more vertical headroom in Advanced so cubes can grow */
-.toy-zoomed[data-toy="loopgrid"] .sequencer-wrap { aspect-ratio: 5 / 1; }
+.toy-zoomed[data-toy="loopgrid"] .sequencer-wrap { aspect-ratio: 4 / 1; }
 
 .toy-zoomed[data-toy="bouncer"],
 .toy-zoomed[data-toy="rippler"] {
