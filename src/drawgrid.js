@@ -341,11 +341,31 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   function drawFullStroke(ctx, stroke) {
     if (!stroke || !stroke.pts || stroke.pts.length < 1) return;
     const color = stroke.color || STROKE_COLORS[0];
+
+    ctx.save(); // Save context for potential glow effect
+    if (stroke.isSpecial) {
+        ctx.shadowColor = 'rgba(255, 255, 255, 0.7)';
+        ctx.shadowBlur = 18;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+    }
+
     ctx.beginPath();
     if (stroke.pts.length === 1) {
       const lineWidth = getLineWidth();
-      ctx.fillStyle = color;
-      ctx.arc(stroke.pts[0].x, stroke.pts[0].y, lineWidth / 2, 0, Math.PI * 2);
+      const p = stroke.pts[0];
+      if (stroke.isSpecial) {
+          const r = lineWidth / 2;
+          const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+          const hue = (performance.now() / 20) % 360;
+          grad.addColorStop(0, `hsl(${hue}, 100%, 75%)`);
+          grad.addColorStop(0.7, `hsl(${(hue + 60) % 360}, 100%, 65%)`);
+          grad.addColorStop(1, `hsla(${(hue + 120) % 360}, 100%, 50%, 0.3)`);
+          ctx.fillStyle = grad;
+      } else {
+          ctx.fillStyle = color;
+      }
+      ctx.arc(p.x, p.y, lineWidth / 2, 0, Math.PI * 2);
       ctx.fill();
     } else {
       ctx.moveTo(stroke.pts[0].x, stroke.pts[0].y);
@@ -354,9 +374,21 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       }
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       ctx.lineWidth = getLineWidth();
-      ctx.strokeStyle = color;
+      if (stroke.isSpecial) {
+          const p1 = stroke.pts[0];
+          const pLast = stroke.pts[stroke.pts.length - 1];
+          const grad = ctx.createLinearGradient(p1.x, p1.y, pLast.x, pLast.y);
+          const hue = (performance.now() / 20) % 360;
+          grad.addColorStop(0, `hsl(${hue}, 100%, 70%)`);
+          grad.addColorStop(0.5, `hsl(${(hue + 45) % 360}, 100%, 70%)`);
+          grad.addColorStop(1, `hsl(${(hue + 90) % 360}, 100%, 70%)`);
+          ctx.strokeStyle = grad;
+      } else {
+          ctx.strokeStyle = color;
+      }
       ctx.stroke();
     }
+    ctx.restore();
   }
   function eraseAtPoint(p) {
     const R = getLineWidth(); // This is the radius
@@ -581,15 +613,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
             // Start the animation. It will handle drawing the remaining nodes.
             animateErasedNode(node);
-            flashColumn(col);
-
-            // Clear the blue line in that column
-            const x = gridArea.x + col * cw;
-            const w = cw;
-            pctx.clearRect(x, 0, w, cssH);
-
-            strokes = []; // Erasing invalidates the logical stroke model
-
             // Notify the player of the change
             panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
         }
@@ -725,40 +748,55 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     const strokeToProcess = cur;
     cur = null;
 
-    if (!erasing && strokeToProcess) {
-      strokes.push({ pts: strokeToProcess.pts, color: strokeToProcess.color }); // Add the new stroke to our list
-      // This is the most robust way to handle the browser's asynchronous rendering.
-      // We wait for the next animation frame to do our work, ensuring the browser
-      // is ready for new drawing commands.
+    if (erasing) {
+      // When erasing, we just stop. State was updated on move. The line is visually gone.
+      erasedColsThisDrag.clear();
+      // Erasing invalidates the logical stroke model.
+      // This "bakes" the paint canvas and stops the animation loop from redrawing.
+      strokes = [];
+      return;
+    }
+
+    if (!strokeToProcess) return;
+
+    const isZoomed = panel.classList.contains('toy-zoomed');
+    const hasNodes = currentMap && currentMap.nodes.some(s => s.size > 0);
+
+    let shouldGenerateNodes = true;
+    let isSpecial = false;
+
+    if (!isZoomed) { // Standard view logic
+      if (hasNodes) {
+        shouldGenerateNodes = false;
+      } else {
+        // This is the first stroke. It should generate nodes and be special.
+        isSpecial = true;
+      }
+    }
+    // In zoomed view, every stroke generates nodes (current behavior).
+
+    strokeToProcess.isSpecial = isSpecial;
+    strokes.push({ pts: strokeToProcess.pts, color: strokeToProcess.color, isSpecial: strokeToProcess.isSpecial });
+
+    if (shouldGenerateNodes) {
       requestAnimationFrame(() => {
         if (!panel.isConnected) return; // Safety check
 
         // Analyze just the new stroke to get its nodes.
         const partialMap = snapToGridFromStroke(strokeToProcess);
-
         if (!currentMap) {
           currentMap = {active:Array(cols).fill(false),nodes:Array.from({length:cols},()=>new Set())};
         }
-
-        // Merge the new nodes into the existing map.
-        // A new line's nodes overwrite any existing nodes in the columns it touches.
         for (let c = 0; c < cols; c++) {
-            if (partialMap.nodes[c]?.size > 0) {
-                // Add new nodes to the existing set for this column
-                for (const node of partialMap.nodes[c]) {
-                    currentMap.nodes[c].add(node);
-                }
-                currentMap.active[c] = true;
-            }
+          if (partialMap.nodes[c]?.size > 0) {
+            for (const node of partialMap.nodes[c]) { currentMap.nodes[c].add(node); }
+            currentMap.active[c] = true;
+          }
         }
-
         panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
         drawNodes(currentMap.nodes);
         drawGrid();
       });
-    } else if (erasing) {
-      // When erasing, we just stop. State was updated on move. The line is visually gone.
-      erasedColsThisDrag.clear();
     }
   }
 
@@ -800,18 +838,29 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
   let rafId = 0;
   function renderLoop() {
-      if (!panel.isConnected) { cancelAnimationFrame(rafId); return; }
-      let needsRedraw = false;
-      for (let i = 0; i < flashes.length; i++) {
-          if (flashes[i] > 0) {
-              flashes[i] = Math.max(0, flashes[i] - 0.08);
-              needsRedraw = true;
-          }
-      }
-      if (needsRedraw) {
-        drawGrid(); // Redraws the grid canvas, which includes the cubes
-      }
-      rafId = requestAnimationFrame(renderLoop);
+    if (!panel.isConnected) { cancelAnimationFrame(rafId); return; }
+
+    // Animate special stroke by redrawing it every frame
+    const specialStroke = strokes.find(s => s.isSpecial);
+    if (specialStroke && !drawing) {
+        pctx.clearRect(0, 0, cssW, cssH);
+        for (const s of strokes) {
+            drawFullStroke(pctx, s);
+        }
+    }
+
+    // Animate playhead flash
+    let needsRedraw = false;
+    for (let i = 0; i < flashes.length; i++) {
+        if (flashes[i] > 0) {
+            flashes[i] = Math.max(0, flashes[i] - 0.08);
+            needsRedraw = true;
+        }
+    }
+    if (needsRedraw) {
+      drawGrid(); // Redraws the grid canvas, which includes the cubes
+    }
+    rafId = requestAnimationFrame(renderLoop);
   }
   rafId = requestAnimationFrame(renderLoop);
 

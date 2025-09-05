@@ -1,10 +1,10 @@
 /* rippler.css — robust square wrapper (padding-top trick) */
 
-/* Let the body expand in the panel; no forced aspect ratio here */
+/* Body sizes to content; wrapper controls the square */
 .toy-panel[data-toy="rippler"] .toy-body {
   position: relative;
   display: block;
-  flex: 1 1 auto;
+  flex: 0 0 auto; /* do not stretch vertically */
   min-height: 0;
   overflow: hidden;
 }
@@ -14,12 +14,11 @@
   position: relative;
   width: 100%;
   max-width: 100%;
-  /* The "square" — height becomes 100% of width */
 }
 .toy-panel[data-toy="rippler"] .rippler-wrap::before {
   content: "";
   display: block;
-  padding-top: 100%; /* ← the square magic */
+  padding-top: 100%; /* square magic */
 }
 
 /* Canvas absolutely fills the square wrapper */
@@ -41,3 +40,4 @@
   max-width: 100%;
   max-height: 100%;
 }
+

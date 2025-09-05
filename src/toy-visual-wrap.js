@@ -45,11 +45,35 @@
   }
   function layout(panel){
     const kind = (panel.getAttribute('data-toy')||'').toLowerCase();
-    // This is the critical check. It runs every time the layout is
-    // potentially modified. This catches the 'loopgrid' toy even if the
-    // data-toy attribute was added *after* the initial script wiring,
-    // which is the source of the race condition.
-    if (kind === 'loopgrid') return;
+    // Skip toys that manage their own square/aspect layout
+    // - loopgrid: custom grid layout
+    // - rippler: square body managed via CSS (rippler.css)
+    if (kind === 'loopgrid' || kind === 'rippler') {
+      // Clean up any previous inline styles from older runs that might force absolute layout
+      const body = panel.querySelector('.toy-body');
+      if (body){
+        Object.assign(body.style, {
+          position: '', left: '', right: '', top: '', bottom: '',
+          padding: '', margin: '', border: '', overflow: ''
+        });
+      }
+      const wrap = panel.querySelector('.rippler-wrap');
+      const vis = panel.querySelector('.rippler-canvas, canvas, svg');
+      if (vis){
+        // If a wrapper exists, keep the visual inside it; otherwise leave
+        // the visual where rippler mounted it (usually toy-body)
+        if (wrap && vis.parentElement !== wrap) {
+          try { wrap.appendChild(vis); } catch {}
+        }
+        // Remove absolute fill styles so CSS can control size/aspect
+        Object.assign(vis.style, {
+          position: '', inset: '', left: '', right: '', top: '', bottom: '',
+          width: '', height: '', display: ''
+        });
+      }
+      // Do not unwrap .rippler-wrap; it defines the square via padding-top
+      return;
+    }
 
     const body = ensureBody(panel);
     const top = headerControlsHeight(panel);

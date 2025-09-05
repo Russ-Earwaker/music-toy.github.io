@@ -36,8 +36,17 @@ export function createRippleSynth(selector){
   canvas.className = 'rippler-canvas';
   canvas.style.display = 'block';
 
-  // Mount into the square wrapper if present (fixes layout), else fall back to .toy-body/panel
-  const __mountHost = panel.querySelector?.('.rippler-wrap') || panel.querySelector?.('.toy-body') || panel;
+  // Mount into a square wrapper inside toy-body to ensure a true square area
+  let __mountHost = panel.querySelector?.('.rippler-wrap');
+  try {
+    if (!__mountHost) {
+      const body = panel.querySelector?.('.toy-body') || panel;
+      __mountHost = document.createElement('div');
+      __mountHost.className = 'rippler-wrap';
+      body.appendChild(__mountHost);
+    }
+  } catch {}
+  __mountHost = __mountHost || panel.querySelector?.('.toy-body') || panel;
   __mountHost.appendChild(canvas);
   try{
     const host = __mountHost;
