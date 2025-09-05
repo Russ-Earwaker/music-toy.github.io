@@ -11,7 +11,7 @@ let EDGE_KEEP = 10;
 
 // Flash intensities for rings
 const FLASH_MAIN = 1.0;      // primary bright ring
-const FLASH_SECOND = 0.55;    // secondary bright ring (less bright)
+const FLASH_SECOND = 0.75;    // secondary bright ring (stronger)
 
 export function setParticleBounds(w, h){ WIDTH = w; HEIGHT = h; }
 
@@ -172,7 +172,7 @@ export function drawParticles(ctx, now, ripples, generator, blocks){
   // render — white points with brightness bump on flash, NO scaling
   ctx.save();
   for (const p of P){
-    const base = 0.55; const alpha = Math.max(0.08, Math.min(1, base + 0.45 * Math.max(0, Math.min(1, p.flash)))) ;
+    const base = 0.55; const alpha = Math.max(0.12, Math.min(1, base + 0.55 * Math.max(0, Math.min(1, p.flash)))) ;
     ctx.globalAlpha = alpha;
     if ((typeof window !== 'undefined') && window.__ripplerTint && (p.tint||0) > 0.05){
       // debug tint: bluish when repelled by cubes
@@ -184,7 +184,9 @@ export function drawParticles(ctx, now, ripples, generator, blocks){
       ctx.fillStyle = '#ffffff';
     }
     /*TINT_RENDER*/
-    ctx.fillRect(p.x, p.y, 1.5, 1.5);
+    const __f = Math.max(0, Math.min(1, p.flash||0));
+    const __sz = 1.5 + 0.9 * __f;
+    ctx.fillRect(p.x, p.y, __sz, __sz);
   }
   ctx.restore();
 }

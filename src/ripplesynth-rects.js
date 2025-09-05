@@ -26,7 +26,10 @@ export function makeGetBlockRects(n2x, n2y, sizing, BASE, blocks){
         id: (b.id != null ? b.id : i),
         active: !!b.active,
         noteIndex: (typeof b.noteIndex === 'number' ? b.noteIndex : 0),
-        flash: (typeof b.flash === 'number' ? b.flash : 0),
+        // Provide multiple flash channels expected by the renderer
+        flashEnd: (typeof b.flashEnd === 'number' ? b.flashEnd : 0),
+        flashDur: (typeof b.flashDur === 'number' ? b.flashDur : 0),
+        flash: (typeof b.cflash === 'number' ? b.cflash : (typeof b.pulse === 'number' ? b.pulse : (typeof b.flash === 'number' ? b.flash : 0))),
         cflash: (typeof b.cflash === 'number' ? b.cflash : 0),
         pulse: (typeof b.pulse === 'number' ? b.pulse : 0),
         labelOverride: (b.labelOverride ?? null)

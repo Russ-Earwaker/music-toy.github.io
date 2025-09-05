@@ -66,11 +66,10 @@ export function createRippleSynth(selector){
   const baseNoteName = (panel?.dataset?.ripplerOct || 'C4');
   panel.addEventListener('toy-instrument', (e)=>{ try{ currentInstrument = (e?.detail?.value)||currentInstrument; }catch{} });
 
-  // The legacy sizing helper has been removed. The new toy-layout-manager.js
-  // handles canvas sizing automatically. This dummy object prevents runtime
-  // errors from any remaining legacy debug code that might reference it.
-  const sizing = { scale: 1 };
+  // Zoom state helper used by renderers
   const isZoomed = ()=> panel.classList.contains('toy-zoomed');
+  // Sizing object passed to shared renderers; include isZoomed so they can show arrows/labels in Advanced view
+  const sizing = { scale: 1, isZoomed };
   panel.addEventListener('toy-zoom', ()=>{ try { setParticleBounds(canvas.width|0, canvas.height|0); } catch {} });
 
   const EDGE=4;
@@ -225,7 +224,7 @@ export function createRippleSynth(selector){
     const gp = getCanvasPos(canvas, e);
     const gx0 = n2x(generator.nx), gy0 = n2y(generator.ny);
     const nearGen = generator.placed && !isZoomed() && (Math.hypot(gp.x - gx0, gp.y - gy0) <= Math.max(20, generator.r*(sizing.scale||1)+10));
-    dragMuteActive = nearGen; playbackMuted = nearGen; if (nearGen){ ripples.length = 0; }
+    dragMuteActive = nearGen; playbackMuted = nearGen; if (nearGen){ ripples.length = 0; lastSpawnPerf = 0; }
     _genDownPos = { x: gx0, y: gy0 };
     if (isZoomed()){ }
     const wasPlaced = generator.placed; _wasPlacedAtDown = wasPlaced;
@@ -259,7 +258,8 @@ export function createRippleSynth(selector){
 
   function spawnRipple(manual=false){
     if (!generator?.placed) return;
-    if (typeof window !== 'undefined' && !window.__ripplerUserArmed) return;
+    // Allow programmatic/manual spawns to bypass the first-interaction guard
+    if (typeof window !== 'undefined' && !window.__ripplerUserArmed && !manual) return;
     const nowAT = ac.currentTime, nowPerf = ac.currentTime;
     if (nowPerf - lastSpawnPerf < 0.15) return; // debounce double fires
     lastSpawnPerf = nowPerf;
@@ -353,7 +353,8 @@ export function createRippleSynth(selector){
       const __nowAT = ac.currentTime; const __dt = (__lastDrawAT ? (__nowAT-__lastDrawAT) : 0); __lastDrawAT = __nowAT;
       for (let i=0;i<blocks.length;i++){ const b=blocks[i]; if (b.rippleAge != null && b.rippleMax){ b.rippleAge = Math.min(b.rippleMax, Math.max(0, b.rippleAge + __dt)); } }
 
-      drawBlocksSection(ctx, blockRects, n2x(generator.nx), n2y(generator.ny), ripples, 1, noteList, sizing, null, null, ac.currentTime);
+      // Draw blocks at their own positions; no global offset
+      drawBlocksSection(ctx, blockRects, 0, 0, null, 1, noteList, sizing, null, null, ac.currentTime);
 
       if (generator.placed){
         drawGenerator(ctx, n2x(generator.nx), n2y(generator.ny), Math.max(8, Math.round(generator.r*(sizing.scale||1))), ac.currentTime, ripples, NUM_STEPS, stepSeconds, (sizing.scale||1));
@@ -378,6 +379,60 @@ export function createRippleSynth(selector){
     pattern.forEach(s=> s.clear());
     barStartAT = ac.currentTime; nextSlotAT = barStartAT + stepSeconds(); nextSlotIx = 1; recording = true;
   }
+
+  // Advanced-only actions: randomize notes (and actives) and randomize block positions
+  function randomizeNotesAndActives(){
+    try {
+      try { ensureAudioContext(); } catch {}
+      // Randomize active set politely using existing helper
+      randomizeAllImpl(panel, {
+        panel, toyId, blocks,
+        clearPattern: ()=> pattern.forEach(s=> s.clear()),
+      });
+      // Randomize notes within pentatonic offsets around base note
+      const baseIx = (noteList.indexOf(baseNoteName)>=0? noteList.indexOf(baseNoteName) : (noteList.indexOf('C4')>=0? noteList.indexOf('C4') : 48));
+      for (let i=0;i<blocks.length;i++){
+        const off = PENTATONIC_OFFSETS[(Math.random()*PENTATONIC_OFFSETS.length)|0] | 0;
+        blocks[i].noteIndex = baseIx + off;
+        blocks[i].pulse = 1; blocks[i].cflash = 1; blocks[i].flashEnd = Math.max(blocks[i].flashEnd||0, ac.currentTime + 0.12);
+      }
+      // Reset loop recording/playback timeline
+      const nowAT = ac.currentTime;
+      barStartAT = nowAT;
+      nextSlotAT = barStartAT + stepSeconds();
+      nextSlotIx = 1;
+      pattern.forEach(s=> s.clear());
+      recording = true;
+      // Always seed a fresh ripple: cancel any in-flight waves first
+      try { if (Array.isArray(ripples)) ripples.length = 0; spawnRipple(true); } catch {}
+    } catch(e) { try { console.warn('[rippler random-notes]', e); } catch {} }
+  }
+  function randomizeBlockPositions(){
+    try {
+      try { ensureAudioContext(); } catch {}
+      const size = Math.round(BASE*(sizing.scale||1)*boardScale(canvas));
+      const bounds = { x: EDGE, y: EDGE, w: Math.max(1, W()-EDGE*2), h: Math.max(1, H()-EDGE*2) };
+      const rects = Array.from({length:CUBES}, ()=>({ w:size, h:size }));
+      try { randomizeRects(rects, bounds, 6); } catch {}
+      for (let i=0;i<CUBES;i++){
+        const r = rects[i]; const cx = r.x + r.w/2, cy = r.y + r.h/2;
+        const b = blocks[i]; b.nx = b.nx0 = x2n(cx); b.ny = b.ny0 = y2n(cy); b.vx=0; b.vy=0;
+        b.pulse = 1; b.cflash = 1; b.flashEnd = Math.max(b.flashEnd||0, ac.currentTime + 0.12);
+      }
+      // Reset loop recording/playback timeline
+      const nowAT = ac.currentTime;
+      barStartAT = nowAT;
+      nextSlotAT = barStartAT + stepSeconds();
+      nextSlotIx = 1;
+      pattern.forEach(s=> s.clear());
+      recording = true;
+      // Always seed a fresh ripple: cancel any in-flight waves first
+      try { if (Array.isArray(ripples)) ripples.length = 0; spawnRipple(true); } catch {}
+    } catch(e) { try { console.warn('[rippler random-blocks]', e); } catch {} }
+  }
+
+  panel.addEventListener('toy-random-notes', randomizeNotesAndActives);
+  panel.addEventListener('toy-random-blocks', randomizeBlockPositions);
 
   randomizeAll();
   requestAnimationFrame(draw);

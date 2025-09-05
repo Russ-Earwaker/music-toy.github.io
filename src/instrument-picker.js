@@ -105,21 +105,76 @@ export async function openInstrumentPicker({ panel, toyId }){
   renderGrid();
 
   // Wire controls
-  // Volume ducking: reduce other toys to 20% while picker is open
-  const restore = new Map();
+  // Volume ducking: reduce other toys to 20% while picker is open.
+  // Make this robust to nested/rapid openings by tracking per-id duck counts.
+  const duckState = (window.__instDuck ||= { count: new Map(), store: new Map(), openCount: 0 });
+  const duckedThisOpen = new Set();
+  duckState.openCount = (duckState.openCount || 0) + 1;
   try{
     document.querySelectorAll('.toy-panel').forEach(p=>{
       const id = String(p.dataset.toyid || p.dataset.toy || p.id || '').toLowerCase();
-      if (!id) return; const vol = getToyVolume ? getToyVolume(id) : 1; restore.set(id, vol);
-      if (id !== tgtId) try{ setToyVolume && setToyVolume(id, Math.max(0, Math.min(1, vol*0.2))); }catch{}
+      const kind = String(p.dataset.toy || '').toLowerCase();
+      if (!id || id === tgtId) return;
+      const curVol = getToyVolume ? getToyVolume(id) : 1;
+      if (!duckState.count.get(id)) {
+        duckState.store.set(id, curVol);
+        duckState.count.set(id, 1);
+      } else {
+        duckState.count.set(id, (duckState.count.get(id) || 0) + 1);
+      }
+      duckedThisOpen.add(id);
+      try{ setToyVolume && setToyVolume(id, Math.max(0, Math.min(1, curVol * 0.2))); }catch{}
+
+      // Also duck the shared kind bus (e.g., 'loopgrid') in case the panel uses it
+      if (kind && kind !== tgtId) {
+        const kVol = getToyVolume ? getToyVolume(kind) : 1;
+        const key = `__kind__:${kind}`;
+        if (!duckState.count.get(key)) {
+          duckState.store.set(key, kVol);
+          duckState.count.set(key, 1);
+        } else {
+          duckState.count.set(key, (duckState.count.get(key) || 0) + 1);
+        }
+        duckedThisOpen.add(key);
+        try{ setToyVolume && setToyVolume(kind, Math.max(0, Math.min(1, kVol * 0.2))); }catch{}
+      }
     });
   }catch{}
 
   function close(result){
     ov.classList.remove('open');
     window.setTimeout(()=>{ ov.style.display='none'; }, 120);
-    // restore volumes
-    try{ restore.forEach((v,id)=>{ try{ setToyVolume && setToyVolume(id, v); }catch{} }); }catch{}
+    // Restore volumes using ref-counted ducking
+    try{
+      duckedThisOpen.forEach((id)=>{
+        const n = (duckState.count.get(id) || 0) - 1;
+        if (n <= 0){
+          duckState.count.delete(id);
+          const v = duckState.store.get(id);
+          duckState.store.delete(id);
+          if (typeof v === 'number') {
+            // Kind keys are prefixed; restore actual key accordingly
+            const actual = id.startsWith('__kind__:') ? id.slice('__kind__:'.length) : id;
+            try{ setToyVolume && setToyVolume(actual, v); }catch{}
+          }
+        } else {
+          duckState.count.set(id, n);
+        }
+      });
+      // If no picker remains open, hard-restore any lingering ducked ids
+      duckState.openCount = Math.max(0, (duckState.openCount || 1) - 1);
+      if (duckState.openCount === 0){
+        duckState.count.forEach((_, id)=>{
+          const v = duckState.store.get(id);
+          if (typeof v === 'number') {
+            const actual = id.startsWith('__kind__:') ? id.slice('__kind__:'.length) : id;
+            try{ setToyVolume && setToyVolume(actual, v); }catch{}
+          }
+        });
+        duckState.count.clear();
+        duckState.store.clear();
+      }
+    }catch{}
     resolve && resolve(result);
   }
   let resolve;

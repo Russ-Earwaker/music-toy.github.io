@@ -25,13 +25,12 @@ export function createBouncerDraw(env){
   let didInit = false;
 
   function draw(){
-    // Size canvas for DPR if CSS size changed
+    // Always ensure backing store matches CSS size for crisp rendering
+    try{ resizeCanvasForDPR(canvas, ctx); }catch{}
+    // Track CSS size (optional diagnostics)
     const cssW = Math.max(1, Math.round(canvas.clientWidth || 0));
     const cssH = Math.max(1, Math.round(canvas.clientHeight || 0));
-    if (cssW !== lastCssW || cssH !== lastCssH){
-      try{ resizeCanvasForDPR(canvas, ctx); }catch{}
-      lastCssW = cssW; lastCssH = cssH;
-    }
+    lastCssW = cssW; lastCssH = cssH;
 
     // First-frame init: lock world and set launch baseline
     if (!didInit){

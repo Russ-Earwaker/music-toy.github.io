@@ -88,6 +88,16 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
     const b = btn('Random Notes'); b.dataset.action='random-notes'; right.appendChild(b);
   }
 
+  // Rippler advanced-only buttons: Random Notes + Random Blocks
+  if (toyKind === 'rippler') {
+    if (!right.querySelector('[data-action="random-notes"]')) {
+      const b = btn('Random Notes'); b.dataset.action='random-notes'; right.appendChild(b);
+    }
+    if (!right.querySelector('[data-action="random-blocks"]')) {
+      const b = btn('Random Blocks'); b.dataset.action='random-blocks'; right.appendChild(b);
+    }
+  }
+
   // Instrument select (header, hidden in standard)
   const sel = buildInstrumentSelect(panel);
   // Replace select with a button that opens the picker (keep select for fallback/state only)

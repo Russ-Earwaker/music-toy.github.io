@@ -154,6 +154,16 @@ export function drawBlock(ctx, b, opts = {}){
   ctx.fillStyle = color;
   ctx.fillRect(x, y, w, h);
 
+  // Strong white flash overlay regardless of base color (ensures visible pop)
+  if (flash > 0) {
+    const f = Math.max(0, Math.min(1, flash));
+    ctx.save();
+    ctx.globalAlpha = 0.25 + 0.55 * f; // from 0.25 up to ~0.8
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x, y, w, h);
+    ctx.restore();
+  }
+
   // variant styling
   if (variant === 'button'){
     // Beveled button look

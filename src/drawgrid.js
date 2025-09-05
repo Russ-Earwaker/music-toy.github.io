@@ -55,6 +55,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let strokes = []; // Store all completed stroke objects
   let currentMap = null; // Store the current node map {active, nodes}
   let nodeCoordsForHitTest = []; // For draggable nodes
+  let nextDrawTarget = null; // Can be 1 or 2. Determines the next special line.
   let flashes = new Float32Array(cols);
   let playheadCol = -1;
   let erasedColsThisDrag = new Set(); // For eraser hit-testing
@@ -82,6 +83,54 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       else erasedColsThisDrag.clear(); // Clear on tool toggle
     });
 
+    // --- Generator Line Buttons (Advanced Mode Only) ---
+    const generatorButtonsWrap = document.createElement('div');
+    generatorButtonsWrap.className = 'drawgrid-generator-buttons';
+    panel.appendChild(generatorButtonsWrap);
+
+    const btnLine1 = document.createElement('button');
+    btnLine1.type = 'button';
+    btnLine1.className = 'toy-btn';
+    btnLine1.dataset.line = '1';
+    btnLine1.textContent = 'Draw Line 1';
+    generatorButtonsWrap.appendChild(btnLine1);
+
+    const btnLine2 = document.createElement('button');
+    btnLine2.type = 'button';
+    btnLine2.className = 'toy-btn';
+    btnLine2.dataset.line = '2';
+    btnLine2.textContent = 'Draw Line 2';
+    generatorButtonsWrap.appendChild(btnLine2);
+
+    function updateGeneratorButtons() {
+        const hasLine1 = strokes.some(s => s.generatorId === 1);
+        const hasLine2 = strokes.some(s => s.generatorId === 2);
+
+        btnLine1.textContent = hasLine1 ? 'Redraw Line 1' : 'Draw Line 1';
+        btnLine2.textContent = hasLine2 ? 'Redraw Line 2' : 'Draw Line 2';
+
+        btnLine1.classList.toggle('active', nextDrawTarget === 1);
+        btnLine2.classList.toggle('active', nextDrawTarget === 2);
+    }
+
+    function handleGeneratorButtonClick(e) {
+        const lineNum = parseInt(e.target.dataset.line, 10);
+        const hasLine = strokes.some(s => s.generatorId === lineNum);
+
+        if (hasLine) {
+            // "Redraw" was clicked. Remove the existing line and its nodes.
+            strokes = strokes.filter(s => s.generatorId !== lineNum);
+            clearAndRedrawFromStrokes();
+        }
+        
+        // Set this line as the next one to be drawn.
+        nextDrawTarget = lineNum;
+        updateGeneratorButtons();
+    }
+
+    btnLine1.addEventListener('click', handleGeneratorButtonClick);
+    btnLine2.addEventListener('click', handleGeneratorButtonClick);
+
     // Auto-tune toggle
     let autoTuneBtn = right.querySelector('.drawgrid-autotune');
     if (!autoTuneBtn) {
@@ -95,7 +144,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       autoTuneBtn.addEventListener('click', () => {
         autoTune = !autoTune;
         autoTuneBtn.textContent = `Auto-tune: ${autoTune ? 'On' : 'Off'}`;
-        autoTuneBtn.setAttribute('aria-pressed', String(autoTune));
+        autoTuneBtn.setAttribute('aria-pressed', String(autoTune)); // This will re-snap all nodes
         resnapAndRedraw();
       });
     }
@@ -137,6 +186,56 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     }
   }
 
+  // New central helper to redraw the paint canvas and regenerate the node map from the `strokes` array.
+  function clearAndRedrawFromStrokes() {
+    pctx.clearRect(0, 0, cssW, cssH);
+    for (const s of strokes) { drawFullStroke(pctx, s); }
+    regenerateMapFromStrokes();
+    updateGeneratorButtons();
+  }
+
+  // Regenerates the node map by snapping all generator strokes.
+function regenerateMapFromStrokes() {
+      const isZoomed = panel.classList.contains('toy-zoomed');
+      const newMap = { active: Array(cols).fill(false), nodes: Array.from({ length: cols }, () => new Set()) };
+
+      if (isZoomed) {
+        // Aggregate all generator strokes into an offscreen canvas and snap once
+        const tmp = document.createElement('canvas');
+        tmp.width = paint.width; tmp.height = paint.height;
+        const tctx = tmp.getContext('2d', { willReadFrequently: true });
+        if (tctx){
+          try { tctx.setTransform(dpr, 0, 0, dpr, 0, 0); } catch {}
+          const gens = strokes.filter(s => s.generatorId);
+          for (const s of gens) drawFullStroke(tctx, s);
+          const partial = snapToGrid(tctx);
+          for (let c = 0; c < cols; c++){
+            if (partial.nodes[c]?.size > 0){
+              partial.nodes[c].forEach(node => newMap.nodes[c].add(node));
+              newMap.active[c] = true;
+            }
+          }
+        }
+      } else {
+        // In standard view, only the first special stroke generates nodes.
+        const specialStroke = strokes.find(s => s.isSpecial);
+        if (specialStroke){
+          const partial = snapToGridFromStroke(specialStroke);
+          for (let c = 0; c < cols; c++){
+            if (partial.nodes[c]?.size > 0){
+              partial.nodes[c].forEach(node => newMap.nodes[c].add(node));
+              newMap.active[c] = true;
+            }
+          }
+        }
+      }
+
+      currentMap = newMap;
+      panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
+      drawNodes(currentMap.nodes);
+      drawGrid();
+  }
+
   function resnapAndRedraw() {
     const hasContent = strokes.length > 0;
     layout(true); // This redraws the grid and clears the content canvases.
@@ -144,22 +243,13 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     if (hasContent) {
       requestAnimationFrame(() => {
         if (!panel.isConnected) return;
-        // Redraw all strokes onto the cleared canvas.
-        pctx.clearRect(0, 0, cssW, cssH);
-        for (const s of strokes) { drawFullStroke(pctx, s); }
-        // ...then we can read it to generate the new node map.
-        const map = snapToGrid();
-        // The canvas already has the line from the previous step, so we just draw nodes on top.
-        // Notify the player of the new state
-        panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: map }));
-        currentMap = map;
-        drawNodes(map.nodes);
-        drawGrid();
+        clearAndRedrawFromStrokes();
       });
     } else {
       api.clear();
     }
   }
+
 
   panel.addEventListener('toy-zoom', () => {
     // When zooming in or out, the panel's size changes.
@@ -169,15 +259,25 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (!panel.isConnected) return;
-        layout(true);
 
-        // After a resize, the canvases are cleared by layout(), so we must redraw the state.
-        if (strokes.length > 0) {
-          for (const s of strokes) { drawFullStroke(pctx, s); }
+        // If entering advanced mode, upgrade the standard-view special line to Line 1
+        // so that its nodes are preserved.
+        if (panel.classList.contains('toy-zoomed')) {
+            const hasGeneratorLines = strokes.some(s => s.generatorId);
+            if (!hasGeneratorLines) {
+                // If there are no generator lines, we are effectively starting fresh
+                // in advanced mode. Clear any purely visual strokes from standard view.
+                strokes = [];
+            }
+        } else {
+            // LEAVING advanced mode. Consolidate to just Line 1 and any decorative lines.
+            const line1 = strokes.find(s => s.generatorId === 1);
+            const decorativeStrokes = strokes.filter(s => !s.generatorId);
+            // Line 2 and its nodes are discarded.
+            strokes = line1 ? [line1, ...decorativeStrokes] : decorativeStrokes;
         }
-        if (currentMap) {
-          drawNodes(currentMap.nodes);
-        }
+
+        resnapAndRedraw();
       });
     });
   });
@@ -357,10 +457,21 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       if (stroke.isSpecial) {
           const r = lineWidth / 2;
           const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
-          const hue = (performance.now() / 20) % 360;
-          grad.addColorStop(0, `hsl(${hue}, 100%, 75%)`);
-          grad.addColorStop(0.7, `hsl(${(hue + 60) % 360}, 100%, 65%)`);
-          grad.addColorStop(1, `hsla(${(hue + 120) % 360}, 100%, 50%, 0.3)`);
+          const time = (performance.now() / 20);
+          if (stroke.generatorId === 1) {
+              grad.addColorStop(0, `hsl(${(240 + time) % 360}, 100%, 75%)`);
+              grad.addColorStop(0.7, `hsl(${(300 + time) % 360}, 100%, 65%)`);
+              grad.addColorStop(1, `hsla(${(360 + time) % 360}, 100%, 50%, 0.3)`);
+          } else if (stroke.generatorId === 2) {
+              grad.addColorStop(0, `hsl(${(60 + time) % 360}, 100%, 75%)`);
+              grad.addColorStop(0.7, `hsl(${(30 + time) % 360}, 100%, 65%)`);
+              grad.addColorStop(1, `hsla(${(0 + time) % 360}, 100%, 50%, 0.3)`);
+          } else {
+              const hue = time % 360;
+              grad.addColorStop(0, `hsl(${hue}, 100%, 75%)`);
+              grad.addColorStop(0.7, `hsl(${(hue + 60) % 360}, 100%, 65%)`);
+              grad.addColorStop(1, `hsla(${(hue + 120) % 360}, 100%, 50%, 0.3)`);
+          }
           ctx.fillStyle = grad;
       } else {
           ctx.fillStyle = color;
@@ -378,10 +489,21 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
           const p1 = stroke.pts[0];
           const pLast = stroke.pts[stroke.pts.length - 1];
           const grad = ctx.createLinearGradient(p1.x, p1.y, pLast.x, pLast.y);
-          const hue = (performance.now() / 20) % 360;
-          grad.addColorStop(0, `hsl(${hue}, 100%, 70%)`);
-          grad.addColorStop(0.5, `hsl(${(hue + 45) % 360}, 100%, 70%)`);
-          grad.addColorStop(1, `hsl(${(hue + 90) % 360}, 100%, 70%)`);
+          const time = performance.now() / 20;
+          if (stroke.generatorId === 1) {
+              grad.addColorStop(0, `hsl(${(240 + time) % 360}, 100%, 70%)`);
+              grad.addColorStop(0.5, `hsl(${(280 + time) % 360}, 100%, 70%)`);
+              grad.addColorStop(1, `hsl(${(360 + time) % 360}, 100%, 70%)`);
+          } else if (stroke.generatorId === 2) {
+              grad.addColorStop(0, `hsl(${(60 + time) % 360}, 100%, 70%)`);
+              grad.addColorStop(0.5, `hsl(${(30 + time) % 360}, 100%, 70%)`);
+              grad.addColorStop(1, `hsl(${(0 + time) % 360}, 100%, 70%)`);
+          } else {
+              const hue = time % 360;
+              grad.addColorStop(0, `hsl(${hue}, 100%, 70%)`);
+              grad.addColorStop(0.5, `hsl(${(hue + 45) % 360}, 100%, 70%)`);
+              grad.addColorStop(1, `hsl(${(hue + 90) % 360}, 100%, 70%)`);
+          }
           ctx.strokeStyle = grad;
       } else {
           ctx.strokeStyle = color;
@@ -649,6 +771,12 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         }
     }
 
+    // If the click was in the top area (where cubes are) but not on a cube,
+    // or anywhere above the note grid, ignore it for drawing.
+    if (p.y < gridArea.y + topPad) {
+        return;
+    }
+
     // In advanced mode, check for dragging a node first.
     if (panel.classList.contains('toy-zoomed')) {
       for (const node of nodeCoordsForHitTest) {
@@ -760,43 +888,65 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     if (!strokeToProcess) return;
 
     const isZoomed = panel.classList.contains('toy-zoomed');
-    const hasNodes = currentMap && currentMap.nodes.some(s => s.size > 0);
-
     let shouldGenerateNodes = true;
     let isSpecial = false;
+    let generatorId = null;
 
-    if (!isZoomed) { // Standard view logic
-      if (hasNodes) {
-        shouldGenerateNodes = false;
-      } else {
-        // This is the first stroke. It should generate nodes and be special.
-        isSpecial = true;
-      }
+    if (isZoomed) {
+        const hasLine1 = strokes.some(s => s.generatorId === 1);
+        const hasLine2 = strokes.some(s => s.generatorId === 2);
+
+        if (!hasLine1) {
+            // No lines exist, this new one is Line 1.
+            shouldGenerateNodes = true;
+            isSpecial = true;
+            generatorId = 1;
+        } else if (!hasLine2 && !nextDrawTarget) {
+            // Line 1 exists, so the next natural draw is Line 2.
+            shouldGenerateNodes = true;
+            isSpecial = true;
+            generatorId = 2;
+        } else if (nextDrawTarget) {
+            // A "Draw Line" button was explicitly clicked.
+            shouldGenerateNodes = true;
+            isSpecial = true;
+            generatorId = nextDrawTarget;
+            // Remove any existing line with the same ID before adding the new one.
+            strokes = strokes.filter(s => s.generatorId !== generatorId);
+            nextDrawTarget = null; // consume target so subsequent swipes follow natural order
+        } else {
+            // Both lines exist and no redraw is armed, so this is a decorative line.
+            shouldGenerateNodes = false;
+        }
+        nextDrawTarget = null; // Always reset after a draw completes
+        updateGeneratorButtons();
+    } else { // Standard view logic (unchanged)
+        const hasNodes = currentMap && currentMap.nodes.some(s => s.size > 0);
+        if (hasNodes) {
+            shouldGenerateNodes = false;
+        } else {
+            isSpecial = true;
+            generatorId = 1; // Standard view's first line is functionally Line 1
+        }
     }
-    // In zoomed view, every stroke generates nodes (current behavior).
-
+    
     strokeToProcess.isSpecial = isSpecial;
-    strokes.push({ pts: strokeToProcess.pts, color: strokeToProcess.color, isSpecial: strokeToProcess.isSpecial });
+    strokeToProcess.generatorId = generatorId;
+    strokes.push({ pts: strokeToProcess.pts, color: strokeToProcess.color, isSpecial: strokeToProcess.isSpecial, generatorId: strokeToProcess.generatorId });
+
+    // Immediately redraw paint with special effects if any special strokes exist
+    try {
+      const anySpecial = strokes.some(s => s.isSpecial);
+      if (anySpecial) {
+        pctx.clearRect(0, 0, cssW, cssH);
+        for (const s of strokes) drawFullStroke(pctx, s);
+      }
+    } catch {}
 
     if (shouldGenerateNodes) {
-      requestAnimationFrame(() => {
-        if (!panel.isConnected) return; // Safety check
-
-        // Analyze just the new stroke to get its nodes.
-        const partialMap = snapToGridFromStroke(strokeToProcess);
-        if (!currentMap) {
-          currentMap = {active:Array(cols).fill(false),nodes:Array.from({length:cols},()=>new Set())};
-        }
-        for (let c = 0; c < cols; c++) {
-          if (partialMap.nodes[c]?.size > 0) {
-            for (const node of partialMap.nodes[c]) { currentMap.nodes[c].add(node); }
-            currentMap.active[c] = true;
-          }
-        }
-        panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
-        drawNodes(currentMap.nodes);
-        drawGrid();
-      });
+      // Rebuild nodes immediately to ensure Advanced first swipe creates Line 1 nodes
+      if (!panel.isConnected) return;
+      clearAndRedrawFromStrokes();
     }
   }
 
@@ -840,9 +990,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   function renderLoop() {
     if (!panel.isConnected) { cancelAnimationFrame(rafId); return; }
 
-    // Animate special stroke by redrawing it every frame
-    const specialStroke = strokes.find(s => s.isSpecial);
-    if (specialStroke && !drawing) {
+    // Animate special strokes by redrawing them every frame
+    const specialStrokes = strokes.filter(s => s.isSpecial);
+    if (specialStrokes.length > 0 && !drawing) {
         pctx.clearRect(0, 0, cssW, cssH);
         for (const s of strokes) {
             drawFullStroke(pctx, s);
@@ -878,6 +1028,27 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     },
     setErase:(v)=>{ erasing=!!v; },
   };
+
+  // Add some CSS for the new buttons
+  const style = document.createElement('style');
+  style.textContent = `
+      .toy-panel[data-toy="drawgrid"] .drawgrid-generator-buttons {
+          position: absolute;
+          left: -115px; /* Position outside the panel */
+          top: 50%;
+          transform: translateY(-50%);
+          display: none; /* Hidden by default */
+          flex-direction: column;
+          gap: 10px;
+          z-index: 10;
+      }
+      .toy-panel[data-toy="drawgrid"].toy-zoomed .drawgrid-generator-buttons {
+          display: flex; /* Visible only in advanced mode */
+      }
+      .drawgrid-generator-buttons .toy-btn { width: 100px; height: 60px; font-size: 14px; }
+      .drawgrid-generator-buttons .toy-btn.active { box-shadow: 0 0 8px 2px #fff; border-color: #fff; }
+  `;
+  panel.appendChild(style);
 
   panel.addEventListener('toy-clear', api.clear);
 

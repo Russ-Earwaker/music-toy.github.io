@@ -26,30 +26,30 @@ export function drawBlocksSection(ctx, blocks, offsetX = 0, offsetY = 0, selecte
     const b = blocks[i];
     if (!b) continue;
 
-    // Calculate flash intensity (0-1)
+    // Calculate flash intensity (0-1). Use the strongest of time-based and instant channels.
     let flash = 0;
     if (b.flashEnd && b.flashDur) {
       const elapsed = now - (b.flashEnd - b.flashDur);
       if (elapsed >= 0 && elapsed < b.flashDur) {
-        flash = 1.0 - (elapsed / b.flashDur);
+        flash = Math.max(flash, 1.0 - (elapsed / b.flashDur));
       }
-    } else if (b.flash > 0) {
-      // Fallback for older flash property
-      flash = b.flash;
     }
+    const flashProp = Math.max(0, b.flash || 0, b.cflash || 0, b.pulse || 0);
+    flash = Math.max(flash, flashProp);
 
     const isActive = b.active !== false;
     const baseColor = isActive ? '#ff8c00' : '#333';
-    const finalColor = flash > 0 ? `rgba(255, 140, 0, ${1 - flash})` : baseColor;
 
     const opts = {
-      baseColor: finalColor,
+      baseColor: baseColor,
       active: isActive || flash > 0.1,
+      flash,
       offsetX,
       offsetY,
-      noteLabel: b.labelOverride || (isZoomed && b.noteIndex != null && noteNames[b.noteIndex]) ? (noteNames[b.noteIndex] || '') : null,
+      noteLabel: (isZoomed ? (b.labelOverride ?? ((b.noteIndex != null) ? (noteNames[b.noteIndex] || '') : null)) : null),
       showArrows: isZoomed,
-      variant: isZoomed ? 'button' : 'block'
+      // Use the beveled 'button' style in both modes for consistency with Bouncer
+      variant: 'button'
     };
 
     drawBlock(ctx, b, opts);

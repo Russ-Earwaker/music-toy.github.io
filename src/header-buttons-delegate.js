@@ -35,6 +35,10 @@
       e.preventDefault();
       panel.dispatchEvent(new CustomEvent('toy-random-notes', { bubbles:true }));
       log('Random Notes dispatched', panel.id||panel.dataset.toy);
+    } else if (action === 'random-blocks') {
+      e.preventDefault();
+      panel.dispatchEvent(new CustomEvent('toy-random-blocks', { bubbles:true }));
+      log('Random Blocks dispatched', panel.id||panel.dataset.toy);
     }
   }
 

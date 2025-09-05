@@ -427,13 +427,19 @@ select.toy-instrument {
   left: auto !important;
   top: auto !important;
   pointer-events: auto;
+  overflow: visible; /* Allow external controls like drawgrid buttons to be visible */
 }
 
 /* Specific sizing for zoomed toys */
 .toy-zoomed[data-toy="loopgrid"] {
-  width: min(90vw, 1000px);
+  width: min(100vw, 1800px);
   height: auto;
 }
+/* In Advanced, let loopgrid body grow freely (not forced square) */
+.toy-zoomed[data-toy="loopgrid"] .toy-body { aspect-ratio: auto; }
+.toy-zoomed[data-toy="loopgrid"] .toy-body { flex-grow: 1; }
+/* Give loopgrid more vertical headroom in Advanced so cubes can grow */
+.toy-zoomed[data-toy="loopgrid"] .sequencer-wrap { aspect-ratio: 5 / 1; }
 
 .toy-zoomed[data-toy="bouncer"],
 .toy-zoomed[data-toy="rippler"] {
@@ -456,9 +462,18 @@ select.toy-instrument {
 .drawgrid-autotune { display: none; }
 
 /* Show advanced controls only when zoomed */
-.toy-zoomed .toy-instrument,
 .toy-zoomed .drawgrid-steps,
 .toy-zoomed .drawgrid-autotune { display: inline-block; }
+
+/* Always hide the legacy instrument <select>; use the instrument picker button instead */
+.toy-instrument { display: none !important; }
+
+/* Rippler advanced: replace generic Random with two buttons */
+.toy-panel[data-toy="rippler"] [data-action="random-notes"],
+.toy-panel[data-toy="rippler"] [data-action="random-blocks"] { display: none; }
+.toy-zoomed[data-toy="rippler"] [data-action="random"] { display: none; }
+.toy-zoomed[data-toy="rippler"] [data-action="random-notes"],
+.toy-zoomed[data-toy="rippler"] [data-action="random-blocks"] { display: inline-block; }
 
 [data-action="close-advanced"],
 [data-action="random-notes"] { display: none; }

@@ -1,7 +1,7 @@
 // src/drum-tiles-visual.js
 // Renders and handles interaction for the 8-step sequencer cubes.
 import { drawBlock, whichThirdRect } from './toyhelpers.js';
-import { midiToName, stepIndexUp, stepIndexDown } from './note-helpers.js';
+import { midiToName } from './note-helpers.js';
 
 const NUM_CUBES = 8;
 const GAP = 4; // A few pixels of space between each cube
@@ -48,9 +48,10 @@ export function attachDrumVisuals(panel) {
     const scaleY = canvas.height / rect.height;
     const canvasP = { x: p.x * scaleX, y: p.y * scaleY };
 
-    const totalGapWidth = GAP * (NUM_CUBES - 1);
+    const localGap = panel.classList.contains('toy-zoomed') ? 2 : GAP;
+    const totalGapWidth = localGap * (NUM_CUBES - 1);
     const cubeSize = (canvas.width - totalGapWidth) / NUM_CUBES;
-    const blockWidthWithGap = cubeSize + GAP;
+    const blockWidthWithGap = cubeSize + localGap;
 
     const clickedIndex = Math.floor(canvasP.x / blockWidthWithGap);
     const xInBlock = canvasP.x % blockWidthWithGap;
@@ -66,13 +67,18 @@ export function attachDrumVisuals(panel) {
         const isZoomed = panel.classList.contains('toy-zoomed');
 
         if (isZoomed && third === 'up') {
-          stepIndexUp(state.noteIndices, state.notePalette, clickedIndex);
-          // Dispatch an event to notify the core logic to play the new note.
-          // This is more robust than a direct call, avoiding initialization order issues.
+          // Increment the selected step's note index in the palette
+          const curIx = (state.noteIndices[clickedIndex] | 0);
+          const max = state.notePalette.length | 0;
+          state.noteIndices[clickedIndex] = max ? ((curIx + 1) % max) : curIx;
+          // Preview the new note without triggering the cube flash animation
           panel.dispatchEvent(new CustomEvent('grid:notechange', { detail: { col: clickedIndex } }));
         } else if (isZoomed && third === 'down') {
-          stepIndexDown(state.noteIndices, state.notePalette, clickedIndex);
-          // Dispatch an event to notify the core logic to play the new note.
+          // Decrement the selected step's note index in the palette
+          const curIx = (state.noteIndices[clickedIndex] | 0);
+          const max = state.notePalette.length | 0;
+          state.noteIndices[clickedIndex] = max ? ((curIx - 1 + max) % max) : curIx;
+          // Preview the new note without triggering the cube flash animation
           panel.dispatchEvent(new CustomEvent('grid:notechange', { detail: { col: clickedIndex } }));
         } else {
           state.steps[clickedIndex] = !state.steps[clickedIndex];
@@ -112,12 +118,18 @@ function render(panel) {
   // To prevent highlight clipping and ensure cubes fit in zoomed view,
   // we calculate cubeSize based on both width and height constraints.
   const BORDER_MARGIN = 4;
-  const totalGapWidth = GAP * (NUM_CUBES - 1);
+  const localGap = isZoomed ? 2 : GAP;
+  const totalGapWidth = localGap * (NUM_CUBES - 1);
 
   // Calculate max possible cube size from both dimensions.
   const heightBasedSize = h - BORDER_MARGIN * 2;
   const widthBasedSize = (w - totalGapWidth) / NUM_CUBES;
   let cubeSize = Math.min(heightBasedSize, widthBasedSize);
+  if (isZoomed) {
+    // Enlarge cubes up to +50% when height was the limiting factor, but never exceed width or height constraints
+    const target = Math.min(Math.floor(heightBasedSize * 1.5), Math.floor(widthBasedSize));
+    cubeSize = Math.max(cubeSize, target);
+  }
   cubeSize = Math.max(1, Math.floor(cubeSize));
 
   // Center the entire block of cubes.
@@ -128,7 +140,7 @@ function render(panel) {
   for (let i = 0; i < NUM_CUBES; i++) {
     const flash = st.flash[i] || 0;
     const isEnabled = !!steps[i];
-    const cubeX = xOffset + i * (cubeSize + GAP);
+    const cubeX = xOffset + i * (cubeSize + localGap);
     const cubeRect = { x: cubeX, y: yOffset, w: cubeSize, h: cubeSize };
 
     // Draw playhead highlight first, so it's underneath the cube
