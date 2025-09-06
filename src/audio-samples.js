@@ -189,11 +189,11 @@ export function triggerInstrument(instrument, noteName='C4', when, toyId){
   }catch{}
 
   // exact or alias match first
-  if (playSampleAt(id, t, 1, toyId, noteName)) return;
+  if (playSampleAt(id, t, 1, toyId, noteName)) { try{ window.__toyActivityAt = ensureAudioContext().currentTime; }catch{}; return; }
 
   // try family (e.g., djembe_bass -> djembe)
   const fam = id.split('_')[0];
-  if (fam !== id && playSampleAt(fam, t, 1, toyId, noteName)) return;
+  if (fam !== id && playSampleAt(fam, t, 1, toyId, noteName)) { try{ window.__toyActivityAt = ensureAudioContext().currentTime; }catch{}; return; }
 
   // synth alias fallback: if an entry exists whose synth matches the id, use that tone
   try{
@@ -203,7 +203,9 @@ export function triggerInstrument(instrument, noteName='C4', when, toyId){
       const iNorm = id.replace(/[()]/g,'').replace(/[_\s]+/g,'-');
       if (s && (s === id || sNorm === id || s === iNorm || sNorm === iNorm)){
         const toneId2 = TONE_NAMES.includes(sNorm) ? sNorm : (TONE_NAMES.includes(s) ? s : 'tone');
-        return playById(toneId2, noteToFreq(noteName), t, getToyGain(toyId||'master'));
+        const ok = playById(toneId2, noteToFreq(noteName), t, getToyGain(toyId||'master'));
+        if (ok) { try{ window.__toyActivityAt = ensureAudioContext().currentTime; }catch{} }
+        return ok;
       }
     }
   }catch{}
@@ -216,7 +218,9 @@ export function triggerInstrument(instrument, noteName='C4', when, toyId){
       console.warn('[audio] instrument not found:', id, '— using', toneId);
     }
   }catch{}
-  return playById(toneId, noteToFreq(noteName), t, getToyGain(toyId||'master'));
+  const ok = playById(toneId, noteToFreq(noteName), t, getToyGain(toyId||'master'));
+  if (ok) { try{ window.__toyActivityAt = ensureAudioContext().currentTime; }catch{} }
+  return ok;
 }
 
 // Tiny debug API

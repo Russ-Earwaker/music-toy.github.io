@@ -1,32 +1,116 @@
 // src/loopindicator.js
-import { ensureAudioContext, getLoopInfo } from './audio-core.js';
+import { ensureAudioContext, getLoopInfo, getToyGain, bpm as currentBpm } from './audio-core.js';
 
 /**
  * Create a single pulsing red loop indicator.
  * - Strong pulse on full loop start
  * - Lighter pulse on each quarter
  */
-export function createLoopIndicator(targetSelector = 'body'){
+export function createLoopIndicator(targetSelector = '#topbar'){
   const host = (typeof targetSelector === 'string') ? document.querySelector(targetSelector) : targetSelector;
+  const attach = host || document.body;
+
+  // Frame anchored to the right side of the header
+  const frame = document.createElement('div');
+  frame.style.cssText = `
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto; /* push to right in header */
+    margin-right: 0;   /* hug the right edge inside header padding */
+    margin-top: 40px;  /* push pod further down to avoid top clipping */
+    padding: 6px 8px;
+    background: rgba(0,0,0,0.25);
+    border-radius: 10px;
+    z-index: 9999;
+  `;
+  attach.appendChild(frame);
+
   const el = document.createElement('div');
   el.style.cssText = `
-    position: fixed;
-    right: 12px;
-    top: 12px;
-    width: 14px;
-    height: 14px;
+    width: 70px;
+    height: 70px;
     border-radius: 50%;
     background: #d22;
     box-shadow: 0 0 0 0 rgba(220,0,0,0.0);
     transform: scale(1);
-    z-index: 9999;
     pointer-events: none;
   `;
-  host.appendChild(el);
+  
+
+  const bpmLabel = document.createElement('span');
+  bpmLabel.textContent = `${Math.round(currentBpm)} BPM`;
+  bpmLabel.style.cssText = 'color:#fff;font:600 14px system-ui, sans-serif; opacity:0.9;';
+  frame.appendChild(bpmLabel);
+
+  const muteBtn = document.createElement('button');
+  muteBtn.type = 'button';
+  muteBtn.textContent = 'Unmute';
+  muteBtn.style.cssText = 'padding:6px 10px; font:600 12px system-ui, sans-serif;';
+  frame.appendChild(muteBtn);
+  frame.appendChild(el); // circle on far right
 
   let lastQuarter = -1;
   let lastBarId = 0;
   let rafId;
+  let muted = true;
+  let metroBuf = null; // AudioBuffer for metronome sample
+  let triedLoad = false;
+
+  muteBtn.addEventListener('click', () => {
+    muted = !muted;
+    muteBtn.textContent = muted ? 'Unmute' : 'Mute';
+  });
+
+  async function ensureMetronomeLoaded(){
+    if (metroBuf || triedLoad) return !!metroBuf;
+    triedLoad = true;
+    const ctx = ensureAudioContext();
+    const urls = [
+      './assets/samples/metronome.wav',
+      './assets/metronome.wav',
+      './metronome.wav'
+    ];
+    for (const url of urls){
+      try{
+        const res = await fetch(url);
+        if (!res.ok) continue;
+        const ab = await res.arrayBuffer();
+        metroBuf = await ctx.decodeAudioData(ab);
+        break;
+      }catch{}
+    }
+    return !!metroBuf;
+  }
+
+  function playClick(){
+    if (muted) return;
+    const ctx = ensureAudioContext();
+    const now = ctx.currentTime;
+    const toyId = 'metronome';
+    if (metroBuf){
+      const src = ctx.createBufferSource();
+      src.buffer = metroBuf;
+      const g = ctx.createGain();
+      g.gain.value = 0.7;
+      src.connect(g).connect(getToyGain(toyId));
+      src.start(now);
+      return;
+    }
+    // Fallback: short tick
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type='square';
+    osc.frequency.value = 2000;
+    g.gain.value = 0.0;
+    osc.connect(g).connect(getToyGain(toyId));
+    const t0 = now;
+    g.gain.setValueAtTime(0.0, t0);
+    g.gain.linearRampToValueAtTime(0.5, t0 + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.08);
+    osc.start(t0);
+    osc.stop(t0 + 0.1);
+  }
 
   function animate(){
     const ac = ensureAudioContext();
@@ -34,6 +118,7 @@ export function createLoopIndicator(targetSelector = 'body'){
     const now = ac.currentTime;
     const t = ((now - loopStartTime) % barLen + barLen) % barLen;
     const pct = barLen ? t / barLen : 0;
+    bpmLabel.textContent = `${Math.round(currentBpm)} BPM`;
 
     // Detect quarter transitions
     const quarter = Math.floor(pct * 4 + 1e-6);
@@ -42,6 +127,9 @@ export function createLoopIndicator(targetSelector = 'body'){
       pulse(strong ? 1.0 : 0.55);
       lastQuarter = quarter;
       if (strong) lastBarId++;
+
+      // Always play metronome on quarter if not muted
+      ensureMetronomeLoaded().then(()=> playClick());
     }
 
     // slight breathing based on pct
@@ -67,5 +155,5 @@ export function createLoopIndicator(targetSelector = 'body'){
   }
 
   animate();
-  return { element: el };
+  return { element: el, frame };
 }

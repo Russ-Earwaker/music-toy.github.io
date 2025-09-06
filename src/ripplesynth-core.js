@@ -4,7 +4,8 @@ import { randomizeRects } from './toyhelpers.js';
 import { resizeCanvasForDPR, noteList } from './utils.js';
 import { PENTATONIC_OFFSETS } from './ripplesynth-scale.js';
 import { boardScale } from './board-scale-helpers.js';
-import { ensureAudioContext, barSeconds as audioBarSeconds } from './audio-core.js';
+import { ensureAudioContext, barSeconds as audioBarSeconds, getLoopInfo } from './audio-core.js';
+import { installQuantUI } from './bouncer-quant-ui.js';
 import { triggerInstrument as __rawTrig } from './audio-samples.js';
 import { drawBlocksSection } from './ripplesynth-blocks.js';
 import { makePointerHandlers } from './ripplesynth-input.js';
@@ -60,6 +61,9 @@ export function createRippleSynth(selector){
 
   const ctx = canvas.getContext('2d');
   const ui  = initToyUI(panel, { toyName: 'Rippler' });
+  // Install quantization UI (shared with Bouncer), default to 1/4
+  try{ if (!panel.dataset.quantDiv && !panel.dataset.quant) panel.dataset.quantDiv = '4'; }catch{}
+  try{ installQuantUI(panel, parseFloat(panel?.dataset?.quantDiv||panel?.dataset?.quant||'4')); }catch{}
 
   let currentInstrument = (ui.instrument && ui.instrument !== 'tone') ? ui.instrument : 'kalimba';
   try { ui.setInstrument(currentInstrument); } catch {}
@@ -71,6 +75,41 @@ export function createRippleSynth(selector){
   // Sizing object passed to shared renderers; include isZoomed so they can show arrows/labels in Advanced view
   const sizing = { scale: 1, isZoomed };
   panel.addEventListener('toy-zoom', ()=>{ try { setParticleBounds(canvas.width|0, canvas.height|0); } catch {} });
+  // Flash the quant dot on each tick (same visual as Bouncer)
+  try{
+    let lastTick = -1;
+    const tickDot = ()=>{
+      try{
+        const li = getLoopInfo();
+        let div = NaN;
+        const sel = panel.querySelector('.bouncer-quant-ctrl select');
+        if (sel){ const v = parseFloat(sel.value); if (Number.isFinite(v)) div = v; }
+        if (!Number.isFinite(div)){
+          const ds = parseFloat(panel.dataset.quantDiv || panel.dataset.quant || '');
+          if (Number.isFinite(ds)) div = ds;
+        }
+        if (!Number.isFinite(div)) div = 4;
+        const beatLen = li?.beatLen || 0;
+        const grid = (div>0 && beatLen) ? (beatLen/div) : 0;
+        const now = ensureAudioContext().currentTime;
+        const rel = li ? Math.max(0, now - li.loopStartTime) : 0;
+        const k = grid>0 ? Math.ceil((rel+1e-6)/grid) : -1;
+        if (k !== lastTick && k >= 0){
+          lastTick = k;
+          const dot = panel.querySelector('.bouncer-quant-ctrl .bouncer-quant-dot');
+          if (dot && dot.animate){
+            dot.animate([
+              { transform:'scale(1)', background:'rgba(255,255,255,0.35)', boxShadow:'0 0 0 0 rgba(255,255,255,0.0)' },
+              { transform:'scale(1.35)', background:'#fff', boxShadow:'0 0 10px 4px rgba(255,255,255,0.65)' },
+              { transform:'scale(1)', background:'rgba(255,255,255,0.35)', boxShadow:'0 0 0 0 rgba(255,255,255,0.0)' }
+            ], { duration: Math.max(140, Math.min(260, (grid||0.2)*700 )), easing: 'ease-out' });
+          }
+        }
+      }catch{}
+      requestAnimationFrame(tickDot);
+    };
+    requestAnimationFrame(tickDot);
+  }catch{}
 
   const EDGE=4;
   const W = ()=> (canvas.width|0);
@@ -205,7 +244,26 @@ export function createRippleSynth(selector){
       const b = blocks[idx];
       const was = !!b.active; b.active = !b.active;
       if (!was && b.active){ try{ __schedState?.recordOnly?.add?.(idx); }catch{} }
-      try { const name = noteList[b.noteIndex] || 'C4'; triggerInstrument(currentInstrument, name, ac.currentTime + 0.0005); } catch {}
+      try {
+        const name = noteList[b.noteIndex] || 'C4';
+        // Quantize immediate tap to next beat/div boundary
+        const li = getLoopInfo();
+        let div = NaN; try{ const sel=panel.querySelector('.bouncer-quant-ctrl select'); if (sel){ const v=parseFloat(sel.value); if (Number.isFinite(v)) div=v; } }catch{}
+        if (!Number.isFinite(div)){
+          const ds = parseFloat(panel.dataset.quantDiv || panel.dataset.quant || '');
+          if (Number.isFinite(ds)) div = ds;
+        }
+        if (!Number.isFinite(div) || div <= 0){ triggerInstrument(currentInstrument, name, ac.currentTime + 0.0005); }
+        else {
+          const beatLen = li?.beatLen || (audioBarSeconds()/4);
+          const grid = beatLen / div;
+          const at = ac.currentTime;
+          const rel = li ? Math.max(0, at - li.loopStartTime) : 0;
+          const k = Math.ceil((rel + 1e-6) / grid);
+          const tSched = (li?.loopStartTime || at) + k * grid + 0.0004;
+          triggerInstrument(currentInstrument, name, tSched);
+        }
+      } catch {}
     },
     onBlockDrag: (idx, newX, newY)=>{
       const size2 = Math.max(20, Math.round(BASE*(sizing.scale||1)*rectScale()));
@@ -292,11 +350,48 @@ export function createRippleSynth(selector){
         const ang = Math.atan2(cy - gy, cx - gx), push = 64 * (sizing.scale || 1); b.vx += Math.cos(ang)*push; b.vy += Math.sin(ang)*push;
         const whenAT = ac.currentTime, slotLen = stepSeconds(); let k = Math.ceil((whenAT - barStartAT)/slotLen); if (k<0) k=0;
         const slotIx = k % NUM_STEPS; const name = noteList[b.noteIndex] || 'C4';
-        if (liveBlocks.has(i)) { try { triggerInstrument(currentInstrument, name, whenAT + 0.0005); } catch {} }
+        if (liveBlocks.has(i)) {
+          try {
+            // Quantize live block hits to next beat/div where applicable
+            const li2 = getLoopInfo();
+            let div2 = NaN; try{ const sel=panel.querySelector('.bouncer-quant-ctrl select'); if (sel){ const v=parseFloat(sel.value); if (Number.isFinite(v)) div2=v; } }catch{}
+            if (!Number.isFinite(div2)){
+              const ds = parseFloat(panel.dataset.quantDiv || panel.dataset.quant || '');
+              if (Number.isFinite(ds)) div2 = ds;
+            }
+            if (!Number.isFinite(div2) || div2 <= 0){ triggerInstrument(currentInstrument, name, whenAT + 0.0005); }
+            else {
+              const beatLen2 = li2?.beatLen || (audioBarSeconds()/4);
+              const grid2 = beatLen2 / div2;
+              const rel2 = li2 ? Math.max(0, whenAT - li2.loopStartTime) : 0;
+              const k2 = Math.ceil((rel2 + 1e-6) / grid2);
+              const tSched2 = (li2?.loopStartTime || whenAT) + k2 * grid2 + 0.0004;
+              triggerInstrument(currentInstrument, name, tSched2);
+            }
+          } catch {}
+        }
         try { } catch {}
         try { } catch {}
         if (!liveBlocks.has(i) && (recording || recordOnly.has(i))){
-          try { triggerInstrument(currentInstrument, name, barStartAT + k*slotLen + 0.0005); } catch {}
+          try {
+            // Schedule recording preview at quantized beat/div to match bouncer behavior
+            const li3 = getLoopInfo();
+            let div3 = NaN; try{ const sel=panel.querySelector('.bouncer-quant-ctrl select'); if (sel){ const v=parseFloat(sel.value); if (Number.isFinite(v)) div3=v; } }catch{}
+            if (!Number.isFinite(div3)){
+              const ds = parseFloat(panel.dataset.quantDiv || panel.dataset.quant || '');
+              if (Number.isFinite(ds)) div3 = ds;
+            }
+            if (!Number.isFinite(div3) || div3 <= 0){ triggerInstrument(currentInstrument, name, barStartAT + k*slotLen + 0.0005); }
+            else {
+              const beatLen3 = li3?.beatLen || (audioBarSeconds()/4);
+              const grid3 = beatLen3 / div3;
+              const at3 = ac.currentTime;
+              const rel3 = li3 ? Math.max(0, at3 - li3.loopStartTime) : 0;
+              const k3 = Math.ceil((rel3 + 1e-6) / grid3);
+              const tSched3 = (li3?.loopStartTime || at3) + k3 * grid3 + 0.0004;
+              triggerInstrument(currentInstrument, name, tSched3);
+            }
+          } catch {}
           try { } catch {}
           const slot = pattern[slotIx]; let existsSame = false;
           for (const jj of slot){ const nm = noteList[blocks[jj].noteIndex] || 'C4'; if (nm === name){ existsSame = true; break; } }

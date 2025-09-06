@@ -33,13 +33,49 @@ function sweptCircleAABB(px, py, vx, vy, r, rect){
 }
 
 export function stepBouncer(S, nowAT){
-  // Quantize to next sixteenth (epoch-based)
+  // Global per-tick coalescing (one scheduled note per quant tick across all sources)
+  S.__globalScheduledTicks = S.__globalScheduledTicks || new Set();
+  function allowGlobalAtTick(tick){
+    if (tick == null) return true; // no quant -> allow
+    if (S.__globalScheduledTicks.has(tick)) return false;
+    S.__globalScheduledTicks.add(tick);
+    // light cleanup to avoid unbounded growth
+    if (S.__globalScheduledTicks.size > 128){
+      try{
+        const minKeep = tick - 64;
+        for (const k of Array.from(S.__globalScheduledTicks)) if (k < minKeep) S.__globalScheduledTicks.delete(k);
+      }catch{}
+    }
+    return true;
+  }
+  // Optional quant debug aggregator
+  function dbgMarkFire(label, t){
+    try{
+      if (!window.BOUNCER_QUANT_DBG) return;
+      const li = S.getLoopInfo ? S.getLoopInfo() : null;
+      const divRaw = (typeof S.getQuantDiv==='function') ? (S.getQuantDiv()) : 8;
+      const div = Number.isFinite(divRaw) ? divRaw : 8;
+      const baseBeat = (li && (li.beatLen || (li.barLen/4))) || 0;
+      const grid = div > 0 ? (baseBeat / div) : 0;
+      const at = (S.ensureAudioContext && S.ensureAudioContext())?.currentTime || (t||0);
+      const rel = li ? Math.max(0, at - li.loopStartTime) : 0;
+      const tick = grid > 0 ? Math.ceil((rel + 1e-6) / grid) : -1;
+      const g = (window.__bouncerFireDbg = window.__bouncerFireDbg || { counts:new Map(), lastTick:-1, lastAt:0, lastLabel:'', grid:0, div:0 });
+      g.div = div; g.grid = grid; g.lastAt = t||at; g.lastLabel = label; g.lastTick = tick;
+      const c = g.counts.get(tick) || 0; g.counts.set(tick, c+1);
+    }catch{}
+  }
+  // Quantize to next division aligned to project BEAT (not bar), or immediate if off
   function qSixteenth(){
     const ac = (S.ensureAudioContext && S.ensureAudioContext()) || null;
     const at = ac ? ac.currentTime : (S.lastAT || 0);
     const li = S.getLoopInfo ? S.getLoopInfo() : null;
     if (li && typeof li.loopStartTime === 'number' && li.barLen){
-      const grid = li.barLen / 16;
+      const divRaw = (typeof S.getQuantDiv==='function') ? (S.getQuantDiv()) : 8;
+      const div = Number.isFinite(divRaw) ? divRaw : 8;
+      if (!div || div <= 0) return at + 0.0005; // no quantization
+      // Use beat length so 1/1 = every beat, 1/2 = half-beat, etc.
+      const grid = (li.beatLen || (li.barLen/4)) / div;
       const rel  = Math.max(0, at - li.loopStartTime);
       const k    = Math.ceil((rel + 1e-6) / grid);
       return li.loopStartTime + k * grid;
@@ -47,7 +83,7 @@ export function stepBouncer(S, nowAT){
     return at + 0.0005;
   }
 
-  // Tick de-dupe maps (per-16th index since epoch)
+  // Tick de-dupe maps (per-division index since epoch, aligned to beats)
   S.__lastTickByBlock = S.__lastTickByBlock || new Map();
   S.__lastTickByEdge  = S.__lastTickByEdge  || new Map();
 
@@ -148,10 +184,13 @@ export function stepBouncer(S, nowAT){
           try {
             const li = S.getLoopInfo ? S.getLoopInfo() : null;
             if (li && li.barLen){
-              const grid = li.barLen / 16;
+              const divRaw = (typeof S.getQuantDiv==='function') ? (S.getQuantDiv()) : 8;
+              const div = Number.isFinite(divRaw) ? divRaw : 8;
+              const baseBeat = (li && (li.beatLen || (li.barLen/4))) || 0;
+              const grid = div > 0 ? (baseBeat / div) : 0;
               const at = (S.ensureAudioContext && S.ensureAudioContext())?.currentTime || now;
               const rel = Math.max(0, at - li.loopStartTime);
-              tick16 = Math.ceil((rel + 1e-6) / grid);
+              tick16 = grid > 0 ? Math.ceil((rel + 1e-6) / grid) : null;
             }
           } catch(e){}
 
@@ -165,10 +204,13 @@ export function stepBouncer(S, nowAT){
               if (tick16 == null || last !== tick16){
                 const nm = S.noteValue ? (S.noteList && Number.isFinite((b.noteIndex))) ? S.noteList[Math.max(0, Math.min(S.noteList.length-1, ((b.noteIndex)|0)))] : null : null;
                 const t = qSixteenth();
+                // Global coalescing: only one scheduler per tick across all sources
+                if (tick16 != null && !allowGlobalAtTick(tick16)) { /* coalesced */ break; }
                 try { if (window && window.BOUNCER_LOOP_DBG) { var __tt=(t && t.toFixed)?t.toFixed(4):t; console.log('[bouncer-step] HIT', nm, 'idx=', (b&&b.noteIndex), 'listLen=', (S.noteList&&S.noteList.length), 't=', __tt); } } catch(e) {}
                 ensureUnmutedOnFirstHit(S);
                 if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t);
                 if (S.fx && S.fx.onHit) S.fx.onHit(S.ball.x, S.ball.y);
+                dbgMarkFire('block', t);
                 b.flash = 1.0; b.flashDur = 0.12;
                 const at2 = (S.ensureAudioContext && S.ensureAudioContext())?.currentTime || now;
                 b.flashEnd = at2 + b.flashDur;
@@ -183,11 +225,13 @@ export function stepBouncer(S, nowAT){
                 if (tick16 == null || last !== tick16){
                 const nm = S.noteValue ? (S.noteList && Number.isFinite((c.noteIndex))) ? S.noteList[Math.max(0, Math.min(S.noteList.length-1, ((c.noteIndex)|0)))] : null : null;
                 const t = qSixteenth();
+                if (tick16 != null && !allowGlobalAtTick(tick16)) { /* coalesced */ break; }
                 ensureUnmutedOnFirstHit(S);
                 try { if (window && window.BOUNCER_LOOP_DBG) { var __tt=(t && t.toFixed)?t.toFixed(4):t; console.log('[bouncer-step] HIT', nm, 'idx=', (b&&c.noteIndex), 'listLen=', (S.noteList&&S.noteList.length), 't=', __tt); } } catch(e) {}
                 ensureUnmutedOnFirstHit(S);
                 if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t);
                 if (S.fx && S.fx.onHit) S.fx.onHit(S.ball.x, S.ball.y);
+                dbgMarkFire('edge-controller', t);
                 c.flash = 1.0; c.flashDur = 0.12;
                 const at2 = (S.ensureAudioContext && S.ensureAudioContext())?.currentTime || now;
                 c.flashEnd = at2 + c.flashDur;
@@ -208,10 +252,12 @@ export function stepBouncer(S, nowAT){
                 const lastEdgeTick = (S.__lastTickByEdge && S.__lastTickByEdge.get) ? S.__lastTickByEdge.get(edgeKey) : undefined;
                 ensureUnmutedOnFirstHit(S);
                 if (tick16 != null && lastEdgeTick === tick16) { /* already fired this edge this tick */ return; }
+                if (tick16 != null && !allowGlobalAtTick(tick16)) { /* coalesced globally */ return; }
                 if (S.__lastTickByEdge && S.__lastTickByEdge.set) S.__lastTickByEdge.set(edgeKey, tick16);
                 ensureUnmutedOnFirstHit(S);
                 if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t);
                 if (typeof S.flashEdge==='function') S.flashEdge((best.nx>0)?'left':(best.nx<0)?'right':(best.ny>0)?'top':'bot');
+                dbgMarkFire('border', t);
                 c.flash = 1.0; c.flashDur = 0.12;
                 const at2 = (S.ensureAudioContext && S.ensureAudioContext())?.currentTime || now;
                 c.flashEnd = at2 + c.flashDur;

@@ -17,6 +17,7 @@ import { buildPentatonicPalette, processVisQ as processVisQBouncer } from './bou
 import { computeLaunchVelocity, updateLaunchBaseline, setSpawnSpeedFromBallSpeed , getLaunchDiag} from './bouncer-geom.js';
 import { localPoint as __localPoint } from './bouncer-pointer.js';
 import { installSpeedUI } from './bouncer-speed-ui.js';
+import { installQuantUI } from './bouncer-quant-ui.js';
 import { installBouncerOSD } from './bouncer-osd.js';
 import { initBouncerPhysWorld } from './bouncer-physworld.js';
 import './bouncer-scale.js';
@@ -30,6 +31,9 @@ const BASE_BLOCK_SIZE = 44, BASE_CANNON_R = 10, BASE_BALL_R = 7;
 export function createBouncer(selector){
   const shell = (typeof selector==='string') ? document.querySelector(selector) : selector; if (!shell) return null;
   const panel = shell.closest('.toy-panel') || shell;
+  // Enable OSD + quant debug by default (can be turned off later)
+  try{ if (!panel.dataset.debug) panel.dataset.debug = '1'; }catch{}
+  try{ window.BOUNCER_QUANT_DBG = true; }catch{}
   let instrument = (panel.dataset.instrument || 'retro_square'); panel.addEventListener('toy-instrument', (e)=>{ instrument = (e?.detail?.value)||instrument; });
   let speedFactor = parseFloat((panel?.dataset?.speed)||'1.60'); // +60% faster default // 0.60 = calmer default
   const toyId = (panel?.dataset?.toy || 'bouncer').toLowerCase();
@@ -64,22 +68,57 @@ export function createBouncer(selector){
   }
 // On-screen debug (set panel.dataset.debug='1' to enable)
   const __osd = document.createElement('div');
-  __osd.style.cssText='position:absolute;left:6px;top:6px;padding:4px 6px;background:rgba(0,0,0,0.4);color:#fff;font:12px/1.3 monospace;z-index:10;border-radius:4px;display:none;pointer-events:none';
-  if (panel?.dataset?.debug==='1'){ panel.appendChild(__osd); }
+  __osd.style.cssText='position:absolute;left:6px;top:6px;padding:0;background:transparent;color:#fff;font:12px/1.3 monospace;z-index:10;border-radius:4px;display:none;pointer-events:none';
+  // Do not append OSD text by default anymore; header flash serves as the visual clock.
   function __tickOSD(){
-    __osd.style.display = (panel?.dataset?.debug==='1') ? 'block' : 'none';
-    if (__osd.style.display==='block' && !__osd.parentNode){ try{ panel.appendChild(__osd); }catch{} } /*OSD_ATTACH*/
-    if (__osd.style.display==='block'){
-      const d = getLaunchDiag?.()||{};
-      const sp = (typeof speedFactor!=='undefined')? speedFactor : (__getSpeed?__getSpeed():1);
-      const vmag = (ball && ball.vx!=null) ? Math.hypot(ball.vx, ball.vy) : 0;
-      __osd.textContent = `scale=${sizing.scale.toFixed(3)} speed=${sp.toFixed(2)} v=${vmag.toFixed(3)} baseDiag=${(d.baseDiag||0).toFixed(1)} ppfOv=${(d.ppfOverride||0).toFixed(3)}`;
-    }
+    // Always compute quant tick and flash header; keep OSD hidden
+    __osd.style.display = 'none';
+    try {
+      if (window.BOUNCER_QUANT_DBG) {
+        const li = (typeof getLoopInfo==='function') ? getLoopInfo() : null;
+        // Read quant divisor robustly: live <select> value > getter > dataset > default
+        let div = NaN;
+        try{
+          const sel = panel.querySelector('.bouncer-quant-ctrl select');
+          if (sel) { const vv = parseFloat(sel.value); if (Number.isFinite(vv)) div = vv; }
+        }catch{}
+        if (!Number.isFinite(div)){
+          try{ const v2 = (__getQuantDiv && __getQuantDiv()); if (Number.isFinite(v2)) div = v2; }catch{}
+        }
+        if (!Number.isFinite(div)){
+          const ds = parseFloat(panel.dataset.quantDiv || panel.dataset.quant || '');
+          if (Number.isFinite(ds)) div = ds;
+        }
+        if (!Number.isFinite(div)) div = 4;
+        const beatLen = li ? li.beatLen : 0;
+        const grid = (div>0 && beatLen) ? (beatLen/div) : 0;
+        const now = (typeof ensureAudioContext==='function') ? ensureAudioContext().currentTime : 0;
+        const rel = li ? Math.max(0, now - li.loopStartTime) : 0;
+        const k = grid>0 ? Math.ceil((rel+1e-6)/grid) : -1;
+        // Flash quant dot next to dropdown on quant tick
+        if (!window.__bouncerLastQuantTick) window.__bouncerLastQuantTick = new WeakMap();
+        const last = window.__bouncerLastQuantTick.get(panel) ?? -1;
+        if (k !== last && k >= 0) {
+          window.__bouncerLastQuantTick.set(panel, k);
+          const dot = panel.querySelector('.bouncer-quant-ctrl .bouncer-quant-dot');
+          if (dot && dot.animate){
+            dot.animate([
+              { transform:'scale(1)', background:'rgba(255,255,255,0.35)', boxShadow:'0 0 0 0 rgba(255,255,255,0.0)' },
+              { transform:'scale(1.35)', background:'#fff', boxShadow:'0 0 10px 4px rgba(255,255,255,0.65)' },
+              { transform:'scale(1)', background:'rgba(255,255,255,0.35)', boxShadow:'0 0 0 0 rgba(255,255,255,0.0)' }
+            ], { duration: Math.max(140, Math.min(260, (grid||0.2)*700 )), easing: 'ease-out' });
+          }
+        }
+      }
+    } catch {}
     requestAnimationFrame(__tickOSD);
   }
   requestAnimationFrame(__tickOSD); /*OSD_DEBUG*/
 
   const __getSpeed = installSpeedUI(panel, sizing, parseFloat((panel?.dataset?.speed)||'1.60'));
+  // Default quant to 1/4 (div=4) if not provided
+  try{ if (!panel.dataset.quantDiv && !panel.dataset.quant) panel.dataset.quantDiv = '4'; }catch{}
+  const __getQuantDiv = installQuantUI(panel, parseFloat(panel?.dataset?.quantDiv||panel?.dataset?.quant||'4'));
   // apply speed changes to queued launch
   let __speedCache = (__getSpeed?__getSpeed():1);
   panel.addEventListener('toy-speed', (e)=>{ const ns = (e && e.detail && Number(e.detail.value)) ? e.detail.value : (__getSpeed?__getSpeed():1); const os = __speedCache || 1; const ratio = os ? (ns/os) : 1; __speedCache = ns; try{ if (lastLaunch && Number.isFinite(ratio) && ratio>0){ lastLaunch.vx *= ratio; lastLaunch.vy *= ratio; } }catch{} });
@@ -415,7 +454,12 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
         const k = Math.floor(Math.max(0, (nowT - anchor) / barLen));
         if (lr && lr.mode === 'replay'){ return; }
         if (lr && lr.mode === 'record'){
-          try { const ac = ensureAudioContext ? ensureAudioContext() : null; const t0 = (ac ? ac.currentTime : 0) + 0.0008; triggerInstrument(i||instrument, n, t0, toyId); } catch(e){}
+          try {
+            const ac = ensureAudioContext ? ensureAudioContext() : null;
+            // Respect scheduled time if provided; otherwise fire near-now
+            const scheduledT = (typeof t === 'number') ? t : ((ac ? ac.currentTime : 0) + 0.0008);
+            triggerInstrument(i||instrument, n, scheduledT, toyId);
+          } catch(e){}
           const barStart = anchor + k*barLen;
           const at = (typeof t==='number' ? t : nowT);
           // Only start recording once we pass the anchor
@@ -458,6 +502,7 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
       spawnBallFrom,
       triggerInstrument: (i,n,t)=>{ try{ if (window && window.BOUNCER_FORCE_RAW){   return triggerInstrument(i||instrument, n, t, toyId); } }catch{} return triggerPhysAware(i,n,t);},
       triggerInstrumentRaw: (i,n,t)=>triggerInstrument(i||instrument, n, t, toyId),
+      getQuantDiv: ()=>{ try{ const v = __getQuantDiv ? __getQuantDiv() : 8; return (Number.isFinite(v)? v : 8); }catch(_){ return 8; } },
       BOUNCER_BARS_PER_LIFE,
       setNextLaunchAt: (t)=>{ nextLaunchAt = t; },
       setBallOut: (o)=>{ ball = o; },

@@ -60,7 +60,7 @@ async function boot(){
   }
 
   bootTopbar();
-  createLoopIndicator('body');
+  createLoopIndicator('#topbar');
   // Initialize loopgrids (this attaches __sequencerStep to them)
   bootGrids();
   bootDrawGrids();

@@ -55,6 +55,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let strokes = []; // Store all completed stroke objects
   let currentMap = null; // Store the current node map {active, nodes}
   let nodeCoordsForHitTest = []; // For draggable nodes
+  let nodeGroupMap = []; // Per-column Map(row -> groupId) to avoid cross-line connections
   let nextDrawTarget = null; // Can be 1 or 2. Determines the next special line.
   let flashes = new Float32Array(cols);
   let playheadCol = -1;
@@ -199,39 +200,49 @@ function clearAndRedrawFromStrokes() {
 function regenerateMapFromStrokes() {
       const isZoomed = panel.classList.contains('toy-zoomed');
       const newMap = { active: Array(cols).fill(false), nodes: Array.from({ length: cols }, () => new Set()) };
+      const newGroups = Array.from({ length: cols }, () => new Map());
 
       if (isZoomed) {
-        // Aggregate all generator strokes into an offscreen canvas and snap once
-        const tmp = document.createElement('canvas');
-        tmp.width = paint.width; tmp.height = paint.height;
-        const tctx = tmp.getContext('2d', { willReadFrequently: true });
-        if (tctx){
-          try { tctx.setTransform(dpr, 0, 0, dpr, 0, 0); } catch {}
-          const gens = strokes.filter(s => s.generatorId);
-          for (const s of gens) drawFullStroke(tctx, s);
-          const partial = snapToGrid(tctx);
+        // Advanced view: snap each generator line separately and union nodes.
+        const gens = strokes.filter(s => s.generatorId);
+        for (const s of gens) {
+          const partial = snapToGridFromStroke(s);
           for (let c = 0; c < cols; c++){
             if (partial.nodes[c]?.size > 0){
-              partial.nodes[c].forEach(node => newMap.nodes[c].add(node));
+              partial.nodes[c].forEach(row => { newMap.nodes[c].add(row); newGroups[c].set(row, s.generatorId || 0); });
               newMap.active[c] = true;
             }
           }
         }
       } else {
-        // In standard view, only the first special stroke generates nodes.
-        const specialStroke = strokes.find(s => s.isSpecial);
-        if (specialStroke){
-          const partial = snapToGridFromStroke(specialStroke);
-          for (let c = 0; c < cols; c++){
-            if (partial.nodes[c]?.size > 0){
-              partial.nodes[c].forEach(node => newMap.nodes[c].add(node));
-              newMap.active[c] = true;
+        // Standard view: if generator lines exist, preserve all of them; otherwise fall back to first special stroke.
+        const gens = strokes.filter(s => s.generatorId);
+        if (gens.length > 0){
+          for (const s of gens){
+            const partial = snapToGridFromStroke(s);
+            for (let c = 0; c < cols; c++){
+              if (partial.nodes[c]?.size > 0){
+                partial.nodes[c].forEach(row => { newMap.nodes[c].add(row); newGroups[c].set(row, s.generatorId || 0); });
+                newMap.active[c] = true;
+              }
+            }
+          }
+        } else {
+          const specialStroke = strokes.find(s => s.isSpecial);
+          if (specialStroke){
+            const partial = snapToGridFromStroke(specialStroke);
+            for (let c = 0; c < cols; c++){
+              if (partial.nodes[c]?.size > 0){
+                partial.nodes[c].forEach(row => { newMap.nodes[c].add(row); newGroups[c].set(row, specialStroke.generatorId || 0); });
+                newMap.active[c] = true;
+              }
             }
           }
         }
       }
 
       currentMap = newMap;
+      nodeGroupMap = newGroups;
       try { (panel.__dgUpdateButtons || function(){})() } catch {}
       panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
       drawNodes(currentMap.nodes);
@@ -272,11 +283,7 @@ function regenerateMapFromStrokes() {
                 strokes = [];
             }
         } else {
-            // LEAVING advanced mode. Consolidate to just Line 1 and any decorative lines.
-            const line1 = strokes.find(s => s.generatorId === 1);
-            const decorativeStrokes = strokes.filter(s => !s.generatorId);
-            // Line 2 and its nodes are discarded.
-            strokes = line1 ? [line1, ...decorativeStrokes] : decorativeStrokes;
+            // LEAVING advanced mode. Preserve generator lines; standard view will keep their nodes.
         }
 
         resnapAndRedraw();
@@ -445,7 +452,13 @@ function regenerateMapFromStrokes() {
     const color = stroke.color || STROKE_COLORS[0];
 
     ctx.save(); // Save context for potential glow effect
-    if (stroke.isSpecial) {
+    const isStandard = !panel.classList.contains('toy-zoomed');
+    let wantsSpecial = !!stroke.isSpecial;
+    if (!wantsSpecial && isStandard) {
+      const hasAnySpecial = strokes.some(s => s.isSpecial);
+      if (!hasAnySpecial && stroke === cur) wantsSpecial = true; // first-line preview in standard
+    }
+    if (wantsSpecial) {
         ctx.shadowColor = 'rgba(255, 255, 255, 0.7)';
         ctx.shadowBlur = 18;
         ctx.shadowOffsetX = 0;
@@ -453,23 +466,22 @@ function regenerateMapFromStrokes() {
     }
 
     ctx.beginPath();
-    if (stroke.pts.length === 1) {
+      if (stroke.pts.length === 1) {
       const lineWidth = getLineWidth();
       const p = stroke.pts[0];
-      if (stroke.isSpecial || !panel.classList.contains('toy-zoomed')) {
+      if (wantsSpecial) {
           const r = lineWidth / 2;
           const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
-          const time = (performance.now() / 20);
           if (stroke.generatorId === 1) {
-              grad.addColorStop(0, `hsl(${(240 + time) % 360}, 100%, 75%)`);
-              grad.addColorStop(0.7, `hsl(${(300 + time) % 360}, 100%, 65%)`);
-              grad.addColorStop(1, `hsla(${(360 + time) % 360}, 100%, 50%, 0.3)`);
+              grad.addColorStop(0, 'hsl(200, 100%, 75%)');
+              grad.addColorStop(0.7, 'hsl(270, 100%, 68%)');
+              grad.addColorStop(1,  'hsla(320, 100%, 60%, 0.35)');
           } else if (stroke.generatorId === 2) {
-              grad.addColorStop(0, `hsl(${(60 + time) % 360}, 100%, 75%)`);
-              grad.addColorStop(0.7, `hsl(${(30 + time) % 360}, 100%, 65%)`);
-              grad.addColorStop(1, `hsla(${(0 + time) % 360}, 100%, 50%, 0.3)`);
+              grad.addColorStop(0, 'hsl(45, 100%, 70%)');
+              grad.addColorStop(0.7, 'hsl(20, 100%, 65%)');
+              grad.addColorStop(1,  'hsla(0, 100%, 55%, 0.35)');
           } else {
-              const hue = time % 360;
+              const hue = (performance.now() / 20) % 360;
               grad.addColorStop(0, `hsl(${hue}, 100%, 75%)`);
               grad.addColorStop(0.7, `hsl(${(hue + 60) % 360}, 100%, 65%)`);
               grad.addColorStop(1, `hsla(${(hue + 120) % 360}, 100%, 50%, 0.3)`);
@@ -487,21 +499,20 @@ function regenerateMapFromStrokes() {
       }
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       ctx.lineWidth = getLineWidth();
-      if (stroke.isSpecial || !panel.classList.contains('toy-zoomed')) {
+      if (wantsSpecial) {
           const p1 = stroke.pts[0];
           const pLast = stroke.pts[stroke.pts.length - 1];
           const grad = ctx.createLinearGradient(p1.x, p1.y, pLast.x, pLast.y);
-          const time = performance.now() / 20;
           if (stroke.generatorId === 1) {
-              grad.addColorStop(0, `hsl(${(240 + time) % 360}, 100%, 70%)`);
-              grad.addColorStop(0.5, `hsl(${(280 + time) % 360}, 100%, 70%)`);
-              grad.addColorStop(1, `hsl(${(360 + time) % 360}, 100%, 70%)`);
+              grad.addColorStop(0, 'hsl(200, 100%, 70%)');
+              grad.addColorStop(0.5, 'hsl(260, 100%, 70%)');
+              grad.addColorStop(1,  'hsl(320, 100%, 68%)');
           } else if (stroke.generatorId === 2) {
-              grad.addColorStop(0, `hsl(${(60 + time) % 360}, 100%, 70%)`);
-              grad.addColorStop(0.5, `hsl(${(30 + time) % 360}, 100%, 70%)`);
-              grad.addColorStop(1, `hsl(${(0 + time) % 360}, 100%, 70%)`);
+              grad.addColorStop(0, 'hsl(50, 100%, 68%)');
+              grad.addColorStop(0.5, 'hsl(25, 100%, 66%)');
+              grad.addColorStop(1,  'hsl(0, 100%, 64%)');
           } else {
-              const hue = time % 360;
+              const hue = (performance.now() / 20) % 360;
               grad.addColorStop(0, `hsl(${hue}, 100%, 70%)`);
               grad.addColorStop(0.5, `hsl(${(hue + 45) % 360}, 100%, 70%)`);
               grad.addColorStop(1, `hsl(${(hue + 90) % 360}, 100%, 70%)`);
@@ -567,7 +578,7 @@ function regenerateMapFromStrokes() {
     nctx.clearRect(0, 0, cssW, cssH);
     if (!nodes) { nodeCoordsForHitTest = []; return; }
 
-    const nodeCoords = []; // Store coordinates of each node: {x, y, col, row, radius}
+    const nodeCoords = []; // Store coordinates of each node: {x, y, col, row, radius, group}
     nodeCoordsForHitTest = []; // Clear for new set
     const radius = Math.max(4, Math.min(cw, ch) * 0.20); // Bigger nodes
 
@@ -577,7 +588,8 @@ function regenerateMapFromStrokes() {
             for (const r of nodes[c]) {
                 const x = gridArea.x + c * cw + cw * 0.5;
                 const y = gridArea.y + topPad + r * ch + ch * 0.5;
-                const nodeData = { x, y, col: c, row: r, radius: radius * 1.5 }; // Use a larger hit area
+                const groupId = (nodeGroupMap && nodeGroupMap[c]) ? (nodeGroupMap[c].get(r) ?? null) : null;
+                const nodeData = { x, y, col: c, row: r, radius: radius * 1.5, group: groupId }; // Use a larger hit area
                 nodeCoords.push(nodeData);
                 nodeCoordsForHitTest.push(nodeData);
             }
@@ -607,6 +619,9 @@ function regenerateMapFromStrokes() {
         nctx.beginPath();
         for (const node of currentColNodes) {
           for (const nextNode of nextColNodes) {
+            if (node.group != null && nextNode.group != null && node.group !== nextNode.group) continue; // avoid cross-line connections
+            if (node.group == null && nextNode.group != null) continue;
+            if (node.group != null && nextNode.group == null) continue;
             nctx.moveTo(node.x, node.y);
             nctx.lineTo(nextNode.x, nextNode.y);
           }
