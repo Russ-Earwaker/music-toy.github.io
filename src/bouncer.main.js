@@ -8,6 +8,7 @@ import { randomizeRects, EDGE_PAD as EDGE, hitRect, whichThirdRect, drawThirdsGu
 import { drawBlocksSection } from './ripplesynth-blocks.js';
 // board scale via rect baseline (rippler-style)
 import { createImpactFX } from './bouncer-impact.js';
+import { installVolumeUI } from './volume-ui.js';
 import { createBouncerDraw } from './bouncer-render.js';
 import { installAdvancedCubeUI } from './bouncer-adv-ui.js';
 import { installBouncerInteractions } from './bouncer-interactions.js';
@@ -37,10 +38,17 @@ export function createBouncer(selector){
   let instrument = (panel.dataset.instrument || 'retro_square'); panel.addEventListener('toy-instrument', (e)=>{ instrument = (e?.detail?.value)||instrument; });
   let speedFactor = parseFloat((panel?.dataset?.speed)||'1.60'); // +60% faster default // 0.60 = calmer default
   const toyId = (panel?.dataset?.toy || 'bouncer').toLowerCase();
+  try{ panel.dataset.toyid = toyId; }catch{}
 
   const host = panel.querySelector('.toy-body') || panel;
   const canvas = document.createElement('canvas'); canvas.style.width='100%'; canvas.style.display='block';canvas.style.height='100%'; host.appendChild(canvas);
   try{ canvas.removeAttribute('data-lock-scale'); canvas.style.transform=''; }catch{};
+  // Ensure a footer exists and volume UI is installed (matches routing via data-toyid)
+  try{
+    let footer = panel.querySelector('.toy-footer');
+    if (!footer){ footer = document.createElement('div'); footer.className = 'toy-footer'; panel.appendChild(footer); }
+    installVolumeUI(footer);
+  }catch{}
   const ctx = canvas.getContext('2d', { alpha:false });
   // The legacy sizing helper has been removed. The new toy-layout-manager.js
   // handles canvas sizing automatically. This dummy object prevents runtime
@@ -465,7 +473,10 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
           // Only start recording once we pass the anchor
           if (at >= anchor - 1e-4){
             const offBeats = (at - barStart)/beatDur;
-            const off = Math.max(0, Math.min(4, Math.round(offBeats*16)/16));
+            // Round offsets to current quant grid so replay matches quant exactly
+            let divRec = 4;
+            try{ const vq = (__getQuantDiv && __getQuantDiv()); if (Number.isFinite(vq) && vq>0) divRec = vq; }catch{}
+            const off = Math.max(0, Math.min(4, Math.round(offBeats * divRec)/divRec));
             if (visQ && visQ.loopRec && Array.isArray(visQ.loopRec.pattern)){
               visQ.loopRec.pattern.push({ note: n, offset: off });
             }

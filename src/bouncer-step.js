@@ -33,21 +33,8 @@ function sweptCircleAABB(px, py, vx, vy, r, rect){
 }
 
 export function stepBouncer(S, nowAT){
-  // Global per-tick coalescing (one scheduled note per quant tick across all sources)
-  S.__globalScheduledTicks = S.__globalScheduledTicks || new Set();
-  function allowGlobalAtTick(tick){
-    if (tick == null) return true; // no quant -> allow
-    if (S.__globalScheduledTicks.has(tick)) return false;
-    S.__globalScheduledTicks.add(tick);
-    // light cleanup to avoid unbounded growth
-    if (S.__globalScheduledTicks.size > 128){
-      try{
-        const minKeep = tick - 64;
-        for (const k of Array.from(S.__globalScheduledTicks)) if (k < minKeep) S.__globalScheduledTicks.delete(k);
-      }catch{}
-    }
-    return true;
-  }
+  // Global coalescing disabled: allow multiple sources to fire in the same tick.
+  function allowGlobalAtTick(){ return true; }
   // Optional quant debug aggregator
   function dbgMarkFire(label, t){
     try{
@@ -204,8 +191,8 @@ export function stepBouncer(S, nowAT){
               if (tick16 == null || last !== tick16){
                 const nm = S.noteValue ? (S.noteList && Number.isFinite((b.noteIndex))) ? S.noteList[Math.max(0, Math.min(S.noteList.length-1, ((b.noteIndex)|0)))] : null : null;
                 const t = qSixteenth();
-                // Global coalescing: only one scheduler per tick across all sources
-                if (tick16 != null && !allowGlobalAtTick(tick16)) { /* coalesced */ break; }
+                // Global coalescing: only one scheduler per tick across all sources (per bar)
+                // Global coalescing disabled: do not suppress other sources in this tick
                 try { if (window && window.BOUNCER_LOOP_DBG) { var __tt=(t && t.toFixed)?t.toFixed(4):t; console.log('[bouncer-step] HIT', nm, 'idx=', (b&&b.noteIndex), 'listLen=', (S.noteList&&S.noteList.length), 't=', __tt); } } catch(e) {}
                 ensureUnmutedOnFirstHit(S);
                 if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t);
@@ -225,7 +212,7 @@ export function stepBouncer(S, nowAT){
                 if (tick16 == null || last !== tick16){
                 const nm = S.noteValue ? (S.noteList && Number.isFinite((c.noteIndex))) ? S.noteList[Math.max(0, Math.min(S.noteList.length-1, ((c.noteIndex)|0)))] : null : null;
                 const t = qSixteenth();
-                if (tick16 != null && !allowGlobalAtTick(tick16)) { /* coalesced */ break; }
+                // Global coalescing disabled: do not suppress other sources in this tick
                 ensureUnmutedOnFirstHit(S);
                 try { if (window && window.BOUNCER_LOOP_DBG) { var __tt=(t && t.toFixed)?t.toFixed(4):t; console.log('[bouncer-step] HIT', nm, 'idx=', (b&&c.noteIndex), 'listLen=', (S.noteList&&S.noteList.length), 't=', __tt); } } catch(e) {}
                 ensureUnmutedOnFirstHit(S);
@@ -252,7 +239,7 @@ export function stepBouncer(S, nowAT){
                 const lastEdgeTick = (S.__lastTickByEdge && S.__lastTickByEdge.get) ? S.__lastTickByEdge.get(edgeKey) : undefined;
                 ensureUnmutedOnFirstHit(S);
                 if (tick16 != null && lastEdgeTick === tick16) { /* already fired this edge this tick */ return; }
-                if (tick16 != null && !allowGlobalAtTick(tick16)) { /* coalesced globally */ return; }
+                // Global coalescing disabled: do not suppress other sources in this tick
                 if (S.__lastTickByEdge && S.__lastTickByEdge.set) S.__lastTickByEdge.set(edgeKey, tick16);
                 ensureUnmutedOnFirstHit(S);
                 if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t);

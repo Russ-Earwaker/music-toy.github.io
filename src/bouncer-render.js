@@ -258,30 +258,23 @@ export function createBouncerDraw(env){
 
 // Just-in-time scheduling with short lookahead so state changes can cancel playback
 const LOOKAHEAD = 0.03; // seconds — reduce overlap risk without starving scheduling
-// Reset per-bar scheduled set when bar advances
+// Reset per-bar scheduled set and schedule entire bar deterministically when bar advances
 if (lr.scheduledBarIndex !== k){
   lr.scheduledBarIndex = k;
   if (!lr.scheduledKeys || typeof lr.scheduledKeys.clear !== 'function') lr.scheduledKeys = new Set();
   else lr.scheduledKeys.clear();
   if ((globalThis.BOUNCER_DBG_LEVEL|0) >= 2) console.log('[bouncer-rec] new bar', k, 'mode', lr.mode, 'patLen', lr.pattern?.length||0);
-}
-const __seen = new Set();
-const __evs = (Array.isArray(lr.pattern)?lr.pattern:[]).filter(ev=>{
-  const key = ev && ev.note ? (ev.note + '@' + (Math.round(((ev.offset||0))*16)/16)) : '';
-  if (__seen.has(key)) return false; __seen.add(key); return true; });
-// beatDur defined above; reused here
-// base computed above; reused here
-// baseNext computed above; reused here
-for (const ev of __evs){
-  if (!ev || !ev.note) continue;
-  const offBeats = Math.max(0, ev.offset||0);
-  let when = base + offBeats * beatDur;
-  // if event time already missed for this bar, roll to next bar
-  if (when < nowT - 0.01) when = baseNext + offBeats * beatDur;
-  if (when <= nowT + LOOKAHEAD){
+  const __seen = new Set();
+  const __evs = (Array.isArray(lr.pattern)?lr.pattern:[]).filter(ev=>{
+    const keySeen = ev && ev.note ? (ev.note + '@' + (Math.round(((ev.offset||0))*16)/16)) : '';
+    if (__seen.has(keySeen)) return false; __seen.add(keySeen); return true; });
+  for (const ev of __evs){
+    if (!ev || !ev.note) continue;
+    const offBeats = Math.max(0, ev.offset||0);
+    let when = base + offBeats * beatDur;
+    if (when < nowT - 0.01) when = baseNext + offBeats * beatDur;
     const key = k + '|' + ev.note + '|' + (Math.round(offBeats*16)/16);
     if (!lr.scheduledKeys.has(key)){
-      if ((globalThis.BOUNCER_DBG_LEVEL|0)>=2) console.log('[bouncer-replay] schedule', ev.note, 'in', (when-nowT).toFixed(3));
       try { S.triggerInstrumentRaw ? S.triggerInstrumentRaw(S.instrument, ev.note, when) : S.triggerInstrument(S.instrument, ev.note, when); }
       catch(e){ try{ if ((globalThis.BOUNCER_DBG_LEVEL|0)>=2) console.warn('[bouncer-replay] schedule fail', e); }catch{} }
       lr.scheduledKeys.add(key);

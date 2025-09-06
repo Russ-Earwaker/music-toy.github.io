@@ -68,19 +68,32 @@ export function initDragBoard(boardSel = '#board') {
   window.addEventListener('pointermove', onPointerMove, true);
   window.addEventListener('pointerup', onPointerUp, true);
 
-  // organize: simple grid
+  // organize: masonry-like columns that respect actual panel height
   window.organizeBoard = function organizeBoard(){
     const panels = Array.from(document.querySelectorAll('.toy-panel'));
-    const GAP=16, colW=380, colH=420;
-    let c=0, r=0;
-    panels.forEach(el=>{
-      el.style.width = colW+'px';
-      el.style.height = '';
+    const GAP = 16;
+    const VIEW_W = document.documentElement.clientWidth || 1200;
+    const COL_W = 380; // target content width
+    const cols = Math.max(1, Math.min(4, Math.floor((VIEW_W - GAP) / (COL_W + GAP))));
+    const colX = Array.from({length: cols}, (_,i)=> GAP + i*(COL_W + GAP));
+    const colY = Array.from({length: cols}, ()=> GAP);
 
+    panels.forEach(el=>{
+      // Fix width but let height be measured from content
+      el.style.width = COL_W + 'px';
+      el.style.height = '';
       el.style.position='absolute';
-      el.style.left = (GAP + c*(colW+GAP))+'px';
-      el.style.top  = (GAP + r*(colH+GAP))+'px';
-      c++; if (c>=3){ c=0; r++; }
+
+      // Choose the column with the smallest current height
+      let best = 0; for (let i=1;i<cols;i++){ if (colY[i] < colY[best]) best = i; }
+      el.style.left = colX[best] + 'px';
+      el.style.top  = colY[best] + 'px';
+
+      // Measure with current layout to advance that column's y
+      // Use offsetHeight to include header/footer/volume controls
+      const h = Math.max(1, (el.offsetHeight || 0));
+      colY[best] += h + GAP;
+
       savePos(el);
     });
   };
