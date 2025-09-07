@@ -167,7 +167,7 @@ export function createBouncer(selector){
   let draggingBlock=false, dragBlockRef=null, dragOffset={dx:0,dy:0};
   let zoomDragCand=null, zoomDragStart=null, zoomTapT=null;
   let tapCand=null, tapStart=null, tapMoved=false;
-  let lastLaunch=null, launchPhase=0, nextLaunchAt=null, prevNow=0, ball=null;
+  let lastLaunch=null, launchPhase=0, nextLaunchAt=null, prevNow=0, ball=null, __unmuteAfter = 0;
   // When manually spawning, briefly mute any already-scheduled replay notes;
   // stepBouncer will unmute on the first new physics hit.
   let __spawnPendingUnmute = false;
@@ -412,6 +412,10 @@ export function createBouncer(selector){
         try {
             if (typeof setToyMuted === 'function') setToyMuted(toyId, true);
             __spawnPendingUnmute = true;
+            // Always unmute on the first new hit. This prioritizes responsiveness
+            // over cleanly silencing all notes from a previous loop, which could
+            // cause a long, un-interactive silence.
+            __unmuteAfter = 0;
         } catch (e) {}
 
         // Reset loop recorder for the new user-initiated loop.
@@ -560,6 +564,7 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
       toyId,
       setToyMuted,
       __spawnPendingUnmute,
+      __unmuteAfter,
       lastLaunch,
       nextLaunchAt,
       spawnBallFrom,
@@ -584,6 +589,7 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
       if ('ball' in S) ball = S.ball;
       if ('lastLaunch' in S && S.lastLaunch) lastLaunch = S.lastLaunch;
       if ('nextLaunchAt' in S) nextLaunchAt = S.nextLaunchAt;
+      if (typeof S.__unmuteAfter === 'number') __unmuteAfter = S.__unmuteAfter;
       if (S.__lastTickByBlock) __lastTickByBlock = S.__lastTickByBlock;
       if (S.__lastTickByEdge) __lastTickByEdge = S.__lastTickByEdge;
       if (typeof S.__justSpawnedUntil === 'number') __justSpawnedUntil = S.__justSpawnedUntil;

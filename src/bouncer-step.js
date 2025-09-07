@@ -2,8 +2,13 @@
 function ensureUnmutedOnFirstHit(S){
   try{
     if (S && S.__spawnPendingUnmute){
-      if (S.setToyMuted) S.setToyMuted(S.toyId, false);
-      S.__spawnPendingUnmute = false;
+      const now = (S.ensureAudioContext && S.ensureAudioContext().currentTime) || 0;
+      // Only unmute if we are past the end of the bar where old notes might have been scheduled.
+      if (now >= (S.__unmuteAfter || 0)) {
+        if (S.setToyMuted) S.setToyMuted(S.toyId, false);
+        S.__spawnPendingUnmute = false;
+        S.__unmuteAfter = 0;
+      }
     }
   }catch{}
 }
