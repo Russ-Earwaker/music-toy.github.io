@@ -208,20 +208,6 @@ export function createBouncerDraw(env){
         }
       } catch(e){}
 
-      // Fallback: if there's no live ball but we have a lastLaunch,
-      // and we're past nextLaunchAt (or it was never set), re-spawn once.
-      try {
-        const ac2 = ensureAudioContext ? ensureAudioContext() : null;
-        const now2 = ac2 ? ac2.currentTime : 0;
-        if (!S.ball && S.lastLaunch && (S.nextLaunchAt==null || now2 >= (S.nextLaunchAt - 0.01))) {
-          if (typeof spawnBallFrom === 'function') {
-            spawnBallFrom(S.lastLaunch);
-            S.__justSpawnedUntil = now2 + 0.15;
-            if ((globalThis.BOUNCER_DBG_LEVEL|0)>=2) console.log('[bouncer-render] fallback spawn fired');
-          }
-        }
-      } catch(e) { try{console.warn('[bouncer-render] fallback spawn error', e);}catch{} }
-
 
       // Loop recorder: detect new bar and let main decide record/replay
       try {

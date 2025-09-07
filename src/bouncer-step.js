@@ -81,37 +81,12 @@ export function stepBouncer(S, nowAT){
   // Framescale: keep speed consistent across FPS
   const dt = Math.max(0, (now - (S.lastAT || now)));
   const frameFactor = Math.min(3.0, Math.max(0.25, dt * 60));
-// scheduled re-spawn (keep behavior but tie life to barLen)
-  if (S.lastLaunch && S.nextLaunchAt != null && now >= (S.nextLaunchAt - 0.001)){
-    const nb = S.spawnBallFrom({ x:S.handle.x, y:S.handle.y, vx:S.lastLaunch.vx, vy:S.lastLaunch.vy, r:S.ballR() });
-    S.ball = nb;
-    try {
-      // Use locked physics dimensions so collisions line up with the drawn frame
-      const L=S.EDGE, T=S.EDGE, R=S.physW()-S.EDGE, B=S.physH()-S.EDGE;
-      const rr = S.ball.r || S.ballR();
-      if (S.ball.x < L+rr+2) S.ball.x = L+rr+2;
-      if (S.ball.x > R-rr-2) S.ball.x = R-rr-2;
-      if (S.ball.y < T+rr+2) S.ball.y = T+rr+2;
-      if (S.ball.y > B-rr-2) S.ball.y = B-rr-2;
-      S.ball.x += (S.ball.vx||0)*0.6;
-      S.ball.y += (S.ball.vy||0)*0.6;
-    } catch(e) {}
-    try{
-      const li = S.getLoopInfo ? S.getLoopInfo() : null;
-      const bl = li ? li.barLen : 0;
-      if (bl){
-        S.ball.flightEnd = now + bl * (S.BOUNCER_BARS_PER_LIFE || 1);
-        if (S.setNextLaunchAt) S.setNextLaunchAt(S.ball.flightEnd);
-        S.nextLaunchAt = S.ball.flightEnd;
-      }
-    } catch(e){}
-    S.__justSpawnedUntil = now + 0.05;
-  }
 
   // integrate with swept collision (segment vs expanded AABB)
   if (S.ball){
-    if (S.ball.flightEnd != null && now >= S.ball.flightEnd){ S.ball = null; }
-    else {
+    if (S.ball.flightEnd != null && now >= S.ball.flightEnd) {
+      S.ball = null; // End of life for the current ball
+    } else {
       const eps = 0.001;
       // Collide against the same locked physics bounds as rendering
       const L=S.EDGE, T=S.EDGE, R=S.physW()-S.EDGE, B=S.physH()-S.EDGE;
@@ -261,6 +236,19 @@ export function stepBouncer(S, nowAT){
 
       // light damping
       /* no damping */
+    }
+  }
+  // If there's no ball, check if it's time to respawn.
+  else {
+    if (S.lastLaunch && S.nextLaunchAt != null && now >= (S.nextLaunchAt - 0.001)) {
+      // Respawn from the original launch point, not the current handle position.
+      const nb = S.spawnBallFrom({ x: S.lastLaunch.x, y: S.lastLaunch.y, vx: S.lastLaunch.vx, vy: S.lastLaunch.vy, r: S.ballR() }, { isRespawn: true });
+      S.ball = nb;
+      try {
+        S.ball.x += (S.ball.vx||0)*0.6;
+        S.ball.y += (S.ball.vy||0)*0.6;
+      } catch(e) {}
+      S.__justSpawnedUntil = now + 0.05;
     }
   }
 

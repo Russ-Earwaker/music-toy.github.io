@@ -19,7 +19,7 @@ export function installBouncerInteractions({
   panel, canvas, sizing, toWorld, EDGE, physW, physH, ballR, __getSpeed,
   blocks, edgeControllers, handle,
   spawnBallFrom, setNextLaunchAt, setBallOut,
-  instrument, toyId, noteList,
+  instrument, toyId, noteList, velFrom,
   setAim, isAdvanced
 }){
   let draggingBlock = false, dragBlockRef = null, dragOffset = {dx:0, dy:0};
@@ -31,17 +31,6 @@ export function installBouncerInteractions({
     const x = (evt.clientX - r.left) * ((canvas.width||1) / Math.max(1, r.width));
     const y = (evt.clientY - r.top)  * ((canvas.height||1) / Math.max(1, r.height));
     return { x, y };
-  }
-
-  function velFrom(hx, hy, px, py){
-    let dx = (px - hx), dy = (py - hy);
-    let len = Math.hypot(dx, dy) || 1;
-    let ux = dx/len, uy = dy/len;
-    if (len < 3){ ux = 0; uy = -1; }
-    const speed = (typeof __getSpeed === 'function') ? __getSpeed() : 1;
-    const BASE = 4.8;
-    const v = BASE * speed;
-    return { vx: ux * v, vy: uy * v };
   }
 
   function onPointerDown(e){

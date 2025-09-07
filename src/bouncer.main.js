@@ -22,6 +22,7 @@ import { installQuantUI } from './bouncer-quant-ui.js';
 import { installBouncerOSD } from './bouncer-osd.js';
 import { initBouncerPhysWorld } from './bouncer-physworld.js';
 import './bouncer-scale.js';
+import { circleRectHit } from './bouncer-helpers.js';
 const noteValue = (list, idx)=> list[Math.max(0, Math.min(list.length-1, (idx|0)))];
 const BOUNCER_BARS_PER_LIFE = 1;
 const MAX_SPEED = 700, LAUNCH_K = 0.9;
@@ -32,6 +33,11 @@ const BASE_BLOCK_SIZE = 44, BASE_CANNON_R = 10, BASE_BALL_R = 7;
 export function createBouncer(selector){
   const shell = (typeof selector==='string') ? document.querySelector(selector) : selector; if (!shell) return null;
   const panel = shell.closest('.toy-panel') || shell;
+  // Prevent double-initialization, which can cause duplicate draw loops and event listeners.
+  if (panel.__bouncer_main_instance) {
+    console.warn('[bouncer.main] createBouncer called on an already-initialized panel. Aborting to prevent duplicates.', panel.id);
+    return panel.__bouncer_main_instance;
+  }
   // Enable OSD + quant debug by default (can be turned off later)
   try{ if (!panel.dataset.debug) panel.dataset.debug = '1'; }catch{}
   try{ window.BOUNCER_QUANT_DBG = true; }catch{}
@@ -164,10 +170,9 @@ export function createBouncer(selector){
   let lastLaunch=null, launchPhase=0, nextLaunchAt=null, prevNow=0, ball=null;
   // When manually spawning, briefly mute any already-scheduled replay notes;
   // stepBouncer will unmute on the first new physics hit.
-  // Start with unmute pending so the very first physics hit after boot is audible.
-  let __spawnPendingUnmute = true;
+  let __spawnPendingUnmute = false;
   // --- Loop Recorder (record a bar, replay verbatim) ----------------------
-  const loopRec = {
+  let loopRec = {
     signature: '',
     mode: 'record',        // 'record' | 'replay'
     pattern: [],           // [{note, offset}] in seconds within bar
@@ -225,7 +230,8 @@ export function createBouncer(selector){
   let __spawnLastAt = 0;
   const __spawnCooldown = 0.08; // seconds
   let lastCanvasW=0, lastCanvasH=0;
-  let visQ = []; const fx = createImpactFX()
+  // visQ is a carrier for the loop recorder state, passed to the physics/render steps.
+  let visQ = { loopRec: loopRec }; const fx = createImpactFX()
   // Debug OSD (toggle with globalThis.BOUNCER_DIAG = true)
   try{ installBouncerOSD(panel, sizing, (()=>speedFactor), ()=>ball, ()=>getLaunchDiag?.()); }catch{}
 ; let lastScale = sizing.scale||1;
@@ -272,6 +278,17 @@ export function createBouncer(selector){
   }
 
   // toy controls
+  function velFrom(hx, hy, px, py){
+    let dx = (px - hx), dy = (py - hy);
+    let len = Math.hypot(dx, dy) || 1;
+    let ux = dx/len, uy = dy/len;
+    if (len < 3){ ux = 0; uy = -1; }
+    const speed = (typeof __getSpeed === 'function') ? __getSpeed() : 1;
+    const BASE = 4.8;
+    const v = BASE * speed;
+    return { vx: ux * v, vy: uy * v };
+  }
+
   
   function doRandom(){
     const pr = Number(panel?.dataset?.priority || '1') || 1;
@@ -301,6 +318,33 @@ export function createBouncer(selector){
     for (let i = 0; i < N; i++) blocks[i].active = false;
     for (const i of picks) if (blocks[i]) blocks[i].active = true;
     randomizeControllers(edgeControllers, noteList);
+
+    // Randomly spawn a ball in a clear space
+    const r = ballR();
+    const spawnableW = w - 2 * (EDGE + r + 4);
+    const spawnableH = h - 2 * (EDGE + r + 4);
+    let x, y, attempts = 0;
+    const collidables = [...blocks, ...edgeControllers].filter(b => b && b.active !== false);
+
+    do {
+      x = (EDGE + r + 4) + Math.random() * spawnableW;
+      y = (EDGE + r + 4) + Math.random() * spawnableH;
+      attempts++;
+      if (attempts > 100) {
+        console.warn('[bouncer] Could not find a clear spawn point after 100 attempts.');
+        break; // Give up to avoid an infinite loop
+      }
+    } while (collidables.some(b => circleRectHit(x, y, r, b)));
+
+    // Update the visual spawn handle to match the new random position
+    handle.x = x;
+    handle.y = y;
+
+    const angle = Math.random() * Math.PI * 2;
+    const endX = x + Math.cos(angle) * 10; // create a point in a random direction
+    const endY = y + Math.sin(angle) * 10;
+    const { vx, vy } = velFrom(x, y, endX, endY);
+    spawnBallFrom({ x, y, vx, vy, r });
   }
 
   
@@ -350,53 +394,68 @@ export function createBouncer(selector){
   
   // interactions moved to bouncer-adv-ui.js
   // basic ball control helpers (restored after split)
-  function spawnBallFrom(L){
-      /*DEBUG_SPAWN*/ try{ if ((globalThis.BOUNCER_DBG_LEVEL|0)>=2) console.log('[bouncer-main] spawn', 'x',L.x,'y',L.y,'vx',L.vx,'vy',L.vy); }catch{}
-      // Debounce rapid duplicate spawns
-      try {
-        const ac = (typeof ensureAudioContext==='function') ? ensureAudioContext() : null;
-        const nowT = ac ? ac.currentTime : 0;
-        if (ball && (nowT - __spawnLastAt) < __spawnCooldown){
-          if ((globalThis.BOUNCER_DBG_LEVEL|0)>=2) console.log('[bouncer-main] spawn ignored (cooldown)');
-          return ball;
+  function spawnBallFrom(L, opts = {}) {
+    const isRespawn = !!opts.isRespawn;
+    const ac = (typeof ensureAudioContext === 'function') ? ensureAudioContext() : null;
+    const nowT = ac ? ac.currentTime : 0;
+
+    if (!isRespawn) {
+        // Debounce rapid duplicate user launches
+        if (ball && (nowT - __spawnLastAt) < __spawnCooldown) {
+            if ((globalThis.BOUNCER_DBG_LEVEL | 0) >= 2) console.log('[bouncer-main] spawn ignored (cooldown)');
+            return ball;
         }
         __spawnLastAt = nowT;
-      }catch{}
+
+        // Mute any lingering scheduled notes from a previous loop.
+        // The toy will be unmuted on the first new physics hit.
+        try {
+            if (typeof setToyMuted === 'function') setToyMuted(toyId, true);
+            __spawnPendingUnmute = true;
+        } catch (e) {}
+
+        // Reset loop recorder for the new user-initiated loop.
+        // Re-create the object from scratch to guarantee a clean state.
+        loopRec = {
+            signature: '',
+            mode: 'record',
+            pattern: [],
+            anchorStartTime: 0,
+            lastBarIndex: -1,
+            scheduledBarIndex: -999,
+            seen: new Set(),
+        };
+        visQ.loopRec = loopRec; // Ensure the shared state carrier points to the new object.
+        try {
+            loopRec.signature = stateSignature();
+            loopRec.anchorStartTime = nowT;
+        } catch {}
+    }
+
     const o = { x:L.x, y:L.y, vx:L.vx, vy:L.vy, r: ballR() };
     ball = o;
-    lastLaunch = { vx: L.vx, vy: L.vy, x: L.x, y: L.y };
-    // Reset loop recorder immediately to avoid overlap with prior replay
-    try{
-      const lr = (visQ && visQ.loopRec) ? visQ.loopRec : null;
-      if (lr){
-        lr.mode = 'record';
-        lr.pattern.length = 0;
-        lr.scheduledBarIndex = -999;
-        if (lr.scheduledKeys && typeof lr.scheduledKeys.clear === 'function') lr.scheduledKeys.clear();
-        try{ lr.signature = stateSignature(); }catch{}
-        // Set loop anchor to spawn time + 1 beat
-        try{
-          const li = (typeof getLoopInfo==='function') ? getLoopInfo() : null;
-          const ac = (typeof ensureAudioContext==='function') ? ensureAudioContext() : null;
-          const now = ac ? ac.currentTime : 0;
-          const beat = li && Number.isFinite(li.beatLen) ? li.beatLen : (60/120);
-          lr.anchorStartTime = now + beat;
-        }catch{}
-      }
-    }catch{}
-    // Do not mute on spawn; rely on short replay lookahead and recorder reset
-    // to avoid overlap, keeping first-loop hits fully audible.
-    try{
+
+    if (!isRespawn) {
+        lastLaunch = { vx: L.vx, vy: L.vy, x: L.x, y: L.y };
+    }
+
+    // Set the flight time for the new ball (applies to both launches and respawns).
+    try {
       const li = (typeof getLoopInfo==='function') ? getLoopInfo() : null;
       const ac = (typeof ensureAudioContext==='function') ? ensureAudioContext() : null;
       const now = ac ? ac.currentTime : 0;
       if (li && Number.isFinite(li.barLen) && li.barLen > 0){
-        nextLaunchAt = now + li.barLen;
+        const life = li.barLen * BOUNCER_BARS_PER_LIFE;
+        nextLaunchAt = now + life;
+        ball.flightEnd = nextLaunchAt;
       } else {
         nextLaunchAt = null;
       }
     }catch{}
-    try{ fx.onLaunch && fx.onLaunch(L.x, L.y); }catch{}
+
+    if (!isRespawn) {
+        try { fx.onLaunch && fx.onLaunch(L.x, L.y); } catch {}
+    }
     return o;
   }
 function setNextLaunchAt(t){ nextLaunchAt = t; }
@@ -408,14 +467,11 @@ let __lastTickByBlock = new Map();
 let __lastTickByEdge  = new Map();
 let __justSpawnedUntil = 0;
 
-// Mute old scheduled events immediately; unmute on first new physics hit
+// Mute on boot to prevent any sound until first interaction.
 try {
-  try{
-    if (typeof window?.setToyMuted==="function") window.setToyMuted(toyId, true);
-    // Mark that the next physics hit should unmute so fresh interactions are audible.
-    __spawnPendingUnmute = true;
-  }catch{}
-} catch {}
+  setToyMuted(toyId, true);
+  __spawnPendingUnmute = true;
+} catch(e) {}
 
 
 try{
@@ -431,7 +487,7 @@ try{
   function __setAim(a){ try{ if (a && typeof a==='object'){ Object.assign(__aim, a); } }catch(e){} }
 
   const _int = installBouncerInteractions({ setAim: __setAim, canvas, sizing, toWorld, EDGE, physW, physH, ballR, __getSpeed,
-    blocks, edgeControllers, handle, spawnBallFrom, setNextLaunchAt, setBallOut, instrument: ()=>instrument, toyId, noteList, isAdvanced: ()=>panel.classList.contains('toy-zoomed') });
+    blocks, edgeControllers, handle, spawnBallFrom, setNextLaunchAt, setBallOut, instrument: ()=>instrument, toyId, noteList, velFrom, isAdvanced: ()=>panel.classList.contains('toy-zoomed') });
 // draw loop
   
   lockPhysWorld();
@@ -464,22 +520,18 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
         if (lr && lr.mode === 'record'){
           try {
             const ac = ensureAudioContext ? ensureAudioContext() : null;
-            // Respect scheduled time if provided; otherwise fire near-now
             const scheduledT = (typeof t === 'number') ? t : ((ac ? ac.currentTime : 0) + 0.0008);
             triggerInstrument(i||instrument, n, scheduledT, toyId);
           } catch(e){}
           const barStart = anchor + k*barLen;
           const at = (typeof t==='number' ? t : nowT);
-          // Only start recording once we pass the anchor
-          if (at >= anchor - 1e-4){
-            const offBeats = (at - barStart)/beatDur;
-            // Round offsets to current quant grid so replay matches quant exactly
-            let divRec = 4;
-            try{ const vq = (__getQuantDiv && __getQuantDiv()); if (Number.isFinite(vq) && vq>0) divRec = vq; }catch{}
-            const off = Math.max(0, Math.min(4, Math.round(offBeats * divRec)/divRec));
-            if (visQ && visQ.loopRec && Array.isArray(visQ.loopRec.pattern)){
-              visQ.loopRec.pattern.push({ note: n, offset: off });
-            }
+          const offBeats = (at - barStart)/beatDur;
+          // Round offsets to current quant grid so replay matches quant exactly
+          let divRec = 4;
+          try{ const vq = (__getQuantDiv && __getQuantDiv()); if (Number.isFinite(vq) && vq>0) divRec = vq; }catch{}
+          const off = Math.max(0, Math.min(4, Math.round(offBeats * divRec)/divRec));
+          if (visQ && visQ.loopRec && Array.isArray(visQ.loopRec.pattern)){
+            visQ.loopRec.pattern.push({ note: n, offset: off });
           }
           return;
         }
@@ -522,7 +574,7 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
       __lastTickByEdge,
       __justSpawnedUntil
     };
-    S.visQ = Object.assign({}, visQ, { loopRec });
+    S.visQ = visQ;
     S.ball = ball;
     return S;
   },
@@ -543,6 +595,7 @@ requestAnimationFrame(draw);
 
 
   function onLoop(_loopStart){} // no-op
-  return { onLoop, reset: doReset, setInstrument: (n)=>{ instrument = n || instrument; }, element: canvas };
+  const instanceApi = { onLoop, reset: doReset, setInstrument: (n)=>{ instrument = n || instrument; }, element: canvas };
+  panel.__bouncer_main_instance = instanceApi;
+  return instanceApi;
 }
-

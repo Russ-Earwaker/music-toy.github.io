@@ -66,6 +66,8 @@ export function setToyMuted(id='master', muted=false){
   const g = getToyGain(key);
   __mute.set(key, !!muted);
   const vv = __vol.get(key) ?? 1.0;
+  // Be more aggressive: cancel any pending gain changes, then set the new value.
+  g.gain.cancelScheduledValues(ctx.currentTime);
   g.gain.setValueAtTime(muted ? 0 : vv, ctx.currentTime);
 }
 
