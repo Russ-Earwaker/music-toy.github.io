@@ -47,6 +47,8 @@ export function createScheduler(cfg){
           if (!__scheduledThisBar.has(k)){
             __scheduledThisBar.add(k);
             try{ triggerInstrument(getInstrument(), name, tFire); }catch{}
+            // Defer visual flash to the actual scheduled time
+            try{ if (b) b._visFlashAt = Math.max((b._visFlashAt||0), tFire); }catch{}
           }
         }
       }
@@ -131,10 +133,11 @@ export function createScheduler(cfg){
             if (!__scheduledThisBar.has(k2)){
               __scheduledThisBar.add(k2);
               triggerInstrument(getInstrument(), name, tFire);
+              try{ const b = blocks[i]; if (b) b._visFlashAt = Math.max((b._visFlashAt||0), tFire); }catch{}
             }
             scheduled.add(name);
           }
-          blocks[i].flashEnd = Math.max(blocks[i].flashEnd, ac.currentTime + 0.12);
+          // Do not flash immediately; visuals are deferred to _visFlashAt in core draw
         });
       }
       }
