@@ -39,8 +39,8 @@
     document.body.classList.remove('panning');
   }, true);
 
-  // --- Zooming ---
-  stage.addEventListener('wheel', (e)=>{
+  // --- Zooming --- (global: anywhere in the window)
+  window.addEventListener('wheel', (e)=>{
     // zoom around mouse position
     const delta = e.deltaY;
     const rect = stage.getBoundingClientRect();
