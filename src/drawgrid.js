@@ -34,8 +34,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const flashCanvas = document.createElement('canvas'); flashCanvas.setAttribute('data-role', 'drawgrid-flash');
   Object.assign(grid.style,  { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 1 });
   Object.assign(paint.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 2 });
-  Object.assign(nodesCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 3, pointerEvents: 'none' });
-  Object.assign(flashCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 4, pointerEvents: 'none' });
+  Object.assign(flashCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 3, pointerEvents: 'none' });
+  Object.assign(nodesCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 4, pointerEvents: 'none' });
   body.appendChild(grid);
   body.appendChild(paint);
   body.appendChild(nodesCanvas);
@@ -53,14 +53,18 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   // The `strokes` array is removed. The paint canvas is now the source of truth.
   let cur = null;
   let strokes = []; // Store all completed stroke objects
-  let currentMap = null; // Store the current node map {active, nodes}
+  let currentMap = null; // Store the current node map {active, nodes, disabled}
   let nodeCoordsForHitTest = []; // For draggable nodes
-  let nodeGroupMap = []; // Per-column Map(row -> groupId) to avoid cross-line connections
+  let nodeGroupMap = []; // Per-column Map(row -> groupId or [groupIds]) to avoid cross-line connections and track z-order
   let nextDrawTarget = null; // Can be 1 or 2. Determines the next special line.
   let flashes = new Float32Array(cols);
   let playheadCol = -1;
-  let erasedColsThisDrag = new Set(); // For eraser hit-testing
-  let draggedNode = null; // { col, row }
+  let erasedTargetsThisDrag = new Set(); // For eraser hit-testing of specific nodes (currently unused)
+  let manualOverrides = Array.from({ length: initialCols }, () => new Set()); // per-column node rows overridden by drags
+  let draggedNode = null; // { col, row, group? }
+  let pendingNodeTap = null; // potential tap for toggle
+  let pendingActiveMask = null; // preserve active columns across resolution changes
+  let previewGid = null; // 1 or 2 while drawing a special line preview
   let autoTune = true; // Default to on
   
   const safeArea = 40;
@@ -81,7 +85,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       erasing = !erasing;
       er.setAttribute('aria-pressed', String(erasing));
       if (!erasing) eraserCursor.style.display = 'none';
-      else erasedColsThisDrag.clear(); // Clear on tool toggle
+      else erasedTargetsThisDrag.clear(); // Clear on tool toggle
     });
 
     // --- Generator Line Buttons (Advanced Mode Only) ---
@@ -122,7 +126,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         if (hasLine) {
             // "Redraw" was clicked. Remove the existing line and its nodes.
             strokes = strokes.filter(s => s.generatorId !== lineNum);
-            clearAndRedrawFromStrokes();
+            // Only regenerate nodes; keep paint as-is to preserve erasures
+            regenerateMapFromStrokes();
         }
         
         // Set this line as the next one to be drawn.
@@ -147,7 +152,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         autoTune = !autoTune;
         autoTuneBtn.textContent = `Auto-tune: ${autoTune ? 'On' : 'Off'}`;
         autoTuneBtn.setAttribute('aria-pressed', String(autoTune)); // This will re-snap all nodes
-        resnapAndRedraw();
+        resnapAndRedraw(false);
       });
     }
 
@@ -161,10 +166,43 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       right.appendChild(stepsSel);
 
       stepsSel.addEventListener('change', () => {
+        const prevCols = cols;
+        const prevActive = currentMap?.active ? Array.from(currentMap.active) : null;
         cols = parseInt(stepsSel.value, 10);
         panel.dataset.steps = String(cols);
         flashes = new Float32Array(cols);
-        resnapAndRedraw();
+        // Reset manual overrides on resolution changes to avoid mismatches
+        manualOverrides = Array.from({ length: cols }, () => new Set());
+        if (prevActive) {
+          pendingActiveMask = { prevCols, prevActive };
+          // Also apply immediately to currentMap if present (for cases with no strokes)
+          if (currentMap && Array.isArray(currentMap.active)) {
+            const newCols = cols;
+            const mapped = Array(newCols).fill(false);
+            if (prevCols === newCols) {
+              for (let i = 0; i < newCols; i++) mapped[i] = !!prevActive[i];
+            } else if (newCols % prevCols === 0) {
+              const f = newCols / prevCols;
+              for (let i = 0; i < prevCols; i++) {
+                for (let j = 0; j < f; j++) mapped[i * f + j] = !!prevActive[i];
+              }
+            } else if (prevCols % newCols === 0) {
+              const f = prevCols / newCols;
+              for (let i = 0; i < newCols; i++) {
+                let any = false;
+                for (let j = 0; j < f; j++) any = any || !!prevActive[i * f + j];
+                mapped[i] = any;
+              }
+            } else {
+              for (let i = 0; i < newCols; i++) {
+                const src = Math.floor(i * prevCols / newCols);
+                mapped[i] = !!prevActive[src];
+              }
+            }
+            currentMap.active = mapped;
+          }
+        }
+        resnapAndRedraw(true);
       });
     }
 
@@ -199,7 +237,7 @@ function clearAndRedrawFromStrokes() {
   // Regenerates the node map by snapping all generator strokes.
 function regenerateMapFromStrokes() {
       const isZoomed = panel.classList.contains('toy-zoomed');
-      const newMap = { active: Array(cols).fill(false), nodes: Array.from({ length: cols }, () => new Set()) };
+      const newMap = { active: Array(cols).fill(false), nodes: Array.from({ length: cols }, () => new Set()), disabled: Array.from({ length: cols }, () => new Set()) };
       const newGroups = Array.from({ length: cols }, () => new Map());
 
       if (isZoomed) {
@@ -209,7 +247,15 @@ function regenerateMapFromStrokes() {
           const partial = snapToGridFromStroke(s);
           for (let c = 0; c < cols; c++){
             if (partial.nodes[c]?.size > 0){
-              partial.nodes[c].forEach(row => { newMap.nodes[c].add(row); newGroups[c].set(row, s.generatorId || 0); });
+              partial.nodes[c].forEach(row => {
+                newMap.nodes[c].add(row);
+                // Track z-ordered group stacks per row. Only store real generator IDs (1/2), not 0/null.
+                if (s.generatorId) {
+                  const stack = newGroups[c].get(row) || [];
+                  if (!stack.includes(s.generatorId)) stack.push(s.generatorId);
+                  newGroups[c].set(row, stack);
+                }
+              });
               newMap.active[c] = true;
             }
           }
@@ -222,7 +268,14 @@ function regenerateMapFromStrokes() {
             const partial = snapToGridFromStroke(s);
             for (let c = 0; c < cols; c++){
               if (partial.nodes[c]?.size > 0){
-                partial.nodes[c].forEach(row => { newMap.nodes[c].add(row); newGroups[c].set(row, s.generatorId || 0); });
+                partial.nodes[c].forEach(row => {
+                  newMap.nodes[c].add(row);
+                  if (s.generatorId) {
+                    const stack = newGroups[c].get(row) || [];
+                    if (!stack.includes(s.generatorId)) stack.push(s.generatorId);
+                    newGroups[c].set(row, stack);
+                  }
+                });
                 newMap.active[c] = true;
               }
             }
@@ -233,14 +286,90 @@ function regenerateMapFromStrokes() {
             const partial = snapToGridFromStroke(specialStroke);
             for (let c = 0; c < cols; c++){
               if (partial.nodes[c]?.size > 0){
-                partial.nodes[c].forEach(row => { newMap.nodes[c].add(row); newGroups[c].set(row, specialStroke.generatorId || 0); });
+                partial.nodes[c].forEach(row => {
+                  newMap.nodes[c].add(row);
+                  if (specialStroke.generatorId) {
+                    const stack = newGroups[c].get(row) || [];
+                    if (!stack.includes(specialStroke.generatorId)) stack.push(specialStroke.generatorId);
+                    newGroups[c].set(row, stack);
+                  }
+                });
                 newMap.active[c] = true;
               }
             }
           }
         }
+
+        // Apply manual node overrides when returning to standard view
+        try {
+          if (manualOverrides && Array.isArray(manualOverrides)) {
+            for (let c = 0; c < cols; c++) {
+              const ov = manualOverrides[c];
+              if (ov && ov.size > 0) {
+                newMap.nodes[c] = new Set(ov);
+                // recompute active based on disabled set
+                const dis = newMap.disabled?.[c] || new Set();
+                const anyOn = Array.from(newMap.nodes[c]).some(r => !dis.has(r));
+                newMap.active[c] = anyOn;
+                // carry over groups from nodeGroupMap so we still avoid cross-line connections
+                if (nodeGroupMap && nodeGroupMap[c] instanceof Map) {
+                  for (const r of newMap.nodes[c]) {
+                    const g = nodeGroupMap[c].get(r);
+                    if (g != null) {
+                      const stack = Array.isArray(g) ? g.slice() : [g];
+                      newGroups[c].set(r, stack);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } catch {}
       }
 
+      // If a pending active mask exists (e.g., after steps change), map it to new cols
+      if (pendingActiveMask && Array.isArray(pendingActiveMask.prevActive)) {
+        const prevCols = pendingActiveMask.prevCols || newMap.active.length;
+        const prevActive = pendingActiveMask.prevActive;
+        const newCols = cols;
+        const mapped = Array(newCols).fill(false);
+        if (prevCols === newCols) {
+          for (let i = 0; i < newCols; i++) mapped[i] = !!prevActive[i];
+        } else if (newCols % prevCols === 0) {
+          // upscale: duplicate each prior column's state into its segments
+          const f = newCols / prevCols;
+          for (let i = 0; i < prevCols; i++) {
+            for (let j = 0; j < f; j++) mapped[i * f + j] = !!prevActive[i];
+          }
+        } else if (prevCols % newCols === 0) {
+          // downscale: OR any segment to preserve activity if either subcolumn was active
+          const f = prevCols / newCols;
+          for (let i = 0; i < newCols; i++) {
+            let any = false;
+            for (let j = 0; j < f; j++) any = any || !!prevActive[i * f + j];
+            mapped[i] = any;
+          }
+        } else {
+          // fallback proportional map
+          for (let i = 0; i < newCols; i++) {
+            const src = Math.floor(i * prevCols / newCols);
+            mapped[i] = !!prevActive[src];
+          }
+        }
+        // Apply mapped active states but only where nodes exist
+        for (let c = 0; c < newCols; c++) {
+          if (newMap.nodes[c]?.size > 0) newMap.active[c] = mapped[c];
+        }
+        pendingActiveMask = null; // consume
+      }
+
+      // Preserve disabled nodes where positions still exist
+      if (currentMap && Array.isArray(currentMap.disabled)) {
+        for (let c = 0; c < cols; c++) {
+          const prevDis = currentMap.disabled[c] || new Set();
+          for (const r of prevDis) { if (newMap.nodes[c]?.has(r)) newMap.disabled[c].add(r); }
+        }
+      }
       currentMap = newMap;
       nodeGroupMap = newGroups;
       try { (panel.__dgUpdateButtons || function(){})() } catch {}
@@ -249,14 +378,24 @@ function regenerateMapFromStrokes() {
       drawGrid();
   }
 
-  function resnapAndRedraw() {
-    const hasContent = strokes.length > 0;
-    layout(true); // This redraws the grid and clears the content canvases.
+  function resnapAndRedraw(forceLayout = false) {
+    const hasStrokes = strokes.length > 0;
+    const hasNodes = currentMap && currentMap.nodes && currentMap.nodes.some(s => s && s.size > 0);
+    // Only force layout when needed (e.g., steps/resolution change or zoom). Avoid clearing paint when unnecessary.
+    layout(!!forceLayout);
 
-    if (hasContent) {
+    if (hasStrokes) {
       requestAnimationFrame(() => {
         if (!panel.isConnected) return;
-        clearAndRedrawFromStrokes();
+        regenerateMapFromStrokes();
+      });
+    } else if (hasNodes) {
+      // No strokes to regenerate from (e.g., after dragging). Preserve current nodes and do not clear paint.
+      requestAnimationFrame(() => {
+        if (!panel.isConnected) return;
+        drawGrid();
+        drawNodes(currentMap.nodes);
+        panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
       });
     } else {
       api.clear();
@@ -286,7 +425,7 @@ function regenerateMapFromStrokes() {
             // LEAVING advanced mode. Preserve generator lines; standard view will keep their nodes.
         }
 
-        resnapAndRedraw();
+        resnapAndRedraw(true);
       });
     });
   });
@@ -306,6 +445,17 @@ function regenerateMapFromStrokes() {
     if (force || newW !== cssW || newH !== cssH || newDpr !== dpr) {
       const oldW = cssW;
       const oldH = cssH;
+      // Snapshot current paint to preserve erased/drawn content across resize
+      let paintSnapshot = null;
+      try {
+        if (paint.width > 0 && paint.height > 0) {
+          paintSnapshot = document.createElement('canvas');
+          paintSnapshot.width = paint.width;
+          paintSnapshot.height = paint.height;
+          const psctx = paintSnapshot.getContext('2d');
+          psctx.drawImage(paint, 0, 0);
+        }
+      } catch {}
 
       dpr = newDpr;
       cssW = newW;
@@ -348,8 +498,21 @@ function regenerateMapFromStrokes() {
       eraserCursor.style.height = `${eraserWidth}px`;
 
       drawGrid();
-      // Clear content canvases. The caller is responsible for redrawing content.
-      pctx.clearRect(0, 0, cssW, cssH);
+      // Restore paint snapshot scaled to new size (preserves erasures)
+      if (paintSnapshot) {
+        try {
+          pctx.save();
+          // Draw in device pixels to avoid double-scaling from current transform
+          pctx.setTransform(1, 0, 0, 1, 0, 0);
+          pctx.drawImage(
+            paintSnapshot,
+            0, 0, paintSnapshot.width, paintSnapshot.height,
+            0, 0, paint.width, paint.height
+          );
+          pctx.restore();
+        } catch {}
+      }
+      // Clear other content canvases. The caller is responsible for redrawing nodes/overlay.
       nctx.clearRect(0, 0, cssW, cssH);
       fctx.clearRect(0, 0, cssW, cssH);
     }
@@ -453,6 +616,7 @@ function regenerateMapFromStrokes() {
 
     ctx.save(); // Save context for potential glow effect
     const isStandard = !panel.classList.contains('toy-zoomed');
+    const isOverlay = (ctx === fctx); // Only overlay animates hues; paint stays neutral for specials
     let wantsSpecial = !!stroke.isSpecial;
     if (!wantsSpecial && isStandard) {
       const hasAnySpecial = strokes.some(s => s.isSpecial);
@@ -472,21 +636,25 @@ function regenerateMapFromStrokes() {
       if (wantsSpecial) {
           const r = lineWidth / 2;
           const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
-          if (stroke.generatorId === 1) {
-              grad.addColorStop(0, 'hsl(200, 100%, 75%)');
-              grad.addColorStop(0.7, 'hsl(270, 100%, 68%)');
-              grad.addColorStop(1,  'hsla(320, 100%, 60%, 0.35)');
-          } else if (stroke.generatorId === 2) {
-              grad.addColorStop(0, 'hsl(45, 100%, 70%)');
-              grad.addColorStop(0.7, 'hsl(20, 100%, 65%)');
-              grad.addColorStop(1,  'hsla(0, 100%, 55%, 0.35)');
+          if (isOverlay) {
+            const t = (performance.now ? performance.now() : Date.now());
+            const gid = stroke.generatorId ?? 1; // default to Line 1 palette
+            if (gid === 1) {
+              const hue = 200 + 20 * Math.sin((t/800) * Math.PI * 2);
+              grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 75%)`);
+              grad.addColorStop(0.7, `hsl(${(hue+60).toFixed(0)}, 100%, 68%)`);
+              grad.addColorStop(1,  `hsla(${(hue+120).toFixed(0)}, 100%, 60%, 0.35)`);
+            } else {
+              const hue = 20 + 20 * Math.sin((t/900) * Math.PI * 2);
+              grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 70%)`);
+              grad.addColorStop(0.7, `hsl(${(hue-25).toFixed(0)}, 100%, 65%)`);
+              grad.addColorStop(1,  `hsla(${(hue-45).toFixed(0)}, 100%, 55%, 0.35)`);
+            }
+            ctx.fillStyle = grad;
           } else {
-              const hue = (performance.now() / 20) % 360;
-              grad.addColorStop(0, `hsl(${hue}, 100%, 75%)`);
-              grad.addColorStop(0.7, `hsl(${(hue + 60) % 360}, 100%, 65%)`);
-              grad.addColorStop(1, `hsla(${(hue + 120) % 360}, 100%, 50%, 0.3)`);
+            // Paint layer: neutral for specials; overlay handles color shift
+            ctx.fillStyle = 'rgba(255,255,255,0.9)';
           }
-          ctx.fillStyle = grad;
       } else {
           ctx.fillStyle = color;
       }
@@ -503,21 +671,24 @@ function regenerateMapFromStrokes() {
           const p1 = stroke.pts[0];
           const pLast = stroke.pts[stroke.pts.length - 1];
           const grad = ctx.createLinearGradient(p1.x, p1.y, pLast.x, pLast.y);
-          if (stroke.generatorId === 1) {
-              grad.addColorStop(0, 'hsl(200, 100%, 70%)');
-              grad.addColorStop(0.5, 'hsl(260, 100%, 70%)');
-              grad.addColorStop(1,  'hsl(320, 100%, 68%)');
-          } else if (stroke.generatorId === 2) {
-              grad.addColorStop(0, 'hsl(50, 100%, 68%)');
-              grad.addColorStop(0.5, 'hsl(25, 100%, 66%)');
-              grad.addColorStop(1,  'hsl(0, 100%, 64%)');
+          if (isOverlay) {
+            const t = (performance.now ? performance.now() : Date.now());
+            const gid = stroke.generatorId ?? 1;
+            if (gid === 1) {
+              const hue = 200 + 20 * Math.sin((t/800) * Math.PI * 2);
+              grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 70%)`);
+              grad.addColorStop(0.5, `hsl(${(hue+45).toFixed(0)}, 100%, 70%)`);
+              grad.addColorStop(1,  `hsl(${(hue+90).toFixed(0)}, 100%, 68%)`);
+            } else {
+              const hue = 20 + 20 * Math.sin((t/900) * Math.PI * 2);
+              grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 68%)`);
+              grad.addColorStop(0.5, `hsl(${(hue-25).toFixed(0)}, 100%, 66%)`);
+              grad.addColorStop(1,  `hsl(${(hue-50).toFixed(0)}, 100%, 64%)`);
+            }
+            ctx.strokeStyle = grad;
           } else {
-              const hue = (performance.now() / 20) % 360;
-              grad.addColorStop(0, `hsl(${hue}, 100%, 70%)`);
-              grad.addColorStop(0.5, `hsl(${(hue + 45) % 360}, 100%, 70%)`);
-              grad.addColorStop(1, `hsl(${(hue + 90) % 360}, 100%, 70%)`);
+            ctx.strokeStyle = 'rgba(255,255,255,0.9)';
           }
-          ctx.strokeStyle = grad;
       } else {
           ctx.strokeStyle = color;
       }
@@ -578,7 +749,7 @@ function regenerateMapFromStrokes() {
     nctx.clearRect(0, 0, cssW, cssH);
     if (!nodes) { nodeCoordsForHitTest = []; return; }
 
-    const nodeCoords = []; // Store coordinates of each node: {x, y, col, row, radius, group}
+    const nodeCoords = []; // Store coordinates of each node: {x, y, col, row, radius, group, disabled}
     nodeCoordsForHitTest = []; // Clear for new set
     const radius = Math.max(4, Math.min(cw, ch) * 0.20); // Bigger nodes
 
@@ -588,10 +759,24 @@ function regenerateMapFromStrokes() {
             for (const r of nodes[c]) {
                 const x = gridArea.x + c * cw + cw * 0.5;
                 const y = gridArea.y + topPad + r * ch + ch * 0.5;
-                const groupId = (nodeGroupMap && nodeGroupMap[c]) ? (nodeGroupMap[c].get(r) ?? null) : null;
-                const nodeData = { x, y, col: c, row: r, radius: radius * 1.5, group: groupId }; // Use a larger hit area
-                nodeCoords.push(nodeData);
-                nodeCoordsForHitTest.push(nodeData);
+                const groupEntry = (nodeGroupMap && nodeGroupMap[c]) ? (nodeGroupMap[c].get(r) ?? null) : null;
+                const disabledSet = currentMap?.disabled?.[c];
+                const isDisabled = !!(disabledSet && disabledSet.has(r));
+                if (Array.isArray(groupEntry) && groupEntry.length > 0) {
+                  // Multiple overlapped nodes at same position; respect z-order (last is top).
+                  // For hit-testing, push top-most first so it is grabbed first.
+                  for (let i = groupEntry.length - 1; i >= 0; i--) {
+                    const gid = groupEntry[i];
+                    const nodeData = { x, y, col: c, row: r, radius: radius * 1.5, group: gid, disabled: isDisabled };
+                    nodeCoords.push(nodeData);
+                    nodeCoordsForHitTest.push(nodeData);
+                  }
+                } else {
+                  const groupId = (typeof groupEntry === 'number') ? groupEntry : null;
+                  const nodeData = { x, y, col: c, row: r, radius: radius * 1.5, group: groupId, disabled: isDisabled }; // Use a larger hit area
+                  nodeCoords.push(nodeData);
+                  nodeCoordsForHitTest.push(nodeData);
+                }
             }
         }
     }
@@ -606,34 +791,54 @@ function regenerateMapFromStrokes() {
         colsMap.get(node.col).push(node);
     }
 
-    // Stroke per segment to handle color changes for muted columns
+    // Stroke per segment to handle color changes and disabled nodes (no animation on connectors)
     for (let c = 0; c < cols - 1; c++) {
       const currentColNodes = colsMap.get(c);
       const nextColNodes = colsMap.get(c + 1);
       if (currentColNodes && nextColNodes) {
         const currentIsActive = currentMap?.active?.[c] ?? true;
         const nextIsActive = currentMap?.active?.[c + 1] ?? true;
-        const lineIsActive = currentIsActive && nextIsActive;
+        const advanced = panel.classList.contains('toy-zoomed');
+        const disabledStyle = 'rgba(120, 120, 120, 0.7)';
+        const colorFor = (gid, active=true) => {
+          if (!active) return disabledStyle;
+          if (gid === 1) return 'rgba(125, 180, 255, 0.9)'; // static bluish
+          if (gid === 2) return 'rgba(255, 160, 120, 0.9)'; // static orangey
+          return 'rgba(255, 255, 255, 0.85)';
+        };
 
-        nctx.strokeStyle = lineIsActive ? 'rgba(255, 255, 255, 0.8)' : 'rgba(120, 120, 120, 0.7)';
-        nctx.beginPath();
-        for (const node of currentColNodes) {
-          for (const nextNode of nextColNodes) {
-            if (node.group != null && nextNode.group != null && node.group !== nextNode.group) continue; // avoid cross-line connections
-            if (node.group == null && nextNode.group != null) continue;
-            if (node.group != null && nextNode.group == null) continue;
-            nctx.moveTo(node.x, node.y);
-            nctx.lineTo(nextNode.x, nextNode.y);
+        const matchGroup = (g, gid) => {
+          if (gid == null) return (g == null);
+          return g === gid;
+        };
+
+        const drawGroupConnections = (gid) => {
+          for (const node of currentColNodes) {
+            if (!matchGroup(node.group ?? null, gid)) continue;
+            for (const nextNode of nextColNodes) {
+              if (!matchGroup(nextNode.group ?? null, gid)) continue;
+              const eitherDisabled = node.disabled || nextNode.disabled || !currentIsActive || !nextIsActive;
+              nctx.strokeStyle = colorFor(gid, !eitherDisabled);
+              nctx.beginPath();
+              nctx.moveTo(node.x, node.y);
+              nctx.lineTo(nextNode.x, nextNode.y);
+              nctx.stroke();
+            }
           }
-        }
-        nctx.stroke();
+        };
+
+        // Draw per group to avoid cross-line connections in both modes.
+        drawGroupConnections(1);
+        drawGroupConnections(2);
+        drawGroupConnections(null);
       }
     }
 
     // --- Draw the dots on top of the lines ---
     for (const node of nodeCoords) {
-        const isActive = currentMap?.active?.[node.col] ?? true;
-        nctx.fillStyle = isActive ? 'rgba(255, 255, 255, 0.95)' : 'rgba(120, 120, 120, 0.8)';
+        const colActive = currentMap?.active?.[node.col] ?? true;
+        const nodeOn = colActive && !node.disabled;
+        nctx.fillStyle = nodeOn ? 'rgba(255, 255, 255, 0.95)' : 'rgba(120, 120, 120, 0.8)';
         nctx.beginPath();
         nctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
         nctx.fill();
@@ -651,7 +856,11 @@ function regenerateMapFromStrokes() {
 
     for (let c = 0; c < cols; c++) {
         if (nodes[c] && nodes[c].size > 0) {
-            const r = [...nodes[c]][0]; // Get the first (and only) row for this column
+            // choose first non-disabled row for label
+            let r = undefined;
+            const disabledSet = currentMap?.disabled?.[c] || new Set();
+            for (const row of nodes[c]) { if (!disabledSet.has(row)) { r = row; break; } }
+            if (r === undefined) continue;
             const midiNote = chromaticPalette[r];
             if (midiNote !== undefined) {
                 const x = gridArea.x + c * cw + cw * 0.5;
@@ -738,19 +947,25 @@ function regenerateMapFromStrokes() {
   function eraseNodeAtPoint(p) {
     const eraserRadius = getLineWidth();
     for (const node of [...nodeCoordsForHitTest]) { // Iterate on a copy
-        if (erasedColsThisDrag.has(node.col)) continue;
+        const key = `${node.col}:${node.row}:${node.group ?? 'n'}`;
+        if (erasedTargetsThisDrag.has(key)) continue;
 
         if (Math.hypot(p.x - node.x, p.y - node.y) < eraserRadius) {
             const col = node.col;
-            erasedColsThisDrag.add(col);
+            const row = node.row;
+            erasedTargetsThisDrag.add(key);
 
-            // Remove node data from the model first
             if (currentMap && currentMap.nodes[col]) {
-                currentMap.nodes[col].clear();
-                currentMap.active[col] = false;
+                // Do not remove groups or nodes; mark it disabled instead so connections persist (but gray)
+                if (!currentMap.disabled) currentMap.disabled = Array.from({length:cols},()=>new Set());
+                currentMap.disabled[col].add(row);
+                // If no enabled nodes remain, mark column inactive
+                const dis = currentMap.disabled[col];
+                const anyOn = Array.from(currentMap.nodes[col] || []).some(r => !dis.has(r));
+                currentMap.active[col] = anyOn;
             }
 
-            // Start the animation. It will handle drawing the remaining nodes.
+            // Start the animation of the erased node only
             animateErasedNode(node);
             // Notify the player of the change
             panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
@@ -777,7 +992,13 @@ function regenerateMapFromStrokes() {
             if (p.x >= cubeX && p.x <= cubeX + cubeSize && p.y >= yOffset && p.y <= yOffset + cubeSize) {
                 // Click was on a cube
                 if (!currentMap) {
-                    currentMap = {active:Array(cols).fill(false),nodes:Array.from({length:cols},()=>new Set())};
+                    currentMap = {
+                      active: Array(cols).fill(false),
+                      nodes: Array.from({length:cols},()=>new Set()),
+                      disabled: Array.from({length:cols},()=>new Set()),
+                    };
+                } else if (!currentMap.disabled) {
+                    currentMap.disabled = Array.from({length:cols},()=>new Set());
                 }
                 currentMap.active[col] = !currentMap.active[col];
                 drawGrid();
@@ -794,16 +1015,15 @@ function regenerateMapFromStrokes() {
         return;
     }
 
-    // In advanced mode, check for dragging a node first.
-    if (panel.classList.contains('toy-zoomed')) {
-      for (const node of nodeCoordsForHitTest) {
-        if (Math.hypot(p.x - node.x, p.y - node.y) < node.radius) {
-          draggedNode = { col: node.col, row: node.row };
-          drawing = true; // To capture move and up events
-          paint.style.cursor = 'grabbing';
-          paint.setPointerCapture?.(e.pointerId);
-          return; // Prevent drawing a new line
-        }
+    // Check for node hit first (tap toggles everywhere; drag only in advanced)
+    for (const node of nodeCoordsForHitTest) {
+      if (Math.hypot(p.x - node.x, p.y - node.y) < node.radius) {
+        // With eraser active: erase paint and disable this node + attached lines coloration
+        if (erasing) { erasedTargetsThisDrag.clear(); eraseNodeAtPoint(p); eraseAtPoint(p); return; }
+        pendingNodeTap = { col: node.col, row: node.row, x: p.x, y: p.y, group: node.group ?? null };
+        drawing = true; // capture move/up
+        paint.setPointerCapture?.(e.pointerId);
+        return; // Defer deciding until move/up
       }
     }
 
@@ -811,9 +1031,8 @@ function regenerateMapFromStrokes() {
     paint.setPointerCapture?.(e.pointerId);
 
     if (erasing) {
-      erasedColsThisDrag.clear(); // Reset on new drag
-      eraseNodeAtPoint(p);
-      eraseAtPoint(p);
+      erasedTargetsThisDrag.clear(); // Reset on new drag (not used but kept)
+      eraseAtPoint(p); // erase visual line only
     } else {
       // When starting a new line, don't clear the canvas. This makes drawing additive.
       cur = { 
@@ -839,15 +1058,61 @@ function regenerateMapFromStrokes() {
       paint.style.cursor = onNode ? 'grab' : 'default';
     }
 
+    // Promote pending tap to drag if moved sufficiently
+    if (panel.classList.contains('toy-zoomed') && pendingNodeTap && drawing && !draggedNode) {
+      const dx = p.x - pendingNodeTap.x;
+      const dy = p.y - pendingNodeTap.y;
+      if (Math.hypot(dx, dy) > 6) {
+        draggedNode = { col: pendingNodeTap.col, row: pendingNodeTap.row, group: pendingNodeTap.group ?? null };
+        paint.style.cursor = 'grabbing';
+        pendingNodeTap = null;
+      }
+    }
+
     if (draggedNode && drawing) {
       const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
       const newRow = clamp(Math.round((p.y - (gridArea.y + topPad)) / ch), 0, rows - 1);
 
       if (newRow !== draggedNode.row && currentMap) {
-          currentMap.nodes[draggedNode.col].delete(draggedNode.row);
-          currentMap.nodes[draggedNode.col].add(newRow);
+          const col = draggedNode.col;
+          const oldRow = draggedNode.row;
+          const gid = draggedNode.group ?? null;
+
+          // Ensure group map exists for this column
+          if (!nodeGroupMap[col]) nodeGroupMap[col] = new Map();
+          const colGroupMap = nodeGroupMap[col];
+
+          // Remove this group's presence from the old row's stack
+          if (gid != null) {
+            const oldArr = (colGroupMap.get(oldRow) || []).filter(g => g !== gid);
+            if (oldArr.length > 0) colGroupMap.set(oldRow, oldArr); else colGroupMap.delete(oldRow);
+          } else {
+            // Ungrouped move: nothing in group map to update
+          }
+
+          // Update nodes set for old row only if no groups remain there
+          if (!(colGroupMap.has(oldRow))) {
+            // If some other ungrouped logic wants to keep it, ensure we don't remove erroneously
+            currentMap.nodes[col].delete(oldRow);
+          }
+
+          // Add/move to new row; place on top of z-stack
+          if (gid != null) {
+            const newArr = colGroupMap.get(newRow) || [];
+            // Remove any existing same gid first to avoid dupes, then push to end (top)
+            const filtered = newArr.filter(g => g !== gid);
+            filtered.push(gid);
+            colGroupMap.set(newRow, filtered);
+          }
+          currentMap.nodes[col].add(newRow);
+
+          // record manual override for standard view preservation
+          try {
+            if (!manualOverrides[col]) manualOverrides[col] = new Set();
+            manualOverrides[col] = new Set(currentMap.nodes[col]);
+          } catch {}
+
           draggedNode.row = newRow;
-          strokes = []; // The original gesture is now invalid
           
           // Redraw only the nodes canvas; the blue line on the paint canvas is untouched.
           drawNodes(currentMap.nodes);
@@ -858,13 +1123,8 @@ function regenerateMapFromStrokes() {
 
     if (erasing) {
       const eraserRadius = getLineWidth();
-      // The visual cursor's transform should be offset by its radius to center it.
       eraserCursor.style.transform = `translate(${p.x - eraserRadius}px, ${p.y - eraserRadius}px)`;
-
-      if (drawing) { // only erase if pointer is down
-        eraseAtPoint(p);
-        eraseNodeAtPoint(p); // Also check for node collision on move
-      }
+      if (drawing) { eraseAtPoint(p); eraseNodeAtPoint(p); }
       return; // Don't do drawing logic if erasing
     }
 
@@ -872,12 +1132,36 @@ function regenerateMapFromStrokes() {
 
     if (cur) {
       cur.pts.push(p);
-      // Redraw all strokes plus the current one for clean feedback
-      pctx.clearRect(0, 0, cssW, cssH);
-      for (const s of strokes) {
-        drawFullStroke(pctx, s);
+      // Determine if current stroke is a special-line preview (show only on overlay)
+      const isZoomed = panel.classList.contains('toy-zoomed');
+      const hasLine1 = strokes.some(s => s.generatorId === 1);
+      const hasLine2 = strokes.some(s => s.generatorId === 2);
+      previewGid = null;
+      if (!isZoomed) {
+        if (!hasLine1 && !hasLine2) previewGid = 1; // Standard: first stroke acts as Line 1
+      } else {
+        if (nextDrawTarget) previewGid = nextDrawTarget;
+        else if (!hasLine1) previewGid = 1;
+        else if (!hasLine2) previewGid = 2;
       }
-      drawFullStroke(pctx, cur);
+      // For normal lines (no previewGid), paint segment onto paint; otherwise, overlay will show it
+      if (!previewGid) {
+        const n = cur.pts.length;
+        if (n >= 2) {
+          const a = cur.pts[n - 2];
+          const b = cur.pts[n - 1];
+          pctx.save();
+          pctx.lineCap = 'round';
+          pctx.lineJoin = 'round';
+          pctx.lineWidth = getLineWidth();
+          pctx.strokeStyle = cur.color;
+          pctx.beginPath();
+          pctx.moveTo(a.x, a.y);
+          pctx.lineTo(b.x, b.y);
+          pctx.stroke();
+          pctx.restore();
+        }
+      }
     }
   }
   function onPointerUp(e){
@@ -885,6 +1169,33 @@ function regenerateMapFromStrokes() {
       panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
       draggedNode = null;
       paint.style.cursor = 'default';
+      return;
+    }
+
+    // Tap on a node toggles column active state
+    if (pendingNodeTap) {
+      const col = pendingNodeTap.col;
+      const row = pendingNodeTap.row;
+      if (!currentMap) {
+        currentMap = {
+          active:Array(cols).fill(false),
+          nodes:Array.from({length:cols},()=>new Set()),
+          disabled:Array.from({length:cols},()=>new Set()),
+        };
+      } else if (!currentMap.disabled) {
+        currentMap.disabled = Array.from({length:cols},()=>new Set());
+      }
+
+      const dis = currentMap.disabled[col];
+      if (dis.has(row)) dis.delete(row); else dis.add(row);
+      // Recompute column active: any node present and not disabled
+      const anyOn = Array.from(currentMap.nodes[col] || []).some(r => !dis.has(r));
+      currentMap.active[col] = anyOn;
+
+      drawGrid();
+      drawNodes(currentMap.nodes);
+      panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
+      pendingNodeTap = null;
     }
 
     if (!drawing) return;
@@ -894,11 +1205,8 @@ function regenerateMapFromStrokes() {
     cur = null;
 
     if (erasing) {
-      // When erasing, we just stop. State was updated on move. The line is visually gone.
-      erasedColsThisDrag.clear();
-      // Erasing invalidates the logical stroke model.
-      // This "bakes" the paint canvas and stops the animation loop from redrawing.
-      strokes = [];
+      // Finish erasing; keep paint modifications and disabled states
+      erasedTargetsThisDrag.clear();
       return;
     }
 
@@ -948,19 +1256,18 @@ function regenerateMapFromStrokes() {
     strokeToProcess.generatorId = generatorId;
     strokes.push({ pts: strokeToProcess.pts, color: strokeToProcess.color, isSpecial: strokeToProcess.isSpecial, generatorId: strokeToProcess.generatorId });
 
-    // Immediately redraw paint with special effects if any special strokes exist
+    // Commit just this stroke to the paint layer (neutral color for specials), preserving existing erasures
     try {
-      const anySpecial = strokes.some(s => s.isSpecial);
-      if (anySpecial) {
-        pctx.clearRect(0, 0, cssW, cssH);
-        for (const s of strokes) drawFullStroke(pctx, s);
-      }
+      drawFullStroke(pctx, strokeToProcess);
     } catch {}
+
+    // Do not redraw paint from strokes here; preserve erased regions
 
     if (shouldGenerateNodes) {
       // Rebuild nodes immediately to ensure Advanced first swipe creates Line 1 nodes
       if (!panel.isConnected) return;
-      clearAndRedrawFromStrokes();
+      // Only regenerate nodes; keep paint as-is
+      regenerateMapFromStrokes();
     }
   }
 
@@ -1004,13 +1311,34 @@ function regenerateMapFromStrokes() {
   function renderLoop() {
     if (!panel.isConnected) { cancelAnimationFrame(rafId); return; }
 
-    // Animate special strokes by redrawing them every frame
+    // Animate special stroke paint (hue cycling) without resurrecting erased areas:
+    // Draw animated special strokes into flashCanvas, then mask with current paint alpha.
     const specialStrokes = strokes.filter(s => s.isSpecial);
-    if (specialStrokes.length > 0 && !drawing) {
-        pctx.clearRect(0, 0, cssW, cssH);
-        for (const s of strokes) {
-            drawFullStroke(pctx, s);
+    if (specialStrokes.length > 0 || (cur && previewGid)) {
+        if (!panel.isConnected) { cancelAnimationFrame(rafId); return; }
+        fctx.save();
+        // Clear overlay in device pixels
+        fctx.setTransform(1, 0, 0, 1, 0, 0);
+        fctx.clearRect(0, 0, flashCanvas.width, flashCanvas.height);
+        // Draw animated strokes with CSS transform
+        fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        for (const s of specialStrokes) drawFullStroke(fctx, s);
+        // Mask with paint alpha without scaling (device pixels)
+        fctx.setTransform(1, 0, 0, 1, 0, 0);
+        fctx.globalCompositeOperation = 'destination-in';
+        fctx.drawImage(paint, 0, 0);
+        // Now draw current special preview ON TOP unmasked, so full stroke is visible while drawing
+        if (cur && previewGid && cur.pts && cur.pts.length) {
+          fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          fctx.globalCompositeOperation = 'source-over';
+          const preview = { pts: cur.pts, isSpecial: true, generatorId: previewGid };
+          drawFullStroke(fctx, preview);
         }
+        fctx.restore();
+    } else {
+        // No special strokes: ensure overlay is cleared
+        fctx.setTransform(1, 0, 0, 1, 0, 0);
+        fctx.clearRect(0, 0, flashCanvas.width, flashCanvas.height);
     }
 
     // Animate playhead flash
@@ -1035,7 +1363,7 @@ function regenerateMapFromStrokes() {
       nctx.clearRect(0,0,cssW,cssH);
       fctx.clearRect(0,0,cssW,cssH);
       strokes = [];
-      const emptyMap = {active:Array(cols).fill(false),nodes:Array.from({length:cols},()=>new Set())};
+      const emptyMap = {active:Array(cols).fill(false),nodes:Array.from({length:cols},()=>new Set()), disabled:Array.from({length:cols},()=>new Set())};
       currentMap = emptyMap;
       panel.dispatchEvent(new CustomEvent('drawgrid:update',{detail:emptyMap}));
       drawGrid();
