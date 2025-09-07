@@ -16,10 +16,9 @@ export function connectDrawGridToPlayer(panel) {
 
   const initialSteps = parseInt(panel.dataset.steps, 10) || 8;
 
-  // The grid has 12 rows. We'll use a chromatic scale.
-  // The drawgrid component handles auto-tuning visuals and row indices.
+  // The grid has 12 rows. Use a chromatic palette matching drawgrid snapping (highest row at top).
   const chromaticOffsets = Array.from({length: 12}, (_, i) => i);
-  const notePalette = buildPalette(60, chromaticOffsets, 1).reverse(); // C4-B4, reversed
+  const notePalette = buildPalette(60, chromaticOffsets, 1).reverse(); // C4..B4 reversed
 
   let gridState = {
     active: Array(initialSteps).fill(false),

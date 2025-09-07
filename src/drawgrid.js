@@ -215,11 +215,109 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       right.appendChild(randomBtn);
 
       randomBtn.addEventListener('click', () => {
-        if (!currentMap) return;
-        // Randomly toggle active state for columns that have nodes
-        for (let c = 0; c < cols; c++) { if (currentMap.nodes[c]?.size > 0) { currentMap.active[c] = Math.random() < 0.5; } }
-        drawNodes(currentMap.nodes); // Redraw nodes to show muted state
-        drawGrid(); // Redraw grid to show new highlights
+        // Ensure data structures exist
+        if (!currentMap) {
+          currentMap = { active: Array(cols).fill(false), nodes: Array.from({length:cols},()=>new Set()), disabled: Array.from({length:cols},()=>new Set()) };
+        }
+
+        // Clear all existing lines and nodes
+        strokes = [];
+        nodeGroupMap = Array.from({ length: cols }, () => new Map());
+        pctx.clearRect(0, 0, cssW, cssH);
+        nctx.clearRect(0, 0, cssW, cssH);
+
+        // Build a smooth, dramatic wiggly line across the full grid height using Catmull-Rom interpolation
+        try {
+          const leftX = gridArea.x;
+          const rightX = gridArea.x + gridArea.w;
+          const minY = gridArea.y + topPad + ch*0.2; // keep safely inside grid rows
+          const maxY = gridArea.y + topPad + rows*ch - ch*0.2;
+          const K = Math.max(6, Math.round(gridArea.w / Math.max(1, cw*0.9))); // control points
+          const cps = [];
+          for (let i=0;i<K;i++){
+            const t = i/(K-1);
+            const x = leftX + (rightX-leftX)*t;
+            // bias extremes sometimes to reach near full height
+            const r = Math.random();
+            let y;
+            if (r < 0.2) y = minY + (Math.random()*ch*0.6);
+            else if (r > 0.8) y = maxY - (Math.random()*ch*0.6);
+            else y = minY + Math.random()*(maxY-minY);
+            cps.push({ x, y });
+          }
+          // Catmull-Rom interpolation
+          function cr(p0,p1,p2,p3,t){
+            const t2=t*t, t3=t2*t;
+            const a = (-t3+2*t2-t)/2, b = (3*t3-5*t2+2)/2, c = (-3*t3+4*t2+t)/2, d = (t3-t2)/2;
+            return a*p0 + b*p1 + c*p2 + d*p3;
+          }
+          const pts = [];
+          const samplesPerSeg = Math.max(8, Math.round(cw/3));
+          for (let i=0;i<cps.length-1;i++){
+            const p0 = cps[Math.max(0,i-1)], p1=cps[i], p2=cps[i+1], p3=cps[Math.min(cps.length-1,i+2)];
+            for (let s=0;s<=samplesPerSeg;s++){
+              const t = s/samplesPerSeg;
+              const x = cr(p0.x, p1.x, p2.x, p3.x, t);
+              let y = cr(p0.y, p1.y, p2.y, p3.y, t);
+              // clamp and bias toward row centers to ensure snap coverage
+              y = Math.max(minY, Math.min(maxY, y));
+              // optional: nudge toward nearest row center a bit
+              const rowF = (y - (gridArea.y + topPad)) / ch;
+              const rowCenterY = (Math.round(rowF) + 0.5) * ch + gridArea.y + topPad;
+              y = 0.85 * y + 0.15 * rowCenterY;
+              pts.push({ x, y });
+            }
+          }
+          // Create as special Line 1 so connectors and colors apply
+          const stroke = { pts, color: '#fff', isSpecial: true, generatorId: 1 };
+          strokes.push(stroke);
+          drawFullStroke(pctx, stroke);
+          // Snap to nodes from strokes
+          regenerateMapFromStrokes();
+          // Randomly disable some notes and columns to mimic prior cube randomisation
+          try {
+            if (currentMap) {
+              // Cap how many notes are turned off per active column:
+              // 1..3 for typical grids, 1..6 for 16-step grids
+              const maxOff = (cols >= 16) ? 6 : 3;
+              const minOff = 1;
+              for (let c = 0; c < cols; c++) {
+                const rowsSet = currentMap.nodes[c];
+                const hasNodes = rowsSet && rowsSet.size > 0;
+                if (!hasNodes) continue;
+                // With 40% chance, mute the whole column
+                const muteCol = Math.random() < 0.4;
+                currentMap.active[c] = !muteCol;
+                if (!currentMap.disabled) currentMap.disabled = Array.from({length:cols},()=>new Set());
+                const disSet = currentMap.disabled[c];
+                // Disable a bounded number of rows in active columns
+                if (!muteCol) {
+                  const rowsArr = Array.from(rowsSet);
+                  // Ensure at least one row remains enabled; if only one, disable 0
+                  const maxDisable = Math.max(0, rowsArr.length - 1);
+                  if (maxDisable === 0) {
+                    // nothing to disable
+                  } else {
+                    const limit = Math.max(1, Math.min(maxOff, maxDisable));
+                    const minThis = Math.min(minOff, limit);
+                    const offCount = Math.floor(Math.random() * (limit - minThis + 1)) + minThis;
+                  // Shuffle and take first offCount entries
+                  for (let i = rowsArr.length - 1; i > 0; i--) {
+                    const j = (Math.random() * (i + 1)) | 0; const t = rowsArr[i]; rowsArr[i] = rowsArr[j]; rowsArr[j] = t;
+                  }
+                    for (let k = 0; k < offCount && k < rowsArr.length; k++) disSet.add(rowsArr[k]);
+                  }
+                  // Recompute active based on remaining enabled nodes
+                  const anyOn = Array.from(currentMap.nodes[c]).some(r => !disSet.has(r));
+                  currentMap.active[c] = anyOn;
+                }
+              }
+            }
+          } catch {}
+        } catch(e){ try{ console.warn('[drawgrid random special line]', e); }catch{} }
+
+        drawGrid();
+        drawNodes(currentMap.nodes);
         panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
       });
     }
@@ -927,15 +1025,15 @@ function regenerateMapFromStrokes() {
         const avgY_dpr = ySum / inkCount;
         const avgY_css = avgY_dpr / dpr;
 
-        // Convert average Y position to the nearest row index, if it's in the grid area
-        // The note grid starts at gridArea.y + topPad
-        const r_initial = Math.round((avgY_css - (gridArea.y + topPad)) / ch);
-        if (r_initial >= 0 && r_initial < rows) {
-          let r_final = r_initial;
+        // Map average Y to nearest row, clamped to valid range so strokes slightly
+        // outside the grid bottom/top still snap to the nearest playable row.
+        const r_clamped = Math.max(0, Math.min(rows - 1, Math.round((avgY_css - (gridArea.y + topPad)) / ch)));
+        {
+          let r_final = r_clamped;
 
           if (autoTune) {
             // 1. Get the MIDI note for the visually-drawn row
-            const drawnMidi = chromaticPalette[r_initial];
+            const drawnMidi = chromaticPalette[r_clamped];
 
             // 2. Find the nearest note in the pentatonic scale
             let nearestMidi = pentatonicPalette[0];
@@ -945,13 +1043,20 @@ function regenerateMapFromStrokes() {
               if (diff < minDiff) { minDiff = diff; nearestMidi = pNote; }
             }
 
-            // 3. Find which row in the chromatic scale corresponds to that pentatonic note
-            const correctedRow = chromaticPalette.indexOf(nearestMidi);
-            if (correctedRow !== -1) r_final = correctedRow;
+            // 3. Map that pentatonic note into the visible chromatic range by octave wrapping
+            try {
+              const minC = chromaticPalette[chromaticPalette.length - 1];
+              const maxC = chromaticPalette[0];
+              let wrapped = nearestMidi|0;
+              while (wrapped > maxC) wrapped -= 12;
+              while (wrapped < minC) wrapped += 12;
+              const correctedRow = chromaticPalette.indexOf(wrapped);
+              if (correctedRow !== -1) r_final = correctedRow;
+            } catch {}
           }
 
           nodes[c].add(r_final);
-            active[c] = true;
+          active[c] = true;
         }
       }
     }
