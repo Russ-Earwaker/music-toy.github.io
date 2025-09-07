@@ -369,6 +369,14 @@ function regenerateMapFromStrokes() {
           for (const r of prevDis) { if (newMap.nodes[c]?.has(r)) newMap.disabled[c].add(r); }
         }
       }
+      // Recompute active flags based on disabled sets
+      for (let c = 0; c < cols; c++) {
+        if (!newMap.nodes[c] || newMap.nodes[c].size === 0) { newMap.active[c] = false; continue; }
+        const dis = newMap.disabled?.[c] || new Set();
+        const anyOn = Array.from(newMap.nodes[c]).some(r => !dis.has(r));
+        newMap.active[c] = anyOn;
+      }
+
       currentMap = newMap;
       nodeGroupMap = newGroups;
       try { (panel.__dgUpdateButtons || function(){})() } catch {}
@@ -508,7 +516,8 @@ function regenerateMapFromStrokes() {
       };
 
       // All calculations are now relative to the gridArea
-      topPad = Math.max(60, gridArea.h * 0.15); // Make space for cubes at the top
+      // Remove the top cube row; use a minimal padding
+      topPad = 0;
       cw = gridArea.w / cols;
       ch = (gridArea.h > topPad) ? (gridArea.h - topPad) / rows : 0;
 
@@ -593,39 +602,7 @@ function regenerateMapFromStrokes() {
     // horizontals (grid area only)
     for(let j=1;j<rows;j++){ gctx.beginPath(); gctx.moveTo(gridArea.x, noteGridY + j*ch); gctx.lineTo(gridArea.x + gridArea.w, noteGridY + j*ch); gctx.stroke(); }
 
-    // 4. Draw the sequencer cubes in the top row
-    const GAP = 4;
-    // The cube size is now based on the column width to ensure alignment.
-    const cubeSize = Math.min(topPad - 8, cw - GAP * 2);
-    const yOffset = gridArea.y + (topPad - cubeSize) / 2;
-
-    for (let i = 0; i < cols; i++) {
-        const flash = flashes[i] || 0;
-        const isEnabled = currentMap?.active?.[i] ?? false;
-        const cubeX = gridArea.x + i * cw + (cw - cubeSize) / 2; // Center cube in its column
-        const cubeRect = { x: cubeX, y: yOffset, w: cubeSize, h: cubeSize };
-
-        if (i === playheadCol) {
-            const borderSize = 4;
-            gctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-            gctx.fillRect(Math.trunc(cubeRect.x) - borderSize, Math.trunc(cubeRect.y) - borderSize, Math.trunc(cubeRect.w) + borderSize * 2, Math.trunc(cubeRect.h) + borderSize * 2);
-        }
-        gctx.save();
-        if (flash > 0) {
-            const scale = 1 + 0.15 * Math.sin(flash * Math.PI);
-            gctx.translate(cubeRect.x + cubeRect.w / 2, cubeRect.y + cubeRect.h / 2);
-            gctx.scale(scale, scale);
-            gctx.translate(-(cubeRect.x + cubeRect.w / 2), -(cubeRect.y + cubeRect.h / 2));
-        }
-        drawBlock(gctx, cubeRect, {
-            baseColor: flash > 0.01 ? '#FFFFFF' : (isEnabled ? '#ff8c00' : '#333'),
-            active: flash > 0.01 || isEnabled,
-            variant: 'button',
-            noteLabel: null,
-            showArrows: false,
-        });
-        gctx.restore();
-    }
+    // (Top cubes removed)
   }
 
   // A helper to draw a complete stroke from a point array.
@@ -857,14 +834,29 @@ function regenerateMapFromStrokes() {
       }
     }
 
-    // --- Draw the dots on top of the lines ---
+    // --- Draw node cubes (with flash animation) on top of connectors ---
     for (const node of nodeCoords) {
         const colActive = currentMap?.active?.[node.col] ?? true;
         const nodeOn = colActive && !node.disabled;
-        nctx.fillStyle = nodeOn ? 'rgba(255, 255, 255, 0.95)' : 'rgba(120, 120, 120, 0.8)';
-        nctx.beginPath();
-        nctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
-        nctx.fill();
+        const flash = flashes[node.col] || 0;
+        const size = radius * 2;
+        const cubeRect = { x: node.x - size/2, y: node.y - size/2, w: size, h: size };
+
+        nctx.save();
+        if (flash > 0) {
+          const scale = 1 + 0.15 * Math.sin(flash * Math.PI);
+          nctx.translate(node.x, node.y);
+          nctx.scale(scale, scale);
+          nctx.translate(-node.x, -node.y);
+        }
+        drawBlock(nctx, cubeRect, {
+          baseColor: flash > 0.01 ? '#FFFFFF' : (nodeOn ? '#ff8c00' : '#333'),
+          active: flash > 0.01 || nodeOn,
+          variant: 'button',
+          noteLabel: null,
+          showArrows: false,
+        });
+        nctx.restore();
     }
 
     drawNoteLabels(nodes);
@@ -999,47 +991,13 @@ function regenerateMapFromStrokes() {
     const rect = paint.getBoundingClientRect();
     const p = { x:e.clientX-rect.left, y:e.clientY-rect.top };
 
-    // Check for cube click in the top row
-    if (p.y >= gridArea.y && p.y < gridArea.y + topPad) {
-        // Find which column was clicked based on the column width `cw`
-        const col = Math.floor((p.x - gridArea.x) / cw);
-        if (col >= 0 && col < cols) {
-            // Now check if the click was inside the cube within that column
-            const GAP = 4;
-            const cubeSize = Math.min(topPad - 8, cw - GAP * 2);
-            const yOffset = gridArea.y + (topPad - cubeSize) / 2;
-            const columnX = gridArea.x + col * cw;
-            const cubeX = columnX + (cw - cubeSize) / 2;
+    // (Top cubes removed)
 
-            if (p.x >= cubeX && p.x <= cubeX + cubeSize && p.y >= yOffset && p.y <= yOffset + cubeSize) {
-                // Click was on a cube
-                if (!currentMap) {
-                    currentMap = {
-                      active: Array(cols).fill(false),
-                      nodes: Array.from({length:cols},()=>new Set()),
-                      disabled: Array.from({length:cols},()=>new Set()),
-                    };
-                } else if (!currentMap.disabled) {
-                    currentMap.disabled = Array.from({length:cols},()=>new Set());
-                }
-                currentMap.active[col] = !currentMap.active[col];
-                drawGrid();
-                drawNodes(currentMap.nodes);
-                panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
-                return; // Stop further processing
-            }
-        }
-    }
-
-    // If the click was in the top area (where cubes are) but not on a cube,
-    // or anywhere above the note grid, ignore it for drawing.
-    if (p.y < gridArea.y + topPad) {
-        return;
-    }
-
-    // Check for node hit first (tap toggles everywhere; drag only in advanced)
+    // Check for node hit first using full grid cell bounds (bigger tap area)
     for (const node of nodeCoordsForHitTest) {
-      if (Math.hypot(p.x - node.x, p.y - node.y) < node.radius) {
+      const cellX = gridArea.x + node.col * cw;
+      const cellY = gridArea.y + topPad + node.row * ch;
+      if (p.x >= cellX && p.x <= cellX + cw && p.y >= cellY && p.y <= cellY + ch) {
         // With eraser active: erase paint and disable this node + attached lines coloration
         if (erasing) { erasedTargetsThisDrag.clear(); eraseNodeAtPoint(p); eraseAtPoint(p); return; }
         pendingNodeTap = { col: node.col, row: node.row, x: p.x, y: p.y, group: node.group ?? null };
@@ -1095,10 +1053,9 @@ function regenerateMapFromStrokes() {
     if (panel.classList.contains('toy-zoomed') && !draggedNode) {
       let onNode = false;
       for (const node of nodeCoordsForHitTest) {
-        if (Math.hypot(p.x - node.x, p.y - node.y) < node.radius) {
-          onNode = true;
-          break;
-        }
+        const cellX = gridArea.x + node.col * cw;
+        const cellY = gridArea.y + topPad + node.row * ch;
+        if (p.x >= cellX && p.x <= cellX + cw && p.y >= cellY && p.y <= cellY + ch) { onNode = true; break; }
       }
       paint.style.cursor = onNode ? 'grab' : 'default';
     }
@@ -1238,6 +1195,8 @@ function regenerateMapFromStrokes() {
       const anyOn = Array.from(currentMap.nodes[col] || []).some(r => !dis.has(r));
       currentMap.active[col] = anyOn;
 
+      // Flash feedback on toggle
+      flashes[col] = 1.0;
       drawGrid();
       drawNodes(currentMap.nodes);
       panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
@@ -1353,9 +1312,7 @@ function regenerateMapFromStrokes() {
     const col = e?.detail?.col;
     playheadCol = col;
     if (col >= 0 && col < cols) {
-        if (currentMap?.active[col]) {
-            flashes[col] = 1.0;
-        }
+        if (currentMap?.active[col]) { flashes[col] = 1.0; }
     }
   });
 
@@ -1408,7 +1365,9 @@ function regenerateMapFromStrokes() {
         }
     }
     if (needsRedraw) {
-      drawGrid(); // Redraws the grid canvas, which includes the cubes
+      // Redraw both grid and nodes to show node cube flash feedback
+      drawGrid();
+      if (currentMap) drawNodes(currentMap.nodes);
     }
     rafId = requestAnimationFrame(renderLoop);
   }
