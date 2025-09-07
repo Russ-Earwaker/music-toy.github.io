@@ -114,24 +114,23 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         btnLine1.textContent = hasLine1 ? 'Redraw Line 1' : 'Draw Line 1';
         btnLine2.textContent = hasLine2 ? 'Redraw Line 2' : 'Draw Line 2';
 
-        btnLine1.classList.toggle('active', nextDrawTarget === 1);
-        btnLine2.classList.toggle('active', nextDrawTarget === 2);
+        const a1 = nextDrawTarget === 1;
+        const a2 = nextDrawTarget === 2;
+        btnLine1.classList.toggle('active', a1);
+        btnLine2.classList.toggle('active', a2);
+        btnLine1.setAttribute('aria-pressed', String(a1));
+        btnLine2.setAttribute('aria-pressed', String(a2));
     }
     try { panel.__dgUpdateButtons = updateGeneratorButtons; } catch{}
 
     function handleGeneratorButtonClick(e) {
         const lineNum = parseInt(e.target.dataset.line, 10);
-        const hasLine = strokes.some(s => s.generatorId === lineNum);
-
-        if (hasLine) {
-            // "Redraw" was clicked. Remove the existing line and its nodes.
-            strokes = strokes.filter(s => s.generatorId !== lineNum);
-            // Only regenerate nodes; keep paint as-is to preserve erasures
-            regenerateMapFromStrokes();
+        // Toggle arming for this line; do not modify existing strokes here
+        if (nextDrawTarget === lineNum) {
+            nextDrawTarget = null; // disarm
+        } else {
+            nextDrawTarget = lineNum; // arm
         }
-        
-        // Set this line as the next one to be drawn.
-        nextDrawTarget = lineNum;
         updateGeneratorButtons();
     }
 
@@ -404,6 +403,16 @@ function regenerateMapFromStrokes() {
 
 
   panel.addEventListener('toy-zoom', () => {
+    // Snapshot paint to preserve drawn/erased content across zoom transitions
+    let zoomSnap = null;
+    try {
+      if (paint.width > 0 && paint.height > 0) {
+        zoomSnap = document.createElement('canvas');
+        zoomSnap.width = paint.width;
+        zoomSnap.height = paint.height;
+        zoomSnap.getContext('2d')?.drawImage(paint, 0, 0);
+      }
+    } catch {}
     // When zooming in or out, the panel's size changes.
     // We force a layout call to ensure everything is redrawn correctly.
     // A double rAF waits for the browser to finish style recalculation and layout
@@ -414,7 +423,7 @@ function regenerateMapFromStrokes() {
 
         // If entering advanced mode, upgrade the standard-view special line to Line 1
         // so that its nodes are preserved.
-        if (panel.classList.contains('toy-zoomed')) {
+    if (panel.classList.contains('toy-zoomed')) {
             const hasGeneratorLines = strokes.some(s => s.generatorId);
             if (!hasGeneratorLines) {
                 // If there are no generator lines, we are effectively starting fresh
@@ -426,6 +435,17 @@ function regenerateMapFromStrokes() {
         }
 
         resnapAndRedraw(true);
+        // Restore snapshot after layout has run
+        requestAnimationFrame(() => {
+          if (zoomSnap) {
+            try {
+              pctx.save();
+              pctx.setTransform(1,0,0,1,0,0);
+              pctx.drawImage(zoomSnap, 0,0, zoomSnap.width, zoomSnap.height, 0,0, paint.width, paint.height);
+              pctx.restore();
+            } catch {}
+          }
+        });
       });
     });
   });
@@ -617,12 +637,12 @@ function regenerateMapFromStrokes() {
     ctx.save(); // Save context for potential glow effect
     const isStandard = !panel.classList.contains('toy-zoomed');
     const isOverlay = (ctx === fctx); // Only overlay animates hues; paint stays neutral for specials
-    let wantsSpecial = !!stroke.isSpecial;
+    let wantsSpecial = !!stroke.isSpecial || (isOverlay && (stroke.generatorId === 1 || stroke.generatorId === 2));
     if (!wantsSpecial && isStandard) {
       const hasAnySpecial = strokes.some(s => s.isSpecial);
       if (!hasAnySpecial && stroke === cur) wantsSpecial = true; // first-line preview in standard
     }
-    if (wantsSpecial) {
+    if (wantsSpecial && isOverlay) {
         ctx.shadowColor = 'rgba(255, 255, 255, 0.7)';
         ctx.shadowBlur = 18;
         ctx.shadowOffsetX = 0;
@@ -666,7 +686,10 @@ function regenerateMapFromStrokes() {
         ctx.lineTo(stroke.pts[i].x, stroke.pts[i].y);
       }
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-      ctx.lineWidth = getLineWidth();
+      {
+        const lw = getLineWidth() + (isOverlay ? 1.25 : 0);
+        ctx.lineWidth = lw;
+      }
       if (wantsSpecial) {
           const p1 = stroke.pts[0];
           const pLast = stroke.pts[stroke.pts.length - 1];
@@ -887,10 +910,9 @@ function regenerateMapFromStrokes() {
     const data = sourceCtx.getImageData(0, 0, w, h).data;
 
     for (let c=0;c<cols;c++){
-      // Define the scan area for the column, extending to the canvas edges for the first and last columns.
-      // This allows drawing "outside the lines" to be snapped correctly.
-      const xStart_css = (c === 0) ? 0 : gridArea.x + c * cw;
-      const xEnd_css = (c === cols - 1) ? cssW : gridArea.x + (c + 1) * cw;
+      // Define the scan area strictly to the visible grid column to avoid phantom nodes
+      const xStart_css = gridArea.x + c * cw;
+      const xEnd_css = gridArea.x + (c + 1) * cw;
       const xStart = Math.round(xStart_css * dpr);
       const xEnd = Math.round(xEnd_css * dpr);
       
@@ -1035,6 +1057,29 @@ function regenerateMapFromStrokes() {
       eraseAtPoint(p); // erase visual line only
     } else {
       // When starting a new line, don't clear the canvas. This makes drawing additive.
+      // If we are about to draw a special line (previewGid decided), demote any existing line of that kind.
+      try {
+        const isZoomed = panel.classList.contains('toy-zoomed');
+        const hasLine1 = strokes.some(s => s.generatorId === 1);
+        const hasLine2 = strokes.some(s => s.generatorId === 2);
+        let intendedGid = null;
+        if (!isZoomed) {
+          if (!hasLine1 && !hasLine2) intendedGid = 1;
+        } else {
+          if (!hasLine1) intendedGid = 1; else if (nextDrawTarget) intendedGid = nextDrawTarget;
+        }
+        if (intendedGid) {
+          const existing = strokes.find(s => s.generatorId === intendedGid);
+          if (existing) {
+            existing.isSpecial = false;
+            existing.generatorId = null;
+            existing.overlayColorize = true;
+            // assign a random palette color
+            const idx = Math.floor(Math.random() * STROKE_COLORS.length);
+            existing.color = STROKE_COLORS[idx];
+          }
+        }
+      } catch {}
       cur = { 
         pts:[p],
         color: STROKE_COLORS[colorIndex++ % STROKE_COLORS.length]
@@ -1138,11 +1183,12 @@ function regenerateMapFromStrokes() {
       const hasLine2 = strokes.some(s => s.generatorId === 2);
       previewGid = null;
       if (!isZoomed) {
-        if (!hasLine1 && !hasLine2) previewGid = 1; // Standard: first stroke acts as Line 1
+        // Standard: first stroke previews as Line 1 if none yet
+        if (!hasLine1 && !hasLine2) previewGid = 1;
       } else {
-        if (nextDrawTarget) previewGid = nextDrawTarget;
-        else if (!hasLine1) previewGid = 1;
-        else if (!hasLine2) previewGid = 2;
+        // Advanced: always preview Line 1 if not yet drawn; otherwise only when explicitly armed
+        if (!hasLine1) previewGid = 1;
+        else if (nextDrawTarget) previewGid = nextDrawTarget;
       }
       // For normal lines (no previewGid), paint segment onto paint; otherwise, overlay will show it
       if (!previewGid) {
@@ -1231,8 +1277,6 @@ function regenerateMapFromStrokes() {
             shouldGenerateNodes = true;
             isSpecial = true;
             generatorId = nextDrawTarget;
-            // Remove any existing line with the same ID before adding the new one.
-            strokes = strokes.filter(s => s.generatorId !== generatorId);
             nextDrawTarget = null; // consume target so subsequent swipes follow natural order
         } else {
             // No target armed: decorative line (no nodes)
@@ -1295,6 +1339,14 @@ function regenerateMapFromStrokes() {
     paint.style.cursor = 'default';
   });
   window.addEventListener('pointerup', onPointerUp);
+  // Coalesce relayouts on wheel/resize to keep pointer math in sync with zoom changes
+  let relayoutScheduled = false;
+  function scheduleRelayout(force = true){
+    if (relayoutScheduled) return; relayoutScheduled = true;
+    requestAnimationFrame(() => { relayoutScheduled = false; layout(force); });
+  }
+  window.addEventListener('resize', () => scheduleRelayout(true));
+  panel.addEventListener('wheel', () => scheduleRelayout(true), { passive: true });
   observer.observe(body);
 
   panel.addEventListener('drawgrid:playcol', (e) => {
@@ -1322,6 +1374,12 @@ function regenerateMapFromStrokes() {
         fctx.clearRect(0, 0, flashCanvas.width, flashCanvas.height);
         // Draw animated strokes with CSS transform
         fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        // Draw demoted colorized strokes as static overlay tints
+        try {
+          const colorized = strokes.filter(s => s.overlayColorize);
+          for (const s of colorized) drawFullStroke(fctx, s);
+        } catch {}
+        // Then draw animated special lines on top of normal lines
         for (const s of specialStrokes) drawFullStroke(fctx, s);
         // Mask with paint alpha without scaling (device pixels)
         fctx.setTransform(1, 0, 0, 1, 0, 0);
