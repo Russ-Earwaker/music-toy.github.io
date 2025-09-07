@@ -1,3 +1,0 @@
-// bouncer-square-fit.js — optional helper (safe stub)
-(function(){ console.log('[bouncer-square-fit] loaded'); })();
-
