@@ -77,6 +77,9 @@ export function createRippleSynth(selector){
   // Sizing object passed to shared renderers; include isZoomed so they can show arrows/labels in Advanced view
   const sizing = { scale: 1, isZoomed };
   panel.addEventListener('toy-zoom', ()=>{ try { setParticleBounds(canvas.width|0, canvas.height|0); } catch {} });
+  // Debug helper
+  const __dbg = (...args)=>{ try{ if (window && window.RIPPLER_TIMING_DBG) console.log('[rippler]', ...args); }catch{} };
+
   // Flash the quant dot on each tick (same visual as Bouncer)
   try{
     let lastTick = -1;
@@ -364,6 +367,7 @@ export function createRippleSynth(selector){
         const ang = Math.atan2(cy - gy, cx - gx), push = 64 * (sizing.scale || 1); b.vx += Math.cos(ang)*push; b.vy += Math.sin(ang)*push;
         const whenAT = ac.currentTime, slotLen = stepSeconds(); let k = Math.ceil((whenAT - barStartAT)/slotLen); if (k<0) k=0;
         const slotIx = k % NUM_STEPS; const name = noteList[b.noteIndex] || 'C4';
+        __dbg('record-hit', { name, whenAT: +whenAT.toFixed?.(4) || whenAT, barStartAT: barStartAT, slotIx, k, slotLen });
         if (liveBlocks.has(i)) {
           try {
             // Quantize live block hits to next beat/div where applicable
@@ -382,6 +386,7 @@ export function createRippleSynth(selector){
               const rel2 = li2 ? Math.max(0, whenAT - li2.loopStartTime) : 0;
               const k2 = Math.ceil((rel2 + 1e-6) / grid2);
               const tSched2 = (li2?.loopStartTime || whenAT) + k2 * grid2 + 0.0004;
+              __dbg('record-live-quant', { name, div: div2, grid: +grid2.toFixed?.(4) || grid2, rel: +rel2.toFixed?.(4) || rel2, k: k2, tSched: tSched2 });
               triggerInstrument(currentInstrument, name, tSched2);
             }
           } catch {}
@@ -399,14 +404,16 @@ export function createRippleSynth(selector){
               const ds = parseFloat(panel.dataset.quantDiv || panel.dataset.quant || '');
               if (Number.isFinite(ds)) div3 = ds;
             }
-            if (!Number.isFinite(div3) || div3 <= 0){ triggerInstrument(currentInstrument, name, barStartAT + k*slotLen + 0.0005); }
+            const slotTime = barStartAT + k*slotLen;
+            if (!Number.isFinite(div3) || div3 <= 0){ triggerInstrument(currentInstrument, name, slotTime + 0.0005); }
             else {
               const beatLen3 = li3?.beatLen || (audioBarSeconds()/4);
               const grid3 = beatLen3 / div3;
-              const at3 = ac.currentTime;
-              const rel3 = li3 ? Math.max(0, at3 - li3.loopStartTime) : 0;
+              // Align to the same grid the scheduler will use for this slot time
+              const rel3 = li3 ? Math.max(0, slotTime - li3.loopStartTime) : 0;
               const k3 = Math.ceil((rel3 + 1e-6) / grid3);
-              const tSched3 = (li3?.loopStartTime || at3) + k3 * grid3 + 0.0004;
+              const tSched3 = (li3?.loopStartTime || slotTime) + k3 * grid3 + 0.0004;
+              __dbg('record-preview-quant', { name, div: div3, grid: +grid3.toFixed?.(4) || grid3, rel: +rel3.toFixed?.(4) || rel3, k: k3, slotTime, tSched: tSched3 });
               triggerInstrument(currentInstrument, name, tSched3);
             }
           } catch {}

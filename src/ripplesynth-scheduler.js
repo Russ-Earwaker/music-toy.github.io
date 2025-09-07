@@ -19,6 +19,7 @@ export function createScheduler(cfg){
       state.barStartAT += barSec();
       state.nextSlotAT = state.barStartAT;
       state.nextSlotIx = 0;
+      try{ if (window && window.RIPPLER_TIMING_DBG) console.log('[rippler]', 'bar-start', { barStartAT: state.barStartAT }); }catch{}
       if (generator.placed && !isPlaybackMuted()){
         if (state.skipNextBarRing) state.skipNextBarRing = false;
         else spawnRipple(false);
@@ -46,6 +47,9 @@ export function createScheduler(cfg){
                 const rel = li ? Math.max(0, (state.nextSlotAT - li.loopStartTime)) : 0;
                 const k = Math.ceil((rel + 1e-6) / grid);
                 tFire = (li?.loopStartTime || state.nextSlotAT) + k * grid + 0.0004;
+                try{ if (window && window.RIPPLER_TIMING_DBG) console.log('[rippler]', 'replay-sched', { name, div, grid:+grid.toFixed?.(4)||grid, rel:+rel.toFixed?.(4)||rel, k, tFire }); }catch{}
+              } else {
+                try{ if (window && window.RIPPLER_TIMING_DBG) console.log('[rippler]', 'replay-sched', { name, div, tFire, slotAT: state.nextSlotAT }); }catch{}
               }
             }catch{}
             triggerInstrument(getInstrument(), name, tFire);
