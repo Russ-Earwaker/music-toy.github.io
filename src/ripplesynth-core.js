@@ -63,7 +63,9 @@ export function createRippleSynth(selector){
   const ui  = initToyUI(panel, { toyName: 'Rippler' });
   // Install quantization UI (shared with Bouncer), default to 1/4
   try{ if (!panel.dataset.quantDiv && !panel.dataset.quant) panel.dataset.quantDiv = '4'; }catch{}
-  try{ installQuantUI(panel, parseFloat(panel?.dataset?.quantDiv||panel?.dataset?.quant||'4')); }catch{}
+  // Keep a getter to read current quant divisor reliably (like Bouncer)
+  let __getQuantDiv = null;
+  try{ __getQuantDiv = installQuantUI(panel, parseFloat(panel?.dataset?.quantDiv||panel?.dataset?.quant||'4')); }catch{}
 
   let currentInstrument = (ui.instrument && ui.instrument !== 'tone') ? ui.instrument : 'kalimba';
   try { ui.setInstrument(currentInstrument); } catch {}
@@ -81,8 +83,10 @@ export function createRippleSynth(selector){
     const tickDot = ()=>{
       try{
         const li = getLoopInfo();
+        // Prefer live getter, then live <select>, then dataset
         let div = NaN;
-        const sel = panel.querySelector('.bouncer-quant-ctrl select');
+        try{ const v0 = (__getQuantDiv && __getQuantDiv()); if (Number.isFinite(v0)) div = v0; }catch{}
+        const sel = (!Number.isFinite(div)) ? panel.querySelector('.bouncer-quant-ctrl select') : null;
         if (sel){ const v = parseFloat(sel.value); if (Number.isFinite(v)) div = v; }
         if (!Number.isFinite(div)){
           const ds = parseFloat(panel.dataset.quantDiv || panel.dataset.quant || '');
@@ -191,7 +195,15 @@ export function createRippleSynth(selector){
     triggerInstrument, getInstrument: ()=> currentInstrument,
     generator, RING_SPEED, spawnRipple,
     state: __schedState,
-    isPlaybackMuted: ()=> playbackMuted
+    isPlaybackMuted: ()=> playbackMuted,
+    getLoopInfo,
+    getQuantDiv: ()=>{
+      // Use the same robust read order
+      try{ const v0 = (__getQuantDiv && __getQuantDiv()); if (Number.isFinite(v0)) return v0; }catch{}
+      try{ const sel = panel.querySelector('.bouncer-quant-ctrl select'); if (sel){ const v=parseFloat(sel.value); if (Number.isFinite(v)) return v; } }catch{}
+      try{ const ds = parseFloat(panel.dataset.quantDiv || panel.dataset.quant || ''); if (Number.isFinite(ds)) return ds; }catch{}
+      return 4;
+    }
   });
 
   function randomizeAll(){
@@ -248,7 +260,9 @@ export function createRippleSynth(selector){
         const name = noteList[b.noteIndex] || 'C4';
         // Quantize immediate tap to next beat/div boundary
         const li = getLoopInfo();
-        let div = NaN; try{ const sel=panel.querySelector('.bouncer-quant-ctrl select'); if (sel){ const v=parseFloat(sel.value); if (Number.isFinite(v)) div=v; } }catch{}
+        // Prefer getter, then live <select>, then dataset
+        let div = NaN; try{ const v0 = (__getQuantDiv && __getQuantDiv()); if (Number.isFinite(v0)) div = v0; }catch{}
+        try{ if (!Number.isFinite(div)){ const sel=panel.querySelector('.bouncer-quant-ctrl select'); if (sel){ const v=parseFloat(sel.value); if (Number.isFinite(v)) div=v; } } }catch{}
         if (!Number.isFinite(div)){
           const ds = parseFloat(panel.dataset.quantDiv || panel.dataset.quant || '');
           if (Number.isFinite(ds)) div = ds;
@@ -354,7 +368,9 @@ export function createRippleSynth(selector){
           try {
             // Quantize live block hits to next beat/div where applicable
             const li2 = getLoopInfo();
-            let div2 = NaN; try{ const sel=panel.querySelector('.bouncer-quant-ctrl select'); if (sel){ const v=parseFloat(sel.value); if (Number.isFinite(v)) div2=v; } }catch{}
+            // Prefer getter, then live <select>, then dataset
+            let div2 = NaN; try{ const v0 = (__getQuantDiv && __getQuantDiv()); if (Number.isFinite(v0)) div2 = v0; }catch{}
+            try{ if (!Number.isFinite(div2)){ const sel=panel.querySelector('.bouncer-quant-ctrl select'); if (sel){ const v=parseFloat(sel.value); if (Number.isFinite(v)) div2=v; } } }catch{}
             if (!Number.isFinite(div2)){
               const ds = parseFloat(panel.dataset.quantDiv || panel.dataset.quant || '');
               if (Number.isFinite(ds)) div2 = ds;
@@ -376,7 +392,9 @@ export function createRippleSynth(selector){
           try {
             // Schedule recording preview at quantized beat/div to match bouncer behavior
             const li3 = getLoopInfo();
-            let div3 = NaN; try{ const sel=panel.querySelector('.bouncer-quant-ctrl select'); if (sel){ const v=parseFloat(sel.value); if (Number.isFinite(v)) div3=v; } }catch{}
+            // Prefer getter, then live <select>, then dataset
+            let div3 = NaN; try{ const v0 = (__getQuantDiv && __getQuantDiv()); if (Number.isFinite(v0)) div3 = v0; }catch{}
+            try{ if (!Number.isFinite(div3)){ const sel=panel.querySelector('.bouncer-quant-ctrl select'); if (sel){ const v=parseFloat(sel.value); if (Number.isFinite(v)) div3=v; } } }catch{}
             if (!Number.isFinite(div3)){
               const ds = parseFloat(panel.dataset.quantDiv || panel.dataset.quant || '');
               if (Number.isFinite(ds)) div3 = ds;

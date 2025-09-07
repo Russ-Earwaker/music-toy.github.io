@@ -7,7 +7,9 @@ export function createScheduler(cfg){
     pattern, blocks, noteList,
     triggerInstrument, getInstrument,
     generator, RING_SPEED, spawnRipple,
-    state, isPlaybackMuted
+    state, isPlaybackMuted,
+    getLoopInfo,
+    getQuantDiv
   } = cfg;
 
   function tick(){
@@ -33,7 +35,20 @@ export function createScheduler(cfg){
         s.forEach(i=>{ if (!blocks[i] || !blocks[i].active) return;
           const name = noteList[blocks[i].noteIndex] || 'C4';
           if (!scheduled.has(name)){
-            triggerInstrument(getInstrument(), name, state.nextSlotAT + 0.0005);
+            // Schedule at quantized grid if enabled; otherwise at slot boundary
+            let tFire = state.nextSlotAT + 0.0005;
+            try{
+              const li = (typeof getLoopInfo === 'function') ? getLoopInfo() : null;
+              const div = (typeof getQuantDiv === 'function') ? Number(getQuantDiv()) : NaN;
+              const beatLen = li?.beatLen || 0;
+              if (Number.isFinite(div) && div > 0 && beatLen > 0){
+                const grid = beatLen / div;
+                const rel = li ? Math.max(0, (state.nextSlotAT - li.loopStartTime)) : 0;
+                const k = Math.ceil((rel + 1e-6) / grid);
+                tFire = (li?.loopStartTime || state.nextSlotAT) + k * grid + 0.0004;
+              }
+            }catch{}
+            triggerInstrument(getInstrument(), name, tFire);
             scheduled.add(name);
           }
           blocks[i].flashEnd = Math.max(blocks[i].flashEnd, ac.currentTime + 0.12);
