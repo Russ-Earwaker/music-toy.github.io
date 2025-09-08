@@ -31,8 +31,8 @@ export function stepBouncer(S, nowAT){
     try{
       if (!window.BOUNCER_QUANT_DBG) return;
       const li = S.getLoopInfo ? S.getLoopInfo() : null;
-      const divRaw = (typeof S.getQuantDiv==='function') ? (S.getQuantDiv()) : 8;
-      const div = Number.isFinite(divRaw) ? divRaw : 8;
+      const divRaw = (typeof S.getQuantDiv==='function') ? (S.getQuantDiv()) : 4;
+      const div = Number.isFinite(divRaw) ? divRaw : 4;
       const baseBeat = (li && (li.beatLen || (li.barLen/4))) || 0;
       const grid = div > 0 ? (baseBeat / div) : 0;
       const at = (S.ensureAudioContext && S.ensureAudioContext())?.currentTime || (t||0);
@@ -46,11 +46,11 @@ export function stepBouncer(S, nowAT){
   // Quantize to next division aligned to project BEAT (not bar), or immediate if off
   function qSixteenth(){
     const ac = (S.ensureAudioContext && S.ensureAudioContext()) || null;
-    const at = ac ? ac.currentTime : (S.lastAT || 0);
+    const at = ac ? ac.currentTime : (S.now || 0);
     const li = S.getLoopInfo ? S.getLoopInfo() : null;
     if (li && typeof li.loopStartTime === 'number' && li.barLen){
-      const divRaw = (typeof S.getQuantDiv==='function') ? (S.getQuantDiv()) : 8;
-      const div = Number.isFinite(divRaw) ? divRaw : 8;
+      const divRaw = (typeof S.getQuantDiv==='function') ? (S.getQuantDiv()) : 4;
+      const div = Number.isFinite(divRaw) ? divRaw : 4;
       if (!div || div <= 0) return at + 0.0005; // no quantization
       // Use beat length so 1/1 = every beat, 1/2 = half-beat, etc.
       const grid = (li.beatLen || (li.barLen/4)) / div;
@@ -136,11 +136,13 @@ export function stepBouncer(S, nowAT){
           let tick16 = null;
           try {
             const li = S.getLoopInfo ? S.getLoopInfo() : null;
-            if (li && li.barLen){
-              const divRaw = (typeof S.getQuantDiv==='function') ? (S.getQuantDiv()) : 8;
-              const div = Number.isFinite(divRaw) ? divRaw : 8;
+            if (li && li.barLen) {
+              // De-dupe logic should use a fixed small interval (e.g., 16th notes)
+              // regardless of the user's quantization setting, to prevent single
+              // physics events from triggering multiple notes.
+              const DEDUPE_DIV = 4; // 4 divisions per beat = 16th notes
               const baseBeat = (li && (li.beatLen || (li.barLen/4))) || 0;
-              const grid = div > 0 ? (baseBeat / div) : 0;
+              const grid = baseBeat / DEDUPE_DIV;
               const at = (S.ensureAudioContext && S.ensureAudioContext())?.currentTime || now;
               const rel = Math.max(0, at - li.loopStartTime);
               tick16 = grid > 0 ? Math.ceil((rel + 1e-6) / grid) : null;

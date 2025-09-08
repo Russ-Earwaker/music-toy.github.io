@@ -411,24 +411,13 @@ export function createBouncer(selector){
                 __unmuteAt = ensureAudioContext().currentTime + 0.150; // Unmute in 150ms (after 100ms lookahead)
             } catch(e) { console.warn('[bouncer] mute/unmute failed', e); }
         }
-
-        // Reset loop recorder for the new user-initiated loop.
-        // Re-create the object from scratch to guarantee a clean state.
-        loopRec = {
-            signature: '',
-            mode: 'record',
-            pattern: [],
-            anchorStartTime: 0,
-            lastBarIndex: -1,
-            scheduledBarIndex: -999,
-            seen: new Set(),
-        };
-        visQ.loopRec = loopRec; // Ensure the shared state carrier points to the new object.
-        try {
-            loopRec.signature = stateSignature();
-            loopRec.anchorStartTime = nowT;
-        } catch {}
     }
+
+    // ALWAYS reset loop recorder for any new ball launch (user or respawn).
+    // This ensures the timing anchor is always fresh and aligned with the new ball's life.
+    loopRec = { signature: '', mode: 'record', pattern: [], anchorStartTime: 0, lastBarIndex: -1, scheduledBarIndex: -999, seen: new Set(), };
+    visQ.loopRec = loopRec; // Ensure the shared state carrier points to the new object.
+    try { loopRec.signature = stateSignature(); loopRec.anchorStartTime = nowT; } catch {}
 
     const o = { x:L.x, y:L.y, vx:L.vx, vy:L.vy, r: ballR() };
     ball = o;
@@ -519,10 +508,16 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
           const barStart = anchor + k*barLen;
           const at = (typeof t==='number' ? t : nowT);
           const offBeats = (at - barStart)/beatDur;
-          // Round offsets to current quant grid so replay matches quant exactly
-          let divRec = 4;
-          try{ const vq = (__getQuantDiv && __getQuantDiv()); if (Number.isFinite(vq) && vq>0) divRec = vq; }catch{}
-          const off = Math.max(0, Math.min(4, Math.round(offBeats * divRec)/divRec));
+          // Round recorded offsets to current quant grid so replay matches quant exactly.
+          let off = offBeats; // Default to unquantized
+          try {
+            const vq = (__getQuantDiv && __getQuantDiv());
+            // Only quantize if div is a positive number. div=0 means 'off'.
+            if (Number.isFinite(vq) && vq > 0) {
+              off = Math.round(offBeats * vq) / vq;
+            }
+          } catch {}
+          off = Math.max(0, Math.min(4, off)); // Clamp to bar length (4 beats)
           if (visQ && visQ.loopRec && Array.isArray(visQ.loopRec.pattern)){
             visQ.loopRec.pattern.push({ note: n, offset: off });
           }
@@ -558,7 +553,7 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
       spawnBallFrom,
       triggerInstrument: (i,n,t)=>{ try{ if (window && window.BOUNCER_FORCE_RAW){   return triggerInstrument(i||instrument, n, t, toyId); } }catch{} return triggerPhysAware(i,n,t);},
       triggerInstrumentRaw: (i,n,t)=>triggerInstrument(i||instrument, n, t, toyId),
-      getQuantDiv: ()=>{ try{ const v = __getQuantDiv ? __getQuantDiv() : 8; return (Number.isFinite(v)? v : 8); }catch(_){ return 8; } },
+      getQuantDiv: ()=>{ try{ const v = __getQuantDiv ? __getQuantDiv() : 4; return (Number.isFinite(v)? v : 4); }catch(_){ return 4; } },
       BOUNCER_BARS_PER_LIFE,
       setNextLaunchAt: (t)=>{ nextLaunchAt = t; },
       setBallOut: (o)=>{ ball = o; },
