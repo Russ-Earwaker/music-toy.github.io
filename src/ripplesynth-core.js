@@ -190,6 +190,7 @@ export function createRippleSynth(selector){
   const patternOffsets = Array.from({length:NUM_STEPS}, ()=> new Map()); // blockIndex -> offsetSeconds from barStart
   const liveBlocks = new Set();      // blocks that play from ripple while dragging
   const recordOnly = new Set();      // blocks to (re)record on next ripple hit
+  let skipNextBarRing = false;
   let recording = false;
   let dragMuteActive = false;
   let playbackMuted = false;
@@ -202,6 +203,7 @@ export function createRippleSynth(selector){
     get nextSlotAT(){ return nextSlotAT; }, set nextSlotAT(v){ nextSlotAT = v; },
     get nextSlotIx(){ return nextSlotIx; }, set nextSlotIx(v){ nextSlotIx = v; },
     get recording(){ return recording; }, set recording(v){ recording = v; },
+    get skipNextBarRing(){ return skipNextBarRing; }, set skipNextBarRing(v){ skipNextBarRing = v; },
     recordOnly, liveBlocks
   };
 
@@ -384,6 +386,7 @@ export function createRippleSynth(selector){
     const corners = [[0,0],[W(),0],[0,H()],[W(),H()]];
     const offR = Math.max(...corners.map(([x,y])=> Math.hypot(x-gx, y-gy))) + 64;
     ripples.push({ x: gx, y: gy, startAT: nowAT, startTime: nowPerf, speed: RING_SPEED(), offR, hit: new Set(), r2off: (RING_SPEED() * (barSec()/2)) });
+    if (manual) skipNextBarRing = true;
   }
 
   function ringFront(nowAT){
@@ -447,35 +450,27 @@ export function createRippleSynth(selector){
         try { } catch {}
         if (!liveBlocks.has(i) && (recording || recordOnly.has(i))){
           try {
+            let tSched = whenAT + 0.0005; // Default to immediate if no quantization
             // Schedule recording preview at quantized beat/div to match bouncer behavior
             const li3 = getLoopInfo();
             // Prefer getter, then live <select>, then dataset
             let div3 = NaN; try{ const v0 = (__getQuantDiv && __getQuantDiv()); if (Number.isFinite(v0)) div3 = v0; }catch{}
             try{ if (!Number.isFinite(div3)){ const sel=panel.querySelector('.bouncer-quant-ctrl select'); if (sel){ const v=parseFloat(sel.value); if (Number.isFinite(v)) div3=v; } } }catch{}
-            if (!Number.isFinite(div3)){
-              const ds = parseFloat(panel.dataset.quantDiv || panel.dataset.quant || '');
-              if (Number.isFinite(ds)) div3 = ds;
-            }
-            const slotTime = barStartAT + k*slotLen;
-            if (!Number.isFinite(div3) || div3 <= 0){
-              // No quant: preview at actual hit time
-              triggerInstrument(currentInstrument, name, whenAT + 0.0005);
-            }
-            else {
+            if (!Number.isFinite(div3)){ const ds = parseFloat(panel.dataset.quantDiv || panel.dataset.quant || ''); if (Number.isFinite(ds)) div3 = ds; }
+
+            if (Number.isFinite(div3) && div3 > 0 && li3 && li3.beatLen > 0) {
               const beatLen3 = li3?.beatLen || (audioBarSeconds()/4);
               const grid3 = beatLen3 / div3;
               // Align to next grid after actual hit time
               const rel3 = li3 ? Math.max(0, whenAT - li3.loopStartTime) : 0;
               const k3 = Math.ceil((rel3 + 1e-6) / grid3);
-              const tSched3 = (li3?.loopStartTime || whenAT) + k3 * grid3 + 0.0004;
-              __dbg('record-preview-quant', { name, div: div3, grid: +grid3.toFixed?.(4) || grid3, rel: +rel3.toFixed?.(4) || rel3, k: k3, slotTime, tSched: tSched3 });
-              if (!doImmediateFlash){ try{ b._visFlashAt = tSched3; }catch{} }
-              triggerInstrument(currentInstrument, name, tSched3);
+              tSched = (li3?.loopStartTime || whenAT) + k3 * grid3 + 0.0004;
             }
-          } catch {}
-          try { } catch {}
-          // Store raw offset for later precise replay
-          try{ patternOffsets[slotIx].set(i, Math.max(0, whenAT - barStartAT)); }catch{}
+            if (!doImmediateFlash){ try{ b._visFlashAt = tSched; }catch{} }
+            triggerInstrument(currentInstrument, name, tSched);
+            // Store the RAW offset of the hit relative to the local bar start.
+            patternOffsets[slotIx].set(i, Math.max(0, whenAT - barStartAT));
+          } catch(e) { __dbg('quant-record-fail', e); }
           const slot = pattern[slotIx]; let existsSame = false;
           for (const jj of slot){ const nm = noteList[blocks[jj].noteIndex] || 'C4'; if (nm === name){ existsSame = true; break; } }
           if (!existsSame) slot.add(i); if (recordOnly.has(i)) recordOnly.delete(i);
@@ -548,7 +543,7 @@ export function createRippleSynth(selector){
       }
 
       springBlocks(1/60);
-      // If quant changed, restart the loop capture at a clean anchor without spawning a ripple
+      // If quant changed, restart the loop capture at a clean anchor and spawn a new ripple
       if (__rearmOnQuant){
         __rearmOnQuant = false;
         try {
@@ -560,6 +555,7 @@ export function createRippleSynth(selector){
           nextSlotIx = 1;
           pattern.forEach(s=> s.clear()); patternOffsets.forEach(m=> m.clear());
           recording = true;
+          spawnRipple(true);
         } catch {}
       }
       handleRingHits(ac.currentTime);

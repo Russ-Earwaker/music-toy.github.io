@@ -27,6 +27,7 @@ export function createScheduler(cfg){
       const div = (typeof getQuantDiv === 'function') ? Number(getQuantDiv()) : NaN;
       const beatLen = li?.beatLen || 0;
       const grid = (Number.isFinite(div) && div>0 && beatLen>0) ? (beatLen/div) : 0;
+
       for (let s=0; s<NUM_STEPS; s++){
         const set = pattern[s]; if (!set || !set.size) continue;
         for (const i of set){
@@ -36,8 +37,10 @@ export function createScheduler(cfg){
           const hasOff = typeof offRaw === 'number' && isFinite(offRaw);
           const baseRel = hasOff ? offRaw : (s * stepSeconds());
           let tFire;
-          if (grid>0 && li){
-            const rel = Math.max(0, (state.barStartAT + baseRel) - li.loopStartTime);
+          if (grid > 0 && li) {
+            // Reconstruct the original unquantized hit time to ensure quantization is consistent with recording.
+            const whenAT_reconstructed = (state.barStartAT - barSec()) + baseRel;
+            const rel = Math.max(0, whenAT_reconstructed - li.loopStartTime);
             const k = Math.ceil((rel + 1e-6) / grid);
             tFire = li.loopStartTime + k * grid + 0.0004;
           } else {
@@ -65,7 +68,10 @@ export function createScheduler(cfg){
       state.nextSlotAT = state.barStartAT;
       state.nextSlotIx = 0;
       try{ if (window && window.RIPPLER_TIMING_DBG) console.log('[rippler]', 'bar-start', { barStartAT: state.barStartAT }); }catch{}
-      if (generator.placed && !isPlaybackMuted()) spawnRipple(false);
+      if (generator.placed && !isPlaybackMuted()) {
+        if (state.skipNextBarRing) state.skipNextBarRing = false;
+        else spawnRipple(false);
+      }
       state.recording = false;
       // Arm summary mode only for the very next bar after recording
       if (justRecorded){ __summaryMode = true; __printedSummaries.clear(); }
@@ -73,73 +79,6 @@ export function createScheduler(cfg){
       __wasRecording = false;
       // Pre-schedule the entire bar so Off playback keeps original spacing
       prescheduleBar();
-    }
-    const lookahead = 0.03;
-    while (!state.recording && !isPlaybackMuted() && nowAT + lookahead >= state.nextSlotAT){
-      // If a bar-aligned preview was already scheduled for this slot, skip once
-      {
-      const s = pattern[state.nextSlotIx];
-      if (s && s.size){
-        const scheduled = new Set();
-        s.forEach(i=>{ if (!blocks[i] || !blocks[i].active) return;
-          const name = noteList[blocks[i].noteIndex] || 'C4';
-          if (!scheduled.has(name)){
-            // Schedule at quantized grid if enabled; otherwise at slot boundary
-            // Use recorded fine offset if available
-            const offRaw = (patternOffsets && patternOffsets[state.nextSlotIx] && patternOffsets[state.nextSlotIx].get(i));
-            const hasOff = typeof offRaw === 'number' && isFinite(offRaw);
-            let tFire = (hasOff ? (state.barStartAT + offRaw) : state.nextSlotAT) + 0.0005;
-            try{
-              const li = (typeof getLoopInfo === 'function') ? getLoopInfo() : null;
-              const div = (typeof getQuantDiv === 'function') ? Number(getQuantDiv()) : NaN;
-              const beatLen = li?.beatLen || 0;
-              let scheduledRelBar = tFire - state.barStartAT;
-              let baseRel = (hasOff ? (offRaw) : Math.max(0, (state.nextSlotAT - state.barStartAT)));
-              if (Number.isFinite(div) && div > 0 && beatLen > 0){
-                const grid = beatLen / div;
-                const rel = li ? Math.max(0, (state.barStartAT + baseRel) - li.loopStartTime) : baseRel;
-                const k = Math.ceil((rel + 1e-6) / grid);
-                tFire = (li?.loopStartTime || (state.barStartAT + baseRel)) + k * grid + 0.0004;
-                scheduledRelBar = tFire - state.barStartAT;
-                try{ if (window && window.RIPPLER_TIMING_DBG) console.log('[rippler]', 'replay-sched', { name, div, grid:+grid.toFixed?.(4)||grid, rel:+rel.toFixed?.(4)||rel, k, offRaw, baseRel, tFire }); }catch{}
-                // One-shot per-event summary on the first replay bar after recording
-                if (__summaryMode){
-                  const key = `${state.nextSlotIx}@${i}`;
-                  if (!__printedSummaries.has(key)){
-                    __printedSummaries.add(key);
-                    const quantRel = Math.ceil((baseRel + 1e-6)/grid) * grid;
-                    const deltaBar = scheduledRelBar - quantRel;
-                    try{ if (window && window.RIPPLER_TIMING_DBG) console.log('[rippler]', 'summary', { name, mode:'quant', div, baseRel, quantRel, scheduledRelBar, deltaBar }); }catch{}
-                  }
-                }
-              } else {
-                try{ if (window && window.RIPPLER_TIMING_DBG) console.log('[rippler]', 'replay-sched', { name, div, tFire, slotAT: state.nextSlotAT, offRaw }); }catch{}
-                if (__summaryMode){
-                  const key = `${state.nextSlotIx}@${i}`;
-                  if (!__printedSummaries.has(key)){
-                    __printedSummaries.add(key);
-                    const scheduledRelBar2 = tFire - state.barStartAT;
-                    const deltaBar2 = scheduledRelBar2 - (hasOff ? offRaw : (state.nextSlotAT - state.barStartAT));
-                    try{ if (window && window.RIPPLER_TIMING_DBG) console.log('[rippler]', 'summary', { name, mode:'off', offRaw, scheduledRelBar: scheduledRelBar2, deltaBar: deltaBar2 }); }catch{}
-                  }
-                }
-              }
-            }catch{}
-            // Avoid double scheduling if prescheduled
-            const k2 = __keyFor(state.nextSlotIx, i);
-            if (!__scheduledThisBar.has(k2)){
-              __scheduledThisBar.add(k2);
-              triggerInstrument(getInstrument(), name, tFire);
-              try{ const b = blocks[i]; if (b) b._visFlashAt = Math.max((b._visFlashAt||0), tFire); }catch{}
-            }
-            scheduled.add(name);
-          }
-          // Do not flash immediately; visuals are deferred to _visFlashAt in core draw
-        });
-      }
-      }
-      state.nextSlotIx = (state.nextSlotIx + 1) & (NUM_STEPS - 1);
-      state.nextSlotAT += stepSeconds();
     }
   }
 
