@@ -468,8 +468,9 @@ export function createRippleSynth(selector){
             }
             if (!doImmediateFlash){ try{ b._visFlashAt = tSched; }catch{} }
             triggerInstrument(currentInstrument, name, tSched);
-            // Store the RAW offset of the hit relative to the local bar start.
-            patternOffsets[slotIx].set(i, Math.max(0, whenAT - barStartAT));
+            // Store the RAW offset of the hit relative to the local bar start,
+            // but clamp it to the bar's duration to prevent runaway timing issues.
+            patternOffsets[slotIx].set(i, Math.min(barSec() - 0.001, Math.max(0, whenAT - barStartAT)));
           } catch(e) { __dbg('quant-record-fail', e); }
           const slot = pattern[slotIx]; let existsSame = false;
           for (const jj of slot){ const nm = noteList[blocks[jj].noteIndex] || 'C4'; if (nm === name){ existsSame = true; break; } }

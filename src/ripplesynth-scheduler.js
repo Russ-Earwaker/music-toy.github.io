@@ -38,9 +38,8 @@ export function createScheduler(cfg){
           const baseRel = hasOff ? offRaw : (s * stepSeconds());
           let tFire;
           if (grid > 0 && li) {
-            // Reconstruct the original unquantized hit time to ensure quantization is consistent with recording.
-            const whenAT_reconstructed = (state.barStartAT - barSec()) + baseRel;
-            const rel = Math.max(0, whenAT_reconstructed - li.loopStartTime);
+            const unquantized_time_this_loop = state.barStartAT + baseRel;
+            const rel = Math.max(0, unquantized_time_this_loop - li.loopStartTime);
             const k = Math.ceil((rel + 1e-6) / grid);
             tFire = li.loopStartTime + k * grid + 0.0004;
           } else {
