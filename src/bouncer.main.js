@@ -416,8 +416,18 @@ export function createBouncer(selector){
     // ALWAYS reset loop recorder for any new ball launch (user or respawn).
     // This ensures the timing anchor is always fresh and aligned with the new ball's life.
     loopRec = { signature: '', mode: 'record', pattern: [], anchorStartTime: 0, lastBarIndex: -1, scheduledBarIndex: -999, seen: new Set(), };
-    visQ.loopRec = loopRec; // Ensure the shared state carrier points to the new object.
-    try { loopRec.signature = stateSignature(); loopRec.anchorStartTime = nowT; } catch {}
+    visQ.loopRec = loopRec; // Ensure the shared state carrier points to the new object
+    try {
+        loopRec.signature = stateSignature();
+        // Align the local loop anchor with the global project bar start time.
+        const li = (typeof getLoopInfo === 'function') ? getLoopInfo() : null;
+        if (li && li.barLen > 0) {
+            const k = Math.floor(Math.max(0, (nowT - li.loopStartTime) / li.barLen));
+            loopRec.anchorStartTime = li.loopStartTime + k * li.barLen;
+        } else {
+            loopRec.anchorStartTime = nowT; // Fallback if no loop info
+        }
+    } catch {}
 
     const o = { x:L.x, y:L.y, vx:L.vx, vy:L.vy, r: ballR() };
     ball = o;
