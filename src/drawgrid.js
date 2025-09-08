@@ -172,6 +172,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         flashes = new Float32Array(cols);
         // Reset manual overrides on resolution changes to avoid mismatches
         manualOverrides = Array.from({ length: cols }, () => new Set());
+        // Invalidate the node cache on all strokes since grid dimensions changed.
+        for (const s of strokes) { s.cachedNodes = null; }
         if (prevActive) {
           pendingActiveMask = { prevCols, prevActive };
           // Also apply immediately to currentMap if present (for cases with no strokes)
@@ -1381,6 +1383,11 @@ function regenerateMapFromStrokes() {
 
   // A version of snapToGrid that analyzes a single stroke object instead of the whole canvas
   function snapToGridFromStroke(stroke) {
+    // Check for cached nodes, but only if the column count matches.
+    if (stroke.cachedNodes && stroke.cachedCols === cols) {
+      return stroke.cachedNodes;
+    }
+
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = paint.width;
     tempCanvas.height = paint.height;
@@ -1390,7 +1397,10 @@ function regenerateMapFromStrokes() {
     tempCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     drawFullStroke(tempCtx, stroke);
     // Pass the temporary context to the main snapToGrid function
-    return snapToGrid(tempCtx);
+    const result = snapToGrid(tempCtx);
+    // Cache the result against the current column count.
+    try { stroke.cachedNodes = result; stroke.cachedCols = cols; } catch {}
+    return result;
   }
 
   paint.addEventListener('pointerdown', onPointerDown);
