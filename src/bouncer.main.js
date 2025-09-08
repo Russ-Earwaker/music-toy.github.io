@@ -137,6 +137,19 @@ export function createBouncer(selector){
   let __speedCache = (__getSpeed?__getSpeed():1);
   panel.addEventListener('toy-speed', (e)=>{ const ns = (e && e.detail && Number(e.detail.value)) ? e.detail.value : (__getSpeed?__getSpeed():1); const os = __speedCache || 1; const ratio = os ? (ns/os) : 1; __speedCache = ns; try{ if (lastLaunch && Number.isFinite(ratio) && ratio>0){ lastLaunch.vx *= ratio; lastLaunch.vy *= ratio; } }catch{} });
 
+  // When quantization changes, reset the loop to start a new recording.
+  // This prevents the old pattern from replaying with mismatched timing.
+  panel.addEventListener('bouncer:quant', () => {
+    if (loopRec) {
+      // Immediately clear the old pattern and switch to record mode.
+      // This prevents the old notes from replaying with the new timing.
+      // The signature is also invalidated to ensure a clean slate on the next bar.
+      loopRec.pattern.length = 0;
+      loopRec.mode = 'record';
+      loopRec.signature = ''; // Guarantees onNewBar will confirm the reset.
+    }
+  });
+
 
 
   /* speed UI moved to bouncer-speed-ui.js */
@@ -205,7 +218,11 @@ export function createBouncer(selector){
       if ((globalThis.BOUNCER_DBG_LEVEL|0)>=1) console.log('[bouncer-rec] loop reset: state changed; recording new bar');
       loopRec.pattern.length = 0;
     } else {
-      if (loopRec.pattern.length > 0) { loopRec.mode = 'replay'; if ((globalThis.BOUNCER_DBG_LEVEL|0)>=1) console.log('[bouncer-rec] loop recorded — switching to replay (events:', loopRec.pattern.length, ')'); }
+      // If the state hasn't changed, switch to replay mode.
+      // This is safe even if no notes were recorded, as it will just replay an empty pattern.
+      // This prevents the loop from getting stuck in 'record' mode across multiple bars.
+      loopRec.mode = 'replay';
+      if ((globalThis.BOUNCER_DBG_LEVEL|0)>=1 && loopRec.pattern.length > 0) console.log('[bouncer-rec] loop recorded — switching to replay (events:', loopRec.pattern.length, ')');
     }
     // If entering replay, ensure we are unmuted before scheduler queues playback.
     // This guarantees the first scheduled notes are audible.
@@ -411,23 +428,16 @@ export function createBouncer(selector){
                 __unmuteAt = ensureAudioContext().currentTime + 0.150; // Unmute in 150ms (after 100ms lookahead)
             } catch(e) { console.warn('[bouncer] mute/unmute failed', e); }
         }
-    }
 
-    // ALWAYS reset loop recorder for any new ball launch (user or respawn).
-    // This ensures the timing anchor is always fresh and aligned with the new ball's life.
-    loopRec = { signature: '', mode: 'record', pattern: [], anchorStartTime: 0, lastBarIndex: -1, scheduledBarIndex: -999, seen: new Set(), };
-    visQ.loopRec = loopRec; // Ensure the shared state carrier points to the new object
-    try {
-        loopRec.signature = stateSignature();
-        // Align the local loop anchor with the global project bar start time.
-        const li = (typeof getLoopInfo === 'function') ? getLoopInfo() : null;
-        if (li && li.barLen > 0) {
-            const k = Math.floor(Math.max(0, (nowT - li.loopStartTime) / li.barLen));
-            loopRec.anchorStartTime = li.loopStartTime + k * li.barLen;
-        } else {
-            loopRec.anchorStartTime = nowT; // Fallback if no loop info
-        }
-    } catch {}
+        // Reset loop recorder ONLY for a new user-initiated launch.
+        loopRec = { signature: '', mode: 'record', pattern: [], anchorStartTime: 0, lastBarIndex: -1, scheduledBarIndex: -999, seen: new Set(), };
+        visQ.loopRec = loopRec; // Ensure the shared state carrier points to the new object.
+        try {
+            loopRec.signature = stateSignature();
+            // Record relative to the local spawn time to ensure the full bar is captured.
+            loopRec.anchorStartTime = nowT;
+        } catch {}
+    }
 
     const o = { x:L.x, y:L.y, vx:L.vx, vy:L.vy, r: ballR() };
     ball = o;
@@ -498,7 +508,7 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
   updateLaunchBaseline,
   buildStateForStep: (now, prevNow)=>{
     const li0 = (typeof getLoopInfo==='function') ? getLoopInfo() : null;
-    const triggerPhysAware = (i,n,t)=>{
+    const triggerPhysAware = (i,n,t,meta)=>{
       if (window && window.BOUNCER_LOOP_DBG) try{ if ((globalThis.BOUNCER_DBG_LEVEL|0)>=2) console.log('[bouncer-audio] fire?', n, 't=', (typeof t==='number')?t.toFixed(4):'imm'); }catch{}
       try{
         const li = (typeof getLoopInfo==='function') ? getLoopInfo() : li0;
@@ -508,16 +518,24 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
         const beatDur = barLen/4;
         const anchor = (visQ && visQ.loopRec && visQ.loopRec.anchorStartTime) ? visQ.loopRec.anchorStartTime : (li ? li.loopStartTime : 0);
         const k = Math.floor(Math.max(0, (nowT - anchor) / barLen));
-        if (lr && lr.mode === 'replay'){ return; }
+
+        // During replay, all sound comes from the scheduler. The live ball is silent.
+        if (lr && lr.mode === 'replay') {
+            return;
+        }
+
         if (lr && lr.mode === 'record'){
           try {
             const ac = ensureAudioContext ? ensureAudioContext() : null;
             const scheduledT = (typeof t === 'number') ? t : ((ac ? ac.currentTime : 0) + 0.0008);
             triggerInstrument(i||instrument, n, scheduledT, toyId);
           } catch(e){}
-          const barStart = anchor + k*barLen;
           const at = (typeof t==='number' ? t : nowT);
-          const offBeats = (at - barStart)/beatDur;
+          // To align with the global beat, calculate offset relative to the start of the global bar
+          // that was active at the time of the hit.
+          const globalBarIndex = Math.floor(Math.max(0, (at - li.loopStartTime) / barLen));
+          const globalBarStart = li.loopStartTime + globalBarIndex * barLen;
+          const offBeats = (at - globalBarStart) / beatDur;
           // Round recorded offsets to current quant grid so replay matches quant exactly.
           let off = offBeats; // Default to unquantized
           try {
@@ -529,7 +547,17 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
           } catch {}
           off = Math.max(0, Math.min(4, off)); // Clamp to bar length (4 beats)
           if (visQ && visQ.loopRec && Array.isArray(visQ.loopRec.pattern)){
-            visQ.loopRec.pattern.push({ note: n, offset: off });
+            // De-dupe notes recorded in the same bar to prevent runaway pattern growth.
+            // Key by note and quantized 16th-note time.
+            const key = `${n}@${Math.round(off * 4)}`;
+            if (lr.seen && !lr.seen.has(key)) {
+              lr.seen.add(key);
+              const event = { note: n, offset: off };
+              if (meta && meta.blockIndex != null) event.blockIndex = meta.blockIndex;
+              if (meta && meta.edgeControllerIndex != null) event.edgeControllerIndex = meta.edgeControllerIndex;
+              if (meta && meta.edgeName != null) event.edgeName = meta.edgeName;
+              visQ.loopRec.pattern.push(event);
+            }
           }
           return;
         }
@@ -560,8 +588,8 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
       __unmuteAt,
       lastLaunch,
       nextLaunchAt,
-      spawnBallFrom,
-      triggerInstrument: (i,n,t)=>{ try{ if (window && window.BOUNCER_FORCE_RAW){   return triggerInstrument(i||instrument, n, t, toyId); } }catch{} return triggerPhysAware(i,n,t);},
+      spawnBallFrom, // The triggerInstrument passed to stepBouncer now accepts a meta object
+      triggerInstrument: (i,n,t,meta)=>{ try{ if (window && window.BOUNCER_FORCE_RAW){   return triggerInstrument(i||instrument, n, t, toyId); } }catch{} return triggerPhysAware(i,n,t,meta);},
       triggerInstrumentRaw: (i,n,t)=>triggerInstrument(i||instrument, n, t, toyId),
       getQuantDiv: ()=>{ try{ const v = __getQuantDiv ? __getQuantDiv() : 4; return (Number.isFinite(v)? v : 4); }catch(_){ return 4; } },
       BOUNCER_BARS_PER_LIFE,

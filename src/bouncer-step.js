@@ -162,7 +162,8 @@ export function stepBouncer(S, nowAT){
                 // Global coalescing: only one scheduler per tick across all sources (per bar)
                 // Global coalescing disabled: do not suppress other sources in this tick
                 try { if (window && window.BOUNCER_LOOP_DBG) { var __tt=(t && t.toFixed)?t.toFixed(4):t; console.log('[bouncer-step] HIT', nm, 'idx=', (b&&b.noteIndex), 'listLen=', (S.noteList&&S.noteList.length), 't=', __tt); } } catch(e) {}
-                if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t);
+                // Pass block index for replay logic
+                if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t, { blockIndex: bestIdx });
                 if (S.fx && S.fx.onHit) S.fx.onHit(S.ball.x, S.ball.y);
                 dbgMarkFire('block', t);
                 b.flash = 1.0; b.flashDur = 0.12;
@@ -180,8 +181,8 @@ export function stepBouncer(S, nowAT){
                 const nm = S.noteValue ? (S.noteList && Number.isFinite((c.noteIndex))) ? S.noteList[Math.max(0, Math.min(S.noteList.length-1, ((c.noteIndex)|0)))] : null : null;
                 const t = qSixteenth();
                 // Global coalescing disabled: do not suppress other sources in this tick
-                try { if (window && window.BOUNCER_LOOP_DBG) { var __tt=(t && t.toFixed)?t.toFixed(4):t; console.log('[bouncer-step] HIT', nm, 'idx=', (b&&c.noteIndex), 'listLen=', (S.noteList&&S.noteList.length), 't=', __tt); } } catch(e) {}
-                if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t);
+                try { if (window && window.BOUNCER_LOOP_DBG) { var __tt=(t && t.toFixed)?t.toFixed(4):t; console.log('[bouncer-step] HIT', nm, 'idx=', (b&&c.noteIndex), 'listLen=', (S.noteList&&S.noteList.length), 't=', __tt); } } catch(e) {} // Pass edge controller index for replay logic
+                if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t, { edgeControllerIndex: ei });
                 if (S.fx && S.fx.onHit) S.fx.onHit(S.ball.x, S.ball.y);
                 dbgMarkFire('edge-controller', t);
                 c.flash = 1.0; c.flashDur = 0.12;
@@ -205,7 +206,7 @@ export function stepBouncer(S, nowAT){
                 if (tick16 != null && lastEdgeTick === tick16) { /* already fired this edge this tick */ return; }
                 // Global coalescing disabled: do not suppress other sources in this tick
                 if (S.__lastTickByEdge && S.__lastTickByEdge.set) S.__lastTickByEdge.set(edgeKey, tick16);
-                if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t);
+                if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t, { edgeName: edgeKey });
                 if (typeof S.flashEdge==='function') S.flashEdge((best.nx>0)?'left':(best.nx<0)?'right':(best.ny>0)?'top':'bot');
                 dbgMarkFire('border', t);
                 c.flash = 1.0; c.flashDur = 0.12;

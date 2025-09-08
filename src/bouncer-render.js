@@ -239,43 +239,52 @@ export function createBouncerDraw(env){
         }
         const lr = S.visQ && S.visQ.loopRec;
         if (lr && !lr.isInvalid && lr.mode === 'replay' && typeof S.getLoopInfo==='function'){
-          const li = S.getLoopInfo();
-          const nowT = li.now;
-          const anchor = (lr && lr.anchorStartTime) ? lr.anchorStartTime : li.loopStartTime;
-          const k = Math.floor(Math.max(0, (nowT - anchor) / li.barLen));
-          if (Array.isArray(lr.pattern) && lr.pattern.length>0){
-            // Clear scheduled keys at the start of a new bar to allow re-scheduling.
-            if (lr.scheduledBarIndex !== k) {
-                lr.scheduledBarIndex = k;
-                if (!lr.scheduledKeys || typeof lr.scheduledKeys.clear !== 'function') lr.scheduledKeys = new Set();
-                else lr.scheduledKeys.clear();
-            }
+            const li = S.getLoopInfo();
+            const nowT = li.now;
+            // The playback anchor is the start of the current GLOBAL bar.
+            const k_global = Math.floor(Math.max(0, (nowT - li.loopStartTime) / li.barLen));
+            const playback_base = li.loopStartTime + k_global * li.barLen;
 
-            const LOOKAHEAD = 0.1; // 100ms lookahead for scheduling
-            const base = anchor + k * li.barLen;
-            const baseNext = base + li.barLen;
-            const beatDur = li.barLen / 4;
+            if (Array.isArray(lr.pattern) && lr.pattern.length > 0) {
+                // Use global bar index to reset scheduled keys.
+                if (lr.scheduledBarIndex !== k_global) {
+                    lr.scheduledBarIndex = k_global;
+                    if (!lr.scheduledKeys || typeof lr.scheduledKeys.clear !== 'function') lr.scheduledKeys = new Set();
+                    else lr.scheduledKeys.clear();
+                }
 
-            const __seen = new Set();
-            const __evs = (Array.isArray(lr.pattern) ? lr.pattern : []).filter(ev => {
-                const keySeen = ev && ev.note ? (ev.note + '@' + (Math.round(((ev.offset || 0)) * 16) / 16)) : '';
-                if (__seen.has(keySeen)) return false; __seen.add(keySeen); return true;
-            });
+                const LOOKAHEAD = 0.1; // 100ms lookahead for scheduling
+                const base = playback_base;
+                const baseNext = base + li.barLen;
+                const beatDur = li.barLen / 4;
 
-            for (const ev of __evs) {
-                if (!ev || !ev.note) continue;
-                const offBeats = Math.max(0, ev.offset || 0);
-                let when = base + offBeats * beatDur;
-                if (when < nowT - 0.01) when = baseNext + offBeats * beatDur;
+                const __seen = new Set();
+                const __evs = (Array.isArray(lr.pattern) ? lr.pattern : []).filter(ev => {
+                    const keySeen = ev && ev.note ? (ev.note + '@' + (Math.round(((ev.offset || 0)) * 16) / 16)) : '';
+                    if (__seen.has(keySeen)) return false; __seen.add(keySeen); return true;
+                });
 
-                const key = k + '|' + ev.note + '|' + (Math.round(offBeats * 16) / 16);
-                if (when >= nowT && when < nowT + LOOKAHEAD && !lr.scheduledKeys.has(key)) {
-                    try { S.triggerInstrumentRaw ? S.triggerInstrumentRaw(S.instrument, ev.note, when) : S.triggerInstrument(S.instrument, ev.note, when); }
-                    catch (e) { try { if ((globalThis.BOUNCER_DBG_LEVEL | 0) >= 2) console.warn('[bouncer-replay] schedule fail', e); } catch {} }
-                    lr.scheduledKeys.add(key);
+                for (const ev of __evs) {
+                    if (!ev || !ev.note) continue;
+
+                    let isSourceActive = true;
+                    if (ev.blockIndex != null) { const block = S.blocks?.[ev.blockIndex]; if (block && block.active === false) isSourceActive = false; }
+                    else if (ev.edgeControllerIndex != null) { const controller = S.edgeControllers?.[ev.edgeControllerIndex]; if (controller && controller.active === false) isSourceActive = false; }
+                    else if (ev.edgeName != null) { const m = S.mapControllersByEdge ? S.mapControllersByEdge(S.edgeControllers) : null; const edgeMap = { 'L': 'left', 'R': 'right', 'T': 'top', 'B': 'bot' }; const controllerKey = edgeMap[ev.edgeName]; const c = m?.[controllerKey]; if (c && c.active === false) isSourceActive = false; }
+                    if (!isSourceActive) continue;
+
+                    const offBeats = Math.max(0, ev.offset || 0);
+                    let when = base + offBeats * beatDur;
+                    if (when < nowT - 0.01) when = baseNext + offBeats * beatDur;
+
+                    const key = k_global + '|' + ev.note + '|' + (Math.round(offBeats * 16) / 16);
+                    if (when >= nowT && when < nowT + LOOKAHEAD && !lr.scheduledKeys.has(key)) {
+                        try { S.triggerInstrumentRaw(S.instrument, ev.note, when); }
+                        catch (e) { try { if ((globalThis.BOUNCER_DBG_LEVEL | 0) >= 2) console.warn('[bouncer-replay] schedule fail', e); } catch {} }
+                        lr.scheduledKeys.add(key);
+                    }
                 }
             }
-          }
         }
       }catch(e){}
       stepBouncer(S);
