@@ -410,7 +410,7 @@ export function createBouncer(selector){
         // Mute any lingering scheduled notes from a previous loop.
         // The toy will be unmuted on the first new physics hit.
         try {
-            if (typeof setToyMuted === 'function') setToyMuted(toyId, true);
+            if (typeof setToyMuted === 'function') setToyMuted(toyId, true, 0.05); // 50ms fade-out
             __spawnPendingUnmute = true;
             // Always unmute on the first new hit. This prioritizes responsiveness
             // over cleanly silencing all notes from a previous loop, which could

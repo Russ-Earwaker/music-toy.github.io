@@ -60,15 +60,19 @@ export function setToyVolume(id='master', v=1){
   g.gain.setValueAtTime(__mute.get(key) ? 0 : vv, ctx.currentTime);
 }
 
-export function setToyMuted(id='master', muted=false){
+export function setToyMuted(id='master', muted=false, rampTime = 0){
   const key = String(id||'master').toLowerCase();
   const ctx = ensureAudioContext();
   const g = getToyGain(key);
   __mute.set(key, !!muted);
   const vv = __vol.get(key) ?? 1.0;
-  // Be more aggressive: cancel any pending gain changes, then set the new value.
+  const targetVol = muted ? 0 : vv;
   g.gain.cancelScheduledValues(ctx.currentTime);
-  g.gain.setValueAtTime(muted ? 0 : vv, ctx.currentTime);
+  if (rampTime > 0.001) {
+    g.gain.linearRampToValueAtTime(targetVol, ctx.currentTime + rampTime);
+  } else {
+    g.gain.setValueAtTime(targetVol, ctx.currentTime);
+  }
 }
 
 // Transport helpers

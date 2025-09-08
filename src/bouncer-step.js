@@ -5,7 +5,7 @@ function ensureUnmutedOnFirstHit(S){
       const now = (S.ensureAudioContext && S.ensureAudioContext().currentTime) || 0;
       // Only unmute if we are past the end of the bar where old notes might have been scheduled.
       if (now >= (S.__unmuteAfter || 0)) {
-        if (S.setToyMuted) S.setToyMuted(S.toyId, false);
+        if (S.setToyMuted) S.setToyMuted(S.toyId, false, 0.02); // 20ms fade-in
         S.__spawnPendingUnmute = false;
         S.__unmuteAfter = 0;
       }
