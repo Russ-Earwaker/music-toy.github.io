@@ -1,18 +1,4 @@
 
-function ensureUnmutedOnFirstHit(S){
-  try{
-    if (S && S.__spawnPendingUnmute){
-      const now = (S.ensureAudioContext && S.ensureAudioContext().currentTime) || 0;
-      // Only unmute if we are past the end of the bar where old notes might have been scheduled.
-      if (now >= (S.__unmuteAfter || 0)) {
-        if (S.setToyMuted) S.setToyMuted(S.toyId, false, 0.02); // 20ms fade-in
-        S.__spawnPendingUnmute = false;
-        S.__unmuteAfter = 0;
-      }
-    }
-  }catch{}
-}
-
 // src/bouncer-step.js — swept collisions + quantized, de-duped scheduling (<=300 lines)
 import { circleRectHit } from './bouncer-helpers.js';
 
@@ -174,7 +160,6 @@ export function stepBouncer(S, nowAT){
                 // Global coalescing: only one scheduler per tick across all sources (per bar)
                 // Global coalescing disabled: do not suppress other sources in this tick
                 try { if (window && window.BOUNCER_LOOP_DBG) { var __tt=(t && t.toFixed)?t.toFixed(4):t; console.log('[bouncer-step] HIT', nm, 'idx=', (b&&b.noteIndex), 'listLen=', (S.noteList&&S.noteList.length), 't=', __tt); } } catch(e) {}
-                ensureUnmutedOnFirstHit(S);
                 if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t);
                 if (S.fx && S.fx.onHit) S.fx.onHit(S.ball.x, S.ball.y);
                 dbgMarkFire('block', t);
@@ -193,9 +178,7 @@ export function stepBouncer(S, nowAT){
                 const nm = S.noteValue ? (S.noteList && Number.isFinite((c.noteIndex))) ? S.noteList[Math.max(0, Math.min(S.noteList.length-1, ((c.noteIndex)|0)))] : null : null;
                 const t = qSixteenth();
                 // Global coalescing disabled: do not suppress other sources in this tick
-                ensureUnmutedOnFirstHit(S);
                 try { if (window && window.BOUNCER_LOOP_DBG) { var __tt=(t && t.toFixed)?t.toFixed(4):t; console.log('[bouncer-step] HIT', nm, 'idx=', (b&&c.noteIndex), 'listLen=', (S.noteList&&S.noteList.length), 't=', __tt); } } catch(e) {}
-                ensureUnmutedOnFirstHit(S);
                 if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t);
                 if (S.fx && S.fx.onHit) S.fx.onHit(S.ball.x, S.ball.y);
                 dbgMarkFire('edge-controller', t);
@@ -217,11 +200,9 @@ export function stepBouncer(S, nowAT){
                 // de-dupe per 16th tick for world edges
                 const edgeKey = (best.nx>0)?'L':(best.nx<0)?'R':(best.ny>0)?'T':'B';
                 const lastEdgeTick = (S.__lastTickByEdge && S.__lastTickByEdge.get) ? S.__lastTickByEdge.get(edgeKey) : undefined;
-                ensureUnmutedOnFirstHit(S);
                 if (tick16 != null && lastEdgeTick === tick16) { /* already fired this edge this tick */ return; }
                 // Global coalescing disabled: do not suppress other sources in this tick
                 if (S.__lastTickByEdge && S.__lastTickByEdge.set) S.__lastTickByEdge.set(edgeKey, tick16);
-                ensureUnmutedOnFirstHit(S);
                 if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t);
                 if (typeof S.flashEdge==='function') S.flashEdge((best.nx>0)?'left':(best.nx<0)?'right':(best.ny>0)?'top':'bot');
                 dbgMarkFire('border', t);

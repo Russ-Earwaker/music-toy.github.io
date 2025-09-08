@@ -167,11 +167,7 @@ export function createBouncer(selector){
   let draggingBlock=false, dragBlockRef=null, dragOffset={dx:0,dy:0};
   let zoomDragCand=null, zoomDragStart=null, zoomTapT=null;
   let tapCand=null, tapStart=null, tapMoved=false;
-  let lastLaunch=null, launchPhase=0, nextLaunchAt=null, prevNow=0, ball=null, __unmuteAfter = 0;
-  // When manually spawning, briefly mute any already-scheduled replay notes;
-  // stepBouncer will unmute on the first new physics hit.
-  let __spawnPendingUnmute = false;
-  // --- Loop Recorder (record a bar, replay verbatim) ----------------------
+  let lastLaunch=null, launchPhase=0, nextLaunchAt=null, prevNow=0, ball=null, __unmuteAt = 0;
   let loopRec = {
     signature: '',
     mode: 'record',        // 'record' | 'replay'
@@ -407,16 +403,14 @@ export function createBouncer(selector){
         }
         __spawnLastAt = nowT;
 
-        // Mute any lingering scheduled notes from a previous loop.
-        // The toy will be unmuted on the first new physics hit.
-        try {
-            if (typeof setToyMuted === 'function') setToyMuted(toyId, true, 0.05); // 50ms fade-out
-            __spawnPendingUnmute = true;
-            // Always unmute on the first new hit. This prioritizes responsiveness
-            // over cleanly silencing all notes from a previous loop, which could
-            // cause a long, un-interactive silence.
-            __unmuteAfter = 0;
-        } catch (e) {}
+        // If interrupting a replay, do a quick cross-fade to prevent audio bleed.
+        if (loopRec && loopRec.mode === 'replay') {
+            try {
+                loopRec.isInvalid = true; // Prevent scheduler from firing on next frame
+                setToyMuted(toyId, true, 0.08); // 80ms fade-out
+                __unmuteAt = ensureAudioContext().currentTime + 0.150; // Unmute in 150ms (after 100ms lookahead)
+            } catch(e) { console.warn('[bouncer] mute/unmute failed', e); }
+        }
 
         // Reset loop recorder for the new user-initiated loop.
         // Re-create the object from scratch to guarantee a clean state.
@@ -471,12 +465,7 @@ let __lastTickByBlock = new Map();
 let __lastTickByEdge  = new Map();
 let __justSpawnedUntil = 0;
 
-// Mute on boot to prevent any sound until first interaction.
-try {
-  setToyMuted(toyId, true);
-  __spawnPendingUnmute = true;
-} catch(e) {}
-
+try { setToyMuted(toyId, false); } catch(e) {}
 
 try{
   const lr = (visQ && visQ.loopRec) ? visQ.loopRec : null;
@@ -563,8 +552,7 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
       handle,
       toyId,
       setToyMuted,
-      __spawnPendingUnmute,
-      __unmuteAfter,
+      __unmuteAt,
       lastLaunch,
       nextLaunchAt,
       spawnBallFrom,
@@ -589,11 +577,10 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
       if ('ball' in S) ball = S.ball;
       if ('lastLaunch' in S && S.lastLaunch) lastLaunch = S.lastLaunch;
       if ('nextLaunchAt' in S) nextLaunchAt = S.nextLaunchAt;
-      if (typeof S.__unmuteAfter === 'number') __unmuteAfter = S.__unmuteAfter;
       if (S.__lastTickByBlock) __lastTickByBlock = S.__lastTickByBlock;
       if (S.__lastTickByEdge) __lastTickByEdge = S.__lastTickByEdge;
       if (typeof S.__justSpawnedUntil === 'number') __justSpawnedUntil = S.__justSpawnedUntil;
-      if (typeof S.__spawnPendingUnmute === 'boolean') __spawnPendingUnmute = S.__spawnPendingUnmute;
+      if (typeof S.__unmuteAt === 'number') __unmuteAt = S.__unmuteAt;
     }
   }
 });

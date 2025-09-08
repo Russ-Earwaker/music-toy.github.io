@@ -193,6 +193,15 @@ export function createBouncerDraw(env){
       const ac = ensureAudioContext(); 
       const now = (ac ? ac.currentTime : 0);
       const S = buildStateForStep(now, prevNow);
+
+      // Handle timed unmute for smooth transitions when interrupting a replay.
+      if (S.__unmuteAt > 0 && now >= S.__unmuteAt) {
+        if (typeof S.setToyMuted === 'function') {
+            S.setToyMuted(S.toyId, false, 0.08); // 80ms fade-in
+        }
+        S.__unmuteAt = 0; // Consume the timer
+      }
+
       // Ensure S.ball mirrors the live ball just before step (belt-and-braces)
       try {
         const liveBall = getBall ? getBall() : null;
@@ -229,45 +238,43 @@ export function createBouncerDraw(env){
           else if((globalThis.BOUNCER_DBG_LEVEL|0)>=2) console.log('[bouncer-rec] pre', 'no lr');
         }
         const lr = S.visQ && S.visQ.loopRec;
-        if (lr && lr.mode === 'replay' && typeof S.getLoopInfo==='function'){
+        if (lr && !lr.isInvalid && lr.mode === 'replay' && typeof S.getLoopInfo==='function'){
           const li = S.getLoopInfo();
           const nowT = li.now;
           const anchor = (lr && lr.anchorStartTime) ? lr.anchorStartTime : li.loopStartTime;
           const k = Math.floor(Math.max(0, (nowT - anchor) / li.barLen));
           if (Array.isArray(lr.pattern) && lr.pattern.length>0){
-            const base = anchor + k*li.barLen;
+            // Clear scheduled keys at the start of a new bar to allow re-scheduling.
+            if (lr.scheduledBarIndex !== k) {
+                lr.scheduledBarIndex = k;
+                if (!lr.scheduledKeys || typeof lr.scheduledKeys.clear !== 'function') lr.scheduledKeys = new Set();
+                else lr.scheduledKeys.clear();
+            }
+
+            const LOOKAHEAD = 0.1; // 100ms lookahead for scheduling
+            const base = anchor + k * li.barLen;
             const baseNext = base + li.barLen;
-            // base computed above; reused here
-            // baseNext computed above; reused here
             const beatDur = li.barLen / 4;
-            if ((globalThis.BOUNCER_DBG_LEVEL|0)>=2) console.log('[bouncer-rec] about to schedule bar', k, 'base', base.toFixed(3), 'nowT', nowT.toFixed(3));
 
-// Just-in-time scheduling with short lookahead so state changes can cancel playback
-const LOOKAHEAD = 0.03; // seconds — reduce overlap risk without starving scheduling
-// Reset per-bar scheduled set and schedule entire bar deterministically when bar advances
-if (lr.scheduledBarIndex !== k){
-  lr.scheduledBarIndex = k;
-  if (!lr.scheduledKeys || typeof lr.scheduledKeys.clear !== 'function') lr.scheduledKeys = new Set();
-  else lr.scheduledKeys.clear();
-  if ((globalThis.BOUNCER_DBG_LEVEL|0) >= 2) console.log('[bouncer-rec] new bar', k, 'mode', lr.mode, 'patLen', lr.pattern?.length||0);
-  const __seen = new Set();
-  const __evs = (Array.isArray(lr.pattern)?lr.pattern:[]).filter(ev=>{
-    const keySeen = ev && ev.note ? (ev.note + '@' + (Math.round(((ev.offset||0))*16)/16)) : '';
-    if (__seen.has(keySeen)) return false; __seen.add(keySeen); return true; });
-  for (const ev of __evs){
-    if (!ev || !ev.note) continue;
-    const offBeats = Math.max(0, ev.offset||0);
-    let when = base + offBeats * beatDur;
-    if (when < nowT - 0.01) when = baseNext + offBeats * beatDur;
-    const key = k + '|' + ev.note + '|' + (Math.round(offBeats*16)/16);
-    if (!lr.scheduledKeys.has(key)){
-      try { S.triggerInstrumentRaw ? S.triggerInstrumentRaw(S.instrument, ev.note, when) : S.triggerInstrument(S.instrument, ev.note, when); }
-      catch(e){ try{ if ((globalThis.BOUNCER_DBG_LEVEL|0)>=2) console.warn('[bouncer-replay] schedule fail', e); }catch{} }
-      lr.scheduledKeys.add(key);
-    }
-  }
-}
+            const __seen = new Set();
+            const __evs = (Array.isArray(lr.pattern) ? lr.pattern : []).filter(ev => {
+                const keySeen = ev && ev.note ? (ev.note + '@' + (Math.round(((ev.offset || 0)) * 16) / 16)) : '';
+                if (__seen.has(keySeen)) return false; __seen.add(keySeen); return true;
+            });
 
+            for (const ev of __evs) {
+                if (!ev || !ev.note) continue;
+                const offBeats = Math.max(0, ev.offset || 0);
+                let when = base + offBeats * beatDur;
+                if (when < nowT - 0.01) when = baseNext + offBeats * beatDur;
+
+                const key = k + '|' + ev.note + '|' + (Math.round(offBeats * 16) / 16);
+                if (when >= nowT && when < nowT + LOOKAHEAD && !lr.scheduledKeys.has(key)) {
+                    try { S.triggerInstrumentRaw ? S.triggerInstrumentRaw(S.instrument, ev.note, when) : S.triggerInstrument(S.instrument, ev.note, when); }
+                    catch (e) { try { if ((globalThis.BOUNCER_DBG_LEVEL | 0) >= 2) console.warn('[bouncer-replay] schedule fail', e); } catch {} }
+                    lr.scheduledKeys.add(key);
+                }
+            }
           }
         }
       }catch(e){}
