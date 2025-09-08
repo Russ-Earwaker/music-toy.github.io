@@ -190,7 +190,6 @@ export function createRippleSynth(selector){
   const patternOffsets = Array.from({length:NUM_STEPS}, ()=> new Map()); // blockIndex -> offsetSeconds from barStart
   const liveBlocks = new Set();      // blocks that play from ripple while dragging
   const recordOnly = new Set();      // blocks to (re)record on next ripple hit
-  let skipNextBarRing = false;
   let recording = false;
   let dragMuteActive = false;
   let playbackMuted = false;
@@ -203,7 +202,6 @@ export function createRippleSynth(selector){
     get nextSlotAT(){ return nextSlotAT; }, set nextSlotAT(v){ nextSlotAT = v; },
     get nextSlotIx(){ return nextSlotIx; }, set nextSlotIx(v){ nextSlotIx = v; },
     get recording(){ return recording; }, set recording(v){ recording = v; },
-    get skipNextBarRing(){ return skipNextBarRing; }, set skipNextBarRing(v){ skipNextBarRing = v; },
     recordOnly, liveBlocks
   };
 
@@ -237,7 +235,6 @@ export function createRippleSynth(selector){
       recordOnly,
       isActive: (b)=> !!b.active,
       setRecording: (v)=>{ recording = !!v; },
-      setSkipNextBarRing: (v)=>{ skipNextBarRing = !!v; },
       setPlaybackMuted: (v)=>{ playbackMuted = !!v; },
       baseIndex: (list)=> (list.indexOf(baseNoteName)>=0? list.indexOf(baseNoteName): (list.indexOf('C4')>=0? list.indexOf('C4'):48)),
       pentatonicOffsets: PENTATONIC_OFFSETS
@@ -386,7 +383,6 @@ export function createRippleSynth(selector){
     const corners = [[0,0],[W(),0],[0,H()],[W(),H()]];
     const offR = Math.max(...corners.map(([x,y])=> Math.hypot(x-gx, y-gy))) + 64;
     ripples.push({ x: gx, y: gy, startAT: nowAT, startTime: nowPerf, speed: RING_SPEED(), offR, hit: new Set(), r2off: (RING_SPEED() * (barSec()/2)) });
-    if (manual) skipNextBarRing = true;
   }
 
   function ringFront(nowAT){

@@ -64,13 +64,11 @@ export function createScheduler(cfg){
       // Determine if we just finished a recording bar
       const justRecorded = !!state.recording;
       state.barStartAT += barSec();
+
       state.nextSlotAT = state.barStartAT;
       state.nextSlotIx = 0;
       try{ if (window && window.RIPPLER_TIMING_DBG) console.log('[rippler]', 'bar-start', { barStartAT: state.barStartAT }); }catch{}
-      if (generator.placed && !isPlaybackMuted()) {
-        if (state.skipNextBarRing) state.skipNextBarRing = false;
-        else spawnRipple(false);
-      }
+      if (generator.placed && !isPlaybackMuted()) spawnRipple(false);
       state.recording = false;
       // Arm summary mode only for the very next bar after recording
       if (justRecorded){ __summaryMode = true; __printedSummaries.clear(); }
