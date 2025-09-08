@@ -112,7 +112,16 @@ export function installBouncerInteractions({
 
     // Edge cube tap (no drag)
     if (tapEdge){
-      handleEdgeControllerEdit(tapEdge, p.y, whichThirdRect, (noteList || []));
+      const t = whichThirdRect(tapEdge, p.y);
+      const adv = typeof isAdvanced === 'function' ? !!isAdvanced() : false;
+
+      if (t === 'toggle' || !adv) {
+        tapEdge.active = !(tapEdge.active !== false);
+      } else if (t === 'up' && adv) {
+        stepIndexUp(tapEdge, (noteList || []));
+      } else if (t === 'down' && adv) {
+        stepIndexDown(tapEdge, (noteList || []));
+      }
       try{
         const nm=(noteList||[])[tapEdge.noteIndex||0] || tapEdge.noteName;
         if (nm) fireNote(instrument, nm, toyId);
