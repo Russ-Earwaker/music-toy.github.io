@@ -15,6 +15,7 @@ import { handleBlockTap } from './ripplesynth-zoomtap.js';
 import { makeGetBlockRects } from './ripplesynth-rects.js';
 import { installLoopGuards } from './rippler-loopguard.js';
 import { createScheduler } from './ripplesynth-scheduler.js';
+import { circleRectHit } from './bouncer-helpers.js';
 
 export function createRippleSynth(selector){
   const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector;
@@ -136,7 +137,15 @@ export function createRippleSynth(selector){
   const getCanvasPos = (el, e)=>{ const r = el.getBoundingClientRect(); const sx = r.width? (el.width / r.width) : 1; const sy = r.height? (el.height / r.height) : 1; return { x: (e.clientX - r.left)*sx, y: (e.clientY - r.top)*sy }; };
 
   const CUBES = 8, BASE = 56 * 0.75;
-  const blocks = Array.from({length:CUBES}, (_,i)=>({ nx:0.5, ny:0.5, nx0:0.5, ny0:0.5, vx:0, vy:0, flashEnd:0, flashDur:0.18, active:true, noteIndex: ((noteList.indexOf('C4')>=0?noteList.indexOf('C4'):48) + PENTATONIC_OFFSETS[i % PENTATONIC_OFFSETS.length]) }));
+  const blocks = Array.from({length:CUBES}, (_,i)=>({
+    nx:0.5, ny:0.5, nx0:0.5, ny0:0.5,
+    vx:0, vy:0,
+    flashEnd:0, flashDur:0.18,
+    // By default, disable 3 of the 8 cubes for a less dense initial sound.
+    // The specific indices (1, 4, 6) are chosen for a balanced visual layout.
+    active: ![1, 4, 6].includes(i),
+    noteIndex: ((noteList.indexOf('C4')>=0?noteList.indexOf('C4'):48) + PENTATONIC_OFFSETS[i % PENTATONIC_OFFSETS.length])
+  }));
 
   let didLayout=false;
   function layoutBlocks(){
@@ -181,7 +190,6 @@ export function createRippleSynth(selector){
   const patternOffsets = Array.from({length:NUM_STEPS}, ()=> new Map()); // blockIndex -> offsetSeconds from barStart
   const liveBlocks = new Set();      // blocks that play from ripple while dragging
   const recordOnly = new Set();      // blocks to (re)record on next ripple hit
-  let skipNextBarRing = false;
   let recording = false;
   let dragMuteActive = false;
   let playbackMuted = false;
@@ -194,7 +202,6 @@ export function createRippleSynth(selector){
     get nextSlotAT(){ return nextSlotAT; }, set nextSlotAT(v){ nextSlotAT = v; },
     get nextSlotIx(){ return nextSlotIx; }, set nextSlotIx(v){ nextSlotIx = v; },
     get recording(){ return recording; }, set recording(v){ recording = v; },
-    get skipNextBarRing(){ return skipNextBarRing; }, set skipNextBarRing(v){ skipNextBarRing = v; },
     recordOnly, liveBlocks
   };
 
@@ -216,6 +223,9 @@ export function createRippleSynth(selector){
   });
 
   function randomizeAll(){
+    // This is a user interaction, so we should arm the toy to allow automatic ripples.
+    try { window.__ripplerUserArmed = true; } catch {}
+
     didLayout = false;
     randomizeAllImpl(panel, {
       toyId,
@@ -230,9 +240,35 @@ export function createRippleSynth(selector){
       baseIndex: (list)=> (list.indexOf(baseNoteName)>=0? list.indexOf(baseNoteName): (list.indexOf('C4')>=0? list.indexOf('C4'):48)),
       pentatonicOffsets: PENTATONIC_OFFSETS
     });
+
+    // Find a clear spot for the generator, avoiding the blocks.
+    const blockRects = getBlockRects();
+    const w = W(), h = H();
+    const genRadius = generator.r || 12;
+
+    let gx, gy, attempts = 0;
+    const MAX_ATTEMPTS = 100;
+
+    do {
+      // Pick a random point within the canvas bounds, respecting EDGE padding
+      gx = EDGE + genRadius + Math.random() * (w - 2 * (EDGE + genRadius));
+      gy = EDGE + genRadius + Math.random() * (h - 2 * (EDGE + genRadius));
+      attempts++;
+      if (attempts > MAX_ATTEMPTS) {
+        console.warn('[rippler] Could not find a clear spot for the generator.');
+        gx = w / 2; gy = h / 2; // Fallback to center
+        break;
+      }
+    } while (blockRects.some(b => circleRectHit(gx, gy, genRadius, b)));
+
+    // Set the generator's new position
+    generator.nx = x2n(gx);
+    generator.ny = y2n(gy);
+    generator.placed = true;
+
     try {
       const nowAT = ac.currentTime;
-      spawnRipple(false);
+      spawnRipple(true); // manual=true to bypass user-armed check
       barStartAT = nowAT;
       nextSlotAT = barStartAT + stepSeconds();
       nextSlotIx = 1;
@@ -348,7 +384,6 @@ export function createRippleSynth(selector){
     const corners = [[0,0],[W(),0],[0,H()],[W(),H()]];
     const offR = Math.max(...corners.map(([x,y])=> Math.hypot(x-gx, y-gy))) + 64;
     ripples.push({ x: gx, y: gy, startAT: nowAT, startTime: nowPerf, speed: RING_SPEED(), offR, hit: new Set(), r2off: (RING_SPEED() * (barSec()/2)) });
-    if (manual) skipNextBarRing = true;
   }
 
   function ringFront(nowAT){
@@ -599,7 +634,6 @@ export function createRippleSynth(selector){
   panel.addEventListener('toy-random-notes', randomizeNotesAndActives);
   panel.addEventListener('toy-random-blocks', randomizeBlockPositions);
 
-  randomizeAll();
   requestAnimationFrame(draw);
 
   return { setInstrument: (name)=> { currentInstrument = name || currentInstrument; try{ ui.setInstrument(name); }catch{} }, reset, element: canvas };
