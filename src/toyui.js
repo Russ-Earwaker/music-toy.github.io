@@ -87,7 +87,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
             editBtn.style.left = '-72px';
             editBtn.style.zIndex = '5';
             editBtn.style.setProperty('--c-btn-size', '144px');
-            editBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_EditButton.png');"></div>`;
+            editBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonEdit.png');"></div>`;
             panel.appendChild(editBtn);
         }
         if (!panel.querySelector(':scope > [data-action="close-advanced"]')) {
@@ -108,7 +108,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
 
   // Random / Clear buttons (delegated elsewhere)
   if (toyKind === 'loopgrid') {
-    // For loopgrid, create a circular random button outside the header
+    // For loopgrid, create circular random and clear buttons outside the header
     if (!panel.querySelector(':scope > [data-action="random"]')) {
       const randomBtn = document.createElement('button');
       randomBtn.className = 'c-btn loopgrid-mode-btn';
@@ -119,15 +119,41 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       randomBtn.style.left = '82px'; // To the right of the 144px edit button
       randomBtn.style.zIndex = '4'; // Below edit button
       randomBtn.style.setProperty('--c-btn-size', '130px'); // ~10% smaller than 144px
-      randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_RandomButton.png');"></div>`;
+      randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandom.png');"></div>`;
       panel.appendChild(randomBtn);
     }
-  } else if (!right.querySelector('[data-action="random"]')) {
-    const b = btn('Random');
-    b.dataset.action = 'random';
-    right.appendChild(b);
+    if (!panel.querySelector(':scope > [data-action="clear"]')) {
+      const clearBtn = document.createElement('button');
+      clearBtn.className = 'c-btn loopgrid-mode-btn';
+      clearBtn.dataset.action = 'clear';
+      clearBtn.title = 'Clear';
+      clearBtn.style.position = 'absolute';
+      clearBtn.style.top = '-65px'; // Align with Random button
+      clearBtn.style.left = '222px'; // To the right of the Random button
+      clearBtn.style.zIndex = '4';
+      clearBtn.style.setProperty('--c-btn-size', '130px'); // Same size as Random button
+      clearBtn.style.setProperty('--accent', '#f87171');
+      clearBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonClear.png');"></div>`;
+      panel.appendChild(clearBtn);
+    }
+  } else {
+    // For other toys, use standard buttons
+    if (!right.querySelector('[data-action="random"]')) {
+      const b = btn('Random');
+      b.dataset.action = 'random';
+      right.appendChild(b);
+    }
+    if (!right.querySelector('[data-action="clear"]')) {
+      const clearBtn = document.createElement('button');
+      clearBtn.className = 'c-btn';
+      clearBtn.dataset.action = 'clear';
+      clearBtn.title = 'Clear';
+      clearBtn.style.setProperty('--c-btn-size', '38px');
+      clearBtn.style.setProperty('--accent', '#f87171'); // Red accent for a destructive action
+      clearBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonClear.png');"></div>`;
+      right.appendChild(clearBtn);
+    }
   }
-  if (!right.querySelector('[data-action="clear"]'))  { const b = btn('Clear');  b.dataset.action='clear';  right.appendChild(b); }
 
   // Drum-specific "Random Notes" button
   if (toyKind === 'loopgrid' && !right.querySelector('[data-action="random-notes"]')) {
@@ -177,12 +203,31 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
 
   // Instrument select (header, hidden in standard)
   const sel = buildInstrumentSelect(panel);
-  // Replace select with a button that opens the picker (keep select for fallback/state only)
-  let instBtn = right.querySelector('.toy-inst-btn');
-  if (!instBtn){
-    instBtn = document.createElement('button'); instBtn.type='button'; instBtn.className='toy-btn toy-inst-btn'; instBtn.textContent='Instrument…';
+  // Remove any old instrument button to prevent duplicates
+  let oldInstBtn = right.querySelector('.toy-inst-btn');
+  if (oldInstBtn) oldInstBtn.remove();
+  let oldExtInstBtn = panel.querySelector(':scope > .toy-inst-btn');
+  if (oldExtInstBtn) oldExtInstBtn.remove();
+
+  const instBtn = document.createElement('button');
+  instBtn.className = 'c-btn toy-inst-btn';
+  instBtn.title = 'Choose Instrument';
+  instBtn.dataset.action = 'instrument';
+  instBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonInstruments.png');"></div>`;
+
+  if (toyKind === 'loopgrid') {
+    instBtn.classList.add('loopgrid-mode-btn');
+    instBtn.style.position = 'absolute';
+    instBtn.style.top = '-65px'; // Align with Random/Clear buttons
+    instBtn.style.left = '362px'; // To the right of the Clear button
+    instBtn.style.zIndex = '4';
+    instBtn.style.setProperty('--c-btn-size', '130px'); // Same size as Random/Clear
+    panel.appendChild(instBtn);
+  } else {
+    instBtn.style.setProperty('--c-btn-size', '38px');
     right.appendChild(instBtn);
   }
+
   instBtn.addEventListener('click', async ()=>{
     try{
       const chosen = await openInstrumentPicker({ panel, toyId: (panel.dataset.toyid || panel.dataset.toy || panel.id || 'master') });

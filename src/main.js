@@ -14,12 +14,43 @@ import { createLoopIndicator } from './loopindicator.js';
 import { buildGrid } from './drum-core.js';
 
 /**
+ * Calculates the visual extents of a panel's content, including any
+ * absolutely positioned child buttons that stick out.
+ * @param {HTMLElement} panel The panel element.
+ * @returns {{left: number, right: number}} The leftmost and rightmost pixel coordinates relative to the panel's content box edge.
+ */
+function getVisualExtents(panel) {
+  const panelWidth = panel.offsetWidth;
+  const panelHeight = panel.offsetHeight;
+  let minX = 0, maxX = panelWidth;
+  let minY = 0, maxY = panelHeight;
+
+  if (panel.dataset.toy === 'loopgrid') {
+    const externalButtons = panel.querySelectorAll(':scope > .loopgrid-mode-btn');
+    externalButtons.forEach(btn => {
+      const left = parseFloat(btn.style.left) || 0;
+      const top = parseFloat(btn.style.top) || 0;
+      const btnSize = parseFloat(btn.style.getPropertyValue('--c-btn-size')) || 0;
+      const right = left + btnSize;
+      const bottom = top + btnSize;
+      
+      if (left < minX) minX = left;
+      if (right > maxX) maxX = right;
+      if (top < minY) minY = top;
+      if (bottom > maxY) maxY = bottom;
+    });
+  }
+  
+  return { left: minX, right: maxX, top: minY, bottom: maxY };
+}
+
+/**
  * Post-processes the layout of toy panels to prevent overlaps.
- * This runs after `organizeBoard()` and shifts panels horizontally to account for
- * their margins (which `organizeBoard` ignores) and adds a consistent gap.
+ * This runs after `organizeBoard()` and correctly spaces toys by accounting for
+ * their full visual width, including margins and external buttons.
  */
 function addGapAfterOrganize() {
-  const GAP = 36; // Increased the desired visual space between toy borders.
+  const GAP = 36; // The desired visual space between toys.
   const panels = Array.from(document.querySelectorAll('#board > .toy-panel'));
   if (panels.length < 1) return;
 
@@ -28,30 +59,41 @@ function addGapAfterOrganize() {
     const topA = parseFloat(a.style.top) || 0;
     const topB = parseFloat(b.style.top) || 0;
     if (topA !== topB) return topA - topB;
-    // Fallback to DOM order if tops are identical (e.g., before organizeBoard runs)
-    return 0;
+    return 0; // Fallback to DOM order if tops are identical
   });
 
   let lastTop = -Infinity;
-  let xCursor = 0;
+  let xCursor = 0; // Tracks the start of the next available horizontal space
+  let yCursor = 0; // Tracks the start of the next available vertical space
+  let rowMaxVisualHeight = 0; // Tracks the max height of the current row
 
   for (const panel of panels) {
     const currentTop = parseFloat(panel.style.top) || 0;
-    const styles = getComputedStyle(panel);
-    const marginLeft = parseFloat(styles.marginLeft) || 0;
-    const marginRight = parseFloat(styles.marginRight) || 0;
-    const panelWidth = panel.offsetWidth;
+    const { left: visualLeftOffset, right: visualRightOffset, top: visualTopOffset, bottom: visualBottomOffset } = getVisualExtents(panel);
+    const visualWidth = visualRightOffset - visualLeftOffset;
+    const visualHeight = visualBottomOffset - visualTopOffset;
 
     if (currentTop > lastTop) { // New row detected
       xCursor = 0; // Reset for the new row.
+      yCursor += rowMaxVisualHeight; // Move y-cursor down by the height of the previous row
+      rowMaxVisualHeight = 0; // Reset max height for the new row
     }
 
-    // The new left position is the cursor plus the panel's own left margin.
-    panel.style.left = (xCursor + marginLeft) + 'px';
+    // Calculate the panel's `left` style property.
+    // We need to shift the panel to the right so that its leftmost visual part
+    // (which could be an external button with a negative `left` style)
+    // starts at the cursor.
+    panel.style.left = (xCursor - visualLeftOffset) + 'px';
 
-    // Advance the cursor by the full space this panel occupies, plus the gap for the next one.
-    xCursor += marginLeft + panelWidth + marginRight + GAP;
+    // Calculate and apply the panel's `top` style property.
+    panel.style.top = (yCursor - visualTopOffset) + 'px';
+
+    // Advance the x-cursor for the next panel in the row.
+    xCursor += visualWidth + GAP;
     
+    // Update the maximum visual height for the current row.
+    rowMaxVisualHeight = Math.max(rowMaxVisualHeight, visualHeight + GAP);
+
     lastTop = currentTop;
   }
 }
