@@ -87,3 +87,7 @@
 
 /* Optional: if a duplicate labels row sneaks in below the grid, hide it */
 .cw-grid + .cw-bar-heads{ display:none !important; }
+
+/* Add at end of src/chordwheel.css (tap-cycle visuals) */
+.cw-neutral{width:60%;height:18%;border-radius:6px;background:#cbd5e1;box-shadow:0 0 0 2px rgba(255,255,255,.05) inset}
+.cw-gap{width:34%;height:34%;border-radius:999px;border:1px dashed #475569;opacity:.6}

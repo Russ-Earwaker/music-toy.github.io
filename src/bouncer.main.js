@@ -304,35 +304,9 @@ export function createBouncer(selector){
 
   
   function doRandom(){
-    const pr = Number(panel?.dataset?.priority || '1') || 1;
-    const density = getPoliteDensityForToy(toyId, 1, pr);
-    const N = blocks.length;
+    // In standard view, the "Random" button now only spawns a new ball in a random, clear location.
+    // The "Random Cubes" and "Random Notes" buttons in advanced view handle the other randomization tasks.
     const w = physW(), h = physH();
-    const baseBW = Math.round(w * 0.6), baseBH = Math.round(h * 0.6);
-    const K = Math.max(1, Math.min(N, Math.round(1 + density * (N - 1))));
-    const areaScale = 0.5 + 0.5 * density;
-    const bw = Math.max(EDGE*4, Math.round(baseBW * areaScale));
-    const bh = Math.max(EDGE*4, Math.round(baseBH * areaScale));
-    const bx = Math.round((w - bw) / 2);
-    const by = Math.round((h - bh) / 2);
-    randomizeRects(blocks, {x:bx, y:by, w:bw, h:bh}, EDGE);
-    try { window.syncAnchorsFromBlocks(); } catch {}
-    const picks = [];
-    if (K >= N) {
-      for (let i = 0; i < N; i++) picks.push(i);
-    } else {
-      const uniq = [];
-      while (uniq.length < K) {
-        const r = (Math.random() * N) | 0;
-        if (!uniq.includes(r)) uniq.push(r);
-      }
-      picks.push(uniq);
-    }
-    for (let i = 0; i < N; i++) blocks[i].active = false;
-    for (const i of picks) if (blocks[i]) blocks[i].active = true;
-    randomizeControllers(edgeControllers, noteList);
-
-    // Randomly spawn a ball in a clear space
     const r = ballR();
     const spawnableW = w - 2 * (EDGE + r + 4);
     const spawnableH = h - 2 * (EDGE + r + 4);
@@ -360,6 +334,46 @@ export function createBouncer(selector){
     spawnBallFrom({ x, y, vx, vy, r });
   }
 
+  function doRandomCubes() {
+    const pr = Number(panel?.dataset?.priority || '1') || 1;
+    const density = getPoliteDensityForToy(toyId, 1, pr);
+    const N = blocks.length;
+    const w = physW(), h = physH();
+    const baseBW = Math.round(w * 0.6), baseBH = Math.round(h * 0.6);
+    const K = Math.max(1, Math.min(N, Math.round(1 + density * (N - 1))));
+    const areaScale = 0.5 + 0.5 * density;
+    const bw = Math.max(EDGE*4, Math.round(baseBW * areaScale));
+    const bh = Math.max(EDGE*4, Math.round(baseBH * areaScale));
+    const bx = Math.round((w - bw) / 2);
+    const by = Math.round((h - bh) / 2);
+    randomizeRects(blocks, {x:bx, y:by, w:bw, h:bh}, EDGE);
+    try { window.syncAnchorsFromBlocks(); } catch {}
+    
+    let picks = [];
+    if (K >= N) {
+      picks = Array.from({length: N}, (_, i) => i);
+    } else {
+      const uniq = [];
+      while (uniq.length < K) {
+        const r = (Math.random() * N) | 0;
+        if (!uniq.includes(r)) uniq.push(r);
+      }
+      picks = uniq;
+    }
+
+    for (let i = 0; i < N; i++) { if (blocks[i]) blocks[i].active = false; }
+    for (const i of picks) { if (blocks[i]) blocks[i].active = true; }
+  }
+
+  function doRandomNotes() {
+    randomizeControllers(edgeControllers, noteList);
+    const pal = buildPentatonicPalette(noteList, 'C4', 'minor', 1);
+    for (let i = pal.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pal[i], pal[j]] = [pal[j], pal[i]];
+    }
+    for (let i=0;i<blocks.length;i++) { if (blocks[i]) blocks[i].noteIndex = pal[i % pal.length]; }
+  }
   
   function doReset(){
     ball = null; lastLaunch = null;
@@ -368,6 +382,8 @@ export function createBouncer(selector){
   }
 
   panel.addEventListener('toy-random', doRandom);
+  panel.addEventListener('toy-random-cubes', doRandomCubes);
+  panel.addEventListener('toy-random-notes', doRandomNotes);
   panel.addEventListener('toy-reset', doReset);
   panel.addEventListener('toy-clear', doReset);
   panel.addEventListener('toy-zoom', (e)=>{ try{ sizing.setZoom && sizing.setZoom(!!(e?.detail?.zoomed)); updateSpeedVisibility && updateSpeedVisibility(); }catch{} });

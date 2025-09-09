@@ -112,6 +112,37 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
     }
   }
 
+  // Bouncer has special button logic to swap "Random" for two more specific buttons in advanced mode.
+  if (toyKind === 'bouncer') {
+    const randomBtn = right.querySelector('[data-action="random"]');
+
+    // Ensure the advanced-only buttons exist.
+    let randomNotesBtn = right.querySelector('[data-action="random-notes"]');
+    if (!randomNotesBtn) {
+      randomNotesBtn = btn('Random Notes'); randomNotesBtn.dataset.action = 'random-notes'; right.appendChild(randomNotesBtn);
+    }
+    let randomCubesBtn = right.querySelector('[data-action="random-cubes"]');
+    if (!randomCubesBtn) {
+      randomCubesBtn = btn('Random Cubes'); randomCubesBtn.dataset.action = 'random-cubes'; right.appendChild(randomCubesBtn);
+    }
+
+    // This function explicitly sets the visibility of the buttons based on the view mode.
+    // This is more robust than relying purely on CSS.
+    const updateVisibility = () => {
+      const isAdvanced = panel.classList.contains('toy-zoomed');
+      // The main "Random" button is visible in standard view, hidden in advanced.
+      if (randomBtn) {
+        randomBtn.style.display = isAdvanced ? 'none' : 'inline-block';
+      }
+      // The specific "Random Notes" and "Random Cubes" buttons are visible in advanced, hidden in standard.
+      // We set display explicitly to 'inline-block' to override any conflicting CSS rules.
+      if (randomNotesBtn) randomNotesBtn.style.display = isAdvanced ? 'inline-block' : 'none';
+      if (randomCubesBtn) randomCubesBtn.style.display = isAdvanced ? 'inline-block' : 'none';
+    }
+    updateVisibility(); // Set initial state
+    panel.addEventListener('toy-zoom', updateVisibility); // Update on view change
+  }
+
   // Instrument select (header, hidden in standard)
   const sel = buildInstrumentSelect(panel);
   // Replace select with a button that opens the picker (keep select for fallback/state only)

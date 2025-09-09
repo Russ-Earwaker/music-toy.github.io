@@ -1,7 +1,7 @@
-// src/chordwheel.js — stable build (no dynamic imports), no tabs, simple highlighting
+// src/chordwheel.js — chord wheel with 4‑state tap cycle (Up ↔ Neutral ↔ Down ↔ Gap)
 import { initToyUI } from './toyui.js';
 import { NUM_STEPS, getLoopInfo } from './audio-core.js';
-import { triggerNoteForToy } from './audio-trigger.js'; // static import to avoid per-tick dynamic import
+import { triggerNoteForToy } from './audio-trigger.js'; // static import (perf-safe)
 
 // --- Roman numeral helper (major key) ---
 function roman(deg) {
@@ -27,30 +27,28 @@ export function createChordWheel(panel){
   wrap.appendChild(flex);
   body.appendChild(wrap);
 
-  // Wheel (top)
+  // --- SVG Wheel (8 slices) ---
   const wheel = buildWheelSVG(180);
   flex.appendChild(wheel.svg);
 
-  // Timeline (under wheel)
+  // --- Timeline (under wheel) ---
   const tl = buildTimeline();
   flex.appendChild(tl.root);
-
-  // Colors
   tl.setBarColors(COLORS);
 
-  // Harmony helpers
-  const MAJOR_SCALE = [0,2,4,5,7,9,11];
-  function degreeToTriadMidi(deg, tonic=60){
+  // ----- Harmony helpers -----
+  const MAJOR_SCALE = [0,2,4,5,7,9,11]; // semitones from tonic
+  function degreeToTriadMidi(deg, tonic=60){ // tonic C4 default
     const idx = (deg-1) % 7;
     const root = tonic + MAJOR_SCALE[idx];
     const third = tonic + MAJOR_SCALE[(idx+2)%7];
     const fifth = tonic + MAJOR_SCALE[(idx+4)%7];
-    return [root-12, third-12, fifth-12];
+    return [root-12, third-12, fifth-12]; // drop an octave for warmth
   }
   function maybeAddSeventh(triad){
-    if (Math.random() < 0.25){
+    if (Math.random() < 0.25){ // optional color
       const rootMidi = triad[0]+12;
-      const pc = ((rootMidi-60)%12+12)%12;
+      const pc = ((rootMidi - 60) % 12 + 12) % 12;
       let idx = 0; for (let i=0;i<7;i++){ if (MAJOR_SCALE[i]===pc) { idx=i; break; } }
       const seventh = 60 + MAJOR_SCALE[(idx+6)%7] - 12;
       return [...triad, seventh];
@@ -71,43 +69,61 @@ export function createChordWheel(panel){
     return seq;
   }
 
-  // Patterns: 0=mute, 1=down, 2=up
-  const patterns = Array.from({length:8}, ()=> Array(16).fill(0));
+  // Pattern states per segment (8 × 16):
+  // -1 = gap (mute), 0 = neutral (block chord), 1 = down strum, 2 = up strum
+  const patterns = Array.from({length:8}, ()=> Array(16).fill(-1)); // start silent until Random/taps
 
   // State
   let activeSeg = 0;
   let progression = [1,5,6,4,1,5,6,4];
+
+  // Initial labels & render
   wheel.setLabels(progression);
   tl.renderSlots(patterns[activeSeg]);
 
   // Interactions
-  tl.onToggle = (ix)=> { const cur = patterns[activeSeg][ix]||0; patterns[activeSeg][ix] = (cur+1)%3; tl.renderSlots(patterns[activeSeg]); };
-  wheel.onPick = (seg)=> { activeSeg = seg; tl.renderSlots(patterns[seg]); };
-
-  // Randomize active segment
-  tl.onRand = ()=> {
-    const strokeProb = 0.5 + Math.random()*0.3;
-    patterns[activeSeg] = Array.from({length:16}, ()=> (Math.random()>strokeProb) ? 0 : (Math.random()<0.5?1:2));
+  tl.onToggle = (ix)=> {
+    const cur = patterns[activeSeg][ix] ?? -1;
+    // Cycle order: Up(2) → Neutral(0) → Down(1) → Gap(-1) → Up...
+    const order = [2,0,1,-1];
+    const next = order[(order.indexOf(cur)+1) % order.length];
+    patterns[activeSeg][ix] = next;
     tl.renderSlots(patterns[activeSeg]);
   };
-  tl.onClear = ()=> { patterns[activeSeg] = Array(16).fill(0); tl.renderSlots(patterns[activeSeg]); };
+  wheel.onPick = (seg)=> { activeSeg = seg; tl.renderSlots(patterns[seg]); };
+
+  // Randomize only active segment
+  tl.onRand = ()=> {
+    const p = [];
+    for (let i=0;i<16;i++){
+      const r = Math.random();
+      p[i] = (r < 0.25) ? -1 : (r < 0.5) ? 0 : (r < 0.75 ? 1 : 2);
+    }
+    patterns[activeSeg] = p;
+    tl.renderSlots(patterns[activeSeg]);
+  };
+  tl.onClear = ()=> { patterns[activeSeg] = Array(16).fill(-1); tl.renderSlots(patterns[activeSeg]); };
 
   // Header-wide random/clear
   panel.addEventListener('toy-random', ()=>{
     progression = randomProgression8();
     wheel.setLabels(progression);
-    const strokeProb = 0.45 + Math.random()*0.35;
     for (let seg=0; seg<8; seg++){
-      patterns[seg] = Array.from({length:16}, ()=> (Math.random()>strokeProb) ? 0 : (Math.random()<0.5?1:2));
+      const p = [];
+      for (let i=0;i<16;i++){
+        const r = Math.random();
+        p[i] = (r < 0.25) ? -1 : (r < 0.5) ? 0 : (r < 0.75 ? 1 : 2);
+      }
+      patterns[seg] = p;
     }
     tl.renderSlots(patterns[activeSeg]);
   });
   panel.addEventListener('toy-clear', ()=>{
-    for (let seg=0; seg<8; seg++) patterns[seg] = Array(16).fill(0);
+    for (let seg=0; seg<8; seg++) patterns[seg] = Array(16).fill(-1);
     tl.renderSlots(patterns[activeSeg]);
   });
 
-  // Sequencer (perf-safe: only update highlight when ix changes)
+  // Sequencer (perf-safe: highlight only when ix changes)
   let lastIx = -1;
   panel.dataset.steps = String(NUM_STEPS);
   panel.__sequencerStep = function step(){
@@ -122,13 +138,17 @@ export function createChordWheel(panel){
 
     if (ix !== lastIx){ tl.highlight(ix); lastIx = ix; }
 
-    const st = (patterns[seg] && patterns[seg][ix]) || 0;
-    if (st){
+    const st = (patterns[seg] && patterns[seg][ix]);
+    if (st !== -1){
       const chord = buildChord(progression[seg]||1);
-      const order = (st===2) ? [...chord].reverse() : chord;
-      const toyId = panel.dataset.toyid || panel.id || 'chordwheel-1';
-      // Very short roll for strum feel; tiny amount of timeouts
-      order.forEach((m,i)=> setTimeout(()=> triggerNoteForToy(toyId, m, 0.9 - i*0.08), i*14));
+      if (st === 0){
+        // Neutral block: near-simultaneous
+        chord.forEach((m,i)=> triggerNoteForToy(panel.dataset.toyid || panel.id || 'chordwheel-1', m, 0.95 - i*0.06));
+      } else {
+        // Up/Down short roll for strum feel
+        const order = (st===2) ? [...chord].reverse() : chord;
+        order.forEach((m,i)=> setTimeout(()=> triggerNoteForToy(panel.dataset.toyid || panel.id || 'chordwheel-1', m, 0.9 - i*0.08), i*14));
+      }
     }
   };
 }
@@ -209,7 +229,7 @@ function buildTimeline(){
   const slots = [];
   for (let i=0;i<16;i++){
     const s = el('div','cw-slot');
-    s.innerHTML = ARROW_SVG(i%2===0 ? 'down':'up');
+    s.innerHTML = iconForState(-1); // start silent (gap)
     s.addEventListener('click', ()=> onToggle(i));
     slots.push(s); slotGrid.appendChild(s);
   }
@@ -225,17 +245,13 @@ function buildTimeline(){
   }
   function renderSlots(states){
     slots.forEach((s,i)=> {
-      const st = states[i]||0;
-      s.classList.toggle('active', st!==0);
-      const svg = s.querySelector('svg');
-      if (svg) svg.style.transform = (st===2 ? 'rotate(180deg)' : '');
+      const st = states[i] ?? -1;
+      s.classList.toggle('active', st!==-1);
       s.dataset.state = String(st);
+      s.innerHTML = iconForState(st);
     });
   }
   function highlight(ix){
-    const prev = heads.querySelector('.cw-head.active');
-    if (prev) prev.classList.remove('active');
-    // outline current slot only (less DOM churn)
     slots.forEach((s,i)=> s.style.outline = (i===ix)?'2px solid rgba(255,255,255,.15)':'none');
   }
 
@@ -243,11 +259,11 @@ function buildTimeline(){
            onToggle: fn=>onToggle=fn, onRand: fn=>onRand=fn, onClear: fn=>onClear=fn };
 }
 
-function ARROW_SVG(kind){
-  const rotate = kind==='down' ? '' : 'transform:rotate(180deg)';
-  return `<svg class="cw-arrow" viewBox="0 0 100 100" style="${rotate}; pointer-events:none">
-    <path d="M50 12 L50 68 L34 52 L28 58 L50 82 L72 58 L66 52 L50 68 Z"/>
-  </svg>`;
+function iconForState(st){
+  if (st===2)   return `<svg class="cw-arrow" viewBox="0 0 100 100" style="transform:rotate(180deg); pointer-events:none"><path d="M50 12 L50 68 L34 52 L28 58 L50 82 L72 58 L66 52 L50 68 Z"/></svg>`;
+  if (st===1)   return `<svg class="cw-arrow" viewBox="0 0 100 100" style="pointer-events:none"><path d="M50 12 L50 68 L34 52 L28 58 L50 82 L72 58 L66 52 L50 68 Z"/></svg>`;
+  if (st===0)   return `<div class="cw-neutral"></div>`;
+  /* st === -1 */return `<div class="cw-gap"></div>`;
 }
 
 // small helpers

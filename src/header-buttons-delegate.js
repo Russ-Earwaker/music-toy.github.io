@@ -39,6 +39,10 @@
       e.preventDefault();
       panel.dispatchEvent(new CustomEvent('toy-random-blocks', { bubbles:true }));
       log('Random Blocks dispatched', panel.id||panel.dataset.toy);
+    } else if (action === 'random-cubes') {
+      e.preventDefault();
+      panel.dispatchEvent(new CustomEvent('toy-random-cubes', { bubbles:true }));
+      log('Random Cubes dispatched', panel.id||panel.dataset.toy);
     }
   }
 

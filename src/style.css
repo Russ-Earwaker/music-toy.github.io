@@ -393,11 +393,18 @@ html, body {
 .toy-zoomed .drawgrid-autotune { display: inline-block; }
 
 [data-action="close-advanced"],
-[data-action="random-notes"] { display: none; }
+[data-action="random-notes"],
+[data-action="random-blocks"],
+[data-action="random-cubes"] { display: none; }
 
 .toy-zoomed [data-action="advanced"] { display: none; }
 .toy-zoomed [data-action="close-advanced"] { display: inline-block; }
 .toy-zoomed[data-toy="loopgrid"] [data-action="random-notes"] { display: inline-block; }
+.toy-zoomed[data-toy="bouncer"] [data-action="random"] { display: none; }
+.toy-zoomed[data-toy="bouncer"] [data-action="random-notes"] { display: inline-block; }
+.toy-zoomed[data-toy="bouncer"] [data-action="random-cubes"] { display: inline-block; }
+.toy-zoomed[data-toy="rippler"] [data-action="random-notes"],
+.toy-zoomed[data-toy="rippler"] [data-action="random-blocks"] { display: inline-block; }
 
 /* Debug pulse animation */
 @keyframes advPulse {
