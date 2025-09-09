@@ -143,6 +143,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       clearBtn.title = 'Clear';
       clearBtn.style.setProperty('--c-btn-size', '65px');
       clearBtn.style.setProperty('--accent', '#f87171');
+      clearBtn.style.marginLeft = '10px'; // Add a small margin to nudge it to the right.
       clearBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonClear.png');"></div>`;
       left.appendChild(clearBtn);
     }
