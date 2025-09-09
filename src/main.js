@@ -3,6 +3,7 @@ import './bouncer-init.js';
 import './header-buttons-delegate.js';
 import './rippler-init.js';
 import { initDrawGrid } from './drawgrid-init.js';
+import { applyStackingOrder } from './stacking-manager.js';
 
 import './toy-audio.js';
 import './toy-layout-manager.js';
@@ -11,6 +12,53 @@ import { initAudioAssets } from './audio-samples.js';
 import { DEFAULT_BPM, NUM_STEPS, ensureAudioContext, getLoopInfo, setBpm, start, isRunning } from './audio-core.js';
 import { createLoopIndicator } from './loopindicator.js';
 import { buildGrid } from './drum-core.js';
+
+/**
+ * Post-processes the layout of toy panels to prevent overlaps.
+ * This runs after `organizeBoard()` and shifts panels horizontally to account for
+ * their margins (which `organizeBoard` ignores) and adds a consistent gap.
+ */
+function addGapAfterOrganize() {
+  const GAP = 36; // Increased the desired visual space between toy borders.
+  const panels = Array.from(document.querySelectorAll('#board > .toy-panel'));
+  if (panels.length < 1) return;
+
+  // Sort panels by their visual position (top, then left) to process them in order.
+  panels.sort((a, b) => {
+    const topA = parseFloat(a.style.top) || 0;
+    const topB = parseFloat(b.style.top) || 0;
+    if (topA !== topB) return topA - topB;
+    // Fallback to DOM order if tops are identical (e.g., before organizeBoard runs)
+    return 0;
+  });
+
+  let lastTop = -Infinity;
+  let xCursor = 0;
+
+  for (const panel of panels) {
+    const currentTop = parseFloat(panel.style.top) || 0;
+    const styles = getComputedStyle(panel);
+    const marginLeft = parseFloat(styles.marginLeft) || 0;
+    const marginRight = parseFloat(styles.marginRight) || 0;
+    const panelWidth = panel.offsetWidth;
+
+    if (currentTop > lastTop) { // New row detected
+      xCursor = 0; // Reset for the new row.
+    }
+
+    // The new left position is the cursor plus the panel's own left margin.
+    panel.style.left = (xCursor + marginLeft) + 'px';
+
+    // Advance the cursor by the full space this panel occupies, plus the gap for the next one.
+    xCursor += marginLeft + panelWidth + marginRight + GAP;
+    
+    lastTop = currentTop;
+  }
+}
+
+// Expose layout functions to be callable from other scripts (like topbar.js)
+window.applyStackingOrder = applyStackingOrder;
+window.addGapAfterOrganize = addGapAfterOrganize;
 
 console.log('[MAIN] module start');
 const CSV_PATH = './assets/samples/samples.csv'; // optional
@@ -70,6 +118,10 @@ async function boot(){
   try{ window.setBoardScale && window.setBoardScale(1); }catch{}
   // Arrange panels if available
   try{ window.organizeBoard && window.organizeBoard(); }catch{}
+  // After organizing, apply our stacking order to ensure buttons are visible.
+  try{ applyStackingOrder(); }catch{}
+  // After all positioning, run our gap-fixer to prevent overlaps.
+  try{ addGapAfterOrganize(); }catch{}
 
   // After a short delay to let all other boot scripts (like the theme manager)
   // finish, forcefully set the instruments for the drum toys to our desired defaults.

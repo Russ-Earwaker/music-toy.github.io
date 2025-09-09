@@ -232,6 +232,13 @@ html, body {
   aspect-ratio: auto;
 }
 
+/* For the drum toy, allow overflow so the external "Edit" button is visible. */
+.toy-panel[data-toy="loopgrid"] {
+  /* overflow is now handled via inline style in toyui.js for robustness. */
+  /* Add margin to create space for the oversized external button, preventing clipping by parent containers. */
+  margin: 72px;
+}
+
 /* Loopgrid (Drum Toy): Complex grid body */
 .toy-panel[data-toy="loopgrid"] .toy-body {
   flex-grow: 0;
@@ -405,6 +412,12 @@ html, body {
 .toy-zoomed[data-toy="bouncer"] [data-action="random-cubes"] { display: inline-block; }
 .toy-zoomed[data-toy="rippler"] [data-action="random-notes"],
 .toy-zoomed[data-toy="rippler"] [data-action="random-blocks"] { display: inline-block; }
+
+/* By default, show Edit button and hide Close button */
+.toy-panel[data-toy="loopgrid"]:not(.toy-zoomed) > .c-btn[data-action="close-advanced"] { display: none; }
+/* When zoomed, hide Edit button and show Close button */
+.toy-panel.toy-zoomed[data-toy="loopgrid"] > .c-btn[data-action="advanced"] { display: none; }
+.toy-panel.toy-zoomed[data-toy="loopgrid"] > .c-btn[data-action="close-advanced"] { display: block; }
 
 /* Debug pulse animation */
 @keyframes advPulse {

@@ -10,7 +10,7 @@ function ensureHeader(panel, titleText){
   let header = panel.querySelector('.toy-header');
   if (!header){
     header = document.createElement('div'); header.className = 'toy-header';
-    const left = document.createElement('div'); left.className = 'toy-title'; left.textContent = titleText || (panel.id || panel.dataset.toy || 'Toy'); left.setAttribute('data-drag-handle', '1');
+    const left = document.createElement('div'); left.className = 'toy-title'; left.textContent = ''; left.setAttribute('data-drag-handle', '1');
     const right = document.createElement('div'); right.className = 'toy-controls-right';
     header.append(left, right); panel.prepend(header);
   }
@@ -70,30 +70,62 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
   const right = header.querySelector('.toy-controls-right');
 
   // Advanced / Close buttons (CSS toggles visibility)
-  if (!right.querySelector('[data-action="advanced"]')) {
-    const advBtn = btn('Advanced'); advBtn.dataset.action = 'advanced';
-    right.prepend(advBtn);
-  }
-  if (!right.querySelector('[data-action="close-advanced"]')) {
-    const closeBtn = btn('Close'); closeBtn.dataset.action = 'close-advanced';
-    right.prepend(closeBtn);
-  }
+    if (toyKind === 'loopgrid') {
+        // For the Drum Toy, use the new circular "Edit" button, positioned outside the panel.
+        // We append it to the panel itself, not the header.
+
+        // --- FIX: Set overflow directly to prevent clipping of the external button ---
+        // This is more robust than relying on CSS, which seems to be overridden.
+        panel.style.setProperty('overflow', 'visible', 'important');
+
+        if (!panel.querySelector(':scope > [data-action="advanced"]')) {
+            const editBtn = document.createElement('button');
+            editBtn.className = 'c-btn loopgrid-mode-btn'; editBtn.dataset.action = 'advanced'; editBtn.title = 'Edit Mode';
+            // Apply positioning directly via inline styles for maximum robustness against CSS conflicts.
+            editBtn.style.position = 'absolute';
+            editBtn.style.top = '-72px';
+            editBtn.style.left = '-72px';
+            editBtn.style.zIndex = '5';
+            editBtn.style.setProperty('--c-btn-size', '144px');
+            editBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_EditButton.png');"></div>`;
+            panel.appendChild(editBtn);
+        }
+        if (!panel.querySelector(':scope > [data-action="close-advanced"]')) {
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'c-btn loopgrid-mode-btn'; closeBtn.dataset.action = 'close-advanced'; closeBtn.title = 'Close Edit Mode';
+            closeBtn.style.position = 'absolute';
+            closeBtn.style.top = '-72px'; // Corrected for consistency
+            closeBtn.style.left = '-72px'; // Corrected for consistency
+            closeBtn.style.zIndex = '5';
+            closeBtn.style.setProperty('--c-btn-size', '144px');
+            closeBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow" style="--accent: #f87171;"></div><div class="c-btn-core" style="--c-btn-icon-url: url('data:image/svg+xml,%3Csvg xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 24 24&quot; fill=&quot;%23e6e8ef&quot;%3E%3Cpath d=&quot;M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z&quot;/%3E%3C/svg%3E');"></div>`;
+            panel.appendChild(closeBtn);
+        }
+    } else {
+        if (!right.querySelector('[data-action="advanced"]')) { const advBtn = btn('Advanced'); advBtn.dataset.action = 'advanced'; right.prepend(advBtn); }
+        if (!right.querySelector('[data-action="close-advanced"]')) { const closeBtn = btn('Close'); closeBtn.dataset.action = 'close-advanced'; right.prepend(closeBtn); }
+    }
 
   // Random / Clear buttons (delegated elsewhere)
-  if (!right.querySelector('[data-action="random"]')) {
-    const b = btn('Random'); // Default label
-    b.dataset.action='random';
-    right.appendChild(b);
-
-    // For loopgrid, the "Random" button has a different label in advanced mode.
-    if (toyKind === 'loopgrid') {
-      const updateLabel = () => {
-        const isAdvanced = panel.classList.contains('toy-zoomed');
-        b.textContent = isAdvanced ? 'Random Cubes' : 'Random';
-      };
-      updateLabel(); // Set initial text
-      panel.addEventListener('toy-zoom', updateLabel); // Update on zoom change
+  if (toyKind === 'loopgrid') {
+    // For loopgrid, create a circular random button outside the header
+    if (!panel.querySelector(':scope > [data-action="random"]')) {
+      const randomBtn = document.createElement('button');
+      randomBtn.className = 'c-btn loopgrid-mode-btn';
+      randomBtn.dataset.action = 'random';
+      randomBtn.title = 'Randomize';
+      randomBtn.style.position = 'absolute';
+      randomBtn.style.top = '-65px'; // Vertically centered with the 144px edit button
+      randomBtn.style.left = '82px'; // To the right of the 144px edit button
+      randomBtn.style.zIndex = '4'; // Below edit button
+      randomBtn.style.setProperty('--c-btn-size', '130px'); // ~10% smaller than 144px
+      randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_RandomButton.png');"></div>`;
+      panel.appendChild(randomBtn);
     }
+  } else if (!right.querySelector('[data-action="random"]')) {
+    const b = btn('Random');
+    b.dataset.action = 'random';
+    right.appendChild(b);
   }
   if (!right.querySelector('[data-action="clear"]'))  { const b = btn('Clear');  b.dataset.action='clear';  right.appendChild(b); }
 

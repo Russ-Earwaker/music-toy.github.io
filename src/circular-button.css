@@ -36,20 +36,49 @@
 
 /* 2. The inner bright glow/outline */
 .c-btn-glow {
-  inset: 3px; /* Position inside the outer border */
-  background: radial-gradient(circle, var(--accent, #5fb3ff) 0%, transparent 65%);
-  opacity: 0.4;
-  filter: blur(2px);
+  inset: 2px; /* Position just inside the outer border */
+  /* A solid border creates a distinct ring, with a blur for a soft glow effect. */
+  border: 3px solid var(--accent, cyan);
+  opacity: 0.75;
+  filter: blur(1.5px);
 }
 
 /* 3. The core interactive button with the image */
 .c-btn-core {
   inset: 5px; /* Position inside the glow */
   background-color: var(--surface, #0d141d);
+  box-shadow: inset 0 3px 8px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.3);
+  /* The core needs to be a positioning context for its ::before pseudo-element. */
+  position: relative;
+  /* Remove background properties; they will be handled by pseudo-elements */
+  background-image: none;
+}
+
+/* ::before is the colored circle background */
+.c-btn-core::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 62%; /* Slightly larger than the 60% background image */
+  height: 62%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background-color: var(--accent, cyan);
+  z-index: 1; /* Behind the icon */
+}
+
+/* ::after is the icon image, drawn on top of the circle */
+.c-btn-core::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: var(--c-btn-icon-url); /* Use custom property from JS */
   background-size: 60%;
   background-position: center;
   background-repeat: no-repeat;
-  box-shadow: inset 0 3px 8px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.3);
+  z-index: 2; /* On top of the circle */
+  transition: all 0.15s ease-out;
 }
 
 /* --- Interaction States --- */
@@ -58,6 +87,13 @@
 .c-btn:hover .c-btn-outer { border-color: rgba(255, 255, 255, 0.4); }
 .c-btn:hover .c-btn-glow { opacity: 0.8; }
 
-/* Active (pressed): core button sinks in, glow expands */
-.c-btn:active .c-btn-core { transform: scale(0.95); box-shadow: inset 0 2px 6px rgba(0,0,0,0.6); }
-.c-btn:active .c-btn-glow { transform: scale(1.05); opacity: 1; }
+.c-btn:active .c-btn-core {
+  /* Don't scale the whole core, just change the shadow to give a "pressed" feel. */
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.6);
+}
+.c-btn:active .c-btn-core::after {
+  /* Scale down the icon image and move it slightly up and left */
+  background-size: 58%;
+  background-position: 49% 49%;
+}
+.c-btn:active .c-btn-glow { opacity: 1; /* Do not scale the glow on press */ }

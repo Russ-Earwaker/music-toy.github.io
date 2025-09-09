@@ -1,99 +1,16 @@
-/* src/chordwheel.css — wide standard & advanced, perfect label alignment, white text/icons */
-
-/* ---- Tunables ---- */
 .toy-panel[data-toy="chordwheel"]{
-  --cw-col: 62px;          /* button width standard */
-  --cw-gap: 10px;          /* gap between buttons (and used in label width calc) */
+  width:auto !important; display:inline-flex; flex-direction:column;
 }
-.toy-zoomed[data-toy="chordwheel"]{
-  --cw-col: 78px;          /* button width advanced */
-  --cw-gap: 12px;
+.cw-wheel{width:100%;max-width:640px;margin:0 auto;display:block;}
+.cw-slices path.active{
+  outline:none;
+  stroke:rgba(255,255,255,.55);
+  stroke-width:2.5;
+  vector-effect:non-scaling-stroke;
+  filter:drop-shadow(0 0 6px rgba(255,255,255,.18));
 }
-
-/* ---- Layout: timeline under wheel in both modes ---- */
-.toy-panel[data-toy="chordwheel"] .cw-wrap{ display:grid; gap:14px; }
-.toy-panel[data-toy="chordwheel"] .cw-flex{ display:grid; grid-template-columns:1fr; gap:14px; }
-
-/* Break any square/aspect clamps the other toys may impose */
-.toy-panel[data-toy="chordwheel"]{ max-width:none; width:100%; }
-.toy-panel[data-toy="chordwheel"] .toy-body{
-  width:100%;
-  max-width:none;
-  height:auto;
-  min-height:unset;
-  max-height:none;
-  aspect-ratio:auto;
-}
-
-/* ---- Wheel ---- */
-.cw-wheel{ width:100%; max-width:520px; margin:0 auto; display:block; }
-
-/* ---- Timeline card ---- */
-.cw-timeline{
-  background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.015));
-  border:1px solid #1f2a3d;
-  border-radius:14px;
-  padding:16px;
-  overflow-x:auto; /* safety valve if a parent clamps width */
-}
-
-/* ---- Labels ABOVE grid, exact 2× width (including one gap) ---- */
-/* Heads use 8 columns where each column width = (2 buttons + 1 gap) */
-.cw-bar-heads{
-  display:grid;
-  grid-template-columns: repeat(8, calc(2*var(--cw-col) + var(--cw-gap)));
-  gap: 0;                 /* the width calc already includes the gap visually */
-  margin: 0 0 10px 0;
-}
-.cw-head{
-  display:flex; align-items:center; justify-content:center;
-  height:24px; border-radius:8px;
-  font:600 12px/1 system-ui;
-  color:#ffffff;          /* white text */
-  background:#94a3b8;     /* color is overridden per-segment in JS */
-}
-
-/* ---- Grid: 16 buttons using shared vars ---- */
-.cw-grid{
-  display:grid;
-  grid-template-columns: repeat(16, var(--cw-col));
-  gap: var(--cw-gap);
-}
-.cw-slot{
-  cursor:pointer;
-  aspect-ratio:1/1.05;
-  border-radius:10px;
-  display:grid; place-items:center;
-  border:1px solid #334155;
-  background:#0b111c;
-  touch-action:manipulation;
-}
-.cw-slot.active{
-  box-shadow:inset 0 8px 20px rgba(0,0,0,.35), 0 0 0 2px rgba(255,255,255,.06);
-}
-
-/* ---- Visibility improvements (no layout impact) ---- */
-.cw-btn{ color:#ffffff; }
-.cw-arrow path{ fill:#ffffff; }
-.cw-slot.playing{
-  outline:2px solid rgba(255,255,255,.25) !important;
-  box-shadow:0 0 0 2px rgba(255,255,255,.08);
-}
-/* visuals for Neutral/Gap (4‑state cycle) */
-.cw-neutral{
-  width:60%; height:18%;
-  border-radius:6px;
-  background:#cbd5e1;
-  box-shadow:0 0 0 2px rgba(255,255,255,.05) inset;
-}
-.cw-gap{
-  width:34%; height:34%;
-  border-radius:999px;
-  border:1px dashed #475569;
-  opacity:.6;
-}
-
-/* ---- Advanced overlay: roomy but bounded ---- */
-.toy-zoomed[data-toy="chordwheel"]{ width:min(100vw, 1920px) !important; height:auto; }
-.toy-zoomed[data-toy="chordwheel"] .toy-body{ width:100%; max-width:none; aspect-ratio:auto; }
-.toy-zoomed[data-toy="chordwheel"] .cw-timeline{ padding:20px; }
+.cw-ring .cw-slotring{cursor:pointer;transition:none!important;animation:none!important;transform-box:fill-box;transform-origin:center;}
+.cw-ring .cw-slotring .cw-icon{pointer-events:none;}
+.cw-ring .cw-slotring.playing .cw-icon{filter:drop-shadow(0 0 8px rgba(255,255,255,.7));}
+.cw-ring .cw-slotring:focus-visible .cw-icon{filter:drop-shadow(0 0 8px rgba(147,197,253,.9));}
+.cw-labels text{fill:#e2e8f0;font-weight:700;}

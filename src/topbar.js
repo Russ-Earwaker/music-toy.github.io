@@ -20,7 +20,12 @@
   if (!bar) return;
   bar.addEventListener('click', (e)=>{
     const b = e.target.closest('button'); if (!b) return;
-    if (b.dataset.action==='organize'){ window.organizeBoard && window.organizeBoard(); }
+    if (b.dataset.action==='organize'){
+      // Run the full layout sequence, same as on initial boot.
+      try { window.organizeBoard && window.organizeBoard(); } catch(e){}
+      try { window.applyStackingOrder && window.applyStackingOrder(); } catch(e){}
+      try { window.addGapAfterOrganize && window.addGapAfterOrganize(); } catch(e){}
+    }
     if (b.dataset.action==='reset-view'){ window.setBoardScale && window.setBoardScale(1); window.panTo && window.panTo(0,0); }
     if (b.dataset.action==='zoom-in'){ window.setBoardScale && window.setBoardScale((window.__boardScale||1)*1.1); }
     if (b.dataset.action==='zoom-out'){ window.setBoardScale && window.setBoardScale((window.__boardScale||1)/1.1); }
