@@ -29,6 +29,13 @@ const BASE_BLOCK_SIZE = 44, BASE_CANNON_R = 10, BASE_BALL_R = 7;
 export function createBouncer(selector){
   const shell = (typeof selector==='string') ? document.querySelector(selector) : selector; if (!shell) return null;
   const panel = shell.closest('.toy-panel') || shell;
+  // Prevent double-initialization, which can cause duplicate draw loops and event listeners.
+  if (panel.__bouncer_main_instance) {
+    // This warning is helpful! It indicates that two different scripts are trying to initialize the same toy.
+    console.warn('[bouncer.main] createBouncer called on an already-initialized panel. Aborting to prevent duplicates.', panel.id);
+    return panel.__bouncer_main_instance;
+  }
+
   let instrument = (panel.dataset.instrument || 'retro_square'); panel.addEventListener('toy-instrument', (e)=>{ instrument = (e?.detail?.value)||instrument; });
   let speedFactor = parseFloat((panel?.dataset?.speed)||'1.60'); // +60% faster default // 0.60 = calmer default
   const toyId = (panel?.dataset?.toy || 'bouncer').toLowerCase();
@@ -447,5 +454,6 @@ requestAnimationFrame(draw);
 
 
   function onLoop(_loopStart){} // no-op
-  return { onLoop, reset: doReset, setInstrument: (n)=>{ instrument = n || instrument; }, element: canvas };
-}
+  const instanceApi = { onLoop, reset: doReset, setInstrument: (n)=>{ instrument = n || instrument; }, element: canvas };
+  panel.__bouncer_main_instance = instanceApi;
+  return instanceApi;

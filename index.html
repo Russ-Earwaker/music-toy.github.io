@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Music Toys</title>
   <!-- The only stylesheet needed is the main style.css. The others were legacy files causing conflicts. -->
-  <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="./style.css"
+  /><link rel="stylesheet" href="./src/chordwheel.css" />
   <link rel="stylesheet" href="./rippler.css">
 </head>
 <body>
@@ -34,7 +35,7 @@
     <!-- Bouncer / Rippler -->
     <section id="toy-b1" class="toy-panel" data-toy="bouncer"></section>
     <section id="toy-r1" class="toy-panel" data-toy="rippler"></section>
-    <section id="toy-b2" class="toy-panel" data-toy="bouncer"></section>
+    <section id="chord1" class="toy-panel" data-toy="chordwheel"></section>
 
     <!-- Drawing Grid toy -->
     <section id="drawgrid1" data-instrument="AcousticGuitar" class="toy-panel" data-toy="drawgrid"></section>
@@ -46,6 +47,7 @@
   <script type="module" src="./src/board-viewport.js" defer></script>
   <script type="module" src="./src/topbar.js" defer></script>
 
+  <script type="module" src="./src/chordwheel-init.js" defer></script>
   <!-- Theme System -->
   <script type="module" src="./src/themes.js" defer></script>
   <script type="module" src="./src/theme-manager.js" defer></script>

@@ -65,6 +65,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let pendingNodeTap = null; // potential tap for toggle
   let pendingActiveMask = null; // preserve active columns across resolution changes
   let previewGid = null; // 1 or 2 while drawing a special line preview
+  let persistentDisabled = Array.from({ length: initialCols }, () => new Set()); // survives view changes
   let autoTune = true; // Default to on
   
   const safeArea = 40;
@@ -170,6 +171,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         cols = parseInt(stepsSel.value, 10);
         panel.dataset.steps = String(cols);
         flashes = new Float32Array(cols);
+        persistentDisabled = Array.from({ length: cols }, () => new Set());
         // Reset manual overrides on resolution changes to avoid mismatches
         manualOverrides = Array.from({ length: cols }, () => new Set());
         // Invalidate the node cache on all strokes since grid dimensions changed.
@@ -289,11 +291,18 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
                 if (!hasNodes) continue;
                 // With 40% chance, mute the whole column
                 const muteCol = Math.random() < 0.4;
-                currentMap.active[c] = !muteCol;
                 if (!currentMap.disabled) currentMap.disabled = Array.from({length:cols},()=>new Set());
                 const disSet = currentMap.disabled[c];
+                if (!persistentDisabled[c]) persistentDisabled[c] = new Set();
+                const pDisSet = persistentDisabled[c];
                 // Disable a bounded number of rows in active columns
-                if (!muteCol) {
+                if (muteCol) {
+                  // If muting the whole column, add all its nodes to the disabled sets
+                  for (const r of rowsSet) {
+                    disSet.add(r);
+                    pDisSet.add(r);
+                  }
+                } else {
                   const rowsArr = Array.from(rowsSet);
                   // Ensure at least one row remains enabled; if only one, disable 0
                   const maxDisable = Math.max(0, rowsArr.length - 1);
@@ -307,12 +316,14 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
                   for (let i = rowsArr.length - 1; i > 0; i--) {
                     const j = (Math.random() * (i + 1)) | 0; const t = rowsArr[i]; rowsArr[i] = rowsArr[j]; rowsArr[j] = t;
                   }
-                    for (let k = 0; k < offCount && k < rowsArr.length; k++) disSet.add(rowsArr[k]);
+                    for (let k = 0; k < offCount && k < rowsArr.length; k++) {
+                      disSet.add(rowsArr[k]);
+                      pDisSet.add(rowsArr[k]);
+                    }
                   }
-                  // Recompute active based on remaining enabled nodes
-                  const anyOn = Array.from(currentMap.nodes[c]).some(r => !disSet.has(r));
-                  currentMap.active[c] = anyOn;
                 }
+                // Always recompute active state from the final disabled set
+                currentMap.active[c] = Array.from(currentMap.nodes[c]).some(r => !disSet.has(r));
               }
             }
           } catch {}
@@ -462,11 +473,11 @@ function regenerateMapFromStrokes() {
         pendingActiveMask = null; // consume
       }
 
-      // Preserve disabled nodes where positions still exist
-      if (currentMap && Array.isArray(currentMap.disabled)) {
-        for (let c = 0; c < cols; c++) {
-          const prevDis = currentMap.disabled[c] || new Set();
-          for (const r of prevDis) { if (newMap.nodes[c]?.has(r)) newMap.disabled[c].add(r); }
+      // Preserve disabled nodes from the persistent set where positions still exist
+      for (let c = 0; c < cols; c++) {
+        const prevDis = persistentDisabled[c] || new Set();
+        for (const r of prevDis) {
+          if (newMap.nodes[c]?.has(r)) newMap.disabled[c].add(r);
         }
       }
       // Recompute active flags based on disabled sets
@@ -479,6 +490,7 @@ function regenerateMapFromStrokes() {
 
       currentMap = newMap;
       nodeGroupMap = newGroups;
+      persistentDisabled = currentMap.disabled; // Update persistent set
       try { (panel.__dgUpdateButtons || function(){})() } catch {}
       panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
       drawNodes(currentMap.nodes);
@@ -1078,11 +1090,10 @@ function regenerateMapFromStrokes() {
 
             if (currentMap && currentMap.nodes[col]) {
                 // Do not remove groups or nodes; mark it disabled instead so connections persist (but gray)
-                if (!currentMap.disabled) currentMap.disabled = Array.from({length:cols},()=>new Set());
-                currentMap.disabled[col].add(row);
+                if (!persistentDisabled[col]) persistentDisabled[col] = new Set();
+                persistentDisabled[col].add(row);
                 // If no enabled nodes remain, mark column inactive
-                const dis = currentMap.disabled[col];
-                const anyOn = Array.from(currentMap.nodes[col] || []).some(r => !dis.has(r));
+                const anyOn = Array.from(currentMap.nodes[col] || []).some(r => !persistentDisabled[col].has(r));
                 currentMap.active[col] = anyOn;
             }
 
@@ -1292,12 +1303,12 @@ function regenerateMapFromStrokes() {
           nodes:Array.from({length:cols},()=>new Set()),
           disabled:Array.from({length:cols},()=>new Set()),
         };
-      } else if (!currentMap.disabled) {
-        currentMap.disabled = Array.from({length:cols},()=>new Set());
       }
 
-      const dis = currentMap.disabled[col];
+      const dis = persistentDisabled[col] || new Set();
       if (dis.has(row)) dis.delete(row); else dis.add(row);
+      persistentDisabled[col] = dis;
+      currentMap.disabled[col] = dis;
       // Recompute column active: any node present and not disabled
       const anyOn = Array.from(currentMap.nodes[col] || []).some(r => !dis.has(r));
       currentMap.active[col] = anyOn;
