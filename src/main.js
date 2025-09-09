@@ -28,14 +28,25 @@ function getVisualExtents(panel) {
   if (panel.dataset.toy === 'loopgrid') {
     const externalButtons = panel.querySelectorAll(':scope > .loopgrid-mode-btn');
     externalButtons.forEach(btn => {
-      const left = parseFloat(btn.style.left) || 0;
-      const top = parseFloat(btn.style.top) || 0;
       const btnSize = parseFloat(btn.style.getPropertyValue('--c-btn-size')) || 0;
-      const right = left + btnSize;
+      let btnLeft, btnRight;
+
+      if (btn.style.left) {
+        btnLeft = parseFloat(btn.style.left);
+        btnRight = btnLeft + btnSize;
+      } else if (btn.style.right) {
+        const rightOffset = parseFloat(btn.style.right);
+        btnRight = panelWidth - rightOffset;
+        btnLeft = btnRight - btnSize;
+      } else {
+        return; // Should not happen for loopgrid-mode-btn
+      }
+
+      const top = parseFloat(btn.style.top) || 0;
       const bottom = top + btnSize;
       
-      if (left < minX) minX = left;
-      if (right > maxX) maxX = right;
+      if (btnLeft < minX) minX = btnLeft;
+      if (btnRight > maxX) maxX = btnRight;
       if (top < minY) minY = top;
       if (bottom > maxY) maxY = bottom;
     });

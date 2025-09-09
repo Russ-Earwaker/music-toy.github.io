@@ -85,13 +85,17 @@ html, body {
   z-index: 2;
   display: flex;
   align-items: center;
+  /* justify-content is removed to allow for more explicit control of children */
   justify-content: space-between;
   gap: 10px;
-  padding: 8px 10px;
+  padding: 16px 10px; /* Increased vertical padding to make header taller */
   background: linear-gradient(180deg, rgba(13, 20, 29, 0.9), rgba(13, 20, 29, 0.75));
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   font-size: 14px;
+  /* Add a slight glow around the header */
+  box-shadow: 0 0 8px -2px var(--accent);
+  transition: box-shadow 0.2s ease-out;
 }
 
 .toy-body {
@@ -116,7 +120,7 @@ html, body {
   letter-spacing: 0.02em;
   color: var(--text);
 }
-.toy-title[data-drag-handle] {
+.toy-header[data-drag-handle] {
   cursor: move;
   user-select: none;
 }
@@ -124,6 +128,7 @@ html, body {
   display: flex;
   gap: 8px;
   align-items: center;
+  margin-left: auto; /* Push this container to the far right of the header */
 }
 
 /* -------------------- */
@@ -236,7 +241,29 @@ html, body {
 .toy-panel[data-toy="loopgrid"] {
   /* overflow is now handled via inline style in toyui.js for robustness. */
   /* Add margin to create space for the oversized external button, preventing clipping by parent containers. */
-  margin: 72px;
+  margin: 48px;
+}
+
+/* Make the drum toy header taller to accommodate its larger buttons. */
+.toy-panel[data-toy="loopgrid"] .toy-header {
+  min-height: 80px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+/* Use a ::before pseudo-element to create a robust, non-DOM spacer. */
+.toy-panel[data-toy="loopgrid"] .toy-header::before {
+  content: '';
+  display: block;
+  width: 52px; /* The space needed to avoid the external Edit button */
+  flex-shrink: 0; /* Prevent the spacer from shrinking */
+}
+
+/* For the drum toy, the .toy-title container holds the left-side buttons. */
+.toy-panel[data-toy="loopgrid"] .toy-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* Loopgrid (Drum Toy): Complex grid body */

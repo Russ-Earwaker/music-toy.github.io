@@ -10,9 +10,17 @@ function ensureHeader(panel, titleText){
   let header = panel.querySelector('.toy-header');
   if (!header){
     header = document.createElement('div'); header.className = 'toy-header';
-    const left = document.createElement('div'); left.className = 'toy-title'; left.textContent = ''; left.setAttribute('data-drag-handle', '1');
+    header.setAttribute('data-drag-handle', '1'); // Make the whole header draggable
+    const left = document.createElement('div'); left.className = 'toy-title'; left.textContent = '';
     const right = document.createElement('div'); right.className = 'toy-controls-right';
     header.append(left, right); panel.prepend(header);
+  } else {
+    // Ensure existing headers are also draggable and not just the title.
+    if (!header.hasAttribute('data-drag-handle')) {
+      header.setAttribute('data-drag-handle', '1');
+      const title = header.querySelector('.toy-title[data-drag-handle]');
+      if (title) title.removeAttribute('data-drag-handle');
+    }
   }
   return header;
 }
@@ -63,11 +71,16 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
   ensureBody(panel);
   const footer = ensureFooter(panel);
 
+  // Get header height for positioning external buttons. This must be read after
+  // the header is in the DOM and has its content.
+  const headerHeight = header.offsetHeight;
+
   // Centrally install the volume UI for every toy.
   installVolumeUI(footer);
 
   // Controls
   const right = header.querySelector('.toy-controls-right');
+  const left = header.querySelector('.toy-title');
 
   // Advanced / Close buttons (CSS toggles visibility)
     if (toyKind === 'loopgrid') {
@@ -82,22 +95,24 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
             const editBtn = document.createElement('button');
             editBtn.className = 'c-btn loopgrid-mode-btn'; editBtn.dataset.action = 'advanced'; editBtn.title = 'Edit Mode';
             // Apply positioning directly via inline styles for maximum robustness against CSS conflicts.
+            const btnSize = 96;
             editBtn.style.position = 'absolute';
-            editBtn.style.top = '-72px';
-            editBtn.style.left = '-72px';
+            editBtn.style.top = `${headerHeight - 40}px`;
+            editBtn.style.left = '-48px';
             editBtn.style.zIndex = '5';
-            editBtn.style.setProperty('--c-btn-size', '144px');
+            editBtn.style.setProperty('--c-btn-size', `${btnSize}px`);
             editBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonEdit.png');"></div>`;
             panel.appendChild(editBtn);
         }
         if (!panel.querySelector(':scope > [data-action="close-advanced"]')) {
             const closeBtn = document.createElement('button');
             closeBtn.className = 'c-btn loopgrid-mode-btn'; closeBtn.dataset.action = 'close-advanced'; closeBtn.title = 'Close Edit Mode';
+            const btnSize = 96;
             closeBtn.style.position = 'absolute';
-            closeBtn.style.top = '-72px'; // Corrected for consistency
-            closeBtn.style.left = '-72px'; // Corrected for consistency
+            closeBtn.style.top = `${headerHeight - btnSize}px`;
+            closeBtn.style.left = '-48px';
             closeBtn.style.zIndex = '5';
-            closeBtn.style.setProperty('--c-btn-size', '144px');
+            closeBtn.style.setProperty('--c-btn-size', `${btnSize}px`);
             closeBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow" style="--accent: #f87171;"></div><div class="c-btn-core" style="--c-btn-icon-url: url('data:image/svg+xml,%3Csvg xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 24 24&quot; fill=&quot;%23e6e8ef&quot;%3E%3Cpath d=&quot;M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z&quot;/%3E%3C/svg%3E');"></div>`;
             panel.appendChild(closeBtn);
         }
@@ -108,34 +123,33 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
 
   // Random / Clear buttons (delegated elsewhere)
   if (toyKind === 'loopgrid') {
-    // For loopgrid, create circular random and clear buttons outside the header
-    if (!panel.querySelector(':scope > [data-action="random"]')) {
+    // For loopgrid, Random and Clear buttons are circular and inside the header on the left.
+    // First, remove any old external buttons to be safe.
+    panel.querySelectorAll(':scope > .loopgrid-mode-btn[data-action="random"], :scope > .loopgrid-mode-btn[data-action="clear"]').forEach(btn => btn.remove());
+
+    if (!left.querySelector('[data-action="random"]')) {
       const randomBtn = document.createElement('button');
-      randomBtn.className = 'c-btn loopgrid-mode-btn';
+      randomBtn.className = 'c-btn';
       randomBtn.dataset.action = 'random';
       randomBtn.title = 'Randomize';
-      randomBtn.style.position = 'absolute';
-      randomBtn.style.top = '-65px'; // Vertically centered with the 144px edit button
-      randomBtn.style.left = '82px'; // To the right of the 144px edit button
-      randomBtn.style.zIndex = '4'; // Below edit button
-      randomBtn.style.setProperty('--c-btn-size', '130px'); // ~10% smaller than 144px
+      randomBtn.style.setProperty('--c-btn-size', '65px');
       randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandom.png');"></div>`;
-      panel.appendChild(randomBtn);
+      left.appendChild(randomBtn);
     }
-    if (!panel.querySelector(':scope > [data-action="clear"]')) {
+    if (!left.querySelector('[data-action="clear"]')) {
       const clearBtn = document.createElement('button');
-      clearBtn.className = 'c-btn loopgrid-mode-btn';
+      clearBtn.className = 'c-btn';
       clearBtn.dataset.action = 'clear';
       clearBtn.title = 'Clear';
-      clearBtn.style.position = 'absolute';
-      clearBtn.style.top = '-65px'; // Align with Random button
-      clearBtn.style.left = '222px'; // To the right of the Random button
-      clearBtn.style.zIndex = '4';
-      clearBtn.style.setProperty('--c-btn-size', '130px'); // Same size as Random button
+      clearBtn.style.setProperty('--c-btn-size', '65px');
       clearBtn.style.setProperty('--accent', '#f87171');
       clearBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonClear.png');"></div>`;
-      panel.appendChild(clearBtn);
+      left.appendChild(clearBtn);
     }
+
+    // Apply margin directly via inline style for maximum robustness against CSS overrides.
+    // This creates the space needed to avoid the external "Edit" button.
+    left.style.setProperty('margin-left', '47px', 'important');
   } else {
     // For other toys, use standard buttons
     if (!right.querySelector('[data-action="random"]')) {
@@ -216,14 +230,11 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
   instBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonInstruments.png');"></div>`;
 
   if (toyKind === 'loopgrid') {
-    instBtn.classList.add('loopgrid-mode-btn');
-    instBtn.style.position = 'absolute';
-    instBtn.style.top = '-65px'; // Align with Random/Clear buttons
-    instBtn.style.left = '362px'; // To the right of the Clear button
-    instBtn.style.zIndex = '4';
-    instBtn.style.setProperty('--c-btn-size', '130px'); // Same size as Random/Clear
-    panel.appendChild(instBtn);
+    // For loopgrid, put a large instrument button inside the header.
+    instBtn.style.setProperty('--c-btn-size', '65px');
+    right.appendChild(instBtn);
   } else {
+    // All other toys get a small instrument button inside the header on the far right.
     instBtn.style.setProperty('--c-btn-size', '38px');
     right.appendChild(instBtn);
   }
