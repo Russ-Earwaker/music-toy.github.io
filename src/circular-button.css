@@ -1,0 +1,63 @@
+/* src/circular-button.css */
+/* A reusable, layered circular button component. */
+
+.c-btn {
+  /* Sizing and base styles */
+  --c-btn-size: 50px;
+  position: relative;
+  width: var(--c-btn-size);
+  height: var(--c-btn-size);
+  
+  /* Reset button styles */
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 50%;
+  
+  /* For focus outlines */
+  outline-offset: 4px;
+}
+
+/* All layers are absolutely positioned circles */
+.c-btn > div {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  border-radius: 50%;
+  pointer-events: none; /* Clicks pass through to the parent button */
+  transition: all 0.15s ease-out;
+}
+
+/* 1. The outermost border */
+.c-btn-outer {
+  border: 2px solid rgba(255, 255, 255, 0.15);
+}
+
+/* 2. The inner bright glow/outline */
+.c-btn-glow {
+  inset: 3px; /* Position inside the outer border */
+  background: radial-gradient(circle, var(--accent, #5fb3ff) 0%, transparent 65%);
+  opacity: 0.4;
+  filter: blur(2px);
+}
+
+/* 3. The core interactive button with the image */
+.c-btn-core {
+  inset: 5px; /* Position inside the glow */
+  background-color: var(--surface, #0d141d);
+  background-size: 60%;
+  background-position: center;
+  background-repeat: no-repeat;
+  box-shadow: inset 0 3px 8px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.3);
+}
+
+/* --- Interaction States --- */
+
+/* Hover: brighten up the borders and glow */
+.c-btn:hover .c-btn-outer { border-color: rgba(255, 255, 255, 0.4); }
+.c-btn:hover .c-btn-glow { opacity: 0.8; }
+
+/* Active (pressed): core button sinks in, glow expands */
+.c-btn:active .c-btn-core { transform: scale(0.95); box-shadow: inset 0 2px 6px rgba(0,0,0,0.6); }
+.c-btn:active .c-btn-glow { transform: scale(1.05); opacity: 1; }

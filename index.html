@@ -6,7 +6,8 @@
   <title>Music Toys</title>
   <!-- The only stylesheet needed is the main style.css. The others were legacy files causing conflicts. -->
   <link rel="stylesheet" href="./style.css"
-  /><link rel="stylesheet" href="./src/chordwheel.css" />
+  /><link rel="stylesheet" href="./src/chordwheel.css"
+  /><link rel="stylesheet" href="./src/circular-button.css" />
   <link rel="stylesheet" href="./rippler.css">
 </head>
 <body>
@@ -19,6 +20,18 @@
       </div>
       
       <button class="toy-btn" data-action="organize">Organize</button>
+      <!-- Example of new circular buttons -->
+      <button class="c-btn" style="--c-btn-size: 38px;" title="Play">
+        <div class="c-btn-outer"></div>
+        <div class="c-btn-glow"></div>
+        <div class="c-btn-core" style="background-image: url('data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'%23e6e8ef\'%3E%3Cpath d=\'M8 5v14l11-7z\'/%3E%3C/svg%3E');"></div>
+      </button>
+      <button class="c-btn" style="--c-btn-size: 38px; --accent: #f87171;" title="Stop">
+        <div class="c-btn-outer"></div>
+        <div class="c-btn-glow"></div>
+        <div class="c-btn-core" style="background-image: url('data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'%23e6e8ef\'%3E%3Cpath d=\'M6 6h12v12H6z\'/%3E%3C/svg%3E');"></div>
+      </button>
+      <!-- End of example -->
       <button class="toy-btn" data-action="reset-view">Reset View</button>
       <button class="toy-btn" data-action="zoom-out">−</button>
       <button class="toy-btn" data-action="zoom-in">+</button>
