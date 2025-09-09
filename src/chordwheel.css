@@ -1,52 +1,44 @@
-/* src/chordwheel.css — phone-friendly styles for the Chord Wheel toy */
-.toy-panel[data-toy="chordwheel"] .cw-wrap{display:grid;gap:10px}
-.toy-panel[data-toy="chordwheel"] .cw-flex{display:grid;grid-template-columns:1fr;gap:10px}
-@media(min-width:900px){.toy-panel[data-toy="chordwheel"] .cw-flex{grid-template-columns:360px 1fr}}
+/* chordwheel.css — wide in both views, timeline under wheel, standard names */
 
-.cw-wheel{width:100%;max-width:380px;margin:0 auto;display:block}
-.cw-legend{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
-.cw-pill{font:600 12px/1.2 system-ui;padding:6px 10px;border-radius:999px;border:1px solid #2b344a;background:#0f1625;color:#cbd5e1}
+/* Base layout */
+.toy-panel[data-toy="chordwheel"] .cw-wrap{display:grid;gap:14px}
+.toy-panel[data-toy="chordwheel"] .cw-flex{display:grid;grid-template-columns:1fr;gap:14px}
 
-.cw-timeline{background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.015));border:1px solid #1f2a3d;border-radius:14px;padding:10px}
-.cw-bar-heads{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin-bottom:8px}
+/* Ensure the toy can expand; avoid hidden max-widths */
+.toy-panel[data-toy="chordwheel"]{max-width:none !important; width:100%;}
+.toy-panel[data-toy="chordwheel"] .toy-body{max-width:none !important; width:100%; margin-inline:auto;}
+
+/* Wheel sizing */
+.cw-wheel{width:100%;max-width:500px;margin:0 auto;display:block}
+
+/* Timeline */
+.cw-timeline{background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.015));border:1px solid #1f2a3d;border-radius:14px;padding:16px}
+
+/* Bar heads */
+.cw-bar-heads{display:grid;grid-template-columns:repeat(8,1fr);gap:8px;margin-bottom:12px}
 .cw-head{height:16px;border-radius:8px}
 
-.cw-grid{display:grid;grid-template-columns:repeat(16, minmax(20px,1fr));gap:6px}
+/* --------- Strum grid sizes --------- */
+/* Standard view: fixed comfortable slot width; will scroll if parent is too narrow */
+.cw-grid{display:grid;grid-template-columns:repeat(16, 60px);gap:10px}
 .cw-slot{cursor:pointer; aspect-ratio:1/1.05;border-radius:10px;display:grid;place-items:center;border:1px solid #334155;background:#0b111c;touch-action:manipulation}
 .cw-slot.active{box-shadow:inset 0 8px 20px rgba(0,0,0,.35), 0 0 0 2px rgba(255,255,255,.06);}
-.cw-arrow{width:70%;height:70%}
-.cw-arrow path{fill:#8091b3}
-.cw-slot.active .cw-arrow path{fill:#e5e7eb}
+.cw-arrow{width:72%;height:72%}
+.toy-panel[data-toy="chordwheel"] .cw-arrow{ pointer-events:none; } /* ensure taps land on slot */
 
-.cw-tabs{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin-top:8px}
-.cw-tab{padding:8px;border-radius:10px;border:1px solid #233049;background:#0d1423;color:#cbd5e1;text-align:center;font:600 12px/1 system-ui;cursor:pointer}
+/* Tabs + footer */
+.cw-tabs{display:grid;grid-template-columns:repeat(8,1fr);gap:8px;margin-top:10px}
+.cw-tab{padding:9px;border-radius:10px;border:1px solid #233049;background:#0d1423;color:#cbd5e1;text-align:center;font:600 12px/1 system-ui;cursor:pointer}
 .cw-tab.active{outline:2px solid rgba(255,255,255,.14)}
-
-.cw-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
-.cw-btn{padding:8px 10px;border-radius:10px;border:1px solid #233049;background:#121a2c;color:#dbe3f3;cursor:pointer}
+.cw-footer{display:flex;gap:10px;justify-content:flex-end;margin-top:10px}
+.cw-btn{padding:9px 12px;border-radius:10px;border:1px solid #233049;background:#121a2c;color:#dbe3f3;cursor:pointer}
 .cw-btn:active{transform:translateY(1px)}
 
+/* Advanced (zoomed) view: much wider and larger slots */
+.toy-zoomed[data-toy="chordwheel"]{ width:100vw !important; max-width:none !important; height:auto; }
+.toy-zoomed[data-toy="chordwheel"] .toy-body{ width:100%; max-width:none !important; aspect-ratio:auto; }
+.toy-zoomed[data-toy="chordwheel"] .cw-grid{ grid-template-columns:repeat(16, 70px); gap:12px; }
+.toy-zoomed[data-toy="chordwheel"] .cw-timeline{ padding:20px; }
 
-/* Advanced overlay sizing for chordwheel */
-.toy-zoomed[data-toy="chordwheel"]{
-  width: min(100vw, 1900px);
-  height: auto;
-}
-.toy-zoomed[data-toy="chordwheel"] .toy-body{ aspect-ratio:auto; }
-
-/* Ensure timeline shows fully; allow wrap on small screens */
-.toy-panel[data-toy="chordwheel"] .cw-grid{ grid-template-columns: repeat(16, minmax(44px, 1fr)); }
-.toy-panel[data-toy="chordwheel"] .cw-timeline{ overflow: visible; }
-
-/* Tri-state visuals */
-.toy-panel[data-toy="chordwheel"] .cw-slot[data-state="0"] .cw-arrow path{ opacity:.25; }
-.toy-panel[data-toy="chordwheel"] .cw-slot[data-state="1"] .cw-arrow path{ opacity:.95; } /* down */
-.toy-panel[data-toy="chordwheel"] .cw-slot[data-state="2"] .cw-arrow path{ opacity:.95; } /* up */
-
-
-/* Make advanced view guaranteed wide */
-.toy-zoomed[data-toy="chordwheel"] .cw-flex{ grid-template-columns:1fr; gap:16px; }
-.toy-zoomed[data-toy="chordwheel"] .cw-grid{ grid-template-columns: repeat(16, minmax(62px, 1fr)); }
-.toy-zoomed[data-toy="chordwheel"] .cw-timeline{ padding:18px; }
-
-.toy-panel[data-toy="chordwheel"] .cw-arrow{ pointer-events:none; }
+/* If the parent still constrains width, allow horizontal scrolling on the timeline as a safety valve */
+.toy-panel[data-toy="chordwheel"] .cw-timeline{ overflow-x:auto; overflow-y:visible; }
