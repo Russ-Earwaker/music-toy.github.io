@@ -80,7 +80,21 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
   }
 
   // Random / Clear buttons (delegated elsewhere)
-  if (!right.querySelector('[data-action="random"]')) { const b = btn('Random'); b.dataset.action='random'; right.appendChild(b); }
+  if (!right.querySelector('[data-action="random"]')) {
+    const b = btn('Random'); // Default label
+    b.dataset.action='random';
+    right.appendChild(b);
+
+    // For loopgrid, the "Random" button has a different label in advanced mode.
+    if (toyKind === 'loopgrid') {
+      const updateLabel = () => {
+        const isAdvanced = panel.classList.contains('toy-zoomed');
+        b.textContent = isAdvanced ? 'Random Cubes' : 'Random';
+      };
+      updateLabel(); // Set initial text
+      panel.addEventListener('toy-zoom', updateLabel); // Update on zoom change
+    }
+  }
   if (!right.querySelector('[data-action="clear"]'))  { const b = btn('Clear');  b.dataset.action='clear';  right.appendChild(b); }
 
   // Drum-specific "Random Notes" button

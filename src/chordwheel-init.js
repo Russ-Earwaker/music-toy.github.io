@@ -4,12 +4,14 @@ import { initToyUI } from './toyui.js';
 
 function bootChordWheels(){
   document.querySelectorAll('.toy-panel[data-toy="chordwheel"]').forEach(panel=>{
-    if (panel.__toyInstance) return;
+    // Use a specific flag to prevent this boot script from running twice on the same panel.
+    // This is crucial because the MutationObserver can trigger this function multiple times.
+    if (panel.__chordwheel_booted) return;
+    panel.__chordwheel_booted = true; // Set flag immediately.
     try{
       createChordWheel(panel);
-      panel.__chordwheelBootOK = true;
     }catch(e){
-      panel.__chordwheelBootOK = false;
+      panel.__chordwheel_booted = false; // Revert on failure so it can be tried again.
       console.error('[chordwheel-init] failed', panel && (panel.id||panel.dataset.toy)||'?', e && (e.stack||e));
     }
   });

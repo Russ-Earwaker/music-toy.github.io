@@ -225,6 +225,13 @@ html, body {
   aspect-ratio: 4 / 3;
 }
 
+/* Chordwheel: Allow body to size to its content, not a fixed aspect ratio. */
+.toy-panel[data-toy="chordwheel"] .toy-body {
+  flex-grow: 0;
+  height: auto;
+  aspect-ratio: auto;
+}
+
 /* Loopgrid (Drum Toy): Complex grid body */
 .toy-panel[data-toy="loopgrid"] .toy-body {
   flex-grow: 0;
