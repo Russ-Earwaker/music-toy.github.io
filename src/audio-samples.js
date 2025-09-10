@@ -114,6 +114,19 @@ export async function initAudioAssets(csvUrl='./assets/samples/samples.csv'){
           variants.add(k.replace(/[-_\s]+/g,''));
         }
         for (const k of variants) if (k) buffers.set(normId(k), buf);
+
+        // Special handling for chord samples named like 'Guitar_Chord_Am.wav'.
+        // This creates an alias (e.g., 'am') so it can be triggered directly by name,
+        // which is what the Chord Wheel toy expects for its sample-based mode.
+        const m = /guitar_chord_([a-g]#?m?)\.wav/i.exec(fn);
+        if (m && m[1]) {
+          const chordAlias = m[1].toLowerCase();
+          if (chordAlias) {
+            const aliasKey = normId(chordAlias);
+            if (!buffers.has(aliasKey)) buffers.set(aliasKey, buf);
+            if (!entries.has(aliasKey)) entries.set(aliasKey, data);
+          }
+        }
       }
     }
   }
@@ -134,7 +147,7 @@ export function getInstrumentNames(){
 }
 
 // Try to play a preloaded sample by id
-function playSampleAt(id, when, gain=1, toyId, noteName){
+function playSampleAt(id, when, gain=1, toyId, noteName, options = {}){
   const key = normId(id);
   const buf = buffers.get(key);
   const ent = entries.get(key);
@@ -145,11 +158,15 @@ function playSampleAt(id, when, gain=1, toyId, noteName){
   if (src){
     src.buffer = buf;
 
-    // Adjust playback rate for pitch. Assume base note is C4 for all samples.
-    const baseFreq = noteToFreq('C4');
-    const targetFreq = noteToFreq(noteName || 'C4');
-    if (baseFreq > 0 && targetFreq > 0) {
-      src.playbackRate.value = targetFreq / baseFreq;
+    if (options && typeof options.playbackRate === 'number') {
+      src.playbackRate.value = options.playbackRate;
+    } else {
+      // Adjust playback rate for pitch. Assume base note is C4 for all samples.
+      const baseFreq = noteToFreq('C4');
+      const targetFreq = noteToFreq(noteName || 'C4');
+      if (baseFreq > 0 && targetFreq > 0) {
+        src.playbackRate.value = targetFreq / baseFreq;
+      }
     }
 
     const g = ctx.createGain(); g.gain.value = gain;
@@ -172,7 +189,7 @@ function playSampleAt(id, when, gain=1, toyId, noteName){
   return false;
 }
 
-export function triggerInstrument(instrument, noteName='C4', when, toyId){
+export function triggerInstrument(instrument, noteName='C4', when, toyId, options = {}){
   const ctx = ensureAudioContext();
   const id0 = String(instrument||'tone').toLowerCase();
   const id  = normId(id0);
@@ -189,11 +206,11 @@ export function triggerInstrument(instrument, noteName='C4', when, toyId){
   }catch{}
 
   // exact or alias match first
-  if (playSampleAt(id, t, 1, toyId, noteName)) { try{ window.__toyActivityAt = ensureAudioContext().currentTime; }catch{}; return; }
+  if (playSampleAt(id, t, 1, toyId, noteName, options)) { try{ window.__toyActivityAt = ensureAudioContext().currentTime; }catch{}; return; }
 
   // try family (e.g., djembe_bass -> djembe)
   const fam = id.split('_')[0];
-  if (fam !== id && playSampleAt(fam, t, 1, toyId, noteName)) { try{ window.__toyActivityAt = ensureAudioContext().currentTime; }catch{}; return; }
+  if (fam !== id && playSampleAt(fam, t, 1, toyId, noteName, options)) { try{ window.__toyActivityAt = ensureAudioContext().currentTime; }catch{}; return; }
 
   // synth alias fallback: if an entry exists whose synth matches the id, use that tone
   try{

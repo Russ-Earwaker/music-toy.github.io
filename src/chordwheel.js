@@ -21,11 +21,42 @@ function midiToName(midi) {
   return NOTE_NAMES[n] + o;
 }
 const COLORS = ['#60a5fa','#34d399','#fbbf24','#a78bfa','#f87171','#22d3ee','#eab308','#fb7185'];
+// This map now uses the simple chord names (e.g., "C", "Dm") as the `source`.
+// This matches the `instrument` IDs that are loaded from samples.csv,
+// resolving the "instrument not found" errors.
+const CHORD_SAMPLE_MAP = {
+  "C":   { source: "C",  shift: 0 },
+  "Cm":  { source: "Dm", shift: -2 },
+  "C#":  { source: "C",  shift: 1 },
+  "C#m": { source: "Em", shift: -1 },
+  "D":   { source: "C",  shift: 2 },
+  "Dm":  { source: "Dm", shift: 0 },
+  "D#":  { source: "F",  shift: -1 },
+  "D#m": { source: "Em", shift: 1 },
+  "E":   { source: "E",  shift: 0 },
+  "Em":  { source: "Em", shift: 0 },
+  "F":   { source: "F",  shift: 0 },
+  "Fm":  { source: "Am", shift: -2 },
+  "F#":  { source: "E",  shift: 2 },
+  "F#m": { source: "Em", shift: 2 },
+  "G":   { source: "G",  shift: 0 },
+  "Gm":  { source: "Am", shift: -2 },
+  "G#":  { source: "G",  shift: 1 },
+  "G#m": { source: "Am", shift: -1 },
+  "A":   { source: "G",  shift: 2 },
+  "Am":  { source: "Am", shift: 0 },
+  "A#":  { source: "C",  shift: -2 },
+  "A#m": { source: "Dm", shift: -1 },
+  "B":   { source: "G",  shift: 2 },
+  "Bm":  { source: "Am", shift: 2 }
+};
 
 export function createChordWheel(panel){
-  initToyUI(panel, { toyName: 'Chord Wheel', defaultInstrument: 'AcousticGuitar' });
+  initToyUI(panel, { toyName: 'Chord Wheel', defaultInstrument: 'Acoustic Guitar Chords' });
   const toyId = panel.dataset.toyid = panel.id || `chordwheel-${Math.random().toString(36).slice(2, 8)}`;
   const audioCtx = ensureAudioContext();
+
+
 
   // --- Strum Realism: Compressor Bus ---
   // To "glue" the notes of the strum together, we'll route all audio for this
@@ -204,8 +235,9 @@ export function createChordWheel(panel){
       if (state !== -1) {
         flashes[audioStep] = 1.0;
         const chord = buildChord(progression[audioStep] || 1);
+        const chordName = degreeToChordName(progression[audioStep] || 1);
         const direction = (state === 2) ? 'up' : 'down';
-        scheduleStrum({ notes: chord, direction });
+        scheduleStrum({ notes: chord, direction, chordName });
       }
     }
   }
@@ -242,9 +274,26 @@ export function createChordWheel(panel){
     } catch (e) { console.warn('[chordwheel] Strum noise failed', e); }
   }
 
-  function scheduleStrum({ notes, direction = 'down' }) {
+  function scheduleStrum({ notes, direction = 'down', chordName }) {
+    const currentInstrument = (panel.dataset.instrument || 'acoustic_guitar').toLowerCase().replace(/[\s-]+/g, '_');
+
+    if (currentInstrument === 'acoustic_guitar_chords') {
+      const mapping = CHORD_SAMPLE_MAP[chordName] || CHORD_SAMPLE_MAP[chordName.replace('°', '')];
+      if (mapping) {
+        const { source, shift } = mapping;
+        const playbackRate = Math.pow(2, shift / 12);
+        // The note name 'C4' is a placeholder as pitch is handled by playbackRate.
+        // We override the instrument to play the specific chord sample.
+        triggerNoteForToy(toyId, 'C4', 0.95, { playbackRate, instrument: source });
+      }
+      return; // Done for this instrument type
+    }
+
+    // --- Existing strum logic for other instruments ---
     const sweep = 0.008; // 8ms total sweep
     const baseVel = 0.85;
+
+
     const time = audioCtx.currentTime;
 
     const orderedNotes = (direction === 'up') ? [...notes].reverse() : notes;
@@ -261,9 +310,9 @@ export function createChordWheel(panel){
   }
   draw();
 
-  // This toy now manages its own timing via requestAnimationFrame, so we
-  // make its sequencer step a no-op to avoid conflicts with the main scheduler.
-  panel.__sequencerStep = () => {};
+  // This toy manages its own timing via requestAnimationFrame. By setting
+  // __sequencerStep to null, we ensure it's completely ignored by the main scheduler.
+  panel.__sequencerStep = null;
 
   // --- Helper Functions ---
   function randomProgression16() {
