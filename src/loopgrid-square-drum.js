@@ -47,7 +47,6 @@
   }
   function relayout(){ document.querySelectorAll(SEL).forEach(layout); }
 
-  window.addEventListener('resize', relayout);
   document.addEventListener('DOMContentLoaded', boot);
   if (document.readyState!=='loading') boot();
 })();

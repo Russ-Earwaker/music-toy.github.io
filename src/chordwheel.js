@@ -2,75 +2,232 @@
 import { initToyUI } from './toyui.js';
 import { NUM_STEPS, getLoopInfo } from './audio-core.js';
 import { triggerNoteForToy } from './audio-trigger.js';
+import { drawBlock } from './toyhelpers.js';
 
-function roman(deg){ const U={1:'I',4:'IV',5:'V'}, L={2:'ii',3:'iii',6:'vi',7:'vii'}; return U[deg]||L[deg]||'I'; }
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+function degreeToChordName(deg) {
+  const rootOffset = MAJOR_SCALE[(deg - 1 + 7) % 7];
+  const rootNoteIndex = (60 + rootOffset) % 12; // 60 = C4
+  const rootNoteName = NOTE_NAMES[rootNoteIndex];
+
+  if ([1, 4, 5].includes(deg)) return rootNoteName;
+  if ([2, 3, 6].includes(deg)) return rootNoteName + 'm';
+  return rootNoteName + '°';
+}
+function midiToName(midi) {
+  if (midi == null) return '';
+  const n = ((midi % 12) + 12) % 12;
+  const o = Math.floor(midi / 12) - 1;
+  return NOTE_NAMES[n] + o;
+}
 const COLORS = ['#60a5fa','#34d399','#fbbf24','#a78bfa','#f87171','#22d3ee','#eab308','#fb7185'];
-const CYCLE = [2,0,1,-1];
 
 export function createChordWheel(panel){
   initToyUI(panel, { toyName: 'Chord Wheel', defaultInstrument: 'AcousticGuitar' });
-  panel.dataset.toyid = panel.id || 'chordwheel-1';
+  panel.dataset.toyid = panel.id || `chordwheel-${Math.random().toString(36).slice(2, 8)}`;
 
   const body = panel.querySelector('.toy-body'); body.innerHTML = '';
   const wrap = el('div','cw-wrap'); const flex = el('div','cw-flex'); wrap.appendChild(flex); body.appendChild(wrap);
+  // The flex container will center both the SVG wheel and the overlay canvas.
+  Object.assign(flex.style, { position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' });
 
-  const patterns = Array.from({length:8}, ()=> Array(16).fill(-1));
-  let progression = [1,5,6,4, 1,5,6,4];
-  let activeSeg = 0;
+  const NUM_STEPS = 16;
+  const NUM_SLICES = 8;
+  const stepStates = Array(NUM_STEPS).fill(-1); // -1: off, 1: arp up, 2: arp down
+  let progression = randomProgression16();
 
-  const wheel = buildWheelWithRing(190,{
-    onSlotToggle:(ix)=>{
-      const cur = patterns[activeSeg][ix] ?? -1;
-      const next = CYCLE[(CYCLE.indexOf(cur)+1)%CYCLE.length];
-      patterns[activeSeg][ix]=next; wheel.renderStep(ix,next);
-    },
-    onPickSeg:(seg)=>{
-      activeSeg=seg; wheel.setActiveSeg(seg);
-      wheel.renderAllFromPattern(ix=>patterns[seg][ix]??-1);
-    }
-  });
-  flex.appendChild(wheel.svg);
+  // --- Create Canvas for Cubes ---
+  const canvas = el('canvas', 'cw-cubes');
+  const ctx = canvas.getContext('2d');
+  Object.assign(canvas.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', pointerEvents: 'auto' });
 
-  wheel.setSliceColors(COLORS); wheel.setLabels(progression);
-  wheel.setActiveSeg(activeSeg);
-  wheel.renderAllFromPattern(ix=>patterns[activeSeg][ix]??-1);
+  // --- Create SVG Wheel (no ring) ---
+  const wheel = buildWheelWithRing(190, NUM_SLICES, {});
+  // The SVG is for display and segment clicks only. It sits behind the canvas.
+  Object.assign(wheel.svg.style, { pointerEvents: 'none' });
+  flex.append(wheel.svg, canvas);
+
+  function updateLabels() {
+    const wheelLabels = progression.filter((_, i) => i % 2 === 0);
+    wheel.setLabels(wheelLabels);
+  }
+
+  wheel.setSliceColors(COLORS);
+  updateLabels();
 
   panel.addEventListener('toy-random',()=>{
-    progression=randomProgression8(); wheel.setLabels(progression);
-    for(let s=0;s<8;s++){ for(let i=0;i<16;i++){ const r=Math.random(); patterns[s][i]=(r<0.25)?-1:(r<0.5)?0:(r<0.75)?1:2; } }
-    wheel.renderAllFromPattern(ix=>patterns[activeSeg][ix]??-1);
-  });
-  panel.addEventListener('toy-clear',()=>{ for(let s=0;s<8;s++) patterns[s].fill(-1); wheel.renderAllFromPattern(ix=>patterns[activeSeg][ix]??-1); });
+    progression = randomProgression16();
+    updateLabels();
+    // New randomization logic:
+    // - A random number of active steps (arpeggios).
+    // - All active steps must have a gap of at least one empty step between them.
+    // - One "double" (two adjacent active steps) is allowed per randomization.
+    stepStates.fill(-1);
 
-  panel.dataset.steps=String(NUM_STEPS);
-  let lastIx=-1,lastSeg=-1;
-  panel.__sequencerStep=function(){
-    const info=getLoopInfo(); const total16=16*8;
-    const pos=Math.floor(info.phase01*total16)%total16;
-    const seg=Math.floor(pos/16), ix=pos%16;
+    const numActive = 3 + Math.floor(Math.random() * 5); // 3 to 7 active steps
+    const allowDouble = Math.random() < 0.5;
+    const indices = Array.from({length: NUM_STEPS}, (_, i) => i);
+    for (let i = indices.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [indices[i], indices[j]] = [indices[j], indices[i]]; }
 
-    wheel.setHand(seg,info.phase01);
+    let placedCount = 0;
+    const occupied = new Set();
+    const isAvailable = (index) => !occupied.has(index);
+    const occupy = (index) => { occupied.add(index); occupied.add((index - 1 + NUM_STEPS) % NUM_STEPS); occupied.add((index + 1 + NUM_STEPS) % NUM_STEPS); };
 
-    if(seg!==lastSeg){ wheel.setActiveSeg(seg); wheel.renderAllFromPattern(i=>patterns[seg][i]??-1); lastSeg=seg; }
-    if(ix!==lastIx){ wheel.highlightStep(ix); lastIx=ix; }
-    activeSeg=seg;
-
-    const st=patterns[seg][ix];
-    if(st!==-1){
-      const chord=buildChord(progression[seg]||1);
-      if(st===0){ chord.forEach((m,i)=> triggerNoteForToy(panel.dataset.toyid,m,0.95-i*0.06)); }
-      else{ const order=(st===2)?[...chord].reverse():chord;
-        order.forEach((m,i)=> setTimeout(()=> triggerNoteForToy(panel.dataset.toyid,m,0.9-i*0.08),i*14)); }
+    if (allowDouble && numActive >= 2) {
+      for (const idx1 of indices) {
+        const idx2 = (idx1 + 1) % NUM_STEPS;
+        if (isAvailable(idx1) && isAvailable(idx2)) {
+          stepStates[idx1] = Math.random() < 0.5 ? 1 : 2; stepStates[idx2] = Math.random() < 0.5 ? 1 : 2;
+          occupy(idx1); occupy(idx2);
+          placedCount = 2; break;
+        }
+      }
     }
-  };
 
+    while (placedCount < numActive) {
+      const foundIndex = indices.find(idx => stepStates[idx] === -1 && isAvailable(idx));
+      if (foundIndex === undefined) break; // No available slots left
+      stepStates[foundIndex] = Math.random() < 0.5 ? 1 : 2;
+      occupy(foundIndex);
+      placedCount++;
+    }
+  });
+  panel.addEventListener('toy-clear',()=>{ stepStates.fill(-1); });
+
+  let lastAudioStep = -1;
+  let playheadIx = -1;
+  const flashes = new Float32Array(NUM_STEPS);
+
+  // --- Canvas Click Handler ---
+  canvas.addEventListener('pointerdown', (e) => {
+    const r = canvas.getBoundingClientRect();
+    // Scale pointer coordinates to match the canvas's internal resolution,
+    // which might be different from its CSS size due to device pixel ratio.
+    const p = {
+      x: (e.clientX - r.left) * (canvas.width / r.width),
+      y: (e.clientY - r.top) * (canvas.height / r.height)
+    };
+    const { cubes } = getCubeGeometry(canvas.width, canvas.height, 190, NUM_STEPS);
+    for (let i = 0; i < cubes.length; i++) {
+      const c = cubes[i];
+      if (p.x >= c.x && p.x <= c.x + c.w && p.y >= c.y && p.y <= c.y + c.h) {
+        // Cycle through states: -1 (off) -> 1 (up) -> 2 (down) -> -1
+        const current = stepStates[i];
+        if (current === -1) stepStates[i] = 1;
+        else if (current === 1) stepStates[i] = 2;
+        else stepStates[i] = -1;
+        break;
+      }
+    }
+  });
+
+  // --- Main Render Loop ---
+  function draw() {
+    if (!panel.isConnected) return;
+    requestAnimationFrame(draw);
+
+    // --- Timing and Playhead Logic ---
+    const info = getLoopInfo();
+    const totalPhase16 = info.phase01 * NUM_STEPS;
+    const currentStep = Math.floor(totalPhase16);
+    playheadIx = currentStep;
+
+    // The hand should rotate over 8 visual segments, in sync with the 16 steps.
+    const totalPhase8 = info.phase01 * NUM_SLICES;
+    const handSegment = Math.floor(totalPhase8);
+    const phaseInHandSegment = totalPhase8 - handSegment;
+    wheel.setHand(handSegment, phaseInHandSegment);
+
+    // --- Visual Rendering ---
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    const { cubes } = getCubeGeometry(w, h, 190, NUM_STEPS);
+
+    for (let i = 0; i < NUM_STEPS; i++) {
+      const state = stepStates[i];
+      const isActive = state !== -1;
+      const flash = flashes[i] || 0;
+      drawBlock(ctx, cubes[i], { active: isActive, flash, variant: 'button', showArrows: false });
+      if (flash > 0) flashes[i] = Math.max(0, flash - 0.08);
+
+      // Draw custom arrows for arpeggio state
+      if (state === 1 || state === 2) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        const c = cubes[i];
+        const cx = c.x + c.w / 2;
+        const cy = c.y + c.h / 2;
+        const arrowW = c.w * 0.4;
+        const arrowH = c.h * 0.4;
+        ctx.beginPath();
+        if (state === 1) { // Arp Up
+          ctx.moveTo(cx - arrowW / 2, cy + arrowH / 2); ctx.lineTo(cx + arrowW / 2, cy + arrowH / 2); ctx.lineTo(cx, cy - arrowH / 2);
+        } else { // Arp Down
+          ctx.moveTo(cx - arrowW / 2, cy - arrowH / 2); ctx.lineTo(cx + arrowW / 2, cy - arrowH / 2); ctx.lineTo(cx, cy + arrowH / 2);
+        }
+        ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    if (playheadIx >= 0) {
+      const c = cubes[playheadIx];
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(c.x - 2, c.y - 2, c.w + 4, c.h + 4);
+    }
+
+    // --- Audio Logic ---
+    const audioStep = currentStep;
+    if (audioStep !== lastAudioStep) {
+      lastAudioStep = audioStep;
+
+      const state = stepStates[audioStep];
+      if (state !== -1) {
+        flashes[audioStep] = 1.0;
+        const chord = buildChord(progression[audioStep] || 1); // Corrected this line
+        // Play arpeggio up (1) or down (2)
+        const order = (state === 2) ? [...chord].reverse() : chord;
+        order.forEach((m, i) => setTimeout(() => triggerNoteForToy(panel.dataset.toyid, midiToName(m), 0.85 - i * 0.08), i * 15));
+      }
+    }
+  }
+  draw();
+
+  // This toy now manages its own timing via requestAnimationFrame, so we
+  // make its sequencer step a no-op to avoid conflicts with the main scheduler.
+  panel.__sequencerStep = () => {};
+
+  // --- Helper Functions ---
+  function randomProgression16() {
+    const base = randomProgression8();
+    return base.concat(base);
+  }
   function randomProgression8(){ const presets=[[1,5,6,4],[1,6,4,5],[6,4,1,5],[2,5,1,6],[1,4,5,4],[1,5,4,5]];
     const base=presets[Math.floor(Math.random()*presets.length)],seq=base.concat(base);
     if(Math.random()<0.35)seq[7]=5; if(Math.random()<0.25)seq[3]=2; return seq; }
-  function buildChord(deg){ return maybeAddSeventh(degreeToTriadMidi(deg)); }
+  function buildChord(deg){ return maybeAddSeventh(buildDiatonicTriad(deg)); }
 }
 
-function buildWheelWithRing(radius,api){
+function getCubeGeometry(width, height, radius, numCubes = 16) {
+  const outerPad = 70, size = radius * 2 + outerPad * 2;
+  const scale = Math.min(width, height) / size;
+  const cx = width / 2, cy = height / 2;
+  const r = radius * scale;
+  const ringR = (r + 45 * scale);
+  const cubeSize = Math.max(12, 48 * scale);
+  const cubes = [];
+  for (let ix = 0; ix < numCubes; ix++) {
+    const a = (ix / numCubes) * Math.PI * 2 - Math.PI / 2;
+    const x = cx + ringR * Math.cos(a);
+    const y = cy + ringR * Math.sin(a);
+    cubes.push({ x: x - cubeSize / 2, y: y - cubeSize / 2, w: cubeSize, h: cubeSize });
+  }
+  return { cubes, cubeSize };
+}
+
+function buildWheelWithRing(radius, numSlices, api){
   const outerPad=70,size=radius*2+outerPad*2;
   const svg=svgEl('svg',{viewBox:`0 0 ${size} ${size}`,class:'cw-wheel'});
   const cx=size/2,cy=size/2,r=radius;
@@ -78,54 +235,65 @@ function buildWheelWithRing(radius,api){
   svg.appendChild(svgEl('circle',{cx,cy,r:r+6,fill:'#0b111c',stroke:'#1f2a3d'}));
   const sliceGroup=svgEl('g',{class:'cw-slices'}); svg.appendChild(sliceGroup);
   const slicePaths=[];
-  for(let i=0;i<8;i++){ const path=describeSlice(cx,cy,r-2,(i/8)*Math.PI*2-Math.PI/2,((i+1)/8)*Math.PI*2-Math.PI/2);
-    const p=svgEl('path',{d:path,fill:COLORS[i],opacity:.75,stroke:'#1e293b','data-seg':i});
-    p.addEventListener('click',()=>api.onPickSeg?.(i)); sliceGroup.appendChild(p); slicePaths.push(p); }
+  for(let i=0;i<numSlices;i++){ const path=describeSlice(cx,cy,r-2,(i/numSlices)*Math.PI*2-Math.PI/2,((i+1)/numSlices)*Math.PI*2-Math.PI/2);
+    const p=svgEl('path',{d:path,fill:COLORS[i % COLORS.length],opacity:.75,stroke:'#1e293b','data-seg':i});
+    if (api.onPickSeg) p.addEventListener('click',()=>api.onPickSeg(i));
+    sliceGroup.appendChild(p); slicePaths.push(p); }
 
   const labelGroup=svgEl('g',{class:'cw-labels'}); svg.appendChild(labelGroup);
   function setLabels(arr){ while(labelGroup.firstChild)labelGroup.removeChild(labelGroup.firstChild);
-    for(let i=0;i<8;i++){ const aMid=((i+0.5)/8)*Math.PI*2-Math.PI/2;
+    for(let i=0;i<numSlices;i++){ const aMid=((i+0.5)/numSlices)*Math.PI*2-Math.PI/2;
       const tx=cx+(r*0.58)*Math.cos(aMid),ty=cy+(r*0.58)*Math.sin(aMid)+8;
-      const t=svgEl('text',{x:tx,y:ty,'text-anchor':'middle','font-size':'20','font-weight':'700',fill:'#e2e8f0'});
-      t.textContent=roman(arr[i]||1); labelGroup.appendChild(t);} }
+      const t=svgEl('text',{x:tx,y:ty,'text-anchor':'middle','font-size':'24','font-weight':'700',fill:'#e2e8f0'});
+      t.textContent=degreeToChordName(arr[i]||1); labelGroup.appendChild(t);} }
 
   const hand=svgEl('line',{x1:cx,y1:cy,x2:cx,y2:cy-r,stroke:'#e2e8f0','stroke-width':4,'stroke-linecap':'round'}); svg.appendChild(hand);
 
-  const ringGroup=svgEl('g',{class:'cw-ring'}); svg.appendChild(ringGroup);
-  const steps=[]; const ringR=r+40,iconLen=16;
-  for(let ix=0;ix<16;ix++){ const a=(ix/16)*Math.PI*2-Math.PI/2;
-    const x=cx+ringR*Math.cos(a),y=cy+ringR*Math.sin(a),deg=a*180/Math.PI+90;
-    const g=svgEl('g',{class:'cw-slotring',transform:`translate(${x} ${y}) rotate(${deg})`,'data-ix':ix});
-    g.setAttribute('role','button'); g.setAttribute('tabindex','0'); g.setAttribute('aria-label',`Step ${ix+1}`);
-    const hit=svgEl('circle',{r:iconLen*0.9,fill:'transparent'}); g.appendChild(hit);
-    const icon=svgEl('g',{class:'cw-icon'}); g.appendChild(icon);
-    g.addEventListener('click',()=>api.onSlotToggle?.(ix));
-    g.addEventListener('keydown',(e)=>{ if(e.code==='Space'||e.code==='Enter'){ e.preventDefault(); api.onSlotToggle?.(ix);} });
-    ringGroup.appendChild(g); steps.push({g,icon}); }
-
-  function setIconForState(icon,st){ while(icon.firstChild)icon.removeChild(icon.firstChild);
-    if(st===-1){icon.appendChild(svgEl('circle',{r:6,fill:'none',stroke:'#94a3b8','stroke-width':1.8}));return;}
-    if(st===0){icon.appendChild(svgEl('rect',{x:-7,y:-2.5,width:14,height:5,rx:2.5,fill:'#cbd5e1'}));return;}
-    if(st===1){icon.appendChild(svgEl('path',{d:'M -7 -4 L 7 -4 L 0 8 Z',fill:'#fff'}));return;}
-    if(st===2){icon.appendChild(svgEl('path',{d:'M -7 4 L 7 4 L 0 -8 Z',fill:'#fff'}));return;} }
-  function renderStep(ix,st){ setIconForState(steps[ix].icon,st); }
-  function renderAllFromPattern(getState){ for(let i=0;i<16;i++) renderStep(i,getState(i)); }
-  function highlightStep(ix){ if(typeof highlightStep.last==='number'){const prev=steps[highlightStep.last]?.g;if(prev)prev.classList.remove('playing');}
-    const cur=steps[ix]?.g;if(cur)cur.classList.add('playing'); highlightStep.last=ix; }
-  function setActiveSeg(seg){ slicePaths.forEach((p,i)=>p.classList.toggle('active',i===seg)); }
+  function setActiveSeg(seg){ if (slicePaths.length) slicePaths.forEach((p,i)=>p.classList.toggle('active',i===seg)); }
   function setSliceColors(cols){ slicePaths.forEach((p,i)=>p.setAttribute('fill',cols[i]||'#6b7280')); }
-  function setHand(seg,phase01){ const local=(phase01*8)-Math.floor(phase01*8);
-    const angle=((seg+local)/8)*Math.PI*2-Math.PI/2;
+  function setHand(seg,localPhase){
+    const angle=((seg+localPhase)/numSlices)*Math.PI*2-Math.PI/2;
     const x=cx+(r-6)*Math.cos(angle),y=cy+(r-6)*Math.sin(angle);
     hand.setAttribute('x2',x); hand.setAttribute('y2',y); }
 
-  return{svg,setLabels,setHand,setSliceColors,setActiveSeg,renderStep,renderAllFromPattern,highlightStep};
+  return{svg,setLabels,setHand,setSliceColors,setActiveSeg};
 }
 
 const MAJOR_SCALE=[0,2,4,5,7,9,11];
-function degreeToTriadMidi(deg,tonic=60){const i=(deg-1)%7;return[tonic+MAJOR_SCALE[i]-12,tonic+MAJOR_SCALE[(i+2)%7]-12,tonic+MAJOR_SCALE[(i+4)%7]-12];}
-function maybeAddSeventh(triad){ if(Math.random()<0.25){ const rootMidi=triad[0]+12,pc=((rootMidi-60)%12+12)%12;
-  let idx=MAJOR_SCALE.findIndex(v=>v===pc); if(idx<0)idx=0; const seventh=60+MAJOR_SCALE[(idx+6)%7]-12; return[...triad,seventh]; } return triad; }
+
+function buildDiatonicTriad(degree, tonicMidi = 60) {
+  const scaleRootIndex = (degree - 1 + 7) % 7;
+
+  const rootOffset = MAJOR_SCALE[scaleRootIndex];
+  let thirdOffset = MAJOR_SCALE[(scaleRootIndex + 2) % 7];
+  let fifthOffset = MAJOR_SCALE[(scaleRootIndex + 4) % 7];
+
+  // Adjust for octave wrapping to ensure chords are in root position.
+  if (thirdOffset < rootOffset) thirdOffset += 12;
+  if (fifthOffset < rootOffset) fifthOffset += 12;
+
+  const octaveShift = 0; // Play in the C4-C5 range for a pleasant default.
+  return [
+    tonicMidi + rootOffset + octaveShift,
+    tonicMidi + thirdOffset + octaveShift,
+    tonicMidi + fifthOffset + octaveShift
+  ];
+}
+
+function maybeAddSeventh(triad){
+  if (Math.random() < 0.25) {
+    const rootMidi = triad[0];
+    const rootPitchClass = rootMidi % 12;
+    const scaleDegreeIndex = MAJOR_SCALE.indexOf(rootPitchClass);
+    if (scaleDegreeIndex === -1) return triad; // Should not happen with diatonic triads
+    let seventhOffset = MAJOR_SCALE[(scaleDegreeIndex + 6) % 7];
+    if (seventhOffset < rootPitchClass) seventhOffset += 12;
+    const seventhMidi = (rootMidi - rootPitchClass) + seventhOffset;
+    return [...triad, seventhMidi];
+  }
+  return triad;
+}
+
 function el(tag,cls){const n=document.createElement(tag);if(cls)n.className=cls;return n;}
 function svgEl(tag,attrs={}){const n=document.createElementNS('http://www.w3.org/2000/svg',tag);Object.entries(attrs).forEach(([k,v])=>n.setAttribute(k,v));return n;}
 function describeSlice(cx,cy,r,a0,a1){const x0=cx+r*Math.cos(a0),y0=cy+r*Math.sin(a0),x1=cx+r*Math.cos(a1),y1=cy+r*Math.sin(a1);

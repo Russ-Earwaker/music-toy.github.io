@@ -25,23 +25,25 @@ function getVisualExtents(panel) {
   let minX = 0, maxX = panelWidth;
   let minY = 0, maxY = panelHeight;
 
-  if (panel.dataset.toy === 'loopgrid') {
-    const externalButtons = panel.querySelectorAll(':scope > .loopgrid-mode-btn');
+  const toyKind = panel.dataset.toy;
+  const hasExternalButtons = ['loopgrid', 'bouncer', 'rippler', 'chordwheel', 'drawgrid'].includes(toyKind);
+
+  if (hasExternalButtons) {
+    // These are the large 'Edit'/'Close' buttons positioned outside the panel.
+    const externalButtons = panel.querySelectorAll(':scope > .toy-mode-btn');
     externalButtons.forEach(btn => {
       const btnSize = parseFloat(btn.style.getPropertyValue('--c-btn-size')) || 0;
       let btnLeft, btnRight;
 
+      // Check for 'left' style property to calculate horizontal extents.
       if (btn.style.left) {
-        btnLeft = parseFloat(btn.style.left);
+        btnLeft = parseFloat(btn.style.left); // e.g., -48px
         btnRight = btnLeft + btnSize;
-      } else if (btn.style.right) {
-        const rightOffset = parseFloat(btn.style.right);
-        btnRight = panelWidth - rightOffset;
-        btnLeft = btnRight - btnSize;
-      } else {
-        return; // Should not happen for loopgrid-mode-btn
+        if (btnLeft < minX) minX = btnLeft;
+        if (btnRight > maxX) maxX = btnRight;
       }
-
+      
+      // Check for 'top' style property to calculate vertical extents.
       const top = parseFloat(btn.style.top) || 0;
       const bottom = top + btnSize;
       
@@ -70,7 +72,9 @@ function addGapAfterOrganize() {
     const topA = parseFloat(a.style.top) || 0;
     const topB = parseFloat(b.style.top) || 0;
     if (topA !== topB) return topA - topB;
-    return 0; // Fallback to DOM order if tops are identical
+    const leftA = parseFloat(a.style.left) || 0; // Add secondary sort for stability
+    const leftB = parseFloat(b.style.left) || 0;
+    return leftA - leftB;
   });
 
   let lastTop = -Infinity;
@@ -84,7 +88,7 @@ function addGapAfterOrganize() {
     const visualWidth = visualRightOffset - visualLeftOffset;
     const visualHeight = visualBottomOffset - visualTopOffset;
 
-    if (currentTop > lastTop) { // New row detected
+    if (Math.abs(currentTop - lastTop) > 1) { // New row detected (use a small tolerance)
       xCursor = 0; // Reset for the new row.
       yCursor += rowMaxVisualHeight; // Move y-cursor down by the height of the previous row
       rowMaxVisualHeight = 0; // Reset max height for the new row

@@ -3,6 +3,10 @@
 // below header/controls — without changing your layout (no flex wrappers, no reparenting).
 // Keeps canvas backing store crisp via a throttled ResizeObserver. (<300 lines)
 (function(){
+  // This script has been superseded by toy-layout-manager.js, which uses a more
+  // robust method for canvas sizing. We disable this script to prevent layout conflicts.
+  return;
+
   function shouldManage(panel){
     try{
       const toy = (panel.dataset.toy || '').toLowerCase();

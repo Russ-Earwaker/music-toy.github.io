@@ -1302,9 +1302,6 @@ function regenerateMapFromStrokes() {
     if (relayoutScheduled) return; relayoutScheduled = true;
     requestAnimationFrame(() => { relayoutScheduled = false; layout(force); });
   }
-  window.addEventListener('resize', () => scheduleRelayout(true));
-  // Recompute layout on global wheel zoom (board transforms change getBoundingClientRect)
-  window.addEventListener('wheel', () => scheduleRelayout(true), { passive: true });
   observer.observe(body);
 
   panel.addEventListener('drawgrid:playcol', (e) => {

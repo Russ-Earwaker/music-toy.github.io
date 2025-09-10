@@ -73,10 +73,8 @@
     applyAll();
   }
 
-  window.addEventListener('resize', schedule);
   try{
     const ro = new ResizeObserver(schedule);
     document.querySelectorAll('.toy-panel[data-toy="bouncer"] .toy-body').forEach(el=> ro.observe(el));
   }catch{}
 })();
-

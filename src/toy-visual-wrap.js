@@ -113,8 +113,6 @@
     layout(panel);
     const mo = new MutationObserver(()=> layout(panel));
     mo.observe(panel, { childList:true, subtree:true });
-    let t=0;
-    window.addEventListener('resize', ()=>{ cancelAnimationFrame(t); t=requestAnimationFrame(()=> layout(panel)); });
   }
   function boot(){
     document.querySelectorAll('.toy-panel').forEach(wire);

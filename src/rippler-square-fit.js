@@ -97,9 +97,6 @@
     applyAll();
   }
 
-  // Re-layout on window resize
-  window.addEventListener('resize', schedule);
-
   // Observe size changes of each rippler body directly (transform-immune)
   try{
     const ro = new ResizeObserver(schedule);
