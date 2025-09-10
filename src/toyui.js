@@ -82,44 +82,43 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
   const right = header.querySelector('.toy-controls-right');
   const left = header.querySelector('.toy-title');
 
-  // Advanced / Close buttons (CSS toggles visibility)
-    if (toyKind === 'loopgrid') {
-        // For the Drum Toy, use the new circular "Edit" button, positioned outside the panel.
-        // We append it to the panel itself, not the header.
+  // Advanced / Close buttons
+  if (toyKind === 'loopgrid' || toyKind === 'bouncer') {
+    // For the Drum Toy and Bouncer, use the new circular "Edit" button, positioned outside the panel.
+    // We append it to the panel itself, not the header.
 
-        // --- FIX: Set overflow directly to prevent clipping of the external button ---
-        // This is more robust than relying on CSS, which seems to be overridden.
-        panel.style.setProperty('overflow', 'visible', 'important');
+    // --- FIX: Set overflow directly to prevent clipping of the external button ---
+    panel.style.setProperty('overflow', 'visible', 'important');
 
-        if (!panel.querySelector(':scope > [data-action="advanced"]')) {
-            const editBtn = document.createElement('button');
-            editBtn.className = 'c-btn loopgrid-mode-btn'; editBtn.dataset.action = 'advanced'; editBtn.title = 'Edit Mode';
-            // Apply positioning directly via inline styles for maximum robustness against CSS conflicts.
-            const btnSize = 96;
-            editBtn.style.position = 'absolute';
-            editBtn.style.top = `${headerHeight - 40}px`;
-            editBtn.style.left = '-48px';
-            editBtn.style.zIndex = '5';
-            editBtn.style.setProperty('--c-btn-size', `${btnSize}px`);
-            editBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonEdit.png');"></div>`;
-            panel.appendChild(editBtn);
-        }
-        if (!panel.querySelector(':scope > [data-action="close-advanced"]')) {
-            const closeBtn = document.createElement('button');
-            closeBtn.className = 'c-btn loopgrid-mode-btn'; closeBtn.dataset.action = 'close-advanced'; closeBtn.title = 'Close Edit Mode';
-            const btnSize = 96;
-            closeBtn.style.position = 'absolute';
-            closeBtn.style.top = `${headerHeight - btnSize}px`;
-            closeBtn.style.left = '-48px';
-            closeBtn.style.zIndex = '5';
-            closeBtn.style.setProperty('--c-btn-size', `${btnSize}px`);
-            closeBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow" style="--accent: #f87171;"></div><div class="c-btn-core" style="--c-btn-icon-url: url('data:image/svg+xml,%3Csvg xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 24 24&quot; fill=&quot;%23e6e8ef&quot;%3E%3Cpath d=&quot;M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z&quot;/%3E%3C/svg%3E');"></div>`;
-            panel.appendChild(closeBtn);
-        }
-    } else {
-        if (!right.querySelector('[data-action="advanced"]')) { const advBtn = btn('Advanced'); advBtn.dataset.action = 'advanced'; right.prepend(advBtn); }
-        if (!right.querySelector('[data-action="close-advanced"]')) { const closeBtn = btn('Close'); closeBtn.dataset.action = 'close-advanced'; right.prepend(closeBtn); }
+    if (!panel.querySelector(':scope > .toy-mode-btn[data-action="advanced"]')) {
+        const editBtn = document.createElement('button');
+        editBtn.className = 'c-btn toy-mode-btn'; editBtn.dataset.action = 'advanced'; editBtn.title = 'Edit Mode';
+        // Apply positioning directly via inline styles for maximum robustness against CSS conflicts.
+        const btnSize = 96;
+        editBtn.style.position = 'absolute';
+        editBtn.style.top = `${headerHeight - 40}px`;
+        editBtn.style.left = '-48px';
+        editBtn.style.zIndex = '5';
+        editBtn.style.setProperty('--c-btn-size', `${btnSize}px`);
+        editBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonEdit.png');"></div>`;
+        panel.appendChild(editBtn);
     }
+    if (!panel.querySelector(':scope > .toy-mode-btn[data-action="close-advanced"]')) {
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'c-btn toy-mode-btn'; closeBtn.dataset.action = 'close-advanced'; closeBtn.title = 'Close Edit Mode';
+        const btnSize = 96;
+        closeBtn.style.position = 'absolute';
+        closeBtn.style.top = `${headerHeight - 40}px`; // Match the edit button's vertical position
+        closeBtn.style.left = '-48px';
+        closeBtn.style.zIndex = '5';
+        closeBtn.style.setProperty('--c-btn-size', `${btnSize}px`);
+        closeBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow" style="--accent: #f87171;"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonClose.png');"></div>`;
+        panel.appendChild(closeBtn);
+    }
+  } else {
+      if (!right.querySelector('[data-action="advanced"]')) { const advBtn = btn('Advanced'); advBtn.dataset.action = 'advanced'; right.prepend(advBtn); }
+      if (!right.querySelector('[data-action="close-advanced"]')) { const closeBtn = btn('Close'); closeBtn.dataset.action = 'close-advanced'; right.prepend(closeBtn); }
+  }
 
   // Random / Clear buttons (delegated elsewhere)
   if (toyKind === 'loopgrid') {
@@ -129,13 +128,14 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
 
     // The "Random Blocks" button randomizes the step sequence.
     // It is visible in both standard and advanced modes.
-    if (!left.querySelector('[data-action="random"]')) {
-      const randomBtn = document.createElement('button');
+    let randomBtn = left.querySelector('[data-action="random"]');
+    if (!randomBtn) {
+      randomBtn = document.createElement('button');
       randomBtn.className = 'c-btn';
       randomBtn.dataset.action = 'random';
-      randomBtn.title = 'Random Blocks';
+      // Title and icon are set dynamically based on view mode.
       randomBtn.style.setProperty('--c-btn-size', '65px');
-      randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandomBlocks.png');"></div>`;
+      randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandom.png');"></div>`;
       left.appendChild(randomBtn);
     }
 
@@ -169,10 +169,22 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
     // This creates the space needed to avoid the external "Edit" button.
     left.style.setProperty('margin-left', '47px', 'important');
 
-    // Visibility logic for the "Random Notes" button.
+    // Visibility logic for advanced-only buttons and dynamic icons.
     const updateVisibility = () => {
         const isAdvanced = panel.classList.contains('toy-zoomed');
         if (randomNotesBtn) randomNotesBtn.style.display = isAdvanced ? 'inline-block' : 'none';
+
+        // Update the main random button's icon and title based on the mode.
+        if (randomBtn) {
+            const iconEl = randomBtn.querySelector('.c-btn-core');
+            if (isAdvanced) {
+                randomBtn.title = 'Random Blocks';
+                if (iconEl) iconEl.style.setProperty('--c-btn-icon-url', `url('../assets/UI/T_ButtonRandomBlocks.png')`);
+            } else {
+                randomBtn.title = 'Random';
+                if (iconEl) iconEl.style.setProperty('--c-btn-icon-url', `url('../assets/UI/T_ButtonRandom.png')`);
+            }
+        }
     };
     updateVisibility();
     panel.addEventListener('toy-zoom', updateVisibility);
@@ -180,15 +192,8 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
     // For other toys, use standard buttons
     if (!right.querySelector('[data-action="random"]')) {
       // Bouncer gets a special icon button for its standard "Random" (new ball) action.
-      if (toyKind === 'bouncer') {
-        const randomBtn = document.createElement('button');
-        randomBtn.className = 'c-btn';
-        randomBtn.dataset.action = 'random';
-        randomBtn.title = 'New Ball';
-        randomBtn.style.setProperty('--c-btn-size', '38px');
-        randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandomBlocks.png');"></div>`;
-        right.appendChild(randomBtn);
-      } else {
+      // Bouncer handles its own buttons entirely within its specific block.
+      if (toyKind !== 'bouncer') {
         const b = btn('Random'); b.dataset.action = 'random'; right.appendChild(b);
       }
     }
@@ -233,62 +238,140 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
 
   // Bouncer has special button logic to swap "Random" for two more specific buttons in advanced mode.
   if (toyKind === 'bouncer') {
-    const randomBtn = right.querySelector('[data-action="random"]');
+    // Bouncer buttons are now on the left, like the drum toy.
     const left = header.querySelector('.toy-title');
+    const right = header.querySelector('.toy-controls-right');
 
-    // Ensure the advanced-only buttons exist on the LEFT side.
+    // Remove any old bouncer buttons from the right side to be safe.
+    right.querySelector('[data-action="random"]')?.remove();
+
+    // Apply margin to create space for the external "Edit" button, just like the drum toy.
+    left.style.setProperty('margin-left', '47px', 'important');
+
+    // Get the external buttons created earlier.
+    const editBtn = panel.querySelector(':scope > .toy-mode-btn[data-action="advanced"]');
+    const closeBtn = panel.querySelector(':scope > .toy-mode-btn[data-action="close-advanced"]');
+
+    // --- Create all buttons on the left side, with the correct size ---
+    const BTN_SIZE = '65px';
+
+    // Standard-view "Random" button (New Ball)
+    let randomBtn = left.querySelector('[data-action="random"]');
+    if (!randomBtn) {
+      randomBtn = document.createElement('button');
+      randomBtn.className = 'c-btn';
+      randomBtn.dataset.action = 'random';
+      randomBtn.title = 'New Ball';
+      randomBtn.style.setProperty('--c-btn-size', BTN_SIZE);
+      // Per request, standard view uses T_ButtonRandom.png
+      randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandom.png');"></div>`;
+      left.appendChild(randomBtn);
+    }
+
+    // Advanced-view "Random Blocks" button
+    let randomCubesBtn = left.querySelector('[data-action="random-cubes"]');
+    if (!randomCubesBtn) {
+      randomCubesBtn = document.createElement('button');
+      randomCubesBtn.className = 'c-btn';
+      randomCubesBtn.dataset.action = 'random-cubes';
+      randomCubesBtn.title = 'Random Blocks';
+      randomCubesBtn.style.setProperty('--c-btn-size', BTN_SIZE);
+      // Per request, advanced view uses T_ButtonRandomBlocks.png
+      randomCubesBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandomBlocks.png');"></div>`;
+      left.appendChild(randomCubesBtn);
+    }
+
+    // Advanced-view "Random Notes" button
     let randomNotesBtn = left.querySelector('[data-action="random-notes"]');
     if (!randomNotesBtn) {
       randomNotesBtn = document.createElement('button');
       randomNotesBtn.className = 'c-btn';
       randomNotesBtn.dataset.action = 'random-notes';
       randomNotesBtn.title = 'Random Notes';
-      randomNotesBtn.style.setProperty('--c-btn-size', '38px');
-      randomNotesBtn.style.setProperty('margin-left', '10px');
+      randomNotesBtn.style.setProperty('--c-btn-size', BTN_SIZE);
       randomNotesBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandomNotes.png');"></div>`;
       left.appendChild(randomNotesBtn);
     }
-    let randomCubesBtn = left.querySelector('[data-action="random-cubes"]');
-    if (!randomCubesBtn) {
-      randomCubesBtn = document.createElement('button');
-      randomCubesBtn.className = 'c-btn';
-      randomCubesBtn.dataset.action = 'random-cubes';
-      // Per request, this is the "Random Blocks" button.
-      randomCubesBtn.title = 'Random Blocks';
-      randomCubesBtn.style.setProperty('--c-btn-size', '38px');
-      randomCubesBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandomBlocks.png');"></div>`;
-      left.appendChild(randomCubesBtn);
-    }
 
-    // Bouncer's clear button also goes on the left, to the right of the random buttons.
-    if (!left.querySelector('[data-action="clear"]')) {
-      const clearBtn = document.createElement('button');
+    // "Clear" button (visible in both modes)
+    let clearBtn = left.querySelector('[data-action="clear"]');
+    if (!clearBtn) {
+      clearBtn = document.createElement('button');
       clearBtn.className = 'c-btn';
       clearBtn.dataset.action = 'clear';
       clearBtn.title = 'Clear';
-      clearBtn.style.setProperty('--c-btn-size', '38px');
-      clearBtn.style.setProperty('--accent', '#f87171'); // Red accent
+      clearBtn.style.setProperty('--c-btn-size', BTN_SIZE);
+      clearBtn.style.setProperty('--accent', '#f87171');
+      clearBtn.style.marginLeft = '10px';
       clearBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonClear.png');"></div>`;
       left.appendChild(clearBtn);
     }
 
-    // The generic "Random" button for Bouncer is on the right, but only for standard view.
-    // It triggers a new ball spawn.
     // This function explicitly sets the visibility of the buttons based on the view mode.
-    // This is more robust than relying purely on CSS.
     const updateVisibility = () => {
       const isAdvanced = panel.classList.contains('toy-zoomed');
-      // The main "Random" button is visible in standard view, hidden in advanced.
-      if (randomBtn) {
-        randomBtn.style.display = isAdvanced ? 'none' : 'inline-block';
-      }
-      // The specific "Random Notes" and "Random Cubes" buttons are visible in advanced, hidden in standard.
-      // We set display explicitly to 'inline-block' to override any conflicting CSS rules.
+
+      if (randomBtn) randomBtn.style.display = isAdvanced ? 'none' : 'inline-block';
       if (randomNotesBtn) randomNotesBtn.style.display = isAdvanced ? 'inline-block' : 'none';
       if (randomCubesBtn) randomCubesBtn.style.display = isAdvanced ? 'inline-block' : 'none';
+      if (clearBtn) clearBtn.style.display = 'inline-block'; // Always visible
+
+      // Adjust margins for layout.
+      // Standard: [Random] [Clear]
+      // Advanced: [Random Blocks] [Random Notes] [Clear]
+      if (randomCubesBtn) randomCubesBtn.style.marginLeft = '';
+      if (randomNotesBtn) randomNotesBtn.style.marginLeft = '10px';
+
+      // Handle visibility for external Edit/Close buttons
+      if (editBtn) editBtn.style.display = isAdvanced ? 'none' : 'block';
+      if (closeBtn) closeBtn.style.display = isAdvanced ? 'block' : 'none';
     }
     updateVisibility(); // Set initial state
     panel.addEventListener('toy-zoom', updateVisibility); // Update on view change
+
+    // --- Logic for external controls in Advanced mode ---
+    let externalHost = panel.querySelector('.bouncer-external-controls');
+    if (!externalHost) {
+      externalHost = document.createElement('div');
+      externalHost.className = 'bouncer-external-controls';
+      Object.assign(externalHost.style, {
+        position: 'absolute', right: '-160px', top: '50%', transform: 'translateY(-50%)',
+        display: 'none', flexDirection: 'column', gap: '10px', zIndex: '10', width: '150px',
+      });
+      panel.appendChild(externalHost);
+    }
+
+    const moveBouncerControls = () => {
+      const isAdvanced = panel.classList.contains('toy-zoomed');
+      const headerRight = panel.querySelector('.toy-header .toy-controls-right');
+      const speedCtrl = panel.querySelector('.bouncer-speed-ctrl');
+      const quantCtrl = panel.querySelector('.bouncer-quant-ctrl');
+
+      if (isAdvanced) {
+        if (speedCtrl) externalHost.appendChild(speedCtrl);
+        if (quantCtrl) externalHost.appendChild(quantCtrl);
+        externalHost.style.display = 'flex';
+      } else {
+        if (headerRight) {
+          if (speedCtrl) headerRight.appendChild(speedCtrl);
+          if (quantCtrl) headerRight.appendChild(quantCtrl);
+        }
+        externalHost.style.display = 'none';
+      }
+    };
+
+    // The controls are added by another script. We watch for them to appear in the DOM.
+    const mo = new MutationObserver(() => {
+      const speedCtrl = panel.querySelector('.bouncer-speed-ctrl');
+      const quantCtrl = panel.querySelector('.bouncer-quant-ctrl');
+      if (speedCtrl && quantCtrl) {
+        moveBouncerControls(); // Move them to their initial correct place
+        mo.disconnect(); // We found them, stop observing.
+      }
+    });
+    mo.observe(panel, { childList: true, subtree: true });
+
+    panel.addEventListener('toy-zoom', moveBouncerControls);
   }
 
   // Instrument select (header, hidden in standard)
@@ -305,8 +388,8 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
   instBtn.dataset.action = 'instrument';
   instBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonInstruments.png');"></div>`;
 
-  if (toyKind === 'loopgrid') {
-    // For loopgrid, put a large instrument button inside the header.
+  if (toyKind === 'loopgrid' || toyKind === 'bouncer') {
+    // For loopgrid and bouncer, put a large instrument button inside the header.
     instBtn.style.setProperty('--c-btn-size', '65px');
     right.appendChild(instBtn);
   } else {
