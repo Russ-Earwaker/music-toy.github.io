@@ -1,6 +1,6 @@
 // src/chordwheel.js — chord wheel with 16-step radial ring (per active segment)
 import { initToyUI } from './toyui.js';
-import { NUM_STEPS, getLoopInfo } from './audio-core.js';
+import { NUM_STEPS, getLoopInfo, ensureAudioContext, getToyGain } from './audio-core.js';
 import { triggerNoteForToy } from './audio-trigger.js';
 import { drawBlock } from './toyhelpers.js';
 
@@ -24,8 +24,25 @@ const COLORS = ['#60a5fa','#34d399','#fbbf24','#a78bfa','#f87171','#22d3ee','#ea
 
 export function createChordWheel(panel){
   initToyUI(panel, { toyName: 'Chord Wheel', defaultInstrument: 'AcousticGuitar' });
-  panel.dataset.toyid = panel.id || `chordwheel-${Math.random().toString(36).slice(2, 8)}`;
+  const toyId = panel.dataset.toyid = panel.id || `chordwheel-${Math.random().toString(36).slice(2, 8)}`;
+  const audioCtx = ensureAudioContext();
 
+  // --- Strum Realism: Compressor Bus ---
+  // To "glue" the notes of the strum together, we'll route all audio for this
+  // toy through a single compressor.
+  try {
+    const toyGain = getToyGain(toyId);
+    if (toyGain.context) { // Ensure we have a valid gain node
+      const destination = toyGain.destination || audioCtx.destination;
+      toyGain.disconnect();
+
+      const compressor = audioCtx.createDynamicsCompressor();
+      compressor.threshold.value = -24; compressor.ratio.value = 4;
+      compressor.attack.value = 0.006; compressor.release.value = 0.12;
+
+      toyGain.connect(compressor); compressor.connect(destination);
+    }
+  } catch (e) { console.warn(`[chordwheel] Could not install compressor for ${toyId}`, e); }
   const body = panel.querySelector('.toy-body'); body.innerHTML = '';
   const wrap = el('div','cw-wrap'); const flex = el('div','cw-flex'); wrap.appendChild(flex); body.appendChild(wrap);
   // The flex container will center both the SVG wheel and the overlay canvas.
@@ -186,12 +203,61 @@ export function createChordWheel(panel){
       const state = stepStates[audioStep];
       if (state !== -1) {
         flashes[audioStep] = 1.0;
-        const chord = buildChord(progression[audioStep] || 1); // Corrected this line
-        // Play arpeggio up (1) or down (2)
-        const order = (state === 2) ? [...chord].reverse() : chord;
-        order.forEach((m, i) => setTimeout(() => triggerNoteForToy(panel.dataset.toyid, midiToName(m), 0.85 - i * 0.08), i * 15));
+        const chord = buildChord(progression[audioStep] || 1);
+        const direction = (state === 2) ? 'up' : 'down';
+        scheduleStrum({ notes: chord, direction });
       }
     }
+  }
+
+  function dbToGain(db){ return Math.pow(10, db/20); }
+
+  function addStrumNoise(time, sweep, direction) {
+    try {
+      const toyGain = getToyGain(toyId);
+      const dur = Math.max(0.012, Math.min(0.035, sweep + 0.012));
+      const noise = audioCtx.createBufferSource();
+      const len = Math.ceil(audioCtx.sampleRate * dur);
+      const buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = (Math.random()*2 - 1) * 0.5;
+      noise.buffer = buf;
+
+      const bp = audioCtx.createBiquadFilter();
+      bp.type = 'bandpass';
+      const fStart = direction === 'down' ? 1000 : 3200;
+      const fEnd   = direction === 'down' ? 3200 : 1000;
+      bp.frequency.setValueAtTime(fStart, time);
+      bp.frequency.linearRampToValueAtTime(fEnd, time + dur);
+      bp.Q.value = 0.707;
+
+      const g = audioCtx.createGain();
+      g.gain.setValueAtTime(0.0001, time);
+      g.gain.linearRampToValueAtTime(dbToGain(-16), time + 0.002);
+      g.gain.exponentialRampToValueAtTime(0.0001, time + dur);
+
+      noise.connect(bp).connect(g).connect(toyGain);
+      noise.start(time);
+      noise.stop(time + dur + 0.01);
+    } catch (e) { console.warn('[chordwheel] Strum noise failed', e); }
+  }
+
+  function scheduleStrum({ notes, direction = 'down' }) {
+    const sweep = 0.008; // 8ms total sweep
+    const baseVel = 0.85;
+    const time = audioCtx.currentTime;
+
+    const orderedNotes = (direction === 'up') ? [...notes].reverse() : notes;
+    const N = orderedNotes.length;
+    const step = N > 1 ? sweep / (N - 1) : 0;
+
+    const velAt = i => { const t = i/(N-1 || 1); const curve = (direction === 'down') ? (0.8 + 0.4 * Math.sin(Math.PI * t)) : (1.2 - 0.4 * Math.sin(Math.PI * t)); return baseVel * curve; };
+    addStrumNoise(time, sweep, direction);
+    orderedNotes.forEach((midi, i) => {
+      const delayMs = (i * step * 1000) + (Math.random() * 4 - 2); // ±2ms jitter
+      const velocity = Math.max(0.05, Math.min(1, velAt(i)));
+      setTimeout(() => triggerNoteForToy(toyId, midiToName(midi), velocity), delayMs);
+    });
   }
   draw();
 
@@ -272,26 +338,30 @@ function buildDiatonicTriad(degree, tonicMidi = 60) {
   if (thirdOffset < rootOffset) thirdOffset += 12;
   if (fifthOffset < rootOffset) fifthOffset += 12;
 
-  const octaveShift = 0; // Play in the C4-C5 range for a pleasant default.
-  return [
-    tonicMidi + rootOffset + octaveShift,
-    tonicMidi + thirdOffset + octaveShift,
-    tonicMidi + fifthOffset + octaveShift
-  ];
+  const octaveShift = 0; // Build chords around the C4-C5 range.
+  const root = tonicMidi + rootOffset + octaveShift;
+  const third = tonicMidi + thirdOffset + octaveShift;
+  const fifth = tonicMidi + fifthOffset + octaveShift;
+
+  // Standard root-position triad voicing.
+  return [root, third, fifth];
 }
 
 function maybeAddSeventh(triad){
   if (Math.random() < 0.25) {
+    // The root is the first note of the triad.
     const rootMidi = triad[0];
     const rootPitchClass = rootMidi % 12;
     const scaleDegreeIndex = MAJOR_SCALE.indexOf(rootPitchClass);
     if (scaleDegreeIndex === -1) return triad; // Should not happen with diatonic triads
     let seventhOffset = MAJOR_SCALE[(scaleDegreeIndex + 6) % 7];
     if (seventhOffset < rootPitchClass) seventhOffset += 12;
+    // Build the seventh in the same octave as the third and fifth.
     const seventhMidi = (rootMidi - rootPitchClass) + seventhOffset;
     return [...triad, seventhMidi];
   }
-  return triad;
+  // Return a copy to avoid mutation by other parts of the system.
+  return [...triad];
 }
 
 function el(tag,cls){const n=document.createElement(tag);if(cls)n.className=cls;return n;}
