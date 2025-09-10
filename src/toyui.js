@@ -127,15 +127,32 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
     // First, remove any old external buttons to be safe.
     panel.querySelectorAll(':scope > .loopgrid-mode-btn[data-action="random"], :scope > .loopgrid-mode-btn[data-action="clear"]').forEach(btn => btn.remove());
 
+    // The "Random Blocks" button randomizes the step sequence.
+    // It is visible in both standard and advanced modes.
     if (!left.querySelector('[data-action="random"]')) {
       const randomBtn = document.createElement('button');
       randomBtn.className = 'c-btn';
       randomBtn.dataset.action = 'random';
-      randomBtn.title = 'Randomize';
+      randomBtn.title = 'Random Blocks';
       randomBtn.style.setProperty('--c-btn-size', '65px');
-      randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandom.png');"></div>`;
+      randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandomBlocks.png');"></div>`;
       left.appendChild(randomBtn);
     }
+
+    // The "Random Notes" button randomizes pitches and is only visible in advanced mode.
+    let randomNotesBtn = left.querySelector('[data-action="random-notes"]');
+    if (!randomNotesBtn) {
+        randomNotesBtn = document.createElement('button');
+        randomNotesBtn.className = 'c-btn';
+        randomNotesBtn.dataset.action = 'random-notes';
+        randomNotesBtn.title = 'Random Notes';
+        randomNotesBtn.style.setProperty('--c-btn-size', '65px');
+        randomNotesBtn.style.marginLeft = '10px';
+        randomNotesBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandomNotes.png');"></div>`;
+        left.appendChild(randomNotesBtn);
+    }
+
+    // The "Clear" button is to the right of the random buttons.
     if (!left.querySelector('[data-action="clear"]')) {
       const clearBtn = document.createElement('button');
       clearBtn.className = 'c-btn';
@@ -151,54 +168,112 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
     // Apply margin directly via inline style for maximum robustness against CSS overrides.
     // This creates the space needed to avoid the external "Edit" button.
     left.style.setProperty('margin-left', '47px', 'important');
+
+    // Visibility logic for the "Random Notes" button.
+    const updateVisibility = () => {
+        const isAdvanced = panel.classList.contains('toy-zoomed');
+        if (randomNotesBtn) randomNotesBtn.style.display = isAdvanced ? 'inline-block' : 'none';
+    };
+    updateVisibility();
+    panel.addEventListener('toy-zoom', updateVisibility);
   } else {
     // For other toys, use standard buttons
     if (!right.querySelector('[data-action="random"]')) {
-      const b = btn('Random');
-      b.dataset.action = 'random';
-      right.appendChild(b);
+      // Bouncer gets a special icon button for its standard "Random" (new ball) action.
+      if (toyKind === 'bouncer') {
+        const randomBtn = document.createElement('button');
+        randomBtn.className = 'c-btn';
+        randomBtn.dataset.action = 'random';
+        randomBtn.title = 'New Ball';
+        randomBtn.style.setProperty('--c-btn-size', '38px');
+        randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandomBlocks.png');"></div>`;
+        right.appendChild(randomBtn);
+      } else {
+        const b = btn('Random'); b.dataset.action = 'random'; right.appendChild(b);
+      }
     }
     if (!right.querySelector('[data-action="clear"]')) {
-      const clearBtn = document.createElement('button');
-      clearBtn.className = 'c-btn';
-      clearBtn.dataset.action = 'clear';
-      clearBtn.title = 'Clear';
-      clearBtn.style.setProperty('--c-btn-size', '38px');
-      clearBtn.style.setProperty('--accent', '#f87171'); // Red accent for a destructive action
-      clearBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonClear.png');"></div>`;
-      right.appendChild(clearBtn);
+      if (toyKind !== 'bouncer') { // Bouncer gets a special clear button on the left
+        const clearBtn = document.createElement('button');
+        clearBtn.className = 'c-btn';
+        clearBtn.dataset.action = 'clear';
+        clearBtn.title = 'Clear';
+        clearBtn.style.setProperty('--c-btn-size', '38px');
+        clearBtn.style.setProperty('--accent', '#f87171'); // Red accent for a destructive action
+        clearBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonClear.png');"></div>`;
+        right.appendChild(clearBtn);
+      }
     }
   }
 
   // Drum-specific "Random Notes" button
-  if (toyKind === 'loopgrid' && !right.querySelector('[data-action="random-notes"]')) {
-    const b = btn('Random Notes'); b.dataset.action='random-notes'; right.appendChild(b);
-  }
+  // This is now handled inside the main `if (toyKind === 'loopgrid')` block above.
 
   // Rippler advanced-only buttons: Random Notes + Random Blocks
   if (toyKind === 'rippler') {
     if (!right.querySelector('[data-action="random-notes"]')) {
-      const b = btn('Random Notes'); b.dataset.action='random-notes'; right.appendChild(b);
+      const b = document.createElement('button');
+      b.className = 'c-btn';
+      b.dataset.action = 'random-notes';
+      b.title = 'Random Notes';
+      b.style.setProperty('--c-btn-size', '38px');
+      b.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandomNotes.png');"></div>`;
+      right.appendChild(b);
     }
     if (!right.querySelector('[data-action="random-blocks"]')) {
-      const b = btn('Random Blocks'); b.dataset.action='random-blocks'; right.appendChild(b);
+      const b = document.createElement('button');
+      b.className = 'c-btn';
+      b.dataset.action = 'random-blocks';
+      b.title = 'Random Blocks';
+      b.style.setProperty('--c-btn-size', '38px');
+      b.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandomBlocks.png');"></div>`;
+      right.appendChild(b);
     }
   }
 
   // Bouncer has special button logic to swap "Random" for two more specific buttons in advanced mode.
   if (toyKind === 'bouncer') {
     const randomBtn = right.querySelector('[data-action="random"]');
+    const left = header.querySelector('.toy-title');
 
-    // Ensure the advanced-only buttons exist.
-    let randomNotesBtn = right.querySelector('[data-action="random-notes"]');
+    // Ensure the advanced-only buttons exist on the LEFT side.
+    let randomNotesBtn = left.querySelector('[data-action="random-notes"]');
     if (!randomNotesBtn) {
-      randomNotesBtn = btn('Random Notes'); randomNotesBtn.dataset.action = 'random-notes'; right.appendChild(randomNotesBtn);
+      randomNotesBtn = document.createElement('button');
+      randomNotesBtn.className = 'c-btn';
+      randomNotesBtn.dataset.action = 'random-notes';
+      randomNotesBtn.title = 'Random Notes';
+      randomNotesBtn.style.setProperty('--c-btn-size', '38px');
+      randomNotesBtn.style.setProperty('margin-left', '10px');
+      randomNotesBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandomNotes.png');"></div>`;
+      left.appendChild(randomNotesBtn);
     }
-    let randomCubesBtn = right.querySelector('[data-action="random-cubes"]');
+    let randomCubesBtn = left.querySelector('[data-action="random-cubes"]');
     if (!randomCubesBtn) {
-      randomCubesBtn = btn('Random Cubes'); randomCubesBtn.dataset.action = 'random-cubes'; right.appendChild(randomCubesBtn);
+      randomCubesBtn = document.createElement('button');
+      randomCubesBtn.className = 'c-btn';
+      randomCubesBtn.dataset.action = 'random-cubes';
+      // Per request, this is the "Random Blocks" button.
+      randomCubesBtn.title = 'Random Blocks';
+      randomCubesBtn.style.setProperty('--c-btn-size', '38px');
+      randomCubesBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandomBlocks.png');"></div>`;
+      left.appendChild(randomCubesBtn);
     }
 
+    // Bouncer's clear button also goes on the left, to the right of the random buttons.
+    if (!left.querySelector('[data-action="clear"]')) {
+      const clearBtn = document.createElement('button');
+      clearBtn.className = 'c-btn';
+      clearBtn.dataset.action = 'clear';
+      clearBtn.title = 'Clear';
+      clearBtn.style.setProperty('--c-btn-size', '38px');
+      clearBtn.style.setProperty('--accent', '#f87171'); // Red accent
+      clearBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonClear.png');"></div>`;
+      left.appendChild(clearBtn);
+    }
+
+    // The generic "Random" button for Bouncer is on the right, but only for standard view.
+    // It triggers a new ball spawn.
     // This function explicitly sets the visibility of the buttons based on the view mode.
     // This is more robust than relying purely on CSS.
     const updateVisibility = () => {
