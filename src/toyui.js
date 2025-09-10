@@ -83,7 +83,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
   const left = header.querySelector('.toy-title');
 
   // Advanced / Close buttons
-  if (toyKind === 'loopgrid' || toyKind === 'bouncer' || toyKind === 'rippler') {
+  if (toyKind === 'loopgrid' || toyKind === 'bouncer' || toyKind === 'rippler' || toyKind === 'chordwheel' || toyKind === 'drawgrid') {
     // For the Drum Toy and Bouncer, use the new circular "Edit" button, positioned outside the panel.
     // We append it to the panel itself, not the header.
 
@@ -193,12 +193,12 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
     if (!right.querySelector('[data-action="random"]')) {
       // Bouncer gets a special icon button for its standard "Random" (new ball) action.
       // Bouncer handles its own buttons entirely within its specific block.
-      if (toyKind !== 'bouncer' && toyKind !== 'rippler') {
+      if (toyKind !== 'bouncer' && toyKind !== 'rippler' && toyKind !== 'chordwheel' && toyKind !== 'drawgrid') {
         const b = btn('Random'); b.dataset.action = 'random'; right.appendChild(b);
       }
     }
     if (!right.querySelector('[data-action="clear"]')) {
-      if (toyKind !== 'bouncer' && toyKind !== 'rippler') { // Bouncer and Rippler get a special clear button on the left
+      if (toyKind !== 'bouncer' && toyKind !== 'rippler' && toyKind !== 'chordwheel' && toyKind !== 'drawgrid') { // Bouncer, Rippler, Chordwheel, and DrawGrid get a special clear button on the left
         const clearBtn = document.createElement('button');
         clearBtn.className = 'c-btn';
         clearBtn.dataset.action = 'clear';
@@ -327,6 +327,145 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
     });
     mo.observe(panel, { childList: true, subtree: true });
     panel.addEventListener('toy-zoom', moveRipplerControls);
+  }
+
+  // Chordwheel UI
+  if (toyKind === 'chordwheel') {
+    const left = header.querySelector('.toy-title');
+    left.style.setProperty('margin-left', '47px', 'important');
+
+    const editBtn = panel.querySelector(':scope > .toy-mode-btn[data-action="advanced"]');
+    const closeBtn = panel.querySelector(':scope > .toy-mode-btn[data-action="close-advanced"]');
+
+    const BTN_SIZE = '65px';
+
+    // "Random" button. Icon changes based on mode.
+    let randomBtn = left.querySelector('[data-action="random"]');
+    if (!randomBtn) {
+      randomBtn = document.createElement('button');
+      randomBtn.className = 'c-btn';
+      randomBtn.dataset.action = 'random';
+      randomBtn.style.setProperty('--c-btn-size', BTN_SIZE);
+      randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandom.png');"></div>`;
+      left.appendChild(randomBtn);
+    }
+
+    // "Clear" button
+    let clearBtn = left.querySelector('[data-action="clear"]');
+    if (!clearBtn) {
+      clearBtn = document.createElement('button');
+      clearBtn.className = 'c-btn';
+      clearBtn.dataset.action = 'clear';
+      clearBtn.title = 'Clear';
+      clearBtn.style.setProperty('--c-btn-size', BTN_SIZE);
+      clearBtn.style.setProperty('--accent', '#f87171');
+      clearBtn.style.marginLeft = '10px';
+      clearBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonClear.png');"></div>`;
+      left.appendChild(clearBtn);
+    }
+
+    const updateVisibility = () => {
+      const isAdvanced = panel.classList.contains('toy-zoomed');
+      // Update the main random button's icon and title based on the mode.
+      if (randomBtn) {
+          const iconEl = randomBtn.querySelector('.c-btn-core');
+          if (isAdvanced) {
+              randomBtn.title = 'Randomize';
+              if (iconEl) iconEl.style.setProperty('--c-btn-icon-url', `url('../assets/UI/T_ButtonRandomBlocks.png')`);
+          } else {
+              randomBtn.title = 'Randomize';
+              if (iconEl) iconEl.style.setProperty('--c-btn-icon-url', `url('../assets/UI/T_ButtonRandom.png')`);
+          }
+      }
+      if (editBtn) editBtn.style.display = isAdvanced ? 'none' : 'block';
+      if (closeBtn) closeBtn.style.display = isAdvanced ? 'block' : 'none';
+    };
+    updateVisibility();
+    panel.addEventListener('toy-zoom', updateVisibility);
+  }
+
+  // DrawGrid UI
+  if (toyKind === 'drawgrid') {
+    const left = header.querySelector('.toy-title');
+    if (!left) {
+      console.warn('[toyui] Could not find .toy-title for drawgrid to add buttons.');
+      return; // Can't add buttons if the container doesn't exist.
+    }
+    left.style.setProperty('margin-left', '47px', 'important');
+
+    const editBtn = panel.querySelector(':scope > .toy-mode-btn[data-action="advanced"]');
+    const closeBtn = panel.querySelector(':scope > .toy-mode-btn[data-action="close-advanced"]');
+
+    const BTN_SIZE = '65px';
+
+    // "Random" button. Icon changes based on mode.
+    let randomBtn = left.querySelector('[data-action="random"]');
+    if (!randomBtn) {
+      randomBtn = document.createElement('button');
+      randomBtn.className = 'c-btn';
+      randomBtn.title = 'Randomize';
+      randomBtn.dataset.action = 'random';
+      randomBtn.style.setProperty('--c-btn-size', BTN_SIZE);
+      randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandom.png');"></div>`;
+      left.appendChild(randomBtn);
+    }
+
+    // "Clear" button
+    let clearBtn = left.querySelector('[data-action="clear"]');
+    if (!clearBtn) {
+      clearBtn = document.createElement('button');
+      clearBtn.className = 'c-btn';
+      clearBtn.dataset.action = 'clear';
+      clearBtn.title = 'Clear';
+      clearBtn.style.setProperty('--c-btn-size', BTN_SIZE);
+      clearBtn.style.setProperty('--accent', '#f87171');
+      clearBtn.style.marginLeft = '10px';
+      clearBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonClear.png');"></div>`;
+      left.appendChild(clearBtn);
+    }
+
+    // Eraser button (specific to drawgrid, on the right)
+    const right = header.querySelector('.toy-controls-right');
+    if (right && !right.querySelector('[data-erase]')) {
+      const eraserBtn = document.createElement('button');
+      eraserBtn.className = 'c-btn';
+      eraserBtn.dataset.erase = '1';
+      eraserBtn.title = 'Eraser';
+      eraserBtn.style.setProperty('--c-btn-size', '65px');
+      eraserBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonEraser.png');"></div>`;
+      right.appendChild(eraserBtn);
+    }
+
+    const updateVisibility = () => {
+      const isAdvanced = panel.classList.contains('toy-zoomed');
+      // For DrawGrid, the random button is always visible and uses the same icon.
+      // We only need to toggle the visibility of the Edit/Close buttons.
+      if (editBtn) editBtn.style.display = isAdvanced ? 'none' : 'block';
+      if (closeBtn) closeBtn.style.display = isAdvanced ? 'block' : 'none';
+    };
+
+    updateVisibility();
+    panel.addEventListener('toy-zoom', updateVisibility);
+
+    // --- Logic for external controls in Advanced mode ---
+    let externalHost = panel.querySelector('.drawgrid-external-controls');
+    if (!externalHost) {
+      externalHost = document.createElement('div');
+      externalHost.className = 'drawgrid-external-controls';
+      Object.assign(externalHost.style, { position: 'absolute', right: '-160px', top: '50%', transform: 'translateY(-50%)', display: 'none', flexDirection: 'column', gap: '10px', zIndex: '10', width: '150px' });
+      panel.appendChild(externalHost);
+    }
+    const moveDrawGridControls = () => {
+      const isAdvanced = panel.classList.contains('toy-zoomed');
+      const headerRight = panel.querySelector('.toy-header .toy-controls-right');
+      const stepsCtrl = panel.querySelector('.drawgrid-steps');
+      const autotuneCtrl = panel.querySelector('.drawgrid-autotune');
+      if (isAdvanced) { if (stepsCtrl) externalHost.appendChild(stepsCtrl); if (autotuneCtrl) externalHost.appendChild(autotuneCtrl); externalHost.style.display = 'flex'; }
+      else { if (headerRight) { if (stepsCtrl) headerRight.appendChild(stepsCtrl); if (autotuneCtrl) headerRight.appendChild(autotuneCtrl); } externalHost.style.display = 'none'; }
+    };
+    const mo = new MutationObserver(() => { const s = panel.querySelector('.drawgrid-steps'), a = panel.querySelector('.drawgrid-autotune'); if (s && a) { moveDrawGridControls(); mo.disconnect(); } });
+    mo.observe(panel, { childList: true, subtree: true });
+    panel.addEventListener('toy-zoom', moveDrawGridControls);
   }
 
   // Bouncer has special button logic to swap "Random" for two more specific buttons in advanced mode.
@@ -481,8 +620,8 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
   instBtn.dataset.action = 'instrument';
   instBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonInstruments.png');"></div>`;
 
-  if (toyKind === 'loopgrid' || toyKind === 'bouncer' || toyKind === 'rippler') {
-    // For loopgrid, bouncer, and rippler, put a large instrument button inside the header.
+  if (toyKind === 'loopgrid' || toyKind === 'bouncer' || toyKind === 'rippler' || toyKind === 'chordwheel' || toyKind === 'drawgrid') {
+    // For loopgrid, bouncer, rippler, chordwheel, and drawgrid, put a large instrument button inside the header.
     instBtn.style.setProperty('--c-btn-size', '65px');
     right.appendChild(instBtn);
   } else {
@@ -537,6 +676,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
     }
     if (sel.value !== instrumentName) sel.value = instrumentName;
   });
+
 
   // SAFER initial instrument resolution:
   // Prefer existing dataset (e.g., theme), then explicit default, and only then current select value.
