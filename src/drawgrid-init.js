@@ -6,7 +6,9 @@ import { initToyUI } from './toyui.js';
 
 export function initDrawGrid(panel){
   if (!panel || panel.__drawgridInit) return panel?.__drawToy;
-  initToyUI(panel, { toyName: 'Draw Grid', defaultInstrument: 'Acoustic Guitar' });
+  // Use the canonical instrument_id directly to avoid a race condition where
+  // the display name lookup fails because the instrument catalog hasn't loaded yet.
+  initToyUI(panel, { toyName: 'Draw Grid', defaultInstrument: 'ACOUSTIC GUITAR' });
   const toy = createDrawGrid(panel, { toyId: panel.id || 'drawgrid-1' });
   connectDrawGridToPlayer(panel);
   panel.__drawgridInit = true;

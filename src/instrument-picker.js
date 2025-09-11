@@ -78,17 +78,14 @@ export async function openInstrumentPicker({ panel, toyId }){
     const list = (cats.get(activeCat)||[]);
     list.forEach(e=>{
       const b = el('button','inst-item', e.display);
-      const disp = String(e.display||'').toLowerCase();
-      const id   = String(e.id||'').toLowerCase();
+      const id   = String(e.id||''); // Keep case, this is the canonical instrument_id
       const synth= String(e.synth||'').toLowerCase().replace(/_/g,'-');
-      const hasFn = (k)=>{ try{ return !!(window.AudioDebug && typeof window.AudioDebug.has==='function' && window.AudioDebug.has(k)); }catch{ return false; } };
-      // Prefer synth (tone engine) when available; otherwise prefer a real buffer key
-      let key = (synth || id || disp || '').trim();
-      if (!synth){
-        if (hasFn(disp)) key = disp;
-        else if (hasFn(id)) key = id;
-      }
+
+      // The value of the button should always be the canonical, case-sensitive instrument_id.
+      // If it's a synth, the synth_id acts as its instrument_id.
+      const key = id || synth;
       b.dataset.value = key;
+
       if (b.dataset.value === selected) b.classList.add('selected');
       b.addEventListener('click', (ev)=>{
         ev.stopPropagation();

@@ -2,7 +2,7 @@
 import { zoomInPanel, zoomOutPanel } from './zoom-overlay.js';
 import { getInstrumentNames } from './audio-samples.js';
 import { installVolumeUI } from './volume-ui.js';
-import { getIdForDisplayName, getDisplayNameForId } from './instrument-catalog.js';
+import { getIdForDisplayName, getDisplayNameForId, getAllIds } from './instrument-catalog.js';
 import { openInstrumentPicker } from './instrument-picker.js';
 
 const $ = (sel, root=document)=> root.querySelector(sel);
@@ -723,10 +723,29 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
 
   // SAFER initial instrument resolution:
   // Prefer existing dataset (e.g., theme), then explicit default, and only then current select value.
-  const fromTheme = panel.dataset.instrument;
-  const fromDefault = defaultInstrument; // This is now always an ID.
-  const fromSelect = sel ? sel.value : null;
-  const initialInstrument = fromTheme || fromDefault || fromSelect || 'TONE';
+  let initialInstrument = 'TONE';
+  try {
+    const fromTheme = panel.dataset.instrument;
+    const fromDefault = defaultInstrument;
+    const fromSelect = sel ? sel.value : null;
+    const candidates = [fromTheme, fromDefault, fromSelect].filter(Boolean);
+    const allIds = getAllIds();
+
+    for (const cand of candidates) {
+      // 1. Try exact, case-sensitive match first.
+      if (allIds.includes(cand)) {
+        initialInstrument = cand;
+        break;
+      }
+      // 2. Fallback: try case-insensitive match. This handles `AcousticGuitar` vs `ACOUSTIC GUITAR`.
+      const lowerCand = cand.toLowerCase().replace(/[\s_-]+/g, '');
+      const foundId = allIds.find(id => id.toLowerCase().replace(/[\s_-]+/g, '') === lowerCand);
+      if (foundId) {
+        initialInstrument = foundId;
+        break;
+      }
+    }
+  } catch (e) { console.warn('[toyui] Initial instrument resolution failed', e); }
 
   // Apply initial instrument without letting an empty/unmatched select overwrite the theme
   if (initialInstrument) {

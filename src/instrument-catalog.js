@@ -6,6 +6,7 @@ const DISPLAY_NAME_TO_ID = new Map();
 
 export function getDisplayNameForId(id) { return ID_TO_DISPLAY_NAME.get(id); }
 export function getIdForDisplayName(displayName) { return DISPLAY_NAME_TO_ID.get(displayName); }
+export function getAllIds() { return Array.from(ID_TO_DISPLAY_NAME.keys()); }
 
 export async function loadInstrumentEntries(){
   try{
