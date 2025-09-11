@@ -66,6 +66,7 @@
   border-radius: 50%;
   background-color: var(--accent, cyan);
   z-index: 1; /* Behind the icon */
+  transition: transform 0.15s ease-out, filter 0.15s ease-out;
 }
 
 /* ::after is the icon image, drawn on top of the circle */

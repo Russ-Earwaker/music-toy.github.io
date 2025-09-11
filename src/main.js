@@ -13,6 +13,7 @@ import { loadInstrumentEntries as loadInstrumentCatalog } from './instrument-cat
 import { DEFAULT_BPM, NUM_STEPS, ensureAudioContext, getLoopInfo, setBpm, start, isRunning } from './audio-core.js';
 import { createLoopIndicator } from './loopindicator.js';
 import { buildGrid } from './drum-core.js';
+import { tryRestoreOnBoot, startAutosave } from './persistence.js';
 
 /**
  * Calculates the visual extents of a panel's content, including any
@@ -169,19 +170,31 @@ async function boot(){
 
   bootTopbar();
   createLoopIndicator('#topbar');
+  // Early restore: apply positions/theme/bpm before toys init to avoid any auto-layout overrides
+  let restored = false;
+  try{ restored = !!tryRestoreOnBoot(); }catch{}
   // Initialize loopgrids (this attaches __sequencerStep to them)
   bootGrids();
   bootDrawGrids();
   // The theme system will run and may set its own instruments.
   try{ window.ThemeBoot && window.ThemeBoot.wireAll && window.ThemeBoot.wireAll(); }catch{}
+  // Restore again to apply toy-specific state now that toys are ready
+  try{ tryRestoreOnBoot(); }catch{}
   scheduler(getSequencedToys());
   try{ window.setBoardScale && window.setBoardScale(1); }catch{}
   // Arrange panels if available
-  try{ window.organizeBoard && window.organizeBoard(); }catch{}
-  // After organizing, apply our stacking order to ensure buttons are visible.
-  try{ applyStackingOrder(); }catch{}
-  // After all positioning, run our gap-fixer to prevent overlaps.
-  try{ addGapAfterOrganize(); }catch{}
+  // Skip if a scene restored positions, or if the user already has saved positions.
+  let hasSavedPositions = false; try { hasSavedPositions = !!localStorage.getItem('toyPositions'); } catch {}
+  if (!restored && !hasSavedPositions){
+    try{ window.organizeBoard && window.organizeBoard(); }catch{}
+    try{ applyStackingOrder(); }catch{}
+    try{ addGapAfterOrganize(); }catch{}
+  } else {
+    // Still ensure stacking order for external buttons
+    try{ applyStackingOrder(); }catch{}
+  }
+  // Begin coarse autosave
+  try{ startAutosave(2000); }catch{}
 }
 if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
 else boot();

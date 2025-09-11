@@ -133,6 +133,21 @@ export function buildGrid(panel, numSteps = 8){
     noteIndices: Array(numSteps).fill(12), // Default to C4 (MIDI 60)
   };
 
+  // If persistence provided a pending state before this toy initialized, apply it now.
+  try{
+    const pending = panel.__pendingLoopGridState;
+    if (pending){
+      if (Array.isArray(pending.steps)) panel.__gridState.steps = Array.from(pending.steps).map(v=>!!v);
+      if (Array.isArray(pending.notes)) panel.__gridState.notes = Array.from(pending.notes).map(x=>x|0);
+      if (Array.isArray(pending.noteIndices)) panel.__gridState.noteIndices = Array.from(pending.noteIndices).map(x=>x|0);
+      if (pending.instrument){
+        panel.dataset.instrument = pending.instrument;
+        try{ panel.dispatchEvent(new CustomEvent('toy:instrument', { detail:{ name: pending.instrument, value: pending.instrument }, bubbles:true })); }catch{}
+      }
+      delete panel.__pendingLoopGridState;
+    }
+  }catch{}
+
   const body = panel.querySelector('.toy-body');
   
   // --- Create all DOM elements first, in a predictable order ---

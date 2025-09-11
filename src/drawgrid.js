@@ -12,6 +12,50 @@ const STROKE_COLORS = [
 ];
 let colorIndex = 0;
 
+/**
+ * For a sparse array of nodes, fills in the empty columns by interpolating
+ * and extrapolating from the existing nodes to create a continuous line.
+ * @param {Array<Set<number>>} nodes - The sparse array of node rows.
+ * @param {number} numCols - The total number of columns in the grid.
+ * @returns {Array<Set<number>>} A new array with all columns filled.
+ */
+function fillGapsInNodeArray(nodes, numCols) {
+    const filled = nodes.map(s => s ? new Set(s) : new Set()); // Deep copy
+    const firstDrawn = filled.findIndex(n => n.size > 0);
+    if (firstDrawn === -1) return filled; // Nothing to fill
+
+    const lastDrawn = filled.map(n => n.size > 0).lastIndexOf(true);
+
+    // Extrapolate backwards from the first drawn point
+    const firstRow = [...filled[firstDrawn]][0];
+    for (let c = 0; c < firstDrawn; c++) {
+        filled[c] = new Set([firstRow]);
+    }
+
+    // Extrapolate forwards from the last drawn point
+    const lastRow = [...filled[lastDrawn]][0];
+    for (let c = lastDrawn + 1; c < numCols; c++) {
+        filled[c] = new Set([lastRow]);
+    }
+
+    // Interpolate between drawn points
+    let lastKnownCol = firstDrawn;
+    for (let c = firstDrawn + 1; c < lastDrawn; c++) {
+        if (filled[c].size > 0) {
+            lastKnownCol = c;
+        } else {
+            let nextKnownCol = c + 1;
+            while (nextKnownCol < lastDrawn && filled[nextKnownCol].size === 0) { nextKnownCol++; }
+            const leftRow = [...filled[lastKnownCol]][0];
+            const rightRow = [...filled[nextKnownCol]][0];
+            const t = (c - lastKnownCol) / (nextKnownCol - lastKnownCol);
+            const interpolatedRow = Math.round(leftRow + t * (rightRow - leftRow));
+            filled[c] = new Set([interpolatedRow]);
+        }
+    }
+    return filled;
+}
+
 export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId, bpm = 120 } = {}) {
   // The init script now guarantees the panel is a valid HTMLElement with the correct dataset.
   // The .toy-body is now guaranteed to exist by initToyUI, which runs first.
@@ -66,6 +110,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let pendingActiveMask = null; // preserve active columns across resolution changes
   let previewGid = null; // 1 or 2 while drawing a special line preview
   let persistentDisabled = Array.from({ length: initialCols }, () => new Set()); // survives view changes
+  let btnLine1, btnLine2;
   let autoTune = true; // Default to on
   
   const safeArea = 40;
@@ -91,35 +136,23 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     generatorButtonsWrap.className = 'drawgrid-generator-buttons';
     panel.appendChild(generatorButtonsWrap);
 
-    const btnLine1 = document.createElement('button');
+    btnLine1 = document.createElement('button');
     btnLine1.type = 'button';
-    btnLine1.className = 'toy-btn';
+    btnLine1.className = 'c-btn';
     btnLine1.dataset.line = '1';
-    btnLine1.textContent = 'Draw Line 1';
+    btnLine1.title = 'Draw Line 1';
+    btnLine1.style.setProperty('--c-btn-size', '96px');
+    btnLine1.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>`;
     generatorButtonsWrap.appendChild(btnLine1);
 
-    const btnLine2 = document.createElement('button');
+    btnLine2 = document.createElement('button');
     btnLine2.type = 'button';
-    btnLine2.className = 'toy-btn';
+    btnLine2.className = 'c-btn';
     btnLine2.dataset.line = '2';
-    btnLine2.textContent = 'Draw Line 2';
+    btnLine2.title = 'Draw Line 2';
+    btnLine2.style.setProperty('--c-btn-size', '96px');
+    btnLine2.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>`;
     generatorButtonsWrap.appendChild(btnLine2);
-
-    function updateGeneratorButtons() {
-        const hasLine1 = strokes.some(s => s.generatorId === 1);
-        const hasLine2 = strokes.some(s => s.generatorId === 2);
-
-        btnLine1.textContent = hasLine1 ? 'Redraw Line 1' : 'Draw Line 1';
-        btnLine2.textContent = hasLine2 ? 'Redraw Line 2' : 'Draw Line 2';
-
-        const a1 = nextDrawTarget === 1;
-        const a2 = nextDrawTarget === 2;
-        btnLine1.classList.toggle('active', a1);
-        btnLine2.classList.toggle('active', a2);
-        btnLine1.setAttribute('aria-pressed', String(a1));
-        btnLine2.setAttribute('aria-pressed', String(a2));
-    }
-    try { panel.__dgUpdateButtons = updateGeneratorButtons; } catch{}
 
     function handleGeneratorButtonClick(e) {
         const lineNum = parseInt(e.target.dataset.line, 10);
@@ -132,9 +165,10 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         updateGeneratorButtons();
     }
 
-    btnLine1.addEventListener('click', handleGeneratorButtonClick);
-    btnLine2.addEventListener('click', handleGeneratorButtonClick);
 
+    
+        btnLine1.addEventListener('click', handleGeneratorButtonClick);
+    btnLine2.addEventListener('click', handleGeneratorButtonClick);
     // Auto-tune toggle
     let autoTuneBtn = right.querySelector('.drawgrid-autotune');
     if (!autoTuneBtn) {
@@ -182,11 +216,13 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
             if (prevCols === newCols) {
               for (let i = 0; i < newCols; i++) mapped[i] = !!prevActive[i];
             } else if (newCols % prevCols === 0) {
+              // upscale: duplicate each prior column's state into its segments
               const f = newCols / prevCols;
               for (let i = 0; i < prevCols; i++) {
                 for (let j = 0; j < f; j++) mapped[i * f + j] = !!prevActive[i];
               }
             } else if (prevCols % newCols === 0) {
+              // downscale: OR any segment to preserve activity if either subcolumn was active
               const f = prevCols / newCols;
               for (let i = 0; i < newCols; i++) {
                 let any = false;
@@ -194,6 +230,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
                 mapped[i] = any;
               }
             } else {
+              // fallback proportional map
               for (let i = 0; i < newCols; i++) {
                 const src = Math.floor(i * prevCols / newCols);
                 mapped[i] = !!prevActive[src];
@@ -208,12 +245,63 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
   }
 
+  function updateGeneratorButtons() {
+      if (!btnLine1 || !btnLine2) return; // Guard in case header/buttons don't exist
+      const hasLine1 = strokes.some(s => s.generatorId === 1);
+      const hasLine2 = strokes.some(s => s.generatorId === 2);
+
+      const core1 = btnLine1.querySelector('.c-btn-core');
+      if (core1) core1.style.setProperty('--c-btn-icon-url', `url('../assets/UI/${hasLine1 ? 'T_ButtonLine1R.png' : 'T_ButtonLine1.png'}')`);
+      btnLine1.title = hasLine1 ? 'Redraw Line 1' : 'Draw Line 1';
+
+      const core2 = btnLine2.querySelector('.c-btn-core');
+      if (core2) core2.style.setProperty('--c-btn-icon-url', `url('../assets/UI/${hasLine2 ? 'T_ButtonLine2R.png' : 'T_ButtonLine2.png'}')`);
+      btnLine2.title = hasLine2 ? 'Redraw Line 2' : 'Draw Line 2';
+      
+      const a1 = nextDrawTarget === 1;
+      const a2 = nextDrawTarget === 2;
+      btnLine1.classList.toggle('active', a1);
+      btnLine2.classList.toggle('active', a2);
+      btnLine1.setAttribute('aria-pressed', String(a1));
+      btnLine2.setAttribute('aria-pressed', String(a2));
+  }
+  try { panel.__dgUpdateButtons = updateGeneratorButtons; } catch{}
+
   // New central helper to redraw the paint canvas and regenerate the node map from the `strokes` array.
 function clearAndRedrawFromStrokes() {
     pctx.clearRect(0, 0, cssW, cssH);
+
+
     for (const s of strokes) { drawFullStroke(pctx, s); }
     regenerateMapFromStrokes();
     try { (panel.__dgUpdateButtons || updateGeneratorButtons || function(){})() } catch(e) { try { console.warn('[drawgrid] updateGeneratorButtons not available', e); } catch{} }
+  }
+
+  /**
+   * Processes a single generator stroke, fills in gaps to create a full line,
+   * and marks the interpolated nodes as disabled.
+   */
+  function processGeneratorStroke(stroke, newMap, newGroups) {
+    const partial = snapToGridFromStroke(stroke);
+    const filledNodes = fillGapsInNodeArray(partial.nodes, cols);
+
+    for (let c = 0; c < cols; c++) {
+        if (filledNodes[c]?.size > 0) {
+            filledNodes[c].forEach(row => {
+                newMap.nodes[c].add(row);
+                if (stroke.generatorId) {
+                    const stack = newGroups[c].get(row) || [];
+                    if (!stack.includes(stroke.generatorId)) stack.push(stroke.generatorId);
+                    newGroups[c].set(row, stack);
+                }
+            });
+
+            if (partial.nodes[c]?.size === 0) {
+                if (!newMap.disabled[c]) newMap.disabled[c] = new Set();
+                filledNodes[c].forEach(row => newMap.disabled[c].add(row));
+            }
+        }
+    }
   }
 
   // Regenerates the node map by snapping all generator strokes.
@@ -225,60 +313,16 @@ function regenerateMapFromStrokes() {
       if (isZoomed) {
         // Advanced view: snap each generator line separately and union nodes.
         const gens = strokes.filter(s => s.generatorId);
-        for (const s of gens) {
-          const partial = snapToGridFromStroke(s);
-          for (let c = 0; c < cols; c++){
-            if (partial.nodes[c]?.size > 0){
-              partial.nodes[c].forEach(row => {
-                newMap.nodes[c].add(row);
-                // Track z-ordered group stacks per row. Only store real generator IDs (1/2), not 0/null.
-                if (s.generatorId) {
-                  const stack = newGroups[c].get(row) || [];
-                  if (!stack.includes(s.generatorId)) stack.push(s.generatorId);
-                  newGroups[c].set(row, stack);
-                }
-              });
-              newMap.active[c] = true;
-            }
-          }
-        }
+        gens.forEach(s => processGeneratorStroke(s, newMap, newGroups));
       } else {
         // Standard view: if generator lines exist, preserve all of them; otherwise fall back to first special stroke.
         const gens = strokes.filter(s => s.generatorId);
         if (gens.length > 0){
-          for (const s of gens){
-            const partial = snapToGridFromStroke(s);
-            for (let c = 0; c < cols; c++){
-              if (partial.nodes[c]?.size > 0){
-                partial.nodes[c].forEach(row => {
-                  newMap.nodes[c].add(row);
-                  if (s.generatorId) {
-                    const stack = newGroups[c].get(row) || [];
-                    if (!stack.includes(s.generatorId)) stack.push(s.generatorId);
-                    newGroups[c].set(row, stack);
-                  }
-                });
-                newMap.active[c] = true;
-              }
-            }
-          }
+          gens.forEach(s => processGeneratorStroke(s, newMap, newGroups));
         } else {
           const specialStroke = strokes.find(s => s.isSpecial);
           if (specialStroke){
-            const partial = snapToGridFromStroke(specialStroke);
-            for (let c = 0; c < cols; c++){
-              if (partial.nodes[c]?.size > 0){
-                partial.nodes[c].forEach(row => {
-                  newMap.nodes[c].add(row);
-                  if (specialStroke.generatorId) {
-                    const stack = newGroups[c].get(row) || [];
-                    if (!stack.includes(specialStroke.generatorId)) stack.push(specialStroke.generatorId);
-                    newGroups[c].set(row, stack);
-                  }
-                });
-                newMap.active[c] = true;
-              }
-            }
+            processGeneratorStroke(specialStroke, newMap, newGroups);
           }
         }
 
@@ -379,6 +423,10 @@ function regenerateMapFromStrokes() {
       requestAnimationFrame(() => {
         if (!panel.isConnected) return;
         regenerateMapFromStrokes();
+        // After regenerating the map, which is the source of truth,
+        // update the generator buttons to reflect the current state.
+        // This is more reliable than calling it from the zoom listener directly.
+        updateGeneratorButtons();
       });
     } else if (hasNodes) {
       // No strokes to regenerate from (e.g., after dragging). Preserve current nodes and do not clear paint.
@@ -387,9 +435,12 @@ function regenerateMapFromStrokes() {
         drawGrid();
         drawNodes(currentMap.nodes);
         panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
+        updateGeneratorButtons();
       });
     } else {
       api.clear();
+      // Also update buttons when clearing, to reset them to "Draw".
+      updateGeneratorButtons();
     }
   }
 
@@ -1404,8 +1455,14 @@ function regenerateMapFromStrokes() {
       .toy-panel[data-toy="drawgrid"].toy-zoomed .drawgrid-generator-buttons {
           display: flex; /* Visible only in advanced mode */
       }
-      .drawgrid-generator-buttons .toy-btn { width: 100px; height: 60px; font-size: 14px; }
-      .drawgrid-generator-buttons .toy-btn.active { box-shadow: 0 0 8px 2px #fff; border-color: #fff; }
+      .drawgrid-generator-buttons .c-btn.active .c-btn-glow {
+          opacity: 1;
+          filter: blur(2px) brightness(1.4);
+      }
+      .drawgrid-generator-buttons .c-btn.active .c-btn-core::before {
+          filter: brightness(1.8);
+          transform: translate(-50%, -50%) scale(1.1);
+      }
   `;
   panel.appendChild(style);
 
