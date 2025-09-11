@@ -67,16 +67,12 @@ export function createRippleSynth(selector){
 
   const ctx = canvas.getContext('2d');
   const ui  = initToyUI(panel, { toyName: 'Rippler' });
-  // Install quantization UI (shared with Bouncer), default to 1/4
-  try{ if (!panel.dataset.quantDiv && !panel.dataset.quant) panel.dataset.quantDiv = '4'; }catch{}
+  // Install quantization UI (shared with Bouncer), default to 1/2
+  try{ if (!panel.dataset.quantDiv && !panel.dataset.quant) panel.dataset.quantDiv = '2'; }catch{}
   // Keep a getter to read current quant divisor reliably (like Bouncer)
   let __getQuantDiv = null;
-  try{ __getQuantDiv = installQuantUI(panel, parseFloat(panel?.dataset?.quantDiv||panel?.dataset?.quant||'4')); }catch{}
+  try{ __getQuantDiv = installQuantUI(panel, parseFloat(panel?.dataset?.quantDiv||panel?.dataset?.quant||'2')); }catch{}
   // If quantization changes mid-loop, re-arm recording so first and subsequent loops match
-  let __rearmOnQuant = false;
-  try{
-    panel.addEventListener('bouncer:quant', ()=>{ __rearmOnQuant = true; });
-  }catch{}
 
   let currentInstrument = (ui.instrument && ui.instrument !== 'tone') ? ui.instrument : 'kalimba';
   try { ui.setInstrument(currentInstrument); } catch {}
@@ -545,21 +541,6 @@ export function createRippleSynth(selector){
       }
 
       springBlocks(1/60);
-      // If quant changed, restart the loop capture at a clean anchor and spawn a new ripple
-      if (__rearmOnQuant){
-        __rearmOnQuant = false;
-        try {
-          const nowAT = ac.currentTime;
-          // Cancel any in-flight ripples to avoid an extra audible wave
-          try{ if (Array.isArray(ripples)) ripples.length = 0; }catch{}
-          barStartAT = nowAT;
-          nextSlotAT = barStartAT + stepSeconds();
-          nextSlotIx = 1;
-          pattern.forEach(s=> s.clear()); patternOffsets.forEach(m=> m.clear());
-          recording = true;
-          spawnRipple(true);
-        } catch {}
-      }
       handleRingHits(ac.currentTime);
       scheduler.tick();
 
