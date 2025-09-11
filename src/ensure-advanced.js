@@ -12,16 +12,15 @@ async function loadInstrumentEntries(){
       const lines = txt.split(/\r?\n/).filter(Boolean);
       if (!lines.length) return [];
       const header = lines.shift().split(',').map(s=>s.trim());
-      const idIdx   = header.findIndex(h=>/^(id|name|instrument_id|instrument)$/i.test(h));
+      // Prioritize `instrument_id` as the canonical ID, falling back to `instrument`.
+      const idIdx = header.includes('instrument_id') ? header.indexOf('instrument_id') : header.findIndex(h=>/^(id|name|instrument)$/i.test(h));
       const dispIdx = header.findIndex(h=>/^(display\s*_?name|display|label|title)$/i.test(h));
       const out = [];
       for (const line of lines){
         const cells = line.split(',');
+        const id = (idIdx !== -1 ? (cells[idIdx]||'') : '').trim();
         const display = (cells[dispIdx]||'').trim();
-            if (!display) continue;
-            // Generate the unique ID from the display name to match the audio engine.
-            const id = display.toLowerCase().replace(/[\s-]+/g, '_');
-            out.push({ id, display });
+        if (id && display){ out.push({ id, display }); }
       }
       return out;
     }
@@ -72,27 +71,26 @@ function buildInstrumentSelect(panel){
       if (!byLabel.has(label)) byLabel.set(label, id);
     }
     const list = Array.from(byLabel.entries()).sort((a,b)=> a[0].localeCompare(b[0]));
-    const cur = (panel.dataset.instrument||'').toLowerCase();
+    const cur = panel.dataset.instrument || '';
     sel.innerHTML='';
     for (const [label, id] of list){
       const opt = document.createElement('option');
-      opt.value = String(id||'').toLowerCase(); // normalize id for stable matching
+      opt.value = String(id||'');
       opt.textContent = label; // text shows CSV display_name only
       sel.appendChild(opt);
     }
     if (cur){
       // ensure current instrument exists in options
-      const exists = Array.from(sel.options).some(o=> String(o.value).toLowerCase() === cur);
+      const exists = Array.from(sel.options).some(o=> o.value === cur);
       if (!exists){
         const opt = document.createElement('option');
         opt.value = cur;
         opt.textContent = toTitleCase(cur);
         sel.appendChild(opt);
       }
-      // try exact match; if not present, try relaxed variants
       sel.value = cur;
       if (sel.value !== cur){
-        const relax = cur.replace(/[\s_-]+/g,'');
+        const relax = cur.toLowerCase().replace(/[\s_-]+/g,'');
         for (const o of sel.options){ if (String(o.value).replace(/[\s_-]+/g,'') === relax){ sel.value = o.value; break; } }
       }
     }

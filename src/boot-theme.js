@@ -82,7 +82,7 @@ async function wireAll() {
     if (!panel || !instrument) return;
 
     // 1. Set data attribute for the toy's internal logic to use.
-    panel.dataset.instrument = String(instrument||'').toLowerCase();
+    panel.dataset.instrument = String(instrument || '');
 
     // 2. Update the instrument <select> dropdown if it exists.
     const select = panel.querySelector('select.toy-instrument');

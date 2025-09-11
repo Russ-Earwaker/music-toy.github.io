@@ -2,6 +2,7 @@
 import { zoomInPanel, zoomOutPanel } from './zoom-overlay.js';
 import { getInstrumentNames } from './audio-samples.js';
 import { installVolumeUI } from './volume-ui.js';
+import { getIdForDisplayName, getDisplayNameForId } from './instrument-catalog.js';
 import { openInstrumentPicker } from './instrument-picker.js';
 
 const $ = (sel, root=document)=> root.querySelector(sel);
@@ -37,6 +38,18 @@ function ensureFooter(panel){
   return footer;
 }
 
+/**
+ * Formats an instrument ID (like 'acoustic_guitar' or 'PianoMiddleC')
+ * into a human-readable "Title Case" string.
+ */
+function toTitleCase(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/[_-]/g, ' ') // a_b -> a b
+    .replace(/([a-z])([A-Z])/g, '$1 $2') // aB -> a B
+    .replace(/\b\w/g, char => char.toUpperCase());
+}
+
 function btn(label){ const b=document.createElement('button'); b.type='button'; b.className='toy-btn'; b.textContent=label; return b; }
 
 function buildInstrumentSelect(panel){
@@ -57,8 +70,8 @@ function buildInstrumentSelect(panel){
     sel.addEventListener('change', ()=>{
       const value = sel.value;
       panel.dataset.instrument = value;
-      try{ panel.dispatchEvent(new CustomEvent('toy-instrument', { detail:{ value }, bubbles:true })); }catch(e){}
-      try{ panel.dispatchEvent(new CustomEvent('toy:instrument', { detail:{ name:value, value }, bubbles:true })); }catch(e){}
+      try{ panel.dispatchEvent(new CustomEvent('toy-instrument', { detail:{ value }, bubbles:true })); }catch{}
+      try{ panel.dispatchEvent(new CustomEvent('toy:instrument', { detail:{ name:value, value }, bubbles:true })); }catch{}
     });
   }
   return sel;
@@ -74,6 +87,30 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
   // Get header height for positioning external buttons. This must be read after
   // the header is in the DOM and has its content.
   const headerHeight = header.offsetHeight;
+
+  // --- Instrument Name Display ---
+  // This element shows the current instrument name above the header.
+  let instDisplay = panel.querySelector(':scope > .toy-instrument-display');
+  if (!instDisplay) {
+    instDisplay = document.createElement('div');
+    instDisplay.className = 'toy-instrument-display';
+    Object.assign(instDisplay.style, {
+      position: 'absolute',
+      top: '-26px',
+      right: '10px',
+      background: 'rgba(0, 0, 0, 0.6)',
+      color: 'white',
+      fontWeight: 'bold',
+      padding: '4px 10px',
+      borderRadius: '6px',
+      fontSize: '12px',
+      pointerEvents: 'none',
+      zIndex: '10',
+      border: '1px solid rgba(255,255,255,0.1)'
+    });
+    panel.appendChild(instDisplay);
+    panel.style.overflow = 'visible'; // Ensure the display isn't clipped.
+  }
 
   // Centrally install the volume UI for every toy.
   installVolumeUI(footer);
@@ -637,9 +674,9 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
         try{ const h = panel.querySelector('.toy-header'); if (h){ h.classList.remove('pulse-accept'); h.classList.add('pulse-cancel'); setTimeout(()=> h.classList.remove('pulse-cancel'), 650); } }catch{}
         return; // cancelled
       }
-      const val = String(chosen||'').toLowerCase();
+      const val = String(chosen || '');
       // Update UI select to contain and select it
-      let has = Array.from(sel.options).some(o=> String(o.value).toLowerCase() === val);
+      let has = Array.from(sel.options).some(o=> o.value === val);
       if (!has){ const o=document.createElement('option'); o.value=val; o.textContent=val.replace(/[_-]/g,' ').replace(/\w\S*/g, t=> t[0].toUpperCase()+t.slice(1).toLowerCase()); sel.appendChild(o); }
       sel.value = val;
       // Apply to toy
@@ -652,26 +689,32 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
 
   // Keep select in sync when instrument changes elsewhere
   panel.addEventListener('toy-instrument', (e) => {
-    const instrumentName = (e?.detail?.value||'').toLowerCase();
+    const instrumentName = (e?.detail?.value || '');
     if (!instrumentName) return;
+    if (instDisplay) {
+      instDisplay.textContent = getDisplayNameForId(instrumentName) || toTitleCase(instrumentName);
+    }
     // Ensure option exists
-    const has = Array.from(sel.options).some(o=> String(o.value).toLowerCase() === instrumentName);
+    const has = Array.from(sel.options).some(o=> o.value === instrumentName);
     if (!has){
       const opt = document.createElement('option');
       opt.value = instrumentName;
-      opt.textContent = instrumentName.replace(/[_-]/g,' ').replace(/\w\S*/g, t=> t[0].toUpperCase()+t.slice(1).toLowerCase());
+      opt.textContent = getDisplayNameForId(instrumentName) || toTitleCase(instrumentName);
       sel.appendChild(opt);
     }
     if (sel.value !== instrumentName) sel.value = instrumentName;
   });
   panel.addEventListener('toy:instrument', (e) => {
-    const instrumentName = ((e?.detail?.name || e?.detail?.value)||'').toLowerCase();
+    const instrumentName = ((e?.detail?.name || e?.detail?.value) || '');
     if (!instrumentName) return;
-    const has = Array.from(sel.options).some(o=> String(o.value).toLowerCase() === instrumentName);
+    if (instDisplay) {
+      instDisplay.textContent = getDisplayNameForId(instrumentName) || toTitleCase(instrumentName);
+    }
+    const has = Array.from(sel.options).some(o=> o.value === instrumentName);
     if (!has){
       const opt = document.createElement('option');
       opt.value = instrumentName;
-      opt.textContent = instrumentName.replace(/[_-]/g,' ').replace(/\w\S*/g, t=> t[0].toUpperCase()+t.slice(1).toLowerCase());
+      opt.textContent = getDisplayNameForId(instrumentName) || toTitleCase(instrumentName);
       sel.appendChild(opt);
     }
     if (sel.value !== instrumentName) sel.value = instrumentName;
@@ -680,9 +723,10 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
 
   // SAFER initial instrument resolution:
   // Prefer existing dataset (e.g., theme), then explicit default, and only then current select value.
-  const cur = (panel.dataset.instrument || '').toLowerCase();
-  const selVal = (sel && sel.value) ? String(sel.value).toLowerCase() : '';
-  const initialInstrument = cur || (defaultInstrument ? String(defaultInstrument).toLowerCase() : '') || selVal || 'tone';
+  const fromTheme = panel.dataset.instrument;
+  const fromDefault = defaultInstrument; // This is now always an ID.
+  const fromSelect = sel ? sel.value : null;
+  const initialInstrument = fromTheme || fromDefault || fromSelect || 'TONE';
 
   // Apply initial instrument without letting an empty/unmatched select overwrite the theme
   if (initialInstrument) {

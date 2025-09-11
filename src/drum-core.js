@@ -190,9 +190,9 @@ export function buildGrid(panel, numSteps = 8){
 
   function setInstrument(name){
     if (!name) return;
-    const id = String(name).toLowerCase();
-    panel.dataset.instrument = id;
-    try{ setToyInstrument(toyId, id); }catch{}
+    // The instrument ID is now case-sensitive and should not be lowercased.
+    panel.dataset.instrument = name;
+    try{ setToyInstrument(toyId, name); }catch{}
   }
   panel.addEventListener('toy-instrument', (e)=> setInstrument(e && e.detail && e.detail.value));
   panel.addEventListener('toy:instrument', (e)=> setInstrument((e && e.detail && (e.detail.name || e.detail.value))));

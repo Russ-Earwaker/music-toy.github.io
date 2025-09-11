@@ -1,51 +1,51 @@
-filename,instrument_type,instrument,function,display_name,synth_id,aliases 
+filename,instrument_type,instrument,function,display_name,synth_id,instrument_id
 # --- Samples ---,,,,,,
-8-bit-punch.wav,effects,drum,short note,Punch,,Punch
-drums1.mp3,percussion,drum,short note,Drum 1,,Drum 1
-drums2.mp3,percussion,drum,short note,Drum 2,,Drum 2
-drums3.mp3,percussion,drum,short note,Drum 3,,Drum 3
-hi-hat-closed.wav,percussion,drum,short note,Hi-Hat Closed,,Hi-Hat Closed
-hi-hat-open.wav,percussion,drum,short note,Hi-Hat Open,,Hi-Hat Open
-PianoMiddleC.wav,piano,piano,short note,Piano,,Piano
-Brk_Snr.mp3,percussion,drum,short note,Snare,,Snare
-hi-hat-closed.wav,percussion,drum,short note,Hi-Hat Closed,,Hi-Hat Closed
-clap.mp3,percussion,clap,short note,Hand clap,,Hand clap
-RP4_KICK_1.mp3,percussion,drum,short note,Kick drum,,Kick drum
-c-bass guitar- slap.wav,string,bass guitar,short note,Slap Bass Guitar,,Slap Bass Guitar
-c-bass guitar-pickmuted.wav,string,bass guitar,short note,Muted Bass Guitar,,Muted Bass Guitar
-c-kalimba.wav,percussion,kalimba,short note,Kalimba,,Kalimba
-c-nylon-guitar.wav,string,guitar,short note,Guitar,,Guitar
-c-old-piano.wav,piano,piano,short note,Old Timey Piano,,Old Timey Piano
-c-solid-tone.wav,synth,solid tone,loop,Solid Tone,,Solid Tone
-C-xylophone.wav,percussion,xylophone,short note,Xylophone,,Xylophone
-marimba_c.wav,percussion,marimba,short note,Marimba,,Marimba
-toyPiano_c.wav,piano,piano,short note,Toy Piano,,Toy Piano
-uke_c.wav,string,ukulele,short note,Ukulele,,Ukulele
-djembe_bass.wav,percussion,djembe,short note,Djembe Bass,,Djembe Bass
-djembe_tone.wav,percussion,djembe,short note,Djembe Tone,,Djembe Tone
-djembe_slap.wav,percussion,djembe,short note,Djembe Slap,,Djembe Slap
-guitar_acoustic_c.wav,string,guitar,short note,Acoustic Guitar,,Acoustic Guitar
-Guitar_Chord_Am.wav,string,guitar,chord,Acoustic Guitar Chords,,Acoustic Guitar Chords
-Guitar_Chord_C.wav,string,guitar,chord,Acoustic Guitar Chords,,Acoustic Guitar Chords
-Guitar_Chord_Dm.wav,string,guitar,chord,Acoustic Guitar Chords,,Acoustic Guitar Chords
-Guitar_Chord_E.wav,string,guitar,chord,Acoustic Guitar Chords,,Acoustic Guitar Chords
-Guitar_Chord_Em.wav,string,guitar,chord,Acoustic Guitar Chords,,Acoustic Guitar Chords
-Guitar_Chord_F.wav,string,guitar,chord,Acoustic Guitar Chords,,Acoustic Guitar Chords
-Guitar_Chord_G.wav,string,guitar,chord,Acoustic Guitar Chords,,Acoustic Guitar Chords
-cowbell.wav,percussion,cowbell,short note,Cowbell,,Cowbell
-BassTone1.wav,percussion,bass tone,short note,Bass Tone 1,,Bass Tone 1
-BassTone2.wav,percussion,bass tone,short note,Bass Tone 2,,Bass Tone 2
-BassTone3.wav,percussion,bass tone,short note,Bass Tone 3,,Bass Tone 3
-BassTone4.wav,percussion,bass tone,short note,Bass Tone 4,,Bass Tone 4
-Accordian.wav,wind,accordian,short note,Accordian,,Accordian
-AcousticGuitar2.mp3,string,guitar,short note,Acoustic Guitar 2,,Acoustic Guitar 2
-clapElectro.mp3,percussion,clap,short note,Hand clap (electro),,Hand clap (electro)
-tamborine.wav,percussion,tamborine,short note,tamborine,,tamborine
-AcousticClap.wav,percussion,clap,short note,Clap Acoustic,,Clap Acoustic
-FingerSnap.wav,percussion,snap,short note,Finger Snap,,Finger Snap
+8-bit-punch.wav,effects,drum,short note,Punch,,PUNCH
+drums1.mp3,percussion,drum,short note,Drum 1,,DRUM 1
+drums2.mp3,percussion,drum,short note,Drum 2,,DRUM 2
+drums3.mp3,percussion,drum,short note,Drum 3,,DRUM 3
+hi-hat-closed.wav,percussion,drum,short note,Hi-Hat Closed,,HI-HAT CLOSED
+hi-hat-open.wav,percussion,drum,short note,Hi-Hat Open,,HI-HAT OPEN
+PianoMiddleC.wav,piano,piano,short note,Piano,,PIANO
+Brk_Snr.mp3,percussion,drum,short note,Snare,,SNARE
+hi-hat-closed.wav,percussion,drum,short note,Hi-Hat Closed,,HI-HAT CLOSED
+clap.mp3,percussion,clap,short note,Hand clap,,HAND CLAP
+RP4_KICK_1.mp3,percussion,drum,short note,Kick drum,,KICK DRUM
+c-bass guitar- slap.wav,string,bass guitar,short note,Slap Bass Guitar,,SLAP BASS GUITAR
+c-bass guitar-pickmuted.wav,string,bass guitar,short note,Muted Bass Guitar,,MUTED BASS GUITAR
+c-kalimba.wav,percussion,kalimba,short note,Kalimba,,KALIMBA
+c-nylon-guitar.wav,string,guitar,short note,Guitar,,GUITAR
+c-old-piano.wav,piano,piano,short note,Old Timey Piano,,OLD TIMEY PIANO
+c-solid-tone.wav,synth,solid tone,loop,Solid Tone,,SOLID TONE
+C-xylophone.wav,percussion,xylophone,short note,Xylophone,,XYLOPHONE
+marimba_c.wav,percussion,marimba,short note,Marimba,,MARIMBA
+toyPiano_c.wav,piano,piano,short note,Toy Piano,,TOY PIANO
+uke_c.wav,string,ukulele,short note,Ukulele,,UKULELE
+djembe_bass.wav,percussion,djembe,short note,Djembe Bass,,DJEMBE BASS
+djembe_tone.wav,percussion,djembe,short note,Djembe Tone,,DJEMBE TONE
+djembe_slap.wav,percussion,djembe,short note,Djembe Slap,,DJEMBE SLAP
+guitar_acoustic_c.wav,string,guitar,short note,Acoustic Guitar,,ACOUSTIC GUITAR
+Guitar_Chord_Am.wav,string,guitar,chord,Acoustic Guitar Chords,,ACOUSTIC GUITAR CHORDS AM
+Guitar_Chord_C.wav,string,guitar,chord,Acoustic Guitar Chords,,ACOUSTIC GUITAR CHORDS C
+Guitar_Chord_Dm.wav,string,guitar,chord,Acoustic Guitar Chords,,ACOUSTIC GUITAR CHORDS Dm
+Guitar_Chord_E.wav,string,guitar,chord,Acoustic Guitar Chords,,ACOUSTIC GUITAR CHORDS E
+Guitar_Chord_Em.wav,string,guitar,chord,Acoustic Guitar Chords,,ACOUSTIC GUITAR CHORDS Em
+Guitar_Chord_F.wav,string,guitar,chord,Acoustic Guitar Chords,,ACOUSTIC GUITAR CHORDS F
+Guitar_Chord_G.wav,string,guitar,chord,Acoustic Guitar Chords,,ACOUSTIC GUITAR CHORDS G
+cowbell.wav,percussion,cowbell,short note,Cowbell,,COWBELL
+BassTone1.wav,percussion,bass tone,short note,Bass Tone 1,,BASS TONE 1
+BassTone2.wav,percussion,bass tone,short note,Bass Tone 2,,BASS TONE 2
+BassTone3.wav,percussion,bass tone,short note,Bass Tone 3,,BASS TONE 3
+BassTone4.wav,percussion,bass tone,short note,Bass Tone 4,,BASS TONE 4
+Accordian.wav,wind,accordian,short note,Accordian,,ACCORDIAN
+AcousticGuitar2.mp3,string,guitar,short note,Acoustic Guitar 2,,ACOUSTIC GUITAR 2
+clapElectro.mp3,percussion,clap,short note,Hand clap (electro),,HAND CLAP (ELECTRO)
+tamborine.wav,percussion,tamborine,short note,tamborine,,TAMBORINE
+AcousticClap.wav,percussion,clap,short note,Clap Acoustic,,CLAP ACOUSTIC
+FingerSnap.wav,percussion,snap,short note,Finger Snap,,FINGER SNAP
 ,,,,,,
-PanFlute.mp3,wind,panflute,short note,Panflute,,Panflute
-RetroGaming.mp3,synth,bling,short note,Gaming Bling,,Gaming Bling
+PanFlute.mp3,wind,panflute,short note,Panflute,,PANFLUTE
+RetroGaming.mp3,synth,bling,short note,Gaming Bling,,GAMING BLING
 ,,,,,,
 ,,,,,,
 ,,,,,,
@@ -53,15 +53,15 @@ RetroGaming.mp3,synth,bling,short note,Gaming Bling,,Gaming Bling
 ,,,,,,
 ,,,,,,
 # --- Synths (no filename; specify synth_id from engine) ---,,,,,,
-,synth,synth,sustain,Tone (Sine),tone,tone
-,synth,synth,short note,Keypad,keypad,keypad
-,synth,synth,short note,Pop,pop,pop
-,synth,synth,sustain,Pad,pad,pad
-,synth,synth,short note,Retro Square,retro-square,retro-square
-,synth,synth,short note,Retro Saw,retro-saw,retro-saw
-,synth,synth,short note,Retro Triangle,retro-tri,retro-tri
-,synth,synth,short note,Laser,laser,laser
-,synth,synth,sustain,Windy,windy,windy
-,synth,synth,short note,Alien,alien,alien
-,synth,synth,short note,Organish,organish,organish
-,synth,synth,short note,Droplet,droplet,droplet
+,synth,synth,sustain,Tone (Sine),tone,TONE
+,synth,synth,short note,Keypad,keypad,KEYPAD
+,synth,synth,short note,Pop,pop,POP
+,synth,synth,sustain,Pad,pad,PAD
+,synth,synth,short note,Retro Square,retro-square,RETRO SQUARE
+,synth,synth,short note,Retro Saw,retro-saw,RETRO SAW
+,synth,synth,short note,Retro Triangle,retro-tri,RETRO TRIANGLE
+,synth,synth,short note,Laser,laser,LASER
+,synth,synth,sustain,Windy,windy,WINDY
+,synth,synth,short note,Alien,alien,ALIEN
+,synth,synth,short note,Organish,organish,ORGANISH
+,synth,synth,short note,Droplet,droplet,DROPLET

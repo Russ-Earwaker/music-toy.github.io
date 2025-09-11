@@ -9,6 +9,7 @@ import './toy-audio.js';
 import './toy-layout-manager.js';
 import './zoom-overlay.js';
 import { initAudioAssets } from './audio-samples.js';
+import { loadInstrumentEntries as loadInstrumentCatalog } from './instrument-catalog.js';
 import { DEFAULT_BPM, NUM_STEPS, ensureAudioContext, getLoopInfo, setBpm, start, isRunning } from './audio-core.js';
 import { createLoopIndicator } from './loopindicator.js';
 import { buildGrid } from './drum-core.js';
@@ -159,6 +160,8 @@ async function boot(){
   // This prevents a race condition where toys try to play samples before they are loaded.
   try {
     await initAudioAssets(CSV_PATH);
+    // Also load the instrument catalog so display names are ready for the UI.
+    await loadInstrumentCatalog();
     console.log('[AUDIO] samples loaded');
   } catch(e) {
     console.warn('[AUDIO] init failed', e);

@@ -22,7 +22,7 @@ const buffers = new Map();
 function normId(s){
   const x = String(s||'').trim();
   if (!x) return '';
-  return x.toLowerCase();
+  return x;
 }
 
 // Convenience: add multiple normalized keys to the map for the same entry
@@ -55,6 +55,7 @@ export async function initAudioAssets(csvUrl='./assets/samples/samples.csv'){
   const col = {
     filename: head.indexOf('filename'),
     instrument: head.indexOf('instrument'),
+    instrument_id: head.indexOf('instrument_id'),
     display: head.findIndex(h=>/^(display\s*_?name|display|label|title)$/.test(h)),
     synth: head.indexOf('synth_id'),
     aliases: head.findIndex(h => h.startsWith('aliases'))
@@ -68,21 +69,22 @@ export async function initAudioAssets(csvUrl='./assets/samples/samples.csv'){
     const parts = line.split(',');
     const fn    = (col.filename>=0 ? parts[col.filename] : '').trim();
     const idCsv = (col.instrument>=0 ? parts[col.instrument] : '').trim();
+    const instId = (col.instrument_id>=0 ? parts[col.instrument_id] : '').trim();
     const disp  = (col.display>=0 ? parts[col.display] : '').trim();
     const synth = (col.synth>=0 ? parts[col.synth] : '').trim().toLowerCase();
     const aliasStr = (col.aliases>=0 ? parts[col.aliases] : '').trim();
     const url   = fn ? (baseDir + fn) : '';
 
-    // Use the display_name to generate a unique, triggerable ID. This prevents
-    // multiple samples with the same 'instrument' value in the CSV from
-    // overwriting each other and ensures consistency with the UI.
-    // E.g., "Gaming Bling" becomes "gaming_bling".
-    const canonicalId = disp ? disp.toLowerCase().replace(/[\s-]+/g, '_') : (idCsv || synth);
+    // The canonical ID is the new `instrument_id` column.
+    // Fall back to the `instrument` column, then `synth_id`.
+    const canonicalId = instId || idCsv || synth;
     if (!canonicalId) continue;
 
     const data = { url, synth };
     const allNames = new Set();
     allNames.add(normId(canonicalId));
+    // The user is renaming 'aliases' to 'instrument_id'. To be safe, we'll
+    // still read the 'aliases' column if it exists for backward compatibility.
     if (aliasStr) {
       aliasStr.split(';').map(s => s.trim()).filter(Boolean).forEach(alias => allNames.add(normId(alias)));
     }
@@ -176,15 +178,14 @@ function playSampleAt(id, when, gain=1, toyId, noteName, options = {}){
 
 export function triggerInstrument(instrument, noteName='C4', when, toyId, options = {}){
   const ctx = ensureAudioContext();
-  const id0 = String(instrument||'tone').toLowerCase();
-  const id  = normId(id0);
+  const id  = normId(instrument || 'TONE');
   const t   = safeStartTime(ctx, when);
 
   // If id looks like a tone name in friendly form, normalize spaces/underscores/parentheses
   try{
-    const idLoose = id.replace(/[()]/g,'').replace(/[_\s]+/g,'-');
+    const idLoose = id.toLowerCase().replace(/[()]/g,'').replace(/[_\s]+/g,'-');
     // Common "tone (sine)" pattern: prefer the inner token if present
-    const m = /\(([a-z-\s_]+)\)/.exec(id0);
+    const m = /\(([a-z-\s_]+)\)/.exec(id.toLowerCase());
     const inner = m ? m[1].trim().replace(/[_\s]+/g,'-') : '';
     if (inner && TONE_NAMES.includes(inner)) return playById(inner, noteToFreq(noteName), t, getToyGain(toyId||'master'));
     if (TONE_NAMES.includes(idLoose)) return playById(idLoose, noteToFreq(noteName), t, getToyGain(toyId||'master'));
