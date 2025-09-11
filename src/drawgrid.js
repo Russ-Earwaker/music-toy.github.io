@@ -978,9 +978,11 @@ function regenerateMapFromStrokes() {
   }
 
   function onPointerDown(e){
+    const boardScale = window.__boardScale || 1;
     const rect = paint.getBoundingClientRect();
-    const p = { x:e.clientX-rect.left, y:e.clientY-rect.top };
-
+    // Adjust pointer coordinates for board-level zoom/scale.
+    const p = { x: (e.clientX - rect.left) / boardScale, y: (e.clientY - rect.top) / boardScale };
+    
     // (Top cubes removed)
 
     // Check for node hit first using full grid cell bounds (bigger tap area)
@@ -1036,9 +1038,11 @@ function regenerateMapFromStrokes() {
     }
   }
   function onPointerMove(e){
+    const boardScale = window.__boardScale || 1;
     const rect = paint.getBoundingClientRect();
-    const p = { x:e.clientX-rect.left, y:e.clientY-rect.top };
-
+    // Adjust pointer coordinates for board-level zoom/scale.
+    const p = { x: (e.clientX - rect.left) / boardScale, y: (e.clientY - rect.top) / boardScale };
+    
     // Update cursor for draggable nodes in advanced mode
     if (panel.classList.contains('toy-zoomed') && !draggedNode) {
       let onNode = false;
