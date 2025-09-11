@@ -532,7 +532,6 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       randomBtn.dataset.action = 'random';
       randomBtn.title = 'New Ball';
       randomBtn.style.setProperty('--c-btn-size', BTN_SIZE);
-      // Per request, standard view uses T_ButtonRandom.png
       randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandom.png');"></div>`;
       left.appendChild(randomBtn);
     }
@@ -545,7 +544,6 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       randomCubesBtn.dataset.action = 'random-cubes';
       randomCubesBtn.title = 'Random Blocks';
       randomCubesBtn.style.setProperty('--c-btn-size', BTN_SIZE);
-      // Per request, advanced view uses T_ButtonRandomBlocks.png
       randomCubesBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandomBlocks.png');"></div>`;
       left.appendChild(randomCubesBtn);
     }
@@ -604,8 +602,9 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       externalHost = document.createElement('div');
       externalHost.className = 'bouncer-external-controls';
       Object.assign(externalHost.style, {
-        position: 'absolute', right: '-160px', top: '50%', transform: 'translateY(-50%)',
-        display: 'none', flexDirection: 'column', gap: '10px', zIndex: '10', width: '150px',
+        position: 'absolute', right: '-260px', top: '50px',
+        transform: 'none', display: 'none', flexDirection: 'column',
+        gap: '20px', zIndex: '10', width: '250px',
       });
       panel.appendChild(externalHost);
     }

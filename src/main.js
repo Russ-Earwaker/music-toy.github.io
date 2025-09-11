@@ -144,14 +144,16 @@ function scheduler(toys){
   const lastCol = new Map(); // Use a map to track last column per toy
   function step(){
     const info = getLoopInfo();
-    toys.forEach(toy => {
-      const steps = parseInt(toy.dataset.steps, 10) || NUM_STEPS;
-      const col = Math.floor(info.phase01 * steps) % steps;
-      if (col !== lastCol.get(toy.id)) {
-        lastCol.set(toy.id, col);
-        try { toy.__sequencerStep(col); } catch (e) { console.warn(`Sequencer step failed for ${toy.id}`, e); }
-      }
-    });
+    if (isRunning()){
+      toys.forEach(toy => {
+        const steps = parseInt(toy.dataset.steps, 10) || NUM_STEPS;
+        const col = Math.floor(info.phase01 * steps) % steps;
+        if (col !== lastCol.get(toy.id)) {
+          lastCol.set(toy.id, col);
+          try { toy.__sequencerStep(col); } catch (e) { console.warn(`Sequencer step failed for ${toy.id}`, e); }
+        }
+      });
+    }
     requestAnimationFrame(step);
   }
   requestAnimationFrame(step);

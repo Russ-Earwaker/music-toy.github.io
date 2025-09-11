@@ -1,31 +1,76 @@
 // src/topbar.js — wires page header buttons to board helpers
 (function(){
+  // Transport (dynamic import; avoid top-level await inside IIFE)
+  let Core = null;
+  import('./audio-core.js').then(m=>{ Core = m; tryInitToggle(); }).catch(()=>{});
+  function tryInitToggle(){
+    try{
+      const btn = document.querySelector('#topbar [data-action="toggle-play"]');
+      if (btn){ btn.textContent = (Core?.isRunning?.() ? 'Pause' : 'Play'); }
+    }catch{}
+  }
+  // Import presets in module scope (dynamic import to keep file order loose)
+  let Presets = null;
+  try { import('./presets.js').then(m=>{ Presets = m; try{ populatePresets(); }catch{} }); } catch {}
+  function populatePresets(){
+    const bar = document.getElementById('topbar'); if (!bar) return;
+    try{
+      const sel = bar.querySelector('#preset-select'); if (!sel || !Presets?.listPresets) return;
+      const items = Presets.listPresets();
+      sel.innerHTML = '';
+      const none = document.createElement('option'); none.value=''; none.textContent='(choose)'; sel.appendChild(none);
+      items.forEach(it=>{ const o=document.createElement('option'); o.value=it.key; o.textContent=it.name; sel.appendChild(o); });
+    }catch{}
+  }
   function ensureTopbar(){
     let bar = document.getElementById('topbar');
     if (!bar){
       bar = document.createElement('header'); bar.id='topbar';
       bar.style.cssText='position:sticky;top:0;z-index:1000;display:flex;gap:8px;align-items:center;padding:8px 12px;background:rgba(0,0,0,0.3);backdrop-filter:blur(4px)';
-      bar.innerHTML = '<button data-action="organize">Organize</button> <button data-action="reset-view">Reset View</button> <button data-action="zoom-out">-</button> <button data-action="zoom-in">+</button> <button data-action="save-scene">Save</button> <button data-action="load-scene">Load</button> <button data-action="export-scene">Export</button> <button data-action="import-scene">Import</button> <button data-action="clear-all">Clear All</button> <button data-action="reset-scene">Reset to Default</button>';
+      bar.innerHTML = '<button data-action="organize">Organize</button> <button data-action="toggle-play">Play</button> <label style="margin-left:8px;color:#cbd5e1;">Presets <select id="preset-select"></select></label> <button data-action="apply-preset">Apply</button> <button data-action="save-scene">Save</button> <button data-action="load-scene">Load</button> <button data-action="export-scene">Export</button> <button data-action="import-scene">Import</button> <button data-action="clear-all">Clear All</button> <button data-action="reset-scene">Reset to Default</button>';
       document.body.prepend(bar);
     }else{
+      // Remove obsolete controls (Stop, Reset View, Zoom +/- and the demo circular Play/Stop)
+      try{
+        bar.querySelectorAll('button[title="Stop"], button[title="Play"], [data-action="reset-view"], [data-action="zoom-out"], [data-action="zoom-in"]').forEach(el=> el.remove());
+      }catch{}
       if (!bar.querySelector('[data-action="organize"]')){
         const btn = document.createElement('button'); btn.textContent='Organize'; btn.setAttribute('data-action','organize'); bar.prepend(btn);
       }
       // Ensure Save/Load/Export/Import exist if bar is already present
       const want = [
+        ['toggle-play','Play'],
         ['save-scene','Save'],
         ['load-scene','Load'],
         ['export-scene','Export'],
         ['import-scene','Import'],
         ['clear-all','Clear All'],
-        ['reset-scene','Reset to Default']
+        ['reset-scene','Reset to Default'],
+        ['apply-preset','Apply']
       ];
       for (const [act, label] of want){
         if (!bar.querySelector(`[data-action="${act}"]`)){
           const btn = document.createElement('button'); btn.textContent = label; btn.setAttribute('data-action', act); bar.appendChild(btn);
         }
       }
+      // Ensure Presets select exists
+      if (!bar.querySelector('#preset-select')){
+        const label = document.createElement('label');
+        label.style.marginLeft = '8px'; label.style.color = '#cbd5e1';
+        label.textContent = 'Presets ';
+        const sel = document.createElement('select'); sel.id = 'preset-select';
+        label.appendChild(sel);
+        // Insert before Apply button if present, else append at end
+        const applyBtn = bar.querySelector('[data-action="apply-preset"]');
+        if (applyBtn && applyBtn.parentNode){ applyBtn.parentNode.insertBefore(label, applyBtn); }
+        else { bar.appendChild(label); }
+      }
     }
+    // Populate Presets dropdown if available
+    try{
+      const sel = bar.querySelector('#preset-select') || (function(){ const s=document.createElement('select'); s.id='preset-select'; const applyBtn = bar.querySelector('[data-action="apply-preset"]'); if (applyBtn && applyBtn.parentNode) applyBtn.parentNode.insertBefore(s, applyBtn); else bar.appendChild(s); return s; })();
+      populatePresets();
+    }catch{}
     return bar;
   }
   document.addEventListener('DOMContentLoaded', ensureTopbar);
@@ -40,9 +85,23 @@
       try { window.applyStackingOrder && window.applyStackingOrder(); } catch(e){}
       try { window.addGapAfterOrganize && window.addGapAfterOrganize(); } catch(e){}
     }
-    if (b.dataset.action==='reset-view'){ window.setBoardScale && window.setBoardScale(1); window.panTo && window.panTo(0,0); }
-    if (b.dataset.action==='zoom-in'){ window.setBoardScale && window.setBoardScale((window.__boardScale||1)*1.1); }
-    if (b.dataset.action==='zoom-out'){ window.setBoardScale && window.setBoardScale((window.__boardScale||1)/1.1); }
+    // Play/Pause toggle
+    if (b.dataset.action==='toggle-play'){
+      const doToggle = ()=>{
+        try{
+          Core?.ensureAudioContext?.();
+          if (Core?.isRunning?.()){
+            Core?.stop?.();
+            b.textContent = 'Play';
+          } else {
+            Core?.start?.();
+            b.textContent = 'Pause';
+          }
+        }catch{}
+      };
+      if (!Core){ import('./audio-core.js').then(m=>{ Core=m; doToggle(); }).catch(()=>{}); }
+      else { doToggle(); }
+    }
     if (b.dataset.action==='clear-all'){
       try{
         document.querySelectorAll('.toy-panel').forEach(panel=>{
@@ -102,7 +161,20 @@
         input.click();
       }catch{}
     }
+    if (b.dataset.action==='apply-preset'){
+      try{
+        const sel = document.getElementById('preset-select');
+        const key = sel?.value || '';
+        if (!key) return;
+        if (Presets?.applyPreset){
+          const ok = Presets.applyPreset(key);
+          if (!ok) alert('Preset failed.');
+        }
+      }catch{}
+    }
   }, true);
+  // Initialize toggle button label based on current state
+  tryInitToggle();
 })();
 
 document.addEventListener('change', (e)=>{
