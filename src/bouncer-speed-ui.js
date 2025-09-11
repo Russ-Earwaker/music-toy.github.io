@@ -10,10 +10,22 @@ export function installSpeedUI(panel, sizing, initial=1.00){
     display:'none', alignItems:'center', gap:'6px'
   });
 
-  let spLabel = spWrap.querySelector('.bouncer-speed-label');
-  if (!spLabel){ spLabel = document.createElement('span'); spLabel.className='bouncer-speed-label'; spLabel.textContent = 'Speed:'; }
-  spLabel.style.fontSize = '12px';
-  spLabel.style.opacity = '0.8';
+  // Remove the old text label if it exists.
+  spWrap.querySelector('.bouncer-speed-label')?.remove();
+
+  // Create an icon element to replace the text label.
+  let spIcon = spWrap.querySelector('.bouncer-speed-icon');
+  if (!spIcon) {
+    spIcon = document.createElement('img');
+    spIcon.className = 'bouncer-speed-icon';
+    spIcon.src = '../assets/UI/T_IconBallSpeed.png';
+    spIcon.alt = 'Speed';
+    spIcon.title = 'Ball Speed';
+    Object.assign(spIcon.style, {
+      width: '24px',
+      height: '24px',
+    });
+  }
 
   let spVal = spWrap.querySelector('.bouncer-speed-value');
   if (!spVal){ spVal = document.createElement('span'); spVal.className='bouncer-speed-value'; }
@@ -47,7 +59,8 @@ export function installSpeedUI(panel, sizing, initial=1.00){
     try{ panel.dispatchEvent(new CustomEvent('toy-speed', { detail:{ value: speedFactor } })); }catch{};
   }); }
 
-  if (!spLabel.parentNode) spWrap.appendChild(spLabel);
+  // Ensure elements are in the correct order, with the icon first.
+  if (!spIcon.parentNode) spWrap.appendChild(spIcon);
   if (!sp.parentNode) spWrap.appendChild(sp);
   if (!spVal.parentNode) spWrap.appendChild(spVal);
 

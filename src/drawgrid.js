@@ -182,7 +182,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       autoTuneBtn.addEventListener('click', () => {
         autoTune = !autoTune;
         autoTuneBtn.textContent = `Auto-tune: ${autoTune ? 'On' : 'Off'}`;
-        autoTuneBtn.setAttribute('aria-pressed', String(autoTune)); // This will re-snap all nodes
+        autoTuneBtn.setAttribute('aria-pressed', String(autoTune));
+        // Invalidate the node cache on all strokes since the tuning has changed.
+        for (const s of strokes) { s.cachedNodes = null; }
         resnapAndRedraw(false);
       });
     }

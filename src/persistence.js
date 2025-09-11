@@ -287,7 +287,15 @@ export function stopAutosave(){
 export function tryRestoreOnBoot(){
   try{
     const url = new URL(window.location.href);
-    if (url.searchParams.has('reset')) return false;
+    if (url.searchParams.has('reset')){
+      // One-shot reset: remove the flag from the URL to re-enable restore next boot
+      try{
+        url.searchParams.delete('reset');
+        window.history.replaceState({}, document.title, url.toString());
+        console.log('[persistence] reset flag detected; skipping restore once');
+      }catch{}
+      return false;
+    }
     const sceneQ = url.searchParams.get('scene');
     const last = localStorage.getItem(LAST_SCENE_KEY);
     const auto = loadFromKey(AUTOSAVE_KEY);
