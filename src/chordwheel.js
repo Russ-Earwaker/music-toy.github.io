@@ -315,13 +315,6 @@ export function createChordWheel(panel){
   panel.__sequencerStep = null;
 
   // --- Helper Functions ---
-  function randomProgression16() {
-    const base = randomProgression8();
-    return base.concat(base);
-  }
-  function randomProgression8(){ const presets=[[1,5,6,4],[1,6,4,5],[6,4,1,5],[2,5,1,6],[1,4,5,4],[1,5,4,5]];
-    const base=presets[Math.floor(Math.random()*presets.length)],seq=base.concat(base);
-    if(Math.random()<0.35)seq[7]=5; if(Math.random()<0.25)seq[3]=2; return seq; }
   function buildChord(deg){ return maybeAddSeventh(buildDiatonicTriad(deg)); }
 }
 
@@ -417,3 +410,104 @@ function el(tag,cls){const n=document.createElement(tag);if(cls)n.className=cls;
 function svgEl(tag,attrs={}){const n=document.createElementNS('http://www.w3.org/2000/svg',tag);Object.entries(attrs).forEach(([k,v])=>n.setAttribute(k,v));return n;}
 function describeSlice(cx,cy,r,a0,a1){const x0=cx+r*Math.cos(a0),y0=cy+r*Math.sin(a0),x1=cx+r*Math.cos(a1),y1=cy+r*Math.sin(a1);
   const large=(a1-a0)>Math.PI?1:0; return`M ${cx} ${cy} L ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1} Z`; }
+
+
+// --- Improved chord progression generator (diatonic, variation, cadence) ---
+const __CW_PRESETS = [
+  [1,5,6,4],  // I–V–vi–IV
+  [6,4,1,5],  // vi–IV–I–V
+  [1,4,2,5],  // I–IV–ii–V
+  [2,5,1,6],  // ii–V–I–vi
+  [1,5,4,5],  // I–V–IV–V
+  [1,3,6,4],  // I–iii–vi–IV
+];
+
+const __CW_SUBS = {
+  1: [6],
+  6: [1,3],
+  4: [2],
+  2: [4],
+  5: [3,5],
+  3: [5,6]
+};
+
+const __CW_ELIGIBLE_SLOTS = [2,4,6,8];
+
+const __CW_PROB = {
+  mutateEligibleSlots: 0.20,     // per eligible slot (scaled by position)
+  cadenceWeights: { 5: 0.50, 4: 0.25, 6: 0.25 }, // V, IV, vi
+  end8ToVOverride: 0.35,         // reinforce bar-8 as V sometimes
+  loopB: { exact: 0.50, lightMutate: 0.30, flipLast4: 0.20 }
+};
+
+function __cwChance(p){ return Math.random() < p; }
+function __cwPick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+function __cwPosBias(idx/*1..8*/){
+  if (idx <= 2) return 0.5;
+  if (idx <= 6) return 1.0;
+  return 0.8;
+}
+
+function __cwSub(rn){
+  const pool = __CW_SUBS[rn] || [];
+  if (!pool.length) return rn;
+  return __cwPick(pool);
+}
+
+function __cwCadenceBar8(current){
+  if (current === 5) return 5;
+  const r = Math.random();
+  const w = __CW_PROB.cadenceWeights;
+  if (r < w[5]) return 5;
+  if (r < w[5] + w[4]) return 4;
+  return 6;
+}
+
+function __cwMutate8(seq8){
+  const out = seq8.slice();
+  for (const slot of __CW_ELIGIBLE_SLOTS){
+    if (!__cwChance(__CW_PROB.mutateEligibleSlots * __cwPosBias(slot))) continue;
+    out[slot-1] = __cwSub(out[slot-1]);
+  }
+  return out;
+}
+
+function randomProgression8(){
+  // 1) pick preset (4) → duplicate to 8
+  const base4 = __cwPick(__CW_PRESETS);
+  let seq8 = [...base4, ...base4];
+
+  // 2) gentle mutate
+  seq8 = __cwMutate8(seq8);
+
+  // 3) optional push to V at bar 8 (legacy behavior)
+  if (__cwChance(__CW_PROB.end8ToVOverride)) seq8[7] = 5;
+
+  // 4) cadence shaping at bar 8
+  seq8[7] = __cwCadenceBar8(seq8[7]);
+
+  return seq8;
+}
+
+function randomProgression16(){
+  const loopA = randomProgression8();
+  let loopB;
+  const r = Math.random();
+  const P = __CW_PROB.loopB;
+
+  if (r < P.exact){
+    loopB = loopA.slice();
+  } else if (r < P.exact + P.lightMutate){
+    loopB = __cwMutate8(loopA);
+    loopB[7] = __cwCadenceBar8(loopB[7]);
+  } else {
+    // flip last 4 bars for turnaround
+    const b = loopA.slice();
+    const last4 = b.slice(4,8).reverse();
+    loopB = [...b.slice(0,4), ...last4];
+    loopB[7] = __cwCadenceBar8(loopB[7]);
+  }
+
+  return [...loopA, ...loopB];
+}

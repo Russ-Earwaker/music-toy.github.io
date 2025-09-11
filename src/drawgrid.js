@@ -1457,6 +1457,21 @@ function regenerateMapFromStrokes() {
       strokes.push(stroke);
       drawFullStroke(pctx, stroke);
       regenerateMapFromStrokes();
+ 
+      // After generating the line, randomly deactivate some columns to create rests.
+      // This addresses the user's feedback that "Random" no longer turns notes off.
+      if (currentMap && currentMap.nodes) {
+        for (let c = 0; c < cols; c++) {
+          if (Math.random() < 0.35) {
+            // Deactivate the column by disabling all of its nodes. This state
+            // is preserved by the `persistentDisabled` mechanism.
+            if (currentMap.nodes[c]?.size > 0) {
+              for (const r of currentMap.nodes[c]) persistentDisabled[c].add(r);
+              currentMap.active[c] = false;
+            }
+          }
+        }
+      }
     } catch(e){ try{ console.warn('[drawgrid random special line]', e); }catch{} }
 
     drawGrid();

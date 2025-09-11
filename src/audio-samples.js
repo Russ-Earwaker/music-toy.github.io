@@ -18,44 +18,18 @@ const entries = new Map();
 // id -> AudioBuffer
 const buffers = new Map();
 
-// Common aliases and misspellings mapped to canonical ids
-const ALIASES = new Map([
-  ['djimbe','djembe'],
-  ['djimbe_bass','djembe_bass'],
-  ['djimbe_tone','djembe_tone'],
-  ['djimbe_slap','djembe_slap'],
-  ['hand_clap','clap'],
-  ['handclap','clap'],
-  ['acousticguitar','acoustic_guitar'],
-  ['acoustic-guitar','acoustic_guitar'],
-]);
-
 // Normalize various user/CSV names to canonical lookup ids
 function normId(s){
   const x = String(s||'').trim();
   if (!x) return '';
-  const lo = x.toLowerCase();
-  return ALIASES.get(lo) || lo;
+  return x.toLowerCase();
 }
 
 // Convenience: add multiple normalized keys to the map for the same entry
 function addAliasesFor(id, data, displayName){
   const variants = new Set();
   const base = normId(id);
-  const disp = String(displayName||'').trim().toLowerCase();
-  // canonical
   variants.add(base);
-  // hyphen/space/underscore variants of id
-  variants.add(base.replace(/[-\s]+/g,'_'));
-  variants.add(base.replace(/[_\s]+/g,'-'));
-  variants.add(base.replace(/[-_\s]+/g,''));
-  // display name variants
-  if (disp){
-    variants.add(disp);
-    variants.add(disp.replace(/[-\s]+/g,'_'));
-    variants.add(disp.replace(/[_\s]+/g,'-'));
-    variants.add(disp.replace(/[-_\s]+/g,''));
-  }
   for (const k of variants) if (k) entries.set(k, data);
 }
 
@@ -82,7 +56,8 @@ export async function initAudioAssets(csvUrl='./assets/samples/samples.csv'){
     filename: head.indexOf('filename'),
     instrument: head.indexOf('instrument'),
     display: head.findIndex(h=>/^(display\s*_?name|display|label|title)$/.test(h)),
-    synth: head.indexOf('synth_id')
+    synth: head.indexOf('synth_id'),
+    aliases: head.findIndex(h => h.startsWith('aliases'))
   };
 
   // Build entries and decode buffers
@@ -91,29 +66,39 @@ export async function initAudioAssets(csvUrl='./assets/samples/samples.csv'){
 
   for (const line of lines){
     const parts = line.split(',');
-    const fn   = (col.filename>=0 ? parts[col.filename] : '').trim();
-    const id   = (col.instrument>=0 ? parts[col.instrument] : '').trim();
-    const disp = (col.display>=0 ? parts[col.display] : '').trim();
-    const synth= (col.synth>=0 ? parts[col.synth] : '').trim().toLowerCase();
-    const url  = fn ? (baseDir + fn) : '';
-    if (!id && !synth) continue;
+    const fn    = (col.filename>=0 ? parts[col.filename] : '').trim();
+    const idCsv = (col.instrument>=0 ? parts[col.instrument] : '').trim();
+    const disp  = (col.display>=0 ? parts[col.display] : '').trim();
+    const synth = (col.synth>=0 ? parts[col.synth] : '').trim().toLowerCase();
+    const aliasStr = (col.aliases>=0 ? parts[col.aliases] : '').trim();
+    const url   = fn ? (baseDir + fn) : '';
+
+    // Use the display_name to generate a unique, triggerable ID. This prevents
+    // multiple samples with the same 'instrument' value in the CSV from
+    // overwriting each other and ensures consistency with the UI.
+    // E.g., "Gaming Bling" becomes "gaming_bling".
+    const canonicalId = disp ? disp.toLowerCase().replace(/[\s-]+/g, '_') : (idCsv || synth);
+    if (!canonicalId) continue;
 
     const data = { url, synth };
-    addAliasesFor(id||synth, data, disp);
+    const allNames = new Set();
+    allNames.add(normId(canonicalId));
+    if (aliasStr) {
+      aliasStr.split(';').map(s => s.trim()).filter(Boolean).forEach(alias => allNames.add(normId(alias)));
+    }
+
+    // Register the entry under all its names.
+    for (const name of allNames) {
+      entries.set(name, data);
+    }
 
     if (url){
       const buf = await loadBuffer(url);
       if (buf){
-        // Mirror the same aliases for buffers
-        const keys = [id||synth, disp].filter(Boolean).map(k=>String(k).toLowerCase());
-        const variants = new Set();
-        for (const k of keys){
-          variants.add(k);
-          variants.add(k.replace(/[-\s]+/g,'_'));
-          variants.add(k.replace(/[_\s]+/g,'-'));
-          variants.add(k.replace(/[-_\s]+/g,''));
+        // Register the buffer under all its names.
+        for (const name of allNames) {
+          buffers.set(name, buf);
         }
-        for (const k of variants) if (k) buffers.set(normId(k), buf);
 
         // Special handling for chord samples named like 'Guitar_Chord_Am.wav'.
         // This creates an alias (e.g., 'am') so it can be triggered directly by name,

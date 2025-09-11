@@ -179,21 +179,6 @@ async function boot(){
   try{ applyStackingOrder(); }catch{}
   // After all positioning, run our gap-fixer to prevent overlaps.
   try{ addGapAfterOrganize(); }catch{}
-
-  // After a short delay to let all other boot scripts (like the theme manager)
-  // finish, forcefully set the instruments for the drum toys to our desired defaults.
-  // This ensures our settings take precedence over the theme system.
-  setTimeout(() => {
-    const panels = Array.from(document.querySelectorAll('.toy-panel[data-toy="loopgrid"]'));
-    const defaultInstruments = ['djembe_bass', 'djembe_tone', 'djembe_slap', 'hand_clap'];
-    panels.forEach((p, i) => {
-      const instrument = defaultInstruments[i % defaultInstruments.length];
-      if (instrument) {
-        p.dispatchEvent(new CustomEvent('toy-instrument', { detail: { value: instrument }, bubbles: true }));
-        p.dispatchEvent(new CustomEvent('toy:instrument', { detail: { name: instrument, value: instrument }, bubbles: true }));
-      }
-    });
-  }, 100);
 }
 if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
 else boot();

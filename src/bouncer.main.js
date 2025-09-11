@@ -130,9 +130,9 @@ export function createBouncer(selector){
   requestAnimationFrame(__tickOSD); /*OSD_DEBUG*/
 
   const __getSpeed = installSpeedUI(panel, sizing, parseFloat((panel?.dataset?.speed)||'1.60'));
-  // Default quant to 1/4 (div=4) if not provided
-  try{ if (!panel.dataset.quantDiv && !panel.dataset.quant) panel.dataset.quantDiv = '4'; }catch{}
-  const __getQuantDiv = installQuantUI(panel, parseFloat(panel?.dataset?.quantDiv||panel?.dataset?.quant||'4'));
+  // Default quant to 1/2 (div=2) if not provided
+  try{ if (!panel.dataset.quantDiv && !panel.dataset.quant) panel.dataset.quantDiv = '2'; }catch{}
+  const __getQuantDiv = installQuantUI(panel, parseFloat(panel?.dataset?.quantDiv||panel?.dataset?.quant||'2'));
   // apply speed changes to queued launch
   let __speedCache = (__getSpeed?__getSpeed():1);
   panel.addEventListener('toy-speed', (e)=>{ const ns = (e && e.detail && Number(e.detail.value)) ? e.detail.value : (__getSpeed?__getSpeed():1); const os = __speedCache || 1; const ratio = os ? (ns/os) : 1; __speedCache = ns; try{ if (lastLaunch && Number.isFinite(ratio) && ratio>0){ lastLaunch.vx *= ratio; lastLaunch.vy *= ratio; } }catch{} });
@@ -224,14 +224,6 @@ export function createBouncer(selector){
       loopRec.mode = 'replay';
       if ((globalThis.BOUNCER_DBG_LEVEL|0)>=1 && loopRec.pattern.length > 0) console.log('[bouncer-rec] loop recorded — switching to replay (events:', loopRec.pattern.length, ')');
     }
-    // If entering replay, ensure we are unmuted before scheduler queues playback.
-    // This guarantees the first scheduled notes are audible.
-    try{
-      if (loopRec.mode === 'replay') {
-        setToyMuted(toyId, false);
-        __spawnPendingUnmute = false;
-      }
-    }catch{}
     loopRec.lastBarIndex = k;
     loopRec.scheduledBarIndex = -999;
     loopRec.seen = new Set();

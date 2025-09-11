@@ -17,12 +17,14 @@ export async function loadInstrumentEntries(){
       const out = [];
       for (const line of lines){
         const cells = line.split(',');
-        const id = String((cells[idIdx]||cells[synthIdx]||'')).trim();
-        const display = String((cells[dispIdx]||id)).trim();
+        const idCsv = String((cells[idIdx]||cells[synthIdx]||'')).trim();
+        const display = String((cells[dispIdx]||idCsv)).trim();
         const type = String((cells[typeIdx]||'')).trim();
         const synth = String((cells[synthIdx]||'')).trim();
-        if (!id || !display) continue;
-        out.push({ id: id.toLowerCase(), display, type, synth });
+        if (!display) continue;
+        // Generate the unique ID from the display name to match the audio engine.
+        const id = display.toLowerCase().replace(/[\s-]+/g, '_');
+        out.push({ id, display, type, synth });
       }
       // Dedup by display label; keep first id per label
       const byLabel = new Map();

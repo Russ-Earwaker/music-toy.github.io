@@ -17,9 +17,11 @@ async function loadInstrumentEntries(){
       const out = [];
       for (const line of lines){
         const cells = line.split(',');
-        const id = (cells[idIdx]||'').trim();
         const display = (cells[dispIdx]||'').trim();
-        if (id && display){ out.push({ id, display }); }
+            if (!display) continue;
+            // Generate the unique ID from the display name to match the audio engine.
+            const id = display.toLowerCase().replace(/[\s-]+/g, '_');
+            out.push({ id, display });
       }
       return out;
     }

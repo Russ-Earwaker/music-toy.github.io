@@ -21,6 +21,11 @@ export function createRippleSynth(selector){
   const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector;
   const panel  = shell?.closest?.('.toy-panel') || shell;
   const toyId = (panel?.dataset?.toyid || panel?.dataset?.toy || 'rippler').toLowerCase();
+  // Ensure the toyId is set on the panel's dataset before any UI is initialized.
+  // This is critical for volume/mute controls, which read this dataset attribute
+  // to correctly target the toy's audio bus.
+  try { panel.dataset.toyid = toyId; } catch {}
+
   const triggerInstrument = (inst, name, when)=> __rawTrig(inst, name, when, toyId);
 
   const canvas = document.createElement('canvas');
