@@ -57,6 +57,16 @@ export function installBouncerInteractions({
     // Click & drag anywhere to launch: anchor handle at start, leave it there
     aimStart = { x: p.x, y: p.y };
     handle.x = Math.round(p.x); handle.y = Math.round(p.y);
+    // Also update the fractional coordinates for persistence. This ensures that if
+    // the user refreshes after placing the spawner but before launching, its
+    // position is correctly saved and restored.
+    try {
+      const w = physW(), h = physH();
+      if (w > EDGE * 2 && h > EDGE * 2) {
+        handle._fx = (handle.x - EDGE) / (w - EDGE * 2);
+        handle._fy = (handle.y - EDGE) / (h - EDGE * 2);
+      }
+    } catch {}
     draggingHandle = true; aimCurr = p;
     if (setAim) setAim({ active:true, sx:p.x, sy:p.y, cx:p.x, cy:p.y });
     try{ canvas.setPointerCapture(e.pointerId); }catch(e){}

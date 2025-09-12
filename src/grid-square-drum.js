@@ -6,8 +6,8 @@
 //   and, if available, calls window.gridActivateNearest(toyId)
 // File length kept under 300 lines.
 
-const DEBUG = localStorage.getItem('mt_debug')==='1';
-const LOG = (...a) => DEBUG && console.log('[grid-square-drum]', ...a);
+const DEBUG = false; // disable debug logs for grid-square-drum overlay
+const LOG = () => {};
 
 function addDrumPad(panel, padWrap, toyId) {
   // Check if the pad already exists to avoid re-creating it and its listeners.

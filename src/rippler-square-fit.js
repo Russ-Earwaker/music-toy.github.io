@@ -4,7 +4,7 @@
 // Also makes the *body* itself square (optional toggle below) so the visible frame is square.
 
 (function(){
-  const MAKE_FRAME_SQUARE = true; // set to true so the visible body/frame is square
+  const MAKE_FRAME_SQUARE = false; // CSS aspect-ratio now handles this.
 
   function getBody(panel){ return panel.querySelector('.toy-body') || panel; }
   function getCanvas(panel){

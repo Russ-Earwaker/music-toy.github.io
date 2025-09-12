@@ -269,10 +269,12 @@ select.toy-instrument {
 /* --- Per-Toy Body Style --- */
 /* -------------------------- */
 
-/* Bouncer: Simple square body */
-.toy-panel[data-toy="bouncer"] .toy-body {
-  flex-grow: 0; /* CRITICAL: This prevents the body from stretching vertically. */
-  aspect-ratio: 1 / 1; /* This makes the body a perfect square. */
+/* Bouncer: keep body square like Rippler */
+.toy-panel[data-toy='bouncer'] .toy-body {
+  position: relative;
+  flex-grow: 1;
+  min-height: 0;
+  display: block;
 }
 .toy-panel[data-toy="drawgrid"] .toy-body {
   flex-grow: 0;
@@ -507,3 +509,6 @@ select.toy-instrument {
   max-height: 100% !important;
   display: block;
 }
+
+/* Bouncer: keep body square like Rippler */
+.toy-panel[data-toy='bouncer'] .toy-body { aspect-ratio: 1 / 1; width: 100%; }

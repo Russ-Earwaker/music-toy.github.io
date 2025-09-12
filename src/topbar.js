@@ -6,8 +6,17 @@
   function tryInitToggle(){
     try{
       const btn = document.querySelector('#topbar [data-action="toggle-play"]');
-      if (btn){ btn.textContent = (Core?.isRunning?.() ? 'Pause' : 'Play'); }
+      if (btn){ updatePlayButtonVisual(btn, !!Core?.isRunning?.()); }
     }catch{}
+  }
+
+  function updatePlayButtonVisual(btn, playing){
+    // Support both circular c-btn and plain text fallback
+    const core = btn.querySelector('.c-btn-core');
+    const url = playing ? "url('../assets/UI/T_ButtonPause.png')" : "url('../assets/UI/T_ButtonPlay.png')";
+    if (core){ core.style.setProperty('--c-btn-icon-url', url); }
+    btn.title = playing ? 'Pause' : 'Play';
+    if (!core){ btn.textContent = playing ? 'Pause' : 'Play'; }
   }
   // Import presets in module scope (dynamic import to keep file order loose)
   let Presets = null;
@@ -27,7 +36,7 @@
     if (!bar){
       bar = document.createElement('header'); bar.id='topbar';
       bar.style.cssText='position:sticky;top:0;z-index:1000;display:flex;gap:8px;align-items:center;padding:8px 12px;background:rgba(0,0,0,0.3);backdrop-filter:blur(4px)';
-      bar.innerHTML = '<button data-action="organize">Organize</button> <button data-action="toggle-play">Play</button> <label style="margin-left:8px;color:#cbd5e1;">Presets <select id="preset-select"></select></label> <button data-action="apply-preset">Apply</button> <button data-action="save-scene">Save</button> <button data-action="load-scene">Load</button> <button data-action="export-scene">Export</button> <button data-action="import-scene">Import</button> <button data-action="clear-all">Clear All</button> <button data-action="reset-scene">Reset to Default</button>';
+      bar.innerHTML = '<button data-action="organize">Organize</button> <label style="margin-left:8px;color:#cbd5e1;">Presets <select id="preset-select"></select></label> <button data-action="apply-preset">Apply</button> <button data-action="save-scene">Save</button> <button data-action="load-scene">Load</button> <button data-action="export-scene">Export</button> <button data-action="import-scene">Import</button> <button data-action="clear-all">Clear All</button> <button data-action="reset-scene">Reset to Default</button>';
       document.body.prepend(bar);
     }else{
       // Remove obsolete controls (Stop, Reset View, Zoom +/- and the demo circular Play/Stop)
@@ -39,7 +48,6 @@
       }
       // Ensure Save/Load/Export/Import exist if bar is already present
       const want = [
-        ['toggle-play','Play'],
         ['save-scene','Save'],
         ['load-scene','Load'],
         ['export-scene','Export'],
@@ -66,6 +74,22 @@
         else { bar.appendChild(label); }
       }
     }
+    // Ensure circular Play/Pause button exists (size 65px like toy random)
+    try{
+      const existing = bar.querySelector('[data-action="toggle-play"]');
+      if (existing) existing.remove();
+      const playBtn = document.createElement('button');
+      playBtn.className = 'c-btn';
+      playBtn.dataset.action = 'toggle-play';
+      playBtn.style.setProperty('--c-btn-size','65px');
+      playBtn.title = 'Play';
+      playBtn.innerHTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
+      // Insert after Organize
+      const org = bar.querySelector('[data-action="organize"]');
+      if (org && org.parentNode){ org.parentNode.insertBefore(playBtn, org.nextSibling); }
+      else { bar.prepend(playBtn); }
+      updatePlayButtonVisual(playBtn, false);
+    }catch{}
     // Populate Presets dropdown if available
     try{
       const sel = bar.querySelector('#preset-select') || (function(){ const s=document.createElement('select'); s.id='preset-select'; const applyBtn = bar.querySelector('[data-action="apply-preset"]'); if (applyBtn && applyBtn.parentNode) applyBtn.parentNode.insertBefore(s, applyBtn); else bar.appendChild(s); return s; })();
@@ -92,10 +116,10 @@
           Core?.ensureAudioContext?.();
           if (Core?.isRunning?.()){
             Core?.stop?.();
-            b.textContent = 'Play';
+            updatePlayButtonVisual(b, false);
           } else {
             Core?.start?.();
-            b.textContent = 'Pause';
+            updatePlayButtonVisual(b, true);
           }
         }catch{}
       };
@@ -173,6 +197,17 @@
       }catch{}
     }
   }, true);
+  // Space bar toggles Play/Pause (ignore when typing in inputs/textareas)
+  try{
+    document.addEventListener('keydown', (e)=>{
+      if (e.code !== 'Space' && e.key !== ' ') return;
+      const tgt = e.target;
+      if (tgt && ((tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.isContentEditable))) return;
+      e.preventDefault();
+      const btn = document.querySelector('#topbar [data-action="toggle-play"]');
+      if (btn) btn.click();
+    }, true);
+  }catch{}
   // Initialize toggle button label based on current state
   tryInitToggle();
 })();

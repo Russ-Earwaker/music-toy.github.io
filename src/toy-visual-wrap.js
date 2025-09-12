@@ -48,7 +48,7 @@
     // Skip toys that manage their own square/aspect layout
     // - loopgrid: custom grid layout
     // - rippler: square body managed via CSS (rippler.css)
-    if (kind === 'loopgrid' || kind === 'rippler') {
+    if (kind === 'loopgrid' || kind === 'rippler' || kind === 'bouncer') {
       // Clean up any previous inline styles from older runs that might force absolute layout
       const body = panel.querySelector('.toy-body');
       if (body){
@@ -57,7 +57,7 @@
           padding: '', margin: '', border: '', overflow: ''
         });
       }
-      const wrap = panel.querySelector('.rippler-wrap');
+      const wrap = panel.querySelector('.rippler-square-wrap, .rippler-wrap, .bouncer-square-wrap');
       const vis = panel.querySelector('.rippler-canvas, canvas, svg');
       if (vis){
         // If a wrapper exists, keep the visual inside it; otherwise leave

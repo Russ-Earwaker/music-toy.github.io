@@ -79,27 +79,56 @@ function applyLoopGrid(panel, state){
 }
 
 function snapBouncer(panel){
-  // Minimal for now: instrument only; full physics state can be added later.
-  return { instrument: panel.dataset.instrument || undefined };
+  try{
+    if (typeof panel.__getBouncerSnapshot === 'function'){
+      return panel.__getBouncerSnapshot();
+    }
+  }catch{}
+  // Fallback
+  return {
+    instrument: panel.dataset.instrument || undefined,
+    speed: parseFloat(panel.dataset.speed||'') || undefined,
+    quantDiv: parseFloat(panel.dataset.quantDiv||panel.dataset.quant||'') || undefined,
+  };
 }
 
 function applyBouncer(panel, state){
   try{
+    if (typeof panel.__applyBouncerSnapshot === 'function'){
+      panel.__applyBouncerSnapshot(state||{});
+      return;
+    }
+    // Toy not initialized yet. Stash full state for init, and apply light dataset hints now.
+    try{ panel.__pendingBouncerState = state || {}; }catch{}
+    // Fallbacks: set instrument/speed/quant in dataset so UI picks them up later
     if (state?.instrument){
       panel.dataset.instrument = state.instrument;
       try{ panel.dispatchEvent(new CustomEvent('toy:instrument', { detail:{ name: state.instrument, value: state.instrument }, bubbles:true })); }catch{}
+    }
+    if (typeof state?.speed === 'number'){
+      try{ panel.dataset.speed = String(state.speed); }catch{}
+    }
+    if (typeof state?.quantDiv !== 'undefined'){
+      try{ panel.dataset.quantDiv = String(state.quantDiv); }catch{}
     }
   }catch(e){ console.warn('[persistence] applyBouncer failed', e); }
 }
 
 function snapRippler(panel){
+  try{ if (typeof panel.__getRipplerSnapshot === 'function') return panel.__getRipplerSnapshot(); }catch{}
   return { instrument: panel.dataset.instrument || undefined };
 }
 function applyRippler(panel, state){
   try{
+    if (typeof panel.__applyRipplerSnapshot === 'function'){ panel.__applyRipplerSnapshot(state||{}); return; }
+    // Not initialized yet; stash and set minimal hints.
+    try{ panel.__pendingRipplerState = state || {}; }catch{}
     if (state?.instrument){
       panel.dataset.instrument = state.instrument;
       try{ panel.dispatchEvent(new CustomEvent('toy:instrument', { detail:{ name: state.instrument, value: state.instrument }, bubbles:true })); }catch{}
+    }
+    if (typeof state?.quantDiv !== 'undefined'){
+      try{ panel.dataset.quantDiv = String(state.quantDiv); }catch{}
     }
   }catch(e){ console.warn('[persistence] applyRippler failed', e); }
 }
@@ -191,6 +220,11 @@ export function applySnapshot(snap){
       const applier = ToySnapshotters[t.type]?.apply;
       if (typeof applier === 'function'){
         try{ applier(panel, t.state||{}); }catch(e){ console.warn('[persistence] apply failed for', t.type, e); }
+      } else {
+        // If the toy isn't ready yet, stash the state for init-time apply (bouncer)
+        if (t.type === 'bouncer'){
+          try{ panel.__pendingBouncerState = t.state || {}; }catch{}
+        }
       }
       appliedCount++;
     }
@@ -268,7 +302,7 @@ export function startAutosave(intervalMs){
   ['click','change','pointerdown','pointerup','keyup'].forEach(evt => document.addEventListener(evt, markDirty, true));
   window.addEventListener('resize', markDirty, true);
   // Listen to toy custom events that change state
-  const toyEvents = ['grid:notechange','toy-random','toy-random-notes','toy-clear','toy-reset'];
+  const toyEvents = ['grid:notechange','toy-random','toy-random-notes','toy-clear','toy-reset','toy-speed','bouncer:quant','toy-random-cubes','toy-random-blocks'];
   toyEvents.forEach(evt => document.addEventListener(evt, markDirty, true));
   // Save when page is being hidden/unloaded
   const flush = ()=>{ try{ const s = getSnapshot(); saveToKey(AUTOSAVE_KEY, s); console.log('[persistence] autosave flush on hide/unload'); }catch{} };

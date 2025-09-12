@@ -85,8 +85,21 @@ export function start(){
     __epochStart = ctx.currentTime;
     __barIndex = 0;
   }
+  try{ window.__ripplerUserArmed = true; }catch{}
+  try{
+    if (localStorage.getItem('mt_audio_dbg')==='1') console.log('[audio] transport:resume');
+    document.dispatchEvent(new CustomEvent('transport:resume', { detail:{ now: ctx.currentTime }}));
+  }catch{}
 }
-export function stop(){ __started=false; }
+export function stop(){
+  __started = false;
+  try{ const ctx = ensureAudioContext(); ctx && ctx.suspend && ctx.suspend(); }catch{}
+  try{
+    if (localStorage.getItem('mt_audio_dbg')==='1') console.log('[audio] transport:pause');
+    const ctx = __ctx || null;
+    document.dispatchEvent(new CustomEvent('transport:pause', { detail:{ now: ctx?.currentTime || 0 }}));
+  }catch{}
+}
 
 export function isRunning(){ return __started; }
 

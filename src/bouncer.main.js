@@ -1,3 +1,4 @@
+// c:\Users\Russ_\Desktop\music-toy\music-toy.github.io\src\bouncer.main.js
 import './bouncer-square-fit.js';
 import { makeEdgeControllers, drawEdgeBondLines, handleEdgeControllerEdit, mapControllersByEdge, randomizeControllers, drawEdgeDecorations } from './bouncer-edges.js';
 import { stepBouncer } from './bouncer-step.js';
@@ -28,8 +29,6 @@ const BOUNCER_BARS_PER_LIFE = 1;
 const MAX_SPEED = 700, LAUNCH_K = 0.9;
 const BASE_BLOCK_SIZE = 44, BASE_CANNON_R = 10, BASE_BALL_R = 7;
 
-
-
 export function createBouncer(selector){
   const shell = (typeof selector==='string') ? document.querySelector(selector) : selector; if (!shell) return null;
   const panel = shell.closest('.toy-panel') || shell;
@@ -45,6 +44,91 @@ export function createBouncer(selector){
   let speedFactor = parseFloat((panel?.dataset?.speed)||'1.60'); // +60% faster default // 0.60 = calmer default
   const toyId = (panel?.dataset?.toy || 'bouncer').toLowerCase();
   try{ panel.dataset.toyid = toyId; }catch{}
+
+  // --- Persistence hooks ---
+  // Define these early so they are available for pending state application.
+  panel.__getBouncerSnapshot = () => {
+    try{
+      const blocksSnap = Array.isArray(blocks) ? blocks.map(b=> b ? ({ x: Math.round(b.x||0), y: Math.round(b.y||0), w: Math.round(b.w||b.size||BASE_BLOCK_SIZE), h: Math.round(b.h||b.size||BASE_BLOCK_SIZE), active: !!b.active, noteIndex: (b.noteIndex|0) }) : null) : [];
+      const edgesSnap = Array.isArray(edgeControllers) ? edgeControllers.map(c=> c ? ({ x: Math.round(c.x||0), y: Math.round(c.y||0), w: Math.round(c.w||BASE_BLOCK_SIZE), h: Math.round(c.h||BASE_BLOCK_SIZE), active: !!c.active, noteIndex: (c.noteIndex|0), edge: c.edge }) : null) : [];
+      const speed = (typeof __getSpeed === 'function') ? __getSpeed() : (parseFloat(panel.dataset.speed||'')||undefined);
+      const quantDiv = (typeof __getQuantDiv === 'function') ? __getQuantDiv() : (parseFloat(panel.dataset.quantDiv||panel.dataset.quant||'')||undefined);
+      const ballSnap = (ball && typeof ball==='object') ? ({ x: Math.round(ball.x||0), y: Math.round(ball.y||0), vx: Number(ball.vx||0), vy: Number(ball.vy||0), r: Number(ball.r||ballR()), flightEnd: ball.flightEnd }) : null;
+      const lastLaunchSnap = (lastLaunch && typeof lastLaunch==='object') ? ({ x: Math.round(lastLaunch.x||0), y: Math.round(lastLaunch.y||0), vx: Number(lastLaunch.vx||0), vy: Number(lastLaunch.vy||0) }) : null;
+      return { instrument, speed, quantDiv, blocks: blocksSnap, edges: edgesSnap, ball: ballSnap, lastLaunch: lastLaunchSnap, nextLaunchAt, handleFx: handle._fx, handleFy: handle._fy };
+    }catch(e){ return { instrument }; }
+  };
+  panel.__applyBouncerSnapshot = (st)=>{
+    try{
+      if (!st || typeof st !== 'object') return;
+      if (st.instrument){ instrument = st.instrument; panel.dataset.instrument = st.instrument; try{ panel.dispatchEvent(new CustomEvent('toy:instrument', { detail:{ name: st.instrument, value: st.instrument }, bubbles:true })); }catch{} }
+      if (typeof st.speed === 'number'){
+        try{ panel.dataset.speed = String(st.speed); const r = panel.querySelector('.bouncer-speed-ctrl input[type="range"]'); if (r){ r.value = String(st.speed); r.dispatchEvent(new Event('input', { bubbles:true })); } }catch{}
+      }
+      if (typeof st.quantDiv !== 'undefined'){
+        try{ panel.dataset.quantDiv = String(st.quantDiv); const sel = panel.querySelector('.bouncer-quant-ctrl select'); if (sel){ sel.value = String(st.quantDiv); sel.dispatchEvent(new Event('change', { bubbles:true })); } }catch{}
+      }
+      // Blocks
+      if (Array.isArray(st.blocks) && Array.isArray(blocks)){
+        for (let i=0;i<Math.min(blocks.length, st.blocks.length); i++){
+          const src = st.blocks[i]; const dst = blocks[i]; if (!src || !dst) continue;
+          dst.x = Math.round(src.x||dst.x); dst.y = Math.round(src.y||dst.y);
+          dst.w = Math.round(src.w||dst.w); dst.h = Math.round(src.h||dst.h);
+          dst.active = !!src.active; dst.noteIndex = (src.noteIndex|0);
+        }
+        try{ window.syncAnchorsFromBlocks && window.syncAnchorsFromBlocks(); }catch{}
+      }
+      // Edge controllers
+      try{ ensureEdgeControllers(physW(), physH()); }catch{}
+      if (Array.isArray(st.edges) && Array.isArray(edgeControllers)){
+        const mapByEdge = (arr)=>{ const m={}; try{ arr.forEach((c,i)=>{ if (c && c.edge) m[c.edge]= {c,i}; }); }catch{} return m; };
+        const srcMap = mapByEdge(st.edges);
+        const dstMap = mapByEdge(edgeControllers);
+        const keys = ['left','right','top','bot'];
+        keys.forEach(k=>{
+          const src = srcMap[k]?.c; const dst = dstMap[k]?.c; if (!src || !dst) return;
+          dst.x = Math.round(src.x||dst.x); dst.y = Math.round(src.y||dst.y);
+          dst.w = Math.round(src.w||dst.w); dst.h = Math.round(src.h||dst.h);
+          dst.active = !!src.active; dst.noteIndex = (src.noteIndex|0);
+        });
+      }
+      // Handle spawn handle position
+      try{
+        if (typeof st.handleFx === 'number') handle._fx = Math.max(0, Math.min(1, st.handleFx));
+        if (typeof st.handleFy === 'number') handle._fy = Math.max(0, Math.min(1, st.handleFy));
+        const w = physW(), h = physH();
+        if (w>0 && h>0){
+          handle.x = Math.round(EDGE + (handle._fx ?? 0.5) * Math.max(1, w-EDGE*2));
+          handle.y = Math.round(EDGE + (handle._fy ?? 0.5) * Math.max(1, h-EDGE*2));
+        }
+      }catch{}
+
+      // Ball + lastLaunch
+      try{
+        if (st.ball && typeof st.ball==='object'){
+          // Minimal ball properties; physics will take over when running
+          ball = { x: Number(st.ball.x||0), y: Number(st.ball.y||0), vx: Number(st.ball.vx||0), vy: Number(st.ball.vy||0), r: Number(st.ball.r||ballR()), active:true, flightEnd: st.ball.flightEnd };
+        }
+        if (st.lastLaunch && typeof st.lastLaunch==='object'){
+          lastLaunch = { x: Number(st.lastLaunch.x||0), y: Number(st.lastLaunch.y||0), vx: Number(st.lastLaunch.vx||0), vy: Number(st.lastLaunch.vy||0) };
+        }
+        if (typeof st.nextLaunchAt === 'number') {
+          nextLaunchAt = st.nextLaunchAt;
+        }
+      }catch{}
+    }catch(e){ try{ console.warn('[bouncer] apply snapshot failed', e); }catch{} }
+  };
+
+  // If a pending snapshot exists (from early restore), apply it ASAP so
+  // anchors/blocks/handle are in place before we sync from anchors.
+  try{
+    const pendingEarly = panel.__pendingBouncerState;
+    if (pendingEarly && typeof pendingEarly === 'object'){
+      if (typeof panel.__applyBouncerSnapshot === 'function'){
+        try{ panel.__applyBouncerSnapshot(pendingEarly); delete panel.__pendingBouncerState; }catch{}
+      }
+    }
+  }catch{}
 
   const host = panel.querySelector('.toy-body') || panel;
   const canvas = document.createElement('canvas'); canvas.style.width='100%'; canvas.style.display='block';canvas.style.height='100%'; host.appendChild(canvas);
@@ -150,11 +234,6 @@ export function createBouncer(selector){
     }
   });
 
-
-
-  /* speed UI moved to bouncer-speed-ui.js */
-
-
   const worldW = ()=> Math.max(1, Math.floor(canvas.clientWidth||0));
   const worldH = ()=> Math.max(1, Math.floor(canvas.clientHeight||0));
   // board zoom scaling based on visual width ratio (like Rippler)
@@ -222,6 +301,9 @@ export function createBouncer(selector){
       // This is safe even if no notes were recorded, as it will just replay an empty pattern.
       // This prevents the loop from getting stuck in 'record' mode across multiple bars.
       loopRec.mode = 'replay';
+      // Only despawn the live ball if a pattern exists; this keeps visuals
+      // when no recording was captured yet.
+      try{ if (Array.isArray(loopRec.pattern) && loopRec.pattern.length>0) { ball = null; lastLaunch = null; } }catch{}
       if ((globalThis.BOUNCER_DBG_LEVEL|0)>=1 && loopRec.pattern.length > 0) console.log('[bouncer-rec] loop recorded — switching to replay (events:', loopRec.pattern.length, ')');
     }
     loopRec.lastBarIndex = k;
@@ -296,8 +378,8 @@ export function createBouncer(selector){
 
   
   function doRandom(){
-    // In standard view, the "Random" button now only spawns a new ball in a random, clear location.
-    // The "Random Cubes" and "Random Notes" buttons in advanced view handle the other randomization tasks.
+    // Randomize a bit of everything in standard view: spawn a ball,
+    // shuffle cube positions/actives, and randomize notes for a fresh vibe.
     const w = physW(), h = physH();
     const r = ballR();
     const spawnableW = w - 2 * (EDGE + r + 4);
@@ -324,6 +406,10 @@ export function createBouncer(selector){
     const endY = y + Math.sin(angle) * 10;
     const { vx, vy } = velFrom(x, y, endX, endY);
     spawnBallFrom({ x, y, vx, vy, r });
+
+    // Also randomize cubes and notes lightly
+    try{ doRandomCubes(); }catch{}
+    try{ doRandomNotes(); }catch{}
   }
 
   function doRandomCubes() {
@@ -618,8 +704,8 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
       if ('ball' in S) ball = S.ball;
       if ('lastLaunch' in S && S.lastLaunch) lastLaunch = S.lastLaunch;
       if ('nextLaunchAt' in S) nextLaunchAt = S.nextLaunchAt;
-      if (S.__lastTickByBlock) __lastTickByBlock = S.__lastTickByBlock;
-      if (S.__lastTickByEdge) __lastTickByEdge = S.__lastTickByEdge;
+      if (S.__lastTickByBlock) __lastTickByBlock = S.lastTickByBlock;
+      if (S.__lastTickByEdge) __lastTickByEdge = S.lastTickByEdge;
       if (typeof S.__justSpawnedUntil === 'number') __justSpawnedUntil = S.__justSpawnedUntil;
       if (typeof S.__unmuteAt === 'number') __unmuteAt = S.__unmuteAt;
     }
@@ -630,6 +716,15 @@ requestAnimationFrame(draw);
 
   function onLoop(_loopStart){} // no-op
   const instanceApi = { onLoop, reset: doReset, setInstrument: (n)=>{ instrument = n || instrument; }, element: canvas };
+
+  // Apply any pending snapshot provided before init
+  try{
+    const pending = panel.__pendingBouncerState;
+    if (pending && typeof panel.__applyBouncerSnapshot === 'function'){
+      panel.__applyBouncerSnapshot(pending);
+      delete panel.__pendingBouncerState;
+    }
+  }catch{}
   panel.__bouncer_main_instance = instanceApi;
   return instanceApi;
 }

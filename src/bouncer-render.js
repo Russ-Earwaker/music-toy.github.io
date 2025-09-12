@@ -2,6 +2,7 @@
 const __DBG = (globalThis.BOUNCER_DBG_LEVEL|0)||0; const __d=(lvl,...a)=>{ if(__DBG>=lvl) console.log(...a); };
 // Encapsulates the Bouncer draw loop to keep bouncer.main.js concise.
 import { drawBlock } from './toyhelpers.js';
+import { isRunning } from './audio-core.js';
 
 export function createBouncerDraw(env){
   const {
@@ -217,6 +218,23 @@ export function createBouncerDraw(env){
         }
       } catch(e){}
 
+
+      // If transport is paused, skip physics stepping and scheduling
+      try { if (typeof isRunning === 'function' && !isRunning()) { requestAnimationFrame(draw); return; } } catch {}
+
+      // Ensure a live ball despawns after one bar (or configured life), even after refresh mid-flight
+      try {
+        if (S && S.getLoopInfo && S.ball) {
+          const li = S.getLoopInfo();
+          if (li) {
+            if (typeof S.ball._spawnAt !== 'number') S.ball._spawnAt = li.now;
+            const lifeBars = (typeof S.BOUNCER_BARS_PER_LIFE === 'number') ? S.BOUNCER_BARS_PER_LIFE : 1;
+            if ((li.now - S.ball._spawnAt) >= (li.barLen * lifeBars)) {
+              try { S.setBallOut && S.setBallOut(null); } catch {}
+            }
+          }
+        }
+      } catch {}
 
       // Loop recorder: detect new bar and let main decide record/replay
       try {

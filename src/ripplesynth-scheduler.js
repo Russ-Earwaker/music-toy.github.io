@@ -20,6 +20,8 @@ export function createScheduler(cfg){
   // Bar-level pre-scheduling to avoid late slot-edge clamping
   let __scheduledThisBar = new Set();   // keys: `${slotIx}@${blockIndex}`
   const __keyFor = (slotIx, idx)=> `${slotIx|0}@${idx|0}`;
+  // Avoid duplicate preschedules; compare against last barStart anchor
+  let __lastPrescheduledAt = -1;
   function prescheduleBar(){
     try{
       __scheduledThisBar.clear();
@@ -27,6 +29,9 @@ export function createScheduler(cfg){
       const div = (typeof getQuantDiv === 'function') ? Number(getQuantDiv()) : NaN;
       const beatLen = li?.beatLen || 0;
       const grid = (Number.isFinite(div) && div>0 && beatLen>0) ? (beatLen/div) : 0;
+      // If we've already prescheduled for this barStartAT, skip
+      if (__lastPrescheduledAt === state.barStartAT) return;
+      __lastPrescheduledAt = state.barStartAT;
 
       for (let s=0; s<NUM_STEPS; s++){
         const set = pattern[s]; if (!set || !set.size) continue;
@@ -37,11 +42,9 @@ export function createScheduler(cfg){
           const hasOff = typeof offRaw === 'number' && isFinite(offRaw);
           const baseRel = hasOff ? offRaw : (s * stepSeconds());
           let tFire;
-          if (grid > 0 && li) {
-            const unquantized_time_this_loop = state.barStartAT + baseRel;
-            const rel = Math.max(0, unquantized_time_this_loop - li.loopStartTime);
-            const k = Math.ceil((rel + 1e-6) / grid);
-            tFire = li.loopStartTime + k * grid + 0.0004;
+          if (grid > 0) {
+            const k = Math.ceil((baseRel + 1e-6) / grid);
+            tFire = state.barStartAT + k * grid + 0.0004;
           } else {
             tFire = state.barStartAT + baseRel + 0.0005;
           }
@@ -68,7 +71,10 @@ export function createScheduler(cfg){
       state.nextSlotAT = state.barStartAT;
       state.nextSlotIx = 0;
       try{ if (window && window.RIPPLER_TIMING_DBG) console.log('[rippler]', 'bar-start', { barStartAT: state.barStartAT }); }catch{}
-      if (generator.placed && !isPlaybackMuted()) spawnRipple(false);
+      // Ensure ripple spawn always occurs on bar boundaries when placed.
+      // Use manual=true to bypass first-interaction guard; AudioContext
+      // should already be resumed by the user via Play.
+      if (generator.placed && !isPlaybackMuted()) spawnRipple(true);
       state.recording = false;
       // Arm summary mode only for the very next bar after recording
       if (justRecorded){ __summaryMode = true; __printedSummaries.clear(); }
@@ -79,5 +85,5 @@ export function createScheduler(cfg){
     }
   }
 
-  return { tick };
+  return { tick, prescheduleNow: prescheduleBar };
 }

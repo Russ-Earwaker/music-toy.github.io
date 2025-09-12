@@ -18,12 +18,12 @@ export function installSpeedUI(panel, sizing, initial=1.00){
   if (!spIcon) {
     spIcon = document.createElement('img');
     spIcon.className = 'bouncer-speed-icon';
-    spIcon.src = 'assets/UI/T_IconBallSpeed.png';
+    spIcon.src = './assets/UI/T_IconBallSpeed.png';
     spIcon.alt = 'Speed';
     spIcon.title = 'Ball Speed';
     Object.assign(spIcon.style, {
-      width: '65px',
-      height: '65px',
+      width: '55px',
+      height: '55px',
     });
   }
 

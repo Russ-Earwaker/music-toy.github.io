@@ -4,7 +4,7 @@ import { randomizeRects } from './toyhelpers.js';
 import { resizeCanvasForDPR, noteList } from './utils.js';
 import { PENTATONIC_OFFSETS } from './ripplesynth-scale.js';
 import { boardScale } from './board-scale-helpers.js';
-import { ensureAudioContext, barSeconds as audioBarSeconds, getLoopInfo } from './audio-core.js';
+import { ensureAudioContext, barSeconds as audioBarSeconds, getLoopInfo, isRunning } from './audio-core.js';
 import { installQuantUI } from './bouncer-quant-ui.js';
 import { triggerInstrument as __rawTrig } from './audio-samples.js';
 import { drawBlocksSection } from './ripplesynth-blocks.js';
@@ -197,6 +197,12 @@ export function createRippleSynth(selector){
   let _genDownPos = null;
   let lastSpawnPerf = 0;
   let _wasPlacedAtDown = false;
+  let __deferredSpawn = false;
+  let __lastRunning = null;
+  let __armRecordingOnResume = false;
+  let __relAtPause = 0; // seconds into local bar when paused
+  let __forceResume = false;
+  let __pausedNow = 0; // absolute AudioContext time at pause for freezing visuals
 
   const __schedState = { suppressSlots: new Set(), suppressUntilMap: new Map(),
     get barStartAT(){ return barStartAT; }, set barStartAT(v){ barStartAT = v; },
@@ -268,12 +274,17 @@ export function createRippleSynth(selector){
 
     try {
       const nowAT = ac.currentTime;
-      spawnRipple(true); // manual=true to bypass user-armed check
-      barStartAT = nowAT;
-      nextSlotAT = barStartAT + stepSeconds();
-      nextSlotIx = 1;
-      pattern.forEach(s=> s.clear()); patternOffsets.forEach(m=> m.clear());
-      recording = true;
+      if (typeof isRunning !== 'function' || isRunning()){
+        spawnRipple(true); // manual=true to bypass first-interaction guard
+        barStartAT = nowAT;
+        nextSlotAT = barStartAT + stepSeconds();
+        nextSlotIx = 1;
+        pattern.forEach(s=> s.clear()); patternOffsets.forEach(m=> m.clear());
+        recording = true;
+      } else {
+        __deferredSpawn = true;
+        __armRecordingOnResume = true;
+      }
     } catch (e) { try { console.warn('[rippler random rearm]', e); } catch {} }
   }
   panel.addEventListener('toy-random', randomizeAll);
@@ -361,13 +372,21 @@ export function createRippleSynth(selector){
     const nowAT = ac.currentTime;
     if (prevDrag){
       playbackMuted=false;
-      spawnRipple(false);
-      barStartAT=nowAT; nextSlotAT=barStartAT+stepSeconds(); nextSlotIx=1; pattern.forEach(s=> s.clear()); patternOffsets.forEach(m=> m.clear()); recording=true;
+      try{ if (typeof isRunning!=='function' || isRunning()) spawnRipple(false); else __deferredSpawn = true; }catch{ spawnRipple(false); }
+      if (typeof isRunning!=='function' || isRunning()){
+        barStartAT=nowAT; nextSlotAT=barStartAT+stepSeconds(); nextSlotIx=1; pattern.forEach(s=> s.clear()); patternOffsets.forEach(m=> m.clear()); recording=true;
+      } else {
+        __armRecordingOnResume = true;
+      }
     } else {
       const gx=n2x(generator.nx), gy=n2y(generator.ny);
       if (_wasPlacedAtDown && _genDownPos && Math.hypot((_genDownPos.x-gx),(_genDownPos.y-gy))>4){
-        spawnRipple(false);
-        barStartAT=nowAT; nextSlotAT=barStartAT+stepSeconds(); nextSlotIx=1; pattern.forEach(s=> s.clear()); patternOffsets.forEach(m=> m.clear()); recording=true;
+        try{ if (typeof isRunning!=='function' || isRunning()) spawnRipple(false); else __deferredSpawn = true; }catch{ spawnRipple(false); }
+        if (typeof isRunning!=='function' || isRunning()){
+          barStartAT=nowAT; nextSlotAT=barStartAT+stepSeconds(); nextSlotIx=1; pattern.forEach(s=> s.clear()); patternOffsets.forEach(m=> m.clear()); recording=true;
+        } else {
+          __armRecordingOnResume = true;
+        }
       }
     }
     _genDownPos=null; _wasPlacedAtDown=false;
@@ -375,15 +394,21 @@ export function createRippleSynth(selector){
 
   function spawnRipple(manual=false){
     if (!generator?.placed) return;
+    // If transport is paused, defer spawning until play resumes
+    try{ if (typeof isRunning==='function' && !isRunning()){ __deferredSpawn = true; return; } }catch{}
     // Allow programmatic/manual spawns to bypass the first-interaction guard
     if (typeof window !== 'undefined' && !window.__ripplerUserArmed && !manual) return;
     const nowAT = ac.currentTime, nowPerf = ac.currentTime;
-    if (nowPerf - lastSpawnPerf < 0.15) return; // debounce double fires
+    if (nowPerf - lastSpawnPerf < 0.15){
+      try{ if (localStorage.getItem('mt_rippler_dbg')==='1') console.log('[rippler] spawnRipple:skip-debounce',{ manual, ripples:(ripples?ripples.length:0) }); }catch{}
+      return; // debounce double fires
+    }
     lastSpawnPerf = nowPerf;
     const gx = n2x(generator.nx), gy = n2y(generator.ny);
     const corners = [[0,0],[W(),0],[0,H()],[W(),H()]];
     const offR = Math.max(...corners.map(([x,y])=> Math.hypot(x-gx, y-gy))) + 64;
     ripples.push({ x: gx, y: gy, startAT: nowAT, startTime: nowPerf, speed: RING_SPEED(), offR, hit: new Set(), r2off: (RING_SPEED() * (barSec()/2)) });
+    try{ if (localStorage.getItem('mt_rippler_dbg')==='1') console.log('[rippler] spawnRipple:ok',{ manual, ripples:(ripples?ripples.length:0) }); }catch{}
   }
 
   function ringFront(nowAT){
@@ -515,11 +540,13 @@ export function createRippleSynth(selector){
       if (generator.placed){
         ctx.save();
         ctx.strokeStyle='rgba(255,255,255,0.65)';
-        drawWaves(ctx, n2x(generator.nx), n2y(generator.ny), ac.currentTime, RING_SPEED(), ripples, NUM_STEPS, stepSeconds, (sizing.scale||1));
+        const tViewWaves = (typeof isRunning==='function' && !isRunning()) ? __pausedNow : ac.currentTime;
+        drawWaves(ctx, n2x(generator.nx), n2y(generator.ny), tViewWaves, RING_SPEED(), ripples, NUM_STEPS, stepSeconds, (sizing.scale||1));
         ctx.restore();
       }
 
-      drawParticles(ctx, ac.currentTime, ripples, { x:n2x(generator.nx), y:n2y(generator.ny) }, blockRects);
+      const tView = (typeof isRunning==='function' && !isRunning()) ? __pausedNow : ac.currentTime;
+      drawParticles(ctx, tView, ripples, { x:n2x(generator.nx), y:n2y(generator.ny) }, blockRects);
 
       const __nowAT = ac.currentTime; const __dt = (__lastDrawAT ? (__nowAT-__lastDrawAT) : 0); __lastDrawAT = __nowAT;
       for (let i=0;i<blocks.length;i++){
@@ -537,12 +564,47 @@ export function createRippleSynth(selector){
       drawBlocksSection(ctx, blockRects, 0, 0, null, 1, noteList, sizing, null, null, ac.currentTime);
 
       if (generator.placed){
-        drawGenerator(ctx, n2x(generator.nx), n2y(generator.ny), Math.max(8, Math.round(generator.r*(sizing.scale||1))), ac.currentTime, ripples, NUM_STEPS, stepSeconds, (sizing.scale||1));
+        drawGenerator(ctx, n2x(generator.nx), n2y(generator.ny), Math.max(8, Math.round(generator.r*(sizing.scale||1))), tView, ripples, NUM_STEPS, stepSeconds, (sizing.scale||1));
       }
 
-      springBlocks(1/60);
-      handleRingHits(ac.currentTime);
-      scheduler.tick();
+      // Only advance physics/scheduling while transport is running
+      if (typeof isRunning !== 'function' || isRunning()){
+      // Detect transport state change and realign timing
+      try{
+        const running = (typeof isRunning==='function') ? !!isRunning() : true;
+        if (__lastRunning === null) __lastRunning = running;
+        if (__lastRunning !== running || __forceResume){
+          __lastRunning = running;
+          __forceResume = false;
+          if (running){
+          // Preserve local bar phase across pause: set anchor so we resume at same offset
+          try{
+            const li = getLoopInfo();
+            const nowAT = ac.currentTime;
+            const rel = Math.max(0, (__relAtPause||0));
+            barStartAT = Math.max(0, (li ? li.now : nowAT) - rel);
+            nextSlotAT = barStartAT + stepSeconds();
+            nextSlotIx = 1;
+            __relAtPause = 0;
+          }catch{}
+          try{ playbackMuted = false; dragMuteActive = false; }catch{}
+          // Only clear ripples if we're about to spawn a new one; otherwise
+          // preserve visuals so resume looks seamless.
+          // Only spawn on resume if we explicitly deferred a spawn while paused (e.g., Random while paused)
+          let willSpawn = !!__deferredSpawn;
+          if (willSpawn){ try{ ripples.length = 0; }catch{} }
+          if (__armRecordingOnResume){ pattern.forEach(s=> s.clear()); patternOffsets.forEach(m=> m.clear()); recording=true; __armRecordingOnResume = false; }
+          if (__deferredSpawn){ __deferredSpawn = false; spawnRipple(true); }
+          }
+        }
+      }catch{}
+      // Only advance physics/scheduling while transport is running
+      if (typeof isRunning !== 'function' || isRunning()){
+        springBlocks(1/60);
+        handleRingHits(ac.currentTime);
+        scheduler.tick();
+      }
+      }
 
       if (input && input.state && input.state.generatorDragEnded){
         input.state.generatorDragEnded=false;
@@ -582,8 +644,13 @@ export function createRippleSynth(selector){
       nextSlotIx = 1;
       pattern.forEach(s=> s.clear()); patternOffsets.forEach(m=> m.clear());
       recording = true;
-      // Always seed a fresh ripple: cancel any in-flight waves first
-      try { if (Array.isArray(ripples)) ripples.length = 0; spawnRipple(true); } catch {}
+      // Seed a ripple only if running; otherwise defer
+      if (typeof isRunning !== 'function' || isRunning()){
+        try { if (Array.isArray(ripples)) ripples.length = 0; spawnRipple(true); } catch {}
+      } else {
+        __deferredSpawn = true;
+        __armRecordingOnResume = true;
+      }
     } catch(e) { try { console.warn('[rippler random-notes]', e); } catch {} }
   }
   function randomizeBlockPositions(){
@@ -605,13 +672,150 @@ export function createRippleSynth(selector){
       nextSlotIx = 1;
       pattern.forEach(s=> s.clear()); patternOffsets.forEach(m=> m.clear());
       recording = true;
-      // Always seed a fresh ripple: cancel any in-flight waves first
-      try { if (Array.isArray(ripples)) ripples.length = 0; spawnRipple(true); } catch {}
+      if (typeof isRunning !== 'function' || isRunning()){
+        try { if (Array.isArray(ripples)) ripples.length = 0; spawnRipple(true); } catch {}
+      } else {
+        __deferredSpawn = true;
+        __armRecordingOnResume = true;
+      }
     } catch(e) { try { console.warn('[rippler random-blocks]', e); } catch {} }
   }
 
   panel.addEventListener('toy-random-notes', randomizeNotesAndActives);
   panel.addEventListener('toy-random-blocks', randomizeBlockPositions);
+
+  // --- Persistence hooks ---
+  try{
+    panel.__getRipplerSnapshot = () => {
+      try{
+        const quantDiv = (__getQuantDiv && Number.isFinite(__getQuantDiv())) ? __getQuantDiv() : (parseFloat(panel.dataset.quantDiv||panel.dataset.quant||'')||undefined);
+        const blocksSnap = Array.isArray(blocks) ? blocks.map(b=> b ? ({ nx: Number(b.nx||0), ny: Number(b.ny||0), active: !!b.active, noteIndex: (b.noteIndex|0) }) : null) : [];
+        const gen = { nx: Number(generator.nx||0.5), ny: Number(generator.ny||0.5), placed: !!generator.placed };
+        // Ripple visual position (seconds into current ring or local bar)
+        let rippleRelSec = 0;
+        try{
+          const nowAT = ac.currentTime;
+          if (Array.isArray(ripples) && ripples.length){
+            const r = ripples[ripples.length-1];
+            rippleRelSec = Math.max(0, nowAT - (r.startAT||nowAT));
+          } else {
+            rippleRelSec = Math.max(0, (nowAT - barStartAT) % Math.max(0.0001, barSec()));
+          }
+        }catch{}
+        const steps = Array.isArray(pattern) ? pattern.map((set, sIx)=>{
+          try{
+            const lst = [];
+            set?.forEach?.((idx)=>{
+              const off = patternOffsets?.[sIx]?.get?.(idx);
+              lst.push({ idx, off: (typeof off==='number'?off:undefined) });
+            });
+            return lst;
+          }catch{ return []; }
+        }) : [];
+        return { instrument: currentInstrument, quantDiv, blocks: blocksSnap, generator: gen, steps, rippleRelSec };
+      }catch(e){ return { instrument: currentInstrument }; }
+    };
+    panel.__applyRipplerSnapshot = (st={}) => {
+      try{
+        if (st.instrument){ try{ ui.setInstrument(st.instrument); }catch{} try{ panel.dataset.instrument = st.instrument; }catch{} }
+        if (typeof st.quantDiv !== 'undefined'){
+          try{ panel.dataset.quantDiv = String(st.quantDiv); const sel = panel.querySelector('.bouncer-quant-ctrl select'); if (sel){ sel.value = String(st.quantDiv); sel.dispatchEvent(new Event('change', { bubbles:true })); } }catch{}
+        }
+        if (st.generator && typeof st.generator==='object'){
+          try{ generator.nx = Math.max(0, Math.min(1, Number(st.generator.nx))); generator.ny = Math.max(0, Math.min(1, Number(st.generator.ny))); generator.placed = !!st.generator.placed; }catch{}
+        }
+        if (Array.isArray(st.blocks) && Array.isArray(blocks)){
+          for (let i=0;i<Math.min(blocks.length, st.blocks.length); i++){
+            const src = st.blocks[i]; const dst = blocks[i]; if (!src || !dst) continue;
+            dst.nx = Math.max(0, Math.min(1, Number(src.nx||dst.nx)));
+            dst.ny = Math.max(0, Math.min(1, Number(src.ny||dst.ny)));
+            dst.active = !!src.active;
+            if (typeof src.noteIndex === 'number') dst.noteIndex = (src.noteIndex|0);
+            dst.vx = 0; dst.vy = 0; dst.nx0 = dst.nx; dst.ny0 = dst.ny;
+          }
+        }
+        if (Array.isArray(st.steps) && Array.isArray(pattern)){
+          try{ pattern.forEach(s=> s.clear()); patternOffsets.forEach(m=> m.clear()); }catch{}
+          for (let s=0; s<Math.min(pattern.length, st.steps.length); s++){
+            const lst = st.steps[s]||[];
+            for (const ev of lst){
+              try{
+                const idx = (ev?.idx|0);
+                pattern[s].add(idx);
+                if (typeof ev?.off === 'number'){ patternOffsets[s].set(idx, ev.off); }
+              }catch{}
+            }
+          }
+        }
+        // Align loop timing to the current global bar
+        try{
+          const li = getLoopInfo();
+          if (li){
+            barStartAT = li.loopStartTime;
+            nextSlotAT = barStartAT + stepSeconds();
+            nextSlotIx = 1;
+          }
+          // If snapshot included a local ripple phase, prefer it to global anchor
+          try{
+            const relSnap = Math.max(0, Number(st.rippleRelSec || 0));
+            if (relSnap > 0){
+              const li2 = getLoopInfo();
+              const now2 = ac.currentTime;
+              barStartAT = Math.max(0, (li2 ? li2.now : now2) - relSnap);
+              nextSlotAT = barStartAT + stepSeconds();
+              nextSlotIx = 1;
+              try{ if (localStorage.getItem('mt_rippler_dbg')==='1') console.log('[rippler restore override]', { rel: relSnap, barStartAT }); }catch{}
+            }
+          }catch{}
+          // If paused, defer visuals until resume; else seed a single ripple
+          try{
+            if (generator.placed){
+              if (typeof isRunning==='function' && !isRunning()){
+                try{ panel.__ripplerDeferredSpawn = true; }catch{}
+              } else {
+                if (Array.isArray(ripples)) ripples.length = 0;
+                spawnRipple(true);
+              }
+            }
+          }catch{}
+        }catch{}
+        // Restore ripple visual phase
+        try{
+          if (generator.placed){
+            const rel = Math.max(0, Number(st.rippleRelSec||0));
+            const nowAT = ac.currentTime;
+            const startAT = (ac.state === 'suspended') ? -rel : (nowAT - rel);
+            const gx = n2x(generator.nx), gy = n2y(generator.ny);
+            const corners = [[0,0],[W(),0],[0,H()],[W(),H()]];
+            const offR = Math.max(...corners.map(([x,y])=> Math.hypot(x-gx, y-gy))) + 64;
+            if (!Array.isArray(ripples)) ripples = [];
+            ripples.length = 0;
+            ripples.push({ x: gx, y: gy, startAT, startTime: startAT, speed: RING_SPEED(), offR, hit: new Set(), r2off: (RING_SPEED() * (barSec()/2)) });
+          }
+        }catch{}
+      }catch(e){ try{ console.warn('[rippler] apply snapshot failed', e); }catch{} }
+    };
+  }catch{}
+
+  // Pick up any deferred spawn request from snapshot apply during pause
+  try{ if (panel.__ripplerDeferredSpawn){ __deferredSpawn = true; panel.__ripplerDeferredSpawn = false; } }catch{}
+
+  // Apply pending snapshot if early restore stashed it
+  try{ if (panel.__pendingRipplerState && typeof panel.__applyRipplerSnapshot==='function'){ panel.__applyRipplerSnapshot(panel.__pendingRipplerState||{}); delete panel.__pendingRipplerState; } }catch{}
+
+  // Transport event listeners for deterministic resume/pause handling
+  try{
+    document.addEventListener('transport:resume', ()=>{ try{ __forceResume = true; if (localStorage.getItem('mt_rippler_dbg')==='1') console.log('[rippler] transport:resume'); }catch{} });
+    document.addEventListener('transport:pause',  ()=>{
+      try{
+        const nowAT = ac.currentTime;
+        // How far into our local bar are we? Keep this to preserve phase on resume
+        __relAtPause = Math.max(0, (nowAT - barStartAT) % Math.max(0.0001, barSec()));
+        __pausedNow = nowAT;
+        if (localStorage.getItem('mt_rippler_dbg')==='1') console.log('[rippler] transport:pause',{ relAtPause: __relAtPause.toFixed?.(3)||__relAtPause });
+      }catch{}
+    });
+  }catch{}
 
   requestAnimationFrame(draw);
 

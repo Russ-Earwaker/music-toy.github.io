@@ -5,12 +5,25 @@
   const stage = document.getElementById('board');
   if (!stage) return;
 
-  let scale = 1; window.__boardScale = scale;
-  let x = 0, y = 0;
+  // Load saved viewport
+  let scale = 1, x = 0, y = 0;
+  try{
+    const saved = JSON.parse(localStorage.getItem('boardViewport')||'null');
+    if (saved && typeof saved==='object'){
+      if (Number.isFinite(saved.scale)) scale = Math.max(0.5, Math.min(2.5, saved.scale));
+      if (Number.isFinite(saved.x)) x = saved.x|0;
+      if (Number.isFinite(saved.y)) y = saved.y|0;
+    }
+  }catch{}
+  window.__boardScale = scale;
 
+  function persist(){
+    try{ localStorage.setItem('boardViewport', JSON.stringify({ scale, x, y })); }catch{}
+  }
   function apply(){
     stage.style.transformOrigin = '0 0';
     stage.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
+    persist();
   }
 
   // --- Panning ---
@@ -37,6 +50,7 @@
     if (!panning) return;
     panning = false;
     document.body.classList.remove('panning');
+    persist();
   }, true);
 
   // --- Zooming --- (global: anywhere in the window)
@@ -56,6 +70,7 @@
     y = e.clientY - rect.top  - my * scale;
     window.__boardScale = scale; apply();
     e.preventDefault();
+    persist();
   }, { passive:false });
 
   // helpers

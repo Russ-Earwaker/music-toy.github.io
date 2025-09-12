@@ -1,5 +1,5 @@
 // src/loopindicator.js
-import { ensureAudioContext, getLoopInfo, getToyGain, bpm as currentBpm } from './audio-core.js';
+import { ensureAudioContext, getLoopInfo, getToyGain, bpm as currentBpm, isRunning } from './audio-core.js';
 
 /**
  * Create a single pulsing red loop indicator.
@@ -56,6 +56,7 @@ export function createLoopIndicator(targetSelector = '#topbar'){
   let muted = true;
   let metroBuf = null; // AudioBuffer for metronome sample
   let triedLoad = false;
+  let running = true;
 
   muteBtn.addEventListener('click', () => {
     muted = !muted;
@@ -85,6 +86,7 @@ export function createLoopIndicator(targetSelector = '#topbar'){
 
   function playClick(){
     if (muted) return;
+    if (typeof isRunning==='function' && !isRunning()) return; // do not click while paused
     const ctx = ensureAudioContext();
     const now = ctx.currentTime;
     const toyId = 'metronome';
@@ -113,6 +115,9 @@ export function createLoopIndicator(targetSelector = '#topbar'){
   }
 
   function animate(){
+    // If transport was paused externally, stop animating immediately
+    try{ if (typeof isRunning==='function' && !isRunning()){ running=false; if (rafId){ cancelAnimationFrame(rafId); rafId=0; } return; } }catch{}
+    if (!running){ rafId = 0; return; }
     const ac = ensureAudioContext();
     const { loopStartTime, barLen } = getLoopInfo();
     const now = ac.currentTime;
@@ -153,6 +158,26 @@ export function createLoopIndicator(targetSelector = '#topbar'){
       { filter: 'brightness(1.0)' }
     ], { duration: 180, easing: 'ease-out' });
   }
+
+  // Transport control: pause stops RAF and clicks; resume restarts aligned to current quarter
+  try{
+    document.addEventListener('transport:pause', ()=>{
+      running = false;
+      if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+    });
+    document.addEventListener('transport:resume', ()=>{
+      // Sync lastQuarter to avoid an immediate extra click on resume
+      try{
+        const ac = ensureAudioContext();
+        const { loopStartTime, barLen } = getLoopInfo();
+        const now = ac.currentTime;
+        const t = ((now - loopStartTime) % barLen + barLen) % barLen;
+        lastQuarter = Math.floor((barLen ? (t / barLen) : 0) * 4 + 1e-6);
+      }catch{}
+      running = true;
+      if (!rafId) rafId = requestAnimationFrame(animate);
+    });
+  }catch{}
 
   animate();
   return { element: el, frame };
