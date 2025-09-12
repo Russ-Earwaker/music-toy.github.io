@@ -42,6 +42,7 @@ export function createScheduler(cfg){
           const hasOff = typeof offRaw === 'number' && isFinite(offRaw);
           const baseRel = hasOff ? offRaw : (s * stepSeconds());
           let tFire;
+          // Apply quantization whenever enabled; otherwise preserve exact relative timing
           if (grid > 0) {
             const k = Math.ceil((baseRel + 1e-6) / grid);
             tFire = state.barStartAT + k * grid + 0.0004;

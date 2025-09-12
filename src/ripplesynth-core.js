@@ -747,26 +747,25 @@ export function createRippleSynth(selector){
             }
           }
         }
-        // Align loop timing to the current global bar
+        // Align loop timing: if snapshot has a local ripple phase, anchor to it;
+        // otherwise align to the current global bar start.
         try{
           const li = getLoopInfo();
-          if (li){
+          const relSnapRaw = (st && Object.prototype.hasOwnProperty.call(st, 'rippleRelSec')) ? Number(st.rippleRelSec) : NaN;
+          if (Number.isFinite(relSnapRaw) && relSnapRaw >= 0){
+            const relSnap = Math.max(0, relSnapRaw);
+            const now2 = ac.currentTime;
+            const refNow = li ? li.now : now2;
+            barStartAT = Math.max(0, refNow - relSnap);
+            nextSlotAT = barStartAT + stepSeconds();
+            nextSlotIx = 1;
+            // Seed resume anchor so first Play after reload preserves local phase
+            try{ __relAtPause = relSnap; if (localStorage.getItem('mt_rippler_dbg')==='1') console.log('[rippler restore anchor]', { relSnap, barStartAT }); }catch{}
+          } else if (li){
             barStartAT = li.loopStartTime;
             nextSlotAT = barStartAT + stepSeconds();
             nextSlotIx = 1;
           }
-          // If snapshot included a local ripple phase, prefer it to global anchor
-          try{
-            const relSnap = Math.max(0, Number(st.rippleRelSec || 0));
-            if (relSnap > 0){
-              const li2 = getLoopInfo();
-              const now2 = ac.currentTime;
-              barStartAT = Math.max(0, (li2 ? li2.now : now2) - relSnap);
-              nextSlotAT = barStartAT + stepSeconds();
-              nextSlotIx = 1;
-              try{ if (localStorage.getItem('mt_rippler_dbg')==='1') console.log('[rippler restore override]', { rel: relSnap, barStartAT }); }catch{}
-            }
-          }catch{}
           // If paused, defer visuals until resume; else seed a single ripple
           try{
             if (generator.placed){

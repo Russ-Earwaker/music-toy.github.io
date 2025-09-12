@@ -51,6 +51,11 @@ const CHORD_SAMPLE_MAP = {
   "Bm":  { source: "Am", shift: 2 }
 };
 
+// --- Strum Animation State ---
+let strumBend = 0;
+const STRUM_BEND_AMP = 25;
+const STRUM_BEND_DECAY = 0.88;
+
 export function createChordWheel(panel){
   initToyUI(panel, { toyName: 'Chord Wheel', defaultInstrument: 'Acoustic Guitar Chords' });
   const toyId = panel.dataset.toyid = panel.id || `chordwheel-${Math.random().toString(36).slice(2, 8)}`;
@@ -77,7 +82,17 @@ export function createChordWheel(panel){
   const body = panel.querySelector('.toy-body'); body.innerHTML = '';
   const wrap = el('div','cw-wrap'); const flex = el('div','cw-flex'); wrap.appendChild(flex); body.appendChild(wrap);
   // The flex container will center both the SVG wheel and the overlay canvas.
-  Object.assign(flex.style, { position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' });
+  Object.assign(flex.style, { position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px' });
+
+  // Strum area
+  const strumCanvas = el('canvas', 'cw-strum');
+  const strumCtx = strumCanvas.getContext('2d');
+  flex.appendChild(strumCanvas);
+
+  // Wrapper for wheel and cubes
+  const wheelWrap = el('div', 'cw-wheel-wrap');
+  Object.assign(wheelWrap.style, { position: 'relative' });
+  flex.appendChild(wheelWrap);
 
   const NUM_STEPS = 16;
   const NUM_SLICES = 8;
@@ -93,7 +108,7 @@ export function createChordWheel(panel){
   const wheel = buildWheelWithRing(190, NUM_SLICES, {});
   // The SVG is for display and segment clicks only. It sits behind the canvas.
   Object.assign(wheel.svg.style, { pointerEvents: 'none' });
-  flex.append(wheel.svg, canvas);
+  wheelWrap.append(wheel.svg, canvas);
 
   function updateLabels() {
     const wheelLabels = progression.filter((_, i) => i % 2 === 0);
@@ -170,6 +185,57 @@ export function createChordWheel(panel){
     }
   });
 
+  // --- Strum Interaction ---
+  let isStrumming = false;
+  let lastStrumX = 0;
+  let strumMidX = 0;
+
+  function performStrum(direction) {
+    const chord = buildChord(progression[playheadIx] || 1);
+    const chordName = degreeToChordName(progression[playheadIx] || 1);
+
+    scheduleStrum({ notes: chord, direction, chordName });
+
+    // Trigger animation: a positive or negative bend
+    strumBend = (direction === 'down') ? STRUM_BEND_AMP : -STRUM_BEND_AMP;
+
+    // Set the arpeggio state of the currently highlighted cube
+    if (playheadIx >= 0 && playheadIx < NUM_STEPS) {
+        stepStates[playheadIx] = (direction === 'down') ? 2 : 1; // 2 for down, 1 for up
+    }
+  }
+
+  strumCanvas.addEventListener('pointerdown', e => {
+    strumCanvas.setPointerCapture(e.pointerId);
+    isStrumming = true;
+    const rect = strumCanvas.getBoundingClientRect();
+    strumMidX = rect.left + rect.width / 2;
+    lastStrumX = e.clientX;
+  });
+
+  strumCanvas.addEventListener('pointermove', e => {
+    if (!isStrumming) return;
+
+    const currentX = e.clientX;
+    
+    // Check for crossing the midline to trigger a strum
+    if (lastStrumX < strumMidX && currentX >= strumMidX) {
+        performStrum('down'); // Crossing from left to right
+    } else if (lastStrumX > strumMidX && currentX <= strumMidX) {
+        performStrum('up'); // Crossing from right to left
+    }
+
+    lastStrumX = currentX;
+  });
+
+  const onPointerUp = e => {
+    isStrumming = false;
+    strumCanvas.releasePointerCapture(e.pointerId);
+  };
+
+  strumCanvas.addEventListener('pointerup', onPointerUp);
+  strumCanvas.addEventListener('pointercancel', onPointerUp);
+
   // --- Main Render Loop ---
   function draw() {
     if (!panel.isConnected) return;
@@ -188,6 +254,23 @@ export function createChordWheel(panel){
     wheel.setHand(handSegment, phaseInHandSegment);
 
     // --- Visual Rendering ---
+    // Size and draw strum canvas
+    if (strumCanvas) {
+      const dpr = window.devicePixelRatio || 1;
+      const wheelRect = wheelWrap.getBoundingClientRect();
+      const strumWidth = wheelRect.width;
+      const strumHeight = wheelRect.height;
+
+      if (strumCanvas.width !== strumWidth * dpr || strumCanvas.height !== strumHeight * dpr) {
+          strumCanvas.width = strumWidth * dpr;
+          strumCanvas.height = strumHeight * dpr;
+          strumCanvas.style.width = `${strumWidth}px`;
+          strumCanvas.style.height = `${strumHeight}px`;
+          strumCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      drawStrumArea(strumCtx, strumWidth, strumHeight);
+    }
+
     const w = canvas.width, h = canvas.height;
     ctx.clearRect(0, 0, w, h);
     const { cubes } = getCubeGeometry(w, h, 190, NUM_STEPS);
@@ -313,6 +396,31 @@ export function createChordWheel(panel){
   // This toy manages its own timing via requestAnimationFrame. By setting
   // __sequencerStep to null, we ensure it's completely ignored by the main scheduler.
   panel.__sequencerStep = null;
+  function drawStrumArea(ctx, w, h) {
+    ctx.clearRect(0, 0, w, h);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+
+    const midX = w / 2;
+
+    if (Math.abs(strumBend) > 0.5) {
+        // The whole string bows out, oscillating back and forth
+        ctx.moveTo(midX, 0);
+        for (let y = 0; y <= h; y++) {
+            const t = y / h; // 0 to 1
+            const xOffset = strumBend * Math.sin(t * Math.PI);
+            ctx.lineTo(midX + xOffset, y);
+        }
+        // Decay and reverse direction for the next frame
+        strumBend *= -STRUM_BEND_DECAY;
+    } else {
+        strumBend = 0; // Clamp to zero to stop animation
+        ctx.moveTo(w / 2, 0);
+        ctx.lineTo(w / 2, h);
+    }
+    ctx.stroke();
+  }
 
   // --- Helper Functions ---
   function buildChord(deg){ return maybeAddSeventh(buildDiatonicTriad(deg)); }
