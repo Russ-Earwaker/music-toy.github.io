@@ -2,7 +2,7 @@
 import { initToyUI } from './toyui.js';
 import { NUM_STEPS, getLoopInfo, ensureAudioContext, getToyGain } from './audio-core.js';
 import { triggerNoteForToy } from './audio-trigger.js';
-import { drawBlock } from './toyhelpers.js';
+import { drawBlock, whichThirdRect } from './toyhelpers.js';
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 function degreeToChordName(deg) {
@@ -56,8 +56,11 @@ let strumBend = 0;
 const STRUM_BEND_AMP = 25;
 const STRUM_BEND_DECAY = 0.88;
 
+let strumBgPulse = 0;
+const PULSE_DECAY = 0.92;
+
 export function createChordWheel(panel){
-  initToyUI(panel, { toyName: 'Chord Wheel', defaultInstrument: 'Acoustic Guitar Chords' });
+  initToyUI(panel, { toyName: 'Chord Wheel', defaultInstrument: 'Acoustic Guitar' });
   const toyId = panel.dataset.toyid = panel.id || `chordwheel-${Math.random().toString(36).slice(2, 8)}`;
   const audioCtx = ensureAudioContext();
 
@@ -80,24 +83,26 @@ export function createChordWheel(panel){
     }
   } catch (e) { console.warn(`[chordwheel] Could not install compressor for ${toyId}`, e); }
   const body = panel.querySelector('.toy-body'); body.innerHTML = '';
-  const wrap = el('div','cw-wrap'); const flex = el('div','cw-flex'); wrap.appendChild(flex); body.appendChild(wrap);
+  const wrap = el('div', 'cw-wrap'); const flex = el('div', 'cw-flex'); wrap.appendChild(flex); body.appendChild(wrap);
+  Object.assign(wrap.style, { width: '100%', height: '100%' });
   // The flex container will center both the SVG wheel and the overlay canvas.
-  Object.assign(flex.style, { position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px' });
+  Object.assign(flex.style, { position: 'relative', display: 'flex', alignItems: 'stretch', justifyContent: 'center', gap: '20px', width: '100%', height: '100%' });
 
   // Strum area
   const strumCanvas = el('canvas', 'cw-strum');
+  Object.assign(strumCanvas.style, { flex: '1 1 0px', minWidth: '0', position: 'relative' });
   const strumCtx = strumCanvas.getContext('2d');
   flex.appendChild(strumCanvas);
 
   // Wrapper for wheel and cubes
   const wheelWrap = el('div', 'cw-wheel-wrap');
-  Object.assign(wheelWrap.style, { position: 'relative' });
+  Object.assign(wheelWrap.style, { position: 'relative', flex: '1 1 0px', minWidth: '0' });
   flex.appendChild(wheelWrap);
 
-  const NUM_STEPS = 16;
   const NUM_SLICES = 8;
-  const stepStates = Array(NUM_STEPS).fill(-1); // -1: off, 1: arp up, 2: arp down
-  let progression = randomProgression16();
+  let numSteps = 8; // Default to 8 steps
+  let stepStates = Array(numSteps).fill(-1); // -1: off, 1: arp up, 2: arp down
+  let progression = Array(numSteps).fill(1);
 
   // --- Create Canvas for Cubes ---
   const canvas = el('canvas', 'cw-cubes');
@@ -107,19 +112,54 @@ export function createChordWheel(panel){
   // --- Create SVG Wheel (no ring) ---
   const wheel = buildWheelWithRing(190, NUM_SLICES, {});
   // The SVG is for display and segment clicks only. It sits behind the canvas.
-  Object.assign(wheel.svg.style, { pointerEvents: 'none' });
+  Object.assign(wheel.svg.style, { pointerEvents: 'none', width: '100%', height: '100%', display: 'block' });
   wheelWrap.append(wheel.svg, canvas);
 
+  // --- Steps Dropdown (Advanced Mode) ---
+  const header = panel.querySelector('.toy-header');
+  const right = header.querySelector('.toy-controls-right');
+  const stepsSelect = el('select', 'cw-steps-select');
+  stepsSelect.innerHTML = `<option value="8">8 Steps</option><option value="16">16 Steps</option>`;
+  stepsSelect.value = String(numSteps);
+  stepsSelect.style.display = 'none'; // Hidden by default
+  if (right) right.appendChild(stepsSelect);
+
+  stepsSelect.addEventListener('change', () => {
+    const newNumSteps = parseInt(stepsSelect.value, 10);
+    if (newNumSteps === numSteps) return;
+
+    numSteps = newNumSteps;
+    panel.dataset.steps = String(numSteps);
+
+    // Reset state arrays for the new size
+    stepStates = Array(numSteps).fill(-1);
+    flashes.length = numSteps; flashes.fill(0);
+
+    // Update progression and labels
+    progression = Array(numSteps).fill(1);
+    updateLabels();
+  });
+
+  panel.addEventListener('toy-zoom', (e) => {
+    const isZoomed = e.detail?.zoomed ?? panel.classList.contains('toy-zoomed');
+    stepsSelect.style.display = isZoomed ? 'inline-block' : 'none';
+  });
+
   function updateLabels() {
-    const wheelLabels = progression.filter((_, i) => i % 2 === 0);
-    wheel.setLabels(wheelLabels);
+    // For debugging, always show the inner cubes, so always hide the SVG labels.
+    wheel.setLabels([]);
+    // The original logic was:
+    // const isZoomed = panel.classList.contains('toy-zoomed');
+    // if (isZoomed) wheel.setLabels([]);
+    // else if (numSteps === 16) wheel.setLabels(progression.filter((_, i) => i % 2 === 0));
+    // else wheel.setLabels(progression);
   }
 
   wheel.setSliceColors(COLORS);
   updateLabels();
 
   panel.addEventListener('toy-random',()=>{
-    progression = randomProgression16();
+    progression = (numSteps === 16) ? randomProgression16() : randomProgression8();
     updateLabels();
     // New randomization logic:
     // - A random number of active steps (arpeggios).
@@ -127,19 +167,18 @@ export function createChordWheel(panel){
     // - One "double" (two adjacent active steps) is allowed per randomization.
     stepStates.fill(-1);
 
-    const numActive = 3 + Math.floor(Math.random() * 5); // 3 to 7 active steps
+    const numActive = 3 + Math.floor(Math.random() * (numSteps / 2.5)); // Scale active steps
     const allowDouble = Math.random() < 0.5;
-    const indices = Array.from({length: NUM_STEPS}, (_, i) => i);
+    const indices = Array.from({length: numSteps}, (_, i) => i);
     for (let i = indices.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [indices[i], indices[j]] = [indices[j], indices[i]]; }
 
     let placedCount = 0;
     const occupied = new Set();
-    const isAvailable = (index) => !occupied.has(index);
-    const occupy = (index) => { occupied.add(index); occupied.add((index - 1 + NUM_STEPS) % NUM_STEPS); occupied.add((index + 1 + NUM_STEPS) % NUM_STEPS); };
+    const isAvailable = (index) => !occupied.has(index); const occupy = (index) => { occupied.add(index); occupied.add((index - 1 + numSteps) % numSteps); occupied.add((index + 1 + numSteps) % numSteps); };
 
     if (allowDouble && numActive >= 2) {
       for (const idx1 of indices) {
-        const idx2 = (idx1 + 1) % NUM_STEPS;
+        const idx2 = (idx1 + 1) % numSteps;
         if (isAvailable(idx1) && isAvailable(idx2)) {
           stepStates[idx1] = Math.random() < 0.5 ? 1 : 2; stepStates[idx2] = Math.random() < 0.5 ? 1 : 2;
           occupy(idx1); occupy(idx2);
@@ -160,18 +199,45 @@ export function createChordWheel(panel){
 
   let lastAudioStep = -1;
   let playheadIx = -1;
-  const flashes = new Float32Array(NUM_STEPS);
+  let flashes = new Float32Array(numSteps);
 
   // --- Canvas Click Handler ---
   canvas.addEventListener('pointerdown', (e) => {
     const r = canvas.getBoundingClientRect();
+
     // Scale pointer coordinates to match the canvas's internal resolution,
     // which might be different from its CSS size due to device pixel ratio.
     const p = {
       x: (e.clientX - r.left) * (canvas.width / r.width),
       y: (e.clientY - r.top) * (canvas.height / r.height)
     };
-    const { cubes } = getCubeGeometry(canvas.width, canvas.height, 190, NUM_STEPS);
+
+    // For debugging, chord selectors are always active.
+    const { cubes: innerCubes } = getInnerCubeGeometry(canvas.width, canvas.height, 190, NUM_SLICES);
+    for (let i = 0; i < innerCubes.length; i++) {
+        const c = innerCubes[i];
+        if (p.x >= c.x && p.x <= c.x + c.w && p.y >= c.y && p.y <= c.h) {
+            console.log(`[chordwheel] DEBUG: Clicked inner cube ${i}`);
+            const third = whichThirdRect(c, p.y);
+            if (third === 'toggle') return; // Ignore middle clicks
+
+            const baseDegreeIndex = (numSteps === 16) ? (i * 2) : i;
+            const currentDegree = progression[baseDegreeIndex] || 1;
+            let newDegree = currentDegree;
+
+            if (third === 'up') { newDegree = (currentDegree % 7) + 1; }
+            else if (third === 'down') { newDegree = ((currentDegree - 2 + 7) % 7) + 1; }
+
+            if (newDegree !== currentDegree) {
+                if (numSteps === 16) { progression[baseDegreeIndex] = newDegree; progression[baseDegreeIndex + 1] = newDegree; }
+                else { progression[baseDegreeIndex] = newDegree; }
+                updateLabels();
+            }
+            return; // Click was handled, stop processing.
+        }
+    }
+
+    const { cubes } = getCubeGeometry(canvas.width, canvas.height, 190, numSteps);
     for (let i = 0; i < cubes.length; i++) {
       const c = cubes[i];
       if (p.x >= c.x && p.x <= c.x + c.w && p.y >= c.y && p.y <= c.y + c.h) {
@@ -189,6 +255,7 @@ export function createChordWheel(panel){
   let isStrumming = false;
   let lastStrumX = 0;
   let strumMidX = 0;
+  let lastBeat = -1;
 
   function performStrum(direction) {
     const chord = buildChord(progression[playheadIx] || 1);
@@ -200,7 +267,7 @@ export function createChordWheel(panel){
     strumBend = (direction === 'down') ? STRUM_BEND_AMP : -STRUM_BEND_AMP;
 
     // Set the arpeggio state of the currently highlighted cube
-    if (playheadIx >= 0 && playheadIx < NUM_STEPS) {
+    if (playheadIx >= 0 && playheadIx < numSteps) {
         stepStates[playheadIx] = (direction === 'down') ? 2 : 1; // 2 for down, 1 for up
     }
   }
@@ -243,8 +310,20 @@ export function createChordWheel(panel){
 
     // --- Timing and Playhead Logic ---
     const info = getLoopInfo();
-    const totalPhase16 = info.phase01 * NUM_STEPS;
-    const currentStep = Math.floor(totalPhase16);
+
+    // Background pulse on global beat
+    const currentBeatInBar = Math.floor(info.phase01 * 4);
+    if (currentBeatInBar !== lastBeat) {
+        if (currentBeatInBar === 0) {
+            strumBgPulse = 1.0; // Strong pulse on the downbeat
+        } else {
+            strumBgPulse = 0.5; // Weaker pulse on other quarter notes
+        }
+        lastBeat = currentBeatInBar;
+    }
+
+    const totalPhase = info.phase01 * numSteps;
+    const currentStep = Math.floor(totalPhase);
     playheadIx = currentStep;
 
     // The hand should rotate over 8 visual segments, in sync with the 16 steps.
@@ -257,25 +336,40 @@ export function createChordWheel(panel){
     // Size and draw strum canvas
     if (strumCanvas) {
       const dpr = window.devicePixelRatio || 1;
-      const wheelRect = wheelWrap.getBoundingClientRect();
-      const strumWidth = wheelRect.width;
-      const strumHeight = wheelRect.height;
+      // Read the canvas's own size, which is now controlled by the flex layout.
+      const strumRect = strumCanvas.getBoundingClientRect();
+      const strumWidth = strumRect.width;
+      const strumHeight = strumRect.height;
 
       if (strumCanvas.width !== strumWidth * dpr || strumCanvas.height !== strumHeight * dpr) {
           strumCanvas.width = strumWidth * dpr;
           strumCanvas.height = strumHeight * dpr;
-          strumCanvas.style.width = `${strumWidth}px`;
-          strumCanvas.style.height = `${strumHeight}px`;
           strumCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       }
       drawStrumArea(strumCtx, strumWidth, strumHeight);
     }
 
+    // Robust canvas sizing to fix hit detection.
+    // This ensures the canvas's internal resolution is always in sync with its
+    // CSS display size, which is the root cause of the coordinate mismatch.
+    if (canvas) {
+        const dpr = window.devicePixelRatio || 1;
+        const displayWidth = canvas.clientWidth;
+        const displayHeight = canvas.clientHeight;
+        if (canvas.width !== Math.round(displayWidth * dpr) || canvas.height !== Math.round(displayHeight * dpr)) {
+            canvas.width = Math.round(displayWidth * dpr);
+            canvas.height = Math.round(displayHeight * dpr);
+        }
+    }
     const w = canvas.width, h = canvas.height;
     ctx.clearRect(0, 0, w, h);
-    const { cubes } = getCubeGeometry(w, h, 190, NUM_STEPS);
+    const { cubes } = getCubeGeometry(w, h, 190, numSteps);
 
-    for (let i = 0; i < NUM_STEPS; i++) {
+    // For debugging, always draw the inner cubes.
+    drawInnerCubes(ctx, w, h);
+
+
+    for (let i = 0; i < numSteps; i++) {
       const state = stepStates[i];
       const isActive = state !== -1;
       const flash = flashes[i] || 0;
@@ -323,6 +417,9 @@ export function createChordWheel(panel){
         scheduleStrum({ notes: chord, direction, chordName });
       }
     }
+
+    // Decay pulse for next frame
+    strumBgPulse *= PULSE_DECAY;
   }
 
   function dbToGain(db){ return Math.pow(10, db/20); }
@@ -373,9 +470,8 @@ export function createChordWheel(panel){
     }
 
     // --- Existing strum logic for other instruments ---
-    const sweep = 0.008; // 8ms total sweep
-    const baseVel = 0.85;
-
+    const sweep = 0.07; // 70ms for a more natural strum
+    const baseVel = 0.9; // A bit louder base
 
     const time = audioCtx.currentTime;
 
@@ -383,12 +479,15 @@ export function createChordWheel(panel){
     const N = orderedNotes.length;
     const step = N > 1 ? sweep / (N - 1) : 0;
 
-    const velAt = i => { const t = i/(N-1 || 1); const curve = (direction === 'down') ? (0.8 + 0.4 * Math.sin(Math.PI * t)) : (1.2 - 0.4 * Math.sin(Math.PI * t)); return baseVel * curve; };
+    // A more pronounced downward ramp in velocity for a more natural strum.
+    const velAt = i => { const t = i / (N - 1 || 1); return baseVel * (1.0 - 0.8 * t); };
+
     addStrumNoise(time, sweep, direction);
+
     orderedNotes.forEach((midi, i) => {
-      const delayMs = (i * step * 1000) + (Math.random() * 4 - 2); // ±2ms jitter
+      const delay = (i * step) + (Math.random() * 0.004 - 0.002); // ±2ms jitter
       const velocity = Math.max(0.05, Math.min(1, velAt(i)));
-      setTimeout(() => triggerNoteForToy(toyId, midiToName(midi), velocity), delayMs);
+      triggerNoteForToy(toyId, midiToName(midi), velocity, { when: time + delay });
     });
   }
   draw();
@@ -398,6 +497,23 @@ export function createChordWheel(panel){
   panel.__sequencerStep = null;
   function drawStrumArea(ctx, w, h) {
     ctx.clearRect(0, 0, w, h);
+
+    // Pulse background
+    if (strumBgPulse > 0.01) {
+        if (strumBgPulse > 0.6) { // Main beat gets a thick, scaling pulse
+            ctx.lineWidth = 2 + (strumBgPulse * 12);
+            ctx.strokeStyle = `rgba(255, 255, 255, ${strumBgPulse * 0.5})`;
+            const inset = ctx.lineWidth / 2;
+            ctx.strokeRect(inset, inset, w - inset * 2, h - inset * 2);
+        } else { // Quarter notes get a non-scaling color flash
+            ctx.lineWidth = 2;
+            // Use a higher alpha multiplier to make the color flash more visible without thickness
+            ctx.strokeStyle = `rgba(255, 255, 255, ${strumBgPulse * 0.8})`;
+            const inset = 1;
+            ctx.strokeRect(inset, inset, w - inset * 2, h - inset * 2);
+        }
+    }
+
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -424,6 +540,45 @@ export function createChordWheel(panel){
 
   // --- Helper Functions ---
   function buildChord(deg){ return maybeAddSeventh(buildDiatonicTriad(deg)); }
+
+  function getInnerCubeGeometry(width, height, radius, numCubes) {
+    const outerPad = 70, size = radius * 2 + outerPad * 2;
+    const scale = Math.min(width, height) / size;
+    const cx = width / 2, cy = height / 2;
+    const r = radius * scale;
+    const ringR = r * 0.58;
+    const cubeSize = Math.max(20, 60 * scale);
+    const cubes = [];
+    for (let ix = 0; ix < numCubes; ix++) {
+        const a = ((ix + 0.5) / numCubes) * Math.PI * 2 - Math.PI / 2;
+        const x = cx + ringR * Math.cos(a);
+        const y = cy + ringR * Math.sin(a);
+        cubes.push({ x: x - cubeSize / 2, y: y - cubeSize / 2, w: cubeSize, h: cubeSize });
+    }
+    return { cubes, cubeSize };
+  }
+
+  function drawInnerCubes(ctx, w, h) {
+      const { cubes: innerCubes } = getInnerCubeGeometry(w, h, 190, NUM_SLICES);
+      for (let i = 0; i < innerCubes.length; i++) {
+          const cube = innerCubes[i];
+          // Use the correct index to read the progression, especially for 16-step mode.
+          const baseDegreeIndex = (numSteps === 16) ? i * 2 : i;
+          const chordName = degreeToChordName(progression[baseDegreeIndex] || 1);
+          drawBlock(ctx, cube, {
+              active: true,
+              variant: 'button',
+              showArrows: true,
+              noteLabel: chordName,
+          });
+      }
+  }
+
+  const style = document.createElement('style');
+  style.textContent = `
+    .toy-zoomed[data-toy="chordwheel"] { width: 1600px !important; height: 800px !important; }
+  `;
+  panel.appendChild(style);
 }
 
 function getCubeGeometry(width, height, radius, numCubes = 16) {
@@ -477,39 +632,29 @@ function buildWheelWithRing(radius, numSlices, api){
 
 const MAJOR_SCALE=[0,2,4,5,7,9,11];
 
-function buildDiatonicTriad(degree, tonicMidi = 60) {
+function buildDiatonicTriad(degree, tonicMidi = 60) { // tonicMidi is C4
   const scaleRootIndex = (degree - 1 + 7) % 7;
 
   const rootOffset = MAJOR_SCALE[scaleRootIndex];
   let thirdOffset = MAJOR_SCALE[(scaleRootIndex + 2) % 7];
   let fifthOffset = MAJOR_SCALE[(scaleRootIndex + 4) % 7];
 
-  // Adjust for octave wrapping to ensure chords are in root position.
   if (thirdOffset < rootOffset) thirdOffset += 12;
   if (fifthOffset < rootOffset) fifthOffset += 12;
 
-  const octaveShift = 0; // Build chords around the C4-C5 range.
-  const root = tonicMidi + rootOffset + octaveShift;
-  const third = tonicMidi + thirdOffset + octaveShift;
-  const fifth = tonicMidi + fifthOffset + octaveShift;
+  // A nice open-sounding 4-note chord.
+  const root = tonicMidi + rootOffset; // C4
+  const fifth = tonicMidi + fifthOffset; // G4
+  const octaveRoot = root + 12; // C5
+  const octaveThird = tonicMidi + thirdOffset + 12; // E5
 
-  // Standard root-position triad voicing.
-  return [root, third, fifth];
+  // e.g., for Cmaj: C4, G4, C5, E5
+  return [root, fifth, octaveRoot, octaveThird].sort((a, b) => a - b);
 }
 
-function maybeAddSeventh(triad){
-  if (Math.random() < 0.25) {
-    // The root is the first note of the triad.
-    const rootMidi = triad[0];
-    const rootPitchClass = rootMidi % 12;
-    const scaleDegreeIndex = MAJOR_SCALE.indexOf(rootPitchClass);
-    if (scaleDegreeIndex === -1) return triad; // Should not happen with diatonic triads
-    let seventhOffset = MAJOR_SCALE[(scaleDegreeIndex + 6) % 7];
-    if (seventhOffset < rootPitchClass) seventhOffset += 12;
-    // Build the seventh in the same octave as the third and fifth.
-    const seventhMidi = (rootMidi - rootPitchClass) + seventhOffset;
-    return [...triad, seventhMidi];
-  }
+function maybeAddSeventh(triad) {
+  // This function is kept for signature compatibility but no longer adds a 7th randomly,
+  // ensuring chords are consistent on repeated plays.
   // Return a copy to avoid mutation by other parts of the system.
   return [...triad];
 }

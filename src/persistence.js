@@ -153,7 +153,22 @@ const ToySnapshotters = {
   loopgrid: { snap: snapLoopGrid, apply: applyLoopGrid },
   bouncer: { snap: snapBouncer, apply: applyBouncer },
   rippler: { snap: snapRippler, apply: applyRippler },
-  chordwheel: { snap: () => ({}), apply: () => {} },
+  chordwheel: {
+    snap: (panel)=>{
+      try{ if (typeof panel.__getChordwheelSnapshot === 'function') return panel.__getChordwheelSnapshot(); }catch{}
+      // Fallback minimal snapshot
+      return { instrument: panel.dataset.instrument || undefined, steps: Number(panel.dataset.steps)||undefined };
+    },
+    apply: (panel, state)=>{
+      try{
+        if (typeof panel.__applyChordwheelSnapshot === 'function'){ panel.__applyChordwheelSnapshot(state||{}); return; }
+        // Stash until toy init; also apply light hints now
+        try{ panel.__pendingChordwheelState = state || {}; }catch{}
+        if (state?.instrument){ try{ panel.dataset.instrument = state.instrument; }catch{} }
+        if (typeof state?.steps === 'number'){ try{ panel.dataset.steps = String(state.steps); }catch{} }
+      }catch(e){ console.warn('[persistence] applyChordwheel failed', e); }
+    }
+  },
   drawgrid: { snap: snapDrawGrid, apply: applyDrawGrid },
 };
 
