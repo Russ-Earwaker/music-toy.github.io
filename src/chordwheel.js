@@ -1,6 +1,6 @@
 // src/chordwheel.js — chord wheel with 16-step radial ring (per active segment)
 import { initToyUI } from './toyui.js';
-import { NUM_STEPS, getLoopInfo, ensureAudioContext, getToyGain } from './audio-core.js';
+import { NUM_STEPS, getLoopInfo, ensureAudioContext, getToyGain, isRunning } from './audio-core.js';
 import { triggerNoteForToy } from './audio-trigger.js';
 import { drawBlock, whichThirdRect } from './toyhelpers.js';
 
@@ -372,27 +372,39 @@ export function createChordWheel(panel){
 
     // --- Timing and Playhead Logic ---
     const info = getLoopInfo();
+    const running = (typeof isRunning === 'function') ? !!isRunning() : true;
 
     // Background pulse on global beat
-    const currentBeatInBar = Math.floor(info.phase01 * 4);
-    if (currentBeatInBar !== lastBeat) {
-        if (currentBeatInBar === 0) {
-            strumBgPulse = 1.0; // Strong pulse on the downbeat
-        } else {
-            strumBgPulse = 0.5; // Weaker pulse on other quarter notes
-        }
-        lastBeat = currentBeatInBar;
+    if (running) {
+      const currentBeatInBar = Math.floor(info.phase01 * 4);
+      if (currentBeatInBar !== lastBeat) {
+          if (currentBeatInBar === 0) {
+              strumBgPulse = 1.0; // Strong pulse on the downbeat
+          } else {
+              strumBgPulse = 0.5; // Weaker pulse on other quarter notes
+          }
+          lastBeat = currentBeatInBar;
+      }
     }
 
-    const totalPhase = info.phase01 * numSteps;
-    const currentStep = Math.floor(totalPhase);
-    playheadIx = currentStep;
+    // Freeze playhead when transport is paused
+    if (running) {
+      const totalPhase = info.phase01 * numSteps;
+      const currentStep = Math.floor(totalPhase);
+      playheadIx = currentStep;
+    }
 
     // The hand should rotate over 8 visual segments, in sync with the 16 steps.
-    const totalPhase8 = info.phase01 * NUM_SLICES;
-    const handSegment = Math.floor(totalPhase8);
-    const phaseInHandSegment = totalPhase8 - handSegment;
-    wheel.setHand(handSegment, phaseInHandSegment);
+    // Freeze the wheel hand when paused
+    try{
+      const totalPhase8 = info.phase01 * NUM_SLICES;
+      const handSegment = Math.floor(totalPhase8);
+      const phaseInHandSegment = totalPhase8 - handSegment;
+      if (!draw.__frozenHand){ draw.__frozenHand = { seg: handSegment, phase: phaseInHandSegment }; }
+      if (running){ draw.__frozenHand = { seg: handSegment, phase: phaseInHandSegment }; }
+      const use = running ? { seg: handSegment, phase: phaseInHandSegment } : draw.__frozenHand;
+      wheel.setHand(use.seg, use.phase);
+    }catch{}
 
     // --- Visual Rendering ---
     // Size and draw strum canvas
@@ -479,7 +491,7 @@ export function createChordWheel(panel){
     // Debug visuals removed
 
     // --- Audio Logic ---
-    const audioStep = currentStep;
+    const audioStep = (playheadIx >= 0) ? playheadIx : 0;
     if (audioStep !== lastAudioStep) {
       lastAudioStep = audioStep;
 
@@ -488,7 +500,8 @@ export function createChordWheel(panel){
         flashes[audioStep] = 1.0;
         const chord = buildChord(progression[audioStep] || 1);
         const chordName = degreeToChordName(progression[audioStep] || 1);
-        const direction = (state === 2) ? 'up' : 'down';
+        // Map state -> strum direction: 1 = up, 2 = down
+        const direction = (state === 1) ? 'up' : 'down';
         scheduleStrum({ notes: chord, direction, chordName });
       }
     }
@@ -627,9 +640,12 @@ export function createChordWheel(panel){
         const midiOut = midi + __octPreview;
         __times.push(+(when-time).toFixed(4)); __vels.push(+vel.toFixed(2)); __midi.push(midiOut);
         // Tempo-scaled sustain: longer on trebles, shorter on bass, proportional to step duration
-        const decayMul = (si <= 1) ? 2.2 : (si <= 3 ? 3.0 : 4.2);
-        const decaySec = Math.min(6.0, Math.max(1.2, __stepDur * decayMul));
-        triggerNoteForToy(toyId, midiToName(midiOut), vel, { when, env: { decaySec } });
+        // Longer musical sustains with gentle release; keeps ring without boom
+        const decayMul = (si <= 1) ? 4.2 : (si <= 3 ? 5.6 : 7.4);
+        const decaySec = Math.min(12.0, Math.max(2.8, __stepDur * decayMul));
+        const releaseSec = (si <= 1) ? 0.6 : (si <= 3 ? 0.9 : 1.2);
+        const sustainLevel = 0.24; // keep a modest level before release
+        triggerNoteForToy(toyId, midiToName(midiOut), vel, { when, env: { decaySec, releaseSec, sustainLevel } });
       }
       try{ if (localStorage.getItem('cw_dbg')==='1') console.log('[chordwheel]', chordName, { dir:direction, strings, order, times:__times, vels:__vels, midi:__midi }); }catch{}
       return; // skip legacy triad path
@@ -757,11 +773,7 @@ export function createChordWheel(panel){
       }
   }
 
-  const style = document.createElement('style');
-  style.textContent = `
-    .toy-zoomed[data-toy="chordwheel"] { width: 1600px !important; height: 800px !important; }
-  `;
-  panel.appendChild(style);
+  // Removed zoom-forced panel sizing to keep frame width stable across zoom
 }
 
 function getCubeGeometry(width, height, radius, numCubes = 16) {
@@ -799,7 +811,7 @@ function buildWheelWithRing(radius, numSlices, api){
     for(let i=0;i<numSlices;i++){ const aMid=((i+0.5)/numSlices)*Math.PI*2-Math.PI/2;
       const tx=cx+(r*0.58)*Math.cos(aMid),ty=cy+(r*0.58)*Math.sin(aMid)+8;
       const t=svgEl('text',{x:tx,y:ty,'text-anchor':'middle','font-size':'24','font-weight':'700',fill:'#e2e8f0'});
-      t.textContent=degreeToChordName(arr[i]||1); labelGroup.appendChild(t);} }
+      t.textContent=arr[i]||''; labelGroup.appendChild(t);} }
 
   const hand=svgEl('line',{x1:cx,y1:cy,x2:cx,y2:cy-r,stroke:'#e2e8f0','stroke-width':4,'stroke-linecap':'round'}); svg.appendChild(hand);
 

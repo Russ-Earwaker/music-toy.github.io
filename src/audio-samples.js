@@ -171,16 +171,21 @@ function playSampleAt(id, when, gain=1, toyId, noteName, options = {}){
     }
 
     const g = ctx.createGain();
-    // Envelope: optional per-note attack/decay for strums
+    // Envelope: optional per-note ADS-like for strums
     const env = options && (options.env || options.strumEnv);
     if (env && typeof env.decaySec === 'number' && env.decaySec > 0){
       try{
         const d = Math.max(0.08, env.decaySec);
-        const atk = Math.min(0.006, d * 0.08); // very short fade-in to avoid clicks
+        const r = Math.max(0.12, Number(env.releaseSec)||0.8);
+        const sustainLevel = Math.max(0.05, Math.min(0.6, Number(env.sustainLevel)||0.22));
+        const atk = Math.min(0.012, d * 0.06); // tiny fade-in to avoid clicks
         g.gain.setValueAtTime(0.0001, tStart);
-        g.gain.exponentialRampToValueAtTime(Math.max(0.001, gain), tStart + atk);
-        // Exponential decay to near-silence
-        g.gain.exponentialRampToValueAtTime(0.0001, tStart + d);
+        // Attack to full gain
+        g.gain.exponentialRampToValueAtTime(Math.max(0.002, gain), tStart + atk);
+        // Decay down to sustain level over d seconds
+        g.gain.linearRampToValueAtTime(Math.max(0.001, gain * sustainLevel), tStart + d);
+        // Release to silence over r seconds
+        g.gain.exponentialRampToValueAtTime(0.0001, tStart + d + r);
       }catch{
         g.gain.value = gain;
       }
@@ -196,7 +201,9 @@ function playSampleAt(id, when, gain=1, toyId, noteName, options = {}){
     // If envelope provided, schedule stop a bit after decay to avoid truncation clicks
     try{
       if (env && typeof env.decaySec === 'number' && env.decaySec > 0){
-        src.stop(__startAt + Math.max(0.08, env.decaySec) + 0.12);
+        const d = Math.max(0.08, env.decaySec);
+        const r = Math.max(0.12, Number(env.releaseSec)||0.8);
+        src.stop(__startAt + d + r + 0.3);
       }
     }catch{}
     return true;
@@ -258,7 +265,7 @@ export function triggerInstrument(instrument, noteName='C4', when, toyId, option
       console.warn('[audio] instrument not found:', id, '— using', toneId);
     }
   }catch{}
-  const ok = playById(toneId, noteToFreq(noteName), t, getToyGain(toyId||'master'), vel);
+  const ok = playById(toneId, noteToFreq(noteName), t, getToyGain(toyId||'master'), vel, options);
   if (ok) { try{ window.__toyActivityAt = ensureAudioContext().currentTime; }catch{} }
   return ok;
 }

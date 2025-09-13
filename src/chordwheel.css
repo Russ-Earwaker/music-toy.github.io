@@ -1,7 +1,18 @@
 .toy-panel[data-toy="chordwheel"]{
-  width:auto !important; display:inline-flex; flex-direction:column;
+  /* Set chordwheel panel to 2× bouncer width (bouncer ~380px) */
+  --panel-w: 760px;
+  width: 760px !important;
+  display:flex; flex-direction:column;
 }
-.cw-wheel{width:100%;max-width:640px;margin:0 auto;display:block;}
+.cw-wheel{width:100%;max-width:100%;margin:0 auto;display:block;}
+.cw-wheel-wrap{width:100%;}
+
+/* Advanced sizing: 4x bouncer width, 2x bouncer height */
+.toy-zoomed[data-toy="chordwheel"] {
+  width: 1520px !important; /* 4 x 380px */
+  height: 760px !important; /* 2 x 380px */
+}
+.toy-zoomed[data-toy="chordwheel"] .toy-body { height: 100%; }
 .cw-slices path.active{
   outline:none;
   stroke:rgba(255,255,255,.55);

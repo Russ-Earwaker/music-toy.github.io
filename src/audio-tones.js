@@ -74,9 +74,33 @@ function playDropletAt(freq, when, dest){
   const g=envGain(acx,t0,[{t:0,v:0.0001},{t:0.01,v:0.30},{t:0.25,v:0.0008}]); o.connect(g).connect(dest||acx.destination);
   o.start(t0); o.stop(t0+0.26);
 }
-export function playById(id, freq, when, dest){
+export function playById(id, freq, when, dest, velocity = 1.0, options = {}){
   const s=String(id||'tone').toLowerCase();
   const f=Math.max(20, Number(freq)||440); const t=Math.max(0, Number(when)||ensureAudioContext().currentTime);
+
+  // NEW: Check for a strum envelope first. If present, use a generic oscillator
+  // that respects the longer decay time. This is crucial for the Chord Wheel.
+  const env = options?.env || options?.strumEnv;
+  if (env && typeof env.decaySec === 'number' && env.decaySec > 0) {
+    const acx = ensureAudioContext();
+    const o = acx.createOscillator();
+    // Try to use the specified wave type, default to triangle for a pleasant tone.
+    const waveType = TONE_NAMES.includes(s.replace('retro-','')) ? s.replace('retro-','') : 'triangle';
+    try { o.type = waveType; } catch { o.type = 'triangle'; }
+    o.frequency.setValueAtTime(f, t);
+    const g = acx.createGain();
+    const d = Math.max(0.08, env.decaySec);
+    const atk = Math.min(0.006, d * 0.08);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.001, velocity), t + atk);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    o.connect(g).connect(dest || acx.destination);
+    o.start(t);
+    o.stop(t + d + 0.12);
+    return true; // Handled
+  }
+
+  // Original logic for short, percussive synth sounds
   if (s.includes('keypad')||s.includes('chime')) return playKeypadAt(f,t,dest);
   if (s.includes('pop')||s.includes('pluck'))  return playPopAt(f,t,dest);
   if (s.includes('pad'))                       return playPadAt(f,t,dest);
