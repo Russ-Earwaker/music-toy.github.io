@@ -58,7 +58,9 @@ export async function initAudioAssets(csvUrl='./assets/samples/samples.csv'){
     instrument_id: head.indexOf('instrument_id'),
     display: head.findIndex(h=>/^(display\s*_?name|display|label|title)$/.test(h)),
     synth: head.indexOf('synth_id'),
-    aliases: head.findIndex(h => h.startsWith('aliases'))
+    aliases: head.findIndex(h => h.startsWith('aliases')),
+    base_note: head.findIndex(h => /^(base\s*_?note|baseNote|note_base)$/i.test(h)),
+    base_oct: head.findIndex(h => /^(base\s*_?oct(ave)?|baseOct(ave)?|octave)$/i.test(h)),
   };
 
   // Build entries and decode buffers
@@ -74,13 +76,20 @@ export async function initAudioAssets(csvUrl='./assets/samples/samples.csv'){
     const synth = (col.synth>=0 ? parts[col.synth] : '').trim().toLowerCase();
     const aliasStr = (col.aliases>=0 ? parts[col.aliases] : '').trim();
     const url   = fn ? (baseDir + fn) : '';
+    // Optional base note metadata to align pitch for this sample family
+    let baseNoteCsv = (col.base_note>=0 ? parts[col.base_note] : '').trim();
+    const baseOctCsv = (col.base_oct>=0 ? parts[col.base_oct] : '').trim();
+    if (!baseNoteCsv && baseOctCsv){
+      // Interpret as C{oct}
+      baseNoteCsv = `C${baseOctCsv}`;
+    }
 
     // The canonical ID is the new `instrument_id` column.
     // Fall back to the `instrument` column, then `synth_id`.
     const canonicalId = instId || idCsv || synth;
     if (!canonicalId) continue;
 
-    const data = { url, synth };
+    const data = { url, synth, baseNote: baseNoteCsv || undefined };
     const allNames = new Set();
     allNames.add(normId(canonicalId));
     // The user is renaming 'aliases' to 'instrument_id'. To be safe, we'll
@@ -141,6 +150,7 @@ function playSampleAt(id, when, gain=1, toyId, noteName, options = {}){
   if (!buf && !ent) return false;
 
   const ctx = ensureAudioContext();
+  const tStart = safeStartTime(ctx, when);
   const src = buf ? ctx.createBufferSource() : null;
   if (src){
     src.buffer = buf;
@@ -149,20 +159,44 @@ function playSampleAt(id, when, gain=1, toyId, noteName, options = {}){
       src.playbackRate.value = options.playbackRate;
     } else {
       // Adjust playback rate for pitch. Assume base note is C4 for all samples.
-      const baseFreq = noteToFreq('C4');
+      // Prefer explicit baseNote from options, then entry metadata, else C4
+      let baseNoteName = (options && options.baseNote) || (ent && ent.baseNote) || 'C4';
+      // Basic sanitize: ensure like 'C4'
+      try{ baseNoteName = String(baseNoteName).trim(); }catch{}
+      const baseFreq = noteToFreq(baseNoteName || 'C4');
       const targetFreq = noteToFreq(noteName || 'C4');
       if (baseFreq > 0 && targetFreq > 0) {
         src.playbackRate.value = targetFreq / baseFreq;
       }
     }
 
-    const g = ctx.createGain(); g.gain.value = gain;
+    const g = ctx.createGain();
+    // Envelope: optional per-note decay for strums
+    const env = options && (options.env || options.strumEnv);
+    if (env && typeof env.decaySec === 'number' && env.decaySec > 0){
+      try{
+        const d = Math.max(0.02, env.decaySec);
+        g.gain.setValueAtTime(Math.max(0.0001, gain), tStart);
+        // Exponential ramp for natural string decay
+        g.gain.exponentialRampToValueAtTime(0.0001, tStart + d);
+      }catch{
+        g.gain.value = gain;
+      }
+    } else {
+      g.gain.value = gain;
+    }
     src.connect(g).connect(getToyGain(toyId||'master'));
-    const __startAt = safeStartTime(ctx, when);
+    const __startAt = tStart;
     if (window && window.BOUNCER_LOOP_DBG) {
       try { console.log('[audio-samples] start', id, noteName||'C4', 'in', (__startAt - ctx.currentTime).toFixed(3)); } catch (e) {}
     }
     src.start(__startAt);
+    // If envelope provided, schedule stop just after decay
+    try{
+      if (env && typeof env.decaySec === 'number' && env.decaySec > 0){
+        src.stop(__startAt + Math.max(0.02, env.decaySec) + 0.02);
+      }
+    }catch{}
     return true;
   }
 

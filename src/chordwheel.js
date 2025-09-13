@@ -6,13 +6,20 @@ import { drawBlock, whichThirdRect } from './toyhelpers.js';
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 function degreeToChordName(deg) {
-  const rootOffset = MAJOR_SCALE[(deg - 1 + 7) % 7];
-  const rootNoteIndex = (60 + rootOffset) % 12; // 60 = C4
+  // `deg` is now a state from 1-14. 1-7 are major, 8-14 are minor.
+  const degree = ((deg - 1) % 7) + 1;
+  const isMinor = deg > 7;
+
+  const rootOffset = MAJOR_SCALE[(degree - 1 + 7) % 7];
+  const rootNoteIndex = (60 + rootOffset) % 12;
   const rootNoteName = NOTE_NAMES[rootNoteIndex];
 
-  if ([1, 4, 5].includes(deg)) return rootNoteName;
-  if ([2, 3, 6].includes(deg)) return rootNoteName + 'm';
-  return rootNoteName + '°';
+  if (isMinor) {
+    // When selecting the minor variant of a chord, always label it as minor ('m'),
+    // not diminished ('°'). This makes Bm selectable instead of B°.
+    return rootNoteName + 'm';
+  }
+  return rootNoteName; // Major
 }
 function midiToName(midi) {
   if (midi == null) return '';
@@ -66,20 +73,35 @@ export function createChordWheel(panel){
 
 
 
-  // --- Strum Realism: Compressor Bus ---
-  // To "glue" the notes of the strum together, we'll route all audio for this
-  // toy through a single compressor.
+  // --- Strum Realism: Light EQ + Compressor Bus ---
+  // To make the strum sit like a guitar and reduce low-end rumble, insert a
+  // gentle high-pass and low-shelf cut before a glue compressor on the toy bus.
   try {
     const toyGain = getToyGain(toyId);
     if (toyGain.context) { // Ensure we have a valid gain node
       const destination = toyGain.destination || audioCtx.destination;
       toyGain.disconnect();
 
-      const compressor = audioCtx.createDynamicsCompressor();
-      compressor.threshold.value = -24; compressor.ratio.value = 4;
-      compressor.attack.value = 0.006; compressor.release.value = 0.12;
+      // High-pass to remove sub rumble but keep E2 (~82 Hz)
+      const hpf = audioCtx.createBiquadFilter();
+      hpf.type = 'highpass';
+      hpf.frequency.value = 78; // just below low E fundamental
+      hpf.Q.value = 0.707;
 
-      toyGain.connect(compressor); compressor.connect(destination);
+      // Gentle low-shelf dip to tame boominess
+      const lowShelf = audioCtx.createBiquadFilter();
+      lowShelf.type = 'lowshelf';
+      lowShelf.frequency.value = 180; // below low mids
+      lowShelf.gain.value = -2.5;     // subtle
+
+      const compressor = audioCtx.createDynamicsCompressor();
+      compressor.threshold.value = -26; compressor.ratio.value = 3.5;
+      compressor.attack.value = 0.008; compressor.release.value = 0.14;
+
+      toyGain.connect(hpf);
+      hpf.connect(lowShelf);
+      lowShelf.connect(compressor);
+      compressor.connect(destination);
     }
   } catch (e) { console.warn(`[chordwheel] Could not install compressor for ${toyId}`, e); }
   const body = panel.querySelector('.toy-body'); body.innerHTML = '';
@@ -154,12 +176,18 @@ export function createChordWheel(panel){
     // else if (numSteps === 16) wheel.setLabels(progression.filter((_, i) => i % 2 === 0));
     // else wheel.setLabels(progression);
   }
+  function diatonicDegreeToState(d) {
+    if ([1, 4, 5].includes(d)) return d; // Major I, IV, V
+    if ([2, 3, 6, 7].includes(d)) return d + 7; // minor ii, iii, vi, and diminished vii
+    return 1; // Fallback to I
+  }
 
   wheel.setSliceColors(COLORS);
   updateLabels();
 
   panel.addEventListener('toy-random',()=>{
-    progression = (numSteps === 16) ? randomProgression16() : randomProgression8();
+    const diatonicProgression = (numSteps === 16) ? randomPentatonicProgression16() : randomPentatonicProgression8();
+    progression = diatonicProgression.map(diatonicDegreeToState);
     updateLabels();
     // New randomization logic:
     // - A random number of active steps (arpeggios).
@@ -201,54 +229,89 @@ export function createChordWheel(panel){
   let playheadIx = -1;
   let flashes = new Float32Array(numSteps);
 
+  let lastClickDebug = null; // For debugging click positions
   // --- Canvas Click Handler ---
   canvas.addEventListener('pointerdown', (e) => {
     const r = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const boardScale = window.__boardScale || 1;
 
-    // Scale pointer coordinates to match the canvas's internal resolution,
-    // which might be different from its CSS size due to device pixel ratio.
+    // Robustly scale pointer coordinates to match the canvas's internal resolution.
+    // This avoids using potentially stale `canvas.width` or a global `__boardScale`.
+    const currentBitmapWidth = Math.round(canvas.clientWidth * dpr);
+    const currentBitmapHeight = Math.round(canvas.clientHeight * dpr);
+
+    // r.width is the visual size on screen. currentBitmapWidth is the backing store size.
+    // The ratio scales the click on the visual element to the backing store coordinate.
     const p = {
-      x: (e.clientX - r.left) * (canvas.width / r.width),
-      y: (e.clientY - r.top) * (canvas.height / r.height)
+      x: (e.clientX - r.left) * (currentBitmapWidth / r.width),
+      y: (e.clientY - r.top) * (currentBitmapHeight / r.height)
     };
 
-    // For debugging, chord selectors are always active.
-    const { cubes: innerCubes } = getInnerCubeGeometry(canvas.width, canvas.height, 190, NUM_SLICES);
-    for (let i = 0; i < innerCubes.length; i++) {
-        const c = innerCubes[i];
-        if (p.x >= c.x && p.x <= c.x + c.w && p.y >= c.y && p.y <= c.h) {
-            console.log(`[chordwheel] DEBUG: Clicked inner cube ${i}`);
-            const third = whichThirdRect(c, p.y);
-            if (third === 'toggle') return; // Ignore middle clicks
+    lastClickDebug = { p, t: Date.now() }; // Store for debug drawing
 
-            const baseDegreeIndex = (numSteps === 16) ? (i * 2) : i;
-            const currentDegree = progression[baseDegreeIndex] || 1;
-            let newDegree = currentDegree;
+    const isZoomed = panel.classList.contains('toy-zoomed');
 
-            if (third === 'up') { newDegree = (currentDegree % 7) + 1; }
-            else if (third === 'down') { newDegree = ((currentDegree - 2 + 7) % 7) + 1; }
+    if (isZoomed) {
+      // In zoomed mode, interact with the inner chord-selection cubes.
+      const { cubes: innerCubes } = getInnerCubeGeometry(currentBitmapWidth, currentBitmapHeight, 190, NUM_SLICES);
+      for (let i = 0; i < innerCubes.length; i++) {
+          const c = innerCubes[i];
+          if (p.x >= c.x && p.x <= c.x + c.w && p.y >= c.y && p.y <= c.y + c.h) {
+              const third = whichThirdRect(c, p.y);
+              if (third === 'toggle') return; // Ignore middle clicks
 
-            if (newDegree !== currentDegree) {
-                if (numSteps === 16) { progression[baseDegreeIndex] = newDegree; progression[baseDegreeIndex + 1] = newDegree; }
-                else { progression[baseDegreeIndex] = newDegree; }
-                updateLabels();
-            }
-            return; // Click was handled, stop processing.
-        }
-    }
+              const baseDegreeIndex = (numSteps === 16) ? (i * 2) : i;
+              const currentDegree = progression[baseDegreeIndex] || 1;
+              let newDegree = currentDegree;
 
-    const { cubes } = getCubeGeometry(canvas.width, canvas.height, 190, numSteps);
-    for (let i = 0; i < cubes.length; i++) {
-      const c = cubes[i];
-      if (p.x >= c.x && p.x <= c.x + c.w && p.y >= c.y && p.y <= c.y + c.h) {
-        // Cycle through states: -1 (off) -> 1 (up) -> 2 (down) -> -1
-        const current = stepStates[i];
-        if (current === -1) stepStates[i] = 1;
-        else if (current === 1) stepStates[i] = 2;
-        else stepStates[i] = -1;
-        break;
+              // New logic to interleave major/minor chords when cycling.
+              const degree = ((currentDegree - 1) % 7) + 1;
+              const isMinor = currentDegree > 7;
+
+              if (third === 'up') {
+                if (isMinor) {
+                  // from minor to next major
+                  const nextDegree = (degree % 7) + 1;
+                  newDegree = nextDegree;
+                } else {
+                  // from major to same minor
+                  newDegree = currentDegree + 7;
+                }
+              } else if (third === 'down') {
+                if (isMinor) {
+                  // from minor to same major
+                  newDegree = currentDegree - 7;
+                } else {
+                  // from major to previous minor
+                  const prevDegree = ((degree - 2 + 7) % 7) + 1;
+                  newDegree = prevDegree + 7;
+                }
+              }
+
+              if (newDegree !== currentDegree) {
+                  if (numSteps === 16) { progression[baseDegreeIndex] = newDegree; progression[baseDegreeIndex + 1] = newDegree; }
+                  else { progression[baseDegreeIndex] = newDegree; }
+                  updateLabels();
+              }
+              return; // Click was handled, stop processing.
+          }
       }
     }
+    // In standard mode, or if no inner cube was hit in advanced mode, check outer cubes.
+      // In standard mode, interact with the outer arpeggio cubes.
+      const { cubes } = getCubeGeometry(currentBitmapWidth, currentBitmapHeight, 190, numSteps);
+      for (let i = 0; i < cubes.length; i++) {
+        const c = cubes[i];
+        if (p.x >= c.x && p.x <= c.x + c.w && p.y >= c.y && p.y <= c.y + c.h) {
+          // Cycle through states: -1 (off) -> 1 (up) -> 2 (down) -> -1
+          const current = stepStates[i];
+          if (current === -1) stepStates[i] = 1;
+          else if (current === 1) stepStates[i] = 2;
+          else stepStates[i] = -1;
+          return; // Click handled
+        }
+      }
   });
 
   // --- Strum Interaction ---
@@ -403,6 +466,35 @@ export function createChordWheel(panel){
       ctx.strokeRect(c.x - 2, c.y - 2, c.w + 4, c.h + 4);
     }
 
+    // --- DEBUG VISUALS (uncomment to see hitboxes and click points) ---
+    
+    // Draw hitboxes for the arpeggio cubes
+    const { cubes: outerCubesDbg } = getCubeGeometry(w, h, 190, numSteps);
+    ctx.strokeStyle = 'lime';
+    ctx.lineWidth = 1;
+    for (const c of outerCubesDbg) {
+        ctx.strokeRect(c.x, c.y, c.w, c.h);
+    }
+
+    // Draw hitboxes for the chord selection cubes
+    const { cubes: innerCubesDbg } = getInnerCubeGeometry(w, h, 190, NUM_SLICES);
+    ctx.strokeStyle = 'yellow';
+    ctx.lineWidth = 1;
+    for (const c of innerCubesDbg) {
+        ctx.strokeRect(c.x, c.y, c.w, c.h);
+    }
+
+    // Draw last click position as a red dot
+    if (lastClickDebug && (Date.now() - lastClickDebug.t < 1000)) {
+        const p = lastClickDebug.p;
+        ctx.fillStyle = 'red';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
+    // --- END DEBUG VISUALS ---
+
     // --- Audio Logic ---
     const audioStep = currentStep;
     if (audioStep !== lastAudioStep) {
@@ -454,14 +546,42 @@ export function createChordWheel(panel){
     } catch (e) { console.warn('[chordwheel] Strum noise failed', e); }
   }
 
+  // Guitar voicing tables (EADGBE)
+  const __CW_TUNING_EADGBE = [40, 45, 50, 55, 59, 64]; // E2 A2 D3 G3 B3 E4 (6..1)
+  const __CW_SHAPES = {
+    'C':  'x32010', 'D':  'xx0232', 'E':  '022100', 'F':  '133211', 'G':  '320003', 'A':  'x02220', 'B':  'x24442',
+    'Cm': 'x35543', 'Dm': 'xx0231', 'Em': '022000', 'Fm': '133111', 'Gm': '355333', 'Am': 'x02210', 'Bm': 'x24432',
+    'C#':  'x46664', 'C#m': 'x46654', 'D#':  'x68886', 'D#m': 'x68876',
+    'F#':  '244322', 'F#m': '244222', 'G#':  '466544', 'G#m': '466444',
+    'A#':  'x13331', 'A#m': 'x13321'
+  };
+  function __cwShapeToMidi(shape){
+    const out = [];
+    for (let s=0; s<6; s++){
+      const ch = shape[s];
+      if (!ch || ch.toLowerCase()==='x'){ out.push(null); continue; }
+      const fret = parseInt(ch, 10);
+      if (!Number.isFinite(fret)) { out.push(null); continue; }
+      out.push(__CW_TUNING_EADGBE[s] + fret);
+    }
+    return out;
+  }
+  function __cwVoicingForName(name, triad){
+    const shp = __CW_SHAPES[String(name||'').trim()];
+    if (shp) return __cwShapeToMidi(shp);
+    const t = Array.isArray(triad) ? triad : [];
+    return [null,null,null, t[0]||55, t[1]||59, t[2]||64];
+  }
+
   function scheduleStrum({ notes, direction = 'down', chordName }) {
     const currentInstrument = (panel.dataset.instrument || 'acoustic_guitar').toLowerCase().replace(/[\s-]+/g, '_');
+    const chordOct = Number(panel.dataset.chordOct || 1);
 
-    if (currentInstrument === 'acoustic_guitar_chords') {
+    if (false && currentInstrument === 'acoustic_guitar_chords') {
       const mapping = CHORD_SAMPLE_MAP[chordName] || CHORD_SAMPLE_MAP[chordName.replace('°', '')];
       if (mapping) {
         const { source, shift } = mapping;
-        const playbackRate = Math.pow(2, shift / 12);
+        const playbackRate = Math.pow(2, (shift + 12 * (Number.isFinite(chordOct) ? chordOct : 1)) / 12);
         // The note name 'C4' is a placeholder as pitch is handled by playbackRate.
         // We override the instrument to play the specific chord sample.
         triggerNoteForToy(toyId, 'C4', 0.95, { playbackRate, instrument: source });
@@ -469,25 +589,79 @@ export function createChordWheel(panel){
       return; // Done for this instrument type
     }
 
+    // --- E/E diagnostic mode: play only low E then high E with 1s gap ---
+    try {
+      const testFlag = String(panel.dataset.chordTestEe || '').toLowerCase();
+      if (testFlag === '1' || testFlag === 'true'){
+        const time = audioCtx.currentTime;
+        // Playback-only octave preview support, same as strum path
+        const __octPrevFlag = String(panel.dataset.chordOctPreview||'').toLowerCase();
+        const __octPreview = (__octPrevFlag==='1' || __octPrevFlag==='true') ? 12 : 0;
+        // If instrument metadata declares a baseNote that's an octave low (e.g., C3),
+        // the sample path will align. Our E/E test uses MIDI names through triggerNoteForToy,
+        // which routes to sample or tone consistently.
+        const lowE  = 40 + __octPreview; // E2 (MIDI 40)
+        const highE = 64 + __octPreview; // E4 (MIDI 64)
+        const v = 0.85;
+        triggerNoteForToy(toyId, midiToName(lowE),  v, { when: time });
+        triggerNoteForToy(toyId, midiToName(highE), v, { when: time + 1.0 });
+        try{ if (localStorage.getItem('cw_dbg')==='1') console.log('[chordwheel testEE]', { lowE, highE, when:[0,1.0] }); }catch{}
+        return;
+      }
+    }catch{}
+
+    // --- Guitar-style voicing and strum ---
+    {
+      const sweep = 0.065; // 65ms natural sweep for realistic strum
+      const time = audioCtx.currentTime;
+      let strings = __cwVoicingForName(chordName, notes);
+      const oct = Number(panel.dataset.chordOct||0);
+      if (Number.isFinite(oct) && oct !== 0){ strings = strings.map(m=> m==null? null : m + 12*oct); }
+      // Playback-only octave preview: shift output by +12 when chordOctPreview is truthy ("1"/"true")
+      const __octPrevFlag = String(panel.dataset.chordOctPreview||'').toLowerCase();
+      const __octPreview = (__octPrevFlag==='1' || __octPrevFlag==='true') ? 12 : 0;
+      const order = (direction === 'up') ? [5,4,3,2,1,0] : [0,1,2,3,4,5];
+      const N = order.length; const step = sweep / (N-1 || 1);
+      // Per-string emphasis (6..1): tuck lows, let highs speak
+      const mul = [0.58, 0.72, 0.85, 0.94, 1.00, 1.00];
+      // Direction-aware base dynamics with gentle spread
+      const baseVel = (i)=>{
+        const t = i/(N-1||1);
+        return (direction==='down') ? (0.92 - 0.10*t) : (0.82 + 0.10*t);
+      };
+      addStrumNoise(time, sweep, direction);
+      const __times = []; const __vels = []; const __midi = [];
+      for (let k=0; k<N; k++){
+        const si = order[k]; const midi = strings[si]; if (midi==null) continue;
+        const when = time + (k*step) + (Math.random()*0.006 - 0.003);
+        const v0 = baseVel(k);
+        const vm = mul[si] ?? 0.9;
+        const vel  = Math.max(0.05, Math.min(1, v0 * vm));
+        const midiOut = midi + __octPreview;
+        __times.push(+(when-time).toFixed(4)); __vels.push(+vel.toFixed(2)); __midi.push(midiOut);
+        // Allow the instrument natural sustain; no forced envelope here
+        triggerNoteForToy(toyId, midiToName(midiOut), vel, { when });
+      }
+      try{ if (localStorage.getItem('cw_dbg')==='1') console.log('[chordwheel]', chordName, { dir:direction, strings, order, times:__times, vels:__vels, midi:__midi }); }catch{}
+      return; // skip legacy triad path
+    }
     // --- Existing strum logic for other instruments ---
     const sweep = 0.07; // 70ms for a more natural strum
     const baseVel = 0.9; // A bit louder base
 
     const time = audioCtx.currentTime;
 
-    const orderedNotes = (direction === 'up') ? [...notes].reverse() : notes;
+    let orderedNotes = (direction === 'up') ? [...notes].reverse() : notes;
+    const semis = (Number.isFinite(chordOct) ? chordOct : 1) * 12;
+    if (semis) orderedNotes = orderedNotes.map(m => (m|0) + semis);
     const N = orderedNotes.length;
     const step = N > 1 ? sweep / (N - 1) : 0;
-
-    // A more pronounced downward ramp in velocity for a more natural strum.
-    const velAt = i => { const t = i / (N - 1 || 1); return baseVel * (1.0 - 0.8 * t); };
 
     addStrumNoise(time, sweep, direction);
 
     orderedNotes.forEach((midi, i) => {
       const delay = (i * step) + (Math.random() * 0.004 - 0.002); // ±2ms jitter
-      const velocity = Math.max(0.05, Math.min(1, velAt(i)));
-      triggerNoteForToy(toyId, midiToName(midi), velocity, { when: time + delay });
+      triggerNoteForToy(toyId, midiToName(midi), baseVel, { when: time + delay });
     });
   }
   draw();
@@ -495,6 +669,26 @@ export function createChordWheel(panel){
   // This toy manages its own timing via requestAnimationFrame. By setting
   // __sequencerStep to null, we ensure it's completely ignored by the main scheduler.
   panel.__sequencerStep = null;
+
+  // Always-on: Press 'C' to play reference C4 tone (debug/tuning aid)
+  try{
+    if (!panel.__cwCKeybound){
+      const onKey = (e)=>{
+        try{
+          const k = (e && (e.key||e.code) || '').toString().toLowerCase();
+          if (k !== 'c') return;
+          // Avoid typing into inputs/contenteditable
+          const ae = document.activeElement;
+          if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+          const t = audioCtx.currentTime;
+          // Use tone synth as a neutral reference
+          triggerNoteForToy(toyId, 'C4', 0.9, { when: t, instrument: 'tone' });
+        }catch{}
+      };
+      document.addEventListener('keydown', onKey, true);
+      panel.__cwCKeybound = true;
+    }
+  }catch{}
   function drawStrumArea(ctx, w, h) {
     ctx.clearRect(0, 0, w, h);
 
@@ -539,7 +733,7 @@ export function createChordWheel(panel){
   }
 
   // --- Helper Functions ---
-  function buildChord(deg){ return maybeAddSeventh(buildDiatonicTriad(deg)); }
+  function buildChord(state){ return maybeAddSeventh(buildChordFromState(state)); }
 
   function getInnerCubeGeometry(width, height, radius, numCubes) {
     const outerPad = 70, size = radius * 2 + outerPad * 2;
@@ -632,24 +826,42 @@ function buildWheelWithRing(radius, numSlices, api){
 
 const MAJOR_SCALE=[0,2,4,5,7,9,11];
 
-function buildDiatonicTriad(degree, tonicMidi = 60) { // tonicMidi is C4
+function buildChordFromState(state, tonicMidi = 60) { // tonicMidi is C4
+  const degree = ((state - 1) % 7) + 1;
+  const isMinor = state > 7;
+
   const scaleRootIndex = (degree - 1 + 7) % 7;
+  let rootNoteMidi = tonicMidi + MAJOR_SCALE[scaleRootIndex];
+  const rootNoteName = NOTE_NAMES[rootNoteMidi % 12];
 
-  const rootOffset = MAJOR_SCALE[scaleRootIndex];
-  let thirdOffset = MAJOR_SCALE[(scaleRootIndex + 2) % 7];
-  let fifthOffset = MAJOR_SCALE[(scaleRootIndex + 4) % 7];
+  // New, more authentic open chord voicings with consistent register and correct note counts.
+  // These are based on standard open chord shapes but voiced in a consistent, brighter register.
+  const chordId = rootNoteName + (isMinor ? 'm' : '');
+  const customVoicings = {
+    'C':  [48, 52, 55, 60, 64],       // 5 notes (C3-E3-G3-C4-E4)
+    'Cm': [48, 51, 55, 60, 63],       // 5 notes (C3-D#3-G3-C4-D#4)
+    'D':  [50, 57, 62, 66],          // 4 notes (D3-A3-D4-F#4)
+    'Dm': [50, 57, 62, 65],          // 4 notes (D3-A3-D4-F4)
+    'E':  [52, 59, 64, 68, 71, 76],    // 6 notes (E3-B3-E4-G#4-B4-E5)
+    'Em': [52, 59, 64, 67, 71, 76],    // 6 notes (E3-B3-E4-G4-B4-E5)
+    'F':  [53, 60, 65, 69, 72, 77],    // 6 notes (F3-C4-F4-A4-C5-F5)
+    'Fm': [53, 60, 65, 68, 72, 77],    // 6 notes (F3-C4-F4-G#4-C5-F5)
+    'G':  [55, 59, 62, 67, 71, 74],    // 6 notes (G3-B3-D4-G4-B4-D5)
+    'Gm': [55, 58, 62, 67, 70, 74],    // 6 notes (G3-A#3-D4-G4-A#4-D5)
+    'A':  [57, 61, 64, 69, 73],       // 5 notes (A3-C#4-E4-A4-C#5)
+    'Am': [57, 60, 64, 69, 72],       // 5 notes (A3-C4-E4-A4-C5)
+    'B':  [59, 63, 66, 71],          // 4 notes (B3-D#4-F#4-B4)
+    'Bm': [59, 62, 66, 71],          // 4 notes (B3-D4-F#4-B4)
+  };
 
-  if (thirdOffset < rootOffset) thirdOffset += 12;
-  if (fifthOffset < rootOffset) fifthOffset += 12;
+  if (customVoicings[chordId]) {
+    return customVoicings[chordId].sort((a, b) => a - b);
+  }
 
-  // A nice open-sounding 4-note chord.
-  const root = tonicMidi + rootOffset; // C4
-  const fifth = tonicMidi + fifthOffset; // G4
-  const octaveRoot = root + 12; // C5
-  const octaveThird = tonicMidi + thirdOffset + 12; // E5
-
-  // e.g., for Cmaj: C4, G4, C5, E5
-  return [root, fifth, octaveRoot, octaveThird].sort((a, b) => a - b);
+  // This fallback should not be reached with the comprehensive map above, but is kept as a safeguard.
+  const thirdMidi = rootNoteMidi + (isMinor ? 3 : 4);
+  const fifthMidi = rootNoteMidi + 7;
+  return [rootNoteMidi, thirdMidi, fifthMidi, rootNoteMidi + 12].sort((a, b) => a - b);
 }
 
 function maybeAddSeventh(triad) {
@@ -708,7 +920,7 @@ function __cwSub(rn){
   return __cwPick(pool);
 }
 
-function __cwCadenceBar8(current){
+function __cwDiatonicCadenceBar8(current){
   if (current === 5) return 5;
   const r = Math.random();
   const w = __CW_PROB.cadenceWeights;
@@ -717,7 +929,7 @@ function __cwCadenceBar8(current){
   return 6;
 }
 
-function __cwMutate8(seq8){
+function __cwDiatonicMutate8(seq8){
   const out = seq8.slice();
   for (const slot of __CW_ELIGIBLE_SLOTS){
     if (!__cwChance(__CW_PROB.mutateEligibleSlots * __cwPosBias(slot))) continue;
@@ -726,25 +938,25 @@ function __cwMutate8(seq8){
   return out;
 }
 
-function randomProgression8(){
+function randomDiatonicProgression8(){
   // 1) pick preset (4) → duplicate to 8
   const base4 = __cwPick(__CW_PRESETS);
   let seq8 = [...base4, ...base4];
 
   // 2) gentle mutate
-  seq8 = __cwMutate8(seq8);
+  seq8 = __cwDiatonicMutate8(seq8);
 
   // 3) optional push to V at bar 8 (legacy behavior)
   if (__cwChance(__CW_PROB.end8ToVOverride)) seq8[7] = 5;
 
   // 4) cadence shaping at bar 8
-  seq8[7] = __cwCadenceBar8(seq8[7]);
+  seq8[7] = __cwDiatonicCadenceBar8(seq8[7]);
 
   return seq8;
 }
 
-function randomProgression16(){
-  const loopA = randomProgression8();
+function randomDiatonicProgression16(){
+  const loopA = randomDiatonicProgression8();
   let loopB;
   const r = Math.random();
   const P = __CW_PROB.loopB;
@@ -752,14 +964,90 @@ function randomProgression16(){
   if (r < P.exact){
     loopB = loopA.slice();
   } else if (r < P.exact + P.lightMutate){
-    loopB = __cwMutate8(loopA);
-    loopB[7] = __cwCadenceBar8(loopB[7]);
+    loopB = __cwDiatonicMutate8(loopA);
+    loopB[7] = __cwDiatonicCadenceBar8(loopB[7]);
   } else {
     // flip last 4 bars for turnaround
     const b = loopA.slice();
     const last4 = b.slice(4,8).reverse();
     loopB = [...b.slice(0,4), ...last4];
-    loopB[7] = __cwCadenceBar8(loopB[7]);
+    loopB[7] = __cwDiatonicCadenceBar8(loopB[7]);
+  }
+
+  return [...loopA, ...loopB];
+}
+
+// --- Pentatonic chord progression generator (for Random button) ---
+const __CW_PENTATONIC_PRESETS = [
+  [1,5,6,2],  // I–V–vi–ii (was I-V-vi-IV)
+  [6,2,1,5],  // vi–ii–I–V (was vi-IV-I-V)
+  [2,5,1,6],  // ii–V–I–vi (already pentatonic)
+  [1,2,5,6],  // I-ii-V-vi (variation)
+  [1,3,6,2],  // I-iii-vi-ii (was I-iii-vi-IV)
+];
+
+const __CW_PENTATONIC_SUBS = {
+  1: [6],
+  6: [1,3,2],
+  2: [6],
+  5: [3,5],
+  3: [5,6]
+};
+
+const __CW_PENTATONIC_PROB = {
+  ...__CW_PROB,
+  cadenceWeights: { 5: 0.50, 2: 0.25, 6: 0.25 }, // V, ii, vi
+};
+
+function __cwPentatonicSub(rn){
+  const pool = __CW_PENTATONIC_SUBS[rn] || [];
+  if (!pool.length) return rn;
+  return __cwPick(pool);
+}
+
+function __cwPentatonicCadenceBar8(current){
+  if (current === 5) return 5;
+  const r = Math.random();
+  const w = __CW_PENTATONIC_PROB.cadenceWeights;
+  if (r < w[5]) return 5;
+  if (r < w[5] + w[2]) return 2;
+  return 6;
+}
+
+function __cwPentatonicMutate8(seq8){
+  const out = seq8.slice();
+  for (const slot of __CW_ELIGIBLE_SLOTS){
+    if (!__cwChance(__CW_PENTATONIC_PROB.mutateEligibleSlots * __cwPosBias(slot))) continue;
+    out[slot-1] = __cwPentatonicSub(out[slot-1]);
+  }
+  return out;
+}
+
+function randomPentatonicProgression8(){
+  const base4 = __cwPick(__CW_PENTATONIC_PRESETS);
+  let seq8 = [...base4, ...base4];
+  seq8 = __cwPentatonicMutate8(seq8);
+  if (__cwChance(__CW_PENTATONIC_PROB.end8ToVOverride)) seq8[7] = 5;
+  seq8[7] = __cwPentatonicCadenceBar8(seq8[7]);
+  return seq8;
+}
+
+function randomPentatonicProgression16(){
+  const loopA = randomPentatonicProgression8();
+  let loopB;
+  const r = Math.random();
+  const P = __CW_PENTATONIC_PROB.loopB;
+
+  if (r < P.exact){
+    loopB = loopA.slice();
+  } else if (r < P.exact + P.lightMutate){
+    loopB = __cwPentatonicMutate8(loopA);
+    loopB[7] = __cwPentatonicCadenceBar8(loopB[7]);
+  } else {
+    const b = loopA.slice();
+    const last4 = b.slice(4,8).reverse();
+    loopB = [...b.slice(0,4), ...last4];
+    loopB[7] = __cwPentatonicCadenceBar8(loopB[7]);
   }
 
   return [...loopA, ...loopB];
