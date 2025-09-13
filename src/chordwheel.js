@@ -162,19 +162,17 @@ export function createChordWheel(panel){
     updateLabels();
   });
 
-  panel.addEventListener('toy-zoom', (e) => {
-    const isZoomed = e.detail?.zoomed ?? panel.classList.contains('toy-zoomed');
-    stepsSelect.style.display = isZoomed ? 'inline-block' : 'none';
+  // Keep header height stable and refresh labels on zoom
+  panel.addEventListener('toy-zoom', () => {
+    try { stepsSelect.style.display = 'none'; } catch {}
+    try { updateLabels(); } catch {}
   });
 
   function updateLabels() {
-    // For debugging, always show the inner cubes, so always hide the SVG labels.
-    wheel.setLabels([]);
-    // The original logic was:
-    // const isZoomed = panel.classList.contains('toy-zoomed');
-    // if (isZoomed) wheel.setLabels([]);
-    // else if (numSteps === 16) wheel.setLabels(progression.filter((_, i) => i % 2 === 0));
-    // else wheel.setLabels(progression);
+    // Always show chord names on the wheel, matching assigned progression
+    const arr = (numSteps === 16) ? progression.filter((_, i)=> i%2===0) : progression;
+    const labels = arr.map((st)=> degreeToChordName(st||1));
+    wheel.setLabels(labels);
   }
   function diatonicDegreeToState(d) {
     if ([1, 4, 5].includes(d)) return d; // Major I, IV, V
@@ -298,8 +296,8 @@ export function createChordWheel(panel){
           }
       }
     }
-    // In standard mode, or if no inner cube was hit in advanced mode, check outer cubes.
-      // In standard mode, interact with the outer arpeggio cubes.
+    // Always allow outer cube interaction (strum direction)
+    {
       const { cubes } = getCubeGeometry(currentBitmapWidth, currentBitmapHeight, 190, numSteps);
       for (let i = 0; i < cubes.length; i++) {
         const c = cubes[i];
@@ -312,6 +310,7 @@ export function createChordWheel(panel){
           return; // Click handled
         }
       }
+    }
   });
 
   // --- Strum Interaction ---
@@ -425,37 +424,48 @@ export function createChordWheel(panel){
         }
     }
     const w = canvas.width, h = canvas.height;
+    // Ensure wheel labels reflect current progression in all views
+    try{
+      const arr = (numSteps === 16) ? progression.filter((_, i)=> i%2===0) : progression;
+      const labels = arr.map(st => degreeToChordName(st||1));
+      wheel.setLabels(labels);
+    }catch{}
     ctx.clearRect(0, 0, w, h);
     const { cubes } = getCubeGeometry(w, h, 190, numSteps);
 
-    // For debugging, always draw the inner cubes.
-    drawInnerCubes(ctx, w, h);
+    // Draw inner chord-name cubes only in Advanced view
+    if (panel.classList.contains('toy-zoomed')){
+      try { drawInnerCubes(ctx, w, h); } catch {}
+    }
 
 
-    for (let i = 0; i < numSteps; i++) {
-      const state = stepStates[i];
-      const isActive = state !== -1;
-      const flash = flashes[i] || 0;
-      drawBlock(ctx, cubes[i], { active: isActive, flash, variant: 'button', showArrows: false });
-      if (flash > 0) flashes[i] = Math.max(0, flash - 0.08);
+    // Always render outer step cubes (strum direction)
+    {
+      for (let i = 0; i < numSteps; i++) {
+        const state = stepStates[i];
+        const isActive = state !== -1;
+        const flash = flashes[i] || 0;
+        drawBlock(ctx, cubes[i], { active: isActive, flash, variant: 'button', showArrows: false });
+        if (flash > 0) flashes[i] = Math.max(0, flash - 0.08);
 
-      // Draw custom arrows for arpeggio state
-      if (state === 1 || state === 2) {
-        ctx.save();
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        const c = cubes[i];
-        const cx = c.x + c.w / 2;
-        const cy = c.y + c.h / 2;
-        const arrowW = c.w * 0.4;
-        const arrowH = c.h * 0.4;
-        ctx.beginPath();
-        if (state === 1) { // Arp Up
-          ctx.moveTo(cx - arrowW / 2, cy + arrowH / 2); ctx.lineTo(cx + arrowW / 2, cy + arrowH / 2); ctx.lineTo(cx, cy - arrowH / 2);
-        } else { // Arp Down
-          ctx.moveTo(cx - arrowW / 2, cy - arrowH / 2); ctx.lineTo(cx + arrowW / 2, cy - arrowH / 2); ctx.lineTo(cx, cy + arrowH / 2);
+        // Draw custom arrows for arpeggio state
+        if (state === 1 || state === 2) {
+          ctx.save();
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+          const c = cubes[i];
+          const cx = c.x + c.w / 2;
+          const cy = c.y + c.h / 2;
+          const arrowW = c.w * 0.4;
+          const arrowH = c.h * 0.4;
+          ctx.beginPath();
+          if (state === 1) { // Arp Up
+            ctx.moveTo(cx - arrowW / 2, cy + arrowH / 2); ctx.lineTo(cx + arrowW / 2, cy + arrowH / 2); ctx.lineTo(cx, cy - arrowH / 2);
+          } else { // Arp Down
+            ctx.moveTo(cx - arrowW / 2, cy - arrowH / 2); ctx.lineTo(cx + arrowW / 2, cy - arrowH / 2); ctx.lineTo(cx, cy + arrowH / 2);
+          }
+          ctx.closePath(); ctx.fill();
+          ctx.restore();
         }
-        ctx.closePath(); ctx.fill();
-        ctx.restore();
       }
     }
 
@@ -466,34 +476,7 @@ export function createChordWheel(panel){
       ctx.strokeRect(c.x - 2, c.y - 2, c.w + 4, c.h + 4);
     }
 
-    // --- DEBUG VISUALS (uncomment to see hitboxes and click points) ---
-    
-    // Draw hitboxes for the arpeggio cubes
-    const { cubes: outerCubesDbg } = getCubeGeometry(w, h, 190, numSteps);
-    ctx.strokeStyle = 'lime';
-    ctx.lineWidth = 1;
-    for (const c of outerCubesDbg) {
-        ctx.strokeRect(c.x, c.y, c.w, c.h);
-    }
-
-    // Draw hitboxes for the chord selection cubes
-    const { cubes: innerCubesDbg } = getInnerCubeGeometry(w, h, 190, NUM_SLICES);
-    ctx.strokeStyle = 'yellow';
-    ctx.lineWidth = 1;
-    for (const c of innerCubesDbg) {
-        ctx.strokeRect(c.x, c.y, c.w, c.h);
-    }
-
-    // Draw last click position as a red dot
-    if (lastClickDebug && (Date.now() - lastClickDebug.t < 1000)) {
-        const p = lastClickDebug.p;
-        ctx.fillStyle = 'red';
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
-        ctx.fill();
-    }
-    
-    // --- END DEBUG VISUALS ---
+    // Debug visuals removed
 
     // --- Audio Logic ---
     const audioStep = currentStep;
@@ -631,6 +614,10 @@ export function createChordWheel(panel){
       };
       addStrumNoise(time, sweep, direction);
       const __times = []; const __vels = []; const __midi = [];
+      // Compute musical step length to scale sustain by tempo and resolution
+      let __stepDur = 0.5;
+      try { const li = getLoopInfo(); __stepDur = Math.max(0.1, (li?.barLen || 2) / Math.max(1, numSteps)); } catch {}
+
       for (let k=0; k<N; k++){
         const si = order[k]; const midi = strings[si]; if (midi==null) continue;
         const when = time + (k*step) + (Math.random()*0.006 - 0.003);
@@ -639,8 +626,10 @@ export function createChordWheel(panel){
         const vel  = Math.max(0.05, Math.min(1, v0 * vm));
         const midiOut = midi + __octPreview;
         __times.push(+(when-time).toFixed(4)); __vels.push(+vel.toFixed(2)); __midi.push(midiOut);
-        // Allow the instrument natural sustain; no forced envelope here
-        triggerNoteForToy(toyId, midiToName(midiOut), vel, { when });
+        // Tempo-scaled sustain: longer on trebles, shorter on bass, proportional to step duration
+        const decayMul = (si <= 1) ? 2.2 : (si <= 3 ? 3.0 : 4.2);
+        const decaySec = Math.min(6.0, Math.max(1.2, __stepDur * decayMul));
+        triggerNoteForToy(toyId, midiToName(midiOut), vel, { when, env: { decaySec } });
       }
       try{ if (localStorage.getItem('cw_dbg')==='1') console.log('[chordwheel]', chordName, { dir:direction, strings, order, times:__times, vels:__vels, midi:__midi }); }catch{}
       return; // skip legacy triad path

@@ -171,13 +171,15 @@ function playSampleAt(id, when, gain=1, toyId, noteName, options = {}){
     }
 
     const g = ctx.createGain();
-    // Envelope: optional per-note decay for strums
+    // Envelope: optional per-note attack/decay for strums
     const env = options && (options.env || options.strumEnv);
     if (env && typeof env.decaySec === 'number' && env.decaySec > 0){
       try{
-        const d = Math.max(0.02, env.decaySec);
-        g.gain.setValueAtTime(Math.max(0.0001, gain), tStart);
-        // Exponential ramp for natural string decay
+        const d = Math.max(0.08, env.decaySec);
+        const atk = Math.min(0.006, d * 0.08); // very short fade-in to avoid clicks
+        g.gain.setValueAtTime(0.0001, tStart);
+        g.gain.exponentialRampToValueAtTime(Math.max(0.001, gain), tStart + atk);
+        // Exponential decay to near-silence
         g.gain.exponentialRampToValueAtTime(0.0001, tStart + d);
       }catch{
         g.gain.value = gain;
@@ -191,10 +193,10 @@ function playSampleAt(id, when, gain=1, toyId, noteName, options = {}){
       try { console.log('[audio-samples] start', id, noteName||'C4', 'in', (__startAt - ctx.currentTime).toFixed(3)); } catch (e) {}
     }
     src.start(__startAt);
-    // If envelope provided, schedule stop just after decay
+    // If envelope provided, schedule stop a bit after decay to avoid truncation clicks
     try{
       if (env && typeof env.decaySec === 'number' && env.decaySec > 0){
-        src.stop(__startAt + Math.max(0.02, env.decaySec) + 0.02);
+        src.stop(__startAt + Math.max(0.08, env.decaySec) + 0.12);
       }
     }catch{}
     return true;
