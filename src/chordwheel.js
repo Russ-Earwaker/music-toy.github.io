@@ -128,7 +128,7 @@ export function createChordWheel(panel){
   const particles = createBouncerParticles(
     () => Math.max(1, Math.floor(strumWrap.getBoundingClientRect().width || 0)),
     () => Math.max(1, Math.floor(strumWrap.getBoundingClientRect().height || 0)),
-    { count: 220, biasXCenter: true, biasYCenter: false, knockbackScale: 1.8 }
+    { count: 0, biasXCenter: false, biasYCenter: false, knockbackScale: 1.0, returnToHome: true, lockXToCenter: true, bounceOnWalls: true, homePull: 0.0065 }
   );
 
   // Wrapper for wheel and cubes
@@ -669,15 +669,14 @@ export function createChordWheel(panel){
         const releaseSec = (si <= 1) ? 0.6 : (si <= 3 ? 0.9 : 1.2);
         const sustainLevel = 0.24; // keep a modest level before release
         triggerNoteForToy(toyId, midiToName(midiOut), vel, { when, env: { decaySec, releaseSec, sustainLevel } });
-        // Disturb particle field at the string position along the vertical midline of strum area
+        // Spawn particles along the string's vertical line; faster near vertical center
         try{
-          const dpr = window.devicePixelRatio||1;
           const w = (strumWrap.getBoundingClientRect().width)|0;
-          const h = (strumWrap.getBoundingClientRect().height)|0;
           const x = (w * 0.5);
-          const y = Math.max(1, Math.min(h-1, (si+1) * (h/7)));
-          const dirKick = (direction === 'down') ? 2.5 : -2.5;
-          particles && particles.disturb(x, y, dirKick, 0);
+          const burstCount = 180;
+          const baseSpeed = 4.6; // increase top speed
+          const speedMul = 1.8;  // stronger overall scaling
+          particles && particles.lineBurst(x, burstCount, baseSpeed, speedMul);
         }catch{}
       }
       try{ if (localStorage.getItem('cw_dbg')==='1') console.log('[chordwheel]', chordName, { dir:direction, strings, order, times:__times, vels:__vels, midi:__midi }); }catch{}
