@@ -1,11 +1,25 @@
 // src/bouncer-particles.js
-export function createBouncerParticles(getW, getH, { count=280 } = {}){
+export function createBouncerParticles(getW, getH, { count=280, biasXCenter=false, biasYCenter=false, knockbackScale=1 } = {}){
   const P = [];
   let beatGlow = 0;
   const W = ()=> Math.max(1, Math.floor(getW()?getW():0));
   const H = ()=> Math.max(1, Math.floor(getH()?getH():0));
+  let lastW = 0, lastH = 0;
+  function spawnCoordX(){
+    const w = W();
+    if (!biasXCenter) return Math.random()*w;
+    // Triangular distribution peaked at center, zero at edges
+    const u = Math.random() - Math.random(); // [-1,1]
+    return ((u + 1) * 0.5) * w;
+  }
+  function spawnCoordY(){
+    const h = H();
+    if (!biasYCenter) return Math.random()*h;
+    const u = Math.random() - Math.random();
+    return ((u + 1) * 0.5) * h;
+  }
   for (let i=0;i<count;i++){
-    const x = Math.random()*W(), y = Math.random()*H();
+    const x = spawnCoordX(), y = spawnCoordY();
     P.push({ x, y, vx:0, vy:0, homeX:x, homeY:y, alpha:0.55, tSince: 0 });
   }
 
@@ -53,9 +67,9 @@ export function createBouncerParticles(getW, getH, { count=280 } = {}){
       const d2 = dx*dx + dy*dy;
       if (d2 < rad2){
         const d = Math.sqrt(d2) || 1;
-        const k = 0.35 * (1 - d/Math.sqrt(rad2));
-        p.vx += vx*0.05 + k*(dx/d);
-        p.vy += vy*0.05 + k*(dy/d);
+        const k = knockbackScale * 0.35 * (1 - d/Math.sqrt(rad2));
+        p.vx += vx*0.10 + k*(dx/d);
+        p.vy += vy*0.10 + k*(dy/d);
         p.alpha = Math.min(1, p.alpha + 0.18);
       }
     }
@@ -63,6 +77,24 @@ export function createBouncerParticles(getW, getH, { count=280 } = {}){
 
   function step(dt, ball){
     const w=W(), h=H();
+    // Re-home particles when container size changes (prevents drift/cutoff)
+    if (w !== lastW || h !== lastH){
+      // Adjust population to desired count
+      if (P.length < count){
+        for (let i=P.length;i<count;i++){
+          const x = spawnCoordX(), y = spawnCoordY();
+          P.push({ x, y, vx:0, vy:0, homeX:x, homeY:y, alpha:0.55, tSince: 0 });
+        }
+      } else if (P.length > count){
+        P.length = count;
+      }
+      for (const p of P){
+        const nx = spawnCoordX();
+        const ny = spawnCoordY();
+        p.homeX = nx; p.homeY = ny; p.x = nx; p.y = ny; p.vx = 0; p.vy = 0; p.alpha = 0.55; p.tSince = 0;
+      }
+      lastW = w; lastH = h;
+    }
     for (const p of P){
       // Smooth damping
       p.vx *= 0.985; p.vy *= 0.985;

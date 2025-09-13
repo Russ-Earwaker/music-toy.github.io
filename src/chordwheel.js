@@ -1,6 +1,7 @@
 // src/chordwheel.js — chord wheel with 16-step radial ring (per active segment)
 import { initToyUI } from './toyui.js';
 import { NUM_STEPS, getLoopInfo, ensureAudioContext, getToyGain, isRunning } from './audio-core.js';
+import { createBouncerParticles } from './bouncer-particles.js';
 import { triggerNoteForToy } from './audio-trigger.js';
 import { drawBlock, whichThirdRect } from './toyhelpers.js';
 
@@ -110,11 +111,25 @@ export function createChordWheel(panel){
   // The flex container will center both the SVG wheel and the overlay canvas.
   Object.assign(flex.style, { position: 'relative', display: 'flex', alignItems: 'stretch', justifyContent: 'center', gap: '20px', width: '100%', height: '100%' });
 
-  // Strum area
+  // Strum area with particle field behind it
+  const strumWrap = el('div', 'cw-strum-wrap');
+  Object.assign(strumWrap.style, { position: 'relative', flex: '1 1 0px', minWidth: '0' });
+  const particleCanvas = el('canvas', 'cw-particles');
+  Object.assign(particleCanvas.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', pointerEvents: 'none', zIndex: '0' });
+  const particleCtx = particleCanvas.getContext('2d');
   const strumCanvas = el('canvas', 'cw-strum');
-  Object.assign(strumCanvas.style, { flex: '1 1 0px', minWidth: '0', position: 'relative' });
+  Object.assign(strumCanvas.style, { position: 'relative', zIndex: '1', width: '100%', height: '100%' });
   const strumCtx = strumCanvas.getContext('2d');
-  flex.appendChild(strumCanvas);
+  strumWrap.appendChild(particleCanvas);
+  strumWrap.appendChild(strumCanvas);
+  flex.appendChild(strumWrap);
+
+  // Particle field for strum area
+  const particles = createBouncerParticles(
+    () => Math.max(1, Math.floor(strumWrap.getBoundingClientRect().width || 0)),
+    () => Math.max(1, Math.floor(strumWrap.getBoundingClientRect().height || 0)),
+    { count: 220, biasXCenter: true, biasYCenter: false, knockbackScale: 1.8 }
+  );
 
   // Wrapper for wheel and cubes
   const wheelWrap = el('div', 'cw-wheel-wrap');
@@ -407,20 +422,28 @@ export function createChordWheel(panel){
     }catch{}
 
     // --- Visual Rendering ---
-    // Size and draw strum canvas
-    if (strumCanvas) {
+    // Size and draw particle + strum canvases
+    if (strumCanvas && particleCanvas) {
       const dpr = window.devicePixelRatio || 1;
-      // Read the canvas's own size, which is now controlled by the flex layout.
-      const strumRect = strumCanvas.getBoundingClientRect();
-      const strumWidth = strumRect.width;
-      const strumHeight = strumRect.height;
-
-      if (strumCanvas.width !== strumWidth * dpr || strumCanvas.height !== strumHeight * dpr) {
-          strumCanvas.width = strumWidth * dpr;
-          strumCanvas.height = strumHeight * dpr;
-          strumCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const strumRect = strumWrap.getBoundingClientRect();
+      const cw = Math.max(1, Math.floor(strumRect.width));
+      const ch = Math.max(1, Math.floor(strumRect.height));
+      // Backing buffers
+      if (particleCanvas.width !== cw * dpr || particleCanvas.height !== ch * dpr) {
+        particleCanvas.width = cw * dpr;
+        particleCanvas.height = ch * dpr;
+        particleCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       }
-      drawStrumArea(strumCtx, strumWidth, strumHeight);
+      if (strumCanvas.width !== cw * dpr || strumCanvas.height !== ch * dpr) {
+        strumCanvas.width = cw * dpr;
+        strumCanvas.height = ch * dpr;
+        strumCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      // Particles step/draw
+      try{ if (!draw.__pbg) draw.__pbg = '#0b1116'; }catch{}
+      try{ particles && particles.step(1/60); }catch{}
+      try{ particleCtx.fillStyle = draw.__pbg; particleCtx.fillRect(0,0, cw, ch); particles && particles.draw(particleCtx); }catch{}
+      drawStrumArea(strumCtx, cw, ch);
     }
 
     // Robust canvas sizing to fix hit detection.
@@ -646,6 +669,16 @@ export function createChordWheel(panel){
         const releaseSec = (si <= 1) ? 0.6 : (si <= 3 ? 0.9 : 1.2);
         const sustainLevel = 0.24; // keep a modest level before release
         triggerNoteForToy(toyId, midiToName(midiOut), vel, { when, env: { decaySec, releaseSec, sustainLevel } });
+        // Disturb particle field at the string position along the vertical midline of strum area
+        try{
+          const dpr = window.devicePixelRatio||1;
+          const w = (strumWrap.getBoundingClientRect().width)|0;
+          const h = (strumWrap.getBoundingClientRect().height)|0;
+          const x = (w * 0.5);
+          const y = Math.max(1, Math.min(h-1, (si+1) * (h/7)));
+          const dirKick = (direction === 'down') ? 2.5 : -2.5;
+          particles && particles.disturb(x, y, dirKick, 0);
+        }catch{}
       }
       try{ if (localStorage.getItem('cw_dbg')==='1') console.log('[chordwheel]', chordName, { dir:direction, strings, order, times:__times, vels:__vels, midi:__midi }); }catch{}
       return; // skip legacy triad path
