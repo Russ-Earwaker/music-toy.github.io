@@ -25,6 +25,7 @@ export function attachDrumVisuals(panel) {
     ctx,
     playheadCol: -1,
     flash: new Float32Array(NUM_CUBES),
+    bgFlash: 0,
   };
   panel.__drumVisualState = st;
 

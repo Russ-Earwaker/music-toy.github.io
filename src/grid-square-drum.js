@@ -36,6 +36,11 @@ function addDrumPad(panel, padWrap, toyId) {
       panel.__particles.disturb();
     }
 
+    // Trigger background flash
+    if (panel.__drumVisualState) {
+      panel.__drumVisualState.bgFlash = 1.0;
+    }
+
     // Also, activate the cube at the current playhead position.
     const playheadCol = panel?.__drumVisualState?.playheadCol;
     if (playheadCol >= 0 && panel?.__gridState?.steps) {
