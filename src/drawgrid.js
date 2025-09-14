@@ -3,6 +3,7 @@
 // Strictly confined to the provided panel element.
 import { buildPalette, midiToName } from './note-helpers.js';
 import { drawBlock } from './toyhelpers.js';
+import { getLoopInfo, isRunning } from './audio-core.js';
 
 const STROKE_COLORS = [
   'rgba(95,179,255,0.95)',  // Blue
@@ -56,6 +57,202 @@ function fillGapsInNodeArray(nodes, numCols) {
     return filled;
 }
 
+/**
+ * A self-contained particle system, adapted from the Bouncer toy.
+ * - Particles are distributed across the entire container.
+ * - They are gently pulled back to their home position.
+ * - A `lineRepulse` function pushes them away from a vertical line.
+ */
+function createDrawGridParticles({
+  getW, getH,
+  count=150,
+  returnToHome=true,
+  homePull=0.002,
+  bounceOnWalls=false,
+} = {}){
+  const P = [];
+  let beatGlow = 0;
+  const W = ()=> Math.max(1, Math.floor(getW()?getW():0));
+  const H = ()=> Math.max(1, Math.floor(getH()?getH():0));
+  let lastW = 0, lastH = 0;
+
+  for (let i=0;i<count;i++){
+    P.push({ x: 0, y: 0, vx:0, vy:0, homeX:0, homeY:0, alpha:0.55, tSince: 0, delay:0, burst:false, flash: 0 });
+  }
+
+  function onBeat(cx, cy){
+    beatGlow = 1;
+    const w=W(), h=H();
+    const rad = Math.max(24, Math.min(w,h)*0.42);
+    for (const p of P){
+      const dx = p.x - cx, dy = p.y - cy;
+      const d = Math.hypot(dx,dy) || 1;
+      if (d < rad){
+        const u = 0.25 * (1 - d/rad);
+        p.vx += u * (dx/d);
+        p.vy += u * (dy/d);
+        p.alpha = Math.min(1, p.alpha + 0.25);
+      }
+    }
+  }
+
+  function step(dt=1/60){
+    const w=W(), h=H();
+    if (w !== lastW || h !== lastH){
+      if (P.length < count){
+        for (let i=P.length;i<count;i++){
+          P.push({ x: 0, y: 0, vx:0, vy:0, homeX:0, homeY:0, alpha:0.55, tSince: 0, flash: 0 });
+        }
+      } else if (P.length > count){
+        P.length = count;
+      }
+
+      for (const p of P){
+        // Generate a random point
+        const nx = Math.random() * w;
+        const ny = Math.random() * h;
+
+        p.homeX = nx; p.homeY = ny; p.x = nx; p.y = ny;
+        p.vx = 0; p.vy = 0; p.alpha = 0.55; p.tSince = 0; p.delay=0; p.burst=false; p.flash = 0;
+      }
+      lastW = w; lastH = h;
+    }
+
+    const toKeep = [];
+    for (const p of P){
+      if (p.delay && p.delay>0){ p.delay = Math.max(0, p.delay - dt); continue; }
+
+      if (p.isBurst) {
+          p.ttl--;
+          if (p.ttl <= 0) {
+              continue; // Particle dies
+          }
+      }
+
+      p.tSince += dt;
+      p.vx *= 0.985; p.vy *= 0.985;
+      // Burst particles just fly and die, no "return to home"
+      if (returnToHome && !p.isBurst){
+        const hx = p.homeX - p.x, hy = p.homeY - p.y;
+        p.vx += homePull*hx; p.vy += homePull*hy;
+      }
+      p.x += p.vx; p.y += p.vy;
+
+      if (p.x < 0 || p.x >= w || p.y < 0 || p.y >= h){
+        if (p.isBurst) {
+            continue; // Burst particles die if they go off-screen
+        }
+        // For regular particles, reset them to their home position
+        p.x=p.homeX; p.y=p.homeY; p.vx=0; p.vy=0; p.alpha=0.55; p.tSince=0; p.delay=0; p.burst=false; p.flash = 0;
+      }
+
+      p.alpha += (0.55 - p.alpha) * 0.05;
+      p.flash = Math.max(0, p.flash - 0.05);
+      toKeep.push(p);
+    }
+    if (toKeep.length !== P.length) {
+        P.length = 0;
+        Array.prototype.push.apply(P, toKeep);
+    }
+  }
+
+  function draw(ctx){
+    if (!ctx) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    if (beatGlow>0){ ctx.globalAlpha = Math.min(0.6, beatGlow*0.6); ctx.fillStyle='rgba(120,160,255,0.5)'; ctx.fillRect(0,0,W(),H()); ctx.globalAlpha=1; beatGlow *= 0.88; }
+    for (const p of P){
+      const sp = Math.hypot(p.vx, p.vy);
+      const spN = Math.max(0, Math.min(1, sp / 5));
+      const fastBias = Math.pow(spN, 1.25);
+      const baseA = Math.max(0.08, Math.min(1, p.alpha));
+      const boost = 0.80 * fastBias;
+      const flashBoost = (p.flash || 0) * 0.9;
+      ctx.globalAlpha = Math.min(1, baseA + boost + flashBoost);
+
+      let baseR, baseG, baseB;
+      if (p.color === 'pink') {
+          baseR=255; baseG=105; baseB=180; // Hot pink
+      } else {
+          baseR=143; baseG=168; baseB=255; // Default blue
+      }
+
+      const speedMix = Math.min(0.9, Math.max(0, Math.pow(spN, 1.4)));
+      const flashMix = p.flash || 0;
+      const mix = Math.max(speedMix, flashMix);
+      // Flash to white
+      const r = Math.round(baseR + (255 - baseR) * mix);
+      const g = Math.round(baseG + (255 - baseG) * mix);
+      const b = Math.round(baseB + (255 - baseB) * mix);
+      ctx.fillStyle = `rgb(${r},${g},${b})`;
+
+      const baseSize = 1.5;
+      const size = baseSize;
+      const x = (p.x | 0) - size / 2;
+      const y = (p.y | 0) - size / 2;
+      ctx.fillRect(x, y, size, size);
+    }
+    ctx.restore();
+  }
+
+  function lineRepulse(x, width=40, strength=1){
+    const w=W(); const h=H();
+    const half = Math.max(4, width*0.5);
+    for (const p of P){
+      const dx = p.x - x;
+      if (Math.abs(dx) <= half){
+        const s = (dx===0? (Math.random()<0.5?-1:1) : Math.sign(dx));
+        const fall = 1 - Math.abs(dx)/half;
+        const jitter = 0.85 + Math.random()*0.3;
+        const k = Math.max(0, fall) * strength * 0.55 * jitter;
+        const vyJitter = (Math.random()*2 - 1) * k * 0.25;
+        p.vx += s * k;
+        p.vy += vyJitter;
+        p.alpha = Math.min(1, p.alpha + 0.85);
+        p.flash = 1.0;
+      }
+    }
+  }
+
+  function drawingDisturb(disturbX, disturbY, radius = 30, strength = 0.5) {
+    for (const p of P) {
+        const dx = p.x - disturbX;
+        const dy = p.y - disturbY;
+        const distSq = dx * dx + dy * dy;
+        if (distSq < radius * radius) {
+            const dist = Math.sqrt(distSq) || 1;
+            const kick = strength * (1 - dist / radius);
+            // Push away from the point
+            p.vx += (dx / dist) * kick;
+            p.vy += (dy / dist) * kick;
+            p.alpha = Math.min(1, p.alpha + 0.5);
+            p.flash = Math.max(p.flash, 0.7);
+        }
+    }
+  }
+
+  function pointBurst(x, y, countBurst = 30, speed = 3.0, color = 'pink') {
+    for (let i = 0; i < countBurst; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const p = {
+            x, y,
+            vx: Math.cos(angle) * speed * (0.5 + Math.random() * 0.5),
+            vy: Math.sin(angle) * speed * (0.5 + Math.random() * 0.5),
+            homeX: x,
+            homeY: y,
+            alpha: 1.0,
+            flash: 1.0,
+            ttl: 45, // frames, ~0.75s
+            color: color,
+            isBurst: true,
+        };
+        P.push(p);
+    }
+  }
+
+  return { step, draw, onBeat, lineRepulse, drawingDisturb, pointBurst };
+}
+
 export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId, bpm = 120 } = {}) {
   // The init script now guarantees the panel is a valid HTMLElement with the correct dataset.
   // The .toy-body is now guaranteed to exist by initToyUI, which runs first.
@@ -71,20 +268,24 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   eraserCursor.className = 'drawgrid-eraser-cursor';
   body.appendChild(eraserCursor);
 
-  // Layers
+  // Layers (z-index order)
+  const particleCanvas = document.createElement('canvas'); particleCanvas.setAttribute('data-role', 'drawgrid-particles');
   const grid = document.createElement('canvas'); grid.setAttribute('data-role','drawgrid-grid');
   const paint = document.createElement('canvas'); paint.setAttribute('data-role','drawgrid-paint');
   const nodesCanvas = document.createElement('canvas'); nodesCanvas.setAttribute('data-role', 'drawgrid-nodes');
   const flashCanvas = document.createElement('canvas'); flashCanvas.setAttribute('data-role', 'drawgrid-flash');
-  Object.assign(grid.style,  { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 1 });
-  Object.assign(paint.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 2 });
-  Object.assign(flashCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 3, pointerEvents: 'none' });
-  Object.assign(nodesCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 4, pointerEvents: 'none' });
+  Object.assign(grid.style,         { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 0 });
+  Object.assign(particleCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 1, pointerEvents: 'none' });
+  Object.assign(paint.style,        { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 2 });
+  Object.assign(flashCanvas.style,  { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 3, pointerEvents: 'none' });
+  Object.assign(nodesCanvas.style,  { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 4, pointerEvents: 'none' });
   body.appendChild(grid);
+  body.appendChild(particleCanvas);
   body.appendChild(paint);
   body.appendChild(nodesCanvas);
   body.appendChild(flashCanvas);
 
+  const particleCtx = particleCanvas.getContext('2d');
   const gctx = grid.getContext('2d', { willReadFrequently: true });
   const pctx = paint.getContext('2d', { willReadFrequently: true });
   const nctx = nodesCanvas.getContext('2d', { willReadFrequently: true });
@@ -99,6 +300,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let strokes = []; // Store all completed stroke objects
   let currentMap = null; // Store the current node map {active, nodes, disabled}
   let nodeCoordsForHitTest = []; // For draggable nodes
+  let cellFlashes = []; // For flashing grid squares on note play
   let nodeGroupMap = []; // Per-column Map(row -> groupId or [groupIds]) to avoid cross-line connections and track z-order
   let nextDrawTarget = null; // Can be 1 or 2. Determines the next special line.
   let flashes = new Float32Array(cols);
@@ -115,6 +317,13 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   
   const safeArea = 40;
   let gridArea = { x: 0, y: 0, w: 0, h: 0 };
+
+  const particles = createDrawGridParticles({
+    getW: () => cssW,
+    getH: () => cssH,
+    count: 400,
+    homePull: 0.002,
+  });
 
   panel.dataset.steps = String(cols);
 
@@ -531,9 +740,11 @@ function regenerateMapFromStrokes() {
       paint.width = w; paint.height = h;
       nodesCanvas.width = w; nodesCanvas.height = h;
       flashCanvas.width = w; flashCanvas.height = h;
+      particleCanvas.width = w; particleCanvas.height = h;
       gctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       pctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       nctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      particleCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       // Scale the logical stroke data if we have it and the canvas was resized
       if (strokes.length > 0 && oldW > 0 && oldH > 0) {
@@ -613,33 +824,69 @@ function regenerateMapFromStrokes() {
   function drawGrid(){
     gctx.clearRect(0, 0, cssW, cssH);
 
+    // Fill the entire background on the lowest layer (grid canvas)
+    gctx.fillStyle = '#0b0f16';
+    gctx.fillRect(0, 0, cssW, cssH);
+
     // 1. Draw the note grid area below the top padding
     const noteGridY = gridArea.y + topPad;
     const noteGridH = gridArea.h - topPad;
     gctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
     gctx.fillRect(gridArea.x, noteGridY, gridArea.w, noteGridH);
 
-    // 2. Column highlights for active/inactive notes
+    // 2. Subtle fill for active columns
     if (currentMap) {
+        gctx.fillStyle = 'rgba(143, 168, 255, 0.1)'; // untriggered particle color, very transparent
         for (let c = 0; c < cols; c++) {
-            if (currentMap.nodes[c]?.size > 0) {
-                const isActive = currentMap.active[c];
-                gctx.fillStyle = isActive ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.5)'; // Darker for inactive
+            if (currentMap.nodes[c]?.size > 0 && currentMap.active[c]) {
                 const x = gridArea.x + c * cw;
                 gctx.fillRect(x, noteGridY, cw, noteGridH);
             }
         }
     }
 
-    // 3. Draw the horizontal and vertical lines for the note grid
-    gctx.strokeStyle='rgba(255,255,255,0.4)';
+    // 3. Draw all grid lines with the base color
+    gctx.strokeStyle = 'rgba(143, 168, 255, 0.35)'; // Untriggered particle color, slightly transparent
     gctx.lineWidth = 1.5;
-    // Verticals
-    for(let i=1;i<cols;i++){ gctx.beginPath(); gctx.moveTo(gridArea.x + i*cw, noteGridY); gctx.lineTo(gridArea.x + i*cw, gridArea.y + gridArea.h); gctx.stroke(); }
-    // horizontals (grid area only)
-    for(let j=1;j<rows;j++){ gctx.beginPath(); gctx.moveTo(gridArea.x, noteGridY + j*ch); gctx.lineTo(gridArea.x + gridArea.w, noteGridY + j*ch); gctx.stroke(); }
+    // Verticals (including outer lines)
+    for(let i = 0; i <= cols; i++){
+        const x = gridArea.x + i * cw;
+        gctx.beginPath();
+        gctx.moveTo(x, noteGridY);
+        gctx.lineTo(x, gridArea.y + gridArea.h);
+        gctx.stroke();
+    }
+    // Horizontals (including outer lines)
+    for(let j = 0; j <= rows; j++){
+        const y = noteGridY + j * ch;
+        gctx.beginPath();
+        gctx.moveTo(gridArea.x, y);
+        gctx.lineTo(gridArea.x + gridArea.w, y);
+        gctx.stroke();
+    }
 
-    // (Top cubes removed)
+    // 4. Highlight active columns by thickening their vertical lines
+    if (currentMap) {
+        gctx.strokeStyle = 'rgba(143, 168, 255, 0.7)'; // Brighter version of grid color
+        for (let c = 0; c < cols; c++) {
+            // Highlight only if there are nodes AND the column is active
+            if (currentMap.nodes[c]?.size > 0 && currentMap.active[c]) {
+                // Left line of the column
+                const x1 = gridArea.x + c * cw;
+                gctx.beginPath();
+                gctx.moveTo(x1, noteGridY);
+                gctx.lineTo(x1, gridArea.y + gridArea.h);
+                gctx.stroke();
+
+                // Right line of the column
+                const x2 = gridArea.x + (c + 1) * cw;
+                gctx.beginPath();
+                gctx.moveTo(x2, noteGridY);
+                gctx.lineTo(x2, gridArea.y + gridArea.h);
+                gctx.stroke();
+            }
+        }
+    }
   }
 
   // A helper to draw a complete stroke from a point array.
@@ -833,10 +1080,10 @@ function regenerateMapFromStrokes() {
       const currentColNodes = colsMap.get(c);
       const nextColNodes = colsMap.get(c + 1);
       if (currentColNodes && nextColNodes) {
-        const currentIsActive = currentMap?.active?.[c] ?? true;
+        const currentIsActive = currentMap?.active?.[c] ?? false;
         const nextIsActive = currentMap?.active?.[c + 1] ?? true;
         const advanced = panel.classList.contains('toy-zoomed');
-        const disabledStyle = 'rgba(120, 120, 120, 0.7)';
+        const disabledStyle = 'rgba(80, 100, 160, 0.6)'; // Darker blue
         const colorFor = (gid, active=true) => {
           if (!active) return disabledStyle;
           if (gid === 1) return 'rgba(125, 180, 255, 0.9)'; // static bluish
@@ -1087,6 +1334,9 @@ function regenerateMapFromStrokes() {
         pts:[p],
         color: STROKE_COLORS[colorIndex++ % STROKE_COLORS.length]
       };
+      try {
+        particles.drawingDisturb(p.x, p.y, getLineWidth() * 2.0, 0.6);
+      } catch(e) {}
       // The full stroke will be drawn on pointermove.
     }
   }
@@ -1211,6 +1461,9 @@ function regenerateMapFromStrokes() {
           pctx.stroke();
           pctx.restore();
         }
+        try {
+          particles.drawingDisturb(p.x, p.y, getLineWidth() * 1.5, 0.4);
+        } catch(e) {}
       }
     }
   }
@@ -1365,13 +1618,40 @@ function regenerateMapFromStrokes() {
     const col = e?.detail?.col;
     playheadCol = col;
     if (col >= 0 && col < cols) {
-        if (currentMap?.active[col]) { flashes[col] = 1.0; }
+        if (currentMap?.active[col]) {
+            flashes[col] = 1.0;
+            // Add flashes for the grid cells that are playing
+            const nodesToFlash = currentMap.nodes[col];
+            if (nodesToFlash && nodesToFlash.size > 0) {
+                for (const row of nodesToFlash) {
+                    const isDisabled = currentMap.disabled?.[col]?.has(row);
+                    if (!isDisabled) {
+                        cellFlashes.push({ col, row, age: 1.0 });
+                        try {
+                            const x = gridArea.x + col * cw + cw * 0.5;
+                            const y = gridArea.y + topPad + row * ch + ch * 0.5;
+                            // Heavily push particles away from the triggering node
+                            particles.drawingDisturb(x, y, cw * 1.2, 2.5);
+                            particles.pointBurst(x, y, 25, 3.0, 'pink');
+                        } catch(e) {}
+                    }
+                }
+            }
+        }
     }
   });
 
   let rafId = 0;
   function renderLoop() {
     if (!panel.isConnected) { cancelAnimationFrame(rafId); return; }
+
+    // Step and draw particles
+    try {
+      particles.step(1/60); // Assuming 60fps for dt
+      particleCtx.clearRect(0, 0, cssW, cssH);
+      // The dark background is now drawn on the grid canvas, so particles can be overlaid.
+      particles.draw(particleCtx);
+    } catch (e) { /* fail silently */ }
 
     // Animate special stroke paint (hue cycling) without resurrecting erased areas:
     // Draw animated special strokes into flashCanvas, then mask with current paint alpha.
@@ -1422,6 +1702,101 @@ function regenerateMapFromStrokes() {
       drawGrid();
       if (currentMap) drawNodes(currentMap.nodes);
     }
+
+    // Draw cell flashes
+    try {
+        if (cellFlashes.length > 0) {
+            fctx.save();
+            fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            for (let i = cellFlashes.length - 1; i >= 0; i--) {
+                const flash = cellFlashes[i];
+                const x = gridArea.x + flash.col * cw;
+                const y = gridArea.y + topPad + flash.row * ch;
+                
+                fctx.globalAlpha = flash.age * 0.6; // Make it a bit more visible
+                fctx.fillStyle = 'rgb(143, 168, 255)'; // Match grid line color
+                fctx.fillRect(x, y, cw, ch);
+                
+                flash.age -= 0.05; // Decay rate
+                if (flash.age <= 0) {
+                    cellFlashes.splice(i, 1);
+                }
+            }
+            fctx.restore();
+        }
+    } catch (e) { /* fail silently */ }
+
+    // Draw scrolling playhead
+    try {
+      const info = getLoopInfo();
+      // Only draw if transport is running and we have valid info
+      if (info && isRunning()) {
+        // Calculate playhead X position based on loop phase
+        const playheadX = gridArea.x + info.phase01 * gridArea.w;
+
+        // Repulse particles at playhead position
+        try {
+          // A strength of 1.2 gives a nice, visible push.
+          particles.lineRepulse(playheadX, 40, 1.2);
+        } catch (e) { /* fail silently */ }
+
+        // Use the flash canvas (fctx) for the playhead. It's cleared each frame.
+        fctx.save();
+        fctx.setTransform(dpr, 0, 0, dpr, 0, 0); // ensure we're in CSS pixels
+
+        // --- Faded gradient background ---
+        const gradientWidth = 80;
+        const t = performance.now();
+        const hue = 200 + 20 * Math.sin((t / 800) * Math.PI * 2);
+        const midColor = `hsla(${(hue + 45).toFixed(0)}, 100%, 70%, 0.25)`;
+
+        const bgGrad = fctx.createLinearGradient(playheadX - gradientWidth / 2, 0, playheadX + gradientWidth / 2, 0);
+        bgGrad.addColorStop(0, 'rgba(0,0,0,0)');
+        bgGrad.addColorStop(0.5, midColor);
+        bgGrad.addColorStop(1, 'rgba(0,0,0,0)');
+
+        fctx.fillStyle = bgGrad;
+        fctx.fillRect(playheadX - gradientWidth / 2, gridArea.y, gradientWidth, gridArea.h);
+
+
+        // Create a vertical gradient that mimics the "Line 1" animated gradient.
+        const grad = fctx.createLinearGradient(playheadX, gridArea.y, playheadX, gridArea.y + gridArea.h);
+        grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 70%)`);
+        grad.addColorStop(0.5, `hsl(${(hue + 45).toFixed(0)}, 100%, 70%)`);
+        grad.addColorStop(1, `hsl(${(hue + 90).toFixed(0)}, 100%, 68%)`);
+
+        // --- Trailing lines ---
+        fctx.strokeStyle = grad; // Use same gradient for all
+        fctx.shadowColor = 'transparent'; // No shadow for trails
+        fctx.shadowBlur = 0;
+
+        const trailLineCount = 3;
+        const gap = 28; // A constant, larger gap
+        for (let i = 0; i < trailLineCount; i++) {
+            const trailX = playheadX - (i + 1) * gap;
+            fctx.globalAlpha = 0.6 - i * 0.18;
+            fctx.lineWidth = Math.max(1.0, 2.5 - i * 0.6);
+            fctx.beginPath();
+            fctx.moveTo(trailX, gridArea.y);
+            fctx.lineTo(trailX, gridArea.y + gridArea.h);
+            fctx.stroke();
+        }
+        fctx.globalAlpha = 1.0; // Reset for main line
+
+        fctx.strokeStyle = grad;
+        fctx.lineWidth = 3;
+        fctx.shadowColor = 'rgba(255, 255, 255, 0.7)';
+        fctx.shadowBlur = 8;
+
+        fctx.beginPath();
+        fctx.moveTo(playheadX, gridArea.y);
+        fctx.lineTo(playheadX, gridArea.y + gridArea.h);
+        fctx.stroke();
+
+        fctx.restore();
+      }
+    } catch (e) { /* fail silently */ }
+
     rafId = requestAnimationFrame(renderLoop);
   }
   rafId = requestAnimationFrame(renderLoop);
@@ -1546,7 +1921,7 @@ function regenerateMapFromStrokes() {
           try{ manualOverrides = st.manualOverrides.slice(0, cols).map(a=> new Set(a||[])); }catch{}
         }
         // Refresh UI affordances
-        try { (panel.__dgUpdateButtons || updateGeneratorButtons || function(){})() } catch{}
+        try { (panel.__dgUpdateButtons || updateGeneratorButtons)(); } catch{}
         if (currentMap){ try{ panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap })); }catch{} }
       }catch(e){ try{ console.warn('[drawgrid] setState failed', e); }catch{} }
     }
