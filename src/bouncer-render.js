@@ -311,9 +311,10 @@ export function createBouncerDraw(env){
                         }
                     } catch {}
                     let when = base + quantizedOffBeats * beatDur;
-                    if (when < nowT - 0.01) when = baseNext + offBeats * beatDur;
+                    // If the calculated time is in the past, schedule it for the next bar using the same quantized offset.
+                    if (when < nowT - 0.01) when = baseNext + quantizedOffBeats * beatDur;
 
-                    const key = k_global + '|' + ev.note + '|' + (Math.round(offBeats * 16) / 16);
+                    const key = k_global + '|' + ev.note + '|' + (Math.round(rawOffBeats * 16) / 16);
                     if (when >= nowT && when < nowT + LOOKAHEAD && !lr.scheduledKeys.has(key)) {
                         if (DBG_RESPAWN()) console.log(`[BNC_DBG] Replay: Scheduling note ${ev.note} at ${when.toFixed(3)}`);
                         try { S.triggerInstrumentRaw(S.instrument, ev.note, when); }
