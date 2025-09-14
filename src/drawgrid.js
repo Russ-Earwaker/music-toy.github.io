@@ -275,13 +275,13 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const nodesCanvas = document.createElement('canvas'); nodesCanvas.setAttribute('data-role', 'drawgrid-nodes');
   const flashCanvas = document.createElement('canvas'); flashCanvas.setAttribute('data-role', 'drawgrid-flash');
   Object.assign(grid.style,         { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 0 });
-  Object.assign(particleCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 1, pointerEvents: 'none' });
-  Object.assign(paint.style,        { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 2 });
+  Object.assign(paint.style,        { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 1 });
+  Object.assign(particleCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 2, pointerEvents: 'none' });
   Object.assign(flashCanvas.style,  { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 3, pointerEvents: 'none' });
   Object.assign(nodesCanvas.style,  { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 4, pointerEvents: 'none' });
   body.appendChild(grid);
-  body.appendChild(particleCanvas);
   body.appendChild(paint);
+  body.appendChild(particleCanvas);
   body.appendChild(nodesCanvas);
   body.appendChild(flashCanvas);
 
@@ -908,6 +908,9 @@ function regenerateMapFromStrokes() {
         ctx.shadowBlur = 18;
         ctx.shadowOffsetX = 0;
         ctx.shadowOffsetY = 0;
+    }
+    if (!wantsSpecial) {
+        ctx.globalAlpha = 0.3;
     }
 
     ctx.beginPath();
@@ -1559,19 +1562,9 @@ function regenerateMapFromStrokes() {
     strokeToProcess.generatorId = generatorId;
     strokes.push({ pts: strokeToProcess.pts, color: strokeToProcess.color, isSpecial: strokeToProcess.isSpecial, generatorId: strokeToProcess.generatorId });
 
-    // Commit just this stroke to the paint layer (neutral color for specials), preserving existing erasures
-    try {
-      drawFullStroke(pctx, strokeToProcess);
-    } catch {}
-
-    // Do not redraw paint from strokes here; preserve erased regions
-
-    if (shouldGenerateNodes) {
-      // Rebuild nodes immediately to ensure Advanced first swipe creates Line 1 nodes
-      if (!panel.isConnected) return;
-      // Only regenerate nodes; keep paint as-is
-      regenerateMapFromStrokes();
-    }
+    // Redraw all strokes to apply consistent alpha, and regenerate the node map.
+    // This fixes the opacity buildup issue from drawing segments during pointermove.
+    clearAndRedrawFromStrokes();
   }
 
   // A version of snapToGrid that analyzes a single stroke object instead of the whole canvas
