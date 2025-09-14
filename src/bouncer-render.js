@@ -217,24 +217,11 @@ export function createBouncerDraw(env){
       try{ if (!S.ball && !S.lastLaunch && window && window.BOUNCER_AUTOSPAWN===true) { const ac= S.ensureAudioContext? S.ensureAudioContext(): null; const now= ac?ac.currentTime:0; if (!S.__autoSpawnAt) S.__autoSpawnAt = now + 0.6; if (now >= S.__autoSpawnAt && typeof S.spawnBallFrom==='function'){   const cx = Math.max(S.EDGE+S.ballR()+4, Math.min(S.worldW()-S.EDGE-S.ballR()-4, S.worldW()/2));   const cy = Math.max(S.EDGE+S.ballR()+4, Math.min(S.worldH()-S.EDGE-S.ballR()-4, S.worldH()/2));   S.spawnBallFrom({ x:cx, y:cy, vx: 3.9, vy: 2.6, r: S.ballR() });   console.log('[bouncer-render] AUTOSPAWN'); } } }catch(e){}
         }
       } catch(e){}
+      const DBG_RESPAWN = ()=> window.BOUNCER_RESPAWN_DBG;
 
 
       // If transport is paused, skip physics stepping and scheduling
       try { if (typeof isRunning === 'function' && !isRunning()) { requestAnimationFrame(draw); return; } } catch {}
-
-      // Ensure a live ball despawns after one bar (or configured life), even after refresh mid-flight
-      try {
-        if (S && S.getLoopInfo && S.ball) {
-          const li = S.getLoopInfo();
-          if (li) {
-            if (typeof S.ball._spawnAt !== 'number') S.ball._spawnAt = li.now;
-            const lifeBars = (typeof S.BOUNCER_BARS_PER_LIFE === 'number') ? S.BOUNCER_BARS_PER_LIFE : 1;
-            if ((li.now - S.ball._spawnAt) >= (li.barLen * lifeBars)) {
-              try { S.setBallOut && S.setBallOut(null); } catch {}
-            }
-          }
-        }
-      } catch {}
 
       // Loop recorder: detect new bar and let main decide record/replay
       try {
@@ -255,6 +242,11 @@ export function createBouncerDraw(env){
           if (_lr) { if ((globalThis.BOUNCER_DBG_LEVEL|0)>=2) console.log('[bouncer-rec] pre', 'mode=', _lr.mode, 'patLen=', (_lr.pattern?_lr.pattern.length:0), 'scheduled=', _lr.scheduledBarIndex); }
           else if((globalThis.BOUNCER_DBG_LEVEL|0)>=2) console.log('[bouncer-rec] pre', 'no lr');
         }
+        if (DBG_RESPAWN()) {
+            const lr = S.visQ && S.visQ.loopRec;
+            if (lr) console.log(`[BNC_DBG] Replay check: mode=${lr.mode}, patternLen=${lr.pattern?.length}, isInvalid=${!!lr.isInvalid}`);
+            else console.log('[BNC_DBG] Replay check: No loop recorder state.');
+        }
         const lr = S.visQ && S.visQ.loopRec;
         if (lr && !lr.isInvalid && lr.mode === 'replay' && typeof S.getLoopInfo==='function'){
             const li = S.getLoopInfo();
@@ -266,6 +258,7 @@ export function createBouncerDraw(env){
             if (Array.isArray(lr.pattern) && lr.pattern.length > 0) {
                 // Use global bar index to reset scheduled keys.
                 if (lr.scheduledBarIndex !== k_global) {
+                    if (DBG_RESPAWN()) console.log(`[BNC_DBG] Replay: New bar (k=${k_global}), resetting scheduled keys.`);
                     lr.scheduledBarIndex = k_global;
                     if (!lr.scheduledKeys || typeof lr.scheduledKeys.clear !== 'function') lr.scheduledKeys = new Set();
                     else lr.scheduledKeys.clear();
@@ -297,14 +290,20 @@ export function createBouncerDraw(env){
 
                     const key = k_global + '|' + ev.note + '|' + (Math.round(offBeats * 16) / 16);
                     if (when >= nowT && when < nowT + LOOKAHEAD && !lr.scheduledKeys.has(key)) {
+                        if (DBG_RESPAWN()) console.log(`[BNC_DBG] Replay: Scheduling note ${ev.note} at ${when.toFixed(3)}`);
                         try { S.triggerInstrumentRaw(S.instrument, ev.note, when); }
                         catch (e) { try { if ((globalThis.BOUNCER_DBG_LEVEL | 0) >= 2) console.warn('[bouncer-replay] schedule fail', e); } catch {} }
                         lr.scheduledKeys.add(key);
                     }
                 }
+            } else if (DBG_RESPAWN()) {
+                console.log('[BNC_DBG] Replay: In replay mode but pattern is empty.');
             }
         }
       }catch(e){}
+      if (DBG_RESPAWN()) {
+        console.log('[BNC_DBG] render: Ball state right before stepBouncer', { flightEnd: S.ball?.flightEnd?.toFixed(3) });
+      }
       stepBouncer(S);
       applyFromStep && applyFromStep(S);
 

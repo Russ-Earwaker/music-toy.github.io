@@ -24,6 +24,11 @@ function sweptCircleAABB(px, py, vx, vy, r, rect){
 }
 
 export function stepBouncer(S, nowAT){
+  const DBG_RESPAWN = ()=> window.BOUNCER_RESPAWN_DBG;
+  if (DBG_RESPAWN()) {
+    console.log(`[BNC_DBG] step: ENTER. ball flightEnd=${S.ball?.flightEnd?.toFixed(3)}`);
+  }
+
   // Global coalescing disabled: allow multiple sources to fire in the same tick.
   function allowGlobalAtTick(){ return true; }
   // Optional quant debug aggregator
@@ -68,6 +73,21 @@ export function stepBouncer(S, nowAT){
   const ac = S.ensureAudioContext && S.ensureAudioContext();
   const now = nowAT || (ac ? ac.currentTime : (S.lastAT || 0));
 
+  // If a ball was restored from a snapshot, it will have a `flightTimeRemaining`
+  // property. We must convert this to an absolute `flightEnd` time using the
+  // current audio clock. This is the only reliable place to do this, as it
+  // guarantees we use the same `now` as the physics step.
+  if (S.ball && S.ball.flightTimeRemaining != null) {
+    S.ball.flightEnd = now + S.ball.flightTimeRemaining;
+    delete S.ball.flightTimeRemaining; // Consume the property
+    if (window.BOUNCER_RESPAWN_DBG) {
+      console.log(`[BNC_DBG] step: Converted flightTimeRemaining to flightEnd=${S.ball.flightEnd.toFixed(3)} (now=${now.toFixed(3)})`);
+    }
+  }
+  if (S.nextLaunchAtRemaining != null) {
+    S.nextLaunchAt = now + S.nextLaunchAtRemaining;
+    S.nextLaunchAtRemaining = null; // Consume the property
+  }
   
   // Framescale: keep speed consistent across FPS
   const dt = Math.max(0, (now - (S.lastAT || now)));
@@ -229,18 +249,30 @@ export function stepBouncer(S, nowAT){
   }
   // If there's no ball, check if it's time to respawn.
   else {
-    if (S.lastLaunch && S.nextLaunchAt != null && now >= (S.nextLaunchAt - 0.001)) {
-      // Respawn from the original launch point, not the current handle position.
-      const nb = S.spawnBallFrom({ x: S.lastLaunch.x, y: S.lastLaunch.y, vx: S.lastLaunch.vx, vy: S.lastLaunch.vy, r: S.ballR() }, { isRespawn: true });
-      S.ball = nb;
-      try {
-        S.ball.x += (S.ball.vx||0)*0.6;
-        S.ball.y += (S.ball.vy||0)*0.6;
-      } catch(e) {}
-      S.__justSpawnedUntil = now + 0.05;
+    if (S.lastLaunch && S.nextLaunchAt != null) {
+      const shouldRespawn = now >= (S.nextLaunchAt - 0.001);
+      if (window.BOUNCER_RESPAWN_DBG) {
+          console.log(`[BNC_DBG] step: No ball. Checking respawn. now=${now.toFixed(3)}, nextLaunchAt=${S.nextLaunchAt.toFixed(3)}, shouldRespawn=${shouldRespawn}`);
+      }
+      if (shouldRespawn) {
+        if (window.BOUNCER_RESPAWN_DBG) console.log('[BNC_DBG] step: Respawning ball.');
+        // Respawn from the original launch point, not the current handle position.
+        const nb = S.spawnBallFrom({ x: S.lastLaunch.x, y: S.lastLaunch.y, vx: S.lastLaunch.vx, vy: S.lastLaunch.vy, r: S.ballR() }, { isRespawn: true }, S);
+        S.ball = nb;
+        try {
+          S.ball.x += (S.ball.vx||0)*0.6;
+          S.ball.y += (S.ball.vy||0)*0.6;
+        } catch(e) {}
+        S.__justSpawnedUntil = now + 0.05;
+      }
+    } else if (window.BOUNCER_RESPAWN_DBG) {
+        console.log('[BNC_DBG] step: No ball. Not respawning.', { hasLastLaunch: !!S.lastLaunch, hasNextLaunchAt: S.nextLaunchAt != null });
     }
   }
 
+  if (DBG_RESPAWN()) {
+    console.log(`[BNC_DBG] step: EXIT. ball flightEnd=${S.ball?.flightEnd?.toFixed(3)}`);
+  }
   if (S.fx && S.fx.onStep) S.fx.onStep(S.ball);
   S.lastAT = now;
 }

@@ -29,6 +29,8 @@ const BOUNCER_BARS_PER_LIFE = 1;
 const MAX_SPEED = 700, LAUNCH_K = 0.9;
 const BASE_BLOCK_SIZE = 44, BASE_CANNON_R = 10, BASE_BALL_R = 7;
 
+const DBG_RESPAWN = ()=> window.BOUNCER_RESPAWN_DBG;
+
 export function createBouncer(selector){
   const shell = (typeof selector==='string') ? document.querySelector(selector) : selector; if (!shell) return null;
   const panel = shell.closest('.toy-panel') || shell;
@@ -53,15 +55,35 @@ export function createBouncer(selector){
       const edgesSnap = Array.isArray(edgeControllers) ? edgeControllers.map(c=> c ? ({ x: Math.round(c.x||0), y: Math.round(c.y||0), w: Math.round(c.w||BASE_BLOCK_SIZE), h: Math.round(c.h||BASE_BLOCK_SIZE), active: !!c.active, noteIndex: (c.noteIndex|0), edge: c.edge }) : null) : [];
       const speed = (typeof __getSpeed === 'function') ? __getSpeed() : (parseFloat(panel.dataset.speed||'')||undefined);
       const quantDiv = (typeof __getQuantDiv === 'function') ? __getQuantDiv() : (parseFloat(panel.dataset.quantDiv||panel.dataset.quant||'')||undefined);
-      const ballSnap = (ball && typeof ball==='object') ? ({ x: Math.round(ball.x||0), y: Math.round(ball.y||0), vx: Number(ball.vx||0), vy: Number(ball.vy||0), r: Number(ball.r||ballR()), flightEnd: ball.flightEnd }) : null;
+      const ac = ensureAudioContext();
+      const now = ac ? ac.currentTime : 0;
+      const ballSnap = (ball && typeof ball==='object') ? ({ x: Math.round(ball.x||0), y: Math.round(ball.y||0), vx: Number(ball.vx||0), vy: Number(ball.vy||0), r: Number(ball.r||ballR()), flightTimeRemaining: (ball.flightEnd != null) ? Math.max(0, ball.flightEnd - now) : undefined }) : null;
       const lastLaunchSnap = (lastLaunch && typeof lastLaunch==='object') ? ({ x: Math.round(lastLaunch.x||0), y: Math.round(lastLaunch.y||0), vx: Number(lastLaunch.vx||0), vy: Number(lastLaunch.vy||0) }) : null;
-      return { instrument, speed, quantDiv, blocks: blocksSnap, edges: edgesSnap, ball: ballSnap, lastLaunch: lastLaunchSnap, nextLaunchAt, handleFx: handle._fx, handleFy: handle._fy };
+      const nextLaunchAtRemaining = (nextLaunchAt != null) ? Math.max(0, nextLaunchAt - now) : undefined;
+      if (DBG_RESPAWN()) console.log('[BNC_DBG] getSnapshot', {
+        now: now.toFixed(3),
+        flightEnd: ball?.flightEnd?.toFixed(3),
+        flightTimeRemaining: ballSnap?.flightTimeRemaining?.toFixed(3),
+        nextLaunchAt: nextLaunchAt?.toFixed(3),
+        nextLaunchAtRemaining: nextLaunchAtRemaining?.toFixed(3),
+      });
+      const loopRecSnap = {
+        mode: loopRec.mode,
+        pattern: loopRec.pattern,
+        signature: loopRec.signature,
+      };
+      if (DBG_RESPAWN()) console.log('[BNC_DBG] getSnapshot: Saving loopRec', { mode: loopRecSnap.mode, patternLen: loopRecSnap.pattern.length, signature: loopRecSnap.signature?.slice(0,30) });
+      return { instrument, speed, quantDiv, blocks: blocksSnap, edges: edgesSnap, ball: ballSnap, lastLaunch: lastLaunchSnap, nextLaunchAtRemaining, handleFx: handle._fx, handleFy: handle._fy, loopRec: loopRecSnap };
     }catch(e){ return { instrument }; }
   };
   panel.__applyBouncerSnapshot = (st)=>{
     try{
       if (!st || typeof st !== 'object') return;
       if (st.instrument){ instrument = st.instrument; panel.dataset.instrument = st.instrument; try{ panel.dispatchEvent(new CustomEvent('toy:instrument', { detail:{ name: st.instrument, value: st.instrument }, bubbles:true })); }catch{} }
+      if (DBG_RESPAWN()) console.log('[BNC_DBG] applySnapshot: Received state', {
+        ballFlightTimeRemaining: st.ball?.flightTimeRemaining,
+        nextLaunchAtRemaining: st.nextLaunchAtRemaining,
+      });
       if (typeof st.speed === 'number'){
         try{ panel.dataset.speed = String(st.speed); const r = panel.querySelector('.bouncer-speed-ctrl input[type="range"]'); if (r){ r.value = String(st.speed); r.dispatchEvent(new Event('input', { bubbles:true })); } }catch{}
       }
@@ -103,19 +125,38 @@ export function createBouncer(selector){
         }
       }catch{}
 
+      // Loop recorder state
+      try{
+        if (st.loopRec && typeof st.loopRec === 'object') {
+          if (DBG_RESPAWN()) console.log('[BNC_DBG] applySnapshot: Restoring loopRec', { mode: st.loopRec.mode, patternLen: st.loopRec.pattern?.length, signature: st.loopRec.signature?.slice(0,30) });
+          if (st.loopRec.mode) loopRec.mode = st.loopRec.mode;
+          if (Array.isArray(st.loopRec.pattern)) loopRec.pattern = st.loopRec.pattern;
+          loopRec.signature = st.loopRec.signature || '';
+          // Reset runtime-only state that shouldn't be persisted
+          loopRec.lastBarIndex = -1; loopRec.scheduledBarIndex = -999; loopRec.seen = new Set();
+        }
+      }catch{}
+
       // Ball + lastLaunch
       try{
         if (st.ball && typeof st.ball==='object'){
-          // Minimal ball properties; physics will take over when running
-          ball = { x: Number(st.ball.x||0), y: Number(st.ball.y||0), vx: Number(st.ball.vx||0), vy: Number(st.ball.vy||0), r: Number(st.ball.r||ballR()), active:true, flightEnd: st.ball.flightEnd };
+          // Defer calculating absolute end time until transport resumes.
+          ball = { x: Number(st.ball.x||0), y: Number(st.ball.y||0), vx: Number(st.ball.vx||0), vy: Number(st.ball.vy||0), r: Number(st.ball.r||ballR()), active:true, flightTimeRemaining: st.ball.flightTimeRemaining, flightEnd: undefined };
         }
         if (st.lastLaunch && typeof st.lastLaunch==='object'){
           lastLaunch = { x: Number(st.lastLaunch.x||0), y: Number(st.lastLaunch.y||0), vx: Number(st.lastLaunch.vx||0), vy: Number(st.lastLaunch.vy||0) };
         }
-        if (typeof st.nextLaunchAt === 'number') {
-          nextLaunchAt = st.nextLaunchAt;
+        if (typeof st.nextLaunchAtRemaining === 'number') {
+          nextLaunchAtRemaining = st.nextLaunchAtRemaining;
+          nextLaunchAt = null; // Clear absolute time
         }
+        if (DBG_RESPAWN()) console.log('[BNC_DBG] applySnapshot: Applied state', {
+            ballFlightTimeRemaining: ball?.flightTimeRemaining,
+            nextLaunchAtRemaining: nextLaunchAtRemaining,
+            nextLaunchAt: nextLaunchAt
+        });
       }catch{}
+
     }catch(e){ try{ console.warn('[bouncer] apply snapshot failed', e); }catch{} }
   };
 
@@ -259,7 +300,10 @@ export function createBouncer(selector){
   let draggingBlock=false, dragBlockRef=null, dragOffset={dx:0,dy:0};
   let zoomDragCand=null, zoomDragStart=null, zoomTapT=null;
   let tapCand=null, tapStart=null, tapMoved=false;
-  let lastLaunch=null, launchPhase=0, nextLaunchAt=null, prevNow=0, ball=null, __unmuteAt = 0;
+  let lastLaunch=null, launchPhase=0, nextLaunchAt=null, prevNow=0, ball=null, __unmuteAt = 0, __resumeHandled = false,
+      nextLaunchAtRemaining = null, wasRunning = null;
+  // __resumeHandled and wasRunning are no longer needed for ball state restoration.
+  // The presence of ball.flightTimeRemaining is the sole indicator.
   let loopRec = {
     signature: '',
     mode: 'record',        // 'record' | 'replay'
@@ -291,25 +335,30 @@ export function createBouncer(selector){
   function onNewBar(li, k){
     const sig = stateSignature();
     const changed = (sig !== loopRec.signature);
+    if (DBG_RESPAWN()) console.log(`[BNC_DBG] onNewBar (k=${k}): mode=${loopRec.mode}, changed=${changed}, patternLen=${loopRec.pattern.length}, sig=${sig.slice(0,30)}...`);
+
     if (changed){
       loopRec.signature = sig;
       loopRec.mode = 'record';
-      if ((globalThis.BOUNCER_DBG_LEVEL|0)>=1) console.log('[bouncer-rec] loop reset: state changed; recording new bar');
+         if ((globalThis.BOUNCER_DBG_LEVEL|0)>=1) console.log('[bouncer-rec] loop reset: state changed; recording new bar');
       loopRec.pattern.length = 0;
     } else {
-      // If the state hasn't changed, switch to replay mode.
-      // This is safe even if no notes were recorded, as it will just replay an empty pattern.
-      // This prevents the loop from getting stuck in 'record' mode across multiple bars.
-      loopRec.mode = 'replay';
-      // Only despawn the live ball if a pattern exists; this keeps visuals
-      // when no recording was captured yet.
-      try{ if (Array.isArray(loopRec.pattern) && loopRec.pattern.length>0) { ball = null; lastLaunch = null; } }catch{}
-      if ((globalThis.BOUNCER_DBG_LEVEL|0)>=1 && loopRec.pattern.length > 0) console.log('[bouncer-rec] loop recorded — switching to replay (events:', loopRec.pattern.length, ')');
+      // If the state hasn't changed, we're done recording. Switch to replay mode
+      // if we aren't already in it.
+      if (loopRec.mode !== 'replay') {
+        // Only switch to replay if a pattern was actually recorded.
+        if (loopRec.pattern.length > 0) {
+          loopRec.mode = 'replay';
+          if ((globalThis.BOUNCER_DBG_LEVEL|0)>=1) console.log('[bouncer-rec] loop recorded — switching to replay (events:', loopRec.pattern.length, ')');
+        }
+      }
     }
     loopRec.lastBarIndex = k;
     loopRec.scheduledBarIndex = -999;
+
+
     loopRec.seen = new Set();
-    if (window && window.BOUNCER_LOOP_DBG){
+    if (DBG_RESPAWN() || (window && window.BOUNCER_LOOP_DBG)){
       if ((globalThis.BOUNCER_DBG_LEVEL|0)>=1) console.log('[bouncer-rec] new bar', k, 'mode', loopRec.mode, 'changed', changed, 'patLen', loopRec.pattern.length);
     }
   }
@@ -501,21 +550,20 @@ export function createBouncer(selector){
   
   // interactions moved to bouncer-adv-ui.js
   // basic ball control helpers (restored after split)
-  function spawnBallFrom(L, opts = {}) {
+  function spawnBallFrom(L, opts = {}, S_ref = null) {
     const isRespawn = !!opts.isRespawn;
     const ac = (typeof ensureAudioContext === 'function') ? ensureAudioContext() : null;
     const nowT = ac ? ac.currentTime : 0;
+    if (DBG_RESPAWN()) console.log(`[BNC_DBG] spawnBallFrom (isRespawn: ${isRespawn}) at ${nowT.toFixed(3)}`);
 
-    if (!isRespawn) {
-        // Debounce rapid duplicate user launches
-        if (ball && (nowT - __spawnLastAt) < __spawnCooldown) {
-            if ((globalThis.BOUNCER_DBG_LEVEL | 0) >= 2) console.log('[bouncer-main] spawn ignored (cooldown)');
-            return ball;
-        }
-        __spawnLastAt = nowT;
+    // Any new ball, whether a user launch or a respawn, starts a new recording sequence.
+    // This prevents a respawned ball from becoming a "ghost" during a replay.
+    if (loopRec.mode === 'replay' || !isRespawn) {
+        if (DBG_RESPAWN()) console.log(`[BNC_DBG] Resetting loop recorder due to new ball (isRespawn: ${isRespawn})`);
 
         // If interrupting a replay, do a quick cross-fade to prevent audio bleed.
-        if (loopRec && loopRec.mode === 'replay') {
+        // Only do this for user-initiated launches, not automatic respawns.
+        if (!isRespawn && loopRec && loopRec.mode === 'replay') {
             try {
                 loopRec.isInvalid = true; // Prevent scheduler from firing on next frame
                 setToyMuted(toyId, true, 0.08); // 80ms fade-out
@@ -523,9 +571,9 @@ export function createBouncer(selector){
             } catch(e) { console.warn('[bouncer] mute/unmute failed', e); }
         }
 
-        // Reset loop recorder ONLY for a new user-initiated launch.
         loopRec = { signature: '', mode: 'record', pattern: [], anchorStartTime: 0, lastBarIndex: -1, scheduledBarIndex: -999, seen: new Set(), };
-        visQ.loopRec = loopRec; // Ensure the shared state carrier points to the new object.
+                // Ensure the shared state carrier used by the renderer points to the new object.
+        if (visQ) visQ.loopRec = loopRec;
         try {
             loopRec.signature = stateSignature();
             // Record relative to the local spawn time to ensure the full bar is captured.
@@ -534,7 +582,13 @@ export function createBouncer(selector){
     }
 
     const o = { x:L.x, y:L.y, vx:L.vx, vy:L.vy, r: ballR() };
-    ball = o;
+
+    // If not called from within the physics step (i.e., no state object is passed),
+    // this is a manual launch. We must update the module-scoped `ball` variable
+    // directly so it appears immediately.
+    if (!S_ref) {
+        ball = o;
+    }
 
     if (!isRespawn) {
         lastLaunch = { vx: L.vx, vy: L.vy, x: L.x, y: L.y };
@@ -545,18 +599,26 @@ export function createBouncer(selector){
       const li = (typeof getLoopInfo==='function') ? getLoopInfo() : null;
       const ac = (typeof ensureAudioContext==='function') ? ensureAudioContext() : null;
       const now = ac ? ac.currentTime : 0;
+      let life = 2.0; // Default lifetime of 2 seconds as a fallback.
       if (li && Number.isFinite(li.barLen) && li.barLen > 0){
-        const life = li.barLen * BOUNCER_BARS_PER_LIFE;
-        nextLaunchAt = now + life;
-        ball.flightEnd = nextLaunchAt;
-      } else {
-        nextLaunchAt = null;
+        life = li.barLen * BOUNCER_BARS_PER_LIFE;
       }
-    }catch{}
+      nextLaunchAt = now + life;
+      o.flightEnd = nextLaunchAt;
+      if (DBG_RESPAWN()) console.log(`[BNC_DBG] spawnBallFrom: Set nextLaunchAt to ${nextLaunchAt.toFixed(3)} (life: ${life.toFixed(3)})`);
+    }catch(e){
+      if (DBG_RESPAWN()) console.error('[BNC_DBG] Error in spawnBallFrom while setting flightEnd:', e);
+    }
 
     if (!isRespawn) {
         try { fx.onLaunch && fx.onLaunch(L.x, L.y); } catch {}
     }
+    // If a state object was passed, update its nextLaunchAt property directly
+    // to prevent applyFromStep from overwriting the new value.
+    if (S_ref && typeof S_ref === 'object') {
+      S_ref.nextLaunchAt = nextLaunchAt;
+    }
+    if (DBG_RESPAWN()) console.log('[BNC_DBG] spawnBallFrom: Returning new ball object', { flightEnd: o?.flightEnd?.toFixed(3) });
     return o;
   }
 function setNextLaunchAt(t){ nextLaunchAt = t; }
@@ -600,7 +662,9 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
   rescale: ()=>{ try{ window.rescaleBouncer({ blocks, handle, edgeControllers, physW, physH, EDGE, blockSize, ballRef: ball,
         getBall: ()=>ball, ballR, ensureEdgeControllers }); }catch{} },
   updateLaunchBaseline,
-  buildStateForStep: (now, prevNow)=>{
+  buildStateForStep: (now, prevNow)=>{ // now is current AudioContext.currentTime
+    // Time conversion logic is now handled inside bouncer-step.js to ensure perfect sync with physics.
+
     const li0 = (typeof getLoopInfo==='function') ? getLoopInfo() : null;
     const triggerPhysAware = (i,n,t,meta)=>{
       if (window && window.BOUNCER_LOOP_DBG) try{ if ((globalThis.BOUNCER_DBG_LEVEL|0)>=2) console.log('[bouncer-audio] fire?', n, 't=', (typeof t==='number')?t.toFixed(4):'imm'); }catch{}
@@ -682,6 +746,7 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
       __unmuteAt,
       lastLaunch,
       nextLaunchAt,
+      nextLaunchAtRemaining,
       spawnBallFrom, // The triggerInstrument passed to stepBouncer now accepts a meta object
       triggerInstrument: (i,n,t,meta)=>{ try{ if (window && window.BOUNCER_FORCE_RAW){   return triggerInstrument(i||instrument, n, t, toyId); } }catch{} return triggerPhysAware(i,n,t,meta);},
       triggerInstrumentRaw: (i,n,t)=>triggerInstrument(i||instrument, n, t, toyId),
@@ -695,7 +760,10 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
       __justSpawnedUntil
     };
     S.visQ = visQ;
-    S.ball = ball;
+    S.ball = ball; // Use the module-scoped `ball` directly.
+    if (DBG_RESPAWN()) {
+      console.log('[BNC_DBG] buildStateForStep: Ball state pre-step', { flightEnd: S.ball?.flightEnd?.toFixed(3) });
+    }
     return S;
   },
   applyFromStep: (S)=>{
@@ -703,11 +771,25 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
       visQ = S.visQ || visQ;
       if ('ball' in S) ball = S.ball;
       if ('lastLaunch' in S && S.lastLaunch) lastLaunch = S.lastLaunch;
-      if ('nextLaunchAt' in S) nextLaunchAt = S.nextLaunchAt;
-      if (S.__lastTickByBlock) __lastTickByBlock = S.lastTickByBlock;
-      if (S.__lastTickByEdge) __lastTickByEdge = S.lastTickByEdge;
+      // Overwrite nextLaunchAt: spawnBallFrom updates S.nextLaunchAt, and we need to persist it for the next frame.
+      if ('nextLaunchAt' in S) {
+        const changed = nextLaunchAt !== S.nextLaunchAt;
+        const oldVal = nextLaunchAt;
+        nextLaunchAt = S.nextLaunchAt;
+        if (DBG_RESPAWN() && changed) {
+            console.log(`[BNC_DBG] applyFromStep: Updated nextLaunchAt from ${oldVal?.toFixed(3)} to ${nextLaunchAt?.toFixed(3)}`);
+        }
+      }
+      if (S.__lastTickByBlock) __lastTickByBlock = S.__lastTickByBlock;
+      if (S.__lastTickByEdge) __lastTickByEdge = S.__lastTickByEdge;
       if (typeof S.__justSpawnedUntil === 'number') __justSpawnedUntil = S.__justSpawnedUntil;
+      if ('nextLaunchAtRemaining' in S) {
+        nextLaunchAtRemaining = S.nextLaunchAtRemaining;
+      }
       if (typeof S.__unmuteAt === 'number') __unmuteAt = S.__unmuteAt;
+      if (DBG_RESPAWN()) {
+        console.log('[BNC_DBG] applyFromStep: Ball state is now', { flightEnd: ball?.flightEnd?.toFixed(3) });
+      }
     }
   }
 });

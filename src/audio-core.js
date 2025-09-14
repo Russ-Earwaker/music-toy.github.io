@@ -80,11 +80,9 @@ let __started = false;
 export function start(){
   const ctx = ensureAudioContext();
   if (ctx.state === 'suspended') ctx.resume();
-  if (!__started){
-    __started = true;
-    __epochStart = ctx.currentTime;
-    __barIndex = 0;
-  }
+  __started = true;
+  __epochStart = ctx.currentTime; // Always reset epoch on start for clean sync.
+  __barIndex = 0;
   try{ window.__ripplerUserArmed = true; }catch{}
   try{
     if (localStorage.getItem('mt_audio_dbg')==='1') console.log('[audio] transport:resume');
@@ -93,6 +91,7 @@ export function start(){
 }
 export function stop(){
   __started = false;
+  __epochStart = 0; // Reset epoch on stop to ensure clean restart.
   try{ const ctx = ensureAudioContext(); ctx && ctx.suspend && ctx.suspend(); }catch{}
   try{
     if (localStorage.getItem('mt_audio_dbg')==='1') console.log('[audio] transport:pause');
