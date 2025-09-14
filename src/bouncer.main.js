@@ -558,12 +558,11 @@ export function createBouncer(selector){
 
     // Any new ball, whether a user launch or a respawn, starts a new recording sequence.
     // This prevents a respawned ball from becoming a "ghost" during a replay.
-    if (loopRec.mode === 'replay' || !isRespawn) {
+    // A new user-initiated launch always starts a new recording.
+    if (!isRespawn) {
         if (DBG_RESPAWN()) console.log(`[BNC_DBG] Resetting loop recorder due to new ball (isRespawn: ${isRespawn})`);
 
-        // If interrupting a replay, do a quick cross-fade to prevent audio bleed.
-        // Only do this for user-initiated launches, not automatic respawns.
-        if (!isRespawn && loopRec && loopRec.mode === 'replay') {
+        if (loopRec && loopRec.mode === 'replay') {
             try {
                 loopRec.isInvalid = true; // Prevent scheduler from firing on next frame
                 setToyMuted(toyId, true, 0.08); // 80ms fade-out
@@ -694,16 +693,8 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
           const globalBarIndex = Math.floor(Math.max(0, (at - li.loopStartTime) / barLen));
           const globalBarStart = li.loopStartTime + globalBarIndex * barLen;
           const offBeats = (at - globalBarStart) / beatDur;
-          // Round recorded offsets to current quant grid so replay matches quant exactly.
-          let off = offBeats; // Default to unquantized
-          try {
-            const vq = (__getQuantDiv && __getQuantDiv());
-            // Only quantize if div is a positive number. div=0 means 'off'.
-            if (Number.isFinite(vq) && vq > 0) {
-              off = Math.round(offBeats * vq) / vq;
-            }
-          } catch {}
-          off = Math.max(0, Math.min(4, off)); // Clamp to bar length (4 beats)
+          // Store the raw, unquantized offset. Quantization will be applied on replay.
+          const off = offBeats;
           if (visQ && visQ.loopRec && Array.isArray(visQ.loopRec.pattern)){
             // De-dupe notes recorded in the same bar to prevent runaway pattern growth.
             // Key by note and quantized 16th-note time.

@@ -129,6 +129,10 @@ export function createBouncerDraw(env){
         if (Math.random() < 0.4){
           sparks.push({ x:b.x, y:b.y, vx:(Math.random()-0.5)*2, vy:(Math.random()-0.5)*2, life: 12 });
         }
+      } else {
+        // If no ball, clear the trail
+        if (ballTrail.length > 0) ballTrail.length = 0;
+        lastBallPos = null;
       }
       // step sparks
       for (let i=sparks.length-1;i>=0;i--){
@@ -139,15 +143,28 @@ export function createBouncerDraw(env){
 
     // Draw neon trail and sparks
     try{
-      if (!teleportGuard && ballTrail.length>1){
-        for (let i=1;i<ballTrail.length;i++){
-          const a = i/(ballTrail.length-1);
-          const x0=ballTrail[i-1].x, y0=ballTrail[i-1].y, x1=ballTrail[i].x, y1=ballTrail[i].y;
-          const g=ctx.createLinearGradient(x0,y0,x1,y1);
-          g.addColorStop(0,'rgba(0,255,200,'+(0.05+0.25*a)+')');
-          g.addColorStop(1,'rgba(0,120,255,'+(0.05+0.25*a)+')');
-          ctx.strokeStyle=g; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke();
+      const b = getBall ? getBall() : env.ball;
+      if (b && !teleportGuard && ballTrail.length > 1) {
+        ctx.beginPath();
+        ctx.moveTo(ballTrail[0].x, ballTrail[0].y);
+        for (let i = 1; i < ballTrail.length; i++) {
+          ctx.lineTo(ballTrail[i].x, ballTrail[i].y);
         }
+
+        // Create a gradient that spans the entire trail
+        const first = ballTrail[0];
+        const last = ballTrail[ballTrail.length - 1];
+        const grad = ctx.createLinearGradient(first.x, first.y, last.x, last.y);
+
+        // Blue at the tail (start of array), green at the ball (end of array)
+        grad.addColorStop(0, 'rgba(0,120,255,0.0)'); // Transparent Blue at tail
+        grad.addColorStop(1, 'rgba(0,255,200,0.85)'); // Green at head (ball)
+
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = b.r * 2; // Same width as the ball
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
       }
       // sparks
       for (const s of sparks){
@@ -284,8 +301,16 @@ export function createBouncerDraw(env){
                     else if (ev.edgeName != null) { const m = S.mapControllersByEdge ? S.mapControllersByEdge(S.edgeControllers) : null; const edgeMap = { 'L': 'left', 'R': 'right', 'T': 'top', 'B': 'bot' }; const controllerKey = edgeMap[ev.edgeName]; const c = m?.[controllerKey]; if (c && c.active === false) isSourceActive = false; }
                     if (!isSourceActive) continue;
 
-                    const offBeats = Math.max(0, ev.offset || 0);
-                    let when = base + offBeats * beatDur;
+                    const rawOffBeats = Math.max(0, ev.offset || 0);
+                    let quantizedOffBeats = rawOffBeats;
+                    try {
+                        const vq = (S.getQuantDiv && S.getQuantDiv());
+                        // Only quantize if div is a positive number. div=0 means 'off'.
+                        if (Number.isFinite(vq) && vq > 0) {
+                            quantizedOffBeats = Math.round(rawOffBeats * vq) / vq;
+                        }
+                    } catch {}
+                    let when = base + quantizedOffBeats * beatDur;
                     if (when < nowT - 0.01) when = baseNext + offBeats * beatDur;
 
                     const key = k_global + '|' + ev.note + '|' + (Math.round(offBeats * 16) / 16);
