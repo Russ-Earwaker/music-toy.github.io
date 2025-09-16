@@ -27,16 +27,28 @@ function fillGapsInNodeArray(nodes, numCols) {
 
     const lastDrawn = filled.map(n => n.size > 0).lastIndexOf(true);
 
+    const getAvgRow = (colSet) => {
+        if (!colSet || colSet.size === 0) return NaN;
+        // Using a simple loop is arguably clearer and safer than reduce here.
+        let sum = 0;
+        for (const row of colSet) { sum += row; }
+        return sum / colSet.size;
+    };
+
     // Extrapolate backwards from the first drawn point
-    const firstRow = [...filled[firstDrawn]][0];
-    for (let c = 0; c < firstDrawn; c++) {
-        filled[c] = new Set([firstRow]);
+    const firstRowAvg = getAvgRow(filled[firstDrawn]);
+    if (!isNaN(firstRowAvg)) {
+        for (let c = 0; c < firstDrawn; c++) {
+            filled[c] = new Set([Math.round(firstRowAvg)]);
+        }
     }
 
     // Extrapolate forwards from the last drawn point
-    const lastRow = [...filled[lastDrawn]][0];
-    for (let c = lastDrawn + 1; c < numCols; c++) {
-        filled[c] = new Set([lastRow]);
+    const lastRowAvg = getAvgRow(filled[lastDrawn]);
+    if (!isNaN(lastRowAvg)) {
+        for (let c = lastDrawn + 1; c < numCols; c++) {
+            filled[c] = new Set([Math.round(lastRowAvg)]);
+        }
     }
 
     // Interpolate between drawn points
@@ -47,8 +59,9 @@ function fillGapsInNodeArray(nodes, numCols) {
         } else {
             let nextKnownCol = c + 1;
             while (nextKnownCol < lastDrawn && filled[nextKnownCol].size === 0) { nextKnownCol++; }
-            const leftRow = [...filled[lastKnownCol]][0];
-            const rightRow = [...filled[nextKnownCol]][0];
+            const leftRow = getAvgRow(filled[lastKnownCol]);
+            const rightRow = getAvgRow(filled[nextKnownCol]);
+            if (isNaN(leftRow) || isNaN(rightRow)) continue;
             const t = (c - lastKnownCol) / (nextKnownCol - lastKnownCol);
             const interpolatedRow = Math.round(leftRow + t * (rightRow - leftRow));
             filled[c] = new Set([interpolatedRow]);
@@ -1281,10 +1294,14 @@ function regenerateMapFromStrokes() {
   }
 
   function onPointerDown(e){
-    const boardScale = window.__boardScale || 1;
     const rect = paint.getBoundingClientRect();
-    // Adjust pointer coordinates for board-level zoom/scale.
-    const p = { x: (e.clientX - rect.left) / boardScale, y: (e.clientY - rect.top) / boardScale };
+    // cssW and cssH are the logical canvas dimensions.
+    // rect.width and rect.height are the visual dimensions on screen.
+    // This correctly scales pointer coordinates regardless of global board zoom or advanced-mode zoom.
+    const p = {
+      x: (e.clientX - rect.left) * (cssW > 0 ? cssW / rect.width : 1),
+      y: (e.clientY - rect.top) * (cssH > 0 ? cssH / rect.height : 1)
+    };
     
     // (Top cubes removed)
 
@@ -1344,10 +1361,14 @@ function regenerateMapFromStrokes() {
     }
   }
   function onPointerMove(e){
-    const boardScale = window.__boardScale || 1;
     const rect = paint.getBoundingClientRect();
-    // Adjust pointer coordinates for board-level zoom/scale.
-    const p = { x: (e.clientX - rect.left) / boardScale, y: (e.clientY - rect.top) / boardScale };
+    // cssW and cssH are the logical canvas dimensions.
+    // rect.width and rect.height are the visual dimensions on screen.
+    // This correctly scales pointer coordinates regardless of global board zoom or advanced-mode zoom.
+    const p = {
+      x: (e.clientX - rect.left) * (cssW > 0 ? cssW / rect.width : 1),
+      y: (e.clientY - rect.top) * (cssH > 0 ? cssH / rect.height : 1)
+    };
     
     // Update cursor for draggable nodes in advanced mode
     if (panel.classList.contains('toy-zoomed') && !draggedNode) {
@@ -1548,11 +1569,16 @@ function regenerateMapFromStrokes() {
         try { (panel.__dgUpdateButtons || updateGeneratorButtons)(); } catch(e){ console.warn('[drawgrid] updateGeneratorButtons missing', e); }
     } else { // Standard view logic (unchanged)
         const hasNodes = currentMap && currentMap.nodes.some(s => s.size > 0);
-        if (hasNodes) {
+        // If a special line already exists, this new line is decorative.
+        // If the user wants to draw a *new* generator line, they should clear first.
+        const hasSpecialLine = strokes.some(s => s.isSpecial || s.generatorId);
+        if (hasSpecialLine) {
             shouldGenerateNodes = false;
         } else {
             isSpecial = true;
             generatorId = 1; // Standard view's first line is functionally Line 1
+            // In standard view, a new generator line should replace any old decorative lines.
+            strokes = [];
         }
     }
     
@@ -1801,6 +1827,8 @@ function regenerateMapFromStrokes() {
       nctx.clearRect(0,0,cssW,cssH);
       fctx.clearRect(0,0,cssW,cssH);
       strokes = [];
+      manualOverrides = Array.from({ length: cols }, () => new Set());
+      persistentDisabled = Array.from({ length: cols }, () => new Set());
       const emptyMap = {active:Array(cols).fill(false),nodes:Array.from({length:cols},()=>new Set()), disabled:Array.from({length:cols},()=>new Set())};
       currentMap = emptyMap;
       panel.dispatchEvent(new CustomEvent('drawgrid:update',{detail:emptyMap}));
@@ -1958,6 +1986,8 @@ function regenerateMapFromStrokes() {
     // Clear all existing lines and nodes
     strokes = [];
     nodeGroupMap = Array.from({ length: cols }, () => new Map());
+    manualOverrides = Array.from({ length: cols }, () => new Set());
+    persistentDisabled = Array.from({ length: cols }, () => new Set());
     pctx.clearRect(0, 0, cssW, cssH);
     nctx.clearRect(0, 0, cssW, cssH);
 
