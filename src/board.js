@@ -3,6 +3,25 @@ export function initDragBoard(boardSel = '#board') {
   const board = document.querySelector(boardSel);
   if (!board) return;
 
+  // --- Toy Focus Highlighting ---
+  if (!window.__toyFocusHandler) {
+    window.__toyFocusHandler = true;
+    const style = document.createElement('style');
+    style.textContent = `
+      .toy-panel {
+        transition: outline-color 0.2s ease-out, box-shadow 0.2s ease-out;
+        outline: 2px solid transparent;
+        outline-offset: -2px;
+      }
+      .toy-panel.toy-focused {
+        outline-color: rgba(143, 168, 255, 0.6);
+        box-shadow: 0 0 12px rgba(143, 168, 255, 0.25);
+        z-index: 51; /* Bring to front */
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   // position context
   if (getComputedStyle(board).position === 'static') board.style.position = 'relative';
 
@@ -39,6 +58,20 @@ export function initDragBoard(boardSel = '#board') {
   let drag=null, sx=0, sy=0, ox=0, oy=0;
   function onPointerDown(e){
     // Only start a drag on the specific title handle, not the whole header.
+    const clickedPanel = e.target.closest('.toy-panel');
+
+    // Unfocus all panels that are not the one being clicked.
+    document.querySelectorAll('.toy-panel.toy-focused').forEach(p => {
+      if (p !== clickedPanel) {
+        p.classList.remove('toy-focused');
+      }
+    });
+
+    // Focus the clicked panel if it's not already focused.
+    if (clickedPanel && !clickedPanel.classList.contains('toy-focused')) {
+      clickedPanel.classList.add('toy-focused');
+    }
+
     const handle = e.target.closest('[data-drag-handle="1"]');
     // Ignore clicks on buttons or other interactive elements in the header.
     if (!handle || e.target.closest('button, select, input, a')) return;
