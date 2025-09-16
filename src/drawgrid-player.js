@@ -23,13 +23,14 @@ export function connectDrawGridToPlayer(panel) {
   let gridState = {
     active: Array(initialSteps).fill(false),
     nodes: Array.from({ length: initialSteps }, () => new Set()),
+    disabled: Array.from({ length: initialSteps }, () => new Set()),
   };
 
   // The gated trigger respects the toy's volume/mute settings.
   const playNote = gateTriggerForToy(toyId, triggerInstrument);
 
   panel.addEventListener('drawgrid:update', (e) => {
-    if (e.detail) gridState = e.detail;
+    if (e.detail) { gridState = e.detail; }
   });
 
   panel.addEventListener('toy-instrument', (e) => {
@@ -39,9 +40,12 @@ export function connectDrawGridToPlayer(panel) {
   function step(col) {
     markPlayingColumn(panel, col);
     if (gridState.active[col] && gridState.nodes[col]?.size > 0) {
+      const disabledInCol = gridState.disabled?.[col] || new Set();
       for (const row of gridState.nodes[col]) {
-        const midiNote = notePalette[row];
-        playNote(instrument, midiToName(midiNote));
+        if (!disabledInCol.has(row)) {
+          const midiNote = notePalette[row];
+          playNote(instrument, midiToName(midiNote));
+        }
       }
     }
   }
