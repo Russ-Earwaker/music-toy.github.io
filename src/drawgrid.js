@@ -329,7 +329,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let persistentDisabled = Array.from({ length: initialCols }, () => new Set()); // survives view changes
   let btnLine1, btnLine2;
   let autoTune = true; // Default to on
-  
   const safeArea = 40;
   let gridArea = { x: 0, y: 0, w: 0, h: 0 };
 
@@ -417,57 +416,31 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     // Steps dropdown
     let stepsSel = right.querySelector('.drawgrid-steps');
     if (!stepsSel) {
-      stepsSel = document.createElement('select');
-      stepsSel.className = 'drawgrid-steps';
-      stepsSel.innerHTML = `<option value="8">8 steps</option><option value="16">16 steps</option>`;
-      stepsSel.value = String(cols);
-      right.appendChild(stepsSel);
+        stepsSel = document.createElement('select');
+        stepsSel.className = 'drawgrid-steps';
+        stepsSel.innerHTML = `<option value="8">8 steps</option><option value="16">16 steps</option>`;
+        stepsSel.value = String(cols);
+        right.appendChild(stepsSel);
 
-      stepsSel.addEventListener('change', () => {
-        const prevCols = cols;
-        const prevActive = currentMap?.active ? Array.from(currentMap.active) : null;
-        cols = parseInt(stepsSel.value, 10);
-        panel.dataset.steps = String(cols);
-        flashes = new Float32Array(cols);
-        persistentDisabled = Array.from({ length: cols }, () => new Set());
-        // Reset manual overrides on resolution changes to avoid mismatches
-        manualOverrides = Array.from({ length: cols }, () => new Set());
-        // Invalidate the node cache on all strokes since grid dimensions changed.
-        for (const s of strokes) { s.cachedNodes = null; }
-        if (prevActive) {
-          pendingActiveMask = { prevCols, prevActive };
-          // Also apply immediately to currentMap if present (for cases with no strokes)
-          if (currentMap && Array.isArray(currentMap.active)) {
-            const newCols = cols;
-            const mapped = Array(newCols).fill(false);
-            if (prevCols === newCols) {
-              for (let i = 0; i < newCols; i++) mapped[i] = !!prevActive[i];
-            } else if (newCols % prevCols === 0) {
-              // upscale: duplicate each prior column's state into its segments
-              const f = newCols / prevCols;
-              for (let i = 0; i < prevCols; i++) {
-                for (let j = 0; j < f; j++) mapped[i * f + j] = !!prevActive[i];
-              }
-            } else if (prevCols % newCols === 0) {
-              // downscale: OR any segment to preserve activity if either subcolumn was active
-              const f = prevCols / newCols;
-              for (let i = 0; i < newCols; i++) {
-                let any = false;
-                for (let j = 0; j < f; j++) any = any || !!prevActive[i * f + j];
-                mapped[i] = any;
-              }
-            } else {
-              // fallback proportional map
-              for (let i = 0; i < newCols; i++) {
-                const src = Math.floor(i * prevCols / newCols);
-                mapped[i] = !!prevActive[src];
-              }
+        stepsSel.addEventListener('change', () => {
+            const prevCols = cols;
+            const prevActive = currentMap?.active ? [...currentMap.active] : null;
+
+            cols = parseInt(stepsSel.value, 10);
+            panel.dataset.steps = String(cols);
+            flashes = new Float32Array(cols);
+
+            if (prevActive) {
+                pendingActiveMask = { prevCols, prevActive };
             }
-            currentMap.active = mapped;
-          }
-        }
-        resnapAndRedraw(true);
-      });
+
+            // Reset manual overrides and invalidate stroke cache
+            manualOverrides = Array.from({ length: cols }, () => new Set());
+            for (const s of strokes) { s.cachedNodes = null; }
+            persistentDisabled = Array.from({ length: cols }, () => new Set());
+
+            resnapAndRedraw(true);
+        });
     }
 
   }
@@ -629,18 +602,16 @@ function regenerateMapFromStrokes() {
         const mapped = Array(newCols).fill(false);
         if (prevCols === newCols) {
           for (let i = 0; i < newCols; i++) mapped[i] = !!prevActive[i];
-        } else if (newCols % prevCols === 0) {
-          // upscale: duplicate each prior column's state into its segments
-          const f = newCols / prevCols;
+        } else if (newCols > prevCols && newCols % prevCols === 0) { // Upscaling (e.g., 8 -> 16)
+          const factor = newCols / prevCols;
           for (let i = 0; i < prevCols; i++) {
-            for (let j = 0; j < f; j++) mapped[i * f + j] = !!prevActive[i];
+            for (let j = 0; j < factor; j++) mapped[i * factor + j] = !!prevActive[i];
           }
-        } else if (prevCols % newCols === 0) {
-          // downscale: OR any segment to preserve activity if either subcolumn was active
-          const f = prevCols / newCols;
+        } else if (prevCols > newCols && prevCols % newCols === 0) { // Downscaling (e.g., 16 -> 8)
+          const factor = prevCols / newCols;
           for (let i = 0; i < newCols; i++) {
             let any = false;
-            for (let j = 0; j < f; j++) any = any || !!prevActive[i * f + j];
+            for (let j = 0; j < factor; j++) any = any || !!prevActive[i * factor + j];
             mapped[i] = any;
           }
         } else {
@@ -650,19 +621,24 @@ function regenerateMapFromStrokes() {
             mapped[i] = !!prevActive[src];
           }
         }
-        // Apply mapped active states but only where nodes exist
+        newMap.active = mapped;
+        // Rebuild the disabled sets based on the new active state
         for (let c = 0; c < newCols; c++) {
-          if (newMap.nodes[c]?.size > 0) newMap.active[c] = mapped[c];
+            if (newMap.active[c]) {
+                newMap.disabled[c].clear();
+            } else if (newMap.nodes[c]) {
+                newMap.nodes[c].forEach(r => newMap.disabled[c].add(r));
+            }
         }
         pendingActiveMask = null; // consume
-      }
-
-      // Preserve disabled nodes from the persistent set where positions still exist
-      for (let c = 0; c < cols; c++) {
-        const prevDis = persistentDisabled[c] || new Set();
-        for (const r of prevDis) {
-          if (newMap.nodes[c]?.has(r)) newMap.disabled[c].add(r);
-        }
+      } else {
+          // Preserve disabled nodes from the persistent set where positions still exist
+          for (let c = 0; c < cols; c++) {
+            const prevDis = persistentDisabled[c] || new Set();
+            for (const r of prevDis) {
+              if (newMap.nodes[c]?.has(r)) newMap.disabled[c].add(r);
+            }
+          }
       }
       // Recompute active flags based on disabled sets
       for (let c = 0; c < cols; c++) {
@@ -2082,6 +2058,11 @@ function regenerateMapFromStrokes() {
         }
         // Refresh UI affordances
         try { (panel.__dgUpdateButtons || updateGeneratorButtons)(); } catch{}
+        // After all state is applied and layout is stable, sync the dropdown.
+        try {
+          const stepsSel = panel.querySelector('.drawgrid-steps');
+          if (stepsSel) stepsSel.value = String(cols);
+        } catch {}
         if (currentMap){ try{ panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap })); }catch{} }
       }catch(e){ try{ console.warn('[drawgrid] setState failed', e); }catch{} }
     }
