@@ -435,7 +435,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
 
     const BTN_SIZE = '65px';
 
-    // "Random" button. Icon changes based on mode.
+    // Standard-view "Random" button
     let randomBtn = left.querySelector('[data-action="random"]');
     if (!randomBtn) {
       randomBtn = document.createElement('button');
@@ -445,6 +445,31 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       randomBtn.style.setProperty('--c-btn-size', BTN_SIZE);
       randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandom.png');"></div>`;
       left.appendChild(randomBtn);
+    }
+
+    // Advanced-view "Random Blocks" button
+    let randomBlocksBtn = left.querySelector('[data-action="random-blocks"]');
+    if (!randomBlocksBtn) {
+        randomBlocksBtn = document.createElement('button');
+        randomBlocksBtn.className = 'c-btn';
+        randomBlocksBtn.dataset.action = 'random-blocks';
+        randomBlocksBtn.title = 'Random Blocks';
+        randomBlocksBtn.style.setProperty('--c-btn-size', BTN_SIZE);
+        randomBlocksBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandomBlocks.png');"></div>`;
+        left.appendChild(randomBlocksBtn);
+    }
+
+    // Advanced-view "Random Notes" button
+    let randomNotesBtn = left.querySelector('[data-action="random-notes"]');
+    if (!randomNotesBtn) {
+        randomNotesBtn = document.createElement('button');
+        randomNotesBtn.className = 'c-btn';
+        randomNotesBtn.dataset.action = 'random-notes';
+        randomNotesBtn.title = 'Random Notes';
+        randomNotesBtn.style.setProperty('--c-btn-size', BTN_SIZE);
+        randomNotesBtn.style.marginLeft = '10px';
+        randomNotesBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandomNotes.png');"></div>`;
+        left.appendChild(randomNotesBtn);
     }
 
     // "Clear" button
@@ -475,10 +500,11 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
 
     const updateVisibility = () => {
       const isAdvanced = panel.classList.contains('toy-zoomed');
-      // For DrawGrid, the random button is always visible and uses the same icon.
-      // We only need to toggle the visibility of the Edit/Close buttons.
       if (editBtn) editBtn.style.display = isAdvanced ? 'none' : 'block';
       if (closeBtn) closeBtn.style.display = isAdvanced ? 'block' : 'none';
+      if (randomBtn) randomBtn.style.display = isAdvanced ? 'none' : 'inline-block';
+      if (randomBlocksBtn) randomBlocksBtn.style.display = isAdvanced ? 'inline-block' : 'none';
+      if (randomNotesBtn) randomNotesBtn.style.display = isAdvanced ? 'inline-block' : 'none';
     };
 
     updateVisibility();

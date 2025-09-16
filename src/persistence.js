@@ -60,7 +60,7 @@ function applyLoopGrid(panel, state){
       if (Array.isArray(state.noteIndices)){
         panel.__gridState.noteIndices = Array.from(state.noteIndices).map(x=> x|0);
       }
-      try{ console.log('[persistence] applied loopgrid state to initialized toy', { steps: state.steps?.length, noteIndices: state.noteIndices?.length }); }catch{}
+      // try{ console.log('[persistence] applied loopgrid state to initialized toy', { steps: state.steps?.length, noteIndices: state.noteIndices?.length }); }catch{}
     } else {
       // Defer: toy not initialized yet; stash and let the toy pick this up on boot
       panel.__pendingLoopGridState = {
@@ -69,7 +69,7 @@ function applyLoopGrid(panel, state){
         noteIndices: Array.isArray(state.noteIndices) ? Array.from(state.noteIndices).map(x=>x|0) : undefined,
         instrument: state.instrument
       };
-      try{ console.log('[persistence] stashed loopgrid state for later apply', { steps: state.steps?.length, noteIndices: state.noteIndices?.length }); }catch{}
+      // try{ console.log('[persistence] stashed loopgrid state for later apply', { steps: state.steps?.length, noteIndices: state.noteIndices?.length }); }catch{}
     }
     if (state.instrument){
       panel.dataset.instrument = state.instrument;
@@ -199,7 +199,7 @@ export function getSnapshot(){
 export function applySnapshot(snap){
   if (!snap || typeof snap !== 'object') return false;
   try{
-    try{ console.log('[persistence] applySnapshot begin', { toys: snap?.toys?.length||0, theme: snap?.themeId, bpm: snap?.transport?.bpm }); }catch{}
+    // try{ console.log('[persistence] applySnapshot begin', { toys: snap?.toys?.length||0, theme: snap?.themeId, bpm: snap?.transport?.bpm }); }catch{}
     // Theme first so instrument resolution matches theme
     if (snap.themeId && typeof setActiveThemeKey === 'function'){
       try{ setActiveThemeKey(snap.themeId); }catch{}
@@ -246,7 +246,7 @@ export function applySnapshot(snap){
     panels.forEach(p => delete p.___usedForApply);
     // Persist positions for board.js so refresh preserves locations
     try{ if (Object.keys(posMap).length){ localStorage.setItem('toyPositions', JSON.stringify(posMap)); } }catch{}
-    try{ console.log('[persistence] applySnapshot end', { applied: appliedCount }); }catch{}
+    // try{ console.log('[persistence] applySnapshot end', { applied: appliedCount }); }catch{}
     return true;
   }catch(e){ console.warn('[persistence] applySnapshot failed', e); return false; }
 }
@@ -304,7 +304,7 @@ function scheduleAutosave(){
       const snap = getSnapshot();
       const lc = (snap.toys||[]).filter(t=>t.type==='loopgrid').length;
       saveToKey(AUTOSAVE_KEY, snap);
-      try{ console.log(`[persistence] autosaved (${lc} loopgrid, bpm=${snap.transport?.bpm}, theme=${snap.themeId})`); }catch{}
+      // try{ console.log(`[persistence] autosaved (${lc} loopgrid, bpm=${snap.transport?.bpm}, theme=${snap.themeId})`); }catch{}
     }catch{}
   }, __interval);
 }
@@ -341,17 +341,17 @@ export function tryRestoreOnBoot(){
       try{
         url.searchParams.delete('reset');
         window.history.replaceState({}, document.title, url.toString());
-        console.log('[persistence] reset flag detected; skipping restore once');
+        // console.log('[persistence] reset flag detected; skipping restore once');
       }catch{}
       return false;
     }
     const sceneQ = url.searchParams.get('scene');
     const last = localStorage.getItem(LAST_SCENE_KEY);
     const auto = loadFromKey(AUTOSAVE_KEY);
-    try{ console.log('[persistence] tryRestoreOnBoot', { hasReset:false, sceneQ, hasAuto: !!auto, last }); }catch{}
-    if (sceneQ){ try{ console.log('[persistence] restoring from ?scene=', sceneQ); }catch{} return loadScene(sceneQ); }
+    // try{ console.log('[persistence] tryRestoreOnBoot', { hasReset:false, sceneQ, hasAuto: !!auto, last }); }catch{}
+    if (sceneQ){ /* try{ console.log('[persistence] restoring from ?scene=', sceneQ); }catch{} */ return loadScene(sceneQ); }
     if (auto){
-      try{ console.log('[persistence] restoring from autosave'); }catch{}
+      // try{ console.log('[persistence] restoring from autosave'); }catch{}
       return applySnapshot(auto);
     }
     if (last){ return loadScene(last); }

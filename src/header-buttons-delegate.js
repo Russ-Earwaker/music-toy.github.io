@@ -22,30 +22,30 @@
         else if (inOverlay && window.zoomOutPanel) window.zoomOutPanel();
         else panel.classList.toggle('toy-zoomed');
       }catch(err){ panel.classList.toggle('toy-zoomed'); }
-      log('Advanced/Close clicked', panel.id||panel.dataset.toy);
+      // log('Advanced/Close clicked', panel.id||panel.dataset.toy);
     } else if (action === 'random') {
       e.preventDefault();
       panel.dispatchEvent(new CustomEvent('toy-random', { bubbles:true }));
-      log('Random dispatched', panel.id||panel.dataset.toy);
+      // log('Random dispatched', panel.id||panel.dataset.toy);
     } else if (action === 'clear') {
       e.preventDefault();
       ['toy-clear','toy-reset'].forEach(t=> panel.dispatchEvent(new CustomEvent(t, { bubbles:true })));
-      log('Clear dispatched', panel.id||panel.dataset.toy); return;
+      // log('Clear dispatched', panel.id||panel.dataset.toy); return;
     } else if (action === 'random-notes') {
       e.preventDefault();
       panel.dispatchEvent(new CustomEvent('toy-random-notes', { bubbles:true }));
-      log('Random Notes dispatched', panel.id||panel.dataset.toy);
+      // log('Random Notes dispatched', panel.id||panel.dataset.toy);
     } else if (action === 'random-blocks') {
       e.preventDefault();
       panel.dispatchEvent(new CustomEvent('toy-random-blocks', { bubbles:true }));
-      log('Random Blocks dispatched', panel.id||panel.dataset.toy);
+      // log('Random Blocks dispatched', panel.id||panel.dataset.toy);
     } else if (action === 'random-cubes') {
       e.preventDefault();
       panel.dispatchEvent(new CustomEvent('toy-random-cubes', { bubbles:true }));
-      log('Random Cubes dispatched', panel.id||panel.dataset.toy);
+      // log('Random Cubes dispatched', panel.id||panel.dataset.toy);
     }
   }
 
   document.addEventListener('click', handle, true);
-  log('booted');
+  // log('booted');
 })();

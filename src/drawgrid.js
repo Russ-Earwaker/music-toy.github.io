@@ -1975,6 +1975,35 @@ function regenerateMapFromStrokes() {
   `;
   panel.appendChild(style);
 
+  function createRandomLineStroke() {
+    const leftX = gridArea.x;
+    const rightX = gridArea.x + gridArea.w;
+    const minY = gridArea.y + topPad + ch; // Inset by one full row from the top
+    const maxY = gridArea.y + topPad + (rows - 1) * ch; // Inset by one full row from the bottom
+    const K = Math.max(6, Math.round(gridArea.w / Math.max(1, cw*0.9))); // control points
+    const cps = [];
+    for (let i=0;i<K;i++){
+      const t = i/(K-1);
+      const x = leftX + (rightX-leftX)*t;
+      const y = minY + Math.random() * (maxY - minY);
+      cps.push({ x, y });
+    }
+    function cr(p0,p1,p2,p3,t){ const t2=t*t, t3=t2*t; const a = (-t3+2*t2-t)/2, b = (3*t3-5*t2+2)/2, c = (-3*t3+4*t2+t)/2, d = (t3-t2)/2; return a*p0 + b*p1 + c*p2 + d*p3; }
+    const pts = [];
+    const samplesPerSeg = Math.max(8, Math.round(cw/3));
+    for (let i=0;i<cps.length-1;i++){
+      const p0 = cps[Math.max(0,i-1)], p1=cps[i], p2=cps[i+1], p3=cps[Math.min(cps.length-1,i+2)];
+      for (let s=0;s<=samplesPerSeg;s++){
+        const t = s/samplesPerSeg;
+        const x = cr(p0.x, p1.x, p2.x, p3.x, t);
+        let y = cr(p0.y, p1.y, p2.y, p3.y, t);
+        y = Math.max(minY, Math.min(maxY, y)); // Clamp to the padded area
+        pts.push({ x, y });
+      }
+    }
+    return { pts, color: '#fff', isSpecial: true, generatorId: 1 };
+  }
+
   panel.addEventListener('toy-clear', api.clear);
 
   function handleRandomize() {
@@ -1993,39 +2022,7 @@ function regenerateMapFromStrokes() {
 
     // Build a smooth, dramatic wiggly line across the full grid height using Catmull-Rom interpolation
     try {
-      const leftX = gridArea.x;
-      const rightX = gridArea.x + gridArea.w;
-      const minY = gridArea.y + topPad + ch*0.2; // keep safely inside grid rows
-      const maxY = gridArea.y + topPad + rows*ch - ch*0.2;
-      const K = Math.max(6, Math.round(gridArea.w / Math.max(1, cw*0.9))); // control points
-      const cps = [];
-      for (let i=0;i<K;i++){
-        const t = i/(K-1);
-        const x = leftX + (rightX-leftX)*t;
-        const r = Math.random();
-        let y;
-        if (r < 0.2) y = minY + (Math.random()*ch*0.6);
-        else if (r > 0.8) y = maxY - (Math.random()*ch*0.6);
-        else y = minY + Math.random()*(maxY-minY);
-        cps.push({ x, y });
-      }
-      function cr(p0,p1,p2,p3,t){ const t2=t*t, t3=t2*t; const a = (-t3+2*t2-t)/2, b = (3*t3-5*t2+2)/2, c = (-3*t3+4*t2+t)/2, d = (t3-t2)/2; return a*p0 + b*p1 + c*p2 + d*p3; }
-      const pts = [];
-      const samplesPerSeg = Math.max(8, Math.round(cw/3));
-      for (let i=0;i<cps.length-1;i++){
-        const p0 = cps[Math.max(0,i-1)], p1=cps[i], p2=cps[i+1], p3=cps[Math.min(cps.length-1,i+2)];
-        for (let s=0;s<=samplesPerSeg;s++){
-          const t = s/samplesPerSeg;
-          const x = cr(p0.x, p1.x, p2.x, p3.x, t);
-          let y = cr(p0.y, p1.y, p2.y, p3.y, t);
-          y = Math.max(minY, Math.min(maxY, y));
-          const rowF = (y - (gridArea.y + topPad)) / ch;
-          const rowCenterY = (Math.round(rowF) + 0.5) * ch + gridArea.y + topPad;
-          y = 0.85 * y + 0.15 * rowCenterY;
-          pts.push({ x, y });
-        }
-      }
-      const stroke = { pts, color: '#fff', isSpecial: true, generatorId: 1 };
+      const stroke = createRandomLineStroke();
       strokes.push(stroke);
       drawFullStroke(pctx, stroke);
       regenerateMapFromStrokes();
@@ -2050,7 +2047,39 @@ function regenerateMapFromStrokes() {
     drawNodes(currentMap.nodes);
     panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
   }
+
+  function handleRandomizeBlocks() {
+    if (currentMap && currentMap.nodes) {
+      for (let c = 0; c < cols; c++) {
+        if (currentMap.nodes[c]?.size > 0) {
+          currentMap.active[c] = Math.random() < 0.5;
+        }
+      }
+      drawGrid();
+      drawNodes(currentMap.nodes);
+      panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
+    }
+  }
+
+  function handleRandomizeNotes() {
+    const existingGenIds = new Set();
+    strokes.forEach(s => {
+      if (s.generatorId === 1 || s.generatorId === 2) {
+        existingGenIds.add(s.generatorId);
+      }
+    });
+    if (existingGenIds.size === 0) { handleRandomize(); return; }
+    strokes = strokes.filter(s => s.generatorId !== 1 && s.generatorId !== 2);
+    existingGenIds.forEach(gid => {
+      const newStroke = createRandomLineStroke();
+      newStroke.generatorId = gid;
+      strokes.push(newStroke);
+    });
+    clearAndRedrawFromStrokes();
+  }
   panel.addEventListener('toy-random', handleRandomize);
+  panel.addEventListener('toy-random-blocks', handleRandomizeBlocks);
+  panel.addEventListener('toy-random-notes', handleRandomizeNotes);
 
   // The ResizeObserver only fires on *changes*. We must call layout() once
   // manually to render the initial state. requestAnimationFrame ensures
