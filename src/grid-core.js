@@ -66,11 +66,20 @@ function createDrumParticles({ getW, getH, count = 150 } = {}) {
     if (!ctx) return;
     ctx.save();
     for (const p of P) {
-      // Tuned contrast for a good "pop" on activation.
-      const alpha = 0.25 + 1.2 * p.flash;
+      // 1. Brightness: Use a brighter color and a stronger alpha pop.
+      const alpha = 0.4 + 1.5 * p.flash; // Increased base and multiplier
       ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
-      ctx.fillStyle = '#a0b0ff';
-      ctx.fillRect(p.x | 0, p.y | 0, 1.5, 1.5);
+      ctx.fillStyle = '#c8d8ff'; // Brighter, whiter-blue
+
+      // 2. Scaling: Use the flash property to scale the particle size.
+      // It will be largest when flash is 1.0 and smallest when flash is 0.
+      const baseSize = 1.5;
+      const scale = 1.0 + p.flash * 2.0; // Scale up to 3x when fully flashed
+      const size = baseSize * scale;
+      const x = (p.x | 0) - size / 2; // Center the scaled particle
+      const y = (p.y | 0) - size / 2;
+
+      ctx.fillRect(x, y, size, size);
     }
     ctx.restore();
   }
@@ -190,9 +199,9 @@ export function buildGrid(panel, numSteps = 8){
 
   function setInstrument(name){
     if (!name) return;
-    const id = String(name).toLowerCase();
-    panel.dataset.instrument = id;
-    try{ setToyInstrument(toyId, id); }catch{}
+    // The instrument ID is case-sensitive and should not be lowercased.
+    panel.dataset.instrument = name;
+    try{ setToyInstrument(toyId, name); }catch{}
   }
   panel.addEventListener('toy-instrument', (e)=> setInstrument(e && e.detail && e.detail.value));
   panel.addEventListener('toy:instrument', (e)=> setInstrument((e && e.detail && (e.detail.name || e.detail.value))));
@@ -275,6 +284,19 @@ export function buildGrid(panel, numSteps = 8){
       // Clear with a much darker background color.
       particleCtx.fillStyle = '#06080b';
       particleCtx.fillRect(0, 0, particleCanvas.width, particleCanvas.height);
+
+      // Background flash on drum hit, rendered on the particle canvas.
+      const st = panel.__drumVisualState;
+      if (st && st.bgFlash > 0) {
+        particleCtx.save();
+        // A darker shade of the purple from the drum pad tap animation
+        particleCtx.fillStyle = '#6030c0';
+        particleCtx.globalAlpha = st.bgFlash * 0.4; // Make it more impactful
+        particleCtx.fillRect(0, 0, particleCanvas.width, particleCanvas.height);
+        particleCtx.restore();
+        st.bgFlash = Math.max(0, st.bgFlash - 0.05); // Decay
+      }
+
       particles.draw(particleCtx);
       requestAnimationFrame(renderParticles);
     }
@@ -291,9 +313,12 @@ export function buildGrid(panel, numSteps = 8){
     if (panel.__gridState.steps[col]) {
       panel.__playCurrent(col);
       if (panel.__particles) panel.__particles.disturb();
-      // Trigger the visual flash animation for the active cube.
-      if (panel.__drumVisualState?.flashes) {
-        panel.__drumVisualState.flashes[col] = 1.0;
+      // Trigger visual flashes.
+      if (panel.__drumVisualState) {
+        // Flash for the individual cube.
+        if (panel.__drumVisualState.flash) panel.__drumVisualState.flash[col] = 1.0;
+        // Flash for the main background.
+        panel.__drumVisualState.bgFlash = 1.0;
       }
     }
   };

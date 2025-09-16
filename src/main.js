@@ -2,7 +2,9 @@
 import './bouncer-init.js';
 import './header-buttons-delegate.js';
 import './rippler-init.js';
+import { createBouncer } from './bouncer.main.js';
 import { initDrawGrid } from './drawgrid-init.js';
+import { createChordWheel } from './chordwheel.js';
 import { applyStackingOrder } from './stacking-manager.js';
 
 import './toy-audio.js';
@@ -12,7 +14,7 @@ import { initAudioAssets } from './audio-samples.js';
 import { loadInstrumentEntries as loadInstrumentCatalog } from './instrument-catalog.js';
 import { DEFAULT_BPM, NUM_STEPS, ensureAudioContext, getLoopInfo, setBpm, start, isRunning } from './audio-core.js';
 import { createLoopIndicator } from './loopindicator.js';
-import { buildGrid } from './drum-core.js';
+import { buildGrid } from './grid-core.js';
 import { tryRestoreOnBoot, startAutosave } from './persistence.js';
 
 /**
@@ -134,36 +136,183 @@ function bootGrids(){
 }
 function bootDrawGrids(){
   const panels = Array.from(document.querySelectorAll('.toy-panel[data-toy="drawgrid"]'));
-  panels.forEach(initDrawGrid);
+  panels.forEach(p => initDrawGrid(p));
 }
 function getSequencedToys() {
   // Find all panels that have been initialized with a step function.
   return Array.from(document.querySelectorAll('.toy-panel')).filter(p => typeof p.__sequencerStep === 'function');
 }
-function scheduler(toys){
-  const lastCol = new Map(); // Use a map to track last column per toy
+
+const toyInitializers = {
+    'bouncer': createBouncer,
+    'drawgrid': initDrawGrid,
+    'loopgrid': buildGrid,
+    'chordwheel': createChordWheel,
+};
+
+function initializeNewToy(panel) {
+    const toyType = panel.dataset.toy;
+    const initFn = toyInitializers[toyType];
+    if (initFn) {
+        try {
+            initFn(panel);
+            // After init, dispatch a 'toy-clear' event to reset its state.
+            panel.dispatchEvent(new CustomEvent('toy-clear', { bubbles: true }));
+        } catch (e) {
+            console.error(`Failed to initialize new toy of type "${toyType}"`, e);
+        }
+    }
+}
+
+function initToyChaining(panel) {
+    const extendBtn = document.createElement('button');
+    extendBtn.className = 'c-btn toy-chain-btn';
+    extendBtn.title = 'Extend with a new toy';
+    extendBtn.style.setProperty('--c-btn-size', '32px');
+    extendBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>`;
+    
+    const core = extendBtn.querySelector('.c-btn-core');
+    if (core) {
+        core.style.setProperty('--c-btn-icon-url', `url('../assets/UI/T_ButtonExtend.png')`);
+    }
+
+    panel.appendChild(extendBtn);
+
+    extendBtn.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+
+        const sourcePanel = panel;
+        const toyType = sourcePanel.dataset.toy;
+        if (!toyType || !toyInitializers[toyType]) return;
+
+        const newPanel = document.createElement('div');
+        newPanel.className = 'toy-panel';
+        newPanel.dataset.toy = toyType;
+        newPanel.id = `${toyType}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        
+        if (sourcePanel.dataset.instrument) {
+            newPanel.dataset.instrument = sourcePanel.dataset.instrument;
+        }
+
+        const board = document.getElementById('board');
+        board.appendChild(newPanel);
+
+        initializeNewToy(newPanel);
+        initToyChaining(newPanel); // Give the new toy its own extend button
+
+        const oldNextId = sourcePanel.dataset.nextToyId;
+        sourcePanel.dataset.nextToyId = newPanel.id;
+        newPanel.dataset.prevToyId = sourcePanel.id;
+
+        if (oldNextId) {
+            const oldNextPanel = document.getElementById(oldNextId);
+            newPanel.dataset.nextToyId = oldNextId;
+            if (oldNextPanel) {
+                oldNextPanel.dataset.prevToyId = newPanel.id;
+            }
+        }
+        
+        const sourceRect = sourcePanel.getBoundingClientRect();
+        const boardRect = board.getBoundingClientRect();
+        const boardScale = window.__boardScale || 1;
+
+        newPanel.style.position = 'absolute';
+        newPanel.style.left = `${(sourceRect.right - boardRect.left) / boardScale + 30}px`;
+        newPanel.style.top = `${(sourceRect.top - boardRect.top) / boardScale}px`;
+        
+        document.querySelectorAll('.toy-panel.toy-focused').forEach(p => p.classList.remove('toy-focused'));
+        newPanel.classList.add('toy-focused');
+
+        updateChains();
+    });
+}
+
+const chainBtnStyle = document.createElement('style');
+chainBtnStyle.textContent = `
+    .toy-chain-btn { position: absolute; top: 50%; right: -16px; transform: translateY(-50%); z-index: 52; }
+`;
+document.head.appendChild(chainBtnStyle);
+
+const g_chainState = new Map();
+
+function findChainHead(toy) {
+    if (!toy) return null;
+    let current = toy;
+    let sanity = 100;
+    while (current && current.dataset.prevToyId && sanity-- > 0) {
+        const prev = document.getElementById(current.dataset.prevToyId);
+        if (!prev || prev === current) break;
+        current = prev;
+    }
+    return current;
+}
+
+function updateChains() {
+    const allToys = getSequencedToys();
+    const seenHeads = new Set();
+
+    allToys.forEach(toy => {
+        const head = findChainHead(toy);
+        if (head && !seenHeads.has(head.id)) {
+            seenHeads.add(head.id);
+            if (!g_chainState.has(head.id)) {
+                g_chainState.set(head.id, head.id);
+            }
+        }
+    });
+
+    for (const headId of g_chainState.keys()) {
+        if (!document.getElementById(headId)) {
+            g_chainState.delete(headId);
+        }
+    }
+}
+
+function scheduler(){
+  let lastPhase = 0;
+  const lastCol = new Map();
   function step(){
     const info = getLoopInfo();
     if (isRunning()){
-      toys.forEach(toy => {
-        const steps = parseInt(toy.dataset.steps, 10) || NUM_STEPS;
-        const col = Math.floor(info.phase01 * steps) % steps;
-        if (col !== lastCol.get(toy.id)) {
-          lastCol.set(toy.id, col);
-          try { toy.__sequencerStep(col); } catch (e) { console.warn(`Sequencer step failed for ${toy.id}`, e); }
-        }
-      });
+      const phaseJustWrapped = info.phase01 < lastPhase && lastPhase > 0.9;
+      lastPhase = info.phase01;
+
+      if (phaseJustWrapped) {
+          for (const [headId, activeToyId] of g_chainState.entries()) {
+              const activeToy = document.getElementById(activeToyId);
+              if (activeToy) {
+                  const nextToyId = activeToy.dataset.nextToyId;
+                  if (nextToyId && document.getElementById(nextToyId)) {
+                      g_chainState.set(headId, nextToyId);
+                  } else {
+                      g_chainState.set(headId, headId);
+                  }
+              } else {
+                  g_chainState.set(headId, headId);
+              }
+          }
+      }
+
+      for (const activeToyId of g_chainState.values()) {
+          const toy = document.getElementById(activeToyId);
+          if (toy && typeof toy.__sequencerStep === 'function') {
+              const steps = parseInt(toy.dataset.steps, 10) || NUM_STEPS;
+              const col = Math.floor(info.phase01 * steps) % steps;
+              if (col !== lastCol.get(toy.id)) {
+                  lastCol.set(toy.id, col);
+                  try { toy.__sequencerStep(col); } catch (e) { console.warn(`Sequencer step failed for ${toy.id}`, e); }
+              }
+          }
+      }
     }
     requestAnimationFrame(step);
   }
+  updateChains();
   requestAnimationFrame(step);
 }
 async function boot(){
-  // Await audio assets before setting up toys that might use them.
-  // This prevents a race condition where toys try to play samples before they are loaded.
   try {
     await initAudioAssets(CSV_PATH);
-    // Also load the instrument catalog so display names are ready for the UI.
     await loadInstrumentCatalog();
     console.log('[AUDIO] samples loaded');
   } catch(e) {
@@ -172,30 +321,23 @@ async function boot(){
 
   bootTopbar();
   createLoopIndicator('#topbar');
-  // Early restore: apply positions/theme/bpm before toys init to avoid any auto-layout overrides
   let restored = false;
   try{ restored = !!tryRestoreOnBoot(); }catch{}
-  // Initialize loopgrids (this attaches __sequencerStep to them)
   bootGrids();
   bootDrawGrids();
-  // The theme system will run and may set its own instruments.
+  document.querySelectorAll('.toy-panel').forEach(initToyChaining);
   try{ window.ThemeBoot && window.ThemeBoot.wireAll && window.ThemeBoot.wireAll(); }catch{}
-  // Restore again to apply toy-specific state now that toys are ready
   try{ tryRestoreOnBoot(); }catch{}
-  scheduler(getSequencedToys());
+  scheduler();
   try{ window.setBoardScale && window.setBoardScale(1); }catch{}
-  // Arrange panels if available
-  // Skip if a scene restored positions, or if the user already has saved positions.
   let hasSavedPositions = false; try { hasSavedPositions = !!localStorage.getItem('toyPositions'); } catch {}
   if (!restored && !hasSavedPositions){
     try{ window.organizeBoard && window.organizeBoard(); }catch{}
     try{ applyStackingOrder(); }catch{}
     try{ addGapAfterOrganize(); }catch{}
   } else {
-    // Still ensure stacking order for external buttons
     try{ applyStackingOrder(); }catch{}
   }
-  // Begin coarse autosave
   try{ startAutosave(2000); }catch{}
 }
 if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
