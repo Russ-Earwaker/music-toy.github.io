@@ -310,7 +310,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let drawing=false, erasing=false;
   // The `strokes` array is removed. The paint canvas is now the source of truth.
   let cur = null;
+  let curErase = null;
   let strokes = []; // Store all completed stroke objects
+  let eraseStrokes = []; // Store all completed erase strokes
   let currentMap = null; // Store the current node map {active, nodes, disabled}
   let nodeCoordsForHitTest = []; // For draggable nodes
   let cellFlashes = []; // For flashing grid squares on note play
@@ -349,6 +351,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     er?.addEventListener('click', ()=>{
       erasing = !erasing;
       er.setAttribute('aria-pressed', String(erasing));
+      er.classList.toggle('active', erasing);
       if (!erasing) eraserCursor.style.display = 'none';
       else erasedTargetsThisDrag.clear(); // Clear on tool toggle
     });
@@ -492,13 +495,49 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   try { panel.__dgUpdateButtons = updateGeneratorButtons; } catch{}
 
   // New central helper to redraw the paint canvas and regenerate the node map from the `strokes` array.
-function clearAndRedrawFromStrokes() {
+  function clearAndRedrawFromStrokes() {
     pctx.clearRect(0, 0, cssW, cssH);
 
+    const normalStrokes = strokes.filter(s => !s.justCreated);
+    const newStrokes = strokes.filter(s => s.justCreated);
 
-    for (const s of strokes) { drawFullStroke(pctx, s); }
+    // 1. Draw all existing, non-new strokes first.
+    for (const s of normalStrokes) {
+      drawFullStroke(pctx, s);
+    }
+    // 2. Apply the global erase mask to the existing strokes.
+    for (const s of eraseStrokes) {
+      drawEraseStroke(pctx, s);
+    }
+    // 3. Draw the brand new strokes on top, so they are not affected by old erasures.
+    for (const s of newStrokes) {
+      drawFullStroke(pctx, s);
+    }
+
     regenerateMapFromStrokes();
     try { (panel.__dgUpdateButtons || updateGeneratorButtons || function(){})() } catch(e) { try { console.warn('[drawgrid] updateGeneratorButtons not available', e); } catch{} }
+  }
+
+  function drawEraseStroke(ctx, stroke) {
+    if (!stroke || !stroke.pts || stroke.pts.length < 1) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.strokeStyle = '#000'; // color doesn't matter
+    ctx.lineWidth = getLineWidth() * 2; // diameter of erase circle
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    ctx.beginPath();
+    ctx.moveTo(stroke.pts[0].x, stroke.pts[0].y);
+    if (stroke.pts.length === 1) {
+        ctx.lineTo(stroke.pts[0].x + 0.1, stroke.pts[0].y);
+    } else {
+        for (let i = 1; i < stroke.pts.length; i++) {
+            ctx.lineTo(stroke.pts[i].x, stroke.pts[i].y);
+        }
+    }
+    ctx.stroke();
+    ctx.restore();
   }
 
   /**
@@ -1323,8 +1362,8 @@ function regenerateMapFromStrokes() {
     paint.setPointerCapture?.(e.pointerId);
 
     if (erasing) {
-      erasedTargetsThisDrag.clear(); // Reset on new drag (not used but kept)
-      eraseAtPoint(p); // erase visual line only
+      erasedTargetsThisDrag.clear();
+      curErase = { pts: [p] };
     } else {
       // When starting a new line, don't clear the canvas. This makes drawing additive.
       // If we are about to draw a special line (previewGid decided), demote any existing line of that kind.
@@ -1447,7 +1486,23 @@ function regenerateMapFromStrokes() {
     if (erasing) {
       const eraserRadius = getLineWidth();
       eraserCursor.style.transform = `translate(${p.x - eraserRadius}px, ${p.y - eraserRadius}px)`;
-      if (drawing) { eraseAtPoint(p); eraseNodeAtPoint(p); }
+      if (drawing && curErase) {
+        const lastPt = curErase.pts[curErase.pts.length - 1];
+        // Draw a line segment for erasing
+        pctx.save();
+        pctx.globalCompositeOperation = 'destination-out';
+        pctx.lineCap = 'round';
+        pctx.lineJoin = 'round';
+        pctx.lineWidth = getLineWidth() * 2;
+        pctx.strokeStyle = '#000';
+        pctx.beginPath();
+        pctx.moveTo(lastPt.x, lastPt.y);
+        pctx.lineTo(p.x, p.y);
+        pctx.stroke();
+        pctx.restore();
+        curErase.pts.push(p);
+        eraseNodeAtPoint(p);
+      }
       return; // Don't do drawing logic if erasing
     }
 
@@ -1535,8 +1590,17 @@ function regenerateMapFromStrokes() {
     cur = null;
 
     if (erasing) {
-      // Finish erasing; keep paint modifications and disabled states
+      if (curErase) {
+        // If it was just a tap (one point), erase a circle at that point.
+        if (curErase.pts.length === 1) {
+          eraseAtPoint(curErase.pts[0]);
+          eraseNodeAtPoint(curErase.pts[0]);
+        }
+        eraseStrokes.push(curErase);
+        curErase = null;
+      }
       erasedTargetsThisDrag.clear();
+      clearAndRedrawFromStrokes(); // Redraw to bake in the erase
       return;
     }
 
@@ -1587,11 +1651,14 @@ function regenerateMapFromStrokes() {
     try { console.info('[drawgrid] up', { isZoomed, isSpecial, generatorId, shouldGenerateNodes, strokes: strokes.length }); } catch{}
     strokeToProcess.isSpecial = isSpecial;
     strokeToProcess.generatorId = generatorId;
-    strokes.push({ pts: strokeToProcess.pts, color: strokeToProcess.color, isSpecial: strokeToProcess.isSpecial, generatorId: strokeToProcess.generatorId });
+    strokeToProcess.justCreated = true; // Mark as new to exempt from old erasures
+    strokes.push({ pts: strokeToProcess.pts, color: strokeToProcess.color, isSpecial: strokeToProcess.isSpecial, generatorId: strokeToProcess.generatorId, justCreated: strokeToProcess.justCreated });
 
     // Redraw all strokes to apply consistent alpha, and regenerate the node map.
     // This fixes the opacity buildup issue from drawing segments during pointermove.
     clearAndRedrawFromStrokes();
+    // After drawing, unmark all strokes so they become part of the normal background for the next operation.
+    strokes.forEach(s => delete s.justCreated);
   }
 
   // A version of snapToGrid that analyzes a single stroke object instead of the whole canvas
@@ -1828,6 +1895,7 @@ function regenerateMapFromStrokes() {
       nctx.clearRect(0,0,cssW,cssH);
       fctx.clearRect(0,0,cssW,cssH);
       strokes = [];
+      eraseStrokes = [];
       manualOverrides = Array.from({ length: cols }, () => new Set());
       persistentDisabled = Array.from({ length: cols }, () => new Set());
       const emptyMap = {active:Array(cols).fill(false),nodes:Array.from({length:cols},()=>new Set()), disabled:Array.from({length:cols},()=>new Set())};
@@ -1860,6 +1928,9 @@ function regenerateMapFromStrokes() {
             isSpecial: !!s.isSpecial,
             generatorId: (typeof s.generatorId==='number')? s.generatorId : undefined,
             overlayColorize: !!s.overlayColorize,
+          })),
+          eraseStrokes: (eraseStrokes||[]).map(s=>({
+            ptsN: Array.isArray(s.pts)? s.pts.map(normPt) : [],
           })),
           nodes: {
             active: (currentMap?.active && Array.isArray(currentMap.active)) ? currentMap.active.slice() : Array(cols).fill(false),
@@ -1921,6 +1992,21 @@ function regenerateMapFromStrokes() {
           // Redraw from strokes and rebuild nodes
           clearAndRedrawFromStrokes();
         }
+        if (Array.isArray(st.eraseStrokes)) {
+          eraseStrokes = [];
+          for (const s of st.eraseStrokes) {
+            let pts = [];
+            if (Array.isArray(s?.ptsN)) {
+              const gh = Math.max(1, gridArea.h - topPad);
+              pts = s.ptsN.map(np=>({
+                x: gridArea.x + Math.max(0, Math.min(1, Number(np?.nx)||0)) * gridArea.w,
+                y: (gridArea.y + topPad) + Math.max(0, Math.min(1, Number(np?.ny)||0)) * gh
+              }));
+            }
+            eraseStrokes.push({ pts });
+          }
+          clearAndRedrawFromStrokes();
+        }
         // Restore node masks if provided
         if (st.nodes && typeof st.nodes==='object'){
           try{
@@ -1967,11 +2053,11 @@ function regenerateMapFromStrokes() {
       .toy-panel[data-toy="drawgrid"].toy-zoomed .drawgrid-generator-buttons {
           display: flex; /* Visible only in advanced mode */
       }
-      .drawgrid-generator-buttons .c-btn.active .c-btn-glow {
+      .toy-panel[data-toy="drawgrid"] .c-btn.active .c-btn-glow {
           opacity: 1;
-          filter: blur(2px) brightness(1.4);
+          filter: blur(2.5px) brightness(1.6);
       }
-      .drawgrid-generator-buttons .c-btn.active .c-btn-core::before {
+      .toy-panel[data-toy="drawgrid"] .c-btn.active .c-btn-core::before {
           filter: brightness(1.8);
           transform: translate(-50%, -50%) scale(1.1);
       }
@@ -2017,6 +2103,7 @@ function regenerateMapFromStrokes() {
 
     // Clear all existing lines and nodes
     strokes = [];
+    eraseStrokes = [];
     nodeGroupMap = Array.from({ length: cols }, () => new Map());
     manualOverrides = Array.from({ length: cols }, () => new Set());
     persistentDisabled = Array.from({ length: cols }, () => new Set());
@@ -2073,12 +2160,17 @@ function regenerateMapFromStrokes() {
     });
     if (existingGenIds.size === 0) { handleRandomize(); return; }
     strokes = strokes.filter(s => s.generatorId !== 1 && s.generatorId !== 2);
+    const newGenStrokes = [];
     existingGenIds.forEach(gid => {
       const newStroke = createRandomLineStroke();
       newStroke.generatorId = gid;
+      newStroke.justCreated = true; // Mark as new to avoid old erasures
       strokes.push(newStroke);
+      newGenStrokes.push(newStroke);
     });
     clearAndRedrawFromStrokes();
+    // After drawing, unmark the new strokes so they behave normally.
+    newGenStrokes.forEach(s => delete s.justCreated);
   }
   panel.addEventListener('toy-random', handleRandomize);
   panel.addEventListener('toy-random-blocks', handleRandomizeBlocks);
