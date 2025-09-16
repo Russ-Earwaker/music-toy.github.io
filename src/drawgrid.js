@@ -2139,24 +2139,61 @@ function regenerateMapFromStrokes() {
   }
 
   function handleRandomizeBlocks() {
-    if (currentMap && currentMap.nodes) {
-      for (let c = 0; c < cols; c++) {
+    if (!currentMap || !currentMap.nodes) return;
+
+    const hasLine1 = strokes.some(s => s.generatorId === 1);
+    const hasLine2 = strokes.some(s => s.generatorId === 2);
+    const separateLines = panel.classList.contains('toy-zoomed') && hasLine1 && hasLine2;
+
+    for (let c = 0; c < cols; c++) {
         if (currentMap.nodes[c]?.size > 0) {
-          currentMap.active[c] = Math.random() < 0.5;
+            if (separateLines) {
+                // Randomize each line's nodes independently
+                const nodesL1 = [];
+                const nodesL2 = [];
+                const groupMapCol = nodeGroupMap[c];
+                if (groupMapCol) {
+                    for (const [row, groups] of groupMapCol.entries()) {
+                        if (Array.isArray(groups)) {
+                            if (groups.includes(1)) nodesL1.push(row);
+                            if (groups.includes(2)) nodesL2.push(row);
+                        }
+                    }
+                }
+
+                const activeL1 = Math.random() < 0.5;
+                if (activeL1) { nodesL1.forEach(r => persistentDisabled[c].delete(r)); }
+                else { nodesL1.forEach(r => persistentDisabled[c].add(r)); }
+
+                const activeL2 = Math.random() < 0.5;
+                if (activeL2) { nodesL2.forEach(r => persistentDisabled[c].delete(r)); }
+                else { nodesL2.forEach(r => persistentDisabled[c].add(r)); }
+
+            } else {
+                // Original behavior: randomize the whole column
+                const colActive = Math.random() < 0.5;
+                if (colActive) { persistentDisabled[c].clear(); }
+                else { currentMap.nodes[c].forEach(r => persistentDisabled[c].add(r)); }
+            }
+            // Recompute active state for the column
+            const anyOn = Array.from(currentMap.nodes[c]).some(r => !persistentDisabled[c].has(r));
+            currentMap.active[c] = anyOn;
+            currentMap.disabled[c] = persistentDisabled[c];
         }
-      }
-      drawGrid();
-      drawNodes(currentMap.nodes);
-      panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
     }
+
+    drawGrid();
+    drawNodes(currentMap.nodes);
+    panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
   }
 
   function handleRandomizeNotes() {
+    // Save the current active state before regenerating lines
+    const oldActive = currentMap?.active ? [...currentMap.active] : null;
+
     const existingGenIds = new Set();
     strokes.forEach(s => {
-      if (s.generatorId === 1 || s.generatorId === 2) {
-        existingGenIds.add(s.generatorId);
-      }
+      if (s.generatorId === 1 || s.generatorId === 2) { existingGenIds.add(s.generatorId); }
     });
     if (existingGenIds.size === 0) { handleRandomize(); return; }
     strokes = strokes.filter(s => s.generatorId !== 1 && s.generatorId !== 2);
@@ -2171,6 +2208,23 @@ function regenerateMapFromStrokes() {
     clearAndRedrawFromStrokes();
     // After drawing, unmark the new strokes so they behave normally.
     newGenStrokes.forEach(s => delete s.justCreated);
+
+    // After regenerating, restore the old active state and update disabled nodes to match.
+    if (currentMap && oldActive) {
+        currentMap.active = oldActive;
+        // Rebuild the disabled sets based on the restored active state.
+        for (let c = 0; c < cols; c++) {
+            if (oldActive[c]) {
+                currentMap.disabled[c].clear(); // If column was active, ensure all its nodes are enabled.
+            } else {
+                currentMap.nodes[c].forEach(r => currentMap.disabled[c].add(r)); // If column was inactive, disable all its nodes.
+            }
+        }
+        persistentDisabled = currentMap.disabled; // Update the master disabled set
+        drawGrid();
+        drawNodes(currentMap.nodes);
+        panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
+    }
   }
   panel.addEventListener('toy-random', handleRandomize);
   panel.addEventListener('toy-random-blocks', handleRandomizeBlocks);
