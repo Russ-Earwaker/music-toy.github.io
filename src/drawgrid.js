@@ -1485,10 +1485,11 @@ function regenerateMapFromStrokes() {
           pctx.stroke();
           pctx.restore();
         }
-        try {
-          particles.drawingDisturb(p.x, p.y, getLineWidth() * 1.5, 0.4);
-        } catch(e) {}
       }
+      // Disturb particles for all lines, special or not.
+      try {
+        particles.drawingDisturb(p.x, p.y, getLineWidth() * 1.5, 0.4);
+      } catch(e) {}
     }
   }
   function onPointerUp(e){
@@ -1833,6 +1834,8 @@ function regenerateMapFromStrokes() {
       currentMap = emptyMap;
       panel.dispatchEvent(new CustomEvent('drawgrid:update',{detail:emptyMap}));
       drawGrid();
+      nextDrawTarget = null; // Disarm any pending line draw
+      updateGeneratorButtons(); // Refresh button state to "Draw"
     },
     setErase:(v)=>{ erasing=!!v; },
     getState: ()=>{
