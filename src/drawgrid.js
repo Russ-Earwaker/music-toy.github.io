@@ -563,6 +563,11 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
                 if (!newMap.disabled[c]) newMap.disabled[c] = new Set();
                 filledNodes[c].forEach(row => newMap.disabled[c].add(row));
             }
+            // Add any nodes that were explicitly marked as disabled by the snapping logic (e.g., out of bounds)
+            if (partial.disabled && partial.disabled[c]?.size > 0) {
+                if (!newMap.disabled[c]) newMap.disabled[c] = new Set();
+                partial.disabled[c].forEach(row => newMap.disabled[c].add(row));
+            }
         }
     }
   }
@@ -756,7 +761,7 @@ function regenerateMapFromStrokes() {
     });
   });
 
-  const observer = new ResizeObserver(layout);
+  const observer = new ResizeObserver(() => resnapAndRedraw(false));
 
   function getLineWidth() {
     return Math.max(12, Math.round(Math.min(cw, ch) * 0.85));
@@ -1166,7 +1171,7 @@ function regenerateMapFromStrokes() {
             if (!matchGroup(node.group ?? null, gid)) continue;
             for (const nextNode of nextColNodes) {
               if (!matchGroup(nextNode.group ?? null, gid)) continue;
-              const eitherDisabled = node.disabled || nextNode.disabled || !currentIsActive || !nextIsActive;
+              const eitherDisabled = node.disabled || nextNode.disabled;
               nctx.strokeStyle = colorFor(gid, !eitherDisabled);
               nctx.beginPath();
               nctx.moveTo(node.x, node.y);
@@ -1245,9 +1250,10 @@ function regenerateMapFromStrokes() {
     // build a map: for each column, choose at most one row where line crosses
     const active = Array(cols).fill(false);
     const nodes = Array.from({length:cols}, ()=> new Set());
+    const disabled = Array.from({length:cols}, ()=> new Set());
     const w = paint.width;
     const h = paint.height;
-    if (!w || !h) return { active, nodes }; // Abort if canvas is not ready
+    if (!w || !h) return { active, nodes, disabled }; // Abort if canvas is not ready
     const data = sourceCtx.getImageData(0, 0, w, h).data;
 
     for (let c=0;c<cols;c++){
@@ -1276,42 +1282,62 @@ function regenerateMapFromStrokes() {
         const avgY_dpr = ySum / inkCount;
         const avgY_css = avgY_dpr / dpr;
 
-        // Map average Y to nearest row, clamped to valid range so strokes slightly
-        // outside the grid bottom/top still snap to the nearest playable row.
-        const r_clamped = Math.max(0, Math.min(rows - 1, Math.round((avgY_css - (gridArea.y + topPad)) / ch)));
-        {
-          let r_final = r_clamped;
+        const noteGridTop = gridArea.y + topPad;
+        const noteGridBottom = noteGridTop + rows * ch;
+        const isOutside = avgY_css <= noteGridTop || avgY_css >= noteGridBottom;
 
-          if (autoTune) {
-            // 1. Get the MIDI note for the visually-drawn row
-            const drawnMidi = chromaticPalette[r_clamped];
+        if (isOutside) {
+            // Find a default "in-key" row for out-of-bounds drawing.
+            // This ensures disabled notes are still harmonically related.
+            let safeRow = 7; // Fallback to a middle-ish row
+            try {
+                const visiblePentatonicNotes = pentatonicPalette.filter(p => chromaticPalette.includes(p));
+                if (visiblePentatonicNotes.length > 0) {
+                    // Pick a note from the middle of the available pentatonic notes.
+                    const middleIndex = Math.floor(visiblePentatonicNotes.length / 2);
+                    const targetMidi = visiblePentatonicNotes[middleIndex];
+                    const targetRow = chromaticPalette.indexOf(targetMidi);
+                    if (targetRow !== -1) safeRow = targetRow;
+                }
+            } catch {}
+            nodes[c].add(safeRow);
+            disabled[c].add(safeRow);
+            active[c] = false; // This will be recomputed later, but good to be consistent
+        } else {
+            // Map average Y to nearest row, clamped to valid range.
+            const r_clamped = Math.max(0, Math.min(rows - 1, Math.round((avgY_css - (gridArea.y + topPad)) / ch)));
+            let r_final = r_clamped;
 
-            // 2. Find the nearest note in the pentatonic scale
-            let nearestMidi = pentatonicPalette[0];
-            let minDiff = Math.abs(drawnMidi - nearestMidi);
-            for (const pNote of pentatonicPalette) {
-              const diff = Math.abs(drawnMidi - pNote);
-              if (diff < minDiff) { minDiff = diff; nearestMidi = pNote; }
+            if (autoTune) {
+              // 1. Get the MIDI note for the visually-drawn row
+              const drawnMidi = chromaticPalette[r_clamped];
+
+              // 2. Find the nearest note in the pentatonic scale
+              let nearestMidi = pentatonicPalette[0];
+              let minDiff = Math.abs(drawnMidi - nearestMidi);
+              for (const pNote of pentatonicPalette) {
+                const diff = Math.abs(drawnMidi - pNote);
+                if (diff < minDiff) { minDiff = diff; nearestMidi = pNote; }
+              }
+
+              // 3. Map that pentatonic note into the visible chromatic range by octave wrapping
+              try {
+                const minC = chromaticPalette[chromaticPalette.length - 1];
+                const maxC = chromaticPalette[0];
+                let wrapped = nearestMidi|0;
+                while (wrapped > maxC) wrapped -= 12;
+                while (wrapped < minC) wrapped += 12;
+                const correctedRow = chromaticPalette.indexOf(wrapped);
+                if (correctedRow !== -1) r_final = correctedRow;
+              } catch {}
             }
 
-            // 3. Map that pentatonic note into the visible chromatic range by octave wrapping
-            try {
-              const minC = chromaticPalette[chromaticPalette.length - 1];
-              const maxC = chromaticPalette[0];
-              let wrapped = nearestMidi|0;
-              while (wrapped > maxC) wrapped -= 12;
-              while (wrapped < minC) wrapped += 12;
-              const correctedRow = chromaticPalette.indexOf(wrapped);
-              if (correctedRow !== -1) r_final = correctedRow;
-            } catch {}
-          }
-
-          nodes[c].add(r_final);
-          active[c] = true;
+            nodes[c].add(r_final);
+            active[c] = true;
         }
       }
     }
-    return {active, nodes};
+    return {active, nodes, disabled};
   }
 
   function eraseNodeAtPoint(p) {
@@ -1682,7 +1708,11 @@ function regenerateMapFromStrokes() {
     tempCanvas.width = paint.width;
     tempCanvas.height = paint.height;
     const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
-    if (!tempCtx) return {active:[], nodes:[]};
+    if (!tempCtx) return {
+        active: Array(cols).fill(false),
+        nodes: Array.from({length:cols}, ()=> new Set()),
+        disabled: Array.from({length:cols}, ()=> new Set())
+    };
 
     tempCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     drawFullStroke(tempCtx, stroke);
@@ -1750,15 +1780,18 @@ function regenerateMapFromStrokes() {
       particles.draw(particleCtx);
     } catch (e) { /* fail silently */ }
 
+    drawGrid(); // Always redraw grid (background, lines, active column fills)
+    if (currentMap) drawNodes(currentMap.nodes); // Always redraw nodes (cubes, connections, labels)
+
+    // Clear flash canvas for this frame's animations
+    fctx.setTransform(1, 0, 0, 1, 0, 0);
+    fctx.clearRect(0, 0, flashCanvas.width, flashCanvas.height);
+
     // Animate special stroke paint (hue cycling) without resurrecting erased areas:
     // Draw animated special strokes into flashCanvas, then mask with current paint alpha.
     const specialStrokes = strokes.filter(s => s.isSpecial);
     if (specialStrokes.length > 0 || (cur && previewGid)) {
-        if (!panel.isConnected) { cancelAnimationFrame(rafId); return; }
         fctx.save();
-        // Clear overlay in device pixels
-        fctx.setTransform(1, 0, 0, 1, 0, 0);
-        fctx.clearRect(0, 0, flashCanvas.width, flashCanvas.height);
         // Draw animated strokes with CSS transform
         fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         // Draw demoted colorized strokes as static overlay tints
@@ -1781,9 +1814,6 @@ function regenerateMapFromStrokes() {
         }
         fctx.restore();
     } else {
-        // No special strokes: ensure overlay is cleared
-        fctx.setTransform(1, 0, 0, 1, 0, 0);
-        fctx.clearRect(0, 0, flashCanvas.width, flashCanvas.height);
     }
 
     // Animate playhead flash
@@ -1793,11 +1823,6 @@ function regenerateMapFromStrokes() {
             flashes[i] = Math.max(0, flashes[i] - 0.08);
             needsRedraw = true;
         }
-    }
-    if (needsRedraw) {
-      // Redraw both grid and nodes to show node cube flash feedback
-      drawGrid();
-      if (currentMap) drawNodes(currentMap.nodes);
     }
 
     // Draw cell flashes
@@ -1925,7 +1950,7 @@ function regenerateMapFromStrokes() {
             const nx = (gridArea.w>0) ? (p.x - gridArea.x)/gridArea.w : 0;
             const gh = Math.max(1, gridArea.h - topPad);
             const ny = gh>0 ? (p.y - (gridArea.y + topPad))/gh : 0;
-            return { nx: Math.max(0, Math.min(1, nx)), ny: Math.max(0, Math.min(1, ny)) };
+            return { nx, ny };
           }catch{ return { nx:0, ny:0 }; }
         };
         const state = {
@@ -1946,6 +1971,7 @@ function regenerateMapFromStrokes() {
             active: (currentMap?.active && Array.isArray(currentMap.active)) ? currentMap.active.slice() : Array(cols).fill(false),
             disabled: serializeSetArr(persistentDisabled || []),
             list: serializeNodes(currentMap?.nodes || []),
+            groups: (nodeGroupMap || []).map(m => m instanceof Map ? Array.from(m.entries()) : []),
           },
           manualOverrides: Array.isArray(manualOverrides) ? manualOverrides.map(s=> Array.from(s||[])) : [],
         };
@@ -1983,8 +2009,8 @@ function regenerateMapFromStrokes() {
             if (Array.isArray(s?.ptsN)){
               const gh = Math.max(1, gridArea.h - topPad);
               pts = s.ptsN.map(np=>({
-                x: gridArea.x + Math.max(0, Math.min(1, Number(np?.nx)||0)) * gridArea.w,
-                y: (gridArea.y + topPad) + Math.max(0, Math.min(1, Number(np?.ny)||0)) * gh
+                x: gridArea.x + (Number(np?.nx)||0) * gridArea.w,
+                y: (gridArea.y + topPad) + (Number(np?.ny)||0) * gh
               }));
             } else if (Array.isArray(s?.pts)) {
               // Legacy raw points fallback
@@ -2021,21 +2047,35 @@ function regenerateMapFromStrokes() {
         if (st.nodes && typeof st.nodes==='object'){
           try{
             const act = Array.isArray(st.nodes.active) ? st.nodes.active.slice(0, cols) : null;
-            const list = Array.isArray(st.nodes.list) ? st.nodes.list.slice(0, cols).map(a=> new Set(a||[])) : null;
-            const dis  = Array.isArray(st.nodes.disabled) ? st.nodes.disabled.slice(0, cols).map(a=> new Set(a||[])) : null;
-            if (act && list){
-              currentMap = { active: Array(cols).fill(false), nodes: Array.from({length:cols},()=>new Set()), disabled: Array.from({length:cols},()=>new Set()) };
-              for (let c=0;c<cols;c++){
-                currentMap.active[c] = !!act[c];
-                currentMap.nodes[c] = list[c] || new Set();
-                currentMap.disabled[c] = (dis && dis[c]) ? dis[c] : new Set();
-              }
+            const dis = Array.isArray(st.nodes.disabled) ? st.nodes.disabled.slice(0, cols).map(a => new Set(a || [])) : null;
+            const list = Array.isArray(st.nodes.list) ? st.nodes.list.slice(0, cols).map(a => new Set(a || [])) : null;
+            const groups = Array.isArray(st.nodes.groups) ? st.nodes.groups.map(g => new Map(g || [])) : null;
+
+            // If a node list is present in the saved state, it is the source of truth.
+            if (list) {
+                if (!currentMap) {
+                    // If strokes were not restored, currentMap is null. Build it from saved node list.
+                    currentMap = { active: Array(cols).fill(false), nodes: list, disabled: Array.from({length:cols},()=>new Set()) };
+                } else {
+                    // If strokes were restored, currentMap exists. Overwrite its nodes with the saved list.
+                    currentMap.nodes = list;
+                }
+            }
+
+            if (currentMap && (act || dis || groups)) {
+                if (groups) nodeGroupMap = groups;
+                for (let c = 0; c < cols; c++) {
+                    if (act && act[c] !== undefined) currentMap.active[c] = !!act[c];
+                    if (dis && dis[c] !== undefined) currentMap.disabled[c] = dis[c];
+                }
+            }
+
               persistentDisabled = currentMap.disabled;
+
               drawGrid();
               drawNodes(currentMap.nodes);
               try{ panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap })); }catch{}
-            }
-          }catch(e){ try{ console.warn('[drawgrid] apply nodes failed', e); }catch{} }
+          } catch(e){ try{ console.warn('[drawgrid] apply nodes failed', e); }catch{} }
         }
         if (Array.isArray(st.manualOverrides)){
           try{ manualOverrides = st.manualOverrides.slice(0, cols).map(a=> new Set(a||[])); }catch{}
@@ -2176,11 +2216,18 @@ function regenerateMapFromStrokes() {
   }
 
   function handleRandomizeNotes() {
+    // Save the current active state before regenerating lines
+    const oldActive = currentMap?.active ? [...currentMap.active] : null;
+
     const existingGenIds = new Set();
     strokes.forEach(s => {
       if (s.generatorId === 1 || s.generatorId === 2) { existingGenIds.add(s.generatorId); }
     });
-    if (existingGenIds.size === 0) { handleRandomize(); return; }
+    // If no generator lines exist, create Line 1. Don't call handleRandomize()
+    // as that would clear decorative strokes and their disabled states.
+    if (existingGenIds.size === 0) {
+      existingGenIds.add(1);
+    }
     strokes = strokes.filter(s => s.generatorId !== 1 && s.generatorId !== 2);
     const newGenStrokes = [];
     existingGenIds.forEach(gid => {
@@ -2193,6 +2240,23 @@ function regenerateMapFromStrokes() {
     clearAndRedrawFromStrokes();
     // After drawing, unmark the new strokes so they behave normally.
     newGenStrokes.forEach(s => delete s.justCreated);
+
+    // After regenerating, restore the old active state and update disabled nodes to match.
+    if (currentMap && oldActive) {
+        currentMap.active = oldActive;
+        // Rebuild the disabled sets based on the restored active state.
+        for (let c = 0; c < cols; c++) {
+            if (oldActive[c]) {
+                currentMap.disabled[c].clear(); // If column was active, ensure all its new nodes are enabled.
+            } else {
+                currentMap.nodes[c].forEach(r => currentMap.disabled[c].add(r)); // If column was inactive, disable all its new nodes.
+            }
+        }
+        persistentDisabled = currentMap.disabled; // Update the master disabled set
+        drawGrid();
+        drawNodes(currentMap.nodes);
+        panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
+    }
   }
   panel.addEventListener('toy-random', handleRandomize);
   panel.addEventListener('toy-random-blocks', handleRandomizeBlocks);
@@ -2201,7 +2265,7 @@ function regenerateMapFromStrokes() {
   // The ResizeObserver only fires on *changes*. We must call layout() once
   // manually to render the initial state. requestAnimationFrame ensures
   // the browser has finished its own layout calculations first.
-  requestAnimationFrame(layout);
+  requestAnimationFrame(() => resnapAndRedraw(false));
 
   return api;
 }
