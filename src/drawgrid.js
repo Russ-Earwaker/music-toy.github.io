@@ -80,7 +80,7 @@ function createDrawGridParticles({
   getW, getH,
   count=150,
   returnToHome=true,
-  homePull=0.002,
+  homePull=0.008, // Increased spring force to resettle faster
   bounceOnWalls=false,
 } = {}){
   const P = [];
@@ -90,7 +90,7 @@ function createDrawGridParticles({
   let lastW = 0, lastH = 0;
 
   for (let i=0;i<count;i++){
-    P.push({ x: 0, y: 0, vx:0, vy:0, homeX:0, homeY:0, alpha:0.55, tSince: 0, delay:0, burst:false, flash: 0 });
+    P.push({ x: 0, y: 0, vx:0, vy:0, homeX:0, homeY:0, alpha:0.55, tSince: 0, delay:0, burst:false, flash: 0, repulsed: 0 });
   }
 
   function onBeat(cx, cy){
@@ -114,7 +114,7 @@ function createDrawGridParticles({
     if (w !== lastW || h !== lastH){
       if (P.length < count){
         for (let i=P.length;i<count;i++){
-          P.push({ x: 0, y: 0, vx:0, vy:0, homeX:0, homeY:0, alpha:0.55, tSince: 0, flash: 0 });
+          P.push({ x: 0, y: 0, vx:0, vy:0, homeX:0, homeY:0, alpha:0.55, tSince: 0, flash: 0, repulsed: 0 });
         }
       } else if (P.length > count){
         P.length = count;
@@ -126,7 +126,7 @@ function createDrawGridParticles({
         const ny = Math.random() * h;
 
         p.homeX = nx; p.homeY = ny; p.x = nx; p.y = ny;
-        p.vx = 0; p.vy = 0; p.alpha = 0.55; p.tSince = 0; p.delay=0; p.burst=false; p.flash = 0;
+        p.vx = 0; p.vy = 0; p.alpha = 0.55; p.tSince = 0; p.delay=0; p.burst=false; p.flash = 0; p.repulsed = 0;
       }
       lastW = w; lastH = h;
     }
@@ -135,28 +135,39 @@ function createDrawGridParticles({
     for (const p of P){
       if (p.delay && p.delay>0){ p.delay = Math.max(0, p.delay - dt); continue; }
 
+      if (p.repulsed > 0) {
+          p.repulsed = Math.max(0, p.repulsed - 0.02); // Decay over ~50 frames
+      }
+
       if (p.isBurst) {
-          p.ttl--;
+          if (p.ttl) p.ttl--;
           if (p.ttl <= 0) {
               continue; // Particle dies
           }
       }
 
       p.tSince += dt;
-      p.vx *= 0.985; p.vy *= 0.985;
+      p.vx *= 0.94; p.vy *= 0.94; // Increased damping to resettle faster
       // Burst particles just fly and die, no "return to home"
-      if (returnToHome && !p.isBurst){
+      if (returnToHome && !p.isBurst && p.repulsed <= 0){
         const hx = p.homeX - p.x, hy = p.homeY - p.y;
         p.vx += homePull*hx; p.vy += homePull*hy;
       }
       p.x += p.vx; p.y += p.vy;
 
-      if (p.x < 0 || p.x >= w || p.y < 0 || p.y >= h){
-        if (p.isBurst) {
-            continue; // Burst particles die if they go off-screen
-        }
-        // For regular particles, reset them to their home position
-        p.x=p.homeX; p.y=p.homeY; p.vx=0; p.vy=0; p.alpha=0.55; p.tSince=0; p.delay=0; p.burst=false; p.flash = 0;
+      if (p.isBurst) {
+          if (p.x < -10 || p.x >= w + 10 || p.y < -10 || p.y >= h + 10) {
+              continue; // Burst particles die if they go off-screen
+          }
+      } else {
+          // If a regular particle is pushed far off-screen, respawn it at its
+          // home position with a fade-in effect. This avoids the jarring "rush back".
+          if (p.x < -10 || p.x >= w + 10 || p.y < -10 || p.y >= h + 10) {
+              p.x = p.homeX; p.y = p.homeY;
+              p.vx = 0; p.vy = 0;
+              p.alpha = 0; // Start fade-in
+              p.repulsed = 0; // Reset repulsion state
+          }
       }
 
       p.alpha += (0.55 - p.alpha) * 0.05;
@@ -217,12 +228,13 @@ function createDrawGridParticles({
         const s = (dx===0? (Math.random()<0.5?-1:1) : Math.sign(dx));
         const fall = 1 - Math.abs(dx)/half;
         const jitter = 0.85 + Math.random()*0.3;
-        const k = Math.max(0, fall) * strength * 0.55 * jitter;
+        const k = Math.max(0, fall) * strength * 0.355 * jitter;
         const vyJitter = (Math.random()*2 - 1) * k * 0.25;
         p.vx += s * k;
         p.vy += vyJitter;
         p.alpha = Math.min(1, p.alpha + 0.85);
         p.flash = 1.0;
+        p.repulsed = 1.0;
       }
     }
   }
@@ -258,6 +270,7 @@ function createDrawGridParticles({
             ttl: 45, // frames, ~0.75s
             color: color,
             isBurst: true,
+            repulsed: 0, // Not used by bursts, but good to initialize
         };
         P.push(p);
     }
@@ -320,6 +333,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let nextDrawTarget = null; // Can be 1 or 2. Determines the next special line.
   let flashes = new Float32Array(cols);
   let playheadCol = -1;
+  let localLastPhase = 0; // For chain-active race condition
   let erasedTargetsThisDrag = new Set(); // For eraser hit-testing of specific nodes (currently unused)
   let manualOverrides = Array.from({ length: initialCols }, () => new Set()); // per-column node rows overridden by drags
   let draggedNode = null; // { col, row, group? }
@@ -1793,11 +1807,9 @@ function regenerateMapFromStrokes() {
     }
 
     // Animate playhead flash
-    let needsRedraw = false;
     for (let i = 0; i < flashes.length; i++) {
         if (flashes[i] > 0) {
             flashes[i] = Math.max(0, flashes[i] - 0.08);
-            needsRedraw = true;
         }
     }
 
@@ -1827,8 +1839,18 @@ function regenerateMapFromStrokes() {
     // Draw scrolling playhead
     try {
       const info = getLoopInfo();
-      // Only draw if transport is running and we have valid info
-      if (info && isRunning()) {
+      const phaseJustWrapped = info.phase01 < localLastPhase && localLastPhase > 0.9;
+      localLastPhase = info.phase01;
+
+      // Only draw and repulse particles if transport is running and this toy is the active one in its chain.
+      const isActiveInChain = panel.dataset.chainActive === 'true';
+
+      // If this toy thinks it's active, but the global transport phase just wrapped,
+      // it's possible its active status is stale. Skip one frame of playhead drawing
+      // to wait for the scheduler to update the `data-chain-active` attribute.
+      const probablyStale = isActiveInChain && phaseJustWrapped;
+
+      if (info && isRunning() && isActiveInChain && !probablyStale) {
         // Calculate playhead X position based on loop phase
         const playheadX = gridArea.x + info.phase01 * gridArea.w;
 

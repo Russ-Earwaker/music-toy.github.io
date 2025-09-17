@@ -121,6 +121,10 @@ function addGapAfterOrganize() {
 window.applyStackingOrder = applyStackingOrder;
 window.addGapAfterOrganize = addGapAfterOrganize;
 
+let chainCanvas, chainCtx;
+const g_pulsingConnectors = new Map(); // fromId -> { toId, pulse: 1.0 }
+
+
 console.log('[MAIN] module start');
 const CSV_PATH = './assets/samples/samples.csv'; // optional
 const $ = (sel, root=document)=> root.querySelector(sel);
@@ -164,11 +168,15 @@ function initializeNewToy(panel) {
     }
 }
 
+function triggerConnectorPulse(fromId, toId) {
+    g_pulsingConnectors.set(fromId, { toId, pulse: 1.0 });
+}
+
 function initToyChaining(panel) {
     const extendBtn = document.createElement('button');
     extendBtn.className = 'c-btn toy-chain-btn';
     extendBtn.title = 'Extend with a new toy';
-    extendBtn.style.setProperty('--c-btn-size', '32px');
+    extendBtn.style.setProperty('--c-btn-size', '65px');
     extendBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>`;
     
     const core = extendBtn.querySelector('.c-btn-core');
@@ -195,44 +203,127 @@ function initToyChaining(panel) {
         }
 
         const board = document.getElementById('board');
-        board.appendChild(newPanel);
-
-        initializeNewToy(newPanel);
-        initToyChaining(newPanel); // Give the new toy its own extend button
-
-        const oldNextId = sourcePanel.dataset.nextToyId;
-        sourcePanel.dataset.nextToyId = newPanel.id;
-        newPanel.dataset.prevToyId = sourcePanel.id;
-
-        if (oldNextId) {
-            const oldNextPanel = document.getElementById(oldNextId);
-            newPanel.dataset.nextToyId = oldNextId;
-            if (oldNextPanel) {
-                oldNextPanel.dataset.prevToyId = newPanel.id;
-            }
-        }
-        
         const sourceRect = sourcePanel.getBoundingClientRect();
         const boardRect = board.getBoundingClientRect();
         const boardScale = window.__boardScale || 1;
 
+        newPanel.style.width = `${sourceRect.width / boardScale}px`;
+        newPanel.style.height = `${sourceRect.height / boardScale}px`;
         newPanel.style.position = 'absolute';
         newPanel.style.left = `${(sourceRect.right - boardRect.left) / boardScale + 30}px`;
         newPanel.style.top = `${(sourceRect.top - boardRect.top) / boardScale}px`;
-        
-        document.querySelectorAll('.toy-panel.toy-focused').forEach(p => p.classList.remove('toy-focused'));
-        newPanel.classList.add('toy-focused');
 
-        updateChains();
+        board.appendChild(newPanel);
+
+        // Defer the rest of the initialization to the next event loop cycle.
+        // This gives the browser time to calculate the new panel's layout,
+        // which is crucial for the toy's internal canvases to be sized correctly.
+        setTimeout(() => {
+            if (!newPanel.isConnected) return; // Guard against panel being removed before init
+
+            initializeNewToy(newPanel);
+            initToyChaining(newPanel); // Give the new toy its own extend button
+
+            const oldNextId = sourcePanel.dataset.nextToyId;
+            sourcePanel.dataset.nextToyId = newPanel.id;
+            newPanel.dataset.prevToyId = sourcePanel.id;
+
+            if (oldNextId) {
+                const oldNextPanel = document.getElementById(oldNextId);
+                newPanel.dataset.nextToyId = oldNextId;
+                if (oldNextPanel) oldNextPanel.dataset.prevToyId = newPanel.id;
+            }
+
+            document.querySelectorAll('.toy-panel.toy-focused').forEach(p => p.classList.remove('toy-focused'));
+            newPanel.classList.add('toy-focused');
+
+            updateChains();
+        }, 0);
     });
 }
 
 const chainBtnStyle = document.createElement('style');
 chainBtnStyle.textContent = `
-    .toy-chain-btn { position: absolute; top: 50%; right: -16px; transform: translateY(-50%); z-index: 52; }
+    .toy-chain-btn { position: absolute; top: 50%; right: -32px; transform: translateY(-50%); z-index: 52; }
 `;
 document.head.appendChild(chainBtnStyle);
 
+function drawChains() {
+    if (!chainCanvas || !chainCtx) return;
+    const board = document.getElementById('board');
+    if (!board) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    // Use scrollWidth/Height to cover the entire pannable area.
+    const w = board.scrollWidth;
+    const h = board.scrollHeight;
+
+    // Ensure the canvas element size and backing store match the board's scrollable area.
+    if (chainCanvas.style.width !== `${w}px` || chainCanvas.style.height !== `${h}px` || chainCanvas.width !== w * dpr || chainCanvas.height !== h * dpr) {
+        chainCanvas.style.width = `${w}px`;
+        chainCanvas.style.height = `${h}px`;
+        chainCanvas.width = w * dpr;
+        chainCanvas.height = h * dpr;
+        chainCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    chainCtx.clearRect(0, 0, w, h);
+
+    // Decay existing pulses
+    for (const [fromId, pulseInfo] of g_pulsingConnectors.entries()) {
+        pulseInfo.pulse -= 0.05; // decay rate
+        if (pulseInfo.pulse <= 0) {
+            g_pulsingConnectors.delete(fromId);
+        }
+    }
+
+    for (const headId of g_chainState.keys()) {
+        let current = document.getElementById(headId);
+        while (current) {
+            const nextId = current.dataset.nextToyId;
+            if (!nextId) break;
+            const next = document.getElementById(nextId);
+            if (!next) break;
+
+            // The button is centered on the right edge of the panel.
+            const p1x = current.offsetLeft + current.offsetWidth;
+            const p1y = current.offsetTop + current.offsetHeight / 2;
+
+            // The connection on the next toy is on the opposite (left) side.
+            const p2x = next.offsetLeft;
+            const p2y = next.offsetTop + next.offsetHeight / 2;
+
+            chainCtx.beginPath();
+            chainCtx.moveTo(p1x, p1y);
+
+            const dx = p2x - p1x;
+            const controlPointOffset = Math.max(40, Math.abs(dx) * 0.4);
+
+            chainCtx.bezierCurveTo(p1x + controlPointOffset, p1y, p2x - controlPointOffset, p2y, p2x, p2y);
+
+            const pulseInfo = g_pulsingConnectors.get(current.id);
+            const isPulsing = pulseInfo && pulseInfo.toId === nextId;
+            const pulseAmount = isPulsing ? pulseInfo.pulse : 0;
+
+            const baseWidth = 10;
+            const pulseWidth = 15 * pulseAmount;
+            chainCtx.lineWidth = baseWidth + pulseWidth;
+            chainCtx.strokeStyle = `hsl(222, 100%, ${80 + 15 * pulseAmount}%)`;
+            chainCtx.stroke();
+
+            // Erase a circle from the line where the source button is,
+            // creating the illusion of the line emerging from behind it.
+            chainCtx.save();
+            chainCtx.globalCompositeOperation = 'destination-out';
+            chainCtx.beginPath();
+            chainCtx.arc(p1x, p1y, 32.5, 0, Math.PI * 2); // 32.5 is half of the 65px button size
+            chainCtx.fill();
+            chainCtx.restore();
+
+            current = next;
+        }
+    }
+}
 const g_chainState = new Map();
 
 function findChainHead(toy) {
@@ -282,10 +373,16 @@ function scheduler(){
               const activeToy = document.getElementById(activeToyId);
               if (activeToy) {
                   const nextToyId = activeToy.dataset.nextToyId;
-                  if (nextToyId && document.getElementById(nextToyId)) {
+                  const nextToy = nextToyId ? document.getElementById(nextToyId) : null;
+                  if (nextToy) {
+                      triggerConnectorPulse(activeToyId, nextToyId);
                       g_chainState.set(headId, nextToyId);
                   } else {
-                      g_chainState.set(headId, headId);
+                      const headToy = document.getElementById(headId);
+                      if (headToy && headToy.id !== activeToyId) {
+                          triggerConnectorPulse(activeToyId, headId);
+                      }
+                      g_chainState.set(headId, headId); // Loop back to head
                   }
               } else {
                   g_chainState.set(headId, headId);
@@ -293,7 +390,14 @@ function scheduler(){
           }
       }
 
-      for (const activeToyId of g_chainState.values()) {
+      const activeToyIds = new Set(g_chainState.values());
+
+      // Update data-chain-active on all sequenced toys
+      getSequencedToys().forEach(toy => {
+          toy.dataset.chainActive = activeToyIds.has(toy.id) ? 'true' : 'false';
+      });
+
+      for (const activeToyId of activeToyIds) {
           const toy = document.getElementById(activeToyId);
           if (toy && typeof toy.__sequencerStep === 'function') {
               const steps = parseInt(toy.dataset.steps, 10) || NUM_STEPS;
@@ -305,6 +409,7 @@ function scheduler(){
           }
       }
     }
+    drawChains();
     requestAnimationFrame(step);
   }
   updateChains();
@@ -319,6 +424,20 @@ async function boot(){
     console.warn('[AUDIO] init failed', e);
   }
 
+  const board = document.getElementById('board');
+  if (board && !document.getElementById('chain-canvas')) {
+      chainCanvas = document.createElement('canvas');
+      chainCanvas.id = 'chain-canvas';
+      Object.assign(chainCanvas.style, {
+          position: 'absolute',
+          top: '0', left: '0', // width/height are set dynamically in drawChains
+          pointerEvents: 'none',
+          zIndex: '1' // Behind toy panels, but in front of any z-index:0 background
+      });
+      board.prepend(chainCanvas);
+      chainCtx = chainCanvas.getContext('2d');
+  }
+
   bootTopbar();
   createLoopIndicator('#topbar');
   let restored = false;
@@ -329,7 +448,6 @@ async function boot(){
   try{ window.ThemeBoot && window.ThemeBoot.wireAll && window.ThemeBoot.wireAll(); }catch{}
   try{ tryRestoreOnBoot(); }catch{}
   scheduler();
-  try{ window.setBoardScale && window.setBoardScale(1); }catch{}
   let hasSavedPositions = false; try { hasSavedPositions = !!localStorage.getItem('toyPositions'); } catch {}
   if (!restored && !hasSavedPositions){
     try{ window.organizeBoard && window.organizeBoard(); }catch{}
