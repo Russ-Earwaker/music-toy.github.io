@@ -1,8 +1,8 @@
 // --- Module Imports ---
-import './bouncer-init.js';
+import { initializeBouncer } from './bouncer-init.js';
 import './header-buttons-delegate.js';
 import './rippler-init.js';
-import { createBouncer } from './bouncer.main.js';
+// import { createBouncer } from './bouncer.main.js'; // This is now handled by bouncer-init.js
 import { initDrawGrid } from './drawgrid-init.js';
 import { createChordWheel } from './chordwheel.js';
 import { applyStackingOrder } from './stacking-manager.js';
@@ -148,7 +148,7 @@ function getSequencedToys() {
 }
 
 const toyInitializers = {
-    'bouncer': createBouncer,
+    'bouncer': initializeBouncer,
     'drawgrid': initDrawGrid,
     'loopgrid': buildGrid,
     'chordwheel': createChordWheel,
@@ -166,6 +166,17 @@ function initializeNewToy(panel) {
             console.error(`Failed to initialize new toy of type "${toyType}"`, e);
         }
     }
+}
+
+function updateAllChainUIs() {
+    const allToys = Array.from(document.querySelectorAll('.toy-panel[data-toy]'));
+    allToys.forEach(toy => {
+        const instBtn = toy.querySelector('.toy-inst-btn');
+        if (instBtn) {
+            const isChild = !!toy.dataset.prevToyId;
+            instBtn.style.display = isChild ? 'none' : '';
+        }
+    });
 }
 
 function triggerConnectorPulse(fromId, toId) {
@@ -238,13 +249,14 @@ function initToyChaining(panel) {
             newPanel.classList.add('toy-focused');
 
             updateChains();
+            updateAllChainUIs();
         }, 0);
     });
 }
 
 const chainBtnStyle = document.createElement('style');
 chainBtnStyle.textContent = `
-    .toy-chain-btn { position: absolute; top: 50%; right: -32px; transform: translateY(-50%); z-index: 52; }
+    .toy-chain-btn { position: absolute; top: 50%; right: -65px; transform: translateY(-50%); z-index: 52; }
 `;
 document.head.appendChild(chainBtnStyle);
 
@@ -285,8 +297,8 @@ function drawChains() {
             const next = document.getElementById(nextId);
             if (!next) break;
 
-            // The button is centered on the right edge of the panel.
-            const p1x = current.offsetLeft + current.offsetWidth;
+            // The button's center is 32.5px to the right of the panel's right edge.
+            const p1x = current.offsetLeft + current.offsetWidth + 32.5;
             const p1y = current.offsetTop + current.offsetHeight / 2;
 
             // The connection on the next toy is on the opposite (left) side.
@@ -295,10 +307,7 @@ function drawChains() {
 
             chainCtx.beginPath();
             chainCtx.moveTo(p1x, p1y);
-
-            const dx = p2x - p1x;
-            const controlPointOffset = Math.max(40, Math.abs(dx) * 0.4);
-
+            const controlPointOffset = Math.max(40, Math.abs(p2x - p1x) * 0.4);
             chainCtx.bezierCurveTo(p1x + controlPointOffset, p1y, p2x - controlPointOffset, p2y, p2x, p2y);
 
             const pulseInfo = g_pulsingConnectors.get(current.id);
@@ -308,18 +317,19 @@ function drawChains() {
             const baseWidth = 10;
             const pulseWidth = 15 * pulseAmount;
             chainCtx.lineWidth = baseWidth + pulseWidth;
+            chainCtx.lineCap = 'round'; // Use rounded ends to seamlessly meet the circular buttons.
             chainCtx.strokeStyle = `hsl(222, 100%, ${80 + 15 * pulseAmount}%)`;
             chainCtx.stroke();
 
-            // Erase a circle from the line where the source button is,
-            // creating the illusion of the line emerging from behind it.
+            // "Erase" the part of the line that is under the button by punching a transparent hole.
+            const buttonRadius = 32.5;
             chainCtx.save();
             chainCtx.globalCompositeOperation = 'destination-out';
             chainCtx.beginPath();
-            chainCtx.arc(p1x, p1y, 32.5, 0, Math.PI * 2); // 32.5 is half of the 65px button size
+            chainCtx.arc(p1x, p1y, buttonRadius, 0, Math.PI * 2);
+            chainCtx.fillStyle = '#000'; // Color doesn't matter for destination-out
             chainCtx.fill();
             chainCtx.restore();
-
             current = next;
         }
     }
@@ -445,6 +455,29 @@ async function boot(){
   bootGrids();
   bootDrawGrids();
   document.querySelectorAll('.toy-panel').forEach(initToyChaining);
+  updateAllChainUIs(); // Set initial instrument button visibility
+
+  // Add event listener for instrument propagation down chains
+  document.addEventListener('toy-instrument', (e) => {
+    const sourcePanel = e.target.closest('.toy-panel');
+    // Only propagate from chain heads (or standalone toys)
+    if (!sourcePanel || sourcePanel.dataset.prevToyId) {
+      return;
+    }
+
+    const instrument = e.detail.value;
+    let current = sourcePanel;
+    while (current && current.dataset.nextToyId) {
+      const nextToy = document.getElementById(current.dataset.nextToyId);
+      if (!nextToy) break;
+
+      nextToy.dataset.instrument = instrument;
+      nextToy.dispatchEvent(new CustomEvent('toy-instrument', { detail: { value: instrument }, bubbles: true }));
+      nextToy.dispatchEvent(new CustomEvent('toy:instrument', { detail: { name: instrument, value: instrument }, bubbles: true }));
+      current = nextToy;
+    }
+  });
+
   try{ window.ThemeBoot && window.ThemeBoot.wireAll && window.ThemeBoot.wireAll(); }catch{}
   try{ tryRestoreOnBoot(); }catch{}
   scheduler();

@@ -6,12 +6,13 @@ import { isRunning } from './audio-core.js';
 
 export function createBouncerDraw(env){
   const {
-    canvas, ctx, sizing, resizeCanvasForDPR, renderScale, physW, physH, EDGE,
+    panel, canvas, ctx, sizing, resizeCanvasForDPR, renderScale, physW, physH, EDGE,
     ensureEdgeControllers, edgeControllers, blockSize, blocks, handle,
     particles, drawEdgeBondLines, ensureAudioContext, noteList,
     drawEdgeDecorations, edgeFlash,
-    stepBouncer, buildStateForStep, applyFromStep, updateLaunchBaseline,
-    getBall, lockPhysWorld, getAim, spawnBallFrom
+    stepBouncer, buildStateForStep, applyFromStep,
+    getBall, lockPhysWorld, getAim, spawnBallFrom,
+    velFrom, ballR, updateLaunchBaseline
   } = env;
 
   let lastCssW = 0, lastCssH = 0;
@@ -20,6 +21,7 @@ export function createBouncerDraw(env){
   // Local state for flash animations, to survive state rebuilds from the physics engine.
   const blockFlashes = [];
   const edgeFlashes = [];
+  let wasActiveInChain = false;
 
   let prevNow = 0;
   let lastBeat = -1; let lastBar = -1;
@@ -238,7 +240,23 @@ export function createBouncerDraw(env){
 
 
       // If transport is paused, skip physics stepping and scheduling
-      try { if (typeof isRunning === 'function' && !isRunning()) { requestAnimationFrame(draw); return; } } catch {}
+      const isGloballyRunning = (typeof isRunning === 'function') ? isRunning() : true;
+      const isActiveInChain = panel.dataset.chainActive === 'true';
+
+      if (isActiveInChain && !wasActiveInChain) {
+          // Toy just became active. If there's no ball, spawn one.
+          const b = getBall ? getBall() : null;
+          if (!b) {
+              // Spawn from the handle's current position, launching upwards.
+              if (velFrom && ballR && spawnBallFrom) {
+                  const { vx, vy } = velFrom(handle.x, handle.y, handle.x, handle.y - 10);
+                  spawnBallFrom({ x: handle.x, y: handle.y, vx, vy, r: ballR() });
+              }
+          }
+      }
+      wasActiveInChain = isActiveInChain;
+
+      if (!isGloballyRunning) { requestAnimationFrame(draw); return; }
 
       // Loop recorder: detect new bar and let main decide record/replay
       try {
@@ -330,7 +348,9 @@ export function createBouncerDraw(env){
       if (DBG_RESPAWN()) {
         console.log('[BNC_DBG] render: Ball state right before stepBouncer', { flightEnd: S.ball?.flightEnd?.toFixed(3) });
       }
-      stepBouncer(S);
+      if (isActiveInChain) {
+        stepBouncer(S);
+      }
       applyFromStep && applyFromStep(S);
 
       // After the physics step, capture any flash events it generated and store

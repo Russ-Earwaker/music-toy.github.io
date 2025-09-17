@@ -2,8 +2,7 @@
 import { createBouncer } from './bouncer.main.js';
 import { initToyUI } from './toyui.js';
 
-function bootBouncers(){
-  document.querySelectorAll('.toy-panel[data-toy="bouncer"]').forEach((panel)=>{
+export function initializeBouncer(panel) {
     // Prevent double-initialization
     if (panel.__toyInstance) return;
     try{
@@ -12,16 +11,11 @@ function bootBouncers(){
       // Now create the toy's specific logic.
       panel.__toyInstance = createBouncer(panel);
     }catch(e){ console.warn('[bouncer-init] failed', panel?.id, e); }
-  });
+}
+
+function bootBouncers(){
+  document.querySelectorAll('.toy-panel[data-toy="bouncer"]').forEach(initializeBouncer);
 }
 
 if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', bootBouncers);
 else bootBouncers();
-
-// Also listen for dynamically added toys
-try {
-  const board = document.getElementById('board') || document.body;
-  new MutationObserver(() => bootBouncers()).observe(board, { childList: true, subtree: true });
-} catch (e) {
-  console.warn('[bouncer-init] MutationObserver failed.', e);
-}

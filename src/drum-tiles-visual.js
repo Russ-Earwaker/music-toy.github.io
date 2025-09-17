@@ -144,8 +144,12 @@ function render(panel) {
     const cubeX = xOffset + i * (cubeSize + localGap);
     const cubeRect = { x: cubeX, y: yOffset, w: cubeSize, h: cubeSize };
 
+    // Check if the toy is the active one in its chain. Default to true if not part of a chain.
+    // The `!== 'false'` check correctly handles cases where the attribute is missing (undefined).
+    const isActiveInChain = panel.dataset.chainActive !== 'false';
+
     // Draw playhead highlight first, so it's underneath the cube
-    if (i === st.playheadCol) {
+    if (isActiveInChain && i === st.playheadCol) {
       // A bigger, centered border highlight drawn by filling a slightly
       // larger rectangle behind the cube. This is more robust than stroking.
       // We use Math.floor to ensure integer coordinates and avoid sub-pixel

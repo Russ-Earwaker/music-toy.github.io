@@ -35,10 +35,6 @@ export function createBouncer(selector){
   const shell = (typeof selector==='string') ? document.querySelector(selector) : selector; if (!shell) return null;
   const panel = shell.closest('.toy-panel') || shell;
   // Prevent double-initialization, which can cause duplicate draw loops and event listeners.
-  if (panel.__bouncer_main_instance) {
-    console.warn('[bouncer.main] createBouncer called on an already-initialized panel. Aborting to prevent duplicates.', panel.id);
-    return panel.__bouncer_main_instance;
-  }
   // Enable OSD + quant debug by default (can be turned off later)
   try{ if (!panel.dataset.debug) panel.dataset.debug = '1'; }catch{}
   try{ window.BOUNCER_QUANT_DBG = true; }catch{}
@@ -782,7 +778,9 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
         console.log('[BNC_DBG] applyFromStep: Ball state is now', { flightEnd: ball?.flightEnd?.toFixed(3) });
       }
     }
-  }
+  },
+  velFrom,
+  ballR
 });
 requestAnimationFrame(draw);
 
@@ -798,6 +796,7 @@ requestAnimationFrame(draw);
       delete panel.__pendingBouncerState;
     }
   }catch{}
+  panel.__sequencerStep = () => {}; // Add dummy step function to be picked up by scheduler
   panel.__bouncer_main_instance = instanceApi;
   return instanceApi;
 }

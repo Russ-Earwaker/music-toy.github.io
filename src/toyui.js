@@ -135,7 +135,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
         editBtn.style.position = 'absolute';
         editBtn.style.top = `${headerHeight - 40}px`;
         editBtn.style.left = '-48px';
-        editBtn.style.zIndex = '5';
+        editBtn.style.zIndex = '1';
         editBtn.style.setProperty('--c-btn-size', `${btnSize}px`);
         editBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonEdit.png');"></div>`;
         panel.appendChild(editBtn);
@@ -147,7 +147,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
         closeBtn.style.position = 'absolute';
         closeBtn.style.top = `${headerHeight - 40}px`; // Match the edit button's vertical position
         closeBtn.style.left = '-48px';
-        closeBtn.style.zIndex = '5';
+        closeBtn.style.zIndex = '1';
         closeBtn.style.setProperty('--c-btn-size', `${btnSize}px`);
         closeBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow" style="--accent: #f87171;"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonClose.png');"></div>`;
         panel.appendChild(closeBtn);
@@ -335,7 +335,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       externalHost.className = 'rippler-external-controls';
       Object.assign(externalHost.style, {
         position: 'absolute', right: '-160px', top: '50%', transform: 'translateY(-50%)',
-        display: 'none', flexDirection: 'column', gap: '10px', zIndex: '10', width: '150px',
+        display: 'none', flexDirection: 'column', gap: '10px', zIndex: '1', width: '150px',
       });
       panel.appendChild(externalHost);
     }
@@ -514,8 +514,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
     let externalHost = panel.querySelector('.drawgrid-external-controls');
     if (!externalHost) {
       externalHost = document.createElement('div');
-      externalHost.className = 'drawgrid-external-controls';
-      Object.assign(externalHost.style, { position: 'absolute', right: '-160px', top: '50%', transform: 'translateY(-50%)', display: 'none', flexDirection: 'column', gap: '10px', zIndex: '10', width: '150px' });
+      externalHost.className = 'drawgrid-external-controls';      Object.assign(externalHost.style, { position: 'absolute', right: '-160px', top: '50%', transform: 'translateY(-50%)', display: 'none', flexDirection: 'column', gap: '10px', zIndex: '1', width: '150px' });
       panel.appendChild(externalHost);
     }
     const moveDrawGridControls = () => {
@@ -630,7 +629,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       Object.assign(externalHost.style, {
         position: 'absolute', right: '-260px', top: '50px',
         transform: 'none', display: 'none', flexDirection: 'column',
-        gap: '20px', zIndex: '10', width: '250px',
+        gap: '20px', zIndex: '1', width: '250px',
       });
       panel.appendChild(externalHost);
     }

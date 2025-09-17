@@ -228,7 +228,7 @@ function createDrawGridParticles({
         const s = (dx===0? (Math.random()<0.5?-1:1) : Math.sign(dx));
         const fall = 1 - Math.abs(dx)/half;
         const jitter = 0.85 + Math.random()*0.3;
-        const k = Math.max(0, fall) * strength * 0.355 * jitter;
+        const k = Math.max(0, fall) * strength * 1.2 * jitter;
         const vyJitter = (Math.random()*2 - 1) * k * 0.25;
         p.vx += s * k;
         p.vy += vyJitter;
@@ -2101,7 +2101,7 @@ function regenerateMapFromStrokes() {
           display: none; /* Hidden by default */
           flex-direction: column;
           gap: 10px;
-          z-index: 10;
+          z-index: 1;
       }
       .toy-panel[data-toy="drawgrid"].toy-zoomed .drawgrid-generator-buttons {
           display: flex; /* Visible only in advanced mode */

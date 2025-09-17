@@ -12,6 +12,7 @@ export function initDragBoard(boardSel = '#board') {
         transition: outline-color 0.2s ease-out, box-shadow 0.2s ease-out;
         outline: 2px solid transparent;
         outline-offset: -2px;
+        z-index: 2; /* Default stacking above chain canvas (z-index: 1) */
       }
       .toy-panel.toy-focused {
         outline-color: rgba(143, 168, 255, 0.6);
