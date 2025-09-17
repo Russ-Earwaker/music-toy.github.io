@@ -143,9 +143,16 @@ export function installBouncerInteractions({
 
     // Launch
     if (draggingHandle){
-      const hsx = aimStart.x, hsy = aimStart.y;
-      const { vx, vy } = velFrom(hsx, hsy, p.x, p.y);
-      spawnBallFrom({ x: hsx, y: hsy, vx, vy, r: (ballR?ballR():6) });
+      const isChainedFollower = !!panel.dataset.prevToyId;
+
+      if (!isChainedFollower) {
+        // For standalone or head-of-chain bouncers, launch the ball.
+        const hsx = aimStart.x, hsy = aimStart.y;
+        const { vx, vy } = velFrom(hsx, hsy, p.x, p.y);
+        spawnBallFrom({ x: hsx, y: hsy, vx, vy, r: (ballR?ballR():6) });
+      }
+      // For chained followers, dragging only sets the spawn point.
+      // The ball is spawned (as a ghost) when the chain activates it.
       draggingHandle = false; aimStart = null; aimCurr = null;
       if (setAim) setAim({ active:false });
       try{ canvas.releasePointerCapture(e.pointerId); }catch(e){}

@@ -120,7 +120,7 @@ export function stepBouncer(S, nowAT){
         S.panel.dispatchEvent(new CustomEvent('chain:next', { bubbles: true }));
       }
       S.ball = null; // End of life for the current ball
-    } else {
+    } else if (!S.ball.isGhost) {
       const eps = 0.001;
       // Collide against the same locked physics bounds as rendering
       const L=S.EDGE, T=S.EDGE, R=S.physW()-S.EDGE, B=S.physH()-S.EDGE;

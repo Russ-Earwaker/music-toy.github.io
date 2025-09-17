@@ -35,6 +35,8 @@ export function createBouncer(selector){
   const shell = (typeof selector==='string') ? document.querySelector(selector) : selector; if (!shell) return null;
   const panel = shell.closest('.toy-panel') || shell;
   // Prevent double-initialization, which can cause duplicate draw loops and event listeners.
+  if (panel.__bouncer_main_instance) return panel.__bouncer_main_instance;
+  // Prevent double-initialization, which can cause duplicate draw loops and event listeners.
   // Enable OSD + quant debug by default (can be turned off later)
   try{ if (!panel.dataset.debug) panel.dataset.debug = '1'; }catch{}
   try{ window.BOUNCER_QUANT_DBG = true; }catch{}
@@ -550,6 +552,18 @@ export function createBouncer(selector){
     // This prevents a respawned ball from becoming a "ghost" during a replay.
     // A new user-initiated launch always starts a new recording.
     if (!isRespawn) {
+        // If a user launches a ball on a toy that's part of a chain,
+        // it should break the chain and become a standalone toy.
+        if (panel.dataset.nextToyId) {
+            const nextToy = document.getElementById(panel.dataset.nextToyId);
+            if (nextToy) {
+                delete nextToy.dataset.prevToyId;
+            }
+            delete panel.dataset.nextToyId;
+            // The main scheduler in main.js will pick up this change on its next tick.
+        }
+    }
+    if (!isRespawn) {
         if (DBG_RESPAWN()) console.log(`[BNC_DBG] Resetting loop recorder due to new ball (isRespawn: ${isRespawn})`);
 
         if (loopRec && loopRec.mode === 'replay') {
@@ -628,9 +642,9 @@ let __justSpawnedUntil = 0;
 
   function __setAim(a){ try{ if (a && typeof a==='object'){ Object.assign(__aim, a); } }catch(e){} }
 
-  const _int = installBouncerInteractions({ setAim: __setAim, canvas, sizing, toWorld, EDGE, physW, physH, ballR, __getSpeed,
-    blocks, edgeControllers, handle, spawnBallFrom, setNextLaunchAt, setBallOut, instrument: ()=>instrument, toyId, noteList, velFrom, isAdvanced: ()=>panel.classList.contains('toy-zoomed') });
-// draw loop
+  const installInteractions = () => {
+    installBouncerInteractions({ panel, setAim: __setAim, canvas, sizing, toWorld, EDGE, physW, physH, ballR, __getSpeed, blocks, edgeControllers, handle, spawnBallFrom, setNextLaunchAt, setBallOut, instrument: ()=>instrument, toyId, noteList, velFrom, isAdvanced: ()=>panel.classList.contains('toy-zoomed') });
+  };
 
   lockPhysWorld();
 
@@ -768,15 +782,17 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
   drawEdgeDecorations, edgeFlash,
   stepBouncer,
   spawnBallFrom,
-  ball,
-        getBall: ()=>ball,
+  getBall: ()=>ball,
   rescale: ()=>{ try{ window.rescaleBouncer({ blocks, handle, edgeControllers, physW, physH, EDGE, blockSize, ballRef: ball,
         getBall: ()=>ball, ballR, ensureEdgeControllers }); }catch{} },
   updateLaunchBaseline,
-  buildStateForStep,
+  buildStateForStep, installInteractions,
   applyFromStep,
   velFrom,
-  ballR
+  ballR,
+  BOUNCER_BARS_PER_LIFE,
+  setBallOut, setNextLaunchAt,
+  getLoopInfo
 });
 
 // The `draw` function is now self-starting from within `createBouncerDraw`.

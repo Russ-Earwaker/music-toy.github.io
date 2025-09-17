@@ -9,10 +9,11 @@ export function createBouncerDraw(env){
     panel, canvas, ctx, sizing, resizeCanvasForDPR, renderScale, physW, physH, EDGE,
     ensureEdgeControllers, edgeControllers, blockSize, blocks, handle,
     particles, drawEdgeBondLines, ensureAudioContext, noteList,
-    drawEdgeDecorations, edgeFlash,
-    stepBouncer, buildStateForStep, applyFromStep,
+    drawEdgeDecorations, edgeFlash, getLoopInfo,
+    stepBouncer, buildStateForStep, applyFromStep, installInteractions,
     getBall, lockPhysWorld, getAim, spawnBallFrom,
-    velFrom, ballR, updateLaunchBaseline
+    velFrom, ballR, updateLaunchBaseline,
+    BOUNCER_BARS_PER_LIFE, setBallOut, setNextLaunchAt
   } = env;
 
   let lastCssW = 0, lastCssH = 0;
@@ -40,6 +41,8 @@ export function createBouncerDraw(env){
     if (!didInit){
       try{ lockPhysWorld && lockPhysWorld(); }catch{}
       try{ updateLaunchBaseline && updateLaunchBaseline(physW, physH, EDGE); }catch{}
+      // Defer interaction setup until the first frame to ensure canvas is sized.
+      try { installInteractions && installInteractions(); } catch(e) { console.warn('[bouncer-render] installInteractions failed', e); }
       didInit = true;
     }
 
@@ -58,8 +61,9 @@ export function createBouncerDraw(env){
     try{
       if (typeof getLoopInfo === 'function'){
         const li = getLoopInfo();
-        const beatIdx = Math.floor(li.now / Math.max(0.001, li.beatLen));
-        if (beatIdx !== lastBeat){ lastBeat = beatIdx; particles && particles.onBeat && particles.onBeat(handle.x, handle.y); }
+        // The on-beat pulse was deemed distracting. This is disabled.
+        // const beatIdx = Math.floor(li.now / Math.max(0.001, li.beatLen));
+        // if (beatIdx !== lastBeat){ lastBeat = beatIdx; particles && particles.onBeat && particles.onBeat(handle.x, handle.y); }
       }
     }catch{}
 
@@ -124,7 +128,7 @@ export function createBouncerDraw(env){
     // Update trail points & sparks
     try{
       const b = getBall ? getBall() : env.ball;
-      if (b){
+      if (b && !b.isGhost){
         if (lastBallPos && (Math.abs(b.x-lastBallPos.x)>50 || Math.abs(b.y-lastBallPos.y)>50)){
           teleportGuard = true; ballTrail.length = 0;
         } else { teleportGuard = false; }
@@ -150,7 +154,7 @@ export function createBouncerDraw(env){
     // Draw neon trail and sparks
     try{
       const b = getBall ? getBall() : env.ball;
-      if (b && !teleportGuard && ballTrail.length > 1) {
+      if (b && !b.isGhost && !teleportGuard && ballTrail.length > 1) {
         ctx.beginPath();
         ctx.moveTo(ballTrail[0].x, ballTrail[0].y);
         for (let i = 1; i < ballTrail.length; i++) {
@@ -226,7 +230,7 @@ export function createBouncerDraw(env){
     // Draw ball
     try{
       const b = getBall ? getBall() : env.ball;
-      if (b){
+      if (b && !b.isGhost){
         ctx.beginPath();
         ctx.arc(b.x, b.y, b.r || 6, 0, Math.PI*2);
         ctx.globalAlpha = 0.98;
@@ -343,12 +347,25 @@ export function createBouncerDraw(env){
         // When a bouncer becomes active in a chain, spawn a ball if it doesn't have one.
         if (isActiveInChain && !wasActiveInChain) {
             const b = getBall ? getBall() : null;
-            if (!b) {
-                // Spawn from the handle's current position, launching upwards.
-                if (velFrom && ballR && spawnBallFrom) {
-                    const { vx, vy } = velFrom(handle.x, handle.y, handle.x, handle.y - 10);
-                    spawnBallFrom({ x: handle.x, y: handle.y, vx, vy, r: ballR() });
+            if (!b && typeof setBallOut === 'function') {
+                // Instead of spawning a real ball, create a "ghost" ball to play out the lifetime.
+                // This will trigger the life line and the chain advancement.
+                const ac = ensureAudioContext();
+                const now = ac ? ac.currentTime : 0;
+                const li = (typeof getLoopInfo === 'function') ? getLoopInfo() : null;
+                let life = 2.0;
+                if (li && Number.isFinite(li.barLen) && li.barLen > 0) {
+                    life = BOUNCER_BARS_PER_LIFE * li.barLen;
                 }
+                const ghostBall = {
+                    isGhost: true, // A flag to prevent it from being drawn or colliding.
+                    spawnTime: now,
+                    flightEnd: now + life,
+                    r: ballR()
+                };
+                setBallOut(ghostBall);
+                // Also update the respawn timer so it's consistent.
+                if (typeof setNextLaunchAt === 'function') setNextLaunchAt(ghostBall.flightEnd);
             }
         }
         wasActiveInChain = isActiveInChain;
