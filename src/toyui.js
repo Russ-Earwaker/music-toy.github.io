@@ -135,7 +135,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
         editBtn.style.position = 'absolute';
         editBtn.style.top = `${headerHeight - 40}px`;
         editBtn.style.left = '-48px';
-        editBtn.style.zIndex = '1';
+        editBtn.style.zIndex = '51';
         editBtn.style.setProperty('--c-btn-size', `${btnSize}px`);
         editBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonEdit.png');"></div>`;
         panel.appendChild(editBtn);
@@ -147,7 +147,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
         closeBtn.style.position = 'absolute';
         closeBtn.style.top = `${headerHeight - 40}px`; // Match the edit button's vertical position
         closeBtn.style.left = '-48px';
-        closeBtn.style.zIndex = '1';
+        closeBtn.style.zIndex = '51';
         closeBtn.style.setProperty('--c-btn-size', `${btnSize}px`);
         closeBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow" style="--accent: #f87171;"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonClose.png');"></div>`;
         panel.appendChild(closeBtn);

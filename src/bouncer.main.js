@@ -642,22 +642,10 @@ try{
   const _int = installBouncerInteractions({ setAim: __setAim, canvas, sizing, toWorld, EDGE, physW, physH, ballR, __getSpeed,
     blocks, edgeControllers, handle, spawnBallFrom, setNextLaunchAt, setBallOut, instrument: ()=>instrument, toyId, noteList, velFrom, isAdvanced: ()=>panel.classList.contains('toy-zoomed') });
 // draw loop
-  
+
   lockPhysWorld();
-  // draw loop moved to bouncer-render.js
-const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld, 
-  canvas, ctx, sizing, resizeCanvasForDPR, renderScale, physW, physH, EDGE,
-  ensureEdgeControllers: (w,h)=>ensureEdgeControllers(w,h), edgeControllers,
-  blockSize, particles, blocks, handle, drawEdgeBondLines, ensureAudioContext, noteList, drawBlocksSection,
-  drawEdgeDecorations, edgeFlash,
-  stepBouncer,
-  spawnBallFrom,
-  ball,
-        getBall: ()=>ball,
-  rescale: ()=>{ try{ window.rescaleBouncer({ blocks, handle, edgeControllers, physW, physH, EDGE, blockSize, ballRef: ball,
-        getBall: ()=>ball, ballR, ensureEdgeControllers }); }catch{} },
-  updateLaunchBaseline,
-  buildStateForStep: (now, prevNow)=>{ // now is current AudioContext.currentTime
+
+  const buildStateForStep = (now, prevNow)=>{ // now is current AudioContext.currentTime
     // Time conversion logic is now handled inside bouncer-step.js to ensure perfect sync with physics.
 
     const li0 = (typeof getLoopInfo==='function') ? getLoopInfo() : null;
@@ -752,8 +740,9 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
       console.log('[BNC_DBG] buildStateForStep: Ball state pre-step', { flightEnd: S.ball?.flightEnd?.toFixed(3) });
     }
     return S;
-  },
-  applyFromStep: (S)=>{
+  };
+
+  const applyFromStep = (S)=>{
     if (S){
       visQ = S.visQ || visQ;
       if ('ball' in S) ball = S.ball;
@@ -778,7 +767,23 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
         console.log('[BNC_DBG] applyFromStep: Ball state is now', { flightEnd: ball?.flightEnd?.toFixed(3) });
       }
     }
-  },
+  };
+
+  // draw loop moved to bouncer-render.js
+const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld, 
+  canvas, ctx, sizing, resizeCanvasForDPR, renderScale, physW, physH, EDGE,
+  ensureEdgeControllers: (w,h)=>ensureEdgeControllers(w,h), edgeControllers,
+  blockSize, particles, blocks, handle, drawEdgeBondLines, ensureAudioContext, noteList, drawBlocksSection,
+  drawEdgeDecorations, edgeFlash,
+  stepBouncer,
+  spawnBallFrom,
+  ball,
+        getBall: ()=>ball,
+  rescale: ()=>{ try{ window.rescaleBouncer({ blocks, handle, edgeControllers, physW, physH, EDGE, blockSize, ballRef: ball,
+        getBall: ()=>ball, ballR, ensureEdgeControllers }); }catch{} },
+  updateLaunchBaseline,
+  buildStateForStep,
+  applyFromStep,
   velFrom,
   ballR
 });
@@ -796,7 +801,9 @@ requestAnimationFrame(draw);
       delete panel.__pendingBouncerState;
     }
   }catch{}
-  panel.__sequencerStep = () => {}; // Add dummy step function to be picked up by scheduler
+  // The bouncer's render loop now drives its own physics when active.
+  // The main scheduler's step is only for grid-based toys.
+  panel.__sequencerStep = () => {};
   panel.__bouncer_main_instance = instanceApi;
   return instanceApi;
 }

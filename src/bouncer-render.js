@@ -198,182 +198,50 @@ export function createBouncerDraw(env){
     try{ drawEdgeDecorations(ctx, edgeControllers, EDGE, physW(), physH()); }catch{}
     try{
       if (edgeFlash){
-        const f = edgeFlash; const lw = Math.max(1, EDGE*0.6);
-        ctx.save(); ctx.lineWidth = lw; ctx.strokeStyle = 'rgba(255,180,0,1)';
-        if (f.top>0){ ctx.globalAlpha = f.top; ctx.beginPath(); ctx.moveTo(EDGE, EDGE); ctx.lineTo(w-EDGE, EDGE); ctx.stroke(); f.top = Math.max(0, f.top - 0.12); }
-        if (f.bot>0){ ctx.globalAlpha = f.bot; ctx.beginPath(); ctx.moveTo(EDGE, h-EDGE); ctx.lineTo(w-EDGE, h-EDGE); ctx.stroke(); f.bot = Math.max(0, f.bot - 0.12); }
-        if (f.left>0){ ctx.globalAlpha = f.left; ctx.beginPath(); ctx.moveTo(EDGE, EDGE); ctx.lineTo(EDGE, h-EDGE); ctx.stroke(); f.left = Math.max(0, f.left - 0.12); }
-        if (f.right>0){ ctx.globalAlpha = f.right; ctx.beginPath(); ctx.moveTo(w-EDGE, EDGE); ctx.lineTo(w-EDGE, h-EDGE); ctx.stroke(); f.right = Math.max(0, f.right - 0.12); }
-        ctx.restore(); ctx.globalAlpha=1;
+        // The main draw loop handles the visual decay of edge flashes.
+        const f = edgeFlash;
+        f.top = Math.max(0, f.top - 0.12);
+        f.bot = Math.max(0, f.bot - 0.12);
+        f.left = Math.max(0, f.left - 0.12);
+        f.right = Math.max(0, f.right - 0.12);
       }
     }catch{}
 
-    // Step physics & schedule next frame
-    try{
-      const ac = ensureAudioContext(); 
-      const now = (ac ? ac.currentTime : 0);
-      const S = buildStateForStep(now, prevNow);
+    // Step physics if this toy is active in a chain.
+    try {
+        const ac = ensureAudioContext();
+        const now = ac ? ac.currentTime : 0;
+        const S = buildStateForStep(now, prevNow);
 
-      // Handle timed unmute for smooth transitions when interrupting a replay.
-      if (S.__unmuteAt > 0 && now >= S.__unmuteAt) {
-        if (typeof S.setToyMuted === 'function') {
-            S.setToyMuted(S.toyId, false, 0.08); // 80ms fade-in
+        // Only step physics if the toy is active in the chain.
+        const isActiveInChain = panel.dataset.chainActive === 'true';
+        if (isActiveInChain) {
+            stepBouncer(S);
         }
-        S.__unmuteAt = 0; // Consume the timer
-      }
 
-      // Ensure S.ball mirrors the live ball just before step (belt-and-braces)
-      try {
-        const liveBall = getBall ? getBall() : null;
-        if (liveBall) S.ball = liveBall;
-        if (liveBall && !(window.__BR_seen)) {
-          window.__BR_seen = true;
-          if ((globalThis.BOUNCER_DBG_LEVEL|0)>=2) console.log('[bouncer-render] first-seen ball pre-step');
-        }
-        if (window && window.BOUNCER_LOOP_DBG) {
-          window.__BR_dbg = (window.__BR_dbg||0) + 1;
-          if((globalThis.BOUNCER_DBG_LEVEL|0)>=3) console.log('[bouncer-render] pre-step hasBall=', !!S.ball, 'pre ll:', !!S.lastLaunch, 'nla:', S.nextLaunchAt);
-      try{ if (!S.ball && !S.lastLaunch && window && window.BOUNCER_AUTOSPAWN===true) { const ac= S.ensureAudioContext? S.ensureAudioContext(): null; const now= ac?ac.currentTime:0; if (!S.__autoSpawnAt) S.__autoSpawnAt = now + 0.6; if (now >= S.__autoSpawnAt && typeof S.spawnBallFrom==='function'){   const cx = Math.max(S.EDGE+S.ballR()+4, Math.min(S.worldW()-S.EDGE-S.ballR()-4, S.worldW()/2));   const cy = Math.max(S.EDGE+S.ballR()+4, Math.min(S.worldH()-S.EDGE-S.ballR()-4, S.worldH()/2));   S.spawnBallFrom({ x:cx, y:cy, vx: 3.9, vy: 2.6, r: S.ballR() });   console.log('[bouncer-render] AUTOSPAWN'); } } }catch(e){}
-        }
-      } catch(e){}
-      const DBG_RESPAWN = ()=> window.BOUNCER_RESPAWN_DBG;
+        // Apply any state changes from the physics step.
+        applyFromStep(S);
 
-
-      // If transport is paused, skip physics stepping and scheduling
-      const isGloballyRunning = (typeof isRunning === 'function') ? isRunning() : true;
-      const isActiveInChain = panel.dataset.chainActive === 'true';
-
-      if (isActiveInChain && !wasActiveInChain) {
-          // Toy just became active. If there's no ball, spawn one.
-          const b = getBall ? getBall() : null;
-          if (!b) {
-              // Spawn from the handle's current position, launching upwards.
-              if (velFrom && ballR && spawnBallFrom) {
-                  const { vx, vy } = velFrom(handle.x, handle.y, handle.x, handle.y - 10);
-                  spawnBallFrom({ x: handle.x, y: handle.y, vx, vy, r: ballR() });
-              }
-          }
-      }
-      wasActiveInChain = isActiveInChain;
-
-      if (!isGloballyRunning) { requestAnimationFrame(draw); return; }
-
-      // Loop recorder: detect new bar and let main decide record/replay
-      try {
-        if (S && typeof S.getLoopInfo==='function' && S.visQ && S.visQ.loopRec && typeof S.onNewBar==='function'){
-          const li = S.getLoopInfo();
-          const anchor = (S.visQ.loopRec && S.visQ.loopRec.anchorStartTime) ? S.visQ.loopRec.anchorStartTime : li.loopStartTime;
-          const k  = Math.floor(Math.max(0, (li.now - anchor) / li.barLen));
-          if (S.visQ.loopRec.lastBarIndex !== k){
-            S.onNewBar(li, k);
-          }
-        }
-      } catch(e) { try{ if ((globalThis.BOUNCER_DBG_LEVEL|0)>=2) console.warn('[bouncer-render] onNewBar error', e);}catch{} }
-
-      // Loop recorder: schedule replay once per bar (robust timing)
-      try {
-        if (window && window.BOUNCER_LOOP_DBG) {
-          const _lr = S.visQ && S.visQ.loopRec;
-          if (_lr) { if ((globalThis.BOUNCER_DBG_LEVEL|0)>=2) console.log('[bouncer-rec] pre', 'mode=', _lr.mode, 'patLen=', (_lr.pattern?_lr.pattern.length:0), 'scheduled=', _lr.scheduledBarIndex); }
-          else if((globalThis.BOUNCER_DBG_LEVEL|0)>=2) console.log('[bouncer-rec] pre', 'no lr');
-        }
-        if (DBG_RESPAWN()) {
-            const lr = S.visQ && S.visQ.loopRec;
-            if (lr) console.log(`[BNC_DBG] Replay check: mode=${lr.mode}, patternLen=${lr.pattern?.length}, isInvalid=${!!lr.isInvalid}`);
-            else console.log('[BNC_DBG] Replay check: No loop recorder state.');
-        }
-        const lr = S.visQ && S.visQ.loopRec;
-        if (lr && !lr.isInvalid && lr.mode === 'replay' && typeof S.getLoopInfo==='function'){
-            const li = S.getLoopInfo();
-            const nowT = li.now;
-            // The playback anchor is the start of the current GLOBAL bar.
-            const k_global = Math.floor(Math.max(0, (nowT - li.loopStartTime) / li.barLen));
-            const playback_base = li.loopStartTime + k_global * li.barLen;
-
-            if (Array.isArray(lr.pattern) && lr.pattern.length > 0) {
-                // Use global bar index to reset scheduled keys.
-                if (lr.scheduledBarIndex !== k_global) {
-                    if (DBG_RESPAWN()) console.log(`[BNC_DBG] Replay: New bar (k=${k_global}), resetting scheduled keys.`);
-                    lr.scheduledBarIndex = k_global;
-                    if (!lr.scheduledKeys || typeof lr.scheduledKeys.clear !== 'function') lr.scheduledKeys = new Set();
-                    else lr.scheduledKeys.clear();
+        // After the physics step, capture any flash events it generated and store
+        // them in our local animation state arrays.
+        if (S.blocks) {
+            S.blocks.forEach((b_step, i) => {
+                if (b_step && b_step.flash > 0) {
+                    blockFlashes[i] = b_step.flash;
+                    b_step.flash = 0; // Consume the flash event
                 }
-
-                const LOOKAHEAD = 0.1; // 100ms lookahead for scheduling
-                const base = playback_base;
-                const baseNext = base + li.barLen;
-                const beatDur = li.barLen / 4;
-
-                const __seen = new Set();
-                const __evs = (Array.isArray(lr.pattern) ? lr.pattern : []).filter(ev => {
-                    const keySeen = ev && ev.note ? (ev.note + '@' + (Math.round(((ev.offset || 0)) * 16) / 16)) : '';
-                    if (__seen.has(keySeen)) return false; __seen.add(keySeen); return true;
-                });
-
-                for (const ev of __evs) {
-                    if (!ev || !ev.note) continue;
-
-                    let isSourceActive = true;
-                    if (ev.blockIndex != null) { const block = S.blocks?.[ev.blockIndex]; if (block && block.active === false) isSourceActive = false; }
-                    else if (ev.edgeControllerIndex != null) { const controller = S.edgeControllers?.[ev.edgeControllerIndex]; if (controller && controller.active === false) isSourceActive = false; }
-                    else if (ev.edgeName != null) { const m = S.mapControllersByEdge ? S.mapControllersByEdge(S.edgeControllers) : null; const edgeMap = { 'L': 'left', 'R': 'right', 'T': 'top', 'B': 'bot' }; const controllerKey = edgeMap[ev.edgeName]; const c = m?.[controllerKey]; if (c && c.active === false) isSourceActive = false; }
-                    if (!isSourceActive) continue;
-
-                    const rawOffBeats = Math.max(0, ev.offset || 0);
-                    let quantizedOffBeats = rawOffBeats;
-                    try {
-                        const vq = (S.getQuantDiv && S.getQuantDiv());
-                        // Only quantize if div is a positive number. div=0 means 'off'.
-                        if (Number.isFinite(vq) && vq > 0) {
-                            quantizedOffBeats = Math.round(rawOffBeats * vq) / vq;
-                        }
-                    } catch {}
-                    let when = base + quantizedOffBeats * beatDur;
-                    // If the calculated time is in the past, schedule it for the next bar using the same quantized offset.
-                    if (when < nowT - 0.01) when = baseNext + quantizedOffBeats * beatDur;
-
-                    const key = k_global + '|' + ev.note + '|' + (Math.round(rawOffBeats * 16) / 16);
-                    if (when >= nowT && when < nowT + LOOKAHEAD && !lr.scheduledKeys.has(key)) {
-                        if (DBG_RESPAWN()) console.log(`[BNC_DBG] Replay: Scheduling note ${ev.note} at ${when.toFixed(3)}`);
-                        try { S.triggerInstrumentRaw(S.instrument, ev.note, when); }
-                        catch (e) { try { if ((globalThis.BOUNCER_DBG_LEVEL | 0) >= 2) console.warn('[bouncer-replay] schedule fail', e); } catch {} }
-                        lr.scheduledKeys.add(key);
-                    }
-                }
-            } else if (DBG_RESPAWN()) {
-                console.log('[BNC_DBG] Replay: In replay mode but pattern is empty.');
-            }
+            });
         }
-      }catch(e){}
-      if (DBG_RESPAWN()) {
-        console.log('[BNC_DBG] render: Ball state right before stepBouncer', { flightEnd: S.ball?.flightEnd?.toFixed(3) });
-      }
-      if (isActiveInChain) {
-        stepBouncer(S);
-      }
-      applyFromStep && applyFromStep(S);
-
-      // After the physics step, capture any flash events it generated and store
-      // them in our local animation state arrays.
-      if (S.blocks) {
-        S.blocks.forEach((b_step, i) => {
-          if (b_step && b_step.flash > 0) {
-            blockFlashes[i] = b_step.flash;
-            b_step.flash = 0; // Consume the flash event
-          }
-        });
-      }
-      if (S.edgeControllers) {
-        S.edgeControllers.forEach((c_step, i) => {
-          if (c_step && c_step.flash > 0) {
-            edgeFlashes[i] = c_step.flash;
-            c_step.flash = 0; // Consume the flash event
-          }
-        });
-      }
-
-      prevNow = now;
-    }catch{}
+        if (S.edgeControllers) {
+            S.edgeControllers.forEach((c_step, i) => {
+                if (c_step && c_step.flash > 0) {
+                    edgeFlashes[i] = c_step.flash;
+                    c_step.flash = 0; // Consume the flash event
+                }
+            });
+        }
+        prevNow = now;
+    } catch(e) { console.warn('[bouncer-render] step failed', e); }
 
     requestAnimationFrame(draw);
   }
