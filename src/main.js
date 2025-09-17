@@ -5,11 +5,13 @@ import './rippler-init.js';
 // import { createBouncer } from './bouncer.main.js'; // This is now handled by bouncer-init.js
 import { initDrawGrid } from './drawgrid-init.js';
 import { createChordWheel } from './chordwheel.js';
+import { createRippleSynth } from './ripplesynth.js';
 import { applyStackingOrder } from './stacking-manager.js';
 
 import './toy-audio.js';
 import './toy-layout-manager.js';
 import './zoom-overlay.js';
+import './toy-spawner.js';
 import { initAudioAssets } from './audio-samples.js';
 import { loadInstrumentEntries as loadInstrumentCatalog } from './instrument-catalog.js';
 import { DEFAULT_BPM, NUM_STEPS, ensureAudioContext, getLoopInfo, setBpm, start, isRunning } from './audio-core.js';
@@ -152,7 +154,52 @@ const toyInitializers = {
     'drawgrid': initDrawGrid,
     'loopgrid': buildGrid,
     'chordwheel': createChordWheel,
+    'rippler': (panel) => {
+        try {
+            if (!panel.__toyInstance) {
+                panel.__toyInstance = createRippleSynth(panel);
+            }
+        } catch (err) {
+            console.warn('[initializeNewToy] rippler failed', err);
+        }
+    },
 };
+
+const toyCatalog = [
+    { type: 'loopgrid', name: 'Loop Grid', description: 'Layer drum patterns and melodies with an 8x12 step matrix.', size: { width: 380, height: 420 } },
+    { type: 'bouncer', name: 'Bouncer', description: 'Bounce melodic balls inside a square arena.', size: { width: 420, height: 420 } },
+    { type: 'rippler', name: 'Rippler', description: 'Evolving pads driven by ripple collisions.', size: { width: 420, height: 420 } },
+    { type: 'drawgrid', name: 'Draw Grid', description: 'Sketch freehand rhythms that become notes.', size: { width: 420, height: 460 } },
+    { type: 'chordwheel', name: 'Chord Wheel', description: 'Play circle-of-fifths chord progressions instantly.', size: { width: 460, height: 420 } },
+];
+
+function getToyCatalog() {
+    return toyCatalog.map(entry => ({ ...entry }));
+}
+
+function advanceChain(headId) {
+    const activeToyId = g_chainState.get(headId);
+    if (!activeToyId) {
+        g_chainState.set(headId, headId);
+        return;
+    }
+    const activeToy = document.getElementById(activeToyId);
+    if (!activeToy) {
+        g_chainState.set(headId, headId);
+        return;
+    }
+
+    const nextToyId = activeToy.dataset.nextToyId;
+    const nextToy = nextToyId ? document.getElementById(nextToyId) : null;
+
+    if (nextToy) {
+        triggerConnectorPulse(activeToyId, nextToyId);
+        g_chainState.set(headId, nextToyId);
+    } else {
+        triggerConnectorPulse(activeToyId, headId);
+        g_chainState.set(headId, headId); // Loop back to head
+    }
+}
 
 function initializeNewToy(panel) {
     const toyType = panel.dataset.toy;
@@ -252,6 +299,100 @@ function initToyChaining(panel) {
             updateAllChainUIs();
         }, 0);
     });
+}
+
+function pickToyPanelSize(type) {
+    const board = document.getElementById('board');
+    if (board) {
+        const sample = board.querySelector(`:scope > .toy-panel[data-toy="${type}"]`);
+        if (sample) {
+            const width = Math.max(240, sample.offsetWidth || parseFloat(sample.style.width) || 380);
+            const height = Math.max(200, sample.offsetHeight || parseFloat(sample.style.height) || 320);
+            return { width, height };
+        }
+    }
+    const fallback = toyCatalog.find(entry => entry.type === type)?.size;
+    if (fallback) {
+        return {
+            width: Math.max(240, Number(fallback.width) || 380),
+            height: Math.max(200, Number(fallback.height) || 320),
+        };
+    }
+    return { width: 380, height: 320 };
+}
+
+function persistToyPosition(panel) {
+    try {
+        const key = 'toyPositions';
+        const map = JSON.parse(localStorage.getItem(key) || '{}');
+        map[panel.id] = { left: panel.style.left, top: panel.style.top };
+        localStorage.setItem(key, JSON.stringify(map));
+    } catch (err) {
+        console.warn('[createToyPanelAt] persist failed', err);
+    }
+}
+
+function createToyPanelAt(toyType, { centerX, centerY, instrument } = {}) {
+    const type = String(toyType || '').toLowerCase();
+    if (!type || !toyInitializers[type]) {
+        console.warn('[createToyPanelAt] unknown toy type', toyType);
+        return null;
+    }
+    const board = document.getElementById('board');
+    if (!board) return null;
+
+    const panel = document.createElement('section');
+    panel.className = 'toy-panel';
+    panel.dataset.toy = type;
+    const idSuffix = Math.random().toString(36).slice(2, 8);
+    panel.id = `${type}-${Date.now()}-${idSuffix}`;
+    panel.style.position = 'absolute';
+
+    if (instrument) panel.dataset.instrument = instrument;
+
+    const { width, height } = pickToyPanelSize(type);
+    if (Number.isFinite(width) && width > 0) panel.style.width = `${Math.round(width)}px`;
+
+    const left = Number.isFinite(centerX) ? Math.max(0, centerX - (width || 0) / 2) : 0;
+    const top = Number.isFinite(centerY) ? Math.max(0, centerY - (height || 0) / 2) : 0;
+
+    panel.style.left = `${left}px`;
+    panel.style.top = `${top}px`;
+
+    board.appendChild(panel);
+    persistToyPosition(panel);
+
+    setTimeout(() => {
+        if (!panel.isConnected) return;
+        try { initializeNewToy(panel); } catch (err) { console.warn('[createToyPanelAt] init failed', err); }
+        try { initToyChaining(panel); } catch (err) { console.warn('[createToyPanelAt] chain init failed', err); }
+
+        document.querySelectorAll('.toy-panel.toy-focused').forEach(p => {
+            if (p !== panel) p.classList.remove('toy-focused');
+        });
+        panel.classList.add('toy-focused');
+
+        try { updateChains(); updateAllChainUIs(); } catch (err) { console.warn('[createToyPanelAt] chain update failed', err); }
+        try { applyStackingOrder(); } catch (err) { console.warn('[createToyPanelAt] stacking failed', err); }
+        try { window.Persistence?.markDirty?.(); } catch (err) { console.warn('[createToyPanelAt] mark dirty failed', err); }
+    }, 0);
+
+    return panel;
+}
+
+try {
+    window.MusicToyFactory = Object.assign(window.MusicToyFactory || {}, {
+        create: createToyPanelAt,
+        getCatalog: () => getToyCatalog(),
+    });
+    if (window.ToySpawner && typeof window.ToySpawner.configure === 'function') {
+        window.ToySpawner.configure({
+            getCatalog: () => getToyCatalog(),
+            create: createToyPanelAt,
+        });
+    }
+} catch (err) {
+    console.warn('[MusicToyFactory] registration failed', err);
 }
 
 const chainBtnStyle = document.createElement('style');
@@ -379,23 +520,12 @@ function scheduler(){
       lastPhase = info.phase01;
 
       if (phaseJustWrapped) {
-          for (const [headId, activeToyId] of g_chainState.entries()) {
-              const activeToy = document.getElementById(activeToyId);
-              if (activeToy) {
-                  const nextToyId = activeToy.dataset.nextToyId;
-                  const nextToy = nextToyId ? document.getElementById(nextToyId) : null;
-                  if (nextToy) {
-                      triggerConnectorPulse(activeToyId, nextToyId);
-                      g_chainState.set(headId, nextToyId);
-                  } else {
-                      const headToy = document.getElementById(headId);
-                      if (headToy && headToy.id !== activeToyId) {
-                          triggerConnectorPulse(activeToyId, headId);
-                      }
-                      g_chainState.set(headId, headId); // Loop back to head
-                  }
-              } else {
-                  g_chainState.set(headId, headId);
+          for (const [headId] of g_chainState.entries()) {
+              const activeToy = document.getElementById(g_chainState.get(headId));
+              // Only advance non-bouncer chains on the global bar clock.
+              // Bouncers will trigger their own advancement via 'chain:next' event.
+              if (activeToy && activeToy.dataset.toy !== 'bouncer') {
+                  advanceChain(headId);
               }
           }
       }
@@ -457,6 +587,25 @@ async function boot(){
   document.querySelectorAll('.toy-panel').forEach(initToyChaining);
   updateAllChainUIs(); // Set initial instrument button visibility
 
+  // Add event listener for bouncer-driven chain advancement
+  document.addEventListener('chain:next', (e) => {
+    const panel = e.target.closest('.toy-panel');
+    if (!panel) return;
+
+    // Only bouncers should be firing this event.
+    if (panel.dataset.toy !== 'bouncer') return;
+
+    const head = findChainHead(panel);
+    if (!head) return;
+
+    const headId = head.id;
+    const activeToyId = g_chainState.get(headId);
+
+    // Only advance if the event is from the currently active toy in the chain
+    if (activeToyId !== panel.id) return;
+    advanceChain(headId);
+  });
+
   // Add event listener for instrument propagation down chains
   document.addEventListener('toy-instrument', (e) => {
     const sourcePanel = e.target.closest('.toy-panel');
@@ -493,3 +642,6 @@ async function boot(){
 }
 if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
 else boot();
+
+
+

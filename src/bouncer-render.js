@@ -213,8 +213,97 @@ export function createBouncerDraw(env){
         const now = ac ? ac.currentTime : 0;
         const S = buildStateForStep(now, prevNow);
 
-        // Only step physics if the toy is active in the chain.
+        // Handle timed unmute for smooth transitions when interrupting a replay.
+        if (S.__unmuteAt > 0 && now >= S.__unmuteAt) {
+            if (typeof S.setToyMuted === 'function') {
+                S.setToyMuted(S.toyId, false, 0.08); // 80ms fade-in
+            }
+            // This mutation is persisted back via applyFromStep.
+            S.__unmuteAt = 0; // Consume the timer
+        }
+
+        // Loop recorder: detect new bar and let main decide record/replay
+        try {
+            if (S && typeof S.getLoopInfo === 'function' && S.visQ && S.visQ.loopRec && typeof S.onNewBar === 'function') {
+                const li = S.getLoopInfo();
+                const anchor = (S.visQ.loopRec && S.visQ.loopRec.anchorStartTime) ? S.visQ.loopRec.anchorStartTime : li.loopStartTime;
+                const k = Math.floor(Math.max(0, (li.now - anchor) / li.barLen));
+                if (S.visQ.loopRec.lastBarIndex !== k) {
+                    S.onNewBar(li, k);
+                }
+            }
+        } catch (e) { try { if ((globalThis.BOUNCER_DBG_LEVEL | 0) >= 2) console.warn('[bouncer-render] onNewBar error', e); } catch {} }
+
+        // Check if the toy is the active one in its chain.
         const isActiveInChain = panel.dataset.chainActive === 'true';
+
+        // After the first bar, the bouncer switches to 'replay' mode. This scheduler
+        // is responsible for playing back the recorded pattern of notes.
+        try {
+            const lr = S.visQ && S.visQ.loopRec;
+            if (isActiveInChain && lr && !lr.isInvalid && lr.mode === 'replay' && typeof S.getLoopInfo === 'function') {
+                const li = S.getLoopInfo();
+                const nowT = li.now;
+                // The playback anchor is the start of the current GLOBAL bar.
+                const k_global = Math.floor(Math.max(0, (nowT - li.loopStartTime) / li.barLen));
+                const playback_base = li.loopStartTime + k_global * li.barLen;
+
+                if (Array.isArray(lr.pattern) && lr.pattern.length > 0) {
+                    // Use global bar index to reset scheduled keys.
+                    if (lr.scheduledBarIndex !== k_global) {
+                        lr.scheduledBarIndex = k_global;
+                        if (!lr.scheduledKeys || typeof lr.scheduledKeys.clear !== 'function') lr.scheduledKeys = new Set();
+                        else lr.scheduledKeys.clear();
+                    }
+
+                    const LOOKAHEAD = 0.1; // 100ms lookahead for scheduling
+                    const base = playback_base;
+                    const baseNext = base + li.barLen;
+                    const beatDur = li.barLen / 4;
+
+                    const __seen = new Set();
+                    const __evs = (Array.isArray(lr.pattern) ? lr.pattern : []).filter(ev => {
+                        const keySeen = ev && ev.note ? (ev.note + '@' + (Math.round(((ev.offset || 0)) * 16) / 16)) : '';
+                        if (__seen.has(keySeen)) return false; __seen.add(keySeen); return true;
+                    });
+
+                    for (const ev of __evs) {
+                        if (!ev || !ev.note) continue;
+
+                        let isSourceActive = true;
+                        if (ev.blockIndex != null) { const block = S.blocks?.[ev.blockIndex]; if (block && block.active === false) isSourceActive = false; }
+                        else if (ev.edgeControllerIndex != null) { const controller = S.edgeControllers?.[ev.edgeControllerIndex]; if (controller && controller.active === false) isSourceActive = false; }
+                        else if (ev.edgeName != null) { const m = S.mapControllersByEdge ? S.mapControllersByEdge(S.edgeControllers) : null; const edgeMap = { 'L': 'left', 'R': 'right', 'T': 'top', 'B': 'bot' }; const controllerKey = edgeMap[ev.edgeName]; const c = m?.[controllerKey]; if (c && c.active === false) isSourceActive = false; }
+                        if (!isSourceActive) continue;
+
+                        const rawOffBeats = Math.max(0, ev.offset || 0);
+                        let quantizedOffBeats = rawOffBeats;
+                        try { const vq = (S.getQuantDiv && S.getQuantDiv()); if (Number.isFinite(vq) && vq > 0) { quantizedOffBeats = Math.round(rawOffBeats * vq) / vq; } } catch {}
+                        let when = base + quantizedOffBeats * beatDur;
+                        if (when < nowT - 0.01) when = baseNext + quantizedOffBeats * beatDur;
+
+                        const key = k_global + '|' + ev.note + '|' + (Math.round(rawOffBeats * 16) / 16);
+                        if (when >= nowT && when < nowT + LOOKAHEAD && !lr.scheduledKeys.has(key)) {
+                            try { S.triggerInstrumentRaw(S.instrument, ev.note, when); } catch (e) { /* fail silently */ }
+                            lr.scheduledKeys.add(key);
+                        }
+                    }
+                }
+            }
+        } catch (e) { /* fail silently */ }
+
+        // When a bouncer becomes active in a chain, spawn a ball if it doesn't have one.
+        if (isActiveInChain && !wasActiveInChain) {
+            const b = getBall ? getBall() : null;
+            if (!b) {
+                // Spawn from the handle's current position, launching upwards.
+                if (velFrom && ballR && spawnBallFrom) {
+                    const { vx, vy } = velFrom(handle.x, handle.y, handle.x, handle.y - 10);
+                    spawnBallFrom({ x: handle.x, y: handle.y, vx, vy, r: ballR() });
+                }
+            }
+        }
+        wasActiveInChain = isActiveInChain;
         if (isActiveInChain) {
             stepBouncer(S);
         }

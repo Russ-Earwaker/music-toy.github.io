@@ -300,16 +300,6 @@ export function createBouncer(selector){
       nextLaunchAtRemaining = null, wasRunning = null;
   // __resumeHandled and wasRunning are no longer needed for ball state restoration.
   // The presence of ball.flightTimeRemaining is the sole indicator.
-  let loopRec = {
-    signature: '',
-    mode: 'record',        // 'record' | 'replay'
-    pattern: [],           // [{note, offset}] in seconds within bar
-    // Anchor start time for loop (spawn + 1 beat)
-    anchorStartTime: 0,
-    lastBarIndex: -1,
-    scheduledBarIndex: -999,
-    seen: new Set(),       // de-dupe within a bar: note@ms
-  };
   function stateSignature(){
     try{
       const parts = [];
@@ -329,6 +319,7 @@ export function createBouncer(selector){
   function barIndexOfTime(li, t){ return Math.floor(Math.max(0, t - li.loopStartTime) / li.barLen); }
   function barStartOfIndex(li, k){ return li.loopStartTime + k * li.barLen; }
   function onNewBar(li, k){
+    const loopRec = visQ.loopRec; // Always use the instance-specific loopRec
     const sig = stateSignature();
     const changed = (sig !== loopRec.signature);
     if (DBG_RESPAWN()) console.log(`[BNC_DBG] onNewBar (k=${k}): mode=${loopRec.mode}, changed=${changed}, patternLen=${loopRec.pattern.length}, sig=${sig.slice(0,30)}...`);
@@ -362,8 +353,6 @@ export function createBouncer(selector){
   let __spawnLastAt = 0;
   const __spawnCooldown = 0.08; // seconds
   let lastCanvasW=0, lastCanvasH=0;
-  // visQ is a carrier for the loop recorder state, passed to the physics/render steps.
-  let visQ = { loopRec: loopRec }; const fx = createImpactFX()
   // Debug OSD (toggle with globalThis.BOUNCER_DIAG = true)
   try{ installBouncerOSD(panel, sizing, (()=>speedFactor), ()=>ball, ()=>getLaunchDiag?.()); }catch{}
 ; let lastScale = sizing.scale||1;
@@ -384,6 +373,10 @@ export function createBouncer(selector){
     isAdvanced, toWorld, getBlocks: ()=> blocks, noteList, onChange: ()=>{}, hitTest
   });
 
+  // visQ is a carrier for the loop recorder state, passed to the physics/render steps.
+  // It must be a new object for each toy instance to prevent state bleeding.
+  let visQ = { loopRec: { mode: 'record', pattern: [], signature: '', lastBarIndex: -1, scheduledBarIndex: -999, seen: new Set() } };
+  const fx = createImpactFX();
 
 // --- anchor-based sizing for blocks & handle (fractions of world size) ---
 
@@ -547,6 +540,7 @@ export function createBouncer(selector){
   // interactions moved to bouncer-adv-ui.js
   // basic ball control helpers (restored after split)
   function spawnBallFrom(L, opts = {}, S_ref = null) {
+    const loopRec = visQ.loopRec; // Always use the instance-specific loopRec
     const isRespawn = !!opts.isRespawn;
     const ac = (typeof ensureAudioContext === 'function') ? ensureAudioContext() : null;
     const nowT = ac ? ac.currentTime : 0;
@@ -566,9 +560,8 @@ export function createBouncer(selector){
             } catch(e) { console.warn('[bouncer] mute/unmute failed', e); }
         }
 
-        loopRec = { signature: '', mode: 'record', pattern: [], anchorStartTime: 0, lastBarIndex: -1, scheduledBarIndex: -999, seen: new Set(), };
-                // Ensure the shared state carrier used by the renderer points to the new object.
-        if (visQ) visQ.loopRec = loopRec;
+        // Reset the existing loopRec object, don't create a new one.
+        Object.assign(loopRec, { signature: '', mode: 'record', pattern: [], anchorStartTime: 0, lastBarIndex: -1, scheduledBarIndex: -999, seen: new Set() });
         try {
             loopRec.signature = stateSignature();
             // Record relative to the local spawn time to ensure the full bar is captured.
@@ -625,17 +618,6 @@ let __lastTickByBlock = new Map();
 let __lastTickByEdge  = new Map();
 let __justSpawnedUntil = 0;
 
-try { setToyMuted(toyId, false); } catch(e) {}
-
-try{
-  const lr = (visQ && visQ.loopRec) ? visQ.loopRec : null;
-  if (lr){
-    lr.mode = 'record'; // ensure physics plays immediately, and replay-scheduling pauses
-    if (lr.scheduledKeys && typeof lr.scheduledKeys.clear === 'function') lr.scheduledKeys.clear();
-    lr.scheduledBarIndex = -999;
-  }
-}catch{}
-
 
   function __setAim(a){ try{ if (a && typeof a==='object'){ Object.assign(__aim, a); } }catch(e){} }
 
@@ -650,6 +632,7 @@ try{
 
     const li0 = (typeof getLoopInfo==='function') ? getLoopInfo() : null;
     const triggerPhysAware = (i,n,t,meta)=>{
+      const loopRec = visQ.loopRec; // Always use the instance-specific loopRec
       if (window && window.BOUNCER_LOOP_DBG) try{ if ((globalThis.BOUNCER_DBG_LEVEL|0)>=2) console.log('[bouncer-audio] fire?', n, 't=', (typeof t==='number')?t.toFixed(4):'imm'); }catch{}
       try{
         const li = (typeof getLoopInfo==='function') ? getLoopInfo() : li0;
@@ -661,11 +644,11 @@ try{
         const k = Math.floor(Math.max(0, (nowT - anchor) / barLen));
 
         // During replay, all sound comes from the scheduler. The live ball is silent.
-        if (lr && lr.mode === 'replay') {
+        if (loopRec && loopRec.mode === 'replay') {
             return;
         }
 
-        if (lr && lr.mode === 'record'){
+        if (loopRec && loopRec.mode === 'record'){
           try {
             const ac = ensureAudioContext ? ensureAudioContext() : null;
             const scheduledT = (typeof t === 'number') ? t : ((ac ? ac.currentTime : 0) + 0.0008);
@@ -679,17 +662,17 @@ try{
           const offBeats = (at - globalBarStart) / beatDur;
           // Store the raw, unquantized offset. Quantization will be applied on replay.
           const off = offBeats;
-          if (visQ && visQ.loopRec && Array.isArray(visQ.loopRec.pattern)){
+          if (loopRec && Array.isArray(loopRec.pattern)){
             // De-dupe notes recorded in the same bar to prevent runaway pattern growth.
             // Key by note and quantized 16th-note time.
             const key = `${n}@${Math.round(off * 4)}`;
-            if (lr.seen && !lr.seen.has(key)) {
-              lr.seen.add(key);
+            if (loopRec.seen && !loopRec.seen.has(key)) {
+              loopRec.seen.add(key);
               const event = { note: n, offset: off };
               if (meta && meta.blockIndex != null) event.blockIndex = meta.blockIndex;
               if (meta && meta.edgeControllerIndex != null) event.edgeControllerIndex = meta.edgeControllerIndex;
               if (meta && meta.edgeName != null) event.edgeName = meta.edgeName;
-              visQ.loopRec.pattern.push(event);
+              loopRec.pattern.push(event);
             }
           }
           return;
@@ -698,6 +681,7 @@ try{
       try { triggerInstrument(i||instrument, n, (typeof t==='number'?t:undefined), toyId); }catch(e){}
     };
     const S = {
+      panel,
       now,
       lastAT: prevNow || 0,
       EDGE,
@@ -771,7 +755,7 @@ try{
 
   // draw loop moved to bouncer-render.js
 const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld, 
-  canvas, ctx, sizing, resizeCanvasForDPR, renderScale, physW, physH, EDGE,
+  panel, canvas, ctx, sizing, resizeCanvasForDPR, renderScale, physW, physH, EDGE,
   ensureEdgeControllers: (w,h)=>ensureEdgeControllers(w,h), edgeControllers,
   blockSize, particles, blocks, handle, drawEdgeBondLines, ensureAudioContext, noteList, drawBlocksSection,
   drawEdgeDecorations, edgeFlash,

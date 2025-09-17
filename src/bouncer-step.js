@@ -96,6 +96,10 @@ export function stepBouncer(S, nowAT){
   // integrate with swept collision (segment vs expanded AABB)
   if (S.ball){
     if (S.ball.flightEnd != null && now >= S.ball.flightEnd) {
+      // The ball's life is over. Signal the chain to advance to the next toy.
+      if (S.panel) {
+        S.panel.dispatchEvent(new CustomEvent('chain:next', { bubbles: true }));
+      }
       S.ball = null; // End of life for the current ball
     } else {
       const eps = 0.001;
