@@ -40,8 +40,8 @@ export function createBouncer(selector){
   try{ window.BOUNCER_QUANT_DBG = true; }catch{}
   let instrument = (panel.dataset.instrument || 'retro_square'); panel.addEventListener('toy-instrument', (e)=>{ instrument = (e?.detail?.value)||instrument; });
   let speedFactor = parseFloat((panel?.dataset?.speed)||'1.60'); // +60% faster default // 0.60 = calmer default
-  const toyId = (panel?.dataset?.toy || 'bouncer').toLowerCase();
-  try{ panel.dataset.toyid = toyId; }catch{}
+  const toyId = panel.id || panel.dataset.toyid || `bouncer-${Math.random().toString(36).slice(2, 8)}`;
+  try { panel.dataset.toyid = toyId; } catch {}
 
   // --- Persistence hooks ---
   // Define these early so they are available for pending state application.
@@ -553,11 +553,10 @@ export function createBouncer(selector){
         if (DBG_RESPAWN()) console.log(`[BNC_DBG] Resetting loop recorder due to new ball (isRespawn: ${isRespawn})`);
 
         if (loopRec && loopRec.mode === 'replay') {
-            try {
-                loopRec.isInvalid = true; // Prevent scheduler from firing on next frame
-                setToyMuted(toyId, true, 0.08); // 80ms fade-out
-                __unmuteAt = ensureAudioContext().currentTime + 0.150; // Unmute in 150ms (after 100ms lookahead)
-            } catch(e) { console.warn('[bouncer] mute/unmute failed', e); }
+            // When a new ball starts, we must invalidate the old recording to prevent
+            // the scheduler from playing stale notes. Muting the toy is too broad
+            // and can cause issues in chains. Invalidating the pattern is sufficient.
+            loopRec.isInvalid = true;
         }
 
         // Reset the existing loopRec object, don't create a new one.

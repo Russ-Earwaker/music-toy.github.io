@@ -22,6 +22,7 @@ export function createBouncerDraw(env){
   const blockFlashes = [];
   const edgeFlashes = [];
   let wasActiveInChain = false;
+  let lastLifeProgress = 0; // For freezing the life line when paused
 
   let prevNow = 0;
   let lastBeat = -1; let lastBar = -1;
@@ -189,27 +190,36 @@ export function createBouncerDraw(env){
       const b = getBall ? getBall() : env.ball;
       const ac = ensureAudioContext();
       const now = ac ? ac.currentTime : 0;
+      const running = isRunning();
 
-      if (b && b.flightEnd != null && b.spawnTime != null && now < b.flightEnd) {
+      let progress = 0;
+      if (b && b.flightEnd != null && b.spawnTime != null) {
         const lifeDuration = b.flightEnd - b.spawnTime;
         if (lifeDuration > 0) {
           const lifeElapsed = now - b.spawnTime;
-          const progress = Math.max(0, Math.min(1, lifeElapsed / lifeDuration));
-
-          if (progress > 0) {
-            const barY = EDGE + 4; // A few pixels below the top edge
-            const barStartX = EDGE;
-            const fullBarWidth = w - (EDGE * 2);
-            const currentBarWidth = fullBarWidth * progress;
-
-            ctx.beginPath();
-            ctx.moveTo(barStartX, barY);
-            ctx.lineTo(barStartX + currentBarWidth, barY);
-            ctx.strokeStyle = '#ffffff'; // Pure white
-            ctx.lineWidth = 4; // A nice thick line
-            ctx.stroke();
-          }
+          progress = Math.max(0, Math.min(1, lifeElapsed / lifeDuration));
         }
+      }
+
+      // When paused, use the last known progress to freeze the bar.
+      if (running) {
+        lastLifeProgress = progress;
+      } else {
+        progress = lastLifeProgress;
+      }
+
+      if (progress > 0) {
+        const barY = EDGE + 4; // A few pixels below the top edge
+        const barStartX = EDGE;
+        const fullBarWidth = w - (EDGE * 2);
+        const currentBarWidth = fullBarWidth * progress;
+
+        ctx.beginPath();
+        ctx.moveTo(barStartX, barY);
+        ctx.lineTo(barStartX + currentBarWidth, barY);
+        ctx.strokeStyle = '#ffffff'; // Pure white
+        ctx.lineWidth = 2; // Thinner line as requested
+        ctx.stroke();
       }
     } catch(e) { /* fail silently */ }
 
@@ -271,8 +281,9 @@ export function createBouncerDraw(env){
 
         // A bouncer is considered "running" if it's the active toy in a chain,
         // OR if it's a standalone toy (not part of any chain).
+        // AND the global transport is playing.
         const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
-        const shouldRunPhysics = isActiveInChain || !isChained;
+        const shouldRunPhysics = (isActiveInChain || !isChained) && isRunning();
 
         // After the first bar, the bouncer switches to 'replay' mode. This scheduler
         // is responsible for playing back the recorded pattern of notes.
