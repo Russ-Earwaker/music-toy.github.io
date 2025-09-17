@@ -269,6 +269,11 @@ select.toy-instrument {
 /* --- Per-Toy Body Style --- */
 /* -------------------------- */
 
+/* Chordwheel: Body must not grow or shrink as a flex item. Its height is intrinsic from its content. */
+.toy-panel[data-toy="chordwheel"] .toy-body {
+  flex: 0 0 auto; /* flex-grow: 0, flex-shrink: 0, flex-basis: auto */
+}
+
 /* Bouncer: keep body square like Rippler */
 .toy-panel[data-toy='bouncer'] .toy-body {
   position: relative;
@@ -510,6 +515,13 @@ select.toy-instrument {
   display: block;
 }
 
+/* Chordwheel: The body must not grow as a flex item. Its height should be determined by its content. */
+.toy-panel[data-toy="chordwheel"] .toy-body {
+  flex-grow: 0;
+  height: auto;
+  aspect-ratio: auto;
+}
+
 /* Bouncer: keep body square like Rippler */
 .toy-panel[data-toy='bouncer'] .toy-body { aspect-ratio: 1 / 1; width: 100%; }
 /* --- Toy Spawner Dock --- */
@@ -623,7 +635,3 @@ select.toy-instrument {
   pointer-events: none;
   opacity: 0.6;
 }
-
-
-
-

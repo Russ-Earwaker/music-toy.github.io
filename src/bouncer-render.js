@@ -44,7 +44,10 @@ export function createBouncerDraw(env){
 
     // Reset transform and apply world→render scale
     try{ ctx.setTransform(1,0,0,1,0,0); }catch{}
-    try{ ctx.clearRect(0,0,canvas.width,canvas.height); }catch{}
+    // Explicitly fill with the background color to prevent flashing on some systems.
+    // With alpha:false, clearRect can have undefined behavior. A fill is more reliable.
+    ctx.fillStyle = '#0f141b'; // Match --bg from style.css
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     const rs = renderScale();
     try{ ctx.scale((rs.sx||1), (rs.sy||1)); }catch{}
     try{ ctx.translate(rs.tx||0, rs.ty||0); }catch{}

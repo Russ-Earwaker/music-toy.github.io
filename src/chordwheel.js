@@ -106,10 +106,15 @@ export function createChordWheel(panel){
     }
   } catch (e) { console.warn(`[chordwheel] Could not install compressor for ${toyId}`, e); }
   const body = panel.querySelector('.toy-body'); body.innerHTML = '';
+  // This is a common flexbox fix. When a flex item (like this toy-body) contains
+  // an element with an intrinsic aspect ratio (the SVG wheel), it can prevent the
+  // container from shrinking properly, leading to infinite expansion. Setting
+  // min-height to 0 on the flex item breaks this feedback loop.
+  body.style.minHeight = '0';
   const wrap = el('div', 'cw-wrap'); const flex = el('div', 'cw-flex'); wrap.appendChild(flex); body.appendChild(wrap);
-  Object.assign(wrap.style, { width: '100%', height: '100%' });
+  Object.assign(wrap.style, { width: '100%' }); // Height must be intrinsic to content
   // The flex container will center both the SVG wheel and the overlay canvas.
-  Object.assign(flex.style, { position: 'relative', display: 'flex', alignItems: 'stretch', justifyContent: 'center', gap: '20px', width: '100%', height: '100%' });
+  Object.assign(flex.style, { position: 'relative', display: 'flex', alignItems: 'stretch', justifyContent: 'center', gap: '20px', width: '100%' }); // Height must be intrinsic
 
   // Strum area with particle field behind it
   const strumWrap = el('div', 'cw-strum-wrap');
@@ -118,16 +123,70 @@ export function createChordWheel(panel){
   Object.assign(particleCanvas.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', pointerEvents: 'none', zIndex: '0' });
   const particleCtx = particleCanvas.getContext('2d');
   const strumCanvas = el('canvas', 'cw-strum');
-  Object.assign(strumCanvas.style, { position: 'relative', zIndex: '1', width: '100%', height: '100%' });
+  // Must be absolute to not participate in flex-item height calculation, breaking a layout loop.
+  Object.assign(strumCanvas.style, { position: 'absolute', inset: '0', zIndex: '1', width: '100%', height: '100%' });
   const strumCtx = strumCanvas.getContext('2d');
   strumWrap.appendChild(particleCanvas);
   strumWrap.appendChild(strumCanvas);
   flex.appendChild(strumWrap);
 
+  const logSize = (label, w, h) => {
+    try { console.debug?.(`[chordwheel] ${toyId} ${label} -> ${Math.round(w)}x${Math.round(h)}`); } catch {}
+  };
+
+  let strumSize = { width: 0, height: 0 };
+  let strumSizeDirty = true;
+  let currentStrumWidth = 1;
+  let currentStrumHeight = 1;
+
+  let wheelSize = { width: 0, height: 0 };
+  let wheelSizeDirty = true;
+  let currentWheelWidth = 1;
+  let currentWheelHeight = 1;
+
+  const markSizeDirty = (reason = 'unknown') => {
+    const wasStrumDirty = strumSizeDirty;
+    const wasWheelDirty = wheelSizeDirty;
+    strumSizeDirty = true;
+    wheelSizeDirty = true;
+    try {
+      if (!wasStrumDirty || !wasWheelDirty) {
+        console.debug?.(`[chordwheel] ${toyId} markSizeDirty (${reason})`);
+      }
+    } catch {}
+  };
+  const sanitizeDimensions = (width, height, label) => {
+    let w = Number.isFinite(width) ? width : 0;
+    let h = Number.isFinite(height) ? height : 0;
+    let clamped = false;
+    if (w <= 0) {
+      w = (label === 'strumWrap' ? (strumSize.width || 1) : (wheelSize.width || 1));
+      clamped = true;
+    }
+    if (h <= 0) {
+      h = w;
+      clamped = true;
+    }
+    const maxRatio = 3;
+    if (h > w * maxRatio || h < w / maxRatio) {
+      h = w;
+      clamped = true;
+    }
+    if (w > h * maxRatio || w < h / maxRatio) {
+      w = h;
+      clamped = true;
+    }
+    if (clamped) {
+      try { console.warn(`[chordwheel] ${toyId} sanitize ${label}: ${width}x${height} -> ${w}x${h}`); } catch {}
+    }
+    return { width: w, height: h };
+  };
+
+
   // Particle field for strum area
   const particles = createBouncerParticles(
-    () => Math.max(1, Math.floor(strumWrap.getBoundingClientRect().width || 0)),
-    () => Math.max(1, Math.floor(strumWrap.getBoundingClientRect().height || 0)),
+    () => Math.max(1, currentStrumWidth),
+    () => Math.max(1, currentStrumHeight),
     { count: 0, biasXCenter: false, biasYCenter: false, knockbackScale: 1.0, returnToHome: true, lockXToCenter: true, bounceOnWalls: true, homePull: 0.0065 }
   );
 
@@ -152,6 +211,47 @@ export function createChordWheel(panel){
   Object.assign(wheel.svg.style, { pointerEvents: 'none', width: '100%', height: '100%', display: 'block' });
   wheelWrap.append(wheel.svg, canvas);
 
+  let resizeObserver = null;
+  try {
+    resizeObserver = new ResizeObserver((entries) => {
+      entries.forEach((entry) => {
+        const rect = entry.contentRect || {};
+        const target = entry.target === strumWrap ? 'strumWrap' : 'wheelWrap';
+        const { width, height } = sanitizeDimensions(rect.width, rect.height, target);
+        if (target === 'strumWrap') {
+          if (width !== strumSize.width || height !== strumSize.height) {
+            strumSize.width = width;
+            strumSize.height = height;
+            strumSizeDirty = true;
+          }
+        } else {
+          if (width !== wheelSize.width || height !== wheelSize.height) {
+            wheelSize.width = width;
+            wheelSize.height = height;
+            wheelSizeDirty = true;
+          }
+        }
+      });
+    });
+    resizeObserver.observe(strumWrap);
+    resizeObserver.observe(wheelWrap);
+  } catch (err) {
+    console.warn('[chordwheel] ResizeObserver unavailable', err);
+  }
+  let cleanupRan = false;
+  const onWindowResize = () => markSizeDirty('window-resize');
+  const cleanup = () => {
+    if (cleanupRan) return;
+    cleanupRan = true;
+    try { console.debug?.(`[chordwheel] ${toyId} cleanup`); } catch {}
+    window.removeEventListener('resize', onWindowResize);
+    try { resizeObserver && resizeObserver.disconnect(); } catch {}
+  };
+  window.addEventListener('resize', onWindowResize);
+  panel.addEventListener('toy-remove', cleanup, { once: true });
+  panel.__chordwheelCleanup = cleanup;
+  markSizeDirty('init');
+
   // --- Steps Dropdown (Advanced Mode) ---
   const header = panel.querySelector('.toy-header');
   const right = header.querySelector('.toy-controls-right');
@@ -175,10 +275,12 @@ export function createChordWheel(panel){
     // Update progression and labels
     progression = Array(numSteps).fill(1);
     updateLabels();
+    markSizeDirty('steps-change');
   });
 
   // Keep header height stable and refresh labels on zoom
   panel.addEventListener('toy-zoom', () => {
+    markSizeDirty('zoom');
     try { stepsSelect.style.display = 'none'; } catch {}
     try { updateLabels(); } catch {}
   });
@@ -382,7 +484,10 @@ export function createChordWheel(panel){
 
   // --- Main Render Loop ---
   function draw() {
-    if (!panel.isConnected) return;
+    if (!panel.isConnected) {
+      cleanup();
+      return;
+    }
     requestAnimationFrame(draw);
 
     // --- Timing and Playhead Logic ---
@@ -424,11 +529,20 @@ export function createChordWheel(panel){
     // --- Visual Rendering ---
     // Size and draw particle + strum canvases
     if (strumCanvas && particleCanvas) {
+      if (strumSizeDirty) {
+        if (!strumSize.width || !strumSize.height) {
+          const rect = sanitizeDimensions(strumWrap.getBoundingClientRect().width, strumWrap.getBoundingClientRect().height, 'strumWrap');
+          strumSize.width = rect.width;
+          strumSize.height = rect.height;
+        }
+        currentStrumWidth = Math.max(1, Math.floor(strumSize.width));
+        currentStrumHeight = Math.max(1, Math.floor(strumSize.height));
+        strumSizeDirty = false;
+        logSize('strumWrap', currentStrumWidth, currentStrumHeight);
+      }
+      const cw = currentStrumWidth;
+      const ch = currentStrumHeight;
       const dpr = window.devicePixelRatio || 1;
-      const strumRect = strumWrap.getBoundingClientRect();
-      const cw = Math.max(1, Math.floor(strumRect.width));
-      const ch = Math.max(1, Math.floor(strumRect.height));
-      // Backing buffers
       if (particleCanvas.width !== cw * dpr || particleCanvas.height !== ch * dpr) {
         particleCanvas.width = cw * dpr;
         particleCanvas.height = ch * dpr;
@@ -439,7 +553,6 @@ export function createChordWheel(panel){
         strumCanvas.height = ch * dpr;
         strumCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       }
-      // Particles step/draw
       try{ if (!draw.__pbg) draw.__pbg = '#0b1116'; }catch{}
       try{ particles && particles.step(1/60); }catch{}
       try{ particleCtx.fillStyle = draw.__pbg; particleCtx.fillRect(0,0, cw, ch); particles && particles.draw(particleCtx); }catch{}
@@ -450,12 +563,23 @@ export function createChordWheel(panel){
     // This ensures the canvas's internal resolution is always in sync with its
     // CSS display size, which is the root cause of the coordinate mismatch.
     if (canvas) {
+        if (wheelSizeDirty) {
+            if (!wheelSize.width || !wheelSize.height) {
+                const rect = sanitizeDimensions(wheelWrap.getBoundingClientRect().width, wheelWrap.getBoundingClientRect().height, 'wheelWrap');
+                wheelSize.width = rect.width;
+                wheelSize.height = rect.height;
+            }
+            currentWheelWidth = Math.max(1, Math.floor(wheelSize.width));
+            currentWheelHeight = Math.max(1, Math.floor(wheelSize.height));
+            wheelSizeDirty = false;
+            logSize('wheelWrap', currentWheelWidth, currentWheelHeight);
+        }
         const dpr = window.devicePixelRatio || 1;
-        const displayWidth = canvas.clientWidth;
-        const displayHeight = canvas.clientHeight;
-        if (canvas.width !== Math.round(displayWidth * dpr) || canvas.height !== Math.round(displayHeight * dpr)) {
-            canvas.width = Math.round(displayWidth * dpr);
-            canvas.height = Math.round(displayHeight * dpr);
+        const targetWidth = Math.round(currentWheelWidth * dpr);
+        const targetHeight = Math.round(currentWheelHeight * dpr);
+        if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
         }
     }
     const w = canvas.width, h = canvas.height;
