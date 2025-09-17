@@ -552,16 +552,21 @@ export function createBouncer(selector){
     // This prevents a respawned ball from becoming a "ghost" during a replay.
     // A new user-initiated launch always starts a new recording.
     if (!isRespawn) {
-        // If a user launches a ball on a toy that's part of a chain,
-        // it should break the chain and become a standalone toy.
-        if (panel.dataset.nextToyId) {
-            const nextToy = document.getElementById(panel.dataset.nextToyId);
-            if (nextToy) {
-                delete nextToy.dataset.prevToyId;
+        // If a user launches a new ball on a toy that's part of a chain,
+        // reset all subsequent toys in that chain without breaking the chain.
+        let nextId = panel.dataset.nextToyId;
+        let currentPanel = panel;
+        while (nextId) {
+            const nextPanel = document.getElementById(nextId);
+            if (!nextPanel) break;
+
+            // Dispatching 'toy-reset' will call the doReset() function for that toy,
+            // which sets its ball and lastLaunch to null, effectively stopping it.
+            nextPanel.dispatchEvent(new CustomEvent('toy-reset', { bubbles: true }));
+
+            currentPanel = nextPanel;
+            nextId = currentPanel.dataset.nextToyId;
             }
-            delete panel.dataset.nextToyId;
-            // The main scheduler in main.js will pick up this change on its next tick.
-        }
     }
     if (!isRespawn) {
         if (DBG_RESPAWN()) console.log(`[BNC_DBG] Resetting loop recorder due to new ball (isRespawn: ${isRespawn})`);

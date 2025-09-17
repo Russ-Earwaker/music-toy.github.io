@@ -347,7 +347,10 @@ export function createBouncerDraw(env){
         // When a bouncer becomes active in a chain, spawn a ball if it doesn't have one.
         if (isActiveInChain && !wasActiveInChain) {
             const b = getBall ? getBall() : null;
-            if (!b && typeof setBallOut === 'function') {
+            // Only create a ghost ball if the toy has no ball AND has no launch history.
+            // If it has a launch history, the regular respawn logic in stepBouncer will handle it.
+            const hasHistory = !!S.lastLaunch;
+            if (!b && !hasHistory && typeof setBallOut === 'function') {
                 // Instead of spawning a real ball, create a "ghost" ball to play out the lifetime.
                 // This will trigger the life line and the chain advancement.
                 const ac = ensureAudioContext();
