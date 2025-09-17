@@ -3,7 +3,7 @@ import './bouncer-square-fit.js';
 import { makeEdgeControllers, drawEdgeBondLines, handleEdgeControllerEdit, mapControllersByEdge, randomizeControllers, drawEdgeDecorations } from './bouncer-edges.js';
 import { stepBouncer } from './bouncer-step.js';
 import { noteList, resizeCanvasForDPR } from './utils.js';
-import { ensureAudioContext, getLoopInfo, setToyMuted } from './audio-core.js';
+import { ensureAudioContext, getLoopInfo, setToyMuted, isRunning } from './audio-core.js';
 import { triggerInstrument } from './audio-samples.js';
 import { randomizeRects, EDGE_PAD as EDGE, hitRect, whichThirdRect, drawThirdsGuides } from './toyhelpers.js';
 import { drawBlocksSection } from './ripplesynth-blocks.js';
@@ -581,23 +581,28 @@ export function createBouncer(selector){
         lastLaunch = { vx: L.vx, vy: L.vy, x: L.x, y: L.y };
     }
 
-    // Set the flight time for the new ball (applies to both launches and respawns).
-    try {
-      const li = (typeof getLoopInfo==='function') ? getLoopInfo() : null;
-      const ac = (typeof ensureAudioContext==='function') ? ensureAudioContext() : null;
-      const now = ac ? ac.currentTime : 0;
-      let life = 2.0; // Default lifetime of 2 seconds as a fallback.
-      if (li && Number.isFinite(li.barLen) && li.barLen > 0){
-        life = li.barLen * BOUNCER_BARS_PER_LIFE;
-      }
-      nextLaunchAt = now + life;
-      if (o) {
-        o.flightEnd = nextLaunchAt;
-        o.spawnTime = now;
-      }
-      if (DBG_RESPAWN()) console.log(`[BNC_DBG] spawnBallFrom: Set nextLaunchAt to ${nextLaunchAt.toFixed(3)} (life: ${life.toFixed(3)})`);
-    }catch(e){
-      if (DBG_RESPAWN()) console.error('[BNC_DBG] Error in spawnBallFrom while setting flightEnd:', e);
+    // If paused, defer setting flight time until the first physics step.
+    if (typeof isRunning === 'function' && !isRunning()) {
+        o.pendingFlightTime = true;
+    } else {
+        // Set the flight time for the new ball (applies to both launches and respawns).
+        try {
+          const li = (typeof getLoopInfo==='function') ? getLoopInfo() : null;
+          const ac = (typeof ensureAudioContext==='function') ? ensureAudioContext() : null;
+          const now = ac ? ac.currentTime : 0;
+          let life = 2.0; // Default lifetime of 2 seconds as a fallback.
+          if (li && Number.isFinite(li.barLen) && li.barLen > 0){
+            life = li.barLen * BOUNCER_BARS_PER_LIFE;
+          }
+          nextLaunchAt = now + life;
+          if (o) {
+            o.flightEnd = nextLaunchAt;
+            o.spawnTime = now;
+          }
+          if (DBG_RESPAWN()) console.log(`[BNC_DBG] spawnBallFrom: Set nextLaunchAt to ${nextLaunchAt.toFixed(3)} (life: ${life.toFixed(3)})`);
+        }catch(e){
+          if (DBG_RESPAWN()) console.error('[BNC_DBG] Error in spawnBallFrom while setting flightEnd:', e);
+        }
     }
 
     if (!isRespawn) {

@@ -87,6 +87,22 @@ export function stepBouncer(S, nowAT){
       console.log(`[BNC_DBG] step: Converted flightTimeRemaining to flightEnd=${S.ball.flightEnd.toFixed(3)} (now=${now.toFixed(3)})`);
     }
   }
+
+  // If a ball was launched while paused, its flight time needs to be initialized now.
+  if (S.ball && S.ball.pendingFlightTime) {
+    delete S.ball.pendingFlightTime; // Consume the flag
+    try {
+      const li = S.getLoopInfo ? S.getLoopInfo() : null;
+      let life = 2.0;
+      if (li && Number.isFinite(li.barLen) && li.barLen > 0) {
+        life = li.barLen * S.BOUNCER_BARS_PER_LIFE;
+      }
+      S.ball.flightEnd = now + life;
+      S.ball.spawnTime = now;
+      S.nextLaunchAt = S.ball.flightEnd; // Also update the respawn timer
+    } catch(e) { console.warn('[bouncer-step] failed to set pending flight time', e); }
+  }
+
   if (S.nextLaunchAtRemaining != null) {
     S.nextLaunchAt = now + S.nextLaunchAtRemaining;
     S.nextLaunchAtRemaining = null; // Consume the property
