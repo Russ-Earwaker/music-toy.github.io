@@ -79,6 +79,9 @@ export function stepBouncer(S, nowAT){
   // guarantees we use the same `now` as the physics step.
   if (S.ball && S.ball.flightTimeRemaining != null) {
     S.ball.flightEnd = now + S.ball.flightTimeRemaining;
+    const li = S.getLoopInfo ? S.getLoopInfo() : null;
+    const life = (li && li.barLen > 0) ? (li.barLen * S.BOUNCER_BARS_PER_LIFE) : 2.0;
+    S.ball.spawnTime = S.ball.flightEnd - life; // Reconstruct spawnTime
     delete S.ball.flightTimeRemaining; // Consume the property
     if (window.BOUNCER_RESPAWN_DBG) {
       console.log(`[BNC_DBG] step: Converted flightTimeRemaining to flightEnd=${S.ball.flightEnd.toFixed(3)} (now=${now.toFixed(3)})`);

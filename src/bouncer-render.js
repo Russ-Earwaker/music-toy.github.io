@@ -184,6 +184,35 @@ export function createBouncerDraw(env){
       if (handle){ ctx.beginPath(); ctx.arc(handle.x, handle.y, 7, 0, Math.PI*2); ctx.strokeStyle='rgba(0,255,200,0.4)'; ctx.lineWidth=1; ctx.stroke(); }
     }catch{}
 
+    // Draw life line bar
+    try {
+      const b = getBall ? getBall() : env.ball;
+      const ac = ensureAudioContext();
+      const now = ac ? ac.currentTime : 0;
+
+      if (b && b.flightEnd != null && b.spawnTime != null && now < b.flightEnd) {
+        const lifeDuration = b.flightEnd - b.spawnTime;
+        if (lifeDuration > 0) {
+          const lifeElapsed = now - b.spawnTime;
+          const progress = Math.max(0, Math.min(1, lifeElapsed / lifeDuration));
+
+          if (progress > 0) {
+            const barY = EDGE + 4; // A few pixels below the top edge
+            const barStartX = EDGE;
+            const fullBarWidth = w - (EDGE * 2);
+            const currentBarWidth = fullBarWidth * progress;
+
+            ctx.beginPath();
+            ctx.moveTo(barStartX, barY);
+            ctx.lineTo(barStartX + currentBarWidth, barY);
+            ctx.strokeStyle = '#ffffff'; // Pure white
+            ctx.lineWidth = 4; // A nice thick line
+            ctx.stroke();
+          }
+        }
+      }
+    } catch(e) { /* fail silently */ }
+
     // Draw ball
     try{
       const b = getBall ? getBall() : env.ball;
@@ -240,11 +269,16 @@ export function createBouncerDraw(env){
         // Check if the toy is the active one in its chain.
         const isActiveInChain = panel.dataset.chainActive === 'true';
 
+        // A bouncer is considered "running" if it's the active toy in a chain,
+        // OR if it's a standalone toy (not part of any chain).
+        const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
+        const shouldRunPhysics = isActiveInChain || !isChained;
+
         // After the first bar, the bouncer switches to 'replay' mode. This scheduler
         // is responsible for playing back the recorded pattern of notes.
         try {
             const lr = S.visQ && S.visQ.loopRec;
-            if (isActiveInChain && lr && !lr.isInvalid && lr.mode === 'replay' && typeof S.getLoopInfo === 'function') {
+            if (shouldRunPhysics && lr && !lr.isInvalid && lr.mode === 'replay' && typeof S.getLoopInfo === 'function') {
                 const li = S.getLoopInfo();
                 const nowT = li.now;
                 // The playback anchor is the start of the current GLOBAL bar.
@@ -307,9 +341,7 @@ export function createBouncerDraw(env){
             }
         }
         wasActiveInChain = isActiveInChain;
-        if (isActiveInChain) {
-            stepBouncer(S);
-        }
+        if (shouldRunPhysics) stepBouncer(S);
 
         // Apply any state changes from the physics step.
         applyFromStep(S);
@@ -337,6 +369,9 @@ export function createBouncerDraw(env){
 
     requestAnimationFrame(draw);
   }
+
+  // Kick off the self-perpetuating draw loop.
+  requestAnimationFrame(draw);
 
   return draw;
 }

@@ -592,7 +592,10 @@ export function createBouncer(selector){
         life = li.barLen * BOUNCER_BARS_PER_LIFE;
       }
       nextLaunchAt = now + life;
-      o.flightEnd = nextLaunchAt;
+      if (o) {
+        o.flightEnd = nextLaunchAt;
+        o.spawnTime = now;
+      }
       if (DBG_RESPAWN()) console.log(`[BNC_DBG] spawnBallFrom: Set nextLaunchAt to ${nextLaunchAt.toFixed(3)} (life: ${life.toFixed(3)})`);
     }catch(e){
       if (DBG_RESPAWN()) console.error('[BNC_DBG] Error in spawnBallFrom while setting flightEnd:', e);
@@ -771,7 +774,9 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
   velFrom,
   ballR
 });
-requestAnimationFrame(draw);
+
+// The `draw` function is now self-starting from within `createBouncerDraw`.
+// This call is no longer needed and could cause a duplicate render loop.
 
 
   function onLoop(_loopStart){} // no-op
