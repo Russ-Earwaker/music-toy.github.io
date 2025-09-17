@@ -363,6 +363,8 @@ export function createBouncerDraw(env){
                     flightEnd: now + life,
                     r: ballR()
                 };
+                // Update both the module-scoped ball and the current step's state object.
+                S.ball = ghostBall;
                 setBallOut(ghostBall);
                 // Also update the respawn timer so it's consistent.
                 if (typeof setNextLaunchAt === 'function') setNextLaunchAt(ghostBall.flightEnd);
