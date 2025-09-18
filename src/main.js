@@ -243,6 +243,7 @@ function initToyChaining(panel) {
     }
 
     panel.appendChild(extendBtn);
+    panel.style.overflow = 'visible'; // Ensure the button is not clipped by the panel's bounds.
 
     extendBtn.addEventListener('pointerdown', (e) => {
         e.stopPropagation();
@@ -522,9 +523,9 @@ function scheduler(){
       if (phaseJustWrapped) {
           for (const [headId] of g_chainState.entries()) {
               const activeToy = document.getElementById(g_chainState.get(headId));
-              // Only advance non-bouncer chains on the global bar clock.
-              // Bouncers will trigger their own advancement via 'chain:next' event.
-              if (activeToy && activeToy.dataset.toy !== 'bouncer') {
+              // Only advance non-bouncer/rippler chains on the global bar clock.
+              // Bouncers and Ripplers will trigger their own advancement via 'chain:next' event.
+              if (activeToy && activeToy.dataset.toy !== 'bouncer' && activeToy.dataset.toy !== 'rippler') {
                   advanceChain(headId);
               }
           }
@@ -592,8 +593,8 @@ async function boot(){
     const panel = e.target.closest('.toy-panel');
     if (!panel) return;
 
-    // Only bouncers should be firing this event.
-    if (panel.dataset.toy !== 'bouncer') return;
+    // Only toys that manage their own lifecycle should fire this event.
+    if (panel.dataset.toy !== 'bouncer' && panel.dataset.toy !== 'rippler') return;
 
     const head = findChainHead(panel);
     if (!head) return;

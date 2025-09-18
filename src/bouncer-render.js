@@ -251,7 +251,9 @@ export function createBouncerDraw(env){
         progress = lastLifeProgress;
       }
 
-      if (progress > 0) {
+      // Only show the life line for bouncers that are part of a chain (i.e., not the head).
+      const isChainedFollower = !!panel.dataset.prevToyId;
+      if (progress > 0 && isChainedFollower) {
         const barY = EDGE + 4; // A few pixels below the top edge
         const barStartX = EDGE;
         const fullBarWidth = w - (EDGE * 2);

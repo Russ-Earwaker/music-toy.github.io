@@ -205,6 +205,11 @@ export function createRippleSynth(selector){
   let __pausedNow = 0; // absolute AudioContext time at pause for freezing visuals
 
   const __schedState = { suppressSlots: new Set(), suppressUntilMap: new Map(),
+    wasActiveInChain: false, // for chain activation
+    chainAdvanceAt: 0,       // for chain advancement
+    ghostSpawnTime: null,    // for life line bar
+    ghostEndTime: null,      // for life line bar
+    lastGhostProgress: 0,    // for freezing life line on pause
     get barStartAT(){ return barStartAT; }, set barStartAT(v){ barStartAT = v; },
     get nextSlotAT(){ return nextSlotAT; }, set nextSlotAT(v){ nextSlotAT = v; },
     get nextSlotIx(){ return nextSlotIx; }, set nextSlotIx(v){ nextSlotIx = v; },
@@ -229,7 +234,9 @@ export function createRippleSynth(selector){
     }
   });
 
-  function randomizeAll(){
+  function randomizeAll(opts = {}){
+    const shouldSpawn = opts.spawn !== false;
+
     // This is a user interaction, so we should arm the toy to allow automatic ripples.
     try { window.__ripplerUserArmed = true; } catch {}
 
@@ -272,24 +279,34 @@ export function createRippleSynth(selector){
     generator.ny = y2n(gy);
     generator.placed = true;
 
-    try {
-      const nowAT = ac.currentTime;
-      if (typeof isRunning !== 'function' || isRunning()){
-        spawnRipple(true); // manual=true to bypass first-interaction guard
-        barStartAT = nowAT;
-        nextSlotAT = barStartAT + stepSeconds();
-        nextSlotIx = 1;
-        pattern.forEach(s=> s.clear()); patternOffsets.forEach(m=> m.clear());
-        recording = true;
-      } else {
-        __deferredSpawn = true;
-        __armRecordingOnResume = true;
-      }
-    } catch (e) { try { console.warn('[rippler random rearm]', e); } catch {} }
+    if (shouldSpawn) {
+      try {
+        const nowAT = ac.currentTime;
+        if (typeof isRunning !== 'function' || isRunning()){
+          spawnRipple(true); // manual=true to bypass first-interaction guard
+          barStartAT = nowAT;
+          nextSlotAT = barStartAT + stepSeconds();
+          nextSlotIx = 1;
+          pattern.forEach(s=> s.clear()); patternOffsets.forEach(m=> m.clear());
+          recording = true;
+        } else {
+          __deferredSpawn = true;
+          __armRecordingOnResume = true;
+        }
+      } catch (e) { try { console.warn('[rippler random rearm]', e); } catch {} }
+    }
   }
   panel.addEventListener('toy-random', randomizeAll);
   panel.addEventListener('toy-clear', (ev)=>{ try{ ev.stopImmediatePropagation?.(); }catch{}; pattern.forEach(s=> s.clear()); patternOffsets.forEach(m=> m.clear()); ripples.length=0; generator.placed=false; });
   panel.addEventListener('toy-reset', ()=>{ pattern.forEach(s=> s.clear()); patternOffsets.forEach(m=> m.clear()); ripples.length=0; generator.placed=false; });
+
+  function doSoftReset() {
+    // This is called when a preceding toy in the chain is reset (e.g., a new ball is launched).
+    // We should randomize the rippler's state, but not spawn a ripple immediately.
+    // The ripple will be spawned when this toy becomes active in the chain.
+    randomizeAll({ spawn: false });
+  }
+  panel.addEventListener('chain:stop', doSoftReset);
 
   const getBlockRects = makeGetBlockRects(n2x, n2y, sizing, BASE, blocks);
 
@@ -359,8 +376,17 @@ export function createRippleSynth(selector){
     input.pointerDown(e);
     if (!wasPlaced && generator.placed){
       pattern.forEach(s=> s.clear()); patternOffsets.forEach(m=> m.clear());
-      spawnRipple(false);
-      barStartAT = ac.currentTime; nextSlotAT = barStartAT + stepSeconds(); nextSlotIx = 1; recording = true;
+
+      // A rippler is "running" if it's standalone or active in a chain, AND the transport is playing.
+      const isActiveInChain = panel.dataset.chainActive === 'true';
+      const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
+      const shouldRun = (isActiveInChain || !isChained);
+      const transportIsRunning = (typeof isRunning === 'function') ? isRunning() : true;
+
+      if (shouldRun && transportIsRunning) {
+          spawnRipple(false);
+          barStartAT = ac.currentTime; nextSlotAT = barStartAT + stepSeconds(); nextSlotIx = 1; recording = true;
+      } // Otherwise, do nothing. The chain activation logic will spawn the ripple when it becomes active.
     }
   });
 
@@ -407,6 +433,10 @@ export function createRippleSynth(selector){
     const gx = n2x(generator.nx), gy = n2y(generator.ny);
     const corners = [[0,0],[W(),0],[0,H()],[W(),H()]];
     const offR = Math.max(...corners.map(([x,y])=> Math.hypot(x-gx, y-gy))) + 64;
+    // Calculate the ripple's lifetime and set the time to advance the chain.
+    const lifeTime = offR / RING_SPEED();
+    __schedState.chainAdvanceAt = nowAT + lifeTime;
+
     ripples.push({ x: gx, y: gy, startAT: nowAT, startTime: nowPerf, speed: RING_SPEED(), offR, hit: new Set(), r2off: (RING_SPEED() * (barSec()/2)) });
     try{ if (localStorage.getItem('mt_rippler_dbg')==='1') console.log('[rippler] spawnRipple:ok',{ manual, ripples:(ripples?ripples.length:0) }); }catch{}
   }
@@ -436,7 +466,12 @@ export function createRippleSynth(selector){
         let k = Math.floor(((whenAT - barStartAT) + 1e-6) / slotLen);
         if (k < 0) k = 0;
         const slotIx = k % NUM_STEPS; const name = noteList[b.noteIndex] || 'C4';
-        __dbg('record-hit', { name, whenAT: +whenAT.toFixed?.(4) || whenAT, barStartAT: barStartAT, slotIx, k, slotLen });
+        
+        // During playback (not recording), the scheduler handles audio.
+        // The live hit should be silent.
+        if (!recording && !liveBlocks.has(i)) {
+            continue; // Let the scheduler handle it.
+        }
         // Quant setting now
         let __divNow = NaN; try{ const v0 = (__getQuantDiv && __getQuantDiv()); if (Number.isFinite(v0)) __divNow = v0; }catch{}
         if (!Number.isFinite(__divNow)){
@@ -567,11 +602,89 @@ export function createRippleSynth(selector){
         drawGenerator(ctx, n2x(generator.nx), n2y(generator.ny), Math.max(8, Math.round(generator.r*(sizing.scale||1))), tView, ripples, NUM_STEPS, stepSeconds, (sizing.scale||1));
       }
 
+      // --- Life Line Bar for Chained Ghost Ripples ---
+      const running = (typeof isRunning === 'function') ? isRunning() : true;
+      let ghostProgress = 0;
+      if (__schedState.ghostEndTime && __schedState.ghostSpawnTime) {
+          const lifeDuration = __schedState.ghostEndTime - __schedState.ghostSpawnTime;
+          if (lifeDuration > 0) {
+              const now = ac.currentTime;
+              const lifeElapsed = now - __schedState.ghostSpawnTime;
+              ghostProgress = Math.max(0, Math.min(1, lifeElapsed / lifeDuration));
+          }
+      }
+
+      // When paused, use the last known progress to freeze the bar.
+      if (running) {
+          __schedState.lastGhostProgress = ghostProgress;
+      } else {
+          ghostProgress = __schedState.lastGhostProgress || 0;
+      }
+
+      if (ghostProgress > 0) {
+          const barY = EDGE + 4;
+          const barStartX = EDGE;
+          const fullBarWidth = W() - (EDGE * 2);
+          const currentBarWidth = fullBarWidth * ghostProgress;
+
+          ctx.beginPath();
+          ctx.moveTo(barStartX, barY);
+          ctx.lineTo(barStartX + currentBarWidth, barY);
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+      }
+
       // Only advance physics/scheduling while transport is running
       if (typeof isRunning !== 'function' || isRunning()){
+      const isActiveInChain = panel.dataset.chainActive === 'true';
       // Detect transport state change and realign timing
       try{
-        const running = (typeof isRunning==='function') ? !!isRunning() : true;
+        // --- Chain Activation Logic ---
+        if (isActiveInChain && !__schedState.wasActiveInChain) {
+            // This toy just became active in the chain.
+            if (generator.placed) {
+                // Spawn a ripple and reset the scheduler to start recording a new pattern.
+                // This handles both initial activation and re-activation in a loop.
+                spawnRipple(true); // manual=true to bypass first-interaction guard
+                const nowAT = ac.currentTime;
+                barStartAT = nowAT;
+                nextSlotAT = barStartAT + stepSeconds();
+                nextSlotIx = 1;
+                pattern.forEach(s=> s.clear()); patternOffsets.forEach(m=> m.clear());
+                recording = true;
+                __deferredSpawn = false; // Consume any deferred spawn from other actions
+            } else {
+                // No generator, start a "ghost" timer to advance the chain, but
+                // only for toys that are followers in a chain. A standalone toy
+                // or the head of a chain should wait for user interaction.
+                const isChainedFollower = !!panel.dataset.prevToyId;
+                if (isChainedFollower) {
+                    const nowAT = ac.currentTime;
+                    const lifeTime = Math.hypot(W(), H()) / RING_SPEED(); // Default lifetime based on diagonal
+                    __schedState.chainAdvanceAt = nowAT + lifeTime;
+                    __schedState.ghostSpawnTime = nowAT;
+                    __schedState.ghostEndTime = nowAT + lifeTime;
+                }
+            }
+        }
+        __schedState.wasActiveInChain = isActiveInChain;
+
+        if (__schedState.chainAdvanceAt > 0 && ac.currentTime >= __schedState.chainAdvanceAt) {
+            // Only advance if this toy is the currently active one.
+            if (isActiveInChain) {
+                panel.dispatchEvent(new CustomEvent('chain:next', { bubbles: true }));
+            }
+            __schedState.chainAdvanceAt = 0; // Consume the timer to prevent re-firing.
+        }
+
+        // Clear the ghost timer when it's done (only when running)
+        if (running && __schedState.ghostEndTime && ac.currentTime >= __schedState.ghostEndTime) {
+            __schedState.ghostSpawnTime = null;
+            __schedState.ghostEndTime = null;
+            __schedState.lastGhostProgress = 0;
+        }
+
         if (__lastRunning === null) __lastRunning = running;
         if (__lastRunning !== running || __forceResume){
           __lastRunning = running;
@@ -597,13 +710,20 @@ export function createRippleSynth(selector){
           if (__deferredSpawn){ __deferredSpawn = false; spawnRipple(true); }
           }
         }
-      }catch{}
-      // Only advance physics/scheduling while transport is running
-      if (typeof isRunning !== 'function' || isRunning()){
-        springBlocks(1/60);
-        handleRingHits(ac.currentTime);
-        scheduler.tick();
-      }
+      }catch(e){ console.warn('[rippler draw] chain/resume logic failed', e); }
+
+      // A rippler is considered "running" if it's the active toy in a chain,
+      // OR if it's a standalone toy (not part of any chain).
+      const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
+      const shouldRun = (isActiveInChain || !isChained);
+
+      // Only advance physics/scheduling if this toy is supposed to be running.
+      if (shouldRun) {
+          springBlocks(1/60);
+          handleRingHits(ac.currentTime);
+          scheduler.tick();
+        }
+      
       }
 
       if (input && input.state && input.state.generatorDragEnded){
@@ -817,6 +937,12 @@ export function createRippleSynth(selector){
   }catch{}
 
   requestAnimationFrame(draw);
+
+  // The main scheduler's step is only for grid-based toys.
+  // This toy manages its own lifecycle via its draw loop, but we need to
+  // provide a dummy step function to be included in the scheduler's update loop,
+  // which is responsible for setting the `data-chain-active` attribute.
+  panel.__sequencerStep = () => {};
 
   return { setInstrument: (name)=> { currentInstrument = name || currentInstrument; try{ ui.setInstrument(name); }catch{} }, reset, element: canvas };
 }
