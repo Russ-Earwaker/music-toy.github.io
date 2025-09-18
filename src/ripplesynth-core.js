@@ -149,6 +149,8 @@ export function createRippleSynth(selector){
     noteIndex: ((noteList.indexOf('C4')>=0?noteList.indexOf('C4'):48) + PENTATONIC_OFFSETS[i % PENTATONIC_OFFSETS.length])
   }));
   let previewGenerator = { nx: null, ny: null, placed: false };
+  let previewBlocks = [];
+  let hasPreviewState = false;
 
   let didLayout=false;
   function layoutBlocks(){
@@ -248,7 +250,7 @@ export function createRippleSynth(selector){
   const scheduler = createScheduler({
     ac, NUM_STEPS, barSec, stepSeconds,
     pattern, patternOffsets, blocks, noteList,
-    triggerInstrument, getInstrument: ()=> currentInstrument, previewGenerator,
+    triggerInstrument, getInstrument: ()=> currentInstrument, applyPreviewState,
     generator, RING_SPEED, spawnRipple,
     state: __schedState,
     isPlaybackMuted: ()=> playbackMuted,
@@ -262,12 +264,107 @@ export function createRippleSynth(selector){
     }
   });
 
+  function applyPreviewState() {
+    if (!hasPreviewState && !previewGenerator.placed) return;
+
+    // Apply preview blocks from 'random'
+    if (hasPreviewState && previewBlocks.length === blocks.length) {
+        for (let i = 0; i < blocks.length; i++) {
+            blocks[i].nx = previewBlocks[i].nx;
+            blocks[i].ny = previewBlocks[i].ny;
+            blocks[i].nx0 = previewBlocks[i].nx; // for spring physics
+            blocks[i].ny0 = previewBlocks[i].ny;
+            blocks[i].vx = 0;
+            blocks[i].vy = 0;
+            blocks[i].active = previewBlocks[i].active;
+            blocks[i].noteIndex = previewBlocks[i].noteIndex;
+        }
+    }
+
+    // Apply preview generator (from 'random' or click)
+    if (previewGenerator.placed) {
+        generator.nx = previewGenerator.nx;
+        generator.ny = previewGenerator.ny;
+        generator.placed = true;
+    }
+
+    // Clear all preview state
+    hasPreviewState = false;
+    previewBlocks = [];
+    previewGenerator.placed = false;
+  }
+
   function randomizeAll(opts = {}){
     const shouldSpawn = opts.spawn !== false;
 
     // This is a user interaction, so we should arm the toy to allow automatic ripples.
     try { window.__ripplerUserArmed = true; } catch {}
 
+    const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
+    const transportIsRunning = (typeof isRunning === 'function') ? isRunning() : true;
+
+    if (isChained && transportIsRunning) {
+        // --- PREVIEW LOGIC ---
+        // On a running, chained toy, create a preview state instead of applying immediately.
+        hasPreviewState = true;
+        if (previewBlocks.length !== CUBES) {
+            previewBlocks = Array.from({length:CUBES}, ()=>({ nx:0.5, ny:0.5, active: true, noteIndex: 0 }));
+        }
+
+        // Randomize active state and notes for the preview blocks
+        randomizeAllImpl(panel, {
+            toyId,
+            blocks: previewBlocks, // Pass previewBlocks to be modified
+            noteList,
+            clearPattern: ()=> { /* don't clear live pattern */ },
+            baseIndex: (list)=> (list.indexOf(baseNoteName)>=0? list.indexOf(baseNoteName): (list.indexOf('C4')>=0? list.indexOf('C4'):48)),
+            pentatonicOffsets: PENTATONIC_OFFSETS
+        });
+
+        // Manually randomize note indices for the preview blocks, as randomizeAllImpl only handles active state.
+        // This fixes the "super low pitch" bug.
+        const baseIx = (noteList.indexOf(baseNoteName)>=0? noteList.indexOf(baseNoteName) : (noteList.indexOf('C4')>=0? noteList.indexOf('C4') : 48));
+        for (let i = 0; i < previewBlocks.length; i++) {
+            const off = PENTATONIC_OFFSETS[Math.floor(Math.random() * PENTATONIC_OFFSETS.length)];
+            previewBlocks[i].noteIndex = baseIx + off;
+        }
+        // Randomize positions for the preview blocks
+        const size = Math.round(BASE*(sizing.scale||1)*boardScale(canvas));
+        const bounds = { x: EDGE, y: EDGE, w: Math.max(1, W()-EDGE*2), h: Math.max(1, H()-EDGE*2) };
+        const rects = Array.from({length:CUBES}, ()=>({ w: size, h: size }));
+        try { randomizeRects(rects, bounds, 6); } catch {}
+        for (let i=0;i<CUBES;i++){
+          const r = rects[i];
+          const cx = r.x + r.w/2, cy = r.y + r.h/2;
+          previewBlocks[i].nx = x2n(cx);
+          previewBlocks[i].ny = y2n(cy);
+        }
+
+        // Randomize generator position into `previewGenerator`
+        const blockRectsForPreview = previewBlocks.map(pb => {
+            const cx = n2x(pb.nx);
+            const cy = n2y(pb.ny);
+            return { x: cx - size/2, y: cy - size/2, w: size, h: size };
+        });
+        const w = W(), h = H();
+        const genRadius = generator.r || 12;
+        let gx, gy, attempts = 0;
+        const MAX_ATTEMPTS = 100;
+        do {
+          gx = EDGE + genRadius + Math.random() * (w - 2 * (EDGE + genRadius));
+          gy = EDGE + genRadius + Math.random() * (h - 2 * (EDGE + genRadius));
+          attempts++;
+          if (attempts > MAX_ATTEMPTS) { gx = w / 2; gy = h / 2; break; }
+        } while (blockRectsForPreview.some(b => circleRectHit(gx, gy, genRadius, b)));
+        previewGenerator.nx = x2n(gx);
+        previewGenerator.ny = y2n(gy);
+        previewGenerator.placed = true;
+
+        // Don't spawn a ripple, don't modify live state.
+        return;
+    }
+
+    // --- IMMEDIATE LOGIC (existing code) ---
     didLayout = false;
     randomizeAllImpl(panel, {
       toyId,
@@ -618,6 +715,25 @@ export function createRippleSynth(selector){
       // Draw blocks at their own positions; no global offset
       drawBlocksSection(ctx, blockRects, 0, 0, null, 1, noteList, sizing, null, null, ac.currentTime);
 
+      // Draw preview blocks if they exist
+      if (hasPreviewState && previewBlocks.length > 0) {
+          const previewBlockRects = previewBlocks.map(pb => {
+              const size = Math.round(BASE*(sizing.scale||1)*boardScale(canvas));
+              const cx = n2x(pb.nx);
+              const cy = n2y(pb.ny);
+              return { x: cx - size/2, y: cy - size/2, w: size, h: size, active: pb.active };
+          });
+
+          ctx.save();
+          ctx.setLineDash([4, 4]);
+          for (const rect of previewBlockRects) {
+              ctx.strokeStyle = rect.active ? 'rgba(255, 140, 0, 0.7)' : 'rgba(100, 100, 100, 0.7)';
+              ctx.lineWidth = 2;
+              ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
+          }
+          ctx.restore();
+      }
+
       if (generator.placed){
         drawGenerator(ctx, n2x(generator.nx), n2y(generator.ny), Math.max(8, Math.round(generator.r*(sizing.scale||1))), tView, ripples, NUM_STEPS, stepSeconds, (sizing.scale||1));
       }
@@ -678,16 +794,6 @@ export function createRippleSynth(selector){
         // --- Chain Activation Logic ---
         if (isActiveInChain && !__schedState.wasActiveInChain) {
             // This toy just became active in the chain.
-
-            // If a preview generator was placed, move the real one to its position.
-            if (previewGenerator.placed) {
-                generator.nx = previewGenerator.nx;
-                generator.ny = previewGenerator.ny;
-                generator.placed = true; // Ensure it's marked as placed
-                previewGenerator.placed = false; // Consume the preview
-            }
-
-            // This toy just became active in the chain.
             if (generator.placed) {
                 // Spawn a ripple and reset the scheduler to start recording a new pattern.
                 // This handles both initial activation and re-activation in a loop.
@@ -718,6 +824,11 @@ export function createRippleSynth(selector){
         if (__schedState.chainAdvanceAt > 0 && ac.currentTime >= __schedState.chainAdvanceAt) {
             // Only advance if this toy is the currently active one.
             if (isActiveInChain) {
+                // A toy's turn is over. If it has a pending preview state, apply it now
+                // so it's ready for the next time it becomes active.
+                if (hasPreviewState || previewGenerator.placed) {
+                    applyPreviewState();
+                }
                 panel.dispatchEvent(new CustomEvent('chain:next', { bubbles: true }));
             }
             __schedState.chainAdvanceAt = 0; // Consume the timer to prevent re-firing.
