@@ -606,6 +606,17 @@ async function boot(){
     advanceChain(headId);
   });
 
+  // Add event listener for toys to request becoming the active link in a chain.
+  document.addEventListener('chain:set-active', (e) => {
+    const panel = e.target.closest('.toy-panel');
+    if (!panel) return;
+
+    const head = findChainHead(panel);
+    if (!head) return;
+
+    g_chainState.set(head.id, panel.id);
+  });
+
   // Add event listener for instrument propagation down chains
   document.addEventListener('toy-instrument', (e) => {
     const sourcePanel = e.target.closest('.toy-panel');
@@ -642,6 +653,3 @@ async function boot(){
 }
 if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
 else boot();
-
-
-

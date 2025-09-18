@@ -292,7 +292,7 @@ export function createBouncer(selector){
 
 
   // interaction state
-  let handle = { x: physW()*0.22, y: physH()*0.5 };
+  let handle = { x: physW()*0.22, y: physH()*0.5, userPlaced: false, vx: 0, vy: 0 };
   handle._fx = 0.22; handle._fy = 0.5;
   let draggingHandle=false, dragStart=null, dragCurr=null;
   let draggingBlock=false, dragBlockRef=null, dragOffset={dx:0,dy:0};
@@ -418,8 +418,11 @@ export function createBouncer(selector){
 
   
   function doRandom(){
-    // Randomize a bit of everything in standard view: spawn a ball,
-    // shuffle cube positions/actives, and randomize notes for a fresh vibe.
+    // Randomize cubes and notes first, as this is common to all cases.
+    try{ doRandomCubes(); }catch{}
+    try{ doRandomNotes(); }catch{}
+
+    // Find a clear spawn point
     const w = physW(), h = physH();
     const r = ballR();
     const spawnableW = w - 2 * (EDGE + r + 4);
@@ -440,16 +443,26 @@ export function createBouncer(selector){
     // Update the visual spawn handle to match the new random position
     handle.x = x;
     handle.y = y;
+    handle.userPlaced = true; // This action counts as the user placing the spawner.
 
+    // Calculate a random launch direction and store it on the handle.
     const angle = Math.random() * Math.PI * 2;
     const endX = x + Math.cos(angle) * 10; // create a point in a random direction
     const endY = y + Math.sin(angle) * 10;
     const { vx, vy } = velFrom(x, y, endX, endY);
-    spawnBallFrom({ x, y, vx, vy, r });
+    handle.vx = vx;
+    handle.vy = vy;
 
-    // Also randomize cubes and notes lightly
-    try{ doRandomCubes(); }catch{}
-    try{ doRandomNotes(); }catch{}
+    // Only spawn a ball and set active if it's a standalone toy or the head of a chain.
+    const isChainedFollower = !!panel.dataset.prevToyId;
+    if (!isChainedFollower) {
+        // If this bouncer is part of a chain (it must be the head), set it as the active toy.
+        if (panel.dataset.nextToyId) {
+            panel.dispatchEvent(new CustomEvent('chain:set-active', { bubbles: true }));
+        }
+        // Spawn the ball with the calculated random vector.
+        spawnBallFrom({ x, y, vx, vy, r });
+    }
   }
 
   function doRandomCubes() {
@@ -495,8 +508,18 @@ export function createBouncer(selector){
   
   function doReset(){
     ball = null; lastLaunch = null;
+    handle.userPlaced = false;
+    handle.vx = 0; handle.vy = 0;
     try { for (const b of blocks){ b.flash = 0; } } catch {}
     try { for (const c of edgeControllers){ c.flash = 0; c.lastHitAT = 0; } } catch {}
+  }
+
+  function doSoftReset() {
+    // This reset is for when a chain is restarted. It should stop the current
+    // ball and prevent respawning from old data, but it must NOT clear
+    // the user's deliberate placement of the spawner handle.
+    ball = null;
+    lastLaunch = null;
   }
 
   panel.addEventListener('toy-random', doRandom);
@@ -504,6 +527,7 @@ export function createBouncer(selector){
   panel.addEventListener('toy-random-notes', doRandomNotes);
   panel.addEventListener('toy-reset', doReset);
   panel.addEventListener('toy-clear', doReset);
+  panel.addEventListener('chain:stop', doSoftReset);
   panel.addEventListener('toy-zoom', (e)=>{ try{ sizing.setZoom && sizing.setZoom(!!(e?.detail?.zoomed)); updateSpeedVisibility && updateSpeedVisibility(); }catch{} });
 
   
@@ -560,10 +584,10 @@ export function createBouncer(selector){
             const nextPanel = document.getElementById(nextId);
             if (!nextPanel) break;
 
-            // Dispatching 'toy-reset' will call the doReset() function for that toy,
-            // which sets its ball and lastLaunch to null, effectively stopping it.
-            nextPanel.dispatchEvent(new CustomEvent('toy-reset', { bubbles: true }));
-
+            // Dispatching 'chain:stop' will call the doSoftReset() function for that toy,
+            // which sets its ball and lastLaunch to null, effectively stopping it,
+            // while preserving the user's spawner placement.
+            nextPanel.dispatchEvent(new CustomEvent('chain:stop', { bubbles: true }));
             currentPanel = nextPanel;
             nextId = currentPanel.dataset.nextToyId;
             }
@@ -791,7 +815,7 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
   rescale: ()=>{ try{ window.rescaleBouncer({ blocks, handle, edgeControllers, physW, physH, EDGE, blockSize, ballRef: ball,
         getBall: ()=>ball, ballR, ensureEdgeControllers }); }catch{} },
   updateLaunchBaseline,
-  buildStateForStep, installInteractions,
+  buildStateForStep, installInteractions, getLastLaunch: ()=>lastLaunch,
   applyFromStep,
   velFrom,
   ballR,

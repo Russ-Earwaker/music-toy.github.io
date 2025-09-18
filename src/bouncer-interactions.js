@@ -57,6 +57,7 @@ export function installBouncerInteractions({
     // Click & drag anywhere to launch: anchor handle at start, leave it there
     aimStart = { x: p.x, y: p.y };
     handle.x = Math.round(p.x); handle.y = Math.round(p.y);
+    handle.userPlaced = true;
     // Also update the fractional coordinates for persistence. This ensures that if
     // the user refreshes after placing the spawner but before launching, its
     // position is correctly saved and restored.
@@ -145,14 +146,14 @@ export function installBouncerInteractions({
     if (draggingHandle){
       const isChainedFollower = !!panel.dataset.prevToyId;
 
+      // Always calculate and store the launch vector on the handle.
+      const { vx, vy } = velFrom(aimStart.x, aimStart.y, p.x, p.y);
+      handle.vx = vx; handle.vy = vy;
+
       if (!isChainedFollower) {
-        // For standalone or head-of-chain bouncers, launch the ball.
-        const hsx = aimStart.x, hsy = aimStart.y;
-        const { vx, vy } = velFrom(hsx, hsy, p.x, p.y);
-        spawnBallFrom({ x: hsx, y: hsy, vx, vy, r: (ballR?ballR():6) });
+        // For standalone or head-of-chain bouncers, launch the ball immediately.
+        spawnBallFrom({ x: aimStart.x, y: aimStart.y, vx, vy, r: (ballR?ballR():6) });
       }
-      // For chained followers, dragging only sets the spawn point.
-      // The ball is spawned (as a ghost) when the chain activates it.
       draggingHandle = false; aimStart = null; aimCurr = null;
       if (setAim) setAim({ active:false });
       try{ canvas.releasePointerCapture(e.pointerId); }catch(e){}
