@@ -1,4 +1,5 @@
 import { initToyUI } from './toyui.js';
+console.log('[Rippler] Core module loaded (v-preview-gen)');
 import { randomizeAllImpl } from './ripplesynth-random.js';
 import { randomizeRects } from './toyhelpers.js';
 import { resizeCanvasForDPR, noteList } from './utils.js';
@@ -147,6 +148,7 @@ export function createRippleSynth(selector){
     active: ![1, 4, 6].includes(i),
     noteIndex: ((noteList.indexOf('C4')>=0?noteList.indexOf('C4'):48) + PENTATONIC_OFFSETS[i % PENTATONIC_OFFSETS.length])
   }));
+  let previewGenerator = { nx: null, ny: null, placed: false };
 
   let didLayout=false;
   function layoutBlocks(){
@@ -179,6 +181,32 @@ export function createRippleSynth(selector){
   const generator = { nx:0.5, ny:0.5, r:10, placed:false };
   let ripples = []; // {x,y,startAT,speed}
   const RING_SPEED = ()=> Math.hypot(W(), H()) / (audioBarSeconds() || 2.0); // px/sec
+
+  function spawnRipple(manual=false){
+    // A new ripple should clear any pending preview.
+    previewGenerator.placed = false;
+
+    if (!generator?.placed) return;
+    // If transport is paused, defer spawning until play resumes
+    try{ if (typeof isRunning==='function' && !isRunning()){ __deferredSpawn = true; return; } }catch{}
+    // Allow programmatic/manual spawns to bypass the first-interaction guard
+    if (typeof window !== 'undefined' && !window.__ripplerUserArmed && !manual) return;
+    const nowAT = ac.currentTime, nowPerf = ac.currentTime;
+    if (nowPerf - lastSpawnPerf < 0.15){
+      try{ if (localStorage.getItem('mt_rippler_dbg')==='1') console.log('[rippler] spawnRipple:skip-debounce',{ manual, ripples:(ripples?ripples.length:0) }); }catch{}
+      return; // debounce double fires
+    }
+    lastSpawnPerf = nowPerf;
+    const gx = n2x(generator.nx), gy = n2y(generator.ny);
+    const corners = [[0,0],[W(),0],[0,H()],[W(),H()]];
+    const offR = Math.max(...corners.map(([x,y])=> Math.hypot(x-gx, y-gy))) + 64;
+    // Calculate the ripple's lifetime and set the time to advance the chain.
+    const lifeTime = offR / RING_SPEED();
+    __schedState.chainAdvanceAt = nowAT + lifeTime;
+
+    ripples.push({ x: gx, y: gy, startAT: nowAT, startTime: nowPerf, speed: RING_SPEED(), offR, hit: new Set(), r2off: (RING_SPEED() * (barSec()/2)) });
+    try{ if (localStorage.getItem('mt_rippler_dbg')==='1') console.log('[rippler] spawnRipple:ok',{ manual, ripples:(ripples?ripples.length:0) }); }catch{}
+  }
 
   let particlesInit = false;
   const ac = ensureAudioContext();
@@ -220,7 +248,7 @@ export function createRippleSynth(selector){
   const scheduler = createScheduler({
     ac, NUM_STEPS, barSec, stepSeconds,
     pattern, patternOffsets, blocks, noteList,
-    triggerInstrument, getInstrument: ()=> currentInstrument,
+    triggerInstrument, getInstrument: ()=> currentInstrument, previewGenerator,
     generator, RING_SPEED, spawnRipple,
     state: __schedState,
     isPlaybackMuted: ()=> playbackMuted,
@@ -328,6 +356,8 @@ export function createRippleSynth(selector){
     onBlockTapStd: (idx, p)=>{
       const b = blocks[idx];
       const was = !!b.active; b.active = !b.active;
+      // When toggling a block on, it should be re-recorded on the next ripple pass.
+      // This ensures it gets added to the pattern correctly.
       if (!was && b.active){ try{ __schedState?.recordOnly?.add?.(idx); }catch{} }
       try {
         const name = noteList[b.noteIndex] || 'C4';
@@ -362,7 +392,20 @@ export function createRippleSynth(selector){
       b.nx0 = b.nx; b.ny0 = b.ny; b.vx = 0; b.vy = 0;
     },
     onBlockGrab: (idx)=>{ liveBlocks.add(idx); try { for (let s=0; s<pattern.length; s++){ pattern[s].delete(idx); try{ patternOffsets[s].delete(idx); }catch{} } } catch {} },
-    onBlockDrop: (idx)=>{ liveBlocks.delete(idx); recordOnly.add(idx); }
+    onBlockDrop: (idx)=>{ liveBlocks.delete(idx); recordOnly.add(idx); },
+    // Add new properties for state checking in input handler
+    isActiveInChain: () => panel.dataset.chainActive === 'true',
+    isChained: () => !!(panel.dataset.nextToyId || panel.dataset.prevToyId),
+    isRunning: isRunning, // pass the function
+    setPreviewGenerator: (pos) => {
+      if (pos) {
+        previewGenerator.nx = x2n(pos.x);
+        previewGenerator.ny = y2n(pos.y);
+        previewGenerator.placed = true;
+      } else {
+        previewGenerator.placed = false;
+      }
+    }
   });
 
   canvas.addEventListener('pointerdown', (e)=>{
@@ -417,29 +460,6 @@ export function createRippleSynth(selector){
     }
     _genDownPos=null; _wasPlacedAtDown=false;
   });
-
-  function spawnRipple(manual=false){
-    if (!generator?.placed) return;
-    // If transport is paused, defer spawning until play resumes
-    try{ if (typeof isRunning==='function' && !isRunning()){ __deferredSpawn = true; return; } }catch{}
-    // Allow programmatic/manual spawns to bypass the first-interaction guard
-    if (typeof window !== 'undefined' && !window.__ripplerUserArmed && !manual) return;
-    const nowAT = ac.currentTime, nowPerf = ac.currentTime;
-    if (nowPerf - lastSpawnPerf < 0.15){
-      try{ if (localStorage.getItem('mt_rippler_dbg')==='1') console.log('[rippler] spawnRipple:skip-debounce',{ manual, ripples:(ripples?ripples.length:0) }); }catch{}
-      return; // debounce double fires
-    }
-    lastSpawnPerf = nowPerf;
-    const gx = n2x(generator.nx), gy = n2y(generator.ny);
-    const corners = [[0,0],[W(),0],[0,H()],[W(),H()]];
-    const offR = Math.max(...corners.map(([x,y])=> Math.hypot(x-gx, y-gy))) + 64;
-    // Calculate the ripple's lifetime and set the time to advance the chain.
-    const lifeTime = offR / RING_SPEED();
-    __schedState.chainAdvanceAt = nowAT + lifeTime;
-
-    ripples.push({ x: gx, y: gy, startAT: nowAT, startTime: nowPerf, speed: RING_SPEED(), offR, hit: new Set(), r2off: (RING_SPEED() * (barSec()/2)) });
-    try{ if (localStorage.getItem('mt_rippler_dbg')==='1') console.log('[rippler] spawnRipple:ok',{ manual, ripples:(ripples?ripples.length:0) }); }catch{}
-  }
 
   function ringFront(nowAT){
     if (!ripples.length) return -1;
@@ -602,6 +622,21 @@ export function createRippleSynth(selector){
         drawGenerator(ctx, n2x(generator.nx), n2y(generator.ny), Math.max(8, Math.round(generator.r*(sizing.scale||1))), tView, ripples, NUM_STEPS, stepSeconds, (sizing.scale||1));
       }
 
+      // Draw preview generator
+      if (previewGenerator.placed) {
+        const pgy = n2y(previewGenerator.ny);
+        const pgx = n2x(previewGenerator.nx);
+        const r = Math.max(8, Math.round(generator.r * (sizing.scale || 1)));
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(pgx, pgy, r, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.setLineDash([4, 4]);
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+      }
+
       // --- Life Line Bar for Chained Ghost Ripples ---
       const running = (typeof isRunning === 'function') ? isRunning() : true;
       let ghostProgress = 0;
@@ -642,6 +677,16 @@ export function createRippleSynth(selector){
       try{
         // --- Chain Activation Logic ---
         if (isActiveInChain && !__schedState.wasActiveInChain) {
+            // This toy just became active in the chain.
+
+            // If a preview generator was placed, move the real one to its position.
+            if (previewGenerator.placed) {
+                generator.nx = previewGenerator.nx;
+                generator.ny = previewGenerator.ny;
+                generator.placed = true; // Ensure it's marked as placed
+                previewGenerator.placed = false; // Consume the preview
+            }
+
             // This toy just became active in the chain.
             if (generator.placed) {
                 // Spawn a ripple and reset the scheduler to start recording a new pattern.

@@ -1,4 +1,5 @@
 // src/ripplesynth-input.js
+console.log('[Rippler] Input module loaded (v-preview-gen)');
 // Handles pointer input for the Rippler toy (placement, move, drag).
 // Exposes flags on cfg.state: draggingBlock, draggingGenerator, generatorDragEnded, dragIndex
 // Now supports dynamic block rects via cfg.getBlockRects() and updates via cfg.onBlockDrag(index, newX, newY).
@@ -19,6 +20,7 @@ export function makePointerHandlers(cfg) {
   cfg.state.dragIndex = -1;
   cfg.state.draggingGenerator = false;
   cfg.state.generatorDragEnded = false;
+  cfg.state.draggingPreviewGenerator = false;
 
   let capturedId = null;
 
@@ -56,7 +58,18 @@ export function makePointerHandlers(cfg) {
     // First-time placement: only on empty space (not on a block)
     if (!generatorRef.placed && e.isTrusted) {
       if (hitIx < 0) {
-        generatorRef.place(p.x, p.y);
+        const isChained = cfg.isChained ? cfg.isChained() : false;
+        const transportIsRunning = (typeof cfg.isRunning === 'function') ? cfg.isRunning() : true;
+        if (isChained && transportIsRunning) {
+            // If running, place a preview instead of the real one.
+            if (cfg.setPreviewGenerator) {
+                cfg.setPreviewGenerator(p);
+            }
+            cfg.state.draggingPreviewGenerator = true;
+        } else {
+            // If not running, place the real generator immediately.
+            generatorRef.place(p.x, p.y);
+        }
         try { if (canvas.setPointerCapture) { canvas.setPointerCapture(e.pointerId); capturedId = e.pointerId; } } catch {}
       } else {
         // Allow dragging blocks even before a generator is placed
@@ -70,9 +83,22 @@ export function makePointerHandlers(cfg) {
 
     // If clicking near generator and not on a block, start generator drag
     if (generatorRef.placed && hitIx < 0 && nearGenerator(p)) {
-      cfg.state.draggingGenerator = true;
-      cfg.state.generatorDragEnded = false;
-      if (Array.isArray(ripples)) ripples.length = 0; // hide ripples while dragging
+      const isActive = cfg.isActiveInChain ? cfg.isActiveInChain() : false;
+      const isChained = cfg.isChained ? cfg.isChained() : false;
+      const transportIsRunning = (typeof cfg.isRunning === 'function') ? cfg.isRunning() : true;
+
+      if (isChained && transportIsRunning) {
+        if (cfg.setPreviewGenerator) {
+          // Initialize preview at the point of click to start the drag.
+          cfg.setPreviewGenerator(p);
+        }
+        cfg.state.draggingPreviewGenerator = true;
+      } else {
+        // Default behavior: drag the real generator.
+        cfg.state.draggingGenerator = true;
+        cfg.state.generatorDragEnded = false;
+        if (Array.isArray(ripples)) ripples.length = 0; // hide ripples while dragging
+      }
       try { if (canvas.setPointerCapture) { canvas.setPointerCapture(e.pointerId); capturedId = e.pointerId; } } catch {}
       return;
     }
@@ -88,17 +114,35 @@ export function makePointerHandlers(cfg) {
 
     // Empty-space click re-places generator (only if not on a block and far from generator)
     if (generatorRef.placed && hitIx < 0 && !nearGenerator(p)) {
-      const nx = _clamp(p.x, EDGE, vw() - EDGE);
-      const ny = _clamp(p.y, EDGE, vh() - EDGE);
-      generatorRef.set(nx, ny);
-      if (Array.isArray(ripples)) ripples.length = 0;
-      cfg.state.generatorDragEnded = true; // trigger a clean re-sync on pointerup
+      const isActive = cfg.isActiveInChain ? cfg.isActiveInChain() : false;
+      const isChained = cfg.isChained ? cfg.isChained() : false;
+      const transportIsRunning = (typeof cfg.isRunning === 'function') ? cfg.isRunning() : true;
+
+      if (isChained && transportIsRunning) {
+        if (cfg.setPreviewGenerator) {
+          cfg.setPreviewGenerator(p);
+        }
+        cfg.state.draggingPreviewGenerator = true;
+        try { if (canvas.setPointerCapture) { canvas.setPointerCapture(e.pointerId); capturedId = e.pointerId; } } catch {}
+      } else {
+        // Default behavior: move the real generator.
+        const nx = _clamp(p.x, EDGE, vw() - EDGE);
+        const ny = _clamp(p.y, EDGE, vh() - EDGE);
+        generatorRef.set(nx, ny);
+        if (Array.isArray(ripples)) ripples.length = 0;
+        cfg.state.generatorDragEnded = true; // trigger a clean re-sync on pointerup
+      }
       return;
     }
 }
 
   function pointerMove(e) {
     const p = posFromEvent(e);
+
+    if (cfg.state.draggingPreviewGenerator) {
+      if (cfg.setPreviewGenerator) { cfg.setPreviewGenerator(p); }
+      return;
+    }
 
     if (cfg.state.draggingGenerator) {
       generatorRef.set(_clamp(p.x, EDGE, vw() - EDGE), _clamp(p.y, EDGE, vh() - EDGE));
@@ -129,6 +173,9 @@ export function makePointerHandlers(cfg) {
 
   function pointerUp(e) {
     const wasDraggingBlock = !!cfg.state.draggingBlock; const wasIndex = wasDraggingBlock ? cfg.state.draggingBlock.index : -1; const localTap = tapCand; tapCand = null;
+    if (cfg.state.draggingPreviewGenerator) {
+      cfg.state.draggingPreviewGenerator = false;
+    }
     if (cfg.state.draggingGenerator) {
       cfg.state.draggingGenerator = false;
       cfg.state.generatorDragEnded = true;

@@ -5,7 +5,7 @@ export function createScheduler(cfg){
   const {
     ac, NUM_STEPS, barSec, stepSeconds,
     pattern, patternOffsets, blocks, noteList,
-    triggerInstrument, getInstrument,
+    triggerInstrument, getInstrument, previewGenerator,
     generator, RING_SPEED, spawnRipple,
     state, isPlaybackMuted,
     getLoopInfo,
@@ -68,6 +68,14 @@ export function createScheduler(cfg){
       // Determine if we just finished a recording bar
       const justRecorded = !!state.recording;
       state.barStartAT += barSec();
+
+      // On new bar, if a preview generator exists, apply it.
+      if (previewGenerator && previewGenerator.placed) {
+          generator.nx = previewGenerator.nx;
+          generator.ny = previewGenerator.ny;
+          generator.placed = true;
+          previewGenerator.placed = false; // Consume it
+      }
 
       state.nextSlotAT = state.barStartAT;
       state.nextSlotIx = 0;
