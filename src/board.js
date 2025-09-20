@@ -82,6 +82,7 @@ export function initDragBoard(boardSel = '#board') {
     drag = el; sx=e.clientX; sy=e.clientY;
     const cs = getComputedStyle(el);
     ox = parseFloat(cs.left)||0; oy=parseFloat(cs.top)||0;
+    window.ToySpawner?.beginPanelDrag?.({ panel: el, pointerId: e.pointerId });
   }
   function onPointerMove(e){
     if (!drag) return;
@@ -91,16 +92,40 @@ export function initDragBoard(boardSel = '#board') {
     drag.style.position='absolute';
     drag.style.left = nx + 'px';
     drag.style.top  = ny + 'px';
+    window.ToySpawner?.updatePanelDrag?.({ panel: drag, clientX: e.clientX, clientY: e.clientY });
   }
   function onPointerUp(e){
     if (!drag) return;
-    savePos(drag);
-    drag.releasePointerCapture?.(e.pointerId);
-    drag=null;
+    const panel = drag;
+    drag = null;
+    panel.releasePointerCapture?.(e.pointerId);
+    const removedByTrash = !!window.ToySpawner?.endPanelDrag?.({
+      panel,
+      pointerId: e.pointerId,
+      clientX: e.clientX,
+      clientY: e.clientY,
+    });
+    if (!removedByTrash) {
+      savePos(panel);
+    }
+  }
+  function onPointerCancel(e){
+    if (!drag) return;
+    const panel = drag;
+    drag = null;
+    panel.releasePointerCapture?.(e.pointerId);
+    window.ToySpawner?.endPanelDrag?.({
+      panel,
+      pointerId: e.pointerId,
+      clientX: e.clientX,
+      clientY: e.clientY,
+      canceled: true,
+    });
   }
   board.addEventListener('pointerdown', onPointerDown, true);
   window.addEventListener('pointermove', onPointerMove, true);
   window.addEventListener('pointerup', onPointerUp, true);
+  window.addEventListener('pointercancel', onPointerCancel, true);
 
   // organize: masonry-like columns that respect actual panel height
   window.organizeBoard = function organizeBoard(){

@@ -6,13 +6,16 @@ const state = {
   toggle: null,
   menu: null,
   listHost: null,
+  trash: null,
   config: {
     getCatalog: () => [],
     create: () => null,
+    remove: () => false,
   },
   drag: null,
   open: false,
   justSpawned: false,
+  panelDrag: null,
 };
 
 function ensureDock() {
@@ -21,10 +24,20 @@ function ensureDock() {
   const dock = document.createElement('div');
   dock.className = 'toy-spawner-dock';
 
+  const trash = document.createElement('button');
+  trash.type = 'button';
+  trash.className = 'toy-spawner-trash toy-btn';
+  trash.setAttribute('aria-label', 'Delete Toy');
+  trash.title = 'Delete Toy';
+  trash.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 3.5h6l.5 2H21V7h-1.5l-1.2 13.05a1.5 1.5 0 0 1-1.49 1.45H7.19a1.5 1.5 0 0 1-1.49-1.45L4.5 7H3V5.5h5.5l.5-2Zm.88 1.5-.22.75h4.68l-.22-.75H9.88ZM6.01 7l1.1 12h9.78l1.1-12H6.01Zm4.24 2h1.5v8h-1.5V9Zm3.5 0h1.5v8h-1.5V9Z"/></svg>`;
+  trash.addEventListener('click', (event) => event.preventDefault());
+
   const toggle = document.createElement('button');
   toggle.type = 'button';
   toggle.className = 'toy-spawner-toggle toy-btn';
-  toggle.textContent = 'Create Toy';
+  toggle.setAttribute('aria-label', 'Create Toy');
+  toggle.title = 'Create Toy';
+  toggle.innerHTML = '<span aria-hidden="true">+</span>';
 
   const menu = document.createElement('div');
   menu.className = 'toy-spawner-menu';
@@ -34,30 +47,39 @@ function ensureDock() {
   list.className = 'toy-spawner-list';
   menu.appendChild(list);
 
-  dock.append(toggle, menu);
+  dock.append(trash, toggle, menu);
   document.body.appendChild(dock);
 
   state.dock = dock;
   state.toggle = toggle;
   state.menu = menu;
   state.listHost = list;
+  state.trash = trash;
 
   toggle.addEventListener('click', () => setMenuOpen(!state.open));
 
-  document.addEventListener('pointerdown', (event) => {
-    if (!state.open) return;
-    if (state.dock?.contains(event.target)) return;
-    if (state.drag) return;
-    setMenuOpen(false);
-  }, true);
-
-  document.addEventListener('keydown', (event) => {
-    if (!state.open) return;
-    if (event.key === 'Escape') {
-      event.preventDefault();
+  document.addEventListener(
+    'pointerdown',
+    (event) => {
+      if (!state.open) return;
+      if (state.dock?.contains(event.target)) return;
+      if (state.drag) return;
       setMenuOpen(false);
-    }
-  }, true);
+    },
+    true,
+  );
+
+  document.addEventListener(
+    'keydown',
+    (event) => {
+      if (!state.open) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setMenuOpen(false);
+      }
+    },
+    true,
+  );
 }
 
 function setMenuOpen(open) {
@@ -173,12 +195,10 @@ function onPointerUp(event) {
 }
 
 function spawnAtDefault(entry) {
-  const board = document.getElementById('board');
-  if (!board) return false;
-  const rect = board.getBoundingClientRect();
-  const scale = window.__boardScale || 1;
-  const centerX = (rect.width / 2) / scale;
-  const centerY = (rect.height / 2) / scale;
+  const metrics = getBoardMetrics();
+  if (!metrics) return false;
+  const centerX = metrics.offsetWidth / 2;
+  const centerY = metrics.offsetHeight / 2;
   try {
     state.config.create?.(entry.type, { centerX, centerY });
     return true;
@@ -194,11 +214,8 @@ function updateGhostPosition(x, y) {
 }
 
 function updateDropPreview(x, y) {
-  const board = document.getElementById('board');
-  if (!board) return;
-  const rect = board.getBoundingClientRect();
-  const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
-  highlightBoard(inside);
+  const point = clientPointToBoard(x, y);
+  highlightBoard(!!point?.inside);
 }
 
 function highlightBoard(active) {
@@ -208,21 +225,14 @@ function highlightBoard(active) {
 }
 
 function trySpawn(entry, clientX, clientY) {
-  const board = document.getElementById('board');
-  if (!board) return false;
-  const rect = board.getBoundingClientRect();
-  const inside = clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
-  if (!inside) {
+  const point = clientPointToBoard(clientX, clientY);
+  if (!point || !point.inside) {
     highlightBoard(false);
     return false;
   }
 
-  const scale = window.__boardScale || 1;
-  const centerX = (clientX - rect.left) / scale;
-  const centerY = (clientY - rect.top) / scale;
-
   try {
-    state.config.create?.(entry.type, { centerX, centerY });
+    state.config.create?.(entry.type, { centerX: point.x, centerY: point.y });
     return true;
   } catch (err) {
     console.warn('[ToySpawner] create failed', err);
@@ -253,6 +263,88 @@ function cancelDrag() {
   highlightBoard(false);
 }
 
+function getBoardMetrics() {
+  const board = document.getElementById('board');
+  if (!board) return null;
+  const rect = board.getBoundingClientRect();
+  const offsetWidth = board.offsetWidth || rect.width || 1;
+  const offsetHeight = board.offsetHeight || rect.height || 1;
+  const scaleX = rect.width / offsetWidth || 1;
+  const scaleY = rect.height / offsetHeight || 1;
+  return { board, rect, offsetWidth, offsetHeight, scaleX, scaleY };
+}
+
+function clientPointToBoard(clientX, clientY) {
+  const metrics = getBoardMetrics();
+  if (!metrics) return null;
+  const { rect, scaleX, scaleY } = metrics;
+  const localX = clientX - rect.left;
+  const localY = clientY - rect.top;
+  const inside = localX >= 0 && localY >= 0 && localX <= rect.width && localY <= rect.height;
+  const x = scaleX ? localX / scaleX : localX;
+  const y = scaleY ? localY / scaleY : localY;
+  return { metrics, inside, x, y };
+}
+
+function setTrashHover(active) {
+  if (!state.trash) return;
+  if (active) {
+    state.trash.dataset.hover = 'true';
+  } else {
+    delete state.trash.dataset.hover;
+  }
+}
+
+function setPanelDragActive(active) {
+  if (!state.dock) return;
+  state.dock.classList.toggle('panel-drag-active', !!active);
+}
+
+function isPointOverTrash(x, y) {
+  if (!state.trash) return false;
+  const rect = state.trash.getBoundingClientRect();
+  const margin = 6;
+  return x >= rect.left - margin && x <= rect.right + margin && y >= rect.top - margin && y <= rect.bottom + margin;
+}
+
+function beginPanelDrag({ panel, pointerId } = {}) {
+  if (!panel) return;
+  ensureDock();
+  state.panelDrag = { panel, pointerId: pointerId ?? null, hovering: false };
+  setPanelDragActive(true);
+  setTrashHover(false);
+}
+
+function updatePanelDrag({ clientX, clientY } = {}) {
+  if (!state.panelDrag) return;
+  if (typeof clientX !== 'number' || typeof clientY !== 'number') return;
+  ensureDock();
+  const hovering = isPointOverTrash(clientX, clientY);
+  if (hovering !== state.panelDrag.hovering) {
+    state.panelDrag.hovering = hovering;
+    setTrashHover(hovering);
+  }
+}
+
+function endPanelDrag({ clientX, clientY, pointerId, canceled } = {}) {
+  if (!state.panelDrag) return false;
+  ensureDock();
+  const panel = state.panelDrag.panel;
+  const shouldRemove = !canceled && panel && typeof clientX === 'number' && typeof clientY === 'number' && isPointOverTrash(clientX, clientY);
+  setTrashHover(false);
+  setPanelDragActive(false);
+  state.panelDrag = null;
+
+  if (shouldRemove && typeof state.config.remove === 'function') {
+    try {
+      return !!state.config.remove(panel);
+    } catch (err) {
+      console.warn('[ToySpawner] remove failed', err);
+    }
+  }
+  return false;
+}
+
 function configure(options) {
   state.config = Object.assign({}, state.config, options || {});
   if (state.open) renderCatalog();
@@ -262,6 +354,9 @@ export const ToySpawner = {
   open: () => setMenuOpen(true),
   close: () => setMenuOpen(false),
   configure,
+  beginPanelDrag,
+  updatePanelDrag,
+  endPanelDrag,
 };
 
 try {

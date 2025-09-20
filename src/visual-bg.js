@@ -21,21 +21,48 @@ function pickHost(){
 function ensureCanvas(){
   if (canvas) return canvas;
   host = pickHost();
+
+  // The root cause of the clipping is `overflow: hidden` on the <body> element,
+  // as confirmed by the `inspectBoard()` debug output. By setting it to 'visible',
+  // we allow the transformed #board element's children (like the chain canvas)
+  // to be drawn outside the viewport bounds without being clipped. This is the
+  // most direct fix for the issue.
+  document.body.style.overflow = 'visible';
+
+  // --- New Structure to Isolate Canvases from Board Transform ---
+  // The board's transform for panning causes clipping on child canvases.
+  // To fix this, we create a stable wrapper for the canvases and a separate
+  // pannable container for the toys.
+  let canvasWrap = host.querySelector('.canvas-wrapper');
+  if (!canvasWrap) {
+    canvasWrap = document.createElement('div');
+    canvasWrap.className = 'canvas-wrapper';
+    Object.assign(canvasWrap.style, {
+      position: 'absolute', inset: '0', zIndex: '0', pointerEvents: 'none'
+    });
+    host.prepend(canvasWrap);
+  }
+
   canvas = document.createElement('canvas');
   canvas.id = 'intensity-bg';
-  const abs = (host !== document.body);
-  Object.assign(canvas.style, abs ? {
-    position: 'absolute', inset: '0', zIndex: '0', pointerEvents: 'none'
-  } : {
-    position: 'fixed', inset: '0', zIndex: '0', pointerEvents: 'none'
+  // The background canvas now has a z-index of 0, and the chain canvas will have a z-index of 1.
+  // They are inside a wrapper that sits behind the toys.
+  Object.assign(canvas.style, {
+    position: 'absolute', inset: '0', width: '100%', height: '100%', zIndex: '0'
   });
-  if (abs){
-    const cs = getComputedStyle(host);
-    if (cs.position === 'static'){ host.style.position = 'relative'; }
-    host.prepend(canvas);
-  } else {
-    document.body.prepend(canvas);
+  canvasWrap.appendChild(canvas);
+
+  // Move the chain canvas into the new stable wrapper as well.
+  const chainCanvas = host.querySelector('#chain-canvas');
+  if (chainCanvas && chainCanvas.parentElement !== canvasWrap) {
+    canvasWrap.appendChild(chainCanvas);
+    // Ensure chain canvas is drawn on top of the background.
+    chainCanvas.style.zIndex = '1';
   }
+
+  const cs = getComputedStyle(host);
+  if (cs.position === 'static'){ host.style.position = 'relative'; }
+
   ctx = canvas.getContext('2d');
   onResize();
   window.addEventListener('resize', onResize);
@@ -46,7 +73,9 @@ function ensureCanvas(){
 function onResize(){
   if (!canvas) return;
   const dpr = window.devicePixelRatio || 1;
-  const rect = (host && host!==document.body) ? host.getBoundingClientRect() : { width: window.innerWidth, height: window.innerHeight };
+  // The canvas now lives in a stable wrapper that fills the host, so we can
+  // get the size from the host's clientWidth/Height, which are immune to CSS transforms.
+  const rect = (host && host!==document.body) ? { width: host.clientWidth, height: host.clientHeight } : { width: window.innerWidth, height: window.innerHeight };
   const w = Math.max(1, Math.floor(rect.width));
   const h = Math.max(1, Math.floor(rect.height));
   canvas.width = Math.floor(w * dpr);

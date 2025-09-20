@@ -381,15 +381,95 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument } = {}) {
     return panel;
 }
 
+function destroyToyPanel(panelOrId) {
+    const panel = typeof panelOrId === 'string' ? document.getElementById(panelOrId) : panelOrId;
+    if (!panel) return false;
+    if (!panel.classList || !panel.classList.contains('toy-panel')) return false;
+    const board = document.getElementById('board');
+    if (!board || !board.contains(panel)) return false;
+
+    const panelId = panel.id;
+    const prevId = panel.dataset.prevToyId || '';
+    const nextId = panel.dataset.nextToyId || '';
+
+    try { panel.dispatchEvent(new CustomEvent('toy-remove', { bubbles: true })); } catch (err) { console.warn('[destroyToyPanel] dispatch toy-remove failed', err); }
+    try { panel.dispatchEvent(new CustomEvent('toy:remove', { detail: { panel }, bubbles: true })); } catch (err) { console.warn('[destroyToyPanel] dispatch toy:remove failed', err); }
+
+    if (prevId) {
+        const prev = document.getElementById(prevId);
+        if (prev) {
+            if (nextId) {
+                prev.dataset.nextToyId = nextId;
+            } else {
+                delete prev.dataset.nextToyId;
+            }
+        }
+    }
+    if (nextId) {
+        const next = document.getElementById(nextId);
+        if (next) {
+            if (prevId) {
+                next.dataset.prevToyId = prevId;
+            } else {
+                delete next.dataset.prevToyId;
+            }
+        }
+    }
+
+    delete panel.dataset.prevToyId;
+    delete panel.dataset.nextToyId;
+
+    panel.remove();
+
+    try {
+        const key = 'toyPositions';
+        const raw = localStorage.getItem(key);
+        if (raw) {
+            const map = JSON.parse(raw) || {};
+            if (panelId && map[panelId]) {
+                delete map[panelId];
+                localStorage.setItem(key, JSON.stringify(map));
+            }
+        }
+    } catch (err) {
+        console.warn('[destroyToyPanel] persist cleanup failed', err);
+    }
+
+    if (panelId) {
+        g_pulsingConnectors.delete(panelId);
+        for (const [fromId, info] of Array.from(g_pulsingConnectors.entries())) {
+            if (info?.toId === panelId) {
+                g_pulsingConnectors.delete(fromId);
+            }
+        }
+        g_chainState.delete(panelId);
+        for (const [headId, activeId] of Array.from(g_chainState.entries())) {
+            if (activeId === panelId) {
+                g_chainState.set(headId, headId);
+            }
+        }
+    }
+
+    try { updateChains(); } catch (err) { console.warn('[destroyToyPanel] chain update failed', err); }
+    try { updateAllChainUIs(); } catch (err) { console.warn('[destroyToyPanel] chain UI update failed', err); }
+    try { drawChains(); } catch (err) { console.warn('[destroyToyPanel] draw chains failed', err); }
+    try { applyStackingOrder(); } catch (err) { console.warn('[destroyToyPanel] stacking failed', err); }
+    try { window.Persistence?.markDirty?.(); } catch (err) { console.warn('[destroyToyPanel] mark dirty failed', err); }
+
+    return true;
+}
+
 try {
     window.MusicToyFactory = Object.assign(window.MusicToyFactory || {}, {
         create: createToyPanelAt,
+        destroy: destroyToyPanel,
         getCatalog: () => getToyCatalog(),
     });
     if (window.ToySpawner && typeof window.ToySpawner.configure === 'function') {
         window.ToySpawner.configure({
             getCatalog: () => getToyCatalog(),
             create: createToyPanelAt,
+            remove: destroyToyPanel,
         });
     }
 } catch (err) {

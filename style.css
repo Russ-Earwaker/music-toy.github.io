@@ -526,13 +526,14 @@ select.toy-instrument {
 .toy-panel[data-toy='bouncer'] .toy-body { aspect-ratio: 1 / 1; width: 100%; }
 /* --- Toy Spawner Dock --- */
 .toy-spawner-dock {
+  --toy-spawner-button-size: 60px;
   position: fixed;
   right: 20px;
-  top: calc(64px + 65px);
+  top: calc(64px + 20px);
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  align-items: stretch;
+  gap: 16px;
+  align-items: flex-end;
   z-index: 900;
   pointer-events: none;
 }
@@ -541,17 +542,64 @@ select.toy-instrument {
   pointer-events: auto;
 }
 
-.toy-spawner-toggle {
-  align-self: stretch;
+.toy-spawner-toggle,
+.toy-spawner-trash {
+  width: var(--toy-spawner-button-size);
+  height: var(--toy-spawner-button-size);
+  padding: 0;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 10px 28px rgba(0, 0, 0, 0.45);
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.25s ease, opacity 0.2s ease;
+}
+
+.toy-spawner-toggle span {
+  pointer-events: none;
+  margin-top: -2px;
+}
+
+.toy-spawner-trash {
+  opacity: 0.55;
+  border: 1px solid rgba(95, 179, 255, 0.32);
+  background: rgba(17, 26, 36, 0.92);
+}
+
+.toy-spawner-dock.panel-drag-active .toy-spawner-trash {
+  opacity: 1;
+}
+
+.toy-spawner-trash svg {
+  width: 26px;
+  height: 26px;
+  fill: rgba(238, 245, 255, 0.78);
+  transition: transform 0.18s ease, fill 0.18s ease;
+}
+
+.toy-spawner-trash[data-hover='true'] {
+  border-color: rgba(248, 113, 113, 0.85);
+  background: rgba(248, 113, 113, 0.18);
+  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.22), 0 20px 45px rgba(0, 0, 0, 0.55);
+}
+
+.toy-spawner-trash[data-hover='true'] svg {
+  transform: translateY(-1px);
+  fill: #fda4af;
 }
 
 .toy-spawner-menu {
   display: none;
   flex-direction: column;
   gap: 10px;
-  max-height: calc(100vh - 120px);
+  align-self: stretch;
+  width: min(320px, calc(100vw - 48px));
+  max-height: calc(100vh - 160px);
   overflow-y: auto;
   padding: 12px;
+  margin-top: 6px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -620,8 +668,12 @@ select.toy-instrument {
   .toy-spawner-dock {
     top: auto;
     bottom: 16px;
+    right: 16px;
+    --toy-spawner-button-size: 54px;
+    gap: 12px;
   }
   .toy-spawner-menu {
+    width: min(92vw, 360px);
     max-height: 60vh;
   }
 }
