@@ -300,25 +300,27 @@ export function createChordWheel(panel){
   wheel.setSliceColors(COLORS);
   updateLabels();
 
-  panel.addEventListener('toy-random',()=>{
+  function performRandomize(source = 'manual') {
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('cw_dbg') === '1') {
+      console.log(`[chordwheel random] ${toyId} via=${source}`);
+    }
+
     const diatonicProgression = (numSteps === 16) ? randomPentatonicProgression16() : randomPentatonicProgression8();
     progression = diatonicProgression.map(diatonicDegreeToState);
     updateLabels();
+
     // New randomization logic:
     // - A random number of active steps (arpeggios).
     // - All active steps must have a gap of at least one empty step between them.
     // - One "double" (two adjacent active steps) is allowed per randomization.
     stepStates.fill(-1);
-
     const numActive = 3 + Math.floor(Math.random() * (numSteps / 2.5)); // Scale active steps
     const allowDouble = Math.random() < 0.5;
     const indices = Array.from({length: numSteps}, (_, i) => i);
     for (let i = indices.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [indices[i], indices[j]] = [indices[j], indices[i]]; }
-
     let placedCount = 0;
     const occupied = new Set();
     const isAvailable = (index) => !occupied.has(index); const occupy = (index) => { occupied.add(index); occupied.add((index - 1 + numSteps) % numSteps); occupied.add((index + 1 + numSteps) % numSteps); };
-
     if (allowDouble && numActive >= 2) {
       for (const idx1 of indices) {
         const idx2 = (idx1 + 1) % numSteps;
@@ -329,7 +331,6 @@ export function createChordWheel(panel){
         }
       }
     }
-
     while (placedCount < numActive) {
       const foundIndex = indices.find(idx => stepStates[idx] === -1 && isAvailable(idx));
       if (foundIndex === undefined) break; // No available slots left
@@ -337,12 +338,21 @@ export function createChordWheel(panel){
       occupy(foundIndex);
       placedCount++;
     }
-  });
+    // Reset audio state to ensure the next step re-evaluates against the new pattern.
+    lastAudioStep = -1;
+  }
+
+  panel.addEventListener('toy-random', () => performRandomize('toy-random'));
   panel.addEventListener('toy-clear',()=>{ stepStates.fill(-1); });
+  // When a preceding toy in a chain is reset, this toy should also reset its pattern
+  // to avoid playing an old pattern against a new one.
+  // This is no longer needed as the global "randomize all" has been disabled.
+  // panel.addEventListener('chain:stop', () => performRandomize('chain:stop'));
 
   let lastAudioStep = -1;
   let playheadIx = -1;
   let flashes = new Float32Array(numSteps);
+
 
   let lastClickDebug = null; // For debugging click positions
   // --- Canvas Click Handler ---
@@ -494,24 +504,35 @@ export function createChordWheel(panel){
     const info = getLoopInfo();
     const running = (typeof isRunning === 'function') ? !!isRunning() : true;
 
+    // A Chord Wheel is "running" if it's the active toy in a chain,
+    // OR if it's a standalone toy (not part of any chain),
+    // AND the global transport is playing.
+    const isActiveInChain = panel.dataset.chainActive !== 'false';
+    const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
+    const shouldRun = (isActiveInChain || !isChained) && running;
+
     // Background pulse on global beat
-    if (running) {
+    // This was changed to `shouldRun` to disable the pulse when inactive.
+    // The `else` block that set the pulse to 0 is removed to allow the pulse to decay naturally.
+    if (shouldRun) {
       const currentBeatInBar = Math.floor(info.phase01 * 4);
       if (currentBeatInBar !== lastBeat) {
-          if (currentBeatInBar === 0) {
-              strumBgPulse = 1.0; // Strong pulse on the downbeat
-          } else {
-              strumBgPulse = 0.5; // Weaker pulse on other quarter notes
-          }
-          lastBeat = currentBeatInBar;
+        if (currentBeatInBar === 0) {
+          strumBgPulse = 1.0; // Strong pulse on the downbeat
+        } else {
+          strumBgPulse = 0.5; // Weaker pulse on other quarter notes
+        }
+        lastBeat = currentBeatInBar;
       }
     }
 
-    // Freeze playhead when transport is paused
-    if (running) {
+    // Freeze playhead when transport is paused or not active in chain
+    if (shouldRun) {
       const totalPhase = info.phase01 * numSteps;
       const currentStep = Math.floor(totalPhase);
       playheadIx = currentStep;
+    } else if (running && !shouldRun) {
+      playheadIx = -1;
     }
 
     // The hand should rotate over 8 visual segments, in sync with the 16 steps.
@@ -520,9 +541,12 @@ export function createChordWheel(panel){
       const totalPhase8 = info.phase01 * NUM_SLICES;
       const handSegment = Math.floor(totalPhase8);
       const phaseInHandSegment = totalPhase8 - handSegment;
-      if (!draw.__frozenHand){ draw.__frozenHand = { seg: handSegment, phase: phaseInHandSegment }; }
-      if (running){ draw.__frozenHand = { seg: handSegment, phase: phaseInHandSegment }; }
-      const use = running ? { seg: handSegment, phase: phaseInHandSegment } : draw.__frozenHand;
+      let use;
+      if (shouldRun) {
+        use = { seg: handSegment, phase: phaseInHandSegment };
+      } else {
+        use = { seg: 0, phase: 0 }; // Default to straight up when not playing
+      }
       wheel.setHand(use.seg, use.phase);
     }catch{}
 
@@ -530,8 +554,8 @@ export function createChordWheel(panel){
     // Size and draw particle + strum canvases
     if (strumCanvas && particleCanvas) {
       if (strumSizeDirty) {
-        if (!strumSize.width || !strumSize.height) {
-          const rect = sanitizeDimensions(strumWrap.getBoundingClientRect().width, strumWrap.getBoundingClientRect().height, 'strumWrap');
+        if (!strumSize.width || !strumSize.height) { // Use clientWidth/clientHeight which are not affected by CSS transforms (board zoom)
+          const rect = sanitizeDimensions(strumWrap.clientWidth, strumWrap.clientHeight, 'strumWrap');
           strumSize.width = rect.width;
           strumSize.height = rect.height;
         }
@@ -638,19 +662,23 @@ export function createChordWheel(panel){
     // Debug visuals removed
 
     // --- Audio Logic ---
-    const audioStep = (playheadIx >= 0) ? playheadIx : 0;
-    if (audioStep !== lastAudioStep) {
-      lastAudioStep = audioStep;
-
-      const state = stepStates[audioStep];
-      if (state !== -1) {
-        flashes[audioStep] = 1.0;
-        const chord = buildChord(progression[audioStep] || 1);
-        const chordName = degreeToChordName(progression[audioStep] || 1);
-        // Map state -> strum direction: 1 = up, 2 = down
-        const direction = (state === 1) ? 'up' : 'down';
-        scheduleStrum({ notes: chord, direction, chordName });
-      }
+    if (shouldRun) {
+        const audioStep = (playheadIx >= 0) ? playheadIx : 0;
+        if (audioStep !== lastAudioStep) {
+          lastAudioStep = audioStep;
+    
+          const state = stepStates[audioStep];
+          if (state !== -1) {
+            flashes[audioStep] = 1.0;
+            const chord = buildChord(progression[audioStep] || 1);
+            const chordName = degreeToChordName(progression[audioStep] || 1);
+            // Map state -> strum direction: 1 = up, 2 = down
+            const direction = (state === 1) ? 'up' : 'down';
+            scheduleStrum({ notes: chord, direction, chordName });
+          }
+        }
+    } else {
+        lastAudioStep = -1;
     }
 
     // Decay pulse for next frame
@@ -795,8 +823,8 @@ export function createChordWheel(panel){
         triggerNoteForToy(toyId, midiToName(midiOut), vel, { when, env: { decaySec, releaseSec, sustainLevel } });
         // Spawn particles along the string's vertical line; faster near vertical center
         try{
-          const w = (strumWrap.getBoundingClientRect().width)|0;
-          const x = (w * 0.5);
+          const w = (strumWrap.clientWidth)|0; // Use clientWidth which is not affected by CSS transforms (board zoom)
+          const x = (w * 0.5); // Use clientWidth which is not affected by CSS transforms (board zoom)
           const burstCount = 180;
           const baseSpeed = 4.6; // increase top speed
           const speedMul = 1.8;  // stronger overall scaling
@@ -828,8 +856,9 @@ export function createChordWheel(panel){
   draw();
 
   // This toy manages its own timing via requestAnimationFrame. By setting
-  // __sequencerStep to null, we ensure it's completely ignored by the main scheduler.
-  panel.__sequencerStep = null;
+  // __sequencerStep to a dummy function, we ensure it's included in the chain
+  // scheduler for `data-chain-active` updates, but its audio is driven by its own RAF loop.
+  panel.__sequencerStep = () => {};
 
   // Always-on: Press 'C' to play reference C4 tone (debug/tuning aid)
   try{
@@ -1198,13 +1227,13 @@ function randomPentatonicProgression16(){
   if (r < P.exact){
     loopB = loopA.slice();
   } else if (r < P.exact + P.lightMutate){
-    loopB = __cwPentatonicMutate8(loopA);
+    loopB = __cwDiatonicMutate8(loopA);
     loopB[7] = __cwPentatonicCadenceBar8(loopB[7]);
   } else {
     const b = loopA.slice();
     const last4 = b.slice(4,8).reverse();
     loopB = [...b.slice(0,4), ...last4];
-    loopB[7] = __cwPentatonicCadenceBar8(loopB[7]);
+    loopB[7] = __cwDiatonicCadenceBar8(loopB[7]);
   }
 
   return [...loopA, ...loopB];

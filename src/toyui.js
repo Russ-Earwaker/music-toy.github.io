@@ -52,6 +52,22 @@ function toTitleCase(str) {
 
 function btn(label){ const b=document.createElement('button'); b.type='button'; b.className='toy-btn'; b.textContent=label; return b; }
 
+/**
+ * Wires a button to dispatch a 'toy-random' event only on its parent panel,
+ * preventing the event from bubbling up to any global "randomize all" delegate.
+ * This is the definitive fix for the "ghost note" race condition.
+ * @param {HTMLElement} button The button element.
+ * @param {HTMLElement} panel The toy panel element.
+ */
+function wireScopedRandom(button, panel) {
+    if (!button || !panel || button.__wiredScopedRandom) return;
+    button.__wiredScopedRandom = true;
+    button.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent any document-level delegate from firing.
+        panel.dispatchEvent(new CustomEvent('toy-random', { bubbles: true }));
+    }, { capture: true }); // Capture to run before any other click listeners.
+}
+
 function buildInstrumentSelect(panel){
   let sel = panel.querySelector('select.toy-instrument');
   const header = ensureHeader(panel);
@@ -174,6 +190,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       randomBtn.style.setProperty('--c-btn-size', '65px');
       randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandom.png');"></div>`;
       left.appendChild(randomBtn);
+      wireScopedRandom(randomBtn, panel);
     }
 
     // The "Random Notes" button randomizes pitches and is only visible in advanced mode.
@@ -231,7 +248,8 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       // Bouncer gets a special icon button for its standard "Random" (new ball) action.
       // Bouncer handles its own buttons entirely within its specific block.
       if (toyKind !== 'bouncer' && toyKind !== 'rippler' && toyKind !== 'chordwheel' && toyKind !== 'drawgrid') {
-        const b = btn('Random'); b.dataset.action = 'random'; right.appendChild(b);
+        const b = btn('Random'); b.dataset.action = 'random';
+        right.appendChild(b); wireScopedRandom(b, panel);
       }
     }
     if (!right.querySelector('[data-action="clear"]')) {
@@ -271,6 +289,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       randomBtn.style.setProperty('--c-btn-size', BTN_SIZE);
       randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandom.png');"></div>`;
       left.appendChild(randomBtn);
+      wireScopedRandom(randomBtn, panel);
     }
 
     // Advanced-view "Random Blocks" button
@@ -385,6 +404,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       randomBtn.style.setProperty('--c-btn-size', BTN_SIZE);
       randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandom.png');"></div>`;
       left.appendChild(randomBtn);
+      wireScopedRandom(randomBtn, panel);
     }
 
     // "Clear" button
@@ -445,6 +465,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       randomBtn.style.setProperty('--c-btn-size', BTN_SIZE);
       randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandom.png');"></div>`;
       left.appendChild(randomBtn);
+      wireScopedRandom(randomBtn, panel);
     }
 
     // Advanced-view "Random Blocks" button
@@ -559,6 +580,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       randomBtn.style.setProperty('--c-btn-size', BTN_SIZE);
       randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandom.png');"></div>`;
       left.appendChild(randomBtn);
+      wireScopedRandom(randomBtn, panel);
     }
 
     // Advanced-view "Random Blocks" button
