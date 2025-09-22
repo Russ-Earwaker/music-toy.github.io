@@ -208,6 +208,7 @@ export function stepBouncer(S, nowAT){
                 // Pass block index for replay logic
                 if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t, { blockIndex: bestIdx });
                 if (S.fx && S.fx.onHit) S.fx.onHit(S.ball.x, S.ball.y);
+                if (S.panel) S.panel.__pulseHighlight = 1.0;
                 dbgMarkFire('block', t);
                 b.flash = 1.0; b.flashDur = 0.12;
                 const at2 = (S.ensureAudioContext && S.ensureAudioContext())?.currentTime || now;
@@ -227,6 +228,7 @@ export function stepBouncer(S, nowAT){
                 try { if (window && window.BOUNCER_LOOP_DBG) { var __tt=(t && t.toFixed)?t.toFixed(4):t; console.log('[bouncer-step] HIT', nm, 'idx=', (b&&c.noteIndex), 'listLen=', (S.noteList&&S.noteList.length), 't=', __tt); } } catch(e) {} // Pass edge controller index for replay logic
                 if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t, { edgeControllerIndex: ei });
                 if (S.fx && S.fx.onHit) S.fx.onHit(S.ball.x, S.ball.y);
+                if (S.panel) S.panel.__pulseHighlight = 1.0;
                 dbgMarkFire('edge-controller', t);
                 c.flash = 1.0; c.flashDur = 0.12;
                 const at2 = (S.ensureAudioContext && S.ensureAudioContext())?.currentTime || now;
@@ -251,6 +253,7 @@ export function stepBouncer(S, nowAT){
                 if (S.__lastTickByEdge && S.__lastTickByEdge.set) S.__lastTickByEdge.set(edgeKey, tick16);
                 if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t, { edgeName: edgeKey });
                 if (typeof S.flashEdge==='function') S.flashEdge((best.nx>0)?'left':(best.nx<0)?'right':(best.ny>0)?'top':'bot');
+                if (S.panel) S.panel.__pulseHighlight = 1.0;
                 dbgMarkFire('border', t);
                 c.flash = 1.0; c.flashDur = 0.12;
                 const at2 = (S.ensureAudioContext && S.ensureAudioContext())?.currentTime || now;

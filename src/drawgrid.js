@@ -1762,6 +1762,11 @@ function regenerateMapFromStrokes() {
   function renderLoop() {
     if (!panel.isConnected) { cancelAnimationFrame(rafId); return; }
 
+    // Set playing class for border highlight
+    const isActiveInChain = panel.dataset.chainActive === 'true';
+    const hasActiveNotes = currentMap && currentMap.active && currentMap.active.some(a => a);
+    panel.classList.toggle('toy-playing', isActiveInChain && hasActiveNotes);
+
     // Step and draw particles
     try {
       particles.step(1/60); // Assuming 60fps for dt
@@ -1843,8 +1848,6 @@ function regenerateMapFromStrokes() {
       localLastPhase = info.phase01;
 
       // Only draw and repulse particles if transport is running and this toy is the active one in its chain.
-      const isActiveInChain = panel.dataset.chainActive === 'true';
-
       // If this toy thinks it's active, but the global transport phase just wrapped,
       // it's possible its active status is stale. Skip one frame of playhead drawing
       // to wait for the scheduler to update the `data-chain-active` attribute.

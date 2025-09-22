@@ -103,6 +103,11 @@ function render(panel) {
   const st = panel.__drumVisualState;
   if (!st) return;
 
+  // Set playing class for border highlight
+  const state = panel.__gridState || {};
+  const isActive = panel.dataset.chainActive !== 'false' && state.steps && state.steps.some(s => s);
+  panel.classList.toggle('toy-playing', isActive);
+
   const { ctx, canvas } = st;
   const w = canvas.width;
   const h = canvas.height;
@@ -110,7 +115,6 @@ function render(panel) {
 
   ctx.clearRect(0, 0, w, h);
 
-  const state = panel.__gridState || {};
   const steps = state.steps || [];
   const noteIndices = state.noteIndices || [];
   const notePalette = state.notePalette || [];

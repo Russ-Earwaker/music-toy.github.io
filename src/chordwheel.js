@@ -511,6 +511,8 @@ export function createChordWheel(panel){
     const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
     const shouldRun = (isActiveInChain || !isChained) && running;
 
+    panel.classList.toggle('toy-playing', shouldRun && stepStates.some(s => s !== -1));
+
     // Background pulse on global beat
     // This was changed to `shouldRun` to disable the pulse when inactive.
     // The `else` block that set the pulse to 0 is removed to allow the pulse to decay naturally.

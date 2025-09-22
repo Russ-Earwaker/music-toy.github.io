@@ -8,11 +8,21 @@ export function initDragBoard(boardSel = '#board') {
     window.__toyFocusHandler = true;
     const style = document.createElement('style');
     style.textContent = `
+      @keyframes playingPulseBigger {
+        50% { outline-width: 8px; outline-offset: -1px; }
+      }
       .toy-panel {
-        transition: outline-color 0.2s ease-out, box-shadow 0.2s ease-out;
-        outline: 2px solid transparent;
-        outline-offset: -2px;
+        transition: outline-color 0.2s ease-out, box-shadow 0.2s ease-out, border-color 0.2s ease-out;
+        outline: 3px solid transparent;
+        outline-offset: 2px; /* Position outline outside the border */
         z-index: 2; /* Default stacking above chain canvas (z-index: 1) */
+      }
+      .toy-panel.toy-playing-pulse {
+        animation: playingPulseBigger 0.3s ease-out;
+      }
+      .toy-panel.toy-playing {
+        /* A flat highlight color that matches the chain connectors. */
+        outline-color: hsl(222, 100%, 80%);
       }
       .toy-panel.toy-focused {
         /* Make the border and inner highlight significantly brighter on focus. */

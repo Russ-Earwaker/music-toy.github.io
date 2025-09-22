@@ -52,6 +52,19 @@ export function createBouncerDraw(env){
     // With alpha:false, clearRect can have undefined behavior. A fill is more reliable.
     ctx.fillStyle = '#0f141b'; // Match --bg from style.css
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Set playing class for border highlight. This must run every frame.
+    const b = getBall ? getBall() : env.ball;
+    panel.classList.toggle('toy-playing', !!b);
+
+    // Handle the highlight pulse animation on note hits.
+    if (panel.__pulseHighlight && panel.__pulseHighlight > 0) {
+      panel.classList.add('toy-playing-pulse');
+      panel.__pulseHighlight = Math.max(0, panel.__pulseHighlight - 0.05); // Decay over ~20 frames
+    } else if (panel.classList.contains('toy-playing-pulse')) {
+      panel.classList.remove('toy-playing-pulse');
+    }
+
     const rs = renderScale();
     try{ ctx.scale((rs.sx||1), (rs.sy||1)); }catch{}
     try{ ctx.translate(rs.tx||0, rs.ty||0); }catch{}
@@ -328,7 +341,10 @@ export function createBouncerDraw(env){
         // OR if it's a standalone toy (not part of any chain).
         // AND the global transport is playing.
         const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
-        const shouldRunPhysics = (isActiveInChain || !isChained) && isRunning();
+        // Physics should run if active in chain, OR if standalone, OR if it has a ghost ball
+        // that needs to expire to advance the chain.
+        const hasActiveGhostBall = (getBall ? getBall() : env.ball)?.isGhost === true;
+        const shouldRunPhysics = (isActiveInChain || !isChained || hasActiveGhostBall) && isRunning();
 
         // After the first bar, the bouncer switches to 'replay' mode. This scheduler
         // is responsible for playing back the recorded pattern of notes.
@@ -389,22 +405,23 @@ export function createBouncerDraw(env){
         if (isActiveInChain && !wasActiveInChain) {
             const b = getBall ? getBall() : null;
             if (!b) { // Only do something if there's no ball.
-                const hasHistory = !!S.lastLaunch;
-                const userHasPlacedHandle = !!S.handle.userPlaced;
+                const isChainHead = !panel.dataset.prevToyId;
+                const hasHistory = !!(getLastLaunch ? getLastLaunch() : null);
+                const userHasPlacedHandle = !!handle.userPlaced;
 
                 if (userHasPlacedHandle) {
-                    // Highest priority: If the user has placed a spawner, always use it.
-                    // This ensures that on subsequent loops, the user's placement is respected.
-                    // Use the launch vector stored on the handle from the user's drag interaction.
+                    // User has placed a spawner, so launch a ball from it.
                     const vx = handle.vx || 0;
-                    const vy = handle.vy || -7.68; // Default to upwards (4.8 base * 1.6 default speed) if not set
+                    const vy = handle.vy || -7.68; // Default upwards
                     const newBall = spawnBallFrom({ x: handle.x, y: handle.y, vx, vy, r: ballR() });
-                    S.ball = newBall; // Update the current step's state object to ensure the new ball is not overwritten.
+                    setBallOut(newBall);
                 } else if (hasHistory) {
                     // No user placement, but has history. Let stepBouncer handle the respawn.
-                    // This correctly handles the head of the chain on subsequent loops.
+                    // This is a no-op here; stepBouncer will see no ball and check nextLaunchAt.
                 } else {
-                    // No history, no user placement. This is an empty, untouched bouncer. Create a ghost ball.
+                    // This is an empty, untouched bouncer. If it's part of a chain,
+                    // it should get a ghost ball to act as a "rest" for one bar.
+                    // This applies to both head and follower bouncers.
                     const ac = ensureAudioContext();
                     const now = ac ? ac.currentTime : 0;
                     const li = (typeof getLoopInfo === 'function') ? getLoopInfo() : null;
@@ -418,10 +435,7 @@ export function createBouncerDraw(env){
                         flightEnd: now + life,
                         r: ballR()
                     };
-                    // Update both the module-scoped ball and the current step's state object.
-                    S.ball = ghostBall;
                     setBallOut(ghostBall);
-                    // Also update the respawn timer so it's consistent.
                     if (typeof setNextLaunchAt === 'function') setNextLaunchAt(ghostBall.flightEnd);
                 }
             }

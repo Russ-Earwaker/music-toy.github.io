@@ -668,6 +668,7 @@ export function createRippleSynth(selector){
   let __lastDrawAT = 0;
   function draw(){
     try {
+      panel.classList.toggle('toy-playing', ripples.length > 0 && generator.placed);
       resizeCanvasForDPR(canvas, ctx);
       if (!didLayout) layoutBlocks();
       ctx.clearRect(0,0,W(),H());
