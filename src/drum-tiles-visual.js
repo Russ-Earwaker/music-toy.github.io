@@ -2,6 +2,7 @@
 // Renders and handles interaction for the 8-step sequencer cubes.
 import { drawBlock, whichThirdRect } from './toyhelpers.js';
 import { midiToName } from './note-helpers.js';
+import { isRunning } from './audio-core.js';
 
 const NUM_CUBES = 8;
 const GAP = 4; // A few pixels of space between each cube
@@ -103,10 +104,32 @@ function render(panel) {
   const st = panel.__drumVisualState;
   if (!st) return;
 
+  // Handle the highlight pulse animation on note hits.
+  if (panel.__pulseHighlight && panel.__pulseHighlight > 0) {
+    panel.classList.add('toy-playing-pulse');
+    panel.__pulseHighlight = Math.max(0, panel.__pulseHighlight - 0.05); // Decay over ~20 frames
+  } else if (panel.classList.contains('toy-playing-pulse')) {
+    panel.classList.remove('toy-playing-pulse');
+  }
+
   // Set playing class for border highlight
   const state = panel.__gridState || {};
-  const isActive = panel.dataset.chainActive !== 'false' && state.steps && state.steps.some(s => s);
-  panel.classList.toggle('toy-playing', isActive);
+  // A toy is only active in a chain if the scheduler has explicitly set this to 'true'.
+  // Checking for `!== 'false'` incorrectly defaults to true when the attribute is missing.
+  const isActiveInChain = panel.dataset.chainActive === 'true';
+  const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
+  const hasActiveNotes = state.steps && state.steps.some(s => s);
+
+  let showPlaying;
+  if (isRunning()) {
+    // For chained toys, being active in the chain is enough to show the highlight.
+    // For standalone toys, only show highlight if there are notes to play.
+    showPlaying = isChained ? isActiveInChain : hasActiveNotes;
+  } else {
+    // When paused, any toy with active notes should be highlighted, regardless of chain status.
+    showPlaying = hasActiveNotes;
+  }
+  panel.classList.toggle('toy-playing', showPlaying);
 
   const { ctx, canvas } = st;
   const w = canvas.width;
