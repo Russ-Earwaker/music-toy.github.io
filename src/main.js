@@ -18,6 +18,7 @@ import { DEFAULT_BPM, NUM_STEPS, ensureAudioContext, getLoopInfo, setBpm, start,
 import { createLoopIndicator } from './loopindicator.js';
 import { buildGrid } from './grid-core.js';
 import { tryRestoreOnBoot, startAutosave } from './persistence.js';
+import { startIntensityVisual } from './visual-bg.js';
 
 /**
  * Calculates the visual extents of a panel's content, including any
@@ -487,21 +488,53 @@ function drawChains() {
     const board = document.getElementById('board');
     if (!board) return;
 
-    const dpr = window.devicePixelRatio || 1;
-    // Use scrollWidth/Height to cover the entire pannable area.
-    const w = board.scrollWidth;
-    const h = board.scrollHeight;
+    // --- New logic to calculate content bounds ---
+    // This correctly handles toys positioned with negative coordinates (e.g., moved to the left).
+    const toys = Array.from(board.querySelectorAll(':scope > .toy-panel'));
+    let minX = 0, minY = 0, maxX = board.clientWidth, maxY = board.clientHeight;
 
-    // Ensure the canvas element size and backing store match the board's scrollable area.
-    if (chainCanvas.style.width !== `${w}px` || chainCanvas.style.height !== `${h}px` || chainCanvas.width !== w * dpr || chainCanvas.height !== h * dpr) {
-        chainCanvas.style.width = `${w}px`;
-        chainCanvas.style.height = `${h}px`;
-        chainCanvas.width = w * dpr;
-        chainCanvas.height = h * dpr;
-        chainCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (toys.length > 0) {
+        minX = Infinity; minY = Infinity; maxX = -Infinity; maxY = -Infinity;
+        for (const toy of toys) {
+            // Use parseFloat on style.left/top, as offsetLeft/Top don't handle negative positions.
+            const left = parseFloat(toy.style.left) || 0;
+            const top = parseFloat(toy.style.top) || 0;
+            const width = toy.offsetWidth;
+            const height = toy.offsetHeight;
+
+            minX = Math.min(minX, left);
+            minY = Math.min(minY, top);
+            maxX = Math.max(maxX, left + width + 65); // Add buffer for chain button
+            maxY = Math.max(maxY, top + height);
+        }
+        // Ensure bounds are at least the size of the viewport.
+        minX = Math.min(minX, 0);
+        minY = Math.min(minY, 0);
+        maxX = Math.max(maxX, board.clientWidth);
+        maxY = Math.max(maxY, board.clientHeight);
     }
 
-    chainCtx.clearRect(0, 0, w, h);
+    const dpr = window.devicePixelRatio || 1;
+    const canvasX = minX;
+    const canvasY = minY;
+    const canvasW = maxX - minX;
+    const canvasH = maxY - minY;
+
+    // Ensure the canvas element size and backing store match the calculated bounds.
+    if (chainCanvas.style.left !== `${canvasX}px` || chainCanvas.style.top !== `${canvasY}px` || chainCanvas.style.width !== `${canvasW}px` || chainCanvas.style.height !== `${canvasH}px` || chainCanvas.width !== canvasW * dpr || chainCanvas.height !== canvasH * dpr) {
+        chainCanvas.style.left = `${canvasX}px`;
+        chainCanvas.style.top = `${canvasY}px`;
+        chainCanvas.style.width = `${canvasW}px`;
+        chainCanvas.style.height = `${canvasH}px`;
+        chainCanvas.width = canvasW * dpr;
+        chainCanvas.height = canvasH * dpr;
+    }
+
+    // Clear entire canvas bitmap. clearRect is not affected by transforms.
+    chainCtx.clearRect(0, 0, chainCanvas.width, chainCanvas.height);
+
+    // Set transform to draw in board coordinates, accounting for canvas offset.
+    chainCtx.setTransform(dpr, 0, 0, dpr, -canvasX * dpr, -canvasY * dpr);
 
     // Decay existing pulses
     for (const [fromId, pulseInfo] of g_pulsingConnectors.entries()) {
@@ -519,13 +552,11 @@ function drawChains() {
             const next = document.getElementById(nextId);
             if (!next) break;
 
-            // The button's center is 32.5px to the right of the panel's right edge.
-            const p1x = current.offsetLeft + current.offsetWidth + 32.5;
-            const p1y = current.offsetTop + current.offsetHeight / 2;
-
-            // The connection on the next toy is on the opposite (left) side.
-            const p2x = next.offsetLeft;
-            const p2y = next.offsetTop + next.offsetHeight / 2;
+            // Use parseFloat(style.left/top) for coordinates to match the bounding box calculation.
+            const p1x = (parseFloat(current.style.left) || 0) + current.offsetWidth + 32.5;
+            const p1y = (parseFloat(current.style.top) || 0) + current.offsetHeight / 2;
+            const p2x = (parseFloat(next.style.left) || 0);
+            const p2y = (parseFloat(next.style.top) || 0) + next.offsetHeight / 2;
 
             chainCtx.beginPath();
             chainCtx.moveTo(p1x, p1y);
@@ -661,6 +692,7 @@ async function boot(){
 
   bootTopbar();
   createLoopIndicator('#topbar');
+  startIntensityVisual();
   let restored = false;
   try{ restored = !!tryRestoreOnBoot(); }catch{}
   bootGrids();
