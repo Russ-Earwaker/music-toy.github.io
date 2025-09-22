@@ -5,7 +5,7 @@ import { randomizeRects } from './toyhelpers.js';
 import { resizeCanvasForDPR, noteList } from './utils.js';
 import { PENTATONIC_OFFSETS } from './ripplesynth-scale.js';
 import { boardScale } from './board-scale-helpers.js';
-import { ensureAudioContext, barSeconds as audioBarSeconds, getLoopInfo, isRunning } from './audio-core.js';
+import { ensureAudioContext, barSeconds as audioBarSeconds, getLoopInfo, isRunning, getToyGain, getToyVolume } from './audio-core.js';
 import { installQuantUI } from './bouncer-quant-ui.js';
 import { triggerInstrument as __rawTrig } from './audio-samples.js';
 import { drawBlocksSection } from './ripplesynth-blocks.js';
@@ -185,6 +185,15 @@ export function createRippleSynth(selector){
   const RING_SPEED = ()=> Math.hypot(W(), H()) / (audioBarSeconds() || 2.0); // px/sec
 
   function spawnRipple(manual=false){
+    // Any action that spawns a ripple should "wake up" the toy's audio.
+    // This restores volume if it was faded out at the end of a previous chain turn.
+    try {
+      const gainNode = getToyGain(toyId);
+      const userVolume = getToyVolume(toyId);
+      if (gainNode.gain.value < userVolume) {
+        gainNode.gain.setTargetAtTime(userVolume, ac.currentTime, 0.015);
+      }
+    } catch {}
     // A new ripple should clear any pending preview.
     previewGenerator.placed = false;
 
@@ -236,6 +245,7 @@ export function createRippleSynth(selector){
 
   const __schedState = { suppressSlots: new Set(), suppressUntilMap: new Map(),
     wasActiveInChain: false, // for chain activation
+    turnOver: false,         // flag to immediately stop scheduler on turn end
     chainAdvanceAt: 0,       // for chain advancement
     ghostSpawnTime: null,    // for life line bar
     ghostEndTime: null,      // for life line bar
@@ -248,6 +258,7 @@ export function createRippleSynth(selector){
   };
 
   const scheduler = createScheduler({
+    panel,
     ac, NUM_STEPS, barSec, stepSeconds,
     pattern, patternOffsets, blocks, noteList,
     triggerInstrument, getInstrument: ()=> currentInstrument, applyPreviewState,
@@ -671,7 +682,9 @@ export function createRippleSynth(selector){
   let __lastDrawAT = 0;
   function draw(){
     try {
-      panel.classList.toggle('toy-playing', ripples.length > 0 && generator.placed);
+      // A toy is "playing" if it has active ripples, or if it's an empty
+      // toy in a chain running its "ghost" timer (lifeline).
+      panel.classList.toggle('toy-playing', (ripples.length > 0 && generator.placed) || !!__schedState.ghostSpawnTime);
 
       // Handle the highlight pulse animation on note hits.
       if (panel.__pulseHighlight && panel.__pulseHighlight > 0) {
@@ -805,6 +818,13 @@ export function createRippleSynth(selector){
       try{
         // --- Chain Activation Logic ---
         if (isActiveInChain && !__schedState.wasActiveInChain) {
+            // Restore volume when this toy's turn starts.
+            const gainNode = getToyGain(toyId);
+            const userVolume = getToyVolume(toyId);
+            gainNode.gain.cancelScheduledValues(ac.currentTime);
+            gainNode.gain.setTargetAtTime(userVolume, ac.currentTime, 0.015);
+
+            __schedState.turnOver = false; // Reset the flag when our turn starts
             // This toy just became active in the chain.
             if (generator.placed) {
                 // Spawn a ripple and reset the scheduler to start recording a new pattern.
@@ -842,6 +862,13 @@ export function createRippleSynth(selector){
                     applyPreviewState();
                 }
                 panel.dispatchEvent(new CustomEvent('chain:next', { bubbles: true }));
+                __schedState.turnOver = true; // Immediately stop this toy's scheduler
+                ripples.length = 0; // Clear active ripples to remove highlight
+
+                // Fade out gain to cancel any remaining scheduled notes for this turn.
+                const gainNode = getToyGain(toyId);
+                gainNode.gain.cancelScheduledValues(ac.currentTime);
+                gainNode.gain.setTargetAtTime(0, ac.currentTime, 0.02); // fast fade out
             }
             __schedState.chainAdvanceAt = 0; // Consume the timer to prevent re-firing.
         }
@@ -885,7 +912,8 @@ export function createRippleSynth(selector){
       // FIX: Also keep running if a ripple is still active, to prevent stuck highlights.
       const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
       const hasActiveRipples = ripples.length > 0;
-      const shouldRun = (isActiveInChain || !isChained || hasActiveRipples) && isRunning();
+      // FIX: Add turnOver flag to immediately stop scheduler when turn ends.
+      const shouldRun = !__schedState.turnOver && (isActiveInChain || !isChained || hasActiveRipples) && isRunning();
 
       // Only advance physics/scheduling if this toy is supposed to be running.
       if (shouldRun) {

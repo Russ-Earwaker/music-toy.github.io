@@ -3,7 +3,7 @@
 
 export function createScheduler(cfg){
   const {
-    ac, NUM_STEPS, barSec, stepSeconds,
+    panel, ac, NUM_STEPS, barSec, stepSeconds,
     pattern, patternOffsets, blocks, noteList,
     triggerInstrument, getInstrument, applyPreviewState,
     generator, RING_SPEED, spawnRipple,
@@ -73,13 +73,17 @@ export function createScheduler(cfg){
       state.nextSlotAT = state.barStartAT;
       state.nextSlotIx = 0;
       try{ if (window && window.RIPPLER_TIMING_DBG) console.log('[rippler]', 'bar-start', { barStartAT: state.barStartAT }); }catch{}
-      // Ensure ripple spawn always occurs on bar boundaries when placed.
-      // Use manual=true to bypass first-interaction guard; AudioContext
-      // should already be resumed by the user via Play.
-      if (generator.placed && !isPlaybackMuted()) spawnRipple(true);
+      // For standalone (unchained) toys, spawn a ripple on every bar.
+      // Chained toys are handled by the chain activation logic.
+      const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
+      if (!isChained && generator.placed && !isPlaybackMuted()) {
+        spawnRipple(true);
+      }
       state.recording = false;
       // Arm summary mode only for the very next bar after recording
       if (justRecorded){ __summaryMode = true; __printedSummaries.clear(); }
+
+
       else { __summaryMode = false; }
       __wasRecording = false;
       // Pre-schedule the entire bar so Off playback keeps original spacing
