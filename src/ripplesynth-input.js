@@ -58,18 +58,10 @@ export function makePointerHandlers(cfg) {
     // First-time placement: only on empty space (not on a block)
     if (!generatorRef.placed && e.isTrusted) {
       if (hitIx < 0) {
-        const isChained = cfg.isChained ? cfg.isChained() : false;
-        const transportIsRunning = (typeof cfg.isRunning === 'function') ? cfg.isRunning() : true;
-        if (isChained && transportIsRunning) {
-            // If running, place a preview instead of the real one.
-            if (cfg.setPreviewGenerator) {
-                cfg.setPreviewGenerator(p);
-            }
-            cfg.state.draggingPreviewGenerator = true;
-        } else {
-            // If not running, place the real generator immediately.
-            generatorRef.place(p.x, p.y);
-        }
+        // A direct user tap to place the generator should always be immediate,
+        // even on a running, chained toy. The preview system is for non-interactive
+        // changes like 'Randomize'.
+        generatorRef.place(p.x, p.y);
         try { if (canvas.setPointerCapture) { canvas.setPointerCapture(e.pointerId); capturedId = e.pointerId; } } catch {}
       } else {
         // Allow dragging blocks even before a generator is placed
@@ -114,24 +106,13 @@ export function makePointerHandlers(cfg) {
 
     // Empty-space click re-places generator (only if not on a block and far from generator)
     if (generatorRef.placed && hitIx < 0 && !nearGenerator(p)) {
-      const isActive = cfg.isActiveInChain ? cfg.isActiveInChain() : false;
-      const isChained = cfg.isChained ? cfg.isChained() : false;
-      const transportIsRunning = (typeof cfg.isRunning === 'function') ? cfg.isRunning() : true;
-
-      if (isChained && transportIsRunning) {
-        if (cfg.setPreviewGenerator) {
-          cfg.setPreviewGenerator(p);
-        }
-        cfg.state.draggingPreviewGenerator = true;
-        try { if (canvas.setPointerCapture) { canvas.setPointerCapture(e.pointerId); capturedId = e.pointerId; } } catch {}
-      } else {
-        // Default behavior: move the real generator.
-        const nx = _clamp(p.x, EDGE, vw() - EDGE);
-        const ny = _clamp(p.y, EDGE, vh() - EDGE);
-        generatorRef.set(nx, ny);
-        if (Array.isArray(ripples)) ripples.length = 0;
-        cfg.state.generatorDragEnded = true; // trigger a clean re-sync on pointerup
-      }
+      // A direct user tap to move the generator should also be immediate.
+      // The `generatorDragEnded` flag will trigger a new ripple on the next frame.
+      const nx = _clamp(p.x, EDGE, vw() - EDGE);
+      const ny = _clamp(p.y, EDGE, vh() - EDGE);
+      generatorRef.set(nx, ny);
+      if (Array.isArray(ripples)) ripples.length = 0;
+      cfg.state.generatorDragEnded = true; // trigger a clean re-sync on pointerup
       return;
     }
 }

@@ -258,6 +258,7 @@ export function createRippleSynth(selector){
     getQuantDiv: ()=>{
       // Use the same robust read order
       try{ const v0 = (__getQuantDiv && __getQuantDiv()); if (Number.isFinite(v0)) return v0; }catch{}
+      // Pass the panel to the scheduler so it can trigger the pulse animation.
       try{ const sel = panel.querySelector('.bouncer-quant-ctrl select'); if (sel){ const v=parseFloat(sel.value); if (Number.isFinite(v)) return v; } }catch{}
       try{ const ds = parseFloat(panel.dataset.quantDiv || panel.dataset.quant || ''); if (Number.isFinite(ds)) return ds; }catch{}
       return 4;
@@ -599,6 +600,7 @@ export function createRippleSynth(selector){
         if (doImmediateFlash){ b.pulse = 1; b.cflash = 1; if (!liveBlocks.has(i)) { b.flashEnd = Math.max(b.flashEnd, ac.currentTime + 0.18); } }
         if (liveBlocks.has(i)) {
           try {
+            panel.__pulseHighlight = 1.0;
             // Quantize live block hits to next beat/div where applicable
             const li2 = getLoopInfo();
             // Prefer getter, then live <select>, then dataset
@@ -625,6 +627,7 @@ export function createRippleSynth(selector){
         if (!liveBlocks.has(i) && (recording || recordOnly.has(i))){
           try {
             let tSched = whenAT + 0.0005; // Default to immediate if no quantization
+            panel.__pulseHighlight = 1.0;
             // Schedule recording preview at quantized beat/div to match bouncer behavior
             const li3 = getLoopInfo();
             // Prefer getter, then live <select>, then dataset
@@ -669,6 +672,14 @@ export function createRippleSynth(selector){
   function draw(){
     try {
       panel.classList.toggle('toy-playing', ripples.length > 0 && generator.placed);
+
+      // Handle the highlight pulse animation on note hits.
+      if (panel.__pulseHighlight && panel.__pulseHighlight > 0) {
+        panel.classList.add('toy-playing-pulse');
+        panel.__pulseHighlight = Math.max(0, panel.__pulseHighlight - 0.05); // Decay over ~20 frames
+      } else if (panel.classList.contains('toy-playing-pulse')) {
+        panel.classList.remove('toy-playing-pulse');
+      }
       resizeCanvasForDPR(canvas, ctx);
       if (!didLayout) layoutBlocks();
       ctx.clearRect(0,0,W(),H());
@@ -871,8 +882,10 @@ export function createRippleSynth(selector){
 
       // A rippler is considered "running" if it's the active toy in a chain,
       // OR if it's a standalone toy (not part of any chain).
+      // FIX: Also keep running if a ripple is still active, to prevent stuck highlights.
       const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
-      const shouldRun = (isActiveInChain || !isChained);
+      const hasActiveRipples = ripples.length > 0;
+      const shouldRun = (isActiveInChain || !isChained || hasActiveRipples) && isRunning();
 
       // Only advance physics/scheduling if this toy is supposed to be running.
       if (shouldRun) {

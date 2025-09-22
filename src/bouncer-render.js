@@ -53,11 +53,13 @@ export function createBouncerDraw(env){
     ctx.fillStyle = '#0f141b'; // Match --bg from style.css
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Set playing class for border highlight. This must run every frame.
-    const b = getBall ? getBall() : env.ball;
-    panel.classList.toggle('toy-playing', !!b);
+    // Set playing class for border highlight and handle pulse animation.
+    const currentBall = getBall ? getBall() : env.ball;
+    const isChainHead = !panel.dataset.prevToyId;
+    // A ghost ball on the head of a chain shouldn't trigger the "playing" highlight.
+    const showPlaying = !!currentBall && !(currentBall.isGhost && isChainHead);
+    panel.classList.toggle('toy-playing', showPlaying);
 
-    // Handle the highlight pulse animation on note hits.
     if (panel.__pulseHighlight && panel.__pulseHighlight > 0) {
       panel.classList.add('toy-playing-pulse');
       panel.__pulseHighlight = Math.max(0, panel.__pulseHighlight - 0.05); // Decay over ~20 frames
@@ -319,9 +321,11 @@ export function createBouncerDraw(env){
         const isActiveInChain = panel.dataset.chainActive === 'true';
         const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
         // Physics should run if active in chain, OR if standalone, OR if it has a ghost ball
-        // that needs to expire to advance the chain.
-        const hasActiveGhostBall = (getBall ? getBall() : env.ball)?.isGhost === true;
-        const shouldRunPhysics = (isActiveInChain || !isChained || hasActiveGhostBall) && isRunning();
+        // that needs to expire, OR if it has a real ball that needs to finish its life.
+        const currentBall = getBall ? getBall() : env.ball;
+        const hasActiveGhostBall = currentBall?.isGhost === true;
+        const hasRealBall = !!currentBall && !currentBall.isGhost;
+        const shouldRunPhysics = (isActiveInChain || !isChained || hasActiveGhostBall || hasRealBall) && isRunning();
 
         // Run the physics step *before* chain activation logic. This ensures that if a ghost
         // ball expires, it is nulled out before the next toy in the chain checks for a ball.
