@@ -15,9 +15,16 @@ export function initDragBoard(boardSel = '#board') {
         z-index: 2; /* Default stacking above chain canvas (z-index: 1) */
       }
       .toy-panel.toy-focused {
-        outline-color: rgba(143, 168, 255, 0.6);
-        box-shadow: 0 0 12px rgba(143, 168, 255, 0.25);
+        /* Make the border and inner highlight significantly brighter on focus. */
+        border-color: rgba(255, 255, 255, 0.6);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3), 0 8px 28px rgba(0, 0, 0, 0.5);
         z-index: 51; /* Bring to front */
+      }
+      .toy-panel.toy-focused .toy-header {
+        filter: brightness(1.15);
+      }
+      .toy-panel.toy-focused .toy-body {
+        filter: brightness(1.1);
       }
     `;
     document.head.appendChild(style);
@@ -60,6 +67,12 @@ export function initDragBoard(boardSel = '#board') {
   function onPointerDown(e){
     // Only start a drag on the specific title handle, not the whole header.
     const clickedPanel = e.target.closest('.toy-panel');
+
+    // If the click is on the board background and not a panel, do nothing.
+    // This prevents toys from being deselected when panning the board.
+    if (!clickedPanel) {
+      return;
+    }
 
     // Unfocus all panels that are not the one being clicked.
     document.querySelectorAll('.toy-panel.toy-focused').forEach(p => {

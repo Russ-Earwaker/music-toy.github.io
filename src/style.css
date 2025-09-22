@@ -72,9 +72,11 @@ html, body {
   display: flex;
   flex-direction: column;
   background: var(--panel);
-  border: 1px solid var(--border);
+  /* A brighter, semi-transparent border to make panels stand out more. Increased opacity for visibility. */
+  border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  /* Add a subtle inner highlight and a slightly stronger drop shadow for better definition. */
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15), 0 8px 24px rgba(0, 0, 0, 0.45);
   overflow: hidden;
   width: var(--panel-w, 380px); /* Default width, can be overridden per-toy */
 }
@@ -95,7 +97,7 @@ html, body {
   font-size: 14px;
   /* Add a slight glow around the header */
   box-shadow: 0 0 8px -2px var(--accent);
-  transition: box-shadow 0.2s ease-out;
+  transition: box-shadow 0.2s ease-out, filter 0.2s ease-out;
 }
 
 .toy-body {
@@ -104,6 +106,7 @@ html, body {
   flex-grow: 1; /* Default: body stretches to fill vertical space */
   min-height: 0; /* Fix for flexbox sizing bugs */
   overflow: hidden;
+  transition: box-shadow 0.2s ease-out, filter 0.2s ease-out;
 }
 
 .toy-footer {
