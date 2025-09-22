@@ -313,6 +313,21 @@ export function createBouncerDraw(env){
         const now = ac ? ac.currentTime : 0;
         const S = buildStateForStep(now, prevNow);
 
+        // A bouncer is considered "running" if it's the active toy in a chain,
+        // OR if it's a standalone toy (not part of any chain),
+        // AND the global transport is playing.
+        const isActiveInChain = panel.dataset.chainActive === 'true';
+        const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
+        // Physics should run if active in chain, OR if standalone, OR if it has a ghost ball
+        // that needs to expire to advance the chain.
+        const hasActiveGhostBall = (getBall ? getBall() : env.ball)?.isGhost === true;
+        const shouldRunPhysics = (isActiveInChain || !isChained || hasActiveGhostBall) && isRunning();
+
+        // Run the physics step *before* chain activation logic. This ensures that if a ghost
+        // ball expires, it is nulled out before the next toy in the chain checks for a ball.
+        if (shouldRunPhysics) stepBouncer(S);
+        applyFromStep(S); // Apply state changes from physics immediately.
+
         // Handle timed unmute for smooth transitions when interrupting a replay.
         if (S.__unmuteAt > 0 && now >= S.__unmuteAt) {
             if (typeof S.setToyMuted === 'function') {
@@ -334,17 +349,49 @@ export function createBouncerDraw(env){
             }
         } catch (e) { try { if ((globalThis.BOUNCER_DBG_LEVEL | 0) >= 2) console.warn('[bouncer-render] onNewBar error', e); } catch {} }
 
-        // Check if the toy is the active one in its chain.
-        const isActiveInChain = panel.dataset.chainActive === 'true';
+        // When a bouncer becomes active in a chain, spawn a ball if it doesn't have one.
+        if (isActiveInChain && !wasActiveInChain) {
+            const b = getBall ? getBall() : null;
+            if (!b) { // Only do something if there's no ball.
+                const isChainHead = !panel.dataset.prevToyId;
+                const hasHistory = !!(getLastLaunch ? getLastLaunch() : null);
+                const userHasPlacedHandle = !!handle.userPlaced;
 
-        // A bouncer is considered "running" if it's the active toy in a chain,
-        // OR if it's a standalone toy (not part of any chain).
-        // AND the global transport is playing.
-        const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
-        // Physics should run if active in chain, OR if standalone, OR if it has a ghost ball
-        // that needs to expire to advance the chain.
-        const hasActiveGhostBall = (getBall ? getBall() : env.ball)?.isGhost === true;
-        const shouldRunPhysics = (isActiveInChain || !isChained || hasActiveGhostBall) && isRunning();
+                if (userHasPlacedHandle) {
+                    // User has placed a spawner, so launch a ball from it.
+                    const vx = handle.vx || 0;
+                    const vy = handle.vy || -7.68; // Default upwards
+                    const newBall = spawnBallFrom({ x: handle.x, y: handle.y, vx, vy, r: ballR() });
+                    setBallOut(newBall);
+                } else if (hasHistory) {
+                    // No user placement, but has history. Let stepBouncer handle the respawn.
+                    // This is a no-op here; stepBouncer will see no ball and check nextLaunchAt.
+                } else {
+                    // This is an empty, untouched bouncer.
+                    const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
+                    if (isChained) {
+                        // If it's part of a chain, it should get a ghost ball to act as a "rest" for one bar.
+                        // This applies to both head and follower bouncers.
+                        const ac = ensureAudioContext();
+                        const now = ac ? ac.currentTime : 0;
+                        const li = (typeof getLoopInfo === 'function') ? getLoopInfo() : null;
+                        let life = 2.0;
+                        if (li && Number.isFinite(li.barLen) && li.barLen > 0) {
+                            life = BOUNCER_BARS_PER_LIFE * li.barLen;
+                        }
+                        const ghostBall = {
+                            isGhost: true, // A flag to prevent it from being drawn or colliding.
+                            spawnTime: now,
+                            flightEnd: now + life,
+                            r: ballR()
+                        };
+                        setBallOut(ghostBall);
+                        if (typeof setNextLaunchAt === 'function') setNextLaunchAt(ghostBall.flightEnd);
+                    }
+                }
+            }
+        }
+        wasActiveInChain = isActiveInChain;
 
         // After the first bar, the bouncer switches to 'replay' mode. This scheduler
         // is responsible for playing back the recorded pattern of notes.
@@ -400,51 +447,6 @@ export function createBouncerDraw(env){
                 }
             }
         } catch (e) { /* fail silently */ }
-
-        // When a bouncer becomes active in a chain, spawn a ball if it doesn't have one.
-        if (isActiveInChain && !wasActiveInChain) {
-            const b = getBall ? getBall() : null;
-            if (!b) { // Only do something if there's no ball.
-                const isChainHead = !panel.dataset.prevToyId;
-                const hasHistory = !!(getLastLaunch ? getLastLaunch() : null);
-                const userHasPlacedHandle = !!handle.userPlaced;
-
-                if (userHasPlacedHandle) {
-                    // User has placed a spawner, so launch a ball from it.
-                    const vx = handle.vx || 0;
-                    const vy = handle.vy || -7.68; // Default upwards
-                    const newBall = spawnBallFrom({ x: handle.x, y: handle.y, vx, vy, r: ballR() });
-                    setBallOut(newBall);
-                } else if (hasHistory) {
-                    // No user placement, but has history. Let stepBouncer handle the respawn.
-                    // This is a no-op here; stepBouncer will see no ball and check nextLaunchAt.
-                } else {
-                    // This is an empty, untouched bouncer. If it's part of a chain,
-                    // it should get a ghost ball to act as a "rest" for one bar.
-                    // This applies to both head and follower bouncers.
-                    const ac = ensureAudioContext();
-                    const now = ac ? ac.currentTime : 0;
-                    const li = (typeof getLoopInfo === 'function') ? getLoopInfo() : null;
-                    let life = 2.0;
-                    if (li && Number.isFinite(li.barLen) && li.barLen > 0) {
-                        life = BOUNCER_BARS_PER_LIFE * li.barLen;
-                    }
-                    const ghostBall = {
-                        isGhost: true, // A flag to prevent it from being drawn or colliding.
-                        spawnTime: now,
-                        flightEnd: now + life,
-                        r: ballR()
-                    };
-                    setBallOut(ghostBall);
-                    if (typeof setNextLaunchAt === 'function') setNextLaunchAt(ghostBall.flightEnd);
-                }
-            }
-        }
-        wasActiveInChain = isActiveInChain;
-        if (shouldRunPhysics) stepBouncer(S);
-
-        // Apply any state changes from the physics step.
-        applyFromStep(S);
 
         // After the physics step, capture any flash events it generated and store
         // them in our local animation state arrays.
