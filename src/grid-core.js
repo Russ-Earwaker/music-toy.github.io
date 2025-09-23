@@ -313,6 +313,7 @@ export function buildGrid(panel, numSteps = 8){
     if (panel.__gridState.steps[col]) {
       panel.__playCurrent(col);
       panel.__pulseHighlight = 1.0; // For border pulse animation
+      panel.__pulseRearm = true;
       if (panel.__particles) panel.__particles.disturb();
       // Trigger visual flashes.
       if (panel.__drumVisualState) {

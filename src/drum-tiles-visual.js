@@ -136,6 +136,12 @@ function render(panel) {
   if (!st) return;
 
   // Handle the highlight pulse animation on note hits.
+  if (panel.__pulseRearm) {
+    panel.classList.remove('toy-playing-pulse');
+    try { panel.offsetWidth; } catch {}
+    panel.__pulseRearm = false;
+  }
+
   if (panel.__pulseHighlight && panel.__pulseHighlight > 0) {
     panel.classList.add('toy-playing-pulse');
     panel.__pulseHighlight = Math.max(0, panel.__pulseHighlight - 0.05); // Decay over ~20 frames
