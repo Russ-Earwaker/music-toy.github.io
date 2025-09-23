@@ -1778,6 +1778,7 @@ function regenerateMapFromStrokes() {
     playheadCol = col;
     if (col >= 0 && col < cols) {
         if (currentMap?.active[col]) {
+            let pulseTriggered = false;
             flashes[col] = 1.0;
             // Add flashes for the grid cells that are playing
             const nodesToFlash = currentMap.nodes[col];
@@ -1785,6 +1786,11 @@ function regenerateMapFromStrokes() {
                 for (const row of nodesToFlash) {
                     const isDisabled = currentMap.disabled?.[col]?.has(row);
                     if (!isDisabled) {
+                        if (!pulseTriggered) {
+                            panel.__pulseHighlight = 1.0;
+                            panel.__pulseRearm = true;
+                            pulseTriggered = true;
+                        }
                         cellFlashes.push({ col, row, age: 1.0 });
                         try {
                             const x = gridArea.x + col * cw + cw * 0.5;
@@ -1803,6 +1809,19 @@ function regenerateMapFromStrokes() {
   let rafId = 0;
     function renderLoop() {
     if (!panel.isConnected) { cancelAnimationFrame(rafId); return; }
+
+    if (panel.__pulseRearm) {
+      panel.classList.remove('toy-playing-pulse');
+      try { panel.offsetWidth; } catch {}
+      panel.__pulseRearm = false;
+    }
+
+    if (panel.__pulseHighlight && panel.__pulseHighlight > 0) {
+      panel.classList.add('toy-playing-pulse');
+      panel.__pulseHighlight = Math.max(0, panel.__pulseHighlight - 0.05);
+    } else if (panel.classList.contains('toy-playing-pulse')) {
+      panel.classList.remove('toy-playing-pulse');
+    }
 
     // Set playing class for border highlight
     const isActiveInChain = panel.dataset.chainActive === 'true';

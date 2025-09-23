@@ -41,8 +41,14 @@ export function connectDrawGridToPlayer(panel) {
     markPlayingColumn(panel, col);
     if (gridState.active[col] && gridState.nodes[col]?.size > 0) {
       const disabledInCol = gridState.disabled?.[col] || new Set();
+      let columnTriggered = false;
       for (const row of gridState.nodes[col]) {
         if (!disabledInCol.has(row)) {
+          if (!columnTriggered) {
+            panel.__pulseHighlight = 1.0;
+            panel.__pulseRearm = true;
+            columnTriggered = true;
+          }
           const midiNote = notePalette[row];
           playNote(instrument, midiToName(midiNote));
         }
