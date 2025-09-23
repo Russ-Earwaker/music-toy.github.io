@@ -2,10 +2,22 @@
 // Renders and handles interaction for the 8-step sequencer cubes.
 import { drawBlock, whichThirdRect } from './toyhelpers.js';
 import { midiToName } from './note-helpers.js';
-import { isRunning } from './audio-core.js';
+import { isRunning, getLoopInfo } from './audio-core.js';
 
 const NUM_CUBES = 8;
 const GAP = 4; // A few pixels of space between each cube
+
+function findChainHead(toy) {
+    if (!toy) return null;
+    let current = toy;
+    let sanity = 100;
+    while (current && current.dataset.prevToyId && sanity-- > 0) {
+        const prev = document.getElementById(current.dataset.prevToyId);
+        if (!prev || prev === current) break;
+        current = prev;
+    }
+    return current;
+}
 
 /**
  * Attaches the visual renderer to a grid toy panel.
@@ -24,22 +36,11 @@ export function attachDrumVisuals(panel) {
     panel,
     canvas,
     ctx,
-    playheadCol: -1,
     flash: new Float32Array(NUM_CUBES),
     bgFlash: 0,
+    localLastPhase: 0, // For flicker-free playhead
   };
   panel.__drumVisualState = st;
-
-  // Listen for playhead movement from grid-core
-  panel.addEventListener('loopgrid:playcol', (e) => {
-    const col = e?.detail?.col;
-    st.playheadCol = col;
-    if (col >= 0 && col < NUM_CUBES) {
-      if (panel.__gridState?.steps[col]) {
-        st.flash[col] = 1.0; // Trigger flash animation only for active steps
-      }
-    }
-  });
 
   // Listen for clicks on the canvas to toggle steps or change notes
   canvas.addEventListener('pointerdown', (e) => {
@@ -83,11 +84,14 @@ export function attachDrumVisuals(panel) {
           // Preview the new note without triggering the cube flash animation
           panel.dispatchEvent(new CustomEvent('grid:notechange', { detail: { col: clickedIndex } }));
         } else {
-          const wasEnabled = state.steps[clickedIndex];
+          const wasEnabled = !!state.steps[clickedIndex];
           state.steps[clickedIndex] = !wasEnabled;
-          // If a step was just turned ON, fire an event to potentially wake up a dormant chain.
-          if (!wasEnabled && state.steps[clickedIndex]) {
+          if (!wasEnabled) {
+            // A step was just turned ON. Fire an event to potentially wake up a dormant chain.
             panel.dispatchEvent(new CustomEvent('chain:wakeup', { bubbles: true }));
+          } else {
+            // A step was just turned OFF. Fire an event to check if the chain is now dormant.
+            panel.dispatchEvent(new CustomEvent('chain:checkdormant', { bubbles: true }));
           }
         }
       }
@@ -125,11 +129,15 @@ function render(panel) {
   const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
   const hasActiveNotes = state.steps && state.steps.some(s => s);
 
+  const head = isChained ? findChainHead(panel) : panel;
+  const chainHasNotes = head ? !!head.dataset.chainHasNotes : hasActiveNotes;
+
   let showPlaying;
   if (isRunning()) {
     // For chained toys, being active in the chain is enough to show the highlight.
     // For standalone toys, only show highlight if there are notes to play.
-    showPlaying = isChained ? isActiveInChain : hasActiveNotes;
+    // A chained toy only shows its highlight if the chain itself has notes.
+    showPlaying = isChained ? (isActiveInChain && chainHasNotes) : hasActiveNotes;
   } else {
     // When paused, any toy with active notes should be highlighted, regardless of chain status.
     showPlaying = hasActiveNotes;
@@ -170,18 +178,24 @@ function render(panel) {
   const xOffset = (w - actualTotalCubesWidth) / 2;
   const yOffset = (h - cubeSize) / 2;
 
+  // Calculate playhead position directly from the global loop info.
+  const loopInfo = getLoopInfo();
+  const playheadCol = loopInfo ? Math.floor(loopInfo.phase01 * NUM_CUBES) : -1;
+
+  // Check for phase wrap to prevent flicker on chain advance
+  const phaseJustWrapped = loopInfo && loopInfo.phase01 < st.localLastPhase && st.localLastPhase > 0.9;
+  st.localLastPhase = loopInfo ? loopInfo.phase01 : 0;
+  const probablyStale = isActiveInChain && phaseJustWrapped;
+
   for (let i = 0; i < NUM_CUBES; i++) {
     const flash = st.flash[i] || 0;
     const isEnabled = !!steps[i];
     const cubeX = xOffset + i * (cubeSize + localGap);
     const cubeRect = { x: cubeX, y: yOffset, w: cubeSize, h: cubeSize };
 
-    // Check if the toy is the active one in its chain. Default to true if not part of a chain.
-    // The `!== 'false'` check correctly handles cases where the attribute is missing (undefined).
-    const isActiveInChain = panel.dataset.chainActive !== 'false';
-
     // Draw playhead highlight first, so it's underneath the cube
-    if (isActiveInChain && i === st.playheadCol) {
+    // The playhead should scroll if the toy is standalone, or if it's the active toy in a chain.
+    if ((isActiveInChain || !isChained) && isRunning() && i === playheadCol && !probablyStale) {
       // A bigger, centered border highlight drawn by filling a slightly
       // larger rectangle behind the cube. This is more robust than stroking.
       // We use Math.floor to ensure integer coordinates and avoid sub-pixel
