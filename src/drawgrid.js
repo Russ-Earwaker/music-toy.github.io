@@ -82,6 +82,36 @@ function findChainHead(toy) {
     return current;
 }
 
+function chainHasSequencedNotes(head) {
+  let current = head;
+  let sanity = 100;
+  while (current && sanity-- > 0) {
+    const toyType = current.dataset?.toy;
+    if (toyType === 'loopgrid') {
+      const state = current.__gridState;
+      if (state?.steps && state.steps.some(Boolean)) return true;
+    } else if (toyType === 'drawgrid') {
+      const toy = current.__drawToy;
+      if (toy) {
+        if (typeof toy.hasActiveNotes === 'function') {
+          if (toy.hasActiveNotes()) return true;
+        } else if (typeof toy.getState === 'function') {
+          try {
+            const drawState = toy.getState();
+            const activeCols = drawState?.nodes?.active;
+            if (Array.isArray(activeCols) && activeCols.some(Boolean)) return true;
+          } catch {}
+        }
+      }
+    }
+    const nextId = current.dataset?.nextToyId;
+    if (!nextId) break;
+    current = document.getElementById(nextId);
+    if (!current || current === head) break;
+  }
+  return false;
+}
+
 /**
  * A self-contained particle system, adapted from the Bouncer toy.
  * - Particles are distributed across the entire container.
@@ -1780,14 +1810,14 @@ function regenerateMapFromStrokes() {
     const hasActiveNotes = currentMap && currentMap.active && currentMap.active.some(a => a);
 
     const head = isChained ? findChainHead(panel) : panel;
-    const chainHasNotes = head ? !!head.dataset.chainHasNotes : hasActiveNotes;
+    const chainHasNotes = head ? chainHasSequencedNotes(head) : hasActiveNotes;
 
     let showPlaying;
     if (isRunning()) {
-        // A chained toy only shows its highlight if the chain itself has notes.
+        // A chained toy only shows its highlight if the chain itself currently has notes.
         showPlaying = isChained ? (isActiveInChain && chainHasNotes) : hasActiveNotes;
     } else {
-        showPlaying = hasActiveNotes;
+        showPlaying = isChained ? chainHasNotes : hasActiveNotes;
     }
     panel.classList.toggle('toy-playing', showPlaying);
 
@@ -2002,6 +2032,11 @@ function regenerateMapFromStrokes() {
         };
         return state;
       }catch(e){ try{ console.warn('[drawgrid] getState failed', e); }catch{} return { steps: cols|0, autotune: !!autoTune }; }
+    },
+    hasActiveNotes: () => {
+      try {
+        return !!(currentMap?.active && currentMap.active.some(Boolean));
+      } catch { return false; }
     },
     setState: (st={})=>{
       try{

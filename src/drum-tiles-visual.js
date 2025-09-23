@@ -19,6 +19,36 @@ function findChainHead(toy) {
     return current;
 }
 
+function chainHasSequencedNotes(head) {
+  let current = head;
+  let sanity = 100;
+  while (current && sanity-- > 0) {
+    const toyType = current.dataset?.toy;
+    if (toyType === 'loopgrid') {
+      const state = current.__gridState;
+      if (state?.steps && state.steps.some(Boolean)) return true;
+    } else if (toyType === 'drawgrid') {
+      const toy = current.__drawToy;
+      if (toy) {
+        if (typeof toy.hasActiveNotes === 'function') {
+          if (toy.hasActiveNotes()) return true;
+        } else if (typeof toy.getState === 'function') {
+          try {
+            const drawState = toy.getState();
+            const activeCols = drawState?.nodes?.active;
+            if (Array.isArray(activeCols) && activeCols.some(Boolean)) return true;
+          } catch {}
+        }
+      }
+    }
+    const nextId = current.dataset?.nextToyId;
+    if (!nextId) break;
+    current = document.getElementById(nextId);
+    if (!current || current === head) break;
+  }
+  return false;
+}
+
 /**
  * Attaches the visual renderer to a grid toy panel.
  * This is called by grid-core.js after the panel's DOM is created.
@@ -122,16 +152,16 @@ function render(panel) {
   const hasActiveNotes = state.steps && state.steps.some(s => s);
 
   const head = isChained ? findChainHead(panel) : panel;
-  const chainHasNotes = head ? !!head.dataset.chainHasNotes : hasActiveNotes;
+  const chainHasNotes = head ? chainHasSequencedNotes(head) : hasActiveNotes;
 
   let showPlaying;
   if (isRunning()) {
-    // A chained toy only shows its highlight if the chain itself has notes.
+    // A chained toy only shows its highlight if the chain itself currently has notes.
     // For standalone toys, only show highlight if there are notes to play.
     showPlaying = isChained ? (isActiveInChain && chainHasNotes) : hasActiveNotes;
   } else {
-    // When paused, any toy with active notes should be highlighted, regardless of chain status.
-    showPlaying = hasActiveNotes;
+    // When paused, highlight chained toys only if the chain retains any active notes.
+    showPlaying = isChained ? chainHasNotes : hasActiveNotes;
   }
   panel.classList.toggle('toy-playing', showPlaying);
 
