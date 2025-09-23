@@ -814,6 +814,7 @@ export function createRippleSynth(selector){
       // Only advance physics/scheduling while transport is running
       if (typeof isRunning !== 'function' || isRunning()){
       const isActiveInChain = panel.dataset.chainActive === 'true';
+      const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
       // Detect transport state change and realign timing
       try{
         // --- Chain Activation Logic ---
@@ -855,7 +856,7 @@ export function createRippleSynth(selector){
 
         if (__schedState.chainAdvanceAt > 0 && ac.currentTime >= __schedState.chainAdvanceAt) {
             // Only advance if this toy is the currently active one.
-            if (isActiveInChain) {
+            if (isChained && isActiveInChain) {
                 // A toy's turn is over. If it has a pending preview state, apply it now
                 // so it's ready for the next time it becomes active.
                 if (hasPreviewState || previewGenerator.placed) {
@@ -910,7 +911,6 @@ export function createRippleSynth(selector){
       // A rippler is considered "running" if it's the active toy in a chain,
       // OR if it's a standalone toy (not part of any chain).
       // FIX: Also keep running if a ripple is still active, to prevent stuck highlights.
-      const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
       const hasActiveRipples = ripples.length > 0;
       // FIX: Add turnOver flag to immediately stop scheduler when turn ends.
       const shouldRun = !__schedState.turnOver && (isActiveInChain || !isChained || hasActiveRipples) && isRunning();
