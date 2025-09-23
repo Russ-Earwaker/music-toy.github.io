@@ -84,15 +84,7 @@ export function attachDrumVisuals(panel) {
           // Preview the new note without triggering the cube flash animation
           panel.dispatchEvent(new CustomEvent('grid:notechange', { detail: { col: clickedIndex } }));
         } else {
-          const wasEnabled = !!state.steps[clickedIndex];
-          state.steps[clickedIndex] = !wasEnabled;
-          if (!wasEnabled) {
-            // A step was just turned ON. Fire an event to potentially wake up a dormant chain.
-            panel.dispatchEvent(new CustomEvent('chain:wakeup', { bubbles: true }));
-          } else {
-            // A step was just turned OFF. Fire an event to check if the chain is now dormant.
-            panel.dispatchEvent(new CustomEvent('chain:checkdormant', { bubbles: true }));
-          }
+          state.steps[clickedIndex] = !state.steps[clickedIndex];
         }
       }
     }
@@ -134,9 +126,8 @@ function render(panel) {
 
   let showPlaying;
   if (isRunning()) {
-    // For chained toys, being active in the chain is enough to show the highlight.
-    // For standalone toys, only show highlight if there are notes to play.
     // A chained toy only shows its highlight if the chain itself has notes.
+    // For standalone toys, only show highlight if there are notes to play.
     showPlaying = isChained ? (isActiveInChain && chainHasNotes) : hasActiveNotes;
   } else {
     // When paused, any toy with active notes should be highlighted, regardless of chain status.

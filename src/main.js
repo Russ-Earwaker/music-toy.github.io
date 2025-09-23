@@ -178,6 +178,33 @@ function getToyCatalog() {
     return toyCatalog.map(entry => ({ ...entry }));
 }
 
+function doesChainHaveActiveNotes(headId) {
+    let current = document.getElementById(headId);
+    if (!current) return false;
+    let sanity = 100;
+    do {
+        if (current.dataset.toy === 'loopgrid') {
+            const state = current.__gridState;
+            if (state && state.steps && state.steps.some(s => s)) {
+                return true;
+            }
+        }
+        if (current.dataset.toy === 'drawgrid') {
+            const toy = current.__drawToy;
+            if (toy && typeof toy.getState === 'function') {
+                const state = toy.getState();
+                if (state?.nodes?.active?.some(a => a)) {
+                    return true;
+                }
+            }
+        }
+        const nextId = current.dataset.nextToyId;
+        if (!nextId) break;
+        current = document.getElementById(nextId);
+    } while (current && current.id !== headId && sanity-- > 0);
+    return false;
+}
+
 function advanceChain(headId) {
     const activeToyId = g_chainState.get(headId);
     if (!activeToyId) {
@@ -190,7 +217,12 @@ function advanceChain(headId) {
         return;
     }
 
-    const shouldPulse = activeToy.dataset.toy !== 'loopgrid';
+    let shouldPulse = true;
+    const toyType = activeToy.dataset.toy;
+    if (toyType === 'loopgrid' || toyType === 'drawgrid') {
+        // For grid-based toys, only pulse the connector if the chain has active notes.
+        shouldPulse = doesChainHaveActiveNotes(headId);
+    }
 
     const nextToyId = activeToy.dataset.nextToyId;
     const nextToy = nextToyId ? document.getElementById(nextToyId) : null;
@@ -591,26 +623,6 @@ function drawChains() {
 }
 const g_chainState = new Map();
 
-function doesChainHaveActiveNotes(headId) {
-    let current = document.getElementById(headId);
-    if (!current) return false;
-    let sanity = 100;
-    do {
-        if (current.dataset.toy === 'loopgrid') {
-            const state = current.__gridState;
-            if (state && state.steps && state.steps.some(s => s)) {
-                return true;
-            }
-        }
-        // NOTE: Could add checks for other toy types here if they have a concept of being "empty".
-
-        const nextId = current.dataset.nextToyId;
-        if (!nextId) break;
-        current = document.getElementById(nextId);
-    } while (current && current.id !== headId && sanity-- > 0);
-    return false;
-}
-
 function findChainHead(toy) {
     if (!toy) return null;
     let current = toy;
@@ -656,16 +668,13 @@ function scheduler(){
       if (phaseJustWrapped) {
           for (const [headId] of g_chainState.entries()) {
               const activeToy = document.getElementById(g_chainState.get(headId));
-              // Only advance non-bouncer/rippler chains on the global bar clock.
-              // Bouncers and Ripplers will trigger their own advancement via 'chain:next' event.
-              if (activeToy && activeToy.dataset.toy !== 'bouncer' && activeToy.dataset.toy !== 'rippler') {
-                  advanceChain(headId);
-              }
+              // Bouncers and Ripplers manage their own advancement via the 'chain:next' event.
+              // All other toys (like loopgrid) advance on the global bar clock.
+              if (activeToy && activeToy.dataset.toy !== 'bouncer' && activeToy.dataset.toy !== 'rippler') { advanceChain(headId); }
           }
       }
 
       const activeToyIds = new Set(g_chainState.values());
-
       // Update data-chain-active on all sequenced toys
       getSequencedToys().forEach(toy => {
           toy.dataset.chainActive = activeToyIds.has(toy.id) ? 'true' : 'false';
@@ -722,45 +731,35 @@ async function boot(){
   document.querySelectorAll('.toy-panel').forEach(initToyChaining);
   updateAllChainUIs(); // Set initial instrument button visibility
 
-  // Add event listener for drum grid chain activation
+  // Add event listener for grid-based chain activation
   document.addEventListener('chain:wakeup', (e) => {
     const panel = e.target.closest('.toy-panel');
-    if (!panel || panel.dataset.toy !== 'loopgrid') return;
+    const toyType = panel?.dataset.toy;
+    if (!panel || (toyType !== 'loopgrid' && toyType !== 'drawgrid')) return;
 
     const head = findChainHead(panel);
     if (!head) return;
 
-    const headId = head.id;
-
-    // Check if this click activated the very first note in the entire chain.
-    let totalActiveNotes = 0;
-    let current = document.getElementById(headId);
-    let sanity = 100;
-    while (current && sanity-- > 0) {
-        if (current.dataset.toy === 'loopgrid' && current.__gridState?.steps) {
-            totalActiveNotes += current.__gridState.steps.filter(s => s).length;
-        }
-        const nextId = current.dataset.nextToyId;
-        if (!nextId) break;
-        current = document.getElementById(nextId);
-        if (current.id === headId) break;
-    }
-
-    if (totalActiveNotes === 1) {
-        // This is the first note in a dormant chain. Set this toy as the starting point.
-        g_chainState.set(headId, panel.id);
+    // If the chain now has notes, mark it.
+    if (doesChainHaveActiveNotes(head.id)) {
         head.dataset.chainHasNotes = 'true';
     }
   });
+
   document.addEventListener('chain:checkdormant', (e) => {
     const panel = e.target.closest('.toy-panel');
-    if (!panel || panel.dataset.toy !== 'loopgrid') return;
+    const toyType = panel?.dataset.toy;
+    if (!panel || (toyType !== 'loopgrid' && toyType !== 'drawgrid')) return;
+
     const head = findChainHead(panel);
     if (!head) return;
+
+    // If the chain no longer has notes, unmark it.
     if (!doesChainHaveActiveNotes(head.id)) {
         delete head.dataset.chainHasNotes;
     }
   });
+
   // Add event listener for bouncer-driven chain advancement
   document.addEventListener('chain:next', (e) => {
     const panel = e.target.closest('.toy-panel');

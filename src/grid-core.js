@@ -316,6 +316,8 @@ export function buildGrid(panel, numSteps = 8){
       if (panel.__particles) panel.__particles.disturb();
       // Trigger visual flashes.
       if (panel.__drumVisualState) {
+
+
         // Flash for the individual cube.
         if (panel.__drumVisualState.flash) panel.__drumVisualState.flash[col] = 1.0;
         // Flash for the main background.

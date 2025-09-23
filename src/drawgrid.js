@@ -70,6 +70,18 @@ function fillGapsInNodeArray(nodes, numCols) {
     return filled;
 }
 
+function findChainHead(toy) {
+    if (!toy) return null;
+    let current = toy;
+    let sanity = 100;
+    while (current && current.dataset.prevToyId && sanity-- > 0) {
+        const prev = document.getElementById(current.dataset.prevToyId);
+        if (!prev || prev === current) break;
+        current = prev;
+    }
+    return current;
+}
+
 /**
  * A self-contained particle system, adapted from the Bouncer toy.
  * - Particles are distributed across the entire container.
@@ -1759,13 +1771,25 @@ function regenerateMapFromStrokes() {
   });
 
   let rafId = 0;
-  function renderLoop() {
+    function renderLoop() {
     if (!panel.isConnected) { cancelAnimationFrame(rafId); return; }
 
     // Set playing class for border highlight
     const isActiveInChain = panel.dataset.chainActive === 'true';
+    const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
     const hasActiveNotes = currentMap && currentMap.active && currentMap.active.some(a => a);
-    panel.classList.toggle('toy-playing', isActiveInChain && hasActiveNotes);
+
+    const head = isChained ? findChainHead(panel) : panel;
+    const chainHasNotes = head ? !!head.dataset.chainHasNotes : hasActiveNotes;
+
+    let showPlaying;
+    if (isRunning()) {
+        // A chained toy only shows its highlight if the chain itself has notes.
+        showPlaying = isChained ? (isActiveInChain && chainHasNotes) : hasActiveNotes;
+    } else {
+        showPlaying = hasActiveNotes;
+    }
+    panel.classList.toggle('toy-playing', showPlaying);
 
     // Step and draw particles
     try {
@@ -1860,7 +1884,7 @@ function regenerateMapFromStrokes() {
         // Repulse particles at playhead position
         try {
           // A strength of 1.2 gives a nice, visible push.
-          particles.lineRepulse(playheadX, 40, 1.2);
+          particles.lineRepulse(playheadX, 40, 0.33);
         } catch (e) { /* fail silently */ }
 
         // Use the flash canvas (fctx) for the playhead. It's cleared each frame.
