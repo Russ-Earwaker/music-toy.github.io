@@ -83,7 +83,12 @@ export function attachDrumVisuals(panel) {
           // Preview the new note without triggering the cube flash animation
           panel.dispatchEvent(new CustomEvent('grid:notechange', { detail: { col: clickedIndex } }));
         } else {
-          state.steps[clickedIndex] = !state.steps[clickedIndex];
+          const wasEnabled = state.steps[clickedIndex];
+          state.steps[clickedIndex] = !wasEnabled;
+          // If a step was just turned ON, fire an event to potentially wake up a dormant chain.
+          if (!wasEnabled && state.steps[clickedIndex]) {
+            panel.dispatchEvent(new CustomEvent('chain:wakeup', { bubbles: true }));
+          }
         }
       }
     }

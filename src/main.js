@@ -589,6 +589,26 @@ function drawChains() {
 }
 const g_chainState = new Map();
 
+function doesChainHaveActiveNotes(headId) {
+    let current = document.getElementById(headId);
+    if (!current) return false;
+    let sanity = 100;
+    do {
+        if (current.dataset.toy === 'loopgrid') {
+            const state = current.__gridState;
+            if (state && state.steps && state.steps.some(s => s)) {
+                return true;
+            }
+        }
+        // NOTE: Could add checks for other toy types here if they have a concept of being "empty".
+
+        const nextId = current.dataset.nextToyId;
+        if (!nextId) break;
+        current = document.getElementById(nextId);
+    } while (current && current.id !== headId && sanity-- > 0);
+    return false;
+}
+
 function findChainHead(toy) {
     if (!toy) return null;
     let current = toy;
@@ -634,15 +654,29 @@ function scheduler(){
       if (phaseJustWrapped) {
           for (const [headId] of g_chainState.entries()) {
               const activeToy = document.getElementById(g_chainState.get(headId));
-              // Only advance non-bouncer/rippler chains on the global bar clock.
-              // Bouncers and Ripplers will trigger their own advancement via 'chain:next' event.
+              // For grid-based toys, only advance the chain if at least one toy in it has active notes.
+              // Bouncers/Ripplers manage their own advancement via 'chain:next' event.
               if (activeToy && activeToy.dataset.toy !== 'bouncer' && activeToy.dataset.toy !== 'rippler') {
-                  advanceChain(headId);
+                  if (doesChainHaveActiveNotes(headId)) {
+                      advanceChain(headId);
+                  }
               }
           }
       }
 
-      const activeToyIds = new Set(g_chainState.values());
+      const activeToyIds = new Set();
+      for (const [headId, activeId] of g_chainState.entries()) {
+        const headToy = document.getElementById(headId);
+        // Check if the chain is a drum grid chain and if it's dormant.
+        if (headToy?.dataset.toy === 'loopgrid') {
+            if (doesChainHaveActiveNotes(headId)) {
+                activeToyIds.add(activeId);
+            }
+        } else {
+            // For other toy types (bouncer, rippler), they are always considered active if in the state map.
+            activeToyIds.add(activeId);
+        }
+      }
 
       // Update data-chain-active on all sequenced toys
       getSequencedToys().forEach(toy => {
@@ -700,6 +734,35 @@ async function boot(){
   document.querySelectorAll('.toy-panel').forEach(initToyChaining);
   updateAllChainUIs(); // Set initial instrument button visibility
 
+  // Add event listener for drum grid chain activation
+  document.addEventListener('chain:wakeup', (e) => {
+    const panel = e.target.closest('.toy-panel');
+    if (!panel || panel.dataset.toy !== 'loopgrid') return;
+
+    const head = findChainHead(panel);
+    if (!head) return;
+
+    const headId = head.id;
+
+    // Check if this click activated the very first note in the entire chain.
+    let totalActiveNotes = 0;
+    let current = document.getElementById(headId);
+    let sanity = 100;
+    while (current && sanity-- > 0) {
+        if (current.dataset.toy === 'loopgrid' && current.__gridState?.steps) {
+            totalActiveNotes += current.__gridState.steps.filter(s => s).length;
+        }
+        const nextId = current.dataset.nextToyId;
+        if (!nextId) break;
+        current = document.getElementById(nextId);
+        if (current.id === headId) break;
+    }
+
+    if (totalActiveNotes === 1) {
+        // This is the first note in a dormant chain. Set this toy as the starting point.
+        g_chainState.set(headId, panel.id);
+    }
+  });
   // Add event listener for bouncer-driven chain advancement
   document.addEventListener('chain:next', (e) => {
     const panel = e.target.closest('.toy-panel');
