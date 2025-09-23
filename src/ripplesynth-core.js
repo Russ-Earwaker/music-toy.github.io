@@ -599,6 +599,8 @@ export function createRippleSynth(selector){
         // During playback (not recording), the scheduler handles audio.
         // The live hit should be silent.
         if (!recording && !liveBlocks.has(i)) {
+            panel.__pulseHighlight = 1.0;
+            panel.__pulseRearm = true;
             continue; // Let the scheduler handle it.
         }
         // Quant setting now
@@ -612,6 +614,7 @@ export function createRippleSynth(selector){
         if (liveBlocks.has(i)) {
           try {
             panel.__pulseHighlight = 1.0;
+            panel.__pulseRearm = true;
             // Quantize live block hits to next beat/div where applicable
             const li2 = getLoopInfo();
             // Prefer getter, then live <select>, then dataset
@@ -639,6 +642,7 @@ export function createRippleSynth(selector){
           try {
             let tSched = whenAT + 0.0005; // Default to immediate if no quantization
             panel.__pulseHighlight = 1.0;
+            panel.__pulseRearm = true;
             // Schedule recording preview at quantized beat/div to match bouncer behavior
             const li3 = getLoopInfo();
             // Prefer getter, then live <select>, then dataset
@@ -687,6 +691,12 @@ export function createRippleSynth(selector){
       panel.classList.toggle('toy-playing', (ripples.length > 0 && generator.placed) || !!__schedState.ghostSpawnTime);
 
       // Handle the highlight pulse animation on note hits.
+      if (panel.__pulseRearm) {
+        panel.classList.remove('toy-playing-pulse');
+        try { panel.offsetWidth; } catch {}
+        panel.__pulseRearm = false;
+      }
+
       if (panel.__pulseHighlight && panel.__pulseHighlight > 0) {
         panel.classList.add('toy-playing-pulse');
         panel.__pulseHighlight = Math.max(0, panel.__pulseHighlight - 0.05); // Decay over ~20 frames
