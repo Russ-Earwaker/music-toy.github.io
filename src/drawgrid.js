@@ -103,6 +103,10 @@ function chainHasSequencedNotes(head) {
           } catch {}
         }
       }
+    } else if (toyType === 'chordwheel') {
+      if (current.__chordwheelHasActive) return true;
+      const steps = current.__chordwheelStepStates;
+      if (Array.isArray(steps) && steps.some(s => s !== -1)) return true;
     }
     const nextId = current.dataset?.nextToyId;
     if (!nextId) break;

@@ -198,6 +198,15 @@ function doesChainHaveActiveNotes(headId) {
                 }
             }
         }
+        if (current.dataset.toy === 'chordwheel') {
+            if (current.__chordwheelHasActive) {
+                return true;
+            }
+            const stepStates = current.__chordwheelStepStates;
+            if (Array.isArray(stepStates) && stepStates.some(s => s !== -1)) {
+                return true;
+            }
+        }
         const nextId = current.dataset.nextToyId;
         if (!nextId) break;
         current = document.getElementById(nextId);
@@ -219,8 +228,8 @@ function advanceChain(headId) {
 
     let shouldPulse = true;
     const toyType = activeToy.dataset.toy;
-    if (toyType === 'loopgrid' || toyType === 'drawgrid') {
-        // For grid-based toys, only pulse the connector if the chain has active notes.
+    if (toyType === 'loopgrid' || toyType === 'drawgrid' || toyType === 'chordwheel') {
+        // For step-driven toys, only pulse the connector if the chain has active notes.
         shouldPulse = doesChainHaveActiveNotes(headId);
     }
 

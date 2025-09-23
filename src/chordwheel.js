@@ -67,6 +67,52 @@ const STRUM_BEND_DECAY = 0.88;
 let strumBgPulse = 0;
 const PULSE_DECAY = 0.92;
 
+function findChainHead(toy) {
+  if (!toy) return null;
+  let current = toy;
+  let sanity = 100;
+  while (current && current.dataset?.prevToyId && sanity-- > 0) {
+    const prev = document.getElementById(current.dataset.prevToyId);
+    if (!prev || prev === current) break;
+    current = prev;
+  }
+  return current;
+}
+
+function chainHasSequencedNotes(head) {
+  let current = head;
+  let sanity = 100;
+  while (current && sanity-- > 0) {
+    const toyType = current.dataset?.toy;
+    if (toyType === 'loopgrid') {
+      const state = current.__gridState;
+      if (state?.steps && state.steps.some(Boolean)) return true;
+    } else if (toyType === 'drawgrid') {
+      const toy = current.__drawToy;
+      if (toy) {
+        if (typeof toy.hasActiveNotes === 'function') {
+          if (toy.hasActiveNotes()) return true;
+        } else if (typeof toy.getState === 'function') {
+          try {
+            const drawState = toy.getState();
+            const activeCols = drawState?.nodes?.active;
+            if (Array.isArray(activeCols) && activeCols.some(Boolean)) return true;
+          } catch {}
+        }
+      }
+    } else if (toyType === 'chordwheel') {
+      if (current.__chordwheelHasActive) return true;
+      const steps = current.__chordwheelStepStates;
+      if (Array.isArray(steps) && steps.some(s => s !== -1)) return true;
+    }
+    const nextId = current.dataset?.nextToyId;
+    if (!nextId) break;
+    current = document.getElementById(nextId);
+    if (!current || current === head) break;
+  }
+  return false;
+}
+
 export function createChordWheel(panel){
   initToyUI(panel, { toyName: 'Chord Wheel', defaultInstrument: 'Acoustic Guitar' });
   const toyId = panel.dataset.toyid = panel.id || `chordwheel-${Math.random().toString(36).slice(2, 8)}`;
@@ -198,6 +244,8 @@ export function createChordWheel(panel){
   const NUM_SLICES = 8;
   let numSteps = 8; // Default to 8 steps
   let stepStates = Array(numSteps).fill(-1); // -1: off, 1: arp up, 2: arp down
+  panel.__chordwheelStepStates = stepStates;
+  panel.__chordwheelHasActive = false;
   let progression = Array(numSteps).fill(1);
 
   // --- Create Canvas for Cubes ---
@@ -270,6 +318,8 @@ export function createChordWheel(panel){
 
     // Reset state arrays for the new size
     stepStates = Array(numSteps).fill(-1);
+    panel.__chordwheelStepStates = stepStates;
+    panel.__chordwheelHasActive = false;
     flashes.length = numSteps; flashes.fill(0);
 
     // Update progression and labels
@@ -509,9 +559,34 @@ export function createChordWheel(panel){
     // AND the global transport is playing.
     const isActiveInChain = panel.dataset.chainActive !== 'false';
     const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
+    const hasActiveSteps = stepStates.some(s => s !== -1);
+    panel.__chordwheelHasActive = hasActiveSteps;
+    panel.__chordwheelStepStates = stepStates;
     const shouldRun = (isActiveInChain || !isChained) && running;
 
-    panel.classList.toggle('toy-playing', shouldRun && stepStates.some(s => s !== -1));
+    if (panel.__pulseRearm) {
+      panel.classList.remove('toy-playing-pulse');
+      try { panel.offsetWidth; } catch {}
+      panel.__pulseRearm = false;
+    }
+
+    if (panel.__pulseHighlight && panel.__pulseHighlight > 0) {
+      panel.classList.add('toy-playing-pulse');
+      panel.__pulseHighlight = Math.max(0, panel.__pulseHighlight - 0.05);
+    } else if (panel.classList.contains('toy-playing-pulse')) {
+      panel.classList.remove('toy-playing-pulse');
+    }
+
+    const head = isChained ? findChainHead(panel) : panel;
+    const chainHasNotes = head ? chainHasSequencedNotes(head) : hasActiveSteps;
+
+    let showPlaying;
+    if (running) {
+      showPlaying = isChained ? (isActiveInChain && chainHasNotes) : hasActiveSteps;
+    } else {
+      showPlaying = isChained ? chainHasNotes : hasActiveSteps;
+    }
+    panel.classList.toggle('toy-playing', showPlaying);
 
     // Background pulse on global beat
     // This was changed to `shouldRun` to disable the pulse when inactive.
@@ -747,6 +822,8 @@ export function createChordWheel(panel){
   }
 
   function scheduleStrum({ notes, direction = 'down', chordName }) {
+    panel.__pulseHighlight = 1.0;
+    panel.__pulseRearm = true;
     const currentInstrument = (panel.dataset.instrument || 'acoustic_guitar').toLowerCase().replace(/[\s-]+/g, '_');
     const chordOct = Number(panel.dataset.chordOct || 1);
 
