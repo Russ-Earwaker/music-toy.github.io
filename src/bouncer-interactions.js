@@ -42,7 +42,6 @@ export function installBouncerInteractions({
   let draggingHandle = false;
   let aimStart = null;
   let aimCurr = null;
-  let handlePreviewActive = false;
 
   function localPoint(evt) {
     const r = canvas.getBoundingClientRect();
@@ -105,7 +104,6 @@ export function installBouncerInteractions({
     draggingHandle = false;
     aimStart = null;
     aimCurr = null;
-    handlePreviewActive = false;
   }
 
   function onPointerDown(e){
@@ -179,23 +177,17 @@ export function installBouncerInteractions({
 
     // Click & drag anywhere to launch
     aimStart = { x: p.x, y: p.y };
-    const deferringHandle = shouldDefer();
-    if (deferringHandle) {
-      handlePreviewActive = true;
-      previewApi.setHandle && previewApi.setHandle({ x: Math.round(p.x), y: Math.round(p.y), userPlaced: true });
-    } else {
-      handle.x = Math.round(p.x);
-      handle.y = Math.round(p.y);
-      handle.userPlaced = true;
-      try {
-        const w = physW(), h = physH();
-        if (w > EDGE * 2 && h > EDGE * 2) {
-          handle._fx = (handle.x - EDGE) / (w - EDGE * 2);
-          handle._fy = (handle.y - EDGE) / (h - EDGE * 2);
-        }
-      } catch (err) {}
-      handlePreviewActive = false;
-    }
+    handle.x = Math.round(p.x);
+    handle.y = Math.round(p.y);
+    handle.userPlaced = true;
+    try {
+      const w = physW(), h = physH();
+      if (w > EDGE * 2 && h > EDGE * 2) {
+        handle._fx = (handle.x - EDGE) / (w - EDGE * 2);
+        handle._fy = (handle.y - EDGE) / (h - EDGE * 2);
+      }
+    } catch (err) {}
+    
     draggingHandle = true;
     aimCurr = p;
     if (setAim) setAim({ active: true, sx: p.x, sy: p.y, cx: p.x, cy: p.y });
@@ -229,10 +221,6 @@ export function installBouncerInteractions({
     if (draggingHandle) {
       aimCurr = p;
       if (setAim) setAim({ active: true, cx: p.x, cy: p.y });
-      if (handlePreviewActive) {
-        const { vx, vy } = velFrom(aimStart.x, aimStart.y, p.x, p.y);
-        previewApi.setHandle && previewApi.setHandle({ x: Math.round(aimStart.x), y: Math.round(aimStart.y), vx, vy, userPlaced: true });
-      }
       return;
     }
 
@@ -329,20 +317,28 @@ export function installBouncerInteractions({
       const isChainedFollower = !!panel.dataset.prevToyId;
       const { vx, vy } = velFrom(aimStart.x, aimStart.y, p.x, p.y);
 
-      if (handlePreviewActive || shouldDefer()) {
-        previewApi.setHandle && previewApi.setHandle({ x: Math.round(aimStart.x), y: Math.round(aimStart.y), vx, vy, userPlaced: true });
-      } else {
-        handle.vx = vx;
-        handle.vy = vy;
+      handle.vx = vx;
+      handle.vy = vy;
+
+      if (!shouldDefer()) {
         if (!isChainedFollower) {
           spawnBallFrom({ x: aimStart.x, y: aimStart.y, vx, vy, r: (ballR ? ballR() : 6) });
+        }
+      } else {
+        // This is a deferred action. Update lastLaunch directly.
+        if (previewApi.updateLastLaunch) {
+            previewApi.updateLastLaunch({
+                x: handle.x,
+                y: handle.y,
+                vx: handle.vx,
+                vy: handle.vy,
+            });
         }
       }
 
       draggingHandle = false;
       aimStart = null;
       aimCurr = null;
-      handlePreviewActive = false;
       if (setAim) setAim({ active: false });
       try { canvas.releasePointerCapture(e.pointerId); } catch (err) {}
       return;

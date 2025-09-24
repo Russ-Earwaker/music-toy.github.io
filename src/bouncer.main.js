@@ -389,7 +389,6 @@ export function createBouncer(selector){
       previewState = {
         blocks: blocks.map(cloneBlock),
         edgeControllers: edgeControllers.map(cloneEdgeController),
-        handle: cloneHandleState(handle),
       };
       try { panel.classList.add('toy-preview-pending'); } catch {}
     }
@@ -405,21 +404,7 @@ export function createBouncer(selector){
   function getPreviewState() { return previewState; }
   function markPreviewUpdated() { if (previewState) try { panel.classList.add('toy-preview-pending'); } catch {} }
 
-  function setPreviewHandleState(state = {}) {
-    const preview = ensurePreviewState();
-    const base = cloneHandleState(preview.handle || handle);
-    const next = { ...base, ...state };
-    if (typeof state.x === 'number' && typeof state.y === 'number') {
-      const w = physW();
-      const h = physH();
-      if (w > EDGE * 2 && h > EDGE * 2) {
-        next._fx = (state.x - EDGE) / (w - EDGE * 2);
-        next._fy = (state.y - EDGE) / (h - EDGE * 2);
-      }
-    }
-    preview.handle = next;
-    markPreviewUpdated();
-  }
+  
 
   function updatePreviewBlock(idx, mutator) {
     if (typeof idx !== 'number' || idx < 0) return;
@@ -455,18 +440,6 @@ export function createBouncer(selector){
         const dst = edgeControllers[idx];
         if (src && dst) Object.assign(dst, src);
       });
-    }
-    if (previewState.handle) {
-      Object.assign(handle, previewState.handle);
-      handle.userPlaced = !!previewState.handle.userPlaced;
-      // Also update lastLaunch to match the new handle position.
-      // This ensures that if a respawn occurs, it uses the updated location.
-      lastLaunch = {
-        x: handle.x,
-        y: handle.y,
-        vx: handle.vx,
-        vy: handle.vy,
-      };
     }
     clearPreviewState();
     try { window.syncAnchorsFromBlocks?.(); } catch {}
@@ -826,6 +799,16 @@ let __justSpawnedUntil = 0;
 
   function __setAim(a){ try{ if (a && typeof a==='object'){ Object.assign(__aim, a); } }catch(e){} }
 
+  function updateLastLaunch(L) {
+    if (!L) return;
+    lastLaunch = {
+        x: L.x,
+        y: L.y,
+        vx: L.vx,
+        vy: L.vy,
+    };
+  }
+
   const installInteractions = () => {
     installBouncerInteractions({
       panel,
@@ -851,12 +834,12 @@ let __justSpawnedUntil = 0;
       isAdvanced: () => panel.classList.contains('toy-zoomed'),
       preview: {
         shouldDefer: shouldDeferChanges,
-        setHandle: setPreviewHandleState,
         updateBlock: updatePreviewBlock,
         updateEdge: updatePreviewEdge,
         clear: clearPreviewState,
         getState: getPreviewState,
         has: hasPreviewState,
+        updateLastLaunch: updateLastLaunch,
       },
     });
     };

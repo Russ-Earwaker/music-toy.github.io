@@ -176,22 +176,7 @@ export function createBouncerDraw(env){
             ctx.restore();
           }
         }
-        if (previewState.handle) {
-          const hPrev = previewState.handle;
-          ctx.save();
-          ctx.setLineDash([6, 4]);
-          ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-          ctx.lineWidth = 2;
-          const radius = Math.max(typeof ballR === 'function' ? ballR() : 8, 10);
-          ctx.beginPath();
-          ctx.arc(hPrev.x, hPrev.y, radius, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(hPrev.x, hPrev.y);
-          ctx.lineTo(hPrev.x + (hPrev.vx || 0) * 8, hPrev.y + (hPrev.vy || 0) * 8);
-          ctx.stroke();
-          ctx.restore();
-        }
+        
       } catch (err) {
         if (__DBG >= 2) console.warn('[bouncer-render] preview overlay failed', err);
       }
@@ -260,7 +245,7 @@ export function createBouncerDraw(env){
     try{
       if (handle){
         ctx.beginPath();
-        ctx.arc(handle.x, handle.y, 7, 0, Math.PI*2);
+        ctx.arc(handle.x, handle.y, 10, 0, Math.PI*2);
         ctx.strokeStyle='rgba(0,255,200,0.4)';
         ctx.lineWidth=1;
         ctx.stroke();
@@ -285,7 +270,7 @@ export function createBouncerDraw(env){
         if (vx !== 0 || vy !== 0) {
             const len = Math.hypot(vx, vy);
             if (len > 0.01) { // Avoid division by zero
-                const indicatorLength = 12; // Length of the direction line
+                const indicatorLength = 20; // Length of the direction line
                 const endX = handle.x + (vx / len) * indicatorLength;
                 const endY = handle.y + (vy / len) * indicatorLength;
 
