@@ -176,6 +176,22 @@ export function createBouncerDraw(env){
             ctx.restore();
           }
         }
+        if (previewState.handle) {
+          const hPrev = previewState.handle;
+          ctx.save();
+          ctx.setLineDash([6, 4]);
+          ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+          ctx.lineWidth = 2;
+          const radius = Math.max(typeof ballR === 'function' ? ballR() : 8, 10);
+          ctx.beginPath();
+          ctx.arc(hPrev.x, hPrev.y, radius, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(hPrev.x, hPrev.y);
+          ctx.lineTo(hPrev.x + (hPrev.vx || 0) * 8, hPrev.y + (hPrev.vy || 0) * 8);
+          ctx.stroke();
+          ctx.restore();
+        }
         
       } catch (err) {
         if (__DBG >= 2) console.warn('[bouncer-render] preview overlay failed', err);

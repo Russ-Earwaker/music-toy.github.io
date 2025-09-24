@@ -441,6 +441,16 @@ export function createBouncer(selector){
         if (src && dst) Object.assign(dst, src);
       });
     }
+    if (previewState.handle) {
+      Object.assign(handle, previewState.handle);
+      handle.userPlaced = !!previewState.handle.userPlaced;
+      lastLaunch = {
+        x: handle.x,
+        y: handle.y,
+        vx: handle.vx,
+        vy: handle.vy,
+      };
+    }
     clearPreviewState();
     try { window.syncAnchorsFromBlocks?.(); } catch {}
   }
@@ -583,7 +593,7 @@ export function createBouncer(selector){
       if (panel.dataset.nextToyId) {
         panel.dispatchEvent(new CustomEvent('chain:set-active', { bubbles: true }));
       }
-      spawnBallFrom({ x, y, vx, vy, r });
+      spawnBallFrom({ x, y, vx, vy, r: ballR() });
     }
   }
 
