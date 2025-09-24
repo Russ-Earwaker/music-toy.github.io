@@ -410,21 +410,23 @@ export function createBouncerDraw(env){
             }
         } catch (e) { try { if ((globalThis.BOUNCER_DBG_LEVEL | 0) >= 2) console.warn('[bouncer-render] onNewBar error', e); } catch {} }
 
-        // When a bouncer becomes active in a chain, spawn a ball if it doesn't have one.
-        if (isActiveInChain && !wasActiveInChain) {
-            let previewWasApplied = false;
+        if (!isActiveInChain && wasActiveInChain) {
             if (typeof applyPreviewState === 'function') {
                 try {
                     const pending = typeof getPreviewState === 'function' ? getPreviewState() : null;
                     if (pending) {
                         applyPreviewState();
-                        previewWasApplied = true;
+                        // Pulse on apply
+                        panel.__pulseHighlight = Math.max(panel.__pulseHighlight || 0, 1);
                     }
                 } catch (err) {
-                    if (__DBG >= 1) console.warn('[bouncer-render] applyPreviewState failed', err);
+                    if (__DBG >= 1) console.warn('[bouncer-render] applyPreviewState on deactivate failed', err);
                 }
             }
+        }
 
+        // When a bouncer becomes active in a chain, spawn a ball if it doesn't have one.
+        if (isActiveInChain && !wasActiveInChain) {
             const b = getBall ? getBall() : null;
             if (!b) { // Only do something if there's no ball.
                 const isChainHead = !panel.dataset.prevToyId;
@@ -463,10 +465,6 @@ export function createBouncerDraw(env){
                         if (typeof setNextLaunchAt === 'function') setNextLaunchAt(ghostBall.flightEnd);
                     }
                 }
-            }
-
-            if (previewWasApplied) {
-                panel.__pulseHighlight = Math.max(panel.__pulseHighlight || 0, 1);
             }
         }
         wasActiveInChain = isActiveInChain;

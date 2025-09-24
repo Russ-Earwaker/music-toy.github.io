@@ -459,6 +459,14 @@ export function createBouncer(selector){
     if (previewState.handle) {
       Object.assign(handle, previewState.handle);
       handle.userPlaced = !!previewState.handle.userPlaced;
+      // Also update lastLaunch to match the new handle position.
+      // This ensures that if a respawn occurs, it uses the updated location.
+      lastLaunch = {
+        x: handle.x,
+        y: handle.y,
+        vx: handle.vx,
+        vy: handle.vy,
+      };
     }
     clearPreviewState();
     try { window.syncAnchorsFromBlocks?.(); } catch {}
@@ -469,9 +477,13 @@ export function createBouncer(selector){
   }
 
   function shouldDeferChanges() {
-    if (!isBouncerChained()) return false;
-    if (panel.dataset.chainActive === 'true') return false;
-    try { if (typeof isRunning === 'function' && !isRunning()) return false; } catch {}
+    const isChainedFollower = !!panel.dataset.prevToyId;
+    if (!isChainedFollower) {
+      return false;
+    }
+    if (typeof isRunning === 'function' && !isRunning()) {
+      return false;
+    }
     return true;
   }
 

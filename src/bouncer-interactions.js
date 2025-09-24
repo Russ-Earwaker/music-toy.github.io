@@ -1,4 +1,4 @@
-﻿// src/bouncer-interactions.js — pointer interactions (<=300 lines)
+// src/bouncer-interactions.js — pointer interactions (<=300 lines)
 
 import { whichThirdRect } from './toyhelpers.js';
 import { handleEdgeControllerEdit } from './bouncer-edges.js';
@@ -109,6 +109,11 @@ export function installBouncerInteractions({
   }
 
   function onPointerDown(e){
+    if (shouldDefer()) {
+      if (previewApi.has && previewApi.has()) {
+        previewApi.clear && previewApi.clear();
+      }
+    }
     const p = toWorld(localPoint(e));
     const hitEdge = edgeControllers.find(c => p.x >= c.x && p.x <= c.x + c.w && p.y >= c.y && p.y <= c.y + c.h);
     const hitBlock = blocks.find((b, idx) => !b.fixed && p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h);
@@ -365,4 +370,3 @@ export function installBouncerInteractions({
     }
   };
 }
-
