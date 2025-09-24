@@ -101,7 +101,8 @@ export function createBouncer(selector){
       // Edge controllers
       try{ ensureEdgeControllers(physW(), physH()); }catch{}
       if (Array.isArray(st.edges) && Array.isArray(edgeControllers)){
-        const mapByEdge = (arr)=>{ const m={}; try{ arr.forEach((c,i)=>{ if (c && c.edge) m[c.edge]= {c,i}; }); }catch{} return m; };
+        const mapByEdge = (arr)=>{ const m={}; try{ arr.forEach((c,i)=>{ if (c && c.edge) m[c.edge]= {c,i}; });
+    }catch{} return m; };
         const srcMap = mapByEdge(st.edges);
         const dstMap = mapByEdge(edgeControllers);
         const keys = ['left','right','top','bot'];
@@ -111,7 +112,7 @@ export function createBouncer(selector){
           dst.w = Math.round(src.w||dst.w); dst.h = Math.round(src.h||dst.h);
           dst.active = !!src.active; dst.noteIndex = (src.noteIndex|0);
         });
-      }
+    }
       // Handle spawn handle position
       try{
         if (typeof st.handleFx === 'number') handle._fx = Math.max(0, Math.min(1, st.handleFx));
@@ -153,7 +154,7 @@ export function createBouncer(selector){
             nextLaunchAtRemaining: nextLaunchAtRemaining,
             nextLaunchAt: nextLaunchAt
         });
-      }catch{}
+    }catch{}
 
     }catch(e){ try{ console.warn('[bouncer] apply snapshot failed', e); }catch{} }
   };
@@ -244,7 +245,7 @@ export function createBouncer(selector){
               { transform:'scale(1.35)', background:'#fff', boxShadow:'0 0 10px 4px rgba(255,255,255,0.65)' },
               { transform:'scale(1)', background:'rgba(255,255,255,0.35)', boxShadow:'0 0 0 0 rgba(255,255,255,0.0)' }
             ], { duration: Math.max(140, Math.min(260, (grid||0.2)*700 )), easing: 'ease-out' });
-          }
+    }
         }
       }
     } catch {}
@@ -366,6 +367,114 @@ export function createBouncer(selector){
   // blocks
   const N_BLOCKS = 4;
   let blocks = Array.from({length:N_BLOCKS}, ()=>({ x:EDGE, y:EDGE, w:blockSize(), h:blockSize(), noteIndex:0, active:true, flash:0, lastHitAT:0 }));
+
+  let previewState = null;
+  function cloneBlock(src) { return src ? { ...src } : null; }
+  function cloneEdgeController(src) { return src ? { ...src } : null; }
+  function cloneHandleState(src) {
+    if (!src) return { x: 0, y: 0, vx: 0, vy: 0, userPlaced: false };
+    return {
+      x: Number(src.x || 0),
+      y: Number(src.y || 0),
+      vx: Number(src.vx || 0),
+      vy: Number(src.vy || 0),
+      userPlaced: !!src.userPlaced,
+      _fx: typeof src._fx === 'number' ? src._fx : undefined,
+      _fy: typeof src._fy === 'number' ? src._fy : undefined,
+    };
+  }
+
+  function ensurePreviewState() {
+    if (!previewState) {
+      previewState = {
+        blocks: blocks.map(cloneBlock),
+        edgeControllers: edgeControllers.map(cloneEdgeController),
+        handle: cloneHandleState(handle),
+      };
+      try { panel.classList.add('toy-preview-pending'); } catch {}
+    }
+    return previewState;
+  }
+
+  function clearPreviewState() {
+    previewState = null;
+    try { panel.classList.remove('toy-preview-pending'); } catch {}
+  }
+
+  function hasPreviewState() { return !!previewState; }
+  function getPreviewState() { return previewState; }
+  function markPreviewUpdated() { if (previewState) try { panel.classList.add('toy-preview-pending'); } catch {} }
+
+  function setPreviewHandleState(state = {}) {
+    const preview = ensurePreviewState();
+    const base = cloneHandleState(preview.handle || handle);
+    const next = { ...base, ...state };
+    if (typeof state.x === 'number' && typeof state.y === 'number') {
+      const w = physW();
+      const h = physH();
+      if (w > EDGE * 2 && h > EDGE * 2) {
+        next._fx = (state.x - EDGE) / (w - EDGE * 2);
+        next._fy = (state.y - EDGE) / (h - EDGE * 2);
+      }
+    }
+    preview.handle = next;
+    markPreviewUpdated();
+  }
+
+  function updatePreviewBlock(idx, mutator) {
+    if (typeof idx !== 'number' || idx < 0) return;
+    const preview = ensurePreviewState();
+    if (!preview.blocks[idx]) preview.blocks[idx] = cloneBlock(blocks[idx]);
+    if (!preview.blocks[idx]) return;
+    const original = blocks[idx];
+    mutator(preview.blocks[idx], original);
+    markPreviewUpdated();
+  }
+
+  function updatePreviewEdge(edge, mutator) {
+    if (!edge) return;
+    const preview = ensurePreviewState();
+    const idx = edgeControllers.indexOf(edge);
+    if (idx === -1) return;
+    if (!preview.edgeControllers[idx]) preview.edgeControllers[idx] = cloneEdgeController(edgeControllers[idx]);
+    if (!preview.edgeControllers[idx]) return;
+    mutator(preview.edgeControllers[idx], edgeControllers[idx]);
+    markPreviewUpdated();
+  }
+
+  function applyPreviewState() {
+    if (!previewState) return;
+    if (Array.isArray(previewState.blocks)) {
+      previewState.blocks.forEach((src, idx) => {
+        const dst = blocks[idx];
+        if (src && dst) Object.assign(dst, src);
+      });
+    }
+    if (Array.isArray(previewState.edgeControllers)) {
+      previewState.edgeControllers.forEach((src, idx) => {
+        const dst = edgeControllers[idx];
+        if (src && dst) Object.assign(dst, src);
+      });
+    }
+    if (previewState.handle) {
+      Object.assign(handle, previewState.handle);
+      handle.userPlaced = !!previewState.handle.userPlaced;
+    }
+    clearPreviewState();
+    try { window.syncAnchorsFromBlocks?.(); } catch {}
+  }
+
+  function isBouncerChained() {
+    return !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
+  }
+
+  function shouldDeferChanges() {
+    if (!isBouncerChained()) return false;
+    if (panel.dataset.chainActive === 'true') return false;
+    try { if (typeof isRunning === 'function' && !isRunning()) return false; } catch {}
+    return true;
+  }
+
   const isAdvanced = ()=> panel.classList.contains('toy-zoomed') || !!panel.closest('#zoom-overlay');
   function hitTest(x,y){
     for (let i=0;i<blocks.length;i++){ const b=blocks[i]; if (x>=b.x && x<b.x+b.w && y>=b.y && y<b.y+b.h) return i; }
@@ -417,18 +526,37 @@ export function createBouncer(selector){
   }
 
   
-  function doRandom(){
-    // Randomize cubes and notes first, as this is common to all cases.
-    try{ doRandomCubes(); }catch{}
-    try{ doRandomNotes(); }catch{}
+  function doRandom(options = {}) {
+    if (!options.previewTarget && shouldDeferChanges()) {
+      clearPreviewState();
+      const preview = ensurePreviewState();
+      preview.blocks = blocks.map(cloneBlock);
+      preview.edgeControllers = edgeControllers.map(cloneEdgeController);
+      preview.handle = cloneHandleState(handle);
+      doRandom({ previewTarget: preview });
+      return;
+    }
 
-    // Find a clear spawn point
+    if (!options.previewTarget && hasPreviewState()) {
+      clearPreviewState();
+    }
+
+    const previewTarget = options.previewTarget;
+    const usingPreview = !!previewTarget;
+
+    const targetBlocks = usingPreview ? previewTarget.blocks : blocks;
+    const targetEdges = usingPreview ? previewTarget.edgeControllers : edgeControllers;
+    const targetHandle = usingPreview ? previewTarget.handle : handle;
+
+    doRandomCubes(targetBlocks, { skipAnchorSync: usingPreview });
+    doRandomNotes(targetEdges, targetBlocks);
+
     const w = physW(), h = physH();
     const r = ballR();
     const spawnableW = w - 2 * (EDGE + r + 4);
     const spawnableH = h - 2 * (EDGE + r + 4);
     let x, y, attempts = 0;
-    const collidables = [...blocks, ...edgeControllers].filter(b => b && b.active !== false);
+    const collidables = [...targetBlocks, ...targetEdges].filter(b => b && b.active !== false);
 
     do {
       x = (EDGE + r + 4) + Math.random() * spawnableW;
@@ -436,74 +564,88 @@ export function createBouncer(selector){
       attempts++;
       if (attempts > 100) {
         console.warn('[bouncer] Could not find a clear spawn point after 100 attempts.');
-        break; // Give up to avoid an infinite loop
+        break;
       }
     } while (collidables.some(b => circleRectHit(x, y, r, b)));
 
-    // Update the visual spawn handle to match the new random position
-    handle.x = x;
-    handle.y = y;
-    handle.userPlaced = true; // This action counts as the user placing the spawner.
-
-    // Calculate a random launch direction and store it on the handle.
     const angle = Math.random() * Math.PI * 2;
-    const endX = x + Math.cos(angle) * 10; // create a point in a random direction
+    const endX = x + Math.cos(angle) * 10;
     const endY = y + Math.sin(angle) * 10;
     const { vx, vy } = velFrom(x, y, endX, endY);
-    handle.vx = vx;
-    handle.vy = vy;
 
-    // Only spawn a ball and set active if it's a standalone toy or the head of a chain.
+    targetHandle.x = x;
+    targetHandle.y = y;
+    targetHandle.userPlaced = true;
+    targetHandle.vx = vx;
+    targetHandle.vy = vy;
+
+    if (w > EDGE * 2 && h > EDGE * 2) {
+      targetHandle._fx = (x - EDGE) / (w - EDGE * 2);
+      targetHandle._fy = (y - EDGE) / (h - EDGE * 2);
+    }
+
+    if (usingPreview) {
+      markPreviewUpdated();
+      return;
+    }
+
     const isChainedFollower = !!panel.dataset.prevToyId;
+    if (shouldDeferChanges()) {
+      return;
+    }
+
     if (!isChainedFollower) {
-        // If this bouncer is part of a chain (it must be the head), set it as the active toy.
-        if (panel.dataset.nextToyId) {
-            panel.dispatchEvent(new CustomEvent('chain:set-active', { bubbles: true }));
-        }
-        // Spawn the ball with the calculated random vector.
-        spawnBallFrom({ x, y, vx, vy, r });
+      if (panel.dataset.nextToyId) {
+        panel.dispatchEvent(new CustomEvent('chain:set-active', { bubbles: true }));
+      }
+      spawnBallFrom({ x, y, vx, vy, r });
     }
   }
 
-  function doRandomCubes() {
+  function doRandomCubes(targetBlocks = blocks, { skipAnchorSync = false } = {}) {
     const pr = Number(panel?.dataset?.priority || '1') || 1;
     const density = getPoliteDensityForToy(toyId, 1, pr);
-    const N = blocks.length;
+    const N = targetBlocks.length;
     const w = physW(), h = physH();
     const baseBW = Math.round(w * 0.6), baseBH = Math.round(h * 0.6);
     const K = Math.max(1, Math.min(N, Math.round(1 + density * (N - 1))));
     const areaScale = 0.5 + 0.5 * density;
-    const bw = Math.max(EDGE*4, Math.round(baseBW * areaScale));
-    const bh = Math.max(EDGE*4, Math.round(baseBH * areaScale));
+    const bw = Math.max(EDGE * 4, Math.round(baseBW * areaScale));
+    const bh = Math.max(EDGE * 4, Math.round(baseBH * areaScale));
     const bx = Math.round((w - bw) / 2);
     const by = Math.round((h - bh) / 2);
-    randomizeRects(blocks, {x:bx, y:by, w:bw, h:bh}, EDGE);
-    try { window.syncAnchorsFromBlocks(); } catch {}
-    
+
+    randomizeRects(targetBlocks, { x: bx, y: by, w: bw, h: bh }, EDGE);
+    if (!skipAnchorSync) {
+      try { window.syncAnchorsFromBlocks(); } catch {}
+    }
+
     let picks = [];
     if (K >= N) {
-      picks = Array.from({length: N}, (_, i) => i);
+      picks = Array.from({ length: N }, (_, i) => i);
     } else {
       const uniq = [];
       while (uniq.length < K) {
-        const r = (Math.random() * N) | 0;
-        if (!uniq.includes(r)) uniq.push(r);
+        const rIdx = (Math.random() * N) | 0;
+        if (!uniq.includes(rIdx)) uniq.push(rIdx);
       }
       picks = uniq;
     }
 
-    for (let i = 0; i < N; i++) { if (blocks[i]) blocks[i].active = false; }
-    for (const i of picks) { if (blocks[i]) blocks[i].active = true; }
+    for (let i = 0; i < N; i++) { if (targetBlocks[i]) targetBlocks[i].active = false; }
+    for (const i of picks) { if (targetBlocks[i]) targetBlocks[i].active = true; }
   }
 
-  function doRandomNotes() {
-    randomizeControllers(edgeControllers, noteList);
+  function doRandomNotes(targetEdges = edgeControllers, targetBlocks = blocks) {
+    randomizeControllers(targetEdges, noteList);
     const pal = buildPentatonicPalette(noteList, 'C4', 'minor', 1);
     for (let i = pal.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [pal[i], pal[j]] = [pal[j], pal[i]];
+      const j = Math.floor(Math.random() * (i + 1));
+      [pal[i], pal[j]] = [pal[j], pal[i]];
     }
-    for (let i=0;i<blocks.length;i++) { if (blocks[i]) blocks[i].noteIndex = pal[i % pal.length]; }
+    for (let i = 0; i < targetBlocks.length; i++) {
+      if (targetBlocks[i]) targetBlocks[i].noteIndex = pal[i % pal.length];
+    }
   }
   
   function doReset(){
@@ -536,7 +678,8 @@ export function createBouncer(selector){
   // Handle position from anchors
   try{
     const w = physW(), h = physH();
-    const hfx = (typeof handle._fx==='number') ? handle._fx : (w? handle.x/w : 0.22); if (globalThis.BOUNCER_DEBUG){ console.log('[bouncer] handle anchors', {hfx, hfy:handle._fy, w, h}); } /*HANDLE_DBG*/
+    const hfx = (typeof handle._fx==='number') ? handle._fx : (w? handle.x/w : 0.22); if (globalThis.BOUNCER_DEBUG){ console.log('[bouncer] handle anchors', {hfx, hfy:handle._fy, w, h});
+    } /*HANDLE_DBG*/
     const hfy = (typeof handle._fy==='number') ? handle._fy : (h? handle.y/h : 0.5);
     handle.x = Math.round(EDGE + hfx * Math.max(1, w - EDGE*2));
     handle.y = Math.round(EDGE + hfy * Math.max(1, h - EDGE*2));
@@ -672,8 +815,39 @@ let __justSpawnedUntil = 0;
   function __setAim(a){ try{ if (a && typeof a==='object'){ Object.assign(__aim, a); } }catch(e){} }
 
   const installInteractions = () => {
-    installBouncerInteractions({ panel, setAim: __setAim, canvas, sizing, toWorld, EDGE, physW, physH, ballR, __getSpeed, blocks, edgeControllers, handle, spawnBallFrom, setNextLaunchAt, setBallOut, instrument: ()=>instrument, toyId, noteList, velFrom, isAdvanced: ()=>panel.classList.contains('toy-zoomed') });
-  };
+    installBouncerInteractions({
+      panel,
+      setAim: __setAim,
+      canvas,
+      sizing,
+      toWorld,
+      EDGE,
+      physW,
+      physH,
+      ballR,
+      __getSpeed,
+      blocks,
+      edgeControllers,
+      handle,
+      spawnBallFrom,
+      setNextLaunchAt,
+      setBallOut,
+      instrument: () => instrument,
+      toyId,
+      noteList,
+      velFrom,
+      isAdvanced: () => panel.classList.contains('toy-zoomed'),
+      preview: {
+        shouldDefer: shouldDeferChanges,
+        setHandle: setPreviewHandleState,
+        updateBlock: updatePreviewBlock,
+        updateEdge: updatePreviewEdge,
+        clear: clearPreviewState,
+        getState: getPreviewState,
+        has: hasPreviewState,
+      },
+    });
+    };
 
   lockPhysWorld();
 
@@ -799,7 +973,7 @@ let __justSpawnedUntil = 0;
       if (typeof S.__unmuteAt === 'number') __unmuteAt = S.__unmuteAt;
       if (DBG_RESPAWN()) {
         console.log('[BNC_DBG] applyFromStep: Ball state is now', { flightEnd: ball?.flightEnd?.toFixed(3) });
-      }
+    }
     }
   };
 
@@ -809,11 +983,14 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
   ensureEdgeControllers: (w,h)=>ensureEdgeControllers(w,h), edgeControllers,
   blockSize, particles, blocks, handle, drawEdgeBondLines, ensureAudioContext, noteList, drawBlocksSection,
   drawEdgeDecorations, edgeFlash,
+  getPreviewState,
+  applyPreviewState,
   stepBouncer,
   spawnBallFrom,
   getBall: ()=>ball,
   rescale: ()=>{ try{ window.rescaleBouncer({ blocks, handle, edgeControllers, physW, physH, EDGE, blockSize, ballRef: ball,
-        getBall: ()=>ball, ballR, ensureEdgeControllers }); }catch{} },
+        getBall: ()=>ball, ballR, ensureEdgeControllers });
+    }catch{} },
   updateLaunchBaseline,
   buildStateForStep, installInteractions, getLastLaunch: ()=>lastLaunch,
   applyFromStep,
@@ -845,3 +1022,29 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
   panel.__bouncer_main_instance = instanceApi;
   return instanceApi;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

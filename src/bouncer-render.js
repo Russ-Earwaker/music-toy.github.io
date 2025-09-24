@@ -10,6 +10,7 @@ export function createBouncerDraw(env){
     ensureEdgeControllers, edgeControllers, blockSize, blocks, handle,
     particles, drawEdgeBondLines, ensureAudioContext, noteList,
     drawEdgeDecorations, edgeFlash, getLoopInfo,
+    getPreviewState, applyPreviewState,
     stepBouncer, buildStateForStep, applyFromStep, installInteractions,
     getBall, lockPhysWorld, getAim, spawnBallFrom, getLastLaunch,
     velFrom, ballR, updateLaunchBaseline,
@@ -139,6 +140,62 @@ export function createBouncerDraw(env){
         });
       }
     }catch(e){ console.error('[bouncer-render] draw blocks failed:', e); }
+    const previewState = (typeof getPreviewState === 'function') ? getPreviewState() : null;
+    if (previewState) {
+      try {
+        const isAdvPreview = !!canvas.closest('.toy-zoomed');
+        if (Array.isArray(previewState.blocks)) {
+          for (const pb of previewState.blocks) {
+            if (!pb) continue;
+            ctx.save();
+            ctx.globalAlpha = 0.45;
+            ctx.setLineDash([6, 4]);
+            drawBlock(ctx, pb, {
+              variant: 'button',
+              active: pb.active !== false,
+              flash: 0,
+              noteLabel: isAdvPreview ? (noteList[pb.noteIndex] || '') : null,
+              showArrows: isAdvPreview,
+            });
+            ctx.restore();
+          }
+        }
+        if (Array.isArray(previewState.edgeControllers)) {
+          for (const pc of previewState.edgeControllers) {
+            if (!pc) continue;
+            ctx.save();
+            ctx.globalAlpha = 0.5;
+            ctx.setLineDash([6, 4]);
+            drawBlock(ctx, pc, {
+              variant: 'button',
+              active: pc.active !== false,
+              flash: 0,
+              noteLabel: isAdvPreview ? (noteList[pc.noteIndex] || '') : null,
+              showArrows: isAdvPreview,
+            });
+            ctx.restore();
+          }
+        }
+        if (previewState.handle) {
+          const hPrev = previewState.handle;
+          ctx.save();
+          ctx.setLineDash([6, 4]);
+          ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+          ctx.lineWidth = 2;
+          const radius = Math.max(typeof ballR === 'function' ? ballR() : 8, 10);
+          ctx.beginPath();
+          ctx.arc(hPrev.x, hPrev.y, radius, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(hPrev.x, hPrev.y);
+          ctx.lineTo(hPrev.x + (hPrev.vx || 0) * 8, hPrev.y + (hPrev.vy || 0) * 8);
+          ctx.stroke();
+          ctx.restore();
+        }
+      } catch (err) {
+        if (__DBG >= 2) console.warn('[bouncer-render] preview overlay failed', err);
+      }
+    }
 
     // Update trail points & sparks
     try{
@@ -355,6 +412,19 @@ export function createBouncerDraw(env){
 
         // When a bouncer becomes active in a chain, spawn a ball if it doesn't have one.
         if (isActiveInChain && !wasActiveInChain) {
+            let previewWasApplied = false;
+            if (typeof applyPreviewState === 'function') {
+                try {
+                    const pending = typeof getPreviewState === 'function' ? getPreviewState() : null;
+                    if (pending) {
+                        applyPreviewState();
+                        previewWasApplied = true;
+                    }
+                } catch (err) {
+                    if (__DBG >= 1) console.warn('[bouncer-render] applyPreviewState failed', err);
+                }
+            }
+
             const b = getBall ? getBall() : null;
             if (!b) { // Only do something if there's no ball.
                 const isChainHead = !panel.dataset.prevToyId;
@@ -393,6 +463,10 @@ export function createBouncerDraw(env){
                         if (typeof setNextLaunchAt === 'function') setNextLaunchAt(ghostBall.flightEnd);
                     }
                 }
+            }
+
+            if (previewWasApplied) {
+                panel.__pulseHighlight = Math.max(panel.__pulseHighlight || 0, 1);
             }
         }
         wasActiveInChain = isActiveInChain;
@@ -481,3 +555,14 @@ export function createBouncerDraw(env){
 
   return draw;
 }
+
+
+
+
+
+
+
+
+
+
+
