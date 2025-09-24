@@ -312,10 +312,7 @@ export function createRippleSynth(selector){
     // This is a user interaction, so we should arm the toy to allow automatic ripples.
     try { window.__ripplerUserArmed = true; } catch {}
 
-    const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
-    const transportIsRunning = (typeof isRunning === 'function') ? isRunning() : true;
-
-    if (isChained && transportIsRunning) {
+    if (shouldDeferChanges()) {
         // --- PREVIEW LOGIC ---
         // On a running, chained toy, create a preview state instead of applying immediately.
         hasPreviewState = true;
@@ -433,9 +430,43 @@ export function createRippleSynth(selector){
       } catch (e) { try { console.warn('[rippler random rearm]', e); } catch {} }
     }
   }
+  function shouldDeferChanges() {
+    const isChainedFollower = !!panel.dataset.prevToyId;
+    if (!isChainedFollower) {
+      return false;
+    }
+    if (typeof isRunning === 'function' && !isRunning()) {
+      return false;
+    }
+    return true;
+  }
+
+  function doReset(ev){
+    try{ ev?.stopImmediatePropagation?.(); }catch{};
+    pattern.forEach(s=> s.clear());
+    patternOffsets.forEach(m=> m.clear());
+    ripples.length=0;
+    generator.placed=false;
+
+    // If this is the head of a chain, reset all downstream toys.
+    const isHeadOfChain = !panel.dataset.prevToyId && panel.dataset.nextToyId;
+    if (isHeadOfChain) {
+      let nextId = panel.dataset.nextToyId;
+      let currentPanel = panel;
+      while (nextId) {
+        const nextPanel = document.getElementById(nextId);
+        if (!nextPanel) break;
+        nextPanel.dispatchEvent(new CustomEvent('toy-reset', { bubbles: true }));
+        currentPanel = nextPanel;
+        nextId = currentPanel.dataset.nextToyId;
+      }
+      // After resetting all followers, make the head active again.
+      panel.dispatchEvent(new CustomEvent('chain:set-active', { bubbles: true }));
+    }
+  }
   panel.addEventListener('toy-random', randomizeAll);
-  panel.addEventListener('toy-clear', (ev)=>{ try{ ev.stopImmediatePropagation?.(); }catch{}; pattern.forEach(s=> s.clear()); patternOffsets.forEach(m=> m.clear()); ripples.length=0; generator.placed=false; });
-  panel.addEventListener('toy-reset', ()=>{ pattern.forEach(s=> s.clear()); patternOffsets.forEach(m=> m.clear()); ripples.length=0; generator.placed=false; });
+  panel.addEventListener('toy-clear', doReset);
+  panel.addEventListener('toy-reset', doReset);
 
   function doSoftReset() {
     // This is called when a preceding toy in the chain is reset (e.g., a new ball is launched).
@@ -503,6 +534,7 @@ export function createRippleSynth(selector){
     onBlockGrab: (idx)=>{ liveBlocks.add(idx); try { for (let s=0; s<pattern.length; s++){ pattern[s].delete(idx); try{ patternOffsets[s].delete(idx); }catch{} } } catch {} },
     onBlockDrop: (idx)=>{ liveBlocks.delete(idx); recordOnly.add(idx); },
     // Add new properties for state checking in input handler
+    shouldDeferChanges: shouldDeferChanges,
     isActiveInChain: () => panel.dataset.chainActive === 'true',
     isChained: () => !!(panel.dataset.nextToyId || panel.dataset.prevToyId),
     isRunning: isRunning, // pass the function

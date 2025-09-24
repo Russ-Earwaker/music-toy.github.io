@@ -467,10 +467,7 @@ export function createBouncer(selector){
     if (typeof isRunning === 'function' && !isRunning()) {
       return false;
     }
-    if (panel.dataset.chainActive === 'true') {
-      return true;
-    }
-    return false;
+    return true;
   }
 
   const isAdvanced = ()=> panel.classList.contains('toy-zoomed') || !!panel.closest('#zoom-overlay');
@@ -652,6 +649,22 @@ export function createBouncer(selector){
     handle.vx = 0; handle.vy = 0;
     try { for (const b of blocks){ b.flash = 0; } } catch {}
     try { for (const c of edgeControllers){ c.flash = 0; c.lastHitAT = 0; } } catch {}
+
+    // If this is the head of a chain, reset all downstream toys.
+    const isHeadOfChain = !panel.dataset.prevToyId && panel.dataset.nextToyId;
+    if (isHeadOfChain) {
+      let nextId = panel.dataset.nextToyId;
+      let currentPanel = panel;
+      while (nextId) {
+        const nextPanel = document.getElementById(nextId);
+        if (!nextPanel) break;
+        nextPanel.dispatchEvent(new CustomEvent('toy-reset', { bubbles: true }));
+        currentPanel = nextPanel;
+        nextId = currentPanel.dataset.nextToyId;
+      }
+      // After resetting all followers, make the head active again.
+      panel.dispatchEvent(new CustomEvent('chain:set-active', { bubbles: true }));
+    }
   }
 
   function doSoftReset() {
