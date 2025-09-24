@@ -17,6 +17,7 @@ import { makeGetBlockRects } from './ripplesynth-rects.js';
 import { installLoopGuards } from './rippler-loopguard.js';
 import { createScheduler } from './ripplesynth-scheduler.js';
 import { circleRectHit } from './bouncer-helpers.js';
+import { drawBlock } from './toyhelpers.js';
 
 export function createRippleSynth(selector){
   const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector;
@@ -139,6 +140,7 @@ export function createRippleSynth(selector){
   const getCanvasPos = (el, e)=>{ const r = el.getBoundingClientRect(); const sx = r.width? (el.width / r.width) : 1; const sy = r.height? (el.height / r.height) : 1; return { x: (e.clientX - r.left)*sx, y: (e.clientY - r.top)*sy }; };
 
   const CUBES = 8, BASE = 56 * 0.75;
+  const __baseSpanW = Math.max(1, Math.abs(n2x(1) - n2x(0)));
   const blocks = Array.from({length:CUBES}, (_,i)=>({
     nx:0.5, ny:0.5, nx0:0.5, ny0:0.5,
     vx:0, vy:0,
@@ -788,18 +790,25 @@ export function createRippleSynth(selector){
       // Draw preview blocks if they exist
       if (hasPreviewState && previewBlocks.length > 0) {
           const previewBlockRects = previewBlocks.map(pb => {
-              const size = Math.round(BASE*(sizing.scale||1)*boardScale(canvas));
+              const __spanW = Math.max(1, Math.abs(n2x(1) - n2x(0)));
+              const __rectScale = __spanW / __baseSpanW;
+              const size = Math.max(20, Math.round(BASE * (sizing.scale||1) * __rectScale));
               const cx = n2x(pb.nx);
               const cy = n2y(pb.ny);
               return { x: cx - size/2, y: cy - size/2, w: size, h: size, active: pb.active };
           });
 
           ctx.save();
-          ctx.setLineDash([4, 4]);
+          ctx.globalAlpha = 0.45; // Bouncer's alpha
+          ctx.setLineDash([6, 4]); // Bouncer's line dash
           for (const rect of previewBlockRects) {
-              ctx.strokeStyle = rect.active ? 'rgba(255, 140, 0, 0.7)' : 'rgba(100, 100, 100, 0.7)';
-              ctx.lineWidth = 2;
-              ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
+              drawBlock(ctx, rect, {
+                variant: 'button',
+                active: rect.active,
+                flash: 0,
+                noteLabel: isZoomed() ? (noteList[rect.noteIndex] || '') : null,
+                showArrows: isZoomed(),
+              });
           }
           ctx.restore();
       }
@@ -814,11 +823,18 @@ export function createRippleSynth(selector){
         const pgx = n2x(previewGenerator.nx);
         const r = Math.max(8, Math.round(generator.r * (sizing.scale || 1)));
         ctx.save();
+        ctx.setLineDash([6, 4]); // Bouncer's line dash
+        ctx.strokeStyle = 'rgba(255,255,255,0.85)'; // Bouncer's color
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(pgx, pgy, r, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-        ctx.setLineDash([4, 4]);
-        ctx.lineWidth = 2;
+        ctx.stroke();
+        // Add directional line
+        const angle = Math.random() * Math.PI * 2; // Random direction for preview
+        const indicatorLength = 20; // Bouncer's indicator length
+        ctx.beginPath();
+        ctx.moveTo(pgx, pgy);
+        ctx.lineTo(pgx + Math.cos(angle) * indicatorLength, pgy + Math.sin(angle) * indicatorLength);
         ctx.stroke();
         ctx.restore();
       }
