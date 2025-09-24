@@ -467,7 +467,10 @@ export function createBouncer(selector){
     if (typeof isRunning === 'function' && !isRunning()) {
       return false;
     }
-    return true;
+    if (panel.dataset.chainActive === 'true') {
+      return true;
+    }
+    return false;
   }
 
   const isAdvanced = ()=> panel.classList.contains('toy-zoomed') || !!panel.closest('#zoom-overlay');
