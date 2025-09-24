@@ -414,9 +414,10 @@ export function createRippleSynth(selector){
     generator.placed = true;
 
     if (shouldSpawn) {
+      const isInactiveFollower = !!panel.dataset.prevToyId && panel.dataset.chainActive !== 'true';
       try {
         const nowAT = ac.currentTime;
-        if (typeof isRunning !== 'function' || isRunning()){
+        if ((typeof isRunning !== 'function' || isRunning()) && !isInactiveFollower){
           spawnRipple(true); // manual=true to bypass first-interaction guard
           barStartAT = nowAT;
           nextSlotAT = barStartAT + stepSeconds();
