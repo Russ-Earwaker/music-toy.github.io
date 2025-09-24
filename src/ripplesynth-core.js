@@ -438,7 +438,7 @@ export function createRippleSynth(selector){
     if (typeof isRunning === 'function' && !isRunning()) {
       return false;
     }
-    return true;
+    return panel.dataset.chainActive === 'true';
   }
 
   function doReset(ev){
@@ -567,7 +567,8 @@ export function createRippleSynth(selector){
       const shouldRun = (isActiveInChain || !isChained);
       const transportIsRunning = (typeof isRunning === 'function') ? isRunning() : true;
 
-      if (shouldRun && transportIsRunning) {
+      const isInactiveFollower = !!panel.dataset.prevToyId && panel.dataset.chainActive !== 'true';
+      if (shouldRun && transportIsRunning && !isInactiveFollower) {
           spawnRipple(false);
           barStartAT = ac.currentTime; nextSlotAT = barStartAT + stepSeconds(); nextSlotIx = 1; recording = true;
       } // Otherwise, do nothing. The chain activation logic will spawn the ripple when it becomes active.
@@ -577,12 +578,13 @@ export function createRippleSynth(selector){
   canvas.addEventListener('pointermove', input.pointerMove);
 
   canvas.addEventListener('pointerup', (e)=>{
+    const isInactiveFollower = !!panel.dataset.prevToyId && panel.dataset.chainActive !== 'true';
     const prevDrag = dragMuteActive; dragMuteActive=false;
     input.pointerUp(e);
     const nowAT = ac.currentTime;
     if (prevDrag){
       playbackMuted=false;
-      try{ if (typeof isRunning!=='function' || isRunning()) spawnRipple(false); else __deferredSpawn = true; }catch{ spawnRipple(false); }
+      try{ if ((typeof isRunning!=='function' || isRunning()) && !isInactiveFollower) spawnRipple(false); else __deferredSpawn = true; }catch{ spawnRipple(false); }
       if (typeof isRunning!=='function' || isRunning()){
         barStartAT=nowAT; nextSlotAT=barStartAT+stepSeconds(); nextSlotIx=1; pattern.forEach(s=> s.clear()); patternOffsets.forEach(m=> m.clear()); recording=true;
       } else {
@@ -591,7 +593,7 @@ export function createRippleSynth(selector){
     } else {
       const gx=n2x(generator.nx), gy=n2y(generator.ny);
       if (_wasPlacedAtDown && _genDownPos && Math.hypot((_genDownPos.x-gx),(_genDownPos.y-gy))>4){
-        try{ if (typeof isRunning!=='function' || isRunning()) spawnRipple(false); else __deferredSpawn = true; }catch{ spawnRipple(false); }
+        try{ if ((typeof isRunning!=='function' || isRunning()) && !isInactiveFollower) spawnRipple(false); else __deferredSpawn = true; }catch{ spawnRipple(false); }
         if (typeof isRunning!=='function' || isRunning()){
           barStartAT=nowAT; nextSlotAT=barStartAT+stepSeconds(); nextSlotIx=1; pattern.forEach(s=> s.clear()); patternOffsets.forEach(m=> m.clear()); recording=true;
         } else {

@@ -467,7 +467,7 @@ export function createBouncer(selector){
     if (typeof isRunning === 'function' && !isRunning()) {
       return false;
     }
-    return true;
+    return panel.dataset.chainActive === 'true';
   }
 
   const isAdvanced = ()=> panel.classList.contains('toy-zoomed') || !!panel.closest('#zoom-overlay');
