@@ -350,7 +350,7 @@ select.toy-instrument {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: radial-gradient(circle at 50% 50%, rgba(124, 86, 255, 0.7), rgba(124, 86, 255, 0));
+  background: rgba(124, 86, 255, 1.0);
   pointer-events: none;
   mix-blend-mode: screen;
   opacity: 0;
