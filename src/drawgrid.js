@@ -1,5 +1,5 @@
 // src/drawgrid.js
-// Minimal, scoped Drawing Grid — 16x12, draw strokes, build snapped nodes on release.
+// Minimal, scoped Drawing Grid ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â 16x12, draw strokes, build snapped nodes on release.
 // Strictly confined to the provided panel element.
 import { buildPalette, midiToName } from './note-helpers.js';
 import { drawBlock } from './toyhelpers.js';
@@ -130,10 +130,75 @@ function createDrawGridParticles({
   bounceOnWalls=false,
 } = {}){
   const P = [];
+  const letters = [];
+  const WORD = 'SWIPE';
+  const LETTER_WIDTH_RATIO = { S: 0.72, W: 1.18, I: 0.32, P: 0.75, E: 0.74 };
+  const LETTER_BASE_ALPHA = 0.2;
+  const LETTER_DAMPING = 0.94;
+  const LETTER_PULL_MULTIPLIER = 3.2;
   let beatGlow = 0;
+  let letterFade = 1;
+  let letterFadeTarget = 1;
+  let letterFadeSpeed = 0.05;
   const W = ()=> Math.max(1, Math.floor(getW()?getW():0));
   const H = ()=> Math.max(1, Math.floor(getH()?getH():0));
   let lastW = 0, lastH = 0;
+
+  function layoutLetters(w, h, { resetPositions = true } = {}) {
+    if (!w || !h) return;
+    const fontSize = Math.max(24, Math.min(w, h) * 0.28);
+    const spacing = fontSize * 0.02;
+    let totalWidth = WORD.length ? -spacing : 0;
+    for (const char of WORD) {
+      const ratio = LETTER_WIDTH_RATIO[char] ?? 0.7;
+      totalWidth += ratio * fontSize + spacing;
+    }
+    const startX = (w - totalWidth) * 0.5;
+    const baselineY = h * 0.5;
+    while (letters.length < WORD.length) {
+      letters.push({
+        char: WORD[letters.length],
+        x: 0,
+        y: 0,
+        vx: 0,
+        vy: 0,
+        homeX: 0,
+        homeY: 0,
+        fontSize,
+        width: 0,
+        alpha: LETTER_BASE_ALPHA,
+        flash: 0,
+        repulsed: 0,
+      });
+    }
+    if (letters.length > WORD.length) {
+      letters.length = WORD.length;
+    }
+    let cursor = startX;
+    for (let i = 0; i < letters.length; i++) {
+      const char = WORD[i];
+      const ratio = LETTER_WIDTH_RATIO[char] ?? 0.7;
+      const width = ratio * fontSize;
+      const homeX = cursor + width * 0.5;
+      const homeY = baselineY;
+      const letter = letters[i];
+      letter.char = char;
+      letter.fontSize = fontSize;
+      letter.width = width;
+      letter.homeX = homeX;
+      letter.homeY = homeY;
+      if (resetPositions) {
+        letter.x = homeX;
+        letter.y = homeY;
+        letter.vx = 0;
+        letter.vy = 0;
+        letter.alpha = LETTER_BASE_ALPHA;
+        letter.flash = 0;
+        letter.repulsed = 0;
+      }
+      cursor += width + spacing;
+    }
+  }
 
   for (let i=0;i<count;i++){
     P.push({ x: 0, y: 0, vx:0, vy:0, homeX:0, homeY:0, alpha:0.55, tSince: 0, delay:0, burst:false, flash: 0, repulsed: 0 });
@@ -152,6 +217,10 @@ function createDrawGridParticles({
         p.vy += u * (dy/d);
         p.alpha = Math.min(1, p.alpha + 0.25);
       }
+    }
+    for (const letter of letters) {
+      letter.flash = Math.min(1, (letter.flash || 0) + 0.2);
+      letter.alpha = Math.min(1, (letter.alpha ?? LETTER_BASE_ALPHA) + 0.06);
     }
   }
 
@@ -174,7 +243,10 @@ function createDrawGridParticles({
         p.homeX = nx; p.homeY = ny; p.x = nx; p.y = ny;
         p.vx = 0; p.vy = 0; p.alpha = 0.55; p.tSince = 0; p.delay=0; p.burst=false; p.flash = 0; p.repulsed = 0;
       }
+      layoutLetters(w, h, { resetPositions: true });
       lastW = w; lastH = h;
+    } else if (!letters.length) {
+      layoutLetters(w, h, { resetPositions: true });
     }
 
     const toKeep = [];
@@ -182,7 +254,7 @@ function createDrawGridParticles({
       if (p.delay && p.delay>0){ p.delay = Math.max(0, p.delay - dt); continue; }
 
       if (p.repulsed > 0) {
-          p.repulsed = Math.max(0, p.repulsed - 0.02); // Decay over ~50 frames
+          p.repulsed = Math.max(0, p.repulsed - 0.05); // Decay tuned for single-hit sweep
       }
 
       if (p.isBurst) {
@@ -224,6 +296,32 @@ function createDrawGridParticles({
         P.length = 0;
         Array.prototype.push.apply(P, toKeep);
     }
+
+    if (letters.length) {
+      const pull = Math.max(0.004, homePull) * LETTER_PULL_MULTIPLIER;
+      for (const letter of letters) {
+        if (letter.repulsed > 0) {
+          letter.repulsed = Math.max(0, letter.repulsed - 0.04);
+        }
+        letter.flash = Math.max(0, (letter.flash || 0) - 0.01);
+        letter.vx *= LETTER_DAMPING;
+        letter.vy *= LETTER_DAMPING;
+        letter.vx += (letter.homeX - letter.x) * pull;
+        letter.vy += (letter.homeY - letter.y) * pull;
+        letter.x += letter.vx;
+        letter.y += letter.vy;
+        letter.alpha = letter.alpha ?? LETTER_BASE_ALPHA;
+        letter.alpha += (LETTER_BASE_ALPHA - letter.alpha) * 0.1;
+      }
+    }
+
+    if (Math.abs(letterFade - letterFadeTarget) > 0.0001) {
+      const delta = (letterFadeTarget - letterFade) * letterFadeSpeed;
+      letterFade += delta;
+      if (Math.abs(letterFade - letterFadeTarget) < 0.001) {
+        letterFade = letterFadeTarget;
+      }
+    }
   }
 
   function draw(ctx){
@@ -263,6 +361,26 @@ function createDrawGridParticles({
       ctx.fillRect(x, y, size, size);
     }
     ctx.restore();
+
+    if (letters.length) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      for (const letter of letters) {
+        const flashBoost = Math.min(1, letter.flash || 0);
+        const alpha = Math.min(1, (letter.alpha ?? LETTER_BASE_ALPHA) + flashBoost * 0.8);
+        ctx.fillStyle = 'rgb(80,120,180)';
+        const finalAlpha = Math.min(1, alpha * letterFade);
+        if (finalAlpha <= 0.001) {
+          continue;
+        }
+        ctx.globalAlpha = finalAlpha;
+        ctx.font = `700 ${letter.fontSize}px 'Poppins', 'Helvetica Neue', sans-serif`;
+        ctx.fillText(letter.char, letter.x, letter.y);
+      }
+      ctx.restore();
+    }
   }
 
   function lineRepulse(x, width=40, strength=1){
@@ -270,17 +388,38 @@ function createDrawGridParticles({
     const half = Math.max(4, width*0.5);
     for (const p of P){
       const dx = p.x - x;
-      if (Math.abs(dx) <= half){
+      if (Math.abs(dx) <= half && p.repulsed <= 0.35){
         const s = (dx===0? (Math.random()<0.5?-1:1) : Math.sign(dx));
         const fall = 1 - Math.abs(dx)/half;
-        const jitter = 0.85 + Math.random()*0.3;
-        const k = Math.max(0, fall) * strength * 1.2 * jitter;
-        const vyJitter = (Math.random()*2 - 1) * k * 0.25;
-        p.vx += s * k;
+        const jitter = 0.9 + Math.random()*0.35;
+        const rawForce = Math.max(0, fall) * strength * 3.45 * jitter;
+        const k = Math.min(rawForce, 1.6);
+        const vyJitter = (Math.random()*2 - 1) * k * 0.24;
+        p.vx += s * k * 1.15;
         p.vy += vyJitter;
         p.alpha = Math.min(1, p.alpha + 0.85);
         p.flash = 1.0;
         p.repulsed = 1.0;
+      }
+    }
+    for (const letter of letters) {
+      const dx = letter.x - x;
+      if (Math.abs(dx) <= half && letter.repulsed <= 0.35) {
+        const s = (dx===0? (Math.random()<0.5?-1:1) : Math.sign(dx));
+        const fall = 1 - Math.abs(dx)/half;
+        const jitter = 0.85 + Math.random()*0.15;
+        const rawForce = Math.max(0, fall) * strength * 1.1 * jitter;
+        const k = Math.min(rawForce, 1.35);
+        const rightBias = k * 1.45 + 0.22;
+        const directional = s * k * 0.45;
+        const horizontal = rightBias + directional;
+        const vyJitter = (Math.random()*2 - 1) * k * 0.28;
+        letter.vx += horizontal;
+        letter.vx += k * 0.25;
+        letter.vy += vyJitter;
+        letter.alpha = Math.min(1, (letter.alpha ?? LETTER_BASE_ALPHA) + 0.12);
+        letter.flash = Math.min(1, (letter.flash || 0) + 0.7);
+        letter.repulsed = 1;
       }
     }
   }
@@ -298,6 +437,23 @@ function createDrawGridParticles({
             p.vy += (dy / dist) * kick;
             p.alpha = Math.min(1, p.alpha + 0.5);
             p.flash = Math.max(p.flash, 0.7);
+        }
+    }
+    for (const letter of letters) {
+        const dx = letter.x - disturbX;
+        const dy = letter.y - disturbY;
+        const distSq = dx * dx + dy * dy;
+        if (distSq < radius * radius) {
+            const dist = Math.sqrt(distSq) || 1;
+            const rawKick = strength * 0.7 * (1 - dist / radius);
+            const kick = Math.min(rawKick, 0.75);
+            const ux = dx / dist;
+            const uy = dy / dist;
+            letter.vx += ux * kick;
+            letter.vy += uy * kick;
+            letter.alpha = Math.min(1, (letter.alpha ?? LETTER_BASE_ALPHA) + 0.1);
+            letter.flash = Math.max(letter.flash || 0, 0.3);
+            letter.repulsed = Math.min(1, letter.repulsed + 0.6);
         }
     }
   }
@@ -322,7 +478,23 @@ function createDrawGridParticles({
     }
   }
 
-  return { step, draw, onBeat, lineRepulse, drawingDisturb, pointBurst };
+  function setLetterFadeTarget(target, speed = 0.05, immediate = false) {
+    letterFadeTarget = Math.max(0, Math.min(1, target));
+    letterFadeSpeed = Math.max(0.0001, speed);
+    if (immediate) {
+      letterFade = letterFadeTarget;
+    }
+  }
+
+  function fadeLettersOut(speed = 0.08) {
+    setLetterFadeTarget(0, speed);
+  }
+
+  function fadeLettersIn(speed = 0.06) {
+    setLetterFadeTarget(1, speed);
+  }
+
+  return { step, draw, onBeat, lineRepulse, drawingDisturb, pointBurst, fadeLettersOut, fadeLettersIn, setLetterFadeTarget };
 }
 
 export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId, bpm = 120 } = {}) {
@@ -395,9 +567,17 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const particles = createDrawGridParticles({
     getW: () => cssW,
     getH: () => cssH,
-    count: 400,
+    count: 600,
     homePull: 0.002,
   });
+
+  function syncLetterFade({ immediate = false } = {}) {
+    if (!particles || typeof particles.setLetterFadeTarget !== 'function') return;
+    const hasStrokes = Array.isArray(strokes) && strokes.length > 0;
+    const target = hasStrokes ? 0 : 1;
+    const speed = hasStrokes ? 0.12 : 0.08;
+    particles.setLetterFadeTarget(target, speed, immediate);
+  }
 
   panel.dataset.steps = String(cols);
 
@@ -549,6 +729,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
     regenerateMapFromStrokes();
     try { (panel.__dgUpdateButtons || updateGeneratorButtons || function(){})() } catch(e) { try { console.warn('[drawgrid] updateGeneratorButtons not available', e); } catch{} }
+    syncLetterFade();
   }
 
   function drawEraseStroke(ctx, stroke) {
@@ -720,6 +901,7 @@ function regenerateMapFromStrokes() {
   function resnapAndRedraw(forceLayout = false) {
     const hasStrokes = strokes.length > 0;
     const hasNodes = currentMap && currentMap.nodes && currentMap.nodes.some(s => s && s.size > 0);
+    syncLetterFade({ immediate: true });
     // Only force layout when needed (e.g., steps/resolution change or zoom). Avoid clearing paint when unnecessary.
     layout(!!forceLayout);
 
@@ -1731,6 +1913,10 @@ function regenerateMapFromStrokes() {
     clearAndRedrawFromStrokes();
     // After drawing, unmark all strokes so they become part of the normal background for the next operation.
     strokes.forEach(s => delete s.justCreated);
+
+    try {
+      syncLetterFade();
+    } catch (e) { /* ignore */ }
   }
 
   // A version of snapToGrid that analyzes a single stroke object instead of the whole canvas
@@ -2017,6 +2203,7 @@ function regenerateMapFromStrokes() {
       drawGrid();
       nextDrawTarget = null; // Disarm any pending line draw
       updateGeneratorButtons(); // Refresh button state to "Draw"
+      syncLetterFade({ immediate: true });
     },
     setErase:(v)=>{ erasing=!!v; },
     getState: ()=>{
