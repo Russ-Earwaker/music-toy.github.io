@@ -85,7 +85,7 @@ function updateLabelVisibility(panel) {
     const running = isRunning();
 
     if (running && !hasActiveSteps) {
-      label.style.opacity = '0.5';
+      label.style.opacity = '0.35';
     } else {
       label.style.opacity = '0';
     }
@@ -116,7 +116,7 @@ function layout(panel){
     const size = Math.floor(Math.min(r.width, r.height) * 0.68);
     const label = panel.querySelector('.drum-tap-label');
     if(label){
-      label.style.fontSize = `${Math.max(24, size * 1.1)}px`;
+      label.style.fontSize = `${Math.max(24, size * 1.3)}px`;
     }
 }
 
