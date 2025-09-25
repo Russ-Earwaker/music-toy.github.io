@@ -13,6 +13,9 @@ if (window.__loopgridDrumBoot) {
       const pad = document.createElement('div');
       pad.className = 'grid-drum-pad loopgrid-drum-pad';
       
+      const flash = document.createElement('div');
+      flash.className = 'drum-pad-flash';
+      pad.appendChild(flash);
       const label = document.createElement('div');
       label.textContent = 'TAP'; // Set text to 'TAP'
       label.className = 'drum-tap-label';
@@ -24,7 +27,8 @@ if (window.__loopgridDrumBoot) {
         color: 'rgba(200, 220, 255, 0.85)',
         fontFamily: "'Poppins', 'Helvetica Neue', sans-serif",
         transition: 'opacity 0.3s ease-in-out',
-        pointerEvents: 'none'
+        pointerEvents: 'none',
+        zIndex: '4'
       });
       pad.appendChild(label);
       body.appendChild(pad);

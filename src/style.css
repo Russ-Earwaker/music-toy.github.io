@@ -308,6 +308,7 @@ html, body {
   cursor: pointer;
   user-select: none;
   background: #2c313a;
+  overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.1);
   transition: transform 0.1s ease-out;
   z-index: 1;
@@ -327,6 +328,18 @@ html, body {
   color: var(--text);
 }
 
+
+.grid-drum-pad .drum-pad-flash {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, rgba(124, 86, 255, 0.7), rgba(124, 86, 255, 0));
+  pointer-events: none;
+  mix-blend-mode: screen;
+  opacity: 0;
+  transition: opacity 0.08s ease-out;
+  z-index: 2;
+}
 
 /* --- Integrated Rippler body/wrapper rules (centered square inside full-height body) --- */
 .toy-panel[data-toy="rippler"] .toy-body {
@@ -532,3 +545,4 @@ html, body {
   max-height: 100% !important;
   display: block;
 }
+

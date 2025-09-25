@@ -336,6 +336,7 @@ select.toy-instrument {
   cursor: pointer;
   user-select: none;
   background: url('./assets/UI/T_Drum.png') center center / contain no-repeat;
+  overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.1);
   transition: transform 0.1s ease-out;
   z-index: 1;
@@ -345,6 +346,17 @@ select.toy-instrument {
 }
 
 
+.grid-drum-pad .drum-pad-flash {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, rgba(124, 86, 255, 0.7), rgba(124, 86, 255, 0));
+  pointer-events: none;
+  mix-blend-mode: screen;
+  opacity: 0;
+  transition: opacity 0.08s ease-out;
+  z-index: 2;
+}\r\n
 /* --- Integrated Rippler body/wrapper rules (centered square inside full-height body) --- */
 .toy-panel[data-toy="rippler"] .toy-body {
   position: relative;
@@ -480,8 +492,7 @@ select.toy-instrument {
   100% { box-shadow: 0 0 0 12px rgba(255, 200, 80, 0); }
 }
 .toy-panel.adv-debug-pulse {
-  animation: advPulse .6s ease-out 1;
-}
+  animation: advPulse .6s ease-out 1; }
 
 
 /* --- Rippler overrides: ensure in-flow square body, disable absolute fill --- */
@@ -677,3 +688,5 @@ select.toy-instrument {
   pointer-events: none;
   opacity: 0.6;
 }
+
+

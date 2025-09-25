@@ -12,6 +12,13 @@ function addDrumPad(panel, padWrap, toyId) {
     padWrap.appendChild(pad);
   }
 
+  let flash = pad.querySelector('.drum-pad-flash');
+  if (!flash) {
+    flash = document.createElement('div');
+    flash.className = 'drum-pad-flash';
+    pad.appendChild(flash);
+  }
+
   let label = padWrap.querySelector('.drum-tap-label');
   if (!label) {
     label = document.createElement('div');
@@ -30,7 +37,7 @@ function addDrumPad(panel, padWrap, toyId) {
         fontFamily: "'Poppins', 'Helvetica Neue', sans-serif",
         transition: 'opacity 0.3s ease-in-out',
         pointerEvents: 'none',
-        zIndex: '2'
+        zIndex: '4'
     });
     padWrap.appendChild(label);
   }
@@ -47,6 +54,7 @@ function addDrumPad(panel, padWrap, toyId) {
     }
     if (panel.__drumVisualState) {
       panel.__drumVisualState.bgFlash = 1.0;
+      updatePadFlash(panel);
     }
 
     const loopInfo = getLoopInfo();
@@ -83,6 +91,24 @@ function updateLabelVisibility(panel) {
     }
 }
 
+function updatePadFlash(panel) {
+    const pad = panel.querySelector('.grid-drum-pad');
+    if (!pad) return;
+    const flash = pad.querySelector('.drum-pad-flash');
+    if (!flash) return;
+
+    const st = panel.__drumVisualState;
+    const raw = (typeof (st?.bgFlash) === 'number') ? st.bgFlash : 0;
+    const value = Number.isFinite(raw) ? raw : 0;
+    if (value <= 0.001) {
+      if (flash.style.opacity !== '0') flash.style.opacity = '0';
+      return;
+    }
+
+    const clamped = Math.max(0, Math.min(1, value));
+    flash.style.opacity = clamped.toFixed(3);
+}
+
 function layout(panel){
     const pad = panel.querySelector('.grid-drum-pad');
     if (!pad) return;
@@ -105,13 +131,18 @@ export function attachGridSquareAndDrum(panel) {
   addDrumPad(panel, padWrap, toyId);
   layout(panel);
   updateLabelVisibility(panel);
-  panel.addEventListener('loopgrid:update', () => updateLabelVisibility(panel));
+  updatePadFlash(panel);
+  panel.addEventListener('loopgrid:update', () => {
+    updateLabelVisibility(panel);
+    updatePadFlash(panel);
+  });
 
   if (!panel.__drumVisibilityLoop) {
       panel.__drumVisibilityLoop = true;
       const checkRunningState = () => {
           if (!panel.isConnected) return;
           updateLabelVisibility(panel);
+          updatePadFlash(panel);
           requestAnimationFrame(checkRunningState);
       }
       checkRunningState();
@@ -119,3 +150,9 @@ export function attachGridSquareAndDrum(panel) {
 
   LOG('attached', { toyId });
 }
+
+
+
+
+
+
