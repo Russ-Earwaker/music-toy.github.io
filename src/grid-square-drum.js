@@ -1,68 +1,91 @@
 // grid-square-drum.js
-// Non-destructive overlay for the existing Grid toy.
-// - Tries to make the canvas appear square (CSS aspect-ratio + height sync)
-// - Adds a Drum Pad at the lower portion of the square
-// - On tap, emits CustomEvent('grid:drum-tap', { detail: { toyId, playheadX } })
-//   and, if available, calls window.gridActivateNearest(toyId)
-// File length kept under 300 lines.
+import { isRunning } from './audio-core.js';
 
 const DEBUG = false; // disable debug logs for grid-square-drum overlay
 const LOG = () => {};
 
 function addDrumPad(panel, padWrap, toyId) {
-  // Check if the pad already exists to avoid re-creating it and its listeners.
   let pad = padWrap.querySelector('.grid-drum-pad');
   if (!pad) {
     pad = document.createElement('div');
     pad.className = 'grid-drum-pad';
-    // Note: All styling is now handled by style.css for a circular pad.
-    // Defensively clear any text content that might be added by other scripts.
-    pad.textContent = '';
     padWrap.appendChild(pad);
   }
 
-  // Prevent adding the same listener multiple times.
+  let label = pad.querySelector('.drum-tap-label');
+  if (!label) {
+    label = document.createElement('div');
+    label.textContent = 'TAP';
+    label.className = 'drum-tap-label';
+    Object.assign(label.style, {
+        fontWeight: '700',
+        fontSize: '48px',
+        letterSpacing: '0.1em',
+        opacity: '0',
+        color: 'rgba(200, 220, 255, 0.85)',
+        fontFamily: "'Poppins', 'Helvetica Neue', sans-serif",
+        transition: 'opacity 0.3s ease-in-out',
+        pointerEvents: 'none'
+    });
+    pad.appendChild(label);
+  }
+
   if (pad.__drumPadWired) return;
   pad.__drumPadWired = true;
 
   const onTap = () => {
-    // Play the assigned instrument immediately, using the toy's main playback function.
-    // This ensures synth sounds are triggered correctly and consistently.
     if (panel.__playCurrent) {
       try { panel.__playCurrent(); } catch (e) { LOG('__playCurrent failed', e); }
     }
-    // Trigger particles
     if (panel.__particles?.disturb) {
       panel.__particles.disturb();
     }
-
-    // Trigger background flash
     if (panel.__drumVisualState) {
       panel.__drumVisualState.bgFlash = 1.0;
     }
 
-    // Also, activate the cube at the current playhead position.
     const playheadCol = panel?.__drumVisualState?.playheadCol;
     if (playheadCol >= 0 && panel?.__gridState?.steps) {
-      panel.__gridState.steps[playheadCol] = true; // Set to true, don't toggle
+      panel.__gridState.steps[playheadCol] = true;
     }
 
-    const playheadX = window.gridPlayheadX?.(toyId) ?? null;
-    panel.dispatchEvent(new CustomEvent('grid:drum-tap', { detail: { toyId, playheadX } }));
-    if (typeof window.gridActivateNearest === 'function') {
-      try { window.gridActivateNearest(toyId); } catch (e) { LOG('gridActivateNearest error', e); }
-    }
-    // Quick visual flash
+    panel.dispatchEvent(new CustomEvent('grid:drum-tap', { detail: { toyId } }));
     pad.animate(
       [
-        { background: 'radial-gradient(circle, #a070ff, #6030c0)', transform: 'scale(0.95)' },
-        { background: '#2c313a', transform: 'scale(1)' }
+        { transform: 'scale(0.95)' },
+        { transform: 'scale(1)' }
       ],
       { duration: 250, easing: 'ease-out' }
     );
   };
 
   pad.addEventListener('pointerdown', onTap);
+}
+
+function updateLabelVisibility(panel) {
+    const label = panel.querySelector('.drum-tap-label');
+    if (!label) return;
+
+    const gridState = panel.__gridState;
+    const hasActiveSteps = gridState && gridState.steps.some(Boolean);
+    const running = isRunning();
+
+    if (running && !hasActiveSteps) {
+      label.style.opacity = '1';
+    } else {
+      label.style.opacity = '0';
+    }
+}
+
+function layout(panel){
+    const pad = panel.querySelector('.grid-drum-pad');
+    if (!pad) return;
+    const r = pad.parentElement.getBoundingClientRect();
+    const size = Math.floor(Math.min(r.width, r.height) * 0.68);
+    const label = pad.querySelector('.drum-tap-label');
+    if(label){
+      label.style.fontSize = `${Math.max(24, size * 0.2)}px`;
+    }
 }
 
 export function attachGridSquareAndDrum(panel) {
@@ -74,5 +97,19 @@ export function attachGridSquareAndDrum(panel) {
   }
 
   addDrumPad(panel, padWrap, toyId);
+  layout(panel);
+  updateLabelVisibility(panel);
+  panel.addEventListener('loopgrid:update', () => updateLabelVisibility(panel));
+
+  if (!panel.__drumVisibilityLoop) {
+      panel.__drumVisibilityLoop = true;
+      const checkRunningState = () => {
+          if (!panel.isConnected) return;
+          updateLabelVisibility(panel);
+          requestAnimationFrame(checkRunningState);
+      }
+      checkRunningState();
+  }
+
   LOG('attached', { toyId });
 }

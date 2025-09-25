@@ -335,7 +335,7 @@ select.toy-instrument {
   border-radius: 50%;
   cursor: pointer;
   user-select: none;
-  background: #2c313a;
+  background: url('./assets/UI/T_Drum.png') center center / contain no-repeat;
   border: 1px solid rgba(255, 255, 255, 0.1);
   transition: transform 0.1s ease-out;
   z-index: 1;
@@ -343,17 +343,7 @@ select.toy-instrument {
 .grid-drum-pad:hover {
   border-color: rgba(255, 255, 255, 0.2);
 }
-.grid-drum-pad::before {
-  content: 'DRUM';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 1.1rem;
-  letter-spacing: 0.2em;
-  opacity: 0.8;
-  color: var(--text);
-}
+
 
 /* --- Integrated Rippler body/wrapper rules (centered square inside full-height body) --- */
 .toy-panel[data-toy="rippler"] .toy-body {

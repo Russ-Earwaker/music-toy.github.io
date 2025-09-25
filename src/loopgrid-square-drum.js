@@ -1,52 +1,131 @@
 // src/loopgrid-square-drum.js — circular pad that triggers current instrument (<=300 lines)
-(function(){
-  if (window.__loopgridDrumBoot) return; window.__loopgridDrumBoot = true;
+import { isRunning } from './audio-core.js';
+
+if (window.__loopgridDrumBoot) {
+  // already booted
+} else {
+  window.__loopgridDrumBoot = true;
   const SEL = '.toy-panel[data-toy="loopgrid"]';
 
-  function ensurePad(panel){
+  function ensurePad(panel) {
     const body = panel.querySelector('.toy-body') || panel;
-    if (!body.querySelector('.loopgrid-drum-pad')){
+    if (!body.querySelector('.loopgrid-drum-pad')) {
       const pad = document.createElement('div');
-      pad.className = 'loopgrid-drum-pad';
-      Object.assign(pad.style, {
-        position:'absolute', left:'50%', top:'50%', transform:'translate(-50%,-50%)',
-        border:'2px solid rgba(255,255,255,0.25)',
-        borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
-        background:'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.18), rgba(255,255,255,0.08))',
-        boxShadow:'0 6px 18px rgba(0,0,0,0.45), inset 0 2px 8px rgba(255,255,255,0.15)',
-        cursor:'pointer', userSelect:'none', zIndex:'60', visibility:'hidden', width:'0px', height:'0px'
-      });
+      pad.className = 'grid-drum-pad loopgrid-drum-pad';
+      
       const label = document.createElement('div');
-      label.textContent = 'DRUM';
-      Object.assign(label.style, { fontWeight:'700', letterSpacing:'0.18em', opacity:'0.85' });
+      label.textContent = 'TAP'; // Set text to 'TAP'
+      label.className = 'drum-tap-label';
+      Object.assign(label.style, {
+        fontWeight: '700',
+        fontSize: '48px',
+        letterSpacing: '0.1em',
+        opacity: '0',
+        color: 'rgba(200, 220, 255, 0.85)',
+        fontFamily: "'Poppins', 'Helvetica Neue', sans-serif",
+        transition: 'opacity 0.3s ease-in-out',
+        pointerEvents: 'none'
+      });
       pad.appendChild(label);
       body.appendChild(pad);
 
       // play + highlight current column
-      pad.addEventListener('pointerdown', (e)=>{
-        e.preventDefault(); e.stopPropagation();
-        try{ panel.__playCurrent && panel.__playCurrent(); }catch{}
-        try{ panel.dispatchEvent(new CustomEvent('loopgrid:tap', { bubbles:true })); }catch{}
+      pad.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        console.log('Drum pad clicked');
+        console.log('Panel:', panel);
+        console.log('Drum Visual State:', panel?.__drumVisualState);
+
+        if (panel.__playCurrent) {
+          try {
+            panel.__playCurrent();
+          } catch (e) {
+            console.warn('__playCurrent failed', e);
+          }
+        }
+        // Trigger particles
+        if (panel.__particles?.disturb) {
+          panel.__particles.disturb();
+        }
+
+        // Trigger background flash
+        if (panel.__drumVisualState) {
+          panel.__drumVisualState.bgFlash = 1.0;
+        }
+
+        // Also, activate the cube at the current playhead position.
+        const playheadCol = panel?.__drumVisualState?.playheadCol;
+        console.log('Playhead Column:', playheadCol);
+
+        if (playheadCol >= 0 && panel?.__gridState?.steps) {
+          console.log('Activating cube at column:', playheadCol);
+          panel.__gridState.steps[playheadCol] = true; // Set to true, don't toggle
+          console.log('Grid state after activation:', panel.__gridState.steps);
+        } else {
+          console.log('Did not activate cube. playheadCol:', playheadCol, 'gridState:', panel?.__gridState);
+        }
+
+        try {
+          panel.dispatchEvent(new CustomEvent('loopgrid:tap', {
+            bubbles: true
+          }));
+        } catch {}
       });
     }
   }
 
-  function layout(panel){
+  function updateLabelVisibility(panel) {
+    const label = panel.querySelector('.drum-tap-label');
+    if (!label) return;
+
+    const gridState = panel.__gridState;
+    const hasActiveSteps = gridState && gridState.steps.some(Boolean);
+    const running = isRunning();
+
+    if (running && !hasActiveSteps) {
+      label.style.opacity = '1';
+    } else {
+      label.style.opacity = '0';
+    }
+  }
+
+  function layout(panel) {
     const body = panel.querySelector('.toy-body') || panel;
     const pad = body.querySelector('.loopgrid-drum-pad');
     if (!pad) return;
     const r = body.getBoundingClientRect();
     const size = Math.floor(Math.min(r.width, r.height) * 0.68);
-    pad.style.width = size + 'px';
-    pad.style.height = size + 'px';
-    pad.style.visibility = size>20 ? 'visible' : 'hidden';
+    
+    const label = pad.querySelector('.drum-tap-label');
+    if (label) {
+      label.style.fontSize = `${Math.max(24, size * 0.2)}px`;
+    }
   }
 
-  function boot(){
-    document.querySelectorAll(SEL).forEach(panel=>{ ensurePad(panel); layout(panel); });
+  function boot() {
+    document.querySelectorAll(SEL).forEach(panel => {
+      ensurePad(panel);
+      layout(panel);
+      updateLabelVisibility(panel);
+      panel.addEventListener('loopgrid:update', () => {
+        updateLabelVisibility(panel)
+      });
+    });
+
+    function checkRunningState() {
+      document.querySelectorAll(SEL).forEach(updateLabelVisibility);
+      requestAnimationFrame(checkRunningState);
+    }
+    checkRunningState();
   }
-  function relayout(){ document.querySelectorAll(SEL).forEach(layout); }
+
+  function relayout() {
+    document.querySelectorAll(SEL).forEach(layout);
+  }
 
   document.addEventListener('DOMContentLoaded', boot);
-  if (document.readyState!=='loading') boot();
-})();
+  if (document.readyState !== 'loading') boot();
+
+}
