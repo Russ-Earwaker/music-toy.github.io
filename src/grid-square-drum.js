@@ -1,5 +1,5 @@
 // grid-square-drum.js
-import { isRunning } from './audio-core.js';
+import { isRunning, getLoopInfo } from './audio-core.js';
 
 const DEBUG = false; // disable debug logs for grid-square-drum overlay
 const LOG = () => {};
@@ -12,22 +12,28 @@ function addDrumPad(panel, padWrap, toyId) {
     padWrap.appendChild(pad);
   }
 
-  let label = pad.querySelector('.drum-tap-label');
+  const body = panel.querySelector('.toy-body') || panel;
+  let label = body.querySelector('.drum-tap-label');
   if (!label) {
     label = document.createElement('div');
     label.textContent = 'TAP';
     label.className = 'drum-tap-label';
     Object.assign(label.style, {
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
         fontWeight: '700',
         fontSize: '48px',
         letterSpacing: '0.1em',
         opacity: '0',
-        color: 'rgba(200, 220, 255, 0.85)',
+        color: 'rgb(80,120,180)',
         fontFamily: "'Poppins', 'Helvetica Neue', sans-serif",
         transition: 'opacity 0.3s ease-in-out',
-        pointerEvents: 'none'
+        pointerEvents: 'none',
+        zIndex: '2'
     });
-    pad.appendChild(label);
+    body.appendChild(label);
   }
 
   if (pad.__drumPadWired) return;
@@ -44,7 +50,8 @@ function addDrumPad(panel, padWrap, toyId) {
       panel.__drumVisualState.bgFlash = 1.0;
     }
 
-    const playheadCol = panel?.__drumVisualState?.playheadCol;
+    const loopInfo = getLoopInfo();
+    const playheadCol = loopInfo ? Math.floor(loopInfo.phase01 * 8) : -1;
     if (playheadCol >= 0 && panel?.__gridState?.steps) {
       panel.__gridState.steps[playheadCol] = true;
     }
@@ -82,7 +89,7 @@ function layout(panel){
     if (!pad) return;
     const r = pad.parentElement.getBoundingClientRect();
     const size = Math.floor(Math.min(r.width, r.height) * 0.68);
-    const label = pad.querySelector('.drum-tap-label');
+    const label = panel.querySelector('.drum-tap-label');
     if(label){
       label.style.fontSize = `${Math.max(24, size * 0.2)}px`;
     }
