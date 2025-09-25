@@ -12,8 +12,7 @@ function addDrumPad(panel, padWrap, toyId) {
     padWrap.appendChild(pad);
   }
 
-  const body = panel.querySelector('.toy-body') || panel;
-  let label = body.querySelector('.drum-tap-label');
+  let label = padWrap.querySelector('.drum-tap-label');
   if (!label) {
     label = document.createElement('div');
     label.textContent = 'TAP';
@@ -33,7 +32,7 @@ function addDrumPad(panel, padWrap, toyId) {
         pointerEvents: 'none',
         zIndex: '2'
     });
-    body.appendChild(label);
+    padWrap.appendChild(label);
   }
 
   if (pad.__drumPadWired) return;
@@ -78,7 +77,7 @@ function updateLabelVisibility(panel) {
     const running = isRunning();
 
     if (running && !hasActiveSteps) {
-      label.style.opacity = '1';
+      label.style.opacity = '0.5';
     } else {
       label.style.opacity = '0';
     }
@@ -91,7 +90,7 @@ function layout(panel){
     const size = Math.floor(Math.min(r.width, r.height) * 0.68);
     const label = panel.querySelector('.drum-tap-label');
     if(label){
-      label.style.fontSize = `${Math.max(24, size * 0.2)}px`;
+      label.style.fontSize = `${Math.max(24, size * 1.1)}px`;
     }
 }
 
