@@ -58,6 +58,18 @@
 
     // Compute square size from current (transform-immune) client box
     const s = Math.max(1, Math.min(bw, bh));
+    let prompt = wrap.querySelector('.rippler-tap-label');
+    if (!prompt) {
+      prompt = document.createElement('div');
+      prompt.className = 'toy-action-label rippler-tap-label';
+      prompt.textContent = 'TAP';
+      wrap.appendChild(prompt);
+    }
+
+    const promptSize = Math.max(24, Math.floor(s * 0.22));
+    prompt.style.fontSize = promptSize + 'px';
+    prompt.style.opacity = wrap.dataset.ripplerPromptDismissed === '1' ? '0' : '0.6';
+
 
     // Center wrapper
     Object.assign(wrap.style, {
@@ -82,6 +94,17 @@
       transform: 'none',
       left: '', top: ''
     });
+
+    if (!canvas.__ripplerPromptHooked) {
+      canvas.__ripplerPromptHooked = true;
+      canvas.addEventListener('pointerdown', () => {
+        const parent = canvas.parentElement;
+        if (!parent) return;
+        parent.dataset.ripplerPromptDismissed = '1';
+        const lbl = parent.querySelector('.rippler-tap-label');
+        if (lbl) lbl.style.opacity = '0';
+      });
+    }
   }
 
   function applyAll(){
@@ -103,3 +126,15 @@
     document.querySelectorAll('.toy-panel[data-toy="rippler"] .toy-body').forEach(el=> ro.observe(el));
   }catch{}
 })();
+
+
+
+
+
+
+
+
+
+
+
+

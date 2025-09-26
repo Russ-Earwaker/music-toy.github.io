@@ -23,7 +23,7 @@ function addDrumPad(panel, padWrap, toyId) {
   if (!label) {
     label = document.createElement('div');
     label.textContent = 'TAP';
-    label.className = 'drum-tap-label';
+    label.className = 'toy-action-label drum-tap-label';
     Object.assign(label.style, {
         position: 'absolute',
         top: '50%',
@@ -150,6 +150,7 @@ export function attachGridSquareAndDrum(panel) {
 
   LOG('attached', { toyId });
 }
+
 
 
 

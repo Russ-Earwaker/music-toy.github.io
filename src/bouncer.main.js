@@ -171,7 +171,50 @@ export function createBouncer(selector){
   }catch{}
 
   const host = panel.querySelector('.toy-body') || panel;
-  const canvas = document.createElement('canvas'); canvas.style.width='100%'; canvas.style.display='block';canvas.style.height='100%'; host.appendChild(canvas);
+  const canvas = document.createElement('canvas');
+  canvas.style.width = '100%';
+  canvas.style.display = 'block';
+  canvas.style.height = '100%';
+  host.appendChild(canvas);
+
+  if (host && getComputedStyle(host).position === 'static') {
+    host.style.position = 'relative';
+  }
+  let swipeLabel = host.querySelector('.bouncer-swipe-label');
+  if (!swipeLabel) {
+    swipeLabel = document.createElement('div');
+    swipeLabel.className = 'toy-action-label bouncer-swipe-label';
+    swipeLabel.textContent = 'SWIPE';
+    host.appendChild(swipeLabel);
+  }
+
+  const applySwipePrompt = () => {
+    const rect = host.getBoundingClientRect();
+    const minSide = Math.min(rect.width || 0, rect.height || 0);
+    const sizePx = minSide > 0 ? Math.max(24, Math.floor(minSide * 0.18)) : 32;
+    swipeLabel.style.fontSize = sizePx + 'px';
+    swipeLabel.style.opacity = host.dataset.bouncerPromptDismissed === '1' ? '0' : '0.55';
+  };
+  applySwipePrompt();
+  if (!host.__bouncerPromptRO && typeof ResizeObserver !== 'undefined') {
+    try {
+      const ro = new ResizeObserver(() => applySwipePrompt());
+      ro.observe(host);
+      host.__bouncerPromptRO = ro;
+    } catch {}
+  }
+
+  if (!canvas.__bouncerPromptHooked) {
+    const dismiss = () => {
+      if (host.dataset.bouncerPromptDismissed === '1') return;
+      host.dataset.bouncerPromptDismissed = '1';
+      swipeLabel.style.opacity = '0';
+    };
+    canvas.addEventListener('pointerdown', dismiss);
+    canvas.addEventListener('pointermove', dismiss);
+    canvas.__bouncerPromptHooked = true;
+  }
+
   try{ canvas.removeAttribute('data-lock-scale'); canvas.style.transform=''; }catch{};
   // Ensure a footer exists and volume UI is installed (matches routing via data-toyid)
   try{
@@ -1043,6 +1086,8 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
   panel.__bouncer_main_instance = instanceApi;
   return instanceApi;
 }
+
+
 
 
 

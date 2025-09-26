@@ -18,7 +18,7 @@ if (window.__loopgridDrumBoot) {
       pad.appendChild(flash);
       const label = document.createElement('div');
       label.textContent = 'TAP'; // Set text to 'TAP'
-      label.className = 'drum-tap-label';
+      label.className = 'toy-action-label drum-tap-label';
       Object.assign(label.style, {
         fontWeight: '700',
         fontSize: '48px',
@@ -133,3 +133,4 @@ if (window.__loopgridDrumBoot) {
   if (document.readyState !== 'loading') boot();
 
 }
+

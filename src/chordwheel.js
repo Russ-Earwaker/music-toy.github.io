@@ -175,6 +175,36 @@ export function createChordWheel(panel){
   strumWrap.appendChild(particleCanvas);
   strumWrap.appendChild(strumCanvas);
   flex.appendChild(strumWrap);
+  let strumLabel = strumWrap.querySelector('.chordwheel-swipe-label');
+  if (!strumLabel) {
+    strumLabel = el('div', 'toy-action-label chordwheel-swipe-label');
+    strumLabel.textContent = 'SWIPE';
+    strumWrap.appendChild(strumLabel);
+  }
+
+  const applyStrumPrompt = () => {
+    const rect = strumWrap.getBoundingClientRect();
+    const minSide = Math.min(rect.width || 0, rect.height || 0);
+    const sizePx = minSide > 0 ? Math.max(22, Math.floor(minSide * 0.16)) : 28;
+    strumLabel.style.fontSize = sizePx + 'px';
+    strumLabel.style.opacity = strumWrap.dataset.strumPromptDismissed === '1' ? '0' : '0.55';
+  };
+  applyStrumPrompt();
+  if (!strumWrap.__promptObserver && typeof ResizeObserver !== 'undefined') {
+    try {
+      const ro = new ResizeObserver(() => applyStrumPrompt());
+      ro.observe(strumWrap);
+      strumWrap.__promptObserver = ro;
+    } catch {}
+  }
+
+  const dismissStrumPrompt = () => {
+    if (strumWrap.dataset.strumPromptDismissed === '1') return;
+    strumWrap.dataset.strumPromptDismissed = '1';
+    strumLabel.style.opacity = '0';
+  };
+  strumCanvas.addEventListener('pointerdown', dismissStrumPrompt);
+  strumCanvas.addEventListener('pointermove', dismissStrumPrompt);
 
   const logSize = (label, w, h) => {
     try { console.debug?.(`[chordwheel] ${toyId} ${label} -> ${Math.round(w)}x${Math.round(h)}`); } catch {}
@@ -1317,3 +1347,6 @@ function randomPentatonicProgression16(){
 
   return [...loopA, ...loopB];
 }
+
+
+
