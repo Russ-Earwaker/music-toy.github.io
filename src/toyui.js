@@ -819,36 +819,36 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
 
   switch (toyKind) {
     case 'loopgrid':
-      markHelp(panel.querySelector('button[data-action="random"]'), 'Randomize pattern (blocks in advanced view)', 'bottom');
+      markHelp(panel.querySelector('button[data-action="random"]'), 'Randomize', 'bottom');
       markHelp(panel.querySelector('button[data-action="random-notes"]'), 'Randomize notes', 'bottom');
-      markHelp(panel.querySelector('button[data-action="clear"]'), 'Clear the grid', 'bottom');
+      markHelp(panel.querySelector('button[data-action="clear"]'), 'Clear', 'bottom');
       break;
     case 'bouncer':
-      markHelp(panel.querySelector('button[data-action="random"]'), 'Add a new ball', 'bottom');
-      markHelp(panel.querySelector('button[data-action="random-cubes"]'), 'Randomize bumpers', 'bottom');
+      markHelp(panel.querySelector('button[data-action="random"]'), 'Randomize', 'bottom');
+      markHelp(panel.querySelector('button[data-action="random-cubes"]'), 'Randomize blocks', 'bottom');
       markHelp(panel.querySelector('button[data-action="random-notes"]'), 'Randomize notes', 'bottom');
-      markHelp(panel.querySelector('button[data-action="clear"]'), 'Clear all balls', 'bottom');
+      markHelp(panel.querySelector('button[data-action="clear"]'), 'Clear', 'bottom');
       break;
     case 'drawgrid':
-      markHelp(panel.querySelector('button[data-action="random"]'), 'Randomize drawing', 'bottom');
+      markHelp(panel.querySelector('button[data-action="random"]'), 'Randomize', 'bottom');
       markHelp(panel.querySelector('button[data-action="random-blocks"]'), 'Randomize blocks', 'bottom');
       markHelp(panel.querySelector('button[data-action="random-notes"]'), 'Randomize notes', 'bottom');
-      markHelp(panel.querySelector('button[data-action="clear"]'), 'Clear the canvas', 'bottom');
+      markHelp(panel.querySelector('button[data-action="clear"]'), 'Clear', 'bottom');
       markHelp(panel.querySelector('button[data-erase="1"]'), 'Toggle eraser mode', 'left');
       break;
     case 'rippler':
-      markHelp(panel.querySelector('button[data-action="random"]'), 'Randomize ripples', 'bottom');
-      markHelp(panel.querySelector('button[data-action="random-blocks"]'), 'Randomize bumpers', 'bottom');
+      markHelp(panel.querySelector('button[data-action="random"]'), 'Randomize', 'bottom');
+      markHelp(panel.querySelector('button[data-action="random-blocks"]'), 'Randomize blocks', 'bottom');
       markHelp(panel.querySelector('button[data-action="random-notes"]'), 'Randomize notes', 'bottom');
-      markHelp(panel.querySelector('button[data-action="clear"]'), 'Clear ripples', 'bottom');
+      markHelp(panel.querySelector('button[data-action="clear"]'), 'Clear', 'bottom');
       break;
     case 'chordwheel':
-      markHelp(panel.querySelector('button[data-action="random"]'), 'Randomize chord palette', 'bottom');
-      markHelp(panel.querySelector('button[data-action="clear"]'), 'Clear all chords', 'bottom');
+      markHelp(panel.querySelector('button[data-action="random"]'), 'Randomize', 'bottom');
+      markHelp(panel.querySelector('button[data-action="clear"]'), 'Clear', 'bottom');
       break;
     default:
-      markHelp(panel.querySelector('button[data-action="random"]'), 'Randomize settings', 'bottom');
-      markHelp(panel.querySelector('button[data-action="clear"]'), 'Reset this toy', 'bottom');
+      markHelp(panel.querySelector('button[data-action="random"]'), 'Randomize', 'bottom');
+      markHelp(panel.querySelector('button[data-action="clear"]'), 'Clear', 'bottom');
       break;
   }
 

@@ -736,15 +736,12 @@ body.toy-help-mode {
 }
 
 body.toy-help-mode [data-help-label] {
-  outline: 2px solid rgba(95, 179, 255, 0.6);
-  outline-offset: 4px;
-  box-shadow: 0 0 0 4px rgba(95, 179, 255, 0.18);
-  transition: outline-color 0.2s ease, box-shadow 0.2s ease;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
-body.toy-help-mode [data-help-label].c-btn {
-  box-shadow: 0 0 0 4px rgba(95, 179, 255, 0.18), 0 0 20px rgba(95, 179, 255, 0.25);
-}
+
+
 
 .toy-help-overlay {
   position: fixed;

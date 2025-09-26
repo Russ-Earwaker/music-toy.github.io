@@ -8,6 +8,12 @@
 
 const scheduleUpdateHandler = () => scheduleUpdate();
 
+const CALL_OUT_MARGIN = 28;
+const BORDER_PADDING = 12;
+const TARGET_PADDING = 6;
+const SHIFT_GAP = 14;
+const MAX_SHIFT_STEPS = 3;
+
 function ensureHost() {
   if (overlayState.host && overlayState.host.isConnected) {
     return overlayState.host;
@@ -124,6 +130,7 @@ function renderOverlay() {
   const host = ensureHost();
   host.innerHTML = '';
   const targets = gatherTargets();
+  const placements = [];
   for (const entry of targets) {
     const { target, rect, label, position } = entry;
     const callout = document.createElement('div');
@@ -143,8 +150,9 @@ function renderOverlay() {
     connector.style.visibility = 'hidden';
     host.insertBefore(connector, callout);
 
-    positionCallout(callout, connector, rect, position, target);
+    const record = positionCallout(callout, connector, rect, position, target, placements);
     callout.style.visibility = 'visible';
+    if (record) placements.push(record);
   }
 }
 
@@ -168,13 +176,11 @@ function gatherTargets() {
   return items;
 }
 
-function positionCallout(callout, connector, rect, preferred, target) {
-  const margin = 24;
+function positionCallout(callout, connector, rect, preferred, target, placements) {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const width = callout.offsetWidth;
   const height = callout.offsetHeight;
-
   const allowed = ['right', 'left', 'bottom', 'top'];
   const options = [];
   if (preferred && allowed.includes(preferred)) options.push(preferred);
@@ -182,113 +188,175 @@ function positionCallout(callout, connector, rect, preferred, target) {
     if (!options.includes(dir)) options.push(dir);
   }
 
-  let chosen = 'right';
-  const fits = {
-    right: rect.right + margin + width <= vw - 12,
-    left: rect.left - margin - width >= 12,
-    bottom: rect.bottom + margin + height <= vh - 12,
-    top: rect.top - margin - height >= 12,
-  };
+  let best = null;
+  const inflatedTarget = inflateRect(rect, TARGET_PADDING);
+
   for (const dir of options) {
-    if (fits[dir]) {
-      chosen = dir;
+    const isVertical = dir === 'right' || dir === 'left';
+    const base = basePositionForDirection(dir, rect, width, height);
+    const step = isVertical ? height + SHIFT_GAP : width + SHIFT_GAP;
+    const offsets = [0];
+    for (let i = 1; i <= MAX_SHIFT_STEPS; i++) {
+      offsets.push(step * i, -step * i);
+    }
+
+    for (const offset of offsets) {
+      let candidateLeft = base.left;
+      let candidateTop = base.top;
+      if (isVertical) candidateTop += offset;
+      else candidateLeft += offset;
+
+      const clampedLeft = clamp(candidateLeft, BORDER_PADDING, Math.max(BORDER_PADDING, vw - width - BORDER_PADDING));
+      const clampedTop = clamp(candidateTop, BORDER_PADDING, Math.max(BORDER_PADDING, vh - height - BORDER_PADDING));
+
+      const calloutRect = {
+        left: clampedLeft,
+        top: clampedTop,
+        right: clampedLeft + width,
+        bottom: clampedTop + height,
+      };
+
+      const overlapTargetArea = intersectionArea(calloutRect, inflatedTarget);
+      const overlapWithTarget = overlapTargetArea > 0;
+
+      let overlapArea = 0;
+      for (const placed of placements) {
+        overlapArea += intersectionArea(calloutRect, placed);
+      }
+
+      const clampPenalty = Math.abs(clampedLeft - candidateLeft) + Math.abs(clampedTop - candidateTop);
+      const offsetPenalty = Math.abs(offset) * 0.05;
+      const preferPenalty = dir === preferred ? 0 : 2;
+
+      const score =
+        (overlapWithTarget ? overlapTargetArea * 5000 + 1e6 : 0) +
+        overlapArea * 200 +
+        clampPenalty * 30 +
+        offsetPenalty +
+        preferPenalty;
+
+      if (!best || score < best.score) {
+        best = {
+          score,
+          dir,
+          left: clampedLeft,
+          top: clampedTop,
+          rect: calloutRect,
+          overlapArea,
+          overlapWithTarget,
+          anchor: anchorForDirection(dir, calloutRect, width, height),
+        };
+      }
+
+      if (!overlapWithTarget && overlapArea === 0 && clampPenalty === 0 && offset === 0 && dir === preferred) {
+        break;
+      }
+    }
+    if (best && best.dir === preferred && best.overlapArea === 0 && !best.overlapWithTarget) {
       break;
     }
   }
 
-  let left;
-  let top;
-  switch (chosen) {
-    case 'left':
-      left = rect.left - margin - width;
-      top = rect.top + rect.height / 2 - height / 2;
-      break;
-    case 'top':
-      left = rect.left + rect.width / 2 - width / 2;
-      top = rect.top - margin - height;
-      break;
-    case 'bottom':
-      left = rect.left + rect.width / 2 - width / 2;
-      top = rect.bottom + margin;
-      break;
-    case 'right':
-    default:
-      left = rect.right + margin;
-      top = rect.top + rect.height / 2 - height / 2;
-      break;
+  if (!best) {
+    return null;
   }
 
-  const minLeft = 12;
-  const maxLeft = Math.max(minLeft, vw - width - 12);
-  const minTop = 12;
-  const maxTop = Math.max(minTop, vh - height - 12);
-  left = Math.min(Math.max(left, minLeft), maxLeft);
-  top = Math.min(Math.max(top, minTop), maxTop);
-
-  callout.style.left = `${Math.round(left)}px`;
-  callout.style.top = `${Math.round(top)}px`;
-  callout.dataset.position = chosen;
+  callout.style.left = `${Math.round(best.left)}px`;
+  callout.style.top = `${Math.round(best.top)}px`;
+  callout.dataset.position = best.dir;
   callout.classList.remove('arrow-left', 'arrow-right', 'arrow-top', 'arrow-bottom');
-  callout.classList.add(`arrow-${chosen}`);
+  callout.classList.add(`arrow-${best.dir}`);
 
-  if (target && target.id) {
-    callout.dataset.target = target.id;
-  } else {
-    delete callout.dataset.target;
-  }
-
-  const targetX = rect.left + rect.width / 2;
-  const targetY = rect.top + rect.height / 2;
-
-  const calloutRect = {
-    left,
-    top,
-    width,
-    height,
-  };
-
-  let anchorX;
-  let anchorY;
-  switch (chosen) {
-    case 'left':
-      anchorX = calloutRect.left + calloutRect.width;
-      anchorY = calloutRect.top + calloutRect.height / 2;
-      break;
-    case 'top':
-      anchorX = calloutRect.left + calloutRect.width / 2;
-      anchorY = calloutRect.top + calloutRect.height;
-      break;
-    case 'bottom':
-      anchorX = calloutRect.left + calloutRect.width / 2;
-      anchorY = calloutRect.top;
-      break;
-    case 'right':
-    default:
-      anchorX = calloutRect.left;
-      anchorY = calloutRect.top + calloutRect.height / 2;
-      break;
-  }
-
-  const dx = targetX - anchorX;
-  const dy = targetY - anchorY;
+  const targetCenterX = rect.left + rect.width / 2;
+  const targetCenterY = rect.top + rect.height / 2;
+  const anchor = best.anchor;
+  const dx = targetCenterX - anchor.x;
+  const dy = targetCenterY - anchor.y;
   const distance = Math.sqrt(dx * dx + dy * dy);
-  const trim = 16;
-  const usable = Math.max(distance - trim, 0);
+  const trimmed = Math.max(distance - 16, 0);
   const angle = Math.atan2(dy, dx) * (180 / Math.PI);
 
-  connector.style.left = `${Math.round(anchorX)}px`;
-  connector.style.top = `${Math.round(anchorY)}px`;
-  connector.style.width = `${Math.round(usable)}px`;
+  connector.style.left = `${Math.round(anchor.x)}px`;
+  connector.style.top = `${Math.round(anchor.y)}px`;
+  connector.style.width = `${Math.round(trimmed)}px`;
   connector.style.transform = `translateY(-50%) rotate(${angle}deg)`;
-  connector.dataset.position = chosen;
+  connector.dataset.position = best.dir;
 
   if (target && target.id) {
     connector.dataset.target = target.id;
+    callout.dataset.target = target.id;
   } else {
     delete connector.dataset.target;
+    delete callout.dataset.target;
   }
 
-  connector.style.visibility = usable > 0 ? 'visible' : 'hidden';
+  connector.style.visibility = trimmed > 0 ? 'visible' : 'hidden';
+  return best.rect;
+}
+
+function basePositionForDirection(direction, rect, width, height) {
+  switch (direction) {
+    case 'left':
+      return {
+        left: rect.left - CALL_OUT_MARGIN - width,
+        top: rect.top + rect.height / 2 - height / 2,
+      };
+    case 'top':
+      return {
+        left: rect.left + rect.width / 2 - width / 2,
+        top: rect.top - CALL_OUT_MARGIN - height,
+      };
+    case 'bottom':
+      return {
+        left: rect.left + rect.width / 2 - width / 2,
+        top: rect.bottom + CALL_OUT_MARGIN,
+      };
+    case 'right':
+    default:
+      return {
+        left: rect.right + CALL_OUT_MARGIN,
+        top: rect.top + rect.height / 2 - height / 2,
+      };
+  }
+}
+
+function anchorForDirection(direction, rect, width, height) {
+  switch (direction) {
+    case 'left':
+      return { x: rect.left + width, y: rect.top + height / 2 };
+    case 'top':
+      return { x: rect.left + width / 2, y: rect.top + height };
+    case 'bottom':
+      return { x: rect.left + width / 2, y: rect.top };
+    case 'right':
+    default:
+      return { x: rect.left, y: rect.top + height / 2 };
+  }
+}
+
+function clamp(value, min, max) {
+  if (value < min) return min;
+  if (value > max) return max;
+  return value;
+}
+
+function inflateRect(rect, amount) {
+  return {
+    left: rect.left - amount,
+    top: rect.top - amount,
+    right: rect.right + amount,
+    bottom: rect.bottom + amount,
+  };
+}
+
+function intersectionArea(a, b) {
+  const left = Math.max(a.left, b.left);
+  const right = Math.min(a.right, b.right);
+  if (right <= left) return 0;
+  const top = Math.max(a.top, b.top);
+  const bottom = Math.min(a.bottom, b.bottom);
+  if (bottom <= top) return 0;
+  return (right - left) * (bottom - top);
 }
 
 export { setHelpActive, toggleHelp, isHelpActive, refreshHelpOverlay };
