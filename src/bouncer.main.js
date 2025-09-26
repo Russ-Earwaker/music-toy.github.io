@@ -191,7 +191,7 @@ export function createBouncer(selector){
   const applySwipePrompt = () => {
     const rect = host.getBoundingClientRect();
     const minSide = Math.min(rect.width || 0, rect.height || 0);
-    const sizePx = minSide > 0 ? Math.max(24, Math.floor(minSide * 0.18)) : 32;
+    const sizePx = minSide > 0 ? Math.max(36, Math.floor(minSide * 0.28)) : 48;
     swipeLabel.style.fontSize = sizePx + 'px';
     swipeLabel.style.opacity = host.dataset.bouncerPromptDismissed === '1' ? '0' : '0.55';
   };
