@@ -31,7 +31,6 @@ if (window.__loopgridDrumBoot) {
         zIndex: '4'
       });
       pad.appendChild(label);
-      body.appendChild(pad);
 
       // play + highlight current column
       pad.addEventListener('pointerdown', (e) => {
@@ -59,7 +58,7 @@ if (window.__loopgridDrumBoot) {
           panel.__drumVisualState.bgFlash = 1.0;
         }
 
-        // Also, activate the cube at the current playhead position.
+        // Also, activate the cube at the current playhead position. 
         const playheadCol = panel?.__drumVisualState?.playheadCol;
         console.log('Playhead Column:', playheadCol);
 

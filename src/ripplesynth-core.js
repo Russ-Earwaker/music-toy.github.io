@@ -725,7 +725,9 @@ export function createRippleSynth(selector){
     try {
       // A toy is "playing" if it has active ripples, or if it's an empty
       // toy in a chain running its "ghost" timer (lifeline).
-      panel.classList.toggle('toy-playing', (ripples.length > 0 && generator.placed) || !!__schedState.ghostSpawnTime);
+      const isPlaying = (ripples.length > 0 && generator.placed) || !!__schedState.ghostSpawnTime;
+      panel.classList.toggle('toy-playing', isPlaying);
+      try { panel.dataset.ripplerIsPlaying = String(isPlaying); } catch(e){}
 
       // Handle the highlight pulse animation on note hits.
       if (panel.__pulseRearm) {

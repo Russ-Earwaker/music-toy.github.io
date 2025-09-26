@@ -1,5 +1,6 @@
 // grid-square-drum.js
 import { isRunning, getLoopInfo } from './audio-core.js';
+import { isHelpActive } from './help-overlay.js';
 
 const DEBUG = false; // disable debug logs for grid-square-drum overlay
 const LOG = () => {};
@@ -82,9 +83,8 @@ function updateLabelVisibility(panel) {
 
     const gridState = panel.__gridState;
     const hasActiveSteps = gridState && gridState.steps.some(Boolean);
-    const running = isRunning();
 
-    if (running && !hasActiveSteps) {
+    if (isHelpActive() && !hasActiveSteps) {
       label.style.opacity = '0.35';
     } else {
       label.style.opacity = '0';

@@ -68,7 +68,10 @@
 
     const promptSize = Math.max(24, Math.floor(s * 0.22));
     prompt.style.fontSize = promptSize + 'px';
-    prompt.style.opacity = wrap.dataset.ripplerPromptDismissed === '1' ? '0' : '0.6';
+    
+    const isPlaying = panel.dataset.ripplerIsPlaying === 'true';
+    const helpActive = document.body.classList.contains('toy-help-mode');
+    prompt.style.opacity = (helpActive && !isPlaying) ? '0.6' : '0';
 
 
     // Center wrapper
@@ -94,17 +97,6 @@
       transform: 'none',
       left: '', top: ''
     });
-
-    if (!canvas.__ripplerPromptHooked) {
-      canvas.__ripplerPromptHooked = true;
-      canvas.addEventListener('pointerdown', () => {
-        const parent = canvas.parentElement;
-        if (!parent) return;
-        parent.dataset.ripplerPromptDismissed = '1';
-        const lbl = parent.querySelector('.rippler-tap-label');
-        if (lbl) lbl.style.opacity = '0';
-      });
-    }
   }
 
   function applyAll(){
@@ -126,15 +118,3 @@
     document.querySelectorAll('.toy-panel[data-toy="rippler"] .toy-body').forEach(el=> ro.observe(el));
   }catch{}
 })();
-
-
-
-
-
-
-
-
-
-
-
-
