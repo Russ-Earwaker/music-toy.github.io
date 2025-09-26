@@ -574,10 +574,17 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   function syncLetterFade({ immediate = false } = {}) {
     if (!particles || typeof particles.setLetterFadeTarget !== 'function') return;
     const hasStrokes = Array.isArray(strokes) && strokes.length > 0;
-    const target = hasStrokes ? 0 : 1;
+    const helpActive = document.body.classList.contains('toy-help-mode');
+    const target = (helpActive && !hasStrokes) ? 1 : 0;
     const speed = hasStrokes ? 0.12 : 0.08;
     particles.setLetterFadeTarget(target, speed, immediate);
   }
+
+  if (!panel.__drawgridHelpModeChecker) {
+    panel.__drawgridHelpModeChecker = setInterval(() => syncLetterFade({ immediate: true }), 250);
+  }
+
+  panel.dataset.steps = String(cols);
 
   panel.dataset.steps = String(cols);
 
