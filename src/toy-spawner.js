@@ -1,12 +1,16 @@
 // src/toy-spawner.js
 // Provides the "Create Toy" palette dock and drag-to-spawn affordance.
 
+import { toggleHelp, isHelpActive } from './help-overlay.js';
+
 const state = {
   dock: null,
   toggle: null,
   menu: null,
   listHost: null,
   trash: null,
+  helpButton: null,
+  helpActive: false,
   config: {
     getCatalog: () => [],
     create: () => null,
@@ -17,6 +21,16 @@ const state = {
   justSpawned: false,
   panelDrag: null,
 };
+
+function updateHelpToggleUI(nextState) {
+  if (typeof nextState === 'boolean') {
+    state.helpActive = nextState;
+  }
+  const active = !!state.helpActive;
+  if (!state.helpButton) return;
+  state.helpButton.setAttribute('aria-pressed', active ? 'true' : 'false');
+  state.helpButton.classList.toggle('is-active', active);
+}
 
 function ensureDock() {
   if (state.dock) return;
@@ -39,6 +53,13 @@ function ensureDock() {
   toggle.title = 'Create Toy';
   toggle.innerHTML = '<span aria-hidden="true">+</span>';
 
+  const help = document.createElement('button');
+  help.type = 'button';
+  help.className = 'toy-spawner-help toy-btn';
+  help.setAttribute('aria-label', 'Toggle Help');
+  help.title = 'Help';
+  help.textContent = '?';
+
   const menu = document.createElement('div');
   menu.className = 'toy-spawner-menu';
   menu.setAttribute('role', 'menu');
@@ -47,7 +68,7 @@ function ensureDock() {
   list.className = 'toy-spawner-list';
   menu.appendChild(list);
 
-  dock.append(trash, toggle, menu);
+  dock.append(trash, toggle, help, menu);
   document.body.appendChild(dock);
 
   state.dock = dock;
@@ -55,6 +76,14 @@ function ensureDock() {
   state.menu = menu;
   state.listHost = list;
   state.trash = trash;
+  state.helpButton = help;
+  updateHelpToggleUI(isHelpActive());
+
+  help.addEventListener('click', (event) => {
+    event.preventDefault();
+    const active = toggleHelp();
+    updateHelpToggleUI(active);
+  });
 
   toggle.addEventListener('click', () => setMenuOpen(!state.open));
 

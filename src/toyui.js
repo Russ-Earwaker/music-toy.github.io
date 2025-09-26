@@ -4,8 +4,15 @@ import { getInstrumentNames } from './audio-samples.js';
 import { installVolumeUI } from './volume-ui.js';
 import { getIdForDisplayName, getDisplayNameForId, getAllIds } from './instrument-catalog.js';
 import { openInstrumentPicker } from './instrument-picker.js';
+import { refreshHelpOverlay } from './help-overlay.js';
 
 const $ = (sel, root=document)=> root.querySelector(sel);
+
+function markHelp(el, label, position){
+  if (!el) return;
+  if (label) el.dataset.helpLabel = label;
+  if (position) el.dataset.helpPosition = position;
+}
 
 function ensureHeader(panel, titleText){
   let header = panel.querySelector('.toy-header');
@@ -171,6 +178,14 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
   } else {
       if (!right.querySelector('[data-action="advanced"]')) { const advBtn = btn('Advanced'); advBtn.dataset.action = 'advanced'; right.prepend(advBtn); }
       if (!right.querySelector('[data-action="close-advanced"]')) { const closeBtn = btn('Close'); closeBtn.dataset.action = 'close-advanced'; right.prepend(closeBtn); }
+  }
+
+  // Advanced help metadata for edit/close toggles
+  {
+    const advBtnEl = panel.querySelector(':scope > .toy-mode-btn[data-action="advanced"]');
+    const closeAdvEl = panel.querySelector(':scope > .toy-mode-btn[data-action="close-advanced"]');
+    markHelp(advBtnEl, 'Open advanced controls', 'right');
+    markHelp(closeAdvEl, 'Exit advanced controls', 'right');
   }
 
   // Random / Clear buttons (delegated elsewhere)
@@ -702,6 +717,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
   instBtn.title = 'Choose Instrument';
   instBtn.dataset.action = 'instrument';
   instBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonInstruments.png');"></div>`;
+  markHelp(instBtn, 'Choose instrument', 'bottom');
 
   if (toyKind === 'loopgrid' || toyKind === 'bouncer' || toyKind === 'rippler' || toyKind === 'chordwheel' || toyKind === 'drawgrid') {
     // For loopgrid, bouncer, rippler, chordwheel, and drawgrid, put a large instrument button inside the header.
@@ -800,6 +816,43 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
     try{ panel.dispatchEvent(new CustomEvent('toy-instrument', { detail: { value: initialInstrument }, bubbles: true })); }catch{}
     try{ panel.dispatchEvent(new CustomEvent('toy:instrument',  { detail: { name: initialInstrument, value: initialInstrument }, bubbles: true })); }catch{}
   }
+
+  switch (toyKind) {
+    case 'loopgrid':
+      markHelp(panel.querySelector('button[data-action="random"]'), 'Randomize pattern (blocks in advanced view)', 'bottom');
+      markHelp(panel.querySelector('button[data-action="random-notes"]'), 'Randomize notes', 'bottom');
+      markHelp(panel.querySelector('button[data-action="clear"]'), 'Clear the grid', 'bottom');
+      break;
+    case 'bouncer':
+      markHelp(panel.querySelector('button[data-action="random"]'), 'Add a new ball', 'bottom');
+      markHelp(panel.querySelector('button[data-action="random-cubes"]'), 'Randomize bumpers', 'bottom');
+      markHelp(panel.querySelector('button[data-action="random-notes"]'), 'Randomize notes', 'bottom');
+      markHelp(panel.querySelector('button[data-action="clear"]'), 'Clear all balls', 'bottom');
+      break;
+    case 'drawgrid':
+      markHelp(panel.querySelector('button[data-action="random"]'), 'Randomize drawing', 'bottom');
+      markHelp(panel.querySelector('button[data-action="random-blocks"]'), 'Randomize blocks', 'bottom');
+      markHelp(panel.querySelector('button[data-action="random-notes"]'), 'Randomize notes', 'bottom');
+      markHelp(panel.querySelector('button[data-action="clear"]'), 'Clear the canvas', 'bottom');
+      markHelp(panel.querySelector('button[data-erase="1"]'), 'Toggle eraser mode', 'left');
+      break;
+    case 'rippler':
+      markHelp(panel.querySelector('button[data-action="random"]'), 'Randomize ripples', 'bottom');
+      markHelp(panel.querySelector('button[data-action="random-blocks"]'), 'Randomize bumpers', 'bottom');
+      markHelp(panel.querySelector('button[data-action="random-notes"]'), 'Randomize notes', 'bottom');
+      markHelp(panel.querySelector('button[data-action="clear"]'), 'Clear ripples', 'bottom');
+      break;
+    case 'chordwheel':
+      markHelp(panel.querySelector('button[data-action="random"]'), 'Randomize chord palette', 'bottom');
+      markHelp(panel.querySelector('button[data-action="clear"]'), 'Clear all chords', 'bottom');
+      break;
+    default:
+      markHelp(panel.querySelector('button[data-action="random"]'), 'Randomize settings', 'bottom');
+      markHelp(panel.querySelector('button[data-action="clear"]'), 'Reset this toy', 'bottom');
+      break;
+  }
+
+  refreshHelpOverlay();
 
   return { header, footer, body: panel.querySelector('.toy-body'), instrument: panel.dataset.instrument || initialInstrument || 'tone' };
 }

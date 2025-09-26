@@ -1,5 +1,6 @@
 // src/volume-ui.js
 import { getToyGain, setToyVolume, setToyMuted, isToyMuted, getToyVolume } from './audio-core.js';
+import { refreshHelpOverlay } from './help-overlay.js';
 
 /**
  * Creates and wires up a standard volume/mute control block in a toy's footer.
@@ -39,6 +40,11 @@ export function installVolumeUI(footer) {
   muteBtn.textContent = 'Mute';
 
   volWrap.append(range, muteBtn);
+
+  range.dataset.helpLabel = 'Adjust volume';
+  range.dataset.helpPosition = 'top';
+  muteBtn.dataset.helpLabel = 'Mute or unmute';
+  muteBtn.dataset.helpPosition = 'top';
 
   // --- 2. Initialize State ---
   const initialMuted = isToyMuted(toyId);
@@ -85,5 +91,6 @@ export function installVolumeUI(footer) {
   });
 
   // --- 4. Return the gain node ---
+  refreshHelpOverlay();
   return { gain: getToyGain(toyId) };
 }
