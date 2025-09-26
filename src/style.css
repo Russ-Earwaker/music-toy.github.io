@@ -732,15 +732,11 @@ select.toy-instrument {
 
 
 
+
+
 body.toy-help-mode {
-  cursor: help;
+  /* help mode keeps default cursor */
 }
-
-body.toy-help-mode [data-help-label] {
-  transition: outline-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-
 
 .toy-help-overlay {
   position: fixed;
@@ -760,8 +756,6 @@ body.toy-help-mode [data-help-label] {
   box-shadow: 0 22px 45px rgba(0, 0, 0, 0.55);
   font-size: 0.95rem;
   line-height: 1.45;
-  pointer-events: none;
-  z-index: 1;
   pointer-events: none;
   z-index: 1;
 }
