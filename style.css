@@ -1,4 +1,4 @@
-﻿/* style.css - Cleaned and Refactored */
+/* style.css - Cleaned and Refactored */
 
 /* ------------------- */
 /* --- Root & Base --- */
@@ -372,7 +372,8 @@ select.toy-instrument {
   opacity: 0;
   transition: opacity 0.08s ease-out;
   z-index: 2;
-}\r\n
+}
+
 /* --- Integrated Rippler body/wrapper rules (centered square inside full-height body) --- */
 .toy-panel[data-toy="rippler"] .toy-body {
   position: relative;
@@ -732,8 +733,8 @@ select.toy-instrument {
 
 
 body.toy-help-mode {
-  cursor: help;
 }
+
 
 body.toy-help-mode [data-help-label] {
   outline: none !important;

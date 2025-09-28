@@ -184,8 +184,8 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
   {
     const advBtnEl = panel.querySelector(':scope > .toy-mode-btn[data-action="advanced"]');
     const closeAdvEl = panel.querySelector(':scope > .toy-mode-btn[data-action="close-advanced"]');
-    markHelp(advBtnEl, 'Open advanced controls', 'right');
-    markHelp(closeAdvEl, 'Exit advanced controls', 'right');
+    markHelp(advBtnEl, 'Open advanced controls', 'top');
+    markHelp(closeAdvEl, 'Exit advanced controls', 'top');
   }
 
   // Random / Clear buttons (delegated elsewhere)

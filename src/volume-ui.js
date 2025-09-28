@@ -42,9 +42,9 @@ export function installVolumeUI(footer) {
   volWrap.append(range, muteBtn);
 
   range.dataset.helpLabel = 'Adjust volume';
-  range.dataset.helpPosition = 'top';
+  range.dataset.helpPosition = 'bottom';
   muteBtn.dataset.helpLabel = 'Mute or unmute';
-  muteBtn.dataset.helpPosition = 'top';
+  muteBtn.dataset.helpPosition = 'bottom';
 
   // --- 2. Initialize State ---
   const initialMuted = isToyMuted(toyId);

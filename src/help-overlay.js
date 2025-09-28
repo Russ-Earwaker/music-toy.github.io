@@ -1,4 +1,4 @@
-﻿const overlayState = {
+const overlayState = {
   active: false,
   host: null,
   pending: false,
@@ -8,7 +8,8 @@
 };
 
 const BASE_MARGIN = 36;
-const BASE_GAP = 44;
+const BASE_GAP = 28;
+const INLINE_GAP = 12;
 const MAX_OFFSETS = 6;
 const MAX_ATTEMPTS = 4;
 const TARGET_PADDING = 40;
@@ -183,13 +184,14 @@ function renderOverlay() {
       dir: placement.dir,
       offset: placement.offset,
       vertical: placement.vertical,
+      group: entry.group,
     });
   });
 }
 
 function gatherTargets() {
   const board = document.getElementById('board');
-  const metrics = board ? getBoardMetrics(board) : null;
+  const boardMetrics = board ? getBoardMetrics(board) : null;
   const items = [];
 
   const nodes = Array.from(document.querySelectorAll('[data-help-label]'));
@@ -206,8 +208,39 @@ function gatherTargets() {
     if (rectScreen.width < 1 || rectScreen.height < 1) continue;
     if (rectScreen.right < 0 || rectScreen.bottom < 0 || rectScreen.left > window.innerWidth || rectScreen.top > window.innerHeight) continue;
 
-    const preferred = (target.dataset.helpPosition || '').toLowerCase();
+    const defaultDirections = ['top', 'bottom', 'right', 'left'];
+    let allowedDirections;
+    const headerRoot = target.closest('.toy-header, #topbar, .app-topbar');
+    const footerRoot = target.closest('.toy-footer');
+    let preferred = (target.dataset.helpPosition || '').toLowerCase();
+    if (!defaultDirections.includes(preferred)) {
+      preferred = '';
+    }
 
+    if (headerRoot) {
+      preferred = 'top';
+      allowedDirections = ['top'];
+    } else if (footerRoot) {
+      preferred = 'bottom';
+      allowedDirections = ['bottom'];
+    } else if (preferred) {
+      allowedDirections = [preferred, ...defaultDirections.filter((dir) => dir !== preferred)];
+    } else {
+      allowedDirections = defaultDirections.slice();
+    }
+
+    const groupRoot = target.closest('[data-help-group], .toy-panel, #topbar, .app-topbar') || document.body;
+    let group = 'global';
+    if (groupRoot) {
+      group =
+        groupRoot.getAttribute('data-help-group') ||
+        groupRoot.id ||
+        (groupRoot.dataset ? (groupRoot.dataset.helpGroup || groupRoot.dataset.toyid || groupRoot.dataset.toy || groupRoot.dataset.panelId) : null) ||
+        (groupRoot.classList && groupRoot.classList.length ? groupRoot.classList[0] : null) ||
+        'global';
+    }
+
+    const metrics = boardMetrics && boardMetrics.board && boardMetrics.board.contains(target) ? boardMetrics : null;
     const rectLocal = metrics
       ? {
           left: (rectScreen.left - metrics.rect.left) / metrics.scale,
@@ -222,10 +255,14 @@ function gatherTargets() {
           bottom: rectScreen.bottom,
         };
 
+    const position = preferred || allowedDirections[0] || 'top';
+
     items.push({
       target,
       label,
-      position: preferred,
+      position,
+      allowedDirections,
+      group,
       rect: rectLocal,
       rectScreen,
       metrics,
@@ -234,7 +271,14 @@ function gatherTargets() {
     });
   }
 
-  items.sort((a, b) => a.rect.top - b.rect.top || a.rect.left - b.rect.left);
+  items.sort((a, b) => {
+    if (a.group !== b.group) {
+      return a.group < b.group ? -1 : 1;
+    }
+    const topDiff = a.rect.top - b.rect.top;
+    if (topDiff !== 0) return topDiff;
+    return a.rect.left - b.rect.left;
+  });
   return items;
 }
 
@@ -265,44 +309,93 @@ function extractScale(el) {
 }
 
 function tryLayout(entries, gap, allowOverlap) {
-  const placements = [];
+  const assigned = [];
+  const results = [];
   for (const entry of entries) {
-    const cached = overlayState.cache.get(entry.target) || null;
-    const placement = placeEntry(entry, placements, gap, cached, allowOverlap);
+    const cachedRaw = overlayState.cache.get(entry.target) || null;
+    const cached = cachedRaw && cachedRaw.group === entry.group ? cachedRaw : null;
+    const placement = placeEntry(entry, assigned, gap, cached, allowOverlap);
     if (!placement) return null;
-    placements.push(placement);
+    assigned.push({ entry, placement });
+    results.push(placement);
   }
-  return placements;
+  return results;
 }
 
-function placeEntry(entry, placements, gap, cachedPlacement, allowOverlap) {
+function placeEntry(entry, assigned, gap, cachedPlacement, allowOverlap) {
   const width = entry.width;
   const height = entry.height;
-  const directions = orderDirections(cachedPlacement?.dir, entry.position);
+  const directions = orderDirections(cachedPlacement?.dir, entry.position, entry.allowedDirections);
   const inflatedTarget = inflateRect(entry.rect, TARGET_PADDING);
+
+  const siblings = assigned.filter(({ entry: other }) => other.group === entry.group);
+
+  const hasSiblingOverlap = (rect) => {
+    for (const { placement } of siblings) {
+      if (intersectionArea(rect, placement.rect) > 0) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  if (cachedPlacement && cachedPlacement.dir && directions.includes(cachedPlacement.dir)) {
+    const dir = cachedPlacement.dir;
+    const vertical = dir === 'right' || dir === 'left';
+    const offset = Number.isFinite(cachedPlacement.offset) ? cachedPlacement.offset : 0;
+    const margin = BASE_MARGIN + gap * 0.25;
+    const base = basePositionForDirection(dir, entry.rect, width, height, margin);
+    const candidate = buildCandidate(base, width, height, vertical, offset);
+    if (intersectionArea(candidate, inflatedTarget) <= 0 && !hasSiblingOverlap(candidate)) {
+      return { dir, rect: candidate, offset, vertical };
+    }
+  }
 
   let fallback = null;
 
+  const findPrevSameDir = (dir) => {
+    for (let i = siblings.length - 1; i >= 0; i--) {
+      const placed = siblings[i].placement;
+      if (!placed.vertical && placed.dir === dir) {
+        return placed;
+      }
+    }
+    return null;
+  };
+
   for (const dir of directions) {
     const vertical = dir === 'right' || dir === 'left';
-    const base = basePositionForDirection(dir, entry.rect, width, height, BASE_MARGIN);
+    const margin = BASE_MARGIN + gap * 0.25;
+    const base = basePositionForDirection(dir, entry.rect, width, height, margin);
     const offsets = buildOffsetSeries(gap, cachedPlacement, dir, vertical);
 
     for (const offset of offsets) {
-      const candidate = buildCandidate(base, width, height, vertical, offset);
-      const overlapsTarget = intersectionArea(candidate, inflatedTarget) > 0;
-      if (overlapsTarget) continue;
+      let candidate = buildCandidate(base, width, height, vertical, offset);
+      let adjustedOffset = offset;
 
-      let overlapsOther = false;
-      for (const placed of placements) {
-        if (intersectionArea(candidate, placed.rect) > 0) {
-          overlapsOther = true;
-          break;
+      if (!vertical) {
+        const prevSameDir = findPrevSameDir(dir);
+        if (prevSameDir) {
+          const minLeft = prevSameDir.rect.right + INLINE_GAP;
+          if (candidate.left < minLeft) {
+            const delta = minLeft - candidate.left;
+            candidate = {
+              left: candidate.left + delta,
+              top: candidate.top,
+              right: candidate.right + delta,
+              bottom: candidate.bottom,
+            };
+            adjustedOffset += delta;
+          }
         }
       }
+
+      if (intersectionArea(candidate, inflatedTarget) > 0) continue;
+
+      const overlapsOther = hasSiblingOverlap(candidate);
       if (overlapsOther && !allowOverlap) continue;
 
-      const placement = { dir, rect: candidate, offset, vertical };
+      const placement = { dir, rect: candidate, offset: adjustedOffset, vertical };
 
       if (!overlapsOther) {
         return placement;
@@ -350,27 +443,42 @@ function buildOffsetSeries(gap, cached, direction, vertical) {
   return offsets;
 }
 
-function orderDirections(cachedDir, preferred) {
+function orderDirections(cachedDir, preferred, allowedDirections) {
+  const fallback = ['top', 'bottom', 'right', 'left'];
+  let allowed = Array.isArray(allowedDirections) && allowedDirections.length
+    ? allowedDirections.filter((dir) => fallback.includes(dir))
+    : fallback.slice();
+  if (!allowed.length) {
+    allowed = fallback.slice();
+  }
   const order = [];
-  if (cachedDir) order.push(cachedDir);
-  if (preferred && preferred !== cachedDir) order.push(preferred);
-  ['right', 'left', 'bottom', 'top'].forEach((dir) => {
-    if (!order.includes(dir)) order.push(dir);
-  });
+  const push = (dir) => {
+    if (dir && allowed.includes(dir) && !order.includes(dir)) {
+      order.push(dir);
+    }
+  };
+  push(cachedDir);
+  push(preferred);
+  allowed.forEach(push);
+  if (!order.length) {
+    order.push(...allowed);
+  }
   return order;
 }
 
 function basePositionForDirection(direction, rect, width, height, margin) {
+  const rectWidth = rect.right - rect.left;
+  const rectHeight = rect.bottom - rect.top;
   switch (direction) {
     case 'left':
-      return { left: rect.left - margin - width, top: rect.top + rect.height / 2 - height / 2 };
+      return { left: rect.left - margin - width, top: rect.top + rectHeight / 2 - height / 2 };
     case 'top':
-      return { left: rect.left + rect.width / 2 - width / 2, top: rect.top - margin - height };
+      return { left: rect.left + rectWidth / 2 - width / 2, top: rect.top - margin - height };
     case 'bottom':
-      return { left: rect.left + rect.width / 2 - width / 2, top: rect.bottom + margin };
+      return { left: rect.left + rectWidth / 2 - width / 2, top: rect.bottom + margin };
     case 'right':
     default:
-      return { left: rect.right + margin, top: rect.top + rect.height / 2 - height / 2 };
+      return { left: rect.right + margin, top: rect.top + rectHeight / 2 - height / 2 };
   }
 }
 
@@ -489,3 +597,11 @@ try {
 } catch (err) {
   // no-op
 }
+
+
+
+
+
+
+
+
