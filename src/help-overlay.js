@@ -5,6 +5,7 @@ const overlayState = {
   observer: null,
   watchers: [],
   cache: new WeakMap(),
+  advBaseline: null,
 };
 
 const BASE_MARGIN = 36;
@@ -169,11 +170,21 @@ function renderOverlay() {
     return { callout, connector };
   });
 
-  let layout = null;
-  for (let attempt = 0; attempt < MAX_ATTEMPTS && !layout; attempt++) {
-    layout = tryLayout(entries, BASE_GAP * (attempt + 1), false);
+  // Align other top labels to the height of "Advanced Controls", scoped to its group and coordinate system
+  overlayState.advBaseline = null;
+  const advEntry = entries.find((e) => e.label && e.label.includes('Advanced Controls'));
+  console.log('DEBUG: Found Advanced Controls entry:', advEntry ? advEntry.label : 'NOT FOUND');
+  if (advEntry) {
+    const advBase = basePositionForDirection('top', advEntry.rect, advEntry.width, advEntry.height, BASE_MARGIN);
+    overlayState.advBaseline = {
+      top: advBase.top,
+      group: advEntry.group,
+      boardRef: advEntry.metrics ? advEntry.metrics.board : null,
+    };
+    console.log('DEBUG: Set baseline:', overlayState.advBaseline);
   }
-  if (!layout) layout = tryLayout(entries, BASE_GAP * (MAX_ATTEMPTS + 1), true);
+
+  const layout = tryLayout(entries, BASE_GAP, true);
   if (!layout) return;
 
   layout.forEach((placement, index) => {
@@ -206,31 +217,8 @@ function gatherTargets() {
 
     const rectScreen = target.getBoundingClientRect();
     if (rectScreen.width < 1 || rectScreen.height < 1) continue;
-    if (rectScreen.right < 0 || rectScreen.bottom < 0 || rectScreen.left > window.innerWidth || rectScreen.top > window.innerHeight) continue;
-
-    const defaultDirections = ['top', 'bottom', 'right', 'left'];
-    let allowedDirections;
-    const headerRoot = target.closest('.toy-header, #topbar, .app-topbar');
-    const footerRoot = target.closest('.toy-footer');
-    let preferred = (target.dataset.helpPosition || '').toLowerCase();
-    if (!defaultDirections.includes(preferred)) {
-      preferred = '';
-    }
-
-    if (label.includes('Choose Instrument')) {
-      preferred = 'top';
-      allowedDirections = ['top'];
-    } else if (headerRoot) {
-      preferred = 'top';
-      allowedDirections = ['top'];
-    } else if (footerRoot) {
-      preferred = 'bottom';
-      allowedDirections = ['bottom'];
-    } else if (preferred) {
-      allowedDirections = [preferred, ...defaultDirections.filter((dir) => dir !== preferred)];
-    } else {
-      allowedDirections = defaultDirections.slice();
-    }
+    // Remove screen edge filtering - let labels exist even if near edges
+    // if (rectScreen.right < 0 || rectScreen.bottom < 0 || rectScreen.left > window.innerWidth || rectScreen.top > window.innerHeight) continue;
 
     const groupRoot = target.closest('[data-help-group], .toy-panel, #topbar, .app-topbar') || document.body;
     let group = 'global';
@@ -258,13 +246,11 @@ function gatherTargets() {
           bottom: rectScreen.bottom,
         };
 
-    const position = preferred || allowedDirections[0] || 'top';
-
     items.push({
       target,
       label,
-      position,
-      allowedDirections,
+      position: 'fixed', // Remove dynamic positioning preferences
+      allowedDirections: ['top', 'bottom'], // Simplified
       group,
       rect: rectLocal,
       rectScreen,
@@ -274,14 +260,8 @@ function gatherTargets() {
     });
   }
 
-  items.sort((a, b) => {
-    if (a.group !== b.group) {
-      return a.group < b.group ? -1 : 1;
-    }
-    const topDiff = a.rect.top - b.rect.top;
-    if (Math.abs(topDiff) > 10) return topDiff;
-    return a.rect.left - b.rect.left;
-  });
+  // Simple sort by label name for consistency
+  items.sort((a, b) => a.label.localeCompare(b.label));
   return items;
 }
 
@@ -312,14 +292,10 @@ function extractScale(el) {
 }
 
 function tryLayout(entries, gap, allowOverlap) {
-  const assigned = [];
   const results = [];
   for (const entry of entries) {
-    const cachedRaw = overlayState.cache.get(entry.target) || null;
-    const cached = cachedRaw && cachedRaw.group === entry.group ? cachedRaw : null;
-    const placement = placeEntry(entry, assigned, gap, cached, allowOverlap);
+    const placement = placeEntry(entry, [], gap, null, allowOverlap);
     if (!placement) return null;
-    assigned.push({ entry, placement });
     results.push(placement);
   }
   return results;
@@ -328,114 +304,54 @@ function tryLayout(entries, gap, allowOverlap) {
 function placeEntry(entry, assigned, gap, cachedPlacement, allowOverlap) {
   const width = entry.width;
   const height = entry.height;
-
   const label = entry.label;
-  const isAdv = label.includes('Advanced Controls') || label.includes('Clear') || label.includes('Random');
 
-  if (isAdv) {
-    const dir = 'top';
-    const vertical = false;
-    const margin = BASE_MARGIN;
-    let base = basePositionForDirection(dir, entry.rect, width, height, margin);
+  console.log('DEBUG: placeEntry for label:', label);
 
-    if (label.includes('Advanced Controls')) {
-      base.left -= 30;
-    } else if (label.includes('Clear')) {
-      base.left += 30;
-    } else if (label.includes('Random')) {
-      base.top -= 20;
-    }
-
-    const candidate = buildCandidate(base, width, height, vertical, 0);
-    return { dir, rect: candidate, offset: 0, vertical };
-  }
+  // Calculate fixed position relative to target - no dynamic repositioning
+  const targetRect = entry.rect;
+  const targetCenterX = targetRect.left + (targetRect.right - targetRect.left) / 2;
+  const margin = BASE_MARGIN;
   
-  const isSpecial = label.includes('Choose Instrument') || label.includes('Mute');
-  if (isSpecial) {
-    const dir = label.includes('Mute') ? 'bottom' : 'top';
-    const vertical = false;
-    const margin = BASE_MARGIN;
-    let base = basePositionForDirection(dir, entry.rect, width, height, margin);
-    const candidate = buildCandidate(base, width, height, vertical, 0);
-    return { dir, rect: candidate, offset: 0, vertical };
+  let base;
+  let dir;
+
+  // Determine direction and base position
+  if (label.includes('Mute') || label.includes('Adjust Volume')) {
+    dir = 'bottom';
+    base = {
+      left: targetCenterX - width / 2,
+      top: targetRect.bottom + margin
+    };
+  } else {
+    // All other labels go to top
+    dir = 'top';
+    base = {
+      left: targetCenterX - width / 2,
+      top: targetRect.top - margin - height
+    };
   }
 
-  const directions = orderDirections(cachedPlacement?.dir, entry.position, entry.allowedDirections);
-  const inflatedTarget = inflateRect(entry.rect, TARGET_PADDING);
-
-  const siblings = assigned.filter(({ entry: other }) => other.group === entry.group);
-
-  const hasSiblingOverlap = (rect) => {
-    const inflated = inflateRect(rect, 5);
-    for (const { placement } of siblings) {
-      if (intersectionArea(inflated, placement.rect) > 0) {
-        return true;
-      }
-    }
-    return false;
-  };
-
-  if (cachedPlacement && cachedPlacement.dir && directions.includes(cachedPlacement.dir)) {
-    const dir = cachedPlacement.dir;
-    const vertical = dir === 'right' || dir === 'left';
-    const offset = Number.isFinite(cachedPlacement.offset) ? cachedPlacement.offset : 0;
-    const margin = BASE_MARGIN + gap * 0.25;
-    const base = basePositionForDirection(dir, entry.rect, width, height, margin);
-    const candidate = buildCandidate(base, width, height, vertical, offset);
-    if (intersectionArea(candidate, inflatedTarget) <= 0 && !hasSiblingOverlap(candidate)) {
-      return { dir, rect: candidate, offset, vertical };
-    }
+  // Apply fixed nudges for specific labels
+  if (label.includes('Advanced Controls')) {
+    base.left -= 50;
+    console.log('DEBUG: Advanced Controls - nudged left by 50');
+  } else if (label.includes('Clear')) {
+    base.left += 30;
+    console.log('DEBUG: Clear - nudged right by 30');
   }
 
-  let fallback = null;
-
-  const findPrevSameDir = (dir) => {
-    for (let i = siblings.length - 1; i >= 0; i--) {
-      const placed = siblings[i].placement;
-      if (!placed.vertical && placed.dir === dir) {
-        return placed;
-      }
-    }
-    return null;
-  };
-
-  for (const dir of directions) {
-    const vertical = dir === 'right' || dir === 'left';
-    const margin = BASE_MARGIN + gap * 0.25;
-    const base = basePositionForDirection(dir, entry.rect, width, height, margin);
-    const offsets = buildOffsetSeries(gap, cachedPlacement, dir, vertical);
-
-    for (const offset of offsets) {
-      let candidate = buildCandidate(base, width, height, vertical, offset);
-      let adjustedOffset = offset;
-
-      if (entry.group === 'adv-controls' && dir === 'top') {
-        let nudge = 0;
-        if (entry.label.includes('Open Advanced')) nudge = -30;
-        if (entry.label.includes('Clear')) nudge = 30;
-        candidate.left += nudge;
-        candidate.right += nudge;
-      }
-
-
-
-      if (intersectionArea(candidate, inflatedTarget) > 0) continue;
-
-      const overlapsOther = hasSiblingOverlap(candidate);
-      if (overlapsOther && !allowOverlap) continue;
-
-      const placement = { dir, rect: candidate, offset: adjustedOffset, vertical };
-
-      if (!overlapsOther) {
-        return placement;
-      }
-      if (!fallback || fallback.overlapsOther) {
-        fallback = { ...placement, overlapsOther };
-      }
-    }
+  // Apply baseline alignment for same group/coordinate system
+  const bl = overlayState.advBaseline;
+  if (dir === 'top' && bl && entry.group === bl.group && ((entry.metrics && entry.metrics.board) || null) === bl.boardRef) {
+    base.top = bl.top;
+    console.log('DEBUG: Aligned to baseline top:', bl.top, 'for group:', entry.group);
   }
 
-  return allowOverlap ? fallback : null;
+  const candidate = buildCandidate(base, width, height, false, 0);
+  console.log('DEBUG: Final candidate for', label, ':', candidate);
+  
+  return { dir, rect: candidate, offset: 0, vertical: false, fixed: true };
 }
 
 function buildCandidate(base, width, height, vertical, offset) {
