@@ -43,7 +43,7 @@ export function installVolumeUI(footer) {
 
   range.dataset.helpLabel = 'Adjust volume';
   range.dataset.helpPosition = 'bottom';
-  muteBtn.dataset.helpLabel = 'Mute or unmute';
+  muteBtn.dataset.helpLabel = 'Mute';
   muteBtn.dataset.helpPosition = 'bottom';
 
   // --- 2. Initialize State ---

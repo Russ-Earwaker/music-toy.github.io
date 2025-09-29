@@ -184,7 +184,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
   {
     const advBtnEl = panel.querySelector(':scope > .toy-mode-btn[data-action="advanced"]');
     const closeAdvEl = panel.querySelector(':scope > .toy-mode-btn[data-action="close-advanced"]');
-    markHelp(advBtnEl, 'Open advanced controls', 'top');
+    markHelp(advBtnEl, 'Advanced Controls', 'top');
     markHelp(closeAdvEl, 'Exit advanced controls', 'top');
   }
 
