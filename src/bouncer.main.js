@@ -190,8 +190,31 @@ export function createBouncer(selector){
 
   const applySwipePrompt = () => {
     const rect = host.getBoundingClientRect();
-    const minSide = Math.min(rect.width || 0, rect.height || 0);
-    const sizePx = minSide > 0 ? Math.max(36, Math.floor(minSide * 0.28)) : 48;
+
+    // Compensate for board zoom so SWIPE stays the same relative size to the toy
+    let scale = 1;
+    try {
+      const board = document.getElementById('board');
+      if (board) {
+        const tf = (getComputedStyle(board).transform || getComputedStyle(board).webkitTransform || '');
+        if (tf && tf !== 'none') {
+          const m = tf.match(/matrix\(([^)]+)\)/);
+          if (m) {
+            const parts = m[1].split(',');
+            if (parts.length >= 2) {
+              const a = parseFloat(parts[0]);
+              const b = parseFloat(parts[1]);
+              const s = Math.sqrt(a * a + b * b);
+              if (Number.isFinite(s) && s > 0) scale = s;
+            }
+          }
+        }
+      }
+    } catch {}
+
+    const unscaledMin = Math.min(rect.width || 0, rect.height || 0) / (scale || 1);
+    const minSide = unscaledMin;
+    const sizePx = minSide > 0 ? Math.max(36, Math.floor(minSide * 0.25)) : 48;
     swipeLabel.style.fontSize = sizePx + 'px';
     swipeLabel.style.opacity = host.dataset.bouncerPromptDismissed === '1' ? '0' : '0.55';
   };
