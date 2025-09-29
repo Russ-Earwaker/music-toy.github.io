@@ -276,7 +276,7 @@ function gatherTargets() {
       return a.group < b.group ? -1 : 1;
     }
     const topDiff = a.rect.top - b.rect.top;
-    if (topDiff !== 0) return topDiff;
+    if (Math.abs(topDiff) > 10) return topDiff;
     return a.rect.left - b.rect.left;
   });
   return items;
@@ -482,6 +482,23 @@ function basePositionForDirection(direction, rect, width, height, margin) {
   }
 }
 
+function getTargetAnchor(direction, rect) {
+  const width = rect.right - rect.left;
+  const height = rect.bottom - rect.top;
+  switch (direction) {
+    case 'left':
+      return { x: rect.left, y: rect.top + height / 2 };
+    case 'right':
+      return { x: rect.right, y: rect.top + height / 2 };
+    case 'top':
+      return { x: rect.left + width / 2, y: rect.top };
+    case 'bottom':
+      return { x: rect.left + width / 2, y: rect.bottom };
+    default:
+      return { x: rect.left + width / 2, y: rect.top + height / 2 };
+  }
+}
+
 function applyPlacement(callout, connector, placement, entry) {
   const { dir, rect, offset, vertical } = placement;
   const { metrics } = entry;
@@ -507,8 +524,9 @@ function applyPlacement(callout, connector, placement, entry) {
 
   const anchor = anchorForDirection(dir, rect);
   const targetRectLocal = entry.rect;
-  const targetCenterXLocal = targetRectLocal.left + (targetRectLocal.right - targetRectLocal.left) / 2;
-  const targetCenterYLocal = targetRectLocal.top + (targetRectLocal.bottom - targetRectLocal.top) / 2;
+  const targetAnchor = getTargetAnchor(dir, targetRectLocal);
+  const targetCenterXLocal = targetAnchor.x;
+  const targetCenterYLocal = targetAnchor.y;
 
   let anchorScreenX;
   let anchorScreenY;
