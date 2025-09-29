@@ -113,7 +113,30 @@ function layout(panel){
     const pad = panel.querySelector('.grid-drum-pad');
     if (!pad) return;
     const r = pad.parentElement.getBoundingClientRect();
-    const size = Math.floor(Math.min(r.width, r.height) * 0.68);
+
+    // Compensate for board zoom so TAP stays the same relative size to the toy
+    let scale = 1;
+    try {
+      const board = document.getElementById('board');
+      if (board) {
+        const tf = (getComputedStyle(board).transform || getComputedStyle(board).webkitTransform || '');
+        if (tf && tf !== 'none') {
+          const m = tf.match(/matrix\(([^)]+)\)/);
+          if (m) {
+            const parts = m[1].split(',');
+            if (parts.length >= 2) {
+              const a = parseFloat(parts[0]);
+              const b = parseFloat(parts[1]);
+              const s = Math.sqrt(a * a + b * b);
+              if (Number.isFinite(s) && s > 0) scale = s;
+            }
+          }
+        }
+      }
+    } catch {}
+
+    const unscaledMin = Math.min(r.width, r.height) / (scale || 1);
+    const size = Math.floor(unscaledMin * 0.3);
     const label = panel.querySelector('.drum-tap-label');
     if(label){
       label.style.fontSize = `${Math.max(24, size * 1.3)}px`;

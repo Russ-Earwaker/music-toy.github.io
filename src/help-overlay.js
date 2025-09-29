@@ -7,6 +7,8 @@ const overlayState = {
   cache: new WeakMap(),
   advBaseline: null,
   debugSeen: new Set(),
+  lastScale: null,
+  shouldLog: false,
 };
 
 const BASE_MARGIN = 36;
@@ -156,6 +158,10 @@ function renderOverlay() {
     connector.className = 'toy-help-connector';
     connector.style.visibility = 'hidden';
     connector.style.transformOrigin = '0 50%';
+    // Enforce solid line (no gradient) regardless of external CSS
+    connector.style.background = 'rgba(95, 179, 255, 0.95)';
+    connector.style.boxShadow = 'none';
+    connector.style.opacity = '1';
 
     host.append(callout, connector);
 
@@ -268,6 +274,17 @@ function gatherTargets() {
 function getBoardMetrics(board) {
   const rect = board.getBoundingClientRect();
   const scale = extractScale(board);
+  // Only log on scale changes
+  const prev = overlayState.lastScale;
+  const changed = prev === null || Math.abs(scale - prev) > 0.001;
+  overlayState.shouldLog = !!changed;
+  if (changed) {
+    overlayState.lastScale = scale;
+    try {
+      const tf = (window.getComputedStyle(board).transform || 'none');
+      console.log(`Board scale detected: ${scale} from transform: ${tf}`);
+    } catch {}
+  }
   return { board, rect, scale };
 }
 
@@ -283,13 +300,11 @@ function extractScale(el) {
         const b = parseFloat(parts[1]);
         const scale = Math.sqrt(a * a + b * b);
         if (Number.isFinite(scale) && scale > 0) {
-          console.log(`Board scale detected: ${scale} from transform: ${transform}`);
           return scale;
         }
       }
     }
   }
-  console.log('No board scaling detected, using scale=1');
   return 1;
 }
 
@@ -313,7 +328,7 @@ const LABEL_POSITIONS = {
   // keys are lowercase, we compare case-insensitively
   'advanced controls': { dir: 'top', offsetX: -48, offsetY: -40 },
   'exit advanced controls': { dir: 'top', offsetX: -48, offsetY: -40 },
-  'clear': { dir: 'top', offsetX: 0, offsetY: -BASE_MARGIN },
+  'clear': { dir: 'top', offsetX: 12, offsetY: -BASE_MARGIN },
   'random': { dir: 'top', offsetX: 0, offsetY: -BASE_MARGIN },
   'randomize': { dir: 'top', offsetX: 0, offsetY: -BASE_MARGIN },
   'randomize notes': { dir: 'top', offsetX: 0, offsetY: -BASE_MARGIN },
@@ -379,9 +394,9 @@ function placeEntry(entry, assigned, gap, cachedPlacement, allowOverlap) {
       top: below + positionConfig.offsetY,
     };
 
-    // Minimal debug (once per render per label)
+    // Minimal debug (once per render per label, only on zoom changes)
     const key = `${label}::vol`;
-    if (!overlayState.debugSeen.has(key)) {
+    if (overlayState.shouldLog && !overlayState.debugSeen.has(key)) {
       console.log(`[${label}] target+footer-based: base=${base.left},${base.top}`);
       overlayState.debugSeen.add(key);
     }
@@ -527,18 +542,21 @@ function applyPlacement(callout, connector, placement, entry) {
   
   if (metrics) {
     const { rect: boardRect, scale } = metrics;
-    screenLeft = boardRect.left + rect.left * scale;
-    screenTop = boardRect.top + rect.top * scale;
+    const localLeft = rect.left;
+    const localTop = rect.top;
+    // Position at board origin, then translate by scaled local coords, then scale
+    callout.style.left = `${boardRect.left}px`;
+    callout.style.top = `${boardRect.top}px`;
+    callout.style.transform = `translate(${localLeft * scale}px, ${localTop * scale}px) scale(${scale})`;
+    callout.style.transformOrigin = '0 0';
     
-    // Apply scaling but keep positioning simple
-    callout.style.left = `${Math.round(screenLeft)}px`;
-    callout.style.top = `${Math.round(screenTop)}px`;
-    callout.style.transform = `scale(${scale})`;
-    callout.style.transformOrigin = 'top left';
-    
-    // Debug scaling issues (once per label per render)
+    // For anchor computations
+    screenLeft = boardRect.left + localLeft * scale;
+    screenTop = boardRect.top + localTop * scale;
+
+    // Debug scaling issues (once per label per render, only on zoom changes)
     const dbgKey = `${entry.label}::scaled`;
-    if ((entry.label.includes('Random') || entry.label.toLowerCase().includes('adjust volume')) && !overlayState.debugSeen.has(dbgKey)) {
+    if (overlayState.shouldLog && (entry.label.includes('Random') || entry.label.toLowerCase().includes('adjust volume')) && !overlayState.debugSeen.has(dbgKey)) {
       console.log(`[${entry.label}] Scale=${scale}, BoardRect=${boardRect.left},${boardRect.top}, LocalRect=${rect.left},${rect.top}, Final=${screenLeft},${screenTop}`);
       overlayState.debugSeen.add(dbgKey);
     }
@@ -546,38 +564,53 @@ function applyPlacement(callout, connector, placement, entry) {
     screenLeft = rect.left;
     screenTop = rect.top;
     
-    callout.style.left = `${Math.round(screenLeft)}px`;
-    callout.style.top = `${Math.round(screenTop)}px`;
+    callout.style.left = `${screenLeft}px`;
+    callout.style.top = `${screenTop}px`;
     callout.style.transform = '';
     callout.style.transformOrigin = '';
     
-    // Debug non-scaled positioning (once per label per render)
+    // Debug non-scaled positioning (once per label per render, only on zoom changes)
     const dbgKey2 = `${entry.label}::noscale`;
-    if (entry.label.toLowerCase().includes('adjust volume') && !overlayState.debugSeen.has(dbgKey2)) {
+    if (overlayState.shouldLog && entry.label.toLowerCase().includes('adjust volume') && !overlayState.debugSeen.has(dbgKey2)) {
       console.log(`[${entry.label}] Non-scaled: ${screenLeft},${screenTop}`);
       overlayState.debugSeen.add(dbgKey2);
     }
   }
 
-  // Calculate anchor points for the connector line in the correct coordinate system
-  const calloutAnchor = anchorForDirection(dir, rect);
+  // Compute callout anchor directly from the scaled visual box to avoid drift
+  const scaleForLine = metrics ? metrics.scale : 1;
+  const visualW = entry.widthPx * scaleForLine;
+  const visualH = entry.heightPx * scaleForLine;
+
+  let anchorScreenX, anchorScreenY;
+  switch (dir) {
+    case 'left':
+      anchorScreenX = screenLeft + visualW;
+      anchorScreenY = screenTop + visualH / 2;
+      break;
+    case 'right':
+      anchorScreenX = screenLeft;
+      anchorScreenY = screenTop + visualH / 2;
+      break;
+    case 'top':
+      anchorScreenX = screenLeft + visualW / 2;
+      anchorScreenY = screenTop + visualH;
+      break;
+    case 'bottom':
+    default:
+      anchorScreenX = screenLeft + visualW / 2;
+      anchorScreenY = screenTop;
+      break;
+  }
+
+  // Compute target anchor in screen space (converted if needed)
   const targetAnchor = getTargetAnchor(dir, entry.rect);
-
-  let anchorScreenX, anchorScreenY, targetScreenX, targetScreenY;
-  let scaleForLine = 1;
-
+  let targetScreenX, targetScreenY;
   if (metrics) {
     const { rect: boardRect, scale } = metrics;
-    scaleForLine = scale;
-    // Convert local coordinates to screen coordinates
-    anchorScreenX = boardRect.left + calloutAnchor.x * scale;
-    anchorScreenY = boardRect.top + calloutAnchor.y * scale;
     targetScreenX = boardRect.left + targetAnchor.x * scale;
     targetScreenY = boardRect.top + targetAnchor.y * scale;
   } else {
-    // Already in screen coordinates
-    anchorScreenX = calloutAnchor.x;
-    anchorScreenY = calloutAnchor.y;
     targetScreenX = targetAnchor.x;
     targetScreenY = targetAnchor.y;
   }
@@ -590,7 +623,7 @@ function applyPlacement(callout, connector, placement, entry) {
 
   connector.dataset.position = dir;
   connector.style.visibility = trimmed > 0 ? 'visible' : 'hidden';
-  connector.style.transform = `translate(${Math.round(anchorScreenX)}px, ${Math.round(anchorScreenY)}px) rotate(${angle}deg)`;
+  connector.style.transform = `translate(${anchorScreenX}px, ${anchorScreenY}px) rotate(${angle}deg)`;
   connector.style.width = `${Math.max(0, Math.round(trimmed))}px`;
   connector.style.height = `${Math.max(2 * scaleForLine, 1)}px`; // Scale connector height
 

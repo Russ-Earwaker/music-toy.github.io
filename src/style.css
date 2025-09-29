@@ -764,11 +764,11 @@ body.toy-help-mode {
   position: absolute;
   height: 2px;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(95, 179, 255, 0.7), rgba(95, 179, 255, 0));
-  box-shadow: 0 0 16px rgba(95, 179, 255, 0.35);
+  background: rgba(95, 179, 255, 0.9); /* solid line */
+  box-shadow: none; /* remove glow for a solid look */
   pointer-events: none;
   transform-origin: 0 50%;
-  opacity: 0.9;
+  opacity: 0.95;
   z-index: 0;
 }
 
