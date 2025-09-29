@@ -6,6 +6,7 @@ const overlayState = {
   watchers: [],
   cache: new WeakMap(),
   advBaseline: null,
+  debugSeen: new Set(),
 };
 
 const BASE_MARGIN = 36;
@@ -134,6 +135,8 @@ function renderOverlay() {
   if (!overlayState.active) return;
   const host = ensureHost();
   host.innerHTML = '';
+  // Reset per-render debug set to limit logs
+  overlayState.debugSeen = new Set();
   const entries = gatherTargets();
   if (!entries.length) return;
 
@@ -160,6 +163,7 @@ function renderOverlay() {
     const heightPx = callout.offsetHeight || 60;
     entry.widthPx = widthPx;
     entry.heightPx = heightPx;
+    // Use local units for layout when board is scaled, so centering math is correct
     if (entry.metrics) {
       entry.width = widthPx / entry.metrics.scale;
       entry.height = heightPx / entry.metrics.scale;
@@ -173,7 +177,6 @@ function renderOverlay() {
   // Align other top labels to the height of "Advanced Controls", scoped to its group and coordinate system
   overlayState.advBaseline = null;
   const advEntry = entries.find((e) => e.label && e.label.includes('Advanced Controls'));
-  console.log('DEBUG: Found Advanced Controls entry:', advEntry ? advEntry.label : 'NOT FOUND');
   if (advEntry) {
     const advBase = basePositionForDirection('top', advEntry.rect, advEntry.width, advEntry.height, BASE_MARGIN);
     overlayState.advBaseline = {
@@ -181,7 +184,6 @@ function renderOverlay() {
       group: advEntry.group,
       boardRef: advEntry.metrics ? advEntry.metrics.board : null,
     };
-    console.log('DEBUG: Set baseline:', overlayState.advBaseline);
   }
 
   const layout = tryLayout(entries, BASE_GAP, true);
@@ -217,8 +219,6 @@ function gatherTargets() {
 
     const rectScreen = target.getBoundingClientRect();
     if (rectScreen.width < 1 || rectScreen.height < 1) continue;
-    // Remove screen edge filtering - let labels exist even if near edges
-    // if (rectScreen.right < 0 || rectScreen.bottom < 0 || rectScreen.left > window.innerWidth || rectScreen.top > window.innerHeight) continue;
 
     const groupRoot = target.closest('[data-help-group], .toy-panel, #topbar, .app-topbar') || document.body;
     let group = 'global';
@@ -249,8 +249,8 @@ function gatherTargets() {
     items.push({
       target,
       label,
-      position: 'fixed', // Remove dynamic positioning preferences
-      allowedDirections: ['top', 'bottom'], // Simplified
+      helpPosition: (target.dataset.helpPosition || '').toLowerCase(),
+      allowedDirections: ['top', 'bottom'],
       group,
       rect: rectLocal,
       rectScreen,
@@ -283,11 +283,13 @@ function extractScale(el) {
         const b = parseFloat(parts[1]);
         const scale = Math.sqrt(a * a + b * b);
         if (Number.isFinite(scale) && scale > 0) {
+          console.log(`Board scale detected: ${scale} from transform: ${transform}`);
           return scale;
         }
       }
     }
   }
+  console.log('No board scaling detected, using scale=1');
   return 1;
 }
 
@@ -301,55 +303,122 @@ function tryLayout(entries, gap, allowOverlap) {
   return results;
 }
 
+// Fixed position mappings for consistent label placement across all toys
+// Based on actual toyui.js positioning:
+// - Advanced Controls: External button at headerHeight-40px, left -48px
+// - Random/Clear: Directly above their target buttons
+// - Choose Instrument: Directly above its target button
+// - Volume controls: Directly below their targets in footer
+const LABEL_POSITIONS = {
+  // keys are lowercase, we compare case-insensitively
+  'advanced controls': { dir: 'top', offsetX: -48, offsetY: -40 },
+  'exit advanced controls': { dir: 'top', offsetX: -48, offsetY: -40 },
+  'clear': { dir: 'top', offsetX: 0, offsetY: -BASE_MARGIN },
+  'random': { dir: 'top', offsetX: 0, offsetY: -BASE_MARGIN },
+  'randomize': { dir: 'top', offsetX: 0, offsetY: -BASE_MARGIN },
+  'randomize notes': { dir: 'top', offsetX: 0, offsetY: -BASE_MARGIN },
+  'randomize blocks': { dir: 'top', offsetX: 0, offsetY: -BASE_MARGIN },
+  'choose instrument': { dir: 'top', offsetX: 0, offsetY: -BASE_MARGIN },
+  'mute': { dir: 'bottom', offsetX: 0, offsetY: 15 },
+  'adjust volume': { dir: 'bottom', offsetX: 0, offsetY: 15 },
+};
+
 function placeEntry(entry, assigned, gap, cachedPlacement, allowOverlap) {
   const width = entry.width;
   const height = entry.height;
   const label = entry.label;
 
-  console.log('DEBUG: placeEntry for label:', label);
-
-  // Calculate fixed position relative to target - no dynamic repositioning
   const targetRect = entry.rect;
   const targetCenterX = targetRect.left + (targetRect.right - targetRect.left) / 2;
-  const margin = BASE_MARGIN;
   
-  let base;
-  let dir;
+  // Find matching position config (case-insensitive)
+  let positionConfig = null;
+  const lower = label.toLowerCase();
+  for (const [labelKey, config] of Object.entries(LABEL_POSITIONS)) {
+    if (lower.includes(labelKey)) {
+      positionConfig = config;
+      break;
+    }
+  }
+  
+  // Default fallback if no specific config found
+  if (!positionConfig) {
+    positionConfig = { dir: entry.helpPosition || 'top', offsetX: 0, offsetY: (entry.helpPosition === 'bottom' ? 15 : -BASE_MARGIN) };
+  }
 
-  // Determine direction and base position
-  if (label.includes('Mute') || label.includes('Adjust Volume')) {
-    dir = 'bottom';
+  const dir = positionConfig.dir || entry.helpPosition || 'top';
+  let base;
+
+  // Special handling for volume controls - position below their specific targets,
+  // but never above the footer
+  if (lower.includes('adjust volume') || lower.includes('mute')) {
+    const footer = entry.target.closest('.toy-footer');
+    let footerRect = null;
+    if (footer) {
+      const footerScreen = footer.getBoundingClientRect();
+      if (entry.metrics) {
+        footerRect = {
+          left: (footerScreen.left - entry.metrics.rect.left) / entry.metrics.scale,
+          top: (footerScreen.top - entry.metrics.rect.top) / entry.metrics.scale,
+          right: (footerScreen.right - entry.metrics.rect.left) / entry.metrics.scale,
+          bottom: (footerScreen.bottom - entry.metrics.rect.top) / entry.metrics.scale,
+        };
+      } else {
+        footerRect = {
+          left: footerScreen.left,
+          top: footerScreen.top,
+          right: footerScreen.right,
+          bottom: footerScreen.bottom,
+        };
+      }
+    }
+
+    const below = Math.max(targetRect.bottom, footerRect ? footerRect.bottom : targetRect.bottom);
     base = {
-      left: targetCenterX - width / 2,
-      top: targetRect.bottom + margin
+      left: targetCenterX - width / 2 + positionConfig.offsetX,
+      top: below + positionConfig.offsetY,
+    };
+
+    // Minimal debug (once per render per label)
+    const key = `${label}::vol`;
+    if (!overlayState.debugSeen.has(key)) {
+      console.log(`[${label}] target+footer-based: base=${base.left},${base.top}`);
+      overlayState.debugSeen.add(key);
+    }
+  } else if (dir === 'bottom') {
+    base = {
+      left: targetCenterX - width / 2 + positionConfig.offsetX,
+      top: targetRect.bottom + positionConfig.offsetY
+    };
+  } else if (dir === 'right') {
+    base = {
+      left: targetRect.right + positionConfig.offsetX,
+      top: targetRect.top + (targetRect.bottom - targetRect.top) / 2 - height / 2 + positionConfig.offsetY
+    };
+  } else if (dir === 'left') {
+    base = {
+      left: targetRect.left - width + positionConfig.offsetX,
+      top: targetRect.top + (targetRect.bottom - targetRect.top) / 2 - height / 2 + positionConfig.offsetY
     };
   } else {
-    // All other labels go to top
-    dir = 'top';
+    // Top direction
     base = {
-      left: targetCenterX - width / 2,
-      top: targetRect.top - margin - height
+      left: targetCenterX - width / 2 + positionConfig.offsetX,
+      top: targetRect.top + positionConfig.offsetY - height
     };
   }
 
-  // Apply fixed nudges for specific labels
-  if (label.includes('Advanced Controls')) {
-    base.left -= 50;
-    console.log('DEBUG: Advanced Controls - nudged left by 50');
-  } else if (label.includes('Clear')) {
-    base.left += 30;
-    console.log('DEBUG: Clear - nudged right by 30');
-  }
-
-  // Apply baseline alignment for same group/coordinate system
+  // Apply baseline alignment for same group/coordinate system (only for top labels)
+  // Advanced Controls is external and higher, so align other top labels to its level
   const bl = overlayState.advBaseline;
   if (dir === 'top' && bl && entry.group === bl.group && ((entry.metrics && entry.metrics.board) || null) === bl.boardRef) {
-    base.top = bl.top;
-    console.log('DEBUG: Aligned to baseline top:', bl.top, 'for group:', entry.group);
+    // Advanced Controls uses -40px offset, others use -BASE_MARGIN, so adjust
+    if (!label.includes('Advanced Controls')) {
+      base.top = bl.top + (BASE_MARGIN - 40); // Align to Advanced Controls level
+    }
   }
 
   const candidate = buildCandidate(base, width, height, false, 0);
-  console.log('DEBUG: Final candidate for', label, ':', candidate);
   
   return { dir, rect: candidate, offset: 0, vertical: false, fixed: true };
 }
@@ -453,57 +522,77 @@ function applyPlacement(callout, connector, placement, entry) {
   callout.classList.remove('arrow-left', 'arrow-right', 'arrow-top', 'arrow-bottom');
   callout.classList.add(`arrow-${dir}`);
 
+  // Use simple screen coordinate positioning - no complex transforms
+  let screenLeft, screenTop;
+  
   if (metrics) {
     const { rect: boardRect, scale } = metrics;
-    const screenLeft = boardRect.left + rect.left * scale;
-    const screenTop = boardRect.top + rect.top * scale;
-    callout.style.left = '0px';
-    callout.style.top = '0px';
-    callout.style.transform = `translate(${Math.round(screenLeft)}px, ${Math.round(screenTop)}px) scale(${scale})`;
+    screenLeft = boardRect.left + rect.left * scale;
+    screenTop = boardRect.top + rect.top * scale;
+    
+    // Apply scaling but keep positioning simple
+    callout.style.left = `${Math.round(screenLeft)}px`;
+    callout.style.top = `${Math.round(screenTop)}px`;
+    callout.style.transform = `scale(${scale})`;
     callout.style.transformOrigin = 'top left';
+    
+    // Debug scaling issues (once per label per render)
+    const dbgKey = `${entry.label}::scaled`;
+    if ((entry.label.includes('Random') || entry.label.toLowerCase().includes('adjust volume')) && !overlayState.debugSeen.has(dbgKey)) {
+      console.log(`[${entry.label}] Scale=${scale}, BoardRect=${boardRect.left},${boardRect.top}, LocalRect=${rect.left},${rect.top}, Final=${screenLeft},${screenTop}`);
+      overlayState.debugSeen.add(dbgKey);
+    }
   } else {
-    callout.style.left = `${Math.round(rect.left)}px`;
-    callout.style.top = `${Math.round(rect.top)}px`;
+    screenLeft = rect.left;
+    screenTop = rect.top;
+    
+    callout.style.left = `${Math.round(screenLeft)}px`;
+    callout.style.top = `${Math.round(screenTop)}px`;
     callout.style.transform = '';
+    callout.style.transformOrigin = '';
+    
+    // Debug non-scaled positioning (once per label per render)
+    const dbgKey2 = `${entry.label}::noscale`;
+    if (entry.label.toLowerCase().includes('adjust volume') && !overlayState.debugSeen.has(dbgKey2)) {
+      console.log(`[${entry.label}] Non-scaled: ${screenLeft},${screenTop}`);
+      overlayState.debugSeen.add(dbgKey2);
+    }
   }
 
-  const anchor = anchorForDirection(dir, rect);
-  const targetRectLocal = entry.rect;
-  const targetAnchor = getTargetAnchor(dir, targetRectLocal);
-  const targetCenterXLocal = targetAnchor.x;
-  const targetCenterYLocal = targetAnchor.y;
+  // Calculate anchor points for the connector line in the correct coordinate system
+  const calloutAnchor = anchorForDirection(dir, rect);
+  const targetAnchor = getTargetAnchor(dir, entry.rect);
 
-  let anchorScreenX;
-  let anchorScreenY;
-  let targetScreenX;
-  let targetScreenY;
+  let anchorScreenX, anchorScreenY, targetScreenX, targetScreenY;
   let scaleForLine = 1;
 
   if (metrics) {
     const { rect: boardRect, scale } = metrics;
     scaleForLine = scale;
-    anchorScreenX = boardRect.left + anchor.x * scale;
-    anchorScreenY = boardRect.top + anchor.y * scale;
-    targetScreenX = boardRect.left + targetCenterXLocal * scale;
-    targetScreenY = boardRect.top + targetCenterYLocal * scale;
+    // Convert local coordinates to screen coordinates
+    anchorScreenX = boardRect.left + calloutAnchor.x * scale;
+    anchorScreenY = boardRect.top + calloutAnchor.y * scale;
+    targetScreenX = boardRect.left + targetAnchor.x * scale;
+    targetScreenY = boardRect.top + targetAnchor.y * scale;
   } else {
-    anchorScreenX = anchor.x;
-    anchorScreenY = anchor.y;
-    targetScreenX = targetCenterXLocal;
-    targetScreenY = targetCenterYLocal;
+    // Already in screen coordinates
+    anchorScreenX = calloutAnchor.x;
+    anchorScreenY = calloutAnchor.y;
+    targetScreenX = targetAnchor.x;
+    targetScreenY = targetAnchor.y;
   }
 
   const dx = targetScreenX - anchorScreenX;
   const dy = targetScreenY - anchorScreenY;
   const distance = Math.sqrt(dx * dx + dy * dy);
-  const trimmed = Math.max(distance - 16, 0);
+  const trimmed = Math.max(distance - 16 * scaleForLine, 0); // Scale the trim distance
   const angle = Math.atan2(dy, dx) * (180 / Math.PI);
 
   connector.dataset.position = dir;
   connector.style.visibility = trimmed > 0 ? 'visible' : 'hidden';
   connector.style.transform = `translate(${Math.round(anchorScreenX)}px, ${Math.round(anchorScreenY)}px) rotate(${angle}deg)`;
   connector.style.width = `${Math.max(0, Math.round(trimmed))}px`;
-  connector.style.height = `${Math.max(2 * scaleForLine, 1)}px`;
+  connector.style.height = `${Math.max(2 * scaleForLine, 1)}px`; // Scale connector height
 
   const targetEl = entry.target;
   if (targetEl && targetEl.id) {
