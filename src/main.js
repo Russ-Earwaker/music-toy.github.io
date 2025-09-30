@@ -2,6 +2,7 @@
 import { initializeBouncer } from './bouncer-init.js';
 import './header-buttons-delegate.js';
 import './rippler-init.js';
+import './tutorial.js';
 // import { createBouncer } from './bouncer.main.js'; // This is now handled by bouncer-init.js
 import { initDrawGrid } from './drawgrid-init.js';
 import { createChordWheel } from './chordwheel.js';

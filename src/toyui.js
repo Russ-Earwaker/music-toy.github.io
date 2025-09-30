@@ -100,7 +100,7 @@ function buildInstrumentSelect(panel){
   return sel;
 }
 
-export function initToyUI(panel, { toyName, defaultInstrument }={}){
+export export function initToyUI(panel, { toyName, defaultInstrument }={}){
   if (!panel) return null;
   const toyKind = String(panel.dataset.toy||'').toLowerCase();
   const header = ensureHeader(panel, toyName);

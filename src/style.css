@@ -734,9 +734,7 @@ select.toy-instrument {
 
 
 
-body.toy-help-mode {
-  /* help mode keeps default cursor */
-}
+
 
 .toy-help-overlay {
   position: fixed;
