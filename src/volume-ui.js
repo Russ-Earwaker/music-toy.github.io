@@ -1,4 +1,4 @@
-// src/volume-ui.js
+﻿// src/volume-ui.js
 import { getToyGain, setToyVolume, setToyMuted, isToyMuted, getToyVolume } from './audio-core.js';
 import { refreshHelpOverlay } from './help-overlay.js';
 
@@ -38,11 +38,11 @@ export function installVolumeUI(footer) {
   muteBtn.className = 'toy-btn';
   muteBtn.title = 'Mute';
   muteBtn.textContent = 'Mute';
+  muteBtn.style.flex = '0 0 auto';
+  muteBtn.style.whiteSpace = 'nowrap';
 
   volWrap.append(range, muteBtn);
 
-  range.dataset.helpLabel = 'Adjust volume';
-  range.dataset.helpPosition = 'bottom';
   muteBtn.dataset.helpLabel = 'Mute';
   muteBtn.dataset.helpPosition = 'bottom';
 

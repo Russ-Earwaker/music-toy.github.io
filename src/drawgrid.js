@@ -1,5 +1,5 @@
-// src/drawgrid.js
-// Minimal, scoped Drawing Grid ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â 16x12, draw strokes, build snapped nodes on release.
+﻿// src/drawgrid.js
+// Minimal, scoped Drawing Grid ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â 16x12, draw strokes, build snapped nodes on release.
 // Strictly confined to the provided panel element.
 import { buildPalette, midiToName } from './note-helpers.js';
 import { drawBlock } from './toyhelpers.js';
@@ -407,18 +407,18 @@ function createDrawGridParticles({
       if (Math.abs(dx) <= half && letter.repulsed <= 0.35) {
         const s = (dx===0? (Math.random()<0.5?-1:1) : Math.sign(dx));
         const fall = 1 - Math.abs(dx)/half;
-        const jitter = 0.85 + Math.random()*0.15;
-        const rawForce = Math.max(0, fall) * strength * 1.1 * jitter;
-        const k = Math.min(rawForce, 1.35);
-        const rightBias = k * 1.45 + 0.22;
-        const directional = s * k * 0.45;
-        const horizontal = rightBias + directional;
-        const vyJitter = (Math.random()*2 - 1) * k * 0.28;
+        const jitter = 0.9 + Math.random() * 0.2;
+        const rawForce = Math.max(0, fall) * strength * 1.65 * jitter;
+        const k = Math.min(rawForce, 1.9);
+        const basePush = k * 1.75 + 0.28;
+        const directional = s * k * 0.6;
+        const horizontal = basePush + directional;
+        const vyJitter = (Math.random()*2 - 1) * k * 0.32;
         letter.vx += horizontal;
-        letter.vx += k * 0.25;
+        letter.vx += k * 0.4;
         letter.vy += vyJitter;
-        letter.alpha = Math.min(1, (letter.alpha ?? LETTER_BASE_ALPHA) + 0.12);
-        letter.flash = Math.min(1, (letter.flash || 0) + 0.7);
+        letter.alpha = Math.min(1, (letter.alpha ?? LETTER_BASE_ALPHA) + 0.18);
+        letter.flash = Math.min(1, (letter.flash || 0) + 0.9);
         letter.repulsed = 1;
       }
     }
@@ -445,15 +445,15 @@ function createDrawGridParticles({
         const distSq = dx * dx + dy * dy;
         if (distSq < radius * radius) {
             const dist = Math.sqrt(distSq) || 1;
-            const rawKick = strength * 0.7 * (1 - dist / radius);
-            const kick = Math.min(rawKick, 0.75);
+            const rawKick = strength * 1.0 * (1 - dist / radius);
+            const kick = Math.min(rawKick, 1.05);
             const ux = dx / dist;
             const uy = dy / dist;
             letter.vx += ux * kick;
             letter.vy += uy * kick;
-            letter.alpha = Math.min(1, (letter.alpha ?? LETTER_BASE_ALPHA) + 0.1);
-            letter.flash = Math.max(letter.flash || 0, 0.3);
-            letter.repulsed = Math.min(1, letter.repulsed + 0.6);
+            letter.alpha = Math.min(1, (letter.alpha ?? LETTER_BASE_ALPHA) + 0.16);
+            letter.flash = Math.max(letter.flash || 0, 0.55);
+            letter.repulsed = Math.min(1, letter.repulsed + 0.75);
         }
     }
   }

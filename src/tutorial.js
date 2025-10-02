@@ -1,4 +1,4 @@
-import { initToyUI } from './toyui.js';
+﻿import { initToyUI } from './toyui.js';
 import { createDrawGrid } from './drawgrid.js';
 import { connectDrawGridToPlayer } from './drawgrid-player.js';
 import { getSnapshot, applySnapshot } from './persistence.js';
@@ -11,7 +11,7 @@ const GOAL_FLOW = [
     reward: {
       description: 'Unlocks the Clear and Randomise buttons.',
       icons: [
-        { type: 'asset', label: 'Clear', icon: "../assets/UI/T_ButtonClear.png" },
+        { type: 'asset', label: 'Clear', icon: "../assets/UI/T_ButtonClear.png", accent: '#f87171' },
         { type: 'asset', label: 'Randomise', icon: "../assets/UI/T_ButtonRandom.png" },
       ],
     },
@@ -21,6 +21,11 @@ const GOAL_FLOW = [
         label: 'Draw your first line.',
         requirement: 'draw-line',
         showSwipePrompt: true,
+      },
+      {
+        id: 'press-play',
+        label: 'Press the Play button to start the toy.',
+        requirement: 'press-play',
       },
       {
         id: 'toggle-node',
@@ -71,6 +76,14 @@ const GOAL_FLOW = [
   let hasDetectedLine = false;
   let spawnerControls = {};
   let tutorialState = null;
+
+  const CONTROL_SELECTORS = {
+    clear: '[data-action="clear"]',
+    random: '[data-action="random"]',
+    randomNotes: '[data-action="random-notes"]',
+    randomBlocks: '[data-action="random-blocks"], [data-action="random-cubes"]',
+    eraser: '[data-erase]',
+  };
 
   const defaultLabel = tutorialButton.textContent?.trim() || 'Tutorial';
 
@@ -139,15 +152,19 @@ const GOAL_FLOW = [
   function getControlMap(panel) {
     if (!panel) return {};
     if (!panel.__tutorialControlMap) {
-      panel.__tutorialControlMap = {
-        clear: panel.querySelector('[data-action="clear"]'),
-        random: panel.querySelector('[data-action="random"]'),
-        randomNotes: panel.querySelector('[data-action="random-notes"]'),
-        randomBlocks: panel.querySelector('[data-action="random-cubes"]'),
-        eraser: panel.querySelector('[data-erase]'),
-      };
+      panel.__tutorialControlMap = {};
     }
-    return panel.__tutorialControlMap;
+    const map = panel.__tutorialControlMap;
+    Object.keys(CONTROL_SELECTORS).forEach(key => {
+      const selector = CONTROL_SELECTORS[key];
+      if (!selector) return;
+      let el = map[key];
+      if (!el || !panel.contains(el)) {
+        el = panel.querySelector(selector);
+        map[key] = el || null;
+      }
+    });
+    return map;
   }
 
   function unlockPanelControls(panel, keys = []) {
@@ -155,7 +172,14 @@ const GOAL_FLOW = [
     const map = getControlMap(panel);
     const unlocked = [];
     keys.forEach(key => {
-      const el = map[key];
+      let el = map[key];
+      if (!el || !panel.contains(el)) {
+        const selector = CONTROL_SELECTORS[key];
+        if (selector) {
+          el = panel.querySelector(selector);
+          map[key] = el || null;
+        }
+      }
       if (!el) return;
       const wasLocked = el.classList.contains('tutorial-control-locked');
       el.classList.remove('tutorial-control-locked');
@@ -350,6 +374,7 @@ const GOAL_FLOW = [
         const btn = document.createElement('div');
         btn.className = 'c-btn';
         btn.style.setProperty('--c-btn-size', '56px');
+        if (icon.accent) btn.style.setProperty('--accent', icon.accent);
         btn.style.pointerEvents = 'none';
         btn.innerHTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
         const core = btn.querySelector('.c-btn-core');
@@ -493,6 +518,12 @@ const GOAL_FLOW = [
     maybeCompleteTask('toggle-node');
   }
 
+  function setupPlayButtonListener() {
+    const btn = document.querySelector('#topbar [data-action="toggle-play"]');
+    if (!btn) return;
+    addListener(btn, 'click', () => maybeCompleteTask('press-play'));
+  }
+
   function setupPanelListeners(panel) {
     if (!panel) return;
     const updateHandler = event => handleDrawgridUpdate(event.detail || {});
@@ -634,6 +665,8 @@ const GOAL_FLOW = [
 
     helpWasActiveBeforeTutorial = isHelpActive();
 
+    setupPlayButtonListener();
+
     tutorialToy = spawnTutorialToy();
     ensureGoalPanel();
     initializeTutorialState();
@@ -707,3 +740,5 @@ const GOAL_FLOW = [
 
   updateButtonVisual();
 })();
+
+

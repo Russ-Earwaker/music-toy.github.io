@@ -5,6 +5,7 @@
 /* ------------------- */
 
 :root {
+  --topbar-height: 120px;
   --bg: #0f141b;
   --panel: #121a24;
   --surface: #0d141d;
@@ -1080,4 +1081,29 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
 }
 .goal-reward-icon.is-unlocked .c-btn .c-btn-glow {
   opacity: 1;
+}
+.app-topbar .brand {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-right: 16px;
+}
+
+.app-topbar .topbar-controls {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.app-topbar [data-action="toggle-play"] {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  --c-btn-size: 120px;
+  z-index: 5;
+}
+
+.app-topbar [data-action="toggle-play"] .c-btn-core {
+  background-size: 50%;
 }
