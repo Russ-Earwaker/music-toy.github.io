@@ -817,3 +817,13 @@ body.toy-help-mode [data-help-label] {
   font-weight: 600;
   letter-spacing: 0.01em;
 }
+body.tutorial-active #board .toy-panel.tutorial-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+body.tutorial-active #board .tutorial-panel {
+  z-index: 60;
+}
+
