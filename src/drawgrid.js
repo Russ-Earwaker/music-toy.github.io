@@ -1841,6 +1841,7 @@ function regenerateMapFromStrokes() {
       drawGrid();
       drawNodes(currentMap.nodes);
       panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
+      panel.dispatchEvent(new CustomEvent('drawgrid:node-toggle', { detail: { col, row, disabled: dis.has(row) } }));
       pendingNodeTap = null;
     }
 
@@ -2551,3 +2552,5 @@ function regenerateMapFromStrokes() {
 
   return api;
 }
+
+

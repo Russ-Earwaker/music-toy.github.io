@@ -276,6 +276,11 @@ function triggerConnectorPulse(fromId, toId) {
 }
 
 function initToyChaining(panel) {
+    if (!panel) return;
+    if (panel.dataset.tutorial === "true" || panel.classList?.contains("tutorial-panel")) {
+        return;
+    }
+
     const extendBtn = document.createElement('button');
     extendBtn.className = 'c-btn toy-chain-btn';
     extendBtn.title = 'Extend with a new toy';
@@ -836,3 +841,4 @@ async function boot(){
 }
 if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
 else boot();
+
