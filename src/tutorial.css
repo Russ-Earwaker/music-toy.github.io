@@ -1,0 +1,7 @@
+/* tutorial.css */
+
+#tutorial-goals {
+  background-color: rgba(13, 20, 29, 1); /* Opaque background */
+  border: 1px solid #1c2430;
+  z-index: 600; /* Above particle canvas, below topbar */
+}

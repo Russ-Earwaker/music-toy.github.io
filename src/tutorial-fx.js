@@ -1,10 +1,9 @@
-
 // src/tutorial-fx.js
 
 let fxCanvas = null;
 let fxCtx = null;
 let animationFrameId = null;
-let activeAnimations = [];
+let particles = [];
 
 function ensureCanvas() {
   if (fxCanvas) return;
@@ -17,7 +16,7 @@ function ensureCanvas() {
     width: '100vw',
     height: '100vh',
     pointerEvents: 'none',
-    zIndex: '9999'
+    zIndex: '550' // Between board and tutorial panel
   });
   document.body.appendChild(fxCanvas);
   fxCtx = fxCanvas.getContext('2d');
@@ -30,85 +29,26 @@ function ensureCanvas() {
   resize();
 }
 
-function createParticle(x, y) {
-  const angle = Math.random() * 2 * Math.PI;
-  const radius = Math.random() * 15;
+function createParticle(x, y, endPos) {
   return {
-    x: x + Math.cos(angle) * radius,
-    y: y + Math.sin(angle) * radius,
-    vx: 0,
-    vy: 0,
-    life: 1,
-    size: 2 + Math.random() * 2
+    x,
+    y,
+    startX: x,
+    startY: y,
+    endX: endPos.x,
+    endY: endPos.y,
+    progress: 0,
+    speed: (0.005 + Math.random() * 0.0025),
+    amplitude: 15 + Math.random() * 15,
+    frequency: 0.1 + Math.random() * 0.1,
+    phase: Math.random() * Math.PI * 2,
+    size: 1.5, // smaller uniform size
   };
 }
 
-function animateHint(startPos, endPos, onComplete) {
-  const particles = Array.from({ length: 20 }, () => createParticle(startPos.x, startPos.y));
-  const duration = 1000; // 1 second
-  const startTime = performance.now();
-
-  const animation = {
-    update() {
-      const now = performance.now();
-      const elapsed = now - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-
-      particles.forEach(p => {
-        const ease = 1 - Math.pow(1 - progress, 3); // easeOutCubic
-        p.x += (endPos.x - p.x) * ease * 0.1;
-        p.y += (endPos.y - p.y) * ease * 0.1;
-        p.life = 1 - progress;
-      });
-
-      if (progress >= 1) {
-        this.isDone = true;
-        if (onComplete) onComplete();
-      }
-    },
-    draw(ctx) {
-      particles.forEach(p => {
-        ctx.fillStyle = `rgba(255, 255, 255, ${p.life * 0.8})`;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, 2 * Math.PI);
-        ctx.fill();
-      });
-    },
-    isDone: false
-  };
-  activeAnimations.push(animation);
-}
-
-function loop() {
-  if (!fxCtx || !fxCanvas) return;
-  fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
-  
-  activeAnimations = activeAnimations.filter(anim => !anim.isDone);
-  
-  activeAnimations.forEach(anim => {
-    anim.update();
-    anim.draw(fxCtx);
-  });
-
-  if (activeAnimations.length > 0) {
-    animationFrameId = requestAnimationFrame(loop);
-  } else {
-    animationFrameId = null;
-  }
-}
-
-function startLoop() {
-  if (!animationFrameId) {
-    loop();
-  }
-}
-
-export function playTaskHint(startEl, endEl) {
-  ensureCanvas();
-  
+function animate(startEl, endEl) {
   const startRect = startEl.getBoundingClientRect();
   const endRect = endEl.getBoundingClientRect();
-
   const startPos = {
     x: startRect.left + startRect.width / 2,
     y: startRect.top + startRect.height / 2
@@ -118,24 +58,71 @@ export function playTaskHint(startEl, endEl) {
     y: endRect.top + endRect.height / 2
   };
 
-  const onComplete = () => {
-    endEl.classList.add('tutorial-target-flash');
-    setTimeout(() => {
-      endEl.classList.remove('tutorial-target-flash');
-    }, 500);
-  };
+  // Consistent spawn rate
+  if (particles.length < 100) { // Cap particles
+    for (let i = 0; i < 2; i++) {
+        particles.push(createParticle(startPos.x, startPos.y, endPos));
+    }
+  }
 
-  animateHint(startPos, endPos, onComplete);
-  startLoop();
+  if (fxCtx) {
+    fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+  }
+
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.progress += p.speed;
+
+    if (p.progress >= 1) {
+      particles.splice(i, 1);
+      continue;
+    }
+
+    const currentX = p.startX + (p.endX - p.startX) * p.progress;
+    const currentY = p.startY + (p.endY - p.startY) * p.progress;
+
+    const angle = Math.atan2(p.endY - p.startY, p.endX - p.startX);
+    const perpendicularAngle = angle + Math.PI / 2;
+
+    const sineOffset = Math.sin(p.progress * Math.PI * 4 + p.phase) * p.amplitude * Math.sin(p.progress * Math.PI);
+
+    p.x = currentX + Math.cos(perpendicularAngle) * sineOffset;
+    p.y = currentY + Math.sin(perpendicularAngle) * sineOffset;
+    
+    if (fxCtx) {
+        // Dynamic sparkle
+        const isSparkling = Math.random() > 0.98;
+        let color = 'rgba(70, 120, 220, 0.8)';
+        if (isSparkling) {
+            color = `rgba(150, 200, 255, 0.9)`;
+        }
+
+        fxCtx.fillStyle = color;
+        fxCtx.beginPath();
+        fxCtx.arc(p.x, p.y, p.size, 0, 2 * Math.PI);
+        fxCtx.fill();
+    }
+  }
+
+  animationFrameId = requestAnimationFrame(() => animate(startEl, endEl));
 }
 
-export function stopAllHints() {
-  activeAnimations = [];
+export function startParticleStream(startEl, endEl) {
+  ensureCanvas();
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId);
+  }
+  particles = [];
+  animate(startEl, endEl);
+}
+
+export function stopParticleStream() {
   if (animationFrameId) {
     cancelAnimationFrame(animationFrameId);
     animationFrameId = null;
   }
-  if (fxCanvas) {
-      fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+  particles = [];
+  if (fxCanvas && fxCtx) {
+    fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
   }
 }

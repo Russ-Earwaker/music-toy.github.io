@@ -824,7 +824,7 @@ select.toy-instrument {
     opacity: 0;
   }
   50% {
-    transform: scale(1.1);
+    transform: scale(1.2);
     opacity: 1;
   }
   100% {
@@ -838,7 +838,7 @@ select.toy-instrument {
     box-shadow: none;
   }
   50% {
-    box-shadow: 0 0 15px 5px rgba(255, 255, 255, 0.7);
+    box-shadow: 0 0 25px 10px rgba(255, 255, 255, 0.9);
   }
 }
 
@@ -847,14 +847,30 @@ select.toy-instrument {
              tutorial-unlock-flash 0.7s 0.2s ease-in-out;
 }
 
+.tutorial-hide-play-button {
+  transform: scale(0) !important;
+  pointer-events: none !important;
+}
+
+@keyframes repeating-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+.tutorial-pulse-target {
+  animation: repeating-pulse 0.8s ease-in-out infinite;
+  transform-origin: center;
+}
+
 @keyframes tutorial-target-flash-anim {
   0%, 100% {
     transform: scale(1);
     box-shadow: none;
   }
   50% {
-    transform: scale(1.05);
-    box-shadow: 0 0 20px 10px rgba(255, 255, 100, 0.8);
+    transform: scale(1.2);
+    box-shadow: 0 0 25px 10px rgba(255, 255, 150, 0.9);
   }
 }
 

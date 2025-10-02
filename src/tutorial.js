@@ -3,7 +3,8 @@ import { createDrawGrid } from './drawgrid.js';
 import { connectDrawGridToPlayer } from './drawgrid-player.js';
 import { getSnapshot, applySnapshot } from './persistence.js';
 import { setHelpActive, isHelpActive } from './help-overlay.js';
-import { playTaskHint, stopAllHints } from './tutorial-fx.js';
+import { isRunning, stop as stopTransport } from './audio-core.js';
+import { startParticleStream, stopParticleStream } from './tutorial-fx.js';
 
 const GOAL_FLOW = [
   {
@@ -77,15 +78,26 @@ const GOAL_FLOW = [
   let hasDetectedLine = false;
   let spawnerControls = {};
   let tutorialState = null;
-  let hintInterval = null;
 
   const CONTROL_SELECTORS = {
     clear: '[data-action="clear"]',
     random: '[data-action="random"]',
-    randomNotes: '[data-action="random-notes"]',
-    randomBlocks: '[data-action="random-blocks"], [data-action="random-cubes"]',
-    eraser: '[data-erase]',
+    play: '#topbar [data-action="toggle-play"]',
   };
+
+  const TASK_TARGETS = {
+    'press-play': 'play',
+    'press-clear': 'clear',
+    'press-random': 'random',
+  };
+  function updatePlayButtonVisual(btn, playing) {
+    if (!btn) return;
+    const core = btn.querySelector('.c-btn-core');
+    const url = playing ? "url('../assets/UI/T_ButtonPause.png')" : "url('../assets/UI/T_ButtonPlay.png')";
+    if (core) core.style.setProperty('--c-btn-icon-url', url);
+    else btn.textContent = playing ? 'Pause' : 'Play';
+    btn.title = playing ? 'Pause' : 'Play';
+  }
 
   const defaultLabel = tutorialButton.textContent?.trim() || 'Tutorial';
 
@@ -124,21 +136,34 @@ const GOAL_FLOW = [
 
   function animateUnlock(el) {
     if (!el) return;
+    const dramatic = el.dataset?.action === 'clear' || el.dataset?.action === 'random';
+    if (el.animate) {
+      const keyframes = dramatic
+        ? [
+            { transform: 'scale(0.2)', opacity: 0 },
+            { transform: 'scale(1.3)', opacity: 1 },
+            { transform: 'scale(0.92)', opacity: 1 },
+            { transform: 'scale(1)', opacity: 1 }
+          ]
+        : [
+            { transform: 'scale(0.8)', opacity: 0 },
+            { transform: 'scale(1.05)', opacity: 1 },
+            { transform: 'scale(1)', opacity: 1 }
+          ];
+      el.animate(keyframes, { duration: dramatic ? 480 : 360, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' });
+    }
     el.classList.add('tutorial-unlock-animate');
     el.addEventListener('animationend', () => el.classList.remove('tutorial-unlock-animate'), { once: true });
   }
 
   function lockTutorialControls(panel) {
     if (!panel) return;
-
     panel.querySelectorAll('.toy-mode-btn, .toy-chain-btn').forEach(btn => btn.remove());
-
     const header = panel.querySelector('.toy-header');
     const locked = [];
     if (header) {
       header.querySelectorAll('button, select, .c-btn').forEach(el => {
-        if (!(el instanceof HTMLElement)) return;
-        if (el.classList.contains('tutorial-control-locked')) return;
+        if (!(el instanceof HTMLElement) || el.classList.contains('tutorial-control-locked')) return;
         el.dataset.tutorialOrigDisplay = el.style.display || '';
         el.classList.add('tutorial-control-locked');
         if (el.matches('button, select')) {
@@ -153,16 +178,14 @@ const GOAL_FLOW = [
 
   function getControlMap(panel) {
     if (!panel) return {};
-    if (!panel.__tutorialControlMap) {
-      panel.__tutorialControlMap = {};
-    }
+    if (!panel.__tutorialControlMap) panel.__tutorialControlMap = {};
     const map = panel.__tutorialControlMap;
     Object.keys(CONTROL_SELECTORS).forEach(key => {
       const selector = CONTROL_SELECTORS[key];
       if (!selector) return;
       let el = map[key];
-      if (!el || !panel.contains(el)) {
-        el = panel.querySelector(selector);
+      if (!el || !document.body.contains(el)) {
+        el = (panel?.isConnected ? panel.querySelector(selector) : null) || document.querySelector(selector);
         map[key] = el || null;
       }
     });
@@ -174,14 +197,7 @@ const GOAL_FLOW = [
     const map = getControlMap(panel);
     const unlocked = [];
     keys.forEach(key => {
-      let el = map[key];
-      if (!el || !panel.contains(el)) {
-        const selector = CONTROL_SELECTORS[key];
-        if (selector) {
-          el = panel.querySelector(selector);
-          map[key] = el || null;
-        }
-      }
+      const el = map[key];
       if (!el) return;
       const wasLocked = el.classList.contains('tutorial-control-locked');
       el.classList.remove('tutorial-control-locked');
@@ -193,213 +209,11 @@ const GOAL_FLOW = [
       }
       if (el.matches('button, select')) {
         el.disabled = false;
-        el.setAttribute('aria-disabled', 'false');
+        el.removeAttribute('aria-disabled');
       }
       if (wasLocked) unlocked.push(el);
     });
     return unlocked;
-  }
-
-  function disconnectControlObserver(panel) {
-    if (panel && panel.__tutorialLockObserver) {
-      try { panel.__tutorialLockObserver.disconnect(); } catch {}
-      panel.__tutorialLockObserver = null;
-    }
-  }
-
-  function observeControlAdditions(panel) {
-    if (!panel) return;
-    disconnectControlObserver(panel);
-    const observer = new MutationObserver(mutations => {
-      mutations.forEach(mutation => {
-        mutation.addedNodes.forEach(node => {
-          if (!(node instanceof HTMLElement)) return;
-          if (node.matches('.toy-header button, .toy-header select, .toy-header .c-btn, .toy-mode-btn, .toy-chain-btn')) {
-            if (!node.classList.contains('tutorial-control-locked')) {
-              node.dataset.tutorialOrigDisplay = node.style.display || '';
-              node.classList.add('tutorial-control-locked');
-              if (node.matches('button, select')) {
-                try { node.disabled = true; } catch {}
-                node.setAttribute('aria-disabled', 'true');
-              }
-            }
-          }
-          if (typeof node.querySelectorAll === 'function') {
-            node.querySelectorAll('button, select, .c-btn, .toy-mode-btn, .toy-chain-btn').forEach(child => {
-              if (child === tutorialButton || child.dataset?.action === 'toggle-play') return;
-              if (!child.classList.contains('tutorial-control-locked')) {
-                child.dataset.tutorialOrigDisplay = child.style.display || '';
-                child.classList.add('tutorial-control-locked');
-                if (child.matches('button, select')) {
-                  try { child.disabled = true; } catch {}
-                  child.setAttribute('aria-disabled', 'true');
-                }
-              }
-            });
-          }
-        });
-      });
-    });
-    try {
-      observer.observe(panel, { childList: true, subtree: true });
-      panel.__tutorialLockObserver = observer;
-    } catch {}
-  }
-
-  function buildGoalPanel() {
-    const container = document.createElement('aside');
-    container.id = 'tutorial-goals';
-    container.className = 'tutorial-goals-panel';
-    container.innerHTML = [
-      '<header class="tutorial-goals-header">',
-      '  <div class="tutorial-goals-eyebrow">Goal</div>',
-      '  <h2 class="tutorial-goals-title"></h2>',
-      '  <p class="tutorial-goals-caption"></p>',
-      '</header>',
-      '<section class="tutorial-goals-tasks">',
-      '  <ol class="tutorial-goals-tasklist"></ol>',
-      '</section>',
-      '<section class="tutorial-goals-progress">',
-      '  <div class="goal-progress-bar">',
-      '    <div class="goal-progress-fill"></div>',
-      '  </div>',
-      '  <div class="goal-progress-summary"></div>',
-      '</section>',
-      '<footer class="tutorial-goals-reward">',
-      '  <div class="goal-reward-label">Reward</div>',
-      '  <p class="goal-reward-description"></p>',
-      '  <div class="goal-reward-icons"></div>',
-      '</footer>'
-    ].join('');
-    return container;
-  }
-
-  function ensureGoalPanel() {
-    if (!goalPanel) goalPanel = buildGoalPanel();
-    if (!goalPanel.isConnected) {
-      document.body.appendChild(goalPanel);
-    }
-    requestAnimationFrame(() => {
-      goalPanel.classList.add('is-visible');
-    });
-  }
-
-  function teardownGoalPanel() {
-    if (!goalPanel) return;
-    goalPanel.classList.remove('is-visible');
-    if (goalPanel.isConnected) {
-      goalPanel.remove();
-    }
-  }
-
-  function renderGoalPanel() {
-    if (!goalPanel) return;
-    const titleEl = goalPanel.querySelector('.tutorial-goals-title');
-    const captionEl = goalPanel.querySelector('.tutorial-goals-caption');
-    const listEl = goalPanel.querySelector('.tutorial-goals-tasklist');
-    const progressFill = goalPanel.querySelector('.goal-progress-fill');
-    const progressSummary = goalPanel.querySelector('.goal-progress-summary');
-    const rewardDescription = goalPanel.querySelector('.goal-reward-description');
-    const rewardIcons = goalPanel.querySelector('.goal-reward-icons');
-
-    if (!tutorialState || tutorialState.goalIndex >= GOAL_FLOW.length) {
-      titleEl.textContent = 'All goals complete';
-      captionEl.textContent = 'Enjoy exploring the full drawgrid controls.';
-      listEl.innerHTML = '';
-      const completeItem = document.createElement('li');
-      completeItem.className = 'goal-task is-complete';
-      const labelSpan = document.createElement('span');
-      labelSpan.className = 'goal-task-label';
-      labelSpan.textContent = "You've unlocked everything!";
-      completeItem.appendChild(labelSpan);
-      listEl.appendChild(completeItem);
-      progressFill.style.width = '100%';
-      progressSummary.textContent = 'All tasks complete';
-      rewardDescription.textContent = 'All tutorial rewards unlocked.';
-      rewardIcons.innerHTML = '';
-      return;
-    }
-
-    const goal = GOAL_FLOW[tutorialState.goalIndex];
-    const totalTasks = goal.tasks.length;
-    const completedTasks = Math.min(tutorialState.taskIndex, totalTasks);
-    const rewardUnlocked = tutorialState.unlockedRewards && tutorialState.unlockedRewards.has(goal.id);
-
-    titleEl.textContent = goal.title;
-    captionEl.textContent = goal.caption || 'Complete the tasks below to progress.';
-
-    listEl.innerHTML = '';
-    goal.tasks.forEach((task, index) => {
-      const li = document.createElement('li');
-      li.className = 'goal-task';
-      li.dataset.taskId = task.id;
-      if (index < completedTasks) {
-        li.classList.add('is-complete');
-      } else if (index === completedTasks) {
-        li.classList.add('is-active');
-      } else {
-        li.classList.add('is-hidden');
-      }
-
-      const indexSpan = document.createElement('span');
-      indexSpan.className = 'goal-task-index';
-      indexSpan.textContent = String(index + 1);
-      li.appendChild(indexSpan);
-
-      const labelSpan = document.createElement('span');
-      labelSpan.className = 'goal-task-label';
-      labelSpan.textContent = task.label;
-      li.appendChild(labelSpan);
-
-      if (index === completedTasks) {
-        const status = document.createElement('span');
-        status.className = 'goal-task-status';
-        status.textContent = 'Current task';
-        li.appendChild(status);
-      }
-
-      listEl.appendChild(li);
-    });
-
-    const progress = totalTasks ? Math.max(0, Math.min(100, (completedTasks / totalTasks) * 100)) : 0;
-    progressFill.style.width = progress + '%';
-    progressSummary.innerHTML = '<strong>' + completedTasks + ' / ' + totalTasks + '</strong> tasks complete';
-
-    rewardDescription.textContent = goal.reward ? goal.reward.description : '';
-    rewardIcons.innerHTML = '';
-    if (goal.reward && Array.isArray(goal.reward.icons)) {
-      goal.reward.icons.forEach(icon => {
-        const wrapper = document.createElement('div');
-        wrapper.className = 'goal-reward-icon';
-        wrapper.dataset.goalId = goal.id;
-        if (rewardUnlocked) wrapper.classList.add('is-unlocked');
-
-        const btn = document.createElement('div');
-        btn.className = 'c-btn';
-        btn.style.setProperty('--c-btn-size', '56px');
-        if (icon.accent) btn.style.setProperty('--accent', icon.accent);
-        btn.style.pointerEvents = 'none';
-        btn.innerHTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
-        const core = btn.querySelector('.c-btn-core');
-        core.setAttribute('role', 'img');
-        if (icon.type === 'asset') {
-          core.style.setProperty('--c-btn-icon-url', "url('" + icon.icon + "')");
-          core.setAttribute('aria-label', icon.label || '');
-        } else {
-          core.textContent = icon.symbol || '+';
-          core.setAttribute('aria-label', icon.label || icon.symbol || '+');
-        }
-
-        wrapper.appendChild(btn);
-        rewardIcons.appendChild(wrapper);
-      });
-    }
-  }
-
-  function unlockReward(goalId) {
-    if (!tutorialState) return;
-    if (!tutorialState.unlockedRewards) tutorialState.unlockedRewards = new Set();
-    tutorialState.unlockedRewards.add(goalId);
   }
 
   function setUpSpawnerControls() {
@@ -424,20 +238,84 @@ const GOAL_FLOW = [
       if (el.dataset.tutorialOrigDisplay !== undefined) {
         el.style.display = el.dataset.tutorialOrigDisplay;
         delete el.dataset.tutorialOrigDisplay;
+      } else {
+        el.style.removeProperty('display');
       }
     });
+    spawnerControls = {};
   }
 
-  function unlockSpawnerToggle() {
-    const toggle = spawnerControls.toggle;
-    if (!toggle) return null;
-    const wasLocked = toggle.classList.contains('tutorial-locked-control');
-    toggle.classList.remove('tutorial-locked-control');
-    if (toggle.dataset.tutorialOrigDisplay !== undefined) {
-      toggle.style.display = toggle.dataset.tutorialOrigDisplay;
-      delete toggle.dataset.tutorialOrigDisplay;
+  function unlockReward(goalId) {
+    if (!tutorialState) return;
+    if (!tutorialState.unlockedRewards) tutorialState.unlockedRewards = new Set();
+    tutorialState.unlockedRewards.add(goalId);
+  }
+
+  function unlockSpawnerControl(key) {
+    const el = spawnerControls[key];
+    if (!el) return null;
+    const wasLocked = el.classList.contains('tutorial-locked-control');
+    el.classList.remove('tutorial-locked-control');
+    if (el.dataset.tutorialOrigDisplay !== undefined) {
+      el.style.display = el.dataset.tutorialOrigDisplay;
+      delete el.dataset.tutorialOrigDisplay;
+    } else {
+      el.style.removeProperty('display');
     }
-    return wasLocked ? toggle : null;
+    return wasLocked ? el : null;
+  }
+
+  function applyGoalReward(goal) {
+    if (!goal || !tutorialState) return [];
+    if (!tutorialState.unlockedRewards) tutorialState.unlockedRewards = new Set();
+    if (tutorialState.unlockedRewards.has(goal.id)) return [];
+
+    const unlocked = [];
+    if (goal.id === 'draw-intro' && tutorialToy) {
+      unlocked.push(...unlockPanelControls(tutorialToy, ['clear', 'random']));
+    }
+    if (goal.id === 'clear-random') {
+      const toggle = unlockSpawnerControl('toggle');
+      if (toggle) unlocked.push(toggle);
+    }
+
+    unlockReward(goal.id);
+    return unlocked.filter(Boolean);
+  }
+
+  function buildGoalPanel() {
+    const container = document.createElement('aside');
+    container.id = 'tutorial-goals';
+    container.className = 'tutorial-goals-panel';
+    container.innerHTML = `
+      <header class="tutorial-goals-header">
+        <div class="tutorial-goals-eyebrow">Goal</div>
+        <h2 class="tutorial-goals-title"></h2>
+      </header>
+      <section class="tutorial-goals-tasks">
+        <ol class="tutorial-goals-tasklist"></ol>
+      </section>
+      <section class="tutorial-goals-progress">
+        <div class="goal-progress-bar"><div class="goal-progress-fill"></div></div>
+        <div class="goal-progress-summary"></div>
+      </section>
+      <footer class="tutorial-goals-reward">
+        <div class="goal-reward-label">Reward</div>
+        <p class="goal-reward-description"></p>
+        <div class="goal-reward-icons"></div>
+      </footer>`;
+    return container;
+  }
+
+  function ensureGoalPanel() {
+    if (!goalPanel) goalPanel = buildGoalPanel();
+    if (!goalPanel.isConnected) document.body.appendChild(goalPanel);
+    requestAnimationFrame(() => goalPanel.classList.add('is-visible'));
+  }
+
+  function teardownGoalPanel() {
+    if (!goalPanel) return;
+    goalPanel.classList.remove('is-visible');
   }
 
   function getCurrentGoal() {
@@ -451,35 +329,110 @@ const GOAL_FLOW = [
     return goal.tasks[tutorialState.taskIndex] || null;
   }
 
+  function renderGoalPanel() {
+    if (!goalPanel) return;
+    const goal = getCurrentGoal();
+    if (!tutorialState || !goal) {
+      return;
+    }
+
+    const { taskIndex } = tutorialState;
+    const { title, tasks, reward } = goal;
+    goalPanel.querySelector('.tutorial-goals-title').textContent = title;
+    const listEl = goalPanel.querySelector('.tutorial-goals-tasklist');
+    listEl.innerHTML = '';
+    tasks.forEach((task, index) => {
+      const li = document.createElement('li');
+      li.className = 'goal-task';
+      li.dataset.taskId = task.id;
+      if (index < taskIndex) li.classList.add('is-complete');
+      else if (index === taskIndex) li.classList.add('is-active');
+      else li.classList.add('is-hidden');
+      li.innerHTML = `<span class="goal-task-index">${index + 1}</span><span class="goal-task-label">${task.label}</span>`;
+      listEl.appendChild(li);
+    });
+
+    const completedTasks = Math.min(taskIndex, tasks.length);
+    goalPanel.querySelector('.goal-progress-fill').style.width = `${(completedTasks / tasks.length) * 100}%`;
+    goalPanel.querySelector('.goal-progress-summary').innerHTML = `<strong>${completedTasks} / ${tasks.length}</strong> tasks complete`;
+    goalPanel.querySelector('.goal-reward-description').textContent = reward.description;
+
+    const rewardIcons = goalPanel.querySelector('.goal-reward-icons');
+    rewardIcons.innerHTML = '';
+    if (reward && Array.isArray(reward.icons)) {
+      reward.icons.forEach(icon => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'goal-reward-icon';
+        if (tutorialState?.unlockedRewards?.has(goal.id)) wrapper.classList.add('is-unlocked');
+
+        const btn = document.createElement('div');
+        btn.className = 'c-btn';
+        btn.style.setProperty('--c-btn-size', '56px');
+        if (icon.accent) btn.style.setProperty('--accent', icon.accent);
+        btn.style.pointerEvents = 'none';
+        btn.innerHTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
+        const core = btn.querySelector('.c-btn-core');
+        core.setAttribute('role', 'img');
+        if (icon.type === 'asset') {
+          core.style.setProperty('--c-btn-icon-url', `url('${icon.icon}')`);
+          core.setAttribute('aria-label', icon.label || '');
+        } else {
+          core.textContent = icon.symbol || '+';
+          core.setAttribute('aria-label', icon.label || icon.symbol || '+');
+        }
+
+        wrapper.appendChild(btn);
+        rewardIcons.appendChild(wrapper);
+      });
+    }
+  }
+
   function handleTaskEnter(task) {
+    stopParticleStream();
+    document.querySelectorAll('.tutorial-pulse-target').forEach(el => el.classList.remove('tutorial-pulse-target'));
+
     if (!task) return;
 
-    if (hintInterval) {
-      clearInterval(hintInterval);
-      hintInterval = null;
-    }
-    stopAllHints();
-
-    if (task.id === 'press-play') {
-      const taskEl = goalPanel?.querySelector('.goal-task.is-active');
-      const playBtn = document.querySelector('#topbar [data-action="toggle-play"]');
-      if (taskEl && playBtn) {
-        hintInterval = setInterval(() => {
-          playTaskHint(taskEl, playBtn);
-        }, 2000);
-        playTaskHint(taskEl, playBtn); // play once immediately
-      }
-    }
-
-    if (task.showSwipePrompt) {
-      helpWasActiveBeforeTutorial = isHelpActive();
-      if (!helpWasActiveBeforeTutorial) {
-        helpActivatedForTask = true;
-        try { setHelpActive(true); } catch {}
+    const targetKey = TASK_TARGETS[task.id];
+    const targetEl = targetKey ? (getControlMap(tutorialToy)[targetKey] || document.querySelector(CONTROL_SELECTORS[targetKey])) : null;
+    if (task.id === 'press-play' && targetEl) {
+      targetEl.classList.remove('tutorial-hide-play-button');
+      if (targetEl.dataset.tutorialOrigDisplay !== undefined) {
+        targetEl.style.display = targetEl.dataset.tutorialOrigDisplay;
       } else {
-        helpActivatedForTask = false;
+        targetEl.style.removeProperty('display');
       }
-    } else if (helpActivatedForTask) {
+      targetEl.disabled = false;
+      window.tutorialSpacebarDisabled = false;
+    }
+    const targetVisible = targetEl && !targetEl.classList.contains('tutorial-control-locked') && !targetEl.classList.contains('tutorial-hide-play-button') && (targetEl.offsetParent !== null || getComputedStyle(targetEl).display !== 'none');
+
+    if (targetVisible) {
+      const taskEl = goalPanel?.querySelector('.goal-task.is-active');
+      if (taskEl) startParticleStream(taskEl, targetEl);
+
+      if (task.id === 'press-play') {
+        targetEl.style.transform = '';
+
+        targetEl.animate([
+          { transform: 'scale(0)', opacity: 0 },
+          { transform: 'scale(1.2)', opacity: 1 },
+          { transform: 'scale(0.9)', opacity: 1 },
+          { transform: 'scale(1)', opacity: 1 }
+        ], {
+          duration: 600,
+          easing: 'cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+        }).onfinish = () => {
+          targetEl.classList.add('tutorial-pulse-target');
+        };
+      } else {
+        targetEl.classList.add('tutorial-pulse-target');
+      }
+    } else {
+      stopParticleStream();
+    }
+
+    if (helpActivatedForTask) {
       try { setHelpActive(false); } catch {}
       helpActivatedForTask = false;
     }
@@ -487,47 +440,25 @@ const GOAL_FLOW = [
 
   function completeCurrentTask() {
     const goal = getCurrentGoal();
-    const task = getCurrentTask();
-    if (!goal || !task) {
-      renderGoalPanel();
-      return;
-    }
+    if (!goal) return;
 
-    if (hintInterval) {
-      clearInterval(hintInterval);
-      hintInterval = null;
-    }
-    stopAllHints();
-
-    tutorialState.taskIndex += 1;
-
+    tutorialState.taskIndex++;
     if (tutorialState.taskIndex >= goal.tasks.length) {
-      const newlyUnlocked = applyGoalReward(goal);
-      newlyUnlocked.forEach(animateUnlock);
-
-      tutorialState.goalIndex += 1;
+      applyGoalReward(goal).forEach(animateUnlock);
+      tutorialState.goalIndex++;
       tutorialState.taskIndex = 0;
       hasDetectedLine = false;
-
-      const nextGoal = getCurrentGoal();
-      if (nextGoal) {
-        handleTaskEnter(nextGoal.tasks[0] || null);
-      } else if (helpActivatedForTask && !helpWasActiveBeforeTutorial) {
-        try { setHelpActive(false); } catch {}
-        helpActivatedForTask = false;
-      }
-
-      renderGoalPanel();
-    } else {
-      handleTaskEnter(getCurrentTask());
-      renderGoalPanel();
     }
+
+    renderGoalPanel();
+    handleTaskEnter(getCurrentTask());
   }
 
   function maybeCompleteTask(requirement) {
     const task = getCurrentTask();
-    if (!task || task.requirement !== requirement) return;
-    completeCurrentTask();
+    if (task && task.requirement === requirement) {
+      completeCurrentTask();
+    }
   }
 
   function handleDrawgridUpdate(detail) {
@@ -540,30 +471,13 @@ const GOAL_FLOW = [
     }
   }
 
-  function handleNodeToggle() {
-    if (!tutorialActive || !tutorialState) return;
-    maybeCompleteTask('toggle-node');
-  }
-
-  function setupPlayButtonListener() {
-    const btn = document.querySelector('#topbar [data-action="toggle-play"]');
-    if (!btn) return;
-    addListener(btn, 'click', () => maybeCompleteTask('press-play'));
-  }
-
   function setupPanelListeners(panel) {
     if (!panel) return;
-    const updateHandler = event => handleDrawgridUpdate(event.detail || {});
-    addListener(panel, 'drawgrid:update', updateHandler);
-    addListener(panel, 'drawgrid:node-toggle', handleNodeToggle);
-
-    const map = getControlMap(panel);
-    if (map.clear) {
-      addListener(map.clear, 'click', () => maybeCompleteTask('press-clear'));
-    }
-    if (map.random) {
-      addListener(map.random, 'click', () => maybeCompleteTask('press-random'));
-    }
+    addListener(panel, 'drawgrid:update', (e) => handleDrawgridUpdate(e.detail));
+    addListener(panel, 'drawgrid:node-toggle', () => maybeCompleteTask('toggle-node'));
+    const controlMap = getControlMap(panel);
+    if (controlMap.clear) addListener(controlMap.clear, 'click', () => maybeCompleteTask('press-clear'));
+    if (controlMap.random) addListener(controlMap.random, 'click', () => maybeCompleteTask('press-random'));
   }
 
   function spawnTutorialToy() {
@@ -606,8 +520,6 @@ const GOAL_FLOW = [
     panel.style.zIndex = '60';
 
     lockTutorialControls(panel);
-    observeControlAdditions(panel);
-    getControlMap(panel);
     setupPanelListeners(panel);
 
     requestAnimationFrame(() => {
@@ -625,82 +537,59 @@ const GOAL_FLOW = [
     return panel;
   }
 
-  function initializeTutorialState() {
-    tutorialState = {
-      goalIndex: 0,
-      taskIndex: 0,
-      unlockedRewards: new Set(),
-    };
-    hasDetectedLine = false;
-    renderGoalPanel();
-    handleTaskEnter(getCurrentTask());
-  }
-
-  function cleanupPanel(panel) {
-    if (!panel) return;
-    disconnectControlObserver(panel);
-    if (panel.__tutorialLockedControls) {
-      panel.__tutorialLockedControls.forEach(el => {
-        if (!el) return;
-        el.classList.remove('tutorial-control-locked');
-        if (el.dataset.tutorialOrigDisplay !== undefined) {
-          el.style.display = el.dataset.tutorialOrigDisplay;
-          delete el.dataset.tutorialOrigDisplay;
-        }
-        if (el.matches('button, select')) {
-          el.disabled = false;
-          el.removeAttribute('aria-disabled');
-        }
-      });
-      panel.__tutorialLockedControls = null;
-    }
-  }
-
-  function applyGoalReward(goal) {
-    if (!goal) return [];
-    const newlyUnlocked = [];
-    if (goal.id === 'draw-intro' && tutorialToy) {
-      newlyUnlocked.push(...unlockPanelControls(tutorialToy, ['clear', 'random']));
-    }
-    if (goal.id === 'clear-random') {
-      const toggle = unlockSpawnerToggle();
-      if (toggle) newlyUnlocked.push(toggle);
-    }
-    unlockReward(goal.id);
-    return newlyUnlocked;
-  }
   function enterTutorial() {
     if (tutorialActive) return;
     tutorialActive = true;
 
     updateButtonVisual();
 
-    previousSnapshot = null;
-    try {
-      previousSnapshot = getSnapshot();
-    } catch (err) {
-      console.warn('[tutorial] snapshot capture failed', err);
+    if (!document.getElementById('tutorial-styles')) {
+      const link = document.createElement('link');
+      link.id = 'tutorial-styles';
+      link.rel = 'stylesheet';
+      link.href = 'src/tutorial.css';
+      document.head.appendChild(link);
     }
 
+    previousSnapshot = null;
+    try { previousSnapshot = getSnapshot(); } catch {}
     storedScroll = { x: window.scrollX || 0, y: window.scrollY || 0 };
     previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    helpWasActiveBeforeTutorial = isHelpActive();
+    if (helpWasActiveBeforeTutorial) {
+      try { setHelpActive(false); } catch {}
+    }
 
-    document.body.classList.add('tutorial-active');
-
-    hideOriginalToys();
     setUpSpawnerControls();
 
-    helpWasActiveBeforeTutorial = isHelpActive();
+    window.tutorialSpacebarDisabled = true;
+    const playBtn = document.querySelector(CONTROL_SELECTORS.play);
+    const transportWasRunning = typeof isRunning === 'function' ? isRunning() : false;
+    if (transportWasRunning) {
+      try { stopTransport(); } catch {}
+    }
+    if (playBtn) {
+      if (playBtn.dataset.tutorialOrigDisplay === undefined) playBtn.dataset.tutorialOrigDisplay = playBtn.style.display || '';
+      playBtn.style.display = 'none';
+      playBtn.disabled = true;
+      playBtn.classList.add('tutorial-hide-play-button');
+      playBtn.classList.remove('tutorial-pulse-target');
+      updatePlayButtonVisual(playBtn, false);
+    }
 
-    setupPlayButtonListener();
-
+    document.body.classList.add('tutorial-active');
+    hideOriginalToys();
     tutorialToy = spawnTutorialToy();
     ensureGoalPanel();
-    initializeTutorialState();
 
-    if (tutorialToy) {
-      tutorialToy.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
+    tutorialState = { goalIndex: 0, taskIndex: 0, unlockedRewards: new Set() };
+    hasDetectedLine = false;
+
+    const playBtnListener = document.querySelector(CONTROL_SELECTORS.play);
+    if (playBtnListener) addListener(playBtnListener, 'click', () => maybeCompleteTask('press-play'));
+
+    renderGoalPanel();
+    handleTaskEnter(getCurrentTask());
   }
 
   function exitTutorial() {
@@ -709,69 +598,58 @@ const GOAL_FLOW = [
 
     updateButtonVisual();
 
-    removeTutorialListeners();
-
-    if (hintInterval) {
-      clearInterval(hintInterval);
-      hintInterval = null;
-    }
-    stopAllHints();
-
-    if (tutorialToy) {
-      if (tutorialFromFactory && window && window.MusicToyFactory && typeof window.MusicToyFactory.destroy === 'function') {
-        try {
-          window.MusicToyFactory.destroy(tutorialToy);
-        } catch (err) {
-          console.warn('[tutorial] factory destroy failed', err);
-          cleanupPanel(tutorialToy);
-          tutorialToy.remove();
-        }
+    window.tutorialSpacebarDisabled = false;
+    const playBtn = document.querySelector(CONTROL_SELECTORS.play);
+    if (playBtn) {
+      playBtn.disabled = false;
+      playBtn.classList.remove('tutorial-hide-play-button');
+      playBtn.classList.remove('tutorial-pulse-target');
+      if (playBtn.dataset.tutorialOrigDisplay !== undefined) {
+        playBtn.style.display = playBtn.dataset.tutorialOrigDisplay;
+        delete playBtn.dataset.tutorialOrigDisplay;
       } else {
-        cleanupPanel(tutorialToy);
-        tutorialToy.remove();
+        playBtn.style.removeProperty('display');
       }
+      updatePlayButtonVisual(playBtn, false);
     }
-    tutorialToy = null;
-    tutorialFromFactory = false;
 
-    restoreSpawnerControls();
+    if (helpWasActiveBeforeTutorial) {
+      try { setHelpActive(true); } catch {}
+    } else {
+      try { setHelpActive(false); } catch {}
+    }
+    helpActivatedForTask = false;
+    helpWasActiveBeforeTutorial = false;
+
+    stopParticleStream();
+    removeTutorialListeners();
+    if (tutorialToy) tutorialToy.remove();
     teardownGoalPanel();
     showOriginalToys();
     document.body.classList.remove('tutorial-active');
 
-    if (!helpWasActiveBeforeTutorial && isHelpActive()) {
-      try { setHelpActive(false); } catch {}
-    }
-    helpActivatedForTask = false;
+    restoreSpawnerControls();
 
     if (previousSnapshot) {
-      try {
-        applySnapshot(previousSnapshot);
-      } catch (err) {
-        console.warn('[tutorial] failed to restore scene', err);
-      }
+      try { applySnapshot(previousSnapshot); } catch {}
     }
-
     window.scrollTo({ left: storedScroll.x, top: storedScroll.y, behavior: 'auto' });
-
     if (previousFocus) {
-      try {
-        previousFocus.focus({ preventScroll: true });
-      } catch {}
-      previousFocus = null;
+      try { previousFocus.focus({ preventScroll: true }); } catch {}
     }
 
-    previousSnapshot = null;
+    tutorialToy = null;
+    tutorialFromFactory = false;
     tutorialState = null;
+    previousSnapshot = null;
+    previousFocus = null;
     hasDetectedLine = false;
   }
 
-  tutorialButton.addEventListener('click', () => {
-    if (tutorialActive) exitTutorial();
-    else enterTutorial();
-  });
-
+  tutorialButton.addEventListener('click', () => tutorialActive ? exitTutorial() : enterTutorial());
   updateButtonVisual();
 })();
+
+
 
 

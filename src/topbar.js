@@ -267,6 +267,8 @@ function ensureTopbar(){
 
     document.addEventListener('keydown', (e)=>{
 
+      if (window.tutorialSpacebarDisabled) return;
+
       if (e.code !== 'Space' && e.key !== ' ') return;
 
       const tgt = e.target;
