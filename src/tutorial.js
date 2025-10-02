@@ -3,6 +3,7 @@ import { createDrawGrid } from './drawgrid.js';
 import { connectDrawGridToPlayer } from './drawgrid-player.js';
 import { getSnapshot, applySnapshot } from './persistence.js';
 import { setHelpActive, isHelpActive } from './help-overlay.js';
+import { playTaskHint, stopAllHints } from './tutorial-fx.js';
 
 const GOAL_FLOW = [
   {
@@ -76,6 +77,7 @@ const GOAL_FLOW = [
   let hasDetectedLine = false;
   let spawnerControls = {};
   let tutorialState = null;
+  let hintInterval = null;
 
   const CONTROL_SELECTORS = {
     clear: '[data-action="clear"]',
@@ -330,6 +332,7 @@ const GOAL_FLOW = [
     goal.tasks.forEach((task, index) => {
       const li = document.createElement('li');
       li.className = 'goal-task';
+      li.dataset.taskId = task.id;
       if (index < completedTasks) {
         li.classList.add('is-complete');
       } else if (index === completedTasks) {
@@ -450,6 +453,24 @@ const GOAL_FLOW = [
 
   function handleTaskEnter(task) {
     if (!task) return;
+
+    if (hintInterval) {
+      clearInterval(hintInterval);
+      hintInterval = null;
+    }
+    stopAllHints();
+
+    if (task.id === 'press-play') {
+      const taskEl = goalPanel?.querySelector('.goal-task.is-active');
+      const playBtn = document.querySelector('#topbar [data-action="toggle-play"]');
+      if (taskEl && playBtn) {
+        hintInterval = setInterval(() => {
+          playTaskHint(taskEl, playBtn);
+        }, 2000);
+        playTaskHint(taskEl, playBtn); // play once immediately
+      }
+    }
+
     if (task.showSwipePrompt) {
       helpWasActiveBeforeTutorial = isHelpActive();
       if (!helpWasActiveBeforeTutorial) {
@@ -471,6 +492,12 @@ const GOAL_FLOW = [
       renderGoalPanel();
       return;
     }
+
+    if (hintInterval) {
+      clearInterval(hintInterval);
+      hintInterval = null;
+    }
+    stopAllHints();
 
     tutorialState.taskIndex += 1;
 
@@ -683,6 +710,12 @@ const GOAL_FLOW = [
     updateButtonVisual();
 
     removeTutorialListeners();
+
+    if (hintInterval) {
+      clearInterval(hintInterval);
+      hintInterval = null;
+    }
+    stopAllHints();
 
     if (tutorialToy) {
       if (tutorialFromFactory && window && window.MusicToyFactory && typeof window.MusicToyFactory.destroy === 'function') {
