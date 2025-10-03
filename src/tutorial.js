@@ -646,13 +646,16 @@ const GOAL_FLOW = [
             : targetEl;
 
           animEl.animate([
-            { transform: 'scale(0.8)', opacity: 0 },
-            { transform: 'scale(1.2)', opacity: 1 },
-            { transform: 'scale(0.9)', opacity: 1 },
-            { transform: 'scale(1)', opacity: 1 }
+            /* Clean pop: 0 -> 2.0x -> 0.92x -> 1.0x, no opacity flicker */
+            { transform: 'scale(0)',    opacity: 1, offset: 0.0 },
+            { transform: 'scale(2.0)',  opacity: 1, offset: 0.6 },
+            { transform: 'scale(0.92)', opacity: 1, offset: 0.85 },
+            { transform: 'scale(1)',    opacity: 1, offset: 1.0 }
           ], {
-            duration: 600,
-            easing: 'cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+            duration: 12000,
+            easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+            composite: 'replace',
+            fill: 'none'
           }).onfinish = () => {
             targetEl.classList.add('tutorial-pulse-target');
           };
