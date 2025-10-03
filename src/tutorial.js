@@ -637,7 +637,15 @@ const GOAL_FLOW = [
 
       if (task.id === 'press-play') {
         setTimeout(() => {
-          targetEl.animate([
+          // Animate inner core so the container's translate(-50%, -50%) centering
+          // isn't overridden by transform keyframes during the spawn pop.
+          const animEl = targetEl.matches('#topbar [data-action="toggle-play"]')
+            ? (targetEl.querySelector('.c-btn-core')
+                || targetEl.querySelector('.btn-core')
+                || targetEl)
+            : targetEl;
+
+          animEl.animate([
             { transform: 'scale(0.8)', opacity: 0 },
             { transform: 'scale(1.2)', opacity: 1 },
             { transform: 'scale(0.9)', opacity: 1 },
@@ -648,6 +656,7 @@ const GOAL_FLOW = [
           }).onfinish = () => {
             targetEl.classList.add('tutorial-pulse-target');
           };
+
         }, 100);
       } else {
         targetEl.classList.add('tutorial-pulse-target');
