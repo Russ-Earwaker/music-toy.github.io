@@ -646,13 +646,15 @@ const GOAL_FLOW = [
             : targetEl;
 
           animEl.animate([
-            /* Clean pop: 0 -> 2.0x -> 0.92x -> 1.0x, no opacity flicker */
+            /* Clean pop: 0 -> 2.st0x -> 0.92x -> 1.0x, no opacity flicker */
             { transform: 'scale(0)',    opacity: 1, offset: 0.0 },
             { transform: 'scale(2.0)',  opacity: 1, offset: 0.6 },
             { transform: 'scale(0.92)', opacity: 1, offset: 0.85 },
+
+
             { transform: 'scale(1)',    opacity: 1, offset: 1.0 }
           ], {
-            duration: 12000,
+            duration: 1200,
             easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
             composite: 'replace',
             fill: 'none'
@@ -936,3 +938,4 @@ const GOAL_FLOW = [
 
 
 
+            /* Clean pop: 0 -> 2.0x -> 0.92x -> 1.0x, no opacity flicker */
