@@ -604,16 +604,32 @@ const GOAL_FLOW = [
     const targetKey = TASK_TARGETS[task.id];
     const targetEl = targetKey ? (getControlMap(tutorialToy)[targetKey] || document.querySelector(CONTROL_SELECTORS[targetKey])) : null;
     if (task.id === 'press-play' && targetEl) {
+      targetEl.classList.remove('tutorial-play-hidden');
       targetEl.classList.remove('tutorial-hide-play-button');
       if (targetEl.dataset.tutorialOrigDisplay !== undefined) {
         targetEl.style.display = targetEl.dataset.tutorialOrigDisplay;
       } else {
         targetEl.style.removeProperty('display');
       }
+      if (targetEl.dataset.tutorialOrigVisibility !== undefined) {
+        const vis = targetEl.dataset.tutorialOrigVisibility;
+        if (vis) targetEl.style.visibility = vis;
+        else targetEl.style.removeProperty('visibility');
+      } else {
+        targetEl.style.removeProperty('visibility');
+      }
+      if (targetEl.dataset.tutorialOrigOpacity !== undefined) {
+        const op = targetEl.dataset.tutorialOrigOpacity;
+        if (op) targetEl.style.opacity = op;
+        else targetEl.style.removeProperty('opacity');
+      } else {
+        targetEl.style.removeProperty('opacity');
+      }
       targetEl.disabled = false;
+      targetEl.removeAttribute('aria-hidden');
       window.tutorialSpacebarDisabled = false;
     }
-    const targetVisible = targetEl && !targetEl.classList.contains('tutorial-control-locked') && !targetEl.classList.contains('tutorial-hide-play-button') && (targetEl.offsetParent !== null || getComputedStyle(targetEl).display !== 'none');
+    const targetVisible = targetEl && !targetEl.classList.contains('tutorial-control-locked') && !targetEl.classList.contains('tutorial-hide-play-button') && !targetEl.classList.contains('tutorial-play-hidden') && (targetEl.offsetParent !== null || getComputedStyle(targetEl).display !== 'none');
 
     if (targetVisible) {
       const taskEl = goalPanel?.querySelector('.goal-task.is-active');
@@ -785,10 +801,13 @@ const GOAL_FLOW = [
     }
     if (playBtn) {
       if (playBtn.dataset.tutorialOrigDisplay === undefined) playBtn.dataset.tutorialOrigDisplay = playBtn.style.display || '';
-      playBtn.style.display = 'none';
-      playBtn.disabled = true;
-      playBtn.classList.add('tutorial-hide-play-button');
+      if (playBtn.dataset.tutorialOrigVisibility === undefined) playBtn.dataset.tutorialOrigVisibility = playBtn.style.visibility || '';
+      if (playBtn.dataset.tutorialOrigOpacity === undefined) playBtn.dataset.tutorialOrigOpacity = playBtn.style.opacity || '';
+      playBtn.classList.add('tutorial-play-hidden');
+      playBtn.classList.remove('tutorial-hide-play-button');
       playBtn.classList.remove('tutorial-pulse-target');
+      playBtn.disabled = true;
+      playBtn.setAttribute('aria-hidden', 'true');
       updatePlayButtonVisual(playBtn, false);
     }
 
@@ -817,13 +836,31 @@ const GOAL_FLOW = [
     const playBtn = document.querySelector(CONTROL_SELECTORS.play);
     if (playBtn) {
       playBtn.disabled = false;
+      playBtn.classList.remove('tutorial-play-hidden');
       playBtn.classList.remove('tutorial-hide-play-button');
       playBtn.classList.remove('tutorial-pulse-target');
+      playBtn.removeAttribute('aria-hidden');
       if (playBtn.dataset.tutorialOrigDisplay !== undefined) {
         playBtn.style.display = playBtn.dataset.tutorialOrigDisplay;
         delete playBtn.dataset.tutorialOrigDisplay;
       } else {
         playBtn.style.removeProperty('display');
+      }
+      if (playBtn.dataset.tutorialOrigVisibility !== undefined) {
+        const vis = playBtn.dataset.tutorialOrigVisibility;
+        if (vis) playBtn.style.visibility = vis;
+        else playBtn.style.removeProperty('visibility');
+        delete playBtn.dataset.tutorialOrigVisibility;
+      } else {
+        playBtn.style.removeProperty('visibility');
+      }
+      if (playBtn.dataset.tutorialOrigOpacity !== undefined) {
+        const op = playBtn.dataset.tutorialOrigOpacity;
+        if (op) playBtn.style.opacity = op;
+        else playBtn.style.removeProperty('opacity');
+        delete playBtn.dataset.tutorialOrigOpacity;
+      } else {
+        playBtn.style.removeProperty('opacity');
       }
       updatePlayButtonVisual(playBtn, false);
     }

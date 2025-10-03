@@ -4,6 +4,11 @@ body.tutorial-active #board .toy-panel[data-tutorial="true"] .tutorial-control-l
   display: none !important;
 }
 
+body.tutorial-active #topbar .tutorial-play-hidden {
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
 
 #tutorial-goals {
   background-color: rgba(13, 20, 29, 1); /* Opaque background */
@@ -30,4 +35,5 @@ body.tutorial-active #board .toy-panel[data-tutorial="true"] .tutorial-control-l
   opacity: 0 !important;
   pointer-events: none !important;
 }
+
 
