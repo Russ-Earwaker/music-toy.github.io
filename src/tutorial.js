@@ -636,19 +636,19 @@ const GOAL_FLOW = [
       if (taskEl) startParticleStream(taskEl, targetEl);
 
       if (task.id === 'press-play') {
-        targetEl.style.transform = '';
-
-        targetEl.animate([
-          { transform: 'scale(0)', opacity: 0 },
-          { transform: 'scale(1.2)', opacity: 1 },
-          { transform: 'scale(0.9)', opacity: 1 },
-          { transform: 'scale(1)', opacity: 1 }
-        ], {
-          duration: 600,
-          easing: 'cubic-bezier(0.175, 0.885, 0.32, 1.275)'
-        }).onfinish = () => {
-          targetEl.classList.add('tutorial-pulse-target');
-        };
+        setTimeout(() => {
+          targetEl.animate([
+            { transform: 'scale(0.8)', opacity: 0 },
+            { transform: 'scale(1.2)', opacity: 1 },
+            { transform: 'scale(0.9)', opacity: 1 },
+            { transform: 'scale(1)', opacity: 1 }
+          ], {
+            duration: 600,
+            easing: 'cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+          }).onfinish = () => {
+            targetEl.classList.add('tutorial-pulse-target');
+          };
+        }, 100);
       } else {
         targetEl.classList.add('tutorial-pulse-target');
       }
