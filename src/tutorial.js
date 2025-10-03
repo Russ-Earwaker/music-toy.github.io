@@ -78,6 +78,7 @@ const GOAL_FLOW = [
   let hasDetectedLine = false;
   let spawnerControls = {};
   let tutorialState = null;
+  let claimButton = null;
   const debugTutorial = (...args) => {
     if (typeof window === 'undefined' || !window.DEBUG_TUTORIAL_LOCKS) return;
     try { console.debug('[tutorial]', ...args); } catch (_) { try { console.log('[tutorial]', ...args); } catch {} }
@@ -177,24 +178,31 @@ const GOAL_FLOW = [
       btn.remove();
     });
     const header = panel.querySelector('.toy-header');
+    if (!header) {
+      debugTutorial('lockTutorialControls:no-header', describeElement(panel));
+      if (!panel.__tutorialHeaderWaiter) {
+        const observer = new MutationObserver(() => {
+          const headerNow = panel.querySelector('.toy-header');
+          if (headerNow) {
+            try { observer.disconnect(); } catch {}
+            panel.__tutorialHeaderWaiter = null;
+            lockTutorialControls(panel);
+          }
+        });
+        observer.observe(panel, { childList: true, subtree: true });
+        panel.__tutorialHeaderWaiter = observer;
+      }
+      return;
+    }
     const locked = panel.__tutorialLockedControls || [];
 
     const lockElement = (el) => {
       if (!(el instanceof HTMLElement) || el.classList.contains('tutorial-control-locked')) return;
-      if (el.dataset.tutorialOrigDisplay === undefined) {
-        el.dataset.tutorialOrigDisplay = el.style.display || '';
-      }
-      if (el.dataset.tutorialOrigDisplayPriority === undefined) {
-        const priority = typeof el.style?.getPropertyPriority === 'function' ? el.style.getPropertyPriority('display') : '';
-        el.dataset.tutorialOrigDisplayPriority = priority || '';
-      }
       el.classList.add('tutorial-control-locked');
-      try {
-        el.style.setProperty('display', 'none', 'important');
-      } catch (_) {
-        el.style.display = 'none';
-      }
       if (el.matches('button, select')) {
+        if (el.dataset.tutorialWasDisabled === undefined) {
+          el.dataset.tutorialWasDisabled = el.disabled ? '1' : '0';
+        }
         try { el.disabled = true; } catch {}
         el.setAttribute('aria-disabled', 'true');
       }
@@ -260,11 +268,14 @@ const GOAL_FLOW = [
     Object.keys(CONTROL_SELECTORS).forEach(key => {
       const selector = CONTROL_SELECTORS[key];
       if (!selector) return;
-      let el = map[key];
-      if (!el || !document.body.contains(el)) {
-        el = (panel?.isConnected ? panel.querySelector(selector) : null) || document.querySelector(selector);
-        map[key] = el || null;
+      const panelEl = panel?.isConnected ? panel.querySelector(selector) : null;
+      if (panelEl) {
+        map[key] = panelEl;
+        return;
       }
+      const cached = map[key];
+      if (cached && document.body.contains(cached)) return;
+      map[key] = document.querySelector(selector) || null;
     });
     return map;
   }
@@ -274,39 +285,79 @@ const GOAL_FLOW = [
     const map = getControlMap(panel);
     const unlocked = [];
     keys.forEach(key => {
-      const el = map[key];
-      if (!el) return;
-      const wasLocked = el.classList.contains('tutorial-control-locked');
-      if (!wasLocked) {
-        debugTutorial('unlock-skip', key, describeElement(el));
+      const selector = CONTROL_SELECTORS[key];
+      const candidates = [];
+      if (selector && panel?.isConnected) {
+        panel.querySelectorAll(selector).forEach(el => {
+          if (!(el instanceof HTMLElement)) return;
+          if (!candidates.includes(el)) candidates.push(el);
+        });
+      }
+      const mapped = map[key];
+      if (mapped instanceof HTMLElement && panel?.isConnected && panel.contains(mapped) && !candidates.includes(mapped)) {
+        candidates.push(mapped);
+      }
+      if (!candidates.length && selector) {
+        document.querySelectorAll(selector).forEach(el => {
+          if (!(el instanceof HTMLElement)) return;
+          const ownerPanel = el.closest('.toy-panel');
+          if (ownerPanel !== panel) return;
+          if (!candidates.includes(el)) candidates.push(el);
+        });
+      }
+      if (!panel.__tutorialUnlockObservers) panel.__tutorialUnlockObservers = {};
+      if (!candidates.length) {
+        debugTutorial('unlock-wait', key, selector || '(no selector)');
+        if (!panel.__tutorialUnlockObservers[key] && selector) {
+          const observer = new MutationObserver(() => {
+            const retry = Array.from(panel.querySelectorAll(selector)).filter(el => el instanceof HTMLElement);
+            if (retry.length) {
+              try { observer.disconnect(); } catch {}
+              panel.__tutorialUnlockObservers[key] = null;
+              const unlockedNow = unlockPanelControls(panel, [key]);
+              if (unlockedNow?.length) {
+                requestAnimationFrame(() => unlockedNow.forEach(animateUnlock));
+              }
+            }
+          });
+          try { observer.observe(panel, { childList: true, subtree: true }); } catch {}
+          panel.__tutorialUnlockObservers[key] = observer;
+        }
         return;
       }
-      el.classList.remove('tutorial-control-locked');
-      const origPriority = el.dataset.tutorialOrigDisplayPriority || '';
-      if (el.dataset.tutorialOrigDisplay !== undefined) {
-        const origDisplay = el.dataset.tutorialOrigDisplay;
-        try { el.style.removeProperty('display'); } catch {}
-        if (origDisplay) {
-          try { el.style.setProperty('display', origDisplay, origPriority); }
-          catch (_) { el.style.display = origDisplay; }
+      if (panel.__tutorialUnlockObservers?.[key]) {
+        try { panel.__tutorialUnlockObservers[key].disconnect(); } catch {}
+        panel.__tutorialUnlockObservers[key] = null;
+      }
+      debugTutorial('unlock-candidates', key, candidates.map(describeElement).join(', '));
+      candidates.forEach(el => {
+        const wasLocked = el.classList.contains('tutorial-control-locked');
+        if (!wasLocked) {
+          debugTutorial('unlock-skip', key, describeElement(el));
+        } else {
+          el.classList.remove('tutorial-control-locked');
         }
-        delete el.dataset.tutorialOrigDisplay;
-      } else {
+        if (el.matches('button, select')) {
+          const wasDisabled = el.dataset.tutorialWasDisabled;
+          const shouldEnable = wasDisabled === '0' || wasDisabled === undefined;
+          if (shouldEnable) {
+            el.disabled = false;
+            el.removeAttribute('aria-disabled');
+          } else {
+            el.setAttribute('aria-disabled', 'true');
+          }
+          delete el.dataset.tutorialWasDisabled;
+        }
         try { el.style.removeProperty('display'); } catch {}
+        if (!unlocked.includes(el)) unlocked.push(el);
+        debugTutorial('unlock', key, describeElement(el));
+      });
+      if (candidates[0]) {
+        map[key] = candidates[0];
       }
-      if (el.dataset.tutorialOrigDisplayPriority !== undefined) {
-        delete el.dataset.tutorialOrigDisplayPriority;
-      }
-      if (el.matches('button, select')) {
-        el.disabled = false;
-        el.removeAttribute('aria-disabled');
-      }
-      unlocked.push(el);
-      debugTutorial('unlock', key, describeElement(el));
     });
     return unlocked;
   }
-
   function setUpSpawnerControls() {
     spawnerControls = {
       toggle: document.querySelector('.toy-spawner-toggle'),
@@ -394,19 +445,32 @@ const GOAL_FLOW = [
         <div class="goal-reward-label">Reward</div>
         <p class="goal-reward-description"></p>
         <div class="goal-reward-icons"></div>
-      </footer>`;
+      </footer>
+      <button class="tutorial-claim-btn" type="button">Claim Reward</button>
+    `;
     return container;
   }
 
   function ensureGoalPanel() {
     if (!goalPanel) goalPanel = buildGoalPanel();
     if (!goalPanel.isConnected) document.body.appendChild(goalPanel);
+    if (!claimButton && goalPanel) {
+      claimButton = goalPanel.querySelector('.tutorial-claim-btn');
+      if (claimButton) {
+        claimButton.addEventListener('click', () => claimCurrentGoalReward());
+      }
+    }
+    updateClaimButtonVisibility();
     requestAnimationFrame(() => goalPanel.classList.add('is-visible'));
   }
 
   function teardownGoalPanel() {
     if (!goalPanel) return;
     goalPanel.classList.remove('is-visible');
+    if (claimButton) {
+      claimButton.classList.remove('is-visible');
+      claimButton.disabled = true;
+    }
   }
 
   function getCurrentGoal() {
@@ -424,6 +488,7 @@ const GOAL_FLOW = [
     if (!goalPanel) return;
     const goal = getCurrentGoal();
     if (!tutorialState || !goal) {
+      updateClaimButtonVisibility();
       return;
     }
 
@@ -475,6 +540,58 @@ const GOAL_FLOW = [
         wrapper.appendChild(btn);
         rewardIcons.appendChild(wrapper);
       });
+    }
+    updateClaimButtonVisibility();
+  }
+
+  function updateClaimButtonVisibility() {
+    if (!goalPanel) return;
+    const btn = claimButton || goalPanel.querySelector('.tutorial-claim-btn');
+    if (!btn) return;
+    if (!tutorialState) {
+      btn.classList.remove('is-visible');
+      btn.disabled = true;
+      return;
+    }
+    const goal = getCurrentGoal();
+    const pendingGoalId = tutorialState.pendingRewardGoalId || null;
+    const awaitingClaim = !!pendingGoalId && goal && goal.id === pendingGoalId;
+    if (awaitingClaim) {
+      btn.classList.add('is-visible');
+      btn.disabled = false;
+      btn.textContent = 'Claim Reward';
+    } else {
+      btn.classList.remove('is-visible');
+      btn.disabled = true;
+    }
+  }
+
+  function claimCurrentGoalReward() {
+    if (!tutorialState) return;
+    const pendingGoalId = tutorialState.pendingRewardGoalId;
+    if (!pendingGoalId) return;
+    const goal = GOAL_FLOW.find(g => g.id === pendingGoalId);
+    if (!goal) {
+      tutorialState.pendingRewardGoalId = null;
+      updateClaimButtonVisibility();
+      return;
+    }
+    const unlocked = applyGoalReward(goal) || [];
+    debugTutorial('reward-claimed', goal.id, 'unlocked', unlocked.length);
+    if (unlocked.length) {
+      requestAnimationFrame(() => unlocked.forEach(animateUnlock));
+    }
+    tutorialState.pendingRewardGoalId = null;
+    tutorialState.goalIndex++;
+    tutorialState.taskIndex = 0;
+    hasDetectedLine = false;
+    renderGoalPanel();
+    updateClaimButtonVisibility();
+    const nextTask = getCurrentTask();
+    if (nextTask) {
+      handleTaskEnter(nextTask);
+    } else {
+      stopParticleStream();
     }
   }
 
@@ -531,14 +648,18 @@ const GOAL_FLOW = [
 
   function completeCurrentTask() {
     const goal = getCurrentGoal();
-    if (!goal) return;
+    if (!goal || !tutorialState) return;
+    if (tutorialState.pendingRewardGoalId) return;
 
     tutorialState.taskIndex++;
     if (tutorialState.taskIndex >= goal.tasks.length) {
-      applyGoalReward(goal).forEach(animateUnlock);
-      tutorialState.goalIndex++;
-      tutorialState.taskIndex = 0;
-      hasDetectedLine = false;
+      tutorialState.taskIndex = goal.tasks.length;
+      tutorialState.pendingRewardGoalId = goal.id;
+      debugTutorial('goal-ready', goal.id);
+      renderGoalPanel();
+      updateClaimButtonVisibility();
+      stopParticleStream();
+      return;
     }
 
     renderGoalPanel();
@@ -546,6 +667,7 @@ const GOAL_FLOW = [
   }
 
   function maybeCompleteTask(requirement) {
+    if (tutorialState?.pendingRewardGoalId) return;
     const task = getCurrentTask();
     if (task && task.requirement === requirement) {
       completeCurrentTask();
@@ -675,7 +797,7 @@ const GOAL_FLOW = [
     tutorialToy = spawnTutorialToy();
     ensureGoalPanel();
 
-    tutorialState = { goalIndex: 0, taskIndex: 0, unlockedRewards: new Set() };
+    tutorialState = { goalIndex: 0, taskIndex: 0, unlockedRewards: new Set(), pendingRewardGoalId: null };
     hasDetectedLine = false;
 
     const playBtnListener = document.querySelector(CONTROL_SELECTORS.play);
@@ -720,9 +842,17 @@ const GOAL_FLOW = [
       try { tutorialToy.__tutorialHeaderObserver.disconnect(); } catch {}
       tutorialToy.__tutorialHeaderObserver = null;
     }
+    if (tutorialToy && tutorialToy.__tutorialHeaderWaiter) {
+      try { tutorialToy.__tutorialHeaderWaiter.disconnect(); } catch {}
+      tutorialToy.__tutorialHeaderWaiter = null;
+    }
     if (tutorialToy && tutorialToy.__tutorialModeObserver) {
       try { tutorialToy.__tutorialModeObserver.disconnect(); } catch {}
       tutorialToy.__tutorialModeObserver = null;
+    }
+    if (tutorialToy && tutorialToy.__tutorialUnlockObservers) {
+      Object.values(tutorialToy.__tutorialUnlockObservers).forEach(obs => { try { obs?.disconnect(); } catch {} });
+      tutorialToy.__tutorialUnlockObservers = null;
     }
     if (tutorialToy) tutorialToy.remove();
     teardownGoalPanel();
@@ -739,6 +869,7 @@ const GOAL_FLOW = [
       try { previousFocus.focus({ preventScroll: true }); } catch {}
     }
 
+    if (tutorialState) tutorialState.pendingRewardGoalId = null;
     tutorialToy = null;
     tutorialFromFactory = false;
     tutorialState = null;
@@ -750,3 +881,9 @@ const GOAL_FLOW = [
   tutorialButton.addEventListener('click', () => tutorialActive ? exitTutorial() : enterTutorial());
   updateButtonVisual();
 })();
+
+
+
+
+
+

@@ -1,5 +1,5 @@
-﻿// src/drawgrid.js
-// Minimal, scoped Drawing Grid ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â 16x12, draw strokes, build snapped nodes on release.
+// src/drawgrid.js
+// Minimal, scoped Drawing Grid ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â 16x12, draw strokes, build snapped nodes on release.
 // Strictly confined to the provided panel element.
 import { buildPalette, midiToName } from './note-helpers.js';
 import { drawBlock } from './toyhelpers.js';
@@ -1468,8 +1468,8 @@ function regenerateMapFromStrokes() {
   const pentatonicOffsets = [0, 3, 5, 7, 10];
   const chromaticOffsets = Array.from({length: 12}, (_, i) => i);
   // Create palettes of MIDI numbers. Reversed so top row is highest pitch.
-  const chromaticPalette = buildPalette(60, chromaticOffsets, 1).reverse(); // MIDI 71 (B4) down to 60 (C4)
-  const pentatonicPalette = buildPalette(60, pentatonicOffsets, 2).reverse(); // 10 notes from C4-C6 range
+  const chromaticPalette = buildPalette(48, chromaticOffsets, 1).reverse(); // MIDI 59 (B3) down to 48 (C3)
+  const pentatonicPalette = buildPalette(48, pentatonicOffsets, 2).reverse(); // 10 notes from C3-C5 range
 
   function snapToGrid(sourceCtx = pctx){
     // build a map: for each column, choose at most one row where line crosses
@@ -2552,5 +2552,7 @@ function regenerateMapFromStrokes() {
 
   return api;
 }
+
+
 
 

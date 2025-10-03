@@ -791,6 +791,33 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
 
 
 }
+  if (isTutorialContext && toyKind === 'drawgrid') {
+    if (!left) {
+      console.warn('[toyui] Tutorial drawgrid missing .toy-title; cannot seed reward buttons.');
+    } else {
+      left.style.setProperty('margin-left', '47px', 'important');
+      const BTN_SIZE = '65px';
+      const ensureTutorialButton = (action, iconUrl, options = {}) => {
+        const { title = '', accent } = options;
+        let btn = left.querySelector(`[data-action="${action}"]`);
+        if (!btn) {
+          btn = document.createElement('button');
+          btn.className = 'c-btn';
+          btn.dataset.action = action;
+          if (title) btn.title = title;
+          btn.style.setProperty('--c-btn-size', BTN_SIZE);
+          if (accent) btn.style.setProperty('--accent', accent);
+          btn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('${iconUrl}');"></div>`;
+          left.appendChild(btn);
+          if (action === 'random') wireScopedRandom(btn, panel);
+        }
+        return btn;
+      };
+      ensureTutorialButton('random', '../assets/UI/T_ButtonRandom.png', { title: 'Randomize' });
+      ensureTutorialButton('clear', '../assets/UI/T_ButtonClear.png', { title: 'Clear', accent: '#f87171' });
+    }
+  }
+
 
   // SAFER initial instrument resolution:
   // Prefer existing dataset (e.g., theme), then explicit default, and only then current select value.

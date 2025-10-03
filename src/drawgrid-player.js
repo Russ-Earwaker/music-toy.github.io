@@ -18,7 +18,7 @@ export function connectDrawGridToPlayer(panel) {
 
   // The grid has 12 rows. Use a chromatic palette matching drawgrid snapping (highest row at top).
   const chromaticOffsets = Array.from({length: 12}, (_, i) => i);
-  const notePalette = buildPalette(60, chromaticOffsets, 1).reverse(); // C4..B4 reversed
+  const notePalette = buildPalette(48, chromaticOffsets, 1).reverse(); // C3..B3 reversed
 
   let gridState = {
     active: Array(initialSteps).fill(false),
@@ -58,3 +58,4 @@ export function connectDrawGridToPlayer(panel) {
 
   panel.__sequencerStep = step;
 }
+
