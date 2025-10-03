@@ -1,4 +1,4 @@
-﻿import { initToyUI } from './toyui.js';
+import { initToyUI } from './toyui.js';
 import { createDrawGrid } from './drawgrid.js';
 import { connectDrawGridToPlayer } from './drawgrid-player.js';
 import { getSnapshot, applySnapshot } from './persistence.js';
@@ -78,6 +78,19 @@ const GOAL_FLOW = [
   let hasDetectedLine = false;
   let spawnerControls = {};
   let tutorialState = null;
+  const debugTutorial = (...args) => {
+    if (typeof window === 'undefined' || !window.DEBUG_TUTORIAL_LOCKS) return;
+    try { console.debug('[tutorial]', ...args); } catch (_) { try { console.log('[tutorial]', ...args); } catch {} }
+  };
+
+  const describeElement = (el) => {
+    if (!(el instanceof HTMLElement)) return String(el);
+    const parts = [el.tagName.toLowerCase()];
+    if (el.id) parts.push('#' + el.id);
+    if (el.classList?.length) parts.push('.' + Array.from(el.classList).join('.'));
+    if (el.dataset?.action) parts.push(`[data-action="${el.dataset.action}"]`);
+    return parts.join('');
+  };
 
   const CONTROL_SELECTORS = {
     clear: '[data-action="clear"]',
@@ -158,21 +171,85 @@ const GOAL_FLOW = [
 
   function lockTutorialControls(panel) {
     if (!panel) return;
-    panel.querySelectorAll('.toy-mode-btn, .toy-chain-btn').forEach(btn => btn.remove());
+    debugTutorial('lockTutorialControls:start', describeElement(panel));
+    panel.querySelectorAll('.toy-mode-btn, .toy-chain-btn').forEach(btn => {
+      debugTutorial('remove-existing-mode-control', describeElement(btn));
+      btn.remove();
+    });
     const header = panel.querySelector('.toy-header');
-    const locked = [];
-    if (header) {
-      header.querySelectorAll('button, select, .c-btn').forEach(el => {
-        if (!(el instanceof HTMLElement) || el.classList.contains('tutorial-control-locked')) return;
+    const locked = panel.__tutorialLockedControls || [];
+
+    const lockElement = (el) => {
+      if (!(el instanceof HTMLElement) || el.classList.contains('tutorial-control-locked')) return;
+      if (el.dataset.tutorialOrigDisplay === undefined) {
         el.dataset.tutorialOrigDisplay = el.style.display || '';
-        el.classList.add('tutorial-control-locked');
-        if (el.matches('button, select')) {
-          try { el.disabled = true; } catch {}
-          el.setAttribute('aria-disabled', 'true');
+      }
+      if (el.dataset.tutorialOrigDisplayPriority === undefined) {
+        const priority = typeof el.style?.getPropertyPriority === 'function' ? el.style.getPropertyPriority('display') : '';
+        el.dataset.tutorialOrigDisplayPriority = priority || '';
+      }
+      el.classList.add('tutorial-control-locked');
+      try {
+        el.style.setProperty('display', 'none', 'important');
+      } catch (_) {
+        el.style.display = 'none';
+      }
+      if (el.matches('button, select')) {
+        try { el.disabled = true; } catch {}
+        el.setAttribute('aria-disabled', 'true');
+      }
+      debugTutorial('lock', describeElement(el));
+      if (!locked.includes(el)) locked.push(el);
+    };
+
+    if (header) {
+      if (panel.__tutorialHeaderObserver) {
+        try { panel.__tutorialHeaderObserver.disconnect(); } catch {}
+      }
+      header.querySelectorAll('button, select, .c-btn').forEach(lockElement);
+
+      const observer = new MutationObserver(mutations => {
+        for (const mutation of mutations) {
+          for (const node of mutation.addedNodes) {
+            if (!(node instanceof HTMLElement)) continue;
+            if (node.matches && node.matches('button, select, .c-btn')) lockElement(node);
+            if (node.querySelectorAll) {
+              node.querySelectorAll('button, select, .c-btn').forEach(lockElement);
+            }
+          }
         }
-        locked.push(el);
       });
+
+      debugTutorial('lockTutorialControls:observe-header', describeElement(header));
+      observer.observe(header, { childList: true, subtree: true });
+      panel.__tutorialHeaderObserver = observer;
     }
+
+    if (panel.__tutorialModeObserver) {
+      try { panel.__tutorialModeObserver.disconnect(); } catch {}
+    }
+    const modeObserver = new MutationObserver(mutations => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (!(node instanceof HTMLElement)) continue;
+          if (node.matches && (node.matches('.toy-mode-btn') || node.matches('.toy-chain-btn'))) {
+            debugTutorial('remove-mode-control', describeElement(node));
+            node.remove();
+            continue;
+          }
+          if (node.querySelectorAll) {
+            node.querySelectorAll('.toy-mode-btn, .toy-chain-btn').forEach(btn => {
+              debugTutorial('remove-mode-control', describeElement(btn));
+              btn.remove();
+            });
+          }
+        }
+      }
+    });
+    debugTutorial('lockTutorialControls:observe-panel', describeElement(panel));
+    modeObserver.observe(panel, { childList: true, subtree: true });
+    panel.__tutorialModeObserver = modeObserver;
+
     panel.__tutorialLockedControls = locked;
   }
 
@@ -200,18 +277,32 @@ const GOAL_FLOW = [
       const el = map[key];
       if (!el) return;
       const wasLocked = el.classList.contains('tutorial-control-locked');
+      if (!wasLocked) {
+        debugTutorial('unlock-skip', key, describeElement(el));
+        return;
+      }
       el.classList.remove('tutorial-control-locked');
+      const origPriority = el.dataset.tutorialOrigDisplayPriority || '';
       if (el.dataset.tutorialOrigDisplay !== undefined) {
-        el.style.display = el.dataset.tutorialOrigDisplay;
+        const origDisplay = el.dataset.tutorialOrigDisplay;
+        try { el.style.removeProperty('display'); } catch {}
+        if (origDisplay) {
+          try { el.style.setProperty('display', origDisplay, origPriority); }
+          catch (_) { el.style.display = origDisplay; }
+        }
         delete el.dataset.tutorialOrigDisplay;
       } else {
-        el.style.removeProperty('display');
+        try { el.style.removeProperty('display'); } catch {}
+      }
+      if (el.dataset.tutorialOrigDisplayPriority !== undefined) {
+        delete el.dataset.tutorialOrigDisplayPriority;
       }
       if (el.matches('button, select')) {
         el.disabled = false;
         el.removeAttribute('aria-disabled');
       }
-      if (wasLocked) unlocked.push(el);
+      unlocked.push(el);
+      debugTutorial('unlock', key, describeElement(el));
     });
     return unlocked;
   }
@@ -508,6 +599,8 @@ const GOAL_FLOW = [
       panel.className = 'toy-panel';
       panel.dataset.toy = 'drawgrid';
       panel.dataset.instrument = 'AcousticGuitar';
+      panel.dataset.tutorial = 'true';
+      panel.classList.add('tutorial-panel');
       board.appendChild(panel);
       initToyUI(panel, { toyName: 'DrawGrid Tutorial' });
       createDrawGrid(panel, { toyId: panel.id });
@@ -515,8 +608,8 @@ const GOAL_FLOW = [
       try { panel.dispatchEvent(new CustomEvent('toy-clear', { bubbles: true })); } catch {}
     }
 
+    if (!panel.dataset.tutorial) panel.dataset.tutorial = 'true';
     panel.classList.add('tutorial-panel');
-    panel.dataset.tutorial = 'true';
     panel.style.zIndex = '60';
 
     lockTutorialControls(panel);
@@ -623,6 +716,14 @@ const GOAL_FLOW = [
 
     stopParticleStream();
     removeTutorialListeners();
+    if (tutorialToy && tutorialToy.__tutorialHeaderObserver) {
+      try { tutorialToy.__tutorialHeaderObserver.disconnect(); } catch {}
+      tutorialToy.__tutorialHeaderObserver = null;
+    }
+    if (tutorialToy && tutorialToy.__tutorialModeObserver) {
+      try { tutorialToy.__tutorialModeObserver.disconnect(); } catch {}
+      tutorialToy.__tutorialModeObserver = null;
+    }
     if (tutorialToy) tutorialToy.remove();
     teardownGoalPanel();
     showOriginalToys();
@@ -649,7 +750,3 @@ const GOAL_FLOW = [
   tutorialButton.addEventListener('click', () => tutorialActive ? exitTutorial() : enterTutorial());
   updateButtonVisual();
 })();
-
-
-
-

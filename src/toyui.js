@@ -141,7 +141,14 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
   // Controls
   const right = header.querySelector('.toy-controls-right');
   const left = header.querySelector('.toy-title');
+  const isTutorialContext = panel.dataset.tutorial === 'true' || panel.classList.contains('tutorial-panel');
+  if (isTutorialContext) {
+    panel.querySelectorAll(':scope > .toy-mode-btn, :scope > .toy-chain-btn').forEach(btn => btn.remove());
+    if (right) right.innerHTML = '';
+  }
+  let sel = null;
 
+  if (!isTutorialContext) {
   // Advanced / Close buttons
   if (toyKind === 'loopgrid' || toyKind === 'bouncer' || toyKind === 'rippler' || toyKind === 'chordwheel' || toyKind === 'drawgrid') {
     // For the Drum Toy and Bouncer, use the new circular "Edit" button, positioned outside the panel.
@@ -705,7 +712,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
   }
 
   // Instrument select (header, hidden in standard)
-  const sel = buildInstrumentSelect(panel);
+  sel = buildInstrumentSelect(panel);
   // Remove any old instrument button to prevent duplicates
   let oldInstBtn = right.querySelector('.toy-inst-btn');
   if (oldInstBtn) oldInstBtn.remove();
@@ -783,6 +790,8 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
   });
 
 
+}
+
   // SAFER initial instrument resolution:
   // Prefer existing dataset (e.g., theme), then explicit default, and only then current select value.
   let initialInstrument = 'TONE';
@@ -817,7 +826,8 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
     try{ panel.dispatchEvent(new CustomEvent('toy:instrument',  { detail: { name: initialInstrument, value: initialInstrument }, bubbles: true })); }catch{}
   }
 
-  switch (toyKind) {
+  if (!isTutorialContext) {
+    switch (toyKind) {
     case 'loopgrid':
       markHelp(panel.querySelector('button[data-action="random"]'), 'Randomize', 'bottom');
       markHelp(panel.querySelector('button[data-action="random-notes"]'), 'Randomize notes', 'bottom');
@@ -850,6 +860,11 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       markHelp(panel.querySelector('button[data-action="random"]'), 'Randomize', 'bottom');
       markHelp(panel.querySelector('button[data-action="clear"]'), 'Clear', 'bottom');
       break;
+    }
+  }
+
+  if (instDisplay && panel.dataset.instrument) {
+    instDisplay.textContent = getDisplayNameForId(panel.dataset.instrument) || toTitleCase(panel.dataset.instrument);
   }
 
   refreshHelpOverlay();

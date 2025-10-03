@@ -836,6 +836,10 @@ body.tutorial-active #board .toy-panel[data-tutorial="true"] .tutorial-control-l
   display: none !important;
 }
 
+.tutorial-topbar-locked {
+  display: none !important;
+}
+
 body.tutorial-active #topbar [data-action]:not([data-action="tutorial"]):not([data-action="toggle-play"]) {
   display: none !important;
 }
@@ -1082,6 +1086,32 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
 .goal-reward-icon.is-unlocked .c-btn .c-btn-glow {
   opacity: 1;
 }
+.tutorial-claim-btn {
+  display: none;
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(94, 138, 190, 0.6);
+  background: rgba(40, 68, 110, 0.85);
+  color: var(--text);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.tutorial-claim-btn.is-visible {
+  display: block;
+  animation: tutorialClaimPulse 1.1s ease-in-out infinite;
+}
+
+@keyframes tutorialClaimPulse {
+  0% { transform: scale(1); box-shadow: 0 0 0 rgba(94, 138, 190, 0.0); }
+  50% { transform: scale(1.03); box-shadow: 0 0 18px rgba(94, 138, 190, 0.45); }
+  100% { transform: scale(1); box-shadow: 0 0 0 rgba(94, 138, 190, 0.0); }
+}
 .app-topbar .brand {
   font-size: 1.1rem;
   font-weight: 600;
@@ -1107,3 +1137,4 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
 .app-topbar [data-action="toggle-play"] .c-btn-core {
   background-size: 50%;
 }
+
