@@ -15,7 +15,22 @@ body.tutorial-active #topbar .tutorial-play-hidden {
   border: 1px solid #1c2430;
   z-index: 600; /* Above particle canvas, below topbar */
 }
-
+
+/* Particles just behind the task row, but still within the goals panel */
+#tutorial-goals .goal-particles-behind {
+  position: absolute;
+  inset: 0;
+  z-index: 590; /* below task rows, above panel background */
+  pointer-events: none;
+}
+
+/* Global particles above the goals panel (for the fly-out path) */
+.tutorial-particles-front {
+  position: fixed;
+  left: 0; top: 0; right: 0; bottom: 0;
+  z-index: 650; /* > #tutorial-goals (600), < topbar if needed */
+  pointer-events: none;
+}
 
 
 /* Tutorial Play pulse (applies to the whole button wrapper so glow + core pulse together) */

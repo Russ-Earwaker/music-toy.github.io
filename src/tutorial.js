@@ -460,6 +460,16 @@ const GOAL_FLOW = [
         claimButton.addEventListener('click', () => claimCurrentGoalReward());
       }
     }
+    if (!goalPanel.querySelector('.goal-particles-behind')) {
+      const c = document.createElement('canvas');
+      c.className = 'goal-particles-behind';
+      goalPanel.appendChild(c);
+    }
+    if (!document.querySelector('.tutorial-particles-front')) {
+      const c2 = document.createElement('canvas');
+      c2.className = 'tutorial-particles-front';
+      document.body.appendChild(c2);
+    }
     updateClaimButtonVisibility();
     requestAnimationFrame(() => goalPanel.classList.add('is-visible'));
   }
@@ -616,6 +626,7 @@ const GOAL_FLOW = [
   function handleTaskEnter(task) {
     stopParticleStream();
     document.querySelectorAll('.tutorial-pulse-target').forEach(el => el.classList.remove('tutorial-pulse-target'));
+    document.querySelectorAll('.tutorial-active-pulse').forEach(el => el.classList.remove('tutorial-active-pulse'));
 
     if (!task) return;
 
@@ -659,69 +670,78 @@ const GOAL_FLOW = [
       if (taskEl) startParticleStream(taskEl, targetEl);
 
       if (isPlayTask) {
-        const playButtonContainer = targetEl; // Animate the button element itself (it wraps .c-btn-outer/.c-btn-glow/.c-btn-core)
+        const playButtonContainer = targetEl;
 
-        // Prepare hidden state (Step 6)
+        // guard (before rAF)
         playButtonContainer.classList.add('tutorial-play-hidden');
-        
-        // Before starting the animation, make sure we start from scale(0) and avoid a normal-size flash. (Step 1)
         playButtonContainer.style.transformOrigin = '50% 50%';
         playButtonContainer.style.willChange = 'transform, opacity';
         playButtonContainer.style.transform = 'scale(0)';
         playButtonContainer.style.opacity = '1';
 
-        // Next frame: reveal and animate (Step 6)
+        // reveal + force layout before anim
         requestAnimationFrame(() => {
           if (!playButtonContainer.isConnected) return;
-          playButtonContainer.classList.remove('tutorial-play-hidden');
 
-          // Clean previous animations, if any
-          if (playButtonContainer._tutorialAnim && typeof playButtonContainer._tutorialAnim.cancel === 'function') {
-            playButtonContainer._tutorialAnim.cancel();
+          // Reveal + ensure container guards are applied, then force layout
+          playButtonContainer.classList.remove('tutorial-play-hidden');
+          void playButtonContainer.offsetWidth; // reflow container
+
+          const playButtonVisual = playButtonContainer.querySelector('.c-btn-core') || playButtonContainer;
+
+          // Cancel any prior visual animation
+          if (playButtonVisual._tutorialAnim && typeof playButtonVisual._tutorialAnim.cancel === 'function') {
+            playButtonVisual._tutorialAnim.cancel();
           }
 
-          // Add flash effect (Step 4)
-          playButtonContainer.classList.add('tutorial-flash');
-          setTimeout(() => playButtonContainer.classList.remove('tutorial-flash'), 320);
+          // Ensure visual starts at scale(0) so WAAPI tween can't be skipped
+          playButtonVisual.style.willChange = 'transform, opacity';
+          playButtonVisual.style.transform = 'scale(0)';
+          playButtonVisual.style.opacity = '1';
+          void playButtonVisual.offsetWidth; // reflow visual
 
-          if (!playButtonContainer.animate) {
+          // Flash accent
+          playButtonVisual.classList.add('tutorial-flash');
+          setTimeout(() => playButtonVisual.classList.remove('tutorial-flash'), 320);
+
+          const finish = () => {
+            // Enable ongoing pulses and clear guards
+            playButtonVisual.classList.add('tutorial-pulse-target');
+            // Also toggle ring pulse on the wrapper for the blue ring animation
+            playButtonContainer.classList.add('tutorial-active-pulse');
+
+            playButtonVisual.style.removeProperty('transform');
+            playButtonVisual.style.removeProperty('will-change');
+            playButtonVisual.style.removeProperty('opacity');
+            
             playButtonContainer.style.removeProperty('transform');
             playButtonContainer.style.removeProperty('will-change');
             playButtonContainer.style.removeProperty('opacity');
-            playButtonContainer.classList.add('tutorial-pulse-target');
+            playButtonVisual._tutorialAnim = null;
+          };
+
+          if (!playButtonVisual.animate) {
+            finish();
             return;
           }
 
-          // Pop: 0 → 2.0x → 0.92x → 1.0x (Step 1)
-          playButtonContainer._tutorialAnim = playButtonContainer.animate(
+          playButtonVisual._tutorialAnim = playButtonVisual.animate(
             [
               { transform: 'scale(0)',    opacity: 1, offset: 0.00 },
               { transform: 'scale(2.0)',  opacity: 1, offset: 0.60 },
               { transform: 'scale(0.92)', opacity: 1, offset: 0.85 },
               { transform: 'scale(1.0)',  opacity: 1, offset: 1.00 }
             ],
-            {
-              duration: 1200,
-              easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
-              fill: 'both',          // keep end state
-              composite: 'replace'
-            }
+            { duration: 1200, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'both', composite: 'replace' }
           );
 
-          // Ensure we mark it as a pulse target when the pop finishes
-          const finish = () => {
-            playButtonContainer.classList.add('tutorial-pulse-target');
-            // Clear initial transform property that was set as a guard
-            playButtonContainer.style.removeProperty('transform');
-            playButtonContainer.style.removeProperty('will-change');
-            playButtonContainer.style.removeProperty('opacity');
-            playButtonContainer._tutorialAnim = null;
-          };
-          playButtonContainer._tutorialAnim.onfinish = finish;
-          playButtonContainer._tutorialAnim.oncancel = finish;
+          if (playButtonVisual._tutorialAnim && typeof playButtonVisual._tutorialAnim === 'object') {
+            playButtonVisual._tutorialAnim.onfinish = finish;
+            playButtonVisual._tutorialAnim.oncancel = finish;
+          }
         });
       } else {
-        targetEl.classList.add('tutorial-pulse-target');
+        targetEl.classList.add('tutorial-pulse-target', 'tutorial-active-pulse');
       }
     } else {
       stopParticleStream();
@@ -915,6 +935,7 @@ const GOAL_FLOW = [
       playBtn.classList.remove('tutorial-play-hidden');
       playBtn.classList.remove('tutorial-hide-play-button');
       playBtn.classList.remove('tutorial-pulse-target');
+      playBtn.classList.remove('tutorial-active-pulse');
       playBtn.removeAttribute('aria-hidden');
       if (playBtn.dataset.tutorialOrigDisplay !== undefined) {
         playBtn.style.display = playBtn.dataset.tutorialOrigDisplay;

@@ -1,4 +1,4 @@
-﻿/* src/circular-button.css */
+/* src/circular-button.css */
 /* A reusable, layered circular button component. */
 
 .c-btn {
@@ -100,6 +100,26 @@
 }
 .c-btn:active .c-btn-glow { opacity: 1; /* Do not scale the glow on press */ }
 
+/* Active pulse ring: scale the glow to fill outer circle and tint to white */
+@keyframes cbtnActiveRing {
+  0%   { inset: 2px; border-color: var(--accent, cyan); opacity: 0.85; filter: blur(1.5px); }
+  40%  { inset: 0px; border-color: #fff;               opacity: 1.00; filter: blur(1.0px); }
+  100% { inset: 2px; border-color: var(--accent, cyan); opacity: 0.85; filter: blur(1.5px); }
+}
 
+/* When the button is in "tutorial-active-pulse", ring expands & pulses */
+.c-btn.tutorial-active-pulse .c-btn-glow {
+  animation: cbtnActiveRing 2s ease-in-out infinite;
+}
 
+/* Core background pulse: scale the colored circle to the outer edge and flash to white */
+@keyframes cbtnActiveCore {
+  0%   { transform: translate(-50%, -50%) scale(1.00); filter: brightness(1.0); background-color: var(--accent, cyan); }
+  40%  { transform: translate(-50%, -50%) scale(1.15); filter: brightness(1.25); background-color: #ffffff; }
+  100% { transform: translate(-50%, -50%) scale(1.00); filter: brightness(1.0); background-color: var(--accent, cyan); }
+}
 
+/* When active, pulse the background disc too */
+.c-btn.tutorial-active-pulse .c-btn-core::before {
+  animation: cbtnActiveCore 2s ease-in-out infinite;
+}
