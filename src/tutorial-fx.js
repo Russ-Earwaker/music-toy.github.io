@@ -1,9 +1,10 @@
-// src/tutorial-fx.js
+﻿// src/tutorial-fx.js
 
 let fxCanvas = null;
 let fxCtx = null;
 let animationFrameId = null;
 let particles = [];
+const PARTICLES_PER_SEC = 140;
 
 function ensureCanvas() {
   if (fxCanvas) return;
@@ -20,7 +21,7 @@ function ensureCanvas() {
   });
   document.body.appendChild(fxCanvas);
   fxCtx = fxCanvas.getContext('2d');
-  
+
   const resize = () => {
     fxCanvas.width = window.innerWidth;
     fxCanvas.height = window.innerHeight;
@@ -38,71 +39,64 @@ function createParticle(x, y, endPos) {
     endX: endPos.x,
     endY: endPos.y,
     progress: 0,
-    speed: (0.005 + Math.random() * 0.0025),
-    amplitude: 15 + Math.random() * 15,
+    speed: 0.01 + Math.random() * 0.002,
+    amplitude: 11.25 + Math.random() * 11.25,
     frequency: 0.1 + Math.random() * 0.1,
     phase: Math.random() * Math.PI * 2,
-    size: 1.5, // smaller uniform size
+    size: 1.5
   };
 }
 
 function animate(startEl, endEl) {
+  if (!fxCtx || !fxCanvas || !startEl || !endEl) {
+    animationFrameId = requestAnimationFrame(() => animate(startEl, endEl));
+    return;
+  }
+
+  if (!animate._lastTs) animate._lastTs = performance.now();
+  if (typeof animate._accum !== 'number') animate._accum = 0;
+
+  const now = performance.now();
+  const dt = Math.max(0, now - animate._lastTs) / 1000;
+  animate._lastTs = now;
+
   const startRect = startEl.getBoundingClientRect();
   const endRect = endEl.getBoundingClientRect();
-  const startPos = {
-    x: startRect.left + startRect.width / 2,
-    y: startRect.top + startRect.height / 2
-  };
-  const endPos = {
-    x: endRect.left + endRect.width / 2,
-    y: endRect.top + endRect.height / 2
-  };
+  const sx = startRect.left + startRect.width * 0.9;
+  const sy = startRect.top + startRect.height * 0.5;
+  const ex = endRect.left + endRect.width * 0.5;
+  const ey = endRect.top + endRect.height * 0.5;
 
-  // Consistent spawn rate
-  if (particles.length < 100) { // Cap particles
-    for (let i = 0; i < 2; i++) {
-        particles.push(createParticle(startPos.x, startPos.y, endPos));
-    }
+  animate._accum += PARTICLES_PER_SEC * dt;
+  while (animate._accum >= 1) {
+    particles.push(createParticle(sx, sy, { x: ex, y: ey }));
+    animate._accum -= 1;
   }
 
-  if (fxCtx) {
-    fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
-  }
+  fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+  fxCtx.save();
+  fxCtx.globalCompositeOperation = 'lighter';
 
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
-    p.progress += p.speed;
+    p.progress = Math.min(1, p.progress + p.speed * (dt * 60));
+    const t = p.progress;
+
+    p.x = p.startX + (p.endX - p.startX) * t;
+    p.y = p.startY + (p.endY - p.startY) * t + Math.sin(p.phase + t * Math.PI * 2 * p.frequency) * p.amplitude;
 
     if (p.progress >= 1) {
       particles.splice(i, 1);
       continue;
     }
 
-    const currentX = p.startX + (p.endX - p.startX) * p.progress;
-    const currentY = p.startY + (p.endY - p.startY) * p.progress;
-
-    const angle = Math.atan2(p.endY - p.startY, p.endX - p.startX);
-    const perpendicularAngle = angle + Math.PI / 2;
-
-    const sineOffset = Math.sin(p.progress * Math.PI * 4 + p.phase) * p.amplitude * Math.sin(p.progress * Math.PI);
-
-    p.x = currentX + Math.cos(perpendicularAngle) * sineOffset;
-    p.y = currentY + Math.sin(perpendicularAngle) * sineOffset;
-    
-    if (fxCtx) {
-        // Dynamic sparkle
-        const isSparkling = Math.random() > 0.98;
-        let color = 'rgba(70, 120, 220, 0.8)';
-        if (isSparkling) {
-            color = `rgba(150, 200, 255, 0.9)`;
-        }
-
-        fxCtx.fillStyle = color;
-        fxCtx.beginPath();
-        fxCtx.arc(p.x, p.y, p.size, 0, 2 * Math.PI);
-        fxCtx.fill();
-    }
+    fxCtx.beginPath();
+    fxCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    fxCtx.fillStyle = Math.random() > 0.98 ? 'rgba(150,200,255,0.9)' : 'rgba(70,120,220,0.8)';
+    fxCtx.fill();
   }
+
+  fxCtx.restore();
 
   animationFrameId = requestAnimationFrame(() => animate(startEl, endEl));
 }
@@ -113,6 +107,8 @@ export function startParticleStream(startEl, endEl) {
     cancelAnimationFrame(animationFrameId);
   }
   particles = [];
+  animate._lastTs = performance.now();
+  animate._accum = 0;
   animate(startEl, endEl);
 }
 
@@ -122,6 +118,8 @@ export function stopParticleStream() {
     animationFrameId = null;
   }
   particles = [];
+  animate._lastTs = undefined;
+  animate._accum = 0;
   if (fxCanvas && fxCtx) {
     fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
   }

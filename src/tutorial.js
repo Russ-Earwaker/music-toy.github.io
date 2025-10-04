@@ -1,4 +1,4 @@
-import { initToyUI } from './toyui.js';
+﻿import { initToyUI } from './toyui.js';
 import { createDrawGrid } from './drawgrid.js';
 import { connectDrawGridToPlayer } from './drawgrid-player.js';
 import { getSnapshot, applySnapshot } from './persistence.js';
@@ -516,12 +516,30 @@ const GOAL_FLOW = [
     const rewardIcons = goalPanel.querySelector('.goal-reward-icons');
     rewardIcons.innerHTML = '';
     if (reward && Array.isArray(reward.icons)) {
-      reward.icons.forEach(icon => {
+      reward.icons.forEach((icon) => {
         const wrapper = document.createElement('div');
         wrapper.className = 'goal-reward-icon';
         if (tutorialState?.unlockedRewards?.has(goal.id)) wrapper.classList.add('is-unlocked');
 
-        const btn = document.createElement('div');
+        // SPECIAL CASE: show Add Toy as the same bevelled square as the real spawner button
+        const isAddToy = (goal.id === 'clear-random') &&
+                         ((icon.label && /add\s*toy/i.test(icon.label)) || icon.symbol === '+');
+
+        if (isAddToy) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'toy-spawner-toggle toy-btn is-preview';
+          btn.setAttribute('aria-label', icon.label || 'Add Toy');
+          btn.innerHTML = '<span aria-hidden="true">+</span>';
+          btn.style.pointerEvents = 'none'; // purely decorative in the reward panel
+          wrapper.appendChild(btn);
+          rewardIcons.appendChild(wrapper);
+          return;
+        }
+
+        // Default path: circular layered icon button
+        const btn = document.createElement('button');
+        btn.type = 'button';
         btn.className = 'c-btn';
         btn.style.setProperty('--c-btn-size', '56px');
         if (icon.accent) btn.style.setProperty('--accent', icon.accent);
@@ -604,7 +622,6 @@ const GOAL_FLOW = [
     const targetKey = TASK_TARGETS[task.id];
     const targetEl = targetKey ? (getControlMap(tutorialToy)[targetKey] || document.querySelector(CONTROL_SELECTORS[targetKey])) : null;
     if (task.id === 'press-play' && targetEl) {
-      targetEl.classList.remove('tutorial-play-hidden');
       targetEl.classList.remove('tutorial-hide-play-button');
       if (targetEl.dataset.tutorialOrigDisplay !== undefined) {
         targetEl.style.display = targetEl.dataset.tutorialOrigDisplay;
@@ -629,40 +646,80 @@ const GOAL_FLOW = [
       targetEl.removeAttribute('aria-hidden');
       window.tutorialSpacebarDisabled = false;
     }
-    const targetVisible = targetEl && !targetEl.classList.contains('tutorial-control-locked') && !targetEl.classList.contains('tutorial-hide-play-button') && !targetEl.classList.contains('tutorial-play-hidden') && (targetEl.offsetParent !== null || getComputedStyle(targetEl).display !== 'none');
+    const isPlayTask = task.id === 'press-play';
+    const targetVisible =
+      targetEl &&
+      !targetEl.classList.contains('tutorial-control-locked') &&
+      !targetEl.classList.contains('tutorial-hide-play-button') &&
+      (isPlayTask || !targetEl.classList.contains('tutorial-play-hidden')) &&
+      (targetEl.offsetParent !== null || getComputedStyle(targetEl).display !== 'none');
 
     if (targetVisible) {
       const taskEl = goalPanel?.querySelector('.goal-task.is-active');
       if (taskEl) startParticleStream(taskEl, targetEl);
 
-      if (task.id === 'press-play') {
-        setTimeout(() => {
-          // Animate inner core so the container's translate(-50%, -50%) centering
-          // isn't overridden by transform keyframes during the spawn pop.
-          const animEl = targetEl.matches('#topbar [data-action="toggle-play"]')
-            ? (targetEl.querySelector('.c-btn-core')
-                || targetEl.querySelector('.btn-core')
-                || targetEl)
-            : targetEl;
+      if (isPlayTask) {
+        const playButtonContainer = targetEl; // Animate the button element itself (it wraps .c-btn-outer/.c-btn-glow/.c-btn-core)
 
-          animEl.animate([
-            /* Clean pop: 0 -> 2.st0x -> 0.92x -> 1.0x, no opacity flicker */
-            { transform: 'scale(0)',    opacity: 1, offset: 0.0 },
-            { transform: 'scale(2.0)',  opacity: 1, offset: 0.6 },
-            { transform: 'scale(0.92)', opacity: 1, offset: 0.85 },
+        // Prepare hidden state (Step 6)
+        playButtonContainer.classList.add('tutorial-play-hidden');
+        
+        // Before starting the animation, make sure we start from scale(0) and avoid a normal-size flash. (Step 1)
+        playButtonContainer.style.transformOrigin = '50% 50%';
+        playButtonContainer.style.willChange = 'transform, opacity';
+        playButtonContainer.style.transform = 'scale(0)';
+        playButtonContainer.style.opacity = '1';
 
+        // Next frame: reveal and animate (Step 6)
+        requestAnimationFrame(() => {
+          if (!playButtonContainer.isConnected) return;
+          playButtonContainer.classList.remove('tutorial-play-hidden');
 
-            { transform: 'scale(1)',    opacity: 1, offset: 1.0 }
-          ], {
-            duration: 1200,
-            easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
-            composite: 'replace',
-            fill: 'none'
-          }).onfinish = () => {
-            targetEl.classList.add('tutorial-pulse-target');
+          // Clean previous animations, if any
+          if (playButtonContainer._tutorialAnim && typeof playButtonContainer._tutorialAnim.cancel === 'function') {
+            playButtonContainer._tutorialAnim.cancel();
+          }
+
+          // Add flash effect (Step 4)
+          playButtonContainer.classList.add('tutorial-flash');
+          setTimeout(() => playButtonContainer.classList.remove('tutorial-flash'), 320);
+
+          if (!playButtonContainer.animate) {
+            playButtonContainer.style.removeProperty('transform');
+            playButtonContainer.style.removeProperty('will-change');
+            playButtonContainer.style.removeProperty('opacity');
+            playButtonContainer.classList.add('tutorial-pulse-target');
+            return;
+          }
+
+          // Pop: 0 → 2.0x → 0.92x → 1.0x (Step 1)
+          playButtonContainer._tutorialAnim = playButtonContainer.animate(
+            [
+              { transform: 'scale(0)',    opacity: 1, offset: 0.00 },
+              { transform: 'scale(2.0)',  opacity: 1, offset: 0.60 },
+              { transform: 'scale(0.92)', opacity: 1, offset: 0.85 },
+              { transform: 'scale(1.0)',  opacity: 1, offset: 1.00 }
+            ],
+            {
+              duration: 1200,
+              easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+              fill: 'both',          // keep end state
+              composite: 'replace'
+            }
+          );
+
+          // Ensure we mark it as a pulse target when the pop finishes
+          const finish = () => {
+            playButtonContainer.classList.add('tutorial-pulse-target');
+            // Clear initial transform property that was set as a guard
+            playButtonContainer.style.removeProperty('transform');
+            playButtonContainer.style.removeProperty('will-change');
+            playButtonContainer.style.removeProperty('opacity');
+            playButtonContainer._tutorialAnim = null;
           };
-
-        }, 100);
+          playButtonContainer._tutorialAnim.onfinish = finish;
+          playButtonContainer._tutorialAnim.oncancel = finish;
+        });
       } else {
         targetEl.classList.add('tutorial-pulse-target');
       }
@@ -675,7 +732,6 @@ const GOAL_FLOW = [
       helpActivatedForTask = false;
     }
   }
-
   function completeCurrentTask() {
     const goal = getCurrentGoal();
     if (!goal || !tutorialState) return;
@@ -718,9 +774,15 @@ const GOAL_FLOW = [
     if (!panel) return;
     addListener(panel, 'drawgrid:update', (e) => handleDrawgridUpdate(e.detail));
     addListener(panel, 'drawgrid:node-toggle', () => maybeCompleteTask('toggle-node'));
+
     const controlMap = getControlMap(panel);
-    if (controlMap.clear) addListener(controlMap.clear, 'click', () => maybeCompleteTask('press-clear'));
+    if (controlMap.clear)  addListener(controlMap.clear,  'click', () => maybeCompleteTask('press-clear'));
     if (controlMap.random) addListener(controlMap.random, 'click', () => maybeCompleteTask('press-random'));
+
+    // NEW: also complete tasks when the toy’s own events fire (more robust than click-only)
+    addListener(panel, 'toy-clear',  () => maybeCompleteTask('press-clear'));
+    addListener(panel, 'toy-reset',  () => maybeCompleteTask('press-clear'));   // some flows dispatch this too
+    addListener(panel, 'toy-random', () => maybeCompleteTask('press-random'));
   }
 
   function spawnTutorialToy() {
@@ -939,3 +1001,4 @@ const GOAL_FLOW = [
 
 
             /* Clean pop: 0 -> 2.0x -> 0.92x -> 1.0x, no opacity flicker */
+

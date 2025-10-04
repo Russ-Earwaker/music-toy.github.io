@@ -18,3 +18,29 @@ body.tutorial-active #topbar .tutorial-play-hidden {
 
 
 
+/* Tutorial Play pulse (applies to the whole button wrapper so glow + core pulse together) */
+@keyframes tutorialPulse {
+  0%   { transform: scale(1);   }
+  10%  { transform: scale(1.08); }
+  20%  { transform: scale(1);   }
+  100% { transform: scale(1);   }
+}
+
+.tutorial-pulse-target {
+  animation: tutorialPulse 2s ease-in-out infinite;
+  transform-origin: 50% 50%;
+}
+
+/* Reward panel: bevelled Add Toy preview sizing */
+.goal-reward-icons .toy-spawner-toggle.is-preview {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;       /* matches bevelled square feel */
+  font-size: 36px;           /* big '+' like the real button */
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.goal-reward-icons .toy-spawner-toggle.is-preview > span[aria-hidden="true"] {
+  line-height: 1;
+}
