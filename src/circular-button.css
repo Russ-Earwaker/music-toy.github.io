@@ -100,17 +100,6 @@
 }
 .c-btn:active .c-btn-glow { opacity: 1; /* Do not scale the glow on press */ }
 
-/* One-shot flash used by tutorial pop */
-@keyframes tutorialFlash {
-  0%   { filter: brightness(1);   }
-  10%  { filter: brightness(1.8); }
-  100% { filter: brightness(1);   }
-}
 
-/* When the container gets the flash flag, brighten the glow layer */
-.c-btn.tutorial-flash .c-btn-glow,
-.tutorial-flash .c-btn-glow {
-  animation: tutorialFlash 300ms ease-out 1;
-}
 
 

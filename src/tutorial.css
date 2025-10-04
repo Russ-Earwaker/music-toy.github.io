@@ -44,3 +44,8 @@ body.tutorial-active #topbar .tutorial-play-hidden {
 .goal-reward-icons .toy-spawner-toggle.is-preview > span[aria-hidden="true"] {
   line-height: 1;
 }
+
+/* Quick flash accent (class toggled for ~320ms) */
+.tutorial-flash {
+  filter: brightness(1.35);
+}

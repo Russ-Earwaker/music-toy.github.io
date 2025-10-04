@@ -1,4 +1,4 @@
-import { initToyUI } from './toyui.js';
+﻿import { initToyUI } from './toyui.js';
 import { createDrawGrid } from './drawgrid.js';
 import { connectDrawGridToPlayer } from './drawgrid-player.js';
 import { getSnapshot, applySnapshot } from './persistence.js';
@@ -994,3 +994,11 @@ const GOAL_FLOW = [
   tutorialButton.addEventListener('click', () => tutorialActive ? exitTutorial() : enterTutorial());
   updateButtonVisual();
 })();
+
+
+
+
+
+
+            /* Clean pop: 0 -> 2.0x -> 0.92x -> 1.0x, no opacity flicker */
+

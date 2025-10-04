@@ -1,0 +1,27 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Patch: Preview change pack",
+      "type": "shell",
+      "command": "node",
+      "args": ["tools/apply-anchors.mjs", "--plan", "${input:changePack}"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Patch: Apply change pack",
+      "type": "shell",
+      "command": "node",
+      "args": ["tools/apply-anchors.mjs", "--apply", "${input:changePack}"],
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "changePack",
+      "type": "promptString",
+      "description": "Path to change pack JSON (e.g., changes/play-button-fix.json)",
+      "default": "changes/play-button-fix.json"
+    }
+  ]
+}
