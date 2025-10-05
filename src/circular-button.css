@@ -135,7 +135,8 @@
 #topbar [data-action="toggle-play"].c-btn {
   --c-btn-size: var(--play-btn-size);
   position: relative;
+  transform-origin: 50% 50%;
+  /* Use left/top for a layout-based offset so WAAPI transform for scale doesn't fight it */
   left: var(--play-btn-offset-x);
   top:  var(--play-btn-offset-y);
-  transform-origin: 50% 50%;
 }

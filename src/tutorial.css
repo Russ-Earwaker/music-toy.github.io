@@ -10,10 +10,12 @@ body.tutorial-active #topbar .tutorial-play-hidden {
   pointer-events: none !important;
 }
 
+/* Ensure the panel forms its own stacking context so z-index works */
 #tutorial-goals {
+  position: relative;                    /* NEW */
   background-color: rgba(13, 20, 29, 1); /* Opaque background */
   border: 1px solid #1c2430;
-  z-index: 600; /* Above particle canvas, below topbar */
+  z-index: 600;                          /* Above particle canvas, below topbar */
 }
 
 /* Particles just behind the task row, but still within the goals panel */
