@@ -87,6 +87,44 @@ try {
   }
 } catch (e) { /* no-op */ }
 /* << GPT:MASK_FRONT_CANVAS_OVER_PANEL END >> */
+
+/* << GPT:MASK_FRONT_CANVAS_OVER_PANEL START >> */
+try {
+  const gp = document.getElementById('tutorial-goals');
+  if (gp && typeof frontCtx !== 'undefined' && frontCtx && typeof frontCanvas !== 'undefined' && frontCanvas) {
+    const dpr = (window.devicePixelRatio || 1);
+    const r = gp.getBoundingClientRect();
+    frontCtx.save();
+    frontCtx.globalCompositeOperation = 'destination-out';
+    frontCtx.fillRect(
+      Math.floor(r.left * dpr),
+      Math.floor(r.top * dpr),
+      Math.ceil(r.width * dpr),
+      Math.ceil(r.height * dpr)
+    );
+    frontCtx.restore();
+  }
+} catch (e) { /* no-op */ }
+/* << GPT:MASK_FRONT_CANVAS_OVER_PANEL END >> */
+
+/* << GPT:MASK_FRONT_CANVAS_OVER_PANEL START >> */
+try {
+  const gp = document.getElementById('tutorial-goals');
+  if (gp && typeof frontCtx !== 'undefined' && frontCtx && typeof frontCanvas !== 'undefined' && frontCanvas) {
+    const dpr = (window.devicePixelRatio || 1);
+    const r = gp.getBoundingClientRect();
+    frontCtx.save();
+    frontCtx.globalCompositeOperation = 'destination-out';
+    frontCtx.fillRect(
+      Math.floor(r.left * dpr),
+      Math.floor(r.top * dpr),
+      Math.ceil(r.width * dpr),
+      Math.ceil(r.height * dpr)
+    );
+    frontCtx.restore();
+  }
+} catch (e) { /* no-op */ }
+/* << GPT:MASK_FRONT_CANVAS_OVER_PANEL END >> */
 animationFrameId = requestAnimationFrame(() => startFlight(ctx, startEl, endEl));
         return;
     }

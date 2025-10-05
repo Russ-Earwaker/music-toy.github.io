@@ -1,25 +1,11 @@
 {
   "operations": [
     {
-      "file": "src/circular-button.css",
+      "file": "style.css",
       "op": "insert_after",
-      "anchor": "/\\* src/circular-button.css \\*/",
-      "id": "PLAY_BUTTON_POS_FIXED_2X",
-      "text": "\n/* << GPT:PLAY_BUTTON_POS_FIXED_2X START >> */\n/* Pin Play button to a consistent viewport position across all modes */\n#topbar { position: relative !important; }\n#topbar [data-action='toggle-play'] {\n  --play-btn-size: 100px;\n  position: fixed !important;\n  top: 24px !important;\n  right: 24px !important;\n  width: var(--play-btn-size) !important;\n  height: var(--play-btn-size) !important;\n  transform-origin: 50% 50% !important;\n  z-index: 1000 !important; /* above particle canvas */\n}\n#topbar [data-action='toggle-play'].c-btn,\n#topbar [data-action='toggle-play'] .c-btn {\n  --c-btn-size: var(--play-btn-size) !important;\n  width: var(--c-btn-size) !important;\n  height: var(--c-btn-size) !important;\n}\n/* << GPT:PLAY_BUTTON_POS_FIXED_2X END >> */\n"
-    },
-    {
-      "file": "src/tutorial.css",
-      "op": "insert_after",
-      "anchor": "/\\* tutorial.css \\*/",
-      "id": "PARTICLE_FRONT_BETWEEN_WITH_MASK",
-      "text": "\n/* << GPT:PARTICLE_FRONT_BETWEEN_WITH_MASK START >> */\n/* Header under particles, Play above particles */\n#topbar { position: relative !important; z-index: 900 !important; }\nbody .tutorial-particles-front { z-index: 940 !important; }\n#tutorial-goals { position: relative !important; z-index: 600 !important; }\n/* << GPT:PARTICLE_FRONT_BETWEEN_WITH_MASK END >> */\n"
-    },
-    {
-      "file": "src/tutorial-fx.js",
-      "op": "insert_before",
-      "anchor": "animationFrameId\\s*=\\s*requestAnimationFrame\\(",
-      "id": "MASK_FRONT_CANVAS_OVER_PANEL",
-      "text": "\n/* << GPT:MASK_FRONT_CANVAS_OVER_PANEL START >> */\ntry {\n  const gp = document.getElementById('tutorial-goals');\n  if (gp && typeof frontCtx !== 'undefined' && frontCtx && typeof frontCanvas !== 'undefined' && frontCanvas) {\n    const dpr = (window.devicePixelRatio || 1);\n    const r = gp.getBoundingClientRect();\n    frontCtx.save();\n    frontCtx.globalCompositeOperation = 'destination-out';\n    frontCtx.fillRect(\n      Math.floor(r.left * dpr),\n      Math.floor(r.top * dpr),\n      Math.ceil(r.width * dpr),\n      Math.ceil(r.height * dpr)\n    );\n    frontCtx.restore();\n  }\n} catch (e) { /* no-op */ }\n/* << GPT:MASK_FRONT_CANVAS_OVER_PANEL END >> */\n"
+      "anchor": "/\\* style.css - Cleaned and Refactored \\*/",
+      "id": "PLAY_BUTTON_MAIN_ALIGN",
+      "text": "\n/* << GPT:PLAY_BUTTON_MAIN_ALIGN START >> */\n/* Align the main-view Play button to the same vertical position as tutorial */\n:root {\n  --play-btn-top-main: 24px;   /* match tutorial's top offset */\n  --play-btn-right-main: 24px; /* match tutorial's right offset */\n  --play-btn-size-main: 100px; /* 2\u00d7 size */\n}\n.app-topbar [data-action=\"toggle-play\"] {\n  position: fixed !important;\n  top: var(--play-btn-top-main) !important;\n  right: var(--play-btn-right-main) !important;\n  width: var(--play-btn-size-main) !important;\n  height: var(--play-btn-size-main) !important;\n  transform: none !important;     /* cancel translate(-50%,-50%) centering */\n  z-index: 1000 !important;       /* keep above most UI, below any modal if needed */\n}\n/* << GPT:PLAY_BUTTON_MAIN_ALIGN END >> */\n"
     }
   ]
 }

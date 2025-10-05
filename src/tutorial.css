@@ -6,6 +6,20 @@ body .tutorial-particles-front { z-index: 940 !important; }
 #tutorial-goals { position: relative !important; z-index: 600 !important; }
 /* << GPT:PARTICLE_FRONT_BETWEEN_WITH_MASK END >> */
 
+/* << GPT:PARTICLE_FRONT_BETWEEN_WITH_MASK START >> */
+/* Header under particles, Play above particles */
+#topbar { position: relative !important; z-index: 900 !important; }
+body .tutorial-particles-front { z-index: 940 !important; }
+#tutorial-goals { position: relative !important; z-index: 600 !important; }
+/* << GPT:PARTICLE_FRONT_BETWEEN_WITH_MASK END >> */
+
+/* << GPT:PARTICLE_FRONT_BETWEEN_WITH_MASK START >> */
+/* Header under particles, Play above particles */
+#topbar { position: relative !important; z-index: 900 !important; }
+body .tutorial-particles-front { z-index: 940 !important; }
+#tutorial-goals { position: relative !important; z-index: 600 !important; }
+/* << GPT:PARTICLE_FRONT_BETWEEN_WITH_MASK END >> */
+
 /* << GPT:PARTICLE_BETWEEN_FIX_TASKS_ABOVE START >> */
 /* Layering order (top -> bottom):
    Play button (1000)

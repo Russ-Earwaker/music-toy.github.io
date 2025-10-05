@@ -1,4 +1,22 @@
 /* style.css - Cleaned and Refactored */
+/* << GPT:PLAY_BUTTON_MAIN_ALIGN START >> */
+/* Align the main-view Play button to the same vertical position as tutorial */
+:root {
+  --play-btn-top-main: 24px;   /* match tutorial's top offset */
+  --play-btn-right-main: 24px; /* match tutorial's right offset */
+  --play-btn-size-main: 100px; /* 2× size */
+}
+.app-topbar [data-action="toggle-play"] {
+  position: fixed !important;
+  top: var(--play-btn-top-main) !important;
+  right: var(--play-btn-right-main) !important;
+  width: var(--play-btn-size-main) !important;
+  height: var(--play-btn-size-main) !important;
+  transform: none !important;     /* cancel translate(-50%,-50%) centering */
+  z-index: 1000 !important;       /* keep above most UI, below any modal if needed */
+}
+/* << GPT:PLAY_BUTTON_MAIN_ALIGN END >> */
+
 
 /* ------------------- */
 /* --- Root & Base --- */

@@ -1,4 +1,62 @@
 /* src/circular-button.css */
+/* << GPT:PLAY_BUTTON_MODE_TOPS START >> */
+:root {
+  --play-btn-top-tutorial: 24px; /* tutorial-correct height */
+  --play-btn-top-main: 24px;     /* make MAIN match tutorial for now */
+}
+/* Force per-mode vertical alignment (high specificity + !important) */
+body.tutorial-active #topbar [data-action='toggle-play'],
+body.tutorial-active [data-action='toggle-play'] {
+  top: var(--play-btn-top-tutorial) !important;
+}
+body:not(.tutorial-active) #topbar [data-action='toggle-play'],
+body:not(.tutorial-active) [data-action='toggle-play'] {
+  top: var(--play-btn-top-main) !important;
+}
+/* << GPT:PLAY_BUTTON_MODE_TOPS END >> */
+
+/* << GPT:PLAY_BUTTON_POS_FIXED_2X START >> */
+/* Pin Play button to a consistent viewport position across all modes */
+#topbar { position: relative !important; }
+#topbar [data-action='toggle-play'] {
+  --play-btn-size: 100px;
+  position: fixed !important;
+  top: 24px !important;
+  right: 24px !important;
+  width: var(--play-btn-size) !important;
+  height: var(--play-btn-size) !important;
+  transform-origin: 50% 50% !important;
+  z-index: 1000 !important; /* above particle canvas */
+}
+#topbar [data-action='toggle-play'].c-btn,
+#topbar [data-action='toggle-play'] .c-btn {
+  --c-btn-size: var(--play-btn-size) !important;
+  width: var(--c-btn-size) !important;
+  height: var(--c-btn-size) !important;
+}
+/* << GPT:PLAY_BUTTON_POS_FIXED_2X END >> */
+
+/* << GPT:PLAY_BUTTON_POS_FIXED_2X START >> */
+/* Pin Play button to a consistent viewport position across all modes */
+#topbar { position: relative !important; }
+#topbar [data-action='toggle-play'] {
+  --play-btn-size: 100px;
+  position: fixed !important;
+  top: 24px !important;
+  right: 24px !important;
+  width: var(--play-btn-size) !important;
+  height: var(--play-btn-size) !important;
+  transform-origin: 50% 50% !important;
+  z-index: 1000 !important; /* above particle canvas */
+}
+#topbar [data-action='toggle-play'].c-btn,
+#topbar [data-action='toggle-play'] .c-btn {
+  --c-btn-size: var(--play-btn-size) !important;
+  width: var(--c-btn-size) !important;
+  height: var(--c-btn-size) !important;
+}
+/* << GPT:PLAY_BUTTON_POS_FIXED_2X END >> */
+
 /* << GPT:PLAY_BUTTON_POS_FIXED_2X START >> */
 /* Pin Play button to a consistent viewport position across all modes */
 #topbar { position: relative !important; }
