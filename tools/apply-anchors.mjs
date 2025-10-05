@@ -91,8 +91,7 @@ if (!operations.length) {
 }
 
 const ensureBackup = (filePath, original) => {
-  const bakPath = filePath + ".bak";
-  if (!fs.existsSync(bakPath)) fs.writeFileSync(bakPath, original, "utf8");
+  // Backups disabled by project policy — no .bak files will be created.
 };
 
 const insertAfter = (content, anchorRe, insertText) => {

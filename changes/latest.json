@@ -1,11 +1,11 @@
 {
   "operations": [
     {
-      "file": "style.css",
-      "op": "insert_after",
-      "anchor": "/\\* style.css - Cleaned and Refactored \\*/",
-      "id": "PLAY_BUTTON_MAIN_ALIGN",
-      "text": "\n/* << GPT:PLAY_BUTTON_MAIN_ALIGN START >> */\n/* Align the main-view Play button to the same vertical position as tutorial */\n:root {\n  --play-btn-top-main: 24px;   /* match tutorial's top offset */\n  --play-btn-right-main: 24px; /* match tutorial's right offset */\n  --play-btn-size-main: 100px; /* 2\u00d7 size */\n}\n.app-topbar [data-action=\"toggle-play\"] {\n  position: fixed !important;\n  top: var(--play-btn-top-main) !important;\n  right: var(--play-btn-right-main) !important;\n  width: var(--play-btn-size-main) !important;\n  height: var(--play-btn-size-main) !important;\n  transform: none !important;     /* cancel translate(-50%,-50%) centering */\n  z-index: 1000 !important;       /* keep above most UI, below any modal if needed */\n}\n/* << GPT:PLAY_BUTTON_MAIN_ALIGN END >> */\n"
+      "file": "tools/apply-anchors.mjs",
+      "op": "replace_between",
+      "start": "const ensureBackup = \\(filePath, original\\) => \\{",
+      "end": "\\};",
+      "text": "const ensureBackup = (filePath, original) => {\n  // Backups disabled by project policy \u2014 no .bak files will be created.\n"
     }
   ]
 }
