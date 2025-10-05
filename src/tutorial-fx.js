@@ -4,7 +4,7 @@ let behindCanvas, frontCanvas;
 let behindCtx, frontCtx;
 let animationFrameId = null;
 let particles = [];
-const PARTICLES_PER_SEC = 140;
+const PARTICLES_PER_SEC = 60;
 
 function setupCanvases(behind, front) {
   behindCanvas = behind;
@@ -40,8 +40,8 @@ function createParticle(x, y, endPos) {
     endY: endPos.y,
     progress: 0,
     speed: 0.005 + Math.random() * 0.001, // 75% slower than original
-    amplitude: 22.5 + Math.random() * 22.5, // Increased wander
-    frequency: 0.1 + Math.random() * 0.1,
+    amplitude: 10 + Math.random() * 22.5, // Increased wander
+    frequency: 0.6 + Math.random() * 0.1,
     phase: Math.random() * Math.PI * 2,
     size: 1.5
   };

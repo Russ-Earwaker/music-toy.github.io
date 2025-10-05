@@ -123,3 +123,19 @@
 .c-btn.tutorial-active-pulse .c-btn-core::before {
   animation: cbtnActiveCore 2s ease-in-out infinite;
 }
+
+/* === Global Play Button Overrides === */
+:root {
+  --play-btn-size: 100px;        /* 2× (adjust if needed) */
+  --play-btn-offset-x: 0px;      /* tweak if you want the “new” offset baked in */
+  --play-btn-offset-y: 0px;
+}
+
+/* Target the actual Play button in the topbar */
+#topbar [data-action="toggle-play"].c-btn {
+  --c-btn-size: var(--play-btn-size);
+  position: relative;
+  left: var(--play-btn-offset-x);
+  top:  var(--play-btn-offset-y);
+  transform-origin: 50% 50%;
+}

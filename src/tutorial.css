@@ -24,14 +24,13 @@ body.tutorial-active #topbar .tutorial-play-hidden {
   pointer-events: none;
 }
 
-/* Global particles above the goals panel (for the fly-out path) */
+/* Global particles above the page background, but BELOW the entire goals panel */
 .tutorial-particles-front {
   position: fixed;
   left: 0; top: 0; right: 0; bottom: 0;
-  z-index: 650; /* > #tutorial-goals (600), < topbar if needed */
+  z-index: 580;               /* BELOW #tutorial-goals (600) */
   pointer-events: none;
 }
-
 
 /* Tutorial Play pulse (applies to the whole button wrapper so glow + core pulse together) */
 @keyframes tutorialPulse {

@@ -1,4 +1,4 @@
-import { initToyUI } from './toyui.js';
+﻿import { initToyUI } from './toyui.js';
 import { createDrawGrid } from './drawgrid.js';
 import { connectDrawGridToPlayer } from './drawgrid-player.js';
 import { getSnapshot, applySnapshot } from './persistence.js';
@@ -676,8 +676,6 @@ const GOAL_FLOW = [
         playButtonContainer.classList.add('tutorial-play-hidden');
         playButtonContainer.style.transformOrigin = '50% 50%';
         playButtonContainer.style.willChange = 'transform, opacity';
-        playButtonContainer.style.transform = 'scale(0)';
-        playButtonContainer.style.opacity = '1';
 
         // reveal + force layout before anim
         requestAnimationFrame(() => {
@@ -685,59 +683,43 @@ const GOAL_FLOW = [
 
           // Reveal + ensure container guards are applied, then force layout
           playButtonContainer.classList.remove('tutorial-play-hidden');
-          void playButtonContainer.offsetWidth; // reflow container
+          playButtonContainer.style.removeProperty('visibility');
+          playButtonContainer.style.opacity = '1';
+          playButtonContainer.removeAttribute('aria-hidden');
+          void playButtonContainer.offsetWidth;
 
-          const playButtonVisual = playButtonContainer.querySelector('.c-btn-core') || playButtonContainer;
-
-          // Cancel any prior visual animation
-          if (playButtonVisual._tutorialAnim && typeof playButtonVisual._tutorialAnim.cancel === 'function') {
-            playButtonVisual._tutorialAnim.cancel();
+          const playButtonVisual = playButtonContainer.querySelector('.c-btn-core');
+          // Flash accent on the core (optional, keep your visual feedback)
+          if (playButtonVisual) {
+            playButtonVisual.classList.add('tutorial-flash');
+            setTimeout(() => playButtonVisual.classList.remove('tutorial-flash'), 320);
           }
 
-          // Ensure visual starts at scale(0) so WAAPI tween can't be skipped
-          playButtonVisual.style.willChange = 'transform, opacity';
-          playButtonVisual.style.transform = 'scale(0)';
-          playButtonVisual.style.opacity = '1';
-          void playButtonVisual.offsetWidth; // reflow visual
-
-          // Flash accent
-          playButtonVisual.classList.add('tutorial-flash');
-          setTimeout(() => playButtonVisual.classList.remove('tutorial-flash'), 320);
-
           const finish = () => {
-            // Enable ongoing pulses and clear guards
-            playButtonVisual.classList.add('tutorial-pulse-target');
-            // Also toggle ring pulse on the wrapper for the blue ring animation
+            // enable ongoing pulses and clear guards
             playButtonContainer.classList.add('tutorial-active-pulse');
+            if (playButtonVisual) playButtonVisual.classList.add('tutorial-pulse-target');
 
-            playButtonVisual.style.removeProperty('transform');
-            playButtonVisual.style.removeProperty('will-change');
-            playButtonVisual.style.removeProperty('opacity');
-            
             playButtonContainer.style.removeProperty('transform');
             playButtonContainer.style.removeProperty('will-change');
             playButtonContainer.style.removeProperty('opacity');
-            playButtonVisual._tutorialAnim = null;
           };
 
-          if (!playButtonVisual.animate) {
+          // Animate the WRAPPER so the entire button (core + ring) scales together
+          if (!playButtonContainer.animate) {
             finish();
-            return;
-          }
-
-          playButtonVisual._tutorialAnim = playButtonVisual.animate(
-            [
-              { transform: 'scale(0)',    opacity: 1, offset: 0.00 },
-              { transform: 'scale(2.0)',  opacity: 1, offset: 0.60 },
-              { transform: 'scale(0.92)', opacity: 1, offset: 0.85 },
-              { transform: 'scale(1.0)',  opacity: 1, offset: 1.00 }
-            ],
-            { duration: 1200, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'both', composite: 'replace' }
-          );
-
-          if (playButtonVisual._tutorialAnim && typeof playButtonVisual._tutorialAnim === 'object') {
-            playButtonVisual._tutorialAnim.onfinish = finish;
-            playButtonVisual._tutorialAnim.oncancel = finish;
+          } else {
+            const anim = playButtonContainer.animate(
+              [
+                { transform: 'scale(0)',    opacity: 1, offset: 0.00 },
+                { transform: 'scale(2.0)',  opacity: 1, offset: 0.60 },
+                { transform: 'scale(0.92)', opacity: 1, offset: 0.85 },
+                { transform: 'scale(1.0)',  opacity: 1, offset: 1.00 }
+              ],
+              { duration: 1200, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'both', composite: 'replace' }
+            );
+            anim.onfinish = finish;
+            anim.oncancel = finish;
           }
         });
       } else {
