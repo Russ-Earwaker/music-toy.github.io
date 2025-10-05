@@ -678,7 +678,20 @@ const GOAL_FLOW = [
         playButtonContainer.style.willChange = 'transform, opacity';
 
         // reveal + force layout before anim
-        requestAnimationFrame(() => {
+        
+/* << GPT:TUTORIAL_DRAW_TOY_SIZE_V2 START >> */
+// Make the Draw toy panel large so the existing centering code uses the new size
+try {
+  if (panel && panel.style) {
+    panel.style.position = 'absolute';
+    panel.style.width = 'min(960px, 80vw)';
+    panel.style.height = 'min(640px, 70vh)';
+    panel.style.maxWidth = 'calc(100vw - 64px)';
+    panel.style.maxHeight = 'calc(100vh - 128px)';
+  }
+} catch (_) {}
+/* << GPT:TUTORIAL_DRAW_TOY_SIZE_V2 END >> */
+requestAnimationFrame(() => {
           if (!playButtonContainer.isConnected) return;
 
           // Reveal + ensure container guards are applied, then force layout

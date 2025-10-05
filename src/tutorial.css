@@ -1,4 +1,12 @@
 /* tutorial.css */
+/* << GPT:ACTIVE_CARD_STACK_v2 START >> */
+#tutorial-goals .goal-row.is-active,
+#tutorial-goals .goal-task.is-active {
+  position: relative !important;
+  z-index: 960 !important; /* above .tutorial-particles-front (<= 950) */
+}
+/* << GPT:ACTIVE_CARD_STACK_v2 END >> */
+
 /* << GPT:PARTICLE_FRONT_BETWEEN_WITH_MASK START >> */
 /* Header under particles, Play above particles */
 #topbar { position: relative !important; z-index: 900 !important; }

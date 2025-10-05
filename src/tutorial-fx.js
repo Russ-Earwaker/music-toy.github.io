@@ -125,6 +125,68 @@ try {
   }
 } catch (e) { /* no-op */ }
 /* << GPT:MASK_FRONT_CANVAS_OVER_PANEL END >> */
+
+/* << GPT:MASK_ACTIVE_TASK_CARD START >> */
+// Erase front-canvas where the rounded task card sits (CSS pixel coords)
+try {
+  if (frontCtx && frontCanvas) {
+    // Find the active task, fall back to first task/row
+    const active =
+      document.querySelector('#tutorial-goals .goal-task.is-active') ||
+      document.querySelector('#tutorial-goals .goal-row.is-active') ||
+      document.querySelector('#tutorial-goals .goal-task') ||
+      document.querySelector('#tutorial-goals .goal-row');
+
+    // Helper: px extractor
+    const px = (v) => {
+      if (!v) return 0;
+      const m = /([\d.]+)/.exec(v);
+      return m ? parseFloat(m[1]) : 0;
+    };
+
+    // Pick the largest descendant with a rounded, non-transparent background
+    const pickRoundedCard = (root) => {
+      if (!root) return null;
+      let best = null;
+      const list = [root, ...root.querySelectorAll('*')];
+      for (const el of list) {
+        const cs = getComputedStyle(el);
+        const br = Math.max(px(cs.borderTopLeftRadius), px(cs.borderRadius));
+        const bg = cs.backgroundColor;
+        if (br <= 2) continue;
+        if (!bg || bg === 'transparent' || bg === 'rgba(0, 0, 0, 0)') continue;
+        const r = el.getBoundingClientRect();
+        const area = Math.max(1, r.width * r.height);
+        if (!best || area > best.area) best = { el, r, br };
+      }
+      return best || { el: root, r: root.getBoundingClientRect(), br: 12 };
+    };
+
+    const card = pickRoundedCard(active);
+    if (card) {
+      const { r, br } = card;
+
+      // Rounded rect path in CSS pixels
+      const roundedRect = (ctx, x, y, w, h, rad) => {
+        const rr = Math.max(0, Math.min(rad, Math.min(w, h) / 2));
+        ctx.beginPath();
+        ctx.moveTo(x + rr, y);
+        ctx.arcTo(x + w, y,     x + w, y + h, rr);
+        ctx.arcTo(x + w, y + h, x,     y + h, rr);
+        ctx.arcTo(x,     y + h, x,     y,     rr);
+        ctx.arcTo(x,     y,     x + w, y,     rr);
+        ctx.closePath();
+      };
+
+      frontCtx.save();
+      frontCtx.globalCompositeOperation = 'destination-out';
+      roundedRect(frontCtx, r.left, r.top, r.width, r.height, br);
+      frontCtx.fill();
+      frontCtx.restore();
+    }
+  }
+} catch (_) { /* noop */ }
+/* << GPT:MASK_ACTIVE_TASK_CARD END >> */
 animationFrameId = requestAnimationFrame(() => startFlight(ctx, startEl, endEl));
         return;
     }
@@ -176,7 +238,142 @@ animationFrameId = requestAnimationFrame(() => startFlight(ctx, startEl, endEl))
         }
     }
 
-    if(frontCtx) frontCtx.restore();
+    
+/* << GPT:ROUNDED_CARD_MASK START >> */
+// Mask the front canvas exactly over the highlighted bevelled card (per-corner, CSS px)
+try {
+  if (typeof frontCtx !== 'undefined' && frontCtx && typeof frontCanvas !== 'undefined' && frontCanvas) {
+    const active =
+      document.querySelector('#tutorial-goals .goal-row.is-active, #tutorial-goals .goal-task.is-active') ||
+      document.querySelector('#tutorial-goals .goal-row, #tutorial-goals .goal-task');
+    if (active) {
+      const r = active.getBoundingClientRect();
+      const cs = getComputedStyle(active);
+      const px = v => (v ? parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0 : 0);
+      const tl = px(cs.borderTopLeftRadius);
+      const tr = px(cs.borderTopRightRadius);
+      const br = px(cs.borderBottomRightRadius);
+      const bl = px(cs.borderBottomLeftRadius);
+
+      // Slight inset so we don't erase the border stroke itself
+      const inset = 1;
+      const x = r.left + inset;
+      const y = r.top + inset;
+      const w = Math.max(0, r.width  - inset * 2);
+      const h = Math.max(0, r.height - inset * 2);
+
+      const roundedPath = (ctx, x, y, w, h, tl, tr, br, bl) => {
+        ctx.beginPath();
+        ctx.moveTo(x + tl, y);
+        ctx.lineTo(x + w - tr, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + tr);
+        ctx.lineTo(x + w, y + h - br);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - br, y + h);
+        ctx.lineTo(x + bl, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - bl);
+        ctx.lineTo(x, y + tl);
+        ctx.quadraticCurveTo(x, y, x + tl, y);
+        ctx.closePath();
+      };
+
+      frontCtx.save();
+      frontCtx.globalCompositeOperation = 'destination-out';
+      // Tiny feather to avoid hard seam
+      frontCtx.shadowBlur = 1.5;
+      frontCtx.shadowColor = 'rgba(0,0,0,0.25)';
+      roundedPath(frontCtx, x, y, w, h, tl, tr, br, bl);
+      frontCtx.fill();
+      frontCtx.restore();
+    }
+  }
+} catch (e) { /* no-op */ }
+/* << GPT:ROUNDED_CARD_MASK END >> */
+
+/* << GPT:ROUNDED_CARD_MASK_V3 START >> */
+// Erase front-canvas exactly under the highlighted bevelled card (per-corner radii).
+try {
+  if (typeof frontCtx !== 'undefined' && frontCtx && typeof frontCanvas !== 'undefined' && frontCanvas) {
+    const active =
+      document.querySelector('#tutorial-goals .goal-row.is-active, #tutorial-goals .goal-task.is-active') ||
+      document.querySelector('#tutorial-goals .goal-row, #tutorial-goals .goal-task');
+    if (active) {
+      // If the highlight/border is on a child, pick the largest rounded, non-transparent descendant
+      const px = v => (v ? parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0 : 0);
+      const list = [active, ...active.querySelectorAll('*')];
+      let best = null;
+      for (const el of list) {
+        const cs = getComputedStyle(el);
+        const tl = Math.max(px(cs.borderTopLeftRadius),  px(cs.borderRadius));
+        const tr = Math.max(px(cs.borderTopRightRadius), px(cs.borderRadius));
+        const br = Math.max(px(cs.borderBottomRightRadius),px(cs.borderRadius));
+        const bl = Math.max(px(cs.borderBottomLeftRadius), px(cs.borderRadius));
+        const hasRadius = (tl || tr || br || bl) > 2;
+        const bg = cs.backgroundColor;
+        const hasBg = bg && bg !== 'transparent' && bg !== 'rgba(0, 0, 0, 0)';
+        if (!hasRadius || !hasBg) continue;
+        const r = el.getBoundingClientRect();
+        const area = Math.max(1, r.width * r.height);
+        if (!best || area > best.area) best = { r, tl, tr, br, bl, area };
+      }
+      const target = best || { r: active.getBoundingClientRect(), tl: 12, tr: 12, br: 12, bl: 12 };
+      const { r, tl, tr, br, bl } = target;
+
+      // Slight inset so we don't erase the border stroke itself
+      const inset = 2;
+
+      // Determine the coordinate units the context expects:
+      // If the context is scaled (common dpr scaling), draw in CSS px (scale≈dpr).
+      // Else convert CSS px -> device px using dpr.
+      let unit = 1;
+      try {
+        const m = frontCtx.getTransform ? frontCtx.getTransform() : null;
+        const scaleX = m ? m.a : 1;
+        if (Math.abs(scaleX - 1) < 0.05) {
+          // unscaled context -> use device px
+          const dpr = (frontCanvas.clientWidth > 0) ? (frontCanvas.width / frontCanvas.clientWidth) : (window.devicePixelRatio || 1);
+          unit = dpr;
+        } else {
+          // scaled context -> CSS px
+          unit = 1;
+        }
+      } catch (_) { unit = 1; }
+
+      const x = (r.left + inset) * unit;
+      const y = (r.top  + inset) * unit;
+      const w = Math.max(0, (r.width  - inset * 2) * unit);
+      const h = Math.max(0, (r.height - inset * 2) * unit);
+
+      const roundedPath = (ctx, x, y, w, h, tl, tr, br, bl) => {
+        const _tl = Math.min(tl * unit, Math.min(w, h) / 2);
+        const _tr = Math.min(tr * unit, Math.min(w, h) / 2);
+        const _br = Math.min(br * unit, Math.min(w, h) / 2);
+        const _bl = Math.min(bl * unit, Math.min(w, h) / 2);
+        ctx.beginPath();
+        ctx.moveTo(x + _tl, y);
+        ctx.lineTo(x + w - _tr, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + _tr);
+        ctx.lineTo(x + w, y + h - _br);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - _br, y + h);
+        ctx.lineTo(x + _bl, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - _bl);
+        ctx.lineTo(x, y + _tl);
+        ctx.quadraticCurveTo(x, y, x + _tl, y);
+        ctx.closePath();
+      };
+
+      frontCtx.save();
+      frontCtx.globalCompositeOperation = 'destination-out';
+      // Tiny feather to hide any seam
+      frontCtx.shadowBlur = 1.5 * unit;
+      frontCtx.shadowColor = 'rgba(0,0,0,0.25)';
+      roundedPath(frontCtx, x, y, w, h, tl, tr, br, bl);
+      frontCtx.fill();
+      frontCtx.restore();
+    }
+  }
+} catch (e) { /* no-op */ }
+/* << GPT:ROUNDED_CARD_MASK_V3 END >> */
+if(frontCtx) frontCtx.restore();
 
     animationFrameId = requestAnimationFrame(() => startFlight(ctx, startEl, endEl));
 }
