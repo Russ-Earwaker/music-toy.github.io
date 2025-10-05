@@ -1,9 +1,0 @@
-This is a convenience patch bundle.
-If 'git apply' fails due to context mismatches, copy the two files into your project:
-
-- src/tutorial.css
-- src/circular-button.css
-
-These files contain:
-- Particles behind tasks (z-index stack cleaned; panel positioned)
-- Play button 2× and stable (offset via CSS vars; wrapper scales from center)
