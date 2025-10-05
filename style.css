@@ -1,4 +1,8 @@
-/* style.css - Cleaned and Refactored */
+/* style.css - Cleaned and Refactored *//* << GPT:HEADER_LAYER_RESTORE START >> */
+#topbar { position: relative !important; z-index: 980 !important; }
+.tutorial-particles-front { z-index: 940 !important; pointer-events: none !important; }
+/* << GPT:HEADER_LAYER_RESTORE END >> */
+
 /* << GPT:PLAY_BUTTON_MAIN_ALIGN START >> */
 /* Align the main-view Play button to the same vertical position as tutorial */
 :root {
