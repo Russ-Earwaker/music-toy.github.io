@@ -1,4 +1,106 @@
 /* src/circular-button.css */
+/* << GPT:PLAY_BUTTON_POS_FIXED_2X START >> */
+/* Pin Play button to a consistent viewport position across all modes */
+#topbar { position: relative !important; }
+#topbar [data-action='toggle-play'] {
+  --play-btn-size: 100px;
+  position: fixed !important;
+  top: 24px !important;
+  right: 24px !important;
+  width: var(--play-btn-size) !important;
+  height: var(--play-btn-size) !important;
+  transform-origin: 50% 50% !important;
+  z-index: 1000 !important; /* above particle canvas */
+}
+#topbar [data-action='toggle-play'].c-btn,
+#topbar [data-action='toggle-play'] .c-btn {
+  --c-btn-size: var(--play-btn-size) !important;
+  width: var(--c-btn-size) !important;
+  height: var(--c-btn-size) !important;
+}
+/* << GPT:PLAY_BUTTON_POS_FIXED_2X END >> */
+
+/* << GPT:PLAY_BUTTON_FORCE_SIZE_AND_POSITION START >> */
+/* Ensure #topbar is the containing block for absolute positioning */
+#topbar { position: relative !important; }
+
+/* Apply consistent position & 2× size in ALL modes (pre-tutorial + tutorial) */
+#topbar [data-action='toggle-play'] {
+  --play-btn-size: 100px;           /* 2× */
+  position: absolute !important;
+  top: 24px !important;             /* tweak as desired */
+  right: 24px !important;           /* tweak as desired */
+  width: var(--play-btn-size) !important;
+  height: var(--play-btn-size) !important;
+  transform-origin: 50% 50% !important;
+  z-index: 1000 !important;         /* above particles */
+}
+
+/* Support both markup variants: element IS .c-btn, or contains a .c-btn */
+#topbar [data-action='toggle-play'].c-btn { 
+  --c-btn-size: var(--play-btn-size) !important;
+  width: var(--c-btn-size) !important;
+  height: var(--c-btn-size) !important;
+}
+#topbar [data-action='toggle-play'] .c-btn { 
+  --c-btn-size: var(--play-btn-size) !important;
+  width: var(--c-btn-size) !important;
+  height: var(--c-btn-size) !important;
+}
+/* << GPT:PLAY_BUTTON_FORCE_SIZE_AND_POSITION END >> */
+
+/* << GPT:PLAY_BUTTON_ABSOLUTE_AND_2X START >> */
+/* Make Play button consistent across modes: absolute, 2× size, top-right offset */
+#topbar [data-action='toggle-play'].c-btn.c-btn {
+  --play-btn-size: 100px;
+  --c-btn-size: var(--play-btn-size);
+  position: absolute !important;
+  top: 24px !important;   /* tweak here for vertical placement */
+  right: 24px !important; /* tweak here for horizontal placement */
+  width: var(--c-btn-size) !important;
+  height: var(--c-btn-size) !important;
+  transform-origin: 50% 50% !important;
+  z-index: 1000 !important; /* sit above front particles */
+}
+/* << GPT:PLAY_BUTTON_ABSOLUTE_AND_2X END >> */
+
+/* << GPT:PLAY_BUTTON_FINAL_OVERRIDES START >> */
+/* High-specificity overrides so later blocks can't undo them */
+#topbar {
+  --play-btn-size: 100px;   /* 2× */
+  --play-btn-offset-x: 0px; /* tweak as needed */
+  --play-btn-offset-y: 24px;/* move further down */
+}
+/* duplicate .c-btn to increase specificity vs later rules */
+#topbar [data-action='toggle-play'].c-btn.c-btn {
+  --c-btn-size: var(--play-btn-size);
+  position: relative !important;
+  transform-origin: 50% 50%;
+  left: var(--play-btn-offset-x) !important;
+  top:  var(--play-btn-offset-y) !important;
+  z-index: 1000 !important;
+}
+/* << GPT:PLAY_BUTTON_FINAL_OVERRIDES END >> */
+
+/* << GPT:PLAY_BUTTON_OVERRIDES START >> */
+:root {
+  --play-btn-size: 100px;   /* 2× size — tweak here */
+  --play-btn-offset-x: 0px; /* horizontal nudge */
+  --play-btn-offset-y: 24px;/* move further down */
+}
+
+/* The actual Play button in the topbar */
+#topbar [data-action='toggle-play'].c-btn {
+  --c-btn-size: var(--play-btn-size);
+  position: relative;
+  transform-origin: 50% 50%;
+  left: var(--play-btn-offset-x);
+  top:  var(--play-btn-offset-y);
+  z-index: 1000; /* above front particle canvas */
+}
+/* << GPT:PLAY_BUTTON_OVERRIDES END >> */
+
+
 /* A reusable, layered circular button component. */
 
 .c-btn {

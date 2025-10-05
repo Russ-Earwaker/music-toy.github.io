@@ -1,4 +1,99 @@
 /* tutorial.css */
+/* << GPT:PARTICLE_FRONT_BETWEEN_WITH_MASK START >> */
+/* Header under particles, Play above particles */
+#topbar { position: relative !important; z-index: 900 !important; }
+body .tutorial-particles-front { z-index: 940 !important; }
+#tutorial-goals { position: relative !important; z-index: 600 !important; }
+/* << GPT:PARTICLE_FRONT_BETWEEN_WITH_MASK END >> */
+
+/* << GPT:PARTICLE_BETWEEN_FIX_TASKS_ABOVE START >> */
+/* Layering order (top -> bottom):
+   Play button (1000)
+   Task rows (960)
+   Front particle stream (940)
+   Header/topbar (900)
+   Goals panel (600)
+   Origin glow inside goals panel (590)
+*/
+
+/* Header context */
+#topbar { z-index: 900 !important; position: relative !important; }
+
+/* Front particle stream sits between header and tasks */
+body .tutorial-particles-front { z-index: 940 !important; }
+
+/* Tasks above front particles */
+#tutorial-goals .tutorial-goals-tasks,
+#tutorial-goals .goal-task,
+#tutorial-goals .goal-row,
+#tutorial-goals .goal-task.is-active {
+  position: relative !important;
+  z-index: 960 !important;
+}
+
+/* Goals panel & origin glow */
+#tutorial-goals { z-index: 600 !important; position: relative !important; }
+#tutorial-goals .goal-particles-behind { z-index: 590 !important; position: absolute !important; inset: 0; }
+/* << GPT:PARTICLE_BETWEEN_FIX_TASKS_ABOVE END >> */
+
+/* << GPT:PARTICLE_BETWEEN_LAYERING START >> */
+/* Header (and Play inside it) above particles */
+#topbar { z-index: 960 !important; position: relative; }
+/* Front particles below header+play, above goals */
+body .tutorial-particles-front { z-index: 940 !important; }
+/* Ensure goals panel remains below */
+#tutorial-goals { z-index: 600 !important; position: relative; }
+/* Keep origin glow below task rows */
+#tutorial-goals .goal-particles-behind { z-index: 590 !important; }
+#tutorial-goals .tutorial-goals-tasks, #tutorial-goals .goal-task { z-index: 605 !important; position: relative; }
+/* << GPT:PARTICLE_BETWEEN_LAYERING END >> */
+
+/* << GPT:TUTORIAL_FRONT_CANVAS_SPECIFICITY START >> */
+/* Earlier file defines .tutorial-particles-front { z-index: 580 } later in source.
+   Use higher specificity and !important so this wins regardless of order. */
+body .tutorial-particles-front {
+  z-index: 950 !important; /* in front of header (900), behind Play (1000) */
+}
+/* << GPT:TUTORIAL_FRONT_CANVAS_SPECIFICITY END >> */
+
+/* << GPT:TUTORIAL_LAYERING_OVERRIDES START >> */
+/* Header: create stacking context so z-index applies */
+#topbar {
+  position: relative;
+  z-index: 900; /* below particles, above goals panel */
+}
+
+/* Goals panel: stacking context */
+#tutorial-goals {
+  position: relative;
+  z-index: 600; /* below header and front particles */
+}
+
+/* Origin glow inside goals panel, behind tasks but above panel bg */
+#tutorial-goals .goal-particles-behind {
+  position: absolute;
+  inset: 0;
+  z-index: 590;         /* panel bg < 590 < task rows */
+  pointer-events: none;
+}
+
+/* Ensure task rows sit above the origin glow */
+#tutorial-goals .tutorial-goals-tasks,
+#tutorial-goals .goal-task {
+  position: relative;
+  z-index: 605;         /* above 590 glow */
+}
+
+/* Front flight stream: in front of header, behind Play button */
+.tutorial-particles-front {
+  position: fixed;
+  left: 0; top: 0; right: 0; bottom: 0;
+  z-index: 950;         /* < Play(1000), > header(900) */
+  pointer-events: none;
+}
+/* << GPT:TUTORIAL_LAYERING_OVERRIDES END >> */
+
+
 
 body.tutorial-active #board .toy-panel[data-tutorial="true"] .tutorial-control-locked {
   display: none !important;
