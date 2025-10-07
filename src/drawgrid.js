@@ -2578,13 +2578,12 @@ function regenerateMapFromStrokes() {
   requestAnimationFrame(() => resnapAndRedraw(false));
 
 panel.startGhostGuide = (opts = {}) => {
-  console.debug('[drawgrid] startGhostGuide: opts=', opts, 'gridArea=', gridArea, cssW, cssH);
   if (panel.__ghostGuide) return;
 
   const {
-    speed = 2200,        // smooth; no “stuck” feel
+    speed = 2200,
     pause = 900,
-    force = 1.4,         // bigger knockback
+    force = 1.4,
     radius = Math.max(getLineWidth() * 1.9, 28),
     trail = true,
     trailEveryMs = 38,
@@ -2596,47 +2595,55 @@ panel.startGhostGuide = (opts = {}) => {
 
   function loopOnce() {
     if (stopped || !panel.isConnected) return;
-    console.log('[drawgrid] loopOnce is starting the animation.');
 
     const padX = Math.max(8, Math.min(24, gridArea.w * 0.03));
     const padY = Math.max(8, Math.min(24, gridArea.h * 0.03));
     const startX = gridArea.x + padX;
-    const endX   = gridArea.x + gridArea.w - padX; // always left → right
+    const endX   = gridArea.x + gridArea.w - padX;
     const topY   = gridArea.y + padY;
     const botY   = gridArea.y + gridArea.h - padY;
 
-    // Always traverse full height once per sweep; random direction
+    const yRange = botY - topY;
     const goDown = Math.random() < 0.5;
-    const yStart = goDown ? topY : botY;
-    const yEnd   = goDown ? botY : topY;
+    // Start and end in the top/bottom 30% of the area
+    const yStart = topY + yRange * (goDown ? Math.random() * 0.3 : 0.7 + Math.random() * 0.3);
+    const yEnd   = topY + yRange * (goDown ? 0.7 + Math.random() * 0.3 : Math.random() * 0.3);
 
-    // Gentle wiggle that stays inside frame
-    const wiggleAmp = Math.min((botY - topY) * 0.08, Math.max(10, ch * 0.30));
+    // More wiggle
+    const wiggleAmp = Math.min(yRange * 0.25, Math.max(10, ch * 0.60));
     const cycles    = 1 + Math.random() * 0.6;
     const phase     = Math.random() * Math.PI * 2;
 
     const t0 = performance.now();
-    let lastTrail = t0 - trailEveryMs; // emit immediately
+    let lastTrail = t0 - trailEveryMs;
+    let lastX = -1, lastY = -1;
 
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
     const easeIO = (u) => (u < 0.5 ? 4*u*u*u : 1 - Math.pow(-2*u + 2, 3)/2);
 
     function frame(now) {
       if (stopped || !panel.isConnected) return;
-      console.log('[drawgrid] frame update');
       const u = Math.min(1, (now - t0) / speed);
 
-      // X: L→R
       const x = startX + (endX - startX) * u;
-
-      // Y: full-height pass + wiggle
       const baseY = yStart + (yEnd - yStart) * easeIO(u);
       const y = clamp(baseY + Math.sin(u * Math.PI * 2 * cycles + phase) * wiggleAmp, topY, botY);
 
-      // Stronger clear hole
+      if (lastX > 0) {
+        particleCtx.save();
+        particleCtx.beginPath();
+        particleCtx.moveTo(lastX, lastY);
+        particleCtx.lineTo(x, y);
+        particleCtx.lineWidth = getLineWidth();
+        particleCtx.strokeStyle = `rgba(255, 105, 180, 0.5)`;
+        particleCtx.stroke();
+        particleCtx.restore();
+      }
+      lastX = x;
+      lastY = y;
+
       try { particles.drawingDisturb(x, y, radius, force); } catch {}
 
-      // Ring-only trail on the circumference (hole visual)
       if (trail && (now - lastTrail) >= trailEveryMs) {
         try { particles.ringBurst(x, y, radius, trailCount, trailSpeed, 'pink'); } catch {}
         lastTrail = now;
@@ -2650,14 +2657,11 @@ panel.startGhostGuide = (opts = {}) => {
   }
 
   const ensureLayoutReady = () => {
-    // gridArea/cssW/cssH are set in layout(); wait until they’re valid
     const ready = gridArea && gridArea.w > 0 && gridArea.h > 0 && cssW > 0 && cssH > 0 && panel.isConnected;
-    console.log('[drawgrid] ensureLayoutReady check. Ready:', ready, 'gridArea.w:', gridArea?.w);
     if (!ready) {
         rafId = requestAnimationFrame(ensureLayoutReady);
         return;
     }
-    // Now that layout is ready, start the animation loop.
     loopOnce();
   };
 
