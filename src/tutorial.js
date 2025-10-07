@@ -62,6 +62,8 @@ const GOAL_FLOW = [
   },
 ];
 
+
+
 (function() {
   const tutorialButton = document.querySelector('[data-action="tutorial"]');
   const board = document.getElementById('board');
@@ -632,6 +634,11 @@ const GOAL_FLOW = [
 
     if (!task) return;
 
+    if (task.id === 'draw-line' && tutorialToy) {
+      tutorialToy.setSwipeVisible?.(true, { immediate: true });
+      tutorialToy.startGhostGuide?.({ speed: 2000, pause: 1000, force: 0.4 });
+    }
+
     const targetKey = TASK_TARGETS[task.id];
     const targetEl = targetKey ? (getControlMap(tutorialToy)[targetKey] || document.querySelector(CONTROL_SELECTORS[targetKey])) : null;
     if (task.id === 'press-play' && targetEl) {
@@ -780,6 +787,14 @@ requestAnimationFrame(() => {
   function handleDrawgridUpdate(detail) {
     if (!tutorialActive || !tutorialState) return;
     const nodes = detail && detail.nodes;
+    // As soon as a real line exists, remove the hint + ghost
+    if (!hasDetectedLine && Array.isArray(nodes)) {
+      const madeAny = nodes.some(set => set && set.size > 0);
+      if (madeAny) {
+        tutorialToy.stopGhostGuide?.();
+        tutorialToy.setSwipeVisible?.(false);
+      }
+    }
     const hasNodes = Array.isArray(nodes) ? nodes.some(set => set && set.size > 0) : false;
     if (!hasDetectedLine && hasNodes) {
       hasDetectedLine = true;
@@ -956,16 +971,35 @@ try {
 /* << GPT:TUTORIAL_VIEW_INIT END >> */
 
 
-    requestAnimationFrame(() => {
+    const _repositionForGap = () => {
       if (!panel.isConnected) return;
-      const width = panel.offsetWidth || 0;
-      const height = panel.offsetHeight || 0;
-      const boardWidth = board.offsetWidth || boardRect.width || window.innerWidth || 1280;
-      const boardHeight = board.offsetHeight || boardRect.height || window.innerHeight || 720;
-      const left = Math.max(16, Math.round((boardWidth - width) / 2));
-      const top = Math.max(72, Math.round(Math.min((boardHeight - height) / 2, boardHeight - height - 32)));
+      const goals = document.getElementById('tutorial-goals');
+      const goalsRect = goals ? goals.getBoundingClientRect() : null;
+      const margin = 16;
+      const safeTop = 72;
+      const r = panel.getBoundingClientRect();
+      const width = panel.offsetWidth || r.width;
+      const height = panel.offsetHeight || r.height;
+      const gapLeft  = Math.max(margin, (goalsRect ? Math.round(goalsRect.right) + margin : margin));
+      const gapRight = Math.max(gapLeft + 1, window.innerWidth - margin);
+      const gapWidth = Math.max(0, gapRight - gapLeft);
+      let left;
+      if (gapWidth >= Math.min(width, 320)) {
+        const gapCenter = (gapLeft + gapRight) / 2;
+        left = Math.round(gapCenter - width / 2);
+      } else {
+        left = Math.max(margin, Math.round((window.innerWidth - width) / 2));
+      }
+      const top = Math.max(safeTop, Math.round(Math.min((window.innerHeight - height) / 2, window.innerHeight - height - 32)));
       panel.style.left = left + 'px';
-      panel.style.top = top + 'px';
+      panel.style.top  = top  + 'px';
+    };
+    window.addEventListener('resize', _repositionForGap, { passive:true });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', _repositionForGap, { passive:true });
+      window.visualViewport.addEventListener('scroll', _repositionForGap, { passive:true });
+    }
+    requestAnimationFrame(_repositionForGap);
 /* << GPT:TUTORIAL_RECENTER_FINAL START >> */
 // Re-center after layout & any transform resets settle (2x rAF).
 if (!window.__useBoardCentering) {
@@ -1067,8 +1101,6 @@ try {
     }
   })();
 /* << GPT:TUTORIAL_CENTER_VIEW END >> */
-
-    });
 
     return panel;
   }
@@ -1225,6 +1257,9 @@ try {
     }
     helpActivatedForTask = false;
     helpWasActiveBeforeTutorial = false;
+
+    tutorialToy.stopGhostGuide?.();
+    tutorialToy.setSwipeVisible?.(false);
 
     stopParticleStream();
     removeTutorialListeners();
