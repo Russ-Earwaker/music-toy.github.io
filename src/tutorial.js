@@ -968,6 +968,7 @@ try {
       panel.style.top = top + 'px';
 /* << GPT:TUTORIAL_RECENTER_FINAL START >> */
 // Re-center after layout & any transform resets settle (2x rAF).
+if (!window.__useBoardCentering) {
 try {
   requestAnimationFrame(() => requestAnimationFrame(() => {
     const r = panel.getBoundingClientRect();
@@ -982,10 +983,12 @@ try {
     });
   }));
 } catch (e) { /* no-op */ }
+}
 /* << GPT:TUTORIAL_RECENTER_FINAL END >> */
 
 /* << GPT:TUTORIAL_RECENTER_AFTER_RESET START >> */
 // Recenter again after the board viewport reset has applied.
+if (!window.__useBoardCentering) {
 try {
   requestAnimationFrame(() => {
     const r = panel.getBoundingClientRect();
@@ -1000,6 +1003,7 @@ try {
     });
   });
 } catch (e) { /* no-op */ }
+}
 /* << GPT:TUTORIAL_RECENTER_AFTER_RESET END >> */
 
 /* << GPT:TUTORIAL_RECENTER_AND_OBSERVERS START >> */
@@ -1009,6 +1013,7 @@ try {
     panel._tutorialRecenterInit = true;
 
     const centerNow = () => {
+      if (!window.__useBoardCentering) {
       try {
         const r = panel.getBoundingClientRect();
         const sx = window.scrollX || document.documentElement.scrollLeft || 0;
@@ -1021,6 +1026,7 @@ try {
           behavior: 'auto'
         });
       } catch (_) {}
+      }
     };
 
     // Run after two frames so fonts/styles settle
@@ -1068,6 +1074,7 @@ try {
   }
 
   function enterTutorial() {
+    window.__useBoardCentering = true;
     if (tutorialActive) return;
     tutorialActive = true;
 
@@ -1083,6 +1090,27 @@ try {
 
     previousSnapshot = null;
     try { previousSnapshot = getSnapshot(); } catch {}
+/* TUTORIAL_SCROLL_LOCK:START */
+try {
+  // Save previous overflow to restore later
+  const de = document.documentElement;
+  if (de && de.style) {
+    if (de.dataset.prevOverflow === undefined) {
+      de.dataset.prevOverflow = de.style.overflow || '';
+    }
+    de.style.overflow = 'hidden';
+  }
+  const b = document.body;
+  if (b && b.style) {
+    if (b.dataset.prevOverflow === undefined) {
+      b.dataset.prevOverflow = b.style.overflow || '';
+    }
+    b.style.overflow = 'hidden';
+  }
+  // Ensure page scroll is reset
+  window.scrollTo({ left: 0, top: 0, behavior: 'auto' });
+} catch {}
+/* TUTORIAL_SCROLL_LOCK:END */
   // Save current board viewport & lock zoom interactions
   window.__prevBoardViewport = {
     scale: window.__boardScale ?? 1,
@@ -1150,6 +1178,7 @@ try {
   }
 
   function exitTutorial() {
+    window.__useBoardCentering = false;
     if (!tutorialActive) return;
     tutorialActive = false;
 
@@ -1251,6 +1280,30 @@ try {
     if (previousSnapshot) {
       try { applySnapshot(previousSnapshot); } catch {}
     }
+/* TUTORIAL_SCROLL_UNLOCK:START */
+try {
+  const de = document.documentElement;
+  if (de && de.style) {
+    const prev = de.dataset.prevOverflow;
+    if (prev !== undefined) {
+      de.style.overflow = prev;
+      delete de.dataset.prevOverflow;
+    } else {
+      de.style.removeProperty('overflow');
+    }
+  }
+  const b = document.body;
+  if (b && b.style) {
+    const prev = b.dataset.prevOverflow;
+    if (prev !== undefined) {
+      b.style.overflow = prev;
+      delete b.dataset.prevOverflow;
+    } else {
+      b.style.removeProperty('overflow');
+    }
+  }
+} catch {}
+/* TUTORIAL_SCROLL_UNLOCK:END */
     window.scrollTo({ left: storedScroll.x, top: storedScroll.y, behavior: 'auto' });
     if (previousFocus) {
       try { previousFocus.focus({ preventScroll: true }); } catch {}

@@ -107,6 +107,11 @@
     x = Math.round(viewportCX - scale * centerX);
     y = Math.round(viewportCY - scale * centerY);
 
+    const maxOffsetX = window.innerWidth * 2;
+    const maxOffsetY = window.innerHeight * 2;
+    x = Math.max(-maxOffsetX, Math.min(maxOffsetX, x));
+    y = Math.max(-maxOffsetY, Math.min(maxOffsetY, y));
+
     window.__boardScale = scale;
     window.__boardX = x;
     window.__boardY = y;
