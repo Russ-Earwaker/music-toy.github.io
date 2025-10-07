@@ -644,12 +644,23 @@ const GOAL_FLOW = [
 
     if (!task) return;
 
-    if (task.id === 'draw-line' && tutorialToy) {
-      whenSwipeAPIReady(tutorialToy, () => {
-        tutorialToy.setSwipeVisible(true, { immediate: true });
-        tutorialToy.startGhostGuide({ speed: 2000, pause: 1000, force: 0.4 });
-      });
-    }
+    // When entering the "draw-line" task, use the toy's own APIs.
+// This avoids duplicate DOM overlays and guarantees correct z-order.
+if (task.id === 'draw-line' && tutorialToy) {
+  whenSwipeAPIReady(tutorialToy, () => {
+    console.debug('[tutorial] starting ghost guide + hint on draw-line');
+    // Show the toy's built-in word overlay (uses "DRAW" inside drawgrid)
+    tutorialToy.setSwipeVisible(true, { immediate: true });
+
+    // Start the ghost guide from the toy (particles only; no real drawing)
+    tutorialToy.startGhostGuide({
+      speed: 2000,   // ms per sweep
+      pause: 1000,   // gap between sweeps
+      force: 1.4     // knockback; matches our recent tuning
+      // radius/trail come from drawgrid defaults
+    });
+  });
+}
 
     const targetKey = TASK_TARGETS[task.id];
     const targetEl = targetKey ? (getControlMap(tutorialToy)[targetKey] || document.querySelector(CONTROL_SELECTORS[targetKey])) : null;

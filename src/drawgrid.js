@@ -131,8 +131,9 @@ function createDrawGridParticles({
 } = {}){
   const P = [];
   const letters = [];
-  const WORD = 'SWIPE';
-  const LETTER_WIDTH_RATIO = { S: 0.72, W: 1.18, I: 0.32, P: 0.75, E: 0.74 };
+  const WORD = 'DRAW';
+  // tuned widths; W is already wide
+  const LETTER_WIDTH_RATIO = { D: 0.78, R: 0.78, A: 0.78, W: 1.18 };
   const LETTER_BASE_ALPHA = 0.2;
   const LETTER_DAMPING = 0.94;
   const LETTER_PULL_MULTIPLIER = 3.2;
@@ -478,6 +479,24 @@ function createDrawGridParticles({
     }
   }
 
+function ringBurst(x, y, radius, countBurst = 28, speed = 2.4, color = 'pink') {
+  for (let i = 0; i < countBurst; i++) {
+    const theta = (i / countBurst) * Math.PI * 2 + (Math.random() * 0.15);
+    const px = x + Math.cos(theta) * radius;
+    const py = y + Math.sin(theta) * radius;
+    const outward = speed * (0.65 + Math.random() * 0.55);
+    const jitterA = (Math.random() - 0.5) * 0.35;
+    const vx = Math.cos(theta + jitterA) * outward;
+    const vy = Math.sin(theta + jitterA) * outward;
+    P.push({
+      x: px, y: py, vx, vy,
+      homeX: px, homeY: py,
+      alpha: 1.0, flash: 1.0,
+      ttl: 45, color, isBurst: true, repulsed: 0
+    });
+  }
+}
+
   function setLetterFadeTarget(target, speed = 0.05, immediate = false) {
     letterFadeTarget = Math.max(0, Math.min(1, target));
     letterFadeSpeed = Math.max(0.0001, speed);
@@ -494,7 +513,7 @@ function createDrawGridParticles({
     setLetterFadeTarget(1, speed);
   }
 
-  return { step, draw, onBeat, lineRepulse, drawingDisturb, pointBurst, fadeLettersOut, fadeLettersIn, setLetterFadeTarget };
+  return { step, draw, onBeat, lineRepulse, drawingDisturb, pointBurst, ringBurst, fadeLettersOut, fadeLettersIn, setLetterFadeTarget };
 }
 
 export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId, bpm = 120 } = {}) {
@@ -2559,51 +2578,91 @@ function regenerateMapFromStrokes() {
   requestAnimationFrame(() => resnapAndRedraw(false));
 
 panel.startGhostGuide = (opts = {}) => {
+  console.debug('[drawgrid] startGhostGuide: opts=', opts, 'gridArea=', gridArea, cssW, cssH);
   if (panel.__ghostGuide) return;
+
   const {
-    speed = 2000,       // ms per sweep
-    pause = 1000,       // ms between sweeps
-    force = 0.4,        // match player stroke force
-    radius = (typeof getLineWidth === 'function' ? getLineWidth() * 1.5 : Math.max(10, Math.min(cw, ch) * 0.9)),
+    speed = 2200,        // smooth; no “stuck” feel
+    pause = 900,
+    force = 1.4,         // bigger knockback
+    radius = Math.max(getLineWidth() * 1.9, 28),
+    trail = true,
+    trailEveryMs = 38,
+    trailCount = 8,
+    trailSpeed = 1.6,
   } = opts;
 
   let stopped = false, rafId = 0;
-  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-  function loopOnce(){
+  function loopOnce() {
     if (stopped || !panel.isConnected) return;
+    console.log('[drawgrid] loopOnce is starting the animation.');
 
-    // recompute safe frame each run
     const padX = Math.max(8, Math.min(24, gridArea.w * 0.03));
     const padY = Math.max(8, Math.min(24, gridArea.h * 0.03));
     const startX = gridArea.x + padX;
-    const endX   = gridArea.x + gridArea.w - padX;     // left -> right
+    const endX   = gridArea.x + gridArea.w - padX; // always left → right
     const topY   = gridArea.y + padY;
     const botY   = gridArea.y + gridArea.h - padY;
 
-    const midY   = topY + Math.random() * (botY - topY);
-    const amp    = Math.min((botY - topY) * 0.35, Math.max(12, ch * 2));
-    const cycles = 1 + Math.random() * 0.8;
-    const phase  = Math.random() * Math.PI * 2;
+    // Always traverse full height once per sweep; random direction
+    const goDown = Math.random() < 0.5;
+    const yStart = goDown ? topY : botY;
+    const yEnd   = goDown ? botY : topY;
+
+    // Gentle wiggle that stays inside frame
+    const wiggleAmp = Math.min((botY - topY) * 0.08, Math.max(10, ch * 0.30));
+    const cycles    = 1 + Math.random() * 0.6;
+    const phase     = Math.random() * Math.PI * 2;
+
     const t0 = performance.now();
+    let lastTrail = t0 - trailEveryMs; // emit immediately
 
-    function frame(now){
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const easeIO = (u) => (u < 0.5 ? 4*u*u*u : 1 - Math.pow(-2*u + 2, 3)/2);
+
+    function frame(now) {
       if (stopped || !panel.isConnected) return;
-      const t = Math.min(1, (now - t0) / speed);
-      const x = startX + (endX - startX) * t; // strictly L->R
-      const yBase = midY + Math.sin((t * cycles * Math.PI * 2) + phase) * amp;
-      const y = clamp(yBase, topY, botY);
+      console.log('[drawgrid] frame update');
+      const u = Math.min(1, (now - t0) / speed);
 
+      // X: L→R
+      const x = startX + (endX - startX) * u;
+
+      // Y: full-height pass + wiggle
+      const baseY = yStart + (yEnd - yStart) * easeIO(u);
+      const y = clamp(baseY + Math.sin(u * Math.PI * 2 * cycles + phase) * wiggleAmp, topY, botY);
+
+      // Stronger clear hole
       try { particles.drawingDisturb(x, y, radius, force); } catch {}
 
-      if (t < 1) rafId = requestAnimationFrame(frame);
-      else setTimeout(()=> { if (!stopped) loopOnce(); }, pause);
+      // Ring-only trail on the circumference (hole visual)
+      if (trail && (now - lastTrail) >= trailEveryMs) {
+        try { particles.ringBurst(x, y, radius, trailCount, trailSpeed, 'pink'); } catch {}
+        lastTrail = now;
+      }
+
+      if (u < 1) rafId = requestAnimationFrame(frame);
+      else setTimeout(() => { if (!stopped) loopOnce(); }, pause);
     }
+
     rafId = requestAnimationFrame(frame);
   }
 
+  const ensureLayoutReady = () => {
+    // gridArea/cssW/cssH are set in layout(); wait until they’re valid
+    const ready = gridArea && gridArea.w > 0 && gridArea.h > 0 && cssW > 0 && cssH > 0 && panel.isConnected;
+    console.log('[drawgrid] ensureLayoutReady check. Ready:', ready, 'gridArea.w:', gridArea?.w);
+    if (!ready) {
+        rafId = requestAnimationFrame(ensureLayoutReady);
+        return;
+    }
+    // Now that layout is ready, start the animation loop.
+    loopOnce();
+  };
+
   panel.__ghostGuide = { stop: () => { stopped = true; cancelAnimationFrame(rafId); } };
-  loopOnce();
+  ensureLayoutReady();
 };
 
 panel.stopGhostGuide = () => {
