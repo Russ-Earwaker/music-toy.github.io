@@ -535,6 +535,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const nctx = nodesCanvas.getContext('2d', { willReadFrequently: true });
   const fctx = flashCanvas.getContext('2d', { willReadFrequently: true });
 
+  let __forceSwipeVisible = null; // null=auto, true/false=forced by tutorial
+
   // State
   let cols = initialCols;
   let cssW=0, cssH=0, cw=0, ch=0, topPad=0, dpr=1;
@@ -571,20 +573,18 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     homePull: 0.002,
   });
 
-// Expose a switch for the built-in SWIPE lettering used by help-overlay.
-// This uses the *same* particles + lettering code the overlay relies on.
 panel.setSwipeVisible = (show, { immediate = false } = {}) => {
-  try {
-    const speed = show ? 0.08 : 0.12;
-    particles.setLetterFadeTarget(show ? 1 : 0, speed, immediate);
-  } catch {}
+  __forceSwipeVisible = !!show;
+  const speed = show ? 0.08 : 0.12;
+  try { particles.setLetterFadeTarget(show ? 1 : 0, speed, immediate); } catch {}
 };
 
   function syncLetterFade({ immediate = false } = {}) {
-    if (!particles || typeof particles.setLetterFadeTarget !== 'function') return;
     const hasStrokes = Array.isArray(strokes) && strokes.length > 0;
     const helpActive = document.body.classList.contains('toy-help-mode');
-    const target = (helpActive && !hasStrokes) ? 1 : 0;
+    const target = (__forceSwipeVisible !== null)
+      ? (__forceSwipeVisible ? 1 : 0)
+      : ((helpActive && !hasStrokes) ? 1 : 0);
     const speed = hasStrokes ? 0.12 : 0.08;
     particles.setLetterFadeTarget(target, speed, immediate);
   }
@@ -2558,86 +2558,68 @@ function regenerateMapFromStrokes() {
   // the browser has finished its own layout calculations first.
   requestAnimationFrame(() => resnapAndRedraw(false));
 
-// ---- Ghost Guide (reusable, left-to-right, stays within gridArea) ----
 panel.startGhostGuide = (opts = {}) => {
   if (panel.__ghostGuide) return;
-
   const {
-    speed = 2000,
-    pause = 1000,
-    force = 0.4,
-    radius = getLineWidth() * 1.5,
+    speed = 2000,       // ms per sweep
+    pause = 1000,       // ms between sweeps
+    force = 0.4,        // match player stroke force
+    radius = (typeof getLineWidth === 'function' ? getLineWidth() * 1.5 : Math.max(10, Math.min(cw, ch) * 0.9)),
   } = opts;
 
-  let stopped = false;
-  let rafId = 0;
-
+  let stopped = false, rafId = 0;
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-  function loopOnce() {
+  function loopOnce(){
     if (stopped || !panel.isConnected) return;
 
-    // recompute bounds each run (panel can resize)
+    // recompute safe frame each run
     const padX = Math.max(8, Math.min(24, gridArea.w * 0.03));
     const padY = Math.max(8, Math.min(24, gridArea.h * 0.03));
     const startX = gridArea.x + padX;
-    const endX   = gridArea.x + gridArea.w - padX;    // always left -> right
+    const endX   = gridArea.x + gridArea.w - padX;     // left -> right
     const topY   = gridArea.y + padY;
     const botY   = gridArea.y + gridArea.h - padY;
 
-    // random vertical centre + amplitude, but clamped within frame
     const midY   = topY + Math.random() * (botY - topY);
     const amp    = Math.min((botY - topY) * 0.35, Math.max(12, ch * 2));
-    const cycles = 1 + Math.random() * 0.8;          // ~1–1.8 waves
+    const cycles = 1 + Math.random() * 0.8;
     const phase  = Math.random() * Math.PI * 2;
     const t0 = performance.now();
 
-    function frame(now) {
+    function frame(now){
       if (stopped || !panel.isConnected) return;
       const t = Math.min(1, (now - t0) / speed);
-
-      // Left -> Right
-      const x = startX + (endX - startX) * t;
-      // Wiggly Y but clamped inside interactive area
+      const x = startX + (endX - startX) * t; // strictly L->R
       const yBase = midY + Math.sin((t * cycles * Math.PI * 2) + phase) * amp;
       const y = clamp(yBase, topY, botY);
 
-      // Displace particles with same force as player drawing
       try { particles.drawingDisturb(x, y, radius, force); } catch {}
 
-      if (t < 1) {
-        rafId = requestAnimationFrame(frame);
-      } else {
-        setTimeout(() => { if (!stopped) loopOnce(); }, pause);
-      }
+      if (t < 1) rafId = requestAnimationFrame(frame);
+      else setTimeout(()=> { if (!stopped) loopOnce(); }, pause);
     }
-
     rafId = requestAnimationFrame(frame);
   }
 
-  panel.__ghostGuide = {
-    stop: () => { stopped = true; cancelAnimationFrame(rafId); }
-  };
+  panel.__ghostGuide = { stop: () => { stopped = true; cancelAnimationFrame(rafId); } };
   loopOnce();
 };
 
 panel.stopGhostGuide = () => {
-  const g = panel.__ghostGuide;
-  if (g) { try { g.stop(); } catch {} ; panel.__ghostGuide = null; }
+  if (panel.__ghostGuide) { try { panel.__ghostGuide.stop(); } catch{}; panel.__ghostGuide = null; }
 };
 
-// Auto-stop the ghost + hide SWIPE as soon as the user actually draws
 panel.addEventListener('drawgrid:update', (e) => {
-  try {
-    const map = e.detail;
-    const hasAny = Array.isArray(map?.nodes) && map.nodes.some(set => set && set.size > 0);
-    if (hasAny) {
-      panel.stopGhostGuide?.();
-      panel.setSwipeVisible?.(false);
-    }
-  } catch {}
+  const nodes = e?.detail?.nodes;
+  const hasAny = Array.isArray(nodes) && nodes.some(set => set && set.size > 0);
+  if (hasAny) {
+    panel.stopGhostGuide?.();
+    panel.setSwipeVisible?.(false);
+  }
 });
 
+  try { panel.dispatchEvent(new CustomEvent('drawgrid:ready', { bubbles: true })); } catch {}
   return api;
 }
 

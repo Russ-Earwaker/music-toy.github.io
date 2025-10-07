@@ -6,6 +6,16 @@ import { setHelpActive, isHelpActive } from './help-overlay.js';
 import { isRunning, stop as stopTransport } from './audio-core.js';
 import { startParticleStream, stopParticleStream } from './tutorial-fx.js';
 
+function whenSwipeAPIReady(panel, fn, tries=30){
+  if (!panel) return;
+  if (typeof panel.setSwipeVisible === 'function' && typeof panel.startGhostGuide === 'function'){
+    try { fn(); } catch {}
+    return;
+  }
+  if (tries <= 0) return;
+  requestAnimationFrame(()=> whenSwipeAPIReady(panel, fn, tries-1));
+}
+
 const TUTORIAL_ZOOM = 1.15; // adjust to taste (1.0–1.3 are good)
 
 const GOAL_FLOW = [
@@ -635,8 +645,10 @@ const GOAL_FLOW = [
     if (!task) return;
 
     if (task.id === 'draw-line' && tutorialToy) {
-      tutorialToy.setSwipeVisible?.(true, { immediate: true });
-      tutorialToy.startGhostGuide?.({ speed: 2000, pause: 1000, force: 0.4 });
+      whenSwipeAPIReady(tutorialToy, () => {
+        tutorialToy.setSwipeVisible(true, { immediate: true });
+        tutorialToy.startGhostGuide({ speed: 2000, pause: 1000, force: 0.4 });
+      });
     }
 
     const targetKey = TASK_TARGETS[task.id];
