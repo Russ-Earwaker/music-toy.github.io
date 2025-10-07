@@ -2584,7 +2584,7 @@ panel.startGhostGuide = (opts = {}) => {
     speed = 2200,
     pause = 900,
     force = 1.4,
-    radius = Math.max(getLineWidth() * 1.9, 28),
+    radius = Math.max(getLineWidth() * 2.5, 40),
     trail = true,
     trailEveryMs = 38,
     trailCount = 8,
@@ -2605,21 +2605,22 @@ panel.startGhostGuide = (opts = {}) => {
 
     const yRange = botY - topY;
     const goDown = Math.random() < 0.5;
-    // Start and end in the top/bottom 30% of the area
     const yStart = topY + yRange * (goDown ? Math.random() * 0.3 : 0.7 + Math.random() * 0.3);
     const yEnd   = topY + yRange * (goDown ? 0.7 + Math.random() * 0.3 : Math.random() * 0.3);
 
-    // More wiggle
     const wiggleAmp = Math.min(yRange * 0.25, Math.max(10, ch * 0.60));
     const cycles    = 1 + Math.random() * 0.6;
     const phase     = Math.random() * Math.PI * 2;
 
     const t0 = performance.now();
     let lastTrail = t0 - trailEveryMs;
-    let lastX = -1, lastY = -1;
-
+    
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
     const easeIO = (u) => (u < 0.5 ? 4*u*u*u : 1 - Math.pow(-2*u + 2, 3)/2);
+
+    const firstX = startX;
+    const firstY = clamp(yStart + Math.sin(phase) * wiggleAmp, topY, botY);
+    const trailPoints = [{x: firstX, y: firstY}];
 
     function frame(now) {
       if (stopped || !panel.isConnected) return;
@@ -2629,18 +2630,26 @@ panel.startGhostGuide = (opts = {}) => {
       const baseY = yStart + (yEnd - yStart) * easeIO(u);
       const y = clamp(baseY + Math.sin(u * Math.PI * 2 * cycles + phase) * wiggleAmp, topY, botY);
 
-      if (lastX > 0) {
-        particleCtx.save();
-        particleCtx.beginPath();
-        particleCtx.moveTo(lastX, lastY);
-        particleCtx.lineTo(x, y);
-        particleCtx.lineWidth = getLineWidth();
-        particleCtx.strokeStyle = `rgba(255, 105, 180, 0.5)`;
-        particleCtx.stroke();
-        particleCtx.restore();
+      trailPoints.push({x, y});
+      if (trailPoints.length > 20) {
+          trailPoints.shift();
       }
-      lastX = x;
-      lastY = y;
+
+      fctx.save();
+      fctx.lineCap = 'round';
+      fctx.lineJoin = 'round';
+      fctx.lineWidth = getLineWidth();
+      for (let i = 0; i < trailPoints.length - 1; i++) {
+          const p1 = trailPoints[i];
+          const p2 = trailPoints[i+1];
+          const alpha = (i / trailPoints.length) * 0.3;
+          fctx.strokeStyle = `rgba(255, 105, 180, ${alpha})`;
+          fctx.beginPath();
+          fctx.moveTo(p1.x, p1.y);
+          fctx.lineTo(p2.x, p2.y);
+          fctx.stroke();
+      }
+      fctx.restore();
 
       try { particles.drawingDisturb(x, y, radius, force); } catch {}
 
