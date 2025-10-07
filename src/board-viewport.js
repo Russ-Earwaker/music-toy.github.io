@@ -22,13 +22,19 @@
   }
   function apply(){
     stage.style.transformOrigin = '0 0';
+    stage.style.transformOrigin = '0 0';
     stage.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
+    // expose current viewport to other modules
+    window.__boardScale = scale;
+    window.__boardX = x;
+    window.__boardY = y;
     persist();
   }
 
   // --- Panning ---
   let panning = false, sx=0, sy=0, ox=0, oy=0;
   document.addEventListener('mousedown', (e)=>{
+    if (window.__tutorialZoomLock) return;
     const overPanel = !!e.target.closest('.toy-panel');
     if (overPanel) return;        // let panel dragging handle their own
     const overTopbar = !!e.target.closest('#topbar');
@@ -55,6 +61,10 @@
 
   // --- Zooming --- (global: anywhere in the window)
   window.addEventListener('wheel', (e)=>{
+    if (window.__tutorialZoomLock) { 
+      e.preventDefault(); 
+      return; 
+    }
     // zoom around mouse position
     const delta = e.deltaY;
     const rect = stage.getBoundingClientRect();
@@ -76,6 +86,32 @@
   // helpers
   window.panTo = (nx, ny)=>{ x = nx|0; y = ny|0; window.__boardScale = scale; apply(); };
   window.setBoardScale = (sc)=>{ scale = Math.max(0.5, Math.min(2.5, Number(sc)||1)); window.__boardScale = scale; apply(); };
+
+  // Center the board on a specific element at a desired scale
+  window.centerBoardOnElement = (el, desiredScale = scale) => {
+    if (!el || !stage) return;
+    // Use current scale (pre-transform sizes from rects / divide by scale)
+    const curScale = Number(window.__boardScale) || scale;
+    const boardRect = stage.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+
+    // Element center in board's unscaled coordinates
+    const centerX = (elRect.left - boardRect.left) / curScale + (elRect.width  / curScale) / 2;
+    const centerY = (elRect.top  - boardRect.top ) / curScale + (elRect.height / curScale) / 2;
+
+    // Apply desired scale, then compute translate so element center == viewport center
+    scale = Math.max(0.5, Math.min(2.5, Number(desiredScale)||1));
+    const viewportCX = (window.innerWidth  / 2);
+    const viewportCY = (window.innerHeight / 2);
+
+    x = Math.round(viewportCX - scale * centerX);
+    y = Math.round(viewportCY - scale * centerY);
+
+    window.__boardScale = scale;
+    window.__boardX = x;
+    window.__boardY = y;
+    apply();
+  };
 
   window.__boardScale = scale; apply();
 })();
