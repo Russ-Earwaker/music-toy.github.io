@@ -70,6 +70,28 @@ const GOAL_FLOW = [
       },
     ],
   },
+  {
+    id: 'add-toy',
+    title: 'Add another toy',
+    reward: {
+      description: 'Unlocks the Instrument Select button',
+      icons: [
+        { type: 'asset', label: 'Instrument', icon: "../assets/UI/T_ButtonInstrument.png" },
+      ],
+    },
+    tasks: [
+      {
+        id: 'add-rhythm-toy',
+        label: 'Open the Add Toy menu and drag in a new Simple Rhythm toy',
+        requirement: 'add-toy-loopgrid',
+      },
+      {
+        id: 'add-rhythm-note',
+        label: 'Add a rhythm to the new toy',
+        requirement: 'add-note-new-toy',
+      },
+    ],
+  },
 ];
 
 
@@ -111,6 +133,7 @@ const GOAL_FLOW = [
     clear: '[data-action="clear"]',
     random: '[data-action="random"]',
     play: '#topbar [data-action="toggle-play"]',
+    instrument: '[data-action="instrument"]',
   };
 
   const TASK_TARGETS = {
@@ -156,8 +179,13 @@ const GOAL_FLOW = [
   }
 
   function removeTutorialListeners() {
-    tutorialListeners.forEach(({ target, type, handler, options }) => {
-      try { target.removeEventListener(type, handler, options); } catch {}
+    tutorialListeners.forEach((listener) => {
+      if (listener.disconnect) {
+        try { listener.disconnect(); } catch {}
+      } else {
+        const { target, type, handler, options } = listener;
+        try { target.removeEventListener(type, handler, options); } catch {}
+      }
     });
     tutorialListeners = [];
   }
@@ -434,6 +462,11 @@ const GOAL_FLOW = [
       const toggle = unlockSpawnerControl('toggle');
       if (toggle) unlocked.push(toggle);
     }
+    if (goal.id === 'add-toy') {
+      document.querySelectorAll('.toy-panel:not(.tutorial-hidden)').forEach(panel => {
+        unlocked.push(...unlockPanelControls(panel, ['instrument']));
+      });
+    }
 
     unlockReward(goal.id);
     return unlocked.filter(Boolean);
@@ -637,12 +670,85 @@ const GOAL_FLOW = [
     }
   }
 
+  function whenVisible(selector, callback, timeout = 2000) {
+    const startTime = Date.now();
+    const check = () => {
+        const el = document.querySelector(selector);
+        if (el && (el.offsetParent !== null || el.getClientRects().length > 0)) {
+            callback(el);
+        } else if (Date.now() - startTime < timeout) {
+            requestAnimationFrame(check);
+        }
+    };
+    check();
+  }
+
   function handleTaskEnter(task) {
     stopParticleStream();
     document.querySelectorAll('.tutorial-pulse-target').forEach(el => el.classList.remove('tutorial-pulse-target'));
     document.querySelectorAll('.tutorial-active-pulse').forEach(el => el.classList.remove('tutorial-active-pulse'));
 
     if (!task) return;
+
+    if (task.id === 'add-rhythm-toy') {
+      // When the + button is visible, start the line from the active task → + button
+      whenVisible('.toy-spawner-toggle', (targetEl) => {
+        const taskEl = goalPanel?.querySelector('.goal-task.is-active');
+        if (taskEl) startParticleStream(taskEl, targetEl);
+        // Make the + button pulse while task is active
+        targetEl.classList.add('tutorial-pulse-target', 'tutorial-active-pulse');
+      });
+
+      // Grey out all toy cards EXCEPT the one we want to allow (Loop Grid → renamed to Simple Rhythm)
+      const style = document.createElement('style');
+      style.id = 'tutorial-add-toy-style';
+      style.textContent = `
+    body.tutorial-active .toy-spawner-item:not([data-tutorial-keep="true"]) {
+      pointer-events: none !important;
+      opacity: 0.35 !important;
+      filter: grayscale(1) !important;
+      cursor: not-allowed !important;
+    }
+  `;
+      document.head.appendChild(style);
+
+      // IMPORTANT: use the actual class name from toy-spawner.js → .toy-spawner-name
+      const renameObserver = new MutationObserver(() => {
+        document.querySelectorAll('.toy-spawner-item').forEach(item => {
+          const label = item.querySelector('.toy-spawner-name');
+          if (!label) return;
+
+          // If we still see "Loop Grid", change its display label and whitelist it
+          if (label.textContent.includes('Loop Grid')) {
+            if (!item.dataset.tutorialOrigLabel) {
+              item.dataset.tutorialOrigLabel = label.textContent;
+              label.textContent = 'Simple Rhythm';
+            }
+            item.dataset.tutorialKeep = 'true';
+          }
+
+          // Also whitelist if it already says "Simple Rhythm"
+          if (label.textContent.includes('Simple Rhythm')) {
+            item.dataset.tutorialKeep = 'true';
+          }
+        });
+      });
+      renameObserver.observe(document.body, { childList: true, subtree: true });
+
+      // Clean-up when leaving the task
+      tutorialListeners.push({
+        disconnect: () => {
+          try { style.remove(); } catch {}
+          try { renameObserver.disconnect(); } catch {}
+          // Stop the particle line and remove button pulse
+          stopParticleStream();
+          const targetEl = document.querySelector('.toy-spawner-toggle');
+          if (targetEl) {
+            targetEl.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse');
+          }
+        }
+      });
+    }
 
     // When entering the "draw-line" task, use the toy's own APIs.
 // This avoids duplicate DOM overlays and guarantees correct z-order.
@@ -1165,6 +1271,38 @@ try {
     tutorialActive = true;
 
     updateButtonVisual();
+
+    const boardObserver = new MutationObserver(mutations => {
+      if (!tutorialActive) return;
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (node.matches && node.matches('.toy-panel[data-toy="loopgrid"]')) {
+            const newToy = node;
+            maybeCompleteTask('add-toy-loopgrid');
+
+            if (window.centerBoardOnElement) {
+              requestAnimationFrame(() => {
+                window.centerBoardOnElement(newToy, TUTORIAL_ZOOM);
+              });
+            }
+
+            const onNoteAdd = (e) => {
+              const detail = e.detail || {};
+              const nodes = detail.nodes;
+              const hasNodes = Array.isArray(nodes) ? nodes.some(set => set && set.size > 0) : (newToy.querySelectorAll('.node.active, .pressed').length > 0);
+              if (hasNodes) {
+                maybeCompleteTask('add-note-new-toy');
+              }
+            };
+            addListener(newToy, 'toy-update', onNoteAdd);
+            addListener(newToy, 'change', onNoteAdd);
+            addListener(newToy, 'loopgrid:update', onNoteAdd);
+          }
+        }
+      }
+    });
+    boardObserver.observe(board, { childList: true });
+    tutorialListeners.push({ disconnect: () => boardObserver.disconnect() });
 
     if (!document.getElementById('tutorial-styles')) {
       const link = document.createElement('link');

@@ -143,6 +143,12 @@ function renderCatalog() {
     descEl.textContent = entry.description || '';
 
     card.append(nameEl, descEl);
+
+    if (entry.disabled) {
+      card.disabled = true;
+      card.classList.add('is-disabled');
+    }
+
     card.addEventListener('pointerdown', (event) => startDrag(event, entry, card));
     card.addEventListener('click', (event) => {
       if (state.justSpawned) {
@@ -212,6 +218,13 @@ function onPointerMove(event) {
 function onPointerUp(event) {
   const drag = state.drag;
   if (!drag || event.pointerId !== drag.pointerId) return;
+
+  // If not moved, it's a click. Let the click handler spawn.
+  if (!drag.moved) {
+    cleanupDrag();
+    return;
+  }
+
   const { entry } = drag;
   const clientX = event.clientX;
   const clientY = event.clientY;

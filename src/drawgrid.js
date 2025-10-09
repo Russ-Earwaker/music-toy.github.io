@@ -2676,7 +2676,7 @@ function regenerateMapFromStrokes() {
         ghostCtx.lineCap = 'round';
         ghostCtx.lineJoin = 'round';
         ghostCtx.lineWidth = Math.max(getLineWidth()*1.15, 24);
-        ghostCtx.strokeStyle = 'rgba(255, 68, 236, 0.7)'; // User tweaked color
+        ghostCtx.strokeStyle = 'rgba(68, 112, 255, 0.7)'; // User tweaked color
         ghostCtx.beginPath();
         ghostCtx.moveTo(last.x, last.y);
         ghostCtx.lineTo(x, y);
