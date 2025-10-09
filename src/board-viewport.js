@@ -21,8 +21,7 @@
     try{ localStorage.setItem('boardViewport', JSON.stringify({ scale, x, y })); }catch{}
   }
   function apply(){
-    stage.style.transformOrigin = '0 0';
-    stage.style.transformOrigin = '0 0';
+    stage.style.transformOrigin = '50% 50%';
     stage.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
     // expose current viewport to other modules
     window.__boardScale = scale;
@@ -104,8 +103,13 @@
     const viewportCX = (window.innerWidth  / 2);
     const viewportCY = (window.innerHeight / 2);
 
-    x = Math.round(viewportCX - scale * centerX);
-    y = Math.round(viewportCY - scale * centerY);
+    const boardWidth = stage.offsetWidth;
+    const boardHeight = stage.offsetHeight;
+    const centerX_from_center = centerX - boardWidth / 2;
+    const centerY_from_center = centerY - boardHeight / 2;
+
+    x = Math.round(viewportCX - scale * centerX_from_center);
+    y = Math.round(viewportCY - scale * centerY_from_center);
 
     const maxOffsetX = window.innerWidth * 2;
     const maxOffsetY = window.innerHeight * 2;

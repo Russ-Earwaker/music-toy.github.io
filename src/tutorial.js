@@ -76,7 +76,7 @@ const GOAL_FLOW = [
     reward: {
       description: 'Unlocks the Instrument Select button',
       icons: [
-        { type: 'asset', label: 'Instrument', icon: "../assets/UI/T_ButtonInstrument.png" },
+        { type: 'asset', label: 'Instrument', icon: "../assets/UI/T_ButtonInstruments.png" },
       ],
     },
     tasks: [
@@ -460,7 +460,14 @@ const GOAL_FLOW = [
     }
     if (goal.id === 'clear-random') {
       const toggle = unlockSpawnerControl('toggle');
-      if (toggle) unlocked.push(toggle);
+      if (toggle) {
+        unlocked.push(toggle);
+        toggle.classList.add('tutorial-pulse-target', 'tutorial-active-pulse');
+        const rewardIcon = goalPanel?.querySelector('.goal-reward-icon .toy-spawner-toggle');
+        if (rewardIcon) {
+          startParticleStream(rewardIcon, toggle);
+        }
+      }
     }
     if (goal.id === 'add-toy') {
       document.querySelectorAll('.toy-panel:not(.tutorial-hidden)').forEach(panel => {
@@ -985,6 +992,8 @@ requestAnimationFrame(() => {
     const centerX = logicalWidth / 2;
     const centerY = Math.min(logicalHeight / 2, logicalHeight - 240);
 
+    console.log({ logicalWidth, centerX });
+
     let panel = null;
     tutorialFromFactory = false;
 
@@ -1131,35 +1140,6 @@ try {
 /* << GPT:TUTORIAL_VIEW_INIT END >> */
 
 
-    const _repositionForGap = () => {
-      if (!panel.isConnected) return;
-      const goals = document.getElementById('tutorial-goals');
-      const goalsRect = goals ? goals.getBoundingClientRect() : null;
-      const margin = 16;
-      const safeTop = 72;
-      const r = panel.getBoundingClientRect();
-      const width = panel.offsetWidth || r.width;
-      const height = panel.offsetHeight || r.height;
-      const gapLeft  = Math.max(margin, (goalsRect ? Math.round(goalsRect.right) + margin : margin));
-      const gapRight = Math.max(gapLeft + 1, window.innerWidth - margin);
-      const gapWidth = Math.max(0, gapRight - gapLeft);
-      let left;
-      if (gapWidth >= Math.min(width, 320)) {
-        const gapCenter = (gapLeft + gapRight) / 2;
-        left = Math.round(gapCenter - width / 2);
-      } else {
-        left = Math.max(margin, Math.round((window.innerWidth - width) / 2));
-      }
-      const top = Math.max(safeTop, Math.round(Math.min((window.innerHeight - height) / 2, window.innerHeight - height - 32)));
-      panel.style.left = left + 'px';
-      panel.style.top  = top  + 'px';
-    };
-    window.addEventListener('resize', _repositionForGap, { passive:true });
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', _repositionForGap, { passive:true });
-      window.visualViewport.addEventListener('scroll', _repositionForGap, { passive:true });
-    }
-    requestAnimationFrame(_repositionForGap);
 /* << GPT:TUTORIAL_RECENTER_FINAL START >> */
 // Re-center after layout & any transform resets settle (2x rAF).
 if (!window.__useBoardCentering) {
@@ -1377,7 +1357,9 @@ try {
                || document.querySelector('.toy-panel[data-toy-id]')
                || tutorialToy;
     if (panel && window.centerBoardOnElement && window.setBoardScale) {
-      window.centerBoardOnElement(panel, TUTORIAL_ZOOM);
+      requestAnimationFrame(() => {
+        window.centerBoardOnElement(panel, TUTORIAL_ZOOM);
+      });
       // keep centred on resize / visualViewport changes
       const recenter = ()=> window.centerBoardOnElement(panel, TUTORIAL_ZOOM);
       window.addEventListener('resize', recenter, { passive:true });

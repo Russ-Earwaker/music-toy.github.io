@@ -88,10 +88,12 @@ html, body {
 
 #board {
   position: absolute;
-  top: 48px;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  width: 8000px;
+  height: 8000px;
+  left: -4000px;
+  top: -4000px;
+  transform-origin: 50% 50%;
+  overflow: visible !important;
 }
 
 #organise-toys-btn {
@@ -1159,4 +1161,3 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
 .app-topbar [data-action="toggle-play"] .c-btn-core {
   background-size: 50%;
 }
-

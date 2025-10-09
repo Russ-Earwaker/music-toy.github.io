@@ -1,4 +1,5 @@
 // --- Module Imports ---
+import './debug.js';
 import { initializeBouncer } from './bouncer-init.js';
 import './header-buttons-delegate.js';
 import './rippler-init.js';
