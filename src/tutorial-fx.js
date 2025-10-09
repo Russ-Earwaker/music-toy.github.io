@@ -382,19 +382,19 @@ if(frontCtx) frontCtx.restore();
 export function startParticleStream(originEl, targetEl) {
   const behind = document.querySelector('#tutorial-goals .goal-particles-behind');
   const front  = document.querySelector('.tutorial-particles-front');
-  if(!behind || !front) return;
-  
+  if (!behind || !front || !originEl || !targetEl) return;
+
   setupCanvases(behind, front);
 
   drawOriginParticles(behind.getContext('2d'), originEl);
 
-  if (animationFrameId) {
-    cancelAnimationFrame(animationFrameId);
-  }
+  if (animationFrameId) cancelAnimationFrame(animationFrameId);
   particles = [];
   startFlight._lastTs = performance.now();
   startFlight._accum = 0;
-  startFlight(front.getContext('2d'), originEl, targetEl);
+
+  // Kick the animation
+  animationFrameId = requestAnimationFrame(() => startFlight(front.getContext('2d'), originEl, targetEl));
 }
 
 export function stopParticleStream() {

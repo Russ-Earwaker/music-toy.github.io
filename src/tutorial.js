@@ -698,15 +698,44 @@ const GOAL_FLOW = [
     if (!task) return;
 
     if (task.id === 'add-rhythm-toy') {
+      ensureGoalPanel();
+
       // When the + button is visible, start the line from the active task → + button
       whenVisible('.toy-spawner-toggle', (targetEl) => {
-        const taskEl = goalPanel?.querySelector('.goal-task.is-active');
-        if (taskEl) startParticleStream(taskEl, targetEl);
-        // Make the + button pulse while task is active
-        targetEl.classList.add('tutorial-pulse-target', 'tutorial-active-pulse');
+        const startParticles = () => {
+          const taskEl = goalPanel?.querySelector('.goal-task.is-active') 
+                      || goalPanel?.querySelector('.goal-row.is-active');
+          if (taskEl && targetEl?.isConnected) {
+            // two rAFs = layout stable & canvases sized
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                startParticleStream(taskEl, targetEl);
+              });
+            });
+
+            // Highlight + button while task is active
+            targetEl.classList.add('tutorial-pulse-target', 'tutorial-addtoy-pulse');
+            // One-off accent flash
+            targetEl.classList.add('tutorial-flash');
+            setTimeout(() => targetEl.classList.remove('tutorial-flash'), 320);
+          }
+        };
+
+        // Start now and also restart on resize (keeps path correct)
+        startParticles();
+        window.addEventListener('resize', startParticles, { passive: true });
+
+        // Clean up when task completes / goal changes
+        tutorialListeners.push({
+          target: window,
+          type: 'resize',
+          handler: startParticles,
+          options: { passive: true }
+        });
       });
 
-      // Grey out all toy cards EXCEPT the one we want to allow (Loop Grid → renamed to Simple Rhythm)
+      // Grey out all toy cards EXCEPT the one we want to allow (Simple Rhythm)
+      // (keep your existing greying/rename logic here)
       const style = document.createElement('style');
       style.id = 'tutorial-add-toy-style';
       style.textContent = `
@@ -747,14 +776,12 @@ const GOAL_FLOW = [
         disconnect: () => {
           try { style.remove(); } catch {}
           try { renameObserver.disconnect(); } catch {}
-          // Stop the particle line and remove button pulse
-          stopParticleStream();
-          const targetEl = document.querySelector('.toy-spawner-toggle');
-          if (targetEl) {
-            targetEl.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse');
-          }
         }
       });
+    } else {
+      // On any non-add-toy task, stop the stream + remove pulse
+      stopParticleStream();
+      document.querySelector('.toy-spawner-toggle')?.classList.remove('tutorial-pulse-target', 'tutorial-addtoy-pulse', 'tutorial-flash');
     }
 
     // When entering the "draw-line" task, use the toy's own APIs.

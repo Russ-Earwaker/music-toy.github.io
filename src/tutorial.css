@@ -150,17 +150,32 @@ body.tutorial-active #topbar .tutorial-play-hidden {
   pointer-events: none;
 }
 
-/* Tutorial Play pulse (applies to the whole button wrapper so glow + core pulse together) */
+/* Base pulse used across targets */
 @keyframes tutorialPulse {
-  0%   { transform: scale(1);   }
+  0%   { transform: scale(1);    }
   10%  { transform: scale(1.08); }
-  20%  { transform: scale(1);   }
-  100% { transform: scale(1);   }
+  25%  { transform: scale(1.00); }
+  50%  { transform: scale(1.06); }
+  100% { transform: scale(1);    }
 }
 
 .tutorial-pulse-target {
   animation: tutorialPulse 2s ease-in-out infinite;
   transform-origin: 50% 50%;
+}
+
+/* Add Toy pulse skin */
+.toy-spawner-toggle { position: relative; transform-origin: 50% 50%; }
+
+.toy-spawner-toggle.tutorial-addtoy-pulse::before {
+  content: "";
+  position: absolute;
+  inset: -10px;               /* extends beyond the bevel for a halo */
+  border-radius: 12px;        /* bevel-friendly */
+  background: currentColor;   /* uses button color */
+  opacity: 0.12;
+  pointer-events: none;
+  animation: tutorialPulse 2s ease-in-out infinite;
 }
 
 /* Reward panel: bevelled Add Toy preview sizing */
