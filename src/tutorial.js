@@ -651,15 +651,42 @@ if (task.id === 'draw-line' && tutorialToy) {
     console.debug('[tutorial] starting ghost guide + hint on draw-line');
     // Show the toy's built-in word overlay (uses "DRAW" inside drawgrid)
     tutorialToy.setSwipeVisible(true, { immediate: true });
-
-    // Start the ghost guide from the toy (particles only; no real drawing)
-    tutorialToy.startGhostGuide({
-      speed: 2000,   // ms per sweep
-      pause: 1000,   // gap between sweeps
-      force: 1.4     // knockback; matches our recent tuning
-      // radius/trail come from drawgrid defaults
-    });
-  });
+    
+        // Compute local coords inside the drawgrid panel (not viewport coords)
+        const r = tutorialToy.getBoundingClientRect();
+        const pad = 24; // keep inside the grid area a bit
+        const startX = pad;
+        const endX   = Math.max(pad + 1, r.width - pad);
+        const startY = pad;
+        const endY   = Math.max(pad + 1, r.height - pad);
+    
+        // One sweep of the ghost finger; drawgrid.js handles fade/opacity (~30%)
+        tutorialToy.startGhostGuide({
+          startX,
+          endX,
+          startY,
+          endY,
+          duration: 2000,   // ms per sweep
+          wiggle: true,
+          trail: true,
+          trailEveryMs: 50,
+          trailCount: 3,
+          trailSpeed: 1.2
+        });
+    
+        // Loop the sweep with a short pause
+        if (tutorialToy.__ghostLoop) clearInterval(tutorialToy.__ghostLoop);
+        tutorialToy.__ghostLoop = setInterval(() => {
+          tutorialToy.startGhostGuide({
+            startX, endX, startY, endY,
+            duration: 2000,
+            wiggle: true,
+            trail: true,
+            trailEveryMs: 50,
+            trailCount: 3,
+            trailSpeed: 1.2
+          });
+        }, 2000 /*duration*/ + 1000 /*pause*/);  });
 }
 
     const targetKey = TASK_TARGETS[task.id];
@@ -814,7 +841,11 @@ requestAnimationFrame(() => {
     if (!hasDetectedLine && Array.isArray(nodes)) {
       const madeAny = nodes.some(set => set && set.size > 0);
       if (madeAny) {
-        tutorialToy.stopGhostGuide?.();
+        try { tutorialToy.stopGhostGuide?.(); } catch {}
+        if (tutorialToy.__ghostLoop) {
+          clearInterval(tutorialToy.__ghostLoop);
+          tutorialToy.__ghostLoop = null;
+        }
         tutorialToy.setSwipeVisible?.(false);
       }
     }
@@ -1281,7 +1312,11 @@ try {
     helpActivatedForTask = false;
     helpWasActiveBeforeTutorial = false;
 
-    tutorialToy.stopGhostGuide?.();
+    try { tutorialToy.stopGhostGuide?.(); } catch {}
+    if (tutorialToy.__ghostLoop) {
+      clearInterval(tutorialToy.__ghostLoop);
+      tutorialToy.__ghostLoop = null;
+    }
     tutorialToy.setSwipeVisible?.(false);
 
     stopParticleStream();

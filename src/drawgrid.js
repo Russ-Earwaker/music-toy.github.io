@@ -537,22 +537,26 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const paint = document.createElement('canvas'); paint.setAttribute('data-role','drawgrid-paint');
   const nodesCanvas = document.createElement('canvas'); nodesCanvas.setAttribute('data-role', 'drawgrid-nodes');
   const flashCanvas = document.createElement('canvas'); flashCanvas.setAttribute('data-role', 'drawgrid-flash');
+  const ghostCanvas = document.createElement('canvas'); ghostCanvas.setAttribute('data-role','drawgrid-ghost');
   Object.assign(grid.style,         { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 0 });
   Object.assign(paint.style,        { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 1 });
   Object.assign(particleCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 2, pointerEvents: 'none' });
-  Object.assign(flashCanvas.style,  { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 3, pointerEvents: 'none' });
-  Object.assign(nodesCanvas.style,  { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 4, pointerEvents: 'none' });
+  Object.assign(ghostCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 3, pointerEvents: 'none' });
+  Object.assign(flashCanvas.style,  { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 4, pointerEvents: 'none' });
+  Object.assign(nodesCanvas.style,  { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 5, pointerEvents: 'none' });
   body.appendChild(grid);
   body.appendChild(paint);
   body.appendChild(particleCanvas);
-  body.appendChild(nodesCanvas);
+  body.appendChild(ghostCanvas);
   body.appendChild(flashCanvas);
+  body.appendChild(nodesCanvas);
 
   const particleCtx = particleCanvas.getContext('2d');
   const gctx = grid.getContext('2d', { willReadFrequently: true });
   const pctx = paint.getContext('2d', { willReadFrequently: true });
   const nctx = nodesCanvas.getContext('2d', { willReadFrequently: true });
   const fctx = flashCanvas.getContext('2d', { willReadFrequently: true });
+  const ghostCtx = ghostCanvas.getContext('2d');
 
   let __forceSwipeVisible = null; // null=auto, true/false=forced by tutorial
 
@@ -1051,10 +1055,13 @@ function regenerateMapFromStrokes() {
       nodesCanvas.width = w; nodesCanvas.height = h;
       flashCanvas.width = w; flashCanvas.height = h;
       particleCanvas.width = w; particleCanvas.height = h;
+      ghostCanvas.width = w; ghostCanvas.height = h;
       gctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       pctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       nctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       particleCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ghostCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       // Scale the logical stroke data if we have it and the canvas was resized
       if (strokes.length > 0 && oldW > 0 && oldH > 0) {
@@ -1102,6 +1109,9 @@ function regenerateMapFromStrokes() {
       // Clear other content canvases. The caller is responsible for redrawing nodes/overlay.
       nctx.clearRect(0, 0, cssW, cssH);
       fctx.clearRect(0, 0, cssW, cssH);
+      ghostCtx.setTransform(1,0,0,1,0,0);
+      ghostCtx.clearRect(0,0,ghostCanvas.width,ghostCanvas.height);
+      ghostCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
   }
 
@@ -1622,6 +1632,7 @@ function regenerateMapFromStrokes() {
   }
 
   function onPointerDown(e){
+    panel.stopGhostGuide();
     const rect = paint.getBoundingClientRect();
     // cssW and cssH are the logical canvas dimensions.
     // rect.width and rect.height are the visual dimensions on screen.
@@ -2225,6 +2236,8 @@ function regenerateMapFromStrokes() {
 
   const api = {
     panel,
+    startGhostGuide,
+    stopGhostGuide,
     clear: ()=>{
       pctx.clearRect(0,0,cssW,cssH);
       nctx.clearRect(0,0,cssW,cssH);
@@ -2577,110 +2590,121 @@ function regenerateMapFromStrokes() {
   // the browser has finished its own layout calculations first.
   requestAnimationFrame(() => resnapAndRedraw(false));
 
-panel.startGhostGuide = (opts = {}) => {
-  if (panel.__ghostGuide) return;
+  let ghostGuideAnimFrame = null;
 
-  const {
-    speed = 2200,
-    pause = 900,
-    force = 1.4,
-    radius = Math.max(getLineWidth() * 2.5, 40),
-    trail = true,
-    trailEveryMs = 38,
-    trailCount = 8,
-    trailSpeed = 1.6,
-  } = opts;
+  function stopGhostGuide() {
+    if (ghostGuideAnimFrame) {
+      cancelAnimationFrame(ghostGuideAnimFrame);
+      ghostGuideAnimFrame = null;
+    }
+    ghostCtx.setTransform(1,0,0,1,0,0);
+    ghostCtx.clearRect(0,0,ghostCanvas.width,ghostCanvas.height);
+  }
 
-  let stopped = false, rafId = 0;
-
-  function loopOnce() {
-    if (stopped || !panel.isConnected) return;
-
-    const padX = Math.max(8, Math.min(24, gridArea.w * 0.03));
-    const padY = Math.max(8, Math.min(24, gridArea.h * 0.03));
-    const startX = gridArea.x + padX;
-    const endX   = gridArea.x + gridArea.w - padX;
-    const topY   = gridArea.y + padY;
-    const botY   = gridArea.y + gridArea.h - padY;
-
-    const yRange = botY - topY;
-    const goDown = Math.random() < 0.5;
-    const yStart = topY + yRange * (goDown ? Math.random() * 0.3 : 0.7 + Math.random() * 0.3);
-    const yEnd   = topY + yRange * (goDown ? 0.7 + Math.random() * 0.3 : Math.random() * 0.3);
-
-    const wiggleAmp = Math.min(yRange * 0.25, Math.max(10, ch * 0.60));
-    const cycles    = 1 + Math.random() * 0.6;
-    const phase     = Math.random() * Math.PI * 2;
-
-    const t0 = performance.now();
-    let lastTrail = t0 - trailEveryMs;
+  function startGhostGuide({
+      startX, endX,
+      startY, endY,
+      duration = 2000,
+      wiggle = true,
+      trail = true,
+      trailEveryMs = 50,
+      trailCount = 3,
+      trailSpeed = 1.2,
+  } = {}) {
+    stopGhostGuide();
     
-    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-    const easeIO = (u) => (u < 0.5 ? 4*u*u*u : 1 - Math.pow(-2*u + 2, 3)/2);
+    const r = panel.getBoundingClientRect();
+    const pad = 24;
+    const H = Math.max(1, r.height - pad * 2);
+    const centerY = r.height / 2;
 
-    const firstX = startX;
-    const firstY = clamp(yStart + Math.sin(phase) * wiggleAmp, topY, botY);
-    const trailPoints = [{x: firstX, y: firstY}];
+    // Ensure the sweep crosses the vertical center of the panel.
+    if (Math.random() < 0.5) {
+        startY = pad + Math.random() * (H / 2 - H * 0.2);
+        endY = centerY + Math.random() * (H / 2 - H * 0.2);
+    } else {
+        startY = centerY + Math.random() * (H / 2 - H * 0.2);
+        endY = pad + Math.random() * (H / 2 - H * 0.2);
+    }
+    
+    // Ensure it always goes left to right
+    if (startX > endX) [startX, endX] = [endX, startX];
+
+    const startTime = performance.now();
+    let last = null;
+    let lastTrail = 0;
+    const noiseSeed = Math.random() * 100;
 
     function frame(now) {
-      if (stopped || !panel.isConnected) return;
-      const u = Math.min(1, (now - t0) / speed);
+      const elapsed = now - startTime;
+      let t = Math.min(elapsed / duration, 1);
 
-      const x = startX + (endX - startX) * u;
-      const baseY = yStart + (yEnd - yStart) * easeIO(u);
-      const y = clamp(baseY + Math.sin(u * Math.PI * 2 * cycles + phase) * wiggleAmp, topY, botY);
+      if (!cw || !ch) { layout(true); }
 
-      trailPoints.push({x, y});
-      if (trailPoints.length > 20) {
-          trailPoints.shift();
+      const wiggleAmp = r.height * 0.25; // More wiggle
+
+      const x = startX + (endX - startX) * t;
+      let y = startY + (endY - startY) * t;
+
+      if (wiggle) {
+        const wiggleFactor = Math.sin(t * Math.PI * 3) * Math.sin(t * Math.PI * 0.5 + noiseSeed);
+        y += wiggleAmp * wiggleFactor;
       }
+      
+      // Clamp y to stay within the padded area
+      y = Math.max(pad, Math.min(y, r.height - pad));
 
-      fctx.save();
-      fctx.lineCap = 'round';
-      fctx.lineJoin = 'round';
-      fctx.lineWidth = getLineWidth();
-      for (let i = 0; i < trailPoints.length - 1; i++) {
-          const p1 = trailPoints[i];
-          const p2 = trailPoints[i+1];
-          const alpha = (i / trailPoints.length) * 0.3;
-          fctx.strokeStyle = `rgba(255, 105, 180, ${alpha})`;
-          fctx.beginPath();
-          fctx.moveTo(p1.x, p1.y);
-          fctx.lineTo(p2.x, p2.y);
-          fctx.stroke();
+      // Fade old trail
+      ghostCtx.save();
+      ghostCtx.setTransform(1,0,0,1,0,0);
+      ghostCtx.globalCompositeOperation = 'destination-out';
+      ghostCtx.globalAlpha = 0.1;
+      ghostCtx.fillRect(0, 0, ghostCanvas.width, ghostCanvas.height);
+      ghostCtx.restore();
+
+      // Draw new segment
+      if (last) {
+        ghostCtx.save();
+        ghostCtx.setTransform(dpr,0,0,dpr,0,0);
+        ghostCtx.globalCompositeOperation = 'source-over';
+        ghostCtx.globalAlpha = 0.15; // Super subtle
+        ghostCtx.lineCap = 'round';
+        ghostCtx.lineJoin = 'round';
+        ghostCtx.lineWidth = Math.max(getLineWidth()*1.15, 24);
+        ghostCtx.strokeStyle = 'rgb(255, 105, 180)'; // Pink color
+        ghostCtx.beginPath();
+        ghostCtx.moveTo(last.x, last.y);
+        ghostCtx.lineTo(x, y);
+        ghostCtx.stroke();
+        ghostCtx.restore();
       }
-      fctx.restore();
+      last = { x, y };
 
-      try { particles.drawingDisturb(x, y, radius, force); } catch {}
-
-      if (trail && (now - lastTrail) >= trailEveryMs) {
-        try { particles.ringBurst(x, y, radius, trailCount, trailSpeed, 'pink'); } catch {}
+      const force = 0.4;
+      const radius = getLineWidth() * 1.5;
+      particles.drawingDisturb(x, y, radius, force);
+      if (trail && now - lastTrail >= trailEveryMs) {
+        particles.ringBurst(x, y, radius, trailCount, trailSpeed, 'pink');
         lastTrail = now;
       }
 
-      if (u < 1) rafId = requestAnimationFrame(frame);
-      else setTimeout(() => { if (!stopped) loopOnce(); }, pause);
+      if (t < 1) {
+        ghostGuideAnimFrame = requestAnimationFrame(frame);
+      } else {
+        ghostCtx.save();
+        ghostCtx.setTransform(1,0,0,1,0,0);
+        ghostCtx.globalCompositeOperation = 'destination-out';
+        ghostCtx.globalAlpha = 1;
+        ghostCtx.fillRect(0, 0, ghostCanvas.width, ghostCanvas.height);
+        ghostCtx.restore();
+        stopGhostGuide();
+      }
     }
-
-    rafId = requestAnimationFrame(frame);
+    ghostGuideAnimFrame = requestAnimationFrame(frame);
   }
 
-  const ensureLayoutReady = () => {
-    const ready = gridArea && gridArea.w > 0 && gridArea.h > 0 && cssW > 0 && cssH > 0 && panel.isConnected;
-    if (!ready) {
-        rafId = requestAnimationFrame(ensureLayoutReady);
-        return;
-    }
-    loopOnce();
-  };
-
-  panel.__ghostGuide = { stop: () => { stopped = true; cancelAnimationFrame(rafId); } };
-  ensureLayoutReady();
-};
-
-panel.stopGhostGuide = () => {
-  if (panel.__ghostGuide) { try { panel.__ghostGuide.stop(); } catch{}; panel.__ghostGuide = null; }
-};
+  panel.startGhostGuide = startGhostGuide;
+  panel.stopGhostGuide = stopGhostGuide;
 
 panel.addEventListener('drawgrid:update', (e) => {
   const nodes = e?.detail?.nodes;
