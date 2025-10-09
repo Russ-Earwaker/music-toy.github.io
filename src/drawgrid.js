@@ -2641,7 +2641,7 @@ function regenerateMapFromStrokes() {
 
       if (!cw || !ch) { layout(true); }
 
-      const wiggleAmp = r.height * 0.25; // More wiggle
+      const wiggleAmp = r.height * 0.25; // User can tweak this
 
       const x = startX + (endX - startX) * t;
       let y = startY + (endY - startY) * t;
@@ -2651,8 +2651,13 @@ function regenerateMapFromStrokes() {
         y += wiggleAmp * wiggleFactor;
       }
       
-      // Clamp y to stay within the padded area
-      y = Math.max(pad, Math.min(y, r.height - pad));
+      const topBound = pad;
+      const bottomBound = r.height - pad;
+      if (y > bottomBound) {
+        y = bottomBound - (y - bottomBound);
+      } else if (y < topBound) {
+        y = topBound + (topBound - y);
+      }
 
       // Fade old trail
       ghostCtx.save();
@@ -2667,11 +2672,11 @@ function regenerateMapFromStrokes() {
         ghostCtx.save();
         ghostCtx.setTransform(dpr,0,0,dpr,0,0);
         ghostCtx.globalCompositeOperation = 'source-over';
-        ghostCtx.globalAlpha = 0.15; // Super subtle
+        ghostCtx.globalAlpha = 0.2; // Even more subtle
         ghostCtx.lineCap = 'round';
         ghostCtx.lineJoin = 'round';
         ghostCtx.lineWidth = Math.max(getLineWidth()*1.15, 24);
-        ghostCtx.strokeStyle = 'rgb(255, 105, 180)'; // Pink color
+        ghostCtx.strokeStyle = 'rgba(255, 68, 236, 0.7)'; // User tweaked color
         ghostCtx.beginPath();
         ghostCtx.moveTo(last.x, last.y);
         ghostCtx.lineTo(x, y);
@@ -2680,7 +2685,7 @@ function regenerateMapFromStrokes() {
       }
       last = { x, y };
 
-      const force = 0.4;
+      const force = 0.8; // Increased knockback
       const radius = getLineWidth() * 1.5;
       particles.drawingDisturb(x, y, radius, force);
       if (trail && now - lastTrail >= trailEveryMs) {
