@@ -1,4 +1,5 @@
-﻿import { initToyUI } from './toyui.js';
+import { spawnTutorialToy } from './tutorial-spawner.js';
+import { initToyUI } from './toyui.js';
 import { createDrawGrid } from './drawgrid.js';
 import { connectDrawGridToPlayer } from './drawgrid-player.js';
 import { getSnapshot, applySnapshot } from './persistence.js';
@@ -878,18 +879,7 @@ if (task.id === 'draw-line' && tutorialToy) {
 
         // reveal + force layout before anim
         
-/* << GPT:TUTORIAL_DRAW_TOY_SIZE_V2 START >> */
-// Make the Draw toy panel large so the existing centering code uses the new size
-try {
-  if (panel && panel.style) {
-    panel.style.position = 'absolute';
-    panel.style.width = 'min(960px, 80vw)';
-    panel.style.height = 'min(640px, 70vh)';
-    panel.style.maxWidth = 'calc(100vw - 64px)';
-    panel.style.maxHeight = 'calc(100vh - 128px)';
-  }
-} catch (_) {}
-/* << GPT:TUTORIAL_DRAW_TOY_SIZE_V2 END >> */
+
 requestAnimationFrame(() => {
           if (!playButtonContainer.isConnected) return;
 
@@ -1011,266 +1001,7 @@ requestAnimationFrame(() => {
     addListener(panel, 'toy-random', () => maybeCompleteTask('press-random'));
   }
 
-  function spawnTutorialToy() {
-    const factory = window && window.MusicToyFactory;
-    const boardRect = board.getBoundingClientRect();
-    const logicalWidth = board.offsetWidth || boardRect.width || window.innerWidth || 1280;
-    const logicalHeight = board.offsetHeight || boardRect.height || window.innerHeight || 720;
-    const centerX = logicalWidth / 2;
-    const centerY = Math.min(logicalHeight / 2, logicalHeight - 240);
 
-    console.log({ logicalWidth, centerX });
-
-    let panel = null;
-    tutorialFromFactory = false;
-
-    if (factory && typeof factory.create === 'function') {
-      try {
-        panel = factory.create('drawgrid', { centerX, centerY, instrument: 'AcousticGuitar' });
-        tutorialFromFactory = !!panel;
-      } catch (err) {
-        console.warn('[tutorial] factory create failed, falling back', err);
-        panel = null;
-        tutorialFromFactory = false;
-      }
-    }
-
-    if (!panel) {
-      panel = document.createElement('section');
-      panel.id = 'tutorial-drawgrid';
-      panel.className = 'toy-panel';
-      panel.dataset.toy = 'drawgrid';
-      panel.dataset.instrument = 'AcousticGuitar';
-      panel.dataset.tutorial = 'true';
-      panel.classList.add('tutorial-panel');
-      board.appendChild(panel);
-      initToyUI(panel, { toyName: 'DrawGrid Tutorial' });
-      createDrawGrid(panel, { toyId: panel.id });
-      connectDrawGridToPlayer(panel);
-/* << GPT:TUTORIAL_FREEZE_BOARD_VIEWPORT START >> */
-// Reset and freeze the main board viewport while the tutorial is active.
-// This prevents saved/other-view zoom from leaking in.
-try {
-  const board = document.getElementById('board');
-  if (board) {
-    // Reset any transform so header/goals are on-screen
-    board.style.transformOrigin = '0 0';
-    board.style.transform = 'translate(0px, 0px) scale(1)';
-    // Block board-viewport interactions (wheel/pan/touch) while in tutorial
-    const stop = (e) => { e.stopImmediatePropagation(); e.preventDefault(); };
-    board._tutBlockers = board._tutBlockers || [];
-    const types = [
-      ['wheel',      { passive: false, capture: true }],
-      ['mousedown',  { passive: false, capture: true }],
-      ['mousemove',  { passive: false, capture: true }],
-      ['mouseup',    { passive: false, capture: true }],
-      ['touchstart', { passive: false, capture: true }],
-      ['touchmove',  { passive: false, capture: true }],
-      ['touchend',   { passive: false, capture: true }]
-    ];
-    for (const [type, opts] of types) {
-      board.addEventListener(type, stop, opts);
-      board._tutBlockers.push([type, stop, opts]);
-    }
-  }
-} catch (e) { /* no-op */ }
-/* << GPT:TUTORIAL_FREEZE_BOARD_VIEWPORT END >> */
-
-/* << GPT:TUTORIAL_BOARD_VIEWPORT_RESET START >> */
-// Reset the main board pan/zoom so header and goals are on-screen regardless of prior zoom.
-try {
-  // Clear any saved viewport so the board-viewport module doesn't restore an odd state
-  try { localStorage.setItem('boardViewport', JSON.stringify({ scale: 1, x: 0, y: 0 })); } catch {}
-  if (typeof window.setBoardScale === 'function') window.setBoardScale(1);
-  if (typeof window.panTo === 'function') window.panTo(0, 0);
-} catch (e) { /* no-op */ }
-/* << GPT:TUTORIAL_BOARD_VIEWPORT_RESET END >> */
-
-/* << GPT:TUTORIAL_VIEWPORT_BASELINE START >> */
-// Ensure a consistent toy zoom/pan on tutorial entry.
-// 1) Prefer event-based (toy listens for 'toy-set-viewport').
-// 2) Fallback: apply a transform on a likely viewport element.
-try {
-  // Avoid restoring a weird scroll after refresh
-  try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch (_) {}
-
-  const INITIAL_TUTORIAL_ZOOM = 1.15; // tweak if you want tighter/looser
-  panel.dispatchEvent(new CustomEvent('toy-set-viewport', {
-    bubbles: true,
-    detail: { zoom: INITIAL_TUTORIAL_ZOOM, center: 'content', pan: { x: 0, y: 0 } }
-  }));
-
-  // Fallback if the toy doesn't implement the event:
-  (function applyViewportFallback() {
-    const vp = panel.querySelector('[data-viewport], .drawgrid-viewport, .toy-viewport, .grid-viewport, canvas');
-    if (!vp) return;
-    // Reset any stale transform (e.g., from prior sessions) then apply baseline
-    vp.style.transformOrigin = '50% 50%';
-    vp.style.transform = 'translate(0px, 0px) scale(' + INITIAL_TUTORIAL_ZOOM + ')';
-  })();
-} catch (e) { /* no-op */ }
-/* << GPT:TUTORIAL_VIEWPORT_BASELINE END >> */
-
-      try { panel.dispatchEvent(new CustomEvent('toy-clear', { bubbles: true })); } catch {}
-    }
-
-    if (!panel.dataset.tutorial) panel.dataset.tutorial = 'true';
-    panel.classList.add('tutorial-panel');
-    panel.style.zIndex = '60';
-
-    lockTutorialControls(panel);
-    setupPanelListeners(panel);
-/* << GPT:TUTORIAL_CAMERA_RESET START >> */
-// Ensure the Draw toy starts at a consistent size and zoom every time
-try {
-  if (panel && panel.style) {
-    panel.style.position = 'absolute';
-    panel.style.width = 'min(960px, 80vw)';
-    panel.style.height = 'min(640px, 70vh)';
-    panel.style.maxWidth = 'calc(100vw - 64px)';
-    panel.style.maxHeight = 'calc(100vh - 128px)';
-  }
-  // Preferred: let the toy handle its own zoom/pan
-  const INITIAL_TUTORIAL_ZOOM = 1.15;
-  panel.dispatchEvent(new CustomEvent('toy-set-viewport', {
-    bubbles: true,
-    detail: { zoom: INITIAL_TUTORIAL_ZOOM, center: 'content', pan: { x: 0, y: 0 } }
-  }));
-  // Fallback: apply a default transform to a likely viewport element if the toy doesn't listen
-  (function() {
-    const vp = panel.querySelector('[data-viewport], .drawgrid-viewport, .toy-viewport, .grid-viewport, canvas');
-    if (vp) {
-      vp.style.transformOrigin = '50% 50%';
-      vp.style.transform = 'translate(0px, 0px) scale(' + INITIAL_TUTORIAL_ZOOM + ')';
-    }
-  })();
-} catch (e) { /* no-op */ }
-/* << GPT:TUTORIAL_CAMERA_RESET END >> */
-/* << GPT:TUTORIAL_VIEW_INIT START >> */
-// Ensure the tutorial toy opens at a consistent size and zoom every time.
-try {
-  if (panel && panel.style) {
-    panel.style.position = 'absolute';
-    panel.style.width = 'min(960px, 80vw)';
-    panel.style.height = 'min(640px, 70vh)';
-    panel.style.maxWidth = 'calc(100vw - 64px)';
-    panel.style.maxHeight = 'calc(100vh - 128px)';
-  }
-  // Ask the toy to set its own internal zoom (middle-mouse baseline)
-  const INITIAL_TUTORIAL_ZOOM = 1.15; // tweak to taste
-  panel.dispatchEvent(new CustomEvent('toy-set-viewport', {
-    bubbles: true,
-    detail: { zoom: INITIAL_TUTORIAL_ZOOM, center: 'content' }
-  }));
-  panel.dataset.tutorialZoom = String(INITIAL_TUTORIAL_ZOOM);
-} catch (e) { /* no-op */ }
-/* << GPT:TUTORIAL_VIEW_INIT END >> */
-
-
-/* << GPT:TUTORIAL_RECENTER_FINAL START >> */
-// Re-center after layout & any transform resets settle (2x rAF).
-if (!window.__useBoardCentering) {
-try {
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    const r = panel.getBoundingClientRect();
-    const sx = window.scrollX || document.documentElement.scrollLeft || 0;
-    const sy = window.scrollY || document.documentElement.scrollTop || 0;
-    const cx = r.left + r.width / 2 + sx;
-    const cy = r.top  + r.height / 2 + sy;
-    window.scrollTo({
-      left: Math.max(0, Math.round(cx - window.innerWidth  / 2)),
-      top:  Math.max(0, Math.round(cy - window.innerHeight / 2)),
-      behavior: 'auto'
-    });
-  }));
-} catch (e) { /* no-op */ }
-}
-/* << GPT:TUTORIAL_RECENTER_FINAL END >> */
-
-/* << GPT:TUTORIAL_RECENTER_AFTER_RESET START >> */
-// Recenter again after the board viewport reset has applied.
-if (!window.__useBoardCentering) {
-try {
-  requestAnimationFrame(() => {
-    const r = panel.getBoundingClientRect();
-    const sx = window.scrollX || document.documentElement.scrollLeft || 0;
-    const sy = window.scrollY || document.documentElement.scrollTop || 0;
-    const cx = r.left + r.width / 2 + sx;
-    const cy = r.top  + r.height / 2 + sy;
-    window.scrollTo({
-      left: Math.max(0, Math.round(cx - window.innerWidth  / 2)),
-      top:  Math.max(0, Math.round(cy - window.innerHeight / 2)),
-      behavior: 'auto'
-    });
-  });
-} catch (e) { /* no-op */ }
-}
-/* << GPT:TUTORIAL_RECENTER_AFTER_RESET END >> */
-
-/* << GPT:TUTORIAL_RECENTER_AND_OBSERVERS START >> */
-// Re-center the window after layout is stable, and keep it stable across browser zoom changes.
-(() => {
-  if (panel && !panel._tutorialRecenterInit) {
-    panel._tutorialRecenterInit = true;
-
-    const centerNow = () => {
-      if (!window.__useBoardCentering) {
-      try {
-        const r = panel.getBoundingClientRect();
-        const sx = window.scrollX || document.documentElement.scrollLeft || 0;
-        const sy = window.scrollY || document.documentElement.scrollTop || 0;
-        const cx = r.left + r.width / 2 + sx;
-        const cy = r.top  + r.height / 2 + sy;
-        window.scrollTo({
-          left: Math.max(0, Math.round(cx - window.innerWidth  / 2)),
-          top:  Math.max(0, Math.round(cy - window.innerHeight / 2)),
-          behavior: 'auto'
-        });
-      } catch (_) {}
-      }
-    };
-
-    // Run after two frames so fonts/styles settle
-    requestAnimationFrame(() => requestAnimationFrame(centerNow));
-
-    // Keep centered if the panel resizes or the browser zoom changes
-    try {
-      const ro = new ResizeObserver(() => centerNow());
-      ro.observe(panel);
-    } catch (_) {}
-
-    window.addEventListener('resize', centerNow, { passive: true });
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', centerNow, { passive: true });
-      window.visualViewport.addEventListener('scroll', centerNow, { passive: true });
-    }
-  }
-})();
-/* << GPT:TUTORIAL_CENTER_VIEW START >> */
-  // Replaced by board pan/zoom centring
-  (()=>{
-    const panel = document.querySelector('.toy-panel.toy-focused') 
-               || document.querySelector('.toy-panel[data-toy-id]')
-               || tutorialToy;
-    if (panel && window.centerBoardOnElement) {
-      window.centerBoardOnElement(panel, TUTORIAL_ZOOM);
-    }
-  })();
-/* << GPT:TUTORIAL_CENTER_VIEW END >> */
-/* << GPT:TUTORIAL_CENTER_VIEW START >> */
-  // Replaced by board pan/zoom centring
-  (()=>{
-    const panel = document.querySelector('.toy-panel.toy-focused') 
-               || document.querySelector('.toy-panel[data-toy-id]')
-               || tutorialToy;
-    if (panel && window.centerBoardOnElement) {
-      window.centerBoardOnElement(panel, TUTORIAL_ZOOM);
-    }
-  })();
-/* << GPT:TUTORIAL_CENTER_VIEW END >> */
-
-    return panel;
-  }
 
   function enterTutorial() {
     window.__useBoardCentering = true;
@@ -1287,11 +1018,85 @@ try {
             const newToy = node;
             maybeCompleteTask('add-toy-loopgrid');
 
-            if (window.centerBoardOnElement) {
-              requestAnimationFrame(() => {
-                window.centerBoardOnElement(newToy, TUTORIAL_ZOOM);
-              });
-            }
+/***** << GPT:TUTORIAL_PLACE_AND_FRAME_BOTH START >> *****/
+try {
+  const board = document.getElementById('board');
+  const draw = board?.querySelector(':scope > .toy-panel[data-toy="drawgrid"]');
+
+  if (draw && newToy) {
+    const settle = (fn) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(fn)));
+    const getBoardPos = (panel) => {
+        const br = board.getBoundingClientRect();
+        const pr = panel.getBoundingClientRect();
+        const sc = Number(window.__boardScale) || 1;
+        return {
+            left: (pr.left - br.left) / sc,
+            top: (pr.top - br.top) / sc,
+            width: pr.width / sc,
+            height: pr.height / sc
+        };
+    };
+
+    settle(() => {
+      if (!tutorialActive) return;
+
+      const drawRect = draw.getBoundingClientRect();
+      const newToyRect = newToy.getBoundingClientRect();
+      const boardRect = board.getBoundingClientRect();
+      const currentScale = window.__boardScale || 1;
+
+      // Bounding box in VIEWPORT coordinates
+      const pad = 48;
+      const x1 = Math.min(drawRect.left, newToyRect.left) - pad;
+      const y1 = Math.min(drawRect.top, newToyRect.top) - pad;
+      const x2 = Math.max(drawRect.right, newToyRect.right) + pad;
+      const y2 = Math.max(drawRect.bottom, newToyRect.bottom) + pad;
+
+      const bw = Math.max(1, x2 - x1);
+      const bh = Math.max(1, y2 - y1);
+      const vw = window.innerWidth || 1280;
+      const vh = window.innerHeight || 720;
+
+      const targetScale = Math.max(0.5, Math.min(2.5, Math.min(vw / bw, vh / bh)));
+
+      // Center of bounding box in VIEWPORT coordinates
+      const viewportCx = x1 + bw / 2;
+      const viewportCy = y1 + bh / 2;
+
+      // Convert viewport center to board-space center
+      const boardCx = (viewportCx - boardRect.left) / currentScale;
+      const boardCy = (viewportCy - boardRect.top) / currentScale;
+
+      // Now use the standard pan formula with board-space coordinates
+      const panX = Math.round(vw / 2 - boardCx * targetScale);
+      const panY = Math.round(vh / 2 - boardCy * targetScale);
+
+      console.log('[TUTORIAL DEBUG FINAL]', {
+          drawRect,
+          newToyRect,
+          pan: {panX, panY},
+          scale: targetScale
+      });
+
+      const prevLock = window.__tutorialZoomLock;
+      window.__tutorialZoomLock = false;
+      if (typeof window.setBoardScale === 'function' && typeof window.panTo === 'function') {
+          window.setBoardScale(targetScale);
+          window.panTo(panX, panY);
+      } else if (typeof window.centerBoardOnElement === 'function') {
+          window.centerBoardOnElement(newToy, targetScale);
+      } else {
+          board.style.transformOrigin = '0 0';
+          board.style.transform = `translate(${panX}px, ${panY}px) scale(${targetScale.toFixed(4)})`;
+          window.__boardScale = targetScale;
+      }
+      window.__tutorialZoomLock = prevLock;
+    });
+  }
+} catch (err) {
+  console.warn('[tutorial] place/frame both toys failed', err);
+}
+/***** << GPT:TUTORIAL_PLACE_AND_FRAME_BOTH END >> *****/
 
             const onNoteAdd = (e) => {
               const detail = e.detail || {};
@@ -1378,26 +1183,29 @@ try {
 
     document.body.classList.add('tutorial-active');
     hideOriginalToys();
-    tutorialToy = spawnTutorialToy();
-  (()=>{
-    const panel = document.querySelector('.toy-panel.toy-focused') 
-               || document.querySelector('.toy-panel[data-toy-id]')
-               || tutorialToy;
-    if (panel && window.centerBoardOnElement && window.setBoardScale) {
-      requestAnimationFrame(() => {
-        window.centerBoardOnElement(panel, TUTORIAL_ZOOM);
-      });
-      // keep centred on resize / visualViewport changes
-      const recenter = ()=> window.centerBoardOnElement(panel, TUTORIAL_ZOOM);
-      window.addEventListener('resize', recenter, { passive:true });
-      if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', recenter, { passive:true });
-        window.visualViewport.addEventListener('scroll', recenter, { passive:true });
+    const spawnResult = spawnTutorialToy(lockTutorialControls, setupPanelListeners);
+    tutorialToy = spawnResult.panel;
+    tutorialFromFactory = spawnResult.tutorialFromFactory;
+
+    // --- Frame the initial tutorial toy ---
+    try {
+      if (tutorialToy && tutorialToy.style) {
+        tutorialToy.style.position = 'absolute';
+        tutorialToy.style.width = 'min(960px, 80vw)';
+        tutorialToy.style.height = 'min(640px, 70vh)';
+        tutorialToy.style.maxWidth = 'calc(100vw - 64px)';
+        tutorialToy.style.maxHeight = 'calc(100vh - 128px)';
       }
-      // remember for cleanup
-      panel.__tutorialRecenterHandler = recenter;
+    } catch (_) {}
+
+    if (typeof window.centerBoardOnElement === 'function') {
+      requestAnimationFrame(() => {
+        if (!tutorialActive) return; // exit if tutorial was closed quickly
+        window.centerBoardOnElement(tutorialToy, TUTORIAL_ZOOM);
+      });
     }
-  })();
+    // --- End framing ---
+
     ensureGoalPanel();
 
     tutorialState = { goalIndex: 0, taskIndex: 0, unlockedRewards: new Set(), pendingRewardGoalId: null };

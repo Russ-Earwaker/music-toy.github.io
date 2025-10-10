@@ -23,6 +23,7 @@
   function apply(){
     stage.style.transformOrigin = '50% 50%';
     stage.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
+    stage.style.setProperty('--bv-scale', String(scale));
     // expose current viewport to other modules
     window.__boardScale = scale;
     window.__boardX = x;
@@ -110,11 +111,6 @@
 
     x = Math.round(viewportCX - scale * centerX_from_center);
     y = Math.round(viewportCY - scale * centerY_from_center);
-
-    const maxOffsetX = window.innerWidth * 2;
-    const maxOffsetY = window.innerHeight * 2;
-    x = Math.max(-maxOffsetX, Math.min(maxOffsetX, x));
-    y = Math.max(-maxOffsetY, Math.min(maxOffsetY, y));
 
     window.__boardScale = scale;
     window.__boardX = x;

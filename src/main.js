@@ -405,6 +405,20 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument } = {}) {
     const { width, height } = pickToyPanelSize(type);
     if (Number.isFinite(width) && width > 0) panel.style.width = `${Math.round(width)}px`;
 
+    // If no drop point provided, try to spawn to the right of the focused/toy under focus
+    if (!Number.isFinite(centerX) || !Number.isFinite(centerY)) {
+      const ref = document.querySelector('.toy-panel.toy-focused') || document.querySelector(':scope > .toy-panel');
+      if (ref) {
+        const rx = parseFloat(ref.style.left) || 0;
+        const ry = parseFloat(ref.style.top)  || 0;
+        const rw = ref.offsetWidth  || ref.clientWidth || 360;
+        const rh = ref.offsetHeight || ref.clientHeight || 300;
+        const GAP = 24;
+        centerX = rx + rw + GAP + (width || rw) / 2;
+        centerY = ry + (height || rh) / 2;
+      }
+    }
+
     const left = Number.isFinite(centerX) ? Math.max(0, centerX - (width || 0) / 2) : 0;
     const top = Number.isFinite(centerY) ? Math.max(0, centerY - (height || 0) / 2) : 0;
 
