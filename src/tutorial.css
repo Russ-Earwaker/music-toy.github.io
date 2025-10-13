@@ -118,7 +118,8 @@ body .tutorial-particles-front {
 
 
 body.tutorial-active #board .toy-panel[data-tutorial="true"] .tutorial-control-locked {
-  display: none !important;
+  opacity: 0.5 !important;
+  pointer-events: none !important;
 }
 
 body.tutorial-active #topbar .tutorial-play-hidden {

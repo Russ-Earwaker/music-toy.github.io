@@ -75,9 +75,9 @@ const GOAL_FLOW = [
     id: 'add-toy',
     title: 'Add another toy',
     reward: {
-      description: 'Unlocks the Instrument Select button',
+      description: 'Unlocks the Help button',
       icons: [
-        { type: 'asset', label: 'Instrument', icon: "../assets/UI/T_ButtonInstruments.png" },
+        { type: 'symbol', label: 'Help', symbol: '?' },
       ],
     },
     tasks: [
@@ -90,6 +90,23 @@ const GOAL_FLOW = [
         id: 'add-rhythm-note',
         label: 'Add a rhythm to the new toy',
         requirement: 'add-note-new-toy',
+      },
+    ],
+  },
+  {
+    id: 'get-help',
+    title: 'Help!',
+    reward: {
+      description: 'Unlocks all buttons on toys, all toys in the Add Toy menu, and camera controls.',
+      icons: [
+        { type: 'symbol', label: 'Help', symbol: '?' }
+      ],
+    },
+    tasks: [
+      {
+        id: 'press-help',
+        label: 'Press the Help button.',
+        requirement: 'press-help',
       },
     ],
   },
@@ -135,12 +152,14 @@ const GOAL_FLOW = [
     random: '[data-action="random"]',
     play: '#topbar [data-action="toggle-play"]',
     instrument: '.toy-inst-btn, select.toy-instrument, [data-action="instrument"]',
+    help: '.toy-spawner-help',
   };
 
   const TASK_TARGETS = {
     'press-play': 'play',
     'press-clear': 'clear',
     'press-random': 'random',
+    'press-help': 'help',
   };
   function updatePlayButtonVisual(btn, playing) {
     if (!btn) return;
@@ -779,13 +798,46 @@ const GOAL_FLOW = [
       }
     }
     if (goal.id === 'add-toy') {
-      // Unlock instrument controls for all visible toys now that the goal is complete.
-      // This includes the original tutorial toy and the newly added one.
+      const help = unlockSpawnerControl('help');
+      if (help) {
+        unlocked.push(help);
+      }
+    }
+    if (goal.id === 'get-help') {
+      // Unlock all controls on all toys
       document.querySelectorAll('.toy-panel:not(.tutorial-hidden)').forEach(panel => {
-        if (panel) {
-          unlocked.push(...unlockPanelControls(panel, ['instrument']));
+        if (panel && panel.__tutorialLockedControls) {
+          const allKeys = Object.keys(CONTROL_SELECTORS);
+          unlocked.push(...unlockPanelControls(panel, allKeys));
         }
       });
+
+      // Unlock all spawner controls
+      const spawnerKeys = Object.keys(spawnerControls);
+      spawnerKeys.forEach(key => {
+        const el = unlockSpawnerControl(key);
+        if (el) unlocked.push(el);
+      });
+
+      // Unlock all toy spawner items
+      const style = document.getElementById('tutorial-add-toy-style');
+      if (style) style.remove();
+      document.querySelectorAll('.toy-spawner-item').forEach(item => {
+        item.classList.remove('tutorial-locked-control');
+        item.style.opacity = '';
+        item.style.filter = '';
+        item.style.pointerEvents = '';
+        item.style.cursor = '';
+        const label = item.querySelector('.toy-spawner-name');
+        if (label && item.dataset.tutorialOrigLabel) {
+            label.textContent = item.dataset.tutorialOrigLabel;
+            delete item.dataset.tutorialOrigLabel;
+        }
+      });
+
+
+      // Unlock camera controls
+      window.__tutorialZoomLock = false;
     }
 
     unlockReward(goal.id);
@@ -1090,6 +1142,35 @@ const GOAL_FLOW = [
           try { style.remove(); } catch {}
           try { renameObserver.disconnect(); } catch {}
         }
+      });
+    } else if (task.id === 'press-help') {
+      ensureGoalPanel();
+
+      whenVisible('.toy-spawner-help', (targetEl) => {
+        const startParticles = () => {
+          const taskEl = goalPanel?.querySelector('.goal-task.is-active');
+          if (taskEl && targetEl?.isConnected) {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                startParticleStream(taskEl, targetEl);
+              });
+            });
+
+            targetEl.classList.add('tutorial-pulse-target', 'tutorial-addtoy-pulse');
+            targetEl.classList.add('tutorial-flash');
+            setTimeout(() => targetEl.classList.remove('tutorial-flash'), 320);
+          }
+        };
+
+        startParticles();
+        window.addEventListener('resize', startParticles, { passive: true });
+
+        tutorialListeners.push({
+          target: window,
+          type: 'resize',
+          handler: startParticles,
+          options: { passive: true }
+        });
       });
     } else {
       // On any non-add-toy task, stop the stream + remove pulse
@@ -1521,6 +1602,9 @@ try {
 
     const playBtnListener = document.querySelector(CONTROL_SELECTORS.play);
     if (playBtnListener) addListener(playBtnListener, 'click', () => maybeCompleteTask('press-play'));
+
+    const helpBtnListener = document.querySelector(CONTROL_SELECTORS.help);
+    if (helpBtnListener) addListener(helpBtnListener, 'click', () => maybeCompleteTask('press-help'));
 
     renderGoalPanel();
     handleTaskEnter(getCurrentTask());

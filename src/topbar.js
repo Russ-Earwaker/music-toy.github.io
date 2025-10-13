@@ -119,6 +119,7 @@ function ensureTopbar(){
       playBtn = document.createElement('button');
       playBtn.className = 'c-btn';
       playBtn.dataset.action = 'toggle-play';
+      playBtn.dataset.helpLabel = 'Toggle Play/Pause';
       playBtn.style.setProperty('--c-btn-size','65px');
       playBtn.title = 'Play';
       playBtn.innerHTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';

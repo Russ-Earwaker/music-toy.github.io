@@ -43,6 +43,7 @@ function ensureDock() {
   trash.className = 'toy-spawner-trash toy-btn';
   trash.setAttribute('aria-label', 'Delete Toy');
   trash.title = 'Delete Toy';
+  trash.dataset.helpLabel = 'Drag a toy here to delete it';
   trash.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 3.5h6l.5 2H21V7h-1.5l-1.2 13.05a1.5 1.5 0 0 1-1.49 1.45H7.19a1.5 1.5 0 0 1-1.49-1.45L4.5 7H3V5.5h5.5l.5-2Zm.88 1.5-.22.75h4.68l-.22-.75H9.88ZM6.01 7l1.1 12h9.78l1.1-12H6.01Zm4.24 2h1.5v8h-1.5V9Zm3.5 0h1.5v8h-1.5V9Z"/></svg>`;
   trash.addEventListener('click', (event) => event.preventDefault());
 
@@ -51,6 +52,7 @@ function ensureDock() {
   toggle.className = 'toy-spawner-toggle toy-btn';
   toggle.setAttribute('aria-label', 'Create Toy');
   toggle.title = 'Create Toy';
+  toggle.dataset.helpLabel = 'Open the Add Toy menu';
   toggle.innerHTML = '<span aria-hidden="true">+</span>';
 
   const help = document.createElement('button');
@@ -58,6 +60,7 @@ function ensureDock() {
   help.className = 'toy-spawner-help toy-btn';
   help.setAttribute('aria-label', 'Toggle Help');
   help.title = 'Help';
+  help.dataset.helpLabel = 'Toggle help labels';
   help.textContent = '?';
 
   const menu = document.createElement('div');
