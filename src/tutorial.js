@@ -134,7 +134,7 @@ const GOAL_FLOW = [
     clear: '[data-action="clear"]',
     random: '[data-action="random"]',
     play: '#topbar [data-action="toggle-play"]',
-    instrument: '[data-action="instrument"]',
+    instrument: '.toy-inst-btn, select.toy-instrument, [data-action="instrument"]',
   };
 
   const TASK_TARGETS = {
@@ -779,13 +779,12 @@ const GOAL_FLOW = [
       }
     }
     if (goal.id === 'add-toy') {
-      const seen = new Set();
-      const candidates = Array.from(document.querySelectorAll('.toy-panel:not(.tutorial-hidden)'));
-      if (tutorialToy && tutorialToy.isConnected) candidates.push(tutorialToy);
-      candidates.forEach(panel => {
-        if (!panel || seen.has(panel)) return;
-        seen.add(panel);
-        unlocked.push(...unlockPanelControls(panel, ['instrument']));
+      // Unlock instrument controls for all visible toys now that the goal is complete.
+      // This includes the original tutorial toy and the newly added one.
+      document.querySelectorAll('.toy-panel:not(.tutorial-hidden)').forEach(panel => {
+        if (panel) {
+          unlocked.push(...unlockPanelControls(panel, ['instrument']));
+        }
       });
     }
 

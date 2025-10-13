@@ -722,6 +722,51 @@ panel.setSwipeVisible = (show, { immediate = false } = {}) => {
         });
     }
 
+    // Instrument button (for tutorial unlock and general use)
+    if (!right.querySelector('[data-action="instrument"]')) {
+        const instBtn = document.createElement('button');
+        instBtn.className = 'c-btn toy-inst-btn';
+        instBtn.title = 'Choose Instrument';
+        instBtn.dataset.action = 'instrument';
+        instBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonInstruments.png');"></div>`;
+        instBtn.style.setProperty('--c-btn-size', '65px');
+        right.appendChild(instBtn);
+
+        let sel = panel.querySelector('select.toy-instrument');
+        if (!sel) {
+            sel = document.createElement('select');
+            sel.className = 'toy-instrument';
+            sel.style.display = 'none';
+            right.appendChild(sel);
+        }
+
+        instBtn.addEventListener('click', async () => {
+            try {
+                const { openInstrumentPicker } = await import('./instrument-picker.js');
+                const { getDisplayNameForId } = await import('./instrument-catalog.js');
+                const chosen = await openInstrumentPicker({ panel, toyId: (panel.dataset.toyid || panel.dataset.toy || panel.id || 'master') });
+                if (!chosen) {
+                    try { const h = panel.querySelector('.toy-header'); if (h) { h.classList.remove('pulse-accept'); h.classList.add('pulse-cancel'); setTimeout(() => h.classList.remove('pulse-cancel'), 650); } } catch { }
+                    return;
+                }
+                const val = String(chosen || '');
+                let has = Array.from(sel.options).some(o => o.value === val);
+                if (!has) { 
+                  const o = document.createElement('option');
+                  o.value = val;
+                  o.textContent = getDisplayNameForId(val) || val.replace(/[_-]/g, ' ').replace(/\w\S*/g, t => t[0].toUpperCase() + t.slice(1).toLowerCase());
+                  sel.appendChild(o);
+                }
+                sel.value = val;
+                panel.dataset.instrument = val;
+                panel.dispatchEvent(new CustomEvent('toy-instrument', { detail: { value: val }, bubbles: true }));
+                panel.dispatchEvent(new CustomEvent('toy:instrument', { detail: { name: val, value: val }, bubbles: true }));
+                try { const h = panel.querySelector('.toy-header'); if (h) { h.classList.remove('pulse-cancel'); h.classList.add('pulse-accept'); setTimeout(() => h.classList.remove('pulse-accept'), 650); } } catch { }
+            } catch (e) {
+                console.error("Instrument picker failed in drawgrid", e);
+            }
+        });
+    }
   }
 
   function updateGeneratorButtons() {
