@@ -529,7 +529,7 @@ const GOAL_FLOW = [
         el.dataset.tutorialOrigDisplay = el.style.display || '';
       }
       if (el.matches('.toy-inst-btn, select.toy-instrument, [data-action="instrument"]')) {
-        el.style.display = 'none';
+        el.classList.add('tutorial-instrument-hidden');
         el.setAttribute('aria-hidden', 'true');
       }
       debugTutorial('lock', describeElement(el));
@@ -673,6 +673,7 @@ const GOAL_FLOW = [
       }
       debugTutorial('unlock-candidates', key, candidates.map(describeElement).join(', '));
       candidates.forEach(el => {
+        el.classList.remove('tutorial-instrument-hidden');
         const wasLocked = el.classList.contains('tutorial-control-locked');
         if (!wasLocked) {
           debugTutorial('unlock-skip', key, describeElement(el));
@@ -1327,6 +1328,13 @@ requestAnimationFrame(() => {
 
     updateButtonVisual();
 
+    if (!document.getElementById('tutorial-override-styles')) {
+      const style = document.createElement('style');
+      style.id = 'tutorial-override-styles';
+      style.textContent = `.tutorial-instrument-hidden { display: none !important; }`;
+      document.head.appendChild(style);
+    }
+
     const boardObserver = new MutationObserver(mutations => {
       if (!tutorialActive) return;
       for (const mutation of mutations) {
@@ -1523,6 +1531,8 @@ try {
     window.__useBoardCentering = false;
     if (!tutorialActive) return;
     tutorialActive = false;
+
+    document.getElementById('tutorial-override-styles')?.remove();
 
     updateButtonVisual();
 

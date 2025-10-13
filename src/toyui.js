@@ -711,50 +711,52 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
     panel.addEventListener('toy-zoom', moveBouncerControls);
   }
 
-  // Instrument select (header, hidden in standard)
-  sel = buildInstrumentSelect(panel);
-  // Remove any old instrument button to prevent duplicates
-  let oldInstBtn = right.querySelector('.toy-inst-btn');
-  if (oldInstBtn) oldInstBtn.remove();
-  let oldExtInstBtn = panel.querySelector(':scope > .toy-inst-btn');
-  if (oldExtInstBtn) oldExtInstBtn.remove();
+  if (!isTutorialContext) {
+    // Instrument select (header, hidden in standard)
+    sel = buildInstrumentSelect(panel);
+    // Remove any old instrument button to prevent duplicates
+    let oldInstBtn = right.querySelector('.toy-inst-btn');
+    if (oldInstBtn) oldInstBtn.remove();
+    let oldExtInstBtn = panel.querySelector(':scope > .toy-inst-btn');
+    if (oldExtInstBtn) oldExtInstBtn.remove();
 
-  const instBtn = document.createElement('button');
-  instBtn.className = 'c-btn toy-inst-btn';
-  instBtn.title = 'Choose Instrument';
-  instBtn.dataset.action = 'instrument';
-  instBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonInstruments.png');"></div>`;
-  markHelp(instBtn, 'Choose instrument', 'bottom');
+    const instBtn = document.createElement('button');
+    instBtn.className = 'c-btn toy-inst-btn';
+    instBtn.title = 'Choose Instrument';
+    instBtn.dataset.action = 'instrument';
+    instBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonInstruments.png');"></div>`;
+    markHelp(instBtn, 'Choose instrument', 'bottom');
 
-  if (toyKind === 'loopgrid' || toyKind === 'bouncer' || toyKind === 'rippler' || toyKind === 'chordwheel' || toyKind === 'drawgrid') {
-    // For loopgrid, bouncer, rippler, chordwheel, and drawgrid, put a large instrument button inside the header.
-    instBtn.style.setProperty('--c-btn-size', '65px');
-    right.appendChild(instBtn);
-  } else {
-    // All other toys get a small instrument button inside the header on the far right.
-    instBtn.style.setProperty('--c-btn-size', '38px');
-    right.appendChild(instBtn);
+    if (toyKind === 'loopgrid' || toyKind === 'bouncer' || toyKind === 'rippler' || toyKind === 'chordwheel' || toyKind === 'drawgrid') {
+      // For loopgrid, bouncer, rippler, chordwheel, and drawgrid, put a large instrument button inside the header.
+      instBtn.style.setProperty('--c-btn-size', '65px');
+      right.appendChild(instBtn);
+    } else {
+      // All other toys get a small instrument button inside the header on the far right.
+      instBtn.style.setProperty('--c-btn-size', '38px');
+      right.appendChild(instBtn);
+    }
+
+    instBtn.addEventListener('click', async ()=>{
+      try{
+        const chosen = await openInstrumentPicker({ panel, toyId: (panel.dataset.toyid || panel.dataset.toy || panel.id || 'master') });
+        if (!chosen){
+          try{ const h = panel.querySelector('.toy-header'); if (h){ h.classList.remove('pulse-accept'); h.classList.add('pulse-cancel'); setTimeout(()=> h.classList.remove('pulse-cancel'), 650); } }catch{}
+          return; // cancelled
+        }
+        const val = String(chosen || '');
+        // Update UI select to contain and select it
+        let has = Array.from(sel.options).some(o=> o.value === val);
+        if (!has){ const o=document.createElement('option'); o.value=val; o.textContent=val.replace(/[_-]/g,' ').replace(/\w\S*/g, t=> t[0].toUpperCase()+t.slice(1).toLowerCase()); sel.appendChild(o); }
+        sel.value = val;
+        // Apply to toy
+        panel.dataset.instrument = val;
+        try{ panel.dispatchEvent(new CustomEvent('toy-instrument', { detail:{ value: val }, bubbles:true })); }catch{}
+        try{ panel.dispatchEvent(new CustomEvent('toy:instrument', { detail:{ name: val, value: val }, bubbles:true })); }catch{}
+        try{ const h = panel.querySelector('.toy-header'); if (h){ h.classList.remove('pulse-cancel'); h.classList.add('pulse-accept'); setTimeout(()=> h.classList.remove('pulse-accept'), 650); } }catch{}
+      }catch{}
+    });
   }
-
-  instBtn.addEventListener('click', async ()=>{
-    try{
-      const chosen = await openInstrumentPicker({ panel, toyId: (panel.dataset.toyid || panel.dataset.toy || panel.id || 'master') });
-      if (!chosen){
-        try{ const h = panel.querySelector('.toy-header'); if (h){ h.classList.remove('pulse-accept'); h.classList.add('pulse-cancel'); setTimeout(()=> h.classList.remove('pulse-cancel'), 650); } }catch{}
-        return; // cancelled
-      }
-      const val = String(chosen || '');
-      // Update UI select to contain and select it
-      let has = Array.from(sel.options).some(o=> o.value === val);
-      if (!has){ const o=document.createElement('option'); o.value=val; o.textContent=val.replace(/[_-]/g,' ').replace(/\w\S*/g, t=> t[0].toUpperCase()+t.slice(1).toLowerCase()); sel.appendChild(o); }
-      sel.value = val;
-      // Apply to toy
-      panel.dataset.instrument = val;
-      try{ panel.dispatchEvent(new CustomEvent('toy-instrument', { detail:{ value: val }, bubbles:true })); }catch{}
-      try{ panel.dispatchEvent(new CustomEvent('toy:instrument', { detail:{ name: val, value: val }, bubbles:true })); }catch{}
-      try{ const h = panel.querySelector('.toy-header'); if (h){ h.classList.remove('pulse-cancel'); h.classList.add('pulse-accept'); setTimeout(()=> h.classList.remove('pulse-accept'), 650); } }catch{}
-    }catch{}
-  });
 
   // Keep select in sync when instrument changes elsewhere
   panel.addEventListener('toy-instrument', (e) => {
