@@ -130,7 +130,7 @@ export function buildGrid(panel, numSteps = 8){
   if (!panel || !(panel instanceof Element) || panel.__gridBuilt) return null;
   panel.__gridBuilt = true;
   panel.dataset.toy = panel.dataset.toy || 'loopgrid';
-  initToyUI(panel, { toyName: 'Loop Grid' });
+  initToyUI(panel, { toyName: 'Loop Grid', defaultInstrument: 'Bass Tone 4' });
 
   // Use a full chromatic scale instead of the default pentatonic scale.
   // This makes all semitones (sharps/flats) available.

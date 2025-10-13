@@ -44,8 +44,8 @@ function ensureDock() {
   trash.setAttribute('aria-label', 'Delete Toy');
   trash.title = 'Delete Toy';
   trash.dataset.helpLabel = 'Drag a toy here to delete it';
-  trash.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 3.5h6l.5 2H21V7h-1.5l-1.2 13.05a1.5 1.5 0 0 1-1.49 1.45H7.19a1.5 1.5 0 0 1-1.49-1.45L4.5 7H3V5.5h5.5l.5-2Zm.88 1.5-.22.75h4.68l-.22-.75H9.88ZM6.01 7l1.1 12h9.78l1.1-12H6.01Zm4.24 2h1.5v8h-1.5V9Zm3.5 0h1.5v8h-1.5V9Z"/></svg>`;
-  trash.addEventListener('click', (event) => event.preventDefault());
+  trash.dataset.helpPosition = 'left';
+  trash.innerHTML = `<svg viewBox="0 0 24 24"><path d="M9,3V4H4V6H5V19C5,20.1 5.9,21 7,21H17C18.1,21 19,20.1 19,19V6H20V4H15V3H9M7,6H17V19H7V6M9,8V17H11V8H9M13,8V17H15V8H13Z" /></svg>`;
 
   const toggle = document.createElement('button');
   toggle.type = 'button';
@@ -53,6 +53,7 @@ function ensureDock() {
   toggle.setAttribute('aria-label', 'Create Toy');
   toggle.title = 'Create Toy';
   toggle.dataset.helpLabel = 'Open the Add Toy menu';
+  toggle.dataset.helpPosition = 'left';
   toggle.innerHTML = '<span aria-hidden="true">+</span>';
 
   const help = document.createElement('button');
@@ -61,7 +62,8 @@ function ensureDock() {
   help.setAttribute('aria-label', 'Toggle Help');
   help.title = 'Help';
   help.dataset.helpLabel = 'Toggle help labels';
-  help.textContent = '?';
+  help.dataset.helpPosition = 'left';
+  help.innerHTML = '<span aria-hidden="true">?</span>';
 
   const menu = document.createElement('div');
   menu.className = 'toy-spawner-menu';

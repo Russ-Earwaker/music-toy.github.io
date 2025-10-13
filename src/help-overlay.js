@@ -140,6 +140,10 @@ function renderOverlay() {
   // Reset per-render debug set to limit logs
   overlayState.debugSeen = new Set();
   const entries = gatherTargets();
+  
+  // Always render the controls help, even if there are no other labels
+  renderControlsHelp(host);
+
   if (!entries.length) return;
 
   const elements = entries.map((entry) => {
@@ -221,7 +225,9 @@ function gatherTargets() {
     if (target.dataset.helpIgnore === 'true') continue;
 
     const style = window.getComputedStyle(target);
-    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') continue;
+    // For tutorial, show labels for locked (but not explicitly hidden) buttons
+    const isTutorialLocked = target.classList.contains('tutorial-control-locked');
+    if (!isTutorialLocked && (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0')) continue;
 
     const rectScreen = target.getBoundingClientRect();
     if (rectScreen.width < 1 || rectScreen.height < 1) continue;
@@ -256,7 +262,7 @@ function gatherTargets() {
       target,
       label,
       helpPosition: (target.dataset.helpPosition || '').toLowerCase(),
-      allowedDirections: ['top', 'bottom'],
+      allowedDirections: ['top', 'bottom', 'left', 'right'],
       group,
       rect: rectLocal,
       rectScreen,
@@ -336,6 +342,10 @@ const LABEL_POSITIONS = {
   'choose instrument': { dir: 'top', offsetX: 0, offsetY: -BASE_MARGIN },
   'mute': { dir: 'bottom', offsetX: 0, offsetY: 15 },
   'adjust volume': { dir: 'bottom', offsetX: 0, offsetY: 15 },
+  // Spawner buttons
+  'open the add toy menu': { dir: 'left', offsetX: -15, offsetY: 0 },
+  'drag a toy here to delete it': { dir: 'left', offsetX: -15, offsetY: 0 },
+  'toggle help labels': { dir: 'left', offsetX: -15, offsetY: 0 },
 };
 
 function placeEntry(entry, assigned, gap, cachedPlacement, allowOverlap) {
@@ -673,6 +683,33 @@ function intersectionArea(a, b) {
   const bottom = Math.min(a.bottom, b.bottom);
   if (bottom <= top) return 0;
   return (right - left) * (bottom - top);
+}
+
+function renderControlsHelp(host) {
+  const helpBox = document.createElement('div');
+  helpBox.className = 'toy-help-callout toy-help-controls';
+  const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+  let content = '';
+  if (isMobile) {
+    content = `
+      <strong>Controls:</strong>
+      <ul>
+        <li><strong>Pan:</strong> Drag with one finger</li>
+        <li><strong>Zoom:</strong> Pinch with two fingers</li>
+      </ul>
+    `;
+  } else {
+    content = `
+      <strong>Controls:</strong>
+      <ul>
+        <li><strong>Pan:</strong> Middle-click + drag, or<br>Shift + Left-click + drag</li>
+        <li><strong>Zoom:</strong> Scroll wheel</li>
+      </ul>
+    `;
+  }
+  helpBox.innerHTML = content;
+  host.appendChild(helpBox);
 }
 
 export { setHelpActive, toggleHelp, isHelpActive, refreshHelpOverlay };

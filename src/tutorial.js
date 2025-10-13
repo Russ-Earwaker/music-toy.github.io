@@ -802,6 +802,8 @@ const GOAL_FLOW = [
       if (help) {
         unlocked.push(help);
       }
+      // Unlock camera controls at the same time as help
+      window.__tutorialZoomLock = false;
     }
     if (goal.id === 'get-help') {
       // Unlock all controls on all toys
@@ -834,10 +836,6 @@ const GOAL_FLOW = [
             delete item.dataset.tutorialOrigLabel;
         }
       });
-
-
-      // Unlock camera controls
-      window.__tutorialZoomLock = false;
     }
 
     unlockReward(goal.id);
