@@ -126,6 +126,224 @@ function addGapAfterOrganize() {
 window.applyStackingOrder = applyStackingOrder;
 window.addGapAfterOrganize = addGapAfterOrganize;
 
+const SPAWN_PADDING = 36;
+
+function pickPositive(...values) {
+    for (const value of values) {
+        const num = Number(value);
+        if (Number.isFinite(num) && num > 0) return num;
+    }
+    return 1;
+}
+
+function getPanelLocalExtents(panel, { fallbackWidth, fallbackHeight } = {}) {
+    let extents = null;
+    try {
+        extents = getVisualExtents(panel);
+    } catch {
+        extents = null;
+    }
+    const rect = panel.getBoundingClientRect?.();
+
+    const fallbackWidthValue = pickPositive(
+        fallbackWidth,
+        panel.offsetWidth,
+        rect?.width,
+        parseFloat(panel.style.width),
+        380
+    );
+    const fallbackHeightValue = pickPositive(
+        fallbackHeight,
+        panel.offsetHeight,
+        rect?.height,
+        parseFloat(panel.style.height),
+        320
+    );
+
+    let localLeft = Number.isFinite(extents?.left) ? extents.left : 0;
+    let localTop = Number.isFinite(extents?.top) ? extents.top : 0;
+    let localRight = Number.isFinite(extents?.right) ? extents.right : localLeft + fallbackWidthValue;
+    let localBottom = Number.isFinite(extents?.bottom) ? extents.bottom : localTop + fallbackHeightValue;
+
+    if (!Number.isFinite(localRight)) localRight = localLeft + fallbackWidthValue;
+    if (!Number.isFinite(localBottom)) localBottom = localTop + fallbackHeightValue;
+
+    const width = Math.max(1, localRight - localLeft);
+    const height = Math.max(1, localBottom - localTop);
+
+    return { left: localLeft, top: localTop, right: localRight, bottom: localBottom, width, height };
+}
+
+function getPanelPosition(panel) {
+    const styleLeft = parseFloat(panel.style.left);
+    const styleTop = parseFloat(panel.style.top);
+    if (Number.isFinite(styleLeft) && Number.isFinite(styleTop)) {
+        return { left: styleLeft, top: styleTop };
+    }
+    const fallbackLeft = Number.isFinite(styleLeft) ? styleLeft : panel.offsetLeft;
+    const fallbackTop = Number.isFinite(styleTop) ? styleTop : panel.offsetTop;
+    if (Number.isFinite(fallbackLeft) && Number.isFinite(fallbackTop)) {
+        return { left: fallbackLeft, top: fallbackTop };
+    }
+    const panelRect = panel.getBoundingClientRect?.();
+    const parentRect = panel.parentElement?.getBoundingClientRect?.();
+    if (panelRect && parentRect) {
+        return {
+            left: panelRect.left - parentRect.left,
+            top: panelRect.top - parentRect.top,
+        };
+    }
+    return { left: 0, top: 0 };
+}
+
+function buildBoundsFromLocal(local, left, top, padding = 0) {
+    return {
+        left: left + local.left - padding,
+        right: left + local.right + padding,
+        top: top + local.top - padding,
+        bottom: top + local.bottom + padding,
+        width: local.width + padding * 2,
+        height: local.height + padding * 2,
+    };
+}
+
+function boundsOverlap(a, b) {
+    return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+}
+
+function ensurePanelSpawnPlacement(panel, {
+    baseLeft,
+    baseTop,
+    fallbackWidth,
+    fallbackHeight,
+    skipIfMoved = false,
+    padding = SPAWN_PADDING,
+    maxAttempts = 400,
+} = {}) {
+    if (!panel?.isConnected) return null;
+    const board = panel.parentElement;
+    if (!board) return null;
+
+    // Force layout to ensure measurements are up to date.
+    void panel.offsetWidth;
+
+    const currentPos = getPanelPosition(panel);
+    const basePosition = {
+        left: Number.isFinite(baseLeft) ? baseLeft : currentPos.left,
+        top: Number.isFinite(baseTop) ? baseTop : currentPos.top,
+    };
+
+    if (skipIfMoved) {
+        const storedLeft = Number(panel.dataset.spawnAutoLeft);
+        const storedTop = Number(panel.dataset.spawnAutoTop);
+        if (Number.isFinite(storedLeft) && Number.isFinite(storedTop)) {
+            const deltaLeft = Math.abs(currentPos.left - storedLeft);
+            const deltaTop = Math.abs(currentPos.top - storedTop);
+            if (deltaLeft > 1 || deltaTop > 1) {
+                return { left: currentPos.left, top: currentPos.top, changed: false, skipped: true };
+            }
+        }
+    }
+
+    const localExtents = getPanelLocalExtents(panel, { fallbackWidth, fallbackHeight });
+    const boardRect = board.getBoundingClientRect?.();
+    const maxX = Math.max(board.scrollWidth || 0, board.offsetWidth || 0, boardRect?.width || 0) + 2000;
+    const maxY = Math.max(board.scrollHeight || 0, board.offsetHeight || 0, boardRect?.height || 0) + 2000;
+
+    const existingBounds = Array.from(board.querySelectorAll(':scope > .toy-panel'))
+        .filter(other => other !== panel)
+        .map(other => {
+            const otherPos = getPanelPosition(other);
+            const otherLocal = getPanelLocalExtents(other);
+            return buildBoundsFromLocal(otherLocal, otherPos.left, otherPos.top, padding);
+        })
+        .filter(Boolean);
+
+    const overlapsAt = (left, top) => {
+        const bounds = buildBoundsFromLocal(localExtents, left, top, padding);
+        return existingBounds.some(other => boundsOverlap(bounds, other));
+    };
+
+    let candidateLeft = Math.max(0, basePosition.left);
+    let candidateTop = Math.max(0, basePosition.top);
+
+    if (!overlapsAt(candidateLeft, candidateTop)) {
+        const changed = Math.abs(candidateLeft - currentPos.left) > 1 || Math.abs(candidateTop - currentPos.top) > 1;
+        if (changed) {
+            panel.style.left = `${Math.round(candidateLeft)}px`;
+            panel.style.top = `${Math.round(candidateTop)}px`;
+        }
+        panel.dataset.spawnAutoManaged = 'true';
+        panel.dataset.spawnAutoLeft = String(Math.round(candidateLeft));
+        panel.dataset.spawnAutoTop = String(Math.round(candidateTop));
+        return { left: candidateLeft, top: candidateTop, changed };
+    }
+
+    const stepX = Math.max(48, Math.round(localExtents.width / 2));
+    const stepY = Math.max(48, Math.round(localExtents.height / 2));
+    const halfStepX = Math.max(32, Math.round(stepX / 2));
+    const halfStepY = Math.max(32, Math.round(stepY / 2));
+
+    const queue = [];
+    const visited = new Set();
+
+    const enqueue = (left, top) => {
+        const clampedLeft = Math.max(0, Math.min(Math.round(left), maxX));
+        const clampedTop = Math.max(0, Math.min(Math.round(top), maxY));
+        const key = `${clampedLeft}|${clampedTop}`;
+        if (!visited.has(key)) {
+            visited.add(key);
+            queue.push({ left: clampedLeft, top: clampedTop });
+        }
+    };
+
+    enqueue(candidateLeft, candidateTop);
+
+    let best = null;
+    let iterations = 0;
+
+    while (queue.length && iterations < maxAttempts) {
+        iterations++;
+        const current = queue.shift();
+        const hasCollision = overlapsAt(current.left, current.top);
+        if (!hasCollision) {
+            best = current;
+            break;
+        }
+
+        const neighbors = [
+            [current.left + stepX, current.top],
+            [current.left - stepX, current.top],
+            [current.left, current.top + stepY],
+            [current.left, current.top - stepY],
+            [current.left + stepX, current.top + stepY],
+            [current.left - stepX, current.top + stepY],
+            [current.left + halfStepX, current.top],
+            [current.left - halfStepX, current.top],
+            [current.left, current.top + halfStepY],
+            [current.left, current.top - halfStepY],
+        ];
+
+        for (const [nx, ny] of neighbors) {
+            if (nx >= 0 && ny >= 0) enqueue(nx, ny);
+        }
+    }
+
+    if (best) {
+        panel.style.left = `${Math.round(best.left)}px`;
+        panel.style.top = `${Math.round(best.top)}px`;
+        panel.dataset.spawnAutoManaged = 'true';
+        panel.dataset.spawnAutoLeft = String(Math.round(best.left));
+        panel.dataset.spawnAutoTop = String(Math.round(best.top));
+        return { left: best.left, top: best.top, changed: true };
+    }
+
+    panel.dataset.spawnAutoManaged = 'true';
+    panel.dataset.spawnAutoLeft = String(Math.round(currentPos.left));
+    panel.dataset.spawnAutoTop = String(Math.round(currentPos.top));
+    return { left: currentPos.left, top: currentPos.top, changed: false };
+}
+
 let chainCanvas, chainCtx;
 const g_pulsingConnectors = new Map(); // fromId -> { toId, pulse: 1.0 }
 
@@ -325,6 +543,19 @@ function initToyChaining(panel) {
 
         board.appendChild(newPanel);
 
+        const baseLeft = parseFloat(newPanel.style.left) || 0;
+        const baseTop = parseFloat(newPanel.style.top) || 0;
+        const initialPlacement = ensurePanelSpawnPlacement(newPanel, {
+            baseLeft,
+            baseTop,
+            fallbackWidth: sourceRect.width / boardScale,
+            fallbackHeight: sourceRect.height / boardScale,
+        });
+        if (initialPlacement?.changed) {
+            // Position already updated by the helper.
+        }
+        persistToyPosition(newPanel);
+
         // Defer the rest of the initialization to the next event loop cycle.
         // This gives the browser time to calculate the new panel's layout,
         // which is crucial for the toy's internal canvases to be sized correctly.
@@ -347,8 +578,24 @@ function initToyChaining(panel) {
             document.querySelectorAll('.toy-panel.toy-focused').forEach(p => p.classList.remove('toy-focused'));
             newPanel.classList.add('toy-focused');
 
-            updateChains();
-            updateAllChainUIs();
+            const finalizePlacement = () => {
+                const followUp = ensurePanelSpawnPlacement(newPanel, {
+                    fallbackWidth: sourceRect.width / boardScale,
+                    fallbackHeight: sourceRect.height / boardScale,
+                    skipIfMoved: true,
+                });
+                if (followUp?.changed) {
+                    persistToyPosition(newPanel);
+                }
+                updateChains();
+                updateAllChainUIs();
+                delete newPanel.dataset.spawnAutoManaged;
+                delete newPanel.dataset.spawnAutoLeft;
+                delete newPanel.dataset.spawnAutoTop;
+            };
+
+            const raf = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));
+            raf(() => raf(finalizePlacement));
         }, 0);
     });
 }
@@ -426,6 +673,16 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument } = {}) {
     panel.style.top = `${top}px`;
 
     board.appendChild(panel);
+
+    const initialPlacement = ensurePanelSpawnPlacement(panel, {
+        baseLeft: left,
+        baseTop: top,
+        fallbackWidth: width,
+        fallbackHeight: height,
+    });
+    if (initialPlacement?.changed) {
+        // The helper already wrote the updated position to the style attributes.
+    }
     persistToyPosition(panel);
 
     setTimeout(() => {
@@ -438,9 +695,25 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument } = {}) {
         });
         panel.classList.add('toy-focused');
 
-        try { updateChains(); updateAllChainUIs(); } catch (err) { console.warn('[createToyPanelAt] chain update failed', err); }
-        try { applyStackingOrder(); } catch (err) { console.warn('[createToyPanelAt] stacking failed', err); }
-        try { window.Persistence?.markDirty?.(); } catch (err) { console.warn('[createToyPanelAt] mark dirty failed', err); }
+        const finalizePlacement = () => {
+            const followUp = ensurePanelSpawnPlacement(panel, {
+                fallbackWidth: width,
+                fallbackHeight: height,
+                skipIfMoved: true,
+            });
+            if (followUp?.changed) {
+                persistToyPosition(panel);
+            }
+            try { updateChains(); updateAllChainUIs(); } catch (err) { console.warn('[createToyPanelAt] chain update failed', err); }
+            try { applyStackingOrder(); } catch (err) { console.warn('[createToyPanelAt] stacking failed', err); }
+            try { window.Persistence?.markDirty?.(); } catch (err) { console.warn('[createToyPanelAt] mark dirty failed', err); }
+            delete panel.dataset.spawnAutoManaged;
+            delete panel.dataset.spawnAutoLeft;
+            delete panel.dataset.spawnAutoTop;
+        };
+
+        const raf = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));
+        raf(() => raf(finalizePlacement));
     }, 0);
 
     return panel;

@@ -1021,78 +1021,71 @@ requestAnimationFrame(() => {
 /***** << GPT:TUTORIAL_PLACE_AND_FRAME_BOTH START >> *****/
 try {
   const board = document.getElementById('board');
-  const draw = board?.querySelector(':scope > .toy-panel[data-toy="drawgrid"]');
+  if (!board || !tutorialToy || !newToy?.isConnected) return;
 
-  if (draw && newToy) {
-    const settle = (fn) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(fn)));
-    const getBoardPos = (panel) => {
-        const br = board.getBoundingClientRect();
-        const pr = panel.getBoundingClientRect();
-        const sc = Number(window.__boardScale) || 1;
-        return {
-            left: (pr.left - br.left) / sc,
-            top: (pr.top - br.top) / sc,
-            width: pr.width / sc,
-            height: pr.height / sc
-        };
+  const settle = (fn) => requestAnimationFrame(() => requestAnimationFrame(fn));
+  settle(() => {
+    if (!tutorialActive || !tutorialToy?.isConnected || !newToy?.isConnected) return;
+
+    const currentScale = Number(window.__boardScale) || 1;
+    const boardRect = board.getBoundingClientRect();
+    const toBoardSpace = (panel) => {
+      const rect = panel.getBoundingClientRect();
+      return {
+        left: (rect.left - boardRect.left) / currentScale,
+        right: (rect.right - boardRect.left) / currentScale,
+        top: (rect.top - boardRect.top) / currentScale,
+        bottom: (rect.bottom - boardRect.top) / currentScale,
+      };
     };
 
-    settle(() => {
-      if (!tutorialActive) return;
+    const panels = [tutorialToy, newToy].map(toBoardSpace);
+    if (panels.some(bounds => !Number.isFinite(bounds.left))) return;
 
-      const drawRect = draw.getBoundingClientRect();
-      const newToyRect = newToy.getBoundingClientRect();
-      const boardRect = board.getBoundingClientRect();
-      const currentScale = window.__boardScale || 1;
+    const minLeft = Math.min(...panels.map(b => b.left));
+    const maxRight = Math.max(...panels.map(b => b.right));
+    const minTop = Math.min(...panels.map(b => b.top));
+    const maxBottom = Math.max(...panels.map(b => b.bottom));
 
-      // Bounding box in VIEWPORT coordinates
-      const pad = 48;
-      const x1 = Math.min(drawRect.left, newToyRect.left) - pad;
-      const y1 = Math.min(drawRect.top, newToyRect.top) - pad;
-      const x2 = Math.max(drawRect.right, newToyRect.right) + pad;
-      const y2 = Math.max(drawRect.bottom, newToyRect.bottom) + pad;
+    const bboxWidth = Math.max(1, maxRight - minLeft);
+    const bboxHeight = Math.max(1, maxBottom - minTop);
+    const viewportWidth = window.visualViewport?.width ?? window.innerWidth ?? 1280;
+    const viewportHeight = window.visualViewport?.height ?? window.innerHeight ?? 720;
+    const padding = 160; // viewport pixels of breathing room
+    const usableWidth = Math.max(240, viewportWidth - padding);
+    const usableHeight = Math.max(240, viewportHeight - padding);
+    const fitScale = Math.min(usableWidth / bboxWidth, usableHeight / bboxHeight);
+    const clampedFit = Math.max(0.5, Math.min(2.5, fitScale));
+    const targetScale = Math.max(0.5, Math.min(currentScale, clampedFit));
 
-      const bw = Math.max(1, x2 - x1);
-      const bh = Math.max(1, y2 - y1);
-      const vw = window.innerWidth || 1280;
-      const vh = window.innerHeight || 720;
+    const centerX = minLeft + bboxWidth / 2;
+    const centerY = minTop + bboxHeight / 2;
+    const boardWidth = board.offsetWidth || (boardRect.width / currentScale);
+    const boardHeight = board.offsetHeight || (boardRect.height / currentScale);
+    const centerXFromCenter = centerX - boardWidth / 2;
+    const centerYFromCenter = centerY - boardHeight / 2;
 
-      const targetScale = Math.max(0.5, Math.min(2.5, Math.min(vw / bw, vh / bh)));
+    const viewportCX = viewportWidth / 2;
+    const viewportCY = viewportHeight / 2;
+    const targetX = Math.round(viewportCX - targetScale * centerXFromCenter);
+    const targetY = Math.round(viewportCY - targetScale * centerYFromCenter);
 
-      // Center of bounding box in VIEWPORT coordinates
-      const viewportCx = x1 + bw / 2;
-      const viewportCy = y1 + bh / 2;
-
-      // Convert viewport center to board-space center
-      const boardCx = (viewportCx - boardRect.left) / currentScale;
-      const boardCy = (viewportCy - boardRect.top) / currentScale;
-
-      // Now use the standard pan formula with board-space coordinates
-      const panX = Math.round(vw / 2 - boardCx * targetScale);
-      const panY = Math.round(vh / 2 - boardCy * targetScale);
-
-      console.log('[TUTORIAL DEBUG FINAL]', {
-          drawRect,
-          newToyRect,
-          pan: {panX, panY},
-          scale: targetScale
-      });
-
-      const prevLock = window.__tutorialZoomLock;
-      window.__tutorialZoomLock = false;
-      if (typeof window.setBoardScale === 'function' && typeof window.panTo === 'function') {
-          window.setBoardScale(targetScale);
-          window.panTo(panX, panY);
-      } else if (typeof window.centerBoardOnElement === 'function') {
-          window.centerBoardOnElement(newToy, targetScale);
-      } else {
-          board.style.transformOrigin = '0 0';
-          board.style.transform = `translate(${panX}px, ${panY}px) scale(${targetScale.toFixed(4)})`;
-          window.__boardScale = targetScale;
-      }
-      window.__tutorialZoomLock = prevLock;
-    });
-  }
+    const wasLocked = window.__tutorialZoomLock;
+    window.__tutorialZoomLock = false;
+    if (typeof window.setBoardScale === 'function' && typeof window.panTo === 'function') {
+      window.setBoardScale(targetScale);
+      window.panTo(targetX, targetY);
+    } else if (typeof window.centerBoardOnElement === 'function') {
+      window.centerBoardOnElement(newToy, targetScale);
+    } else {
+      board.style.transformOrigin = '50% 50%';
+      board.style.transform = `translate3d(${targetX}px, ${targetY}px, 0) scale(${targetScale})`;
+      window.__boardScale = targetScale;
+      window.__boardX = targetX;
+      window.__boardY = targetY;
+    }
+    window.__tutorialZoomLock = wasLocked;
+  });
 } catch (err) {
   console.warn('[tutorial] place/frame both toys failed', err);
 }
