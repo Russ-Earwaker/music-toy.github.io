@@ -1272,11 +1272,13 @@ requestAnimationFrame(() => {
   }
 
   function maybeCompleteTask(requirement) {
-    if (tutorialState?.pendingRewardGoalId) return;
+    if (tutorialState?.pendingRewardGoalId) return false;
     const task = getCurrentTask();
     if (task && task.requirement === requirement) {
       completeCurrentTask();
+      return true;
     }
+    return false;
   }
 
   function handleDrawgridUpdate(detail) {
@@ -1331,7 +1333,11 @@ requestAnimationFrame(() => {
         for (const node of mutation.addedNodes) {
           if (node.matches && node.matches('.toy-panel[data-toy="loopgrid"]')) {
             const newToy = node;
-            maybeCompleteTask('add-toy-loopgrid');
+            const didComplete = maybeCompleteTask('add-toy-loopgrid');
+            if (didComplete) {
+              stopParticleStream();
+              document.querySelector('.toy-spawner-toggle')?.classList.remove('tutorial-pulse-target', 'tutorial-addtoy-pulse', 'tutorial-flash', 'tutorial-active-pulse');
+            }
 
 /***** << GPT:TUTORIAL_PLACE_AND_FRAME_BOTH START >> *****/
 try {
