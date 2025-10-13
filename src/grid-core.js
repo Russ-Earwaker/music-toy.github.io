@@ -142,6 +142,15 @@ export function buildGrid(panel, numSteps = 8){
     noteIndices: Array(numSteps).fill(12), // Default to C4 (MIDI 60)
   };
 
+  const emitLoopgridUpdate = (extraDetail = {}) => {
+    const state = panel.__gridState || {};
+    const detail = Object.assign({}, extraDetail);
+    if (Array.isArray(state.steps)) detail.steps = Array.from(state.steps);
+    if (Array.isArray(state.noteIndices)) detail.noteIndices = Array.from(state.noteIndices);
+    if (Array.isArray(state.notePalette)) detail.notePalette = Array.from(state.notePalette);
+    try { panel.dispatchEvent(new CustomEvent('loopgrid:update', { detail })); } catch {}
+  };
+
   const body = panel.querySelector('.toy-body');
   
   // --- Create all DOM elements first, in a predictable order ---
@@ -231,12 +240,14 @@ export function buildGrid(panel, numSteps = 8){
     for (let i = 0; i < panel.__gridState.steps.length; i++) {
       panel.__gridState.steps[i] = Math.random() < 0.5;
     }
+    emitLoopgridUpdate({ reason: 'random' });
   });
   panel.addEventListener('toy-clear', () => {
     if (!panel.__gridState?.steps) return;
     panel.__gridState.steps.fill(false);
     // Also reset the notes for each step back to the default (C4).
     if (panel.__gridState.noteIndices) panel.__gridState.noteIndices.fill(12);
+    emitLoopgridUpdate({ reason: 'clear' });
   });
   panel.addEventListener('toy-random-notes', () => {
     if (!panel.__gridState?.noteIndices || !panel.__gridState?.notePalette) return;
@@ -258,6 +269,7 @@ export function buildGrid(panel, numSteps = 8){
         noteIndices[i] = newIndex;
       }
     }
+    emitLoopgridUpdate({ reason: 'random-notes' });
   });
 
   // --- Particle System ---

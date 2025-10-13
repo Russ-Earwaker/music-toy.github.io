@@ -213,6 +213,279 @@ const GOAL_FLOW = [
     el.addEventListener('animationend', () => el.classList.remove('tutorial-unlock-animate'), { once: true });
   }
 
+  function isGoalPanelVisible() {
+    if (!goalPanel || !goalPanel.isConnected) return false;
+    if (goalPanel.getClientRects().length === 0) return false;
+    try {
+      const style = window.getComputedStyle(goalPanel);
+      if (style.display === 'none' || style.visibility === 'hidden') return false;
+    } catch {}
+    return true;
+  }
+
+  function frameTutorialPanels(panels, options = {}) {
+    const board = document.getElementById('board');
+    if (!board) return null;
+    const input = Array.isArray(panels) ? panels : [panels];
+    const filtered = input.filter(panel => panel && panel instanceof HTMLElement && panel.isConnected && board.contains(panel));
+    const unique = Array.from(new Set(filtered));
+    if (!unique.length) return null;
+
+    const padding = Number.isFinite(options.padding) ? Math.max(0, options.padding) : 160;
+    const currentScale = Number(window.__boardScale) || 1;
+    const boardRect = board.getBoundingClientRect();
+    const boardWidth = Math.max(1, board.offsetWidth || (boardRect.width && currentScale ? boardRect.width / currentScale : 0) || 1);
+    const boardHeight = Math.max(1, board.offsetHeight || (boardRect.height && currentScale ? boardRect.height / currentScale : 0) || 1);
+
+    let minLeft = Infinity;
+    let maxRight = -Infinity;
+    let minTop = Infinity;
+    let maxBottom = -Infinity;
+    for (const panel of unique) {
+      const rect = panel.getBoundingClientRect();
+      const left = (rect.left - boardRect.left) / currentScale;
+      const right = (rect.right - boardRect.left) / currentScale;
+      const top = (rect.top - boardRect.top) / currentScale;
+      const bottom = (rect.bottom - boardRect.top) / currentScale;
+      if (![left, right, top, bottom].every(Number.isFinite)) continue;
+      if (left < minLeft) minLeft = left;
+      if (right > maxRight) maxRight = right;
+      if (top < minTop) minTop = top;
+      if (bottom > maxBottom) maxBottom = bottom;
+    }
+    if (!Number.isFinite(minLeft) || !Number.isFinite(maxRight) || !Number.isFinite(minTop) || !Number.isFinite(maxBottom)) {
+      return null;
+    }
+
+    const bboxWidth = Math.max(1, maxRight - minLeft);
+    const bboxHeight = Math.max(1, maxBottom - minTop);
+
+    const viewportWidth = window.visualViewport?.width ?? window.innerWidth ?? 1280;
+    const viewportHeight = window.visualViewport?.height ?? window.innerHeight ?? 720;
+
+    const leftBound = Math.max(24, Math.min(padding, 120));
+    const topBound = Math.max(24, Math.min(padding, 120));
+    let usableWidth = Math.max(240, viewportWidth - leftBound * 2);
+    let usableHeight = Math.max(240, viewportHeight - topBound * 2);
+
+    let targetScale = Math.min(usableWidth / bboxWidth, usableHeight / bboxHeight);
+    targetScale = Math.max(0.5, Math.min(2.5, targetScale));
+
+    if (isGoalPanelVisible()) {
+      try {
+        const goalRect = goalPanel.getBoundingClientRect();
+        if (Number.isFinite(goalRect.left)) {
+          const goalSafeLeft = goalRect.left - Math.max(24, Math.min(padding, 120));
+          const safeWidth = goalSafeLeft - leftBound;
+          if (safeWidth > 0) {
+            const maxScaleForGoal = safeWidth / bboxWidth;
+            if (Number.isFinite(maxScaleForGoal) && maxScaleForGoal > 0) {
+              targetScale = Math.min(targetScale, Math.max(0.5, Math.min(2.5, maxScaleForGoal)));
+            }
+            usableWidth = Math.max(240, safeWidth);
+          }
+        }
+      } catch {}
+    }
+
+    if (options.limitToCurrentScale !== false && targetScale > currentScale) {
+      targetScale = currentScale;
+    }
+    if (Number.isFinite(options.desiredScale)) {
+      const desired = Math.max(0.5, Math.min(2.5, options.desiredScale));
+      if (options.limitToCurrentScale === false && desired > targetScale) {
+        targetScale = Math.min(desired, Math.max(0.5, Math.min(2.5, usableWidth / bboxWidth)));
+      } else {
+        targetScale = Math.min(targetScale, desired);
+      }
+    }
+    targetScale = Math.max(0.5, Math.min(2.5, targetScale));
+
+    const centerX = minLeft + bboxWidth / 2;
+    const centerY = minTop + bboxHeight / 2;
+    const centerXFromCenter = centerX - boardWidth / 2;
+    const centerYFromCenter = centerY - boardHeight / 2;
+    const safeCenterX = leftBound + usableWidth / 2;
+    const safeCenterY = topBound + usableHeight / 2;
+
+    let targetX = Math.round(safeCenterX - targetScale * centerXFromCenter);
+    let targetY = Math.round(safeCenterY - targetScale * centerYFromCenter);
+
+    const originX = boardWidth / 2;
+    let rightBound = viewportWidth - leftBound;
+    if (isGoalPanelVisible()) {
+      try {
+        const goalRect = goalPanel.getBoundingClientRect();
+        if (Number.isFinite(goalRect.left)) {
+          rightBound = Math.max(leftBound + 1, goalRect.left - leftBound);
+        }
+      } catch {}
+    }
+    const minX = leftBound - (minLeft - originX) * targetScale - originX;
+    const maxX = rightBound - (maxRight - originX) * targetScale - originX;
+    if (Number.isFinite(minX) && targetX < minX) targetX = minX;
+    if (Number.isFinite(maxX) && targetX > maxX) targetX = maxX;
+
+    const originY = boardHeight / 2;
+    const bottomBound = viewportHeight - topBound;
+    const minY = topBound - (minTop - originY) * targetScale - originY;
+    const maxY = bottomBound - (maxBottom - originY) * targetScale - originY;
+    if (Number.isFinite(minY) && targetY < minY) targetY = minY;
+    if (Number.isFinite(maxY) && targetY > maxY) targetY = maxY;
+
+    const prevLock = window.__tutorialZoomLock;
+    window.__tutorialZoomLock = false;
+    try {
+      if (typeof window.setBoardScale === 'function') {
+        window.setBoardScale(targetScale);
+      } else {
+        window.__boardScale = targetScale;
+      }
+      if (typeof window.panTo === 'function') {
+        window.panTo(targetX, targetY);
+      } else {
+        board.style.transformOrigin = '50% 50%';
+        board.style.transform = `translate3d(${targetX}px, ${targetY}px, 0) scale(${targetScale})`;
+        window.__boardX = targetX;
+        window.__boardY = targetY;
+      }
+    } finally {
+      window.__tutorialZoomLock = prevLock;
+    }
+    window.__boardScale = targetScale;
+    window.__boardX = targetX;
+    window.__boardY = targetY;
+    return { scale: targetScale, x: targetX, y: targetY };
+  }
+
+  function hasActiveLoopgrid(panel) {
+    if (!panel) return false;
+    const state = panel.__gridState;
+    if (state?.steps && state.steps.some(Boolean)) return true;
+    const activeCell = panel.querySelector('.sequencer-wrap .is-on, .sequencer-wrap .is-active, .sequencer-wrap .active, .sequencer-wrap .enabled, .node.active, .node.on, .node.is-active, .grid-cube.is-on, .grid-cube.active');
+    return !!activeCell;
+  }
+
+  function isPanelInViewport(panel, margin = 24) {
+    if (!panel?.isConnected) return false;
+    const rect = panel.getBoundingClientRect();
+    if (!rect || rect.width < 2 || rect.height < 2) return false;
+    const vw = window.visualViewport?.width ?? window.innerWidth ?? 0;
+    const vh = window.visualViewport?.height ?? window.innerHeight ?? 0;
+    if (vw <= 0 || vh <= 0) return true;
+    return rect.right > margin && rect.bottom > margin && rect.left < vw - margin && rect.top < vh - margin;
+  }
+
+  function withZoomUnlock(fn) {
+    const prev = window.__tutorialZoomLock;
+    window.__tutorialZoomLock = false;
+    try {
+      return fn();
+    } finally {
+      window.__tutorialZoomLock = prev;
+    }
+  }
+
+  function captureBoardViewport() {
+    const scale = Number(window.__boardScale);
+    const x = Number(window.__boardX);
+    const y = Number(window.__boardY);
+    return {
+      scale: Number.isFinite(scale) ? scale : 1,
+      x: Number.isFinite(x) ? x : 0,
+      y: Number.isFinite(y) ? y : 0,
+    };
+  }
+
+  function applyBoardViewport(view) {
+    if (!view) return;
+    const board = document.getElementById('board');
+    const targetScale = Math.max(0.5, Math.min(2.5, Number(view.scale) || 1));
+    const targetX = Number.isFinite(view.x) ? view.x : 0;
+    const targetY = Number.isFinite(view.y) ? view.y : 0;
+    withZoomUnlock(() => {
+      if (typeof window.setBoardScale === 'function') {
+        window.setBoardScale(targetScale);
+      } else if (board) {
+        board.style.transformOrigin = '50% 50%';
+        board.style.transform = `translate3d(${targetX}px, ${targetY}px, 0) scale(${targetScale})`;
+      }
+      if (typeof window.panTo === 'function') {
+        window.panTo(targetX, targetY);
+      } else if (board) {
+        board.style.transformOrigin = '50% 50%';
+        board.style.transform = `translate3d(${targetX}px, ${targetY}px, 0) scale(${targetScale})`;
+      }
+      window.__boardScale = targetScale;
+      window.__boardX = targetX;
+      window.__boardY = targetY;
+    });
+  }
+
+  function ensurePanelsVisible(panels, attempts) {
+    const arr = (Array.isArray(panels) ? panels : [panels]).filter(panel => panel && panel.isConnected);
+    if (!arr.length) return false;
+    const originalViewport = captureBoardViewport();
+
+    const ops = Array.isArray(attempts) && attempts.length ? attempts : [
+      () => withZoomUnlock(() => frameTutorialPanels(arr, { limitToCurrentScale: true })),
+      () => withZoomUnlock(() => frameTutorialPanels(arr, { limitToCurrentScale: false })),
+      () => {
+        if (arr[1] && typeof window.centerBoardOnElement === 'function') {
+          withZoomUnlock(() => window.centerBoardOnElement(arr[1], TUTORIAL_ZOOM));
+        }
+      },
+      () => {
+        if (typeof window.centerBoardOnElement === 'function') {
+          withZoomUnlock(() => window.centerBoardOnElement(arr[0], TUTORIAL_ZOOM));
+        }
+      },
+    ];
+
+    for (const attempt of ops) {
+      const snapshot = captureBoardViewport();
+      try {
+        attempt?.();
+      } catch (err) {
+        console.warn('[tutorial] frame attempt failed', err);
+      }
+      ensurePanelsClearGoal(arr);
+      if (arr.every(panel => isPanelInViewport(panel))) {
+        return true;
+      }
+      applyBoardViewport(snapshot);
+    }
+
+    applyBoardViewport(originalViewport);
+    return arr.every(panel => isPanelInViewport(panel));
+  }
+
+  function ensurePanelsClearGoal(panels, margin = 24) {
+    if (!isGoalPanelVisible() || typeof window.panTo !== 'function') return;
+    const arr = Array.isArray(panels) ? panels : [panels];
+    const candidates = arr.filter(panel => panel?.isConnected);
+    if (candidates.length < 2) return;
+    const goalRect = goalPanel.getBoundingClientRect();
+    if (!goalRect || !Number.isFinite(goalRect.left)) return;
+    const limit = goalRect.left - margin;
+    const currentX = Number(window.__boardX) || 0;
+    const currentY = Number(window.__boardY) || 0;
+    let maxOverlap = 0;
+    candidates.forEach(panel => {
+      if (!panel?.isConnected) return;
+      const rect = panel.getBoundingClientRect();
+      if (!rect) return;
+      const overlap = rect.right - limit;
+      if (overlap > maxOverlap) maxOverlap = overlap;
+    });
+    if (maxOverlap > 1) {
+      const newX = Math.round(currentX - maxOverlap);
+      window.panTo(newX, currentY);
+      window.__boardX = newX;
+      window.__boardY = currentY;
+    }
+  }
+
   function lockTutorialControls(panel) {
     if (!panel) return;
     debugTutorial('lockTutorialControls:start', describeElement(panel));
@@ -241,6 +514,9 @@ const GOAL_FLOW = [
 
     const lockElement = (el) => {
       if (!(el instanceof HTMLElement) || el.classList.contains('tutorial-control-locked')) return;
+      if (tutorialState?.unlockedRewards?.has?.('add-toy') && el.matches('.toy-inst-btn, select.toy-instrument, [data-action="instrument"]')) {
+        return;
+      }
       el.classList.add('tutorial-control-locked');
       if (el.matches('button, select')) {
         if (el.dataset.tutorialWasDisabled === undefined) {
@@ -249,8 +525,27 @@ const GOAL_FLOW = [
         try { el.disabled = true; } catch {}
         el.setAttribute('aria-disabled', 'true');
       }
+      if (el.dataset.tutorialOrigDisplay === undefined) {
+        el.dataset.tutorialOrigDisplay = el.style.display || '';
+      }
+      if (el.matches('.toy-inst-btn, select.toy-instrument, [data-action="instrument"]')) {
+        el.style.display = 'none';
+        el.setAttribute('aria-hidden', 'true');
+      }
       debugTutorial('lock', describeElement(el));
       if (!locked.includes(el)) locked.push(el);
+    };
+
+    const lockInstrumentElements = (node) => {
+      if (!node || tutorialState?.unlockedRewards?.has?.('add-toy')) return;
+      const targets = [];
+      if (node instanceof HTMLElement && node.matches('.toy-inst-btn, select.toy-instrument, [data-action="instrument"]')) {
+        targets.push(node);
+      }
+      if (node.querySelectorAll) {
+        node.querySelectorAll('.toy-inst-btn, select.toy-instrument, [data-action="instrument"]').forEach(el => targets.push(el));
+      }
+      targets.forEach(lockElement);
     };
 
     if (header) {
@@ -258,6 +553,7 @@ const GOAL_FLOW = [
         try { panel.__tutorialHeaderObserver.disconnect(); } catch {}
       }
       header.querySelectorAll('button, select, .c-btn').forEach(lockElement);
+      lockInstrumentElements(header);
 
       const observer = new MutationObserver(mutations => {
         for (const mutation of mutations) {
@@ -267,6 +563,7 @@ const GOAL_FLOW = [
             if (node.querySelectorAll) {
               node.querySelectorAll('button, select, .c-btn').forEach(lockElement);
             }
+            lockInstrumentElements(node);
           }
         }
       });
@@ -294,6 +591,7 @@ const GOAL_FLOW = [
               btn.remove();
             });
           }
+          lockInstrumentElements(node);
         }
       }
     });
@@ -301,6 +599,7 @@ const GOAL_FLOW = [
     modeObserver.observe(panel, { childList: true, subtree: true });
     panel.__tutorialModeObserver = modeObserver;
 
+    lockInstrumentElements(panel);
     panel.__tutorialLockedControls = locked;
   }
 
@@ -383,15 +682,23 @@ const GOAL_FLOW = [
         if (el.matches('button, select')) {
           const wasDisabled = el.dataset.tutorialWasDisabled;
           const shouldEnable = wasDisabled === '0' || wasDisabled === undefined;
-          if (shouldEnable) {
-            el.disabled = false;
-            el.removeAttribute('aria-disabled');
-          } else {
-            el.setAttribute('aria-disabled', 'true');
+        if (shouldEnable) {
+          el.disabled = false;
+          el.removeAttribute('aria-disabled');
+        } else {
+          el.setAttribute('aria-disabled', 'true');
           }
           delete el.dataset.tutorialWasDisabled;
         }
-        try { el.style.removeProperty('display'); } catch {}
+        if (el.dataset.tutorialOrigDisplay !== undefined) {
+          const orig = el.dataset.tutorialOrigDisplay;
+          if (orig) el.style.display = orig;
+          else el.style.removeProperty('display');
+          delete el.dataset.tutorialOrigDisplay;
+        } else {
+          try { el.style.removeProperty('display'); } catch {}
+        }
+        el.removeAttribute('aria-hidden');
         if (!unlocked.includes(el)) unlocked.push(el);
         debugTutorial('unlock', key, describeElement(el));
       });
@@ -471,7 +778,12 @@ const GOAL_FLOW = [
       }
     }
     if (goal.id === 'add-toy') {
-      document.querySelectorAll('.toy-panel:not(.tutorial-hidden)').forEach(panel => {
+      const seen = new Set();
+      const candidates = Array.from(document.querySelectorAll('.toy-panel:not(.tutorial-hidden)'));
+      if (tutorialToy && tutorialToy.isConnected) candidates.push(tutorialToy);
+      candidates.forEach(panel => {
+        if (!panel || seen.has(panel)) return;
+        seen.add(panel);
         unlocked.push(...unlockPanelControls(panel, ['instrument']));
       });
     }
@@ -949,6 +1261,9 @@ requestAnimationFrame(() => {
       renderGoalPanel();
       updateClaimButtonVisibility();
       stopParticleStream();
+      document.querySelectorAll('.tutorial-pulse-target, .tutorial-active-pulse, .tutorial-addtoy-pulse').forEach(el => {
+        el.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-addtoy-pulse');
+      });
       return;
     }
 
@@ -1020,88 +1335,66 @@ requestAnimationFrame(() => {
 
 /***** << GPT:TUTORIAL_PLACE_AND_FRAME_BOTH START >> *****/
 try {
-  const board = document.getElementById('board');
-  if (!board || !tutorialToy || !newToy?.isConnected) return;
+  if (!tutorialToy || !newToy?.isConnected) return;
 
-  const settle = (fn) => requestAnimationFrame(() => requestAnimationFrame(fn));
+  if (!newToy.__tutorialOnboarded) {
+    newToy.__tutorialOnboarded = true;
+    lockTutorialControls(newToy);
+    if (tutorialState?.unlockedRewards?.has?.('draw-intro')) {
+      unlockPanelControls(newToy, ['clear', 'random']);
+    }
+    setupPanelListeners(newToy);
+  }
+
+  const onNoteAdd = () => {
+    if (hasActiveLoopgrid(newToy)) {
+      maybeCompleteTask('add-note-new-toy');
+    }
+  };
+
+  if (!newToy.__tutorialRhythmHooked) {
+    newToy.__tutorialRhythmHooked = true;
+    const rhythmEvents = [
+      'loopgrid:update',
+      'grid:notechange',
+      'grid:drum-tap',
+      'loopgrid:tap',
+      'toy-random',
+      'toy-update',
+      'change',
+      'toy-random-notes'
+    ];
+    rhythmEvents.forEach(evt => addListener(newToy, evt, onNoteAdd));
+    addListener(newToy, 'toy-clear', () => requestAnimationFrame(onNoteAdd));
+  }
+  onNoteAdd();
+
+  const raf = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));
+  const settle = (fn) => raf(() => raf(fn));
   settle(() => {
     if (!tutorialActive || !tutorialToy?.isConnected || !newToy?.isConnected) return;
-
-    const currentScale = Number(window.__boardScale) || 1;
-    const boardRect = board.getBoundingClientRect();
-    const toBoardSpace = (panel) => {
-      const rect = panel.getBoundingClientRect();
-      return {
-        left: (rect.left - boardRect.left) / currentScale,
-        right: (rect.right - boardRect.left) / currentScale,
-        top: (rect.top - boardRect.top) / currentScale,
-        bottom: (rect.bottom - boardRect.top) / currentScale,
-      };
-    };
-
-    const panels = [tutorialToy, newToy].map(toBoardSpace);
-    if (panels.some(bounds => !Number.isFinite(bounds.left))) return;
-
-    const minLeft = Math.min(...panels.map(b => b.left));
-    const maxRight = Math.max(...panels.map(b => b.right));
-    const minTop = Math.min(...panels.map(b => b.top));
-    const maxBottom = Math.max(...panels.map(b => b.bottom));
-
-    const bboxWidth = Math.max(1, maxRight - minLeft);
-    const bboxHeight = Math.max(1, maxBottom - minTop);
-    const viewportWidth = window.visualViewport?.width ?? window.innerWidth ?? 1280;
-    const viewportHeight = window.visualViewport?.height ?? window.innerHeight ?? 720;
-    const padding = 160; // viewport pixels of breathing room
-    const usableWidth = Math.max(240, viewportWidth - padding);
-    const usableHeight = Math.max(240, viewportHeight - padding);
-    const fitScale = Math.min(usableWidth / bboxWidth, usableHeight / bboxHeight);
-    const clampedFit = Math.max(0.5, Math.min(2.5, fitScale));
-    const targetScale = Math.max(0.5, Math.min(currentScale, clampedFit));
-
-    const centerX = minLeft + bboxWidth / 2;
-    const centerY = minTop + bboxHeight / 2;
-    const boardWidth = board.offsetWidth || (boardRect.width / currentScale);
-    const boardHeight = board.offsetHeight || (boardRect.height / currentScale);
-    const centerXFromCenter = centerX - boardWidth / 2;
-    const centerYFromCenter = centerY - boardHeight / 2;
-
-    const viewportCX = viewportWidth / 2;
-    const viewportCY = viewportHeight / 2;
-    const targetX = Math.round(viewportCX - targetScale * centerXFromCenter);
-    const targetY = Math.round(viewportCY - targetScale * centerYFromCenter);
-
-    const wasLocked = window.__tutorialZoomLock;
-    window.__tutorialZoomLock = false;
-    if (typeof window.setBoardScale === 'function' && typeof window.panTo === 'function') {
-      window.setBoardScale(targetScale);
-      window.panTo(targetX, targetY);
-    } else if (typeof window.centerBoardOnElement === 'function') {
-      window.centerBoardOnElement(newToy, targetScale);
-    } else {
-      board.style.transformOrigin = '50% 50%';
-      board.style.transform = `translate3d(${targetX}px, ${targetY}px, 0) scale(${targetScale})`;
-      window.__boardScale = targetScale;
-      window.__boardX = targetX;
-      window.__boardY = targetY;
-    }
-    window.__tutorialZoomLock = wasLocked;
+    const panels = [tutorialToy, newToy];
+    const attempts = [
+      () => withZoomUnlock(() => frameTutorialPanels(panels, { limitToCurrentScale: true })),
+      () => withZoomUnlock(() => frameTutorialPanels(panels, { limitToCurrentScale: false })),
+      () => {
+        if (typeof window.centerBoardOnElement === 'function') {
+          withZoomUnlock(() => window.centerBoardOnElement(newToy, TUTORIAL_ZOOM));
+        }
+      },
+      () => {
+        if (typeof window.centerBoardOnElement === 'function') {
+          withZoomUnlock(() => window.centerBoardOnElement(tutorialToy, TUTORIAL_ZOOM));
+        }
+      },
+    ];
+    ensurePanelsVisible(panels, attempts);
   });
 } catch (err) {
   console.warn('[tutorial] place/frame both toys failed', err);
 }
 /***** << GPT:TUTORIAL_PLACE_AND_FRAME_BOTH END >> *****/
 
-            const onNoteAdd = (e) => {
-              const detail = e.detail || {};
-              const nodes = detail.nodes;
-              const hasNodes = Array.isArray(nodes) ? nodes.some(set => set && set.size > 0) : (newToy.querySelectorAll('.node.active, .pressed').length > 0);
-              if (hasNodes) {
-                maybeCompleteTask('add-note-new-toy');
-              }
-            };
-            addListener(newToy, 'toy-update', onNoteAdd);
-            addListener(newToy, 'change', onNoteAdd);
-            addListener(newToy, 'loopgrid:update', onNoteAdd);
           }
         }
       }
@@ -1191,12 +1484,21 @@ try {
       }
     } catch (_) {}
 
-    if (typeof window.centerBoardOnElement === 'function') {
-      requestAnimationFrame(() => {
-        if (!tutorialActive) return; // exit if tutorial was closed quickly
-        window.centerBoardOnElement(tutorialToy, TUTORIAL_ZOOM);
-      });
-    }
+    const raf = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));
+    const settle = (fn) => raf(() => raf(fn));
+    settle(() => {
+      if (!tutorialActive || !tutorialToy?.isConnected) return;
+      const panels = [tutorialToy];
+      const attempts = [
+        () => withZoomUnlock(() => frameTutorialPanels(panels, { desiredScale: TUTORIAL_ZOOM, limitToCurrentScale: false })),
+        () => {
+          if (typeof window.centerBoardOnElement === 'function') {
+            withZoomUnlock(() => window.centerBoardOnElement(tutorialToy, TUTORIAL_ZOOM));
+          }
+        },
+      ];
+      ensurePanelsVisible(panels, attempts);
+    });
     // --- End framing ---
 
     ensureGoalPanel();

@@ -103,6 +103,8 @@ export function attachDrumVisuals(panel) {
         const third = whichThirdRect(cubeRect, canvasP.y);
         const isZoomed = panel.classList.contains('toy-zoomed');
 
+        let mutated = false;
+
         if (isZoomed && third === 'up') {
           // Increment the selected step's note index in the palette
           const curIx = (state.noteIndices[clickedIndex] | 0);
@@ -110,6 +112,7 @@ export function attachDrumVisuals(panel) {
           state.noteIndices[clickedIndex] = max ? ((curIx + 1) % max) : curIx;
           // Preview the new note without triggering the cube flash animation
           panel.dispatchEvent(new CustomEvent('grid:notechange', { detail: { col: clickedIndex } }));
+          mutated = true;
         } else if (isZoomed && third === 'down') {
           // Decrement the selected step's note index in the palette
           const curIx = (state.noteIndices[clickedIndex] | 0);
@@ -117,8 +120,23 @@ export function attachDrumVisuals(panel) {
           state.noteIndices[clickedIndex] = max ? ((curIx - 1 + max) % max) : curIx;
           // Preview the new note without triggering the cube flash animation
           panel.dispatchEvent(new CustomEvent('grid:notechange', { detail: { col: clickedIndex } }));
+          mutated = true;
         } else {
           state.steps[clickedIndex] = !state.steps[clickedIndex];
+          mutated = true;
+        }
+
+        if (mutated) {
+          try {
+            panel.dispatchEvent(new CustomEvent('loopgrid:update', {
+              detail: {
+                reason: isZoomed ? 'note-change' : 'step-toggle',
+                col: clickedIndex,
+                steps: Array.isArray(state.steps) ? Array.from(state.steps) : undefined,
+                noteIndices: Array.isArray(state.noteIndices) ? Array.from(state.noteIndices) : undefined
+              }
+            }));
+          } catch {}
         }
       }
     }
