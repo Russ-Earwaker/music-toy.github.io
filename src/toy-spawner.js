@@ -120,7 +120,6 @@ function setMenuOpen(open) {
     renderCatalog();
   } else {
     cancelDrag();
-    state.justSpawned = false;
   }
 }
 
