@@ -1407,51 +1407,6 @@ function cloneGoal(goal) {
       document.querySelector('.toy-spawner-toggle')?.classList.remove('tutorial-pulse-target', 'tutorial-addtoy-pulse', 'tutorial-flash');
     }
 
-    // When entering the "draw-line" task, use the toy's own APIs.
-// This avoids duplicate DOM overlays and guarantees correct z-order.
-if (task.id === 'draw-line' && tutorialToy) {
-  whenSwipeAPIReady(tutorialToy, () => {
-    console.debug('[tutorial] starting ghost guide + hint on draw-line');
-    // Show the toy's built-in word overlay (uses "DRAW" inside drawgrid)
-    tutorialToy.setSwipeVisible(true, { immediate: true });
-    
-        // Compute local coords inside the drawgrid panel (not viewport coords)
-        const r = tutorialToy.getBoundingClientRect();
-        const pad = 24; // keep inside the grid area a bit
-        const startX = pad;
-        const endX   = Math.max(pad + 1, r.width - pad);
-        const startY = pad;
-        const endY   = Math.max(pad + 1, r.height - pad);
-    
-        // One sweep of the ghost finger; drawgrid.js handles fade/opacity (~30%)
-        tutorialToy.startGhostGuide({
-          startX,
-          endX,
-          startY,
-          endY,
-          duration: 2000,   // ms per sweep
-          wiggle: true,
-          trail: true,
-          trailEveryMs: 50,
-          trailCount: 3,
-          trailSpeed: 1.2
-        });
-    
-        // Loop the sweep with a short pause
-        if (tutorialToy.__ghostLoop) clearInterval(tutorialToy.__ghostLoop);
-        tutorialToy.__ghostLoop = setInterval(() => {
-          tutorialToy.startGhostGuide({
-            startX, endX, startY, endY,
-            duration: 2000,
-            wiggle: true,
-            trail: true,
-            trailEveryMs: 50,
-            trailCount: 3,
-            trailSpeed: 1.2
-          });
-        }, 2000 /*duration*/ + 1000 /*pause*/);  });
-}
-
     if (!handledSpecial) {
       const targetKey = TASK_TARGETS[task.id];
       const targetEl = targetKey ? (getControlMap(tutorialToy)[targetKey] || document.querySelector(CONTROL_SELECTORS[targetKey])) : null;
@@ -1596,18 +1551,6 @@ if (task.id === 'draw-line' && tutorialToy) {
   function handleDrawgridUpdate(detail) {
     if (!tutorialActive || !tutorialState) return;
     const nodes = detail && detail.nodes;
-    // As soon as a real line exists, remove the hint + ghost
-    if (!hasDetectedLine && Array.isArray(nodes)) {
-      const madeAny = nodes.some(set => set && set.size > 0);
-      if (madeAny) {
-        try { tutorialToy.stopGhostGuide?.(); } catch {}
-        if (tutorialToy.__ghostLoop) {
-          clearInterval(tutorialToy.__ghostLoop);
-          tutorialToy.__ghostLoop = null;
-        }
-        tutorialToy.setSwipeVisible?.(false);
-      }
-    }
     const hasNodes = Array.isArray(nodes) ? nodes.some(set => set && set.size > 0) : false;
     if (!hasDetectedLine && hasNodes) {
       hasDetectedLine = true;
@@ -1899,11 +1842,6 @@ try {
     helpWasActiveBeforeTutorial = false;
 
     try { tutorialToy.stopGhostGuide?.(); } catch {}
-    if (tutorialToy.__ghostLoop) {
-      clearInterval(tutorialToy.__ghostLoop);
-      tutorialToy.__ghostLoop = null;
-    }
-    tutorialToy.setSwipeVisible?.(false);
 
     stopParticleStream();
     removeTutorialListeners();

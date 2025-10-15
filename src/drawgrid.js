@@ -604,11 +604,14 @@ panel.setSwipeVisible = (show, { immediate = false } = {}) => {
 
   function syncLetterFade({ immediate = false } = {}) {
     const hasStrokes = Array.isArray(strokes) && strokes.length > 0;
-    const helpActive = document.body.classList.contains('toy-help-mode');
+    const hasNodes = Array.isArray(currentMap?.nodes)
+      ? currentMap.nodes.some(set => set && set.size > 0)
+      : false;
+    const hasContent = hasStrokes || hasNodes;
     const target = (__forceSwipeVisible !== null)
       ? (__forceSwipeVisible ? 1 : 0)
-      : ((helpActive && !hasStrokes) ? 1 : 0);
-    const speed = hasStrokes ? 0.12 : 0.08;
+      : (hasContent ? 0 : 1);
+    const speed = hasContent ? 0.12 : 0.08;
     particles.setLetterFadeTarget(target, speed, immediate);
   }
 
@@ -2636,6 +2639,10 @@ function regenerateMapFromStrokes() {
   requestAnimationFrame(() => resnapAndRedraw(false));
 
   let ghostGuideAnimFrame = null;
+  let ghostGuideLoopId = null;
+  let ghostGuideAutoActive = false;
+  const GHOST_SWEEP_DURATION = 2000;
+  const GHOST_SWEEP_PAUSE = 1000;
 
   function stopGhostGuide() {
     if (ghostGuideAnimFrame) {
@@ -2753,6 +2760,57 @@ function regenerateMapFromStrokes() {
     ghostGuideAnimFrame = requestAnimationFrame(frame);
   }
 
+  function runAutoGhostGuideSweep() {
+    if (!ghostGuideAutoActive) return;
+    const rect = panel.getBoundingClientRect();
+    if (!rect || rect.width <= 48 || rect.height <= 48) {
+      if (ghostGuideAutoActive) requestAnimationFrame(runAutoGhostGuideSweep);
+      return;
+    }
+    const pad = 24;
+    const startX = pad;
+    const endX = Math.max(pad + 1, rect.width - pad);
+    const startY = pad;
+    const endY = Math.max(pad + 1, rect.height - pad);
+    startGhostGuide({
+      startX,
+      endX,
+      startY,
+      endY,
+      duration: GHOST_SWEEP_DURATION,
+      wiggle: true,
+      trail: true,
+      trailEveryMs: 50,
+      trailCount: 3,
+      trailSpeed: 1.2,
+    });
+  }
+
+  function startAutoGhostGuide({ immediate = false } = {}) {
+    if (ghostGuideAutoActive) return;
+    ghostGuideAutoActive = true;
+    syncLetterFade({ immediate });
+    runAutoGhostGuideSweep();
+    const interval = GHOST_SWEEP_DURATION + GHOST_SWEEP_PAUSE;
+    ghostGuideLoopId = setInterval(() => {
+      if (!ghostGuideAutoActive) return;
+      runAutoGhostGuideSweep();
+    }, interval);
+  }
+
+  function stopAutoGhostGuide({ immediate = false } = {}) {
+    const wasActive = ghostGuideAutoActive || ghostGuideLoopId !== null || !!ghostGuideAnimFrame;
+    ghostGuideAutoActive = false;
+    if (ghostGuideLoopId) {
+      clearInterval(ghostGuideLoopId);
+      ghostGuideLoopId = null;
+    }
+    stopGhostGuide();
+    if (wasActive) {
+      syncLetterFade({ immediate });
+    }
+  }
+
   panel.startGhostGuide = startGhostGuide;
   panel.stopGhostGuide = stopGhostGuide;
 
@@ -2760,10 +2818,21 @@ panel.addEventListener('drawgrid:update', (e) => {
   const nodes = e?.detail?.nodes;
   const hasAny = Array.isArray(nodes) && nodes.some(set => set && set.size > 0);
   if (hasAny) {
-    panel.stopGhostGuide?.();
-    panel.setSwipeVisible?.(false);
+    stopAutoGhostGuide({ immediate: true });
+  } else {
+    startAutoGhostGuide({ immediate: true });
   }
 });
+
+  requestAnimationFrame(() => {
+    const hasStrokes = Array.isArray(strokes) && strokes.length > 0;
+    const hasNodes = Array.isArray(currentMap?.nodes)
+      ? currentMap.nodes.some(set => set && set.size > 0)
+      : false;
+    if (!hasStrokes && !hasNodes) {
+      startAutoGhostGuide({ immediate: true });
+    }
+  });
 
   try { panel.dispatchEvent(new CustomEvent('drawgrid:ready', { bubbles: true })); } catch {}
   return api;
