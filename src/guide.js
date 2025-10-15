@@ -35,27 +35,33 @@ function initGuidePanel(api) {
     const reward = panel.querySelector('.tutorial-goals-reward');
 
     if (header && (tasks || progress || reward)) {
-      const content = [tasks, progress, reward].filter(Boolean);
+      const bodyContent = [tasks, progress, reward].filter(Boolean);
+      
+      const bodyWrapper = document.createElement('div');
+      bodyWrapper.className = 'goal-body-wrapper';
+      bodyWrapper.style.background = 'rgba(0,0,0,0.2)';
+      bodyWrapper.style.padding = '10px';
+      bodyWrapper.style.borderRadius = '8px';
+      bodyContent.forEach(el => bodyWrapper.appendChild(el));
+      panel.appendChild(bodyWrapper);
+
       const isFirst = index === 0;
+
+      header.style.cursor = 'pointer';
 
       if (isFirst) {
         // First goal starts expanded
-        panel.style.cursor = 'default';
+        panel.classList.remove('is-collapsed');
       } else {
         // Other goals start collapsed
         panel.classList.add('is-collapsed');
-        content.forEach(el => el.style.display = 'none');
-        panel.style.cursor = 'pointer';
+        bodyWrapper.style.display = 'none';
       }
 
-      panel.addEventListener('click', (e) => {
-        if (e.target.closest('button, a, input, select')) {
-          return;
-        }
-        const wasCollapsed = panel.classList.contains('is-collapsed');
-        panel.classList.toggle('is-collapsed', !wasCollapsed);
-        content.forEach(el => el.style.display = wasCollapsed ? '' : 'none');
-        panel.style.cursor = wasCollapsed ? 'default' : 'pointer';
+      header.addEventListener('click', () => {
+        const isCollapsed = panel.classList.contains('is-collapsed');
+        panel.classList.toggle('is-collapsed', !isCollapsed);
+        bodyWrapper.style.display = isCollapsed ? '' : 'none';
       });
     }
 
