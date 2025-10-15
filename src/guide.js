@@ -29,6 +29,20 @@ function initGuidePanel(api) {
 
     api.populatePanel?.(panel, goal, { taskIndex: 0, showClaimButton: false });
 
+    panel.querySelectorAll('.goal-task').forEach(taskEl => {
+      taskEl.style.cursor = 'pointer';
+      taskEl.addEventListener('click', () => {
+        const taskId = taskEl.dataset.taskId;
+        if (taskId) {
+          window.dispatchEvent(new CustomEvent('guide:task-click', {
+            detail: { taskId, taskElement: taskEl },
+            bubbles: true,
+            composed: true
+          }));
+        }
+      });
+    });
+
     const header = panel.querySelector('.tutorial-goals-header');
     const tasks = panel.querySelector('.tutorial-goals-tasks');
     const progress = panel.querySelector('.tutorial-goals-progress');

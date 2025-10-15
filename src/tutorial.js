@@ -1999,6 +1999,44 @@ try {
   tutorialButton.addEventListener('click', () => tutorialActive ? exitTutorial() : enterTutorial());
   updateButtonVisual();
 
+  window.addEventListener('guide:task-click', (e) => {
+    const { taskId, taskElement } = e.detail;
+    if (!taskId || !taskElement) return;
+
+    // Ensure canvases exist
+    const panel = taskElement.closest('.guide-goals-panel');
+    if (panel && !panel.querySelector('.goal-particles-behind')) {
+        const c = document.createElement('canvas');
+        c.className = 'goal-particles-behind';
+        panel.appendChild(c);
+    }
+    if (!document.querySelector('.tutorial-particles-front')) {
+        const c2 = document.createElement('canvas');
+        c2.className = 'tutorial-particles-front';
+        document.body.appendChild(c2);
+    }
+
+    // Stop any existing particle streams
+    stopParticleStream();
+
+    const TASK_TARGET_SELECTORS = {
+      'add-draw-toy': '.toy-spawner-toggle',
+      'add-rhythm-toy': '.toy-spawner-toggle',
+      'press-help': '.toy-spawner-help',
+      'press-play': '#topbar [data-action="toggle-play"]',
+      'press-clear': '.toy-panel [data-action="clear"]',
+      'press-random': '.toy-panel [data-action="random"]',
+    };
+
+    const selector = TASK_TARGET_SELECTORS[taskId];
+    if (selector) {
+      const targetElement = document.querySelector(selector);
+      if (targetElement) {
+        startParticleStream(taskElement, targetElement);
+      }
+    }
+  });
+
   try {
     if (!window.TutorialGoalsAPI) {
       const api = {

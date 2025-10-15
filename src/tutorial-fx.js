@@ -380,7 +380,8 @@ if(frontCtx) frontCtx.restore();
 
 
 export function startParticleStream(originEl, targetEl) {
-  const behind = document.querySelector('#tutorial-goals .goal-particles-behind');
+  const panel = originEl.closest('.tutorial-goals-panel, #tutorial-goals');
+  const behind = panel ? panel.querySelector('.goal-particles-behind') : null;
   const front  = document.querySelector('.tutorial-particles-front');
   if (!behind || !front || !originEl || !targetEl) return;
 
