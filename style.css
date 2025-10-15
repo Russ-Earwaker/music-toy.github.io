@@ -235,6 +235,11 @@ html, body {
   transform: translateY(1px) scale(0.99);
 }
 
+[data-action="tutorial"] {
+  width: 120px;
+  text-align: center;
+}
+
 /* Selects with .toy-btn need their appearance restored to be usable */
 select.toy-btn {
   appearance: auto !important;
@@ -1006,11 +1011,13 @@ body.tutorial-active #topbar #theme-switcher-wrap {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  width: 320px;
 }
 
 .guide-launcher .guide-toggle {
   padding: 8px 16px;
   font-weight: 600;
+  width: 100%;
 }
 
 .guide-launcher .tutorial-goals-panel {
