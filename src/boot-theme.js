@@ -111,7 +111,7 @@ async function wireAll() {
 
   // --- Wire up all toy types ---
 
-  const gridPanels = document.querySelectorAll('.toy-panel[data-toy="loopgrid"]');
+  const gridPanels = document.querySelectorAll('.toy-panel[data-toy="loopgrid"], .toy-panel[data-toy="loopgrid-drum"]');
   if (gridPanels.length > 0 && theme.grids) {
     resolveGridSamples();
     gridPanels.forEach((panel, i) => applyToPanel(panel, theme.grids[i % theme.grids.length]));

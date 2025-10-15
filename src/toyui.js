@@ -150,7 +150,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
 
   if (!isTutorialContext) {
   // Advanced / Close buttons
-  if (toyKind === 'loopgrid' || toyKind === 'bouncer' || toyKind === 'rippler' || toyKind === 'chordwheel' || toyKind === 'drawgrid') {
+  if (toyKind === 'loopgrid' || toyKind === 'loopgrid-drum' || toyKind === 'bouncer' || toyKind === 'rippler' || toyKind === 'chordwheel' || toyKind === 'drawgrid') {
     // For the Drum Toy and Bouncer, use the new circular "Edit" button, positioned outside the panel.
     // We append it to the panel itself, not the header.
 
@@ -196,7 +196,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
   }
 
   // Random / Clear buttons (delegated elsewhere)
-  if (toyKind === 'loopgrid') {
+  if (toyKind === 'loopgrid' || toyKind === 'loopgrid-drum') {
     // For loopgrid, Random and Clear buttons are circular and inside the header on the left.
     // First, remove any old external buttons to be safe.
     panel.querySelectorAll(':scope > .loopgrid-mode-btn[data-action="random"], :scope > .loopgrid-mode-btn[data-action="clear"]').forEach(btn => btn.remove());
@@ -727,7 +727,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
     instBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonInstruments.png');"></div>`;
     markHelp(instBtn, 'Choose instrument', 'bottom');
 
-    if (toyKind === 'loopgrid' || toyKind === 'bouncer' || toyKind === 'rippler' || toyKind === 'chordwheel' || toyKind === 'drawgrid') {
+    if (toyKind === 'loopgrid' || toyKind === 'loopgrid-drum' || toyKind === 'bouncer' || toyKind === 'rippler' || toyKind === 'chordwheel' || toyKind === 'drawgrid') {
       // For loopgrid, bouncer, rippler, chordwheel, and drawgrid, put a large instrument button inside the header.
       instBtn.style.setProperty('--c-btn-size', '65px');
       right.appendChild(instBtn);
@@ -858,6 +858,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
   if (!isTutorialContext) {
     switch (toyKind) {
     case 'loopgrid':
+    case 'loopgrid-drum':
       markHelp(panel.querySelector('button[data-action="random"]'), 'Randomize', 'bottom');
       markHelp(panel.querySelector('button[data-action="random-notes"]'), 'Randomize notes', 'bottom');
       markHelp(panel.querySelector('button[data-action="clear"]'), 'Clear', 'bottom');

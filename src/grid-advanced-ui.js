@@ -31,7 +31,7 @@
   }
 
   function boot(){
-    document.querySelectorAll('.toy-panel[data-toy="loopgrid"]').forEach(ensureButtons);
+    document.querySelectorAll('.toy-panel[data-toy="loopgrid"], .toy-panel[data-toy="loopgrid-drum"]').forEach(ensureButtons);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();

@@ -4,7 +4,7 @@
 // ===============================
 
 (function () {
-  const TOY_SELECTOR = '.toy-panel[data-toy="loopgrid"]';
+  const TOY_SELECTOR = '.toy-panel[data-toy="loopgrid"], .toy-panel[data-toy="loopgrid-drum"]';
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init, { once: true });

@@ -19,6 +19,7 @@ import { loadInstrumentEntries as loadInstrumentCatalog } from './instrument-cat
 import { DEFAULT_BPM, NUM_STEPS, ensureAudioContext, getLoopInfo, setBpm, start, isRunning } from './audio-core.js';
 import { createLoopIndicator } from './loopindicator.js';
 import { buildGrid } from './grid-core.js';
+import { buildDrumGrid } from './drum-core.js';
 import { tryRestoreOnBoot, startAutosave } from './persistence.js';
 import { startIntensityVisual } from './visual-bg.js';
 
@@ -35,7 +36,7 @@ function getVisualExtents(panel) {
   let minY = 0, maxY = panelHeight;
 
   const toyKind = panel.dataset.toy;
-  const hasExternalButtons = ['loopgrid', 'bouncer', 'rippler', 'chordwheel', 'drawgrid'].includes(toyKind);
+  const hasExternalButtons = ['loopgrid', 'loopgrid-drum', 'bouncer', 'rippler', 'chordwheel', 'drawgrid'].includes(toyKind);
 
   if (hasExternalButtons) {
     // These are the large 'Edit'/'Close' buttons positioned outside the panel.
@@ -358,8 +359,10 @@ function bootTopbar(){
   bpmInput?.addEventListener('change', (e)=> setBpm(Number(e.target.value)||DEFAULT_BPM));
 }
 function bootGrids(){
-  const panels = Array.from(document.querySelectorAll('.toy-panel[data-toy="loopgrid"]'));
-  panels.forEach(p => buildGrid(p, 8));
+  const simplePanels = Array.from(document.querySelectorAll('.toy-panel[data-toy="loopgrid"]'));
+  simplePanels.forEach(p => buildGrid(p, 8));
+  const drumPanels = Array.from(document.querySelectorAll('.toy-panel[data-toy="loopgrid-drum"]'));
+  drumPanels.forEach(p => buildDrumGrid(p, 8));
 }
 function bootDrawGrids(){
   const panels = Array.from(document.querySelectorAll('.toy-panel[data-toy="drawgrid"]'));
@@ -374,6 +377,7 @@ const toyInitializers = {
     'bouncer': initializeBouncer,
     'drawgrid': initDrawGrid,
     'loopgrid': buildGrid,
+    'loopgrid-drum': buildDrumGrid,
     'chordwheel': createChordWheel,
     'rippler': (panel) => {
         try {
@@ -389,6 +393,7 @@ const toyInitializers = {
 const toyCatalog = [
     { type: 'drawgrid', name: 'Draw Line', description: 'Sketch out freehand lines that become notes.', size: { width: 420, height: 460 } },
     { type: 'loopgrid', name: 'Simple Rhythm', description: 'Layer drum patterns and melodies with an 8x12 step matrix.', size: { width: 380, height: 420 } },
+    { type: 'loopgrid-drum', name: 'Drum Kit', description: 'Tap a responsive pad while sequencing the 8-step cube grid.', size: { width: 380, height: 420 } },
     { type: 'bouncer', name: 'Bouncer', description: 'Bounce melodic balls inside a square arena.', size: { width: 420, height: 420 } },
     { type: 'rippler', name: 'Rippler', description: 'Evolving pads driven by ripple collisions.', size: { width: 420, height: 420 } },
     { type: 'chordwheel', name: 'Chord Wheel', description: 'Play circle-of-fifths chord progressions instantly.', size: { width: 460, height: 420 } },
@@ -403,7 +408,7 @@ function doesChainHaveActiveNotes(headId) {
     if (!current) return false;
     let sanity = 100;
     do {
-        if (current.dataset.toy === 'loopgrid') {
+        if (current.dataset.toy === 'loopgrid' || current.dataset.toy === 'loopgrid-drum') {
             const state = current.__gridState;
             if (state && state.steps && state.steps.some(s => s)) {
                 return true;
@@ -448,7 +453,7 @@ function advanceChain(headId) {
 
     let shouldPulse = true;
     const toyType = activeToy.dataset.toy;
-    if (toyType === 'loopgrid' || toyType === 'drawgrid' || toyType === 'chordwheel') {
+    if (toyType === 'loopgrid' || toyType === 'loopgrid-drum' || toyType === 'drawgrid' || toyType === 'chordwheel') {
         // For step-driven toys, only pulse the connector if the chain has active notes.
         shouldPulse = doesChainHaveActiveNotes(headId);
     }
@@ -1038,7 +1043,7 @@ async function boot(){
   document.addEventListener('chain:wakeup', (e) => {
     const panel = e.target.closest('.toy-panel');
     const toyType = panel?.dataset.toy;
-    if (!panel || (toyType !== 'loopgrid' && toyType !== 'drawgrid')) return;
+    if (!panel || (toyType !== 'loopgrid' && toyType !== 'loopgrid-drum' && toyType !== 'drawgrid')) return;
 
     const head = findChainHead(panel);
     if (!head) return;
@@ -1052,7 +1057,7 @@ async function boot(){
   document.addEventListener('chain:checkdormant', (e) => {
     const panel = e.target.closest('.toy-panel');
     const toyType = panel?.dataset.toy;
-    if (!panel || (toyType !== 'loopgrid' && toyType !== 'drawgrid')) return;
+    if (!panel || (toyType !== 'loopgrid' && toyType !== 'loopgrid-drum' && toyType !== 'drawgrid')) return;
 
     const head = findChainHead(panel);
     if (!head) return;

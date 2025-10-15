@@ -5,7 +5,7 @@
 
 export function applyStackingOrder() {
   // Find all loopgrid panels, which have external "Edit Mode" buttons.
-  const loopGrids = Array.from(document.querySelectorAll('.toy-panel[data-toy="loopgrid"]'));
+  const loopGrids = Array.from(document.querySelectorAll('.toy-panel[data-toy="loopgrid"], .toy-panel[data-toy="loopgrid-drum"]'));
   const totalGrids = loopGrids.length;
 
   // Assign a descending z-index. The first panel in the DOM gets the highest z-index,

@@ -24,7 +24,7 @@ function chainHasSequencedNotes(head) {
   let sanity = 100;
   while (current && sanity-- > 0) {
     const toyType = current.dataset?.toy;
-    if (toyType === 'loopgrid') {
+    if (toyType === 'loopgrid' || toyType === 'loopgrid-drum') {
       const state = current.__gridState;
       if (state?.steps && state.steps.some(Boolean)) return true;
     } else if (toyType === 'drawgrid') {

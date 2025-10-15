@@ -5,7 +5,7 @@ if (window.__loopgridDrumBoot) {
   // already booted
 } else {
   window.__loopgridDrumBoot = true;
-  const SEL = '.toy-panel[data-toy="loopgrid"]';
+  const SEL = '.toy-panel[data-toy="loopgrid-drum"]';
 
   function ensurePad(panel) {
     const body = panel.querySelector('.toy-body') || panel;

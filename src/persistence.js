@@ -151,6 +151,7 @@ function applyDrawGrid(panel, state) {
 
 const ToySnapshotters = {
   loopgrid: { snap: snapLoopGrid, apply: applyLoopGrid },
+  'loopgrid-drum': { snap: snapLoopGrid, apply: applyLoopGrid },
   bouncer: { snap: snapBouncer, apply: applyBouncer },
   rippler: { snap: snapRippler, apply: applyRippler },
   chordwheel: {
@@ -302,9 +303,9 @@ function scheduleAutosave(){
     __dirty = false;
     try{
       const snap = getSnapshot();
-      const lc = (snap.toys||[]).filter(t=>t.type==='loopgrid').length;
+      const lc = (snap.toys||[]).filter(t=>t.type==='loopgrid' || t.type==='loopgrid-drum').length;
       saveToKey(AUTOSAVE_KEY, snap);
-      // try{ console.log(`[persistence] autosaved (${lc} loopgrid, bpm=${snap.transport?.bpm}, theme=${snap.themeId})`); }catch{}
+      // try{ console.log(`[persistence] autosaved (${lc} loopgrid variants, bpm=${snap.transport?.bpm}, theme=${snap.themeId})`); }catch{}
     }catch{}
   }, __interval);
 }

@@ -48,7 +48,7 @@
     // Skip toys that manage their own square/aspect layout
     // - loopgrid: custom grid layout
     // - rippler: square body managed via CSS (rippler.css)
-    if (kind === 'loopgrid' || kind === 'rippler' || kind === 'bouncer') {
+    if (kind === 'loopgrid' || kind === 'loopgrid-drum' || kind === 'rippler' || kind === 'bouncer') {
       // Clean up any previous inline styles from older runs that might force absolute layout
       const body = panel.querySelector('.toy-body');
       if (body){

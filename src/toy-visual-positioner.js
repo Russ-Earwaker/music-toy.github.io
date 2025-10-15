@@ -55,7 +55,7 @@
     }
     // The loopgrid toy has its own complex grid layout defined in CSS.
     // This generic positioner would break it, so we skip it.
-    if (panel.dataset.toy === 'loopgrid') return;
+    if (panel.dataset.toy === 'loopgrid' || panel.dataset.toy === 'loopgrid-drum') return;
 
     const visual = pickVisual(panel);
     if (!visual) return;

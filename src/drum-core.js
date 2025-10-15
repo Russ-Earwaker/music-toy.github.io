@@ -1,11 +1,10 @@
 // src/drum-core.js — drum grid core + instrument sync (<=300 lines)
 import { triggerInstrument } from './audio-samples.js';
-import { TONE_NAMES } from './audio-tones.js';
 import { setToyInstrument } from './instrument-map.js';
 import { initToyUI } from './toyui.js';
 import { attachDrumVisuals } from './drum-tiles-visual.js';
 import { attachGridSquareAndDrum } from './grid-square-drum.js';
-import { midiToName, buildPalette, stepIndexUp, stepIndexDown } from './note-helpers.js';
+import { midiToName, buildPalette } from './note-helpers.js';
 
 /**
  * A self-contained particle system for the drum pad.
@@ -125,12 +124,12 @@ export function markPlayingColumn(panel, colIndex){
   try{ panel.dispatchEvent(new CustomEvent('loopgrid:playcol', { detail:{ col: colIndex }, bubbles:true })); }catch{}
 }
 
-export function buildGrid(panel, numSteps = 8){
+export function buildDrumGrid(panel, numSteps = 8){
   if (typeof panel === 'string') panel = document.querySelector(panel);
   if (!panel || !(panel instanceof Element) || panel.__gridBuilt) return null;
   panel.__gridBuilt = true;
-  panel.dataset.toy = panel.dataset.toy || 'loopgrid';
-  initToyUI(panel, { toyName: 'Loop Grid' });
+  panel.dataset.toy = panel.dataset.toy || 'loopgrid-drum';
+  initToyUI(panel, { toyName: 'Drum Kit', defaultInstrument: 'Djimbe' });
 
   // Use a full chromatic scale instead of the default pentatonic scale.
   // This makes all semitones (sharps/flats) available.
@@ -140,6 +139,15 @@ export function buildGrid(panel, numSteps = 8){
     notes: Array(numSteps).fill(60),
     notePalette: buildPalette(48, chromaticOffsets, 3), // C3 Chromatic, 3 octaves
     noteIndices: Array(numSteps).fill(12), // Default to C4 (MIDI 60)
+  };
+
+  const emitLoopgridUpdate = (extraDetail = {}) => {
+    const state = panel.__gridState || {};
+    const detail = Object.assign({}, extraDetail);
+    if (Array.isArray(state.steps)) detail.steps = Array.from(state.steps);
+    if (Array.isArray(state.noteIndices)) detail.noteIndices = Array.from(state.noteIndices);
+    if (Array.isArray(state.notePalette)) detail.notePalette = Array.from(state.notePalette);
+    try { panel.dispatchEvent(new CustomEvent('loopgrid:update', { detail })); } catch {}
   };
 
   // If persistence provided a pending state before this toy initialized, apply it now.
@@ -206,7 +214,7 @@ export function buildGrid(panel, numSteps = 8){
   // Now, attach logic to the stable DOM
   attachDrumVisuals(panel);
   attachGridSquareAndDrum(panel);
-  const toyId = panel.dataset.toyid || panel.id || 'loopgrid';
+  const toyId = panel.dataset.toyid || panel.id || 'loopgrid-drum';
 
   try {
     if (panel.dataset.instrument) setToyInstrument(toyId, panel.dataset.instrument);
@@ -246,12 +254,14 @@ export function buildGrid(panel, numSteps = 8){
     for (let i = 0; i < panel.__gridState.steps.length; i++) {
       panel.__gridState.steps[i] = Math.random() < 0.5;
     }
+    emitLoopgridUpdate({ reason: 'random' });
   });
   panel.addEventListener('toy-clear', () => {
     if (!panel.__gridState?.steps) return;
     panel.__gridState.steps.fill(false);
     // Also reset the notes for each step back to the default (C4).
     if (panel.__gridState.noteIndices) panel.__gridState.noteIndices.fill(12);
+    emitLoopgridUpdate({ reason: 'clear' });
   });
   panel.addEventListener('toy-random-notes', () => {
     if (!panel.__gridState?.noteIndices || !panel.__gridState?.notePalette) return;
@@ -273,6 +283,7 @@ export function buildGrid(panel, numSteps = 8){
         noteIndices[i] = newIndex;
       }
     }
+    emitLoopgridUpdate({ reason: 'random-notes' });
   });
 
   // --- Particle System ---

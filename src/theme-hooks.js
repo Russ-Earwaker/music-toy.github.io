@@ -5,7 +5,7 @@ import { pickFromSelect } from "./theme-manager.js";
 const fire = (panel, value)=>{ try{ panel.dispatchEvent(new CustomEvent("toy-instrument", { detail:{ value } })); }catch{} };
 
 export function assignGridInstrument(index, id){
-  const panel = document.querySelector(`#grid${index+1}`) || document.querySelectorAll('[data-toy="loopgrid"]')[index];
+  const panel = document.querySelector(`#grid${index+1}`) || document.querySelectorAll('[data-toy="loopgrid"], [data-toy="loopgrid-drum"]')[index];
   if (!panel) return false; const value = pickFromSelect(panel, id); fire(panel, value); return true;
 }
 export function assignWheelInstrument(id){
