@@ -111,6 +111,57 @@ const GOAL_FLOW = [
       },
     ],
   },
+  {
+    id: 'dummy-goal-1',
+    title: 'Dummy Goal 1',
+    reward: {
+      description: 'This is a dummy reward.',
+      icons: [
+        { type: 'symbol', label: 'Dummy', symbol: 'D' },
+      ],
+    },
+    tasks: [
+      {
+        id: 'dummy-task-1',
+        label: 'Do a dummy task.',
+        requirement: 'dummy-req-1',
+      },
+    ],
+  },
+  {
+    id: 'dummy-goal-2',
+    title: 'Dummy Goal 2',
+    reward: {
+      description: 'Another dummy reward.',
+      icons: [
+        { type: 'symbol', label: 'Dummy 2', symbol: 'D' },
+      ],
+    },
+    tasks: [
+      {
+        id: 'dummy-task-2',
+        label: 'Do another dummy task.',
+        requirement: 'dummy-req-2',
+      },
+    ],
+  },
+  {
+    id: 'dummy-goal-3',
+    title: 'Dummy Goal 3',
+    reward: {
+      description: 'Yet another dummy reward.',
+      icons: [
+        { type: 'symbol', label: 'Dummy 3', symbol: 'D' },
+      ],
+    },
+    tasks: [
+      {
+        id: 'dummy-task-3',
+        label: 'Do yet another dummy task.',
+        requirement: 'dummy-req-3',
+      },
+    ],
+  },
 ];
 
 function cloneGoal(goal) {
