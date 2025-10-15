@@ -1021,7 +1021,7 @@ body.tutorial-active #topbar #theme-switcher-wrap {
 }
 
 .guide-launcher .tutorial-goals-panel {
-  position: static;
+  position: relative;
   transform: none;
   opacity: 1;
   transition: none;

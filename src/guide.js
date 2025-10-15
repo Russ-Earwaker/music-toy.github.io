@@ -3,6 +3,16 @@ const GUIDE_OPEN_CLASS = 'is-open';
 
 function initGuidePanel(api) {
   if (!api) return;
+
+  // Ensure CSS is loaded
+  if (!document.getElementById('tutorial-styles')) {
+    const link = document.createElement('link');
+    link.id = 'tutorial-styles';
+    link.rel = 'stylesheet';
+    link.href = 'src/tutorial.css';
+    document.head.appendChild(link);
+  }
+
   const allGoals = api.getGoals?.() || [];
   if (!allGoals.length) return;
 
@@ -32,13 +42,29 @@ function initGuidePanel(api) {
     panel.querySelectorAll('.goal-task').forEach(taskEl => {
       taskEl.style.cursor = 'pointer';
       taskEl.addEventListener('click', () => {
-        const taskId = taskEl.dataset.taskId;
-        if (taskId) {
-          window.dispatchEvent(new CustomEvent('guide:task-click', {
-            detail: { taskId, taskElement: taskEl },
-            bubbles: true,
-            composed: true
-          }));
+        const isActive = taskEl.classList.contains('is-active-guide-task');
+
+        // If it's already active, we're deactivating it.
+        if (isActive) {
+          taskEl.classList.remove('is-active-guide-task');
+          window.dispatchEvent(new CustomEvent('guide:task-deactivate', { bubbles: true, composed: true }));
+        } else {
+          // Deactivate any other active task
+          const currentActive = panel.querySelector('.is-active-guide-task');
+          if (currentActive) {
+            currentActive.classList.remove('is-active-guide-task');
+            window.dispatchEvent(new CustomEvent('guide:task-deactivate', { bubbles: true, composed: true }));
+          }
+          // Activate the new one
+          taskEl.classList.add('is-active-guide-task');
+          const taskId = taskEl.dataset.taskId;
+          if (taskId) {
+            window.dispatchEvent(new CustomEvent('guide:task-click', {
+              detail: { taskId, taskElement: taskEl },
+              bubbles: true,
+              composed: true
+            }));
+          }
         }
       });
     });

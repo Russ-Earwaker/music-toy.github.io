@@ -136,7 +136,8 @@ body.tutorial-active #topbar .tutorial-play-hidden {
 }
 
 /* Particles just behind the task row, but still within the goals panel */
-#tutorial-goals .goal-particles-behind {
+#tutorial-goals .goal-particles-behind,
+.guide-goals-panel .goal-particles-behind {
   position: absolute;
   inset: 0;
   z-index: 590; /* below task rows, above panel background */
@@ -196,4 +197,17 @@ body.tutorial-active #topbar .tutorial-play-hidden {
 /* Quick flash accent (class toggled for ~320ms) */
 .tutorial-flash {
   filter: brightness(1.35);
+}
+
+.goal-task {
+  border: 3px solid transparent;
+  border-radius: 8px;
+  padding: 8px;
+  margin-bottom: 8px;
+  transition: all 0.2s ease-in-out;
+}
+
+.goal-task.is-active-guide-task {
+  outline: 3px solid var(--accent, #5fb3ff) !important;
+  box-shadow: 0 0 12px 2px var(--accent, #5fb3ff);
 }

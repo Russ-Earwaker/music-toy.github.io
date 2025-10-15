@@ -14,15 +14,16 @@ function setupCanvases(behind, front) {
 
   const resize = () => {
     const dpr = window.devicePixelRatio || 1;
-    if (behindCanvas) {
-      const rect = behindCanvas.getBoundingClientRect();
+    if (behindCanvas && behindCanvas.parentElement) {
+      const rect = behindCanvas.parentElement.getBoundingClientRect();
       behindCanvas.width = rect.width * dpr;
       behindCanvas.height = rect.height * dpr;
       behindCtx?.scale(dpr, dpr);
     }
     if (frontCanvas) {
-      frontCanvas.width = window.innerWidth;
-      frontCanvas.height = window.innerHeight;
+      frontCanvas.width = window.innerWidth * dpr;
+      frontCanvas.height = window.innerHeight * dpr;
+      frontCtx?.scale(dpr, dpr);
     }
   };
 
@@ -43,16 +44,43 @@ function createParticle(x, y, endPos) {
     amplitude: 10 + Math.random() * 22.5, // Increased wander
     frequency: 0.6 + Math.random() * 0.1,
     phase: Math.random() * Math.PI * 2,
-    size: 1.5
+    size: 1.5,
+    isBurst: false
   };
+}
+
+function createBurst(x, y, endPos) {
+  const count = 40; // more packed
+  for (let i = 0; i < count; i++) {
+    const p = createParticle(x, y, endPos);
+    // Slower ball
+    p.speed = 0.008 + Math.random() * 0.002;
+
+    // Grouped
+    p.amplitude = 2 + Math.random() * 5;
+    p.frequency = 0.2 + Math.random() * 0.1;
+
+    // Circular shape for the burst
+    const angle = Math.random() * Math.PI * 2;
+    const radius = Math.random() * 15;
+    p.startX += Math.cos(angle) * radius;
+    p.startY += Math.sin(angle) * radius;
+
+    p.size = 2.5 + Math.random() * 1.0; // Bigger
+    p.isBurst = true; // For special styling
+    particles.push(p);
+  }
 }
 
 // Draw a subtle origin burst on the behind-canvas so particles appear to emerge from under the task row
 function drawOriginParticles(ctx, originEl) {
   if (!ctx || !originEl) return;
+  const canvas = ctx.canvas;
+  const canvasRect = canvas.getBoundingClientRect();
   const r = originEl.getBoundingClientRect();
-  const x = r.left + r.width * 0.1;
-  const y = r.top + r.height * 0.5;
+  // Coordinates relative to the canvas
+  const x = (r.left - canvasRect.left) + r.width * 0.1;
+  const y = (r.top - canvasRect.top) + r.height * 0.5;
   // soft radial burst
   const grad = ctx.createRadialGradient(x, y, 0, x, y, 24);
   grad.addColorStop(0, 'rgba(120, 170, 255, 0.25)');
@@ -201,7 +229,7 @@ animationFrameId = requestAnimationFrame(() => startFlight(ctx, startEl, endEl))
     const startRect = startEl.getBoundingClientRect();
     const endRect = endEl.getBoundingClientRect();
     const sx = startRect.left + startRect.width * 0.9;
-    const sy = startRect.top + startRect.height * 0.5;
+    const sy = startRect.top + startRect.height * 0.5 - 20; // HACK: Adjust for offset
     const ex = endRect.left + endRect.width * 0.5;
     const ey = endRect.top + endRect.height * 0.5;
 
@@ -233,7 +261,11 @@ animationFrameId = requestAnimationFrame(() => startFlight(ctx, startEl, endEl))
         if(frontCtx){
             frontCtx.beginPath();
             frontCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-            frontCtx.fillStyle = Math.random() > 0.98 ? 'rgba(150,200,255,0.9)' : 'rgba(70,120,220,0.8)';
+            if (p.isBurst) {
+              frontCtx.fillStyle = 'rgba(220, 235, 255, 0.98)'; // Brighter
+            } else {
+              frontCtx.fillStyle = 'rgba(100,160,255,0.85)';
+            }
             frontCtx.fill();
         }
     }
@@ -393,6 +425,14 @@ export function startParticleStream(originEl, targetEl) {
   particles = [];
   startFlight._lastTs = performance.now();
   startFlight._accum = 0;
+
+  const startRect = originEl.getBoundingClientRect();
+  const endRect = targetEl.getBoundingClientRect();
+  const sx = startRect.left + startRect.width * 0.9;
+  const sy = startRect.top + startRect.height * 0.5 - 20; // HACK: Adjust for offset
+  const ex = endRect.left + endRect.width * 0.5;
+  const ey = endRect.top + endRect.height * 0.5;
+  createBurst(sx, sy, { x: ex, y: ey });
 
   // Kick the animation
   animationFrameId = requestAnimationFrame(() => startFlight(front.getContext('2d'), originEl, targetEl));

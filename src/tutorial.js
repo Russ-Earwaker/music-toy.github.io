@@ -2008,6 +2008,13 @@ try {
     if (panel && !panel.querySelector('.goal-particles-behind')) {
         const c = document.createElement('canvas');
         c.className = 'goal-particles-behind';
+        // Style the canvas to prevent it from affecting layout
+        c.style.position = 'absolute';
+        c.style.inset = '0';
+        c.style.width = '100%';
+        c.style.height = '100%';
+        c.style.pointerEvents = 'none';
+        c.style.zIndex = '590'; // As per tutorial.css
         panel.appendChild(c);
     }
     if (!document.querySelector('.tutorial-particles-front')) {
@@ -2035,6 +2042,10 @@ try {
         startParticleStream(taskElement, targetElement);
       }
     }
+  });
+
+  window.addEventListener('guide:task-deactivate', () => {
+    stopParticleStream();
   });
 
   try {
