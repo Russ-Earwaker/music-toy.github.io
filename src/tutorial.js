@@ -2040,12 +2040,21 @@ try {
       const targetElement = document.querySelector(selector);
       if (targetElement) {
         startParticleStream(taskElement, targetElement);
+        // Add highlight if it's an "add toy" task
+        if (taskId === 'add-draw-toy' || taskId === 'add-rhythm-toy') {
+          targetElement.classList.add('tutorial-pulse-target', 'tutorial-addtoy-pulse');
+        }
       }
     }
   });
 
   window.addEventListener('guide:task-deactivate', () => {
     stopParticleStream();
+    // Remove highlight from "+ add toy" button
+    const spawner = document.querySelector('.toy-spawner-toggle');
+    if (spawner) {
+      spawner.classList.remove('tutorial-pulse-target', 'tutorial-addtoy-pulse');
+    }
   });
 
   try {

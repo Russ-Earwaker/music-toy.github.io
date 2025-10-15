@@ -53,8 +53,8 @@ function createBurst(x, y, endPos) {
   const count = 40; // more packed
   for (let i = 0; i < count; i++) {
     const p = createParticle(x, y, endPos);
-    // Slower ball
-    p.speed = 0.008 + Math.random() * 0.002;
+    // Slower ball with same speed
+    p.speed = 0.008;
 
     // Grouped
     p.amplitude = 2 + Math.random() * 5;
@@ -418,8 +418,6 @@ export function startParticleStream(originEl, targetEl) {
   if (!behind || !front || !originEl || !targetEl) return;
 
   setupCanvases(behind, front);
-
-  drawOriginParticles(behind.getContext('2d'), originEl);
 
   if (animationFrameId) cancelAnimationFrame(animationFrameId);
   particles = [];
