@@ -574,7 +574,7 @@ select.toy-instrument {
 .toy-panel[data-toy='bouncer'] .toy-body { aspect-ratio: 1 / 1; width: 100%; }
 /* --- Toy Spawner Dock --- */
 .toy-spawner-dock {
-  --toy-spawner-button-size: 60px;
+  --toy-spawner-button-size: 80px;
   position: fixed;
   right: 20px;
   top: calc(64px + 20px);
@@ -582,7 +582,7 @@ select.toy-instrument {
   flex-direction: column;
   gap: 16px;
   align-items: flex-end;
-  z-index: 900;
+  z-index: 960; /* Higher than particle canvas (950) */
   pointer-events: none;
 }
 
@@ -598,9 +598,8 @@ select.toy-instrument {
   padding: 0;
   border-radius: 16px;
   display: grid;
-  place-items: center;
-  font-size: 32px;
-  font-weight: 600;
+        place-items: center;
+  font-size: 42px;  font-weight: 600;
   line-height: 1;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 10px 28px rgba(0, 0, 0, 0.45);
   transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.25s ease, opacity 0.2s ease;
@@ -612,7 +611,7 @@ select.toy-instrument {
 }
 
 .toy-spawner-help {
-  font-size: 32px;
+  font-size: 42px;
   font-weight: 600;
   color: rgba(226, 233, 255, 0.9);
   border: 1px solid rgba(95, 179, 255, 0.32);
@@ -1022,6 +1021,8 @@ body.tutorial-active #topbar #theme-switcher-wrap {
 
 .guide-launcher .tutorial-goals-panel {
   position: relative;
+  left: 0;
+  top: 0;
   transform: none;
   opacity: 1;
   transition: none;

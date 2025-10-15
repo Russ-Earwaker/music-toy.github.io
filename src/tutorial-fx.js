@@ -5,6 +5,8 @@ let behindCtx, frontCtx;
 let animationFrameId = null;
 let particles = [];
 const PARTICLES_PER_SEC = 60;
+const BURST_COLOR_RGB = { r: 92, g: 178, b: 255 };
+const burstColor = (alpha = 1) => `rgba(${BURST_COLOR_RGB.r}, ${BURST_COLOR_RGB.g}, ${BURST_COLOR_RGB.b}, ${alpha})`;
 
 function setupCanvases(behind, front) {
   behindCanvas = behind;
@@ -37,185 +39,67 @@ function createParticle(x, y, endPos) {
     y,
     startX: x,
     startY: y,
-    endX: endPos.x,
-    endY: endPos.y,
+    endX: endPos ? endPos.x : 0,
+    endY: endPos ? endPos.y : 0,
     progress: 0,
-    speed: 0.005 + Math.random() * 0.001, // 75% slower than original
-    amplitude: 10 + Math.random() * 22.5, // Increased wander
+    speed: 0.005 + Math.random() * 0.001,
+    amplitude: 10 + Math.random() * 22.5,
     frequency: 0.6 + Math.random() * 0.1,
     phase: Math.random() * Math.PI * 2,
-    size: 1.5,
-    isBurst: false
+    size: 1.5 + Math.random() * 0.5,
+    life: 1.0,
+    isBurst: false,
+    isTrail: false,
+    isExplosion: false,
+    isSun: false,
+    isSweeper: false,
+    vx: 0,
+    vy: 0,
+    orbitRadius: 0,
+    orbitPhase: 0,
+    orbitSpeed: 0,
   };
 }
 
 function createBurst(x, y, endPos) {
-  const count = 40; // more packed
-  for (let i = 0; i < count; i++) {
+  // Sun
+  const sun = createParticle(x, y, endPos);
+  sun.isSun = true;
+  sun.isBurst = true; // Sun is part of the burst
+  sun.size = 10.0;
+  sun.speed = 0.012;
+  sun.amplitude = 0;
+  particles.push(sun);
+
+  // 2 Orbiters
+  for (let i = 0; i < 2; i++) {
     const p = createParticle(x, y, endPos);
-    // Slower ball with same speed
-    p.speed = 0.008;
+    p.isBurst = true;
+    p.isSun = false;
+    p.speed = 0.012;
+    p.orbitRadius = 36;
+    p.orbitPhase = i * Math.PI; // Start on opposite sides
+    p.orbitSpeed = 0.22 + Math.random() * 0.06;
+    particles.push(p);
+  }
 
-    // Grouped
-    p.amplitude = 2 + Math.random() * 5;
-    p.frequency = 0.2 + Math.random() * 0.1;
-
-    // Circular shape for the burst
-    const angle = Math.random() * Math.PI * 2;
-    const radius = Math.random() * 15;
-    p.startX += Math.cos(angle) * radius;
-    p.startY += Math.sin(angle) * radius;
-
-    p.size = 2.5 + Math.random() * 1.0; // Bigger
-    p.isBurst = true; // For special styling
+  // 2 Sweepers
+  for (let i = 0; i < 2; i++) {
+    const p = createParticle(x, y, endPos);
+    p.isBurst = true;
+    p.isSweeper = true;
+    p.speed = 0.006;
+    p.size = 3.2;
+    p.amplitude = 36;
+    p.phase = i * Math.PI;
+    p.frequency = 1;
     particles.push(p);
   }
 }
 
-// Draw a subtle origin burst on the behind-canvas so particles appear to emerge from under the task row
-function drawOriginParticles(ctx, originEl) {
-  if (!ctx || !originEl) return;
-  const canvas = ctx.canvas;
-  const canvasRect = canvas.getBoundingClientRect();
-  const r = originEl.getBoundingClientRect();
-  // Coordinates relative to the canvas
-  const x = (r.left - canvasRect.left) + r.width * 0.1;
-  const y = (r.top - canvasRect.top) + r.height * 0.5;
-  // soft radial burst
-  const grad = ctx.createRadialGradient(x, y, 0, x, y, 24);
-  grad.addColorStop(0, 'rgba(120, 170, 255, 0.25)');
-  grad.addColorStop(1, 'rgba(120, 170, 255, 0.00)');
-  ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.arc(x, y, 28, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-}
-
 function startFlight(ctx, startEl, endEl) {
     if (!ctx || !startEl || !endEl) {
-        
-/* << GPT:MASK_FRONT_CANVAS_OVER_PANEL START >> */
-try {
-  const gp = document.getElementById('tutorial-goals');
-  if (gp && typeof frontCtx !== 'undefined' && frontCtx && typeof frontCanvas !== 'undefined' && frontCanvas) {
-    const dpr = (window.devicePixelRatio || 1);
-    const r = gp.getBoundingClientRect();
-    frontCtx.save();
-    frontCtx.globalCompositeOperation = 'destination-out';
-    frontCtx.fillRect(
-      Math.floor(r.left * dpr),
-      Math.floor(r.top * dpr),
-      Math.ceil(r.width * dpr),
-      Math.ceil(r.height * dpr)
-    );
-    frontCtx.restore();
-  }
-} catch (e) { /* no-op */ }
-/* << GPT:MASK_FRONT_CANVAS_OVER_PANEL END >> */
-
-/* << GPT:MASK_FRONT_CANVAS_OVER_PANEL START >> */
-try {
-  const gp = document.getElementById('tutorial-goals');
-  if (gp && typeof frontCtx !== 'undefined' && frontCtx && typeof frontCanvas !== 'undefined' && frontCanvas) {
-    const dpr = (window.devicePixelRatio || 1);
-    const r = gp.getBoundingClientRect();
-    frontCtx.save();
-    frontCtx.globalCompositeOperation = 'destination-out';
-    frontCtx.fillRect(
-      Math.floor(r.left * dpr),
-      Math.floor(r.top * dpr),
-      Math.ceil(r.width * dpr),
-      Math.ceil(r.height * dpr)
-    );
-    frontCtx.restore();
-  }
-} catch (e) { /* no-op */ }
-/* << GPT:MASK_FRONT_CANVAS_OVER_PANEL END >> */
-
-/* << GPT:MASK_FRONT_CANVAS_OVER_PANEL START >> */
-try {
-  const gp = document.getElementById('tutorial-goals');
-  if (gp && typeof frontCtx !== 'undefined' && frontCtx && typeof frontCanvas !== 'undefined' && frontCanvas) {
-    const dpr = (window.devicePixelRatio || 1);
-    const r = gp.getBoundingClientRect();
-    frontCtx.save();
-    frontCtx.globalCompositeOperation = 'destination-out';
-    frontCtx.fillRect(
-      Math.floor(r.left * dpr),
-      Math.floor(r.top * dpr),
-      Math.ceil(r.width * dpr),
-      Math.ceil(r.height * dpr)
-    );
-    frontCtx.restore();
-  }
-} catch (e) { /* no-op */ }
-/* << GPT:MASK_FRONT_CANVAS_OVER_PANEL END >> */
-
-/* << GPT:MASK_ACTIVE_TASK_CARD START >> */
-// Erase front-canvas where the rounded task card sits (CSS pixel coords)
-try {
-  if (frontCtx && frontCanvas) {
-    // Find the active task, fall back to first task/row
-    const active =
-      document.querySelector('#tutorial-goals .goal-task.is-active') ||
-      document.querySelector('#tutorial-goals .goal-row.is-active') ||
-      document.querySelector('#tutorial-goals .goal-task') ||
-      document.querySelector('#tutorial-goals .goal-row');
-
-    // Helper: px extractor
-    const px = (v) => {
-      if (!v) return 0;
-      const m = /([\d.]+)/.exec(v);
-      return m ? parseFloat(m[1]) : 0;
-    };
-
-    // Pick the largest descendant with a rounded, non-transparent background
-    const pickRoundedCard = (root) => {
-      if (!root) return null;
-      let best = null;
-      const list = [root, ...root.querySelectorAll('*')];
-      for (const el of list) {
-        const cs = getComputedStyle(el);
-        const br = Math.max(px(cs.borderTopLeftRadius), px(cs.borderRadius));
-        const bg = cs.backgroundColor;
-        if (br <= 2) continue;
-        if (!bg || bg === 'transparent' || bg === 'rgba(0, 0, 0, 0)') continue;
-        const r = el.getBoundingClientRect();
-        const area = Math.max(1, r.width * r.height);
-        if (!best || area > best.area) best = { el, r, br };
-      }
-      return best || { el: root, r: root.getBoundingClientRect(), br: 12 };
-    };
-
-    const card = pickRoundedCard(active);
-    if (card) {
-      const { r, br } = card;
-
-      // Rounded rect path in CSS pixels
-      const roundedRect = (ctx, x, y, w, h, rad) => {
-        const rr = Math.max(0, Math.min(rad, Math.min(w, h) / 2));
-        ctx.beginPath();
-        ctx.moveTo(x + rr, y);
-        ctx.arcTo(x + w, y,     x + w, y + h, rr);
-        ctx.arcTo(x + w, y + h, x,     y + h, rr);
-        ctx.arcTo(x,     y + h, x,     y,     rr);
-        ctx.arcTo(x,     y,     x + w, y,     rr);
-        ctx.closePath();
-      };
-
-      frontCtx.save();
-      frontCtx.globalCompositeOperation = 'destination-out';
-      roundedRect(frontCtx, r.left, r.top, r.width, r.height, br);
-      frontCtx.fill();
-      frontCtx.restore();
-    }
-  }
-} catch (_) { /* noop */ }
-/* << GPT:MASK_ACTIVE_TASK_CARD END >> */
-animationFrameId = requestAnimationFrame(() => startFlight(ctx, startEl, endEl));
+        animationFrameId = requestAnimationFrame(() => startFlight(ctx, startEl, endEl));
         return;
     }
 
@@ -223,13 +107,14 @@ animationFrameId = requestAnimationFrame(() => startFlight(ctx, startEl, endEl))
     if (typeof startFlight._accum !== 'number') startFlight._accum = 0;
 
     const now = performance.now();
+    const shimmerPhase = now * 0.012;
     const dt = Math.max(0, now - startFlight._lastTs) / 1000;
     startFlight._lastTs = now;
 
     const startRect = startEl.getBoundingClientRect();
     const endRect = endEl.getBoundingClientRect();
     const sx = startRect.left + startRect.width * 0.9;
-    const sy = startRect.top + startRect.height * 0.5 - 20; // HACK: Adjust for offset
+    const sy = startRect.top + startRect.height * 0.5;
     const ex = endRect.left + endRect.width * 0.5;
     const ey = endRect.top + endRect.height * 0.5;
 
@@ -244,168 +129,123 @@ animationFrameId = requestAnimationFrame(() => startFlight(ctx, startEl, endEl))
         frontCtx.save();
         frontCtx.globalCompositeOperation = 'lighter';
     }
-    
+
+    const sun = particles.find(p => p.isSun);
+    if (sun) {
+        sun.progress = Math.min(1, sun.progress + sun.speed * (dt * 60));
+        sun.x = sun.startX + (sun.endX - sun.startX) * sun.progress;
+        sun.y = sun.startY + (sun.endY - sun.startY) * sun.progress;
+
+        // Sun's trail
+        if (sun.progress < 1) {
+            const trailP = createParticle(sun.x, sun.y, {});
+            trailP.isTrail = true;
+            trailP.life = 0.45;
+            trailP.size = sun.size * 0.8;
+            trailP.trailBaseSize = sun.size;
+            particles.push(trailP);
+        }
+    }
+
     for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
-        p.progress = Math.min(1, p.progress + p.speed * (dt * 60));
-        const t = p.progress;
 
-        p.x = p.startX + (p.endX - p.startX) * t;
-        p.y = p.startY + (p.endY - p.startY) * t + Math.sin(p.phase + t * Math.PI * 2 * p.frequency) * p.amplitude;
+        if (p.isBurst && !p.isSun && !p.isSweeper) { // Orbiter
+            if (sun) {
+                p.progress = sun.progress;
+                const orbitAngle = p.orbitPhase + sun.progress * 20 * p.orbitSpeed;
+                p.x = sun.x + Math.cos(orbitAngle) * p.orbitRadius;
+                p.y = sun.y + Math.sin(orbitAngle) * p.orbitRadius;
 
-        if (p.progress >= 1) {
-            particles.splice(i, 1);
-            continue;
+                const trailP = createParticle(p.x, p.y, {});
+                trailP.isTrail = true;
+                trailP.life = 0.35;
+                trailP.size = p.size * 0.7;
+                trailP.trailBaseSize = p.size;
+                particles.push(trailP);
+            }
+            if (p.progress >= 1) {
+                particles.splice(i, 1);
+                continue;
+            }
+        } else if (p.isSweeper) {
+            if (sun) {
+                p.progress = sun.progress;
+                const sweepOffset = Math.sin(p.phase + sun.progress * 7 * p.frequency) * p.amplitude;
+                const dx = sun.endX - sun.startX;
+                const dy = sun.endY - sun.startY;
+                const len = Math.sqrt(dx*dx + dy*dy) || 1;
+                const pdx = -dy / len;
+                const pdy = dx / len;
+                p.x = sun.x + pdx * sweepOffset;
+                p.y = sun.y + pdy * sweepOffset;
+
+                // Sweeper trail
+                const trailP = createParticle(p.x, p.y, {});
+                trailP.isTrail = true;
+                trailP.life = 0.45;
+                trailP.size = p.size * 0.85;
+                trailP.trailBaseSize = p.size;
+                particles.push(trailP);
+            }
+            if (p.progress >= 1) {
+                particles.splice(i, 1);
+                continue;
+            }
+        } else if (p.isSun) {
+            if (p.progress >= 1) {
+                particles.splice(i, 1);
+                continue;
+            }
+        } else if (p.isTrail) {
+            p.life -= dt * 1.5;
+            p.size *= 0.98;
+            if (p.life <= 0) {
+                particles.splice(i, 1);
+                continue;
+            }
+        } else { // Regular stream
+            p.progress = Math.min(1, p.progress + p.speed * (dt * 60));
+            const t = p.progress;
+            p.x = p.startX + (p.endX - p.startX) * t;
+            p.y = p.startY + (p.endY - p.startY) * t + Math.sin(p.phase + t * Math.PI * 2 * p.frequency) * p.amplitude;
+
+            if (p.progress >= 1) {
+                particles.splice(i, 1);
+                continue;
+            }
         }
 
         if(frontCtx){
             frontCtx.beginPath();
             frontCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-            if (p.isBurst) {
-              frontCtx.fillStyle = 'rgba(220, 235, 255, 0.98)'; // Brighter
-            } else {
-              frontCtx.fillStyle = 'rgba(100,160,255,0.85)';
+            let fillAlpha = 0.85;
+            let trailHighlightAlpha = null;
+            if (p.isSun || (p.isBurst && !p.isSun && !p.isSweeper)) {
+              const phaseOffset = (p.orbitPhase ?? p.phase ?? 0) * 0.8;
+              const shimmer = Math.sin(shimmerPhase + phaseOffset);
+              fillAlpha = Math.min(1, Math.max(0.45, 0.75 + 0.25 * shimmer));
+            } else if (p.isTrail) {
+              const opacity = Math.max(0, Math.min(1, 0.8 * p.life + 0.2));
+              fillAlpha = opacity;
+              trailHighlightAlpha = Math.min(1, opacity + 0.2);
+            } else if (p.isSweeper) {
+              fillAlpha = 0.78;
             }
+
+            frontCtx.fillStyle = burstColor(fillAlpha);
             frontCtx.fill();
+
+            if (p.isTrail && p.trailBaseSize) {
+              frontCtx.beginPath();
+              frontCtx.arc(p.x, p.y, Math.max(0.6, p.trailBaseSize * 0.12), 0, Math.PI * 2);
+              frontCtx.fillStyle = burstColor(trailHighlightAlpha ?? fillAlpha);
+              frontCtx.fill();
+            }
         }
     }
 
-    
-/* << GPT:ROUNDED_CARD_MASK START >> */
-// Mask the front canvas exactly over the highlighted bevelled card (per-corner, CSS px)
-try {
-  if (typeof frontCtx !== 'undefined' && frontCtx && typeof frontCanvas !== 'undefined' && frontCanvas) {
-    const active =
-      document.querySelector('#tutorial-goals .goal-row.is-active, #tutorial-goals .goal-task.is-active') ||
-      document.querySelector('#tutorial-goals .goal-row, #tutorial-goals .goal-task');
-    if (active) {
-      const r = active.getBoundingClientRect();
-      const cs = getComputedStyle(active);
-      const px = v => (v ? parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0 : 0);
-      const tl = px(cs.borderTopLeftRadius);
-      const tr = px(cs.borderTopRightRadius);
-      const br = px(cs.borderBottomRightRadius);
-      const bl = px(cs.borderBottomLeftRadius);
-
-      // Slight inset so we don't erase the border stroke itself
-      const inset = 1;
-      const x = r.left + inset;
-      const y = r.top + inset;
-      const w = Math.max(0, r.width  - inset * 2);
-      const h = Math.max(0, r.height - inset * 2);
-
-      const roundedPath = (ctx, x, y, w, h, tl, tr, br, bl) => {
-        ctx.beginPath();
-        ctx.moveTo(x + tl, y);
-        ctx.lineTo(x + w - tr, y);
-        ctx.quadraticCurveTo(x + w, y, x + w, y + tr);
-        ctx.lineTo(x + w, y + h - br);
-        ctx.quadraticCurveTo(x + w, y + h, x + w - br, y + h);
-        ctx.lineTo(x + bl, y + h);
-        ctx.quadraticCurveTo(x, y + h, x, y + h - bl);
-        ctx.lineTo(x, y + tl);
-        ctx.quadraticCurveTo(x, y, x + tl, y);
-        ctx.closePath();
-      };
-
-      frontCtx.save();
-      frontCtx.globalCompositeOperation = 'destination-out';
-      // Tiny feather to avoid hard seam
-      frontCtx.shadowBlur = 1.5;
-      frontCtx.shadowColor = 'rgba(0,0,0,0.25)';
-      roundedPath(frontCtx, x, y, w, h, tl, tr, br, bl);
-      frontCtx.fill();
-      frontCtx.restore();
-    }
-  }
-} catch (e) { /* no-op */ }
-/* << GPT:ROUNDED_CARD_MASK END >> */
-
-/* << GPT:ROUNDED_CARD_MASK_V3 START >> */
-// Erase front-canvas exactly under the highlighted bevelled card (per-corner radii).
-try {
-  if (typeof frontCtx !== 'undefined' && frontCtx && typeof frontCanvas !== 'undefined' && frontCanvas) {
-    const active =
-      document.querySelector('#tutorial-goals .goal-row.is-active, #tutorial-goals .goal-task.is-active') ||
-      document.querySelector('#tutorial-goals .goal-row, #tutorial-goals .goal-task');
-    if (active) {
-      // If the highlight/border is on a child, pick the largest rounded, non-transparent descendant
-      const px = v => (v ? parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0 : 0);
-      const list = [active, ...active.querySelectorAll('*')];
-      let best = null;
-      for (const el of list) {
-        const cs = getComputedStyle(el);
-        const tl = Math.max(px(cs.borderTopLeftRadius),  px(cs.borderRadius));
-        const tr = Math.max(px(cs.borderTopRightRadius), px(cs.borderRadius));
-        const br = Math.max(px(cs.borderBottomRightRadius),px(cs.borderRadius));
-        const bl = Math.max(px(cs.borderBottomLeftRadius), px(cs.borderRadius));
-        const hasRadius = (tl || tr || br || bl) > 2;
-        const bg = cs.backgroundColor;
-        const hasBg = bg && bg !== 'transparent' && bg !== 'rgba(0, 0, 0, 0)';
-        if (!hasRadius || !hasBg) continue;
-        const r = el.getBoundingClientRect();
-        const area = Math.max(1, r.width * r.height);
-        if (!best || area > best.area) best = { r, tl, tr, br, bl, area };
-      }
-      const target = best || { r: active.getBoundingClientRect(), tl: 12, tr: 12, br: 12, bl: 12 };
-      const { r, tl, tr, br, bl } = target;
-
-      // Slight inset so we don't erase the border stroke itself
-      const inset = 2;
-
-      // Determine the coordinate units the context expects:
-      // If the context is scaled (common dpr scaling), draw in CSS px (scale≈dpr).
-      // Else convert CSS px -> device px using dpr.
-      let unit = 1;
-      try {
-        const m = frontCtx.getTransform ? frontCtx.getTransform() : null;
-        const scaleX = m ? m.a : 1;
-        if (Math.abs(scaleX - 1) < 0.05) {
-          // unscaled context -> use device px
-          const dpr = (frontCanvas.clientWidth > 0) ? (frontCanvas.width / frontCanvas.clientWidth) : (window.devicePixelRatio || 1);
-          unit = dpr;
-        } else {
-          // scaled context -> CSS px
-          unit = 1;
-        }
-      } catch (_) { unit = 1; }
-
-      const x = (r.left + inset) * unit;
-      const y = (r.top  + inset) * unit;
-      const w = Math.max(0, (r.width  - inset * 2) * unit);
-      const h = Math.max(0, (r.height - inset * 2) * unit);
-
-      const roundedPath = (ctx, x, y, w, h, tl, tr, br, bl) => {
-        const _tl = Math.min(tl * unit, Math.min(w, h) / 2);
-        const _tr = Math.min(tr * unit, Math.min(w, h) / 2);
-        const _br = Math.min(br * unit, Math.min(w, h) / 2);
-        const _bl = Math.min(bl * unit, Math.min(w, h) / 2);
-        ctx.beginPath();
-        ctx.moveTo(x + _tl, y);
-        ctx.lineTo(x + w - _tr, y);
-        ctx.quadraticCurveTo(x + w, y, x + w, y + _tr);
-        ctx.lineTo(x + w, y + h - _br);
-        ctx.quadraticCurveTo(x + w, y + h, x + w - _br, y + h);
-        ctx.lineTo(x + _bl, y + h);
-        ctx.quadraticCurveTo(x, y + h, x, y + h - _bl);
-        ctx.lineTo(x, y + _tl);
-        ctx.quadraticCurveTo(x, y, x + _tl, y);
-        ctx.closePath();
-      };
-
-      frontCtx.save();
-      frontCtx.globalCompositeOperation = 'destination-out';
-      // Tiny feather to hide any seam
-      frontCtx.shadowBlur = 1.5 * unit;
-      frontCtx.shadowColor = 'rgba(0,0,0,0.25)';
-      roundedPath(frontCtx, x, y, w, h, tl, tr, br, bl);
-      frontCtx.fill();
-      frontCtx.restore();
-    }
-  }
-} catch (e) { /* no-op */ }
-/* << GPT:ROUNDED_CARD_MASK_V3 END >> */
-if(frontCtx) frontCtx.restore();
+    if(frontCtx) frontCtx.restore();
 
     animationFrameId = requestAnimationFrame(() => startFlight(ctx, startEl, endEl));
 }
@@ -427,7 +267,7 @@ export function startParticleStream(originEl, targetEl) {
   const startRect = originEl.getBoundingClientRect();
   const endRect = targetEl.getBoundingClientRect();
   const sx = startRect.left + startRect.width * 0.9;
-  const sy = startRect.top + startRect.height * 0.5 - 20; // HACK: Adjust for offset
+  const sy = startRect.top + startRect.height * 0.5;
   const ex = endRect.left + endRect.width * 0.5;
   const ey = endRect.top + endRect.height * 0.5;
   createBurst(sx, sy, { x: ex, y: ey });
@@ -451,3 +291,16 @@ export function stopParticleStream() {
     behindCtx.clearRect(0, 0, behindCanvas.width, behindCanvas.height);
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
