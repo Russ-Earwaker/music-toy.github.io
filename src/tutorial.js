@@ -1,7 +1,3 @@
-import { spawnTutorialToy } from './tutorial-spawner.js';
-import { initToyUI } from './toyui.js';
-import { createDrawGrid } from './drawgrid.js';
-import { connectDrawGridToPlayer } from './drawgrid-player.js';
 import { getSnapshot, applySnapshot } from './persistence.js';
 import { setHelpActive, isHelpActive } from './help-overlay.js';
 import { isRunning, stop as stopTransport } from './audio-core.js';
@@ -31,6 +27,11 @@ const GOAL_FLOW = [
       ],
     },
     tasks: [
+      {
+        id: 'add-draw-toy',
+        label: 'Open the Add Toy menu and drag in a new Draw Line toy',
+        requirement: 'add-toy-drawgrid',
+      },
       {
         id: 'draw-line',
         label: 'Draw your first line.',
@@ -112,6 +113,15 @@ const GOAL_FLOW = [
   },
 ];
 
+function cloneGoal(goal) {
+  if (!goal) return null;
+  try {
+    return JSON.parse(JSON.stringify(goal));
+  } catch {
+    return null;
+  }
+}
+
 
 
 (function() {
@@ -121,7 +131,6 @@ const GOAL_FLOW = [
 
   let tutorialActive = false;
   let tutorialToy = null;
-  let tutorialFromFactory = false;
   let goalPanel = null;
   let previousSnapshot = null;
   let previousFocus = null;
@@ -131,6 +140,7 @@ const GOAL_FLOW = [
   let tutorialListeners = [];
   let hasDetectedLine = false;
   let spawnerControls = {};
+  const tempSpawnerUnlocks = new Set();
   let tutorialState = null;
   let claimButton = null;
   const debugTutorial = (...args) => {
@@ -439,6 +449,14 @@ const GOAL_FLOW = [
       window.__boardX = targetX;
       window.__boardY = targetY;
     });
+  }
+
+  function resetBoardViewport() {
+    try {
+      localStorage.setItem('boardViewport', JSON.stringify({ scale: 1, x: 0, y: 0 }));
+      if (typeof window.setBoardScale === 'function') window.setBoardScale(1);
+      if (typeof window.panTo === 'function') window.panTo(0, 0);
+    } catch {}
   }
 
   function ensurePanelsVisible(panels, attempts) {
@@ -755,6 +773,37 @@ const GOAL_FLOW = [
       }
     });
     spawnerControls = {};
+    tempSpawnerUnlocks.clear();
+  }
+
+  function relockTemporarySpawnerControls() {
+    tempSpawnerUnlocks.forEach(el => {
+      if (!el || !el.classList) return;
+      if (el.dataset.tutorialTempUnlock !== '1') return;
+      el.classList.add('tutorial-locked-control');
+      if (el.dataset.tutorialOrigDisplay !== undefined) {
+        el.style.display = el.dataset.tutorialOrigDisplay;
+      } else {
+        el.style.removeProperty('display');
+      }
+      delete el.dataset.tutorialTempUnlock;
+    });
+    tempSpawnerUnlocks.clear();
+  }
+
+  function temporaryUnlockSpawnerControl(key) {
+    const el = spawnerControls[key];
+    if (!el || !el.classList) return false;
+    if (!el.classList.contains('tutorial-locked-control')) return false;
+    el.classList.remove('tutorial-locked-control');
+    if (el.dataset.tutorialOrigDisplay !== undefined) {
+      el.style.display = el.dataset.tutorialOrigDisplay;
+    } else {
+      el.style.removeProperty('display');
+    }
+    el.dataset.tutorialTempUnlock = '1';
+    tempSpawnerUnlocks.add(el);
+    return true;
   }
 
   function unlockReward(goalId) {
@@ -773,6 +822,10 @@ const GOAL_FLOW = [
       delete el.dataset.tutorialOrigDisplay;
     } else {
       el.style.removeProperty('display');
+    }
+    if (tempSpawnerUnlocks.has(el)) {
+      tempSpawnerUnlocks.delete(el);
+      delete el.dataset.tutorialTempUnlock;
     }
     return wasLocked ? el : null;
   }
@@ -868,6 +921,108 @@ const GOAL_FLOW = [
     return container;
   }
 
+  function populateGoalPanel(panelEl, goal, options = {}) {
+    if (!panelEl || !goal) return;
+    const tasks = Array.isArray(goal.tasks) ? goal.tasks : [];
+    const rawTaskIndex = Number.isFinite(options.taskIndex) ? options.taskIndex : 0;
+    const taskIndex = Math.max(0, Math.min(tasks.length, rawTaskIndex));
+    const unlockedInput = options.unlockedRewards;
+    const unlockedRewards = unlockedInput instanceof Set
+      ? unlockedInput
+      : new Set(Array.isArray(unlockedInput) ? unlockedInput : []);
+
+    const titleEl = panelEl.querySelector('.tutorial-goals-title');
+    if (titleEl) titleEl.textContent = goal.title || '';
+
+    const listEl = panelEl.querySelector('.tutorial-goals-tasklist');
+    if (listEl) {
+      listEl.innerHTML = '';
+      tasks.forEach((task, index) => {
+        const li = document.createElement('li');
+        li.className = 'goal-task';
+        li.dataset.taskId = task.id || `task-${index}`;
+        if (index < taskIndex) li.classList.add('is-complete');
+        else if (index === taskIndex) li.classList.add('is-active');
+        else li.classList.add('is-hidden');
+        li.innerHTML = `<span class="goal-task-index">${index + 1}</span><span class="goal-task-label">${task.label || ''}</span>`;
+        listEl.appendChild(li);
+      });
+    }
+
+    const completedTasks = Math.min(taskIndex, tasks.length);
+    const progressFill = panelEl.querySelector('.goal-progress-fill');
+    if (progressFill) {
+      const pct = tasks.length > 0 ? (completedTasks / tasks.length) * 100 : 0;
+      progressFill.style.width = `${pct}%`;
+    }
+    const progressSummary = panelEl.querySelector('.goal-progress-summary');
+    if (progressSummary) {
+      progressSummary.innerHTML = `<strong>${completedTasks} / ${tasks.length}</strong> tasks complete`;
+    }
+
+    const reward = goal.reward || {};
+    const rewardDescription = panelEl.querySelector('.goal-reward-description');
+    if (rewardDescription) rewardDescription.textContent = reward.description || '';
+
+    const rewardIcons = panelEl.querySelector('.goal-reward-icons');
+    if (rewardIcons) {
+      rewardIcons.innerHTML = '';
+      if (reward && Array.isArray(reward.icons)) {
+        reward.icons.forEach(icon => {
+          const wrapper = document.createElement('div');
+          wrapper.className = 'goal-reward-icon';
+          if (goal.id && unlockedRewards.has(goal.id)) wrapper.classList.add('is-unlocked');
+
+          const isAddToy = (goal.id === 'clear-random') &&
+            ((icon.label && /add\s*toy/i.test(icon.label)) || icon.symbol === '+');
+
+          if (isAddToy) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'toy-spawner-toggle toy-btn is-preview';
+            btn.setAttribute('aria-label', icon.label || 'Add Toy');
+            btn.innerHTML = '<span aria-hidden="true">+</span>';
+            btn.style.pointerEvents = 'none';
+            wrapper.appendChild(btn);
+            rewardIcons.appendChild(wrapper);
+            return;
+          }
+
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'c-btn';
+          btn.style.setProperty('--c-btn-size', '56px');
+          if (icon.accent) btn.style.setProperty('--accent', icon.accent);
+          btn.style.pointerEvents = 'none';
+          btn.innerHTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
+          const core = btn.querySelector('.c-btn-core');
+          core.setAttribute('role', 'img');
+          if (icon.type === 'asset') {
+            core.style.setProperty('--c-btn-icon-url', `url('${icon.icon}')`);
+            core.setAttribute('aria-label', icon.label || '');
+          } else {
+            core.textContent = icon.symbol || '+';
+            core.setAttribute('aria-label', icon.label || icon.symbol || '+');
+          }
+
+          wrapper.appendChild(btn);
+          rewardIcons.appendChild(wrapper);
+        });
+      }
+    }
+
+    if (options.showClaimButton === false) {
+      const btn = panelEl.querySelector('.tutorial-claim-btn');
+      if (btn) {
+        btn.style.display = 'none';
+        btn.classList.remove('is-visible');
+        btn.disabled = true;
+      }
+    }
+
+    panelEl.dataset.goalId = goal.id || '';
+  }
+
   function ensureGoalPanel() {
     if (!goalPanel) goalPanel = buildGoalPanel();
     if (!goalPanel.isConnected) document.body.appendChild(goalPanel);
@@ -919,73 +1074,10 @@ const GOAL_FLOW = [
       return;
     }
 
-    const { taskIndex } = tutorialState;
-    const { title, tasks, reward } = goal;
-    goalPanel.querySelector('.tutorial-goals-title').textContent = title;
-    const listEl = goalPanel.querySelector('.tutorial-goals-tasklist');
-    listEl.innerHTML = '';
-    tasks.forEach((task, index) => {
-      const li = document.createElement('li');
-      li.className = 'goal-task';
-      li.dataset.taskId = task.id;
-      if (index < taskIndex) li.classList.add('is-complete');
-      else if (index === taskIndex) li.classList.add('is-active');
-      else li.classList.add('is-hidden');
-      li.innerHTML = `<span class="goal-task-index">${index + 1}</span><span class="goal-task-label">${task.label}</span>`;
-      listEl.appendChild(li);
+    populateGoalPanel(goalPanel, goal, {
+      taskIndex: tutorialState.taskIndex,
+      unlockedRewards: tutorialState.unlockedRewards,
     });
-
-    const completedTasks = Math.min(taskIndex, tasks.length);
-    goalPanel.querySelector('.goal-progress-fill').style.width = `${(completedTasks / tasks.length) * 100}%`;
-    goalPanel.querySelector('.goal-progress-summary').innerHTML = `<strong>${completedTasks} / ${tasks.length}</strong> tasks complete`;
-    goalPanel.querySelector('.goal-reward-description').textContent = reward.description;
-
-    const rewardIcons = goalPanel.querySelector('.goal-reward-icons');
-    rewardIcons.innerHTML = '';
-    if (reward && Array.isArray(reward.icons)) {
-      reward.icons.forEach((icon) => {
-        const wrapper = document.createElement('div');
-        wrapper.className = 'goal-reward-icon';
-        if (tutorialState?.unlockedRewards?.has(goal.id)) wrapper.classList.add('is-unlocked');
-
-        // SPECIAL CASE: show Add Toy as the same bevelled square as the real spawner button
-        const isAddToy = (goal.id === 'clear-random') &&
-                         ((icon.label && /add\s*toy/i.test(icon.label)) || icon.symbol === '+');
-
-        if (isAddToy) {
-          const btn = document.createElement('button');
-          btn.type = 'button';
-          btn.className = 'toy-spawner-toggle toy-btn is-preview';
-          btn.setAttribute('aria-label', icon.label || 'Add Toy');
-          btn.innerHTML = '<span aria-hidden="true">+</span>';
-          btn.style.pointerEvents = 'none'; // purely decorative in the reward panel
-          wrapper.appendChild(btn);
-          rewardIcons.appendChild(wrapper);
-          return;
-        }
-
-        // Default path: circular layered icon button
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'c-btn';
-        btn.style.setProperty('--c-btn-size', '56px');
-        if (icon.accent) btn.style.setProperty('--accent', icon.accent);
-        btn.style.pointerEvents = 'none';
-        btn.innerHTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
-        const core = btn.querySelector('.c-btn-core');
-        core.setAttribute('role', 'img');
-        if (icon.type === 'asset') {
-          core.style.setProperty('--c-btn-icon-url', `url('${icon.icon}')`);
-          core.setAttribute('aria-label', icon.label || '');
-        } else {
-          core.textContent = icon.symbol || '+';
-          core.setAttribute('aria-label', icon.label || icon.symbol || '+');
-        }
-
-        wrapper.appendChild(btn);
-        rewardIcons.appendChild(wrapper);
-      });
-    }
     updateClaimButtonVisibility();
   }
 
@@ -1057,10 +1149,95 @@ const GOAL_FLOW = [
     stopParticleStream();
     document.querySelectorAll('.tutorial-pulse-target').forEach(el => el.classList.remove('tutorial-pulse-target'));
     document.querySelectorAll('.tutorial-active-pulse').forEach(el => el.classList.remove('tutorial-active-pulse'));
+    relockTemporarySpawnerControls();
 
     if (!task) return;
 
-    if (task.id === 'add-rhythm-toy') {
+    let handledSpecial = false;
+
+    if (task.id === 'add-draw-toy') {
+      ensureGoalPanel();
+      temporaryUnlockSpawnerControl('toggle');
+
+      whenVisible('.toy-spawner-toggle', (targetEl) => {
+        const startParticles = () => {
+          const taskEl = goalPanel?.querySelector('.goal-task.is-active') 
+                      || goalPanel?.querySelector('.goal-row.is-active');
+          if (taskEl && targetEl?.isConnected) {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                startParticleStream(taskEl, targetEl);
+              });
+            });
+
+            targetEl.classList.add('tutorial-pulse-target', 'tutorial-addtoy-pulse');
+            targetEl.classList.add('tutorial-flash');
+            setTimeout(() => targetEl.classList.remove('tutorial-flash'), 320);
+          }
+        };
+
+        startParticles();
+        window.addEventListener('resize', startParticles, { passive: true });
+        tutorialListeners.push({
+          target: window,
+          type: 'resize',
+          handler: startParticles,
+          options: { passive: true }
+        });
+      });
+
+      document.getElementById('tutorial-add-draw-style')?.remove();
+      const style = document.createElement('style');
+      style.id = 'tutorial-add-draw-style';
+      style.textContent = `
+    body.tutorial-active .toy-spawner-item:not([data-tutorial-keep="draw"]) {
+      pointer-events: none !important;
+      opacity: 0.35 !important;
+      filter: grayscale(1) !important;
+      cursor: not-allowed !important;
+    }
+    body.tutorial-active .toy-spawner-item[data-tutorial-keep="draw"] {
+      pointer-events: auto !important;
+      opacity: 1 !important;
+      filter: none !important;
+      cursor: pointer !important;
+    }
+  `;
+      document.head.appendChild(style);
+
+      const applyKeepFlags = () => {
+        document.querySelectorAll('.toy-spawner-item').forEach(item => {
+          if (!(item instanceof HTMLElement)) return;
+          if (item.dataset.toyType === 'drawgrid') {
+            item.dataset.tutorialKeep = 'draw';
+            const label = item.querySelector('.toy-spawner-name');
+            if (label) label.textContent = 'Draw Line';
+          } else if (item.dataset.tutorialKeep === 'draw') {
+            delete item.dataset.tutorialKeep;
+          }
+        });
+      };
+      applyKeepFlags();
+      let debounceTimeout;
+      const debouncedApplyKeepFlags = () => {
+        clearTimeout(debounceTimeout);
+        debounceTimeout = setTimeout(applyKeepFlags, 50);
+      };
+      const renameObserver = new MutationObserver(debouncedApplyKeepFlags);
+      const listHost = document.querySelector('.toy-spawner-list');
+      if (listHost) renameObserver.observe(listHost, { childList: true, subtree: true });
+      else renameObserver.observe(document.body, { childList: true, subtree: true });
+
+      tutorialListeners.push({
+        disconnect: () => {
+          try { style.remove(); } catch {}
+          try { renameObserver.disconnect(); } catch {}
+        }
+      });
+      handledSpecial = true;
+
+    }
+    else if (task.id === 'add-rhythm-toy') {
       ensureGoalPanel();
 
       // When the + button is visible, start the line from the active task → + button
@@ -1132,7 +1309,9 @@ const GOAL_FLOW = [
           }
         });
       });
-      renameObserver.observe(document.body, { childList: true, subtree: true });
+      const listHost = document.querySelector('.toy-spawner-list');
+      if (listHost) renameObserver.observe(listHost, { childList: true, subtree: true });
+      else renameObserver.observe(document.body, { childList: true, subtree: true });
 
       // Clean-up when leaving the task
       tutorialListeners.push({
@@ -1141,6 +1320,7 @@ const GOAL_FLOW = [
           try { renameObserver.disconnect(); } catch {}
         }
       });
+      handledSpecial = true;
     } else if (task.id === 'press-help') {
       ensureGoalPanel();
 
@@ -1221,107 +1401,109 @@ if (task.id === 'draw-line' && tutorialToy) {
         }, 2000 /*duration*/ + 1000 /*pause*/);  });
 }
 
-    const targetKey = TASK_TARGETS[task.id];
-    const targetEl = targetKey ? (getControlMap(tutorialToy)[targetKey] || document.querySelector(CONTROL_SELECTORS[targetKey])) : null;
-    if (task.id === 'press-play' && targetEl) {
-      targetEl.classList.remove('tutorial-hide-play-button');
-      if (targetEl.dataset.tutorialOrigDisplay !== undefined) {
-        targetEl.style.display = targetEl.dataset.tutorialOrigDisplay;
-      } else {
-        targetEl.style.removeProperty('display');
+    if (!handledSpecial) {
+      const targetKey = TASK_TARGETS[task.id];
+      const targetEl = targetKey ? (getControlMap(tutorialToy)[targetKey] || document.querySelector(CONTROL_SELECTORS[targetKey])) : null;
+      if (task.id === 'press-play' && targetEl) {
+        targetEl.classList.remove('tutorial-hide-play-button');
+        if (targetEl.dataset.tutorialOrigDisplay !== undefined) {
+          targetEl.style.display = targetEl.dataset.tutorialOrigDisplay;
+        } else {
+          targetEl.style.removeProperty('display');
+        }
+        if (targetEl.dataset.tutorialOrigVisibility !== undefined) {
+          const vis = targetEl.dataset.tutorialOrigVisibility;
+          if (vis) targetEl.style.visibility = vis;
+          else targetEl.style.removeProperty('visibility');
+        } else {
+          targetEl.style.removeProperty('visibility');
+        }
+        if (targetEl.dataset.tutorialOrigOpacity !== undefined) {
+          const op = targetEl.dataset.tutorialOrigOpacity;
+          if (op) targetEl.style.opacity = op;
+          else targetEl.style.removeProperty('opacity');
+        } else {
+          targetEl.style.removeProperty('opacity');
+        }
+        targetEl.disabled = false;
+        targetEl.removeAttribute('aria-hidden');
+        window.tutorialSpacebarDisabled = false;
       }
-      if (targetEl.dataset.tutorialOrigVisibility !== undefined) {
-        const vis = targetEl.dataset.tutorialOrigVisibility;
-        if (vis) targetEl.style.visibility = vis;
-        else targetEl.style.removeProperty('visibility');
+      const isPlayTask = task.id === 'press-play';
+      const targetVisible =
+        targetEl &&
+        !targetEl.classList.contains('tutorial-control-locked') &&
+        !targetEl.classList.contains('tutorial-hide-play-button') &&
+        (isPlayTask || !targetEl.classList.contains('tutorial-play-hidden')) &&
+        (targetEl.offsetParent !== null || getComputedStyle(targetEl).display !== 'none');
+  
+      if (targetVisible) {
+        const taskEl = goalPanel?.querySelector('.goal-task.is-active');
+        if (taskEl) startParticleStream(taskEl, targetEl);
+  
+        if (isPlayTask) {
+          const playButtonContainer = targetEl;
+  
+          // guard (before rAF)
+          playButtonContainer.classList.add('tutorial-play-hidden');
+          playButtonContainer.style.transformOrigin = '50% 50%';
+          playButtonContainer.style.willChange = 'transform, opacity';
+  
+          // reveal + force layout before anim
+          
+  
+  requestAnimationFrame(() => {
+            if (!playButtonContainer.isConnected) return;
+  
+            // Reveal + ensure container guards are applied, then force layout
+            playButtonContainer.classList.remove('tutorial-play-hidden');
+            playButtonContainer.style.removeProperty('visibility');
+            playButtonContainer.style.opacity = '1';
+            playButtonContainer.removeAttribute('aria-hidden');
+            void playButtonContainer.offsetWidth;
+  
+            const playButtonVisual = playButtonContainer.querySelector('.c-btn-core');
+            // Flash accent on the core (optional, keep your visual feedback)
+            if (playButtonVisual) {
+              playButtonVisual.classList.add('tutorial-flash');
+              setTimeout(() => playButtonVisual.classList.remove('tutorial-flash'), 320);
+            }
+  
+            const finish = () => {
+              // enable ongoing pulses and clear guards
+              playButtonContainer.classList.add('tutorial-active-pulse');
+              if (playButtonVisual) playButtonVisual.classList.add('tutorial-pulse-target');
+  
+              playButtonContainer.style.removeProperty('transform');
+              playButtonContainer.style.removeProperty('will-change');
+              playButtonContainer.style.removeProperty('opacity');
+            };
+  
+            // Animate the WRAPPER so the entire button (core + ring) scales together
+            if (!playButtonContainer.animate) {
+              finish();
+            } else {
+              const anim = playButtonContainer.animate(
+                [
+                  { transform: 'scale(0)',    opacity: 1, offset: 0.00 },
+                  { transform: 'scale(2.0)',  opacity: 1, offset: 0.60 },
+                  { transform: 'scale(0.92)', opacity: 1, offset: 0.85 },
+                  { transform: 'scale(1.0)',  opacity: 1, offset: 1.00 }
+                ],
+                { duration: 1200, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'both', composite: 'replace' }
+              );
+              anim.onfinish = finish;
+              anim.oncancel = finish;
+            }
+          });
+        } else {
+          targetEl.classList.add('tutorial-pulse-target', 'tutorial-active-pulse');
+        }
       } else {
-        targetEl.style.removeProperty('visibility');
+        stopParticleStream();
       }
-      if (targetEl.dataset.tutorialOrigOpacity !== undefined) {
-        const op = targetEl.dataset.tutorialOrigOpacity;
-        if (op) targetEl.style.opacity = op;
-        else targetEl.style.removeProperty('opacity');
-      } else {
-        targetEl.style.removeProperty('opacity');
-      }
-      targetEl.disabled = false;
-      targetEl.removeAttribute('aria-hidden');
-      window.tutorialSpacebarDisabled = false;
+  
     }
-    const isPlayTask = task.id === 'press-play';
-    const targetVisible =
-      targetEl &&
-      !targetEl.classList.contains('tutorial-control-locked') &&
-      !targetEl.classList.contains('tutorial-hide-play-button') &&
-      (isPlayTask || !targetEl.classList.contains('tutorial-play-hidden')) &&
-      (targetEl.offsetParent !== null || getComputedStyle(targetEl).display !== 'none');
-
-    if (targetVisible) {
-      const taskEl = goalPanel?.querySelector('.goal-task.is-active');
-      if (taskEl) startParticleStream(taskEl, targetEl);
-
-      if (isPlayTask) {
-        const playButtonContainer = targetEl;
-
-        // guard (before rAF)
-        playButtonContainer.classList.add('tutorial-play-hidden');
-        playButtonContainer.style.transformOrigin = '50% 50%';
-        playButtonContainer.style.willChange = 'transform, opacity';
-
-        // reveal + force layout before anim
-        
-
-requestAnimationFrame(() => {
-          if (!playButtonContainer.isConnected) return;
-
-          // Reveal + ensure container guards are applied, then force layout
-          playButtonContainer.classList.remove('tutorial-play-hidden');
-          playButtonContainer.style.removeProperty('visibility');
-          playButtonContainer.style.opacity = '1';
-          playButtonContainer.removeAttribute('aria-hidden');
-          void playButtonContainer.offsetWidth;
-
-          const playButtonVisual = playButtonContainer.querySelector('.c-btn-core');
-          // Flash accent on the core (optional, keep your visual feedback)
-          if (playButtonVisual) {
-            playButtonVisual.classList.add('tutorial-flash');
-            setTimeout(() => playButtonVisual.classList.remove('tutorial-flash'), 320);
-          }
-
-          const finish = () => {
-            // enable ongoing pulses and clear guards
-            playButtonContainer.classList.add('tutorial-active-pulse');
-            if (playButtonVisual) playButtonVisual.classList.add('tutorial-pulse-target');
-
-            playButtonContainer.style.removeProperty('transform');
-            playButtonContainer.style.removeProperty('will-change');
-            playButtonContainer.style.removeProperty('opacity');
-          };
-
-          // Animate the WRAPPER so the entire button (core + ring) scales together
-          if (!playButtonContainer.animate) {
-            finish();
-          } else {
-            const anim = playButtonContainer.animate(
-              [
-                { transform: 'scale(0)',    opacity: 1, offset: 0.00 },
-                { transform: 'scale(2.0)',  opacity: 1, offset: 0.60 },
-                { transform: 'scale(0.92)', opacity: 1, offset: 0.85 },
-                { transform: 'scale(1.0)',  opacity: 1, offset: 1.00 }
-              ],
-              { duration: 1200, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'both', composite: 'replace' }
-            );
-            anim.onfinish = finish;
-            anim.oncancel = finish;
-          }
-        });
-      } else {
-        targetEl.classList.add('tutorial-pulse-target', 'tutorial-active-pulse');
-      }
-    } else {
-      stopParticleStream();
-    }
-
     if (helpActivatedForTask) {
       try { setHelpActive(false); } catch {}
       helpActivatedForTask = false;
@@ -1487,6 +1669,36 @@ try {
 }
 /***** << GPT:TUTORIAL_PLACE_AND_FRAME_BOTH END >> *****/
 
+          } else if (node.matches && node.matches('.toy-panel[data-toy="drawgrid"]') && node.dataset.tutorial !== 'true') {
+            const newToy = node;
+            lockTutorialControls(newToy);
+            setupPanelListeners(newToy);
+            if (!tutorialToy || !tutorialToy.isConnected) {
+              tutorialToy = newToy;
+              newToy.dataset.tutorial = 'true';
+              newToy.classList.add('tutorial-panel');
+              const drawPanels = [newToy];
+              const drawAttempts = [
+                () => withZoomUnlock(() => frameTutorialPanels(drawPanels, { limitToCurrentScale: true })),
+                () => withZoomUnlock(() => frameTutorialPanels(drawPanels, { limitToCurrentScale: false })),
+                () => {
+                  if (typeof window.centerBoardOnElement === 'function') {
+                    withZoomUnlock(() => window.centerBoardOnElement(newToy, TUTORIAL_ZOOM));
+                  }
+                },
+              ];
+              ensurePanelsVisible(drawPanels, drawAttempts);
+            }
+            const didCompleteDraw = maybeCompleteTask('add-toy-drawgrid');
+            if (didCompleteDraw) {
+              stopParticleStream();
+              document.querySelector('.toy-spawner-toggle')?.classList.remove('tutorial-pulse-target', 'tutorial-addtoy-pulse', 'tutorial-flash', 'tutorial-active-pulse');
+              relockTemporarySpawnerControls();
+              document.getElementById('tutorial-add-draw-style')?.remove();
+              document.querySelectorAll('.toy-spawner-item[data-tutorial-keep="draw"]').forEach(item => {
+                if (item instanceof HTMLElement) delete item.dataset.tutorialKeep;
+              });
+            }
           }
         }
       }
@@ -1561,37 +1773,8 @@ try {
 
     document.body.classList.add('tutorial-active');
     hideOriginalToys();
-    const spawnResult = spawnTutorialToy(lockTutorialControls, setupPanelListeners);
-    tutorialToy = spawnResult.panel;
-    tutorialFromFactory = spawnResult.tutorialFromFactory;
-
-    // --- Frame the initial tutorial toy ---
-    try {
-      if (tutorialToy && tutorialToy.style) {
-        tutorialToy.style.position = 'absolute';
-        tutorialToy.style.width = 'min(960px, 80vw)';
-        tutorialToy.style.height = 'min(640px, 70vh)';
-        tutorialToy.style.maxWidth = 'calc(100vw - 64px)';
-        tutorialToy.style.maxHeight = 'calc(100vh - 128px)';
-      }
-    } catch (_) {}
-
-    const raf = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));
-    const settle = (fn) => raf(() => raf(fn));
-    settle(() => {
-      if (!tutorialActive || !tutorialToy?.isConnected) return;
-      const panels = [tutorialToy];
-      const attempts = [
-        () => withZoomUnlock(() => frameTutorialPanels(panels, { desiredScale: TUTORIAL_ZOOM, limitToCurrentScale: false })),
-        () => {
-          if (typeof window.centerBoardOnElement === 'function') {
-            withZoomUnlock(() => window.centerBoardOnElement(tutorialToy, TUTORIAL_ZOOM));
-          }
-        },
-      ];
-      ensurePanelsVisible(panels, attempts);
-    });
-    // --- End framing ---
+    resetBoardViewport();
+    tutorialToy = null;
 
     ensureGoalPanel();
 
@@ -1614,6 +1797,11 @@ try {
     tutorialActive = false;
 
     document.getElementById('tutorial-override-styles')?.remove();
+    relockTemporarySpawnerControls();
+    document.getElementById('tutorial-add-draw-style')?.remove();
+    document.querySelectorAll('.toy-spawner-item[data-tutorial-keep="draw"]').forEach(item => {
+      if (item instanceof HTMLElement) delete item.dataset.tutorialKeep;
+    });
 
     updateButtonVisual();
 
@@ -1668,7 +1856,7 @@ try {
 
     stopParticleStream();
     removeTutorialListeners();
-  // Unlock zoom and restore previous viewport
+    // Unlock zoom and restore previous viewport
   window.__tutorialZoomLock = false;
 
   try {
@@ -1751,7 +1939,6 @@ try {
 
     if (tutorialState) tutorialState.pendingRewardGoalId = null;
     tutorialToy = null;
-    tutorialFromFactory = false;
     tutorialState = null;
     previousSnapshot = null;
     previousFocus = null;
@@ -1760,4 +1947,19 @@ try {
 
   tutorialButton.addEventListener('click', () => tutorialActive ? exitTutorial() : enterTutorial());
   updateButtonVisual();
+
+  try {
+    if (!window.TutorialGoalsAPI) {
+      const api = {
+        getGoals: () => GOAL_FLOW.map(cloneGoal).filter(Boolean),
+        getGoalById: (id) => cloneGoal(GOAL_FLOW.find(goal => goal.id === id)),
+        createPanel: () => buildGoalPanel(),
+        populatePanel: (panel, goal, options) => populateGoalPanel(panel, goal, options),
+      };
+      window.TutorialGoalsAPI = Object.freeze(api);
+      window.dispatchEvent(new CustomEvent('tutorial:goals-ready', { detail: api }));
+    }
+  } catch (err) {
+    console.warn('[tutorial] expose goal API failed', err);
+  }
 })();

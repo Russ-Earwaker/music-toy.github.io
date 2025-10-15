@@ -387,10 +387,10 @@ const toyInitializers = {
 };
 
 const toyCatalog = [
+    { type: 'drawgrid', name: 'Draw Line', description: 'Sketch out freehand lines that become notes.', size: { width: 420, height: 460 } },
     { type: 'loopgrid', name: 'Simple Rhythm', description: 'Layer drum patterns and melodies with an 8x12 step matrix.', size: { width: 380, height: 420 } },
     { type: 'bouncer', name: 'Bouncer', description: 'Bounce melodic balls inside a square arena.', size: { width: 420, height: 420 } },
     { type: 'rippler', name: 'Rippler', description: 'Evolving pads driven by ripple collisions.', size: { width: 420, height: 420 } },
-    { type: 'drawgrid', name: 'Draw Grid', description: 'Sketch freehand rhythms that become notes.', size: { width: 420, height: 460 } },
     { type: 'chordwheel', name: 'Chord Wheel', description: 'Play circle-of-fifths chord progressions instantly.', size: { width: 460, height: 420 } },
 ];
 

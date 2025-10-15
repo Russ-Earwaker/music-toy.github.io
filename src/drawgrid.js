@@ -1075,7 +1075,7 @@ function regenerateMapFromStrokes() {
     const newW = Math.max(1, r.width|0);
     const newH = Math.max(1, r.height|0);
 
-    if (force || newW !== cssW || newH !== cssH || newDpr !== dpr) {
+    if (force || Math.abs(newW - cssW) > 1 || Math.abs(newH - cssH) > 1 || newDpr !== dpr) {
       const oldW = cssW;
       const oldH = cssH;
       // Snapshot current paint to preserve erased/drawn content across resize
