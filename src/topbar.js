@@ -28,7 +28,7 @@
 
     const core = btn.querySelector('.c-btn-core');
 
-    const url = playing ? "url('../assets/UI/T_ButtonPause.png')" : "url('../assets/UI/T_ButtonPlay.png')";
+    const url = playing ? "url('/assets/UI/T_ButtonPause.png')" : "url('/assets/UI/T_ButtonPlay.png')";
 
     if (core){ core.style.setProperty('--c-btn-icon-url', url); }
 
@@ -106,8 +106,8 @@ function ensureTopbar(){
       if (!menuBtn.title) menuBtn.title = 'Menu';
     }
     const menuBtnCore = menuBtn.querySelector('.c-btn-core');
-    if (menuBtnCore && !menuBtnCore.style.getPropertyValue('--c-btn-icon-url')){
-      menuBtnCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_MainMenu.png')");
+    if (menuBtnCore){
+      menuBtnCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_MainMenu.png')");
     }
 
     let menuPanel = bar.querySelector('#topbar-menu');
@@ -346,17 +346,60 @@ if (document.readyState === 'loading') {
         return;
       }
 
-      const runSceneClear = ()=>{
+      const runSceneClear = ({ removePanels = false } = {})=>{
         try{
-          document.querySelectorAll('.toy-panel').forEach(panel=>{
-            ['toy-clear','toy-reset'].forEach(t=> panel.dispatchEvent(new CustomEvent(t, { bubbles:true })));
+          const panels = Array.from(document.querySelectorAll('.toy-panel'));
+          panels.forEach(panel=>{
+            try{
+              ['toy-clear','toy-reset'].forEach(evt=>{
+                panel.dispatchEvent(new CustomEvent(evt, { bubbles:true }));
+              });
+            }catch{}
           });
-          try{ window.Persistence && window.Persistence.markDirty && window.Persistence.markDirty(); }catch{}
-        }catch{}
+
+          if (removePanels){
+            const destroy = window.MusicToyFactory?.destroy;
+            panels.forEach(panel=>{
+              try{
+                if (typeof destroy === 'function'){
+                  destroy(panel);
+                } else {
+                  panel.remove();
+                }
+              }catch(err){
+                console.warn('[topbar] destroy panel failed', err);
+              }
+            });
+            try{ localStorage.removeItem('toyPositions'); }catch{}
+          }
+
+          try{
+            const snap = window.Persistence?.getSnapshot ? window.Persistence.getSnapshot() : null;
+            if (snap){
+              snap.updatedAt = new Date().toISOString();
+              localStorage.setItem('scene:autosave', JSON.stringify(snap));
+            } else {
+              localStorage.removeItem('scene:autosave');
+            }
+          }catch(err){
+            console.warn('[topbar] snapshot save failed', err);
+          }
+
+          try{ window.Persistence?.markDirty?.(); }catch{}
+        }catch(err){
+          console.warn('[topbar] scene clear failed', err);
+        }
       };
 
-      if (action === 'new-scene' || action === 'clear-all'){
-        runSceneClear();
+      if (action === 'new-scene'){
+        runSceneClear({ removePanels: true });
+        menuState?.close?.();
+        try{ localStorage.removeItem('prefs:lastScene'); }catch{}
+        return;
+      }
+
+      if (action === 'clear-all'){
+        runSceneClear({ removePanels: false });
         return;
       }
 

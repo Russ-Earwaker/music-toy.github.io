@@ -1,302 +1,142 @@
+
 /* src/circular-button.css */
-/* << GPT:PLAY_BUTTON_MODE_TOPS START >> */
-:root {
-  --play-btn-top-tutorial: 24px; /* tutorial-correct height */
-  --play-btn-top-main: 24px;     /* make MAIN match tutorial for now */
-}
-/* Force per-mode vertical alignment (high specificity + !important) */
-body.tutorial-active #topbar [data-action='toggle-play'],
-body.tutorial-active [data-action='toggle-play'] {
-  top: var(--play-btn-top-tutorial) !important;
-}
-body:not(.tutorial-active) #topbar [data-action='toggle-play'],
-body:not(.tutorial-active) [data-action='toggle-play'] {
-  top: var(--play-btn-top-main) !important;
-}
-/* << GPT:PLAY_BUTTON_MODE_TOPS END >> */
 
-/* << GPT:PLAY_BUTTON_POS_FIXED_2X START >> */
-/* Pin Play button to a consistent viewport position across all modes */
-#topbar { position: relative !important; }
-#topbar [data-action='toggle-play'] {
-  --play-btn-size: 100px;
-  position: fixed !important;
-  top: 24px !important;
-  right: 24px !important;
-  width: var(--play-btn-size) !important;
-  height: var(--play-btn-size) !important;
-  transform-origin: 50% 50% !important;
-  z-index: 1000 !important; /* above particle canvas */
-}
-#topbar [data-action='toggle-play'].c-btn,
-#topbar [data-action='toggle-play'] .c-btn {
-  --c-btn-size: var(--play-btn-size) !important;
-  width: var(--c-btn-size) !important;
-  height: var(--c-btn-size) !important;
-}
-/* << GPT:PLAY_BUTTON_POS_FIXED_2X END >> */
-
-/* << GPT:PLAY_BUTTON_POS_FIXED_2X START >> */
-/* Pin Play button to a consistent viewport position across all modes */
-#topbar { position: relative !important; }
-#topbar [data-action='toggle-play'] {
-  --play-btn-size: 100px;
-  position: fixed !important;
-  top: 24px !important;
-  right: 24px !important;
-  width: var(--play-btn-size) !important;
-  height: var(--play-btn-size) !important;
-  transform-origin: 50% 50% !important;
-  z-index: 1000 !important; /* above particle canvas */
-}
-#topbar [data-action='toggle-play'].c-btn,
-#topbar [data-action='toggle-play'] .c-btn {
-  --c-btn-size: var(--play-btn-size) !important;
-  width: var(--c-btn-size) !important;
-  height: var(--c-btn-size) !important;
-}
-/* << GPT:PLAY_BUTTON_POS_FIXED_2X END >> */
-
-/* << GPT:PLAY_BUTTON_POS_FIXED_2X START >> */
-/* Pin Play button to a consistent viewport position across all modes */
-#topbar { position: relative !important; }
-#topbar [data-action='toggle-play'] {
-  --play-btn-size: 100px;
-  position: fixed !important;
-  top: 24px !important;
-  right: 24px !important;
-  width: var(--play-btn-size) !important;
-  height: var(--play-btn-size) !important;
-  transform-origin: 50% 50% !important;
-  z-index: 1000 !important; /* above particle canvas */
-}
-#topbar [data-action='toggle-play'].c-btn,
-#topbar [data-action='toggle-play'] .c-btn {
-  --c-btn-size: var(--play-btn-size) !important;
-  width: var(--c-btn-size) !important;
-  height: var(--c-btn-size) !important;
-}
-/* << GPT:PLAY_BUTTON_POS_FIXED_2X END >> */
-
-/* << GPT:PLAY_BUTTON_FORCE_SIZE_AND_POSITION START >> */
-/* Ensure #topbar is the containing block for absolute positioning */
-#topbar { position: relative !important; }
-
-/* Apply consistent position & 2× size in ALL modes (pre-tutorial + tutorial) */
-#topbar [data-action='toggle-play'] {
-  --play-btn-size: 100px;           /* 2× */
-  position: absolute !important;
-  top: 24px !important;             /* tweak as desired */
-  right: 24px !important;           /* tweak as desired */
-  width: var(--play-btn-size) !important;
-  height: var(--play-btn-size) !important;
-  transform-origin: 50% 50% !important;
-  z-index: 1000 !important;         /* above particles */
-}
-
-/* Support both markup variants: element IS .c-btn, or contains a .c-btn */
-#topbar [data-action='toggle-play'].c-btn { 
-  --c-btn-size: var(--play-btn-size) !important;
-  width: var(--c-btn-size) !important;
-  height: var(--c-btn-size) !important;
-}
-#topbar [data-action='toggle-play'] .c-btn { 
-  --c-btn-size: var(--play-btn-size) !important;
-  width: var(--c-btn-size) !important;
-  height: var(--c-btn-size) !important;
-}
-/* << GPT:PLAY_BUTTON_FORCE_SIZE_AND_POSITION END >> */
-
-/* << GPT:PLAY_BUTTON_ABSOLUTE_AND_2X START >> */
-/* Make Play button consistent across modes: absolute, 2× size, top-right offset */
-#topbar [data-action='toggle-play'].c-btn.c-btn {
-  --play-btn-size: 100px;
-  --c-btn-size: var(--play-btn-size);
-  position: absolute !important;
-  top: 24px !important;   /* tweak here for vertical placement */
-  right: 24px !important; /* tweak here for horizontal placement */
-  width: var(--c-btn-size) !important;
-  height: var(--c-btn-size) !important;
-  transform-origin: 50% 50% !important;
-  z-index: 1000 !important; /* sit above front particles */
-}
-/* << GPT:PLAY_BUTTON_ABSOLUTE_AND_2X END >> */
-
-/* << GPT:PLAY_BUTTON_FINAL_OVERRIDES START >> */
-/* High-specificity overrides so later blocks can't undo them */
-#topbar {
-  --play-btn-size: 100px;   /* 2× */
-  --play-btn-offset-x: 0px; /* tweak as needed */
-  --play-btn-offset-y: 24px;/* move further down */
-}
-/* duplicate .c-btn to increase specificity vs later rules */
-#topbar [data-action='toggle-play'].c-btn.c-btn {
-  --c-btn-size: var(--play-btn-size);
-  position: relative !important;
-  transform-origin: 50% 50%;
-  left: var(--play-btn-offset-x) !important;
-  top:  var(--play-btn-offset-y) !important;
-  z-index: 1000 !important;
-}
-/* << GPT:PLAY_BUTTON_FINAL_OVERRIDES END >> */
-
-/* << GPT:PLAY_BUTTON_OVERRIDES START >> */
-:root {
-  --play-btn-size: 100px;   /* 2× size — tweak here */
-  --play-btn-offset-x: 0px; /* horizontal nudge */
-  --play-btn-offset-y: 24px;/* move further down */
-}
-
-/* The actual Play button in the topbar */
-#topbar [data-action='toggle-play'].c-btn {
-  --c-btn-size: var(--play-btn-size);
-  position: relative;
-  transform-origin: 50% 50%;
-  left: var(--play-btn-offset-x);
-  top:  var(--play-btn-offset-y);
-  z-index: 1000; /* above front particle canvas */
-}
-/* << GPT:PLAY_BUTTON_OVERRIDES END >> */
-
-
-/* A reusable, layered circular button component. */
-
+/* Base circular button styling */
 .c-btn {
-  /* Sizing and base styles */
   --c-btn-size: 50px;
   position: relative;
   width: var(--c-btn-size);
   height: var(--c-btn-size);
   transform-origin: 50% 50%;
-
-  /* Reset button styles */
   appearance: none;
   border: none;
   background: transparent;
   padding: 0;
   cursor: pointer;
   border-radius: 50%;
-  
-  /* For focus outlines */
   outline-offset: 4px;
 }
 
-/* All layers are absolutely positioned circles */
 .c-btn > div {
   position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   border-radius: 50%;
-  pointer-events: none; /* Clicks pass through to the parent button */
+  pointer-events: none;
   transition: all 0.15s ease-out;
 }
 
-/* 1. The outermost border */
 .c-btn-outer {
   border: 2px solid rgba(255, 255, 255, 0.15);
 }
 
-/* 2. The inner bright glow/outline */
 .c-btn-glow {
-  inset: 2px; /* Position just inside the outer border */
-  /* A solid border creates a distinct ring, with a blur for a soft glow effect. */
+  inset: 2px;
   border: 3px solid var(--accent, cyan);
   opacity: 0.75;
   filter: blur(1.5px);
 }
 
-/* 3. The core interactive button with the image */
 .c-btn-core {
-  inset: 5px; /* Position inside the glow */
+  inset: 5px;
   background-color: var(--surface, #0d141d);
-  box-shadow: inset 0 3px 8px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.3);
-  /* The core needs to be a positioning context for its ::before pseudo-element. */
+  box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.3);
   position: relative;
-  /* Remove background properties; they will be handled by pseudo-elements */
   background-image: none;
 }
 
-/* ::before is the colored circle background */
 .c-btn-core::before {
   content: '';
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 80%; /* 62% * 1.25 */
-  height: 80%; /* 62% * 1.25 */
+  width: 80%;
+  height: 80%;
   transform: translate(-50%, -50%);
   border-radius: 50%;
   background-color: var(--accent, cyan);
-  z-index: 1; /* Behind the icon */
+  z-index: 1;
   transition: transform 0.15s ease-out, filter 0.15s ease-out;
 }
 
-/* ::after is the icon image, drawn on top of the circle */
 .c-btn-core::after {
   content: '';
   position: absolute;
   inset: 0;
-  background-image: var(--c-btn-icon-url); /* Use custom property from JS */
-  background-size: 75%; /* 60% * 1.25 */
+  background-image: var(--c-btn-icon-url);
+  background-size: 75%;
   background-position: center;
   background-repeat: no-repeat;
-  z-index: 2; /* On top of the circle */
+  z-index: 2;
   transition: all 0.15s ease-out;
 }
 
-/* --- Interaction States --- */
+.c-btn:hover .c-btn-outer {
+  border-color: rgba(255, 255, 255, 0.4);
+}
 
-/* Hover: brighten up the borders and glow */
-.c-btn:hover .c-btn-outer { border-color: rgba(255, 255, 255, 0.4); }
-.c-btn:hover .c-btn-glow { opacity: 0.8; }
+.c-btn:hover .c-btn-glow {
+  opacity: 0.8;
+}
 
 .c-btn:active .c-btn-core {
-  /* Don't scale the whole core, just change the shadow to give a "pressed" feel. */
-  box-shadow: inset 0 2px 6px rgba(0,0,0,0.6);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6);
 }
+
 .c-btn:active .c-btn-core::after {
-  /* Scale down the icon image and move it slightly up and left */
-  background-size: 72.5%; /* 58% -> 72.5% to maintain press-in ratio */
+  background-size: 72.5%;
   background-position: 49% 49%;
 }
-.c-btn:active .c-btn-glow { opacity: 1; /* Do not scale the glow on press */ }
 
-/* Active pulse ring: scale the glow to fill outer circle and tint to white */
-@keyframes cbtnActiveRing {
-  0%   { inset: 2px; border-color: var(--accent, cyan); opacity: 0.85; filter: blur(1.5px); }
-  40%  { inset: 0px; border-color: #fff;               opacity: 1.00; filter: blur(1.0px); }
-  100% { inset: 2px; border-color: var(--accent, cyan); opacity: 0.85; filter: blur(1.5px); }
+.c-btn:active .c-btn-glow {
+  opacity: 1;
 }
 
-/* When the button is in "tutorial-active-pulse", ring expands & pulses */
+@keyframes cbtnActiveRing {
+  0% {
+    inset: 2px;
+    border-color: var(--accent, cyan);
+    opacity: 0.85;
+    filter: blur(1.5px);
+  }
+  40% {
+    inset: 0;
+    border-color: #fff;
+    opacity: 1;
+    filter: blur(1px);
+  }
+  100% {
+    inset: 2px;
+    border-color: var(--accent, cyan);
+    opacity: 0.85;
+    filter: blur(1.5px);
+  }
+}
+
 .c-btn.tutorial-active-pulse .c-btn-glow {
   animation: cbtnActiveRing 2s ease-in-out infinite;
 }
 
-/* Core background pulse: scale the colored circle to the outer edge and flash to white */
 @keyframes cbtnActiveCore {
-  0%   { transform: translate(-50%, -50%) scale(1.00); filter: brightness(1.0); background-color: var(--accent, cyan); }
-  40%  { transform: translate(-50%, -50%) scale(1.15); filter: brightness(1.25); background-color: #ffffff; }
-  100% { transform: translate(-50%, -50%) scale(1.00); filter: brightness(1.0); background-color: var(--accent, cyan); }
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    filter: brightness(1);
+    background-color: var(--accent, cyan);
+  }
+  40% {
+    transform: translate(-50%, -50%) scale(1.15);
+    filter: brightness(1.25);
+    background-color: #ffffff;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    filter: brightness(1);
+    background-color: var(--accent, cyan);
+  }
 }
 
-/* When active, pulse the background disc too */
 .c-btn.tutorial-active-pulse .c-btn-core::before {
   animation: cbtnActiveCore 2s ease-in-out infinite;
-}
-
-/* === Global Play Button Overrides === */
-:root {
-  --play-btn-size: 100px;        /* 2× (adjust if needed) */
-  --play-btn-offset-x: 0px;      /* tweak if you want the “new” offset baked in */
-  --play-btn-offset-y: 0px;
-}
-
-/* Target the actual Play button in the topbar */
-#topbar [data-action="toggle-play"].c-btn {
-  --c-btn-size: var(--play-btn-size);
-  position: relative;
-  transform-origin: 50% 50%;
-  /* Use left/top for a layout-based offset so WAAPI transform for scale doesn't fight it */
-  left: var(--play-btn-offset-x);
-  top:  var(--play-btn-offset-y);
 }

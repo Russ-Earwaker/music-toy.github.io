@@ -176,6 +176,25 @@ function cloneGoal(goal) {
 
 
 (function() {
+  function exposeGoalsAPI(){
+    try {
+      if (!window.TutorialGoalsAPI) {
+        const api = {
+          getGoals: () => GOAL_FLOW.map(cloneGoal).filter(Boolean),
+          getGoalById: (id) => cloneGoal(GOAL_FLOW.find(goal => goal.id === id)),
+          createPanel: () => buildGoalPanel(),
+          populatePanel: (panel, goal, options) => populateGoalPanel(panel, goal, options),
+        };
+        window.TutorialGoalsAPI = Object.freeze(api);
+        window.dispatchEvent(new CustomEvent('tutorial:goals-ready', { detail: api }));
+      }
+    } catch (err) {
+      console.warn('[tutorial] expose goal API failed', err);
+    }
+  }
+
+  exposeGoalsAPI();
+
   const tutorialButton = document.querySelector('[data-action="tutorial"]');
   const board = document.getElementById('board');
   if (!tutorialButton || !board) return;
@@ -1995,18 +2014,4 @@ try {
     }
   });
 
-  try {
-    if (!window.TutorialGoalsAPI) {
-      const api = {
-        getGoals: () => GOAL_FLOW.map(cloneGoal).filter(Boolean),
-        getGoalById: (id) => cloneGoal(GOAL_FLOW.find(goal => goal.id === id)),
-        createPanel: () => buildGoalPanel(),
-        populatePanel: (panel, goal, options) => populateGoalPanel(panel, goal, options),
-      };
-      window.TutorialGoalsAPI = Object.freeze(api);
-      window.dispatchEvent(new CustomEvent('tutorial:goals-ready', { detail: api }));
-    }
-  } catch (err) {
-    console.warn('[tutorial] expose goal API failed', err);
-  }
 })();

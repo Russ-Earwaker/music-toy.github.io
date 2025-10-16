@@ -1,33 +1,12 @@
-/* style.css - Cleaned and Refactored *//* << GPT:HEADER_LAYER_RESTORE START >> */
-#topbar { position: relative !important; z-index: 980 !important; }
+/* style.css - Cleaned and Refactored */
 .tutorial-particles-front { z-index: 940 !important; pointer-events: none !important; }
-/* << GPT:HEADER_LAYER_RESTORE END >> */
-
-/* << GPT:PLAY_BUTTON_MAIN_ALIGN START >> */
-/* Align the main-view Play button to the same vertical position as tutorial */
-:root {
-  --play-btn-top-main: 24px;   /* match tutorial's top offset */
-  --play-btn-right-main: 24px; /* match tutorial's right offset */
-  --play-btn-size-main: 100px; /* 2× size */
-}
-.app-topbar [data-action="toggle-play"] {
-  position: fixed !important;
-  top: var(--play-btn-top-main) !important;
-  right: var(--play-btn-right-main) !important;
-  width: var(--play-btn-size-main) !important;
-  height: var(--play-btn-size-main) !important;
-  transform: none !important;     /* cancel translate(-50%,-50%) centering */
-  z-index: 1000 !important;       /* keep above most UI, below any modal if needed */
-}
-/* << GPT:PLAY_BUTTON_MAIN_ALIGN END >> */
-
 
 /* ------------------- */
 /* --- Root & Base --- */
 /* ------------------- */
 
 :root {
-  --topbar-height: 120px;
+  --topbar-height: 60px;
   --bg: #0f141b;
   --panel: #121a24;
   --surface: #0d141d;
@@ -36,6 +15,10 @@
   --muted: #9aa4b2;
   --accent: #5fb3ff;
   font-size: 16px;
+  --top-btn-offset: 24px;
+  --top-btn-size: 120px;
+  --top-btn-gap: 14px;
+  
 }
 
 .toy-action-label {
@@ -76,25 +59,33 @@ html, body {
   top: 0;
   left: 0;
   right: 0;
-  height: 48px;
+  height: var(--topbar-height);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 12px;
+  justify-content: center;
+  padding: 0;
   background: #0d141d;
   border-bottom: 1px solid #1c2430;
-  z-index: 1000;
+  z-index: 1300;
 }
 
 .topbar-menu-wrap {
-  position: relative;
+  position: fixed;
+  top: var(--top-btn-offset);
+  left: var(--top-btn-offset);
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--top-btn-gap);
+  z-index: 9000;
+  pointer-events: none;
+}
+
+.topbar-menu-wrap > * {
+  pointer-events: auto;
 }
 
 .topbar-menu-wrap .menu-btn {
-  --c-btn-size: 46px;
+  --c-btn-size: var(--top-btn-size);
 }
 
 .topbar-menu-wrap .menu-btn .c-btn-core {
@@ -102,9 +93,9 @@ html, body {
 }
 
 .topbar-menu {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
+  position: fixed;
+  top: calc(var(--top-btn-offset) + var(--top-btn-size) + 8px);
+  left: var(--top-btn-offset);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -115,7 +106,8 @@ html, body {
   border-radius: 12px;
   box-shadow: 0 18px 45px rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(8px);
-  z-index: 1200;
+  z-index: 9100;
+  pointer-events: auto;
 }
 
 .topbar-menu[hidden] {
@@ -687,7 +679,7 @@ select.toy-instrument {
   --toy-spawner-button-size: 80px;
   position: fixed;
   right: 20px;
-  top: calc(64px + 20px);
+  top: calc(var(--topbar-height) + 32px);
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -1114,9 +1106,9 @@ body.tutorial-active #topbar #theme-switcher-wrap {
 
 .guide-launcher {
   position: fixed;
-  top: 96px;
-  left: 18px;
-  z-index: 900;
+  top: calc(var(--top-btn-offset) + var(--top-btn-size) + var(--top-btn-gap));
+  left: var(--top-btn-offset);
+  z-index: 850;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1124,9 +1116,15 @@ body.tutorial-active #topbar #theme-switcher-wrap {
 }
 
 .guide-launcher .guide-toggle {
-  padding: 8px 16px;
+  padding: 10px 18px;
   font-weight: 600;
   width: 100%;
+  border-radius: 12px;
+  background: rgba(15, 21, 32, 0.92);
+  border: 1px solid rgba(146, 176, 228, 0.35);
+  color: var(--text);
+  box-shadow: 0 12px 24px rgba(12, 18, 30, 0.45);
+  pointer-events: auto;
 }
 
 .guide-launcher .tutorial-goals-panel {
@@ -1139,6 +1137,16 @@ body.tutorial-active #topbar #theme-switcher-wrap {
   width: 320px;
   max-width: calc(100vw - 48px);
   display: none;
+}
+
+.guide-empty-state {
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: rgba(13, 20, 29, 0.85);
+  color: rgba(226, 232, 240, 0.8);
+  font-size: 0.95rem;
+  line-height: 1.4;
+  border: 1px solid rgba(94, 129, 180, 0.25);
 }
 
 .guide-launcher.is-open .tutorial-goals-panel {
@@ -1306,21 +1314,38 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
   100% { transform: scale(1); box-shadow: 0 0 0 rgba(94, 138, 190, 0.0); }
 }
 .app-topbar .topbar-controls {
-  margin-left: auto;
+  flex: 1;
   display: flex;
   align-items: center;
+  justify-content: center;
+  min-height: 100%;
   gap: 10px;
+  pointer-events: none;
 }
 
-.app-topbar [data-action="toggle-play"] {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  --c-btn-size: 120px;
-  z-index: 5;
+.app-topbar .topbar-controls > * {
+  pointer-events: auto;
 }
 
-.app-topbar [data-action="toggle-play"] .c-btn-core {
+#topbar [data-action="toggle-play"] {
+  position: fixed !important;
+  top: var(--top-btn-offset) !important;
+  left: 50% !important;
+  right: auto !important;
+  width: var(--top-btn-size) !important;
+  height: var(--top-btn-size) !important;
+  --c-btn-size: var(--top-btn-size) !important;
+  transform: translateX(-50%) !important;
+  z-index: 1450 !important;
+  pointer-events: auto !important;
+}
+
+#topbar [data-action="toggle-play"] .c-btn-core {
   background-size: 50%;
 }
+
+
+
+
+
+
