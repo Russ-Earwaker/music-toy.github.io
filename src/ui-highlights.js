@@ -199,10 +199,11 @@ function highlightForNewScene() {
   Object.keys(entries).forEach((key) => {
     const entry = entries[key];
     if (!entry) return;
-    saveSeen(entry, false);
-    setActive(key, true);
+    entry.seen = false;
+    try { window.localStorage.removeItem(entry.storageKey); } catch {}
+    saveActive(entry, true);
   });
-  queryTargets();
+  scheduleRefresh();
 }
 
 function handleAppBoot({ restored, hasSavedPositions } = {}) {
