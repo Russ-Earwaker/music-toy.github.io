@@ -4,6 +4,7 @@ import { initializeBouncer } from './bouncer-init.js';
 import './header-buttons-delegate.js';
 import './rippler-init.js';
 import './tutorial.js';
+import './ui-highlights.js';
 // import { createBouncer } from './bouncer.main.js'; // This is now handled by bouncer-init.js
 import { initDrawGrid } from './drawgrid-init.js';
 import { createChordWheel } from './chordwheel.js';
@@ -349,6 +350,11 @@ const g_pulsingConnectors = new Map(); // fromId -> { toId, pulse: 1.0 }
 
 
 console.log('[MAIN] module start');
+const BOARD_BOOT_CLASS = 'board--booting';
+const boardBootRoot = document.getElementById('board');
+if (boardBootRoot) {
+  boardBootRoot.classList.add(BOARD_BOOT_CLASS);
+}
 const CSV_PATH = './assets/samples/samples.csv'; // optional
 const $ = (sel, root=document)=> root.querySelector(sel);
 function bootTopbar(){
@@ -1006,36 +1012,37 @@ function scheduler(){
   requestAnimationFrame(step);
 }
 async function boot(){
-  try {
-    await initAudioAssets(CSV_PATH);
-    await loadInstrumentCatalog();
-    console.log('[AUDIO] samples loaded');
-  } catch(e) {
-    console.warn('[AUDIO] init failed', e);
-  }
-
   const board = document.getElementById('board');
-  if (board && !document.getElementById('chain-canvas')) {
-      chainCanvas = document.createElement('canvas');
-      chainCanvas.id = 'chain-canvas';
-      Object.assign(chainCanvas.style, {
-          position: 'absolute',
-          top: '0', left: '0', // width/height are set dynamically in drawChains
-          pointerEvents: 'none',
-          zIndex: '1' // Behind toy panels, but in front of any z-index:0 background
-      });
-      board.prepend(chainCanvas);
-      chainCtx = chainCanvas.getContext('2d');
-  }
+  try {
+    try {
+      await initAudioAssets(CSV_PATH);
+      await loadInstrumentCatalog();
+      console.log('[AUDIO] samples loaded');
+    } catch(e) {
+      console.warn('[AUDIO] init failed', e);
+    }
 
-  bootTopbar();
-  startIntensityVisual();
-  let restored = false;
-  try{ restored = !!tryRestoreOnBoot(); }catch{}
-  bootGrids();
-  bootDrawGrids();
-  document.querySelectorAll('.toy-panel').forEach(initToyChaining);
-  updateAllChainUIs(); // Set initial instrument button visibility
+    if (board && !document.getElementById('chain-canvas')) {
+        chainCanvas = document.createElement('canvas');
+        chainCanvas.id = 'chain-canvas';
+        Object.assign(chainCanvas.style, {
+            position: 'absolute',
+            top: '0', left: '0', // width/height are set dynamically in drawChains
+            pointerEvents: 'none',
+            zIndex: '1' // Behind toy panels, but in front of any z-index:0 background
+        });
+        board.prepend(chainCanvas);
+        chainCtx = chainCanvas.getContext('2d');
+    }
+
+    bootTopbar();
+    startIntensityVisual();
+    let restored = false;
+    try{ restored = !!tryRestoreOnBoot(); }catch{}
+    bootGrids();
+    bootDrawGrids();
+    document.querySelectorAll('.toy-panel').forEach(initToyChaining);
+    updateAllChainUIs(); // Set initial instrument button visibility
 
   // Add event listener for grid-based chain activation
   document.addEventListener('chain:wakeup', (e) => {
@@ -1117,19 +1124,23 @@ async function boot(){
     }
   });
 
-  try{ window.ThemeBoot && window.ThemeBoot.wireAll && window.ThemeBoot.wireAll(); }catch{}
-  try{ tryRestoreOnBoot(); }catch{}
-  scheduler();
-  let hasSavedPositions = false; try { hasSavedPositions = !!localStorage.getItem('toyPositions'); } catch {}
-  if (!restored && !hasSavedPositions){
-    try{ window.organizeBoard && window.organizeBoard(); }catch{}
-    try{ applyStackingOrder(); }catch{}
-    try{ addGapAfterOrganize(); }catch{}
-  } else {
-    try{ applyStackingOrder(); }catch{}
+    try{ window.ThemeBoot && window.ThemeBoot.wireAll && window.ThemeBoot.wireAll(); }catch{}
+    try{ tryRestoreOnBoot(); }catch{}
+    scheduler();
+    let hasSavedPositions = false; try { hasSavedPositions = !!localStorage.getItem('toyPositions'); } catch {}
+    if (!restored && !hasSavedPositions){
+      try{ window.organizeBoard && window.organizeBoard(); }catch{}
+      try{ applyStackingOrder(); }catch{}
+      try{ addGapAfterOrganize(); }catch{}
+    } else {
+      try{ applyStackingOrder(); }catch{}
+    }
+    try{ window.UIHighlights?.onAppBoot?.({ restored, hasSavedPositions }); }catch{}
+    try{ board?.classList.remove(BOARD_BOOT_CLASS); }catch{}
+    try{ startAutosave(2000); }catch{}
+  } finally {
+    try{ board?.classList.remove(BOARD_BOOT_CLASS); }catch{}
   }
-  try{ startAutosave(2000); }catch{}
 }
 if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
 else boot();
-

@@ -40,22 +40,7 @@
     <div class="topbar-controls"></div>
   </header>
 
-  <main id="board">
-    <!-- Drum Grid toys (existing) -->
-    <section id="grid1" data-instrument="Djimbe" class="toy-panel" data-toy="loopgrid"></section>
-    <section id="grid2" data-instrument="Djimbe" class="toy-panel" data-toy="loopgrid"></section>
-    <section id="grid3" data-instrument="Djimbe" class="toy-panel" data-toy="loopgrid"></section>
-    <section id="grid4" data-instrument="Djimbe" class="toy-panel" data-toy="loopgrid"></section>
-
-    <!-- Bouncer / Rippler -->
-    <section id="toy-b1" class="toy-panel" data-toy="bouncer"></section>
-    <section id="toy-r1" class="toy-panel" data-toy="rippler"></section>
-    <!-- Drawing Chord toy -->
-    <section id="chord1" class="toy-panel" data-toy="chordwheel"></section>
-
-    <!-- Drawing Grid toy -->
-    <section id="drawgrid1" data-instrument="AcousticGuitar" class="toy-panel" data-toy="drawgrid"></section>
-  </main>
+  <main id="board"></main>
 
   <!-- App boot scripts -->
   <script type="module" src="./src/main.js" defer></script>
@@ -79,7 +64,7 @@
   <!-- Bouncer safe boot (non-invasive) -->
   <script>
     window.BOUNCER_DBG_LEVEL = window.BOUNCER_DBG_LEVEL ?? 0; // Set to 0 to reduce console noise
-    window.BOUNCER_IDS = window.BOUNCER_IDS || ['toy-b1','toy-b2'];
+    window.BOUNCER_IDS = window.BOUNCER_IDS || [];
     // Uncomment to temporarily disable loop engine while debugging physics:
     // window.BOUNCER_LOOP_DISABLE = true;
   </script>

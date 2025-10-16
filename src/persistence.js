@@ -218,16 +218,47 @@ export function applySnapshot(snap){
     // Toys: match by id first, else by type order.
     const panels = Array.from(document.querySelectorAll('#board > .toy-panel'));
     const byId = new Map(panels.map(p => [panelId(p), p]));
+    const factory = window.MusicToyFactory;
+    const usedPanels = new Set();
     const posMap = {};
     let appliedCount = 0;
     for (const t of (snap.toys||[])){
       let panel = byId.get(t.id);
       if (!panel){
         // Try to find first panel of same type not yet used
-        panel = panels.find(p => String(p.dataset.toy||'').toLowerCase() === t.type && !p.___usedForApply);
+        panel = panels.find(p => String(p.dataset.toy||'').toLowerCase() === t.type && !usedPanels.has(p));
+      }
+      if (!panel && factory && typeof factory.create === 'function'){
+        try{
+          const ui = t.ui || {};
+          const left = parseFloat(ui.left);
+          const top = parseFloat(ui.top);
+          const width = parseFloat(ui.width);
+          const height = parseFloat(ui.height);
+          const opts = {};
+          if (Number.isFinite(left) && Number.isFinite(width)) opts.centerX = left + width / 2;
+          if (Number.isFinite(top) && Number.isFinite(height)) opts.centerY = top + height / 2;
+          if (t.state && typeof t.state === 'object' && t.state.instrument) opts.instrument = t.state.instrument;
+          panel = factory.create(t.type, opts);
+          if (panel){
+            panels.push(panel);
+            byId.set(panelId(panel), panel);
+          }
+        }catch(err){
+          console.warn('[persistence] create panel failed', err);
+        }
       }
       if (!panel) continue;
-      panel.___usedForApply = true;
+      if (t.id){
+        try{
+          const existing = document.getElementById(t.id);
+          if (!existing || existing === panel){
+            panel.id = t.id;
+          }
+        }catch{}
+      }
+      byId.set(panelId(panel), panel);
+      usedPanels.add(panel);
       try{
         applyUI(panel, t.ui);
         // collect positions for board.js persistence too
@@ -244,9 +275,26 @@ export function applySnapshot(snap){
       }
       appliedCount++;
     }
-    panels.forEach(p => delete p.___usedForApply);
+    // Remove any panels that were not part of the snapshot so the board matches the saved scene.
+    panels.forEach(panel => {
+      if (usedPanels.has(panel)) return;
+      try{
+        const destroy = window.MusicToyFactory?.destroy;
+        if (typeof destroy === 'function'){
+          destroy(panel);
+        }
+      }catch{}
+      try{ panel.remove(); }catch{}
+    });
     // Persist positions for board.js so refresh preserves locations
-    try{ if (Object.keys(posMap).length){ localStorage.setItem('toyPositions', JSON.stringify(posMap)); } }catch{}
+    try{
+      const keys = Object.keys(posMap);
+      if (keys.length){
+        localStorage.setItem('toyPositions', JSON.stringify(posMap));
+      } else {
+        localStorage.removeItem('toyPositions');
+      }
+    }catch{}
     // try{ console.log('[persistence] applySnapshot end', { applied: appliedCount }); }catch{}
     return true;
   }catch(e){ console.warn('[persistence] applySnapshot failed', e); return false; }

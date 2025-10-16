@@ -191,6 +191,10 @@ html, body {
   overflow: visible !important;
 }
 
+#board.board--booting {
+  visibility: hidden;
+}
+
 #organise-toys-btn {
   position: fixed;
   top: 10px;
@@ -1163,6 +1167,50 @@ body.tutorial-active #topbar #theme-switcher-wrap {
 
 .goal-task.is-hidden {
   display: none;
+}
+
+.ui-highlighted {
+  position: relative;
+  isolation: isolate;
+}
+
+.ui-highlight-pulse {
+  animation: uiHighlightPulse 1.6s ease-in-out infinite;
+  box-shadow: 0 0 0 0 rgba(94, 179, 255, 0.45);
+  transition: transform 0.25s ease;
+}
+
+.ui-highlight-pulse::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: inherit;
+  box-shadow: 0 0 24px rgba(94, 179, 255, 0.7);
+  opacity: 0.8;
+  animation: uiHighlightGlow 1.6s ease-in-out infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+
+@keyframes uiHighlightPulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(94, 179, 255, 0.45);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 8px rgba(94, 179, 255, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(94, 179, 255, 0.45);
+  }
+}
+
+@keyframes uiHighlightGlow {
+  0% { opacity: 0.85; }
+  50% { opacity: 0.2; }
+  100% { opacity: 0.85; }
 }
 
 .tutorial-goals-progress {

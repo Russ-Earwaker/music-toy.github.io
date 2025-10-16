@@ -395,6 +395,7 @@ if (document.readyState === 'loading') {
         runSceneClear({ removePanels: true });
         menuState?.close?.();
         try{ localStorage.removeItem('prefs:lastScene'); }catch{}
+        try{ window.UIHighlights?.onNewScene?.(); }catch{}
         return;
       }
 
