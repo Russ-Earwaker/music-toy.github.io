@@ -13,15 +13,31 @@
 </head>
 <body>
   <header id="topbar" class="app-topbar">
-    <div class="brand">Music Toys</div>
-    <div class="topbar-controls">
-      <div id="theme-switcher-wrap" style="display: inline-flex; align-items: center; gap: 6px;">
-        <label for="theme-select" style="color:#cbd5e1;">Theme</label>
-        <select id="theme-select" class="toy-btn" data-action="theme"></select>
+    <div class="topbar-menu-wrap">
+      <button id="topbar-menu-btn" class="c-btn menu-btn" data-action="menu-toggle" title="Menu" type="button">
+        <div class="c-btn-outer"></div>
+        <div class="c-btn-glow"></div>
+        <div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_MainMenu.png');"></div>
+      </button>
+      <div id="topbar-menu" class="topbar-menu" hidden>
+        <button class="menu-item" data-action="new-scene" type="button">New Scene</button>
+        <button class="menu-item" data-action="save-scene" type="button">Save Scene</button>
+        <button class="menu-item" data-action="load-scene" type="button">Load Scene</button>
+        <button class="menu-item" data-action="export-scene" type="button">Export Scene</button>
+        <button class="menu-item" data-action="import-scene" type="button">Import Scene</button>
+        <div class="menu-item menu-row menu-row-theme">
+          <label for="theme-select">Theme</label>
+          <select id="theme-select" class="toy-btn" data-action="theme"></select>
+        </div>
+        <div class="menu-item menu-row menu-row-preset">
+          <label for="preset-select">Preset</label>
+          <select id="preset-select" class="toy-btn"></select>
+          <button class="menu-inline-btn" data-action="apply-preset" type="button">Apply</button>
+        </div>
+        <button class="menu-item" data-action="organize" type="button">Organize Board</button>
       </div>
-      
-      <button class="toy-btn" data-action="tutorial">Tutorial</button>
-      <button class="toy-btn" data-action="organize">Organize</button>
+    </div>
+    <div class="topbar-controls">
       <!-- Example of new circular buttons -->
       <button class="c-btn" style="--c-btn-size: 38px;" title="Play">
         <div class="c-btn-outer"></div>

@@ -17,7 +17,6 @@ import './toy-spawner.js';
 import { initAudioAssets } from './audio-samples.js';
 import { loadInstrumentEntries as loadInstrumentCatalog } from './instrument-catalog.js';
 import { DEFAULT_BPM, NUM_STEPS, ensureAudioContext, getLoopInfo, setBpm, start, isRunning } from './audio-core.js';
-import { createLoopIndicator } from './loopindicator.js';
 import { buildGrid } from './grid-core.js';
 import { buildDrumGrid } from './drum-core.js';
 import { tryRestoreOnBoot, startAutosave } from './persistence.js';
@@ -1030,7 +1029,6 @@ async function boot(){
   }
 
   bootTopbar();
-  createLoopIndicator('#topbar');
   startIntensityVisual();
   let restored = false;
   try{ restored = !!tryRestoreOnBoot(); }catch{}

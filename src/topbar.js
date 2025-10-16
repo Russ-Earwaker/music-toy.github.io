@@ -70,50 +70,155 @@ function ensureTopbar(){
     if (!bar){
       bar = document.createElement('header');
       bar.id = 'topbar';
-      bar.style.cssText = 'position:sticky;top:0;z-index:1000;display:flex;gap:8px;align-items:center;padding:8px 12px;background:rgba(0,0,0,0.3);backdrop-filter:blur(4px)';
-      bar.innerHTML = '<button data-action="organize">Organize</button> <label style="margin-left:8px;color:#cbd5e1;">Presets <select id="preset-select"></select></label> <button data-action="apply-preset">Apply</button> <button data-action="save-scene">Save</button> <button data-action="load-scene">Load</button> <button data-action="export-scene">Export</button> <button data-action="import-scene">Import</button> <button data-action="clear-all">Clear All</button> <button data-action="reset-scene">Reset to Default</button>';
+      bar.className = 'app-topbar';
+      bar.innerHTML = `
+        <div class="topbar-menu-wrap"></div>
+        <div class="topbar-controls"></div>
+      `;
       document.body.prepend(bar);
-    } else {
-      try{ bar.querySelectorAll('button[title="Stop"], button[title="Play"], [data-action="reset-view"], [data-action="zoom-out"], [data-action="zoom-in"]').forEach(el=> el.remove()); }catch{}
-      if (!bar.querySelector('[data-action="organize"]')){
-        const organizeBtn = document.createElement('button');
-        organizeBtn.textContent = 'Organize';
-        organizeBtn.setAttribute('data-action','organize');
-        bar.prepend(organizeBtn);
-      }
-      const want = [
-        ['save-scene','Save'],
-        ['load-scene','Load'],
-        ['export-scene','Export'],
-        ['import-scene','Import'],
-        ['clear-all','Clear All'],
-        ['reset-scene','Reset to Default'],
-        ['apply-preset','Apply']
-      ];
-      for (const [act, label] of want){
-        if (!bar.querySelector(`[data-action="${act}"]`)){
-          const btn = document.createElement('button');
-          btn.textContent = label;
-          btn.setAttribute('data-action', act);
-          bar.appendChild(btn);
-        }
-      }
-      if (!bar.querySelector('#preset-select')){
-        const label = document.createElement('label');
-        label.style.marginLeft = '8px';
-        label.style.color = '#cbd5e1';
-        label.textContent = 'Presets ';
-        const sel = document.createElement('select');
-        sel.id = 'preset-select';
-        label.appendChild(sel);
-        const applyBtn = bar.querySelector('[data-action="apply-preset"]');
-        if (applyBtn && applyBtn.parentNode){
-          applyBtn.parentNode.insertBefore(label, applyBtn);
-        } else {
-          bar.appendChild(label);
-        }
-      }
     }
+
+    if (!bar.classList.contains('app-topbar')){
+      bar.classList.add('app-topbar');
+    }
+
+    let menuWrap = bar.querySelector('.topbar-menu-wrap');
+    if (!menuWrap){
+      menuWrap = document.createElement('div');
+      menuWrap.className = 'topbar-menu-wrap';
+      bar.insertBefore(menuWrap, bar.firstElementChild || null);
+    }
+
+    let menuBtn = bar.querySelector('#topbar-menu-btn');
+    if (!menuBtn){
+      menuBtn = document.createElement('button');
+      menuBtn.type = 'button';
+      menuBtn.id = 'topbar-menu-btn';
+      menuBtn.className = 'c-btn menu-btn';
+      menuBtn.dataset.action = 'menu-toggle';
+      menuBtn.title = 'Menu';
+      menuBtn.innerHTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
+      menuWrap.prepend(menuBtn);
+    } else {
+      menuBtn.type = 'button';
+      menuBtn.dataset.action = 'menu-toggle';
+      menuBtn.classList.add('c-btn','menu-btn');
+      if (!menuBtn.title) menuBtn.title = 'Menu';
+    }
+    const menuBtnCore = menuBtn.querySelector('.c-btn-core');
+    if (menuBtnCore && !menuBtnCore.style.getPropertyValue('--c-btn-icon-url')){
+      menuBtnCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_MainMenu.png')");
+    }
+
+    let menuPanel = bar.querySelector('#topbar-menu');
+    if (!menuPanel){
+      menuPanel = document.createElement('div');
+      menuPanel.id = 'topbar-menu';
+      menuPanel.className = 'topbar-menu';
+      menuPanel.setAttribute('hidden','');
+      menuWrap.appendChild(menuPanel);
+    } else {
+      menuPanel.classList.add('topbar-menu');
+    }
+    menuPanel.setAttribute('role','menu');
+    menuPanel.setAttribute('aria-label','Main menu');
+
+    menuBtn.setAttribute('aria-haspopup', 'menu');
+
+    const ensureMenuButton = (action, label) => {
+      if (!menuPanel) return null;
+      let btn = menuPanel.querySelector(`button[data-action="${action}"]`);
+      if (!btn){
+        btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'menu-item';
+        btn.dataset.action = action;
+        btn.textContent = label;
+        menuPanel.appendChild(btn);
+      } else {
+        btn.classList.add('menu-item');
+        btn.type = 'button';
+      }
+      btn.setAttribute('role','menuitem');
+      return btn;
+    };
+
+    const ensureThemeRow = () => {
+      if (!menuPanel) return;
+      let select = menuPanel.querySelector('#theme-select');
+      if (select){
+        const row = select.closest('.menu-row') || select.parentElement;
+        if (row){
+          row.classList.add('menu-item','menu-row','menu-row-theme');
+        }
+        select.classList.add('toy-btn');
+        if (!select.dataset.action) select.dataset.action = 'theme';
+        return;
+      }
+      const row = document.createElement('div');
+      row.className = 'menu-item menu-row menu-row-theme';
+      const label = document.createElement('label');
+      label.setAttribute('for','theme-select');
+      label.textContent = 'Theme';
+      const sel = document.createElement('select');
+      sel.id = 'theme-select';
+      sel.className = 'toy-btn';
+      sel.dataset.action = 'theme';
+      row.append(label, sel);
+      menuPanel.appendChild(row);
+    };
+
+    const ensurePresetRow = () => {
+      if (!menuPanel) return;
+      let select = menuPanel.querySelector('#preset-select');
+      let row = select ? (select.closest('.menu-row') || select.parentElement) : null;
+      if (!select){
+        row = document.createElement('div');
+        row.className = 'menu-item menu-row menu-row-preset';
+        const label = document.createElement('label');
+        label.setAttribute('for','preset-select');
+        label.textContent = 'Preset';
+        select = document.createElement('select');
+        select.id = 'preset-select';
+        select.className = 'toy-btn';
+        row.append(label, select);
+        menuPanel.appendChild(row);
+      } else {
+        select.classList.add('toy-btn');
+        if (row){
+          row.classList.add('menu-item','menu-row','menu-row-preset');
+        }
+      }
+      let apply = menuPanel.querySelector('[data-action="apply-preset"]');
+      if (!apply){
+        apply = document.createElement('button');
+        apply.type = 'button';
+        apply.className = 'menu-inline-btn';
+        apply.dataset.action = 'apply-preset';
+        apply.textContent = 'Apply';
+        row?.appendChild(apply);
+      } else {
+        apply.classList.add('menu-inline-btn');
+        apply.type = 'button';
+      }
+    };
+
+    ensureMenuButton('new-scene', 'New Scene');
+    ensureMenuButton('save-scene', 'Save Scene');
+    ensureMenuButton('load-scene', 'Load Scene');
+    ensureMenuButton('export-scene', 'Export Scene');
+    ensureMenuButton('import-scene', 'Import Scene');
+    ensureThemeRow();
+    ensurePresetRow();
+    ensureMenuButton('organize', 'Organize Board');
+
+    let controls = bar.querySelector('.topbar-controls');
+    if (!controls){
+      controls = document.createElement('div');
+      controls.className = 'topbar-controls';
+      bar.appendChild(controls);
+    }
+
     let playBtn = bar.querySelector('[data-action="toggle-play"]');
     if (!playBtn){
       playBtn = document.createElement('button');
@@ -123,45 +228,107 @@ function ensureTopbar(){
       playBtn.style.setProperty('--c-btn-size','65px');
       playBtn.title = 'Play';
       playBtn.innerHTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
-      const org = bar.querySelector('[data-action="organize"]');
-      if (org && org.parentNode){
-        org.parentNode.insertBefore(playBtn, org.nextSibling);
-      } else {
-        bar.prepend(playBtn);
-      }
+      controls.prepend(playBtn);
+    } else {
+      playBtn.classList.add('c-btn');
     }
     updatePlayButtonVisual(playBtn, !!Core?.isRunning?.());
+
+    const menuState = bar.__menuState || (bar.__menuState = {});
+    menuState.btn = menuBtn;
+    menuState.panel = menuPanel;
+    menuState.open = !!menuState.open;
+
+    if (!menuState.setOpen){
+      menuState.setOpen = (open)=>{
+        menuState.open = !!open;
+        const panel = menuState.panel || menuPanel;
+        const btnRef = menuState.btn || menuBtn;
+        if (!panel) return;
+        if (menuState.open){
+          panel.removeAttribute('hidden');
+          panel.classList.add('is-open');
+          btnRef?.setAttribute('aria-expanded','true');
+        } else {
+          if (!panel.hasAttribute('hidden')) panel.setAttribute('hidden','');
+          panel.classList.remove('is-open');
+          btnRef?.setAttribute('aria-expanded','false');
+        }
+      };
+      menuState.close = ()=> menuState.setOpen(false);
+      menuState.toggle = ()=> menuState.setOpen(!menuState.open);
+    }
+    menuState.setOpen(false);
+
+    if (!menuState.boundOutside && menuPanel && menuBtn){
+      menuState.boundOutside = (evt)=>{
+        if (!menuState.open) return;
+        const panel = menuState.panel || menuPanel;
+        const btnRef = menuState.btn || menuBtn;
+        const target = evt.target;
+        if (panel && panel.contains(target)) return;
+        if (btnRef && btnRef.contains(target)) return;
+        menuState.close?.();
+      };
+      document.addEventListener('pointerdown', menuState.boundOutside);
+    }
+
+    if (!menuState.boundEscape){
+      menuState.boundEscape = (evt)=>{
+        if (evt.key === 'Escape'){
+          menuState.close?.();
+        }
+      };
+      document.addEventListener('keydown', menuState.boundEscape);
+    }
+
     try{ populatePresets(); }catch{}
+
     return bar;
   }
 
 
-  if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => { ensureTopbar(); wireTopbar(); });
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    ensureTopbar();
+    wireTopbar();
+  });
 } else {
+  ensureTopbar();
   wireTopbar();
 }
 
-
-    function wireTopbar(){
-    if (window.__topbarWired) return;
-    window.__topbarWired = true;
+  function wireTopbar(){
     const bar = ensureTopbar();
     if (!bar) return;
+    if (window.__topbarWired) return;
+    window.__topbarWired = true;
+
     bar.addEventListener('click', (e)=>{
-      const b = e.target.closest('button');
+      const b = e.target.closest('button[data-action]');
       if (!b) return;
 
-      if (b.dataset.action==='organize'){
-        // Run the full layout sequence, same as on initial boot.
+      const action = b.dataset.action;
+      const menuState = bar.__menuState;
+
+      if (action === 'menu-toggle'){
+        e.preventDefault();
+        menuState?.toggle?.();
+        return;
+      }
+
+      if (action !== 'menu-toggle'){
+        menuState?.close?.();
+      }
+
+      if (action === 'organize'){
         try { window.organizeBoard && window.organizeBoard(); } catch(e){}
         try { window.applyStackingOrder && window.applyStackingOrder(); } catch(e){}
         try { window.addGapAfterOrganize && window.addGapAfterOrganize(); } catch(e){}
         return;
       }
 
-      if (b.dataset.action==='toggle-play'){
-        // Play/Pause toggle
+      if (action === 'toggle-play'){
         const doToggle = ()=>{
           try{
             Core?.ensureAudioContext?.();
@@ -179,29 +346,21 @@ function ensureTopbar(){
         return;
       }
 
-      if (b.dataset.action==='clear-all'){
+      const runSceneClear = ()=>{
         try{
           document.querySelectorAll('.toy-panel').forEach(panel=>{
             ['toy-clear','toy-reset'].forEach(t=> panel.dispatchEvent(new CustomEvent(t, { bubbles:true })));
           });
           try{ window.Persistence && window.Persistence.markDirty && window.Persistence.markDirty(); }catch{}
         }catch{}
+      };
+
+      if (action === 'new-scene' || action === 'clear-all'){
+        runSceneClear();
         return;
       }
 
-      if (b.dataset.action==='reset-scene'){
-        try{
-          try{ localStorage.removeItem('scene:autosave'); }catch{}
-          try{ localStorage.removeItem('prefs:lastScene'); }catch{}
-          try{ localStorage.removeItem('toyPositions'); }catch{}
-          const url = new URL(window.location.href);
-          url.searchParams.set('reset','1');
-          window.location.href = url.toString();
-        }catch{}
-        return;
-      }
-
-      if (b.dataset.action==='save-scene'){
+      if (action === 'save-scene'){
         try{
           const name = prompt('Save scene as:', (localStorage.getItem('prefs:lastScene')||'default')) || 'default';
           const P = window.Persistence; if (P && typeof P.saveScene==='function'){ P.saveScene(name); alert('Saved.'); }
@@ -209,7 +368,7 @@ function ensureTopbar(){
         return;
       }
 
-      if (b.dataset.action==='load-scene'){
+      if (action === 'load-scene'){
         try{
           const P = window.Persistence; if (!P) return;
           const scenes = (typeof P.listScenes==='function') ? P.listScenes() : [];
@@ -220,7 +379,7 @@ function ensureTopbar(){
         return;
       }
 
-      if (b.dataset.action==='export-scene'){
+      if (action === 'export-scene'){
         try{
           const P = window.Persistence; if (!P) return;
           const name = localStorage.getItem('prefs:lastScene') || 'default';
@@ -233,7 +392,7 @@ function ensureTopbar(){
         return;
       }
 
-      if (b.dataset.action==='import-scene'){
+      if (action === 'import-scene'){
         try{
           const input = document.createElement('input'); input.type='file'; input.accept='.json,application/json';
           input.onchange = async ()=>{
@@ -246,7 +405,7 @@ function ensureTopbar(){
         return;
       }
 
-      if (b.dataset.action==='apply-preset'){
+      if (action === 'apply-preset'){
         try{
           const sel = document.getElementById('preset-select');
           const key = sel?.value || '';
