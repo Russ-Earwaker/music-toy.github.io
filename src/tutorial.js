@@ -213,6 +213,7 @@ function cloneGoal(goal) {
   const tempSpawnerUnlocks = new Set();
   let tutorialState = null;
   let claimButton = null;
+  let guideHighlightCleanup = null;
   const debugTutorial = (...args) => {
     if (typeof window === 'undefined' || !window.DEBUG_TUTORIAL_LOCKS) return;
     try { console.debug('[tutorial]', ...args); } catch (_) { try { console.log('[tutorial]', ...args); } catch {} }
@@ -1957,60 +1958,154 @@ try {
   updateButtonVisual();
 
   window.addEventListener('guide:task-click', (e) => {
-    const { taskId, taskElement } = e.detail;
+    const { taskId, taskElement } = (e && e.detail) || {};
     if (!taskId || !taskElement) return;
+
+    // Clean up any previous highlight/handlers
+    if (typeof guideHighlightCleanup === 'function') {
+      try { guideHighlightCleanup(); } catch {}
+      guideHighlightCleanup = null;
+    }
 
     // Ensure canvases exist
     const panel = taskElement.closest('.guide-goals-panel');
     if (panel && !panel.querySelector('.goal-particles-behind')) {
-        const c = document.createElement('canvas');
-        c.className = 'goal-particles-behind';
-        // Style the canvas to prevent it from affecting layout
-        c.style.position = 'absolute';
-        c.style.inset = '0';
-        c.style.width = '100%';
-        c.style.height = '100%';
-        c.style.pointerEvents = 'none';
-        c.style.zIndex = '590'; // As per tutorial.css
-        panel.appendChild(c);
+      const c = document.createElement('canvas');
+      c.className = 'goal-particles-behind';
+      c.style.position = 'absolute';
+      c.style.inset = '0';
+      c.style.width = '100%';
+      c.style.height = '100%';
+      c.style.pointerEvents = 'none';
+      c.style.zIndex = '590';
+      panel.appendChild(c);
     }
     if (!document.querySelector('.tutorial-particles-front')) {
-        const c2 = document.createElement('canvas');
-        c2.className = 'tutorial-particles-front';
-        document.body.appendChild(c2);
+      const c2 = document.createElement('canvas');
+      c2.className = 'tutorial-particles-front';
+      document.body.appendChild(c2);
     }
 
-    // Stop any existing particle streams
     stopParticleStream();
 
+    const highlightAddToy = (toggle) => {
+      if (!toggle) return null;
+      let disposed = false;
+      const runParticles = () => {
+        if (disposed) return;
+        if (!taskElement.isConnected || !toggle.isConnected) return;
+        stopParticleStream();
+        startParticleStream(taskElement, toggle);
+      };
+      const scheduleParticles = () => {
+        requestAnimationFrame(() => requestAnimationFrame(runParticles));
+      };
+      const onResize = () => scheduleParticles();
+      toggle.classList.add('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-addtoy-pulse', 'tutorial-flash');
+      scheduleParticles();
+      window.addEventListener('resize', onResize, { passive: true });
+      const flashTimer = setTimeout(() => toggle.classList.remove('tutorial-flash'), 360);
+
+      return () => {
+        disposed = true;
+        window.removeEventListener('resize', onResize);
+        clearTimeout(flashTimer);
+        toggle.classList.remove('tutorial-flash');
+        toggle.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-addtoy-pulse');
+        stopParticleStream();
+      };
+    };
+
+    if (taskId === 'add-draw-toy' || taskId === 'add-rhythm-toy') {
+      let disposed = false;
+      let cleanupInner = null;
+      let retryTimer = 0;
+
+      const attach = () => {
+        if (disposed || cleanupInner) return;
+        const toggle = document.querySelector('.toy-spawner-toggle');
+        const visible = toggle && (toggle.offsetParent !== null || toggle.getClientRects().length > 0);
+        if (!visible) {
+          retryTimer = window.setTimeout(attach, 120);
+          return;
+        }
+        cleanupInner = highlightAddToy(toggle);
+      };
+
+      attach();
+
+      guideHighlightCleanup = () => {
+        disposed = true;
+        if (retryTimer) {
+          clearTimeout(retryTimer);
+          retryTimer = 0;
+        }
+        if (cleanupInner) {
+          try { cleanupInner(); } catch {}
+          cleanupInner = null;
+        }
+      };
+
+      return;
+    }
+
     const TASK_TARGET_SELECTORS = {
-      'add-draw-toy': '.toy-spawner-toggle',
-      'add-rhythm-toy': '.toy-spawner-toggle',
       'press-help': '.toy-spawner-help',
       'press-play': '#topbar [data-action="toggle-play"]',
-      'press-clear': '.toy-panel [data-action="clear"]',
-      'press-random': '.toy-panel [data-action="random"]',
+      'press-clear': '.toy-panel[data-toy="drawgrid"] [data-action="clear"], .toy-panel [data-action="clear"]',
+      'press-random': '.toy-panel[data-toy="drawgrid"] [data-action="random"], .toy-panel [data-action="random"]',
+      'toggle-node': '.toy-panel[data-toy="drawgrid"]',
+      'draw-line': '.toy-panel[data-toy="drawgrid"] canvas[data-role="drawgrid-paint"]',
     };
 
     const selector = TASK_TARGET_SELECTORS[taskId];
-    if (selector) {
-      const targetElement = document.querySelector(selector);
-      if (targetElement) {
-        startParticleStream(taskElement, targetElement);
-        // Add highlight if it's an "add toy" task
-        if (taskId === 'add-draw-toy' || taskId === 'add-rhythm-toy') {
-          targetElement.classList.add('tutorial-pulse-target', 'tutorial-addtoy-pulse');
-        }
-      }
+    if (!selector) return;
+
+    const targetElement = document.querySelector(selector);
+    if (!targetElement) return;
+
+    let disposed = false;
+    const runParticles = () => {
+      if (disposed) return;
+      if (!taskElement.isConnected || !targetElement.isConnected) return;
+      stopParticleStream();
+      startParticleStream(taskElement, targetElement);
+    };
+    const scheduleParticles = () => {
+      requestAnimationFrame(() => requestAnimationFrame(runParticles));
+    };
+    const onResize = () => scheduleParticles();
+
+    if (targetElement.classList.contains('tutorial-flash')) {
+      targetElement.classList.remove('tutorial-flash');
+      void targetElement.offsetWidth;
     }
+    targetElement.classList.add('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-flash');
+    const flashTimer = setTimeout(() => {
+      targetElement.classList.remove('tutorial-flash');
+    }, 360);
+    scheduleParticles();
+    window.addEventListener('resize', onResize, { passive: true });
+
+    guideHighlightCleanup = () => {
+      disposed = true;
+      window.removeEventListener('resize', onResize);
+      clearTimeout(flashTimer);
+      targetElement.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-flash');
+      stopParticleStream();
+    };
   });
 
   window.addEventListener('guide:task-deactivate', () => {
+    if (typeof guideHighlightCleanup === 'function') {
+      try { guideHighlightCleanup(); } catch {}
+      guideHighlightCleanup = null;
+      return;
+    }
     stopParticleStream();
-    // Remove highlight from "+ add toy" button
     const spawner = document.querySelector('.toy-spawner-toggle');
     if (spawner) {
-      spawner.classList.remove('tutorial-pulse-target', 'tutorial-addtoy-pulse');
+      spawner.classList.remove('tutorial-pulse-target', 'tutorial-addtoy-pulse', 'tutorial-flash');
     }
   });
 

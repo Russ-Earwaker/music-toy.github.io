@@ -2,8 +2,9 @@
 // Manages persistent UI highlight prompts for guide/help controls.
 
 const STORAGE_PREFIX = 'uiHighlight:';
-const CLASS_ACTIVE = 'ui-highlighted';
-const CLASS_PULSE = 'ui-highlight-pulse';
+const CLASS_ACTIVE = 'tutorial-pulse-target';
+const CLASS_PULSE = 'tutorial-active-pulse';
+const CLASS_FLASH = 'tutorial-flash';
 
 /**
  * @typedef {Object} HighlightEntry
@@ -14,6 +15,7 @@ const CLASS_PULSE = 'ui-highlight-pulse';
  * @property {boolean} active
  * @property {HTMLElement|null} el
  * @property {(ev: Event) => void} handler
+ * @property {number|null} flashTimer
  */
 
 const entries = {
@@ -25,6 +27,7 @@ const entries = {
     active: false,
     el: null,
     handler: () => markSeen('guide'),
+    flashTimer: null,
   },
   help: {
     storageKey: STORAGE_PREFIX + 'help',
@@ -34,6 +37,7 @@ const entries = {
     active: false,
     el: null,
     handler: () => markSeen('help'),
+    flashTimer: null,
   },
 };
 
@@ -91,13 +95,34 @@ function applyHighlightClass(entry) {
   if (!el) return;
 
   const shouldHighlight = entry.active && !entry.seen;
-  el.classList.toggle(CLASS_ACTIVE, shouldHighlight);
-  el.classList.toggle(CLASS_PULSE, shouldHighlight);
+  if (entry.flashTimer) {
+    clearTimeout(entry.flashTimer);
+    entry.flashTimer = null;
+  }
+
+  if (shouldHighlight) {
+    el.classList.add(CLASS_ACTIVE, CLASS_PULSE, CLASS_FLASH);
+    entry.flashTimer = setTimeout(() => {
+      if (entry.el) {
+        entry.el.classList.remove(CLASS_FLASH);
+      }
+      entry.flashTimer = null;
+    }, 360);
+  } else {
+    el.classList.remove(CLASS_ACTIVE, CLASS_PULSE, CLASS_FLASH);
+  }
 }
 
 function detachEntry(entry) {
   if (entry.el && entry.handler) {
     entry.el.removeEventListener('click', entry.handler);
+  }
+  if (entry.flashTimer) {
+    clearTimeout(entry.flashTimer);
+    entry.flashTimer = null;
+  }
+  if (entry.el) {
+    entry.el.classList.remove(CLASS_ACTIVE, CLASS_PULSE, CLASS_FLASH);
   }
   entry.el = null;
 }
@@ -171,16 +196,20 @@ function markSeen(key) {
 }
 
 function highlightForNewScene() {
-  setActive('guide', true);
-  setActive('help', true);
+  Object.keys(entries).forEach((key) => {
+    const entry = entries[key];
+    if (!entry) return;
+    saveSeen(entry, false);
+    setActive(key, true);
+  });
+  queryTargets();
 }
 
 function handleAppBoot({ restored, hasSavedPositions } = {}) {
   if (!restored && !hasSavedPositions) {
     highlightForNewScene();
-  } else {
-    scheduleRefresh();
   }
+  scheduleRefresh();
 }
 
 loadSeenFlags();

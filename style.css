@@ -1169,48 +1169,51 @@ body.tutorial-active #topbar #theme-switcher-wrap {
   display: none;
 }
 
-.ui-highlighted {
+@keyframes tutorialPulse {
+  0%   { transform: scale(1); }
+  10%  { transform: scale(1.08); }
+  25%  { transform: scale(1.00); }
+  50%  { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+
+.tutorial-pulse-target {
+  animation: tutorialPulse 2s ease-in-out infinite;
+  transform-origin: 50% 50%;
+}
+
+.tutorial-active-pulse:not(.c-btn) {
   position: relative;
   isolation: isolate;
+  box-shadow: 0 0 20px rgba(94, 179, 255, 0.55);
+  transition: box-shadow 0.25s ease;
 }
 
-.ui-highlight-pulse {
-  animation: uiHighlightPulse 1.6s ease-in-out infinite;
-  box-shadow: 0 0 0 0 rgba(94, 179, 255, 0.45);
-  transition: transform 0.25s ease;
-}
-
-.ui-highlight-pulse::after {
+.tutorial-active-pulse:not(.c-btn)::after {
   content: '';
   position: absolute;
   inset: -6px;
   border-radius: inherit;
-  box-shadow: 0 0 24px rgba(94, 179, 255, 0.7);
-  opacity: 0.8;
-  animation: uiHighlightGlow 1.6s ease-in-out infinite;
+  box-shadow: 0 0 32px rgba(94, 179, 255, 0.4);
+  opacity: 0.9;
   pointer-events: none;
   z-index: -1;
 }
 
-@keyframes uiHighlightPulse {
-  0% {
-    transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(94, 179, 255, 0.45);
-  }
-  50% {
-    transform: scale(1.05);
-    box-shadow: 0 0 0 8px rgba(94, 179, 255, 0);
-  }
-  100% {
-    transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(94, 179, 255, 0.45);
-  }
+.tutorial-flash {
+  filter: brightness(1.35);
 }
 
-@keyframes uiHighlightGlow {
-  0% { opacity: 0.85; }
-  50% { opacity: 0.2; }
-  100% { opacity: 0.85; }
+@keyframes pulseBorder {
+  0%   { box-shadow: 0 0 0 0px rgba(255, 255, 255, 0.9); }
+  50%  { box-shadow: 0 0 0 12px rgba(255, 255, 255, 0); }
+  100% { box-shadow: 0 0 0 0px rgba(255, 255, 255, 0); }
+}
+
+.toy-spawner-toggle.tutorial-addtoy-pulse {
+  animation: pulseBorder 2s ease-in-out infinite;
+  background-color: var(--surface) !important;
+  position: relative;
 }
 
 .tutorial-goals-progress {
