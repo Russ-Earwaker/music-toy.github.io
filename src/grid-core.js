@@ -5,6 +5,10 @@ import { initToyUI } from './toyui.js';
 import { attachDrumVisuals } from './drum-tiles-visual.js';
 import { midiToName, buildPalette } from './note-helpers.js';
 
+const NUM_CUBES = 8;
+
+
+
 export function markPlayingColumn(panel, colIndex){
   try{ panel.dispatchEvent(new CustomEvent('loopgrid:playcol', { detail:{ col: colIndex }, bubbles:true })); }catch{}
 }

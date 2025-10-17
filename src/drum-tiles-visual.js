@@ -3,8 +3,11 @@
 import { drawBlock, whichThirdRect } from './toyhelpers.js';
 import { midiToName } from './note-helpers.js';
 import { isRunning, getLoopInfo } from './audio-core.js';
+import { initGridParticles, drawGridParticles } from './grid-particles.js';
 
 const NUM_CUBES = 8;
+
+
 const GAP = 4; // A few pixels of space between each cube
 
 function findChainHead(toy) {
@@ -73,6 +76,7 @@ export function attachDrumVisuals(panel) {
     flash: new Float32Array(NUM_CUBES),
     bgFlash: 0,
     localLastPhase: 0, // For flicker-free playhead
+    particles: initGridParticles(),
   };
   panel.__drumVisualState = st;
 
@@ -193,12 +197,22 @@ function render(panel) {
   }
   panel.classList.toggle('toy-playing', showPlaying);
 
-  const { ctx, canvas } = st;
+  const { ctx, canvas, particles } = st;
   const w = canvas.width;
   const h = canvas.height;
   if (!w || !h) return;
 
   ctx.clearRect(0, 0, w, h);
+
+  const loopInfo = getLoopInfo();
+  const playheadCol = loopInfo ? Math.floor(loopInfo.phase01 * NUM_CUBES) : -1;
+
+  const map = {
+    n2x: (n) => n * w,
+    n2y: (n) => n * h,
+    scale: () => Math.min(w, h) / 420,
+  };
+  drawGridParticles(ctx, particles, map, { col: playheadCol });
 
   const steps = state.steps || [];
   const noteIndices = state.noteIndices || [];
@@ -215,21 +229,13 @@ function render(panel) {
   const heightBasedSize = h - BORDER_MARGIN * 2;
   const widthBasedSize = (w - totalGapWidth) / NUM_CUBES;
   let cubeSize = Math.min(heightBasedSize, widthBasedSize);
-  if (isZoomed) {
-    // Enlarge cubes up to +100% when height is the limiter, but never exceed width constraint
-    const target = Math.min(Math.floor(heightBasedSize * 2.0), Math.floor(widthBasedSize));
-    cubeSize = Math.max(cubeSize, target);
-  }
-  cubeSize = Math.max(1, Math.floor(cubeSize));
+  
+  cubeSize = Math.max(1, Math.floor(cubeSize * 1.2));
 
   // Center the entire block of cubes.
   const actualTotalCubesWidth = (cubeSize * NUM_CUBES) + totalGapWidth;
   const xOffset = (w - actualTotalCubesWidth) / 2;
   const yOffset = (h - cubeSize) / 2;
-
-  // Calculate playhead position directly from the global loop info.
-  const loopInfo = getLoopInfo();
-  const playheadCol = loopInfo ? Math.floor(loopInfo.phase01 * NUM_CUBES) : -1;
 
   // Check for phase wrap to prevent flicker on chain advance
   const phaseJustWrapped = loopInfo && loopInfo.phase01 < st.localLastPhase && st.localLastPhase > 0.9;

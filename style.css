@@ -405,7 +405,7 @@ select.toy-instrument {
 /* -------------------------- */
 
 .toy-panel[data-toy="loopgrid"],
-.toy-panel[data-toy="loopgrid-drum"] { --panel-w: 380px; }
+.toy-panel[data-toy="loopgrid-drum"] { --panel-w: 420px; }
 .toy-panel[data-toy="bouncer"]  { --panel-w: 300px; }
 .toy-panel[data-toy="rippler"]  { --panel-w: 300px; }
 .toy-panel[data-toy="drawgrid"] { --panel-w: 800px;
