@@ -4,6 +4,7 @@ const GUIDE_OPEN_CLASS = 'is-open';
 let hostRef = null;
 let toggleRef = null;
 let panelsRef = null;
+let lastApi = null;
 
 function ensureStyles() {
   if (document.getElementById('tutorial-styles')) return;
@@ -66,6 +67,7 @@ function clearPanels() {
 function renderGuide(api, { source = 'unknown' } = {}) {
   ensureStyles();
   ensureHost();
+  if (api) lastApi = api;
 
   const stamp = Date.now();
   let goals = [];
@@ -78,6 +80,12 @@ function renderGuide(api, { source = 'unknown' } = {}) {
   }
   if (!Array.isArray(goals)) goals = [];
   const hasGoals = goals.length > 0;
+  const toSet = (value) => (value instanceof Set ? new Set(value) : new Set(Array.isArray(value) ? value : []));
+  const progress = api?.getGuideProgress?.() || {};
+  const completedTasks = toSet(progress.completedTasks || []);
+  const completedGoals = toSet(progress.completedGoals || []);
+  const claimedRewards = toSet(progress.claimedRewards || []);
+  const pendingRewards = new Set([...completedGoals].filter((id) => !claimedRewards.has(id)));
 
   hostRef.dataset.guideState = hasGoals ? 'has-goals' : 'no-goals';
   hostRef.dataset.goalCount = String(goals.length);
@@ -96,7 +104,26 @@ function renderGuide(api, { source = 'unknown' } = {}) {
       panel.querySelector('.tutorial-claim-btn')?.remove();
 
       try {
-        api.populatePanel?.(panel, goal, { taskIndex: 0, showClaimButton: false });
+        const goalTasks = Array.isArray(goal.tasks) ? goal.tasks : [];
+        let activeTaskId = null;
+        for (const task of goalTasks) {
+          const taskId = task?.id;
+          if (!taskId) continue;
+          if (!completedTasks.has(taskId)) {
+            activeTaskId = taskId;
+            break;
+          }
+        }
+
+        api.populatePanel?.(panel, goal, {
+          taskIndex: 0,
+          showClaimButton: false,
+          activeTaskId,
+          completedTaskIds: completedTasks,
+          completedGoals,
+          claimedRewards,
+          pendingRewards,
+        });
       } catch (err) {
         console.warn('[guide] populatePanel failed', err);
       }
@@ -178,6 +205,12 @@ function renderGuide(api, { source = 'unknown' } = {}) {
 
   console.info('[guide] render', { source, goals: goals.length });
 }
+
+window.addEventListener('guide:progress-update', () => {
+  if (lastApi) {
+    renderGuide(lastApi, { source: 'progress-update' });
+  }
+});
 
 function startWhenReady() {
   renderGuide(null, { source: 'bootstrap-placeholder' });

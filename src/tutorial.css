@@ -199,6 +199,39 @@ body.tutorial-active #topbar .tutorial-play-hidden {
   filter: brightness(1.35);
 }
 
+.tutorial-goals-header,
+.guide-goals-panel .tutorial-goals-header {
+  position: relative;
+}
+
+.tutorial-goals-panel.is-goal-complete .tutorial-goals-title::after,
+.guide-goals-panel.is-goal-complete .tutorial-goals-title::after {
+  content: '✓';
+  margin-left: 0.5rem;
+  font-size: 0.75em;
+  color: #4ade80;
+  font-weight: 700;
+}
+
+.tutorial-goals-panel.has-pending-reward .tutorial-goals-header::after,
+.guide-goals-panel.has-pending-reward .tutorial-goals-header::after {
+  content: '!';
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.35);
+}
+
 .goal-task {
   border: 3px solid transparent;
   border-radius: 8px;

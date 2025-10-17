@@ -17,6 +17,21 @@ const TUTORIAL_ZOOM = 1.15; // adjust to taste (1.0–1.3 are good)
 
 const GOAL_FLOW = [
   {
+    id: 'place-toy',
+    title: 'Place a Toy',
+    reward: {
+      description: 'Reward available soon.',
+      autoClaim: true,
+    },
+    tasks: [
+      {
+        id: 'place-any-toy',
+        label: 'Open the Add Toy menu and drag or tap to place any toy',
+        requirement: 'place-any-toy',
+      },
+    ],
+  },
+  {
     id: 'draw-intro',
     title: 'Draw out a tune',
     reward: {
@@ -164,6 +179,156 @@ const GOAL_FLOW = [
   },
 ];
 
+const GOAL_BY_ID = new Map(GOAL_FLOW.map(goal => [goal.id, goal]));
+const TASK_INFO_BY_ID = new Map();
+const TASKS_BY_REQUIREMENT = new Map();
+
+GOAL_FLOW.forEach((goal) => {
+  const tasks = Array.isArray(goal.tasks) ? goal.tasks : [];
+  tasks.forEach((task, index) => {
+    if (!task) return;
+    const taskId = task.id || `task-${index}`;
+    TASK_INFO_BY_ID.set(taskId, { goalId: goal.id, taskIndex: index, requirement: task.requirement });
+    if (!task.requirement) return;
+    if (!TASKS_BY_REQUIREMENT.has(task.requirement)) TASKS_BY_REQUIREMENT.set(task.requirement, []);
+    TASKS_BY_REQUIREMENT.get(task.requirement).push({ goalId: goal.id, taskId, taskIndex: index });
+  });
+});
+
+const GUIDE_PROGRESS_STORAGE_KEY = 'music-toy-guide-progress.v1';
+
+function createEmptyGuideProgress() {
+  return {
+    tasks: new Set(),
+    goals: new Set(),
+    claimedRewards: new Set(),
+  };
+}
+
+function arrayToSet(value) {
+  if (value instanceof Set) return value;
+  if (!Array.isArray(value)) return new Set();
+  return new Set(value);
+}
+
+function hasLocalStorage() {
+  try {
+    return typeof localStorage !== 'undefined';
+  } catch {
+    return false;
+  }
+}
+
+function loadGuideProgress() {
+  if (!hasLocalStorage()) return createEmptyGuideProgress();
+  try {
+    const raw = localStorage.getItem(GUIDE_PROGRESS_STORAGE_KEY);
+    if (!raw) return createEmptyGuideProgress();
+    const parsed = JSON.parse(raw);
+    return {
+      tasks: arrayToSet(parsed.tasks),
+      goals: arrayToSet(parsed.goals),
+      claimedRewards: arrayToSet(parsed.claimedRewards),
+    };
+  } catch {
+    return createEmptyGuideProgress();
+  }
+}
+
+const guideProgress = loadGuideProgress();
+
+function saveGuideProgress() {
+  if (!hasLocalStorage()) return;
+  try {
+    const payload = {
+      tasks: Array.from(guideProgress.tasks),
+      goals: Array.from(guideProgress.goals),
+      claimedRewards: Array.from(guideProgress.claimedRewards),
+    };
+    localStorage.setItem(GUIDE_PROGRESS_STORAGE_KEY, JSON.stringify(payload));
+  } catch {}
+}
+
+function getGuideProgressSnapshot() {
+  return {
+    completedTasks: Array.from(guideProgress.tasks),
+    completedGoals: Array.from(guideProgress.goals),
+    claimedRewards: Array.from(guideProgress.claimedRewards),
+  };
+}
+
+function dispatchGuideProgressUpdate(source) {
+  try {
+    const detail = { source, progress: getGuideProgressSnapshot() };
+    window.dispatchEvent(new CustomEvent('guide:progress-update', { detail }));
+  } catch {}
+}
+
+function markGuideTaskComplete(goalId, taskId) {
+  if (!goalId || !taskId) return false;
+  const beforeSize = guideProgress.tasks.size;
+  guideProgress.tasks.add(taskId);
+  const goal = GOAL_BY_ID.get(goalId);
+  let goalUpdated = false;
+  if (goal) {
+    const tasks = Array.isArray(goal.tasks) ? goal.tasks : [];
+    const allComplete = tasks.every(task => !task?.id || guideProgress.tasks.has(task.id));
+    if (allComplete) {
+      if (!guideProgress.goals.has(goalId)) goalUpdated = true;
+      guideProgress.goals.add(goalId);
+    }
+  }
+  if (guideProgress.tasks.size !== beforeSize || goalUpdated) {
+    saveGuideProgress();
+    dispatchGuideProgressUpdate({ goalId, taskId, via: 'markGuideTaskComplete' });
+    return true;
+  }
+  return false;
+}
+
+function markGuideRewardClaimed(goalId) {
+  if (!goalId) return false;
+  const prior = guideProgress.claimedRewards.size;
+  guideProgress.claimedRewards.add(goalId);
+  if (guideProgress.claimedRewards.size !== prior) {
+    saveGuideProgress();
+    dispatchGuideProgressUpdate({ goalId, via: 'markGuideRewardClaimed' });
+    return true;
+  }
+  return false;
+}
+
+function recordRequirementProgress(requirement) {
+  if (!requirement) return false;
+  const entries = TASKS_BY_REQUIREMENT.get(requirement);
+  if (!entries || !entries.length) return false;
+  let changed = false;
+  const goalsTouched = new Set();
+  entries.forEach(({ goalId, taskId }) => {
+    const didUpdate = markGuideTaskComplete(goalId, taskId);
+    if (didUpdate) changed = true;
+    goalsTouched.add(goalId);
+  });
+  if (changed) return true;
+  // Even if no individual task was new, a previously incomplete goal might flip to complete
+  let goalChanged = false;
+  goalsTouched.forEach((goalId) => {
+    const goal = GOAL_BY_ID.get(goalId);
+    if (!goal) return;
+    const tasks = Array.isArray(goal.tasks) ? goal.tasks : [];
+    const allComplete = tasks.every(task => !task?.id || guideProgress.tasks.has(task.id));
+    if (allComplete && !guideProgress.goals.has(goalId)) {
+      guideProgress.goals.add(goalId);
+      goalChanged = true;
+    }
+  });
+  if (goalChanged) {
+    saveGuideProgress();
+    dispatchGuideProgressUpdate({ requirement, via: 'recordRequirementProgress' });
+  }
+  return goalChanged;
+}
+
 function cloneGoal(goal) {
   if (!goal) return null;
   try {
@@ -185,6 +350,7 @@ function cloneGoal(goal) {
           getGoalById: (id) => cloneGoal(GOAL_FLOW.find(goal => goal.id === id)),
           createPanel: () => buildGoalPanel(),
           populatePanel: (panel, goal, options) => populateGoalPanel(panel, goal, options),
+          getGuideProgress: () => getGuideProgressSnapshot(),
         };
         window.TutorialGoalsAPI = Object.freeze(api);
         window.dispatchEvent(new CustomEvent('tutorial:goals-ready', { detail: api }));
@@ -200,6 +366,34 @@ function cloneGoal(goal) {
   const board = document.getElementById('board');
   console.log('[tutorial] element probe', { hasTutorialButton: !!tutorialButton, hasBoard: !!board, readyState: document.readyState });
   if (!board) return;
+
+  const guideToyTracker = (() => {
+    const handlePanel = (panel) => {
+      if (!(panel instanceof HTMLElement)) return;
+      if (!panel.classList.contains('toy-panel')) return;
+      maybeCompleteTask('place-any-toy');
+      const toyType = panel.dataset?.toy;
+      if (toyType === 'drawgrid') {
+        maybeCompleteTask('add-toy-drawgrid');
+      } else if (toyType === 'loopgrid') {
+        maybeCompleteTask('add-toy-loopgrid');
+      }
+    };
+
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        mutation.addedNodes.forEach((node) => {
+          if (node instanceof HTMLElement) {
+            if (node.classList.contains('toy-panel')) handlePanel(node);
+            node.querySelectorAll?.('.toy-panel').forEach(handlePanel);
+          }
+        });
+      });
+    });
+
+    observer.observe(board, { childList: true, subtree: true });
+    return { disconnect: () => observer.disconnect() };
+  })();
 
   let tutorialActive = false;
   let tutorialToy = null;
@@ -1004,34 +1198,80 @@ function cloneGoal(goal) {
     const unlockedRewards = unlockedInput instanceof Set
       ? unlockedInput
       : new Set(Array.isArray(unlockedInput) ? unlockedInput : []);
+    const completedTasksInput = options.completedTaskIds;
+    const completedTaskIds = completedTasksInput instanceof Set
+      ? new Set(completedTasksInput)
+      : new Set(Array.isArray(completedTasksInput) ? completedTasksInput : []);
+    if (!completedTaskIds.size && taskIndex > 0) {
+      for (let i = 0; i < taskIndex && i < tasks.length; i++) {
+        const fallbackId = tasks[i]?.id || `task-${i}`;
+        completedTaskIds.add(fallbackId);
+      }
+    }
+    const completedGoalsInput = options.completedGoals;
+    const completedGoals = completedGoalsInput instanceof Set
+      ? completedGoalsInput
+      : new Set(Array.isArray(completedGoalsInput) ? completedGoalsInput : []);
+    const claimedRewardsInput = options.claimedRewards;
+    const claimedRewards = claimedRewardsInput instanceof Set
+      ? claimedRewardsInput
+      : new Set(Array.isArray(claimedRewardsInput) ? claimedRewardsInput : []);
+    const pendingRewardsInput = options.pendingRewards;
+    const pendingRewards = pendingRewardsInput instanceof Set
+      ? pendingRewardsInput
+      : new Set(Array.isArray(pendingRewardsInput) ? pendingRewardsInput : []);
 
+    const headerEl = panelEl.querySelector('.tutorial-goals-header');
     const titleEl = panelEl.querySelector('.tutorial-goals-title');
     if (titleEl) titleEl.textContent = goal.title || '';
+
+    const goalId = goal.id || '';
+    const goalComplete = goalId ? completedGoals.has(goalId) : false;
+    const rewardClaimed = goalId ? claimedRewards.has(goalId) : false;
+    const hasPendingReward = goalId ? pendingRewards.has(goalId) : (goalComplete && !rewardClaimed);
+
+    panelEl.classList.toggle('is-goal-complete', goalComplete);
+    panelEl.classList.toggle('has-pending-reward', hasPendingReward);
+    if (headerEl) headerEl.classList.toggle('has-pending-reward', hasPendingReward);
+    if (titleEl) titleEl.classList.toggle('is-goal-complete', goalComplete);
+
+    const resolvedActiveTaskId = (() => {
+      if (options.activeTaskId) return options.activeTaskId;
+      if (taskIndex < tasks.length && tasks[taskIndex]?.id) return tasks[taskIndex].id;
+      const firstIncomplete = tasks.find((task, index) => {
+        const taskId = task?.id || `task-${index}`;
+        return !completedTaskIds.has(taskId);
+      });
+      return firstIncomplete?.id || null;
+    })();
 
     const listEl = panelEl.querySelector('.tutorial-goals-tasklist');
     if (listEl) {
       listEl.innerHTML = '';
       tasks.forEach((task, index) => {
+        const taskId = task?.id || `task-${index}`;
         const li = document.createElement('li');
         li.className = 'goal-task';
-        li.dataset.taskId = task.id || `task-${index}`;
-        if (index < taskIndex) li.classList.add('is-complete');
-        else if (index === taskIndex) li.classList.add('is-active');
-        else li.classList.add('is-hidden');
-        li.innerHTML = `<span class="goal-task-index">${index + 1}</span><span class="goal-task-label">${task.label || ''}</span>`;
+        li.dataset.taskId = taskId;
+        if (completedTaskIds.has(taskId)) li.classList.add('is-complete');
+        if (resolvedActiveTaskId && resolvedActiveTaskId === taskId) li.classList.add('is-active');
+        li.innerHTML = `<span class="goal-task-index">${index + 1}</span><span class="goal-task-label">${task?.label || ''}</span>`;
         listEl.appendChild(li);
       });
     }
 
-    const completedTasks = Math.min(taskIndex, tasks.length);
+    const completedTasksCount = tasks.reduce((count, task, index) => {
+      const taskId = task?.id || `task-${index}`;
+      return completedTaskIds.has(taskId) ? count + 1 : count;
+    }, 0);
     const progressFill = panelEl.querySelector('.goal-progress-fill');
     if (progressFill) {
-      const pct = tasks.length > 0 ? (completedTasks / tasks.length) * 100 : 0;
+      const pct = tasks.length > 0 ? (completedTasksCount / tasks.length) * 100 : 0;
       progressFill.style.width = `${pct}%`;
     }
     const progressSummary = panelEl.querySelector('.goal-progress-summary');
     if (progressSummary) {
-      progressSummary.innerHTML = `<strong>${completedTasks} / ${tasks.length}</strong> tasks complete`;
+      progressSummary.innerHTML = `<strong>${completedTasksCount} / ${tasks.length}</strong> tasks complete`;
     }
 
     const reward = goal.reward || {};
@@ -1148,9 +1388,20 @@ function cloneGoal(goal) {
       return;
     }
 
+    const progress = getGuideProgressSnapshot();
+    const completedTaskSet = new Set(progress.completedTasks || []);
+    const completedGoalSet = new Set(progress.completedGoals || []);
+    const claimedRewardSet = new Set(progress.claimedRewards || []);
+    const pendingRewardSet = new Set([...completedGoalSet].filter(id => !claimedRewardSet.has(id)));
+
     populateGoalPanel(goalPanel, goal, {
       taskIndex: tutorialState.taskIndex,
       unlockedRewards: tutorialState.unlockedRewards,
+      activeTaskId: getCurrentTask()?.id || null,
+      completedTaskIds: completedTaskSet,
+      completedGoals: completedGoalSet,
+      claimedRewards: claimedRewardSet,
+      pendingRewards: pendingRewardSet,
     });
     updateClaimButtonVisibility();
   }
@@ -1192,6 +1443,7 @@ function cloneGoal(goal) {
     if (unlocked.length) {
       requestAnimationFrame(() => unlocked.forEach(animateUnlock));
     }
+    markGuideRewardClaimed(goal.id);
     tutorialState.pendingRewardGoalId = null;
     tutorialState.goalIndex++;
     tutorialState.taskIndex = 0;
@@ -1229,7 +1481,7 @@ function cloneGoal(goal) {
 
     let handledSpecial = false;
 
-    if (task.id === 'add-draw-toy') {
+    if (task.id === 'place-any-toy' || task.id === 'add-draw-toy') {
       ensureGoalPanel();
       temporaryUnlockSpawnerControl('toggle');
 
@@ -1548,12 +1800,18 @@ function cloneGoal(goal) {
       tutorialState.taskIndex = goal.tasks.length;
       tutorialState.pendingRewardGoalId = goal.id;
       debugTutorial('goal-ready', goal.id);
-      renderGoalPanel();
-      updateClaimButtonVisibility();
-      stopParticleStream();
-      document.querySelectorAll('.tutorial-pulse-target, .tutorial-active-pulse, .tutorial-addtoy-pulse').forEach(el => {
-        el.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-addtoy-pulse');
-      });
+      const reward = goal.reward || null;
+      const shouldAutoClaim = !reward || reward.autoClaim;
+      if (shouldAutoClaim) {
+        claimCurrentGoalReward();
+      } else {
+        renderGoalPanel();
+        updateClaimButtonVisibility();
+        stopParticleStream();
+        document.querySelectorAll('.tutorial-pulse-target, .tutorial-active-pulse, .tutorial-addtoy-pulse').forEach(el => {
+          el.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-addtoy-pulse');
+        });
+      }
       return;
     }
 
@@ -1562,13 +1820,14 @@ function cloneGoal(goal) {
   }
 
   function maybeCompleteTask(requirement) {
-    if (tutorialState?.pendingRewardGoalId) return false;
+    const progressChanged = recordRequirementProgress(requirement);
+    if (tutorialState?.pendingRewardGoalId) return progressChanged;
     const task = getCurrentTask();
     if (task && task.requirement === requirement) {
       completeCurrentTask();
       return true;
     }
-    return false;
+    return progressChanged;
   }
 
   function handleDrawgridUpdate(detail) {
@@ -2034,7 +2293,7 @@ try {
       };
     };
 
-    if (taskId === 'add-draw-toy' || taskId === 'add-rhythm-toy') {
+    if (taskId === 'place-any-toy' || taskId === 'add-draw-toy' || taskId === 'add-rhythm-toy') {
       let disposed = false;
       let cleanupInner = null;
       let retryTimer = 0;
@@ -2082,6 +2341,7 @@ try {
       'toggle-node': '.toy-panel[data-toy="drawgrid"]',
       'draw-line': '.toy-panel[data-toy="drawgrid"] canvas[data-role="drawgrid-paint"]',
       // Guide tasks that spawn toys should aim the effect at the shared toggle button
+      'place-any-toy': '.toy-spawner-toggle',
       'add-draw-toy': '.toy-spawner-toggle',
       'add-rhythm-toy': '.toy-spawner-toggle',
     };
