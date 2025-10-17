@@ -176,6 +176,7 @@ function cloneGoal(goal) {
 
 
 (function() {
+  console.log('[tutorial] script boot', { readyState: document.readyState });
   function exposeGoalsAPI(){
     try {
       if (!window.TutorialGoalsAPI) {
@@ -197,7 +198,8 @@ function cloneGoal(goal) {
 
   const tutorialButton = document.querySelector('[data-action="tutorial"]');
   const board = document.getElementById('board');
-  if (!tutorialButton || !board) return;
+  console.log('[tutorial] element probe', { hasTutorialButton: !!tutorialButton, hasBoard: !!board, readyState: document.readyState });
+  if (!board) return;
 
   let tutorialActive = false;
   let tutorialToy = null;
@@ -251,9 +253,10 @@ function cloneGoal(goal) {
     btn.title = playing ? 'Pause' : 'Play';
   }
 
-  const defaultLabel = tutorialButton.textContent?.trim() || 'Tutorial';
+  const defaultLabel = tutorialButton ? (tutorialButton.textContent?.trim() || 'Tutorial') : 'Tutorial';
 
   function updateButtonVisual() {
+    if (!tutorialButton) return;
     tutorialButton.textContent = tutorialActive ? 'Exit Tutorial' : defaultLabel;
     tutorialButton.setAttribute('aria-pressed', tutorialActive ? 'true' : 'false');
   }
@@ -1954,11 +1957,14 @@ try {
     hasDetectedLine = false;
   }
 
-  tutorialButton.addEventListener('click', () => tutorialActive ? exitTutorial() : enterTutorial());
-  updateButtonVisual();
+  if (tutorialButton) {
+    tutorialButton.addEventListener('click', () => tutorialActive ? exitTutorial() : enterTutorial());
+    updateButtonVisual();
+  }
 
   window.addEventListener('guide:task-click', (e) => {
     const { taskId, taskElement } = (e && e.detail) || {};
+    console.log('[tutorial] guide:task-click', { taskId, taskElementExists: !!taskElement });
     if (!taskId || !taskElement) return;
 
     // Clean up any previous highlight/handlers
@@ -1995,12 +2001,24 @@ try {
         if (disposed) return;
         if (!taskElement.isConnected || !toggle.isConnected) return;
         stopParticleStream();
+        console.log('[tutorial] highlightAddToy runParticles', {
+          taskId,
+          taskClasses: taskElement.className,
+          toggleClasses: toggle.className,
+        });
         startParticleStream(taskElement, toggle);
       };
       const scheduleParticles = () => {
+        console.log('[tutorial] highlightAddToy scheduleParticles', { taskId });
         requestAnimationFrame(() => requestAnimationFrame(runParticles));
       };
       const onResize = () => scheduleParticles();
+      console.log('[tutorial] highlightAddToy start', {
+        taskId,
+        toggleClasses: toggle.className,
+        isConnected: toggle.isConnected,
+        isVisible: toggle.offsetParent !== null || toggle.getClientRects().length > 0,
+      });
       toggle.classList.add('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-addtoy-pulse', 'tutorial-flash');
       scheduleParticles();
       window.addEventListener('resize', onResize, { passive: true });
@@ -2024,11 +2042,18 @@ try {
       const attach = () => {
         if (disposed || cleanupInner) return;
         const toggle = document.querySelector('.toy-spawner-toggle');
+        console.log('[tutorial] attach toggle lookup', {
+          taskId,
+          toggleFound: !!toggle,
+          toggleClasses: toggle ? toggle.className : null,
+        });
         const visible = toggle && (toggle.offsetParent !== null || toggle.getClientRects().length > 0);
         if (!visible) {
+          console.log('[tutorial] attach toggle not visible yet', { taskId });
           retryTimer = window.setTimeout(attach, 120);
           return;
         }
+        console.log('[tutorial] attach toggle ready', { taskId });
         cleanupInner = highlightAddToy(toggle);
       };
 
@@ -2056,19 +2081,34 @@ try {
       'press-random': '.toy-panel[data-toy="drawgrid"] [data-action="random"], .toy-panel [data-action="random"]',
       'toggle-node': '.toy-panel[data-toy="drawgrid"]',
       'draw-line': '.toy-panel[data-toy="drawgrid"] canvas[data-role="drawgrid-paint"]',
+      // Guide tasks that spawn toys should aim the effect at the shared toggle button
+      'add-draw-toy': '.toy-spawner-toggle',
+      'add-rhythm-toy': '.toy-spawner-toggle',
     };
 
     const selector = TASK_TARGET_SELECTORS[taskId];
-    if (!selector) return;
+    if (!selector) {
+      console.log('[tutorial] no target selector for task', { taskId });
+      return;
+    }
 
     const targetElement = document.querySelector(selector);
-    if (!targetElement) return;
+    if (!targetElement) {
+      console.log('[tutorial] target selector found no element', { taskId, selector });
+      return;
+    }
 
     let disposed = false;
     const runParticles = () => {
       if (disposed) return;
       if (!taskElement.isConnected || !targetElement.isConnected) return;
       stopParticleStream();
+      console.log('[tutorial] general runParticles', {
+        taskId,
+        taskClasses: taskElement.className,
+        targetSelector: selector,
+        targetClasses: targetElement.className,
+      });
       startParticleStream(taskElement, targetElement);
     };
     const scheduleParticles = () => {

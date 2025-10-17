@@ -252,10 +252,17 @@ function startFlight(ctx, startEl, endEl) {
 
 
 export function startParticleStream(originEl, targetEl) {
-  const panel = originEl.closest('.tutorial-goals-panel, #tutorial-goals');
+  if (!originEl || !targetEl) {
+    console.log('[tutorial-fx] startParticleStream skipped: origin or target missing', { originElExists: !!originEl, targetElExists: !!targetEl });
+    return;
+  }
+  const panel = originEl.closest('.guide-goals-panel, .tutorial-goals-panel, #tutorial-goals');
   const behind = panel ? panel.querySelector('.goal-particles-behind') : null;
   const front  = document.querySelector('.tutorial-particles-front');
-  if (!behind || !front || !originEl || !targetEl) return;
+  if (!behind || !front) {
+    console.log('[tutorial-fx] startParticleStream skipped: canvas missing', { hasPanel: !!panel, hasBehind: !!behind, hasFront: !!front });
+    return;
+  }
 
   setupCanvases(behind, front);
 
@@ -270,6 +277,12 @@ export function startParticleStream(originEl, targetEl) {
   const sy = startRect.top + startRect.height * 0.5;
   const ex = endRect.left + endRect.width * 0.5;
   const ey = endRect.top + endRect.height * 0.5;
+  console.log('[tutorial-fx] startParticleStream kicking off', {
+    originClass: originEl.className,
+    targetClass: targetEl.className,
+    startRect: { left: startRect.left, top: startRect.top, width: startRect.width, height: startRect.height },
+    endRect: { left: endRect.left, top: endRect.top, width: endRect.width, height: endRect.height },
+  });
   createBurst(sx, sy, { x: ex, y: ey });
 
   // Kick the animation
