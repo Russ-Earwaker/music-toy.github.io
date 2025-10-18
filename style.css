@@ -404,8 +404,12 @@ select.toy-instrument {
 /* --- Per-Toy Panel Size --- */
 /* -------------------------- */
 
-.toy-panel[data-toy="loopgrid"],
 .toy-panel[data-toy="loopgrid-drum"] { --panel-w: 420px; }
+.toy-panel[data-toy="loopgrid"] { --panel-w: 520px; }
+
+.toy-panel[data-toy="loopgrid"] {
+  width: var(--panel-w) !important; /* override any JS inline width */
+}
 .toy-panel[data-toy="bouncer"]  { --panel-w: 300px; }
 .toy-panel[data-toy="rippler"]  { --panel-w: 300px; }
 .toy-panel[data-toy="drawgrid"] { --panel-w: 800px;
@@ -444,7 +448,6 @@ select.toy-instrument {
 }
 
 /* Loopgrid (Simple + Drum): Complex grid body */
-.toy-panel[data-toy="loopgrid"] .toy-body,
 .toy-panel[data-toy="loopgrid-drum"] .toy-body {
   flex-grow: 0;
   aspect-ratio: 1 / 1;
@@ -452,6 +455,14 @@ select.toy-instrument {
   grid-template-rows: auto 1fr;
   padding: 12px;
   gap: 12px;
+}
+.toy-panel[data-toy="loopgrid"] .toy-body {
+  flex-grow: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr); /* sequencer row + flexible pad row */
+  padding: 12px;
+  gap: 12px;
+  height: auto; /* allow natural height; no global aspect lock here */
 }
 .sequencer-wrap {
   width: 100%;
@@ -476,8 +487,6 @@ select.toy-instrument {
 }
 .grid-drum-pad {
   aspect-ratio: 1 / 1;
-  width: 55%;
-  max-height: 65%;
   position: relative;
   border-radius: 50%;
   cursor: pointer;
@@ -487,6 +496,16 @@ select.toy-instrument {
   border: 1px solid rgba(255, 255, 255, 0.1);
   transition: transform 0.1s ease-out;
   z-index: 1;
+}
+
+.toy-panel[data-toy="loopgrid-drum"] .grid-drum-pad {
+  width: 55%;
+  max-height: 65%;
+}
+
+.toy-panel[data-toy="loopgrid"] .grid-drum-pad {
+  width: 60%;
+  max-height: 70%;
 }
 .grid-drum-pad:hover {
   border-color: rgba(255, 255, 255, 0.2);
