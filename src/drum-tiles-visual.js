@@ -69,13 +69,19 @@ export function attachDrumVisuals(panel) {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
 
+  /* NEW: particle canvas/context */
+  const particleCanvas = panel.querySelector('.particle-canvas');
+  const pctx = particleCanvas ? particleCanvas.getContext('2d') : null;
+
   const st = {
     panel,
     canvas,
     ctx,
+    particleCanvas,
+    pctx,
     flash: new Float32Array(NUM_CUBES),
     bgFlash: 0,
-    localLastPhase: 0, // For flicker-free playhead
+    localLastPhase: 0,
     particles: initGridParticles(),
   };
   panel.__drumVisualState = st;
@@ -207,12 +213,25 @@ function render(panel) {
   const loopInfo = getLoopInfo();
   const playheadCol = loopInfo ? Math.floor(loopInfo.phase01 * NUM_CUBES) : -1;
 
+  /* Draw particles on the particle layer (double-height) */
+  if (st.pctx && st.particleCanvas) {
+    const pw = st.particleCanvas.width;
+    const ph = st.particleCanvas.height;
+    st.pctx.clearRect(0, 0, pw, ph);
+    const pmap = {
+      n2x: (n) => n * pw,
+      n2y: (n) => n * ph,
+      scale: () => Math.min(pw, ph) / 420,
+    };
+    drawGridParticles(st.pctx, particles, pmap, { col: playheadCol });
+  }
+
+  /* Map for cubes uses the grid canvas size */
   const map = {
     n2x: (n) => n * w,
     n2y: (n) => n * h,
     scale: () => Math.min(w, h) / 420,
   };
-  drawGridParticles(ctx, particles, map, { col: playheadCol });
 
   const steps = state.steps || [];
   const noteIndices = state.noteIndices || [];

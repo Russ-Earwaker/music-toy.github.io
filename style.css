@@ -406,13 +406,66 @@ select.toy-instrument {
 
 .toy-panel[data-toy="loopgrid-drum"] { --panel-w: 420px; }
 .toy-panel[data-toy="loopgrid"] {
+  /* Grid geometry */
   --loopgrid-cols: 8;
   --loopgrid-gap: 4px;
   --loopgrid-cube-size: 56px;
-  --loopgrid-inner-width: calc(var(--loopgrid-cube-size) * var(--loopgrid-cols) + var(--loopgrid-gap) * (var(--loopgrid-cols) - 1));
+  --loopgrid-inner-width: calc(
+    var(--loopgrid-cube-size) * var(--loopgrid-cols)
+    + var(--loopgrid-gap) * (var(--loopgrid-cols) - 1)
+  );
+
+  /* Particle field = 2x cube height */
   --loopgrid-field-height: calc(var(--loopgrid-cube-size) * 2);
-  --panel-w: max(480px, calc(var(--loopgrid-inner-width) + 72px));
+
+  /* Horizontal breathing room (for the field / shadows) */
+  --edge-buffer: 60px;
+
+  /* Panel width must accommodate inner grid + side buffers + header/UI */
+  --panel-w: max(640px, calc(var(--loopgrid-inner-width) + (var(--edge-buffer) * 2) + 120px));
 }
+
+/* Layout for the grid row + pad row (we only use the sequencer row here) */
+.toy-panel[data-toy="loopgrid"] .toy-body {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  padding: 12px;
+  gap: 12px;
+}
+
+/* The sequencer viewport that contains the cubes' canvas */
+.toy-panel[data-toy="loopgrid"] .sequencer-wrap {
+  position: relative;
+  width: var(--loopgrid-inner-width);
+  margin: 0 auto;              /* center inside the panel */
+  min-height: 56px;            /* guardrails */
+  max-height: 22vh;
+  aspect-ratio: 8 / 1;
+}
+
+/* The cubes canvas should sit above the particles */
+.toy-panel[data-toy="loopgrid"] .grid-canvas {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Particle canvas sits behind and is double-height, centered */
+.toy-panel[data-toy="loopgrid"] .particle-canvas {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  width: calc(100% + var(--edge-buffer) * 2);
+  left: calc(var(--edge-buffer) * -1);
+
+  /* 2× cube area, vertically centered on the sequencer */
+  height: var(--loopgrid-field-height);
+  top: calc(50% - (var(--loopgrid-field-height) / 2));
+}
+
+
 /* Panel width: one source of truth, wins over inline widths */
 .toy-panel[data-toy="loopgrid"],
 .toy-panel[data-toy="loopgrid-drum"] {
@@ -500,6 +553,7 @@ select.toy-instrument {
 .toy-panel[data-toy="loopgrid"] .drum-pad-wrap {
   justify-self: stretch;
   aspect-ratio: 1 / 4;
+  overflow: visible;
 }
 .grid-drum-pad {
   aspect-ratio: 1 / 1;

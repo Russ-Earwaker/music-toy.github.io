@@ -50,22 +50,47 @@ export function buildGrid(panel, numSteps = 8){
     sequencerWrap.appendChild(canvas);
     body.appendChild(sequencerWrap);
   }
+  if (body && !body.querySelector('.particle-canvas')) {
+    const particleCanvas = document.createElement('canvas');
+    particleCanvas.className = 'particle-canvas';
+    body.appendChild(particleCanvas);
+  }
   
   // This is the critical fix for the squished cubes. The clues indicate a
   // mismatch between the canvas's CSS size and its internal bitmap size,
   // causing non-uniform stretching. A ResizeObserver is the most robust
   // way to keep them in sync.
-  const sequencerWrap = body.querySelector('.sequencer-wrap');
-  const canvas = sequencerWrap.querySelector('.grid-canvas');
-  const observer = new ResizeObserver(entries => {
-    const rect = entries[0]?.contentRect;
-    if (rect) {
-      // Synchronize the canvas's drawing buffer size with its on-screen size.
-      canvas.width = rect.width;
-      canvas.height = rect.height;
-    }
-  });
-  observer.observe(sequencerWrap);
+const sequencerWrap = body.querySelector('.sequencer-wrap');
+const gridCanvas = sequencerWrap.querySelector('.grid-canvas');
+const particleCanvas = body.querySelector('.particle-canvas');
+
+const DPR = () => (window.devicePixelRatio || 1);
+
+const sizeGridCanvas = () => {
+  const r = sequencerWrap.getBoundingClientRect();
+  const dpr = DPR();
+  gridCanvas.width = Math.max(1, Math.round(r.width * dpr));
+  gridCanvas.height = Math.max(1, Math.round(r.height * dpr));
+};
+
+const sizeParticleCanvas = () => {
+  if (!particleCanvas) return;
+  const r = particleCanvas.getBoundingClientRect();
+  const dpr = DPR();
+  particleCanvas.width = Math.max(1, Math.round(r.width * dpr));
+  particleCanvas.height = Math.max(1, Math.round(r.height * dpr));
+};
+
+const ro = new ResizeObserver(() => {
+  sizeGridCanvas();
+  sizeParticleCanvas();
+});
+ro.observe(sequencerWrap);
+if (particleCanvas) ro.observe(particleCanvas);
+
+/* Initial sizing */
+sizeGridCanvas();
+sizeParticleCanvas();
   // --- DOM scaffolding ready ---
 
   // Attach visual renderer for the 8-step grid.
