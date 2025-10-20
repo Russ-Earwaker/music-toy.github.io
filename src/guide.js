@@ -101,7 +101,6 @@ function renderGuide(api, { source = 'unknown' } = {}) {
       }
       panel.classList.add('guide-goals-panel');
       panel.removeAttribute('id');
-      panel.querySelector('.tutorial-claim-btn')?.remove();
 
       try {
         const goalTasks = Array.isArray(goal.tasks) ? goal.tasks : [];
@@ -117,7 +116,7 @@ function renderGuide(api, { source = 'unknown' } = {}) {
 
         api.populatePanel?.(panel, goal, {
           taskIndex: 0,
-          showClaimButton: false,
+          showClaimButton: true,
           activeTaskId,
           completedTaskIds: completedTasks,
           completedGoals,
@@ -126,6 +125,17 @@ function renderGuide(api, { source = 'unknown' } = {}) {
         });
       } catch (err) {
         console.warn('[guide] populatePanel failed', err);
+      }
+
+      const claimBtn = panel.querySelector('.tutorial-claim-btn');
+      if (claimBtn && !claimBtn.__guideBound) {
+        claimBtn.__guideBound = true;
+        claimBtn.addEventListener('click', () => {
+          const targetGoalId = claimBtn.dataset.goalId || goal.id;
+          if (typeof api.claimReward === 'function') {
+            api.claimReward(targetGoalId);
+          }
+        });
       }
 
       panel.querySelectorAll('.goal-task').forEach((taskEl) => {

@@ -396,6 +396,7 @@ if (document.readyState === 'loading') {
         menuState?.close?.();
         try{ localStorage.removeItem('prefs:lastScene'); }catch{}
         try{ window.UIHighlights?.onNewScene?.(); }catch{}
+        try { window.dispatchEvent(new CustomEvent('scene:new')); } catch {}
         return;
       }
 

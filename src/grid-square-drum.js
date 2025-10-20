@@ -13,6 +13,12 @@ function addDrumPad(panel, padWrap, toyId) {
     padWrap.appendChild(pad);
   }
 
+  if (!pad.querySelector('.drum-particles')) {
+    const c = document.createElement('canvas');
+    c.className = 'drum-particles';
+    pad.prepend(c);
+  }
+
   let flash = pad.querySelector('.drum-pad-flash');
   if (!flash) {
     flash = document.createElement('div');
@@ -143,6 +149,17 @@ function layout(panel){
     }
 }
 
+function sizeParticlesCanvas(panel){
+  const pad = panel.querySelector('.grid-drum-pad');
+  const p = pad?.querySelector('.drum-particles');
+  if (!p || !pad) return;
+  const dpr = window.devicePixelRatio || 1;
+  // compute the CSS size the element currently has
+  const rect = p.getBoundingClientRect();
+  p.width  = Math.max(1, Math.floor(rect.width  * dpr));
+  p.height = Math.max(1, Math.floor(rect.height * dpr));
+}
+
 export function attachGridSquareAndDrum(panel) {
   const toyId = panel?.dataset?.toyId || panel?.id || 'grid';
   const padWrap = panel.querySelector('.drum-pad-wrap');
@@ -171,12 +188,11 @@ export function attachGridSquareAndDrum(panel) {
       checkRunningState();
   }
 
+  if (!panel.__drumResizeHandler) {
+    panel.__drumResizeHandler = () => sizeParticlesCanvas(panel);
+    window.addEventListener('resize', panel.__drumResizeHandler);
+    requestAnimationFrame(panel.__drumResizeHandler);
+  }
+
   LOG('attached', { toyId });
 }
-
-
-
-
-
-
-

@@ -405,11 +405,15 @@ select.toy-instrument {
 /* -------------------------- */
 
 .toy-panel[data-toy="loopgrid-drum"] { --panel-w: 420px; }
-.toy-panel[data-toy="loopgrid"] { --panel-w: 520px; }
-
 .toy-panel[data-toy="loopgrid"] {
-  width: var(--panel-w) !important; /* override any JS inline width */
+  --panel-w: 780px; /* adjust to taste */
 }
+/* Panel width: one source of truth, wins over inline widths */
+.toy-panel[data-toy="loopgrid"],
+.toy-panel[data-toy="loopgrid-drum"] {
+  width: var(--panel-w) !important;
+}
+
 .toy-panel[data-toy="bouncer"]  { --panel-w: 300px; }
 .toy-panel[data-toy="rippler"]  { --panel-w: 300px; }
 .toy-panel[data-toy="drawgrid"] { --panel-w: 800px;
@@ -447,7 +451,6 @@ select.toy-instrument {
   will-change: transform;
 }
 
-/* Loopgrid (Simple + Drum): Complex grid body */
 .toy-panel[data-toy="loopgrid-drum"] .toy-body {
   flex-grow: 0;
   aspect-ratio: 1 / 1;
@@ -456,18 +459,21 @@ select.toy-instrument {
   padding: 12px;
   gap: 12px;
 }
+
 .toy-panel[data-toy="loopgrid"] .toy-body {
-  flex-grow: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr); /* sequencer row + flexible pad row */
   padding: 12px;
   gap: 12px;
-  height: auto; /* allow natural height; no global aspect lock here */
+  height: auto;
 }
+
 .sequencer-wrap {
   width: 100%;
-  aspect-ratio: 8 / 1;
+  aspect-ratio: 8 / 1;      /* wide and shallow */
   flex-shrink: 0;
+  min-height: 48px;         /* guardrail – tweak as needed */
+  max-height: 22vh;         /* don’t let it get too tall */
 }
 .sequencer-wrap canvas {
   width: 100%;
@@ -485,6 +491,11 @@ select.toy-instrument {
   max-height: 100%;
   min-height: 0;
 }
+
+.toy-panel[data-toy="loopgrid"] .drum-pad-wrap {
+  justify-self: stretch;
+  aspect-ratio: 1 / 4;
+}
 .grid-drum-pad {
   aspect-ratio: 1 / 1;
   position: relative;
@@ -498,18 +509,61 @@ select.toy-instrument {
   z-index: 1;
 }
 
-.toy-panel[data-toy="loopgrid-drum"] .grid-drum-pad {
-  width: 55%;
-  max-height: 65%;
-}
-
-.toy-panel[data-toy="loopgrid"] .grid-drum-pad {
-  width: 60%;
-  max-height: 70%;
-}
 .grid-drum-pad:hover {
   border-color: rgba(255, 255, 255, 0.2);
 }
+
+/* Configurable edge buffer around the cube grid inside the circular pad */
+.toy-panel[data-toy="loopgrid-drum"] {
+  --edge-buffer: 10px; /* tweak 8–16px as you like */
+}
+
+/* Ensure the pad is positioned context for absolute children */
+.toy-panel[data-toy="loopgrid-drum"] .drum-pad-wrap {
+  position: relative;
+  overflow: visible; /* allow particles and buffered grid to breath */
+}
+
+/* The circular visible pad */
+.toy-panel[data-toy="loopgrid-drum"] .grid-drum-pad {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  width: 55%;
+  max-height: 65%;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+/* Inner content area for cubes (whatever node/canvas holds the cubes) */
+.toy-panel[data-toy="loopgrid-drum"] .grid-drum-pad > .cube-layer,
+.toy-panel[data-toy="loopgrid-drum"] .grid-drum-pad > canvas.cubes,
+.toy-panel[data-toy="loopgrid-drum"] .grid-drum-pad > .grid-content {
+  position: absolute;
+  left: var(--edge-buffer);
+  right: var(--edge-buffer);
+  top: var(--edge-buffer);
+  bottom: var(--edge-buffer);
+  border-radius: 50%;     /* preserve circular clipping, if desired */
+  overflow: hidden;       /* keep cubes inside the inset circle */
+}
+
+/* Let things bleed outside the pad visually */
+.toy-panel[data-toy="loopgrid-drum"] .drum-pad-wrap { overflow: visible; }
+
+/* Particles live behind the cubes/pad visuals */
+.toy-panel[data-toy="loopgrid-drum"] .drum-particles {
+  position: absolute;
+  z-index: 0;
+  /* double-height field centered on the pad */
+  height: 200%;
+  width: calc(100% + var(--edge-buffer)*2); /* give some horizontal buffer */
+  left: calc(var(--edge-buffer) * -1);
+  top: -50%;
+  pointer-events: none;
+}
+
+/* Make sure visible pad/cubes render above particles */
+.toy-panel[data-toy="loopgrid-drum"] .grid-drum-pad { z-index: 1; }
 
 
 .grid-drum-pad .drum-pad-flash {
@@ -1413,9 +1467,3 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
 #topbar [data-action="toggle-play"] .c-btn-core {
   background-size: 50%;
 }
-
-
-
-
-
-

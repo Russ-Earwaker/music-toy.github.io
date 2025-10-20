@@ -20,8 +20,10 @@ const GOAL_FLOW = [
     id: 'place-toy',
     title: 'Place a Toy',
     reward: {
-      description: 'Reward available soon.',
-      autoClaim: true,
+      description: 'Collect your first star.',
+      icons: [
+        { type: 'symbol', label: 'Star Reward', symbol: '\u2605', accent: '#facc15' },
+      ],
     },
     tasks: [
       {
@@ -288,6 +290,7 @@ function markGuideTaskComplete(goalId, taskId) {
 
 function markGuideRewardClaimed(goalId) {
   if (!goalId) return false;
+  if (!guideProgress.goals.has(goalId)) return false;
   const prior = guideProgress.claimedRewards.size;
   guideProgress.claimedRewards.add(goalId);
   if (guideProgress.claimedRewards.size !== prior) {
@@ -296,6 +299,18 @@ function markGuideRewardClaimed(goalId) {
     return true;
   }
   return false;
+}
+
+function claimGuideReward(goalId) {
+  return markGuideRewardClaimed(goalId);
+}
+
+function resetGuideProgress() {
+  guideProgress.tasks.clear();
+  guideProgress.goals.clear();
+  guideProgress.claimedRewards.clear();
+  saveGuideProgress();
+  dispatchGuideProgressUpdate({ via: 'resetGuideProgress' });
 }
 
 function recordRequirementProgress(requirement) {
@@ -351,6 +366,7 @@ function cloneGoal(goal) {
           createPanel: () => buildGoalPanel(),
           populatePanel: (panel, goal, options) => populateGoalPanel(panel, goal, options),
           getGuideProgress: () => getGuideProgressSnapshot(),
+          claimReward: (goalId) => claimGuideReward(goalId),
         };
         window.TutorialGoalsAPI = Object.freeze(api);
         window.dispatchEvent(new CustomEvent('tutorial:goals-ready', { detail: api }));
@@ -367,10 +383,42 @@ function cloneGoal(goal) {
   console.log('[tutorial] element probe', { hasTutorialButton: !!tutorialButton, hasBoard: !!board, readyState: document.readyState });
   if (!board) return;
 
+  let tutorialActive = false;
+  let autoToyIgnoreCount = 0;
+  let autoToyIgnoreDeadline = 0;
+
   const guideToyTracker = (() => {
+    let seenToyPanels = new WeakSet();
+    const seedExistingPanels = () => {
+      board.querySelectorAll('.toy-panel').forEach((panel) => {
+        if (panel instanceof HTMLElement) {
+          seenToyPanels.add(panel);
+        }
+      });
+    };
+    seedExistingPanels();
+
     const handlePanel = (panel) => {
       if (!(panel instanceof HTMLElement)) return;
       if (!panel.classList.contains('toy-panel')) return;
+      if (tutorialActive) return;
+      const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+        ? performance.now()
+        : Date.now();
+      if (autoToyIgnoreCount > 0) {
+        if (now <= autoToyIgnoreDeadline) {
+          autoToyIgnoreCount--;
+          seenToyPanels.add(panel);
+          return;
+        }
+        autoToyIgnoreCount = 0;
+      }
+      if (panel.dataset?.tutorial === 'true') {
+        seenToyPanels.add(panel);
+        return;
+      }
+      if (seenToyPanels.has(panel)) return;
+      seenToyPanels.add(panel);
       maybeCompleteTask('place-any-toy');
       const toyType = panel.dataset?.toy;
       if (toyType === 'drawgrid') {
@@ -392,10 +440,15 @@ function cloneGoal(goal) {
     });
 
     observer.observe(board, { childList: true, subtree: true });
-    return { disconnect: () => observer.disconnect() };
+    return {
+      disconnect: () => observer.disconnect(),
+      reset: () => {
+        seenToyPanels = new WeakSet();
+        seedExistingPanels();
+      },
+    };
   })();
 
-  let tutorialActive = false;
   let tutorialToy = null;
   let goalPanel = null;
   let previousSnapshot = null;
@@ -1184,7 +1237,7 @@ function cloneGoal(goal) {
         <p class="goal-reward-description"></p>
         <div class="goal-reward-icons"></div>
       </footer>
-      <button class="tutorial-claim-btn" type="button">Claim Reward</button>
+      <button class="tutorial-claim-btn" type="button">Collect Reward</button>
     `;
     return container;
   }
@@ -1332,6 +1385,21 @@ function cloneGoal(goal) {
         btn.classList.remove('is-visible');
         btn.disabled = true;
       }
+    } else if (options.showClaimButton === true) {
+      const btn = panelEl.querySelector('.tutorial-claim-btn');
+      if (btn) {
+        const pending = hasPendingReward;
+        btn.style.display = pending ? '' : 'none';
+        btn.textContent = 'Collect Reward';
+        btn.dataset.goalId = goalId;
+        if (pending) {
+          btn.classList.add('is-visible');
+          btn.disabled = false;
+        } else {
+          btn.classList.remove('is-visible');
+          btn.disabled = true;
+        }
+      }
     }
 
     panelEl.dataset.goalId = goal.id || '';
@@ -1421,7 +1489,7 @@ function cloneGoal(goal) {
     if (awaitingClaim) {
       btn.classList.add('is-visible');
       btn.disabled = false;
-      btn.textContent = 'Claim Reward';
+      btn.textContent = 'Collect Reward';
     } else {
       btn.classList.remove('is-visible');
       btn.disabled = true;
@@ -1877,6 +1945,7 @@ function cloneGoal(goal) {
         for (const node of mutation.addedNodes) {
           if (node.matches && node.matches('.toy-panel[data-toy="loopgrid"]')) {
             const newToy = node;
+            maybeCompleteTask('place-any-toy');
             const didComplete = maybeCompleteTask('add-toy-loopgrid');
             if (didComplete) {
               stopParticleStream();
@@ -1947,6 +2016,7 @@ try {
 
           } else if (node.matches && node.matches('.toy-panel[data-toy="drawgrid"]') && node.dataset.tutorial !== 'true') {
             const newToy = node;
+            maybeCompleteTask('place-any-toy');
             lockTutorialControls(newToy);
             setupPanelListeners(newToy);
             if (!tutorialToy || !tutorialToy.isConnected) {
@@ -2409,4 +2479,15 @@ try {
     }
   });
 
+  window.addEventListener('scene:new', () => {
+    const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+      ? performance.now()
+      : Date.now();
+    autoToyIgnoreCount = Math.max(autoToyIgnoreCount, 2);
+    autoToyIgnoreDeadline = now + 1500;
+    guideToyTracker.reset?.();
+    resetGuideProgress();
+  });
+
 })();
+
