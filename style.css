@@ -1231,7 +1231,10 @@ body.tutorial-active #topbar #theme-switcher-wrap {
 }
 
 .guide-launcher .tutorial-claim-btn {
-  display: none !important;
+  display: none;
+}
+.guide-launcher .tutorial-claim-btn.is-visible {
+  display: block !important;
 }
 
 .goal-task.is-complete .goal-task-index {

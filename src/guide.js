@@ -42,6 +42,10 @@ function ensureHost() {
       hostRef.classList.toggle(GUIDE_OPEN_CLASS, willOpen);
       panelsRef.style.display = willOpen ? 'block' : 'none';
       panelsRef.classList.toggle('is-visible', willOpen);
+      if (!willOpen) {
+        panelsRef.querySelectorAll('.is-active-guide-task').forEach(el => el.classList.remove('is-active-guide-task'));
+        window.dispatchEvent(new CustomEvent('guide:task-deactivate', { bubbles: true, composed: true }));
+      }
       try {
         window.__guideDebug = Object.assign({}, window.__guideDebug || {}, {
           lastToggle: { open: willOpen, at: Date.now() },
@@ -93,12 +97,18 @@ function renderGuide(api, { source = 'unknown' } = {}) {
   clearPanels();
 
   if (hasGoals && api?.createPanel) {
+    const activePanels = [];
+    const claimedPanels = [];
+
     goals.forEach((goal, index) => {
       const panel = api.createPanel?.();
       if (!panel) {
         console.warn('[guide] createPanel returned no panel', { index, goal });
         return;
       }
+      const goalId = goal?.id;
+      const goalClaimed = goalId ? claimedRewards.has(goalId) : false;
+      const willBeFirstActive = !goalClaimed && activePanels.length === 0;
       panel.classList.add('guide-goals-panel');
       panel.removeAttribute('id');
 
@@ -127,11 +137,13 @@ function renderGuide(api, { source = 'unknown' } = {}) {
         console.warn('[guide] populatePanel failed', err);
       }
 
+
       const claimBtn = panel.querySelector('.tutorial-claim-btn');
       if (claimBtn && !claimBtn.__guideBound) {
         claimBtn.__guideBound = true;
         claimBtn.addEventListener('click', () => {
           const targetGoalId = claimBtn.dataset.goalId || goal.id;
+          window.dispatchEvent(new CustomEvent('guide:task-deactivate', { bubbles: true, composed: true }));
           if (typeof api.claimReward === 'function') {
             api.claimReward(targetGoalId);
           }
@@ -179,7 +191,7 @@ function renderGuide(api, { source = 'unknown' } = {}) {
         bodyContent.forEach((el) => bodyWrapper.appendChild(el));
         panel.appendChild(bodyWrapper);
 
-        const isFirst = index === 0;
+        const isFirst = willBeFirstActive;
         header.style.cursor = 'pointer';
         panel.classList.toggle('is-collapsed', !isFirst);
         if (!isFirst) bodyWrapper.style.display = 'none';
@@ -187,12 +199,29 @@ function renderGuide(api, { source = 'unknown' } = {}) {
         header.addEventListener('click', () => {
           const isCollapsed = panel.classList.contains('is-collapsed');
           panel.classList.toggle('is-collapsed', !isCollapsed);
-          bodyWrapper.style.display = isCollapsed ? '' : 'none';
+          const nowCollapsed = panel.classList.contains('is-collapsed');
+          bodyWrapper.style.display = nowCollapsed ? 'none' : '';
+          if (nowCollapsed) {
+            panel.querySelectorAll('.is-active-guide-task').forEach(task => task.classList.remove('is-active-guide-task'));
+            window.dispatchEvent(new CustomEvent('guide:task-deactivate', { bubbles: true, composed: true }));
+          }
         });
       }
 
-      panelsRef.appendChild(panel);
+      if (goalClaimed) {
+        panel.classList.add('is-collapsed');
+        panel.querySelectorAll('.goal-task.is-active-guide-task').forEach((taskEl) => taskEl.classList.remove('is-active-guide-task'));
+        const existingWrapper = panel.querySelector('.goal-body-wrapper');
+        if (existingWrapper) existingWrapper.style.display = 'none';
+        window.dispatchEvent(new CustomEvent('guide:task-deactivate', { bubbles: true, composed: true }));
+        claimedPanels.push(panel);
+      } else {
+        activePanels.push(panel);
+      }
+
     });
+
+    [...activePanels, ...claimedPanels].forEach(panel => panelsRef.appendChild(panel));
   } else {
     const empty = document.createElement('div');
     empty.className = 'guide-empty-state';

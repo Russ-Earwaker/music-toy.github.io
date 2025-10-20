@@ -181,6 +181,12 @@ body.tutorial-active #topbar .tutorial-play-hidden {
 }
 
 /* Reward panel: bevelled Add Toy preview sizing */
+.goal-body-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .goal-reward-icons .toy-spawner-toggle.is-preview {
   width: 56px;
   height: 56px;
@@ -206,7 +212,7 @@ body.tutorial-active #topbar .tutorial-play-hidden {
 
 .tutorial-goals-panel.is-goal-complete .tutorial-goals-title::after,
 .guide-goals-panel.is-goal-complete .tutorial-goals-title::after {
-  content: '✓';
+  content: '\2713';
   margin-left: 0.5rem;
   font-size: 0.75em;
   color: #4ade80;
@@ -232,6 +238,12 @@ body.tutorial-active #topbar .tutorial-play-hidden {
   box-shadow: 0 0 6px rgba(0, 0, 0, 0.35);
 }
 
+.tutorial-goals-panel.is-reward-claimed .tutorial-goals-title,
+.guide-goals-panel.is-reward-claimed .tutorial-goals-title {
+  color: rgba(148, 163, 184, 0.75);
+}
+
+
 .goal-task {
   border: 3px solid transparent;
   border-radius: 8px;
@@ -244,3 +256,5 @@ body.tutorial-active #topbar .tutorial-play-hidden {
   outline: 3px solid var(--accent, #5fb3ff) !important;
   box-shadow: 0 0 12px 2px var(--accent, #5fb3ff);
 }
+
+

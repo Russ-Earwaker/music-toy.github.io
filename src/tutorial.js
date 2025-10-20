@@ -1285,6 +1285,7 @@ function cloneGoal(goal) {
 
     panelEl.classList.toggle('is-goal-complete', goalComplete);
     panelEl.classList.toggle('has-pending-reward', hasPendingReward);
+    panelEl.classList.toggle('is-reward-claimed', rewardClaimed);
     if (headerEl) headerEl.classList.toggle('has-pending-reward', hasPendingReward);
     if (titleEl) titleEl.classList.toggle('is-goal-complete', goalComplete);
 
@@ -1328,10 +1329,11 @@ function cloneGoal(goal) {
     }
 
     const reward = goal.reward || {};
-    const rewardDescription = panelEl.querySelector('.goal-reward-description');
+    const rewardSection = panelEl.querySelector('.tutorial-goals-reward');
+    const rewardDescription = rewardSection ? rewardSection.querySelector('.goal-reward-description') : panelEl.querySelector('.goal-reward-description');
     if (rewardDescription) rewardDescription.textContent = reward.description || '';
 
-    const rewardIcons = panelEl.querySelector('.goal-reward-icons');
+    const rewardIcons = rewardSection ? rewardSection.querySelector('.goal-reward-icons') : panelEl.querySelector('.goal-reward-icons');
     if (rewardIcons) {
       rewardIcons.innerHTML = '';
       if (reward && Array.isArray(reward.icons)) {
@@ -1381,6 +1383,7 @@ function cloneGoal(goal) {
     if (options.showClaimButton === false) {
       const btn = panelEl.querySelector('.tutorial-claim-btn');
       if (btn) {
+        if (rewardSection && btn.parentElement !== rewardSection) rewardSection.appendChild(btn);
         btn.style.display = 'none';
         btn.classList.remove('is-visible');
         btn.disabled = true;
@@ -1388,6 +1391,7 @@ function cloneGoal(goal) {
     } else if (options.showClaimButton === true) {
       const btn = panelEl.querySelector('.tutorial-claim-btn');
       if (btn) {
+        if (rewardSection && btn.parentElement !== rewardSection) rewardSection.appendChild(btn);
         const pending = hasPendingReward;
         btn.style.display = pending ? '' : 'none';
         btn.textContent = 'Collect Reward';
@@ -1889,6 +1893,17 @@ function cloneGoal(goal) {
 
   function maybeCompleteTask(requirement) {
     const progressChanged = recordRequirementProgress(requirement);
+    if (progressChanged && !tutorialActive) {
+      if (typeof guideHighlightCleanup === 'function') {
+        try { guideHighlightCleanup(); } catch {}
+        guideHighlightCleanup = null;
+      } else {
+        stopParticleStream();
+      }
+      document.querySelectorAll('.tutorial-pulse-target, .tutorial-active-pulse, .tutorial-addtoy-pulse').forEach(el => {
+        el.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-addtoy-pulse');
+      });
+    }
     if (tutorialState?.pendingRewardGoalId) return progressChanged;
     const task = getCurrentTask();
     if (task && task.requirement === requirement) {
