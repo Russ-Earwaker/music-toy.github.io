@@ -416,7 +416,7 @@ select.toy-instrument {
   );
 
   /* Particle field = 2x cube height */
-  --loopgrid-field-height: calc(var(--loopgrid-cube-size) * 2);
+  --loopgrid-field-height: calc(var(--loopgrid-cube-size) * 3);
 
   /* Horizontal breathing room (for the field / shadows) */
   --edge-buffer: 60px;
