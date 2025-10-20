@@ -13,7 +13,7 @@ function whenSwipeAPIReady(panel, fn, tries=30){
   requestAnimationFrame(()=> whenSwipeAPIReady(panel, fn, tries-1));
 }
 
-const TUTORIAL_ZOOM = 1.15; // adjust to taste (1.0–1.3 are good)
+const TUTORIAL_ZOOM = 1.15; // adjust to taste (1.0â€“1.3 are good)
 
 const GOAL_FLOW = [
   {
@@ -30,6 +30,38 @@ const GOAL_FLOW = [
         id: 'place-any-toy',
         label: 'Open the Add Toy menu and drag or tap to place any toy',
         requirement: 'place-any-toy',
+      },
+      {
+        id: 'interact-new-toy',
+        label: 'Interact with your new toy.',
+        requirement: 'interact-any-toy',
+      },
+      {
+        id: 'press-play',
+        label: 'Press the Play button to start the toy.',
+        requirement: 'press-play',
+      },
+    ],
+  },
+  {
+    id: 'clear-random',
+    title: 'Randomise and clear',
+    reward: {
+      description: 'Collect a gleaming star for exploring controls.',
+      icons: [
+        { type: 'symbol', label: 'Star Reward', symbol: '\u2605', accent: '#facc15' },
+      ],
+    },
+    tasks: [
+      {
+        id: 'press-random',
+        label: 'Press any Randomise button.',
+        requirement: 'press-random',
+      },
+      {
+        id: 'press-clear',
+        label: 'Press any Clear button.',
+        requirement: 'press-clear',
       },
     ],
   },
@@ -64,28 +96,6 @@ const GOAL_FLOW = [
         id: 'toggle-node',
         label: 'Tap a note on the line to mute and unmute it.',
         requirement: 'toggle-node',
-      },
-    ],
-  },
-  {
-    id: 'clear-random',
-    title: 'Randomise and clear',
-    reward: {
-      description: 'Unlocks the Add Toy button.',
-      icons: [
-        { type: 'symbol', label: 'Add Toy', symbol: '+' },
-      ],
-    },
-    tasks: [
-      {
-        id: 'press-clear',
-        label: 'Press the Clear button.',
-        requirement: 'press-clear',
-      },
-      {
-        id: 'press-random',
-        label: 'Press the Randomise button.',
-        requirement: 'press-random',
       },
     ],
   },
@@ -238,6 +248,7 @@ function loadGuideProgress() {
 }
 
 const guideProgress = loadGuideProgress();
+let lastPlacedToy = null;
 
 function saveGuideProgress() {
   if (!hasLocalStorage()) return;
@@ -309,6 +320,7 @@ function resetGuideProgress() {
   guideProgress.tasks.clear();
   guideProgress.goals.clear();
   guideProgress.claimedRewards.clear();
+  lastPlacedToy = null;
   saveGuideProgress();
   dispatchGuideProgressUpdate({ via: 'resetGuideProgress' });
 }
@@ -319,7 +331,30 @@ function recordRequirementProgress(requirement) {
   if (!entries || !entries.length) return false;
   let changed = false;
   const goalsTouched = new Set();
-  entries.forEach(({ goalId, taskId }) => {
+  entries.forEach(({ goalId, taskId, taskIndex }) => {
+    const goal = GOAL_BY_ID.get(goalId);
+    if (goal) {
+      const tasks = Array.isArray(goal.tasks) ? goal.tasks : [];
+      let index = Number.isFinite(taskIndex) ? taskIndex : tasks.findIndex((task, idx) => (task?.id || `task-${idx}`) === taskId);
+      if (index < 0) {
+        index = tasks.findIndex((task, idx) => (task?.id || `task-${idx}`) === taskId);
+      }
+      if (index >= 0) {
+        let prerequisitesComplete = true;
+        for (let i = 0; i < index; i++) {
+          const prevTask = tasks[i];
+          const prevId = prevTask?.id || `task-${i}`;
+          if (prevId && !guideProgress.tasks.has(prevId)) {
+            prerequisitesComplete = false;
+            break;
+          }
+        }
+        if (!prerequisitesComplete) {
+          goalsTouched.add(goalId);
+          return;
+        }
+      }
+    }
     const didUpdate = markGuideTaskComplete(goalId, taskId);
     if (didUpdate) changed = true;
     goalsTouched.add(goalId);
@@ -419,6 +454,7 @@ function cloneGoal(goal) {
       }
       if (seenToyPanels.has(panel)) return;
       seenToyPanels.add(panel);
+      registerToyInteraction(panel);
       maybeCompleteTask('place-any-toy');
       const toyType = panel.dataset?.toy;
       if (toyType === 'drawgrid') {
@@ -467,6 +503,56 @@ function cloneGoal(goal) {
     if (typeof window === 'undefined' || !window.DEBUG_TUTORIAL_LOCKS) return;
     try { console.debug('[tutorial]', ...args); } catch (_) { try { console.log('[tutorial]', ...args); } catch {} }
   };
+
+  function registerToyInteraction(panel) {
+    if (!(panel instanceof HTMLElement)) return;
+    if (lastPlacedToy && lastPlacedToy !== panel) {
+      lastPlacedToy.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-addtoy-pulse');
+    }
+    lastPlacedToy = panel;
+    if (panel.__tutorialInteractionHooked) return;
+
+    const toyType = (panel.dataset?.toy || '').toLowerCase();
+    const markInteraction = () => maybeCompleteTask('interact-any-toy');
+
+    const add = (evt, handler, opts) => {
+      try { panel.addEventListener(evt, handler, opts); } catch { panel.addEventListener(evt, handler); }
+    };
+
+    if (toyType === 'drawgrid') {
+      add('drawgrid:update', (e) => {
+        const nodes = e?.detail?.nodes;
+        const hasNodes = Array.isArray(nodes) ? nodes.some(set => set && set.size > 0) : false;
+        if (hasNodes) markInteraction();
+      }, { passive: true });
+      add('drawgrid:node-toggle', () => markInteraction(), { passive: true });
+    } else if (toyType === 'loopgrid' || toyType === 'loopgrid-drum') {
+      ['loopgrid:update', 'grid:notechange', 'grid:drum-tap', 'loopgrid:tap'].forEach(evt => {
+        add(evt, () => markInteraction(), { passive: true });
+      });
+    } else if (toyType === 'bouncer') {
+      const canvas = panel.querySelector('.bouncer-canvas, canvas');
+      if (canvas) {
+        const pointerHandler = () => markInteraction();
+        try { canvas.addEventListener('pointerup', pointerHandler, { once: true }); } catch { canvas.addEventListener('pointerup', pointerHandler, { once: true }); }
+      } else {
+        try { panel.addEventListener('pointerup', () => markInteraction(), { once: true }); } catch { panel.addEventListener('pointerup', () => markInteraction(), { once: true }); }
+      }
+    } else if (toyType === 'rippler') {
+      const canvas = panel.querySelector('.rippler-canvas, canvas');
+      if (canvas) {
+        const pointerHandler = () => markInteraction();
+        try { canvas.addEventListener('pointerup', pointerHandler, { once: true }); } catch { canvas.addEventListener('pointerup', pointerHandler, { once: true }); }
+      } else {
+        try { panel.addEventListener('pointerup', () => markInteraction(), { once: true }); } catch { panel.addEventListener('pointerup', () => markInteraction(), { once: true }); }
+      }
+    } else {
+      const pointerHandler = () => markInteraction();
+      try { panel.addEventListener('pointerup', pointerHandler, { once: true }); } catch { panel.addEventListener('pointerup', pointerHandler, { once: true }); }
+    }
+
+    panel.__tutorialInteractionHooked = true;
+  }
 
   const describeElement = (el) => {
     if (!(el instanceof HTMLElement)) return String(el);
@@ -1635,10 +1721,68 @@ function cloneGoal(goal) {
       handledSpecial = true;
 
     }
+    else if (task.id === 'interact-new-toy') {
+      handledSpecial = true;
+      ensureGoalPanel();
+
+      let disposed = false;
+      let retryTimer = 0;
+
+      const attach = () => {
+        if (disposed) return;
+        const targetToy = lastPlacedToy && lastPlacedToy.isConnected ? lastPlacedToy : null;
+        if (!targetToy) {
+          retryTimer = window.setTimeout(attach, 160);
+          return;
+        }
+
+        const startParticles = () => {
+          const taskEl = goalPanel?.querySelector('.goal-task.is-active');
+          if (taskEl && targetToy.isConnected) {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                startParticleStream(taskEl, targetToy);
+              });
+            });
+          }
+        };
+
+        targetToy.classList.add('tutorial-pulse-target', 'tutorial-active-pulse');
+        startParticles();
+        window.addEventListener('resize', startParticles, { passive: true });
+
+        tutorialListeners.push({
+          target: window,
+          type: 'resize',
+          handler: startParticles,
+          options: { passive: true }
+        });
+
+        tutorialListeners.push({
+          disconnect: () => {
+            window.removeEventListener('resize', startParticles);
+            targetToy.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse');
+            stopParticleStream();
+          }
+        });
+      };
+
+      attach();
+
+      tutorialListeners.push({
+        disconnect: () => {
+          disposed = true;
+          if (retryTimer) {
+            clearTimeout(retryTimer);
+            retryTimer = 0;
+          }
+        }
+      });
+    }
     else if (task.id === 'add-rhythm-toy') {
       ensureGoalPanel();
 
-      // When the + button is visible, start the line from the active task → + button
+      // When the + button is visible, start the line from the active task â†’ + button
       whenVisible('.toy-spawner-toggle', (targetEl) => {
         const startParticles = () => {
           const taskEl = goalPanel?.querySelector('.goal-task.is-active') 
@@ -1686,7 +1830,7 @@ function cloneGoal(goal) {
   `;
       document.head.appendChild(style);
 
-      // IMPORTANT: use the actual class name from toy-spawner.js → .toy-spawner-name
+      // IMPORTANT: use the actual class name from toy-spawner.js â†’ .toy-spawner-name
       const renameObserver = new MutationObserver(() => {
         document.querySelectorAll('.toy-spawner-item').forEach(item => {
           const label = item.querySelector('.toy-spawner-name');
@@ -1925,17 +2069,43 @@ function cloneGoal(goal) {
 
   function setupPanelListeners(panel) {
     if (!panel) return;
-    addListener(panel, 'drawgrid:update', (e) => handleDrawgridUpdate(e.detail));
-    addListener(panel, 'drawgrid:node-toggle', () => maybeCompleteTask('toggle-node'));
+    registerToyInteraction(panel);
+    const markInteraction = () => maybeCompleteTask('interact-any-toy');
+    addListener(panel, 'drawgrid:update', (e) => {
+      handleDrawgridUpdate(e.detail);
+      markInteraction();
+    });
+    addListener(panel, 'drawgrid:node-toggle', () => {
+      maybeCompleteTask('toggle-node');
+      markInteraction();
+    });
 
     const controlMap = getControlMap(panel);
-    if (controlMap.clear)  addListener(controlMap.clear,  'click', () => maybeCompleteTask('press-clear'));
-    if (controlMap.random) addListener(controlMap.random, 'click', () => maybeCompleteTask('press-random'));
+    if (controlMap.clear) {
+      addListener(controlMap.clear, 'click', () => {
+        maybeCompleteTask('press-clear');
+        markInteraction();
+      });
+    }
+    if (controlMap.random) {
+      addListener(controlMap.random, 'click', () => {
+        maybeCompleteTask('press-random');
+        markInteraction();
+      });
+    }
 
-    // NEW: also complete tasks when the toy’s own events fire (more robust than click-only)
-    addListener(panel, 'toy-clear',  () => maybeCompleteTask('press-clear'));
-    addListener(panel, 'toy-reset',  () => maybeCompleteTask('press-clear'));   // some flows dispatch this too
-    addListener(panel, 'toy-random', () => maybeCompleteTask('press-random'));
+    addListener(panel, 'toy-clear', () => {
+      maybeCompleteTask('press-clear');
+      markInteraction();
+    });
+    addListener(panel, 'toy-reset', () => {
+      maybeCompleteTask('press-clear');
+      markInteraction();
+    });
+    addListener(panel, 'toy-random', () => {
+      maybeCompleteTask('press-random');
+      markInteraction();
+    });
   }
 
 
@@ -1960,6 +2130,7 @@ function cloneGoal(goal) {
         for (const node of mutation.addedNodes) {
           if (node.matches && node.matches('.toy-panel[data-toy="loopgrid"]')) {
             const newToy = node;
+            registerToyInteraction(newToy);
             maybeCompleteTask('place-any-toy');
             const didComplete = maybeCompleteTask('add-toy-loopgrid');
             if (didComplete) {
@@ -1983,6 +2154,7 @@ try {
   const onNoteAdd = () => {
     if (hasActiveLoopgrid(newToy)) {
       maybeCompleteTask('add-note-new-toy');
+      maybeCompleteTask('interact-any-toy');
     }
   };
 
@@ -2031,6 +2203,7 @@ try {
 
           } else if (node.matches && node.matches('.toy-panel[data-toy="drawgrid"]') && node.dataset.tutorial !== 'true') {
             const newToy = node;
+            registerToyInteraction(newToy);
             maybeCompleteTask('place-any-toy');
             lockTutorialControls(newToy);
             setupPanelListeners(newToy);
@@ -2060,6 +2233,11 @@ try {
                 if (item instanceof HTMLElement) delete item.dataset.tutorialKeep;
               });
             }
+          }
+          else if (node.matches && node.matches('.toy-panel') && node.dataset.tutorial !== 'true') {
+            const newToy = node;
+            registerToyInteraction(newToy);
+            maybeCompleteTask('place-any-toy');
           }
         }
       }
@@ -2418,6 +2596,56 @@ try {
       return;
     }
 
+    if (taskId === 'interact-new-toy') {
+      let disposed = false;
+      let cleanupInner = null;
+      let retryTimer = 0;
+
+      const attach = () => {
+        if (disposed || cleanupInner) return;
+        const toy = lastPlacedToy && lastPlacedToy.isConnected ? lastPlacedToy : null;
+        if (!toy) {
+          retryTimer = window.setTimeout(attach, 160);
+          return;
+        }
+
+        const runParticles = () => {
+          if (disposed) return;
+          if (!taskElement.isConnected || !toy.isConnected) return;
+          stopParticleStream();
+          startParticleStream(taskElement, toy);
+        };
+        const scheduleParticles = () => requestAnimationFrame(() => requestAnimationFrame(runParticles));
+        const onResize = () => scheduleParticles();
+
+        toy.classList.add('tutorial-pulse-target', 'tutorial-active-pulse');
+        scheduleParticles();
+        window.addEventListener('resize', onResize, { passive: true });
+
+        cleanupInner = () => {
+          window.removeEventListener('resize', onResize);
+          toy.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse');
+          stopParticleStream();
+        };
+      };
+
+      attach();
+
+      guideHighlightCleanup = () => {
+        disposed = true;
+        if (retryTimer) {
+          clearTimeout(retryTimer);
+          retryTimer = 0;
+        }
+        if (cleanupInner) {
+          try { cleanupInner(); } catch {}
+          cleanupInner = null;
+        }
+      };
+
+      return;
+    }
+
     const TASK_TARGET_SELECTORS = {
       'press-help': '.toy-spawner-help',
       'press-play': '#topbar [data-action="toggle-play"]',
@@ -2426,7 +2654,6 @@ try {
       'toggle-node': '.toy-panel[data-toy="drawgrid"]',
       'draw-line': '.toy-panel[data-toy="drawgrid"] canvas[data-role="drawgrid-paint"]',
       // Guide tasks that spawn toys should aim the effect at the shared toggle button
-      'place-any-toy': '.toy-spawner-toggle',
       'add-draw-toy': '.toy-spawner-toggle',
       'add-rhythm-toy': '.toy-spawner-toggle',
     };
@@ -2500,9 +2727,21 @@ try {
       : Date.now();
     autoToyIgnoreCount = Math.max(autoToyIgnoreCount, 2);
     autoToyIgnoreDeadline = now + 1500;
+    lastPlacedToy = null;
     guideToyTracker.reset?.();
     resetGuideProgress();
   });
 
+  document.addEventListener('click', (event) => {
+    const target = event.target instanceof HTMLElement ? event.target.closest('[data-action="toggle-play"]') : null;
+    if (!target) return;
+    maybeCompleteTask('press-play');
+  }, { capture: true });
+
 })();
+
+
+
+
+
 
