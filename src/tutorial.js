@@ -527,9 +527,20 @@ function cloneGoal(goal) {
       }, { passive: true });
       add('drawgrid:node-toggle', () => markInteraction(), { passive: true });
     } else if (toyType === 'loopgrid' || toyType === 'loopgrid-drum') {
-      ['loopgrid:update', 'grid:notechange', 'grid:drum-tap', 'loopgrid:tap'].forEach(evt => {
+      const manualEvents = ['grid:notechange', 'grid:drum-tap', 'loopgrid:tap'];
+      manualEvents.forEach(evt => {
         add(evt, () => markInteraction(), { passive: true });
       });
+      const randomEvents = ['toy-random', 'toy-random-notes', 'toy-random-cubes', 'toy-random-blocks', 'loopgrid:random'];
+      randomEvents.forEach(evt => {
+        add(evt, () => markInteraction(), { passive: true });
+      });
+      add('loopgrid:update', (event) => {
+        const reason = event?.detail?.reason;
+        if (reason === 'step-toggle' || reason === 'note-change') {
+          markInteraction();
+        }
+      }, { passive: true });
     } else if (toyType === 'bouncer') {
       const canvas = panel.querySelector('.bouncer-canvas, canvas');
       if (canvas) {
@@ -1736,18 +1747,18 @@ function cloneGoal(goal) {
           return;
         }
 
+        targetToy.classList.add('tutorial-guide-foreground');
         const startParticles = () => {
           const taskEl = goalPanel?.querySelector('.goal-task.is-active');
           if (taskEl && targetToy.isConnected) {
             requestAnimationFrame(() => {
               requestAnimationFrame(() => {
-                startParticleStream(taskEl, targetToy);
+                startParticleStream(taskEl, targetToy, { layer: 'behind-target' });
               });
             });
           }
         };
 
-        targetToy.classList.add('tutorial-pulse-target', 'tutorial-active-pulse');
         startParticles();
         window.addEventListener('resize', startParticles, { passive: true });
 
@@ -1761,7 +1772,7 @@ function cloneGoal(goal) {
         tutorialListeners.push({
           disconnect: () => {
             window.removeEventListener('resize', startParticles);
-            targetToy.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse');
+            targetToy.classList.remove('tutorial-guide-foreground');
             stopParticleStream();
           }
         });
@@ -2024,8 +2035,8 @@ function cloneGoal(goal) {
         renderGoalPanel();
         updateClaimButtonVisibility();
         stopParticleStream();
-        document.querySelectorAll('.tutorial-pulse-target, .tutorial-active-pulse, .tutorial-addtoy-pulse').forEach(el => {
-          el.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-addtoy-pulse');
+        document.querySelectorAll('.tutorial-pulse-target, .tutorial-active-pulse, .tutorial-addtoy-pulse, .tutorial-guide-foreground').forEach(el => {
+          el.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-addtoy-pulse', 'tutorial-guide-foreground');
         });
       }
       return;
@@ -2044,8 +2055,8 @@ function cloneGoal(goal) {
       } else {
         stopParticleStream();
       }
-      document.querySelectorAll('.tutorial-pulse-target, .tutorial-active-pulse, .tutorial-addtoy-pulse').forEach(el => {
-        el.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-addtoy-pulse');
+      document.querySelectorAll('.tutorial-pulse-target, .tutorial-active-pulse, .tutorial-addtoy-pulse, .tutorial-guide-foreground').forEach(el => {
+        el.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-addtoy-pulse', 'tutorial-guide-foreground');
       });
     }
     if (tutorialState?.pendingRewardGoalId) return progressChanged;
@@ -2159,29 +2170,35 @@ try {
     setupPanelListeners(newToy);
   }
 
-  const onNoteAdd = () => {
-    if (hasActiveLoopgrid(newToy)) {
-      maybeCompleteTask('add-note-new-toy');
-      maybeCompleteTask('interact-any-toy');
+  const onNoteAdd = ({ markInteract = false } = {}) => {
+    if (!hasActiveLoopgrid(newToy)) return;
+    maybeCompleteTask('add-note-new-toy');
+    if (markInteract) maybeCompleteTask('interact-any-toy');
+  };
+
+  const scheduleNoteCheck = (markInteract = false) => {
+    const exec = () => onNoteAdd({ markInteract });
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(exec);
+    } else {
+      setTimeout(exec, 16);
     }
   };
 
   if (!newToy.__tutorialRhythmHooked) {
     newToy.__tutorialRhythmHooked = true;
-    const rhythmEvents = [
-      'loopgrid:update',
-      'grid:notechange',
-      'grid:drum-tap',
-      'loopgrid:tap',
-      'toy-random',
-      'toy-update',
-      'change',
-      'toy-random-notes'
-    ];
-    rhythmEvents.forEach(evt => addListener(newToy, evt, onNoteAdd));
-    addListener(newToy, 'toy-clear', () => requestAnimationFrame(onNoteAdd));
+    const manualEvents = ['grid:notechange', 'grid:drum-tap', 'loopgrid:tap'];
+    manualEvents.forEach(evt => addListener(newToy, evt, () => scheduleNoteCheck(true)));
+
+    const stateEvents = ['loopgrid:update', 'toy-update', 'change'];
+    stateEvents.forEach(evt => addListener(newToy, evt, () => scheduleNoteCheck(false)));
+
+    const randomEvents = ['toy-random', 'toy-random-notes'];
+    randomEvents.forEach(evt => addListener(newToy, evt, () => scheduleNoteCheck(true)));
+
+    addListener(newToy, 'toy-clear', () => scheduleNoteCheck(false));
   }
-  onNoteAdd();
+  scheduleNoteCheck(false);
 
   const raf = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));
   const settle = (fn) => raf(() => raf(fn));
@@ -2617,22 +2634,22 @@ try {
           return;
         }
 
+        toy.classList.add('tutorial-guide-foreground');
         const runParticles = () => {
           if (disposed) return;
           if (!taskElement.isConnected || !toy.isConnected) return;
           stopParticleStream();
-          startParticleStream(taskElement, toy);
+          startParticleStream(taskElement, toy, { layer: 'behind-target' });
         };
         const scheduleParticles = () => requestAnimationFrame(() => requestAnimationFrame(runParticles));
         const onResize = () => scheduleParticles();
 
-        toy.classList.add('tutorial-pulse-target', 'tutorial-active-pulse');
         scheduleParticles();
         window.addEventListener('resize', onResize, { passive: true });
 
         cleanupInner = () => {
           window.removeEventListener('resize', onResize);
-          toy.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse');
+          toy.classList.remove('tutorial-guide-foreground');
           stopParticleStream();
         };
       };
@@ -2773,3 +2790,4 @@ try {
   ['toy-clear', 'toy-reset'].forEach(evt => document.addEventListener(evt, () => maybeCompleteTask('press-clear'), { capture: true }));
 
 })();
+

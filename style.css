@@ -406,7 +406,12 @@ select.toy-instrument {
 
 .toy-panel[data-toy="loopgrid-drum"] { --panel-w: 420px; }
 .toy-panel[data-toy="loopgrid"] {
-  --panel-w: 780px; /* adjust to taste */
+  --loopgrid-cols: 8;
+  --loopgrid-gap: 4px;
+  --loopgrid-cube-size: 56px;
+  --loopgrid-inner-width: calc(var(--loopgrid-cube-size) * var(--loopgrid-cols) + var(--loopgrid-gap) * (var(--loopgrid-cols) - 1));
+  --loopgrid-field-height: calc(var(--loopgrid-cube-size) * 2);
+  --panel-w: max(480px, calc(var(--loopgrid-inner-width) + 72px));
 }
 /* Panel width: one source of truth, wins over inline widths */
 .toy-panel[data-toy="loopgrid"],
@@ -886,6 +891,21 @@ select.toy-instrument {
   transform: translateY(-1px);
 }
 
+.toy-spawner-item.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+  border-color: rgba(95, 179, 255, 0.12);
+  background: rgba(17, 26, 36, 0.6);
+  box-shadow: none;
+  transform: none;
+}
+
+.toy-spawner-item.is-disabled .toy-spawner-name,
+.toy-spawner-item.is-disabled .toy-spawner-description {
+  color: rgba(154, 164, 178, 0.6);
+}
+
 .toy-spawner-name {
   font-weight: 600;
   font-size: 1rem;
@@ -1274,6 +1294,10 @@ body.tutorial-active #topbar #theme-switcher-wrap {
   opacity: 0.9;
   pointer-events: none;
   z-index: -1;
+}
+
+.tutorial-guide-foreground {
+  z-index: 1200 !important;
 }
 
 .tutorial-flash {

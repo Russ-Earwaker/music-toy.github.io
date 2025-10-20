@@ -148,23 +148,26 @@ function renderCatalog() {
 
     card.append(nameEl, descEl);
 
-    if (entry.disabled) {
+    const isDisabled = !!entry.disabled;
+    if (isDisabled) {
       card.disabled = true;
       card.classList.add('is-disabled');
-    }
-
-    card.addEventListener('pointerdown', (event) => startDrag(event, entry, card));
-    card.addEventListener('click', (event) => {
-      if (state.justSpawned) {
-        state.justSpawned = false;
+      card.setAttribute('aria-disabled', 'true');
+      card.tabIndex = -1;
+    } else {
+      card.addEventListener('pointerdown', (event) => startDrag(event, entry, card));
+      card.addEventListener('click', (event) => {
+        if (state.justSpawned) {
+          state.justSpawned = false;
+          event.preventDefault();
+          return;
+        }
         event.preventDefault();
-        return;
-      }
-      event.preventDefault();
-      const created = spawnAtDefault(entry);
-      state.justSpawned = false;
-      if (created) setMenuOpen(false);
-    });
+        const created = spawnAtDefault(entry);
+        state.justSpawned = false;
+        if (created) setMenuOpen(false);
+      });
+    }
     state.listHost.appendChild(card);
   });
 }

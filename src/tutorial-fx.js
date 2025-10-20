@@ -4,6 +4,7 @@ let behindCanvas, frontCanvas;
 let behindCtx, frontCtx;
 let animationFrameId = null;
 let particles = [];
+let desiredFrontLayer = 'front';
 const PARTICLES_PER_SEC = 60;
 const BURST_COLOR_RGB = { r: 92, g: 178, b: 255 };
 const burstColor = (alpha = 1) => `rgba(${BURST_COLOR_RGB.r}, ${BURST_COLOR_RGB.g}, ${BURST_COLOR_RGB.b}, ${alpha})`;
@@ -31,8 +32,28 @@ function setupCanvases(behind, front) {
 
   window.addEventListener('resize', resize, { passive: true });
   resize();
+  applyFrontCanvasLayer(desiredFrontLayer);
 }
 
+function applyFrontCanvasLayer(mode = 'front') {
+  desiredFrontLayer = mode;
+  if (!frontCanvas) return;
+  if (mode === 'behind-target') {
+    frontCanvas.dataset.tutorialLayer = 'behind-target';
+    try {
+      frontCanvas.style.setProperty('z-index', '400', 'important');
+    } catch {
+      frontCanvas.style.zIndex = '400';
+    }
+  } else if (frontCanvas.dataset.tutorialLayer) {
+    delete frontCanvas.dataset.tutorialLayer;
+    try {
+      frontCanvas.style.removeProperty('z-index');
+    } catch {
+      frontCanvas.style.zIndex = '';
+    }
+  }
+}
 function createParticle(x, y, endPos) {
   return {
     x,
@@ -251,7 +272,8 @@ function startFlight(ctx, startEl, endEl) {
 }
 
 
-export function startParticleStream(originEl, targetEl) {
+export function startParticleStream(originEl, targetEl, options = {}) {
+  const layer = options?.layer === 'behind-target' ? 'behind-target' : 'front';
   if (!originEl || !targetEl) {
     console.log('[tutorial-fx] startParticleStream skipped: origin or target missing', { originElExists: !!originEl, targetElExists: !!targetEl });
     return;
@@ -265,6 +287,7 @@ export function startParticleStream(originEl, targetEl) {
   }
 
   setupCanvases(behind, front);
+  applyFrontCanvasLayer(layer);
 
   if (animationFrameId) cancelAnimationFrame(animationFrameId);
   particles = [];
@@ -303,6 +326,7 @@ export function stopParticleStream() {
   if (behindCanvas && behindCtx) {
     behindCtx.clearRect(0, 0, behindCanvas.width, behindCanvas.height);
   }
+  applyFrontCanvasLayer('front');
 }
 
 
