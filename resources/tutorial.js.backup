@@ -3,6 +3,8 @@ import { setHelpActive, isHelpActive } from './help-overlay.js';
 import { isRunning, stop as stopTransport } from './audio-core.js';
 import { startParticleStream, stopParticleStream } from './tutorial-fx.js';
 
+(function() {
+
 function whenSwipeAPIReady(panel, fn, tries=30){
   if (!panel) return;
   if (typeof panel.setSwipeVisible === 'function' && typeof panel.startGhostGuide === 'function'){
@@ -13,7 +15,7 @@ function whenSwipeAPIReady(panel, fn, tries=30){
   requestAnimationFrame(()=> whenSwipeAPIReady(panel, fn, tries-1));
 }
 
-const TUTORIAL_ZOOM = 1.15; // adjust to taste (1.0-1.3 are good)
+const TUTORIAL_ZOOM = 1.15; // adjust to taste (1.0Ã¢â‚¬â€œ1.3 are good)
 
 const GOAL_FLOW = [
   {
@@ -1782,7 +1784,7 @@ function cloneGoal(goal) {
     else if (task.id === 'add-rhythm-toy') {
       ensureGoalPanel();
 
-      // When the + button is visible, start the line from the active task -> + button
+      // When the + button is visible, start the line from the active task Ã¢â€ â€™ + button
       whenVisible('.toy-spawner-toggle', (targetEl) => {
         const startParticles = () => {
           const taskEl = goalPanel?.querySelector('.goal-task.is-active') 
@@ -1830,7 +1832,7 @@ function cloneGoal(goal) {
   `;
       document.head.appendChild(style);
 
-      // IMPORTANT: use the actual class name from toy-spawner.js -> .toy-spawner-name
+      // IMPORTANT: use the actual class name from toy-spawner.js Ã¢â€ â€™ .toy-spawner-name
       const renameObserver = new MutationObserver(() => {
         document.querySelectorAll('.toy-spawner-item').forEach(item => {
           const label = item.querySelector('.toy-spawner-name');
@@ -2772,4 +2774,4 @@ try {
   randomEvents.forEach(evt => document.addEventListener(evt, () => maybeCompleteTask('press-random'), { capture: true }));
   ['toy-clear', 'toy-reset'].forEach(evt => document.addEventListener(evt, () => maybeCompleteTask('press-clear'), { capture: true }));
 
-})();
+})();})
