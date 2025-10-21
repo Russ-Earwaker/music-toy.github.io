@@ -587,6 +587,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let draggedNode = null; // { col, row, group? }
   let pendingNodeTap = null; // potential tap for toggle
   let pendingActiveMask = null; // preserve active columns across resolution changes
+  let dragScaleHighlightCol = null; // column index currently showing pentatonic hints
   let previewGid = null; // 1 or 2 while drawing a special line preview
   let persistentDisabled = Array.from({ length: initialCols }, () => new Set()); // survives view changes
   let btnLine1, btnLine2;
@@ -1373,6 +1374,27 @@ function regenerateMapFromStrokes() {
             }
         }
     }
+
+    if (typeof dragScaleHighlightCol === 'number' && dragScaleHighlightCol >= 0 && dragScaleHighlightCol < cols && cw > 0 && ch > 0) {
+        const colX = gridArea.x + dragScaleHighlightCol * cw;
+        const activeRow = (draggedNode && draggedNode.col === dragScaleHighlightCol) ? draggedNode.row : null;
+        for (let r = 0; r < rows; r++) {
+            const midi = chromaticPalette[r];
+            if (typeof midi !== 'number') continue;
+            const pitchClass = ((midi % 12) + 12) % 12;
+            const isPent = pentatonicPitchClasses.has(pitchClass);
+            gctx.save();
+            gctx.lineWidth = activeRow === r ? 3 : 2;
+            gctx.strokeStyle = isPent ? 'rgba(90, 200, 255, 0.95)' : 'rgba(255, 80, 80, 0.9)';
+            gctx.strokeRect(
+                colX + 1,
+                noteGridY + r * ch + 1,
+                Math.max(0, cw - 2),
+                Math.max(0, ch - 2)
+            );
+            gctx.restore();
+        }
+    }
   }
 
   // A helper to draw a complete stroke from a point array.
@@ -1669,6 +1691,14 @@ function regenerateMapFromStrokes() {
   // Create palettes of MIDI numbers. Reversed so top row is highest pitch.
   const chromaticPalette = buildPalette(48, chromaticOffsets, 1).reverse(); // MIDI 59 (B3) down to 48 (C3)
   const pentatonicPalette = buildPalette(48, pentatonicOffsets, 2).reverse(); // 10 notes from C3-C5 range
+  const pentatonicPitchClasses = new Set(pentatonicOffsets.map(offset => ((offset % 12) + 12) % 12));
+
+  function setDragScaleHighlight(col) {
+    const next = (typeof col === 'number' && col >= 0 && col < cols) ? col : null;
+    if (dragScaleHighlightCol === next) return;
+    dragScaleHighlightCol = next;
+    drawGrid();
+  }
 
   function snapToGrid(sourceCtx = pctx){
     // build a map: for each column, choose at most one row where line crosses
@@ -1895,6 +1925,7 @@ function regenerateMapFromStrokes() {
         };
         paint.style.cursor = 'grabbing';
         pendingNodeTap = null;
+        setDragScaleHighlight(draggedNode.col);
       }
     }
 
@@ -1950,6 +1981,8 @@ function regenerateMapFromStrokes() {
           // Redraw only the nodes canvas; the blue line on the paint canvas is untouched.
           drawNodes(currentMap.nodes);
           drawGrid();
+      } else if (dragScaleHighlightCol === null) {
+          setDragScaleHighlight(draggedNode.col);
       }
       return;
     }
@@ -2027,6 +2060,7 @@ function regenerateMapFromStrokes() {
         try { panel.dispatchEvent(new CustomEvent('drawgrid:node-drag-end', { detail: finalDetail })); } catch {}
       }
       draggedNode = null;
+      setDragScaleHighlight(null);
       drawing = false;
       paint.style.cursor = 'default';
       return;

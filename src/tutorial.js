@@ -69,10 +69,9 @@ const GOAL_FLOW = [
     id: 'draw-intro',
     title: 'Draw out a tune',
     reward: {
-      description: 'Unlocks the Clear and Randomise buttons.',
+      description: 'Collect a gleaming star.',
       icons: [
-        { type: 'asset', label: 'Clear', icon: "../assets/UI/T_ButtonClear.png", accent: '#f87171' },
-        { type: 'asset', label: 'Randomise', icon: "../assets/UI/T_ButtonRandom.png" },
+        { type: 'symbol', label: 'Star Reward', symbol: '\u2605', accent: '#facc15' },
       ],
     },
     tasks: [
