@@ -588,6 +588,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let pendingNodeTap = null; // potential tap for toggle
   let pendingActiveMask = null; // preserve active columns across resolution changes
   let dragScaleHighlightCol = null; // column index currently showing pentatonic hints
+  let eraseButton = null; // Reference to header erase button
   let previewGid = null; // 1 or 2 while drawing a special line preview
   let persistentDisabled = Array.from({ length: initialCols }, () => new Set()); // survives view changes
   let btnLine1, btnLine2;
@@ -733,12 +734,13 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const header = panel.querySelector('.toy-header');
   if (header){
     const right = header.querySelector('.toy-controls-right') || header;
-    let er = header.querySelector('[data-erase]');
+    eraseButton = header.querySelector('[data-erase]');
     // The button is now created by toyui.js. We just need to find it and wire it up.
-    er?.addEventListener('click', ()=>{
+    eraseButton?.addEventListener('click', ()=>{
+      if (eraseButton?.disabled) return;
       erasing = !erasing;
-      er.setAttribute('aria-pressed', String(erasing));
-      er.classList.toggle('active', erasing);
+      eraseButton.setAttribute('aria-pressed', String(erasing));
+      eraseButton.classList.toggle('active', erasing);
       if (!erasing) eraserCursor.style.display = 'none';
       else erasedTargetsThisDrag.clear(); // Clear on tool toggle
     });
@@ -778,9 +780,10 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     }
 
 
-    
-        btnLine1.addEventListener('click', handleGeneratorButtonClick);
+    btnLine1.addEventListener('click', handleGeneratorButtonClick);
     btnLine2.addEventListener('click', handleGeneratorButtonClick);
+
+    updateEraseButtonState();
     // Auto-tune toggle
     let autoTuneBtn = right.querySelector('.drawgrid-autotune');
     if (!autoTuneBtn) {
@@ -875,6 +878,22 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
                 console.error("Instrument picker failed in drawgrid", e);
             }
         });
+    }
+  }
+
+  function updateEraseButtonState() {
+    if (!eraseButton) return;
+    const isZoomed = panel.classList.contains('toy-zoomed');
+    if (!isZoomed && erasing) {
+      erasing = false;
+      erasedTargetsThisDrag.clear();
+    }
+    eraseButton.disabled = !isZoomed;
+    eraseButton.classList.toggle('is-disabled', !isZoomed);
+    eraseButton.setAttribute('aria-pressed', String(erasing));
+    eraseButton.classList.toggle('active', !!erasing && isZoomed);
+    if (!erasing) {
+      eraserCursor.style.display = 'none';
     }
   }
 
@@ -1125,6 +1144,7 @@ function regenerateMapFromStrokes() {
 
 
   panel.addEventListener('toy-zoom', () => {
+    updateEraseButtonState();
     // Snapshot paint to preserve drawn/erased content across zoom transitions
     let zoomSnap = null;
     try {
@@ -1336,7 +1356,7 @@ function regenerateMapFromStrokes() {
     gctx.strokeStyle = 'rgba(143, 168, 255, 0.35)'; // Untriggered particle color, slightly transparent
     gctx.lineWidth = 1.5;
     // Verticals (including outer lines)
-    for(let i = 0; i <= cols; i++){
+    for (let i = 0; i <= cols; i++) {
         const x = gridArea.x + i * cw;
         gctx.beginPath();
         gctx.moveTo(x, noteGridY);
@@ -1344,7 +1364,7 @@ function regenerateMapFromStrokes() {
         gctx.stroke();
     }
     // Horizontals (including outer lines)
-    for(let j = 0; j <= rows; j++){
+    for (let j = 0; j <= rows; j++) {
         const y = noteGridY + j * ch;
         gctx.beginPath();
         gctx.moveTo(gridArea.x, y);
@@ -1375,26 +1395,6 @@ function regenerateMapFromStrokes() {
         }
     }
 
-    if (typeof dragScaleHighlightCol === 'number' && dragScaleHighlightCol >= 0 && dragScaleHighlightCol < cols && cw > 0 && ch > 0) {
-        const colX = gridArea.x + dragScaleHighlightCol * cw;
-        const activeRow = (draggedNode && draggedNode.col === dragScaleHighlightCol) ? draggedNode.row : null;
-        for (let r = 0; r < rows; r++) {
-            const midi = chromaticPalette[r];
-            if (typeof midi !== 'number') continue;
-            const pitchClass = ((midi % 12) + 12) % 12;
-            const isPent = pentatonicPitchClasses.has(pitchClass);
-            gctx.save();
-            gctx.lineWidth = activeRow === r ? 3 : 2;
-            gctx.strokeStyle = isPent ? 'rgba(90, 200, 255, 0.95)' : 'rgba(255, 80, 80, 0.9)';
-            gctx.strokeRect(
-                colX + 1,
-                noteGridY + r * ch + 1,
-                Math.max(0, cw - 2),
-                Math.max(0, ch - 2)
-            );
-            gctx.restore();
-        }
-    }
   }
 
   // A helper to draw a complete stroke from a point array.
@@ -1542,7 +1542,11 @@ function regenerateMapFromStrokes() {
 
   function drawNodes(nodes) {
     nctx.clearRect(0, 0, cssW, cssH);
-    if (!nodes) { nodeCoordsForHitTest = []; return; }
+    renderDragScaleBlueHints(nctx);
+    if (!nodes) {
+        nodeCoordsForHitTest = [];
+        return;
+    }
 
     const nodeCoords = []; // Store coordinates of each node: {x, y, col, row, radius, group, disabled}
     nodeCoordsForHitTest = []; // Clear for new set
@@ -1693,11 +1697,39 @@ function regenerateMapFromStrokes() {
   const pentatonicPalette = buildPalette(48, pentatonicOffsets, 2).reverse(); // 10 notes from C3-C5 range
   const pentatonicPitchClasses = new Set(pentatonicOffsets.map(offset => ((offset % 12) + 12) % 12));
 
+  function renderDragScaleBlueHints(ctx) {
+    if (!ctx) return;
+    if (typeof dragScaleHighlightCol !== 'number' || dragScaleHighlightCol < 0 || dragScaleHighlightCol >= cols) return;
+    if (cw <= 0 || ch <= 0) return;
+    const noteGridY = gridArea.y + topPad;
+    const colX = gridArea.x + dragScaleHighlightCol * cw;
+    const activeRow = (draggedNode && draggedNode.col === dragScaleHighlightCol) ? draggedNode.row : null;
+    ctx.save();
+    const strokeWidth = Math.max(1, Math.min(cw, ch) * 0.045);
+    ctx.lineJoin = 'miter';
+    ctx.lineCap = 'butt';
+    for (let r = 0; r < rows; r++) {
+      const midi = chromaticPalette[r];
+      if (typeof midi !== 'number') continue;
+      const pitchClass = ((midi % 12) + 12) % 12;
+      if (!pentatonicPitchClasses.has(pitchClass)) continue;
+      const y = noteGridY + r * ch;
+      const alpha = (activeRow === r) ? 0.6 : 0.35;
+      ctx.fillStyle = `rgba(90, 200, 255, ${alpha})`;
+      ctx.fillRect(colX, y, cw, ch);
+      ctx.lineWidth = strokeWidth;
+      ctx.strokeStyle = activeRow === r ? 'rgba(160, 240, 255, 0.95)' : 'rgba(130, 220, 255, 0.85)';
+      ctx.strokeRect(colX, y, cw, ch);
+    }
+    ctx.restore();
+  }
+
   function setDragScaleHighlight(col) {
     const next = (typeof col === 'number' && col >= 0 && col < cols) ? col : null;
     if (dragScaleHighlightCol === next) return;
     dragScaleHighlightCol = next;
     drawGrid();
+    drawNodes(currentMap?.nodes || null);
   }
 
   function snapToGrid(sourceCtx = pctx){
