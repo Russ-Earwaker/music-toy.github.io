@@ -683,7 +683,7 @@ function cloneGoal(goal) {
         maybeCompleteTask('toggle-node');
         markInteraction();
       }, { passive: true });
-      add('drawgrid:node-drag', () => {
+      add('drawgrid:node-drag-end', () => {
         maybeCompleteTask('drag-note');
         markInteraction();
       }, { passive: true });
