@@ -78,23 +78,23 @@ const GOAL_FLOW = [
     tasks: [
       {
         id: 'add-draw-toy',
-        label: 'Open the Add Toy menu and drag in a new Draw Line toy',
+        label: 'Add a Draw Line Toy',
         requirement: 'add-toy-drawgrid',
       },
       {
         id: 'draw-line',
-        label: 'Draw your first line.',
+        label: 'Make a line on a draw line toy',
         requirement: 'draw-line',
         showSwipePrompt: true,
       },
       {
         id: 'press-play',
-        label: 'Press the Play button to start the toy.',
+        label: 'Press the play button',
         requirement: 'press-play',
       },
       {
         id: 'toggle-node',
-        label: 'Tap a note on the line to mute and unmute it.',
+        label: 'Tap a note to mute or unmute it.',
         requirement: 'toggle-node',
       },
     ],
@@ -674,7 +674,10 @@ function cloneGoal(goal) {
       add('drawgrid:update', (e) => {
         handleDrawUpdate(e?.detail?.nodes);
       }, { passive: true });
-      add('drawgrid:node-toggle', () => markInteraction(), { passive: true });
+      add('drawgrid:node-toggle', () => {
+        maybeCompleteTask('toggle-node');
+        markInteraction();
+      }, { passive: true });
       add('toy-remove', () => {
         drawToyPanels.delete(panel);
         drawToyLineState.delete(panel);
@@ -2106,7 +2109,7 @@ function cloneGoal(goal) {
   
         if (isPlayTask) {
           const playButtonContainer = targetEl;
-  
+
           // guard (before rAF)
           playButtonContainer.classList.add('tutorial-play-hidden');
           playButtonContainer.style.transformOrigin = '50% 50%';
@@ -2160,12 +2163,19 @@ function cloneGoal(goal) {
             }
           });
         } else {
-          targetEl.classList.add('tutorial-pulse-target', 'tutorial-active-pulse');
+          if (task.id === 'draw-line') {
+            const drawPanel = targetEl.closest('.toy-panel');
+            if (drawPanel) {
+              drawPanel.classList.add('tutorial-guide-foreground');
+            }
+          } else {
+            targetEl.classList.add('tutorial-pulse-target', 'tutorial-active-pulse');
+          }
         }
       } else {
         stopParticleStream();
       }
-  
+
     }
     if (helpActivatedForTask) {
       try { setHelpActive(false); } catch {}
@@ -2242,7 +2252,6 @@ function cloneGoal(goal) {
       markInteraction();
     });
     addListener(panel, 'drawgrid:node-toggle', () => {
-      maybeCompleteTask('toggle-node');
       markInteraction();
     });
 
