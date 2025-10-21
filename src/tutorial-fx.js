@@ -5,6 +5,10 @@ let behindCtx, frontCtx;
 let animationFrameId = null;
 let particles = [];
 let desiredFrontLayer = 'front';
+let activeCanvas = null;
+let activeCtx = null;
+let activeLayer = 'front';
+let activeTargetEl = null;
 const PARTICLES_PER_SEC = 60;
 const BURST_COLOR_RGB = { r: 92, g: 178, b: 255 };
 const burstColor = (alpha = 1) => `rgba(${BURST_COLOR_RGB.r}, ${BURST_COLOR_RGB.g}, ${BURST_COLOR_RGB.b}, ${alpha})`;
@@ -38,15 +42,14 @@ function setupCanvases(behind, front) {
 function applyFrontCanvasLayer(mode = 'front') {
   desiredFrontLayer = mode;
   if (!frontCanvas) return;
-  if (mode === 'behind-target') {
-    frontCanvas.dataset.tutorialLayer = 'behind-target';
+  if (frontCanvas.dataset?.tutorialLayer) delete frontCanvas.dataset.tutorialLayer;
+  if (mode === 'front') {
     try {
-      frontCanvas.style.setProperty('z-index', '400', 'important');
+      frontCanvas.style.setProperty('z-index', '600', 'important');
     } catch {
-      frontCanvas.style.zIndex = '400';
+      frontCanvas.style.zIndex = '600';
     }
-  } else if (frontCanvas.dataset.tutorialLayer) {
-    delete frontCanvas.dataset.tutorialLayer;
+  } else {
     try {
       frontCanvas.style.removeProperty('z-index');
     } catch {
@@ -118,9 +121,9 @@ function createBurst(x, y, endPos) {
   }
 }
 
-function startFlight(ctx, startEl, endEl) {
-    if (!ctx || !startEl || !endEl) {
-        animationFrameId = requestAnimationFrame(() => startFlight(ctx, startEl, endEl));
+function startFlight(ctx, canvas, startEl, endEl) {
+    if (!ctx || !canvas || !startEl || !endEl) {
+        animationFrameId = requestAnimationFrame(() => startFlight(ctx, canvas, startEl, endEl));
         return;
     }
 
@@ -145,10 +148,10 @@ function startFlight(ctx, startEl, endEl) {
         startFlight._accum -= 1;
     }
 
-    if(frontCanvas && frontCtx){
-        frontCtx.clearRect(0, 0, frontCanvas.width, frontCanvas.height);
-        frontCtx.save();
-        frontCtx.globalCompositeOperation = 'lighter';
+    if (canvas && ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
     }
 
     const sun = particles.find(p => p.isSun);
@@ -237,9 +240,9 @@ function startFlight(ctx, startEl, endEl) {
             }
         }
 
-        if(frontCtx){
-            frontCtx.beginPath();
-            frontCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        if(ctx){
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
             let fillAlpha = 0.85;
             let trailHighlightAlpha = null;
             if (p.isSun || (p.isBurst && !p.isSun && !p.isSweeper)) {
@@ -254,21 +257,32 @@ function startFlight(ctx, startEl, endEl) {
               fillAlpha = 0.78;
             }
 
-            frontCtx.fillStyle = burstColor(fillAlpha);
-            frontCtx.fill();
+            ctx.fillStyle = burstColor(fillAlpha);
+            ctx.fill();
 
             if (p.isTrail && p.trailBaseSize) {
-              frontCtx.beginPath();
-              frontCtx.arc(p.x, p.y, Math.max(0.6, p.trailBaseSize * 0.12), 0, Math.PI * 2);
-              frontCtx.fillStyle = burstColor(trailHighlightAlpha ?? fillAlpha);
-              frontCtx.fill();
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, Math.max(0.6, p.trailBaseSize * 0.12), 0, Math.PI * 2);
+              ctx.fillStyle = burstColor(trailHighlightAlpha ?? fillAlpha);
+              ctx.fill();
             }
         }
     }
 
-    if(frontCtx) frontCtx.restore();
+    if (canvas === frontCanvas && activeLayer === 'behind' && activeTargetEl) {
+        const rect = activeTargetEl.getBoundingClientRect();
+        const padding = 16;
+        ctx.save();
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.beginPath();
+        ctx.rect(rect.left - padding, rect.top - padding, rect.width + padding * 2, rect.height + padding * 2);
+        ctx.fill();
+        ctx.restore();
+    }
 
-    animationFrameId = requestAnimationFrame(() => startFlight(ctx, startEl, endEl));
+    if(ctx) ctx.restore();
+
+    animationFrameId = requestAnimationFrame(() => startFlight(ctx, canvas, startEl, endEl));
 }
 
 
@@ -308,8 +322,25 @@ export function startParticleStream(originEl, targetEl, options = {}) {
   });
   createBurst(sx, sy, { x: ex, y: ey });
 
+  const drawCtx = frontCtx;
+  const drawCanvas = frontCanvas;
+  if (!drawCtx || !drawCanvas) {
+    console.log('[tutorial-fx] startParticleStream skipped: no drawing context for layer', { layer });
+    return;
+  }
+  activeLayer = layer === 'behind-target' ? 'behind' : 'front';
+  activeCtx = drawCtx;
+  activeCanvas = drawCanvas;
+  activeTargetEl = layer === 'behind-target' ? targetEl : null;
+  if (layer === 'behind-target' && frontCanvas && frontCtx) {
+    frontCtx.clearRect(0, 0, frontCanvas.width, frontCanvas.height);
+  }
+  if (layer === 'front' && behindCanvas && behindCtx) {
+    behindCtx.clearRect(0, 0, behindCanvas.width, behindCanvas.height);
+  }
+
   // Kick the animation
-  animationFrameId = requestAnimationFrame(() => startFlight(front.getContext('2d'), originEl, targetEl));
+  animationFrameId = requestAnimationFrame(() => startFlight(drawCtx, drawCanvas, originEl, targetEl));
 }
 
 export function stopParticleStream() {
@@ -320,24 +351,19 @@ export function stopParticleStream() {
   particles = [];
   startFlight._lastTs = undefined;
   startFlight._accum = 0;
+  if (activeCanvas && activeCtx) {
+    activeCtx.clearRect(0, 0, activeCanvas.width, activeCanvas.height);
+  }
   if (frontCanvas && frontCtx) {
     frontCtx.clearRect(0, 0, frontCanvas.width, frontCanvas.height);
   }
   if (behindCanvas && behindCtx) {
     behindCtx.clearRect(0, 0, behindCanvas.width, behindCanvas.height);
   }
+  activeCanvas = null;
+  activeCtx = null;
+  activeLayer = 'front';
+  activeTargetEl = null;
   applyFrontCanvasLayer('front');
 }
-
-
-
-
-
-
-
-
-
-
-
-
 

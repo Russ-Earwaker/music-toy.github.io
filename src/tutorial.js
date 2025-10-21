@@ -97,6 +97,11 @@ const GOAL_FLOW = [
         label: 'Tap a note to mute or unmute it.',
         requirement: 'toggle-node',
       },
+      {
+        id: 'drag-note',
+        label: 'Drag a note up or down.',
+        requirement: 'drag-note',
+      },
     ],
   },
   {
@@ -676,6 +681,10 @@ function cloneGoal(goal) {
       }, { passive: true });
       add('drawgrid:node-toggle', () => {
         maybeCompleteTask('toggle-node');
+        markInteraction();
+      }, { passive: true });
+      add('drawgrid:node-drag', () => {
+        maybeCompleteTask('drag-note');
         markInteraction();
       }, { passive: true });
       add('toy-remove', () => {
@@ -2096,6 +2105,8 @@ function cloneGoal(goal) {
         window.tutorialSpacebarDisabled = false;
       }
       const isPlayTask = task.id === 'press-play';
+      const isToggleTask = task.id === 'toggle-node';
+      const isDragTask = task.id === 'drag-note';
       const targetVisible =
         targetEl &&
         !targetEl.classList.contains('tutorial-control-locked') &&
@@ -2106,7 +2117,9 @@ function cloneGoal(goal) {
       if (targetVisible) {
         const taskEl = goalPanel?.querySelector('.goal-task.is-active');
         if (taskEl) {
-          if (task.id === 'toggle-node') {
+          if (isToggleTask) {
+            startParticleStream(taskEl, targetEl, { layer: 'behind-target' });
+          } else if (isDragTask) {
             startParticleStream(taskEl, targetEl, { layer: 'behind-target' });
           } else {
             startParticleStream(taskEl, targetEl, { layer: 'behind-target' });
@@ -2174,9 +2187,12 @@ function cloneGoal(goal) {
             if (drawPanel) {
               drawPanel.classList.add('tutorial-guide-foreground');
             }
-          } else if (task.id === 'toggle-node') {
+          } else if (isToggleTask) {
             targetEl.classList.add('tutorial-guide-foreground');
             try { targetEl.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: true } })); } catch {}
+          } else if (isDragTask) {
+            targetEl.classList.add('tutorial-guide-foreground');
+            try { targetEl.dispatchEvent(new CustomEvent('tutorial:highlight-drag', { detail: { active: true } })); } catch {}
           } else {
             targetEl.classList.add('tutorial-pulse-target', 'tutorial-active-pulse');
           }
@@ -2212,6 +2228,7 @@ function cloneGoal(goal) {
         document.querySelectorAll('.tutorial-pulse-target, .tutorial-active-pulse, .tutorial-addtoy-pulse, .tutorial-guide-foreground').forEach(el => {
           if (el.matches?.('.toy-panel[data-toy="drawgrid"]')) {
             try { el.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: false } })); } catch {}
+            try { el.dispatchEvent(new CustomEvent('tutorial:highlight-drag', { detail: { active: false } })); } catch {}
           }
           el.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-addtoy-pulse', 'tutorial-guide-foreground');
         });
@@ -2235,6 +2252,7 @@ function cloneGoal(goal) {
       document.querySelectorAll('.tutorial-pulse-target, .tutorial-active-pulse, .tutorial-addtoy-pulse, .tutorial-guide-foreground').forEach(el => {
         if (el.matches?.('.toy-panel[data-toy="drawgrid"]')) {
           try { el.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: false } })); } catch {}
+          try { el.dispatchEvent(new CustomEvent('tutorial:highlight-drag', { detail: { active: false } })); } catch {}
         }
         el.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-addtoy-pulse', 'tutorial-guide-foreground');
       });
@@ -2766,7 +2784,7 @@ try {
           taskClasses: taskElement.className,
           toggleClasses: toggle.className,
         });
-        startParticleStream(taskElement, toggle);
+        startParticleStream(taskElement, toggle, { layer: 'behind-target' });
       };
       const scheduleParticles = () => {
         console.log('[tutorial] highlightAddToy scheduleParticles', { taskId });
@@ -2890,6 +2908,7 @@ try {
       'press-clear': '.toy-panel[data-toy="drawgrid"] [data-action="clear"], .toy-panel [data-action="clear"]',
       'press-random': '.toy-panel[data-toy="drawgrid"] [data-action="random"], .toy-panel [data-action="random"]',
       'toggle-node': '.toy-panel[data-toy="drawgrid"]',
+      'drag-note': '.toy-panel[data-toy="drawgrid"]',
       'draw-line': '.toy-panel[data-toy="drawgrid"] canvas[data-role="drawgrid-paint"]',
       // Guide tasks that spawn toys should aim the effect at the shared toggle button
       'add-draw-toy': '.toy-spawner-toggle',
@@ -2909,10 +2928,12 @@ try {
     }
 
     const isToggleTask = taskId === 'toggle-node';
-    const particleTarget = isToggleTask
+    const isDragTask = taskId === 'drag-note';
+    const panelHighlightTask = isToggleTask || isDragTask;
+    const particleTarget = panelHighlightTask
       ? (targetElement.querySelector('canvas[data-role="drawgrid-nodes"]') || targetElement)
       : targetElement;
-    const particleOptions = isToggleTask ? { layer: 'behind-target' } : null;
+    const particleOptions = panelHighlightTask ? { layer: 'behind-target' } : null;
     let disposed = false;
     let flashTimer = null;
     const runParticles = () => {
@@ -2940,9 +2961,10 @@ try {
       targetElement.classList.remove('tutorial-flash');
       void targetElement.offsetWidth;
     }
-    if (isToggleTask) {
+    if (panelHighlightTask) {
       targetElement.classList.add('tutorial-guide-foreground');
-      try { targetElement.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: true } })); } catch {}
+      const eventName = isDragTask ? 'tutorial:highlight-drag' : 'tutorial:highlight-notes';
+      try { targetElement.dispatchEvent(new CustomEvent(eventName, { detail: { active: true } })); } catch {}
     } else {
       targetElement.classList.add('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-flash');
       flashTimer = setTimeout(() => {
@@ -2956,9 +2978,10 @@ try {
       disposed = true;
       window.removeEventListener('resize', onResize);
       if (flashTimer) clearTimeout(flashTimer);
-      if (isToggleTask) {
+      if (panelHighlightTask) {
         targetElement.classList.remove('tutorial-guide-foreground');
-        try { targetElement.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: false } })); } catch {}
+        const eventName = isDragTask ? 'tutorial:highlight-drag' : 'tutorial:highlight-notes';
+        try { targetElement.dispatchEvent(new CustomEvent(eventName, { detail: { active: false } })); } catch {}
       } else {
         targetElement.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-flash');
       }
@@ -2975,6 +2998,7 @@ try {
     stopParticleStream();
     document.querySelectorAll('.toy-panel[data-toy="drawgrid"]').forEach(panel => {
       try { panel.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: false } })); } catch {}
+      try { panel.dispatchEvent(new CustomEvent('tutorial:highlight-drag', { detail: { active: false } })); } catch {}
       panel.classList.remove('tutorial-guide-foreground');
     });
     const spawner = document.querySelector('.toy-spawner-toggle');
@@ -2994,6 +3018,7 @@ try {
     resetGuideProgress();
     document.querySelectorAll('.toy-panel[data-toy="drawgrid"]').forEach(panel => {
       try { panel.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: false } })); } catch {}
+      try { panel.dispatchEvent(new CustomEvent('tutorial:highlight-drag', { detail: { active: false } })); } catch {}
       panel.classList.remove('tutorial-guide-foreground');
     });
     scheduleDrawToySync();

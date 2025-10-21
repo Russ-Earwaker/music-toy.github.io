@@ -593,8 +593,12 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let autoTune = true; // Default to on
   const safeArea = 40;
   let gridArea = { x: 0, y: 0, w: 0, h: 0 };
-  let tutorialHighlightActive = false;
+  let tutorialHighlightMode = 'none'; // 'none' | 'notes' | 'drag'
   let tutorialHighlightRaf = null;
+  let dragHintGhosts = [];
+  let dragHintDirection = 1;
+  let dragHintIndex = 0;
+  let lastDragHintTime = 0;
 
   const particles = createDrawGridParticles({
     getW: () => cssW,
@@ -611,7 +615,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const renderTutorialHighlight = () => {
     if (!tutorialCtx) return;
     tutorialCtx.clearRect(0, 0, tutorialCanvas.width, tutorialCanvas.height);
-    if (!tutorialHighlightActive || !nodeCoordsForHitTest?.length) return;
+    if (tutorialHighlightMode === 'none' || !nodeCoordsForHitTest?.length) return;
     const baseRadius = Math.max(6, Math.min(cw || 0, ch || 0) * 0.55);
     tutorialCtx.save();
     tutorialCtx.shadowColor = 'rgba(0, 0, 0, 0.35)';
@@ -621,7 +625,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       : Date.now();
     const pulsePhase = (now / 480) % (Math.PI * 2);
     const pulseScale = 1 + Math.sin(pulsePhase) * 0.24;
-    for (const node of nodeCoordsForHitTest) {
+    const nodesToHighlight = nodeCoordsForHitTest;
+    for (const node of nodesToHighlight) {
       if (!node) continue;
       tutorialCtx.globalAlpha = node.disabled ? 0.45 : 1;
       tutorialCtx.lineWidth = Math.max(2, baseRadius * 0.22);
@@ -630,22 +635,78 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       tutorialCtx.arc(node.x, node.y, baseRadius * pulseScale, 0, Math.PI * 2);
       tutorialCtx.stroke();
     }
+
+    if (tutorialHighlightMode === 'drag') {
+      const effectiveWidth = (gridArea.w && gridArea.w > 0) ? gridArea.w : (cw * cols);
+      const effectiveHeight = (gridArea.h && gridArea.h > 0) ? gridArea.h : (ch * rows);
+      const fallbackX = gridArea.x + (effectiveWidth / 2);
+      const fallbackY = gridArea.y + topPad + Math.max(0, effectiveHeight - topPad) / 2;
+      const spawnInterval = 650;
+      if (now - lastDragHintTime > spawnInterval) {
+        const nodeCount = nodeCoordsForHitTest.length;
+        const anchorNode = nodeCount
+          ? nodeCoordsForHitTest[dragHintIndex % nodeCount]
+          : { x: fallbackX, y: fallbackY };
+        if (nodeCount) {
+          dragHintIndex = (dragHintIndex + 1) % nodeCount;
+        } else {
+          dragHintIndex = 0;
+        }
+        dragHintGhosts.push({
+          x: anchorNode.x,
+          baseY: anchorNode.y,
+          dir: dragHintDirection,
+          progress: 0
+        });
+        if (dragHintGhosts.length > 24) dragHintGhosts.shift();
+        dragHintDirection *= -1;
+        lastDragHintTime = now;
+      }
+
+      const amplitude = Math.max(ch * 1.2, 48);
+      tutorialCtx.lineWidth = Math.max(1.2, baseRadius * 0.18);
+      tutorialCtx.strokeStyle = 'rgba(150, 215, 255, 0.75)';
+      for (let i = dragHintGhosts.length - 1; i >= 0; i--) {
+        const ghost = dragHintGhosts[i];
+        ghost.progress += 0.025;
+        if (ghost.progress >= 1) {
+          dragHintGhosts.splice(i, 1);
+          continue;
+        }
+        const eased = Math.sin(ghost.progress * Math.PI);
+        const y = ghost.baseY + ghost.dir * amplitude * eased;
+        const alpha = Math.max(0, 1 - ghost.progress);
+        tutorialCtx.globalAlpha = alpha * 0.7;
+        const ghostRadius = baseRadius * (0.9 + ghost.progress * 0.8);
+        tutorialCtx.beginPath();
+        tutorialCtx.arc(ghost.x, y, ghostRadius, 0, Math.PI * 2);
+        tutorialCtx.stroke();
+      }
+      tutorialCtx.globalAlpha = 1;
+    } else {
+      dragHintGhosts = [];
+      dragHintIndex = 0;
+    }
     tutorialCtx.restore();
     tutorialCtx.shadowBlur = 0;
     tutorialCtx.globalAlpha = 1;
   };
 
   const startTutorialHighlightLoop = () => {
-    if (!tutorialHighlightActive) return;
+    if (tutorialHighlightMode === 'none') return;
     if (tutorialHighlightRaf !== null) return;
     const tick = () => {
-      if (!tutorialHighlightActive) {
+      if (tutorialHighlightMode === 'none') {
         tutorialHighlightRaf = null;
         return;
       }
       renderTutorialHighlight();
       tutorialHighlightRaf = requestAnimationFrame(tick);
     };
+    lastDragHintTime = 0;
+    dragHintGhosts = [];
+    dragHintDirection = 1;
+    dragHintIndex = 0;
     renderTutorialHighlight();
     tutorialHighlightRaf = requestAnimationFrame(tick);
   };
@@ -656,9 +717,13 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       tutorialHighlightRaf = null;
     }
     clearTutorialHighlight();
+    dragHintGhosts = [];
+    dragHintIndex = 0;
+    lastDragHintTime = 0;
+    dragHintDirection = 1;
   };
 
-panel.setSwipeVisible = (show, { immediate = false } = {}) => {
+  panel.setSwipeVisible = (show, { immediate = false } = {}) => {
   __forceSwipeVisible = !!show;
   const speed = show ? 0.08 : 0.12;
   try { particles.setLetterFadeTarget(show ? 1 : 0, speed, immediate); } catch {}
@@ -1174,7 +1239,7 @@ function regenerateMapFromStrokes() {
       particleCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ghostCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       if (tutorialCtx) tutorialCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      if (tutorialHighlightActive) renderTutorialHighlight();
+    if (tutorialHighlightMode !== 'none') renderTutorialHighlight();
 
       // Scale the logical stroke data if we have it and the canvas was resized
       if (strokes.length > 0 && oldW > 0 && oldH > 0) {
@@ -1590,7 +1655,7 @@ function regenerateMapFromStrokes() {
     }
 
     drawNoteLabels(nodes);
-    if (tutorialHighlightActive) {
+    if (tutorialHighlightMode !== 'none') {
       renderTutorialHighlight();
     } else {
       clearTutorialHighlight();
@@ -1893,6 +1958,9 @@ function regenerateMapFromStrokes() {
           } catch {}
 
           draggedNode.row = newRow;
+          try {
+            panel.dispatchEvent(new CustomEvent('drawgrid:node-drag', { detail: { col, row: newRow, group: gid } }));
+          } catch {}
           
           // Redraw only the nodes canvas; the blue line on the paint canvas is untouched.
           drawNodes(currentMap.nodes);
@@ -2919,16 +2987,30 @@ function regenerateMapFromStrokes() {
   panel.stopGhostGuide = stopGhostGuide;
 
   panel.addEventListener('toy-remove', () => {
-    tutorialHighlightActive = false;
+    tutorialHighlightMode = 'none';
     stopTutorialHighlightLoop();
     noteToggleEffects = [];
   }, { once: true });
 
   panel.addEventListener('tutorial:highlight-notes', (event) => {
-    tutorialHighlightActive = !!event?.detail?.active;
-    if (tutorialHighlightActive) {
+    if (event?.detail?.active) {
+      tutorialHighlightMode = 'notes';
       startTutorialHighlightLoop();
-    } else {
+    } else if (tutorialHighlightMode === 'notes') {
+      tutorialHighlightMode = 'none';
+      stopTutorialHighlightLoop();
+    }
+  });
+
+  panel.addEventListener('tutorial:highlight-drag', (event) => {
+    if (event?.detail?.active) {
+      tutorialHighlightMode = 'drag';
+      dragHintGhosts = [];
+      dragHintIndex = 0;
+      lastDragHintTime = 0;
+      startTutorialHighlightLoop();
+    } else if (tutorialHighlightMode === 'drag') {
+      tutorialHighlightMode = 'none';
       stopTutorialHighlightLoop();
     }
   });
@@ -2956,8 +3038,4 @@ function regenerateMapFromStrokes() {
   try { panel.dispatchEvent(new CustomEvent('drawgrid:ready', { bubbles: true })); } catch {}
   return api;
 }
-
-
-
-
 
