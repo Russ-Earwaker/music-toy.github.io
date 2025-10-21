@@ -3,12 +3,38 @@
 import { drawBlock, whichThirdRect } from './toyhelpers.js';
 import { midiToName } from './note-helpers.js';
 import { isRunning, getLoopInfo } from './audio-core.js';
-import { initGridParticles, drawGridParticles } from './grid-particles.js';
+import { initLoopgridParticles, drawGridParticles } from './grid-particles.js';
 
 const NUM_CUBES = 8;
 
 
 const GAP = 4; // A few pixels of space between each cube
+
+function retargetLoopgridParticleCount(st, pw, ph) {
+  // Baseline: 56 particles for field height = 2 * 72 (old spec).
+  // Our field height is 3 * cube, so scale count ~ linearly with height,
+  // and also with width vs the field baseline width.
+  const cube = Math.max(1, ph / 3); // 3*cube = field height
+  const gap = 4;                     // loopgrid gap
+  const baselineCube = 72;
+  const innerW = (NUM_CUBES * cube) + ((NUM_CUBES - 1) * gap);
+  const fieldW = innerW + cube;                    // you extend half a cube on both sides => +1 cube total
+  const baselineInnerW = (NUM_CUBES * baselineCube) + ((NUM_CUBES - 1) * gap);
+  const baselineFieldW = baselineInnerW + baselineCube;
+  const heightScale = (ph / (2 * baselineCube));   // 3× vs 2× baseline => 1.5x
+  const widthScale  = (pw / baselineFieldW);       // proportional width scale
+  const target = Math.max(24, Math.round(56 * heightScale * widthScale));
+  const current = st.particles.length;
+  if (current === target) return;
+  if (current < target) {
+    // add more
+    st.particles.push(...st.particles.slice(0, Math.min(current, target - current)).map(p => ({...p})));
+    while (st.particles.length < target) st.particles.push({ nx: Math.random(), ny: Math.random(), sx:null, sy:null, vx:0, vy:0, flash:0 });
+  } else {
+    // trim
+    st.particles.length = target;
+  }
+}
 
 function findChainHead(toy) {
     if (!toy) return null;
@@ -82,7 +108,7 @@ export function attachDrumVisuals(panel) {
     flash: new Float32Array(NUM_CUBES),
     bgFlash: 0,
     localLastPhase: 0,
-    particles: initGridParticles(),
+    particles: initLoopgridParticles(56),
   };
   panel.__drumVisualState = st;
 
@@ -167,6 +193,31 @@ function render(panel) {
   const st = panel.__drumVisualState;
   if (!st) return;
 
+  // --- Ensure canvases' bitmap sizes track CSS boxes exactly (prevents drift) ---
+  const DPR = Math.max(1, Math.floor(window.devicePixelRatio || 1));
+
+  // Sync grid (cubes) canvas to its CSS size
+  {
+    const rect = st.canvas.getBoundingClientRect();
+    const targetW = Math.max(1, Math.round(rect.width * DPR));
+    const targetH = Math.max(1, Math.round(rect.height * DPR));
+    if (st.canvas.width !== targetW || st.canvas.height !== targetH) {
+      st.canvas.width = targetW;
+      st.canvas.height = targetH;
+    }
+  }
+
+  // Sync particle canvas to its CSS size
+  if (st.particleCanvas) {
+    const prect = st.particleCanvas.getBoundingClientRect();
+    const pW = Math.max(1, Math.round(prect.width * DPR));
+    const pH = Math.max(1, Math.round(prect.height * DPR));
+    if (st.particleCanvas.width !== pW || st.particleCanvas.height !== pH) {
+      st.particleCanvas.width = pW;
+      st.particleCanvas.height = pH;
+    }
+  }
+
   // Handle the highlight pulse animation on note hits.
   if (panel.__pulseRearm) {
     panel.classList.remove('toy-playing-pulse');
@@ -218,10 +269,15 @@ function render(panel) {
     const pw = st.particleCanvas.width;
     const ph = st.particleCanvas.height;
     st.pctx.clearRect(0, 0, pw, ph);
+    retargetLoopgridParticleCount(st, pw, ph);
+    // Base particle scale on cube size so it matches Rippler's visual definition.
+    // Our field height = 3 * cubeSizePx  => cubeSizePx = ph / 3
+    const cubeSizePx = Math.max(1, st.particleCanvas.height / 3);
+    const baselineCube = 72; // Rippler baseline cube size
     const pmap = {
       n2x: (n) => n * pw,
       n2y: (n) => n * ph,
-      scale: () => Math.min(pw, ph) / 420,
+      scale: () => (cubeSizePx / baselineCube), // 1.0 when cube is 72px
     };
     drawGridParticles(st.pctx, particles, pmap, { col: playheadCol });
   }
@@ -248,12 +304,20 @@ function render(panel) {
   const heightBasedSize = h - BORDER_MARGIN * 2;
   const widthBasedSize = (w - totalGapWidth) / NUM_CUBES;
   let cubeSize = Math.min(heightBasedSize, widthBasedSize);
-  
-  cubeSize = Math.max(1, Math.floor(cubeSize * 1.2));
+
+  // IMPORTANT: do NOT inflate cube size (removes edge cut-offs).
+  // Keep integer pixels to avoid blurry borders.
+  cubeSize = Math.max(1, Math.floor(cubeSize));
 
   // Center the entire block of cubes.
   const actualTotalCubesWidth = (cubeSize * NUM_CUBES) + totalGapWidth;
-  const xOffset = (w - actualTotalCubesWidth) / 2;
+
+  // Safety clamp in case of rounding: never exceed canvas width.
+  if (actualTotalCubesWidth > w) {
+    cubeSize = Math.floor((w - totalGapWidth) / NUM_CUBES);
+  }
+
+  const xOffset = (w - ((cubeSize * NUM_CUBES) + totalGapWidth)) / 2;
   const yOffset = (h - cubeSize) / 2;
 
   // Check for phase wrap to prevent flicker on chain advance

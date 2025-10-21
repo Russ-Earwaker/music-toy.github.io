@@ -409,58 +409,61 @@ select.toy-instrument {
   /* Grid geometry */
   --loopgrid-cols: 8;
   --loopgrid-gap: 4px;
-  --loopgrid-cube-size: 56px;
+  /* Keep this equal to Rippler’s block visual size. If Rippler’s blocks change later,
+     update this single token and loopgrid will follow. */
+  --loopgrid-cube-size: 72px;
   --loopgrid-inner-width: calc(
     var(--loopgrid-cube-size) * var(--loopgrid-cols)
     + var(--loopgrid-gap) * (var(--loopgrid-cols) - 1)
   );
+  /* Field width = inner grid + half-cube on both sides (total +1 cube) */
+  --loopgrid-field-width: calc(var(--loopgrid-inner-width) + var(--loopgrid-cube-size));
 
-  /* Particle field = 2x cube height */
+  /* Particle field = 3x cube height (previously 2x) */
   --loopgrid-field-height: calc(var(--loopgrid-cube-size) * 3);
 
-  /* Horizontal breathing room (for the field / shadows) */
-  --edge-buffer: 60px;
-
-  /* Panel width must accommodate inner grid + side buffers + header/UI */
-  --panel-w: max(640px, calc(var(--loopgrid-inner-width) + (var(--edge-buffer) * 2) + 120px));
+  --edge-buffer: 0px;
+  --panel-w: var(--loopgrid-field-width); /* hug the black background width */
 }
 
-/* Layout for the grid row + pad row (we only use the sequencer row here) */
+/* Remove horizontal padding so the black background touches the frame edges */
 .toy-panel[data-toy="loopgrid"] .toy-body {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  padding: 12px;
+  padding: 0 0 12px; /* no left/right padding; keep a little bottom space for controls if needed */
   gap: 12px;
+  place-items: center;
 }
 
-/* The sequencer viewport that contains the cubes' canvas */
 .toy-panel[data-toy="loopgrid"] .sequencer-wrap {
   position: relative;
-  width: var(--loopgrid-inner-width);
-  margin: 0 auto;              /* center inside the panel */
-  min-height: 56px;            /* guardrails */
-  max-height: 22vh;
-  aspect-ratio: 8 / 1;
+  width: var(--loopgrid-field-width);
+  height: var(--loopgrid-field-height); /* match particle field */
+  margin-left: 0;
+  margin-right: 0;
+  background: #000;
+  border-radius: 0;     /* remove curved corners */
+  overflow: hidden;     /* keep canvases clipped cleanly */
 }
 
-/* The cubes canvas should sit above the particles */
+/* Cubes canvas: fixed to inner grid width, centered in the frame */
 .toy-panel[data-toy="loopgrid"] .grid-canvas {
-  position: relative;
+  position: absolute;
   z-index: 1;
-  display: block;
-  width: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: var(--loopgrid-inner-width);
   height: 100%;
+  display: block;
 }
 
-/* Particle canvas sits behind and is double-height, centered */
+/* Particle canvas: covers the whole black field (wider than cubes) */
 .toy-panel[data-toy="loopgrid"] .particle-canvas {
   position: absolute;
   z-index: 0;
-  pointer-events: none;
-  width: calc(100% + var(--edge-buffer) * 2);
-  left: calc(var(--edge-buffer) * -1);
-
-  /* 2× cube area, vertically centered on the sequencer */
+  left: 50%;
+  transform: translateX(-50%);
+  width: var(--loopgrid-field-width);
   height: var(--loopgrid-field-height);
   top: calc(50% - (var(--loopgrid-field-height) / 2));
 }
@@ -518,13 +521,7 @@ select.toy-instrument {
   gap: 12px;
 }
 
-.toy-panel[data-toy="loopgrid"] .toy-body {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr); /* sequencer row + flexible pad row */
-  padding: 12px;
-  gap: 12px;
-  height: auto;
-}
+
 
 .sequencer-wrap {
   width: 100%;

@@ -69,3 +69,11 @@ export function kickParticles(parts, map, {
     }
   }
 }
+
+// Loopgrid-specific particle init (Rippler-like density & size)
+export function initLoopgridParticles(count = 56) {
+  const pts = initGridParticles(count);   // reuse the base generator
+  // If Rippler uses a larger base radius/energy, normalize here:
+  // e.g., pts.forEach(p => { p.size *= 1.0; p.energy *= 1.0; });
+  return pts;
+}

@@ -1957,6 +1957,7 @@ function regenerateMapFromStrokes() {
         };
         paint.style.cursor = 'grabbing';
         pendingNodeTap = null;
+        activateDraggedColumn(draggedNode.col, draggedNode.row);
         setDragScaleHighlight(draggedNode.col);
       }
     }
@@ -1997,6 +1998,7 @@ function regenerateMapFromStrokes() {
             colGroupMap.set(newRow, filtered);
           }
           currentMap.nodes[col].add(newRow);
+          activateDraggedColumn(col, newRow);
 
           // record manual override for standard view preservation
           try {
