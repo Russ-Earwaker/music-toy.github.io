@@ -248,6 +248,9 @@ function loadGuideProgress() {
 }
 
 const guideProgress = loadGuideProgress();
+const requirementCompletionState = new Map();
+const drawToyPanels = new Set();
+const drawToyLineState = new Map();
 let lastPlacedToy = null;
 
 function saveGuideProgress() {
@@ -299,6 +302,27 @@ function markGuideTaskComplete(goalId, taskId) {
   return false;
 }
 
+function markGuideTaskIncomplete(goalId, taskId) {
+  if (!goalId || !taskId) return false;
+  const hadTask = guideProgress.tasks.delete(taskId);
+  let goalChanged = false;
+  const goal = GOAL_BY_ID.get(goalId);
+  if (goal) {
+    const tasks = Array.isArray(goal.tasks) ? goal.tasks : [];
+    const stillComplete = tasks.every(task => !task?.id || guideProgress.tasks.has(task.id));
+    if (!stillComplete && guideProgress.goals.has(goalId)) {
+      guideProgress.goals.delete(goalId);
+      goalChanged = true;
+    }
+  }
+  if (hadTask || goalChanged) {
+    saveGuideProgress();
+    dispatchGuideProgressUpdate({ goalId, taskId, via: 'markGuideTaskIncomplete' });
+    return true;
+  }
+  return false;
+}
+
 function markGuideRewardClaimed(goalId) {
   if (!goalId) return false;
   if (!guideProgress.goals.has(goalId)) return false;
@@ -321,45 +345,60 @@ function resetGuideProgress() {
   guideProgress.goals.clear();
   guideProgress.claimedRewards.clear();
   lastPlacedToy = null;
+  requirementCompletionState.clear();
+  drawToyPanels.clear();
+  drawToyLineState.clear();
   saveGuideProgress();
   dispatchGuideProgressUpdate({ via: 'resetGuideProgress' });
 }
 
-function recordRequirementProgress(requirement) {
-  if (!requirement) return false;
+function recordRequirementProgress(requirement, shouldComplete = true) {
+  if (!requirement) return { updated: false, blocked: false };
   const entries = TASKS_BY_REQUIREMENT.get(requirement);
-  if (!entries || !entries.length) return false;
+  if (!entries || !entries.length) return { updated: false, blocked: false };
   let changed = false;
+  let blocked = false;
+  let attemptedCompletion = false;
   const goalsTouched = new Set();
   entries.forEach(({ goalId, taskId, taskIndex }) => {
-    const goal = GOAL_BY_ID.get(goalId);
-    if (goal) {
-      const tasks = Array.isArray(goal.tasks) ? goal.tasks : [];
-      let index = Number.isFinite(taskIndex) ? taskIndex : tasks.findIndex((task, idx) => (task?.id || `task-${idx}`) === taskId);
-      if (index < 0) {
-        index = tasks.findIndex((task, idx) => (task?.id || `task-${idx}`) === taskId);
-      }
-      if (index >= 0) {
-        let prerequisitesComplete = true;
-        for (let i = 0; i < index; i++) {
-          const prevTask = tasks[i];
-          const prevId = prevTask?.id || `task-${i}`;
-          if (prevId && !guideProgress.tasks.has(prevId)) {
-            prerequisitesComplete = false;
-            break;
+    goalsTouched.add(goalId);
+    if (shouldComplete) {
+      const goal = GOAL_BY_ID.get(goalId);
+      if (goal) {
+        const tasks = Array.isArray(goal.tasks) ? goal.tasks : [];
+        let index = Number.isFinite(taskIndex) ? taskIndex : tasks.findIndex((task, idx) => (task?.id || `task-${idx}`) === taskId);
+        if (index < 0) {
+          index = tasks.findIndex((task, idx) => (task?.id || `task-${idx}`) === taskId);
+        }
+        if (index >= 0) {
+          let prerequisitesComplete = true;
+          for (let i = 0; i < index; i++) {
+            const prevTask = tasks[i];
+            const prevId = prevTask?.id || `task-${i}`;
+            if (prevId && !guideProgress.tasks.has(prevId)) {
+              prerequisitesComplete = false;
+              break;
+            }
+          }
+          if (!prerequisitesComplete) {
+            blocked = true;
+            return;
           }
         }
-        if (!prerequisitesComplete) {
-          goalsTouched.add(goalId);
-          return;
-        }
       }
+      attemptedCompletion = true;
+      const didUpdate = markGuideTaskComplete(goalId, taskId);
+      if (didUpdate) changed = true;
+    } else {
+      const didUpdate = markGuideTaskIncomplete(goalId, taskId);
+      if (didUpdate) changed = true;
     }
-    const didUpdate = markGuideTaskComplete(goalId, taskId);
-    if (didUpdate) changed = true;
-    goalsTouched.add(goalId);
   });
-  if (changed) return true;
+  if (!shouldComplete) {
+    return { updated: changed, blocked: false };
+  }
+  const blockedWithoutAttempt = blocked && !attemptedCompletion;
+  if (changed) return { updated: true, blocked: blockedWithoutAttempt };
   // Even if no individual task was new, a previously incomplete goal might flip to complete
   let goalChanged = false;
   goalsTouched.forEach((goalId) => {
@@ -375,8 +414,13 @@ function recordRequirementProgress(requirement) {
   if (goalChanged) {
     saveGuideProgress();
     dispatchGuideProgressUpdate({ requirement, via: 'recordRequirementProgress' });
+    return { updated: true, blocked: blockedWithoutAttempt };
   }
-  return goalChanged;
+  // If we attempted to record but prerequisites prevented it, surface blocked state
+  if (!changed && !goalChanged && blockedWithoutAttempt) {
+    return { updated: false, blocked: true };
+  }
+  return { updated: false, blocked: blockedWithoutAttempt };
 }
 
 function cloneGoal(goal) {
@@ -499,6 +543,94 @@ function cloneGoal(goal) {
   let tutorialState = null;
   let claimButton = null;
   let guideHighlightCleanup = null;
+
+  function hasAnyDrawToyWithLine() {
+    for (const value of drawToyLineState.values()) {
+      if (value) return true;
+    }
+    return false;
+  }
+
+  function panelHasDrawLine(panel) {
+    if (!(panel instanceof HTMLElement)) return false;
+    try {
+      if (panel.__drawToy && typeof panel.__drawToy.hasActiveNotes === 'function') {
+        return !!panel.__drawToy.hasActiveNotes();
+      }
+      if (panel.__drawToy && typeof panel.__drawToy.getState === 'function') {
+        const state = panel.__drawToy.getState();
+        const nodes = state?.nodes?.list;
+        if (Array.isArray(nodes)) {
+          return nodes.some(col => Array.isArray(col) && col.length > 0);
+        }
+      }
+    } catch {}
+    return false;
+  }
+
+  function refreshDrawToyRequirement() {
+    const hasDrawToy = drawToyPanels.size > 0;
+    if (hasDrawToy) {
+      maybeCompleteTask('add-toy-drawgrid');
+    } else {
+      setRequirementProgress('add-toy-drawgrid', false);
+    }
+  }
+
+  function refreshDrawLineRequirement() {
+    const hasLine = hasAnyDrawToyWithLine();
+    if (hasLine) {
+      hasDetectedLine = true;
+      maybeCompleteTask('draw-line');
+    } else {
+      hasDetectedLine = false;
+      setRequirementProgress('draw-line', false);
+    }
+  }
+
+  function syncTutorialProgressForGoal(goalId) {
+    if (!goalId || !tutorialActive || !tutorialState) return;
+    const currentGoal = getCurrentGoal();
+    if (!currentGoal || currentGoal.id !== goalId) return;
+    const tasks = Array.isArray(currentGoal.tasks) ? currentGoal.tasks : [];
+    let nextIndex = tasks.length;
+    for (let i = 0; i < tasks.length; i++) {
+      const taskId = tasks[i]?.id;
+      if (taskId && !guideProgress.tasks.has(taskId)) {
+        nextIndex = i;
+        break;
+      }
+    }
+    if (nextIndex >= tasks.length) {
+      tutorialState.taskIndex = tasks.length;
+      return;
+    }
+    const prevIndex = tutorialState.taskIndex;
+    const prevPending = tutorialState.pendingRewardGoalId;
+    tutorialState.pendingRewardGoalId = null;
+    tutorialState.taskIndex = nextIndex;
+    if (prevIndex !== nextIndex || prevPending) {
+      renderGoalPanel();
+      const nextTask = getCurrentTask();
+      if (nextTask) handleTaskEnter(nextTask);
+    }
+  }
+
+  function setRequirementProgress(requirement, shouldComplete) {
+    if (!requirement) return false;
+    requirementCompletionState.set(requirement, shouldComplete);
+    const { updated, blocked } = recordRequirementProgress(requirement, shouldComplete);
+    if (shouldComplete && blocked && !updated) {
+      requirementCompletionState.set(requirement, false);
+    }
+    if (!shouldComplete) {
+      const entries = TASKS_BY_REQUIREMENT.get(requirement) || [];
+      const goals = new Set(entries.map(entry => entry.goalId).filter(Boolean));
+      goals.forEach(syncTutorialProgressForGoal);
+    }
+    return updated;
+  }
+
   const debugTutorial = (...args) => {
     if (typeof window === 'undefined' || !window.DEBUG_TUTORIAL_LOCKS) return;
     try { console.debug('[tutorial]', ...args); } catch (_) { try { console.log('[tutorial]', ...args); } catch {} }
@@ -520,12 +652,35 @@ function cloneGoal(goal) {
     };
 
     if (toyType === 'drawgrid') {
-      add('drawgrid:update', (e) => {
-        const nodes = e?.detail?.nodes;
+      drawToyPanels.add(panel);
+      refreshDrawToyRequirement();
+      const computePanelHasLine = () => panelHasDrawLine(panel);
+
+      drawToyLineState.set(panel, computePanelHasLine());
+      refreshDrawLineRequirement();
+
+      const handleDrawUpdate = (nodes) => {
         const hasNodes = Array.isArray(nodes) ? nodes.some(set => set && set.size > 0) : false;
+        drawToyLineState.set(panel, hasNodes);
+        refreshDrawLineRequirement();
         if (hasNodes) markInteraction();
+      };
+
+      add('drawgrid:ready', () => {
+        drawToyLineState.set(panel, computePanelHasLine());
+        refreshDrawLineRequirement();
+      }, { once: true, passive: true });
+
+      add('drawgrid:update', (e) => {
+        handleDrawUpdate(e?.detail?.nodes);
       }, { passive: true });
       add('drawgrid:node-toggle', () => markInteraction(), { passive: true });
+      add('toy-remove', () => {
+        drawToyPanels.delete(panel);
+        drawToyLineState.delete(panel);
+        refreshDrawToyRequirement();
+        refreshDrawLineRequirement();
+      }, { once: true });
     } else if (toyType === 'loopgrid' || toyType === 'loopgrid-drum') {
       const manualEvents = ['grid:notechange', 'grid:drum-tap', 'loopgrid:tap'];
       manualEvents.forEach(evt => {
@@ -2047,7 +2202,7 @@ function cloneGoal(goal) {
   }
 
   function maybeCompleteTask(requirement) {
-    const progressChanged = recordRequirementProgress(requirement);
+    const progressChanged = setRequirementProgress(requirement, true);
     if (progressChanged && !tutorialActive) {
       if (typeof guideHighlightCleanup === 'function') {
         try { guideHighlightCleanup(); } catch {}
@@ -2128,6 +2283,39 @@ function cloneGoal(goal) {
   }
 
 
+
+  const updatePlayRequirement = () => {
+    const playing = typeof isRunning === 'function' ? !!isRunning() : false;
+    if (playing) {
+      maybeCompleteTask('press-play');
+    } else {
+      setRequirementProgress('press-play', false);
+    }
+  };
+
+  document.addEventListener('transport:resume', updatePlayRequirement, { passive: true });
+  document.addEventListener('transport:pause', updatePlayRequirement, { passive: true });
+  updatePlayRequirement();
+
+  const scheduleDrawToySync = () => {
+    requestAnimationFrame(() => {
+      try {
+        board?.querySelectorAll?.('.toy-panel[data-toy="drawgrid"]').forEach((panel) => {
+          if (!(panel instanceof HTMLElement)) return;
+          if (!panel.__tutorialInteractionHooked) {
+            registerToyInteraction(panel);
+          } else {
+            drawToyPanels.add(panel);
+            drawToyLineState.set(panel, panelHasDrawLine(panel));
+          }
+        });
+        refreshDrawToyRequirement();
+        refreshDrawLineRequirement();
+      } catch {}
+    });
+  };
+
+  scheduleDrawToySync();
 
   function enterTutorial() {
     window.__useBoardCentering = true;
@@ -2323,6 +2511,7 @@ try {
     if (transportWasRunning) {
       try { stopTransport(); } catch {}
     }
+    updatePlayRequirement();
     if (playBtn) {
       if (playBtn.dataset.tutorialOrigDisplay === undefined) playBtn.dataset.tutorialOrigDisplay = playBtn.style.display || '';
       if (playBtn.dataset.tutorialOrigVisibility === undefined) playBtn.dataset.tutorialOrigVisibility = playBtn.style.visibility || '';
@@ -2755,6 +2944,8 @@ try {
     lastPlacedToy = null;
     guideToyTracker.reset?.();
     resetGuideProgress();
+    scheduleDrawToySync();
+    updatePlayRequirement();
   });
 
   document.addEventListener('click', (event) => {
