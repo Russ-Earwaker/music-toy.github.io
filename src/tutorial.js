@@ -1819,7 +1819,7 @@ function cloneGoal(goal) {
           if (taskEl && targetEl?.isConnected) {
             requestAnimationFrame(() => {
               requestAnimationFrame(() => {
-                startParticleStream(taskEl, targetEl);
+                startParticleStream(taskEl, targetEl, { layer: 'behind-target' });
               });
             });
 
@@ -1960,7 +1960,7 @@ function cloneGoal(goal) {
             // two rAFs = layout stable & canvases sized
             requestAnimationFrame(() => {
               requestAnimationFrame(() => {
-                startParticleStream(taskEl, targetEl);
+                startParticleStream(taskEl, targetEl, { layer: 'behind-target' });
               });
             });
 
@@ -2041,7 +2041,7 @@ function cloneGoal(goal) {
           if (taskEl && targetEl?.isConnected) {
             requestAnimationFrame(() => {
               requestAnimationFrame(() => {
-                startParticleStream(taskEl, targetEl);
+                startParticleStream(taskEl, targetEl, { layer: 'behind-target' });
               });
             });
 
@@ -2105,7 +2105,13 @@ function cloneGoal(goal) {
   
       if (targetVisible) {
         const taskEl = goalPanel?.querySelector('.goal-task.is-active');
-        if (taskEl) startParticleStream(taskEl, targetEl);
+        if (taskEl) {
+          if (task.id === 'toggle-node') {
+            startParticleStream(taskEl, targetEl, { layer: 'behind-target' });
+          } else {
+            startParticleStream(taskEl, targetEl, { layer: 'behind-target' });
+          }
+        }
   
         if (isPlayTask) {
           const playButtonContainer = targetEl;
@@ -2168,6 +2174,9 @@ function cloneGoal(goal) {
             if (drawPanel) {
               drawPanel.classList.add('tutorial-guide-foreground');
             }
+          } else if (task.id === 'toggle-node') {
+            targetEl.classList.add('tutorial-guide-foreground');
+            try { targetEl.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: true } })); } catch {}
           } else {
             targetEl.classList.add('tutorial-pulse-target', 'tutorial-active-pulse');
           }
@@ -2201,6 +2210,9 @@ function cloneGoal(goal) {
         updateClaimButtonVisibility();
         stopParticleStream();
         document.querySelectorAll('.tutorial-pulse-target, .tutorial-active-pulse, .tutorial-addtoy-pulse, .tutorial-guide-foreground').forEach(el => {
+          if (el.matches?.('.toy-panel[data-toy="drawgrid"]')) {
+            try { el.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: false } })); } catch {}
+          }
           el.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-addtoy-pulse', 'tutorial-guide-foreground');
         });
       }
@@ -2221,6 +2233,9 @@ function cloneGoal(goal) {
         stopParticleStream();
       }
       document.querySelectorAll('.tutorial-pulse-target, .tutorial-active-pulse, .tutorial-addtoy-pulse, .tutorial-guide-foreground').forEach(el => {
+        if (el.matches?.('.toy-panel[data-toy="drawgrid"]')) {
+          try { el.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: false } })); } catch {}
+        }
         el.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-addtoy-pulse', 'tutorial-guide-foreground');
       });
     }
@@ -2893,7 +2908,13 @@ try {
       return;
     }
 
+    const isToggleTask = taskId === 'toggle-node';
+    const particleTarget = isToggleTask
+      ? (targetElement.querySelector('canvas[data-role="drawgrid-nodes"]') || targetElement)
+      : targetElement;
+    const particleOptions = isToggleTask ? { layer: 'behind-target' } : null;
     let disposed = false;
+    let flashTimer = null;
     const runParticles = () => {
       if (disposed) return;
       if (!taskElement.isConnected || !targetElement.isConnected) return;
@@ -2904,7 +2925,11 @@ try {
         targetSelector: selector,
         targetClasses: targetElement.className,
       });
-      startParticleStream(taskElement, targetElement);
+      if (particleOptions) {
+        startParticleStream(taskElement, particleTarget, particleOptions);
+      } else {
+        startParticleStream(taskElement, particleTarget, { layer: 'behind-target' });
+      }
     };
     const scheduleParticles = () => {
       requestAnimationFrame(() => requestAnimationFrame(runParticles));
@@ -2915,18 +2940,28 @@ try {
       targetElement.classList.remove('tutorial-flash');
       void targetElement.offsetWidth;
     }
-    targetElement.classList.add('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-flash');
-    const flashTimer = setTimeout(() => {
-      targetElement.classList.remove('tutorial-flash');
-    }, 360);
+    if (isToggleTask) {
+      targetElement.classList.add('tutorial-guide-foreground');
+      try { targetElement.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: true } })); } catch {}
+    } else {
+      targetElement.classList.add('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-flash');
+      flashTimer = setTimeout(() => {
+        targetElement.classList.remove('tutorial-flash');
+      }, 360);
+    }
     scheduleParticles();
     window.addEventListener('resize', onResize, { passive: true });
 
     guideHighlightCleanup = () => {
       disposed = true;
       window.removeEventListener('resize', onResize);
-      clearTimeout(flashTimer);
-      targetElement.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-flash');
+      if (flashTimer) clearTimeout(flashTimer);
+      if (isToggleTask) {
+        targetElement.classList.remove('tutorial-guide-foreground');
+        try { targetElement.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: false } })); } catch {}
+      } else {
+        targetElement.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-flash');
+      }
       stopParticleStream();
     };
   });
@@ -2938,6 +2973,10 @@ try {
       return;
     }
     stopParticleStream();
+    document.querySelectorAll('.toy-panel[data-toy="drawgrid"]').forEach(panel => {
+      try { panel.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: false } })); } catch {}
+      panel.classList.remove('tutorial-guide-foreground');
+    });
     const spawner = document.querySelector('.toy-spawner-toggle');
     if (spawner) {
       spawner.classList.remove('tutorial-pulse-target', 'tutorial-addtoy-pulse', 'tutorial-flash');
@@ -2953,6 +2992,10 @@ try {
     lastPlacedToy = null;
     guideToyTracker.reset?.();
     resetGuideProgress();
+    document.querySelectorAll('.toy-panel[data-toy="drawgrid"]').forEach(panel => {
+      try { panel.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: false } })); } catch {}
+      panel.classList.remove('tutorial-guide-foreground');
+    });
     scheduleDrawToySync();
     updatePlayRequirement();
   });
@@ -2990,4 +3033,5 @@ try {
   ['toy-clear', 'toy-reset'].forEach(evt => document.addEventListener(evt, () => maybeCompleteTask('press-clear'), { capture: true }));
 
 })();
+
 

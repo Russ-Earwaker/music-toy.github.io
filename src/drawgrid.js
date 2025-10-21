@@ -1,5 +1,5 @@
 // src/drawgrid.js
-// Minimal, scoped Drawing Grid ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â 16x12, draw strokes, build snapped nodes on release.
+// Minimal, scoped Drawing Grid ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â 16x12, draw strokes, build snapped nodes on release.
 // Strictly confined to the provided panel element.
 import { buildPalette, midiToName } from './note-helpers.js';
 import { drawBlock } from './toyhelpers.js';
@@ -538,18 +538,21 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const nodesCanvas = document.createElement('canvas'); nodesCanvas.setAttribute('data-role', 'drawgrid-nodes');
   const flashCanvas = document.createElement('canvas'); flashCanvas.setAttribute('data-role', 'drawgrid-flash');
   const ghostCanvas = document.createElement('canvas'); ghostCanvas.setAttribute('data-role','drawgrid-ghost');
+  const tutorialCanvas = document.createElement('canvas'); tutorialCanvas.setAttribute('data-role', 'drawgrid-tutorial-highlight');
   Object.assign(grid.style,         { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 0 });
   Object.assign(paint.style,        { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 1 });
   Object.assign(particleCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 2, pointerEvents: 'none' });
   Object.assign(ghostCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 3, pointerEvents: 'none' });
   Object.assign(flashCanvas.style,  { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 4, pointerEvents: 'none' });
   Object.assign(nodesCanvas.style,  { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 5, pointerEvents: 'none' });
+  Object.assign(tutorialCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 6, pointerEvents: 'none' });
   body.appendChild(grid);
   body.appendChild(paint);
   body.appendChild(particleCanvas);
   body.appendChild(ghostCanvas);
   body.appendChild(flashCanvas);
   body.appendChild(nodesCanvas);
+  body.appendChild(tutorialCanvas);
 
   const particleCtx = particleCanvas.getContext('2d');
   const gctx = grid.getContext('2d', { willReadFrequently: true });
@@ -557,6 +560,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const nctx = nodesCanvas.getContext('2d', { willReadFrequently: true });
   const fctx = flashCanvas.getContext('2d', { willReadFrequently: true });
   const ghostCtx = ghostCanvas.getContext('2d');
+  const tutorialCtx = tutorialCanvas.getContext('2d');
 
   let __forceSwipeVisible = null; // null=auto, true/false=forced by tutorial
 
@@ -572,6 +576,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let currentMap = null; // Store the current node map {active, nodes, disabled}
   let nodeCoordsForHitTest = []; // For draggable nodes
   let cellFlashes = []; // For flashing grid squares on note play
+  let noteToggleEffects = []; // For tap feedback animations
   let nodeGroupMap = []; // Per-column Map(row -> groupId or [groupIds]) to avoid cross-line connections and track z-order
   let nextDrawTarget = null; // Can be 1 or 2. Determines the next special line.
   let flashes = new Float32Array(cols);
@@ -588,6 +593,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let autoTune = true; // Default to on
   const safeArea = 40;
   let gridArea = { x: 0, y: 0, w: 0, h: 0 };
+  let tutorialHighlightActive = false;
+  let tutorialHighlightRaf = null;
 
   const particles = createDrawGridParticles({
     getW: () => cssW,
@@ -595,6 +602,61 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     count: 600,
     homePull: 0.002,
   });
+
+  const clearTutorialHighlight = () => {
+    if (!tutorialCtx) return;
+    tutorialCtx.clearRect(0, 0, tutorialCanvas.width, tutorialCanvas.height);
+  };
+
+  const renderTutorialHighlight = () => {
+    if (!tutorialCtx) return;
+    tutorialCtx.clearRect(0, 0, tutorialCanvas.width, tutorialCanvas.height);
+    if (!tutorialHighlightActive || !nodeCoordsForHitTest?.length) return;
+    const baseRadius = Math.max(6, Math.min(cw || 0, ch || 0) * 0.55);
+    tutorialCtx.save();
+    tutorialCtx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+    tutorialCtx.shadowBlur = Math.max(4, baseRadius * 0.3);
+    const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+      ? performance.now()
+      : Date.now();
+    const pulsePhase = (now / 480) % (Math.PI * 2);
+    const pulseScale = 1 + Math.sin(pulsePhase) * 0.24;
+    for (const node of nodeCoordsForHitTest) {
+      if (!node) continue;
+      tutorialCtx.globalAlpha = node.disabled ? 0.45 : 1;
+      tutorialCtx.lineWidth = Math.max(2, baseRadius * 0.22);
+      tutorialCtx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+      tutorialCtx.beginPath();
+      tutorialCtx.arc(node.x, node.y, baseRadius * pulseScale, 0, Math.PI * 2);
+      tutorialCtx.stroke();
+    }
+    tutorialCtx.restore();
+    tutorialCtx.shadowBlur = 0;
+    tutorialCtx.globalAlpha = 1;
+  };
+
+  const startTutorialHighlightLoop = () => {
+    if (!tutorialHighlightActive) return;
+    if (tutorialHighlightRaf !== null) return;
+    const tick = () => {
+      if (!tutorialHighlightActive) {
+        tutorialHighlightRaf = null;
+        return;
+      }
+      renderTutorialHighlight();
+      tutorialHighlightRaf = requestAnimationFrame(tick);
+    };
+    renderTutorialHighlight();
+    tutorialHighlightRaf = requestAnimationFrame(tick);
+  };
+
+  const stopTutorialHighlightLoop = () => {
+    if (tutorialHighlightRaf !== null) {
+      cancelAnimationFrame(tutorialHighlightRaf);
+      tutorialHighlightRaf = null;
+    }
+    clearTutorialHighlight();
+  };
 
 panel.setSwipeVisible = (show, { immediate = false } = {}) => {
   __forceSwipeVisible = !!show;
@@ -1104,12 +1166,15 @@ function regenerateMapFromStrokes() {
       flashCanvas.width = w; flashCanvas.height = h;
       particleCanvas.width = w; particleCanvas.height = h;
       ghostCanvas.width = w; ghostCanvas.height = h;
+      tutorialCanvas.width = w; tutorialCanvas.height = h;
       gctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       pctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       nctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       particleCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ghostCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (tutorialCtx) tutorialCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (tutorialHighlightActive) renderTutorialHighlight();
 
       // Scale the logical stroke data if we have it and the canvas was resized
       if (strokes.length > 0 && oldW > 0 && oldH > 0) {
@@ -1525,6 +1590,11 @@ function regenerateMapFromStrokes() {
     }
 
     drawNoteLabels(nodes);
+    if (tutorialHighlightActive) {
+      renderTutorialHighlight();
+    } else {
+      clearTutorialHighlight();
+    }
   }
 
   function drawNoteLabels(nodes) {
@@ -1757,8 +1827,8 @@ function regenerateMapFromStrokes() {
       y: (e.clientY - rect.top) * (cssH > 0 ? cssH / rect.height : 1)
     };
     
-    // Update cursor for draggable nodes in advanced mode
-    if (panel.classList.contains('toy-zoomed') && !draggedNode) {
+    // Update cursor for draggable nodes
+    if (!draggedNode) {
       let onNode = false;
       for (const node of nodeCoordsForHitTest) {
         const cellX = gridArea.x + node.col * cw;
@@ -1769,7 +1839,7 @@ function regenerateMapFromStrokes() {
     }
 
     // Promote pending tap to drag if moved sufficiently
-    if (panel.classList.contains('toy-zoomed') && pendingNodeTap && drawing && !draggedNode) {
+    if (pendingNodeTap && drawing && !draggedNode) {
       const dx = p.x - pendingNodeTap.x;
       const dy = p.y - pendingNodeTap.y;
       if (Math.hypot(dx, dy) > 6) {
@@ -1929,6 +1999,14 @@ function regenerateMapFromStrokes() {
       drawNodes(currentMap.nodes);
       panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
       panel.dispatchEvent(new CustomEvent('drawgrid:node-toggle', { detail: { col, row, disabled: dis.has(row) } }));
+
+      const cx = gridArea.x + col * cw + cw * 0.5;
+      const cy = gridArea.y + topPad + row * ch + ch * 0.5;
+      const baseRadius = Math.max(6, Math.min(cw, ch) * 0.5);
+      noteToggleEffects.push({ x: cx, y: cy, radius: baseRadius, progress: 0 });
+      if (noteToggleEffects.length > 24) noteToggleEffects.splice(0, noteToggleEffects.length - 24);
+      try { particles.pointBurst(cx, cy, 18, 2.4, 'skyblue'); } catch {}
+
       pendingNodeTap = null;
     }
 
@@ -2199,6 +2277,31 @@ function regenerateMapFromStrokes() {
         }
     } catch (e) { /* fail silently */ }
 
+    if (noteToggleEffects.length > 0) {
+      try {
+        fctx.save();
+        fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        for (let i = noteToggleEffects.length - 1; i >= 0; i--) {
+          const effect = noteToggleEffects[i];
+          effect.progress += 0.12;
+          const alpha = Math.max(0, 1 - effect.progress);
+          if (alpha <= 0) {
+            noteToggleEffects.splice(i, 1);
+            continue;
+          }
+          const radius = effect.radius * (1 + effect.progress * 1.6);
+          const lineWidth = Math.max(1.2, effect.radius * 0.28 * (1 - effect.progress * 0.5));
+          fctx.globalAlpha = alpha;
+          fctx.lineWidth = lineWidth;
+          fctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+          fctx.beginPath();
+          fctx.arc(effect.x, effect.y, radius, 0, Math.PI * 2);
+          fctx.stroke();
+        }
+        fctx.restore();
+      } catch {}
+    }
+
     // Draw scrolling playhead
     try {
       const info = getLoopInfo();
@@ -2300,6 +2403,7 @@ function regenerateMapFromStrokes() {
       drawGrid();
       nextDrawTarget = null; // Disarm any pending line draw
       updateGeneratorButtons(); // Refresh button state to "Draw"
+      noteToggleEffects = [];
     },
     setErase:(v)=>{ erasing=!!v; },
     getState: ()=>{
@@ -2814,15 +2918,30 @@ function regenerateMapFromStrokes() {
   panel.startGhostGuide = startGhostGuide;
   panel.stopGhostGuide = stopGhostGuide;
 
-panel.addEventListener('drawgrid:update', (e) => {
-  const nodes = e?.detail?.nodes;
-  const hasAny = Array.isArray(nodes) && nodes.some(set => set && set.size > 0);
-  if (hasAny) {
-    stopAutoGhostGuide({ immediate: true });
-  } else {
-    startAutoGhostGuide({ immediate: true });
-  }
-});
+  panel.addEventListener('toy-remove', () => {
+    tutorialHighlightActive = false;
+    stopTutorialHighlightLoop();
+    noteToggleEffects = [];
+  }, { once: true });
+
+  panel.addEventListener('tutorial:highlight-notes', (event) => {
+    tutorialHighlightActive = !!event?.detail?.active;
+    if (tutorialHighlightActive) {
+      startTutorialHighlightLoop();
+    } else {
+      stopTutorialHighlightLoop();
+    }
+  });
+
+  panel.addEventListener('drawgrid:update', (e) => {
+    const nodes = e?.detail?.nodes;
+    const hasAny = Array.isArray(nodes) && nodes.some(set => set && set.size > 0);
+    if (hasAny) {
+      stopAutoGhostGuide({ immediate: true });
+    } else {
+      startAutoGhostGuide({ immediate: true });
+    }
+  });
 
   requestAnimationFrame(() => {
     const hasStrokes = Array.isArray(strokes) && strokes.length > 0;
@@ -2837,6 +2956,7 @@ panel.addEventListener('drawgrid:update', (e) => {
   try { panel.dispatchEvent(new CustomEvent('drawgrid:ready', { bubbles: true })); } catch {}
   return api;
 }
+
 
 
 
