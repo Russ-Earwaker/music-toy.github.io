@@ -254,7 +254,7 @@ body.tutorial-active #topbar .tutorial-play-hidden {
 
 .goal-task.is-active-guide-task {
   outline: 3px solid var(--accent, #5fb3ff) !important;
-  box-shadow: 0 0 12px 2px var(--accent, #5fb3ff);
+  box-shadow: none !important;
 }
 
 

@@ -1849,6 +1849,9 @@ function cloneGoal(goal) {
       pendingRewards: pendingRewardSet,
     });
     updateClaimButtonVisibility();
+    try {
+      window.dispatchEvent(new CustomEvent('tutorial:goals-updated', { detail: { goal } }));
+    } catch {}
   }
 
   function updateClaimButtonVisibility() {

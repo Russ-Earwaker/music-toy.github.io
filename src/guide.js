@@ -7,6 +7,27 @@ let panelsRef = null;
 let lastApi = null;
 const goalExpansionState = new Map();
 
+function addGuidePulse() { try { window.dispatchEvent(new CustomEvent('guide:request-pulse')); } catch (e) { console.warn('guide:request-pulse failed', e); } }
+
+function removeGuidePulse() { try { window.dispatchEvent(new CustomEvent('guide:cancel-pulse')); } catch (e) { console.warn('guide:cancel-pulse failed', e); } }
+
+function isPlaceAToyIntroActive(api) {
+  try {
+    const goals = api?.getGoals?.() || [];
+    if (!Array.isArray(goals)) return false;
+    const activeGoal = goals.find((goal) => goal && (goal.active || goal.isActive || goal.isCurrent));
+    if (!activeGoal) return false;
+    const title = String(activeGoal.title || '').toLowerCase();
+    if (!title.includes('place a toy')) return false;
+    const tasks = Array.isArray(activeGoal.tasks) ? activeGoal.tasks : [];
+    if (!tasks.length) return false;
+    const firstTask = tasks[0];
+    return !!firstTask && !firstTask.completed;
+  } catch {
+    return false;
+  }
+}
+
 function ensureStyles() {
   if (document.getElementById('tutorial-styles')) return;
   const link = document.createElement('link');
@@ -55,6 +76,8 @@ function ensureHost() {
       console.info('[guide] toggle', { open: willOpen, goalCount: Number(hostRef.dataset.goalCount || 0) });
     });
     toggleRef.__guideBound = true;
+
+    try { if (isPlaceAToyIntroActive(api || lastApi)) addGuidePulse(); else removeGuidePulse(); } catch {}
   }
 
   if (!hostRef.isConnected) {
@@ -277,6 +300,12 @@ function renderGuide(api, { source = 'unknown' } = {}) {
   panelsRef.classList.toggle('is-visible', open);
 
   try {
+    if (isPlaceAToyIntroActive(api)) addGuidePulse(); else removeGuidePulse();
+  } catch {
+    removeGuidePulse();
+  }
+
+  try {
     window.__guideDebug = Object.assign({}, window.__guideDebug || {}, {
       lastRender: stamp,
       goalCount: goals.length,
@@ -293,6 +322,24 @@ window.addEventListener('guide:progress-update', () => {
     renderGuide(lastApi, { source: 'progress-update' });
   }
 });
+
+window.addEventListener('scene:new', () => {
+  try {
+    const api = window.TutorialGoalsAPI || lastApi;
+    if (isPlaceAToyIntroActive(api)) addGuidePulse(); else removeGuidePulse();
+  } catch {
+    addGuidePulse();
+  }
+}, { passive: true });
+
+window.addEventListener('tutorial:goals-updated', () => {
+  try {
+    const api = window.TutorialGoalsAPI || lastApi;
+    if (isPlaceAToyIntroActive(api)) addGuidePulse(); else removeGuidePulse();
+  } catch {
+    removeGuidePulse();
+  }
+}, { passive: true });
 
 window.addEventListener('guide:close', () => closeGuide());
 
@@ -330,3 +377,9 @@ if (document.readyState === 'loading') {
 } else {
   startWhenReady();
 }
+
+
+
+
+
+
