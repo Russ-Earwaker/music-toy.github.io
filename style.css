@@ -1368,6 +1368,15 @@ body.tutorial-active #topbar #theme-switcher-wrap {
   100% { box-shadow: 0 0 0 0px rgba(255, 255, 255, 0); }
 }
 
+@keyframes pointRight {
+  0%, 100% {
+    transform: translateX(0) translateY(-50%);
+  }
+  50% {
+    transform: translateX(-10px) translateY(-50%);
+  }
+}
+
 .toy-spawner-toggle.tutorial-addtoy-pulse {
   animation: pulseBorder 2s ease-in-out infinite;
   background-color: var(--surface) !important;
@@ -1395,7 +1404,7 @@ body.tutorial-active #topbar #theme-switcher-wrap {
   content: 'TAP';
   position: absolute;
   top: 50%;
-  left: calc(100% + 3.5rem);
+  left: calc(100% + 4.5rem);
   transform: translateY(-50%);
   font-family: 'Poppins', 'Helvetica Neue', sans-serif;
   font-weight: 700;
@@ -1412,7 +1421,7 @@ body.tutorial-active #topbar #theme-switcher-wrap {
   content: '';
   position: absolute;
   top: 50%;
-  left: calc(100% + 1rem);
+  left: calc(100% + 2rem);
   transform: translateY(-50%);
   width: 0;
   height: 0;
@@ -1421,6 +1430,7 @@ body.tutorial-active #topbar #theme-switcher-wrap {
   border-right: 24px solid rgba(80, 120, 180, 0.22);
   pointer-events: none;
   z-index: 1;
+  animation: pointRight 1.5s ease-in-out infinite;
 }
 
 .tutorial-goals-progress {
