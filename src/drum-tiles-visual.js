@@ -10,6 +10,39 @@ const NUM_CUBES = 8;
 
 const GAP = 4; // A few pixels of space between each cube
 
+function ensureTapLetters(label) {
+  if (!label) return [];
+  let spans = Array.from(label.querySelectorAll('.loopgrid-tap-letter-char'));
+  if (spans.length !== 3) {
+    label.textContent = '';
+    for (const ch of 'TAP') {
+      const span = document.createElement('span');
+      span.className = 'loopgrid-tap-letter-char';
+      span.textContent = ch;
+      label.appendChild(span);
+    }
+    spans = Array.from(label.querySelectorAll('.loopgrid-tap-letter-char'));
+  }
+  return spans;
+}
+
+function triggerTapLettersForColumn(state, columnIndex, centerNorm) {
+  const bounds = state.tapLetterBounds;
+  const flashes = state.tapLetterFlash;
+  const lastCols = state.tapLetterLastColumn;
+  if (!Array.isArray(bounds) || !Array.isArray(flashes) || !Array.isArray(lastCols)) return;
+  for (let i = 0; i < bounds.length; i++) {
+    const bound = bounds[i];
+    if (!bound) continue;
+    if (centerNorm >= bound.start && centerNorm <= bound.end) {
+      if (lastCols[i] !== columnIndex) {
+        flashes[i] = 1;
+        lastCols[i] = columnIndex;
+      }
+    }
+  }
+}
+
 function retargetLoopgridParticleCount(st, pw, ph) {
   // Baseline: tuned so a standard Simple Rhythm canvas (roughly Rippler sized)
   // lands near the Rippler particle budget. Scale with field width/height so
@@ -104,9 +137,12 @@ export function attachDrumVisuals(panel) {
   if (!tapLabel && sequencerWrap) {
     tapLabel = document.createElement('div');
     tapLabel.className = 'toy-action-label loopgrid-tap-label';
-    tapLabel.textContent = 'TAP';
+    tapLabel.style.lineHeight = '1';
+    tapLabel.style.whiteSpace = 'nowrap';
+    tapLabel.style.transition = 'none';
     sequencerWrap.appendChild(tapLabel);
   }
+  const tapLetters = ensureTapLetters(tapLabel);
 
   const st = {
     panel,
@@ -119,8 +155,12 @@ export function attachDrumVisuals(panel) {
     localLastPhase: 0,
     particles: initLoopgridParticles(LOOPGRID_BASE_PARTICLE_COUNT),
     tapLabel,
-    tapLabelFlash: 0,
-    tapLastPulseCol: -1,
+    tapLetters,
+    tapLetterFlash: tapLetters.map(() => 0),
+    tapLetterLastColumn: tapLetters.map(() => -1),
+    tapLetterBounds: null,
+    tapFieldRect: null,
+    tapPromptVisible: false,
   };
   panel.__drumVisualState = st;
 
@@ -255,8 +295,9 @@ function render(panel) {
   const head = isChained ? findChainHead(panel) : panel;
   const chainHasNotes = head ? chainHasSequencedNotes(head) : hasActiveNotes;
 
+  const transportRunning = isRunning();
   let showPlaying;
-  if (isRunning()) {
+  if (transportRunning) {
     // A chained toy only shows its highlight if the chain itself currently has notes.
     // For standalone toys, only show highlight if there are notes to play.
     showPlaying = isChained ? (isActiveInChain && chainHasNotes) : hasActiveNotes;
@@ -315,26 +356,70 @@ function render(panel) {
     particleFieldH = h;
   }
 
-  if (tapLabel) {
-    const showTapPrompt = !hasActiveNotes;
-    let flash = st.tapLabelFlash || 0;
-    if (showTapPrompt && playheadCol >= 0 && playheadCol !== st.tapLastPulseCol) {
-      flash = 1;
-      st.tapLastPulseCol = playheadCol;
-    } else if (!showTapPrompt) {
-      st.tapLastPulseCol = -1;
-      flash = 0;
+  const showTapPrompt = !hasActiveNotes;
+  if (tapLabel && st.tapLetters?.length) {
+    const tapLetters = st.tapLetters;
+    const letterCount = tapLetters.length;
+    if (!Array.isArray(st.tapLetterFlash) || st.tapLetterFlash.length !== letterCount) {
+      st.tapLetterFlash = Array.from({ length: letterCount }, () => 0);
     }
-    flash = Math.max(0, flash * 0.9 - 0.015);
-    st.tapLabelFlash = flash;
+    if (!Array.isArray(st.tapLetterLastColumn) || st.tapLetterLastColumn.length !== letterCount) {
+      st.tapLetterLastColumn = Array.from({ length: letterCount }, () => -1);
+    }
 
-    const baseOpacity = showTapPrompt ? 0.32 : 0;
-    const finalOpacity = showTapPrompt ? Math.min(0.75, baseOpacity + flash * 0.4) : 0;
-    tapLabel.style.opacity = finalOpacity.toFixed(3);
+    if (!showTapPrompt) {
+      tapLabel.style.opacity = '0';
+      st.tapLetterBounds = null;
+      st.tapFieldRect = null;
+      st.tapPromptVisible = false;
+      for (let i = 0; i < letterCount; i++) {
+        st.tapLetterFlash[i] = 0;
+        st.tapLetterLastColumn[i] = -1;
+        tapLetters[i].style.color = 'rgba(80, 120, 180, 0)';
+        tapLetters[i].style.transform = 'scale(1)';
+      }
+    } else {
+      if (!st.tapPromptVisible && Array.isArray(st.tapLetterLastColumn)) {
+        st.tapLetterLastColumn.fill(-1);
+      }
+      st.tapPromptVisible = true;
+      tapLabel.style.opacity = '1';
+      const labelSize = Math.max(32, Math.min(particleFieldW, particleFieldH) * 0.28);
+      tapLabel.style.fontSize = `${Math.round(labelSize)}px`;
 
-    const labelSize = Math.max(28, Math.min(particleFieldW, particleFieldH) * 0.18);
-    tapLabel.style.fontSize = `${Math.round(labelSize)}px`;
+      const fieldElement = st.particleCanvas || tapLabel;
+      let fieldRect = null;
+      try { fieldRect = fieldElement.getBoundingClientRect(); } catch {}
+      if (fieldRect && fieldRect.width > 0) {
+        st.tapFieldRect = { left: fieldRect.left, width: fieldRect.width };
+        st.tapLetterBounds = tapLetters.map(letter => {
+          const rect = letter.getBoundingClientRect();
+          const start = (rect.left - fieldRect.left) / fieldRect.width;
+          const end = (rect.right - fieldRect.left) / fieldRect.width;
+          return {
+            start: Math.max(0, Math.min(1, start)),
+            end: Math.max(0, Math.min(1, end)),
+          };
+        });
+      } else {
+        st.tapFieldRect = null;
+        st.tapLetterBounds = null;
+      }
+
+      for (let i = 0; i < letterCount; i++) {
+        let activeFlash = st.tapLetterFlash[i] || 0;
+        activeFlash = Math.max(0, activeFlash * 0.86 - 0.02);
+        st.tapLetterFlash[i] = activeFlash;
+        const baseAlpha = 0.2;
+        const finalAlpha = Math.max(baseAlpha, Math.min(1, baseAlpha + activeFlash * 0.8));
+        tapLetters[i].style.color = `rgba(80, 120, 180, ${finalAlpha})`;
+        tapLetters[i].style.transform = `scale(${1 + activeFlash * 0.18})`;
+      }
+    }
   }
+
+  const gridRect = st.canvas.getBoundingClientRect();
+  const fieldRectData = st.tapFieldRect;
 
   // To prevent highlight clipping and ensure cubes fit in zoomed view,
   // we calculate cubeSize based on both width and height constraints.
@@ -367,6 +452,10 @@ function render(panel) {
   st.localLastPhase = loopInfo ? loopInfo.phase01 : 0;
   const probablyStale = isActiveInChain && phaseJustWrapped;
 
+  if (showTapPrompt && Array.isArray(st.tapLetterLastColumn) && phaseJustWrapped) {
+    st.tapLetterLastColumn.fill(-1);
+  }
+
   for (let i = 0; i < NUM_CUBES; i++) {
     const flash = st.flash[i] || 0;
     const isEnabled = !!steps[i];
@@ -375,7 +464,7 @@ function render(panel) {
 
     // Draw playhead highlight first, so it's underneath the cube
     // The playhead should scroll if the toy is standalone, or if it's the active toy in a chain.
-    if ((isActiveInChain || !isChained) && isRunning() && i === playheadCol && !probablyStale) {
+    if ((isActiveInChain || !isChained) && transportRunning && i === playheadCol && !probablyStale) {
       // A bigger, centered border highlight drawn by filling a slightly
       // larger rectangle behind the cube. This is more robust than stroking.
       // We use Math.floor to ensure integer coordinates and avoid sub-pixel
@@ -390,6 +479,14 @@ function render(panel) {
         Math.trunc(cubeRect.w) + borderSize * 2,
         Math.trunc(cubeRect.h) + borderSize * 2
       );
+      if (showTapPrompt && fieldRectData && Number.isFinite(fieldRectData.left) && fieldRectData.width > 0 && gridRect.width > 0 && Array.isArray(st.tapLetterBounds)) {
+        const columnCenterPx = gridRect.left + ((cubeRect.x + cubeRect.w / 2) / w) * gridRect.width;
+        const centerNorm = (columnCenterPx - fieldRectData.left) / fieldRectData.width;
+        if (Number.isFinite(centerNorm)) {
+          const clamped = Math.max(0, Math.min(1, centerNorm));
+          triggerTapLettersForColumn(st, i, clamped);
+        }
+      }
     }
 
     ctx.save();

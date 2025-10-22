@@ -38,10 +38,14 @@
   z-index: 4;
 }
 .loopgrid-tap-label {
-  letter-spacing: 0.18em;
-  color: rgba(226, 236, 255, 0.35);
-  text-shadow: 0 0 22px rgba(140, 170, 255, 0.28);
-  mix-blend-mode: screen;
+  letter-spacing: 0.16em;
+  color: rgba(80, 120, 180, 0.2);
+  text-shadow: 0 0 28px rgba(120, 160, 255, 0.32);
+  mix-blend-mode: normal;
+}
+.loopgrid-tap-label .loopgrid-tap-letter-char {
+  display: inline-block;
+  transition: transform 0.12s ease, color 0.12s ease;
 }
 * {
   box-sizing: border-box;
@@ -447,7 +451,7 @@ select.toy-instrument {
   height: var(--loopgrid-field-height); /* match particle field */
   margin-left: 0;
   margin-right: 0;
-  background: #000;
+  background: #0b0f16;
   border-radius: 0;     /* remove curved corners */
   overflow: hidden;     /* keep canvases clipped cleanly */
 }
@@ -455,7 +459,7 @@ select.toy-instrument {
 /* Cubes canvas: fixed to inner grid width, centered in the frame */
 .toy-panel[data-toy="loopgrid"] .grid-canvas {
   position: absolute;
-  z-index: 1;
+  z-index: 3;
   left: 50%;
   transform: translateX(-50%);
   width: var(--loopgrid-inner-width);
@@ -466,12 +470,13 @@ select.toy-instrument {
 /* Particle canvas: covers the whole black field (wider than cubes) */
 .toy-panel[data-toy="loopgrid"] .particle-canvas {
   position: absolute;
-  z-index: 0;
+  z-index: 2;
   left: 50%;
   transform: translateX(-50%);
   width: var(--loopgrid-field-width);
   height: var(--loopgrid-field-height);
   top: calc(50% - (var(--loopgrid-field-height) / 2));
+  pointer-events: none;
 }
 
 
