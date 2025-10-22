@@ -5,6 +5,7 @@ let hostRef = null;
 let toggleRef = null;
 let panelsRef = null;
 let lastApi = null;
+const goalExpansionState = new Map();
 
 function ensureStyles() {
   if (document.getElementById('tutorial-styles')) return;
@@ -63,6 +64,21 @@ function ensureHost() {
   return hostRef;
 }
 
+function closeGuide() {
+  if (!hostRef) hostRef = document.querySelector(`.${GUIDE_TOGGLE_CLASS}`) || hostRef;
+  if (!panelsRef) panelsRef = document.querySelector('.guide-panels-container') || panelsRef;
+  if (!hostRef || !panelsRef) return;
+  hostRef.classList.remove(GUIDE_OPEN_CLASS);
+  panelsRef.style.display = 'none';
+  panelsRef.classList.remove('is-visible');
+  panelsRef.querySelectorAll('.is-active-guide-task').forEach((taskEl) => {
+    taskEl.classList.remove('is-active-guide-task');
+  });
+  try {
+    window.dispatchEvent(new CustomEvent('guide:task-deactivate', { bubbles: true, composed: true }));
+  } catch {}
+}
+
 function clearPanels() {
   if (!panelsRef) return;
   while (panelsRef.firstChild) panelsRef.removeChild(panelsRef.firstChild);
@@ -99,6 +115,8 @@ function renderGuide(api, { source = 'unknown' } = {}) {
   if (hasGoals && api?.createPanel) {
     const activePanels = [];
     const claimedPanels = [];
+    const panelMeta = [];
+    let expandedCount = 0;
 
     goals.forEach((goal, index) => {
       const panel = api.createPanel?.();
@@ -191,16 +209,28 @@ function renderGuide(api, { source = 'unknown' } = {}) {
         bodyContent.forEach((el) => bodyWrapper.appendChild(el));
         panel.appendChild(bodyWrapper);
 
-        const isFirst = willBeFirstActive;
+        const stateKey = goalId || `__index_${index}`;
+        const storedExpanded = stateKey ? goalExpansionState.get(stateKey) : undefined;
+        const shouldExpand = storedExpanded !== undefined ? !!storedExpanded : willBeFirstActive;
+        if (shouldExpand) expandedCount += 1;
+        if (stateKey) goalExpansionState.set(stateKey, shouldExpand);
+
         header.style.cursor = 'pointer';
-        panel.classList.toggle('is-collapsed', !isFirst);
-        if (!isFirst) bodyWrapper.style.display = 'none';
+        panel.classList.toggle('is-collapsed', !shouldExpand);
+        bodyWrapper.style.display = shouldExpand ? '' : 'none';
+        panelMeta.push({ panel, bodyWrapper, stateKey });
 
         header.addEventListener('click', () => {
           const isCollapsed = panel.classList.contains('is-collapsed');
           panel.classList.toggle('is-collapsed', !isCollapsed);
           const nowCollapsed = panel.classList.contains('is-collapsed');
           bodyWrapper.style.display = nowCollapsed ? 'none' : '';
+          if (nowCollapsed) {
+            if (expandedCount > 0) expandedCount -= 1;
+          } else {
+            expandedCount += 1;
+          }
+          if (stateKey) goalExpansionState.set(stateKey, !nowCollapsed);
           if (nowCollapsed) {
             panel.querySelectorAll('.is-active-guide-task').forEach(task => task.classList.remove('is-active-guide-task'));
             window.dispatchEvent(new CustomEvent('guide:task-deactivate', { bubbles: true, composed: true }));
@@ -214,6 +244,7 @@ function renderGuide(api, { source = 'unknown' } = {}) {
         const existingWrapper = panel.querySelector('.goal-body-wrapper');
         if (existingWrapper) existingWrapper.style.display = 'none';
         window.dispatchEvent(new CustomEvent('guide:task-deactivate', { bubbles: true, composed: true }));
+        if (goalId) goalExpansionState.set(goalId, false);
         claimedPanels.push(panel);
       } else {
         activePanels.push(panel);
@@ -221,7 +252,19 @@ function renderGuide(api, { source = 'unknown' } = {}) {
 
     });
 
-    [...activePanels, ...claimedPanels].forEach(panel => panelsRef.appendChild(panel));
+    const orderedPanels = [...activePanels, ...claimedPanels];
+    orderedPanels.forEach(panel => panelsRef.appendChild(panel));
+
+    if (expandedCount === 0 && orderedPanels.length > 0) {
+      const targetPanel = orderedPanels[0];
+      const meta = panelMeta.find(entry => entry.panel === targetPanel);
+      if (meta && meta.bodyWrapper) {
+        targetPanel.classList.remove('is-collapsed');
+        meta.bodyWrapper.style.display = '';
+        expandedCount = 1;
+        if (meta.stateKey) goalExpansionState.set(meta.stateKey, true);
+      }
+    }
   } else {
     const empty = document.createElement('div');
     empty.className = 'guide-empty-state';
@@ -250,6 +293,8 @@ window.addEventListener('guide:progress-update', () => {
     renderGuide(lastApi, { source: 'progress-update' });
   }
 });
+
+window.addEventListener('guide:close', () => closeGuide());
 
 function startWhenReady() {
   renderGuide(null, { source: 'bootstrap-placeholder' });

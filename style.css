@@ -40,12 +40,16 @@
 .loopgrid-tap-label {
   letter-spacing: 0.16em;
   color: rgba(80, 120, 180, 0.2);
-  text-shadow: 0 0 28px rgba(120, 160, 255, 0.32);
+  text-shadow: none;
   mix-blend-mode: normal;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 .loopgrid-tap-label .loopgrid-tap-letter-char {
   display: inline-block;
-  transition: transform 0.12s ease, color 0.12s ease;
+  transition: color 0.12s ease, text-shadow 0.12s ease;
+  will-change: color, text-shadow;
 }
 * {
   box-sizing: border-box;
@@ -1378,6 +1382,17 @@ body.tutorial-active #topbar #theme-switcher-wrap {
   position: relative;
 }
 
+.guide-toggle.tutorial-pulse-target {
+  animation: none;
+  transform: none;
+}
+
+.guide-toggle.tutorial-addtoy-pulse {
+  animation: pulseBorder 2s ease-in-out infinite;
+  position: relative;
+  background-color: var(--surface, #0d141d);
+}
+
 .tutorial-goals-progress {
   display: flex;
   flex-direction: column;
@@ -1444,8 +1459,9 @@ body.tutorial-active #topbar #theme-switcher-wrap {
 .goal-reward-icon .c-btn {
   --c-btn-size: 56px;
   pointer-events: none;
-  transform: scale(0.9);
-  opacity: 0.55;
+  transform: scale(0.95);
+  opacity: 0.9;
+  filter: none;
   transition: opacity 0.25s ease, transform 0.25s ease;
 }
 
@@ -1459,6 +1475,24 @@ body.tutorial-active #topbar #theme-switcher-wrap {
 .goal-reward-icon.is-unlocked .c-btn {
   opacity: 1;
   transform: scale(1);
+}
+
+.goal-reward-icon--asset .c-btn {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.goal-reward-icon--asset .c-btn-core {
+  background-color: transparent;
+  box-shadow: none;
+}
+
+.goal-reward-icon--asset .c-btn-core::before {
+  background-color: transparent;
+}
+
+.goal-reward-icon--asset .c-btn-core::after {
+  filter: none;
 }
 
 @media (max-width: 900px) {

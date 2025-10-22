@@ -4,6 +4,7 @@
 const STORAGE_PREFIX = 'uiHighlight:';
 const CLASS_ACTIVE = 'tutorial-pulse-target';
 const CLASS_PULSE = 'tutorial-active-pulse';
+const CLASS_BORDER = 'tutorial-addtoy-pulse';
 const CLASS_FLASH = 'tutorial-flash';
 
 /**
@@ -101,7 +102,7 @@ function applyHighlightClass(entry) {
   }
 
   if (shouldHighlight) {
-    el.classList.add(CLASS_ACTIVE, CLASS_PULSE, CLASS_FLASH);
+    el.classList.add(CLASS_ACTIVE, CLASS_PULSE, CLASS_BORDER, CLASS_FLASH);
     entry.flashTimer = setTimeout(() => {
       if (entry.el) {
         entry.el.classList.remove(CLASS_FLASH);
@@ -109,7 +110,7 @@ function applyHighlightClass(entry) {
       entry.flashTimer = null;
     }, 360);
   } else {
-    el.classList.remove(CLASS_ACTIVE, CLASS_PULSE, CLASS_FLASH);
+    el.classList.remove(CLASS_ACTIVE, CLASS_PULSE, CLASS_BORDER, CLASS_FLASH);
   }
 }
 
@@ -122,7 +123,7 @@ function detachEntry(entry) {
     entry.flashTimer = null;
   }
   if (entry.el) {
-    entry.el.classList.remove(CLASS_ACTIVE, CLASS_PULSE, CLASS_FLASH);
+    entry.el.classList.remove(CLASS_ACTIVE, CLASS_PULSE, CLASS_BORDER, CLASS_FLASH);
   }
   entry.el = null;
 }
@@ -196,13 +197,19 @@ function markSeen(key) {
 }
 
 function highlightForNewScene() {
-  Object.keys(entries).forEach((key) => {
-    const entry = entries[key];
-    if (!entry) return;
-    entry.seen = false;
-    try { window.localStorage.removeItem(entry.storageKey); } catch {}
-    saveActive(entry, true);
-  });
+  const guideEntry = entries.guide;
+  if (guideEntry) {
+    saveSeen(guideEntry, false);
+    saveActive(guideEntry, true);
+  }
+  const helpEntry = entries.help;
+  if (helpEntry) {
+    saveSeen(helpEntry, true);
+    saveActive(helpEntry, false);
+    if (helpEntry.el) {
+      helpEntry.el.classList.remove(CLASS_ACTIVE, CLASS_PULSE, CLASS_BORDER, CLASS_FLASH);
+    }
+  }
   scheduleRefresh();
 }
 

@@ -26,19 +26,29 @@ function ensureTapLetters(label) {
   return spans;
 }
 
-function triggerTapLettersForColumn(state, columnIndex, centerNorm) {
+function triggerTapLettersForColumn(state, columnIndex, centerNorm, cubeCenterX, cubeCenterY) {
   const bounds = state.tapLetterBounds;
   const flashes = state.tapLetterFlash;
-  const lastCols = state.tapLetterLastColumn;
-  if (!Array.isArray(bounds) || !Array.isArray(flashes) || !Array.isArray(lastCols)) return;
+  const lastLoop = state.tapLetterLastLoop;
+  const velX = state.tapLetterVelocityX;
+  const velY = state.tapLetterVelocityY;
+  const loopIndex = typeof state.tapLoopIndex === 'number' ? state.tapLoopIndex : 0;
+  if (!Array.isArray(bounds) || !Array.isArray(flashes) || !Array.isArray(lastLoop)) return;
   for (let i = 0; i < bounds.length; i++) {
     const bound = bounds[i];
     if (!bound) continue;
-    if (centerNorm >= bound.start && centerNorm <= bound.end) {
-      if (lastCols[i] !== columnIndex) {
-        flashes[i] = 1;
-        lastCols[i] = columnIndex;
-      }
+    if (centerNorm < bound.start || centerNorm > bound.end) continue;
+    if (lastLoop[i] === loopIndex) continue;
+    flashes[i] = 1;
+    lastLoop[i] = loopIndex;
+    if (Array.isArray(velX) && Array.isArray(velY)) {
+      const centerX = bound.centerX ?? cubeCenterX;
+      const centerY = bound.centerY ?? cubeCenterY;
+      const dx = centerX - cubeCenterX;
+      const dy = centerY - cubeCenterY;
+      const impulseScale = 0.08;
+      velX[i] = (velX[i] || 0) + dx * impulseScale;
+      velY[i] = (velY[i] || 0) + dy * impulseScale * 0.6;
     }
   }
 }
@@ -157,10 +167,15 @@ export function attachDrumVisuals(panel) {
     tapLabel,
     tapLetters,
     tapLetterFlash: tapLetters.map(() => 0),
-    tapLetterLastColumn: tapLetters.map(() => -1),
+    tapLetterLastLoop: tapLetters.map(() => -1),
     tapLetterBounds: null,
+    tapLetterOffsetX: tapLetters.map(() => 0),
+    tapLetterOffsetY: tapLetters.map(() => 0),
+    tapLetterVelocityX: tapLetters.map(() => 0),
+    tapLetterVelocityY: tapLetters.map(() => 0),
     tapFieldRect: null,
     tapPromptVisible: false,
+    tapLoopIndex: 0,
   };
   panel.__drumVisualState = st;
 
@@ -363,8 +378,20 @@ function render(panel) {
     if (!Array.isArray(st.tapLetterFlash) || st.tapLetterFlash.length !== letterCount) {
       st.tapLetterFlash = Array.from({ length: letterCount }, () => 0);
     }
-    if (!Array.isArray(st.tapLetterLastColumn) || st.tapLetterLastColumn.length !== letterCount) {
-      st.tapLetterLastColumn = Array.from({ length: letterCount }, () => -1);
+    if (!Array.isArray(st.tapLetterLastLoop) || st.tapLetterLastLoop.length !== letterCount) {
+      st.tapLetterLastLoop = Array.from({ length: letterCount }, () => -1);
+    }
+    if (!Array.isArray(st.tapLetterOffsetX) || st.tapLetterOffsetX.length !== letterCount) {
+      st.tapLetterOffsetX = Array.from({ length: letterCount }, () => 0);
+    }
+    if (!Array.isArray(st.tapLetterOffsetY) || st.tapLetterOffsetY.length !== letterCount) {
+      st.tapLetterOffsetY = Array.from({ length: letterCount }, () => 0);
+    }
+    if (!Array.isArray(st.tapLetterVelocityX) || st.tapLetterVelocityX.length !== letterCount) {
+      st.tapLetterVelocityX = Array.from({ length: letterCount }, () => 0);
+    }
+    if (!Array.isArray(st.tapLetterVelocityY) || st.tapLetterVelocityY.length !== letterCount) {
+      st.tapLetterVelocityY = Array.from({ length: letterCount }, () => 0);
     }
 
     if (!showTapPrompt) {
@@ -372,26 +399,30 @@ function render(panel) {
       st.tapLetterBounds = null;
       st.tapFieldRect = null;
       st.tapPromptVisible = false;
+      st.tapLoopIndex = 0;
+      if (Array.isArray(st.tapLetterLastLoop)) st.tapLetterLastLoop.fill(-1);
       for (let i = 0; i < letterCount; i++) {
         st.tapLetterFlash[i] = 0;
-        st.tapLetterLastColumn[i] = -1;
+        if (st.tapLetterOffsetX) st.tapLetterOffsetX[i] = 0;
+        if (st.tapLetterOffsetY) st.tapLetterOffsetY[i] = 0;
+        if (st.tapLetterVelocityX) st.tapLetterVelocityX[i] = 0;
+        if (st.tapLetterVelocityY) st.tapLetterVelocityY[i] = 0;
         tapLetters[i].style.color = 'rgba(80, 120, 180, 0)';
-        tapLetters[i].style.transform = 'scale(1)';
+        tapLetters[i].style.textShadow = 'none';
+        tapLetters[i].style.transform = 'none';
       }
     } else {
-      if (!st.tapPromptVisible && Array.isArray(st.tapLetterLastColumn)) {
-        st.tapLetterLastColumn.fill(-1);
-      }
       st.tapPromptVisible = true;
       tapLabel.style.opacity = '1';
-      const labelSize = Math.max(32, Math.min(particleFieldW, particleFieldH) * 0.28);
-      tapLabel.style.fontSize = `${Math.round(labelSize)}px`;
-
       const fieldElement = st.particleCanvas || tapLabel;
       let fieldRect = null;
       try { fieldRect = fieldElement.getBoundingClientRect(); } catch {}
       if (fieldRect && fieldRect.width > 0) {
-        st.tapFieldRect = { left: fieldRect.left, width: fieldRect.width };
+        const heightBased = (fieldRect.height || fieldRect.width) * 1.15;
+        const widthBased = fieldRect.width / 2.4;
+        const labelSize = Math.max(24, Math.min(heightBased, widthBased));
+        tapLabel.style.fontSize = `${Math.round(labelSize)}px`;
+        st.tapFieldRect = { left: fieldRect.left, width: fieldRect.width, top: fieldRect.top, height: fieldRect.height };
         st.tapLetterBounds = tapLetters.map(letter => {
           const rect = letter.getBoundingClientRect();
           const start = (rect.left - fieldRect.left) / fieldRect.width;
@@ -399,21 +430,72 @@ function render(panel) {
           return {
             start: Math.max(0, Math.min(1, start)),
             end: Math.max(0, Math.min(1, end)),
+            centerX: rect.left + rect.width / 2,
+            centerY: rect.top + rect.height / 2,
           };
         });
       } else {
         st.tapFieldRect = null;
         st.tapLetterBounds = null;
+        const heightBased = particleFieldH * 1.15;
+        const widthBased = particleFieldW / 2.4;
+        const fallbackSize = Math.max(24, Math.min(heightBased, widthBased));
+        tapLabel.style.fontSize = `${Math.round(fallbackSize)}px`;
       }
 
+      const offsetsX = st.tapLetterOffsetX;
+      const offsetsY = st.tapLetterOffsetY;
+      const velX = st.tapLetterVelocityX;
+      const velY = st.tapLetterVelocityY;
+      const spring = 0.14;
+      const damping = 0.82;
+      const maxOffset = 26;
       for (let i = 0; i < letterCount; i++) {
         let activeFlash = st.tapLetterFlash[i] || 0;
         activeFlash = Math.max(0, activeFlash * 0.86 - 0.02);
         st.tapLetterFlash[i] = activeFlash;
-        const baseAlpha = 0.2;
-        const finalAlpha = Math.max(baseAlpha, Math.min(1, baseAlpha + activeFlash * 0.8));
+
+        let offX = offsetsX ? offsetsX[i] || 0 : 0;
+        let offY = offsetsY ? offsetsY[i] || 0 : 0;
+        let vx = velX ? velX[i] || 0 : 0;
+        let vy = velY ? velY[i] || 0 : 0;
+
+        vx += (-offX) * spring;
+        vy += (-offY) * spring;
+        vx *= damping;
+        vy *= damping;
+        offX += vx;
+        offY += vy;
+
+        const mag = Math.hypot(offX, offY);
+        if (mag > maxOffset && mag > 0) {
+          const scale = maxOffset / mag;
+          offX *= scale;
+          offY *= scale;
+        }
+
+        if (offsetsX) offsetsX[i] = offX;
+        if (offsetsY) offsetsY[i] = offY;
+        if (velX) velX[i] = vx;
+        if (velY) velY[i] = vy;
+
+        const baseAlpha = 0.22;
+        const finalAlpha = Math.max(baseAlpha, Math.min(1, baseAlpha + activeFlash * 0.75));
         tapLetters[i].style.color = `rgba(80, 120, 180, ${finalAlpha})`;
-        tapLetters[i].style.transform = `scale(${1 + activeFlash * 0.18})`;
+
+        if (activeFlash > 0) {
+          const glowRadius = 10 + activeFlash * 24;
+          const glowAlpha = 0.25 + activeFlash * 0.45;
+          tapLetters[i].style.textShadow = `0 0 ${glowRadius.toFixed(0)}px rgba(150, 190, 255, ${glowAlpha.toFixed(2)})`;
+        } else {
+          tapLetters[i].style.textShadow = 'none';
+        }
+
+        if (Math.abs(offX) < 0.02 && Math.abs(offY) < 0.02) {
+          tapLetters[i].style.transform = 'none';
+        } else {
+          tapLetters[i].style.transform = `translate(${offX.toFixed(2)}px, ${offY.toFixed(2)}px)`;
+        }
       }
     }
   }
@@ -452,8 +534,9 @@ function render(panel) {
   st.localLastPhase = loopInfo ? loopInfo.phase01 : 0;
   const probablyStale = isActiveInChain && phaseJustWrapped;
 
-  if (showTapPrompt && Array.isArray(st.tapLetterLastColumn) && phaseJustWrapped) {
-    st.tapLetterLastColumn.fill(-1);
+  if (phaseJustWrapped) {
+    st.tapLoopIndex = (typeof st.tapLoopIndex === 'number' ? st.tapLoopIndex : 0) + 1;
+    if (Array.isArray(st.tapLetterLastLoop)) st.tapLetterLastLoop.fill(-1);
   }
 
   for (let i = 0; i < NUM_CUBES; i++) {
@@ -481,10 +564,11 @@ function render(panel) {
       );
       if (showTapPrompt && fieldRectData && Number.isFinite(fieldRectData.left) && fieldRectData.width > 0 && gridRect.width > 0 && Array.isArray(st.tapLetterBounds)) {
         const columnCenterPx = gridRect.left + ((cubeRect.x + cubeRect.w / 2) / w) * gridRect.width;
+        const columnCenterPy = gridRect.top + ((cubeRect.y + cubeRect.h / 2) / h) * gridRect.height;
         const centerNorm = (columnCenterPx - fieldRectData.left) / fieldRectData.width;
         if (Number.isFinite(centerNorm)) {
           const clamped = Math.max(0, Math.min(1, centerNorm));
-          triggerTapLettersForColumn(st, i, clamped);
+          triggerTapLettersForColumn(st, i, clamped, columnCenterPx, columnCenterPy);
         }
       }
     }

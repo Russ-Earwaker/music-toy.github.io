@@ -20,9 +20,9 @@ const GOAL_FLOW = [
     id: 'place-toy',
     title: 'Place a Toy',
     reward: {
-      description: 'Collect your first star.',
+      description: 'You made progress. Have a star.',
       icons: [
-        { type: 'symbol', label: 'Star Reward', symbol: '\u2605', accent: '#facc15' },
+        { type: 'asset', label: 'Star Reward', icon: '../assets/Ui/T_Star.png' },
       ],
     },
     tasks: [
@@ -47,9 +47,9 @@ const GOAL_FLOW = [
     id: 'clear-random',
     title: 'Randomise and clear',
     reward: {
-      description: 'Collect a gleaming star for exploring controls.',
+      description: 'You made progress. Have a star.',
       icons: [
-        { type: 'symbol', label: 'Star Reward', symbol: '\u2605', accent: '#facc15' },
+        { type: 'asset', label: 'Star Reward', icon: '../assets/Ui/T_Star.png' },
       ],
     },
     tasks: [
@@ -69,9 +69,9 @@ const GOAL_FLOW = [
     id: 'draw-intro',
     title: 'Draw out a tune',
     reward: {
-      description: 'Collect a gleaming star.',
+      description: 'You made progress. Have a star.',
       icons: [
-        { type: 'symbol', label: 'Star Reward', symbol: '\u2605', accent: '#facc15' },
+        { type: 'asset', label: 'Star Reward', icon: '../assets/Ui/T_Star.png' },
       ],
     },
     tasks: [
@@ -87,11 +87,6 @@ const GOAL_FLOW = [
         showSwipePrompt: true,
       },
       {
-        id: 'press-play',
-        label: 'Press the play button',
-        requirement: 'press-play',
-      },
-      {
         id: 'toggle-node',
         label: 'Tap a note to mute or unmute it.',
         requirement: 'toggle-node',
@@ -105,11 +100,11 @@ const GOAL_FLOW = [
   },
   {
     id: 'add-toy',
-    title: 'Add another toy',
+    title: 'Simple Rhythm',
     reward: {
-      description: 'Unlocks the Help button',
+      description: 'You made progress. Have a star.',
       icons: [
-        { type: 'symbol', label: 'Help', symbol: '?' },
+        { type: 'asset', label: 'Star Reward', icon: '../assets/Ui/T_Star.png' },
       ],
     },
     tasks: [
@@ -120,7 +115,7 @@ const GOAL_FLOW = [
       },
       {
         id: 'add-rhythm-note',
-        label: 'Add a rhythm to the new toy',
+        label: 'Add a rhythm',
         requirement: 'add-note-new-toy',
       },
     ],
@@ -254,6 +249,7 @@ function loadGuideProgress() {
 const guideProgress = loadGuideProgress();
 const requirementCompletionState = new Map();
 const drawToyPanels = new Set();
+const rhythmToyPanels = new Set();
 const drawToyLineState = new Map();
 let lastPlacedToy = null;
 
@@ -600,6 +596,40 @@ function cloneGoal(goal) {
     }
   }
 
+  function refreshRhythmRequirement() {
+    const panels = Array.from(rhythmToyPanels).filter(panel => panel?.isConnected);
+    const hasRhythm = panels.some(panel => hasActiveLoopgrid(panel));
+    if (hasRhythm) {
+      maybeCompleteTask('add-note-new-toy');
+    } else if (!guideProgress.tasks.has('add-rhythm-note')) {
+      setRequirementProgress('add-note-new-toy', false);
+    }
+  }
+
+  function getNearestSimpleRhythmPanel() {
+    const panels = Array.from(rhythmToyPanels).filter(panel => panel?.isConnected);
+    if (!panels.length) return null;
+    const viewport = window.visualViewport;
+    const cx = Number.isFinite(viewport?.width) ? viewport.width / 2 : (window.innerWidth || 0) / 2;
+    const cy = Number.isFinite(viewport?.height) ? viewport.height / 2 : (window.innerHeight || 0) / 2;
+    let best = null;
+    let bestDist = Infinity;
+    for (const panel of panels) {
+      const rect = panel.getBoundingClientRect();
+      if (!rect || rect.width < 2 || rect.height < 2) continue;
+      const px = rect.left + rect.width / 2;
+      const py = rect.top + rect.height / 2;
+      const dx = px - cx;
+      const dy = py - cy;
+      const dist = dx * dx + dy * dy;
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = panel;
+      }
+    }
+    return best;
+  }
+
   function syncTutorialProgressForGoal(goalId) {
     if (!goalId || !tutorialActive || !tutorialState) return;
     const currentGoal = getCurrentGoal();
@@ -753,20 +783,39 @@ function cloneGoal(goal) {
         refreshDrawLineRequirement();
       }, { once: true });
     } else if (toyType === 'loopgrid' || toyType === 'loopgrid-drum') {
+      rhythmToyPanels.add(panel);
+      refreshRhythmRequirement();
+      if (typeof window !== 'undefined') {
+        try { window.dispatchEvent(new CustomEvent('tutorial:loopgrid-sync')); } catch {}
+      }
       const manualEvents = ['grid:notechange', 'grid:drum-tap', 'loopgrid:tap'];
       manualEvents.forEach(evt => {
-        add(evt, () => markInteraction(), { passive: true });
+        add(evt, () => {
+          markInteraction();
+          refreshRhythmRequirement();
+        }, { passive: true });
       });
       const randomEvents = ['toy-random', 'toy-random-notes', 'toy-random-cubes', 'toy-random-blocks', 'loopgrid:random'];
       randomEvents.forEach(evt => {
-        add(evt, () => markInteraction(), { passive: true });
+        add(evt, () => {
+          markInteraction();
+          refreshRhythmRequirement();
+        }, { passive: true });
       });
       add('loopgrid:update', (event) => {
         const reason = event?.detail?.reason;
         if (reason === 'step-toggle' || reason === 'note-change') {
           markInteraction();
         }
+        refreshRhythmRequirement();
       }, { passive: true });
+      add('toy-remove', () => {
+        rhythmToyPanels.delete(panel);
+        refreshRhythmRequirement();
+        if (typeof window !== 'undefined') {
+          try { window.dispatchEvent(new CustomEvent('tutorial:loopgrid-sync')); } catch {}
+        }
+      }, { once: true });
     } else if (toyType === 'bouncer') {
       const canvas = panel.querySelector('.bouncer-canvas, canvas');
       if (canvas) {
@@ -1663,6 +1712,7 @@ function cloneGoal(goal) {
         reward.icons.forEach(icon => {
           const wrapper = document.createElement('div');
           wrapper.className = 'goal-reward-icon';
+          if (icon.type === 'asset') wrapper.classList.add('goal-reward-icon--asset');
           if (goal.id && unlockedRewards.has(goal.id)) wrapper.classList.add('is-unlocked');
 
           const isAddToy = (goal.id === 'clear-random') &&
@@ -2427,7 +2477,20 @@ function cloneGoal(goal) {
     });
   };
 
+  const scheduleRhythmToySync = () => {
+    requestAnimationFrame(() => {
+      try {
+        board?.querySelectorAll?.('.toy-panel[data-toy="loopgrid"]').forEach((panel) => {
+          if (!(panel instanceof HTMLElement)) return;
+          registerToyInteraction(panel);
+        });
+        refreshRhythmRequirement();
+      } catch {}
+    });
+  };
+
   scheduleDrawToySync();
+  scheduleRhythmToySync();
 
   function enterTutorial() {
     window.__useBoardCentering = true;
@@ -2469,38 +2532,38 @@ try {
     if (tutorialState?.unlockedRewards?.has?.('draw-intro')) {
       unlockPanelControls(newToy, ['clear', 'random']);
     }
-    setupPanelListeners(newToy);
-  }
+        setupPanelListeners(newToy);
+      }
 
-  const onNoteAdd = ({ markInteract = false } = {}) => {
-    if (!hasActiveLoopgrid(newToy)) return;
-    maybeCompleteTask('add-note-new-toy');
-    if (markInteract) maybeCompleteTask('interact-any-toy');
-  };
+      const onNoteAdd = ({ markInteract = false } = {}) => {
+        if (markInteract) maybeCompleteTask('interact-any-toy');
+        refreshRhythmRequirement();
+      };
 
-  const scheduleNoteCheck = (markInteract = false) => {
-    const exec = () => onNoteAdd({ markInteract });
-    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      const scheduleNoteCheck = (markInteract = false) => {
+        const exec = () => onNoteAdd({ markInteract });
+        if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
       window.requestAnimationFrame(exec);
     } else {
       setTimeout(exec, 16);
     }
   };
 
-  if (!newToy.__tutorialRhythmHooked) {
-    newToy.__tutorialRhythmHooked = true;
-    const manualEvents = ['grid:notechange', 'grid:drum-tap', 'loopgrid:tap'];
-    manualEvents.forEach(evt => addListener(newToy, evt, () => scheduleNoteCheck(true)));
+      if (!newToy.__tutorialRhythmHooked) {
+        newToy.__tutorialRhythmHooked = true;
+        const manualEvents = ['grid:notechange', 'grid:drum-tap', 'loopgrid:tap'];
+        manualEvents.forEach(evt => addListener(newToy, evt, () => scheduleNoteCheck(true)));
 
-    const stateEvents = ['loopgrid:update', 'toy-update', 'change'];
-    stateEvents.forEach(evt => addListener(newToy, evt, () => scheduleNoteCheck(false)));
+        const stateEvents = ['loopgrid:update', 'toy-update', 'change'];
+        stateEvents.forEach(evt => addListener(newToy, evt, () => scheduleNoteCheck(false)));
 
-    const randomEvents = ['toy-random', 'toy-random-notes'];
-    randomEvents.forEach(evt => addListener(newToy, evt, () => scheduleNoteCheck(true)));
+        const randomEvents = ['toy-random', 'toy-random-notes'];
+        randomEvents.forEach(evt => addListener(newToy, evt, () => scheduleNoteCheck(true)));
 
-    addListener(newToy, 'toy-clear', () => scheduleNoteCheck(false));
-  }
-  scheduleNoteCheck(false);
+        addListener(newToy, 'toy-clear', () => scheduleNoteCheck(false));
+      }
+      scheduleNoteCheck(false);
+      try { window.dispatchEvent(new CustomEvent('tutorial:loopgrid-sync')); } catch {}
 
   const raf = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));
   const settle = (fn) => raf(() => raf(fn));
@@ -2974,6 +3037,84 @@ try {
       return;
     }
 
+    if (taskId === 'add-rhythm-note') {
+      let disposed = false;
+      let cleanupInner = null;
+      let retryTimer = 0;
+      let currentPanel = null;
+
+      const scheduleParticles = () => {
+        if (disposed) return;
+        requestAnimationFrame(() => requestAnimationFrame(runParticles));
+      };
+
+      const runParticles = () => {
+        if (disposed) return;
+        const panel = getNearestSimpleRhythmPanel();
+        if (!panel || !panel.isConnected) {
+          stopParticleStream();
+          if (currentPanel) {
+            currentPanel.classList.remove('tutorial-guide-foreground');
+            currentPanel = null;
+          }
+          if (!retryTimer) retryTimer = window.setTimeout(scheduleParticles, 240);
+          return;
+        }
+        if (retryTimer) {
+          clearTimeout(retryTimer);
+          retryTimer = 0;
+        }
+        if (currentPanel !== panel) {
+          if (currentPanel) currentPanel.classList.remove('tutorial-guide-foreground');
+          currentPanel = panel;
+          currentPanel.classList.add('tutorial-guide-foreground');
+        }
+        const target = panel.querySelector('.sequencer-wrap') || panel;
+        if (!target?.isConnected) return;
+        stopParticleStream();
+        startParticleStream(taskElement, target, { layer: 'behind-target' });
+      };
+
+      const attach = () => {
+        if (disposed || cleanupInner) return;
+        scheduleParticles();
+        const onResize = () => scheduleParticles();
+        window.addEventListener('resize', onResize, { passive: true });
+        const board = document.getElementById('board');
+        const observer = board ? new MutationObserver(() => scheduleParticles()) : null;
+        if (observer && board) observer.observe(board, { childList: true, subtree: true });
+        const onSync = () => scheduleParticles();
+        window.addEventListener('tutorial:loopgrid-sync', onSync);
+
+        cleanupInner = () => {
+          window.removeEventListener('resize', onResize);
+          window.removeEventListener('tutorial:loopgrid-sync', onSync);
+          if (observer) observer.disconnect();
+          if (currentPanel) {
+            currentPanel.classList.remove('tutorial-guide-foreground');
+            currentPanel = null;
+          }
+          stopParticleStream();
+        };
+      };
+
+      attach();
+
+      guideHighlightCleanup = () => {
+        disposed = true;
+        if (retryTimer) {
+          clearTimeout(retryTimer);
+          retryTimer = 0;
+        }
+        if (cleanupInner) {
+          try { cleanupInner(); } catch {}
+          cleanupInner = null;
+        }
+      };
+
+      return;
+    }
+
     const TASK_TARGET_SELECTORS = {
       'press-help': '.toy-spawner-help',
       'press-play': '#topbar [data-action="toggle-play"]',
@@ -3093,6 +3234,10 @@ try {
       try { panel.dispatchEvent(new CustomEvent('tutorial:highlight-drag', { detail: { active: false } })); } catch {}
       panel.classList.remove('tutorial-guide-foreground');
     });
+    const helpBtn = document.querySelector('.toy-spawner-help');
+    if (helpBtn) {
+      helpBtn.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-addtoy-pulse', 'tutorial-flash');
+    }
     scheduleDrawToySync();
     updatePlayRequirement();
   });
