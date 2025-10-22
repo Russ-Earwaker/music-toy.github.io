@@ -365,6 +365,9 @@ function recordRequirementProgress(requirement, shouldComplete = true) {
   let attemptedCompletion = false;
   const goalsTouched = new Set();
   entries.forEach(({ goalId, taskId, taskIndex }) => {
+    if (guideProgress.goals.has(goalId)) {
+      return;
+    }
     goalsTouched.add(goalId);
     if (shouldComplete) {
       const goal = GOAL_BY_ID.get(goalId);
@@ -627,23 +630,27 @@ function cloneGoal(goal) {
 
   function setRequirementProgress(requirement, shouldComplete) {
     if (!requirement) return false;
+
+    const entries = TASKS_BY_REQUIREMENT.get(requirement) || [];
+    const pendingGoalId = tutorialState?.pendingRewardGoalId || null;
+    if (pendingGoalId && entries.some(entry => entry.goalId === pendingGoalId)) {
+      return false;
+    }
+
     const previous = requirementCompletionState.has(requirement)
       ? requirementCompletionState.get(requirement)
       : undefined;
     requirementCompletionState.set(requirement, shouldComplete);
 
-    const entries = TASKS_BY_REQUIREMENT.get(requirement) || [];
-    const pendingGoalId = tutorialState?.pendingRewardGoalId || null;
-    if (pendingGoalId && entries.some(entry => entry.goalId === pendingGoalId)) {
+    const { updated } = recordRequirementProgress(requirement, shouldComplete);
+    if (!updated) {
       if (previous === undefined) {
         requirementCompletionState.delete(requirement);
-      } else {
+      } else if (previous !== shouldComplete) {
         requirementCompletionState.set(requirement, previous);
       }
-      return false;
     }
 
-    const { updated } = recordRequirementProgress(requirement, shouldComplete);
     if (!shouldComplete) {
       const goals = new Set(entries.map(entry => entry.goalId).filter(Boolean));
       goals.forEach(syncTutorialProgressForGoal);
