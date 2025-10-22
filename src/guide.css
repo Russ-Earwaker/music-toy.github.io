@@ -1,0 +1,48 @@
+.guide-task-highlighter {
+  position: absolute;
+  z-index: 10000;
+  pointer-events: none;
+  display: none;
+}
+
+.guide-task-highlighter.is-visible {
+  display: block;
+}
+
+.guide-task-highlighter-text {
+  position: absolute;
+  top: 50%;
+  left: 3.5rem;
+  transform: translateY(-50%);
+  font-family: 'Poppins', 'Helvetica Neue', sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-size: 3rem;
+  color: rgba(80, 120, 180, 0.8);
+  white-space: nowrap;
+}
+
+.guide-task-highlighter-arrow {
+  position: absolute;
+  top: 50%;
+  left: 1rem;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  background: transparent;
+  border-top: 18px solid transparent;
+  border-bottom: 18px solid transparent;
+  border-right: 24px solid rgba(80, 120, 180, 0.8);
+  animation: pointRight 1.5s ease-in-out infinite;
+  box-shadow: none;
+}
+
+@keyframes pointRight {
+  0%, 100% {
+    transform: translateX(0) translateY(-50%);
+  }
+  50% {
+    transform: translateX(-10px) translateY(-50%);
+  }
+}

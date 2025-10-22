@@ -6,6 +6,8 @@ let toggleRef = null;
 let panelsRef = null;
 let lastApi = null;
 const goalExpansionState = new Map();
+let highlighterRef = null;
+let highlightNextTask = false;
 
 function addGuidePulse() { try { window.dispatchEvent(new CustomEvent('guide:request-pulse')); } catch (e) { console.warn('guide:request-pulse failed', e); } }
 
@@ -29,12 +31,20 @@ function isPlaceAToyIntroActive(api) {
 }
 
 function ensureStyles() {
-  if (document.getElementById('tutorial-styles')) return;
-  const link = document.createElement('link');
-  link.id = 'tutorial-styles';
-  link.rel = 'stylesheet';
-  link.href = 'src/tutorial.css';
-  document.head.appendChild(link);
+  if (!document.getElementById('tutorial-styles')) {
+    const link = document.createElement('link');
+    link.id = 'tutorial-styles';
+    link.rel = 'stylesheet';
+    link.href = 'src/tutorial.css';
+    document.head.appendChild(link);
+  }
+  if (!document.getElementById('guide-styles')) {
+    const guideLink = document.createElement('link');
+    guideLink.id = 'guide-styles';
+    guideLink.rel = 'stylesheet';
+    guideLink.href = 'src/guide.css';
+    document.head.appendChild(guideLink);
+  }
 }
 
 function ensureHost() {
@@ -42,6 +52,16 @@ function ensureHost() {
 
   hostRef = document.querySelector(`.${GUIDE_TOGGLE_CLASS}`) || document.createElement('div');
   hostRef.className = GUIDE_TOGGLE_CLASS;
+
+  if (!highlighterRef) {
+    highlighterRef = document.createElement('div');
+    highlighterRef.className = 'guide-task-highlighter';
+    highlighterRef.innerHTML = `
+      <div class="guide-task-highlighter-arrow"></div>
+      <div class="guide-task-highlighter-text">TAP</div>
+    `;
+    document.body.appendChild(highlighterRef);
+  }
 
   if (!toggleRef || !toggleRef.isConnected) {
     toggleRef = document.createElement('button');
@@ -64,7 +84,20 @@ function ensureHost() {
       hostRef.classList.toggle(GUIDE_OPEN_CLASS, willOpen);
       panelsRef.style.display = willOpen ? 'block' : 'none';
       panelsRef.classList.toggle('is-visible', willOpen);
+      if (willOpen && highlightNextTask) {
+        setTimeout(() => {
+          const firstTask = panelsRef.querySelector('.goal-task:not(.is-complete)');
+          if (firstTask && highlighterRef) {
+            const rect = firstTask.getBoundingClientRect();
+            highlighterRef.style.left = `${rect.right}px`;
+            highlighterRef.style.top = `${rect.top + rect.height / 2}px`;
+            highlighterRef.classList.add('is-visible');
+          }
+        }, 100);
+        highlightNextTask = false;
+      }
       if (!willOpen) {
+        if (highlighterRef) highlighterRef.classList.remove('is-visible');
         panelsRef.querySelectorAll('.is-active-guide-task').forEach(el => el.classList.remove('is-active-guide-task'));
         window.dispatchEvent(new CustomEvent('guide:task-deactivate', { bubbles: true, composed: true }));
       }
@@ -91,6 +124,7 @@ function closeGuide() {
   if (!hostRef) hostRef = document.querySelector(`.${GUIDE_TOGGLE_CLASS}`) || hostRef;
   if (!panelsRef) panelsRef = document.querySelector('.guide-panels-container') || panelsRef;
   if (!hostRef || !panelsRef) return;
+  if (highlighterRef) highlighterRef.classList.remove('is-visible');
   hostRef.classList.remove(GUIDE_OPEN_CLASS);
   panelsRef.style.display = 'none';
   panelsRef.classList.remove('is-visible');
@@ -194,6 +228,7 @@ function renderGuide(api, { source = 'unknown' } = {}) {
       panel.querySelectorAll('.goal-task').forEach((taskEl) => {
         taskEl.style.cursor = 'pointer';
         taskEl.addEventListener('click', () => {
+          if (highlighterRef) highlighterRef.classList.remove('is-visible');
           const isActive = taskEl.classList.contains('is-active-guide-task');
           if (isActive) {
             taskEl.classList.remove('is-active-guide-task');
@@ -342,6 +377,7 @@ window.addEventListener('tutorial:goals-updated', () => {
 }, { passive: true });
 
 window.addEventListener('guide:close', () => closeGuide());
+window.addEventListener('guide:highlight-next-task', () => { highlightNextTask = true; });
 
 function startWhenReady() {
   renderGuide(null, { source: 'bootstrap-placeholder' });

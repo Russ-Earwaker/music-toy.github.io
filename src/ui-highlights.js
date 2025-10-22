@@ -27,7 +27,14 @@ const entries = {
     seen: false,
     active: false,
     el: null,
-    handler: () => markSeen('guide'),
+    handler: () => {
+      markSeen('guide');
+      try {
+        window.dispatchEvent(new CustomEvent('guide:highlight-next-task'));
+      } catch (e) {
+        console.warn('guide:highlight-next-task failed', e);
+      }
+    },
     flashTimer: null,
   },
   help: {
