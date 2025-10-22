@@ -1377,7 +1377,6 @@ body.tutorial-active #topbar #theme-switcher-wrap {
 
 
 .guide-toggle.tutorial-active-pulse {
-  box-shadow: none !important;
 }
 
 .guide-toggle.tutorial-active-pulse::after {
@@ -1388,7 +1387,6 @@ body.tutorial-active #topbar #theme-switcher-wrap {
   animation: pulseBorder 2s ease-in-out infinite;
   position: relative;
   background-color: var(--surface, #0d141d);
-  box-shadow: none;
   border: 1px solid rgba(146, 176, 228, 0.35);
   overflow: visible;
 }
@@ -1420,7 +1418,7 @@ body.tutorial-active #topbar #theme-switcher-wrap {
   height: 0;
   border-top: 18px solid transparent;
   border-bottom: 18px solid transparent;
-  border-left: 24px solid rgba(80, 120, 180, 0.22);
+  border-right: 24px solid rgba(80, 120, 180, 0.22);
   pointer-events: none;
   z-index: 1;
 }
