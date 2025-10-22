@@ -1732,6 +1732,24 @@ function regenerateMapFromStrokes() {
     drawNodes(currentMap?.nodes || null);
   }
 
+  function activateDraggedColumn(col, row) {
+    if (!currentMap) return;
+    if (!currentMap.nodes || !currentMap.active || !currentMap.disabled) return;
+    const colIndex = Number(col);
+    if (!Number.isInteger(colIndex) || colIndex < 0 || colIndex >= cols) return;
+
+    if (!currentMap.nodes[colIndex]) currentMap.nodes[colIndex] = new Set();
+    if (!currentMap.disabled[colIndex]) currentMap.disabled[colIndex] = new Set();
+    if (!persistentDisabled[colIndex]) persistentDisabled[colIndex] = new Set();
+
+    currentMap.active[colIndex] = true;
+
+    if (Number.isInteger(row)) {
+      currentMap.disabled[colIndex].delete(row);
+      persistentDisabled[colIndex].delete(row);
+    }
+  }
+
   function snapToGrid(sourceCtx = pctx){
     // build a map: for each column, choose at most one row where line crosses
     const active = Array(cols).fill(false);
