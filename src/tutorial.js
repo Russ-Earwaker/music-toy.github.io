@@ -375,15 +375,20 @@ function recordRequirementProgress(requirement, shouldComplete = true) {
           index = tasks.findIndex((task, idx) => (task?.id || `task-${idx}`) === taskId);
         }
         if (index >= 0) {
+          const allowOutOfOrder = requirement === 'press-play';
+
           let prerequisitesComplete = true;
-          for (let i = 0; i < index; i++) {
-            const prevTask = tasks[i];
-            const prevId = prevTask?.id || `task-${i}`;
-            if (prevId && !guideProgress.tasks.has(prevId)) {
-              prerequisitesComplete = false;
-              break;
+          if (!allowOutOfOrder) {
+            for (let i = 0; i < index; i++) {
+              const prevTask = tasks[i];
+              const prevId = prevTask?.id || `task-${i}`;
+              if (prevId && !guideProgress.tasks.has(prevId)) {
+                prerequisitesComplete = false;
+                break;
+              }
             }
           }
+
           if (!prerequisitesComplete) {
             blocked = true;
             return;
@@ -622,13 +627,24 @@ function cloneGoal(goal) {
 
   function setRequirementProgress(requirement, shouldComplete) {
     if (!requirement) return false;
+    const previous = requirementCompletionState.has(requirement)
+      ? requirementCompletionState.get(requirement)
+      : undefined;
     requirementCompletionState.set(requirement, shouldComplete);
-    const { updated, blocked } = recordRequirementProgress(requirement, shouldComplete);
-    if (shouldComplete && blocked && !updated) {
-      requirementCompletionState.set(requirement, false);
+
+    const entries = TASKS_BY_REQUIREMENT.get(requirement) || [];
+    const pendingGoalId = tutorialState?.pendingRewardGoalId || null;
+    if (pendingGoalId && entries.some(entry => entry.goalId === pendingGoalId)) {
+      if (previous === undefined) {
+        requirementCompletionState.delete(requirement);
+      } else {
+        requirementCompletionState.set(requirement, previous);
+      }
+      return false;
     }
+
+    const { updated } = recordRequirementProgress(requirement, shouldComplete);
     if (!shouldComplete) {
-      const entries = TASKS_BY_REQUIREMENT.get(requirement) || [];
       const goals = new Set(entries.map(entry => entry.goalId).filter(Boolean));
       goals.forEach(syncTutorialProgressForGoal);
     }
@@ -2104,6 +2120,9 @@ function cloneGoal(goal) {
         window.tutorialSpacebarDisabled = false;
       }
       const isPlayTask = task.id === 'press-play';
+      if (isPlayTask) {
+        requestAnimationFrame(() => updatePlayRequirement());
+      }
       const isToggleTask = task.id === 'toggle-node';
       const isDragTask = task.id === 'drag-note';
       const targetVisible =
@@ -2124,7 +2143,7 @@ function cloneGoal(goal) {
             startParticleStream(taskEl, targetEl, { layer: 'behind-target' });
           }
         }
-  
+
         if (isPlayTask) {
           const playButtonContainer = targetEl;
 
@@ -2326,6 +2345,14 @@ function cloneGoal(goal) {
 
 
   const updatePlayRequirement = () => {
+    const pendingGoalId = tutorialState?.pendingRewardGoalId || null;
+    if (pendingGoalId) {
+      const pressPlayEntries = TASKS_BY_REQUIREMENT.get('press-play') || [];
+      if (pressPlayEntries.some(entry => entry.goalId === pendingGoalId)) {
+        return;
+      }
+    }
+
     const playing = typeof isRunning === 'function' ? !!isRunning() : false;
     if (playing) {
       maybeCompleteTask('press-play');
@@ -3032,7 +3059,8 @@ try {
     if (playBtn) {
       if (playBtn instanceof HTMLButtonElement && playBtn.disabled) return;
       if (playBtn.getAttribute('aria-disabled') === 'true') return;
-      maybeCompleteTask('press-play');
+      // defer to transport events so completion reflects actual play state
+      requestAnimationFrame(updatePlayRequirement);
       return;
     }
 
