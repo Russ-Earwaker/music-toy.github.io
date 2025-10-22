@@ -631,16 +631,53 @@ function cloneGoal(goal) {
   function setRequirementProgress(requirement, shouldComplete) {
     if (!requirement) return false;
 
-    const entries = TASKS_BY_REQUIREMENT.get(requirement) || [];
-    const pendingGoalId = tutorialState?.pendingRewardGoalId || null;
-    if (pendingGoalId && entries.some(entry => entry.goalId === pendingGoalId)) {
-      return false;
-    }
-
     const previous = requirementCompletionState.has(requirement)
       ? requirementCompletionState.get(requirement)
       : undefined;
+
+    const entries = TASKS_BY_REQUIREMENT.get(requirement) || [];
+    const pendingGoalId = tutorialState?.pendingRewardGoalId || null;
+    if (pendingGoalId && entries.some(entry => entry.goalId === pendingGoalId)) {
+      if (previous === undefined) {
+        requirementCompletionState.delete(requirement);
+      } else {
+        requirementCompletionState.set(requirement, previous);
+      }
+      return false;
+    }
+
+    if (entries.length > 0) {
+      const anyUnlocked = entries.some(entry => !guideProgress.goals.has(entry.goalId));
+      if (!anyUnlocked) {
+        if (previous === undefined) {
+          requirementCompletionState.delete(requirement);
+        } else {
+          requirementCompletionState.set(requirement, previous);
+        }
+        return false;
+      }
+    }
+
     requirementCompletionState.set(requirement, shouldComplete);
+
+    // Hard lock: once 'place-toy' is complete, don't let 'press-play' flip anymore
+    if (requirement === 'press-play') {
+      const g = GOAL_BY_ID.get('place-toy');
+      const tasks = Array.isArray(g?.tasks) ? g.tasks : [];
+      const placeToyTasksComplete = tasks.length
+        ? tasks.every(t => !t?.id || guideProgress.tasks.has(t.id))
+        : false;
+      const goalCompleteFlag = guideProgress.goals.has('place-toy') || placeToyTasksComplete;
+      if (goalCompleteFlag) {
+        // revert and bail
+        if (previous === undefined) {
+          requirementCompletionState.delete(requirement);
+        } else {
+          requirementCompletionState.set(requirement, previous);
+        }
+        return false;
+      }
+    }
 
     const { updated } = recordRequirementProgress(requirement, shouldComplete);
     if (!updated) {
@@ -2398,6 +2435,8 @@ function cloneGoal(goal) {
     tutorialActive = true;
 
     updateButtonVisual();
+
+    resetGuideProgress();
 
     if (!document.getElementById('tutorial-override-styles')) {
       const style = document.createElement('style');
