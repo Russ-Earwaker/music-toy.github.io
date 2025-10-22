@@ -3,7 +3,7 @@
 import { drawBlock, whichThirdRect } from './toyhelpers.js';
 import { midiToName } from './note-helpers.js';
 import { isRunning, getLoopInfo } from './audio-core.js';
-import { initLoopgridParticles, drawGridParticles } from './grid-particles.js';
+import { initLoopgridParticles, drawGridParticles, LOOPGRID_BASE_PARTICLE_COUNT } from './grid-particles.js';
 
 const NUM_CUBES = 8;
 
@@ -11,9 +11,9 @@ const NUM_CUBES = 8;
 const GAP = 4; // A few pixels of space between each cube
 
 function retargetLoopgridParticleCount(st, pw, ph) {
-  // Baseline: 56 particles for field height = 2 * 72 (old spec).
-  // Our field height is 3 * cube, so scale count ~ linearly with height,
-  // and also with width vs the field baseline width.
+  // Baseline: tuned so a standard Simple Rhythm canvas (roughly Rippler sized)
+  // lands near the Rippler particle budget. Scale with field width/height so
+  // zooming keeps density roughly consistent.
   const cube = Math.max(1, ph / 3); // 3*cube = field height
   const gap = 4;                     // loopgrid gap
   const baselineCube = 72;
@@ -23,7 +23,7 @@ function retargetLoopgridParticleCount(st, pw, ph) {
   const baselineFieldW = baselineInnerW + baselineCube;
   const heightScale = (ph / (2 * baselineCube));   // 3× vs 2× baseline => 1.5x
   const widthScale  = (pw / baselineFieldW);       // proportional width scale
-  const target = Math.max(24, Math.round(56 * heightScale * widthScale));
+  const target = Math.max(96, Math.round(LOOPGRID_BASE_PARTICLE_COUNT * heightScale * widthScale));
   const current = st.particles.length;
   if (current === target) return;
   if (current < target) {
@@ -35,6 +35,7 @@ function retargetLoopgridParticleCount(st, pw, ph) {
     st.particles.length = target;
   }
 }
+
 
 function findChainHead(toy) {
     if (!toy) return null;
@@ -108,7 +109,7 @@ export function attachDrumVisuals(panel) {
     flash: new Float32Array(NUM_CUBES),
     bgFlash: 0,
     localLastPhase: 0,
-    particles: initLoopgridParticles(56),
+    particles: initLoopgridParticles(LOOPGRID_BASE_PARTICLE_COUNT),
   };
   panel.__drumVisualState = st;
 

@@ -1,6 +1,8 @@
 // src/grid-particles.js — springy particles for the grid toy
 import { clamp } from './toyhelpers.js';
 
+export const LOOPGRID_BASE_PARTICLE_COUNT = 187;
+
 export function initGridParticles(count=90){
   return Array.from({length:count}, ()=> ({
     nx: Math.random(), ny: Math.random(),
@@ -14,7 +16,7 @@ export function initGridParticles(count=90){
 export function drawGridParticles(ctx, parts, map, {
   kSpring = 3.2,
   damping = 0.88,
-  radius = (s)=> Math.max(1.8, 2.4 * map.scale()),
+  radius = () => Math.max(0.6, 0.85 * map.scale()),
   col,
 } = {}){
   const dt = 1/60;
@@ -71,9 +73,6 @@ export function kickParticles(parts, map, {
 }
 
 // Loopgrid-specific particle init (Rippler-like density & size)
-export function initLoopgridParticles(count = 56) {
-  const pts = initGridParticles(count);   // reuse the base generator
-  // If Rippler uses a larger base radius/energy, normalize here:
-  // e.g., pts.forEach(p => { p.size *= 1.0; p.energy *= 1.0; });
-  return pts;
+export function initLoopgridParticles(count = LOOPGRID_BASE_PARTICLE_COUNT) {
+  return initGridParticles(count);
 }
