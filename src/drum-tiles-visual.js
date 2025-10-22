@@ -100,6 +100,14 @@ export function attachDrumVisuals(panel) {
   const particleCanvas = panel.querySelector('.particle-canvas');
   const pctx = particleCanvas ? particleCanvas.getContext('2d') : null;
 
+  let tapLabel = sequencerWrap ? sequencerWrap.querySelector('.loopgrid-tap-label') : null;
+  if (!tapLabel && sequencerWrap) {
+    tapLabel = document.createElement('div');
+    tapLabel.className = 'toy-action-label loopgrid-tap-label';
+    tapLabel.textContent = 'TAP';
+    sequencerWrap.appendChild(tapLabel);
+  }
+
   const st = {
     panel,
     canvas,
@@ -110,6 +118,9 @@ export function attachDrumVisuals(panel) {
     bgFlash: 0,
     localLastPhase: 0,
     particles: initLoopgridParticles(LOOPGRID_BASE_PARTICLE_COUNT),
+    tapLabel,
+    tapLabelFlash: 0,
+    tapLastPulseCol: -1,
   };
   panel.__drumVisualState = st;
 
@@ -255,7 +266,7 @@ function render(panel) {
   }
   panel.classList.toggle('toy-playing', showPlaying);
 
-  const { ctx, canvas, particles } = st;
+  const { ctx, canvas, particles, tapLabel } = st;
   const w = canvas.width;
   const h = canvas.height;
   if (!w || !h) return;
@@ -266,9 +277,13 @@ function render(panel) {
   const playheadCol = loopInfo ? Math.floor(loopInfo.phase01 * NUM_CUBES) : -1;
 
   /* Draw particles on the particle layer (double-height) */
+  let particleFieldW = 0;
+  let particleFieldH = 0;
   if (st.pctx && st.particleCanvas) {
     const pw = st.particleCanvas.width;
     const ph = st.particleCanvas.height;
+    particleFieldW = pw;
+    particleFieldH = ph;
     st.pctx.clearRect(0, 0, pw, ph);
     retargetLoopgridParticleCount(st, pw, ph);
     // Base particle scale on cube size so it matches Rippler's visual definition.
@@ -294,6 +309,32 @@ function render(panel) {
   const noteIndices = state.noteIndices || [];
   const notePalette = state.notePalette || [];
   const isZoomed = panel.classList.contains('toy-zoomed');
+
+  if (!particleFieldW || !particleFieldH) {
+    particleFieldW = w;
+    particleFieldH = h;
+  }
+
+  if (tapLabel) {
+    const showTapPrompt = !hasActiveNotes;
+    let flash = st.tapLabelFlash || 0;
+    if (showTapPrompt && playheadCol >= 0 && playheadCol !== st.tapLastPulseCol) {
+      flash = 1;
+      st.tapLastPulseCol = playheadCol;
+    } else if (!showTapPrompt) {
+      st.tapLastPulseCol = -1;
+      flash = 0;
+    }
+    flash = Math.max(0, flash * 0.9 - 0.015);
+    st.tapLabelFlash = flash;
+
+    const baseOpacity = showTapPrompt ? 0.32 : 0;
+    const finalOpacity = showTapPrompt ? Math.min(0.75, baseOpacity + flash * 0.4) : 0;
+    tapLabel.style.opacity = finalOpacity.toFixed(3);
+
+    const labelSize = Math.max(28, Math.min(particleFieldW, particleFieldH) * 0.18);
+    tapLabel.style.fontSize = `${Math.round(labelSize)}px`;
+  }
 
   // To prevent highlight clipping and ensure cubes fit in zoomed view,
   // we calculate cubeSize based on both width and height constraints.

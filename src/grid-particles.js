@@ -42,10 +42,10 @@ export function drawGridParticles(ctx, parts, map, {
 
     const r = radius();
     ctx.beginPath(); ctx.arc(p.sx, p.sy, r, 0, Math.PI*2);
-    ctx.fillStyle = 'rgba(200,210,230,0.25)'; ctx.fill();
+    ctx.fillStyle = 'rgba(230,240,255,0.35)'; ctx.fill();
     if (p.flash > 0){
       ctx.globalAlpha = p.flash;
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
       ctx.beginPath(); ctx.arc(p.sx, p.sy, r, 0, Math.PI*2); ctx.fill();
       ctx.globalAlpha = 1;
       p.flash = Math.max(0, p.flash - 0.08);

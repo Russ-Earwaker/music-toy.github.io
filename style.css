@@ -37,6 +37,12 @@
   transition: opacity 0.3s ease-in-out;
   z-index: 4;
 }
+.loopgrid-tap-label {
+  letter-spacing: 0.18em;
+  color: rgba(226, 236, 255, 0.35);
+  text-shadow: 0 0 22px rgba(140, 170, 255, 0.28);
+  mix-blend-mode: screen;
+}
 * {
   box-sizing: border-box;
 }
