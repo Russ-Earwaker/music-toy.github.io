@@ -24,7 +24,15 @@ function enterOverviewMode(isButton) {
     overviewText.textContent = 'Overview Mode';
     document.body.appendChild(overviewText);
 
+    // Hide the entire frame of all toys by making backgrounds transparent and removing borders/shadows
     document.querySelectorAll('.toy-panel').forEach(panel => {
+        panel.style.background = 'transparent';
+        panel.style.border = 'none';
+        panel.style.boxShadow = 'none';
+        const body = panel.querySelector('.toy-body');
+        if (body) {
+            body.style.background = 'transparent';
+        }
         panel.addEventListener('mousedown', onToyMouseDown);
     });
 }
@@ -44,7 +52,15 @@ function exitOverviewMode(isButton) {
         window.setBoardScale(overviewState.previousScale);
     }
 
+    // Restore the original appearance of all toys
     document.querySelectorAll('.toy-panel').forEach(panel => {
+        panel.style.background = '';
+        panel.style.border = '';
+        panel.style.boxShadow = '';
+        const body = panel.querySelector('.toy-body');
+        if (body) {
+            body.style.background = '';
+        }
         panel.removeEventListener('mousedown', onToyMouseDown);
     });
 }
