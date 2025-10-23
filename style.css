@@ -1638,7 +1638,14 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
     visibility: hidden;
     opacity: 0;
     pointer-events: none;
+    cursor: default !important;
     transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.overview-mode .toy-panel .toy-header *,
+.overview-mode .toy-panel .toy-footer * {
+    cursor: default !important;
+    pointer-events: none !important;
 }
 
 .overview-mode .toy-panel {

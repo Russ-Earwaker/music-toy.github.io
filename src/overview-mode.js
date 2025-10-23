@@ -8,6 +8,26 @@ const overviewState = {
 
 let dragInfo = { isDragging: false, target: null, startX: 0, startY: 0, initialX: 0, initialY: 0 };
 
+function setCursorRecursive(element, cursor) {
+    if (!element) return;
+    const originalCursor = getComputedStyle(element).cursor;
+    element.style.cursor = cursor;
+    element.style.setProperty('cursor', cursor, 'important');
+    console.log('DEBUG: Processed element:', element.tagName, element.className, 'ID:', element.id, 'Original cursor:', originalCursor, 'New cursor:', cursor);
+    for (let child of element.children) {
+        setCursorRecursive(child, cursor);
+    }
+}
+
+function restoreCursorRecursive(element) {
+    if (!element) return;
+    element.style.removeProperty('cursor');
+    console.log('DEBUG: Restored cursor on element:', element.tagName, element.className, 'ID:', element.id);
+    for (let child of element.children) {
+        restoreCursorRecursive(child);
+    }
+}
+
 function enterOverviewMode(isButton) {
     if (overviewState.isActive) return;
     overviewState.isActive = true;
@@ -33,6 +53,11 @@ function enterOverviewMode(isButton) {
         if (body) {
             body.style.background = 'transparent';
         }
+        // Ensure cursor is default on headers and footers and all their descendants
+        const header = panel.querySelector('.toy-header');
+        const footer = panel.querySelector('.toy-footer');
+        setCursorRecursive(header, 'default');
+        setCursorRecursive(footer, 'default');
         panel.addEventListener('mousedown', onToyMouseDown);
     });
 }
@@ -61,12 +86,36 @@ function exitOverviewMode(isButton) {
         if (body) {
             body.style.background = '';
         }
+        // Restore original cursor styles on headers and footers and all their descendants
+        const header = panel.querySelector('.toy-header');
+        const footer = panel.querySelector('.toy-footer');
+        restoreCursorRecursive(header);
+        restoreCursorRecursive(footer);
         panel.removeEventListener('mousedown', onToyMouseDown);
     });
 }
 
 function onToyMouseDown(e) {
     if (!overviewState.isActive) return;
+
+    const panel = e.currentTarget;
+    const header = panel.querySelector('.toy-header');
+    const footer = panel.querySelector('.toy-footer');
+
+    // Check if click is within header or footer bounds
+    if (header && footer) {
+        const headerRect = header.getBoundingClientRect();
+        const footerRect = footer.getBoundingClientRect();
+
+        // Header area: top of panel
+        const isInHeader = e.clientY <= headerRect.bottom;
+        // Footer area: bottom of panel
+        const isInFooter = e.clientY >= footerRect.top;
+
+        if (isInHeader || isInFooter) {
+            return;
+        }
+    }
 
     const target = e.currentTarget;
     dragInfo = {
@@ -108,6 +157,7 @@ function onToyMouseUp(e) {
     if (!dragInfo.moved) {
         // This was a tap, zoom in on the toy
         window.centerBoardOnElement(dragInfo.target, overviewState.zoomReturnLevel);
+        exitOverviewMode(false);
     }
 
     dragInfo.isDragging = false;
