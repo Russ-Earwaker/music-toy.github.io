@@ -5,6 +5,7 @@ import { installVolumeUI } from './volume-ui.js';
 import { getIdForDisplayName, getDisplayNameForId, getAllIds } from './instrument-catalog.js';
 import { openInstrumentPicker } from './instrument-picker.js';
 import { refreshHelpOverlay } from './help-overlay.js';
+import { overviewMode } from './overview-mode.js';
 
 const $ = (sel, root=document)=> root.querySelector(sel);
 
@@ -111,29 +112,6 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
   // the header is in the DOM and has its content.
   const headerHeight = header.offsetHeight;
 
-  // --- Instrument Name Display ---
-  // This element shows the current instrument name above the header.
-  let instDisplay = panel.querySelector(':scope > .toy-instrument-display');
-  if (!instDisplay) {
-    instDisplay = document.createElement('div');
-    instDisplay.className = 'toy-instrument-display';
-    Object.assign(instDisplay.style, {
-      position: 'absolute',
-      top: '-26px',
-      right: '10px',
-      background: 'rgba(0, 0, 0, 0.6)',
-      color: 'white',
-      fontWeight: 'bold',
-      padding: '4px 10px',
-      borderRadius: '6px',
-      fontSize: '12px',
-      pointerEvents: 'none',
-      zIndex: '10',
-      border: '1px solid rgba(255,255,255,0.1)'
-    });
-    panel.appendChild(instDisplay);
-    panel.style.overflow = 'visible'; // Ensure the display isn't clipped.
-  }
 
   // Centrally install the volume UI for every toy.
   installVolumeUI(footer);
@@ -762,9 +740,6 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
   panel.addEventListener('toy-instrument', (e) => {
     const instrumentName = (e?.detail?.value || '');
     if (!instrumentName) return;
-    if (instDisplay) {
-      instDisplay.textContent = getDisplayNameForId(instrumentName) || toTitleCase(instrumentName);
-    }
     // Ensure option exists
     const has = Array.from(sel.options).some(o=> o.value === instrumentName);
     if (!has){
@@ -778,9 +753,6 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
   panel.addEventListener('toy:instrument', (e) => {
     const instrumentName = ((e?.detail?.name || e?.detail?.value) || '');
     if (!instrumentName) return;
-    if (instDisplay) {
-      instDisplay.textContent = getDisplayNameForId(instrumentName) || toTitleCase(instrumentName);
-    }
     const has = Array.from(sel.options).some(o=> o.value === instrumentName);
     if (!has){
       const opt = document.createElement('option');
@@ -893,9 +865,6 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
     }
   }
 
-  if (instDisplay && panel.dataset.instrument) {
-    instDisplay.textContent = getDisplayNameForId(panel.dataset.instrument) || toTitleCase(panel.dataset.instrument);
-  }
 
   refreshHelpOverlay();
 
