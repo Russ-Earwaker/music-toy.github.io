@@ -1630,16 +1630,16 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
 }
 
 .overview-mode .toy-panel .toy-header,
-.overview-mode .toy-panel .toy-footer{
-    display: none !important;
-}
-
+.overview-mode .toy-panel .toy-footer,
 .overview-mode [data-action="advanced"],
 .overview-mode .toy-spawner-toggle,
 .overview-mode .toy-chain-btn,
 .overview-mode .toy-title,
 .overview-mode .toy-instrument {
-    display: none !important;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
 }
 
 .overview-mode .toy-panel {
