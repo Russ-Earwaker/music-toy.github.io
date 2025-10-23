@@ -1400,39 +1400,10 @@ body.tutorial-active #topbar #theme-switcher-wrap {
   overflow: visible;
 }
 
-.guide-toggle.tutorial-addtoy-pulse::before {
-  content: 'TAP';
-  position: absolute;
-  top: 50%;
-  left: calc(100% + 4.5rem);
-  transform: translateY(-50%);
-  font-family: 'Poppins', 'Helvetica Neue', sans-serif;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  font-size: 3rem;
-  color: rgba(80, 120, 180, 0.8);
-  pointer-events: none;
-  white-space: nowrap;
-  z-index: 1;
-}
-
+.guide-toggle.tutorial-addtoy-pulse::before,
 .guide-toggle.tutorial-addtoy-pulse::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: calc(100% + 2rem);
-  transform: translateY(-50%);
-  width: 0;
-  height: 0;
-  background: transparent;
-  border-top: 18px solid transparent;
-  border-bottom: 18px solid transparent;
-  border-right: 24px solid rgba(80, 120, 180, 0.8);
-  pointer-events: none;
-  z-index: 1;
-  animation: pointRight 1.5s ease-in-out infinite;
-  box-shadow: none;
+  content: none;
+  display: none;
 }
 
 .tutorial-goals-progress {

@@ -103,6 +103,8 @@ function applyHighlightClass(entry) {
   if (!el) return;
 
   const shouldHighlight = entry.active && !entry.seen;
+  const wasHighlighted = !!entry._highlightVisible;
+  entry._highlightVisible = shouldHighlight;
   if (entry.flashTimer) {
     clearTimeout(entry.flashTimer);
     entry.flashTimer = null;
@@ -116,8 +118,22 @@ function applyHighlightClass(entry) {
       }
       entry.flashTimer = null;
     }, 360);
+    if (!wasHighlighted && entry === entries.guide) {
+      try {
+        window.dispatchEvent(new CustomEvent('guide:highlight-next-task'));
+      } catch (err) {
+        console.warn('guide:highlight-next-task dispatch failed', err);
+      }
+    }
   } else {
     el.classList.remove(CLASS_ACTIVE, CLASS_PULSE, CLASS_BORDER, CLASS_FLASH);
+    if (wasHighlighted && entry === entries.guide) {
+      try {
+        window.dispatchEvent(new CustomEvent('guide:highlight-hide'));
+      } catch (err) {
+        console.warn('guide:highlight-hide dispatch failed', err);
+      }
+    }
   }
 }
 

@@ -8,6 +8,44 @@ let lastApi = null;
 const goalExpansionState = new Map();
 let highlighterRef = null;
 let highlightNextTask = false;
+let openFirstGoalNextRender = false;
+
+function showHighlighterForElement(el) {
+  if (!highlighterRef || !el) return false;
+  const rect = el.getBoundingClientRect();
+  if (!rect || !Number.isFinite(rect.top) || !Number.isFinite(rect.right)) return false;
+  highlighterRef.style.left = `${rect.right}px`;
+  highlighterRef.style.top = `${rect.top + rect.height / 2}px`;
+  highlighterRef.classList.add('is-visible');
+  return true;
+}
+
+function showHighlighterForGuide() {
+  ensureHost();
+  if (!toggleRef || !toggleRef.isConnected) return false;
+  return showHighlighterForElement(toggleRef);
+}
+
+function ensureHighlighter() {
+  const existing = Array.from(document.querySelectorAll('.guide-task-highlighter'));
+  if (existing.length > 0) {
+    highlighterRef = existing[0];
+    for (let i = 1; i < existing.length; i += 1) {
+      existing[i].remove();
+    }
+  }
+  if (!highlighterRef) {
+    highlighterRef = document.createElement('div');
+    highlighterRef.className = 'guide-task-highlighter';
+    highlighterRef.innerHTML = `
+      <div class="guide-task-highlighter-arrow"></div>
+      <div class="guide-task-highlighter-text">TAP</div>
+    `;
+  }
+  if (!highlighterRef.isConnected) {
+    document.body.appendChild(highlighterRef);
+  }
+}
 
 function addGuidePulse() { try { window.dispatchEvent(new CustomEvent('guide:request-pulse')); } catch (e) { console.warn('guide:request-pulse failed', e); } }
 
@@ -53,15 +91,7 @@ function ensureHost() {
   hostRef = document.querySelector(`.${GUIDE_TOGGLE_CLASS}`) || document.createElement('div');
   hostRef.className = GUIDE_TOGGLE_CLASS;
 
-  if (!highlighterRef) {
-    highlighterRef = document.createElement('div');
-    highlighterRef.className = 'guide-task-highlighter';
-    highlighterRef.innerHTML = `
-      <div class="guide-task-highlighter-arrow"></div>
-      <div class="guide-task-highlighter-text">TAP</div>
-    `;
-    document.body.appendChild(highlighterRef);
-  }
+  ensureHighlighter();
 
   if (!toggleRef || !toggleRef.isConnected) {
     toggleRef = document.createElement('button');
@@ -87,11 +117,8 @@ function ensureHost() {
       if (willOpen && highlightNextTask) {
         setTimeout(() => {
           const firstTask = panelsRef.querySelector('.goal-task:not(.is-complete)');
-          if (firstTask && highlighterRef) {
-            const rect = firstTask.getBoundingClientRect();
-            highlighterRef.style.left = `${rect.right}px`;
-            highlighterRef.style.top = `${rect.top + rect.height / 2}px`;
-            highlighterRef.classList.add('is-visible');
+          if (!showHighlighterForElement(firstTask)) {
+            if (highlighterRef) highlighterRef.classList.remove('is-visible');
           }
         }, 100);
         highlightNextTask = false;
@@ -218,6 +245,7 @@ function renderGuide(api, { source = 'unknown' } = {}) {
         claimBtn.__guideBound = true;
         claimBtn.addEventListener('click', () => {
           const targetGoalId = claimBtn.dataset.goalId || goal.id;
+          openFirstGoalNextRender = true;
           window.dispatchEvent(new CustomEvent('guide:task-deactivate', { bubbles: true, composed: true }));
           if (typeof api.claimReward === 'function') {
             api.claimReward(targetGoalId);
@@ -313,6 +341,19 @@ function renderGuide(api, { source = 'unknown' } = {}) {
     const orderedPanels = [...activePanels, ...claimedPanels];
     orderedPanels.forEach(panel => panelsRef.appendChild(panel));
 
+    if (openFirstGoalNextRender && orderedPanels.length > 0) {
+      const targetPanel = orderedPanels[0];
+      const meta = panelMeta.find(entry => entry.panel === targetPanel);
+      if (meta && meta.bodyWrapper) {
+        const wasCollapsed = targetPanel.classList.contains('is-collapsed');
+        targetPanel.classList.remove('is-collapsed');
+        meta.bodyWrapper.style.display = '';
+        if (wasCollapsed) expandedCount += 1;
+        if (meta.stateKey) goalExpansionState.set(meta.stateKey, true);
+        openFirstGoalNextRender = false;
+      }
+    }
+
     if (expandedCount === 0 && orderedPanels.length > 0) {
       const targetPanel = orderedPanels[0];
       const meta = panelMeta.find(entry => entry.panel === targetPanel);
@@ -365,6 +406,12 @@ window.addEventListener('scene:new', () => {
   } catch {
     addGuidePulse();
   }
+  goalExpansionState.clear();
+  openFirstGoalNextRender = true;
+  highlightNextTask = true;
+  requestAnimationFrame(() => {
+    if (!showHighlighterForGuide() && highlighterRef) highlighterRef.classList.remove('is-visible');
+  });
 }, { passive: true });
 
 window.addEventListener('tutorial:goals-updated', () => {
@@ -377,7 +424,24 @@ window.addEventListener('tutorial:goals-updated', () => {
 }, { passive: true });
 
 window.addEventListener('guide:close', () => closeGuide());
-window.addEventListener('guide:highlight-next-task', () => { highlightNextTask = true; });
+window.addEventListener('guide:highlight-next-task', () => {
+  highlightNextTask = true;
+  const guideOpen = hostRef && hostRef.classList.contains(GUIDE_OPEN_CLASS);
+  if (guideOpen && panelsRef) {
+    const firstTask = panelsRef.querySelector('.goal-task:not(.is-complete)');
+    if (!showHighlighterForElement(firstTask) && highlighterRef) {
+      highlighterRef.classList.remove('is-visible');
+    }
+    highlightNextTask = false;
+  } else if (!showHighlighterForGuide() && highlighterRef) {
+    highlighterRef.classList.remove('is-visible');
+  }
+});
+
+window.addEventListener('guide:highlight-hide', () => {
+  highlightNextTask = false;
+  if (highlighterRef) highlighterRef.classList.remove('is-visible');
+});
 
 function startWhenReady() {
   renderGuide(null, { source: 'bootstrap-placeholder' });
