@@ -1,4 +1,5 @@
 // src/board-viewport.js — pan & zoom from anywhere (clean, <=300 lines)
+import { overviewMode } from './overview-mode.js';
 (function(){
   if (window.__boardViewport) return; window.__boardViewport=true;
 
@@ -16,6 +17,8 @@
     }
   }catch{}
   window.__boardScale = scale;
+  const SCALE_EVENT_EPSILON = 1e-4;
+  let lastNotifiedScale = scale;
 
   function persist(){
     try{ localStorage.setItem('boardViewport', JSON.stringify({ scale, x, y })); }catch{}
@@ -28,6 +31,14 @@
     window.__boardScale = scale;
     window.__boardX = x;
     window.__boardY = y;
+    if (Math.abs(scale - lastNotifiedScale) > SCALE_EVENT_EPSILON){
+      lastNotifiedScale = scale;
+      try {
+        window.dispatchEvent(new CustomEvent('board:scale', { detail: { scale } }));
+      } catch (err) {
+        console.warn('[board-viewport] scale event dispatch failed', err);
+      }
+    }
     persist();
   }
 
@@ -68,16 +79,28 @@
     // zoom around mouse position
     const delta = e.deltaY;
     const rect = stage.getBoundingClientRect();
-    const mx = (e.clientX - rect.left - x) / scale;
-    const my = (e.clientY - rect.top  - y) / scale;
+    const boardCenterX = rect.left + rect.width / 2;
+    const boardCenterY = rect.top + rect.height / 2;
 
-    const old = scale;
+    const mouseXFromCenter = e.clientX - boardCenterX;
+    const mouseYFromCenter = e.clientY - boardCenterY;
+
+    const mx = mouseXFromCenter / scale;
+    const my = mouseYFromCenter / scale;
+
+    const oldScale = scale;
     const factor = Math.pow(1.0015, -delta);
-    scale = Math.max(0.5, Math.min(2.5, scale * factor));
+    scale = Math.max(0.1, Math.min(2.5, scale * factor));
 
-    // keep point under cursor stable
-    x = e.clientX - rect.left - mx * scale;
-    y = e.clientY - rect.top  - my * scale;
+    x -= mx * (scale - oldScale);
+    y -= my * (scale - oldScale);
+
+    if (scale < overviewMode.state.zoomThreshold) {
+        overviewMode.enter();
+    } else {
+        overviewMode.exit(false);
+    }
+
     window.__boardScale = scale; apply();
     e.preventDefault();
     persist();
@@ -85,7 +108,7 @@
 
   // helpers
   window.panTo = (nx, ny)=>{ x = nx|0; y = ny|0; window.__boardScale = scale; apply(); };
-  window.setBoardScale = (sc)=>{ scale = Math.max(0.5, Math.min(2.5, Number(sc)||1)); window.__boardScale = scale; apply(); };
+  window.setBoardScale = (sc)=>{ scale = Math.max(0.1, Math.min(2.5, Number(sc)||1)); window.__boardScale = scale; apply(); };
 
   // Center the board on a specific element at a desired scale
   window.centerBoardOnElement = (el, desiredScale = scale) => {

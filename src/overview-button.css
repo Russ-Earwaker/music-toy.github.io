@@ -1,0 +1,32 @@
+#overview-mode-button {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    width: 50px;
+    height: 50px;
+    background-color: #333;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    z-index: 1000;
+    font-size: 24px;
+    font-weight: bold;
+}
+
+#zoom-readout {
+    position: fixed;
+    top: 35px;
+    right: 80px;
+    color: white;
+    font-family: monospace;
+    font-size: 16px;
+    z-index: 1000;
+}
+
+.overview-mode #overview-mode-button {
+    background-color: #eee;
+    color: #333;
+}

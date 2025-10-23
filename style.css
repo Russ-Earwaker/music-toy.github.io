@@ -1,4 +1,5 @@
 /* style.css - Cleaned and Refactored */
+@import url("./src/overview-button.css");
 .tutorial-particles-front { z-index: 940 !important; pointer-events: none !important; }
 
 /* ------------------- */
@@ -1623,3 +1624,41 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
 
 
 
+.overview-mode .toy-panel .toy-body > :not(canvas):not(svg),
+.overview-mode .toy-panel .toy-body {
+    pointer-events: none !important;
+}
+
+.overview-mode .toy-panel .toy-header,
+.overview-mode .toy-panel .toy-footer{
+    display: none !important;
+}
+
+.overview-mode [data-action="advanced"],
+.overview-mode .toy-spawner-toggle,
+.overview-mode .toy-chain-btn,
+.overview-mode .toy-title,
+.overview-mode .toy-instrument {
+    display: none !important;
+}
+
+.overview-mode .toy-panel {
+    cursor: grab;
+}
+
+.overview-mode .toy-panel:active {
+    cursor: grabbing;
+}
+
+#overview-mode-text {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background-color: rgba(0,0,0,0.5);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 10px;
+    font-size: 24px;
+    font-weight: bold;
+    z-index: 1000;
+}
