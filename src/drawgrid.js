@@ -128,6 +128,7 @@ function createDrawGridParticles({
   returnToHome=true,
   homePull=0.008, // Increased spring force to resettle faster
   bounceOnWalls=false,
+  dpr = 1,
 } = {}){
   const P = [];
   const letters = [];
@@ -141,8 +142,9 @@ function createDrawGridParticles({
   let letterFade = 1;
   let letterFadeTarget = 1;
   let letterFadeSpeed = 0.05;
-  const W = ()=> Math.max(1, Math.floor(getW()?getW():0));
-  const H = ()=> Math.max(1, Math.floor(getH()?getH():0));
+  let currentDpr = dpr;
+  const W = ()=> Math.max(1, Math.floor(getW()?getW() * currentDpr:0));
+  const H = ()=> Math.max(1, Math.floor(getH()?getH() * currentDpr:0));
   let lastW = 0, lastH = 0;
 
   function layoutLetters(w, h, { resetPositions = true } = {}) {
@@ -355,7 +357,7 @@ function createDrawGridParticles({
       const b = Math.round(baseB + (255 - baseB) * mix);
       ctx.fillStyle = `rgb(${r},${g},${b})`;
 
-      const baseSize = 1.5;
+      const baseSize = 1.5 * currentDpr;
       const size = baseSize;
       const x = (p.x | 0) - size / 2;
       const y = (p.y | 0) - size / 2;
@@ -377,7 +379,7 @@ function createDrawGridParticles({
           continue;
         }
         ctx.globalAlpha = finalAlpha;
-        ctx.font = `700 ${letter.fontSize}px 'Poppins', 'Helvetica Neue', sans-serif`;
+        ctx.font = `700 ${letter.fontSize * currentDpr}px 'Poppins', 'Helvetica Neue', sans-serif`;
         ctx.fillText(letter.char, letter.x, letter.y);
       }
       ctx.restore();
@@ -416,7 +418,6 @@ function createDrawGridParticles({
         const horizontal = basePush + directional;
         const vyJitter = (Math.random()*2 - 1) * k * 0.32;
         letter.vx += horizontal;
-        letter.vx += k * 0.4;
         letter.vy += vyJitter;
         letter.alpha = Math.min(1, (letter.alpha ?? LETTER_BASE_ALPHA) + 0.18);
         letter.flash = Math.min(1, (letter.flash || 0) + 0.9);
@@ -513,7 +514,31 @@ function ringBurst(x, y, radius, countBurst = 28, speed = 2.4, color = 'pink') {
     setLetterFadeTarget(1, speed);
   }
 
-  return { step, draw, onBeat, lineRepulse, drawingDisturb, pointBurst, ringBurst, fadeLettersOut, fadeLettersIn, setLetterFadeTarget };
+  function setDpr(newDpr) {
+    if (newDpr === currentDpr) return;
+    currentDpr = newDpr;
+  }
+
+  function scalePositions(scaleX, scaleY) {
+    for (const p of P) {
+      p.x *= scaleX;
+      p.y *= scaleY;
+      p.homeX *= scaleX;
+      p.homeY *= scaleY;
+      p.vx *= scaleX;
+      p.vy *= scaleY;
+    }
+    for (const letter of letters) {
+      letter.x *= scaleX;
+      letter.y *= scaleY;
+      letter.homeX *= scaleX;
+      letter.homeY *= scaleY;
+      letter.vx *= scaleX;
+      letter.vy *= scaleY;
+    }
+  }
+
+  return { step, draw, onBeat, lineRepulse, drawingDisturb, pointBurst, ringBurst, fadeLettersOut, fadeLettersIn, setLetterFadeTarget, setDpr, scalePositions };
 }
 
 export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId, bpm = 120 } = {}) {
@@ -618,6 +643,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     getH: () => cssH,
     count: 600,
     homePull: 0.002,
+    dpr: dpr,
   });
 
   const clearTutorialHighlight = () => {
@@ -1220,6 +1246,9 @@ function regenerateMapFromStrokes() {
     return Math.max(12, Math.round(Math.min(cw, ch) * 0.85));
   }
 
+  let lastZoomX = 1;
+  let lastZoomY = 1;
+
   function layout(force = false){
     const newDpr = window.devicePixelRatio || 1;
     // Measure transform-immune base…
@@ -1250,12 +1279,10 @@ function regenerateMapFromStrokes() {
         }
       } catch {}
 
-      // Bake zoom into effective DPR so canvases stay sharp while zoomed.
-      // Use geometric mean to balance non-uniform scales.
-      const zoomDpr = Math.sqrt(zoomX * zoomY) || 1;
-      dpr = newDpr * zoomDpr;
+      dpr = newDpr;
       cssW = newW;
       cssH = newH;
+      particles.setDpr(dpr);
       const w = cssW * dpr;
       const h = cssH * dpr;
       grid.width = w; grid.height = h;
@@ -1268,11 +1295,19 @@ function regenerateMapFromStrokes() {
       gctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       pctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       nctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      particleCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      particleCtx.setTransform(1, 0, 0, 1, 0, 0);
       ghostCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       if (tutorialCtx) tutorialCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     if (tutorialHighlightMode !== 'none') renderTutorialHighlight();
+
+      // Scale particle positions if zoom changed
+      if (zoomX !== lastZoomX || zoomY !== lastZoomY) {
+        const scaleX = zoomX / lastZoomX;
+        const scaleY = zoomY / lastZoomY;
+        particles.scalePositions(scaleX, scaleY);
+        lastZoomX = zoomX;
+        lastZoomY = zoomY;
+      }
 
       // Scale the logical stroke data if we have it and the canvas was resized
       if (strokes.length > 0 && oldW > 0 && oldH > 0) {
@@ -1330,9 +1365,7 @@ function regenerateMapFromStrokes() {
       // Clear other content canvases. The caller is responsible for redrawing nodes/overlay.
       nctx.clearRect(0, 0, cssW, cssH);
       fctx.clearRect(0, 0, cssW, cssH);
-      ghostCtx.setTransform(1,0,0,1,0,0);
       ghostCtx.clearRect(0,0,ghostCanvas.width,ghostCanvas.height);
-      ghostCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
   }
 
@@ -2383,7 +2416,6 @@ function regenerateMapFromStrokes() {
     if (currentMap) drawNodes(currentMap.nodes); // Always redraw nodes (cubes, connections, labels)
 
     // Clear flash canvas for this frame's animations
-    fctx.setTransform(1, 0, 0, 1, 0, 0);
     fctx.clearRect(0, 0, flashCanvas.width, flashCanvas.height);
 
     // Animate special stroke paint (hue cycling) without resurrecting erased areas:
@@ -2391,8 +2423,7 @@ function regenerateMapFromStrokes() {
     const specialStrokes = strokes.filter(s => s.isSpecial);
     if (specialStrokes.length > 0 || (cur && previewGid)) {
         fctx.save();
-        // Draw animated strokes with CSS transform
-        fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        // Draw animated strokes with device transform
         // Draw demoted colorized strokes as static overlay tints
         try {
           const colorized = strokes.filter(s => s.overlayColorize);
@@ -2426,7 +2457,6 @@ function regenerateMapFromStrokes() {
     try {
         if (cellFlashes.length > 0) {
             fctx.save();
-            fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
             for (let i = cellFlashes.length - 1; i >= 0; i--) {
                 const flash = cellFlashes[i];
                 const x = gridArea.x + flash.col * cw;
@@ -2448,7 +2478,6 @@ function regenerateMapFromStrokes() {
     if (noteToggleEffects.length > 0) {
       try {
         fctx.save();
-        fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         for (let i = noteToggleEffects.length - 1; i >= 0; i--) {
           const effect = noteToggleEffects[i];
           effect.progress += 0.12;
@@ -2494,10 +2523,11 @@ function regenerateMapFromStrokes() {
 
         // Use the flash canvas (fctx) for the playhead. It's cleared each frame.
         fctx.save();
-        fctx.setTransform(dpr, 0, 0, dpr, 0, 0); // ensure we're in CSS pixels
 
-        // --- Faded gradient background ---
-        const gradientWidth = 80;
+        // Width of the soft highlight band scales with a column, clamped
+        const gradientWidth = Math.round(
+          Math.max(0.8 * cw, Math.min(gridArea.w * 0.08, 2.2 * cw))
+        );
         const t = performance.now();
         const hue = 200 + 20 * Math.sin((t / 800) * Math.PI * 2);
         const midColor = `hsla(${(hue + 45).toFixed(0)}, 100%, 70%, 0.25)`;
@@ -2510,6 +2540,9 @@ function regenerateMapFromStrokes() {
         fctx.fillStyle = bgGrad;
         fctx.fillRect(playheadX - gradientWidth / 2, gridArea.y, gradientWidth, gridArea.h);
 
+        // Optional: scale shadow/line widths a bit with cw
+        const trailLineWidth = Math.max(1.5, cw * 0.08);
+        fctx.lineWidth = trailLineWidth;
 
         // Create a vertical gradient that mimics the "Line 1" animated gradient.
         const grad = fctx.createLinearGradient(playheadX, gridArea.y, playheadX, gridArea.y + gridArea.h);
@@ -2925,7 +2958,7 @@ function regenerateMapFromStrokes() {
     ghostCtx.clearRect(0,0,ghostCanvas.width,ghostCanvas.height);
   }
 
-  function startGhostGuide({
+function startGhostGuide({
   startX, endX,
   startY, endY,
   duration = 2000,
@@ -2936,29 +2969,30 @@ function regenerateMapFromStrokes() {
   trailSpeed = 1.2,
 } = {}) {
   stopGhostGuide();
-  if (!cw || !ch) { layout(true); }
+  if (!cw || !ch) {
+    console.log('[drawgrid] startGhostGuide: layout called because cw or ch missing');
+    layout(true);
+  }
 
-  // Work in the same coordinate space as the grid
-  const gx = gridArea.x;
-  const gy = gridArea.y;
-  const gw = gridArea.w;
-  const gh = gridArea.h;
+  // Work in logical coordinate space
+  const gx = gridArea.x, gy = gridArea.y, gw = gridArea.w, gh = gridArea.h;
 
+  // Default span if caller omitted
+  if (typeof startX !== 'number' || typeof endX !== 'number') {
+    startX = gx;
+    endX = gx + gw;
+  }
   // Left → right
   if (startX > endX) [startX, endX] = [endX, startX];
 
-  // Default Y’s if not provided: two rows within the grid area
-  const centerY = gy + gh / 2;
+  // Default for Y
   if (typeof startY !== 'number' || typeof endY !== 'number') {
-    const span = Math.max(1, gh * 0.3);
-    if (Math.random() < 0.5) {
-      startY = gy + Math.random() * span;
-      endY   = centerY + Math.random() * span;
-    } else {
-      startY = centerY + Math.random() * span;
-      endY   = gy + Math.random() * span;
-    }
+    startY = gy;
+    endY = gy + gh;
   }
+
+  const { x: zoomX, y: zoomY } = getZoomScale(panel);
+  console.log('[drawgrid] startGhostGuide: zoomX=', zoomX, 'zoomY=', zoomY, 'gridArea=', gridArea, 'startX=', startX, 'endX=', endX, 'startY=', startY, 'endY=', endY);
 
   const startTime = performance.now();
   let last = null;
@@ -2969,7 +3003,10 @@ function regenerateMapFromStrokes() {
     const elapsed = now - startTime;
     const t = Math.min(elapsed / duration, 1);
 
-    if (!cw || !ch) { layout(true); }
+    if (!cw || !ch) {
+      console.log('[drawgrid] startGhostGuide frame: layout called because cw or ch missing');
+      layout(true);
+    }
 
     const wiggleAmp = gh * 0.25;
 
@@ -2982,12 +3019,13 @@ function regenerateMapFromStrokes() {
     }
 
     // Clamp inside the grid area
-    const topBound = gy;
-    const bottomBound = gy + gh;
+    const topBound = gy, bottomBound = gy + gh;
     if (y > bottomBound)      y = bottomBound - (y - bottomBound);
     else if (y < topBound)    y = topBound + (topBound - y);
 
-    // Fade old trail
+    console.log('[drawgrid] startGhostGuide frame: t=', t.toFixed(2), 'x=', x.toFixed(1), 'y=', y.toFixed(1), 'dotR=', (Math.max(6, getLineWidth() * 0.45)).toFixed(1), 'gridArea:', gridArea);
+
+    // Fade old trail (device pixel space)
     ghostCtx.save();
     ghostCtx.setTransform(1,0,0,1,0,0);
     ghostCtx.globalCompositeOperation = 'destination-out';
@@ -2995,15 +3033,15 @@ function regenerateMapFromStrokes() {
     ghostCtx.fillRect(0, 0, ghostCanvas.width, ghostCanvas.height);
     ghostCtx.restore();
 
-    // Draw new segment + dot (all in CSS space; we set dpr transform)
+    // Draw new segment + dot (device space)
     if (last) {
       ghostCtx.save();
-      ghostCtx.setTransform(dpr,0,0,dpr,0,0);
+      ghostCtx.setTransform(1,0,0,1,0,0);
       ghostCtx.globalCompositeOperation = 'source-over';
       ghostCtx.globalAlpha = 0.25;
       ghostCtx.lineCap = 'round';
       ghostCtx.lineJoin = 'round';
-      ghostCtx.lineWidth = Math.max(getLineWidth() * 1.15, 24); // scales with cell size
+      ghostCtx.lineWidth = Math.max(getLineWidth() * 1.15, 24) * dpr;
       ghostCtx.strokeStyle = 'rgba(68,112,255,0.7)';
       ghostCtx.beginPath();
       ghostCtx.moveTo(last.x, last.y);
@@ -3011,7 +3049,7 @@ function regenerateMapFromStrokes() {
       ghostCtx.stroke();
 
       // Finger dot – scales with grid cell size & zoom
-      const dotR = Math.max(6, getLineWidth() * 0.45);
+      const dotR = Math.max(6, getLineWidth() * 0.45) * dpr;
       ghostCtx.beginPath();
       ghostCtx.arc(x, y, dotR, 0, Math.PI * 2);
       ghostCtx.fillStyle = 'rgba(68,112,255,0.85)';
@@ -3021,7 +3059,7 @@ function regenerateMapFromStrokes() {
     }
     last = { x, y };
 
-    // Particle kick in CSS coords; radius scales with line width
+    // Particle interactions in logical coords; radius scales with line width
     const force  = 0.8;
     const radius = getLineWidth() * 1.5;
     particles.drawingDisturb(x, y, radius, force);
@@ -3033,8 +3071,8 @@ function regenerateMapFromStrokes() {
     if (t < 1) {
       ghostGuideAnimFrame = requestAnimationFrame(frame);
     } else {
+      // Hard clear
       ghostCtx.save();
-      ghostCtx.setTransform(1,0,0,1,0,0);
       ghostCtx.globalCompositeOperation = 'destination-out';
       ghostCtx.globalAlpha = 1;
       ghostCtx.fillRect(0, 0, ghostCanvas.width, ghostCanvas.height);
@@ -3045,25 +3083,23 @@ function regenerateMapFromStrokes() {
   ghostGuideAnimFrame = requestAnimationFrame(frame);
 }
 
-  function runAutoGhostGuideSweep() {
+function runAutoGhostGuideSweep() {
   if (!ghostGuideAutoActive) return;
-  if (!cw || !ch) { layout(true); }
 
-  // Drive the sweep inside the gridArea so it scales with the toy
-  const gx = gridArea.x;
-  const gy = gridArea.y;
-  const gw = gridArea.w;
-  const gh = gridArea.h;
+  // Guard against tiny layouts
+  if (!gridArea || gridArea.w <= 48 || gridArea.h <= 48) {
+    console.log('[drawgrid] runAutoGhostGuideSweep: skipping due to tiny gridArea', gridArea, 'cw:', cw, 'ch:', ch);
+    if (ghostGuideAutoActive) requestAnimationFrame(runAutoGhostGuideSweep);
+    return;
+  }
 
-  const startX = gx;
-  const endX   = gx + Math.max(1, gw);
+  // Use logical coordinates directly
+  const startX = gridArea.x + gridArea.w * 0.1;
+  const endX = gridArea.x + gridArea.w * 0.9;
+  const startY = gridArea.y + gridArea.h * 0.1;
+  const endY = gridArea.y + gridArea.h * 0.9;
 
-  // Cross near the vertical center with some variance
-  const centerY = gy + gh / 2;
-  const span = Math.max(1, gh * 0.3);
-  const upFirst = Math.random() < 0.5;
-  const startY = upFirst ? (gy + Math.random() * span) : (centerY + Math.random() * span);
-  const endY   = upFirst ? (centerY + Math.random() * span) : (gy + Math.random() * span);
+  console.log('[drawgrid] runAutoGhostGuideSweep: startX=', startX.toFixed(1), 'endX=', endX.toFixed(1), 'startY=', startY.toFixed(1), 'endY=', endY.toFixed(1), 'gridArea:', gridArea);
 
   startGhostGuide({
     startX, endX, startY, endY,
