@@ -981,7 +981,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     }
 
     regenerateMapFromStrokes();
-    try { (panel.__dgUpdateButtons || updateGeneratorButtons || function(){})() } catch(e) { try { console.warn('[drawgrid] updateGeneratorButtons not available', e); } catch{} }
+    try { (panel.__dgUpdateButtons || updateGeneratorButtons || function(){})() } catch(e) { }
     syncLetterFade();
   }
 
@@ -1236,6 +1236,42 @@ function regenerateMapFromStrokes() {
   // When zoom state changes, force a transform-immune resnap next frame
   panel.addEventListener('toy-zoom', () => {
     requestAnimationFrame(() => resnapAndRedraw(true));
+  });
+
+  panel.addEventListener('board:scale', () => {
+    // Record canvas size before potential change
+    const oldCssW = cssW;
+    const oldCssH = cssH;
+    // Snapshot paint to preserve drawn/erased content across board scale changes
+    let scaleSnap = null;
+    try {
+      if (paint.width > 0 && paint.height > 0) {
+        scaleSnap = document.createElement('canvas');
+        scaleSnap.width = paint.width;
+        scaleSnap.height = paint.height;
+        scaleSnap.getContext('2d')?.drawImage(paint, 0, 0);
+      }
+    } catch {}
+    // Force layout to check for canvas size changes
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!panel.isConnected) return;
+        resnapAndRedraw(true);
+        // Only restore snapshot if canvas size actually changed
+        if (cssW !== oldCssW || cssH !== oldCssH) {
+          requestAnimationFrame(() => {
+            if (scaleSnap) {
+              try {
+                pctx.save();
+                pctx.setTransform(1,0,0,1,0,0);
+                pctx.drawImage(scaleSnap, 0,0, scaleSnap.width, scaleSnap.height, 0,0, paint.width, paint.height);
+                pctx.restore();
+              } catch {}
+            }
+          });
+        }
+      });
+    });
   });
 
 
@@ -2261,7 +2297,7 @@ function regenerateMapFromStrokes() {
             shouldGenerateNodes = false;
         }
         nextDrawTarget = null; // Always reset after a draw completes
-        try { (panel.__dgUpdateButtons || updateGeneratorButtons)(); } catch(e){ console.warn('[drawgrid] updateGeneratorButtons missing', e); }
+        try { (panel.__dgUpdateButtons || updateGeneratorButtons)(); } catch(e){ }
     } else { // Standard view logic (unchanged)
         const hasNodes = currentMap && currentMap.nodes.some(s => s.size > 0);
         // If a special line already exists, this new line is decorative.
@@ -2643,7 +2679,7 @@ function regenerateMapFromStrokes() {
           manualOverrides: Array.isArray(manualOverrides) ? manualOverrides.map(s=> Array.from(s||[])) : [],
         };
         return state;
-      }catch(e){ try{ console.warn('[drawgrid] getState failed', e); }catch{} return { steps: cols|0, autotune: !!autoTune }; }
+        }catch(e){ return { steps: cols|0, autotune: !!autoTune }; }
     },
     hasActiveNotes: () => {
       try {
@@ -2680,9 +2716,10 @@ function regenerateMapFromStrokes() {
             let pts = [];
             if (Array.isArray(s?.ptsN)){
               const gh = Math.max(1, gridArea.h - topPad);
+              const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
               pts = s.ptsN.map(np=>({
-                x: gridArea.x + (Number(np?.nx)||0) * gridArea.w,
-                y: (gridArea.y + topPad) + (Number(np?.ny)||0) * gh
+                x: gridArea.x + clamp(Number(np?.nx)||0, 0, 1) * gridArea.w,
+                y: (gridArea.y + topPad) + clamp(Number(np?.ny)||0, 0, 1) * gh
               }));
             } else if (Array.isArray(s?.pts)) {
               // Legacy raw points fallback
@@ -2706,9 +2743,10 @@ function regenerateMapFromStrokes() {
             let pts = [];
             if (Array.isArray(s?.ptsN)) {
               const gh = Math.max(1, gridArea.h - topPad);
+              const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
               pts = s.ptsN.map(np=>({
-                x: gridArea.x + Math.max(0, Math.min(1, Number(np?.nx)||0)) * gridArea.w,
-                y: (gridArea.y + topPad) + Math.max(0, Math.min(1, Number(np?.ny)||0)) * gh
+                x: gridArea.x + clamp(Number(np?.nx)||0, 0, 1) * gridArea.w,
+                y: (gridArea.y + topPad) + clamp(Number(np?.ny)||0, 0, 1) * gh
               }));
             }
             eraseStrokes.push({ pts });
@@ -2747,7 +2785,7 @@ function regenerateMapFromStrokes() {
               drawGrid();
               drawNodes(currentMap.nodes);
               try{ panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap })); }catch{}
-          } catch(e){ try{ console.warn('[drawgrid] apply nodes failed', e); }catch{} }
+          } catch(e){ }
         }
         if (Array.isArray(st.manualOverrides)){
           try{ manualOverrides = st.manualOverrides.slice(0, cols).map(a=> new Set(a||[])); }catch{}
@@ -2760,7 +2798,7 @@ function regenerateMapFromStrokes() {
           if (stepsSel) stepsSel.value = String(cols);
         } catch {}
         if (currentMap){ try{ panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap })); }catch{} }
-      }catch(e){ try{ console.warn('[drawgrid] setState failed', e); }catch{} }
+      }catch(e){ }
     }
   };
 
@@ -2858,7 +2896,7 @@ function regenerateMapFromStrokes() {
           }
         }
       }
-    } catch(e){ try{ console.warn('[drawgrid random special line]', e); }catch{} }
+    } catch(e){ }
 
     drawGrid();
     drawNodes(currentMap.nodes);
@@ -2971,7 +3009,6 @@ function startGhostGuide({
 } = {}) {
   stopGhostGuide();
   if (!cw || !ch) {
-    console.log('[drawgrid] startGhostGuide: layout called because cw or ch missing');
     layout(true);
   }
 
@@ -2993,7 +3030,6 @@ function startGhostGuide({
   }
 
   const { x: zoomX, y: zoomY } = getZoomScale(panel);
-  console.log('[drawgrid] startGhostGuide: zoomX=', zoomX, 'zoomY=', zoomY, 'gridArea=', gridArea, 'startX=', startX, 'endX=', endX, 'startY=', startY, 'endY=', endY);
 
   const startTime = performance.now();
   let last = null;
@@ -3005,7 +3041,6 @@ function startGhostGuide({
     const t = Math.min(elapsed / duration, 1);
 
     if (!cw || !ch) {
-      console.log('[drawgrid] startGhostGuide frame: layout called because cw or ch missing');
       layout(true);
     }
 
@@ -3023,8 +3058,6 @@ function startGhostGuide({
     const topBound = gy, bottomBound = gy + gh;
     if (y > bottomBound)      y = bottomBound - (y - bottomBound);
     else if (y < topBound)    y = topBound + (topBound - y);
-
-    console.log('[drawgrid] startGhostGuide frame: t=', t.toFixed(2), 'x=', x.toFixed(1), 'y=', y.toFixed(1), 'dotR=', (Math.max(6, getLineWidth() * 0.45)).toFixed(1), 'gridArea:', gridArea);
 
     // Fade old trail (device pixel space)
     ghostCtx.save();
@@ -3089,7 +3122,6 @@ function runAutoGhostGuideSweep() {
 
   // Guard against tiny layouts
   if (!gridArea || gridArea.w <= 48 || gridArea.h <= 48) {
-    console.log('[drawgrid] runAutoGhostGuideSweep: skipping due to tiny gridArea', gridArea, 'cw:', cw, 'ch:', ch);
     if (ghostGuideAutoActive) requestAnimationFrame(runAutoGhostGuideSweep);
     return;
   }
@@ -3099,8 +3131,6 @@ function runAutoGhostGuideSweep() {
   const endX = gridArea.x + gridArea.w * 0.9;
   const startY = gridArea.y + gridArea.h * 0.1;
   const endY = gridArea.y + gridArea.h * 0.9;
-
-  console.log('[drawgrid] runAutoGhostGuideSweep: startX=', startX.toFixed(1), 'endX=', endX.toFixed(1), 'startY=', startY.toFixed(1), 'endY=', endY.toFixed(1), 'gridArea:', gridArea);
 
   startGhostGuide({
     startX, endX, startY, endY,

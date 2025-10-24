@@ -513,6 +513,7 @@ select.toy-instrument {
   display: block;
 }
 .toy-panel[data-toy="drawgrid"] .toy-body {
+  position: relative;
   flex-grow: 0;
   aspect-ratio: 4 / 3;
 }
