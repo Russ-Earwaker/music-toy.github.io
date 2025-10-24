@@ -33,10 +33,14 @@ function enterOverviewMode(isButton) {
     overviewState.isActive = true;
     overviewState.previousScale = window.__boardScale;
     document.body.classList.add('overview-mode');
-    console.log('Entering Overview Mode');
+    console.log('Entering Overview Mode, previousScale:', overviewState.previousScale, 'current boardScale:', window.__boardScale);
 
     if (isButton) {
+        console.log('Setting board scale to 0.36 for overview mode, current scale:', window.__boardScale);
         window.setBoardScale(0.36);
+        console.log('After setting scale to 0.36, actual scale:', window.__boardScale);
+        // Dispatch event to trigger layout recalculation in toys
+        window.dispatchEvent(new CustomEvent('board:scale', { detail: { scale: 0.36 } }));
     }
 
     const overviewText = document.createElement('div');
@@ -66,7 +70,7 @@ function exitOverviewMode(isButton) {
     if (!overviewState.isActive) return;
     overviewState.isActive = false;
     document.body.classList.remove('overview-mode');
-    console.log('Exiting Overview Mode');
+    console.log('Exiting Overview Mode, restoring scale to:', overviewState.previousScale, 'current scale:', window.__boardScale);
 
     const overviewText = document.getElementById('overview-mode-text');
     if (overviewText) {
@@ -74,7 +78,11 @@ function exitOverviewMode(isButton) {
     }
 
     if (isButton) {
+        console.log('Restoring board scale from overview mode, target:', overviewState.previousScale, 'current:', window.__boardScale);
         window.setBoardScale(overviewState.previousScale);
+        console.log('After restoring scale, actual scale:', window.__boardScale);
+        // Dispatch event to trigger layout recalculation in toys
+        window.dispatchEvent(new CustomEvent('board:scale', { detail: { scale: overviewState.previousScale } }));
     }
 
     // Restore the original appearance of all toys

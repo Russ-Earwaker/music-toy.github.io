@@ -522,8 +522,20 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const body = panel.querySelector('.toy-body');
 
   if (!body) {
-    console.error('[drawgrid] Fatal: could not find .toy-body element!');
     return;
+  }
+
+  function getZoomScale(el) {
+    // Compare transformed rect to layout box to infer CSS transform scale.
+    // Fallback to 1 to remain stable if values are 0 or unavailable.
+    if (!el) return { x: 1, y: 1 };
+    const rect = el.getBoundingClientRect?.();
+    const cw = el.clientWidth || 0;
+    const ch = el.clientHeight || 0;
+    if (!rect || cw <= 0 || ch <= 0) return { x: 1, y: 1 };
+    const sx = Math.max(0.5, Math.min(4, rect.width  / cw));
+    const sy = Math.max(0.5, Math.min(4, rect.height / ch));
+    return { x: (isFinite(sx) ? sx : 1), y: (isFinite(sy) ? sy : 1) };
   }
 
   // Eraser cursor
@@ -567,6 +579,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   // State
   let cols = initialCols;
   let cssW=0, cssH=0, cw=0, ch=0, topPad=0, dpr=1;
+  let lastBoardScale = 1;
   let drawing=false, erasing=false;
   // The `strokes` array is removed. The paint canvas is now the source of truth.
   let cur = null;
@@ -593,7 +606,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let persistentDisabled = Array.from({ length: initialCols }, () => new Set()); // survives view changes
   let btnLine1, btnLine2;
   let autoTune = true; // Default to on
-  const safeArea = 40;
+  // Proportional safe area so the grid keeps the same relative size at any zoom.
+  // Start with ~5% of the smaller dimension; clamp to a sensible px range.
+  const SAFE_AREA_FRACTION = 0.05;
   let gridArea = { x: 0, y: 0, w: 0, h: 0 };
   let tutorialHighlightMode = 'none'; // 'none' | 'notes' | 'drag'
   let tutorialHighlightRaf = null;
@@ -875,7 +890,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
                 panel.dispatchEvent(new CustomEvent('toy:instrument', { detail: { name: val, value: val }, bubbles: true }));
                 try { const h = panel.querySelector('.toy-header'); if (h) { h.classList.remove('pulse-cancel'); h.classList.add('pulse-accept'); setTimeout(() => h.classList.remove('pulse-accept'), 650); } } catch { }
             } catch (e) {
-                console.error("Instrument picker failed in drawgrid", e);
             }
         });
     }
@@ -1192,7 +1206,15 @@ function regenerateMapFromStrokes() {
     });
   });
 
-  const observer = new ResizeObserver(() => resnapAndRedraw(false));
+  // When zoom state changes, force a transform-immune resnap next frame
+  panel.addEventListener('toy-zoom', () => {
+    requestAnimationFrame(() => resnapAndRedraw(true));
+  });
+
+
+  const observer = new ResizeObserver(() => {
+    resnapAndRedraw(false);
+  });
 
   function getLineWidth() {
     return Math.max(12, Math.round(Math.min(cw, ch) * 0.85));
@@ -1200,9 +1222,18 @@ function regenerateMapFromStrokes() {
 
   function layout(force = false){
     const newDpr = window.devicePixelRatio || 1;
-    const r = body.getBoundingClientRect();
-    const newW = Math.max(1, r.width|0);
-    const newH = Math.max(1, r.height|0);
+    // Measure transform-immune base…
+    const baseW = Math.max(1, (body.clientWidth | 0));
+    const baseH = Math.max(1, (body.clientHeight | 0));
+    // …then infer transform scale so grid matches the visible frame size.
+    const { x: zoomX, y: zoomY } = getZoomScale(panel); // panel is the element that toggles toy-zoomed
+    const newW = Math.max(1, Math.round(baseW * zoomX));
+    const newH = Math.max(1, Math.round(baseH * zoomY));
+
+    if (newW === 0 || newH === 0) {
+      requestAnimationFrame(() => resnapAndRedraw(force));
+      return;
+    }
 
     if (force || Math.abs(newW - cssW) > 1 || Math.abs(newH - cssH) > 1 || newDpr !== dpr) {
       const oldW = cssW;
@@ -1219,7 +1250,10 @@ function regenerateMapFromStrokes() {
         }
       } catch {}
 
-      dpr = newDpr;
+      // Bake zoom into effective DPR so canvases stay sharp while zoomed.
+      // Use geometric mean to balance non-uniform scales.
+      const zoomDpr = Math.sqrt(zoomX * zoomY) || 1;
+      dpr = newDpr * zoomDpr;
       cssW = newW;
       cssH = newH;
       const w = cssW * dpr;
@@ -1249,19 +1283,29 @@ function regenerateMapFromStrokes() {
         }
       }
 
-      // Define the grid area inset by the safe area
-      gridArea = {
-        x: safeArea,
-        y: safeArea,
-        w: cssW > safeArea * 2 ? cssW - 2 * safeArea : 0,
-        h: cssH > safeArea * 2 ? cssH - 2 * safeArea : 0,
-      };
+      const logicalW = cssW;
+      const logicalH = cssH;
 
+      const minGridArea = 20; // px floor so it never fully collapses
+      // Compute proportional margin in CSS px (already in the visible, transformed space)
+      const dynamicSafeArea = Math.max(
+        12,                               // lower bound so lines don't hug edges on tiny panels
+        Math.round(SAFE_AREA_FRACTION * Math.min(cssW, cssH))
+      );
+
+      gridArea = {
+        x: dynamicSafeArea,
+        y: dynamicSafeArea,
+        w: Math.max(minGridArea, logicalW - 2 * dynamicSafeArea),
+        h: Math.max(minGridArea, logicalH - 2 * dynamicSafeArea),
+      };
+    
       // All calculations are now relative to the gridArea
       // Remove the top cube row; use a minimal padding
       topPad = 0;
       cw = gridArea.w / cols;
       ch = (gridArea.h > topPad) ? (gridArea.h - topPad) / rows : 0;
+
 
       // Update eraser cursor size
       const eraserWidth = getLineWidth() * 2;
@@ -1732,24 +1776,6 @@ function regenerateMapFromStrokes() {
     drawNodes(currentMap?.nodes || null);
   }
 
-  function activateDraggedColumn(col, row) {
-    if (!currentMap) return;
-    if (!currentMap.nodes || !currentMap.active || !currentMap.disabled) return;
-    const colIndex = Number(col);
-    if (!Number.isInteger(colIndex) || colIndex < 0 || colIndex >= cols) return;
-
-    if (!currentMap.nodes[colIndex]) currentMap.nodes[colIndex] = new Set();
-    if (!currentMap.disabled[colIndex]) currentMap.disabled[colIndex] = new Set();
-    if (!persistentDisabled[colIndex]) persistentDisabled[colIndex] = new Set();
-
-    currentMap.active[colIndex] = true;
-
-    if (Number.isInteger(row)) {
-      currentMap.disabled[colIndex].delete(row);
-      persistentDisabled[colIndex].delete(row);
-    }
-  }
-
   function snapToGrid(sourceCtx = pctx){
     // build a map: for each column, choose at most one row where line crosses
     const active = Array(cols).fill(false);
@@ -1975,7 +2001,6 @@ function regenerateMapFromStrokes() {
         };
         paint.style.cursor = 'grabbing';
         pendingNodeTap = null;
-        activateDraggedColumn(draggedNode.col, draggedNode.row);
         setDragScaleHighlight(draggedNode.col);
       }
     }
@@ -2016,7 +2041,6 @@ function regenerateMapFromStrokes() {
             colGroupMap.set(newRow, filtered);
           }
           currentMap.nodes[col].add(newRow);
-          activateDraggedColumn(col, newRow);
 
           // record manual override for standard view preservation
           try {
@@ -2220,7 +2244,6 @@ function regenerateMapFromStrokes() {
     }
     
     // Debug: log the decision for this stroke
-    try { console.info('[drawgrid] up', { isZoomed, isSpecial, generatorId, shouldGenerateNodes, strokes: strokes.length }); } catch{}
     strokeToProcess.isSpecial = isSpecial;
     strokeToProcess.generatorId = generatorId;
     strokeToProcess.justCreated = true; // Mark as new to exempt from old erasures
@@ -3112,5 +3135,3 @@ function regenerateMapFromStrokes() {
   try { panel.dispatchEvent(new CustomEvent('drawgrid:ready', { bubbles: true })); } catch {}
   return api;
 }
-
-
