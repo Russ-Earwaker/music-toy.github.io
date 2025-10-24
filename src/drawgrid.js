@@ -549,6 +549,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   if (!body) {
     return;
   }
+  body.style.position = 'relative';
 
   function getZoomScale(el) {
     // Compare transformed rect to layout box to infer CSS transform scale.
