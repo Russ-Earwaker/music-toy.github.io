@@ -23,9 +23,11 @@
   function applyOne(panel) {
     const body = getBody(panel);
     const wrap = getWrap(body);
-    // Force wrap to the body's layout size (ignores transforms)
-    wrap.style.width  = body.clientWidth  + 'px';
-    wrap.style.height = body.clientHeight + 'px';
+    // Measure with offsetWidth/offsetHeight (transform-immune)
+    const w = body.offsetWidth;
+    const h = body.offsetHeight;
+    wrap.style.width  = w + 'px';
+    wrap.style.height = h + 'px';
   }
 
   function applyAll() {
@@ -41,9 +43,23 @@
     applyAll();
   }
 
+  // Wire to board scale changes
+  window.addEventListener('board:scale', schedule);
+
+  // Add listener for visibilitychange (resume tab)
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) schedule();
+  });
+
+  // Optional: fullscreenchange
+  document.addEventListener('fullscreenchange', schedule);
+
   try {
     const ro = new ResizeObserver(schedule);
     document.querySelectorAll('.toy-panel[data-toy="drawgrid"] .toy-body')
       .forEach(el => ro.observe(el));
   } catch {}
+
+  // Also listen to window resize
+  window.addEventListener('resize', schedule);
 })();

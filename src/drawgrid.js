@@ -606,6 +606,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let cols = initialCols;
   let cssW=0, cssH=0, cw=0, ch=0, topPad=0, dpr=1;
   let lastBoardScale = 1;
+  let boardScale = 1;
   let drawing=false, erasing=false;
   // The `strokes` array is removed. The paint canvas is now the source of truth.
   let cur = null;
@@ -1238,7 +1239,8 @@ function regenerateMapFromStrokes() {
     requestAnimationFrame(() => resnapAndRedraw(true));
   });
 
-  panel.addEventListener('board:scale', () => {
+  panel.addEventListener('board:scale', (e) => {
+    boardScale = e.detail?.scale || 1;
     // Record canvas size before potential change
     const oldCssW = cssW;
     const oldCssH = cssH;
@@ -1286,11 +1288,17 @@ function regenerateMapFromStrokes() {
   let lastZoomX = 1;
   let lastZoomY = 1;
 
+  function getLayoutSize() {
+    const wrap = body.querySelector('.drawgrid-size-wrap') || body;
+    const w = wrap.offsetWidth;
+    const h = wrap.offsetHeight;
+    return { w, h };
+  }
+
   function layout(force = false){
     const newDpr = window.devicePixelRatio || 1;
     // Measure transform-immune base…
-    const baseW = Math.max(1, (body.clientWidth | 0));
-    const baseH = Math.max(1, (body.clientHeight | 0));
+    const { w: baseW, h: baseH } = getLayoutSize();
     // …then infer transform scale so grid matches the visible frame size.
     const { x: zoomX, y: zoomY } = getZoomScale(panel); // panel is the element that toggles toy-zoomed
     const newW = Math.max(1, Math.round(baseW * zoomX));
@@ -1320,8 +1328,8 @@ function regenerateMapFromStrokes() {
       cssW = newW;
       cssH = newH;
       particles.setDpr(dpr);
-      const w = cssW * dpr;
-      const h = cssH * dpr;
+      const w = Math.max(1, Math.round(cssW * dpr));
+      const h = Math.max(1, Math.round(cssH * dpr));
       grid.width = w; grid.height = h;
       paint.width = w; paint.height = h;
       nodesCanvas.width = w; nodesCanvas.height = h;
@@ -1332,7 +1340,7 @@ function regenerateMapFromStrokes() {
       gctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       pctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       nctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      particleCtx.setTransform(1, 0, 0, 1, 0, 0);
+      particleCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ghostCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       if (tutorialCtx) tutorialCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     if (tutorialHighlightMode !== 'none') renderTutorialHighlight();
@@ -1375,8 +1383,8 @@ function regenerateMapFromStrokes() {
       // All calculations are now relative to the gridArea
       // Remove the top cube row; use a minimal padding
       topPad = 0;
-      cw = gridArea.w / cols;
-      ch = (gridArea.h > topPad) ? (gridArea.h - topPad) / rows : 0;
+      cw = cssW / cols;
+      ch = cssH / rows;
 
 
       // Update eraser cursor size
@@ -1970,13 +1978,12 @@ function regenerateMapFromStrokes() {
 
   function onPointerDown(e){
     panel.stopGhostGuide();
+    const { w, h } = getLayoutSize();
     const rect = paint.getBoundingClientRect();
-    // cssW and cssH are the logical canvas dimensions.
-    // rect.width and rect.height are the visual dimensions on screen.
-    // This correctly scales pointer coordinates regardless of global board zoom or advanced-mode zoom.
+    // Use shared w/h for coordinate mapping
     const p = {
-      x: (e.clientX - rect.left) * (cssW > 0 ? cssW / rect.width : 1),
-      y: (e.clientY - rect.top) * (cssH > 0 ? cssH / rect.height : 1)
+      x: (e.clientX - rect.left) * (w > 0 ? w / rect.width : 1),
+      y: (e.clientY - rect.top) * (h > 0 ? h / rect.height : 1)
     };
     
     // (Top cubes removed)
@@ -2037,13 +2044,12 @@ function regenerateMapFromStrokes() {
     }
   }
   function onPointerMove(e){
+    const { w, h } = getLayoutSize();
     const rect = paint.getBoundingClientRect();
-    // cssW and cssH are the logical canvas dimensions.
-    // rect.width and rect.height are the visual dimensions on screen.
-    // This correctly scales pointer coordinates regardless of global board zoom or advanced-mode zoom.
+    // Use shared w/h for coordinate mapping
     const p = {
-      x: (e.clientX - rect.left) * (cssW > 0 ? cssW / rect.width : 1),
-      y: (e.clientY - rect.top) * (cssH > 0 ? cssH / rect.height : 1)
+      x: (e.clientX - rect.left) * (w > 0 ? w / rect.width : 1),
+      y: (e.clientY - rect.top) * (h > 0 ? h / rect.height : 1)
     };
     
     // Update cursor for draggable nodes
@@ -2585,7 +2591,7 @@ function regenerateMapFromStrokes() {
         const grad = fctx.createLinearGradient(playheadX, gridArea.y, playheadX, gridArea.y + gridArea.h);
         grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 70%)`);
         grad.addColorStop(0.5, `hsl(${(hue + 45).toFixed(0)}, 100%, 70%)`);
-        grad.addColorStop(1, `hsl(${(hue + 90).toFixed(0)}, 100%, 68%)`);
+        grad.addColorStop(1,  `hsl(${(hue + 90).toFixed(0)}, 100%, 68%)`);
 
         // --- Trailing lines ---
         fctx.strokeStyle = grad; // Use same gradient for all
@@ -2618,6 +2624,20 @@ function regenerateMapFromStrokes() {
         fctx.restore();
       }
     } catch (e) { /* fail silently */ }
+
+    // Debug overlay
+    if (window.DEBUG_DRAWGRID === 1) {
+      fctx.save();
+      fctx.strokeStyle = 'red';
+      fctx.lineWidth = 1;
+      fctx.strokeRect(0, 0, cssW, cssH);
+      fctx.fillStyle = 'red';
+      fctx.font = '12px monospace';
+      fctx.fillText(`boardScale: ${boardScale.toFixed(2)}`, 5, 15);
+      fctx.fillText(`w×h: ${cssW}×${cssH}`, 5, 30);
+      fctx.fillText(`dpr: ${dpr}`, 5, 45);
+      fctx.restore();
+    }
 
     rafId = requestAnimationFrame(renderLoop);
   }
@@ -3008,7 +3028,8 @@ function startGhostGuide({
   trailSpeed = 1.2,
 } = {}) {
   stopGhostGuide();
-  if (!cw || !ch) {
+  const { w, h } = getLayoutSize();
+  if (!w || !h) {
     layout(true);
   }
 
@@ -3120,8 +3141,9 @@ function startGhostGuide({
 function runAutoGhostGuideSweep() {
   if (!ghostGuideAutoActive) return;
 
+  const { w, h } = getLayoutSize();
   // Guard against tiny layouts
-  if (!gridArea || gridArea.w <= 48 || gridArea.h <= 48) {
+  if (!w || !h || w <= 48 || h <= 48) {
     if (ghostGuideAutoActive) requestAnimationFrame(runAutoGhostGuideSweep);
     return;
   }
