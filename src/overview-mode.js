@@ -36,8 +36,7 @@ function enterOverviewMode(isButton) {
         console.log('Setting board scale to 0.36 for overview mode, current scale:', window.__boardScale);
         window.setBoardScale(0.36);
         console.log('After setting scale to 0.36, actual scale:', window.__boardScale);
-        // Dispatch event to trigger layout recalculation in toys
-        window.dispatchEvent(new CustomEvent('board:scale', { detail: { scale: 0.36 } }));
+        // Do not dispatch board:scale here; board-viewport.apply() will emit it.
     }
 
     const overviewText = document.createElement('div');
@@ -79,8 +78,7 @@ function exitOverviewMode(isButton) {
         window.setBoardScale(overviewState.previousScale);
         console.log('overview-mode: setBoardScale called with', overviewState.previousScale);
         console.log('After restoring scale, actual scale:', window.__boardScale);
-        // Dispatch event to trigger layout recalculation in toys
-        window.dispatchEvent(new CustomEvent('board:scale', { detail: { scale: overviewState.previousScale } }));
+        // Do not dispatch board:scale here; board-viewport.apply() will emit it.
     }
 
     // Restore the original appearance of all toys

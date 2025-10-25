@@ -559,9 +559,14 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     const cw = el.clientWidth || 0;
     const ch = el.clientHeight || 0;
     if (!rect || cw <= 0 || ch <= 0) return { x: 1, y: 1 };
-    const sx = Math.max(0.5, Math.min(4, rect.width  / cw));
-    const sy = Math.max(0.5, Math.min(4, rect.height / ch));
-    return { x: (isFinite(sx) ? sx : 1), y: (isFinite(sy) ? sy : 1) };
+  // Prefer boardScale (from board:scale event) to avoid timing/race issues on refresh/overview.
+  const inferredX = rect.width  / cw;
+  const inferredY = rect.height / ch;
+  const sx = (boardScale && isFinite(boardScale)) ? boardScale : inferredX;
+  const sy = (boardScale && isFinite(boardScale)) ? boardScale : inferredY;
+  const clampedX = Math.max(0.1, Math.min(4, sx));
+  const clampedY = Math.max(0.1, Math.min(4, sy));
+  return { x: (isFinite(clampedX) ? clampedX : 1), y: (isFinite(clampedY) ? clampedY : 1) };
   }
 
   // Eraser cursor
@@ -1252,12 +1257,14 @@ function regenerateMapFromStrokes() {
     requestAnimationFrame(() => resnapAndRedraw(true));
   });
 
-  panel.addEventListener('board:scale', (e) => {
-    boardScale = e.detail?.scale || 1;
-    // Record canvas size before potential change
-    const oldCssW = cssW;
-    const oldCssH = cssH;
-    // Snapshot paint to preserve drawn/erased content across board scale changes
+  // Listen on window because board-viewport dispatches on window.
+  // Debounce to the next frame so the DOM transform from setBoardScale/apply() is settled.
+  window.addEventListener('board:scale', (e) => {
+    const newScale = e?.detail?.scale ?? 1;
+    if (Math.abs(newScale - boardScale) < 0.0001) return; // ignore no-op
+    boardScale = newScale;
+
+    // Snapshot current paint so we can restore after canvas backing-store resize
     let scaleSnap = null;
     try {
       if (paint.width > 0 && paint.height > 0) {
@@ -1267,25 +1274,19 @@ function regenerateMapFromStrokes() {
         scaleSnap.getContext('2d')?.drawImage(paint, 0, 0);
       }
     } catch {}
-    // Force layout to check for canvas size changes
+
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        if (!panel.isConnected) return;
-        resnapAndRedraw(true);
-        // Only restore snapshot if canvas size actually changed
-        if (cssW !== oldCssW || cssH !== oldCssH) {
-          requestAnimationFrame(() => {
-            if (scaleSnap) {
-              try {
-                pctx.save();
-                pctx.setTransform(1,0,0,1,0,0);
-                pctx.drawImage(scaleSnap, 0,0, scaleSnap.width, scaleSnap.height, 0,0, paint.width, paint.height);
-                pctx.restore();
-              } catch {}
-            }
-          });
-        }
-      });
+      if (!panel.isConnected) return;
+      // Re-layout with force so cssW/cssH and DPR are recomputed against the new zoom
+      resnapAndRedraw(true);
+      // Restore snapshot after layout; ensure we don't double-scale
+      if (scaleSnap) {
+        try {
+          pctx.setTransform(1, 0, 0, 1, 0, 0);
+          pctx.clearRect(0, 0, paint.width, paint.height);
+          pctx.drawImage(scaleSnap, 0, 0, scaleSnap.width, scaleSnap.height, 0, 0, paint.width, paint.height);
+        } catch {}
+      }
     });
   });
 
