@@ -1383,8 +1383,8 @@ function regenerateMapFromStrokes() {
       // All calculations are now relative to the gridArea
       // Remove the top cube row; use a minimal padding
       topPad = 0;
-      cw = cssW / cols;
-      ch = cssH / rows;
+      cw = gridArea.w / cols;
+      ch = (gridArea.h - topPad) / rows;
 
 
       // Update eraser cursor size
