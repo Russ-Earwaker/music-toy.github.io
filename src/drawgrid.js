@@ -1290,9 +1290,7 @@ function regenerateMapFromStrokes() {
         } catch {}
       }
 
-      if (ghostGuideAutoActive) {
-        runAutoGhostGuideSweep();
-      }
+
     });
   });
 
@@ -3060,116 +3058,119 @@ function startGhostGuide({
   trailSpeed = 1.2,
 } = {}) {
   stopGhostGuide();
-  requestAnimationFrame(() => {
-    const { w, h } = getLayoutSize();
-    if (!w || !h) {
-      layout(true);
+  const { w, h } = getLayoutSize();
+  if (!w || !h) {
+    layout(true);
+  }
+
+  // Work in logical coordinate space
+  const gx = gridArea.x, gy = gridArea.y, gw = gridArea.w, gh = gridArea.h;
+
+  // Default span if caller omitted
+  if (typeof startX !== 'number' || typeof endX !== 'number') {
+    startX = gx;
+    endX = gx + gw;
+  }
+  // Left → right
+  if (startX > endX) [startX, endX] = [endX, startX];
+
+  // Default for Y
+  if (typeof startY !== 'number' || typeof endY !== 'number') {
+    startY = gy;
+    endY = gy + gh;
+  }
+
+  const { x: zoomX, y: zoomY } = getZoomScale(panel);
+
+  const startTime = performance.now();
+  let last = null;
+  let lastTrail = 0;
+  const noiseSeed = Math.random() * 100;
+
+      function frame(now) {
+        const elapsed = now - startTime;
+        const t = Math.min(elapsed / duration, 1);
+  
+        if (!cw || !ch) {
+          layout(true);
+        }
+  
+        const gx = gridArea.x, gy = gridArea.y, gw = gridArea.w, gh = gridArea.h;
+        const currentStartX = gx + gw * 0.1;
+        const currentEndX = gx + gw * 0.9;
+        const currentStartY = gy + gh * 0.1;
+        const currentEndY = gy + gh * 0.9;
+  
+        const wiggleAmp = gh * 0.25;
+  
+        const x = currentStartX + (currentEndX - currentStartX) * t;
+        let y  = currentStartY + (currentEndY - currentStartY) * t;
+    if (wiggle) {
+      const wiggleFactor = Math.sin(t * Math.PI * 3) * Math.sin(t * Math.PI * 0.5 + noiseSeed);
+      y += wiggleAmp * wiggleFactor;
     }
 
-    // Work in logical coordinate space
-    const gx = gridArea.x, gy = gridArea.y, gw = gridArea.w, gh = gridArea.h;
+    // Clamp inside the grid area
+    const topBound = gy, bottomBound = gy + gh;
+    if (y > bottomBound)      y = bottomBound - (y - bottomBound);
+    else if (y < topBound)    y = topBound + (topBound - y);
 
-    // Default span if caller omitted
-    if (typeof startX !== 'number' || typeof endX !== 'number') {
-      startX = gx;
-      endX = gx + gw;
-    }
-    // Left → right
-    if (startX > endX) [startX, endX] = [endX, startX];
+    // Fade old trail (device pixel space)
+    ghostCtx.save();
+    ghostCtx.setTransform(1,0,0,1,0,0);
+    ghostCtx.globalCompositeOperation = 'destination-out';
+    ghostCtx.globalAlpha = 0.1;
+    ghostCtx.fillRect(0, 0, ghostCanvas.width, ghostCanvas.height);
+    ghostCtx.restore();
 
-    // Default for Y
-    if (typeof startY !== 'number' || typeof endY !== 'number') {
-      startY = gy;
-      endY = gy + gh;
-    }
-
-    const { x: zoomX, y: zoomY } = getZoomScale(panel);
-
-    const startTime = performance.now();
-    let last = { x: startX, y: startY };
-    let lastTrail = 0;
-    const noiseSeed = Math.random() * 100;
-
-    function frame(now) {
-      const elapsed = now - startTime;
-      const t = Math.min(elapsed / duration, 1);
-
-      if (!cw || !ch) {
-        layout(true);
-      }
-
-      const wiggleAmp = gh * 0.25;
-
-      const x = startX + (endX - startX) * t;
-      let y  = startY + (endY - startY) * t;
-
-      if (wiggle) {
-        const wiggleFactor = Math.sin(t * Math.PI * 3) * Math.sin(t * Math.PI * 0.5 + noiseSeed);
-        y += wiggleAmp * wiggleFactor;
-      }
-
-      // Clamp inside the grid area
-      const topBound = gy, bottomBound = gy + gh;
-      if (y > bottomBound)      y = bottomBound - (y - bottomBound);
-      else if (y < topBound)    y = topBound + (topBound - y);
-
-      // Fade old trail (device pixel space)
+    // Draw new segment + dot (device space)
+    if (last) {
       ghostCtx.save();
       ghostCtx.setTransform(1,0,0,1,0,0);
+      ghostCtx.globalCompositeOperation = 'source-over';
+      ghostCtx.globalAlpha = 0.25;
+      ghostCtx.lineCap = 'round';
+      ghostCtx.lineJoin = 'round';
+      ghostCtx.lineWidth = getLineWidth() * 1.15 * dpr;
+      ghostCtx.strokeStyle = 'rgba(68,112,255,0.7)';
+      ghostCtx.beginPath();
+      ghostCtx.moveTo(last.x, last.y);
+      ghostCtx.lineTo(x, y);
+      ghostCtx.stroke();
+
+      // Finger dot – scales with grid cell size & zoom
+      const dotR = getLineWidth() * 0.45 * dpr;
+      ghostCtx.beginPath();
+      ghostCtx.arc(x, y, dotR, 0, Math.PI * 2);
+      ghostCtx.fillStyle = 'rgba(68,112,255,0.85)';
+      ghostCtx.fill();
+
+      ghostCtx.restore();
+    }
+    last = { x, y };
+
+    // Particle interactions in logical coords; radius scales with line width
+    const force  = 0.8;
+    const radius = getLineWidth() * 1.5;
+    particles.drawingDisturb(x, y, radius, force);
+    if (trail && now - lastTrail >= trailEveryMs) {
+      particles.ringBurst(x, y, radius, trailCount, trailSpeed, 'pink');
+      lastTrail = now;
+    }
+
+    if (t < 1) {
+      ghostGuideAnimFrame = requestAnimationFrame(frame);
+    } else {
+      // Hard clear
+      ghostCtx.save();
       ghostCtx.globalCompositeOperation = 'destination-out';
-      ghostCtx.globalAlpha = 0.1;
+      ghostCtx.globalAlpha = 1;
       ghostCtx.fillRect(0, 0, ghostCanvas.width, ghostCanvas.height);
       ghostCtx.restore();
-
-      // Draw new segment + dot (device space)
-      if (last) {
-        ghostCtx.save();
-        ghostCtx.setTransform(1,0,0,1,0,0);
-        ghostCtx.globalCompositeOperation = 'source-over';
-        ghostCtx.globalAlpha = 0.25;
-        ghostCtx.lineCap = 'round';
-        ghostCtx.lineJoin = 'round';
-        ghostCtx.lineWidth = getLineWidth() * 1.15 * dpr;
-        ghostCtx.strokeStyle = 'rgba(68,112,255,0.7)';
-        ghostCtx.beginPath();
-        ghostCtx.moveTo(last.x, last.y);
-        ghostCtx.lineTo(x, y);
-        ghostCtx.stroke();
-
-        // Finger dot – scales with grid cell size & zoom
-        const dotR = getLineWidth() * 0.45 * dpr;
-        ghostCtx.beginPath();
-        ghostCtx.arc(x, y, dotR, 0, Math.PI * 2);
-        ghostCtx.fillStyle = 'rgba(68,112,255,0.85)';
-        ghostCtx.fill();
-
-        ghostCtx.restore();
-      }
-      last = { x, y };
-
-      // Particle interactions in logical coords; radius scales with line width
-      const force  = 0.8;
-      const radius = getLineWidth() * 1.5;
-      particles.drawingDisturb(x, y, radius, force);
-      if (trail && now - lastTrail >= trailEveryMs) {
-        particles.ringBurst(x, y, radius, trailCount, trailSpeed, 'pink');
-        lastTrail = now;
-      }
-
-      if (t < 1) {
-        ghostGuideAnimFrame = requestAnimationFrame(frame);
-      } else {
-        // Hard clear
-        ghostCtx.save();
-        ghostCtx.globalCompositeOperation = 'destination-out';
-        ghostCtx.globalAlpha = 1;
-        ghostCtx.fillRect(0, 0, ghostCanvas.width, ghostCanvas.height);
-        ghostCtx.restore();
-        stopGhostGuide();
-      }
+      stopGhostGuide();
     }
-    ghostGuideAnimFrame = requestAnimationFrame(frame);
-  });
+  }
+  ghostGuideAnimFrame = requestAnimationFrame(frame);
 }
 
 function runAutoGhostGuideSweep() {
@@ -3178,7 +3179,7 @@ function runAutoGhostGuideSweep() {
   const { w, h } = getLayoutSize();
   // Guard against tiny layouts
   if (!w || !h || w <= 48 || h <= 48) {
-    if (ghostGuideAutoActive) requestAnimationFrame(runAutoGhostGuideSweep);
+
     return;
   }
 
@@ -3269,7 +3270,7 @@ function runAutoGhostGuideSweep() {
       ? currentMap.nodes.some(set => set && set.size > 0)
       : false;
     if (!hasStrokes && !hasNodes) {
-      startAutoGhostGuide({ immediate: true });
+      setTimeout(() => startAutoGhostGuide({ immediate: true }), 100);
     }
   });
 
