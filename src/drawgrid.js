@@ -327,7 +327,8 @@ function createDrawGridParticles({
     }
   }
 
-  function draw(ctx){
+  function draw(ctx, boardScale = 1){
+    console.log('particle draw, boardScale:', boardScale);
     if (!ctx) return;
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
@@ -358,7 +359,8 @@ function createDrawGridParticles({
       ctx.fillStyle = `rgb(${r},${g},${b})`;
 
       const baseSize = 1.5 * currentDpr;
-      const size = baseSize;
+      const size = baseSize * boardScale;
+      console.log('particle size:', size);
       const x = (p.x | 0) - size / 2;
       const y = (p.y | 0) - size / 2;
       ctx.fillRect(x, y, size, size);
@@ -2471,7 +2473,7 @@ function regenerateMapFromStrokes() {
       particles.step(1/60); // Assuming 60fps for dt
       particleCtx.clearRect(0, 0, cssW, cssH);
       // The dark background is now drawn on the grid canvas, so particles can be overlaid.
-      particles.draw(particleCtx);
+      particles.draw(particleCtx, boardScale);
     } catch (e) { /* fail silently */ }
 
     drawGrid(); // Always redraw grid (background, lines, active column fills)
@@ -2580,7 +2582,7 @@ function regenerateMapFromStrokes() {
         // Repulse particles at playhead position
         try {
           // A strength of 1.2 gives a nice, visible push.
-          particles.lineRepulse(playheadX, 40, 0.33);
+          particles.lineRepulse(playheadX, cw, 0.33);
         } catch (e) { /* fail silently */ }
 
         // Use the flash canvas (fctx) for the playhead. It's cleared each frame.
