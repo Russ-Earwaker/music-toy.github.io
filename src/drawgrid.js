@@ -358,8 +358,8 @@ function createDrawGridParticles({
       const b = Math.round(baseB + (255 - baseB) * mix);
       ctx.fillStyle = `rgb(${r},${g},${b})`;
 
-      const baseSize = 1.5 * currentDpr;
-      const size = baseSize * boardScale;
+      const baseSize = 1.5;
+      const size = Math.max(0.75, baseSize * boardScale);
       console.log('particle size:', size);
       const x = (p.x | 0) - size / 2;
       const y = (p.y | 0) - size / 2;
