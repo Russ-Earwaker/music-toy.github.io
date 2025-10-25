@@ -1,6 +1,5 @@
 // src/drawgrid-init.js
 // Boot drawing grid only for panels with data-toy="drawgrid".
-import './drawgrid-fit.js';
 import { createDrawGrid } from './drawgrid.js';
 import { connectDrawGridToPlayer } from './drawgrid-player.js';
 import { initToyUI } from './toyui.js';

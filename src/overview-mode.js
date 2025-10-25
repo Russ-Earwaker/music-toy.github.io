@@ -1,4 +1,3 @@
-
 const overviewState = {
     isActive: false,
     zoomThreshold: 0.36, // Zoom out further to activate
@@ -13,7 +12,6 @@ function setCursorRecursive(element, cursor) {
     const originalCursor = getComputedStyle(element).cursor;
     element.style.cursor = cursor;
     element.style.setProperty('cursor', cursor, 'important');
-    console.log('DEBUG: Processed element:', element.tagName, element.className, 'ID:', element.id, 'Original cursor:', originalCursor, 'New cursor:', cursor);
     for (let child of element.children) {
         setCursorRecursive(child, cursor);
     }
@@ -22,7 +20,6 @@ function setCursorRecursive(element, cursor) {
 function restoreCursorRecursive(element) {
     if (!element) return;
     element.style.removeProperty('cursor');
-    console.log('DEBUG: Restored cursor on element:', element.tagName, element.className, 'ID:', element.id);
     for (let child of element.children) {
         restoreCursorRecursive(child);
     }
@@ -80,6 +77,7 @@ function exitOverviewMode(isButton) {
     if (isButton) {
         console.log('Restoring board scale from overview mode, target:', overviewState.previousScale, 'current:', window.__boardScale);
         window.setBoardScale(overviewState.previousScale);
+        console.log('overview-mode: setBoardScale called with', overviewState.previousScale);
         console.log('After restoring scale, actual scale:', window.__boardScale);
         // Dispatch event to trigger layout recalculation in toys
         window.dispatchEvent(new CustomEvent('board:scale', { detail: { scale: overviewState.previousScale } }));

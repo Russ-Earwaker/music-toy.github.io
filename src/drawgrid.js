@@ -592,6 +592,18 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   body.appendChild(nodesCanvas);
   body.appendChild(tutorialCanvas);
 
+  const wrap = document.createElement('div');
+  wrap.className = 'drawgrid-size-wrap';
+  wrap.style.position = 'relative';
+  wrap.style.width = '100%';
+  wrap.style.height = '100%';
+  wrap.style.overflow = 'hidden';
+
+  // Move all existing elements from body into the new wrapper
+  [...body.childNodes].forEach(node => wrap.appendChild(node));
+  
+  body.appendChild(wrap);
+
   const particleCtx = particleCanvas.getContext('2d');
   const gctx = grid.getContext('2d', { willReadFrequently: true });
   const pctx = paint.getContext('2d', { willReadFrequently: true });
@@ -601,6 +613,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const tutorialCtx = tutorialCanvas.getContext('2d');
 
   let __forceSwipeVisible = null; // null=auto, true/false=forced by tutorial
+  let isRestoring = false;
 
   // State
   let cols = initialCols;
@@ -1289,13 +1302,18 @@ function regenerateMapFromStrokes() {
   let lastZoomY = 1;
 
   function getLayoutSize() {
-    const wrap = body.querySelector('.drawgrid-size-wrap') || body;
     const w = wrap.offsetWidth;
     const h = wrap.offsetHeight;
     return { w, h };
   }
 
   function layout(force = false){
+    const bodyW = body.offsetWidth;
+    const bodyH = body.offsetHeight;
+    wrap.style.width  = bodyW + 'px';
+    wrap.style.height = bodyH + 'px';
+
+
     const newDpr = window.devicePixelRatio || 1;
     // Measure transform-immune base…
     const { w: baseW, h: baseH } = getLayoutSize();
@@ -1355,7 +1373,7 @@ function regenerateMapFromStrokes() {
       }
 
       // Scale the logical stroke data if we have it and the canvas was resized
-      if (strokes.length > 0 && oldW > 0 && oldH > 0) {
+      if (strokes.length > 0 && oldW > 0 && oldH > 0 && !isRestoring) {
         const scaleX = cssW / oldW;
         const scaleY = cssH / oldH;
         if (scaleX !== 1 || scaleY !== 1) {
@@ -2707,118 +2725,125 @@ function regenerateMapFromStrokes() {
       } catch { return false; }
     },
     setState: (st={})=>{
-      try{
-        // Steps first
-        if (typeof st.steps === 'number' && (st.steps===8 || st.steps===16)){
-          if ((st.steps|0) !== cols){
-            cols = st.steps|0;
-            panel.dataset.steps = String(cols);
-            flashes = new Float32Array(cols);
-            persistentDisabled = Array.from({ length: cols }, () => new Set());
-            manualOverrides = Array.from({ length: cols }, () => new Set());
-            // Force layout for new resolution
-            resnapAndRedraw(true);
-          }
-        }
-        // Ensure geometry is current before de-normalizing
-        try{ layout(true); }catch{}
-        if (typeof st.autotune !== 'undefined') {
-          autoTune = !!st.autotune;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (!panel.isConnected) return;
+          isRestoring = true;
           try{
-            const btn = panel.querySelector('.drawgrid-autotune');
-            if (btn){ btn.textContent = `Auto-tune: ${autoTune ? 'On' : 'Off'}`; btn.setAttribute('aria-pressed', String(autoTune)); }
-          }catch{}
-        }
-        // Restore strokes
-        if (Array.isArray(st.strokes)){
-          strokes = [];
-          for (const s of st.strokes){
-            let pts = [];
-            if (Array.isArray(s?.ptsN)){
-              const gh = Math.max(1, gridArea.h - topPad);
-              const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-              pts = s.ptsN.map(np=>({
-                x: gridArea.x + clamp(Number(np?.nx)||0, 0, 1) * gridArea.w,
-                y: (gridArea.y + topPad) + clamp(Number(np?.ny)||0, 0, 1) * gh
-              }));
-            } else if (Array.isArray(s?.pts)) {
-              // Legacy raw points fallback
-              pts = s.pts.map(p=>({ x: Number(p.x)||0, y: Number(p.y)||0 }));
+            // Steps first
+            if (typeof st.steps === 'number' && (st.steps===8 || st.steps===16)){
+              if ((st.steps|0) !== cols){
+                cols = st.steps|0;
+                panel.dataset.steps = String(cols);
+                flashes = new Float32Array(cols);
+                persistentDisabled = Array.from({ length: cols }, () => new Set());
+                manualOverrides = Array.from({ length: cols }, () => new Set());
+                // Force layout for new resolution
+                resnapAndRedraw(true);
+              }
             }
-            const stroke = {
-              pts,
-              color: s?.color || STROKE_COLORS[0],
-              isSpecial: !!s?.isSpecial,
-              generatorId: (typeof s?.generatorId==='number') ? s.generatorId : undefined,
-              overlayColorize: !!s?.overlayColorize,
-            };
-            strokes.push(stroke);
-          }
-          // Redraw from strokes and rebuild nodes
-          clearAndRedrawFromStrokes();
-        }
-        if (Array.isArray(st.eraseStrokes)) {
-          eraseStrokes = [];
-          for (const s of st.eraseStrokes) {
-            let pts = [];
-            if (Array.isArray(s?.ptsN)) {
-              const gh = Math.max(1, gridArea.h - topPad);
-              const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-              pts = s.ptsN.map(np=>({
-                x: gridArea.x + clamp(Number(np?.nx)||0, 0, 1) * gridArea.w,
-                y: (gridArea.y + topPad) + clamp(Number(np?.ny)||0, 0, 1) * gh
-              }));
+            // Ensure geometry is current before de-normalizing
+            try{ layout(true); }catch{}
+            if (typeof st.autotune !== 'undefined') {
+              autoTune = !!st.autotune;
+              try{
+                const btn = panel.querySelector('.drawgrid-autotune');
+                if (btn){ btn.textContent = `Auto-tune: ${autoTune ? 'On' : 'Off'}`; btn.setAttribute('aria-pressed', String(autoTune)); }
+              }catch{}
             }
-            eraseStrokes.push({ pts });
-          }
-          clearAndRedrawFromStrokes();
-        }
-        // Restore node masks if provided
-        if (st.nodes && typeof st.nodes==='object'){
-          try{
-            const act = Array.isArray(st.nodes.active) ? st.nodes.active.slice(0, cols) : null;
-            const dis = Array.isArray(st.nodes.disabled) ? st.nodes.disabled.slice(0, cols).map(a => new Set(a || [])) : null;
-            const list = Array.isArray(st.nodes.list) ? st.nodes.list.slice(0, cols).map(a => new Set(a || [])) : null;
-            const groups = Array.isArray(st.nodes.groups) ? st.nodes.groups.map(g => new Map(g || [])) : null;
-
-            // If a node list is present in the saved state, it is the source of truth.
-            if (list) {
-                if (!currentMap) {
-                    // If strokes were not restored, currentMap is null. Build it from saved node list.
-                    currentMap = { active: Array(cols).fill(false), nodes: list, disabled: Array.from({length:cols},()=>new Set()) };
-                } else {
-                    // If strokes were restored, currentMap exists. Overwrite its nodes with the saved list.
-                    currentMap.nodes = list;
+            // Restore strokes
+            if (Array.isArray(st.strokes)){
+              strokes = [];
+              for (const s of st.strokes){
+                let pts = [];
+                if (Array.isArray(s?.ptsN)){
+                  const gh = Math.max(1, gridArea.h - topPad);
+                  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+                  pts = s.ptsN.map(np=>({
+                    x: gridArea.x + clamp(Number(np?.nx)||0, 0, 1) * gridArea.w,
+                    y: (gridArea.y + topPad) + clamp(Number(np?.ny)||0, 0, 1) * gh
+                  }));
+                } else if (Array.isArray(s?.pts)) {
+                  // Legacy raw points fallback
+                  pts = s.pts.map(p=>({ x: Number(p.x)||0, y: Number(p.y)||0 }));
                 }
+                const stroke = {
+                  pts,
+                  color: s?.color || STROKE_COLORS[0],
+                  isSpecial: !!s?.isSpecial,
+                  generatorId: (typeof s?.generatorId==='number') ? s.generatorId : undefined,
+                  overlayColorize: !!s?.overlayColorize,
+                };
+                strokes.push(stroke);
+              }
+              // Redraw from strokes and rebuild nodes
+              clearAndRedrawFromStrokes();
             }
-
-            if (currentMap && (act || dis || groups)) {
-                if (groups) nodeGroupMap = groups;
-                for (let c = 0; c < cols; c++) {
-                    if (act && act[c] !== undefined) currentMap.active[c] = !!act[c];
-                    if (dis && dis[c] !== undefined) currentMap.disabled[c] = dis[c];
+            if (Array.isArray(st.eraseStrokes)) {
+              eraseStrokes = [];
+              for (const s of st.eraseStrokes) {
+                let pts = [];
+                if (Array.isArray(s?.ptsN)) {
+                  const gh = Math.max(1, gridArea.h - topPad);
+                  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+                  pts = s.ptsN.map(np=>({
+                    x: gridArea.x + clamp(Number(np?.nx)||0, 0, 1) * gridArea.w,
+                    y: (gridArea.y + topPad) + clamp(Number(np?.ny)||0, 0, 1) * gh
+                  }));
                 }
+                eraseStrokes.push({ pts });
+              }
+              clearAndRedrawFromStrokes();
             }
+            // Restore node masks if provided
+            if (st.nodes && typeof st.nodes==='object'){
+              try{
+                const act = Array.isArray(st.nodes.active) ? st.nodes.active.slice(0, cols) : null;
+                const dis = Array.isArray(st.nodes.disabled) ? st.nodes.disabled.slice(0, cols).map(a => new Set(a || [])) : null;
+                const list = Array.isArray(st.nodes.list) ? st.nodes.list.slice(0, cols).map(a => new Set(a || [])) : null;
+                const groups = Array.isArray(st.nodes.groups) ? st.nodes.groups.map(g => new Map(g || [])) : null;
 
-              persistentDisabled = currentMap.disabled;
+                // If a node list is present in the saved state, it is the source of truth.
+                if (list) {
+                    if (!currentMap) {
+                        // If strokes were not restored, currentMap is null. Build it from saved node list.
+                        currentMap = { active: Array(cols).fill(false), nodes: list, disabled: Array.from({length:cols},()=>new Set()) };
+                    } else {
+                        // If strokes were restored, currentMap exists. Overwrite its nodes with the saved list.
+                        currentMap.nodes = list;
+                    }
+                }
 
-              drawGrid();
-              drawNodes(currentMap.nodes);
-              try{ panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap })); }catch{}
-          } catch(e){ }
-        }
-        if (Array.isArray(st.manualOverrides)){
-          try{ manualOverrides = st.manualOverrides.slice(0, cols).map(a=> new Set(a||[])); }catch{}
-        }
-        // Refresh UI affordances
-        try { (panel.__dgUpdateButtons || updateGeneratorButtons)(); } catch{}
-        // After all state is applied and layout is stable, sync the dropdown.
-        try {
-          const stepsSel = panel.querySelector('.drawgrid-steps');
-          if (stepsSel) stepsSel.value = String(cols);
-        } catch {}
-        if (currentMap){ try{ panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap })); }catch{} }
-      }catch(e){ }
+                if (currentMap && (act || dis || groups)) {
+                    if (groups) nodeGroupMap = groups;
+                    for (let c = 0; c < cols; c++) {
+                        if (act && act[c] !== undefined) currentMap.active[c] = !!act[c];
+                        if (dis && dis[c] !== undefined) currentMap.disabled[c] = dis[c];
+                    }
+                }
+
+                  persistentDisabled = currentMap.disabled;
+
+                  drawGrid();
+                  drawNodes(currentMap.nodes);
+                  try{ panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap })); }catch{}
+              } catch(e){ }
+            }
+            if (Array.isArray(st.manualOverrides)){
+              try{ manualOverrides = st.manualOverrides.slice(0, cols).map(a=> new Set(a||[])); }catch{}
+            }
+            // Refresh UI affordances
+            try { (panel.__dgUpdateButtons || updateGeneratorButtons)(); } catch{}
+            // After all state is applied and layout is stable, sync the dropdown.
+            try {
+              const stepsSel = panel.querySelector('.drawgrid-steps');
+              if (stepsSel) stepsSel.value = String(cols);
+            } catch {}
+            if (currentMap){ try{ panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap })); }catch{} }
+          }catch(e){ }
+          isRestoring = false;
+        });
+      });
     }
   };
 

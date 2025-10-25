@@ -9,14 +9,22 @@ import { overviewMode } from './overview-mode.js';
   // Load saved viewport
   let scale = 1, x = 0, y = 0;
   try{
-    const saved = JSON.parse(localStorage.getItem('boardViewport')||'null');
+    const savedStr = localStorage.getItem('boardViewport')||'null';
+    console.log('board-viewport: loading from localStorage', savedStr);
+    const saved = JSON.parse(savedStr);
     if (saved && typeof saved==='object'){
-      if (Number.isFinite(saved.scale)) scale = Math.max(0.5, Math.min(2.5, saved.scale));
+      const savedScale = saved.scale;
+      if (Number.isFinite(savedScale)) {
+        console.log('board-viewport: saved scale is', savedScale);
+        scale = Math.max(0.1, Math.min(2.5, savedScale));
+        console.log('board-viewport: clamped scale is', scale);
+      }
       if (Number.isFinite(saved.x)) x = saved.x|0;
       if (Number.isFinite(saved.y)) y = saved.y|0;
     }
-  }catch{}
+  }catch(e){ console.error('board-viewport: failed to load viewport', e); }
   window.__boardScale = scale;
+  console.log('board-viewport: initial window.__boardScale', window.__boardScale);
   const SCALE_EVENT_EPSILON = 1e-4;
   let lastNotifiedScale = scale;
 
@@ -91,6 +99,7 @@ import { overviewMode } from './overview-mode.js';
     const oldScale = scale;
     const factor = Math.pow(1.0015, -delta);
     scale = Math.max(0.1, Math.min(2.5, scale * factor));
+    console.log('board-viewport: wheel zoom, new scale:', scale);
 
     x -= mx * (scale - oldScale);
     y -= my * (scale - oldScale);
@@ -108,7 +117,13 @@ import { overviewMode } from './overview-mode.js';
 
   // helpers
   window.panTo = (nx, ny)=>{ x = nx|0; y = ny|0; window.__boardScale = scale; apply(); };
-  window.setBoardScale = (sc)=>{ scale = Math.max(0.1, Math.min(2.5, Number(sc)||1)); window.__boardScale = scale; apply(); };
+  window.setBoardScale = (sc)=>{ 
+    console.log('board-viewport: setBoardScale called with', sc);
+    scale = Math.max(0.1, Math.min(2.5, Number(sc)||1)); 
+    console.log('board-viewport: setBoardScale new scale', scale);
+    window.__boardScale = scale; 
+    apply(); 
+  };
 
   // Center the board on a specific element at a desired scale
   window.centerBoardOnElement = (el, desiredScale = scale) => {
@@ -123,7 +138,7 @@ import { overviewMode } from './overview-mode.js';
     const centerY = (elRect.top  - boardRect.top ) / curScale + (elRect.height / curScale) / 2;
 
     // Apply desired scale, then compute translate so element center == viewport center
-    scale = Math.max(0.5, Math.min(2.5, Number(desiredScale)||1));
+    scale = Math.max(0.1, Math.min(2.5, Number(desiredScale)||1));
     const viewportCX = (window.innerWidth  / 2);
     const viewportCY = (window.innerHeight / 2);
 
