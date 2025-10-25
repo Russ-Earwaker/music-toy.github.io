@@ -37,29 +37,56 @@
   let raf = 0;
   const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(applyAll); };
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', applyAll, { once: true });
-  } else {
-    applyAll();
+  function init() {
+    applyAll(); // Apply to any toys that already exist
+
+    // Wire to board scale changes
+    window.addEventListener('board:scale', schedule);
+
+    // Add listener for visibilitychange (resume tab)
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) schedule();
+    });
+
+    // Optional: fullscreenchange
+    document.addEventListener('fullscreenchange', schedule);
+
+    // Also listen to window resize
+    window.addEventListener('resize', schedule);
+
+    try {
+      const ro = new ResizeObserver(schedule);
+      
+      // Observe existing toys' bodies
+      document.querySelectorAll('.toy-panel[data-toy="drawgrid"] .toy-body')
+        .forEach(el => ro.observe(el));
+
+      // Observe board for new drawgrid toys
+      const board = document.getElementById('board');
+      if (board) {
+        const mo = new MutationObserver((mutations) => {
+          for (const mutation of mutations) {
+            for (const node of mutation.addedNodes) {
+              if (node.nodeType === 1 && node.matches('.toy-panel[data-toy="drawgrid"]')) {
+                // Run fit logic on the new toy
+                applyOne(node);
+                // Observe the new toy for resizes
+                const body = getBody(node);
+                if (body) ro.observe(body);
+              }
+            }
+          }
+        });
+        mo.observe(board, { childList: true });
+      }
+    } catch(e) {
+      console.error('drawgrid-fit failed to init observers', e);
+    }
   }
 
-  // Wire to board scale changes
-  window.addEventListener('board:scale', schedule);
-
-  // Add listener for visibilitychange (resume tab)
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) schedule();
-  });
-
-  // Optional: fullscreenchange
-  document.addEventListener('fullscreenchange', schedule);
-
-  try {
-    const ro = new ResizeObserver(schedule);
-    document.querySelectorAll('.toy-panel[data-toy="drawgrid"] .toy-body')
-      .forEach(el => ro.observe(el));
-  } catch {}
-
-  // Also listen to window resize
-  window.addEventListener('resize', schedule);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init, { once: true });
+  } else {
+    init();
+  }
 })();
