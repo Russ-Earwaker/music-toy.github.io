@@ -390,7 +390,7 @@ function createDrawGridParticles({
 
   function lineRepulse(x, width=40, strength=1){
     const w=W(); const h=H();
-    const half = Math.max(4, width*0.5);
+    const half = width*0.5;
     for (const p of P){
       const dx = p.x - x;
       if (Math.abs(dx) <= half && p.repulsed <= 0.35){
@@ -1298,7 +1298,7 @@ function regenerateMapFromStrokes() {
   });
 
   function getLineWidth() {
-    return Math.max(12, Math.round(Math.min(cw, ch) * 0.85));
+    return Math.max(1.5, Math.round(Math.min(cw, ch) * 0.85));
   }
 
   let lastZoomX = 1;
@@ -1497,7 +1497,7 @@ function regenerateMapFromStrokes() {
 
     // 3. Draw all grid lines with the base color
     gctx.strokeStyle = 'rgba(143, 168, 255, 0.35)'; // Untriggered particle color, slightly transparent
-    gctx.lineWidth = 1.5;
+    gctx.lineWidth = Math.max(0.5, Math.min(cw,ch) * 0.05);
     // Verticals (including outer lines)
     for (let i = 0; i <= cols; i++) {
         const x = gridArea.x + i * cw;
@@ -3124,7 +3124,7 @@ function startGhostGuide({
       ghostCtx.globalAlpha = 0.25;
       ghostCtx.lineCap = 'round';
       ghostCtx.lineJoin = 'round';
-      ghostCtx.lineWidth = Math.max(getLineWidth() * 1.15, 24) * dpr;
+      ghostCtx.lineWidth = getLineWidth() * 1.15 * dpr;
       ghostCtx.strokeStyle = 'rgba(68,112,255,0.7)';
       ghostCtx.beginPath();
       ghostCtx.moveTo(last.x, last.y);
@@ -3132,7 +3132,7 @@ function startGhostGuide({
       ghostCtx.stroke();
 
       // Finger dot – scales with grid cell size & zoom
-      const dotR = Math.max(6, getLineWidth() * 0.45) * dpr;
+      const dotR = getLineWidth() * 0.45 * dpr;
       ghostCtx.beginPath();
       ghostCtx.arc(x, y, dotR, 0, Math.PI * 2);
       ghostCtx.fillStyle = 'rgba(68,112,255,0.85)';
