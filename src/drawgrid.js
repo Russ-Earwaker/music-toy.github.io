@@ -328,7 +328,7 @@ function createDrawGridParticles({
   }
 
   function draw(ctx, boardScale = 1){
-    console.log('particle draw, boardScale:', boardScale);
+    //console.log('particle draw, boardScale:', boardScale);
     if (!ctx) return;
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
@@ -360,7 +360,7 @@ function createDrawGridParticles({
 
       const baseSize = 1.5;
       const size = Math.max(0.75, baseSize * boardScale);
-      console.log('particle size:', size);
+      //console.log('particle size:', size);
       const x = (p.x | 0) - size / 2;
       const y = (p.y | 0) - size / 2;
       ctx.fillRect(x, y, size, size);
@@ -2001,12 +2001,11 @@ function regenerateMapFromStrokes() {
 
   function onPointerDown(e){
     panel.stopGhostGuide();
-    const { w, h } = getLayoutSize();
     const rect = paint.getBoundingClientRect();
     // Use shared w/h for coordinate mapping
     const p = {
-      x: (e.clientX - rect.left) * (w > 0 ? w / rect.width : 1),
-      y: (e.clientY - rect.top) * (h > 0 ? h / rect.height : 1)
+      x: (e.clientX - rect.left) * (cssW > 0 ? cssW / rect.width : 1),
+      y: (e.clientY - rect.top) * (cssH > 0 ? cssH / rect.height : 1)
     };
     
     // (Top cubes removed)
@@ -2067,12 +2066,11 @@ function regenerateMapFromStrokes() {
     }
   }
   function onPointerMove(e){
-    const { w, h } = getLayoutSize();
     const rect = paint.getBoundingClientRect();
     // Use shared w/h for coordinate mapping
     const p = {
-      x: (e.clientX - rect.left) * (w > 0 ? w / rect.width : 1),
-      y: (e.clientY - rect.top) * (h > 0 ? h / rect.height : 1)
+      x: (e.clientX - rect.left) * (cssW > 0 ? cssW / rect.width : 1),
+      y: (e.clientY - rect.top) * (cssH > 0 ? cssH / rect.height : 1)
     };
     
     // Update cursor for draggable nodes
