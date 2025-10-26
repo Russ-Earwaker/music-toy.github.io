@@ -487,7 +487,7 @@ function render(panel) {
         if (velX) velX[i] = vx;
         if (velY) velY[i] = vy;
 
-        const baseAlpha = 0.22;
+        const baseAlpha = 0.3;
         const finalAlpha = Math.max(baseAlpha, Math.min(1, baseAlpha + activeFlash * 0.75));
         tapLetters[i].style.color = `rgba(80, 120, 180, ${finalAlpha})`;
 
