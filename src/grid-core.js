@@ -50,19 +50,19 @@ export function buildGrid(panel, numSteps = 8){
     sequencerWrap.appendChild(canvas);
     body.appendChild(sequencerWrap);
   }
-  if (body && !body.querySelector('.particle-canvas')) {
+  const sequencerWrap = body.querySelector('.sequencer-wrap');
+  if (sequencerWrap && !sequencerWrap.querySelector('.particle-canvas')) {
     const particleCanvas = document.createElement('canvas');
     particleCanvas.className = 'particle-canvas';
-    body.appendChild(particleCanvas);
+    sequencerWrap.appendChild(particleCanvas);
   }
   
   // This is the critical fix for the squished cubes. The clues indicate a
   // mismatch between the canvas's CSS size and its internal bitmap size,
   // causing non-uniform stretching. A ResizeObserver is the most robust
   // way to keep them in sync.
-const sequencerWrap = body.querySelector('.sequencer-wrap');
 const gridCanvas = sequencerWrap.querySelector('.grid-canvas');
-const particleCanvas = body.querySelector('.particle-canvas');
+const particleCanvas = sequencerWrap.querySelector('.particle-canvas');
 
 const DPR = () => (window.devicePixelRatio || 1);
 
@@ -86,7 +86,6 @@ const ro = new ResizeObserver(() => {
   sizeParticleCanvas();
 });
 ro.observe(sequencerWrap);
-if (particleCanvas) ro.observe(particleCanvas);
 
 /* Initial sizing */
 sizeGridCanvas();

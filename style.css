@@ -477,11 +477,10 @@ select.toy-instrument {
 .toy-panel[data-toy="loopgrid"] .particle-canvas {
   position: absolute;
   z-index: 2;
-  left: 50%;
-  transform: translateX(-50%);
-  width: var(--loopgrid-field-width);
-  height: var(--loopgrid-field-height);
-  top: calc(50% - (var(--loopgrid-field-height) / 2));
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
 }
 
