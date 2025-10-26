@@ -1631,14 +1631,19 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
     pointer-events: none !important;
 }
 
+
+
 .overview-mode .toy-panel .toy-header,
 .overview-mode .toy-panel .toy-footer {
-    cursor: pointer;
-}
-
-.overview-mode .toy-panel .toy-header *,
-.overview-mode .toy-panel .toy-footer * {
-    cursor: pointer;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    cursor: default;
+    transition: opacity 0.3s ease, visibility 0.3s ease, height 0.3s ease, padding 0.3s ease;
+    height: 0;
+    padding: 0;
+    border: 0;
+    margin: 0;
 }
 
 .overview-mode [data-action="advanced"],
@@ -1648,8 +1653,16 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
     visibility: hidden;
     opacity: 0;
     pointer-events: none;
+    cursor: default;
     transition: opacity 0.3s ease, visibility 0.3s ease;
 }
+
+.overview-mode .toy-panel .toy-header *,
+.overview-mode .toy-panel .toy-footer * {
+    display: none;
+}
+
+
 
 .overview-mode .toy-panel {
     cursor: grab;
