@@ -257,6 +257,14 @@ export function triggerInstrument(instrument, noteName='C4', when, toyId, option
     }
   }catch{}
 
+  // If we've reached here, no sample or synth alias was found for 'id'.
+  // Before falling back to a generic tone, try 'acoustic_guitar' as a last resort for samples.
+  if (id !== 'acoustic_guitar' && playSampleAt('acoustic_guitar', t, vel, toyId, noteName, options)) {
+    console.warn(`[audio] instrument not found: '${id}' — using fallback 'acoustic_guitar'`);
+    try { window.__toyActivityAt = ensureAudioContext().currentTime; } catch {}
+    return; // Successfully played fallback sample
+  }
+
   // synth fallback
   const toneId = TONE_NAMES.includes(id) ? id : 'tone';
   try{
