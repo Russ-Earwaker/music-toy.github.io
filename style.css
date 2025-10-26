@@ -445,10 +445,9 @@ select.toy-instrument {
 /* Remove horizontal padding so the black background touches the frame edges */
 .toy-panel[data-toy="loopgrid"] .toy-body {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  padding: 0 0 12px; /* no left/right padding; keep a little bottom space for controls if needed */
-  gap: 12px;
+  padding: 0;
   place-items: center;
+  flex-grow: 0;
 }
 
 .toy-panel[data-toy="loopgrid"] .sequencer-wrap {

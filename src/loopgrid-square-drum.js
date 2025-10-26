@@ -95,15 +95,13 @@ if (window.__loopgridDrumBoot) {
   }
 
   function layout(panel) {
-    const body = panel.querySelector('.toy-body') || panel;
-    const pad = body.querySelector('.loopgrid-drum-pad');
+    const pad = panel.querySelector('.loopgrid-drum-pad');
     if (!pad) return;
-    const r = body.getBoundingClientRect();
-    const size = Math.floor(Math.min(r.width, r.height) * 0.68);
     
     const label = pad.querySelector('.drum-tap-label');
     if (label) {
-      label.style.fontSize = `${Math.max(24, size * 0.2)}px`;
+      const scale = window.__boardScale || 1;
+      label.style.fontSize = `${40 / scale}px`;
     }
   }
 
@@ -116,6 +114,8 @@ if (window.__loopgridDrumBoot) {
         updateLabelVisibility(panel)
       });
     });
+
+    window.addEventListener('board:scale', relayout);
 
     function checkRunningState() {
       document.querySelectorAll(SEL).forEach(updateLabelVisibility);
