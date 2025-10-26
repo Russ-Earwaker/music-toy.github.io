@@ -1,6 +1,7 @@
 // src/drum-tiles-visual.js
 // Renders and handles interaction for the 8-step sequencer cubes.
 import { drawBlock, whichThirdRect } from './toyhelpers.js';
+import { boardScale } from './board-scale-helpers.js';
 import { midiToName } from './note-helpers.js';
 import { isRunning, getLoopInfo } from './audio-core.js';
 import { initLoopgridParticles, drawGridParticles, LOOPGRID_BASE_PARTICLE_COUNT } from './grid-particles.js';
@@ -418,9 +419,14 @@ function render(panel) {
       let fieldRect = null;
       try { fieldRect = fieldElement.getBoundingClientRect(); } catch {}
       if (fieldRect && fieldRect.width > 0) {
-        const heightBased = (fieldRect.height || fieldRect.width) * 1.15;
-        const widthBased = fieldRect.width / 2.4;
-        const labelSize = Math.max(24, Math.min(heightBased, widthBased));
+        const s = Math.max(0.001, Number(boardScale(panel)) || 1);
+        // Use the unscaled field size so the label stays a constant
+        // fraction of its frame regardless of zoom.
+        const rawH = (fieldRect.height || fieldRect.width) / s;
+        const rawW = (fieldRect.width) / s;
+        const heightBased = rawH / 3.0;
+        const widthBased  = rawW / 2.4;
+        const labelSize = Math.max(24, Math.min(heightBased, widthBased) * 2.5);
         tapLabel.style.fontSize = `${Math.round(labelSize)}px`;
         st.tapFieldRect = { left: fieldRect.left, width: fieldRect.width, top: fieldRect.top, height: fieldRect.height };
         st.tapLetterBounds = tapLetters.map(letter => {
@@ -435,10 +441,12 @@ function render(panel) {
           };
         });
       } else {
-        st.tapFieldRect = null;
-        st.tapLetterBounds = null;
-        const heightBased = particleFieldH * 1.15;
-        const widthBased = particleFieldW / 2.4;
+        // Fallback if fieldRect missing
+        const s = Math.max(0.001, Number(boardScale(panel)) || 1);
+        const particleFieldW = (st.fieldWidth  || 320) / s;
+        const particleFieldH = (st.fieldHeight || 180) / s;
+        const heightBased = particleFieldH / 3.0;
+        const widthBased  = particleFieldW / 2.4;
         const fallbackSize = Math.max(24, Math.min(heightBased, widthBased));
         tapLabel.style.fontSize = `${Math.round(fallbackSize)}px`;
       }

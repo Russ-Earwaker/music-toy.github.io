@@ -440,12 +440,12 @@ select.toy-instrument {
 
   --edge-buffer: 0px;
   --panel-w: var(--loopgrid-field-width); /* hug the black background width */
+  height: auto !important;
 }
 
 /* Remove horizontal padding so the black background touches the frame edges */
 .toy-panel[data-toy="loopgrid"] .toy-body {
   display: grid;
-  padding: 0;
   place-items: center;
   flex-grow: 0;
 }
