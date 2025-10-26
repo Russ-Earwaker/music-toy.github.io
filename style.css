@@ -247,6 +247,7 @@ html, body {
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   font-size: 14px;
+  cursor: grab;
 }
 
 /* ----------------------------- */
@@ -1631,7 +1632,15 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
 }
 
 .overview-mode .toy-panel .toy-header,
-.overview-mode .toy-panel .toy-footer,
+.overview-mode .toy-panel .toy-footer {
+    cursor: pointer;
+}
+
+.overview-mode .toy-panel .toy-header *,
+.overview-mode .toy-panel .toy-footer * {
+    cursor: pointer;
+}
+
 .overview-mode [data-action="advanced"],
 .overview-mode .toy-chain-btn,
 .overview-mode .toy-title,
@@ -1639,14 +1648,7 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
     visibility: hidden;
     opacity: 0;
     pointer-events: none;
-    cursor: default !important;
     transition: opacity 0.3s ease, visibility 0.3s ease;
-}
-
-.overview-mode .toy-panel .toy-header *,
-.overview-mode .toy-panel .toy-footer * {
-    cursor: default !important;
-    pointer-events: none !important;
 }
 
 .overview-mode .toy-panel {
