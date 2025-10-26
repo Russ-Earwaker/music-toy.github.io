@@ -2000,7 +2000,7 @@ function regenerateMapFromStrokes() {
   }
 
   function onPointerDown(e){
-    panel.stopGhostGuide();
+    stopAutoGhostGuide({ immediate: true });
     const rect = paint.getBoundingClientRect();
     // Use shared w/h for coordinate mapping
     const p = {
@@ -2845,6 +2845,9 @@ function regenerateMapFromStrokes() {
             if (currentMap){ try{ panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap })); }catch{} }
           }catch(e){ }
           isRestoring = false;
+          // Re-check after hydration completes
+          stopAutoGhostGuide({ immediate: true });
+          scheduleGhostIfEmpty({ initialDelay: 0 });
         });
       });
     }
@@ -3171,6 +3174,28 @@ function startGhostGuide({
   ghostGuideAnimFrame = requestAnimationFrame(frame);
 }
 
+function scheduleGhostIfEmpty({ initialDelay = 150 } = {}) {
+  const check = () => {
+    if (!panel.isConnected) return;
+    if (isRestoring) {                 // Wait until setState() finishes
+      setTimeout(check, 100);
+      return;
+    }
+    const hasStrokes = Array.isArray(strokes) && strokes.length > 0;
+    const hasNodes = Array.isArray(currentMap?.nodes)
+      ? currentMap.nodes.some(set => set && set.size > 0)
+      : false;
+
+    if (!hasStrokes && !hasNodes) {
+      startAutoGhostGuide({ immediate: true });
+    } else {
+      // If content exists, ensure the ghost is fully stopped/cleared.
+      stopAutoGhostGuide({ immediate: true });
+    }
+  };
+  setTimeout(check, initialDelay);
+}
+
 function runAutoGhostGuideSweep() {
   if (!ghostGuideAutoActive) return;
 
@@ -3262,15 +3287,7 @@ function runAutoGhostGuideSweep() {
     }
   });
 
-  requestAnimationFrame(() => {
-    const hasStrokes = Array.isArray(strokes) && strokes.length > 0;
-    const hasNodes = Array.isArray(currentMap?.nodes)
-      ? currentMap.nodes.some(set => set && set.size > 0)
-      : false;
-    if (!hasStrokes && !hasNodes) {
-      setTimeout(() => startAutoGhostGuide({ immediate: true }), 100);
-    }
-  });
+  scheduleGhostIfEmpty({ initialDelay: 150 });
 
   try { panel.dispatchEvent(new CustomEvent('drawgrid:ready', { bubbles: true })); } catch {}
   return api;
