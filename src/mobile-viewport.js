@@ -4,33 +4,38 @@
   const body = document.body;
 
   function applyOrientationClass() {
-    const isPortrait = window.matchMedia("(orientation: portrait)").matches;
-    root.classList.toggle('portrait', isPortrait);
-    root.classList.toggle('landscape', !isPortrait);
-  }
+    const mqPortrait = window.matchMedia("(orientation: portrait)");
+    // VisualViewport is more honest on iOS; fall back to inner sizes
+    const vv = window.visualViewport;
+    const vw = Math.round((vv?.width || window.innerWidth));
+    const vh = Math.round((vv?.height || window.innerHeight));
 
-  // iOS Safari sometimes needs a nudge for dvh after UI chrome changes
-  function reflowForIOS() {
-    // Force layout by reading/writing; cheap & safe
-    body.style.transform = 'translateZ(0)';
-    void body.offsetHeight;
-    body.style.transform = '';
+    // Heuristic to avoid false portrait when toolbars are animating:
+    // treat as portrait only if height is meaningfully larger than width
+    const heuristicPortrait = vh > vw + 80;
+
+    const isPortrait = mqPortrait.matches && heuristicPortrait;
+
+    document.documentElement.classList.toggle('portrait', isPortrait);
+    document.documentElement.classList.toggle('landscape', !isPortrait);
   }
 
   // Run at start and on change
   applyOrientationClass();
   window.addEventListener('orientationchange', () => {
     applyOrientationClass();
-    // Give iOS time to settle the address bar
     setTimeout(() => {
       applyOrientationClass();
-      reflowForIOS();
-    }, 250);
+      // small iOS reflow
+      document.body.style.transform = 'translateZ(0)';
+      void document.body.offsetHeight;
+      document.body.style.transform = '';
+    }, 300);
   });
 
-  // Also react to resize (Android toolbars, desktop window resize)
   window.addEventListener('resize', () => {
     applyOrientationClass();
+    setTimeout(applyOrientationClass, 120);
   });
 
   // Expose a helper to lock the page scroll (if your app uses modal/fullscreen)

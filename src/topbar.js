@@ -304,6 +304,13 @@ if (document.readyState === 'loading') {
     if (window.__topbarWired) return;
     window.__topbarWired = true;
 
+    const playBtn = bar.querySelector('[data-action="toggle-play"]');
+    if(playBtn) {
+      playBtn.addEventListener('pointerup', () => {
+        Core?.resumeAudioContextIfNeeded?.();
+      }, { passive: true });
+    }
+
     bar.addEventListener('click', (e)=>{
       const b = e.target.closest('button[data-action]');
       if (!b) return;

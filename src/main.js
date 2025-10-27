@@ -1,4 +1,5 @@
 import './mobile-viewport.js';
+import './fullscreen.js';
 // --- Module Imports ---
 import './debug.js';
 import { initializeBouncer } from './bouncer-init.js';

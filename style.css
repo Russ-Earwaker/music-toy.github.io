@@ -1739,3 +1739,125 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
     font-weight: bold;
     z-index: 1000;
 }
+
+.fullscreen-button {
+  position: fixed;
+  right: calc(12px + var(--safe-right));
+  top:  calc(12px + var(--safe-top));
+  z-index: 120000;            /* always tappable/clickable */
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: rgba(20,20,20,0.7);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #fff;
+  font: 600 18px/44px system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  text-align: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  pointer-events: auto !important; /* override any inherited none */
+  touch-action: manipulation;      /* hint to iOS */
+  -webkit-user-select: none;
+  user-select: none;
+}
+.fullscreen-button[aria-pressed="true"] { background: rgba(20,20,20,0.95); }
+/* Controls layer and Play button should always be tappable */
+.controls-layer,
+.play-button {
+  position: fixed;                 /* not inside zoomed/translated board */
+  z-index: 120000;                 /* above canvases/overlays */
+  pointer-events: auto !important;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Typical placement – tweak selectors/offsets to your UI */
+.play-button {
+  right: calc(12px + var(--safe-right));
+  bottom: calc(12px + var(--safe-bottom));
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: flex !important;
+}
+
+/* Ensure no parent transform clips it when pseudo-FS is active */
+.pseudo-fullscreen .controls-layer,
+.pseudo-fullscreen .play-button {
+  transform: none !important;
+}
+
+/* add a little extra buffer on iOS to reduce edge-swipes */
+.ios:root {
+  --edge-buffer: 12px; /* tweak to taste: 8–16px */
+  --app-pad-left:  calc(env(safe-area-inset-left, 0px) + var(--edge-buffer));
+  --app-pad-right: calc(env(safe-area-inset-right,0px) + var(--edge-buffer));
+  --app-pad-bottom:calc(env(safe-area-inset-bottom,0px) + var(--edge-buffer));
+  /* top can stay env(safe-area-inset-top), we hide our own topbar in pseudo-FS anyway */
+}
+
+.edge-deadzone {
+  position: fixed;
+  z-index: 110000;
+  pointer-events: auto;
+  touch-action: none;
+  background: transparent;
+}
+.edge-deadzone.left   { left: 0;   top: 0; bottom: 0; width: 12px; }
+.edge-deadzone.right  { right: 0;  top: 0; bottom: 0; width: 12px; }
+.edge-deadzone.bottom { left: 0;   right: 0; bottom: 0; height: 14px; }
+
+/* True app-level fullscreen (real or pseudo) */
+:fullscreen #app,
+:-webkit-full-screen #app,
+.pseudo-fullscreen #app,
+:fullscreen .app,
+:-webkit-full-screen .app,
+.pseudo-fullscreen .app {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  margin: 0 !important;
+  padding: var(--app-pad-top) var(--app-pad-right) var(--app-pad-bottom) var(--app-pad-left) !important;
+  max-width: none !important;
+  max-height: none !important;
+  aspect-ratio: auto !important;
+  background: #000 !important;
+  overflow: hidden !important;
+}
+
+/* Board containers stretch with app fullscreen */
+:fullscreen .board-viewport,
+:-webkit-full-screen .board-viewport,
+.pseudo-fullscreen .board-viewport,
+:fullscreen .board-wrap, .pseudo-fullscreen .board-wrap,
+:fullscreen .main-stage, .pseudo-fullscreen .main-stage,
+:fullscreen .toy-area,   .pseudo-fullscreen .toy-area {
+  position: fixed !important; inset: 0 !important;
+  width: 100vw !important; height: 100dvh !important;
+  margin: 0 !important; padding: 0 !important; background: transparent !important;
+  max-width: none !important; max-height: none !important; aspect-ratio: auto !important;
+}
+
+/* Hide chrome in fullscreen, but NOT the controls (play/FS) */
+:fullscreen .app-topbar, .pseudo-fullscreen .app-topbar { display: none !important; }
+
+/* The gesture layer must be above canvases but below UI */
+.board-viewport, .board-wrap { position: relative; }
+.gesture-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 5000;              /* canvases below, UI buttons above */
+  pointer-events: none;
+  touch-action: none;         /* critical: no browser pan/zoom */
+  background: transparent;
+}
+
+/* Make sure canvases don't sit above the gesture layer unintentionally */
+.toy-panel canvas, .particle-canvas, .draw-canvas { z-index: 0; }
+
+/* Controls stay tappable/clickable */
+.fullscreen-button, .play-button, .controls-layer { z-index: 120000; }
+
+/* Never disable pointer events on board canvases globally */
+.toy-panel canvas { pointer-events: auto; }  /* unless you *intend* to block drawing */

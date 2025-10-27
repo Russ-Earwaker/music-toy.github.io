@@ -10,21 +10,17 @@ import { overviewMode } from './overview-mode.js';
   let scale = 1, x = 0, y = 0;
   try{
     const savedStr = localStorage.getItem('boardViewport')||'null';
-    console.log('board-viewport: loading from localStorage', savedStr);
     const saved = JSON.parse(savedStr);
     if (saved && typeof saved==='object'){
       const savedScale = saved.scale;
       if (Number.isFinite(savedScale)) {
-        console.log('board-viewport: saved scale is', savedScale);
         scale = Math.max(0.1, Math.min(2.5, savedScale));
-        console.log('board-viewport: clamped scale is', scale);
       }
       if (Number.isFinite(saved.x)) x = saved.x|0;
       if (Number.isFinite(saved.y)) y = saved.y|0;
     }
   }catch(e){ console.error('board-viewport: failed to load viewport', e); }
   window.__boardScale = scale;
-  console.log('board-viewport: initial window.__boardScale', window.__boardScale);
   const SCALE_EVENT_EPSILON = 1e-4;
   let lastNotifiedScale = scale;
 
@@ -50,56 +46,19 @@ import { overviewMode } from './overview-mode.js';
     persist();
   }
 
-  // --- Panning ---
-  let panning = false, sx=0, sy=0, ox=0, oy=0;
-  document.addEventListener('mousedown', (e)=>{
-    if (window.__tutorialZoomLock) return;
-    const overPanel = !!e.target.closest('.toy-panel');
-    if (overPanel) return;        // let panel dragging handle their own
-    const overTopbar = !!e.target.closest('#topbar');
-    if (overTopbar) return;       // let topbar controls handle their own
-    if (e.button!==0 && e.button!==1) return;
-    panning = true; sx=e.clientX; sy=e.clientY; ox=x; oy=y;
-    document.body.classList.add('panning');
-    e.preventDefault();
-  }, true);
-
-  window.addEventListener('mousemove', (e)=>{
-    if (!panning) return;
-    x = ox + (e.clientX - sx);
-    y = oy + (e.clientY - sy);
-    window.__boardScale = scale; apply();
-  }, true);
-
-  window.addEventListener('mouseup', ()=>{
-    if (!panning) return;
-    panning = false;
-    document.body.classList.remove('panning');
-    persist();
-  }, true);
-
-  // --- Zooming --- (global: anywhere in the window)
-  window.addEventListener('wheel', (e)=>{
-    if (window.__tutorialZoomLock) { 
-      e.preventDefault(); 
-      return; 
-    }
-    // zoom around mouse position
-    const delta = e.deltaY;
+  function zoomAt(clientX, clientY, factor) {
     const rect = stage.getBoundingClientRect();
     const boardCenterX = rect.left + rect.width / 2;
     const boardCenterY = rect.top + rect.height / 2;
 
-    const mouseXFromCenter = e.clientX - boardCenterX;
-    const mouseYFromCenter = e.clientY - boardCenterY;
+    const mouseXFromCenter = clientX - boardCenterX;
+    const mouseYFromCenter = clientY - boardCenterY;
 
     const mx = mouseXFromCenter / scale;
     const my = mouseYFromCenter / scale;
 
     const oldScale = scale;
-    const factor = Math.pow(1.0015, -delta);
     scale = Math.max(0.1, Math.min(2.5, scale * factor));
-    console.log('board-viewport: wheel zoom, new scale:', scale);
 
     x -= mx * (scale - oldScale);
     y -= my * (scale - oldScale);
@@ -110,17 +69,28 @@ import { overviewMode } from './overview-mode.js';
         overviewMode.exit(false);
     }
 
-    window.__boardScale = scale; apply();
-    e.preventDefault();
+    window.__boardScale = scale; 
+    apply();
     persist();
+  }
+
+  // --- Zooming --- (global: anywhere in the window)
+  window.addEventListener('wheel', (e)=>{
+    if (window.__tutorialZoomLock) { 
+      e.preventDefault(); 
+      return; 
+    }
+    const factor = Math.pow(1.0015, -e.deltaY);
+    zoomAt(e.clientX, e.clientY, factor);
+    e.preventDefault();
   }, { passive:false });
 
   // helpers
   window.panTo = (nx, ny)=>{ x = nx|0; y = ny|0; window.__boardScale = scale; apply(); };
+  window.panBy = (dx, dy)=>{ x += dx; y += dy; apply(); };
+  window.zoomAt = zoomAt;
   window.setBoardScale = (sc)=>{ 
-    console.log('board-viewport: setBoardScale called with', sc);
     scale = Math.max(0.1, Math.min(2.5, Number(sc)||1)); 
-    console.log('board-viewport: setBoardScale new scale', scale);
     window.__boardScale = scale; 
     apply(); 
   };
@@ -128,16 +98,13 @@ import { overviewMode } from './overview-mode.js';
   // Center the board on a specific element at a desired scale
   window.centerBoardOnElement = (el, desiredScale = scale) => {
     if (!el || !stage) return;
-    // Use current scale (pre-transform sizes from rects / divide by scale)
     const curScale = Number(window.__boardScale) || scale;
     const boardRect = stage.getBoundingClientRect();
     const elRect = el.getBoundingClientRect();
 
-    // Element center in board's unscaled coordinates
     const centerX = (elRect.left - boardRect.left) / curScale + (elRect.width  / curScale) / 2;
     const centerY = (elRect.top  - boardRect.top ) / curScale + (elRect.height / curScale) / 2;
 
-    // Apply desired scale, then compute translate so element center == viewport center
     scale = Math.max(0.1, Math.min(2.5, Number(desiredScale)||1));
     const viewportCX = (window.innerWidth  / 2);
     const viewportCY = (window.innerHeight / 2);

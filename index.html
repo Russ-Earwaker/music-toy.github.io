@@ -6,13 +6,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
   <title>Music Toys</title>
   <link rel="icon" type="image/png" href="./assets/icons/icon-192.png" />
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <link rel="apple-touch-icon" href="/assets/icons/icon-192.png">
   <!-- The only stylesheet needed is the main style.css. The others were legacy files causing conflicts. -->
   <link rel="stylesheet" href="./src/chordwheel.css"
   /><link rel="stylesheet" href="./src/circular-button.css" />
   <link rel="stylesheet" href="./rippler.css">
   <link rel="stylesheet" href="./style.css"
   />
-  <link rel="stylesheet" href="./src/orientation.css">
+  <script type="module" src="./src/ios-flag.js"></script>
+  <script type="module" src="./src/spa-history-guard.js"></script>
 </head>
 <body>
   <header id="topbar" class="app-topbar">
@@ -43,19 +48,23 @@
     <div class="topbar-controls"></div>
   </header>
 
-  <main id="board"></main>
-
-  <div class="rotate-overlay" id="rotateOverlay" aria-hidden="true">
-    <div class="card">
-      <div style="font-size:20px; margin-bottom:8px;">Rotate your device</div>
-      <div>MVP supports landscape orientation only.</div>
-    </div>
+  <button id="fullscreenBtn" class="fullscreen-button" aria-pressed="false" aria-label="Enter fullscreen" onclick="window.__Fullscreen?.toggle?.()">
+  ⤢
+</button>
+  <div class="board-viewport">
+    <main id="board"></main>
+    <div class="gesture-layer" id="boardGestureLayer" aria-hidden="true"></div>
   </div>
+
+  <div class="edge-deadzone left"  aria-hidden="true"></div>
+  <div class="edge-deadzone right" aria-hidden="true"></div>
+  <div class="edge-deadzone bottom" aria-hidden="true"></div>
 
   <!-- App boot scripts -->
   <script type="module" src="./src/main.js" defer></script>
   <script type="module" src="./src/board.js" defer></script>
   <script type="module" src="./src/board-viewport.js" defer></script>
+  <script type="module" src="./src/board-gestures.js" defer></script>
   <script type="module" src="./src/topbar.js" defer></script>
   <script type="module" src="./src/guide.js" defer></script>
   <script type="module" src="./src/overview-mode.js" defer></script>
@@ -79,6 +88,12 @@
     window.BOUNCER_IDS = window.BOUNCER_IDS || [];
     // Uncomment to temporarily disable loop engine while debugging physics:
     // window.BOUNCER_LOOP_DISABLE = true;
+  </script>
+  <script type="module" src="/src/debug-hud.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/service-worker.js').catch(()=>{});
+    }
   </script>
 </body>
 </html>
