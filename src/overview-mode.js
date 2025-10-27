@@ -12,6 +12,9 @@ function enterOverviewMode(isButton) {
     overviewState.isActive = true;
     overviewState.previousScale = window.__boardScale;
     document.body.classList.add('overview-mode');
+    try {
+        window.dispatchEvent(new CustomEvent('overview:change', { detail: { active: true } }));
+    } catch {}
     console.log('Entering Overview Mode, previousScale:', overviewState.previousScale, 'current boardScale:', window.__boardScale);
 
     if (isButton) {
@@ -43,6 +46,9 @@ function exitOverviewMode(isButton) {
     if (!overviewState.isActive) return;
     overviewState.isActive = false;
     document.body.classList.remove('overview-mode');
+    try {
+        window.dispatchEvent(new CustomEvent('overview:change', { detail: { active: false } }));
+    } catch {}
     console.log('Exiting Overview Mode, restoring scale to:', overviewState.previousScale, 'current scale:', window.__boardScale);
 
     const overviewText = document.getElementById('overview-mode-text');

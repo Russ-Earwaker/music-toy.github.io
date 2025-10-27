@@ -177,21 +177,7 @@ export function buildDrumGrid(panel, numSteps = 8){
     body.appendChild(sequencerWrap);
   }
   
-  // This is the critical fix for the squished cubes. The clues indicate a
-  // mismatch between the canvas's CSS size and its internal bitmap size,
-  // causing non-uniform stretching. A ResizeObserver is the most robust
-  // way to keep them in sync.
   const sequencerWrap = body.querySelector('.sequencer-wrap');
-  const canvas = sequencerWrap.querySelector('.grid-canvas');
-  const observer = new ResizeObserver(entries => {
-    const rect = entries[0]?.contentRect;
-    if (rect) {
-      // Synchronize the canvas's drawing buffer size with its on-screen size.
-      canvas.width = rect.width;
-      canvas.height = rect.height;
-    }
-  });
-  observer.observe(sequencerWrap);
 
   let padWrap = body.querySelector('.drum-pad-wrap');
   if (!padWrap) {

@@ -94,6 +94,15 @@ import { overviewMode } from './overview-mode.js';
     window.__boardScale = scale; 
     apply(); 
   };
+  window.resetBoardView = ()=>{
+    scale = 1;
+    x = 0;
+    y = 0;
+    window.__boardScale = scale;
+    window.__boardX = x;
+    window.__boardY = y;
+    apply();
+  };
 
   // Center the board on a specific element at a desired scale
   window.centerBoardOnElement = (el, desiredScale = scale) => {

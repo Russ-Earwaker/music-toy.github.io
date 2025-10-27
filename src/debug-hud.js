@@ -1,5 +1,22 @@
 // src/debug-hud.js
 (function () {
+  const shouldEnable = (() => {
+    try {
+      const params = new URLSearchParams(window.location.search || '');
+      if (params.get('debugHUD') === '1') return true;
+      return window.localStorage?.getItem('mt_debug_hud') === '1';
+    } catch {
+      return false;
+    }
+  })();
+
+  if (!shouldEnable) {
+    try {
+      window.__HUD = { log() {}, refresh() {} };
+    } catch {}
+    return;
+  }
+
   // --------- state ---------
   const BUF_MAX = 400;
   const buf = []; // store lines for copy

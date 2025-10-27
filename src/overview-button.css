@@ -1,32 +1,86 @@
 #overview-mode-button {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    width: 50px;
-    height: 50px;
-    background-color: #333;
-    color: white;
+    position: relative;
+    width: clamp(56px, calc(var(--top-btn-size) * 0.9), 86px);
+    height: clamp(56px, calc(var(--top-btn-size) * 0.9), 86px);
+    margin-left: clamp(12px, calc(var(--ui-float-gap-sm)), 20px);
+    background-color: rgba(36, 46, 62, 0.95);
+    color: #fff;
     border-radius: 50%;
     display: flex;
     justify-content: center;
     align-items: center;
     cursor: pointer;
-    z-index: 1000;
-    font-size: 24px;
-    font-weight: bold;
+    font-size: clamp(20px, calc(var(--top-btn-size) * 0.32), 28px);
+    font-weight: 700;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(95, 179, 255, 0.35);
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
 }
 
 #zoom-readout {
-    position: fixed;
-    top: 35px;
-    right: 80px;
-    color: white;
-    font-family: monospace;
-    font-size: 16px;
-    z-index: 1000;
+    position: relative;
+    margin-left: clamp(10px, calc(var(--ui-float-gap-sm) * 0.8), 18px);
+    color: var(--muted);
+    font-family: 'Roboto Mono', monospace;
+    font-size: clamp(0.78rem, calc(0.82rem + (0.12rem * var(--ui-scale))), 0.92rem);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    min-width: 62px;
+    text-align: left;
+    white-space: nowrap;
+    align-self: center;
 }
 
-.overview-mode #overview-mode-button {
-    background-color: #eee;
-    color: #333;
+#overview-mode-button:focus-visible {
+    outline: 2px solid rgba(95, 179, 255, 0.8);
+    outline-offset: 4px;
+}
+
+#overview-mode-button:hover {
+    box-shadow: 0 16px 32px rgba(0, 0, 0, 0.45);
+    transform: translateY(-1px);
+}
+
+#overview-mode-button.is-active, .overview-mode #overview-mode-button {
+    background-color: rgba(226, 232, 240, 0.92);
+    color: #111;
+}
+#overview-mode-button span {
+    pointer-events: none;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+#reset-view-button {
+    position: relative;
+    width: clamp(48px, calc(var(--top-btn-size) * 0.75), 72px);
+    height: clamp(48px, calc(var(--top-btn-size) * 0.75), 72px);
+    margin-left: clamp(10px, calc(var(--ui-float-gap-sm) * 0.8), 18px);
+    background-color: rgba(28, 36, 48, 0.95);
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    font-size: clamp(14px, calc(var(--top-btn-size) * 0.24), 20px);
+    font-weight: 600;
+    border: 1px solid rgba(95, 179, 255, 0.28);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+#reset-view-button:hover {
+    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.4);
+    transform: translateY(-1px);
+}
+
+#reset-view-button:focus-visible {
+    outline: 2px solid rgba(95, 179, 255, 0.8);
+    outline-offset: 4px;
+}
+
+#reset-view-button span {
+    pointer-events: none;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
 }

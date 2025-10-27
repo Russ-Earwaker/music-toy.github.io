@@ -23,7 +23,6 @@ import { DEFAULT_BPM, NUM_STEPS, ensureAudioContext, getLoopInfo, setBpm, start,
 import { buildGrid } from './grid-core.js';
 import { buildDrumGrid } from './drum-core.js';
 import { tryRestoreOnBoot, startAutosave } from './persistence.js';
-import { startIntensityVisual } from './visual-bg.js';
 
 /**
  * Calculates the visual extents of a panel's content, including any
@@ -1038,7 +1037,6 @@ async function boot(){
     }
 
     bootTopbar();
-    startIntensityVisual();
     let restored = false;
     try{ restored = !!tryRestoreOnBoot(); }catch{}
     bootGrids();

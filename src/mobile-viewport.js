@@ -2,6 +2,8 @@
 (function () {
   const root = document.documentElement;
   const body = document.body;
+  const bootStart = performance.now();
+  const STABILISE_MS = 700;
 
   function applyOrientationClass() {
     const mqPortrait = window.matchMedia("(orientation: portrait)");
@@ -15,9 +17,19 @@
     const heuristicPortrait = vh > vw + 80;
 
     const isPortrait = mqPortrait.matches && heuristicPortrait;
+    const alreadyTagged = root.classList.contains('portrait') || root.classList.contains('landscape');
 
-    document.documentElement.classList.toggle('portrait', isPortrait);
-    document.documentElement.classList.toggle('landscape', !isPortrait);
+    // During early iOS toolbar animation, freeze the first detected orientation
+    if (performance.now() - bootStart < STABILISE_MS) {
+      if (!alreadyTagged) {
+        root.classList.toggle('portrait', isPortrait);
+        root.classList.toggle('landscape', !isPortrait);
+      }
+      return;
+    }
+
+    root.classList.toggle('portrait', isPortrait);
+    root.classList.toggle('landscape', !isPortrait);
   }
 
   // Run at start and on change
@@ -33,10 +45,15 @@
     }, 300);
   });
 
-  window.addEventListener('resize', () => {
-    applyOrientationClass();
-    setTimeout(applyOrientationClass, 120);
-  });
+  let ovpTimer = 0;
+  function queueOvp() {
+    if (ovpTimer) cancelAnimationFrame(ovpTimer);
+    ovpTimer = requestAnimationFrame(() => {
+      applyOrientationClass();
+      setTimeout(applyOrientationClass, 120);
+    });
+  }
+  window.addEventListener('resize', queueOvp, { passive: true });
 
   // Expose a helper to lock the page scroll (if your app uses modal/fullscreen)
   window.__AppViewport = {

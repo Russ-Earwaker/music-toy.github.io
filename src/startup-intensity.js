@@ -1,6 +1,5 @@
 // src/startup-intensity.js — boot intensity + visual + toggles
 import { startIntensityMonitor } from './intensity.js';
-import { startIntensityVisual } from './visual-bg.js';
 import { enable as startAutoMix, disable as stopAutoMix } from './auto-mix.js';
 import { setPoliteRandomEnabled, isPoliteRandomEnabled } from './polite-random.js';
 
@@ -39,7 +38,6 @@ function setAutoMixEnabled(on){ try { on ? startAutoMix() : stopAutoMix(); } cat
 
 export function boot(){
   startIntensityMonitor();
-  startIntensityVisual();
 
   // restore toggles
   const autoOn = load('autoMix', true);

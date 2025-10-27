@@ -128,7 +128,6 @@ function createDrawGridParticles({
   returnToHome=true,
   homePull=0.008, // Increased spring force to resettle faster
   bounceOnWalls=false,
-  dpr = 1,
 } = {}){
   const P = [];
   const letters = [];
@@ -142,7 +141,7 @@ function createDrawGridParticles({
   let letterFade = 1;
   let letterFadeTarget = 1;
   let letterFadeSpeed = 0.05;
-  let currentDpr = dpr;
+  let currentDpr = 1;
   const W = ()=> Math.max(1, Math.floor(getW()?getW() * currentDpr:0));
   const H = ()=> Math.max(1, Math.floor(getH()?getH() * currentDpr:0));
   let lastW = 0, lastH = 0;
@@ -624,7 +623,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
   // State
   let cols = initialCols;
-  let cssW=0, cssH=0, cw=0, ch=0, topPad=0, dpr=1;
+  let cssW=0, cssH=0, cw=0, ch=0, topPad=0;
   let lastBoardScale = 1;
   let boardScale = 1;
   let drawing=false, erasing=false;
@@ -665,7 +664,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     getH: () => cssH,
     count: 600,
     homePull: 0.002,
-    dpr: dpr,
   });
 
   const clearTutorialHighlight = () => {
@@ -1319,7 +1317,6 @@ function regenerateMapFromStrokes() {
     wrap.style.height = bodyH + 'px';
 
 
-    const newDpr = window.devicePixelRatio || 1;
     // Measure transform-immune base…
     const { w: baseW, h: baseH } = getLayoutSize();
     // …then infer transform scale so grid matches the visible frame size.
@@ -1332,7 +1329,7 @@ function regenerateMapFromStrokes() {
       return;
     }
 
-    if (force || Math.abs(newW - cssW) > 1 || Math.abs(newH - cssH) > 1 || newDpr !== dpr) {
+    if (force || Math.abs(newW - cssW) > 1 || Math.abs(newH - cssH) > 1) {
       const oldW = cssW;
       const oldH = cssH;
       // Snapshot current paint to preserve erased/drawn content across resize
@@ -1347,12 +1344,10 @@ function regenerateMapFromStrokes() {
         }
       } catch {}
 
-      dpr = newDpr;
       cssW = newW;
       cssH = newH;
-      particles.setDpr(dpr);
-      const w = Math.max(1, Math.round(cssW * dpr));
-      const h = Math.max(1, Math.round(cssH * dpr));
+      const w = Math.max(1, Math.round(cssW));
+      const h = Math.max(1, Math.round(cssH));
       grid.width = w; grid.height = h;
       paint.width = w; paint.height = h;
       nodesCanvas.width = w; nodesCanvas.height = h;
@@ -1360,13 +1355,7 @@ function regenerateMapFromStrokes() {
       particleCanvas.width = w; particleCanvas.height = h;
       ghostCanvas.width = w; ghostCanvas.height = h;
       tutorialCanvas.width = w; tutorialCanvas.height = h;
-      gctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      pctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      nctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      particleCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ghostCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      if (tutorialCtx) tutorialCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    if (tutorialHighlightMode !== 'none') renderTutorialHighlight();
+      if (tutorialHighlightMode !== 'none') renderTutorialHighlight();
 
       // Scale particle positions if zoom changed
       if (zoomX !== lastZoomX || zoomY !== lastZoomY) {
@@ -1431,8 +1420,8 @@ function regenerateMapFromStrokes() {
         } catch {}
       }
       // Clear other content canvases. The caller is responsible for redrawing nodes/overlay.
-      nctx.clearRect(0, 0, cssW, cssH);
-      fctx.clearRect(0, 0, cssW, cssH);
+      nctx.clearRect(0, 0, w, h);
+      fctx.clearRect(0, 0, w, h);
       ghostCtx.clearRect(0,0,ghostCanvas.width,ghostCanvas.height);
     }
   }
@@ -1891,8 +1880,8 @@ function regenerateMapFromStrokes() {
       // Define the scan area strictly to the visible grid column to avoid phantom nodes
       const xStart_css = gridArea.x + c * cw;
       const xEnd_css = gridArea.x + (c + 1) * cw;
-      const xStart = Math.round(xStart_css * dpr);
-      const xEnd = Math.round(xEnd_css * dpr);
+      const xStart = Math.round(xStart_css);
+      const xEnd = Math.round(xEnd_css);
       
       let ySum = 0;
       let inkCount = 0;
@@ -1911,7 +1900,7 @@ function regenerateMapFromStrokes() {
 
       if (inkCount > 0) {
         const avgY_dpr = ySum / inkCount;
-        const avgY_css = avgY_dpr / dpr;
+        const avgY_css = avgY_dpr;
 
         const noteGridTop = gridArea.y + topPad;
         const noteGridBottom = noteGridTop + rows * ch;
@@ -2374,7 +2363,6 @@ function regenerateMapFromStrokes() {
         disabled: Array.from({length:cols}, ()=> new Set())
     };
 
-    tempCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     drawFullStroke(tempCtx, stroke);
     // Pass the temporary context to the main snapToGrid function
     const result = snapToGrid(tempCtx);
@@ -2501,7 +2489,7 @@ function regenerateMapFromStrokes() {
         fctx.drawImage(paint, 0, 0);
         // Now draw current special preview ON TOP unmasked, so full stroke is visible while drawing
         if (cur && previewGid && cur.pts && cur.pts.length) {
-          fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          fctx.setTransform(1, 0, 0, 1, 0, 0);
           fctx.globalCompositeOperation = 'source-over';
           const preview = { pts: cur.pts, isSpecial: true, generatorId: previewGid };
           drawFullStroke(fctx, preview);
@@ -2654,9 +2642,10 @@ function regenerateMapFromStrokes() {
       fctx.strokeRect(0, 0, cssW, cssH);
       fctx.fillStyle = 'red';
       fctx.font = '12px monospace';
+      const pxScale = cssW ? (paint.width / cssW).toFixed(2) : 'n/a';
       fctx.fillText(`boardScale: ${boardScale.toFixed(2)}`, 5, 15);
-      fctx.fillText(`w×h: ${cssW}×${cssH}`, 5, 30);
-      fctx.fillText(`dpr: ${dpr}`, 5, 45);
+      fctx.fillText(`w x h: ${cssW} x ${cssH}`, 5, 30);
+      fctx.fillText(`pixelScale: ${pxScale}`, 5, 45);
       fctx.restore();
     }
 
@@ -3132,7 +3121,7 @@ function startGhostGuide({
       ghostCtx.globalAlpha = 0.25;
       ghostCtx.lineCap = 'round';
       ghostCtx.lineJoin = 'round';
-      ghostCtx.lineWidth = getLineWidth() * 1.15 * dpr;
+      ghostCtx.lineWidth = getLineWidth() * 1.15;
       ghostCtx.strokeStyle = 'rgba(68,112,255,0.7)';
       ghostCtx.beginPath();
       ghostCtx.moveTo(last.x, last.y);
@@ -3140,7 +3129,7 @@ function startGhostGuide({
       ghostCtx.stroke();
 
       // Finger dot – scales with grid cell size & zoom
-      const dotR = getLineWidth() * 0.45 * dpr;
+      const dotR = getLineWidth() * 0.45;
       ghostCtx.beginPath();
       ghostCtx.arc(x, y, dotR, 0, Math.PI * 2);
       ghostCtx.fillStyle = 'rgba(68,112,255,0.85)';

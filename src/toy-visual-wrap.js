@@ -27,6 +27,29 @@
   function pickVisual(panel){
     return panel.querySelector('.wheel-canvas, .grid-canvas, .rippler-canvas, .bouncer-canvas, canvas, svg');
   }
+  function manageCanvasDpr(canvas, container){
+    if (!canvas || canvas.__wrapResize) return;
+    const target = container || canvas.parentElement || canvas;
+    if (!target) return;
+    let raf = 0;
+    const resize = ()=>{
+      if (raf) return;
+      raf = requestAnimationFrame(()=>{
+        raf = 0;
+        const rect = target.getBoundingClientRect();
+        const w = Math.max(1, Math.round(rect.width));
+        const h = Math.max(1, Math.round(rect.height));
+        const pxW = Math.max(1, Math.round(w * DPR()));
+        const pxH = Math.max(1, Math.round(h * DPR()));
+        if (canvas.width !== pxW) canvas.width = pxW;
+        if (canvas.height !== pxH) canvas.height = pxH;
+      });
+    };
+    const ro = new ResizeObserver(resize);
+    ro.observe(target);
+    resize();
+    canvas.__wrapResize = { ro };
+  }
   function ensureBody(panel){
     let body = panel.querySelector('.toy-body');
     if (!body){
@@ -71,6 +94,11 @@
           width: '', height: '', display: ''
         });
       }
+      if (kind === 'loopgrid' || kind === 'loopgrid-drum') {
+        panel.querySelectorAll('.grid-canvas, .particle-canvas, .drum-particles').forEach(canvas => {
+          manageCanvasDpr(canvas, canvas?.parentElement);
+        });
+      }
       // Do not unwrap .rippler-wrap; it defines the square via padding-top
       return;
     }
@@ -89,24 +117,7 @@
     }
     // DPR backing store
     if (vis && vis.tagName === 'CANVAS'){
-      const canvas = vis;
-      let raf = 0;
-      const resize = ()=>{
-        if (raf) return;
-        raf = requestAnimationFrame(()=>{
-          raf = 0;
-          const r = body.getBoundingClientRect();
-          const w = Math.max(1, Math.round(r.width));
-          const h = Math.max(1, Math.round(r.height));
-          const pxW = Math.max(1, Math.round(w * DPR()));
-          const pxH = Math.max(1, Math.round(h * DPR()));
-          if (canvas.width !== pxW) canvas.width = pxW;
-          if (canvas.height !== pxH) canvas.height = pxH;
-        });
-      };
-      const ro = new ResizeObserver(resize);
-      ro.observe(body);
-      resize();
+      manageCanvasDpr(vis, body);
     }
   }
   function wire(panel){
