@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Mobile viewport: fit to device width, allow notches -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
   <title>Music Toys</title>
   <link rel="icon" type="image/png" href="./assets/icons/icon-192.png" />
   <!-- The only stylesheet needed is the main style.css. The others were legacy files causing conflicts. -->
@@ -11,6 +12,7 @@
   <link rel="stylesheet" href="./rippler.css">
   <link rel="stylesheet" href="./style.css"
   />
+  <link rel="stylesheet" href="./src/orientation.css">
 </head>
 <body>
   <header id="topbar" class="app-topbar">
@@ -43,6 +45,13 @@
 
   <main id="board"></main>
 
+  <div class="rotate-overlay" id="rotateOverlay" aria-hidden="true">
+    <div class="card">
+      <div style="font-size:20px; margin-bottom:8px;">Rotate your device</div>
+      <div>MVP supports landscape orientation only.</div>
+    </div>
+  </div>
+
   <!-- App boot scripts -->
   <script type="module" src="./src/main.js" defer></script>
   <script type="module" src="./src/board.js" defer></script>
@@ -71,6 +80,5 @@
     // Uncomment to temporarily disable loop engine while debugging physics:
     // window.BOUNCER_LOOP_DISABLE = true;
   </script>
-  
 </body>
 </html>

@@ -1,3 +1,4 @@
+import './mobile-viewport.js';
 // --- Module Imports ---
 import './debug.js';
 import { initializeBouncer } from './bouncer-init.js';

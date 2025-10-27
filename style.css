@@ -1,3 +1,60 @@
+/* ========== Mobile Viewport & Safe Areas (landscape MVP) ========== */
+
+/* Use dynamic viewport units to avoid iOS 100vh bugs, and expose safe area vars */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+
+  /* App paddings that respect notches in landscape */
+  --app-pad-top: var(--safe-top);
+  --app-pad-right: max(8px, var(--safe-right));
+  --app-pad-bottom: max(8px, var(--safe-bottom));
+  --app-pad-left: max(8px, var(--safe-left));
+}
+
+/* Prevent Rubber-band / page scroll inside app */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overscroll-behavior: none;         /* no scroll chaining */
+  background: #000;                  /* app background (adjust if needed) */
+}
+
+/* The root app container should fill the visual viewport height on mobile */
+#app, .app, body > main {
+  position: relative;
+  width: 100%;
+  min-height: 100dvh;                /* dynamic viewport height (iOS Safari friendly) */
+  padding: var(--app-pad-top) var(--app-pad-right) var(--app-pad-bottom) var(--app-pad-left);
+  box-sizing: border-box;
+}
+
+/* Full-bleed “board” or main stage should not be clipped by notches */
+.board-viewport, .main-stage, .toy-area {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  /* If you ever use fixed headers/footers, subtract them with calc(...) */
+}
+
+/* Interactive layers must disable browser gestures (we’ll implement our own) */
+canvas, .board-viewport, .toy-panel, .gesture-layer {
+  touch-action: none;                /* disables browser pinch/scroll on the element */
+}
+
+/* Avoid text zooming on iOS when rotating / focusing inputs */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Utility: hide scrollbars in overflow containers if present */
+.noscroll {
+  overflow: hidden !important;
+}
+
 /* style.css - Cleaned and Refactored */
 @import url("./src/overview-button.css");
 .tutorial-particles-front { z-index: 940 !important; pointer-events: none !important; }
