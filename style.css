@@ -1840,7 +1840,7 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
 }
 
 /* Hide chrome in fullscreen, but NOT the controls (play/FS) */
-:fullscreen .app-topbar, .pseudo-fullscreen .app-topbar { display: none !important; }
+
 
 /* The gesture layer must be above canvases but below UI */
 .board-viewport, .board-wrap { position: relative; }

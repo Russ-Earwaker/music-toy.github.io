@@ -131,6 +131,10 @@ function exitFullscreen() {
 function wireButton() {
   btn = document.getElementById('fullscreenBtn');
   if (!btn) return false;
+  if (isIOS) {
+    btn.style.display = 'none';
+    return true;
+  }
   const handler = () => {
     if (isFs || inRealFullscreen()) exitFullscreen();
     else enterFullscreen();
