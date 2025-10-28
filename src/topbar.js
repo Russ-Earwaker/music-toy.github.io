@@ -1,12 +1,8 @@
-// src/topbar.js — wires page header buttons to board helpers
+// src/topbar.js - wires page header buttons to board helpers
+import * as Core from './audio-core.js';
+import { resumeAudioContextIfNeeded } from './audio-core.js';
 
 (function(){
-
-  // Transport (dynamic import; avoid top-level await inside IIFE)
-
-  let Core = null;
-
-  import('./audio-core.js').then(m=>{ Core = m; tryInitToggle(); }).catch(()=>{});
 
   function tryInitToggle(){
 
@@ -304,13 +300,15 @@ if (document.readyState === 'loading') {
     window.__topbarWired = true;
 
     const playBtn = bar.querySelector('[data-action="toggle-play"]');
-    if(playBtn) {
-      playBtn.addEventListener('pointerup', () => {
-        Core?.resumeAudioContextIfNeeded?.();
-      }, { passive: true });
+    if (playBtn) {
+      const resume = () => { resumeAudioContextIfNeeded().catch(()=>{}); };
+      ['pointerup', 'touchend', 'mouseup'].forEach(evt => {
+        playBtn.addEventListener(evt, resume, { passive: true });
+      });
+      playBtn.addEventListener('click', resume, { passive: true });
     }
 
-    bar.addEventListener('click', (e)=>{
+    bar.addEventListener('click', async (e)=>{
       const b = e.target.closest('button[data-action]');
       if (!b) return;
 
@@ -335,8 +333,9 @@ if (document.readyState === 'loading') {
       }
 
       if (action === 'toggle-play'){
-        const doToggle = ()=>{
+        const doToggle = async ()=>{
           try{
+            await resumeAudioContextIfNeeded();
             Core?.ensureAudioContext?.();
             if (Core?.isRunning?.()){
               Core?.stop?.();
@@ -347,8 +346,7 @@ if (document.readyState === 'loading') {
             }
           }catch{}
         };
-        if (!Core){ import('./audio-core.js').then(m=>{ Core=m; doToggle(); }).catch(()=>{}); }
-        else { doToggle(); }
+        await doToggle();
         return;
       }
 
@@ -519,4 +517,5 @@ document.addEventListener('change', (e)=>{
   window.ThemeBoot && window.ThemeBoot.setTheme && window.ThemeBoot.setTheme(val);
 
 });
+
 

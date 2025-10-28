@@ -46,6 +46,10 @@ canvas, .board-viewport, .toy-panel, .gesture-layer {
   touch-action: none;                /* disables browser pinch/scroll on the element */
 }
 
+.world-wrapper, .canvas-host {
+  touch-action: none;
+}
+
 /* Avoid text zooming on iOS when rotating / focusing inputs */
 html {
   -webkit-text-size-adjust: 100%;
@@ -121,6 +125,13 @@ input, select, textarea, button {
 }
 * {
   box-sizing: border-box;
+}
+
+/* Prevent any CSS transition/animation from fighting the atomic commit */
+.zoom-commit-freeze *, .zoom-commit-freeze *::before, .zoom-commit-freeze *::after {
+  transition: none !important;
+  animation: none !important;
+  caret-color: transparent; /* avoids text repaint flicker on some iPads */
 }
 
 html, body {
@@ -1896,3 +1907,36 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
 
 /* Never disable pointer events on board canvases globally */
 .toy-panel canvas { pointer-events: auto; }  /* unless you *intend* to block drawing */
+
+/* Promote UI layers to compositor during zoom gestures */
+.world, .toy, .toy-header, .toolbar, .btn, .hud, .grid-overlay, .toy-canvas {
+  transform: translateZ(0);
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.toy, .toy * {
+  -webkit-font-smoothing: antialiased;
+  contain: paint;
+}
+
+/* Stabilize icon/image layers during transforms on iOS */
+.btn img,
+.toolbar img,
+.toy-header img,
+.icon,
+.icon > svg,
+.icon > img {
+  image-rendering: auto;
+  transform: translateZ(0);
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Keep swapped icons from collapsing layout while zooming */
+.icon-img {
+  display: inline-block;
+  vertical-align: middle;
+}

@@ -1,11 +1,22 @@
 // src/loopgrid-square-drum.js — circular pad that triggers current instrument (<=300 lines)
 import { isRunning } from './audio-core.js';
+import { onZoomChange } from './zoom/ZoomCoordinator.js';
 
 if (window.__loopgridDrumBoot) {
   // already booted
 } else {
   window.__loopgridDrumBoot = true;
   const SEL = '.toy-panel[data-toy="loopgrid-drum"]';
+  let zoomMode = 'idle';
+  const unsubscribeZoom = onZoomChange((z) => {
+    zoomMode = z.mode || 'idle';
+    if (z.committed) {
+      requestAnimationFrame(relayout);
+    }
+  });
+  window.addEventListener('unload', () => {
+    try { unsubscribeZoom?.(); } catch {}
+  }, { once: true });
 
   function ensurePad(panel) {
     const body = panel.querySelector('.toy-body') || panel;
@@ -97,6 +108,7 @@ if (window.__loopgridDrumBoot) {
   function layout(panel) {
     const pad = panel.querySelector('.loopgrid-drum-pad');
     if (!pad) return;
+    if (zoomMode === 'gesturing') return;
     
     const label = pad.querySelector('.drum-tap-label');
     if (label) {
@@ -114,8 +126,6 @@ if (window.__loopgridDrumBoot) {
         updateLabelVisibility(panel)
       });
     });
-
-    window.addEventListener('board:scale', relayout);
 
     function checkRunningState() {
       document.querySelectorAll(SEL).forEach(updateLabelVisibility);

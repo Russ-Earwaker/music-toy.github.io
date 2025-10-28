@@ -4,6 +4,7 @@
 import { buildPalette, midiToName } from './note-helpers.js';
 import { drawBlock } from './toyhelpers.js';
 import { getLoopInfo, isRunning } from './audio-core.js';
+import { onZoomChange, getZoomState } from './zoom/ZoomCoordinator.js';
 
 const STROKE_COLORS = [
   'rgba(95,179,255,0.95)',  // Blue
@@ -610,22 +611,59 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   
   body.appendChild(wrap);
 
-  const particleCtx = particleCanvas.getContext('2d');
-  const gctx = grid.getContext('2d', { willReadFrequently: true });
-  const pctx = paint.getContext('2d', { willReadFrequently: true });
-  const nctx = nodesCanvas.getContext('2d', { willReadFrequently: true });
-  const fctx = flashCanvas.getContext('2d', { willReadFrequently: true });
-  const ghostCtx = ghostCanvas.getContext('2d');
-  const tutorialCtx = tutorialCanvas.getContext('2d');
+  const particleFrontCtx = particleCanvas.getContext('2d');
+  const particleBackCanvas = document.createElement('canvas');
+  const particleBackCtx = particleBackCanvas.getContext('2d');
+  let particleCtx = particleFrontCtx;
+
+  const gridFrontCtx = grid.getContext('2d', { willReadFrequently: true });
+  const gridBackCanvas = document.createElement('canvas');
+  const gridBackCtx = gridBackCanvas.getContext('2d', { willReadFrequently: true });
+  let gctx = gridFrontCtx;
+
+  const frontCanvas = paint;
+  frontCanvas.classList.add('toy-canvas');
+  const pctx = frontCanvas.getContext('2d', { willReadFrequently: true });
+  const backCanvas = document.createElement('canvas');
+  const backCtx = backCanvas.getContext('2d', { alpha: true, desynchronized: true });
+
+  const nodesFrontCtx = nodesCanvas.getContext('2d', { willReadFrequently: true });
+  const nodesBackCanvas = document.createElement('canvas');
+  const nodesBackCtx = nodesBackCanvas.getContext('2d', { willReadFrequently: true });
+  let nctx = nodesFrontCtx;
+
+  const flashFrontCtx = flashCanvas.getContext('2d', { willReadFrequently: true });
+  const flashBackCanvas = document.createElement('canvas');
+  const flashBackCtx = flashBackCanvas.getContext('2d', { willReadFrequently: true });
+  let fctx = flashFrontCtx;
+
+  const ghostFrontCtx = ghostCanvas.getContext('2d');
+  const ghostBackCanvas = document.createElement('canvas');
+  const ghostBackCtx = ghostBackCanvas.getContext('2d');
+  let ghostCtx = ghostFrontCtx;
+
+  const tutorialFrontCtx = tutorialCanvas.getContext('2d');
+  const tutorialBackCanvas = document.createElement('canvas');
+  const tutorialBackCtx = tutorialBackCanvas.getContext('2d');
+  let tutorialCtx = tutorialFrontCtx;
 
   let __forceSwipeVisible = null; // null=auto, true/false=forced by tutorial
   let isRestoring = false;
 
+  // Double-buffer + DPR tracking
+  let paintDpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
+  let pendingPaintSwap = false;
+  let zoomCommitPhase = 'idle';
+
   // State
   let cols = initialCols;
-  let cssW=0, cssH=0, cw=0, ch=0, topPad=0;
+  let cssW = 0, cssH = 0, cw = 0, ch = 0, topPad = 0;
   let lastBoardScale = 1;
   let boardScale = 1;
+  let zoomMode = 'idle';
+  let pendingZoomResnap = false;
+  const SCALE_RESNAP_EPSILON = 1e-4;
+  let lastCommittedScale = boardScale;
   let drawing=false, erasing=false;
   // The `strokes` array is removed. The paint canvas is now the source of truth.
   let cur = null;
@@ -658,6 +696,26 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let gridArea = { x: 0, y: 0, w: 0, h: 0 };
   let tutorialHighlightMode = 'none'; // 'none' | 'notes' | 'drag'
   let tutorialHighlightRaf = null;
+  let usingBackBuffers = false;
+  let pendingSwap = false;
+  let pendingWrapSize = null;
+  let pendingEraserSize = null;
+  let progressBudget = 16; // ms guard so we skip redundant progress swaps
+  let lastProgressFrameTs = 0;
+  let progressMeasureW = 0;
+  let progressMeasureH = 0;
+  const PROGRESS_SIZE_THRESHOLD = 4;
+  const PROGRESS_AREA_THRESHOLD = 64 * 64;
+
+  const initialMeasureHost = frontCanvas?.parentElement || wrap || body;
+  const initialMeasure = measureCSSSize(initialMeasureHost);
+  if (initialMeasure.w > 0 && initialMeasure.h > 0) {
+    cssW = initialMeasure.w;
+    cssH = initialMeasure.h;
+    progressMeasureW = cssW;
+    progressMeasureH = cssH;
+    updatePaintBackingStores({ force: true, target: usingBackBuffers ? 'back' : 'both' });
+  }
 
   const particles = createDrawGridParticles({
     getW: () => cssW,
@@ -668,12 +726,14 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
   const clearTutorialHighlight = () => {
     if (!tutorialCtx) return;
-    tutorialCtx.clearRect(0, 0, tutorialCanvas.width, tutorialCanvas.height);
+    const tutorialSurface = getActiveTutorialCanvas();
+    tutorialCtx.clearRect(0, 0, tutorialSurface.width, tutorialSurface.height);
   };
 
   const renderTutorialHighlight = () => {
     if (!tutorialCtx) return;
-    tutorialCtx.clearRect(0, 0, tutorialCanvas.width, tutorialCanvas.height);
+    const tutorialSurface = getActiveTutorialCanvas();
+    tutorialCtx.clearRect(0, 0, tutorialSurface.width, tutorialSurface.height);
     if (tutorialHighlightMode === 'none' || !nodeCoordsForHitTest?.length) return;
     const baseRadius = Math.max(6, Math.min(cw || 0, ch || 0) * 0.55);
     tutorialCtx.save();
@@ -980,23 +1040,24 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   try { panel.__dgUpdateButtons = updateGeneratorButtons; } catch{}
 
   // New central helper to redraw the paint canvas and regenerate the node map from the `strokes` array.
-  function clearAndRedrawFromStrokes() {
-    pctx.clearRect(0, 0, cssW, cssH);
+  function clearAndRedrawFromStrokes(targetCtx = pctx) {
+    if (!targetCtx) return;
+    targetCtx.clearRect(0, 0, cssW, cssH);
 
     const normalStrokes = strokes.filter(s => !s.justCreated);
     const newStrokes = strokes.filter(s => s.justCreated);
 
     // 1. Draw all existing, non-new strokes first.
     for (const s of normalStrokes) {
-      drawFullStroke(pctx, s);
+      drawFullStroke(targetCtx, s);
     }
     // 2. Apply the global erase mask to the existing strokes.
     for (const s of eraseStrokes) {
-      drawEraseStroke(pctx, s);
+      drawEraseStroke(targetCtx, s);
     }
     // 3. Draw the brand new strokes on top, so they are not affected by old erasures.
     for (const s of newStrokes) {
-      drawFullStroke(pctx, s);
+      drawFullStroke(targetCtx, s);
     }
 
     regenerateMapFromStrokes();
@@ -1024,6 +1085,12 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     }
     ctx.stroke();
     ctx.restore();
+  }
+
+  function drawIntoBackOnly() {
+    if (!backCtx || !cssW || !cssH) return;
+    clearAndRedrawFromStrokes(backCtx);
+    pendingPaintSwap = true;
   }
 
   /**
@@ -1170,7 +1237,177 @@ function regenerateMapFromStrokes() {
       drawGrid();
   }
 
+  const initialZoomState = getZoomState();
+  if (initialZoomState) {
+    const initialScale =
+      initialZoomState.currentScale ?? initialZoomState.targetScale;
+    if (Number.isFinite(initialScale)) {
+      boardScale = initialScale;
+      lastCommittedScale = boardScale;
+    }
+  }
+
+  function capturePaintSnapshot() {
+    try {
+      if (paint.width > 0 && paint.height > 0) {
+        const snap = document.createElement('canvas');
+        snap.width = paint.width;
+        snap.height = paint.height;
+        snap.getContext('2d')?.drawImage(paint, 0, 0);
+        return snap;
+      }
+    } catch {}
+    return null;
+  }
+
+  function restorePaintSnapshot(snap) {
+    if (!snap) return;
+    try {
+      updatePaintBackingStores({ target: usingBackBuffers ? 'back' : 'both' });
+      pctx.clearRect(0, 0, cssW, cssH);
+      pctx.drawImage(snap, 0, 0, snap.width, snap.height, 0, 0, cssW, cssH);
+    } catch {}
+  }
+
+  const unsubscribeZoom = onZoomChange((z) => {
+    zoomMode = z.mode || 'idle';
+    const nextScale = Number.isFinite(z.currentScale)
+      ? z.currentScale
+      : Number(z.targetScale);
+    if (Number.isFinite(nextScale)) {
+      boardScale = nextScale;
+    }
+
+    if (z.phase === 'progress') {
+      const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+        ? performance.now()
+        : Date.now();
+      if (lastProgressFrameTs && (now - lastProgressFrameTs) < progressBudget) {
+        return;
+      }
+      lastProgressFrameTs = now;
+
+      const hostEl = frontCanvas?.parentElement || wrap || panel;
+      if (hostEl && typeof hostEl.getBoundingClientRect === 'function') {
+        const rect = hostEl.getBoundingClientRect();
+        if (rect && rect.width && rect.height) {
+          const dw = Math.abs(rect.width - progressMeasureW);
+          const dh = Math.abs(rect.height - progressMeasureH);
+          if (dw > PROGRESS_SIZE_THRESHOLD || dh > PROGRESS_SIZE_THRESHOLD) {
+            progressMeasureW = rect.width;
+            progressMeasureH = rect.height;
+            cssW = rect.width;
+            cssH = rect.height;
+            if (backCanvas && backCtx) {
+              const targetW = Math.round(cssW * paintDpr);
+              const targetH = Math.round(cssH * paintDpr);
+              const areaDelta = Math.abs(targetW * targetH - backCanvas.width * backCanvas.height);
+              if (areaDelta > PROGRESS_AREA_THRESHOLD) {
+                updatePaintBackingStores({ target: 'back' });
+              }
+            }
+          }
+        }
+      }
+
+      drawIntoBackOnly();
+      if (pendingPaintSwap) {
+        swapBackToFront();
+        pendingPaintSwap = false;
+      }
+      return;
+    }
+
+    if (z.phase) {
+      if (z.phase === 'freeze') {
+        zoomCommitPhase = 'freeze';
+        useFrontBuffers();
+        paintDpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
+        const hostEl = frontCanvas?.parentElement || wrap || panel;
+        const measured = measureCSSSize(hostEl);
+        if (measured.w > 0 && measured.h > 0) {
+          cssW = measured.w;
+          cssH = measured.h;
+          progressMeasureW = cssW;
+          progressMeasureH = cssH;
+        }
+        pendingZoomResnap = true;
+        return;
+      }
+      if (z.phase === 'recompute') {
+        zoomCommitPhase = 'recompute';
+        paintDpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
+        pendingZoomResnap = false;
+        useBackBuffers();
+        updatePaintBackingStores({ force: true, target: 'back' });
+        resnapAndRedraw(true);
+        drawIntoBackOnly();
+        pendingSwap = true;
+        return;
+      }
+      if (z.phase === 'swap') {
+        zoomCommitPhase = 'swap';
+        if (pendingPaintSwap) {
+          swapBackToFront();
+          pendingPaintSwap = false;
+        }
+        if (pendingSwap) {
+          flushVisualBackBuffersToFront();
+          useFrontBuffers();
+          pendingSwap = false;
+        }
+        return;
+      }
+      if (z.phase === 'done') {
+        zoomCommitPhase = 'idle';
+        useFrontBuffers();
+        pendingPaintSwap = false;
+        pendingSwap = false;
+        if (z.committed) {
+          lastCommittedScale = boardScale;
+          panel.dispatchEvent(new CustomEvent('toy-zoom-commit', { detail: z }));
+        }
+        return;
+      }
+    }
+
+    if (zoomMode === 'gesturing') {
+      if (Math.abs(boardScale - lastCommittedScale) > SCALE_RESNAP_EPSILON) {
+        pendingZoomResnap = true;
+      }
+      return;
+    }
+
+    const scaleDelta = Math.abs(boardScale - lastCommittedScale);
+    const shouldResnap =
+      (z.committed && scaleDelta > SCALE_RESNAP_EPSILON) ||
+      (pendingZoomResnap && scaleDelta > SCALE_RESNAP_EPSILON);
+
+    if (shouldResnap) {
+      pendingZoomResnap = false;
+      const scaleSnap = capturePaintSnapshot();
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (!panel.isConnected) return;
+          resnapAndRedraw(true);
+          if (scaleSnap) restorePaintSnapshot(scaleSnap);
+          panel.dispatchEvent(new CustomEvent('toy-zoom-commit', { detail: z }));
+          lastCommittedScale = boardScale;
+        });
+      });
+    } else {
+      pendingZoomResnap = false;
+      if (z.committed) {
+        lastCommittedScale = boardScale;
+      }
+    }
+  });
+
   function resnapAndRedraw(forceLayout = false) {
+    if (zoomMode === 'gesturing' && !forceLayout) {
+      pendingZoomResnap = true;
+      return;
+    }
     const hasStrokes = strokes.length > 0;
     const hasNodes = currentMap && currentMap.nodes && currentMap.nodes.some(s => s && s.size > 0);
     syncLetterFade({ immediate: true });
@@ -1241,10 +1478,13 @@ function regenerateMapFromStrokes() {
         requestAnimationFrame(() => {
           if (zoomSnap) {
             try {
-              pctx.save();
-              pctx.setTransform(1,0,0,1,0,0);
-              pctx.drawImage(zoomSnap, 0,0, zoomSnap.width, zoomSnap.height, 0,0, paint.width, paint.height);
-              pctx.restore();
+              updatePaintBackingStores({ target: usingBackBuffers ? 'back' : 'both' });
+              pctx.clearRect(0, 0, cssW, cssH);
+              pctx.drawImage(
+                zoomSnap,
+                0, 0, zoomSnap.width, zoomSnap.height,
+                0, 0, cssW, cssH
+              );
             } catch {}
           }
         });
@@ -1257,43 +1497,11 @@ function regenerateMapFromStrokes() {
     requestAnimationFrame(() => resnapAndRedraw(true));
   });
 
-  // Listen on window because board-viewport dispatches on window.
-  // Debounce to the next frame so the DOM transform from setBoardScale/apply() is settled.
-  window.addEventListener('board:scale', (e) => {
-    const newScale = e?.detail?.scale ?? 1;
-    if (Math.abs(newScale - boardScale) < 0.0001) return; // ignore no-op
-    boardScale = newScale;
-
-    // Snapshot current paint so we can restore after canvas backing-store resize
-    let scaleSnap = null;
-    try {
-      if (paint.width > 0 && paint.height > 0) {
-        scaleSnap = document.createElement('canvas');
-        scaleSnap.width = paint.width;
-        scaleSnap.height = paint.height;
-        scaleSnap.getContext('2d')?.drawImage(paint, 0, 0);
-      }
-    } catch {}
-
-    requestAnimationFrame(() => {
-      if (!panel.isConnected) return;
-      // Re-layout with force so cssW/cssH and DPR are recomputed against the new zoom
-      resnapAndRedraw(true);
-      // Restore snapshot after layout; ensure we don't double-scale
-      if (scaleSnap) {
-        try {
-          pctx.setTransform(1, 0, 0, 1, 0, 0);
-          pctx.clearRect(0, 0, paint.width, paint.height);
-          pctx.drawImage(scaleSnap, 0, 0, scaleSnap.width, scaleSnap.height, 0, 0, paint.width, paint.height);
-        } catch {}
-      }
-
-
-    });
-  });
-
-
   const observer = new ResizeObserver(() => {
+    if (zoomMode === 'gesturing') {
+      pendingZoomResnap = true;
+      return;
+    }
     resnapAndRedraw(false);
   });
 
@@ -1310,11 +1518,177 @@ function regenerateMapFromStrokes() {
     return { w, h };
   }
 
+  function measureCSSSize(el) {
+    if (!el) return { w: 0, h: 0 };
+    const r = el.getBoundingClientRect();
+    return { w: r.width || 0, h: r.height || 0 };
+  }
+
+  function useBackBuffers() {
+    if (usingBackBuffers) return;
+    usingBackBuffers = true;
+    particleCtx = particleBackCtx;
+    gctx = gridBackCtx;
+    nctx = nodesBackCtx;
+    fctx = flashBackCtx;
+    ghostCtx = ghostBackCtx;
+    tutorialCtx = tutorialBackCtx;
+  }
+
+  function useFrontBuffers() {
+    if (!usingBackBuffers) return;
+    usingBackBuffers = false;
+    particleCtx = particleFrontCtx;
+    gctx = gridFrontCtx;
+    nctx = nodesFrontCtx;
+    fctx = flashFrontCtx;
+    ghostCtx = ghostFrontCtx;
+    tutorialCtx = tutorialFrontCtx;
+  }
+
+  function getActiveFlashCanvas() {
+    return usingBackBuffers ? flashBackCanvas : flashCanvas;
+  }
+
+  function getActiveGhostCanvas() {
+    return usingBackBuffers ? ghostBackCanvas : ghostCanvas;
+  }
+
+  function getActiveTutorialCanvas() {
+    return usingBackBuffers ? tutorialBackCanvas : tutorialCanvas;
+  }
+
+  function updatePaintBackingStores({ force = false, target } = {}) {
+    if (!cssW || !cssH) return;
+    const targetW = Math.max(1, Math.round(cssW * paintDpr));
+    const targetH = Math.max(1, Math.round(cssH * paintDpr));
+    const mode = target || (usingBackBuffers ? 'back' : 'both');
+    const updateFront = mode === 'front' || mode === 'both';
+    const updateBack = mode === 'back' || mode === 'both';
+
+    if (updateFront) {
+      if (
+        force ||
+        frontCanvas.width !== targetW ||
+        frontCanvas.height !== targetH
+      ) {
+        frontCanvas.width = targetW;
+        frontCanvas.height = targetH;
+        pctx.setTransform(1, 0, 0, 1, 0, 0);
+        pctx.imageSmoothingEnabled = true;
+        pctx.scale(paintDpr, paintDpr);
+      }
+    }
+
+    if (updateBack && backCtx) {
+      if (
+        force ||
+        backCanvas.width !== targetW ||
+        backCanvas.height !== targetH
+      ) {
+        backCanvas.width = targetW;
+        backCanvas.height = targetH;
+        backCtx.setTransform(1, 0, 0, 1, 0, 0);
+        backCtx.imageSmoothingEnabled = true;
+        backCtx.scale(paintDpr, paintDpr);
+      }
+    }
+  }
+
+  function swapBackToFront() {
+    if (!backCtx || !cssW || !cssH) return;
+    updatePaintBackingStores({ force: true, target: 'front' });
+    pctx.clearRect(0, 0, cssW, cssH);
+    try {
+      pctx.drawImage(
+        backCanvas,
+        0, 0, backCanvas.width, backCanvas.height,
+        0, 0, cssW, cssH
+      );
+    } catch {}
+  }
+
+  function flushVisualBackBuffersToFront() {
+    const w = Math.max(1, Math.round(cssW));
+    const h = Math.max(1, Math.round(cssH));
+
+    if (pendingWrapSize) {
+      wrap.style.width = `${pendingWrapSize.width}px`;
+      wrap.style.height = `${pendingWrapSize.height}px`;
+      pendingWrapSize = null;
+    }
+    if (pendingEraserSize != null) {
+      const sizePx = `${pendingEraserSize}px`;
+      eraserCursor.style.width = sizePx;
+      eraserCursor.style.height = sizePx;
+      pendingEraserSize = null;
+    }
+
+    grid.width = w; grid.height = h;
+    nodesCanvas.width = w; nodesCanvas.height = h;
+    particleCanvas.width = w; particleCanvas.height = h;
+    flashCanvas.width = w; flashCanvas.height = h;
+    ghostCanvas.width = w; ghostCanvas.height = h;
+    tutorialCanvas.width = w; tutorialCanvas.height = h;
+
+    gridFrontCtx.setTransform(1, 0, 0, 1, 0, 0);
+    gridFrontCtx.clearRect(0, 0, w, h);
+    gridFrontCtx.drawImage(
+      gridBackCanvas,
+      0, 0, gridBackCanvas.width, gridBackCanvas.height,
+      0, 0, w, h
+    );
+
+    nodesFrontCtx.setTransform(1, 0, 0, 1, 0, 0);
+    nodesFrontCtx.clearRect(0, 0, w, h);
+    nodesFrontCtx.drawImage(
+      nodesBackCanvas,
+      0, 0, nodesBackCanvas.width, nodesBackCanvas.height,
+      0, 0, w, h
+    );
+
+    particleFrontCtx.setTransform(1, 0, 0, 1, 0, 0);
+    particleFrontCtx.clearRect(0, 0, w, h);
+    particleFrontCtx.drawImage(
+      particleBackCanvas,
+      0, 0, particleBackCanvas.width, particleBackCanvas.height,
+      0, 0, w, h
+    );
+
+    flashFrontCtx.setTransform(1, 0, 0, 1, 0, 0);
+    flashFrontCtx.clearRect(0, 0, w, h);
+    flashFrontCtx.drawImage(
+      flashBackCanvas,
+      0, 0, flashBackCanvas.width, flashBackCanvas.height,
+      0, 0, w, h
+    );
+
+    ghostFrontCtx.setTransform(1, 0, 0, 1, 0, 0);
+    ghostFrontCtx.clearRect(0, 0, w, h);
+    ghostFrontCtx.drawImage(
+      ghostBackCanvas,
+      0, 0, ghostBackCanvas.width, ghostBackCanvas.height,
+      0, 0, w, h
+    );
+
+    tutorialFrontCtx.setTransform(1, 0, 0, 1, 0, 0);
+    tutorialFrontCtx.clearRect(0, 0, w, h);
+    tutorialFrontCtx.drawImage(
+      tutorialBackCanvas,
+      0, 0, tutorialBackCanvas.width, tutorialBackCanvas.height,
+      0, 0, w, h
+    );
+  }
+
   function layout(force = false){
     const bodyW = body.offsetWidth;
     const bodyH = body.offsetHeight;
-    wrap.style.width  = bodyW + 'px';
-    wrap.style.height = bodyH + 'px';
+    if (usingBackBuffers) {
+      pendingWrapSize = { width: bodyW, height: bodyH };
+    } else {
+      wrap.style.width  = bodyW + 'px';
+      wrap.style.height = bodyH + 'px';
+    }
 
 
     // Measure transform-immune base…
@@ -1346,25 +1720,38 @@ function regenerateMapFromStrokes() {
 
       cssW = newW;
       cssH = newH;
+      progressMeasureW = cssW;
+      progressMeasureH = cssH;
       const w = Math.max(1, Math.round(cssW));
       const h = Math.max(1, Math.round(cssH));
-      grid.width = w; grid.height = h;
-      paint.width = w; paint.height = h;
-      nodesCanvas.width = w; nodesCanvas.height = h;
-      flashCanvas.width = w; flashCanvas.height = h;
-      particleCanvas.width = w; particleCanvas.height = h;
-      ghostCanvas.width = w; ghostCanvas.height = h;
-      tutorialCanvas.width = w; tutorialCanvas.height = h;
+      if (usingBackBuffers) {
+        gridBackCanvas.width = w; gridBackCanvas.height = h;
+        nodesBackCanvas.width = w; nodesBackCanvas.height = h;
+        particleBackCanvas.width = w; particleBackCanvas.height = h;
+        flashBackCanvas.width = w; flashBackCanvas.height = h;
+        ghostBackCanvas.width = w; ghostBackCanvas.height = h;
+        tutorialBackCanvas.width = w; tutorialBackCanvas.height = h;
+      } else {
+        grid.width = w; grid.height = h;
+        nodesCanvas.width = w; nodesCanvas.height = h;
+        particleCanvas.width = w; particleCanvas.height = h;
+        flashCanvas.width = w; flashCanvas.height = h;
+        ghostCanvas.width = w; ghostCanvas.height = h;
+        tutorialCanvas.width = w; tutorialCanvas.height = h;
+      }
+      updatePaintBackingStores({ force: true, target: usingBackBuffers ? 'back' : 'both' });
       if (tutorialHighlightMode !== 'none') renderTutorialHighlight();
 
       // Scale particle positions if zoom changed
-      if (zoomX !== lastZoomX || zoomY !== lastZoomY) {
-        const scaleX = zoomX / lastZoomX;
-        const scaleY = zoomY / lastZoomY;
-        particles.scalePositions(scaleX, scaleY);
-        lastZoomX = zoomX;
-        lastZoomY = zoomY;
+      if (oldW > 0 && oldH > 0) {
+        const scaleX = cssW / oldW;
+        const scaleY = cssH / oldH;
+        if ((scaleX !== 1 || scaleY !== 1) && Number.isFinite(scaleX) && Number.isFinite(scaleY)) {
+          particles.scalePositions(scaleX, scaleY);
+        }
       }
+      lastZoomX = zoomX;
+      lastZoomY = zoomY;
 
       // Scale the logical stroke data if we have it and the canvas was resized
       if (strokes.length > 0 && oldW > 0 && oldH > 0 && !isRestoring) {
@@ -1401,34 +1788,39 @@ function regenerateMapFromStrokes() {
 
       // Update eraser cursor size
       const eraserWidth = getLineWidth() * 2;
-      eraserCursor.style.width = `${eraserWidth}px`;
-      eraserCursor.style.height = `${eraserWidth}px`;
+      if (usingBackBuffers) {
+        pendingEraserSize = eraserWidth;
+      } else {
+        eraserCursor.style.width = `${eraserWidth}px`;
+        eraserCursor.style.height = `${eraserWidth}px`;
+      }
 
       drawGrid();
       // Restore paint snapshot scaled to new size (preserves erasures)
-      if (paintSnapshot) {
+      if (paintSnapshot && zoomCommitPhase !== 'recompute') {
         try {
-          pctx.save();
-          // Draw in device pixels to avoid double-scaling from current transform
-          pctx.setTransform(1, 0, 0, 1, 0, 0);
+          updatePaintBackingStores({ target: usingBackBuffers ? 'back' : 'both' });
+          pctx.clearRect(0, 0, cssW, cssH);
           pctx.drawImage(
             paintSnapshot,
             0, 0, paintSnapshot.width, paintSnapshot.height,
-            0, 0, paint.width, paint.height
+            0, 0, cssW, cssH
           );
-          pctx.restore();
         } catch {}
       }
       // Clear other content canvases. The caller is responsible for redrawing nodes/overlay.
       nctx.clearRect(0, 0, w, h);
-      fctx.clearRect(0, 0, w, h);
-      ghostCtx.clearRect(0,0,ghostCanvas.width,ghostCanvas.height);
+      const flashTarget = getActiveFlashCanvas();
+      fctx.clearRect(0, 0, flashTarget.width, flashTarget.height);
+      const ghostTarget = getActiveGhostCanvas();
+      ghostCtx.clearRect(0, 0, ghostTarget.width, ghostTarget.height);
     }
   }
 
   function flashColumn(col) {
     // Save current grid state to restore after flash
-    const currentGridData = gctx.getImageData(0, 0, grid.width, grid.height);
+    const gridSurface = usingBackBuffers ? gridBackCanvas : grid;
+    const currentGridData = gctx.getImageData(0, 0, gridSurface.width, gridSurface.height);
 
     const x = gridArea.x + col * cw;
     const w = cw;
@@ -1491,7 +1883,7 @@ function regenerateMapFromStrokes() {
     gctx.lineWidth = Math.max(0.5, Math.min(cw,ch) * 0.05);
     // Verticals (including outer lines)
     for (let i = 0; i <= cols; i++) {
-        const x = gridArea.x + i * cw;
+        const x = crisp(gridArea.x + i * cw);
         gctx.beginPath();
         gctx.moveTo(x, noteGridY);
         gctx.lineTo(x, gridArea.y + gridArea.h);
@@ -1499,7 +1891,7 @@ function regenerateMapFromStrokes() {
     }
     // Horizontals (including outer lines)
     for (let j = 0; j <= rows; j++) {
-        const y = noteGridY + j * ch;
+        const y = crisp(noteGridY + j * ch);
         gctx.beginPath();
         gctx.moveTo(gridArea.x, y);
         gctx.lineTo(gridArea.x + gridArea.w, y);
@@ -1513,14 +1905,14 @@ function regenerateMapFromStrokes() {
             // Highlight only if there are nodes AND the column is active
             if (currentMap.nodes[c]?.size > 0 && currentMap.active[c]) {
                 // Left line of the column
-                const x1 = gridArea.x + c * cw;
+                const x1 = crisp(gridArea.x + c * cw);
                 gctx.beginPath();
                 gctx.moveTo(x1, noteGridY);
                 gctx.lineTo(x1, gridArea.y + gridArea.h);
                 gctx.stroke();
 
                 // Right line of the column
-                const x2 = gridArea.x + (c + 1) * cw;
+                const x2 = crisp(gridArea.x + (c + 1) * cw);
                 gctx.beginPath();
                 gctx.moveTo(x2, noteGridY);
                 gctx.lineTo(x2, gridArea.y + gridArea.h);
@@ -1529,6 +1921,10 @@ function regenerateMapFromStrokes() {
         }
     }
 
+  }
+
+  function crisp(v) {
+    return Math.round(v) + 0.5;
   }
 
   // A helper to draw a complete stroke from a point array.
@@ -1802,10 +2198,10 @@ function regenerateMapFromStrokes() {
 
   function drawNoteLabels(nodes) {
     nctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-    nctx.font = '12px system-ui, sans-serif';
+    nctx.font = '600 12px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
     nctx.textAlign = 'center';
-    nctx.textBaseline = 'bottom';
-    const labelY = cssH - 10; // Position below the grid area, in the safe zone
+    nctx.textBaseline = 'alphabetic';
+    const labelY = Math.round(cssH - 10); // Position below the grid area, in the safe zone
 
     for (let c = 0; c < cols; c++) {
         if (nodes[c] && nodes[c].size > 0) {
@@ -1816,8 +2212,8 @@ function regenerateMapFromStrokes() {
             if (r === undefined) continue;
             const midiNote = chromaticPalette[r];
             if (midiNote !== undefined) {
-                const x = gridArea.x + c * cw + cw * 0.5;
-                nctx.fillText(midiToName(midiNote), x, labelY);
+                const tx = Math.round(gridArea.x + c * cw + cw * 0.5);
+                nctx.fillText(midiToName(midiNote), tx, labelY);
             }
         }
     }
@@ -2456,6 +2852,9 @@ function regenerateMapFromStrokes() {
     }
     panel.classList.toggle('toy-playing', showPlaying);
 
+    const flashSurface = getActiveFlashCanvas();
+    const ghostSurface = getActiveGhostCanvas();
+
     // Step and draw particles
     try {
       particles.step(1/60); // Assuming 60fps for dt
@@ -2468,7 +2867,7 @@ function regenerateMapFromStrokes() {
     if (currentMap) drawNodes(currentMap.nodes); // Always redraw nodes (cubes, connections, labels)
 
     // Clear flash canvas for this frame's animations
-    fctx.clearRect(0, 0, flashCanvas.width, flashCanvas.height);
+    fctx.clearRect(0, 0, flashSurface.width, flashSurface.height);
 
     // Animate special stroke paint (hue cycling) without resurrecting erased areas:
     // Draw animated special strokes into flashCanvas, then mask with current paint alpha.
@@ -3034,7 +3433,8 @@ function regenerateMapFromStrokes() {
       ghostGuideAnimFrame = null;
     }
     ghostCtx.setTransform(1,0,0,1,0,0);
-    ghostCtx.clearRect(0,0,ghostCanvas.width,ghostCanvas.height);
+    const ghostSurface = getActiveGhostCanvas();
+    ghostCtx.clearRect(0,0,ghostSurface.width,ghostSurface.height);
   }
 
 function startGhostGuide({
@@ -3078,6 +3478,7 @@ function startGhostGuide({
   const noiseSeed = Math.random() * 100;
 
       function frame(now) {
+        const ghostSurface = getActiveGhostCanvas();
         const elapsed = now - startTime;
         const t = Math.min(elapsed / duration, 1);
   
@@ -3110,7 +3511,7 @@ function startGhostGuide({
     ghostCtx.setTransform(1,0,0,1,0,0);
     ghostCtx.globalCompositeOperation = 'destination-out';
     ghostCtx.globalAlpha = 0.1;
-    ghostCtx.fillRect(0, 0, ghostCanvas.width, ghostCanvas.height);
+    ghostCtx.fillRect(0, 0, ghostSurface.width, ghostSurface.height);
     ghostCtx.restore();
 
     // Draw new segment + dot (device space)
@@ -3155,7 +3556,7 @@ function startGhostGuide({
       ghostCtx.save();
       ghostCtx.globalCompositeOperation = 'destination-out';
       ghostCtx.globalAlpha = 1;
-      ghostCtx.fillRect(0, 0, ghostCanvas.width, ghostCanvas.height);
+      ghostCtx.fillRect(0, 0, ghostSurface.width, ghostSurface.height);
       ghostCtx.restore();
       stopGhostGuide();
     }
@@ -3244,6 +3645,10 @@ function runAutoGhostGuideSweep() {
     tutorialHighlightMode = 'none';
     stopTutorialHighlightLoop();
     noteToggleEffects = [];
+    if (typeof unsubscribeZoom === 'function') {
+      try { unsubscribeZoom(); } catch {}
+    }
+    observer.disconnect();
   }, { once: true });
 
   panel.addEventListener('tutorial:highlight-notes', (event) => {

@@ -19,10 +19,21 @@ import './zoom-overlay.js';
 import './toy-spawner.js';
 import { initAudioAssets } from './audio-samples.js';
 import { loadInstrumentEntries as loadInstrumentCatalog } from './instrument-catalog.js';
+import { installIOSAudioUnlock } from './ios-audio-unlock.js';
+import { installAudioDiagnostics } from './audio-diagnostics.js';
 import { DEFAULT_BPM, NUM_STEPS, ensureAudioContext, getLoopInfo, setBpm, start, isRunning } from './audio-core.js';
 import { buildGrid } from './grid-core.js';
 import { buildDrumGrid } from './drum-core.js';
 import { tryRestoreOnBoot, startAutosave } from './persistence.js';
+
+installIOSAudioUnlock();
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', installAudioDiagnostics, { once: true });
+} else {
+  installAudioDiagnostics();
+}
+// Ensure at least one non-passive gesture listener exists for iOS unlock
+window.addEventListener('touchstart', ()=>{}, { capture: true, passive: false });
 
 /**
  * Calculates the visual extents of a panel's content, including any

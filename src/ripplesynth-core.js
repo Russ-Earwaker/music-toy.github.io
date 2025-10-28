@@ -5,7 +5,7 @@ import { randomizeRects } from './toyhelpers.js';
 import { resizeCanvasForDPR, noteList } from './utils.js';
 import { PENTATONIC_OFFSETS } from './ripplesynth-scale.js';
 import { boardScale } from './board-scale-helpers.js';
-import { ensureAudioContext, barSeconds as audioBarSeconds, getLoopInfo, isRunning, getToyGain, getToyVolume } from './audio-core.js';
+import { ensureAudioContext, barSeconds as audioBarSeconds, getLoopInfo, isRunning, getToyGain, getToyVolume, resumeAudioContextIfNeeded } from './audio-core.js';
 import { installQuantUI } from './bouncer-quant-ui.js';
 import { triggerInstrument as __rawTrig } from './audio-samples.js';
 import { drawBlocksSection } from './ripplesynth-blocks.js';
@@ -552,7 +552,8 @@ export function createRippleSynth(selector){
     }
   });
 
-  canvas.addEventListener('pointerdown', (e)=>{
+  canvas.addEventListener('pointerdown', async (e)=>{
+    try { await resumeAudioContextIfNeeded(); } catch {}
     const gp = getCanvasPos(canvas, e);
     const gx0 = n2x(generator.nx), gy0 = n2y(generator.ny);
     const nearGen = generator.placed && !isZoomed() && (Math.hypot(gp.x - gx0, gp.y - gy0) <= Math.max(20, generator.r*(sizing.scale||1)+10));

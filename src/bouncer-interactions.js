@@ -3,7 +3,7 @@
 import { whichThirdRect } from './toyhelpers.js';
 import { handleEdgeControllerEdit } from './bouncer-edges.js';
 import { stepIndexUp, stepIndexDown } from './note-helpers.js';
-import { ensureAudioContext } from './audio-core.js';
+import { ensureAudioContext, resumeAudioContextIfNeeded } from './audio-core.js';
 import { triggerInstrument } from './audio-samples.js';
 
 function fireNote(inst, name, toyId){
@@ -106,7 +106,8 @@ export function installBouncerInteractions({
     aimCurr = null;
   }
 
-  function onPointerDown(e){
+  async function onPointerDown(e){
+    try { await resumeAudioContextIfNeeded(); } catch {}
     if (shouldDefer()) {
       if (previewApi.has && previewApi.has()) {
         previewApi.clear && previewApi.clear();

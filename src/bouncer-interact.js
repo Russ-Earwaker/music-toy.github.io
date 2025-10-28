@@ -3,6 +3,8 @@
 // Rationale: the toy's physics & hit tests operate in the same space as drawing
 // (ctx scaled internally if needed). Using CSS px keeps spawns, drags, and
 // edge collisions aligned with the visible canvas.
+import { resumeAudioContextIfNeeded } from './audio-core.js';
+
 export function installBouncerInteractions(canvas, panel, {
   sizing, EDGE, blocks, edgeControllers, ensureAudioContext, noteList, noteValue, triggerInstrument, instrument,
   handle, cannonR, hitRect, whichThirdRect,
@@ -19,7 +21,8 @@ export function installBouncerInteractions(canvas, panel, {
     if (st.draggingBlock){ setDragState({ draggingBlock:false, dragBlockRef:null }); }
     if (st.zoomDragCand){ setDragState({ zoomDragCand:null, zoomDragStart:null, zoomTapT:null }); }
   }
-  canvas.addEventListener('pointerdown', (e)=>{
+  canvas.addEventListener('pointerdown', async (e)=>{
+    try { await resumeAudioContextIfNeeded(); } catch {}
     const st = getDragState();
     const p = toCssPoint(e);
     const hit = blocks.find(b => hitRect(p, b));
@@ -51,3 +54,4 @@ export function installBouncerInteractions(canvas, panel, {
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
 }
+
