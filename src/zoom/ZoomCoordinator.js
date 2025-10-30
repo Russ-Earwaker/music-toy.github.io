@@ -40,6 +40,12 @@ function applyTransform() {
   const x = roundPx(state.currentX);
   const y = roundPx(state.currentY);
   worldEl.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${s})`;
+
+  // Publish CSS vars for any follower layers (runs in the same RAF)
+  const st = worldEl.style;
+  st.setProperty('--zoom-scale', String(s));
+  st.setProperty('--zoom-x', `${x}px`);
+  st.setProperty('--zoom-y', `${y}px`);
 }
 
 function tick() {

@@ -215,7 +215,7 @@ import { WheelZoomLerper } from './zoom/WheelZoomLerper.js';
         const target = lerper.state;
         commitGesture(
           { scale: target.targetScale, x: target.targetX, y: target.targetY },
-          { delayMs: 80 }
+          { delayMs: 60 }
         );
       });
     }, 120);

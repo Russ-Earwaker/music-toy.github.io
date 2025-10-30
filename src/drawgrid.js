@@ -662,6 +662,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let boardScale = 1;
   let zoomMode = 'idle';
   let pendingZoomResnap = false;
+  let zoomGestureActive = false;
+  let zoomRAF = 0;
   const SCALE_RESNAP_EPSILON = 1e-4;
   let lastCommittedScale = boardScale;
   let drawing=false, erasing=false;
@@ -1269,8 +1271,25 @@ function regenerateMapFromStrokes() {
     } catch {}
   }
 
+  function scheduleZoomRecompute() {
+    if (zoomRAF) return;
+    zoomRAF = requestAnimationFrame(() => {
+      zoomRAF = 0;
+      paintDpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
+      pendingZoomResnap = false;
+      useBackBuffers();
+      updatePaintBackingStores({ force: true, target: 'back' });
+      resnapAndRedraw(true);
+      drawIntoBackOnly();
+      pendingSwap = true;
+    });
+  }
+
   const unsubscribeZoom = onZoomChange((z) => {
     zoomMode = z.mode || 'idle';
+    if (z.mode === 'gesturing') {
+      zoomGestureActive = true;
+    }
     const nextScale = Number.isFinite(z.currentScale)
       ? z.currentScale
       : Number(z.targetScale);
@@ -1279,6 +1298,7 @@ function regenerateMapFromStrokes() {
     }
 
     if (z.phase === 'progress') {
+      zoomGestureActive = true;
       const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
         ? performance.now()
         : Date.now();
@@ -1321,6 +1341,7 @@ function regenerateMapFromStrokes() {
     if (z.phase) {
       if (z.phase === 'freeze') {
         zoomCommitPhase = 'freeze';
+        zoomGestureActive = true;
         useFrontBuffers();
         paintDpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
         const hostEl = frontCanvas?.parentElement || wrap || panel;
@@ -1336,13 +1357,10 @@ function regenerateMapFromStrokes() {
       }
       if (z.phase === 'recompute') {
         zoomCommitPhase = 'recompute';
+        zoomGestureActive = true;
         paintDpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
         pendingZoomResnap = false;
-        useBackBuffers();
-        updatePaintBackingStores({ force: true, target: 'back' });
-        resnapAndRedraw(true);
-        drawIntoBackOnly();
-        pendingSwap = true;
+        scheduleZoomRecompute();
         return;
       }
       if (z.phase === 'swap') {
@@ -1360,6 +1378,7 @@ function regenerateMapFromStrokes() {
       }
       if (z.phase === 'done') {
         zoomCommitPhase = 'idle';
+        zoomGestureActive = false;
         useFrontBuffers();
         pendingPaintSwap = false;
         pendingSwap = false;
@@ -1369,6 +1388,10 @@ function regenerateMapFromStrokes() {
         }
         return;
       }
+    }
+
+    if (z.mode !== 'gesturing' && !z.phase) {
+      zoomGestureActive = false;
     }
 
     if (zoomMode === 'gesturing') {
@@ -1560,6 +1583,7 @@ function regenerateMapFromStrokes() {
 
   function updatePaintBackingStores({ force = false, target } = {}) {
     if (!cssW || !cssH) return;
+    if (!force && zoomGestureActive) return;
     const targetW = Math.max(1, Math.round(cssW * paintDpr));
     const targetH = Math.max(1, Math.round(cssH * paintDpr));
     const mode = target || (usingBackBuffers ? 'back' : 'both');

@@ -1940,3 +1940,16 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
   display: inline-block;
   vertical-align: middle;
 }
+.btn img, .toolbar img, .toy-header img, .icon, .icon > svg, .icon > img {
+  transform: translateZ(0);
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.btn img, .toolbar img, .toy-header img, .icon, .icon > svg, .icon > img {
+  transform: translateZ(0);
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}

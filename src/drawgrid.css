@@ -1,0 +1,61 @@
+
+/* src/drawgrid.css */
+.drawtoy-root {
+  position: absolute; inset: 0;  /* fills toy frame */
+  overflow: hidden;
+  contain: paint;                /* avoid layout invalidation leaking out */
+}
+
+.drawtoy-viewport {
+  position: absolute; inset: 0;
+  /* No per-gesture size changes; it just follows the world transform */
+  transform: translateZ(0);
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+.drawtoy-bg {
+  position: absolute; inset: 0;
+  background: #0b0b0b;          /* your dark square */
+  z-index: -1;
+}
+
+.drawtoy-particles,
+.drawtoy-canvas,
+canvas[data-role='drawgrid-grid'],
+canvas[data-role='drawgrid-nodes'],
+canvas[data-role='drawgrid-flash'],
+canvas[data-role='drawgrid-ghost'],
+canvas[data-role='drawgrid-tutorial-highlight']
+ {
+  position: absolute; inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  transform: translateZ(0);
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+/* Specific z-indexes from original code */
+canvas[data-role='drawgrid-grid'] { z-index: 0; }
+.drawtoy-canvas { z-index: 1; }
+.drawtoy-particles { z-index: 2; pointer-events: none; }
+canvas[data-role='drawgrid-ghost'] { z-index: 3; pointer-events: none; }
+canvas[data-role='drawgrid-flash'] { z-index: 4; pointer-events: none; }
+canvas[data-role='drawgrid-nodes'] { z-index: 5; pointer-events: none; }
+canvas[data-role='drawgrid-tutorial-highlight'] { z-index: 6; pointer-events: none; }
+
+
+.drawtoy-label {
+  display: none !important; 
+  position: absolute; left: 8px; top: 8px;  /* wherever you want it anchored */
+  font: 700 12px system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  letter-spacing: .08em;
+  transform: translateZ(0);
+  will-change: transform;
+  -webkit-font-smoothing: antialiased;
+  color: white; /* Assuming label should be visible on dark background */
+  z-index: 7; /* Above all canvases */
+  pointer-events: none; /* So it doesn't block interaction */
+}
