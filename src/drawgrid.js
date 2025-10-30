@@ -14,6 +14,23 @@ const STROKE_COLORS = [
 ];
 let colorIndex = 0;
 
+function withIdentity(ctx, fn) {
+  if (!ctx || typeof fn !== 'function') return;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  try {
+    fn();
+  } finally {
+    ctx.restore();
+  }
+}
+
+function clearCanvas(ctx) {
+  if (!ctx || !ctx.canvas) return;
+  const surface = ctx.canvas;
+  withIdentity(ctx, () => ctx.clearRect(0, 0, surface.width, surface.height));
+}
+
 /**
  * For a sparse array of nodes, fills in the empty columns by interpolating
  * and extrapolating from the existing nodes to create a continuous line.
@@ -1044,23 +1061,24 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   // New central helper to redraw the paint canvas and regenerate the node map from the `strokes` array.
   function clearAndRedrawFromStrokes(targetCtx = pctx) {
     if (!targetCtx) return;
-    targetCtx.clearRect(0, 0, cssW, cssH);
-
     const normalStrokes = strokes.filter(s => !s.justCreated);
     const newStrokes = strokes.filter(s => s.justCreated);
+    withIdentity(targetCtx, () => {
+      targetCtx.clearRect(0, 0, cssW, cssH);
 
-    // 1. Draw all existing, non-new strokes first.
-    for (const s of normalStrokes) {
-      drawFullStroke(targetCtx, s);
-    }
-    // 2. Apply the global erase mask to the existing strokes.
-    for (const s of eraseStrokes) {
-      drawEraseStroke(targetCtx, s);
-    }
-    // 3. Draw the brand new strokes on top, so they are not affected by old erasures.
-    for (const s of newStrokes) {
-      drawFullStroke(targetCtx, s);
-    }
+      // 1. Draw all existing, non-new strokes first.
+      for (const s of normalStrokes) {
+        drawFullStroke(targetCtx, s);
+      }
+      // 2. Apply the global erase mask to the existing strokes.
+      for (const s of eraseStrokes) {
+        drawEraseStroke(targetCtx, s);
+      }
+      // 3. Draw the brand new strokes on top, so they are not affected by old erasures.
+      for (const s of newStrokes) {
+        drawFullStroke(targetCtx, s);
+      }
+    });
 
     regenerateMapFromStrokes();
     try { (panel.__dgUpdateButtons || updateGeneratorButtons || function(){})() } catch(e) { }
@@ -1069,24 +1087,26 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
   function drawEraseStroke(ctx, stroke) {
     if (!stroke || !stroke.pts || stroke.pts.length < 1) return;
-    ctx.save();
-    ctx.globalCompositeOperation = 'destination-out';
-    ctx.strokeStyle = '#000'; // color doesn't matter
-    ctx.lineWidth = getLineWidth() * 2; // diameter of erase circle
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
+    withIdentity(ctx, () => {
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.strokeStyle = '#000'; // color doesn't matter
+      ctx.lineWidth = getLineWidth() * 2; // diameter of erase circle
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
 
-    ctx.beginPath();
-    ctx.moveTo(stroke.pts[0].x, stroke.pts[0].y);
-    if (stroke.pts.length === 1) {
-        ctx.lineTo(stroke.pts[0].x + 0.1, stroke.pts[0].y);
-    } else {
-        for (let i = 1; i < stroke.pts.length; i++) {
-            ctx.lineTo(stroke.pts[i].x, stroke.pts[i].y);
-        }
-    }
-    ctx.stroke();
-    ctx.restore();
+      ctx.beginPath();
+      ctx.moveTo(stroke.pts[0].x, stroke.pts[0].y);
+      if (stroke.pts.length === 1) {
+          ctx.lineTo(stroke.pts[0].x + 0.1, stroke.pts[0].y);
+      } else {
+          for (let i = 1; i < stroke.pts.length; i++) {
+              ctx.lineTo(stroke.pts[i].x, stroke.pts[i].y);
+          }
+      }
+      ctx.stroke();
+      ctx.restore();
+    });
   }
 
   function drawIntoBackOnly() {
@@ -1869,82 +1889,83 @@ function regenerateMapFromStrokes() {
   }
 
   function drawGrid(){
-    gctx.clearRect(0, 0, cssW, cssH);
+    withIdentity(gctx, () => {
+      gctx.clearRect(0, 0, cssW, cssH);
 
-    // Fill the entire background on the lowest layer (grid canvas)
-    gctx.fillStyle = '#0b0f16';
-    gctx.fillRect(0, 0, cssW, cssH);
+      // Fill the entire background on the lowest layer (grid canvas)
+      gctx.fillStyle = '#0b0f16';
+      gctx.fillRect(0, 0, cssW, cssH);
 
-    // 1. Draw the note grid area below the top padding
-    const noteGridY = gridArea.y + topPad;
-    const noteGridH = gridArea.h - topPad;
-    gctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-    gctx.fillRect(gridArea.x, noteGridY, gridArea.w, noteGridH);
+      // 1. Draw the note grid area below the top padding
+      const noteGridY = gridArea.y + topPad;
+      const noteGridH = gridArea.h - topPad;
+      gctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+      gctx.fillRect(gridArea.x, noteGridY, gridArea.w, noteGridH);
 
-    // 2. Subtle fill for active columns
-    if (currentMap) {
-        for (let c = 0; c < cols; c++) {
-            if (currentMap.nodes[c]?.size > 0 && currentMap.active[c]) {
-                let fillOpacity = 0.1; // default opacity
-                const hasTwoLines = strokes.some(s => s.generatorId === 2);
-                if (hasTwoLines) {
-                    const totalNodes = currentMap.nodes[c].size;
-                    const disabledNodes = currentMap.disabled[c]?.size || 0;
-                    const activeNodes = totalNodes - disabledNodes;
-                    if (activeNodes === 1) {
-                        fillOpacity = 0.05; // more subtle
-                    }
-                }
-                gctx.fillStyle = `rgba(143, 168, 255, ${fillOpacity})`;
-                const x = gridArea.x + c * cw;
-                gctx.fillRect(x, noteGridY, cw, noteGridH);
-            }
-        }
-    }
+      // 2. Subtle fill for active columns
+      if (currentMap) {
+          for (let c = 0; c < cols; c++) {
+              if (currentMap.nodes[c]?.size > 0 && currentMap.active[c]) {
+                  let fillOpacity = 0.1; // default opacity
+                  const hasTwoLines = strokes.some(s => s.generatorId === 2);
+                  if (hasTwoLines) {
+                      const totalNodes = currentMap.nodes[c].size;
+                      const disabledNodes = currentMap.disabled[c]?.size || 0;
+                      const activeNodes = totalNodes - disabledNodes;
+                      if (activeNodes === 1) {
+                          fillOpacity = 0.05; // more subtle
+                      }
+                  }
+                  gctx.fillStyle = `rgba(143, 168, 255, ${fillOpacity})`;
+                  const x = gridArea.x + c * cw;
+                  gctx.fillRect(x, noteGridY, cw, noteGridH);
+              }
+          }
+      }
 
-    // 3. Draw all grid lines with the base color
-    gctx.strokeStyle = 'rgba(143, 168, 255, 0.35)'; // Untriggered particle color, slightly transparent
-    gctx.lineWidth = Math.max(0.5, Math.min(cw,ch) * 0.05);
-    // Verticals (including outer lines)
-    for (let i = 0; i <= cols; i++) {
-        const x = crisp(gridArea.x + i * cw);
-        gctx.beginPath();
-        gctx.moveTo(x, noteGridY);
-        gctx.lineTo(x, gridArea.y + gridArea.h);
-        gctx.stroke();
-    }
-    // Horizontals (including outer lines)
-    for (let j = 0; j <= rows; j++) {
-        const y = crisp(noteGridY + j * ch);
-        gctx.beginPath();
-        gctx.moveTo(gridArea.x, y);
-        gctx.lineTo(gridArea.x + gridArea.w, y);
-        gctx.stroke();
-    }
+      // 3. Draw all grid lines with the base color
+      gctx.strokeStyle = 'rgba(143, 168, 255, 0.35)'; // Untriggered particle color, slightly transparent
+      gctx.lineWidth = Math.max(0.5, Math.min(cw,ch) * 0.05);
+      // Verticals (including outer lines)
+      for (let i = 0; i <= cols; i++) {
+          const x = crisp(gridArea.x + i * cw);
+          gctx.beginPath();
+          gctx.moveTo(x, noteGridY);
+          gctx.lineTo(x, gridArea.y + gridArea.h);
+          gctx.stroke();
+      }
+      // Horizontals (including outer lines)
+      for (let j = 0; j <= rows; j++) {
+          const y = crisp(noteGridY + j * ch);
+          gctx.beginPath();
+          gctx.moveTo(gridArea.x, y);
+          gctx.lineTo(gridArea.x + gridArea.w, y);
+          gctx.stroke();
+      }
 
-    // 4. Highlight active columns by thickening their vertical lines
-    if (currentMap) {
-        gctx.strokeStyle = 'rgba(143, 168, 255, 0.7)'; // Brighter version of grid color
-        for (let c = 0; c < cols; c++) {
-            // Highlight only if there are nodes AND the column is active
-            if (currentMap.nodes[c]?.size > 0 && currentMap.active[c]) {
-                // Left line of the column
-                const x1 = crisp(gridArea.x + c * cw);
-                gctx.beginPath();
-                gctx.moveTo(x1, noteGridY);
-                gctx.lineTo(x1, gridArea.y + gridArea.h);
-                gctx.stroke();
+      // 4. Highlight active columns by thickening their vertical lines
+      if (currentMap) {
+          gctx.strokeStyle = 'rgba(143, 168, 255, 0.7)'; // Brighter version of grid color
+          for (let c = 0; c < cols; c++) {
+              // Highlight only if there are nodes AND the column is active
+              if (currentMap.nodes[c]?.size > 0 && currentMap.active[c]) {
+                  // Left line of the column
+                  const x1 = crisp(gridArea.x + c * cw);
+                  gctx.beginPath();
+                  gctx.moveTo(x1, noteGridY);
+                  gctx.lineTo(x1, gridArea.y + gridArea.h);
+                  gctx.stroke();
 
-                // Right line of the column
-                const x2 = crisp(gridArea.x + (c + 1) * cw);
-                gctx.beginPath();
-                gctx.moveTo(x2, noteGridY);
-                gctx.lineTo(x2, gridArea.y + gridArea.h);
-                gctx.stroke();
-            }
-        }
-    }
-
+                  // Right line of the column
+                  const x2 = crisp(gridArea.x + (c + 1) * cw);
+                  gctx.beginPath();
+                  gctx.moveTo(x2, noteGridY);
+                  gctx.lineTo(x2, gridArea.y + gridArea.h);
+                  gctx.stroke();
+              }
+          }
+      }
+    });
   }
 
   function crisp(v) {
@@ -1957,66 +1978,65 @@ function regenerateMapFromStrokes() {
     if (!stroke || !stroke.pts || stroke.pts.length < 1) return;
     const color = stroke.color || STROKE_COLORS[0];
 
-    ctx.save(); // Save context for potential glow effect
-    const isStandard = !panel.classList.contains('toy-zoomed');
-    const isOverlay = (ctx === fctx); // Only overlay animates hues; paint stays neutral for specials
-    let wantsSpecial = !!stroke.isSpecial || (isOverlay && (stroke.generatorId === 1 || stroke.generatorId === 2));
-    if (!wantsSpecial && isStandard) {
-      const hasAnySpecial = strokes.some(s => s.isSpecial);
-      if (!hasAnySpecial && stroke === cur) wantsSpecial = true; // first-line preview in standard
-    }
-    if (wantsSpecial && isOverlay) {
+    withIdentity(ctx, () => {
+      ctx.save();
+      const isStandard = !panel.classList.contains('toy-zoomed');
+      const isOverlay = (ctx === fctx);
+      let wantsSpecial = !!stroke.isSpecial || (isOverlay && (stroke.generatorId === 1 || stroke.generatorId === 2));
+      if (!wantsSpecial && isStandard) {
+        const hasAnySpecial = strokes.some(s => s.isSpecial);
+        if (!hasAnySpecial && stroke === cur) wantsSpecial = true;
+      }
+      if (wantsSpecial && isOverlay) {
         ctx.shadowColor = 'rgba(255, 255, 255, 0.7)';
         ctx.shadowBlur = 18;
         ctx.shadowOffsetX = 0;
         ctx.shadowOffsetY = 0;
-    }
-    if (!wantsSpecial) {
+      }
+      if (!wantsSpecial) {
         ctx.globalAlpha = 0.3;
-    }
+      }
 
-    ctx.beginPath();
+      ctx.beginPath();
       if (stroke.pts.length === 1) {
-      const lineWidth = getLineWidth();
-      const p = stroke.pts[0];
-      if (wantsSpecial) {
+        const lineWidth = getLineWidth();
+        const p = stroke.pts[0];
+        if (wantsSpecial) {
           const r = lineWidth / 2;
           const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
           if (isOverlay) {
             const t = (performance.now ? performance.now() : Date.now());
-            const gid = stroke.generatorId ?? 1; // default to Line 1 palette
+            const gid = stroke.generatorId ?? 1;
             if (gid === 1) {
-              const hue = 200 + 20 * Math.sin((t/800) * Math.PI * 2);
+              const hue = 200 + 20 * Math.sin((t / 800) * Math.PI * 2);
               grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 75%)`);
-              grad.addColorStop(0.7, `hsl(${(hue+60).toFixed(0)}, 100%, 68%)`);
-              grad.addColorStop(1,  `hsla(${(hue+120).toFixed(0)}, 100%, 60%, 0.35)`);
+              grad.addColorStop(0.7, `hsl(${(hue + 60).toFixed(0)}, 100%, 68%)`);
+              grad.addColorStop(1, `hsla(${(hue + 120).toFixed(0)}, 100%, 60%, 0.35)`);
             } else {
-              const hue = 20 + 20 * Math.sin((t/900) * Math.PI * 2);
+              const hue = 20 + 20 * Math.sin((t / 900) * Math.PI * 2);
               grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 70%)`);
-              grad.addColorStop(0.7, `hsl(${(hue-25).toFixed(0)}, 100%, 65%)`);
-              grad.addColorStop(1,  `hsla(${(hue-45).toFixed(0)}, 100%, 55%, 0.35)`);
+              grad.addColorStop(0.7, `hsl(${(hue - 25).toFixed(0)}, 100%, 65%)`);
+              grad.addColorStop(1, `hsla(${(hue - 45).toFixed(0)}, 100%, 55%, 0.35)`);
             }
             ctx.fillStyle = grad;
           } else {
-            // Paint layer: neutral for specials; overlay handles color shift
             ctx.fillStyle = 'rgba(255,255,255,0.9)';
           }
-      } else {
+        } else {
           ctx.fillStyle = color;
-      }
-      ctx.arc(p.x, p.y, lineWidth / 2, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      ctx.moveTo(stroke.pts[0].x, stroke.pts[0].y);
-      for (let i = 1; i < stroke.pts.length; i++) {
-        ctx.lineTo(stroke.pts[i].x, stroke.pts[i].y);
-      }
-      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-      {
+        }
+        ctx.arc(p.x, p.y, lineWidth / 2, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.moveTo(stroke.pts[0].x, stroke.pts[0].y);
+        for (let i = 1; i < stroke.pts.length; i++) {
+          ctx.lineTo(stroke.pts[i].x, stroke.pts[i].y);
+        }
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
         const lw = getLineWidth() + (isOverlay ? 1.25 : 0);
         ctx.lineWidth = lw;
-      }
-      if (wantsSpecial) {
+        if (wantsSpecial) {
           const p1 = stroke.pts[0];
           const pLast = stroke.pts[stroke.pts.length - 1];
           const grad = ctx.createLinearGradient(p1.x, p1.y, pLast.x, pLast.y);
@@ -2024,26 +2044,28 @@ function regenerateMapFromStrokes() {
             const t = (performance.now ? performance.now() : Date.now());
             const gid = stroke.generatorId ?? 1;
             if (gid === 1) {
-              const hue = 200 + 20 * Math.sin((t/800) * Math.PI * 2);
+              const hue = 200 + 20 * Math.sin((t / 800) * Math.PI * 2);
               grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 70%)`);
-              grad.addColorStop(0.5, `hsl(${(hue+45).toFixed(0)}, 100%, 70%)`);
-              grad.addColorStop(1,  `hsl(${(hue+90).toFixed(0)}, 100%, 68%)`);
+              grad.addColorStop(0.5, `hsl(${(hue + 45).toFixed(0)}, 100%, 70%)`);
+              grad.addColorStop(1, `hsl(${(hue + 90).toFixed(0)}, 100%, 68%)`);
             } else {
-              const hue = 20 + 20 * Math.sin((t/900) * Math.PI * 2);
+              const hue = 20 + 20 * Math.sin((t / 900) * Math.PI * 2);
               grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 68%)`);
-              grad.addColorStop(0.5, `hsl(${(hue-25).toFixed(0)}, 100%, 66%)`);
-              grad.addColorStop(1,  `hsl(${(hue-50).toFixed(0)}, 100%, 64%)`);
+              grad.addColorStop(0.5, `hsl(${(hue - 25).toFixed(0)}, 100%, 66%)`);
+              grad.addColorStop(1, `hsl(${(hue - 50).toFixed(0)}, 100%, 64%)`);
             }
             ctx.strokeStyle = grad;
           } else {
             ctx.strokeStyle = 'rgba(255,255,255,0.9)';
           }
-      } else {
+        } else {
           ctx.strokeStyle = color;
+        }
+        ctx.stroke();
       }
-      ctx.stroke();
-    }
-    ctx.restore();
+
+      ctx.restore();
+    });
   }
   function eraseAtPoint(p) {
     const R = getLineWidth(); // This is the radius
@@ -2095,105 +2117,174 @@ function regenerateMapFromStrokes() {
   }
 
   function drawNodes(nodes) {
-    nctx.clearRect(0, 0, cssW, cssH);
-    renderDragScaleBlueHints(nctx);
-    if (!nodes) {
-        nodeCoordsForHitTest = [];
+    const nodeCoords = [];
+    nodeCoordsForHitTest = [];
+    withIdentity(nctx, () => {
+      nctx.clearRect(0, 0, cssW, cssH);
+      renderDragScaleBlueHints(nctx);
+      if (!nodes) {
         return;
-    }
+      }
 
-    const nodeCoords = []; // Store coordinates of each node: {x, y, col, row, radius, group, disabled}
-    nodeCoordsForHitTest = []; // Clear for new set
-    const radius = Math.max(4, Math.min(cw, ch) * 0.20); // Bigger nodes
+      const radius = Math.max(4, Math.min(cw, ch) * 0.20);
 
-    // First, find all node center points
-    for (let c = 0; c < cols; c++) {
-        if (nodes[c] && nodes[c].size > 0) {
-            for (const r of nodes[c]) {
-                const x = gridArea.x + c * cw + cw * 0.5;
-                const y = gridArea.y + topPad + r * ch + ch * 0.5;
-                const groupEntry = (nodeGroupMap && nodeGroupMap[c]) ? (nodeGroupMap[c].get(r) ?? null) : null;
-                const disabledSet = currentMap?.disabled?.[c];
-                const isDisabled = !!(disabledSet && disabledSet.has(r));
-                if (Array.isArray(groupEntry) && groupEntry.length > 0) {
-                  // Multiple overlapped nodes at same position; respect z-order (last is top).
-                  // For hit-testing, push top-most first so it is grabbed first.
-                  for (let i = groupEntry.length - 1; i >= 0; i--) {
-                    const gid = groupEntry[i];
-                    const nodeData = { x, y, col: c, row: r, radius: radius * 1.5, group: gid, disabled: isDisabled };
-                    nodeCoords.push(nodeData);
-                    nodeCoordsForHitTest.push(nodeData);
-                  }
-                } else {
-                  const groupId = (typeof groupEntry === 'number') ? groupEntry : null;
-                  const nodeData = { x, y, col: c, row: r, radius: radius * 1.5, group: groupId, disabled: isDisabled }; // Use a larger hit area
-                  nodeCoords.push(nodeData);
-                  nodeCoordsForHitTest.push(nodeData);
-                }
+      for (let c = 0; c < cols; c++) {
+        if (!nodes[c] || nodes[c].size === 0) continue;
+        for (const r of nodes[c]) {
+          const x = gridArea.x + c * cw + cw * 0.5;
+          const y = gridArea.y + topPad + r * ch + ch * 0.5;
+          const groupEntry = nodeGroupMap?.[c]?.get(r) ?? null;
+          const disabledSet = currentMap?.disabled?.[c];
+          const isDisabled = !!(disabledSet && disabledSet.has(r));
+          if (Array.isArray(groupEntry) && groupEntry.length > 0) {
+            for (let i = groupEntry.length - 1; i >= 0; i--) {
+              const gid = groupEntry[i];
+              const nodeData = { x, y, col: c, row: r, radius: radius * 1.5, group: gid, disabled: isDisabled };
+              nodeCoords.push(nodeData);
+              nodeCoordsForHitTest.push(nodeData);
             }
+          } else {
+            const groupId = typeof groupEntry === 'number' ? groupEntry : null;
+            const nodeData = { x, y, col: c, row: r, radius: radius * 1.5, group: groupId, disabled: isDisabled };
+            nodeCoords.push(nodeData);
+            nodeCoordsForHitTest.push(nodeData);
+          }
         }
-    }
+      }
 
-    // --- Draw connecting lines ---
-    nctx.lineWidth = 3; // Thicker
-
-    // Group nodes by column for easier and more efficient lookup
-    const colsMap = new Map();
-    for (const node of nodeCoords) {
+      nctx.lineWidth = 3;
+      const colsMap = new Map();
+      for (const node of nodeCoords) {
         if (!colsMap.has(node.col)) colsMap.set(node.col, []);
         colsMap.get(node.col).push(node);
-    }
+      }
 
-    // Stroke per segment to handle color changes and disabled nodes (no animation on connectors)
-    for (let c = 0; c < cols - 1; c++) {
-      const currentColNodes = colsMap.get(c);
-      const nextColNodes = colsMap.get(c + 1);
-      if (currentColNodes && nextColNodes) {
+      const colorFor = (gid, active = true) => {
+        if (!active) return 'rgba(80, 100, 160, 0.6)';
+        if (gid === 1) return 'rgba(125, 180, 255, 0.9)';
+        if (gid === 2) return 'rgba(255, 160, 120, 0.9)';
+        return 'rgba(255, 255, 255, 0.85)';
+      };
+
+      const matchGroup = (value, gid) => {
+        if (gid == null) return value == null;
+        return value === gid;
+      };
+
+      for (let c = 0; c < cols - 1; c++) {
+        const currentColNodes = colsMap.get(c);
+        const nextColNodes = colsMap.get(c + 1);
+        if (!currentColNodes || !nextColNodes) continue;
         const currentIsActive = currentMap?.active?.[c] ?? false;
         const nextIsActive = currentMap?.active?.[c + 1] ?? true;
         const advanced = panel.classList.contains('toy-zoomed');
-        const disabledStyle = 'rgba(80, 100, 160, 0.6)'; // Darker blue
-        const colorFor = (gid, active=true) => {
-          if (!active) return disabledStyle;
-          if (gid === 1) return 'rgba(125, 180, 255, 0.9)'; // static bluish
-          if (gid === 2) return 'rgba(255, 160, 120, 0.9)'; // static orangey
-          return 'rgba(255, 255, 255, 0.85)';
-        };
-
-        const matchGroup = (g, gid) => {
-          if (gid == null) return (g == null);
-          return g === gid;
-        };
 
         const drawGroupConnections = (gid) => {
-          for (const node of currentColNodes) {
-            if (!matchGroup(node.group ?? null, gid)) continue;
-            for (const nextNode of nextColNodes) {
-              if (!matchGroup(nextNode.group ?? null, gid)) continue;
-              const eitherDisabled = node.disabled || nextNode.disabled;
-              nctx.strokeStyle = colorFor(gid, !eitherDisabled);
+          for (const nodeA of currentColNodes) {
+            if (!matchGroup(nodeA.group ?? null, gid)) continue;
+            for (const nodeB of nextColNodes) {
+              if (!matchGroup(nodeB.group ?? null, gid)) continue;
+              const eitherDisabled = nodeA.disabled || nodeB.disabled;
+              nctx.strokeStyle = colorFor(gid, currentIsActive && nextIsActive && !eitherDisabled);
+              if (gid && advanced && !eitherDisabled) {
+                nctx.shadowColor = nctx.strokeStyle;
+                nctx.shadowBlur = 12;
+              } else {
+                nctx.shadowColor = 'transparent';
+                nctx.shadowBlur = 0;
+              }
               nctx.beginPath();
-              nctx.moveTo(node.x, node.y);
-              nctx.lineTo(nextNode.x, nextNode.y);
+              nctx.moveTo(nodeA.x, nodeA.y);
+              nctx.lineTo(nodeB.x, nodeB.y);
               nctx.stroke();
             }
           }
         };
 
-        // Draw per group to avoid cross-line connections in both modes.
         drawGroupConnections(1);
         drawGroupConnections(2);
         drawGroupConnections(null);
       }
-    }
 
-    // --- Draw node cubes (with flash animation) on top of connectors ---
-    for (const node of nodeCoords) {
+      nctx.shadowColor = 'transparent';
+      nctx.shadowBlur = 0;
+
+      const gradientCache = new Map();
+      const getGradient = (ctx, x, y, r, color) => {
+        const key = `${color}-${r}`;
+        if (!gradientCache.has(key)) {
+          const grad = ctx.createRadialGradient(x, y, r * 0.1, x, y, r);
+          grad.addColorStop(0, color);
+          grad.addColorStop(0.92, 'rgba(143, 168, 255, 0)');
+          grad.addColorStop(1, 'rgba(143, 168, 255, 0)');
+          gradientCache.set(key, grad);
+        }
+        return gradientCache.get(key);
+      };
+
+      for (const node of nodeCoords) {
+        const disabled = node.disabled || currentMap?.disabled?.[node.col]?.has(node.row);
+        const group = node.group ?? null;
+        const advanced = panel.classList.contains('toy-zoomed');
+        const isSpecialLine1 = group === 1;
+        const isSpecialLine2 = group === 2;
+        const mainColor = disabled
+          ? 'rgba(143, 168, 255, 0.4)'
+          : isSpecialLine1
+            ? 'rgba(125, 180, 255, 0.92)'
+            : isSpecialLine2
+              ? 'rgba(255, 160, 120, 0.92)'
+              : 'rgba(255, 255, 255, 0.92)';
+
+        if (advanced && (isSpecialLine1 || isSpecialLine2) && !disabled) {
+          const glowRadius = node.radius * 1.6;
+          const glowColor = isSpecialLine1 ? 'rgba(125, 180, 255, 0.4)' : 'rgba(255, 160, 120, 0.4)';
+          nctx.fillStyle = glowColor;
+          nctx.beginPath();
+          nctx.arc(node.x, node.y, glowRadius, 0, Math.PI * 2);
+          nctx.fill();
+        }
+
+        nctx.fillStyle = getGradient(nctx, node.x, node.y, node.radius, mainColor);
+        nctx.beginPath();
+        nctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+        nctx.fill();
+
+        nctx.beginPath();
+        nctx.fillStyle = disabled ? 'rgba(90, 110, 150, 0.65)' : 'rgba(255, 255, 255, 0.9)';
+        nctx.arc(node.x, node.y, node.radius * 0.55, 0, Math.PI * 2);
+        nctx.fill();
+
+        nctx.fillStyle = disabled ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.5)';
+        nctx.beginPath();
+        nctx.arc(node.x, node.y - node.radius * 0.3, node.radius * 0.3, 0, Math.PI * 2);
+        nctx.fill();
+      }
+
+      if (panel.classList.contains('toy-zoomed')) {
+        for (const node of nodeCoords) {
+          if (!node.group) continue;
+          const disabled = node.disabled || currentMap?.disabled?.[node.col]?.has(node.row);
+          const outlineColor = node.group === 1
+            ? 'rgba(125, 180, 255, 0.95)'
+            : node.group === 2
+              ? 'rgba(255, 160, 120, 0.95)'
+              : 'rgba(255, 255, 255, 0.85)';
+          const strokeAlpha = disabled ? 0.65 : 1;
+          nctx.lineWidth = disabled ? 2 : 3.5;
+          nctx.strokeStyle = outlineColor.replace(/0\.[0-9]+\)$/, `${strokeAlpha})`);
+          nctx.beginPath();
+          nctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+          nctx.stroke();
+        }
+      }
+
+      for (const node of nodeCoords) {
         const colActive = currentMap?.active?.[node.col] ?? true;
         const nodeOn = colActive && !node.disabled;
         const flash = flashes[node.col] || 0;
         const size = radius * 2;
-        const cubeRect = { x: node.x - size/2, y: node.y - size/2, w: size, h: size };
+        const cubeRect = { x: node.x - size / 2, y: node.y - size / 2, w: size, h: size };
 
         nctx.save();
         if (flash > 0) {
@@ -2210,37 +2301,41 @@ function regenerateMapFromStrokes() {
           showArrows: false,
         });
         nctx.restore();
-    }
+      }
 
-    drawNoteLabels(nodes);
-    if (tutorialHighlightMode !== 'none') {
-      renderTutorialHighlight();
-    } else {
-      clearTutorialHighlight();
-    }
+      drawNoteLabels(nodes);
+      if (tutorialHighlightMode !== 'none') {
+        renderTutorialHighlight();
+      } else {
+        clearTutorialHighlight();
+      }
+
+      nodeCoordsForHitTest = nodeCoords;
+    });
   }
 
   function drawNoteLabels(nodes) {
-    nctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-    nctx.font = '600 12px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
-    nctx.textAlign = 'center';
-    nctx.textBaseline = 'alphabetic';
-    const labelY = Math.round(cssH - 10); // Position below the grid area, in the safe zone
+    withIdentity(nctx, () => {
+      nctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      nctx.font = '600 12px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+      nctx.textAlign = 'center';
+      nctx.textBaseline = 'alphabetic';
+      const labelY = Math.round(cssH - 10);
 
-    for (let c = 0; c < cols; c++) {
-        if (nodes[c] && nodes[c].size > 0) {
-            // choose first non-disabled row for label
-            let r = undefined;
-            const disabledSet = currentMap?.disabled?.[c] || new Set();
-            for (const row of nodes[c]) { if (!disabledSet.has(row)) { r = row; break; } }
-            if (r === undefined) continue;
-            const midiNote = chromaticPalette[r];
-            if (midiNote !== undefined) {
-                const tx = Math.round(gridArea.x + c * cw + cw * 0.5);
-                nctx.fillText(midiToName(midiNote), tx, labelY);
-            }
+      for (let c = 0; c < cols; c++) {
+        if (!nodes[c] || nodes[c].size === 0) continue;
+        let r = undefined;
+        const disabledSet = currentMap?.disabled?.[c] || new Set();
+        for (const row of nodes[c]) {
+          if (!disabledSet.has(row)) { r = row; break; }
         }
-    }
+        if (r === undefined) continue;
+        const midiNote = chromaticPalette[r];
+        if (midiNote === undefined) continue;
+        const tx = Math.round(gridArea.x + c * cw + cw * 0.5);
+        nctx.fillText(midiToName(midiNote), tx, labelY);
+      }
+    });
   }
 
   // --- Note Palettes for Snapping ---
