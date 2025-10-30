@@ -31,6 +31,18 @@ function clearCanvas(ctx) {
   withIdentity(ctx, () => ctx.clearRect(0, 0, surface.width, surface.height));
 }
 
+let __drawParticlesSeed = 1337;
+
+function mulberry32(seed) {
+  let t = seed >>> 0;
+  return function() {
+    t += 0x6D2B79F5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 /**
  * For a sparse array of nodes, fills in the empty columns by interpolating
  * and extrapolating from the existing nodes to create a continuous line.
@@ -163,6 +175,28 @@ function createDrawGridParticles({
   const W = ()=> Math.max(1, Math.floor(getW()?getW() * currentDpr:0));
   const H = ()=> Math.max(1, Math.floor(getH()?getH() * currentDpr:0));
   let lastW = 0, lastH = 0;
+  const rand = mulberry32(__drawParticlesSeed);
+  const clamp01 = (v) => Math.max(0, Math.min(1, v));
+
+  function createBaseParticle(nx = rand(), ny = rand()) {
+    return {
+      nx,
+      ny,
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      homeX: 0,
+      homeY: 0,
+      alpha: 0.55,
+      tSince: 0,
+      delay: 0,
+      burst: false,
+      flash: 0,
+      repulsed: 0,
+      isBurst: false,
+    };
+  }
 
   function layoutLetters(w, h, { resetPositions = true } = {}) {
     if (!w || !h) return;
@@ -214,15 +248,61 @@ function createDrawGridParticles({
         letter.vy = 0;
         letter.alpha = LETTER_BASE_ALPHA;
         letter.flash = 0;
-        letter.repulsed = 0;
-      }
-      cursor += width + spacing;
+      letter.repulsed = 0;
     }
+    cursor += width + spacing;
+  }
+}
+
+  function assignHome(p, w, h, { resetPosition = false } = {}) {
+    if (!p || !Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return;
+    const safePrevW = lastW || w;
+    const safePrevH = lastH || h;
+    const nx = clamp01(typeof p.nx === 'number' ? p.nx : (p.x / w));
+    const ny = clamp01(typeof p.ny === 'number' ? p.ny : (p.y / h));
+    p.nx = nx;
+    p.ny = ny;
+    p.homeX = nx * w;
+    p.homeY = ny * h;
+    if (!resetPosition) return;
+    if (p.isBurst) {
+      const scaleX = safePrevW ? w / safePrevW : 1;
+      const scaleY = safePrevH ? h / safePrevH : 1;
+      if (Number.isFinite(scaleX) && Number.isFinite(scaleY)) {
+        p.x *= scaleX;
+        p.y *= scaleY;
+        p.vx *= scaleX;
+        p.vy *= scaleY;
+      }
+      return;
+    }
+    p.x = p.homeX;
+    p.y = p.homeY;
+    p.vx = 0;
+    p.vy = 0;
   }
 
-  for (let i=0;i<count;i++){
-    P.push({ x: 0, y: 0, vx:0, vy:0, homeX:0, homeY:0, alpha:0.55, tSince: 0, delay:0, burst:false, flash: 0, repulsed: 0 });
+  function refreshHomes({ resetPositions = true } = {}) {
+    const w = W();
+    const h = H();
+    if (!w || !h) return;
+    for (const p of P) {
+      assignHome(p, w, h, { resetPosition: resetPositions });
+    }
+    layoutLetters(w, h, { resetPositions });
+    lastW = w;
+    lastH = h;
   }
+
+  function onResize({ resetPositions = true } = {}) {
+    refreshHomes({ resetPositions });
+  }
+
+  for (let i = 0; i < count; i++) {
+    P.push(createBaseParticle());
+  }
+
+  refreshHomes({ resetPositions: true });
 
   function onBeat(cx, cy){
     beatGlow = 1;
@@ -245,27 +325,23 @@ function createDrawGridParticles({
   }
 
   function step(dt=1/60){
-    const w=W(), h=H();
-    if (w !== lastW || h !== lastH){
-      if (P.length < count){
-        for (let i=P.length;i<count;i++){
-          P.push({ x: 0, y: 0, vx:0, vy:0, homeX:0, homeY:0, alpha:0.55, tSince: 0, flash: 0, repulsed: 0 });
-        }
-      } else if (P.length > count){
-        P.length = count;
-      }
+    const w = W(), h = H();
 
-      for (const p of P){
-        // Generate a random point
-        const nx = Math.random() * w;
-        const ny = Math.random() * h;
-
-        p.homeX = nx; p.homeY = ny; p.x = nx; p.y = ny;
-        p.vx = 0; p.vy = 0; p.alpha = 0.55; p.tSince = 0; p.delay=0; p.burst=false; p.flash = 0; p.repulsed = 0;
+    if (P.length < count){
+      const width = w || lastW || 1;
+      const height = h || lastH || 1;
+      for (let i=P.length;i<count;i++){
+        const p = createBaseParticle();
+        assignHome(p, width, height, { resetPosition: true });
+        P.push(p);
       }
-      layoutLetters(w, h, { resetPositions: true });
-      lastW = w; lastH = h;
-    } else if (!letters.length) {
+    } else if (P.length > count){
+      P.length = count;
+    }
+
+    if ((w !== lastW || h !== lastH) && w && h){
+      refreshHomes({ resetPositions: true });
+    } else if (!letters.length && w && h) {
       layoutLetters(w, h, { resetPositions: true });
     }
 
@@ -345,64 +421,63 @@ function createDrawGridParticles({
   }
 
   function draw(ctx, boardScale = 1){
-    //console.log('particle draw, boardScale:', boardScale);
     if (!ctx) return;
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    if (beatGlow>0){ ctx.globalAlpha = Math.min(0.6, beatGlow*0.6); ctx.fillStyle='rgba(120,160,255,0.5)'; ctx.fillRect(0,0,W(),H()); ctx.globalAlpha=1; beatGlow *= 0.88; }
-    for (const p of P){
-      const sp = Math.hypot(p.vx, p.vy);
-      const spN = Math.max(0, Math.min(1, sp / 5));
-      const fastBias = Math.pow(spN, 1.25);
-      const baseA = Math.max(0.08, Math.min(1, p.alpha));
-      const boost = 0.80 * fastBias;
-      const flashBoost = (p.flash || 0) * 0.9;
-      ctx.globalAlpha = Math.min(1, baseA + boost + flashBoost);
-
-      let baseR, baseG, baseB;
-      if (p.color === 'pink') {
-          baseR=255; baseG=105; baseB=180; // Hot pink
-      } else {
-          baseR=143; baseG=168; baseB=255; // Default blue
-      }
-
-      const speedMix = Math.min(0.9, Math.max(0, Math.pow(spN, 1.4)));
-      const flashMix = p.flash || 0;
-      const mix = Math.max(speedMix, flashMix);
-      // Flash to white
-      const r = Math.round(baseR + (255 - baseR) * mix);
-      const g = Math.round(baseG + (255 - baseG) * mix);
-      const b = Math.round(baseB + (255 - baseB) * mix);
-      ctx.fillStyle = `rgb(${r},${g},${b})`;
-
-      const baseSize = 1.5;
-      const size = Math.max(0.75, baseSize * boardScale);
-      //console.log('particle size:', size);
-      const x = (p.x | 0) - size / 2;
-      const y = (p.y | 0) - size / 2;
-      ctx.fillRect(x, y, size, size);
-    }
-    ctx.restore();
-
-    if (letters.length) {
+    withIdentity(ctx, () => {
       ctx.save();
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      for (const letter of letters) {
-        const flashBoost = Math.min(1, letter.flash || 0);
-        const alpha = Math.min(1, (letter.alpha ?? LETTER_BASE_ALPHA) + flashBoost * 0.8);
-        ctx.fillStyle = 'rgb(80,120,180)';
-        const finalAlpha = Math.min(1, alpha * letterFade);
-        if (finalAlpha <= 0.001) {
-          continue;
+      ctx.globalCompositeOperation = 'lighter';
+      if (beatGlow>0){ ctx.globalAlpha = Math.min(0.6, beatGlow*0.6); ctx.fillStyle='rgba(120,160,255,0.5)'; ctx.fillRect(0,0,W(),H()); ctx.globalAlpha=1; beatGlow *= 0.88; }
+      for (const p of P){
+        const sp = Math.hypot(p.vx, p.vy);
+        const spN = Math.max(0, Math.min(1, sp / 5));
+        const fastBias = Math.pow(spN, 1.25);
+        const baseA = Math.max(0.08, Math.min(1, p.alpha));
+        const boost = 0.80 * fastBias;
+        const flashBoost = (p.flash || 0) * 0.9;
+        ctx.globalAlpha = Math.min(1, baseA + boost + flashBoost);
+
+        let baseR, baseG, baseB;
+        if (p.color === 'pink') {
+            baseR=255; baseG=105; baseB=180; // Hot pink
+        } else {
+            baseR=143; baseG=168; baseB=255; // Default blue
         }
-        ctx.globalAlpha = finalAlpha;
-        ctx.font = `700 ${letter.fontSize * currentDpr}px 'Poppins', 'Helvetica Neue', sans-serif`;
-        ctx.fillText(letter.char, letter.x, letter.y);
+
+        const speedMix = Math.min(0.9, Math.max(0, Math.pow(spN, 1.4)));
+        const flashMix = p.flash || 0;
+        const mix = Math.max(speedMix, flashMix);
+        const r = Math.round(baseR + (255 - baseR) * mix);
+        const g = Math.round(baseG + (255 - baseG) * mix);
+        const b = Math.round(baseB + (255 - baseB) * mix);
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+
+        const baseSize = 1.5;
+        const size = Math.max(0.75, baseSize * boardScale);
+        const x = (p.x | 0) - size / 2;
+        const y = (p.y | 0) - size / 2;
+        ctx.fillRect(x, y, size, size);
       }
       ctx.restore();
-    }
+
+      if (letters.length) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        for (const letter of letters) {
+          const flashBoost = Math.min(1, letter.flash || 0);
+          const alpha = Math.min(1, (letter.alpha ?? LETTER_BASE_ALPHA) + flashBoost * 0.8);
+          ctx.fillStyle = 'rgb(80,120,180)';
+          const finalAlpha = Math.min(1, alpha * letterFade);
+          if (finalAlpha <= 0.001) {
+            continue;
+          }
+          ctx.globalAlpha = finalAlpha;
+          ctx.font = `700 ${letter.fontSize * currentDpr}px 'Poppins', 'Helvetica Neue', sans-serif`;
+          ctx.fillText(letter.char, letter.x, letter.y);
+        }
+        ctx.restore();
+      }
+    });
   }
 
   function lineRepulse(x, width=40, strength=1){
@@ -480,6 +555,8 @@ function createDrawGridParticles({
   }
 
   function pointBurst(x, y, countBurst = 30, speed = 3.0, color = 'pink') {
+    const width = Math.max(1, W());
+    const height = Math.max(1, H());
     for (let i = 0; i < countBurst; i++) {
         const angle = Math.random() * Math.PI * 2;
         const p = {
@@ -495,11 +572,15 @@ function createDrawGridParticles({
             isBurst: true,
             repulsed: 0, // Not used by bursts, but good to initialize
         };
+        p.nx = clamp01(width ? p.homeX / width : 0);
+        p.ny = clamp01(height ? p.homeY / height : 0);
         P.push(p);
     }
   }
 
 function ringBurst(x, y, radius, countBurst = 28, speed = 2.4, color = 'pink') {
+  const width = Math.max(1, W());
+  const height = Math.max(1, H());
   for (let i = 0; i < countBurst; i++) {
     const theta = (i / countBurst) * Math.PI * 2 + (Math.random() * 0.15);
     const px = x + Math.cos(theta) * radius;
@@ -508,12 +589,15 @@ function ringBurst(x, y, radius, countBurst = 28, speed = 2.4, color = 'pink') {
     const jitterA = (Math.random() - 0.5) * 0.35;
     const vx = Math.cos(theta + jitterA) * outward;
     const vy = Math.sin(theta + jitterA) * outward;
-    P.push({
+    const burst = {
       x: px, y: py, vx, vy,
       homeX: px, homeY: py,
       alpha: 1.0, flash: 1.0,
       ttl: 45, color, isBurst: true, repulsed: 0
-    });
+    };
+    burst.nx = clamp01(width ? burst.homeX / width : 0);
+    burst.ny = clamp01(height ? burst.homeY / height : 0);
+    P.push(burst);
   }
 }
 
@@ -536,16 +620,27 @@ function ringBurst(x, y, radius, countBurst = 28, speed = 2.4, color = 'pink') {
   function setDpr(newDpr) {
     if (newDpr === currentDpr) return;
     currentDpr = newDpr;
+    refreshHomes({ resetPositions: true });
   }
 
   function scalePositions(scaleX, scaleY) {
+    if (!Number.isFinite(scaleX) || !Number.isFinite(scaleY)) return;
+    const newW = (Number.isFinite(lastW) && lastW > 0) ? lastW * scaleX : lastW;
+    const newH = (Number.isFinite(lastH) && lastH > 0) ? lastH * scaleY : lastH;
+    const safeW = newW && newW > 0 ? newW : (lastW || 1);
+    const safeH = newH && newH > 0 ? newH : (lastH || 1);
+
     for (const p of P) {
       p.x *= scaleX;
       p.y *= scaleY;
-      p.homeX *= scaleX;
-      p.homeY *= scaleY;
       p.vx *= scaleX;
       p.vy *= scaleY;
+      p.homeX *= scaleX;
+      p.homeY *= scaleY;
+      if (!p.isBurst) {
+        p.nx = clamp01(safeW ? p.homeX / safeW : p.nx);
+        p.ny = clamp01(safeH ? p.homeY / safeH : p.ny);
+      }
     }
     for (const letter of letters) {
       letter.x *= scaleX;
@@ -555,9 +650,15 @@ function ringBurst(x, y, radius, countBurst = 28, speed = 2.4, color = 'pink') {
       letter.vx *= scaleX;
       letter.vy *= scaleY;
     }
+    if (Number.isFinite(newW) && newW > 0) {
+      lastW = newW;
+    }
+    if (Number.isFinite(newH) && newH > 0) {
+      lastH = newH;
+    }
   }
 
-  return { step, draw, onBeat, lineRepulse, drawingDisturb, pointBurst, ringBurst, fadeLettersOut, fadeLettersIn, setLetterFadeTarget, setDpr, scalePositions };
+  return { step, draw, onBeat, lineRepulse, drawingDisturb, pointBurst, ringBurst, fadeLettersOut, fadeLettersIn, setLetterFadeTarget, setDpr, scalePositions, onResize };
 }
 
 export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId, bpm = 120 } = {}) {
@@ -745,79 +846,83 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
   const clearTutorialHighlight = () => {
     if (!tutorialCtx) return;
-    const tutorialSurface = getActiveTutorialCanvas();
-    tutorialCtx.clearRect(0, 0, tutorialSurface.width, tutorialSurface.height);
+    withIdentity(tutorialCtx, () => {
+      const tutorialSurface = getActiveTutorialCanvas();
+      if (!tutorialSurface) return;
+      tutorialCtx.clearRect(0, 0, tutorialSurface.width, tutorialSurface.height);
+    });
   };
 
   const renderTutorialHighlight = () => {
     if (!tutorialCtx) return;
     const tutorialSurface = getActiveTutorialCanvas();
-    tutorialCtx.clearRect(0, 0, tutorialSurface.width, tutorialSurface.height);
-    if (tutorialHighlightMode === 'none' || !nodeCoordsForHitTest?.length) return;
-    const baseRadius = Math.max(6, Math.min(cw || 0, ch || 0) * 0.55);
-    tutorialCtx.save();
-    tutorialCtx.shadowColor = 'rgba(0, 0, 0, 0.35)';
-    tutorialCtx.shadowBlur = Math.max(4, baseRadius * 0.3);
-    const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
-      ? performance.now()
-      : Date.now();
-    const pulsePhase = (now / 480) % (Math.PI * 2);
-    const pulseScale = 1 + Math.sin(pulsePhase) * 0.24;
-    let highlightNodes = nodeCoordsForHitTest;
-    let anchorNode = null;
-    if (tutorialHighlightMode === 'drag') {
-      const effectiveWidth = (gridArea.w && gridArea.w > 0) ? gridArea.w : (cw * cols);
-      const effectiveHeight = (gridArea.h && gridArea.h > 0) ? gridArea.h : (ch * rows);
-      const fallbackX = gridArea.x + (effectiveWidth / 2);
-      const fallbackY = gridArea.y + topPad + Math.max(0, effectiveHeight - topPad) / 2;
-      const activeNode = nodeCoordsForHitTest.find(node => !node?.disabled);
-      anchorNode = activeNode || (nodeCoordsForHitTest.length ? nodeCoordsForHitTest[0] : { x: fallbackX, y: fallbackY });
-      highlightNodes = [anchorNode];
-    }
+    withIdentity(tutorialCtx, () => {
+      tutorialCtx.clearRect(0, 0, tutorialSurface.width, tutorialSurface.height);
+      if (tutorialHighlightMode === 'none' || !nodeCoordsForHitTest?.length) return;
+      const baseRadius = Math.max(6, Math.min(cw || 0, ch || 0) * 0.55);
+      tutorialCtx.save();
+      tutorialCtx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+      tutorialCtx.shadowBlur = Math.max(4, baseRadius * 0.3);
+      const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+        ? performance.now()
+        : Date.now();
+      const pulsePhase = (now / 480) % (Math.PI * 2);
+      const pulseScale = 1 + Math.sin(pulsePhase) * 0.24;
+      let highlightNodes = nodeCoordsForHitTest;
+      let anchorNode = null;
+      if (tutorialHighlightMode === 'drag') {
+        const effectiveWidth = (gridArea.w && gridArea.w > 0) ? gridArea.w : (cw * cols);
+        const effectiveHeight = (gridArea.h && gridArea.h > 0) ? gridArea.h : (ch * rows);
+        const fallbackX = gridArea.x + (effectiveWidth / 2);
+        const fallbackY = gridArea.y + topPad + Math.max(0, effectiveHeight - topPad) / 2;
+        const activeNode = nodeCoordsForHitTest.find(node => !node?.disabled);
+        anchorNode = activeNode || (nodeCoordsForHitTest.length ? nodeCoordsForHitTest[0] : { x: fallbackX, y: fallbackY });
+        highlightNodes = [anchorNode];
+      }
 
-    highlightNodes.forEach((node) => {
-      if (!node) return;
-      tutorialCtx.globalAlpha = node.disabled ? 0.45 : 1;
-      tutorialCtx.lineWidth = Math.max(2, baseRadius * 0.22);
-      tutorialCtx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-      tutorialCtx.beginPath();
-      tutorialCtx.arc(node.x, node.y, baseRadius * pulseScale, 0, Math.PI * 2);
-      tutorialCtx.stroke();
-    });
-
-    if (tutorialHighlightMode === 'drag' && anchorNode) {
-
-      const bob = Math.sin(now / 420) * Math.min(12, ch * 0.35);
-      const arrowColor = 'rgba(148, 181, 255, 0.92)';
-      const arrowWidth = Math.max(10, Math.min(cw, ch) * 0.45);
-      const arrowHeight = arrowWidth * 1.25;
-
-      const drawArrow = (x, y, direction) => {
+      highlightNodes.forEach((node) => {
+        if (!node) return;
+        tutorialCtx.globalAlpha = node.disabled ? 0.45 : 1;
+        tutorialCtx.lineWidth = Math.max(2, baseRadius * 0.22);
+        tutorialCtx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
         tutorialCtx.beginPath();
-        if (direction < 0) {
-          tutorialCtx.moveTo(x, y);
-          tutorialCtx.lineTo(x - arrowWidth * 0.5, y + arrowHeight);
-          tutorialCtx.lineTo(x + arrowWidth * 0.5, y + arrowHeight);
-        } else {
-          tutorialCtx.moveTo(x, y);
-          tutorialCtx.lineTo(x - arrowWidth * 0.5, y - arrowHeight);
-          tutorialCtx.lineTo(x + arrowWidth * 0.5, y - arrowHeight);
-        }
-        tutorialCtx.closePath();
-        tutorialCtx.globalAlpha = 0.9;
-        tutorialCtx.fillStyle = arrowColor;
-        tutorialCtx.fill();
-      };
+        tutorialCtx.arc(node.x, node.y, baseRadius * pulseScale, 0, Math.PI * 2);
+        tutorialCtx.stroke();
+      });
 
-      const topY = anchorNode.y - baseRadius - arrowHeight - 16 - bob;
-      const bottomY = anchorNode.y + baseRadius + arrowHeight + 16 + bob;
-      drawArrow(anchorNode.x, topY, -1);
-      drawArrow(anchorNode.x, bottomY, 1);
+      if (tutorialHighlightMode === 'drag' && anchorNode) {
+        const bob = Math.sin(now / 420) * Math.min(12, ch * 0.35);
+        const arrowColor = 'rgba(148, 181, 255, 0.92)';
+        const arrowWidth = Math.max(10, Math.min(cw, ch) * 0.45);
+        const arrowHeight = arrowWidth * 1.25;
+
+        const drawArrow = (x, y, direction) => {
+          tutorialCtx.beginPath();
+          if (direction < 0) {
+            tutorialCtx.moveTo(x, y);
+            tutorialCtx.lineTo(x - arrowWidth * 0.5, y + arrowHeight);
+            tutorialCtx.lineTo(x + arrowWidth * 0.5, y + arrowHeight);
+          } else {
+            tutorialCtx.moveTo(x, y);
+            tutorialCtx.lineTo(x - arrowWidth * 0.5, y - arrowHeight);
+            tutorialCtx.lineTo(x + arrowWidth * 0.5, y - arrowHeight);
+          }
+          tutorialCtx.closePath();
+          tutorialCtx.globalAlpha = 0.9;
+          tutorialCtx.fillStyle = arrowColor;
+          tutorialCtx.fill();
+        };
+
+        const topY = anchorNode.y - baseRadius - arrowHeight - 16 - bob;
+        const bottomY = anchorNode.y + baseRadius + arrowHeight + 16 + bob;
+        drawArrow(anchorNode.x, topY, -1);
+        drawArrow(anchorNode.x, bottomY, 1);
+        tutorialCtx.globalAlpha = 1;
+      }
+      tutorialCtx.restore();
+      tutorialCtx.shadowBlur = 0;
       tutorialCtx.globalAlpha = 1;
-    }
-    tutorialCtx.restore();
-    tutorialCtx.shadowBlur = 0;
-    tutorialCtx.globalAlpha = 1;
+    });
   };
 
   const startTutorialHighlightLoop = () => {
@@ -1064,7 +1169,10 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     const normalStrokes = strokes.filter(s => !s.justCreated);
     const newStrokes = strokes.filter(s => s.justCreated);
     withIdentity(targetCtx, () => {
-      targetCtx.clearRect(0, 0, cssW, cssH);
+      const surface = targetCtx.canvas;
+      const width = surface?.width ?? cssW;
+      const height = surface?.height ?? cssH;
+      targetCtx.clearRect(0, 0, width, height);
 
       // 1. Draw all existing, non-new strokes first.
       for (const s of normalStrokes) {
@@ -1286,7 +1394,7 @@ function regenerateMapFromStrokes() {
     if (!snap) return;
     try {
       updatePaintBackingStores({ target: usingBackBuffers ? 'back' : 'both' });
-      pctx.clearRect(0, 0, cssW, cssH);
+      clearCanvas(pctx);
       pctx.drawImage(snap, 0, 0, snap.width, snap.height, 0, 0, cssW, cssH);
     } catch {}
   }
@@ -1300,6 +1408,9 @@ function regenerateMapFromStrokes() {
       useBackBuffers();
       updatePaintBackingStores({ force: true, target: 'back' });
       resnapAndRedraw(true);
+      if (particles && typeof particles.onResize === 'function') {
+        particles.onResize({ resetPositions: true });
+      }
       drawIntoBackOnly();
       pendingSwap = true;
     });
@@ -1363,7 +1474,6 @@ function regenerateMapFromStrokes() {
         zoomCommitPhase = 'freeze';
         zoomGestureActive = true;
         useFrontBuffers();
-        paintDpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
         const hostEl = frontCanvas?.parentElement || wrap || panel;
         const measured = measureCSSSize(hostEl);
         if (measured.w > 0 && measured.h > 0) {
@@ -1378,7 +1488,6 @@ function regenerateMapFromStrokes() {
       if (z.phase === 'recompute') {
         zoomCommitPhase = 'recompute';
         zoomGestureActive = true;
-        paintDpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
         pendingZoomResnap = false;
         scheduleZoomRecompute();
         return;
@@ -1483,9 +1592,30 @@ function regenerateMapFromStrokes() {
   }
 
 
-  panel.addEventListener('toy-zoom', () => {
+  panel.addEventListener('toy-zoom', (event) => {
+    const z = event?.detail;
+    if (z && typeof z === 'object' && z.phase) {
+      if (z.phase === 'prepare') {
+        zoomGestureActive = true;
+        updateEraseButtonState();
+        useBackBuffers();
+        return;
+      }
+      if (z.phase === 'recompute') {
+        zoomGestureActive = true;
+        scheduleZoomRecompute();
+        return;
+      }
+      if (z.phase === 'commit' || z.phase === 'cancel') {
+        useFrontBuffers();
+        syncGhostBackToFront();
+        resnapAndRedraw(true);
+        zoomGestureActive = false;
+        return;
+      }
+    }
+
     updateEraseButtonState();
-    // Snapshot paint to preserve drawn/erased content across zoom transitions
     let zoomSnap = null;
     try {
       if (paint.width > 0 && paint.height > 0) {
@@ -1495,49 +1625,33 @@ function regenerateMapFromStrokes() {
         zoomSnap.getContext('2d')?.drawImage(paint, 0, 0);
       }
     } catch {}
-    // When zooming in or out, the panel's size changes.
-    // We force a layout call to ensure everything is redrawn correctly.
-    // A double rAF waits for the browser to finish style recalculation and layout
-    // after the panel is moved in the DOM, preventing a "flash of blank canvas".
+
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (!panel.isConnected) return;
 
-        // If entering advanced mode, upgrade the standard-view special line to Line 1
-        // so that its nodes are preserved.
-    if (panel.classList.contains('toy-zoomed')) {
-            const hasGeneratorLines = strokes.some(s => s.generatorId);
-            if (!hasGeneratorLines) {
-                // If there are no generator lines, we are effectively starting fresh
-                // in advanced mode. Clear any purely visual strokes from standard view.
-                strokes = [];
-            }
-        } else {
-            // LEAVING advanced mode. Preserve generator lines; standard view will keep their nodes.
+        if (panel.classList.contains('toy-zoomed')) {
+          const hasGeneratorLines = strokes.some(s => s.generatorId);
+          if (!hasGeneratorLines) {
+            strokes = [];
+          }
         }
 
         resnapAndRedraw(true);
-        // Restore snapshot after layout has run
         requestAnimationFrame(() => {
-          if (zoomSnap) {
-            try {
-              updatePaintBackingStores({ target: usingBackBuffers ? 'back' : 'both' });
-              pctx.clearRect(0, 0, cssW, cssH);
-              pctx.drawImage(
-                zoomSnap,
-                0, 0, zoomSnap.width, zoomSnap.height,
-                0, 0, cssW, cssH
-              );
-            } catch {}
-          }
+          if (!zoomSnap) return;
+          try {
+            updatePaintBackingStores({ target: usingBackBuffers ? 'back' : 'both' });
+            clearCanvas(pctx);
+            pctx.drawImage(
+              zoomSnap,
+              0, 0, zoomSnap.width, zoomSnap.height,
+              0, 0, cssW, cssH
+            );
+          } catch {}
         });
       });
     });
-  });
-
-  // When zoom state changes, force a transform-immune resnap next frame
-  panel.addEventListener('toy-zoom', () => {
-    requestAnimationFrame(() => resnapAndRedraw(true));
   });
 
   const observer = new ResizeObserver(() => {
@@ -1587,6 +1701,23 @@ function regenerateMapFromStrokes() {
     fctx = flashFrontCtx;
     ghostCtx = ghostFrontCtx;
     tutorialCtx = tutorialFrontCtx;
+  }
+
+  function syncGhostBackToFront() {
+    if (!ghostFrontCtx || !ghostBackCtx) return;
+    const front = ghostFrontCtx.canvas;
+    const back = ghostBackCtx.canvas;
+    if (!front || !back || !front.width || !front.height) return;
+    withIdentity(ghostFrontCtx, () => {
+      ghostFrontCtx.globalCompositeOperation = 'source-over';
+      ghostFrontCtx.globalAlpha = 1;
+      ghostFrontCtx.clearRect(0, 0, front.width, front.height);
+      ghostFrontCtx.drawImage(
+        back,
+        0, 0, back.width, back.height,
+        0, 0, front.width, front.height
+      );
+    });
   }
 
   function getActiveFlashCanvas() {
@@ -1642,7 +1773,7 @@ function regenerateMapFromStrokes() {
   function swapBackToFront() {
     if (!backCtx || !cssW || !cssH) return;
     updatePaintBackingStores({ force: true, target: 'front' });
-    pctx.clearRect(0, 0, cssW, cssH);
+    clearCanvas(pctx);
     try {
       pctx.drawImage(
         backCanvas,
@@ -1675,53 +1806,77 @@ function regenerateMapFromStrokes() {
     ghostCanvas.width = w; ghostCanvas.height = h;
     tutorialCanvas.width = w; tutorialCanvas.height = h;
 
-    gridFrontCtx.setTransform(1, 0, 0, 1, 0, 0);
-    gridFrontCtx.clearRect(0, 0, w, h);
-    gridFrontCtx.drawImage(
-      gridBackCanvas,
-      0, 0, gridBackCanvas.width, gridBackCanvas.height,
-      0, 0, w, h
-    );
+    withIdentity(gridFrontCtx, () => {
+      const surface = gridFrontCtx.canvas;
+      const width = surface?.width ?? w;
+      const height = surface?.height ?? h;
+      gridFrontCtx.clearRect(0, 0, width, height);
+      gridFrontCtx.drawImage(
+        gridBackCanvas,
+        0, 0, gridBackCanvas.width, gridBackCanvas.height,
+        0, 0, width, height
+      );
+    });
 
-    nodesFrontCtx.setTransform(1, 0, 0, 1, 0, 0);
-    nodesFrontCtx.clearRect(0, 0, w, h);
-    nodesFrontCtx.drawImage(
-      nodesBackCanvas,
-      0, 0, nodesBackCanvas.width, nodesBackCanvas.height,
-      0, 0, w, h
-    );
+    withIdentity(nodesFrontCtx, () => {
+      const surface = nodesFrontCtx.canvas;
+      const width = surface?.width ?? w;
+      const height = surface?.height ?? h;
+      nodesFrontCtx.clearRect(0, 0, width, height);
+      nodesFrontCtx.drawImage(
+        nodesBackCanvas,
+        0, 0, nodesBackCanvas.width, nodesBackCanvas.height,
+        0, 0, width, height
+      );
+    });
 
-    particleFrontCtx.setTransform(1, 0, 0, 1, 0, 0);
-    particleFrontCtx.clearRect(0, 0, w, h);
-    particleFrontCtx.drawImage(
-      particleBackCanvas,
-      0, 0, particleBackCanvas.width, particleBackCanvas.height,
-      0, 0, w, h
-    );
+    withIdentity(particleFrontCtx, () => {
+      const surface = particleFrontCtx.canvas;
+      const width = surface?.width ?? w;
+      const height = surface?.height ?? h;
+      particleFrontCtx.clearRect(0, 0, width, height);
+      particleFrontCtx.drawImage(
+        particleBackCanvas,
+        0, 0, particleBackCanvas.width, particleBackCanvas.height,
+        0, 0, width, height
+      );
+    });
 
-    flashFrontCtx.setTransform(1, 0, 0, 1, 0, 0);
-    flashFrontCtx.clearRect(0, 0, w, h);
-    flashFrontCtx.drawImage(
-      flashBackCanvas,
-      0, 0, flashBackCanvas.width, flashBackCanvas.height,
-      0, 0, w, h
-    );
+    withIdentity(flashFrontCtx, () => {
+      const surface = flashFrontCtx.canvas;
+      const width = surface?.width ?? w;
+      const height = surface?.height ?? h;
+      flashFrontCtx.clearRect(0, 0, width, height);
+      flashFrontCtx.drawImage(
+        flashBackCanvas,
+        0, 0, flashBackCanvas.width, flashBackCanvas.height,
+        0, 0, width, height
+      );
+    });
 
-    ghostFrontCtx.setTransform(1, 0, 0, 1, 0, 0);
-    ghostFrontCtx.clearRect(0, 0, w, h);
-    ghostFrontCtx.drawImage(
-      ghostBackCanvas,
-      0, 0, ghostBackCanvas.width, ghostBackCanvas.height,
-      0, 0, w, h
-    );
+    withIdentity(ghostFrontCtx, () => {
+      const surface = ghostFrontCtx.canvas;
+      const width = surface?.width ?? w;
+      const height = surface?.height ?? h;
+      ghostFrontCtx.clearRect(0, 0, width, height);
+      ghostFrontCtx.drawImage(
+        ghostBackCanvas,
+        0, 0, ghostBackCanvas.width, ghostBackCanvas.height,
+        0, 0, width, height
+      );
+    });
 
-    tutorialFrontCtx.setTransform(1, 0, 0, 1, 0, 0);
-    tutorialFrontCtx.clearRect(0, 0, w, h);
-    tutorialFrontCtx.drawImage(
-      tutorialBackCanvas,
-      0, 0, tutorialBackCanvas.width, tutorialBackCanvas.height,
-      0, 0, w, h
-    );
+    withIdentity(tutorialFrontCtx, () => {
+      const surface = tutorialFrontCtx.canvas;
+      const width = surface?.width ?? w;
+      const height = surface?.height ?? h;
+      tutorialFrontCtx.clearRect(0, 0, width, height);
+      tutorialFrontCtx.drawImage(
+        tutorialBackCanvas,
+        0, 0, tutorialBackCanvas.width, tutorialBackCanvas.height,
+        0, 0, width, height
+      );
+    });
   }
 
   function layout(force = false){
@@ -1786,13 +1941,8 @@ function regenerateMapFromStrokes() {
       updatePaintBackingStores({ force: true, target: usingBackBuffers ? 'back' : 'both' });
       if (tutorialHighlightMode !== 'none') renderTutorialHighlight();
 
-      // Scale particle positions if zoom changed
-      if (oldW > 0 && oldH > 0) {
-        const scaleX = cssW / oldW;
-        const scaleY = cssH / oldH;
-        if ((scaleX !== 1 || scaleY !== 1) && Number.isFinite(scaleX) && Number.isFinite(scaleY)) {
-          particles.scalePositions(scaleX, scaleY);
-        }
+      if (typeof particles.onResize === 'function' && !zoomGestureActive) {
+        particles.onResize({ resetPositions: true });
       }
       lastZoomX = zoomX;
       lastZoomY = zoomY;
@@ -1844,7 +1994,7 @@ function regenerateMapFromStrokes() {
       if (paintSnapshot && zoomCommitPhase !== 'recompute') {
         try {
           updatePaintBackingStores({ target: usingBackBuffers ? 'back' : 'both' });
-          pctx.clearRect(0, 0, cssW, cssH);
+          clearCanvas(pctx);
           pctx.drawImage(
             paintSnapshot,
             0, 0, paintSnapshot.width, paintSnapshot.height,
@@ -1853,11 +2003,15 @@ function regenerateMapFromStrokes() {
         } catch {}
       }
       // Clear other content canvases. The caller is responsible for redrawing nodes/overlay.
-      nctx.clearRect(0, 0, w, h);
+      clearCanvas(nctx);
       const flashTarget = getActiveFlashCanvas();
-      fctx.clearRect(0, 0, flashTarget.width, flashTarget.height);
+      withIdentity(fctx, () => {
+        fctx.clearRect(0, 0, flashTarget.width, flashTarget.height);
+      });
       const ghostTarget = getActiveGhostCanvas();
-      ghostCtx.clearRect(0, 0, ghostTarget.width, ghostTarget.height);
+      withIdentity(ghostCtx, () => {
+        ghostCtx.clearRect(0, 0, ghostTarget.width, ghostTarget.height);
+      });
     }
   }
 
@@ -1890,11 +2044,14 @@ function regenerateMapFromStrokes() {
 
   function drawGrid(){
     withIdentity(gctx, () => {
-      gctx.clearRect(0, 0, cssW, cssH);
+      const surface = gctx.canvas;
+      const width = surface?.width ?? cssW;
+      const height = surface?.height ?? cssH;
+      gctx.clearRect(0, 0, width, height);
 
       // Fill the entire background on the lowest layer (grid canvas)
       gctx.fillStyle = '#0b0f16';
-      gctx.fillRect(0, 0, cssW, cssH);
+      gctx.fillRect(0, 0, width, height);
 
       // 1. Draw the note grid area below the top padding
       const noteGridY = gridArea.y + topPad;
@@ -2120,7 +2277,10 @@ function regenerateMapFromStrokes() {
     const nodeCoords = [];
     nodeCoordsForHitTest = [];
     withIdentity(nctx, () => {
-      nctx.clearRect(0, 0, cssW, cssH);
+      const surface = nctx.canvas;
+      const width = surface?.width ?? cssW;
+      const height = surface?.height ?? cssH;
+      nctx.clearRect(0, 0, width, height);
       renderDragScaleBlueHints(nctx);
       if (!nodes) {
         return;
@@ -2504,7 +2664,7 @@ function regenerateMapFromStrokes() {
   }
 
   function onPointerDown(e){
-    stopAutoGhostGuide({ immediate: true });
+    stopAutoGhostGuide({ immediate: false });
     const rect = paint.getBoundingClientRect();
     // Use shared w/h for coordinate mapping
     const p = {
@@ -2977,7 +3137,12 @@ function regenerateMapFromStrokes() {
     // Step and draw particles
     try {
       particles.step(1/60); // Assuming 60fps for dt
-      particleCtx.clearRect(0, 0, cssW, cssH);
+      withIdentity(particleCtx, () => {
+        const surface = particleCtx.canvas;
+        const width = surface?.width ?? cssW;
+        const height = surface?.height ?? cssH;
+        particleCtx.clearRect(0, 0, width, height);
+      });
       // The dark background is now drawn on the grid canvas, so particles can be overlaid.
       particles.draw(particleCtx, boardScale);
     } catch (e) { /* fail silently */ }
@@ -2986,7 +3151,9 @@ function regenerateMapFromStrokes() {
     if (currentMap) drawNodes(currentMap.nodes); // Always redraw nodes (cubes, connections, labels)
 
     // Clear flash canvas for this frame's animations
-    fctx.clearRect(0, 0, flashSurface.width, flashSurface.height);
+    withIdentity(fctx, () => {
+      fctx.clearRect(0, 0, flashSurface.width, flashSurface.height);
+    });
 
     // Animate special stroke paint (hue cycling) without resurrecting erased areas:
     // Draw animated special strokes into flashCanvas, then mask with current paint alpha.
@@ -3157,12 +3324,15 @@ function regenerateMapFromStrokes() {
       fctx.save();
       fctx.strokeStyle = 'red';
       fctx.lineWidth = 1;
-      fctx.strokeRect(0, 0, cssW, cssH);
+      const debugSurface = getActiveFlashCanvas();
+      const dbgW = debugSurface?.width ?? cssW;
+      const dbgH = debugSurface?.height ?? cssH;
+      fctx.strokeRect(0, 0, dbgW, dbgH);
       fctx.fillStyle = 'red';
       fctx.font = '12px monospace';
-      const pxScale = cssW ? (paint.width / cssW).toFixed(2) : 'n/a';
+      const pxScale = dbgW ? (paint.width / dbgW).toFixed(2) : 'n/a';
       fctx.fillText(`boardScale: ${boardScale.toFixed(2)}`, 5, 15);
-      fctx.fillText(`w x h: ${cssW} x ${cssH}`, 5, 30);
+      fctx.fillText(`w x h: ${dbgW} x ${dbgH}`, 5, 30);
       fctx.fillText(`pixelScale: ${pxScale}`, 5, 45);
       fctx.restore();
     }
@@ -3176,9 +3346,12 @@ function regenerateMapFromStrokes() {
     startGhostGuide,
     stopGhostGuide,
     clear: ()=>{
-      pctx.clearRect(0,0,cssW,cssH);
-      nctx.clearRect(0,0,cssW,cssH);
-      fctx.clearRect(0,0,cssW,cssH);
+      clearCanvas(pctx);
+      clearCanvas(nctx);
+      const flashSurface = getActiveFlashCanvas();
+      withIdentity(fctx, () => {
+        fctx.clearRect(0, 0, flashSurface.width, flashSurface.height);
+      });
       strokes = [];
       eraseStrokes = [];
       manualOverrides = Array.from({ length: cols }, () => new Set());
@@ -3430,8 +3603,8 @@ function regenerateMapFromStrokes() {
     nodeGroupMap = Array.from({ length: cols }, () => new Map());
     manualOverrides = Array.from({ length: cols }, () => new Set());
     persistentDisabled = Array.from({ length: cols }, () => new Set());
-    pctx.clearRect(0, 0, cssW, cssH);
-    nctx.clearRect(0, 0, cssW, cssH);
+    clearCanvas(pctx);
+    clearCanvas(nctx);
 
     // Build a smooth, dramatic wiggly line across the full grid height using Catmull-Rom interpolation
     try {
@@ -3543,20 +3716,52 @@ function regenerateMapFromStrokes() {
   let ghostGuideAnimFrame = null;
   let ghostGuideLoopId = null;
   let ghostGuideAutoActive = false;
+  let ghostGuideRunning = false;
+  let ghostFadeRAF = 0;
   const GHOST_SWEEP_DURATION = 2000;
   const GHOST_SWEEP_PAUSE = 1000;
 
-  function stopGhostGuide() {
+  function stopGhostGuide({ immediate = false } = {}) {
     if (ghostGuideAnimFrame) {
       cancelAnimationFrame(ghostGuideAnimFrame);
       ghostGuideAnimFrame = null;
     }
-    ghostCtx.setTransform(1,0,0,1,0,0);
-    const ghostSurface = getActiveGhostCanvas();
-    ghostCtx.clearRect(0,0,ghostSurface.width,ghostSurface.height);
+    ghostGuideRunning = false;
+    if (ghostFadeRAF) {
+      cancelAnimationFrame(ghostFadeRAF);
+      ghostFadeRAF = 0;
+    }
+    if (immediate) {
+      const ghostSurface = getActiveGhostCanvas();
+      withIdentity(ghostCtx, () => {
+        ghostCtx.clearRect(0, 0, ghostSurface.width, ghostSurface.height);
+      });
+    } else {
+      ghostFadeRAF = requestAnimationFrame(() => fadeOutGhostTrail(0));
+    }
   }
 
-function startGhostGuide({
+  function fadeOutGhostTrail(step = 0) {
+    const ghostSurface = getActiveGhostCanvas();
+    if (!ghostSurface) {
+      ghostFadeRAF = 0;
+      return;
+    }
+    withIdentity(ghostCtx, () => {
+      ghostCtx.globalCompositeOperation = 'destination-out';
+      ghostCtx.globalAlpha = 0.18;
+      ghostCtx.fillRect(0, 0, ghostSurface.width, ghostSurface.height);
+    });
+    ghostCtx.globalCompositeOperation = 'source-over';
+    ghostCtx.globalAlpha = 1.0;
+    if (step < 5) {
+      ghostFadeRAF = requestAnimationFrame(() => fadeOutGhostTrail(step + 1));
+    } else {
+      ghostFadeRAF = 0;
+    }
+  }
+
+  function startGhostGuide({
   startX, endX,
   startY, endY,
   duration = 2000,
@@ -3566,24 +3771,24 @@ function startGhostGuide({
   trailCount = 3,
   trailSpeed = 1.2,
 } = {}) {
-  stopGhostGuide();
+  stopGhostGuide({ immediate: true });
+  if (ghostFadeRAF) {
+    cancelAnimationFrame(ghostFadeRAF);
+    ghostFadeRAF = 0;
+  }
   const { w, h } = getLayoutSize();
   if (!w || !h) {
     layout(true);
   }
 
-  // Work in logical coordinate space
   const gx = gridArea.x, gy = gridArea.y, gw = gridArea.w, gh = gridArea.h;
 
-  // Default span if caller omitted
   if (typeof startX !== 'number' || typeof endX !== 'number') {
     startX = gx;
     endX = gx + gw;
   }
-  // Left → right
   if (startX > endX) [startX, endX] = [endX, startX];
 
-  // Default for Y
   if (typeof startY !== 'number' || typeof endY !== 'number') {
     startY = gy;
     endY = gy + gh;
@@ -3595,72 +3800,69 @@ function startGhostGuide({
   let last = null;
   let lastTrail = 0;
   const noiseSeed = Math.random() * 100;
+  ghostGuideRunning = true;
 
-      function frame(now) {
-        const ghostSurface = getActiveGhostCanvas();
-        const elapsed = now - startTime;
-        const t = Math.min(elapsed / duration, 1);
-  
-        if (!cw || !ch) {
-          layout(true);
-        }
-  
-        const gx = gridArea.x, gy = gridArea.y, gw = gridArea.w, gh = gridArea.h;
-        const currentStartX = gx + gw * 0.1;
-        const currentEndX = gx + gw * 0.9;
-        const currentStartY = gy + gh * 0.1;
-        const currentEndY = gy + gh * 0.9;
-  
-        const wiggleAmp = gh * 0.25;
-  
-        const x = currentStartX + (currentEndX - currentStartX) * t;
-        let y  = currentStartY + (currentEndY - currentStartY) * t;
+  function frame(now) {
+    if (!panel.isConnected) return;
+    if (!ghostGuideRunning) return;
+    const ghostSurface = getActiveGhostCanvas();
+    const elapsed = now - startTime;
+    const t = Math.min(elapsed / duration, 1);
+
+    if (!cw || !ch) {
+      layout(true);
+    }
+
+    const gx = gridArea.x, gy = gridArea.y, gw = gridArea.w, gh = gridArea.h;
+    const currentStartX = gx + gw * 0.1;
+    const currentEndX = gx + gw * 0.9;
+    const currentStartY = gy + gh * 0.1;
+    const currentEndY = gy + gh * 0.9;
+
+    const wiggleAmp = gh * 0.25;
+
+    const x = currentStartX + (currentEndX - currentStartX) * t;
+    let y = currentStartY + (currentEndY - currentStartY) * t;
     if (wiggle) {
       const wiggleFactor = Math.sin(t * Math.PI * 3) * Math.sin(t * Math.PI * 0.5 + noiseSeed);
       y += wiggleAmp * wiggleFactor;
     }
 
-    // Clamp inside the grid area
     const topBound = gy, bottomBound = gy + gh;
-    if (y > bottomBound)      y = bottomBound - (y - bottomBound);
-    else if (y < topBound)    y = topBound + (topBound - y);
+    if (y > bottomBound) y = bottomBound - (y - bottomBound);
+    else if (y < topBound) y = topBound + (topBound - y);
 
-    // Fade old trail (device pixel space)
-    ghostCtx.save();
-    ghostCtx.setTransform(1,0,0,1,0,0);
-    ghostCtx.globalCompositeOperation = 'destination-out';
-    ghostCtx.globalAlpha = 0.1;
-    ghostCtx.fillRect(0, 0, ghostSurface.width, ghostSurface.height);
-    ghostCtx.restore();
+    withIdentity(ghostCtx, () => {
+      ghostCtx.globalCompositeOperation = 'destination-out';
+      ghostCtx.globalAlpha = 0.1;
+      ghostCtx.fillRect(0, 0, ghostSurface.width, ghostSurface.height);
+    });
+    ghostCtx.globalCompositeOperation = 'source-over';
+    ghostCtx.globalAlpha = 1.0;
 
-    // Draw new segment + dot (device space)
     if (last) {
-      ghostCtx.save();
-      ghostCtx.setTransform(1,0,0,1,0,0);
-      ghostCtx.globalCompositeOperation = 'source-over';
-      ghostCtx.globalAlpha = 0.25;
-      ghostCtx.lineCap = 'round';
-      ghostCtx.lineJoin = 'round';
-      ghostCtx.lineWidth = getLineWidth() * 1.15;
-      ghostCtx.strokeStyle = 'rgba(68,112,255,0.7)';
-      ghostCtx.beginPath();
-      ghostCtx.moveTo(last.x, last.y);
-      ghostCtx.lineTo(x, y);
-      ghostCtx.stroke();
+      withIdentity(ghostCtx, () => {
+        ghostCtx.globalCompositeOperation = 'source-over';
+        ghostCtx.globalAlpha = 0.25;
+        ghostCtx.lineCap = 'round';
+        ghostCtx.lineJoin = 'round';
+        ghostCtx.lineWidth = getLineWidth() * 1.15;
+        ghostCtx.strokeStyle = 'rgba(68,112,255,0.7)';
+        ghostCtx.beginPath();
+        ghostCtx.moveTo(last.x, last.y);
+        ghostCtx.lineTo(x, y);
+        ghostCtx.stroke();
 
-      // Finger dot – scales with grid cell size & zoom
-      const dotR = getLineWidth() * 0.45;
-      ghostCtx.beginPath();
-      ghostCtx.arc(x, y, dotR, 0, Math.PI * 2);
-      ghostCtx.fillStyle = 'rgba(68,112,255,0.85)';
-      ghostCtx.fill();
-
-      ghostCtx.restore();
+        const dotR = getLineWidth() * 0.45;
+        ghostCtx.beginPath();
+        ghostCtx.arc(x, y, dotR, 0, Math.PI * 2);
+        ghostCtx.fillStyle = 'rgba(68,112,255,0.85)';
+        ghostCtx.fill();
+      });
     }
     last = { x, y };
 
-    // Particle interactions in logical coords; radius scales with line width
-    const force  = 0.8;
+    const force = 0.8;
     const radius = getLineWidth() * 1.5;
     particles.drawingDisturb(x, y, radius, force);
     if (trail && now - lastTrail >= trailEveryMs) {
@@ -3668,18 +3870,18 @@ function startGhostGuide({
       lastTrail = now;
     }
 
-    if (t < 1) {
+    if (ghostGuideRunning && t < 1) {
       ghostGuideAnimFrame = requestAnimationFrame(frame);
     } else {
-      // Hard clear
-      ghostCtx.save();
-      ghostCtx.globalCompositeOperation = 'destination-out';
-      ghostCtx.globalAlpha = 1;
-      ghostCtx.fillRect(0, 0, ghostSurface.width, ghostSurface.height);
-      ghostCtx.restore();
-      stopGhostGuide();
+      ghostGuideRunning = false;
+      if (ghostFadeRAF) {
+        cancelAnimationFrame(ghostFadeRAF);
+      }
+      ghostFadeRAF = requestAnimationFrame(() => fadeOutGhostTrail(0));
+      ghostGuideAnimFrame = null;
     }
   }
+
   ghostGuideAnimFrame = requestAnimationFrame(frame);
 }
 
@@ -3751,7 +3953,7 @@ function runAutoGhostGuideSweep() {
       clearInterval(ghostGuideLoopId);
       ghostGuideLoopId = null;
     }
-    stopGhostGuide();
+    stopGhostGuide({ immediate });
     if (wasActive) {
       syncLetterFade({ immediate });
     }
@@ -3805,3 +4007,7 @@ function runAutoGhostGuideSweep() {
   try { panel.dispatchEvent(new CustomEvent('drawgrid:ready', { bubbles: true })); } catch {}
   return api;
 }
+
+
+
+
