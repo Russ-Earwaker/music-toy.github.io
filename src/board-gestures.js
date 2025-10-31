@@ -87,23 +87,7 @@ import { setGestureTransform, commitGesture, getZoomState } from './zoom/ZoomCoo
     };
   }
 
-  function endGesture(e) {
-    const zoom = getZoomState();
-    // [DIAG] Tag this gesture so other modules can correlate.
-    const GID = (Date.now().toString(36) + Math.random().toString(36).slice(2, 6)).toUpperCase();
-    const T0 = performance?.now?.() ?? Date.now();
-    window.__LAST_POINTERUP_DIAG__ = { gid: GID, t0: T0 };
-
-    console.debug('[DIAG][pointerup] commitGesture start', { GID, T0, zoom });
-    commitGesture(
-      {
-        scale: clampScale(zoom.targetScale ?? zoom.currentScale ?? 1),
-        x: zoom.targetX ?? zoom.currentX ?? 0,
-        y: zoom.targetY ?? zoom.currentY ?? 0,
-      },
-      { delayMs: 60 }
-    );
-    console.debug('[DIAG][pointerup] commitGesture queued', { GID, delayMs: 60 });
+  function cleanupGestureState() {
     if (dragging) {
       dragging = false;
       dragStart = null;
@@ -114,6 +98,47 @@ import { setGestureTransform, commitGesture, getZoomState } from './zoom/ZoomCoo
       capturedPointerId = null;
     }
     pinchState = null;
+  }
+
+  function endGesture(e) {
+    const zoom = getZoomState();
+    const curScale = zoom.targetScale ?? zoom.currentScale ?? 1;
+    const curX = zoom.targetX ?? zoom.currentX ?? 0;
+    const curY = zoom.targetY ?? zoom.currentY ?? 0;
+
+    const endScale = clampScale(curScale);
+    const endX = curX;
+    const endY = curY;
+
+    const SCALE_EPS = 1e-4;
+    const POS_EPS = 0.5; // px tolerance before we treat as movement
+
+    const scaleChanged = Math.abs(endScale - (zoom.currentScale ?? curScale)) > SCALE_EPS;
+    const xChanged = Math.abs(endX - (zoom.currentX ?? curX)) > POS_EPS;
+    const yChanged = Math.abs(endY - (zoom.currentY ?? curY)) > POS_EPS;
+
+    if (!scaleChanged && !xChanged && !yChanged) {
+      cleanupGestureState();
+      return;
+    }
+
+    // [DIAG] Tag this gesture so other modules can correlate.
+    const GID = (Date.now().toString(36) + Math.random().toString(36).slice(2, 6)).toUpperCase();
+    const T0 = performance?.now?.() ?? Date.now();
+    window.__LAST_POINTERUP_DIAG__ = { gid: GID, t0: T0 };
+
+    console.debug('[DIAG][pointerup] commitGesture start', { GID, T0, zoom });
+    commitGesture(
+      { scale: endScale, x: endX, y: endY },
+      { delayMs: 60 }
+    );
+    console.debug('[DIAG][pointerup] commitGesture queued', { GID, delayMs: 60 });
+    // Expose a precise settle-until time for consumers like drawgrid.
+    try {
+      window.__GESTURE_SETTLE_UNTIL_TS = (performance?.now?.() ?? Date.now()) + 60 + 48; // delayMs + small buffer
+    } catch {}
+
+    cleanupGestureState();
   }
 
   function onDown(e) {

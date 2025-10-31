@@ -44,8 +44,16 @@ function clearCanvas(ctx) {
 }
 
 let __drawParticlesSeed = 1337;
+// --- Commit/settle gating for overlay clears ---
 let __dgDeferUntilTs = 0;
 let __dgNeedsUIRefresh = false;
+let __dgStableFramesAfterCommit = 0;
+
+function __dgInCommitWindow(nowTs) {
+  const lp = window.__LAST_POINTERUP_DIAG__;
+  const settleUntil = (window.__GESTURE_SETTLE_UNTIL_TS || (lp?.t0 ? lp.t0 + 200 : 0));
+  return nowTs < settleUntil;
+}
 
 function mulberry32(seed) {
   let t = seed >>> 0;
@@ -158,31 +166,6 @@ function chainHasSequencedNotes(head) {
     if (!current || current === head) break;
   }
   return false;
-}
-
-function drawDebugHUD(extraLines = []) {
-  if (!DG_DEBUG || !debugCtx) return;
-  const w = debugCtx.canvas.width = Math.max(1, Math.round(cssW || debugCtx.canvas.width || 1));
-  const h = debugCtx.canvas.height = Math.max(1, Math.round(cssH || debugCtx.canvas.height || 1));
-  debugCtx.clearRect(0,0,w,h);
-  const pad = 10;
-  debugCtx.save();
-  debugCtx.globalAlpha = 0.85;
-  debugCtx.fillStyle = 'rgba(0,0,0,0.55)';
-  debugCtx.fillRect(pad, pad, Math.min(520,w-2*pad), 14*16 + extraLines.length*16 + 20);
-  debugCtx.fillStyle = '#9cf';
-  debugCtx.font = '12px monospace';
-  const lines = [
-    `usingBackBuffers=${usingBackBuffers} pendingPaintSwap=${!!pendingPaintSwap} pendingSwap=${!!pendingSwap}`,
-    `zoomMode=${zoomMode} commitPhase=${zoomCommitPhase} gesture=${!!zoomGestureActive}`,
-    `boardScale=${boardScale?.toFixed?.(3)} lastCommitted=${lastCommittedScale?.toFixed?.(3)}`,
-    `cssW/H=${cssW}x${cssH} gridArea=(${gridArea.x.toFixed?.(1)},${gridArea.y.toFixed?.(1)}) ${gridArea.w.toFixed?.(1)}x${gridArea.h.toFixed?.(1)}`,
-    `particles: drewRectsLastFrame=${DG_particlesRectsDrawn} lettersDrawn=${DG_lettersDrawn}`,
-    `paintSwapRAF=${!!__swapRAF} paintDpr=${paintDpr}`,
-  ].concat(extraLines);
-  let y = pad + 18;
-  for (const L of lines) { debugCtx.fillText(L, pad+10, y); y+=16; }
-  debugCtx.restore();
 }
 
 /**
@@ -788,10 +771,52 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   body.appendChild(tutorialCanvas);
 
   const debugCanvas = document.createElement('canvas');
-debugCanvas.setAttribute('data-role','drawgrid-debug');
-Object.assign(debugCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display: DG_DEBUG?'block':'none', zIndex: 9999, pointerEvents: 'none' });
-body.appendChild(debugCanvas);
-const debugCtx = debugCanvas.getContext('2d');
+  debugCanvas.setAttribute('data-role','drawgrid-debug');
+  Object.assign(debugCanvas.style, {
+    position: 'absolute',
+    inset: '0',
+    width: '100%',
+    height: '100%',
+    display: DG_DEBUG ? 'block' : 'none',
+    zIndex: 9999,
+    pointerEvents: 'none',
+  });
+  body.appendChild(debugCanvas);
+  const debugCtx = debugCanvas.getContext('2d');
+
+  function drawDebugHUD(extraLines = []) {
+    if (!DG_DEBUG || !debugCtx) return;
+    const safeCssW = (typeof cssW !== 'undefined' && cssW) ? cssW : (debugCtx.canvas?.width || 1);
+    const safeCssH = (typeof cssH !== 'undefined' && cssH) ? cssH : (debugCtx.canvas?.height || 1);
+    const w = debugCtx.canvas.width = Math.max(1, Math.round(safeCssW));
+    const h = debugCtx.canvas.height = Math.max(1, Math.round(safeCssH));
+    debugCtx.clearRect(0, 0, w, h);
+    const pad = 10;
+    debugCtx.save();
+    debugCtx.globalAlpha = 0.85;
+    debugCtx.fillStyle = 'rgba(0,0,0,0.55)';
+    const extraHeight = extraLines.length * 16;
+    debugCtx.fillRect(pad, pad, Math.min(520, w - 2 * pad), 14 * 16 + extraHeight + 20);
+    debugCtx.fillStyle = '#9cf';
+    debugCtx.font = '12px monospace';
+    const gridInfo = (typeof gridArea !== 'undefined' && gridArea)
+      ? `cssW/H=${safeCssW}x${safeCssH} gridArea=(${gridArea.x?.toFixed?.(1)},${gridArea.y?.toFixed?.(1)}) ${gridArea.w?.toFixed?.(1)}x${gridArea.h?.toFixed?.(1)}`
+      : `cssW/H=${safeCssW}x${safeCssH}`;
+    const lines = [
+      `usingBackBuffers=${!!usingBackBuffers} pendingPaintSwap=${!!pendingPaintSwap} pendingSwap=${!!pendingSwap}`,
+      `zoomMode=${zoomMode} commitPhase=${zoomCommitPhase} gesture=${!!zoomGestureActive}`,
+      `boardScale=${boardScale?.toFixed?.(3)} lastCommitted=${lastCommittedScale?.toFixed?.(3)}`,
+      gridInfo,
+      `particles: drewRectsLastFrame=${DG_particlesRectsDrawn} lettersDrawn=${DG_lettersDrawn}`,
+      `paintSwapRAF=${!!__swapRAF} paintDpr=${paintDpr}`,
+    ].concat(extraLines);
+    let y = pad + 18;
+    for (const L of lines) {
+      debugCtx.fillText(L, pad + 10, y);
+      y += 16;
+    }
+    debugCtx.restore();
+  }
 
   const wrap = document.createElement('div');
   wrap.className = 'drawgrid-size-wrap';
@@ -881,6 +906,9 @@ const debugCtx = debugCanvas.getContext('2d');
   let zoomMode = 'idle';
   let pendingZoomResnap = false;
 
+  // Epsilon threshold so we only treat scale changes as real zooms.
+  const ZOOM_SCALE_EPS = 1e-4;
+  let lastProgressScale = null;
   const SCALE_RESNAP_EPSILON = 1e-4;
   let lastCommittedScale = boardScale;
   let drawing=false, erasing=false;
@@ -1542,20 +1570,35 @@ function regenerateMapFromStrokes() {
   }
 
   const unsubscribeZoom = onZoomChange((z) => {
+    // Normalize mode/scale first
     zoomMode = z.mode || 'idle';
-    if (z.mode === 'gesturing') {
-      zoomGestureActive = true;
-    }
-    const nextScale = Number.isFinite(z.currentScale)
+    const nextScale = Number.isFinite(z.currentScale) ? z.currentScale : Number(z.targetScale);
+    if (Number.isFinite(nextScale)) boardScale = nextScale;
+
+    // Decide if scale *really* moved (filter micro jitter)
+    const scaleForCompare = Number.isFinite(z.currentScale)
       ? z.currentScale
-      : Number(z.targetScale);
-    if (Number.isFinite(nextScale)) {
-      boardScale = nextScale;
+      : (Number.isFinite(z.targetScale) ? z.targetScale : boardScale);
+    const scaleMoved =
+      Number.isFinite(scaleForCompare) && Math.abs(scaleForCompare - lastCommittedScale) > ZOOM_SCALE_EPS;
+    const progressMoved =
+      Number.isFinite(scaleForCompare) &&
+      (lastProgressScale === null || Math.abs(scaleForCompare - lastProgressScale) > ZOOM_SCALE_EPS);
+
+    // Only consider a zoom gesture "active" if the scale actually moved.
+    zoomGestureActive = (z.mode === 'gesturing') && scaleMoved;
+
+    if (DG_DEBUG && z.phase) {
+      DG.log('ZOOM phase', z.phase, { boardScale, zoomMode, pendingPaintSwap, pendingSwap, usingBackBuffers });
     }
-    if (DG_DEBUG && z.phase) DG.log('ZOOM phase', z.phase, { boardScale, zoomMode, pendingPaintSwap, pendingSwap, usingBackBuffers });
+
+    // Forget progress accumulator whenever the phase leaves 'progress'
+    if (z.phase && z.phase !== 'progress') lastProgressScale = null;
 
     if (z.phase === 'progress') {
-      zoomGestureActive = true;
+      // Hard gate: only react if (a) user is gesturing AND (b) scale truly moved
+      if (z.mode !== 'gesturing' || !scaleMoved || !progressMoved) return;
+      lastProgressScale = scaleForCompare;
       const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
         ? performance.now()
         : Date.now();
@@ -1679,6 +1722,7 @@ function regenerateMapFromStrokes() {
 
     if (z.mode !== 'gesturing' && !z.phase) {
       zoomGestureActive = false;
+      lastProgressScale = null;
     }
 
     if (zoomMode === 'gesturing') {
@@ -1915,59 +1959,40 @@ function regenerateMapFromStrokes() {
   }
 
   function ensureBackVisualsFreshFromFront() {
-    // Copies FRONT visual layers into BACK so a flush can safely draw them without a blank.
-    // Use only when usingBackBuffers === false and we’re about to request a front flush.
-    const w = Math.max(1, Math.round(cssW));
-    const h = Math.max(1, Math.round(cssH));
-
-    // Grid
-    if (gridBackCanvas && gridFrontCtx) {
-      withIdentity(gridBackCtx, () => {
-        gridBackCanvas.width = w; gridBackCanvas.height = h;
-        gridBackCtx.clearRect(0, 0, w, h);
-        gridBackCtx.drawImage(gridFrontCtx.canvas, 0, 0, gridFrontCtx.canvas.width, gridFrontCtx.canvas.height, 0, 0, w, h);
-      });
-    }
-    // Nodes
-    if (nodesBackCanvas && nodesFrontCtx) {
-      withIdentity(nodesBackCtx, () => {
-        nodesBackCanvas.width = w; nodesBackCanvas.height = h;
-        nodesBackCtx.clearRect(0, 0, w, h);
-        nodesBackCtx.drawImage(nodesFrontCtx.canvas, 0, 0, nodesFrontCtx.canvas.width, nodesFrontCtx.canvas.height, 0, 0, w, h);
-      });
-    }
-    // Particles
-    if (particleBackCanvas && particleFrontCtx) {
-      withIdentity(particleBackCtx, () => {
-        particleBackCanvas.width = w; particleBackCanvas.height = h;
-        particleBackCtx.clearRect(0, 0, w, h);
-        particleBackCtx.drawImage(particleFrontCtx.canvas, 0, 0, particleFrontCtx.canvas.width, particleFrontCtx.canvas.height, 0, 0, w, h);
-      });
-    }
-    // Flash
-    if (flashBackCanvas && flashFrontCtx) {
-      withIdentity(flashBackCtx, () => {
-        flashBackCanvas.width = w; flashBackCanvas.height = h;
-        flashBackCtx.clearRect(0, 0, w, h);
-        flashBackCtx.drawImage(flashFrontCtx.canvas, 0, 0, flashFrontCtx.canvas.width, flashFrontCtx.canvas.height, 0, 0, w, h);
-      });
-    }
-    // Ghost
-    if (ghostBackCanvas && ghostFrontCtx) {
-      withIdentity(ghostBackCtx, () => {
-        ghostBackCanvas.width = w; ghostBackCanvas.height = h;
-        ghostBackCtx.clearRect(0, 0, w, h);
-        ghostBackCtx.drawImage(ghostFrontCtx.canvas, 0, 0, ghostFrontCtx.canvas.width, ghostFrontCtx.canvas.height, 0, 0, w, h);
-      });
-    }
-    // Tutorial
-    if (tutorialBackCanvas && tutorialFrontCtx) {
-      withIdentity(tutorialBackCtx, () => {
-        tutorialBackCanvas.width = w; tutorialBackCanvas.height = h;
-        tutorialBackCtx.clearRect(0, 0, w, h);
-        tutorialBackCtx.drawImage(tutorialFrontCtx.canvas, 0, 0, tutorialFrontCtx.canvas.width, tutorialFrontCtx.canvas.height, 0, 0, w, h);
-      });
-    }
+    try {
+      // Particles
+      if (particleBackCanvas && particleCanvas && particleBackCtx) {
+        particleBackCanvas.width = particleCanvas.width;
+        particleBackCanvas.height = particleCanvas.height;
+        particleBackCtx.setTransform(1,0,0,1,0,0);
+        particleBackCtx.clearRect(0,0,particleBackCanvas.width,particleBackCanvas.height);
+        particleBackCtx.drawImage(particleCanvas, 0, 0);
+      }
+      // Ghost
+      if (ghostBackCanvas && ghostCanvas && ghostBackCtx) {
+        ghostBackCanvas.width = ghostCanvas.width;
+        ghostBackCanvas.height = ghostCanvas.height;
+        ghostBackCtx.setTransform(1,0,0,1,0,0);
+        ghostBackCtx.clearRect(0,0,ghostBackCanvas.width,ghostBackCanvas.height);
+        ghostBackCtx.drawImage(ghostCanvas, 0, 0);
+      }
+      // Flash
+      if (flashBackCanvas && flashCanvas && flashBackCtx) {
+        flashBackCanvas.width = flashCanvas.width;
+        flashBackCanvas.height = flashCanvas.height;
+        flashBackCtx.setTransform(1,0,0,1,0,0);
+        flashBackCtx.clearRect(0,0,flashBackCanvas.width,flashBackCanvas.height);
+        flashBackCtx.drawImage(flashCanvas, 0, 0);
+      }
+      // Tutorial overlay
+      if (tutorialBackCanvas && tutorialCanvas && tutorialBackCtx) {
+        tutorialBackCanvas.width = tutorialCanvas.width;
+        tutorialBackCanvas.height = tutorialCanvas.height;
+        tutorialBackCtx.setTransform(1,0,0,1,0,0);
+        tutorialBackCtx.clearRect(0,0,tutorialBackCanvas.width,tutorialBackCanvas.height);
+        tutorialBackCtx.drawImage(tutorialCanvas, 0, 0);
+      }
+    } catch {}
   }
 
   function flushVisualBackBuffersToFront() {
@@ -2189,15 +2214,21 @@ function regenerateMapFromStrokes() {
         } catch {}
       }
       // Clear other content canvases. The caller is responsible for redrawing nodes/overlay.
-      clearCanvas(nctx);
-      const flashTarget = getActiveFlashCanvas();
-      withIdentity(fctx, () => {
-        fctx.clearRect(0, 0, flashTarget.width, flashTarget.height);
-      });
-      const ghostTarget = getActiveGhostCanvas();
-      withIdentity(ghostCtx, () => {
-        ghostCtx.clearRect(0, 0, ghostTarget.width, ghostTarget.height);
-      });
+      // Defer overlay clears if we are in/near a gesture commit; renderLoop will clear safely.
+      const __now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      if (__dgInCommitWindow(__now) || __dgStableFramesAfterCommit < 2) {
+        __dgNeedsUIRefresh = true;
+      } else {
+        clearCanvas(nctx);
+        const flashTarget = getActiveFlashCanvas();
+        withIdentity(fctx, () => {
+          fctx.clearRect(0, 0, flashTarget.width, flashTarget.height);
+        });
+        const ghostTarget = getActiveGhostCanvas();
+        withIdentity(ghostCtx, () => {
+          ghostCtx.clearRect(0, 0, ghostTarget.width, ghostTarget.height);
+        });
+      }
     }
   }
 
@@ -3078,13 +3109,13 @@ function regenerateMapFromStrokes() {
     }
   }
   function onPointerUp(e){
-    const lp = window.__LAST_POINTERUP_DIAG__;
-    const nowTs = performance?.now?.() ?? Date.now();
-    const insideCommitWindow = lp?.t0 ? (nowTs - lp.t0) < 150 : false;
-    if (insideCommitWindow) {
-      __dgDeferUntilTs = Math.max(__dgDeferUntilTs, lp.t0 + 150);
-    }
+    // Defer overlay clears until the commit window ends AND we've seen 2 stable frames.
+    const now = performance?.now?.() ?? Date.now();
+    __dgDeferUntilTs = Math.max(__dgDeferUntilTs, (window.__GESTURE_SETTLE_UNTIL_TS || now + 200));
+    __dgStableFramesAfterCommit = 0;
+    // IMPORTANT: do not clear here; renderLoop will do it safely.
     if (draggedNode) {
+      __dgNeedsUIRefresh = true;
       const finalDetail = { col: draggedNode.col, row: draggedNode.row, group: draggedNode.group ?? null };
       const didMove = !!draggedNode.moved;
       panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
@@ -3142,13 +3173,19 @@ function regenerateMapFromStrokes() {
     // we may still be in back-buffer mode from pointerdown. Do a safe no-op swap to
     // avoid a single-frame blank on release.
     if (!drawing) {
-      // Safe tiny refresh so the upcoming swap never blanks
-      if (!usingBackBuffers) ensureBackVisualsFreshFromFront();
-      __dgNeedsUIRefresh = true;
-      DG.log('onPointerUp: safe no-op swap', { usingBackBuffers, pendingPaintSwap, DG_particlesRectsDrawn, DG_lettersDrawn });
-      if (DG_DEBUG) drawDebugHUD(['onPointerUp(no-op): swapping']);
-      pendingPaintSwap = true;
-      requestFrontSwap(useFrontBuffers);
+      // Background tap: only swap if we truly staged something.
+      const needSwap = usingBackBuffers || pendingPaintSwap;
+      if (needSwap) {
+        if (!usingBackBuffers) ensureBackVisualsFreshFromFront();
+        __dgNeedsUIRefresh = true;
+        DG.log('onPointerUp: coalesced swap (staged)', { usingBackBuffers, pendingPaintSwap, DG_particlesRectsDrawn, DG_lettersDrawn });
+        pendingPaintSwap = true;
+        requestFrontSwap(useFrontBuffers);
+      } else {
+        __dgNeedsUIRefresh = false;
+        // Nothing staged - don't poke the overlay clears; keeping visuals intact avoids a one-frame blank.
+        DG.log('onPointerUp: no-op (no swap needed)');
+      }
       return;
     }
     drawing=false;
@@ -3169,6 +3206,7 @@ function regenerateMapFromStrokes() {
       erasedTargetsThisDrag.clear();
       clearAndRedrawFromStrokes(); // Redraw to bake in the erase
       pendingPaintSwap = true;
+      __dgNeedsUIRefresh = true;
       if (!zoomGestureActive) {
         if (!__swapRAF) {
           __swapRAF = requestAnimationFrame(() => {
@@ -3247,10 +3285,12 @@ function regenerateMapFromStrokes() {
       useBackBuffers();
       clearAndRedrawFromStrokes();
       pendingPaintSwap = true;
+      __dgNeedsUIRefresh = true;
       requestFrontSwap(useFrontBuffers);
     } else {
       clearAndRedrawFromStrokes();
       pendingPaintSwap = true;
+      __dgNeedsUIRefresh = true;
     }
     // After drawing, unmark all strokes so they become part of the normal background for the next operation.
     strokes.forEach(s => delete s.justCreated);
@@ -3341,40 +3381,48 @@ function regenerateMapFromStrokes() {
     if (!panel.__dgFrame) panel.__dgFrame = 0;
     panel.__dgFrame++;
     const nowTs = performance?.now?.() ?? Date.now();
+    if (__dgInCommitWindow(nowTs)) {
+      __dgStableFramesAfterCommit = 0; // still settling - do nothing destructive
+    } else if (__dgStableFramesAfterCommit < 2) {
+      __dgStableFramesAfterCommit++; // count a couple of stable frames
+    }
+
     const waitingForStable = __dgDeferUntilTs && nowTs < __dgDeferUntilTs;
     const allowOverlayDraw = !waitingForStable;
     const dgr = panel?.getBoundingClientRect?.();
-    console.debug('[DIAG][DG] frame', {
-      f: panel.__dgFrame,
-      lastPointerup: window.__LAST_POINTERUP_DIAG__,
-      box: dgr ? { x: dgr.left, y: dgr.top, w: dgr.width, h: dgr.height } : null,
-    });
-    if (!waitingForStable && __dgNeedsUIRefresh) {
+    //console.debug('[DIAG][DG] frame', {
+      //f: panel.__dgFrame,
+      //lastPointerup: window.__LAST_POINTERUP_DIAG__,
+      //box: dgr ? { x: dgr.left, y: dgr.top, w: dgr.width, h: dgr.height } : null,
+    //});
+    if (__dgNeedsUIRefresh && __dgStableFramesAfterCommit >= 2) {
       __dgNeedsUIRefresh = false;
       __dgDeferUntilTs = 0;
-      console.debug('[DIAG][DG] deferred overlay clear', {
-        t: nowTs,
-        lastPointerup: window.__LAST_POINTERUP_DIAG__,
-      });
       try {
+        if (typeof ensureBackVisualsFreshFromFront === 'function') {
+          ensureBackVisualsFreshFromFront();
+        }
         if (ghostCtx?.canvas) {
-          withIdentity(ghostCtx, () => {
-            const gc = ghostCtx.canvas;
-            ghostCtx.clearRect(0, 0, gc.width, gc.height);
-          });
+          withIdentity(ghostCtx, () => ghostCtx.clearRect(0, 0, ghostCtx.canvas.width, ghostCtx.canvas.height));
         }
         if (particleCtx?.canvas) {
-          withIdentity(particleCtx, () => {
-            const pc = particleCtx.canvas;
-            particleCtx.clearRect(0, 0, pc.width, pc.height);
-          });
+          withIdentity(particleCtx, () => particleCtx.clearRect(0, 0, particleCtx.canvas.width, particleCtx.canvas.height));
         }
         if (fctx?.canvas) {
-          withIdentity(fctx, () => {
-            const fc = fctx.canvas;
-            fctx.clearRect(0, 0, fc.width, fc.height);
+          withIdentity(fctx, () => fctx.clearRect(0, 0, fctx.canvas.width, fctx.canvas.height));
+        }
+        if (tutorialCtx?.canvas) {
+          withIdentity(tutorialCtx, () => {
+            const active = getActiveTutorialCanvas();
+            const tw = active?.width || 0;
+            const th = active?.height || 0;
+            tutorialCtx.clearRect(0, 0, tw, th);
           });
         }
+        console.debug('[DIAG][DG] deferred overlay clear (SAFE)', {
+          t: nowTs,
+          lastPointerup: window.__LAST_POINTERUP_DIAG__,
+        });
       } catch (err) {
         console.warn('[DG] deferred UI clear failed', err);
       }
