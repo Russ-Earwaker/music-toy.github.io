@@ -102,7 +102,24 @@ function applyHighlightClass(entry) {
   const el = entry.el;
   if (!el) return;
 
+  const lp = window.__LAST_POINTERUP_DIAG__;
+  const now = performance?.now?.() ?? Date.now();
+  if (lp?.t0 && (now - lp.t0) < 150) {
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => applyHighlightClass(entry));
+    } else {
+      setTimeout(() => applyHighlightClass(entry), 16);
+    }
+    return;
+  }
+
   const shouldHighlight = entry.active && !entry.seen;
+  console.debug('[DIAG] ui-highlight refresh', {
+    entry: entry?.storageKey,
+    shouldHighlight,
+    wasHighlighted: !!entry._highlightVisible,
+    lastPointerup: window.__LAST_POINTERUP_DIAG__,
+  });
   const wasHighlighted = !!entry._highlightVisible;
   entry._highlightVisible = shouldHighlight;
   if (entry.flashTimer) {
@@ -111,13 +128,16 @@ function applyHighlightClass(entry) {
   }
 
   if (shouldHighlight) {
-    el.classList.add(CLASS_ACTIVE, CLASS_PULSE, CLASS_BORDER, CLASS_FLASH);
-    entry.flashTimer = setTimeout(() => {
-      if (entry.el) {
-        entry.el.classList.remove(CLASS_FLASH);
-      }
-      entry.flashTimer = null;
-    }, 360);
+    const alreadyActive = el.classList.contains(CLASS_ACTIVE);
+    el.classList.add(CLASS_ACTIVE, CLASS_PULSE, CLASS_BORDER);
+    if (!alreadyActive && !entry._hasFlashedOnce) {
+      el.classList.add(CLASS_FLASH);
+      entry._hasFlashedOnce = true;
+      entry.flashTimer = setTimeout(() => {
+        entry.el?.classList.remove(CLASS_FLASH);
+        entry.flashTimer = null;
+      }, 360);
+    }
     if (!wasHighlighted && entry === entries.guide) {
       try {
         window.dispatchEvent(new CustomEvent('guide:highlight-next-task'));

@@ -9,6 +9,15 @@ let activeCanvas = null;
 let activeCtx = null;
 let activeLayer = 'front';
 let activeTargetEl = null;
+let lastStreamKey = null;
+let lastStartTs = 0;
+let lastStopTs = 0;
+
+function elKey(el) {
+  if (!el) return 'null';
+  if (el.id) return `#${el.id}`;
+  return `${el.tagName}:${el.className}:${Math.round(el.getBoundingClientRect?.()?.left || 0)}:${Math.round(el.getBoundingClientRect?.()?.top || 0)}`;
+}
 const PARTICLES_PER_SEC = 60;
 const BURST_COLOR_RGB = { r: 92, g: 178, b: 255 };
 const burstColor = (alpha = 1) => `rgba(${BURST_COLOR_RGB.r}, ${BURST_COLOR_RGB.g}, ${BURST_COLOR_RGB.b}, ${alpha})`;
@@ -288,10 +297,49 @@ function startFlight(ctx, canvas, startEl, endEl) {
 
 export function startParticleStream(originEl, targetEl, options = {}) {
   const layer = options?.layer === 'behind-target' ? 'behind-target' : 'front';
+  const oRect = originEl?.getBoundingClientRect?.();
+  const tRect = targetEl?.getBoundingClientRect?.();
+  console.debug('[DIAG] startParticleStream', {
+    t: performance?.now?.(),
+    layer,
+    origin: oRect ? { x: oRect.left, y: oRect.top, w: oRect.width, h: oRect.height } : null,
+    target: tRect ? { x: tRect.left, y: tRect.top, w: tRect.width, h: tRect.height } : null,
+    lastPointerup: window.__LAST_POINTERUP_DIAG__,
+  });
   if (!originEl || !targetEl) {
     console.log('[tutorial-fx] startParticleStream skipped: origin or target missing', { originElExists: !!originEl, targetElExists: !!targetEl });
     return;
   }
+
+  const newKey = `o=${elKey(originEl)}->t=${elKey(targetEl)}:L=${layer}`;
+  const prevKey = lastStreamKey;
+  let forceReset = !prevKey || (prevKey && newKey !== prevKey);
+  const now = performance?.now?.() ?? Date.now();
+
+  if (newKey === prevKey && (now - lastStopTs) < 200) {
+    console.debug('[FX] startParticleStream deduped (recent stop; continuing)', { key: newKey });
+    const nextLayer = layer === 'behind-target' ? 'behind' : 'front';
+    applyFrontCanvasLayer(layer === 'behind-target' ? 'behind-target' : 'front');
+    activeLayer = nextLayer;
+    if (!activeCtx || !activeCanvas) {
+      if (frontCtx && frontCanvas) {
+        activeCtx = frontCtx;
+        activeCanvas = frontCanvas;
+      }
+    }
+    activeTargetEl = nextLayer === 'behind' ? targetEl : null;
+    if (!animationFrameId && activeCtx && activeCanvas) {
+      animationFrameId = requestAnimationFrame(() => startFlight(activeCtx, activeCanvas, originEl, targetEl));
+    }
+    lastStreamKey = newKey;
+    lastStartTs = now;
+    return;
+  }
+
+  if (!animationFrameId) {
+    forceReset = true;
+  }
+
   const panel = originEl.closest('.guide-goals-panel, .tutorial-goals-panel, #tutorial-goals');
   const behind = panel ? panel.querySelector('.goal-particles-behind') : null;
   const front  = document.querySelector('.tutorial-particles-front');
@@ -300,12 +348,19 @@ export function startParticleStream(originEl, targetEl, options = {}) {
     return;
   }
 
+  lastStreamKey = newKey;
+  lastStartTs = now;
+  if (forceReset) {
+    particles = [];
+    startFlight._lastTs = undefined;
+    startFlight._accum = 0;
+  }
+
   setupCanvases(behind, front);
   applyFrontCanvasLayer(layer);
 
   if (animationFrameId) cancelAnimationFrame(animationFrameId);
-  particles = [];
-  startFlight._lastTs = performance.now();
+  startFlight._lastTs = performance?.now?.() ?? Date.now();
   startFlight._accum = 0;
 
   const startRect = originEl.getBoundingClientRect();
@@ -332,11 +387,13 @@ export function startParticleStream(originEl, targetEl, options = {}) {
   activeCtx = drawCtx;
   activeCanvas = drawCanvas;
   activeTargetEl = layer === 'behind-target' ? targetEl : null;
-  if (layer === 'behind-target' && frontCanvas && frontCtx) {
-    frontCtx.clearRect(0, 0, frontCanvas.width, frontCanvas.height);
-  }
-  if (layer === 'front' && behindCanvas && behindCtx) {
-    behindCtx.clearRect(0, 0, behindCanvas.width, behindCanvas.height);
+  if (forceReset) {
+    if (layer === 'behind-target' && frontCanvas && frontCtx) {
+      frontCtx.clearRect(0, 0, frontCanvas.width, frontCanvas.height);
+    }
+    if (layer === 'front' && behindCanvas && behindCtx) {
+      behindCtx.clearRect(0, 0, behindCanvas.width, behindCanvas.height);
+    }
   }
 
   // Kick the animation
@@ -344,26 +401,15 @@ export function startParticleStream(originEl, targetEl, options = {}) {
 }
 
 export function stopParticleStream() {
+  console.debug('[DIAG] stopParticleStream', {
+    t: performance?.now?.(),
+    lastPointerup: window.__LAST_POINTERUP_DIAG__,
+  });
+  lastStopTs = performance?.now?.() ?? Date.now();
+
   if (animationFrameId) {
     cancelAnimationFrame(animationFrameId);
     animationFrameId = null;
   }
-  particles = [];
-  startFlight._lastTs = undefined;
-  startFlight._accum = 0;
-  if (activeCanvas && activeCtx) {
-    activeCtx.clearRect(0, 0, activeCanvas.width, activeCanvas.height);
-  }
-  if (frontCanvas && frontCtx) {
-    frontCtx.clearRect(0, 0, frontCanvas.width, frontCanvas.height);
-  }
-  if (behindCanvas && behindCtx) {
-    behindCtx.clearRect(0, 0, behindCanvas.width, behindCanvas.height);
-  }
-  activeCanvas = null;
-  activeCtx = null;
-  activeLayer = 'front';
-  activeTargetEl = null;
-  applyFrontCanvasLayer('front');
 }
 

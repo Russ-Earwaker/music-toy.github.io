@@ -44,6 +44,8 @@ function clearCanvas(ctx) {
 }
 
 let __drawParticlesSeed = 1337;
+let __dgDeferUntilTs = 0;
+let __dgNeedsUIRefresh = false;
 
 function mulberry32(seed) {
   let t = seed >>> 0;
@@ -3076,6 +3078,12 @@ function regenerateMapFromStrokes() {
     }
   }
   function onPointerUp(e){
+    const lp = window.__LAST_POINTERUP_DIAG__;
+    const nowTs = performance?.now?.() ?? Date.now();
+    const insideCommitWindow = lp?.t0 ? (nowTs - lp.t0) < 150 : false;
+    if (insideCommitWindow) {
+      __dgDeferUntilTs = Math.max(__dgDeferUntilTs, lp.t0 + 150);
+    }
     if (draggedNode) {
       const finalDetail = { col: draggedNode.col, row: draggedNode.row, group: draggedNode.group ?? null };
       const didMove = !!draggedNode.moved;
@@ -3115,16 +3123,7 @@ function regenerateMapFromStrokes() {
       useBackBuffers();
       drawGrid();
       drawNodes(currentMap.nodes);
-      // ALSO draw particles to back this frame so flush has valid content:
-      try {
-        withIdentity(particleCtx, () => {
-          const surface = particleCtx.canvas;
-          const width = surface?.width ?? cssW;
-          const height = surface?.height ?? cssH;
-          particleCtx.clearRect(0, 0, width, height);
-        });
-        particles.draw(particleCtx, false);
-      } catch(e) {}
+      __dgNeedsUIRefresh = true;
       requestFrontSwap(useFrontBuffers);
       panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
       panel.dispatchEvent(new CustomEvent('drawgrid:node-toggle', { detail: { col, row, disabled: dis.has(row) } }));
@@ -3145,17 +3144,7 @@ function regenerateMapFromStrokes() {
     if (!drawing) {
       // Safe tiny refresh so the upcoming swap never blanks
       if (!usingBackBuffers) ensureBackVisualsFreshFromFront();
-      else {
-        // If we're already on back, at least redraw particles
-        try {
-          withIdentity(particleCtx, () => {
-            const s = particleCtx.canvas;
-            const w = s?.width ?? cssW, h = s?.height ?? cssH;
-            particleCtx.clearRect(0, 0, w, h);
-          });
-          particles.draw(particleCtx, false);
-        } catch(e) {}
-      }
+      __dgNeedsUIRefresh = true;
       DG.log('onPointerUp: safe no-op swap', { usingBackBuffers, pendingPaintSwap, DG_particlesRectsDrawn, DG_lettersDrawn });
       if (DG_DEBUG) drawDebugHUD(['onPointerUp(no-op): swapping']);
       pendingPaintSwap = true;
@@ -3349,6 +3338,47 @@ function regenerateMapFromStrokes() {
 
   let rafId = 0;
     function renderLoop() {
+    if (!panel.__dgFrame) panel.__dgFrame = 0;
+    panel.__dgFrame++;
+    const nowTs = performance?.now?.() ?? Date.now();
+    const waitingForStable = __dgDeferUntilTs && nowTs < __dgDeferUntilTs;
+    const allowOverlayDraw = !waitingForStable;
+    const dgr = panel?.getBoundingClientRect?.();
+    console.debug('[DIAG][DG] frame', {
+      f: panel.__dgFrame,
+      lastPointerup: window.__LAST_POINTERUP_DIAG__,
+      box: dgr ? { x: dgr.left, y: dgr.top, w: dgr.width, h: dgr.height } : null,
+    });
+    if (!waitingForStable && __dgNeedsUIRefresh) {
+      __dgNeedsUIRefresh = false;
+      __dgDeferUntilTs = 0;
+      console.debug('[DIAG][DG] deferred overlay clear', {
+        t: nowTs,
+        lastPointerup: window.__LAST_POINTERUP_DIAG__,
+      });
+      try {
+        if (ghostCtx?.canvas) {
+          withIdentity(ghostCtx, () => {
+            const gc = ghostCtx.canvas;
+            ghostCtx.clearRect(0, 0, gc.width, gc.height);
+          });
+        }
+        if (particleCtx?.canvas) {
+          withIdentity(particleCtx, () => {
+            const pc = particleCtx.canvas;
+            particleCtx.clearRect(0, 0, pc.width, pc.height);
+          });
+        }
+        if (fctx?.canvas) {
+          withIdentity(fctx, () => {
+            const fc = fctx.canvas;
+            fctx.clearRect(0, 0, fc.width, fc.height);
+          });
+        }
+      } catch (err) {
+        console.warn('[DG] deferred UI clear failed', err);
+      }
+    }
     if (!panel.isConnected) { cancelAnimationFrame(rafId); return; }
 
     if (panel.__pulseRearm) {
@@ -3385,112 +3415,130 @@ function regenerateMapFromStrokes() {
     const ghostSurface = getActiveGhostCanvas();
 
     // Step and draw particles
-    try {
-      particles.step(1/60); // Assuming 60fps for dt
-      withIdentity(particleCtx, () => {
-        const surface = particleCtx.canvas;
-        const width = surface?.width ?? cssW;
-        const height = surface?.height ?? cssH;
-        particleCtx.clearRect(0, 0, width, height);
-      });
-      // The dark background is now drawn on the grid canvas, so particles can be overlaid.
-      particles.draw(particleCtx, zoomGestureActive);
-    } catch (e) { /* fail silently */ }
+    if (allowOverlayDraw) {
+      try {
+        particles.step(1/60); // Assuming 60fps for dt
+        withIdentity(particleCtx, () => {
+          const surface = particleCtx.canvas;
+          const width = surface?.width ?? cssW;
+          const height = surface?.height ?? cssH;
+          particleCtx.clearRect(0, 0, width, height);
+        });
+        // The dark background is now drawn on the grid canvas, so particles can be overlaid.
+        particles.draw(particleCtx, zoomGestureActive);
+      } catch (e) { /* fail silently */ }
+    }
 
     drawGrid(); // Always redraw grid (background, lines, active column fills)
     if (currentMap) drawNodes(currentMap.nodes); // Always redraw nodes (cubes, connections, labels)
 
-    // Clear flash canvas for this frame's animations
-    withIdentity(fctx, () => {
-      fctx.clearRect(0, 0, flashSurface.width, flashSurface.height);
-    });
+    if (allowOverlayDraw) {
+      // Clear flash canvas for this frame's animations
+      withIdentity(fctx, () => {
+        fctx.clearRect(0, 0, flashSurface.width, flashSurface.height);
+      });
 
-    // Animate special stroke paint (hue cycling) without resurrecting erased areas:
-    // Draw animated special strokes into flashCanvas, then mask with current paint alpha.
-    const specialStrokes = strokes.filter(s => s.isSpecial);
-    if (specialStrokes.length > 0 || (cur && previewGid)) {
-        fctx.save();
-        // Draw animated strokes with device transform
-        // Draw demoted colorized strokes as static overlay tints
-        try {
-          const colorized = strokes.filter(s => s.overlayColorize);
-          for (const s of colorized) drawFullStroke(fctx, s);
-        } catch {}
-        // Then draw animated special lines on top of normal lines
-        for (const s of specialStrokes) drawFullStroke(fctx, s);
-        // Mask with paint alpha without scaling (device pixels)
-        fctx.setTransform(1, 0, 0, 1, 0, 0);
-        fctx.globalCompositeOperation = 'destination-in';
-        fctx.drawImage(paint, 0, 0);
-        // Now draw current special preview ON TOP unmasked, so full stroke is visible while drawing
-        if (cur && previewGid && cur.pts && cur.pts.length) {
+      // Animate special stroke paint (hue cycling) without resurrecting erased areas:
+      // Draw animated special strokes into flashCanvas, then mask with current paint alpha.
+      const specialStrokes = strokes.filter(s => s.isSpecial);
+      if (specialStrokes.length > 0 || (cur && previewGid)) {
+          fctx.save();
+          // Draw animated strokes with device transform
+          // Draw demoted colorized strokes as static overlay tints
+          try {
+            const colorized = strokes.filter(s => s.overlayColorize);
+            for (const s of colorized) drawFullStroke(fctx, s);
+          } catch {}
+          // Then draw animated special lines on top of normal lines
+          for (const s of specialStrokes) drawFullStroke(fctx, s);
+          // Mask with paint alpha without scaling (device pixels)
           fctx.setTransform(1, 0, 0, 1, 0, 0);
-          fctx.globalCompositeOperation = 'source-over';
-          const preview = { pts: cur.pts, isSpecial: true, generatorId: previewGid };
-          drawFullStroke(fctx, preview);
-        }
-        fctx.restore();
-    } else {
+          fctx.globalCompositeOperation = 'destination-in';
+          fctx.drawImage(paint, 0, 0);
+          // Now draw current special preview ON TOP unmasked, so full stroke is visible while drawing
+          if (cur && previewGid && cur.pts && cur.pts.length) {
+            fctx.setTransform(1, 0, 0, 1, 0, 0);
+            fctx.globalCompositeOperation = 'source-over';
+            const preview = { pts: cur.pts, isSpecial: true, generatorId: previewGid };
+            drawFullStroke(fctx, preview);
+          }
+          fctx.restore();
+      } else {
+      }
     }
 
-    // Animate playhead flash
     for (let i = 0; i < flashes.length; i++) {
         if (flashes[i] > 0) {
             flashes[i] = Math.max(0, flashes[i] - 0.08);
         }
     }
 
-    // Draw cell flashes
-    try {
-        if (cellFlashes.length > 0) {
-            fctx.save();
-            for (let i = cellFlashes.length - 1; i >= 0; i--) {
-                const flash = cellFlashes[i];
-                const x = gridArea.x + flash.col * cw;
-                const y = gridArea.y + topPad + flash.row * ch;
-                
-                fctx.globalAlpha = flash.age * 0.6; // Make it a bit more visible
-                fctx.fillStyle = 'rgb(143, 168, 255)'; // Match grid line color
-                fctx.fillRect(x, y, cw, ch);
-                
-                flash.age -= 0.05; // Decay rate
-                if (flash.age <= 0) {
-                    cellFlashes.splice(i, 1);
-                }
-            }
-            fctx.restore();
-        }
-    } catch (e) { /* fail silently */ }
+    if (allowOverlayDraw) {
+      // Draw cell flashes
+      try {
+          if (cellFlashes.length > 0) {
+              fctx.save();
+              for (let i = cellFlashes.length - 1; i >= 0; i--) {
+                  const flash = cellFlashes[i];
+                  const x = gridArea.x + flash.col * cw;
+                  const y = gridArea.y + topPad + flash.row * ch;
+                  
+                  fctx.globalAlpha = flash.age * 0.6; // Make it a bit more visible
+                  fctx.fillStyle = 'rgb(143, 168, 255)'; // Match grid line color
+                  fctx.fillRect(x, y, cw, ch);
+                  
+                  flash.age -= 0.05; // Decay rate
+                  if (flash.age <= 0) {
+                      cellFlashes.splice(i, 1);
+                  }
+              }
+              fctx.restore();
+          }
+      } catch (e) { /* fail silently */ }
+    }
 
     if (noteToggleEffects.length > 0) {
       try {
-        fctx.save();
-        for (let i = noteToggleEffects.length - 1; i >= 0; i--) {
-          const effect = noteToggleEffects[i];
-          effect.progress += 0.12;
-          const alpha = Math.max(0, 1 - effect.progress);
-          if (alpha <= 0) {
-            noteToggleEffects.splice(i, 1);
-            continue;
+        if (allowOverlayDraw) {
+          fctx.save();
+          for (let i = noteToggleEffects.length - 1; i >= 0; i--) {
+            const effect = noteToggleEffects[i];
+            effect.progress += 0.12;
+            const alpha = Math.max(0, 1 - effect.progress);
+            if (alpha <= 0) {
+              noteToggleEffects.splice(i, 1);
+              continue;
+            }
+            const radius = effect.radius * (1 + effect.progress * 1.6);
+            const lineWidth = Math.max(1.2, effect.radius * 0.28 * (1 - effect.progress * 0.5));
+            fctx.globalAlpha = alpha;
+            fctx.lineWidth = lineWidth;
+            fctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+            fctx.beginPath();
+            fctx.arc(effect.x, effect.y, radius, 0, Math.PI * 2);
+            fctx.stroke();
           }
-          const radius = effect.radius * (1 + effect.progress * 1.6);
-          const lineWidth = Math.max(1.2, effect.radius * 0.28 * (1 - effect.progress * 0.5));
-          fctx.globalAlpha = alpha;
-          fctx.lineWidth = lineWidth;
-          fctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
-          fctx.beginPath();
-          fctx.arc(effect.x, effect.y, radius, 0, Math.PI * 2);
-          fctx.stroke();
+          fctx.restore();
+        } else {
+          // Even if we skip drawing, continue advancing animations so they stay in sync.
+          for (let i = noteToggleEffects.length - 1; i >= 0; i--) {
+            const effect = noteToggleEffects[i];
+            effect.progress += 0.12;
+            const alpha = Math.max(0, 1 - effect.progress);
+            if (alpha <= 0) {
+              noteToggleEffects.splice(i, 1);
+            }
+          }
         }
-        fctx.restore();
       } catch {}
     }
 
     // Draw scrolling playhead
-    try {
-      const info = getLoopInfo();
-      const phaseJustWrapped = info.phase01 < localLastPhase && localLastPhase > 0.9;
-      localLastPhase = info.phase01;
+    if (allowOverlayDraw) {
+      try {
+        const info = getLoopInfo();
+        const phaseJustWrapped = info.phase01 < localLastPhase && localLastPhase > 0.9;
+        localLastPhase = info.phase01;
 
       // Only draw and repulse particles if transport is running and this toy is the active one in its chain.
       // If this toy thinks it's active, but the global transport phase just wrapped,
@@ -3567,10 +3615,16 @@ function regenerateMapFromStrokes() {
 
         fctx.restore();
       }
-    } catch (e) { /* fail silently */ }
+      } catch (e) { /* fail silently */ }
+    } else {
+      const info = getLoopInfo();
+      if (info) {
+        localLastPhase = info.phase01;
+      }
+    }
 
     // Debug overlay
-    if (window.DEBUG_DRAWGRID === 1) {
+    if (allowOverlayDraw && window.DEBUG_DRAWGRID === 1) {
       fctx.save();
       fctx.strokeStyle = 'red';
       fctx.lineWidth = 1;

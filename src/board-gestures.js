@@ -89,14 +89,21 @@ import { setGestureTransform, commitGesture, getZoomState } from './zoom/ZoomCoo
 
   function endGesture(e) {
     const zoom = getZoomState();
+    // [DIAG] Tag this gesture so other modules can correlate.
+    const GID = (Date.now().toString(36) + Math.random().toString(36).slice(2, 6)).toUpperCase();
+    const T0 = performance?.now?.() ?? Date.now();
+    window.__LAST_POINTERUP_DIAG__ = { gid: GID, t0: T0 };
+
+    console.debug('[DIAG][pointerup] commitGesture start', { GID, T0, zoom });
     commitGesture(
       {
         scale: clampScale(zoom.targetScale ?? zoom.currentScale ?? 1),
         x: zoom.targetX ?? zoom.currentX ?? 0,
         y: zoom.targetY ?? zoom.currentY ?? 0,
       },
-      { delayMs: 120 }
+      { delayMs: 60 }
     );
+    console.debug('[DIAG][pointerup] commitGesture queued', { GID, delayMs: 60 });
     if (dragging) {
       dragging = false;
       dragStart = null;
