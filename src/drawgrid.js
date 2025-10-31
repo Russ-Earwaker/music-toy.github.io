@@ -1347,9 +1347,12 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     });
   }
 
-  function drawIntoBackOnly() {
+  function drawIntoBackOnly(includeCurrentStroke = false) {
     if (!backCtx || !cssW || !cssH) return;
     clearAndRedrawFromStrokes(backCtx);
+    if (includeCurrentStroke && cur && Array.isArray(cur.pts) && cur.pts.length > 0) {
+      drawFullStroke(backCtx, cur);
+    }
     pendingPaintSwap = true;
   }
 
@@ -1570,34 +1573,39 @@ function regenerateMapFromStrokes() {
   }
 
   const unsubscribeZoom = onZoomChange((z) => {
-    // Normalize mode/scale first
+    // Normalize
     zoomMode = z.mode || 'idle';
     const nextScale = Number.isFinite(z.currentScale) ? z.currentScale : Number(z.targetScale);
     if (Number.isFinite(nextScale)) boardScale = nextScale;
 
-    // Decide if scale *really* moved (filter micro jitter)
     const scaleForCompare = Number.isFinite(z.currentScale)
       ? z.currentScale
       : (Number.isFinite(z.targetScale) ? z.targetScale : boardScale);
+
     const scaleMoved =
       Number.isFinite(scaleForCompare) && Math.abs(scaleForCompare - lastCommittedScale) > ZOOM_SCALE_EPS;
-    const progressMoved =
-      Number.isFinite(scaleForCompare) &&
-      (lastProgressScale === null || Math.abs(scaleForCompare - lastProgressScale) > ZOOM_SCALE_EPS);
 
-    // Only consider a zoom gesture "active" if the scale actually moved.
+    // Only consider it a zoom gesture if the scale actually moved.
     zoomGestureActive = (z.mode === 'gesturing') && scaleMoved;
 
-    if (DG_DEBUG && z.phase) {
+    // Optional debug: log only when it’s a *real* zoom (or non-progress phases)
+    if (DG_DEBUG && z.phase && (z.phase !== 'progress' || scaleMoved)) {
       DG.log('ZOOM phase', z.phase, { boardScale, zoomMode, pendingPaintSwap, pendingSwap, usingBackBuffers });
     }
 
-    // Forget progress accumulator whenever the phase leaves 'progress'
+    // Reset progress accumulator whenever we leave 'progress'
     if (z.phase && z.phase !== 'progress') lastProgressScale = null;
 
+    // Early-ignore bogus progress (no real zoom): do NOTHING for these
+    if (z.phase === 'progress' && (!scaleMoved || z.mode !== 'gesturing')) {
+      return;
+    }
+
     if (z.phase === 'progress') {
-      // Hard gate: only react if (a) user is gesturing AND (b) scale truly moved
-      if (z.mode !== 'gesturing' || !scaleMoved || !progressMoved) return;
+      const progressMoved =
+        Number.isFinite(scaleForCompare) &&
+        (lastProgressScale === null || Math.abs(scaleForCompare - lastProgressScale) > ZOOM_SCALE_EPS);
+      if (!progressMoved) return;
       lastProgressScale = scaleForCompare;
       const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
         ? performance.now()
@@ -1750,6 +1758,21 @@ function regenerateMapFromStrokes() {
       if (z.committed) {
         lastCommittedScale = boardScale;
       }
+    }
+
+    // Watchdog: if ZoomCoordinator sticks in 'gesturing' without scale change, auto-idle.
+    if (z.mode === 'gesturing' && !scaleMoved) {
+      clearTimeout(window.__dgZoomWatchdogT);
+      window.__dgZoomWatchdogT = setTimeout(() => {
+        // If we STILL haven't moved scale, force idle.
+        const zs = getZoomState?.();
+        const cur = Number.isFinite(zs?.currentScale) ? zs.currentScale : boardScale;
+        if (Math.abs(cur - lastCommittedScale) <= ZOOM_SCALE_EPS) {
+          zoomGestureActive = false;
+          zoomMode = 'idle';
+          if (DG_DEBUG) DG.log('ZOOM watchdog: forced idle (no scale delta)');
+        }
+      }, 120);
     }
   });
 
@@ -3106,18 +3129,32 @@ function regenerateMapFromStrokes() {
       try {
         particles.drawingDisturb(p.x, p.y, getLineWidth() * 1.5, 0.4);
       } catch(e) {}
+
+      const includeCurrent = !previewGid;
+      drawIntoBackOnly(includeCurrent);
+      pendingPaintSwap = true;
+      requestFrontSwap(() => {});
     }
   }
   function onPointerUp(e){
-    // Defer overlay clears until the commit window ends AND we've seen 2 stable frames.
+    // Only defer/blank if a *zoom commit* is actually settling.
     const now = performance?.now?.() ?? Date.now();
-    __dgDeferUntilTs = Math.max(__dgDeferUntilTs, (window.__GESTURE_SETTLE_UNTIL_TS || now + 200));
-    __dgStableFramesAfterCommit = 0;
+    const settleTs = (typeof window !== 'undefined') ? window.__GESTURE_SETTLE_UNTIL_TS : 0;
+    const inZoomCommit = Number.isFinite(settleTs) && settleTs > now;
+
+    if (inZoomCommit) {
+      __dgDeferUntilTs = Math.max(__dgDeferUntilTs, settleTs);
+      __dgStableFramesAfterCommit = 0;          // only reset when a zoom commit is settling
+      __dgNeedsUIRefresh = true;                // schedule safe clears
+    } else {
+      // No zoom commit → do NOT schedule the deferred clears here
+      // (avoids one-frame blank/freeze of particles/text on simple pointerup)
+    }
     // IMPORTANT: do not clear here; renderLoop will do it safely.
     if (draggedNode) {
-      __dgNeedsUIRefresh = true;
       const finalDetail = { col: draggedNode.col, row: draggedNode.row, group: draggedNode.group ?? null };
       const didMove = !!draggedNode.moved;
+      if (didMove || inZoomCommit) __dgNeedsUIRefresh = true;
       panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
       if (didMove) {
         try { panel.dispatchEvent(new CustomEvent('drawgrid:node-drag-end', { detail: finalDetail })); } catch {}
@@ -3389,6 +3426,7 @@ function regenerateMapFromStrokes() {
 
     const waitingForStable = __dgDeferUntilTs && nowTs < __dgDeferUntilTs;
     const allowOverlayDraw = !waitingForStable;
+    const allowParticleDraw = true;                 // particles should never freeze
     const dgr = panel?.getBoundingClientRect?.();
     //console.debug('[DIAG][DG] frame', {
       //f: panel.__dgFrame,
@@ -3404,9 +3442,6 @@ function regenerateMapFromStrokes() {
         }
         if (ghostCtx?.canvas) {
           withIdentity(ghostCtx, () => ghostCtx.clearRect(0, 0, ghostCtx.canvas.width, ghostCtx.canvas.height));
-        }
-        if (particleCtx?.canvas) {
-          withIdentity(particleCtx, () => particleCtx.clearRect(0, 0, particleCtx.canvas.width, particleCtx.canvas.height));
         }
         if (fctx?.canvas) {
           withIdentity(fctx, () => fctx.clearRect(0, 0, fctx.canvas.width, fctx.canvas.height));
@@ -3462,8 +3497,8 @@ function regenerateMapFromStrokes() {
     const flashSurface = getActiveFlashCanvas();
     const ghostSurface = getActiveGhostCanvas();
 
-    // Step and draw particles
-    if (allowOverlayDraw) {
+    // --- particles: always step/draw ---
+    if (allowParticleDraw) {
       try {
         particles.step(1/60); // Assuming 60fps for dt
         withIdentity(particleCtx, () => {
@@ -3480,6 +3515,7 @@ function regenerateMapFromStrokes() {
     drawGrid(); // Always redraw grid (background, lines, active column fills)
     if (currentMap) drawNodes(currentMap.nodes); // Always redraw nodes (cubes, connections, labels)
 
+    // --- other overlay layers still respect allowOverlayDraw ---
     if (allowOverlayDraw) {
       // Clear flash canvas for this frame's animations
       withIdentity(fctx, () => {
