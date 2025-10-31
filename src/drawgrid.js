@@ -753,6 +753,10 @@ function ringBurst(x, y, radius, countBurst = 28, speed = 2.4, color = 'pink') {
   return { step, draw, onBeat, lineRepulse, drawingDisturb, pointBurst, ringBurst, fadeLettersOut, fadeLettersIn, setLetterFadeTarget, setDpr, scalePositions, onResize, snapAllToHomes, holdNextFrame };
 }
 
+let currentMap = null; // Store the current node map {active, nodes, disabled}
+let currentCols = 0;
+let nodeCoordsForHitTest = []; // For draggable nodes
+
 function normalizeMapColumns(map, cols) {
   // Ensure consistent shape for player & renderers
   if (!map) return { active: Array(cols).fill(false), nodes: Array.from({length: cols}, () => new Set()), disabled: Array.from({length: cols}, () => new Set()) };
@@ -766,17 +770,6 @@ function normalizeMapColumns(map, cols) {
     if (typeof map.active[i] !== 'boolean') map.active[i] = !!map.active[i];
   }
   return map;
-}
-
-function emitDrawgridUpdate({ activityOnly = false } = {}) {
-  try {
-    currentMap = normalizeMapColumns(currentMap, cols);
-  } catch {}
-  try {
-    panel.dispatchEvent(new CustomEvent('drawgrid:update', {
-      detail: { map: currentMap, steps: cols|0, activityOnly: !!activityOnly }
-    }));
-  } catch {}
 }
 
 export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId, bpm = 120 } = {}) {
@@ -902,10 +895,14 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
   let __forceSwipeVisible = null; // null=auto, true/false=forced by tutorial
   let __swapRAF = null;
+  let __dgSkipSwapsDuringDrag = false;
 
   // helper: request a single swap this frame
   function requestFrontSwap(andThen) {
-    if (__swapRAF) return;
+    if (__swapRAF || __dgSkipSwapsDuringDrag) {
+      if (DG_DEBUG && __dgSkipSwapsDuringDrag) DG.log('requestFrontSwap() skipped: live drag in progress');
+      return;
+    }
     const mark = `DG.swapRAF@${performance.now().toFixed(2)}`;
     if (DG_DEBUG) DG.log('requestFrontSwap()', { usingBackBuffers, pendingPaintSwap, pendingSwap, zoomCommitPhase, zoomGestureActive });
     __swapRAF = requestAnimationFrame(() => {
@@ -934,6 +931,37 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
   // State
   let cols = initialCols;
+  currentCols = cols;
+  function emitDrawgridUpdate({ activityOnly = false, steps } = {}) {
+    const stepCount = Number.isFinite(steps)
+      ? steps | 0
+      : (Number.isFinite(currentCols) && currentCols > 0
+          ? currentCols | 0
+          : (currentMap?.nodes?.length ?? 0));
+    currentCols = stepCount;
+    currentMap = normalizeMapColumns(currentMap, stepCount);
+    if (Array.isArray(currentMap.nodes) && Array.isArray(currentMap.active)) {
+      for (let c = 0; c < stepCount; c++) {
+        const nodes = currentMap.nodes[c] || new Set();
+        const dis = currentMap.disabled?.[c] || new Set();
+        let anyOn = false;
+        if (nodes.size > 0) {
+          for (const r of nodes) {
+            if (!dis.has(r)) { anyOn = true; break; }
+          }
+        }
+        currentMap.active[c] = anyOn;
+      }
+    }
+    console.log('[DG][emit update]', {
+      steps: stepCount,
+      activeCount: currentMap.active?.filter(Boolean).length,
+      nonEmptyCols: currentMap.nodes?.reduce((n, s)=>n + (s && s.size ? 1 : 0), 0)
+    });
+    panel.dispatchEvent(new CustomEvent('drawgrid:update', {
+      detail: { map: currentMap, steps: stepCount, activityOnly }
+    }));
+  }
   let cssW = 0, cssH = 0, cw = 0, ch = 0, topPad = 0;
   let lastBoardScale = 1;
   let boardScale = 1;
@@ -962,8 +990,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let curErase = null;
   let strokes = []; // Store all completed stroke objects
   let eraseStrokes = []; // Store all completed erase strokes
-  let currentMap = null; // Store the current node map {active, nodes, disabled}
-  let nodeCoordsForHitTest = []; // For draggable nodes
   let cellFlashes = []; // For flashing grid squares on note play
   let noteToggleEffects = []; // For tap feedback animations
   let nodeGroupMap = []; // Per-column Map(row -> groupId or [groupIds]) to avoid cross-line connections and track z-order
@@ -1238,6 +1264,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
             const prevActive = currentMap?.active ? [...currentMap.active] : null;
 
             cols = parseInt(stepsSel.value, 10);
+            currentCols = cols;
             panel.dataset.steps = String(cols);
             flashes = new Float32Array(cols);
 
@@ -1545,6 +1572,11 @@ function regenerateMapFromStrokes() {
           }
       }
 
+      console.log('[DG][rebuild map]', {
+        cols: newMap.nodes.length,
+        activeCount: newMap.active.filter(Boolean).length
+      });
+
       const prevActive = currentMap?.active ? currentMap.active.slice() : null;
       const prevNodes = currentMap?.nodes ? currentMap.nodes.map(s => s ? new Set(s) : new Set()) : null;
 
@@ -1627,39 +1659,62 @@ function regenerateMapFromStrokes() {
   }
 
   const unsubscribeZoom = onZoomChange((z) => {
-  // Normalize
-  zoomMode = z.mode || 'idle';
-  const nextScale = Number.isFinite(z.currentScale) ? z.currentScale : Number(z.targetScale);
-  if (Number.isFinite(nextScale)) boardScale = nextScale;
+    zoomMode = z.mode || 'idle';
+    const nextScale = getScaleForCompare(z, lastCommittedScale);
+    if (Number.isFinite(nextScale)) boardScale = nextScale;
 
-  const scaleForCompare = Number.isFinite(z.currentScale)
-    ? z.currentScale
-    : (Number.isFinite(z.targetScale) ? z.targetScale : boardScale);
+    const scaleForCompare = getScaleForCompare(z, boardScale);
+    const scaleMoved = isRealZoom(z);
+    zoomGestureActive = (z.mode === 'gesturing') && scaleMoved;
 
-  const scaleMoved =
-    Number.isFinite(scaleForCompare) &&
-    Math.abs(scaleForCompare - lastCommittedScale) > ZOOM_SCALE_EPS;
+    const nowTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+      ? performance.now()
+      : Date.now();
 
-  // Consider it a zoom gesture ONLY if scale really moved.
-  const isRealZoomGesture = (z.mode === 'gesturing') && scaleMoved;
-  zoomGestureActive = isRealZoomGesture;
+    if (DG_DEBUG && z.phase && z.phase !== 'progress' && nowTs > suppressZoomLogsUntilTs) {
+      DG.log('ZOOM phase', z.phase, { boardScale, zoomMode, pendingPaintSwap, pendingSwap, usingBackBuffers });
+    }
 
-  // Skip spam: ignore progress events with no real movement
-  if (z.phase === 'progress' && !scaleMoved) return;
+    if (z.phase && z.phase !== 'progress') {
+      lastProgressScale = null;
+      lastProgressCompareScale = null;
+      lastProgressFrameTs = 0;
+    }
 
-  if (DG_DEBUG && z.phase && (z.phase !== 'progress' || isRealZoomGesture)) {
-    DG_LOG('ZOOM phase', z.phase, { boardScale, zoomMode, pendingPaintSwap, pendingSwap, usingBackBuffers });
-  }
+    if (z.phase === 'progress') {
+      if (zoomMode !== 'gesturing') return;
+      const compareScale = Number.isFinite(scaleForCompare) ? scaleForCompare : boardScale;
+      const prevCompare = Number.isFinite(lastProgressCompareScale) ? lastProgressCompareScale : compareScale;
+      if (Math.abs(compareScale - prevCompare) <= ZOOM_SCALE_EPS) return;
+      lastProgressCompareScale = compareScale;
 
-  // When we reach committing/done/idle, finalize state and silence further logs.
-  if (z.phase === 'done' || z.mode === 'idle') {
-    lastCommittedScale = boardScale;
-    zoomGestureActive = false;
-    zoomCommitPhase = 'idle';
-    pendingPaintSwap = false;
-    pendingSwap = false;
-  }
-});
+      const prevBoard = Number.isFinite(lastProgressScale) ? lastProgressScale : boardScale;
+      if (Math.abs(boardScale - prevBoard) <= ZOOM_SCALE_EPS) return;
+
+      const now = nowTs;
+      if (lastProgressFrameTs && (now - lastProgressFrameTs) < progressBudget) {
+        return;
+      }
+      lastProgressFrameTs = now;
+      lastProgressScale = boardScale;
+
+      if (DG_DEBUG && now > suppressZoomLogsUntilTs) {
+        DG.log('ZOOM phase', z.phase, { boardScale, zoomMode, pendingPaintSwap, pendingSwap, usingBackBuffers });
+      }
+      return;
+    }
+
+    if (z.phase === 'done' || z.mode === 'idle') {
+      lastCommittedScale = Number.isFinite(scaleForCompare) ? scaleForCompare : boardScale;
+      lastProgressScale = boardScale;
+      lastProgressCompareScale = scaleForCompare;
+      suppressZoomLogsUntilTs = nowTs + 1000;
+      zoomGestureActive = false;
+      zoomCommitPhase = 'idle';
+      pendingPaintSwap = false;
+      pendingSwap = false;
+    }
+  });
 
   let zoomRAF = null;
   let zoomGestureActive = false;
@@ -1728,7 +1783,7 @@ function regenerateMapFromStrokes() {
       if (front && back) {
         withIdentity(ghostFrontCtx, ()=> ghostFrontCtx.drawImage(back, 0, 0, back.width, back.height, 0, 0, front.width, front.height));
       }
-      // NEW: also copy other overlays back → front once to avoid a 1-frame size pop
+      // NEW: also copy other overlays back -> front once to avoid a 1-frame size pop
       copyCanvas(particleBackCtx, particleFrontCtx);
       copyCanvas(gridBackCtx,      gridFrontCtx);
       copyCanvas(nodesBackCtx,     nodesFrontCtx);
@@ -1737,8 +1792,8 @@ function regenerateMapFromStrokes() {
 
       resnapAndRedraw(true);
       zoomGestureActive = false;
-      zoomMode = 'idle'; // ensure we fully exit zoom mode (see §2)
-      lastCommittedScale = boardScale; lastProgressScale = boardScale;
+      zoomMode = 'idle'; // ensure we fully exit zoom mode 
+      lastCommittedScale = boardScale; lastProgressScale = boardScale; lastProgressCompareScale = boardScale;
       return;
     }
   });
@@ -2856,8 +2911,9 @@ function syncBackBufferSizes() {
     drawing=true;
     paint.setPointerCapture?.(e.pointerId);
 
-    // Arm back buffers so any quick click-release still has a coherent swap on pointerup.
-    useBackBuffers();
+    // Live ink should draw straight to the visible canvas; suppress swaps during drag.
+    if (typeof useFrontBuffers === 'function') useFrontBuffers();
+    __dgSkipSwapsDuringDrag = true;
 
     if (erasing) {
       erasedTargetsThisDrag.clear();
@@ -2904,6 +2960,10 @@ function syncBackBufferSizes() {
       x: (e.clientX - rect.left) * (cssW > 0 ? cssW / rect.width : 1),
       y: (e.clientY - rect.top) * (cssH > 0 ? cssH / rect.height : 1)
     };
+    if (!pctx) {
+      console.warn('[DG] pctx missing; forcing front buffers');
+      if (typeof useFrontBuffers === 'function') useFrontBuffers();
+    }
     
     // Update cursor for draggable nodes
     if (!draggedNode) {
@@ -3050,6 +3110,7 @@ function syncBackBufferSizes() {
     }
   }
   function onPointerUp(e){
+    __dgSkipSwapsDuringDrag = false;
     // Only defer/blank if a *zoom commit* is actually settling.
     const now = performance?.now?.() ?? Date.now();
     const settleTs = (typeof window !== 'undefined') ? window.__GESTURE_SETTLE_UNTIL_TS : 0;
@@ -3763,6 +3824,7 @@ function syncBackBufferSizes() {
             if (typeof st.steps === 'number' && (st.steps===8 || st.steps===16)){
               if ((st.steps|0) !== cols){
                 cols = st.steps|0;
+                currentCols = cols;
                 panel.dataset.steps = String(cols);
                 flashes = new Float32Array(cols);
                 persistentDisabled = Array.from({ length: cols }, () => new Set());

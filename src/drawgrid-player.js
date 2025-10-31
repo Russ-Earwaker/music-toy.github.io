@@ -45,38 +45,57 @@ export function connectDrawGridToPlayer(panel) {
   });
 
   function step(col) {
-    // TEMP: sanity — remove once confirmed
-    // console.log('[PLAYER] step', { col, activeCol: map.active?.[col], nodes: (map.nodes?.[col]?.size || 0) });
+    // Visual playhead pulse for the toy
     markPlayingColumn(panel, col);
 
     const map = gridState;
     const nodesArr = (map && Array.isArray(map.nodes)) ? map.nodes : [];
     const currentSteps = Number.isFinite(steps) ? steps : nodesArr.length;
 
-    if (!currentSteps || !nodesArr.length) return;
-    if (col < 0 || col >= currentSteps) { return; }
+    if (!currentSteps || !nodesArr.length) {
+      console.log('[PLAYER] skip: empty map', { currentSteps, nodesLen: nodesArr.length });
+      return;
+    }
+    if (col < 0 || col >= currentSteps) {
+      console.log('[PLAYER] skip: out of range col', { col, currentSteps });
+      return;
+    }
 
-    if (map.active?.[col]) {
-        const colSet = nodesArr[col] instanceof Set ? nodesArr[col] : new Set();
-        if (colSet.size === 0) return;
+    const activeCol = !!(map.active && map.active[col]);
+    const colSet = nodesArr[col] instanceof Set ? nodesArr[col] : new Set();
+    const disabledInCol = map.disabled?.[col] || new Set();
 
-        const disabledInCol = map.disabled?.[col] || new Set();
-        let columnTriggered = false;
-        for (const row of colSet) {
-            if (typeof row !== 'number' || Number.isNaN(row)) continue;
+    console.log('[PLAYER] step', {
+      col,
+      activeCol,
+      steps: currentSteps,
+      nodesInCol: colSet.size,
+      disabledCount: disabledInCol.size
+    });
 
-            if (!disabledInCol.has(row)) {
-                if (!columnTriggered) {
-                    panel.__pulseHighlight = 1.0;
-                    panel.__pulseRearm = true;
-                    columnTriggered = true;
-                }
-                const midiNote = notePalette[row];
-                if (midiNote !== undefined) {
-                    playNote(instrument, midiToName(midiNote));
-                }
-            }
-        }
+    if (!activeCol || colSet.size === 0) return;
+
+    let columnTriggered = false;
+    for (const row of colSet) {
+      if (typeof row !== 'number' || Number.isNaN(row)) continue;
+      if (disabledInCol.has(row)) continue;
+
+      if (!columnTriggered) {
+        panel.__pulseHighlight = 1.0;
+        panel.__pulseRearm = true;
+        columnTriggered = true;
+      }
+
+      const midiNote = notePalette[row];
+      if (midiNote === undefined) {
+        console.warn('[PLAYER] row -> midi undefined', { row });
+        continue;
+      }
+
+      // Log the exact note we’re about to play.
+      console.log('[PLAYER] trigger', { instrument, row, midiNote });
+
+      playNote(instrument, midiToName(midiNote));
     }
   }
 
