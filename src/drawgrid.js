@@ -719,6 +719,21 @@ function ringBurst(x, y, radius, countBurst = 28, speed = 2.4, color = 'pink') {
   return { step, draw, onBeat, lineRepulse, drawingDisturb, pointBurst, ringBurst, fadeLettersOut, fadeLettersIn, setLetterFadeTarget, setDpr, scalePositions, onResize, snapAllToHomes, holdNextFrame };
 }
 
+function normalizeMapColumns(map, cols) {
+  // Ensure consistent shape for player & renderers
+  if (!map) return { active: Array(cols).fill(false), nodes: Array.from({length: cols}, () => new Set()), disabled: Array.from({length: cols}, () => new Set()) };
+  if (!Array.isArray(map.active)) map.active = Array(cols).fill(false);
+  if (!Array.isArray(map.nodes)) map.nodes = Array.from({length: cols}, () => new Set());
+  if (!Array.isArray(map.disabled)) map.disabled = Array.from({length: cols}, () => new Set());
+  // Fill any sparse holes with Sets
+  for (let i=0;i<cols;i++){
+    if (!(map.nodes[i] instanceof Set)) map.nodes[i] = new Set(map.nodes[i] || []);
+    if (!(map.disabled[i] instanceof Set)) map.disabled[i] = new Set(map.disabled[i] || []);
+    if (typeof map.active[i] !== 'boolean') map.active[i] = !!map.active[i];
+  }
+  return map;
+}
+
 export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId, bpm = 120 } = {}) {
   // The init script now guarantees the panel is a valid HTMLElement with the correct dataset.
   // The .toy-body is now guaranteed to exist by initToyUI, which runs first.
@@ -915,6 +930,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const ZOOM_SCALE_EPS = 1e-4;
   let lastCommittedScale = boardScale;
   let lastProgressScale = null;
+  let lastProgressCompareScale = null;
   let suppressZoomLogsUntilTs = 0;
   const SCALE_RESNAP_EPSILON = 1e-4;
   function getScaleForCompare(z, fallback) {
@@ -1528,6 +1544,7 @@ function regenerateMapFromStrokes() {
       }
 
       if (didChange){
+        currentMap = normalizeMapColumns(currentMap, cols);
         panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: { map: currentMap, activityOnly:false }}));
       } else {
         // noise-free activity: do not notify the guide as a progress update
@@ -1588,247 +1605,36 @@ function regenerateMapFromStrokes() {
   }
 
   const unsubscribeZoom = onZoomChange((z) => {
-    zoomMode = z.mode || 'idle';
-    const nextScale = getScaleForCompare(z, lastCommittedScale);
-    if (Number.isFinite(nextScale)) boardScale = nextScale;
+  // Normalize
+  zoomMode = z.mode || 'idle';
+  const nextScale = Number.isFinite(z.currentScale) ? z.currentScale : Number(z.targetScale);
+  if (Number.isFinite(nextScale)) boardScale = nextScale;
 
-    const scaleForCompare = getScaleForCompare(z, boardScale);
+  const scaleForCompare = Number.isFinite(z.currentScale)
+    ? z.currentScale
+    : (Number.isFinite(z.targetScale) ? z.targetScale : boardScale);
 
-    const scaleMoved = isRealZoom(z);
+  const scaleMoved =
+    Number.isFinite(scaleForCompare) &&
+    Math.abs(scaleForCompare - lastCommittedScale) > ZOOM_SCALE_EPS;
 
-    zoomGestureActive = (z.mode === 'gesturing') && scaleMoved;
+  // Consider it a zoom gesture ONLY if scale really moved.
+  const isRealZoomGesture = (z.mode === 'gesturing') && scaleMoved;
+  zoomGestureActive = isRealZoomGesture;
 
-    const nowTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
-      ? performance.now()
-      : Date.now();
+  // Skip spam: ignore progress events with no real movement
+  if (z.phase === 'progress' && !scaleMoved) return;
 
-    const finalizeZoomState = () => {
-      zoomGestureActive = false;
-      zoomMode = 'idle';
-      if (typeof window !== 'undefined' && window.__dgZoomWatchdogT) {
-        clearTimeout(window.__dgZoomWatchdogT);
-        window.__dgZoomWatchdogT = null;
-      }
-      if (Number.isFinite(scaleForCompare)) {
-        lastCommittedScale = scaleForCompare;
-      }
-      lastProgressScale = null;
-      lastProgressFrameTs = 0;
-      suppressZoomLogsUntilTs = nowTs + 1000;
-      if (zoomFreezeActive) {
-        const settleTs = (typeof window !== 'undefined') ? window.__GESTURE_SETTLE_UNTIL_TS : 0;
-        const delay = (settleTs && settleTs > nowTs) ? (settleTs - nowTs) : 0;
-        setTimeout(() => {
-          requestAnimationFrame(() => requestAnimationFrame(() => {
-            zoomFreezeActive = false;
-            zoomFreezeW = 0;
-            zoomFreezeH = 0;
-          }));
-        }, Math.max(0, delay));
-      }
-    };
+  if (DG_DEBUG && z.phase && (z.phase !== 'progress' || isRealZoomGesture)) {
+    DG.log('ZOOM phase', z.phase, { boardScale, zoomMode, pendingPaintSwap, pendingSwap, usingBackBuffers });
+  }
 
-    // Optional debug: log only when it's a *real* zoom (or non-progress phases)
-    if (DG_DEBUG && z.phase && (z.phase !== 'progress' || scaleMoved) && nowTs > suppressZoomLogsUntilTs) {
-      DG.log('ZOOM phase', z.phase, { boardScale, zoomMode, pendingPaintSwap, pendingSwap, usingBackBuffers });
-    }
-
-    // Reset progress accumulator whenever we leave 'progress'
-    if (z.phase && z.phase !== 'progress') lastProgressScale = null;
-
-    // Early-ignore bogus progress (no real zoom): do NOTHING for these
-    if (z.phase === 'progress' && (!scaleMoved || z.mode !== 'gesturing')) {
-      return;
-    }
-
-    if (z.phase === 'progress' && !zoomFreezeActive) {
-      zoomFreezeActive = true;
-      const latchW = paint?.width || Math.floor(cssW * paintDpr);
-      const latchH = paint?.height || Math.floor(cssH * paintDpr);
-      zoomFreezeW = Math.max(1, latchW);
-      zoomFreezeH = Math.max(1, latchH);
-    }
-
-    if (z.phase === 'progress') {
-      const progressMoved =
-        Number.isFinite(scaleForCompare) &&
-        (lastProgressScale === null || Math.abs(scaleForCompare - lastProgressScale) > ZOOM_SCALE_EPS);
-      if (!progressMoved) return;
-      lastProgressScale = scaleForCompare;
-      const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
-        ? performance.now()
-        : Date.now();
-      if (lastProgressFrameTs && (now - lastProgressFrameTs) < progressBudget) {
-        return;
-      }
-      lastProgressFrameTs = now;
-
-      // During progress we do ZERO sizing/backing-store changes.
-      // CSS transform handles visuals; raster changes are deferred to recompute/commit.
-
-      // Only refresh back during progress if we already staged something heavy:
-      if (!pendingPaintSwap) return;
-
-      // If something was staged previously, do a quick blit pass only:
-      drawIntoBackOnly();
-      if (pendingPaintSwap) {
-        swapBackToFront();
-        pendingPaintSwap = false;
-      }
-      return;
-    }
-
-    if (z.phase) {
-      if (z.phase === 'freeze') {
-        if (!scaleMoved) return;
-        zoomCommitPhase = 'freeze';
-        zoomGestureActive = true;
-        useFrontBuffers();
-        const hostEl = frontCanvas?.parentElement || wrap || panel;
-        const measured = measureCSSSize(hostEl);
-        if (measured.w > 0 && measured.h > 0) {
-          cssW = measured.w;
-          cssH = measured.h;
-          progressMeasureW = cssW;
-          progressMeasureH = cssH;
-        }
-        pendingZoomResnap = true;
-        DG.log(`ZOOM:${z.phase}`, { cssW, cssH, pendingPaintSwap, pendingSwap, usingBackBuffers });
-        if (DG_DEBUG) drawDebugHUD([`ZOOM:${z.phase}`]);
-        return;
-      }
-      if (z.phase === 'recompute') {
-        if (!scaleMoved) return;
-        zoomCommitPhase = 'recompute';
-        zoomGestureActive = true;
-        pendingZoomResnap = false;
-        scheduleZoomRecompute();
-        DG.log(`ZOOM:${z.phase}`, { cssW, cssH, pendingPaintSwap, pendingSwap, usingBackBuffers });
-        if (DG_DEBUG) drawDebugHUD([`ZOOM:${z.phase}`]);
-        return;
-      }
-      if (z.phase === 'swap') {
-        if (!scaleMoved) return;
-        zoomCommitPhase = 'swap';
-        if (!usingBackBuffers) {
-          ensureBackVisualsFreshFromFront();
-        }
-        if (pendingPaintSwap) { swapBackToFront(); pendingPaintSwap = false; }
-        if (pendingSwap) {
-          flushVisualBackBuffersToFront();
-          useFrontBuffers();
-          pendingSwap = false;
-        }
-        DG.log(`ZOOM:${z.phase}`, { cssW, cssH, pendingPaintSwap, pendingSwap, usingBackBuffers });
-        if (DG_DEBUG) drawDebugHUD([`ZOOM:${z.phase}`]);
-        return;
-      }
-      if (z.phase === 'done') {
-        zoomCommitPhase = 'idle';
-        if (!scaleMoved) {
-          finalizeZoomState();
-          return;
-        }
-
-        let DG_preCommitSample = null;
-        try {
-          DG_preCommitSample = {
-            firstP: (()=>{
-              const p = particles?.__peek?.();
-              return p && {x:p.x,y:p.y, hx:p.homeX, hy:p.homeY};
-            })(),
-            scale: boardScale
-          };
-        } catch {}
-        DG.log('ZOOM:done(pre)', DG_preCommitSample);
-
-        // Keep the progress assumptions ON until after redraw + swap:
-        requestAnimationFrame(() => {
-          if (!panel.isConnected) return;
-          zoomGestureActive = true;
-
-          useBackBuffers();
-          resnapAndRedraw(true);     // This calls layout() which updates cssW/H
-          updatePaintBackingStores({ force: true, target: 'back' });
-          // On recompute, re-home geometry and SNAP to the new homes to prevent a visible glide.
-          if (particles?.onResize) particles.onResize({ resetPositions: false });
-          if (particles?.snapAllToHomes) particles.snapAllToHomes();
-          // If you also fade letters, ensure the fade is in sync
-          if (typeof syncLetterFade === 'function') syncLetterFade({ immediate: true });
-
-          if (particles?.holdNextFrame) particles.holdNextFrame();
-
-          // Next frame: swap and only then drop progress state
-          requestAnimationFrame(() => {
-            pendingPaintSwap = true;
-            requestFrontSwap();      // coalesced swap
-            // After the swap frame lands, drop gesture
-            requestAnimationFrame(() => {
-              DG.log('ZOOM:done(post-swap)', {
-                postRects: DG_particlesRectsDrawn,
-                postLetters: DG_lettersDrawn,
-                scale: boardScale
-              });
-              if (DG_DEBUG) drawDebugHUD(['ZOOM:done -> post-swap']);
-              // Final safety snap at commit frame to avoid any single-frame misalignment.
-              if (particles?.snapAllToHomes) particles.snapAllToHomes();
-              useFrontBuffers();
-              zoomGestureActive = false;
-              if (z.committed) panel.dispatchEvent(new CustomEvent('toy-zoom-commit', { detail: z }));
-            });
-          });
-        });
-        finalizeZoomState();
-        return;
-      }
-    }
-
-    if (z.mode !== 'gesturing' && !z.phase) {
-      finalizeZoomState();
-    }
-
-    if (zoomMode === 'gesturing') {
-      if (Math.abs(boardScale - lastCommittedScale) > SCALE_RESNAP_EPSILON) {
-        pendingZoomResnap = true;
-      }
-      return;
-    }
-
-    const scaleDelta = Math.abs(boardScale - lastCommittedScale);
-    const shouldResnap =
-      (z.committed && scaleDelta > SCALE_RESNAP_EPSILON) ||
-      (pendingZoomResnap && scaleDelta > SCALE_RESNAP_EPSILON);
-
-    if (shouldResnap) {
-      pendingZoomResnap = false;
-      requestAnimationFrame(() => {
-        if (!panel.isConnected) return;
-        resnapAndRedraw(true);            // final crisp redraw at true backing size
-        panel.dispatchEvent(new CustomEvent('toy-zoom-commit', { detail: z }));
-        lastCommittedScale = boardScale;
-      });
-    } else {
-      pendingZoomResnap = false;
-      if (z.committed) {
-        lastCommittedScale = boardScale;
-      }
-    }
-
-    // Watchdog: if ZoomCoordinator sticks in 'gesturing' without scale change, auto-idle.
-    if (z.mode === 'gesturing' && !scaleMoved) {
-      clearTimeout(window.__dgZoomWatchdogT);
-      window.__dgZoomWatchdogT = setTimeout(() => {
-        // If we STILL haven't moved scale, force idle.
-        const zs = getZoomState?.();
-        const cur = Number.isFinite(zs?.currentScale) ? zs.currentScale : boardScale;
-        if (Math.abs(cur - lastCommittedScale) <= ZOOM_SCALE_EPS) {
-          zoomGestureActive = false;
-          zoomMode = 'idle';
-          if (DG_DEBUG) DG.log('ZOOM watchdog: forced idle (no scale delta)');
-        }
-      }, 120);
-    }
-  });
+  // When we reach committing/done/idle, finalize state and silence further logs.
+  if (z.phase === 'done' || z.mode === 'idle') {
+    lastCommittedScale = boardScale;
+    zoomGestureActive = false;
+  }
+});
 
   let zoomRAF = null;
   let zoomGestureActive = false;
@@ -1878,6 +1684,7 @@ function regenerateMapFromStrokes() {
 
     if (z.phase === 'prepare') {
       zoomGestureActive = true;
+      zoomMode = 'gesturing';
       // during gesture we render via CSS transforms only
       useBackBuffers();
       return;
@@ -1896,8 +1703,17 @@ function regenerateMapFromStrokes() {
       if (front && back) {
         withIdentity(ghostFrontCtx, ()=> ghostFrontCtx.drawImage(back, 0, 0, back.width, back.height, 0, 0, front.width, front.height));
       }
+      // NEW: also copy other overlays back → front once to avoid a 1-frame size pop
+      copyCanvas(particleBackCtx, particleFrontCtx);
+      copyCanvas(gridBackCtx,      gridFrontCtx);
+      copyCanvas(nodesBackCtx,     nodesFrontCtx);
+      copyCanvas(flashBackCtx,     flashFrontCtx);
+      copyCanvas(tutorialBackCtx,  tutorialFrontCtx);
+
       resnapAndRedraw(true);
       zoomGestureActive = false;
+      zoomMode = 'idle'; // ensure we fully exit zoom mode (see §2)
+      lastCommittedScale = boardScale; lastProgressScale = boardScale;
       return;
     }
   });
@@ -1932,6 +1748,7 @@ function regenerateMapFromStrokes() {
   function useBackBuffers() {
     if (usingBackBuffers) return;
     usingBackBuffers = true;
+    syncBackBufferSizes();
     particleCtx = particleBackCtx;
     gctx = gridBackCtx;
     nctx = nodesBackCtx;
@@ -1967,6 +1784,35 @@ function regenerateMapFromStrokes() {
       );
     });
   }
+
+function copyCanvas(backCtx, frontCtx) {
+  if (!backCtx || !frontCtx) return;
+  const front = frontCtx.canvas, back = backCtx.canvas;
+  if (!front || !back || !front.width || !front.height || !back.width || !back.height) return;
+  withIdentity(frontCtx, () => {
+    frontCtx.clearRect(0, 0, front.width, front.height);
+    frontCtx.drawImage(back, 0, 0, back.width, back.height, 0, 0, front.width, front.height);
+  });
+}
+
+function syncBackBufferSizes() {
+  const pairs = [
+    [particleBackCtx, particleFrontCtx],
+    [gridBackCtx, gridFrontCtx],
+    [nodesBackCtx, nodesFrontCtx],
+    [flashBackCtx, flashFrontCtx],
+    [ghostBackCtx, ghostFrontCtx],
+    [tutorialBackCtx, tutorialFrontCtx]
+  ];
+  for (const [back, front] of pairs) {
+    if (!back || !front) continue;
+    if (back.canvas.width  !== front.canvas.width ||
+        back.canvas.height !== front.canvas.height) {
+      back.canvas.width  = front.canvas.width;
+      back.canvas.height = front.canvas.height;
+    }
+  }
+}
 
   function getActiveFlashCanvas() {
     return usingBackBuffers ? flashBackCanvas : flashCanvas;
@@ -2952,7 +2798,8 @@ function regenerateMapFromStrokes() {
             // Start the animation of the erased node only
             animateErasedNode(node);
             // Notify the player of the change
-            panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
+            currentMap = normalizeMapColumns(currentMap, cols);
+            panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: { map: currentMap } }));
         }
     }
   }
@@ -3209,7 +3056,8 @@ function regenerateMapFromStrokes() {
       const finalDetail = { col: draggedNode.col, row: draggedNode.row, group: draggedNode.group ?? null };
       const didMove = !!draggedNode.moved;
       if (didMove || inZoomCommit) __dgNeedsUIRefresh = true;
-      panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
+      currentMap = normalizeMapColumns(currentMap, cols);
+      panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: { map: currentMap } }));
       if (didMove) {
         try { panel.dispatchEvent(new CustomEvent('drawgrid:node-drag-end', { detail: finalDetail })); } catch {}
       }
@@ -3247,7 +3095,8 @@ function regenerateMapFromStrokes() {
       drawNodes(currentMap.nodes);
       __dgNeedsUIRefresh = true;
       requestFrontSwap(useFrontBuffers);
-      panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
+      currentMap = normalizeMapColumns(currentMap, cols);
+      panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: { map: currentMap } }));
       panel.dispatchEvent(new CustomEvent('drawgrid:node-toggle', { detail: { col, row, disabled: dis.has(row) } }));
 
       const cx = gridArea.x + col * cw + cw * 0.5;
@@ -3800,7 +3649,7 @@ function regenerateMapFromStrokes() {
       persistentDisabled = Array.from({ length: cols }, () => new Set());
       const emptyMap = {active:Array(cols).fill(false),nodes:Array.from({length:cols},()=>new Set()), disabled:Array.from({length:cols},()=>new Set())};
       currentMap = emptyMap;
-      panel.dispatchEvent(new CustomEvent('drawgrid:update',{detail:emptyMap}));
+      panel.dispatchEvent(new CustomEvent('drawgrid:update',{detail:{map:emptyMap}}));
       drawGrid();
       nextDrawTarget = null; // Disarm any pending line draw
       updateGeneratorButtons(); // Refresh button state to "Draw"
@@ -3848,6 +3697,55 @@ function regenerateMapFromStrokes() {
       try {
         return !!(currentMap?.active && currentMap.active.some(Boolean));
       } catch { return false; }
+    },
+    restoreState: (state) => {
+      try {
+        // Reset visuals
+        clearCanvas(pctx);
+        clearCanvas(nctx);
+        const flashSurface = getActiveFlashCanvas();
+        withIdentity(fctx, () => fctx.clearRect(0, 0, flashSurface.width, flashSurface.height));
+
+        // Rebuild stroke arrays
+        const denormPt = (nx, ny) => {
+          const gh = Math.max(1, gridArea.h - topPad);
+          return {
+            x: gridArea.x + nx * gridArea.w,
+            y: gridArea.y + topPad + ny * gh,
+          };
+        };
+
+        strokes = (state?.strokes || []).map(s => ({
+          pts: (s.ptsN || []).map(p => denormPt(p.nx||0, p.ny||0)),
+          color: s.color,
+          isSpecial: !!s.isSpecial,
+          generatorId: (typeof s.generatorId==='number') ? s.generatorId : undefined,
+          overlayColorize: !!s.overlayColorize,
+        }));
+
+        eraseStrokes = (state?.eraseStrokes || []).map(s => ({
+          pts: (s.ptsN || []).map(p => denormPt(p.nx||0, p.ny||0)),
+        }));
+
+        // Recompute map from strokes
+        regenerateMapFromStrokes(); // recomputeFromPaintAndStrokes
+        currentMap = normalizeMapColumns(currentMap, cols);
+
+        // Redraw paint from strokes so the visible line reappears
+        withIdentity(pctx, () => {
+          clearCanvas(pctx);
+          for (const s of strokes) drawFullStroke(pctx, s);
+        });
+
+        // Notify & redraw
+        panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: { map: currentMap, activityOnly:false }}));
+        drawGrid();
+        if (currentMap) drawNodes(currentMap.nodes);
+      } catch (e) {
+        // fail-safe: at least force a map update so player doesn't die
+        currentMap = normalizeMapColumns(currentMap, cols);
+        panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: { map: currentMap, activityOnly:false }}));
+      }
     },
     setState: (st={})=>{
       requestAnimationFrame(() => {
@@ -3951,7 +3849,10 @@ function regenerateMapFromStrokes() {
 
                   drawGrid();
                   drawNodes(currentMap.nodes);
-                  try{ panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap })); }catch{}
+                  try{ 
+                    currentMap = normalizeMapColumns(currentMap, cols);
+                    panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: { map: currentMap } })); 
+                  }catch{}
               } catch(e){ }
             }
             if (Array.isArray(st.manualOverrides)){
@@ -3964,7 +3865,12 @@ function regenerateMapFromStrokes() {
               const stepsSel = panel.querySelector('.drawgrid-steps');
               if (stepsSel) stepsSel.value = String(cols);
             } catch {}
-            if (currentMap){ try{ panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap })); }catch{} }
+            if (currentMap){ 
+              try{
+                currentMap = normalizeMapColumns(currentMap, cols);
+                panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: { map: currentMap } })); 
+              }catch{}
+            }
           }catch(e){ }
           isRestoring = false;
           // Re-check after hydration completes
@@ -4069,11 +3975,12 @@ function regenerateMapFromStrokes() {
           }
         }
       }
-    } catch(e){ }
+    } catch(e){}
 
     drawGrid();
     drawNodes(currentMap.nodes);
-    panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
+    currentMap = normalizeMapColumns(currentMap, cols);
+    panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: { map: currentMap } }));
   }
 
   function handleRandomizeBlocks() {
@@ -4100,7 +4007,8 @@ function regenerateMapFromStrokes() {
 
     drawGrid();
     drawNodes(currentMap.nodes);
-    panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
+    currentMap = normalizeMapColumns(currentMap, cols);
+    panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: { map: currentMap } }));
   }
 
   function handleRandomizeNotes() {
@@ -4140,10 +4048,10 @@ function regenerateMapFromStrokes() {
                 currentMap.nodes[c].forEach(r => currentMap.disabled[c].add(r)); // If column was inactive, disable all its new nodes.
             }
         }
-        persistentDisabled = currentMap.disabled; // Update the master disabled set
         drawGrid();
         drawNodes(currentMap.nodes);
-        panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
+        currentMap = normalizeMapColumns(currentMap, cols);
+        panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: { map: currentMap } }));
     }
   }
   panel.addEventListener('toy-random', handleRandomize);
@@ -4435,7 +4343,7 @@ function runAutoGhostGuideSweep() {
   });
 
   panel.addEventListener('drawgrid:update', (e) => {
-    const nodes = e?.detail?.nodes;
+    const nodes = e?.detail?.map?.nodes;
     const hasAny = Array.isArray(nodes) && nodes.some(set => set && set.size > 0);
           if (hasAny) {
             stopAutoGhostGuide({ immediate: false });    } else {
