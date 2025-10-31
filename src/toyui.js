@@ -549,6 +549,19 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
     const mo = new MutationObserver(() => { const s = panel.querySelector('.drawgrid-steps'), a = panel.querySelector('.drawgrid-autotune'); if (s && a) { moveDrawGridControls(); mo.disconnect(); } });
     mo.observe(panel, { childList: true, subtree: true });
     panel.addEventListener('toy-zoom', moveDrawGridControls);
+
+    // Add listeners for drawgrid activity to control guide pulsing
+    panel.addEventListener('drawgrid:update', (e) => {
+      const { activityOnly } = e.detail || {};
+      if (!activityOnly) {
+        window.dispatchEvent(new Event('guide:progress-update'));
+      }
+    });
+
+    panel.addEventListener('drawgrid:activity', (e) => {
+      // no pulse; optional: a very lightweight guide refresh without glow
+      // renderGuide(lastApi, { source: 'drawgrid-activity', pulse:false });
+    });
   }
 
   // Bouncer has special button logic to swap "Random" for two more specific buttons in advanced mode.

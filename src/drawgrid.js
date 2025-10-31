@@ -6,6 +6,18 @@ import { drawBlock } from './toyhelpers.js';
 import { getLoopInfo, isRunning } from './audio-core.js';
 import { onZoomChange, getZoomState } from './zoom/ZoomCoordinator.js';
 
+const DG_DEBUG = (location.search.includes('dgdebug=1') || localStorage.getItem('DG_DEBUG') === '1');
+function DG_SET(v){ try { if (v) localStorage.setItem('DG_DEBUG','1'); else localStorage.removeItem('DG_DEBUG'); } catch{} }
+const DG = {
+  log(...a){ if (DG_DEBUG) console.log('[DG]', ...a); },
+  warn(...a){ if (DG_DEBUG) console.warn('[DG]', ...a); },
+  time(label){ if (DG_DEBUG) console.time(label); },
+  timeEnd(label){ if (DG_DEBUG) console.timeEnd(label); },
+};
+
+let DG_particlesRectsDrawn = 0;
+let DG_lettersDrawn = 0;
+
 const STROKE_COLORS = [
   'rgba(95,179,255,0.95)',  // Blue
   'rgba(255,95,179,0.95)',  // Pink
@@ -146,6 +158,31 @@ function chainHasSequencedNotes(head) {
   return false;
 }
 
+function drawDebugHUD(extraLines = []) {
+  if (!DG_DEBUG || !debugCtx) return;
+  const w = debugCtx.canvas.width = Math.max(1, Math.round(cssW || debugCtx.canvas.width || 1));
+  const h = debugCtx.canvas.height = Math.max(1, Math.round(cssH || debugCtx.canvas.height || 1));
+  debugCtx.clearRect(0,0,w,h);
+  const pad = 10;
+  debugCtx.save();
+  debugCtx.globalAlpha = 0.85;
+  debugCtx.fillStyle = 'rgba(0,0,0,0.55)';
+  debugCtx.fillRect(pad, pad, Math.min(520,w-2*pad), 14*16 + extraLines.length*16 + 20);
+  debugCtx.fillStyle = '#9cf';
+  debugCtx.font = '12px monospace';
+  const lines = [
+    `usingBackBuffers=${usingBackBuffers} pendingPaintSwap=${!!pendingPaintSwap} pendingSwap=${!!pendingSwap}`,
+    `zoomMode=${zoomMode} commitPhase=${zoomCommitPhase} gesture=${!!zoomGestureActive}`,
+    `boardScale=${boardScale?.toFixed?.(3)} lastCommitted=${lastCommittedScale?.toFixed?.(3)}`,
+    `cssW/H=${cssW}x${cssH} gridArea=(${gridArea.x.toFixed?.(1)},${gridArea.y.toFixed?.(1)}) ${gridArea.w.toFixed?.(1)}x${gridArea.h.toFixed?.(1)}`,
+    `particles: drewRectsLastFrame=${DG_particlesRectsDrawn} lettersDrawn=${DG_lettersDrawn}`,
+    `paintSwapRAF=${!!__swapRAF} paintDpr=${paintDpr}`,
+  ].concat(extraLines);
+  let y = pad + 18;
+  for (const L of lines) { debugCtx.fillText(L, pad+10, y); y+=16; }
+  debugCtx.restore();
+}
+
 /**
  * A self-contained particle system, adapted from the Bouncer toy.
  * - Particles are distributed across the entire container.
@@ -172,6 +209,8 @@ function createDrawGridParticles({
   let letterFadeTarget = 1;
   let letterFadeSpeed = 0.05;
   let currentDpr = 1;
+  let holdOneFrame = false;
+  function holdNextFrame(){ holdOneFrame = true; }
   const W = ()=> Math.max(1, Math.floor(getW()?getW() * currentDpr:0));
   const H = ()=> Math.max(1, Math.floor(getH()?getH() * currentDpr:0));
   let lastW = 0, lastH = 0;
@@ -294,8 +333,27 @@ function createDrawGridParticles({
     lastH = h;
   }
 
-  function onResize({ resetPositions = true } = {}) {
+  function onResize({ resetPositions = false } = {}) {
+    if (DG_DEBUG && resetPositions) DG.warn('particles.onResize() with resetPositions=TRUE');
     refreshHomes({ resetPositions });
+  }
+
+  function snapAllToHomes() {
+    // Snap free particles
+    for (const p of P) {
+      if (Number.isFinite(p.homeX) && Number.isFinite(p.homeY)) {
+        p.x = p.homeX; p.y = p.homeY;
+        p.vx = 0; p.vy = 0;
+      }
+    }
+    // Snap letter quads
+    for (const L of letters) {
+      if (Number.isFinite(L.homeX) && Number.isFinite(L.homeY)) {
+        L.x = L.homeX; L.y = L.homeY;
+        L.vx = 0; L.vy = 0;
+      }
+      // Keep alpha/flash as-is; we only prevent a visual drift at commit.
+    }
   }
 
   for (let i = 0; i < count; i++) {
@@ -325,6 +383,7 @@ function createDrawGridParticles({
   }
 
   function step(dt=1/60){
+    if (holdOneFrame) { holdOneFrame = false; return; }
     const w = W(), h = H();
 
     if (P.length < count){
@@ -340,9 +399,10 @@ function createDrawGridParticles({
     }
 
     if ((w !== lastW || h !== lastH) && w && h){
-      refreshHomes({ resetPositions: true });
+      // Keep current positions; just move homes.
+      refreshHomes({ resetPositions: false });
     } else if (!letters.length && w && h) {
-      layoutLetters(w, h, { resetPositions: true });
+      layoutLetters(w, h, { resetPositions: false });
     }
 
     const toKeep = [];
@@ -420,7 +480,9 @@ function createDrawGridParticles({
     }
   }
 
-  function draw(ctx, boardScale = 1){
+  function draw(ctx, zoomGestureActive = false){
+    DG_particlesRectsDrawn = 0;
+    DG_lettersDrawn = 0;
     if (!ctx) return;
     withIdentity(ctx, () => {
       ctx.save();
@@ -451,10 +513,11 @@ function createDrawGridParticles({
         ctx.fillStyle = `rgb(${r},${g},${b})`;
 
         const baseSize = 1.5;
-        const size = Math.max(0.75, baseSize * boardScale);
+        const size = Math.max(0.75, baseSize);
         const x = (p.x | 0) - size / 2;
         const y = (p.y | 0) - size / 2;
         ctx.fillRect(x, y, size, size);
+        DG_particlesRectsDrawn++;
       }
       ctx.restore();
 
@@ -472,8 +535,9 @@ function createDrawGridParticles({
             continue;
           }
           ctx.globalAlpha = finalAlpha;
-          ctx.font = `700 ${letter.fontSize * currentDpr}px 'Poppins', 'Helvetica Neue', sans-serif`;
+          ctx.font = `700 ${letter.fontSize}px 'Poppins', 'Helvetica Neue', sans-serif`;
           ctx.fillText(letter.char, letter.x, letter.y);
+          DG_lettersDrawn++;
         }
         ctx.restore();
       }
@@ -618,12 +682,16 @@ function ringBurst(x, y, radius, countBurst = 28, speed = 2.4, color = 'pink') {
   }
 
   function setDpr(newDpr) {
+    if (typeof zoomGestureActive !== 'undefined' && zoomGestureActive) return;
     if (newDpr === currentDpr) return;
     currentDpr = newDpr;
     refreshHomes({ resetPositions: true });
   }
 
+  function __peek(){ return P && P.length ? P[0] : null; }
+
   function scalePositions(scaleX, scaleY) {
+    if (typeof zoomGestureActive !== 'undefined' && zoomGestureActive) return;
     if (!Number.isFinite(scaleX) || !Number.isFinite(scaleY)) return;
     const newW = (Number.isFinite(lastW) && lastW > 0) ? lastW * scaleX : lastW;
     const newH = (Number.isFinite(lastH) && lastH > 0) ? lastH * scaleY : lastH;
@@ -658,7 +726,7 @@ function ringBurst(x, y, radius, countBurst = 28, speed = 2.4, color = 'pink') {
     }
   }
 
-  return { step, draw, onBeat, lineRepulse, drawingDisturb, pointBurst, ringBurst, fadeLettersOut, fadeLettersIn, setLetterFadeTarget, setDpr, scalePositions, onResize };
+  return { step, draw, onBeat, lineRepulse, drawingDisturb, pointBurst, ringBurst, fadeLettersOut, fadeLettersIn, setLetterFadeTarget, setDpr, scalePositions, onResize, snapAllToHomes, holdNextFrame };
 }
 
 export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId, bpm = 120 } = {}) {
@@ -717,6 +785,12 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   body.appendChild(nodesCanvas);
   body.appendChild(tutorialCanvas);
 
+  const debugCanvas = document.createElement('canvas');
+debugCanvas.setAttribute('data-role','drawgrid-debug');
+Object.assign(debugCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display: DG_DEBUG?'block':'none', zIndex: 9999, pointerEvents: 'none' });
+body.appendChild(debugCanvas);
+const debugCtx = debugCanvas.getContext('2d');
+
   const wrap = document.createElement('div');
   wrap.className = 'drawgrid-size-wrap';
   wrap.style.position = 'relative';
@@ -766,11 +840,35 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let tutorialCtx = tutorialFrontCtx;
 
   let __forceSwipeVisible = null; // null=auto, true/false=forced by tutorial
+  let __swapRAF = null;
+
+  // helper: request a single swap this frame
+  function requestFrontSwap(andThen) {
+    if (__swapRAF) return;
+    const mark = `DG.swapRAF@${performance.now().toFixed(2)}`;
+    if (DG_DEBUG) DG.log('requestFrontSwap()', { usingBackBuffers, pendingPaintSwap, pendingSwap, zoomCommitPhase, zoomGestureActive });
+    __swapRAF = requestAnimationFrame(() => {
+      __swapRAF = null;
+      DG.time(mark);
+      // NEW: if we’re currently drawing to FRONT, make back visuals fresh to prevent a blank frame.
+      if (!usingBackBuffers) { ensureBackVisualsFreshFromFront(); DG.log('ensureBackVisualsFreshFromFront()'); }
+
+      if (pendingPaintSwap) { swapBackToFront(); DG.log('swapBackToFront()'); if (DG_DEBUG) drawDebugHUD(['swapBackToFront()']); pendingPaintSwap = false; }
+      if (typeof flushVisualBackBuffersToFront === 'function') {
+        flushVisualBackBuffersToFront(); DG.log('flushVisualBackBuffersToFront()'); if (DG_DEBUG) drawDebugHUD(['flushVisualBackBuffersToFront()']);
+      }
+      DG.timeEnd(mark);
+      if (DG_DEBUG) drawDebugHUD(['swap: FRONT painted']);
+      if (andThen) {
+        requestAnimationFrame(andThen);
+      }
+    });
+  }
   let isRestoring = false;
 
   // Double-buffer + DPR tracking
-  let paintDpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
   let pendingPaintSwap = false;
+    let paintDpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
   let zoomCommitPhase = 'idle';
 
   // State
@@ -780,8 +878,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let boardScale = 1;
   let zoomMode = 'idle';
   let pendingZoomResnap = false;
-  let zoomGestureActive = false;
-  let zoomRAF = 0;
+
   const SCALE_RESNAP_EPSILON = 1e-4;
   let lastCommittedScale = boardScale;
   let drawing=false, erasing=false;
@@ -968,7 +1065,10 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   }
 
   if (!panel.__drawgridHelpModeChecker) {
-    panel.__drawgridHelpModeChecker = setInterval(() => syncLetterFade({ immediate: true }), 250);
+    panel.__drawgridHelpModeChecker = setInterval(() => {
+      const imm = !zoomGestureActive; // never force during gesture
+      syncLetterFade({ immediate: imm });
+    }, 250);
   }
 
   panel.dataset.steps = String(cols);
@@ -1164,7 +1264,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   try { panel.__dgUpdateButtons = updateGeneratorButtons; } catch{}
 
   // New central helper to redraw the paint canvas and regenerate the node map from the `strokes` array.
-  function clearAndRedrawFromStrokes(targetCtx = pctx) {
+  function clearAndRedrawFromStrokes(targetCtx = backCtx) {
     if (!targetCtx) return;
     const normalStrokes = strokes.filter(s => !s.justCreated);
     const newStrokes = strokes.filter(s => s.justCreated);
@@ -1358,11 +1458,34 @@ function regenerateMapFromStrokes() {
         newMap.active[c] = anyOn;
       }
 
+      const prevActive = currentMap?.active ? currentMap.active.slice() : null;
+      const prevNodes = currentMap?.nodes ? currentMap.nodes.map(s => s ? new Set(s) : new Set()) : null;
+
       currentMap = newMap;
       nodeGroupMap = newGroups;
       persistentDisabled = currentMap.disabled; // Update persistent set
       try { (panel.__dgUpdateButtons || function(){})() } catch {}
-      panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
+
+      let didChange = true;
+      if (prevActive && Array.isArray(currentMap.active) && prevActive.length === currentMap.active.length){
+        didChange = currentMap.active.some((v,i)=> v !== prevActive[i]);
+        if (!didChange && prevNodes && Array.isArray(currentMap.nodes) && prevNodes.length === currentMap.nodes.length){
+          didChange = currentMap.nodes.some((set,i)=>{
+            const a = prevNodes[i], b = set || new Set();
+            if (a.size !== b.size) return true;
+            for (const v of a) if (!b.has(v)) return true;
+            return false;
+          });
+        }
+      }
+
+      if (didChange){
+        panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: { map: currentMap, activityOnly:false }}));
+      } else {
+        // noise-free activity: do not notify the guide as a progress update
+        panel.dispatchEvent(new CustomEvent('drawgrid:activity', { detail: { activityOnly:true }}));
+      }
+
       drawNodes(currentMap.nodes);
       drawGrid();
   }
@@ -1409,7 +1532,7 @@ function regenerateMapFromStrokes() {
       updatePaintBackingStores({ force: true, target: 'back' });
       resnapAndRedraw(true);
       if (particles && typeof particles.onResize === 'function') {
-        particles.onResize({ resetPositions: true });
+        particles.onResize({ resetPositions: false });
       }
       drawIntoBackOnly();
       pendingSwap = true;
@@ -1427,6 +1550,7 @@ function regenerateMapFromStrokes() {
     if (Number.isFinite(nextScale)) {
       boardScale = nextScale;
     }
+    if (DG_DEBUG && z.phase) DG.log('ZOOM phase', z.phase, { boardScale, zoomMode, pendingPaintSwap, pendingSwap, usingBackBuffers });
 
     if (z.phase === 'progress') {
       zoomGestureActive = true;
@@ -1438,29 +1562,13 @@ function regenerateMapFromStrokes() {
       }
       lastProgressFrameTs = now;
 
-      const hostEl = frontCanvas?.parentElement || wrap || panel;
-      if (hostEl && typeof hostEl.getBoundingClientRect === 'function') {
-        const rect = hostEl.getBoundingClientRect();
-        if (rect && rect.width && rect.height) {
-          const dw = Math.abs(rect.width - progressMeasureW);
-          const dh = Math.abs(rect.height - progressMeasureH);
-          if (dw > PROGRESS_SIZE_THRESHOLD || dh > PROGRESS_SIZE_THRESHOLD) {
-            progressMeasureW = rect.width;
-            progressMeasureH = rect.height;
-            cssW = rect.width;
-            cssH = rect.height;
-            if (backCanvas && backCtx) {
-              const targetW = Math.round(cssW * paintDpr);
-              const targetH = Math.round(cssH * paintDpr);
-              const areaDelta = Math.abs(targetW * targetH - backCanvas.width * backCanvas.height);
-              if (areaDelta > PROGRESS_AREA_THRESHOLD) {
-                updatePaintBackingStores({ target: 'back' });
-              }
-            }
-          }
-        }
-      }
+      // During progress we do ZERO sizing/backing-store changes.
+      // CSS transform handles visuals; raster changes are deferred to recompute/commit.
 
+      // Only refresh back during progress if we already staged something heavy:
+      if (!pendingPaintSwap) return;
+
+      // If something was staged previously, do a quick blit pass only:
       drawIntoBackOnly();
       if (pendingPaintSwap) {
         swapBackToFront();
@@ -1483,6 +1591,8 @@ function regenerateMapFromStrokes() {
           progressMeasureH = cssH;
         }
         pendingZoomResnap = true;
+        DG.log(`ZOOM:${z.phase}`, { cssW, cssH, pendingPaintSwap, pendingSwap, usingBackBuffers });
+        if (DG_DEBUG) drawDebugHUD([`ZOOM:${z.phase}`]);
         return;
       }
       if (z.phase === 'recompute') {
@@ -1490,31 +1600,77 @@ function regenerateMapFromStrokes() {
         zoomGestureActive = true;
         pendingZoomResnap = false;
         scheduleZoomRecompute();
+        DG.log(`ZOOM:${z.phase}`, { cssW, cssH, pendingPaintSwap, pendingSwap, usingBackBuffers });
+        if (DG_DEBUG) drawDebugHUD([`ZOOM:${z.phase}`]);
         return;
       }
       if (z.phase === 'swap') {
         zoomCommitPhase = 'swap';
-        if (pendingPaintSwap) {
-          swapBackToFront();
-          pendingPaintSwap = false;
+        if (!usingBackBuffers) {
+          ensureBackVisualsFreshFromFront();
         }
+        if (pendingPaintSwap) { swapBackToFront(); pendingPaintSwap = false; }
         if (pendingSwap) {
           flushVisualBackBuffersToFront();
           useFrontBuffers();
           pendingSwap = false;
         }
+        DG.log(`ZOOM:${z.phase}`, { cssW, cssH, pendingPaintSwap, pendingSwap, usingBackBuffers });
+        if (DG_DEBUG) drawDebugHUD([`ZOOM:${z.phase}`]);
         return;
       }
       if (z.phase === 'done') {
         zoomCommitPhase = 'idle';
-        zoomGestureActive = false;
-        useFrontBuffers();
-        pendingPaintSwap = false;
-        pendingSwap = false;
-        if (z.committed) {
-          lastCommittedScale = boardScale;
-          panel.dispatchEvent(new CustomEvent('toy-zoom-commit', { detail: z }));
-        }
+
+        let DG_preCommitSample = null;
+        try {
+          DG_preCommitSample = {
+            firstP: (()=>{
+              const p = particles?.__peek?.();
+              return p && {x:p.x,y:p.y, hx:p.homeX, hy:p.homeY};
+            })(),
+            scale: boardScale
+          };
+        } catch {}
+        DG.log('ZOOM:done(pre)', DG_preCommitSample);
+
+        // Keep the progress assumptions ON until after redraw + swap:
+        requestAnimationFrame(() => {
+          if (!panel.isConnected) return;
+          zoomGestureActive = true;
+
+          useBackBuffers();
+          resnapAndRedraw(true);     // This calls layout() which updates cssW/H
+          updatePaintBackingStores({ force: true, target: 'back' });
+          // On recompute, re-home geometry and SNAP to the new homes to prevent a visible glide.
+          if (particles?.onResize) particles.onResize({ resetPositions: false });
+          if (particles?.snapAllToHomes) particles.snapAllToHomes();
+          // If you also fade letters, ensure the fade is in sync
+          if (typeof syncLetterFade === 'function') syncLetterFade({ immediate: true });
+
+          if (particles?.holdNextFrame) particles.holdNextFrame();
+
+          // Next frame: swap and only then drop progress state
+          requestAnimationFrame(() => {
+            pendingPaintSwap = true;
+            requestFrontSwap();      // coalesced swap
+            // After the swap frame lands, drop gesture
+            requestAnimationFrame(() => {
+              DG.log('ZOOM:done(post-swap)', {
+                postRects: DG_particlesRectsDrawn,
+                postLetters: DG_lettersDrawn,
+                scale: boardScale
+              });
+              if (DG_DEBUG) drawDebugHUD(['ZOOM:done → post-swap']);
+              // Final safety snap at commit frame to avoid any single-frame misalignment.
+              if (particles?.snapAllToHomes) particles.snapAllToHomes();
+              useFrontBuffers();
+              zoomGestureActive = false;
+              lastCommittedScale = boardScale;
+              if (z.committed) panel.dispatchEvent(new CustomEvent('toy-zoom-commit', { detail: z }));
+            });
+          });
+        });
         return;
       }
     }
@@ -1537,15 +1693,11 @@ function regenerateMapFromStrokes() {
 
     if (shouldResnap) {
       pendingZoomResnap = false;
-      const scaleSnap = capturePaintSnapshot();
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          if (!panel.isConnected) return;
-          resnapAndRedraw(true);
-          if (scaleSnap) restorePaintSnapshot(scaleSnap);
-          panel.dispatchEvent(new CustomEvent('toy-zoom-commit', { detail: z }));
-          lastCommittedScale = boardScale;
-        });
+        if (!panel.isConnected) return;
+        resnapAndRedraw(true);            // final crisp redraw at true backing size
+        panel.dispatchEvent(new CustomEvent('toy-zoom-commit', { detail: z }));
+        lastCommittedScale = boardScale;
       });
     } else {
       pendingZoomResnap = false;
@@ -1554,6 +1706,9 @@ function regenerateMapFromStrokes() {
       }
     }
   });
+
+  let zoomRAF = null;
+  let zoomGestureActive = false;
 
   function resnapAndRedraw(forceLayout = false) {
     if (zoomMode === 'gesturing' && !forceLayout) {
@@ -1592,66 +1747,36 @@ function regenerateMapFromStrokes() {
   }
 
 
-  panel.addEventListener('toy-zoom', (event) => {
-    const z = event?.detail;
-    if (z && typeof z === 'object' && z.phase) {
-      if (z.phase === 'prepare') {
-        zoomGestureActive = true;
-        updateEraseButtonState();
-        useBackBuffers();
-        return;
-      }
-      if (z.phase === 'recompute') {
-        zoomGestureActive = true;
-        scheduleZoomRecompute();
-        return;
-      }
-      if (z.phase === 'commit' || z.phase === 'cancel') {
-        useFrontBuffers();
-        syncGhostBackToFront();
-        resnapAndRedraw(true);
-        zoomGestureActive = false;
-        return;
-      }
+
+
+  panel.addEventListener('toy-zoom', (e)=>{
+    const z = e?.detail;
+    if (!z) return;
+
+    if (z.phase === 'prepare') {
+      zoomGestureActive = true;
+      // during gesture we render via CSS transforms only
+      useBackBuffers();
+      return;
     }
 
-    updateEraseButtonState();
-    let zoomSnap = null;
-    try {
-      if (paint.width > 0 && paint.height > 0) {
-        zoomSnap = document.createElement('canvas');
-        zoomSnap.width = paint.width;
-        zoomSnap.height = paint.height;
-        zoomSnap.getContext('2d')?.drawImage(paint, 0, 0);
+    if (z.phase === 'recompute') {
+      scheduleZoomRecompute();
+      return;
+    }
+
+    if (z.phase === 'commit') {
+      // one-time swap & finalize
+      useFrontBuffers();
+      // copy ghost back → front exactly once after swap
+      const front = ghostFrontCtx?.canvas, back = ghostBackCtx?.canvas;
+      if (front && back) {
+        withIdentity(ghostFrontCtx, ()=> ghostFrontCtx.drawImage(back, 0, 0, back.width, back.height, 0, 0, front.width, front.height));
       }
-    } catch {}
-
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        if (!panel.isConnected) return;
-
-        if (panel.classList.contains('toy-zoomed')) {
-          const hasGeneratorLines = strokes.some(s => s.generatorId);
-          if (!hasGeneratorLines) {
-            strokes = [];
-          }
-        }
-
-        resnapAndRedraw(true);
-        requestAnimationFrame(() => {
-          if (!zoomSnap) return;
-          try {
-            updatePaintBackingStores({ target: usingBackBuffers ? 'back' : 'both' });
-            clearCanvas(pctx);
-            pctx.drawImage(
-              zoomSnap,
-              0, 0, zoomSnap.width, zoomSnap.height,
-              0, 0, cssW, cssH
-            );
-          } catch {}
-        });
-      });
-    });
+      resnapAndRedraw(true);
+      zoomGestureActive = false;
+      return;
+    }
   });
 
   const observer = new ResizeObserver(() => {
@@ -1741,6 +1866,13 @@ function regenerateMapFromStrokes() {
     const updateFront = mode === 'front' || mode === 'both';
     const updateBack = mode === 'back' || mode === 'both';
 
+    if (debugCanvas) {
+      if (force || debugCanvas.width !== targetW || debugCanvas.height !== targetH) {
+        debugCanvas.width = targetW;
+        debugCanvas.height = targetH;
+      }
+    }
+
     if (updateFront) {
       if (
         force ||
@@ -1773,14 +1905,67 @@ function regenerateMapFromStrokes() {
   function swapBackToFront() {
     if (!backCtx || !cssW || !cssH) return;
     updatePaintBackingStores({ force: true, target: 'front' });
-    clearCanvas(pctx);
     try {
-      pctx.drawImage(
-        backCanvas,
-        0, 0, backCanvas.width, backCanvas.height,
-        0, 0, cssW, cssH
-      );
+      withIdentity(pctx, () => {
+        pctx.drawImage(backCanvas, 0, 0, backCanvas.width, backCanvas.height, 0, 0, frontCanvas.width, frontCanvas.height);
+      });
     } catch {}
+  }
+
+  function ensureBackVisualsFreshFromFront() {
+    // Copies FRONT visual layers into BACK so a flush can safely draw them without a blank.
+    // Use only when usingBackBuffers === false and we’re about to request a front flush.
+    const w = Math.max(1, Math.round(cssW));
+    const h = Math.max(1, Math.round(cssH));
+
+    // Grid
+    if (gridBackCanvas && gridFrontCtx) {
+      withIdentity(gridBackCtx, () => {
+        gridBackCanvas.width = w; gridBackCanvas.height = h;
+        gridBackCtx.clearRect(0, 0, w, h);
+        gridBackCtx.drawImage(gridFrontCtx.canvas, 0, 0, gridFrontCtx.canvas.width, gridFrontCtx.canvas.height, 0, 0, w, h);
+      });
+    }
+    // Nodes
+    if (nodesBackCanvas && nodesFrontCtx) {
+      withIdentity(nodesBackCtx, () => {
+        nodesBackCanvas.width = w; nodesBackCanvas.height = h;
+        nodesBackCtx.clearRect(0, 0, w, h);
+        nodesBackCtx.drawImage(nodesFrontCtx.canvas, 0, 0, nodesFrontCtx.canvas.width, nodesFrontCtx.canvas.height, 0, 0, w, h);
+      });
+    }
+    // Particles
+    if (particleBackCanvas && particleFrontCtx) {
+      withIdentity(particleBackCtx, () => {
+        particleBackCanvas.width = w; particleBackCanvas.height = h;
+        particleBackCtx.clearRect(0, 0, w, h);
+        particleBackCtx.drawImage(particleFrontCtx.canvas, 0, 0, particleFrontCtx.canvas.width, particleFrontCtx.canvas.height, 0, 0, w, h);
+      });
+    }
+    // Flash
+    if (flashBackCanvas && flashFrontCtx) {
+      withIdentity(flashBackCtx, () => {
+        flashBackCanvas.width = w; flashBackCanvas.height = h;
+        flashBackCtx.clearRect(0, 0, w, h);
+        flashBackCtx.drawImage(flashFrontCtx.canvas, 0, 0, flashFrontCtx.canvas.width, flashFrontCtx.canvas.height, 0, 0, w, h);
+      });
+    }
+    // Ghost
+    if (ghostBackCanvas && ghostFrontCtx) {
+      withIdentity(ghostBackCtx, () => {
+        ghostBackCanvas.width = w; ghostBackCanvas.height = h;
+        ghostBackCtx.clearRect(0, 0, w, h);
+        ghostBackCtx.drawImage(ghostFrontCtx.canvas, 0, 0, ghostFrontCtx.canvas.width, ghostFrontCtx.canvas.height, 0, 0, w, h);
+      });
+    }
+    // Tutorial
+    if (tutorialBackCanvas && tutorialFrontCtx) {
+      withIdentity(tutorialBackCtx, () => {
+        tutorialBackCanvas.width = w; tutorialBackCanvas.height = h;
+        tutorialBackCtx.clearRect(0, 0, w, h);
+        tutorialBackCtx.drawImage(tutorialFrontCtx.canvas, 0, 0, tutorialFrontCtx.canvas.width, tutorialFrontCtx.canvas.height, 0, 0, w, h);
+      });
+    }
   }
 
   function flushVisualBackBuffersToFront() {
@@ -1805,6 +1990,7 @@ function regenerateMapFromStrokes() {
     flashCanvas.width = w; flashCanvas.height = h;
     ghostCanvas.width = w; ghostCanvas.height = h;
     tutorialCanvas.width = w; tutorialCanvas.height = h;
+    if (debugCanvas) { debugCanvas.width = w; debugCanvas.height = h; }
 
     withIdentity(gridFrontCtx, () => {
       const surface = gridFrontCtx.canvas;
@@ -1902,7 +2088,7 @@ function regenerateMapFromStrokes() {
       return;
     }
 
-    if (force || Math.abs(newW - cssW) > 1 || Math.abs(newH - cssH) > 1) {
+    if ((!zoomGestureActive && (force || Math.abs(newW - cssW) > 1 || Math.abs(newH - cssH) > 1)) || (force && zoomGestureActive)) {
       const oldW = cssW;
       const oldH = cssH;
       // Snapshot current paint to preserve erased/drawn content across resize
@@ -1941,9 +2127,7 @@ function regenerateMapFromStrokes() {
       updatePaintBackingStores({ force: true, target: usingBackBuffers ? 'back' : 'both' });
       if (tutorialHighlightMode !== 'none') renderTutorialHighlight();
 
-      if (typeof particles.onResize === 'function' && !zoomGestureActive) {
-        particles.onResize({ resetPositions: true });
-      }
+
       lastZoomX = zoomX;
       lastZoomY = zoomY;
 
@@ -2691,6 +2875,9 @@ function regenerateMapFromStrokes() {
     drawing=true;
     paint.setPointerCapture?.(e.pointerId);
 
+    // Arm back buffers so any quick click-release still has a coherent swap on pointerup.
+    useBackBuffers();
+
     if (erasing) {
       erasedTargetsThisDrag.clear();
       curErase = { pts: [p] };
@@ -2925,8 +3112,20 @@ function regenerateMapFromStrokes() {
 
       // Flash feedback on toggle
       flashes[col] = 1.0;
+      useBackBuffers();
       drawGrid();
       drawNodes(currentMap.nodes);
+      // ALSO draw particles to back this frame so flush has valid content:
+      try {
+        withIdentity(particleCtx, () => {
+          const surface = particleCtx.canvas;
+          const width = surface?.width ?? cssW;
+          const height = surface?.height ?? cssH;
+          particleCtx.clearRect(0, 0, width, height);
+        });
+        particles.draw(particleCtx, false);
+      } catch(e) {}
+      requestFrontSwap(useFrontBuffers);
       panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
       panel.dispatchEvent(new CustomEvent('drawgrid:node-toggle', { detail: { col, row, disabled: dis.has(row) } }));
 
@@ -2940,7 +3139,29 @@ function regenerateMapFromStrokes() {
       pendingNodeTap = null;
     }
 
-    if (!drawing) return;
+    // If we were capturing the pointer but ended up not drawing or toggling anything,
+    // we may still be in back-buffer mode from pointerdown. Do a safe no-op swap to
+    // avoid a single-frame blank on release.
+    if (!drawing) {
+      // Safe tiny refresh so the upcoming swap never blanks
+      if (!usingBackBuffers) ensureBackVisualsFreshFromFront();
+      else {
+        // If we're already on back, at least redraw particles
+        try {
+          withIdentity(particleCtx, () => {
+            const s = particleCtx.canvas;
+            const w = s?.width ?? cssW, h = s?.height ?? cssH;
+            particleCtx.clearRect(0, 0, w, h);
+          });
+          particles.draw(particleCtx, false);
+        } catch(e) {}
+      }
+      DG.log('onPointerUp: safe no-op swap', { usingBackBuffers, pendingPaintSwap, DG_particlesRectsDrawn, DG_lettersDrawn });
+      if (DG_DEBUG) drawDebugHUD(['onPointerUp(no-op): swapping']);
+      pendingPaintSwap = true;
+      requestFrontSwap(useFrontBuffers);
+      return;
+    }
     drawing=false;
 
     const strokeToProcess = cur;
@@ -2958,10 +3179,31 @@ function regenerateMapFromStrokes() {
       }
       erasedTargetsThisDrag.clear();
       clearAndRedrawFromStrokes(); // Redraw to bake in the erase
+      pendingPaintSwap = true;
+      if (!zoomGestureActive) {
+        if (!__swapRAF) {
+          __swapRAF = requestAnimationFrame(() => {
+            __swapRAF = null;
+            swapBackToFront();
+            pendingPaintSwap = false;
+          });
+        }
+      }
       return;
     }
 
-    if (!strokeToProcess) return;
+    if (!strokeToProcess) {
+      // This was a background tap, not a drag that started on a node.
+      // Fire activity event but don't modify strokes.
+      panel.dispatchEvent(new CustomEvent('drawgrid:activity', { detail: { activityOnly:true }}));
+      return;
+    }
+
+    // If the stroke was just a tap, don't treat it as a drawing.
+    if (strokeToProcess.pts.length <= 1) {
+      panel.dispatchEvent(new CustomEvent('drawgrid:activity', { detail: { activityOnly: true } }));
+      return;
+    }
 
     const isZoomed = panel.classList.contains('toy-zoomed');
     let shouldGenerateNodes = true;
@@ -3012,7 +3254,15 @@ function regenerateMapFromStrokes() {
 
     // Redraw all strokes to apply consistent alpha, and regenerate the node map.
     // This fixes the opacity buildup issue from drawing segments during pointermove.
-    clearAndRedrawFromStrokes();
+    if (!zoomGestureActive) {
+      useBackBuffers();
+      clearAndRedrawFromStrokes();
+      pendingPaintSwap = true;
+      requestFrontSwap(useFrontBuffers);
+    } else {
+      clearAndRedrawFromStrokes();
+      pendingPaintSwap = true;
+    }
     // After drawing, unmark all strokes so they become part of the normal background for the next operation.
     strokes.forEach(s => delete s.justCreated);
 
@@ -3144,7 +3394,7 @@ function regenerateMapFromStrokes() {
         particleCtx.clearRect(0, 0, width, height);
       });
       // The dark background is now drawn on the grid canvas, so particles can be overlaid.
-      particles.draw(particleCtx, boardScale);
+      particles.draw(particleCtx, zoomGestureActive);
     } catch (e) { /* fail silently */ }
 
     drawGrid(); // Always redraw grid (background, lines, active column fills)
@@ -3526,7 +3776,7 @@ function regenerateMapFromStrokes() {
           }catch(e){ }
           isRestoring = false;
           // Re-check after hydration completes
-          stopAutoGhostGuide({ immediate: true });
+          stopAutoGhostGuide({ immediate: false });
           scheduleGhostIfEmpty({ initialDelay: 0 });
         });
       });
@@ -3995,9 +4245,8 @@ function runAutoGhostGuideSweep() {
   panel.addEventListener('drawgrid:update', (e) => {
     const nodes = e?.detail?.nodes;
     const hasAny = Array.isArray(nodes) && nodes.some(set => set && set.size > 0);
-    if (hasAny) {
-      stopAutoGhostGuide({ immediate: true });
-    } else {
+          if (hasAny) {
+            stopAutoGhostGuide({ immediate: false });    } else {
       startAutoGhostGuide({ immediate: true });
     }
   });
@@ -4007,7 +4256,4 @@ function runAutoGhostGuideSweep() {
   try { panel.dispatchEvent(new CustomEvent('drawgrid:ready', { bubbles: true })); } catch {}
   return api;
 }
-
-
-
 

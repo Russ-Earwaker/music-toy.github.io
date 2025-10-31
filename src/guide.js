@@ -390,7 +390,7 @@ function renderGuide(api, { source = 'unknown' } = {}) {
     });
   } catch {}
 
-  console.info('[guide] render', { source, goals: goals.length });
+  //console.info('[guide] render', { source, goals: goals.length });
 }
 
 window.addEventListener('guide:progress-update', () => {
@@ -483,3 +483,15 @@ if (document.readyState === 'loading') {
 
 
 
+
+window.addEventListener('drawgrid:update', (e) => {
+  const { activityOnly } = e.detail || {};
+  if (!activityOnly) {
+    window.dispatchEvent(new Event('guide:progress-update'));
+  }
+});
+
+window.addEventListener('drawgrid:activity', (e) => {
+  // no pulse; optional: a very lightweight guide refresh without glow
+  // renderGuide(lastApi, { source: 'drawgrid-activity', pulse:false });
+});
