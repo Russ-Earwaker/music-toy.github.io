@@ -25,12 +25,19 @@ export function connectDrawGridToPlayer(panel) {
     nodes: Array.from({ length: initialSteps }, () => new Set()),
     disabled: Array.from({ length: initialSteps }, () => new Set()),
   };
+  let steps = initialSteps;
 
   // The gated trigger respects the toy's volume/mute settings.
   const playNote = gateTriggerForToy(toyId, triggerInstrument);
 
   panel.addEventListener('drawgrid:update', (e) => {
-    if (e.detail) { gridState = e.detail; }
+    const map = e?.detail?.map || (e?.detail && e.detail.nodes ? { nodes: e.detail.nodes } : null);
+    steps = e?.detail?.steps ?? (map?.nodes?.length ?? 16);
+    if (map) {
+      gridState = map;
+    } else if (e.detail) {
+      gridState = e.detail;
+    }
   });
 
   panel.addEventListener('toy-instrument', (e) => {
@@ -38,21 +45,38 @@ export function connectDrawGridToPlayer(panel) {
   });
 
   function step(col) {
+    // TEMP: sanity — remove once confirmed
+    // console.log('[PLAYER] step', { col, activeCol: map.active?.[col], nodes: (map.nodes?.[col]?.size || 0) });
     markPlayingColumn(panel, col);
-    if (gridState.active[col] && gridState.nodes[col]?.size > 0) {
-      const disabledInCol = gridState.disabled?.[col] || new Set();
-      let columnTriggered = false;
-      for (const row of gridState.nodes[col]) {
-        if (!disabledInCol.has(row)) {
-          if (!columnTriggered) {
-            panel.__pulseHighlight = 1.0;
-            panel.__pulseRearm = true;
-            columnTriggered = true;
-          }
-          const midiNote = notePalette[row];
-          playNote(instrument, midiToName(midiNote));
+
+    const map = gridState;
+    const nodesArr = (map && Array.isArray(map.nodes)) ? map.nodes : [];
+    const currentSteps = Number.isFinite(steps) ? steps : nodesArr.length;
+
+    if (!currentSteps || !nodesArr.length) return;
+    if (col < 0 || col >= currentSteps) { return; }
+
+    if (map.active?.[col]) {
+        const colSet = nodesArr[col] instanceof Set ? nodesArr[col] : new Set();
+        if (colSet.size === 0) return;
+
+        const disabledInCol = map.disabled?.[col] || new Set();
+        let columnTriggered = false;
+        for (const row of colSet) {
+            if (typeof row !== 'number' || Number.isNaN(row)) continue;
+
+            if (!disabledInCol.has(row)) {
+                if (!columnTriggered) {
+                    panel.__pulseHighlight = 1.0;
+                    panel.__pulseRearm = true;
+                    columnTriggered = true;
+                }
+                const midiNote = notePalette[row];
+                if (midiNote !== undefined) {
+                    playNote(instrument, midiToName(midiNote));
+                }
+            }
         }
-      }
     }
   }
 

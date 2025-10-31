@@ -114,12 +114,7 @@ function applyHighlightClass(entry) {
   }
 
   const shouldHighlight = entry.active && !entry.seen;
-  console.debug('[DIAG] ui-highlight refresh', {
-    entry: entry?.storageKey,
-    shouldHighlight,
-    wasHighlighted: !!entry._highlightVisible,
-    lastPointerup: window.__LAST_POINTERUP_DIAG__,
-  });
+  
   const wasHighlighted = !!entry._highlightVisible;
   entry._highlightVisible = shouldHighlight;
   if (entry.flashTimer) {

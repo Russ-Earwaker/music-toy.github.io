@@ -14,6 +14,14 @@ const DG = {
   time(label){ if (DG_DEBUG) console.time(label); },
   timeEnd(label){ if (DG_DEBUG) console.timeEnd(label); },
 };
+const DG_LOG = (s) => { /* flip to console.log to re-enable */ };
+
+// --- Drawgrid debug ---
+const DBG_DRAW = true; // flip on/off as needed
+function dbg(tag, obj){ if (DBG_DRAW) console.log(`[DG][${tag}]`, obj || ''); }
+let __dbgLiveSegments = 0;
+let __dbgPointerMoves = 0;
+let __dbgPaintClears = 0;
 
 let DG_particlesRectsDrawn = 0;
 let DG_lettersDrawn = 0;
@@ -41,6 +49,32 @@ function clearCanvas(ctx) {
   if (!ctx || !ctx.canvas) return;
   const surface = ctx.canvas;
   withIdentity(ctx, () => ctx.clearRect(0, 0, surface.width, surface.height));
+  __dbgPaintClears++; if ((__dbgPaintClears % 5)===1) dbg('CLEAR', { which: surface.getAttribute?.('data-role') || 'paint?' , clears: __dbgPaintClears });
+}
+
+// Draw a live stroke segment directly to FRONT (no swaps, no back-buffers)
+function drawLiveStrokePoint(ctx, pt, prevPt, color) {
+  if (!ctx) { dbg('LIVE/no-ctx'); return; }
+  withIdentity(ctx, () => {
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = color || '#fff';
+    ctx.lineWidth = 3.0;
+    if (prevPt) {
+      ctx.beginPath();
+      ctx.moveTo(prevPt.x, prevPt.y);
+      ctx.lineTo(pt.x, pt.y);
+      ctx.stroke();
+    } else {
+      // tiny dot for first point
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, 1.5, 0, Math.PI * 2);
+      ctx.fillStyle = color || '#fff';
+      ctx.fill();
+    }
+  });
+  __dbgLiveSegments++;
+  if ((__dbgLiveSegments % 10) === 1) dbg('LIVE/segment', { segs: __dbgLiveSegments });
 }
 
 let __drawParticlesSeed = 1337;
@@ -734,6 +768,17 @@ function normalizeMapColumns(map, cols) {
   return map;
 }
 
+function emitDrawgridUpdate({ activityOnly = false } = {}) {
+  try {
+    currentMap = normalizeMapColumns(currentMap, cols);
+  } catch {}
+  try {
+    panel.dispatchEvent(new CustomEvent('drawgrid:update', {
+      detail: { map: currentMap, steps: cols|0, activityOnly: !!activityOnly }
+    }));
+  } catch {}
+}
+
 export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId, bpm = 120 } = {}) {
   // The init script now guarantees the panel is a valid HTMLElement with the correct dataset.
   // The .toy-body is now guaranteed to exist by initToyUI, which runs first.
@@ -790,53 +835,22 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   body.appendChild(nodesCanvas);
   body.appendChild(tutorialCanvas);
 
-  const debugCanvas = document.createElement('canvas');
-  debugCanvas.setAttribute('data-role','drawgrid-debug');
-  Object.assign(debugCanvas.style, {
-    position: 'absolute',
-    inset: '0',
-    width: '100%',
-    height: '100%',
-    display: DG_DEBUG ? 'block' : 'none',
-    zIndex: 9999,
-    pointerEvents: 'none',
-  });
-  body.appendChild(debugCanvas);
-  const debugCtx = debugCanvas.getContext('2d');
+  
+  // debugCanvas.setAttribute('data-role','drawgrid-debug');
+  // Object.assign(debugCanvas.style, {
+  //   position: 'absolute',
+  //   inset: '0',
+  //   width: '100%',
+  //   height: '100%',
+  //   display: DG_DEBUG ? 'block' : 'none',
+  //   zIndex: 9999,
+  //   pointerEvents: 'none',
+  // });
+  // body.appendChild(debugCanvas);
+  const debugCanvas = null;
+  const debugCtx = null;
 
-  function drawDebugHUD(extraLines = []) {
-    if (!DG_DEBUG || !debugCtx) return;
-    const safeCssW = (typeof cssW !== 'undefined' && cssW) ? cssW : (debugCtx.canvas?.width || 1);
-    const safeCssH = (typeof cssH !== 'undefined' && cssH) ? cssH : (debugCtx.canvas?.height || 1);
-    const w = debugCtx.canvas.width = Math.max(1, Math.round(safeCssW));
-    const h = debugCtx.canvas.height = Math.max(1, Math.round(safeCssH));
-    debugCtx.clearRect(0, 0, w, h);
-    const pad = 10;
-    debugCtx.save();
-    debugCtx.globalAlpha = 0.85;
-    debugCtx.fillStyle = 'rgba(0,0,0,0.55)';
-    const extraHeight = extraLines.length * 16;
-    debugCtx.fillRect(pad, pad, Math.min(520, w - 2 * pad), 14 * 16 + extraHeight + 20);
-    debugCtx.fillStyle = '#9cf';
-    debugCtx.font = '12px monospace';
-    const gridInfo = (typeof gridArea !== 'undefined' && gridArea)
-      ? `cssW/H=${safeCssW}x${safeCssH} gridArea=(${gridArea.x?.toFixed?.(1)},${gridArea.y?.toFixed?.(1)}) ${gridArea.w?.toFixed?.(1)}x${gridArea.h?.toFixed?.(1)}`
-      : `cssW/H=${safeCssW}x${safeCssH}`;
-    const lines = [
-      `usingBackBuffers=${!!usingBackBuffers} pendingPaintSwap=${!!pendingPaintSwap} pendingSwap=${!!pendingSwap}`,
-      `zoomMode=${zoomMode} commitPhase=${zoomCommitPhase} gesture=${!!zoomGestureActive}`,
-      `boardScale=${boardScale?.toFixed?.(3)} lastCommitted=${lastCommittedScale?.toFixed?.(3)}`,
-      gridInfo,
-      `particles: drewRectsLastFrame=${DG_particlesRectsDrawn} lettersDrawn=${DG_lettersDrawn}`,
-      `paintSwapRAF=${!!__swapRAF} paintDpr=${paintDpr}`,
-    ].concat(extraLines);
-    let y = pad + 18;
-    for (const L of lines) {
-      debugCtx.fillText(L, pad + 10, y);
-      y += 16;
-    }
-    debugCtx.restore();
-  }
+  function drawDebugHUD(extraLines = []) { /* no-op */ }
 
   const wrap = document.createElement('div');
   wrap.className = 'drawgrid-size-wrap';
@@ -1430,18 +1444,16 @@ function regenerateMapFromStrokes() {
         const gens = strokes.filter(s => s.generatorId);
         gens.forEach(s => processGeneratorStroke(s, newMap, newGroups));
       } else {
-        // Standard view: if generator lines exist, preserve all of them; otherwise fall back to first special stroke.
+        // Standard view:
         const gens = strokes.filter(s => s.generatorId);
         if (gens.length > 0){
           gens.forEach(s => processGeneratorStroke(s, newMap, newGroups));
         } else {
-          const specialStroke = strokes.find(s => s.isSpecial);
-          if (specialStroke){
-            processGeneratorStroke(specialStroke, newMap, newGroups);
-          }
+          // Prefer a special stroke, otherwise use the latest stroke.
+          const specialStroke = strokes.find(s => s.isSpecial) || (strokes.length ? strokes[strokes.length - 1] : null);
+          if (specialStroke) processGeneratorStroke(specialStroke, newMap, newGroups);
         }
-
-        // Apply manual node overrides when returning to standard view
+        // ...manual overrides (unchanged)...
         try {
           if (manualOverrides && Array.isArray(manualOverrides)) {
             for (let c = 0; c < cols; c++) {
@@ -1466,6 +1478,24 @@ function regenerateMapFromStrokes() {
             }
           }
         } catch {}
+      }
+
+      // Finalize active mask: a column is active if it has at least one non-disabled node
+      for (let c = 0; c < cols; c++) {
+        const nodes = newMap.nodes?.[c] || new Set();
+        const dis = newMap.disabled?.[c] || new Set();
+        let anyOn = false;
+        if (nodes.size > 0) {
+          for (const r of nodes) { if (!dis.has(r)) { anyOn = true; break; } }
+        }
+        newMap.active[c] = anyOn;
+      }
+
+      // If NOTHING is active but there are nodes, default to active for columns that have nodes.
+      if (!newMap.active.some(Boolean)) {
+        for (let c = 0; c < cols; c++) {
+          if ((newMap.nodes?.[c] || new Set()).size > 0) newMap.active[c] = true;
+        }
       }
 
       // If a pending active mask exists (e.g., after steps change), map it to new cols
@@ -1514,13 +1544,6 @@ function regenerateMapFromStrokes() {
             }
           }
       }
-      // Recompute active flags based on disabled sets
-      for (let c = 0; c < cols; c++) {
-        if (!newMap.nodes[c] || newMap.nodes[c].size === 0) { newMap.active[c] = false; continue; }
-        const dis = newMap.disabled?.[c] || new Set();
-        const anyOn = Array.from(newMap.nodes[c]).some(r => !dis.has(r));
-        newMap.active[c] = anyOn;
-      }
 
       const prevActive = currentMap?.active ? currentMap.active.slice() : null;
       const prevNodes = currentMap?.nodes ? currentMap.nodes.map(s => s ? new Set(s) : new Set()) : null;
@@ -1544,11 +1567,10 @@ function regenerateMapFromStrokes() {
       }
 
       if (didChange){
-        currentMap = normalizeMapColumns(currentMap, cols);
-        panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: { map: currentMap, activityOnly:false }}));
+        emitDrawgridUpdate({ activityOnly: false });
       } else {
         // noise-free activity: do not notify the guide as a progress update
-        panel.dispatchEvent(new CustomEvent('drawgrid:activity', { detail: { activityOnly:true }}));
+        emitDrawgridUpdate({ activityOnly: true });
       }
 
       drawNodes(currentMap.nodes);
@@ -1626,13 +1648,16 @@ function regenerateMapFromStrokes() {
   if (z.phase === 'progress' && !scaleMoved) return;
 
   if (DG_DEBUG && z.phase && (z.phase !== 'progress' || isRealZoomGesture)) {
-    DG.log('ZOOM phase', z.phase, { boardScale, zoomMode, pendingPaintSwap, pendingSwap, usingBackBuffers });
+    DG_LOG('ZOOM phase', z.phase, { boardScale, zoomMode, pendingPaintSwap, pendingSwap, usingBackBuffers });
   }
 
   // When we reach committing/done/idle, finalize state and silence further logs.
   if (z.phase === 'done' || z.mode === 'idle') {
     lastCommittedScale = boardScale;
     zoomGestureActive = false;
+    zoomCommitPhase = 'idle';
+    pendingPaintSwap = false;
+    pendingSwap = false;
   }
 });
 
@@ -1665,7 +1690,7 @@ function regenerateMapFromStrokes() {
         if (!panel.isConnected) return;
         drawGrid();
         drawNodes(currentMap.nodes);
-        panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: currentMap }));
+        emitDrawgridUpdate({ activityOnly: false });
         updateGeneratorButtons();
       });
     } else {
@@ -2798,8 +2823,7 @@ function syncBackBufferSizes() {
             // Start the animation of the erased node only
             animateErasedNode(node);
             // Notify the player of the change
-            currentMap = normalizeMapColumns(currentMap, cols);
-            panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: { map: currentMap } }));
+            emitDrawgridUpdate({ activityOnly: false });
         }
     }
   }
@@ -3010,21 +3034,10 @@ function syncBackBufferSizes() {
       }
       // For normal lines (no previewGid), paint segment onto paint; otherwise, overlay will show it
       if (!previewGid) {
-        const n = cur.pts.length;
-        if (n >= 2) {
-          const a = cur.pts[n - 2];
-          const b = cur.pts[n - 1];
-          pctx.save();
-          pctx.lineCap = 'round';
-          pctx.lineJoin = 'round';
-          pctx.lineWidth = getLineWidth();
-          pctx.strokeStyle = cur.color;
-          pctx.beginPath();
-          pctx.moveTo(a.x, a.y);
-          pctx.lineTo(b.x, b.y);
-          pctx.stroke();
-          pctx.restore();
-        }
+        // live-draw to FRONT only; no swaps during drag
+        drawLiveStrokePoint(pctx, cur.pts[cur.pts.length-1], cur.pts[cur.pts.length-2], cur.color);
+        __dbgPointerMoves++; if ((__dbgPointerMoves % 5)===1) dbg('MOVE', {usingBackBuffers, pendingPaintSwap});
+        __dgNeedsUIRefresh = false; // don't trigger overlay clears during draw
       }
       // Disturb particles for all lines, special or not.
       try {
@@ -3032,9 +3045,8 @@ function syncBackBufferSizes() {
       } catch(e) {}
 
       const includeCurrent = !previewGid;
-      drawIntoBackOnly(includeCurrent);
-      pendingPaintSwap = true;
-      requestFrontSwap(() => {});
+      // drawIntoBackOnly(includeCurrent);
+      // pendingPaintSwap = true;
     }
   }
   function onPointerUp(e){
@@ -3056,8 +3068,7 @@ function syncBackBufferSizes() {
       const finalDetail = { col: draggedNode.col, row: draggedNode.row, group: draggedNode.group ?? null };
       const didMove = !!draggedNode.moved;
       if (didMove || inZoomCommit) __dgNeedsUIRefresh = true;
-      currentMap = normalizeMapColumns(currentMap, cols);
-      panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: { map: currentMap } }));
+      emitDrawgridUpdate({ activityOnly: false });
       if (didMove) {
         try { panel.dispatchEvent(new CustomEvent('drawgrid:node-drag-end', { detail: finalDetail })); } catch {}
       }
@@ -3095,8 +3106,7 @@ function syncBackBufferSizes() {
       drawNodes(currentMap.nodes);
       __dgNeedsUIRefresh = true;
       requestFrontSwap(useFrontBuffers);
-      currentMap = normalizeMapColumns(currentMap, cols);
-      panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: { map: currentMap } }));
+      emitDrawgridUpdate({ activityOnly: false });
       panel.dispatchEvent(new CustomEvent('drawgrid:node-toggle', { detail: { col, row, disabled: dis.has(row) } }));
 
       const cx = gridArea.x + col * cw + cw * 0.5;
@@ -3162,13 +3172,13 @@ function syncBackBufferSizes() {
     if (!strokeToProcess) {
       // This was a background tap, not a drag that started on a node.
       // Fire activity event but don't modify strokes.
-      panel.dispatchEvent(new CustomEvent('drawgrid:activity', { detail: { activityOnly:true }}));
+      emitDrawgridUpdate({ activityOnly: true });
       return;
     }
 
     // If the stroke was just a tap, don't treat it as a drawing.
     if (strokeToProcess.pts.length <= 1) {
-      panel.dispatchEvent(new CustomEvent('drawgrid:activity', { detail: { activityOnly: true } }));
+      emitDrawgridUpdate({ activityOnly: true });
       return;
     }
 
@@ -3217,21 +3227,19 @@ function syncBackBufferSizes() {
     strokeToProcess.isSpecial = isSpecial;
     strokeToProcess.generatorId = generatorId;
     strokeToProcess.justCreated = true; // Mark as new to exempt from old erasures
-    strokes.push({ pts: strokeToProcess.pts, color: strokeToProcess.color, isSpecial: strokeToProcess.isSpecial, generatorId: strokeToProcess.generatorId, justCreated: strokeToProcess.justCreated });
-
-    // Redraw all strokes to apply consistent alpha, and regenerate the node map.
-    // This fixes the opacity buildup issue from drawing segments during pointermove.
-    if (!zoomGestureActive) {
-      useBackBuffers();
-      clearAndRedrawFromStrokes();
-      pendingPaintSwap = true;
-      __dgNeedsUIRefresh = true;
-      requestFrontSwap(useFrontBuffers);
-    } else {
-      clearAndRedrawFromStrokes();
-      pendingPaintSwap = true;
-      __dgNeedsUIRefresh = true;
+    if (!strokeToProcess.generatorId && typeof strokeToProcess.isSpecial !== 'boolean') {
+      strokeToProcess.isSpecial = true;
     }
+    strokes.push(strokeToProcess);
+
+    // Redraw back for consistency, and regenerate nodes
+    clearAndRedrawFromStrokes();
+
+    // Commit to front immediately
+    withIdentity(pctx, () => { drawFullStroke(pctx, strokeToProcess); });
+
+    // No swap needed
+    __dgNeedsUIRefresh = true;
     // After drawing, unmark all strokes so they become part of the normal background for the next operation.
     strokes.forEach(s => delete s.justCreated);
 
@@ -3649,7 +3657,7 @@ function syncBackBufferSizes() {
       persistentDisabled = Array.from({ length: cols }, () => new Set());
       const emptyMap = {active:Array(cols).fill(false),nodes:Array.from({length:cols},()=>new Set()), disabled:Array.from({length:cols},()=>new Set())};
       currentMap = emptyMap;
-      panel.dispatchEvent(new CustomEvent('drawgrid:update',{detail:{map:emptyMap}}));
+      emitDrawgridUpdate({ activityOnly: false });
       drawGrid();
       nextDrawTarget = null; // Disarm any pending line draw
       updateGeneratorButtons(); // Refresh button state to "Draw"
@@ -3738,14 +3746,12 @@ function syncBackBufferSizes() {
         });
 
         // Notify & redraw
-        panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: { map: currentMap, activityOnly:false }}));
+        emitDrawgridUpdate({ activityOnly: false });
         drawGrid();
         if (currentMap) drawNodes(currentMap.nodes);
       } catch (e) {
-        // fail-safe: at least force a map update so player doesn't die
-        currentMap = normalizeMapColumns(currentMap, cols);
-        panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: { map: currentMap, activityOnly:false }}));
-      }
+            // fail-safe: at least force a map update so player doesn't die
+            emitDrawgridUpdate({ activityOnly: false });      }
     },
     setState: (st={})=>{
       requestAnimationFrame(() => {
@@ -3850,8 +3856,7 @@ function syncBackBufferSizes() {
                   drawGrid();
                   drawNodes(currentMap.nodes);
                   try{ 
-                    currentMap = normalizeMapColumns(currentMap, cols);
-                    panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: { map: currentMap } })); 
+                    emitDrawgridUpdate({ activityOnly: false });
                   }catch{}
               } catch(e){ }
             }
@@ -3867,8 +3872,7 @@ function syncBackBufferSizes() {
             } catch {}
             if (currentMap){ 
               try{
-                currentMap = normalizeMapColumns(currentMap, cols);
-                panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: { map: currentMap } })); 
+                emitDrawgridUpdate({ activityOnly: false });
               }catch{}
             }
           }catch(e){ }
@@ -3976,11 +3980,9 @@ function syncBackBufferSizes() {
         }
       }
     } catch(e){}
-
     drawGrid();
     drawNodes(currentMap.nodes);
-    currentMap = normalizeMapColumns(currentMap, cols);
-    panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: { map: currentMap } }));
+    emitDrawgridUpdate({ activityOnly: false });
   }
 
   function handleRandomizeBlocks() {
@@ -4007,8 +4009,7 @@ function syncBackBufferSizes() {
 
     drawGrid();
     drawNodes(currentMap.nodes);
-    currentMap = normalizeMapColumns(currentMap, cols);
-    panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: { map: currentMap } }));
+    emitDrawgridUpdate({ activityOnly: false });
   }
 
   function handleRandomizeNotes() {
@@ -4050,8 +4051,7 @@ function syncBackBufferSizes() {
         }
         drawGrid();
         drawNodes(currentMap.nodes);
-        currentMap = normalizeMapColumns(currentMap, cols);
-        panel.dispatchEvent(new CustomEvent('drawgrid:update', { detail: { map: currentMap } }));
+        emitDrawgridUpdate({ activityOnly: false });
     }
   }
   panel.addEventListener('toy-random', handleRandomize);
