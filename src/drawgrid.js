@@ -1,5 +1,5 @@
 // src/drawgrid.js
-// Minimal, scoped Drawing Grid ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â 16x12, draw strokes, build snapped nodes on release.
+// Minimal, scoped Drawing Grid -- 16x12, draw strokes, build snapped nodes on release.
 // Strictly confined to the provided panel element.
 import { buildPalette, midiToName } from './note-helpers.js';
 import { drawBlock } from './toyhelpers.js';
@@ -48,6 +48,11 @@ let __drawParticlesSeed = 1337;
 let __dgDeferUntilTs = 0;
 let __dgNeedsUIRefresh = false;
 let __dgStableFramesAfterCommit = 0;
+
+// --- Zoom-freeze for overlays ---
+let zoomFreezeActive = false;
+let zoomFreezeW = 0;
+let zoomFreezeH = 0;
 
 function __dgInCommitWindow(nowTs) {
   const lp = window.__LAST_POINTERUP_DIAG__;
@@ -877,7 +882,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     __swapRAF = requestAnimationFrame(() => {
       __swapRAF = null;
       DG.time(mark);
-      // NEW: if we’re currently drawing to FRONT, make back visuals fresh to prevent a blank frame.
+      // NEW: if we're currently drawing to FRONT, make back visuals fresh to prevent a blank frame.
       if (!usingBackBuffers) { ensureBackVisualsFreshFromFront(); DG.log('ensureBackVisualsFreshFromFront()'); }
 
       if (pendingPaintSwap) { swapBackToFront(); DG.log('swapBackToFront()'); if (DG_DEBUG) drawDebugHUD(['swapBackToFront()']); pendingPaintSwap = false; }
@@ -906,11 +911,21 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let zoomMode = 'idle';
   let pendingZoomResnap = false;
 
-  // Epsilon threshold so we only treat scale changes as real zooms.
+  // Zoom signal hygiene
   const ZOOM_SCALE_EPS = 1e-4;
-  let lastProgressScale = null;
-  const SCALE_RESNAP_EPSILON = 1e-4;
   let lastCommittedScale = boardScale;
+  let lastProgressScale = null;
+  let suppressZoomLogsUntilTs = 0;
+  const SCALE_RESNAP_EPSILON = 1e-4;
+  function getScaleForCompare(z, fallback) {
+    if (Number.isFinite(z?.currentScale)) return z.currentScale;
+    if (Number.isFinite(z?.targetScale)) return z.targetScale;
+    return fallback;
+  }
+  function isRealZoom(z) {
+    const s = getScaleForCompare(z, lastCommittedScale);
+    return Number.isFinite(s) && Math.abs(s - lastCommittedScale) > ZOOM_SCALE_EPS;
+  }
   let drawing=false, erasing=false;
   // The `strokes` array is removed. The paint canvas is now the source of truth.
   let cur = null;
@@ -1573,23 +1588,48 @@ function regenerateMapFromStrokes() {
   }
 
   const unsubscribeZoom = onZoomChange((z) => {
-    // Normalize
     zoomMode = z.mode || 'idle';
-    const nextScale = Number.isFinite(z.currentScale) ? z.currentScale : Number(z.targetScale);
+    const nextScale = getScaleForCompare(z, lastCommittedScale);
     if (Number.isFinite(nextScale)) boardScale = nextScale;
 
-    const scaleForCompare = Number.isFinite(z.currentScale)
-      ? z.currentScale
-      : (Number.isFinite(z.targetScale) ? z.targetScale : boardScale);
+    const scaleForCompare = getScaleForCompare(z, boardScale);
 
-    const scaleMoved =
-      Number.isFinite(scaleForCompare) && Math.abs(scaleForCompare - lastCommittedScale) > ZOOM_SCALE_EPS;
+    const scaleMoved = isRealZoom(z);
 
-    // Only consider it a zoom gesture if the scale actually moved.
     zoomGestureActive = (z.mode === 'gesturing') && scaleMoved;
 
-    // Optional debug: log only when it’s a *real* zoom (or non-progress phases)
-    if (DG_DEBUG && z.phase && (z.phase !== 'progress' || scaleMoved)) {
+    const nowTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+      ? performance.now()
+      : Date.now();
+
+    const finalizeZoomState = () => {
+      zoomGestureActive = false;
+      zoomMode = 'idle';
+      if (typeof window !== 'undefined' && window.__dgZoomWatchdogT) {
+        clearTimeout(window.__dgZoomWatchdogT);
+        window.__dgZoomWatchdogT = null;
+      }
+      if (Number.isFinite(scaleForCompare)) {
+        lastCommittedScale = scaleForCompare;
+      }
+      lastProgressScale = null;
+      lastProgressFrameTs = 0;
+      suppressZoomLogsUntilTs = nowTs + 1000;
+      if (zoomFreezeActive) {
+        const settleTs = (typeof window !== 'undefined') ? window.__GESTURE_SETTLE_UNTIL_TS : 0;
+        const delay = (settleTs && settleTs > nowTs) ? (settleTs - nowTs) : 0;
+        setTimeout(() => {
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            zoomFreezeActive = false;
+            zoomFreezeW = 0;
+            zoomFreezeH = 0;
+          }));
+        }, Math.max(0, delay));
+      }
+    };
+
+    // Optional debug: log only when it's a *real* zoom (or non-progress phases)
+    if (DG_DEBUG && z.phase && (z.phase !== 'progress' || scaleMoved) && nowTs > suppressZoomLogsUntilTs) {
       DG.log('ZOOM phase', z.phase, { boardScale, zoomMode, pendingPaintSwap, pendingSwap, usingBackBuffers });
     }
 
@@ -1599,6 +1639,14 @@ function regenerateMapFromStrokes() {
     // Early-ignore bogus progress (no real zoom): do NOTHING for these
     if (z.phase === 'progress' && (!scaleMoved || z.mode !== 'gesturing')) {
       return;
+    }
+
+    if (z.phase === 'progress' && !zoomFreezeActive) {
+      zoomFreezeActive = true;
+      const latchW = paint?.width || Math.floor(cssW * paintDpr);
+      const latchH = paint?.height || Math.floor(cssH * paintDpr);
+      zoomFreezeW = Math.max(1, latchW);
+      zoomFreezeH = Math.max(1, latchH);
     }
 
     if (z.phase === 'progress') {
@@ -1632,6 +1680,7 @@ function regenerateMapFromStrokes() {
 
     if (z.phase) {
       if (z.phase === 'freeze') {
+        if (!scaleMoved) return;
         zoomCommitPhase = 'freeze';
         zoomGestureActive = true;
         useFrontBuffers();
@@ -1649,6 +1698,7 @@ function regenerateMapFromStrokes() {
         return;
       }
       if (z.phase === 'recompute') {
+        if (!scaleMoved) return;
         zoomCommitPhase = 'recompute';
         zoomGestureActive = true;
         pendingZoomResnap = false;
@@ -1658,6 +1708,7 @@ function regenerateMapFromStrokes() {
         return;
       }
       if (z.phase === 'swap') {
+        if (!scaleMoved) return;
         zoomCommitPhase = 'swap';
         if (!usingBackBuffers) {
           ensureBackVisualsFreshFromFront();
@@ -1674,6 +1725,10 @@ function regenerateMapFromStrokes() {
       }
       if (z.phase === 'done') {
         zoomCommitPhase = 'idle';
+        if (!scaleMoved) {
+          finalizeZoomState();
+          return;
+        }
 
         let DG_preCommitSample = null;
         try {
@@ -1714,23 +1769,22 @@ function regenerateMapFromStrokes() {
                 postLetters: DG_lettersDrawn,
                 scale: boardScale
               });
-              if (DG_DEBUG) drawDebugHUD(['ZOOM:done → post-swap']);
+              if (DG_DEBUG) drawDebugHUD(['ZOOM:done -> post-swap']);
               // Final safety snap at commit frame to avoid any single-frame misalignment.
               if (particles?.snapAllToHomes) particles.snapAllToHomes();
               useFrontBuffers();
               zoomGestureActive = false;
-              lastCommittedScale = boardScale;
               if (z.committed) panel.dispatchEvent(new CustomEvent('toy-zoom-commit', { detail: z }));
             });
           });
         });
+        finalizeZoomState();
         return;
       }
     }
 
     if (z.mode !== 'gesturing' && !z.phase) {
-      zoomGestureActive = false;
-      lastProgressScale = null;
+      finalizeZoomState();
     }
 
     if (zoomMode === 'gesturing') {
@@ -1837,7 +1891,7 @@ function regenerateMapFromStrokes() {
     if (z.phase === 'commit') {
       // one-time swap & finalize
       useFrontBuffers();
-      // copy ghost back → front exactly once after swap
+      // copy ghost back -> front exactly once after swap
       const front = ghostFrontCtx?.canvas, back = ghostBackCtx?.canvas;
       if (front && back) {
         withIdentity(ghostFrontCtx, ()=> ghostFrontCtx.drawImage(back, 0, 0, back.width, back.height, 0, 0, front.width, front.height));
@@ -2126,9 +2180,9 @@ function regenerateMapFromStrokes() {
     }
 
 
-    // Measure transform-immune base…
+    // Measure transform-immune base...
     const { w: baseW, h: baseH } = getLayoutSize();
-    // …then infer transform scale so grid matches the visible frame size.
+    // ...then infer transform scale so grid matches the visible frame size.
     const { x: zoomX, y: zoomY } = getZoomScale(panel); // panel is the element that toggles toy-zoomed
     const newW = Math.max(1, Math.round(baseW * zoomX));
     const newH = Math.max(1, Math.round(baseH * zoomY));
@@ -3147,7 +3201,7 @@ function regenerateMapFromStrokes() {
       __dgStableFramesAfterCommit = 0;          // only reset when a zoom commit is settling
       __dgNeedsUIRefresh = true;                // schedule safe clears
     } else {
-      // No zoom commit → do NOT schedule the deferred clears here
+      // No zoom commit -> do NOT schedule the deferred clears here
       // (avoids one-frame blank/freeze of particles/text on simple pointerup)
     }
     // IMPORTANT: do not clear here; renderLoop will do it safely.
