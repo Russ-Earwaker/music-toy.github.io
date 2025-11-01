@@ -17,6 +17,7 @@ const state = {
 
 let rafId = 0;
 let worldEl = null;
+const TRANSFORM_ORDER = 'T_S'; // translate then scale
 let progressRaf = 0;
 let lastProgressTs = 0;
 let progressHz = 30; // ~30fps progress callbacks while pinching/wheeling
@@ -27,7 +28,8 @@ export function attachWorldElement(el) {
   if (!worldEl) return;
   worldEl.style.transformOrigin = '0 0';
   worldEl.style.willChange = 'transform';
-  worldEl.style.transform = 'translateZ(0)';
+  worldEl.style.transform = 'translate3d(0px, 0px, 0) scale(1)';
+  worldEl.dataset.transformOrder = TRANSFORM_ORDER;
 }
 
 function roundPx(v) {
@@ -46,6 +48,13 @@ function applyTransform() {
   st.setProperty('--zoom-scale', String(s));
   st.setProperty('--zoom-x', `${x}px`);
   st.setProperty('--zoom-y', `${y}px`);
+  try {
+    const matrix = getComputedStyle(worldEl).transform;
+    if (worldEl.dataset.lastMatrix !== matrix) {
+      worldEl.dataset.lastMatrix = matrix;
+      console.debug('[zoom] css transform', { order: TRANSFORM_ORDER, matrix });
+    }
+  } catch {}
 }
 
 function tick() {
@@ -158,4 +167,8 @@ export function onZoomChange(fn) {
 
 export function getZoomState() {
   return { ...state };
+}
+
+export function getTransformOrder() {
+  return TRANSFORM_ORDER;
 }

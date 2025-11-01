@@ -4,6 +4,7 @@ import { getZoomState } from './ZoomCoordinator.js';
 export class WheelZoomLerper {
   constructor(applyFn) {
     this.applyFn = applyFn; // (scale, x, y) => void
+    this.onSettle = null;   // optional: invoked when lerp reaches target
     this.state = {
       currentScale: 1,
       currentX: 0,
@@ -20,6 +21,28 @@ export class WheelZoomLerper {
     this.state.currentScale = this.state.targetScale = z.currentScale || 1;
     this.state.currentX = this.state.targetX = z.currentX || 0;
     this.state.currentY = this.state.targetY = z.currentY || 0;
+    this._raf = 0;
+  }
+
+  cancel() {
+    if (this._raf) {
+      cancelAnimationFrame(this._raf);
+      this._raf = 0;
+    }
+    this.state.running = false;
+  }
+
+  setTarget(scale, x, y) {
+    const s = this.state;
+    s.targetScale = this._clamp(scale);
+    if (Number.isFinite(x)) s.targetX = x;
+    if (Number.isFinite(y)) s.targetY = y;
+    if (!s.running) {
+      s.currentScale = Number.isFinite(s.currentScale) ? s.currentScale : s.targetScale;
+      s.currentX = Number.isFinite(s.currentX) ? s.currentX : s.targetX;
+      s.currentY = Number.isFinite(s.currentY) ? s.currentY : s.targetY;
+      this._kick();
+    }
   }
 
   setTargetFromWheel(delta, clientX, clientY, layoutLeft = 0, layoutTop = 0) {
@@ -63,10 +86,10 @@ export class WheelZoomLerper {
     this.state.targetX = nextX;
     this.state.targetY = nextY;
 
-    this._run();
+    this._kick();
   }
 
-  _run() {
+  _kick() {
     if (this.state.running) return;
     this.state.running = true;
     const step = () => {
@@ -85,14 +108,16 @@ export class WheelZoomLerper {
         Math.abs(s.targetY - s.currentY) < 0.2;
 
       if (!done) {
-        requestAnimationFrame(step);
+        this._raf = requestAnimationFrame(step);
       } else {
         // Snap to exact end
         this.applyFn(s.targetScale, s.targetX, s.targetY);
         this.state.running = false;
+        this._raf = 0;
+        try { this.onSettle?.(s.targetScale, s.targetX, s.targetY); } catch {}
       }
     };
-    requestAnimationFrame(step);
+    this._raf = requestAnimationFrame(step);
   }
 
   _clamp(v) {
