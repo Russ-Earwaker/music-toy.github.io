@@ -782,6 +782,71 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   }
   body.style.position = 'relative';
 
+  const resolvedToyId = toyId || panel.dataset.toyid || panel.dataset.toy || panel.id || panel.dataset.toyName || 'drawgrid';
+  const storageKey = resolvedToyId ? `drawgrid:saved:${resolvedToyId}` : null;
+  const PERSIST_DEBOUNCE_MS = 150;
+  let persistStateTimer = null;
+  let persistedStateCache = null;
+  let fallbackHydrationState = null;
+
+  function persistStateNow() {
+    if (!storageKey) return;
+    if (persistStateTimer) {
+      clearTimeout(persistStateTimer);
+      persistStateTimer = null;
+    }
+    try {
+      const state = captureState();
+      persistedStateCache = state;
+      try {
+        fallbackHydrationState = JSON.parse(JSON.stringify(state));
+      } catch {
+        fallbackHydrationState = state;
+      }
+      const payload = { v: 1, state };
+      localStorage.setItem(storageKey, JSON.stringify(payload));
+    } catch (err) {
+      if (DG_DEBUG) DG.warn('persistState failed', err);
+    }
+  }
+
+  function schedulePersistState() {
+    if (!storageKey) return;
+    if (persistStateTimer) clearTimeout(persistStateTimer);
+    persistStateTimer = setTimeout(() => {
+      persistStateTimer = null;
+      persistStateNow();
+    }, PERSIST_DEBOUNCE_MS);
+  }
+
+  function loadPersistedState() {
+    if (!storageKey) return null;
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        const state = parsed.state || parsed;
+        if (state && typeof state === 'object') {
+          persistedStateCache = state;
+          try {
+            fallbackHydrationState = JSON.parse(JSON.stringify(state));
+          } catch {
+            fallbackHydrationState = state;
+          }
+          return state;
+        }
+      }
+    } catch (err) {
+      if (DG_DEBUG) DG.warn('loadPersistedState failed', err);
+    }
+    return null;
+  }
+
+  if (storageKey && typeof window !== 'undefined') {
+    try { window.addEventListener('beforeunload', persistStateNow); } catch {}
+  }
+
   function getZoomScale(el) {
     // Compare transformed rect to layout box to infer CSS transform scale.
     // Fallback to 1 to remain stable if values are 0 or unavailable.
@@ -953,7 +1018,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         currentMap.active[c] = anyOn;
       }
     }
-    console.log('[DG][emit update]', {
+    DG.log('emit update', {
       steps: stepCount,
       activeCount: currentMap.active?.filter(Boolean).length,
       nonEmptyCols: currentMap.nodes?.reduce((n, s)=>n + (s && s.size ? 1 : 0), 0)
@@ -961,6 +1026,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     panel.dispatchEvent(new CustomEvent('drawgrid:update', {
       detail: { map: currentMap, steps: stepCount, activityOnly }
     }));
+    if (!activityOnly) schedulePersistState();
   }
   let cssW = 0, cssH = 0, cw = 0, ch = 0, topPad = 0;
   let lastBoardScale = 1;
@@ -1572,7 +1638,7 @@ function regenerateMapFromStrokes() {
           }
       }
 
-      console.log('[DG][rebuild map]', {
+      DG.log('rebuild map', {
         cols: newMap.nodes.length,
         activeCount: newMap.active.filter(Boolean).length
       });
@@ -1671,10 +1737,6 @@ function regenerateMapFromStrokes() {
       ? performance.now()
       : Date.now();
 
-    if (DG_DEBUG && z.phase && z.phase !== 'progress' && nowTs > suppressZoomLogsUntilTs) {
-      DG.log('ZOOM phase', z.phase, { boardScale, zoomMode, pendingPaintSwap, pendingSwap, usingBackBuffers });
-    }
-
     if (z.phase && z.phase !== 'progress') {
       lastProgressScale = null;
       lastProgressCompareScale = null;
@@ -1697,10 +1759,6 @@ function regenerateMapFromStrokes() {
       }
       lastProgressFrameTs = now;
       lastProgressScale = boardScale;
-
-      if (DG_DEBUG && now > suppressZoomLogsUntilTs) {
-        DG.log('ZOOM phase', z.phase, { boardScale, zoomMode, pendingPaintSwap, pendingSwap, usingBackBuffers });
-      }
       return;
     }
 
@@ -1724,35 +1782,42 @@ function regenerateMapFromStrokes() {
       pendingZoomResnap = true;
       return;
     }
-    const hasStrokes = strokes.length > 0;
-    const hasNodes = currentMap && currentMap.nodes && currentMap.nodes.some(s => s && s.size > 0);
+
+    const hasStrokes = Array.isArray(strokes) && strokes.length > 0;
+    const hasNodes =
+      currentMap &&
+      Array.isArray(currentMap.nodes) &&
+      currentMap.nodes.some(set => set && set.size > 0);
+
     syncLetterFade({ immediate: true });
-    // Only force layout when needed (e.g., steps/resolution change or zoom). Avoid clearing paint when unnecessary.
     layout(!!forceLayout);
 
-    if (hasStrokes) {
-      requestAnimationFrame(() => {
-        if (!panel.isConnected) return;
+    requestAnimationFrame(() => {
+      if (!panel.isConnected) return;
+
+      if (hasStrokes) {
         regenerateMapFromStrokes();
-        // After regenerating the map, which is the source of truth,
-        // update the generator buttons to reflect the current state.
-        // This is more reliable than calling it from the zoom listener directly.
+        withIdentity(pctx, () => {
+          clearCanvas(pctx);
+          for (const s of strokes) {
+            drawFullStroke(pctx, s);
+          }
+        });
         updateGeneratorButtons();
-      });
-    } else if (hasNodes) {
-      // No strokes to regenerate from (e.g., after dragging). Preserve current nodes and do not clear paint.
-      requestAnimationFrame(() => {
-        if (!panel.isConnected) return;
+        return;
+      }
+
+      if (hasNodes) {
         drawGrid();
         drawNodes(currentMap.nodes);
         emitDrawgridUpdate({ activityOnly: false });
         updateGeneratorButtons();
-      });
-    } else {
+        return;
+      }
+
       api.clear();
-      // Also update buttons when clearing, to reset them to "Draw".
       updateGeneratorButtons();
-    }
+    });
   }
 
 
@@ -3216,6 +3281,7 @@ function syncBackBufferSizes() {
       }
       erasedTargetsThisDrag.clear();
       clearAndRedrawFromStrokes(); // Redraw to bake in the erase
+      schedulePersistState();
       pendingPaintSwap = true;
       __dgNeedsUIRefresh = true;
       if (!zoomGestureActive) {
@@ -3303,6 +3369,7 @@ function syncBackBufferSizes() {
     __dgNeedsUIRefresh = true;
     // After drawing, unmark all strokes so they become part of the normal background for the next operation.
     strokes.forEach(s => delete s.justCreated);
+    schedulePersistState();
 
     try {
       syncLetterFade();
@@ -3426,10 +3493,6 @@ function syncBackBufferSizes() {
             tutorialCtx.clearRect(0, 0, tw, th);
           });
         }
-        console.debug('[DIAG][DG] deferred overlay clear (SAFE)', {
-          t: nowTs,
-          lastPointerup: window.__LAST_POINTERUP_DIAG__,
-        });
       } catch (err) {
         console.warn('[DG] deferred UI clear failed', err);
       }
@@ -3701,6 +3764,104 @@ function syncBackBufferSizes() {
   }
   rafId = requestAnimationFrame(renderLoop);
 
+  function captureState() {
+    try {
+      const serializeSetArr = (arr) => Array.isArray(arr) ? arr.map(s => Array.from(s || [])) : [];
+      const serializeNodes = (arr) => Array.isArray(arr) ? arr.map(s => Array.from(s || [])) : [];
+      const normPt = (p) => {
+        try {
+          const nx = (gridArea.w > 0) ? (p.x - gridArea.x) / gridArea.w : 0;
+          const gh = Math.max(1, gridArea.h - topPad);
+          const ny = gh > 0 ? (p.y - (gridArea.y + topPad)) / gh : 0;
+          return { nx, ny };
+        } catch { return { nx: 0, ny: 0 }; }
+      };
+      return {
+        steps: cols | 0,
+        autotune: !!autoTune,
+        strokes: (strokes || []).map(s => ({
+          ptsN: Array.isArray(s.pts) ? s.pts.map(normPt) : [],
+          color: s.color,
+          isSpecial: !!s.isSpecial,
+          generatorId: (typeof s.generatorId === 'number') ? s.generatorId : undefined,
+          overlayColorize: !!s.overlayColorize,
+        })),
+        eraseStrokes: (eraseStrokes || []).map(s => ({
+          ptsN: Array.isArray(s.pts) ? s.pts.map(normPt) : [],
+        })),
+        nodes: {
+          active: (currentMap?.active && Array.isArray(currentMap.active)) ? currentMap.active.slice() : Array(cols).fill(false),
+          disabled: serializeSetArr(persistentDisabled || []),
+          list: serializeNodes(currentMap?.nodes || []),
+          groups: (nodeGroupMap || []).map(m => m instanceof Map ? Array.from(m.entries()) : []),
+        },
+        manualOverrides: Array.isArray(manualOverrides) ? manualOverrides.map(s => Array.from(s || [])) : [],
+      };
+    } catch (e) {
+      return { steps: cols | 0, autotune: !!autoTune };
+    }
+  }
+
+  function restoreFromState(state) {
+    const prevRestoring = isRestoring;
+    isRestoring = true;
+    try {
+      clearCanvas(pctx);
+      clearCanvas(nctx);
+      const flashSurface = getActiveFlashCanvas();
+      withIdentity(fctx, () => fctx.clearRect(0, 0, flashSurface.width, flashSurface.height));
+
+      const denormPt = (nx, ny) => {
+        const gh = Math.max(1, gridArea.h - topPad);
+        return {
+          x: gridArea.x + nx * gridArea.w,
+          y: gridArea.y + topPad + ny * gh,
+        };
+      };
+
+      strokes = (state?.strokes || []).map(s => ({
+        pts: (s.ptsN || []).map(p => denormPt(p.nx || 0, p.ny || 0)),
+        color: s.color,
+        isSpecial: !!s.isSpecial,
+        generatorId: (typeof s.generatorId === 'number') ? s.generatorId : undefined,
+        overlayColorize: !!s.overlayColorize,
+      }));
+
+      eraseStrokes = (state?.eraseStrokes || []).map(s => ({
+        pts: (s.ptsN || []).map(p => denormPt(p.nx || 0, p.ny || 0)),
+      }));
+
+      regenerateMapFromStrokes();
+      currentMap = normalizeMapColumns(currentMap, cols);
+
+      withIdentity(pctx, () => {
+        clearCanvas(pctx);
+        for (const s of strokes) drawFullStroke(pctx, s);
+      });
+
+      emitDrawgridUpdate({ activityOnly: false });
+      drawGrid();
+      if (currentMap) drawNodes(currentMap.nodes);
+    } catch (e) {
+      emitDrawgridUpdate({ activityOnly: false });
+    } finally {
+      isRestoring = prevRestoring;
+      try {
+        const hasStrokes = Array.isArray(strokes) && strokes.length > 0;
+        const hasErase = Array.isArray(eraseStrokes) && eraseStrokes.length > 0;
+        const hasNodes = Array.isArray(currentMap?.nodes)
+          ? currentMap.nodes.some(set => set && set.size > 0)
+          : false;
+
+        if (hasStrokes || hasErase || hasNodes) {
+          schedulePersistState();
+        }
+      } catch {
+        // Ignore persist errors during hydration; keep prior local save intact.
+      }
+    }
+  }
+
   const api = {
     panel,
     startGhostGuide,
@@ -3725,95 +3886,13 @@ function syncBackBufferSizes() {
       noteToggleEffects = [];
     },
     setErase:(v)=>{ erasing=!!v; },
-    getState: ()=>{
-      try{
-        const serializeSetArr = (arr)=> Array.isArray(arr) ? arr.map(s => Array.from(s||[])) : [];
-        const serializeNodes = (arr)=> Array.isArray(arr) ? arr.map(s => Array.from(s||[])) : [];
-        const normPt = (p)=>{
-          try{
-            const nx = (gridArea.w>0) ? (p.x - gridArea.x)/gridArea.w : 0;
-            const gh = Math.max(1, gridArea.h - topPad);
-            const ny = gh>0 ? (p.y - (gridArea.y + topPad))/gh : 0;
-            return { nx, ny };
-          }catch{ return { nx:0, ny:0 }; }
-        };
-        const state = {
-          steps: cols|0,
-          autotune: !!autoTune,
-          strokes: (strokes||[]).map(s=>({
-            // Store normalized points so restore scales correctly
-            ptsN: Array.isArray(s.pts)? s.pts.map(normPt) : [],
-            color: s.color,
-            isSpecial: !!s.isSpecial,
-            generatorId: (typeof s.generatorId==='number')? s.generatorId : undefined,
-            overlayColorize: !!s.overlayColorize,
-          })),
-          eraseStrokes: (eraseStrokes||[]).map(s=>({
-            ptsN: Array.isArray(s.pts)? s.pts.map(normPt) : [],
-          })),
-          nodes: {
-            active: (currentMap?.active && Array.isArray(currentMap.active)) ? currentMap.active.slice() : Array(cols).fill(false),
-            disabled: serializeSetArr(persistentDisabled || []),
-            list: serializeNodes(currentMap?.nodes || []),
-            groups: (nodeGroupMap || []).map(m => m instanceof Map ? Array.from(m.entries()) : []),
-          },
-          manualOverrides: Array.isArray(manualOverrides) ? manualOverrides.map(s=> Array.from(s||[])) : [],
-        };
-        return state;
-        }catch(e){ return { steps: cols|0, autotune: !!autoTune }; }
-    },
+    getState: captureState,
     hasActiveNotes: () => {
       try {
         return !!(currentMap?.active && currentMap.active.some(Boolean));
       } catch { return false; }
     },
-    restoreState: (state) => {
-      try {
-        // Reset visuals
-        clearCanvas(pctx);
-        clearCanvas(nctx);
-        const flashSurface = getActiveFlashCanvas();
-        withIdentity(fctx, () => fctx.clearRect(0, 0, flashSurface.width, flashSurface.height));
-
-        // Rebuild stroke arrays
-        const denormPt = (nx, ny) => {
-          const gh = Math.max(1, gridArea.h - topPad);
-          return {
-            x: gridArea.x + nx * gridArea.w,
-            y: gridArea.y + topPad + ny * gh,
-          };
-        };
-
-        strokes = (state?.strokes || []).map(s => ({
-          pts: (s.ptsN || []).map(p => denormPt(p.nx||0, p.ny||0)),
-          color: s.color,
-          isSpecial: !!s.isSpecial,
-          generatorId: (typeof s.generatorId==='number') ? s.generatorId : undefined,
-          overlayColorize: !!s.overlayColorize,
-        }));
-
-        eraseStrokes = (state?.eraseStrokes || []).map(s => ({
-          pts: (s.ptsN || []).map(p => denormPt(p.nx||0, p.ny||0)),
-        }));
-
-        // Recompute map from strokes
-        regenerateMapFromStrokes(); // recomputeFromPaintAndStrokes
-        currentMap = normalizeMapColumns(currentMap, cols);
-
-        // Redraw paint from strokes so the visible line reappears
-        withIdentity(pctx, () => {
-          clearCanvas(pctx);
-          for (const s of strokes) drawFullStroke(pctx, s);
-        });
-
-        // Notify & redraw
-        emitDrawgridUpdate({ activityOnly: false });
-        drawGrid();
-        if (currentMap) drawNodes(currentMap.nodes);
-      } catch (e) {
-            // fail-safe: at least force a map update so player doesn't die
-            emitDrawgridUpdate({ activityOnly: false });      }
-    },
+    restoreState: restoreFromState,
     setState: (st={})=>{
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
@@ -3842,10 +3921,16 @@ function syncBackBufferSizes() {
                 if (btn){ btn.textContent = `Auto-tune: ${autoTune ? 'On' : 'Off'}`; btn.setAttribute('aria-pressed', String(autoTune)); }
               }catch{}
             }
-            // Restore strokes
-            if (Array.isArray(st.strokes)){
+            // Restore strokes (fallback to persisted paint data if external state omits it)
+            const hasIncomingStrokes = Object.prototype.hasOwnProperty.call(st, 'strokes');
+            const incomingStrokes = Array.isArray(st.strokes) ? st.strokes : null;
+            const fallbackStrokes = (!hasIncomingStrokes && Array.isArray(fallbackHydrationState?.strokes) && fallbackHydrationState.strokes.length > 0)
+              ? fallbackHydrationState.strokes
+              : null;
+            const strokeSource = (incomingStrokes && incomingStrokes.length > 0) ? incomingStrokes : fallbackStrokes;
+            if (strokeSource) {
               strokes = [];
-              for (const s of st.strokes){
+              for (const s of strokeSource){
                 let pts = [];
                 if (Array.isArray(s?.ptsN)){
                   const gh = Math.max(1, gridArea.h - topPad);
@@ -3867,12 +3952,24 @@ function syncBackBufferSizes() {
                 };
                 strokes.push(stroke);
               }
-              // Redraw from strokes and rebuild nodes
               clearAndRedrawFromStrokes();
+            } else if (hasIncomingStrokes && Array.isArray(st.strokes)) {
+              const hasFallback = Array.isArray(fallbackHydrationState?.strokes) && fallbackHydrationState.strokes.length > 0;
+              if (!hasFallback) {
+                strokes = [];
+                clearAndRedrawFromStrokes();
+              }
             }
-            if (Array.isArray(st.eraseStrokes)) {
+
+            const hasIncomingErase = Object.prototype.hasOwnProperty.call(st, 'eraseStrokes');
+            const incomingEraseStrokes = Array.isArray(st.eraseStrokes) ? st.eraseStrokes : null;
+            const fallbackEraseStrokes = (!hasIncomingErase && Array.isArray(fallbackHydrationState?.eraseStrokes) && fallbackHydrationState.eraseStrokes.length > 0)
+              ? fallbackHydrationState.eraseStrokes
+              : null;
+            const eraseSource = (incomingEraseStrokes && incomingEraseStrokes.length > 0) ? incomingEraseStrokes : fallbackEraseStrokes;
+            if (eraseSource) {
               eraseStrokes = [];
-              for (const s of st.eraseStrokes) {
+              for (const s of eraseSource) {
                 let pts = [];
                 if (Array.isArray(s?.ptsN)) {
                   const gh = Math.max(1, gridArea.h - topPad);
@@ -3885,6 +3982,12 @@ function syncBackBufferSizes() {
                 eraseStrokes.push({ pts });
               }
               clearAndRedrawFromStrokes();
+            } else if (hasIncomingErase && Array.isArray(st.eraseStrokes)) {
+              const hasFallbackErase = Array.isArray(fallbackHydrationState?.eraseStrokes) && fallbackHydrationState.eraseStrokes.length > 0;
+              if (!hasFallbackErase) {
+                eraseStrokes = [];
+                clearAndRedrawFromStrokes();
+              }
             }
             // Restore node masks if provided
             if (st.nodes && typeof st.nodes==='object'){
@@ -3942,6 +4045,7 @@ function syncBackBufferSizes() {
           // Re-check after hydration completes
           stopAutoGhostGuide({ immediate: false });
           scheduleGhostIfEmpty({ initialDelay: 0 });
+          schedulePersistState();
         });
       });
     }
@@ -4119,6 +4223,14 @@ function syncBackBufferSizes() {
   panel.addEventListener('toy-random', handleRandomize);
   panel.addEventListener('toy-random-blocks', handleRandomizeBlocks);
   panel.addEventListener('toy-random-notes', handleRandomizeNotes);
+
+  const persistedState = loadPersistedState();
+  if (persistedState) {
+    try { layout(true); } catch {}
+    try { restoreFromState(persistedState); } catch (err) {
+      if (DG_DEBUG) DG.warn('restoreFromState failed', err);
+    }
+  }
 
   // The ResizeObserver only fires on *changes*. We must call layout() once
   // manually to render the initial state. requestAnimationFrame ensures
@@ -4381,6 +4493,10 @@ function runAutoGhostGuideSweep() {
     if (typeof unsubscribeZoom === 'function') {
       try { unsubscribeZoom(); } catch {}
     }
+    if (storageKey && typeof window !== 'undefined') {
+      try { window.removeEventListener('beforeunload', persistStateNow); } catch {}
+    }
+    persistStateNow();
     observer.disconnect();
   }, { once: true });
 

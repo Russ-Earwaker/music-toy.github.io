@@ -144,7 +144,17 @@ function snapDrawGrid(panel) {
 function applyDrawGrid(panel, state) {
   const toy = panel.__drawToy;
   if (toy && typeof toy.setState === 'function') {
-    try { toy.setState(state); }
+    try {
+      const hasStrokes = Array.isArray(state?.strokes) && state.strokes.length > 0;
+      const hasErase = Array.isArray(state?.eraseStrokes) && state.eraseStrokes.length > 0;
+      const hasActiveNodes = Array.isArray(state?.nodes?.active) && state.nodes.active.some(Boolean);
+
+      if (hasStrokes || hasErase || hasActiveNodes) {
+        toy.setState(state);
+      } else {
+        // Empty snapshot; allow drawgrid to hydrate itself from localStorage.
+      }
+    }
     catch(e) { console.warn('[persistence] applyDrawGrid failed', e); }
   }
 }
