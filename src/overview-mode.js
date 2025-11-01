@@ -9,6 +9,28 @@ const overviewState = {
 
 let dragInfo = { isDragging: false, target: null, startX: 0, startY: 0, initialX: 0, initialY: 0 };
 
+function px(n) { return Math.round(n) + 'px'; }
+
+function panelParts(panel) {
+    return {
+        header: panel?.querySelector?.('.toy-header'),
+        body: panel?.querySelector?.('.toy-body'),
+        footer: panel?.querySelector?.('.toy-footer')
+    };
+}
+
+function measurePartRectWithinPanel(panel, el) {
+    if (!panel || !el) return null;
+    const pr = panel.getBoundingClientRect();
+    const er = el.getBoundingClientRect();
+    return {
+        top: er.top - pr.top,
+        left: er.left - pr.left,
+        width: er.width,
+        height: er.height
+    };
+}
+
 function enterOverviewMode(isButton) {
     if (overviewState.isActive) return;
     overviewState.isActive = true;
@@ -32,6 +54,115 @@ function enterOverviewMode(isButton) {
         console.warn('[overview] failed to snapshot panel positions', err);
     }
     overviewState.previousScale = window.__boardScale;
+    const boardForClass = document.querySelector('#board, main#board, .world, .canvas-world');
+    if (boardForClass) boardForClass.classList.add('board-overview');
+    try {
+        const panels = document.querySelectorAll('#board .toy-panel');
+        panels.forEach(panel => {
+            const { header, footer } = panelParts(panel);
+            panel.classList.add('ov-body-border');
+            const hR = header ? measurePartRectWithinPanel(panel, header) : null;
+            const fR = footer ? measurePartRectWithinPanel(panel, footer) : null;
+            panel.style.setProperty('--ov-hdr-top', hR ? px(hR.top) : '0px');
+            panel.style.setProperty('--ov-hdr-h', hR ? px(hR.height) : '0px');
+            panel.style.setProperty('--ov-ftr-top', fR ? px(fR.top) : '0px');
+            panel.style.setProperty('--ov-ftr-h', fR ? px(fR.height) : '0px');
+            const id = panel.id || panel.dataset.toyid || panel.dataset.toy;
+            const snap = id ? overviewState.positions.get(id) : null;
+            const hdrHScreen = hR ? hR.height : 0;
+            if (snap && Number.isFinite(hdrHScreen) && hdrHScreen > 0) {
+                if (panel.dataset._ovCompApplied === '1') {
+                    console.warn('[overview][comp] already applied; skipping', { id });
+                } else {
+                    const scale = window.__boardScale || 1;
+                    const dyWorld = hdrHScreen / Math.max(0.0001, scale);
+                    const compensatedTop = snap.top + dyWorld;
+                    let appliedTop = false;
+                    try {
+                        const body = panel.querySelector('.toy-body') ||
+                            panel.querySelector('.grid-canvas, .rippler-canvas, .bouncer-canvas, .wheel-canvas, canvas, svg');
+                        const innerTop = body ? (body.offsetTop || 0) : 0;
+                        const innerH = body ? (body.offsetHeight || 0) : (Number.isFinite(snap.height) ? snap.height : panel.offsetHeight || 0);
+                        const worldBefore = {
+                            x: snap.left + (panel.offsetWidth * 0.5),
+                            y: snap.top + innerTop + innerH * 0.5
+                        };
+                        const container = document.querySelector('.board-viewport') || document.documentElement;
+                        const viewW = container.clientWidth || window.innerWidth;
+                        const viewH = container.clientHeight || window.innerHeight;
+                        const viewCx = Math.round(viewW * 0.5);
+                        const viewCy = Math.round(viewH * 0.5);
+                        const z = window.getZoomState?.() || {};
+                        const s = Number.isFinite(z.currentScale) ? z.currentScale : Number.isFinite(z.targetScale) ? z.targetScale : window.__boardScale || 1;
+                        const tx = Number.isFinite(z.currentX) ? z.currentX : Number.isFinite(z.targetX) ? z.targetX : window.__boardX || 0;
+                        const ty = Number.isFinite(z.currentY) ? z.currentY : Number.isFinite(z.targetY) ? z.targetY : window.__boardY || 0;
+                        const pxBefore = Math.round(worldBefore.x * s + tx);
+                        const pyBefore = Math.round(worldBefore.y * s + ty);
+                        panel.style.top = `${compensatedTop}px`;
+                        appliedTop = true;
+                        const worldAfter = { x: worldBefore.x, y: compensatedTop + innerTop + innerH * 0.5 };
+                        const pxAfter = Math.round(worldAfter.x * s + tx);
+                        const pyAfter = Math.round(worldAfter.y * s + ty);
+                        console.debug('[overview][comp]', {
+                            id,
+                            hdrHScreen,
+                            scale,
+                            dyWorld,
+                            snapTop: snap.top,
+                            compTop: compensatedTop,
+                            viewCx,
+                            viewCy,
+                            before: { px: pxBefore, py: pyBefore },
+                            after: { px: pxAfter, py: pyAfter },
+                            delta: { dx: pxAfter - pxBefore, dy: pyAfter - pyBefore }
+                        });
+                    } catch (e) {
+                        console.debug('[overview][comp] debug failed', e);
+                    } finally {
+                        if (!appliedTop) {
+                            panel.style.top = `${compensatedTop}px`;
+                        }
+                    }
+                    panel.dataset.ovCompTop = String(compensatedTop);
+                    panel.dataset._ovCompApplied = '1';
+                }
+            }
+            if (header && hR) {
+                header.style.position = 'absolute';
+                header.style.top = px(hR.top);
+                header.style.left = '0';
+                header.style.right = '0';
+                header.style.height = px(hR.height);
+            }
+            if (footer && fR) {
+                footer.style.position = 'absolute';
+                footer.style.top = px(fR.top);
+                footer.style.left = '0';
+                footer.style.right = '0';
+                footer.style.height = px(fR.height);
+            }
+            if (header || footer) {
+                panel.classList.add('ov-freeze');
+                requestAnimationFrame(() => {
+                    if (header) {
+                        header.style.position = '';
+                        header.style.top = '';
+                        header.style.left = '';
+                        header.style.right = '';
+                        header.style.height = '';
+                    }
+                    if (footer) {
+                        footer.style.position = '';
+                        footer.style.top = '';
+                        footer.style.left = '';
+                        footer.style.right = '';
+                        footer.style.height = '';
+                    }
+                    panel.classList.add('ov-collapse');
+                });
+            }
+        });
+    } catch {}
     document.body.classList.add('overview-mode');
     try {
         window.dispatchEvent(new CustomEvent('overview:change', { detail: { active: true } }));
@@ -90,6 +221,34 @@ function exitOverviewMode(isButton) {
         previousScale: overviewState.previousScale,
         currentScale: window.__boardScale
     });
+    try {
+        const boardForClass = document.querySelector('#board, main#board, .world, .canvas-world');
+        if (boardForClass) boardForClass.classList.remove('board-overview');
+        document.querySelectorAll('#board .toy-panel').forEach(panel => {
+            panel.classList.remove('ov-collapse', 'ov-freeze', 'ov-body-border');
+            panel.style.removeProperty('--ov-hdr-top');
+            panel.style.removeProperty('--ov-hdr-h');
+            panel.style.removeProperty('--ov-ftr-top');
+            panel.style.removeProperty('--ov-ftr-h');
+            delete panel.dataset.ovCompTop;
+            delete panel.dataset._ovCompApplied;
+            const { header, footer } = panelParts(panel);
+            if (header) {
+                header.style.position = '';
+                header.style.top = '';
+                header.style.left = '';
+                header.style.right = '';
+                header.style.height = '';
+            }
+            if (footer) {
+                footer.style.position = '';
+                footer.style.top = '';
+                footer.style.left = '';
+                footer.style.right = '';
+                footer.style.height = '';
+            }
+        });
+    } catch {}
 
     const overviewText = document.getElementById('overview-mode-text');
     if (overviewText) {
@@ -109,6 +268,7 @@ function exitOverviewMode(isButton) {
         panel.style.background = '';
         panel.style.border = '';
         panel.style.boxShadow = '';
+        panel.classList.remove('ov-collapse', 'ov-freeze', 'ov-body-border');
         const body = panel.querySelector('.toy-body');
         if (body) {
             body.style.background = '';

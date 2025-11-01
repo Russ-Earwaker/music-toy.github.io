@@ -1953,3 +1953,52 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
 }
+
+/* ==== Overview mode: freeze body position and collapse header/footer ==== */
+.board-overview .toy-panel {
+  position: relative;
+}
+/* When we freeze a panel for Overview, take header/footer out of flow */
+.board-overview .toy-panel.ov-freeze .toy-header,
+.board-overview .toy-panel.ov-freeze .toy-footer {
+  position: absolute;
+  left: 0; right: 0;
+  /* We'll place them with vars measured from JS */
+  transform-origin: 50% 0%;
+  will-change: transform, opacity, height;
+  pointer-events: none;
+}
+.board-overview .toy-panel.ov-freeze .toy-header {
+  top: var(--ov-hdr-top, 0px);
+  height: var(--ov-hdr-h, 0px);
+}
+.board-overview .toy-panel.ov-freeze .toy-footer {
+  top: calc(var(--ov-ftr-top, 0px));
+  height: var(--ov-ftr-h, 0px);
+}
+/* Collapse animation (doesn't push the body anymore) */
+.board-overview .toy-panel.ov-freeze.ov-collapse .toy-header {
+  transform: translateY(calc(-0.15 * var(--ov-hdr-h, 0px))) scaleY(0.6);
+  opacity: 0;
+}
+.board-overview .toy-panel.ov-freeze.ov-collapse .toy-footer {
+  transform: translateY(calc( 0.15 * var(--ov-ftr-h, 0px))) scaleY(0.6);
+  opacity: 0;
+}
+.board-overview .toy-panel.ov-freeze .toy-header,
+.board-overview .toy-panel.ov-freeze .toy-footer {
+  transition: transform 160ms ease, opacity 160ms ease;
+}
+
+/* Body-only activity border in Overview */
+.board-overview .toy-panel.ov-body-border .toy-body {
+  outline: 2px solid var(--toy-active, #3af);
+  outline-offset: 0;
+  border-radius: var(--toy-body-radius, 8px);
+}
+/* Turn off panel-wide border while in Overview (use the body one instead) */
+.board-overview .toy-panel.ov-body-border {
+  box-shadow: none !important;
+  outline: none !important;
+  border-color: transparent !important;
+}
