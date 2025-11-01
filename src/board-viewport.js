@@ -93,6 +93,12 @@ import { WheelZoomLerper } from './zoom/WheelZoomLerper.js';
     } catch {}
   }
 
+  function getLayoutOffset() {
+    const rect = stage.getBoundingClientRect();
+    const { x: baseX, y: baseY } = getActiveTransform();
+    return { layoutLeft: rect.left - baseX, layoutTop: rect.top - baseY };
+  }
+
   function applyTransform(
     { scale: nextScale = scale, x: nextX = x, y: nextY = y } = {},
     { commit = false, delayMs } = {}
@@ -386,8 +392,9 @@ import { WheelZoomLerper } from './zoom/WheelZoomLerper.js';
   window.getWorldCenter = getWorldCenter;
 
   function measureScreenFromWorld(xWorld, yWorld, s = scale, tx = x, ty = y) {
+    const { layoutLeft, layoutTop } = getLayoutOffset();
     const res = worldToScreen(xWorld, yWorld, s, tx, ty);
-    return { px: res.x, py: res.y };
+    return { px: res.x + layoutLeft, py: res.y + layoutTop };
   }
 
   function nudgeCenterIfOff(el, desiredScale) {
@@ -398,6 +405,7 @@ import { WheelZoomLerper } from './zoom/WheelZoomLerper.js';
     const viewH = container.clientHeight || window.innerHeight;
     const viewCx = viewW * 0.5;
     const viewCy = viewH * 0.5;
+    const { layoutLeft, layoutTop } = getLayoutOffset();
     const s = clampScale(Number(desiredScale) || scale);
     const { px, py } = measureScreenFromWorld(wc.x, wc.y, s, x, y);
     const dx = px - viewCx;
@@ -419,8 +427,9 @@ import { WheelZoomLerper } from './zoom/WheelZoomLerper.js';
     const viewH = container.clientHeight || window.innerHeight;
     const viewCx = viewW * 0.5;
     const viewCy = viewH * 0.5;
-    const nextX = viewCx - xWorld * targetScale;
-    const nextY = viewCy - yWorld * targetScale;
+    const { layoutLeft, layoutTop } = getLayoutOffset();
+    const nextX = viewCx - layoutLeft - xWorld * targetScale;
+    const nextY = viewCy - layoutTop - yWorld * targetScale;
     if (!Number.isFinite(nextX) || !Number.isFinite(nextY)) return;
     const projected = worldToScreen(xWorld, yWorld, targetScale, nextX, nextY);
     console.debug('[center target]', {
@@ -428,7 +437,7 @@ import { WheelZoomLerper } from './zoom/WheelZoomLerper.js';
       world: { x: xWorld, y: yWorld },
       view: { cx: viewCx, cy: viewCy },
       next: { scale: targetScale, x: nextX, y: nextY },
-      projected
+      projected: { x: projected.x + layoutLeft, y: projected.y + layoutTop }
     });
     drawCrosshairAtWorld(xWorld, yWorld);
     animateTo(targetScale, nextX, nextY);
@@ -458,8 +467,8 @@ import { WheelZoomLerper } from './zoom/WheelZoomLerper.js';
     const elCxWorld = worldCenter?.x ?? 0;
     const elCyWorld = worldCenter?.y ?? 0;
 
-    const nextX = viewCx - elCxWorld * targetScale;
-    const nextY = viewCy - elCyWorld * targetScale;
+    const nextX = viewCx - layoutLeft - elCxWorld * targetScale;
+    const nextY = viewCy - layoutTop - elCyWorld * targetScale;
 
     // Guard against NaN/Infinity
     if (!Number.isFinite(nextX) || !Number.isFinite(nextY)) {
@@ -504,15 +513,14 @@ import { WheelZoomLerper } from './zoom/WheelZoomLerper.js';
         el.style.boxSizing = 'border-box';
         document.body.appendChild(el);
       }
-      const container = stage.closest('.board-viewport') || document.documentElement;
-      const cRect = container.getBoundingClientRect();
       const z = getZoomState?.() || {};
       const s = z.currentScale ?? z.targetScale ?? scale;
       const tx = z.currentX ?? z.targetX ?? x;
       const ty = z.currentY ?? z.targetY ?? y;
+      const { layoutLeft, layoutTop } = getLayoutOffset();
       const proj = worldToScreen(crosshairState.x, crosshairState.y, s, tx, ty);
-      el.style.left = Math.round(proj.x + cRect.left - 5) + 'px';
-      el.style.top = Math.round(proj.y + cRect.top - 5) + 'px';
+      el.style.left = Math.round(proj.x + layoutLeft - 5) + 'px';
+      el.style.top = Math.round(proj.y + layoutTop - 5) + 'px';
     } catch {}
     crosshairState.raf = requestAnimationFrame(updateCrosshair);
   }
