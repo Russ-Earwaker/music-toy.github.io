@@ -26,6 +26,9 @@ import { WheelZoomLerper } from './zoom/WheelZoomLerper.js';
   function screenToWorld(sx, sy, s, tx, ty) {
     return { x: (sx - tx) / s, y: (sy - ty) / s };
   }
+  // --- tween helpers ---
+  function easeInOutCubic(t){ return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2; }
+  function lerp(a,b,t){ return a + (b - a) * t; }
   console.debug('[board-viewport] transform order =', ORDER);
 
   const SCALE_MIN = 0.3;
@@ -36,6 +39,10 @@ import { WheelZoomLerper } from './zoom/WheelZoomLerper.js';
   let scale = 1;
   let x = 0;
   let y = 0;
+
+  // Prevent re-entrant zooms while our pan+zoom tween is running
+  let camTweenLock = false;
+  Object.defineProperty(window, '__camTweenLock', { get: () => camTweenLock });
 
   try {
     const savedStr = localStorage.getItem('boardViewport') || 'null';
@@ -180,7 +187,10 @@ import { WheelZoomLerper } from './zoom/WheelZoomLerper.js';
       persist();
       scheduleNotify({ ...z });
       const ov = overviewMode?.state;
-      if (ov?.transitioning) {
+      if (camTweenLock) {
+        // While our programmatic tween is running, suppress overview auto-enter/exit
+        // Do nothing here.
+      } else if (ov?.transitioning) {
         if (scale >= (ov.zoomReturnLevel - 1e-3)) {
           try { overviewMode.exit(false); } catch {}
           ov.transitioning = false;
@@ -201,6 +211,7 @@ import { WheelZoomLerper } from './zoom/WheelZoomLerper.js';
   // When any lerp settles, commit so downstream listeners see the final transform.
   lerper.onSettle = (settleScale, settleX, settleY) => {
     commitGesture({ scale: settleScale, x: settleX, y: settleY }, { delayMs: 60 });
+    if (camTweenLock) return;
     try {
       const el = window.__lastFocusEl;
       if (el?.isConnected) {
@@ -418,36 +429,88 @@ import { WheelZoomLerper } from './zoom/WheelZoomLerper.js';
     }
   }
 
-  window.centerBoardOnWorldPoint = (xWorld, yWorld, desiredScale = scale) => {
-    if (!Number.isFinite(xWorld) || !Number.isFinite(yWorld)) return;
+  // Pan & zoom together from current transform to the final "toy centered" transform.
+  // The toy will *move toward* center while zooming (not locked to center mid-move).
+  function zoomPanToFinal(xWorld, yWorld, targetScale, { duration = 320, easing = easeInOutCubic } = {}) {
+    camTweenLock = true;
+    const s1 = clampScale(Number(targetScale) || scale);
+    // We'll recompute layout/view center each frame to follow any chrome/layout changes.
+
+    const start = getActiveTransform();
+    const s0 = start.scale, x0 = start.x, y0 = start.y;
+
+    // If we’re already basically there, snap & commit.
+    // We’ll compute tX/tY inside the step once we know current layout.
+    if (Math.abs(s1 - s0) < 1e-4) {
+      // Keep x/y as-is; a later set will lock to center if already near.
+      applyTransform({ scale: s1, x: x0, y: y0 }, { commit: true, delayMs: 0 });
+      camTweenLock = false;
+      return Promise.resolve();
+    }
+
     cancelWheelCommit();
-    const targetScale = clampScale(Number(desiredScale) || scale);
-    const container = stage.closest('.board-viewport') || document.documentElement;
-    const viewW = container.clientWidth || window.innerWidth;
-    const viewH = container.clientHeight || window.innerHeight;
-    const viewCx = viewW * 0.5;
-    const viewCy = viewH * 0.5;
-    const { layoutLeft, layoutTop } = getLayoutOffset();
-    const nextX = viewCx - layoutLeft - xWorld * targetScale;
-    const nextY = viewCy - layoutTop - yWorld * targetScale;
-    if (!Number.isFinite(nextX) || !Number.isFinite(nextY)) return;
-    const projected = worldToScreen(xWorld, yWorld, targetScale, nextX, nextY);
-    console.debug('[center target]', {
-      order: ORDER,
-      world: { x: xWorld, y: yWorld },
-      view: { cx: viewCx, cy: viewCy },
-      next: { scale: targetScale, x: nextX, y: nextY },
-      projected: { x: projected.x + layoutLeft, y: projected.y + layoutTop }
+    let t0 = 0;
+    return new Promise((resolve) => {
+      const step = (now) => {
+        if (!t0) t0 = now;
+        const k = Math.min(1, (now - t0) / duration);
+        const e = easing(k);
+        const s = lerp(s0, s1, e);
+        // Recompute layout + view center this frame
+        const { layoutLeft, layoutTop } = getLayoutOffset();
+        const container = stage.closest('.board-viewport') || document.documentElement;
+        const viewW = container.clientWidth || window.innerWidth;
+        const viewH = container.clientHeight || window.innerHeight;
+        const viewCx = viewW * 0.5;
+        const viewCy = viewH * 0.5;
+        // Final translate for THIS frame to head toward the correct final center
+        const tX = viewCx - layoutLeft - xWorld * s1;
+        const tY = viewCy - layoutTop  - yWorld * s1;
+        if (!Number.isFinite(tX) || !Number.isFinite(tY)) {
+          camTweenLock = false;
+          resolve();
+          return;
+        }
+        // Interpolate from the *current* transform toward the *final* transform
+        const xLerp = lerp(x0, tX, e);
+        const yLerp = lerp(y0, tY, e);
+        setGestureTransform({ scale: s, x: xLerp, y: yLerp });
+        if (k < 1) {
+          requestAnimationFrame(step);
+        } else {
+          // Recompute one last time at settle to land exactly at the live layout center
+          const { layoutLeft: finalLayoutLeft, layoutTop: finalLayoutTop } = getLayoutOffset();
+          const finalContainer = stage.closest('.board-viewport') || document.documentElement;
+          const finalViewW = finalContainer.clientWidth || window.innerWidth;
+          const finalViewH = finalContainer.clientHeight || window.innerHeight;
+          const finalViewCx = finalViewW * 0.5;
+          const finalViewCy = finalViewH * 0.5;
+          const finalX = finalViewCx - finalLayoutLeft - xWorld * s1;
+          const finalY = finalViewCy - finalLayoutTop  - yWorld * s1;
+          if (Number.isFinite(finalX) && Number.isFinite(finalY)) {
+            commitGesture({ scale: s1, x: finalX, y: finalY }, { delayMs: 60 });
+            // Hold lock one more RAF so nobody kicks a follow-up zoom on the commit
+            requestAnimationFrame(() => { camTweenLock = false; resolve(); });
+          } else {
+            camTweenLock = false;
+            resolve();
+          }
+        }
+      };
+      requestAnimationFrame(step);
     });
-    drawCrosshairAtWorld(xWorld, yWorld);
-    animateTo(targetScale, nextX, nextY);
-    const focusEl = window.__lastFocusEl;
-    setTimeout(() => {
-      if (focusEl?.isConnected) nudgeCenterIfOff(focusEl, targetScale);
-    }, 0);
+  }
+
+  window.centerBoardOnWorldPoint = async (xWorld, yWorld, desiredScale = scale) => {
+    if (camTweenLock) return; // ignore while an animation is in progress
+    if (!Number.isFinite(xWorld) || !Number.isFinite(yWorld)) return;
+    const targetScale = clampScale(Number(desiredScale) || scale);
+    // One smooth move: pan & zoom together toward the final centered transform.
+    await zoomPanToFinal(xWorld, yWorld, targetScale, { duration: 320, easing: easeInOutCubic });
   };
 
   window.centerBoardOnElement = (el, desiredScale = scale) => {
+    if (camTweenLock) return;
     if (!el || !stage) return;
     window.__lastFocusEl = el;
     cancelWheelCommit();

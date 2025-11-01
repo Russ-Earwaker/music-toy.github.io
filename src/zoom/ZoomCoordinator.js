@@ -52,7 +52,7 @@ function applyTransform() {
     const matrix = getComputedStyle(worldEl).transform;
     if (worldEl.dataset.lastMatrix !== matrix) {
       worldEl.dataset.lastMatrix = matrix;
-      console.debug('[zoom] css transform', { order: TRANSFORM_ORDER, matrix });
+      //console.debug('[zoom] css transform', { order: TRANSFORM_ORDER, matrix });
     }
   } catch {}
 }
