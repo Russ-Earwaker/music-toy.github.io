@@ -1130,7 +1130,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let pendingZoomResnap = false;
   const dgViewport = createParticleViewport(() => ({ w: cssW, h: cssH }));
   const dgMap = dgViewport.map;
-  try { dgViewport?.setNonReactive?.(__zoomActive); } catch {}
+  try { dgViewport?.setNonReactive?.(__zoomActive ? true : null); } catch {}
 let __zoomActive = false; // true while pinch/wheel gesture is in progress
 let __overviewActive = false;
 const dgNonReactive = () => __zoomActive;
@@ -1189,25 +1189,23 @@ function ensureSizeReady({ force = false } = {}) {
 
     panelEl.addEventListener('overview:commit', () => {
       try {
-        const { w: layoutW, h: layoutH } = getLayoutSize();
-        const dpr = window.devicePixelRatio || 1;
-        if (layoutW && layoutH) {
-          cssW = Math.max(1, layoutW);
-          cssH = Math.max(1, layoutH);
-          progressMeasureW = cssW;
-          progressMeasureH = cssH;
-        }
-        try { dgViewport?.refreshSize?.({ snap: true }); } catch {}
-        resizeSurfacesFor(cssW, cssH, dpr);
-        __dgDeferUntilTs = 0;
-        __dgStableFramesAfterCommit = 0;
-        __dgNeedsUIRefresh = false;
         particles?.snapAllToHomes?.();
         particles?.cancelHoldNextFrame?.();
         particles?.allowImmediateDraw?.();
-        resnapAndRedraw(true);
+        try { dgViewport?.setNonReactive?.(__zoomActive ? true : null); } catch {}
+        __dgDeferUntilTs = 0;
+        __dgStableFramesAfterCommit = 0;
+        __dgNeedsUIRefresh = true;
         __dgFrontSwapNextDraw = true;
-        requestFrontSwap?.();
+        const sync = () => {
+          try {
+            ensureSizeReady({ force: true });
+            resnapAndRedraw(true);
+          } catch (err) {
+            dglog('overview:commit:sync-error', String((err && err.message) || err));
+          }
+        };
+        requestAnimationFrame(() => requestAnimationFrame(sync));
       } catch (err) {
         dglog('overview:commit:error', String((err && err.message) || err));
       }
@@ -1313,12 +1311,12 @@ function ensureSizeReady({ force = false } = {}) {
         const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
           ? performance.now()
           : Date.now();
-        const deferUntil = now + 180;
+        const deferUntil = now + 32;
         __dgDeferUntilTs = Math.max(__dgDeferUntilTs || 0, deferUntil);
         __dgStableFramesAfterCommit = 0;
         __dgNeedsUIRefresh = true;
         dglog('overview:transition', { active });
-        try { dgViewport?.setNonReactive?.(__zoomActive); } catch {}
+        try { dgViewport?.setNonReactive?.(__zoomActive ? true : null); } catch {}
         try { dgViewport?.refreshSize?.({ snap: true }); } catch {}
         // Don't re-home during overview toggles -- avoids visible lerp.
         // refreshHomes({ resetPositions: false });
@@ -1982,7 +1980,7 @@ function regenerateMapFromStrokes() {
       zoomCommitPhase = 'idle';
       pendingPaintSwap = false;
       pendingSwap = false;
-      try { dgViewport?.setNonReactive?.(false); } catch {}
+      try { dgViewport?.setNonReactive?.(null); } catch {}
       __dgFrontSwapNextDraw = true;
       if (phase === 'commit') {
         const deferBase = (typeof performance !== 'undefined' && typeof performance.now === 'function')

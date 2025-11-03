@@ -40,6 +40,7 @@ export function createParticleViewport(getSize) {
   function setNonReactive(on) {
     if (on === null || typeof on === 'undefined') {
       manualOverride = null;
+      nonReactive = false;
     } else {
       manualOverride = !!on;
       nonReactive = manualOverride;
