@@ -1,3 +1,5 @@
+import { publishFrameStart } from './zoom/ZoomCoordinator.js';
+
 const overviewState = {
     isActive: false,
     zoomThreshold: 0.36, // Zoom out further to activate
@@ -7,9 +9,58 @@ const overviewState = {
     transitioning: false // latch while we zoom in to a toy
 };
 
-let dragInfo = { isDragging: false, target: null, startX: 0, startY: 0, initialX: 0, initialY: 0 };
+let dragInfo = {
+    isDragging: false,
+    target: null,
+    startX: 0,
+    startY: 0,
+    initialX: 0,
+    initialY: 0,
+    moved: false,
+    shield: null,
+    pointerId: null,
+    usingPointer: false,
+    usingTouch: false
+};
+
+let squelchClicksUntil = 0;
+const SQUELCH_MS = 250;
+
+// Only absorb click-ish events; drag paths are handled explicitly.
+const CLICKY_EVENTS = ['click', 'dblclick', 'contextmenu'];
+
+let docAbsorbArmed = false;
+
+// ---- Overview logging gate ----
+const OV_DEBUG = false;
+const ovdbg = (...args) => { if (OV_DEBUG) console.debug(...args); };
+const ovlog = (...args) => { if (OV_DEBUG) console.log(...args); };
 
 function px(n) { return Math.round(n) + 'px'; }
+
+function snapOverlaysOnce() {
+    // Publish committed camera for followers, but do not dispatch any overlay snaps.
+    try { publishFrameStart(); } catch {}
+    try {
+        requestAnimationFrame(() => {
+            try { publishFrameStart(); } catch {}
+        });
+    } catch {}
+}
+
+function getEventClientX(e) {
+    if (Number.isFinite(e?.clientX)) return e.clientX;
+    if (e?.touches?.length) return e.touches[0].clientX;
+    if (e?.changedTouches?.length) return e.changedTouches[0].clientX;
+    return 0;
+}
+
+function getEventClientY(e) {
+    if (Number.isFinite(e?.clientY)) return e.clientY;
+    if (e?.touches?.length) return e.touches[0].clientY;
+    if (e?.changedTouches?.length) return e.changedTouches[0].clientY;
+    return 0;
+}
 
 function panelParts(panel) {
     return {
@@ -31,9 +82,82 @@ function measurePartRectWithinPanel(panel, el) {
     };
 }
 
+function ensureShield(panel) {
+    let shield = panel.querySelector(':scope > .ov-shield');
+    if (!shield) {
+        shield = document.createElement('div');
+        shield.className = 'ov-shield';
+        panel.appendChild(shield);
+    }
+    return shield;
+}
+
+// Block stray clicks that slip through right after a drag
+window.addEventListener('click', (e) => {
+    if (typeof performance !== 'undefined' && performance.now() < squelchClicksUntil) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        e.stopPropagation();
+    }
+}, { capture: true });
+
+const docAbsorbHandler = (ev) => {
+    try {
+        if (!document?.documentElement?.classList?.contains('board-overview')) return;
+    } catch {
+        return;
+    }
+    ovdbg('[overview][doc absorb]', ev.type, 'target=', ev.target?.tagName || '(unknown)');
+    if (ev.cancelable) ev.preventDefault();
+    ev.stopImmediatePropagation();
+    ev.stopPropagation();
+};
+
+function armDocAbsorb() {
+    if (docAbsorbArmed) return;
+    if (typeof document === 'undefined') return;
+    CLICKY_EVENTS.forEach(type => {
+        document.addEventListener(type, docAbsorbHandler, { capture: true, passive: false });
+    });
+    docAbsorbArmed = true;
+}
+
+function disarmDocAbsorb() {
+    if (!docAbsorbArmed) return;
+    if (typeof document === 'undefined') return;
+    CLICKY_EVENTS.forEach(type => {
+        document.removeEventListener(type, docAbsorbHandler, true);
+    });
+    docAbsorbArmed = false;
+}
+
+function bindPanelDragCapture(panel) {
+    if (!panel) return;
+    const handler = (ev) => {
+        if (!overviewState.isActive) return;
+        const { header, footer } = panelParts(panel);
+        if ((header && header.contains?.(ev.target)) || (footer && footer.contains?.(ev.target))) return;
+        onToyMouseDown(ev);
+    };
+    if (panel.__ovDownCaps) {
+        for (const [type, fn] of panel.__ovDownCaps) {
+            panel.removeEventListener(type, fn, true);
+        }
+    }
+    panel.__ovDownCaps = new Map();
+    ['pointerdown', 'touchstart', 'mousedown'].forEach((type) => {
+        panel.addEventListener(type, handler, { capture: true, passive: false });
+        panel.__ovDownCaps.set(type, handler);
+    });
+    ovdbg('[overview][bind] capture downs on', panel.id || '(no-id)');
+}
+
 function enterOverviewMode(isButton) {
     if (overviewState.isActive) return;
     overviewState.isActive = true;
+    // Broadcast: all toys should enter non-reactive mode.
+    // Non-reactive = suppress home resets/springs and snap size maps, not a physics freeze.
+    try { window.dispatchEvent(new CustomEvent('overview:transition', { detail: { active: true } })); } catch {}
     overviewState.transitioning = false;
     overviewState.positions.clear();
     try {
@@ -56,11 +180,70 @@ function enterOverviewMode(isButton) {
     overviewState.previousScale = window.__boardScale;
     const boardForClass = document.querySelector('#board, main#board, .world, .canvas-world');
     if (boardForClass) boardForClass.classList.add('board-overview');
+    let panels = [];
     try {
-        const panels = document.querySelectorAll('#board .toy-panel');
+        panels = Array.from(document.querySelectorAll('#board .toy-panel'));
+        panels.forEach(panel => {
+            try { panel.dispatchEvent(new CustomEvent('overview:precommit', { bubbles: true })); } catch {}
+        });
         panels.forEach(panel => {
             const { header, footer } = panelParts(panel);
+            const bodyEl = panel.querySelector('.toy-body') ||
+                panel.querySelector('.toy-interactive, .grid-canvas, .drawgrid-canvas, .loopgrid-grid, .rippler-canvas, .bouncer-canvas, .wheel-canvas, .cells, canvas, svg');
             panel.classList.add('ov-body-border');
+            bindPanelDragCapture(panel);
+
+            if (bodyEl) {
+                try {
+                    const shield = ensureShield(panel);
+                    const supportsPointerEvents = typeof window !== 'undefined' && 'PointerEvent' in window;
+                    const absorb = (ev) => {
+                        ovdbg('[overview][shield absorb]', ev.type, 'on', panel.id || '(no-id)', 'target=', ev.target?.tagName || '(unknown)', ev.target?.className || '');
+                        if (ev.cancelable) ev.preventDefault();
+                        ev.stopImmediatePropagation();
+                        ev.stopPropagation();
+                    };
+
+                    if (panel.__ovPanelAbsorbHandler) {
+                        CLICKY_EVENTS.forEach(type => panel.removeEventListener(type, panel.__ovPanelAbsorbHandler, true));
+                    }
+                    const panelAbsorb = (ev) => {
+                        ovdbg('[overview][panel absorb]', ev.type, 'on', panel.id || '(no-id)');
+                        if (ev.cancelable) ev.preventDefault();
+                        ev.stopImmediatePropagation();
+                        ev.stopPropagation();
+                    };
+                    panel.__ovPanelAbsorbHandler = panelAbsorb;
+                    CLICKY_EVENTS.forEach(type => panel.addEventListener(type, panelAbsorb, { capture: true, passive: false }));
+
+                    const onShieldPointerDown = (ev) => {
+                        ovdbg('[overview] drag start attempt', { id: panel.id || '(no-id)', type: ev.type });
+                        if (dragInfo.isDragging && (dragInfo.usingPointer || dragInfo.usingTouch)) {
+                            absorb(ev);
+                            return;
+                        }
+                        if (typeof ev.button === 'number' && ev.button !== 0) {
+                            absorb(ev);
+                            return;
+                        }
+                        squelchClicksUntil = (typeof performance !== 'undefined' ? performance.now() : 0) + SQUELCH_MS;
+                        absorb(ev);
+                    };
+
+                    if (supportsPointerEvents) {
+                        shield.addEventListener('pointerdown', onShieldPointerDown, { passive: false, capture: true });
+                    } else {
+                        shield.addEventListener('touchstart', onShieldPointerDown, { passive: false, capture: true });
+                    }
+                    shield.addEventListener('mousedown', onShieldPointerDown, { passive: false, capture: true });
+
+                    CLICKY_EVENTS.forEach(type => shield.addEventListener(type, absorb, { capture: true, passive: false }));
+
+                } catch (err) {
+                    console.warn('[overview] failed to create shield', err);
+                }
+            }
+
             const hR = header ? measurePartRectWithinPanel(panel, header) : null;
             const fR = footer ? measurePartRectWithinPanel(panel, footer) : null;
             panel.style.setProperty('--ov-hdr-top', hR ? px(hR.top) : '0px');
@@ -79,7 +262,8 @@ function enterOverviewMode(isButton) {
                     const compensatedTop = snap.top + dyWorld;
                     let appliedTop = false;
                     try {
-                        const body = panel.querySelector('.toy-body') ||
+                        const body = bodyEl ||
+                            panel.querySelector('.toy-body') ||
                             panel.querySelector('.grid-canvas, .rippler-canvas, .bouncer-canvas, .wheel-canvas, canvas, svg');
                         const innerTop = body ? (body.offsetTop || 0) : 0;
                         const innerH = body ? (body.offsetHeight || 0) : (Number.isFinite(snap.height) ? snap.height : panel.offsetHeight || 0);
@@ -103,7 +287,7 @@ function enterOverviewMode(isButton) {
                         const worldAfter = { x: worldBefore.x, y: compensatedTop + innerTop + innerH * 0.5 };
                         const pxAfter = Math.round(worldAfter.x * s + tx);
                         const pyAfter = Math.round(worldAfter.y * s + ty);
-                        console.debug('[overview][comp]', {
+                        ovdbg('[overview][comp]', {
                             id,
                             hdrHScreen,
                             scale,
@@ -117,7 +301,7 @@ function enterOverviewMode(isButton) {
                             delta: { dx: pxAfter - pxBefore, dy: pyAfter - pyBefore }
                         });
                     } catch (e) {
-                        console.debug('[overview][comp] debug failed', e);
+                        ovdbg('[overview][comp] debug failed', e);
                     } finally {
                         if (!appliedTop) {
                             panel.style.top = `${compensatedTop}px`;
@@ -163,18 +347,24 @@ function enterOverviewMode(isButton) {
             }
         });
     } catch {}
+    armDocAbsorb();
+
     document.body.classList.add('overview-mode');
+    panels.forEach(panel => {
+        try { panel.dispatchEvent(new CustomEvent('overview:commit', { bubbles: true })); } catch {}
+    });
     try {
         window.dispatchEvent(new CustomEvent('overview:change', { detail: { active: true } }));
     } catch {}
-    console.log('Entering Overview Mode, previousScale:', overviewState.previousScale, 'current boardScale:', window.__boardScale);
+    ovlog('Entering Overview Mode, previousScale:', overviewState.previousScale, 'current boardScale:', window.__boardScale);
 
     if (isButton) {
-        console.log('Setting board scale to 0.36 for overview mode, current scale:', window.__boardScale);
+        ovlog('Setting board scale to 0.36 for overview mode, current scale:', window.__boardScale);
         window.setBoardScale(0.36);
-        console.log('After setting scale to 0.36, actual scale:', window.__boardScale);
+        ovlog('After setting scale to 0.36, actual scale:', window.__boardScale);
         // Do not dispatch board:scale here; board-viewport.apply() will emit it.
     }
+    try { snapOverlaysOnce(); } catch {}
 
     const overviewText = document.createElement('div');
     overviewText.id = 'overview-mode-text';
@@ -190,13 +380,18 @@ function enterOverviewMode(isButton) {
         if (body) {
             body.style.background = 'transparent';
         }
-        panel.addEventListener('mousedown', onToyMouseDown);
     });
 }
 
 function exitOverviewMode(isButton) {
     if (!overviewState.isActive) return;
     overviewState.isActive = false;
+    // Broadcast: toys can resume normal physics/tweens
+    try { window.dispatchEvent(new CustomEvent('overview:transition', { detail: { active: false } })); } catch {}
+    const panelsForEvents = Array.from(document.querySelectorAll('#board .toy-panel'));
+    panelsForEvents.forEach(panel => {
+        try { panel.dispatchEvent(new CustomEvent('overview:precommit', { bubbles: true })); } catch {}
+    });
     overviewState.transitioning = false;
     try {
         const board = document.querySelector('#board');
@@ -216,7 +411,7 @@ function exitOverviewMode(isButton) {
     try {
         window.dispatchEvent(new CustomEvent('overview:change', { detail: { active: false } }));
     } catch {}
-    console.log('Exiting Overview Mode', {
+    ovlog('Exiting Overview Mode', {
         willRestoreScale: !!isButton,
         previousScale: overviewState.previousScale,
         currentScale: window.__boardScale
@@ -247,8 +442,22 @@ function exitOverviewMode(isButton) {
                 footer.style.right = '';
                 footer.style.height = '';
             }
+            const shield = panel.querySelector(':scope > .ov-shield');
+            if (shield) shield.remove();
+            if (panel.__ovPanelAbsorbHandler) {
+                CLICKY_EVENTS.forEach(type => panel.removeEventListener(type, panel.__ovPanelAbsorbHandler, true));
+                delete panel.__ovPanelAbsorbHandler;
+            }
+            if (panel.__ovDownCaps) {
+                for (const [type, fn] of panel.__ovDownCaps) {
+                    panel.removeEventListener(type, fn, true);
+                }
+                delete panel.__ovDownCaps;
+            }
         });
     } catch {}
+
+    disarmDocAbsorb();
 
     const overviewText = document.getElementById('overview-mode-text');
     if (overviewText) {
@@ -256,12 +465,13 @@ function exitOverviewMode(isButton) {
     }
 
     if (isButton) {
-        console.log('Restoring board scale from overview mode, target:', overviewState.previousScale, 'current:', window.__boardScale);
+        ovlog('Restoring board scale from overview mode, target:', overviewState.previousScale, 'current:', window.__boardScale);
         window.setBoardScale(overviewState.previousScale);
-        console.log('overview-mode: setBoardScale called with', overviewState.previousScale);
-        console.log('After restoring scale, actual scale:', window.__boardScale);
+        ovlog('overview-mode: setBoardScale called with', overviewState.previousScale);
+        ovlog('After restoring scale, actual scale:', window.__boardScale);
         // Do not dispatch board:scale here; board-viewport.apply() will emit it.
     }
+    try { snapOverlaysOnce(); } catch {}
 
     // Restore the original appearance of all toys
     document.querySelectorAll('.toy-panel').forEach(panel => {
@@ -273,61 +483,177 @@ function exitOverviewMode(isButton) {
         if (body) {
             body.style.background = '';
         }
-        panel.removeEventListener('mousedown', onToyMouseDown);
+    });
+    panelsForEvents.forEach(panel => {
+        try { panel.dispatchEvent(new CustomEvent('overview:commit', { bubbles: true })); } catch {}
     });
 }
 
 function onToyMouseDown(e) {
     if (!overviewState.isActive) return;
 
-    const panel = e.currentTarget;
-    const header = panel.querySelector('.toy-header');
-    const footer = panel.querySelector('.toy-footer');
-
-    // Check if the event target is inside the header or footer
-    if (header.contains(e.target) || footer.contains(e.target)) {
+    if (dragInfo.isDragging) {
+        if (dragInfo.usingPointer && e.type === 'mousedown') {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            e.stopPropagation();
+        }
         return;
     }
 
-    const target = e.currentTarget;
+    const panel = e?.currentTarget?.closest?.('.toy-panel') || e?.currentTarget || e?.target?.closest?.('.toy-panel');
+    if (!panel) return;
+
+    const { header, footer } = panelParts(panel);
+    if ((header && header.contains?.(e.target)) || (footer && footer.contains?.(e.target))) {
+        return;
+    }
+
+    const startX = getEventClientX(e);
+    const startY = getEventClientY(e);
+    const shield = panel.querySelector(':scope > .ov-shield');
+    const eventType = e?.type || '';
+    const usingPointer = eventType.startsWith('pointer');
+    const usingTouch = !usingPointer && eventType.startsWith('touch');
+    const initialX = Number.isFinite(panel.offsetLeft) ? panel.offsetLeft : parseFloat(panel.style.left || '0') || 0;
+    const initialY = Number.isFinite(panel.offsetTop) ? panel.offsetTop : parseFloat(panel.style.top || '0') || 0;
     dragInfo = {
         isDragging: true,
-        target: target,
-        startX: e.clientX,
-        startY: e.clientY,
-        initialX: target.offsetLeft,
-        initialY: target.offsetTop,
-        moved: false
+        target: panel,
+        startX,
+        startY,
+        initialX,
+        initialY,
+        moved: false,
+        shield,
+        pointerId: usingPointer && typeof e.pointerId === 'number' ? e.pointerId : null,
+        usingPointer,
+        usingTouch
     };
 
-    window.addEventListener('mousemove', onToyMouseMove);
-    window.addEventListener('mouseup', onToyMouseUp);
+    ovdbg('[overview] drag start', { id: panel.id || '(no-id)', type: eventType });
+    try { panel.classList.add('grabbing'); } catch {}
+
+    if (shield) {
+        shield.classList.add('grabbing');
+        if (dragInfo.pointerId !== null) {
+            try { shield.setPointerCapture?.(dragInfo.pointerId); } catch {}
+        }
+    }
+
+    squelchClicksUntil = (typeof performance !== 'undefined' ? performance.now() : 0) + SQUELCH_MS;
+
+    const host = dragInfo.shield || window;
+
+    if (dragInfo.usingPointer) {
+        if (dragInfo.shield && dragInfo.pointerId !== null) {
+            try { dragInfo.shield.setPointerCapture?.(dragInfo.pointerId); } catch {}
+        }
+        host.addEventListener('pointermove', onToyPointerMove, { capture: true, passive: false });
+        host.addEventListener('pointerup', onToyPointerUp, { capture: true, passive: false });
+        host.addEventListener('pointercancel', onToyPointerUp, { capture: true, passive: false });
+    } else if (dragInfo.usingTouch) {
+        host.addEventListener('touchmove', onToyTouchMove, { capture: true, passive: false });
+        host.addEventListener('touchend', onToyTouchEnd, { capture: true, passive: false });
+        host.addEventListener('touchcancel', onToyTouchEnd, { capture: true, passive: false });
+    } else {
+        host.addEventListener('mousemove', onToyMouseMove, { capture: true });
+        host.addEventListener('mouseup', onToyMouseUp, { capture: true });
+    }
+
     e.preventDefault();
+    e.stopImmediatePropagation();
+    e.stopPropagation();
 }
 
 function onToyMouseMove(e) {
     if (!dragInfo.isDragging) return;
 
-    const dx = e.clientX - dragInfo.startX;
-    const dy = e.clientY - dragInfo.startY;
+    const cx = getEventClientX(e);
+    const cy = getEventClientY(e);
+    const dx = cx - dragInfo.startX;
+    const dy = cy - dragInfo.startY;
 
-    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+    if (!dragInfo.moved && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) {
         dragInfo.moved = true;
     }
 
-    if (dragInfo.moved) {
-        const newX = dragInfo.initialX + dx / window.__boardScale;
-        const newY = dragInfo.initialY + dy / window.__boardScale;
+    if (dragInfo.moved && dragInfo.target) {
+        const scale = window.__boardScale || 1;
+        const newX = dragInfo.initialX + dx / Math.max(scale, 0.0001);
+        const newY = dragInfo.initialY + dy / Math.max(scale, 0.0001);
         dragInfo.target.style.left = `${newX}px`;
         dragInfo.target.style.top = `${newY}px`;
     }
+
+    ovdbg('[overview] drag move', {
+        id: dragInfo.target?.id || '(no-id)',
+        dx,
+        dy
+    });
+
+    squelchClicksUntil = (typeof performance !== 'undefined' ? performance.now() : 0) + SQUELCH_MS;
+
+    if (typeof e.preventDefault === 'function') e.preventDefault();
+    if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+    if (typeof e.stopPropagation === 'function') e.stopPropagation();
+}
+
+function onToyPointerMove(e) {
+    if (dragInfo.pointerId !== null && e.pointerId !== dragInfo.pointerId) return;
+    onToyMouseMove(e);
+}
+
+function onToyPointerUp(e) {
+    if (dragInfo.pointerId !== null && e.pointerId !== dragInfo.pointerId) return;
+    onToyMouseUp(e);
+}
+
+function onToyTouchMove(e) {
+    onToyMouseMove(e);
+}
+
+function onToyTouchEnd(e) {
+    onToyMouseUp(e);
 }
 
 function onToyMouseUp(e) {
     if (!dragInfo.isDragging) return;
 
+    const now = typeof performance !== 'undefined' ? performance.now() : 0;
+    squelchClicksUntil = now + SQUELCH_MS;
+    const panel = dragInfo.target?.closest?.('.toy-panel') || dragInfo.target;
+
+    if (dragInfo.shield) {
+        dragInfo.shield.classList.remove('grabbing');
+        if (dragInfo.pointerId !== null) {
+            try { dragInfo.shield.releasePointerCapture?.(dragInfo.pointerId); } catch {}
+        }
+    }
+
+    const host = dragInfo.shield || window;
+
+    if (dragInfo.usingPointer) {
+        host.removeEventListener('pointermove', onToyPointerMove, true);
+        host.removeEventListener('pointerup', onToyPointerUp, true);
+        host.removeEventListener('pointercancel', onToyPointerUp, true);
+        if (dragInfo.shield && dragInfo.pointerId !== null) {
+            try { dragInfo.shield.releasePointerCapture?.(dragInfo.pointerId); } catch {}
+        }
+    } else if (dragInfo.usingTouch) {
+        host.removeEventListener('touchmove', onToyTouchMove, true);
+        host.removeEventListener('touchend', onToyTouchEnd, true);
+        host.removeEventListener('touchcancel', onToyTouchEnd, true);
+    } else {
+        host.removeEventListener('mousemove', onToyMouseMove, true);
+        host.removeEventListener('mouseup', onToyMouseUp, true);
+    }
+
+    ovdbg('[overview] drag end', { id: panel?.id || '(no-id)', moved: dragInfo.moved });
+    try { panel?.classList?.remove('grabbing'); } catch {}
+    dragInfo.shield?.classList?.remove('grabbing');
+
     if (!dragInfo.moved) {
-        const panel = dragInfo.target?.closest?.('.toy-panel') || dragInfo.target;
         if (!panel) {
             console.warn('[overview] tap target missing panel reference');
         }
@@ -345,10 +671,10 @@ function onToyMouseUp(e) {
                 x: snap.left + innerLeft + innerW * 0.5,
                 y: snap.top + innerTop + innerH * 0.5
             };
-            console.debug('[overview] tap center (snapshot+body)', { id, snap, innerLeft, innerTop, innerW, innerH, wc: worldCenter });
+            ovdbg('[overview] tap center (snapshot+body)', { id, snap, innerLeft, innerTop, innerW, innerH, wc: worldCenter });
         } else if (window.getWorldCenter) {
             worldCenter = window.getWorldCenter(panel);
-            console.debug('[overview] tap center (fallback getWorldCenter)', { id, wc: worldCenter });
+            ovdbg('[overview] tap center (fallback getWorldCenter)', { id, wc: worldCenter });
         }
         if (worldCenter) {
             const container = document.querySelector('.board-viewport') || document.documentElement;
@@ -362,7 +688,7 @@ function onToyMouseUp(e) {
             const ty = Number.isFinite(z.currentY) ? z.currentY : Number.isFinite(z.targetY) ? z.targetY : window.__boardY || 0;
             const px = Math.round(worldCenter.x * s + tx);
             const py = Math.round(worldCenter.y * s + ty);
-            console.debug('[overview] snapshot forward-projection', {
+            ovdbg('[overview] snapshot forward-projection', {
                 id,
                 wc: worldCenter,
                 s,
@@ -390,8 +716,20 @@ function onToyMouseUp(e) {
     }
 
     dragInfo.isDragging = false;
-    window.removeEventListener('mousemove', onToyMouseMove);
-    window.removeEventListener('mouseup', onToyMouseUp);
+    dragInfo.target = null;
+    dragInfo.shield = null;
+    dragInfo.pointerId = null;
+    dragInfo.usingPointer = false;
+    dragInfo.usingTouch = false;
+    dragInfo.moved = false;
+    dragInfo.startX = 0;
+    dragInfo.startY = 0;
+    dragInfo.initialX = 0;
+    dragInfo.initialY = 0;
+
+    if (typeof e.preventDefault === 'function') e.preventDefault();
+    if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+    if (typeof e.stopPropagation === 'function') e.stopPropagation();
 }
 
 function toggleOverviewMode(isButton) {

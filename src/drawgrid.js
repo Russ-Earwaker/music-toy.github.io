@@ -4,21 +4,27 @@
 import { buildPalette, midiToName } from './note-helpers.js';
 import { drawBlock } from './toyhelpers.js';
 import { getLoopInfo, isRunning } from './audio-core.js';
-import { onZoomChange, getZoomState } from './zoom/ZoomCoordinator.js';
+import { onZoomChange, getZoomState, getFrameStartState, onFrameStart } from './zoom/ZoomCoordinator.js';
+import { createParticleViewport } from './particles/particle-viewport.js';
 
-const DG_DEBUG = (location.search.includes('dgdebug=1') || localStorage.getItem('DG_DEBUG') === '1');
-function DG_SET(v){ try { if (v) localStorage.setItem('DG_DEBUG','1'); else localStorage.removeItem('DG_DEBUG'); } catch{} }
+// ---- drawgrid debug gate ----
+const DG_DEBUG = false;           // master switch
+const DG_FRAME_DEBUG = false;     // per-frame spam
+const DG_SWAP_DEBUG = false;      // swap spam
+const dglog = (...a) => { if (DG_DEBUG) console.log('[DG]', ...a); };
+const dgf = (...a) => { if (DG_FRAME_DEBUG) console.log('[DG] frame', ...a); };
+const dgs = (...a) => { if (DG_SWAP_DEBUG) console.log('[DG] swap', ...a); };
+
 const DG = {
-  log(...a){ if (DG_DEBUG) console.log('[DG]', ...a); },
-  warn(...a){ if (DG_DEBUG) console.warn('[DG]', ...a); },
-  time(label){ if (DG_DEBUG) console.time(label); },
-  timeEnd(label){ if (DG_DEBUG) console.timeEnd(label); },
+  log: dglog,
+  warn: (...a) => { if (DG_DEBUG) console.warn('[DG]', ...a); },
+  time: (label) => { if (DG_DEBUG) console.time(label); },
+  timeEnd: (label) => { if (DG_DEBUG) console.timeEnd(label); },
 };
-const DG_LOG = (s) => { /* flip to console.log to re-enable */ };
 
-// --- Drawgrid debug ---
-const DBG_DRAW = true; // flip on/off as needed
-function dbg(tag, obj){ if (DBG_DRAW) console.log(`[DG][${tag}]`, obj || ''); }
+// --- Drawgrid debug (off by default) ---
+const DBG_DRAW = false; // set true only for hyper-local issues
+function dbg(tag, obj){ if (DG_DEBUG && DBG_DRAW) console.log(`[DG][${tag}]`, obj || ''); }
 let __dbgLiveSegments = 0;
 let __dbgPointerMoves = 0;
 let __dbgPaintClears = 0;
@@ -49,7 +55,10 @@ function clearCanvas(ctx) {
   if (!ctx || !ctx.canvas) return;
   const surface = ctx.canvas;
   withIdentity(ctx, () => ctx.clearRect(0, 0, surface.width, surface.height));
-  __dbgPaintClears++; if ((__dbgPaintClears % 5)===1) dbg('CLEAR', { which: surface.getAttribute?.('data-role') || 'paint?' , clears: __dbgPaintClears });
+  __dbgPaintClears++;
+  if (DG_DEBUG && DBG_DRAW && (__dbgPaintClears % 20) === 1) {
+    console.debug('[DG][CLEAR]', { which: surface.getAttribute?.('data-role') || 'paint?', clears: __dbgPaintClears });
+  }
 }
 
 // Draw a live stroke segment directly to FRONT (no swaps, no back-buffers)
@@ -89,9 +98,12 @@ let zoomFreezeW = 0;
 let zoomFreezeH = 0;
 
 function __dgInCommitWindow(nowTs) {
-  const lp = window.__LAST_POINTERUP_DIAG__;
-  const settleUntil = (window.__GESTURE_SETTLE_UNTIL_TS || (lp?.t0 ? lp.t0 + 200 : 0));
-  return nowTs < settleUntil;
+  const win = (typeof window !== 'undefined') ? window : null;
+  const lp = win?.__LAST_POINTERUP_DIAG__;
+  const gestureSettle = win?.__GESTURE_SETTLE_UNTIL_TS || (lp?.t0 ? lp.t0 + 200 : 0);
+  const deferUntil = __dgDeferUntilTs || 0;
+  const guardUntil = Math.max(gestureSettle || 0, deferUntil);
+  return guardUntil > 0 && nowTs < guardUntil;
 }
 
 function mulberry32(seed) {
@@ -215,10 +227,11 @@ function chainHasSequencedNotes(head) {
  */
 function createDrawGridParticles({
   getW, getH,
-  count=150,
-  returnToHome=true,
-  homePull=0.008, // Increased spring force to resettle faster
-  bounceOnWalls=false,
+  count = 150,
+  returnToHome = true,
+  homePull = 0.008, // Increased spring force to resettle faster
+  bounceOnWalls = false,
+  isNonReactive = () => false,
 } = {}){
   const P = [];
   const letters = [];
@@ -235,11 +248,28 @@ function createDrawGridParticles({
   let currentDpr = 1;
   let holdOneFrame = false;
   function holdNextFrame(){ holdOneFrame = true; }
+  function cancelHoldNextFrame(){ holdOneFrame = false; }
+  function allowImmediateDraw(){ holdOneFrame = false; }
   const W = ()=> Math.max(1, Math.floor(getW()?getW() * currentDpr:0));
   const H = ()=> Math.max(1, Math.floor(getH()?getH() * currentDpr:0));
   let lastW = 0, lastH = 0;
   const rand = mulberry32(__drawParticlesSeed);
   const clamp01 = (v) => Math.max(0, Math.min(1, v));
+  const DG_CORNER_PROBE = (() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return location.search.includes('dgprobe=1') || localStorage.getItem('DG_CORNER_PROBE') === '1';
+    } catch {
+      return false;
+    }
+  })();
+  const checkNonReactive = () => {
+    try {
+      return typeof isNonReactive === 'function' && isNonReactive();
+    } catch {
+      return false;
+    }
+  };
 
   function createBaseParticle(nx = rand(), ny = rand()) {
     return {
@@ -263,6 +293,9 @@ function createDrawGridParticles({
 
   function layoutLetters(w, h, { resetPositions = true } = {}) {
     if (!w || !h) return;
+    const freeze = checkNonReactive();
+    const isUninitialized = letters.length === 0 || !Number.isFinite(letters[0]?.homeX);
+    const allowReset = resetPositions && (!freeze || isUninitialized);
     const fontSize = Math.max(24, Math.min(w, h) * 0.28);
     const spacing = fontSize * 0.02;
     let totalWidth = WORD.length ? -spacing : 0;
@@ -302,20 +335,22 @@ function createDrawGridParticles({
       letter.char = char;
       letter.fontSize = fontSize;
       letter.width = width;
-      letter.homeX = homeX;
-      letter.homeY = homeY;
-      if (resetPositions) {
+      if (allowReset) {
+        letter.homeX = homeX;
+        letter.homeY = homeY;
+      }
+      if (allowReset) {
         letter.x = homeX;
         letter.y = homeY;
         letter.vx = 0;
         letter.vy = 0;
         letter.alpha = LETTER_BASE_ALPHA;
         letter.flash = 0;
-      letter.repulsed = 0;
+        letter.repulsed = 0;
+      }
+      cursor += width + spacing;
     }
-    cursor += width + spacing;
   }
-}
 
   function assignHome(p, w, h, { resetPosition = false } = {}) {
     if (!p || !Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return;
@@ -327,7 +362,9 @@ function createDrawGridParticles({
     p.ny = ny;
     p.homeX = nx * w;
     p.homeY = ny * h;
-    if (!resetPosition) return;
+    const seeded = Number.isFinite(lastW) && lastW > 0 && Number.isFinite(lastH) && lastH > 0;
+    const allowReset = resetPosition && (!checkNonReactive() || !seeded);
+    if (!allowReset) return;
     if (p.isBurst) {
       const scaleX = safePrevW ? w / safePrevW : 1;
       const scaleY = safePrevH ? h / safePrevH : 1;
@@ -349,10 +386,13 @@ function createDrawGridParticles({
     const w = W();
     const h = H();
     if (!w || !h) return;
+    const freeze = checkNonReactive();
+    const seeded = Number.isFinite(lastW) && lastW > 0 && Number.isFinite(lastH) && lastH > 0;
+    const allowReset = resetPositions && (!freeze || !seeded);
     for (const p of P) {
-      assignHome(p, w, h, { resetPosition: resetPositions });
+      assignHome(p, w, h, { resetPosition: allowReset });
     }
-    layoutLetters(w, h, { resetPositions });
+    layoutLetters(w, h, { resetPositions: allowReset });
     lastW = w;
     lastH = h;
   }
@@ -363,6 +403,7 @@ function createDrawGridParticles({
   }
 
   function snapAllToHomes() {
+    if (checkNonReactive()) return;
     // Snap free particles
     for (const p of P) {
       if (Number.isFinite(p.homeX) && Number.isFinite(p.homeY)) {
@@ -408,6 +449,9 @@ function createDrawGridParticles({
 
   function step(dt=1/60){
     if (holdOneFrame) { holdOneFrame = false; return; }
+    const wcss = (typeof getW === 'function') ? getW() : 0;
+    const hcss = (typeof getH === 'function') ? getH() : 0;
+    if (!wcss || !hcss) return;
     const w = W(), h = H();
 
     if (P.length < count){
@@ -426,7 +470,7 @@ function createDrawGridParticles({
       // Keep current positions; just move homes.
       refreshHomes({ resetPositions: false });
     } else if (!letters.length && w && h) {
-      layoutLetters(w, h, { resetPositions: false });
+      layoutLetters(w, h, { resetPositions: true });
     }
 
     const toKeep = [];
@@ -447,7 +491,7 @@ function createDrawGridParticles({
       p.tSince += dt;
       p.vx *= 0.94; p.vy *= 0.94; // Increased damping to resettle faster
       // Burst particles just fly and die, no "return to home"
-      if (returnToHome && !p.isBurst && p.repulsed <= 0){
+      if (returnToHome && !p.isBurst && p.repulsed <= 0 && !checkNonReactive()){
         const hx = p.homeX - p.x, hy = p.homeY - p.y;
         p.vx += homePull*hx; p.vy += homePull*hy;
       }
@@ -486,8 +530,10 @@ function createDrawGridParticles({
         letter.flash = Math.max(0, (letter.flash || 0) - 0.01);
         letter.vx *= LETTER_DAMPING;
         letter.vy *= LETTER_DAMPING;
-        letter.vx += (letter.homeX - letter.x) * pull;
-        letter.vy += (letter.homeY - letter.y) * pull;
+        if (!checkNonReactive()) {
+          letter.vx += (letter.homeX - letter.x) * pull;
+          letter.vy += (letter.homeY - letter.y) * pull;
+        }
         letter.x += letter.vx;
         letter.y += letter.vy;
         letter.alpha = letter.alpha ?? LETTER_BASE_ALPHA;
@@ -508,6 +554,14 @@ function createDrawGridParticles({
     DG_particlesRectsDrawn = 0;
     DG_lettersDrawn = 0;
     if (!ctx) return;
+    const cssWidth = typeof getW === 'function' ? getW() : 0;
+    const cssHeight = typeof getH === 'function' ? getH() : 0;
+    if (!cssWidth || !cssHeight) { return; }
+    if (DG_CORNER_PROBE && ctx && cssWidth && cssHeight) {
+      ctx.save(); ctx.globalAlpha = 1; ctx.fillStyle = '#00ffff';
+      ctx.fillRect(cssWidth - 3, 0, 3, 3);
+      ctx.restore();
+    }
     withIdentity(ctx, () => {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
@@ -565,6 +619,11 @@ function createDrawGridParticles({
         }
         ctx.restore();
       }
+    });
+    dgf('draw', {
+      size: { cssW: cssWidth, cssH: cssHeight, dpr: currentDpr },
+      parts: DG_particlesRectsDrawn,
+      letters: DG_lettersDrawn
     });
   }
 
@@ -750,7 +809,7 @@ function ringBurst(x, y, radius, countBurst = 28, speed = 2.4, color = 'pink') {
     }
   }
 
-  return { step, draw, onBeat, lineRepulse, drawingDisturb, pointBurst, ringBurst, fadeLettersOut, fadeLettersIn, setLetterFadeTarget, setDpr, scalePositions, onResize, snapAllToHomes, holdNextFrame };
+  return { step, draw, onBeat, lineRepulse, drawingDisturb, pointBurst, ringBurst, fadeLettersOut, fadeLettersIn, setLetterFadeTarget, setDpr, scalePositions, onResize, snapAllToHomes, holdNextFrame, cancelHoldNextFrame, allowImmediateDraw };
 }
 
 let currentMap = null; // Store the current node map {active, nodes, disabled}
@@ -788,6 +847,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let persistStateTimer = null;
   let persistedStateCache = null;
   let fallbackHydrationState = null;
+  let overlayCamState = getFrameStartState?.() || { scale: 1, x: 0, y: 0 };
+  let unsubscribeFrameStart = null;
 
   function persistStateNow() {
     if (!storageKey) return;
@@ -855,14 +916,19 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     const cw = el.clientWidth || 0;
     const ch = el.clientHeight || 0;
     if (!rect || cw <= 0 || ch <= 0) return { x: 1, y: 1 };
-  // Prefer boardScale (from board:scale event) to avoid timing/race issues on refresh/overview.
-  const inferredX = rect.width  / cw;
-  const inferredY = rect.height / ch;
-  const sx = (boardScale && isFinite(boardScale)) ? boardScale : inferredX;
-  const sy = (boardScale && isFinite(boardScale)) ? boardScale : inferredY;
-  const clampedX = Math.max(0.1, Math.min(4, sx));
-  const clampedY = Math.max(0.1, Math.min(4, sy));
-  return { x: (isFinite(clampedX) ? clampedX : 1), y: (isFinite(clampedY) ? clampedY : 1) };
+    const inferredX = rect.width  / cw;
+    const inferredY = rect.height / ch;
+    const cam = typeof getFrameStartState === 'function' ? getFrameStartState() : null;
+    const committedScale = Number.isFinite(cam?.scale) ? cam.scale :
+      (Number.isFinite(boardScale) ? boardScale : NaN);
+    const sx = Number.isFinite(committedScale) ? committedScale : inferredX;
+    const sy = Number.isFinite(committedScale) ? committedScale : inferredY;
+    const clampedX = Math.max(0.1, Math.min(4, sx));
+    const clampedY = Math.max(0.1, Math.min(4, sy));
+    return {
+      x: (isFinite(clampedX) ? clampedX : 1),
+      y: (isFinite(clampedY) ? clampedY : 1)
+    };
   }
 
   // Eraser cursor
@@ -958,6 +1024,35 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const tutorialBackCtx = tutorialBackCanvas.getContext('2d');
   let tutorialCtx = tutorialFrontCtx;
 
+  function resizeSurfacesFor(nextCssW, nextCssH, nextDpr) {
+    const dpr = Math.max(1, Number.isFinite(nextDpr) ? nextDpr : (window.devicePixelRatio || 1));
+    paintDpr = Math.max(1, Math.min(dpr, 3));
+    const targetW = Math.max(1, Math.round(nextCssW * paintDpr));
+    const targetH = Math.max(1, Math.round(nextCssH * paintDpr));
+    const resize = (canvas) => {
+      if (!canvas) return;
+      if (canvas.width === targetW && canvas.height === targetH) return;
+      canvas.width = targetW;
+      canvas.height = targetH;
+    };
+    resize(gridFrontCtx?.canvas);
+    resize(gridBackCanvas);
+    resize(particleFrontCtx?.canvas);
+    resize(particleBackCanvas);
+    resize(nodesFrontCtx?.canvas);
+    resize(nodesBackCanvas);
+    resize(flashFrontCtx?.canvas);
+    resize(flashBackCanvas);
+    resize(ghostFrontCtx?.canvas);
+    resize(ghostBackCanvas);
+    resize(tutorialFrontCtx?.canvas);
+    resize(tutorialBackCanvas);
+    resize(frontCanvas);
+    resize(backCanvas);
+    updatePaintBackingStores({ force: true, target: 'both' });
+    try { ensureBackVisualsFreshFromFront?.(); } catch {}
+  }
+
   let __forceSwipeVisible = null; // null=auto, true/false=forced by tutorial
   let __swapRAF = null;
   let __dgSkipSwapsDuringDrag = false;
@@ -965,22 +1060,22 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   // helper: request a single swap this frame
   function requestFrontSwap(andThen) {
     if (__swapRAF || __dgSkipSwapsDuringDrag) {
-      if (DG_DEBUG && __dgSkipSwapsDuringDrag) DG.log('requestFrontSwap() skipped: live drag in progress');
+      if (DG_SWAP_DEBUG && __dgSkipSwapsDuringDrag) dgs('skip', 'live drag in progress');
       return;
     }
     const mark = `DG.swapRAF@${performance.now().toFixed(2)}`;
-    if (DG_DEBUG) DG.log('requestFrontSwap()', { usingBackBuffers, pendingPaintSwap, pendingSwap, zoomCommitPhase, zoomGestureActive });
+    if (DG_SWAP_DEBUG) dgs('request', { usingBackBuffers, pendingPaintSwap, pendingSwap, zoomCommitPhase, zoomGestureActive });
     __swapRAF = requestAnimationFrame(() => {
       __swapRAF = null;
-      DG.time(mark);
+      if (DG_SWAP_DEBUG) console.time(mark);
       // NEW: if we're currently drawing to FRONT, make back visuals fresh to prevent a blank frame.
-      if (!usingBackBuffers) { ensureBackVisualsFreshFromFront(); DG.log('ensureBackVisualsFreshFromFront()'); }
+      if (!usingBackBuffers) { ensureBackVisualsFreshFromFront(); if (DG_SWAP_DEBUG) dgs('ensureBackVisualsFreshFromFront()'); }
 
-      if (pendingPaintSwap) { swapBackToFront(); DG.log('swapBackToFront()'); if (DG_DEBUG) drawDebugHUD(['swapBackToFront()']); pendingPaintSwap = false; }
+      if (pendingPaintSwap) { swapBackToFront(); if (DG_SWAP_DEBUG) dgs('swapBackToFront()'); if (DG_DEBUG) drawDebugHUD(['swapBackToFront()']); pendingPaintSwap = false; }
       if (typeof flushVisualBackBuffersToFront === 'function') {
-        flushVisualBackBuffersToFront(); DG.log('flushVisualBackBuffersToFront()'); if (DG_DEBUG) drawDebugHUD(['flushVisualBackBuffersToFront()']);
+        flushVisualBackBuffersToFront(); if (DG_SWAP_DEBUG) dgs('flushVisualBackBuffersToFront()'); if (DG_DEBUG) drawDebugHUD(['flushVisualBackBuffersToFront()']);
       }
-      DG.timeEnd(mark);
+      if (DG_SWAP_DEBUG) console.timeEnd(mark);
       if (DG_DEBUG) drawDebugHUD(['swap: FRONT painted']);
       if (andThen) {
         requestAnimationFrame(andThen);
@@ -1033,23 +1128,88 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let boardScale = 1;
   let zoomMode = 'idle';
   let pendingZoomResnap = false;
+  const dgViewport = createParticleViewport(() => ({ w: cssW, h: cssH }));
+  const dgMap = dgViewport.map;
+let __zoomActive = false; // true while pinch/wheel gesture is in progress
+const dgNonReactive = () => {
+  const ov = (typeof dgViewport?.isNonReactive === 'function') && dgViewport.isNonReactive();
+  return ov || __zoomActive;
+};
+  // Debug helper for Overview tuning
+  const DG_OV_DBG = !!(location.search.includes('dgov=1') || localStorage.getItem('DG_OV_DBG') === '1');
+  function ovlog(...a){ try { if (DG_OV_DBG) console.debug('[DG][overview]', ...a); } catch {} }
+
+  // Force a front swap after the next successful draw - used on boot and overview toggles.
+  let __dgFrontSwapNextDraw = true;
+  // Draw a tiny corner probe (debug only) so we can see the visible canvas is active.
+  const DG_CORNER_PROBE = !!(location.search.includes('dgprobe=1') || localStorage.getItem('DG_CORNER_PROBE') === '1');
+
+function ensureSizeReady({ force = false } = {}) {
+  if (!force && __zoomActive) return true;
+  const nowTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+    ? performance.now()
+    : Date.now();
+  if (!force && __dgInCommitWindow(nowTs)) {
+    return true;
+  }
+  const host = wrap || body || frontCanvas?.parentElement;
+  let w = host ? host.offsetWidth || host.clientWidth || 0 : 0;
+  let h = host ? host.offsetHeight || host.clientHeight || 0 : 0;
+  if ((!w || !h) && host) {
+    const measured = measureCSSSize(host);
+    w = measured.w;
+    h = measured.h;
+  }
+  if (!w || !h) return false;
+  w = Math.max(1, w);
+  h = Math.max(1, h);
+
+  const changed = force || Math.abs(w - cssW) > 0.5 || Math.abs(h - cssH) > 0.5;
+  if (changed) {
+    cssW = w; cssH = h;
+    progressMeasureW = cssW; progressMeasureH = cssH;
+
+    try { dgViewport?.refreshSize?.({ snap: true }); } catch {}
+
+    resizeSurfacesFor(cssW, cssH, window.devicePixelRatio || paintDpr || 1);
+
+    __dgFrontSwapNextDraw = true;
+    dglog('ensureSizeReady:update', { cssW, cssH });
+  }
+  return true;
+}
+
+  function wireOverviewTransitions(panelEl) {
+    if (!panelEl) return;
+    panelEl.addEventListener('overview:precommit', () => {
+      try {
+        particles?.holdNextFrame?.();
+      } catch {}
+    });
+
+    panelEl.addEventListener('overview:commit', () => {
+      try {
+        const rect = panelEl.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        cssW = Math.max(1, rect.width || cssW);
+        cssH = Math.max(1, rect.height || cssH);
+        progressMeasureW = cssW;
+        progressMeasureH = cssH;
+        try { dgViewport?.refreshSize?.({ snap: true }); } catch {}
+        resizeSurfacesFor(cssW, cssH, dpr);
+        layout(true);
+        particles?.cancelHoldNextFrame?.();
+        particles?.allowImmediateDraw?.();
+        __dgFrontSwapNextDraw = true;
+        requestFrontSwap?.();
+      } catch (err) {
+        dglog('overview:commit:error', String((err && err.message) || err));
+      }
+    });
+  }
 
   // Zoom signal hygiene
-  const ZOOM_SCALE_EPS = 1e-4;
   let lastCommittedScale = boardScale;
-  let lastProgressScale = null;
-  let lastProgressCompareScale = null;
-  let suppressZoomLogsUntilTs = 0;
-  const SCALE_RESNAP_EPSILON = 1e-4;
-  function getScaleForCompare(z, fallback) {
-    if (Number.isFinite(z?.currentScale)) return z.currentScale;
-    if (Number.isFinite(z?.targetScale)) return z.targetScale;
-    return fallback;
-  }
-  function isRealZoom(z) {
-    const s = getScaleForCompare(z, lastCommittedScale);
-    return Number.isFinite(s) && Math.abs(s - lastCommittedScale) > ZOOM_SCALE_EPS;
-  }
   let drawing=false, erasing=false;
   // The `strokes` array is removed. The paint canvas is now the source of truth.
   let cur = null;
@@ -1084,29 +1244,89 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let pendingSwap = false;
   let pendingWrapSize = null;
   let pendingEraserSize = null;
-  let progressBudget = 16; // ms guard so we skip redundant progress swaps
-  let lastProgressFrameTs = 0;
   let progressMeasureW = 0;
   let progressMeasureH = 0;
   const PROGRESS_SIZE_THRESHOLD = 4;
   const PROGRESS_AREA_THRESHOLD = 64 * 64;
 
-  const initialMeasureHost = frontCanvas?.parentElement || wrap || body;
-  const initialMeasure = measureCSSSize(initialMeasureHost);
-  if (initialMeasure.w > 0 && initialMeasure.h > 0) {
-    cssW = initialMeasure.w;
-    cssH = initialMeasure.h;
+  const initialSize = getLayoutSize();
+  if (initialSize.w && initialSize.h) {
+    cssW = Math.max(1, initialSize.w);
+    cssH = Math.max(1, initialSize.h);
     progressMeasureW = cssW;
     progressMeasureH = cssH;
-    updatePaintBackingStores({ force: true, target: usingBackBuffers ? 'back' : 'both' });
+    resizeSurfacesFor(cssW, cssH, paintDpr);
   }
+
+  ensureSizeReady({ force: true });
+  try { refreshHomes({ resetPositions: true }); } catch {}
+  try {
+    [grid, paint, particleCanvas, ghostCanvas, flashCanvas, nodesCanvas, tutorialCanvas]
+      .filter(Boolean)
+      .forEach((cv) => {
+        const s = cv.style || {};
+        if (s.visibility === 'hidden') s.visibility = '';
+        if (s.opacity === '0') s.opacity = '';
+        if (s.display === 'none') s.display = '';
+      });
+  } catch {}
 
   const particles = createDrawGridParticles({
     getW: () => cssW,
     getH: () => cssH,
     count: 600,
     homePull: 0.002,
+    isNonReactive: dgNonReactive,
   });
+  try {
+    if (particles && typeof particles.onResize === 'function') {
+      particles.onResize({ resetPositions: true });
+    }
+    if (DG_CORNER_PROBE) {
+      const ctx = particleCanvas?.getContext?.('2d');
+      if (ctx && cssW && cssH) {
+        ctx.save();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#ff00ff';
+        ctx.fillRect(0, 0, 3, 3);
+        ctx.restore();
+      }
+    }
+    if (typeof requestFrontSwap === 'function') {
+      requestFrontSwap();
+    }
+  } catch {}
+
+  wireOverviewTransitions(panel);
+
+  (function wireOverviewTransitionForDrawgrid(){
+    try {
+      window.addEventListener('overview:transition', (e) => {
+        const active = !!e?.detail?.active;
+        const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+          ? performance.now()
+          : Date.now();
+        const deferUntil = now + 180;
+        __dgDeferUntilTs = Math.max(__dgDeferUntilTs || 0, deferUntil);
+        __dgStableFramesAfterCommit = 0;
+        __dgNeedsUIRefresh = true;
+        dglog('overview:transition', { active });
+        try { dgViewport?.refreshSize?.({ snap: true }); } catch {}
+        // Don't re-home during overview toggles -- avoids visible lerp.
+        // refreshHomes({ resetPositions: false });
+        __dgFrontSwapNextDraw = true;
+        try {
+          if (typeof ovlog === 'function') ovlog('overview:transition handled', { active, cssW, cssH });
+        } catch {}
+      }, { passive: true });
+    } catch {}
+  })();
+
+if (typeof onFrameStart === 'function') {
+  unsubscribeFrameStart = onFrameStart((camState) => {
+    overlayCamState = camState; // keep for HUD/other use
+  });
+}
 
   const clearTutorialHighlight = () => {
     if (!tutorialCtx) return;
@@ -1724,53 +1944,58 @@ function regenerateMapFromStrokes() {
     });
   }
 
-  const unsubscribeZoom = onZoomChange((z) => {
-    zoomMode = z.mode || 'idle';
-    const nextScale = getScaleForCompare(z, lastCommittedScale);
-    if (Number.isFinite(nextScale)) boardScale = nextScale;
-
-    const scaleForCompare = getScaleForCompare(z, boardScale);
-    const scaleMoved = isRealZoom(z);
-    zoomGestureActive = (z.mode === 'gesturing') && scaleMoved;
-
-    const nowTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
-      ? performance.now()
-      : Date.now();
-
-    if (z.phase && z.phase !== 'progress') {
-      lastProgressScale = null;
-      lastProgressCompareScale = null;
-      lastProgressFrameTs = 0;
+  const unsubscribeZoom = onZoomChange((z = {}) => {
+    const phase = z?.phase;
+    const mode = z?.mode;
+    if (mode) {
+      zoomMode = mode;
     }
+    if (zoomMode === 'gesturing' && !__zoomActive) {
+      __zoomActive = true;
+    }
+    zoomGestureActive = zoomMode === 'gesturing';
 
-    if (z.phase === 'progress') {
-      if (zoomMode !== 'gesturing') return;
-      const compareScale = Number.isFinite(scaleForCompare) ? scaleForCompare : boardScale;
-      const prevCompare = Number.isFinite(lastProgressCompareScale) ? lastProgressCompareScale : compareScale;
-      if (Math.abs(compareScale - prevCompare) <= ZOOM_SCALE_EPS) return;
-      lastProgressCompareScale = compareScale;
-
-      const prevBoard = Number.isFinite(lastProgressScale) ? lastProgressScale : boardScale;
-      if (Math.abs(boardScale - prevBoard) <= ZOOM_SCALE_EPS) return;
-
-      const now = nowTs;
-      if (lastProgressFrameTs && (now - lastProgressFrameTs) < progressBudget) {
-        return;
-      }
-      lastProgressFrameTs = now;
-      lastProgressScale = boardScale;
+    if (phase === 'begin') {
+      __zoomActive = true;
+      zoomGestureActive = true;
+      const beginScale = Number.isFinite(z?.currentScale) ? z.currentScale : (Number.isFinite(z?.targetScale) ? z.targetScale : null);
+      dglog('zoom:begin', { scale: beginScale });
       return;
     }
 
-    if (z.phase === 'done' || z.mode === 'idle') {
-      lastCommittedScale = Number.isFinite(scaleForCompare) ? scaleForCompare : boardScale;
-      lastProgressScale = boardScale;
-      lastProgressCompareScale = scaleForCompare;
-      suppressZoomLogsUntilTs = nowTs + 1000;
+    if (phase === 'commit' || phase === 'idle' || phase === 'done') {
+      if (phase === 'commit') {
+        try { particles?.snapAllToHomes?.(); } catch {}
+      }
+      __zoomActive = false;
+      zoomMode = 'idle';
       zoomGestureActive = false;
       zoomCommitPhase = 'idle';
       pendingPaintSwap = false;
       pendingSwap = false;
+      __dgFrontSwapNextDraw = true;
+      if (phase === 'commit') {
+        const deferBase = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+          ? performance.now()
+          : Date.now();
+        const deferUntil = deferBase + 160;
+        __dgDeferUntilTs = Math.max(__dgDeferUntilTs || 0, deferUntil);
+        __dgStableFramesAfterCommit = 0;
+        __dgNeedsUIRefresh = true;
+        const layoutSize = getLayoutSize();
+        if (layoutSize.w && layoutSize.h) {
+          cssW = Math.max(1, layoutSize.w);
+          cssH = Math.max(1, layoutSize.h);
+          progressMeasureW = cssW;
+          progressMeasureH = cssH;
+          try { dgViewport?.refreshSize?.({ snap: true }); } catch {}
+          resizeSurfacesFor(cssW, cssH, window.devicePixelRatio || paintDpr || 1);
+        }
+        layout(true);
+        const commitScale = Number.isFinite(z?.currentScale) ? z.currentScale : (Number.isFinite(z?.targetScale) ? z.targetScale : null);
+        dglog('zoom:commit', { scale: commitScale });
+      }
+      return;
     }
   });
 
@@ -1858,7 +2083,7 @@ function regenerateMapFromStrokes() {
       resnapAndRedraw(true);
       zoomGestureActive = false;
       zoomMode = 'idle'; // ensure we fully exit zoom mode 
-      lastCommittedScale = boardScale; lastProgressScale = boardScale; lastProgressCompareScale = boardScale;
+      lastCommittedScale = boardScale;
       return;
     }
   });
@@ -2202,24 +2427,8 @@ function syncBackBufferSizes() {
       cssH = newH;
       progressMeasureW = cssW;
       progressMeasureH = cssH;
-      const w = Math.max(1, Math.round(cssW));
-      const h = Math.max(1, Math.round(cssH));
-      if (usingBackBuffers) {
-        gridBackCanvas.width = w; gridBackCanvas.height = h;
-        nodesBackCanvas.width = w; nodesBackCanvas.height = h;
-        particleBackCanvas.width = w; particleBackCanvas.height = h;
-        flashBackCanvas.width = w; flashBackCanvas.height = h;
-        ghostBackCanvas.width = w; ghostBackCanvas.height = h;
-        tutorialBackCanvas.width = w; tutorialBackCanvas.height = h;
-      } else {
-        grid.width = w; grid.height = h;
-        nodesCanvas.width = w; nodesCanvas.height = h;
-        particleCanvas.width = w; particleCanvas.height = h;
-        flashCanvas.width = w; flashCanvas.height = h;
-        ghostCanvas.width = w; ghostCanvas.height = h;
-        tutorialCanvas.width = w; tutorialCanvas.height = h;
-      }
-      updatePaintBackingStores({ force: true, target: usingBackBuffers ? 'back' : 'both' });
+      if (dgViewport?.refreshSize) dgViewport.refreshSize({ snap: true });
+      resizeSurfacesFor(cssW, cssH, window.devicePixelRatio || paintDpr || 1);
       if (tutorialHighlightMode !== 'none') renderTutorialHighlight();
 
 
@@ -2240,9 +2449,10 @@ function syncBackBufferSizes() {
 
       const minGridArea = 20; // px floor so it never fully collapses
       // Compute proportional margin in CSS px (already in the visible, transformed space)
+      const safeScale = typeof dgMap?.scale === 'function' ? dgMap.scale() : Math.min(cssW, cssH);
       const dynamicSafeArea = Math.max(
         12,                               // lower bound so lines don't hug edges on tiny panels
-        Math.round(SAFE_AREA_FRACTION * Math.min(cssW, cssH))
+        Math.round(SAFE_AREA_FRACTION * safeScale)
       );
 
       gridArea = {
@@ -3026,7 +3236,7 @@ function syncBackBufferSizes() {
       y: (e.clientY - rect.top) * (cssH > 0 ? cssH / rect.height : 1)
     };
     if (!pctx) {
-      console.warn('[DG] pctx missing; forcing front buffers');
+      DG.warn('pctx missing; forcing front buffers');
       if (typeof useFrontBuffers === 'function') useFrontBuffers();
     }
     
@@ -3457,22 +3667,73 @@ function syncBackBufferSizes() {
     if (!panel.__dgFrame) panel.__dgFrame = 0;
     panel.__dgFrame++;
     const nowTs = performance?.now?.() ?? Date.now();
-    if (__dgInCommitWindow(nowTs)) {
+    const inCommitWindow = __dgInCommitWindow(nowTs);
+    if (inCommitWindow) {
       __dgStableFramesAfterCommit = 0; // still settling - do nothing destructive
     } else if (__dgStableFramesAfterCommit < 2) {
       __dgStableFramesAfterCommit++; // count a couple of stable frames
     }
 
-    const waitingForStable = __dgDeferUntilTs && nowTs < __dgDeferUntilTs;
+    const waitingForStable = inCommitWindow;
     const allowOverlayDraw = !waitingForStable;
     const allowParticleDraw = true;                 // particles should never freeze
+    dgf('start', { f: panel.__dgFrame|0, cssW, cssH, allowOverlayDraw, allowParticleDraw });
+    if (!ensureSizeReady()) {
+      rafId = requestAnimationFrame(renderLoop);
+      return;
+    }
+    const frameCam = overlayCamState || (typeof getFrameStartState === 'function' ? getFrameStartState() : null);
+    if (frameCam && Number.isFinite(frameCam.scale)) {
+      if (!Number.isFinite(boardScale) || Math.abs(boardScale - frameCam.scale) > 1e-4) {
+        boardScale = frameCam.scale;
+      }
+    }
+    if (frameCam && !panel.__dgFrameCamLogged) {
+      const isProd = (typeof process !== 'undefined') && (process?.env?.NODE_ENV === 'production');
+      if (!isProd && DG_DEBUG && DBG_DRAW) {
+        try { console.debug('[DG][overlay] frameStart camera', frameCam); } catch {}
+      }
+      panel.__dgFrameCamLogged = true;
+    }
+    const particleDrawCtx = particleCtx || pctx || frontCanvas?.getContext?.('2d');
+    try {
+      if (allowParticleDraw) {
+        const dtMs = Number.isFinite(frameCam?.dt) ? frameCam.dt : 16.6;
+        const dt = Number.isFinite(dtMs) ? dtMs / 1000 : (1 / 60);
+        particles?.step?.(dt);
+        if (particleDrawCtx) {
+          withIdentity(particleDrawCtx, () => {
+            const surface = particleDrawCtx.canvas;
+            const width = surface?.width ?? cssW;
+            const height = surface?.height ?? cssH;
+            particleDrawCtx.clearRect(0, 0, width, height);
+          });
+          particles?.draw?.(particleDrawCtx, zoomGestureActive);
+        }
+      }
+    } catch (e) {
+      dglog('particles.draw:error', String((e && e.message) || e));
+    }
+
+    try {
+      drawGrid();
+      if (currentMap) drawNodes(currentMap.nodes);
+    } catch (e) {
+      dglog('drawGrid:error', String((e && e.message) || e));
+    }
+
+
+    if (__dgFrontSwapNextDraw && typeof requestFrontSwap === 'function') {
+      __dgFrontSwapNextDraw = false;
+      try { requestFrontSwap(); } catch (err) { dgs('error', String((err && err.message) || err)); }
+    }
     const dgr = panel?.getBoundingClientRect?.();
     //console.debug('[DIAG][DG] frame', {
       //f: panel.__dgFrame,
       //lastPointerup: window.__LAST_POINTERUP_DIAG__,
       //box: dgr ? { x: dgr.left, y: dgr.top, w: dgr.width, h: dgr.height } : null,
     //});
-    if (__dgNeedsUIRefresh && __dgStableFramesAfterCommit >= 2) {
+    if (!dgNonReactive() && __dgNeedsUIRefresh && __dgStableFramesAfterCommit >= 2) {
       __dgNeedsUIRefresh = false;
       __dgDeferUntilTs = 0;
       try {
@@ -3494,7 +3755,7 @@ function syncBackBufferSizes() {
           });
         }
       } catch (err) {
-        console.warn('[DG] deferred UI clear failed', err);
+        DG.warn('deferred UI clear failed', err);
       }
     }
     if (!panel.isConnected) { cancelAnimationFrame(rafId); return; }
@@ -3531,24 +3792,6 @@ function syncBackBufferSizes() {
 
     const flashSurface = getActiveFlashCanvas();
     const ghostSurface = getActiveGhostCanvas();
-
-    // --- particles: always step/draw ---
-    if (allowParticleDraw) {
-      try {
-        particles.step(1/60); // Assuming 60fps for dt
-        withIdentity(particleCtx, () => {
-          const surface = particleCtx.canvas;
-          const width = surface?.width ?? cssW;
-          const height = surface?.height ?? cssH;
-          particleCtx.clearRect(0, 0, width, height);
-        });
-        // The dark background is now drawn on the grid canvas, so particles can be overlaid.
-        particles.draw(particleCtx, zoomGestureActive);
-      } catch (e) { /* fail silently */ }
-    }
-
-    drawGrid(); // Always redraw grid (background, lines, active column fills)
-    if (currentMap) drawNodes(currentMap.nodes); // Always redraw nodes (cubes, connections, labels)
 
     // --- other overlay layers still respect allowOverlayDraw ---
     if (allowOverlayDraw) {
@@ -3760,6 +4003,7 @@ function syncBackBufferSizes() {
       fctx.restore();
     }
 
+    dgf('end', { f: panel.__dgFrame|0 });
     rafId = requestAnimationFrame(renderLoop);
   }
   rafId = requestAnimationFrame(renderLoop);
@@ -4492,6 +4736,10 @@ function runAutoGhostGuideSweep() {
     noteToggleEffects = [];
     if (typeof unsubscribeZoom === 'function') {
       try { unsubscribeZoom(); } catch {}
+    }
+    if (typeof unsubscribeFrameStart === 'function') {
+      try { unsubscribeFrameStart(); } catch {}
+      unsubscribeFrameStart = null;
     }
     if (storageKey && typeof window !== 'undefined') {
       try { window.removeEventListener('beforeunload', persistStateNow); } catch {}

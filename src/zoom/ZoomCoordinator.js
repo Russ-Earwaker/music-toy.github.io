@@ -3,6 +3,7 @@
 // Expensive reflows / canvas redraws happen AFTER the gesture "commits".
 
 const listeners = new Set();
+const frameStartListeners = new Set();
 
 const state = {
   currentScale: 1,
@@ -22,6 +23,7 @@ let progressRaf = 0;
 let lastProgressTs = 0;
 let progressHz = 30; // ~30fps progress callbacks while pinching/wheeling
 let minProgressGapMs = 1000 / progressHz;
+let frameStartState = null;
 
 export function attachWorldElement(el) {
   worldEl = el;
@@ -30,6 +32,48 @@ export function attachWorldElement(el) {
   worldEl.style.willChange = 'transform';
   worldEl.style.transform = 'translate3d(0px, 0px, 0) scale(1)';
   worldEl.dataset.transformOrder = TRANSFORM_ORDER;
+}
+
+function normalizeSnapshot(snapshot) {
+  const scale = Number.isFinite(snapshot?.scale) ? snapshot.scale : state.currentScale;
+  const x = Number.isFinite(snapshot?.x) ? snapshot.x : state.currentX;
+  const y = Number.isFinite(snapshot?.y) ? snapshot.y : state.currentY;
+  return { scale, x, y };
+}
+
+function emitFrameStart(snapshot) {
+  if (!frameStartListeners.size) return;
+  for (const fn of frameStartListeners) {
+    try { fn({ ...snapshot }); } catch (err) { console.warn('[zoom] frameStart listener failed', err); }
+  }
+}
+
+export function getCommittedState() {
+  return normalizeSnapshot({
+    scale: state.currentScale,
+    x: state.currentX,
+    y: state.currentY,
+  });
+}
+
+export function setFrameStartState(snapshot) {
+  frameStartState = normalizeSnapshot(snapshot);
+}
+
+export function getFrameStartState() {
+  return frameStartState ? { ...frameStartState } : getCommittedState();
+}
+
+export function onFrameStart(fn) {
+  if (typeof fn !== 'function') return () => {};
+  frameStartListeners.add(fn);
+  return () => frameStartListeners.delete(fn);
+}
+
+export function publishFrameStart() {
+  const snapshot = getCommittedState();
+  setFrameStartState(snapshot);
+  emitFrameStart(snapshot);
 }
 
 function roundPx(v) {
@@ -75,6 +119,7 @@ function tick() {
   }
 
   applyTransform();
+  publishFrameStart();
   state.isDirty = false;
 
   // notify listeners AFTER transform
@@ -147,6 +192,9 @@ export function commitGesture({ scale, x, y }, { delayMs = 80 } = {}) {
     requestAnimationFrame(() => {
       if (id !== atomicCommitId) return;
       for (const fn of listeners) fn({ ...state, committing: true, phase: 'swap' });
+      try { publishFrameStart(); } catch {}
+      // (removed) overlay:instant-once was causing post-commit snaps
+      // console.debug('[zoom][commit] swap (no overlay snaps)');
 
       // Small timeout gives Safari a breath to present the new pixels before any other layout.
       setTimeout(() => {
@@ -155,6 +203,9 @@ export function commitGesture({ scale, x, y }, { delayMs = 80 } = {}) {
         document.documentElement.classList.remove('zoom-commit-freeze');
         // Final "committed" notification (single post-commit redraw if anyone needs it)
         for (const fn of listeners) fn({ ...state, committed: true, phase: 'done' });
+        try { publishFrameStart(); } catch {}
+        // (removed) overlay:instant-once was causing post-commit snaps
+        // console.debug('[zoom][commit] done (no overlay snaps)');
       }, delayMs);
     });
   });
@@ -172,3 +223,5 @@ export function getZoomState() {
 export function getTransformOrder() {
   return TRANSFORM_ORDER;
 }
+
+setFrameStartState(getCommittedState());
