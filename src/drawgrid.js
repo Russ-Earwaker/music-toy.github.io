@@ -1130,11 +1130,10 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let pendingZoomResnap = false;
   const dgViewport = createParticleViewport(() => ({ w: cssW, h: cssH }));
   const dgMap = dgViewport.map;
+  try { dgViewport?.setNonReactive?.(__zoomActive); } catch {}
 let __zoomActive = false; // true while pinch/wheel gesture is in progress
-const dgNonReactive = () => {
-  const ov = (typeof dgViewport?.isNonReactive === 'function') && dgViewport.isNonReactive();
-  return ov || __zoomActive;
-};
+let __overviewActive = false;
+const dgNonReactive = () => __zoomActive;
   // Debug helper for Overview tuning
   const DG_OV_DBG = !!(location.search.includes('dgov=1') || localStorage.getItem('DG_OV_DBG') === '1');
   function ovlog(...a){ try { if (DG_OV_DBG) console.debug('[DG][overview]', ...a); } catch {} }
@@ -1184,22 +1183,29 @@ function ensureSizeReady({ force = false } = {}) {
     panelEl.addEventListener('overview:precommit', () => {
       try {
         particles?.holdNextFrame?.();
+        particles?.snapAllToHomes?.();
       } catch {}
     });
 
     panelEl.addEventListener('overview:commit', () => {
       try {
-        const rect = panelEl.getBoundingClientRect();
+        const { w: layoutW, h: layoutH } = getLayoutSize();
         const dpr = window.devicePixelRatio || 1;
-        cssW = Math.max(1, rect.width || cssW);
-        cssH = Math.max(1, rect.height || cssH);
-        progressMeasureW = cssW;
-        progressMeasureH = cssH;
+        if (layoutW && layoutH) {
+          cssW = Math.max(1, layoutW);
+          cssH = Math.max(1, layoutH);
+          progressMeasureW = cssW;
+          progressMeasureH = cssH;
+        }
         try { dgViewport?.refreshSize?.({ snap: true }); } catch {}
         resizeSurfacesFor(cssW, cssH, dpr);
-        layout(true);
+        __dgDeferUntilTs = 0;
+        __dgStableFramesAfterCommit = 0;
+        __dgNeedsUIRefresh = false;
+        particles?.snapAllToHomes?.();
         particles?.cancelHoldNextFrame?.();
         particles?.allowImmediateDraw?.();
+        resnapAndRedraw(true);
         __dgFrontSwapNextDraw = true;
         requestFrontSwap?.();
       } catch (err) {
@@ -1303,6 +1309,7 @@ function ensureSizeReady({ force = false } = {}) {
     try {
       window.addEventListener('overview:transition', (e) => {
         const active = !!e?.detail?.active;
+        __overviewActive = active;
         const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
           ? performance.now()
           : Date.now();
@@ -1311,6 +1318,7 @@ function ensureSizeReady({ force = false } = {}) {
         __dgStableFramesAfterCommit = 0;
         __dgNeedsUIRefresh = true;
         dglog('overview:transition', { active });
+        try { dgViewport?.setNonReactive?.(__zoomActive); } catch {}
         try { dgViewport?.refreshSize?.({ snap: true }); } catch {}
         // Don't re-home during overview toggles -- avoids visible lerp.
         // refreshHomes({ resetPositions: false });
@@ -1958,6 +1966,7 @@ function regenerateMapFromStrokes() {
     if (phase === 'begin') {
       __zoomActive = true;
       zoomGestureActive = true;
+      try { dgViewport?.setNonReactive?.(true); } catch {}
       const beginScale = Number.isFinite(z?.currentScale) ? z.currentScale : (Number.isFinite(z?.targetScale) ? z.targetScale : null);
       dglog('zoom:begin', { scale: beginScale });
       return;
@@ -1973,6 +1982,7 @@ function regenerateMapFromStrokes() {
       zoomCommitPhase = 'idle';
       pendingPaintSwap = false;
       pendingSwap = false;
+      try { dgViewport?.setNonReactive?.(false); } catch {}
       __dgFrontSwapNextDraw = true;
       if (phase === 'commit') {
         const deferBase = (typeof performance !== 'undefined' && typeof performance.now === 'function')

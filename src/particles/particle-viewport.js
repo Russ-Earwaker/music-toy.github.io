@@ -7,6 +7,7 @@ export function createParticleViewport(getSize) {
   let w = 1;
   let h = 1;
   let nonReactive = false;
+  let manualOverride = null;
 
   function refreshSize({ snap = false } = {}) {
     const s = typeof getSize === 'function' ? getSize() : null;
@@ -37,14 +38,21 @@ export function createParticleViewport(getSize) {
   };
 
   function setNonReactive(on) {
-    nonReactive = !!on;
+    if (on === null || typeof on === 'undefined') {
+      manualOverride = null;
+    } else {
+      manualOverride = !!on;
+      nonReactive = manualOverride;
+    }
   }
   function isNonReactive() {
     return nonReactive;
   }
 
   function onOverview(e) {
-    setNonReactive(!!e?.detail?.active);
+    if (manualOverride === null) {
+      nonReactive = !!e?.detail?.active;
+    }
     refreshSize({ snap: true });
   }
 
