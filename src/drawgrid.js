@@ -3742,7 +3742,7 @@ function syncBackBufferSizes() {
       //lastPointerup: window.__LAST_POINTERUP_DIAG__,
       //box: dgr ? { x: dgr.left, y: dgr.top, w: dgr.width, h: dgr.height } : null,
     //});
-    if (!dgNonReactive() && __dgNeedsUIRefresh && __dgStableFramesAfterCommit >= 2) {
+    if (__dgNeedsUIRefresh && __dgStableFramesAfterCommit >= 2) {
       __dgNeedsUIRefresh = false;
       __dgDeferUntilTs = 0;
       try {
