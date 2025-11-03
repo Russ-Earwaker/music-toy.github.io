@@ -2398,10 +2398,9 @@ function syncBackBufferSizes() {
 
     // Measure transform-immune base...
     const { w: baseW, h: baseH } = getLayoutSize();
-    // ...then infer transform scale so grid matches the visible frame size.
-    const { x: zoomX, y: zoomY } = getZoomScale(panel); // panel is the element that toggles toy-zoomed
-    const newW = Math.max(1, Math.round(baseW * zoomX));
-    const newH = Math.max(1, Math.round(baseH * zoomY));
+    const { x: zoomX, y: zoomY } = getZoomScale(panel); // tracking only for logs/debug
+    const newW = Math.max(1, Math.round(baseW));
+    const newH = Math.max(1, Math.round(baseH));
 
     if (newW === 0 || newH === 0) {
       requestAnimationFrame(() => resnapAndRedraw(force));
