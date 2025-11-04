@@ -51,10 +51,52 @@ function withIdentity(ctx, fn) {
   }
 }
 
+let paintDpr = Math.max(1, Math.min((typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1, 3));
+
+let cssW = 0, cssH = 0, cw = 0, ch = 0, topPad = 0;
+
+function getLineWidth() {
+  return Math.max(1.5, Math.round(Math.min(cw, ch) * 0.85));
+}
+
+// Draw in logical (CSS) space scaled by current paintDpr; use for stroke/path operations.
+function withLogicalSpace(ctx, fn) {
+  if (!ctx || typeof fn !== 'function') return;
+  ctx.save();
+  const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+  try {
+    fn();
+  } finally {
+    ctx.restore();
+  }
+}
+
+// Draw in raw device pixels without additional scaling; ideal for blits / drawImage.
+function withDeviceSpace(ctx, fn) {
+  if (!ctx || typeof fn !== 'function') return;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  try {
+    fn();
+  } finally {
+    ctx.restore();
+  }
+}
+
+function resetCtx(ctx) {
+  if (!ctx) return;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+}
+
 function clearCanvas(ctx) {
   if (!ctx || !ctx.canvas) return;
   const surface = ctx.canvas;
-  withIdentity(ctx, () => ctx.clearRect(0, 0, surface.width, surface.height));
+  const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+  const width = cssW || (surface?.width ?? 0) / scale;
+  const height = cssH || (surface?.height ?? 0) / scale;
+  resetCtx(ctx);
+  withLogicalSpace(ctx, () => ctx.clearRect(0, 0, width, height));
   __dbgPaintClears++;
   if (DG_DEBUG && DBG_DRAW && (__dbgPaintClears % 20) === 1) {
     console.debug('[DG][CLEAR]', { which: surface.getAttribute?.('data-role') || 'paint?', clears: __dbgPaintClears });
@@ -64,11 +106,14 @@ function clearCanvas(ctx) {
 // Draw a live stroke segment directly to FRONT (no swaps, no back-buffers)
 function drawLiveStrokePoint(ctx, pt, prevPt, color) {
   if (!ctx) { dbg('LIVE/no-ctx'); return; }
-  withIdentity(ctx, () => {
+  resetCtx(ctx);
+  withLogicalSpace(ctx, () => {
+    ctx.save();
+    const lw = getLineWidth();
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.strokeStyle = color || '#fff';
-    ctx.lineWidth = 3.0;
+    ctx.lineWidth = lw;
     if (prevPt) {
       ctx.beginPath();
       ctx.moveTo(prevPt.x, prevPt.y);
@@ -77,10 +122,11 @@ function drawLiveStrokePoint(ctx, pt, prevPt, color) {
     } else {
       // tiny dot for first point
       ctx.beginPath();
-      ctx.arc(pt.x, pt.y, 1.5, 0, Math.PI * 2);
+      ctx.arc(pt.x, pt.y, lw * 0.5, 0, Math.PI * 2);
       ctx.fillStyle = color || '#fff';
       ctx.fill();
     }
+    ctx.restore();
   });
   __dbgLiveSegments++;
   if ((__dbgLiveSegments % 10) === 1) dbg('LIVE/segment', { segs: __dbgLiveSegments });
@@ -562,7 +608,7 @@ function createDrawGridParticles({
       ctx.fillRect(cssWidth - 3, 0, 3, 3);
       ctx.restore();
     }
-    withIdentity(ctx, () => {
+    withLogicalSpace(ctx, () => {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       if (beatGlow>0){ ctx.globalAlpha = Math.min(0.6, beatGlow*0.6); ctx.fillStyle='rgba(120,160,255,0.5)'; ctx.fillRect(0,0,W(),H()); ctx.globalAlpha=1; beatGlow *= 0.88; }
@@ -1029,6 +1075,14 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     paintDpr = Math.max(1, Math.min(dpr, 3));
     const targetW = Math.max(1, Math.round(nextCssW * paintDpr));
     const targetH = Math.max(1, Math.round(nextCssH * paintDpr));
+    if (frontCanvas) {
+      frontCanvas.style.width = `${nextCssW}px`;
+      frontCanvas.style.height = `${nextCssH}px`;
+    }
+    if (backCanvas) {
+      backCanvas.style.width = `${nextCssW}px`;
+      backCanvas.style.height = `${nextCssH}px`;
+    }
     const resize = (canvas) => {
       if (!canvas) return;
       if (canvas.width === targetW && canvas.height === targetH) return;
@@ -1086,7 +1140,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
   // Double-buffer + DPR tracking
   let pendingPaintSwap = false;
-    let paintDpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
+    paintDpr = Math.max(1, Math.min((typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1, 3));
   let zoomCommitPhase = 'idle';
 
   // State
@@ -1123,7 +1177,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     }));
     if (!activityOnly) schedulePersistState();
   }
-  let cssW = 0, cssH = 0, cw = 0, ch = 0, topPad = 0;
+
   let lastBoardScale = 1;
   let boardScale = 1;
   let zoomMode = 'idle';
@@ -1152,13 +1206,8 @@ function ensureSizeReady({ force = false } = {}) {
     return true;
   }
   const host = wrap || body || frontCanvas?.parentElement;
-  let w = host ? host.offsetWidth || host.clientWidth || 0 : 0;
-  let h = host ? host.offsetHeight || host.clientHeight || 0 : 0;
-  if ((!w || !h) && host) {
-    const measured = measureCSSSize(host);
-    w = measured.w;
-    h = measured.h;
-  }
+  const measured = host ? measureCSSSize(host) : { w: 0, h: 0 };
+  let { w, h } = measured;
   if (!w || !h) return false;
   w = Math.max(1, w);
   h = Math.max(1, h);
@@ -1299,6 +1348,14 @@ function ensureSizeReady({ force = false } = {}) {
     if (typeof requestFrontSwap === 'function') {
       requestFrontSwap();
     }
+    __dgNeedsUIRefresh = true;
+    __dgStableFramesAfterCommit = 0;
+    try {
+      drawGrid();
+      if (currentMap) drawNodes(currentMap.nodes);
+    } catch {}
+    __dgNeedsUIRefresh = true;
+    __dgStableFramesAfterCommit = 0;
   } catch {}
 
   wireOverviewTransitions(panel);
@@ -1336,18 +1393,26 @@ if (typeof onFrameStart === 'function') {
 
   const clearTutorialHighlight = () => {
     if (!tutorialCtx) return;
-    withIdentity(tutorialCtx, () => {
+    resetCtx(tutorialCtx);
+    withLogicalSpace(tutorialCtx, () => {
       const tutorialSurface = getActiveTutorialCanvas();
       if (!tutorialSurface) return;
-      tutorialCtx.clearRect(0, 0, tutorialSurface.width, tutorialSurface.height);
+      const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+      const width = cssW || (tutorialSurface.width ?? 0) / scale;
+      const height = cssH || (tutorialSurface.height ?? 0) / scale;
+      tutorialCtx.clearRect(0, 0, width, height);
     });
   };
 
   const renderTutorialHighlight = () => {
     if (!tutorialCtx) return;
     const tutorialSurface = getActiveTutorialCanvas();
-    withIdentity(tutorialCtx, () => {
-      tutorialCtx.clearRect(0, 0, tutorialSurface.width, tutorialSurface.height);
+    resetCtx(tutorialCtx);
+    withLogicalSpace(tutorialCtx, () => {
+      const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+      const width = cssW || (tutorialSurface?.width ?? 0) / scale;
+      const height = cssH || (tutorialSurface?.height ?? 0) / scale;
+      tutorialCtx.clearRect(0, 0, width, height);
       if (tutorialHighlightMode === 'none' || !nodeCoordsForHitTest?.length) return;
       const baseRadius = Math.max(6, Math.min(cw || 0, ch || 0) * 0.55);
       tutorialCtx.save();
@@ -1662,10 +1727,12 @@ if (typeof onFrameStart === 'function') {
     if (!targetCtx) return;
     const normalStrokes = strokes.filter(s => !s.justCreated);
     const newStrokes = strokes.filter(s => s.justCreated);
-    withIdentity(targetCtx, () => {
+    resetCtx(targetCtx);
+    withLogicalSpace(targetCtx, () => {
       const surface = targetCtx.canvas;
-      const width = surface?.width ?? cssW;
-      const height = surface?.height ?? cssH;
+      const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+      const width = cssW || (surface?.width ?? 0) / scale;
+      const height = cssH || (surface?.height ?? 0) / scale;
       targetCtx.clearRect(0, 0, width, height);
 
       // 1. Draw all existing, non-new strokes first.
@@ -1689,7 +1756,7 @@ if (typeof onFrameStart === 'function') {
 
   function drawEraseStroke(ctx, stroke) {
     if (!stroke || !stroke.pts || stroke.pts.length < 1) return;
-    withIdentity(ctx, () => {
+    withLogicalSpace(ctx, () => {
       ctx.save();
       ctx.globalCompositeOperation = 'destination-out';
       ctx.strokeStyle = '#000'; // color doesn't matter
@@ -1929,7 +1996,11 @@ function regenerateMapFromStrokes() {
     try {
       updatePaintBackingStores({ target: usingBackBuffers ? 'back' : 'both' });
       clearCanvas(pctx);
-      pctx.drawImage(snap, 0, 0, snap.width, snap.height, 0, 0, cssW, cssH);
+      resetCtx(pctx);
+      resetCtx(pctx);
+      withLogicalSpace(pctx, () => {
+        pctx.drawImage(snap, 0, 0, snap.width, snap.height, 0, 0, cssW, cssH);
+      });
     } catch {}
   }
 
@@ -2027,10 +2098,13 @@ function regenerateMapFromStrokes() {
 
     requestAnimationFrame(() => {
       if (!panel.isConnected) return;
+      __dgNeedsUIRefresh = true;
+      __dgStableFramesAfterCommit = 0;
 
       if (hasStrokes) {
         regenerateMapFromStrokes();
-        withIdentity(pctx, () => {
+        resetCtx(pctx);
+        withLogicalSpace(pctx, () => {
           clearCanvas(pctx);
           for (const s of strokes) {
             drawFullStroke(pctx, s);
@@ -2079,7 +2153,7 @@ function regenerateMapFromStrokes() {
       // copy ghost back -> front exactly once after swap
       const front = ghostFrontCtx?.canvas, back = ghostBackCtx?.canvas;
       if (front && back) {
-        withIdentity(ghostFrontCtx, ()=> ghostFrontCtx.drawImage(back, 0, 0, back.width, back.height, 0, 0, front.width, front.height));
+        withDeviceSpace(ghostFrontCtx, () => ghostFrontCtx.drawImage(back, 0, 0, back.width, back.height, 0, 0, front.width, front.height));
       }
       // NEW: also copy other overlays back -> front once to avoid a 1-frame size pop
       copyCanvas(particleBackCtx, particleFrontCtx);
@@ -2089,6 +2163,7 @@ function regenerateMapFromStrokes() {
       copyCanvas(tutorialBackCtx,  tutorialFrontCtx);
 
       resnapAndRedraw(true);
+      try { clearAndRedrawFromStrokes(pctx); } catch {}
       zoomGestureActive = false;
       zoomMode = 'idle'; // ensure we fully exit zoom mode 
       lastCommittedScale = boardScale;
@@ -2104,23 +2179,25 @@ function regenerateMapFromStrokes() {
     resnapAndRedraw(false);
   });
 
-  function getLineWidth() {
-    return Math.max(1.5, Math.round(Math.min(cw, ch) * 0.85));
-  }
-
   let lastZoomX = 1;
   let lastZoomY = 1;
 
   function getLayoutSize() {
-    const w = wrap.offsetWidth;
-    const h = wrap.offsetHeight;
-    return { w, h };
+    return measureCSSSize(wrap);
   }
 
   function measureCSSSize(el) {
     if (!el) return { w: 0, h: 0 };
-    const r = el.getBoundingClientRect();
-    return { w: r.width || 0, h: r.height || 0 };
+    const w = el.offsetWidth || el.clientWidth || 0;
+    const h = el.offsetHeight || el.clientHeight || 0;
+    if (w > 0 && h > 0) return { w, h };
+    const rect = el.getBoundingClientRect?.();
+    if (rect && rect.width > 0 && rect.height > 0) {
+      const boardScale = Number.isFinite(window?.__boardScale) && window.__boardScale > 0 ? window.__boardScale : 1;
+      const inv = boardScale !== 0 ? (1 / boardScale) : 1;
+      return { w: rect.width * inv, h: rect.height * inv };
+    }
+    return { w: 0, h: 0 };
   }
 
   function useBackBuffers() {
@@ -2151,7 +2228,7 @@ function regenerateMapFromStrokes() {
     const front = ghostFrontCtx.canvas;
     const back = ghostBackCtx.canvas;
     if (!front || !back || !front.width || !front.height) return;
-    withIdentity(ghostFrontCtx, () => {
+    withDeviceSpace(ghostFrontCtx, () => {
       ghostFrontCtx.globalCompositeOperation = 'source-over';
       ghostFrontCtx.globalAlpha = 1;
       ghostFrontCtx.clearRect(0, 0, front.width, front.height);
@@ -2167,7 +2244,7 @@ function copyCanvas(backCtx, frontCtx) {
   if (!backCtx || !frontCtx) return;
   const front = frontCtx.canvas, back = backCtx.canvas;
   if (!front || !back || !front.width || !front.height || !back.width || !back.height) return;
-  withIdentity(frontCtx, () => {
+  withDeviceSpace(frontCtx, () => {
     frontCtx.clearRect(0, 0, front.width, front.height);
     frontCtx.drawImage(back, 0, 0, back.width, back.height, 0, 0, front.width, front.height);
   });
@@ -2230,7 +2307,7 @@ function syncBackBufferSizes() {
         frontCanvas.height = targetH;
         pctx.setTransform(1, 0, 0, 1, 0, 0);
         pctx.imageSmoothingEnabled = true;
-        pctx.scale(paintDpr, paintDpr);
+        // Scaling applied per-draw via withLogicalSpace().
       }
     }
 
@@ -2244,7 +2321,7 @@ function syncBackBufferSizes() {
         backCanvas.height = targetH;
         backCtx.setTransform(1, 0, 0, 1, 0, 0);
         backCtx.imageSmoothingEnabled = true;
-        backCtx.scale(paintDpr, paintDpr);
+        // Scaling applied per-draw via withLogicalSpace().
       }
     }
   }
@@ -2253,7 +2330,7 @@ function syncBackBufferSizes() {
     if (!backCtx || !cssW || !cssH) return;
     updatePaintBackingStores({ force: true, target: 'front' });
     try {
-      withIdentity(pctx, () => {
+      withDeviceSpace(pctx, () => {
         pctx.drawImage(backCanvas, 0, 0, backCanvas.width, backCanvas.height, 0, 0, frontCanvas.width, frontCanvas.height);
       });
     } catch {}
@@ -2261,38 +2338,72 @@ function syncBackBufferSizes() {
 
   function ensureBackVisualsFreshFromFront() {
     try {
-      // Particles
-      if (particleBackCanvas && particleCanvas && particleBackCtx) {
-        particleBackCanvas.width = particleCanvas.width;
-        particleBackCanvas.height = particleCanvas.height;
-        particleBackCtx.setTransform(1,0,0,1,0,0);
-        particleBackCtx.clearRect(0,0,particleBackCanvas.width,particleBackCanvas.height);
-        particleBackCtx.drawImage(particleCanvas, 0, 0);
+      const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+      const logicalWidth = Math.max(1, cssW || ((frontCanvas?.width ?? 1) / scale));
+      const logicalHeight = Math.max(1, cssH || ((frontCanvas?.height ?? 1) / scale));
+      const pixelW = Math.max(1, Math.round(logicalWidth * scale));
+      const pixelH = Math.max(1, Math.round(logicalHeight * scale));
+
+      const styleCanvases = [
+        frontCanvas,
+        gridFrontCtx?.canvas,
+        nodesFrontCtx?.canvas,
+        flashFrontCtx?.canvas,
+        ghostFrontCtx?.canvas,
+        tutorialFrontCtx?.canvas,
+        particleFrontCtx?.canvas
+      ].filter(Boolean);
+
+      for (const canvas of styleCanvases) {
+        canvas.style.width = `${logicalWidth}px`;
+        canvas.style.height = `${logicalHeight}px`;
       }
-      // Ghost
-      if (ghostBackCanvas && ghostCanvas && ghostBackCtx) {
-        ghostBackCanvas.width = ghostCanvas.width;
-        ghostBackCanvas.height = ghostCanvas.height;
-        ghostBackCtx.setTransform(1,0,0,1,0,0);
-        ghostBackCtx.clearRect(0,0,ghostBackCanvas.width,ghostBackCanvas.height);
-        ghostBackCtx.drawImage(ghostCanvas, 0, 0);
+
+      const allCanvases = [
+        frontCanvas,
+        backCanvas,
+        gridFrontCtx?.canvas,
+        gridBackCanvas,
+        nodesFrontCtx?.canvas,
+        nodesBackCanvas,
+        flashFrontCtx?.canvas,
+        flashBackCanvas,
+        ghostFrontCtx?.canvas,
+        ghostBackCanvas,
+        tutorialFrontCtx?.canvas,
+        tutorialBackCanvas,
+        particleFrontCtx?.canvas,
+        particleBackCanvas
+      ].filter(Boolean);
+
+      for (const canvas of allCanvases) {
+        if (canvas.width !== pixelW) canvas.width = pixelW;
+        if (canvas.height !== pixelH) canvas.height = pixelH;
+        canvas.style.width = `${logicalWidth}px`;
+        canvas.style.height = `${logicalHeight}px`;
+        const ctx = canvas.getContext && canvas.getContext('2d');
+        resetCtx(ctx);
       }
-      // Flash
-      if (flashBackCanvas && flashCanvas && flashBackCtx) {
-        flashBackCanvas.width = flashCanvas.width;
-        flashBackCanvas.height = flashCanvas.height;
-        flashBackCtx.setTransform(1,0,0,1,0,0);
-        flashBackCtx.clearRect(0,0,flashBackCanvas.width,flashBackCanvas.height);
-        flashBackCtx.drawImage(flashCanvas, 0, 0);
-      }
-      // Tutorial overlay
-      if (tutorialBackCanvas && tutorialCanvas && tutorialBackCtx) {
-        tutorialBackCanvas.width = tutorialCanvas.width;
-        tutorialBackCanvas.height = tutorialCanvas.height;
-        tutorialBackCtx.setTransform(1,0,0,1,0,0);
-        tutorialBackCtx.clearRect(0,0,tutorialBackCanvas.width,tutorialBackCanvas.height);
-        tutorialBackCtx.drawImage(tutorialCanvas, 0, 0);
-      }
+
+      const copyCtx = (srcCtx, dstCtx) => {
+        if (!srcCtx || !dstCtx) return;
+        withDeviceSpace(dstCtx, () => {
+          dstCtx.clearRect(0, 0, pixelW, pixelH);
+          dstCtx.drawImage(
+            srcCtx.canvas,
+            0, 0, srcCtx.canvas.width, srcCtx.canvas.height,
+            0, 0, pixelW, pixelH
+          );
+        });
+      };
+
+      copyCtx(pctx, backCtx);
+      copyCtx(gridFrontCtx, gridBackCtx);
+      copyCtx(nodesFrontCtx, nodesBackCtx);
+      copyCtx(flashFrontCtx, flashBackCtx);
+      copyCtx(ghostFrontCtx, ghostBackCtx);
+      copyCtx(tutorialFrontCtx, tutorialBackCtx);
+      copyCtx(particleFrontCtx, particleBackCtx);
     } catch {}
   }
 
@@ -2320,7 +2431,7 @@ function syncBackBufferSizes() {
     tutorialCanvas.width = w; tutorialCanvas.height = h;
     if (debugCanvas) { debugCanvas.width = w; debugCanvas.height = h; }
 
-    withIdentity(gridFrontCtx, () => {
+    withDeviceSpace(gridFrontCtx, () => {
       const surface = gridFrontCtx.canvas;
       const width = surface?.width ?? w;
       const height = surface?.height ?? h;
@@ -2332,7 +2443,7 @@ function syncBackBufferSizes() {
       );
     });
 
-    withIdentity(nodesFrontCtx, () => {
+    withDeviceSpace(nodesFrontCtx, () => {
       const surface = nodesFrontCtx.canvas;
       const width = surface?.width ?? w;
       const height = surface?.height ?? h;
@@ -2344,7 +2455,7 @@ function syncBackBufferSizes() {
       );
     });
 
-    withIdentity(particleFrontCtx, () => {
+    withDeviceSpace(particleFrontCtx, () => {
       const surface = particleFrontCtx.canvas;
       const width = surface?.width ?? w;
       const height = surface?.height ?? h;
@@ -2356,7 +2467,7 @@ function syncBackBufferSizes() {
       );
     });
 
-    withIdentity(flashFrontCtx, () => {
+    withDeviceSpace(flashFrontCtx, () => {
       const surface = flashFrontCtx.canvas;
       const width = surface?.width ?? w;
       const height = surface?.height ?? h;
@@ -2368,7 +2479,7 @@ function syncBackBufferSizes() {
       );
     });
 
-    withIdentity(ghostFrontCtx, () => {
+    withDeviceSpace(ghostFrontCtx, () => {
       const surface = ghostFrontCtx.canvas;
       const width = surface?.width ?? w;
       const height = surface?.height ?? h;
@@ -2380,7 +2491,7 @@ function syncBackBufferSizes() {
       );
     });
 
-    withIdentity(tutorialFrontCtx, () => {
+    withDeviceSpace(tutorialFrontCtx, () => {
       const surface = tutorialFrontCtx.canvas;
       const width = surface?.width ?? w;
       const height = surface?.height ?? h;
@@ -2394,8 +2505,9 @@ function syncBackBufferSizes() {
   }
 
   function layout(force = false){
-    const bodyW = body.offsetWidth;
-    const bodyH = body.offsetHeight;
+    const bodySize = measureCSSSize(body);
+    const bodyW = bodySize.w;
+    const bodyH = bodySize.h;
     if (usingBackBuffers) {
       pendingWrapSize = { width: bodyW, height: bodyH };
     } else {
@@ -2506,12 +2618,20 @@ function syncBackBufferSizes() {
       } else {
         clearCanvas(nctx);
         const flashTarget = getActiveFlashCanvas();
-        withIdentity(fctx, () => {
-          fctx.clearRect(0, 0, flashTarget.width, flashTarget.height);
+        resetCtx(fctx);
+        withLogicalSpace(fctx, () => {
+          const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+          const width = cssW || (flashTarget?.width ?? 0) / scale;
+          const height = cssH || (flashTarget?.height ?? 0) / scale;
+          fctx.clearRect(0, 0, width, height);
         });
         const ghostTarget = getActiveGhostCanvas();
-        withIdentity(ghostCtx, () => {
-          ghostCtx.clearRect(0, 0, ghostTarget.width, ghostTarget.height);
+        resetCtx(ghostCtx);
+        withLogicalSpace(ghostCtx, () => {
+          const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+          const width = cssW || (ghostTarget?.width ?? 0) / scale;
+          const height = cssH || (ghostTarget?.height ?? 0) / scale;
+          ghostCtx.clearRect(0, 0, width, height);
         });
       }
     }
@@ -2545,10 +2665,12 @@ function syncBackBufferSizes() {
   }
 
   function drawGrid(){
-    withIdentity(gctx, () => {
+    resetCtx(gctx);
+    withLogicalSpace(gctx, () => {
       const surface = gctx.canvas;
-      const width = surface?.width ?? cssW;
-      const height = surface?.height ?? cssH;
+      const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+      const width = cssW || (surface?.width ?? 0) / scale;
+      const height = cssH || (surface?.height ?? 0) / scale;
       gctx.clearRect(0, 0, width, height);
 
       // Fill the entire background on the lowest layer (grid canvas)
@@ -2637,23 +2759,27 @@ function syncBackBufferSizes() {
     if (!stroke || !stroke.pts || stroke.pts.length < 1) return;
     const color = stroke.color || STROKE_COLORS[0];
 
-    withIdentity(ctx, () => {
+    resetCtx(ctx);
+    withLogicalSpace(ctx, () => {
       ctx.save();
       const isStandard = !panel.classList.contains('toy-zoomed');
       const isOverlay = (ctx === fctx);
-      let wantsSpecial = !!stroke.isSpecial || (isOverlay && (stroke.generatorId === 1 || stroke.generatorId === 2));
-      if (!wantsSpecial && isStandard) {
-        const hasAnySpecial = strokes.some(s => s.isSpecial);
-        if (!hasAnySpecial && stroke === cur) wantsSpecial = true;
-      }
+      let wantsSpecial = isOverlay && ( !!stroke.isSpecial || stroke.generatorId === 1 || stroke.generatorId === 2 );
+      if (!isOverlay) wantsSpecial = false;
       if (wantsSpecial && isOverlay) {
         ctx.shadowColor = 'rgba(255, 255, 255, 0.7)';
         ctx.shadowBlur = 18;
         ctx.shadowOffsetX = 0;
         ctx.shadowOffsetY = 0;
+      } else {
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
       }
       if (!wantsSpecial) {
-        ctx.globalAlpha = 0.3;
+        ctx.globalAlpha = (isOverlay ? 0.3 : 1.0);
+      } else {
+        ctx.globalAlpha = 1.0;
       }
 
       ctx.beginPath();
@@ -2679,7 +2805,7 @@ function syncBackBufferSizes() {
             }
             ctx.fillStyle = grad;
           } else {
-            ctx.fillStyle = 'rgba(255,255,255,0.9)';
+            ctx.fillStyle = color;
           }
         } else {
           ctx.fillStyle = color;
@@ -2696,8 +2822,8 @@ function syncBackBufferSizes() {
         const lw = getLineWidth() + (isOverlay ? 1.25 : 0);
         ctx.lineWidth = lw;
         if (wantsSpecial) {
-          const p1 = stroke.pts[0];
-          const pLast = stroke.pts[stroke.pts.length - 1];
+         const p1 = stroke.pts[0];
+         const pLast = stroke.pts[stroke.pts.length - 1];
           const grad = ctx.createLinearGradient(p1.x, p1.y, pLast.x, pLast.y);
           if (isOverlay) {
             const t = (performance.now ? performance.now() : Date.now());
@@ -2714,8 +2840,6 @@ function syncBackBufferSizes() {
               grad.addColorStop(1, `hsl(${(hue - 50).toFixed(0)}, 100%, 64%)`);
             }
             ctx.strokeStyle = grad;
-          } else {
-            ctx.strokeStyle = 'rgba(255,255,255,0.9)';
           }
         } else {
           ctx.strokeStyle = color;
@@ -2728,13 +2852,16 @@ function syncBackBufferSizes() {
   }
   function eraseAtPoint(p) {
     const R = getLineWidth(); // This is the radius
-    pctx.save();
-    pctx.globalCompositeOperation = 'destination-out';
-    pctx.beginPath();
-    pctx.arc(p.x, p.y, R, 0, Math.PI * 2, false);
-    pctx.fillStyle = '#000';
-    pctx.fill();
-    pctx.restore();
+    resetCtx(pctx);
+    withLogicalSpace(pctx, () => {
+      pctx.save();
+      pctx.globalCompositeOperation = 'destination-out';
+      pctx.beginPath();
+      pctx.arc(p.x, p.y, R, 0, Math.PI * 2, false);
+      pctx.fillStyle = '#000';
+      pctx.fill();
+      pctx.restore();
+    });
   }
 
   function animateErasedNode(node) {
@@ -2757,18 +2884,21 @@ function syncBackBufferSizes() {
             const scale = 1 + 2.5 * easedProgress; // Scale up to 3.5x
             const opacity = 1 - progress; // Fade out
 
-            nctx.save();
-            nctx.globalAlpha = opacity;
-            nctx.fillStyle = 'rgba(255, 255, 255, 1)'; // Bright white
+            resetCtx(nctx);
+            withLogicalSpace(nctx, () => {
+              nctx.save();
+              nctx.globalAlpha = opacity;
+              nctx.fillStyle = 'rgba(255, 255, 255, 1)'; // Bright white
 
-            // Add a bright glow that fades
-            nctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
-            nctx.shadowBlur = 20 * (1 - progress);
+              // Add a bright glow that fades
+              nctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
+              nctx.shadowBlur = 20 * (1 - progress);
 
-            nctx.beginPath();
-            nctx.arc(node.x, node.y, initialRadius * scale, 0, Math.PI * 2);
-            nctx.fill();
-            nctx.restore();
+              nctx.beginPath();
+              nctx.arc(node.x, node.y, initialRadius * scale, 0, Math.PI * 2);
+              nctx.fill();
+              nctx.restore();
+            });
             requestAnimationFrame(frame);
         }
     }
@@ -2778,10 +2908,13 @@ function syncBackBufferSizes() {
   function drawNodes(nodes) {
     const nodeCoords = [];
     nodeCoordsForHitTest = [];
-    withIdentity(nctx, () => {
+    resetCtx(nctx);
+    resetCtx(nctx);
+    withLogicalSpace(nctx, () => {
       const surface = nctx.canvas;
-      const width = surface?.width ?? cssW;
-      const height = surface?.height ?? cssH;
+      const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+      const width = cssW || (surface?.width ?? 0) / scale;
+      const height = cssH || (surface?.height ?? 0) / scale;
       nctx.clearRect(0, 0, width, height);
       renderDragScaleBlueHints(nctx);
       if (!nodes) {
@@ -2977,12 +3110,12 @@ function syncBackBufferSizes() {
   }
 
   function drawNoteLabels(nodes) {
-    withIdentity(nctx, () => {
+    withLogicalSpace(nctx, () => {
       nctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
       nctx.font = '600 12px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
       nctx.textAlign = 'center';
       nctx.textBaseline = 'alphabetic';
-      const labelY = Math.round(cssH - 10);
+      const labelY = Math.round((cssH || 0) - 10);
 
       for (let c = 0; c < cols; c++) {
         if (!nodes[c] || nodes[c].size === 0) continue;
@@ -3137,6 +3270,22 @@ function syncBackBufferSizes() {
     return {active, nodes, disabled};
   }
 
+  // Convert pointer events into layout-space coordinates that ignore board zoom scaling.
+  function getPointerPosition(e) {
+    const rect = paint?.getBoundingClientRect?.();
+    if (!rect) return { x: 0, y: 0 };
+    const layoutW = paint?.offsetWidth || cssW || rect.width || 1;
+    const layoutH = paint?.offsetHeight || cssH || rect.height || 1;
+    const scaleX = rect.width > 0 ? layoutW / rect.width : 1;
+    const scaleY = rect.height > 0 ? layoutH / rect.height : 1;
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+    return {
+      x: offsetX * (Number.isFinite(scaleX) ? scaleX : 1),
+      y: offsetY * (Number.isFinite(scaleY) ? scaleY : 1),
+    };
+  }
+
   function eraseNodeAtPoint(p) {
     const eraserRadius = getLineWidth();
     for (const node of [...nodeCoordsForHitTest]) { // Iterate on a copy
@@ -3167,13 +3316,8 @@ function syncBackBufferSizes() {
 
   function onPointerDown(e){
     stopAutoGhostGuide({ immediate: false });
-    const rect = paint.getBoundingClientRect();
-    // Use shared w/h for coordinate mapping
-    const p = {
-      x: (e.clientX - rect.left) * (cssW > 0 ? cssW / rect.width : 1),
-      y: (e.clientY - rect.top) * (cssH > 0 ? cssH / rect.height : 1)
-    };
-    
+    const p = getPointerPosition(e);
+
     // (Top cubes removed)
 
     // Check for node hit first using full grid cell bounds (bigger tap area)
@@ -3236,12 +3380,7 @@ function syncBackBufferSizes() {
     }
   }
   function onPointerMove(e){
-    const rect = paint.getBoundingClientRect();
-    // Use shared w/h for coordinate mapping
-    const p = {
-      x: (e.clientX - rect.left) * (cssW > 0 ? cssW / rect.width : 1),
-      y: (e.clientY - rect.top) * (cssH > 0 ? cssH / rect.height : 1)
-    };
+    const p = getPointerPosition(e);
     if (!pctx) {
       DG.warn('pctx missing; forcing front buffers');
       if (typeof useFrontBuffers === 'function') useFrontBuffers();
@@ -3361,18 +3500,18 @@ function syncBackBufferSizes() {
 
     if (cur) {
       cur.pts.push(p);
-      // Determine if current stroke is a special-line preview (show only on overlay)
-      const isZoomed = panel.classList.contains('toy-zoomed');
+      // Determine if current stroke should show a special-line preview
+      const isAdvanced = panel.classList.contains('toy-zoomed');
       const hasLine1 = strokes.some(s => s.generatorId === 1);
       const hasLine2 = strokes.some(s => s.generatorId === 2);
+
       previewGid = null;
-      if (!isZoomed) {
-        // Standard: first stroke previews as Line 1 if none yet
-        if (!hasLine1 && !hasLine2) previewGid = 1;
-      } else {
-        // Advanced: always preview Line 1 if not yet drawn; otherwise only when explicitly armed
+      // Only show preview in advanced mode or when a line button is explicitly armed.
+      if (isAdvanced) {
         if (!hasLine1) previewGid = 1;
         else if (nextDrawTarget) previewGid = nextDrawTarget;
+      } else if (nextDrawTarget) {
+        previewGid = nextDrawTarget;
       }
       // For normal lines (no previewGid), paint segment onto paint; otherwise, overlay will show it
       if (!previewGid) {
@@ -3499,6 +3638,7 @@ function syncBackBufferSizes() {
       erasedTargetsThisDrag.clear();
       clearAndRedrawFromStrokes(); // Redraw to bake in the erase
       schedulePersistState();
+      try { window.Persistence?.flushAutosaveNow?.(); } catch {}
       pendingPaintSwap = true;
       __dgNeedsUIRefresh = true;
       if (!zoomGestureActive) {
@@ -3578,15 +3718,18 @@ function syncBackBufferSizes() {
 
     // Redraw back for consistency, and regenerate nodes
     clearAndRedrawFromStrokes();
+    pendingPaintSwap = true;
 
     // Commit to front immediately
-    withIdentity(pctx, () => { drawFullStroke(pctx, strokeToProcess); });
+    resetCtx(pctx);
+    withLogicalSpace(pctx, () => { drawFullStroke(pctx, strokeToProcess); });
 
     // No swap needed
     __dgNeedsUIRefresh = true;
     // After drawing, unmark all strokes so they become part of the normal background for the next operation.
     strokes.forEach(s => delete s.justCreated);
     schedulePersistState();
+    try { window.Persistence?.flushAutosaveNow?.(); } catch {}
 
     try {
       syncLetterFade();
@@ -3609,6 +3752,12 @@ function syncBackBufferSizes() {
         nodes: Array.from({length:cols}, ()=> new Set()),
         disabled: Array.from({length:cols}, ()=> new Set())
     };
+
+    tempCtx.save();
+    tempCtx.globalCompositeOperation = 'source-over';
+    tempCtx.globalAlpha = 1;
+    tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+    tempCtx.restore();
 
     drawFullStroke(tempCtx, stroke);
     // Pass the temporary context to the main snapToGrid function
@@ -3709,13 +3858,15 @@ function syncBackBufferSizes() {
         const dt = Number.isFinite(dtMs) ? dtMs / 1000 : (1 / 60);
         particles?.step?.(dt);
         if (particleDrawCtx) {
-          withIdentity(particleDrawCtx, () => {
+          resetCtx(particleDrawCtx);
+          withLogicalSpace(particleDrawCtx, () => {
             const surface = particleDrawCtx.canvas;
-            const width = surface?.width ?? cssW;
-            const height = surface?.height ?? cssH;
+            const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+            const width = cssW || (surface?.width ?? 0) / scale;
+            const height = cssH || (surface?.height ?? 0) / scale;
             particleDrawCtx.clearRect(0, 0, width, height);
+            particles?.draw?.(particleDrawCtx, zoomGestureActive);
           });
-          particles?.draw?.(particleDrawCtx, zoomGestureActive);
         }
       }
     } catch (e) {
@@ -3748,16 +3899,32 @@ function syncBackBufferSizes() {
           ensureBackVisualsFreshFromFront();
         }
         if (ghostCtx?.canvas) {
-          withIdentity(ghostCtx, () => ghostCtx.clearRect(0, 0, ghostCtx.canvas.width, ghostCtx.canvas.height));
+          const ghostSurface = getActiveGhostCanvas();
+          resetCtx(ghostCtx);
+          withLogicalSpace(ghostCtx, () => {
+            const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+            const width = cssW || (ghostSurface?.width ?? ghostCtx.canvas.width ?? 0) / scale;
+            const height = cssH || (ghostSurface?.height ?? ghostCtx.canvas.height ?? 0) / scale;
+            ghostCtx.clearRect(0, 0, width, height);
+          });
         }
         if (fctx?.canvas) {
-          withIdentity(fctx, () => fctx.clearRect(0, 0, fctx.canvas.width, fctx.canvas.height));
+          const flashSurface = getActiveFlashCanvas();
+          resetCtx(fctx);
+          withLogicalSpace(fctx, () => {
+            const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+            const width = cssW || (flashSurface?.width ?? fctx.canvas.width ?? 0) / scale;
+            const height = cssH || (flashSurface?.height ?? fctx.canvas.height ?? 0) / scale;
+            fctx.clearRect(0, 0, width, height);
+          });
         }
         if (tutorialCtx?.canvas) {
-          withIdentity(tutorialCtx, () => {
+          resetCtx(tutorialCtx);
+          withLogicalSpace(tutorialCtx, () => {
             const active = getActiveTutorialCanvas();
-            const tw = active?.width || 0;
-            const th = active?.height || 0;
+            const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+            const tw = cssW || (active?.width ?? tutorialCtx.canvas.width ?? 0) / scale;
+            const th = cssH || (active?.height ?? tutorialCtx.canvas.height ?? 0) / scale;
             tutorialCtx.clearRect(0, 0, tw, th);
           });
         }
@@ -3781,8 +3948,9 @@ function syncBackBufferSizes() {
     }
 
     // Set playing class for border highlight
-    const isActiveInChain = panel.dataset.chainActive === 'true';
-    const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
+    const hasChainLink = panel.dataset.nextToyId || panel.dataset.prevToyId;
+    const isChained = !!hasChainLink;
+    const isActiveInChain = isChained ? (panel.dataset.chainActive === 'true') : true;
     const hasActiveNotes = currentMap && currentMap.active && currentMap.active.some(a => a);
 
     const head = isChained ? findChainHead(panel) : panel;
@@ -3803,8 +3971,12 @@ function syncBackBufferSizes() {
     // --- other overlay layers still respect allowOverlayDraw ---
     if (allowOverlayDraw) {
       // Clear flash canvas for this frame's animations
-      withIdentity(fctx, () => {
-        fctx.clearRect(0, 0, flashSurface.width, flashSurface.height);
+      resetCtx(fctx);
+      withLogicalSpace(fctx, () => {
+        const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+        const width = cssW || (flashSurface?.width ?? 0) / scale;
+        const height = cssH || (flashSurface?.height ?? 0) / scale;
+        fctx.clearRect(0, 0, width, height);
       });
 
       // Animate special stroke paint (hue cycling) without resurrecting erased areas:
@@ -3820,17 +3992,28 @@ function syncBackBufferSizes() {
           } catch {}
           // Then draw animated special lines on top of normal lines
           for (const s of specialStrokes) drawFullStroke(fctx, s);
-          // Mask with paint alpha without scaling (device pixels)
-          fctx.setTransform(1, 0, 0, 1, 0, 0);
-          fctx.globalCompositeOperation = 'destination-in';
-          fctx.drawImage(paint, 0, 0);
-          // Now draw current special preview ON TOP unmasked, so full stroke is visible while drawing
+          // Draw current special preview before masking so it also respects the paint mask
           if (cur && previewGid && cur.pts && cur.pts.length) {
             fctx.setTransform(1, 0, 0, 1, 0, 0);
             fctx.globalCompositeOperation = 'source-over';
             const preview = { pts: cur.pts, isSpecial: true, generatorId: previewGid };
             drawFullStroke(fctx, preview);
           }
+          // Mask the overlay with the current paint alpha, scaled to the flash surface size.
+          withDeviceSpace(fctx, () => {
+            const flashSurface = getActiveFlashCanvas();
+            const maskW = flashSurface?.width || fctx.canvas?.width || paint?.width || 0;
+            const maskH = flashSurface?.height || fctx.canvas?.height || paint?.height || 0;
+            fctx.globalCompositeOperation = 'destination-in';
+            fctx.globalAlpha = 1;
+            fctx.drawImage(
+              paint,
+              0, 0, paint.width, paint.height,
+              0, 0, maskW, maskH
+            );
+            fctx.globalCompositeOperation = 'source-over';
+            fctx.globalAlpha = 1;
+          });
           fctx.restore();
       } else {
       }
@@ -4060,7 +4243,12 @@ function syncBackBufferSizes() {
       clearCanvas(pctx);
       clearCanvas(nctx);
       const flashSurface = getActiveFlashCanvas();
-      withIdentity(fctx, () => fctx.clearRect(0, 0, flashSurface.width, flashSurface.height));
+      withLogicalSpace(fctx, () => {
+        const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+        const width = cssW || (flashSurface?.width ?? 0) / scale;
+        const height = cssH || (flashSurface?.height ?? 0) / scale;
+        fctx.clearRect(0, 0, width, height);
+      });
 
       const denormPt = (nx, ny) => {
         const gh = Math.max(1, gridArea.h - topPad);
@@ -4085,7 +4273,7 @@ function syncBackBufferSizes() {
       regenerateMapFromStrokes();
       currentMap = normalizeMapColumns(currentMap, cols);
 
-      withIdentity(pctx, () => {
+      withLogicalSpace(pctx, () => {
         clearCanvas(pctx);
         for (const s of strokes) drawFullStroke(pctx, s);
       });
@@ -4093,10 +4281,12 @@ function syncBackBufferSizes() {
       emitDrawgridUpdate({ activityOnly: false });
       drawGrid();
       if (currentMap) drawNodes(currentMap.nodes);
-    } catch (e) {
+  } catch (e) {
       emitDrawgridUpdate({ activityOnly: false });
     } finally {
       isRestoring = prevRestoring;
+      __dgNeedsUIRefresh = true;
+      __dgStableFramesAfterCommit = 0;
       try {
         const hasStrokes = Array.isArray(strokes) && strokes.length > 0;
         const hasErase = Array.isArray(eraseStrokes) && eraseStrokes.length > 0;
@@ -4121,8 +4311,11 @@ function syncBackBufferSizes() {
       clearCanvas(pctx);
       clearCanvas(nctx);
       const flashSurface = getActiveFlashCanvas();
-      withIdentity(fctx, () => {
-        fctx.clearRect(0, 0, flashSurface.width, flashSurface.height);
+      withLogicalSpace(fctx, () => {
+        const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+        const width = cssW || (flashSurface?.width ?? 0) / scale;
+        const height = cssH || (flashSurface?.height ?? 0) / scale;
+        fctx.clearRect(0, 0, width, height);
       });
       strokes = [];
       eraseStrokes = [];
@@ -4508,8 +4701,13 @@ function syncBackBufferSizes() {
     }
     if (immediate) {
       const ghostSurface = getActiveGhostCanvas();
-      withIdentity(ghostCtx, () => {
-        ghostCtx.clearRect(0, 0, ghostSurface.width, ghostSurface.height);
+      resetCtx(ghostCtx);
+      resetCtx(ghostCtx);
+      withLogicalSpace(ghostCtx, () => {
+        const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+        const width = cssW || (ghostSurface?.width ?? 0) / scale;
+        const height = cssH || (ghostSurface?.height ?? 0) / scale;
+        ghostCtx.clearRect(0, 0, width, height);
       });
     } else {
       ghostFadeRAF = requestAnimationFrame(() => fadeOutGhostTrail(0));
@@ -4522,10 +4720,15 @@ function syncBackBufferSizes() {
       ghostFadeRAF = 0;
       return;
     }
-    withIdentity(ghostCtx, () => {
+    resetCtx(ghostCtx);
+    resetCtx(ghostCtx);
+    withLogicalSpace(ghostCtx, () => {
+      const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+      const width = cssW || (ghostSurface?.width ?? 0) / scale;
+      const height = cssH || (ghostSurface?.height ?? 0) / scale;
       ghostCtx.globalCompositeOperation = 'destination-out';
       ghostCtx.globalAlpha = 0.18;
-      ghostCtx.fillRect(0, 0, ghostSurface.width, ghostSurface.height);
+      ghostCtx.fillRect(0, 0, width, height);
     });
     ghostCtx.globalCompositeOperation = 'source-over';
     ghostCtx.globalAlpha = 1.0;
@@ -4607,16 +4810,21 @@ function syncBackBufferSizes() {
     if (y > bottomBound) y = bottomBound - (y - bottomBound);
     else if (y < topBound) y = topBound + (topBound - y);
 
-    withIdentity(ghostCtx, () => {
+    resetCtx(ghostCtx);
+    withLogicalSpace(ghostCtx, () => {
+      const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+      const width = cssW || (ghostSurface?.width ?? 0) / scale;
+      const height = cssH || (ghostSurface?.height ?? 0) / scale;
       ghostCtx.globalCompositeOperation = 'destination-out';
       ghostCtx.globalAlpha = 0.1;
-      ghostCtx.fillRect(0, 0, ghostSurface.width, ghostSurface.height);
+      ghostCtx.fillRect(0, 0, width, height);
     });
     ghostCtx.globalCompositeOperation = 'source-over';
     ghostCtx.globalAlpha = 1.0;
 
     if (last) {
-      withIdentity(ghostCtx, () => {
+      resetCtx(ghostCtx);
+      withLogicalSpace(ghostCtx, () => {
         ghostCtx.globalCompositeOperation = 'source-over';
         ghostCtx.globalAlpha = 0.25;
         ghostCtx.lineCap = 'round';

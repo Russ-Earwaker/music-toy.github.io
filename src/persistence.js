@@ -386,8 +386,15 @@ export function startAutosave(intervalMs){
   setTimeout(()=>{ try{ markDirty(); }catch{} }, 250);
 }
 
+export function flushAutosaveNow(){
+  try{
+    const snap = getSnapshot();
+    saveToKey(AUTOSAVE_KEY, snap);
+  }catch{}
+}
+
 export function stopAutosave(){
-  ['click','change','pointerup','keyup'].forEach(evt => document.removeEventListener(evt, markDirty, true));
+  ['click','change','pointerdown','pointerup','keyup'].forEach(evt => document.removeEventListener(evt, markDirty, true));
   window.removeEventListener('resize', markDirty, true);
   if (__autosaveTimer) { clearTimeout(__autosaveTimer); __autosaveTimer = 0; }
 }
@@ -419,4 +426,4 @@ export function tryRestoreOnBoot(){
 }
 
 // Expose in window for quick manual access/debug
-try{ window.Persistence = { getSnapshot, applySnapshot, saveScene, loadScene, listScenes, deleteScene, exportScene, importScene, startAutosave, stopAutosave, markDirty, tryRestoreOnBoot }; }catch{}
+try{ window.Persistence = { getSnapshot, applySnapshot, saveScene, loadScene, listScenes, deleteScene, exportScene, importScene, startAutosave, stopAutosave, markDirty, tryRestoreOnBoot, flushAutosaveNow }; }catch{}
