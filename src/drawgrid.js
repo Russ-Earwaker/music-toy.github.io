@@ -4992,6 +4992,21 @@ function runAutoGhostGuideSweep() {
     }
   });
 
+  requestAnimationFrame(() => {
+    try {
+      if (!panel.isConnected) return;
+      ensureSizeReady({ force: true });
+      layout(true);
+      drawGrid();
+      if (currentMap?.nodes) {
+        drawNodes(currentMap.nodes);
+      }
+      startAutoGhostGuide({ immediate: true });
+      __dgNeedsUIRefresh = true;
+      __dgStableFramesAfterCommit = 0;
+    } catch {}
+  });
+
   scheduleGhostIfEmpty({ initialDelay: 150 });
 
   try { panel.dispatchEvent(new CustomEvent('drawgrid:ready', { bubbles: true })); } catch {}
