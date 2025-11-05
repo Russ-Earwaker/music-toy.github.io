@@ -1083,9 +1083,10 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
   const frontCanvas = paint;
   frontCanvas.classList.add('toy-canvas');
-  const pctx = frontCanvas.getContext('2d', { willReadFrequently: true });
+  const frontCtx = frontCanvas.getContext('2d', { willReadFrequently: true });
   const backCanvas = document.createElement('canvas');
   const backCtx = backCanvas.getContext('2d', { alpha: true, desynchronized: true });
+  let pctx = frontCtx;
 
   const nodesFrontCtx = nodesCanvas.getContext('2d', { willReadFrequently: true });
   const nodesBackCanvas = document.createElement('canvas');
@@ -1106,6 +1107,20 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const tutorialBackCanvas = document.createElement('canvas');
   const tutorialBackCtx = tutorialBackCanvas.getContext('2d');
   let tutorialCtx = tutorialFrontCtx;
+
+  // === Active canvas helpers (front/back safe) ===
+  function getActivePaintCanvas() {
+    return usingBackBuffers ? frontCanvas : paint;
+  }
+  function getActivePaintCtx() {
+    const surf = getActivePaintCanvas();
+    return (surf && typeof surf.getContext === 'function') ? surf.getContext('2d') : pctx;
+  }
+  function resetPaintBlend(ctx) {
+    if (!ctx) return;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+  }
 
   function resizeSurfacesFor(nextCssW, nextCssH, nextDpr) {
     const dpr = Math.max(1, Number.isFinite(nextDpr) ? nextDpr : (window.devicePixelRatio || 1));
@@ -3416,6 +3431,15 @@ function syncBackBufferSizes() {
         pts:[p],
         color: STROKE_COLORS[colorIndex++ % STROKE_COLORS.length]
       };
+      pctx = getActivePaintCtx();
+      resetPaintBlend(pctx);
+      try {
+        console.debug('[DG][ink] pointerdown', {
+          id: panel.id,
+          usingBackBuffers,
+          frontIs: getActivePaintCanvas()?.getAttribute?.('data-role') || null,
+        });
+      } catch {}
       try {
         particles.drawingDisturb(p.x, p.y, getLineWidth() * 2.0, 0.6);
       } catch(e) {}
@@ -3542,6 +3566,28 @@ function syncBackBufferSizes() {
     if (!drawing) return; // Guard for drawing logic below
 
     if (cur) {
+      pctx = getActivePaintCtx();
+      resetPaintBlend(pctx);
+      try {
+        if (!previewGid && pctx) {
+          const sz = Math.max(1, Math.floor(getLineWidth() / 6));
+          withLogicalSpace(pctx, () => {
+            pctx.fillStyle = '#ffffff';
+            pctx.fillRect(p.x, p.y, sz, sz);
+          });
+        }
+        console.debug('[DG][ink] livemove', {
+          id: panel.id,
+          w: pctx?.canvas?.width ?? null,
+          h: pctx?.canvas?.height ?? null,
+          cssW,
+          cssH,
+          dpr: paintDpr,
+          usingBackBuffers,
+          previewGid,
+          nextDrawTarget,
+        });
+      } catch {}
       cur.pts.push(p);
       // Determine if current stroke should show a special-line preview
       const isAdvanced = panel.classList.contains('toy-zoomed');
@@ -3681,19 +3727,13 @@ function syncBackBufferSizes() {
 
     const strokeToProcess = cur;
     cur = null;
-    let drewPreviewToPaint = false;
 
-    // If we were previewing a special line, commit it to the paint layer immediately.
-    if (strokeToProcess && previewGid && pctx) {
-      drewPreviewToPaint = true;
+    // If we were previewing a special line, mark it but let the commit redraw handle visibility.
+    if (strokeToProcess && previewGid) {
       try {
         if (!strokeToProcess.generatorId) {
           strokeToProcess.generatorId = previewGid;
         }
-      } catch {}
-      try {
-        resetCtx(pctx);
-        withLogicalSpace(pctx, () => { drawFullStroke(pctx, strokeToProcess); });
       } catch {}
       try { previewGid = null; } catch {}
     }
@@ -3791,12 +3831,20 @@ function syncBackBufferSizes() {
 
     // Redraw back for consistency, and regenerate nodes
     clearAndRedrawFromStrokes();
-    pendingPaintSwap = true;
+    pendingPaintSwap = usingBackBuffers;
 
-    // Commit to front immediately
-    if (!drewPreviewToPaint) {
-      resetCtx(pctx);
-      withLogicalSpace(pctx, () => { drawFullStroke(pctx, strokeToProcess); });
+    // Commit: redraw ink to the visible paint surface (front)
+    pctx = getActivePaintCtx();
+    resetPaintBlend(pctx);
+    if (pctx) {
+      clearCanvas(pctx);
+      withLogicalSpace(pctx, () => {
+        for (const s of strokes) drawFullStroke(pctx, s);
+      });
+    }
+    // Keep back buffer fresh if we use it
+    if (usingBackBuffers && typeof ensureBackVisualsFreshFromFront === 'function') {
+      try { ensureBackVisualsFreshFromFront(); } catch {}
     }
 
     // No swap needed

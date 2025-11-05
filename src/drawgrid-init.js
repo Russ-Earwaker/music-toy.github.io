@@ -11,6 +11,11 @@ export function initDrawGrid(panel){
   initToyUI(panel, { toyName: 'Draw Grid', defaultInstrument: 'acoustic_guitar', });
   const toy = createDrawGrid(panel, { toyId: panel.id });
   try { console.log('[drawgrid-init] create', { id: panel.id, toyId: panel.id }); } catch {}
+  try {
+    if (panel.dataset.chainParent) {
+      panel.dataset.autoplay = 'chain';
+    }
+  } catch {}
   connectDrawGridToPlayer(panel);
   // --- Hydrate drawgrid state (pending stash or persisted local) ---
   try {

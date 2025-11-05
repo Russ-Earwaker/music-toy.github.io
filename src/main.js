@@ -371,7 +371,21 @@ const CSV_PATH = './assets/samples/samples.csv'; // optional
 const $ = (sel, root=document)=> root.querySelector(sel);
 function bootTopbar(){
   const playBtn = $('#play'), stopBtn = $('#stop'), bpmInput = $('#bpm');
-  playBtn?.addEventListener('click', ()=>{ ensureAudioContext(); start(); });
+  playBtn?.addEventListener('click', ()=>{
+    ensureAudioContext();
+    start();
+    try {
+      const panels = Array.from(document.querySelectorAll('.toy-panel[id]'));
+      const roots = panels.filter(el => !el.dataset.chainParent);
+      console.log('[chain] play → roots', roots.map(r => r.id));
+      const visited = new Set();
+      for (const root of roots) {
+        startToyAndDescendants(root, visited);
+      }
+    } catch (err) {
+      console.warn('[chain] play cascade failed', err);
+    }
+  });
   stopBtn?.addEventListener('click', ()=>{ try{ ensureAudioContext().suspend(); }catch{} });
   bpmInput?.addEventListener('change', (e)=> setBpm(Number(e.target.value)||DEFAULT_BPM));
 }
@@ -454,6 +468,36 @@ function doesChainHaveActiveNotes(headId) {
         current = document.getElementById(nextId);
     } while (current && current.id !== headId && sanity-- > 0);
     return false;
+}
+
+function getChildrenOf(parentId) {
+    if (!parentId) return [];
+    return Array.from(document.querySelectorAll('.toy-panel[id]')).filter(el => el.dataset.chainParent === parentId);
+}
+
+function startToy(panelEl) {
+    if (!panelEl) return;
+    try {
+        const api = panelEl.__toyApi || panelEl.__drawToy || panelEl.__toy || panelEl.__toyInstance || null;
+        if (api && typeof api.start === 'function') {
+            api.start();
+        } else {
+            panelEl.dispatchEvent(new CustomEvent('toy:start', { bubbles: false }));
+        }
+        console.log('[chain] startToy', panelEl.id);
+    } catch (e) {
+        console.warn('[chain] startToy failed', panelEl?.id, e);
+    }
+}
+
+function startToyAndDescendants(panelEl, visited = new Set()) {
+    if (!panelEl || visited.has(panelEl.id)) return;
+    visited.add(panelEl.id);
+    startToy(panelEl);
+    const kids = getChildrenOf(panelEl.id);
+    for (const child of kids) {
+        startToyAndDescendants(child, visited);
+    }
 }
 
 function advanceChain(headId) {
@@ -551,7 +595,11 @@ function initToyChaining(panel) {
         try { delete newPanel.dataset.toyid; } catch {}
         newPanel.dataset.toyid = newPanel.id;
         // drawgrid uses panel.id as its key; make that explicit too
-        try { console.log('[chain] new child', { parent: panel.id, child: newPanel.id }); } catch {}
+        newPanel.dataset.chainParent = sourcePanel.id;
+        try {
+            document.dispatchEvent(new CustomEvent('chain:linked', { detail: { parent: sourcePanel.id, child: newPanel.id, phase: 'create' } }));
+            console.log('[chain] new child', { parent: panel.id, child: newPanel.id });
+        } catch {}
         
         if (sourcePanel.dataset.instrument) {
             newPanel.dataset.instrument = sourcePanel.dataset.instrument;
@@ -1010,6 +1058,11 @@ function updateChains() {
         }
     }
 }
+
+try {
+    window.updateChains = updateChains;
+    window.updateAllChainUIs = updateAllChainUIs;
+} catch {}
 
 function scheduler(){
   let lastPhase = 0;

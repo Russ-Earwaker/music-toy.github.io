@@ -227,6 +227,16 @@ export function getSnapshot(){
       solo: undefined,
     };
   });
+  // --- Capture chain links (parent → child) ---
+  const chains = [];
+  try {
+    const chainedPanels = Array.from(document.querySelectorAll('.toy-panel[id]'));
+    for (const el of chainedPanels) {
+      const childId = el.id;
+      const parentId = el.dataset.chainParent;
+      if (childId && parentId) chains.push({ parentId, childId });
+    }
+  } catch {}
   return {
     schemaVersion: SCHEMA_VERSION,
     createdAt: nowIso(),
@@ -234,6 +244,7 @@ export function getSnapshot(){
     transport: { bpm },
     themeId: getActiveThemeKey?.() || undefined,
     toys,
+    chains,
   };
 }
 
@@ -326,6 +337,68 @@ export function applySnapshot(snap){
         }
       }
       appliedCount++;
+    }
+    // --- Re-link chain edges AFTER all toys exist ---
+    try {
+      const edges = Array.isArray(snap.chains) ? snap.chains : [];
+
+      // 1) Clear any stale prev/next links first (we will rebuild from edges)
+      Array.from(document.querySelectorAll('.toy-panel[id]')).forEach(el => {
+        delete el.dataset.prevToyId;
+        delete el.dataset.nextToyId;
+        // NOTE: keep chainParent; we'll set it from edges below
+        if (!el.dataset.chainParent) delete el.dataset.chainParent;
+      });
+
+      // 2) Rebuild chainParent + linear prev/next links
+      const parentHasNext = new Set(); // prevent multiple next links on the same parent
+      for (const e of edges) {
+        const parent = document.getElementById(e.parentId);
+        const child = document.getElementById(e.childId);
+        if (!parent || !child) continue;
+
+        // Always restore the parent pointer used by play DFS
+        child.dataset.chainParent = parent.id;
+
+        // Rebuild linear prev/next if not already set
+        if (!child.dataset.prevToyId) child.dataset.prevToyId = parent.id;
+
+        // Only set parent's next if it isn't already taken or points to this child
+        if (!parent.dataset.nextToyId || parent.dataset.nextToyId === child.id) {
+          if (!parentHasNext.has(parent.id)) {
+            parent.dataset.nextToyId = child.id;
+            parentHasNext.add(parent.id);
+          }
+        }
+
+        // Keep existing event for any listeners/visuals
+        document.dispatchEvent(new CustomEvent('chain:linked', {
+          detail: { parent: e.parentId || null, child: e.childId, phase: 'restore' }
+        }));
+      }
+
+      // 3) Nudge any chain UI/derived state to refresh (best-effort, non-fatal)
+      try {
+        const raf = window.requestAnimationFrame?.bind(window) ?? (fn => setTimeout(fn, 16));
+        raf(() => {
+          try { window.updateChains?.(); } catch {}
+          try { window.updateAllChainUIs?.(); } catch {}
+          // Optional: log graph for diagnostics
+          try {
+            const graph = Array.from(document.querySelectorAll('.toy-panel[id]')).map(el => ({
+              id: el.id,
+              parent: el.dataset.chainParent || null,
+              prev: el.dataset.prevToyId || null,
+              next: el.dataset.nextToyId || null,
+            }));
+            console.log('[chain] graph (restored)', graph);
+          } catch {}
+        });
+      } catch {}
+
+      console.log('[persistence] chains restored', edges.length);
+    } catch (err) {
+      console.warn('[persistence] chain restore failed', err);
     }
     // Remove any panels that were not part of the snapshot so the board matches the saved scene.
     panels.forEach(panel => {
