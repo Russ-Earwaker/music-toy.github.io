@@ -537,8 +537,27 @@ function initializeNewToy(panel) {
     if (initFn) {
         try {
             initFn(panel);
-            // After init, dispatch a 'toy-clear' event to reset its state.
-            panel.dispatchEvent(new CustomEvent('toy-clear', { bubbles: true }));
+            let shouldDispatchClear = true;
+            if (toyType === 'drawgrid') {
+                try {
+                    const inboundNonEmpty = typeof panel.__drawToy?.__inboundNonEmpty === 'function'
+                        ? !!panel.__drawToy.__inboundNonEmpty()
+                        : false;
+                    if (inboundNonEmpty) {
+                        shouldDispatchClear = false;
+                        console.log('[boot] skip toy-clear for drawgrid (inbound non-empty)', {
+                            panelId: panel.id,
+                            inboundNonEmpty,
+                        });
+                    }
+                } catch (err) {
+                    console.warn('[boot] drawgrid inbound check failed', err);
+                }
+            }
+            // After init, dispatch a 'toy-clear' event to reset its state when safe.
+            if (shouldDispatchClear) {
+                panel.dispatchEvent(new CustomEvent('toy-clear', { bubbles: true }));
+            }
         } catch (e) {
             console.error(`Failed to initialize new toy of type "${toyType}"`, e);
         }

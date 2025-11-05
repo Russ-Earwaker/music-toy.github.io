@@ -4,6 +4,57 @@
 import { bpm, setBpm } from './audio-core.js';
 import { getActiveThemeKey, setActiveThemeKey } from './theme-manager.js';
 
+// ---- Persistence diagnostics ----
+const PERSIST_DIAG = (typeof window !== 'undefined') ? (window.__PERSIST_DIAG = window.__PERSIST_DIAG || {}) : {};
+function __diagNow() {
+  try { return performance.now(); }
+  catch { return Date.now(); }
+}
+function __stateStats(payload) {
+  if (payload && typeof payload === 'object') {
+    if (payload.payload && typeof payload.payload === 'object') {
+      payload = payload.payload;
+    } else if (payload.state && typeof payload.state === 'object') {
+      payload = payload.state;
+    }
+  }
+  if (!payload || typeof payload !== 'object') return { strokes: 0, nodeCount: 0, activeCols: 0, nonEmpty: false };
+  const strokes = Array.isArray(payload.strokes) ? payload.strokes.length : ((payload.strokes | 0) || 0);
+  const list = payload?.nodes?.list;
+  const activeList = Array.isArray(payload?.nodes?.active) ? payload.nodes.active : null;
+  let nodeCount = 0;
+  let activeCols = 0;
+  if (Array.isArray(list)) {
+    for (let i = 0; i < list.length; i++) {
+      const col = list[i];
+      let count = 0;
+      if (col instanceof Set) {
+        count = col.size;
+      } else if (Array.isArray(col)) {
+        count = col.length;
+      } else if (col && typeof col.size === 'number') {
+        count = col.size;
+      }
+      if (count > 0) {
+        nodeCount += count;
+        activeCols++;
+      } else if (activeList && activeList[i]) {
+        activeCols++;
+      }
+    }
+  } else if (activeList) {
+    activeCols = activeList.filter(Boolean).length;
+  }
+  const nonEmpty = (strokes > 0) || (nodeCount > 0) || (activeCols > 0);
+  return { strokes, nodeCount, activeCols, nonEmpty };
+}
+function __shouldVetoEmptyOverwrite(prevPayload, nextPayload, meta) {
+  const prev = __stateStats(prevPayload);
+  const next = __stateStats(nextPayload);
+  const userCleared = !!(meta && meta.userCleared);
+  return (prev.nonEmpty && !next.nonEmpty && !userCleared);
+}
+
 const SCHEMA_VERSION = 1;
 const AUTOSAVE_KEY = 'scene:autosave';
 const LAST_SCENE_KEY = 'prefs:lastScene';
@@ -320,6 +371,13 @@ export function applySnapshot(snap){
         try {
           if (t.type === 'drawgrid') {
             const s = t.state || {};
+            try {
+              const stats = __stateStats(s);
+              let stack = null;
+              try { stack = (new Error('apply-snapshot')).stack?.split('\n').slice(0, 5).join('\n'); } catch {}
+              console.log('[persist][APPLY]', { storageKey: `drawgrid:${panel.id}`, stats, stack });
+              PERSIST_DIAG.lastApply = { t: __diagNow(), storageKey: `drawgrid:${panel.id}`, stats, stack };
+            } catch {}
             const summary = {
               strokes: Array.isArray(s.strokes) ? s.strokes.length : 0,
               erases: Array.isArray(s.eraseStrokes) ? s.eraseStrokes.length : 0,
@@ -429,11 +487,69 @@ export function applySnapshot(snap){
 
 function saveToKey(key, data){
   try{
-    localStorage.setItem(key, JSON.stringify(data));
+    const stateToWrite = data && typeof data === 'object' ? data : null;
+    try {
+      const prevRaw = localStorage.getItem(key);
+      let prevPayload = null;
+      if (prevRaw) {
+        try {
+          const prevParsed = JSON.parse(prevRaw);
+          prevPayload = (prevParsed && typeof prevParsed === 'object' && prevParsed.payload !== undefined)
+            ? prevParsed.payload
+            : prevParsed;
+        } catch (parseErr) {
+          console.warn('[persist] failed to parse previous payload for veto check', parseErr);
+        }
+      }
+      let nextPayload = stateToWrite;
+      if (stateToWrite && typeof stateToWrite === 'object') {
+        if (stateToWrite.payload !== undefined) nextPayload = stateToWrite.payload;
+        else if (stateToWrite.state !== undefined) nextPayload = stateToWrite.state;
+      }
+      const veto = __shouldVetoEmptyOverwrite(prevPayload, nextPayload, stateToWrite?.meta);
+      if (veto) {
+        const prevStats = __stateStats(prevPayload);
+        const nextStats = __stateStats(nextPayload);
+        console.warn('[persist][VETO] blocked empty overwrite', { key, prev: prevStats, next: nextStats, meta: stateToWrite?.meta || null });
+        PERSIST_DIAG.lastVeto = { t: __diagNow(), storageKey: key, prev: prevStats, next: nextStats };
+        return false;
+      }
+    } catch (guardErr) {
+      console.warn('[persist] veto check failed (continuing)', guardErr);
+    }
+    const serialized = JSON.stringify(data);
+    localStorage.setItem(key, serialized);
+    try {
+      let payloadForStats = stateToWrite;
+      if (stateToWrite && typeof stateToWrite === 'object') {
+        if (stateToWrite.payload !== undefined) payloadForStats = stateToWrite.payload;
+        else if (stateToWrite.state !== undefined) payloadForStats = stateToWrite.state;
+      }
+      const stats = __stateStats(payloadForStats);
+      console.log('[persist][WRITE]', { storageKey: key, meta: stateToWrite?.meta || null, stats });
+      PERSIST_DIAG.lastWrite = { t: __diagNow(), storageKey: key, stats };
+    } catch (logErr) {
+      console.warn('[persist] write stat log failed', logErr);
+    }
     return true;
   }catch(e){ console.warn('[persistence] save failed', e); return false; }
 }
-function loadFromKey(key){ try{ const s = localStorage.getItem(key); return s ? JSON.parse(s) : null; }catch(e){ console.warn('[persistence] load failed', e); return null; } }
+function loadFromKey(key){
+  try{
+    const s = localStorage.getItem(key);
+    if (!s) return null;
+    const parsed = JSON.parse(s);
+    try {
+      const payload = (parsed && typeof parsed === 'object' && parsed.payload !== undefined) ? parsed.payload : parsed;
+      const stats = __stateStats(payload);
+      console.log('[persist][READ]', { storageKey: key, stats });
+      PERSIST_DIAG.lastRead = { t: __diagNow(), storageKey: key, stats };
+    } catch (logErr) {
+      console.warn('[persist] read stat log failed', logErr);
+    }
+    return parsed;
+  }catch(e){ console.warn('[persistence] load failed', e); return null; }
+}
 
 export function saveScene(name){
   const snap = getSnapshot();
@@ -555,3 +671,10 @@ export function tryRestoreOnBoot(){
 
 // Expose in window for quick manual access/debug
 try{ window.Persistence = { getSnapshot, applySnapshot, saveScene, loadScene, listScenes, deleteScene, exportScene, importScene, startAutosave, stopAutosave, markDirty, tryRestoreOnBoot, flushAutosaveNow, flushBeforeRefresh }; }catch{}
+if (typeof window !== 'undefined') {
+  window.__PERSIST_DEBUG = {
+    readKey: (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+    writeKey: (k, v) => { try { localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v)); } catch {} },
+    stat: __stateStats,
+  };
+}
