@@ -136,6 +136,7 @@ let __drawParticlesSeed = 1337;
 // --- Commit/settle gating for overlay clears ---
 let __dgDeferUntilTs = 0;
 let __dgNeedsUIRefresh = false;
+let __hydrationJustApplied = false;
 let __dgStableFramesAfterCommit = 0;
 
 // --- Zoom-freeze for overlays ---
@@ -858,9 +859,7 @@ function ringBurst(x, y, radius, countBurst = 28, speed = 2.4, color = 'pink') {
   return { step, draw, onBeat, lineRepulse, drawingDisturb, pointBurst, ringBurst, fadeLettersOut, fadeLettersIn, setLetterFadeTarget, setDpr, scalePositions, onResize, snapAllToHomes, holdNextFrame, cancelHoldNextFrame, allowImmediateDraw };
 }
 
-let currentMap = null; // Store the current node map {active, nodes, disabled}
-let currentCols = 0;
-let nodeCoordsForHitTest = []; // For draggable nodes
+// (moved into createDrawGrid - per-instance)
 
 function normalizeMapColumns(map, cols) {
   // Ensure consistent shape for player & renderers
@@ -878,6 +877,13 @@ function normalizeMapColumns(map, cols) {
 }
 
 export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId, bpm = 120 } = {}) {
+  // Per-instance state (WAS module-level; moving fixes cross-toy leakage)
+  let currentMap = null;                // { active:boolean[], nodes:Set[], disabled:Set[] }
+  let currentCols = 0;
+  let nodeCoordsForHitTest = [];        // For draggable nodes (hit tests, drags)
+
+  // DEBUG: prove these are per-instance
+  try { console.log('[drawgrid] instance-state', panel.id, { scope: 'per-instance' }); } catch {}
   // The init script now guarantees the panel is a valid HTMLElement with the correct dataset.
   // The .toy-body is now guaranteed to exist by initToyUI, which runs first.
   const body = panel.querySelector('.toy-body');
@@ -887,8 +893,33 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   }
   body.style.position = 'relative';
 
-  const resolvedToyId = toyId || panel.dataset.toyid || panel.dataset.toy || panel.id || panel.dataset.toyName || 'drawgrid';
+  const resolvedToyId = toyId || panel.id || panel.dataset.toyid || panel.dataset.toyid || panel.dataset.toyName || 'drawgrid';
   const storageKey = resolvedToyId ? `drawgrid:saved:${resolvedToyId}` : null;
+  // --- DEBUG: verify unique key per panel
+  try {
+    console.log('[drawgrid] init', { panelId: panel.id, resolvedToyId, storageKey });
+  } catch {}
+  // Expose a safe way for persistence.js to inspect our saved state on demand.
+  function __loadPersistedStateRaw() {
+    // Block legacy global key patterns to avoid cross-panel contamination
+    try {
+      if (storageKey && storageKey.endsWith(':drawgrid') && panel.id !== 'drawgrid') {
+        console.warn('[drawgrid] ignoring legacy global key for', panel.id, storageKey);
+        return null;
+      }
+    } catch {}
+    if (!storageKey) return null;
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      const state = parsed?.state || parsed;
+      return (state && typeof state === 'object') ? state : null;
+    } catch {
+      return null;
+    }
+  }
+  try { panel.__getDrawgridPersistedState = __loadPersistedStateRaw; } catch {}
   const PERSIST_DEBOUNCE_MS = 150;
   let persistStateTimer = null;
   let persistedStateCache = null;
@@ -911,7 +942,13 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         fallbackHydrationState = state;
       }
       const payload = { v: 1, state };
-      localStorage.setItem(storageKey, JSON.stringify(payload));
+      try {
+        const serialized = JSON.stringify(payload);
+        localStorage.setItem(storageKey, serialized);
+        console.log('[drawgrid] PERSIST', storageKey, { bytes: serialized.length });
+      } catch(e) {
+        console.warn('[drawgrid] PERSIST failed', e);
+      }
     } catch (err) {
       if (DG_DEBUG) DG.warn('persistState failed', err);
     }
@@ -1272,7 +1309,7 @@ function ensureSizeReady({ force = false } = {}) {
   let cellFlashes = []; // For flashing grid squares on note play
   let noteToggleEffects = []; // For tap feedback animations
   let nodeGroupMap = []; // Per-column Map(row -> groupId or [groupIds]) to avoid cross-line connections and track z-order
-  let nextDrawTarget = null; // Can be 1 or 2. Determines the next special line.
+  let nextDrawTarget = null; // Per-instance arming for generator buttons (1 or 2).
   let flashes = new Float32Array(cols);
   let playheadCol = -1;
   let localLastPhase = 0; // For chain-active race condition
@@ -1964,6 +2001,12 @@ function regenerateMapFromStrokes() {
         emitDrawgridUpdate({ activityOnly: true });
       }
 
+      try {
+        console.log('[drawgrid] drawNodes', panel.id, {
+          cols: currentCols,
+          nodesCols: currentMap?.nodes?.length ?? 0,
+        });
+      } catch {}
       drawNodes(currentMap.nodes);
       drawGrid();
   }
@@ -3513,11 +3556,25 @@ function syncBackBufferSizes() {
       } else if (nextDrawTarget) {
         previewGid = nextDrawTarget;
       }
+      __dbgPointerMoves++;
+      // Debug: track preview vs paint to ensure live line visibility
+      try {
+        if ((__dbgPointerMoves % 7) === 1) {
+          console.log('[drawgrid] liveMove', {
+            id: panel.id,
+            advanced: isAdvanced,
+            nextDrawTarget,
+            previewGid,
+            hasLine1,
+            hasLine2,
+          });
+        }
+      } catch {}
       // For normal lines (no previewGid), paint segment onto paint; otherwise, overlay will show it
       if (!previewGid) {
         // live-draw to FRONT only; no swaps during drag
         drawLiveStrokePoint(pctx, cur.pts[cur.pts.length-1], cur.pts[cur.pts.length-2], cur.color);
-        __dbgPointerMoves++; if ((__dbgPointerMoves % 5)===1) dbg('MOVE', {usingBackBuffers, pendingPaintSwap});
+        if ((__dbgPointerMoves % 5)===1) dbg('MOVE', {usingBackBuffers, pendingPaintSwap});
         __dgNeedsUIRefresh = false; // don't trigger overlay clears during draw
       }
       // Disturb particles for all lines, special or not.
@@ -3624,6 +3681,22 @@ function syncBackBufferSizes() {
 
     const strokeToProcess = cur;
     cur = null;
+    let drewPreviewToPaint = false;
+
+    // If we were previewing a special line, commit it to the paint layer immediately.
+    if (strokeToProcess && previewGid && pctx) {
+      drewPreviewToPaint = true;
+      try {
+        if (!strokeToProcess.generatorId) {
+          strokeToProcess.generatorId = previewGid;
+        }
+      } catch {}
+      try {
+        resetCtx(pctx);
+        withLogicalSpace(pctx, () => { drawFullStroke(pctx, strokeToProcess); });
+      } catch {}
+      try { previewGid = null; } catch {}
+    }
 
     if (erasing) {
       if (curErase) {
@@ -3721,8 +3794,10 @@ function syncBackBufferSizes() {
     pendingPaintSwap = true;
 
     // Commit to front immediately
-    resetCtx(pctx);
-    withLogicalSpace(pctx, () => { drawFullStroke(pctx, strokeToProcess); });
+    if (!drewPreviewToPaint) {
+      resetCtx(pctx);
+      withLogicalSpace(pctx, () => { drawFullStroke(pctx, strokeToProcess); });
+    }
 
     // No swap needed
     __dgNeedsUIRefresh = true;
@@ -3734,6 +3809,12 @@ function syncBackBufferSizes() {
     try {
       syncLetterFade();
     } catch (e) { /* ignore */ }
+    try { previewGid = null; } catch {}
+    nextDrawTarget = null;
+    try {
+      const updateButtons = panel.__dgUpdateButtons || updateGeneratorButtons;
+      if (typeof updateButtons === 'function') updateButtons();
+    } catch {}
   }
 
   // A version of snapToGrid that analyzes a single stroke object instead of the whole canvas
@@ -3895,38 +3976,40 @@ function syncBackBufferSizes() {
       __dgNeedsUIRefresh = false;
       __dgDeferUntilTs = 0;
       try {
-        if (typeof ensureBackVisualsFreshFromFront === 'function') {
-          ensureBackVisualsFreshFromFront();
-        }
-        if (ghostCtx?.canvas) {
-          const ghostSurface = getActiveGhostCanvas();
-          resetCtx(ghostCtx);
-          withLogicalSpace(ghostCtx, () => {
-            const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
-            const width = cssW || (ghostSurface?.width ?? ghostCtx.canvas.width ?? 0) / scale;
-            const height = cssH || (ghostSurface?.height ?? ghostCtx.canvas.height ?? 0) / scale;
-            ghostCtx.clearRect(0, 0, width, height);
-          });
-        }
-        if (fctx?.canvas) {
-          const flashSurface = getActiveFlashCanvas();
-          resetCtx(fctx);
-          withLogicalSpace(fctx, () => {
-            const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
-            const width = cssW || (flashSurface?.width ?? fctx.canvas.width ?? 0) / scale;
-            const height = cssH || (flashSurface?.height ?? fctx.canvas.height ?? 0) / scale;
-            fctx.clearRect(0, 0, width, height);
-          });
-        }
-        if (tutorialCtx?.canvas) {
-          resetCtx(tutorialCtx);
-          withLogicalSpace(tutorialCtx, () => {
-            const active = getActiveTutorialCanvas();
-            const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
-            const tw = cssW || (active?.width ?? tutorialCtx.canvas.width ?? 0) / scale;
-            const th = cssH || (active?.height ?? tutorialCtx.canvas.height ?? 0) / scale;
-            tutorialCtx.clearRect(0, 0, tw, th);
-          });
+        if (!__hydrationJustApplied) {
+          if (typeof ensureBackVisualsFreshFromFront === 'function') {
+            ensureBackVisualsFreshFromFront();
+          }
+          if (ghostCtx?.canvas) {
+            const ghostSurface = getActiveGhostCanvas();
+            resetCtx(ghostCtx);
+            withLogicalSpace(ghostCtx, () => {
+              const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+              const width = cssW || (ghostSurface?.width ?? ghostCtx.canvas.width ?? 0) / scale;
+              const height = cssH || (ghostSurface?.height ?? ghostCtx.canvas.height ?? 0) / scale;
+              ghostCtx.clearRect(0, 0, width, height);
+            });
+          }
+          if (fctx?.canvas) {
+            const flashSurface = getActiveFlashCanvas();
+            resetCtx(fctx);
+            withLogicalSpace(fctx, () => {
+              const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+              const width = cssW || (flashSurface?.width ?? fctx.canvas.width ?? 0) / scale;
+              const height = cssH || (flashSurface?.height ?? fctx.canvas.height ?? 0) / scale;
+              fctx.clearRect(0, 0, width, height);
+            });
+          }
+          if (tutorialCtx?.canvas) {
+            resetCtx(tutorialCtx);
+            withLogicalSpace(tutorialCtx, () => {
+              const active = getActiveTutorialCanvas();
+              const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+              const tw = cssW || (active?.width ?? tutorialCtx.canvas.width ?? 0) / scale;
+              const th = cssH || (active?.height ?? tutorialCtx.canvas.height ?? 0) / scale;
+              tutorialCtx.clearRect(0, 0, tw, th);
+            });
+          }
         }
       } catch (err) {
         DG.warn('deferred UI clear failed', err);
@@ -4000,20 +4083,23 @@ function syncBackBufferSizes() {
             drawFullStroke(fctx, preview);
           }
           // Mask the overlay with the current paint alpha, scaled to the flash surface size.
-          withDeviceSpace(fctx, () => {
-            const flashSurface = getActiveFlashCanvas();
-            const maskW = flashSurface?.width || fctx.canvas?.width || paint?.width || 0;
-            const maskH = flashSurface?.height || fctx.canvas?.height || paint?.height || 0;
-            fctx.globalCompositeOperation = 'destination-in';
-            fctx.globalAlpha = 1;
-            fctx.drawImage(
-              paint,
-              0, 0, paint.width, paint.height,
-              0, 0, maskW, maskH
-            );
-            fctx.globalCompositeOperation = 'source-over';
-            fctx.globalAlpha = 1;
-          });
+          // IMPORTANT: If a live preview is active, skip masking so the preview remains visible.
+          if (!(cur && previewGid && cur.pts && cur.pts.length)) {
+            withDeviceSpace(fctx, () => {
+              const flashSurface = getActiveFlashCanvas();
+              const maskW = flashSurface?.width || fctx.canvas?.width || paint?.width || 0;
+              const maskH = flashSurface?.height || fctx.canvas?.height || paint?.height || 0;
+              fctx.globalCompositeOperation = 'destination-in';
+              fctx.globalAlpha = 1;
+              fctx.drawImage(
+                paint,
+                0, 0, paint.width, paint.height,
+                0, 0, maskW, maskH
+              );
+              fctx.globalCompositeOperation = 'source-over';
+              fctx.globalAlpha = 1;
+            });
+          }
           fctx.restore();
       } else {
       }
@@ -4239,6 +4325,14 @@ function syncBackBufferSizes() {
   function restoreFromState(state) {
     const prevRestoring = isRestoring;
     isRestoring = true;
+    const hasStrokes = Array.isArray(state?.strokes) && state.strokes.length > 0;
+    const hasErase = Array.isArray(state?.eraseStrokes) && state.eraseStrokes.length > 0;
+    const hasActiveNodes = Array.isArray(state?.nodes?.active) && state.nodes.active.some(Boolean);
+    const hasNodeList = Array.isArray(state?.nodes?.list) && state.nodes.list.some(arr => Array.isArray(arr) && arr.length > 0);
+    if (!hasStrokes && !hasErase && !hasActiveNodes && !hasNodeList) {
+      isRestoring = prevRestoring;
+      return;
+    }
     try {
       clearCanvas(pctx);
       clearCanvas(nctx);
@@ -4278,6 +4372,8 @@ function syncBackBufferSizes() {
         for (const s of strokes) drawFullStroke(pctx, s);
       });
 
+      __hydrationJustApplied = true;
+      setTimeout(() => { __hydrationJustApplied = false; }, 32);
       emitDrawgridUpdate({ activityOnly: false });
       drawGrid();
       if (currentMap) drawNodes(currentMap.nodes);
@@ -4484,12 +4580,15 @@ function syncBackBufferSizes() {
                 emitDrawgridUpdate({ activityOnly: false });
               }catch{}
             }
+            __hydrationJustApplied = true;
+            setTimeout(() => { __hydrationJustApplied = false; }, 32);
           }catch(e){ }
           isRestoring = false;
           // Re-check after hydration completes
           stopAutoGhostGuide({ immediate: false });
           scheduleGhostIfEmpty({ initialDelay: 0 });
           schedulePersistState();
+          try { console.log('[drawgrid] SETSTATE complete', panel.id); } catch {}
         });
       });
     }
@@ -4949,6 +5048,8 @@ function runAutoGhostGuideSweep() {
     tutorialHighlightMode = 'none';
     stopTutorialHighlightLoop();
     noteToggleEffects = [];
+    nextDrawTarget = null;
+    previewGid = null;
     if (typeof unsubscribeZoom === 'function') {
       try { unsubscribeZoom(); } catch {}
     }
@@ -4960,6 +5061,7 @@ function runAutoGhostGuideSweep() {
       try { window.removeEventListener('beforeunload', persistStateNow); } catch {}
     }
     persistStateNow();
+    try { delete panel.__getDrawgridPersistedState; } catch {}
     observer.disconnect();
   }, { once: true });
 
@@ -5008,6 +5110,15 @@ function runAutoGhostGuideSweep() {
   });
 
   scheduleGhostIfEmpty({ initialDelay: 150 });
+
+  try {
+    setTimeout(() => {
+      try {
+        window.Persistence?.markDirty?.();
+        window.Persistence?.flushAutosaveNow?.();
+      } catch {}
+    }, 0);
+  } catch {}
 
   try { panel.dispatchEvent(new CustomEvent('drawgrid:ready', { bubbles: true })); } catch {}
   return api;

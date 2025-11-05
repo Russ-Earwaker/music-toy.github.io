@@ -143,19 +143,49 @@ function snapDrawGrid(panel) {
 
 function applyDrawGrid(panel, state) {
   const toy = panel.__drawToy;
-  if (toy && typeof toy.setState === 'function') {
-    try {
-      const hasStrokes = Array.isArray(state?.strokes) && state.strokes.length > 0;
-      const hasErase = Array.isArray(state?.eraseStrokes) && state.eraseStrokes.length > 0;
-      const hasActiveNodes = Array.isArray(state?.nodes?.active) && state.nodes.active.some(Boolean);
 
-      if (hasStrokes || hasErase || hasActiveNodes) {
-        toy.setState(state);
-      } else {
-        // Empty snapshot; allow drawgrid to hydrate itself from localStorage.
-      }
+  // Summarize state for logs
+  const sum = (st = {}) => {
+    const strokes = Array.isArray(st.strokes) ? st.strokes.length : 0;
+    const er = Array.isArray(st.eraseStrokes) ? st.eraseStrokes.length : 0;
+    const act = Array.isArray(st?.nodes?.active) ? st.nodes.active.filter(Boolean).length : 0;
+    const steps = (typeof st.steps === 'number') ? st.steps : undefined;
+    return { strokes, erases: er, activeCols: act, steps };
+  };
+
+  // If toy isn't initialized yet, stash full state for init-time apply.
+  if (!toy || typeof toy.setState !== 'function') {
+    try {
+      panel.__pendingDrawGridState = state || {};
+      console.log('[persistence][drawgrid] STASH (toy-not-ready)', panel.id, sum(state));
+    } catch {}
+    return;
+  }
+
+  try {
+    const hasStrokes = Array.isArray(state?.strokes) && state.strokes.length > 0;
+    const hasErase = Array.isArray(state?.eraseStrokes) && state.eraseStrokes.length > 0;
+    const hasActiveNodes = Array.isArray(state?.nodes?.active) && state.nodes.active.some(Boolean);
+    const meaningful = hasStrokes || hasErase || hasActiveNodes || (typeof state?.steps === 'number');
+
+    if (meaningful) {
+      console.log('[persistence][drawgrid] APPLY (meaningful)', panel.id, sum(state));
+      toy.setState(state);
+      return;
     }
-    catch(e) { console.warn('[persistence] applyDrawGrid failed', e); }
+
+    // Fallback path: empty snapshot — hydrate directly from localStorage.
+    let local = null;
+    try { local = panel.__getDrawgridPersistedState?.(); } catch {}
+    if (local && typeof local === 'object') {
+      console.log('[persistence][drawgrid] APPLY (fallback-local)', panel.id, sum(local));
+      try { toy.setState(local); return; }
+      catch (err) { console.warn('[persistence] drawgrid local fallback failed', err); }
+    }
+
+    console.log('[persistence][drawgrid] NO-OP (empty-state, no-local)', panel.id, sum(state));
+  } catch(e) {
+    console.warn('[persistence] applyDrawGrid failed', e);
   }
 }
 
@@ -276,6 +306,18 @@ export function applySnapshot(snap){
       }catch{}
       const applier = ToySnapshotters[t.type]?.apply;
       if (typeof applier === 'function'){
+        try {
+          if (t.type === 'drawgrid') {
+            const s = t.state || {};
+            const summary = {
+              strokes: Array.isArray(s.strokes) ? s.strokes.length : 0,
+              erases: Array.isArray(s.eraseStrokes) ? s.eraseStrokes.length : 0,
+              activeCols: Array.isArray(s?.nodes?.active) ? s.nodes.active.filter(Boolean).length : 0,
+              steps: typeof s.steps === 'number' ? s.steps : undefined,
+            };
+            console.log('[persistence] APPLY SNAPSHOT -> drawgrid', panel.id, summary);
+          }
+        } catch {}
         try{ applier(panel, t.state||{}); }catch(e){ console.warn('[persistence] apply failed for', t.type, e); }
       } else {
         // If the toy isn't ready yet, stash the state for init-time apply (bouncer)
@@ -393,6 +435,11 @@ export function flushAutosaveNow(){
   }catch{}
 }
 
+// Helper to ensure snapshots are up to date before a manual refresh.
+export function flushBeforeRefresh(){
+  try { flushAutosaveNow(); } catch {}
+}
+
 export function stopAutosave(){
   ['click','change','pointerdown','pointerup','keyup'].forEach(evt => document.removeEventListener(evt, markDirty, true));
   window.removeEventListener('resize', markDirty, true);
@@ -418,7 +465,15 @@ export function tryRestoreOnBoot(){
     if (sceneQ){ /* try{ console.log('[persistence] restoring from ?scene=', sceneQ); }catch{} */ return loadScene(sceneQ); }
     if (auto){
       // try{ console.log('[persistence] restoring from autosave'); }catch{}
-      return applySnapshot(auto);
+      const applied = applySnapshot(auto);
+      if (applied) {
+        try {
+          setTimeout(() => {
+            try { markDirty(); flushAutosaveNow(); } catch {}
+          }, 0);
+        } catch {}
+      }
+      return applied;
     }
     if (last){ return loadScene(last); }
   }catch{}
@@ -426,4 +481,4 @@ export function tryRestoreOnBoot(){
 }
 
 // Expose in window for quick manual access/debug
-try{ window.Persistence = { getSnapshot, applySnapshot, saveScene, loadScene, listScenes, deleteScene, exportScene, importScene, startAutosave, stopAutosave, markDirty, tryRestoreOnBoot, flushAutosaveNow }; }catch{}
+try{ window.Persistence = { getSnapshot, applySnapshot, saveScene, loadScene, listScenes, deleteScene, exportScene, importScene, startAutosave, stopAutosave, markDirty, tryRestoreOnBoot, flushAutosaveNow, flushBeforeRefresh }; }catch{}

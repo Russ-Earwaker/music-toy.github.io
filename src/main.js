@@ -546,7 +546,12 @@ function initToyChaining(panel) {
         const newPanel = document.createElement('div');
         newPanel.className = 'toy-panel';
         newPanel.dataset.toy = toyType;
-        newPanel.id = `${toyType}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        // --- Ensure brand new identity & no inherited persistence hints
+        newPanel.id = `toy-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        try { delete newPanel.dataset.toyid; } catch {}
+        newPanel.dataset.toyid = newPanel.id;
+        // drawgrid uses panel.id as its key; make that explicit too
+        try { console.log('[chain] new child', { parent: panel.id, child: newPanel.id }); } catch {}
         
         if (sourcePanel.dataset.instrument) {
             newPanel.dataset.instrument = sourcePanel.dataset.instrument;
@@ -586,6 +591,27 @@ function initToyChaining(panel) {
 
             initializeNewToy(newPanel);
             initToyChaining(newPanel); // Give the new toy its own extend button
+            const enqueueClear = (typeof queueMicrotask === 'function')
+                ? queueMicrotask
+                : ((fn) => {
+                    try {
+                        Promise.resolve().then(fn);
+                    } catch {
+                        setTimeout(fn, 0);
+                    }
+                });
+            enqueueClear(() => {
+                try {
+                    const drawToy = newPanel.__drawToy;
+                    if (drawToy && typeof drawToy.clear === 'function') {
+                        drawToy.clear();
+                    } else {
+                        newPanel.dispatchEvent(new CustomEvent('toy-clear', { bubbles: false }));
+                    }
+                } catch {
+                    // Best-effort clear; ignore failures so chaining still works.
+                }
+            });
 
             const oldNextId = sourcePanel.dataset.nextToyId;
             sourcePanel.dataset.nextToyId = newPanel.id;
@@ -666,7 +692,11 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument } = {}) {
     panel.className = 'toy-panel';
     panel.dataset.toy = type;
     const idSuffix = Math.random().toString(36).slice(2, 8);
-    panel.id = `${type}-${Date.now()}-${idSuffix}`;
+    // Stable, unique id composed of type + timestamp + short random.
+    // This id is used by drawgrid persistence; ensure it exists before init.
+    if (!panel.id) {
+      panel.id = `${type}-${Date.now()}-${idSuffix}`;
+    }
     panel.style.position = 'absolute';
 
     if (instrument) panel.dataset.instrument = instrument;
@@ -1052,6 +1082,13 @@ async function boot(){
     try{ restored = !!tryRestoreOnBoot(); }catch{}
     bootGrids();
     bootDrawGrids();
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-action="refresh"], .btn-refresh, [data-refresh]');
+      if (btn) {
+        try { window.Persistence?.flushBeforeRefresh?.(); } catch {}
+        try { console.log('[MAIN] refresh requested -> flushed autosave'); } catch {}
+      }
+    }, true);
     document.querySelectorAll('.toy-panel').forEach(initToyChaining);
     updateAllChainUIs(); // Set initial instrument button visibility
 
