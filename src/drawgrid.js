@@ -22,6 +22,11 @@ const DG = {
   timeEnd: (label) => { if (DG_DEBUG) console.timeEnd(label); },
 };
 
+// Toggle for detailed drawgrid diagnostics. Flip to true when chasing state issues.
+const DG_TRACE_DEBUG = false;
+const dgTraceLog = (...args) => { if (DG_TRACE_DEBUG) console.log(...args); };
+const dgTraceWarn = (...args) => { if (DG_TRACE_DEBUG) console.warn(...args); };
+
 // --- Drawgrid debug (off by default) ---
 const DBG_DRAW = false; // set true only for hyper-local issues
 function dbg(tag, obj){ if (DG_DEBUG && DBG_DRAW) console.log(`[DG][${tag}]`, obj || ''); }
@@ -142,7 +147,7 @@ function maybeDropPersistGuard(reason, extra = {}) {
   if (!DG_HYDRATE.guardActive) return;
   const inbound = DG_HYDRATE.inbound || {};
   if (!DG_HYDRATE.seenUserChange && (inbound.strokes || 0) > 0 && DG_HYDRATE.lastPersistNonEmpty === false) {
-    console.log('[drawgrid][persist-guard] keep guard ON (no non-empty persist yet)', {
+    dgTraceLog('[drawgrid][persist-guard] keep guard ON (no non-empty persist yet)', {
       reason,
       inbound: { ...inbound },
       seenUserChange: DG_HYDRATE.seenUserChange,
@@ -160,19 +165,21 @@ function maybeDropPersistGuard(reason, extra = {}) {
     ...extra,
   };
   if (DG_HYDRATE.lastPersistNonEmpty === true) {
-    console.log('[drawgrid][persist-guard] guard OFF (non-empty persist confirmed)', payload);
+    dgTraceLog('[drawgrid][persist-guard] guard OFF (non-empty persist confirmed)', payload);
   } else {
-    console.log('[drawgrid][persist-guard] guard OFF', payload);
+    dgTraceLog('[drawgrid][persist-guard] guard OFF', payload);
   }
 }
 
 function markUserChange(reason, extra = {}) {
   if (DG_HYDRATE.seenUserChange) return;
   DG_HYDRATE.seenUserChange = true;
-  try {
-    const stack = (new Error('user-change')).stack?.split('\n').slice(0, 4).join('\n');
-    console.log('[drawgrid][user-change]', { reason, guardActive: DG_HYDRATE.guardActive, stack });
-  } catch {}
+  if (DG_TRACE_DEBUG) {
+    try {
+      const stack = (new Error('user-change')).stack?.split('\n').slice(0, 4).join('\n');
+      console.log('[drawgrid][user-change]', { reason, guardActive: DG_HYDRATE.guardActive, stack });
+    } catch {}
+  }
   maybeDropPersistGuard(reason || 'user-change', { ...extra, userChange: true });
 }
 
@@ -205,9 +212,9 @@ function updateHydrateInboundFromState(state, { reason = 'hydrate' } = {}) {
   DG_HYDRATE.lastPersistNonEmpty = inboundNonEmpty ? false : null;
   DG_HYDRATE.guardActive = inboundNonEmpty;
   if (inboundNonEmpty) {
-    console.log('[drawgrid][persist-guard] inbound hydrate', { reason, inbound: { ...inbound } });
+    dgTraceLog('[drawgrid][persist-guard] inbound hydrate', { reason, inbound: { ...inbound } });
   } else {
-    console.log('[drawgrid][persist-guard] inbound hydrate empty', { reason });
+    dgTraceLog('[drawgrid][persist-guard] inbound hydrate empty', { reason });
   }
 }
 
@@ -1062,7 +1069,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let nodeCoordsForHitTest = [];        // For draggable nodes (hit tests, drags)
 
   // DEBUG: prove these are per-instance
-  try { console.log('[drawgrid] instance-state', panel.id, { scope: 'per-instance' }); } catch {}
+  dgTraceLog('[drawgrid] instance-state', panel.id, { scope: 'per-instance' });
   // The init script now guarantees the panel is a valid HTMLElement with the correct dataset.
   // The .toy-body is now guaranteed to exist by initToyUI, which runs first.
   const body = panel.querySelector('.toy-body');
@@ -1075,10 +1082,10 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const resolvedToyId = toyId || panel.id || panel.dataset.toyid || panel.dataset.toyid || panel.dataset.toyName || 'drawgrid';
   const storageKey = resolvedToyId ? `drawgrid:saved:${resolvedToyId}` : null;
   // --- DEBUG: verify unique key per panel
-  try {
+  if (DG_TRACE_DEBUG) {
     console.log('[drawgrid] init', { panelId: panel.id, resolvedToyId, storageKey });
     console.log('[drawgrid][storage-key]', { panelId: panel.id, storageKey });
-  } catch {}
+  }
   // Expose a safe way for persistence.js to inspect our saved state on demand.
   function __loadPersistedStateRaw() {
     // Block legacy global key patterns to avoid cross-panel contamination
@@ -1141,7 +1148,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       if (!skipReason && forbidEmptyUntilNonEmpty) skipReason = 'awaiting_first_non_empty';
 
       if (skipReason && !DG_HYDRATE.pendingUserClear) {
-        console.log('[drawgrid][persist-guard] SKIP write (empty would replace hydrated non-empty)', {
+        dgTraceLog('[drawgrid][persist-guard] SKIP write (empty would replace hydrated non-empty)', {
           reason: skipReason,
           source,
           msSinceHydrate,
@@ -1152,7 +1159,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         });
         return;
       } else if (skipReason && DG_HYDRATE.pendingUserClear) {
-        console.log('[drawgrid][persist-guard] overriding skip due to user-clear', {
+        dgTraceLog('[drawgrid][persist-guard] overriding skip due to user-clear', {
           originalReason: skipReason,
           source,
           inbound: { ...inbound },
@@ -1187,9 +1194,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         localStorage.setItem(storageKey, serialized);
         try {
           const stack = (new Error('persist-state')).stack?.split('\n').slice(0, 5).join('\n');
-          console.log('[drawgrid] PERSIST', storageKey, { bytes: serialized.length, source, nonEmpty, meta, stack });
+          dgTraceLog('[drawgrid] PERSIST', storageKey, { bytes: serialized.length, source, nonEmpty, meta, stack });
         } catch {
-          console.log('[drawgrid] PERSIST', storageKey, { source, nonEmpty, meta });
+          dgTraceLog('[drawgrid] PERSIST', storageKey, { source, nonEmpty, meta });
         }
       } catch (e) {
         console.warn('[drawgrid] PERSIST failed', e);
@@ -1245,7 +1252,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         (wouldPersistEmpty && inboundNonEmpty && !DG_HYDRATE.seenUserChange) ||
         ((DG_HYDRATE.lastPersistNonEmpty === false) && wouldPersistEmpty && inboundNonEmpty);
       if (guardBlocksEmpty) {
-        console.log('[drawgrid][persist-guard] SKIP schedule (guardActive & empty would overwrite)', {
+        dgTraceLog('[drawgrid][persist-guard] SKIP schedule (guardActive & empty would overwrite)', {
           source,
           inbound: { ...inbound },
           strokeCount,
@@ -2381,7 +2388,7 @@ function regenerateMapFromStrokes() {
       }
 
       try {
-        console.log('[drawgrid] drawNodes', panel.id, {
+        dgTraceLog('[drawgrid] drawNodes', panel.id, {
           cols: currentCols,
           nodesCols: currentMap?.nodes?.length ?? 0,
         });
@@ -2548,7 +2555,7 @@ function regenerateMapFromStrokes() {
       if (!inboundNonEmpty && !DG_HYDRATE.guardActive) {
         api.clear({ reason: 'resnap-empty' });
       } else {
-        console.warn('[drawgrid][boot] skip clear', {
+        dgTraceWarn('[drawgrid][boot] skip clear', {
           reason: 'resnap-empty',
           guardActive: DG_HYDRATE.guardActive,
           inboundNonEmpty,
@@ -3950,17 +3957,19 @@ function syncBackBufferSizes() {
             pctx.fillRect(p.x, p.y, sz, sz);
           });
         }
-        console.debug('[DG][ink] livemove', {
-          id: panel.id,
-          w: pctx?.canvas?.width ?? null,
-          h: pctx?.canvas?.height ?? null,
-          cssW,
-          cssH,
-          dpr: paintDpr,
-          usingBackBuffers,
-          previewGid,
-          nextDrawTarget,
-        });
+        if (DG_TRACE_DEBUG) {
+          console.debug('[DG][ink] livemove', {
+            id: panel.id,
+            w: pctx?.canvas?.width ?? null,
+            h: pctx?.canvas?.height ?? null,
+            cssW,
+            cssH,
+            dpr: paintDpr,
+            usingBackBuffers,
+            previewGid,
+            nextDrawTarget,
+          });
+        }
       } catch {}
       cur.pts.push(p);
       // Determine if current stroke should show a special-line preview
@@ -3980,7 +3989,7 @@ function syncBackBufferSizes() {
       // Debug: track preview vs paint to ensure live line visibility
       try {
         if ((__dbgPointerMoves % 7) === 1) {
-          console.log('[drawgrid] liveMove', {
+          dgTraceLog('[drawgrid] liveMove', {
             id: panel.id,
             advanced: isAdvanced,
             nextDrawTarget,
@@ -4761,7 +4770,7 @@ function syncBackBufferSizes() {
         activeCols: Array.isArray(state?.nodes?.active) ? state.nodes.active.filter(Boolean).length : 0,
       };
       const stack = (new Error('restore-state')).stack?.split('\n').slice(0, 6).join('\n');
-      console.log('[drawgrid][RESTORE] requested', { panelId: panel.id, stats, stack });
+      dgTraceLog('[drawgrid][RESTORE] requested', { panelId: panel.id, stats, stack });
     } catch {}
     updateHydrateInboundFromState(state, { reason: 'restoreFromState', panelId: panel?.id });
     if (!hasStrokes && !hasErase && !hasActiveNodes && !hasNodeList) {
@@ -4861,15 +4870,15 @@ function syncBackBufferSizes() {
         stack: stackSnippet,
       };
       if (!user && (guardActive || inboundNonEmpty)) {
-        console.warn('[drawgrid][CLEAR][VETO] blocked programmatic clear', clearLog);
+        dgTraceWarn('[drawgrid][CLEAR][VETO] blocked programmatic clear', clearLog);
         return false;
       }
       if (user) {
-        console.log('[drawgrid][CLEAR] user', clearLog);
+        dgTraceLog('[drawgrid][CLEAR] user', clearLog);
         DG_HYDRATE.pendingUserClear = true;
         markUserChange('user-clear', { reason });
       } else {
-        console.warn('[drawgrid][CLEAR] programmatic', clearLog);
+        dgTraceWarn('[drawgrid][CLEAR] programmatic', clearLog);
       }
       clearCanvas(pctx);
       clearCanvas(nctx);
@@ -4915,7 +4924,7 @@ function syncBackBufferSizes() {
               activeCols: Array.isArray(st?.nodes?.active) ? st.nodes.active.filter(Boolean).length : 0,
             };
             const stack = (new Error('set-state')).stack?.split('\n').slice(0, 6).join('\n');
-            console.log('[drawgrid][SETSTATE] requested', { panelId: panel.id, stats, stack });
+            dgTraceLog('[drawgrid][SETSTATE] requested', { panelId: panel.id, stats, stack });
           } catch {}
           const guardStrokesCandidate = Array.isArray(st?.strokes) && st.strokes.length > 0
             ? st.strokes
@@ -5098,7 +5107,7 @@ function syncBackBufferSizes() {
             strokeCount === 0 &&
             postNodeCount === 0;
           if (guardBlocksPostSetState) {
-            console.log('[drawgrid][persist-guard] skip post-setState persist (guard active & snapshot empty)', {
+            dgTraceLog('[drawgrid][persist-guard] skip post-setState persist (guard active & snapshot empty)', {
               inbound: { ...DG_HYDRATE.inbound },
               strokeCount,
               nodeCount: postNodeCount,
@@ -5108,7 +5117,7 @@ function syncBackBufferSizes() {
           } else {
             schedulePersistState({ source: 'setState-complete' });
           }
-          try { console.log('[drawgrid] SETSTATE complete', panel.id); } catch {}
+          try { dgTraceLog('[drawgrid] SETSTATE complete', panel.id); } catch {}
         });
       });
     }
@@ -5651,3 +5660,8 @@ function runAutoGhostGuideSweep() {
   try { panel.dispatchEvent(new CustomEvent('drawgrid:ready', { bubbles: true })); } catch {}
   return api;
 }
+
+
+
+
+

@@ -28,4 +28,7 @@ window.debugViewport = () => {
     console.log('  Pan Y:', window.__boardY);
 };
 
-console.log('Debug helpers loaded. Use debugBoard(), debugTutorialToy(), and debugViewport() in the console.');
+const DEBUG_HELPERS_VERBOSE = false;
+if (DEBUG_HELPERS_VERBOSE) {
+    console.log('Debug helpers loaded. Use debugBoard(), debugTutorialToy(), and debugViewport() in the console.');
+}

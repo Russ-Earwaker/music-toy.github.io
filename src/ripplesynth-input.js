@@ -1,5 +1,8 @@
 // src/ripplesynth-input.js
-console.log('[Rippler] Input module loaded (v-preview-gen)');
+const RIPPLER_BOOT_DEBUG = false;
+if (RIPPLER_BOOT_DEBUG) {
+  console.log('[Rippler] Input module loaded (v-preview-gen)');
+}
 // Handles pointer input for the Rippler toy (placement, move, drag).
 // Exposes flags on cfg.state: draggingBlock, draggingGenerator, generatorDragEnded, dragIndex
 // Now supports dynamic block rects via cfg.getBlockRects() and updates via cfg.onBlockDrag(index, newX, newY).

@@ -1,7 +1,10 @@
 ﻿// src/audio-diagnostics.js
 import { ensureAudioContext } from './audio-core.js';
 
+const AUDIO_DIAG_DEBUG = false;
+
 function logState(where) {
+  if (!AUDIO_DIAG_DEBUG) return;
   try {
     const ctx = ensureAudioContext();
     console.info('[audio]', where, 'state=', ctx.state, 'currentTime=', ctx.currentTime.toFixed(3));

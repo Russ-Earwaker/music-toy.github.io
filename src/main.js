@@ -531,6 +531,8 @@ function advanceChain(headId) {
     }
 }
 
+const DRAWGRID_BOOT_DEBUG = false;
+
 function initializeNewToy(panel) {
     const toyType = panel.dataset.toy;
     const initFn = toyInitializers[toyType];
@@ -545,13 +547,17 @@ function initializeNewToy(panel) {
                         : false;
                     if (inboundNonEmpty) {
                         shouldDispatchClear = false;
-                        console.log('[boot] skip toy-clear for drawgrid (inbound non-empty)', {
-                            panelId: panel.id,
-                            inboundNonEmpty,
-                        });
+                        if (DRAWGRID_BOOT_DEBUG) {
+                            console.log('[boot] skip toy-clear for drawgrid (inbound non-empty)', {
+                                panelId: panel.id,
+                                inboundNonEmpty,
+                            });
+                        }
                     }
                 } catch (err) {
-                    console.warn('[boot] drawgrid inbound check failed', err);
+                    if (DRAWGRID_BOOT_DEBUG) {
+                        console.warn('[boot] drawgrid inbound check failed', err);
+                    }
                 }
             }
             // After init, dispatch a 'toy-clear' event to reset its state when safe.

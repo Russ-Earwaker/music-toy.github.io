@@ -3,6 +3,9 @@ import { setHelpActive, isHelpActive } from './help-overlay.js';
 import { isRunning, stop as stopTransport } from './audio-core.js';
 import { startParticleStream, stopParticleStream } from './tutorial-fx.js';
 
+const TUTORIAL_BOOT_DEBUG = false;
+const tutorialBootLog = (...args) => { if (TUTORIAL_BOOT_DEBUG) console.log(...args); };
+
 function whenSwipeAPIReady(panel, fn, tries=30){
   if (!panel) return;
   if (typeof panel.setSwipeVisible === 'function' && typeof panel.startGhostGuide === 'function'){
@@ -443,7 +446,7 @@ function cloneGoal(goal) {
 
 
 (function() {
-  console.log('[tutorial] script boot', { readyState: document.readyState });
+  tutorialBootLog('[tutorial] script boot', { readyState: document.readyState });
   function exposeGoalsAPI(){
     try {
       if (!window.TutorialGoalsAPI) {
@@ -467,7 +470,7 @@ function cloneGoal(goal) {
 
   const tutorialButton = document.querySelector('[data-action="tutorial"]');
   const board = document.getElementById('board');
-  console.log('[tutorial] element probe', { hasTutorialButton: !!tutorialButton, hasBoard: !!board, readyState: document.readyState });
+  tutorialBootLog('[tutorial] element probe', { hasTutorialButton: !!tutorialButton, hasBoard: !!board, readyState: document.readyState });
   if (!board) return;
 
   let tutorialActive = false;

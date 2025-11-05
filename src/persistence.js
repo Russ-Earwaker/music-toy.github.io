@@ -10,6 +10,10 @@ function __diagNow() {
   try { return performance.now(); }
   catch { return Date.now(); }
 }
+// Toggle for verbose persistence diagnostics. Set true while chasing save/load issues.
+const PERSIST_TRACE_DEBUG = false;
+const persistTraceLog = (...args) => { if (PERSIST_TRACE_DEBUG) console.log(...args); };
+const persistTraceWarn = (...args) => { if (PERSIST_TRACE_DEBUG) console.warn(...args); };
 function __stateStats(payload) {
   if (payload && typeof payload === 'object') {
     if (payload.payload && typeof payload.payload === 'object') {
@@ -111,7 +115,7 @@ function applyLoopGrid(panel, state){
       if (Array.isArray(state.noteIndices)){
         panel.__gridState.noteIndices = Array.from(state.noteIndices).map(x=> x|0);
       }
-      // try{ console.log('[persistence] applied loopgrid state to initialized toy', { steps: state.steps?.length, noteIndices: state.noteIndices?.length }); }catch{}
+      // try{ persistTraceLog('[persistence] applied loopgrid state to initialized toy', { steps: state.steps?.length, noteIndices: state.noteIndices?.length }); }catch{}
     } else {
       // Defer: toy not initialized yet; stash and let the toy pick this up on boot
       panel.__pendingLoopGridState = {
@@ -120,7 +124,7 @@ function applyLoopGrid(panel, state){
         noteIndices: Array.isArray(state.noteIndices) ? Array.from(state.noteIndices).map(x=>x|0) : undefined,
         instrument: state.instrument
       };
-      // try{ console.log('[persistence] stashed loopgrid state for later apply', { steps: state.steps?.length, noteIndices: state.noteIndices?.length }); }catch{}
+      // try{ persistTraceLog('[persistence] stashed loopgrid state for later apply', { steps: state.steps?.length, noteIndices: state.noteIndices?.length }); }catch{}
     }
     if (state.instrument){
       panel.dataset.instrument = state.instrument;
@@ -208,7 +212,7 @@ function applyDrawGrid(panel, state) {
   if (!toy || typeof toy.setState !== 'function') {
     try {
       panel.__pendingDrawGridState = state || {};
-      console.log('[persistence][drawgrid] STASH (toy-not-ready)', panel.id, sum(state));
+      persistTraceLog('[persistence][drawgrid] STASH (toy-not-ready)', panel.id, sum(state));
     } catch {}
     return;
   }
@@ -220,7 +224,7 @@ function applyDrawGrid(panel, state) {
     const meaningful = hasStrokes || hasErase || hasActiveNodes || (typeof state?.steps === 'number');
 
     if (meaningful) {
-      console.log('[persistence][drawgrid] APPLY (meaningful)', panel.id, sum(state));
+      persistTraceLog('[persistence][drawgrid] APPLY (meaningful)', panel.id, sum(state));
       toy.setState(state);
       return;
     }
@@ -229,12 +233,12 @@ function applyDrawGrid(panel, state) {
     let local = null;
     try { local = panel.__getDrawgridPersistedState?.(); } catch {}
     if (local && typeof local === 'object') {
-      console.log('[persistence][drawgrid] APPLY (fallback-local)', panel.id, sum(local));
+      persistTraceLog('[persistence][drawgrid] APPLY (fallback-local)', panel.id, sum(local));
       try { toy.setState(local); return; }
       catch (err) { console.warn('[persistence] drawgrid local fallback failed', err); }
     }
 
-    console.log('[persistence][drawgrid] NO-OP (empty-state, no-local)', panel.id, sum(state));
+    persistTraceLog('[persistence][drawgrid] NO-OP (empty-state, no-local)', panel.id, sum(state));
   } catch(e) {
     console.warn('[persistence] applyDrawGrid failed', e);
   }
@@ -302,7 +306,7 @@ export function getSnapshot(){
 export function applySnapshot(snap){
   if (!snap || typeof snap !== 'object') return false;
   try{
-    // try{ console.log('[persistence] applySnapshot begin', { toys: snap?.toys?.length||0, theme: snap?.themeId, bpm: snap?.transport?.bpm }); }catch{}
+    // try{ persistTraceLog('[persistence] applySnapshot begin', { toys: snap?.toys?.length||0, theme: snap?.themeId, bpm: snap?.transport?.bpm }); }catch{}
     // Theme first so instrument resolution matches theme
     if (snap.themeId && typeof setActiveThemeKey === 'function'){
       try{ setActiveThemeKey(snap.themeId); }catch{}
@@ -375,7 +379,7 @@ export function applySnapshot(snap){
               const stats = __stateStats(s);
               let stack = null;
               try { stack = (new Error('apply-snapshot')).stack?.split('\n').slice(0, 5).join('\n'); } catch {}
-              console.log('[persist][APPLY]', { storageKey: `drawgrid:${panel.id}`, stats, stack });
+              persistTraceLog('[persist][APPLY]', { storageKey: `drawgrid:${panel.id}`, stats, stack });
               PERSIST_DIAG.lastApply = { t: __diagNow(), storageKey: `drawgrid:${panel.id}`, stats, stack };
             } catch {}
             const summary = {
@@ -384,7 +388,7 @@ export function applySnapshot(snap){
               activeCols: Array.isArray(s?.nodes?.active) ? s.nodes.active.filter(Boolean).length : 0,
               steps: typeof s.steps === 'number' ? s.steps : undefined,
             };
-            console.log('[persistence] APPLY SNAPSHOT -> drawgrid', panel.id, summary);
+            persistTraceLog('[persistence] APPLY SNAPSHOT -> drawgrid', panel.id, summary);
           }
         } catch {}
         try{ applier(panel, t.state||{}); }catch(e){ console.warn('[persistence] apply failed for', t.type, e); }
@@ -449,12 +453,12 @@ export function applySnapshot(snap){
               prev: el.dataset.prevToyId || null,
               next: el.dataset.nextToyId || null,
             }));
-            console.log('[chain] graph (restored)', graph);
+            persistTraceLog('[chain] graph (restored)', graph);
           } catch {}
         });
       } catch {}
 
-      console.log('[persistence] chains restored', edges.length);
+      persistTraceLog('[persistence] chains restored', edges.length);
     } catch (err) {
       console.warn('[persistence] chain restore failed', err);
     }
@@ -478,7 +482,7 @@ export function applySnapshot(snap){
         localStorage.removeItem('toyPositions');
       }
     }catch{}
-    // try{ console.log('[persistence] applySnapshot end', { applied: appliedCount }); }catch{}
+    // try{ persistTraceLog('[persistence] applySnapshot end', { applied: appliedCount }); }catch{}
     return true;
   }catch(e){ console.warn('[persistence] applySnapshot failed', e); return false; }
 }
@@ -498,7 +502,7 @@ function saveToKey(key, data){
             ? prevParsed.payload
             : prevParsed;
         } catch (parseErr) {
-          console.warn('[persist] failed to parse previous payload for veto check', parseErr);
+          persistTraceWarn('[persist] failed to parse previous payload for veto check', parseErr);
         }
       }
       let nextPayload = stateToWrite;
@@ -510,12 +514,12 @@ function saveToKey(key, data){
       if (veto) {
         const prevStats = __stateStats(prevPayload);
         const nextStats = __stateStats(nextPayload);
-        console.warn('[persist][VETO] blocked empty overwrite', { key, prev: prevStats, next: nextStats, meta: stateToWrite?.meta || null });
+        persistTraceWarn('[persist][VETO] blocked empty overwrite', { key, prev: prevStats, next: nextStats, meta: stateToWrite?.meta || null });
         PERSIST_DIAG.lastVeto = { t: __diagNow(), storageKey: key, prev: prevStats, next: nextStats };
         return false;
       }
     } catch (guardErr) {
-      console.warn('[persist] veto check failed (continuing)', guardErr);
+      persistTraceWarn('[persist] veto check failed (continuing)', guardErr);
     }
     const serialized = JSON.stringify(data);
     localStorage.setItem(key, serialized);
@@ -526,10 +530,10 @@ function saveToKey(key, data){
         else if (stateToWrite.state !== undefined) payloadForStats = stateToWrite.state;
       }
       const stats = __stateStats(payloadForStats);
-      console.log('[persist][WRITE]', { storageKey: key, meta: stateToWrite?.meta || null, stats });
+      persistTraceLog('[persist][WRITE]', { storageKey: key, meta: stateToWrite?.meta || null, stats });
       PERSIST_DIAG.lastWrite = { t: __diagNow(), storageKey: key, stats };
     } catch (logErr) {
-      console.warn('[persist] write stat log failed', logErr);
+      persistTraceWarn('[persist] write stat log failed', logErr);
     }
     return true;
   }catch(e){ console.warn('[persistence] save failed', e); return false; }
@@ -542,10 +546,10 @@ function loadFromKey(key){
     try {
       const payload = (parsed && typeof parsed === 'object' && parsed.payload !== undefined) ? parsed.payload : parsed;
       const stats = __stateStats(payload);
-      console.log('[persist][READ]', { storageKey: key, stats });
+      persistTraceLog('[persist][READ]', { storageKey: key, stats });
       PERSIST_DIAG.lastRead = { t: __diagNow(), storageKey: key, stats };
     } catch (logErr) {
-      console.warn('[persist] read stat log failed', logErr);
+      persistTraceWarn('[persist] read stat log failed', logErr);
     }
     return parsed;
   }catch(e){ console.warn('[persistence] load failed', e); return null; }
@@ -610,7 +614,7 @@ export function startAutosave(intervalMs){
   const toyEvents = ['grid:notechange','toy-random','toy-random-notes','toy-clear','toy-reset','toy-speed','bouncer:quant','toy-random-cubes','toy-random-blocks'];
   toyEvents.forEach(evt => document.addEventListener(evt, markDirty, true));
   // Save when page is being hidden/unloaded
-  const flush = ()=>{ try{ const s = getSnapshot(); saveToKey(AUTOSAVE_KEY, s); console.log('[persistence] autosave flush on hide/unload'); }catch{} };
+  const flush = ()=>{ try{ const s = getSnapshot(); saveToKey(AUTOSAVE_KEY, s); persistTraceLog('[persistence] autosave flush on hide/unload'); }catch{} };
   window.addEventListener('beforeunload', flush, true);
   document.addEventListener('visibilitychange', ()=>{ if (document.hidden) flush(); }, true);
   // Mark initial state dirty to ensure a snapshot is captured shortly after boot
@@ -643,17 +647,17 @@ export function tryRestoreOnBoot(){
       try{
         url.searchParams.delete('reset');
         window.history.replaceState({}, document.title, url.toString());
-        // console.log('[persistence] reset flag detected; skipping restore once');
+        // persistTraceLog('[persistence] reset flag detected; skipping restore once');
       }catch{}
       return false;
     }
     const sceneQ = url.searchParams.get('scene');
     const last = localStorage.getItem(LAST_SCENE_KEY);
     const auto = loadFromKey(AUTOSAVE_KEY);
-    // try{ console.log('[persistence] tryRestoreOnBoot', { hasReset:false, sceneQ, hasAuto: !!auto, last }); }catch{}
-    if (sceneQ){ /* try{ console.log('[persistence] restoring from ?scene=', sceneQ); }catch{} */ return loadScene(sceneQ); }
+    // try{ persistTraceLog('[persistence] tryRestoreOnBoot', { hasReset:false, sceneQ, hasAuto: !!auto, last }); }catch{}
+    if (sceneQ){ /* try{ persistTraceLog('[persistence] restoring from ?scene=', sceneQ); }catch{} */ return loadScene(sceneQ); }
     if (auto){
-      // try{ console.log('[persistence] restoring from autosave'); }catch{}
+      // try{ persistTraceLog('[persistence] restoring from autosave'); }catch{}
       const applied = applySnapshot(auto);
       if (applied) {
         try {
@@ -678,3 +682,6 @@ if (typeof window !== 'undefined') {
     stat: __stateStats,
   };
 }
+
+
+

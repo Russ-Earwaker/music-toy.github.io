@@ -28,7 +28,10 @@ const canRealFullscreen = !isIOS && (
   document.fullscreenEnabled || document.webkitFullscreenEnabled || document.msFullscreenEnabled
 );
 
-console.log('[FS Detect]', { isIOS, canRealFullscreen, touchCapable: ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) });
+const FS_DEBUG = false;
+if (FS_DEBUG) {
+  console.log('[FS Detect]', { isIOS, canRealFullscreen, touchCapable });
+}
 
 function enterPseudoFullscreen() {
   pseudo = true;

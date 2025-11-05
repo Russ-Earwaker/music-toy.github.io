@@ -1,5 +1,8 @@
 import { initToyUI } from './toyui.js';
-console.log('[Rippler] Core module loaded (v-preview-gen)');
+const RIPPLER_BOOT_DEBUG = false;
+if (RIPPLER_BOOT_DEBUG) {
+  console.log('[Rippler] Core module loaded (v-preview-gen)');
+}
 import { randomizeAllImpl } from './ripplesynth-random.js';
 import { randomizeRects } from './toyhelpers.js';
 import { resizeCanvasForDPR, noteList } from './utils.js';
