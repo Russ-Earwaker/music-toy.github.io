@@ -9,6 +9,9 @@ const overviewState = {
     transitioning: false // latch while we zoom in to a toy
 };
 
+const DOUBLE_TAP_MS = 320; // tweak between ~250–350ms to taste
+let lastTap = { time: 0, id: null };
+
 let dragInfo = {
     isDragging: false,
     target: null,
@@ -27,7 +30,8 @@ let squelchClicksUntil = 0;
 const SQUELCH_MS = 250;
 
 // Only absorb click-ish events; drag paths are handled explicitly.
-const CLICKY_EVENTS = ['click', 'dblclick', 'contextmenu'];
+// Don’t absorb 'dblclick' so desktop double-click can register as two taps.
+const CLICKY_EVENTS = ['click', 'contextmenu'];
 
 let docAbsorbArmed = false;
 
@@ -35,6 +39,16 @@ let docAbsorbArmed = false;
 const OV_DEBUG = false;
 const ovdbg = (...args) => { if (OV_DEBUG) console.debug(...args); };
 const ovlog = (...args) => { if (OV_DEBUG) console.log(...args); };
+
+// ---- Event-based diagnostics (toggle with localStorage.setItem('OV_EVENTS','1')) ----
+const OV_EVENTS_ON = (typeof localStorage !== 'undefined' && localStorage.getItem('OV_EVENTS') === '1');
+function emitOV(name, detail = {}) {
+  if (!OV_EVENTS_ON) return;
+  const payload = { t: (performance?.now?.() ?? Date.now()), ...detail };
+  try {
+    window.dispatchEvent(new CustomEvent(`overview:${name}`, { detail: payload }));
+  } catch {}
+}
 
 function px(n) { return Math.round(n) + 'px'; }
 
@@ -155,6 +169,7 @@ function bindPanelDragCapture(panel) {
 function enterOverviewMode(isButton) {
     if (overviewState.isActive) return;
     overviewState.isActive = true;
+    lastTap = { time: 0, id: null };
     // Broadcast: all toys should enter non-reactive mode.
     // Non-reactive = suppress home resets/springs and snap size maps, not a physics freeze.
     try { window.dispatchEvent(new CustomEvent('overview:transition', { detail: { active: true } })); } catch {}
@@ -217,19 +232,20 @@ function enterOverviewMode(isButton) {
                     CLICKY_EVENTS.forEach(type => panel.addEventListener(type, panelAbsorb, { capture: true, passive: false }));
 
                     const onShieldPointerDown = (ev) => {
-                        ovdbg('[overview] drag start attempt', { id: panel.id || '(no-id)', type: ev.type });
-                        if (dragInfo.isDragging && (dragInfo.usingPointer || dragInfo.usingTouch)) {
-                            absorb(ev);
-                            return;
-                        }
-                        if (typeof ev.button === 'number' && ev.button !== 0) {
-                            absorb(ev);
-                            return;
-                        }
-                        squelchClicksUntil = (typeof performance !== 'undefined' ? performance.now() : 0) + SQUELCH_MS;
-                        absorb(ev);
+                      ovdbg('[overview] drag start attempt', { id: panel.id || '(no-id)', type: ev.type });
+                      if (dragInfo.isDragging && (dragInfo.usingPointer || dragInfo.usingTouch)) {
+                          absorb(ev);
+                          return;
+                      }
+                      if (typeof ev.button === 'number' && ev.button !== 0) {
+                          absorb(ev);
+                          return;
+                      }
+                      // Kick off drag on the shield so we can move panels reliably.
+                      try { onToyMouseDown(ev); } catch {}
+                      squelchClicksUntil = (typeof performance !== 'undefined' ? performance.now() : 0) + SQUELCH_MS;
+                      absorb(ev);
                     };
-
                     if (supportsPointerEvents) {
                         shield.addEventListener('pointerdown', onShieldPointerDown, { passive: false, capture: true });
                     } else {
@@ -532,6 +548,7 @@ function onToyMouseDown(e) {
     };
 
     ovdbg('[overview] drag start', { id: panel.id || '(no-id)', type: eventType });
+    emitOV('drag-start', { id: panel.id || '(no-id)', startX, startY });
     try { panel.classList.add('grabbing'); } catch {}
 
     if (shield) {
@@ -582,9 +599,9 @@ function onToyMouseMove(e) {
         const scale = window.__boardScale || 1;
         const newX = dragInfo.initialX + dx / Math.max(scale, 0.0001);
         const newY = dragInfo.initialY + dy / Math.max(scale, 0.0001);
-        dragInfo.target.style.left = `${newX}px`;
-        dragInfo.target.style.top = `${newY}px`;
-    }
+                    dragInfo.target.style.left = `${newX}px`;
+                    dragInfo.target.style.top = `${newY}px`;
+                    emitOV('drag-move', { id: dragInfo.target.id || '(no-id)', left: newX, top: newY });    }
 
     ovdbg('[overview] drag move', {
         id: dragInfo.target?.id || '(no-id)',
@@ -653,66 +670,109 @@ function onToyMouseUp(e) {
     try { panel?.classList?.remove('grabbing'); } catch {}
     dragInfo.shield?.classList?.remove('grabbing');
 
+    if (dragInfo.moved && panel) {
+      const id = panel.id || panel.dataset.toyid || panel.dataset.toy;
+      // Prefer explicit style first, then computed fallback
+      const cs = getComputedStyle(panel);
+      let left = parseFloat(panel.style.left || cs.left || '0') || 0;
+      let top  = parseFloat(panel.style.top  || cs.top  || '0') || 0;
+      const width  = Number.isFinite(panel.offsetWidth)  ? panel.offsetWidth  : parseFloat(cs.width  || '0') || 0;
+      const height = Number.isFinite(panel.offsetHeight) ? panel.offsetHeight : parseFloat(cs.height || '0') || 0;
+
+                // Commit the updated snapshot so exitOverviewMode uses the NEW position
+                try { overviewState.positions.set(id, { left, top, width, height }); } catch {}
+                emitOV('drag-end', { id, left, top, width, height });
+      
+                ovdbg('[overview] drag commit', { id, left, top, width, height });    }
+
     if (!dragInfo.moved) {
-        if (!panel) {
-            console.warn('[overview] tap target missing panel reference');
-        }
-        const id = panel?.id || panel?.dataset?.toyid || panel?.dataset?.toy;
-        const snap = id ? overviewState.positions.get(id) : null;
-        let worldCenter = null;
-        if (snap) {
-            const body = panel?.querySelector?.('.toy-body') ||
-                panel?.querySelector?.('.grid-canvas, .rippler-canvas, .bouncer-canvas, .wheel-canvas, canvas, svg');
-            const innerLeft = body ? (body.offsetLeft || 0) : 0;
-            const innerTop = body ? (body.offsetTop || 0) : 0;
-            const innerW = body ? (body.offsetWidth || 0) : (Number.isFinite(snap.width) ? snap.width : panel?.offsetWidth || 0);
-            const innerH = body ? (body.offsetHeight || 0) : (Number.isFinite(snap.height) ? snap.height : panel?.offsetHeight || 0);
-            worldCenter = {
-                x: snap.left + innerLeft + innerW * 0.5,
-                y: snap.top + innerTop + innerH * 0.5
-            };
-            ovdbg('[overview] tap center (snapshot+body)', { id, snap, innerLeft, innerTop, innerW, innerH, wc: worldCenter });
-        } else if (window.getWorldCenter) {
-            worldCenter = window.getWorldCenter(panel);
-            ovdbg('[overview] tap center (fallback getWorldCenter)', { id, wc: worldCenter });
-        }
-        if (worldCenter) {
-            const container = document.querySelector('.board-viewport') || document.documentElement;
-            const viewW = container.clientWidth || window.innerWidth;
-            const viewH = container.clientHeight || window.innerHeight;
-            const viewCx = Math.round(viewW * 0.5);
-            const viewCy = Math.round(viewH * 0.5);
-            const z = window.getZoomState?.() || {};
-            const s = Number.isFinite(z.currentScale) ? z.currentScale : Number.isFinite(z.targetScale) ? z.targetScale : window.__boardScale || 1;
-            const tx = Number.isFinite(z.currentX) ? z.currentX : Number.isFinite(z.targetX) ? z.targetX : window.__boardX || 0;
-            const ty = Number.isFinite(z.currentY) ? z.currentY : Number.isFinite(z.targetY) ? z.targetY : window.__boardY || 0;
-            const px = Math.round(worldCenter.x * s + tx);
-            const py = Math.round(worldCenter.y * s + ty);
-            ovdbg('[overview] snapshot forward-projection', {
-                id,
-                wc: worldCenter,
-                s,
-                tx,
-                ty,
-                viewCx,
-                viewCy,
-                px,
-                py,
-                dx: px - viewCx,
-                dy: py - viewCy
-            });
-        }
-        overviewState.transitioning = true;
-        if (panel) window.__lastFocusEl = panel;
-        exitOverviewMode(false);
-        overviewState.transitioning = true;
-        requestAnimationFrame(() => {
-            if (worldCenter && Number.isFinite(worldCenter.x) && Number.isFinite(worldCenter.y)) {
-                window.centerBoardOnWorldPoint?.(worldCenter.x, worldCenter.y, overviewState.zoomReturnLevel);
-            } else if (panel) {
-                window.centerBoardOnElement?.(panel, overviewState.zoomReturnLevel);
-            }
-        });
+      const id = panel?.id || panel?.dataset?.toyid || panel?.dataset?.toy;
+      const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+      const isDoubleTap = (lastTap.id === id) && ((now - lastTap.time) <= DOUBLE_TAP_MS);
+
+      // Update tap memory
+      lastTap = { time: now, id };
+
+      let __handledSingleTap = false;
+      if (!isDoubleTap) {
+                  // Single tap: do NOT zoom. Optionally provide a tiny visual affordance here.
+                  // e.g., panel.classList.add('ov-tap'); setTimeout(() => panel.classList.remove('ov-tap'), 150);
+                  emitOV('tap', { id, tap: 'single' });
+                  ovdbg('[overview] single tap (awaiting second tap)', { id });        // Absorb; don’t exit overview.
+        if (typeof e.preventDefault === 'function') e.preventDefault();
+        if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+        __handledSingleTap = true;
+      }
+
+      if (!__handledSingleTap) {
+                // Double tap → proceed with the existing compute-center-and-zoom logic:
+                // (keep your current worldCenter/viewCx… calculation and exitOverviewMode(false) exactly as-is)
+                emitOV('tap', { id, tap: 'double' });
+                emitOV('zoom-in', { id });
+                ovdbg('[overview] double tap → zoom', { id });
+      // Ensure the panel’s FINAL drag result is already committed (Fix #1) before zoom,
+      // then run your existing “snapshot forward-projection” and exitOverviewMode(false)
+      // (No further changes needed below this comment.)
+      if (!panel) {
+          console.warn('[overview] tap target missing panel reference');
+      }
+      const snap = id ? overviewState.positions.get(id) : null;
+      let worldCenter = null;
+      if (snap) {
+          const body = panel?.querySelector?.('.toy-body') ||
+              panel?.querySelector?.('.grid-canvas, .rippler-canvas, .bouncer-canvas, .wheel-canvas, canvas, svg');
+          const innerLeft = body ? (body.offsetLeft || 0) : 0;
+          const innerTop = body ? (body.offsetTop || 0) : 0;
+          const innerW = body ? (body.offsetWidth || 0) : (Number.isFinite(snap.width) ? snap.width : panel?.offsetWidth || 0);
+          const innerH = body ? (body.offsetHeight || 0) : (Number.isFinite(snap.height) ? snap.height : panel?.offsetHeight || 0);
+          worldCenter = {
+              x: snap.left + innerLeft + innerW * 0.5,
+              y: snap.top + innerTop + innerH * 0.5
+          };
+          ovdbg('[overview] tap center (snapshot+body)', { id, snap, innerLeft, innerTop, innerW, innerH, wc: worldCenter });
+      } else if (window.getWorldCenter) {
+          worldCenter = window.getWorldCenter(panel);
+          ovdbg('[overview] tap center (fallback getWorldCenter)', { id, wc: worldCenter });
+      }
+      if (worldCenter) {
+          const container = document.querySelector('.board-viewport') || document.documentElement;
+          const viewW = container.clientWidth || window.innerWidth;
+          const viewH = container.clientHeight || window.innerHeight;
+          const viewCx = Math.round(viewW * 0.5);
+          const viewCy = Math.round(viewH * 0.5);
+          const z = window.getZoomState?.() || {};
+          const s = Number.isFinite(z.currentScale) ? z.currentScale : Number.isFinite(z.targetScale) ? z.targetScale : window.__boardScale || 1;
+          const tx = Number.isFinite(z.currentX) ? z.currentX : Number.isFinite(z.targetX) ? z.targetX : window.__boardX || 0;
+          const ty = Number.isFinite(z.currentY) ? z.currentY : Number.isFinite(z.targetY) ? z.targetY : window.__boardY || 0;
+          const px = Math.round(worldCenter.x * s + tx);
+          const py = Math.round(worldCenter.y * s + ty);
+          ovdbg('[overview] snapshot forward-projection', {
+              id,
+              wc: worldCenter,
+              s,
+              tx,
+              ty,
+              viewCx,
+              viewCy,
+              px,
+              py,
+              dx: px - viewCx,
+              dy: py - viewCy
+          });
+      }
+      overviewState.transitioning = true;
+      if (panel) window.__lastFocusEl = panel;
+      exitOverviewMode(false);
+      overviewState.transitioning = true;
+      requestAnimationFrame(() => {
+          if (worldCenter && Number.isFinite(worldCenter.x) && Number.isFinite(worldCenter.y)) {
+              window.centerBoardOnWorldPoint?.(worldCenter.x, worldCenter.y, overviewState.zoomReturnLevel);
+          } else if (panel) {
+              window.centerBoardOnElement?.(panel, overviewState.zoomReturnLevel);
+          }
+      });
+      }
     }
 
     dragInfo.isDragging = false;

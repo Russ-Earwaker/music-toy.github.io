@@ -12,8 +12,8 @@ const DG_DEBUG = false;           // master switch
 const DG_FRAME_DEBUG = false;     // per-frame spam
 const DG_SWAP_DEBUG = false;      // swap spam;
 
-// Alpha debug (default ON while we’re testing)
-let DG_ALPHA_DEBUG = true;
+// Alpha debug (default OFF; toggle via ?dgalpha=1 or localStorage('DG_ALPHA_DEBUG'='1'))
+let DG_ALPHA_DEBUG = false;
 
 // Allow enabling via URL or localStorage without rebuild:
 // - add ?dgalpha=1 to URL OR localStorage.setItem('DG_ALPHA_DEBUG','1')
@@ -22,7 +22,7 @@ try {
   if (typeof localStorage !== 'undefined' && localStorage.getItem('DG_ALPHA_DEBUG') === '1') DG_ALPHA_DEBUG = true;
 } catch {}
 
-try { console.info('[DG][alpha:boot]', { DG_ALPHA_DEBUG }); } catch {}
+if (DG_DEBUG) { try { console.info('[DG][alpha:boot]', { DG_ALPHA_DEBUG }); } catch {} }
 
 let __ALPHA_PATH_LAST_TS = 0;
 const DG_ALPHA_SPAM_MS = 300;
@@ -1144,7 +1144,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     // Block legacy global key patterns to avoid cross-panel contamination
     try {
       if (storageKey && storageKey.endsWith(':drawgrid') && panel.id !== 'drawgrid') {
-        console.warn('[drawgrid] ignoring legacy global key for', panel.id, storageKey);
+        if (DG_DEBUG) console.warn('[drawgrid] ignoring legacy global key for', panel.id, storageKey);
         return null;
       }
     } catch {}
@@ -1252,7 +1252,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
           dgTraceLog('[drawgrid] PERSIST', storageKey, { source, nonEmpty, meta });
         }
       } catch (e) {
-        console.warn('[drawgrid] PERSIST failed', e);
+        if (DG_DEBUG) console.warn('[drawgrid] PERSIST failed', e);
         return;
       }
       if (nonEmpty) {
@@ -1285,7 +1285,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         const sinceRead = now - lastRead.t;
         const looksEmptyNow = wouldPersistEmpty;
         if (looksEmptyNow && Number.isFinite(sinceRead) && sinceRead < 4000) {
-          console.warn('[drawgrid][persist-guard] drop schedule (recent non-empty READ -> transient empty)', {
+          if (DG_DEBUG) console.warn('[drawgrid][persist-guard] drop schedule (recent non-empty READ -> transient empty)', {
             source,
             sinceRead,
             strokeCount,
@@ -1296,7 +1296,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         }
       }
     } catch (assertErr) {
-      console.warn('[drawgrid] persist schedule assertion failed', assertErr);
+      if (DG_DEBUG) console.warn('[drawgrid] persist schedule assertion failed', assertErr);
     }
     const inbound = DG_HYDRATE.inbound || {};
     const inboundNonEmpty = inboundWasNonEmpty();
@@ -1595,7 +1595,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     });
     const updateDetail = { map: currentMap, steps: stepCount, activityOnly };
     if (trapHydrateFlip) {
-      console.warn('[drawgrid][trap] 1->0 during hydrate window; DROP persist this frame', {
+      if (DG_DEBUG) console.warn('[drawgrid][trap] 1->0 during hydrate window; DROP persist this frame', {
         prevStrokeCount,
         strokeCount,
         guardActive: DG_HYDRATE.guardActive,
@@ -1716,8 +1716,10 @@ function ensureSizeReady({ force = false } = {}) {
           const prevLen = Array.isArray(_strokes) ? _strokes.length : 0;
           const nextLen = Array.isArray(v) ? v.length : 0;
           if (DG_HYDRATE.guardActive && prevLen === 1 && nextLen === 0 && !DG_HYDRATE.seenUserChange) {
-            console.warn('[drawgrid][probe] strokes cleared during guard window', { prevLen, nextLen });
-            try { console.trace(); } catch {}
+            if (DG_DEBUG) {
+              console.warn('[drawgrid][probe] strokes cleared during guard window', { prevLen, nextLen });
+              try { console.trace(); } catch {}
+            }
           }
           _strokes = v;
         }
@@ -1735,7 +1737,7 @@ function ensureSizeReady({ force = false } = {}) {
         const stackRaw = (new Error('flip')).stack;
         if (stackRaw) stackSnippet = stackRaw.split('\n').slice(0, 6).join('\n');
       } catch {}
-      console.warn('[DG][SENTINEL] strokes flipped >0 -> 0', {
+      if (DG_DEBUG) console.warn('[DG][SENTINEL] strokes flipped >0 -> 0', {
         tag,
         prev: __dgPrevStrokeLen,
         now: len,
