@@ -10,7 +10,23 @@ import { createParticleViewport } from './particles/particle-viewport.js';
 // ---- drawgrid debug gate ----
 const DG_DEBUG = false;           // master switch
 const DG_FRAME_DEBUG = false;     // per-frame spam
-const DG_SWAP_DEBUG = false;      // swap spam
+const DG_SWAP_DEBUG = false;      // swap spam;
+
+// Alpha debug (default ON while we’re testing)
+let DG_ALPHA_DEBUG = true;
+
+// Allow enabling via URL or localStorage without rebuild:
+// - add ?dgalpha=1 to URL OR localStorage.setItem('DG_ALPHA_DEBUG','1')
+try {
+  if (typeof location !== 'undefined' && location.search.includes('dgalpha=1')) DG_ALPHA_DEBUG = true;
+  if (typeof localStorage !== 'undefined' && localStorage.getItem('DG_ALPHA_DEBUG') === '1') DG_ALPHA_DEBUG = true;
+} catch {}
+
+try { console.info('[DG][alpha:boot]', { DG_ALPHA_DEBUG }); } catch {}
+
+let __ALPHA_PATH_LAST_TS = 0;
+const DG_ALPHA_SPAM_MS = 300;
+
 const dglog = (...a) => { if (DG_DEBUG) console.log('[DG]', ...a); };
 const dgf = (...a) => { if (DG_FRAME_DEBUG) console.log('[DG] frame', ...a); };
 const dgs = (...a) => { if (DG_SWAP_DEBUG) console.log('[DG] swap', ...a); };
@@ -21,6 +37,28 @@ const DG = {
   time: (label) => { if (DG_DEBUG) console.time(label); },
   timeEnd: (label) => { if (DG_DEBUG) console.timeEnd(label); },
 };
+
+// --- Event diagnostics (off by default; enable via localStorage.setItem('dg_events','1')) ---
+const DG_EVENTS_ON = (localStorage.getItem('dg_events') === '1');
+const EMIT_PREFIX = 'dg:';
+
+function emitDG(eventName, detail = {}) {
+  if (!DG_EVENTS_ON) return;
+  const payload = {
+    t: (performance?.now?.() ?? Date.now()),
+    panelId: panel?.id || panel?.dataset?.toy || 'unknown',
+    ...detail,
+  };
+  try {
+    // Bubble to panel (scoped) and window (global)
+    if (panel?.dispatchEvent) {
+      panel.dispatchEvent(new CustomEvent(`${EMIT_PREFIX}${eventName}`, { detail: payload }));
+    }
+    window.dispatchEvent(new CustomEvent(`${EMIT_PREFIX}${eventName}`, { detail: payload }));
+  } catch (e) {
+    if (DG_DEBUG) DG.warn('emitDG failed', e);
+  }
+}
 
 // Toggle for detailed drawgrid diagnostics. Flip to true when chasing state issues.
 const DG_TRACE_DEBUG = false;
@@ -224,6 +262,23 @@ const STROKE_COLORS = [
   'rgba(95,255,179,0.95)',  // Green
   'rgba(255,220,95,0.95)', // Yellow
 ];
+
+  // Opacity for visual-only strokes (should be semi-transparent on ANY layer)
+  const VISUAL_ONLY_ALPHA = 0.6; // tweak between 0.4–0.7 to taste
+
+  function isVisualOnlyStroke(s) {
+    // Decorative if it’s not a generator/special and not a demoted colorized overlay
+    return !s?.isSpecial && !s?.generatorId && !s?.overlayColorize;
+  }
+
+  function getPathAlpha({ isOverlay, wantsSpecial, isVisualOnly }) {
+    // Special/generative lines are always fully opaque
+    if (wantsSpecial) return 1;
+    // Decorative lines should be semi-transparent whether drawn on paint or overlay
+    if (isVisualOnly) return VISUAL_ONLY_ALPHA;
+    // Non-special but not decorative (e.g., demoted overlay colorize pass)
+    return isOverlay ? VISUAL_ONLY_ALPHA : 1;
+  }
 let colorIndex = 0;
 
 function withIdentity(ctx, fn) {
@@ -294,9 +349,7 @@ function drawLiveStrokePoint(ctx, pt, prevPt, color) {
   if (!ctx) { dbg('LIVE/no-ctx'); return; }
   resetCtx(ctx);
   withLogicalSpace(ctx, () => {
-    ctx.save();
-    const lw = getLineWidth();
-    ctx.lineCap = 'round';
+              ctx.save();          const lw = getLineWidth();    ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.strokeStyle = color || '#fff';
     ctx.lineWidth = lw;
@@ -2425,6 +2478,7 @@ function regenerateMapFromStrokes() {
     try {
       updatePaintBackingStores({ target: usingBackBuffers ? 'back' : 'both' });
       clearCanvas(pctx);
+      emitDG('paint-clear', { reason: 'restore-snapshot' });
       resetCtx(pctx);
       resetCtx(pctx);
       withLogicalSpace(pctx, () => {
@@ -2535,6 +2589,7 @@ function regenerateMapFromStrokes() {
         resetCtx(pctx);
         withLogicalSpace(pctx, () => {
           clearCanvas(pctx);
+          emitDG('paint-clear', { reason: 'resnap-redraw' });
           for (const s of strokes) {
             drawFullStroke(pctx, s);
           }
@@ -2595,10 +2650,15 @@ function regenerateMapFromStrokes() {
       }
       // NEW: also copy other overlays back -> front once to avoid a 1-frame size pop
       copyCanvas(particleBackCtx, particleFrontCtx);
+      emitDG('blit', { from: 'back', to: 'front', layer: 'particles' });
       copyCanvas(gridBackCtx,      gridFrontCtx);
+      emitDG('blit', { from: 'back', to: 'front', layer: 'grid' });
       copyCanvas(nodesBackCtx,     nodesFrontCtx);
+      emitDG('blit', { from: 'back', to: 'front', layer: 'nodes' });
       copyCanvas(flashBackCtx,     flashFrontCtx);
+      emitDG('blit', { from: 'back', to: 'front', layer: 'flash' });
       copyCanvas(tutorialBackCtx,  tutorialFrontCtx);
+      emitDG('blit', { from: 'back', to: 'front', layer: 'tutorial' });
 
       resnapAndRedraw(true);
       try { clearAndRedrawFromStrokes(pctx); } catch {}
@@ -2648,6 +2708,7 @@ function regenerateMapFromStrokes() {
     fctx = flashBackCtx;
     ghostCtx = ghostBackCtx;
     tutorialCtx = tutorialBackCtx;
+    emitDG('buffers', { action: 'useBackBuffers', usingBackBuffers });
   }
 
   function useFrontBuffers() {
@@ -2659,6 +2720,7 @@ function regenerateMapFromStrokes() {
     fctx = flashFrontCtx;
     ghostCtx = ghostFrontCtx;
     tutorialCtx = tutorialFrontCtx;
+    emitDG('buffers', { action: 'useFrontBuffers', usingBackBuffers });
   }
 
   function syncGhostBackToFront() {
@@ -3200,11 +3262,48 @@ function syncBackBufferSizes() {
     resetCtx(ctx);
     withLogicalSpace(ctx, () => {
       ctx.save();
-      const isStandard = !panel.classList.contains('toy-zoomed');
       const isOverlay = (ctx === fctx);
-      let wantsSpecial = isOverlay && ( !!stroke.isSpecial || stroke.generatorId === 1 || stroke.generatorId === 2 );
-      if (!isOverlay) wantsSpecial = false;
-      if (wantsSpecial && isOverlay) {
+      const wantsSpecial = !!stroke.isSpecial;
+      const visualOnly = isVisualOnlyStroke(stroke);
+      const alpha = getPathAlpha({ isOverlay, wantsSpecial, isVisualOnly: visualOnly });
+
+      emitDG('path-alpha', {
+        layer: (ctx === fctx) ? 'overlay' : 'paint',
+        wantsSpecial: !!stroke.isSpecial,
+        visualOnly,
+        alpha,
+        overlayColorize: !!stroke.overlayColorize,
+        hasGeneratorId: !!stroke.generatorId,
+        pts: stroke.pts?.length || 0
+      });
+
+      if (DG_ALPHA_DEBUG) {
+        const now = performance?.now?.() ?? Date.now();
+        if (now - __ALPHA_PATH_LAST_TS > DG_ALPHA_SPAM_MS) {
+          __ALPHA_PATH_LAST_TS = now;
+          console.debug('[DG][alpha:path]', {
+            isOverlay,
+            wantsSpecial,
+            VISUAL_ONLY_ALPHA,
+          });
+        }
+      }
+
+      ctx.globalAlpha = alpha;
+
+      const useMultiColour = wantsSpecial && isOverlay;
+
+      if (!useMultiColour) {
+        if (isOverlay) {
+          ctx.strokeStyle = stroke.overlayColor || '#ffffff';
+          ctx.fillStyle = ctx.strokeStyle;
+        } else {
+          ctx.strokeStyle = color;
+          ctx.fillStyle = color;
+        }
+      }
+
+      if (useMultiColour) {
         ctx.shadowColor = 'rgba(255, 255, 255, 0.7)';
         ctx.shadowBlur = 18;
         ctx.shadowOffsetX = 0;
@@ -3214,39 +3313,28 @@ function syncBackBufferSizes() {
         ctx.shadowOffsetX = 0;
         ctx.shadowOffsetY = 0;
       }
-      if (!wantsSpecial) {
-        ctx.globalAlpha = (isOverlay ? 0.3 : 1.0);
-      } else {
-        ctx.globalAlpha = 1.0;
-      }
 
       ctx.beginPath();
       if (stroke.pts.length === 1) {
         const lineWidth = getLineWidth();
         const p = stroke.pts[0];
-        if (wantsSpecial) {
+        if (useMultiColour) {
           const r = lineWidth / 2;
           const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
-          if (isOverlay) {
-            const t = (performance.now ? performance.now() : Date.now());
-            const gid = stroke.generatorId ?? 1;
-            if (gid === 1) {
-              const hue = 200 + 20 * Math.sin((t / 800) * Math.PI * 2);
-              grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 75%)`);
-              grad.addColorStop(0.7, `hsl(${(hue + 60).toFixed(0)}, 100%, 68%)`);
-              grad.addColorStop(1, `hsla(${(hue + 120).toFixed(0)}, 100%, 60%, 0.35)`);
-            } else {
-              const hue = 20 + 20 * Math.sin((t / 900) * Math.PI * 2);
-              grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 70%)`);
-              grad.addColorStop(0.7, `hsl(${(hue - 25).toFixed(0)}, 100%, 65%)`);
-              grad.addColorStop(1, `hsla(${(hue - 45).toFixed(0)}, 100%, 55%, 0.35)`);
-            }
-            ctx.fillStyle = grad;
+          const t = (performance.now ? performance.now() : Date.now());
+          const gid = stroke.generatorId ?? 1;
+          if (gid === 1) {
+            const hue = 200 + 20 * Math.sin((t / 800) * Math.PI * 2);
+            grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 75%)`);
+            grad.addColorStop(0.7, `hsl(${(hue + 60).toFixed(0)}, 100%, 68%)`);
+            grad.addColorStop(1, `hsla(${(hue + 120).toFixed(0)}, 100%, 60%, 0.35)`);
           } else {
-            ctx.fillStyle = color;
+            const hue = 20 + 20 * Math.sin((t / 900) * Math.PI * 2);
+            grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 70%)`);
+            grad.addColorStop(0.7, `hsl(${(hue - 25).toFixed(0)}, 100%, 65%)`);
+            grad.addColorStop(1, `hsla(${(hue - 45).toFixed(0)}, 100%, 55%, 0.35)`);
           }
-        } else {
-          ctx.fillStyle = color;
+          ctx.fillStyle = grad;
         }
         ctx.arc(p.x, p.y, lineWidth / 2, 0, Math.PI * 2);
         ctx.fill();
@@ -3259,28 +3347,24 @@ function syncBackBufferSizes() {
         ctx.lineJoin = 'round';
         const lw = getLineWidth() + (isOverlay ? 1.25 : 0);
         ctx.lineWidth = lw;
-        if (wantsSpecial) {
-         const p1 = stroke.pts[0];
-         const pLast = stroke.pts[stroke.pts.length - 1];
+        if (useMultiColour) {
+          const p1 = stroke.pts[0];
+          const pLast = stroke.pts[stroke.pts.length - 1];
           const grad = ctx.createLinearGradient(p1.x, p1.y, pLast.x, pLast.y);
-          if (isOverlay) {
-            const t = (performance.now ? performance.now() : Date.now());
-            const gid = stroke.generatorId ?? 1;
-            if (gid === 1) {
-              const hue = 200 + 20 * Math.sin((t / 800) * Math.PI * 2);
-              grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 70%)`);
-              grad.addColorStop(0.5, `hsl(${(hue + 45).toFixed(0)}, 100%, 70%)`);
-              grad.addColorStop(1, `hsl(${(hue + 90).toFixed(0)}, 100%, 68%)`);
-            } else {
-              const hue = 20 + 20 * Math.sin((t / 900) * Math.PI * 2);
-              grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 68%)`);
-              grad.addColorStop(0.5, `hsl(${(hue - 25).toFixed(0)}, 100%, 66%)`);
-              grad.addColorStop(1, `hsl(${(hue - 50).toFixed(0)}, 100%, 64%)`);
-            }
-            ctx.strokeStyle = grad;
+          const t = (performance.now ? performance.now() : Date.now());
+          const gid = stroke.generatorId ?? 1;
+          if (gid === 1) {
+            const hue = 200 + 20 * Math.sin((t / 800) * Math.PI * 2);
+            grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 70%)`);
+            grad.addColorStop(0.5, `hsl(${(hue + 45).toFixed(0)}, 100%, 70%)`);
+            grad.addColorStop(1, `hsl(${(hue + 90).toFixed(0)}, 100%, 68%)`);
+          } else {
+            const hue = 20 + 20 * Math.sin((t / 900) * Math.PI * 2);
+            grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 68%)`);
+            grad.addColorStop(0.5, `hsl(${(hue - 25).toFixed(0)}, 100%, 66%)`);
+            grad.addColorStop(1, `hsl(${(hue - 50).toFixed(0)}, 100%, 64%)`);
           }
-        } else {
-          ctx.strokeStyle = color;
+          ctx.strokeStyle = grad;
         }
         ctx.stroke();
       }
@@ -4165,7 +4249,6 @@ function syncBackBufferSizes() {
 
     const isZoomed = panel.classList.contains('toy-zoomed');
     let shouldGenerateNodes = true;
-    let isSpecial = false;
     let generatorId = null;
 
     if (isZoomed) {
@@ -4197,20 +4280,39 @@ function syncBackBufferSizes() {
         if (hasSpecialLine) {
             shouldGenerateNodes = false;
         } else {
-            isSpecial = true;
+            shouldGenerateNodes = true; // Explicitly set to true
             generatorId = 1; // Standard view's first line is functionally Line 1
             // In standard view, a new generator line should replace any old decorative lines.
             strokes = [];
         }
     }
     
-    // Debug: log the decision for this stroke
+    const isSpecial = !!shouldGenerateNodes;
     strokeToProcess.isSpecial = isSpecial;
-    strokeToProcess.generatorId = generatorId;
-    strokeToProcess.justCreated = true; // Mark as new to exempt from old erasures
-    if (!strokeToProcess.generatorId && typeof strokeToProcess.isSpecial !== 'boolean') {
-      strokeToProcess.isSpecial = true;
+    strokeToProcess.justCreated = true;
+
+    if (isSpecial) {
+      strokeToProcess.generatorId = generatorId || 1;
+    } else {
+      delete strokeToProcess.generatorId;
+      strokeToProcess.overlayColorize = false;
     }
+
+    console.debug('[DG][commit]', {
+      mode: panel.classList.contains('toy-zoomed') ? 'zoomed' : 'standard',
+      shouldGenerateNodes,
+      isSpecial,
+      generatorId: strokeToProcess.generatorId ?? null,
+    });
+
+    emitDG('commit', {
+      mode: panel.classList.contains('toy-zoomed') ? 'zoomed' : 'standard',
+      shouldGenerateNodes,
+      isSpecial,
+      generatorId: strokeToProcess.generatorId ?? null,
+      pts: strokeToProcess.pts?.length || 0
+    });
+
     strokes.push(strokeToProcess);
     markUserChange('stroke-commit');
 
@@ -4493,6 +4595,7 @@ function syncBackBufferSizes() {
         const width = cssW || (flashSurface?.width ?? 0) / scale;
         const height = cssH || (flashSurface?.height ?? 0) / scale;
         fctx.clearRect(0, 0, width, height);
+        emitDG('overlay-clear', { reason: 'pre-redraw' });
       });
 
       // Animate special stroke paint (hue cycling) without resurrecting erased areas:
@@ -4779,6 +4882,7 @@ function syncBackBufferSizes() {
     }
     try {
       clearCanvas(pctx);
+      emitDG('paint-clear', { reason: 'restore-state' });
       clearCanvas(nctx);
       const flashSurface = getActiveFlashCanvas();
       withLogicalSpace(fctx, () => {
@@ -4786,6 +4890,7 @@ function syncBackBufferSizes() {
         const width = cssW || (flashSurface?.width ?? 0) / scale;
         const height = cssH || (flashSurface?.height ?? 0) / scale;
         fctx.clearRect(0, 0, width, height);
+        emitDG('overlay-clear', { reason: 'restore-state' });
       });
 
       const denormPt = (nx, ny) => {
@@ -4881,6 +4986,7 @@ function syncBackBufferSizes() {
         dgTraceWarn('[drawgrid][CLEAR] programmatic', clearLog);
       }
       clearCanvas(pctx);
+      emitDG('paint-clear', { reason: 'pre-redraw' });
       clearCanvas(nctx);
       const flashSurface = getActiveFlashCanvas();
       withLogicalSpace(fctx, () => {
@@ -4888,6 +4994,7 @@ function syncBackBufferSizes() {
         const width = cssW || (flashSurface?.width ?? 0) / scale;
         const height = cssH || (flashSurface?.height ?? 0) / scale;
         fctx.clearRect(0, 0, width, height);
+        emitDG('overlay-clear', { reason: 'pre-redraw' });
       });
       strokes = [];
       prevStrokeCount = 0;
@@ -5200,6 +5307,7 @@ function syncBackBufferSizes() {
     manualOverrides = Array.from({ length: cols }, () => new Set());
     persistentDisabled = Array.from({ length: cols }, () => new Set());
     clearCanvas(pctx);
+    emitDG('paint-clear', { reason: 'randomize' });
     clearCanvas(nctx);
 
     // Build a smooth, dramatic wiggly line across the full grid height using Catmull-Rom interpolation
