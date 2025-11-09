@@ -1019,7 +1019,7 @@ function persistToyPosition(panel) {
     }
 }
 
-function createToyPanelAt(toyType, { centerX, centerY, instrument } = {}) {
+function createToyPanelAt(toyType, { centerX, centerY, instrument, autoCenter } = {}) {
     const type = String(toyType || '').toLowerCase();
     if (!type || !toyInitializers[type]) {
         console.warn('[createToyPanelAt] unknown toy type', toyType);
@@ -1080,6 +1080,8 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument } = {}) {
     }
     persistToyPosition(panel);
 
+    const shouldAutoCenterCamera = !!autoCenter;
+
     setTimeout(() => {
         if (!panel.isConnected) return;
         try { initializeNewToy(panel); } catch (err) { console.warn('[createToyPanelAt] init failed', err); }
@@ -1105,6 +1107,13 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument } = {}) {
             delete panel.dataset.spawnAutoManaged;
             delete panel.dataset.spawnAutoLeft;
             delete panel.dataset.spawnAutoTop;
+            if (shouldAutoCenterCamera && panel.isConnected) {
+                try {
+                    window.centerBoardOnElement?.(panel);
+                } catch (err) {
+                    console.warn('[createToyPanelAt] auto-center failed', err);
+                }
+            }
         };
 
         const raf = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));

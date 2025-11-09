@@ -249,8 +249,8 @@ function spawnAtDefault(entry) {
   const centerX = metrics.offsetWidth / 2;
   const centerY = metrics.offsetHeight / 2;
   try {
-    state.config.create?.(entry.type, { centerX, centerY });
-    return true;
+    const panel = state.config.create?.(entry.type, { centerX, centerY, autoCenter: true });
+    return !!panel;
   } catch (err) {
     console.warn('[ToySpawner] default create failed', err);
     return false;
@@ -281,8 +281,8 @@ function trySpawn(entry, clientX, clientY) {
   }
 
   try {
-    state.config.create?.(entry.type, { centerX: point.x, centerY: point.y });
-    return true;
+    const panel = state.config.create?.(entry.type, { centerX: point.x, centerY: point.y, autoCenter: true });
+    return !!panel;
   } catch (err) {
     console.warn('[ToySpawner] create failed', err);
     return false;

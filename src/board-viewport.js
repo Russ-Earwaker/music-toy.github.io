@@ -543,12 +543,13 @@ export function getViewportTransform() {
     const viewCy = viewH * 0.5;
 
     // World-space center of the panel (offsets are relative to #board because board.js ensures position:relative).
-    const worldCenter = getWorldCenter(el);
-    const elCxWorld = worldCenter?.x ?? 0;
-    const elCyWorld = worldCenter?.y ?? 0;
+  const worldCenter = getWorldCenter(el);
+  const elCxWorld = worldCenter?.x ?? 0;
+  const elCyWorld = worldCenter?.y ?? 0;
 
-    const nextX = viewCx - layoutLeft - elCxWorld * targetScale;
-    const nextY = viewCy - layoutTop - elCyWorld * targetScale;
+  const { layoutLeft, layoutTop } = getLayoutOffset();
+  const nextX = viewCx - layoutLeft - elCxWorld * targetScale;
+  const nextY = viewCy - layoutTop - elCyWorld * targetScale;
 
     // Guard against NaN/Infinity
     if (!Number.isFinite(nextX) || !Number.isFinite(nextY)) {

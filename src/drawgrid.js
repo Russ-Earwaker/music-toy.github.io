@@ -1643,6 +1643,11 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     });
   }
   let isRestoring = false;
+  const handleInstrumentPersist = () => {
+    if (isRestoring) return;
+    schedulePersistState({ source: 'instrument-change', bypassGuard: true });
+  };
+  try { panel.addEventListener('toy-instrument', handleInstrumentPersist); } catch {}
 
   // Double-buffer + DPR tracking
   let pendingPaintSwap = false;
@@ -5005,6 +5010,20 @@ function syncBackBufferSizes() {
   }
   rafId = requestAnimationFrame(renderLoop);
 
+  function applyInstrumentFromState(value, { emitEvents = true } = {}) {
+    const resolved = (typeof value === 'string') ? value.trim() : '';
+    if (!resolved) return false;
+    const prev = panel.dataset.instrument || '';
+    const changed = prev !== resolved;
+    panel.dataset.instrument = resolved;
+    panel.dataset.instrumentPersisted = '1';
+    if (changed && emitEvents) {
+      try { panel.dispatchEvent(new CustomEvent('toy-instrument', { detail: { value: resolved }, bubbles: true })); } catch {}
+      try { panel.dispatchEvent(new CustomEvent('toy:instrument', { detail: { name: resolved, value: resolved }, bubbles: true })); } catch {}
+    }
+    return changed;
+  }
+
   function captureState() {
     try {
       const serializeSetArr = (arr) => Array.isArray(arr) ? arr.map(s => Array.from(s || [])) : [];
@@ -5020,6 +5039,7 @@ function syncBackBufferSizes() {
       return {
         steps: cols | 0,
         autotune: !!autoTune,
+        instrument: panel.dataset.instrument || undefined,
         strokes: (strokes || []).map(s => ({
           ptsN: Array.isArray(s.pts) ? s.pts.map(normPt) : [],
           color: s.color,
@@ -5046,6 +5066,9 @@ function syncBackBufferSizes() {
   function restoreFromState(state) {
     const prevRestoring = isRestoring;
     isRestoring = true;
+    if (state && typeof state.instrument === 'string') {
+      applyInstrumentFromState(state.instrument, { emitEvents: true });
+    }
     const hasStrokes = Array.isArray(state?.strokes) && state.strokes.length > 0;
     const hasErase = Array.isArray(state?.eraseStrokes) && state.eraseStrokes.length > 0;
     const hasActiveNodes = Array.isArray(state?.nodes?.active) && state.nodes.active.some(Boolean);
@@ -5252,6 +5275,9 @@ function syncBackBufferSizes() {
               disabled: guardNodesDisabledCandidate,
             },
           }, { reason: 'setState-pre', panelId: panel?.id });
+          if (typeof st?.instrument === 'string') {
+            applyInstrumentFromState(st.instrument, { emitEvents: true });
+          }
           try{
             // Steps first
             if (typeof st.steps === 'number' && (st.steps===8 || st.steps===16)){
@@ -5898,6 +5924,7 @@ function runAutoGhostGuideSweep() {
     noteToggleEffects = [];
     nextDrawTarget = null;
     previewGid = null;
+    try { panel.removeEventListener('toy-instrument', handleInstrumentPersist); } catch {}
     if (typeof unsubscribeZoom === 'function') {
       try { unsubscribeZoom(); } catch {}
     }
