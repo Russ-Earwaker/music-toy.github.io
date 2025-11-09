@@ -492,8 +492,22 @@ function bootTopbar(){
     } catch (err) {
       console.warn('[chain] play cascade failed', err);
     }
+    // Globally mark all toys as "playing" (steady outer highlight even if empty)
+    try {
+      document.querySelectorAll('.toy-panel').forEach(p => p.classList.add('toy-playing'));
+    } catch {}
   });
-  stopBtn?.addEventListener('click', ()=>{ try{ ensureAudioContext().suspend(); }catch{} });
+  stopBtn?.addEventListener('click', ()=>{
+    try { ensureAudioContext().suspend(); } catch {}
+    // Clear all highlight state when paused
+    try {
+      document.querySelectorAll('.toy-panel').forEach(p => {
+        p.classList.remove('toy-playing', 'toy-playing-pulse');
+      });
+    } catch {}
+    // Clear connector pulse cache so edges don't “ghost” flash after stop
+    try { g_pulsingConnectors.clear(); } catch {}
+  });
   bpmInput?.addEventListener('change', (e)=> setBpm(Number(e.target.value)||DEFAULT_BPM));
 }
 function bootGrids(){
@@ -1423,15 +1437,11 @@ function scheduler(){
       }
 
       const activeToyIds = new Set(g_chainState.values());
-      // Phase A: apply chain-active highlight to ALL toys (outer border in normal view)
+      // Phase A: mark chain-active (for logic/UI), but DO NOT toggle the highlight here.
+      // The steady highlight is controlled globally by Play/Stop.
       document.querySelectorAll('.toy-panel[id]').forEach(toy => {
         const isActive = activeToyIds.has(toy.id);
         toy.dataset.chainActive = isActive ? 'true' : 'false';
-        if (isActive) {
-          toy.classList.add('toy-playing');
-        } else {
-          toy.classList.remove('toy-playing');
-        }
       });
 
       // Phase B: still run sequencer steps only on toys that implement it
@@ -1454,6 +1464,13 @@ function scheduler(){
               }
           }
       }
+    } else {
+      // Transport paused — ensure no steady highlight is shown
+      try {
+        document.querySelectorAll('.toy-panel').forEach(p => {
+          p.classList.remove('toy-playing', 'toy-playing-pulse');
+        });
+      } catch {}
     }
     drawChains();
     requestAnimationFrame(step);
