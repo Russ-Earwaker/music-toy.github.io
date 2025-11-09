@@ -362,6 +362,86 @@ const g_pulsingConnectors = new Map(); // fromId -> { toId, pulse: 1.0 }
 
 
 console.log('[MAIN] module start');
+  // --- Adaptive outline style: scales with zoom, but never below min px on screen ---
+  (function installAdaptiveOutlineCSS(){
+    const style = document.createElement('style');
+    style.textContent = `
+      :root{
+        --toy-outline-w: 3px;          /* base pre-zoom width */
+        --toy-outline-pulse-w: 8px;    /* pulse peak pre-zoom width */
+        --toy-outline-color: hsl(222, 100%, 80%);
+      }
+      /* Ensure outline is driven by variables (we override any earlier CSS) */
+      .toy-panel.toy-playing{
+        outline-style: solid;
+        outline-color: var(--toy-outline-color);
+        outline-width: var(--toy-outline-w);
+        outline-offset: -1px;
+      }
+      @keyframes playingPulseAdaptive {
+        0%   { outline-width: var(--toy-outline-w); }
+        50%  { outline-width: var(--toy-outline-pulse-w); }
+        100% { outline-width: var(--toy-outline-w); }
+      }
+      .toy-panel.toy-playing-pulse{
+        animation: playingPulseAdaptive 0.3s ease-out;
+      }
+    `;
+    document.head.appendChild(style);
+  })();
+  // --- Body-only outline for overview (used when header/footer are hidden) ---
+  (function installBodyOutlineCSS(){
+    const style = document.createElement('style');
+    style.textContent = `
+      /* When we're in overview-outline mode, suppress the panel outline itself */
+      .toy-panel.overview-outline.toy-playing { outline-width: 0 !important; }
+
+      /* Overlay hugging .toy-body */
+      .toy-body-outline {
+        position: absolute;
+        left: 0; top: 0; width: 0; height: 0;
+        pointer-events: none;
+        border-radius: 8px;
+        opacity: 0;
+        z-index: 51; /* above toy content; buttons are 52 */
+
+        /* Two-layer effect:
+           1) outer glow   -> 0 0 blur color
+           2) hard outline -> 0 0 0 spread color  */
+        box-shadow:
+          0 0 var(--toy-outline-glow-base, 10px) hsla(222, 100%, 85%, 0.9),
+          0 0 0 var(--toy-outline-w) var(--toy-outline-color);
+      }
+
+      /* Visible whenever playing or pulsing */
+      .toy-panel.overview-outline.toy-playing > .toy-body-outline,
+      .toy-panel.overview-outline.toy-playing-pulse > .toy-body-outline {
+        opacity: 1;
+      }
+
+      @keyframes playingPulseBodyAdaptive {
+        0% {
+          box-shadow:
+            0 0 var(--toy-outline-glow-base, 10px) hsla(222, 100%, 85%, 0.9),
+            0 0 0 var(--toy-outline-w) var(--toy-outline-color);
+        }
+        50% {
+          box-shadow:
+            0 0 var(--toy-outline-glow-pulse, 28px) hsla(222, 100%, 92%, 0.95),
+            0 0 0 var(--toy-outline-pulse-w) var(--toy-outline-color);
+        }
+        100% {
+          box-shadow:
+            0 0 var(--toy-outline-glow-base, 10px) hsla(222, 100%, 85%, 0.9),
+            0 0 0 var(--toy-outline-w) var(--toy-outline-color);
+        }
+      }
+      .toy-panel.overview-outline.toy-playing-pulse > .toy-body-outline {
+        animation: playingPulseBodyAdaptive 0.3s ease-out;
+      }
+    `;
+    document.head.appendChild(style);
+  })();
 const BOARD_BOOT_CLASS = 'board--booting';
 const boardBootRoot = document.getElementById('board');
 if (boardBootRoot) {
@@ -394,6 +474,68 @@ function bootGrids(){
   simplePanels.forEach(p => buildGrid(p, 8));
   const drumPanels = Array.from(document.querySelectorAll('.toy-panel[data-toy="loopgrid-drum"]'));
   drumPanels.forEach(p => buildDrumGrid(p, 8));
+}
+// --- Body-outline manager: keeps an outline hugging .toy-body only when header/footer are hidden ---
+// Treat element as "hidden" if any of these is true.
+function __elHidden(el){
+  if (!el) return true;
+  const cs = getComputedStyle(el);
+  return (
+    cs.display === 'none' ||
+    cs.visibility === 'hidden' ||
+    cs.opacity === '0' ||
+    el.offsetHeight === 0 ||
+    el.clientHeight === 0
+  );
+}
+function syncBodyOutline(panel){
+    if (!panel || !panel.isConnected) return;
+    let overlay = panel.querySelector(':scope > .toy-body-outline');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.className = 'toy-body-outline';
+      panel.appendChild(overlay);
+    }
+
+    const header = panel.querySelector(':scope > .toy-header');
+    const footer = panel.querySelector(':scope > .toy-footer');
+    const body = panel.querySelector(':scope > .toy-body');
+
+    const hdrHidden = __elHidden(header);
+    const ftrHidden = __elHidden(footer);
+    const bodyShown = !!body && getComputedStyle(body).display !== 'none';
+
+    // Consider this "overview" if body is visible but header+footer are hidden
+    const isOverviewLike = bodyShown && hdrHidden && ftrHidden;
+
+    panel.classList.toggle('overview-outline', isOverviewLike);
+
+    if (isOverviewLike && body) {
+      const bodyTop = body.offsetTop;
+      const bodyLeft = body.offsetLeft;
+      const bodyW = body.offsetWidth;
+      const bodyH = body.offsetHeight;
+
+      overlay.style.left = `${bodyLeft}px`;
+      overlay.style.top = `${bodyTop}px`;
+      overlay.style.width = `${bodyW}px`;
+      overlay.style.height = `${bodyH}px`;
+
+      // Mirror toy body radius so the glow matches perfectly
+      const br = getComputedStyle(body).borderRadius || '8px';
+      overlay.style.borderRadius = br;
+      overlay.style.opacity = '';
+    } else {
+      overlay.style.left = '0px';
+      overlay.style.top = '0px';
+      overlay.style.width = '0px';
+      overlay.style.height = '0px';
+      overlay.style.opacity = '0';
+    }
+}
+
+function syncAllBodyOutlines(){
+  document.querySelectorAll('.toy-panel').forEach(syncBodyOutline);
 }
 function bootDrawGrids(){
   const panels = Array.from(document.querySelectorAll('.toy-panel[data-toy="drawgrid"]'));
@@ -1139,10 +1281,59 @@ try {
     window.updateAllChainUIs = updateAllChainUIs;
 } catch {}
 
+  // --- Adaptive outline variable updater ---
+  (function installOutlineScaler(){
+    let lastScale = -1;
+    const root = document.documentElement;
+
+    function updateOutlineVars(scale){
+      // Keep outline constant in *screen px* regardless of zoom.
+      // Dialed up for stronger presence and flash.
+      const BASE_W_PX   = 7.0;   // was ~6
+      const PULSE_W_PX  = 22.0;  // was ~15
+
+      // Glow halo around the outline (screen px)
+      const GLOW_BASE_BLUR  = 10.0;
+      const GLOW_PULSE_BLUR = 28.0;
+
+      const MIN_SCREEN_PX = 2.5; // never thinner than this visually
+
+      const basePreZoom  = Math.max(MIN_SCREEN_PX, BASE_W_PX);
+      const pulsePreZoom = Math.max(basePreZoom * 1.6, PULSE_W_PX);
+
+      root.style.setProperty('--toy-outline-w', `${basePreZoom}px`);
+      root.style.setProperty('--toy-outline-pulse-w', `${pulsePreZoom}px`);
+      root.style.setProperty('--toy-outline-glow-base', `${GLOW_BASE_BLUR}px`);
+      root.style.setProperty('--toy-outline-glow-pulse', `${GLOW_PULSE_BLUR}px`);
+    }
+
+    // initial
+    updateOutlineVars(window.__boardScale || 1);
+
+    // update on zoom/overview transitions + window resize
+    window.addEventListener('overview:transition', () => updateOutlineVars(window.__boardScale || 1), { passive: true });
+    window.addEventListener('overview:transition', () => { try { syncAllBodyOutlines(); } catch {} }, { passive: true });
+    window.addEventListener('resize', () => updateOutlineVars(window.__boardScale || 1), { passive: true });
+    window.addEventListener('resize', () => { try { syncAllBodyOutlines(); } catch {} }, { passive: true });
+
+    // also piggyback on the main rAF loop to catch any scale changes
+    window.__updateOutlineScaleIfNeeded = function(){
+      const scale = window.__boardScale || 1;
+      if (scale !== lastScale){
+        lastScale = scale;
+        updateOutlineVars(scale);
+      }
+    };
+  })();
 function scheduler(){
   let lastPhase = 0;
   const lastCol = new Map();
   function step(){
+      // Keep outline vars + body-only overlays synced with layout changes
+      try {
+        window.__updateOutlineScaleIfNeeded && window.__updateOutlineScaleIfNeeded();
+        syncAllBodyOutlines();
+      } catch {}
     const info = getLoopInfo();
     if (isRunning()){
       const phaseJustWrapped = info.phase01 < lastPhase && lastPhase > 0.9;
@@ -1217,7 +1408,30 @@ async function boot(){
         try { console.log('[MAIN] refresh requested -> flushed autosave'); } catch {}
       }
     }, true);
+    // Delegate CLEAR button -> treat as user intent so drawgrid honors it
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-action="clear"], .btn-clear, [data-clear]');
+      if (!btn) return;
+      const panel = btn.closest('.toy-panel');
+      if (!panel) return;
+
+      try {
+        const dg = panel.__drawToy;
+        if (dg && typeof dg.clear === 'function') {
+          dg.clear({ user: true, reason: 'user-clear-button' });
+        } else {
+          panel.dispatchEvent(new CustomEvent('toy-clear', {
+            bubbles: false,
+            detail: { user: true, reason: 'user-clear-button' }
+          }));
+        }
+      } catch (err) {
+        console.warn('[MAIN] clear dispatch failed', err);
+      }
+    }, true);
     document.querySelectorAll('.toy-panel').forEach(initToyChaining);
+    // Initial sync once toys are present
+    try { syncAllBodyOutlines(); } catch {}
     updateAllChainUIs(); // Set initial instrument button visibility
 
   // Add event listener for grid-based chain activation
