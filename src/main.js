@@ -605,6 +605,24 @@ function initToyChaining(panel) {
     if (core) {
         core.style.setProperty('--c-btn-icon-url', `url('../assets/UI/T_ButtonExtend.png')`);
     }
+    // Ensure the button is vertically centered on the toy body, not the whole panel
+    const updateChainBtnPos = () => {
+      try {
+        const body = panel.querySelector('.toy-body');
+        if (!body) return;
+        // Position via absolute top in panel coords so it matches the connector Y
+        const targetTop = (body.offsetTop || 0) + (body.offsetHeight || 0) / 2;
+        extendBtn.style.top = `${targetTop}px`;
+        extendBtn.style.transform = 'translateY(-50%)';
+      } catch {}
+    };
+    // Run on attach + whenever layout/size changes
+    const ro = new ResizeObserver(updateChainBtnPos);
+    ro.observe(panel);
+    if (panel.querySelector('.toy-body')) ro.observe(panel.querySelector('.toy-body'));
+    window.addEventListener('overview:transition', updateChainBtnPos, { passive: true });
+    window.addEventListener('resize', updateChainBtnPos, { passive: true });
+    requestAnimationFrame(updateChainBtnPos);
 
     panel.appendChild(extendBtn);
     panel.style.overflow = 'visible'; // Ensure the button is not clipped by the panel's bounds.
@@ -952,9 +970,28 @@ try {
 
 const chainBtnStyle = document.createElement('style');
 chainBtnStyle.textContent = `
-    .toy-chain-btn { position: absolute; top: 50%; right: -65px; transform: translateY(-50%); z-index: 52; }
+    .toy-chain-btn { position: absolute; right: -65px; transform: translateY(-50%); z-index: 52; }
 `;
 document.head.appendChild(chainBtnStyle);
+
+function getChainAnchor(panel) {
+  // Board-space coordinates of where the connector should start (right edge center of toy body)
+  const left = (parseFloat(panel.style.left) || 0);
+  const top  = (parseFloat(panel.style.top)  || 0);
+  const body = panel.querySelector('.toy-body');
+  if (body) {
+    const bodyTop = body.offsetTop || 0;
+    const bodyH   = body.offsetHeight || panel.offsetHeight || 0;
+    const cx = left + panel.offsetWidth + 32.5; // 32.5 = chain button radius
+    const cy = top + bodyTop + (bodyH / 2);
+    return { x: cx, y: cy };
+  }
+  // Fallback to panel center if body missing
+  return {
+    x: left + panel.offsetWidth + 32.5,
+    y: top + (panel.offsetHeight / 2)
+  };
+}
 
 function drawChains() {
     if (!chainCanvas || !chainCtx) return;
@@ -1026,10 +1063,21 @@ function drawChains() {
             if (!next) break;
 
             // Use parseFloat(style.left/top) for coordinates to match the bounding box calculation.
-            const p1x = (parseFloat(current.style.left) || 0) + current.offsetWidth + 32.5;
-            const p1y = (parseFloat(current.style.top) || 0) + current.offsetHeight / 2;
-            const p2x = (parseFloat(next.style.left) || 0);
-            const p2y = (parseFloat(next.style.top) || 0) + next.offsetHeight / 2;
+            const a1 = getChainAnchor(current);
+            const a2 = (() => {
+              const left = (parseFloat(next.style.left) || 0);
+              const top  = (parseFloat(next.style.top)  || 0);
+              const body = next.querySelector('.toy-body');
+              if (body) {
+                return {
+                  x: left,
+                  y: top + body.offsetTop + (body.offsetHeight / 2)
+                };
+              }
+              return { x: left, y: top + (next.offsetHeight / 2) };
+            })();
+            const p1x = a1.x, p1y = a1.y;
+            const p2x = a2.x, p2y = a2.y;
 
             chainCtx.beginPath();
             chainCtx.moveTo(p1x, p1y);
@@ -1260,6 +1308,10 @@ async function boot(){
       current = nextToy;
     }
   });
+
+  window.addEventListener('overview:transition', () => {
+    try { drawChains(); } catch {}
+  }, { passive: true });
 
     try{ window.ThemeBoot && window.ThemeBoot.wireAll && window.ThemeBoot.wireAll(); }catch{}
     try{ tryRestoreOnBoot(); }catch{}
