@@ -371,20 +371,44 @@ console.log('[MAIN] module start');
         --toy-outline-pulse-w: 8px;    /* pulse peak pre-zoom width */
         --toy-outline-color: hsl(222, 100%, 80%);
       }
-      /* Ensure outline is driven by variables (we override any earlier CSS) */
+      /* NORMAL MODE — full-frame outline visible */
       .toy-panel.toy-playing{
-        outline-style: solid;
-        outline-color: var(--toy-outline-color);
-        outline-width: var(--toy-outline-w);
-        outline-offset: -1px;
+        outline: none;
+        box-shadow:
+          var(--toy-panel-shadow, 0 8px 24px rgba(0, 0, 0, 0.35)),
+          0 0 var(--toy-outline-glow-base, 10px) hsla(222, 100%, 85%, 0.9),
+          0 0 0 var(--toy-outline-w) var(--toy-outline-color);
       }
       @keyframes playingPulseAdaptive {
-        0%   { outline-width: var(--toy-outline-w); }
-        50%  { outline-width: var(--toy-outline-pulse-w); }
-        100% { outline-width: var(--toy-outline-w); }
+        0% {
+          box-shadow:
+            var(--toy-panel-shadow, 0 8px 24px rgba(0, 0, 0, 0.35)),
+            0 0 var(--toy-outline-glow-base, 10px) hsla(222, 100%, 85%, 0.9),
+            0 0 0 var(--toy-outline-w) var(--toy-outline-color);
+        }
+        50% {
+          box-shadow:
+            var(--toy-panel-shadow, 0 8px 24px rgba(0, 0, 0, 0.35)),
+            0 0 var(--toy-outline-glow-pulse, 28px) hsla(222, 100%, 92%, 0.95),
+            0 0 0 var(--toy-outline-pulse-w) var(--toy-outline-color);
+        }
+        100% {
+          box-shadow:
+            var(--toy-panel-shadow, 0 8px 24px rgba(0, 0, 0, 0.35)),
+            0 0 var(--toy-outline-glow-base, 10px) hsla(222, 100%, 85%, 0.9),
+            0 0 0 var(--toy-outline-w) var(--toy-outline-color);
+        }
       }
-      .toy-panel.toy-playing-pulse{
+      /* Normal view: force the outer border to animate */
+      .toy-panel:not(.overview-outline).toy-playing-pulse{
         animation: playingPulseAdaptive 0.3s ease-out;
+      }
+      /* OVERVIEW — suppress full-frame outline so only body overlay shows */
+      .toy-panel.overview-outline.toy-playing{
+        box-shadow: var(--toy-panel-shadow, 0 8px 24px rgba(0, 0, 0, 0.35));
+      }
+      .toy-panel.overview-outline.toy-playing-pulse{
+        animation: none !important;
       }
     `;
     document.head.appendChild(style);
@@ -393,9 +417,6 @@ console.log('[MAIN] module start');
   (function installBodyOutlineCSS(){
     const style = document.createElement('style');
     style.textContent = `
-      /* When we're in overview-outline mode, suppress the panel outline itself */
-      .toy-panel.overview-outline.toy-playing { outline-width: 0 !important; }
-
       /* Overlay hugging .toy-body */
       .toy-body-outline {
         position: absolute;
@@ -413,7 +434,12 @@ console.log('[MAIN] module start');
           0 0 0 var(--toy-outline-w) var(--toy-outline-color);
       }
 
-      /* Visible whenever playing or pulsing */
+      /* Show the body-hugging outline only in OVERVIEW */
+      .toy-panel.overview-outline.toy-playing > .toy-body-outline {
+        opacity: 1;
+      }
+
+      /* Visible in OVERVIEW only */
       .toy-panel.overview-outline.toy-playing > .toy-body-outline,
       .toy-panel.overview-outline.toy-playing-pulse > .toy-body-outline {
         opacity: 1;
@@ -436,6 +462,7 @@ console.log('[MAIN] module start');
             0 0 0 var(--toy-outline-w) var(--toy-outline-color);
         }
       }
+      /* Animate overlay pulse only in OVERVIEW */
       .toy-panel.overview-outline.toy-playing-pulse > .toy-body-outline {
         animation: playingPulseBodyAdaptive 0.3s ease-out;
       }
@@ -480,10 +507,11 @@ function bootGrids(){
 function __elHidden(el){
   if (!el) return true;
   const cs = getComputedStyle(el);
+  // Treat as "hidden" ONLY if removed from layout or explicitly hidden.
   return (
     cs.display === 'none' ||
     cs.visibility === 'hidden' ||
-    cs.opacity === '0' ||
+    el.offsetParent === null || // not in layout flow
     el.offsetHeight === 0 ||
     el.clientHeight === 0
   );
@@ -510,7 +538,12 @@ function syncBodyOutline(panel){
 
     panel.classList.toggle('overview-outline', isOverviewLike);
 
-    if (isOverviewLike && body) {
+    // Defensive: if either header or footer is visible, make sure we’re not suppressing the outer outline
+    if (!isOverviewLike && panel.classList.contains('overview-outline')) {
+      panel.classList.remove('overview-outline');
+    }
+
+    if (body) {
       const bodyTop = body.offsetTop;
       const bodyLeft = body.offsetLeft;
       const bodyW = body.offsetWidth;
@@ -615,6 +648,33 @@ function doesChainHaveActiveNotes(headId) {
 function getChildrenOf(parentId) {
     if (!parentId) return [];
     return Array.from(document.querySelectorAll('.toy-panel[id]')).filter(el => el.dataset.chainParent === parentId);
+}
+
+// Returns true if the given panel has any notes at the specified column.
+function panelHasNotesAtColumn(panel, col){
+  if (!panel || !Number.isFinite(col)) return false;
+  const type = panel.dataset?.toy;
+
+  if (type === 'loopgrid' || type === 'loopgrid-drum'){
+    const steps = panel.__gridState?.steps;
+    return Array.isArray(steps) && !!steps[col];
+  }
+
+  if (type === 'drawgrid'){
+    try {
+      const st = panel.__drawToy?.getState?.();
+      const active = st?.nodes?.active;
+      return Array.isArray(active) && !!active[col];
+    } catch {}
+    return false;
+  }
+
+  if (type === 'chordwheel'){
+    const s = panel.__chordwheelStepStates;
+    return Array.isArray(s) && s[col] !== -1;
+  }
+
+  return false;
 }
 
 function startToy(panelEl) {
@@ -729,6 +789,20 @@ function updateAllChainUIs() {
 
 function triggerConnectorPulse(fromId, toId) {
     g_pulsingConnectors.set(fromId, { toId, pulse: 1.0 });
+    const panel = document.getElementById(fromId);
+    pulseToyBorder(panel);
+}
+
+// Unified border pulse helper for both modes
+function pulseToyBorder(panel, durationMs = 320) {
+  if (!panel || !panel.isConnected) return;
+  // Ensure base playing outline is present
+  panel.classList.add('toy-playing');
+  // Trigger the pulse animation
+  panel.classList.add('toy-playing-pulse');
+  setTimeout(() => panel.classList.remove('toy-playing-pulse'), durationMs);
+  // Keep overlay geometry aligned even if pulse happens mid-layout change
+  try { syncBodyOutline(panel); } catch {}
 }
 
 function initToyChaining(panel) {
@@ -1290,7 +1364,7 @@ try {
       // Keep outline constant in *screen px* regardless of zoom.
       // Dialed up for stronger presence and flash.
       const BASE_W_PX   = 7.0;   // was ~6
-      const PULSE_W_PX  = 22.0;  // was ~15
+      const PULSE_W_PX  = 17.0;  // was ~15
 
       // Glow halo around the outline (screen px)
       const GLOW_BASE_BLUR  = 10.0;
@@ -1349,9 +1423,20 @@ function scheduler(){
       }
 
       const activeToyIds = new Set(g_chainState.values());
-      // Update data-chain-active on all sequenced toys
+      // Phase A: apply chain-active highlight to ALL toys (outer border in normal view)
+      document.querySelectorAll('.toy-panel[id]').forEach(toy => {
+        const isActive = activeToyIds.has(toy.id);
+        toy.dataset.chainActive = isActive ? 'true' : 'false';
+        if (isActive) {
+          toy.classList.add('toy-playing');
+        } else {
+          toy.classList.remove('toy-playing');
+        }
+      });
+
+      // Phase B: still run sequencer steps only on toys that implement it
       getSequencedToys().forEach(toy => {
-          toy.dataset.chainActive = activeToyIds.has(toy.id) ? 'true' : 'false';
+        // (no-op here; the per-step loop below will handle stepping)
       });
 
       for (const activeToyId of activeToyIds) {
@@ -1362,6 +1447,10 @@ function scheduler(){
               if (col !== lastCol.get(toy.id)) {
                   lastCol.set(toy.id, col);
                   try { toy.__sequencerStep(col); } catch (e) { console.warn(`Sequencer step failed for ${toy.id}`, e); }
+                  // If this toy actually has notes at this column, flash the normal-mode border
+                  if (panelHasNotesAtColumn(toy, col)) {
+                    pulseToyBorder(toy);
+                  }
               }
           }
       }

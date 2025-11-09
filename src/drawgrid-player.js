@@ -53,11 +53,11 @@ export function connectDrawGridToPlayer(panel) {
     const currentSteps = Number.isFinite(steps) ? steps : nodesArr.length;
 
     if (!currentSteps || !nodesArr.length) {
-      console.log('[PLAYER] skip: empty map', { currentSteps, nodesLen: nodesArr.length });
+      //console.log('[PLAYER] skip: empty map', { currentSteps, nodesLen: nodesArr.length });
       return;
     }
     if (col < 0 || col >= currentSteps) {
-      console.log('[PLAYER] skip: out of range col', { col, currentSteps });
+      //console.log('[PLAYER] skip: out of range col', { col, currentSteps });
       return;
     }
 
@@ -65,13 +65,13 @@ export function connectDrawGridToPlayer(panel) {
     const colSet = nodesArr[col] instanceof Set ? nodesArr[col] : new Set();
     const disabledInCol = map.disabled?.[col] || new Set();
 
-    console.log('[PLAYER] step', {
+    /*console.log('[PLAYER] step', {
       col,
       activeCol,
       steps: currentSteps,
       nodesInCol: colSet.size,
       disabledCount: disabledInCol.size
-    });
+    });*/
 
     if (!activeCol || colSet.size === 0) return;
 
@@ -93,7 +93,7 @@ export function connectDrawGridToPlayer(panel) {
       }
 
       // Log the exact note we’re about to play.
-      console.log('[PLAYER] trigger', { instrument, row, midiNote });
+      //console.log('[PLAYER] trigger', { instrument, row, midiNote });
 
       playNote(instrument, midiToName(midiNote));
     }
