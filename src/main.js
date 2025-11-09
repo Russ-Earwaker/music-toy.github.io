@@ -982,13 +982,13 @@ function getChainAnchor(panel) {
   if (body) {
     const bodyTop = body.offsetTop || 0;
     const bodyH   = body.offsetHeight || panel.offsetHeight || 0;
-    const cx = left + panel.offsetWidth + 32.5; // 32.5 = chain button radius
+    const cx = left + panel.offsetWidth; // start at toy's right edge, independent of button
     const cy = top + bodyTop + (bodyH / 2);
     return { x: cx, y: cy };
   }
   // Fallback to panel center if body missing
   return {
-    x: left + panel.offsetWidth + 32.5,
+    x: left + panel.offsetWidth,
     y: top + (panel.offsetHeight / 2)
   };
 }
@@ -1076,7 +1076,7 @@ function drawChains() {
               }
               return { x: left, y: top + (next.offsetHeight / 2) };
             })();
-            const p1x = a1.x, p1y = a1.y;
+            const p1x = a1.x - 1, p1y = a1.y; // tiny inset so the stroke tucks under the panel border cleanly
             const p2x = a2.x, p2y = a2.y;
 
             chainCtx.beginPath();
@@ -1095,15 +1095,6 @@ function drawChains() {
             chainCtx.strokeStyle = `hsl(222, 100%, ${80 + 15 * pulseAmount}%)`;
             chainCtx.stroke();
 
-            // "Erase" the part of the line that is under the button by punching a transparent hole.
-            const buttonRadius = 32.5;
-            chainCtx.save();
-            chainCtx.globalCompositeOperation = 'destination-out';
-            chainCtx.beginPath();
-            chainCtx.arc(p1x, p1y, buttonRadius, 0, Math.PI * 2);
-            chainCtx.fillStyle = '#000'; // Color doesn't matter for destination-out
-            chainCtx.fill();
-            chainCtx.restore();
             current = next;
         }
     }
@@ -1208,7 +1199,7 @@ async function boot(){
             position: 'absolute',
             top: '0', left: '0', // width/height are set dynamically in drawChains
             pointerEvents: 'none',
-            zIndex: '1' // Behind toy panels, but in front of any z-index:0 background
+            zIndex: '0' // Sit behind toy panels and buttons
         });
         board.prepend(chainCanvas);
         chainCtx = chainCanvas.getContext('2d');
