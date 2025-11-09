@@ -10,6 +10,11 @@ import {
 } from './zoom/ZoomCoordinator.js';
 import { WheelZoomLerper } from './zoom/WheelZoomLerper.js';
 
+let __liveViewportTransform = { scale: 1, tx: 0, ty: 0 };
+export function getViewportTransform() {
+  return { ...__liveViewportTransform };
+}
+
 (function () {
   if (window.__boardViewport) return;
   window.__boardViewport = true;
@@ -59,9 +64,22 @@ import { WheelZoomLerper } from './zoom/WheelZoomLerper.js';
     console.error('[board-viewport] failed to load viewport', e);
   }
 
-  window.__boardScale = scale;
-  window.__boardX = x;
-  window.__boardY = y;
+  function syncViewportSnapshot({
+    scale: nextScale = scale,
+    x: nextX = x,
+    y: nextY = y,
+  } = {}) {
+    const safeScale = Number.isFinite(nextScale) ? nextScale : 1;
+    const safeX = Number.isFinite(nextX) ? nextX : 0;
+    const safeY = Number.isFinite(nextY) ? nextY : 0;
+    __liveViewportTransform = { scale: safeScale, tx: safeX, ty: safeY };
+    window.__boardScale = safeScale;
+    window.__boardX = safeX;
+    window.__boardY = safeY;
+    try { stage?.style?.setProperty('--bv-scale', String(safeScale)); } catch {}
+  }
+
+  syncViewportSnapshot();
 
   let lastNotifiedScale = scale;
   let wheelCommitTimer = 0;
@@ -115,6 +133,7 @@ import { WheelZoomLerper } from './zoom/WheelZoomLerper.js';
     y = Number.isFinite(nextY) ? nextY : y;
 
     setGestureTransform({ scale, x, y });
+    syncViewportSnapshot({ scale, x, y });
     if (commit) {
       commitGesture({ scale, x, y }, { delayMs });
     }
@@ -164,10 +183,8 @@ import { WheelZoomLerper } from './zoom/WheelZoomLerper.js';
     const currentX = z.currentX ?? x;
     const currentY = z.currentY ?? y;
 
-    stage.style.setProperty('--bv-scale', String(currentScale));
-    window.__boardScale = currentScale;
-    window.__boardX = currentX;
-    window.__boardY = currentY;
+    try { stage.style.setProperty('--bv-scale', String(currentScale)); } catch {}
+    syncViewportSnapshot({ scale: currentScale, x: currentX, y: currentY });
 
     if (Math.abs(currentScale - lastNotifiedScale) > SCALE_EVENT_EPSILON) {
       lastNotifiedScale = currentScale;
@@ -597,9 +614,9 @@ import { WheelZoomLerper } from './zoom/WheelZoomLerper.js';
   ) {
     applyTransform({ scale, x, y }, { commit: true, delayMs: 0 });
   } else {
-    window.__boardScale = initial.currentScale ?? initial.targetScale ?? scale;
-    window.__boardX = initial.currentX ?? initial.targetX ?? x;
-    window.__boardY = initial.currentY ?? initial.targetY ?? y;
-    stage.style.setProperty('--bv-scale', String(window.__boardScale));
+    const initialScale = initial.currentScale ?? initial.targetScale ?? scale;
+    const initialX = initial.currentX ?? initial.targetX ?? x;
+    const initialY = initial.currentY ?? initial.targetY ?? y;
+    syncViewportSnapshot({ scale: initialScale, x: initialX, y: initialY });
   }
 })();

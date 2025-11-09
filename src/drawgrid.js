@@ -6,6 +6,7 @@ import { drawBlock } from './toyhelpers.js';
 import { getLoopInfo, isRunning } from './audio-core.js';
 import { onZoomChange, getZoomState, getFrameStartState, onFrameStart } from './zoom/ZoomCoordinator.js';
 import { createParticleViewport } from './particles/particle-viewport.js';
+import { getToyWorldAnchor } from './toyhelpers-sizing.js';
 
 // ---- drawgrid debug gate ----
 const DG_DEBUG = false;           // master switch
@@ -378,11 +379,6 @@ let __dgNeedsUIRefresh = false;
 let __hydrationJustApplied = false;
 let __dgStableFramesAfterCommit = 0;
 
-// --- Zoom-freeze for overlays ---
-let zoomFreezeActive = false;
-let zoomFreezeW = 0;
-let zoomFreezeH = 0;
-
 function __dgInCommitWindow(nowTs) {
   const win = (typeof window !== 'undefined') ? window : null;
   const lp = win?.__LAST_POINTERUP_DIAG__;
@@ -518,6 +514,7 @@ function createDrawGridParticles({
   homePull = 0.008, // Increased spring force to resettle faster
   bounceOnWalls = false,
   isNonReactive = () => false,
+  panel = null,
 } = {}){
   const P = [];
   const letters = [];
@@ -536,8 +533,40 @@ function createDrawGridParticles({
   function holdNextFrame(){ holdOneFrame = true; }
   function cancelHoldNextFrame(){ holdOneFrame = false; }
   function allowImmediateDraw(){ holdOneFrame = false; }
-  const W = ()=> Math.max(1, Math.floor(getW()?getW() * currentDpr:0));
-  const H = ()=> Math.max(1, Math.floor(getH()?getH() * currentDpr:0));
+  const W = ()=> Math.max(1, Math.floor(getW()?getW():0));
+  const H = ()=> Math.max(1, Math.floor(getH()?getH():0));
+  const panelEl = panel || null;
+  let panelWorldAnchor = panelEl ? getToyWorldAnchor(panelEl) : { x: 0, y: 0 };
+  function localToWorldCoords(localX, localY, anchorX = panelWorldAnchor?.x || 0, anchorY = panelWorldAnchor?.y || 0) {
+    return { x: anchorX + localX, y: anchorY + localY };
+  }
+  function worldToLocalCoords(worldX, worldY, anchorX = panelWorldAnchor?.x || 0, anchorY = panelWorldAnchor?.y || 0) {
+    return { x: worldX - anchorX, y: worldY - anchorY };
+  }
+  function refreshPanelAnchor({ shiftParticles = true } = {}) {
+    if (!panelEl) return;
+    const next = getToyWorldAnchor(panelEl) || { x: 0, y: 0 };
+    const prev = panelWorldAnchor || { x: 0, y: 0 };
+    const nextX = Number.isFinite(next.x) ? next.x : 0;
+    const nextY = Number.isFinite(next.y) ? next.y : 0;
+    const prevX = Number.isFinite(prev.x) ? prev.x : nextX;
+    const prevY = Number.isFinite(prev.y) ? prev.y : nextY;
+    const dx = nextX - prevX;
+    const dy = nextY - prevY;
+    panelWorldAnchor = { x: nextX, y: nextY };
+    if (!shiftParticles) return;
+    if (Math.abs(dx) < 1e-4 && Math.abs(dy) < 1e-4) return;
+    for (const p of P) {
+      p.x = (p.x ?? 0) + dx;
+      p.y = (p.y ?? 0) + dy;
+      p.homeX = (p.homeX ?? p.x) + dx;
+      p.homeY = (p.homeY ?? p.y) + dy;
+      const local = worldToLocalCoords(p.x, p.y);
+      p.localX = local.x;
+      p.localY = local.y;
+    }
+  }
+  refreshPanelAnchor({ shiftParticles: false });
   let lastW = 0, lastH = 0;
   const rand = mulberry32(__drawParticlesSeed);
   const clamp01 = (v) => Math.max(0, Math.min(1, v));
@@ -640,35 +669,49 @@ function createDrawGridParticles({
 
   function assignHome(p, w, h, { resetPosition = false } = {}) {
     if (!p || !Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return;
-    const safePrevW = lastW || w;
-    const safePrevH = lastH || h;
-    const nx = clamp01(typeof p.nx === 'number' ? p.nx : (p.x / w));
-    const ny = clamp01(typeof p.ny === 'number' ? p.ny : (p.y / h));
-    p.nx = nx;
-    p.ny = ny;
-    p.homeX = nx * w;
-    p.homeY = ny * h;
     const seeded = Number.isFinite(lastW) && lastW > 0 && Number.isFinite(lastH) && lastH > 0;
     const allowReset = resetPosition && (!checkNonReactive() || !seeded);
+    const fallbackLocal = worldToLocalCoords(p.x ?? 0, p.y ?? 0);
+    const existingLocalX = Number.isFinite(p.localX) ? p.localX : fallbackLocal.x;
+    const existingLocalY = Number.isFinite(p.localY) ? p.localY : fallbackLocal.y;
+    const nx = clamp01(typeof p.nx === 'number' ? p.nx : (existingLocalX / (w || 1)));
+    const ny = clamp01(typeof p.ny === 'number' ? p.ny : (existingLocalY / (h || 1)));
+    p.nx = nx;
+    p.ny = ny;
+    const localX = nx * w;
+    const localY = ny * h;
+    const world = localToWorldCoords(localX, localY);
+    p.homeX = world.x;
+    p.homeY = world.y;
     if (!allowReset) return;
     if (p.isBurst) {
+      const safePrevW = lastW || w;
+      const safePrevH = lastH || h;
       const scaleX = safePrevW ? w / safePrevW : 1;
       const scaleY = safePrevH ? h / safePrevH : 1;
       if (Number.isFinite(scaleX) && Number.isFinite(scaleY)) {
-        p.x *= scaleX;
-        p.y *= scaleY;
+        const burstLocalX = (Number.isFinite(p.localX) ? p.localX : localX) * scaleX;
+        const burstLocalY = (Number.isFinite(p.localY) ? p.localY : localY) * scaleY;
+        const burstWorld = localToWorldCoords(burstLocalX, burstLocalY);
+        p.x = burstWorld.x;
+        p.y = burstWorld.y;
+        p.localX = burstLocalX;
+        p.localY = burstLocalY;
         p.vx *= scaleX;
         p.vy *= scaleY;
       }
       return;
     }
-    p.x = p.homeX;
-    p.y = p.homeY;
+    p.x = world.x;
+    p.y = world.y;
+    p.localX = localX;
+    p.localY = localY;
     p.vx = 0;
     p.vy = 0;
   }
 
   function refreshHomes({ resetPositions = true } = {}) {
+    refreshPanelAnchor();
     const w = W();
     const h = H();
     if (!w || !h) return;
@@ -694,6 +737,9 @@ function createDrawGridParticles({
     for (const p of P) {
       if (Number.isFinite(p.homeX) && Number.isFinite(p.homeY)) {
         p.x = p.homeX; p.y = p.homeY;
+        const local = worldToLocalCoords(p.x, p.y);
+        p.localX = local.x;
+        p.localY = local.y;
         p.vx = 0; p.vy = 0;
       }
     }
@@ -716,9 +762,12 @@ function createDrawGridParticles({
   function onBeat(cx, cy){
     beatGlow = 1;
     const w=W(), h=H();
+    refreshPanelAnchor({ shiftParticles: false });
+    const beatWorld = localToWorldCoords(cx, cy);
     const rad = Math.max(24, Math.min(w,h)*0.42);
     for (const p of P){
-      const dx = p.x - cx, dy = p.y - cy;
+      const dx = p.x - beatWorld.x;
+      const dy = p.y - beatWorld.y;
       const d = Math.hypot(dx,dy) || 1;
       if (d < rad){
         const u = 0.25 * (1 - d/rad);
@@ -739,6 +788,7 @@ function createDrawGridParticles({
     const hcss = (typeof getH === 'function') ? getH() : 0;
     if (!wcss || !hcss) return;
     const w = W(), h = H();
+    refreshPanelAnchor();
 
     if (P.length < count){
       const width = w || lastW || 1;
@@ -776,22 +826,26 @@ function createDrawGridParticles({
 
       p.tSince += dt;
       p.vx *= 0.94; p.vy *= 0.94; // Increased damping to resettle faster
-      // Burst particles just fly and die, no "return to home"
-      if (returnToHome && !p.isBurst && p.repulsed <= 0 && !checkNonReactive()){
+      if (returnToHome && !p.isBurst && p.repulsed <= 0){
         const hx = p.homeX - p.x, hy = p.homeY - p.y;
         p.vx += homePull*hx; p.vy += homePull*hy;
       }
       p.x += p.vx; p.y += p.vy;
 
+      const localPos = worldToLocalCoords(p.x, p.y);
+      p.localX = localPos.x;
+      p.localY = localPos.y;
+
       if (p.isBurst) {
-          if (p.x < -10 || p.x >= w + 10 || p.y < -10 || p.y >= h + 10) {
+          if (p.localX < -10 || p.localX >= w + 10 || p.localY < -10 || p.localY >= h + 10) {
               continue; // Burst particles die if they go off-screen
           }
       } else {
-          // If a regular particle is pushed far off-screen, respawn it at its
-          // home position with a fade-in effect. This avoids the jarring "rush back".
-          if (p.x < -10 || p.x >= w + 10 || p.y < -10 || p.y >= h + 10) {
+          if (p.localX < -10 || p.localX >= w + 10 || p.localY < -10 || p.localY >= h + 10) {
               p.x = p.homeX; p.y = p.homeY;
+              const homeLocal = worldToLocalCoords(p.homeX, p.homeY);
+              p.localX = homeLocal.x;
+              p.localY = homeLocal.y;
               p.vx = 0; p.vy = 0;
               p.alpha = 0; // Start fade-in
               p.repulsed = 0; // Reset repulsion state
@@ -878,8 +932,10 @@ function createDrawGridParticles({
 
         const baseSize = 1.5;
         const size = Math.max(0.75, baseSize);
-        const x = (p.x | 0) - size / 2;
-        const y = (p.y | 0) - size / 2;
+        const localX = Number.isFinite(p.localX) ? p.localX : worldToLocalCoords(p.x, p.y).x;
+        const localY = Number.isFinite(p.localY) ? p.localY : worldToLocalCoords(p.x, p.y).y;
+        const x = (localX | 0) - size / 2;
+        const y = (localY | 0) - size / 2;
         ctx.fillRect(x, y, size, size);
         DG_particlesRectsDrawn++;
       }
@@ -914,10 +970,12 @@ function createDrawGridParticles({
   }
 
   function lineRepulse(x, width=40, strength=1){
+    refreshPanelAnchor({ shiftParticles: false });
     const w=W(); const h=H();
     const half = width*0.5;
     for (const p of P){
-      const dx = p.x - x;
+      const localX = Number.isFinite(p.localX) ? p.localX : worldToLocalCoords(p.x, p.y).x;
+      const dx = localX - x;
       if (Math.abs(dx) <= half && p.repulsed <= 0.35){
         const s = (dx===0? (Math.random()<0.5?-1:1) : Math.sign(dx));
         const fall = 1 - Math.abs(dx)/half;
@@ -954,9 +1012,12 @@ function createDrawGridParticles({
   }
 
   function drawingDisturb(disturbX, disturbY, radius = 30, strength = 0.5) {
+    refreshPanelAnchor({ shiftParticles: false });
     for (const p of P) {
-        const dx = p.x - disturbX;
-        const dy = p.y - disturbY;
+        const localX = Number.isFinite(p.localX) ? p.localX : worldToLocalCoords(p.x, p.y).x;
+        const localY = Number.isFinite(p.localY) ? p.localY : worldToLocalCoords(p.x, p.y).y;
+        const dx = localX - disturbX;
+        const dy = localY - disturbY;
         const distSq = dx * dx + dy * dy;
         if (distSq < radius * radius) {
             const dist = Math.sqrt(distSq) || 1;
@@ -988,48 +1049,67 @@ function createDrawGridParticles({
   }
 
   function pointBurst(x, y, countBurst = 30, speed = 3.0, color = 'pink') {
+    refreshPanelAnchor({ shiftParticles: false });
     const width = Math.max(1, W());
     const height = Math.max(1, H());
+    const burstWorld = localToWorldCoords(x, y);
     for (let i = 0; i < countBurst; i++) {
         const angle = Math.random() * Math.PI * 2;
+        const vx = Math.cos(angle) * speed * (0.5 + Math.random() * 0.5);
+        const vy = Math.sin(angle) * speed * (0.5 + Math.random() * 0.5);
         const p = {
-            x, y,
-            vx: Math.cos(angle) * speed * (0.5 + Math.random() * 0.5),
-            vy: Math.sin(angle) * speed * (0.5 + Math.random() * 0.5),
-            homeX: x,
-            homeY: y,
+            x: burstWorld.x,
+            y: burstWorld.y,
+            vx,
+            vy,
+            homeX: burstWorld.x,
+            homeY: burstWorld.y,
+            localX: x,
+            localY: y,
             alpha: 1.0,
             flash: 1.0,
             ttl: 45, // frames, ~0.75s
             color: color,
             isBurst: true,
-            repulsed: 0, // Not used by bursts, but good to initialize
+            repulsed: 0,
         };
-        p.nx = clamp01(width ? p.homeX / width : 0);
-        p.ny = clamp01(height ? p.homeY / height : 0);
+        p.nx = clamp01(width ? x / width : 0);
+        p.ny = clamp01(height ? y / height : 0);
         P.push(p);
     }
   }
 
 function ringBurst(x, y, radius, countBurst = 28, speed = 2.4, color = 'pink') {
+  refreshPanelAnchor({ shiftParticles: false });
   const width = Math.max(1, W());
   const height = Math.max(1, H());
   for (let i = 0; i < countBurst; i++) {
     const theta = (i / countBurst) * Math.PI * 2 + (Math.random() * 0.15);
-    const px = x + Math.cos(theta) * radius;
-    const py = y + Math.sin(theta) * radius;
+    const localPx = x + Math.cos(theta) * radius;
+    const localPy = y + Math.sin(theta) * radius;
     const outward = speed * (0.65 + Math.random() * 0.55);
     const jitterA = (Math.random() - 0.5) * 0.35;
     const vx = Math.cos(theta + jitterA) * outward;
     const vy = Math.sin(theta + jitterA) * outward;
+    const worldPos = localToWorldCoords(localPx, localPy);
     const burst = {
-      x: px, y: py, vx, vy,
-      homeX: px, homeY: py,
-      alpha: 1.0, flash: 1.0,
-      ttl: 45, color, isBurst: true, repulsed: 0
+      x: worldPos.x,
+      y: worldPos.y,
+      localX: localPx,
+      localY: localPy,
+      vx,
+      vy,
+      homeX: worldPos.x,
+      homeY: worldPos.y,
+      alpha: 1.0,
+      flash: 1.0,
+      ttl: 45,
+      color,
+      isBurst: true,
+      repulsed: 0
     };
-    burst.nx = clamp01(width ? burst.homeX / width : 0);
-    burst.ny = clamp01(height ? burst.homeY / height : 0);
+    burst.nx = clamp01(width ? localPx / width : 0);
+    burst.ny = clamp01(height ? localPy / height : 0);
     P.push(burst);
   }
 }
@@ -1062,22 +1142,34 @@ function ringBurst(x, y, radius, countBurst = 28, speed = 2.4, color = 'pink') {
   function scalePositions(scaleX, scaleY) {
     if (typeof zoomGestureActive !== 'undefined' && zoomGestureActive) return;
     if (!Number.isFinite(scaleX) || !Number.isFinite(scaleY)) return;
+    refreshPanelAnchor({ shiftParticles: false });
     const newW = (Number.isFinite(lastW) && lastW > 0) ? lastW * scaleX : lastW;
     const newH = (Number.isFinite(lastH) && lastH > 0) ? lastH * scaleY : lastH;
     const safeW = newW && newW > 0 ? newW : (lastW || 1);
     const safeH = newH && newH > 0 ? newH : (lastH || 1);
 
     for (const p of P) {
-      p.x *= scaleX;
-      p.y *= scaleY;
+      const homeLocal = worldToLocalCoords(p.homeX, p.homeY);
+      homeLocal.x *= scaleX;
+      homeLocal.y *= scaleY;
+      const newHomeWorld = localToWorldCoords(homeLocal.x, homeLocal.y);
+      p.homeX = newHomeWorld.x;
+      p.homeY = newHomeWorld.y;
+      const posLocal = (Number.isFinite(p.localX) && Number.isFinite(p.localY))
+        ? { x: p.localX * scaleX, y: p.localY * scaleY }
+        : (() => {
+            const fallback = worldToLocalCoords(p.x, p.y);
+            return { x: fallback.x * scaleX, y: fallback.y * scaleY };
+          })();
+      const newPosWorld = localToWorldCoords(posLocal.x, posLocal.y);
+      p.x = newPosWorld.x;
+      p.y = newPosWorld.y;
       p.vx *= scaleX;
       p.vy *= scaleY;
-      p.homeX *= scaleX;
-      p.homeY *= scaleY;
-      if (!p.isBurst) {
-        p.nx = clamp01(safeW ? p.homeX / safeW : p.nx);
-        p.ny = clamp01(safeH ? p.homeY / safeH : p.ny);
-      }
+      p.nx = clamp01(safeW ? homeLocal.x / safeW : p.nx);
+      p.ny = clamp01(safeH ? homeLocal.y / safeH : p.ny);
+      p.localX = posLocal.x;
+      p.localY = posLocal.y;
     }
     for (const letter of letters) {
       letter.x *= scaleX;
@@ -1615,12 +1707,124 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let boardScale = 1;
   let zoomMode = 'idle';
   let pendingZoomResnap = false;
+  let zoomGestureActive = false;
   const dgViewport = createParticleViewport(() => ({ w: cssW, h: cssH }));
   const dgMap = dgViewport.map;
-  try { dgViewport?.setNonReactive?.(__zoomActive ? true : null); } catch {}
-let __zoomActive = false; // true while pinch/wheel gesture is in progress
-let __overviewActive = false;
-const dgNonReactive = () => __zoomActive;
+  const nowMs = () => {
+    if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+      return performance.now();
+    }
+    return Date.now();
+  };
+  const ZOOM_STALL_MS = 420;
+  function extractZoomSnapshot(z) {
+    const scale = Number.isFinite(z?.targetScale) ? z.targetScale :
+      (Number.isFinite(z?.currentScale) ? z.currentScale : null);
+    const x = Number.isFinite(z?.targetX) ? z.targetX :
+      (Number.isFinite(z?.currentX) ? z.currentX : null);
+    const y = Number.isFinite(z?.targetY) ? z.targetY :
+      (Number.isFinite(z?.currentY) ? z.currentY : null);
+    return { scale, x, y };
+  }
+  const initialZoomState = (typeof getZoomState === 'function') ? getZoomState() : null;
+  let __zoomActive = false; // true while pinch/wheel gesture is in progress
+  let __zoomActiveSince = 0;
+  let __lastZoomMotionTs = 0;
+  let __lastZoomEventTs = 0;
+  let __lastZoomSnapshot = extractZoomSnapshot(initialZoomState);
+  let __overviewActive = false;
+  const zoomFreezeActive = () => {
+    if (!__zoomActive) return false;
+    const anchor = __lastZoomMotionTs || __zoomActiveSince || __lastZoomEventTs;
+    if (!anchor) return true;
+    return (nowMs() - anchor) < ZOOM_STALL_MS;
+  };
+  const dgNonReactive = () => false;
+  function resetZoomFreezeTracking() {
+    __zoomActiveSince = 0;
+    __lastZoomMotionTs = 0;
+    __lastZoomSnapshot = extractZoomSnapshot((typeof getZoomState === 'function') ? getZoomState() : null);
+  }
+  function markZoomActive() {
+    const now = nowMs();
+    __zoomActiveSince = now;
+    if (!__lastZoomMotionTs) {
+      __lastZoomMotionTs = now;
+    }
+  }
+  function noteZoomMotion(z) {
+    if (!z) return;
+    __lastZoomEventTs = nowMs();
+    const snapshot = extractZoomSnapshot(z);
+    const prev = __lastZoomSnapshot || {};
+    const moved =
+      (__zoomActive && snapshot.scale != null && prev.scale != null && Math.abs(snapshot.scale - prev.scale) > 1e-4) ||
+      (__zoomActive && snapshot.x != null && prev.x != null && Math.abs(snapshot.x - prev.x) > 0.4) ||
+      (__zoomActive && snapshot.y != null && prev.y != null && Math.abs(snapshot.y - prev.y) > 0.4);
+    if (moved) {
+      __lastZoomMotionTs = nowMs();
+    }
+    if (snapshot.scale != null || snapshot.x != null || snapshot.y != null) {
+      __lastZoomSnapshot = snapshot;
+    }
+  }
+  function releaseZoomFreeze({ reason = 'generic', refreshLayout = false, zoomPayload = null } = {}) {
+    if (!__zoomActive && zoomMode !== 'gesturing') return;
+    if (DG_DEBUG) dglog('zoom-freeze:release', {
+      reason,
+      since: __zoomActiveSince,
+      lastMotion: __lastZoomMotionTs,
+      mode: zoomMode
+    });
+    __zoomActive = false;
+    zoomGestureActive = false;
+    zoomCommitPhase = 'idle';
+    pendingPaintSwap = false;
+    pendingSwap = false;
+    zoomMode = zoomPayload?.mode && zoomPayload.mode !== 'gesturing' ? zoomPayload.mode : 'idle';
+    try { dgViewport?.setNonReactive?.(null); } catch {}
+    resetZoomFreezeTracking();
+    __dgFrontSwapNextDraw = true;
+    if (refreshLayout) {
+      const deferBase = nowMs();
+      const deferUntil = deferBase + 160;
+      __dgDeferUntilTs = Math.max(__dgDeferUntilTs || 0, deferUntil);
+      __dgStableFramesAfterCommit = 0;
+      __dgNeedsUIRefresh = true;
+      const layoutSize = getLayoutSize();
+      if (layoutSize.w && layoutSize.h) {
+        cssW = Math.max(1, layoutSize.w);
+        cssH = Math.max(1, layoutSize.h);
+        progressMeasureW = cssW;
+        progressMeasureH = cssH;
+        try { dgViewport?.refreshSize?.({ snap: true }); } catch {}
+        resizeSurfacesFor(cssW, cssH, window.devicePixelRatio || paintDpr || 1);
+      }
+      layout(true);
+      const commitScale = Number.isFinite(zoomPayload?.currentScale)
+        ? zoomPayload.currentScale
+        : (Number.isFinite(zoomPayload?.targetScale) ? zoomPayload.targetScale : null);
+      dglog('zoom:commit', { scale: commitScale, reason });
+    }
+  }
+  function forceReleaseZoomFreeze(reason = 'stall') {
+    releaseZoomFreeze({ reason });
+  }
+  function maybeReleaseStalledZoom() {
+    if (!__zoomActive) return;
+    const anchor = __lastZoomMotionTs || __zoomActiveSince || __lastZoomEventTs;
+    if (!anchor) return;
+    if ((nowMs() - anchor) < ZOOM_STALL_MS) return;
+    forceReleaseZoomFreeze('stall');
+  }
+  try { dgViewport?.setNonReactive?.(zoomFreezeActive() ? true : null); } catch {}
+  if (initialZoomState) {
+    const initialScale =
+      initialZoomState.currentScale ?? initialZoomState.targetScale;
+    if (Number.isFinite(initialScale)) {
+      boardScale = initialScale;
+    }
+  }
   // Debug helper for Overview tuning
   const DG_OV_DBG = !!(location.search.includes('dgov=1') || localStorage.getItem('DG_OV_DBG') === '1');
   function ovlog(...a){ try { if (DG_OV_DBG) console.debug('[DG][overview]', ...a); } catch {} }
@@ -1631,7 +1835,7 @@ const dgNonReactive = () => __zoomActive;
   const DG_CORNER_PROBE = !!(location.search.includes('dgprobe=1') || localStorage.getItem('DG_CORNER_PROBE') === '1');
 
 function ensureSizeReady({ force = false } = {}) {
-  if (!force && __zoomActive) return true;
+  if (!force && zoomFreezeActive()) return true;
   const nowTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
     ? performance.now()
     : Date.now();
@@ -1674,7 +1878,7 @@ function ensureSizeReady({ force = false } = {}) {
         particles?.snapAllToHomes?.();
         particles?.cancelHoldNextFrame?.();
         particles?.allowImmediateDraw?.();
-        try { dgViewport?.setNonReactive?.(__zoomActive ? true : null); } catch {}
+        try { dgViewport?.setNonReactive?.(zoomFreezeActive() ? true : null); } catch {}
         __dgDeferUntilTs = 0;
         __dgStableFramesAfterCommit = 0;
         __dgNeedsUIRefresh = true;
@@ -1851,7 +2055,7 @@ function ensureSizeReady({ force = false } = {}) {
         __dgStableFramesAfterCommit = 0;
         __dgNeedsUIRefresh = true;
         dglog('overview:transition', { active });
-        try { dgViewport?.setNonReactive?.(__zoomActive ? true : null); } catch {}
+        try { dgViewport?.setNonReactive?.(zoomFreezeActive() ? true : null); } catch {}
         try { dgViewport?.refreshSize?.({ snap: true }); } catch {}
         // Don't re-home during overview toggles -- avoids visible lerp.
         // refreshHomes({ resetPositions: false });
@@ -2453,16 +2657,6 @@ function regenerateMapFromStrokes() {
       drawGrid();
   }
 
-  const initialZoomState = getZoomState();
-  if (initialZoomState) {
-    const initialScale =
-      initialZoomState.currentScale ?? initialZoomState.targetScale;
-    if (Number.isFinite(initialScale)) {
-      boardScale = initialScale;
-      lastCommittedScale = boardScale;
-    }
-  }
-
   function capturePaintSnapshot() {
     try {
       if (paint.width > 0 && paint.height > 0) {
@@ -2508,19 +2702,31 @@ function regenerateMapFromStrokes() {
   }
 
   const unsubscribeZoom = onZoomChange((z = {}) => {
+    __lastZoomEventTs = nowMs();
+    noteZoomMotion(z);
     const phase = z?.phase;
     const mode = z?.mode;
     if (mode) {
       zoomMode = mode;
     }
-    if (zoomMode === 'gesturing' && !__zoomActive) {
+    const currentlyGesturing = zoomMode === 'gesturing';
+    if (currentlyGesturing && !__zoomActive) {
       __zoomActive = true;
+      markZoomActive();
+      zoomGestureActive = true;
+      try { dgViewport?.setNonReactive?.(true); } catch {}
+    } else if (!currentlyGesturing && !phase && __zoomActive && zoomMode === 'idle') {
+      releaseZoomFreeze({ reason: 'mode-idle', zoomPayload: z });
+    } else {
+      zoomGestureActive = currentlyGesturing;
     }
-    zoomGestureActive = zoomMode === 'gesturing';
 
     if (phase === 'begin') {
-      __zoomActive = true;
-      zoomGestureActive = true;
+      if (!__zoomActive) {
+        __zoomActive = true;
+        zoomGestureActive = true;
+        markZoomActive();
+      }
       try { dgViewport?.setNonReactive?.(true); } catch {}
       const beginScale = Number.isFinite(z?.currentScale) ? z.currentScale : (Number.isFinite(z?.targetScale) ? z.targetScale : null);
       dglog('zoom:begin', { scale: beginScale });
@@ -2531,41 +2737,16 @@ function regenerateMapFromStrokes() {
       if (phase === 'commit') {
         try { particles?.snapAllToHomes?.(); } catch {}
       }
-      __zoomActive = false;
-      zoomMode = 'idle';
-      zoomGestureActive = false;
-      zoomCommitPhase = 'idle';
-      pendingPaintSwap = false;
-      pendingSwap = false;
-      try { dgViewport?.setNonReactive?.(null); } catch {}
-      __dgFrontSwapNextDraw = true;
-      if (phase === 'commit') {
-        const deferBase = (typeof performance !== 'undefined' && typeof performance.now === 'function')
-          ? performance.now()
-          : Date.now();
-        const deferUntil = deferBase + 160;
-        __dgDeferUntilTs = Math.max(__dgDeferUntilTs || 0, deferUntil);
-        __dgStableFramesAfterCommit = 0;
-        __dgNeedsUIRefresh = true;
-        const layoutSize = getLayoutSize();
-        if (layoutSize.w && layoutSize.h) {
-          cssW = Math.max(1, layoutSize.w);
-          cssH = Math.max(1, layoutSize.h);
-          progressMeasureW = cssW;
-          progressMeasureH = cssH;
-          try { dgViewport?.refreshSize?.({ snap: true }); } catch {}
-          resizeSurfacesFor(cssW, cssH, window.devicePixelRatio || paintDpr || 1);
-        }
-        layout(true);
-        const commitScale = Number.isFinite(z?.currentScale) ? z.currentScale : (Number.isFinite(z?.targetScale) ? z.targetScale : null);
-        dglog('zoom:commit', { scale: commitScale });
-      }
+      releaseZoomFreeze({
+        reason: `phase-${phase}`,
+        refreshLayout: phase === 'commit',
+        zoomPayload: z
+      });
       return;
     }
   });
 
   let zoomRAF = null;
-  let zoomGestureActive = false;
 
   function resnapAndRedraw(forceLayout = false) {
     if (zoomMode === 'gesturing' && !forceLayout) {
@@ -4452,6 +4633,7 @@ function syncBackBufferSizes() {
     const waitingForStable = inCommitWindow;
     const allowOverlayDraw = !waitingForStable;
     const allowParticleDraw = true;                 // particles should never freeze
+    maybeReleaseStalledZoom();
     dgf('start', { f: panel.__dgFrame|0, cssW, cssH, allowOverlayDraw, allowParticleDraw });
     if (!ensureSizeReady()) {
       rafId = requestAnimationFrame(renderLoop);
@@ -5789,6 +5971,7 @@ function runAutoGhostGuideSweep() {
   try { panel.dispatchEvent(new CustomEvent('drawgrid:ready', { bubbles: true })); } catch {}
   return api;
 }
+
 
 
 
