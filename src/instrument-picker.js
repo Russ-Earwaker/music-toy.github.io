@@ -51,15 +51,38 @@ export async function openInstrumentPicker({ panel, toyId }){
   const cats = categorize(entries);
   const catNames = Array.from(cats.keys()).filter(n=> n !== 'All');
 
-  let current = (panel?.dataset?.instrument||'').toLowerCase();
+  const normalizeId = (val)=> String(val || '').trim().toLowerCase().replace(/_/g, '-');
+  const getEntryKey = (entry)=>{
+    if (!entry) return '';
+    const id = String(entry.id || '').trim();
+    if (id) return id;
+    const synth = String(entry.synth || '').trim();
+    return synth ? synth.toLowerCase().replace(/_/g, '-') : '';
+  };
+  const findCategoryForInstrument = (instrumentId)=>{
+    const target = normalizeId(instrumentId);
+    if (!target) return null;
+    for (const [cat, list] of cats.entries()){
+      if (cat === 'All') continue;
+      if (list.some(entry => normalizeId(getEntryKey(entry)) === target)) return cat;
+    }
+    return null;
+  };
+
+  const current = String(panel?.dataset?.instrument || '').trim();
   let selected = current || '';
 
   // Build tabs + grid
   const tgtId = String(toyId || panel?.dataset?.toy || panel?.dataset?.toyid || panel?.id || 'master').toLowerCase();
-  let activeCat = catNames[0] || '';
+  const initialCat = findCategoryForInstrument(selected);
+  let activeCat = (initialCat && catNames.includes(initialCat)) ? initialCat : (catNames[0] || '');
+  let initialSelectionRevealPending = Boolean(initialCat);
 
   function renderTabs(){
     tabs.innerHTML='';
+    if (activeCat && !catNames.includes(activeCat) && catNames.length){
+      activeCat = catNames[0];
+    }
     catNames.forEach(name=>{
       const t = el('button','inst-tab', name);
       if (name===activeCat) t.classList.add('selected');
@@ -73,20 +96,29 @@ export async function openInstrumentPicker({ panel, toyId }){
     if (btn) btn.classList.add('selected');
   }
 
+  function ensureSelectedVisible(btn){
+    if (!initialSelectionRevealPending || !btn) return;
+    initialSelectionRevealPending = false;
+    requestAnimationFrame(()=> {
+      try{
+        btn.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'auto' });
+      }catch{}
+    });
+  }
+
   function renderGrid(){
     grid.innerHTML='';
     const list = (cats.get(activeCat)||[]);
+    const normalizedSelected = normalizeId(selected);
+    let matchBtn = null;
     list.forEach(e=>{
       const b = el('button','inst-item', e.display);
-      const id   = String(e.id||''); // Keep case, this is the canonical instrument_id
-      const synth= String(e.synth||'').toLowerCase().replace(/_/g,'-');
-
-      // The value of the button should always be the canonical, case-sensitive instrument_id.
-      // If it's a synth, the synth_id acts as its instrument_id.
-      const key = id || synth;
+      const key = getEntryKey(e);
       b.dataset.value = key;
 
-      if (b.dataset.value === selected) b.classList.add('selected');
+      if (!matchBtn && normalizedSelected && normalizeId(key) === normalizedSelected) {
+        matchBtn = b;
+      }
       b.addEventListener('click', (ev)=>{
         ev.stopPropagation();
         b.classList.add('tapping'); setTimeout(()=> b.classList.remove('tapping'), 120);
@@ -96,6 +128,12 @@ export async function openInstrumentPicker({ panel, toyId }){
       });
       grid.appendChild(b);
     });
+    if (matchBtn){
+      highlight(matchBtn);
+      ensureSelectedVisible(matchBtn);
+    } else if (initialSelectionRevealPending){
+      initialSelectionRevealPending = false;
+    }
   }
 
   renderTabs();
