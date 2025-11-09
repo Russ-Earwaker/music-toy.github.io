@@ -792,6 +792,15 @@ select.toy-instrument {
 /* --- Advanced View --- */
 /* --------------------- */
 
+body.advanced-controls-disabled .toy-mode-btn[data-action="advanced"],
+body.advanced-controls-disabled .toy-mode-btn[data-action="close-advanced"],
+body.advanced-controls-disabled .toy-header [data-action="advanced"],
+body.advanced-controls-disabled .toy-header [data-action="close-advanced"],
+body.advanced-controls-disabled [data-adv] {
+  display: none !important;
+  pointer-events: none !important;
+}
+
 #adv-overlay {
   position: fixed;
   inset: 0;

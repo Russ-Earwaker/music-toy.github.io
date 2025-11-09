@@ -2,6 +2,7 @@ import './mobile-viewport.js';
 import './fullscreen.js';
 // --- Module Imports ---
 import './debug.js';
+import './advanced-controls-toggle.js';
 import { initializeBouncer } from './bouncer-init.js';
 import './header-buttons-delegate.js';
 import './rippler-init.js';
