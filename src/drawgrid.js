@@ -4964,6 +4964,20 @@ function syncBackBufferSizes() {
       const reason = typeof opts.reason === 'string' ? opts.reason : 'api.clear';
       const guardActive = !!DG_HYDRATE.guardActive;
       const inboundNonEmpty = inboundWasNonEmpty();
+      // If a programmatic clear lands on a toy that already has strokes/nodes,
+      // veto it unless detail.user === true. This prevents unintended wipes.
+      if (!opts.user) {
+        const hasStrokes = Array.isArray(strokes) && strokes.length > 0;
+        const hasActiveCols = currentMap?.active?.some(Boolean);
+        if (hasStrokes || hasActiveCols) {
+          dgTraceWarn?.('[drawgrid][CLEAR][VETO] programmatic clear blocked on non-empty toy', {
+            reason,
+            hasStrokes,
+            hasActiveCols
+          });
+          return false;
+        }
+      }
       let stackSnippet = null;
       try {
         stackSnippet = (new Error('clear-call')).stack?.split('\n').slice(0, 6).join('\n');
@@ -5289,8 +5303,12 @@ function syncBackBufferSizes() {
   }
 
   panel.addEventListener('toy-clear', (event) => {
+    // Ignore clears that were dispatched on other panels (defensive guard)
+    if (event?.target !== panel) return;
+
     const detail = (event && typeof event === 'object') ? (event.detail || {}) : {};
-    const user = detail.user !== false;
+    // Treat clears as programmatic unless explicitly flagged as user: true
+    const user = detail.user === true;
     const reason = typeof detail.reason === 'string' ? detail.reason : 'toy-clear';
     api.clear({ user, reason });
   });

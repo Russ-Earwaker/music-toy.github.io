@@ -560,9 +560,13 @@ function initializeNewToy(panel) {
                     }
                 }
             }
-            // After init, dispatch a 'toy-clear' event to reset its state when safe.
+            // After init, dispatch a 'toy-clear' event explicitly scoped to THIS panel only.
+            // Mark it as programmatic so drawgrid veto/guards don't treat it as a user action.
             if (shouldDispatchClear) {
-                panel.dispatchEvent(new CustomEvent('toy-clear', { bubbles: true }));
+                panel.dispatchEvent(new CustomEvent('toy-clear', {
+                    bubbles: false,
+                    detail: { user: false, reason: 'spawn-init' }
+                }));
             }
         } catch (e) {
             console.error(`Failed to initialize new toy of type "${toyType}"`, e);
@@ -606,6 +610,8 @@ function initToyChaining(panel) {
     panel.style.overflow = 'visible'; // Ensure the button is not clipped by the panel's bounds.
 
     extendBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        e.stopImmediatePropagation?.();
         e.stopPropagation();
 
         const sourcePanel = panel;
@@ -677,9 +683,14 @@ function initToyChaining(panel) {
                 try {
                     const drawToy = newPanel.__drawToy;
                     if (drawToy && typeof drawToy.clear === 'function') {
-                        drawToy.clear();
+                        // Programmatic, not user-initiated
+                        drawToy.clear({ user: false, reason: 'spawn-enqueue-clear' });
                     } else {
-                        newPanel.dispatchEvent(new CustomEvent('toy-clear', { bubbles: false }));
+                        // Keep it scoped to this panel and mark as programmatic
+                        newPanel.dispatchEvent(new CustomEvent('toy-clear', {
+                            bubbles: false,
+                            detail: { user: false, reason: 'spawn-enqueue-clear' }
+                        }));
                     }
                 } catch {
                     // Best-effort clear; ignore failures so chaining still works.
