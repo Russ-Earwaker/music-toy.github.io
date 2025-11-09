@@ -128,7 +128,10 @@ function applyLoopGrid(panel, state){
     }
     if (state.instrument){
       panel.dataset.instrument = state.instrument;
+      panel.dataset.instrumentPersisted = '1';
       try{ panel.dispatchEvent(new CustomEvent('toy:instrument', { detail:{ name: state.instrument, value: state.instrument }, bubbles:true })); }catch{}
+    } else {
+      delete panel.dataset.instrumentPersisted;
     }
   }catch(e){ console.warn('[persistence] applyLoopGrid failed', e); }
 }
@@ -158,7 +161,10 @@ function applyBouncer(panel, state){
     // Fallbacks: set instrument/speed/quant in dataset so UI picks them up later
     if (state?.instrument){
       panel.dataset.instrument = state.instrument;
+      panel.dataset.instrumentPersisted = '1';
       try{ panel.dispatchEvent(new CustomEvent('toy:instrument', { detail:{ name: state.instrument, value: state.instrument }, bubbles:true })); }catch{}
+    } else {
+      delete panel.dataset.instrumentPersisted;
     }
     if (typeof state?.speed === 'number'){
       try{ panel.dataset.speed = String(state.speed); }catch{}
@@ -180,7 +186,10 @@ function applyRippler(panel, state){
     try{ panel.__pendingRipplerState = state || {}; }catch{}
     if (state?.instrument){
       panel.dataset.instrument = state.instrument;
+      panel.dataset.instrumentPersisted = '1';
       try{ panel.dispatchEvent(new CustomEvent('toy:instrument', { detail:{ name: state.instrument, value: state.instrument }, bubbles:true })); }catch{}
+    } else {
+      delete panel.dataset.instrumentPersisted;
     }
     if (typeof state?.quantDiv !== 'undefined'){
       try{ panel.dataset.quantDiv = String(state.quantDiv); }catch{}
@@ -260,7 +269,14 @@ const ToySnapshotters = {
         if (typeof panel.__applyChordwheelSnapshot === 'function'){ panel.__applyChordwheelSnapshot(state||{}); return; }
         // Stash until toy init; also apply light hints now
         try{ panel.__pendingChordwheelState = state || {}; }catch{}
-        if (state?.instrument){ try{ panel.dataset.instrument = state.instrument; }catch{} }
+        if (state?.instrument){
+          try{
+            panel.dataset.instrument = state.instrument;
+            panel.dataset.instrumentPersisted = '1';
+          }catch{}
+        } else {
+          delete panel.dataset.instrumentPersisted;
+        }
         if (typeof state?.steps === 'number'){ try{ panel.dataset.steps = String(state.steps); }catch{} }
       }catch(e){ console.warn('[persistence] applyChordwheel failed', e); }
     }
@@ -329,6 +345,7 @@ export function applySnapshot(snap){
     const posMap = {};
     let appliedCount = 0;
     for (const t of (snap.toys||[])){
+      let createdFromFactory = false;
       let panel = byId.get(t.id);
       if (!panel){
         // Try to find first panel of same type not yet used
@@ -349,12 +366,16 @@ export function applySnapshot(snap){
           if (panel){
             panels.push(panel);
             byId.set(panelId(panel), panel);
+            createdFromFactory = true;
           }
         }catch(err){
           console.warn('[persistence] create panel failed', err);
         }
       }
       if (!panel) continue;
+      if (createdFromFactory) {
+        try { panel.__restoringFromSnapshot = true; } catch {}
+      }
       if (t.id){
         try{
           const existing = document.getElementById(t.id);
@@ -672,6 +693,13 @@ export function tryRestoreOnBoot(){
   }catch{}
   return false;
 }
+
+// Ensure autosave flushes on browser refresh / tab close
+try {
+  window.addEventListener('beforeunload', () => {
+    try { flushAutosaveNow(); } catch {}
+  }, { capture: true });
+} catch {}
 
 // Expose in window for quick manual access/debug
 try{ window.Persistence = { getSnapshot, applySnapshot, saveScene, loadScene, listScenes, deleteScene, exportScene, importScene, startAutosave, stopAutosave, markDirty, tryRestoreOnBoot, flushAutosaveNow, flushBeforeRefresh }; }catch{}

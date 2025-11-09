@@ -48,7 +48,7 @@ function initThemeSwitcher() {
     const newTheme = select.value;
     if (window.ThemeBoot && window.ThemeBoot.setTheme) {
       window.ThemeBoot.setTheme(newTheme);
-      if (window.ThemeBoot.wireAll) window.ThemeBoot.wireAll();
+      if (window.ThemeBoot.wireAll) window.ThemeBoot.wireAll({ force: true });
     } else {
       console.warn('[theme-switcher] window.ThemeBoot API not found. Cannot change theme.');
     }

@@ -159,6 +159,7 @@ export function buildDrumGrid(panel, numSteps = 8){
       if (Array.isArray(pending.noteIndices)) panel.__gridState.noteIndices = Array.from(pending.noteIndices).map(x=>x|0);
       if (pending.instrument){
         panel.dataset.instrument = pending.instrument;
+        panel.dataset.instrumentPersisted = '1';
         try{ panel.dispatchEvent(new CustomEvent('toy:instrument', { detail:{ name: pending.instrument, value: pending.instrument }, bubbles:true })); }catch{}
       }
       delete panel.__pendingLoopGridState;
@@ -210,6 +211,7 @@ export function buildDrumGrid(panel, numSteps = 8){
     if (!name) return;
     // The instrument ID is now case-sensitive and should not be lowercased.
     panel.dataset.instrument = name;
+    panel.dataset.instrumentPersisted = '1';
     try{ setToyInstrument(toyId, name); }catch{}
   }
   panel.addEventListener('toy-instrument', (e)=> setInstrument(e && e.detail && e.detail.value));

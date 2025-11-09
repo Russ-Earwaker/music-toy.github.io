@@ -44,6 +44,7 @@ export function spawnTutorialToy(lockTutorialControls, setupPanelListeners) {
           panel.className = 'toy-panel';
           panel.dataset.toy = 'drawgrid';
           panel.dataset.instrument = 'AcousticGuitar';
+          panel.dataset.instrumentPersisted = '1';
           panel.dataset.tutorial = 'true';
           panel.classList.add('tutorial-panel');
           board.appendChild(panel);

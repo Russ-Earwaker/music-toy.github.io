@@ -61,6 +61,43 @@ export function buildGrid(panel, numSteps = 8){
 
   // Attach visual renderer for the 8-step grid.
   attachDrumVisuals(panel);
+
+// --- Apply any pending restored state (set by persistence.applyLoopGrid before grid init) ---
+try {
+  const pending = panel.__pendingLoopGridState;
+  if (pending && panel.__gridState) {
+    if (Array.isArray(pending.steps)) {
+      panel.__gridState.steps = Array.from(pending.steps).map(v => !!v);
+    }
+    if (Array.isArray(pending.notes)) {
+      panel.__gridState.notes = Array.from(pending.notes).map(x => x | 0);
+    }
+    if (Array.isArray(pending.noteIndices)) {
+      panel.__gridState.noteIndices = Array.from(pending.noteIndices).map(x => x | 0);
+    }
+    if (pending.instrument) {
+      // Keep dataset updated; grid-core already wires instrument changes
+      panel.dataset.instrument = pending.instrument;
+      panel.dataset.instrumentPersisted = '1';
+      try { panel.dispatchEvent(new CustomEvent('toy:instrument', { detail: { name: pending.instrument, value: pending.instrument } })); } catch {}
+    }
+    // Notify listeners/visuals that state changed due to restore
+    try {
+      panel.dispatchEvent(new CustomEvent('loopgrid:update', {
+        detail: {
+          reason: 'restore',
+          steps: Array.from(panel.__gridState.steps),
+          noteIndices: Array.from(panel.__gridState.noteIndices),
+        }
+      }));
+    } catch {}
+
+    delete panel.__pendingLoopGridState;
+  }
+} catch (e) {
+  console.warn('[loopgrid] pending state apply failed', e);
+}
+
   const toyId = panel.dataset.toyid || panel.id || 'loopgrid';
 
   try {
@@ -71,6 +108,7 @@ export function buildGrid(panel, numSteps = 8){
     if (!name) return;
     // The instrument ID is case-sensitive and should not be lowercased.
     panel.dataset.instrument = name;
+    panel.dataset.instrumentPersisted = '1';
     try{ setToyInstrument(toyId, name); }catch{}
   }
   panel.addEventListener('toy-instrument', (e)=> setInstrument(e && e.detail && e.detail.value));

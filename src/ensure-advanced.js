@@ -100,6 +100,7 @@ function buildInstrumentSelect(panel){
   sel.addEventListener('change', ()=>{
     const value = sel.value;
     panel.dataset.instrument = value;
+    panel.dataset.instrumentPersisted = '1';
     try{ panel.dispatchEvent(new CustomEvent('toy-instrument', { detail:{ value }, bubbles:true })); }catch{}
     try{ panel.dispatchEvent(new CustomEvent('toy:instrument',  { detail:{ name:value, value }, bubbles:true })); }catch{}
   });

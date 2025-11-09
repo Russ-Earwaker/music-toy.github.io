@@ -77,7 +77,14 @@ export function createBouncer(selector){
   panel.__applyBouncerSnapshot = (st)=>{
     try{
       if (!st || typeof st !== 'object') return;
-      if (st.instrument){ instrument = st.instrument; panel.dataset.instrument = st.instrument; try{ panel.dispatchEvent(new CustomEvent('toy:instrument', { detail:{ name: st.instrument, value: st.instrument }, bubbles:true })); }catch{} }
+      if (st.instrument){
+        instrument = st.instrument;
+        panel.dataset.instrument = st.instrument;
+        panel.dataset.instrumentPersisted = '1';
+        try{ panel.dispatchEvent(new CustomEvent('toy:instrument', { detail:{ name: st.instrument, value: st.instrument }, bubbles:true })); }catch{}
+      } else {
+        delete panel.dataset.instrumentPersisted;
+      }
       if (DBG_RESPAWN()) console.log('[BNC_DBG] applySnapshot: Received state', {
         ballFlightTimeRemaining: st.ball?.flightTimeRemaining,
         nextLaunchAtRemaining: st.nextLaunchAtRemaining,
@@ -1109,7 +1116,6 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
   panel.__bouncer_main_instance = instanceApi;
   return instanceApi;
 }
-
 
 
 

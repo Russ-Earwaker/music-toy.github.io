@@ -776,6 +776,10 @@ function initializeNewToy(panel) {
                     }
                 }
             }
+            if (panel.__restoringFromSnapshot) {
+                shouldDispatchClear = false;
+            }
+            delete panel.__restoringFromSnapshot;
             // After init, dispatch a 'toy-clear' event explicitly scoped to THIS panel only.
             // Mark it as programmatic so drawgrid veto/guards don't treat it as a user action.
             if (shouldDispatchClear) {
@@ -882,6 +886,9 @@ function initToyChaining(panel) {
         
         if (sourcePanel.dataset.instrument) {
             newPanel.dataset.instrument = sourcePanel.dataset.instrument;
+            if (sourcePanel.dataset.instrumentPersisted) {
+                newPanel.dataset.instrumentPersisted = sourcePanel.dataset.instrumentPersisted;
+            }
         }
 
         const board = document.getElementById('board');
@@ -1031,7 +1038,10 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument } = {}) {
     }
     panel.style.position = 'absolute';
 
-    if (instrument) panel.dataset.instrument = instrument;
+    if (instrument) {
+        panel.dataset.instrument = instrument;
+        panel.dataset.instrumentPersisted = '1';
+    }
 
     const { width, height } = pickToyPanelSize(type);
     if (Number.isFinite(width) && width > 0) panel.style.width = `${Math.round(width)}px`;
@@ -1614,6 +1624,7 @@ async function boot(){
       if (!nextToy) break;
 
       nextToy.dataset.instrument = instrument;
+      nextToy.dataset.instrumentPersisted = '1';
       nextToy.dispatchEvent(new CustomEvent('toy-instrument', { detail: { value: instrument }, bubbles: true }));
       nextToy.dispatchEvent(new CustomEvent('toy:instrument', { detail: { name: instrument, value: instrument }, bubbles: true }));
       current = nextToy;

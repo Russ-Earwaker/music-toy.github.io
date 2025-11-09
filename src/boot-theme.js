@@ -65,7 +65,8 @@ function toTitleCase(str) {
  * Finds all toy panels, assigns instruments from the current theme,
  * and updates their instrument selection UI.
  */
-async function wireAll() {
+async function wireAll(options = {}) {
+  const force = !!options.force;
   const activeThemeKey = getActiveThemeKey();
   const theme = THEMES[activeThemeKey];
   if (!theme) {
@@ -80,9 +81,13 @@ async function wireAll() {
   /** Helper to apply an instrument to a panel and update its UI */
   function applyToPanel(panel, instrument) {
     if (!panel || !instrument) return;
+    if (!force && panel.dataset.instrumentPersisted === '1') return;
 
     // 1. Set data attribute for the toy's internal logic to use.
     panel.dataset.instrument = String(instrument || '');
+    if (force) {
+      delete panel.dataset.instrumentPersisted;
+    }
 
     // 2. Update the instrument <select> dropdown if it exists.
     const select = panel.querySelector('select.toy-instrument');

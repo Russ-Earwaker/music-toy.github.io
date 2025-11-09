@@ -94,6 +94,7 @@ function buildInstrumentSelect(panel){
     sel.addEventListener('change', ()=>{
       const value = sel.value;
       panel.dataset.instrument = value;
+      panel.dataset.instrumentPersisted = '1';
       try{ panel.dispatchEvent(new CustomEvent('toy-instrument', { detail:{ value }, bubbles:true })); }catch{}
       try{ panel.dispatchEvent(new CustomEvent('toy:instrument', { detail:{ name:value, value }, bubbles:true })); }catch{}
     });
@@ -742,6 +743,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
         sel.value = val;
         // Apply to toy
         panel.dataset.instrument = val;
+        panel.dataset.instrumentPersisted = '1';
         try{ panel.dispatchEvent(new CustomEvent('toy-instrument', { detail:{ value: val }, bubbles:true })); }catch{}
         try{ panel.dispatchEvent(new CustomEvent('toy:instrument', { detail:{ name: val, value: val }, bubbles:true })); }catch{}
         try{ const h = panel.querySelector('.toy-header'); if (h){ h.classList.remove('pulse-cancel'); h.classList.add('pulse-accept'); setTimeout(()=> h.classList.remove('pulse-accept'), 650); } }catch{}

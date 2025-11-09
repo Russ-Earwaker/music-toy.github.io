@@ -34,6 +34,7 @@
       const raw = String(sel.value||'').trim();
       const canonical = raw.replace(/\s+/g,'_').replace(/([a-z0-9])([A-Z])/g,'$1_$2').toLowerCase();
       panel.dataset.instrument = canonical;
+      panel.dataset.instrumentPersisted = '1';
       panel.dispatchEvent(new CustomEvent('toy-instrument', { detail:{ value: canonical }, bubbles:true }));
       panel.dispatchEvent(new CustomEvent('toy:instrument', { detail:{ name: canonical, value: canonical }, bubbles:true }));
     });

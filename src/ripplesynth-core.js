@@ -1102,7 +1102,15 @@ export function createRippleSynth(selector){
     };
     panel.__applyRipplerSnapshot = (st={}) => {
       try{
-        if (st.instrument){ try{ ui.setInstrument(st.instrument); }catch{} try{ panel.dataset.instrument = st.instrument; }catch{} }
+        if (st.instrument){
+          try{ ui.setInstrument(st.instrument); }catch{}
+          try{
+            panel.dataset.instrument = st.instrument;
+            panel.dataset.instrumentPersisted = '1';
+          }catch{}
+        } else {
+          delete panel.dataset.instrumentPersisted;
+        }
         if (typeof st.quantDiv !== 'undefined'){
           try{ panel.dataset.quantDiv = String(st.quantDiv); const sel = panel.querySelector('.bouncer-quant-ctrl select'); if (sel){ sel.value = String(st.quantDiv); sel.dispatchEvent(new Event('change', { bubbles:true })); } }catch{}
         }

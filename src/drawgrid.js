@@ -2153,6 +2153,7 @@ if (typeof onFrameStart === 'function') {
                 }
                 sel.value = val;
                 panel.dataset.instrument = val;
+                panel.dataset.instrumentPersisted = '1';
                 panel.dispatchEvent(new CustomEvent('toy-instrument', { detail: { value: val }, bubbles: true }));
                 panel.dispatchEvent(new CustomEvent('toy:instrument', { detail: { name: val, value: val }, bubbles: true }));
                 try { const h = panel.querySelector('.toy-header'); if (h) { h.classList.remove('pulse-cancel'); h.classList.add('pulse-accept'); setTimeout(() => h.classList.remove('pulse-accept'), 650); } } catch { }
