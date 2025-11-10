@@ -183,7 +183,7 @@ export function attachDrumVisuals(panel) {
           noise: 0.10,
           kick: 18,
           kickDecay: 7.5,
-          sizePx: 1.5,
+          sizePx: 1.0,
           drawMode: 'dots',
         },
       );

@@ -194,10 +194,13 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
   function draw() {
     ctx.clearRect(0, 0, state.w, state.h);
 
+    const zoom = readZoom(viewport) || 1;
+    const deviceDotPx = Math.max(1, Math.round((config.sizePx ?? 1.8) * zoom * state.dpr));
+    const radius = Math.max(0.5, deviceDotPx / state.dpr);
     if (config.drawMode === 'dots+links' && state.particles.length <= 1500) {
       ctx.globalAlpha = config.lineAlpha;
       ctx.strokeStyle = config.strokeStyle;
-      ctx.lineWidth = 0.6;
+      ctx.lineWidth = Math.max(0.6, radius * 0.8);
       for (let i = 0; i < state.particles.length; i++) {
         const a = state.particles[i];
         for (let j = i + 1; j < state.particles.length; j++) {
@@ -215,7 +218,6 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
     }
 
     ctx.fillStyle = config.fillStyle;
-    const size = config.sizePx;
     for (let i = 0; i < state.particles.length; i++) {
       const p = state.particles[i];
       const alpha =
@@ -224,7 +226,7 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
           (0.5 + 0.5 * Math.sin(p.a * Math.PI * 2));
       ctx.globalAlpha = alpha;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
