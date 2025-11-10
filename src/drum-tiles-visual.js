@@ -4,12 +4,30 @@ import { drawBlock, whichThirdRect } from './toyhelpers.js';
 import { boardScale } from './board-scale-helpers.js';
 import { midiToName } from './note-helpers.js';
 import { isRunning, getLoopInfo } from './audio-core.js';
-import { initLoopgridParticles, drawGridParticles, LOOPGRID_BASE_PARTICLE_COUNT } from './grid-particles.js';
+import { createField } from './particles/field-generic.js';
+import { overviewMode } from './overview-mode.js';
 
 const NUM_CUBES = 8;
 
 
 const GAP = 4; // A few pixels of space between each cube
+const BORDER_MARGIN = 4;
+
+// The canvas covers only the inner GRID area; side gutters (1 cube width)
+// are provided by CSS on .sequencer-wrap. Keep the math in here aligned
+// with the inner canvas dimensions (no extra offsets) so pointer hits stay accurate.
+function getLoopgridLayout(cssW, cssH, isZoomed) {
+  const localGap = isZoomed ? 2 : GAP;
+  const totalGapWidth = localGap * (NUM_CUBES - 1);
+  let cubeSize = Math.floor((cssW - totalGapWidth) / NUM_CUBES);
+  const heightBasedMax = Math.floor(cssH - BORDER_MARGIN * 2);
+  if (heightBasedMax > 0) cubeSize = Math.min(cubeSize, heightBasedMax);
+  cubeSize = Math.max(1, cubeSize);
+  const blockWidthWithGap = cubeSize + localGap;
+  const xOffset = 0;
+  const yOffset = Math.max(0, Math.floor((cssH - cubeSize) / 2));
+  return { cubeSize, localGap, totalGapWidth, blockWidthWithGap, xOffset, yOffset };
+}
 
 function ensureTapLetters(label) {
   if (!label) return [];
@@ -54,30 +72,12 @@ function triggerTapLettersForColumn(state, columnIndex, centerNorm, cubeCenterX,
   }
 }
 
-function retargetLoopgridParticleCount(st, pw, ph) {
-  // Baseline: tuned so a standard Simple Rhythm canvas (roughly Rippler sized)
-  // lands near the Rippler particle budget. Scale with field width/height so
-  // zooming keeps density roughly consistent.
-  const cube = Math.max(1, ph / 3); // 3*cube = field height
-  const gap = 4;                     // loopgrid gap
-  const baselineCube = 72;
-  const innerW = (NUM_CUBES * cube) + ((NUM_CUBES - 1) * gap);
-  const fieldW = innerW + cube;                    // you extend half a cube on both sides => +1 cube total
-  const baselineInnerW = (NUM_CUBES * baselineCube) + ((NUM_CUBES - 1) * gap);
-  const baselineFieldW = baselineInnerW + baselineCube;
-  const heightScale = (ph / (2 * baselineCube));   // 3× vs 2× baseline => 1.5x
-  const widthScale  = (pw / baselineFieldW);       // proportional width scale
-  const target = Math.max(96, Math.round(LOOPGRID_BASE_PARTICLE_COUNT * heightScale * widthScale));
-  const current = st.particles.length;
-  if (current === target) return;
-  if (current < target) {
-    // add more
-    st.particles.push(...st.particles.slice(0, Math.min(current, target - current)).map(p => ({...p})));
-    while (st.particles.length < target) st.particles.push({ nx: Math.random(), ny: Math.random(), sx:null, sy:null, vx:0, vy:0, flash:0 });
-  } else {
-    // trim
-    st.particles.length = target;
-  }
+// Bridge for field-generic: provide zoom + overview flags.
+function createViewportBridge(hostEl) {
+  return {
+    getZoom: () => (hostEl ? boardScale(hostEl) : 1),
+    isOverview: () => overviewMode.isActive(),
+  };
 }
 
 
@@ -145,13 +145,61 @@ export function attachDrumVisuals(panel) {
   panel.__drumVisualAttached = true;
 
   const sequencerWrap = panel.querySelector('.sequencer-wrap');
-  const canvas = sequencerWrap ? sequencerWrap.querySelector('canvas') : null;
+  let canvas = sequencerWrap
+    ? (sequencerWrap.querySelector('.grid-canvas')
+       || sequencerWrap.querySelector('canvas:not(.toy-particles)'))
+    : null;
   if (!canvas) return;
+  if (!canvas.classList.contains('grid-canvas')) canvas.classList.add('grid-canvas');
   const ctx = canvas.getContext('2d');
+  if (ctx) ctx.imageSmoothingEnabled = false;
 
-  /* NEW: particle canvas/context */
-  const particleCanvas = panel.querySelector('.particle-canvas');
-  const pctx = particleCanvas ? particleCanvas.getContext('2d') : null;
+  let particleCanvas = panel.querySelector('.toy-particles');
+  if (!particleCanvas && sequencerWrap) {
+    particleCanvas = document.createElement('canvas');
+    particleCanvas.className = 'toy-particles';
+    sequencerWrap.insertBefore(particleCanvas, sequencerWrap.firstChild || null);
+    Object.assign(particleCanvas.style, {
+      position: 'absolute',
+      inset: '0',
+      width: '100%',
+      height: '100%',
+      pointerEvents: 'none',
+      zIndex: '1',
+    });
+  }
+  let particleField = null;
+  let particleObserver = null;
+  if (particleCanvas) {
+    try {
+      const viewport = createViewportBridge(sequencerWrap || panel);
+      const pausedRef = () => !isRunning();
+      particleField = createField({
+        canvas: particleCanvas,
+        viewport,
+        pausedRef,
+      }, {
+        density: 0.00022,
+        cap: 2200,
+        stiffness: 16,
+        damping: 0.18,
+        noise: 0.10,
+        kick: 18,
+        kickDecay: 7.5,
+        sizePx: 1.6,
+        drawMode: 'dots',
+      });
+      particleField.resize();
+      if (typeof ResizeObserver !== 'undefined') {
+        particleObserver = new ResizeObserver(() => particleField.resize());
+        particleObserver.observe(sequencerWrap || panel);
+      }
+    } catch (err) {
+      console.warn('[loopgrid] particle field init failed', err);
+      particleField = null;
+      particleObserver = null;
+    }
+  }
 
   let tapLabel = sequencerWrap ? sequencerWrap.querySelector('.loopgrid-tap-label') : null;
   if (!tapLabel && sequencerWrap) {
@@ -168,12 +216,16 @@ export function attachDrumVisuals(panel) {
     panel,
     canvas,
     ctx,
+    sequencerWrap,
     particleCanvas,
-    pctx,
+    particleField,
+    particleObserver,
+    lastParticleTick: performance.now(),
+    fieldWidth: 0,
+    fieldHeight: 0,
     flash: new Float32Array(NUM_CUBES),
     bgFlash: 0,
     localLastPhase: 0,
-    particles: initLoopgridParticles(LOOPGRID_BASE_PARTICLE_COUNT),
     tapLabel,
     tapLetters,
     tapLetterFlash: tapLetters.map(() => 0),
@@ -188,6 +240,12 @@ export function attachDrumVisuals(panel) {
     tapLoopIndex: 0,
   };
   panel.__drumVisualState = st;
+  panel.__drumVisualState.particleField = particleField || null;
+  const teardownParticles = () => {
+    try { particleObserver?.disconnect?.(); } catch {}
+    try { particleField?.destroy?.(); } catch {}
+  };
+  panel.addEventListener('toy:remove', teardownParticles, { once: true });
 
   // Listen for clicks on the canvas to toggle steps or change notes
   canvas.addEventListener('pointerdown', (e) => {
@@ -198,22 +256,25 @@ export function attachDrumVisuals(panel) {
 
     const pointer = { x: e.clientX - rawRect.left, y: e.clientY - rawRect.top };
 
-    const localGap = panel.classList.contains('toy-zoomed') ? 2 : GAP;
-    const totalGapWidth = localGap * (NUM_CUBES - 1);
-    const cubeSize = (cssW - totalGapWidth) / NUM_CUBES;
-    const blockWidthWithGap = cubeSize + localGap;
-    if (cubeSize <= 0 || blockWidthWithGap <= 0) return;
+    const layout = getLoopgridLayout(cssW, cssH, panel.classList.contains('toy-zoomed'));
+    const { cubeSize, yOffset, blockWidthWithGap } = layout;
+    if (blockWidthWithGap <= 0 || cubeSize <= 0) return;
 
     const clickedIndex = Math.floor(pointer.x / blockWidthWithGap);
-    const xInBlock = pointer.x % blockWidthWithGap;
+    if (clickedIndex < 0 || clickedIndex >= NUM_CUBES) return;
+    const xInBlock = pointer.x - clickedIndex * blockWidthWithGap;
 
     if (xInBlock < cubeSize) { // Ensure the click is on the cube, not the gap
       if (clickedIndex >= 0 && clickedIndex < NUM_CUBES) {
         const state = panel.__gridState;
         if (!state?.noteIndices || !state?.steps) return;
 
-        const yOffset = (cssH - cubeSize) / 2;
-        const cubeRect = { x: clickedIndex * blockWidthWithGap, y: yOffset, w: cubeSize, h: cubeSize };
+        const cubeRect = {
+          x: clickedIndex * blockWidthWithGap,
+          y: yOffset,
+          w: cubeSize,
+          h: cubeSize,
+        };
         const third = whichThirdRect(cubeRect, pointer.y);
         const isZoomed = panel.classList.contains('toy-zoomed');
 
@@ -308,8 +369,15 @@ function render(panel) {
   }
   panel.classList.toggle('toy-playing', showPlaying);
 
-  const { ctx, canvas, particles, tapLabel, pctx, particleCanvas } = st;
+  const { ctx, canvas, tapLabel, particleCanvas, sequencerWrap, particleField } = st;
   const { width: cssW, height: cssH } = cssRect(canvas);
+  if (particleField) {
+    const now = performance.now();
+    if (!Number.isFinite(st.lastParticleTick)) st.lastParticleTick = now;
+    const dt = Math.min(0.05, Math.max(0, (now - st.lastParticleTick) / 1000));
+    st.lastParticleTick = now;
+    try { particleField.tick(dt || (1 / 60)); } catch {}
+  }
   const w = canvas.width;
   const h = canvas.height;
   if (!cssW || !cssH || !w || !h) return;
@@ -321,41 +389,18 @@ function render(panel) {
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, w, h);
-  st.fieldWidth = cssW;
-  st.fieldHeight = cssH;
 
   const loopInfo = getLoopInfo();
   const playheadCol = loopInfo ? Math.floor(loopInfo.phase01 * NUM_CUBES) : -1;
 
-  /* Draw particles on the particle layer (double-height) */
-  let particleFieldW = 0;
-  let particleFieldH = 0;
-  if (pctx && particleCanvas) {
-    const { width: cssPW, height: cssPH } = cssRect(particleCanvas);
-    const pw = particleCanvas.width;
-    const ph = particleCanvas.height;
-    if (pw && ph && cssPW && cssPH) {
-      const pScaleX = pw / cssPW;
-      const pScaleY = ph / cssPH;
-      particleFieldW = cssPW;
-      particleFieldH = cssPH;
-      pctx.setTransform(1, 0, 0, 1, 0, 0);
-      pctx.clearRect(0, 0, pw, ph);
-      retargetLoopgridParticleCount(st, cssPW, cssPH);
-      st.fieldWidth = cssPW;
-      st.fieldHeight = cssPH;
-      // Base particle scale on cube size so it matches Rippler's visual definition.
-      // Our field height = 3 * cubeSizePx  => cubeSizePx = ph / 3
-      const cubeSizeCss = Math.max(1, cssPH / 3);
-      const cubeSizePx = Math.max(1, cubeSizeCss * pScaleY);
-      const baselineCube = 72; // Rippler baseline cube size
-      const pmap = {
-        n2x: (n) => n * pw,
-        n2y: (n) => n * ph,
-        scale: () => (cubeSizePx / baselineCube), // 1.0 when cube is 72px
-      };
-      drawGridParticles(pctx, particles, pmap, { col: playheadCol });
-    }
+  const fieldHost = sequencerWrap || particleCanvas || canvas;
+  if (fieldHost) {
+    const rect = cssRect(fieldHost);
+    st.fieldWidth = rect.width || cssW;
+    st.fieldHeight = rect.height || cssH;
+  } else {
+    st.fieldWidth = cssW;
+    st.fieldHeight = cssH;
   }
 
   /* Map for cubes uses the grid canvas size */
@@ -370,10 +415,8 @@ function render(panel) {
   const notePalette = state.notePalette || [];
   const isZoomed = panel.classList.contains('toy-zoomed');
 
-  if (!particleFieldW || !particleFieldH) {
-    particleFieldW = cssW;
-    particleFieldH = cssH;
-  }
+  const particleFieldW = st.fieldWidth || cssW;
+  const particleFieldH = st.fieldHeight || cssH;
 
   const showTapPrompt = !hasActiveNotes;
   if (tapLabel && st.tapLetters?.length) {
@@ -418,7 +461,7 @@ function render(panel) {
     } else {
       st.tapPromptVisible = true;
       tapLabel.style.opacity = '1';
-      const fieldElement = st.particleCanvas || tapLabel;
+      const fieldElement = particleCanvas || tapLabel;
       let fieldRect = null;
       try { fieldRect = fieldElement.getBoundingClientRect(); } catch {}
       if (fieldRect && fieldRect.width > 0) {
@@ -516,29 +559,8 @@ function render(panel) {
 
   // To prevent highlight clipping and ensure cubes fit in zoomed view,
   // we calculate cubeSize based on both width and height constraints.
-  const BORDER_MARGIN = 4;
-  const localGap = isZoomed ? 2 : GAP;
-  const totalGapWidth = localGap * (NUM_CUBES - 1);
-
-  // Calculate max possible cube size from both dimensions.
-  const heightBasedSize = cssH - BORDER_MARGIN * 2;
-  const widthBasedSize = (cssW - totalGapWidth) / NUM_CUBES;
-  let cubeSize = Math.min(heightBasedSize, widthBasedSize);
-
-  // IMPORTANT: do NOT inflate cube size (removes edge cut-offs).
-  // Keep integer pixels to avoid blurry borders.
-  cubeSize = Math.max(1, Math.floor(cubeSize));
-
-  // Center the entire block of cubes.
-  const totalCubesWidthCss = (cubeSize * NUM_CUBES) + totalGapWidth;
-
-  // Safety clamp in case of rounding: never exceed canvas width.
-  if (totalCubesWidthCss > cssW) {
-    cubeSize = Math.floor((cssW - totalGapWidth) / NUM_CUBES);
-  }
-
-  const xOffset = (cssW - ((cubeSize * NUM_CUBES) + totalGapWidth)) / 2;
-  const yOffset = (cssH - cubeSize) / 2;
+  const layout = getLoopgridLayout(cssW, cssH, isZoomed);
+  const { cubeSize, xOffset, yOffset, blockWidthWithGap, localGap } = layout;
 
   // Check for phase wrap to prevent flicker on chain advance
   const phaseJustWrapped = loopInfo && loopInfo.phase01 < st.localLastPhase && st.localLastPhase > 0.9;
@@ -556,10 +578,10 @@ function render(panel) {
     const cubeX = xOffset + i * (cubeSize + localGap);
     const cubeRectCss = { x: cubeX, y: yOffset, w: cubeSize, h: cubeSize };
     const cubeRect = {
-      x: pxX(cubeRectCss.x),
-      y: pxY(cubeRectCss.y),
-      w: pxX(cubeRectCss.w),
-      h: pxY(cubeRectCss.h),
+      x: Math.round(pxX(cubeRectCss.x)),
+      y: Math.round(pxY(cubeRectCss.y)),
+      w: Math.round(pxX(cubeRectCss.w)),
+      h: Math.round(pxY(cubeRectCss.h)),
     };
 
     // Draw playhead highlight first, so it's underneath the cube
@@ -567,17 +589,17 @@ function render(panel) {
     if ((isActiveInChain || !isChained) && transportRunning && i === playheadCol && !probablyStale) {
       // A bigger, centered border highlight drawn by filling a slightly
       // larger rectangle behind the cube. This is more robust than stroking.
-      // We use Math.floor to ensure integer coordinates and avoid sub-pixel
+      // We rely on integer-aligned cube geometry to avoid sub-pixel
       // rendering artifacts that can make borders appear uneven.
       const borderSize = 4;
       ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
       // To ensure perfect centering, we base the highlight's geometry on the
       // final, integer-based position and size of the cube itself.
       ctx.fillRect(
-        Math.trunc(cubeRect.x) - borderSize,
-        Math.trunc(cubeRect.y) - borderSize,
-        Math.trunc(cubeRect.w) + borderSize * 2,
-        Math.trunc(cubeRect.h) + borderSize * 2
+        cubeRect.x - borderSize,
+        cubeRect.y - borderSize,
+        cubeRect.w + borderSize * 2,
+        cubeRect.h + borderSize * 2
       );
       if (showTapPrompt && fieldRectData && Number.isFinite(fieldRectData.left) && fieldRectData.width > 0 && gridRect.width > 0 && Array.isArray(st.tapLetterBounds)) {
         const columnCenterPx = gridRect.left + ((cubeRectCss.x + cubeRectCss.w / 2) / cssW) * gridRect.width;

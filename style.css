@@ -388,6 +388,16 @@ html, body {
   overflow: hidden;
 }
 
+.toy-particles {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+  z-index: 0;
+}
+
 .toy-footer {
   position: relative;
   z-index: 2;
@@ -519,8 +529,8 @@ select.toy-instrument {
     var(--loopgrid-cube-size) * var(--loopgrid-cols)
     + var(--loopgrid-gap) * (var(--loopgrid-cols) - 1)
   );
-  /* Field width = inner grid + half-cube on both sides (total +1 cube) */
-  --loopgrid-field-width: calc(var(--loopgrid-inner-width) + var(--loopgrid-cube-size));
+  /* Field width = inner grid + a full cube on each side to restore the horizontal buffer */
+  --loopgrid-field-width: calc(var(--loopgrid-inner-width) + var(--loopgrid-cube-size) * 2);
 
   /* Particle field = 3x cube height (previously 2x) */
   --loopgrid-field-height: calc(var(--loopgrid-cube-size) * 3);
@@ -551,7 +561,7 @@ select.toy-instrument {
 /* Cubes canvas: fixed to inner grid width, centered in the frame */
 /* Force dark background across platforms, even if canvas misses a frame */
 .toy-panel[data-toy="loopgrid"] .sequencer-wrap,
-.toy-panel[data-toy="loopgrid"] .grid-canvas,
+.toy-panel[data-toy="loopgrid"] .toy-particles,
 .toy-panel[data-toy="loopgrid"] .particle-canvas {
   background-color: #0b0f16 !important;
 }
@@ -565,21 +575,24 @@ select.toy-instrument {
   position: absolute;
   z-index: 3;
   left: 50%;
+  top: 0;
   transform: translateX(-50%);
   width: var(--loopgrid-inner-width);
   height: 100%;
   display: block;
+  background-color: transparent !important; /* let particle layer stay visible outside the cubes */
 }
 
 /* Particle canvas: covers the whole black field (wider than cubes) */
+.toy-panel[data-toy="loopgrid"] .toy-particles,
 .toy-panel[data-toy="loopgrid"] .particle-canvas {
   position: absolute;
-  z-index: 2;
-  left: 0;
-  top: 0;
+  z-index: 1;
+  inset: 0;
   width: 100%;
   height: 100%;
   pointer-events: none;
+  background-color: #0b0f16; /* help the gutters stay consistently dark */
 }
 
 
@@ -1926,7 +1939,7 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
 }
 
 /* Make sure canvases don't sit above the gesture layer unintentionally */
-.toy-panel canvas, .particle-canvas, .draw-canvas { z-index: 0; }
+.toy-panel canvas, .particle-canvas, .toy-particles, .draw-canvas { z-index: 0; }
 
 /* Controls stay tappable/clickable */
 .fullscreen-button, .play-button, .controls-layer { z-index: 120000; }

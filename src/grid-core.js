@@ -51,10 +51,10 @@ export function buildGrid(panel, numSteps = 8){
     body.appendChild(sequencerWrap);
   }
   const sequencerWrap = body.querySelector('.sequencer-wrap');
-  if (sequencerWrap && !sequencerWrap.querySelector('.particle-canvas')) {
+  if (sequencerWrap && !sequencerWrap.querySelector('.toy-particles')) {
     const particleCanvas = document.createElement('canvas');
-    particleCanvas.className = 'particle-canvas';
-    sequencerWrap.appendChild(particleCanvas);
+    particleCanvas.className = 'toy-particles';
+    sequencerWrap.insertBefore(particleCanvas, sequencerWrap.firstChild || null);
   }
   
   // --- DOM scaffolding ready ---
@@ -185,6 +185,7 @@ try {
         if (panel.__drumVisualState.flash) panel.__drumVisualState.flash[col] = 1.0;
         // Flash for the main background.
         panel.__drumVisualState.bgFlash = 1.0;
+        try { panel.__drumVisualState.particleField?.pulse?.(0.85); } catch {}
       }
     }
   };
