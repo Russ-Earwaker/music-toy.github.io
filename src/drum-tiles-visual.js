@@ -176,14 +176,14 @@ export function attachDrumVisuals(panel) {
       particleField = createField(
         { canvas: particleCanvas, viewport: pv, pausedRef },
         {
-          density: 0.00022,
-          cap: 2200,
+          density: 0.05,
+          cap: 300,
           stiffness: 16,
           damping: 0.18,
           noise: 0.10,
           kick: 18,
           kickDecay: 7.5,
-          sizePx: 1.6,
+          sizePx: 1.5,
           drawMode: 'dots',
         },
       );
