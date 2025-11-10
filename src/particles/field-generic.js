@@ -43,7 +43,10 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
     return { w, h };
   };
 
-  const pv = createParticleViewport(() => measure());
+  // If an external viewport was provided (from Draw Toy, etc.), reuse it.
+  const pv = viewport && viewport.map && typeof viewport.map.size === 'function'
+    ? viewport
+    : createParticleViewport(() => measure());
 
   const config = {
     density: opts.density ?? 0.0002,
@@ -72,8 +75,15 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
     lodScale: 1,
   };
 
+  function makeRng(seed = 1337) {
+    let s = (seed >>> 0) || 1;
+    return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 0xffffffff);
+  }
+
   function rebuild() {
     const size = pv?.map?.size?.() || measure();
+    const prevW = state.w;
+    const prevH = state.h;
     state.w = Math.max(1, Math.round(size.w || 1));
     state.h = Math.max(1, Math.round(size.h || 1));
     state.dpr = window.devicePixelRatio && window.devicePixelRatio > 0 ? window.devicePixelRatio : 1;
@@ -85,19 +95,36 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
     ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
 
     const target = Math.min(
-      Math.floor(state.w * state.h * config.density * state.lodScale),
+      Math.floor(state.w * state.h * config.density),
       config.cap,
     );
 
+    if (state.particles.length) {
+      for (let i = 0; i < state.particles.length; i++) {
+        const p = state.particles[i];
+        const u = prevW > 0 ? (p.x / prevW) : 0.5;
+        const v = prevH > 0 ? (p.y / prevH) : 0.5;
+        const clampedU = Math.min(Math.max(u, 0), 1);
+        const clampedV = Math.min(Math.max(v, 0), 1);
+        p.x = p.hx = clampedU * state.w;
+        p.y = p.hy = clampedV * state.h;
+      }
+    }
+
     if (target === state.particles.length) return;
 
-    const arr = new Array(target);
-    for (let i = 0; i < target; i++) {
-      const x = Math.random() * state.w;
-      const y = Math.random() * state.h;
-      arr[i] = { x, y, hx: x, hy: y, vx: 0, vy: 0, a: Math.random() };
+    if (target < state.particles.length) {
+      state.particles.length = target;
+    } else {
+      const seed = Math.floor((state.w * 73856093) ^ (state.h * 19349663)) || 1;
+      const rng = makeRng(seed);
+      while (state.particles.length < target) {
+        const x = rng() * state.w;
+        const y = rng() * state.h;
+        const a = rng();
+        state.particles.push({ x, y, hx: x, hy: y, vx: 0, vy: 0, a });
+      }
     }
-    state.particles = arr;
   }
 
   function resize() {
@@ -117,17 +144,10 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
     const inOverview = readOverview(viewport);
     const paused = pausedRef?.() ?? false;
 
-    const zoomFactor = zoom < 0.6 ? 0.6 : (zoom < 0.85 ? 0.85 : 1.0);
-    const overviewFactor = inOverview ? 0.6 : 1.0;
-    const pauseFactor = paused ? 0.5 : 1.0;
-    const next = overviewFactor * zoomFactor * pauseFactor;
-
-    if (Math.abs(next - state.lodScale) > 0.05) {
-      state.lodScale = next;
-      rebuild();
-    } else {
-      state.lodScale = next;
-    }
+    const zoomFactor = zoom < 0.6 ? 0.85 : 1.0;
+    const overviewFactor = inOverview ? 0.85 : 1.0;
+    const pauseFactor = paused ? 0.85 : 1.0;
+    state.lodScale = overviewFactor * zoomFactor * pauseFactor;
   }
 
   function pulse(intensity = 0.6) {

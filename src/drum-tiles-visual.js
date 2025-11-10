@@ -5,7 +5,7 @@ import { boardScale } from './board-scale-helpers.js';
 import { midiToName } from './note-helpers.js';
 import { isRunning, getLoopInfo } from './audio-core.js';
 import { createField } from './particles/field-generic.js';
-import { overviewMode } from './overview-mode.js';
+import { createParticleViewport } from './particles/particle-viewport.js';
 
 const NUM_CUBES = 8;
 
@@ -71,15 +71,6 @@ function triggerTapLettersForColumn(state, columnIndex, centerNorm, cubeCenterX,
     }
   }
 }
-
-// Bridge for field-generic: provide zoom + overview flags.
-function createViewportBridge(hostEl) {
-  return {
-    getZoom: () => (hostEl ? boardScale(hostEl) : 1),
-    isOverview: () => overviewMode.isActive(),
-  };
-}
-
 
 function findChainHead(toy) {
     if (!toy) return null;
@@ -170,30 +161,47 @@ export function attachDrumVisuals(panel) {
   }
   let particleField = null;
   let particleObserver = null;
+  let overviewHandler = null;
+  const pv = createParticleViewport(() => {
+    const host = sequencerWrap || panel;
+    const r = host?.getBoundingClientRect?.();
+    return {
+      w: Math.max(1, Math.round(r?.width || 1)),
+      h: Math.max(1, Math.round(r?.height || 1)),
+    };
+  });
   if (particleCanvas) {
     try {
-      const viewport = createViewportBridge(sequencerWrap || panel);
       const pausedRef = () => !isRunning();
-      particleField = createField({
-        canvas: particleCanvas,
-        viewport,
-        pausedRef,
-      }, {
-        density: 0.00022,
-        cap: 2200,
-        stiffness: 16,
-        damping: 0.18,
-        noise: 0.10,
-        kick: 18,
-        kickDecay: 7.5,
-        sizePx: 1.6,
-        drawMode: 'dots',
-      });
+      particleField = createField(
+        { canvas: particleCanvas, viewport: pv, pausedRef },
+        {
+          density: 0.00022,
+          cap: 2200,
+          stiffness: 16,
+          damping: 0.18,
+          noise: 0.10,
+          kick: 18,
+          kickDecay: 7.5,
+          sizePx: 1.6,
+          drawMode: 'dots',
+        },
+      );
       particleField.resize();
       if (typeof ResizeObserver !== 'undefined') {
-        particleObserver = new ResizeObserver(() => particleField.resize());
+        particleObserver = new ResizeObserver(() => {
+          pv.refreshSize({ snap: true });
+          particleField.resize();
+        });
         particleObserver.observe(sequencerWrap || panel);
       }
+      overviewHandler = () => {
+        pv.setNonReactive?.(true);
+        pv.refreshSize({ snap: true });
+        particleField.resize();
+        pv.setNonReactive?.(false);
+      };
+      window.addEventListener('overview:transition', overviewHandler);
     } catch (err) {
       console.warn('[loopgrid] particle field init failed', err);
       particleField = null;
@@ -242,6 +250,7 @@ export function attachDrumVisuals(panel) {
   panel.__drumVisualState = st;
   panel.__drumVisualState.particleField = particleField || null;
   const teardownParticles = () => {
+    try { window.removeEventListener('overview:transition', overviewHandler); } catch {}
     try { particleObserver?.disconnect?.(); } catch {}
     try { particleField?.destroy?.(); } catch {}
   };
@@ -370,7 +379,11 @@ function render(panel) {
   panel.classList.toggle('toy-playing', showPlaying);
 
   const { ctx, canvas, tapLabel, particleCanvas, sequencerWrap, particleField } = st;
-  const { width: cssW, height: cssH } = cssRect(canvas);
+  const dpr = (window.devicePixelRatio && window.devicePixelRatio > 0) ? window.devicePixelRatio : 1;
+  const w = canvas.width;
+  const h = canvas.height;
+  const cssW = Math.max(1, Math.round(w / dpr));
+  const cssH = Math.max(1, Math.round(h / dpr));
   if (particleField) {
     const now = performance.now();
     if (!Number.isFinite(st.lastParticleTick)) st.lastParticleTick = now;
@@ -378,8 +391,6 @@ function render(panel) {
     st.lastParticleTick = now;
     try { particleField.tick(dt || (1 / 60)); } catch {}
   }
-  const w = canvas.width;
-  const h = canvas.height;
   if (!cssW || !cssH || !w || !h) return;
 
   const scaleX = cssW ? (w / cssW) : 1;
