@@ -6,7 +6,38 @@ import { drawBlock } from './toyhelpers.js';
 import { getLoopInfo, isRunning } from './audio-core.js';
 import { onZoomChange, getZoomState, getFrameStartState, onFrameStart } from './zoom/ZoomCoordinator.js';
 import { createParticleViewport } from './particles/particle-viewport.js';
+import { createField } from './particles/field-generic.js';
+import { overviewMode } from './overview-mode.js';
+import { boardScale as boardScaleHelper } from './board-scale-helpers.js';
+import { screenToWorld, worldToToy, getViewportScale } from './board-viewport.js';
 import { getToyWorldAnchor } from './toyhelpers-sizing.js';
+
+const gridAreaLogical = { w: 0, h: 0 };
+
+if (typeof window !== 'undefined' && typeof window.DG_ZOOM_AUDIT === 'undefined') {
+  window.DG_ZOOM_AUDIT = false; // flip true in console to overlay crosshairs/logs
+}
+
+function toyRadiusFromArea(area, ratio, minimum) {
+  const safeW = Number.isFinite(gridAreaLogical?.w) && gridAreaLogical.w > 0
+    ? gridAreaLogical.w
+    : (Number.isFinite(area?.w) ? area.w : 0);
+  const safeH = Number.isFinite(gridAreaLogical?.h) && gridAreaLogical.h > 0
+    ? gridAreaLogical.h
+    : (Number.isFinite(area?.h) ? area.h : 0);
+  const base = Math.min(safeW, safeH);
+  return Math.max(minimum, base * ratio);
+}
+
+// === DRAWGRID TUNING (single source of truth) ===
+const DG_KNOCK = {
+  pointerDown: { radiusToy: (area) => toyRadiusFromArea(area, 0.06, 12), strength: 180 },
+  pointerMove: { radiusToy: (area) => toyRadiusFromArea(area, 0.05, 10), strength:  90 },
+  ghostTrail:  { radiusToy: (area) => toyRadiusFromArea(area, 0.055, 14), strength: 240 },
+  lettersMove: { radius:  120, strength: 36 },
+};
+// quick diagnostics
+function __dgLogFirstPoke(tag, r, s){ if (!window.__DG_POKED__) { window.__DG_POKED__=true; console.log('[DG] poke', tag, {radius:r, strength:s}); } }
 
 // ---- drawgrid debug gate ----
 const DG_DEBUG = false;           // master switch
@@ -72,10 +103,6 @@ function dbg(tag, obj){ if (DG_DEBUG && DBG_DRAW) console.log(`[DG][${tag}]`, ob
 let __dbgLiveSegments = 0;
 let __dbgPointerMoves = 0;
 let __dbgPaintClears = 0;
-
-let DG_particlesRectsDrawn = 0;
-let DG_lettersDrawn = 0;
-
 const DG_HYDRATE = {
   guardActive: false,
   hydratedAt: 0,
@@ -280,7 +307,27 @@ const STROKE_COLORS = [
     // Non-special but not decorative (e.g., demoted overlay colorize pass)
     return isOverlay ? VISUAL_ONLY_ALPHA : 1;
   }
-let colorIndex = 0;
+  let colorIndex = 0;
+
+function createViewportBridgeDG(hostEl) {
+  return {
+    getZoom: () => {
+      try {
+        const raw = boardScaleHelper(hostEl);
+        const value = Number(raw);
+        if (Number.isFinite(value) && value > 0) return value;
+      } catch {}
+      return 1;
+    },
+    isOverview: () => {
+      try {
+        return !!overviewMode?.isActive?.();
+      } catch {
+        return false;
+      }
+    },
+  };
+}
 
 function withIdentity(ctx, fn) {
   if (!ctx || typeof fn !== 'function') return;
@@ -372,7 +419,6 @@ function drawLiveStrokePoint(ctx, pt, prevPt, color) {
   if ((__dbgLiveSegments % 10) === 1) dbg('LIVE/segment', { segs: __dbgLiveSegments });
 }
 
-let __drawParticlesSeed = 1337;
 // --- Commit/settle gating for overlay clears ---
 let __dgDeferUntilTs = 0;
 let __dgNeedsUIRefresh = false;
@@ -386,16 +432,6 @@ function __dgInCommitWindow(nowTs) {
   const deferUntil = __dgDeferUntilTs || 0;
   const guardUntil = Math.max(gestureSettle || 0, deferUntil);
   return guardUntil > 0 && nowTs < guardUntil;
-}
-
-function mulberry32(seed) {
-  let t = seed >>> 0;
-  return function() {
-    t += 0x6D2B79F5;
-    let r = Math.imul(t ^ (t >>> 15), 1 | t);
-    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
-    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
-  };
 }
 
 /**
@@ -501,695 +537,6 @@ function chainHasSequencedNotes(head) {
   return false;
 }
 
-/**
- * A self-contained particle system, adapted from the Bouncer toy.
- * - Particles are distributed across the entire container.
- * - They are gently pulled back to their home position.
- * - A `lineRepulse` function pushes them away from a vertical line.
- */
-function createDrawGridParticles({
-  getW, getH,
-  count = 150,
-  returnToHome = true,
-  homePull = 0.008, // Increased spring force to resettle faster
-  bounceOnWalls = false,
-  isNonReactive = () => false,
-  panel = null,
-} = {}){
-  const P = [];
-  const letters = [];
-  const WORD = 'DRAW';
-  // tuned widths; W is already wide
-  const LETTER_WIDTH_RATIO = { D: 0.78, R: 0.78, A: 0.78, W: 1.18 };
-  const LETTER_BASE_ALPHA = 0.2;
-  const LETTER_DAMPING = 0.94;
-  const LETTER_PULL_MULTIPLIER = 3.2;
-  let beatGlow = 0;
-  let letterFade = 1;
-  let letterFadeTarget = 1;
-  let letterFadeSpeed = 0.05;
-  let currentDpr = 1;
-  let holdOneFrame = false;
-  function holdNextFrame(){ holdOneFrame = true; }
-  function cancelHoldNextFrame(){ holdOneFrame = false; }
-  function allowImmediateDraw(){ holdOneFrame = false; }
-  const W = ()=> Math.max(1, Math.floor(getW()?getW():0));
-  const H = ()=> Math.max(1, Math.floor(getH()?getH():0));
-  const panelEl = panel || null;
-  let panelWorldAnchor = panelEl ? getToyWorldAnchor(panelEl) : { x: 0, y: 0 };
-  function localToWorldCoords(localX, localY, anchorX = panelWorldAnchor?.x || 0, anchorY = panelWorldAnchor?.y || 0) {
-    return { x: anchorX + localX, y: anchorY + localY };
-  }
-  function worldToLocalCoords(worldX, worldY, anchorX = panelWorldAnchor?.x || 0, anchorY = panelWorldAnchor?.y || 0) {
-    return { x: worldX - anchorX, y: worldY - anchorY };
-  }
-  function refreshPanelAnchor({ shiftParticles = true } = {}) {
-    if (!panelEl) return;
-    const next = getToyWorldAnchor(panelEl) || { x: 0, y: 0 };
-    const prev = panelWorldAnchor || { x: 0, y: 0 };
-    const nextX = Number.isFinite(next.x) ? next.x : 0;
-    const nextY = Number.isFinite(next.y) ? next.y : 0;
-    const prevX = Number.isFinite(prev.x) ? prev.x : nextX;
-    const prevY = Number.isFinite(prev.y) ? prev.y : nextY;
-    const dx = nextX - prevX;
-    const dy = nextY - prevY;
-    panelWorldAnchor = { x: nextX, y: nextY };
-    if (!shiftParticles) return;
-    if (Math.abs(dx) < 1e-4 && Math.abs(dy) < 1e-4) return;
-    for (const p of P) {
-      p.x = (p.x ?? 0) + dx;
-      p.y = (p.y ?? 0) + dy;
-      p.homeX = (p.homeX ?? p.x) + dx;
-      p.homeY = (p.homeY ?? p.y) + dy;
-      const local = worldToLocalCoords(p.x, p.y);
-      p.localX = local.x;
-      p.localY = local.y;
-    }
-  }
-  refreshPanelAnchor({ shiftParticles: false });
-  let lastW = 0, lastH = 0;
-  const rand = mulberry32(__drawParticlesSeed);
-  const clamp01 = (v) => Math.max(0, Math.min(1, v));
-  const DG_CORNER_PROBE = (() => {
-    if (typeof window === 'undefined') return false;
-    try {
-      return location.search.includes('dgprobe=1') || localStorage.getItem('DG_CORNER_PROBE') === '1';
-    } catch {
-      return false;
-    }
-  })();
-  const checkNonReactive = () => {
-    try {
-      return typeof isNonReactive === 'function' && isNonReactive();
-    } catch {
-      return false;
-    }
-  };
-
-  function createBaseParticle(nx = rand(), ny = rand()) {
-    return {
-      nx,
-      ny,
-      x: 0,
-      y: 0,
-      vx: 0,
-      vy: 0,
-      homeX: 0,
-      homeY: 0,
-      alpha: 0.55,
-      tSince: 0,
-      delay: 0,
-      burst: false,
-      flash: 0,
-      repulsed: 0,
-      isBurst: false,
-    };
-  }
-
-  function layoutLetters(w, h, { resetPositions = true } = {}) {
-    if (!w || !h) return;
-    const freeze = checkNonReactive();
-    const isUninitialized = letters.length === 0 || !Number.isFinite(letters[0]?.homeX);
-    const allowReset = resetPositions && (!freeze || isUninitialized);
-    const fontSize = Math.max(24, Math.min(w, h) * 0.28);
-    const spacing = fontSize * 0.02;
-    let totalWidth = WORD.length ? -spacing : 0;
-    for (const char of WORD) {
-      const ratio = LETTER_WIDTH_RATIO[char] ?? 0.7;
-      totalWidth += ratio * fontSize + spacing;
-    }
-    const startX = (w - totalWidth) * 0.5;
-    const baselineY = h * 0.5;
-    while (letters.length < WORD.length) {
-      letters.push({
-        char: WORD[letters.length],
-        x: 0,
-        y: 0,
-        vx: 0,
-        vy: 0,
-        homeX: 0,
-        homeY: 0,
-        fontSize,
-        width: 0,
-        alpha: LETTER_BASE_ALPHA,
-        flash: 0,
-        repulsed: 0,
-      });
-    }
-    if (letters.length > WORD.length) {
-      letters.length = WORD.length;
-    }
-    let cursor = startX;
-    for (let i = 0; i < letters.length; i++) {
-      const char = WORD[i];
-      const ratio = LETTER_WIDTH_RATIO[char] ?? 0.7;
-      const width = ratio * fontSize;
-      const homeX = cursor + width * 0.5;
-      const homeY = baselineY;
-      const letter = letters[i];
-      letter.char = char;
-      letter.fontSize = fontSize;
-      letter.width = width;
-      if (allowReset) {
-        letter.homeX = homeX;
-        letter.homeY = homeY;
-      }
-      if (allowReset) {
-        letter.x = homeX;
-        letter.y = homeY;
-        letter.vx = 0;
-        letter.vy = 0;
-        letter.alpha = LETTER_BASE_ALPHA;
-        letter.flash = 0;
-        letter.repulsed = 0;
-      }
-      cursor += width + spacing;
-    }
-  }
-
-  function assignHome(p, w, h, { resetPosition = false } = {}) {
-    if (!p || !Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return;
-    const seeded = Number.isFinite(lastW) && lastW > 0 && Number.isFinite(lastH) && lastH > 0;
-    const allowReset = resetPosition && (!checkNonReactive() || !seeded);
-    const fallbackLocal = worldToLocalCoords(p.x ?? 0, p.y ?? 0);
-    const existingLocalX = Number.isFinite(p.localX) ? p.localX : fallbackLocal.x;
-    const existingLocalY = Number.isFinite(p.localY) ? p.localY : fallbackLocal.y;
-    const nx = clamp01(typeof p.nx === 'number' ? p.nx : (existingLocalX / (w || 1)));
-    const ny = clamp01(typeof p.ny === 'number' ? p.ny : (existingLocalY / (h || 1)));
-    p.nx = nx;
-    p.ny = ny;
-    const localX = nx * w;
-    const localY = ny * h;
-    const world = localToWorldCoords(localX, localY);
-    p.homeX = world.x;
-    p.homeY = world.y;
-    if (!allowReset) return;
-    if (p.isBurst) {
-      const safePrevW = lastW || w;
-      const safePrevH = lastH || h;
-      const scaleX = safePrevW ? w / safePrevW : 1;
-      const scaleY = safePrevH ? h / safePrevH : 1;
-      if (Number.isFinite(scaleX) && Number.isFinite(scaleY)) {
-        const burstLocalX = (Number.isFinite(p.localX) ? p.localX : localX) * scaleX;
-        const burstLocalY = (Number.isFinite(p.localY) ? p.localY : localY) * scaleY;
-        const burstWorld = localToWorldCoords(burstLocalX, burstLocalY);
-        p.x = burstWorld.x;
-        p.y = burstWorld.y;
-        p.localX = burstLocalX;
-        p.localY = burstLocalY;
-        p.vx *= scaleX;
-        p.vy *= scaleY;
-      }
-      return;
-    }
-    p.x = world.x;
-    p.y = world.y;
-    p.localX = localX;
-    p.localY = localY;
-    p.vx = 0;
-    p.vy = 0;
-  }
-
-  function refreshHomes({ resetPositions = true } = {}) {
-    refreshPanelAnchor();
-    const w = W();
-    const h = H();
-    if (!w || !h) return;
-    const freeze = checkNonReactive();
-    const seeded = Number.isFinite(lastW) && lastW > 0 && Number.isFinite(lastH) && lastH > 0;
-    const allowReset = resetPositions && (!freeze || !seeded);
-    for (const p of P) {
-      assignHome(p, w, h, { resetPosition: allowReset });
-    }
-    layoutLetters(w, h, { resetPositions: allowReset });
-    lastW = w;
-    lastH = h;
-  }
-
-  function onResize({ resetPositions = false } = {}) {
-    if (DG_DEBUG && resetPositions) DG.warn('particles.onResize() with resetPositions=TRUE');
-    refreshHomes({ resetPositions });
-  }
-
-  function snapAllToHomes() {
-    if (checkNonReactive()) return;
-    // Snap free particles
-    for (const p of P) {
-      if (Number.isFinite(p.homeX) && Number.isFinite(p.homeY)) {
-        p.x = p.homeX; p.y = p.homeY;
-        const local = worldToLocalCoords(p.x, p.y);
-        p.localX = local.x;
-        p.localY = local.y;
-        p.vx = 0; p.vy = 0;
-      }
-    }
-    // Snap letter quads
-    for (const L of letters) {
-      if (Number.isFinite(L.homeX) && Number.isFinite(L.homeY)) {
-        L.x = L.homeX; L.y = L.homeY;
-        L.vx = 0; L.vy = 0;
-      }
-      // Keep alpha/flash as-is; we only prevent a visual drift at commit.
-    }
-  }
-
-  for (let i = 0; i < count; i++) {
-    P.push(createBaseParticle());
-  }
-
-  refreshHomes({ resetPositions: true });
-
-  function onBeat(cx, cy){
-    beatGlow = 1;
-    const w=W(), h=H();
-    refreshPanelAnchor({ shiftParticles: false });
-    const beatWorld = localToWorldCoords(cx, cy);
-    const rad = Math.max(24, Math.min(w,h)*0.42);
-    for (const p of P){
-      const dx = p.x - beatWorld.x;
-      const dy = p.y - beatWorld.y;
-      const d = Math.hypot(dx,dy) || 1;
-      if (d < rad){
-        const u = 0.25 * (1 - d/rad);
-        p.vx += u * (dx/d);
-        p.vy += u * (dy/d);
-        p.alpha = Math.min(1, p.alpha + 0.25);
-      }
-    }
-    for (const letter of letters) {
-      letter.flash = Math.min(1, (letter.flash || 0) + 0.2);
-      letter.alpha = Math.min(1, (letter.alpha ?? LETTER_BASE_ALPHA) + 0.06);
-    }
-  }
-
-  function step(dt=1/60){
-    if (holdOneFrame) { holdOneFrame = false; return; }
-    const wcss = (typeof getW === 'function') ? getW() : 0;
-    const hcss = (typeof getH === 'function') ? getH() : 0;
-    if (!wcss || !hcss) return;
-    const w = W(), h = H();
-    refreshPanelAnchor();
-
-    if (P.length < count){
-      const width = w || lastW || 1;
-      const height = h || lastH || 1;
-      for (let i=P.length;i<count;i++){
-        const p = createBaseParticle();
-        assignHome(p, width, height, { resetPosition: true });
-        P.push(p);
-      }
-    } else if (P.length > count){
-      P.length = count;
-    }
-
-    if ((w !== lastW || h !== lastH) && w && h){
-      // Keep current positions; just move homes.
-      refreshHomes({ resetPositions: false });
-    } else if (!letters.length && w && h) {
-      layoutLetters(w, h, { resetPositions: true });
-    }
-
-    const toKeep = [];
-    for (const p of P){
-      if (p.delay && p.delay>0){ p.delay = Math.max(0, p.delay - dt); continue; }
-
-      if (p.repulsed > 0) {
-          p.repulsed = Math.max(0, p.repulsed - 0.05); // Decay tuned for single-hit sweep
-      }
-
-      if (p.isBurst) {
-          if (p.ttl) p.ttl--;
-          if (p.ttl <= 0) {
-              continue; // Particle dies
-          }
-      }
-
-      p.tSince += dt;
-      p.vx *= 0.94; p.vy *= 0.94; // Increased damping to resettle faster
-      if (returnToHome && !p.isBurst && p.repulsed <= 0){
-        const hx = p.homeX - p.x, hy = p.homeY - p.y;
-        p.vx += homePull*hx; p.vy += homePull*hy;
-      }
-      p.x += p.vx; p.y += p.vy;
-
-      const localPos = worldToLocalCoords(p.x, p.y);
-      p.localX = localPos.x;
-      p.localY = localPos.y;
-
-      if (p.isBurst) {
-          if (p.localX < -10 || p.localX >= w + 10 || p.localY < -10 || p.localY >= h + 10) {
-              continue; // Burst particles die if they go off-screen
-          }
-      } else {
-          if (p.localX < -10 || p.localX >= w + 10 || p.localY < -10 || p.localY >= h + 10) {
-              p.x = p.homeX; p.y = p.homeY;
-              const homeLocal = worldToLocalCoords(p.homeX, p.homeY);
-              p.localX = homeLocal.x;
-              p.localY = homeLocal.y;
-              p.vx = 0; p.vy = 0;
-              p.alpha = 0; // Start fade-in
-              p.repulsed = 0; // Reset repulsion state
-          }
-      }
-
-      p.alpha += (0.55 - p.alpha) * 0.05;
-      p.flash = Math.max(0, p.flash - 0.05);
-      toKeep.push(p);
-    }
-    if (toKeep.length !== P.length) {
-        P.length = 0;
-        Array.prototype.push.apply(P, toKeep);
-    }
-
-    if (letters.length) {
-      const pull = Math.max(0.004, homePull) * LETTER_PULL_MULTIPLIER;
-      for (const letter of letters) {
-        if (letter.repulsed > 0) {
-          letter.repulsed = Math.max(0, letter.repulsed - 0.04);
-        }
-        letter.flash = Math.max(0, (letter.flash || 0) - 0.01);
-        letter.vx *= LETTER_DAMPING;
-        letter.vy *= LETTER_DAMPING;
-        if (!checkNonReactive()) {
-          letter.vx += (letter.homeX - letter.x) * pull;
-          letter.vy += (letter.homeY - letter.y) * pull;
-        }
-        letter.x += letter.vx;
-        letter.y += letter.vy;
-        letter.alpha = letter.alpha ?? LETTER_BASE_ALPHA;
-        letter.alpha += (LETTER_BASE_ALPHA - letter.alpha) * 0.1;
-      }
-    }
-
-    if (Math.abs(letterFade - letterFadeTarget) > 0.0001) {
-      const delta = (letterFadeTarget - letterFade) * letterFadeSpeed;
-      letterFade += delta;
-      if (Math.abs(letterFade - letterFadeTarget) < 0.001) {
-        letterFade = letterFadeTarget;
-      }
-    }
-  }
-
-  function draw(ctx, zoomGestureActive = false){
-    DG_particlesRectsDrawn = 0;
-    DG_lettersDrawn = 0;
-    if (!ctx) return;
-    const cssWidth = typeof getW === 'function' ? getW() : 0;
-    const cssHeight = typeof getH === 'function' ? getH() : 0;
-    if (!cssWidth || !cssHeight) { return; }
-    if (DG_CORNER_PROBE && ctx && cssWidth && cssHeight) {
-      ctx.save(); ctx.globalAlpha = 1; ctx.fillStyle = '#00ffff';
-      ctx.fillRect(cssWidth - 3, 0, 3, 3);
-      ctx.restore();
-    }
-    withLogicalSpace(ctx, () => {
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      if (beatGlow>0){ ctx.globalAlpha = Math.min(0.6, beatGlow*0.6); ctx.fillStyle='rgba(120,160,255,0.5)'; ctx.fillRect(0,0,W(),H()); ctx.globalAlpha=1; beatGlow *= 0.88; }
-      for (const p of P){
-        const sp = Math.hypot(p.vx, p.vy);
-        const spN = Math.max(0, Math.min(1, sp / 5));
-        const fastBias = Math.pow(spN, 1.25);
-        const baseA = Math.max(0.08, Math.min(1, p.alpha));
-        const boost = 0.80 * fastBias;
-        const flashBoost = (p.flash || 0) * 0.9;
-        ctx.globalAlpha = Math.min(1, baseA + boost + flashBoost);
-
-        let baseR, baseG, baseB;
-        if (p.color === 'pink') {
-            baseR=255; baseG=105; baseB=180; // Hot pink
-        } else {
-            baseR=143; baseG=168; baseB=255; // Default blue
-        }
-
-        const speedMix = Math.min(0.9, Math.max(0, Math.pow(spN, 1.4)));
-        const flashMix = p.flash || 0;
-        const mix = Math.max(speedMix, flashMix);
-        const r = Math.round(baseR + (255 - baseR) * mix);
-        const g = Math.round(baseG + (255 - baseG) * mix);
-        const b = Math.round(baseB + (255 - baseB) * mix);
-        ctx.fillStyle = `rgb(${r},${g},${b})`;
-
-        const baseSize = 1.5;
-        const size = Math.max(0.75, baseSize);
-        const localX = Number.isFinite(p.localX) ? p.localX : worldToLocalCoords(p.x, p.y).x;
-        const localY = Number.isFinite(p.localY) ? p.localY : worldToLocalCoords(p.x, p.y).y;
-        const x = (localX | 0) - size / 2;
-        const y = (localY | 0) - size / 2;
-        ctx.fillRect(x, y, size, size);
-        DG_particlesRectsDrawn++;
-      }
-      ctx.restore();
-
-      if (letters.length) {
-        ctx.save();
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        for (const letter of letters) {
-          const flashBoost = Math.min(1, letter.flash || 0);
-          const alpha = Math.min(1, (letter.alpha ?? LETTER_BASE_ALPHA) + flashBoost * 0.8);
-          ctx.fillStyle = 'rgb(80,120,180)';
-          const finalAlpha = Math.min(1, alpha * letterFade);
-          if (finalAlpha <= 0.001) {
-            continue;
-          }
-          ctx.globalAlpha = finalAlpha;
-          ctx.font = `700 ${letter.fontSize}px 'Poppins', 'Helvetica Neue', sans-serif`;
-          ctx.fillText(letter.char, letter.x, letter.y);
-          DG_lettersDrawn++;
-        }
-        ctx.restore();
-      }
-    });
-    dgf('draw', {
-      size: { cssW: cssWidth, cssH: cssHeight, dpr: currentDpr },
-      parts: DG_particlesRectsDrawn,
-      letters: DG_lettersDrawn
-    });
-  }
-
-  function lineRepulse(x, width=40, strength=1){
-    refreshPanelAnchor({ shiftParticles: false });
-    const w=W(); const h=H();
-    const half = width*0.5;
-    for (const p of P){
-      const localX = Number.isFinite(p.localX) ? p.localX : worldToLocalCoords(p.x, p.y).x;
-      const dx = localX - x;
-      if (Math.abs(dx) <= half && p.repulsed <= 0.35){
-        const s = (dx===0? (Math.random()<0.5?-1:1) : Math.sign(dx));
-        const fall = 1 - Math.abs(dx)/half;
-        const jitter = 0.9 + Math.random()*0.35;
-        const rawForce = Math.max(0, fall) * strength * 3.45 * jitter;
-        const k = Math.min(rawForce, 1.6);
-        const vyJitter = (Math.random()*2 - 1) * k * 0.24;
-        p.vx += s * k * 1.15;
-        p.vy += vyJitter;
-        p.alpha = Math.min(1, p.alpha + 0.85);
-        p.flash = 1.0;
-        p.repulsed = 1.0;
-      }
-    }
-    for (const letter of letters) {
-      const dx = letter.x - x;
-      if (Math.abs(dx) <= half && letter.repulsed <= 0.35) {
-        const s = (dx===0? (Math.random()<0.5?-1:1) : Math.sign(dx));
-        const fall = 1 - Math.abs(dx)/half;
-        const jitter = 0.9 + Math.random() * 0.2;
-        const rawForce = Math.max(0, fall) * strength * 1.65 * jitter;
-        const k = Math.min(rawForce, 1.9);
-        const basePush = k * 1.75 + 0.28;
-        const directional = s * k * 0.6;
-        const horizontal = basePush + directional;
-        const vyJitter = (Math.random()*2 - 1) * k * 0.32;
-        letter.vx += horizontal;
-        letter.vy += vyJitter;
-        letter.alpha = Math.min(1, (letter.alpha ?? LETTER_BASE_ALPHA) + 0.18);
-        letter.flash = Math.min(1, (letter.flash || 0) + 0.9);
-        letter.repulsed = 1;
-      }
-    }
-  }
-
-  function drawingDisturb(disturbX, disturbY, radius = 30, strength = 0.5) {
-    refreshPanelAnchor({ shiftParticles: false });
-    for (const p of P) {
-        const localX = Number.isFinite(p.localX) ? p.localX : worldToLocalCoords(p.x, p.y).x;
-        const localY = Number.isFinite(p.localY) ? p.localY : worldToLocalCoords(p.x, p.y).y;
-        const dx = localX - disturbX;
-        const dy = localY - disturbY;
-        const distSq = dx * dx + dy * dy;
-        if (distSq < radius * radius) {
-            const dist = Math.sqrt(distSq) || 1;
-            const kick = strength * (1 - dist / radius);
-            // Push away from the point
-            p.vx += (dx / dist) * kick;
-            p.vy += (dy / dist) * kick;
-            p.alpha = Math.min(1, p.alpha + 0.5);
-            p.flash = Math.max(p.flash, 0.7);
-        }
-    }
-    for (const letter of letters) {
-        const dx = letter.x - disturbX;
-        const dy = letter.y - disturbY;
-        const distSq = dx * dx + dy * dy;
-        if (distSq < radius * radius) {
-            const dist = Math.sqrt(distSq) || 1;
-            const rawKick = strength * 1.0 * (1 - dist / radius);
-            const kick = Math.min(rawKick, 1.05);
-            const ux = dx / dist;
-            const uy = dy / dist;
-            letter.vx += ux * kick;
-            letter.vy += uy * kick;
-            letter.alpha = Math.min(1, (letter.alpha ?? LETTER_BASE_ALPHA) + 0.16);
-            letter.flash = Math.max(letter.flash || 0, 0.55);
-            letter.repulsed = Math.min(1, letter.repulsed + 0.75);
-        }
-    }
-  }
-
-  function pointBurst(x, y, countBurst = 30, speed = 3.0, color = 'pink') {
-    refreshPanelAnchor({ shiftParticles: false });
-    const width = Math.max(1, W());
-    const height = Math.max(1, H());
-    const burstWorld = localToWorldCoords(x, y);
-    for (let i = 0; i < countBurst; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const vx = Math.cos(angle) * speed * (0.5 + Math.random() * 0.5);
-        const vy = Math.sin(angle) * speed * (0.5 + Math.random() * 0.5);
-        const p = {
-            x: burstWorld.x,
-            y: burstWorld.y,
-            vx,
-            vy,
-            homeX: burstWorld.x,
-            homeY: burstWorld.y,
-            localX: x,
-            localY: y,
-            alpha: 1.0,
-            flash: 1.0,
-            ttl: 45, // frames, ~0.75s
-            color: color,
-            isBurst: true,
-            repulsed: 0,
-        };
-        p.nx = clamp01(width ? x / width : 0);
-        p.ny = clamp01(height ? y / height : 0);
-        P.push(p);
-    }
-  }
-
-function ringBurst(x, y, radius, countBurst = 28, speed = 2.4, color = 'pink') {
-  refreshPanelAnchor({ shiftParticles: false });
-  const width = Math.max(1, W());
-  const height = Math.max(1, H());
-  for (let i = 0; i < countBurst; i++) {
-    const theta = (i / countBurst) * Math.PI * 2 + (Math.random() * 0.15);
-    const localPx = x + Math.cos(theta) * radius;
-    const localPy = y + Math.sin(theta) * radius;
-    const outward = speed * (0.65 + Math.random() * 0.55);
-    const jitterA = (Math.random() - 0.5) * 0.35;
-    const vx = Math.cos(theta + jitterA) * outward;
-    const vy = Math.sin(theta + jitterA) * outward;
-    const worldPos = localToWorldCoords(localPx, localPy);
-    const burst = {
-      x: worldPos.x,
-      y: worldPos.y,
-      localX: localPx,
-      localY: localPy,
-      vx,
-      vy,
-      homeX: worldPos.x,
-      homeY: worldPos.y,
-      alpha: 1.0,
-      flash: 1.0,
-      ttl: 45,
-      color,
-      isBurst: true,
-      repulsed: 0
-    };
-    burst.nx = clamp01(width ? localPx / width : 0);
-    burst.ny = clamp01(height ? localPy / height : 0);
-    P.push(burst);
-  }
-}
-
-  function setLetterFadeTarget(target, speed = 0.05, immediate = false) {
-    letterFadeTarget = Math.max(0, Math.min(1, target));
-    letterFadeSpeed = Math.max(0.0001, speed);
-    if (immediate) {
-      letterFade = letterFadeTarget;
-    }
-  }
-
-  function fadeLettersOut(speed = 0.08) {
-    setLetterFadeTarget(0, speed);
-  }
-
-  function fadeLettersIn(speed = 0.06) {
-    setLetterFadeTarget(1, speed);
-  }
-
-  function setDpr(newDpr) {
-    if (typeof zoomGestureActive !== 'undefined' && zoomGestureActive) return;
-    if (newDpr === currentDpr) return;
-    currentDpr = newDpr;
-    refreshHomes({ resetPositions: true });
-  }
-
-  function __peek(){ return P && P.length ? P[0] : null; }
-
-  function scalePositions(scaleX, scaleY) {
-    if (typeof zoomGestureActive !== 'undefined' && zoomGestureActive) return;
-    if (!Number.isFinite(scaleX) || !Number.isFinite(scaleY)) return;
-    refreshPanelAnchor({ shiftParticles: false });
-    const newW = (Number.isFinite(lastW) && lastW > 0) ? lastW * scaleX : lastW;
-    const newH = (Number.isFinite(lastH) && lastH > 0) ? lastH * scaleY : lastH;
-    const safeW = newW && newW > 0 ? newW : (lastW || 1);
-    const safeH = newH && newH > 0 ? newH : (lastH || 1);
-
-    for (const p of P) {
-      const homeLocal = worldToLocalCoords(p.homeX, p.homeY);
-      homeLocal.x *= scaleX;
-      homeLocal.y *= scaleY;
-      const newHomeWorld = localToWorldCoords(homeLocal.x, homeLocal.y);
-      p.homeX = newHomeWorld.x;
-      p.homeY = newHomeWorld.y;
-      const posLocal = (Number.isFinite(p.localX) && Number.isFinite(p.localY))
-        ? { x: p.localX * scaleX, y: p.localY * scaleY }
-        : (() => {
-            const fallback = worldToLocalCoords(p.x, p.y);
-            return { x: fallback.x * scaleX, y: fallback.y * scaleY };
-          })();
-      const newPosWorld = localToWorldCoords(posLocal.x, posLocal.y);
-      p.x = newPosWorld.x;
-      p.y = newPosWorld.y;
-      p.vx *= scaleX;
-      p.vy *= scaleY;
-      p.nx = clamp01(safeW ? homeLocal.x / safeW : p.nx);
-      p.ny = clamp01(safeH ? homeLocal.y / safeH : p.ny);
-      p.localX = posLocal.x;
-      p.localY = posLocal.y;
-    }
-    for (const letter of letters) {
-      letter.x *= scaleX;
-      letter.y *= scaleY;
-      letter.homeX *= scaleX;
-      letter.homeY *= scaleY;
-      letter.vx *= scaleX;
-      letter.vy *= scaleY;
-    }
-    if (Number.isFinite(newW) && newW > 0) {
-      lastW = newW;
-    }
-    if (Number.isFinite(newH) && newH > 0) {
-      lastH = newH;
-    }
-  }
-
-  return { step, draw, onBeat, lineRepulse, drawingDisturb, pointBurst, ringBurst, fadeLettersOut, fadeLettersIn, setLetterFadeTarget, setDpr, scalePositions, onResize, snapAllToHomes, holdNextFrame, cancelHoldNextFrame, allowImmediateDraw };
-}
-
 // (moved into createDrawGrid - per-instance)
 
 function normalizeMapColumns(map, cols) {
@@ -1212,6 +559,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let currentMap = null;                // { active:boolean[], nodes:Set[], disabled:Set[] }
   let currentCols = 0;
   let nodeCoordsForHitTest = [];        // For draggable nodes (hit tests, drags)
+  let dgViewport = null;
+  let dgMap = null;
+  let dgField = null;
 
   // DEBUG: prove these are per-instance
   dgTraceLog('[drawgrid] instance-state', panel.id, { scope: 'per-instance' });
@@ -1473,24 +823,26 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   eraserCursor.className = 'drawgrid-eraser-cursor';
   body.appendChild(eraserCursor);
 
-  // Layers (z-index order)
-  const particleCanvas = document.createElement('canvas'); particleCanvas.setAttribute('data-role', 'drawgrid-particles');
+  // Layers (z-index order) — particles behind the art layers
+  const particleCanvas = document.createElement('canvas');
+  particleCanvas.className = 'toy-particles';
+  particleCanvas.setAttribute('data-role', 'drawgrid-particles');
   const grid = document.createElement('canvas'); grid.setAttribute('data-role','drawgrid-grid');
   const paint = document.createElement('canvas'); paint.setAttribute('data-role','drawgrid-paint');
   const nodesCanvas = document.createElement('canvas'); nodesCanvas.setAttribute('data-role', 'drawgrid-nodes');
   const flashCanvas = document.createElement('canvas'); flashCanvas.setAttribute('data-role', 'drawgrid-flash');
   const ghostCanvas = document.createElement('canvas'); ghostCanvas.setAttribute('data-role','drawgrid-ghost');
   const tutorialCanvas = document.createElement('canvas'); tutorialCanvas.setAttribute('data-role', 'drawgrid-tutorial-highlight');
-  Object.assign(grid.style,         { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 0 });
-  Object.assign(paint.style,        { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 1 });
-  Object.assign(particleCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 2, pointerEvents: 'none' });
+  Object.assign(particleCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 0, pointerEvents: 'none' });
+  Object.assign(grid.style,           { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 1 });
+  Object.assign(paint.style,          { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 2 });
   Object.assign(ghostCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 3, pointerEvents: 'none' });
   Object.assign(flashCanvas.style,  { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 4, pointerEvents: 'none' });
   Object.assign(nodesCanvas.style,  { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 5, pointerEvents: 'none' });
   Object.assign(tutorialCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 6, pointerEvents: 'none' });
+  body.appendChild(particleCanvas);
   body.appendChild(grid);
   body.appendChild(paint);
-  body.appendChild(particleCanvas);
   body.appendChild(ghostCanvas);
   body.appendChild(flashCanvas);
   body.appendChild(nodesCanvas);
@@ -1525,10 +877,202 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   
   body.appendChild(wrap);
 
-  const particleFrontCtx = particleCanvas.getContext('2d');
-  const particleBackCanvas = document.createElement('canvas');
-  const particleBackCtx = particleBackCanvas.getContext('2d');
-  let particleCtx = particleFrontCtx;
+  let updateDrawLabel = () => {};
+
+  // --- DRAW label overlay (DOM) ---
+  let drawLabel = panel.querySelector('.drawgrid-tap-label');
+  if (!drawLabel) {
+    drawLabel = document.createElement('div');
+    drawLabel.className = 'drawgrid-tap-label';
+      Object.assign(drawLabel.style, {
+        position: 'absolute',
+        inset: '0',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        pointerEvents: 'none',
+        zIndex: 7,
+        fontFamily: 'system-ui, sans-serif',
+        fontWeight: '700',
+        letterSpacing: '0.08em',
+      // Use Loopgrid/TAP-ish theming if available; bump ~50%.
+      color: 'var(--tap-label-color, rgba(160,188,255,0.72))',
+      textShadow: 'var(--tap-label-shadow, 0 2px 10px rgba(40,60,120,0.55))',
+      fontSize: 'var(--tap-label-size, clamp(36px, 18vmin, 190px))',
+        lineHeight: '1',
+        textTransform: 'uppercase',
+        userSelect: 'none'
+      });
+    wrap.appendChild(drawLabel);
+    drawLabel.style.pointerEvents = 'none';
+  }
+
+  const drawLabelLetters = [];
+  function renderDrawText() {
+    if (!drawLabel) return;
+    drawLabelLetters.length = 0;
+    drawLabel.innerHTML = '';
+    for (const ch of 'DRAW') {
+      const span = document.createElement('span');
+      span.className = 'drawgrid-letter';
+      span.textContent = ch;
+      span.style.display = 'inline-block';
+      span.style.transition = 'transform 90ms ease-out';
+      span.style.willChange = 'transform';
+      span.style.transform = 'translate3d(0,0,0)';
+      drawLabel.appendChild(span);
+      drawLabelLetters.push(span);
+    }
+  }
+  renderDrawText();
+
+  function setDrawTextActive(active) {
+    if (!drawLabel) return;
+    drawLabel.style.display = active ? 'flex' : 'none';
+  }
+
+  function knockLettersAt(localX, localY, { radius = 72, strength = 10 } = {}) {
+    const z = Math.max(0.1, dgViewport?.getZoom?.() || 1);
+    const scaledRadius = radius / z;
+    if (!drawLabel || !drawLabelLetters.length) return;
+    const rect = drawLabel.getBoundingClientRect?.();
+    const wrapRect = wrap?.getBoundingClientRect?.();
+    if (!rect || !wrapRect || !rect.width || !rect.height) return;
+    const baseX = (typeof localX === 'number' ? localX : 0) + (gridArea?.x || 0);
+    const baseY = (typeof localY === 'number' ? localY : 0) + (gridArea?.y || 0) + (topPad || 0);
+    const relX = baseX - (rect.left - wrapRect.left);
+    const relY = baseY - (rect.top - wrapRect.top);
+    drawLabelLetters.forEach((el, idx) => {
+      const letterRect = el.getBoundingClientRect?.();
+      if (!letterRect) return;
+      const lx = letterRect.left - rect.left + letterRect.width * 0.5;
+      const ly = letterRect.top - rect.top + letterRect.height * 0.5;
+      const dx = lx - relX;
+      const dy = ly - relY;
+      const distSq = dx * dx + dy * dy;
+      if (distSq > scaledRadius * scaledRadius) {
+        el.style.transform = 'translate3d(0,0,0)';
+        return;
+      }
+      const dist = Math.sqrt(distSq) || 1;
+      const fall = 1 - Math.min(1, dist / scaledRadius);
+      const push = strength * fall * fall;
+      const ux = dx / dist;
+      const uy = dy / dist;
+      const tx = ux * push;
+      const ty = uy * push;
+      el.style.transform = `translate3d(${tx}px, ${ty}px, 0)`;
+      const delay = 80 + (idx * 12);
+      setTimeout(() => {
+        el.style.transform = 'translate3d(0,0,0)';
+      }, delay);
+    });
+  }
+
+  updateDrawLabel = (show) => {
+    setDrawTextActive(!!show);
+  };
+  updateDrawLabel(true);
+
+  function getToyLogicalSize() {
+    const width = Math.max(1, Math.round(wrap?.clientWidth || 1));
+    const height = Math.max(1, Math.round(wrap?.clientHeight || 1));
+    return { w: width, h: height };
+  }
+
+  function __auditZoomSizes(tag = 'audit') {
+    if (typeof window === 'undefined' || !window.DG_ZOOM_AUDIT) return;
+    try {
+      const rect = wrap?.getBoundingClientRect?.();
+      const clientW = wrap?.clientWidth || 0;
+      const clientH = wrap?.clientHeight || 0;
+      const zoomState = (typeof getZoomState === 'function') ? getZoomState() : null;
+      const zoomScale = Number.isFinite(dgViewport?.getZoom?.())
+        ? dgViewport.getZoom()
+        : (Number.isFinite(zoomState?.scale) ? zoomState.scale : 1);
+      console.log('[DG][ZOOM-AUDIT]', tag, {
+        zoomScale,
+        rectW: Math.round(rect?.width || 0),
+        rectH: Math.round(rect?.height || 0),
+        clientW,
+        clientH,
+        gridAreaLogical: { ...gridAreaLogical },
+      });
+    } catch (err) {
+      console.warn('[DG][ZOOM-AUDIT] failed', err);
+    }
+  }
+
+  // --- Particle viewport / field init after wrap is ready ---
+  const pausedRef = () => !!panel?.dataset?.paused;
+  const viewportBridge = createViewportBridgeDG(panel);
+  dgViewport = createParticleViewport(() => {
+    return getToyLogicalSize();
+  });
+  Object.assign(dgViewport, viewportBridge);
+  dgMap = dgViewport.map;
+  const panelSeed = panel?.dataset?.toyid || panel?.id || 'drawgrid';
+  let gridArea = { x: 0, y: 0, w: 0, h: 0 };
+  function initDrawgridParticles() {
+    // Hard guard: if a previous field exists, nuke it & clear the surface
+    if (panel.__drawParticles && typeof panel.__drawParticles.destroy === 'function') {
+      try { panel.__drawParticles.destroy(); } catch {}
+      panel.__drawParticles = null;
+    }
+    try {
+      const ctx = particleCanvas.getContext('2d', { alpha: true });
+      ctx && ctx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
+    } catch {}
+    try {
+      dgField?.destroy?.();
+      dgViewport?.refreshSize?.({ snap: true });
+      dgField = createField(
+        { canvas: particleCanvas, viewport: dgViewport, pausedRef },
+        {
+          seed: panelSeed,
+          cap: 2200,
+          stiffness: 24,     // quick return to home
+          damping: 1.2,      // minimal wobble
+          noise: 0,
+          kick: 0,
+          kickDecay: 8.0,
+          drawMode: 'dots',
+          minAlpha: 0.25,
+          maxAlpha: 0.85,
+          forceMul: 1.2,
+          staticMode: true,
+        }
+      );
+      window.__dgField = dgField;
+      console.log('[DG] field config', dgField?._config);
+      dgViewport?.refreshSize?.({ snap: true });
+      dgField?.resize?.();
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        try {
+          dgViewport?.refreshSize?.({ snap: true });
+          dgField?.resize?.();
+        } catch {}
+      }));
+      const logicalSize = getToyLogicalSize();
+      gridAreaLogical.w = logicalSize.w;
+      gridAreaLogical.h = logicalSize.h;
+      __auditZoomSizes('init-field');
+      panel.__drawParticles = dgField;
+    } catch (err) {
+      console.warn('[drawgrid] particle field init failed', err);
+      dgField = null;
+    }
+  }
+  initDrawgridParticles();
+
+  if (typeof ResizeObserver !== 'undefined') {
+    const particleResizeObserver = new ResizeObserver(() => {
+      try { dgViewport?.refreshSize?.({ snap: true }); } catch {}
+      try { dgField?.resize?.(); } catch {}
+    });
+    particleResizeObserver.observe(wrap);
+    panel.addEventListener('toy:remove', () => particleResizeObserver.disconnect(), { once: true });
+  }
 
   const gridFrontCtx = grid.getContext('2d', { willReadFrequently: true });
   const gridBackCanvas = document.createElement('canvas');
@@ -1556,6 +1100,46 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const ghostBackCanvas = document.createElement('canvas');
   const ghostBackCtx = ghostBackCanvas.getContext('2d');
   let ghostCtx = ghostFrontCtx;
+
+  function pokeFieldToy(source, xToy, yToy, radiusToy, strength, extra = {}) {
+    try {
+      const zoomScale = getOverlayZoomSnapshot()?.scale || 1;
+      if (!Number.isFinite(radiusToy) || radiusToy <= 0) {
+        console.warn('[DG][pokeFieldToy] skipping invalid radius', { source, radiusToy, xToy, yToy });
+        return;
+      }
+      if (typeof window !== 'undefined' && window.DG_ZOOM_AUDIT) {
+        try {
+          withLogicalSpace(ghostCtx, () => {
+            if (!ghostCtx) return;
+            ghostCtx.save();
+            ghostCtx.strokeStyle = 'rgba(255,80,80,0.9)';
+            ghostCtx.lineWidth = 1;
+            ghostCtx.beginPath();
+            ghostCtx.moveTo(xToy - 6, yToy);
+            ghostCtx.lineTo(xToy + 6, yToy);
+            ghostCtx.moveTo(xToy, yToy - 6);
+            ghostCtx.lineTo(xToy, yToy + 6);
+            ghostCtx.stroke();
+            ghostCtx.restore();
+          });
+        } catch {}
+        console.log('[DG][POKE]', {
+          source,
+          xToy,
+          yToy,
+          radiusToy,
+          strength,
+          zoomScale,
+          gridW: gridArea?.w,
+          gridH: gridArea?.h,
+        });
+      }
+      dgField?.poke?.(xToy, yToy, { radius: radiusToy, strength, ...extra });
+    } catch (err) {
+      console.warn('[DG][pokeFieldToy] failed', { source, err });
+    }
+  }
 
   const tutorialFrontCtx = tutorialCanvas.getContext('2d');
   const tutorialBackCanvas = document.createElement('canvas');
@@ -1597,8 +1181,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     };
     resize(gridFrontCtx?.canvas);
     resize(gridBackCanvas);
-    resize(particleFrontCtx?.canvas);
-    resize(particleBackCanvas);
+    // particleCanvas sizing is managed by field-generic (it owns DPR/size)
     resize(nodesFrontCtx?.canvas);
     resize(nodesBackCanvas);
     resize(flashFrontCtx?.canvas);
@@ -1713,8 +1296,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let zoomMode = 'idle';
   let pendingZoomResnap = false;
   let zoomGestureActive = false;
-  const dgViewport = createParticleViewport(() => ({ w: cssW, h: cssH }));
-  const dgMap = dgViewport.map;
   const nowMs = () => {
     if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
       return performance.now();
@@ -1730,6 +1311,21 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     const y = Number.isFinite(z?.targetY) ? z.targetY :
       (Number.isFinite(z?.currentY) ? z.currentY : null);
     return { scale, x, y };
+  }
+  function getOverlayZoomSnapshot() {
+    const camSource = overlayCamState || (typeof getFrameStartState === 'function' ? getFrameStartState() : null);
+    const snapshot = extractZoomSnapshot(camSource);
+    const fallbackScale = Number.isFinite(boardScale) ? boardScale : 1;
+    const rawScale = Number.isFinite(snapshot?.scale) ? snapshot.scale : fallbackScale;
+    const clampedScale = Math.max(0.1, rawScale);
+    return {
+      scale: clampedScale,
+      x: Number.isFinite(snapshot?.x) ? snapshot.x : 0,
+      y: Number.isFinite(snapshot?.y) ? snapshot.y : 0,
+    };
+  }
+  function __dgZoomScale() {
+    return getOverlayZoomSnapshot()?.scale || 1;
   }
   const initialZoomState = (typeof getZoomState === 'function') ? getZoomState() : null;
   let __zoomActive = false; // true while pinch/wheel gesture is in progress
@@ -1872,17 +1468,10 @@ function ensureSizeReady({ force = false } = {}) {
   function wireOverviewTransitions(panelEl) {
     if (!panelEl) return;
     panelEl.addEventListener('overview:precommit', () => {
-      try {
-        particles?.holdNextFrame?.();
-        particles?.snapAllToHomes?.();
-      } catch {}
+      // Particle field handles its own throttling; no extra hooks needed.
     });
-
     panelEl.addEventListener('overview:commit', () => {
       try {
-        particles?.snapAllToHomes?.();
-        particles?.cancelHoldNextFrame?.();
-        particles?.allowImmediateDraw?.();
         try { dgViewport?.setNonReactive?.(zoomFreezeActive() ? true : null); } catch {}
         __dgDeferUntilTs = 0;
         __dgStableFramesAfterCommit = 0;
@@ -1977,7 +1566,6 @@ function ensureSizeReady({ force = false } = {}) {
   // Proportional safe area so the grid keeps the same relative size at any zoom.
   // Start with ~5% of the smaller dimension; clamp to a sensible px range.
   const SAFE_AREA_FRACTION = 0.05;
-  let gridArea = { x: 0, y: 0, w: 0, h: 0 };
   let tutorialHighlightMode = 'none'; // 'none' | 'notes' | 'drag'
   let tutorialHighlightRaf = null;
   let usingBackBuffers = false;
@@ -2011,17 +1599,7 @@ function ensureSizeReady({ force = false } = {}) {
       });
   } catch {}
 
-  const particles = createDrawGridParticles({
-    getW: () => cssW,
-    getH: () => cssH,
-    count: 600,
-    homePull: 0.002,
-    isNonReactive: dgNonReactive,
-  });
   try {
-    if (particles && typeof particles.onResize === 'function') {
-      particles.onResize({ resetPositions: true });
-    }
     if (DG_CORNER_PROBE) {
       const ctx = particleCanvas?.getContext?.('2d');
       if (ctx && cssW && cssH) {
@@ -2062,6 +1640,7 @@ function ensureSizeReady({ force = false } = {}) {
         dglog('overview:transition', { active });
         try { dgViewport?.setNonReactive?.(zoomFreezeActive() ? true : null); } catch {}
         try { dgViewport?.refreshSize?.({ snap: true }); } catch {}
+        try { dgField?.resize?.(); } catch {}
         // Don't re-home during overview toggles -- avoids visible lerp.
         // refreshHomes({ resetPositions: false });
         __dgFrontSwapNextDraw = true;
@@ -2192,21 +1771,10 @@ if (typeof onFrameStart === 'function') {
 
   panel.setSwipeVisible = (show, { immediate = false } = {}) => {
   __forceSwipeVisible = !!show;
-  const speed = show ? 0.08 : 0.12;
-  try { particles.setLetterFadeTarget(show ? 1 : 0, speed, immediate); } catch {}
 };
 
   function syncLetterFade({ immediate = false } = {}) {
-    const hasStrokes = Array.isArray(strokes) && strokes.length > 0;
-    const hasNodes = Array.isArray(currentMap?.nodes)
-      ? currentMap.nodes.some(set => set && set.size > 0)
-      : false;
-    const hasContent = hasStrokes || hasNodes;
-    const target = (__forceSwipeVisible !== null)
-      ? (__forceSwipeVisible ? 1 : 0)
-      : (hasContent ? 0 : 1);
-    const speed = hasContent ? 0.12 : 0.08;
-    particles.setLetterFadeTarget(target, speed, immediate);
+    // Legacy hook retained for future use; no-op now that particles manage themselves.
   }
 
   if (!panel.__drawgridHelpModeChecker) {
@@ -2698,9 +2266,6 @@ function regenerateMapFromStrokes() {
       useBackBuffers();
       updatePaintBackingStores({ force: true, target: 'back' });
       resnapAndRedraw(true);
-      if (particles && typeof particles.onResize === 'function') {
-        particles.onResize({ resetPositions: false });
-      }
       drawIntoBackOnly();
       pendingSwap = true;
     });
@@ -2709,6 +2274,7 @@ function regenerateMapFromStrokes() {
   const unsubscribeZoom = onZoomChange((z = {}) => {
     __lastZoomEventTs = nowMs();
     noteZoomMotion(z);
+    __auditZoomSizes('zoom-change');
     const phase = z?.phase;
     const mode = z?.mode;
     if (mode) {
@@ -2838,8 +2404,6 @@ function regenerateMapFromStrokes() {
         withDeviceSpace(ghostFrontCtx, () => ghostFrontCtx.drawImage(back, 0, 0, back.width, back.height, 0, 0, front.width, front.height));
       }
       // NEW: also copy other overlays back -> front once to avoid a 1-frame size pop
-      copyCanvas(particleBackCtx, particleFrontCtx);
-      emitDG('blit', { from: 'back', to: 'front', layer: 'particles' });
       copyCanvas(gridBackCtx,      gridFrontCtx);
       emitDG('blit', { from: 'back', to: 'front', layer: 'grid' });
       copyCanvas(nodesBackCtx,     nodesFrontCtx);
@@ -2891,7 +2455,6 @@ function regenerateMapFromStrokes() {
     if (usingBackBuffers) return;
     usingBackBuffers = true;
     syncBackBufferSizes();
-    particleCtx = particleBackCtx;
     gctx = gridBackCtx;
     nctx = nodesBackCtx;
     fctx = flashBackCtx;
@@ -2903,7 +2466,6 @@ function regenerateMapFromStrokes() {
   function useFrontBuffers() {
     if (!usingBackBuffers) return;
     usingBackBuffers = false;
-    particleCtx = particleFrontCtx;
     gctx = gridFrontCtx;
     nctx = nodesFrontCtx;
     fctx = flashFrontCtx;
@@ -2941,7 +2503,6 @@ function copyCanvas(backCtx, frontCtx) {
 
 function syncBackBufferSizes() {
   const pairs = [
-    [particleBackCtx, particleFrontCtx],
     [gridBackCtx, gridFrontCtx],
     [nodesBackCtx, nodesFrontCtx],
     [flashBackCtx, flashFrontCtx],
@@ -3040,7 +2601,7 @@ function syncBackBufferSizes() {
         flashFrontCtx?.canvas,
         ghostFrontCtx?.canvas,
         tutorialFrontCtx?.canvas,
-        particleFrontCtx?.canvas
+        particleCanvas
       ].filter(Boolean);
 
       for (const canvas of styleCanvases) {
@@ -3061,8 +2622,6 @@ function syncBackBufferSizes() {
         ghostBackCanvas,
         tutorialFrontCtx?.canvas,
         tutorialBackCanvas,
-        particleFrontCtx?.canvas,
-        particleBackCanvas
       ].filter(Boolean);
 
       for (const canvas of allCanvases) {
@@ -3092,7 +2651,6 @@ function syncBackBufferSizes() {
       copyCtx(flashFrontCtx, flashBackCtx);
       copyCtx(ghostFrontCtx, ghostBackCtx);
       copyCtx(tutorialFrontCtx, tutorialBackCtx);
-      copyCtx(particleFrontCtx, particleBackCtx);
     } catch {}
   }
 
@@ -3114,7 +2672,6 @@ function syncBackBufferSizes() {
 
     grid.width = w; grid.height = h;
     nodesCanvas.width = w; nodesCanvas.height = h;
-    particleCanvas.width = w; particleCanvas.height = h;
     flashCanvas.width = w; flashCanvas.height = h;
     ghostCanvas.width = w; ghostCanvas.height = h;
     tutorialCanvas.width = w; tutorialCanvas.height = h;
@@ -3140,18 +2697,6 @@ function syncBackBufferSizes() {
       nodesFrontCtx.drawImage(
         nodesBackCanvas,
         0, 0, nodesBackCanvas.width, nodesBackCanvas.height,
-        0, 0, width, height
-      );
-    });
-
-    withDeviceSpace(particleFrontCtx, () => {
-      const surface = particleFrontCtx.canvas;
-      const width = surface?.width ?? w;
-      const height = surface?.height ?? h;
-      particleFrontCtx.clearRect(0, 0, width, height);
-      particleFrontCtx.drawImage(
-        particleBackCanvas,
-        0, 0, particleBackCanvas.width, particleBackCanvas.height,
         0, 0, width, height
       );
     });
@@ -3252,8 +2797,11 @@ function syncBackBufferSizes() {
         }
       }
 
-      const logicalW = cssW;
-      const logicalH = cssH;
+      const logicalSize = getToyLogicalSize();
+      const logicalW = logicalSize.w;
+      const logicalH = logicalSize.h;
+      gridAreaLogical.w = logicalW;
+      gridAreaLogical.h = logicalH;
 
       const minGridArea = 20; // px floor so it never fully collapses
       // Compute proportional margin in CSS px (already in the visible, transformed space)
@@ -3361,10 +2909,6 @@ function syncBackBufferSizes() {
       const width = cssW || (surface?.width ?? 0) / scale;
       const height = cssH || (surface?.height ?? 0) / scale;
       gctx.clearRect(0, 0, width, height);
-
-      // Fill the entire background on the lowest layer (grid canvas)
-      gctx.fillStyle = '#0b0f16';
-      gctx.fillRect(0, 0, width, height);
 
       // 1. Draw the note grid area below the top padding
       const noteGridY = gridArea.y + topPad;
@@ -3982,19 +3526,16 @@ function syncBackBufferSizes() {
   }
 
   // Convert pointer events into layout-space coordinates that ignore board zoom scaling.
-  function getPointerPosition(e) {
-    const rect = paint?.getBoundingClientRect?.();
-    if (!rect) return { x: 0, y: 0 };
-    const layoutW = paint?.offsetWidth || cssW || rect.width || 1;
-    const layoutH = paint?.offsetHeight || cssH || rect.height || 1;
-    const scaleX = rect.width > 0 ? layoutW / rect.width : 1;
-    const scaleY = rect.height > 0 ? layoutH / rect.height : 1;
-    const offsetX = e.clientX - rect.left;
-    const offsetY = e.clientY - rect.top;
-    return {
-      x: offsetX * (Number.isFinite(scaleX) ? scaleX : 1),
-      y: offsetY * (Number.isFinite(scaleY) ? scaleY : 1),
+  function toToyPointFromEvent(ev) {
+    const zoom = getViewportScale();
+    const screenPoint = {
+      x: ev?.clientX ?? ev?.x ?? 0,
+      y: ev?.clientY ?? ev?.y ?? 0,
     };
+    const toyOrigin = getToyWorldAnchor(panel);
+    const worldPoint = screenToWorld(screenPoint);
+    const pToy = worldToToy(worldPoint, toyOrigin || { x: 0, y: 0 });
+    return { pToy, zoom };
   }
 
   function eraseNodeAtPoint(p) {
@@ -4028,7 +3569,8 @@ function syncBackBufferSizes() {
   function onPointerDown(e){
     stopAutoGhostGuide({ immediate: false });
     markUserChange('pointerdown');
-    const p = getPointerPosition(e);
+    const { pToy: p } = toToyPointFromEvent(e);
+    updateDrawLabel(false);
 
     // (Top cubes removed)
 
@@ -4095,13 +3637,17 @@ function syncBackBufferSizes() {
         });
       } catch {}
       try {
-        particles.drawingDisturb(p.x, p.y, getLineWidth() * 2.0, 0.6);
+        const r0 = DG_KNOCK.pointerDown.radiusToy(gridArea);
+        const s0 = DG_KNOCK.pointerDown.strength;
+        pokeFieldToy('pointerDown', p.x, p.y, r0, s0);
+        __dgLogFirstPoke('pointerDown', r0, s0);
+        knockLettersAt(p.x - (gridArea?.x || 0), p.y - (gridArea?.y || 0), { radius: 100, strength: 14 });
       } catch(e) {}
       // The full stroke will be drawn on pointermove.
     }
   }
   function onPointerMove(e){
-    const p = getPointerPosition(e);
+    const { pToy: p } = toToyPointFromEvent(e);
     if (!pctx) {
       DG.warn('pctx missing; forcing front buffers');
       if (typeof useFrontBuffers === 'function') useFrontBuffers();
@@ -4281,7 +3827,11 @@ function syncBackBufferSizes() {
       }
       // Disturb particles for all lines, special or not.
       try {
-        particles.drawingDisturb(p.x, p.y, getLineWidth() * 1.5, 0.4);
+        const r1 = DG_KNOCK.pointerMove.radiusToy(gridArea);
+        const s1 = DG_KNOCK.pointerMove.strength;
+        pokeFieldToy('pointerMove', p.x, p.y, r1, s1);
+        __dgLogFirstPoke('pointerMove', r1, s1);
+        knockLettersAt(p.x - (gridArea?.x || 0), p.y - (gridArea?.y || 0), DG_KNOCK.lettersMove);
       } catch(e) {}
 
       const includeCurrent = !previewGid;
@@ -4355,7 +3905,15 @@ function syncBackBufferSizes() {
       const baseRadius = Math.max(6, Math.min(cw, ch) * 0.5);
       noteToggleEffects.push({ x: cx, y: cy, radius: baseRadius, progress: 0 });
       if (noteToggleEffects.length > 24) noteToggleEffects.splice(0, noteToggleEffects.length - 24);
-      try { particles.pointBurst(cx, cy, 18, 2.4, 'skyblue'); } catch {}
+      try {
+        dgField?.pulse?.(0.25);
+        const wrapRect = wrap?.getBoundingClientRect?.();
+        if (wrapRect && wrapRect.width && wrapRect.height) {
+          const localX = (wrapRect.width * 0.5) - (gridArea?.x || 0);
+          const localY = (wrapRect.height * 0.5) - (gridArea?.y || 0);
+          knockLettersAt(localX, localY, { radius: 80, strength: 10 });
+        }
+      } catch {}
 
       pendingNodeTap = null;
     }
@@ -4369,7 +3927,7 @@ function syncBackBufferSizes() {
       if (needSwap) {
         if (!usingBackBuffers) ensureBackVisualsFreshFromFront();
         __dgNeedsUIRefresh = true;
-        DG.log('onPointerUp: coalesced swap (staged)', { usingBackBuffers, pendingPaintSwap, DG_particlesRectsDrawn, DG_lettersDrawn });
+        DG.log('onPointerUp: coalesced swap (staged)', { usingBackBuffers, pendingPaintSwap });
         pendingPaintSwap = true;
         requestFrontSwap(useFrontBuffers);
       } else {
@@ -4612,9 +4170,9 @@ function syncBackBufferSizes() {
                         try {
                             const x = gridArea.x + col * cw + cw * 0.5;
                             const y = gridArea.y + topPad + row * ch + ch * 0.5;
-                            // Heavily push particles away from the triggering node
-                            particles.drawingDisturb(x, y, cw * 1.2, 2.5);
-                            particles.pointBurst(x, y, 25, 3.0, 'pink');
+                            const nodeRadiusToy = Math.max(10, Math.min(gridAreaLogical.w, gridAreaLogical.h) * 0.05);
+                            pokeFieldToy('nodePulse', x, y, nodeRadiusToy, 95);
+                            dgField?.pulse?.(0.8);
                         } catch(e) {}
                     }
                 }
@@ -4657,26 +4215,14 @@ function syncBackBufferSizes() {
       }
       panel.__dgFrameCamLogged = true;
     }
-    const particleDrawCtx = particleCtx || pctx || frontCanvas?.getContext?.('2d');
     try {
       if (allowParticleDraw) {
         const dtMs = Number.isFinite(frameCam?.dt) ? frameCam.dt : 16.6;
         const dt = Number.isFinite(dtMs) ? dtMs / 1000 : (1 / 60);
-        particles?.step?.(dt);
-        if (particleDrawCtx) {
-          resetCtx(particleDrawCtx);
-          withLogicalSpace(particleDrawCtx, () => {
-            const surface = particleDrawCtx.canvas;
-            const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
-            const width = cssW || (surface?.width ?? 0) / scale;
-            const height = cssH || (surface?.height ?? 0) / scale;
-            particleDrawCtx.clearRect(0, 0, width, height);
-            particles?.draw?.(particleDrawCtx, zoomGestureActive);
-          });
-        }
+        dgField?.tick?.(dt);
       }
     } catch (e) {
-      dglog('particles.draw:error', String((e && e.message) || e));
+      dglog('particle-field.tick:error', String((e && e.message) || e));
     }
 
     try {
@@ -4916,8 +4462,9 @@ function syncBackBufferSizes() {
 
         // Repulse particles at playhead position
         try {
-          // A strength of 1.2 gives a nice, visible push.
-          particles.lineRepulse(playheadX, cw, 0.33);
+          const playheadY = gridArea.y + (gridArea.h * 0.5);
+          const radiusToy = Math.max(12, Math.min(gridAreaLogical.w, gridAreaLogical.h) * 0.06);
+          pokeFieldToy('playhead', playheadX, playheadY, radiusToy, 48);
         } catch (e) { /* fail silently */ }
 
         // Use the flash canvas (fctx) for the playhead. It's cleared each frame.
@@ -5229,6 +4776,9 @@ function syncBackBufferSizes() {
       drawGrid();
       nextDrawTarget = null; // Disarm any pending line draw
       updateGeneratorButtons(); // Refresh button state to "Draw"
+      stopAutoGhostGuide({ immediate: true });
+      startAutoGhostGuide({ immediate: true });
+      updateDrawLabel(true);
       noteToggleEffects = [];
       return true;
     },
@@ -5564,6 +5114,8 @@ function syncBackBufferSizes() {
     drawGrid();
     drawNodes(currentMap.nodes);
     emitDrawgridUpdate({ activityOnly: false });
+    stopAutoGhostGuide({ immediate: true });
+    updateDrawLabel(false);
   }
 
   function handleRandomizeBlocks() {
@@ -5592,6 +5144,8 @@ function syncBackBufferSizes() {
     drawGrid();
     drawNodes(currentMap.nodes);
     emitDrawgridUpdate({ activityOnly: false });
+    stopAutoGhostGuide({ immediate: true });
+    updateDrawLabel(false);
   }
 
   function handleRandomizeNotes() {
@@ -5634,8 +5188,10 @@ function syncBackBufferSizes() {
         }
         drawGrid();
         drawNodes(currentMap.nodes);
-      emitDrawgridUpdate({ activityOnly: false });
+        emitDrawgridUpdate({ activityOnly: false });
     }
+    stopAutoGhostGuide({ immediate: true });
+    updateDrawLabel(false);
   }
   panel.addEventListener('toy-random', handleRandomize);
   panel.addEventListener('toy-random-blocks', handleRandomizeBlocks);
@@ -5745,11 +5301,10 @@ function syncBackBufferSizes() {
     endY = gy + gh;
   }
 
-  const { x: zoomX, y: zoomY } = getZoomScale(panel);
-
   const startTime = performance.now();
   let last = null;
   let lastTrail = 0;
+  let lastGhostAudit = 0;
   const noiseSeed = Math.random() * 100;
   ghostGuideRunning = true;
 
@@ -5794,6 +5349,8 @@ function syncBackBufferSizes() {
     });
     ghostCtx.globalCompositeOperation = 'source-over';
     ghostCtx.globalAlpha = 1.0;
+    const camSnapshot = getOverlayZoomSnapshot();
+    const z = camSnapshot.scale;
 
     if (last) {
       resetCtx(ghostCtx);
@@ -5818,11 +5375,23 @@ function syncBackBufferSizes() {
     }
     last = { x, y };
 
-    const force = 0.8;
-    const radius = getLineWidth() * 1.5;
-    particles.drawingDisturb(x, y, radius, force);
+    const baseR = DG_KNOCK.ghostTrail.radiusToy(gridArea);
+    const capR = Math.max(8, Math.min(gridAreaLogical.w, gridAreaLogical.h) * 0.25);
+    const radius = Math.min(baseR, capR);
+    pokeFieldToy('ghostTrail', x, y, radius, DG_KNOCK.ghostTrail.strength, { mode: 'plow', highlightMs: 420 });
+    if (!window.__DG_FIRST_GHOST_LOGGED__) {
+      window.__DG_FIRST_GHOST_LOGGED__ = true;
+      console.log('[DG][ghostTrail] poke', { x, y, radius, strength: DG_KNOCK.ghostTrail.strength });
+    }
+    __dgLogFirstPoke('ghostTrail', radius, DG_KNOCK.ghostTrail.strength);
+    const lettersRadius = radius + 60;
+    knockLettersAt(x - (gridArea?.x || 0), y - (gridArea?.y || 0), { radius: lettersRadius, strength: DG_KNOCK.lettersMove.strength });
+    if (window.DG_ZOOM_AUDIT && (now - lastGhostAudit) >= 500) {
+      __auditZoomSizes('ghostTrail');
+      lastGhostAudit = now;
+    }
     if (trail && now - lastTrail >= trailEveryMs) {
-      particles.ringBurst(x, y, radius, trailCount, trailSpeed, 'pink');
+      dgField?.pulse?.(0.4 + Math.min(0.2, trailCount * 0.05));
       lastTrail = now;
     }
 
@@ -5854,10 +5423,13 @@ function scheduleGhostIfEmpty({ initialDelay = 150 } = {}) {
       : false;
 
     if (!hasStrokes && !hasNodes) {
+      stopAutoGhostGuide({ immediate: true });
       startAutoGhostGuide({ immediate: true });
+      updateDrawLabel(true);
     } else {
       // If content exists, ensure the ghost is fully stopped/cleared.
       stopAutoGhostGuide({ immediate: true });
+      updateDrawLabel(false);
     }
   };
   setTimeout(check, initialDelay);
@@ -5924,6 +5496,9 @@ function runAutoGhostGuideSweep() {
     noteToggleEffects = [];
     nextDrawTarget = null;
     previewGid = null;
+    stopAutoGhostGuide({ immediate: true });
+    try { dgField?.destroy?.(); } catch {}
+    panel.__drawParticles = null;
     try { panel.removeEventListener('toy-instrument', handleInstrumentPersist); } catch {}
     if (typeof unsubscribeZoom === 'function') {
       try { unsubscribeZoom(); } catch {}
@@ -5963,8 +5538,10 @@ function runAutoGhostGuideSweep() {
   panel.addEventListener('drawgrid:update', (e) => {
     const nodes = e?.detail?.map?.nodes;
     const hasAny = Array.isArray(nodes) && nodes.some(set => set && set.size > 0);
-          if (hasAny) {
-            stopAutoGhostGuide({ immediate: false });    } else {
+    if (hasAny) {
+      stopAutoGhostGuide({ immediate: false });
+    } else {
+      stopAutoGhostGuide({ immediate: true });
       startAutoGhostGuide({ immediate: true });
     }
   });
@@ -5978,6 +5555,7 @@ function runAutoGhostGuideSweep() {
       if (currentMap?.nodes) {
         drawNodes(currentMap.nodes);
       }
+      stopAutoGhostGuide({ immediate: true });
       startAutoGhostGuide({ immediate: true });
       __dgNeedsUIRefresh = true;
       __dgStableFramesAfterCommit = 0;

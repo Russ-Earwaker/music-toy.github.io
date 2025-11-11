@@ -11,6 +11,14 @@
 //   field.destroy()
 
 import { createParticleViewport } from './particle-viewport.js';
+import {
+  BASE_RADIUS_PX,
+  RNG_SEED_PER_TOY,
+  computeParticleLayout,
+  particleRadiusPx,
+  screenRadiusToWorld,
+  seededRandomFactory,
+} from './particle-density.js';
 
 function readZoom(viewport) {
   if (viewport && typeof viewport.getZoom === 'function') {
@@ -34,6 +42,8 @@ function readOverview(viewport) {
 
 export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
   if (!canvas) throw new Error('createField requires a canvas reference');
+  // Static mode: no ambient noise, no radial "kick" gravity. Only reacts to pokes.
+  const STATIC_MODE = !!opts.staticMode;
   const ctx = canvas.getContext('2d', { alpha: true });
 
   const measure = () => {
@@ -50,13 +60,15 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
 
   const config = {
     density: opts.density ?? 0.0002,
+    layoutOverrides: opts.layout && typeof opts.layout === 'object' ? opts.layout : null,
+    seed: opts.seed ?? 'particle-field',
     cap: opts.cap ?? 2200,
-    stiffness: opts.stiffness ?? 18.0,
-    damping: opts.damping ?? 0.16,
-    noise: opts.noise ?? 0.1,
-    kick: opts.kick ?? 20.0,
-    kickDecay: opts.kickDecay ?? 7.0,
-    sizePx: opts.sizePx ?? 1.8,
+    stiffness: opts.stiffness ?? 22.0,
+    damping:   opts.damping   ?? 1.05,
+    noise:     STATIC_MODE ? 0.0 : (opts.noise ?? 0.0),
+    kick:      STATIC_MODE ? 0.0 : (opts.kick  ?? 0.0),
+    kickDecay: opts.kickDecay ?? 8.0,
+    sizePx: typeof opts.sizePx === 'number' ? opts.sizePx : BASE_RADIUS_PX,
     minAlpha: opts.minAlpha ?? 0.25,
     maxAlpha: opts.maxAlpha ?? 0.85,
     lineAlpha: opts.lineAlpha ?? 0.1,
@@ -64,6 +76,7 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
     linkDist: opts.linkDist ?? 42,
     strokeStyle: opts.strokeStyle ?? 'rgba(143,168,255,0.35)',
     fillStyle: opts.fillStyle ?? '#9fb7ff',
+    forceMul: typeof opts.forceMul === 'number' ? opts.forceMul : 1.3,
   };
 
   const state = {
@@ -73,11 +86,38 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
     particles: [],
     pulseEnergy: 0,
     lodScale: 1,
+    spacing: 18,
   };
+  const PARTICLE_HIGHLIGHT_DURATION = 420; // ms
+  const PARTICLE_HIGHLIGHT_INTENSITY = 0.6; // base cap
+  const highlightEvents = [];
+  // evt: {x,y,radius,t,amp,dur}
 
-  function makeRng(seed = 1337) {
-    let s = (seed >>> 0) || 1;
-    return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 0xffffffff);
+  function hashSeed(value) {
+    const key = String(value ?? '');
+    let h = 2166136261 >>> 0;
+    for (let i = 0; i < key.length; i++) {
+      h ^= key.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0) || 1;
+  }
+
+  function makeRng(token) {
+    const key = String(token ?? '');
+    if (RNG_SEED_PER_TOY) return seededRandomFactory(key);
+    let s = hashSeed(key);
+    return () => {
+      s = (s * 1664525 + 1013904223) >>> 0;
+      return s / 0xffffffff;
+    };
+  }
+
+  function normalizedKick(distPx, spacing) {
+    const s = Math.max(8, spacing || 18);
+    const span = Math.max(1, s * 1.5);
+    const ratio = Math.min(1, distPx / span);
+    return Math.max(0.2, 1 - ratio);
   }
 
   function rebuild() {
@@ -94,10 +134,24 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
     if (canvas.height !== pxH) canvas.height = pxH;
     ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
 
-    const target = Math.min(
-      Math.floor(state.w * state.h * config.density),
-      config.cap,
-    );
+    const layoutOpts = config.layoutOverrides || {};
+    const computedLayout = computeParticleLayout({
+      widthPx: state.w,
+      heightPx: state.h,
+      baseArea: layoutOpts.baseArea,
+      baseCount: layoutOpts.baseCount,
+      minCount: layoutOpts.minCount,
+      maxCount: layoutOpts.maxCount,
+    });
+    const resolvedCount = Number.isFinite(layoutOpts.count)
+      ? Math.max(1, Math.round(layoutOpts.count))
+      : computedLayout.count;
+    const spacingCandidate = Number.isFinite(layoutOpts.spacing)
+      ? layoutOpts.spacing
+      : computedLayout.spacing;
+    state.spacing = Math.max(8, spacingCandidate || computedLayout.spacing || 8);
+    const cap = Number.isFinite(config.cap) ? config.cap : Number.POSITIVE_INFINITY;
+    const target = Math.min(cap, Math.max(1, Math.round(resolvedCount)));
 
     if (state.particles.length) {
       for (let i = 0; i < state.particles.length; i++) {
@@ -115,15 +169,17 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
 
     if (target < state.particles.length) {
       state.particles.length = target;
-    } else {
-      const seed = Math.floor((state.w * 73856093) ^ (state.h * 19349663)) || 1;
-      const rng = makeRng(seed);
-      while (state.particles.length < target) {
-        const x = rng() * state.w;
-        const y = rng() * state.h;
-        const a = rng();
-        state.particles.push({ x, y, hx: x, hy: y, vx: 0, vy: 0, a });
-      }
+      return;
+    }
+
+    const seedKey = `${config.seed}:${state.w}x${state.h}`;
+    const rng = makeRng(seedKey);
+    while (state.particles.length < target) {
+      const x = rng() * state.w;
+      const y = rng() * state.h;
+      const a = rng();
+      const rPx = particleRadiusPx(rng);
+      state.particles.push({ x, y, hx: x, hy: y, vx: 0, vy: 0, a, rPx });
     }
   }
 
@@ -155,10 +211,17 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
   }
 
   function step(dt) {
-    const k = config.stiffness;
-    const c = config.damping;
-    const hum = config.noise;
-    const kick = state.pulseEnergy * config.kick;
+    // If velocities ever become NaN (from bad math), reset gracefully
+    if (!Number.isFinite(dt) || dt <= 0) dt = 1 / 60;
+
+    const spacing = Math.max(8, state.spacing || 18);
+    const spacingScale = spacing / 18;
+
+    const k = (config.stiffness ?? 22) * spacingScale; // spring to home
+    const c = (config.damping   ?? 1.05);              // velocity damping
+    const hum = STATIC_MODE ? 0.0 : (config.noise ?? 0.0);
+    const kick = STATIC_MODE ? 0.0 : (state.pulseEnergy * (config.kick ?? 0.0));
+
     const cx = state.w * 0.5;
     const cy = state.h * 0.5;
 
@@ -171,8 +234,8 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
       p.a += 0.35 * dt;
       if (p.a > 1) p.a -= 1;
       const ang = p.a * Math.PI * 2;
-      const nx = Math.cos(ang) * hum;
-      const ny = Math.sin(ang) * hum;
+      const nx = hum ? Math.cos(ang) * hum : 0;
+      const ny = hum ? Math.sin(ang) * hum : 0;
 
       const rx = p.x - cx;
       const ry = p.y - cy;
@@ -182,8 +245,30 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
 
       p.vx += (ax - p.vx * c + nx - kx) * dt;
       p.vy += (ay - p.vy * c + ny - ky) * dt;
+
+      // Cap velocities relative to spacing so the field doesn't sling particles wildly.
+      const defaultVmax = Math.max(8, spacing * 15 * dt);
+      const staticVmax = Math.max(14, spacing * 30 * dt);
+      const vmax = STATIC_MODE ? staticVmax : defaultVmax;
+      const speed = Math.hypot(p.vx, p.vy);
+      if (speed > vmax && speed > 0) {
+        const scale = vmax / speed;
+        p.vx *= scale;
+        p.vy *= scale;
+      }
+
       p.x += p.vx * dt;
       p.y += p.vy * dt;
+
+      // Snap to home a bit earlier to feel "short settle"
+      const dxh = p.hx - p.x;
+      const dyh = p.hy - p.y;
+      const dist2 = dxh * dxh + dyh * dyh;
+      const vel2  = p.vx * p.vx + p.vy * p.vy;
+      if (dist2 < 1.0 && vel2 < 0.09) { // ~1px and ~0.3px/s
+        p.x = p.hx; p.y = p.hy;
+        p.vx = 0; p.vy = 0;
+      }
     }
 
     if (state.pulseEnergy > 0) {
@@ -194,13 +279,22 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
   function draw() {
     ctx.clearRect(0, 0, state.w, state.h);
 
-    const zoom = readZoom(viewport) || 1;
-    const deviceDotPx = Math.max(1, Math.round((config.sizePx ?? 1.8) * zoom * state.dpr));
-    const radius = Math.max(0.5, deviceDotPx / state.dpr);
+    // Canvas is sized from getBoundingClientRect (CSS space), so use screen-px radius directly.
+    const fallbackRadiusPx = config.sizePx ?? BASE_RADIUS_PX;
+    const baseWorldRadius = Math.max(0.5, fallbackRadiusPx);
+    const zoom = readZoom(pv);
+    const now = performance?.now?.() ?? Date.now();
+    while (
+      highlightEvents.length &&
+      now - highlightEvents[0].t >= (highlightEvents[0].dur || PARTICLE_HIGHLIGHT_DURATION)
+    ) {
+      highlightEvents.shift();
+    }
+
     if (config.drawMode === 'dots+links' && state.particles.length <= 1500) {
       ctx.globalAlpha = config.lineAlpha;
       ctx.strokeStyle = config.strokeStyle;
-      ctx.lineWidth = Math.max(0.6, radius * 0.8);
+      ctx.lineWidth = Math.max(0.6, baseWorldRadius * 0.8);
       for (let i = 0; i < state.particles.length; i++) {
         const a = state.particles[i];
         for (let j = i + 1; j < state.particles.length; j++) {
@@ -217,17 +311,56 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
       }
     }
 
-    ctx.fillStyle = config.fillStyle;
+    const baseFillStyle = config.fillStyle;
+    const glowFillStyle = 'rgba(201, 228, 255, 0.96)';
     for (let i = 0; i < state.particles.length; i++) {
       const p = state.particles[i];
       const alpha =
         config.minAlpha +
         (config.maxAlpha - config.minAlpha) *
           (0.5 + 0.5 * Math.sin(p.a * Math.PI * 2));
-      ctx.globalAlpha = alpha;
+      let highlight = 0;
+      let highlightAmp = 0;
+      if (highlightEvents.length) {
+        for (const evt of highlightEvents) {
+          const dt = now - evt.t;
+          const evtDur = evt.dur || PARTICLE_HIGHLIGHT_DURATION;
+          if (dt >= evtDur) continue;
+          const life = 1 - dt / evtDur;
+          const dx = p.x - evt.x;
+          const dy = p.y - evt.y;
+          const distSq = dx * dx + dy * dy;
+          if (distSq >= evt.radius * evt.radius) continue;
+          const dist = Math.sqrt(distSq);
+          const radial = 1 - Math.min(1, dist / evt.radius);
+          const candidate = radial * life;
+          if (candidate > highlight) {
+            highlight = candidate;
+            highlightAmp = Math.max(0, Math.min(1, evt.amp ?? 0.6));
+          }
+        }
+      }
+      const particleRadius = Math.max(0.5, screenRadiusToWorld(p.rPx ?? fallbackRadiusPx, zoom));
+      const accent = Math.min(
+        1,
+        highlight *
+          PARTICLE_HIGHLIGHT_INTENSITY *
+          (1 + 0.5 * highlightAmp)
+      );
+      ctx.globalAlpha = Math.min(1, alpha + accent);
+      ctx.fillStyle = baseFillStyle;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, particleRadius, 0, Math.PI * 2);
       ctx.fill();
+      if (highlight > 0) {
+        const glowAlpha = Math.min(0.85, accent * 1.2);
+        ctx.globalAlpha = glowAlpha;
+        ctx.fillStyle = glowFillStyle;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, particleRadius * (1 + highlight * 0.8), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
     }
     ctx.globalAlpha = 1;
   }
@@ -239,6 +372,76 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
     draw();
   }
 
+  function poke(x, y, opts = {}) {
+    const z = Math.max(0.1, readZoom(pv)); // pv is the internal viewport from createField
+    const isPlow = opts && opts.mode === 'plow';
+    if (!window.__PF_DIAG) window.__PF_DIAG = { count: 0 };
+    window.__PF_DIAG.count++;
+    window.__PF_LAST_POKE__ = {
+      x,
+      y,
+      r: Number.isFinite(opts.radius) ? opts.radius : NaN,
+      s: Number.isFinite(opts.strength) ? opts.strength : NaN,
+      t: performance.now(),
+    };
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    const radiusCss = Number.isFinite(opts.radius) ? opts.radius : 64;
+    // Caller passes toy-relative radius; do not rescale here.
+    const radius = Math.max(1, radiusCss);
+    const strength = Number.isFinite(opts.strength) ? opts.strength : 28;
+    const rim = isPlow ? (radius + Math.max(1, state.spacing * 0.15)) : radius;
+    const now = performance?.now?.() ?? Date.now();
+    const amp = Math.max(0, Math.min(1, (strength / 260)));
+    const dur = Number.isFinite(opts.highlightMs) ? opts.highlightMs : PARTICLE_HIGHLIGHT_DURATION;
+    highlightEvents.push({ x, y, radius, t: now, amp, dur });
+    if (highlightEvents.length > 32) {
+      highlightEvents.shift();
+    }
+    const radiusSq = radius * radius;
+    for (let i = 0; i < state.particles.length; i++) {
+      const p = state.particles[i];
+      const dx = p.x - x;
+      const dy = p.y - y;
+      const distSq = dx * dx + dy * dy;
+      if (distSq > radiusSq) continue;
+      const dist = Math.sqrt(distSq) || 1;
+      const nx = dx / dist;
+      const ny = dy / dist;
+
+      if (isPlow) {
+        // 1) Snap to the rim (true snow-plow push)
+        p.x = x + nx * rim;
+        p.y = y + ny * rim;
+
+        // 2) Small outward kick so it glides a touch then springs back
+        const influence = 1 - Math.min(1, dist / radius);
+        const falloff   = influence * influence * influence; // tight & local
+        const kickScale = Math.max(0.25, normalizedKick(dist, state.spacing));
+        const force     = strength * 0.35 * falloff * kickScale * (config.forceMul || 1.0);
+        p.vx += nx * force;
+        p.vy += ny * force;
+      } else {
+        // Legacy local impulse
+        const influence = 1 - Math.min(1, dist / radius);
+        const falloff   = influence * influence * influence;
+        const kickScale = Math.max(0.25, normalizedKick(dist, state.spacing));
+        const force = strength * falloff * kickScale * (config.forceMul || 1.0);
+        p.vx += nx * force;
+        p.vy += ny * force;
+      }
+    }
+  }
+
+  function setStyle(style = {}) {
+    if (!style || typeof style !== 'object') return;
+    if (style.fillStyle) config.fillStyle = style.fillStyle;
+    if (style.strokeStyle) config.strokeStyle = style.strokeStyle;
+    if (typeof style.drawMode === 'string') config.drawMode = style.drawMode;
+    if (typeof style.sizePx === 'number') config.sizePx = style.sizePx;
+    if (typeof style.minAlpha === 'number') config.minAlpha = style.minAlpha;
+    if (typeof style.maxAlpha === 'number') config.maxAlpha = style.maxAlpha;
+  }
+
   function destroy() {
     state.particles.length = 0;
     ctx.clearRect(0, 0, state.w, state.h);
@@ -246,5 +449,17 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
 
   resize();
 
-  return { tick, pulse, resize, destroy, canvas, _state: state, _config: config };
+  return {
+    tick,
+    pulse,
+    resize,
+    destroy,
+    poke,
+    setStyle,
+    canvas,
+    _state: state,
+    _config: config,
+    // expose static flag for diagnostics
+    _static: STATIC_MODE,
+  };
 }

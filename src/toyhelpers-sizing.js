@@ -1,6 +1,6 @@
 // src/toyhelpers-sizing.js
 // Helpers for mapping toy-local coordinates to world/screen space using the live board viewport transform.
-import { getViewportTransform } from './board-viewport.js';
+import { screenToWorld as viewportScreenToWorld, worldToScreen as viewportWorldToScreen } from './board-viewport.js';
 
 function toNumber(val) {
   if (typeof val === 'number' && Number.isFinite(val)) return val;
@@ -20,28 +20,12 @@ function getDatasetNumber(panel, keys = []) {
   return null;
 }
 
-function normalizeScale(scale) {
-  return (Number.isFinite(scale) && Math.abs(scale) > 1e-6) ? scale : 1;
+function worldToScreenPoint(wx, wy) {
+  return viewportWorldToScreen({ x: wx, y: wy });
 }
 
-function worldToScreenPoint(wx, wy, vp = getViewportTransform()) {
-  const scale = normalizeScale(vp?.scale);
-  const tx = Number(vp?.tx) || 0;
-  const ty = Number(vp?.ty) || 0;
-  return {
-    x: wx * scale + tx,
-    y: wy * scale + ty,
-  };
-}
-
-function screenToWorldPoint(sx, sy, vp = getViewportTransform()) {
-  const scale = normalizeScale(vp?.scale);
-  const tx = Number(vp?.tx) || 0;
-  const ty = Number(vp?.ty) || 0;
-  return {
-    x: (sx - tx) / scale,
-    y: (sy - ty) / scale,
-  };
+function screenToWorldPoint(sx, sy) {
+  return viewportScreenToWorld({ x: sx, y: sy });
 }
 
 export function getToyWorldAnchor(panel) {

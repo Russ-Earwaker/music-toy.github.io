@@ -173,17 +173,17 @@ export function attachDrumVisuals(panel) {
   if (particleCanvas) {
     try {
       const pausedRef = () => !isRunning();
+      const panelSeed = panel?.dataset?.toyid || panel?.id || 'loopgrid';
       particleField = createField(
         { canvas: particleCanvas, viewport: pv, pausedRef },
         {
-          density: 0.05,
+          seed: panelSeed,
           cap: 300,
           stiffness: 16,
           damping: 0.18,
           noise: 0.10,
           kick: 18,
           kickDecay: 7.5,
-          sizePx: 1.0,
           drawMode: 'dots',
         },
       );

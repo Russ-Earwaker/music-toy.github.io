@@ -15,6 +15,59 @@ export function getViewportTransform() {
   return { ...__liveViewportTransform };
 }
 
+export function getViewportState() {
+  return getViewportTransform();
+}
+
+export function getViewportScale() {
+  const state = getViewportTransform();
+  return Number.isFinite(state?.scale) ? state.scale : 1;
+}
+
+export function screenToWorld(point = { x: 0, y: 0 }) {
+  const { scale = 1, tx = 0, ty = 0 } = getViewportState() || {};
+  const safeScale = Number.isFinite(scale) && Math.abs(scale) > 1e-6 ? scale : 1;
+  const translateX = Number.isFinite(tx) ? tx : 0;
+  const translateY = Number.isFinite(ty) ? ty : 0;
+  const screenX = Number.isFinite(point?.x) ? point.x : 0;
+  const screenY = Number.isFinite(point?.y) ? point.y : 0;
+  return {
+    x: (screenX - translateX) / safeScale,
+    y: (screenY - translateY) / safeScale,
+  };
+}
+
+export function worldToScreen(point = { x: 0, y: 0 }) {
+  const { scale = 1, tx = 0, ty = 0 } = getViewportState() || {};
+  const safeScale = Number.isFinite(scale) && Math.abs(scale) > 1e-6 ? scale : 1;
+  const translateX = Number.isFinite(tx) ? tx : 0;
+  const translateY = Number.isFinite(ty) ? ty : 0;
+  const worldX = Number.isFinite(point?.x) ? point.x : 0;
+  const worldY = Number.isFinite(point?.y) ? point.y : 0;
+  return {
+    x: worldX * safeScale + translateX,
+    y: worldY * safeScale + translateY,
+  };
+}
+
+export function worldToToy(pointWorld = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y: 0 }) {
+  const originX = Number.isFinite(toyWorldOrigin?.x) ? toyWorldOrigin.x : 0;
+  const originY = Number.isFinite(toyWorldOrigin?.y) ? toyWorldOrigin.y : 0;
+  return {
+    x: Number.isFinite(pointWorld?.x) ? pointWorld.x - originX : -originX,
+    y: Number.isFinite(pointWorld?.y) ? pointWorld.y - originY : -originY,
+  };
+}
+
+export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y: 0 }) {
+  const originX = Number.isFinite(toyWorldOrigin?.x) ? toyWorldOrigin.x : 0;
+  const originY = Number.isFinite(toyWorldOrigin?.y) ? toyWorldOrigin.y : 0;
+  return {
+    x: Number.isFinite(pointToy?.x) ? pointToy.x + originX : originX,
+    y: Number.isFinite(pointToy?.y) ? pointToy.y + originY : originY,
+  };
+}
+
 (function () {
   if (window.__boardViewport) return;
   window.__boardViewport = true;
