@@ -1031,15 +1031,14 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         {
           seed: panelSeed,
           cap: 2200,
-          stiffness: 24,     // quick return to home
-          damping: 1.2,      // minimal wobble
+          returnSeconds: 2.0,   // target settle time
+          forceMul: 1.0,        // keep 1.0 unless you need bigger kicks overall
           noise: 0,
           kick: 0,
           kickDecay: 8.0,
           drawMode: 'dots',
           minAlpha: 0.25,
           maxAlpha: 0.85,
-          forceMul: 1.2,
           staticMode: true,
         }
       );

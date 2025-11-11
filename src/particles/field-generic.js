@@ -63,11 +63,14 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
     layoutOverrides: opts.layout && typeof opts.layout === 'object' ? opts.layout : null,
     seed: opts.seed ?? 'particle-field',
     cap: opts.cap ?? 2200,
-    stiffness: opts.stiffness ?? 22.0,
-    damping:   opts.damping   ?? 1.05,
-    noise:     STATIC_MODE ? 0.0 : (opts.noise ?? 0.0),
-    kick:      STATIC_MODE ? 0.0 : (opts.kick  ?? 0.0),
-    kickDecay: opts.kickDecay ?? 8.0,
+    noise: STATIC_MODE ? 0.0 : (opts.noise ?? 0.0),
+    kick: STATIC_MODE ? 0.0 : (opts.kick ?? 0.0),
+    kickDecay: opts.kickDecay ?? 6.0,
+    /**
+     * Target return time (seconds) for particles to settle ~critically damped.
+     * 2.0 gives a nice "float back in" feel.
+     */
+    returnSeconds: Math.max(0.3, Number(opts.returnSeconds ?? 2.0)),
     sizePx: typeof opts.sizePx === 'number' ? opts.sizePx : BASE_RADIUS_PX,
     minAlpha: opts.minAlpha ?? 0.25,
     maxAlpha: opts.maxAlpha ?? 0.85,
@@ -154,14 +157,26 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
     const target = Math.min(cap, Math.max(1, Math.round(resolvedCount)));
 
     if (state.particles.length) {
+      const scaleX = prevW > 0 ? (state.w / prevW) : 1;
+      const scaleY = prevH > 0 ? (state.h / prevH) : 1;
       for (let i = 0; i < state.particles.length; i++) {
         const p = state.particles[i];
-        const u = prevW > 0 ? (p.x / prevW) : 0.5;
-        const v = prevH > 0 ? (p.y / prevH) : 0.5;
+        const homeX = Number.isFinite(p.hx) ? p.hx : p.x;
+        const homeY = Number.isFinite(p.hy) ? p.hy : p.y;
+        const dispX = Number.isFinite(p.x) ? (p.x - homeX) : 0;
+        const dispY = Number.isFinite(p.y) ? (p.y - homeY) : 0;
+        const u = prevW > 0 ? (homeX / prevW) : 0.5;
+        const v = prevH > 0 ? (homeY / prevH) : 0.5;
         const clampedU = Math.min(Math.max(u, 0), 1);
         const clampedV = Math.min(Math.max(v, 0), 1);
-        p.x = p.hx = clampedU * state.w;
-        p.y = p.hy = clampedV * state.h;
+        const nextHx = clampedU * state.w;
+        const nextHy = clampedV * state.h;
+        const nextX = nextHx + dispX * scaleX;
+        const nextY = nextHy + dispY * scaleY;
+        p.hx = nextHx;
+        p.hy = nextHy;
+        p.x = Math.min(Math.max(nextX, 0), state.w);
+        p.y = Math.min(Math.max(nextY, 0), state.h);
       }
     }
 
@@ -217,8 +232,13 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
     const spacing = Math.max(8, state.spacing || 18);
     const spacingScale = spacing / 18;
 
-    const k = (config.stiffness ?? 22) * spacingScale; // spring to home
-    const c = (config.damping   ?? 1.05);              // velocity damping
+    // Derive spring constants from target return time (critical-ish damping).
+    // For x'' + 2ζω x' + ω² x = 0 with ζ≈1, T_settle ≈ 2/ω to 4/ω depending on definition.
+    // Empirically ω = 3 / T gives a good ~2s visual settle.
+    const T = Math.max(0.3, config.returnSeconds);
+    const w0 = 3.0 / T;
+    const k = (w0 * w0) * spacingScale; // spring to home
+    const c = 2.0 * w0;
     const hum = STATIC_MODE ? 0.0 : (config.noise ?? 0.0);
     const kick = STATIC_MODE ? 0.0 : (state.pulseEnergy * (config.kick ?? 0.0));
 
@@ -247,8 +267,9 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
       p.vy += (ay - p.vy * c + ny - ky) * dt;
 
       // Cap velocities relative to spacing so the field doesn't sling particles wildly.
-      const defaultVmax = Math.max(8, spacing * 15 * dt);
-      const staticVmax = Math.max(14, spacing * 30 * dt);
+      // vmax is expressed in px/sec; dt already scales movement when applied.
+      const defaultVmax = Math.max(60, spacing * 18);
+      const staticVmax = Math.max(90, spacing * 28);
       const vmax = STATIC_MODE ? staticVmax : defaultVmax;
       const speed = Math.hypot(p.vx, p.vy);
       if (speed > vmax && speed > 0) {
@@ -373,16 +394,16 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
   }
 
   function poke(x, y, opts = {}) {
-    const z = Math.max(0.1, readZoom(pv)); // pv is the internal viewport from createField
     const isPlow = opts && opts.mode === 'plow';
     if (!window.__PF_DIAG) window.__PF_DIAG = { count: 0 };
     window.__PF_DIAG.count++;
+    const pokeTime = performance?.now?.() ?? Date.now();
     window.__PF_LAST_POKE__ = {
       x,
       y,
       r: Number.isFinite(opts.radius) ? opts.radius : NaN,
       s: Number.isFinite(opts.strength) ? opts.strength : NaN,
-      t: performance.now(),
+      t: pokeTime,
     };
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
     const radiusCss = Number.isFinite(opts.radius) ? opts.radius : 64;
@@ -390,13 +411,37 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
     const radius = Math.max(1, radiusCss);
     const strength = Number.isFinite(opts.strength) ? opts.strength : 28;
     const rim = isPlow ? (radius + Math.max(1, state.spacing * 0.15)) : radius;
-    const now = performance?.now?.() ?? Date.now();
-    const amp = Math.max(0, Math.min(1, (strength / 260)));
-    const dur = Number.isFinite(opts.highlightMs) ? opts.highlightMs : PARTICLE_HIGHLIGHT_DURATION;
-    highlightEvents.push({ x, y, radius, t: now, amp, dur });
-    if (highlightEvents.length > 32) {
-      highlightEvents.shift();
-    }
+    const highlightEnabled = opts.highlight !== false;
+    const highlightRadius = Math.max(8, radius * 1.15);
+    const highlightAmp = Math.max(
+      0,
+      Math.min(
+        1,
+        Number.isFinite(opts.highlightAmp) ? opts.highlightAmp : 0.8
+      )
+    );
+    const highlightDur = Number.isFinite(opts.highlightDur)
+      ? opts.highlightDur
+      : Number.isFinite(opts.highlightMs)
+      ? opts.highlightMs
+      : PARTICLE_HIGHLIGHT_DURATION;
+    const highlightTime = pokeTime;
+    let highlightQueued = false;
+    const enqueueHighlight = (cx, cy) => {
+      if (!highlightEnabled || highlightQueued) return;
+      highlightEvents.push({
+        x: cx,
+        y: cy,
+        radius: highlightRadius,
+        t: highlightTime,
+        dur: highlightDur,
+        amp: highlightAmp,
+      });
+      highlightQueued = true;
+      if (highlightEvents.length > 32) {
+        highlightEvents.shift();
+      }
+    };
     const radiusSq = radius * radius;
     for (let i = 0; i < state.particles.length; i++) {
       const p = state.particles[i];
@@ -420,6 +465,7 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
         const force     = strength * 0.35 * falloff * kickScale * (config.forceMul || 1.0);
         p.vx += nx * force;
         p.vy += ny * force;
+        enqueueHighlight(p.x, p.y);
       } else {
         // Legacy local impulse
         const influence = 1 - Math.min(1, dist / radius);
@@ -428,6 +474,7 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
         const force = strength * falloff * kickScale * (config.forceMul || 1.0);
         p.vx += nx * force;
         p.vy += ny * force;
+        enqueueHighlight(p.x, p.y);
       }
     }
   }
