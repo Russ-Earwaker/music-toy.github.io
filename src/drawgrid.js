@@ -53,6 +53,20 @@ const LETTER_PHYS = Object.freeze({
   max: 42,       // clamp max pixel offset from center
   epsilon: 0.02, // snap-to-zero deadzone
 });
+// Visual response for DRAW letters on ghost-hit (per-letter only)
+const LETTER_VIS = Object.freeze({
+  // Flash timing
+  flashUpMs: 80,        // ms to ramp up to peak
+  flashDownMs: 260,     // ms to decay to 0
+  // Flash look
+  flashBoost: 1.35,     // brightness multiplier at peak (1 = no extra)
+  flashColor: 'rgba(51, 97, 234, 1)', // temporary text color during flash
+  // Opacity behavior (becomes MORE opaque on hit)
+  opacityBase: 0.8,       // baseline per-letter opacity (multiplies with the label’s 0.3)
+  opacityBoost: 0.9,   // extra opacity at peak flash
+  // Ghost hit detection: require touch within this ratio of the radius
+  ghostCoreHitMul: 0.55,
+});
 const KNOCK_DEBUG = false; // flip to true in console if we need counts
 const __pokeCounts = {
   header: 0,
@@ -1149,6 +1163,35 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         const ty = Math.max(-LETTER_PHYS.max, Math.min(LETTER_PHYS.max, st.y));
         st.el.style.transform = `translate3d(${tx}px, ${ty}px, 0)`;
 
+        // ---- visual: brief colour flash + opacity boost on ghost impact ----
+        const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+
+        let flashAmt = 0;
+        if (st.lastHitTs > 0) {
+          const t = now - st.lastHitTs;
+          if (t <= LETTER_VIS.flashUpMs) {
+            flashAmt = t / Math.max(1, LETTER_VIS.flashUpMs);
+          } else if (t <= LETTER_VIS.flashUpMs + LETTER_VIS.flashDownMs) {
+            const d = (t - LETTER_VIS.flashUpMs) / Math.max(1, LETTER_VIS.flashDownMs);
+            flashAmt = 1 - d;
+          } else {
+            flashAmt = 0;
+          }
+        }
+        const opacity = Math.min(1, LETTER_VIS.opacityBase + LETTER_VIS.opacityBoost * flashAmt);
+        st.el.style.opacity = `${Math.max(0, opacity)}`;
+
+        if (flashAmt > 0) {
+          const boost = 1 + (LETTER_VIS.flashBoost - 1) * flashAmt;
+          st.el.style.filter = `brightness(${boost.toFixed(3)})`;
+          st.el.style.color = LETTER_VIS.flashColor;
+          st.el.style.textShadow = LETTER_VIS.flashShadow;
+        } else {
+          st.el.style.filter = 'none';
+          st.el.style.color = '';
+          st.el.style.textShadow = '';
+        }
+
         if (
           st.x !== 0 || st.y !== 0 ||
           Math.abs(st.vx) > LETTER_PHYS.epsilon ||
@@ -1167,7 +1210,11 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     for (const el of drawLabelLetters) {
       el.style.transition = 'none';
       el.style.willChange = 'transform';
-      letterStates.push({ el, x: 0, y: 0, vx: 0, vy: 0 });
+      // visual state for hit flash
+      letterStates.push({
+        el, x: 0, y: 0, vx: 0, vy: 0,
+        lastHitTs: 0,      // ms timestamp of last hit
+      });
     }
     ensureLetterPhysicsLoop();
   }
@@ -1183,6 +1230,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       span.style.display = 'inline-block';
       span.style.willChange = 'transform';
       span.style.transform = 'translate3d(0,0,0)';
+      // Visual baseline for per-letter effects
+      span.style.opacity = `${LETTER_VIS.opacityBase}`;       // per-letter opacity (multiplies with container’s 0.3)
+      span.style.filter = 'none';     // we'll bump brightness briefly on hit
       drawLabel.appendChild(span);
       drawLabelLetters.push(span);
     }
@@ -1195,7 +1245,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     drawLabel.style.display = active ? 'flex' : 'none';
   }
 
-  function knockLettersAt(localX, localY, { radius = 72, strength = 10 } = {}) {
+  function knockLettersAt(localX, localY, { radius = 72, strength = 10, source = 'unknown' } = {}) {
     const z = Math.max(0.1, dgViewport?.getZoom?.() || 1);
     const scaledRadius = radius / z;
     if (!drawLabel || !drawLabelLetters.length) return;
@@ -1232,6 +1282,11 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       st.vy += uy * impulse;
 
       ensureLetterPhysicsLoop();
+      // ---- visual: register a hit only for ghost fingers within the core radius ----
+      const coreHitRadius = scaledRadius * LETTER_VIS.ghostCoreHitMul;
+      if (source === 'ghost' && dist <= coreHitRadius) {
+        st.lastHitTs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      }
       if (DG_GHOST_DEBUG) {
         try { console.debug('[DG][letters-hit]', { idx, dx, dy }); } catch {}
       }
@@ -3319,13 +3374,6 @@ function syncBackBufferSizes() {
     } else {
       wrap.style.width  = bodyW + 'px';
       wrap.style.height = bodyH + 'px';
-      // === DRAW label responsive sizing tied to toy, not viewport ===
-    if (drawLabel && drawLabel.style) {
-      const minDim = Math.max(1, Math.min(gridArea.w, gridArea.h));
-      // 0.18 works well for large, readable text; adjust as needed (e.g. 0.15–0.25)
-      const lblPx = Math.round(Math.max(36, Math.min(190, minDim * 0.38)));
-      drawLabel.style.fontSize = `${lblPx}px`;
-}
     }
 
 
@@ -6088,7 +6136,7 @@ function startGhostGuide({
     knockLettersAt(
       x - (gridArea?.x || 0),
       y - (gridArea?.y || 0),
-      { radius: lettersRadius, strength: DG_KNOCK.lettersMove.strength }
+      { radius: lettersRadius, strength: DG_KNOCK.lettersMove.strength, source: 'ghost' }
     );
     if (DG_GHOST_DEBUG) {
       try {
@@ -6305,9 +6353,4 @@ function runAutoGhostGuideSweep() {
   try { panel.dispatchEvent(new CustomEvent('drawgrid:ready', { bubbles: true })); } catch {}
   return api;
 }
-
-
-
-
-
 
