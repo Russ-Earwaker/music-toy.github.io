@@ -35,6 +35,7 @@ const DG_KNOCK = {
   pointerMove: { radiusToy: (area) => toyRadiusFromArea(area, 0.05, 10), strength:  90 },
   ghostTrail:  { radiusToy: (area) => toyRadiusFromArea(area, 0.055, 14), strength: 240 },
   lettersMove: { radius:  120, strength: 36 },
+  headerLine:  { radiusToy: (area) => toyRadiusFromArea(area, 0.035, 10), strength: 160 }, // NEW
 };
 // quick diagnostics
 function __dgLogFirstPoke(tag, r, s){ if (!window.__DG_POKED__) { window.__DG_POKED__=true; console.log('[DG] poke', tag, {radius:r, strength:s}); } }
@@ -1064,7 +1065,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         {
           seed: panelSeed,
           cap: 2200,
-          returnSeconds: 2.0,   // target settle time
+          returnSeconds: 1.6,   // target settle time
           forceMul: 1.0,        // keep 1.0 unless you need bigger kicks overall
           noise: 0,
           kick: 0,
@@ -1172,6 +1173,27 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     } catch (err) {
       console.warn('[DG][pokeFieldToy] failed', { source, err });
     }
+  }
+
+  // Poke a vertical band centered at xToy, stepping down Y to cover the grid.
+  function pokeHeaderBand(xToy, preset = {}) {
+    try {
+      if (!Number.isFinite(xToy)) return;
+      const { radiusToy, strength } = preset;
+      const area = (gridArea && gridArea.w > 0 && gridArea.h > 0)
+        ? gridArea
+        : { x: 0, y: 0, w: cssW || 0, h: cssH || 0 };
+      const r = typeof radiusToy === 'function' ? radiusToy(area) : radiusToy;
+      const s = strength;
+      if (!Number.isFinite(r) || r <= 0 || !Number.isFinite(s) || s <= 0) return;
+      const step = Math.max(6, Math.round(r * 1.5)); // keep continuous but cheap
+      const yStart = area?.y || 0;
+      const height = area?.h || Math.max(cssH || 0, 0);
+      const yEnd = yStart + height;
+      for (let y = yStart; y <= yEnd; y += step) {
+        pokeFieldToy('header', xToy, y, r, s);
+      }
+    } catch {}
   }
 
   const tutorialFrontCtx = tutorialCanvas.getContext('2d');
@@ -1712,8 +1734,34 @@ function ensureSizeReady({ force = false } = {}) {
   })();
 
 if (typeof onFrameStart === 'function') {
+  unsubscribeFrameStart?.();
   unsubscribeFrameStart = onFrameStart((camState) => {
     overlayCamState = camState; // keep for HUD/other use
+    try {
+      if (typeof isRunning === 'function' && !isRunning()) return;
+      const chainNext = panel?.dataset?.nextToyId;
+      const chainPrev = panel?.dataset?.prevToyId;
+      const isChained = !!(chainNext || chainPrev);
+      const isActiveInChain = isChained ? (panel?.dataset?.chainActive === 'true') : true;
+      if (!isActiveInChain) return;
+      const area = (gridArea && gridArea.w > 0 && gridArea.h > 0)
+        ? gridArea
+        : { x: 0, y: 0, w: cssW || 0, h: cssH || 0 };
+      const usableWidth = area?.w || cssW || 0;
+      if (!Number.isFinite(usableWidth) || usableWidth <= 0) return;
+      const li = typeof getLoopInfo === 'function' ? (getLoopInfo() || null) : null;
+      let progress = Number.isFinite(li?.progress) ? li.progress : null;
+      if (progress == null && Number.isFinite(li?.phase01)) progress = li.phase01;
+      if (progress == null && Number.isFinite(li?.step) && Number.isFinite(li?.steps)) {
+        const steps = Math.max(1, li.steps);
+        progress = ((li.step || 0) % steps) / steps;
+      }
+      if (progress == null) return;
+      const clampedProgress = Math.max(0, Math.min(1, progress));
+      const startX = area?.x || 0;
+      const xToy = startX + clampedProgress * usableWidth;
+      pokeHeaderBand(xToy, DG_KNOCK.headerLine);
+    } catch {}
   });
 }
 
@@ -3725,7 +3773,10 @@ function syncBackBufferSizes() {
         console.debug('[DG][PTR->LOCAL]', { x0: paintStart.x, y0: paintStart.y, cssW, cssH, paintDpr });
       }
       try {
-        const r0 = DG_KNOCK.pointerDown.radiusToy(gridArea);
+        const area = (gridArea && gridArea.w > 0 && gridArea.h > 0)
+          ? gridArea
+          : { x: 0, y: 0, w: cssW || 0, h: cssH || 0 };
+        const r0 = DG_KNOCK.pointerDown.radiusToy(area);
         const s0 = DG_KNOCK.pointerDown.strength;
         pokeFieldToy('pointerDown', p.x, p.y, r0, s0);
         __dgLogFirstPoke('pointerDown', r0, s0);
@@ -3971,13 +4022,32 @@ function syncBackBufferSizes() {
         __dgNeedsUIRefresh = false; // don't trigger overlay clears during draw
       }
       // Disturb particles for all lines, special or not.
+      let pointerMoveRadius = null;
       try {
-        const r1 = DG_KNOCK.pointerMove.radiusToy(gridArea);
+        const area = (gridArea && gridArea.w > 0 && gridArea.h > 0)
+          ? gridArea
+          : { x: 0, y: 0, w: cssW || 0, h: cssH || 0 };
+        const r1 = DG_KNOCK.pointerMove.radiusToy(area);
         const s1 = DG_KNOCK.pointerMove.strength;
+        pointerMoveRadius = r1;
         pokeFieldToy('pointerMove', p.x, p.y, r1, s1);
         __dgLogFirstPoke('pointerMove', r1, s1);
-        knockLettersAt(p.x - (gridArea?.x || 0), p.y - (gridArea?.y || 0), DG_KNOCK.lettersMove);
       } catch(e) {}
+
+      // Optional: also nudge the 'DRAW' letters for nice UX feedback
+      try {
+        const fallbackRadius = DG_KNOCK.lettersMove?.radius || 0;
+        const letterRadius = Math.max(
+          fallbackRadius,
+          Number.isFinite(pointerMoveRadius) ? pointerMoveRadius * 2 : 0
+        );
+        const letterStrength = DG_KNOCK.lettersMove?.strength ?? 12;
+        knockLettersAt(
+          p.x - (gridArea?.x || 0),
+          p.y - (gridArea?.y || 0),
+          { radius: letterRadius || 80, strength: letterStrength }
+        );
+      } catch {}
 
       const includeCurrent = !previewGid;
       // drawIntoBackOnly(includeCurrent);
