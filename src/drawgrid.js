@@ -86,6 +86,13 @@ try {
   if (typeof localStorage !== 'undefined' && localStorage.getItem('DG_ALPHA_DEBUG') === '1') DG_ALPHA_DEBUG = true;
 } catch {}
 
+// Ghost debug (off by default). Enable via ?dgghost=1 or localStorage('DG_GHOST_DEBUG'='1')
+let DG_GHOST_DEBUG = false;
+try {
+  if (typeof location !== 'undefined' && location.search.includes('dgghost=1')) DG_GHOST_DEBUG = true;
+  if (typeof localStorage !== 'undefined' && localStorage.getItem('DG_GHOST_DEBUG') === '1') DG_GHOST_DEBUG = true;
+} catch {}
+
 if (DG_DEBUG) { try { console.info('[DG][alpha:boot]', { DG_ALPHA_DEBUG }); } catch {} }
 
 let __ALPHA_PATH_LAST_TS = 0;
@@ -404,6 +411,88 @@ function withLogicalSpace(ctx, fn) {
   }
 }
 
+function drawGhostDebugBand(ctx, band) {
+  if (!DG_GHOST_DEBUG || !ctx || !band || !gridArea) return;
+  withLogicalSpace(ctx, () => {
+    ctx.save();
+    ctx.setLineDash([6, 4]);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(0,255,255,0.8)';
+    ctx.beginPath();
+    ctx.moveTo(gridArea.x, band.minY);
+    ctx.lineTo(gridArea.x + gridArea.w, band.minY);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(gridArea.x, band.maxY);
+    ctx.lineTo(gridArea.x + gridArea.w, band.maxY);
+    ctx.stroke();
+    ctx.setLineDash([2, 6]);
+    ctx.strokeStyle = 'rgba(0,255,255,0.35)';
+    ctx.beginPath();
+    ctx.moveTo(gridArea.x, band.midY);
+    ctx.lineTo(gridArea.x + gridArea.w, band.midY);
+    ctx.stroke();
+    ctx.restore();
+  });
+}
+
+function drawGhostDebugPath(ctx, { from, to, crossY }) {
+  if (!DG_GHOST_DEBUG || !ctx || !from || !to) return;
+  withLogicalSpace(ctx, () => {
+    ctx.save();
+    const q = (v0, v1, v2, t) => {
+      const u = 1 - t;
+      return u * u * v0 + 2 * u * t * v1 + t * t * v2;
+    };
+    ctx.lineWidth = 1;
+    ctx.setLineDash([8, 4]);
+    ctx.strokeStyle = 'rgba(255,0,200,0.8)';
+    ctx.beginPath();
+    for (let i = 0; i <= 48; i++) {
+      const t = i / 48;
+      const x = from.x + (to.x - from.x) * t;
+      const y = q(from.y, typeof crossY === 'number' ? crossY : (from.y + to.y) * 0.5, to.y, t);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    const cx = (from.x + to.x) * 0.5;
+    const cy = typeof crossY === 'number' ? crossY : (from.y + to.y) * 0.5;
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(255,0,200,0.7)';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(0,180,255,0.9)';
+    ctx.beginPath(); ctx.arc(from.x, from.y, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(to.x, to.y, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  });
+}
+
+function drawGhostDebugFrame(ctx, { x, y, radius, lettersRadius }) {
+  if (!DG_GHOST_DEBUG || !ctx) return;
+  withLogicalSpace(ctx, () => {
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,210,255,0.85)';
+    ctx.beginPath();
+    ctx.arc(x, y, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,210,255,0.5)';
+    ctx.setLineDash([5, 5]);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(x, y, Math.max(2, radius), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([2, 6]);
+    ctx.strokeStyle = 'rgba(50,255,120,0.5)';
+    ctx.beginPath();
+    ctx.arc(x, y, Math.max(2, lettersRadius), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  });
+}
+
 // Draw in raw device pixels without additional scaling; ideal for blits / drawImage.
 function withDeviceSpace(ctx, fn) {
   if (!ctx || typeof fn !== 'function') return;
@@ -634,11 +723,19 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   // The init script now guarantees the panel is a valid HTMLElement with the correct dataset.
   // The .toy-body is now guaranteed to exist by initToyUI, which runs first.
   const body = panel.querySelector('.toy-body');
+  const drawToyBg = '#000413ff';
 
   if (!body) {
     return;
   }
   body.style.position = 'relative';
+  if (body.style) {
+    body.style.background = drawToyBg;
+  }
+  if (panel?.style) {
+    panel.style.background = drawToyBg;
+    panel.style.backgroundColor = drawToyBg;
+  }
 
   const resolvedToyId = toyId || panel.id || panel.dataset.toyid || panel.dataset.toyid || panel.dataset.toyName || 'drawgrid';
   const storageKey = resolvedToyId ? `drawgrid:saved:${resolvedToyId}` : null;
@@ -900,13 +997,20 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const ghostCanvas = document.createElement('canvas'); ghostCanvas.setAttribute('data-role','drawgrid-ghost');
   const tutorialCanvas = document.createElement('canvas'); tutorialCanvas.setAttribute('data-role', 'drawgrid-tutorial-highlight');
   Object.assign(particleCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 0, pointerEvents: 'none' });
+  particleCanvas.style.background = 'transparent';
   Object.assign(grid.style,           { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 1 });
+  grid.style.background = 'transparent';
   Object.assign(paint.style,          { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 2 });
+  paint.style.background = 'transparent';
   paint.style.pointerEvents = 'auto';
   Object.assign(ghostCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 3, pointerEvents: 'none' });
+  ghostCanvas.style.background = 'transparent';
   Object.assign(flashCanvas.style,  { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 4, pointerEvents: 'none' });
+  flashCanvas.style.background = 'transparent';
   Object.assign(nodesCanvas.style,  { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 5, pointerEvents: 'none' });
+  nodesCanvas.style.background = 'transparent';
   Object.assign(tutorialCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 6, pointerEvents: 'none' });
+  tutorialCanvas.style.background = 'transparent';
   body.appendChild(particleCanvas);
   body.appendChild(grid);
   body.appendChild(paint);
@@ -938,6 +1042,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   wrap.style.width = '100%';
   wrap.style.height = '100%';
   wrap.style.overflow = 'hidden';
+  wrap.style.background = drawToyBg;
 
   // Move all existing elements from body into the new wrapper
   [...body.childNodes].forEach(node => wrap.appendChild(node));
@@ -965,7 +1070,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       // Use Loopgrid/TAP-ish theming if available; bump ~50%.
       color: 'var(--tap-label-color, rgba(160,188,255,0.72))',
       textShadow: 'var(--tap-label-shadow, 0 2px 10px rgba(40,60,120,0.55))',
-      fontSize: 'var(--tap-label-size, clamp(36px, 18vmin, 190px))',
+      fontSize: 'initial',
         lineHeight: '1',
         textTransform: 'uppercase',
         userSelect: 'none',
@@ -980,6 +1085,50 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   // Per-letter physics state
   let letterStates = []; // [{ el, x, y, vx, vy }]
   let lettersRAF = null;
+
+  function __dgClamp01(value) {
+    if (typeof value !== 'number') return 0;
+    if (value <= 0) return 0;
+    if (value >= 1) return 1;
+    return value;
+  }
+
+  function __dgGetGridCssRect() {
+    let rect = grid?.getBoundingClientRect?.();
+    if (!rect || !rect.width || !rect.height) {
+      rect = wrap?.getBoundingClientRect?.();
+    }
+    if (!rect || !rect.width || !rect.height) return null;
+    return rect;
+  }
+
+  function __dgLogicalToCssPoint(point) {
+    if (!point || typeof point.x !== 'number' || typeof point.y !== 'number') return { x: point?.x || 0, y: point?.y || 0 };
+    const rect = __dgGetGridCssRect();
+    const areaWidth = (gridArea?.w > 0) ? gridArea.w : rect?.width || 1;
+    const areaHeight = (gridArea?.h > 0) ? gridArea.h : rect?.height || 1;
+    if (!rect) return { x: point.x, y: point.y };
+    const scaleX = areaWidth > 0 ? rect.width / areaWidth : 1;
+    const scaleY = areaHeight > 0 ? rect.height / areaHeight : 1;
+    return {
+      x: rect.left + (point.x - (gridArea?.x || 0)) * scaleX,
+      y: rect.top + (point.y - (gridArea?.y || 0)) * scaleY,
+    };
+  }
+
+  function __dgCssToLogicalPoint(point) {
+    if (!point || typeof point.x !== 'number' || typeof point.y !== 'number') return { x: point?.x || 0, y: point?.y || 0 };
+    const rect = __dgGetGridCssRect();
+    if (!rect) return { x: point.x, y: point.y };
+    const nx = __dgClamp01((point.x - rect.left) / rect.width);
+    const ny = __dgClamp01((point.y - rect.top) / rect.height);
+    const areaWidth = (gridArea?.w > 0) ? gridArea.w : rect.width;
+    const areaHeight = (gridArea?.h > 0) ? gridArea.h : rect.height;
+    return {
+      x: (gridArea?.x || 0) + nx * areaWidth,
+      y: (gridArea?.y || 0) + ny * areaHeight,
+    };
+  }
 
   function ensureLetterPhysicsLoop() {
     if (lettersRAF) return;
@@ -1050,13 +1199,13 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     const z = Math.max(0.1, dgViewport?.getZoom?.() || 1);
     const scaledRadius = radius / z;
     if (!drawLabel || !drawLabelLetters.length) return;
-    const rect = drawLabel.getBoundingClientRect?.();
-    const wrapRect = wrap?.getBoundingClientRect?.();
-    if (!rect || !wrapRect || !rect.width || !rect.height) return;
+    const rect = drawLabel?.getBoundingClientRect?.();
+    if (!rect || !rect.width || !rect.height) return;
     const baseX = (typeof localX === 'number' ? localX : 0) + (gridArea?.x || 0);
-    const baseY = (typeof localY === 'number' ? localY : 0) + (gridArea?.y || 0) + (topPad || 0);
-    const relX = baseX - (rect.left - wrapRect.left);
-    const relY = baseY - (rect.top - wrapRect.top);
+    const baseY = (typeof localY === 'number' ? localY : 0) + (gridArea?.y || 0);
+    const cssPoint = __dgLogicalToCssPoint({ x: baseX, y: baseY });
+    const relX = cssPoint.x - rect.left;
+    const relY = cssPoint.y - rect.top;
     drawLabelLetters.forEach((el, idx) => {
       const letterRect = el.getBoundingClientRect?.();
       if (!letterRect) return;
@@ -1083,6 +1232,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       st.vy += uy * impulse;
 
       ensureLetterPhysicsLoop();
+      if (DG_GHOST_DEBUG) {
+        try { console.debug('[DG][letters-hit]', { idx, dx, dy }); } catch {}
+      }
     });
   }
 
@@ -1896,6 +2048,61 @@ function ensureSizeReady({ force = false } = {}) {
     __dgStableFramesAfterCommit = 0;
   } catch {}
 
+  function __dgGetDrawLabelYRange() {
+    if (!drawLabel) return null;
+    const drawRect = drawLabel.getBoundingClientRect?.();
+    if (!drawRect) return null;
+    const centerX = drawRect.left + drawRect.width * 0.5;
+    const logicalTop = __dgCssToLogicalPoint({ x: centerX, y: drawRect.top });
+    const logicalBottom = __dgCssToLogicalPoint({ x: centerX, y: drawRect.bottom });
+    const topY = Math.min(logicalTop.y, logicalBottom.y);
+    const bottomY = Math.max(logicalTop.y, logicalBottom.y);
+    if (!Number.isFinite(topY) || !Number.isFinite(bottomY) || bottomY <= topY) return null;
+    const areaTop = Number.isFinite(gridArea?.y) ? gridArea.y : topY;
+    const areaBottom = Number.isFinite(gridArea?.h) ? (gridArea.y + gridArea.h) : bottomY;
+    const minY = Math.max(areaTop, topY);
+    const maxY = Math.min(areaBottom, bottomY);
+    if (!Number.isFinite(minY) || !Number.isFinite(maxY) || maxY <= minY) return null;
+    return { minY, maxY, midY: (minY + maxY) * 0.5 };
+  }
+
+  // --- ghost path helper: off-screen left->right with random Y inside safe area
+  function __dgComputeGhostSweepLR() {
+    if (!gridArea || gridArea.w <= 0 || gridArea.h <= 0) {
+      const fallbackY = gridArea?.y || 0;
+      const fallbackX = gridArea?.x || 0;
+      return {
+        from: { x: fallbackX, y: fallbackY },
+        to: { x: fallbackX + (gridArea?.w || 0), y: fallbackY },
+        safeMinY: fallbackY,
+        safeMaxY: fallbackY,
+      };
+    }
+    const margin = Math.max(16, Math.round(Math.min(gridArea.w, gridArea.h) * 0.08));
+    const leftX = gridArea.x - margin;
+    const rightX = gridArea.x + gridArea.w + margin;
+    const cellH = rows > 0 ? gridArea.h / rows : gridArea.h;
+    const safeMargin = Math.max(6, Math.round(cellH * 0.5));
+    const safeMinY = gridArea.y + safeMargin;
+    const safeMaxY = Math.max(safeMinY, gridArea.y + gridArea.h - safeMargin);
+
+    const range = Math.max(1, safeMaxY - safeMinY);
+    const startY = Math.round(safeMinY + Math.random() * range);
+    const letterRange = __dgGetDrawLabelYRange();
+    const crossY = (letterRange && letterRange.maxY > letterRange.minY)
+      ? Math.round((Math.max(safeMinY, letterRange.minY) + Math.min(safeMaxY, letterRange.maxY)) * 0.5)
+      : Math.round(safeMinY + range * 0.5);
+
+    const clampedY = Math.max(safeMinY, Math.min(safeMaxY, startY));
+    return {
+      from: { x: leftX, y: clampedY },
+      to: { x: rightX, y: clampedY },
+      crossY,
+      safeMinY,
+      safeMaxY,
+    };
+  }
+
   wireOverviewTransitions(panel);
 
   (function wireOverviewTransitionForDrawgrid(){
@@ -1914,6 +2121,56 @@ function ensureSizeReady({ force = false } = {}) {
         try { dgViewport?.setNonReactive?.(zoomFreezeActive() ? true : null); } catch {}
         try { dgViewport?.refreshSize?.({ snap: true }); } catch {}
         try { dgField?.resize?.(); } catch {}
+        try {
+          // Ensure all layers are visible & transparent
+          [grid, paint, particleCanvas, ghostCanvas, flashCanvas, nodesCanvas, tutorialCanvas]
+            .filter(Boolean)
+            .forEach((cv) => {
+              const s = cv.style || {};
+              if (s.visibility === 'hidden') s.visibility = '';
+              if (s.opacity === '0') s.opacity = '';
+              if (s.display === 'none') s.display = '';
+              s.background = 'transparent';
+            });
+
+          const body = panel.querySelector('.toy-body');
+          if (body && body.style) {
+            body.style.background = drawToyBg;
+          }
+          if (panel?.style) {
+            panel.style.background = drawToyBg;
+            panel.style.backgroundColor = drawToyBg;
+          }
+          if (wrap && wrap.style) {
+            wrap.style.background = drawToyBg;
+          }
+        } catch {}
+        try {
+          __dgFrontSwapNextDraw = true;
+          __dgNeedsUIRefresh = true;
+          __dgStableFramesAfterCommit = 0;
+
+          drawGrid();
+          if (currentMap) drawNodes(currentMap.nodes);
+
+          const flashTarget = getActiveFlashCanvas();
+          resetCtx(fctx);
+          withLogicalSpace(fctx, () => {
+            const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+            const width = cssW || (flashTarget?.width ?? 0) / scale;
+            const height = cssH || (flashTarget?.height ?? 0) / scale;
+            fctx.clearRect(0, 0, width, height);
+          });
+
+          const ghostTarget = getActiveGhostCanvas();
+          resetCtx(ghostCtx);
+          withLogicalSpace(ghostCtx, () => {
+            const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+            const width = cssW || (ghostTarget?.width ?? 0) / scale;
+            const height = cssH || (ghostTarget?.height ?? 0) / scale;
+            ghostCtx.clearRect(0, 0, width, height);
+          });
+        } catch {}
         // Don't re-home during overview toggles -- avoids visible lerp.
         // refreshHomes({ resetPositions: false });
         __dgFrontSwapNextDraw = true;
@@ -2626,6 +2883,9 @@ function regenerateMapFromStrokes() {
         refreshLayout: phase === 'commit',
         zoomPayload: z
       });
+      try { layout(true); } catch {}
+      try { dgField?.resize?.(); } catch {}
+      try { runAutoGhostGuideSweep(); } catch {}
       return;
     }
   });
@@ -3060,6 +3320,13 @@ function syncBackBufferSizes() {
     } else {
       wrap.style.width  = bodyW + 'px';
       wrap.style.height = bodyH + 'px';
+      // === DRAW label responsive sizing tied to toy, not viewport ===
+    if (drawLabel && drawLabel.style) {
+      const minDim = Math.max(1, Math.min(gridArea.w, gridArea.h));
+      // 0.18 works well for large, readable text; adjust as needed (e.g. 0.15–0.25)
+      const lblPx = Math.round(Math.max(36, Math.min(190, minDim * 0.38)));
+      drawLabel.style.fontSize = `${lblPx}px`;
+}
     }
 
 
@@ -3136,6 +3403,24 @@ function syncBackBufferSizes() {
       topPad = 0;
       cw = gridArea.w / cols;
       ch = (gridArea.h - topPad) / rows;
+
+      // === DRAW label responsive sizing tied to toy, not viewport ===
+      const minDim = Math.max(1, Math.min(gridArea.w, gridArea.h));
+      const lblPx = Math.round(Math.max(48, Math.min(240, minDim * 0.26)));
+      if (drawLabel?.style) {
+        drawLabel.style.fontSize = `${lblPx}px`;
+      }
+      if (Array.isArray(drawLabelLetters)) {
+        letterStates = drawLabelLetters.map((el, i) => {
+          const prev = letterStates[i];
+          if (prev) {
+            prev.el = el;
+            return prev;
+          }
+          return { el, x: 0, y: 0, vx: 0, vy: 0 };
+        });
+        ensureLetterPhysicsLoop();
+      }
 
 
       // Update eraser cursor size
@@ -5646,6 +5931,15 @@ function syncBackBufferSizes() {
     });
     ghostCtx.globalCompositeOperation = 'source-over';
     ghostCtx.globalAlpha = 1.0;
+    if (DG_GHOST_DEBUG && typeof startY === 'number' && typeof endY === 'number') {
+      try {
+        const from = { x: gridArea.x - 24, y: startY };
+        const to = { x: gridArea.x + gridArea.w + 24, y: endY };
+        const labelBand = __dgGetDrawLabelYRange?.();
+        if (labelBand) drawGhostDebugBand(ghostCtx, labelBand);
+        drawGhostDebugPath(ghostCtx, { from, to, crossY });
+      } catch {}
+    }
     if (step < 5) {
       ghostFadeRAF = requestAnimationFrame(() => fadeOutGhostTrail(step + 1));
     } else {
@@ -5653,9 +5947,10 @@ function syncBackBufferSizes() {
     }
   }
 
-  function startGhostGuide({
+function startGhostGuide({
   startX, endX,
   startY, endY,
+  crossY = null,
   duration = 2000,
   wiggle = true,
   trail = true,
@@ -5673,18 +5968,28 @@ function syncBackBufferSizes() {
     layout(true);
   }
 
-  const gx = gridArea.x, gy = gridArea.y, gw = gridArea.w, gh = gridArea.h;
+    const gx = gridArea.x, gy = gridArea.y, gw = gridArea.w, gh = gridArea.h;
 
-  if (typeof startX !== 'number' || typeof endX !== 'number') {
-    startX = gx;
-    endX = gx + gw;
-  }
-  if (startX > endX) [startX, endX] = [endX, startX];
+    if (typeof startX !== 'number' || Number.isNaN(startX)) {
+      startX = gx;
+    }
+    if (typeof endX !== 'number' || Number.isNaN(endX)) {
+      endX = gx + gw;
+    }
+    if (startX > endX) [startX, endX] = [endX, startX];
 
-  if (typeof startY !== 'number' || typeof endY !== 'number') {
-    startY = gy;
-    endY = gy + gh;
-  }
+    if (typeof startY !== 'number' || Number.isNaN(startY)) {
+      startY = gy;
+    }
+    if (typeof endY !== 'number' || Number.isNaN(endY)) {
+      endY = gy + gh;
+    }
+
+  const __gpathStatic = {
+    from: { x: startX, y: startY },
+    to: { x: endX, y: endY },
+    crossY,
+  };
 
   const startTime = performance.now();
   let last = null;
@@ -5705,15 +6010,17 @@ function syncBackBufferSizes() {
     }
 
     const gx = gridArea.x, gy = gridArea.y, gw = gridArea.w, gh = gridArea.h;
-    const currentStartX = gx + gw * 0.1;
-    const currentEndX = gx + gw * 0.9;
-    const currentStartY = gy + gh * 0.1;
-    const currentEndY = gy + gh * 0.9;
-
     const wiggleAmp = gh * 0.25;
-
-    const x = currentStartX + (currentEndX - currentStartX) * t;
-    let y = currentStartY + (currentEndY - currentStartY) * t;
+    const x = startX + (endX - startX) * t;
+    // Quadratic curve that bends toward the DRAW label mid-path.
+    const q = (v0, v1, v2, tt) => {
+      const u = 1 - tt;
+      return u * u * v0 + 2 * u * tt * v1 + tt * tt * v2;
+    };
+    const t1 = Math.min(1, Math.max(0, t));
+    const targetCrossY = (typeof crossY === 'number') ? crossY : (startY + endY) * 0.5;
+    const tCurve = Math.max(0, Math.min(1, (t1 < 0.5) ? (t1 * 0.9) : (0.1 + t1 * 0.9)));
+    let y = q(startY, targetCrossY, endY, tCurve);
     if (wiggle) {
       const wiggleFactor = Math.sin(t * Math.PI * 3) * Math.sin(t * Math.PI * 0.5 + noiseSeed);
       y += wiggleAmp * wiggleFactor;
@@ -5734,6 +6041,13 @@ function syncBackBufferSizes() {
     });
     ghostCtx.globalCompositeOperation = 'source-over';
     ghostCtx.globalAlpha = 1.0;
+    if (DG_GHOST_DEBUG) {
+      try {
+        const band = __dgGetDrawLabelYRange?.();
+        if (band) drawGhostDebugBand(ghostCtx, band);
+        drawGhostDebugPath(ghostCtx, __gpathStatic);
+      } catch {}
+    }
     const camSnapshot = getOverlayZoomSnapshot();
     const z = camSnapshot.scale;
 
@@ -5769,8 +6083,25 @@ function syncBackBufferSizes() {
       console.log('[DG][ghostTrail] poke', { x, y, radius, strength: DG_KNOCK.ghostTrail.strength });
     }
     __dgLogFirstPoke('ghostTrail', radius, DG_KNOCK.ghostTrail.strength);
-    const lettersRadius = radius + 60;
-    knockLettersAt(x - (gridArea?.x || 0), y - (gridArea?.y || 0), { radius: lettersRadius, strength: DG_KNOCK.lettersMove.strength });
+
+    // Make sure the label gets hit even when zoomed: big radius, scaled internally in knockLettersAt
+    const lettersRadius = Math.max(radius * 2.25, (gridArea?.h || 0) * 0.25);
+    knockLettersAt(
+      x - (gridArea?.x || 0),
+      y - (gridArea?.y || 0),
+      { radius: lettersRadius, strength: DG_KNOCK.lettersMove.strength }
+    );
+    if (DG_GHOST_DEBUG) {
+      try {
+        withLogicalSpace(ghostCtx, () => {
+          ghostCtx.save();
+          const pad = Math.max(20, radius * 3);
+          ghostCtx.clearRect(x - pad, y - pad, pad * 2, pad * 2);
+          ghostCtx.restore();
+        });
+        drawGhostDebugFrame(ghostCtx, { x, y, radius, lettersRadius });
+      } catch {}
+    }
     if (window.DG_ZOOM_AUDIT && (now - lastGhostAudit) >= 500) {
       __auditZoomSizes('ghostTrail');
       lastGhostAudit = now;
@@ -5823,21 +6154,35 @@ function scheduleGhostIfEmpty({ initialDelay = 150 } = {}) {
 function runAutoGhostGuideSweep() {
   if (!ghostGuideAutoActive) return;
 
-  const { w, h } = getLayoutSize();
+  const w = gridArea?.w ?? 0;
+  const h = gridArea?.h ?? 0;
   // Guard against tiny layouts
   if (!w || !h || w <= 48 || h <= 48) {
-
     return;
   }
 
-  // Use logical coordinates directly
-  const startX = gridArea.x + gridArea.w * 0.1;
-  const endX = gridArea.x + gridArea.w * 0.9;
-  const startY = gridArea.y + gridArea.h * 0.1;
-  const endY = gridArea.y + gridArea.h * 0.9;
+  // Use left->right off-screen randomized Y path
+  const gpath = __dgComputeGhostSweepLR();
+  const { safeMinY = gridArea?.y ?? 0, safeMaxY = (gridArea?.y ?? 0) + (gridArea?.h ?? 0) } = gpath;
+  const clampY = (v) => {
+    if (!Number.isFinite(v)) return safeMinY;
+    return Math.max(safeMinY, Math.min(safeMaxY, v));
+  };
+  const startX = gpath.from.x;
+  const startY = clampY(gpath.from.y);
+  const endX = gpath.to.x;
+  const endY = clampY(gpath.to.y);
+
+  if (DG_GHOST_DEBUG) {
+    try {
+      const labelBand = __dgGetDrawLabelYRange?.();
+      if (labelBand) drawGhostDebugBand(ghostCtx, labelBand);
+      drawGhostDebugPath(ghostCtx, { from: gpath.from, to: gpath.to, crossY: gpath.crossY });
+    } catch {}
+  }
 
   startGhostGuide({
-    startX, endX, startY, endY,
+    startX, endX, startY, endY, crossY: gpath.crossY,
     duration: GHOST_SWEEP_DURATION,
     wiggle: true,
     trail: true,
