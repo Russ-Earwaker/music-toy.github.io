@@ -33,6 +33,12 @@ function toyRadiusFromArea(area, ratio, minimum) {
 const ghostRadiusToy = (area) => toyRadiusFromArea(area, 0.027, 12); // legacy feel, +50% applied when poking
 const ghostStrength = 1600;
 const headerRadiusToy = (area) => toyRadiusFromArea(area, 0.022, 10);
+export const HeaderSweepForce = Object.freeze({
+  radiusMul: 2.2,
+  strength: 50,
+  falloff: 'gaussian',
+  spacingMul: 0.6,
+});
 const DG_KNOCK = {
   ghostTrail:  { radiusToy: ghostRadiusToy, strength: ghostStrength },
   pointerDown: { radiusToy: ghostRadiusToy, strength: ghostStrength },
@@ -614,6 +620,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let dgViewport = null;
   let dgMap = null;
   let dgField = null;
+  let headerSweepDirX = 1;
 
   // DEBUG: prove these are per-instance
   dgTraceLog('[drawgrid] instance-state', panel.id, { scope: 'per-instance' });
@@ -1194,25 +1201,83 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     }
   }
 
-  // Poke a vertical band centered at xToy, stepping down Y to cover the grid.
-  function pokeHeaderBand(xToy, preset = {}) {
+  function pushAlongSegment(field, ax, ay, bx, by, opts = {}) {
+    if (!field?.pushDirectional) return;
+    const coords = [ax, ay, bx, by];
+    if (coords.some((v) => !Number.isFinite(v))) return;
+    const dx = bx - ax;
+    const dy = by - ay;
+    const segLen = Math.hypot(dx, dy);
+    const radius = Math.max(1, Number.isFinite(opts.radius) ? opts.radius : 32);
+    const spacing = Math.max(4, Number.isFinite(opts.spacing) ? opts.spacing : Math.round(radius * 0.6));
+    const steps = segLen > 0 ? Math.max(1, Math.ceil(segLen / spacing)) : 0;
+    let dirX;
+    let dirY;
+    if (Number.isFinite(opts.dirX) || Number.isFinite(opts.dirY)) {
+      dirX = Number.isFinite(opts.dirX) ? opts.dirX : 0;
+      dirY = Number.isFinite(opts.dirY) ? opts.dirY : 0;
+    } else if (segLen > 0) {
+      dirX = dx / segLen;
+      dirY = dy / segLen;
+    } else {
+      dirX = 1;
+      dirY = 0;
+    }
+    const payload = {
+      radius,
+      strength: Number.isFinite(opts.strength) ? opts.strength : 1200,
+      falloff: typeof opts.falloff === 'string' ? opts.falloff : 'gaussian',
+      forceMul: opts.forceMul,
+    };
+    for (let i = 0; i <= steps; i++) {
+      const t = steps === 0 ? 0 : i / steps;
+      const sx = ax + dx * t;
+      const sy = ay + dy * t;
+      field.pushDirectional(sx, sy, dirX, dirY, payload);
+    }
+  }
+
+  function pushHeaderSweepAt(xToy, { lineWidthPx } = {}) {
     try {
-      if (!Number.isFinite(xToy)) return;
-      const { radiusToy, strength } = preset;
+      if (!dgField?.pushDirectional || !Number.isFinite(xToy)) return;
       const area = (gridArea && gridArea.w > 0 && gridArea.h > 0)
         ? gridArea
-        : { x: 0, y: 0, w: cssW || 0, h: cssH || 0 };
-      const r = typeof radiusToy === 'function' ? radiusToy(area) : radiusToy;
-      const s = strength;
-      if (!Number.isFinite(r) || r <= 0 || !Number.isFinite(s) || s <= 0) return;
-      const step = Math.max(6, Math.round(r * 1.5)); // keep continuous but cheap
-      const yStart = area?.y || 0;
-      const height = area?.h || Math.max(cssH || 0, 0);
-      const yEnd = yStart + height;
-      for (let y = yStart; y <= yEnd; y += step) {
-        pokeFieldToy('header', xToy, y, r, s);
-      }
-    } catch {}
+        : null;
+      if (!area || area.h <= 0) return;
+      const zoomScale = getOverlayZoomSnapshot()?.scale || 1;
+      const columnWidth = (Number.isFinite(cw) && cw > 0)
+        ? cw
+        : Math.max(6, (area.w || 0) / Math.max(1, cols || 1));
+      const headerLineWidthPx = Number.isFinite(lineWidthPx) ? lineWidthPx : columnWidth;
+      const lineWidthWorld = headerLineWidthPx / Math.max(zoomScale, 1e-3);
+      const fallbackRadius = typeof DG_KNOCK?.headerLine?.radiusToy === 'function'
+        ? DG_KNOCK.headerLine.radiusToy(area)
+        : null;
+      const radius = Number.isFinite(fallbackRadius) && fallbackRadius > 0
+        ? fallbackRadius
+        : Math.max(8, lineWidthWorld * (HeaderSweepForce.radiusMul || 2));
+      const spacing = Math.max(4, radius * (HeaderSweepForce.spacingMul || 0.6));
+      const strength = Number.isFinite(HeaderSweepForce.strength)
+        ? HeaderSweepForce.strength
+        : (DG_KNOCK?.headerLine?.strength || 1600);
+      pushAlongSegment(
+        dgField,
+        xToy,
+        area.y,
+        xToy,
+        area.y + area.h,
+        {
+          radius,
+          strength,
+          spacing,
+          falloff: HeaderSweepForce.falloff || 'gaussian',
+          dirX: headerSweepDirX || 1,
+          dirY: 0,
+        },
+      );
+    } catch (err) {
+      if (DG_DEBUG) console.warn('[DG][pushHeaderSweepAt] failed', err);
+    }
   }
 
   // Poke a thick band along a stroke from (x0,y0)->(x1,y1), sampling along the path and across its width.
@@ -1828,7 +1893,7 @@ function ensureSizeReady({ force = false } = {}) {
         if (!Number.isFinite(usableWidth) || usableWidth <= 0) return;
         const startX = area?.x || 0;
         const xToy = startX + clampedProgress * usableWidth;
-        pokeHeaderBand(xToy, DG_KNOCK.headerLine);
+        pushHeaderSweepAt(xToy);
         dbgPoke('header');
       } catch {}
     });
@@ -3062,7 +3127,8 @@ function syncBackBufferSizes() {
     const w = cw;
     try {
       const xToy = x + w * 0.5;
-      pokeHeaderBand(xToy, DG_KNOCK.headerLine);
+      pushHeaderSweepAt(xToy, { lineWidthPx: w });
+      dbgPoke('header');
     } catch {}
     gctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
     gctx.fillRect(x, gridArea.y, w, gridArea.h);
@@ -4692,8 +4758,12 @@ function syncBackBufferSizes() {
     if (allowOverlayDraw) {
       try {
         const info = getLoopInfo();
-        const phaseJustWrapped = info.phase01 < localLastPhase && localLastPhase > 0.9;
-        localLastPhase = info.phase01;
+        const prevPhase = Number.isFinite(localLastPhase) ? localLastPhase : null;
+        const currentPhase = Number.isFinite(info?.phase01) ? info.phase01 : null;
+        const phaseJustWrapped = currentPhase != null && prevPhase != null && currentPhase < prevPhase && prevPhase > 0.9;
+        if (currentPhase != null) {
+          localLastPhase = currentPhase;
+        }
 
       // Only draw and repulse particles if transport is running and this toy is the active one in its chain.
       // If this toy thinks it's active, but the global transport phase just wrapped,
@@ -4705,13 +4775,6 @@ function syncBackBufferSizes() {
         // Calculate playhead X position based on loop phase
         const playheadX = gridArea.x + info.phase01 * gridArea.w;
 
-        // Repulse particles at playhead position
-        try {
-          const playheadY = gridArea.y + (gridArea.h * 0.5);
-          const radiusToy = Math.max(12, Math.min(gridAreaLogical.w, gridAreaLogical.h) * 0.06);
-          pokeFieldToy('playhead', playheadX, playheadY, radiusToy, 48);
-        } catch (e) { /* fail silently */ }
-
         // Use the flash canvas (fctx) for the playhead. It's cleared each frame.
         fctx.save();
 
@@ -4719,6 +4782,21 @@ function syncBackBufferSizes() {
         const gradientWidth = Math.round(
           Math.max(0.8 * cw, Math.min(gridArea.w * 0.08, 2.2 * cw))
         );
+
+        // Repulse particles along the full header segment
+        try {
+          let sweepDir = headerSweepDirX || 1;
+          if (currentPhase != null && prevPhase != null) {
+            if (phaseJustWrapped) {
+              sweepDir = 1;
+            } else if (Math.abs(currentPhase - prevPhase) > 1e-4) {
+              sweepDir = (currentPhase - prevPhase) >= 0 ? 1 : -1;
+            }
+          }
+          headerSweepDirX = sweepDir;
+          pushHeaderSweepAt(playheadX, { lineWidthPx: gradientWidth });
+          dbgPoke('header');
+        } catch (e) { /* fail silently */ }
         const t = performance.now();
         const hue = 200 + 20 * Math.sin((t / 800) * Math.PI * 2);
         const midColor = `hsla(${(hue + 45).toFixed(0)}, 100%, 70%, 0.25)`;

@@ -479,6 +479,46 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
     }
   }
 
+  function pushDirectional(x, y, dirX, dirY, opts = {}) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    const radius = Math.max(1, Number.isFinite(opts.radius) ? opts.radius : 40);
+    const strength = Number.isFinite(opts.strength) ? opts.strength : 1200;
+    const falloffMode = opts.falloff === 'linear' ? 'linear' : 'gaussian';
+    let ux = Number.isFinite(dirX) ? dirX : 0;
+    let uy = Number.isFinite(dirY) ? dirY : 0;
+    const len = Math.hypot(ux, uy);
+    if (len > 1e-6) {
+      ux /= len;
+      uy /= len;
+    } else {
+      ux = 1;
+      uy = 0;
+    }
+    const radiusSq = radius * radius;
+    const particles = state.particles;
+    const forceMul = Number.isFinite(opts.forceMul) ? opts.forceMul : (config.forceMul || 1);
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+      const dx = p.x - x;
+      const dy = p.y - y;
+      const distSq = dx * dx + dy * dy;
+      if (distSq > radiusSq) continue;
+      const dist = Math.sqrt(distSq) || 0;
+      let weight = 0;
+      if (falloffMode === 'linear') {
+        weight = Math.max(0, 1 - dist / radius);
+      } else {
+        const k = radius > 0 ? dist / radius : 0;
+        weight = Math.exp(-4.5 * k * k);
+      }
+      if (weight <= 0) continue;
+      const mass = Number.isFinite(p.mass) && p.mass > 0 ? p.mass : 1;
+      const impulse = (strength * forceMul * weight) / mass;
+      p.vx += ux * impulse;
+      p.vy += uy * impulse;
+    }
+  }
+
   function setStyle(style = {}) {
     if (!style || typeof style !== 'object') return;
     if (style.fillStyle) config.fillStyle = style.fillStyle;
@@ -502,6 +542,7 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
     resize,
     destroy,
     poke,
+    pushDirectional,
     setStyle,
     canvas,
     _state: state,
