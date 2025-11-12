@@ -41,7 +41,7 @@ const DG_KNOCK = {
   ghostTrail:  { radiusToy: ghostRadiusToy, strength: ghostStrength },
   pointerDown: { radiusToy: ghostRadiusToy, strength: ghostStrength },
   pointerMove: { radiusToy: ghostRadiusToy, strength: ghostStrength },
-  lettersMove: { radius:  120, strength: 36 },
+  lettersMove: { radius:  120, strength: 24 },
   headerLine:  { radiusToy: headerRadiusToy, strength: 2200 },
 };
 
@@ -2885,7 +2885,6 @@ function regenerateMapFromStrokes() {
       });
       try { layout(true); } catch {}
       try { dgField?.resize?.(); } catch {}
-      try { runAutoGhostGuideSweep(); } catch {}
       return;
     }
   });
