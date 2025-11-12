@@ -9,8 +9,6 @@ import { createParticleViewport } from './particles/particle-viewport.js';
 import { createField } from './particles/field-generic.js';
 import { overviewMode } from './overview-mode.js';
 import { boardScale as boardScaleHelper } from './board-scale-helpers.js';
-import { screenToWorld, worldToToy, getViewportScale } from './board-viewport.js';
-import { getToyWorldAnchor } from './toyhelpers-sizing.js';
 
 const gridAreaLogical = { w: 0, h: 0 };
 
@@ -46,6 +44,15 @@ const DG_KNOCK = {
   lettersMove: { radius:  120, strength: 36 },
   headerLine:  { radiusToy: headerRadiusToy, strength: 2200 },
 };
+
+// Smooth letter physics (spring back to center)
+const LETTER_PHYS = Object.freeze({
+  k: 0.02,       // spring constant (higher = snappier return)
+  damping: 0.82, // velocity damping (lower = more wobble)
+  impulse: 0.05, // converts 'strength' to initial velocity kick
+  max: 42,       // clamp max pixel offset from center
+  epsilon: 0.02, // snap-to-zero deadzone
+});
 const KNOCK_DEBUG = false; // flip to true in console if we need counts
 const __pokeCounts = {
   header: 0,
@@ -895,6 +902,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   Object.assign(particleCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 0, pointerEvents: 'none' });
   Object.assign(grid.style,           { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 1 });
   Object.assign(paint.style,          { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 2 });
+  paint.style.pointerEvents = 'auto';
   Object.assign(ghostCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 3, pointerEvents: 'none' });
   Object.assign(flashCanvas.style,  { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 4, pointerEvents: 'none' });
   Object.assign(nodesCanvas.style,  { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 5, pointerEvents: 'none' });
@@ -960,13 +968,61 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       fontSize: 'var(--tap-label-size, clamp(36px, 18vmin, 190px))',
         lineHeight: '1',
         textTransform: 'uppercase',
-        userSelect: 'none'
+        userSelect: 'none',
+        opacity: '0.3'
       });
     wrap.appendChild(drawLabel);
     drawLabel.style.pointerEvents = 'none';
   }
 
   const drawLabelLetters = [];
+
+  // Per-letter physics state
+  let letterStates = []; // [{ el, x, y, vx, vy }]
+  let lettersRAF = null;
+
+  function ensureLetterPhysicsLoop() {
+    if (lettersRAF) return;
+    const step = () => {
+      let rafNeeded = false;
+      for (const st of letterStates) {
+        const ax = -LETTER_PHYS.k * st.x;
+        const ay = -LETTER_PHYS.k * st.y;
+        st.vx = (st.vx + ax) * LETTER_PHYS.damping;
+        st.vy = (st.vy + ay) * LETTER_PHYS.damping;
+        st.x += st.vx;
+        st.y += st.vy;
+
+        if (Math.abs(st.x) < LETTER_PHYS.epsilon) st.x = 0;
+        if (Math.abs(st.y) < LETTER_PHYS.epsilon) st.y = 0;
+
+        const tx = Math.max(-LETTER_PHYS.max, Math.min(LETTER_PHYS.max, st.x));
+        const ty = Math.max(-LETTER_PHYS.max, Math.min(LETTER_PHYS.max, st.y));
+        st.el.style.transform = `translate3d(${tx}px, ${ty}px, 0)`;
+
+        if (
+          st.x !== 0 || st.y !== 0 ||
+          Math.abs(st.vx) > LETTER_PHYS.epsilon ||
+          Math.abs(st.vy) > LETTER_PHYS.epsilon
+        ) {
+          rafNeeded = true;
+        }
+      }
+      lettersRAF = rafNeeded ? requestAnimationFrame(step) : null;
+    };
+    lettersRAF = requestAnimationFrame(step);
+  }
+
+  function rebuildLetterStates() {
+    letterStates.length = 0;
+    for (const el of drawLabelLetters) {
+      el.style.transition = 'none';
+      el.style.willChange = 'transform';
+      letterStates.push({ el, x: 0, y: 0, vx: 0, vy: 0 });
+    }
+    ensureLetterPhysicsLoop();
+  }
+
   function renderDrawText() {
     if (!drawLabel) return;
     drawLabelLetters.length = 0;
@@ -976,12 +1032,12 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       span.className = 'drawgrid-letter';
       span.textContent = ch;
       span.style.display = 'inline-block';
-      span.style.transition = 'transform 90ms ease-out';
       span.style.willChange = 'transform';
       span.style.transform = 'translate3d(0,0,0)';
       drawLabel.appendChild(span);
       drawLabelLetters.push(span);
     }
+    rebuildLetterStates();
   }
   renderDrawText();
 
@@ -1004,27 +1060,29 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     drawLabelLetters.forEach((el, idx) => {
       const letterRect = el.getBoundingClientRect?.();
       if (!letterRect) return;
+
       const lx = letterRect.left - rect.left + letterRect.width * 0.5;
-      const ly = letterRect.top - rect.top + letterRect.height * 0.5;
+      const ly = letterRect.top  - rect.top  + letterRect.height * 0.5;
+
       const dx = lx - relX;
       const dy = ly - relY;
       const distSq = dx * dx + dy * dy;
-      if (distSq > scaledRadius * scaledRadius) {
-        el.style.transform = 'translate3d(0,0,0)';
-        return;
-      }
+      if (distSq > scaledRadius * scaledRadius) return;
+
       const dist = Math.sqrt(distSq) || 1;
       const fall = 1 - Math.min(1, dist / scaledRadius);
       const push = strength * fall * fall;
+
       const ux = dx / dist;
       const uy = dy / dist;
-      const tx = ux * push;
-      const ty = uy * push;
-      el.style.transform = `translate3d(${tx}px, ${ty}px, 0)`;
-      const delay = 80 + (idx * 12);
-      setTimeout(() => {
-        el.style.transform = 'translate3d(0,0,0)';
-      }, delay);
+
+      const st = letterStates[idx];
+      if (!st) return;
+      const impulse = LETTER_PHYS.impulse * push;
+      st.vx += ux * impulse;
+      st.vy += uy * impulse;
+
+      ensureLetterPhysicsLoop();
     });
   }
 
@@ -1239,6 +1297,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
   function pushHeaderSweepAt(xToy, { lineWidthPx } = {}) {
     try {
+      // Do not inject forces while camera is in motion / settling.
+      if (headerPushSuppressed()) return;
+
       if (!dgField?.pushDirectional || !Number.isFinite(xToy)) return;
       const area = (gridArea && gridArea.w > 0 && gridArea.h > 0)
         ? gridArea
@@ -1530,6 +1591,15 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let __zoomActive = false; // true while pinch/wheel gesture is in progress
   let __zoomActiveSince = 0;
   let __lastZoomMotionTs = 0;
+  // Suppress header sweep pushes while zoom/pan gestures are active.
+  let suppressHeaderPushUntil = 0;
+  const HEADER_PUSH_SUPPRESS_MS = 180; // cooldown after zoom motion/commit
+  function headerPushSuppressed() {
+    const now = nowMs();
+    const midGesture = zoomGestureActive;
+    const inMotionCooldown = __lastZoomMotionTs && (now - __lastZoomMotionTs) < HEADER_PUSH_SUPPRESS_MS;
+    return midGesture || inMotionCooldown || (now < suppressHeaderPushUntil);
+  }
   let __lastZoomEventTs = 0;
   let __lastZoomSnapshot = extractZoomSnapshot(initialZoomState);
   let __overviewActive = false;
@@ -2529,6 +2599,7 @@ function regenerateMapFromStrokes() {
       zoomGestureActive = true;
       try { dgViewport?.setNonReactive?.(true); } catch {}
     } else if (!currentlyGesturing && !phase && __zoomActive && zoomMode === 'idle') {
+      suppressHeaderPushUntil = nowMs() + HEADER_PUSH_SUPPRESS_MS;
       releaseZoomFreeze({ reason: 'mode-idle', zoomPayload: z });
     } else {
       zoomGestureActive = currentlyGesturing;
@@ -2543,13 +2614,13 @@ function regenerateMapFromStrokes() {
       try { dgViewport?.setNonReactive?.(true); } catch {}
       const beginScale = Number.isFinite(z?.currentScale) ? z.currentScale : (Number.isFinite(z?.targetScale) ? z.targetScale : null);
       dglog('zoom:begin', { scale: beginScale });
+      suppressHeaderPushUntil = nowMs() + HEADER_PUSH_SUPPRESS_MS;
       return;
     }
 
     if (phase === 'commit' || phase === 'idle' || phase === 'done') {
-      if (phase === 'commit') {
-        try { particles?.snapAllToHomes?.(); } catch {}
-      }
+      try { particles?.snapAllToHomes?.(); } catch {}
+      suppressHeaderPushUntil = nowMs() + HEADER_PUSH_SUPPRESS_MS;
       releaseZoomFreeze({
         reason: `phase-${phase}`,
         refreshLayout: phase === 'commit',
@@ -3778,19 +3849,6 @@ function syncBackBufferSizes() {
     return {active, nodes, disabled};
   }
 
-  // Convert pointer events into layout-space coordinates that ignore board zoom scaling.
-  function toToyPointFromEvent(ev) {
-    const zoom = getViewportScale();
-    const screenPoint = {
-      x: ev?.clientX ?? ev?.x ?? 0,
-      y: ev?.clientY ?? ev?.y ?? 0,
-    };
-    const toyOrigin = getToyWorldAnchor(panel);
-    const worldPoint = screenToWorld(screenPoint);
-    const pToy = worldToToy(worldPoint, toyOrigin || { x: 0, y: 0 });
-    return { pToy, zoom };
-  }
-
   function eraseNodeAtPoint(p) {
     const eraserRadius = getLineWidth();
     for (const node of [...nodeCoordsForHitTest]) { // Iterate on a copy
@@ -3822,7 +3880,7 @@ function syncBackBufferSizes() {
   function onPointerDown(e){
     stopAutoGhostGuide({ immediate: false });
     markUserChange('pointerdown');
-    const { pToy: p } = toToyPointFromEvent(e);
+    const p = pointerToPaintLogical(e);
     updateDrawLabel(false);
 
     // (Top cubes removed)
@@ -3841,13 +3899,15 @@ function syncBackBufferSizes() {
         }
         pendingNodeTap = { col: node.col, row: node.row, x: p.x, y: p.y, group: node.group ?? null };
         setDrawingState(true); // capture move/up
-        paint.setPointerCapture?.(e.pointerId);
+        try { paint.setPointerCapture?.(e.pointerId); } catch {}
+        e.preventDefault?.();
         return; // Defer deciding until move/up
       }
     }
 
     setDrawingState(true);
-    paint.setPointerCapture?.(e.pointerId);
+    try { paint.setPointerCapture?.(e.pointerId); } catch {}
+    e.preventDefault?.();
 
     // Live ink should draw straight to the visible canvas; suppress swaps during drag.
     __dgSkipSwapsDuringDrag = true;
@@ -3896,7 +3956,7 @@ function syncBackBufferSizes() {
           }
         }
       } catch {}
-      const paintStart = pointerToPaintLogical(e);
+      const paintStart = p;
       const { x: x0, y: y0 } = paintStart;
       // Particle push on gesture start — snowplow a full-width band even before movement.
       try {
@@ -3921,7 +3981,7 @@ function syncBackBufferSizes() {
     }
   }
   function onPointerMove(e){
-    const { pToy: p } = toToyPointFromEvent(e);
+    const p = pointerToPaintLogical(e);
     if (!pctx) {
       DG.warn('pctx missing; forcing front buffers');
       if (typeof useFrontBuffers === 'function') useFrontBuffers();
@@ -4018,7 +4078,7 @@ function syncBackBufferSizes() {
       const eraserRadius = getLineWidth();
       eraserCursor.style.transform = `translate(${p.x - eraserRadius}px, ${p.y - eraserRadius}px)`;
       if (drawing && curErase) {
-        const paintErasePt = pointerToPaintLogical(e);
+        const paintErasePt = p;
         const lastPt = curErase.pts[curErase.pts.length - 1] || paintErasePt;
         // Draw a line segment for erasing
         pctx.save();
@@ -4043,7 +4103,7 @@ function syncBackBufferSizes() {
     if (cur) {
       pctx = getActivePaintCtx();
       resetPaintBlend(pctx);
-      const paintPt = pointerToPaintLogical(e);
+      const paintPt = p;
       const pt = paintPt;
       try {
         if (!previewGid && pctx) {
@@ -4220,6 +4280,8 @@ function syncBackBufferSizes() {
       } catch {}
 
       pendingNodeTap = null;
+      setDrawingState(false);
+      return; // handled as a tap, skip stroke handling
     }
 
     // If we were capturing the pointer but ended up not drawing or toggling anything,
