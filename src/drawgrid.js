@@ -99,10 +99,19 @@ const dgTraceWarn = (...args) => { if (DG_TRACE_DEBUG) console.warn(...args); };
 
 // --- Drawgrid debug (off by default) ---
 const DBG_DRAW = false; // set true only for hyper-local issues
-function dbg(tag, obj){ if (DG_DEBUG && DBG_DRAW) console.log(`[DG][${tag}]`, obj || ''); }
+const DG_INK_DEBUG = true;     // live ink logs
+const DG_CLEAR_DEBUG = true;   // paint clears with reasons
+// --- TEMP DEBUG FLAGS ---
+if (typeof window !== 'undefined') {
+  window.DG_DRAW_DEBUG = true; // enable probes/logs for live drawing & snap
+}
 let __dbgLiveSegments = 0;
 let __dbgPointerMoves = 0;
 let __dbgPaintClears = 0;
+function dbg(tag, payload){
+  if (!DG_INK_DEBUG) return;
+  try { console.debug(`[DG][${tag}]`, payload || ''); } catch {}
+}
 const DG_HYDRATE = {
   guardActive: false,
   hydratedAt: 0,
@@ -340,6 +349,8 @@ function withIdentity(ctx, fn) {
   }
 }
 
+let usingBackBuffers = false;
+let __dgDrawingActive = false;
 let paintDpr = Math.max(1, Math.min((typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1, 3));
 
 let cssW = 0, cssH = 0, cw = 0, ch = 0, topPad = 0;
@@ -380,6 +391,13 @@ function resetCtx(ctx) {
 
 function clearCanvas(ctx) {
   if (!ctx || !ctx.canvas) return;
+  // Do not clear the paint layer during a live stroke
+  const role = ctx.canvas?.getAttribute?.('data-role');
+  const isPaintSurface = role === 'drawgrid-paint' || role === 'drawgrid-paint-back';
+  if (typeof window !== 'undefined' && window.DG_DRAW_DEBUG && __dgDrawingActive && isPaintSurface) {
+    console.debug('[DG][CLEAR/SKIP] attempted to clear paint during drag.');
+    return;
+  }
   const surface = ctx.canvas;
   const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
   const width = cssW || (surface?.width ?? 0) / scale;
@@ -387,19 +405,35 @@ function clearCanvas(ctx) {
   resetCtx(ctx);
   withLogicalSpace(ctx, () => ctx.clearRect(0, 0, width, height));
   __dbgPaintClears++;
-  if (DG_DEBUG && DBG_DRAW && (__dbgPaintClears % 20) === 1) {
-    console.debug('[DG][CLEAR]', { which: surface.getAttribute?.('data-role') || 'paint?', clears: __dbgPaintClears });
+  if (DG_CLEAR_DEBUG) {
+    let stack = '';
+    try { stack = (new Error('clear')).stack?.split('\n').slice(1, 6).join('\n'); } catch {}
+    console.debug('[DG][CLEAR]', {
+      target: surface.getAttribute?.('data-role') || 'paint?',
+      clears: __dbgPaintClears,
+      usingBackBuffers,
+    }, stack);
   }
 }
 
 // Draw a live stroke segment directly to FRONT (no swaps, no back-buffers)
 function drawLiveStrokePoint(ctx, pt, prevPt, color) {
   if (!ctx) { dbg('LIVE/no-ctx'); return; }
+  if (typeof window !== 'undefined' && window.DG_DRAW_DEBUG) {
+    console.debug('[DG][LIVE/ctx]', {
+      canvas: ctx.canvas && (ctx.canvas.getAttribute?.('data-role') || ctx.canvas.id),
+      w: ctx.canvas?.width,
+      h: ctx.canvas?.height
+    });
+  }
   resetCtx(ctx);
   withLogicalSpace(ctx, () => {
-              ctx.save();          const lw = getLineWidth();    ctx.lineCap = 'round';
+    ctx.save();
+    let lw = (typeof getLineWidth === 'function' ? getLineWidth() : 4);
+    if (!(lw > 0)) lw = 4; // ensure non-zero/visible
+    ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.strokeStyle = color || '#fff';
+    ctx.strokeStyle = color || '#ffffff';
     ctx.lineWidth = lw;
     if (prevPt) {
       ctx.beginPath();
@@ -407,7 +441,6 @@ function drawLiveStrokePoint(ctx, pt, prevPt, color) {
       ctx.lineTo(pt.x, pt.y);
       ctx.stroke();
     } else {
-      // tiny dot for first point
       ctx.beginPath();
       ctx.arc(pt.x, pt.y, lw * 0.5, 0, Math.PI * 2);
       ctx.fillStyle = color || '#fff';
@@ -1082,6 +1115,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   frontCanvas.classList.add('toy-canvas');
   const frontCtx = frontCanvas.getContext('2d', { willReadFrequently: true });
   const backCanvas = document.createElement('canvas');
+  backCanvas.setAttribute('data-role', 'drawgrid-paint-back');
   const backCtx = backCanvas.getContext('2d', { alpha: true, desynchronized: true });
   let pctx = frontCtx;
 
@@ -1147,16 +1181,39 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
   // === Active canvas helpers (front/back safe) ===
   function getActivePaintCanvas() {
-    return usingBackBuffers ? frontCanvas : paint;
+    // draw into back when using back-buffers, otherwise front (paint)
+    return usingBackBuffers ? backCanvas : frontCanvas; // frontCanvas === paint
   }
   function getActivePaintCtx() {
-    const surf = getActivePaintCanvas();
-    return (surf && typeof surf.getContext === 'function') ? surf.getContext('2d') : pctx;
+    // return the already-created 2D contexts; do not create a fresh context
+    return usingBackBuffers ? backCtx : frontCtx;
   }
   function resetPaintBlend(ctx) {
     if (!ctx) return;
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
+  }
+
+  // Map pointer coordinates into the active paint canvas's logical space.
+  function pointerToPaintLogical(ev = {}) {
+    const canvas = (typeof getActivePaintCanvas === 'function' ? getActivePaintCanvas() : null) || frontCanvas;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect?.();
+    const rw = Math.max(1, rect?.width || canvas.clientWidth || cssW || canvas.width || 1);
+    const rh = Math.max(1, rect?.height || canvas.clientHeight || cssH || canvas.height || 1);
+    const dpr = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+    const lw = cssW || (canvas.width / dpr) || rw;
+    const lh = cssH || (canvas.height / dpr) || rh;
+    const clientX = ev?.clientX ?? ev?.x ?? 0;
+    const clientY = ev?.clientY ?? ev?.y ?? 0;
+    const left = rect?.left ?? 0;
+    const top = rect?.top ?? 0;
+    const lx = (clientX - left) * (lw / rw);
+    const ly = (clientY - top) * (lh / rh);
+    return {
+      x: Number.isFinite(lx) ? lx : 0,
+      y: Number.isFinite(ly) ? ly : 0,
+    };
   }
 
   function resizeSurfacesFor(nextCssW, nextCssH, nextDpr) {
@@ -1494,6 +1551,11 @@ function ensureSizeReady({ force = false } = {}) {
   // Zoom signal hygiene
   let lastCommittedScale = boardScale;
   let drawing=false, erasing=false;
+  const setDrawingState = (state) => {
+    drawing = !!state;
+    __dgDrawingActive = !!state;
+  };
+  setDrawingState(false);
   // The `strokes` array is removed. The paint canvas is now the source of truth.
   let cur = null;
   let curErase = null;
@@ -1567,7 +1629,6 @@ function ensureSizeReady({ force = false } = {}) {
   const SAFE_AREA_FRACTION = 0.05;
   let tutorialHighlightMode = 'none'; // 'none' | 'notes' | 'drag'
   let tutorialHighlightRaf = null;
-  let usingBackBuffers = false;
   let pendingSwap = false;
   let pendingWrapSize = null;
   let pendingEraserSize = null;
@@ -2834,16 +2895,18 @@ function syncBackBufferSizes() {
       }
 
       drawGrid();
-      // Restore paint snapshot scaled to new size (preserves erasures)
+      // Restore paint snapshot scaled to new size (preserves erasures) — but never during an active stroke
       if (paintSnapshot && zoomCommitPhase !== 'recompute') {
         try {
-          updatePaintBackingStores({ target: usingBackBuffers ? 'back' : 'both' });
-          clearCanvas(pctx);
-          pctx.drawImage(
-            paintSnapshot,
-            0, 0, paintSnapshot.width, paintSnapshot.height,
-            0, 0, cssW, cssH
-          );
+          if (!drawing) {
+            updatePaintBackingStores({ target: usingBackBuffers ? 'back' : 'both' });
+            clearCanvas(pctx);
+            pctx.drawImage(
+              paintSnapshot,
+              0, 0, paintSnapshot.width, paintSnapshot.height,
+              0, 0, cssW, cssH
+            );
+          }
         } catch {}
       }
       // Clear other content canvases. The caller is responsible for redrawing nodes/overlay.
@@ -3521,6 +3584,10 @@ function syncBackBufferSizes() {
         }
       }
     }
+    if (typeof window !== 'undefined' && window.DG_DRAW_DEBUG) {
+      const totalNodes = nodes.reduce((n, set) => n + ((set && set.size) || 0), 0);
+      console.debug('[DG][SNAP] summary', { w, h, totalNodes, anyInk: totalNodes > 0 });
+    }
     return {active, nodes, disabled};
   }
 
@@ -3579,24 +3646,44 @@ function syncBackBufferSizes() {
       const cellY = gridArea.y + topPad + node.row * ch;
       if (p.x >= cellX && p.x <= cellX + cw && p.y >= cellY && p.y <= cellY + ch) {
         // With eraser active: erase paint and disable this node + attached lines coloration
-        if (erasing) { erasedTargetsThisDrag.clear(); eraseNodeAtPoint(p); eraseAtPoint(p); return; }
+        if (erasing) {
+          erasedTargetsThisDrag.clear();
+          eraseNodeAtPoint(p);
+          eraseAtPoint(pointerToPaintLogical(e));
+          return;
+        }
         pendingNodeTap = { col: node.col, row: node.row, x: p.x, y: p.y, group: node.group ?? null };
-        drawing = true; // capture move/up
+        setDrawingState(true); // capture move/up
         paint.setPointerCapture?.(e.pointerId);
         return; // Defer deciding until move/up
       }
     }
 
-    drawing=true;
+    setDrawingState(true);
     paint.setPointerCapture?.(e.pointerId);
 
     // Live ink should draw straight to the visible canvas; suppress swaps during drag.
-    if (typeof useFrontBuffers === 'function') useFrontBuffers();
     __dgSkipSwapsDuringDrag = true;
+    if (typeof useFrontBuffers === 'function') useFrontBuffers();
+    pctx = getActivePaintCtx();
+    if (typeof window !== 'undefined' && window.DG_DRAW_DEBUG && pctx && pctx.canvas) {
+      const c = pctx.canvas;
+      console.debug('[DG][PAINT/ctx]', {
+        role: c.getAttribute?.('data-role') || c.id || 'unknown',
+        w: c.width,
+        h: c.height,
+        cssW,
+        cssH,
+        dpr: paintDpr,
+        alpha: pctx.globalAlpha,
+        comp: pctx.globalCompositeOperation,
+      });
+    }
+    resetPaintBlend(pctx);
 
     if (erasing) {
       erasedTargetsThisDrag.clear();
-      curErase = { pts: [p] };
+      curErase = { pts: [pointerToPaintLogical(e)] };
     } else {
       // When starting a new line, don't clear the canvas. This makes drawing additive.
       // If we are about to draw a special line (previewGid decided), demote any existing line of that kind.
@@ -3622,12 +3709,11 @@ function syncBackBufferSizes() {
           }
         }
       } catch {}
-      cur = { 
-        pts:[p],
+      const paintStart = pointerToPaintLogical(e);
+      cur = {
+        pts:[paintStart],
         color: STROKE_COLORS[colorIndex++ % STROKE_COLORS.length]
       };
-      pctx = getActivePaintCtx();
-      resetPaintBlend(pctx);
       try {
         console.debug('[DG][ink] pointerdown', {
           id: panel.id,
@@ -3635,6 +3721,9 @@ function syncBackBufferSizes() {
           frontIs: getActivePaintCanvas()?.getAttribute?.('data-role') || null,
         });
       } catch {}
+      if (typeof window !== 'undefined' && window.DG_DRAW_DEBUG) {
+        console.debug('[DG][PTR->LOCAL]', { x0: paintStart.x, y0: paintStart.y, cssW, cssH, paintDpr });
+      }
       try {
         const r0 = DG_KNOCK.pointerDown.radiusToy(gridArea);
         const s0 = DG_KNOCK.pointerDown.strength;
@@ -3743,7 +3832,8 @@ function syncBackBufferSizes() {
       const eraserRadius = getLineWidth();
       eraserCursor.style.transform = `translate(${p.x - eraserRadius}px, ${p.y - eraserRadius}px)`;
       if (drawing && curErase) {
-        const lastPt = curErase.pts[curErase.pts.length - 1];
+        const paintErasePt = pointerToPaintLogical(e);
+        const lastPt = curErase.pts[curErase.pts.length - 1] || paintErasePt;
         // Draw a line segment for erasing
         pctx.save();
         pctx.globalCompositeOperation = 'destination-out';
@@ -3753,10 +3843,10 @@ function syncBackBufferSizes() {
         pctx.strokeStyle = '#000';
         pctx.beginPath();
         pctx.moveTo(lastPt.x, lastPt.y);
-        pctx.lineTo(p.x, p.y);
+        pctx.lineTo(paintErasePt.x, paintErasePt.y);
         pctx.stroke();
         pctx.restore();
-        curErase.pts.push(p);
+        curErase.pts.push(paintErasePt);
         eraseNodeAtPoint(p);
       }
       return; // Don't do drawing logic if erasing
@@ -3767,12 +3857,13 @@ function syncBackBufferSizes() {
     if (cur) {
       pctx = getActivePaintCtx();
       resetPaintBlend(pctx);
+      const paintPt = pointerToPaintLogical(e);
       try {
         if (!previewGid && pctx) {
           const sz = Math.max(1, Math.floor(getLineWidth() / 6));
           withLogicalSpace(pctx, () => {
             pctx.fillStyle = '#ffffff';
-            pctx.fillRect(p.x, p.y, sz, sz);
+            pctx.fillRect(paintPt.x, paintPt.y, sz, sz);
           });
         }
         if (DG_TRACE_DEBUG) {
@@ -3789,7 +3880,7 @@ function syncBackBufferSizes() {
           });
         }
       } catch {}
-      cur.pts.push(p);
+      cur.pts.push(paintPt);
       // Determine if current stroke should show a special-line preview
       const isAdvanced = panel.classList.contains('toy-zoomed');
       const hasLine1 = strokes.some(s => s.generatorId === 1);
@@ -3819,9 +3910,64 @@ function syncBackBufferSizes() {
       } catch {}
       // For normal lines (no previewGid), paint segment onto paint; otherwise, overlay will show it
       if (!previewGid) {
-        // live-draw to FRONT only; no swaps during drag
-        drawLiveStrokePoint(pctx, cur.pts[cur.pts.length-1], cur.pts[cur.pts.length-2], cur.color);
-        if ((__dbgPointerMoves % 5)===1) dbg('MOVE', {usingBackBuffers, pendingPaintSwap});
+        const lastIdx = cur.pts.length - 1;
+        const prevIdx = Math.max(0, cur.pts.length - 2);
+        const lastPt = cur.pts[lastIdx];
+        const prevPt = cur.pts[prevIdx];
+
+        if (typeof window !== 'undefined' && window.DG_DRAW_DEBUG) {
+          try {
+            // BIG device-pixel dot exactly where the pointer is (dpr-aware), no transforms
+            const dpr = paintDpr || 1;
+            const xpx = Math.round(lastPt.x * dpr);
+            const ypx = Math.round(lastPt.y * dpr);
+            pctx.save();
+            pctx.setTransform(1, 0, 0, 1, 0, 0);
+            const prevComp = pctx.globalCompositeOperation;
+            const prevAlpha = pctx.globalAlpha;
+            pctx.globalCompositeOperation = 'source-over';
+            pctx.globalAlpha = 1;
+            pctx.fillStyle = '#ff00ff';
+            pctx.fillRect(xpx - 6, ypx - 6, 12, 12);
+            pctx.globalCompositeOperation = prevComp;
+            pctx.globalAlpha = prevAlpha;
+            pctx.restore();
+            // Probe alpha at center pixel
+            const a = pctx.getImageData(xpx, ypx, 1, 1).data[3];
+            console.debug('[DG][TESTDOT]', {
+              xpx,
+              ypx,
+              a,
+              canvas: pctx.canvas.getAttribute?.('data-role') || pctx.canvas.id
+            });
+          } catch (err) {
+            console.debug('[DG][TESTDOT/err]', String(err));
+          }
+        }
+
+        // ensure we're actually painting opaque pixels in normal mode
+        resetPaintBlend(pctx);
+        if (typeof window !== 'undefined' && window.DG_DRAW_DEBUG) {
+          const lw = typeof getLineWidth === 'function' ? getLineWidth() : '(n/a)';
+          console.debug('[DG][LIVE/settings]', {
+            lw,
+            alpha: pctx.globalAlpha,
+            comp: pctx.globalCompositeOperation
+          });
+        }
+        // draw the live segment
+        drawLiveStrokePoint(pctx, lastPt, prevPt, cur.color);
+
+        // DEBUG: alpha-probe to confirm pixels were written at the logical point
+        if (typeof window !== 'undefined' && window.DG_DRAW_DEBUG) {
+          try {
+            const dpr = paintDpr || 1;
+            const gx = Math.max(0, Math.min((pctx.canvas.width || 1) - 1, Math.round(lastPt.x * dpr)));
+            const gy = Math.max(0, Math.min((pctx.canvas.height || 1) - 1, Math.round(lastPt.y * dpr)));
+            const a = pctx.getImageData(gx, gy, 1, 1).data[3];
+            console.debug('[DG][LIVE/alpha-probe]', { gx, gy, a });
+          } catch {}
+        }
         __dgNeedsUIRefresh = false; // don't trigger overlay clears during draw
       }
       // Disturb particles for all lines, special or not.
@@ -3864,7 +4010,7 @@ function syncBackBufferSizes() {
       }
       draggedNode = null;
       setDragScaleHighlight(null);
-      drawing = false;
+      setDrawingState(false);
       paint.style.cursor = 'default';
       return;
     }
@@ -3936,8 +4082,16 @@ function syncBackBufferSizes() {
       }
       return;
     }
-    drawing=false;
-
+    setDrawingState(false);
+    if (cur) {
+      try {
+        const finalPaintPt = pointerToPaintLogical(e);
+        const lastPt = cur.pts[cur.pts.length - 1];
+        if (!lastPt || Math.hypot((lastPt.x ?? 0) - finalPaintPt.x, (lastPt.y ?? 0) - finalPaintPt.y) > 0.25) {
+          cur.pts.push(finalPaintPt);
+        }
+      } catch {}
+    }
     const strokeToProcess = cur;
     cur = null;
 
@@ -4070,7 +4224,6 @@ function syncBackBufferSizes() {
     pctx = getActivePaintCtx();
     resetPaintBlend(pctx);
     if (pctx) {
-      clearCanvas(pctx);
       withLogicalSpace(pctx, () => {
         for (const s of strokes) drawFullStroke(pctx, s);
       });
