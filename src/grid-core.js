@@ -2,7 +2,7 @@
 import { triggerInstrument } from './audio-samples.js';
 import { setToyInstrument } from './instrument-map.js';
 import { initToyUI } from './toyui.js';
-import { attachDrumVisuals } from './drum-tiles-visual.js';
+import { attachSimpleRhythmVisual } from './simple-rhythm-visual.js';
 import { midiToName, buildPalette } from './note-helpers.js';
 
 const NUM_CUBES = 8;
@@ -60,7 +60,7 @@ export function buildGrid(panel, numSteps = 8){
   // --- DOM scaffolding ready ---
 
   // Attach visual renderer for the 8-step grid.
-  attachDrumVisuals(panel);
+  attachSimpleRhythmVisual(panel);
 
 // --- Apply any pending restored state (set by persistence.applyLoopGrid before grid init) ---
 try {
@@ -180,12 +180,12 @@ try {
       panel.__pulseHighlight = 1.0; // For border pulse animation
       panel.__pulseRearm = true;
       // Trigger visual flashes.
-      if (panel.__drumVisualState) {
+      if (panel.__simpleRhythmVisualState) {
         // Flash for the individual cube.
-        if (panel.__drumVisualState.flash) panel.__drumVisualState.flash[col] = 1.0;
+        if (panel.__simpleRhythmVisualState.flash) panel.__simpleRhythmVisualState.flash[col] = 1.0;
         // Flash for the main background.
-        panel.__drumVisualState.bgFlash = 1.0;
-        try { panel.__drumVisualState.particleField?.pulse?.(0.85); } catch {}
+        panel.__simpleRhythmVisualState.bgFlash = 1.0;
+        try { panel.__simpleRhythmVisualState.particleField?.pulse?.(0.85); } catch {}
       }
     }
   };

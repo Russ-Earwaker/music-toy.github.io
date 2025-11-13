@@ -2,7 +2,7 @@
 import { triggerInstrument } from './audio-samples.js';
 import { setToyInstrument } from './instrument-map.js';
 import { initToyUI } from './toyui.js';
-import { attachDrumVisuals } from './drum-tiles-visual.js';
+import { attachSimpleRhythmVisual } from './simple-rhythm-visual.js';
 import { attachGridSquareAndDrum } from './grid-square-drum.js';
 import { midiToName, buildPalette } from './note-helpers.js';
 
@@ -199,7 +199,7 @@ export function buildDrumGrid(panel, numSteps = 8){
   // --- All DOM elements are now created ---
 
   // Now, attach logic to the stable DOM
-  attachDrumVisuals(panel);
+  attachSimpleRhythmVisual(panel);
   attachGridSquareAndDrum(panel);
   const toyId = panel.dataset.toyid || panel.id || 'loopgrid-drum';
 

@@ -1,4 +1,4 @@
-// src/drum-tiles-visual.js
+// src/simple-rhythm-visual.js
 // Renders and handles interaction for the 8-step sequencer cubes.
 import { drawBlock, whichThirdRect } from './toyhelpers.js';
 import { boardScale } from './board-scale-helpers.js';
@@ -6,6 +6,31 @@ import { midiToName } from './note-helpers.js';
 import { isRunning, getLoopInfo } from './audio-core.js';
 import { createField } from './particles/field-generic.js';
 import { createParticleViewport } from './particles/particle-viewport.js';
+
+// --- sizing helpers ---------------------------------------------------------
+function raf() {
+  return new Promise(r => requestAnimationFrame(r));
+}
+
+/**
+ * Wait until the element has a stable, non-zero size.
+ * Tries up to maxFrames; bails early when width/height stop changing.
+ */
+async function waitForStableBox(el, { maxFrames = 6 } = {}) {
+  let lastW = -1, lastH = -1;
+  for (let i = 0; i < maxFrames; i++) {
+    await raf(); // let layout/zoom settle this frame
+    const rect = el.getBoundingClientRect();
+    const w = Math.round(rect.width), h = Math.round(rect.height);
+    if (w > 0 && h > 0 && w === lastW && h === lastH) {
+      return { width: w, height: h };
+    }
+    lastW = w; lastH = h;
+  }
+  // final read (whatever it is)
+  const rect = el.getBoundingClientRect();
+  return { width: Math.round(rect.width), height: Math.round(rect.height) };
+}
 
 const NUM_CUBES = 8;
 
@@ -131,9 +156,10 @@ function cssRect(el) {
   };
 }
 
-export function attachDrumVisuals(panel) {
-  if (!panel || panel.__drumVisualAttached) return;
-  panel.__drumVisualAttached = true;
+export async function attachSimpleRhythmVisual(panel) { // Made async
+  console.debug('[SR][size][attach]', { id: panel.id });
+  if (!panel || panel.__simpleRhythmVisualAttached) return;
+  panel.__simpleRhythmVisualAttached = true;
 
   const sequencerWrap = panel.querySelector('.sequencer-wrap');
   let canvas = sequencerWrap
@@ -145,6 +171,95 @@ export function attachDrumVisuals(panel) {
   const ctx = canvas.getContext('2d');
   if (ctx) ctx.imageSmoothingEnabled = false;
 
+  // --- Sizing and Layout Setup ---
+  const targetEl = sequencerWrap; // Element to observe for size changes
+  const st = { // Define st here so it's available for computeLayout
+    panel,
+    canvas,
+    ctx,
+    sequencerWrap,
+    particleCanvas: null, // Will be set later
+    particleField: null,
+    particleObserver: null,
+    lastParticleTick: performance.now(),
+    fieldWidth: 0,
+    fieldHeight: 0,
+    flash: new Float32Array(NUM_CUBES),
+    bgFlash: 0,
+    localLastPhase: 0,
+    tapLabel: null, // Will be set later
+    tapLetters: [],
+    tapLetterFlash: [],
+    tapLetterLastLoop: [],
+    tapLetterBounds: null,
+    tapLetterOffsetX: [],
+    tapLetterOffsetY: [],
+    tapLetterVelocityX: [],
+    tapLetterVelocityY: [],
+    tapFieldRect: null,
+    tapPromptVisible: false,
+    tapLoopIndex: 0,
+    _resizer: null,
+    computeLayout: (w, h) => {
+      const dpr = (window.devicePixelRatio && window.devicePixelRatio > 0) ? window.devicePixelRatio : 1;
+      const cssW = Math.max(1, Math.round(w / dpr));
+      const cssH = Math.max(1, Math.round(h / dpr));
+
+      const isZoomed = panel.classList.contains('toy-zoomed');
+      const layout = getLoopgridLayout(cssW, cssH, isZoomed);
+      const { cubeSize, xOffset, yOffset, blockWidthWithGap, localGap } = layout;
+
+      st.canvas.width = w;
+      st.canvas.height = h;
+
+      st._cubeSize = cubeSize;
+      st._xOffset = xOffset;
+      st._yOffset = yOffset;
+      st._blockWidthWithGap = blockWidthWithGap;
+      st._localGap = localGap;
+      console.debug('[SR][size][applied]', { id: panel.id, cellW: st._cubeSize, cellH: st._cubeSize });
+    },
+  };
+  panel.__simpleRhythmVisualState = st; // Assign st to panel here
+
+  st._resizer?.disconnect?.(); // in case of re-init
+
+  console.debug('[SR][size][before-compute]', {
+    id: panel.id,
+    bodyRect: targetEl?.getBoundingClientRect?.(),
+  });
+  // 1) Defer the first layout until the box is real & stable
+  const box = await waitForStableBox(targetEl);
+  st.computeLayout(box.width, box.height);
+  console.debug('[SR][size][first-layout]', { w: box.width, h: box.height, id: panel.id });
+
+  // 2) Re-layout on container size changes
+  st._resizer = new ResizeObserver((entries) => {
+    for (const entry of entries) {
+      const cr = entry.contentRect;
+      const w = Math.round(cr.width), h = Math.round(cr.height);
+      if (w > 0 && h > 0) {
+        st.computeLayout(w, h);
+        console.debug('[SR][size][resize]', { w, h, id: panel.id });
+      }
+    }
+  });
+  st._resizer.observe(targetEl);
+
+  // 3) Re-layout on zoom settle (hook whatever you already have)
+  panel.zoom?.on?.('end', () => {
+    const rect = targetEl.getBoundingClientRect();
+    st.computeLayout(Math.round(rect.width), Math.round(rect.height));
+    console.debug('[SR][size][zoom-end]', { id: panel.id });
+  });
+
+  panel.zoom?.on?.('tick', () => {
+    const rect = targetEl.getBoundingClientRect();
+    st.computeLayout(Math.round(rect.width), Math.round(rect.height));
+    console.debug('[SR][size][zoom-tick]', { id: panel.id });
+  });
+
+  // --- Particle Canvas Setup (moved after st definition) ---
   let particleCanvas = panel.querySelector('.toy-particles');
   if (!particleCanvas && sequencerWrap) {
     particleCanvas = document.createElement('canvas');
@@ -159,6 +274,8 @@ export function attachDrumVisuals(panel) {
       zIndex: '1',
     });
   }
+  st.particleCanvas = particleCanvas; // Assign to st
+
   let particleField = null;
   let particleObserver = null;
   let overviewHandler = null;
@@ -208,6 +325,8 @@ export function attachDrumVisuals(panel) {
       particleObserver = null;
     }
   }
+  st.particleField = particleField; // Assign to st
+  st.particleObserver = particleObserver; // Assign to st
 
   let tapLabel = sequencerWrap ? sequencerWrap.querySelector('.loopgrid-tap-label') : null;
   if (!tapLabel && sequencerWrap) {
@@ -218,41 +337,14 @@ export function attachDrumVisuals(panel) {
     tapLabel.style.transition = 'none';
     sequencerWrap.appendChild(tapLabel);
   }
-  const tapLetters = ensureTapLetters(tapLabel);
+  st.tapLabel = tapLabel; // Assign to st
+  st.tapLetters = ensureTapLetters(tapLabel); // Assign to st
 
-  const st = {
-    panel,
-    canvas,
-    ctx,
-    sequencerWrap,
-    particleCanvas,
-    particleField,
-    particleObserver,
-    lastParticleTick: performance.now(),
-    fieldWidth: 0,
-    fieldHeight: 0,
-    flash: new Float32Array(NUM_CUBES),
-    bgFlash: 0,
-    localLastPhase: 0,
-    tapLabel,
-    tapLetters,
-    tapLetterFlash: tapLetters.map(() => 0),
-    tapLetterLastLoop: tapLetters.map(() => -1),
-    tapLetterBounds: null,
-    tapLetterOffsetX: tapLetters.map(() => 0),
-    tapLetterOffsetY: tapLetters.map(() => 0),
-    tapLetterVelocityX: tapLetters.map(() => 0),
-    tapLetterVelocityY: tapLetters.map(() => 0),
-    tapFieldRect: null,
-    tapPromptVisible: false,
-    tapLoopIndex: 0,
-  };
-  panel.__drumVisualState = st;
-  panel.__drumVisualState.particleField = particleField || null;
   const teardownParticles = () => {
     try { window.removeEventListener('overview:transition', overviewHandler); } catch {}
-    try { particleObserver?.disconnect?.(); } catch {}
-    try { particleField?.destroy?.(); } catch {}
+    try { st.particleObserver?.disconnect?.(); } catch {} // Use st.particleObserver
+    try { st.particleField?.destroy?.(); } catch {} // Use st.particleField
+    st._resizer?.disconnect?.(); // Disconnect the main resizer
   };
   panel.addEventListener('toy:remove', teardownParticles, { once: true });
 
@@ -327,18 +419,18 @@ export function attachDrumVisuals(panel) {
   });
 
   // Start the render loop
-  if (!panel.__drumRenderLoop) {
+  if (!panel.__simpleRhythmRenderLoop) {
     const renderLoop = () => {
       if (!panel.isConnected) return; // Stop rendering if panel is removed
       render(panel);
-      panel.__drumRenderLoop = requestAnimationFrame(renderLoop);
+      panel.__simpleRhythmRenderLoop = requestAnimationFrame(renderLoop);
     };
     renderLoop();
   }
 }
 
 function render(panel) {
-  const st = panel.__drumVisualState;
+  const st = panel.__simpleRhythmVisualState;
   if (!st) return;
 
   // Handle the highlight pulse animation on note hits.
@@ -568,10 +660,12 @@ function render(panel) {
   const gridRect = st.canvas.getBoundingClientRect();
   const fieldRectData = st.tapFieldRect;
 
-  // To prevent highlight clipping and ensure cubes fit in zoomed view,
-  // we calculate cubeSize based on both width and height constraints.
-  const layout = getLoopgridLayout(cssW, cssH, isZoomed);
-  const { cubeSize, xOffset, yOffset, blockWidthWithGap, localGap } = layout;
+  // Use pre-computed layout values from st
+  const cubeSize = st._cubeSize;
+  const xOffset = st._xOffset;
+  const yOffset = st._yOffset;
+  const blockWidthWithGap = st._blockWidthWithGap;
+  const localGap = st._localGap;
 
   // Check for phase wrap to prevent flicker on chain advance
   const phaseJustWrapped = loopInfo && loopInfo.phase01 < st.localLastPhase && st.localLastPhase > 0.9;
