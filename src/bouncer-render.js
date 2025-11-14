@@ -29,6 +29,7 @@ export function createBouncerDraw(env){
   let prevNow = 0;
   let lastBeat = -1; let lastBar = -1;
   let didInit = false;
+  let _loggedCubeOnce = false;
 
   function draw(){
     // Always ensure backing store matches CSS size for crisp rendering
@@ -124,6 +125,24 @@ export function createBouncerDraw(env){
       if (blocks) {
         blocks.forEach((b, i) => {
           if (!b) return;
+          if (!_loggedCubeOnce && i === 0) {
+            _loggedCubeOnce = true;
+            const rs = renderScale();
+            const blockRect = {
+              x: Math.round(b.x * (rs.sx || 1)),
+              y: Math.round(b.y * (rs.sy || 1)),
+              w: Math.round(b.w * (rs.sx || 1)),
+              h: Math.round(b.h * (rs.sy || 1))
+            };
+            console.debug('[BOUNCER][cube-debug]', {
+              id: panel.id,
+              cssW,
+              cssH,
+              blockSizeCss: blockSize(),
+              blockRect,
+              aspect: (blockRect.w ? (blockRect.h / blockRect.w) : null),
+            });
+          }
           drawBlock(ctx, b, {
             variant: 'button', active: b.active !== false, flash: blockFlashes[i] || 0,
             noteLabel: isAdv ? (noteList[b.noteIndex] || '') : null, showArrows: isAdv,

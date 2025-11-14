@@ -34,6 +34,7 @@ async function waitForStableBox(el, { maxFrames = 6 } = {}) {
 }
 
 const NUM_CUBES = 8;
+const NUM_CUBES_GLOBAL = NUM_CUBES;
 
 // Simple Rhythm cubes: size purely from the local canvas, not boardScale.
 // This keeps them stable across zoom levels and lets the global board zoom
@@ -42,41 +43,67 @@ const NUM_CUBES = 8;
 const GAP = 4; // A few pixels of space between each cube
 const BORDER_MARGIN = 4;
 
-// The canvas covers only the inner GRID area; side gutters (1 cube width)
-// are provided by CSS on .sequencer-wrap. Keep the math in here aligned
-// with the inner canvas dimensions (no extra offsets) so pointer hits stay accurate.
-function getLoopgridLayout(cssW, cssH, isZoomed) {
-  const localGap = isZoomed ? 2 : GAP;
-  const totalGapWidth = localGap * (NUM_CUBES - 1);
+// Simple Rhythm visual tuning: bump cube size slightly so it matches
+// Bouncer / Rippler visually. You can tweak this if needed.
 
-  // Width-based limit (must fit 8 cubes + gaps)
-  const widthBased = Math.floor((cssW - totalGapWidth) / NUM_CUBES);
 
-  // Start from width-based size; width is usually the limiting dimension.
-  let cubeSize = widthBased;
+// The canvas covers the whole field; CSS defines the geometry via custom properties.
+// We read those so JS and CSS share a single source of truth.
+function getLoopgridLayout(cssW, cssH, isZoomed, hostEl) {
+  const NUM_CUBES = NUM_CUBES_GLOBAL || 8;
 
-  // Height-based limit (keep within visible body)
-  const heightBasedMax = Math.floor(cssH - BORDER_MARGIN * 2);
-  if (heightBasedMax > 0) cubeSize = Math.min(cubeSize, heightBasedMax);
+  const styles = hostEl ? getComputedStyle(hostEl) : null;
+  const cubeSizeCss      = styles ? parseFloat(styles.getPropertyValue('--loopgrid-cube-size'))      : NaN;
+  const gapCss           = styles ? parseFloat(styles.getPropertyValue('--loopgrid-gap'))            : NaN;
+  const borderUnitsCss   = styles ? parseFloat(styles.getPropertyValue('--loopgrid-border-units'))   : NaN;
+  const verticalFactorCss= styles ? parseFloat(styles.getPropertyValue('--loopgrid-vertical-factor')): NaN;
 
-  cubeSize = Math.max(1, cubeSize);
+  const baseCubeSize   = Number.isFinite(cubeSizeCss)      ? cubeSizeCss      : 44;
+  const baseGap        = Number.isFinite(gapCss)           ? gapCss           : 4;
+  const borderUnits    = Number.isFinite(borderUnitsCss)   ? borderUnitsCss   : 1;
+  const verticalFactor = Number.isFinite(verticalFactorCss)? verticalFactorCss: 3;
 
+  // ~5% bump in normal view so SR feels the same size as Rippler/Bouncer.
+  const sizeScale = isZoomed ? 1.0 : 1.05;
+  const cubeSize  = baseCubeSize * sizeScale;
+
+  // Slightly tighter gaps when zoomed to avoid visual crowding.
+  const localGap       = isZoomed ? Math.max(1, baseGap * 0.5) : baseGap;
+  const totalGapWidth  = localGap * (NUM_CUBES - 1);
   const blockWidthWithGap = cubeSize + localGap;
-  const xOffset = 0;
-  const yOffset = Math.max(0, Math.floor((cssH - cubeSize) / 2));
+
+  // horizontal border in “cube units”
+  const xOffset = borderUnits * cubeSize;
+
+  // top + row + bottom = verticalFactor cubes
+  const totalHeight = verticalFactor * cubeSize;
+  const yOffset     = (totalHeight - cubeSize) / 2;
 
   console.debug('[SR][layout]', {
     cssW,
     cssH,
     isZoomed,
-    widthBased,
-    heightBasedMax,
+    baseCubeSize,
     cubeSize,
+    sizeScale,
+    baseGap,
+    localGap,
+    borderUnits,
+    verticalFactor,
+    totalGapWidth,
     blockWidthWithGap,
-    GAP: localGap,
+    xOffset,
+    yOffset,
   });
 
-  return { cubeSize, localGap, totalGapWidth, blockWidthWithGap, xOffset, yOffset };
+  return {
+    cubeSize,
+    localGap,
+    totalGapWidth,
+    blockWidthWithGap,
+    xOffset,
+    yOffset,
+  };
 }
 
 function ensureTapLetters(label) {
@@ -236,7 +263,7 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
 
       // Cube size is derived purely from the local canvas size.
       // Zoom is applied globally via board-viewport, not here.
-      const layout = getLoopgridLayout(cssW, cssH, isZoomed);
+      const layout = getLoopgridLayout(cssW, cssH, isZoomed, sequencerWrap || panel);
       const { cubeSize, xOffset, yOffset, blockWidthWithGap, localGap } = layout;
 
       st._cubeSize = cubeSize;
@@ -387,75 +414,121 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
 
   // Listen for clicks on the canvas to toggle steps or change notes
   canvas.addEventListener('pointerdown', (e) => {
+    const st = panel.__simpleRhythmVisualState;
+    if (!st) return;
+
     const rawRect = canvas.getBoundingClientRect();
-    const cssW = Math.max(1, Math.round(rawRect.width));
-    const cssH = Math.max(1, Math.round(rawRect.height));
+    const rawW = Math.max(1, rawRect.width);
+    const rawH = Math.max(1, rawRect.height);
+
+    // Use the same CSS-space dimensions that render/computeLayout use
+    const cssW = Math.max(1, st._cssW || Math.round(rawW));
+    const cssH = Math.max(1, st._cssH || Math.round(rawH));
     if (!cssW || !cssH) return;
 
-    const pointer = { x: e.clientX - rawRect.left, y: e.clientY - rawRect.top };
+    const pointer = {
+      x: e.clientX - rawRect.left,
+      y: e.clientY - rawRect.top,
+    };
 
-    const layout = getLoopgridLayout(
-      cssW,
-      cssH,
-      panel.classList.contains('toy-zoomed')
-    );
-    const { cubeSize, yOffset, blockWidthWithGap } = layout;
+    // Layout values as computed by computeLayout / getLoopgridLayout
+    const cubeSize        = st._cubeSize;
+    const xOffset         = st._xOffset;
+    const yOffset         = st._yOffset;
+    const blockWidthWithGap = st._blockWidthWithGap;
+
+    if (!Number.isFinite(cubeSize) || !Number.isFinite(blockWidthWithGap) || !Number.isFinite(xOffset)) {
+      return;
+    }
     if (blockWidthWithGap <= 0 || cubeSize <= 0) return;
 
-    const clickedIndex = Math.floor(pointer.x / blockWidthWithGap);
+    // Convert pointer.x from canvas pixel space into the same CSS-space
+    // used for layout (they should usually match, but guard against drift).
+    const scaleX = cssW / rawW;
+    const gridX = pointer.x * scaleX;
+
+    // Remove the left border (1 cube of safe-zone)
+    const relX = gridX - xOffset;
+    if (relX < 0) return;
+
+    const clickedIndex = Math.floor(relX / blockWidthWithGap);
     if (clickedIndex < 0 || clickedIndex >= NUM_CUBES) return;
-    const xInBlock = pointer.x - clickedIndex * blockWidthWithGap;
 
-    if (xInBlock < cubeSize) { // Ensure the click is on the cube, not the gap
-      if (clickedIndex >= 0 && clickedIndex < NUM_CUBES) {
-        const state = panel.__gridState;
-        if (!state?.noteIndices || !state?.steps) return;
+    const xInBlock = relX - clickedIndex * blockWidthWithGap;
 
-        const cubeRect = {
-          x: clickedIndex * blockWidthWithGap,
-          y: yOffset,
-          w: cubeSize,
-          h: cubeSize,
-        };
-        const third = whichThirdRect(cubeRect, pointer.y);
-        const isZoomed = panel.classList.contains('toy-zoomed');
+    // Ignore clicks that land in the gap rather than inside the cube.
+    if (xInBlock < 0 || xInBlock >= cubeSize) return;
 
-        let mutated = false;
+    console.debug('[SR][hit-test]', {
+      pointerX: pointer.x,
+      gridX,
+      relX,
+      xOffset,
+      blockWidthWithGap,
+      clickedIndex,
+      cubeSize,
+      cssW,
+      rawW,
+    });
 
-        if (isZoomed && third === 'up') {
-          // Increment the selected step's note index in the palette
-          const curIx = (state.noteIndices[clickedIndex] | 0);
-          const max = state.notePalette.length | 0;
-          state.noteIndices[clickedIndex] = max ? ((curIx + 1) % max) : curIx;
-          // Preview the new note without triggering the cube flash animation
-          panel.dispatchEvent(new CustomEvent('grid:notechange', { detail: { col: clickedIndex } }));
-          mutated = true;
-        } else if (isZoomed && third === 'down') {
-          // Decrement the selected step's note index in the palette
-          const curIx = (state.noteIndices[clickedIndex] | 0);
-          const max = state.notePalette.length | 0;
-          state.noteIndices[clickedIndex] = max ? ((curIx - 1 + max) % max) : curIx;
-          // Preview the new note without triggering the cube flash animation
-          panel.dispatchEvent(new CustomEvent('grid:notechange', { detail: { col: clickedIndex } }));
-          mutated = true;
-        } else {
-          state.steps[clickedIndex] = !state.steps[clickedIndex];
-          mutated = true;
-        }
+    const state = panel.__gridState;
+    if (!state?.noteIndices || !state?.steps) return;
 
-        if (mutated) {
-          try {
-            panel.dispatchEvent(new CustomEvent('loopgrid:update', {
-              detail: {
-                reason: isZoomed ? 'note-change' : 'step-toggle',
-                col: clickedIndex,
-                steps: Array.isArray(state.steps) ? Array.from(state.steps) : undefined,
-                noteIndices: Array.isArray(state.noteIndices) ? Array.from(state.noteIndices) : undefined
-              }
-            }));
-          } catch {}
-        }
-      }
+    // Build cube rect in CSS-space (not pixels), to match layout.
+    const cubeRectCss = {
+      x: xOffset + clickedIndex * blockWidthWithGap,
+      y: yOffset,
+      w: cubeSize,
+      h: cubeSize,
+    };
+
+    // For whichThirdRect we still feed pointer.y in canvas space, but that
+    // only cares about vertical thirds and we kept the same yOffset logic.
+    const third = whichThirdRect(
+      {
+        x: cubeRectCss.x,
+        y: cubeRectCss.y,
+        w: cubeRectCss.w,
+        h: cubeRectCss.h,
+      },
+      pointer.y
+    );
+
+    const isZoomed = panel.classList.contains('toy-zoomed');
+    let mutated = false;
+
+    if (isZoomed && third === 'up') {
+      const curIx = (state.noteIndices[clickedIndex] | 0);
+      const max = state.notePalette.length | 0;
+      state.noteIndices[clickedIndex] = max ? ((curIx + 1) % max) : curIx;
+      panel.dispatchEvent(new CustomEvent('grid:notechange', {
+        detail: { col: clickedIndex },
+      }));
+      mutated = true;
+    } else if (isZoomed && third === 'down') {
+      const curIx = (state.noteIndices[clickedIndex] | 0);
+      const max = state.notePalette.length | 0;
+      state.noteIndices[clickedIndex] = max ? ((curIx - 1 + max) % max) : curIx;
+      panel.dispatchEvent(new CustomEvent('grid:notechange', {
+        detail: { col: clickedIndex },
+      }));
+      mutated = true;
+    } else {
+      state.steps[clickedIndex] = !state.steps[clickedIndex];
+      mutated = true;
+    }
+
+    if (mutated) {
+      try {
+        panel.dispatchEvent(new CustomEvent('loopgrid:update', {
+          detail: {
+            reason: isZoomed ? 'note-change' : 'step-toggle',
+            col: clickedIndex,
+            steps: Array.isArray(state.steps) ? Array.from(state.steps) : undefined,
+            noteIndices: Array.isArray(state.noteIndices) ? Array.from(state.noteIndices) : undefined,
+          },
+        }));
+      } catch {}
     }
   });
 
@@ -540,8 +613,14 @@ const { ctx, canvas, tapLabel, particleCanvas, sequencerWrap, particleField } = 
       cssH,
       scaleX,
       scaleY,
+      aspectCanvas: (h ? (w / h) : null),
+      aspectCss: (cssH ? (cssW / cssH) : null),
     });
   }
+
+  // Use a uniform pixel size for cubes so they stay visually square,
+  // even if scaleX and scaleY differ slightly.
+  const cubePixelSize = Math.round(st._cubeSize * scaleX);
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, w, h);
@@ -725,6 +804,21 @@ const { ctx, canvas, tapLabel, particleCanvas, sequencerWrap, particleField } = 
   st.localLastPhase = loopInfo ? loopInfo.phase01 : 0;
   const probablyStale = isActiveInChain && phaseJustWrapped;
 
+  // --- Cube pixel sizing (make them square on screen) ----------------------
+  // Convert 1 "cubeSize" CSS unit into pixels along X and Y.
+  // Using the smaller of the two guarantees a square in screen space even
+  // if the canvas has non-uniform scaling.
+  const sizePxX = pxX(cubeSize);
+  const sizePxY = pxY(cubeSize);
+
+  // Base square size in pixels from layout: use the smaller axis so cubes stay square
+  // and always fit inside their logical CSS cell.
+  const rawBlockPx = Math.max(1, Math.min(sizePxX, sizePxY));
+  const blockSizePx = Math.round(rawBlockPx);
+
+  // Vertical position: use the CSS-space yOffset (1 cube of buffer) in pixels.
+  const rowY = Math.round(pxY(yOffset));
+
   if (phaseJustWrapped) {
     st.tapLoopIndex = (typeof st.tapLoopIndex === 'number' ? st.tapLoopIndex : 0) + 1;
     if (Array.isArray(st.tapLetterLastLoop)) st.tapLetterLastLoop.fill(-1);
@@ -733,26 +827,54 @@ const { ctx, canvas, tapLabel, particleCanvas, sequencerWrap, particleField } = 
   for (let i = 0; i < NUM_CUBES; i++) {
     const flash = st.flash[i] || 0;
     const isEnabled = !!steps[i];
-    const cubeX = xOffset + i * (cubeSize + localGap);
-    const cubeRectCss = { x: cubeX, y: yOffset, w: cubeSize, h: cubeSize };
+
+    // CSS-space position using our layout (1-cube buffers and gap)
+    const cubeRectCss = {
+      x: xOffset + i * blockWidthWithGap,
+      y: yOffset,
+      w: cubeSize,
+      h: cubeSize,
+    };
+
+    // Final on-screen rectangle in pixel space:
+    // - position derived from CSS-space layout
+    // - size forced square using blockSizePx
     const cubeRect = {
       x: Math.round(pxX(cubeRectCss.x)),
-      y: Math.round(pxY(cubeRectCss.y)),
-      w: Math.round(pxX(cubeRectCss.w)),
-      h: Math.round(pxY(cubeRectCss.h)),
+      y: rowY,
+      w: blockSizePx,
+      h: blockSizePx,
     };
+
+    if (!st._loggedCubeOnce && i === 0) {
+      st._loggedCubeOnce = true;
+      console.debug('[SR][cube-debug]', {
+        id: panel.id,
+        cssW,
+        cssH,
+        cubeSizeCss: cubeSize,
+        xOffsetCss: xOffset,
+        yOffsetCss: yOffset,
+        sizePxX,
+        sizePxY,
+        blockSizePx,
+        cubeRectCss,
+        cubeRect,
+        aspect: cubeRect.w ? (cubeRect.h / cubeRect.w) : null,
+      });
+      const target = 59; // Rippler's current cube size from logs
+      console.debug('[SR][cube-compare]', {
+        cubeSize: cubeSize,
+        target,
+        ratio: (cubeSize / target).toFixed(3),
+      });
+    }
 
     // Draw playhead highlight first, so it's underneath the cube
     // The playhead should scroll if the toy is standalone, or if it's the active toy in a chain.
     if ((isActiveInChain || !isChained) && transportRunning && i === playheadCol && !probablyStale) {
-      // A bigger, centered border highlight drawn by filling a slightly
-      // larger rectangle behind the cube. This is more robust than stroking.
-      // We rely on integer-aligned cube geometry to avoid sub-pixel
-      // rendering artifacts that can make borders appear uneven.
       const borderSize = 4;
       ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-      // To ensure perfect centering, we base the highlight's geometry on the
-      // final, integer-based position and size of the cube itself.
       ctx.fillRect(
         cubeRect.x - borderSize,
         cubeRect.y - borderSize,
@@ -760,8 +882,11 @@ const { ctx, canvas, tapLabel, particleCanvas, sequencerWrap, particleField } = 
         cubeRect.h + borderSize * 2
       );
       if (showTapPrompt && fieldRectData && Number.isFinite(fieldRectData.left) && fieldRectData.width > 0 && gridRect.width > 0 && Array.isArray(st.tapLetterBounds)) {
-        const columnCenterPx = gridRect.left + ((cubeRectCss.x + cubeRectCss.w / 2) / cssW) * gridRect.width;
-        const columnCenterPy = gridRect.top + ((cubeRectCss.y + cubeRectCss.h / 2) / cssH) * gridRect.height;
+        // Map the CSS-space center of this cube into the field for TAP letters.
+        const cubeCenterCssX = cubeRectCss.x + cubeRectCss.w / 2;
+        const cubeCenterCssY = cubeRectCss.y + cubeRectCss.h / 2;
+        const columnCenterPx = gridRect.left + (cubeCenterCssX / cssW) * gridRect.width;
+        const columnCenterPy = gridRect.top + (cubeCenterCssY / cssH) * gridRect.height;
         const centerNorm = (columnCenterPx - fieldRectData.left) / fieldRectData.width;
         if (Number.isFinite(centerNorm)) {
           const clamped = Math.max(0, Math.min(1, centerNorm));

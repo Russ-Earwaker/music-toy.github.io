@@ -26,6 +26,7 @@ export function createRippleSynth(selector){
   const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector;
   const panel  = shell?.closest?.('.toy-panel') || shell;
   const toyId = (panel?.dataset?.toyid || panel?.dataset?.toy || 'rippler').toLowerCase();
+  let _loggedCubeOnce = false;
   // Ensure the toyId is set on the panel's dataset before any UI is initialized.
   // This is critical for volume/mute controls, which read this dataset attribute
   // to correctly target the toy's audio bus.
@@ -760,34 +761,20 @@ export function createRippleSynth(selector){
       for (let b of blocks){ if (b.pulse){ b.pulse = Math.max(0, b.pulse*0.90 - 0.03); } if (b.cflash){ b.cflash = Math.max(0, b.cflash*0.94 - 0.02); } }
       const blockRects = getBlockRects();
 
-      if (!particlesInit && canvas.width && canvas.height){ try { initParticles(canvas.width, canvas.height, EDGE, 280); particlesInit = true; } catch {} }
-      if (typeof window.__rpW === 'undefined'){ window.__rpW = canvas.width; window.__rpH = canvas.height; }
-      if (canvas.width !== window.__rpW || canvas.height !== window.__rpH){
-        window.__rpW = canvas.width; window.__rpH = canvas.height;
-        try { initParticles(canvas.width, canvas.height, EDGE, 280); } catch {}
-      }
+      if (!_loggedCubeOnce && blockRects.length > 0) {
+        _loggedCubeOnce = true;
+        const blockRect = blockRects[0];
+        const cssW = canvas.clientWidth;
+        const cssH = canvas.clientHeight;
 
-      if (generator.placed){
-        ctx.save();
-        ctx.strokeStyle='rgba(255,255,255,0.65)';
-        const tViewWaves = (typeof isRunning==='function' && !isRunning()) ? __pausedNow : ac.currentTime;
-        drawWaves(ctx, n2x(generator.nx), n2y(generator.ny), tViewWaves, RING_SPEED(), ripples, NUM_STEPS, stepSeconds, (sizing.scale||1));
-        ctx.restore();
-      }
-
-      const tView = (typeof isRunning==='function' && !isRunning()) ? __pausedNow : ac.currentTime;
-      drawParticles(ctx, tView, ripples, { x:n2x(generator.nx), y:n2y(generator.ny) }, blockRects);
-
-      const __nowAT = ac.currentTime; const __dt = (__lastDrawAT ? (__nowAT-__lastDrawAT) : 0); __lastDrawAT = __nowAT;
-      for (let i=0;i<blocks.length;i++){
-        const b=blocks[i];
-        if (b.rippleAge != null && b.rippleMax){ b.rippleAge = Math.min(b.rippleMax, Math.max(0, b.rippleAge + __dt)); }
-        // Deferred visual pulse aligned to scheduled audio (when quantizing)
-        try{
-          if (typeof b._visFlashAt === 'number' && ac.currentTime >= b._visFlashAt - 1e-4){
-            b._visFlashAt = undefined; b.pulse = 1; b.cflash = 1; b.flashEnd = Math.max(b.flashEnd||0, ac.currentTime + 0.18);
-          }
-        }catch{}
+        console.debug('[RIPPLER][cube-debug]', {
+          id: panel.id,
+          cssW,
+          cssH,
+          blockSizeCss: blockRect.w, // This is canvas pixels, but it's the 'size'
+          blockRect,
+          aspect: (blockRect.w ? (blockRect.h / blockRect.w) : null),
+        });
       }
 
       // Draw blocks at their own positions; no global offset

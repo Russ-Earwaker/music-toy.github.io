@@ -91,6 +91,18 @@ input, select, textarea, button {
   --guide-width: min(clamp(220px, calc(320px * var(--ui-scale)), 360px), 92vw);
   --ui-float-gap: clamp(14px, calc(24px * var(--ui-scale)), 30px);
   --ui-float-gap-sm: clamp(10px, calc(18px * var(--ui-scale)), 22px);
+
+  /* Base cube size – this should match the Rippler debug cube size (59) */
+  --loopgrid-cube-size: 59px;
+
+  /* Horizontal gap between cubes */
+  --loopgrid-gap: 4px;
+
+  /* 1 cube margin left/right */
+  --loopgrid-border-units: 1;
+
+  /* top + row + bottom = 3 “cube heights” total */
+  --loopgrid-vertical-factor: 3;
 }
 
 .toy-action-label {
@@ -521,19 +533,22 @@ select.toy-instrument {
 .toy-panel[data-toy="loopgrid"] {
   /* Grid geometry */
   --loopgrid-cols: 8;
-  --loopgrid-gap: 4px;
-  /* Keep this equal to Rippler’s block visual size. If Rippler’s blocks change later,
-     update this single token and loopgrid will follow. */
-  --loopgrid-cube-size: 72px;
+
   --loopgrid-inner-width: calc(
     var(--loopgrid-cube-size) * var(--loopgrid-cols)
     + var(--loopgrid-gap) * (var(--loopgrid-cols) - 1)
   );
-  /* Field width = inner grid + a full cube on each side to restore the horizontal buffer */
-  --loopgrid-field-width: calc(var(--loopgrid-inner-width) + var(--loopgrid-cube-size) * 2);
 
-  /* Particle field = 3x cube height (previously 2x) */
-  --loopgrid-field-height: calc(var(--loopgrid-cube-size) * 3);
+  /* Field width = inner grid + 1 cube each side */
+  --loopgrid-field-width: calc(
+    var(--loopgrid-inner-width)
+    + var(--loopgrid-cube-size) * 2 * var(--loopgrid-border-units)
+  );
+
+  /* Field height = 3 cubes tall total */
+  --loopgrid-field-height: calc(
+    var(--loopgrid-cube-size) * var(--loopgrid-vertical-factor)
+  );
 
   --edge-buffer: 0px;
   --panel-w: var(--loopgrid-field-width); /* hug the black background width */
@@ -554,33 +569,32 @@ select.toy-instrument {
   margin-left: 0;
   margin-right: 0;
   background: #0b0f16;
-  border-radius: 0;     /* remove curved corners */
-  overflow: hidden;     /* keep canvases clipped cleanly */
+  border-radius: 0;
+  overflow: hidden;
+
+  /* Make sure parents don't distort its aspect ratio */
+  max-width: 100%;
+  max-height: 100%;
 }
 
-/* Cubes canvas: fixed to inner grid width, centered in the frame */
-/* Force dark background across platforms, even if canvas misses a frame */
-.toy-panel[data-toy="loopgrid"] .sequencer-wrap,
-.toy-panel[data-toy="loopgrid"] .toy-particles,
-.toy-panel[data-toy="loopgrid"] .particle-canvas {
-  background-color: #0b0f16 !important;
-}
-
-/* As a belt-and-braces fallback, give the toy-body a dark base */
-.toy-panel[data-toy="loopgrid"] .toy-body {
-  background-color: #0b0f16;
-}
-
+/* Cubes canvas: fill the full field, same as the particle canvas */
 .toy-panel[data-toy="loopgrid"] .grid-canvas {
   position: absolute;
   z-index: 3;
-  left: 50%;
-  top: 0;
-  transform: translateX(-50%);
-  width: var(--loopgrid-inner-width);
+  inset: 0;                 /* shorthand for top/right/bottom/left: 0 */
+  width: 100%;
   height: 100%;
   display: block;
-  background-color: transparent !important; /* let particle layer stay visible outside the cubes */
+  background-color: transparent !important; /* let particle layer stay visible */
+  /* Ensure no inherited max-* rules squash it */
+  max-width: none;
+  max-height: none;
+  transform: none;          /* remove translateX(-50%) */
+}
+
+/* TEMP: diagnostic outline to confirm canvas aspect is correct */
+.toy-panel[data-toy="loopgrid"] .grid-canvas {
+  outline: 1px solid rgba(0, 255, 0, 0.4);
 }
 
 /* Particle canvas: covers the whole black field (wider than cubes) */
