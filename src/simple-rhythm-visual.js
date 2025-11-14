@@ -63,9 +63,8 @@ function getLoopgridLayout(cssW, cssH, isZoomed, hostEl) {
   const borderUnits    = Number.isFinite(borderUnitsCss)   ? borderUnitsCss   : 1;
   const verticalFactor = Number.isFinite(verticalFactorCss)? verticalFactorCss: 3;
 
-  // ~5% bump in normal view so SR feels the same size as Rippler/Bouncer.
-  const sizeScale = isZoomed ? 1.0 : 1.05;
-  const cubeSize  = baseCubeSize * sizeScale;
+  // Let CSS fully control cube size so borders line up exactly.
+  const cubeSize = baseCubeSize;
 
   // Slightly tighter gaps when zoomed to avoid visual crowding.
   const localGap       = isZoomed ? Math.max(1, baseGap * 0.5) : baseGap;
@@ -85,7 +84,6 @@ function getLoopgridLayout(cssW, cssH, isZoomed, hostEl) {
     isZoomed,
     baseCubeSize,
     cubeSize,
-    sizeScale,
     baseGap,
     localGap,
     borderUnits,
