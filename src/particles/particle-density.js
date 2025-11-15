@@ -39,7 +39,11 @@ export function particleRadiusPx(randomFn = Math.random) {
 }
 
 export function screenRadiusToWorld(rPx, currentZoom) {
-  return rPx / Math.max(0.0001, currentZoom);
+  // Particles for Draw/Simple Rhythm are drawn in a canvas whose size is already
+  // in CSS/screen space (via getBoundingClientRect), so we *don't* want to scale
+  // the radius by board zoom. Keep them roughly constant in pixel size.
+  const base = Number.isFinite(rPx) ? rPx : BASE_RADIUS_PX;
+  return Math.max(0.25, base);
 }
 
 export function seededRandomFactory(seedStr) {
