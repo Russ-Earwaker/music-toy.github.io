@@ -97,17 +97,18 @@ const LETTER_PHYS = Object.freeze({
 // Visual response for DRAW letters on ghost-hit (per-letter only)
 const LETTER_VIS = Object.freeze({
   // Flash timing
-  flashUpMs: 80,        // ms to ramp up to peak
+  flashUpMs: 0,         // ms to ramp up to peak (0 = instant)
   flashDownMs: 260,     // ms to decay to 0
   // Flash look
-  flashBoost: 1.35,     // brightness multiplier at peak (1 = no extra)
+  flashBoost: 1.75,     // brightness multiplier at peak (1 = no extra)
   flashColor: 'rgba(51, 97, 234, 1)', // temporary text color during flash
   // Opacity behavior (becomes MORE opaque on hit)
-  opacityBase: 0.8,       // baseline per-letter opacity (multiplies with the label’s 0.3)
+  opacityBase: 0.35,       // baseline per-letter opacity (multiplies with the letter’s base opacity)
   opacityBoost: 0.9,   // extra opacity at peak flash
   // Ghost hit detection: require touch within this ratio of the radius
   ghostCoreHitMul: 0.55,
 });
+const DRAW_LABEL_OPACITY_BASE = 1;
 const KNOCK_DEBUG = false; // flip to true in console if we need counts
 const __pokeCounts = {
   header: 0,
@@ -1163,7 +1164,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         lineHeight: '1',
         textTransform: 'uppercase',
         userSelect: 'none',
-        opacity: '0.3'
+        opacity: `${DRAW_LABEL_OPACITY_BASE}`
       });
     wrap.appendChild(drawLabel);
     drawLabel.style.pointerEvents = 'none';
@@ -1245,7 +1246,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         if (st.lastHitTs > 0) {
           const t = now - st.lastHitTs;
           if (t <= LETTER_VIS.flashUpMs) {
-            flashAmt = t / Math.max(1, LETTER_VIS.flashUpMs);
+            flashAmt = LETTER_VIS.flashUpMs > 0
+              ? t / Math.max(1, LETTER_VIS.flashUpMs)
+              : 1;
           } else if (t <= LETTER_VIS.flashUpMs + LETTER_VIS.flashDownMs) {
             const d = (t - LETTER_VIS.flashUpMs) / Math.max(1, LETTER_VIS.flashDownMs);
             flashAmt = 1 - d;
@@ -1323,8 +1326,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     if (active) {
       drawLabel.style.display = 'flex';
       // Restore base opacity whenever we show it
-      drawLabel.style.opacity = '0.3';
+      drawLabel.style.opacity = `${DRAW_LABEL_OPACITY_BASE}`;
     } else {
+      drawLabel.style.opacity = '0';
       drawLabel.style.display = 'none';
     }
   }

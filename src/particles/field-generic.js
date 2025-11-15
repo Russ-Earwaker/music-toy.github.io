@@ -95,7 +95,7 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
   };
   const PARTICLE_HIGHLIGHT_DURATION = 900; // ms
   const PARTICLE_HIGHLIGHT_INTENSITY = 0.6; // base cap
-  const PARTICLE_HIGHLIGHT_SIZE_BUMP = 0.65; // relative radius increase at peak highlight
+  const PARTICLE_HIGHLIGHT_SIZE_BUMP = 0.25; // relative radius increase at peak highlight
   const highlightEvents = [];
   // evt: {x,y,radius,t,amp,dur}
 
