@@ -84,6 +84,9 @@ const DG_KNOCK = {
   pointerMove: { radiusToy: ghostRadiusToy, strength: ghostStrength },
   lettersMove: { radius:  120, strength: 24 },
   headerLine:  { radiusToy: headerRadiusToy, strength: 2200 },
+  nodePulse:   {
+    strengthMul: 1800.0, // stronger per-note particle kick on playback
+  },
 };
 
 // Smooth letter physics (spring back to center)
@@ -1547,13 +1550,19 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
           seed: panelSeed,
           cap: 2200,
           returnSeconds: 2.4,   // slower settle time so brightness/offsets linger
-          forceMul: 1.0,        // keep 1.0 unless you need bigger kicks overall
+          forceMul: 1.0,
           noise: 0,
           kick: 0,
           kickDecay: 800.0,
+
+          // --- DEBUG: make particles extremely visible ---
           drawMode: 'dots',
-          minAlpha: 0.25,
-          maxAlpha: 0.85,
+          sizePx: 3.0, // bigger dots so you can clearly see them
+          fillStyle: 'rgba(255, 255, 255, 0.98)',
+          strokeStyle: 'rgba(255, 120, 200, 0.98)',
+
+          minAlpha: 0.95,
+          maxAlpha: 1.0,
           staticMode: true,
         }
       );
@@ -2262,7 +2271,73 @@ function ensureSizeReady({ force = false } = {}) {
   }
   let eraseStrokes = []; // Store all completed erase strokes
   let cellFlashes = []; // For flashing grid squares on note play
-  let noteToggleEffects = []; // For tap feedback animations
+  let noteToggleEffects = []; // For tap feedback ring animations
+  let noteBurstEffects = [];  // For short-range radial particle bursts on note hits
+
+  function spawnNoteRingEffect(cx, cy, baseRadius) {
+    const r =
+      Math.max(
+        6,
+        baseRadius ||
+          (Number.isFinite(cw) && Number.isFinite(ch)
+            ? Math.min(cw, ch) * 0.5
+            : 12),
+      );
+    noteToggleEffects.push({ x: cx, y: cy, radius: r, progress: 0 });
+
+    // Keep a reasonable cap so we don't leak
+    if (noteToggleEffects.length > 48) {
+      noteToggleEffects.splice(0, noteToggleEffects.length - 48);
+    }
+  }
+
+  function spawnNoteBurst(cx, cy, baseRadius) {
+    // We want small particles that travel about half a grid cell
+    const cell =
+      (Number.isFinite(cw) && cw > 0)
+        ? cw
+        : (Number.isFinite(ch) && ch > 0 ? ch : 24);
+
+    // Travel radius target: ~0.5 of a grid square
+    const travelRadius =
+      Math.max(
+        6,
+        baseRadius && baseRadius > 0
+          ? baseRadius * 0.5
+          : cell * 0.5
+      );
+
+    const count = 48;
+    const particles = [];
+
+    for (let i = 0; i < count; i++) {
+      const angle = (Math.PI * 2 * i) / count + Math.random() * 0.4;
+
+      // Speed tuned so, over the particle lifetime, they move visibly across the cell
+      const speed = travelRadius * (10.0 + Math.random() * 10.0);
+
+      // Bigger jitter so motion is obvious from the start
+      const jitter = travelRadius * 0.3 * Math.random();
+
+      particles.push({
+        x: cx + Math.cos(angle) * jitter,
+        y: cy + Math.sin(angle) * jitter,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        // Enough life so the faster particles can travel visibly
+        life: 0.8,
+        // Larger, more obvious dots
+        size: 0.25 + Math.random() * 2,
+      });
+    }
+
+    noteBurstEffects.push({ particles });
+
+    // Cap the number of active bursts so we don't leak
+    if (noteBurstEffects.length > 32) {
+      noteBurstEffects.splice(0, noteBurstEffects.length - 32);
+    }
+  }
   let nodeGroupMap = []; // Per-column Map(row -> groupId or [groupIds]) to avoid cross-line connections and track z-order
   let nextDrawTarget = null; // Per-instance arming for generator buttons (1 or 2).
   let flashes = new Float32Array(cols);
@@ -4850,8 +4925,7 @@ function syncBackBufferSizes() {
       const cx = gridArea.x + col * cw + cw * 0.5;
       const cy = gridArea.y + topPad + row * ch + ch * 0.5;
       const baseRadius = Math.max(6, Math.min(cw, ch) * 0.5);
-      noteToggleEffects.push({ x: cx, y: cy, radius: baseRadius, progress: 0 });
-      if (noteToggleEffects.length > 24) noteToggleEffects.splice(0, noteToggleEffects.length - 24);
+      spawnNoteRingEffect(cx, cy, baseRadius);
       try {
         dgField?.pulse?.(0.25);
         const wrapRect = wrap?.getBoundingClientRect?.();
@@ -5139,14 +5213,24 @@ function syncBackBufferSizes() {
                             panel.__pulseRearm = true;
                             pulseTriggered = true;
                         }
-                        cellFlashes.push({ col, row, age: 1.0 });
-                        try {
-                            const x = gridArea.x + col * cw + cw * 0.5;
-                            const y = gridArea.y + topPad + row * ch + ch * 0.5;
-                            const nodeRadiusToy = Math.max(10, Math.min(gridAreaLogical.w, gridAreaLogical.h) * 0.05);
-                            pokeFieldToy('nodePulse', x, y, nodeRadiusToy, 95);
-                            dgField?.pulse?.(0.8);
-                        } catch(e) {}
+                          cellFlashes.push({ col, row, age: 1.0 });
+                          try {
+                              const x = gridArea.x + col * cw + cw * 0.5;
+                              const y = gridArea.y + topPad + row * ch + ch * 0.5;
+
+                              // Radius roughly the size of a grid square
+                              const nodeRadiusToy = Math.max(10, Math.min(cw, ch) * 0.55);
+
+                              // New local pink burst (no knockback, just visuals)
+                              spawnNoteBurst(x, y, nodeRadiusToy);
+
+                              // Existing ring effect
+                              const ringRadius = Math.max(6, Math.min(cw, ch) * 0.5);
+                              spawnNoteRingEffect(x, y, ringRadius);
+
+                              // Keep the subtle global "breathe" pulse if you like
+                              dgField?.pulse?.(0.8);
+                          } catch (e) {}
                     }
                 }
             }
@@ -5410,6 +5494,72 @@ function syncBackBufferSizes() {
             const alpha = Math.max(0, 1 - effect.progress);
             if (alpha <= 0) {
               noteToggleEffects.splice(i, 1);
+            }
+          }
+        }
+      } catch {}
+    }
+
+    // Pink radial bursts for active notes
+    if (noteBurstEffects.length > 0) {
+      try {
+        const dtMs = Number.isFinite(frameCam?.dt) ? frameCam.dt : 16.6;
+        const dt = Number.isFinite(dtMs) ? dtMs / 1000 : (1 / 60);
+
+        if (allowOverlayDraw) {
+          fctx.save();
+          fctx.globalCompositeOperation = 'lighter';
+          for (let i = noteBurstEffects.length - 1; i >= 0; i--) {
+            const burst = noteBurstEffects[i];
+            let anyAlive = false;
+
+            for (let j = burst.particles.length - 1; j >= 0; j--) {
+              const p = burst.particles[j];
+
+              // Fade out – faster fade so the burst clears quickly
+              p.life -= dt * 2.0;
+              if (p.life <= 0) {
+                burst.particles.splice(j, 1);
+                continue;
+              }
+
+              anyAlive = true;
+
+              // Integrate
+              p.x += p.vx * dt;
+              p.y += p.vy * dt;
+
+              // Gentle damping so they slow as they fade
+              p.vx *= 0.9;
+              p.vy *= 0.9;
+
+              const alpha = p.life;
+              const radius = p.size;
+
+              fctx.globalAlpha = alpha;
+              fctx.fillStyle = 'rgba(255, 180, 210, 1)';
+              fctx.beginPath();
+              fctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+              fctx.fill();
+            }
+
+            if (!anyAlive) {
+              noteBurstEffects.splice(i, 1);
+            }
+          }
+          fctx.restore();
+        } else {
+          for (let i = noteBurstEffects.length - 1; i >= 0; i--) {
+            const burst = noteBurstEffects[i];
+            for (let j = burst.particles.length - 1; j >= 0; j--) {
+              const p = burst.particles[j];
+              p.life -= dt * 2.8;
+              if (p.life <= 0) {
+                burst.particles.splice(j, 1);
+              }
+            }
+            if (!burst.particles.length) {
+              noteBurstEffects.splice(i, 1);
             }
           }
         }
