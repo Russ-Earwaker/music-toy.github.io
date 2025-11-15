@@ -21,6 +21,7 @@ export function computeParticleLayout({
   baseCount = BASE_COUNT,
   minCount = MIN_COUNT,
   maxCount = MAX_COUNT,
+  debugLabel,
 } = {}) {
   const area = Math.max(1, widthPx * heightPx);
   const ideal = (area / baseArea) * baseCount;

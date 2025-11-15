@@ -12,6 +12,47 @@ import { boardScale as boardScaleHelper } from './board-scale-helpers.js';
 
 const gridAreaLogical = { w: 0, h: 0 };
 
+// --- Global Debug Buffer + helpers ---
+(function () {
+  if (typeof window === 'undefined') return;
+
+  // Single global array for all DG debug logs
+  if (!window.DG_LOGS) window.DG_LOGS = [];
+
+  // Debug helper that stores logs AND prints as a JSON string
+  window.DG_LOG = function DG_LOG(entry) {
+    try {
+      window.DG_LOGS.push(entry);
+      const line = JSON.stringify(entry);
+      // One-line JSON, easy to copy
+      console.log('[DG][DBG]', line);
+    } catch (err) {
+      console.warn('DG_LOG failed', err);
+    }
+  };
+
+  // Helper to dump just the zoom logs as one big block of text
+  window.dumpDGZoomLogs = function dumpDGZoomLogs() {
+    try {
+      const lines = (window.DG_LOGS || [])
+        .filter(e => e && e.tag === 'ZOOM-AUDIT')
+        .map(e => JSON.stringify(e));
+      const text = lines.join('\n');
+      console.log('[DG][ZOOM-DUMP]\n' + text);
+      return text;
+    } catch (err) {
+      console.warn('[DG][ZOOM-DUMP] failed', err);
+      return '';
+    }
+  };
+})();
+
+function __dgZoomScale() {
+  if (typeof window === 'undefined') return 1;
+  const scale = Number.isFinite(window.__boardScale) && window.__boardScale > 0 ? window.__boardScale : null;
+  return scale || 1;
+}
+
 if (typeof window !== 'undefined' && typeof window.DG_ZOOM_AUDIT === 'undefined') {
   window.DG_ZOOM_AUDIT = false; // flip true in console to overlay crosshairs/logs
 }
@@ -409,7 +450,15 @@ let paintDpr = Math.max(1, Math.min((typeof window !== 'undefined' ? window.devi
 let cssW = 0, cssH = 0, cw = 0, ch = 0, topPad = 0;
 
 function getLineWidth() {
-  return Math.max(1.5, Math.round(Math.min(cw, ch) * 0.85));
+  // Camera-like behaviour: line thickness is in toy space, not scaled by zoom
+  const cellW = cw || 24;
+  const cellH = ch || 24;
+  const cell = Math.max(4, Math.min(cellW, cellH));
+
+  // Tune these numbers if it looks too thick/thin
+  const base = cell * 0.4;
+  const clamped = Math.max(2, Math.min(base, 60));
+  return clamped;
 }
 
 // Draw in logical (CSS) space scaled by current paintDpr; use for stroke/path operations.
@@ -1246,8 +1295,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   }
 
   function knockLettersAt(localX, localY, { radius = 72, strength = 10, source = 'unknown' } = {}) {
-    const z = Math.max(0.1, dgViewport?.getZoom?.() || 1);
-    const scaledRadius = radius / z;
+  const z = Math.max(0.1, dgViewport?.getZoom?.() || 1);
+  const scaledRadius = radius * z;
     if (!drawLabel || !drawLabelLetters.length) return;
     const rect = drawLabel?.getBoundingClientRect?.();
     if (!rect || !rect.width || !rect.height) return;
@@ -1304,23 +1353,85 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     return { w: width, h: height };
   }
 
+  function getToyCssSizeForParticles() {
+    const host = wrap || panel;
+    const rect = host?.getBoundingClientRect?.();
+    const width = Math.max(1, Math.round(rect?.width || 1));
+    const height = Math.max(1, Math.round(rect?.height || 1));
+    return { w: width, h: height };
+  }
+
   function __auditZoomSizes(tag = 'audit') {
     if (typeof window === 'undefined' || !window.DG_ZOOM_AUDIT) return;
     try {
       const rect = wrap?.getBoundingClientRect?.();
       const clientW = wrap?.clientWidth || 0;
       const clientH = wrap?.clientHeight || 0;
+
       const zoomState = (typeof getZoomState === 'function') ? getZoomState() : null;
       const zoomScale = Number.isFinite(dgViewport?.getZoom?.())
         ? dgViewport.getZoom()
         : (Number.isFinite(zoomState?.scale) ? zoomState.scale : 1);
-      console.log('[DG][ZOOM-AUDIT]', tag, {
+
+      // --- Common area basis (logical toy size) ---
+      const areaW = Number.isFinite(gridAreaLogical?.w) && gridAreaLogical.w > 0
+        ? gridAreaLogical.w
+        : Math.round(rect?.width || clientW || 0);
+      const areaH = Number.isFinite(gridAreaLogical?.h) && gridAreaLogical.h > 0
+        ? gridAreaLogical.h
+        : Math.round(rect?.height || clientH || 0);
+
+      // --- DRAW label sizing (DOM text) ---
+      const minDim = Math.max(1, Math.min(areaW || 0, areaH || 0));
+      const labelZoomScale = Math.max(0.1, __dgZoomScale());
+      const rawLbl = Math.max(48, Math.min(240, minDim * 0.26));
+      const drawLabelPx = Math.max(12, Math.round(rawLbl * labelZoomScale));
+
+      // --- Grid scale + grid line thickness ---
+      const gridCellW = cw || 0;
+      const gridCellH = ch || 0;
+      const gridLineWidthPx = (gridCellW > 0 && gridCellH > 0)
+        ? Math.max(0.5, Math.min(gridCellW, gridCellH) * 0.05 * zoomScale)
+        : 0;
+
+      // --- Drawn animated line thickness ---
+      let drawLineWidthPx = null;
+      try {
+        drawLineWidthPx = typeof getLineWidth === 'function' ? getLineWidth() : null;
+      } catch {
+        drawLineWidthPx = null;
+      }
+
+      // --- Ghost finger / disturbance radii (world-space, based on toy area) ---
+      const areaForRadii = { w: areaW || 0, h: areaH || 0 };
+      const ghostRadius =
+        (typeof ghostRadiusToy === 'function')
+          ? ghostRadiusToy(areaForRadii)
+          : null;
+      const headerRadius =
+        (typeof headerRadiusToy === 'function')
+          ? headerRadiusToy(areaForRadii)
+          : null;
+
+      DG_LOG({
+        tag: 'ZOOM-AUDIT',
+        source: tag,
         zoomScale,
         rectW: Math.round(rect?.width || 0),
         rectH: Math.round(rect?.height || 0),
         clientW,
         clientH,
         gridAreaLogical: { ...gridAreaLogical },
+
+        // Element-specific zoom diagnostics:
+        drawLabelPx,
+        drawLabelRawPx: rawLbl,
+        gridCellW,
+        gridCellH,
+        gridLineWidthPx,
+        drawLineWidthPx,
+        ghostRadiusToy: ghostRadius,
+        headerRadiusToy: headerRadius,
       });
     } catch (err) {
       console.warn('[DG][ZOOM-AUDIT] failed', err);
@@ -1331,7 +1442,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const pausedRef = () => !!panel?.dataset?.paused;
   const viewportBridge = createViewportBridgeDG(panel);
   dgViewport = createParticleViewport(() => {
-    return getToyLogicalSize();
+    // For particles, use the CSS rect (like Simple Rhythm) so layout sees the same basis.
+    return getToyCssSizeForParticles();
   });
   Object.assign(dgViewport, viewportBridge);
   dgMap = dgViewport.map;
@@ -1351,7 +1463,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       dgField?.destroy?.();
       dgViewport?.refreshSize?.({ snap: true });
       dgField = createField(
-        { canvas: particleCanvas, viewport: dgViewport, pausedRef },
+        { canvas: particleCanvas, viewport: dgViewport, pausedRef, debugLabel: 'drawgrid-particles' },
         {
           seed: panelSeed,
           cap: 2200,
@@ -1427,13 +1539,47 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
   function pokeFieldToy(source, xToy, yToy, radiusToy, strength, extra = {}) {
     try {
-      const zoomScale = getOverlayZoomSnapshot()?.scale || 1;
-      if (!Number.isFinite(radiusToy) || radiusToy <= 0) {
-        console.warn('[DG][pokeFieldToy] skipping invalid radius', { source, radiusToy, xToy, yToy });
+      const config = DG_KNOCK[source] || {};
+
+      const zoomSnapshot = typeof getOverlayZoomSnapshot === 'function'
+        ? getOverlayZoomSnapshot()
+        : null;
+      const zoomScale = zoomSnapshot?.scale || 1;
+
+      // radiusToy already defined in toy/world space; the field converts to CSS when needed.
+      const radius = radiusToy;
+
+      const strengthToy = strength * (config.strengthMul ?? 1);
+
+      if (!Number.isFinite(radius) || radius <= 0) {
+        console.warn('[DG][pokeFieldToy] skipping invalid radius', {
+          source,
+          radiusToy,
+          radius,
+          xToy,
+          yToy,
+        });
         return;
       }
+
+      if (DG_DEBUG && DG_DEBUG.poke) {
+        console.log('[DG][POKE][DEBUG]', {
+          source,
+          zoomScale,
+          xToy,
+          yToy,
+          radiusToy,
+          radiusWorld: radius,
+          radiusPx: radius * zoomScale,
+          strength,
+          strengthToy,
+          extra,
+        });
+      }
+
       if (typeof window !== 'undefined' && window.DG_ZOOM_AUDIT) {
         try {
+          // Visual crosshair at the toy coordinate we’re poking
           withLogicalSpace(ghostCtx, () => {
             if (!ghostCtx) return;
             ghostCtx.save();
@@ -1448,18 +1594,31 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
             ghostCtx.restore();
           });
         } catch {}
-        console.log('[DG][POKE]', {
+
+        const camSnapshot = getOverlayZoomSnapshot();
+        const auditZoom = camSnapshot?.scale || 1;
+        const view = dgMap?.size ? dgMap.size() : null;
+        /*console.log('[DG][POKE]', {
           source,
+          zoomScale: auditZoom,
           xToy,
           yToy,
           radiusToy,
+          radiusWorld: radius,
+          radiusPx: radius * auditZoom,
           strength,
-          zoomScale,
-          gridW: gridArea?.w,
-          gridH: gridArea?.h,
-        });
+          strengthToy,
+          gridArea: gridArea && { ...gridArea },
+          gridAreaLogical: { ...gridAreaLogical },
+          viewportSize: view,
+        });*/
       }
-      dgField?.poke?.(xToy, yToy, { radius: radiusToy, strength, ...extra });
+
+      dgField?.poke?.(xToy, yToy, {
+        radius,
+        strength: strengthToy,
+        ...extra,
+      });
       dbgPoke(source || 'poke');
     } catch (err) {
       console.warn('[DG][pokeFieldToy] failed', { source, err });
@@ -1790,9 +1949,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       x: Number.isFinite(snapshot?.x) ? snapshot.x : 0,
       y: Number.isFinite(snapshot?.y) ? snapshot.y : 0,
     };
-  }
-  function __dgZoomScale() {
-    return getOverlayZoomSnapshot()?.scale || 1;
   }
   const initialZoomState = (typeof getZoomState === 'function') ? getZoomState() : null;
   let __zoomActive = false; // true while pinch/wheel gesture is in progress
@@ -3452,10 +3608,12 @@ function syncBackBufferSizes() {
       ch = (gridArea.h - topPad) / rows;
 
       // === DRAW label responsive sizing tied to toy, not viewport ===
-      const minDim = Math.max(1, Math.min(gridArea.w, gridArea.h));
-      const lblPx = Math.round(Math.max(48, Math.min(240, minDim * 0.26)));
+      const areaW = gridAreaLogical?.w || wrap?.clientWidth || 0;
+      const areaH = gridAreaLogical?.h || wrap?.clientHeight || 0;
+      const minDim = Math.max(1, Math.min(areaW, areaH));
+      const labelSizePx = Math.max(48, Math.min(240, minDim * 0.26));
       if (drawLabel?.style) {
-        drawLabel.style.fontSize = `${lblPx}px`;
+        drawLabel.style.fontSize = `${labelSizePx}px`;
       }
       if (Array.isArray(drawLabelLetters)) {
         letterStates = drawLabelLetters.map((el, i) => {
@@ -3590,8 +3748,12 @@ function syncBackBufferSizes() {
       }
 
       // 3. Draw all grid lines with the base color
-      gctx.strokeStyle = 'rgba(143, 168, 255, 0.35)'; // Untriggered particle color, slightly transparent
-      gctx.lineWidth = Math.max(0.5, Math.min(cw,ch) * 0.05);
+      const cellW = cw || 24;
+      const cellH = ch || 24;
+      const cell = Math.max(4, Math.min(cellW, cellH));
+      const gridLineWidthPx = Math.max(1, Math.min(cell * 0.03, 8));
+      gctx.strokeStyle = 'rgba(143, 168, 255, 0.35)';
+      gctx.lineWidth = gridLineWidthPx;
       // Verticals (including outer lines)
       for (let i = 0; i <= cols; i++) {
           const x = crisp(gridArea.x + i * cw);
@@ -6037,6 +6199,19 @@ function startGhostGuide({
     to: { x: endX, y: endY },
     crossY,
   };
+
+  if (typeof window !== 'undefined' && window.DG_ZOOM_AUDIT && !window.__DG_FIRST_GPATH__) {
+    window.__DG_FIRST_GPATH__ = true;
+    const camSnapshot = getOverlayZoomSnapshot();
+    console.log('[DG][GHOST][PATH]', {
+      zoomScale: camSnapshot?.scale || 1,
+      from: { x: startX, y: startY },
+      to: { x: endX, y: endY },
+      crossY,
+      gridArea: gridArea && { ...gridArea },
+      gridAreaLogical: { ...gridAreaLogical },
+    });
+  }
 
   const startTime = performance.now();
   let last = null;

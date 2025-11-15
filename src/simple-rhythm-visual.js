@@ -80,22 +80,6 @@ function getLoopgridLayout(cssW, cssH, isZoomed, hostEl) {
   const totalHeight = verticalFactor * cubeSize;
   const yOffset     = (totalHeight - cubeSize) / 2;
 
-  console.debug('[SR][layout]', {
-    cssW,
-    cssH,
-    isZoomed,
-    baseCubeSize,
-    cubeSize,
-    baseGap,
-    localGap,
-    borderUnits,
-    verticalFactor,
-    totalGapWidth,
-    blockWidthWithGap,
-    xOffset,
-    yOffset,
-  });
-
   return {
     cubeSize,
     localGap,
@@ -209,7 +193,6 @@ function cssRect(el) {
 }
 
 export async function attachSimpleRhythmVisual(panel) { // Made async
-  console.debug('[SR][size][attach]', { id: panel.id });
   if (!panel || panel.__simpleRhythmVisualAttached) return;
   panel.__simpleRhythmVisualAttached = true;
 
@@ -272,30 +255,15 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
       st._blockWidthWithGap = blockWidthWithGap;
       st._localGap = localGap;
 
-      console.debug('[SR][size][applied]', {
-        id: panel.id,
-        cssW,
-        cssH,
-        cubeSize,
-        xOffset,
-        yOffset,
-        blockWidthWithGap,
-        localGap,
-      });
     },
   };
   panel.__simpleRhythmVisualState = st; // Assign st to panel here
 
   st._resizer?.disconnect?.(); // in case of re-init
 
-  console.debug('[SR][size][before-compute]', {
-    id: panel.id,
-    bodyRect: targetEl?.getBoundingClientRect?.(),
-  });
   // 1) Defer the first layout until the box is real & stable
   const box = await waitForStableBox(targetEl);
   st.computeLayout(box.width, box.height);
-  console.debug('[SR][size][first-layout]', { w: box.width, h: box.height, id: panel.id });
 
   // 2) Re-layout on container size changes
   st._resizer = new ResizeObserver((entries) => {
@@ -304,7 +272,6 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
       const w = Math.round(cr.width), h = Math.round(cr.height);
       if (w > 0 && h > 0) {
         st.computeLayout(w, h);
-        console.debug('[SR][size][resize]', { w, h, id: panel.id });
       }
     }
   });
@@ -314,13 +281,11 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
   panel.zoom?.on?.('end', () => {
     const rect = targetEl.getBoundingClientRect();
     st.computeLayout(Math.round(rect.width), Math.round(rect.height));
-    console.debug('[SR][size][zoom-end]', { id: panel.id });
   });
 
   panel.zoom?.on?.('tick', () => {
     const rect = targetEl.getBoundingClientRect();
     st.computeLayout(Math.round(rect.width), Math.round(rect.height));
-    console.debug('[SR][size][zoom-tick]', { id: panel.id });
   });
 
   // --- Particle Canvas Setup (moved after st definition) ---
@@ -377,17 +342,20 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
       const pausedRef = () => !isRunning();
       const panelSeed = panel?.dataset?.toyid || panel?.id || 'loopgrid';
       particleField = createField(
-        { canvas: particleCanvas, viewport: pv, pausedRef },
+        { canvas: particleCanvas, viewport: pv, pausedRef, debugLabel: 'simple-rhythm-particles' },
         {
           seed: panelSeed,
-          cap: 300,
-          stiffness: 16,
-          damping: 0.18,
-          noise: 0.10,
-          kick: 18,
-          kickDecay: 7.5,
+          cap: 2200,
+          returnSeconds: 1.4,
+          forceMul: 1.0,
+          noise: 0,
+          kick: 0,
+          kickDecay: 8.0,
           drawMode: 'dots',
-        },
+          minAlpha: 0.25,
+          maxAlpha: 0.85,
+          staticMode: true,
+        }
       );
       particleField.resize();
       if (typeof ResizeObserver !== 'undefined') {
@@ -499,18 +467,6 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
 
     // Ignore clicks that land in the gap rather than inside the cube.
     if (xInBlock < 0 || xInBlock >= cubeSize) return;
-
-    console.debug('[SR][hit-test]', {
-      pointerX: pointer.x,
-      gridX,
-      relX,
-      xOffset,
-      blockWidthWithGap,
-      clickedIndex,
-      cubeSize,
-      cssW,
-      rawW,
-    });
 
     const state = panel.__gridState;
     if (!state?.noteIndices || !state?.steps) return;
@@ -646,17 +602,6 @@ const { ctx, canvas, tapLabel, particleCanvas, sequencerWrap, particleField } = 
 
   if (!st._loggedScaleOnce) {
     st._loggedScaleOnce = true;
-    console.debug('[SR][scale]', {
-      id: panel.id,
-      w,
-      h,
-      cssW,
-      cssH,
-      scaleX,
-      scaleY,
-      aspectCanvas: (h ? (w / h) : null),
-      aspectCss: (cssH ? (cssW / cssH) : null),
-    });
   }
 
   // Use a uniform pixel size for cubes so they stay visually square,
@@ -889,26 +834,6 @@ const { ctx, canvas, tapLabel, particleCanvas, sequencerWrap, particleField } = 
 
     if (!st._loggedCubeOnce && i === 0) {
       st._loggedCubeOnce = true;
-      console.debug('[SR][cube-debug]', {
-        id: panel.id,
-        cssW,
-        cssH,
-        cubeSizeCss: cubeSize,
-        xOffsetCss: xOffset,
-        yOffsetCss: yOffset,
-        sizePxX,
-        sizePxY,
-        blockSizePx,
-        cubeRectCss,
-        cubeRect,
-        aspect: cubeRect.w ? (cubeRect.h / cubeRect.w) : null,
-      });
-      const target = 59; // Rippler's current cube size from logs
-      console.debug('[SR][cube-compare]', {
-        cubeSize: cubeSize,
-        target,
-        ratio: (cubeSize / target).toFixed(3),
-      });
     }
 
     // Draw playhead highlight first, so it's underneath the cube

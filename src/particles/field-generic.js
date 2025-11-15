@@ -45,6 +45,7 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
   // Static mode: no ambient noise, no radial "kick" gravity. Only reacts to pokes.
   const STATIC_MODE = !!opts.staticMode;
   const ctx = canvas.getContext('2d', { alpha: true });
+  const fieldLabel = opts.debugLabel ?? opts.id ?? 'field-unknown';
 
   const measure = () => {
     const rect = canvas.getBoundingClientRect?.();
@@ -80,6 +81,7 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
     strokeStyle: opts.strokeStyle ?? 'rgba(143,168,255,0.35)',
     fillStyle: opts.fillStyle ?? '#9fb7ff',
     forceMul: typeof opts.forceMul === 'number' ? opts.forceMul : 1.3,
+    debugLabel: fieldLabel,
   };
 
   const state = {
@@ -145,6 +147,7 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
       baseCount: layoutOpts.baseCount,
       minCount: layoutOpts.minCount,
       maxCount: layoutOpts.maxCount,
+      debugLabel: opts.debugLabel || config.seed || 'field',
     });
     const resolvedCount = Number.isFinite(layoutOpts.count)
       ? Math.max(1, Math.round(layoutOpts.count))
@@ -535,6 +538,12 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
   }
 
   resize();
+  console.log('[FIELD][init]', {
+    id: fieldLabel,
+    widthPx: state.w,
+    heightPx: state.h,
+    config,
+  });
 
   return {
     tick,
