@@ -179,13 +179,17 @@ try {
       panel.__playCurrent(col);
       panel.__pulseHighlight = 1.0; // For border pulse animation
       panel.__pulseRearm = true;
-      // Trigger visual flashes.
-      if (panel.__simpleRhythmVisualState) {
+      // Trigger visual flashes and particle burst.
+      const vis = panel.__simpleRhythmVisualState;
+      if (vis) {
         // Flash for the individual cube.
-        if (panel.__simpleRhythmVisualState.flash) panel.__simpleRhythmVisualState.flash[col] = 1.0;
+        if (vis.flash) vis.flash[col] = 1.0;
         // Flash for the main background.
-        panel.__simpleRhythmVisualState.bgFlash = 1.0;
-        try { panel.__simpleRhythmVisualState.particleField?.pulse?.(0.85); } catch {}
+        vis.bgFlash = 1.0;
+        try {
+          vis.particleField?.pulse?.(0.85);
+          vis.triggerNoteParticleBurst?.(col);
+        } catch {}
       }
     }
   };

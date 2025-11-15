@@ -235,6 +235,17 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     tapPromptVisible: false,
     tapLoopIndex: 0,
     _resizer: null,
+    _debugBurstSettings: null,
+    _debugBurstLine: null,
+    burstParticles: [],
+    burstConfig: {
+      particleCount: 20,
+      lifeSeconds: 0.35,
+      speedScalar: 5,
+      pixelSize: 6,
+      color: 'rgba(255, 180, 220, 1)',
+    },
+    _burstLastTime: performance.now(),
     computeLayout: (w, h) => {
       resizeCanvasForDPR(st.canvas, w, h);
       st._cssW = w;
@@ -256,6 +267,16 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
       st._localGap = localGap;
 
     },
+  };
+  const globalObj = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
+  const burstDebugEnv = globalObj?.__simpleRhythmBurstDebug;
+  st._debugBurstSettings = {
+    showIndicator: !!burstDebugEnv?.showIndicator,
+    logPush: !!burstDebugEnv?.logPush,
+    lineDuration: Number.isFinite(burstDebugEnv?.lineDuration) ? burstDebugEnv.lineDuration : 300,
+    lineColor: typeof burstDebugEnv?.lineColor === 'string' ? burstDebugEnv.lineColor : 'rgba(255, 128, 0, 0.85)',
+    lineWidth: Number.isFinite(burstDebugEnv?.lineWidth) ? burstDebugEnv.lineWidth : 2,
+    lineDash: Array.isArray(burstDebugEnv?.lineDash) ? burstDebugEnv.lineDash : [],
   };
   panel.__simpleRhythmVisualState = st; // Assign st to panel here
 
@@ -354,7 +375,8 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
           drawMode: 'dots',
           minAlpha: 0.25,
           maxAlpha: 0.85,
-          staticMode: true,
+          // IMPORTANT: let particles actually respond to pushes
+          staticMode: false,
         }
       );
       particleField.resize();
@@ -399,6 +421,106 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
   }
   st.particleField = particleField; // Assign to st
   st.particleObserver = particleObserver; // Assign to st
+
+  // Expose a helper so grid-core can trigger a directional particle burst
+  // when a cube plays.
+  st.triggerNoteParticleBurst = (colIndex) => {
+    const globalObj = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
+    const burstDebugEnv = globalObj?.__simpleRhythmBurstDebug || {};
+    const debug = st._debugBurstSettings = {
+      showIndicator: !!burstDebugEnv.showIndicator,
+      logPush: !!burstDebugEnv.logPush,
+      lineDuration: Number.isFinite(burstDebugEnv.lineDuration) ? burstDebugEnv.lineDuration : 300,
+      lineColor: typeof burstDebugEnv.lineColor === 'string' ? burstDebugEnv.lineColor : 'rgba(255, 128, 0, 0.85)',
+      lineWidth: Number.isFinite(burstDebugEnv.lineWidth) ? burstDebugEnv.lineWidth : 2,
+      lineDash: Array.isArray(burstDebugEnv.lineDash) ? burstDebugEnv.lineDash : [],
+    };
+
+    const cssW = st._cssW || (sequencerWrap?.clientWidth || canvas.clientWidth || 0);
+    const cssH = st._cssH || (sequencerWrap?.clientHeight || canvas.clientHeight || 0);
+    if (!cssW || !cssH) return;
+
+    const cubeSize = st._cubeSize;
+    const xOffset = st._xOffset;
+    const yOffset = st._yOffset;
+    const blockWidthWithGap = st._blockWidthWithGap;
+    if (!Number.isFinite(cubeSize) || cubeSize <= 0) return;
+
+    const numCubes = NUM_CUBES_GLOBAL || NUM_CUBES || 8;
+    const col = Math.max(0, Math.min(numCubes - 1, (colIndex | 0)));
+
+    const cubeXCss = xOffset + col * blockWidthWithGap;
+    const cubeYCss = yOffset;
+    const cubeCenterCssX = cubeXCss + cubeSize * 0.5;
+    const cubeCenterCssY = cubeYCss + cubeSize * 0.5;
+
+    const cfg = st.burstConfig || {};
+    const count = cfg.particleCount || 30;
+    const lifeSeconds = cfg.lifeSeconds || 0.35;
+    const speedScalar = (cfg.speedScalar ?? 10);
+    const pixelSize = (cfg.pixelSize ?? 4);
+    const color = cfg.color || 'rgba(255, 180, 220, 0.9)';
+
+    const maxSpeed = cubeSize * speedScalar;
+    const minSpeed = maxSpeed * 0.4;
+
+    const now = performance.now();
+    const midIndex = (count - 1) / 2;
+
+    for (let i = 0; i < count; i++) {
+      const t = count <= 1 ? 0.5 : i / (count - 1);
+
+      // Centered along a horizontal line across the cube
+      const x = cubeCenterCssX + (t - 0.5) * cubeSize;
+      const y = cubeCenterCssY;
+
+      // Deterministic up/down direction (no random angle)
+      const up = (i % 2) === 0;
+      const angle = up ? -Math.PI / 2 : Math.PI / 2;
+
+      // Arrow shape: middle particles move fastest, edges slowest
+      const centerDist = Math.abs(i - midIndex) / (midIndex || 1); // 0 at center, 1 at ends
+      const centerBias = 1 - centerDist;                            // 1 at center, 0 at ends
+      const bias = 0.2 + 0.8 * centerBias;                          // keep ends from being completely dead
+      const speed = minSpeed + (maxSpeed - minSpeed) * bias;
+
+      const vx = Math.cos(angle) * speed;
+      const vy = Math.sin(angle) * speed;
+
+      st.burstParticles.push({
+        x,
+        y,
+        vx,
+        vy,
+        life: 1,
+        lifeSeconds,
+        size: pixelSize, // fixed size → ~2px on screen
+        color,
+        born: now,
+      });
+    }
+
+    if (debug?.logPush) {
+      console.debug('[loopgrid] particle burst', {
+        col,
+        cubeCenterCssX,
+        cubeCenterCssY,
+        count,
+        lifeSeconds,
+        speedScalar,
+      });
+    }
+
+    if (debug?.showIndicator) {
+      const duration = Number.isFinite(debug.lineDuration) ? debug.lineDuration : 300;
+      st._debugBurstLine = {
+        x: cubeXCss,
+        y: cubeYCss,
+        size: cubeSize,
+        expire: now + duration,
+      };
+    }
+  };
 
   let tapLabel = sequencerWrap ? sequencerWrap.querySelector('.loopgrid-tap-label') : null;
   if (!tapLabel && sequencerWrap) {
@@ -581,18 +703,24 @@ function render(panel) {
   }
   panel.classList.toggle('toy-playing', showPlaying);
 
-const { ctx, canvas, tapLabel, particleCanvas, sequencerWrap, particleField } = st;
+  const { ctx, canvas, tapLabel, particleCanvas, sequencerWrap, particleField } = st;
   const w = canvas.width;
   const h = canvas.height;
   const cssW = st._cssW || canvas.clientWidth;
   const cssH = st._cssH || canvas.clientHeight;
+  const renderTime = performance.now();
+
   if (particleField) {
-    const now = performance.now();
-    if (!Number.isFinite(st.lastParticleTick)) st.lastParticleTick = now;
-    const dt = Math.min(0.05, Math.max(0, (now - st.lastParticleTick) / 1000));
-    st.lastParticleTick = now;
+    if (!Number.isFinite(st.lastParticleTick)) st.lastParticleTick = renderTime;
+    const dt = Math.min(0.05, Math.max(0, (renderTime - st.lastParticleTick) / 1000));
+    st.lastParticleTick = renderTime;
     try { particleField.tick(dt || (1 / 60)); } catch {}
   }
+
+  if (!Number.isFinite(st._burstLastTime)) st._burstLastTime = renderTime;
+  const burstDt = Math.min(0.05, Math.max(0, (renderTime - st._burstLastTime) / 1000));
+  st._burstLastTime = renderTime;
+
   if (!cssW || !cssH || !w || !h) return;
 
   const scaleX = cssW ? (w / cssW) : 1;
@@ -610,6 +738,62 @@ const { ctx, canvas, tapLabel, particleCanvas, sequencerWrap, particleField } = 
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, w, h);
+
+  const debugSettings = st._debugBurstSettings;
+  const debugLine = st._debugBurstLine;
+  if (debugSettings?.showIndicator && debugLine) {
+    if (renderTime >= debugLine.expire) {
+      st._debugBurstLine = null;
+    } else if (ctx) {
+      const rectX = debugLine.x * scaleX;
+      const rectY = debugLine.y * scaleY;
+      const rectW = debugLine.size * scaleX;
+      const rectH = debugLine.size * scaleY;
+      ctx.save();
+      ctx.strokeStyle = debugSettings.lineColor;
+      ctx.lineWidth = Math.max(1, debugSettings.lineWidth);
+      if (ctx.setLineDash) ctx.setLineDash(debugSettings.lineDash || []);
+      ctx.strokeRect(rectX, rectY, rectW, rectH);
+      ctx.restore();
+    }
+  }
+
+  // --- Note burst particles (overlay, like Draw toy) ---
+  if (Array.isArray(st.burstParticles) && st.burstParticles.length && ctx) {
+    const particles = st.burstParticles;
+    const remaining = [];
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+      const lifeSeconds = p.lifeSeconds || 0.35;
+      const decay = lifeSeconds > 0 ? (burstDt / lifeSeconds) : burstDt * 3;
+      p.life -= decay;
+      if (p.life <= 0) continue;
+
+      p.x += p.vx * burstDt;
+      p.y += p.vy * burstDt;
+
+      remaining.push(p);
+    }
+    st.burstParticles = remaining;
+
+    if (remaining.length) {
+      ctx.save();
+      for (const p of remaining) {
+        const alpha = Math.max(0, Math.min(1, p.life));
+        const cx = p.x * scaleX;
+        const cy = p.y * scaleY;
+        const r = (p.size * 0.5) * ((scaleX + scaleY) * 0.5 || 1);
+
+        ctx.globalAlpha = alpha;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fillStyle = p.color || 'rgba(255, 180, 220, 0.9)';
+        ctx.fill();
+      }
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
+  }
 
   const loopInfo = getLoopInfo();
   const playheadCol = loopInfo ? Math.floor(loopInfo.phase01 * NUM_CUBES) : -1;
@@ -759,7 +943,7 @@ const { ctx, canvas, tapLabel, particleCanvas, sequencerWrap, particleField } = 
         tapLetters[i].style.color = `rgba(80, 120, 180, ${finalAlpha})`;
 
         if (activeFlash > 0) {
-          const glowRadius = 10 + activeFlash * 24;
+          const glowRadius = 100 + activeFlash * 24;
           const glowAlpha = 0.25 + activeFlash * 0.45;
           tapLetters[i].style.textShadow = `0 0 ${glowRadius.toFixed(0)}px rgba(150, 190, 255, ${glowAlpha.toFixed(2)})`;
         } else {

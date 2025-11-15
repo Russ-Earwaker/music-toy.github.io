@@ -1555,15 +1555,11 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
           kick: 0,
           kickDecay: 800.0,
 
-          // --- DEBUG: make particles extremely visible ---
+          // Restore normal idle particle look (same as Simple Rhythm)
           drawMode: 'dots',
-          sizePx: 3.0, // bigger dots so you can clearly see them
-          fillStyle: 'rgba(255, 255, 255, 0.98)',
-          strokeStyle: 'rgba(255, 120, 200, 0.98)',
-
-          minAlpha: 0.95,
-          maxAlpha: 1.0,
-          staticMode: true,
+          sizePx: 1.4,
+          minAlpha: 0.25,
+          maxAlpha: 0.85,
         }
       );
       window.__dgField = dgField;
