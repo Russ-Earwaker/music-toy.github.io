@@ -69,7 +69,7 @@ function toyRadiusFromArea(area, ratio, minimum) {
 }
 
 // === DRAWGRID TUNING (single source of truth) ===
-const ghostRadiusToy = (area) => toyRadiusFromArea(area, 0.027, 12); // legacy feel, +50% applied when poking
+const ghostRadiusToy = (area) => toyRadiusFromArea(area, 0.054, 12); // doubled radius, +50% applied when poking
 const ghostStrength = 1600;
 const headerRadiusToy = (area) => toyRadiusFromArea(area, 0.022, 10);
 export const HeaderSweepForce = Object.freeze({
@@ -394,22 +394,28 @@ const STROKE_COLORS = [
   'rgba(255,220,95,0.95)', // Yellow
 ];
 
-  // Opacity for visual-only strokes (should be semi-transparent on ANY layer)
-  const VISUAL_ONLY_ALPHA = 0.6; // tweak between 0.4–0.7 to taste
+// Opacity for decorative/secondary strokes
+const VISUAL_ONLY_ALPHA = 0.6; // decorative lines
+const SECONDARY_ALPHA   = 0.6; // secondary generator line (Line 2)
 
-  function isVisualOnlyStroke(s) {
-    // Decorative if it’s not a generator/special and not a demoted colorized overlay
-    return !s?.isSpecial && !s?.generatorId && !s?.overlayColorize;
-  }
+function isVisualOnlyStroke(s) {
+  // Decorative if it’s not a generator/special and not a demoted colorized overlay
+  return !s?.isSpecial && !s?.generatorId && !s?.overlayColorize;
+}
 
-  function getPathAlpha({ isOverlay, wantsSpecial, isVisualOnly }) {
-    // Special/generative lines are always fully opaque
-    if (wantsSpecial) return 1;
-    // Decorative lines should be semi-transparent whether drawn on paint or overlay
-    if (isVisualOnly) return VISUAL_ONLY_ALPHA;
-    // Non-special but not decorative (e.g., demoted overlay colorize pass)
-    return isOverlay ? VISUAL_ONLY_ALPHA : 1;
-  }
+function getPathAlpha({ isOverlay, wantsSpecial, isVisualOnly, generatorId }) {
+  // Secondary drawn lines (generatorId === 2) should be semi-transparent
+  if (wantsSpecial && generatorId === 2) return SECONDARY_ALPHA;
+
+  // Primary/special line (Line 1) stays fully opaque
+  if (wantsSpecial) return 1;
+
+  // Decorative lines should be semi-transparent whether drawn on paint or overlay
+  if (isVisualOnly) return VISUAL_ONLY_ALPHA;
+
+  // Non-special but not decorative (e.g., demoted overlay colorize pass)
+  return isOverlay ? VISUAL_ONLY_ALPHA : 1;
+}
   let colorIndex = 0;
 
 function createViewportBridgeDG(hostEl) {
@@ -456,7 +462,8 @@ function getLineWidth() {
   const cell = Math.max(4, Math.min(cellW, cellH));
 
   // Tune these numbers if it looks too thick/thin
-  const base = cell * 0.4;
+  // (doubled from 0.4 → 0.8 to make strokes ~2x thicker)
+  const base = cell * 0.8;
   const clamped = Math.max(2, Math.min(base, 60));
   return clamped;
 }
@@ -1441,9 +1448,13 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   // --- Particle viewport / field init after wrap is ready ---
   const pausedRef = () => !!panel?.dataset?.paused;
   const viewportBridge = createViewportBridgeDG(panel);
+
+  // IMPORTANT:
+  // Use the logical toy size for the particle viewport so that:
+  // - grid, ghost path, and particles all share the same world-space basis, and
+  // - camera zoom (board scale) just scales the whole toy visually.
   dgViewport = createParticleViewport(() => {
-    // For particles, use the CSS rect (like Simple Rhythm) so layout sees the same basis.
-    return getToyCssSizeForParticles();
+    return getToyLogicalSize();
   });
   Object.assign(dgViewport, viewportBridge);
   dgMap = dgViewport.map;
@@ -3812,7 +3823,12 @@ function syncBackBufferSizes() {
       const isOverlay = (ctx === fctx);
       const wantsSpecial = !!stroke.isSpecial;
       const visualOnly = isVisualOnlyStroke(stroke);
-      const alpha = getPathAlpha({ isOverlay, wantsSpecial, isVisualOnly: visualOnly });
+      const alpha = getPathAlpha({
+        isOverlay,
+        wantsSpecial,
+        isVisualOnly: visualOnly,
+        generatorId: stroke.generatorId ?? null,
+      });
 
       emitDG('path-alpha', {
         layer: (ctx === fctx) ? 'overlay' : 'paint',
@@ -6273,6 +6289,12 @@ function startGhostGuide({
     const camSnapshot = getOverlayZoomSnapshot();
     const z = camSnapshot.scale;
 
+    // Use the same world-space radius for both visual and disturbance,
+    // so the ghost finger "looks as big as it feels".
+    const baseR = DG_KNOCK.ghostTrail.radiusToy(gridArea);
+    const capR = Math.max(8, Math.min(gridAreaLogical.w, gridAreaLogical.h) * 0.25);
+    const radius = Math.min(baseR, capR);
+
     if (last) {
       resetCtx(ghostCtx);
       withLogicalSpace(ghostCtx, () => {
@@ -6280,14 +6302,18 @@ function startGhostGuide({
         ghostCtx.globalAlpha = 0.25;
         ghostCtx.lineCap = 'round';
         ghostCtx.lineJoin = 'round';
-        ghostCtx.lineWidth = getLineWidth() * 1.15;
+
+        // Trail thickness: proportional to disturbance radius (camera-like).
+        const trailWidth = Math.max(2, radius * 1.35);
+        ghostCtx.lineWidth = trailWidth;
         ghostCtx.strokeStyle = 'rgba(68,112,255,0.7)';
         ghostCtx.beginPath();
         ghostCtx.moveTo(last.x, last.y);
         ghostCtx.lineTo(x, y);
         ghostCtx.stroke();
 
-        const dotR = getLineWidth() * 0.45;
+        // Core dot: roughly matches the disturbance band.
+        const dotR = Math.max(2, radius * 0.9);
         ghostCtx.beginPath();
         ghostCtx.arc(x, y, dotR, 0, Math.PI * 2);
         ghostCtx.fillStyle = 'rgba(68,112,255,0.85)';
@@ -6296,9 +6322,7 @@ function startGhostGuide({
     }
     last = { x, y };
 
-    const baseR = DG_KNOCK.ghostTrail.radiusToy(gridArea);
-    const capR = Math.max(8, Math.min(gridAreaLogical.w, gridAreaLogical.h) * 0.25);
-    const radius = Math.min(baseR, capR);
+    // Disturbance uses the same radius as the visual above.
     pokeFieldToy('ghostTrail', x, y, radius, DG_KNOCK.ghostTrail.strength, { mode: 'plow', highlightMs: 420 });
     if (!window.__DG_FIRST_GHOST_LOGGED__) {
       window.__DG_FIRST_GHOST_LOGGED__ = true;
