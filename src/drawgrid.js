@@ -394,26 +394,33 @@ const STROKE_COLORS = [
   'rgba(255,220,95,0.95)', // Yellow
 ];
 
-// Opacity for decorative/secondary strokes
-const VISUAL_ONLY_ALPHA = 0.6; // decorative lines
-const SECONDARY_ALPHA   = 0.6; // secondary generator line (Line 2)
+// Opacity for decorative/visual-only strokes
+const VISUAL_ONLY_ALPHA = 0.35; // decorative lines (non-generator)
+const SECONDARY_ALPHA   = 0.6; // reserved for future use (e.g. alt styles)
 
+/**
+ * Visual-only strokes:
+ * - do NOT generate nodes (no isSpecial, no generatorId)
+ * - are not overlay colorize passes
+ */
 function isVisualOnlyStroke(s) {
-  // Decorative if it’s not a generator/special and not a demoted colorized overlay
   return !s?.isSpecial && !s?.generatorId && !s?.overlayColorize;
 }
 
+/**
+ * Compute alpha for a stroke path.
+ * - All generator/special lines (Line 1, Line 2, …) stay fully opaque.
+ * - Visual-only strokes are semi-transparent, both on paint and overlay.
+ * - Demoted overlay passes (overlayColorize) stay more subtle on overlay.
+ */
 function getPathAlpha({ isOverlay, wantsSpecial, isVisualOnly, generatorId }) {
-  // Secondary drawn lines (generatorId === 2) should be semi-transparent
-  if (wantsSpecial && generatorId === 2) return SECONDARY_ALPHA;
-
-  // Primary/special line (Line 1) stays fully opaque
+  // Any special/generator line stays fully opaque (Line 1, Line 2, etc.)
   if (wantsSpecial) return 1;
 
-  // Decorative lines should be semi-transparent whether drawn on paint or overlay
+  // Decorative / visual-only strokes are semi-transparent
   if (isVisualOnly) return VISUAL_ONLY_ALPHA;
 
-  // Non-special but not decorative (e.g., demoted overlay colorize pass)
+  // Non-special but not decorative (e.g., overlay colorize passes)
   return isOverlay ? VISUAL_ONLY_ALPHA : 1;
 }
   let colorIndex = 0;
@@ -608,39 +615,51 @@ function clearCanvas(ctx) {
 }
 
 // Draw a live stroke segment directly to FRONT (no swaps, no back-buffers)
-function drawLiveStrokePoint(ctx, pt, prevPt, color) {
-  if (!ctx) { dbg('LIVE/no-ctx'); return; }
-  if (typeof window !== 'undefined' && window.DG_DRAW_DEBUG) {
-    console.debug('[DG][LIVE/ctx]', {
-      canvas: ctx.canvas && (ctx.canvas.getAttribute?.('data-role') || ctx.canvas.id),
-      w: ctx.canvas?.width,
-      h: ctx.canvas?.height
-    });
+function drawLiveStrokePoint(ctx, pt, prevPt, strokeOrColor) {
+  if (!ctx || !pt) return;
+
+  const stroke =
+    strokeOrColor && typeof strokeOrColor === 'object' && strokeOrColor.pts
+      ? strokeOrColor
+      : null;
+  const color = stroke ? (stroke.color || '#ffffff') : (strokeOrColor || '#ffffff');
+
+  let alpha = 1;
+  if (stroke) {
+    const overrideAlpha = Number.isFinite(stroke.liveAlphaOverride)
+      ? stroke.liveAlphaOverride
+      : null;
+    if (overrideAlpha !== null) {
+      alpha = overrideAlpha;
+    } else {
+      const wantsSpecial = !!stroke.isSpecial;
+      const isVisualOnly = isVisualOnlyStroke(stroke);
+      const generatorId = stroke.generatorId ?? null;
+      alpha = getPathAlpha({
+        isOverlay: false,
+        wantsSpecial,
+        isVisualOnly,
+        generatorId,
+      });
+    }
   }
+
   resetCtx(ctx);
   withLogicalSpace(ctx, () => {
-    ctx.save();
-    let lw = (typeof getLineWidth === 'function' ? getLineWidth() : 4);
-    if (!(lw > 0)) lw = 4; // ensure non-zero/visible
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.strokeStyle = color || '#ffffff';
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = alpha;
+
+    const lw = typeof getLineWidth === 'function' ? getLineWidth() : 8;
     ctx.lineWidth = lw;
-    if (prevPt) {
-      ctx.beginPath();
-      ctx.moveTo(prevPt.x, prevPt.y);
-      ctx.lineTo(pt.x, pt.y);
-      ctx.stroke();
-    } else {
-      ctx.beginPath();
-      ctx.arc(pt.x, pt.y, lw * 0.5, 0, Math.PI * 2);
-      ctx.fillStyle = color || '#fff';
-      ctx.fill();
-    }
-    ctx.restore();
+
+    ctx.beginPath();
+    if (prevPt) ctx.moveTo(prevPt.x, prevPt.y);
+    else ctx.moveTo(pt.x, pt.y);
+    ctx.lineTo(pt.x, pt.y);
+    ctx.stroke();
   });
-  __dbgLiveSegments++;
-  if ((__dbgLiveSegments % 10) === 1) dbg('LIVE/segment', { segs: __dbgLiveSegments });
 }
 
 // --- Commit/settle gating for overlay clears ---
@@ -1119,7 +1138,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   
   body.appendChild(wrap);
 
-  let updateDrawLabel = () => {};
+  let updateDrawLabel;
 
   // --- DRAW label overlay (DOM) ---
   let drawLabel = panel.querySelector('.drawgrid-tap-label');
@@ -1296,9 +1315,44 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   }
   renderDrawText();
 
+  // Track whether the player has completed their first line this session.
+  let hasDrawnFirstLine = false;
+
   function setDrawTextActive(active) {
     if (!drawLabel) return;
-    drawLabel.style.display = active ? 'flex' : 'none';
+    if (active) {
+      drawLabel.style.display = 'flex';
+      // Restore base opacity whenever we show it
+      drawLabel.style.opacity = '0.3';
+    } else {
+      drawLabel.style.display = 'none';
+    }
+  }
+
+  function fadeOutDrawLabel(opts = {}) {
+    const { immediate = false } = opts || {};
+    if (!drawLabel) return;
+    hasDrawnFirstLine = true;
+
+    if (immediate) {
+      drawLabel.style.transition = 'none';
+      drawLabel.style.opacity = '0';
+      setDrawTextActive(false);
+      return;
+    }
+
+    try {
+      drawLabel.style.transition = 'opacity 260ms ease-out';
+    } catch {}
+    drawLabel.style.opacity = '0';
+
+    setTimeout(() => {
+      try {
+        setDrawTextActive(false);
+        // Clear transition so future shows don't inherit it unexpectedly
+        drawLabel.style.transition = '';
+      } catch {}
+    }, 280);
   }
 
   function knockLettersAt(localX, localY, { radius = 72, strength = 10, source = 'unknown' } = {}) {
@@ -1340,8 +1394,10 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       ensureLetterPhysicsLoop();
       // ---- visual: register a hit only for ghost fingers within the core radius ----
       const coreHitRadius = scaledRadius * LETTER_VIS.ghostCoreHitMul;
-      if (source === 'ghost' && dist <= coreHitRadius) {
-        st.lastHitTs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      if ((source === 'ghost' || source === 'line') && dist <= coreHitRadius) {
+        st.lastHitTs = (typeof performance !== 'undefined' && performance.now)
+          ? performance.now()
+          : Date.now();
       }
       if (DG_GHOST_DEBUG) {
         try { console.debug('[DG][letters-hit]', { idx, dx, dy }); } catch {}
@@ -1350,8 +1406,16 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   }
 
   updateDrawLabel = (show) => {
+    // Once we've faded it out after the first line, don't resurrect it
+    // unless explicitly re-enabled via clear().
+    if (hasDrawnFirstLine) {
+      if (!show) setDrawTextActive(false);
+      return;
+    }
     setDrawTextActive(!!show);
   };
+
+  // Initial state: label visible before the player has drawn anything.
   updateDrawLabel(true);
 
   function getToyLogicalSize() {
@@ -1478,7 +1542,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         {
           seed: panelSeed,
           cap: 2200,
-          returnSeconds: 1.4,   // target settle time
+          returnSeconds: 2.4,   // slower settle time so brightness/offsets linger
           forceMul: 1.0,        // keep 1.0 unless you need bigger kicks overall
           noise: 0,
           kick: 0,
@@ -4391,7 +4455,6 @@ function syncBackBufferSizes() {
     stopAutoGhostGuide({ immediate: false });
     markUserChange('pointerdown');
     const p = pointerToPaintLogical(e);
-    updateDrawLabel(false);
 
     // (Top cubes removed)
 
@@ -4485,7 +4548,11 @@ function syncBackBufferSizes() {
         color: STROKE_COLORS[colorIndex++ % STROKE_COLORS.length]
       };
       try {
-        knockLettersAt(p.x - (gridArea?.x || 0), p.y - (gridArea?.y || 0), { radius: 100, strength: 14 });
+        knockLettersAt(
+          p.x - (gridArea?.x || 0),
+          p.y - (gridArea?.y || 0),
+          { radius: 100, strength: 14, source: 'line' }
+        );
       } catch {}
       // The full stroke will be drawn on pointermove.
     }
@@ -4673,41 +4740,43 @@ function syncBackBufferSizes() {
         const prevPt = cur.pts[prevIdx];
         // ensure we're actually painting opaque pixels in normal mode
         resetPaintBlend(pctx);
-        // draw the live segment
-        drawLiveStrokePoint(pctx, lastPt, prevPt, cur.color);
+        const hasSpecialLine = strokes.some(s => s.isSpecial || s.generatorId);
+        const wantsSpecialLive = !isAdvanced && !hasSpecialLine;
+        const liveStrokeMeta = { ...cur, isSpecial: wantsSpecialLive, liveAlphaOverride: 1 };
+        drawLiveStrokePoint(pctx, lastPt, prevPt, liveStrokeMeta);
 
-        
-        // Poke along the entire stroke band so particles ride the gesture, not just the center.
         try {
-          const lw = (typeof getLineWidth === 'function' ? getLineWidth() : 12);
-          if (prevPt) {
-            pokeAlongStrokeBand(prevPt.x, prevPt.y, lastPt.x, lastPt.y, lw, DG_KNOCK.ghostTrail);
-          } else {
-            const area = (gridArea && gridArea.w > 0 && gridArea.h > 0)
-              ? gridArea
-              : { w: cssW || 0, h: cssH || 0 };
-            const r = DG_KNOCK.ghostTrail.radiusToy(area);
-            pokeFieldToy('drag', lastPt.x, lastPt.y, r, DG_KNOCK.ghostTrail.strength);
-          }
+          const area = (gridArea && gridArea.w > 0 && gridArea.h > 0)
+            ? gridArea
+            : { w: cssW || 0, h: cssH || 0 };
+          let baseRadius = typeof DG_KNOCK?.ghostTrail?.radiusToy === 'function'
+            ? DG_KNOCK.ghostTrail.radiusToy(area)
+            : 0;
+          if (!Number.isFinite(baseRadius) || baseRadius <= 0) baseRadius = 18;
+          const pointerR = baseRadius * 1.5;
+          const logicalMin = Math.min(
+            Number.isFinite(gridAreaLogical?.w) && gridAreaLogical.w > 0 ? gridAreaLogical.w : 0,
+            Number.isFinite(gridAreaLogical?.h) && gridAreaLogical.h > 0 ? gridAreaLogical.h : 0,
+          );
+          const capR = Math.max(8, logicalMin > 0 ? logicalMin * 0.25 : 8);
+          const disturbanceRadius = Math.min(pointerR, capR);
+          pokeFieldToy('ghostTrail', lastPt.x, lastPt.y, disturbanceRadius, DG_KNOCK.ghostTrail.strength, {
+            mode: 'plow',
+          highlightMs: 900,
+          });
+          const lettersRadius = Math.max(
+            disturbanceRadius * 2.25,
+            logicalMin * 0.2,
+            40,
+          );
+          knockLettersAt(lastPt.x, lastPt.y, {
+            radius: lettersRadius,
+            strength: 12,
+            source: 'line',
+          });
         } catch {}
         __dgNeedsUIRefresh = false; // don't trigger overlay clears during draw
       }
-      // Disturb particles for all lines, special or not.
-      try {
-        const area = (gridArea && gridArea.w > 0 && gridArea.h > 0)
-          ? gridArea
-          : { w: cssW || 0, h: cssH || 0 };
-        const baseRadius = DG_KNOCK.ghostTrail.radiusToy(area);
-        const r1 = baseRadius * 1.5;
-        const s1 = DG_KNOCK.ghostTrail.strength;
-        pokeFieldToy('pointerMove', pt.x, pt.y, r1, s1, { mode: 'plow' });
-        dbgPoke('pointerMove');
-        __dgLogFirstPoke('pointerMove', r1, s1);
-        try {
-          knockLettersAt(pt.x, pt.y, { radius: r1 * 2, strength: 12 });
-        } catch {}
-      } catch {}
-
       const includeCurrent = !previewGid;
       // drawIntoBackOnly(includeCurrent);
       // pendingPaintSwap = true;
@@ -4970,6 +5039,13 @@ function syncBackBufferSizes() {
     strokes.forEach(s => delete s.justCreated);
     schedulePersistState({ source: 'stroke-commit' });
     try { window.Persistence?.flushAutosaveNow?.(); } catch {}
+
+    // First successful generator line -> fade out the DRAW label.
+    try {
+      if (!hasDrawnFirstLine && shouldGenerateNodes) {
+        fadeOutDrawLabel({ immediate: false });
+      }
+    } catch {}
 
     try {
       syncLetterFade();
@@ -5673,6 +5749,7 @@ function syncBackBufferSizes() {
       updateGeneratorButtons(); // Refresh button state to "Draw"
       stopAutoGhostGuide({ immediate: true });
       startAutoGhostGuide({ immediate: true });
+      hasDrawnFirstLine = false;
       updateDrawLabel(true);
       noteToggleEffects = [];
       return true;
@@ -6289,11 +6366,21 @@ function startGhostGuide({
     const camSnapshot = getOverlayZoomSnapshot();
     const z = camSnapshot.scale;
 
-    // Use the same world-space radius for both visual and disturbance,
-    // so the ghost finger "looks as big as it feels".
+    // Disturbance radius in toy space (unchanged: big, soft "snowplow" feel).
     const baseR = DG_KNOCK.ghostTrail.radiusToy(gridArea);
+    const pointerR = baseR * 1.5;
     const capR = Math.max(8, Math.min(gridAreaLogical.w, gridAreaLogical.h) * 0.25);
-    const radius = Math.min(baseR, capR);
+    const disturbanceRadius = Math.min(pointerR, capR);
+
+    // Visual radius: match the user's drawn line thickness (thickness ≈ lineWidth).
+    let visualRadius = disturbanceRadius;
+    try {
+      const lw = (typeof getLineWidth === 'function') ? getLineWidth() : null;
+      if (Number.isFinite(lw) && lw > 0) {
+        // Treat the line width as our visual thickness baseline.
+        visualRadius = Math.max(2, lw);
+      }
+    } catch {}
 
     if (last) {
       resetCtx(ghostCtx);
@@ -6303,8 +6390,13 @@ function startGhostGuide({
         ghostCtx.lineCap = 'round';
         ghostCtx.lineJoin = 'round';
 
-        // Trail thickness: proportional to disturbance radius (camera-like).
-        const trailWidth = Math.max(2, radius * 1.35);
+        // Make the ghost trail roughly the same thickness as the drawn line.
+        let lw = (typeof getLineWidth === 'function') ? getLineWidth() : null;
+        if (!Number.isFinite(lw) || lw <= 0) {
+          lw = visualRadius;
+        }
+
+        const trailWidth = Math.max(2, lw);
         ghostCtx.lineWidth = trailWidth;
         ghostCtx.strokeStyle = 'rgba(68,112,255,0.7)';
         ghostCtx.beginPath();
@@ -6312,8 +6404,8 @@ function startGhostGuide({
         ghostCtx.lineTo(x, y);
         ghostCtx.stroke();
 
-        // Core dot: roughly matches the disturbance band.
-        const dotR = Math.max(2, radius * 0.9);
+        // Core dot width ≈ line thickness
+        const dotR = Math.max(2, lw * 0.5);
         ghostCtx.beginPath();
         ghostCtx.arc(x, y, dotR, 0, Math.PI * 2);
         ghostCtx.fillStyle = 'rgba(68,112,255,0.85)';
@@ -6322,16 +6414,25 @@ function startGhostGuide({
     }
     last = { x, y };
 
-    // Disturbance uses the same radius as the visual above.
-    pokeFieldToy('ghostTrail', x, y, radius, DG_KNOCK.ghostTrail.strength, { mode: 'plow', highlightMs: 420 });
+    // Physics still uses the larger radius so particles "feel" a fat snowplow.
+    pokeFieldToy('ghostTrail', x, y, disturbanceRadius, DG_KNOCK.ghostTrail.strength, {
+      mode: 'plow',
+      highlightMs: 900,
+    });
     if (!window.__DG_FIRST_GHOST_LOGGED__) {
       window.__DG_FIRST_GHOST_LOGGED__ = true;
-      console.log('[DG][ghostTrail] poke', { x, y, radius, strength: DG_KNOCK.ghostTrail.strength });
+      console.log('[DG][ghostTrail] poke', { x, y, radius: disturbanceRadius, strength: DG_KNOCK.ghostTrail.strength });
     }
-    __dgLogFirstPoke('ghostTrail', radius, DG_KNOCK.ghostTrail.strength);
+    __dgLogFirstPoke('ghostTrail', disturbanceRadius, DG_KNOCK.ghostTrail.strength);
 
-    // Make sure the label gets hit even when zoomed: big radius, scaled internally in knockLettersAt
-    const lettersRadius = Math.max(radius * 2.25, (gridArea?.h || 0) * 0.25);
+    const logicalMin = Math.min(
+      (gridAreaLogical?.w ?? 0),
+      (gridAreaLogical?.h ?? 0)
+    );
+    const lettersRadius = Math.max(
+      disturbanceRadius * 2.25,
+      logicalMin * 0.2
+    );
     knockLettersAt(
       x - (gridArea?.x || 0),
       y - (gridArea?.y || 0),
@@ -6341,11 +6442,16 @@ function startGhostGuide({
       try {
         withLogicalSpace(ghostCtx, () => {
           ghostCtx.save();
-          const pad = Math.max(20, radius * 3);
+          const pad = Math.max(20, disturbanceRadius * 3);
           ghostCtx.clearRect(x - pad, y - pad, pad * 2, pad * 2);
           ghostCtx.restore();
         });
-        drawGhostDebugFrame(ghostCtx, { x, y, radius, lettersRadius });
+        drawGhostDebugFrame(ghostCtx, {
+          x,
+          y,
+          radius: disturbanceRadius,
+          lettersRadius,
+        });
       } catch {}
     }
     if (window.DG_ZOOM_AUDIT && (now - lastGhostAudit) >= 500) {
