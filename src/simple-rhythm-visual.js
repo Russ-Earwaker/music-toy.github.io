@@ -239,11 +239,11 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     _debugBurstLine: null,
     burstParticles: [],
     burstConfig: {
-      particleCount: 20,
+      particleCount: 16,
       lifeSeconds: 0.35,
-      speedScalar: 5,
-      pixelSize: 6,
-      color: 'rgba(255, 180, 220, 1)',
+      ampScalar: 30.0,              // overall height of the “bars”
+      pixelSize: 6,                // base radius in CSS units (≈2–3px on screen)
+      color: 'rgba(242, 170, 36, 1)',
     },
     _burstLastTime: performance.now(),
     computeLayout: (w, h) => {
@@ -422,7 +422,7 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
   st.particleField = particleField; // Assign to st
   st.particleObserver = particleObserver; // Assign to st
 
-  // Expose a helper so grid-core can trigger a directional particle burst
+  // Expose a helper so grid-core can trigger a vertical-scale burst
   // when a cube plays.
   st.triggerNoteParticleBurst = (colIndex) => {
     const globalObj = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
@@ -455,14 +455,11 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     const cubeCenterCssY = cubeYCss + cubeSize * 0.5;
 
     const cfg = st.burstConfig || {};
-    const count = cfg.particleCount || 30;
+    const count       = cfg.particleCount || 20;
     const lifeSeconds = cfg.lifeSeconds || 0.35;
-    const speedScalar = (cfg.speedScalar ?? 10);
-    const pixelSize = (cfg.pixelSize ?? 4);
-    const color = cfg.color || 'rgba(255, 180, 220, 0.9)';
-
-    const maxSpeed = cubeSize * speedScalar;
-    const minSpeed = maxSpeed * 0.4;
+    const ampScalar   = (cfg.ampScalar ?? 1.0);
+    const pixelSize   = (cfg.pixelSize ?? 6);
+    const color       = cfg.color || 'rgba(255, 180, 220, 1)';
 
     const now = performance.now();
     const midIndex = (count - 1) / 2;
@@ -474,28 +471,19 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
       const x = cubeCenterCssX + (t - 0.5) * cubeSize;
       const y = cubeCenterCssY;
 
-      // Deterministic up/down direction (no random angle)
-      const up = (i % 2) === 0;
-      const angle = up ? -Math.PI / 2 : Math.PI / 2;
-
-      // Arrow shape: middle particles move fastest, edges slowest
+      // Arrow shape: middle "bar" scales most, edges least (purely deterministic)
       const centerDist = Math.abs(i - midIndex) / (midIndex || 1); // 0 at center, 1 at ends
       const centerBias = 1 - centerDist;                            // 1 at center, 0 at ends
-      const bias = 0.2 + 0.8 * centerBias;                          // keep ends from being completely dead
-      const speed = minSpeed + (maxSpeed - minSpeed) * bias;
-
-      const vx = Math.cos(angle) * speed;
-      const vy = Math.sin(angle) * speed;
+      const amp = (0.4 + 0.8 * centerBias) * ampScalar;            // keep edges from being completely flat
 
       st.burstParticles.push({
         x,
         y,
-        vx,
-        vy,
         life: 1,
         lifeSeconds,
-        size: pixelSize, // fixed size → ~2px on screen
+        size: pixelSize, // base radius in CSS units
         color,
+        amp,             // vertical scale amplitude
         born: now,
       });
     }
@@ -507,7 +495,7 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
         cubeCenterCssY,
         count,
         lifeSeconds,
-        speedScalar,
+        ampScalar,
       });
     }
 
@@ -758,7 +746,7 @@ function render(panel) {
     }
   }
 
-  // --- Note burst particles (overlay, like Draw toy) ---
+  // --- Note burst particles: vertical scale from cube center (no movement) ---
   if (Array.isArray(st.burstParticles) && st.burstParticles.length && ctx) {
     const particles = st.burstParticles;
     const remaining = [];
@@ -767,10 +755,7 @@ function render(panel) {
       const lifeSeconds = p.lifeSeconds || 0.35;
       const decay = lifeSeconds > 0 ? (burstDt / lifeSeconds) : burstDt * 3;
       p.life -= decay;
-      if (p.life <= 0) continue;
-
-      p.x += p.vx * burstDt;
-      p.y += p.vy * burstDt;
+      if (p.life <= 0) continue; // drop fully faded particles
 
       remaining.push(p);
     }
@@ -782,13 +767,27 @@ function render(panel) {
         const alpha = Math.max(0, Math.min(1, p.life));
         const cx = p.x * scaleX;
         const cy = p.y * scaleY;
-        const r = (p.size * 0.5) * ((scaleX + scaleY) * 0.5 || 1);
 
+        // Base radius in pixels from CSS-space size
+        const baseR = (p.size * 0.5) * ((scaleX + scaleY) * 0.5 || 1);
+
+        // Time progress 0..1 (0 at spawn, 1 at end)
+        const tNorm = 1 - p.life;
+        // Up-and-down pulse over lifetime
+        const pulse = Math.sin(tNorm * Math.PI); // 0 -> 1 -> 0
+
+        const amp = p.amp || 1;
+        const stretchY = 1 + amp * pulse; // middle particles have bigger amp
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(1, stretchY); // vertical scale only
         ctx.globalAlpha = alpha;
         ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.arc(0, 0, baseR, 0, Math.PI * 2);
         ctx.fillStyle = p.color || 'rgba(255, 180, 220, 0.9)';
         ctx.fill();
+        ctx.restore();
       }
       ctx.restore();
       ctx.globalAlpha = 1;
