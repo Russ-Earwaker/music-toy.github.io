@@ -93,8 +93,9 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
     lodScale: 1,
     spacing: 18,
   };
-  const PARTICLE_HIGHLIGHT_DURATION = 420; // ms
+  const PARTICLE_HIGHLIGHT_DURATION = 900; // ms
   const PARTICLE_HIGHLIGHT_INTENSITY = 0.6; // base cap
+  const PARTICLE_HIGHLIGHT_SIZE_BUMP = 0.65; // relative radius increase at peak highlight
   const highlightEvents = [];
   // evt: {x,y,radius,t,amp,dur}
 
@@ -365,6 +366,8 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
         }
       }
       const particleRadius = Math.max(0.5, screenRadiusToWorld(p.rPx ?? fallbackRadiusPx, zoom));
+      const highlightSizeScale = 1 + highlight * PARTICLE_HIGHLIGHT_SIZE_BUMP;
+      const drawRadius = particleRadius * highlightSizeScale;
       const accent = Math.min(
         1,
         highlight *
@@ -374,14 +377,14 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
       ctx.globalAlpha = Math.min(1, alpha + accent);
       ctx.fillStyle = baseFillStyle;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, particleRadius, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, drawRadius, 0, Math.PI * 2);
       ctx.fill();
       if (highlight > 0) {
         const glowAlpha = Math.min(0.85, accent * 1.2);
         ctx.globalAlpha = glowAlpha;
         ctx.fillStyle = glowFillStyle;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, particleRadius * (1 + highlight * 0.8), 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, drawRadius * (1 + highlight * 0.8), 0, Math.PI * 2);
         ctx.fill();
         ctx.globalAlpha = 1;
       }
