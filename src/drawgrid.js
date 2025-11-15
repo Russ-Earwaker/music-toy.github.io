@@ -1546,7 +1546,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
           forceMul: 1.0,        // keep 1.0 unless you need bigger kicks overall
           noise: 0,
           kick: 0,
-          kickDecay: 8.0,
+          kickDecay: 800.0,
           drawMode: 'dots',
           minAlpha: 0.25,
           maxAlpha: 0.85,
