@@ -5020,15 +5020,25 @@ function syncBackBufferSizes() {
     clearAndRedrawFromStrokes();
     pendingPaintSwap = usingBackBuffers;
 
-    // Commit: redraw ink to the visible paint surface (front)
-    pctx = getActivePaintCtx();
-    resetPaintBlend(pctx);
-    if (pctx) {
-      withLogicalSpace(pctx, () => {
-        for (const s of strokes) drawFullStroke(pctx, s);
-      });
-    }
-    // Keep back buffer fresh if we use it
+      // Commit: redraw ink to the visible paint surface (front)
+      pctx = getActivePaintCtx();
+      resetPaintBlend(pctx);
+      if (pctx) {
+        withLogicalSpace(pctx, () => {
+          // Clear the front paint canvas before redrawing all strokes so
+          // we don't leave the full-opacity live stroke underneath.
+          const surface = pctx.canvas;
+          const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+          const width = cssW || (surface?.width ?? 0) / scale;
+          const height = cssH || (surface?.height ?? 0) / scale;
+          pctx.clearRect(0, 0, width, height);
+
+          // Now redraw all strokes with the correct alpha (visual-only lines
+          // use VISUAL_ONLY_ALPHA via getPathAlpha in drawFullStroke).
+          for (const s of strokes) drawFullStroke(pctx, s);
+        });
+      }
+      // Keep back buffer fresh if we use it
     if (usingBackBuffers && typeof ensureBackVisualsFreshFromFront === 'function') {
       try { ensureBackVisualsFreshFromFront(); } catch {}
     }
