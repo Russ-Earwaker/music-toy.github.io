@@ -7,6 +7,8 @@ import { isRunning, getLoopInfo } from './audio-core.js';
 import { createField } from './particles/field-generic.js';
 import { createParticleViewport } from './particles/particle-viewport.js';
 import { resizeCanvasForDPR } from './utils.js';
+import { overviewMode } from './overview-mode.js';
+import { onZoomChange } from './zoom/ZoomCoordinator.js';
 
 // --- sizing helpers ---------------------------------------------------------
 function raf() {
@@ -341,6 +343,7 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
   let particleField = null;
   let particleObserver = null;
   let overviewHandler = null;
+  let zoomUnsubscribe = null;
   const pv = createParticleViewport(() => {
     const host = sequencerWrap || panel;
     const r = host?.getBoundingClientRect?.();
@@ -348,6 +351,26 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
       w: Math.max(1, Math.round(r?.width || 1)),
       h: Math.max(1, Math.round(r?.height || 1)),
     };
+  });
+  // Make the Simple Rhythm particle viewport zoom-aware, like DrawGrid's.
+  Object.assign(pv, {
+    getZoom: () => {
+      try {
+        const host = sequencerWrap || panel;
+        const raw = boardScale(host);
+        const value = Number(raw);
+        return Number.isFinite(value) && value > 0 ? value : 1;
+      } catch {
+        return 1;
+      }
+    },
+    isOverview: () => {
+      try {
+        return !!overviewMode?.isActive?.();
+      } catch {
+        return false;
+      }
+    },
   });
   if (particleCanvas) {
     try {
@@ -381,6 +404,25 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
         pv.setNonReactive?.(false);
       };
       window.addEventListener('overview:transition', overviewHandler);
+
+      // NEW: keep the particle viewport in sync with board zoom commits
+      if (typeof onZoomChange === 'function') {
+        zoomUnsubscribe = onZoomChange((z = {}) => {
+          const phase = z.phase;
+          const mode = z.mode;
+          const gesturing = mode === 'gesturing';
+
+          // Don't thrash during the live gesture; just react when it settles.
+          if (!gesturing && (phase === 'commit' || phase === 'idle' || phase === 'done')) {
+            try {
+              pv.refreshSize?.({ snap: true });
+              particleField.resize?.();
+            } catch {
+              // ignore
+            }
+          }
+        });
+      }
     } catch (err) {
       console.warn('[loopgrid] particle field init failed', err);
       particleField = null;
@@ -404,6 +446,7 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
 
   const teardownParticles = () => {
     try { window.removeEventListener('overview:transition', overviewHandler); } catch {}
+    try { zoomUnsubscribe?.(); } catch {}       // NEW: stop listening to zoom events
     try { st.particleObserver?.disconnect?.(); } catch {} // Use st.particleObserver
     try { st.particleField?.destroy?.(); } catch {} // Use st.particleField
     st._resizer?.disconnect?.(); // Disconnect the main resizer
