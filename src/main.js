@@ -1480,8 +1480,9 @@ function drawChains() {
   chainCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   const now = performance.now();
-  const baseWidth = 3;
-  const pulseExtraWidth = 2;
+  // You can tweak these to taste. Thicker curves = slightly more GPU work.
+  const baseWidth = 6;
+  const pulseExtraWidth = 3;
 
   let connectorCount = 0;
   const tEdgesStart = performance.now();
@@ -1498,41 +1499,20 @@ function drawChains() {
     const isPulsing = !!(pulseInfo && pulseInfo.toId === toToyId && pulseInfo.until > now);
     const lineWidth = baseWidth + (isPulsing ? pulseExtraWidth : 0);
 
-    chainCtx.beginPath();
-    chainCtx.moveTo(p1x, p1y);
-    chainCtx.lineTo(p2x, p2y);
-    chainCtx.lineWidth = lineWidth;
-    chainCtx.lineCap = 'round';
-    chainCtx.strokeStyle = isPulsing
-      ? 'hsl(222, 100%, 95%)'
-      : 'hsl(222, 100%, 80%)';
-    chainCtx.stroke();
-
     const dx = p2x - p1x;
     const dy = p2y - p1y;
-    const len = Math.hypot(dx, dy) || 1;
-    const ux = dx / len;
-    const uy = dy / len;
+    const dist = Math.hypot(dx, dy) || 1;
+    const handleLength = Math.max(40, dist * 0.33); // horizontal-only handles
 
-    const arrowLen = 10;
-    const arrowWidth = 4;
-    const ax = p2x - ux * 6;
-    const ay = p2y - uy * 6;
-    const px = -uy;
-    const py = ux;
+    const c1x = p1x + handleLength;
+    const c1y = p1y;
+    const c2x = p2x - handleLength;
+    const c2y = p2y;
 
+    chainCtx.lineWidth = (lineWidth * 3);
     chainCtx.beginPath();
-    chainCtx.moveTo(ax, ay);
-    chainCtx.lineTo(
-      ax - ux * arrowLen + px * arrowWidth,
-      ay - uy * arrowLen + py * arrowWidth
-    );
-    chainCtx.moveTo(ax, ay);
-    chainCtx.lineTo(
-      ax - ux * arrowLen - px * arrowWidth,
-      ay - uy * arrowLen - py * arrowWidth
-    );
-    chainCtx.lineWidth = lineWidth;
+    chainCtx.moveTo(p1x, p1y);
+    chainCtx.bezierCurveTo(c1x, c1y, c2x, c2y, p2x, p2y);
     chainCtx.lineCap = 'round';
     chainCtx.strokeStyle = isPulsing
       ? 'hsl(222, 100%, 95%)'
