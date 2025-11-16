@@ -359,22 +359,49 @@ function ensurePanelSpawnPlacement(panel, {
 }
 
 let chainCanvas, chainCtx;
-// fromId -> { toId, until: number (performance.now() + durationMs) }
-const g_pulsingConnectors = new Map();
 
 // Cached layout data so drawChains() avoids DOM reads per frame
 let g_boardClientWidth = 0;
 let g_boardClientHeight = 0;
-let g_chainSegments = []; // { fromId, toId, p1x, p1y, p2x, p2y }
 
-// Drag-time throttling for chain redraws
+/**
+ * @typedef {Object} Edge
+ * @property {string} id
+ * @property {string} fromToyId
+ * @property {string} toToyId
+ * @property {'default'} type
+ * @property {number} p1x
+ * @property {number} p1y
+ * @property {number} p2x
+ * @property {number} p2y
+ * @property {number} [flashUntilMs]
+ */
+
+/** @type {Map<string, Edge>} */
+const g_chainEdges = new Map();
+/** @type {Map<string, Set<string>>} */
+const g_edgesByToyId = new Map();
+/** Legacy segment list (kept for any consumers still expecting g_chainSegments). */
+const g_chainSegments = [];
+/** @type {Map<string, {toId: string, until: number}>} */
+const g_pulsingConnectors = new Map();
+
+// Drag-time state for connector updates
 let g_chainDragToyId = null;
 let g_chainDragLastUpdateTime = 0;
-const CHAIN_DRAG_UPDATE_INTERVAL_MS = 50; // ms between connector updates while dragging
+// Tracks last known board-space position for each toy we drag (left/top from style).
+const g_chainToyLastPos = new Map(); // toyId -> { left, top }
 
+// Aim for ~60fps max during drag; further throttling is done by the browser's pointermove rate.
+const CHAIN_DRAG_UPDATE_INTERVAL_MS = 16;
+
+// Chain / scheduler debug controls.
+// CHAIN_DEBUG: master flag – turn this off to silence all chain/scheduler logs.
 const CHAIN_DEBUG = false;
-const CHAIN_DEBUG_LOG_THRESHOLD_MS = 1.5;  // log sub-step if it costs more than this
-const CHAIN_DEBUG_FRAME_THRESHOLD_MS = 12; // log whole frame if it costs more than this
+// Log phase timings that take longer than this in ms.
+const CHAIN_DEBUG_LOG_THRESHOLD_MS = 1;
+// Log whole-frame cost if it exceeds this in ms (we'll also rate-limit logs).
+const CHAIN_DEBUG_FRAME_THRESHOLD_MS = 0.0;
 
 // Feature flags so we can selectively disable suspected work during perf debugging.
 // Flip these to false one at a time to see which block removes the slowdown.
@@ -382,6 +409,11 @@ const CHAIN_FEATURE_ENABLE_SCHEDULER      = true; // master toggle for chain wor
 const CHAIN_FEATURE_ENABLE_MARK_ACTIVE    = true; // DOM scan + data-chain-active flags
 const CHAIN_FEATURE_ENABLE_SEQUENCER      = true; // __sequencerStep + border pulses
 const CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW = true; // drawChains() canvas connectors
+// Rendering resolution multiplier for the chain canvas.
+// 1.0 = full resolution (heaviest)
+// 0.5 = half resolution in each dimension (~4x fewer pixels)
+// 0.25 = quarter resolution in each dimension (~16x fewer pixels)
+const CHAIN_CANVAS_RESOLUTION_SCALE = 0.5;
 
 
 console.log('[MAIN] module start');
@@ -528,8 +560,6 @@ function bootTopbar(){
         p.classList.remove('toy-playing', 'toy-playing-pulse');
       });
     } catch {}
-    // Clear connector pulse cache so edges don't “ghost” flash after stop
-    try { g_pulsingConnectors.clear(); } catch {}
   });
   bpmInput?.addEventListener('change', (e)=> setBpm(Number(e.target.value)||DEFAULT_BPM));
 }
@@ -829,6 +859,7 @@ function updateAllChainUIs() {
 }
 
 function triggerConnectorPulse(fromId, toId) {
+    // Keep the toy border pulse behaviour as before.
     const panel = document.getElementById(fromId);
     if (panel) {
         pulseToyBorder(panel);
@@ -836,27 +867,56 @@ function triggerConnectorPulse(fromId, toId) {
 
     const now = performance.now();
     const durationMs = 150;
-
-    // Store a simple flash window for this connector
     g_pulsingConnectors.set(fromId, { toId, until: now + durationMs });
 
-    // Redraw once at flash start
-    try { scheduleChainRedraw(); } catch (err) {
-        console.warn('[CHAIN] pulse redraw failed', err);
+    // Mark matching edges as "flashing" using the Edge model.
+    const edgeIdSet = g_edgesByToyId.get(fromId);
+    if (edgeIdSet && edgeIdSet.size > 0) {
+        for (const edgeId of edgeIdSet) {
+            const edge = g_chainEdges.get(edgeId);
+            if (!edge || edge.toToyId !== toId) continue;
+            edge.flashUntilMs = now + durationMs;
+        }
     }
 
-    // And once at flash end to restore normal appearance
+    if (!CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) return;
+
+    // Redraw once at flash start.
+    try {
+        scheduleChainRedraw();
+    } catch (err) {
+        console.warn('[CHAIN] pulse redraw failed (start)', err);
+    }
+
+    // And once at flash end to restore normal appearance.
     setTimeout(() => {
-        const info = g_pulsingConnectors.get(fromId);
-        if (!info) return;
-        // Only clear if this is still the same edge and same flash window
-        if (info.toId !== toId) return;
-        if (info.until > now + durationMs) return;
-        g_pulsingConnectors.delete(fromId);
-        try { scheduleChainRedraw(); } catch (err) {
-            console.warn('[CHAIN] pulse clear redraw failed', err);
+        if (!CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) return;
+
+        const expireNow = performance.now();
+        const edgeIdSet2 = g_edgesByToyId.get(fromId);
+        if (edgeIdSet2 && edgeIdSet2.size > 0) {
+            for (const edgeId of edgeIdSet2) {
+                const edge = g_chainEdges.get(edgeId);
+                if (!edge || edge.toToyId !== toId) continue;
+
+                // Only clear if this pulse window has actually expired.
+                if (typeof edge.flashUntilMs === 'number' && edge.flashUntilMs <= expireNow) {
+                    edge.flashUntilMs = 0;
+                }
+            }
         }
-    }, durationMs + 20);
+
+        const pulseInfo = g_pulsingConnectors.get(fromId);
+        if (pulseInfo && pulseInfo.toId === toId && pulseInfo.until <= expireNow) {
+            g_pulsingConnectors.delete(fromId);
+        }
+
+        try {
+            scheduleChainRedraw();
+        } catch (err) {
+            console.warn('[CHAIN] pulse redraw failed (end)', err);
+        }
+    }, durationMs);
 }
 
 // Unified border pulse helper for both modes
@@ -1225,12 +1285,6 @@ function destroyToyPanel(panelOrId) {
     }
 
     if (panelId) {
-        g_pulsingConnectors.delete(panelId);
-        for (const [fromId, info] of Array.from(g_pulsingConnectors.entries())) {
-            if (info?.toId === panelId) {
-                g_pulsingConnectors.delete(fromId);
-            }
-        }
         g_chainState.delete(panelId);
         for (const [headId, activeId] of Array.from(g_chainState.entries())) {
             if (activeId === panelId) {
@@ -1301,7 +1355,10 @@ function getConnectorAnchorPoints(fromPanel, toPanel) {
 }
 
 function rebuildChainSegments() {
-  g_chainSegments = [];
+  // New edge model + adjacency index.
+  g_chainEdges.clear();
+  g_edgesByToyId.clear();
+
   const board = document.getElementById('board');
   if (!board || !g_chainState || g_chainState.size === 0) return;
 
@@ -1324,14 +1381,37 @@ function rebuildChainSegments() {
       }
 
       const { a1, a2 } = anchors;
-      g_chainSegments.push({
-        fromId: current.id,
-        toId: nextId,
+
+      const edgeId = `${current.id}__${nextId}`;
+
+      /** @type {Edge} */
+      const edge = {
+        id: edgeId,
+        fromToyId: current.id,
+        toToyId: nextId,
+        type: 'default',
         p1x: a1.x - 1,
         p1y: a1.y,
         p2x: a2.x,
         p2y: a2.y
-      });
+      };
+
+      g_chainEdges.set(edgeId, edge);
+
+      // Adjacency index – useful for future detach/reattach UX.
+      let fromSet = g_edgesByToyId.get(current.id);
+      if (!fromSet) {
+        fromSet = new Set();
+        g_edgesByToyId.set(current.id, fromSet);
+      }
+      fromSet.add(edgeId);
+
+      let toSet = g_edgesByToyId.get(nextId);
+      if (!toSet) {
+        toSet = new Set();
+        g_edgesByToyId.set(nextId, toSet);
+      }
+      toSet.add(edgeId);
 
       current = next;
     }
@@ -1339,79 +1419,246 @@ function rebuildChainSegments() {
 }
 
 function drawChains() {
-    if (!chainCanvas || !chainCtx) return;
-    let connectorCount = 0;
+  if (!CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) return;
+  if (!chainCanvas || !chainCtx) return;
 
-    const width = g_boardClientWidth || 0;
-    const height = g_boardClientHeight || 0;
+  const width = g_boardClientWidth || 0;
+  const height = g_boardClientHeight || 0;
+  const edgeCount = g_chainEdges ? g_chainEdges.size : 0;
 
-    const hasChains = g_chainSegments && Array.isArray(g_chainSegments) && g_chainSegments.length > 0;
+  if (!width || !height) return;
 
-    if (!width || !height) return;
+  const tStart = performance.now();
 
-    const dpr = window.devicePixelRatio || 1;
-    const canvasW = chainCanvas.width / dpr;
-    const canvasH = chainCanvas.height / dpr;
+  // Use a lower-resolution backing buffer for the chain canvas to reduce GPU cost.
+  // We still draw in board coordinates, but the internal pixel density is scaled down.
+  const devicePixelRatioForChains = window.devicePixelRatio || 1;
+  const dpr = devicePixelRatioForChains * CHAIN_CANVAS_RESOLUTION_SCALE;
+  const canvasW = chainCanvas.width / dpr;
+  const canvasH = chainCanvas.height / dpr;
 
-    if (canvasW !== width || canvasH !== height) {
-        chainCanvas.width = width * dpr;
-        chainCanvas.height = height * dpr;
-        chainCanvas.style.left = '0px';
-        chainCanvas.style.top = '0px';
-        chainCanvas.style.width = `${width}px`;
-        chainCanvas.style.height = `${height}px`;
+  // --- Phase 1: resize canvas if board viewport changed ---
+  let tAfterResize = tStart;
+  if (canvasW !== width || canvasH !== height) {
+    const tResizeStart = performance.now();
+
+    chainCanvas.width = width * dpr;
+    chainCanvas.height = height * dpr;
+    chainCanvas.style.left = '0px';
+    chainCanvas.style.top = '0px';
+    chainCanvas.style.width = `${width}px`;
+    chainCanvas.style.height = `${height}px`;
+
+    tAfterResize = performance.now();
+
+    if (CHAIN_DEBUG) {
+      console.log('[CHAIN][perf][resize] chainCanvas resized', 'board=', width, 'x', height, 'canvas=', chainCanvas.width, 'x', chainCanvas.height, 'cost=', (tAfterResize - tResizeStart).toFixed(2), 'ms')
+    }
+  } else {
+    tAfterResize = performance.now();
+  }
+
+  // --- Phase 2: clear the canvas ---
+  chainCtx.setTransform(1, 0, 0, 1, 0, 0);
+  const tClearStart = performance.now();
+  chainCtx.clearRect(0, 0, chainCanvas.width, chainCanvas.height);
+  const tAfterClear = performance.now();
+
+  if (!edgeCount) {
+    if (CHAIN_DEBUG) {
+      const total = tAfterClear - tStart;
+      const resizeCost = tAfterResize - tStart;
+      const clearCost = tAfterClear - tClearStart;
+      if (total > CHAIN_DEBUG_LOG_THRESHOLD_MS) {
+        console.log('[CHAIN][perf] drawChains(empty)', 'total=', total.toFixed(2), 'ms', 'resize=', resizeCost.toFixed(2), 'ms', 'clear=', clearCost.toFixed(2), 'ms', 'edges=', edgeCount)
+      }
+    }
+    return;
+  }
+
+  // --- Phase 3: draw all edges ---
+  chainCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const now = performance.now();
+  const baseWidth = 3;
+  const pulseExtraWidth = 2;
+
+  let connectorCount = 0;
+  const tEdgesStart = performance.now();
+
+  for (const edge of g_chainEdges.values()) {
+    const { fromToyId, toToyId, p1x, p1y, p2x, p2y } = edge;
+
+    if (!Number.isFinite(p1x) || !Number.isFinite(p1y) ||
+        !Number.isFinite(p2x) || !Number.isFinite(p2y)) {
+      continue;
     }
 
-    if (!hasChains) {
-        chainCtx.setTransform(1, 0, 0, 1, 0, 0);
-        chainCtx.clearRect(0, 0, chainCanvas.width, chainCanvas.height);
-        return;
+    const pulseInfo = g_pulsingConnectors.get(fromToyId);
+    const isPulsing = !!(pulseInfo && pulseInfo.toId === toToyId && pulseInfo.until > now);
+    const lineWidth = baseWidth + (isPulsing ? pulseExtraWidth : 0);
+
+    chainCtx.beginPath();
+    chainCtx.moveTo(p1x, p1y);
+    chainCtx.lineTo(p2x, p2y);
+    chainCtx.lineWidth = lineWidth;
+    chainCtx.lineCap = 'round';
+    chainCtx.strokeStyle = isPulsing
+      ? 'hsl(222, 100%, 95%)'
+      : 'hsl(222, 100%, 80%)';
+    chainCtx.stroke();
+
+    const dx = p2x - p1x;
+    const dy = p2y - p1y;
+    const len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len;
+    const uy = dy / len;
+
+    const arrowLen = 10;
+    const arrowWidth = 4;
+    const ax = p2x - ux * 6;
+    const ay = p2y - uy * 6;
+    const px = -uy;
+    const py = ux;
+
+    chainCtx.beginPath();
+    chainCtx.moveTo(ax, ay);
+    chainCtx.lineTo(
+      ax - ux * arrowLen + px * arrowWidth,
+      ay - uy * arrowLen + py * arrowWidth
+    );
+    chainCtx.moveTo(ax, ay);
+    chainCtx.lineTo(
+      ax - ux * arrowLen - px * arrowWidth,
+      ay - uy * arrowLen - py * arrowWidth
+    );
+    chainCtx.lineWidth = lineWidth;
+    chainCtx.lineCap = 'round';
+    chainCtx.strokeStyle = isPulsing
+      ? 'hsl(222, 100%, 95%)'
+      : 'hsl(222, 100%, 80%)';
+    chainCtx.stroke();
+
+    connectorCount++;
+  }
+
+  const tAfterEdges = performance.now();
+
+  if (CHAIN_DEBUG && connectorCount > 0 && g_chainState.size > 0) {
+    console.log('[CHAIN][perf][detail] drawChains connectors=', connectorCount, 'heads=', g_chainState.size)
+  }
+
+  if (CHAIN_DEBUG) {
+    const total = tAfterEdges - tStart;
+    const resizeCost = tAfterResize - tStart;
+    const clearCost = tAfterClear - tClearStart;
+    const edgesCost = tAfterEdges - tEdgesStart;
+
+    if (total > CHAIN_DEBUG_LOG_THRESHOLD_MS) {
+      console.log(
+        '[CHAIN][perf] drawChains',
+        'total=', total.toFixed(2), 'ms',
+        'resize=', resizeCost.toFixed(2), 'ms',
+        'clear=', clearCost.toFixed(2), 'ms',
+        'edges=', edgesCost.toFixed(2), 'ms',
+        'edgeCount=', edgeCount
+      )
+    } else {
+      console.log(
+        '[CHAIN][drag] drawChains',
+        'total=', total.toFixed(2), 'ms',
+        'resize=', resizeCost.toFixed(2), 'ms',
+        'clear=', clearCost.toFixed(2), 'ms',
+        'edges=', edgesCost.toFixed(2), 'ms',
+        'edgeCount=', edgeCount
+      )
     }
+  }
+}
 
-    chainCtx.setTransform(1, 0, 0, 1, 0, 0);
-    chainCtx.clearRect(0, 0, chainCanvas.width, chainCanvas.height);
-    chainCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+// Shift connector geometry only for segments touching a specific toy by applying
+// the toy's movement delta. This avoids layout reads during drag.
+function updateChainSegmentsForToy(toyId) {
+  if (!toyId) return;
+  if (!CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) return;
 
-    const now = performance.now();
+  const panel = document.getElementById(toyId);
+  if (!panel || !panel.isConnected) return;
 
-    // Draw static chain connectors (with optional flash state).
+  // Use style.left/top so we don't force a reflow via offsetLeft/offsetTop.
+  const left = parseFloat(panel.style.left);
+  const top = parseFloat(panel.style.top);
+
+  if (!Number.isFinite(left) || !Number.isFinite(top)) {
+    if (CHAIN_DEBUG) {
+      console.warn('[CHAIN][drag] updateChainSegmentsForToy: invalid left/top for', toyId, {
+        left: panel.style.left,
+        top: panel.style.top
+      });
+    }
+    return;
+  }
+
+  const prev = g_chainToyLastPos.get(toyId) || { left, top };
+  const dx = left - prev.left;
+  const dy = top - prev.top;
+
+  if (CHAIN_DEBUG) {
+    console.log('[CHAIN][drag] updateChainSegmentsForToy', toyId, {
+      left, top, prevLeft: prev.left, prevTop: prev.top, dx, dy
+    });
+  }
+
+  // No movement since last update → nothing to do.
+  if (dx === 0 && dy === 0) return;
+
+  // Legacy geometry (for any remaining users of g_chainSegments).
+  if (g_chainSegments && g_chainSegments.length > 0) {
+    let touchedSegments = 0;
     for (const seg of g_chainSegments) {
-        const { p1x, p1y, p2x, p2y } = seg;
-
-        chainCtx.beginPath();
-        chainCtx.moveTo(p1x, p1y);
-        const controlPointOffset = Math.max(40, Math.abs(p2x - p1x) * 0.4);
-        chainCtx.bezierCurveTo(
-            p1x + controlPointOffset,
-            p1y,
-            p2x - controlPointOffset,
-            p2y,
-            p2x,
-            p2y
-        );
-
-        const pulseInfo = g_pulsingConnectors.get(seg.fromId);
-        const isPulsing = !!(pulseInfo && pulseInfo.toId === seg.toId && pulseInfo.until > now);
-        const baseWidth = 10;
-        const pulseWidth = isPulsing ? 4 : 0;
-        chainCtx.lineWidth = baseWidth + pulseWidth;
-        chainCtx.lineCap = 'round'; // Use rounded ends to seamlessly meet the circular buttons.
-        chainCtx.strokeStyle = isPulsing
-            ? 'hsl(222, 100%, 95%)'
-            : 'hsl(222, 100%, 80%)';
-        chainCtx.stroke();
-
-        connectorCount++;
+      if (seg.fromId === toyId) {
+        seg.p1x += dx;
+        seg.p1y += dy;
+        touchedSegments++;
+      }
+      if (seg.toId === toyId) {
+        seg.p2x += dx;
+        seg.p2y += dy;
+        touchedSegments++;
+      }
     }
-
-    if (CHAIN_DEBUG && connectorCount > 0 && g_chainState.size > 0) {
-        console.log(
-            '[CHAIN][perf][detail] drawChains connectors=',
-            connectorCount,
-            'heads=',
-            g_chainState.size
-        );
+    if (CHAIN_DEBUG && touchedSegments > 0) {
+      console.log('[CHAIN][drag] updated legacy segments for', toyId, 'count=', touchedSegments);
     }
+  }
+
+  // New edge geometry used by drawChains(): update only edges attached to this toy.
+  const edgeIdSet = g_edgesByToyId.get(toyId);
+  if (edgeIdSet && edgeIdSet.size > 0) {
+    let touchedEdges = 0;
+    for (const edgeId of edgeIdSet) {
+      const edge = g_chainEdges.get(edgeId);
+      if (!edge) continue;
+
+      if (edge.fromToyId === toyId) {
+        edge.p1x += dx;
+        edge.p1y += dy;
+        touchedEdges++;
+      }
+      if (edge.toToyId === toyId) {
+        edge.p2x += dx;
+        edge.p2y += dy;
+        touchedEdges++;
+      }
+    }
+    if (CHAIN_DEBUG && touchedEdges > 0) {
+      console.log('[CHAIN][drag] updated edges for', toyId, 'count=', touchedEdges);
+    }
+  } else if (CHAIN_DEBUG) {
+    console.log('[CHAIN][drag] no edges found for', toyId);
+  }
+
+  g_chainToyLastPos.set(toyId, { left, top });
 }
 // Throttled "redraw once on the next frame" helper for chain connectors.
 let g_chainRedrawScheduled = false;
@@ -1639,9 +1886,20 @@ function scheduler(){
     // --- Whole-frame cost ---
     const now = performance.now();
     const frameCost = now - frameStart;
-    if (CHAIN_DEBUG && frameCost > CHAIN_DEBUG_FRAME_THRESHOLD_MS && (now - lastPerfLog) > 1000) {
+
+    if (CHAIN_DEBUG && frameCost > CHAIN_DEBUG_FRAME_THRESHOLD_MS && (now - lastPerfLog) > 250) {
       lastPerfLog = now;
-      console.log('[SCHED][perf] frame', frameCost.toFixed(2), 'ms');
+
+      // How many edges exist, and are connectors visually enabled?
+      const edgeCount = g_chainEdges ? g_chainEdges.size : 0;
+      const connectorsOn = !!CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW;
+
+      console.log(
+        '[SCHED][perf] frame',
+        frameCost.toFixed(2), 'ms',
+        'edges=', edgeCount,
+        'connectorsOn=', connectorsOn
+      );
     }
 
     // Connectors are now updated on-demand, not every frame.
@@ -1661,8 +1919,37 @@ async function boot(){
   window.addEventListener('resize', () => {
     const b = document.getElementById('board');
     if (!b) return;
+
+    // Cache board client size for the chain canvas
     g_boardClientWidth = b.clientWidth || 0;
     g_boardClientHeight = b.clientHeight || 0;
+
+    // Rebuild connector geometry + redraw once, event-driven, off the hot path
+    if (CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) {
+      try {
+        rebuildChainSegments();
+        scheduleChainRedraw();
+      } catch (err) {
+        if (CHAIN_DEBUG) {
+          console.warn('[CHAIN] resize redraw failed', err);
+        }
+      }
+    }
+  }, { passive: true });
+
+  // Overview / camera transitions can hide headers / footers and change the toy-body vertical center.
+  // Treat this as a major layout change for connectors and rebuild geometry once.
+  window.addEventListener('overview:transition', () => {
+    if (!CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) return;
+
+    try {
+      rebuildChainSegments();
+      scheduleChainRedraw();
+    } catch (err) {
+      if (CHAIN_DEBUG) {
+        console.warn('[CHAIN] overview:transition redraw failed', err);
+      }
+    }
   }, { passive: true });
   try {
     try {
@@ -1835,35 +2122,88 @@ async function boot(){
   document.addEventListener('pointerdown', (e) => {
     const panel = e.target && e.target.closest ? e.target.closest('.toy-panel') : null;
     if (!panel) return;
+
     g_chainDragToyId = panel.id;
     g_chainDragLastUpdateTime = performance.now();
+
+    // Seed last-pos cache for delta-based segment updates.
+    const left = parseFloat(panel.style.left);
+    const top = parseFloat(panel.style.top);
+    if (Number.isFinite(left) && Number.isFinite(top)) {
+      g_chainToyLastPos.set(panel.id, { left, top });
+    } else {
+      g_chainToyLastPos.set(panel.id, { left: 0, top: 0 });
+    }
+
+    if (CHAIN_DEBUG) {
+      console.log('[CHAIN][drag] pointerdown on panel', panel.id, {
+        left: panel.style.left,
+        top: panel.style.top
+      });
+    }
   }, true);
 
-  // While dragging, update chain geometry at a throttled rate
-  document.addEventListener('pointermove', () => {
+  // While dragging, update only the segments connected to the dragged toy at a throttled rate
+  document.addEventListener('pointermove', (e) => {
     if (!g_chainDragToyId) return;
     if (!CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) return;
 
     const now = performance.now();
-    if (now - g_chainDragLastUpdateTime < CHAIN_DRAG_UPDATE_INTERVAL_MS) {
+    const dt = now - g_chainDragLastUpdateTime;
+
+    if (dt < CHAIN_DRAG_UPDATE_INTERVAL_MS) {
+      if (CHAIN_DEBUG) {
+        // Very light log; comment out if too noisy.
+        // console.log('[CHAIN][drag] pointermove skipped (throttle)', { dt });
+      }
       return;
     }
     g_chainDragLastUpdateTime = now;
 
+    let t0 = 0;
+    if (CHAIN_DEBUG) {
+      t0 = performance.now();
+    }
+
     try {
-      rebuildChainSegments();
+      updateChainSegmentsForToy(g_chainDragToyId);
       scheduleChainRedraw();
     } catch (err) {
       if (CHAIN_DEBUG) {
         console.warn('[CHAIN] pointermove throttled redraw failed', err);
       }
     }
+
+    if (CHAIN_DEBUG) {
+      const t1 = performance.now();
+      const jsTime = t1 - t0;
+
+      let edgeCount = 0;
+      if (g_edgesByToyId && g_edgesByToyId.has(g_chainDragToyId)) {
+        const set = g_edgesByToyId.get(g_chainDragToyId);
+        edgeCount = set ? set.size : 0;
+      }
+
+      console.log(
+        '[CHAIN][perf][drag] JS',
+        jsTime.toFixed(3),
+        'ms for toy',
+        g_chainDragToyId,
+        'edges=',
+        edgeCount,
+        'dt=',
+        dt.toFixed(1)
+      );
+    }
   }, true);
 
   // On drag end, do a final precise rebuild and clear drag state
   document.addEventListener('pointerup', () => {
-    if (!g_chainDragToyId) return;
+    if (!g_chainDragToyId) return; // not dragging a toy
+    const toyId = g_chainDragToyId;
     g_chainDragToyId = null;
+    g_chainDragLastUpdateTime = 0;
+    g_chainToyLastPos.delete(toyId);
     if (!CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) return;
 
     try {
