@@ -359,7 +359,29 @@ function ensurePanelSpawnPlacement(panel, {
 }
 
 let chainCanvas, chainCtx;
-const g_pulsingConnectors = new Map(); // fromId -> { toId, pulse: 1.0 }
+// fromId -> { toId, until: number (performance.now() + durationMs) }
+const g_pulsingConnectors = new Map();
+
+// Cached layout data so drawChains() avoids DOM reads per frame
+let g_boardClientWidth = 0;
+let g_boardClientHeight = 0;
+let g_chainSegments = []; // { fromId, toId, p1x, p1y, p2x, p2y }
+
+// Drag-time throttling for chain redraws
+let g_chainDragToyId = null;
+let g_chainDragLastUpdateTime = 0;
+const CHAIN_DRAG_UPDATE_INTERVAL_MS = 50; // ms between connector updates while dragging
+
+const CHAIN_DEBUG = false;
+const CHAIN_DEBUG_LOG_THRESHOLD_MS = 1.5;  // log sub-step if it costs more than this
+const CHAIN_DEBUG_FRAME_THRESHOLD_MS = 12; // log whole frame if it costs more than this
+
+// Feature flags so we can selectively disable suspected work during perf debugging.
+// Flip these to false one at a time to see which block removes the slowdown.
+const CHAIN_FEATURE_ENABLE_SCHEDULER      = true; // master toggle for chain work in scheduler()
+const CHAIN_FEATURE_ENABLE_MARK_ACTIVE    = true; // DOM scan + data-chain-active flags
+const CHAIN_FEATURE_ENABLE_SEQUENCER      = true; // __sequencerStep + border pulses
+const CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW = true; // drawChains() canvas connectors
 
 
 console.log('[MAIN] module start');
@@ -807,9 +829,34 @@ function updateAllChainUIs() {
 }
 
 function triggerConnectorPulse(fromId, toId) {
-    g_pulsingConnectors.set(fromId, { toId, pulse: 1.0 });
     const panel = document.getElementById(fromId);
-    pulseToyBorder(panel);
+    if (panel) {
+        pulseToyBorder(panel);
+    }
+
+    const now = performance.now();
+    const durationMs = 150;
+
+    // Store a simple flash window for this connector
+    g_pulsingConnectors.set(fromId, { toId, until: now + durationMs });
+
+    // Redraw once at flash start
+    try { scheduleChainRedraw(); } catch (err) {
+        console.warn('[CHAIN] pulse redraw failed', err);
+    }
+
+    // And once at flash end to restore normal appearance
+    setTimeout(() => {
+        const info = g_pulsingConnectors.get(fromId);
+        if (!info) return;
+        // Only clear if this is still the same edge and same flash window
+        if (info.toId !== toId) return;
+        if (info.until > now + durationMs) return;
+        g_pulsingConnectors.delete(fromId);
+        try { scheduleChainRedraw(); } catch (err) {
+            console.warn('[CHAIN] pulse clear redraw failed', err);
+        }
+    }, durationMs + 20);
 }
 
 // Unified border pulse helper for both modes
@@ -863,6 +910,7 @@ function initToyChaining(panel) {
     panel.style.overflow = 'visible'; // Ensure the button is not clipped by the panel's bounds.
 
     extendBtn.addEventListener('pointerdown', (e) => {
+        const tStart = performance.now();
         e.preventDefault();
         e.stopImmediatePropagation?.();
         e.stopPropagation();
@@ -904,19 +952,6 @@ function initToyChaining(panel) {
         newPanel.style.top = `${(sourceRect.top - boardRect.top) / boardScale}px`;
 
         board.appendChild(newPanel);
-
-        const baseLeft = parseFloat(newPanel.style.left) || 0;
-        const baseTop = parseFloat(newPanel.style.top) || 0;
-        const initialPlacement = ensurePanelSpawnPlacement(newPanel, {
-            baseLeft,
-            baseTop,
-            fallbackWidth: sourceRect.width / boardScale,
-            fallbackHeight: sourceRect.height / boardScale,
-        });
-        if (initialPlacement?.changed) {
-            // Position already updated by the helper.
-        }
-        persistToyPosition(newPanel);
 
         // Defer the rest of the initialization to the next event loop cycle.
         // This gives the browser time to calculate the new panel's layout,
@@ -971,10 +1006,18 @@ function initToyChaining(panel) {
                     fallbackWidth: sourceRect.width / boardScale,
                     fallbackHeight: sourceRect.height / boardScale,
                     skipIfMoved: true,
+                    // Chained toys don’t need a huge search radius; keep this tight
+                    maxAttempts: 120,
                 });
-                if (followUp?.changed) {
+
+                // Always persist at least once for chained toys so their position is saved,
+                // regardless of whether the helper actually moved them.
+                try {
                     persistToyPosition(newPanel);
+                } catch (err) {
+                    console.warn('[chain] persistToyPosition failed', err);
                 }
+
                 updateChains();
                 updateAllChainUIs();
                 delete newPanel.dataset.spawnAutoManaged;
@@ -985,6 +1028,10 @@ function initToyChaining(panel) {
             const raf = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));
             raf(() => raf(finalizePlacement));
         }, 0);
+        try {
+            const dt = performance.now() - tStart;
+            console.log('[CHAIN][perf] chained toy created in', dt.toFixed(1), 'ms');
+        } catch {}
     });
 }
 
@@ -1194,7 +1241,7 @@ function destroyToyPanel(panelOrId) {
 
     try { updateChains(); } catch (err) { console.warn('[destroyToyPanel] chain update failed', err); }
     try { updateAllChainUIs(); } catch (err) { console.warn('[destroyToyPanel] chain UI update failed', err); }
-    try { drawChains(); } catch (err) { console.warn('[destroyToyPanel] draw chains failed', err); }
+    try { scheduleChainRedraw(); } catch (err) { console.warn('[destroyToyPanel] draw chains failed', err); }
     try { applyStackingOrder(); } catch (err) { console.warn('[destroyToyPanel] stacking failed', err); }
     try { window.Persistence?.markDirty?.(); } catch (err) { console.warn('[destroyToyPanel] mark dirty failed', err); }
 
@@ -1243,111 +1290,145 @@ function getChainAnchor(panel) {
   };
 }
 
+function getConnectorAnchorPoints(fromPanel, toPanel) {
+  if (!fromPanel || !toPanel) return null;
+  const a1 = getChainAnchor(fromPanel);
+  const left = parseFloat(toPanel.style.left) || 0;
+  const top = parseFloat(toPanel.style.top) || 0;
+  const body = toPanel.querySelector('.toy-body');
+  const a2y = body ? top + body.offsetTop + (body.offsetHeight / 2) : top + (toPanel.offsetHeight / 2);
+  return { a1, a2: { x: left, y: a2y } };
+}
+
+function rebuildChainSegments() {
+  g_chainSegments = [];
+  const board = document.getElementById('board');
+  if (!board || !g_chainState || g_chainState.size === 0) return;
+
+  for (const headId of g_chainState.keys()) {
+    let current = document.getElementById(headId);
+    const visited = new Set();
+
+    while (current && !visited.has(current.id)) {
+      visited.add(current.id);
+
+      const nextId = current.dataset.nextToyId;
+      if (!nextId) break;
+      const next = document.getElementById(nextId);
+      if (!next) break;
+
+      const anchors = getConnectorAnchorPoints(current, next);
+      if (!anchors) {
+        current = next;
+        continue;
+      }
+
+      const { a1, a2 } = anchors;
+      g_chainSegments.push({
+        fromId: current.id,
+        toId: nextId,
+        p1x: a1.x - 1,
+        p1y: a1.y,
+        p2x: a2.x,
+        p2y: a2.y
+      });
+
+      current = next;
+    }
+  }
+}
+
 function drawChains() {
     if (!chainCanvas || !chainCtx) return;
-    const board = document.getElementById('board');
-    if (!board) return;
+    let connectorCount = 0;
 
-    // --- New logic to calculate content bounds ---
-    // This correctly handles toys positioned with negative coordinates (e.g., moved to the left).
-    const toys = Array.from(board.querySelectorAll(':scope > .toy-panel'));
-    let minX = 0, minY = 0, maxX = board.clientWidth, maxY = board.clientHeight;
+    const width = g_boardClientWidth || 0;
+    const height = g_boardClientHeight || 0;
 
-    if (toys.length > 0) {
-        minX = Infinity; minY = Infinity; maxX = -Infinity; maxY = -Infinity;
-        for (const toy of toys) {
-            // Use parseFloat on style.left/top, as offsetLeft/Top don't handle negative positions.
-            const left = parseFloat(toy.style.left) || 0;
-            const top = parseFloat(toy.style.top) || 0;
-            const width = toy.offsetWidth;
-            const height = toy.offsetHeight;
+    const hasChains = g_chainSegments && Array.isArray(g_chainSegments) && g_chainSegments.length > 0;
 
-            minX = Math.min(minX, left);
-            minY = Math.min(minY, top);
-            maxX = Math.max(maxX, left + width + 65); // Add buffer for chain button
-            maxY = Math.max(maxY, top + height);
-        }
-        // Ensure bounds are at least the size of the viewport.
-        minX = Math.min(minX, 0);
-        minY = Math.min(minY, 0);
-        maxX = Math.max(maxX, board.clientWidth);
-        maxY = Math.max(maxY, board.clientHeight);
-    }
+    if (!width || !height) return;
 
     const dpr = window.devicePixelRatio || 1;
-    const canvasX = minX;
-    const canvasY = minY;
-    const canvasW = maxX - minX;
-    const canvasH = maxY - minY;
+    const canvasW = chainCanvas.width / dpr;
+    const canvasH = chainCanvas.height / dpr;
 
-    // Ensure the canvas element size and backing store match the calculated bounds.
-    if (chainCanvas.style.left !== `${canvasX}px` || chainCanvas.style.top !== `${canvasY}px` || chainCanvas.style.width !== `${canvasW}px` || chainCanvas.style.height !== `${canvasH}px` || chainCanvas.width !== canvasW * dpr || chainCanvas.height !== canvasH * dpr) {
-        chainCanvas.style.left = `${canvasX}px`;
-        chainCanvas.style.top = `${canvasY}px`;
-        chainCanvas.style.width = `${canvasW}px`;
-        chainCanvas.style.height = `${canvasH}px`;
-        chainCanvas.width = canvasW * dpr;
-        chainCanvas.height = canvasH * dpr;
+    if (canvasW !== width || canvasH !== height) {
+        chainCanvas.width = width * dpr;
+        chainCanvas.height = height * dpr;
+        chainCanvas.style.left = '0px';
+        chainCanvas.style.top = '0px';
+        chainCanvas.style.width = `${width}px`;
+        chainCanvas.style.height = `${height}px`;
     }
 
-    // Clear entire canvas bitmap. clearRect is not affected by transforms.
+    if (!hasChains) {
+        chainCtx.setTransform(1, 0, 0, 1, 0, 0);
+        chainCtx.clearRect(0, 0, chainCanvas.width, chainCanvas.height);
+        return;
+    }
+
+    chainCtx.setTransform(1, 0, 0, 1, 0, 0);
     chainCtx.clearRect(0, 0, chainCanvas.width, chainCanvas.height);
+    chainCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    // Set transform to draw in board coordinates, accounting for canvas offset.
-    chainCtx.setTransform(dpr, 0, 0, dpr, -canvasX * dpr, -canvasY * dpr);
+    const now = performance.now();
 
-    // Decay existing pulses
-    for (const [fromId, pulseInfo] of g_pulsingConnectors.entries()) {
-        pulseInfo.pulse -= 0.05; // decay rate
-        if (pulseInfo.pulse <= 0) {
-            g_pulsingConnectors.delete(fromId);
-        }
+    // Draw static chain connectors (with optional flash state).
+    for (const seg of g_chainSegments) {
+        const { p1x, p1y, p2x, p2y } = seg;
+
+        chainCtx.beginPath();
+        chainCtx.moveTo(p1x, p1y);
+        const controlPointOffset = Math.max(40, Math.abs(p2x - p1x) * 0.4);
+        chainCtx.bezierCurveTo(
+            p1x + controlPointOffset,
+            p1y,
+            p2x - controlPointOffset,
+            p2y,
+            p2x,
+            p2y
+        );
+
+        const pulseInfo = g_pulsingConnectors.get(seg.fromId);
+        const isPulsing = !!(pulseInfo && pulseInfo.toId === seg.toId && pulseInfo.until > now);
+        const baseWidth = 10;
+        const pulseWidth = isPulsing ? 4 : 0;
+        chainCtx.lineWidth = baseWidth + pulseWidth;
+        chainCtx.lineCap = 'round'; // Use rounded ends to seamlessly meet the circular buttons.
+        chainCtx.strokeStyle = isPulsing
+            ? 'hsl(222, 100%, 95%)'
+            : 'hsl(222, 100%, 80%)';
+        chainCtx.stroke();
+
+        connectorCount++;
     }
 
-    for (const headId of g_chainState.keys()) {
-        let current = document.getElementById(headId);
-        while (current) {
-            const nextId = current.dataset.nextToyId;
-            if (!nextId) break;
-            const next = document.getElementById(nextId);
-            if (!next) break;
-
-            // Use parseFloat(style.left/top) for coordinates to match the bounding box calculation.
-            const a1 = getChainAnchor(current);
-            const a2 = (() => {
-              const left = (parseFloat(next.style.left) || 0);
-              const top  = (parseFloat(next.style.top)  || 0);
-              const body = next.querySelector('.toy-body');
-              if (body) {
-                return {
-                  x: left,
-                  y: top + body.offsetTop + (body.offsetHeight / 2)
-                };
-              }
-              return { x: left, y: top + (next.offsetHeight / 2) };
-            })();
-            const p1x = a1.x - 1, p1y = a1.y; // tiny inset so the stroke tucks under the panel border cleanly
-            const p2x = a2.x, p2y = a2.y;
-
-            chainCtx.beginPath();
-            chainCtx.moveTo(p1x, p1y);
-            const controlPointOffset = Math.max(40, Math.abs(p2x - p1x) * 0.4);
-            chainCtx.bezierCurveTo(p1x + controlPointOffset, p1y, p2x - controlPointOffset, p2y, p2x, p2y);
-
-            const pulseInfo = g_pulsingConnectors.get(current.id);
-            const isPulsing = pulseInfo && pulseInfo.toId === nextId;
-            const pulseAmount = isPulsing ? pulseInfo.pulse : 0;
-
-            const baseWidth = 10;
-            const pulseWidth = 15 * pulseAmount;
-            chainCtx.lineWidth = baseWidth + pulseWidth;
-            chainCtx.lineCap = 'round'; // Use rounded ends to seamlessly meet the circular buttons.
-            chainCtx.strokeStyle = `hsl(222, 100%, ${80 + 15 * pulseAmount}%)`;
-            chainCtx.stroke();
-
-            current = next;
-        }
+    if (CHAIN_DEBUG && connectorCount > 0 && g_chainState.size > 0) {
+        console.log(
+            '[CHAIN][perf][detail] drawChains connectors=',
+            connectorCount,
+            'heads=',
+            g_chainState.size
+        );
     }
+}
+// Throttled "redraw once on the next frame" helper for chain connectors.
+let g_chainRedrawScheduled = false;
+function scheduleChainRedraw() {
+    if (!chainCanvas || !chainCtx) return;
+    if (g_chainRedrawScheduled) return;
+    g_chainRedrawScheduled = true;
+
+    const raf = window.requestAnimationFrame?.bind(window) ?? (fn => setTimeout(fn, 16));
+    raf(() => {
+        g_chainRedrawScheduled = false;
+        try {
+            drawChains();
+        } catch (err) {
+            console.warn('[CHAIN] scheduleChainRedraw failed', err);
+        }
+    });
 }
 const g_chainState = new Map();
 
@@ -1380,6 +1461,18 @@ function updateChains() {
     for (const headId of g_chainState.keys()) {
         if (!document.getElementById(headId)) {
             g_chainState.delete(headId);
+        }
+    }
+
+    // Rebuild cached connector geometry whenever chain heads change and redraw once.
+    try {
+        rebuildChainSegments();
+        if (CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) {
+            scheduleChainRedraw();
+        }
+    } catch (err) {
+        if (CHAIN_DEBUG) {
+            console.warn('[CHAIN][perf] rebuildChainSegments/draw failed', err);
         }
     }
 }
@@ -1436,54 +1529,104 @@ try {
 function scheduler(){
   let lastPhase = 0;
   const lastCol = new Map();
+  let lastPerfLog = 0;
+
   function step(){
-      // Keep outline vars + body-only overlays synced with layout changes
-      try {
-        window.__updateOutlineScaleIfNeeded && window.__updateOutlineScaleIfNeeded();
-        syncAllBodyOutlines();
-      } catch {}
+    const frameStart = performance.now();
+
+    // Keep outline-related CSS vars synced with zoom; heavy geometry sync happens on demand.
+    try {
+      window.__updateOutlineScaleIfNeeded && window.__updateOutlineScaleIfNeeded();
+    } catch {}
+
     const info = getLoopInfo();
-    if (isRunning()){
+
+    if (CHAIN_FEATURE_ENABLE_SCHEDULER && isRunning()){
+      // --- Phase: advance chains on bar wrap ---
       const phaseJustWrapped = info.phase01 < lastPhase && lastPhase > 0.9;
       lastPhase = info.phase01;
 
       if (phaseJustWrapped) {
-          for (const [headId] of g_chainState.entries()) {
-              const activeToy = document.getElementById(g_chainState.get(headId));
-              // Bouncers and Ripplers manage their own advancement via the 'chain:next' event.
-              // All other toys (like loopgrid) advance on the global bar clock.
-              if (activeToy && activeToy.dataset.toy !== 'bouncer' && activeToy.dataset.toy !== 'rippler') { advanceChain(headId); }
+        const tAdvanceStart = performance.now();
+        for (const [headId] of g_chainState.entries()) {
+          const activeToy = document.getElementById(g_chainState.get(headId));
+          // Bouncers and Ripplers manage their own advancement via the 'chain:next' event.
+          // All other toys (like loopgrid) advance on the global bar clock.
+          if (activeToy && activeToy.dataset.toy !== 'bouncer' && activeToy.dataset.toy !== 'rippler') {
+            advanceChain(headId);
           }
+        }
+        const tAdvanceEnd = performance.now();
+        if (CHAIN_DEBUG && (tAdvanceEnd - tAdvanceStart) > CHAIN_DEBUG_LOG_THRESHOLD_MS) {
+          console.log('[CHAIN][perf] advanceChain batch', (tAdvanceEnd - tAdvanceStart).toFixed(2), 'ms', 'heads=', g_chainState.size);
+        }
       }
 
+      // --- Phase A: chain-active flags ---
+      const tActiveStart = performance.now();
       const activeToyIds = new Set(g_chainState.values());
-      // Phase A: mark chain-active (for logic/UI), but DO NOT toggle the highlight here.
-      // The steady highlight is controlled globally by Play/Stop.
-      document.querySelectorAll('.toy-panel[id]').forEach(toy => {
-        const isActive = activeToyIds.has(toy.id);
-        toy.dataset.chainActive = isActive ? 'true' : 'false';
-      });
 
-      // Phase B: still run sequencer steps only on toys that implement it
-      getSequencedToys().forEach(toy => {
-        // (no-op here; the per-step loop below will handle stepping)
-      });
+      if (CHAIN_FEATURE_ENABLE_MARK_ACTIVE) {
+        if (activeToyIds.size > 0) {
+          document.querySelectorAll('.toy-panel[id]').forEach(toy => {
+            const isActive = activeToyIds.has(toy.id);
+            const current = toy.dataset.chainActive === 'true';
+            if (current !== isActive) {
+              toy.dataset.chainActive = isActive ? 'true' : 'false';
+            }
+          });
+        } else {
+          // No active toys in any chain: clear flags in one cheap pass.
+          document.querySelectorAll('.toy-panel[data-chain-active="true"]').forEach(toy => {
+            delete toy.dataset.chainActive;
+          });
+        }
+      }
+      const tActiveEnd = performance.now();
+      if (CHAIN_DEBUG && (tActiveEnd - tActiveStart) > CHAIN_DEBUG_LOG_THRESHOLD_MS) {
+        console.log('[CHAIN][perf] mark-active', (tActiveEnd - tActiveStart).toFixed(2), 'ms', 'activeToyCount=', activeToyIds.size);
+      }
 
-      for (const activeToyId of activeToyIds) {
+      // --- Phase B: find sequenced toys (DOM scan) ---
+      const tSeqStart = performance.now();
+      let sequencedToys = [];
+      if (CHAIN_FEATURE_ENABLE_SEQUENCER) {
+        sequencedToys = getSequencedToys(); // querySelectorAll('.toy-panel') + filter
+      }
+      const tSeqEnd = performance.now();
+      if (CHAIN_DEBUG && CHAIN_FEATURE_ENABLE_SEQUENCER && (tSeqEnd - tSeqStart) > CHAIN_DEBUG_LOG_THRESHOLD_MS) {
+        console.log('[CHAIN][perf] getSequencedToys', (tSeqEnd - tSeqStart).toFixed(2), 'ms', 'count=', sequencedToys.length);
+      }
+      // (existing behaviour: the actual stepping loop below uses activeToyIds, not sequencedToys)
+
+      // --- Phase C: per-toy sequencer stepping for active chain links ---
+      const tStepStart = performance.now();
+      if (CHAIN_FEATURE_ENABLE_SEQUENCER) {
+        for (const activeToyId of activeToyIds) {
           const toy = document.getElementById(activeToyId);
           if (toy && typeof toy.__sequencerStep === 'function') {
-              const steps = parseInt(toy.dataset.steps, 10) || NUM_STEPS;
-              const col = Math.floor(info.phase01 * steps) % steps;
-              if (col !== lastCol.get(toy.id)) {
-                  lastCol.set(toy.id, col);
-                  try { toy.__sequencerStep(col); } catch (e) { console.warn(`Sequencer step failed for ${toy.id}`, e); }
-                  // If this toy actually has notes at this column, flash the normal-mode border
-                  if (panelHasNotesAtColumn(toy, col)) {
-                    pulseToyBorder(toy);
-                  }
+            const steps = parseInt(toy.dataset.steps, 10) || NUM_STEPS;
+            const col = Math.floor(info.phase01 * steps) % steps;
+            if (col !== lastCol.get(toy.id)) {
+              lastCol.set(toy.id, col);
+              try {
+                toy.__sequencerStep(col);
+              } catch (e) {
+                console.warn(`Sequencer step failed for ${toy.id}`, e);
               }
+              // If this toy actually has notes at this column, flash the normal-mode border
+              if (panelHasNotesAtColumn(toy, col)) {
+                pulseToyBorder(toy);
+              }
+            }
           }
+        }
       }
+      const tStepEnd = performance.now();
+      if (CHAIN_DEBUG && CHAIN_FEATURE_ENABLE_SEQUENCER && (tStepEnd - tStepStart) > CHAIN_DEBUG_LOG_THRESHOLD_MS) {
+        console.log('[CHAIN][perf] sequencerStep batch', (tStepEnd - tStepStart).toFixed(2), 'ms', 'activeToyCount=', activeToyIds.size);
+      }
+
     } else {
       // Transport paused — ensure no steady highlight is shown
       try {
@@ -1492,14 +1635,35 @@ function scheduler(){
         });
       } catch {}
     }
-    drawChains();
+
+    // --- Whole-frame cost ---
+    const now = performance.now();
+    const frameCost = now - frameStart;
+    if (CHAIN_DEBUG && frameCost > CHAIN_DEBUG_FRAME_THRESHOLD_MS && (now - lastPerfLog) > 1000) {
+      lastPerfLog = now;
+      console.log('[SCHED][perf] frame', frameCost.toFixed(2), 'ms');
+    }
+
+    // Connectors are now updated on-demand, not every frame.
     requestAnimationFrame(step);
   }
+
   updateChains();
   requestAnimationFrame(step);
 }
 async function boot(){
   const board = document.getElementById('board');
+  if (board) {
+    g_boardClientWidth = board.clientWidth || 0;
+    g_boardClientHeight = board.clientHeight || 0;
+  }
+
+  window.addEventListener('resize', () => {
+    const b = document.getElementById('board');
+    if (!b) return;
+    g_boardClientWidth = b.clientWidth || 0;
+    g_boardClientHeight = b.clientHeight || 0;
+  }, { passive: true });
   try {
     try {
       await initAudioAssets(CSV_PATH);
@@ -1520,6 +1684,13 @@ async function boot(){
         });
         board.prepend(chainCanvas);
         chainCtx = chainCanvas.getContext('2d');
+        try {
+            updateChains();
+        } catch (err) {
+            if (CHAIN_DEBUG) {
+                console.warn('[CHAIN] initial updateChains failed', err);
+            }
+        }
     }
 
     bootTopbar();
@@ -1559,6 +1730,14 @@ async function boot(){
     // Initial sync once toys are present
     try { syncAllBodyOutlines(); } catch {}
     updateAllChainUIs(); // Set initial instrument button visibility
+    try {
+      rebuildChainSegments();
+      scheduleChainRedraw();
+    } catch (err) {
+      if (CHAIN_DEBUG) {
+        console.warn('[CHAIN] initial redraw failed', err);
+      }
+    }
 
   // Add event listener for grid-based chain activation
   document.addEventListener('chain:wakeup', (e) => {
@@ -1642,8 +1821,60 @@ async function boot(){
   });
 
   window.addEventListener('overview:transition', () => {
-    try { drawChains(); } catch {}
+    try {
+      rebuildChainSegments();
+      scheduleChainRedraw();
+    } catch (err) {
+      if (CHAIN_DEBUG) {
+        console.warn('[CHAIN] overview:transition redraw failed', err);
+      }
+    }
   }, { passive: true });
+
+  // Start tracking drag when pressing down on a toy panel
+  document.addEventListener('pointerdown', (e) => {
+    const panel = e.target && e.target.closest ? e.target.closest('.toy-panel') : null;
+    if (!panel) return;
+    g_chainDragToyId = panel.id;
+    g_chainDragLastUpdateTime = performance.now();
+  }, true);
+
+  // While dragging, update chain geometry at a throttled rate
+  document.addEventListener('pointermove', () => {
+    if (!g_chainDragToyId) return;
+    if (!CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) return;
+
+    const now = performance.now();
+    if (now - g_chainDragLastUpdateTime < CHAIN_DRAG_UPDATE_INTERVAL_MS) {
+      return;
+    }
+    g_chainDragLastUpdateTime = now;
+
+    try {
+      rebuildChainSegments();
+      scheduleChainRedraw();
+    } catch (err) {
+      if (CHAIN_DEBUG) {
+        console.warn('[CHAIN] pointermove throttled redraw failed', err);
+      }
+    }
+  }, true);
+
+  // On drag end, do a final precise rebuild and clear drag state
+  document.addEventListener('pointerup', () => {
+    if (!g_chainDragToyId) return;
+    g_chainDragToyId = null;
+    if (!CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) return;
+
+    try {
+      rebuildChainSegments();
+      scheduleChainRedraw();
+    } catch (err) {
+      if (CHAIN_DEBUG) {
+        console.warn('[CHAIN] pointerup final redraw failed', err);
+      }
+    }
+  }, true);
 
     try{ window.ThemeBoot && window.ThemeBoot.wireAll && window.ThemeBoot.wireAll(); }catch{}
     try{ tryRestoreOnBoot(); }catch{}
