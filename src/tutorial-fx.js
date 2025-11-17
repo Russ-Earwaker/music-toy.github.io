@@ -177,7 +177,16 @@ function startFlight(ctx, canvas, startEl, endEl) {
     }
 
     if (canvas && ctx) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const logicalW = canvasRect.width;
+        const logicalH = canvasRect.height;
+        if (window.__TUTORIAL_STREAM_DEBUG) {
+            console.debug('[FX][stream] clear', {
+                w: logicalW,
+                h: logicalH,
+                dpr: window.devicePixelRatio || 1,
+            });
+        }
+        ctx.clearRect(0, 0, logicalW, logicalH);
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
     }
@@ -419,10 +428,12 @@ export function startParticleStream(originEl, targetEl, options = {}) {
   activeTargetEl = layer === 'behind-target' ? targetEl : null;
   if (forceReset) {
     if (layer === 'behind-target' && frontCanvas && frontCtx) {
-      frontCtx.clearRect(0, 0, frontCanvas.width, frontCanvas.height);
+      const rect = frontCanvas.getBoundingClientRect();
+      frontCtx.clearRect(0, 0, rect.width, rect.height);
     }
     if (layer === 'front' && behindCanvas && behindCtx) {
-      behindCtx.clearRect(0, 0, behindCanvas.width, behindCanvas.height);
+      const rect = behindCanvas.getBoundingClientRect();
+      behindCtx.clearRect(0, 0, rect.width, rect.height);
     }
   }
 
