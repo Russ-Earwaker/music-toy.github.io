@@ -30,16 +30,22 @@ function setupCanvases(behind, front) {
 
   const resize = () => {
     const dpr = window.devicePixelRatio || 1;
-    if (behindCanvas && behindCanvas.parentElement) {
+    if (behindCanvas && behindCanvas.parentElement && behindCtx) {
       const rect = behindCanvas.parentElement.getBoundingClientRect();
       behindCanvas.width = rect.width * dpr;
       behindCanvas.height = rect.height * dpr;
-      behindCtx?.scale(dpr, dpr);
+      behindCanvas.style.width = `${rect.width}px`;
+      behindCanvas.style.height = `${rect.height}px`;
+      behindCtx.setTransform(1, 0, 0, 1, 0, 0);
+      behindCtx.scale(dpr, dpr);
     }
-    if (frontCanvas) {
+    if (frontCanvas && frontCtx) {
       frontCanvas.width = window.innerWidth * dpr;
       frontCanvas.height = window.innerHeight * dpr;
-      frontCtx?.scale(dpr, dpr);
+      frontCanvas.style.width = `${window.innerWidth}px`;
+      frontCanvas.style.height = `${window.innerHeight}px`;
+      frontCtx.setTransform(1, 0, 0, 1, 0, 0);
+      frontCtx.scale(dpr, dpr);
     }
   };
 
@@ -94,6 +100,14 @@ function createParticle(x, y, endPos) {
   };
 }
 
+function getRectCenter(rect) {
+  if (!rect) return { x: 0, y: 0 };
+  return {
+    x: rect.left + (rect.width * 0.5),
+    y: rect.top + (rect.height * 0.5),
+  };
+}
+
 function createBurst(x, y, endPos) {
   // Sun
   const sun = createParticle(x, y, endPos);
@@ -144,12 +158,17 @@ function startFlight(ctx, canvas, startEl, endEl) {
     const dt = Math.max(0, now - startFlight._lastTs) / 1000;
     startFlight._lastTs = now;
 
+    const canvasRect = canvas.getBoundingClientRect();
     const startRect = startEl.getBoundingClientRect();
     const endRect = endEl.getBoundingClientRect();
-    const sx = startRect.left + startRect.width * 0.9;
-    const sy = startRect.top + startRect.height * 0.5;
-    const ex = endRect.left + endRect.width * 0.5;
-    const ey = endRect.top + endRect.height * 0.5;
+
+    const startCenter = getRectCenter(startRect);
+    const endCenter = getRectCenter(endRect);
+
+    const sx = startCenter.x - canvasRect.left;
+    const sy = startCenter.y - canvasRect.top;
+    const ex = endCenter.x - canvasRect.left;
+    const ey = endCenter.y - canvasRect.top;
 
     startFlight._accum += PARTICLES_PER_SEC * dt;
     while (startFlight._accum >= 1) {
@@ -280,11 +299,17 @@ function startFlight(ctx, canvas, startEl, endEl) {
 
     if (canvas === frontCanvas && activeLayer === 'behind' && activeTargetEl) {
         const rect = activeTargetEl.getBoundingClientRect();
+        const canvasRect = canvas.getBoundingClientRect();
         const padding = 16;
         ctx.save();
         ctx.globalCompositeOperation = 'destination-out';
         ctx.beginPath();
-        ctx.rect(rect.left - padding, rect.top - padding, rect.width + padding * 2, rect.height + padding * 2);
+        ctx.rect(
+          rect.left - canvasRect.left - padding,
+          rect.top - canvasRect.top - padding,
+          rect.width + padding * 2,
+          rect.height + padding * 2
+        );
         ctx.fill();
         ctx.restore();
     }
@@ -365,17 +390,12 @@ export function startParticleStream(originEl, targetEl, options = {}) {
 
   const startRect = originEl.getBoundingClientRect();
   const endRect = targetEl.getBoundingClientRect();
-  const sx = startRect.left + startRect.width * 0.9;
-  const sy = startRect.top + startRect.height * 0.5;
-  const ex = endRect.left + endRect.width * 0.5;
-  const ey = endRect.top + endRect.height * 0.5;
   console.log('[tutorial-fx] startParticleStream kicking off', {
     originClass: originEl.className,
     targetClass: targetEl.className,
     startRect: { left: startRect.left, top: startRect.top, width: startRect.width, height: startRect.height },
     endRect: { left: endRect.left, top: endRect.top, width: endRect.width, height: endRect.height },
   });
-  createBurst(sx, sy, { x: ex, y: ey });
 
   const drawCtx = frontCtx;
   const drawCanvas = frontCanvas;
@@ -383,6 +403,16 @@ export function startParticleStream(originEl, targetEl, options = {}) {
     console.log('[tutorial-fx] startParticleStream skipped: no drawing context for layer', { layer });
     return;
   }
+
+  const canvasRect = drawCanvas.getBoundingClientRect();
+  const startCenter = getRectCenter(startRect);
+  const endCenter = getRectCenter(endRect);
+  const sx = startCenter.x - canvasRect.left;
+  const sy = startCenter.y - canvasRect.top;
+  const ex = endCenter.x - canvasRect.left;
+  const ey = endCenter.y - canvasRect.top;
+
+  createBurst(sx, sy, { x: ex, y: ey });
   activeLayer = layer === 'behind-target' ? 'behind' : 'front';
   activeCtx = drawCtx;
   activeCanvas = drawCanvas;

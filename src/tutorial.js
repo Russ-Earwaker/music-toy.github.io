@@ -196,6 +196,11 @@ const GOAL_FLOW = [
 const GOAL_BY_ID = new Map(GOAL_FLOW.map(goal => [goal.id, goal]));
 const TASK_INFO_BY_ID = new Map();
 const TASKS_BY_REQUIREMENT = new Map();
+const ADD_TOY_TOGGLE_SELECTOR = '.toy-spawner-dock .toy-spawner-toggle:not(.is-preview)';
+
+function getAddToyToggle() {
+  return document.querySelector(ADD_TOY_TOGGLE_SELECTOR);
+}
 
 GOAL_FLOW.forEach((goal) => {
   const tasks = Array.isArray(goal.tasks) ? goal.tasks : [];
@@ -1444,7 +1449,7 @@ function cloneGoal(goal) {
   }
   function setUpSpawnerControls() {
     spawnerControls = {
-      toggle: document.querySelector('.toy-spawner-toggle'),
+      toggle: getAddToyToggle(),
       trash: document.querySelector('.toy-spawner-trash'),
       help: document.querySelector('.toy-spawner-help'),
     };
@@ -1936,7 +1941,7 @@ function cloneGoal(goal) {
       ensureGoalPanel();
       temporaryUnlockSpawnerControl('toggle');
 
-      whenVisible('.toy-spawner-toggle', (targetEl) => {
+      whenVisible(ADD_TOY_TOGGLE_SELECTOR, (targetEl) => {
         const startParticles = () => {
           const taskEl = goalPanel?.querySelector('.goal-task.is-active') 
                       || goalPanel?.querySelector('.goal-row.is-active');
@@ -2076,7 +2081,7 @@ function cloneGoal(goal) {
       ensureGoalPanel();
 
       // When the + button is visible, start the line from the active task -> + button
-      whenVisible('.toy-spawner-toggle', (targetEl) => {
+      whenVisible(ADD_TOY_TOGGLE_SELECTOR, (targetEl) => {
         const startParticles = () => {
           const taskEl = goalPanel?.querySelector('.goal-task.is-active') 
                       || goalPanel?.querySelector('.goal-row.is-active');
@@ -2188,7 +2193,7 @@ function cloneGoal(goal) {
     } else {
       // On any non-add-toy task, stop the stream + remove pulse
       stopParticleStream();
-      document.querySelector('.toy-spawner-toggle')?.classList.remove('tutorial-pulse-target', 'tutorial-addtoy-pulse', 'tutorial-flash');
+    getAddToyToggle()?.classList.remove('tutorial-pulse-target', 'tutorial-addtoy-pulse', 'tutorial-flash');
     }
 
     if (!handledSpecial) {
@@ -2525,7 +2530,7 @@ function cloneGoal(goal) {
             const didComplete = maybeCompleteTask('add-toy-loopgrid');
             if (didComplete) {
               stopParticleStream();
-              document.querySelector('.toy-spawner-toggle')?.classList.remove('tutorial-pulse-target', 'tutorial-addtoy-pulse', 'tutorial-flash', 'tutorial-active-pulse');
+              getAddToyToggle()?.classList.remove('tutorial-pulse-target', 'tutorial-addtoy-pulse', 'tutorial-flash', 'tutorial-active-pulse');
             }
 
 /***** << GPT:TUTORIAL_PLACE_AND_FRAME_BOTH START >> *****/
@@ -2622,7 +2627,7 @@ try {
             const didCompleteDraw = maybeCompleteTask('add-toy-drawgrid');
             if (didCompleteDraw) {
               stopParticleStream();
-              document.querySelector('.toy-spawner-toggle')?.classList.remove('tutorial-pulse-target', 'tutorial-addtoy-pulse', 'tutorial-flash', 'tutorial-active-pulse');
+              getAddToyToggle()?.classList.remove('tutorial-pulse-target', 'tutorial-addtoy-pulse', 'tutorial-flash', 'tutorial-active-pulse');
               relockTemporarySpawnerControls();
               document.getElementById('tutorial-add-draw-style')?.remove();
               document.querySelectorAll('.toy-spawner-item[data-tutorial-keep="draw"]').forEach(item => {
@@ -2960,7 +2965,7 @@ try {
 
       const attach = () => {
         if (disposed || cleanupInner) return;
-        const toggle = document.querySelector('.toy-spawner-toggle');
+        const toggle = getAddToyToggle();
         console.log('[tutorial] attach toggle lookup', {
           taskId,
           toggleFound: !!toggle,
@@ -3220,7 +3225,7 @@ try {
       try { panel.dispatchEvent(new CustomEvent('tutorial:highlight-drag', { detail: { active: false } })); } catch {}
       panel.classList.remove('tutorial-guide-foreground');
     });
-    const spawner = document.querySelector('.toy-spawner-toggle');
+    const spawner = getAddToyToggle();
     if (spawner) {
       spawner.classList.remove('tutorial-pulse-target', 'tutorial-addtoy-pulse', 'tutorial-flash');
     }
