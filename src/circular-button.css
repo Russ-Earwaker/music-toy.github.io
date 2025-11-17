@@ -119,6 +119,12 @@
   animation: cbtnActiveRing 2s ease-in-out infinite;
 }
 
+/* Disable outer glow pulse for the Guide button tutorial highlight */
+.guide-toggle.tutorial-active-pulse .c-btn-glow {
+  animation: none !important;
+  opacity: 0 !important;
+}
+
 @keyframes cbtnActiveCore {
   0% {
     transform: translate(-50%, -50%) scale(1);
