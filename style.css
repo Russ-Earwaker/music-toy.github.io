@@ -1425,18 +1425,13 @@ body.tutorial-active #topbar #theme-switcher-wrap {
   overflow: visible;
 }
 
-.guide-toggle {
-  padding: clamp(9px, calc(14px * var(--ui-scale)), 18px) clamp(14px, calc(22px * var(--ui-scale)), 26px);
-  font-weight: 600;
-  width: 100%;
-  min-width: 0;
-  border-radius: clamp(10px, calc(16px * var(--ui-scale)), 18px);
-  background: rgba(15, 21, 32, 0.92);
-  border: 1px solid rgba(146, 176, 228, 0.35);
-  color: var(--text);
-  box-shadow: none;
-  pointer-events: auto;
-  font-size: clamp(0.82rem, calc(0.88rem + (0.12rem * var(--ui-scale))), 0.98rem);
+.guide-launcher .guide-toggle {
+  align-self: flex-start;
+  --c-btn-size: var(--top-btn-size);
+}
+
+.guide-launcher .guide-toggle .c-btn-core {
+  background-size: 62%;
 }
 
 .guide-launcher .tutorial-goals-panel {

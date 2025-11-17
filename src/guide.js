@@ -96,10 +96,21 @@ function ensureHost() {
   if (!toggleRef || !toggleRef.isConnected) {
     toggleRef = document.createElement('button');
     toggleRef.type = 'button';
-    toggleRef.className = 'toy-btn guide-toggle';
-    toggleRef.textContent = 'Guide';
-    toggleRef.style.fontSize = '1.75rem';
+    toggleRef.className = 'c-btn guide-toggle';
+    toggleRef.id = 'guide-button';
+    toggleRef.title = 'Guide';
+    toggleRef.setAttribute('aria-label', 'Guide');
+    toggleRef.innerHTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
     hostRef.appendChild(toggleRef);
+  } else {
+    toggleRef.classList.add('c-btn');
+  }
+  toggleRef.id = 'guide-button';
+  toggleRef.title = 'Guide';
+  toggleRef.setAttribute('aria-label', 'Guide');
+  const toggleCore = toggleRef.querySelector('.c-btn-core');
+  if (toggleCore) {
+    toggleCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_Guide.png')");
   }
 
   if (!panelsRef || !panelsRef.isConnected) {
