@@ -17,6 +17,8 @@ let lastStopTs = 0;
 // Rect in canvas CSS coords that should be “punched out” of the front canvas.
 // This is aligned to the active goal-task that owns the origin element.
 let activeTaskMaskRect = null;
+// Keep track of which element started the current stream so we can recompute the mask on resize.
+let activeOriginEl = null;
 /* << GPT:TASK_MASK_GLOBALS END >> */
 
 function elKey(el) {
@@ -27,6 +29,28 @@ function elKey(el) {
 const PARTICLES_PER_SEC = 60;
 const BURST_COLOR_RGB = { r: 92, g: 178, b: 255 };
 const burstColor = (alpha = 1) => `rgba(${BURST_COLOR_RGB.r}, ${BURST_COLOR_RGB.g}, ${BURST_COLOR_RGB.b}, ${alpha})`;
+
+function recomputeActiveTaskMaskRect(front) {
+  if (!front || !activeOriginEl) {
+    activeTaskMaskRect = null;
+    return;
+  }
+
+  const maskEl = activeOriginEl?.closest?.('.goal-task');
+  if (!maskEl) {
+    activeTaskMaskRect = null;
+    return;
+  }
+
+  const canvasRect = front.getBoundingClientRect();
+  const taskRect = maskEl.getBoundingClientRect();
+  activeTaskMaskRect = {
+    x: taskRect.left - canvasRect.left,
+    y: taskRect.top  - canvasRect.top,
+    w: taskRect.width,
+    h: taskRect.height,
+  };
+}
 
 function setupCanvases(behind, front) {
   behindCanvas = behind;
@@ -52,6 +76,7 @@ function setupCanvases(behind, front) {
       frontCanvas.style.height = `${window.innerHeight}px`;
       frontCtx.setTransform(1, 0, 0, 1, 0, 0);
       frontCtx.scale(dpr, dpr);
+      recomputeActiveTaskMaskRect(frontCanvas);
     }
   };
 
@@ -360,6 +385,7 @@ export function startParticleStream(originEl, targetEl, options = {}) {
   if (!originEl || !targetEl) {
     console.log('[tutorial-fx] startParticleStream skipped: origin or target missing', { originElExists: !!originEl, targetElExists: !!targetEl });
     activeTaskMaskRect = null;
+    activeOriginEl = null;
     return;
   }
 
@@ -379,6 +405,8 @@ export function startParticleStream(originEl, targetEl, options = {}) {
         activeCanvas = frontCanvas;
       }
     }
+    activeOriginEl = originEl;
+    recomputeActiveTaskMaskRect(frontCanvas);
     activeTargetEl = nextLayer === 'behind' ? targetEl : null;
     if (!animationFrameId && activeCtx && activeCanvas) {
       animationFrameId = requestAnimationFrame(() => startFlight(activeCtx, activeCanvas, originEl, targetEl));
@@ -398,6 +426,7 @@ export function startParticleStream(originEl, targetEl, options = {}) {
   if (!behind || !front) {
     console.log('[tutorial-fx] startParticleStream skipped: canvas missing', { hasPanel: !!panel, hasBehind: !!behind, hasFront: !!front });
     activeTaskMaskRect = null;
+    activeOriginEl = null;
     return;
   }
 
@@ -409,27 +438,13 @@ export function startParticleStream(originEl, targetEl, options = {}) {
     startFlight._accum = 0;
   }
 
+  // Remember which element we’re masking around for this stream.
+  activeOriginEl = originEl;
+
   /* << GPT:TASK_MASK_CAPTURE START >> */
   // Capture the rect of the goal-task that owns the origin element.
   // We store it in canvas coordinates so we can clear it later as a mask.
-  (function captureTaskMaskRect() {
-    // Try to find the nearest goal-task (the individual task row/card)
-    const maskEl = originEl?.closest?.('.goal-task');
-    if (!maskEl || !front) {
-      activeTaskMaskRect = null;
-      return;
-    }
-
-    const canvasRect = front.getBoundingClientRect();
-    const taskRect = maskEl.getBoundingClientRect();
-
-    activeTaskMaskRect = {
-      x: taskRect.left - canvasRect.left,
-      y: taskRect.top  - canvasRect.top,
-      w: taskRect.width,
-      h: taskRect.height,
-    };
-  })();
+  recomputeActiveTaskMaskRect(front);
   /* << GPT:TASK_MASK_CAPTURE END >> */
 
   setupCanvases(behind, front);
@@ -453,6 +468,7 @@ export function startParticleStream(originEl, targetEl, options = {}) {
   if (!drawCtx || !drawCanvas) {
     console.log('[tutorial-fx] startParticleStream skipped: no drawing context for layer', { layer });
     activeTaskMaskRect = null;
+    activeOriginEl = null;
     return;
   }
 
@@ -496,5 +512,6 @@ export function stopParticleStream() {
     animationFrameId = null;
   }
   activeTaskMaskRect = null;
+  activeOriginEl = null;
 }
 
