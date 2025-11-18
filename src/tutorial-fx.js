@@ -19,6 +19,8 @@ let lastStopTs = 0;
 let activeTaskMaskRect = null;
 // Keep track of which element started the current stream so we can recompute the mask on resize.
 let activeOriginEl = null;
+// Controls whether the current animation should continue spawning new particles.
+let spawnParticles = false;
 /* << GPT:TASK_MASK_GLOBALS END >> */
 
 function elKey(el) {
@@ -201,10 +203,12 @@ function startFlight(ctx, canvas, startEl, endEl) {
     const ex = endCenter.x - canvasRect.left;
     const ey = endCenter.y - canvasRect.top;
 
-    startFlight._accum += PARTICLES_PER_SEC * dt;
-    while (startFlight._accum >= 1) {
-        particles.push(createParticle(sx, sy, { x: ex, y: ey }));
-        startFlight._accum -= 1;
+    if (spawnParticles) {
+        startFlight._accum += PARTICLES_PER_SEC * dt;
+        while (startFlight._accum >= 1) {
+            particles.push(createParticle(sx, sy, { x: ex, y: ey }));
+            startFlight._accum -= 1;
+        }
     }
 
     if (canvas && ctx) {
@@ -367,7 +371,18 @@ function startFlight(ctx, canvas, startEl, endEl) {
 
     if(ctx) ctx.restore();
 
-    animationFrameId = requestAnimationFrame(() => startFlight(ctx, canvas, startEl, endEl));
+    const shouldContinueAnimating = spawnParticles || particles.length > 0;
+    if (shouldContinueAnimating) {
+        animationFrameId = requestAnimationFrame(() => startFlight(ctx, canvas, startEl, endEl));
+    } else {
+        animationFrameId = null;
+        activeCtx = null;
+        activeCanvas = null;
+        activeLayer = 'front';
+        activeTargetEl = null;
+        activeTaskMaskRect = null;
+        activeOriginEl = null;
+    }
 }
 
 
@@ -407,6 +422,7 @@ export function startParticleStream(originEl, targetEl, options = {}) {
     }
     activeOriginEl = originEl;
     recomputeActiveTaskMaskRect(frontCanvas);
+    spawnParticles = true;
     activeTargetEl = nextLayer === 'behind' ? targetEl : null;
     if (!animationFrameId && activeCtx && activeCanvas) {
       animationFrameId = requestAnimationFrame(() => startFlight(activeCtx, activeCanvas, originEl, targetEl));
@@ -481,6 +497,7 @@ export function startParticleStream(originEl, targetEl, options = {}) {
   const ey = endCenter.y - canvasRect.top;
 
   createBurst(sx, sy, { x: ex, y: ey });
+  spawnParticles = true;
   activeLayer = layer === 'behind-target' ? 'behind' : 'front';
   activeCtx = drawCtx;
   activeCanvas = drawCanvas;
@@ -500,18 +517,54 @@ export function startParticleStream(originEl, targetEl, options = {}) {
   animationFrameId = requestAnimationFrame(() => startFlight(drawCtx, drawCanvas, originEl, targetEl));
 }
 
-export function stopParticleStream() {
+export function stopParticleStream(options = {}) {
   console.debug('[DIAG] stopParticleStream', {
     t: performance?.now?.(),
     lastPointerup: window.__LAST_POINTERUP_DIAG__,
   });
   lastStopTs = performance?.now?.() ?? Date.now();
 
-  if (animationFrameId) {
+  spawnParticles = false;
+  startFlight._lastTs = undefined;
+  startFlight._accum = 0;
+  activeTargetEl = null;
+  const { immediate = false } = options || {};
+
+  if (immediate) {
+    if (animationFrameId) {
+      cancelAnimationFrame(animationFrameId);
+      animationFrameId = null;
+    }
+    particles = [];
+    if (frontCtx && frontCanvas) {
+      const rect = frontCanvas.getBoundingClientRect();
+      frontCtx.clearRect(0, 0, rect.width, rect.height);
+    }
+    if (behindCtx && behindCanvas) {
+      const rect = behindCanvas.getBoundingClientRect();
+      behindCtx.clearRect(0, 0, rect.width, rect.height);
+    }
+    activeTaskMaskRect = null;
+    activeOriginEl = null;
+    activeCtx = null;
+    activeCanvas = null;
+    activeLayer = 'front';
+    return;
+  }
+
+  if (!particles.length && animationFrameId) {
     cancelAnimationFrame(animationFrameId);
     animationFrameId = null;
+    activeCtx = null;
+    activeCanvas = null;
+    activeTaskMaskRect = null;
+    activeOriginEl = null;
   }
-  activeTaskMaskRect = null;
-  activeOriginEl = null;
+}
+
+if (typeof window !== 'undefined') {
+  const clearParticlesOnSceneReset = () => stopParticleStream({ immediate: true });
+  window.addEventListener('scene:new', clearParticlesOnSceneReset);
+  window.addEventListener('guide:close', clearParticlesOnSceneReset);
 }
 
