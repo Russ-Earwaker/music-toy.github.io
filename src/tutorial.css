@@ -276,6 +276,17 @@ body.tutorial-active #topbar .tutorial-play-hidden {
   transition: background 0.15s ease-out, border-color 0.15s ease-out, transform 0.1s ease-out;
 }
 
+.goal-task.is-disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.goal-task.is-disabled .goal-task-label,
+.goal-task.is-disabled .goal-task-index {
+  color: rgba(148, 163, 184, 0.7);
+}
+
 .goal-task.is-active {
   background: rgba(95, 179, 255, 0.08);
   border-color: var(--accent, #5fb3ff);

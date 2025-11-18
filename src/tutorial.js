@@ -260,6 +260,19 @@ const drawToyPanels = new Set();
 const rhythmToyPanels = new Set();
 const drawToyLineState = new Map();
 let lastPlacedToy = null;
+const PLACE_TOY_GOAL_ID = 'place-toy';
+const PLACE_TOY_TASK_IDS = {
+  place: 'place-any-toy',
+  interact: 'interact-new-toy',
+  play: 'press-play',
+};
+const PLACE_TOY_STAGES = {
+  WAITING_FOR_TOY: 1,
+  WAITING_FOR_INTERACT: 2,
+  WAITING_FOR_PLAY: 3,
+  COMPLETED: 4,
+};
+const placeToyPanels = new Set();
 
 function saveGuideProgress() {
   if (!hasLocalStorage()) return;
@@ -355,6 +368,7 @@ function resetGuideProgress() {
   lastPlacedToy = null;
   requirementCompletionState.clear();
   drawToyPanels.clear();
+  placeToyPanels.clear();
   drawToyLineState.clear();
   saveGuideProgress();
   dispatchGuideProgressUpdate({ via: 'resetGuideProgress' });
@@ -459,7 +473,10 @@ function cloneGoal(goal) {
           getGoals: () => GOAL_FLOW.map(cloneGoal).filter(Boolean),
           getGoalById: (id) => cloneGoal(GOAL_FLOW.find(goal => goal.id === id)),
           createPanel: () => buildGoalPanel(),
-          populatePanel: (panel, goal, options) => populateGoalPanel(panel, goal, options),
+          populatePanel: (panel, goal, options) => {
+            const opts = Object.assign({}, options || {}, { disabledTaskIds: computeDisabledTasksForGoal(goal) });
+            return populateGoalPanel(panel, goal, opts);
+          },
           getGuideProgress: () => getGuideProgressSnapshot(),
           claimReward: (goalId) => claimGuideReward(goalId),
         };
@@ -733,6 +750,74 @@ function cloneGoal(goal) {
     return updated;
   }
 
+  function shouldTrackPlaceToyPanel(panel) {
+    if (!(panel instanceof HTMLElement)) return false;
+    if (panel.dataset?.tutorial === 'true') return false;
+    if (!panel.isConnected) return false;
+    return true;
+  }
+
+  function trackPlaceToyPanel(panel) {
+    if (!shouldTrackPlaceToyPanel(panel)) return;
+    placeToyPanels.add(panel);
+    renderGoalPanel();
+  }
+
+  function untrackPlaceToyPanel(panel) {
+    if (!panel) return;
+    placeToyPanels.delete(panel);
+  }
+
+  function computePlaceToyStage() {
+    const hasToy = placeToyPanels.size > 0;
+    if (!hasToy) return PLACE_TOY_STAGES.WAITING_FOR_TOY;
+    if (!guideProgress.tasks.has(PLACE_TOY_TASK_IDS.interact)) return PLACE_TOY_STAGES.WAITING_FOR_INTERACT;
+    if (!guideProgress.tasks.has(PLACE_TOY_TASK_IDS.play)) return PLACE_TOY_STAGES.WAITING_FOR_PLAY;
+    return PLACE_TOY_STAGES.COMPLETED;
+  }
+
+  function computePlaceToyDisabledTaskIds() {
+    const stage = computePlaceToyStage();
+    if (stage === PLACE_TOY_STAGES.WAITING_FOR_TOY) {
+      return new Set([PLACE_TOY_TASK_IDS.interact, PLACE_TOY_TASK_IDS.play]);
+    }
+    if (stage === PLACE_TOY_STAGES.WAITING_FOR_INTERACT) {
+      return new Set([PLACE_TOY_TASK_IDS.play]);
+    }
+    return new Set();
+  }
+
+  function computeDisabledTasksForGoal(goal) {
+    if (!goal || goal.id !== PLACE_TOY_GOAL_ID) return new Set();
+    return computePlaceToyDisabledTaskIds();
+  }
+
+  function handlePlaceToyPanelRemoval(panel) {
+    untrackPlaceToyPanel(panel);
+    if (!placeToyPanels.size) {
+      setRequirementProgress(PLACE_TOY_TASK_IDS.play, false);
+      setRequirementProgress(PLACE_TOY_TASK_IDS.interact, false);
+      setRequirementProgress(PLACE_TOY_TASK_IDS.place, false);
+      renderGoalPanel();
+    }
+  }
+
+  function handlePlaceToyClear(panel) {
+    if (!panel || !placeToyPanels.has(panel)) return;
+    if (!placeToyPanels.size) return;
+    setRequirementProgress(PLACE_TOY_TASK_IDS.play, false);
+    setRequirementProgress(PLACE_TOY_TASK_IDS.interact, false);
+    renderGoalPanel();
+  }
+
+  function handleSceneResetPlaceToyState() {
+    placeToyPanels.clear();
+    setRequirementProgress(PLACE_TOY_TASK_IDS.play, false);
+    setRequirementProgress(PLACE_TOY_TASK_IDS.interact, false);
+    setRequirementProgress(PLACE_TOY_TASK_IDS.place, false);
+    renderGoalPanel();
+  }
+
   const debugTutorial = (...args) => {
     if (typeof window === 'undefined' || !window.DEBUG_TUTORIAL_LOCKS) return;
     try { console.debug('[tutorial]', ...args); } catch (_) { try { console.log('[tutorial]', ...args); } catch {} }
@@ -745,6 +830,8 @@ function cloneGoal(goal) {
     }
     lastPlacedToy = panel;
     if (panel.__tutorialInteractionHooked) return;
+
+    trackPlaceToyPanel(panel);
 
     const toyType = (panel.dataset?.toy || '').toLowerCase();
     const markInteraction = () => maybeCompleteTask('interact-any-toy');
@@ -761,7 +848,8 @@ function cloneGoal(goal) {
       drawToyLineState.set(panel, computePanelHasLine());
       refreshDrawLineRequirement();
 
-      const handleDrawUpdate = (nodes) => {
+      const handleDrawUpdate = (detail) => {
+        const nodes = detail?.map?.nodes;
         const hasNodes = Array.isArray(nodes) ? nodes.some(set => set && set.size > 0) : false;
         drawToyLineState.set(panel, hasNodes);
         refreshDrawLineRequirement();
@@ -774,7 +862,7 @@ function cloneGoal(goal) {
       }, { once: true, passive: true });
 
       add('drawgrid:update', (e) => {
-        handleDrawUpdate(e?.detail?.nodes);
+        handleDrawUpdate(e?.detail);
       }, { passive: true });
       add('drawgrid:node-toggle', () => {
         maybeCompleteTask('toggle-node');
@@ -846,6 +934,7 @@ function cloneGoal(goal) {
     }
 
     panel.__tutorialInteractionHooked = true;
+    add('toy-remove', () => handlePlaceToyPanelRemoval(panel), { once: true });
   }
 
   const describeElement = (el) => {
@@ -1653,6 +1742,10 @@ function cloneGoal(goal) {
     const pendingRewards = pendingRewardsInput instanceof Set
       ? pendingRewardsInput
       : new Set(Array.isArray(pendingRewardsInput) ? pendingRewardsInput : []);
+    const disabledTaskIdsInput = options.disabledTaskIds;
+    const disabledTaskIds = disabledTaskIdsInput instanceof Set
+      ? disabledTaskIdsInput
+      : new Set(Array.isArray(disabledTaskIdsInput) ? disabledTaskIdsInput : []);
 
     const headerEl = panelEl.querySelector('.tutorial-goals-header');
     const titleEl = panelEl.querySelector('.tutorial-goals-title');
@@ -1690,6 +1783,7 @@ function cloneGoal(goal) {
         if (completedTaskIds.has(taskId)) li.classList.add('is-complete');
         if (resolvedActiveTaskId && resolvedActiveTaskId === taskId) li.classList.add('is-active');
         li.innerHTML = `<span class="goal-task-index">${index + 1}</span><span class="goal-task-label">${task?.label || ''}</span>`;
+        if (disabledTaskIds.has(taskId)) li.classList.add('is-disabled');
         listEl.appendChild(li);
       });
     }
@@ -1855,6 +1949,7 @@ function cloneGoal(goal) {
       completedGoals: completedGoalSet,
       claimedRewards: claimedRewardSet,
       pendingRewards: pendingRewardSet,
+      disabledTaskIds: computeDisabledTasksForGoal(goal),
     });
     updateClaimButtonVisibility();
     try {
@@ -2391,7 +2486,7 @@ function cloneGoal(goal) {
 
   function handleDrawgridUpdate(detail) {
     if (!tutorialActive || !tutorialState) return;
-    const nodes = detail && detail.nodes;
+    const nodes = detail?.map?.nodes;
     const hasNodes = Array.isArray(nodes) ? nodes.some(set => set && set.size > 0) : false;
     if (!hasDetectedLine && hasNodes) {
       hasDetectedLine = true;
@@ -2440,10 +2535,12 @@ function cloneGoal(goal) {
     addListener(panel, 'toy-clear', () => {
       maybeCompleteTask('press-clear');
       markInteraction();
+      handlePlaceToyClear(panel);
     });
     addListener(panel, 'toy-reset', () => {
       maybeCompleteTask('press-clear');
       markInteraction();
+      handlePlaceToyClear(panel);
     });
   }
 
@@ -2875,6 +2972,7 @@ try {
 
     if (tutorialState) tutorialState.pendingRewardGoalId = null;
     tutorialToy = null;
+    placeToyPanels.clear();
     tutorialState = null;
     previousSnapshot = null;
     previousFocus = null;
@@ -3237,6 +3335,9 @@ try {
       : Date.now();
     autoToyIgnoreCount = Math.max(autoToyIgnoreCount, 2);
     autoToyIgnoreDeadline = now + 1500;
+    if (tutorialActive) {
+      handleSceneResetPlaceToyState();
+    }
     lastPlacedToy = null;
     guideToyTracker.reset?.();
     resetGuideProgress();

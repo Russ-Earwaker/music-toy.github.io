@@ -1,4 +1,4 @@
-const GUIDE_TOGGLE_CLASS = 'guide-launcher';
+﻿const GUIDE_TOGGLE_CLASS = 'guide-launcher';
 const GUIDE_OPEN_CLASS = 'is-open';
 
 let hostRef = null;
@@ -9,6 +9,7 @@ const goalExpansionState = new Map();
 let highlighterRef = null;
 let highlightNextTask = false;
 let openFirstGoalNextRender = false;
+const GUIDE_TAP_ACK_KEY = 'guide:task-tap-ack';
 
 function showHighlighterForElement(el) {
   if (!highlighterRef || !el) return false;
@@ -45,6 +46,33 @@ function ensureHighlighter() {
   if (!highlighterRef.isConnected) {
     document.body.appendChild(highlighterRef);
   }
+  updateHighlighterTapState();
+}
+
+function readGuideTapAcknowledged() {
+  if (typeof window === 'undefined' || !window.localStorage) return false;
+  try {
+    return !!window.localStorage.getItem(GUIDE_TAP_ACK_KEY);
+  } catch {
+    return false;
+  }
+}
+
+function setGuideTapAcknowledged(value) {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    if (value) {
+      window.localStorage.setItem(GUIDE_TAP_ACK_KEY, '1');
+    } else {
+      window.localStorage.removeItem(GUIDE_TAP_ACK_KEY);
+    }
+  } catch {}
+}
+
+function updateHighlighterTapState() {
+  if (!highlighterRef) return;
+  const shouldHide = readGuideTapAcknowledged();
+  highlighterRef.classList.toggle('guide-task-highlighter--tap-hidden', shouldHide);
 }
 
 function addGuidePulse() { try { window.dispatchEvent(new CustomEvent('guide:request-pulse')); } catch (e) { console.warn('guide:request-pulse failed', e); } }
@@ -495,6 +523,17 @@ if (document.readyState === 'loading') {
 
 
 
+if (typeof window !== 'undefined') {
+  window.addEventListener('guide:task-tapped', () => {
+    setGuideTapAcknowledged(true);
+    updateHighlighterTapState();
+  });
+  window.addEventListener('scene:new', () => {
+    setGuideTapAcknowledged(false);
+    updateHighlighterTapState();
+  });
+}
+
 window.addEventListener('drawgrid:update', (e) => {
   const { activityOnly } = e.detail || {};
   if (!activityOnly) {
@@ -506,3 +545,5 @@ window.addEventListener('drawgrid:activity', (e) => {
   // no pulse; optional: a very lightweight guide refresh without glow
   // renderGuide(lastApi, { source: 'drawgrid-activity', pulse:false });
 });
+
+

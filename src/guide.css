@@ -38,6 +38,18 @@
   box-shadow: none;
 }
 
+.guide-task-highlighter--tap-hidden .guide-task-highlighter-text {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.2s ease-in-out;
+}
+.guide-task-highlighter--tap-hidden .guide-task-highlighter-arrow {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease-in-out;
+}
+
 @keyframes pointRight {
   0%, 100% {
     transform: translateX(0) translateY(-50%);

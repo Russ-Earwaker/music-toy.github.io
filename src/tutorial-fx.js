@@ -23,6 +23,15 @@ let activeOriginEl = null;
 let spawnParticles = false;
 /* << GPT:TASK_MASK_GLOBALS END >> */
 
+function notifyGuideTaskTapped() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.dispatchEvent(new CustomEvent('guide:task-tapped'));
+  } catch {
+    // ignore
+  }
+}
+
 function elKey(el) {
   if (!el) return 'null';
   if (el.id) return `#${el.id}`;
@@ -403,6 +412,8 @@ export function startParticleStream(originEl, targetEl, options = {}) {
     activeOriginEl = null;
     return;
   }
+
+  notifyGuideTaskTapped();
 
   const newKey = `o=${elKey(originEl)}->t=${elKey(targetEl)}:L=${layer}`;
   const prevKey = lastStreamKey;
