@@ -13,6 +13,12 @@ let lastStreamKey = null;
 let lastStartTs = 0;
 let lastStopTs = 0;
 
+/* << GPT:TASK_MASK_GLOBALS START >> */
+// Rect in canvas CSS coords that should be “punched out” of the front canvas.
+// This is aligned to the active goal-task that owns the origin element.
+let activeTaskMaskRect = null;
+/* << GPT:TASK_MASK_GLOBALS END >> */
+
 function elKey(el) {
   if (!el) return 'null';
   if (el.id) return `#${el.id}`;
@@ -323,6 +329,17 @@ function startFlight(ctx, canvas, startEl, endEl) {
         ctx.restore();
     }
 
+    /* << GPT:TASK_MASK_APPLY START >> */
+    // If we are drawing on the front canvas and have a valid task mask rect,
+    // punch that area out so the stream never draws over the Task panel.
+    if (canvas === frontCanvas && activeTaskMaskRect && ctx) {
+      const r = activeTaskMaskRect;
+      ctx.save();
+      ctx.clearRect(r.x, r.y, r.w, r.h);
+      ctx.restore();
+    }
+    /* << GPT:TASK_MASK_APPLY END >> */
+
     if(ctx) ctx.restore();
 
     animationFrameId = requestAnimationFrame(() => startFlight(ctx, canvas, startEl, endEl));
@@ -342,6 +359,7 @@ export function startParticleStream(originEl, targetEl, options = {}) {
   });
   if (!originEl || !targetEl) {
     console.log('[tutorial-fx] startParticleStream skipped: origin or target missing', { originElExists: !!originEl, targetElExists: !!targetEl });
+    activeTaskMaskRect = null;
     return;
   }
 
@@ -379,6 +397,7 @@ export function startParticleStream(originEl, targetEl, options = {}) {
   const front  = document.querySelector('.tutorial-particles-front');
   if (!behind || !front) {
     console.log('[tutorial-fx] startParticleStream skipped: canvas missing', { hasPanel: !!panel, hasBehind: !!behind, hasFront: !!front });
+    activeTaskMaskRect = null;
     return;
   }
 
@@ -389,6 +408,29 @@ export function startParticleStream(originEl, targetEl, options = {}) {
     startFlight._lastTs = undefined;
     startFlight._accum = 0;
   }
+
+  /* << GPT:TASK_MASK_CAPTURE START >> */
+  // Capture the rect of the goal-task that owns the origin element.
+  // We store it in canvas coordinates so we can clear it later as a mask.
+  (function captureTaskMaskRect() {
+    // Try to find the nearest goal-task (the individual task row/card)
+    const maskEl = originEl?.closest?.('.goal-task');
+    if (!maskEl || !front) {
+      activeTaskMaskRect = null;
+      return;
+    }
+
+    const canvasRect = front.getBoundingClientRect();
+    const taskRect = maskEl.getBoundingClientRect();
+
+    activeTaskMaskRect = {
+      x: taskRect.left - canvasRect.left,
+      y: taskRect.top  - canvasRect.top,
+      w: taskRect.width,
+      h: taskRect.height,
+    };
+  })();
+  /* << GPT:TASK_MASK_CAPTURE END >> */
 
   setupCanvases(behind, front);
   applyFrontCanvasLayer(layer);
@@ -410,6 +452,7 @@ export function startParticleStream(originEl, targetEl, options = {}) {
   const drawCanvas = frontCanvas;
   if (!drawCtx || !drawCanvas) {
     console.log('[tutorial-fx] startParticleStream skipped: no drawing context for layer', { layer });
+    activeTaskMaskRect = null;
     return;
   }
 
@@ -452,5 +495,6 @@ export function stopParticleStream() {
     cancelAnimationFrame(animationFrameId);
     animationFrameId = null;
   }
+  activeTaskMaskRect = null;
 }
 

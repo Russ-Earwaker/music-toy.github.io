@@ -10,6 +10,13 @@
 /* << GPT:PARTICLE_FRONT_BETWEEN_WITH_MASK START >> */
 /* Header under particles, Play above particles */
 #topbar { position: relative !important; z-index: 900 !important; }
+body .tutorial-particles-front { z-index: 940 !important; pointer-events: none !important; }
+#tutorial-goals { position: relative !important; z-index: 600 !important; }
+/* << GPT:PARTICLE_FRONT_BETWEEN_WITH_MASK END >> */
+
+/* << GPT:PARTICLE_FRONT_BETWEEN_WITH_MASK START >> */
+/* Header under particles, Play above particles */
+#topbar { position: relative !important; z-index: 900 !important; }
 body .tutorial-particles-front { z-index: 940 !important; }
 #tutorial-goals { position: relative !important; z-index: 600 !important; }
 /* << GPT:PARTICLE_FRONT_BETWEEN_WITH_MASK END >> */
@@ -256,5 +263,27 @@ body.tutorial-active #topbar .tutorial-play-hidden {
   outline: 3px solid var(--accent, #5fb3ff) !important;
   box-shadow: none !important;
 }
+
+/* << GPT:TASK_PANEL_FLAT_STYLE START >> */
+/* Flatten goal task visuals so masking can be a simple rectangle */
+.goal-task {
+  background: var(--surface, #0d141d);
+  border-radius: 0;                 /* fully square; change to 6px if you want soft corners */
+  border: 1px solid var(--border, #1c2430);
+  box-shadow: none;
+  padding: 8px;
+  margin-bottom: 8px;
+  transition: background 0.15s ease-out, border-color 0.15s ease-out, transform 0.1s ease-out;
+}
+
+.goal-task.is-active {
+  background: rgba(95, 179, 255, 0.08);
+  border-color: var(--accent, #5fb3ff);
+}
+
+.goal-task.is-complete {
+  opacity: 0.7;
+}
+/* << GPT:TASK_PANEL_FLAT_STYLE END >> */
 
 
