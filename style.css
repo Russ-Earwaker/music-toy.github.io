@@ -314,16 +314,39 @@ html, body {
   background-position: var(--board-grid-offset);
 }
 
+@property --tap-ripple-scale {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 1;
+}
+@property --tap-radius {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --tap-dot-color {
+  syntax: '<color>';
+  inherits: false;
+  initial-value: #5ac8ff;
+}
+@property --tap-radius {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
 #board .board-tap-overlay {
   position: absolute;
   inset: 0;
   pointer-events: none;
   z-index: 2;
+  --tap-ripple-scale: 1;
+  --tap-dot-size: 1px;
   background-repeat: repeat;
   background-image: radial-gradient(
     circle,
-    rgba(255, 255, 255, 0.92) calc(1px / var(--zoom-scale, 1)),
-    transparent calc(1px / var(--zoom-scale, 1))
+    var(--tap-dot-color) calc(var(--tap-dot-size) * var(--tap-ripple-scale)),
+    transparent calc(var(--tap-dot-size) * var(--tap-ripple-scale))
   );
   background-size: var(--tap-dyn-spacing, var(--board-tap-spacing)) var(--tap-dyn-spacing, var(--board-tap-spacing));
   background-position:
@@ -337,6 +360,24 @@ html, body {
 
 #board .board-tap-overlay.is-active {
   opacity: 1;
+}
+
+@keyframes tapDotsRipple {
+  0%   { --tap-ripple-scale: 0; }
+  40%  { --tap-ripple-scale: 2.4; }
+  70%  { --tap-ripple-scale: 0.9; }
+  100% { --tap-ripple-scale: 1; }
+}
+
+@keyframes tapRadiusGrow {
+  0%   { --tap-radius: 0px; }
+  100% { --tap-radius: var(--tap-radius-target, 0px); }
+}
+
+@keyframes tapDotsColor {
+  0%   { --tap-dot-color: rgba(90, 200, 255, 0); }
+  35%  { --tap-dot-color: rgba(255, 255, 255, 1); }
+  100% { --tap-dot-color: rgba(90, 200, 255, 0.9); }
 }
 
 #board.board--booting {

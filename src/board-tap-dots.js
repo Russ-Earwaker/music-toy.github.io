@@ -67,10 +67,23 @@
     const quantizedScale = Math.pow(2, Math.round(Math.log2(Math.max(zoomScale, 0.01))));
     const tapSpacing = baseTapSpacing / quantizedScale; // zoom in => denser, zoom out => sparser
 
+    // Restart ripple animation on each tap.
+    overlay.classList.remove('is-active');
+    overlay.style.animation = 'none';
+    // Force reflow so the animation can replay.
+    void overlay.offsetWidth;
+    overlay.style.animation = '';
+
     overlay.style.setProperty('--tap-x', `${x}px`);
     overlay.style.setProperty('--tap-y', `${y}px`);
-    overlay.style.setProperty('--tap-radius', `${radiusBoardUnits}px`);
+    overlay.style.setProperty('--tap-radius', '0px');
+    overlay.style.setProperty('--tap-radius-target', `${radiusBoardUnits}px`);
     overlay.style.setProperty('--tap-dyn-spacing', `${tapSpacing}px`);
+    overlay.style.setProperty('--tap-dot-color', 'rgba(90, 200, 255, 0)');
+    const radiusAnimMs = 800; // faster growth target per request
+    const rippleMs = radiusAnimMs; // keep ripple alive while wave expands
+    const colorMs = Math.min(420, radiusAnimMs * 0.55);
+    overlay.style.animation = `tapDotsRipple ${rippleMs}ms ease-out forwards, tapRadiusGrow ${radiusAnimMs}ms ease-out forwards, tapDotsColor ${colorMs}ms ease-out forwards`;
     overlay.classList.add('is-active');
 
     window.addEventListener('pointerup', handlePointerUp, { once: true, capture: true });
