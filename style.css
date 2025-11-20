@@ -295,6 +295,12 @@ html, body {
 }
 
 #board {
+  --board-grid-spacing: 90px;
+  --board-grid-offset-x: -45px;
+  --board-grid-offset-y: -45px;
+  --board-grid-offset: var(--board-grid-offset-x) var(--board-grid-offset-y);
+  --board-tap-spacing: calc(var(--board-grid-spacing) / 6);
+  --board-tap-radius: calc(var(--board-grid-spacing) * 1.5);
   position: absolute;
   width: 8000px;
   height: 8000px;
@@ -302,7 +308,35 @@ html, body {
   top: -4000px;
   transform-origin: 0 0 !important;
   overflow: visible !important;
-  background: #000;
+  background-color: #000;
+  background-image: radial-gradient(circle, #2c333d 1.2px, transparent 1.2px);
+  background-size: var(--board-grid-spacing) var(--board-grid-spacing);
+  background-position: var(--board-grid-offset);
+}
+
+#board .board-tap-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background-repeat: repeat;
+  background-image: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.92) calc(1px / var(--zoom-scale, 1)),
+    transparent calc(1px / var(--zoom-scale, 1))
+  );
+  background-size: var(--tap-dyn-spacing, var(--board-tap-spacing)) var(--tap-dyn-spacing, var(--board-tap-spacing));
+  background-position:
+    calc(var(--board-grid-offset-x) - (var(--tap-dyn-spacing, var(--board-tap-spacing)) / 2))
+    calc(var(--board-grid-offset-y) - (var(--tap-dyn-spacing, var(--board-tap-spacing)) / 2));
+  opacity: 0;
+  transition: opacity 80ms ease;
+  clip-path: circle(var(--tap-radius, 0px) at var(--tap-x, -9999px) var(--tap-y, -9999px));
+  -webkit-clip-path: circle(var(--tap-radius, 0px) at var(--tap-x, -9999px) var(--tap-y, -9999px));
+}
+
+#board .board-tap-overlay.is-active {
+  opacity: 1;
 }
 
 #board.board--booting {
