@@ -27,10 +27,10 @@
   const HANG_MS = 0; // delay before fading out overlay after wave ends
   const FADE_OUT_MS = 1000;   // time to fade dots after tap release
 
-  // Drag nudge config
-  const DRAG_WAVE_MS = 180;   // how long a drag "poke" lasts
-  const DRAG_RADIUS_FACTOR = 0.5; // fraction of tap radius used for drag influence
-  const DRAG_PUSH_MULT = 1.0; // how far drag pushes vs dot.pushMag
+  // Drag nudge config (make it much more visible)
+  const DRAG_WAVE_MS = 260;      // how long a drag "poke" lasts
+  const DRAG_RADIUS_FACTOR = 0.9; // fraction of tap radius used for drag influence
+  const DRAG_PUSH_MULT = 2.5;    // how far drag pushes vs dot.pushMag
 
   let hideTimer = 0;
   let rafId = 0;
@@ -462,7 +462,8 @@
 
     dragDirX = dx / dist;
     dragDirY = dy / dist;
-    dragStrength = Math.min(dist / (currentTapSpacing || 1), 1);
+    // Make even small moves feel strong: 0.3 * spacing already gives full strength
+    dragStrength = Math.min(dist / ((currentTapSpacing || 1) * 0.3), 1);
     dragPosX = x;
     dragPosY = y;
     dragStartTime = performance.now();
@@ -528,7 +529,7 @@
 
     dragDirX = dx / dist;
     dragDirY = dy / dist;
-    dragStrength = Math.min(dist / (currentTapSpacing || 1), 1);
+    dragStrength = Math.min(dist / ((currentTapSpacing || 1) * 0.3), 1);
     dragPosX = x;
     dragPosY = y;
     dragStartTime = performance.now();
