@@ -37,11 +37,11 @@
 
   // Base dot appearance
   const BASE_DOT_RADIUS = 1.4; // pixels at scale = 1
-  const MAX_SCALE = 1.4;       // BIG peak scale for drag + tap (we can pull back later)
+  const MAX_SCALE = 1.6;       // BIG peak scale for drag + tap (we can pull back later)
 
   // Colours
   const BASE_COLOR = { r: 90, g: 100, b: 255 };  // calm blue
-  const WHITE = { r: 200, g: 200, b: 255 };      // flash
+  const WHITE = { r: 255, g: 255, b: 255 };      // flash
 
   // Drag "grab the blob" config
   const DRAG_SMOOTH = 0.45;             // blob snaps towards the finger much faster
