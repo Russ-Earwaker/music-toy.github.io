@@ -335,20 +335,20 @@ html, body {
   initial-value: 0px;
 }
 
-#board .board-tap-overlay {
+.board-viewport .board-tap-overlay {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 2;
+  z-index: 3500;
   opacity: 0;
   transition: opacity 80ms ease;
 }
 
-#board .board-tap-overlay.is-active {
+.board-viewport .board-tap-overlay.is-active {
   opacity: 1;
 }
 
-#board .board-tap-overlay canvas.board-tap-canvas {
+.board-viewport .board-tap-overlay canvas.board-tap-canvas {
   width: 100%;
   height: 100%;
   display: block;

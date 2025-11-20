@@ -4,12 +4,15 @@
   const viewport = document.querySelector('.board-viewport');
   if (!board || !viewport) return;
 
-  let overlay = board.querySelector('.board-tap-overlay');
+  // Keep the overlay rooted on the viewport (not the board) so it isn't scaled up
+  // to the full 8k board size. On iPad a 2x DPR canvas at board dimensions would
+  // exceed Safari's canvas limits and silently fail to draw.
+  let overlay = viewport.querySelector('.board-tap-overlay');
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.className = 'board-tap-overlay';
     overlay.setAttribute('aria-hidden', 'true');
-    board.appendChild(overlay);
+    viewport.appendChild(overlay);
   }
 
   // Canvas for drawing the tap dots
@@ -92,10 +95,28 @@
   let dragOffsetX = 0;
   let dragOffsetY = 0;
 
+  // Mapping helpers: board space (8k) -> viewport canvas space
+  let viewScaleX = 1;
+  let viewScaleY = 1;
+  let viewOriginX = 0;
+  let viewOriginY = 0;
+
+  function updateBoardToViewTransform() {
+    const boardRect = board.getBoundingClientRect();
+    const viewportRect = viewport.getBoundingClientRect();
+    const bw = boardRect.width || boardW;
+    const bh = boardRect.height || boardH;
+    viewScaleX = bw / (boardW || 1);
+    viewScaleY = bh / (boardH || 1);
+    viewOriginX = boardRect.left - viewportRect.left;
+    viewOriginY = boardRect.top - viewportRect.top;
+  }
+
   function resizeCanvas() {
     const dpr = window.devicePixelRatio || 1;
-    const width = board.offsetWidth || boardW;
-    const height = board.offsetHeight || boardH;
+    const rect = viewport.getBoundingClientRect();
+    const width = Math.max(1, rect.width);
+    const height = Math.max(1, rect.height);
 
     canvas.width = width * dpr;
     canvas.height = height * dpr;
@@ -103,6 +124,7 @@
     canvas.style.height = height + 'px';
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    updateBoardToViewTransform();
   }
 
   function resetOverlay() {
@@ -256,6 +278,8 @@
       dragOffsetY += (0 - dragOffsetY) * DRAG_RETURN;
     }
 
+    updateBoardToViewTransform();
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // If we're fully faded and the blob is basically at rest, clean up.
@@ -317,9 +341,13 @@
         const g = Math.round(lerp(BASE_COLOR.g, WHITE.g, mixToWhite));
         const b = Math.round(lerp(BASE_COLOR.b, WHITE.b, mixToWhite));
 
+        const drawX = viewOriginX + (dot.x + offsetX) * viewScaleX;
+        const drawY = viewOriginY + (dot.y + offsetY) * viewScaleY;
+        const radius = BASE_DOT_RADIUS * scale * viewScaleX;
+
         ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${baseAlpha})`;
         ctx.beginPath();
-        ctx.arc(dot.x + offsetX, dot.y + offsetY, BASE_DOT_RADIUS * scale, 0, Math.PI * 2);
+        ctx.arc(drawX, drawY, radius, 0, Math.PI * 2);
         ctx.fill();
         continue;
       }
@@ -354,12 +382,13 @@
       const g = Math.round(lerp(BASE_COLOR.g, WHITE.g, mixToWhite));
       const b = Math.round(lerp(BASE_COLOR.b, WHITE.b, mixToWhite));
 
-      const drawX = dot.x + dot.dirX * pushAmount;
-      const drawY = dot.y + dot.dirY * pushAmount;
+      const drawX = viewOriginX + (dot.x + dot.dirX * pushAmount) * viewScaleX;
+      const drawY = viewOriginY + (dot.y + dot.dirY * pushAmount) * viewScaleY;
+      const radius = BASE_DOT_RADIUS * scale * viewScaleX;
 
       ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
       ctx.beginPath();
-      ctx.arc(drawX, drawY, BASE_DOT_RADIUS * scale, 0, Math.PI * 2);
+      ctx.arc(drawX, drawY, radius, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -384,8 +413,6 @@
     dragOffsetX = 0;
     dragOffsetY = 0;
 
-    resizeCanvas();
-
     const zoomScale =
       parseFloat(getComputedStyle(board).getPropertyValue('--zoom-scale')) || 1;
 
@@ -396,6 +423,7 @@
     tapY = y;
 
     buildDotsAroundTap(tapX, tapY, tapRadiusScreen, zoomScale);
+    resizeCanvas();
 
     overlay.classList.add('is-active');
     if (FORCE_DEBUG_VIS) {
