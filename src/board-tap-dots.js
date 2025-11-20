@@ -24,65 +24,73 @@
 
   const DEBUG = false;
   const FORCE_DEBUG_VIS = false;
-  const HANG_MS = 0; // delay before fading out overlay after wave ends
-  const FADE_OUT_MS = 1000;   // time to fade dots after tap release
 
-  // Drag nudge config (make it much more visible)
-  const DRAG_WAVE_MS = 260;      // how long a drag "poke" lasts
-  const DRAG_RADIUS_FACTOR = 0.9; // fraction of tap radius used for drag influence
-  const DRAG_PUSH_MULT = 2.5;    // how far drag pushes vs dot.pushMag
+  // delay before full reset once everything is faded out
+  const HANG_MS = 0;
+
+  // Fade-out timing after tap release
+  const FADE_OUT_MS = 1000; // ms to fade dots after tap release
+
+  // Wave timing (tap ripple)
+  const WAVE_DURATION_MS = 200;  // how long the expanding circle travels
+  const DOT_WAVE_WIDTH_MS = 220; // per-dot flash + settle time
+
+  // Base dot appearance
+  const BASE_DOT_RADIUS = 1.4; // pixels at scale = 1
+  const MAX_SCALE = 1.4;       // BIG peak scale for drag + tap (we can pull back later)
+
+  // Colours
+  const BASE_COLOR = { r: 90, g: 100, b: 255 };  // calm blue
+  const WHITE = { r: 200, g: 200, b: 255 };      // flash
+
+  // Drag "grab the blob" config
+  const DRAG_SMOOTH = 0.45;             // blob snaps towards the finger much faster
+  const DRAG_RETURN = 0.22;             // relax back fairly quickly
+  const DRAG_MAX_OFFSET_FACTOR = 1.4;   // blob can travel up to ~2 * tap radius from centre
+  const DRAG_CENTER_POWER = 0.4;        // almost the whole disc moves (edge only slightly less)
+  const DRAG_BLOB_MULT = 1.5;           // heavy exaggeration factor for drag displacement
 
   let hideTimer = 0;
   let rafId = 0;
+
   let isPointerDown = false;
+  let waveActive = false;
   let waveFinished = false;
-
-  // Fade-out state
-  let fadeOutActive = false;
-  let fadeOutStartTime = 0;
-
-  // Drag nudge state
-  let dragActive = false;
-  let dragPosX = 0;
-  let dragPosY = 0;
-  let dragDirX = 0;
-  let dragDirY = 0;
-  let dragStrength = 0;
-  let dragStartTime = 0;
-
-  // Last tap spacing used to size drag pushes
-  let currentTapSpacing = 0;
 
   // Board / grid settings (aligned with CSS vars)
   const style = getComputedStyle(board);
   const boardW = board.offsetWidth || 8000;
   const boardH = board.offsetHeight || 8000;
-  const baseSpacing = parseFloat(style.getPropertyValue('--board-grid-spacing')) || 90;
+  const baseSpacing =
+    parseFloat(style.getPropertyValue('--board-grid-spacing')) || 90;
   const baseTapSpacing =
     parseFloat(style.getPropertyValue('--board-tap-spacing')) || (baseSpacing / 6);
   const tapRadiusBoardUnits =
     parseFloat(style.getPropertyValue('--board-tap-radius')) || (baseSpacing * 1.5);
-  const gridOffsetX = parseFloat(style.getPropertyValue('--board-grid-offset-x')) || 0;
-  const gridOffsetY = parseFloat(style.getPropertyValue('--board-grid-offset-y')) || 0;
-
-  // Wave timing (faster, still with a bit of settle)
-  const WAVE_DURATION_MS = 200;  // how long the expanding circle travels
-  const DOT_WAVE_WIDTH_MS = 220; // quicker per-dot flash + settle
-
-  // Base dot appearance
-  const BASE_DOT_RADIUS = 1.4; // pixels at scale = 1
-  const MAX_SCALE = 1.5;       // peak scale at wave edge
-
-  // Colours
-  const BASE_COLOR = { r: 90, g: 100, b: 255 };  // blue
-  const WHITE = { r: 255, g: 255, b: 255 };
+  const gridOffsetX =
+    parseFloat(style.getPropertyValue('--board-grid-offset-x')) || 0;
+  const gridOffsetY =
+    parseFloat(style.getPropertyValue('--board-grid-offset-y')) || 0;
 
   let dots = [];
+
   let tapX = 0;
   let tapY = 0;
   let tapRadiusScreen = tapRadiusBoardUnits;
   let waveStartTime = 0;
-  let waveActive = false;
+
+  // track spacing used for this tap (so drag scales nicely)
+  let currentTapSpacing = baseTapSpacing;
+
+  // Fade-out state
+  let fadeOutActive = false;
+  let fadeOutStartTime = 0;
+
+  // Drag state - global blob offset centred at tap
+  let dragTargetOffsetX = 0;
+  let dragTargetOffsetY = 0;
+  let dragOffsetX = 0;
+  let dragOffsetY = 0;
 
   function resizeCanvas() {
     const dpr = window.devicePixelRatio || 1;
@@ -106,22 +114,22 @@
       cancelAnimationFrame(rafId);
       rafId = 0;
     }
+
     waveActive = false;
-    isPointerDown = false;
     waveFinished = false;
+    isPointerDown = false;
     fadeOutActive = false;
-    fadeOutStartTime = 0;
-    dragActive = false;
-    dragPosX = 0;
-    dragPosY = 0;
-    dragDirX = 0;
-    dragDirY = 0;
-    dragStrength = 0;
-    dragStartTime = 0;
+
+    dragTargetOffsetX = 0;
+    dragTargetOffsetY = 0;
+    dragOffsetX = 0;
+    dragOffsetY = 0;
+
     dots = [];
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     overlay.classList.remove('is-active');
+
     if (DEBUG) console.debug('[tap-dots] reset');
   }
 
@@ -138,7 +146,10 @@
     dots = [];
 
     // Match the finer tap-grid spacing (scaled with zoom) and align to board grid.
-    const quantizedScale = Math.pow(2, Math.round(Math.log2(Math.max(zoomScale, 0.01))));
+    const quantizedScale = Math.pow(
+      2,
+      Math.round(Math.log2(Math.max(zoomScale, 0.01)))
+    );
     const tapSpacing = baseTapSpacing / quantizedScale;
     currentTapSpacing = tapSpacing;
 
@@ -167,7 +178,7 @@
 
         const dirX = dist > 0.0001 ? dx / dist : 0;
         const dirY = dist > 0.0001 ? dy / dist : 0;
-        const pushMag = tapSpacing * 1.65; // stronger radial "poke" distance
+        const pushMag = tapSpacing * 1.65; // radial "poke" distance for tap wave
 
         dots.push({
           x: xx,
@@ -212,8 +223,8 @@
   }
 
   function drawWaveFrame(now) {
-    // We might still be fading out even if waveActive is false.
-    if (!waveActive && !fadeOutActive && !dragActive) return;
+    // We might still be fading even if the tap wave has finished.
+    if (!waveActive && !fadeOutActive && !isPointerDown) return;
 
     const elapsed = now - waveStartTime;
     const totalDuration = WAVE_DURATION_MS + DOT_WAVE_WIDTH_MS;
@@ -234,33 +245,36 @@
       }
     }
 
-    // Drag amplitude (1 at dragStartTime -> 0 over DRAG_WAVE_MS)
-    let dragAmp = 0;
-    let dragRadius = 0;
-    if (dragActive) {
-      const tDrag = (now - dragStartTime) / DRAG_WAVE_MS;
-      if (tDrag >= 1) {
-        dragActive = false;
-      } else {
-        dragAmp = 1 - tDrag;
-        dragRadius = tapRadiusScreen * DRAG_RADIUS_FACTOR;
-      }
+    // Smooth global drag offset
+    if (isPointerDown) {
+      // Follow the target offset
+      dragOffsetX += (dragTargetOffsetX - dragOffsetX) * DRAG_SMOOTH;
+      dragOffsetY += (dragTargetOffsetY - dragOffsetY) * DRAG_SMOOTH;
+    } else {
+      // Relax back towards centre
+      dragOffsetX += (0 - dragOffsetX) * DRAG_RETURN;
+      dragOffsetY += (0 - dragOffsetY) * DRAG_RETURN;
     }
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // If we're fully faded out, clean up and bail.
-    if (fadeFactor <= 0) {
+    // If we're fully faded and the blob is basically at rest, clean up.
+    const dragMag = Math.sqrt(dragOffsetX * dragOffsetX + dragOffsetY * dragOffsetY);
+    if (!isPointerDown && fadeFactor <= 0.001 && dragMag <= 0.1) {
       waveActive = false;
       fadeOutActive = false;
-      resetOverlay();
+      if (HANG_MS > 0) {
+        hideTimer = setTimeout(() => resetOverlay(), HANG_MS);
+      } else {
+        resetOverlay();
+      }
       return;
     }
 
     ctx.save();
     ctx.globalAlpha = fadeFactor;
 
-    // Early "hit" phase (0 -> MAX) then longer settle (MAX -> 1)
+    // Early "hit" phase (0 -> MAX) then settle (MAX -> 1)
     const impactDuration = DOT_WAVE_WIDTH_MS * 0.35;
     const settleDuration = DOT_WAVE_WIDTH_MS - impactDuration;
 
@@ -272,47 +286,40 @@
         continue;
       }
 
-      // 2) Wave has passed and the dot has finished its flash -> calm blue dot at grid spot,
-      //    but allow drag to "poke" it with same style as the tap wave.
+      // Distance from the tap centre for centre-weighting + edge fade.
+      const distRatio = Math.min(dot.dist / tapRadiusScreen, 1);
+      const centreInfluence = Math.pow(1 - distRatio, DRAG_CENTER_POWER);
+
+      // 2) Wave has passed and the dot has finished its flash -> calm blue dot,
+      //    but displaced as part of a single "blob" moved by dragOffset.
       if (localT > DOT_WAVE_WIDTH_MS) {
         // Base settled alpha: fade based on distance (center = strong, edge = faint).
-        const distRatio = Math.min(dot.dist / tapRadiusScreen, 1);
         const edgeFactor = 1 - distRatio;
-        const settledAlpha = lerp(0.3, 0.9, edgeFactor);
+        const baseAlpha = lerp(0.3, 0.9, edgeFactor);
 
-        let scale = 1;
-        let mixToWhite = 0;
-        let drawX = dot.x;
-        let drawY = dot.y;
+        // Apply smooth global drag offset scaled by centre influence and exaggeration.
+        const offsetX = dragOffsetX * centreInfluence * DRAG_BLOB_MULT;
+        const offsetY = dragOffsetY * centreInfluence * DRAG_BLOB_MULT;
 
-        // Drag nudge: use same MAX_SCALE + white as impact phase.
-        if (dragAmp > 0 && dragRadius > 0) {
-          const dxp = dot.x - dragPosX;
-          const dyp = dot.y - dragPosY;
-          const distDrag = Math.sqrt(dxp * dxp + dyp * dyp);
+        const dispMag = Math.sqrt(offsetX * offsetX + offsetY * offsetY);
+        const maxDisp = (tapRadiusScreen * DRAG_MAX_OFFSET_FACTOR || 1);
 
-          if (distDrag < dragRadius) {
-            const influence = 1 - distDrag / dragRadius;
-            const dragImpact = dragAmp * influence * dragStrength;
+        // Reach "full effect" sooner: 0.4 * maxDisp already gives full ratio.
+        const dispRatioRaw = Math.min(dispMag / (maxDisp * 0.4), 1);
+        // Ease it a bit so it ramps up quickly but still feels smooth.
+        const dispRatio = Math.sqrt(dispRatioRaw);
 
-            // Scale 1 -> MAX_SCALE
-            scale = lerp(1, MAX_SCALE, dragImpact);
-            // Blue -> white
-            mixToWhite = dragImpact;
-
-            const push = dot.pushMag * DRAG_PUSH_MULT * dragImpact;
-            drawX += dragDirX * push;
-            drawY += dragDirY * push;
-          }
-        }
+        // Use displacement amount to scale & brighten (stronger version of tap wave).
+        const scale = lerp(1, MAX_SCALE, dispRatio);
+        const mixToWhite = dispRatio;
 
         const r = Math.round(lerp(BASE_COLOR.r, WHITE.r, mixToWhite));
         const g = Math.round(lerp(BASE_COLOR.g, WHITE.g, mixToWhite));
         const b = Math.round(lerp(BASE_COLOR.b, WHITE.b, mixToWhite));
 
-        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${settledAlpha})`;
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${baseAlpha})`;
         ctx.beginPath();
-        ctx.arc(drawX, drawY, BASE_DOT_RADIUS * scale, 0, Math.PI * 2);
+        ctx.arc(dot.x + offsetX, dot.y + offsetY, BASE_DOT_RADIUS * scale, 0, Math.PI * 2);
         ctx.fill();
         continue;
       }
@@ -358,15 +365,7 @@
 
     ctx.restore();
 
-    const shouldContinue =
-      fadeOutActive || dragActive || !waveFinished || isPointerDown;
-
-    if (shouldContinue) {
-      rafId = requestAnimationFrame(drawWaveFrame);
-    } else {
-      waveActive = false;
-      resetOverlay();
-    }
+    rafId = requestAnimationFrame(drawWaveFrame);
   }
 
   function startWave(x, y) {
@@ -379,11 +378,11 @@
       hideTimer = 0;
     }
 
-    waveFinished = false;
-    fadeOutActive = false;
-    fadeOutStartTime = 0;
-    dragActive = false;
-    dragStrength = 0;
+    // Reset drag state for this tap
+    dragTargetOffsetX = 0;
+    dragTargetOffsetY = 0;
+    dragOffsetX = 0;
+    dragOffsetY = 0;
 
     resizeCanvas();
 
@@ -405,6 +404,10 @@
 
     waveStartTime = performance.now();
     waveActive = true;
+    waveFinished = false;
+    fadeOutActive = false;
+
+    // Kick off first frame immediately so there is no delay.
     drawWaveFrame(waveStartTime);
   }
 
@@ -416,13 +419,15 @@
     isPointerDown = true;
 
     const { x, y } = clientToBoardPoint(e);
-    if (DEBUG) console.debug('[tap-dots] down', {
-      clientX: e.clientX,
-      clientY: e.clientY,
-      x,
-      y,
-      tapRadiusBoardUnits
-    });
+    if (DEBUG) {
+      console.debug('[tap-dots] pointerdown', {
+        clientX: e.clientX,
+        clientY: e.clientY,
+        x,
+        y,
+        tapRadiusBoardUnits
+      });
+    }
 
     startWave(x, y);
 
@@ -431,72 +436,62 @@
     window.addEventListener('pointercancel', handlePointerUp, { once: true, capture: true });
   }
 
-  function handlePointerUp() {
-    if (DEBUG) console.debug('[tap-dots] up');
-    isPointerDown = false;
-    viewport.removeEventListener('pointermove', handlePointerMove);
-    fadeOutActive = true;
-    fadeOutStartTime = performance.now();
-  }
-
   function handlePointerMove(e) {
     if (!isPointerDown) return;
     if (!e.isPrimary) return;
 
     const { x, y } = clientToBoardPoint(e);
 
-    if (dragPosX === 0 && dragPosY === 0) {
-      dragPosX = x;
-      dragPosY = y;
-      return;
+    // Global offset is pointer position relative to tap centre,
+    // clamped so the blob never flies too far away.
+    let dx = x - tapX;
+    let dy = y - tapY;
+    const mag = Math.sqrt(dx * dx + dy * dy);
+    const maxOffset = tapRadiusScreen * DRAG_MAX_OFFSET_FACTOR;
+
+    if (mag > maxOffset && mag > 0.0001) {
+      const s = maxOffset / mag;
+      dx *= s;
+      dy *= s;
     }
 
-    const dx = x - dragPosX;
-    const dy = y - dragPosY;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < 0.1) {
-      dragPosX = x;
-      dragPosY = y;
-      return;
-    }
+    dragTargetOffsetX = dx;
+    dragTargetOffsetY = dy;
+  }
 
-    dragDirX = dx / dist;
-    dragDirY = dy / dist;
-    // Make even small moves feel strong: 0.3 * spacing already gives full strength
-    dragStrength = Math.min(dist / ((currentTapSpacing || 1) * 0.3), 1);
-    dragPosX = x;
-    dragPosY = y;
-    dragStartTime = performance.now();
-    dragActive = true;
+  function handlePointerUp() {
+    if (DEBUG) console.debug('[tap-dots] pointerup');
+    isPointerDown = false;
+    fadeOutActive = true;
+    fadeOutStartTime = performance.now();
 
-    // Make sure we have a frame loop running to show the drag effect.
-    if (!waveActive && !fadeOutActive) {
-      waveActive = true;
-      waveStartTime = dragStartTime;
-      drawWaveFrame(dragStartTime);
-    }
+    viewport.removeEventListener('pointermove', handlePointerMove);
   }
 
   function handleTouchStart(e) {
     if (e.touches.length === 0) return;
     const t = e.touches[0];
 
-    // Ignore touches on UI elements, same as pointer path.
-    if (t.target && t.target.closest &&
-        t.target.closest('.toy-panel, button, a, input, select, textarea')) {
+    if (
+      t.target &&
+      t.target.closest &&
+      t.target.closest('.toy-panel, button, a, input, select, textarea')
+    ) {
       return;
     }
 
     isPointerDown = true;
 
     const { x, y } = clientToBoardPoint(t);
-    if (DEBUG) console.debug('[tap-dots] touchstart', {
-      clientX: t.clientX,
-      clientY: t.clientY,
-      x,
-      y,
-      tapRadiusBoardUnits
-    });
+    if (DEBUG) {
+      console.debug('[tap-dots] touchstart', {
+        clientX: t.clientX,
+        clientY: t.clientY,
+        x,
+        y,
+        tapRadiusBoardUnits
+      });
+    }
 
     startWave(x, y);
 
@@ -508,46 +503,32 @@
   function handleTouchMove(e) {
     if (!isPointerDown) return;
     if (e.touches.length === 0) return;
-    const t = e.touches[0];
 
+    const t = e.touches[0];
     const { x, y } = clientToBoardPoint(t);
 
-    if (dragPosX === 0 && dragPosY === 0) {
-      dragPosX = x;
-      dragPosY = y;
-      return;
+    let dx = x - tapX;
+    let dy = y - tapY;
+    const mag = Math.sqrt(dx * dx + dy * dy);
+    const maxOffset = tapRadiusScreen * DRAG_MAX_OFFSET_FACTOR;
+
+    if (mag > maxOffset && mag > 0.0001) {
+      const s = maxOffset / mag;
+      dx *= s;
+      dy *= s;
     }
 
-    const dx = x - dragPosX;
-    const dy = y - dragPosY;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < 0.1) {
-      dragPosX = x;
-      dragPosY = y;
-      return;
-    }
-
-    dragDirX = dx / dist;
-    dragDirY = dy / dist;
-    dragStrength = Math.min(dist / ((currentTapSpacing || 1) * 0.3), 1);
-    dragPosX = x;
-    dragPosY = y;
-    dragStartTime = performance.now();
-    dragActive = true;
-
-    if (!waveActive && !fadeOutActive) {
-      waveActive = true;
-      waveStartTime = dragStartTime;
-      drawWaveFrame(dragStartTime);
-    }
+    dragTargetOffsetX = dx;
+    dragTargetOffsetY = dy;
   }
 
   function handleTouchEnd() {
     if (DEBUG) console.debug('[tap-dots] touchend');
     isPointerDown = false;
-    viewport.removeEventListener('touchmove', handleTouchMove);
     fadeOutActive = true;
     fadeOutStartTime = performance.now();
+
+    viewport.removeEventListener('touchmove', handleTouchMove);
   }
 
   resetOverlay();
