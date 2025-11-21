@@ -179,6 +179,8 @@ function openGoalPicker(context) {
       }
 
       if (goal?.id) setActiveGoal(goal.id);
+      if (highlighterRef) highlighterRef.classList.remove('is-visible');
+      highlightNextTask = false;
       closeGoalPicker();
       openFirstGoalNextRender = true;
       if (lastApi) renderGuide(lastApi, { source: 'goal-picker-select' });
@@ -214,9 +216,33 @@ function showHighlighterForElement(el) {
   return true;
 }
 
+function shouldShowTapHighlighter() {
+  try {
+    const api = lastApi;
+    if (!api) return false;
+    const goals = api.getGoals?.() || [];
+    if (!Array.isArray(goals) || goals.length === 0) return false;
+    const firstGoal = goals[0];
+    if (!firstGoal || !firstGoal.id) return false;
+    const firstTask = Array.isArray(firstGoal.tasks) ? firstGoal.tasks[0] : null;
+    if (!firstTask || !firstTask.id) return false;
+    const progress = api.getGuideProgress?.() || {};
+    const completedGoals = new Set(progress.completedGoals || []);
+    const claimedRewards = new Set(progress.claimedRewards || []);
+    const completedTasks = new Set(progress.completedTasks || []);
+    const activeGoal = getActiveGoal(goals, { completedGoals, claimedRewards });
+    if (!activeGoal || activeGoal.id !== firstGoal.id) return false;
+    if (completedTasks.has(firstTask.id)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function showHighlighterForGuide() {
   ensureHost();
   if (!toggleRef || !toggleRef.isConnected) return false;
+  if (!shouldShowTapHighlighter()) return false;
   return showHighlighterForElement(toggleRef);
 }
 
@@ -375,8 +401,14 @@ function ensureHost() {
       }
       if (willOpen && highlightNextTask) {
         setTimeout(() => {
-          const firstTask = panelsRef.querySelector('.goal-task:not(.is-complete)');
-          if (!showHighlighterForElement(firstTask)) {
+          let firstTaskEl = null;
+          if (shouldShowTapHighlighter()) {
+            const firstTaskId = getFirstGoalFirstTaskId();
+            if (firstTaskId && panelsRef) {
+              firstTaskEl = panelsRef.querySelector(`.goal-task[data-task-id="${firstTaskId}"]`);
+            }
+          }
+          if (!firstTaskEl || !showHighlighterForElement(firstTaskEl)) {
             if (highlighterRef) highlighterRef.classList.remove('is-visible');
           }
         }, 100);
@@ -413,6 +445,18 @@ function ensureHost() {
     });
   }
   return hostRef;
+}
+
+function getFirstGoalFirstTaskId() {
+  try {
+    const goals = lastGuideContext?.goals || lastApi?.getGoals?.() || [];
+    if (!Array.isArray(goals) || goals.length === 0) return null;
+    const firstGoal = goals[0];
+    const firstTask = Array.isArray(firstGoal?.tasks) ? firstGoal.tasks[0] : null;
+    return firstTask?.id || null;
+  } catch {
+    return null;
+  }
 }
 
 function closeGuide() {
@@ -604,6 +648,10 @@ function renderGuide(api, { source = 'unknown' } = {}) {
             task.classList.add('goal-task-claimed');
           }
         });
+      } else if (!replaySession) {
+        const rewardEl = panel.querySelector('.tutorial-goals-reward');
+        const desc = rewardEl?.querySelector('.goal-reward-description');
+        if (desc) desc.textContent = 'A Star. A symbol of Achievement.';
       }
 
       panel.querySelectorAll('.goal-task').forEach((taskEl) => {
@@ -751,6 +799,10 @@ window.addEventListener('guide:progress-update', () => {
   if (lastApi) {
     renderGuide(lastApi, { source: 'progress-update' });
   }
+  if (!shouldShowTapHighlighter() && highlighterRef) {
+    highlighterRef.classList.remove('is-visible');
+    highlightNextTask = false;
+  }
 });
 
 window.addEventListener('scene:new', () => {
@@ -787,11 +839,19 @@ window.addEventListener('guide:highlight-next-task', () => {
   highlightNextTask = true;
   const guideOpen = hostRef && hostRef.classList.contains(GUIDE_OPEN_CLASS);
   if (guideOpen && panelsRef) {
-    const firstTask = panelsRef.querySelector('.goal-task:not(.is-complete)');
-    if (!showHighlighterForElement(firstTask) && highlighterRef) {
-      highlighterRef.classList.remove('is-visible');
+    let target = null;
+    if (shouldShowTapHighlighter()) {
+      const firstTaskId = getFirstGoalFirstTaskId();
+      if (firstTaskId) {
+        target = panelsRef.querySelector(`.goal-task[data-task-id="${firstTaskId}"]`);
+      }
     }
-    highlightNextTask = false;
+    if (target && showHighlighterForElement(target)) {
+      highlightNextTask = false;
+    } else if (highlighterRef) {
+      highlighterRef.classList.remove('is-visible');
+      highlightNextTask = false;
+    }
   } else if (!showHighlighterForGuide() && highlighterRef) {
     highlighterRef.classList.remove('is-visible');
   }
