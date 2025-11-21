@@ -314,6 +314,13 @@ html, body {
   background-position: var(--board-grid-offset);
 }
 
+.board-viewport,
+.board-viewport *:not(input):not(textarea):not(button):not(select) {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
 @property --tap-ripple-scale {
   syntax: '<number>';
   inherits: false;
