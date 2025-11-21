@@ -20,6 +20,44 @@ import {
   seededRandomFactory,
 } from './particle-density.js';
 
+// Color stops for particles as they fade back home after a poke.
+// Sequence: bright cyan punch -> pink -> clean white settle.
+export const PARTICLE_RETURN_GRADIENT = Object.freeze([
+  { stop: 0.0, rgb: [51, 153, 255] },   // Bright cyan blue at impact
+  { stop: 0.55, rgb: [255, 255, 255] }, // Pink mid fade
+  { stop: 1.0, rgb: [255, 108, 196] },  // White as it settles
+]);
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function sampleReturnGradient(t) {
+  const stops = PARTICLE_RETURN_GRADIENT;
+  const clamped = Math.max(0, Math.min(1, Number.isFinite(t) ? t : 0));
+  for (let i = 1; i < stops.length; i++) {
+    const prev = stops[i - 1];
+    const next = stops[i];
+    if (clamped <= next.stop) {
+      const span = Math.max(1e-6, next.stop - prev.stop);
+      const localT = (clamped - prev.stop) / span;
+      return [
+        Math.round(lerp(prev.rgb[0], next.rgb[0], localT)),
+        Math.round(lerp(prev.rgb[1], next.rgb[1], localT)),
+        Math.round(lerp(prev.rgb[2], next.rgb[2], localT)),
+      ];
+    }
+  }
+  const last = stops[stops.length - 1];
+  return [last.rgb[0], last.rgb[1], last.rgb[2]];
+}
+
+function rgbToRgbaString(rgb, alpha = 1) {
+  const [r, g, b] = Array.isArray(rgb) ? rgb : [255, 255, 255];
+  const a = Math.max(0, Math.min(1, Number.isFinite(alpha) ? alpha : 1));
+  return `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${a})`;
+}
+
 function readZoom(viewport) {
   if (viewport && typeof viewport.getZoom === 'function') {
     const z = Number(viewport.getZoom());
@@ -346,6 +384,7 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
           (0.5 + 0.5 * Math.sin(p.a * Math.PI * 2));
       let highlight = 0;
       let highlightAmp = 0;
+      let highlightProgress = 0;
       if (highlightEvents.length) {
         for (const evt of highlightEvents) {
           const dt = now - evt.t;
@@ -362,6 +401,8 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
           if (candidate > highlight) {
             highlight = candidate;
             highlightAmp = Math.max(0, Math.min(1, evt.amp ?? 0.6));
+            // Track how far through the highlight we are to drive color fade.
+            highlightProgress = 1 - life;
           }
         }
       }
@@ -374,15 +415,19 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
           PARTICLE_HIGHLIGHT_INTENSITY *
           (1 + 0.5 * highlightAmp)
       );
+      const accentRgb = highlight > 0 ? sampleReturnGradient(highlightProgress) : null;
       ctx.globalAlpha = Math.min(1, alpha + accent);
-      ctx.fillStyle = baseFillStyle;
+      ctx.fillStyle = (highlight > 0 && accentRgb)
+        ? rgbToRgbaString(accentRgb, 1)
+        : baseFillStyle;
       ctx.beginPath();
       ctx.arc(p.x, p.y, drawRadius, 0, Math.PI * 2);
       ctx.fill();
       if (highlight > 0) {
         const glowAlpha = Math.min(0.85, accent * 1.2);
+        const glowRgb = accentRgb || sampleReturnGradient(1);
         ctx.globalAlpha = glowAlpha;
-        ctx.fillStyle = glowFillStyle;
+        ctx.fillStyle = glowRgb ? rgbToRgbaString(glowRgb, 0.95) : glowFillStyle;
         ctx.beginPath();
         ctx.arc(p.x, p.y, drawRadius * (1 + highlight * 0.8), 0, Math.PI * 2);
         ctx.fill();

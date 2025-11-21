@@ -2439,7 +2439,9 @@ function ensureSizeReady({ force = false } = {}) {
         safeMaxY: fallbackY,
       };
     }
-    const margin = Math.max(16, Math.round(Math.min(gridArea.w, gridArea.h) * 0.08));
+    // Push the ghost further off-screen so the trail fully exits before fading.
+    const marginBase = Math.min(gridArea.w, gridArea.h);
+    const margin = Math.max(32, Math.round(marginBase * 0.24));
     const leftX = gridArea.x - margin;
     const rightX = gridArea.x + gridArea.w + margin;
     const cellH = rows > 0 ? gridArea.h / rows : gridArea.h;
