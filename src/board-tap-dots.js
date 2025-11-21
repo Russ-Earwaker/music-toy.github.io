@@ -50,14 +50,15 @@
 
   // Colours
   const BASE_COLOR = { r: 90, g: 100, b: 255 };  // calm blue
-  const WHITE = { r: 255, g: 255, b: 255 };      // flash
+  const WHITE = { r: 160, g: 160, b: 255 };      // flash
 
   // Drag "grab the blob" config
-  const DRAG_SMOOTH = 0.45;             // blob snaps towards the finger much faster
+  const DRAG_SMOOTH = 0.5;              // blob snaps towards the finger quickly
   const DRAG_RETURN = 0.22;             // relax back fairly quickly
-  const DRAG_MAX_OFFSET_FACTOR = 1.4;   // blob can travel up to ~2 * tap radius from centre
-  const DRAG_CENTER_POWER = 0.4;        // almost the whole disc moves (edge only slightly less)
-  const DRAG_BLOB_MULT = 1.5;           // heavy exaggeration factor for drag displacement
+  const DRAG_MAX_OFFSET_FACTOR = 1.8;   // blob can roam further under the finger
+  const DRAG_CENTER_POWER = 1.8;        // inner dots move MUCH more than outer dots
+  const DRAG_BLOB_MULT = 2.1;           // stronger exaggeration factor for drag displacement
+  const DRAG_BRIGHTEN_MULT = 2.0;       // how much drag can boost brightness
 
   let hideTimer = 0;
   let rafId = 0;
@@ -388,7 +389,7 @@
       if (localT > DOT_WAVE_WIDTH_MS) {
         // Base settled alpha: fade based on distance (center = strong, edge = faint).
         const edgeFactor = 1 - distRatio;
-        const baseAlpha = lerp(0.3, 0.9, edgeFactor) * edgeFade;
+        const baseAlpha = lerp(0.25, 0.95, edgeFactor) * edgeFade;
 
         // Apply smooth global drag offset scaled by centre influence and exaggeration.
         const offsetX = dragOffsetX * centreInfluence * DRAG_BLOB_MULT;
@@ -402,9 +403,16 @@
         // Ease it a bit so it ramps up quickly but still feels smooth.
         const dispRatio = Math.sqrt(dispRatioRaw);
 
-        // Use displacement amount to scale & brighten (stronger version of tap wave).
-        const scale = lerp(1, MAX_SCALE, dispRatio);
-        const mixToWhite = dispRatio;
+        // Combine "how far from center" and "how far we've dragged" into one intensity.
+        const dragIntensity = Math.min(dispRatio * centreInfluence, 1);
+
+        // Inner dots scale up and brighten more based on dragIntensity.
+        const scale = lerp(1, MAX_SCALE, dragIntensity);
+        const mixToWhite = dragIntensity;
+
+        // Brightness also increases with dragIntensity (on top of baseAlpha).
+        const brightFactor = lerp(1, DRAG_BRIGHTEN_MULT, dragIntensity);
+        const alpha = baseAlpha * brightFactor;
 
         const r = Math.round(lerp(BASE_COLOR.r, WHITE.r, mixToWhite));
         const g = Math.round(lerp(BASE_COLOR.g, WHITE.g, mixToWhite));
@@ -414,7 +422,7 @@
         const drawY = viewOriginY + (dot.y + offsetY) * viewScaleY;
         const radius = (BASE_DOT_RADIUS * scale) * invZoom; // keep screen size constant regardless of zoom
 
-        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${baseAlpha})`;
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
         ctx.beginPath();
         ctx.arc(drawX, drawY, radius, 0, Math.PI * 2);
         ctx.fill();
