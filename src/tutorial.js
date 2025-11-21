@@ -57,6 +57,11 @@ const GOAL_FLOW = [
     },
     tasks: [
       {
+        id: 'add-any-toy',
+        label: 'Add a toy',
+        requirement: 'place-any-toy',
+      },
+      {
         id: 'press-random',
         label: 'Press the Random button.',
         requirement: 'press-random',
@@ -937,6 +942,17 @@ let hasDetectedLine = false;
     if (!goal || !goal.id) return new Set();
     if (goal.id === PLACE_TOY_GOAL_ID) return computePlaceToyDisabledTaskIds();
     if (goal.id === DRAW_INTRO_GOAL_ID) return computeDrawIntroDisabledTaskIds();
+    if (goal.id === 'clear-random') {
+      const blocked = new Set();
+      const hasAnyToy = (placeToyPanels.size > 0) || (() => {
+        try { return !!document.querySelector('.toy-panel'); } catch { return false; }
+      })();
+      if (!hasAnyToy) {
+        blocked.add('press-random');
+        blocked.add('press-clear');
+      }
+      return blocked;
+    }
     return new Set();
   }
 
@@ -948,6 +964,19 @@ let hasDetectedLine = false;
       lastPlacedToy = null;
     }
     placeToyTriggerState.delete(panel);
+    const recheckEmptyBoard = () => {
+      const hasAnyToy = (placeToyPanels.size > 0) || (() => {
+        try { return !!document.querySelector('.toy-panel'); } catch { return false; }
+      })();
+      if (!hasAnyToy) {
+        setRequirementProgress('place-any-toy', false);
+        markGuideTaskIncomplete('clear-random', 'add-any-toy');
+        renderGoalPanel();
+        try { window.dispatchEvent(new Event('guide:progress-update')); } catch {}
+      }
+    };
+    recheckEmptyBoard();
+    try { requestAnimationFrame(recheckEmptyBoard); } catch {}
     if (!guideProgress.goals.has(PLACE_TOY_GOAL_ID) && (removedPrimary || !placeToyPanels.size)) {
       resetPlaceToyGoalProgress();
     }
@@ -2232,9 +2261,17 @@ let hasDetectedLine = false;
 
     let handledSpecial = false;
 
-    if (task.id === 'place-any-toy' || task.id === 'add-draw-toy') {
+    const isGenericAddToyTask = task.id === 'add-any-toy';
+    const isAddToyTask = task.id === 'place-any-toy' || task.id === 'add-draw-toy' || isGenericAddToyTask;
+
+    if (isAddToyTask) {
       ensureGoalPanel();
       temporaryUnlockSpawnerControl('toggle');
+      try {
+        if (document.querySelector('.toy-panel')) {
+          maybeCompleteTask('place-any-toy');
+        }
+      } catch {}
 
       whenVisible(ADD_TOY_TOGGLE_SELECTOR, (targetEl) => {
         const startParticles = () => {
@@ -2263,10 +2300,11 @@ let hasDetectedLine = false;
         });
       });
 
-      document.getElementById('tutorial-add-draw-style')?.remove();
-      const style = document.createElement('style');
-      style.id = 'tutorial-add-draw-style';
-      style.textContent = `
+      if (!isGenericAddToyTask) {
+        document.getElementById('tutorial-add-draw-style')?.remove();
+        const style = document.createElement('style');
+        style.id = 'tutorial-add-draw-style';
+        style.textContent = `
     body.tutorial-active .toy-spawner-item:not([data-tutorial-keep="draw"]) {
       pointer-events: none !important;
       opacity: 0.35 !important;
@@ -2280,37 +2318,38 @@ let hasDetectedLine = false;
       cursor: pointer !important;
     }
   `;
-      document.head.appendChild(style);
+        document.head.appendChild(style);
 
-      const applyKeepFlags = () => {
-        document.querySelectorAll('.toy-spawner-item').forEach(item => {
-          if (!(item instanceof HTMLElement)) return;
-          if (item.dataset.toyType === 'drawgrid') {
-            item.dataset.tutorialKeep = 'draw';
-            const label = item.querySelector('.toy-spawner-name');
-            if (label) label.textContent = 'Draw Line';
-          } else if (item.dataset.tutorialKeep === 'draw') {
-            delete item.dataset.tutorialKeep;
+        const applyKeepFlags = () => {
+          document.querySelectorAll('.toy-spawner-item').forEach(item => {
+            if (!(item instanceof HTMLElement)) return;
+            if (item.dataset.toyType === 'drawgrid') {
+              item.dataset.tutorialKeep = 'draw';
+              const label = item.querySelector('.toy-spawner-name');
+              if (label) label.textContent = 'Draw Line';
+            } else if (item.dataset.tutorialKeep === 'draw') {
+              delete item.dataset.tutorialKeep;
+            }
+          });
+        };
+        applyKeepFlags();
+        let debounceTimeout;
+        const debouncedApplyKeepFlags = () => {
+          clearTimeout(debounceTimeout);
+          debounceTimeout = setTimeout(applyKeepFlags, 50);
+        };
+        const renameObserver = new MutationObserver(debouncedApplyKeepFlags);
+        const listHost = document.querySelector('.toy-spawner-list');
+        if (listHost) renameObserver.observe(listHost, { childList: true, subtree: true });
+        else renameObserver.observe(document.body, { childList: true, subtree: true });
+
+        tutorialListeners.push({
+          disconnect: () => {
+            try { style.remove(); } catch {}
+            try { renameObserver.disconnect(); } catch {}
           }
         });
-      };
-      applyKeepFlags();
-      let debounceTimeout;
-      const debouncedApplyKeepFlags = () => {
-        clearTimeout(debounceTimeout);
-        debounceTimeout = setTimeout(applyKeepFlags, 50);
-      };
-      const renameObserver = new MutationObserver(debouncedApplyKeepFlags);
-      const listHost = document.querySelector('.toy-spawner-list');
-      if (listHost) renameObserver.observe(listHost, { childList: true, subtree: true });
-      else renameObserver.observe(document.body, { childList: true, subtree: true });
-
-      tutorialListeners.push({
-        disconnect: () => {
-          try { style.remove(); } catch {}
-          try { renameObserver.disconnect(); } catch {}
-        }
-      });
+      }
       handledSpecial = true;
 
     }
@@ -3256,7 +3295,7 @@ try {
       };
     };
 
-    if (taskId === 'place-any-toy' || taskId === 'add-draw-toy' || taskId === 'add-rhythm-toy') {
+    if (taskId === 'place-any-toy' || taskId === 'add-draw-toy' || taskId === 'add-rhythm-toy' || taskId === 'add-any-toy') {
       let disposed = false;
       let cleanupInner = null;
       let retryTimer = 0;
