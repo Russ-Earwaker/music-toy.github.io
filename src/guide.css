@@ -1,8 +1,13 @@
 .guide-task-highlighter {
-  position: absolute;
-  z-index: 10000;
+  position: fixed;
+  z-index: 1200;
   pointer-events: none;
   display: none;
+}
+.topbar-menu-wrap .guide-task-highlighter,
+.app-topbar .guide-task-highlighter,
+#topbar .guide-task-highlighter {
+  z-index: 9005;
 }
 
 .guide-task-highlighter.is-visible {

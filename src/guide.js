@@ -16,6 +16,14 @@ let moreGoalsButtonRef = null;
 let lastGuideContext = null;
 let buttonsWrapRef = null;
 
+function getHighlighterHost() {
+  if (typeof document === 'undefined') return null;
+  return document.querySelector('.topbar-menu-wrap')
+    || document.querySelector('.app-topbar')
+    || document.getElementById('topbar')
+    || null;
+}
+
 function setActiveGoal(goalId) {
   activeGoalId = goalId || null;
   try {
@@ -208,6 +216,7 @@ function openGoalPicker(context) {
 
 function showHighlighterForElement(el) {
   if (!highlighterRef || !el) return false;
+  attachHighlighter();
   const rect = el.getBoundingClientRect();
   if (!rect || !Number.isFinite(rect.top) || !Number.isFinite(rect.right)) return false;
   highlighterRef.style.left = `${rect.right}px`;
@@ -218,6 +227,10 @@ function showHighlighterForElement(el) {
 
 function shouldShowTapHighlighter() {
   try {
+    const topbarMenu = document.getElementById('topbar-menu');
+    const menuOpen = topbarMenu && !topbarMenu.hasAttribute('hidden');
+    if (menuOpen) return false;
+
     const api = lastApi;
     if (!api) return false;
     const goals = api.getGoals?.() || [];
@@ -246,6 +259,13 @@ function showHighlighterForGuide() {
   return showHighlighterForElement(toggleRef);
 }
 
+function attachHighlighter() {
+  if (!highlighterRef) return;
+  const host = getHighlighterHost();
+  if (!host) return;
+  if (highlighterRef.parentElement !== host) host.appendChild(highlighterRef);
+}
+
 function ensureHighlighter() {
   const existing = Array.from(document.querySelectorAll('.guide-task-highlighter'));
   if (existing.length > 0) {
@@ -262,9 +282,7 @@ function ensureHighlighter() {
       <div class="guide-task-highlighter-text">TAP</div>
     `;
   }
-  if (!highlighterRef.isConnected) {
-    document.body.appendChild(highlighterRef);
-  }
+  attachHighlighter();
   updateHighlighterTapState();
 }
 
@@ -333,7 +351,10 @@ function ensureStyles() {
 }
 
 function ensureHost() {
-  if (hostRef && panelsRef && toggleRef) return hostRef;
+  if (hostRef && panelsRef && toggleRef) {
+    attachHighlighter();
+    return hostRef;
+  }
 
   hostRef = document.querySelector(`.${GUIDE_TOGGLE_CLASS}`) || document.createElement('div');
   hostRef.className = GUIDE_TOGGLE_CLASS;
