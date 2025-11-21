@@ -266,6 +266,11 @@ const PLACE_TOY_TASK_IDS = {
   interact: 'interact-new-toy',
   play: 'press-play',
 };
+const PLACE_TOY_REQUIREMENTS = {
+  place: 'place-any-toy',
+  interact: 'interact-any-toy',
+  play: 'press-play',
+};
 const PLACE_TOY_STAGES = {
   WAITING_FOR_TOY: 1,
   WAITING_FOR_INTERACT: 2,
@@ -273,6 +278,7 @@ const PLACE_TOY_STAGES = {
   COMPLETED: 4,
 };
 const placeToyPanels = new Set();
+const placeToyTriggerState = new Map();
 
 function saveGuideProgress() {
   if (!hasLocalStorage()) return;
@@ -370,6 +376,7 @@ function resetGuideProgress() {
   drawToyPanels.clear();
   placeToyPanels.clear();
   drawToyLineState.clear();
+  placeToyTriggerState.clear();
   saveGuideProgress();
   dispatchGuideProgressUpdate({ via: 'resetGuideProgress' });
 }
@@ -735,6 +742,9 @@ function cloneGoal(goal) {
     }
 
     const { updated } = recordRequirementProgress(requirement, shouldComplete);
+    if (shouldComplete && requirement === PLACE_TOY_REQUIREMENTS.interact) {
+      maybeAutoCompletePlayIfAlreadyActive();
+    }
     if (!updated) {
       if (previous === undefined) {
         requirementCompletionState.delete(requirement);
@@ -770,7 +780,7 @@ function cloneGoal(goal) {
 
   function computePlaceToyStage() {
     const hasToy = placeToyPanels.size > 0;
-    if (!hasToy) return PLACE_TOY_STAGES.WAITING_FOR_TOY;
+    if (!hasToy || !guideProgress.tasks.has(PLACE_TOY_TASK_IDS.place)) return PLACE_TOY_STAGES.WAITING_FOR_TOY;
     if (!guideProgress.tasks.has(PLACE_TOY_TASK_IDS.interact)) return PLACE_TOY_STAGES.WAITING_FOR_INTERACT;
     if (!guideProgress.tasks.has(PLACE_TOY_TASK_IDS.play)) return PLACE_TOY_STAGES.WAITING_FOR_PLAY;
     return PLACE_TOY_STAGES.COMPLETED;
@@ -787,35 +797,85 @@ function cloneGoal(goal) {
     return new Set();
   }
 
+  function maybeAutoCompletePlayIfAlreadyActive() {
+    const playing = typeof isRunning === 'function' ? !!isRunning() : false;
+    if (!playing) return false;
+    if (!guideProgress.tasks.has(PLACE_TOY_TASK_IDS.place)) return false;
+    if (!guideProgress.tasks.has(PLACE_TOY_TASK_IDS.interact)) return false;
+    if (guideProgress.tasks.has(PLACE_TOY_TASK_IDS.play)) return false;
+    return setRequirementProgress(PLACE_TOY_REQUIREMENTS.play, true);
+  }
+
+  function maybeReactivatePlaceToyInteraction(panel) {
+    if (!panel || !placeToyPanels.has(panel)) return;
+    if (guideProgress.goals.has(PLACE_TOY_GOAL_ID)) return;
+    const primaryPanel = (lastPlacedToy && lastPlacedToy.isConnected) ? lastPlacedToy : null;
+    if (!primaryPanel || panel !== primaryPanel) return;
+    if (!guideProgress.tasks.has(PLACE_TOY_TASK_IDS.place)) return;
+    if (!guideProgress.tasks.has(PLACE_TOY_TASK_IDS.interact)) return;
+    const interactionReset = setRequirementProgress(PLACE_TOY_REQUIREMENTS.interact, false);
+    const playReset = setRequirementProgress(PLACE_TOY_REQUIREMENTS.play, false);
+    if (interactionReset || playReset) {
+      renderGoalPanel();
+    }
+  }
+
+  function updatePlaceToySoundState(panel, hasSound) {
+    if (!panel || !placeToyPanels.has(panel)) return;
+    const normalized = !!hasSound;
+    const previous = placeToyTriggerState.get(panel);
+    placeToyTriggerState.set(panel, normalized);
+    if (previous && !normalized) {
+      maybeReactivatePlaceToyInteraction(panel);
+    }
+  }
+
+  function resetPlaceToyGoalProgress() {
+    const changed = [
+      setRequirementProgress(PLACE_TOY_REQUIREMENTS.play, false),
+      setRequirementProgress(PLACE_TOY_REQUIREMENTS.interact, false),
+      setRequirementProgress(PLACE_TOY_REQUIREMENTS.place, false),
+    ].some(Boolean);
+    if (changed || !placeToyPanels.size) renderGoalPanel();
+  }
+
   function computeDisabledTasksForGoal(goal) {
     if (!goal || goal.id !== PLACE_TOY_GOAL_ID) return new Set();
     return computePlaceToyDisabledTaskIds();
   }
 
   function handlePlaceToyPanelRemoval(panel) {
+    const primaryPanel = (lastPlacedToy && lastPlacedToy.isConnected) ? lastPlacedToy : null;
+    const removedPrimary = primaryPanel && panel === primaryPanel;
     untrackPlaceToyPanel(panel);
-    if (!placeToyPanels.size) {
-      setRequirementProgress(PLACE_TOY_TASK_IDS.play, false);
-      setRequirementProgress(PLACE_TOY_TASK_IDS.interact, false);
-      setRequirementProgress(PLACE_TOY_TASK_IDS.place, false);
-      renderGoalPanel();
+    if (panel === lastPlacedToy) {
+      lastPlacedToy = null;
+    }
+    placeToyTriggerState.delete(panel);
+    if (!guideProgress.goals.has(PLACE_TOY_GOAL_ID) && (removedPrimary || !placeToyPanels.size)) {
+      resetPlaceToyGoalProgress();
     }
   }
 
   function handlePlaceToyClear(panel) {
     if (!panel || !placeToyPanels.has(panel)) return;
+    const primaryPanel = (lastPlacedToy && lastPlacedToy.isConnected) ? lastPlacedToy : null;
+    if (!primaryPanel || panel !== primaryPanel) return;
+    if (guideProgress.goals.has(PLACE_TOY_GOAL_ID)) return;
     if (!placeToyPanels.size) return;
-    setRequirementProgress(PLACE_TOY_TASK_IDS.play, false);
-    setRequirementProgress(PLACE_TOY_TASK_IDS.interact, false);
-    renderGoalPanel();
+    updatePlaceToySoundState(panel, false);
+    const changed = [
+      setRequirementProgress(PLACE_TOY_REQUIREMENTS.play, false),
+      setRequirementProgress(PLACE_TOY_REQUIREMENTS.interact, false),
+    ].some(Boolean);
+    if (changed) renderGoalPanel();
   }
 
   function handleSceneResetPlaceToyState() {
     placeToyPanels.clear();
-    setRequirementProgress(PLACE_TOY_TASK_IDS.play, false);
-    setRequirementProgress(PLACE_TOY_TASK_IDS.interact, false);
-    setRequirementProgress(PLACE_TOY_TASK_IDS.place, false);
-    renderGoalPanel();
+    placeToyTriggerState.clear();
+    lastPlacedToy = null;
+    resetPlaceToyGoalProgress();
   }
 
   const debugTutorial = (...args) => {
@@ -845,19 +905,24 @@ function cloneGoal(goal) {
       refreshDrawToyRequirement();
       const computePanelHasLine = () => panelHasDrawLine(panel);
 
-      drawToyLineState.set(panel, computePanelHasLine());
+      const initialHasLine = computePanelHasLine();
+      drawToyLineState.set(panel, initialHasLine);
+      updatePlaceToySoundState(panel, initialHasLine);
       refreshDrawLineRequirement();
 
       const handleDrawUpdate = (detail) => {
         const nodes = detail?.map?.nodes;
         const hasNodes = Array.isArray(nodes) ? nodes.some(set => set && set.size > 0) : false;
         drawToyLineState.set(panel, hasNodes);
+        updatePlaceToySoundState(panel, hasNodes);
         refreshDrawLineRequirement();
         if (hasNodes) markInteraction();
       };
 
       add('drawgrid:ready', () => {
-        drawToyLineState.set(panel, computePanelHasLine());
+        const hasLine = computePanelHasLine();
+        drawToyLineState.set(panel, hasLine);
+        updatePlaceToySoundState(panel, hasLine);
         refreshDrawLineRequirement();
       }, { once: true, passive: true });
 
@@ -867,20 +932,25 @@ function cloneGoal(goal) {
       add('drawgrid:node-toggle', () => {
         maybeCompleteTask('toggle-node');
         markInteraction();
+        updatePlaceToySoundState(panel, computePanelHasLine());
       }, { passive: true });
       add('drawgrid:node-drag-end', () => {
         maybeCompleteTask('drag-note');
         markInteraction();
+        updatePlaceToySoundState(panel, computePanelHasLine());
       }, { passive: true });
       add('toy-remove', () => {
         drawToyPanels.delete(panel);
         drawToyLineState.delete(panel);
         refreshDrawToyRequirement();
         refreshDrawLineRequirement();
+        placeToyTriggerState.delete(panel);
       }, { once: true });
     } else if (toyType === 'loopgrid' || toyType === 'loopgrid-drum') {
       rhythmToyPanels.add(panel);
       refreshRhythmRequirement();
+      const syncLoopgridSoundState = () => updatePlaceToySoundState(panel, hasActiveLoopgrid(panel));
+      syncLoopgridSoundState();
       if (typeof window !== 'undefined') {
         try { window.dispatchEvent(new CustomEvent('tutorial:loopgrid-sync')); } catch {}
       }
@@ -889,6 +959,7 @@ function cloneGoal(goal) {
         add(evt, () => {
           markInteraction();
           refreshRhythmRequirement();
+          syncLoopgridSoundState();
         }, { passive: true });
       });
       const randomEvents = ['toy-random', 'toy-random-notes', 'toy-random-cubes', 'toy-random-blocks', 'loopgrid:random'];
@@ -896,6 +967,7 @@ function cloneGoal(goal) {
         add(evt, () => {
           markInteraction();
           refreshRhythmRequirement();
+          syncLoopgridSoundState();
         }, { passive: true });
       });
       add('loopgrid:update', (event) => {
@@ -904,10 +976,12 @@ function cloneGoal(goal) {
           markInteraction();
         }
         refreshRhythmRequirement();
+        syncLoopgridSoundState();
       }, { passive: true });
       add('toy-remove', () => {
         rhythmToyPanels.delete(panel);
         refreshRhythmRequirement();
+        placeToyTriggerState.delete(panel);
         if (typeof window !== 'undefined') {
           try { window.dispatchEvent(new CustomEvent('tutorial:loopgrid-sync')); } catch {}
         }
@@ -932,6 +1006,9 @@ function cloneGoal(goal) {
       const pointerHandler = () => markInteraction();
       try { panel.addEventListener('pointerup', pointerHandler, { once: true }); } catch { panel.addEventListener('pointerup', pointerHandler, { once: true }); }
     }
+
+    add('toy-clear', () => handlePlaceToyClear(panel));
+    add('toy-reset', () => handlePlaceToyClear(panel));
 
     panel.__tutorialInteractionHooked = true;
     add('toy-remove', () => handlePlaceToyPanelRemoval(panel), { once: true });
