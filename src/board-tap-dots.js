@@ -119,6 +119,11 @@
     return { width: w, height: h };
   }
 
+  function getCurrentZoomScale() {
+    const z = parseFloat(getComputedStyle(board).getPropertyValue('--zoom-scale'));
+    return Number.isFinite(z) && z > 0 ? z : 1;
+  }
+
   function updateBoardToViewTransform() {
     // Board + overlay share the same CSS transform (scale + translate),
     // so board "world" units map 1:1 into the overlay canvas.
@@ -338,6 +343,9 @@
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    const zoomScale = getCurrentZoomScale();
+    const invZoom = 1 / Math.max(zoomScale, 0.0001);
+
     // If we're fully faded and the blob is basically at rest, clean up.
     const dragMag = Math.sqrt(dragOffsetX * dragOffsetX + dragOffsetY * dragOffsetY);
     if (!isPointerDown && fadeFactor <= 0.001 && dragMag <= 0.1) {
@@ -404,7 +412,7 @@
 
         const drawX = viewOriginX + (dot.x + offsetX) * viewScaleX;
         const drawY = viewOriginY + (dot.y + offsetY) * viewScaleY;
-        const radius = BASE_DOT_RADIUS * scale; // keep screen size constant regardless of zoom
+        const radius = (BASE_DOT_RADIUS * scale) * invZoom; // keep screen size constant regardless of zoom
 
         ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${baseAlpha})`;
         ctx.beginPath();
@@ -446,7 +454,7 @@
       const drawX = viewOriginX + (dot.x + dot.dirX * pushAmount) * viewScaleX;
       const drawY = viewOriginY + (dot.y + dot.dirY * pushAmount) * viewScaleY;
       // Keep screen size roughly constant regardless of zoom (use view scales)
-      const radius = BASE_DOT_RADIUS * scale;
+      const radius = (BASE_DOT_RADIUS * scale) * invZoom;
 
       ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
       ctx.beginPath();
