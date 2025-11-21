@@ -309,7 +309,7 @@ html, body {
   transform-origin: 0 0 !important;
   overflow: visible !important;
   background-color: #000;
-  background-image: radial-gradient(circle, #2c333d 1.2px, transparent 1.2px);
+  background-image: radial-gradient(circle, #131c2a 2px, transparent 1.2px);
   background-size: var(--board-grid-spacing) var(--board-grid-spacing);
   background-position: var(--board-grid-offset);
 }

@@ -92,12 +92,16 @@ function ensureTopbar(){
       menuBtn.id = 'topbar-menu-btn';
       menuBtn.className = 'c-btn menu-btn';
       menuBtn.dataset.action = 'menu-toggle';
+      menuBtn.dataset.helpLabel = 'Main menu';
+      menuBtn.dataset.helpPosition = 'bottom';
       menuBtn.title = 'Menu';
       menuBtn.innerHTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
       menuWrap.prepend(menuBtn);
     } else {
       menuBtn.type = 'button';
       menuBtn.dataset.action = 'menu-toggle';
+      if (!menuBtn.dataset.helpLabel) menuBtn.dataset.helpLabel = 'Main menu';
+      if (!menuBtn.dataset.helpPosition) menuBtn.dataset.helpPosition = 'bottom';
       menuBtn.classList.add('c-btn','menu-btn');
       if (!menuBtn.title) menuBtn.title = 'Menu';
     }
@@ -221,11 +225,13 @@ function ensureTopbar(){
       playBtn.className = 'c-btn';
       playBtn.dataset.action = 'toggle-play';
       playBtn.dataset.helpLabel = 'Toggle Play/Pause';
+      playBtn.dataset.helpPosition = 'bottom';
       playBtn.title = 'Play';
       playBtn.innerHTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
       controls.prepend(playBtn);
     } else {
       playBtn.classList.add('c-btn');
+      if (!playBtn.dataset.helpPosition) playBtn.dataset.helpPosition = 'bottom';
     }
     updatePlayButtonVisual(playBtn, !!Core?.isRunning?.());
 

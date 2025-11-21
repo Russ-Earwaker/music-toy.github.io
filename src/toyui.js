@@ -508,18 +508,6 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       left.appendChild(clearBtn);
     }
 
-    // Eraser button (specific to drawgrid, on the right)
-    const right = header.querySelector('.toy-controls-right');
-    if (right && !right.querySelector('[data-erase]')) {
-      const eraserBtn = document.createElement('button');
-      eraserBtn.className = 'c-btn';
-      eraserBtn.dataset.erase = '1';
-      eraserBtn.title = 'Eraser';
-      eraserBtn.style.setProperty('--c-btn-size', '65px');
-      eraserBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonEraser.png');"></div>`;
-      right.appendChild(eraserBtn);
-    }
-
     const updateVisibility = () => {
       const isAdvanced = panel.classList.contains('toy-zoomed');
       if (editBtn) editBtn.style.display = isAdvanced ? 'none' : 'block';
@@ -861,7 +849,6 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       markHelp(panel.querySelector('button[data-action="random-blocks"]'), 'Randomize blocks', 'bottom');
       markHelp(panel.querySelector('button[data-action="random-notes"]'), 'Randomize notes', 'bottom');
       markHelp(panel.querySelector('button[data-action="clear"]'), 'Clear', 'bottom');
-      markHelp(panel.querySelector('button[data-erase="1"]'), 'Toggle eraser mode', 'left');
       break;
     case 'rippler':
       markHelp(panel.querySelector('button[data-action="random"]'), 'Randomize', 'bottom');

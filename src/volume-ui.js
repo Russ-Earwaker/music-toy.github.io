@@ -32,6 +32,8 @@ export function installVolumeUI(footer) {
   range.max = '100';
   range.step = '1';
   range.title = 'Volume';
+  range.dataset.helpLabel = 'Adjust volume';
+  range.dataset.helpPosition = 'bottom';
 
   const muteBtn = document.createElement('button');
   muteBtn.type = 'button';

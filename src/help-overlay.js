@@ -340,12 +340,16 @@ const LABEL_POSITIONS = {
   'randomize notes': { dir: 'top', offsetX: 0, offsetY: -BASE_MARGIN },
   'randomize blocks': { dir: 'top', offsetX: 0, offsetY: -BASE_MARGIN },
   'choose instrument': { dir: 'top', offsetX: 0, offsetY: -BASE_MARGIN },
+  'main menu': { dir: 'right', offsetX: 26, offsetY: 0 },
+  'guide': { dir: 'right', offsetX: 38, offsetY: -70 },
+  'goal select menu': { dir: 'right', offsetX: 32, offsetY: 0 },
+  'toggle play/pause': { dir: 'bottom', offsetX: 0, offsetY: 30 },
   'mute': { dir: 'bottom', offsetX: 0, offsetY: 15 },
   'adjust volume': { dir: 'bottom', offsetX: 0, offsetY: 15 },
   // Spawner buttons
-  'open the add toy menu': { dir: 'left', offsetX: -15, offsetY: 0 },
-  'drag a toy here to delete it': { dir: 'left', offsetX: -15, offsetY: 0 },
-  'toggle help labels': { dir: 'left', offsetX: -15, offsetY: 0 },
+  'open the add toy menu': { dir: 'left', offsetX: -25, offsetY: 0 },
+  'drag a toy here to delete it': { dir: 'left', offsetX: -25, offsetY: 0 },
+  'toggle help labels': { dir: 'left', offsetX: -25, offsetY: 0 },
 };
 
 function placeEntry(entry, assigned, gap, cachedPlacement, allowOverlap) {
@@ -703,7 +707,7 @@ function renderControlsHelp(host) {
     content = `
       <strong>Controls:</strong>
       <ul>
-        <li><strong>Pan:</strong> Middle-click + drag, or<br>Shift + Left-click + drag</li>
+        <li><strong>Pan:</strong> Left-click and drag</li>
         <li><strong>Zoom:</strong> Scroll wheel</li>
       </ul>
     `;
@@ -719,9 +723,6 @@ try {
 } catch (err) {
   // no-op
 }
-
-
-
 
 
 

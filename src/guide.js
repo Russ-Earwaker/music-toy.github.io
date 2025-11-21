@@ -379,6 +379,8 @@ function ensureHost() {
     toggleRef.className = 'c-btn guide-toggle';
     toggleRef.id = 'guide-button';
     toggleRef.title = 'Guide';
+    toggleRef.dataset.helpLabel = 'Guide';
+    toggleRef.dataset.helpPosition = 'top';
     toggleRef.setAttribute('aria-label', 'Guide');
     toggleRef.innerHTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
     buttonsWrapRef.appendChild(toggleRef);
@@ -390,6 +392,8 @@ function ensureHost() {
   }
   toggleRef.id = 'guide-button';
   toggleRef.title = 'Guide';
+  if (!toggleRef.dataset.helpLabel) toggleRef.dataset.helpLabel = 'Guide';
+  if (!toggleRef.dataset.helpPosition) toggleRef.dataset.helpPosition = 'top';
   toggleRef.setAttribute('aria-label', 'Guide');
   const toggleCore = toggleRef.querySelector('.c-btn-core');
   if (toggleCore) {
@@ -402,6 +406,8 @@ function ensureHost() {
     moreGoalsButtonRef.className = 'c-btn guide-more-goals';
     moreGoalsButtonRef.style.display = 'none';
     moreGoalsButtonRef.title = 'More goals';
+    moreGoalsButtonRef.dataset.helpLabel = 'Goal select menu';
+    moreGoalsButtonRef.dataset.helpPosition = 'right';
     moreGoalsButtonRef.setAttribute('aria-label', 'More goals');
     moreGoalsButtonRef.innerHTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
     buttonsWrapRef.appendChild(moreGoalsButtonRef);
@@ -409,6 +415,12 @@ function ensureHost() {
   const moreCore = moreGoalsButtonRef?.querySelector('.c-btn-core');
   if (moreCore) {
     moreCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_3Dots.png')");
+  }
+  if (moreGoalsButtonRef && !moreGoalsButtonRef.dataset.helpLabel) {
+    moreGoalsButtonRef.dataset.helpLabel = 'Goal select menu';
+  }
+  if (moreGoalsButtonRef && !moreGoalsButtonRef.dataset.helpPosition) {
+    moreGoalsButtonRef.dataset.helpPosition = 'right';
   }
 
   if (!toggleRef.__guideBound) {
