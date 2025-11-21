@@ -346,7 +346,7 @@ html, body {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 3500;
+  z-index: 0; /* sit with canvases; DOM order keeps it behind toys */
   opacity: 0;
   transition: opacity 80ms ease;
 }

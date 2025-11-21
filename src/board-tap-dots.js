@@ -4,15 +4,18 @@
   const viewport = document.querySelector('.board-viewport');
   if (!board || !viewport) return;
 
-  // Keep the overlay rooted on the viewport (not the board) so it isn't scaled up
-  // to the full 8k board size. On iPad a 2x DPR canvas at board dimensions would
-  // exceed Safari's canvas limits and silently fail to draw.
-  let overlay = viewport.querySelector('.board-tap-overlay');
+  // Root the overlay on the board so it layers under toys/UI but above the board background.
+  let overlay = board.querySelector('.board-tap-overlay');
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.className = 'board-tap-overlay';
     overlay.setAttribute('aria-hidden', 'true');
-    viewport.appendChild(overlay);
+    // Insert before other board children so toys render above.
+    if (board.firstChild) {
+      board.insertBefore(overlay, board.firstChild);
+    } else {
+      board.appendChild(overlay);
+    }
   }
 
   // Canvas for drawing the tap dots
@@ -25,7 +28,7 @@
 
   const ctx = canvas.getContext('2d');
 
-  const DEBUG = false;
+  const DEBUG = true;
   const FORCE_DEBUG_VIS = false;
 
   // delay before full reset once everything is faded out
@@ -104,22 +107,38 @@
   let viewOriginX = 0;
   let viewOriginY = 0;
 
+  function getOverlayRect() {
+    const rect = overlay.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) return rect;
+    return viewport.getBoundingClientRect();
+  }
+
+  function getOverlayCssSize() {
+    const w = overlay.clientWidth || boardW;
+    const h = overlay.clientHeight || boardH;
+    return { width: w, height: h };
+  }
+
   function updateBoardToViewTransform() {
-    const boardRect = board.getBoundingClientRect();
-    const viewportRect = viewport.getBoundingClientRect();
-    const bw = boardRect.width || boardW;
-    const bh = boardRect.height || boardH;
-    viewScaleX = bw / (boardW || 1);
-    viewScaleY = bh / (boardH || 1);
-    viewOriginX = boardRect.left - viewportRect.left;
-    viewOriginY = boardRect.top - viewportRect.top;
+    // Board + overlay share the same CSS transform (scale + translate),
+    // so board "world" units map 1:1 into the overlay canvas.
+    // Let the board's transform handle zoom/pan; don't rescale again here.
+    viewScaleX = 1;
+    viewScaleY = 1;
+    viewOriginX = 0;
+    viewOriginY = 0;
   }
 
   function resizeCanvas() {
     const dpr = window.devicePixelRatio || 1;
-    const rect = viewport.getBoundingClientRect();
-    const width = Math.max(1, rect.width);
-    const height = Math.max(1, rect.height);
+    // Keep the canvas locked to the overlay's visible rect
+    // so all transforms use the same size.
+    const rect = getOverlayRect();
+    // Use the untransformed CSS size for the backing buffer so the world
+    // transform (scale/translate) isn't applied twice to the canvas itself.
+    const cssSize = getOverlayCssSize();
+    const width = Math.max(1, cssSize.width);
+    const height = Math.max(1, cssSize.height);
 
     canvas.width = width * dpr;
     canvas.height = height * dpr;
@@ -159,11 +178,29 @@
   }
 
   function clientToBoardPoint(e) {
-    const rect = board.getBoundingClientRect();
+    // Measure relative to the overlay we're actually drawing into,
+    // not the full offscreen board.
+    const rect = getOverlayRect();
     const fx = (e.clientX - rect.left) / (rect.width || 1);
     const fy = (e.clientY - rect.top) / (rect.height || 1);
     const x = fx * boardW;
     const y = fy * boardH;
+    if (DEBUG) {
+      console.debug('[tap-dots] clientToBoardPoint', {
+        clientX: e.clientX,
+        clientY: e.clientY,
+        viewScaleX,
+        viewScaleY,
+        overlayCssSize: getOverlayCssSize(),
+        overlayRect: {
+          left: rect.left,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height
+        },
+        mapped: { x, y }
+      });
+    }
     return { x, y };
   }
 
@@ -392,7 +429,8 @@
 
       const drawX = viewOriginX + (dot.x + dot.dirX * pushAmount) * viewScaleX;
       const drawY = viewOriginY + (dot.y + dot.dirY * pushAmount) * viewScaleY;
-      const radius = BASE_DOT_RADIUS * scale; // keep screen size constant regardless of zoom
+      // Keep screen size roughly constant regardless of zoom (use view scales)
+      const radius = BASE_DOT_RADIUS * scale;
 
       ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
       ctx.beginPath();
