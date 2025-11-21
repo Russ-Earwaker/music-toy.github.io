@@ -351,7 +351,7 @@
 
         const drawX = viewOriginX + (dot.x + offsetX) * viewScaleX;
         const drawY = viewOriginY + (dot.y + offsetY) * viewScaleY;
-        const radius = BASE_DOT_RADIUS * scale * viewScaleX;
+        const radius = BASE_DOT_RADIUS * scale; // keep screen size constant regardless of zoom
 
         ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${baseAlpha})`;
         ctx.beginPath();
@@ -392,7 +392,7 @@
 
       const drawX = viewOriginX + (dot.x + dot.dirX * pushAmount) * viewScaleX;
       const drawY = viewOriginY + (dot.y + dot.dirY * pushAmount) * viewScaleY;
-      const radius = BASE_DOT_RADIUS * scale * viewScaleX;
+      const radius = BASE_DOT_RADIUS * scale; // keep screen size constant regardless of zoom
 
       ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
       ctx.beginPath();
