@@ -58,3 +58,135 @@
     transform: translateX(-10px) translateY(-50%);
   }
 }
+
+.guide-more-goals {
+  margin-left: 8px;
+  position: relative;
+  z-index: 2002;
+  --c-btn-size: calc(var(--top-btn-size) * 0.67);
+}
+
+.guide-goal-picker {
+  position: fixed;
+  inset: 0;
+  z-index: 2001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.guide-goal-picker__backdrop {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(0,0,0,0.65), rgba(12,16,28,0.7));
+  backdrop-filter: blur(4px);
+  pointer-events: auto;
+}
+
+.guide-goal-picker__sheet {
+  position: relative;
+  width: min(520px, 90vw);
+  max-height: 80vh;
+  background: rgba(15, 20, 35, 0.92);
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 16px 40px rgba(0,0,0,0.45);
+  border-radius: 16px;
+  padding: 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+}
+
+.guide-goal-picker__header {
+  font-family: 'Poppins', 'Helvetica Neue', sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 0.04em;
+  color: #fff;
+  padding: 4px 4px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.guide-goal-picker__list {
+  overflow-y: auto;
+  padding-right: 4px;
+  display: grid;
+  gap: 10px;
+  width: 100%;
+}
+
+.guide-goal-picker__stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.guide-goal-picker__stars img {
+  width: 18px;
+  height: 18px;
+  display: inline-block;
+}
+
+.guide-goal-picker-card {
+  display: block;
+  width: 100%;
+  min-height: 52px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 8px;
+  transition: transform 0.18s ease, border-color 0.18s ease;
+  color: #f5f7fb;
+}
+
+.guide-goal-picker-card.tutorial-goals-panel {
+  position: relative;
+  left: 0;
+  top: 0;
+  width: 100%;
+  max-width: 100%;
+  transform: none;
+  opacity: 1;
+  box-shadow: none;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: block !important;
+  visibility: visible !important;
+}
+
+.guide-goal-picker-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.guide-goal-picker-card .tutorial-goals-header {
+  cursor: pointer;
+}
+
+.guide-goal-picker-card .goal-body-wrapper,
+.guide-goal-picker-card .tutorial-goals-tasks,
+.guide-goal-picker-card .tutorial-goals-progress,
+.guide-goal-picker-card .tutorial-goals-reward {
+  display: none !important;
+}
+
+.guide-goal-picker-card .tutorial-goals-header {
+  color: #f5f7fb;
+  display: block;
+}
+
+.goal-task-claimed {
+  opacity: 0.65;
+  pointer-events: auto;
+}
+
+.tutorial-goals-reward-claimed {
+  color: #d1d9e6;
+  font-weight: 600;
+  font-size: 0.95rem;
+}

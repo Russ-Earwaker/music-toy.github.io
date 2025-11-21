@@ -1501,6 +1501,12 @@ body.tutorial-active #topbar #theme-switcher-wrap {
   overflow: visible;
 }
 
+.guide-launcher-buttons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .guide-launcher .guide-toggle {
   align-self: flex-start;
   --c-btn-size: var(--top-btn-size);

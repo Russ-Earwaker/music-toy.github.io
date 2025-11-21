@@ -256,6 +256,7 @@ function loadGuideProgress() {
 
 const guideProgress = loadGuideProgress();
 const requirementCompletionState = new Map();
+const replaySessionTasks = new Map();
 const drawToyPanels = new Set();
 const rhythmToyPanels = new Set();
 const drawToyLineState = new Map();
@@ -270,6 +271,14 @@ const PLACE_TOY_REQUIREMENTS = {
   place: 'place-any-toy',
   interact: 'interact-any-toy',
   play: 'press-play',
+};
+const ACTIVE_GOAL_KEY = '__guideActiveGoal';
+const DRAW_INTRO_GOAL_ID = 'draw-intro';
+const DRAW_INTRO_TASK_IDS = {
+  add: 'add-draw-toy',
+  line: 'draw-line',
+  toggle: 'toggle-node',
+  drag: 'drag-note',
 };
 const PLACE_TOY_STAGES = {
   WAITING_FOR_TOY: 1,
@@ -383,16 +392,32 @@ function resetGuideProgress() {
 
 function recordRequirementProgress(requirement, shouldComplete = true) {
   if (!requirement) return { updated: false, blocked: false };
-  const entries = TASKS_BY_REQUIREMENT.get(requirement);
-  if (!entries || !entries.length) return { updated: false, blocked: false };
-  let changed = false;
-  let blocked = false;
+    const entries = TASKS_BY_REQUIREMENT.get(requirement);
+    if (!entries || !entries.length) return { updated: false, blocked: false };
+    let changed = false;
+    let sessionChanged = false;
+    let blocked = false;
   let attemptedCompletion = false;
   const goalsTouched = new Set();
-  entries.forEach(({ goalId, taskId, taskIndex }) => {
-    if (guideProgress.goals.has(goalId)) {
-      return;
-    }
+    entries.forEach(({ goalId, taskId, taskIndex }) => {
+      if (guideProgress.goals.has(goalId)) {
+        if (guideProgress.claimedRewards.has(goalId)) {
+          const currentActiveGoal = (typeof window !== 'undefined' && window.__guideActiveGoal) || null;
+          if (currentActiveGoal === goalId) {
+            const set = replaySessionTasks.get(goalId) || new Set();
+            if (shouldComplete) set.add(taskId);
+            else set.delete(taskId);
+            replaySessionTasks.set(goalId, set);
+            sessionChanged = true;
+            try {
+              if (typeof window !== 'undefined') {
+                window.__guideReplayTasks = Array.from(replaySessionTasks.entries()).map(([g, s]) => [g, Array.from(s)]);
+              }
+            } catch {}
+          }
+        }
+        return;
+      }
     goalsTouched.add(goalId);
     if (shouldComplete) {
       const goal = GOAL_BY_ID.get(goalId);
@@ -410,6 +435,11 @@ function recordRequirementProgress(requirement, shouldComplete = true) {
             for (let i = 0; i < index; i++) {
               const prevTask = tasks[i];
               const prevId = prevTask?.id || `task-${i}`;
+              // Allow drag-note before toggle-node within draw-intro goal
+              const skipPrev = goal?.id === DRAW_INTRO_GOAL_ID
+                && requirement === DRAW_INTRO_TASK_IDS.drag
+                && prevId === DRAW_INTRO_TASK_IDS.toggle;
+              if (skipPrev) continue;
               if (prevId && !guideProgress.tasks.has(prevId)) {
                 prerequisitesComplete = false;
                 break;
@@ -432,10 +462,15 @@ function recordRequirementProgress(requirement, shouldComplete = true) {
     }
   });
   if (!shouldComplete) {
-    return { updated: changed, blocked: false };
+    if (sessionChanged) dispatchGuideProgressUpdate({ requirement, via: 'recordRequirementProgress:replay' });
+    return { updated: changed || sessionChanged, blocked: false };
   }
   const blockedWithoutAttempt = blocked && !attemptedCompletion;
   if (changed) return { updated: true, blocked: blockedWithoutAttempt };
+  if (sessionChanged) {
+    dispatchGuideProgressUpdate({ requirement, via: 'recordRequirementProgress:replay' });
+    return { updated: true, blocked: blockedWithoutAttempt };
+  }
   // Even if no individual task was new, a previously incomplete goal might flip to complete
   let goalChanged = false;
   goalsTouched.forEach((goalId) => {
@@ -576,8 +611,8 @@ function cloneGoal(goal) {
   let storedScroll = { x: 0, y: 0 };
   let helpWasActiveBeforeTutorial = false;
   let helpActivatedForTask = false;
-  let tutorialListeners = [];
-  let hasDetectedLine = false;
+let tutorialListeners = [];
+let hasDetectedLine = false;
   let spawnerControls = {};
   const tempSpawnerUnlocks = new Set();
   let tutorialState = null;
@@ -614,6 +649,9 @@ function cloneGoal(goal) {
       maybeCompleteTask('add-toy-drawgrid');
     } else {
       setRequirementProgress('add-toy-drawgrid', false);
+      setRequirementProgress('draw-line', false);
+      setRequirementProgress('toggle-node', false);
+      setRequirementProgress('drag-note', false);
     }
   }
 
@@ -625,6 +663,8 @@ function cloneGoal(goal) {
     } else {
       hasDetectedLine = false;
       setRequirementProgress('draw-line', false);
+      setRequirementProgress('toggle-node', false);
+      setRequirementProgress('drag-note', false);
     }
   }
 
@@ -709,7 +749,14 @@ function cloneGoal(goal) {
     }
 
     if (entries.length > 0) {
-      const anyUnlocked = entries.some(entry => !guideProgress.goals.has(entry.goalId));
+      const activeGoalId = (() => {
+        try { return typeof window !== 'undefined' ? window[ACTIVE_GOAL_KEY] || null : null; } catch { return null; }
+      })();
+      const anyUnlocked = entries.some(entry => {
+        if (!guideProgress.goals.has(entry.goalId)) return true;
+        const isReplay = guideProgress.claimedRewards.has(entry.goalId) && activeGoalId === entry.goalId;
+        return isReplay;
+      });
       if (!anyUnlocked) {
         if (previous === undefined) {
           requirementCompletionState.delete(requirement);
@@ -722,8 +769,20 @@ function cloneGoal(goal) {
 
     requirementCompletionState.set(requirement, shouldComplete);
 
-    // Hard lock: once 'place-toy' is complete, don't let 'press-play' flip anymore
+    // Hard lock: once 'place-toy' is complete, don't let 'press-play' flip anymore,
+    // except when replaying that goal.
     if (requirement === 'press-play') {
+      const activeGoalId = (() => {
+        try { return typeof window !== 'undefined' ? window[ACTIVE_GOAL_KEY] || null : null; } catch { return null; }
+      })();
+      const allowReplay = guideProgress.claimedRewards.has(PLACE_TOY_GOAL_ID) && activeGoalId === PLACE_TOY_GOAL_ID;
+      if (allowReplay) {
+        // Keep requirementCompletionState in sync but don't block replay session updates
+        requirementCompletionState.set(requirement, shouldComplete);
+        const { updated } = recordRequirementProgress(requirement, shouldComplete);
+        return updated;
+      }
+
       const g = GOAL_BY_ID.get('place-toy');
       const tasks = Array.isArray(g?.tasks) ? g.tasks : [];
       const placeToyTasksComplete = tasks.length
@@ -779,10 +838,30 @@ function cloneGoal(goal) {
   }
 
   function computePlaceToyStage() {
+    const activeGoalId = (() => {
+      try { return typeof window !== 'undefined' ? window[ACTIVE_GOAL_KEY] || null : null; } catch { return null; }
+    })();
+    const isReplay = guideProgress.claimedRewards.has(PLACE_TOY_GOAL_ID) && activeGoalId === PLACE_TOY_GOAL_ID;
+    const sessionSet = (() => {
+      if (!isReplay) return null;
+      const setFromMap = replaySessionTasks.get(PLACE_TOY_GOAL_ID);
+      if (setFromMap instanceof Set) return setFromMap;
+      try {
+        const raw = (typeof window !== 'undefined' && Array.isArray(window.__guideReplayTasks)) ? window.__guideReplayTasks : [];
+        const match = raw.find(([g]) => g === PLACE_TOY_GOAL_ID);
+        if (match) {
+          const set = new Set(match[1] || []);
+          replaySessionTasks.set(PLACE_TOY_GOAL_ID, set);
+          return set;
+        }
+      } catch {}
+      return new Set();
+    })();
+    const taskProgress = (isReplay && sessionSet) ? sessionSet : guideProgress.tasks;
     const hasToy = placeToyPanels.size > 0;
-    if (!hasToy || !guideProgress.tasks.has(PLACE_TOY_TASK_IDS.place)) return PLACE_TOY_STAGES.WAITING_FOR_TOY;
-    if (!guideProgress.tasks.has(PLACE_TOY_TASK_IDS.interact)) return PLACE_TOY_STAGES.WAITING_FOR_INTERACT;
-    if (!guideProgress.tasks.has(PLACE_TOY_TASK_IDS.play)) return PLACE_TOY_STAGES.WAITING_FOR_PLAY;
+    if (!hasToy || !taskProgress.has(PLACE_TOY_TASK_IDS.place)) return PLACE_TOY_STAGES.WAITING_FOR_TOY;
+    if (!taskProgress.has(PLACE_TOY_TASK_IDS.interact)) return PLACE_TOY_STAGES.WAITING_FOR_INTERACT;
+    if (!taskProgress.has(PLACE_TOY_TASK_IDS.play)) return PLACE_TOY_STAGES.WAITING_FOR_PLAY;
     return PLACE_TOY_STAGES.COMPLETED;
   }
 
@@ -795,6 +874,21 @@ function cloneGoal(goal) {
       return new Set([PLACE_TOY_TASK_IDS.play]);
     }
     return new Set();
+  }
+
+  function computeDrawIntroDisabledTaskIds() {
+    const disabled = new Set();
+    if (!guideProgress.tasks.has(DRAW_INTRO_TASK_IDS.add)) {
+      disabled.add(DRAW_INTRO_TASK_IDS.line);
+      disabled.add(DRAW_INTRO_TASK_IDS.toggle);
+      disabled.add(DRAW_INTRO_TASK_IDS.drag);
+      return disabled;
+    }
+    if (!guideProgress.tasks.has(DRAW_INTRO_TASK_IDS.line)) {
+      disabled.add(DRAW_INTRO_TASK_IDS.toggle);
+      disabled.add(DRAW_INTRO_TASK_IDS.drag);
+    }
+    return disabled;
   }
 
   function maybeAutoCompletePlayIfAlreadyActive() {
@@ -840,8 +934,10 @@ function cloneGoal(goal) {
   }
 
   function computeDisabledTasksForGoal(goal) {
-    if (!goal || goal.id !== PLACE_TOY_GOAL_ID) return new Set();
-    return computePlaceToyDisabledTaskIds();
+    if (!goal || !goal.id) return new Set();
+    if (goal.id === PLACE_TOY_GOAL_ID) return computePlaceToyDisabledTaskIds();
+    if (goal.id === DRAW_INTRO_GOAL_ID) return computeDrawIntroDisabledTaskIds();
+    return new Set();
   }
 
   function handlePlaceToyPanelRemoval(panel) {
@@ -938,6 +1034,14 @@ function cloneGoal(goal) {
         maybeCompleteTask('drag-note');
         markInteraction();
         updatePlaceToySoundState(panel, computePanelHasLine());
+      }, { passive: true });
+      add('toy-clear', () => {
+        drawToyLineState.set(panel, false);
+        refreshDrawLineRequirement();
+      }, { passive: true });
+      add('toy-reset', () => {
+        drawToyLineState.set(panel, false);
+        refreshDrawLineRequirement();
       }, { passive: true });
       add('toy-remove', () => {
         drawToyPanels.delete(panel);
@@ -1790,6 +1894,8 @@ function cloneGoal(goal) {
 
   function populateGoalPanel(panelEl, goal, options = {}) {
     if (!panelEl || !goal) return;
+    const replaySession = !!options.replaySession;
+    const replayComplete = !!options.replayComplete;
     const tasks = Array.isArray(goal.tasks) ? goal.tasks : [];
     const rawTaskIndex = Number.isFinite(options.taskIndex) ? options.taskIndex : 0;
     const taskIndex = Math.max(0, Math.min(tasks.length, rawTaskIndex));
@@ -1832,6 +1938,8 @@ function cloneGoal(goal) {
     const goalComplete = goalId ? completedGoals.has(goalId) : false;
     const rewardClaimed = goalId ? claimedRewards.has(goalId) : false;
     const hasPendingReward = goalId ? pendingRewards.has(goalId) : (goalComplete && !rewardClaimed);
+
+    const isReplay = replaySession && rewardClaimed;
 
     panelEl.classList.toggle('is-goal-complete', goalComplete);
     panelEl.classList.toggle('has-pending-reward', hasPendingReward);
@@ -1935,20 +2043,35 @@ function cloneGoal(goal) {
     if (options.showClaimButton === false) {
       const btn = panelEl.querySelector('.tutorial-claim-btn');
       if (btn) {
-        if (rewardSection && btn.parentElement !== rewardSection) rewardSection.appendChild(btn);
+        if (rewardSection && btn.parentElement !== rewardSection) {
+          rewardSection.appendChild(btn);
+        }
         btn.style.display = 'none';
         btn.classList.remove('is-visible');
-        btn.disabled = true;
       }
-    } else if (options.showClaimButton === true) {
+    } else {
       const btn = panelEl.querySelector('.tutorial-claim-btn');
       if (btn) {
-        if (rewardSection && btn.parentElement !== rewardSection) rewardSection.appendChild(btn);
-        const pending = hasPendingReward;
-        btn.style.display = pending ? '' : 'none';
-        btn.textContent = 'Collect Reward';
+        if (rewardSection && btn.parentElement !== rewardSection) {
+          rewardSection.appendChild(btn);
+        }
+
+        const showReplayButton = isReplay && replayComplete;
+        const pending = !isReplay && hasPendingReward;
+        const visible = pending || showReplayButton;
+
+        btn.style.display = visible ? '' : 'none';
         btn.dataset.goalId = goalId;
-        if (pending) {
+
+        if (showReplayButton) {
+          // Replay mode: all tasks complete, reward already claimed
+          btn.textContent = 'Replay complete';
+        } else {
+          // Normal first-time completion
+          btn.textContent = 'Collect Reward';
+        }
+
+        if (visible) {
           btn.classList.add('is-visible');
           btn.disabled = false;
         } else {
@@ -2513,7 +2636,7 @@ function cloneGoal(goal) {
       tutorialState.pendingRewardGoalId = goal.id;
       debugTutorial('goal-ready', goal.id);
       const reward = goal.reward || null;
-      const shouldAutoClaim = !reward || reward.autoClaim;
+      const shouldAutoClaim = !!(reward && reward.autoClaim);
       if (shouldAutoClaim) {
         claimCurrentGoalReward();
       } else {
@@ -3429,6 +3552,8 @@ try {
     }
     scheduleDrawToySync();
     updatePlayRequirement();
+    replaySessionTasks.clear();
+    try { if (typeof window !== 'undefined') window.__guideReplayTasks = []; } catch {}
   });
 
   document.addEventListener('click', (event) => {
