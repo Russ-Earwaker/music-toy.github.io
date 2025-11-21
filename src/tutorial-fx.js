@@ -23,6 +23,11 @@ let activeOriginEl = null;
 let spawnParticles = false;
 /* << GPT:TASK_MASK_GLOBALS END >> */
 
+function removeHighlight(el) {
+  if (!el || !el.classList) return;
+  el.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-addtoy-pulse', 'tutorial-flash');
+}
+
 function notifyGuideTaskTapped() {
   if (typeof window === 'undefined') return;
   try {
@@ -187,9 +192,25 @@ function createBurst(x, y, endPos) {
 }
 
 function startFlight(ctx, canvas, startEl, endEl) {
-    if (!ctx || !canvas || !startEl || !endEl) {
-        animationFrameId = requestAnimationFrame(() => startFlight(ctx, canvas, startEl, endEl));
+    const isValidNode = (el) => {
+      if (!el) return false;
+      if (!el.isConnected) return false;
+      const rects = el.getClientRects?.();
+      return rects && rects.length > 0;
+    };
+    const nodesValid = isValidNode(startEl) && isValidNode(endEl);
+    const canDrain = !nodesValid && particles.length > 0;
+    if (!ctx || !canvas || (!nodesValid && !canDrain)) {
+        stopParticleStream({ clearHighlight: true, targetEl: endEl || activeTargetEl || null });
         return;
+    }
+    if (!nodesValid) {
+      spawnParticles = false;
+      removeHighlight(endEl || activeTargetEl || null);
+    }
+    if (nodesValid && startEl.closest && startEl.closest('.goal-task.is-disabled')) {
+      spawnParticles = false;
+      removeHighlight(endEl || activeTargetEl || null);
     }
 
     if (!startFlight._lastTs) startFlight._lastTs = performance.now();
@@ -201,23 +222,22 @@ function startFlight(ctx, canvas, startEl, endEl) {
     startFlight._lastTs = now;
 
     const canvasRect = canvas.getBoundingClientRect();
-    const startRect = startEl.getBoundingClientRect();
-    const endRect = endEl.getBoundingClientRect();
 
-    const startCenter = getRectCenter(startRect);
-    const endCenter = getRectCenter(endRect);
-
-    const sx = startCenter.x - canvasRect.left;
-    const sy = startCenter.y - canvasRect.top;
-    const ex = endCenter.x - canvasRect.left;
-    const ey = endCenter.y - canvasRect.top;
-
-    if (spawnParticles) {
-        startFlight._accum += PARTICLES_PER_SEC * dt;
-        while (startFlight._accum >= 1) {
-            particles.push(createParticle(sx, sy, { x: ex, y: ey }));
-            startFlight._accum -= 1;
-        }
+    let sx = 0, sy = 0, ex = 0, ey = 0;
+    if (spawnParticles && nodesValid) {
+      const startRect = startEl.getBoundingClientRect();
+      const endRect = endEl.getBoundingClientRect();
+      const startCenter = getRectCenter(startRect);
+      const endCenter = getRectCenter(endRect);
+      sx = startCenter.x - canvasRect.left;
+      sy = startCenter.y - canvasRect.top;
+      ex = endCenter.x - canvasRect.left;
+      ey = endCenter.y - canvasRect.top;
+      startFlight._accum += PARTICLES_PER_SEC * dt;
+      while (startFlight._accum >= 1) {
+          particles.push(createParticle(sx, sy, { x: ex, y: ey }));
+          startFlight._accum -= 1;
+      }
     }
 
     if (canvas && ctx) {
@@ -406,10 +426,21 @@ export function startParticleStream(originEl, targetEl, options = {}) {
     target: tRect ? { x: tRect.left, y: tRect.top, w: tRect.width, h: tRect.height } : null,
     lastPointerup: window.__LAST_POINTERUP_DIAG__,
   });
-  if (!originEl || !targetEl) {
+  const isValidNode = (el) => {
+    if (!el) return false;
+    if (!el.isConnected) return false;
+    const rects = el.getClientRects?.();
+    return rects && rects.length > 0;
+  };
+  if (!originEl || !targetEl || !isValidNode(originEl) || !isValidNode(targetEl)) {
     console.log('[tutorial-fx] startParticleStream skipped: origin or target missing', { originElExists: !!originEl, targetElExists: !!targetEl });
     activeTaskMaskRect = null;
     activeOriginEl = null;
+    return;
+  }
+  if (originEl.closest && originEl.closest('.goal-task.is-disabled')) {
+    console.log('[tutorial-fx] startParticleStream skipped: origin task is disabled');
+    removeHighlight(targetEl);
     return;
   }
 
@@ -535,11 +566,17 @@ export function stopParticleStream(options = {}) {
   });
   lastStopTs = performance?.now?.() ?? Date.now();
 
+  const { immediate = false, clearHighlight = false, targetEl = null } = options || {};
+  if (clearHighlight) {
+    removeHighlight(targetEl || activeTargetEl || activeOriginEl);
+  }
+
   spawnParticles = false;
   startFlight._lastTs = undefined;
   startFlight._accum = 0;
-  activeTargetEl = null;
-  const { immediate = false } = options || {};
+  if (!immediate && !animationFrameId && activeCtx && activeCanvas && particles.length > 0) {
+    animationFrameId = requestAnimationFrame(() => startFlight(activeCtx, activeCanvas, activeOriginEl, targetEl || activeTargetEl || activeOriginEl));
+  }
 
   if (immediate) {
     if (animationFrameId) {
@@ -557,6 +594,7 @@ export function stopParticleStream(options = {}) {
     }
     activeTaskMaskRect = null;
     activeOriginEl = null;
+    activeTargetEl = null;
     activeCtx = null;
     activeCanvas = null;
     activeLayer = 'front';
