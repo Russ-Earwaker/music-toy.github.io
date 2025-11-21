@@ -28,7 +28,7 @@
 
   const ctx = canvas.getContext('2d');
 
-  const DEBUG = true;
+  const DEBUG = false;
   const FORCE_DEBUG_VIS = false;
 
   // delay before full reset once everything is faded out
@@ -131,21 +131,37 @@
 
   function resizeCanvas() {
     const dpr = window.devicePixelRatio || 1;
-    // Keep the canvas locked to the overlay's visible rect
-    // so all transforms use the same size.
-    const rect = getOverlayRect();
-    // Use the untransformed CSS size for the backing buffer so the world
-    // transform (scale/translate) isn't applied twice to the canvas itself.
+    // Keep the canvas locked to the overlay's visible rect so all transforms use the same size.
+    // Use the untransformed CSS size for the backing buffer so the world transform (scale/translate)
+    // isn't applied twice to the canvas itself.
     const cssSize = getOverlayCssSize();
     const width = Math.max(1, cssSize.width);
     const height = Math.max(1, cssSize.height);
 
-    canvas.width = width * dpr;
-    canvas.height = height * dpr;
+    // Mobile Safari can silently drop rendering on oversized canvases. Clamp the backing store so
+    // width/height stay under a safe cap, reducing DPR if needed.
+    const MAX_BACKING_DIM = 8192;
+    const maxDim = Math.max(width, height);
+    const maxDpr = maxDim > 0 ? (MAX_BACKING_DIM / maxDim) : dpr;
+    const effectiveDpr = Math.max(1, Math.min(dpr, maxDpr));
+
+    canvas.width = Math.round(width * effectiveDpr);
+    canvas.height = Math.round(height * effectiveDpr);
     canvas.style.width = width + 'px';
     canvas.style.height = height + 'px';
 
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.setTransform(effectiveDpr, 0, 0, effectiveDpr, 0, 0);
+
+    if (DEBUG) {
+      console.debug('[tap-dots] resizeCanvas', {
+        width,
+        height,
+        dpr,
+        effectiveDpr,
+        maxDim
+      });
+    }
+
     updateBoardToViewTransform();
   }
 
