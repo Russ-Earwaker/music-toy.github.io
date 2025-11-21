@@ -41,6 +41,9 @@
   // Base dot appearance
   const BASE_DOT_RADIUS = 1.4; // pixels at scale = 1
   const MAX_SCALE = 1.6;       // BIG peak scale for drag + tap (we can pull back later)
+  const EDGE_FADE_NEAR = 0.95; // alpha multiplier at tap centre
+  const EDGE_FADE_FAR = 0.25;  // alpha multiplier at outer edge
+  const EDGE_FADE_POWER = 1.4; // curve: >1 makes edges fall off faster
 
   // Colours
   const BASE_COLOR = { r: 90, g: 100, b: 255 };  // calm blue
@@ -313,13 +316,18 @@
       // Distance from the tap centre for centre-weighting + edge fade.
       const distRatio = Math.min(dot.dist / tapRadiusScreen, 1);
       const centreInfluence = Math.pow(1 - distRatio, DRAG_CENTER_POWER);
+      const edgeFade = lerp(
+        EDGE_FADE_FAR,
+        EDGE_FADE_NEAR,
+        1 - Math.pow(distRatio, EDGE_FADE_POWER)
+      );
 
       // 2) Wave has passed and the dot has finished its flash -> calm blue dot,
       //    but displaced as part of a single "blob" moved by dragOffset.
       if (localT > DOT_WAVE_WIDTH_MS) {
         // Base settled alpha: fade based on distance (center = strong, edge = faint).
         const edgeFactor = 1 - distRatio;
-        const baseAlpha = lerp(0.3, 0.9, edgeFactor);
+        const baseAlpha = lerp(0.3, 0.9, edgeFactor) * edgeFade;
 
         // Apply smooth global drag offset scaled by centre influence and exaggeration.
         const offsetX = dragOffsetX * centreInfluence * DRAG_BLOB_MULT;
@@ -365,7 +373,7 @@
 
         scale = lerp(0, MAX_SCALE, eased);
         mixToWhite = eased;
-        alpha = lerp(0.4, 1.0, eased);
+        alpha = lerp(0.4, 1.0, eased) * edgeFade;
         pushAmount = dot.pushMag * eased;
       } else {
         // Settle phase: MAX_SCALE -> 1, white -> blue, slide back to grid.
@@ -374,7 +382,7 @@
 
         scale = lerp(MAX_SCALE, 1, eased);
         mixToWhite = 1 - eased;
-        alpha = lerp(1.0, 0.9, eased);
+        alpha = lerp(1.0, 0.9, eased) * edgeFade;
         pushAmount = dot.pushMag * (1 - eased);
       }
 
