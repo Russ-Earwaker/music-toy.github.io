@@ -48,7 +48,7 @@ const GOAL_FLOW = [
   },
   {
     id: 'clear-random',
-    title: 'Randomise and clear',
+    title: 'Random and Clear',
     reward: {
       description: 'You made progress. Have a star.',
       icons: [
@@ -58,12 +58,12 @@ const GOAL_FLOW = [
     tasks: [
       {
         id: 'press-random',
-        label: 'Press any Randomise button.',
+        label: 'Press the Random button.',
         requirement: 'press-random',
       },
       {
         id: 'press-clear',
-        label: 'Press any Clear button.',
+        label: 'Press the Clear button.',
         requirement: 'press-clear',
       },
     ],
