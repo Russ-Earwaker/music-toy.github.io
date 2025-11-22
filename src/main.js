@@ -1889,6 +1889,31 @@ function scheduler(){
   updateChains();
   requestAnimationFrame(step);
 }
+
+// --- Volume slider fill helper ---
+function initToyVolumeSliders() {
+  const sliders = document.querySelectorAll('.toy-volwrap input[type="range"]');
+  sliders.forEach((slider) => {
+    const updateFill = () => {
+      const min = slider.min ? parseFloat(slider.min) : 0;
+      const max = slider.max ? parseFloat(slider.max) : 100;
+      const val = slider.value ? parseFloat(slider.value) : 0;
+      const pct = (max > min) ? ((val - min) / (max - min)) : 0;
+      slider.style.setProperty('--vol-fill-pct', `${Math.max(0, Math.min(1, pct)) * 100}%`);
+    };
+    slider.removeEventListener('input', slider.__volFillHandler || (() => {}));
+    slider.__volFillHandler = updateFill;
+    slider.addEventListener('input', updateFill);
+    updateFill();
+  });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initToyVolumeSliders);
+} else {
+  initToyVolumeSliders();
+}
+
 async function boot(){
   const board = document.getElementById('board');
   if (board) {

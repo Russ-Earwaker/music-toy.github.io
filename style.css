@@ -559,40 +559,89 @@ select.toy-instrument {
 
 /* Volume control in footer */
 .toy-volwrap {
+  --vol-bar-accent: #0141a9; /* mid blue, solid */
+  --vol-bar-track-start: #111827; /* dark grey track */
+  --vol-bar-track-end: #111827;
+
   display: flex;
   gap: 10px;
   align-items: center;
-  background: rgba(13, 20, 29, 0.85);
+  background: #0b0f16; /* solid dark grey */
   border: 1px solid #1c2430;
   border-radius: 8px;
   padding: 8px 10px;
 }
-.toy-volwrap .toy-btn {
-  min-width: 44px;
+
+.toy-volwrap .toy-mute-btn {
+  --c-btn-size: 42px;
+  flex: 0 0 auto;
 }
+
 .toy-volwrap input[type="range"] {
-  appearance: auto;
-  -webkit-appearance: slider-horizontal;
+  -webkit-appearance: none !important;
+  appearance: none !important;
   width: 100%;
-  height: 18px;
+  height: 20px;
+  background: transparent;
   outline: none;
   flex: 1;
+
+  /* JS (initToyVolumeSliders) keeps this updated 0–100% */
+  --vol-fill-pct: 0%;
 }
+
+/* Track: left side filled to the knob, right side dark grey */
+.toy-volwrap input[type="range"]::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+  border: none;
+  box-shadow: none;
+  background: linear-gradient(
+    to right,
+    var(--vol-bar-accent) 0,
+    var(--vol-bar-accent) var(--vol-fill-pct, 0%),
+    #1a1a1d               var(--vol-fill-pct, 0%),
+    #1a1a1d               100%
+  );
+}
+
+.toy-volwrap input[type="range"]::-moz-range-track {
+  height: 8px;
+  border-radius: 999px;
+  border: none;
+  box-shadow: none;
+  background: linear-gradient(
+    to right,
+    var(--vol-bar-accent) 0,
+    var(--vol-bar-accent) var(--vol-fill-pct, 0%),
+    #1a1a1d               var(--vol-fill-pct, 0%),
+    #1a1a1d               100%
+  );
+}
+
+/* Knob: simple opaque circle */
 .toy-volwrap input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 2px;
-  background: #f4932f;
-  border: 1px solid #0d141d;
-  margin-top: -6px;
+  -webkit-appearance: none !important;
+  width: 18px;
+  height: 18px;
+  background: var(--vol-bar-accent); /* match bar fill */
+  border-radius: 999px;              /* circle */
+  border: none;
+  margin-top: -5px;                  /* center on 8px track */
+  box-shadow: none;
 }
+
 .toy-volwrap input[type="range"]::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  border-radius: 2px;
-  background: #f4932f;
-  border: 1px solid #0d141d;
+  width: 18px;
+  height: 18px;
+  background: var(--vol-bar-accent);
+  border-radius: 999px;
+  border: none;
+  box-shadow: none;
+}
+
+.toy-volwrap input[type="range"]:focus {
+  outline: none;
 }
 
 /* Theme select dropdown in topbar */
