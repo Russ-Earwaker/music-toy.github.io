@@ -332,6 +332,16 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     if (e.ctrlKey) return;
 
     e.preventDefault();
+    try {
+      window.dispatchEvent(new CustomEvent('board:user-zoom', {
+        detail: {
+          method: 'wheel',
+          delta: e.deltaY,
+          x: e.clientX,
+          y: e.clientY,
+        },
+      }));
+    } catch {}
 
     const rect = stage.getBoundingClientRect();
     const { x: baseX, y: baseY } = getActiveTransform();

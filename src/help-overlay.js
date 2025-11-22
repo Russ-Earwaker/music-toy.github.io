@@ -87,7 +87,15 @@ function setHelpActive(active) {
     if (next) scheduleUpdate(true);
     return overlayState.active;
   }
+  const prev = overlayState.active;
   overlayState.active = next;
+  const detail = { active: overlayState.active, previous: prev };
+  try { window.dispatchEvent(new CustomEvent('help:toggle', { detail })); } catch {}
+  if (overlayState.active) {
+    try { window.dispatchEvent(new CustomEvent('help:open', { detail })); } catch {}
+  } else {
+    try { window.dispatchEvent(new CustomEvent('help:close', { detail })); } catch {}
+  }
   if (overlayState.active) {
     ensureHost();
     document.body.classList.add('toy-help-mode');
@@ -723,7 +731,6 @@ try {
 } catch (err) {
   // no-op
 }
-
 
 
 

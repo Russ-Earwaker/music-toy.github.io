@@ -113,9 +113,13 @@ import { setGestureTransform, commitGesture, getZoomState } from './zoom/ZoomCoo
     const SCALE_EPS = 1e-4;
     const POS_EPS = 0.5; // px tolerance before we treat as movement
 
-    const scaleChanged = Math.abs(endScale - (zoom.currentScale ?? curScale)) > SCALE_EPS;
-    const xChanged = Math.abs(endX - (zoom.currentX ?? curX)) > POS_EPS;
-    const yChanged = Math.abs(endY - (zoom.currentY ?? curY)) > POS_EPS;
+    const startScale = pinchState?.baseScale ?? dragStart?.scale ?? (zoom.currentScale ?? curScale);
+    const startX = pinchState?.baseX ?? dragStart?.baseX ?? (zoom.currentX ?? curX);
+    const startY = pinchState?.baseY ?? dragStart?.baseY ?? (zoom.currentY ?? curY);
+
+    const scaleChanged = Math.abs(endScale - startScale) > SCALE_EPS;
+    const xChanged = Math.abs(endX - startX) > POS_EPS;
+    const yChanged = Math.abs(endY - startY) > POS_EPS;
 
     if (!scaleChanged && !xChanged && !yChanged) {
       cleanupGestureState();
@@ -136,6 +140,21 @@ import { setGestureTransform, commitGesture, getZoomState } from './zoom/ZoomCoo
     // Expose a precise settle-until time for consumers like drawgrid.
     try {
       window.__GESTURE_SETTLE_UNTIL_TS = (performance?.now?.() ?? Date.now()) + 60 + 48; // delayMs + small buffer
+    } catch {}
+
+    try {
+      window.dispatchEvent(new CustomEvent('board:gesture-commit', {
+        detail: {
+          scaleChanged,
+          positionChanged: xChanged || yChanged,
+          startScale,
+          endScale,
+          startX,
+          startY,
+          endX,
+          endY,
+        },
+      }));
     } catch {}
 
     cleanupGestureState();

@@ -1,5 +1,5 @@
 import { getSnapshot, applySnapshot } from './persistence.js';
-import { setHelpActive, isHelpActive } from './help-overlay.js';
+import { setHelpActive, isHelpActive, refreshHelpOverlay } from './help-overlay.js';
 import { isRunning, stop as stopTransport } from './audio-core.js';
 import { startParticleStream, stopParticleStream } from './tutorial-fx.js';
 
@@ -131,10 +131,11 @@ const GOAL_FLOW = [
   {
     id: 'get-help',
     title: 'Help!',
+    allowOutOfOrder: true,
     reward: {
-      description: 'Unlocks all buttons on toys, all toys in the Add Toy menu, and camera controls.',
+      description: 'You made progress. Have a star.',
       icons: [
-        { type: 'symbol', label: 'Help', symbol: '?' }
+        { type: 'asset', label: 'Star Reward', icon: '../assets/Ui/T_Star.png' }
       ],
     },
     tasks: [
@@ -142,6 +143,26 @@ const GOAL_FLOW = [
         id: 'press-help',
         label: 'Press the Help button.',
         requirement: 'press-help',
+      },
+      {
+        id: 'pan-camera',
+        label: 'Pan the camera.',
+        requirement: 'pan-camera',
+      },
+      {
+        id: 'zoom-camera',
+        label: 'Zoom the camera.',
+        requirement: 'zoom-camera',
+      },
+      {
+        id: 'recycle-toy',
+        label: 'Trash a toy.',
+        requirement: 'recycle-toy',
+      },
+      {
+        id: 'close-help',
+        label: 'Close the help panel.',
+        requirement: 'close-help',
       },
     ],
   },
@@ -432,8 +453,11 @@ function recordRequirementProgress(requirement, shouldComplete = true) {
         if (index < 0) {
           index = tasks.findIndex((task, idx) => (task?.id || `task-${idx}`) === taskId);
         }
+        const task = index >= 0 ? tasks[index] : null;
         if (index >= 0) {
-          const allowOutOfOrder = requirement === 'press-play';
+          const allowOutOfOrder = requirement === 'press-play'
+            || !!goal?.allowOutOfOrder
+            || !!task?.allowOutOfOrder;
 
           let prerequisitesComplete = true;
           if (!allowOutOfOrder) {
@@ -1162,6 +1186,7 @@ let hasDetectedLine = false;
     play: '#topbar [data-action="toggle-play"]',
     instrument: '.toy-inst-btn, select.toy-instrument, [data-action="instrument"]',
     help: '.toy-spawner-help',
+    trash: '.toy-spawner-trash',
   };
 
   const TASK_TARGETS = {
@@ -1169,6 +1194,8 @@ let hasDetectedLine = false;
     'press-clear': 'clear',
     'press-random': 'random',
     'press-help': 'help',
+    'close-help': 'help',
+    'recycle-toy': 'trash',
   };
   function updatePlayButtonVisual(btn, playing) {
     if (!btn) return;
@@ -2524,10 +2551,41 @@ let hasDetectedLine = false;
           options: { passive: true }
         });
       });
+    } else if (task.id === 'pan-camera' || task.id === 'zoom-camera') {
+      ensureGoalPanel();
+      try {
+        setHelpActive(true);
+        refreshHelpOverlay();
+      } catch {}
+
+      whenVisible('.toy-help-controls', (targetEl) => {
+        const startParticles = () => {
+          const taskEl = goalPanel?.querySelector('.goal-task.is-active');
+          if (taskEl && targetEl?.isConnected) {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                startParticleStream(taskEl, targetEl, { layer: 'behind-target' });
+              });
+            });
+            targetEl.classList.add('tutorial-pulse-target', 'tutorial-addtoy-pulse');
+          }
+        };
+
+        startParticles();
+        window.addEventListener('resize', startParticles, { passive: true });
+
+        tutorialListeners.push({
+          target: window,
+          type: 'resize',
+          handler: startParticles,
+          options: { passive: true }
+        });
+      });
+      handledSpecial = true;
     } else {
       // On any non-add-toy task, stop the stream + remove pulse
       stopParticleStream();
-    getAddToyToggle()?.classList.remove('tutorial-pulse-target', 'tutorial-addtoy-pulse', 'tutorial-flash');
+      getAddToyToggle()?.classList.remove('tutorial-pulse-target', 'tutorial-addtoy-pulse', 'tutorial-flash');
     }
 
     if (!handledSpecial) {
@@ -3463,8 +3521,69 @@ try {
       return;
     }
 
+    if (taskId === 'pan-camera' || taskId === 'zoom-camera') {
+      let disposed = false;
+      let retryTimer = 0;
+      guideHighlightCleanup = () => {
+        disposed = true;
+        if (retryTimer) {
+          clearTimeout(retryTimer);
+          retryTimer = 0;
+        }
+        stopParticleStream();
+      };
+      const ensureHelpVisible = () => {
+        try {
+          if (!isHelpActive()) setHelpActive(true);
+          refreshHelpOverlay();
+        } catch {}
+      };
+
+      const attach = () => {
+        if (disposed) return;
+        ensureHelpVisible();
+        const target = document.querySelector('.toy-help-controls');
+        const visible = target && (target.offsetParent !== null || target.getClientRects().length > 0);
+        if (!visible) {
+          retryTimer = window.setTimeout(attach, 160);
+          return;
+        }
+
+        const runParticles = () => {
+          if (disposed) return;
+          if (!taskElement.isConnected || !target.isConnected) return;
+          stopParticleStream();
+          startParticleStream(taskElement, target, { layer: 'behind-target' });
+          target.classList.add('tutorial-pulse-target', 'tutorial-addtoy-pulse');
+        };
+        const scheduleParticles = () => requestAnimationFrame(() => requestAnimationFrame(runParticles));
+        const onResize = () => scheduleParticles();
+
+        scheduleParticles();
+        window.addEventListener('resize', onResize, { passive: true });
+
+        const prevCleanup = guideHighlightCleanup;
+        guideHighlightCleanup = () => {
+          disposed = true;
+          window.removeEventListener('resize', onResize);
+          target?.classList.remove('tutorial-pulse-target', 'tutorial-addtoy-pulse');
+          stopParticleStream();
+          if (prevCleanup && prevCleanup !== guideHighlightCleanup) {
+            try { prevCleanup(); } catch {}
+          }
+        };
+      };
+
+      attach();
+      return;
+    }
+
     const TASK_TARGET_SELECTORS = {
       'press-help': '.toy-spawner-help',
+      'close-help': '.toy-spawner-help',
+      'pan-camera': '.toy-help-controls',
+      'zoom-camera': '.toy-help-controls',
+      'recycle-toy': '.toy-spawner-trash',
       'press-play': '#topbar [data-action="toggle-play"]',
       'press-clear': '.toy-panel[data-toy="drawgrid"] [data-action="clear"], .toy-panel [data-action="clear"]',
       'press-random': '.toy-panel[data-toy="drawgrid"] [data-action="random"], .toy-panel [data-action="random"]',
@@ -3595,6 +3714,31 @@ try {
     try { if (typeof window !== 'undefined') window.__guideReplayTasks = []; } catch {}
   });
 
+  window.addEventListener('board:gesture-commit', (event) => {
+    const detail = event?.detail || {};
+    if (detail.positionChanged) maybeCompleteTask('pan-camera');
+    if (detail.scaleChanged) maybeCompleteTask('zoom-camera');
+  }, { passive: true });
+
+  window.addEventListener('board:user-zoom', () => {
+    maybeCompleteTask('zoom-camera');
+  }, { passive: true });
+
+  window.addEventListener('help:close', () => {
+    maybeCompleteTask('close-help');
+  }, { passive: true });
+
+  window.addEventListener('help:toggle', () => {
+    maybeCompleteTask('press-help');
+  }, { passive: true });
+
+  document.addEventListener('toy-remove', () => {
+    maybeCompleteTask('recycle-toy');
+  }, { capture: true });
+  document.addEventListener('toy:remove', () => {
+    maybeCompleteTask('recycle-toy');
+  }, { capture: true });
+
   document.addEventListener('click', (event) => {
     const rawTarget = event.target;
     if (!(rawTarget instanceof Element)) return;
@@ -3605,6 +3749,14 @@ try {
       if (playBtn.getAttribute('aria-disabled') === 'true') return;
       // defer to transport events so completion reflects actual play state
       requestAnimationFrame(updatePlayRequirement);
+      return;
+    }
+
+    const helpBtn = rawTarget.closest('.toy-spawner-help');
+    if (helpBtn) {
+      if (helpBtn instanceof HTMLButtonElement && helpBtn.disabled) return;
+      if (helpBtn.getAttribute('aria-disabled') === 'true') return;
+      maybeCompleteTask('press-help');
       return;
     }
 
