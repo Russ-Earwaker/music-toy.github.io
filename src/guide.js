@@ -15,6 +15,7 @@ let goalPickerRef = null;
 let moreGoalsButtonRef = null;
 let lastGuideContext = null;
 let buttonsWrapRef = null;
+let lastActiveTaskSelectionId = null;
 
 function getHighlighterHost() {
   if (typeof document === 'undefined') return null;
@@ -503,6 +504,7 @@ function closeGuide() {
   panelsRef.querySelectorAll('.is-active-guide-task').forEach((taskEl) => {
     taskEl.classList.remove('is-active-guide-task');
   });
+  lastActiveTaskSelectionId = null;
   try {
     window.dispatchEvent(new CustomEvent('guide:task-deactivate', { bubbles: true, composed: true }));
   } catch {}
@@ -694,6 +696,7 @@ function renderGuide(api, { source = 'unknown' } = {}) {
           const isActive = taskEl.classList.contains('is-active-guide-task');
           if (isActive) {
             taskEl.classList.remove('is-active-guide-task');
+            lastActiveTaskSelectionId = null;
             window.dispatchEvent(new CustomEvent('guide:task-deactivate', { bubbles: true, composed: true }));
           } else {
             const currentActive = panel.querySelector('.is-active-guide-task');
@@ -704,6 +707,7 @@ function renderGuide(api, { source = 'unknown' } = {}) {
             taskEl.classList.add('is-active-guide-task');
             const taskId = taskEl.dataset.taskId;
             if (taskId) {
+              lastActiveTaskSelectionId = taskId;
               window.dispatchEvent(new CustomEvent('guide:task-click', {
                 detail: { taskId, taskElement: taskEl },
                 bubbles: true,
@@ -713,6 +717,20 @@ function renderGuide(api, { source = 'unknown' } = {}) {
           }
         });
       });
+
+      const restoreActiveTaskSelection = () => {
+        if (!lastActiveTaskSelectionId) return;
+        const el = panel.querySelector(`.goal-task[data-task-id="${lastActiveTaskSelectionId}"]`);
+        if (!el) return;
+        el.classList.add('is-active-guide-task');
+        try {
+          window.dispatchEvent(new CustomEvent('guide:task-click', {
+            detail: { taskId: lastActiveTaskSelectionId, taskElement: el },
+            bubbles: true,
+            composed: true,
+          }));
+        } catch {}
+      };
 
       const header = panel.querySelector('.tutorial-goals-header');
       const tasks = panel.querySelector('.tutorial-goals-tasks');
@@ -792,6 +810,21 @@ function renderGuide(api, { source = 'unknown' } = {}) {
         meta.bodyWrapper.style.display = '';
         expandedCount = 1;
         if (meta.stateKey) goalExpansionState.set(meta.stateKey, true);
+      }
+    }
+
+    // Restore previously active task highlight after render
+    if (lastActiveTaskSelectionId && orderedPanels.length > 0) {
+      const el = orderedPanels[0].querySelector(`.goal-task[data-task-id="${lastActiveTaskSelectionId}"]`);
+      if (el) {
+        el.classList.add('is-active-guide-task');
+        try {
+          window.dispatchEvent(new CustomEvent('guide:task-click', {
+            detail: { taskId: lastActiveTaskSelectionId, taskElement: el },
+            bubbles: true,
+            composed: true,
+          }));
+        } catch {}
       }
     }
   } else {

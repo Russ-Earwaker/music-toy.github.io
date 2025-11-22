@@ -1666,6 +1666,13 @@ body.tutorial-active #topbar #theme-switcher-wrap {
   position: relative;
 }
 
+.toy-spawner-help.tutorial-addtoy-pulse,
+.toy-spawner-trash.tutorial-addtoy-pulse {
+  animation: pulseBorder 2s ease-in-out infinite;
+  background-color: var(--surface) !important;
+  position: relative;
+}
+
 
 
 .guide-toggle.tutorial-active-pulse {

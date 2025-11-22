@@ -287,6 +287,7 @@ const drawToyPanels = new Set();
 const rhythmToyPanels = new Set();
 const drawToyLineState = new Map();
 let lastPlacedToy = null;
+let activeGuideRequirement = null;
 const PLACE_TOY_GOAL_ID = 'place-toy';
 const PLACE_TOY_TASK_IDS = {
   place: 'place-any-toy',
@@ -2535,13 +2536,14 @@ let hasDetectedLine = false;
               });
             });
 
-            targetEl.classList.add('tutorial-pulse-target', 'tutorial-addtoy-pulse');
+            targetEl.classList.add('tutorial-pulse-target', 'tutorial-addtoy-pulse', 'tutorial-active-pulse');
             targetEl.classList.add('tutorial-flash');
             setTimeout(() => targetEl.classList.remove('tutorial-flash'), 320);
           }
         };
 
         startParticles();
+        setTimeout(startParticles, 180);
         window.addEventListener('resize', startParticles, { passive: true });
 
         tutorialListeners.push({
@@ -2553,34 +2555,94 @@ let hasDetectedLine = false;
       });
     } else if (task.id === 'pan-camera' || task.id === 'zoom-camera') {
       ensureGoalPanel();
-      try {
-        setHelpActive(true);
-        refreshHelpOverlay();
-      } catch {}
+      let disposed = false;
+      let currentTarget = null;
+      const taskEl = goalPanel?.querySelector('.goal-task.is-active');
+      let retargetTimer = 0;
 
-      whenVisible('.toy-help-controls', (targetEl) => {
-        const startParticles = () => {
-          const taskEl = goalPanel?.querySelector('.goal-task.is-active');
-          if (taskEl && targetEl?.isConnected) {
-            requestAnimationFrame(() => {
-              requestAnimationFrame(() => {
-                startParticleStream(taskEl, targetEl, { layer: 'behind-target' });
-              });
-            });
-            targetEl.classList.add('tutorial-pulse-target', 'tutorial-addtoy-pulse');
-          }
-        };
+      const getHelpButton = () => getControlMap(tutorialToy).help || document.querySelector(CONTROL_SELECTORS.help);
+      const stopForTarget = () => {
+        if (currentTarget) {
+          currentTarget.classList.remove('tutorial-pulse-target', 'tutorial-addtoy-pulse', 'tutorial-active-pulse', 'tutorial-flash');
+        }
+        stopParticleStream();
+        currentTarget = null;
+      };
 
-        startParticles();
-        window.addEventListener('resize', startParticles, { passive: true });
-
-        tutorialListeners.push({
-          target: window,
-          type: 'resize',
-          handler: startParticles,
-          options: { passive: true }
+      const startForTarget = (targetEl) => {
+        if (!taskEl || !targetEl?.isConnected) return;
+        currentTarget = targetEl;
+        targetEl.classList.add('tutorial-pulse-target', 'tutorial-addtoy-pulse', 'tutorial-active-pulse');
+        targetEl.classList.add('tutorial-flash');
+        setTimeout(() => targetEl?.classList.remove('tutorial-flash'), 320);
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            if (!disposed && taskEl.isConnected && targetEl.isConnected) {
+              startParticleStream(taskEl, targetEl, { layer: 'behind-target' });
+            }
+          });
         });
+        setTimeout(() => {
+          if (!disposed && taskEl.isConnected && targetEl.isConnected) {
+            startParticleStream(taskEl, targetEl, { layer: 'behind-target' });
+          }
+        }, 200);
+      };
+
+      const retarget = () => {
+        if (disposed) return;
+        const controls = document.querySelector('.toy-help-controls');
+        const controlsVisible = controls && (controls.offsetParent !== null || controls.getClientRects().length > 0);
+        const nextTarget = controlsVisible ? controls : getHelpButton();
+        if (nextTarget === currentTarget) return;
+        stopForTarget();
+        if (nextTarget) startForTarget(nextTarget);
+        if (!controlsVisible && isHelpActive() && !retargetTimer) {
+          retargetTimer = window.setTimeout(() => {
+            retargetTimer = 0;
+            retarget();
+          }, 180);
+        }
+      };
+
+      const ensureHelpVisible = () => {
+        try {
+          if (isHelpActive()) refreshHelpOverlay();
+        } catch {}
+      };
+
+      ensureHelpVisible();
+      retarget();
+
+      const onHelpEvent = () => {
+        ensureHelpVisible();
+        retarget();
+        setTimeout(retarget, 200);
+      };
+
+      const onResize = () => retarget();
+      window.addEventListener('resize', onResize, { passive: true });
+      window.addEventListener('help:toggle', onHelpEvent);
+      window.addEventListener('help:open', onHelpEvent);
+      window.addEventListener('help:close', () => {
+        retarget();
+        setTimeout(retarget, 120);
       });
+
+      tutorialListeners.push({
+        disconnect: () => {
+          disposed = true;
+        window.removeEventListener('resize', onResize);
+        window.removeEventListener('help:toggle', onHelpEvent);
+        window.removeEventListener('help:open', onHelpEvent);
+        window.removeEventListener('help:close', retarget);
+        if (retargetTimer) {
+          clearTimeout(retargetTimer);
+          retargetTimer = 0;
+        }
+        stopForTarget();
+      }
+    });
       handledSpecial = true;
     } else {
       // On any non-add-toy task, stop the stream + remove pulse
@@ -2622,12 +2684,12 @@ let hasDetectedLine = false;
       }
       const isToggleTask = task.id === 'toggle-node';
       const isDragTask = task.id === 'drag-note';
-      const targetVisible =
-        targetEl &&
-        !targetEl.classList.contains('tutorial-control-locked') &&
-        !targetEl.classList.contains('tutorial-hide-play-button') &&
-        (isPlayTask || !targetEl.classList.contains('tutorial-play-hidden')) &&
-        (targetEl.offsetParent !== null || getComputedStyle(targetEl).display !== 'none');
+    const targetVisible =
+      targetEl &&
+      !targetEl.classList.contains('tutorial-control-locked') &&
+      !targetEl.classList.contains('tutorial-hide-play-button') &&
+      (isPlayTask || !targetEl.classList.contains('tutorial-play-hidden')) &&
+      (targetEl.offsetParent !== null || getComputedStyle(targetEl).display !== 'none');
   
       if (targetVisible) {
         const taskEl = goalPanel?.querySelector('.goal-task.is-active');
@@ -2758,19 +2820,22 @@ let hasDetectedLine = false;
   function maybeCompleteTask(requirement) {
     const progressChanged = setRequirementProgress(requirement, true);
     if (progressChanged && !tutorialActive) {
-      if (typeof guideHighlightCleanup === 'function') {
-        try { guideHighlightCleanup(); } catch {}
-        guideHighlightCleanup = null;
-      } else {
-        stopParticleStream();
-      }
-      document.querySelectorAll('.tutorial-pulse-target, .tutorial-active-pulse, .tutorial-addtoy-pulse, .tutorial-guide-foreground').forEach(el => {
-        if (el.matches?.('.toy-panel[data-toy="drawgrid"]')) {
-          try { el.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: false } })); } catch {}
-          try { el.dispatchEvent(new CustomEvent('tutorial:highlight-drag', { detail: { active: false } })); } catch {}
+      const allowCleanup = !activeGuideRequirement || activeGuideRequirement === requirement;
+      if (allowCleanup) {
+        if (typeof guideHighlightCleanup === 'function') {
+          try { guideHighlightCleanup(); } catch {}
+          guideHighlightCleanup = null;
+        } else {
+          stopParticleStream();
         }
-        el.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-addtoy-pulse', 'tutorial-guide-foreground');
-      });
+        document.querySelectorAll('.tutorial-pulse-target, .tutorial-active-pulse, .tutorial-addtoy-pulse, .tutorial-guide-foreground').forEach(el => {
+          if (el.matches?.('.toy-panel[data-toy="drawgrid"]')) {
+            try { el.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: false } })); } catch {}
+            try { el.dispatchEvent(new CustomEvent('tutorial:highlight-drag', { detail: { active: false } })); } catch {}
+          }
+          el.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-addtoy-pulse', 'tutorial-guide-foreground');
+        });
+      }
     }
     if (tutorialState?.pendingRewardGoalId) return progressChanged;
     const task = getCurrentTask();
@@ -3228,10 +3293,10 @@ try {
       Object.values(tutorialToy.__tutorialUnlockObservers).forEach(obs => { try { obs?.disconnect(); } catch {} });
       tutorialToy.__tutorialUnlockObservers = null;
     }
-    if (tutorialToy) tutorialToy.remove();
-    teardownGoalPanel();
-    showOriginalToys();
-    document.body.classList.remove('tutorial-active');
+  if (tutorialToy) tutorialToy.remove();
+  teardownGoalPanel();
+  showOriginalToys();
+  document.body.classList.remove('tutorial-active');
 
     restoreSpawnerControls();
 
@@ -3267,13 +3332,47 @@ try {
       try { previousFocus.focus({ preventScroll: true }); } catch {}
     }
 
-    if (tutorialState) tutorialState.pendingRewardGoalId = null;
-    tutorialToy = null;
-    placeToyPanels.clear();
-    tutorialState = null;
-    previousSnapshot = null;
-    previousFocus = null;
-    hasDetectedLine = false;
+  if (tutorialState) tutorialState.pendingRewardGoalId = null;
+  tutorialToy = null;
+  placeToyPanels.clear();
+  tutorialState = null;
+  previousSnapshot = null;
+  previousFocus = null;
+  hasDetectedLine = false;
+  }
+
+  function clearCurrentTutorialHighlight() {
+    const selectors =
+      '.tutorial-pulse-target, .tutorial-addtoy-pulse, .tutorial-active-pulse, .tutorial-flash';
+
+    const prev = Array.from(document.querySelectorAll(selectors));
+
+    console.log('[tutorial] clearCurrentTutorialHighlight BEFORE', {
+      count: prev.length,
+      elements: prev.map((el) => ({
+        tag: el.tagName,
+        classes: el.className
+      }))
+    });
+
+    prev.forEach((el) => {
+      el.classList.remove(
+        'tutorial-pulse-target',
+        'tutorial-addtoy-pulse',
+        'tutorial-active-pulse',
+        'tutorial-flash'
+      );
+    });
+
+    const after = Array.from(document.querySelectorAll(selectors));
+
+    console.log('[tutorial] clearCurrentTutorialHighlight AFTER', {
+      remainingCount: after.length,
+      remaining: after.map((el) => ({
+        tag: el.tagName,
+        classes: el.className
+      }))
+    });
   }
 
   if (tutorialButton) {
@@ -3285,6 +3384,10 @@ try {
     const { taskId, taskElement } = (e && e.detail) || {};
     console.log('[tutorial] guide:task-click', { taskId, taskElementExists: !!taskElement });
     if (!taskId || !taskElement) return;
+    activeGuideRequirement = (() => {
+      const info = TASK_INFO_BY_ID.get(taskId);
+      return info?.requirement || null;
+    })();
 
     // Clean up any previous highlight/handlers
     if (typeof guideHighlightCleanup === 'function') {
@@ -3353,30 +3456,32 @@ try {
       };
     };
 
-    if (taskId === 'place-any-toy' || taskId === 'add-draw-toy' || taskId === 'add-rhythm-toy' || taskId === 'add-any-toy') {
-      let disposed = false;
-      let cleanupInner = null;
-      let retryTimer = 0;
+  if (taskId === 'place-any-toy' || taskId === 'add-draw-toy' || taskId === 'add-rhythm-toy' || taskId === 'add-any-toy') {
+    let disposed = false;
+    let cleanupInner = null;
+    let retryTimer = 0;
+    let didStart = false;
 
-      const attach = () => {
-        if (disposed || cleanupInner) return;
-        const toggle = getAddToyToggle();
-        console.log('[tutorial] attach toggle lookup', {
+    const attach = () => {
+      if (disposed || cleanupInner) return;
+      const toggle = getAddToyToggle();
+      console.log('[tutorial] attach toggle lookup', {
           taskId,
           toggleFound: !!toggle,
           toggleClasses: toggle ? toggle.className : null,
         });
-        const visible = toggle && (toggle.offsetParent !== null || toggle.getClientRects().length > 0);
-        if (!visible) {
-          console.log('[tutorial] attach toggle not visible yet', { taskId });
-          retryTimer = window.setTimeout(attach, 120);
-          return;
-        }
-        console.log('[tutorial] attach toggle ready', { taskId });
-        cleanupInner = highlightAddToy(toggle);
-      };
+      const visible = toggle && (toggle.offsetParent !== null || toggle.getClientRects().length > 0);
+      if (!visible) {
+        console.log('[tutorial] attach toggle not visible yet', { taskId });
+        retryTimer = window.setTimeout(attach, 120);
+        return;
+      }
+      console.log('[tutorial] attach toggle ready', { taskId });
+      cleanupInner = highlightAddToy(toggle);
+      didStart = true;
+    };
 
-      attach();
+    attach();
 
       guideHighlightCleanup = () => {
         disposed = true;
@@ -3521,68 +3626,116 @@ try {
       return;
     }
 
-    if (taskId === 'pan-camera' || taskId === 'zoom-camera') {
+    if (tutorialActive && (taskId === 'pan-camera' || taskId === 'zoom-camera')) {
       let disposed = false;
       let retryTimer = 0;
-      guideHighlightCleanup = () => {
-        disposed = true;
-        if (retryTimer) {
-          clearTimeout(retryTimer);
-          retryTimer = 0;
+      let currentTarget = null;
+      let retargetTimer = 0;
+      let didStart = false;
+
+      const getHelpButton = () => document.querySelector('.toy-spawner-help');
+      const stopForTarget = () => {
+        if (currentTarget) {
+          currentTarget.classList.remove('tutorial-pulse-target', 'tutorial-addtoy-pulse', 'tutorial-active-pulse', 'tutorial-flash');
         }
         stopParticleStream();
+        currentTarget = null;
+        didStart = false;
       };
+
+      const startForTarget = (target) => {
+        if (!taskElement.isConnected || !target?.isConnected) return;
+        currentTarget = target;
+        target.classList.add('tutorial-pulse-target', 'tutorial-addtoy-pulse', 'tutorial-active-pulse');
+        target.classList.add('tutorial-flash');
+        setTimeout(() => target?.classList.remove('tutorial-flash'), 320);
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          if (!disposed && taskElement.isConnected && target.isConnected) {
+            startParticleStream(taskElement, target, { layer: 'behind-target' });
+            didStart = true;
+          }
+        }));
+        setTimeout(() => {
+          if (!didStart && !disposed && taskElement.isConnected && target.isConnected) {
+            startParticleStream(taskElement, target, { layer: 'behind-target' });
+            didStart = true;
+          }
+        }, 200);
+      };
+
+      const retarget = () => {
+        if (disposed) return;
+        const controls = document.querySelector('.toy-help-controls');
+        const controlsVisible = controls && (controls.offsetParent !== null || controls.getClientRects().length > 0);
+        const next = controlsVisible ? controls : getHelpButton();
+        if (next === currentTarget) return;
+        stopForTarget();
+        if (next) startForTarget(next);
+        if (!controlsVisible && isHelpActive() && !retargetTimer) {
+          retargetTimer = window.setTimeout(() => {
+            retargetTimer = 0;
+            retarget();
+          }, 180);
+        }
+      };
+
       const ensureHelpVisible = () => {
         try {
-          if (!isHelpActive()) setHelpActive(true);
-          refreshHelpOverlay();
+          if (isHelpActive()) refreshHelpOverlay();
         } catch {}
       };
 
       const attach = () => {
         if (disposed) return;
         ensureHelpVisible();
-        const target = document.querySelector('.toy-help-controls');
-        const visible = target && (target.offsetParent !== null || target.getClientRects().length > 0);
-        if (!visible) {
-          retryTimer = window.setTimeout(attach, 160);
-          return;
+        retarget();
+        if (!currentTarget) {
+          retryTimer = window.setTimeout(attach, 240);
+        } else if (retryTimer) {
+          clearTimeout(retryTimer);
+          retryTimer = 0;
         }
-
-        const runParticles = () => {
-          if (disposed) return;
-          if (!taskElement.isConnected || !target.isConnected) return;
-          stopParticleStream();
-          startParticleStream(taskElement, target, { layer: 'behind-target' });
-          target.classList.add('tutorial-pulse-target', 'tutorial-addtoy-pulse');
-        };
-        const scheduleParticles = () => requestAnimationFrame(() => requestAnimationFrame(runParticles));
-        const onResize = () => scheduleParticles();
-
-        scheduleParticles();
-        window.addEventListener('resize', onResize, { passive: true });
-
-        const prevCleanup = guideHighlightCleanup;
-        guideHighlightCleanup = () => {
-          disposed = true;
-          window.removeEventListener('resize', onResize);
-          target?.classList.remove('tutorial-pulse-target', 'tutorial-addtoy-pulse');
-          stopParticleStream();
-          if (prevCleanup && prevCleanup !== guideHighlightCleanup) {
-            try { prevCleanup(); } catch {}
-          }
-        };
       };
 
       attach();
+
+      const onResize = () => retarget();
+      const onHelp = () => { ensureHelpVisible(); retarget(); setTimeout(retarget, 200); };
+      window.addEventListener('resize', onResize, { passive: true });
+      const onHelpClose = () => {
+        retarget();
+        setTimeout(retarget, 120);
+      };
+
+      window.addEventListener('help:toggle', onHelp);
+      window.addEventListener('help:open', onHelp);
+      window.addEventListener('help:close', onHelpClose);
+
+      const prevCleanup = guideHighlightCleanup;
+      guideHighlightCleanup = () => {
+        disposed = true;
+        clearTimeout(retryTimer);
+        if (retargetTimer) {
+          clearTimeout(retargetTimer);
+          retargetTimer = 0;
+        }
+        window.removeEventListener('resize', onResize);
+        window.removeEventListener('help:toggle', onHelp);
+        window.removeEventListener('help:open', onHelp);
+        window.removeEventListener('help:close', onHelpClose);
+        stopForTarget();
+        if (prevCleanup && prevCleanup !== guideHighlightCleanup) {
+          try { prevCleanup(); } catch {}
+        }
+      };
       return;
     }
 
     const TASK_TARGET_SELECTORS = {
       'press-help': '.toy-spawner-help',
       'close-help': '.toy-spawner-help',
-      'pan-camera': '.toy-help-controls',
-      'zoom-camera': '.toy-help-controls',
+      'pan-camera': '.toy-help-controls, .toy-spawner-help',
+      'zoom-camera': '.toy-help-controls, .toy-spawner-help',
       'recycle-toy': '.toy-spawner-trash',
       'press-play': '#topbar [data-action="toggle-play"]',
       'press-clear': '.toy-panel[data-toy="drawgrid"] [data-action="clear"], .toy-panel [data-action="clear"]',
@@ -3610,21 +3763,72 @@ try {
     const isToggleTask = taskId === 'toggle-node';
     const isDragTask = taskId === 'drag-note';
     const panelHighlightTask = isToggleTask || isDragTask;
+
+    // Normalise the pulse target for Help / Trash / Help-controls:
+    const rawTarget = targetElement;
+    const pulseTarget =
+      rawTarget &&
+      (rawTarget.closest(
+        '.toy-spawner-help, .toy-spawner-trash, .toy-help-controls, .toy-spawner-toggle'
+      ) ||
+        rawTarget);
+
+    console.log('[tutorial][guide:task-click] RESOLVED', {
+      taskId,
+      rawTargetTag: rawTarget?.tagName,
+      rawTargetClasses: rawTarget?.className,
+      pulseTargetTag: pulseTarget?.tagName,
+      pulseTargetClassesBefore: pulseTarget?.className
+    });
+
+    // Before we touch anything, see what highlight exists:
+    console.log('[tutorial][guide:task-click] BEFORE clear', {
+      taskId,
+      existingPulseTargets: Array.from(
+        document.querySelectorAll(
+          '.tutorial-pulse-target, .tutorial-addtoy-pulse, .tutorial-active-pulse, .tutorial-flash'
+        )
+      ).map((el) => ({
+        tag: el.tagName,
+        classes: el.className
+      }))
+    });
+
+    clearCurrentTutorialHighlight();
+
+    console.log('[tutorial][guide:task-click] AFTER clear before add', {
+      taskId,
+      pulseTargetTag: pulseTarget?.tagName,
+      pulseTargetClassesNow: pulseTarget?.className
+    });
+
+    if (!pulseTarget) {
+      console.log('[tutorial][guide:task-click] NO pulseTarget for task', taskId);
+      return;
+    }
+
+    const wantsWhitePulse = pulseTarget.matches(
+      '.toy-spawner-help, .toy-spawner-trash, .toy-help-controls, .toy-spawner-toggle'
+    );
+
     const particleTarget = panelHighlightTask
       ? (targetElement.querySelector('canvas[data-role="drawgrid-nodes"]') || targetElement)
-      : targetElement;
+      : pulseTarget;
     const particleOptions = panelHighlightTask ? { layer: 'behind-target' } : null;
     let disposed = false;
     let flashTimer = null;
-    const runParticles = () => {
+    let didStart = false;
+    const runParticles = (force = false) => {
       if (disposed) return;
-      if (!taskElement.isConnected || !targetElement.isConnected) return;
+      if (!taskElement.isConnected || !particleTarget?.isConnected) return;
+      if (didStart && !force) return;
+      didStart = true;
       stopParticleStream();
       console.log('[tutorial] general runParticles', {
         taskId,
         taskClasses: taskElement.className,
         targetSelector: selector,
-        targetClasses: targetElement.className,
+        targetClasses: particleTarget?.className,
       });
       if (particleOptions) {
         startParticleStream(taskElement, particleTarget, particleOptions);
@@ -3632,29 +3836,83 @@ try {
         startParticleStream(taskElement, particleTarget, { layer: 'behind-target' });
       }
     };
-    const scheduleParticles = () => {
-      requestAnimationFrame(() => requestAnimationFrame(runParticles));
+    const scheduleParticles = (force = false) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => runParticles(force)));
     };
-    const onResize = () => scheduleParticles();
+    const onResize = () => scheduleParticles(true);
 
-    if (targetElement.classList.contains('tutorial-flash')) {
-      targetElement.classList.remove('tutorial-flash');
-      void targetElement.offsetWidth;
+    if (pulseTarget.classList.contains('tutorial-flash')) {
+      pulseTarget.classList.remove('tutorial-flash');
+      void pulseTarget.offsetWidth;
     }
     if (panelHighlightTask) {
       targetElement.classList.add('tutorial-guide-foreground');
       const eventName = isDragTask ? 'tutorial:highlight-drag' : 'tutorial:highlight-notes';
       try { targetElement.dispatchEvent(new CustomEvent(eventName, { detail: { active: true } })); } catch {}
     } else {
-      targetElement.classList.add('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-flash');
+      pulseTarget.classList.add('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-flash');
+      if (wantsWhitePulse) {
+        pulseTarget.classList.add('tutorial-addtoy-pulse');
+      }
       flashTimer = setTimeout(() => {
-        targetElement.classList.remove('tutorial-flash');
+        pulseTarget.classList.remove('tutorial-flash');
       }, 360);
     }
-    scheduleParticles();
-    window.addEventListener('resize', onResize, { passive: true });
 
-    guideHighlightCleanup = () => {
+    console.log('[tutorial][guide:task-click] AFTER add', {
+      taskId,
+      wantsWhitePulse,
+      panelHighlightTask,
+      pulseTargetTag: pulseTarget.tagName,
+      pulseTargetClassesAfterAdd: pulseTarget.className
+    });
+
+    window.__HELP_PULSE_DEBUG = {
+      taskId,
+      time: performance.now(),
+      pulseTargetTag: pulseTarget.tagName,
+      pulseTargetClasses: pulseTarget.className,
+      panelHighlightTask
+    };
+
+    // And check in the next tick if something else removes them:
+    setTimeout(() => {
+      const hasPulse =
+        pulseTarget.classList.contains('tutorial-pulse-target') ||
+        pulseTarget.classList.contains('tutorial-addtoy-pulse') ||
+        pulseTarget.classList.contains('tutorial-active-pulse');
+
+      console.log('[tutorial][guide:task-click] AFTER TICK', {
+        taskId,
+        pulseTargetTag: pulseTarget.tagName,
+        pulseTargetClassesAfterTick: pulseTarget.className,
+        panelHighlightTask,
+        hasPulse
+      });
+
+      // In guide-only mode, the very first Help-related task click sometimes
+      // gets its pulse classes removed by other logic. If that happens, reapply.
+      if (!tutorialActive && !panelHighlightTask && wantsWhitePulse && !hasPulse) {
+        console.log('[tutorial][guide:task-click] REAPPLY help pulse after tick', {
+          taskId,
+          pulseTargetTag: pulseTarget.tagName
+        });
+
+        pulseTarget.classList.add(
+          'tutorial-pulse-target',
+          'tutorial-active-pulse',
+          'tutorial-flash',
+          'tutorial-addtoy-pulse'
+        );
+
+        if (flashTimer) clearTimeout(flashTimer);
+        flashTimer = setTimeout(() => {
+          pulseTarget.classList.remove('tutorial-flash');
+        }, 360);
+      }
+    }, 0);
+
+    const cleanup = () => {
       disposed = true;
       window.removeEventListener('resize', onResize);
       if (flashTimer) clearTimeout(flashTimer);
@@ -3663,18 +3921,45 @@ try {
         const eventName = isDragTask ? 'tutorial:highlight-drag' : 'tutorial:highlight-notes';
         try { targetElement.dispatchEvent(new CustomEvent(eventName, { detail: { active: false } })); } catch {}
       } else {
-        targetElement.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-flash');
+        pulseTarget.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-flash', 'tutorial-addtoy-pulse');
       }
       stopParticleStream();
     };
+
+    const prevCleanup = guideHighlightCleanup;
+    guideHighlightCleanup = () => {
+      try { cleanup(); } catch {}
+      if (prevCleanup && prevCleanup !== guideHighlightCleanup) {
+        try { prevCleanup(); } catch {}
+      }
+    };
+
+    scheduleParticles();
+    setTimeout(() => scheduleParticles(true), 200);
+    window.addEventListener('resize', onResize, { passive: true });
+
+    renderGoalPanel();
+
+    // Only drive handleTaskEnter in full tutorial mode.
+    if (tutorialActive) {
+      console.log('[tutorial][guide:task-click] calling handleTaskEnter (tutorialActive=true)', {
+        taskId,
+        currentTaskId: getCurrentTask()?.id
+      });
+      handleTaskEnter(getCurrentTask());
+    } else {
+      console.log('[tutorial][guide:task-click] skip handleTaskEnter in guide-only mode', { taskId });
+    }
   });
 
   window.addEventListener('guide:task-deactivate', () => {
     if (typeof guideHighlightCleanup === 'function') {
       try { guideHighlightCleanup(); } catch {}
       guideHighlightCleanup = null;
+      activeGuideRequirement = null;
       return;
     }
+    activeGuideRequirement = null;
     stopParticleStream();
     document.querySelectorAll('.toy-panel[data-toy="drawgrid"]').forEach(panel => {
       try { panel.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: false } })); } catch {}

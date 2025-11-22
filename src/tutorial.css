@@ -122,6 +122,20 @@ body .tutorial-particles-front {
 }
 /* << GPT:TUTORIAL_LAYERING_OVERRIDES END >> */
 
+/* Lift tutorial visuals above the Help overlay (z-index 5000) */
+body .tutorial-particles-front {
+  z-index: 6000 !important;
+}
+.toy-spawner-help.tutorial-active-pulse,
+.toy-spawner-trash.tutorial-active-pulse {
+  position: relative;
+  z-index: 6050 !important;
+}
+.toy-help-controls.tutorial-active-pulse {
+  position: relative;
+  z-index: 6050 !important;
+}
+
 
 
 body.tutorial-active #board .toy-panel[data-tutorial="true"] .tutorial-control-locked {
@@ -182,7 +196,10 @@ body.tutorial-active #topbar .tutorial-play-hidden {
   100% { box-shadow: 0 0 0 0px white; }
 }
 
-.toy-spawner-toggle.tutorial-addtoy-pulse {
+.toy-spawner-toggle.tutorial-addtoy-pulse,
+.toy-spawner-help.tutorial-addtoy-pulse,
+.toy-spawner-trash.tutorial-addtoy-pulse,
+.toy-help-controls.tutorial-addtoy-pulse {
   animation: pulseBorder 2s ease-in-out infinite;
   background-color: var(--surface) !important;
 }
