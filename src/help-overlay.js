@@ -146,16 +146,37 @@ function scheduleUpdate(immediate = false) {
 function renderOverlay() {
   if (!overlayState.active) return;
   const host = ensureHost();
-  host.innerHTML = '';
+
+  // Preserve the existing Controls callout so its animations aren't reset on rerender.
+  const existingControls = host.querySelector('.toy-help-controls');
+  const preservedTutorialClasses = existingControls
+    ? Array.from(existingControls.classList).filter((cls) => cls.startsWith('tutorial-'))
+    : [];
+
+  // Remove everything except the Controls callout to avoid restarting its animations.
+  Array.from(host.children).forEach((child) => {
+    if (child !== existingControls) host.removeChild(child);
+  });
+
   // Reset per-render debug set to limit logs
   overlayState.debugSeen = new Set();
   const entries = gatherTargets();
   
-  // Always render the controls help, even if there are no other labels
-  renderControlsHelp(host);
+  // Always render the controls help, even if there are no other labels.
+  // Reuse the existing element when possible to avoid restarting animations.
+  let controlsLabel = existingControls;
+  if (controlsLabel) {
+    host.appendChild(controlsLabel);
+  } else {
+    controlsLabel = renderControlsHelp(host);
+  }
 
-  const controlsLabel = host.querySelector('.toy-help-controls');
   if (controlsLabel instanceof HTMLElement) {
+    // Reapply any tutorial highlight classes that were present before the rerender (in case we rebuilt).
+    if (preservedTutorialClasses.length) {
+      preservedTutorialClasses.forEach((cls) => controlsLabel.classList.add(cls));
+    }
+
     const rect = controlsLabel.getBoundingClientRect();
     const ready =
       rect.width > 0 &&
@@ -778,6 +799,7 @@ function renderControlsHelp(host) {
   helpBox.style.maxWidth = '260px';
 
   host.appendChild(helpBox);
+  return helpBox;
 }
 
 export { setHelpActive, toggleHelp, isHelpActive, refreshHelpOverlay };

@@ -1390,6 +1390,10 @@ body.toy-help-mode [data-help-label] {
   z-index: 10;
 }
 
+.toy-help-callout.toy-help-controls {
+  overflow: visible;
+}
+
 .toy-help-controls ul {
   margin: 8px 0 0 0;
   padding-left: 20px;
@@ -1637,6 +1641,29 @@ body.tutorial-active #topbar #theme-switcher-wrap {
   z-index: -1;
 }
 
+/* Stronger highlight specifically for the Help overlay Controls label */
+.toy-help-callout.toy-help-controls.tutorial-active-pulse {
+  position: relative;
+  isolation: isolate;
+}
+
+/* Use the same glowing ring style as our buttons, but shaped to the callout */
+.toy-help-callout.toy-help-controls.tutorial-active-pulse::after {
+  content: '';
+  display: block;
+  position: absolute;
+  inset: -6px;
+  border-radius: 12px; /* match callout corners */
+  border: 1px solid rgba(136, 192, 255, 0.95);
+  box-shadow:
+    0 0 0 2px rgba(12, 18, 28, 0.9),
+    0 0 30px rgba(94, 179, 255, 0.95);
+  opacity: 1;
+  animation: tutorialPulse 1.6s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 1; /* sit above the callout background but below other UI */
+}
+
 .tutorial-guide-foreground {
   z-index: 1200 !important;
 }
@@ -1660,14 +1687,10 @@ body.tutorial-active #topbar #theme-switcher-wrap {
   }
 }
 
-.toy-spawner-toggle.tutorial-addtoy-pulse {
-  animation: pulseBorder 2s ease-in-out infinite;
-  background-color: var(--surface) !important;
-  position: relative;
-}
-
+.toy-spawner-toggle.tutorial-addtoy-pulse,
 .toy-spawner-help.tutorial-addtoy-pulse,
-.toy-spawner-trash.tutorial-addtoy-pulse {
+.toy-spawner-trash.tutorial-addtoy-pulse,
+.toy-help-callout.toy-help-controls.tutorial-addtoy-pulse {
   animation: pulseBorder 2s ease-in-out infinite;
   background-color: var(--surface) !important;
   position: relative;

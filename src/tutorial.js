@@ -2618,8 +2618,10 @@ let hasDetectedLine = false;
         if (!taskEl || !targetEl?.isConnected) return;
         currentTarget = targetEl;
         targetEl.classList.add('tutorial-pulse-target', 'tutorial-addtoy-pulse', 'tutorial-active-pulse');
-        targetEl.classList.add('tutorial-flash');
-        setTimeout(() => targetEl?.classList.remove('tutorial-flash'), 320);
+        if (!targetEl.classList.contains('tutorial-flash')) {
+          targetEl.classList.add('tutorial-flash');
+          setTimeout(() => targetEl?.classList.remove('tutorial-flash'), 320);
+        }
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             if (!disposed && taskEl.isConnected && targetEl.isConnected) {
@@ -3695,8 +3697,10 @@ try {
         if (!taskElement.isConnected || !target?.isConnected) return;
         currentTarget = target;
         target.classList.add('tutorial-pulse-target', 'tutorial-addtoy-pulse', 'tutorial-active-pulse');
-        target.classList.add('tutorial-flash');
-        setTimeout(() => target?.classList.remove('tutorial-flash'), 320);
+        if (!target.classList.contains('tutorial-flash')) {
+          target.classList.add('tutorial-flash');
+          setTimeout(() => target?.classList.remove('tutorial-flash'), 320);
+        }
         requestAnimationFrame(() => requestAnimationFrame(() => {
           if (!disposed && taskElement.isConnected && target.isConnected) {
             startParticleStream(taskElement, target);
@@ -3838,8 +3842,10 @@ try {
             'tutorial-addtoy-pulse',
             'tutorial-active-pulse'
           );
-          el.classList.add('tutorial-flash');
-          setTimeout(() => el?.classList.remove('tutorial-flash'), 320);
+          if (!el.classList.contains('tutorial-flash')) {
+            el.classList.add('tutorial-flash');
+            setTimeout(() => el?.classList.remove('tutorial-flash'), 320);
+          }
         };
 
         const debugRects = (label, targetEl) => {
