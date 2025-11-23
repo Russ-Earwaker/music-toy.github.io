@@ -339,7 +339,9 @@ function getBoardMetrics(board) {
     overlayState.lastScale = scale;
     try {
       const tf = (window.getComputedStyle(board).transform || 'none');
-      console.log(`Board scale detected: ${scale} from transform: ${tf}`);
+      if (window.__TUTORIAL_STREAM_DEBUG) {
+        console.log(`Board scale detected: ${scale} from transform: ${tf}`);
+      }
     } catch {}
   }
   return { board, rect, scale };
@@ -622,7 +624,9 @@ function applyPlacement(callout, connector, placement, entry) {
     // Debug scaling issues (once per label per render, only on zoom changes)
     const dbgKey = `${entry.label}::scaled`;
     if (overlayState.shouldLog && (entry.label.includes('Random') || entry.label.toLowerCase().includes('adjust volume')) && !overlayState.debugSeen.has(dbgKey)) {
-      console.log(`[${entry.label}] Scale=${scale}, BoardRect=${boardRect.left},${boardRect.top}, LocalRect=${rect.left},${rect.top}, Final=${screenLeft},${screenTop}`);
+      if (window.__TUTORIAL_STREAM_DEBUG) {
+        console.log(`[${entry.label}] Scale=${scale}, BoardRect=${boardRect.left},${boardRect.top}, LocalRect=${rect.left},${rect.top}, Final=${screenLeft},${screenTop}`);
+      }
       overlayState.debugSeen.add(dbgKey);
     }
   } else {
@@ -637,7 +641,9 @@ function applyPlacement(callout, connector, placement, entry) {
     // Debug non-scaled positioning (once per label per render, only on zoom changes)
     const dbgKey2 = `${entry.label}::noscale`;
     if (overlayState.shouldLog && entry.label.toLowerCase().includes('adjust volume') && !overlayState.debugSeen.has(dbgKey2)) {
-      console.log(`[${entry.label}] Non-scaled: ${screenLeft},${screenTop}`);
+      if (window.__TUTORIAL_STREAM_DEBUG) {
+        console.log(`[${entry.label}] Non-scaled: ${screenLeft},${screenTop}`);
+      }
       overlayState.debugSeen.add(dbgKey2);
     }
   }

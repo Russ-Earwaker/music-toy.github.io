@@ -1530,32 +1530,39 @@ let hasDetectedLine = false;
     const helpActive = typeof isHelpActive === 'function' ? isHelpActive() : false;
     const hasControls = !!controls && controls.getClientRects().length > 0;
 
-    // Debug so we can see what we're locking onto
-    try {
-      const helpButton = document.querySelector('.toy-spawner-help');
-      const desc = (el) => {
-        if (!(el instanceof HTMLElement)) return String(el);
-        const parts = [el.tagName.toLowerCase()];
-        if (el.id) parts.push('#' + el.id);
-        if (el.classList?.length) parts.push('.' + Array.from(el.classList).join('.'));
-        if (el.dataset?.action) parts.push(`[data-action="${el.dataset.action}"]`);
-        return parts.join('');
-      };
-      console.debug('[tutorial][getPanZoomHelpTarget]', {
-        helpActive,
-        hasControls,
-        controls: desc(controls),
-        helpButton: desc(helpButton),
-      });
-    } catch {}
+    if (window.__TUTORIAL_STREAM_DEBUG) {
+      try {
+        const helpButton = document.querySelector('.toy-spawner-help');
+        const desc = (el) => {
+          if (!(el instanceof HTMLElement)) return String(el);
+          const parts = [el.tagName.toLowerCase()];
+          if (el.id) parts.push('#' + el.id);
+          if (el.classList?.length) parts.push('.' + Array.from(el.classList).join('.'));
+          if (el.dataset?.action) parts.push(`[data-action="${el.dataset.action}"]`);
+          return parts.join('');
+        };
+        console.debug('[tutorial][getPanZoomHelpTarget]', {
+          helpActive,
+          hasControls,
+          controls: desc(controls),
+          helpButton: desc(helpButton),
+        });
+      } catch {
+        // diagnostics only
+      }
+    }
 
     if (helpActive && hasControls) {
-      console.debug('[tutorial][getPanZoomHelpTarget] using controls label');
+      if (window.__TUTORIAL_STREAM_DEBUG) {
+        console.debug('[tutorial][getPanZoomHelpTarget] using controls label');
+      }
       return controls;
     }
 
     const help = document.querySelector('.toy-spawner-help');
-    console.debug('[tutorial][getPanZoomHelpTarget] falling back to help button');
+    if (window.__TUTORIAL_STREAM_DEBUG) {
+      console.debug('[tutorial][getPanZoomHelpTarget] falling back to help button');
+    }
     return help;
   }
 
@@ -3766,8 +3773,25 @@ try {
       const onHelp = () => { ensureHelpVisible(); retarget(); setTimeout(retarget, 200); };
       window.addEventListener('resize', onResize, { passive: true });
       const onHelpClose = () => {
-        retarget();
-        setTimeout(retarget, 120);
+        if (disposed) return;
+        try {
+          const helpBtn =
+            document.querySelector('.toy-spawner-help.toy-btn') ||
+            document.querySelector('.toy-spawner-help');
+
+          if (helpBtn && helpBtn.isConnected) {
+            stopForTarget();
+            startForTarget(helpBtn, 'help-close');
+          } else {
+            retarget();
+          }
+
+          setTimeout(retarget, 120);
+        } catch (err) {
+          if (window.__TUTORIAL_STREAM_DEBUG) {
+            console.debug('[tutorial][guide-panzoom] onHelpClose failed', err);
+          }
+        }
       };
 
       window.addEventListener('help:toggle', onHelp);
@@ -3819,6 +3843,7 @@ try {
         };
 
         const debugRects = (label, targetEl) => {
+          if (!window.__TUTORIAL_STREAM_DEBUG) return;
           try {
             const originRect = taskElement.getBoundingClientRect();
             const targetRect = targetEl.getBoundingClientRect();
@@ -3853,20 +3878,24 @@ try {
         const resolveLiveTarget = (label) => {
           let live = getPanZoomHelpTarget() || currentTarget || initialTarget;
           if (!live || !live.isConnected) {
-            console.debug('[tutorial][guide-panzoom] live target missing', {
-              taskId,
-              label,
-            });
+            if (window.__TUTORIAL_STREAM_DEBUG) {
+              console.debug('[tutorial][guide-panzoom] live target missing', {
+                taskId,
+                label,
+              });
+            }
             return null;
           }
 
           if (live !== currentTarget) {
-            console.debug('[tutorial][guide-panzoom] live target changed', {
-              taskId,
-              from: describeElement(currentTarget),
-              to: describeElement(live),
-              label,
-            });
+            if (window.__TUTORIAL_STREAM_DEBUG) {
+              console.debug('[tutorial][guide-panzoom] live target changed', {
+                taskId,
+                from: describeElement(currentTarget),
+                to: describeElement(live),
+                label,
+              });
+            }
             clearCurrentTarget();
             currentTarget = live;
             applyHighlight(live);
@@ -3882,11 +3911,13 @@ try {
             const liveTarget = resolveLiveTarget('rAF');
             if (!liveTarget) return;
 
-            console.debug('[tutorial][guide-panzoom] rAF startParticleStream', {
-              taskId,
-              reason,
-              target: describeElement(liveTarget),
-            });
+            if (window.__TUTORIAL_STREAM_DEBUG) {
+              console.debug('[tutorial][guide-panzoom] rAF startParticleStream', {
+                taskId,
+                reason,
+                target: describeElement(liveTarget),
+              });
+            }
             startParticleStream(taskElement, liveTarget);
             didStart = true;
           });
@@ -3969,6 +4000,13 @@ try {
           taskId,
           rect: event?.detail?.rect || null,
         });
+        // Overlay is laid out and the Controls label rect is valid now.
+        scheduleRun(true);
+      };
+
+      const onHelpToggle = () => {
+        console.debug('[tutorial][guide-panzoom] help:toggle');
+        // Whenever Help is opened or closed, re-evaluate the target.
         scheduleRun(true);
       };
 
@@ -3977,6 +4015,7 @@ try {
       scheduleRun(true);
       window.addEventListener('resize', onResize, { passive: true });
       window.addEventListener('help:overlay-ready', onHelpReady, { passive: true });
+      window.addEventListener('help:toggle', onHelpToggle, { passive: true });
 
       guideHighlightCleanup = () => {
         disposed = true;
@@ -3986,6 +4025,7 @@ try {
         }
         window.removeEventListener('resize', onResize);
         window.removeEventListener('help:overlay-ready', onHelpReady);
+        window.removeEventListener('help:toggle', onHelpToggle);
         clearCurrentTarget();
         stopParticleStream();
       };
