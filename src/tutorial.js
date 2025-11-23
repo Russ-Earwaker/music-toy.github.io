@@ -1525,6 +1525,40 @@ let hasDetectedLine = false;
     return arr.every(panel => isPanelInViewport(panel));
   }
 
+  function getPanZoomHelpTarget() {
+    const controls = document.querySelector('.toy-help-controls');
+    const helpActive = typeof isHelpActive === 'function' ? isHelpActive() : false;
+    const hasControls = !!controls && controls.getClientRects().length > 0;
+
+    // Debug so we can see what we're locking onto
+    try {
+      const helpButton = document.querySelector('.toy-spawner-help');
+      const desc = (el) => {
+        if (!(el instanceof HTMLElement)) return String(el);
+        const parts = [el.tagName.toLowerCase()];
+        if (el.id) parts.push('#' + el.id);
+        if (el.classList?.length) parts.push('.' + Array.from(el.classList).join('.'));
+        if (el.dataset?.action) parts.push(`[data-action="${el.dataset.action}"]`);
+        return parts.join('');
+      };
+      console.debug('[tutorial][getPanZoomHelpTarget]', {
+        helpActive,
+        hasControls,
+        controls: desc(controls),
+        helpButton: desc(helpButton),
+      });
+    } catch {}
+
+    if (helpActive && hasControls) {
+      console.debug('[tutorial][getPanZoomHelpTarget] using controls label');
+      return controls;
+    }
+
+    const help = document.querySelector('.toy-spawner-help');
+    console.debug('[tutorial][getPanZoomHelpTarget] falling back to help button');
+    return help;
+  }
+
   function ensurePanelsClearGoal(panels, margin = 24) {
     if (!isGoalPanelVisible() || typeof window.panTo !== 'function') return;
     const arr = Array.isArray(panels) ? panels : [panels];
@@ -2158,6 +2192,10 @@ let hasDetectedLine = false;
     if (!document.querySelector('.tutorial-particles-front')) {
       const c2 = document.createElement('canvas');
       c2.className = 'tutorial-particles-front';
+      c2.style.position = 'fixed';
+      c2.style.inset = '0';
+      c2.style.pointerEvents = 'none';
+      c2.style.zIndex = '6000';
       document.body.appendChild(c2);
     }
     updateClaimButtonVisibility();
@@ -3411,6 +3449,10 @@ try {
     if (!document.querySelector('.tutorial-particles-front')) {
       const c2 = document.createElement('canvas');
       c2.className = 'tutorial-particles-front';
+      c2.style.position = 'fixed';
+      c2.style.inset = '0';
+      c2.style.pointerEvents = 'none';
+      c2.style.zIndex = '6000';
       document.body.appendChild(c2);
     }
 
@@ -3633,7 +3675,6 @@ try {
       let retargetTimer = 0;
       let didStart = false;
 
-      const getHelpButton = () => document.querySelector('.toy-spawner-help');
       const stopForTarget = () => {
         if (currentTarget) {
           currentTarget.classList.remove('tutorial-pulse-target', 'tutorial-addtoy-pulse', 'tutorial-active-pulse', 'tutorial-flash');
@@ -3651,13 +3692,13 @@ try {
         setTimeout(() => target?.classList.remove('tutorial-flash'), 320);
         requestAnimationFrame(() => requestAnimationFrame(() => {
           if (!disposed && taskElement.isConnected && target.isConnected) {
-            startParticleStream(taskElement, target, { layer: 'behind-target' });
+            startParticleStream(taskElement, target);
             didStart = true;
           }
         }));
         setTimeout(() => {
           if (!didStart && !disposed && taskElement.isConnected && target.isConnected) {
-            startParticleStream(taskElement, target, { layer: 'behind-target' });
+            startParticleStream(taskElement, target);
             didStart = true;
           }
         }, 200);
@@ -3665,13 +3706,35 @@ try {
 
       const retarget = () => {
         if (disposed) return;
+
         const controls = document.querySelector('.toy-help-controls');
-        const controlsVisible = controls && (controls.offsetParent !== null || controls.getClientRects().length > 0);
-        const next = controlsVisible ? controls : getHelpButton();
-        if (next === currentTarget) return;
+        const hasControls = !!controls && controls.getClientRects().length > 0;
+        const nextTarget = getPanZoomHelpTarget();
+
+        if (!nextTarget || !nextTarget.isConnected) {
+          stopForTarget();
+          if (!retryTimer) {
+            retryTimer = window.setTimeout(() => {
+              retryTimer = 0;
+              retarget();
+            }, 180);
+          }
+          return;
+        }
+
+        if (retryTimer) {
+          clearTimeout(retryTimer);
+          retryTimer = 0;
+        }
+
+        if (nextTarget === currentTarget) return;
+
         stopForTarget();
-        if (next) startForTarget(next);
-        if (!controlsVisible && isHelpActive() && !retargetTimer) {
+        startForTarget(nextTarget);
+
+        // If help is active but we haven't managed to lock onto the Controls callout yet,
+        // keep retrying for a short while in case the overlay is still laying out.
+        if (!hasControls && isHelpActive() && !retargetTimer) {
           retargetTimer = window.setTimeout(() => {
             retargetTimer = 0;
             retarget();
@@ -3731,11 +3794,210 @@ try {
       return;
     }
 
+    if (!tutorialActive && (taskId === 'pan-camera' || taskId === 'zoom-camera')) {
+      let disposed = false;
+      let retryTimer = 0;
+      let currentTarget = null;
+      let didStart = false;
+
+      const startForTarget = (initialTarget, reason) => {
+        if (!taskElement?.isConnected) return;
+        if (!initialTarget) return;
+
+        // Keep a reference for highlighting, but re-resolve for geometry.
+        currentTarget = initialTarget;
+
+        const applyHighlight = (el) => {
+          if (!el || !el.classList) return;
+          el.classList.add(
+            'tutorial-pulse-target',
+            'tutorial-addtoy-pulse',
+            'tutorial-active-pulse'
+          );
+          el.classList.add('tutorial-flash');
+          setTimeout(() => el?.classList.remove('tutorial-flash'), 320);
+        };
+
+        const debugRects = (label, targetEl) => {
+          try {
+            const originRect = taskElement.getBoundingClientRect();
+            const targetRect = targetEl.getBoundingClientRect();
+            console.debug('[tutorial][guide-panzoom] startForTarget', {
+              taskId,
+              reason,
+              origin: {
+                desc: describeElement(taskElement),
+                x: originRect.x,
+                y: originRect.y,
+                w: originRect.width,
+                h: originRect.height,
+              },
+              target: {
+                desc: describeElement(targetEl),
+                x: targetRect.x,
+                y: targetRect.y,
+                w: targetRect.width,
+                h: targetRect.height,
+              },
+              label,
+            });
+          } catch (err) {
+            console.debug('[tutorial][guide-panzoom] rect debug failed', err);
+          }
+        };
+
+        applyHighlight(initialTarget);
+
+        let didStart = false;
+
+        const resolveLiveTarget = (label) => {
+          let live = getPanZoomHelpTarget() || currentTarget || initialTarget;
+          if (!live || !live.isConnected) {
+            console.debug('[tutorial][guide-panzoom] live target missing', {
+              taskId,
+              label,
+            });
+            return null;
+          }
+
+          if (live !== currentTarget) {
+            console.debug('[tutorial][guide-panzoom] live target changed', {
+              taskId,
+              from: describeElement(currentTarget),
+              to: describeElement(live),
+              label,
+            });
+            clearCurrentTarget();
+            currentTarget = live;
+            applyHighlight(live);
+          }
+
+          debugRects(label, live);
+          return live;
+        };
+
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            if (disposed || !taskElement.isConnected) return;
+            const liveTarget = resolveLiveTarget('rAF');
+            if (!liveTarget) return;
+
+            console.debug('[tutorial][guide-panzoom] rAF startParticleStream', {
+              taskId,
+              reason,
+              target: describeElement(liveTarget),
+            });
+            startParticleStream(taskElement, liveTarget);
+            didStart = true;
+          });
+        });
+
+        setTimeout(() => {
+          if (didStart || disposed || !taskElement.isConnected) return;
+          const liveTarget = resolveLiveTarget('fallback');
+          if (!liveTarget) return;
+
+          console.debug('[tutorial][guide-panzoom] fallback startParticleStream', {
+            taskId,
+            reason,
+            target: describeElement(liveTarget),
+          });
+          startParticleStream(taskElement, liveTarget);
+          didStart = true;
+        }, 200);
+      };
+
+      const clearCurrentTarget = () => {
+        if (currentTarget) {
+          currentTarget.classList.remove(
+            'tutorial-pulse-target',
+            'tutorial-addtoy-pulse',
+            'tutorial-active-pulse',
+            'tutorial-flash'
+          );
+          currentTarget = null;
+        }
+      };
+
+      const runOnce = () => {
+        if (disposed) return;
+
+        const target = getPanZoomHelpTarget();
+        if (!target || !target.isConnected) {
+          console.debug('[tutorial][guide-panzoom] no target yet; retry');
+          stopParticleStream();
+          clearCurrentTarget();
+          if (!retryTimer) {
+            retryTimer = window.setTimeout(() => {
+              retryTimer = 0;
+              runOnce();
+            }, 180);
+          }
+          return;
+        }
+
+        if (retryTimer) {
+          clearTimeout(retryTimer);
+          retryTimer = 0;
+        }
+
+        if (target === currentTarget) {
+          // We already have the right element; just ensure the stream exists.
+          console.debug('[tutorial][guide-panzoom] target unchanged; nudging stream');
+          startForTarget(target, 'nudged');
+          return;
+        }
+
+        console.debug('[tutorial][guide-panzoom] switching target', {
+          taskId,
+          target: describeElement(target),
+        });
+
+        clearCurrentTarget();
+        startForTarget(target, currentTarget ? 'switch' : 'initial');
+      };
+
+      const scheduleRun = (force) => {
+        if (disposed) return;
+        if (!force && document.hidden) return;
+        requestAnimationFrame(() => requestAnimationFrame(runOnce));
+      };
+
+      const onResize = () => scheduleRun(false);
+      const onHelpReady = (event) => {
+        console.debug('[tutorial][guide-panzoom] help:overlay-ready', {
+          taskId,
+          rect: event?.detail?.rect || null,
+        });
+        scheduleRun(true);
+      };
+
+      // Initial attempt: before help is open we’ll point at the Help button,
+      // then retarget to the controls label once the overlay fires help:overlay-ready
+      scheduleRun(true);
+      window.addEventListener('resize', onResize, { passive: true });
+      window.addEventListener('help:overlay-ready', onHelpReady, { passive: true });
+
+      guideHighlightCleanup = () => {
+        disposed = true;
+        if (retryTimer) {
+          clearTimeout(retryTimer);
+          retryTimer = 0;
+        }
+        window.removeEventListener('resize', onResize);
+        window.removeEventListener('help:overlay-ready', onHelpReady);
+        clearCurrentTarget();
+        stopParticleStream();
+      };
+
+      return;
+    }
+
     const TASK_TARGET_SELECTORS = {
       'press-help': '.toy-spawner-help',
       'close-help': '.toy-spawner-help',
-      'pan-camera': '.toy-help-controls, .toy-spawner-help',
-      'zoom-camera': '.toy-help-controls, .toy-spawner-help',
+      'pan-camera': '.toy-spawner-help',
+      'zoom-camera': '.toy-spawner-help',
       'recycle-toy': '.toy-spawner-trash',
       'press-play': '#topbar [data-action="toggle-play"]',
       'press-clear': '.toy-panel[data-toy="drawgrid"] [data-action="clear"], .toy-panel [data-action="clear"]',

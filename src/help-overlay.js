@@ -9,6 +9,7 @@ const overlayState = {
   debugSeen: new Set(),
   lastScale: null,
   shouldLog: false,
+  overlayReadyFired: false,
 };
 
 const BASE_MARGIN = 36;
@@ -89,6 +90,7 @@ function setHelpActive(active) {
   }
   const prev = overlayState.active;
   overlayState.active = next;
+  overlayState.overlayReadyFired = false;
   const detail = { active: overlayState.active, previous: prev };
   try { window.dispatchEvent(new CustomEvent('help:toggle', { detail })); } catch {}
   if (overlayState.active) {
@@ -151,6 +153,47 @@ function renderOverlay() {
   
   // Always render the controls help, even if there are no other labels
   renderControlsHelp(host);
+
+  const controlsLabel = host.querySelector('.toy-help-controls');
+  if (controlsLabel instanceof HTMLElement) {
+    const rect = controlsLabel.getBoundingClientRect();
+    const ready =
+      rect.width > 0 &&
+      rect.height > 0 &&
+      Number.isFinite(rect.x) &&
+      Number.isFinite(rect.y);
+
+    console.debug('[help-overlay] controls label rect', {
+      x: rect.x,
+      y: rect.y,
+      w: rect.width,
+      h: rect.height,
+      ready,
+      alreadyFired: overlayState.overlayReadyFired,
+    });
+
+    if (ready && !overlayState.overlayReadyFired) {
+      overlayState.overlayReadyFired = true;
+
+      // Fire on the next frame so any CSS transforms/relayout are fully applied.
+      requestAnimationFrame(() => {
+        try {
+          window.dispatchEvent(
+            new CustomEvent('help:overlay-ready', {
+              detail: { rect },
+            })
+          );
+          console.debug('[help-overlay] dispatched help:overlay-ready');
+        } catch (err) {
+          console.debug('[help-overlay] failed to dispatch help:overlay-ready', err);
+        }
+      });
+    } else if (!ready) {
+      console.debug('[help-overlay] controls label not ready yet');
+    }
+  } else {
+    console.debug('[help-overlay] no .toy-help-controls found');
+  }
 
   if (!entries.length) return;
 
@@ -721,6 +764,13 @@ function renderControlsHelp(host) {
     `;
   }
   helpBox.innerHTML = content;
+
+  // Pin the controls callout so it has a stable rect and doesn't jump during layout.
+  helpBox.style.position = 'absolute';
+  helpBox.style.right = '32px';
+  helpBox.style.bottom = '32px';
+  helpBox.style.maxWidth = '260px';
+
   host.appendChild(helpBox);
 }
 

@@ -417,6 +417,11 @@ function startFlight(ctx, canvas, startEl, endEl) {
 
 export function startParticleStream(originEl, targetEl, options = {}) {
   const layer = options?.layer === 'behind-target' ? 'behind-target' : 'front';
+  console.debug('[tutorial-fx] resolved layer', {
+    layer,
+    originClass: originEl?.className,
+    targetClass: targetEl?.className,
+  });
   const oRect = originEl?.getBoundingClientRect?.();
   const tRect = targetEl?.getBoundingClientRect?.();
   console.debug('[DIAG] startParticleStream', {
@@ -538,7 +543,18 @@ export function startParticleStream(originEl, targetEl, options = {}) {
   const ex = endCenter.x - canvasRect.left;
   const ey = endCenter.y - canvasRect.top;
 
+  console.debug('[tutorial-fx] create stream', {
+    type: 'burst',
+    key: newKey,
+    start: { x: sx, y: sy },
+    end: { x: ex, y: ey },
+  });
   createBurst(sx, sy, { x: ex, y: ey });
+  console.debug('[tutorial-fx] create stream', {
+    type: 'trail',
+    key: newKey,
+    rate: PARTICLES_PER_SEC,
+  });
   spawnParticles = true;
   activeLayer = layer === 'behind-target' ? 'behind' : 'front';
   activeCtx = drawCtx;
@@ -563,6 +579,13 @@ export function stopParticleStream(options = {}) {
   console.debug('[DIAG] stopParticleStream', {
     t: performance?.now?.(),
     lastPointerup: window.__LAST_POINTERUP_DIAG__,
+  });
+  console.debug('[tutorial-fx] stopParticleStream invoked', {
+    t: performance?.now?.(),
+    activeCount: particles?.length || 0,
+    lastStreamKey,
+    immediate: options?.immediate ?? false,
+    clearHighlight: options?.clearHighlight ?? false,
   });
   lastStopTs = performance?.now?.() ?? Date.now();
 
@@ -592,6 +615,10 @@ export function stopParticleStream(options = {}) {
       const rect = behindCanvas.getBoundingClientRect();
       behindCtx.clearRect(0, 0, rect.width, rect.height);
     }
+    console.debug('[tutorial-fx] destroy stream (immediate)', {
+      key: lastStreamKey,
+      remaining: particles.length,
+    });
     activeTaskMaskRect = null;
     activeOriginEl = null;
     activeTargetEl = null;
@@ -608,6 +635,10 @@ export function stopParticleStream(options = {}) {
     activeCanvas = null;
     activeTaskMaskRect = null;
     activeOriginEl = null;
+    console.debug('[tutorial-fx] destroy stream (drain)', {
+      key: lastStreamKey,
+      remaining: particles.length,
+    });
   }
 }
 
