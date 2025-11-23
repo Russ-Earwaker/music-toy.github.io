@@ -21,6 +21,9 @@ let activeTaskMaskRect = null;
 let activeOriginEl = null;
 // Controls whether the current animation should continue spawning new particles.
 let spawnParticles = false;
+// Cached path for the active stream (canvas coordinates)
+let activeStreamStart = null;
+let activeStreamEnd = null;
 /* << GPT:TASK_MASK_GLOBALS END >> */
 
 function removeHighlight(el) {
@@ -192,23 +195,14 @@ function createBurst(x, y, endPos) {
 }
 
 function startFlight(ctx, canvas, startEl, endEl) {
-    const isValidNode = (el) => {
-      if (!el) return false;
-      if (!el.isConnected) return false;
-      const rects = el.getClientRects?.();
-      return rects && rects.length > 0;
-    };
-    const nodesValid = isValidNode(startEl) && isValidNode(endEl);
-    const canDrain = !nodesValid && particles.length > 0;
-    if (!ctx || !canvas || (!nodesValid && !canDrain)) {
+    // If we lose the canvas/context entirely, bail and clear highlights.
+    if (!ctx || !canvas) {
         stopParticleStream({ clearHighlight: true, targetEl: endEl || activeTargetEl || null });
         return;
     }
-    if (!nodesValid) {
-      spawnParticles = false;
-      removeHighlight(endEl || activeTargetEl || null);
-    }
-    if (nodesValid && startEl.closest && startEl.closest('.goal-task.is-disabled')) {
+
+    // Only gate on disabled tasks for the origin element.
+    if (startEl && startEl.closest && startEl.closest('.goal-task.is-disabled')) {
       spawnParticles = false;
       removeHighlight(endEl || activeTargetEl || null);
     }
@@ -224,20 +218,39 @@ function startFlight(ctx, canvas, startEl, endEl) {
     const canvasRect = canvas.getBoundingClientRect();
 
     let sx = 0, sy = 0, ex = 0, ey = 0;
-    if (spawnParticles && nodesValid) {
-      const startRect = startEl.getBoundingClientRect();
-      const endRect = endEl.getBoundingClientRect();
-      const startCenter = getRectCenter(startRect);
-      const endCenter = getRectCenter(endRect);
-      sx = startCenter.x - canvasRect.left;
-      sy = startCenter.y - canvasRect.top;
-      ex = endCenter.x - canvasRect.left;
-      ey = endCenter.y - canvasRect.top;
+    if (spawnParticles && activeStreamStart && activeStreamEnd) {
+      sx = activeStreamStart.x;
+      sy = activeStreamStart.y;
+      ex = activeStreamEnd.x;
+      ey = activeStreamEnd.y;
+
       startFlight._accum += PARTICLES_PER_SEC * dt;
+
+      let spawnedThisFrame = 0;
       while (startFlight._accum >= 1) {
           particles.push(createParticle(sx, sy, { x: ex, y: ey }));
           startFlight._accum -= 1;
+          spawnedThisFrame++;
       }
+
+      if (window.__TUTORIAL_STREAM_DEBUG) {
+        console.debug('[FX][stream] spawn', {
+          dt,
+          accum: startFlight._accum,
+          spawnedThisFrame,
+          totalParticles: particles.length,
+          sx,
+          sy,
+          ex,
+          ey,
+        });
+      }
+    } else if (window.__TUTORIAL_STREAM_DEBUG) {
+      console.debug('[FX][stream] no spawn', {
+        hasPath: !!(activeStreamStart && activeStreamEnd),
+        spawnParticles,
+        particles: particles.length,
+      });
     }
 
     if (canvas && ctx) {
@@ -404,6 +417,11 @@ function startFlight(ctx, canvas, startEl, endEl) {
     if (shouldContinueAnimating) {
         animationFrameId = requestAnimationFrame(() => startFlight(ctx, canvas, startEl, endEl));
     } else {
+        if (window.__TUTORIAL_STREAM_DEBUG) {
+          console.debug('[FX][stream] end', {
+            particles: particles.length,
+          });
+        }
         animationFrameId = null;
         activeCtx = null;
         activeCanvas = null;
@@ -543,6 +561,10 @@ export function startParticleStream(originEl, targetEl, options = {}) {
   const ex = endCenter.x - canvasRect.left;
   const ey = endCenter.y - canvasRect.top;
 
+  // Cache the path for the continuous trail so we don't depend on live DOM each frame.
+  activeStreamStart = { x: sx, y: sy };
+  activeStreamEnd = { x: ex, y: ey };
+
   console.debug('[tutorial-fx] create stream', {
     type: 'burst',
     key: newKey,
@@ -625,6 +647,8 @@ export function stopParticleStream(options = {}) {
     activeCtx = null;
     activeCanvas = null;
     activeLayer = 'front';
+    activeStreamStart = null;
+    activeStreamEnd = null;
     return;
   }
 
@@ -635,6 +659,8 @@ export function stopParticleStream(options = {}) {
     activeCanvas = null;
     activeTaskMaskRect = null;
     activeOriginEl = null;
+    activeStreamStart = null;
+    activeStreamEnd = null;
     console.debug('[tutorial-fx] destroy stream (drain)', {
       key: lastStreamKey,
       remaining: particles.length,
