@@ -1672,6 +1672,22 @@ body.tutorial-active #topbar #theme-switcher-wrap {
   z-index: 1; /* sit above the callout background but below other UI */
 }
 
+/* Controls callout: keep only the thick white pulse (like buttons) */
+.toy-help-callout.toy-help-controls.tutorial-pulse-target {
+  animation: none;
+}
+
+.toy-help-callout.toy-help-controls.tutorial-active-pulse {
+  box-shadow: none;
+}
+
+.toy-help-callout.toy-help-controls.tutorial-active-pulse::after {
+  content: none;
+  animation: none;
+  box-shadow: none;
+  border: 0;
+}
+
 .tutorial-guide-foreground {
   z-index: 1200 !important;
 }
