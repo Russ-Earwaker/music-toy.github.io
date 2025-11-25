@@ -130,7 +130,7 @@ const GOAL_FLOW = [
   },
   {
     id: 'get-help',
-    title: 'Help!',
+    title: 'Help! Trash! Zoom!',
     allowOutOfOrder: true,
     reward: {
       description: 'You made progress. Have a star.',
@@ -167,19 +167,25 @@ const GOAL_FLOW = [
     ],
   },
   {
-    id: 'dummy-goal-1',
-    title: 'Dummy Goal 1',
+    id: 'change-instrument',
+    title: 'Change musical instrument',
     reward: {
-      description: 'This is a dummy reward.',
+      description: 'You made progress. Have a star.',
       icons: [
-        { type: 'symbol', label: 'Dummy', symbol: 'D' },
+        { type: 'asset', label: 'Star Reward', icon: '../assets/Ui/T_Star.png' },
       ],
     },
     tasks: [
       {
-        id: 'dummy-task-1',
-        label: 'Do a dummy task.',
-        requirement: 'dummy-req-1',
+        id: 'change-instrument-add-toy',
+        label: 'Add a toy.',
+        requirement: 'place-any-toy',
+      },
+      {
+        id: 'change-instrument-select',
+        label: 'Open the instrument menu and choose another instrument.',
+        disabledUntil: 'change-instrument-add-toy',
+        requirement: 'change-instrument',
       },
     ],
   },
@@ -223,6 +229,7 @@ const GOAL_BY_ID = new Map(GOAL_FLOW.map(goal => [goal.id, goal]));
 const TASK_INFO_BY_ID = new Map();
 const TASKS_BY_REQUIREMENT = new Map();
 const ADD_TOY_TOGGLE_SELECTOR = '.toy-spawner-dock .toy-spawner-toggle:not(.is-preview)';
+const INSTRUMENT_SELECTOR = '.toy-inst-btn';
 
 function getAddToyToggle() {
   return document.querySelector(ADD_TOY_TOGGLE_SELECTOR);
@@ -287,6 +294,7 @@ const drawToyPanels = new Set();
 const rhythmToyPanels = new Set();
 const drawToyLineState = new Map();
 let lastPlacedToy = null;
+const instrumentSelection = new WeakMap();
 let activeGuideRequirement = null;
 const PLACE_TOY_GOAL_ID = 'place-toy';
 const PLACE_TOY_TASK_IDS = {
@@ -965,9 +973,12 @@ let hasDetectedLine = false;
 
   function computeDisabledTasksForGoal(goal) {
     if (!goal || !goal.id) return new Set();
-    if (goal.id === PLACE_TOY_GOAL_ID) return computePlaceToyDisabledTaskIds();
-    if (goal.id === DRAW_INTRO_GOAL_ID) return computeDrawIntroDisabledTaskIds();
-    if (goal.id === 'clear-random') {
+    let disabled = new Set();
+    if (goal.id === PLACE_TOY_GOAL_ID) {
+      disabled = computePlaceToyDisabledTaskIds();
+    } else if (goal.id === DRAW_INTRO_GOAL_ID) {
+      disabled = computeDrawIntroDisabledTaskIds();
+    } else if (goal.id === 'clear-random') {
       const blocked = new Set();
       const hasAnyToy = (placeToyPanels.size > 0) || (() => {
         try { return !!document.querySelector('.toy-panel'); } catch { return false; }
@@ -976,9 +987,19 @@ let hasDetectedLine = false;
         blocked.add('press-random');
         blocked.add('press-clear');
       }
-      return blocked;
+      disabled = blocked;
     }
-    return new Set();
+
+    const tasks = Array.isArray(goal.tasks) ? goal.tasks : [];
+    tasks.forEach((task, index) => {
+      const taskId = task?.id || `task-${index}`;
+      const prerequisiteId = task?.disabledUntil;
+      if (taskId && prerequisiteId && !guideProgress.tasks.has(prerequisiteId)) {
+        disabled.add(taskId);
+      }
+    });
+
+    return disabled;
   }
 
   function handlePlaceToyPanelRemoval(panel) {
@@ -1185,7 +1206,7 @@ let hasDetectedLine = false;
     clear: '[data-action="clear"]',
     random: '[data-action="random"]',
     play: '#topbar [data-action="toggle-play"]',
-    instrument: '.toy-inst-btn, select.toy-instrument, [data-action="instrument"]',
+    instrument: INSTRUMENT_SELECTOR,
     help: '.toy-spawner-help',
     trash: '.toy-spawner-trash',
   };
@@ -1197,6 +1218,7 @@ let hasDetectedLine = false;
     'press-help': 'help',
     'close-help': 'help',
     'recycle-toy': 'trash',
+    'change-instrument-select': 'instrument',
   };
   function updatePlayButtonVisual(btn, playing) {
     if (!btn) return;
@@ -1620,7 +1642,7 @@ let hasDetectedLine = false;
 
     const lockElement = (el) => {
       if (!(el instanceof HTMLElement) || el.classList.contains('tutorial-control-locked')) return;
-      if (tutorialState?.unlockedRewards?.has?.('add-toy') && el.matches('.toy-inst-btn, select.toy-instrument, [data-action="instrument"]')) {
+      if (tutorialState?.unlockedRewards?.has?.('add-toy') && el.matches(INSTRUMENT_SELECTOR)) {
         return;
       }
       el.classList.add('tutorial-control-locked');
@@ -1634,7 +1656,7 @@ let hasDetectedLine = false;
       if (el.dataset.tutorialOrigDisplay === undefined) {
         el.dataset.tutorialOrigDisplay = el.style.display || '';
       }
-      if (el.matches('.toy-inst-btn, select.toy-instrument, [data-action="instrument"]')) {
+      if (el.matches(INSTRUMENT_SELECTOR)) {
         el.classList.add('tutorial-instrument-hidden');
         el.setAttribute('aria-hidden', 'true');
       }
@@ -1645,11 +1667,11 @@ let hasDetectedLine = false;
     const lockInstrumentElements = (node) => {
       if (!node || tutorialState?.unlockedRewards?.has?.('add-toy')) return;
       const targets = [];
-      if (node instanceof HTMLElement && node.matches('.toy-inst-btn, select.toy-instrument, [data-action="instrument"]')) {
+      if (node instanceof HTMLElement && node.matches(INSTRUMENT_SELECTOR)) {
         targets.push(node);
       }
       if (node.querySelectorAll) {
-        node.querySelectorAll('.toy-inst-btn, select.toy-instrument, [data-action="instrument"]').forEach(el => targets.push(el));
+        node.querySelectorAll(INSTRUMENT_SELECTOR).forEach(el => targets.push(el));
       }
       targets.forEach(lockElement);
     };
@@ -2335,7 +2357,11 @@ let hasDetectedLine = false;
     let handledSpecial = false;
 
     const isGenericAddToyTask = task.id === 'add-any-toy';
-    const isAddToyTask = task.id === 'place-any-toy' || task.id === 'add-draw-toy' || isGenericAddToyTask;
+    const isAddToyTask =
+      task.id === 'place-any-toy' ||
+      task.id === 'add-draw-toy' ||
+      task.id === 'change-instrument-add-toy' ||
+      isGenericAddToyTask;
 
     if (isAddToyTask) {
       ensureGoalPanel();
@@ -2706,8 +2732,21 @@ let hasDetectedLine = false;
     }
 
     if (!handledSpecial) {
+      const resolveTargetEl = (key) => {
+        if (!key) return null;
+        const selector = CONTROL_SELECTORS[key];
+        if (!selector) return null;
+        const candidates = [];
+        if (tutorialToy?.isConnected) {
+          candidates.push(...tutorialToy.querySelectorAll(selector));
+        }
+        candidates.push(...document.querySelectorAll(selector));
+        const visible = candidates.find((el) => el.isConnected && (el.offsetParent !== null || el.getClientRects().length > 0));
+        return visible || candidates[0] || null;
+      };
+
       const targetKey = TASK_TARGETS[task.id];
-      const targetEl = targetKey ? (getControlMap(tutorialToy)[targetKey] || document.querySelector(CONTROL_SELECTORS[targetKey])) : null;
+      const targetEl = resolveTargetEl(targetKey);
       if (task.id === 'press-play' && targetEl) {
         targetEl.classList.remove('tutorial-hide-play-button');
         if (targetEl.dataset.tutorialOrigDisplay !== undefined) {
@@ -2734,14 +2773,28 @@ let hasDetectedLine = false;
         window.tutorialSpacebarDisabled = false;
       }
       const isPlayTask = task.id === 'press-play';
+      if (isInstrumentTask && targetEl) {
+        // Ensure instrument controls are visible/unlocked for guidance
+        targetEl.classList.remove('tutorial-control-locked', 'tutorial-instrument-hidden');
+        targetEl.removeAttribute('aria-hidden');
+        targetEl.style.removeProperty('display');
+        targetEl.style.removeProperty('visibility');
+        targetEl.style.removeProperty('opacity');
+        if (targetEl.disabled) {
+          try { targetEl.disabled = false; } catch {}
+          targetEl.removeAttribute('aria-disabled');
+        }
+      }
+
       if (isPlayTask) {
         requestAnimationFrame(() => updatePlayRequirement());
       }
-      const isToggleTask = task.id === 'toggle-node';
-      const isDragTask = task.id === 'drag-note';
+    const isToggleTask = task.id === 'toggle-node';
+    const isDragTask = task.id === 'drag-note';
+    const isInstrumentTask = task.id === 'change-instrument-select';
     const targetVisible =
       targetEl &&
-      !targetEl.classList.contains('tutorial-control-locked') &&
+      (!isInstrumentTask || !targetEl.classList.contains('tutorial-control-locked')) &&
       !targetEl.classList.contains('tutorial-hide-play-button') &&
       (isPlayTask || !targetEl.classList.contains('tutorial-play-hidden')) &&
       (targetEl.offsetParent !== null || getComputedStyle(targetEl).display !== 'none');
@@ -2872,8 +2925,31 @@ let hasDetectedLine = false;
     handleTaskEnter(getCurrentTask());
   }
 
+  function clearGuideTaskSelection() {
+    document.querySelectorAll('.goal-task.is-active-guide-task').forEach((taskEl) => {
+      taskEl.classList.remove('is-active-guide-task');
+    });
+    try { window.dispatchEvent(new CustomEvent('guide:task-deactivate', { bubbles: true, composed: true })); } catch {}
+    try { window.dispatchEvent(new CustomEvent('guide:clear-active-task', { bubbles: true, composed: true })); } catch {}
+  }
+
   function maybeCompleteTask(requirement) {
     const progressChanged = setRequirementProgress(requirement, true);
+    if (progressChanged) {
+      const entries = TASKS_BY_REQUIREMENT.get(requirement) || [];
+      const activeTaskEl = document.querySelector('.goal-task.is-active-guide-task');
+      const activeTaskId = activeTaskEl?.dataset?.taskId;
+      const matchesActive =
+        activeGuideRequirement === requirement ||
+        (activeTaskId && entries.some((entry) => entry.taskId === activeTaskId));
+
+      if (matchesActive) {
+        activeGuideRequirement = null;
+        stopParticleStream();
+        clearCurrentTutorialHighlight();
+        clearGuideTaskSelection();
+      }
+    }
     if (progressChanged && !tutorialActive) {
       const allowCleanup = !activeGuideRequirement || activeGuideRequirement === requirement;
       if (allowCleanup) {
@@ -2914,6 +2990,20 @@ let hasDetectedLine = false;
   function setupPanelListeners(panel) {
     if (!panel) return;
     registerToyInteraction(panel);
+    instrumentSelection.set(panel, panel.dataset.instrument || '');
+
+    const handleInstrumentChange = (e) => {
+      const next = (e?.detail?.name || e?.detail?.value || '').trim();
+      if (!next) return;
+      const prev = instrumentSelection.get(panel) || panel.dataset.instrument || '';
+      instrumentSelection.set(panel, next);
+      if (prev && prev !== next) {
+        maybeCompleteTask('change-instrument');
+      }
+    };
+    addListener(panel, 'toy:instrument', handleInstrumentChange);
+    addListener(panel, 'toy-instrument', handleInstrumentChange);
+
     const markInteraction = () => maybeCompleteTask('interact-any-toy');
     addListener(panel, 'drawgrid:update', (e) => {
       handleDrawgridUpdate(e.detail);
@@ -2983,6 +3073,20 @@ let hasDetectedLine = false;
   document.addEventListener('transport:resume', updatePlayRequirement, { passive: true });
   document.addEventListener('transport:pause', updatePlayRequirement, { passive: true });
   updatePlayRequirement();
+
+  const handleInstrumentChangeGlobal = (e) => {
+    const panel = e?.target?.closest?.('.toy-panel');
+    if (!panel) return;
+    const next = (e?.detail?.name || e?.detail?.value || '').trim();
+    if (!next) return;
+    const prev = instrumentSelection.get(panel) || panel.dataset.instrument || '';
+    instrumentSelection.set(panel, next);
+    if (prev && prev !== next) {
+      maybeCompleteTask('change-instrument');
+    }
+  };
+  document.addEventListener('toy:instrument', handleInstrumentChangeGlobal, true);
+  document.addEventListener('toy-instrument', handleInstrumentChangeGlobal, true);
 
   const scheduleDrawToySync = () => {
     requestAnimationFrame(() => {
@@ -3400,33 +3504,13 @@ try {
     const selectors =
       '.tutorial-pulse-target, .tutorial-addtoy-pulse, .tutorial-active-pulse, .tutorial-flash';
 
-    const prev = Array.from(document.querySelectorAll(selectors));
-
-    console.log('[tutorial] clearCurrentTutorialHighlight BEFORE', {
-      count: prev.length,
-      elements: prev.map((el) => ({
-        tag: el.tagName,
-        classes: el.className
-      }))
-    });
-
-    prev.forEach((el) => {
+    Array.from(document.querySelectorAll(selectors)).forEach((el) => {
       el.classList.remove(
         'tutorial-pulse-target',
         'tutorial-addtoy-pulse',
         'tutorial-active-pulse',
         'tutorial-flash'
       );
-    });
-
-    const after = Array.from(document.querySelectorAll(selectors));
-
-    console.log('[tutorial] clearCurrentTutorialHighlight AFTER', {
-      remainingCount: after.length,
-      remaining: after.map((el) => ({
-        tag: el.tagName,
-        classes: el.className
-      }))
     });
   }
 
@@ -3443,6 +3527,16 @@ try {
       const info = TASK_INFO_BY_ID.get(taskId);
       return info?.requirement || null;
     })();
+    const taskInfo = TASK_INFO_BY_ID.get(taskId) || {};
+    const goalForTask = taskInfo.goalId ? GOAL_BY_ID.get(taskInfo.goalId) : null;
+    const clickedTask = (() => {
+      if (!goalForTask || !Array.isArray(goalForTask.tasks)) return null;
+      if (Number.isFinite(taskInfo.taskIndex) && goalForTask.tasks[taskInfo.taskIndex]) {
+        return goalForTask.tasks[taskInfo.taskIndex];
+      }
+      return goalForTask.tasks.find((task) => task?.id === taskId) || null;
+    })();
+    const isDisabledTask = taskElement.classList.contains('is-disabled');
 
     // Clean up any previous highlight/handlers
     if (typeof guideHighlightCleanup === 'function') {
@@ -4062,6 +4156,8 @@ try {
       'press-play': '#topbar [data-action="toggle-play"]',
       'press-clear': '.toy-panel[data-toy="drawgrid"] [data-action="clear"], .toy-panel [data-action="clear"]',
       'press-random': '.toy-panel[data-toy="drawgrid"] [data-action="random"], .toy-panel [data-action="random"]',
+      'change-instrument-add-toy': ADD_TOY_TOGGLE_SELECTOR,
+      'change-instrument-select': INSTRUMENT_SELECTOR,
       'toggle-node': '.toy-panel[data-toy="drawgrid"]',
       'drag-note': '.toy-panel[data-toy="drawgrid"]',
       'draw-line': '.toy-panel[data-toy="drawgrid"] canvas[data-role="drawgrid-paint"]',
@@ -4095,37 +4191,10 @@ try {
       ) ||
         rawTarget);
 
-    console.log('[tutorial][guide:task-click] RESOLVED', {
-      taskId,
-      rawTargetTag: rawTarget?.tagName,
-      rawTargetClasses: rawTarget?.className,
-      pulseTargetTag: pulseTarget?.tagName,
-      pulseTargetClassesBefore: pulseTarget?.className
-    });
-
-    // Before we touch anything, see what highlight exists:
-    console.log('[tutorial][guide:task-click] BEFORE clear', {
-      taskId,
-      existingPulseTargets: Array.from(
-        document.querySelectorAll(
-          '.tutorial-pulse-target, .tutorial-addtoy-pulse, .tutorial-active-pulse, .tutorial-flash'
-        )
-      ).map((el) => ({
-        tag: el.tagName,
-        classes: el.className
-      }))
-    });
-
     clearCurrentTutorialHighlight();
 
-    console.log('[tutorial][guide:task-click] AFTER clear before add', {
-      taskId,
-      pulseTargetTag: pulseTarget?.tagName,
-      pulseTargetClassesNow: pulseTarget?.className
-    });
-
     if (!pulseTarget) {
-      console.log('[tutorial][guide:task-click] NO pulseTarget for task', taskId);
+      console.log('[tutorial] no pulseTarget for guide task', taskId);
       return;
     }
 
@@ -4181,22 +4250,6 @@ try {
       }, 360);
     }
 
-    console.log('[tutorial][guide:task-click] AFTER add', {
-      taskId,
-      wantsWhitePulse,
-      panelHighlightTask,
-      pulseTargetTag: pulseTarget.tagName,
-      pulseTargetClassesAfterAdd: pulseTarget.className
-    });
-
-    window.__HELP_PULSE_DEBUG = {
-      taskId,
-      time: performance.now(),
-      pulseTargetTag: pulseTarget.tagName,
-      pulseTargetClasses: pulseTarget.className,
-      panelHighlightTask
-    };
-
     // And check in the next tick if something else removes them:
     setTimeout(() => {
       const hasPulse =
@@ -4204,22 +4257,9 @@ try {
         pulseTarget.classList.contains('tutorial-addtoy-pulse') ||
         pulseTarget.classList.contains('tutorial-active-pulse');
 
-      console.log('[tutorial][guide:task-click] AFTER TICK', {
-        taskId,
-        pulseTargetTag: pulseTarget.tagName,
-        pulseTargetClassesAfterTick: pulseTarget.className,
-        panelHighlightTask,
-        hasPulse
-      });
-
       // In guide-only mode, the very first Help-related task click sometimes
       // gets its pulse classes removed by other logic. If that happens, reapply.
       if (!tutorialActive && !panelHighlightTask && wantsWhitePulse && !hasPulse) {
-        console.log('[tutorial][guide:task-click] REAPPLY help pulse after tick', {
-          taskId,
-          pulseTargetTag: pulseTarget.tagName
-        });
-
         pulseTarget.classList.add(
           'tutorial-pulse-target',
           'tutorial-active-pulse',
@@ -4262,15 +4302,21 @@ try {
 
     renderGoalPanel();
 
-    // Only drive handleTaskEnter in full tutorial mode.
-    if (tutorialActive) {
-      console.log('[tutorial][guide:task-click] calling handleTaskEnter (tutorialActive=true)', {
+    const taskForEnter = isDisabledTask ? null : (clickedTask || getCurrentTask());
+    if (taskForEnter) {
+      console.log('[tutorial][guide:task-click] calling handleTaskEnter', {
         taskId,
-        currentTaskId: getCurrentTask()?.id
+        tutorialActive,
+        isDisabledTask,
+        currentTaskId: taskForEnter?.id
       });
-      handleTaskEnter(getCurrentTask());
+      handleTaskEnter(taskForEnter);
     } else {
-      console.log('[tutorial][guide:task-click] skip handleTaskEnter in guide-only mode', { taskId });
+      console.log('[tutorial][guide:task-click] skip handleTaskEnter', {
+        taskId,
+        tutorialActive,
+        isDisabledTask,
+      });
     }
   });
 

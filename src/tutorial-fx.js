@@ -449,14 +449,119 @@ export function startParticleStream(originEl, targetEl, options = {}) {
     target: tRect ? { x: tRect.left, y: tRect.top, w: tRect.width, h: tRect.height } : null,
     lastPointerup: window.__LAST_POINTERUP_DIAG__,
   });
-  const isValidNode = (el) => {
-    if (!el) return false;
-    if (!el.isConnected) return false;
+  const diagnoseNode = (el, rect) => {
+    if (!el) return { valid: false, reason: 'missing' };
+    if (!el.isConnected) return { valid: false, reason: 'disconnected' };
+
     const rects = el.getClientRects?.();
-    return rects && rects.length > 0;
+    const rectsCount = rects?.length ?? null;
+    const firstRect = rects && rects.length > 0 ? rects[0] : null;
+    const style = (() => {
+      try {
+        const cs = getComputedStyle(el);
+        return {
+          display: cs.display,
+          visibility: cs.visibility,
+          opacity: cs.opacity,
+          pointerEvents: cs.pointerEvents,
+        };
+      } catch {
+        return null;
+      }
+    })();
+
+    if (rects && rects.length > 0) {
+      return {
+        valid: true,
+        reason: 'client rects',
+        rectsCount,
+        firstRect: firstRect ? {
+          left: firstRect.left,
+          top: firstRect.top,
+          width: firstRect.width,
+          height: firstRect.height,
+        } : null,
+        boundingRect: rect ? { left: rect.left, top: rect.top, width: rect.width, height: rect.height } : null,
+        offset: { w: el.offsetWidth, h: el.offsetHeight },
+        client: { w: el.clientWidth, h: el.clientHeight },
+        style,
+        tag: el.tagName,
+        id: el.id || null,
+        className: el.className || null,
+      };
+    }
+
+    if (rect && typeof rect.width === 'number' && typeof rect.height === 'number' && rect.width > 0 && rect.height > 0) {
+      return {
+        valid: true,
+        reason: 'bounding rect fallback',
+        rectsCount,
+        firstRect: firstRect ? {
+          left: firstRect.left,
+          top: firstRect.top,
+          width: firstRect.width,
+          height: firstRect.height,
+        } : null,
+        boundingRect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+        offset: { w: el.offsetWidth, h: el.offsetHeight },
+        client: { w: el.clientWidth, h: el.clientHeight },
+        style,
+        tag: el.tagName,
+        id: el.id || null,
+        className: el.className || null,
+      };
+    }
+
+    return {
+      valid: false,
+      reason: 'no rects and no size',
+      rectsCount,
+      firstRect: firstRect ? {
+        left: firstRect.left,
+        top: firstRect.top,
+        width: firstRect.width,
+        height: firstRect.height,
+      } : null,
+      boundingRect: rect ? { left: rect.left, top: rect.top, width: rect.width, height: rect.height } : null,
+      offset: { w: el.offsetWidth, h: el.offsetHeight },
+      client: { w: el.clientWidth, h: el.clientHeight },
+      style,
+      tag: el.tagName,
+      id: el.id || null,
+      className: el.className || null,
+    };
   };
-  if (!originEl || !targetEl || !isValidNode(originEl) || !isValidNode(targetEl)) {
-    console.log('[tutorial-fx] startParticleStream skipped: origin or target missing', { originElExists: !!originEl, targetElExists: !!targetEl });
+
+  const originDiag = diagnoseNode(originEl, oRect);
+  const targetDiag = diagnoseNode(targetEl, tRect);
+  const originValid = originDiag.valid;
+  const targetValid = targetDiag.valid;
+
+  const diagSummary = (d) => ({
+    valid: d?.valid,
+    reason: d?.reason,
+    rectsCount: d?.rectsCount,
+    firstRect: d?.firstRect,
+    boundingRect: d?.boundingRect,
+    offset: d?.offset,
+    client: d?.client,
+    style: d?.style,
+    tag: d?.tag,
+    id: d?.id,
+    className: d?.className,
+  });
+
+  if (!originEl || !targetEl || !originValid || !targetValid) {
+    console.log('[tutorial-fx] startParticleStream skipped: origin or target invalid', {
+      originElExists: !!originEl,
+      targetElExists: !!targetEl,
+      originValid,
+      targetValid,
+      originDiag,
+      targetDiag,
+      originSummary: diagSummary(originDiag),
+      targetSummary: diagSummary(targetDiag),
+    });
     activeTaskMaskRect = null;
     activeOriginEl = null;
     return;

@@ -871,6 +871,16 @@ window.addEventListener('guide:progress-update', () => {
   }
 });
 
+window.addEventListener('guide:clear-active-task', () => {
+  lastActiveTaskSelectionId = null;
+  if (panelsRef) {
+    panelsRef.querySelectorAll('.is-active-guide-task').forEach((taskEl) => {
+      taskEl.classList.remove('is-active-guide-task');
+    });
+  }
+  if (highlighterRef) highlighterRef.classList.remove('is-visible');
+});
+
 window.addEventListener('scene:new', () => {
   try {
     const api = window.TutorialGoalsAPI || lastApi;
