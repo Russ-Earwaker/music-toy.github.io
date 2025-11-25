@@ -190,19 +190,37 @@ const GOAL_FLOW = [
     ],
   },
   {
-    id: 'dummy-goal-2',
-    title: 'Dummy Goal 2',
+    id: 'chain-sequence',
+    title: 'Create a toy sequence',
     reward: {
-      description: 'Another dummy reward.',
+      description: 'You made progress. Have a star.',
       icons: [
-        { type: 'symbol', label: 'Dummy 2', symbol: 'D' },
+        { type: 'asset', label: 'Star Reward', icon: '../assets/Ui/T_Star.png' },
       ],
     },
     tasks: [
       {
-        id: 'dummy-task-2',
-        label: 'Do another dummy task.',
-        requirement: 'dummy-req-2',
+        id: 'sequence-add-toy',
+        label: 'Add a toy',
+        requirement: 'place-any-toy',
+      },
+      {
+        id: 'sequence-chain-toy',
+        label: 'Click the + button on the toy.',
+        disabledUntil: 'sequence-add-toy',
+        requirement: 'add-chained-toy',
+      },
+      {
+        id: 'sequence-interact',
+        label: 'Interact with your sequence toy.',
+        disabledUntil: 'sequence-chain-toy',
+        requirement: 'interact-sequence-toy',
+      },
+      {
+        id: 'sequence-press-play',
+        label: 'Press the Play button to start the toy.',
+        disabledUntil: 'sequence-interact',
+        requirement: 'press-play',
       },
     ],
   },
@@ -581,6 +599,19 @@ function cloneGoal(goal) {
 
   const guideToyTracker = (() => {
     let seenToyPanels = new WeakSet();
+    const refreshChainedToyRequirement = () => {
+      try {
+        const anyChained = !!document.querySelector('.toy-panel[data-chain-parent]');
+        if (anyChained) {
+          // Completing the chain requirement should behave like other tasks:
+          // clear highlight, stop stream, and advance the guide.
+          maybeCompleteTask('add-chained-toy');
+        } else {
+          // If the chained toy has been removed, revert the requirement.
+          setRequirementProgress('add-chained-toy', false);
+        }
+      } catch {}
+    };
     const seedExistingPanels = () => {
       board.querySelectorAll('.toy-panel').forEach((panel) => {
         if (panel instanceof HTMLElement) {
@@ -589,6 +620,7 @@ function cloneGoal(goal) {
       });
     };
     seedExistingPanels();
+    refreshChainedToyRequirement();
 
     const handlePanel = (panel) => {
       if (!(panel instanceof HTMLElement)) return;
@@ -613,6 +645,7 @@ function cloneGoal(goal) {
       seenToyPanels.add(panel);
       registerToyInteraction(panel);
       maybeCompleteTask('place-any-toy');
+      refreshChainedToyRequirement();
       const toyType = panel.dataset?.toy;
       if (toyType === 'drawgrid') {
         maybeCompleteTask('add-toy-drawgrid');
@@ -630,6 +663,7 @@ function cloneGoal(goal) {
           }
         });
       });
+      refreshChainedToyRequirement();
     });
 
     observer.observe(board, { childList: true, subtree: true });
@@ -1065,7 +1099,15 @@ let hasDetectedLine = false;
     trackPlaceToyPanel(panel);
 
     const toyType = (panel.dataset?.toy || '').toLowerCase();
-    const markInteraction = () => maybeCompleteTask('interact-any-toy');
+    const markInteraction = () => {
+      // Generic "interact with any toy" requirement (used by the Place a Toy goal)
+      maybeCompleteTask('interact-any-toy');
+
+      // Sequence goal: only complete when the interaction happens on a chained toy
+      if (panel.dataset?.chainParent) {
+        maybeCompleteTask('interact-sequence-toy');
+      }
+    };
 
     const add = (evt, handler, opts) => {
       try { panel.addEventListener(evt, handler, opts); } catch { panel.addEventListener(evt, handler); }
@@ -2356,7 +2398,7 @@ let hasDetectedLine = false;
 
     let handledSpecial = false;
 
-    const isGenericAddToyTask = task.id === 'add-any-toy';
+    const isGenericAddToyTask = task.id === 'add-any-toy' || task.id === 'sequence-add-toy';
     const isAddToyTask =
       task.id === 'place-any-toy' ||
       task.id === 'add-draw-toy' ||
@@ -2452,7 +2494,7 @@ let hasDetectedLine = false;
       handledSpecial = true;
 
     }
-    else if (task.id === 'interact-new-toy') {
+    else if (task.id === 'interact-new-toy' || task.id === 'sequence-interact') {
       handledSpecial = true;
       ensureGoalPanel();
 
@@ -3609,7 +3651,7 @@ try {
       };
     };
 
-  if (taskId === 'place-any-toy' || taskId === 'add-draw-toy' || taskId === 'add-rhythm-toy' || taskId === 'add-any-toy') {
+  if (taskId === 'place-any-toy' || taskId === 'add-draw-toy' || taskId === 'add-rhythm-toy' || taskId === 'add-any-toy' || taskId === 'sequence-add-toy') {
     let disposed = false;
     let cleanupInner = null;
     let retryTimer = 0;
@@ -3651,7 +3693,7 @@ try {
       return;
     }
 
-    if (taskId === 'interact-new-toy') {
+    if (taskId === 'interact-new-toy' || taskId === 'sequence-interact') {
       let disposed = false;
       let cleanupInner = null;
       let retryTimer = 0;
@@ -4154,10 +4196,12 @@ try {
       'zoom-camera': '.toy-spawner-help',
       'recycle-toy': '.toy-spawner-trash',
       'press-play': '#topbar [data-action="toggle-play"]',
+      'sequence-press-play': '#topbar [data-action="toggle-play"]',
       'press-clear': '.toy-panel[data-toy="drawgrid"] [data-action="clear"], .toy-panel [data-action="clear"]',
       'press-random': '.toy-panel[data-toy="drawgrid"] [data-action="random"], .toy-panel [data-action="random"]',
       'change-instrument-add-toy': ADD_TOY_TOGGLE_SELECTOR,
       'change-instrument-select': INSTRUMENT_SELECTOR,
+      'sequence-chain-toy': '.toy-chain-btn',
       'toggle-node': '.toy-panel[data-toy="drawgrid"]',
       'drag-note': '.toy-panel[data-toy="drawgrid"]',
       'draw-line': '.toy-panel[data-toy="drawgrid"] canvas[data-role="drawgrid-paint"]',
@@ -4187,7 +4231,7 @@ try {
     const pulseTarget =
       rawTarget &&
       (rawTarget.closest(
-        '.toy-spawner-help, .toy-spawner-trash, .toy-help-controls, .toy-spawner-toggle'
+        '.toy-spawner-help, .toy-spawner-trash, .toy-help-controls, .toy-spawner-toggle, .toy-chain-btn'
       ) ||
         rawTarget);
 
@@ -4199,7 +4243,7 @@ try {
     }
 
     const wantsWhitePulse = pulseTarget.matches(
-      '.toy-spawner-help, .toy-spawner-trash, .toy-help-controls, .toy-spawner-toggle'
+      '.toy-spawner-help, .toy-spawner-trash, .toy-help-controls, .toy-spawner-toggle, .toy-chain-btn'
     );
 
     const particleTarget = panelHighlightTask
