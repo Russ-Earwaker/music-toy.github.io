@@ -165,10 +165,10 @@ function renderOverlay() {
   // Always render the controls help, even if there are no other labels.
   // Reuse the existing element when possible to avoid restarting animations.
   let controlsLabel = existingControls;
-  if (controlsLabel) {
-    host.appendChild(controlsLabel);
-  } else {
+  if (!controlsLabel) {
     controlsLabel = renderControlsHelp(host);
+  } else if (controlsLabel.parentNode !== host) {
+    host.appendChild(controlsLabel);
   }
 
   if (controlsLabel instanceof HTMLElement) {

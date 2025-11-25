@@ -1645,6 +1645,14 @@ body.tutorial-active #topbar #theme-switcher-wrap {
 .toy-help-callout.toy-help-controls.tutorial-active-pulse {
   position: relative;
   isolation: isolate;
+  /* Keep the callout clearly "on" while it's targeted */
+  filter: brightness(1.28);
+  transition: filter 0.35s ease-out;
+}
+
+.toy-help-callout.toy-help-controls.tutorial-active-pulse.tutorial-flash {
+  /* Slightly stronger pop for the first few frames */
+  filter: brightness(1.45);
 }
 
 /* Use the same glowing ring style as our buttons, but shaped to the callout */

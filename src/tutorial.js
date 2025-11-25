@@ -2608,7 +2608,12 @@ let hasDetectedLine = false;
       const getHelpButton = () => getControlMap(tutorialToy).help || document.querySelector(CONTROL_SELECTORS.help);
       const stopForTarget = () => {
         if (currentTarget) {
-          currentTarget.classList.remove('tutorial-pulse-target', 'tutorial-addtoy-pulse', 'tutorial-active-pulse', 'tutorial-flash');
+          currentTarget.classList.remove(
+            'tutorial-pulse-target',
+            'tutorial-addtoy-pulse',
+            'tutorial-active-pulse',
+            'tutorial-flash'
+          );
         }
         stopParticleStream();
         currentTarget = null;
@@ -2616,9 +2621,12 @@ let hasDetectedLine = false;
 
       const startForTarget = (targetEl) => {
         if (!taskEl || !targetEl?.isConnected) return;
+        const alreadyHighlighted = targetEl.classList.contains('tutorial-active-pulse');
         currentTarget = targetEl;
-        targetEl.classList.add('tutorial-pulse-target', 'tutorial-addtoy-pulse', 'tutorial-active-pulse');
-        if (!targetEl.classList.contains('tutorial-flash')) {
+        if (!alreadyHighlighted) {
+          targetEl.classList.add('tutorial-pulse-target', 'tutorial-addtoy-pulse', 'tutorial-active-pulse');
+        }
+        if (!alreadyHighlighted && !targetEl.classList.contains('tutorial-flash')) {
           targetEl.classList.add('tutorial-flash');
           setTimeout(() => targetEl?.classList.remove('tutorial-flash'), 320);
         }
@@ -3695,9 +3703,12 @@ try {
 
       const startForTarget = (target) => {
         if (!taskElement.isConnected || !target?.isConnected) return;
+        const alreadyHighlighted = target.classList.contains('tutorial-active-pulse');
         currentTarget = target;
-        target.classList.add('tutorial-pulse-target', 'tutorial-addtoy-pulse', 'tutorial-active-pulse');
-        if (!target.classList.contains('tutorial-flash')) {
+        if (!alreadyHighlighted) {
+          target.classList.add('tutorial-pulse-target', 'tutorial-addtoy-pulse', 'tutorial-active-pulse');
+        }
+        if (!alreadyHighlighted && !target.classList.contains('tutorial-flash')) {
           target.classList.add('tutorial-flash');
           setTimeout(() => target?.classList.remove('tutorial-flash'), 320);
         }
@@ -3837,12 +3848,15 @@ try {
 
         const applyHighlight = (el) => {
           if (!el || !el.classList) return;
-          el.classList.add(
-            'tutorial-pulse-target',
-            'tutorial-addtoy-pulse',
-            'tutorial-active-pulse'
-          );
-          if (!el.classList.contains('tutorial-flash')) {
+          const alreadyHighlighted = el.classList.contains('tutorial-active-pulse');
+          if (!alreadyHighlighted) {
+            el.classList.add(
+              'tutorial-pulse-target',
+              'tutorial-addtoy-pulse',
+              'tutorial-active-pulse'
+            );
+          }
+          if (!alreadyHighlighted && !el.classList.contains('tutorial-flash')) {
             el.classList.add('tutorial-flash');
             setTimeout(() => el?.classList.remove('tutorial-flash'), 320);
           }
