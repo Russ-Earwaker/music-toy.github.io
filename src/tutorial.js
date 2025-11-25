@@ -2815,6 +2815,7 @@ let hasDetectedLine = false;
         window.tutorialSpacebarDisabled = false;
       }
       const isPlayTask = task.id === 'press-play';
+      const isInstrumentTask = task.id === 'change-instrument-select';
       if (isInstrumentTask && targetEl) {
         // Ensure instrument controls are visible/unlocked for guidance
         targetEl.classList.remove('tutorial-control-locked', 'tutorial-instrument-hidden');
@@ -2833,7 +2834,6 @@ let hasDetectedLine = false;
       }
     const isToggleTask = task.id === 'toggle-node';
     const isDragTask = task.id === 'drag-note';
-    const isInstrumentTask = task.id === 'change-instrument-select';
     const targetVisible =
       targetEl &&
       (!isInstrumentTask || !targetEl.classList.contains('tutorial-control-locked')) &&
@@ -3009,6 +3009,26 @@ let hasDetectedLine = false;
           el.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-addtoy-pulse', 'tutorial-guide-foreground');
         });
       }
+    }
+    const shouldForceGuideCleanup =
+      !tutorialActive &&
+      requirement === 'add-chained-toy' &&
+      activeGuideRequirement === requirement &&
+      requirementCompletionState.get(requirement) === true;
+    if (!progressChanged && shouldForceGuideCleanup) {
+      if (typeof guideHighlightCleanup === 'function') {
+        try { guideHighlightCleanup(); } catch {}
+        guideHighlightCleanup = null;
+      } else {
+        stopParticleStream();
+      }
+      document.querySelectorAll('.tutorial-pulse-target, .tutorial-active-pulse, .tutorial-addtoy-pulse, .tutorial-guide-foreground').forEach(el => {
+        if (el.matches?.('.toy-panel[data-toy=\"drawgrid\"]')) {
+          try { el.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: false } })); } catch {}
+          try { el.dispatchEvent(new CustomEvent('tutorial:highlight-drag', { detail: { active: false } })); } catch {}
+        }
+        el.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-addtoy-pulse', 'tutorial-guide-foreground');
+      });
     }
     if (tutorialState?.pendingRewardGoalId) return progressChanged;
     const task = getCurrentTask();
@@ -4211,6 +4231,9 @@ try {
     };
 
     const selector = TASK_TARGET_SELECTORS[taskId];
+    if (taskId === 'sequence-chain-toy') {
+      console.log('[tutorial][sequence-chain-toy] using selector', { selector });
+    }
     if (!selector) {
       console.log('[tutorial] no target selector for task', { taskId });
       return;
@@ -4253,22 +4276,35 @@ try {
     let disposed = false;
     let flashTimer = null;
     let didStart = false;
+
+    // Always try to grab the *current* active task element for this taskId.
+    // renderGoalPanel() can swap the DOM node, so the original taskElement may be stale.
+    const getActiveTaskElement = () => {
+      const live = document.querySelector(
+        `.goal-task.is-active-guide-task[data-task-id="${taskId}"]`
+      );
+      if (live && live.isConnected) return live;
+      if (taskElement && taskElement.isConnected) return taskElement;
+      return null;
+    };
+
     const runParticles = (force = false) => {
       if (disposed) return;
-      if (!taskElement.isConnected || !particleTarget?.isConnected) return;
+      const currentTaskEl = getActiveTaskElement();
+      if (!currentTaskEl || !particleTarget?.isConnected) return;
       if (didStart && !force) return;
       didStart = true;
       stopParticleStream();
       console.log('[tutorial] general runParticles', {
         taskId,
-        taskClasses: taskElement.className,
+        taskClasses: currentTaskEl.className,
         targetSelector: selector,
         targetClasses: particleTarget?.className,
       });
       if (particleOptions) {
-        startParticleStream(taskElement, particleTarget, particleOptions);
+        startParticleStream(currentTaskEl, particleTarget, particleOptions);
       } else {
-        startParticleStream(taskElement, particleTarget, { layer: 'behind-target' });
+        startParticleStream(currentTaskEl, particleTarget, { layer: 'behind-target' });
       }
     };
     const scheduleParticles = (force = false) => {
@@ -4288,6 +4324,11 @@ try {
       pulseTarget.classList.add('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-flash');
       if (wantsWhitePulse) {
         pulseTarget.classList.add('tutorial-addtoy-pulse');
+      }
+      if (taskId === 'sequence-chain-toy') {
+        console.log('[tutorial][sequence-chain-toy] applied pulses', {
+          classes: pulseTarget.className,
+        });
       }
       flashTimer = setTimeout(() => {
         pulseTarget.classList.remove('tutorial-flash');
@@ -4327,6 +4368,11 @@ try {
         const eventName = isDragTask ? 'tutorial:highlight-drag' : 'tutorial:highlight-notes';
         try { targetElement.dispatchEvent(new CustomEvent(eventName, { detail: { active: false } })); } catch {}
       } else {
+        if (taskId === 'sequence-chain-toy') {
+          console.log('[tutorial][sequence-chain-toy] cleanup pulses', {
+            classesBefore: pulseTarget.className,
+          });
+        }
         pulseTarget.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-flash', 'tutorial-addtoy-pulse');
       }
       stopParticleStream();
@@ -4347,7 +4393,11 @@ try {
     renderGoalPanel();
 
     const taskForEnter = isDisabledTask ? null : (clickedTask || getCurrentTask());
-    if (taskForEnter) {
+    const skipHandleTaskEnter =
+      !tutorialActive &&
+      (taskId === 'sequence-chain-toy');
+
+    if (taskForEnter && !skipHandleTaskEnter) {
       console.log('[tutorial][guide:task-click] calling handleTaskEnter', {
         taskId,
         tutorialActive,
@@ -4360,6 +4410,7 @@ try {
         taskId,
         tutorialActive,
         isDisabledTask,
+        reason: skipHandleTaskEnter ? 'skip-for-guide-highlight' : 'no-task-for-enter',
       });
     }
   });

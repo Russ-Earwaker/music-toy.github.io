@@ -182,9 +182,21 @@ body.tutorial-active #topbar .tutorial-play-hidden {
   100% { transform: scale(1);    }
 }
 
+@keyframes tutorialPulseChainBtn {
+  0%   { transform: translateY(-50%) scale(1);    }
+  10%  { transform: translateY(-50%) scale(1.08); }
+  25%  { transform: translateY(-50%) scale(1.00); }
+  50%  { transform: translateY(-50%) scale(1.06); }
+  100% { transform: translateY(-50%) scale(1);    }
+}
+
 .tutorial-pulse-target {
   animation: tutorialPulse 2s ease-in-out infinite;
   transform-origin: 50% 50%;
+}
+
+.toy-chain-btn.tutorial-pulse-target {
+  animation-name: tutorialPulseChainBtn;
 }
 
 /* Add Toy pulse skin */
