@@ -1823,8 +1823,8 @@ body.tutorial-active #topbar #theme-switcher-wrap {
 }
 
 @keyframes pulseBorder {
-  0%   { box-shadow: 0 0 0 0px rgba(255, 255, 255, 0.9); }
-  50%  { box-shadow: 0 0 0 12px rgba(255, 255, 255, 0); }
+  0%   { box-shadow: 0 0 0 0px rgba(255, 255, 255, 0.7); }
+  50%  { box-shadow: 0 0 0 8px rgba(255, 255, 255, 0); }
   100% { box-shadow: 0 0 0 0px rgba(255, 255, 255, 0); }
 }
 
@@ -2074,41 +2074,11 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
 
 .tutorial-claim-btn.is-visible {
   display: block;
-  /* Use the same expanding halo as the tutorial add-toy pulse */
+  /* Use the shared subtle halo */
   animation: pulseBorder 1.8s ease-in-out infinite;
   will-change: box-shadow;
 }
 
-@keyframes tutorialClaimPulse {
-  0% { transform: none; box-shadow: 0 0 0 rgba(94, 138, 190, 0.0); }
-  50% { transform: none; box-shadow: 0 0 18px rgba(94, 138, 190, 0.45); }
-  100% { transform: none; box-shadow: 0 0 0 rgba(94, 138, 190, 0.0); }
-}
-
-@keyframes tutorialClaimBorder {
-  0% {
-    opacity: 0;
-    border-width: 2px;
-    box-shadow: 0 0 0 0 rgba(94, 138, 190, 0.0);
-  }
-  40% {
-    opacity: 1;
-    border-width: 3px;
-    box-shadow: 0 0 10px 2px rgba(94, 138, 190, 0.7);
-  }
-  100% {
-    opacity: 0;
-    border-width: 6px;
-    box-shadow: 0 0 18px 6px rgba(94, 138, 190, 0.0);
-  }
-}
-
-@keyframes tutorialClaimRing {
-  0%   { opacity: 0;   outline-width: 0px; outline-offset: 0px; }
-  30%  { opacity: 1;   outline-width: 4px; outline-offset: 2px; }
-  60%  { opacity: 0.95; outline-width: 6px; outline-offset: 4px; }
-  100% { opacity: 0;   outline-width: 10px; outline-offset: 6px; }
-}
 .app-topbar .topbar-controls {
   flex: 1;
   display: flex;
