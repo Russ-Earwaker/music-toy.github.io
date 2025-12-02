@@ -22,7 +22,7 @@ const state = {
   panelDrag: null,
 };
 
-const BUTTON_ICON_HTML = '<span aria-hidden="true" class="toy-spawner-icon"></span>';
+const BUTTON_ICON_HTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
 
 function updateHelpToggleUI(nextState) {
   if (typeof nextState === 'boolean') {
@@ -42,30 +42,42 @@ function ensureDock() {
 
   const trash = document.createElement('button');
   trash.type = 'button';
-  trash.className = 'toy-spawner-trash toy-btn';
+  trash.className = 'toy-spawner-trash c-btn';
   trash.setAttribute('aria-label', 'Delete Toy');
   trash.title = 'Delete Toy';
   trash.dataset.helpLabel = 'Drag a toy here to delete it';
   trash.dataset.helpPosition = 'left';
   trash.innerHTML = BUTTON_ICON_HTML;
+  const trashCore = trash.querySelector('.c-btn-core');
+  if (trashCore) trashCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonTrash.png')");
+  trash.style.setProperty('--c-btn-size', 'var(--toy-spawner-button-size)');
+  trash.style.setProperty('--c-btn-bg', 'rgba(159, 44, 44, 0.85)');
 
   const toggle = document.createElement('button');
   toggle.type = 'button';
-  toggle.className = 'toy-spawner-toggle toy-btn';
+  toggle.className = 'toy-spawner-toggle c-btn';
   toggle.setAttribute('aria-label', 'Create Toy');
   toggle.title = 'Create Toy';
   toggle.dataset.helpLabel = 'Open the Add Toy menu';
   toggle.dataset.helpPosition = 'left';
   toggle.innerHTML = BUTTON_ICON_HTML;
+  const toggleCore = toggle.querySelector('.c-btn-core');
+  if (toggleCore) toggleCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonAddMusic.png')");
+  toggle.style.setProperty('--c-btn-size', 'var(--toy-spawner-button-size)');
+  toggle.style.setProperty('--c-btn-bg', 'rgba(47, 102, 179, 0.85)');
 
   const help = document.createElement('button');
   help.type = 'button';
-  help.className = 'toy-spawner-help toy-btn';
+  help.className = 'toy-spawner-help c-btn';
   help.setAttribute('aria-label', 'Toggle Help');
   help.title = 'Help';
   help.dataset.helpLabel = 'Toggle help labels';
   help.dataset.helpPosition = 'left';
   help.innerHTML = BUTTON_ICON_HTML;
+  const helpCore = help.querySelector('.c-btn-core');
+  if (helpCore) helpCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonHelp.png')");
+  help.style.setProperty('--c-btn-size', 'var(--toy-spawner-button-size)');
+  help.style.setProperty('--c-btn-bg', 'rgba(43, 133, 140, 0.88)');
 
   const menu = document.createElement('div');
   menu.className = 'toy-spawner-menu';

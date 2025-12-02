@@ -1120,57 +1120,22 @@ body.advanced-controls-disabled [data-adv] {
 .toy-spawner-toggle,
 .toy-spawner-trash,
 .toy-spawner-help {
-  --toy-spawner-icon: none;
-  --toy-spawner-bg: rgba(10, 15, 25, 0.92);
   width: var(--toy-spawner-button-size);
   height: var(--toy-spawner-button-size);
-  padding: 6px;
-  border-radius: 999px;
-  border: none;
-  display: grid;
-  place-items: center;
-  position: relative;
-  overflow: hidden;
-  background: radial-gradient(120% 120% at 50% 38%, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 46%), var(--toy-spawner-bg);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 10px 28px rgba(0, 0, 0, 0.45);
-  transition: transform 0.16s ease, box-shadow 0.25s ease, filter 0.2s ease, opacity 0.2s ease;
-}
-
-.toy-spawner-icon {
-  width: 100%;
-  height: 100%;
-  background: var(--toy-spawner-icon) center/contain no-repeat;
-  display: block;
-  border-radius: inherit;
-  filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.38));
-  transition: transform 0.16s ease, filter 0.16s ease;
+  --c-btn-size: var(--toy-spawner-button-size);
+  padding: 0;
+  background: transparent;
 }
 
 .toy-spawner-toggle {
-  --toy-spawner-icon: url('/assets/UI/T_ButtonAddMusic.png');
-  --toy-spawner-bg: rgba(47, 102, 179, 0.85);
+  --c-btn-bg: rgba(47, 102, 179, 0.85);
 }
 .toy-spawner-help {
-  --toy-spawner-icon: url('/assets/UI/T_ButtonHelp.png');
-  --toy-spawner-bg: rgba(43, 133, 140, 0.88);
+  --c-btn-bg: rgba(43, 133, 140, 0.88);
 }
 .toy-spawner-trash {
-  --toy-spawner-icon: url('/assets/UI/T_ButtonTrash.png');
-  --toy-spawner-bg: rgba(159, 44, 44, 0.85);
-  opacity: 0.75;
-}
-
-.toy-spawner-toggle:hover,
-.toy-spawner-help:hover,
-.toy-spawner-trash:hover {
-  transform: translateY(-1px) scale(1.02);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 14px 32px rgba(0, 0, 0, 0.55);
-}
-
-.toy-spawner-toggle:hover .toy-spawner-icon,
-.toy-spawner-help:hover .toy-spawner-icon,
-.toy-spawner-trash:hover .toy-spawner-icon {
-  filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.5)) brightness(1.04);
+  --c-btn-bg: rgba(159, 44, 44, 0.85);
+  opacity: 0.85;
 }
 
 .toy-spawner-help.is-active,
@@ -1189,9 +1154,14 @@ body.advanced-controls-disabled [data-adv] {
   filter: saturate(1.05);
 }
 
-.toy-spawner-trash[data-hover='true'] .toy-spawner-icon {
-  transform: translateY(-1px);
-  filter: drop-shadow(0 10px 16px rgba(248, 113, 113, 0.45)) brightness(1.05);
+.toy-spawner-trash[data-hover='true'] .c-btn-core::before {
+  transform: translate(-50%, -50%) scale(1.06);
+  filter: brightness(1.2);
+}
+
+.toy-spawner-trash[data-hover='true'] .c-btn-core::after {
+  transform: translate(-50%, -50%) scale(1.12);
+  filter: drop-shadow(0 12px 18px rgba(248, 113, 113, 0.45)) brightness(1.08);
 }
 
 .toy-spawner-toggle:focus-visible,

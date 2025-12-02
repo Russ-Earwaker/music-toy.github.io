@@ -2170,9 +2170,11 @@ let hasDetectedLine = false;
           if (isAddToy) {
             const btn = document.createElement('button');
             btn.type = 'button';
-            btn.className = 'toy-spawner-toggle toy-btn is-preview';
+            btn.className = 'toy-spawner-toggle c-btn is-preview';
             btn.setAttribute('aria-label', icon.label || 'Add Toy');
-            btn.innerHTML = '<span aria-hidden="true" class="toy-spawner-icon"></span>';
+            btn.innerHTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
+            const core = btn.querySelector('.c-btn-core');
+            if (core) core.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonAddMusic.png')");
             btn.style.pointerEvents = 'none';
             wrapper.appendChild(btn);
             rewardIcons.appendChild(wrapper);

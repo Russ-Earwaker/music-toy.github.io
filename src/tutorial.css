@@ -226,13 +226,10 @@ body.tutorial-active #topbar .tutorial-play-hidden {
 .goal-reward-icons .toy-spawner-toggle.is-preview {
   width: 56px;
   height: 56px;
-  padding: 6px;
-  border-radius: 999px;
-  display: grid;
-  place-items: center;
+  --c-btn-size: 56px;
   pointer-events: none;
 }
-.goal-reward-icons .toy-spawner-toggle.is-preview .toy-spawner-icon {
+.goal-reward-icons .toy-spawner-toggle.is-preview .c-btn-core::after {
   filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.28));
 }
 
