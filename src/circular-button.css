@@ -64,9 +64,13 @@
 .c-btn-core::after {
   content: '';
   position: absolute;
-  inset: 0;
+  top: 50%;
+  left: 50%;
+  width: 75%;
+  height: 75%;
+  transform: translate(-50%, -50%);
   background-image: var(--c-btn-icon-url);
-  background-size: 75%;
+  background-size: contain;
   background-position: center;
   background-repeat: no-repeat;
   z-index: 2;
@@ -86,8 +90,8 @@
 }
 
 .c-btn:active .c-btn-core::after {
-  background-size: 72.5%;
-  background-position: 49% 49%;
+  width: 72.5%;
+  height: 72.5%;
 }
 
 .c-btn:active .c-btn-glow {
