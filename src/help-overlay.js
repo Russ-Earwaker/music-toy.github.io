@@ -423,6 +423,7 @@ const LABEL_POSITIONS = {
   // Spawner buttons
   'open the add toy menu': { dir: 'left', offsetX: -25, offsetY: 0 },
   'drag a toy here to delete it': { dir: 'left', offsetX: -25, offsetY: 0 },
+  'toggle overview mode': { dir: 'left', offsetX: -25, offsetY: 0 },
   'toggle help labels': { dir: 'left', offsetX: -25, offsetY: 0 },
 };
 
