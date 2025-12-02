@@ -301,6 +301,13 @@ html, body {
   --board-grid-offset: var(--board-grid-offset-x) var(--board-grid-offset-y);
   --board-tap-spacing: calc(var(--board-grid-spacing) / 6);
   --board-tap-radius: calc(var(--board-grid-spacing) * 1.5);
+  --board-dot-min-screen: 1.0px; /* minimum on-screen dot radius */
+  --board-dot-base-size: calc(var(--board-grid-spacing) * 0.022);
+  --board-zoom-scale: max(var(--bv-scale, 1), 0.001); /* guard zero/NaN */
+  --board-dot-size: max(
+    var(--board-dot-base-size),
+    calc(var(--board-dot-min-screen) / var(--board-zoom-scale))
+  );
   position: absolute;
   width: 8000px;
   height: 8000px;
@@ -309,7 +316,11 @@ html, body {
   transform-origin: 0 0 !important;
   overflow: visible !important;
   background-color: #000;
-  background-image: radial-gradient(circle, #131c2a 2px, transparent 1.2px);
+  background-image: radial-gradient(
+    circle,
+    #131c2a var(--board-dot-size),
+    transparent calc(var(--board-dot-size) + 0.8px)
+  );
   background-size: var(--board-grid-spacing) var(--board-grid-spacing);
   background-position: var(--board-grid-offset);
 }
