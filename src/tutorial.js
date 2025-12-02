@@ -31,7 +31,7 @@ const GOAL_FLOW = [
     tasks: [
       {
         id: 'place-any-toy',
-        label: 'Open the Add Toy menu and drag or tap to place any toy',
+        label: '<span class="goal-task-icon goal-task-icon--add" aria-hidden="true"></span>Open the Add Toy menu and drag or tap to place any toy',
         requirement: 'place-any-toy',
       },
       {
@@ -41,7 +41,7 @@ const GOAL_FLOW = [
       },
       {
         id: 'press-play',
-        label: 'Press the Play button to start the toy.',
+        label: '<span class="goal-task-icon goal-task-icon--play" aria-hidden="true"></span>Press the Play button to start the toy.',
         requirement: 'press-play',
       },
     ],
@@ -58,17 +58,17 @@ const GOAL_FLOW = [
     tasks: [
       {
         id: 'add-any-toy',
-        label: 'Add a toy',
+        label: '<span class="goal-task-icon goal-task-icon--add" aria-hidden="true"></span>Add a toy',
         requirement: 'place-any-toy',
       },
       {
         id: 'press-random',
-        label: 'Press the Random button.',
+        label: '<span class="goal-task-icon goal-task-icon--random" aria-hidden="true"></span>Press the Random button.',
         requirement: 'press-random',
       },
       {
         id: 'press-clear',
-        label: 'Press the Clear button.',
+        label: '<span class="goal-task-icon goal-task-icon--clear" aria-hidden="true"></span>Press the Clear button.',
         requirement: 'press-clear',
       },
     ],
@@ -85,7 +85,7 @@ const GOAL_FLOW = [
     tasks: [
       {
         id: 'add-draw-toy',
-        label: 'Add a Draw Line Toy',
+        label: '<span class="goal-task-icon goal-task-icon--add" aria-hidden="true"></span>Add a Draw Line Toy',
         requirement: 'add-toy-drawgrid',
       },
       {
@@ -118,7 +118,7 @@ const GOAL_FLOW = [
     tasks: [
       {
         id: 'add-rhythm-toy',
-        label: 'Open the Add Toy menu and drag in a new Simple Rhythm toy',
+        label: '<span class="goal-task-icon goal-task-icon--add" aria-hidden="true"></span>Open the Add Toy menu and drag in a new Simple Rhythm toy',
         requirement: 'add-toy-loopgrid',
       },
       {
@@ -141,27 +141,27 @@ const GOAL_FLOW = [
     tasks: [
       {
         id: 'press-help',
-        label: 'Press the Help button.',
+        label: '<span class="goal-task-icon goal-task-icon--help" aria-hidden="true"></span>Press the Help button.',
         requirement: 'press-help',
       },
       {
         id: 'pan-camera',
-        label: 'Pan the camera.',
+        label: '<span class="goal-task-icon goal-task-icon--help" aria-hidden="true"></span>Pan the camera.',
         requirement: 'pan-camera',
       },
       {
         id: 'zoom-camera',
-        label: 'Zoom the camera.',
+        label: '<span class="goal-task-icon goal-task-icon--help" aria-hidden="true"></span>Zoom the camera.',
         requirement: 'zoom-camera',
       },
       {
         id: 'recycle-toy',
-        label: 'Trash a toy.',
+        label: '<span class="goal-task-icon goal-task-icon--trash" aria-hidden="true"></span>Trash a toy.',
         requirement: 'recycle-toy',
       },
       {
         id: 'close-help',
-        label: 'Close the help panel.',
+        label: '<span class="goal-task-icon goal-task-icon--help" aria-hidden="true"></span>Close the help panel.',
         requirement: 'close-help',
       },
     ],
@@ -178,12 +178,12 @@ const GOAL_FLOW = [
     tasks: [
       {
         id: 'change-instrument-add-toy',
-        label: 'Add a toy.',
+        label: '<span class="goal-task-icon goal-task-icon--add" aria-hidden="true"></span>Add a toy.',
         requirement: 'place-any-toy',
       },
       {
         id: 'change-instrument-select',
-        label: 'Open the instrument menu and choose another instrument.',
+        label: '<span class="goal-task-icon goal-task-icon--instruments" aria-hidden="true"></span>Open the instrument menu and choose another instrument.',
         disabledUntil: 'change-instrument-add-toy',
         requirement: 'change-instrument',
       },
@@ -206,7 +206,7 @@ const GOAL_FLOW = [
       },
       {
         id: 'sequence-chain-toy',
-        label: 'Click the + button on the toy.',
+        label: '<span class="goal-task-icon goal-task-icon--add" aria-hidden="true"></span>Click the + button on the toy.',
         disabledUntil: 'sequence-add-toy',
         requirement: 'add-chained-toy',
       },
@@ -218,26 +218,9 @@ const GOAL_FLOW = [
       },
       {
         id: 'sequence-press-play',
-        label: 'Press the Play button to start the toy.',
+        label: '<span class="goal-task-icon goal-task-icon--play" aria-hidden="true"></span>Press the Play button to start the toy.',
         disabledUntil: 'sequence-interact',
         requirement: 'press-play',
-      },
-    ],
-  },
-  {
-    id: 'dummy-goal-3',
-    title: 'Dummy Goal 3',
-    reward: {
-      description: 'Yet another dummy reward.',
-      icons: [
-        { type: 'symbol', label: 'Dummy 3', symbol: 'D' },
-      ],
-    },
-    tasks: [
-      {
-        id: 'dummy-task-3',
-        label: 'Do yet another dummy task.',
-        requirement: 'dummy-req-3',
       },
     ],
   },
