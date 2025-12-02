@@ -177,6 +177,25 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     return { layoutLeft: rect.left - baseX, layoutTop: rect.top - baseY };
   }
 
+  function getViewportCenterWorld() {
+    try {
+      const { layoutLeft, layoutTop } = getLayoutOffset();
+      const container = stage.closest('.board-viewport') || document.documentElement;
+      const viewW = container.clientWidth || window.innerWidth;
+      const viewH = container.clientHeight || window.innerHeight;
+      const viewCx = viewW * 0.5;
+      const viewCy = viewH * 0.5;
+      const { scale: s, x: tx, y: ty } = getActiveTransform();
+      if (!Number.isFinite(s) || Math.abs(s) < 1e-6) return null;
+      return {
+        x: (viewCx - layoutLeft - tx) / s,
+        y: (viewCy - layoutTop - ty) / s,
+      };
+    } catch {
+      return null;
+    }
+  }
+
   function applyTransform(
     { scale: nextScale = scale, x: nextX = x, y: nextY = y } = {},
     { commit = false, delayMs } = {}
@@ -408,6 +427,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     applyTransform({ scale: 1, x: 0, y: 0 }, { commit: true, delayMs: 0 });
     scheduleNotify({ ...getZoomState(), committed: true });
   };
+  window.getViewportCenterWorld = getViewportCenterWorld;
 
   function getTargetElementForPanel(panel) {
     if (!panel) return null;

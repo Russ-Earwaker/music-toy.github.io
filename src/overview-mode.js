@@ -1,12 +1,19 @@
 import { publishFrameStart } from './zoom/ZoomCoordinator.js';
 
+const DEFAULT_OVERVIEW_SCALE = 0.3;
+const DEFAULT_NORMAL_SCALE = 1;
+
 const overviewState = {
     isActive: false,
     zoomThreshold: 0.36, // Zoom out further to activate
     zoomReturnLevel: 0.57, // Zoom in closer on return
     previousScale: 1,
     positions: new Map(), // id -> { left, top, width, height }
-    transitioning: false // latch while we zoom in to a toy
+    transitioning: false, // latch while we zoom in to a toy
+    enteredByButton: false,
+    buttonNormalScale: DEFAULT_NORMAL_SCALE,
+    buttonOverviewScale: DEFAULT_OVERVIEW_SCALE,
+    buttonCenterWorld: null
 };
 
 const DOUBLE_TAP_MS = 320; // tweak between ~250–350ms to taste
@@ -48,6 +55,29 @@ function emitOV(name, detail = {}) {
   try {
     window.dispatchEvent(new CustomEvent(`overview:${name}`, { detail: payload }));
   } catch {}
+}
+
+function safeScale(value, fallback = DEFAULT_NORMAL_SCALE) {
+  const n = typeof value === 'number' ? value : NaN;
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+function readBoardScale() {
+  try {
+    const z = typeof window?.getZoomState === 'function' ? window.getZoomState() : null;
+    const live = typeof z?.currentScale === 'number' ? z.currentScale : z?.targetScale;
+    if (Number.isFinite(live) && live > 0) return live;
+  } catch {}
+  return safeScale(window.__boardScale, DEFAULT_NORMAL_SCALE);
+}
+
+function getViewportCenterWorld() {
+    try {
+        if (typeof window?.getViewportCenterWorld === 'function') {
+            return window.getViewportCenterWorld();
+        }
+    } catch {}
+    return null;
 }
 
 function px(n) { return Math.round(n) + 'px'; }
@@ -168,6 +198,15 @@ function bindPanelDragCapture(panel) {
 
 function enterOverviewMode(isButton) {
     if (overviewState.isActive) return;
+    const buttonTriggered = !!isButton;
+    const currentScale = readBoardScale();
+    overviewState.enteredByButton = buttonTriggered;
+    overviewState.previousScale = currentScale;
+    if (buttonTriggered) {
+        overviewState.buttonNormalScale = currentScale;
+        overviewState.buttonOverviewScale = safeScale(overviewState.buttonOverviewScale, DEFAULT_OVERVIEW_SCALE);
+        overviewState.buttonCenterWorld = getViewportCenterWorld();
+    }
     overviewState.isActive = true;
     lastTap = { time: 0, id: null };
     // Broadcast: all toys should enter non-reactive mode.
@@ -192,7 +231,6 @@ function enterOverviewMode(isButton) {
     } catch (err) {
         console.warn('[overview] failed to snapshot panel positions', err);
     }
-    overviewState.previousScale = window.__boardScale;
     const boardForClass = document.querySelector('#board, main#board, .world, .canvas-world');
     if (boardForClass) boardForClass.classList.add('board-overview');
     let panels = [];
@@ -374,10 +412,18 @@ function enterOverviewMode(isButton) {
     } catch {}
     ovlog('Entering Overview Mode, previousScale:', overviewState.previousScale, 'current boardScale:', window.__boardScale);
 
-    if (isButton) {
-        ovlog('Setting board scale to 0.36 for overview mode, current scale:', window.__boardScale);
-        window.setBoardScale(0.36);
-        ovlog('After setting scale to 0.36, actual scale:', window.__boardScale);
+    if (buttonTriggered) {
+        const targetScale = overviewState.buttonOverviewScale;
+        const targetLabel = 'button';
+        const centerWorld = overviewState.buttonCenterWorld || getViewportCenterWorld();
+        ovlog(`[overview] applying ${targetLabel} overview scale`, targetScale, 'current:', window.__boardScale, 'center:', centerWorld);
+        try {
+            if (centerWorld && Number.isFinite(centerWorld.x) && Number.isFinite(centerWorld.y)) {
+                window.centerBoardOnWorldPoint?.(centerWorld.x, centerWorld.y, targetScale);
+            } else {
+                window.setBoardScale(targetScale);
+            }
+        } catch {}
         // Do not dispatch board:scale here; board-viewport.apply() will emit it.
     }
     try { snapOverlaysOnce(); } catch {}
@@ -401,6 +447,12 @@ function enterOverviewMode(isButton) {
 
 function exitOverviewMode(isButton) {
     if (!overviewState.isActive) return;
+    const buttonTriggered = !!isButton;
+    const currentScale = readBoardScale();
+    if (buttonTriggered) {
+        overviewState.buttonOverviewScale = safeScale(currentScale, DEFAULT_OVERVIEW_SCALE);
+    }
+    const wasTransitioning = overviewState.transitioning;
     overviewState.isActive = false;
     // Broadcast: toys can resume normal physics/tweens
     try { window.dispatchEvent(new CustomEvent('overview:transition', { detail: { active: false } })); } catch {}
@@ -427,11 +479,17 @@ function exitOverviewMode(isButton) {
     try {
         window.dispatchEvent(new CustomEvent('overview:change', { detail: { active: false } }));
     } catch {}
+    const targetScale = buttonTriggered
+        ? (overviewState.enteredByButton ? safeScale(overviewState.buttonNormalScale, DEFAULT_NORMAL_SCALE) : DEFAULT_NORMAL_SCALE)
+        : currentScale;
+    const targetCenter = buttonTriggered ? (overviewState.buttonCenterWorld || getViewportCenterWorld()) : null;
     ovlog('Exiting Overview Mode', {
         willRestoreScale: !!isButton,
         previousScale: overviewState.previousScale,
-        currentScale: window.__boardScale
+        currentScale: window.__boardScale,
+        targetScale
     });
+    const shouldApplyScale = buttonTriggered;
     try {
         const boardForClass = document.querySelector('#board, main#board, .world, .canvas-world');
         if (boardForClass) boardForClass.classList.remove('board-overview');
@@ -480,12 +538,20 @@ function exitOverviewMode(isButton) {
         overviewText.remove();
     }
 
-    if (isButton) {
-        ovlog('Restoring board scale from overview mode, target:', overviewState.previousScale, 'current:', window.__boardScale);
-        window.setBoardScale(overviewState.previousScale);
-        ovlog('overview-mode: setBoardScale called with', overviewState.previousScale);
+    if (shouldApplyScale) {
+        ovlog('Restoring board scale from overview mode, target:', targetScale, 'current:', window.__boardScale, 'center:', targetCenter);
+        try {
+            if (targetCenter && Number.isFinite(targetCenter.x) && Number.isFinite(targetCenter.y)) {
+                window.centerBoardOnWorldPoint?.(targetCenter.x, targetCenter.y, targetScale);
+            } else {
+                window.setBoardScale(targetScale);
+            }
+        } catch {}
+        ovlog('overview-mode: setBoardScale called with', targetScale);
         ovlog('After restoring scale, actual scale:', window.__boardScale);
         // Do not dispatch board:scale here; board-viewport.apply() will emit it.
+    } else {
+        ovlog('Skipping scale restore due to active transition, target would have been', targetScale);
     }
     try { snapOverlaysOnce(); } catch {}
 
@@ -503,6 +569,8 @@ function exitOverviewMode(isButton) {
     panelsForEvents.forEach(panel => {
         try { panel.dispatchEvent(new CustomEvent('overview:commit', { bubbles: true })); } catch {}
     });
+    overviewState.enteredByButton = false;
+    overviewState.buttonCenterWorld = null;
 }
 
 function onToyMouseDown(e) {

@@ -1119,7 +1119,8 @@ body.advanced-controls-disabled [data-adv] {
 
 .toy-spawner-toggle,
 .toy-spawner-trash,
-.toy-spawner-help {
+.toy-spawner-help,
+.toy-spawner-overview {
   width: var(--toy-spawner-button-size);
   height: var(--toy-spawner-button-size);
   --c-btn-size: var(--toy-spawner-button-size);
@@ -1130,6 +1131,9 @@ body.advanced-controls-disabled [data-adv] {
 .toy-spawner-toggle {
   --c-btn-bg: rgba(47, 102, 179, 0.85);
 }
+.toy-spawner-overview {
+  --c-btn-bg: rgba(96, 82, 176, 0.9);
+}
 .toy-spawner-help {
   --c-btn-bg: rgba(43, 133, 140, 0.88);
 }
@@ -1139,7 +1143,9 @@ body.advanced-controls-disabled [data-adv] {
 }
 
 .toy-spawner-help.is-active,
-.toy-spawner-help[aria-pressed='true'] {
+.toy-spawner-help[aria-pressed='true'],
+.toy-spawner-overview.is-active,
+.toy-spawner-overview[aria-pressed='true'] {
   box-shadow: 0 0 0 3px rgba(95, 179, 255, 0.35), 0 18px 40px rgba(0, 0, 0, 0.55);
   filter: saturate(1.1) brightness(1.05);
 }
@@ -1166,7 +1172,8 @@ body.advanced-controls-disabled [data-adv] {
 
 .toy-spawner-toggle:focus-visible,
 .toy-spawner-trash:focus-visible,
-.toy-spawner-help:focus-visible {
+.toy-spawner-help:focus-visible,
+.toy-spawner-overview:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 4px;
 }

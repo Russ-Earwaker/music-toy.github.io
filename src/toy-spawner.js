@@ -2,6 +2,7 @@
 // Provides the "Create Toy" palette dock and drag-to-spawn affordance.
 
 import { toggleHelp, isHelpActive } from './help-overlay.js';
+import { overviewMode } from './overview-mode.js';
 
 const state = {
   dock: null,
@@ -16,6 +17,8 @@ const state = {
     create: () => null,
     remove: () => false,
   },
+  overviewButton: null,
+  overviewActive: false,
   drag: null,
   open: false,
   justSpawned: false,
@@ -23,6 +26,8 @@ const state = {
 };
 
 const BUTTON_ICON_HTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
+const OVERVIEW_ICON_OUT = "url('/assets/UI/T_ButtonOverviewZoomOut.png')";
+const OVERVIEW_ICON_IN = "url('/assets/UI/T_ButtonOverviewZoomIn.png')";
 
 function updateHelpToggleUI(nextState) {
   if (typeof nextState === 'boolean') {
@@ -33,6 +38,28 @@ function updateHelpToggleUI(nextState) {
   state.helpButton.setAttribute('aria-pressed', active ? 'true' : 'false');
   state.helpButton.classList.toggle('is-active', active);
 }
+
+function updateOverviewToggleUI(nextState) {
+  if (typeof nextState === 'boolean') {
+    state.overviewActive = nextState;
+  }
+  const active = !!state.overviewActive;
+  const button = state.overviewButton;
+  if (!button) return;
+  button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  button.classList.toggle('is-active', active);
+  const core = button.querySelector('.c-btn-core');
+  if (core) {
+    core.style.setProperty('--c-btn-icon-url', active ? OVERVIEW_ICON_IN : OVERVIEW_ICON_OUT);
+  }
+}
+
+window.addEventListener('overview:change', (event) => {
+  const active = typeof event?.detail?.active === 'boolean'
+    ? event.detail.active
+    : overviewMode?.isActive?.();
+  updateOverviewToggleUI(active);
+});
 
 function ensureDock() {
   if (state.dock) return;
@@ -66,6 +93,20 @@ function ensureDock() {
   toggle.style.setProperty('--c-btn-size', 'var(--toy-spawner-button-size)');
   toggle.style.setProperty('--c-btn-bg', 'rgba(47, 102, 179, 0.85)');
 
+  const overview = document.createElement('button');
+  overview.type = 'button';
+  overview.id = 'overview-mode-button';
+  overview.className = 'toy-spawner-overview c-btn';
+  overview.setAttribute('aria-label', 'Toggle Overview');
+  overview.title = 'Overview';
+  overview.dataset.helpLabel = 'Toggle overview mode';
+  overview.dataset.helpPosition = 'left';
+  overview.innerHTML = BUTTON_ICON_HTML;
+  const overviewCore = overview.querySelector('.c-btn-core');
+  if (overviewCore) overviewCore.style.setProperty('--c-btn-icon-url', OVERVIEW_ICON_OUT);
+  overview.style.setProperty('--c-btn-size', 'var(--toy-spawner-button-size)');
+  overview.style.setProperty('--c-btn-bg', 'rgba(96, 82, 176, 0.9)');
+
   const help = document.createElement('button');
   help.type = 'button';
   help.className = 'toy-spawner-help c-btn';
@@ -87,7 +128,7 @@ function ensureDock() {
   list.className = 'toy-spawner-list';
   menu.appendChild(list);
 
-  dock.append(trash, toggle, help, menu);
+  dock.append(trash, toggle, overview, help, menu);
   document.body.appendChild(dock);
 
   state.dock = dock;
@@ -96,13 +137,22 @@ function ensureDock() {
   state.listHost = list;
   state.trash = trash;
   state.helpButton = help;
+  state.overviewButton = overview;
   updateHelpToggleUI(isHelpActive());
+  updateOverviewToggleUI(overviewMode?.isActive?.());
 
   help.addEventListener('click', (event) => {
     event.preventDefault();
     const active = toggleHelp();
     updateHelpToggleUI(active);
   });
+
+  overview.addEventListener('click', (event) => {
+    event.preventDefault();
+    overviewMode?.toggle?.(true);
+    updateOverviewToggleUI(overviewMode?.isActive?.());
+  });
+  overview.__bound = true;
 
   toggle.addEventListener('click', () => setMenuOpen(!state.open));
 
