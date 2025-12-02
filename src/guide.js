@@ -461,6 +461,9 @@ function ensureHost() {
         if (highlighterRef) highlighterRef.classList.remove('is-visible');
         panelsRef.querySelectorAll('.is-active-guide-task').forEach(el => el.classList.remove('is-active-guide-task'));
         window.dispatchEvent(new CustomEvent('guide:task-deactivate', { bubbles: true, composed: true }));
+        try { window.dispatchEvent(new CustomEvent('guide:close', { bubbles: true, composed: true })); } catch {}
+      } else {
+        try { window.dispatchEvent(new CustomEvent('guide:open', { bubbles: true, composed: true })); } catch {}
       }
       try {
         window.__guideDebug = Object.assign({}, window.__guideDebug || {}, {
@@ -876,6 +879,14 @@ window.addEventListener('guide:progress-update', () => {
   if (!shouldShowTapHighlighter() && highlighterRef) {
     highlighterRef.classList.remove('is-visible');
     highlightNextTask = false;
+  }
+});
+
+window.addEventListener('guide:open', () => {
+  setGuideTapAcknowledged(true);
+  updateHighlighterTapState();
+  if (highlighterRef && !shouldShowTapHighlighter()) {
+    highlighterRef.classList.remove('is-visible');
   }
 });
 
