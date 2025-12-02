@@ -95,7 +95,7 @@
 }
 
 .c-btn:hover {
-  filter: brightness(1.06) saturate(1.05);
+  filter: brightness(1.86) saturate(1.55);
 }
 
 .c-btn:hover .c-btn-core::before {
