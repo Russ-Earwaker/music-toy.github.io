@@ -687,6 +687,13 @@ select.toy-instrument {
   flex-grow: 0;
 }
 
+/* Match Draw toy footer styling for Simple Rhythm (loopgrid) */
+.toy-panel[data-toy="loopgrid"] .toy-footer {
+  padding: 10px;
+  background: #0b0f16; /* same tone as the particle field */
+  border: 0;
+}
+
 .toy-panel[data-toy="loopgrid"] .sequencer-wrap {
   position: relative;
   width: var(--loopgrid-field-width);
@@ -715,11 +722,6 @@ select.toy-instrument {
   max-width: none;
   max-height: none;
   transform: none;          /* remove translateX(-50%) */
-}
-
-/* TEMP: diagnostic outline to confirm canvas aspect is correct */
-.toy-panel[data-toy="loopgrid"] .grid-canvas {
-  outline: 1px solid rgba(0, 255, 0, 0.4);
 }
 
 /* Particle canvas: covers the whole black field (wider than cubes) */
@@ -766,6 +768,11 @@ select.toy-instrument {
   position: relative;
   flex-grow: 0;
   aspect-ratio: 4 / 3;
+}
+
+/* Remove extra bottom padding under the volume bar in Draw toy footer */
+.toy-panel[data-toy="drawgrid"] .toy-footer {
+  padding: 10px 10px 1 10px;
 }
 
 /* Drawgrid eraser cursor */
