@@ -217,6 +217,30 @@ function startFlight(ctx, canvas, startEl, endEl) {
 
     const canvasRect = canvas.getBoundingClientRect();
 
+    const maybeUpdateStreamEndpoints = () => {
+      if (!canvasRect) return;
+      // Recompute origin (goal task) in canvas coords
+      if (activeOriginEl && activeOriginEl.isConnected) {
+        const rect = activeOriginEl.getBoundingClientRect();
+        const center = getRectCenter(rect);
+        activeStreamStart = {
+          x: center.x - canvasRect.left,
+          y: center.y - canvasRect.top,
+        };
+      }
+      // Recompute target (highlighted button) in canvas coords
+      const targetEl = (endEl && endEl.isConnected) ? endEl : (activeTargetEl && activeTargetEl.isConnected ? activeTargetEl : null);
+      if (targetEl) {
+        const rect = targetEl.getBoundingClientRect();
+        const center = getRectCenter(rect);
+        activeStreamEnd = {
+          x: center.x - canvasRect.left,
+          y: center.y - canvasRect.top,
+        };
+      }
+    };
+    maybeUpdateStreamEndpoints();
+
     let sx = 0, sy = 0, ex = 0, ey = 0;
     if (spawnParticles && activeStreamStart && activeStreamEnd) {
       sx = activeStreamStart.x;
@@ -686,7 +710,7 @@ export function startParticleStream(originEl, targetEl, options = {}) {
   activeLayer = layer === 'behind-target' ? 'behind' : 'front';
   activeCtx = drawCtx;
   activeCanvas = drawCanvas;
-  activeTargetEl = layer === 'behind-target' ? targetEl : null;
+  activeTargetEl = targetEl;
   if (forceReset) {
     if (layer === 'behind-target' && frontCanvas && frontCtx) {
       const rect = frontCanvas.getBoundingClientRect();
