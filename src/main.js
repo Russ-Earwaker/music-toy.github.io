@@ -1080,6 +1080,11 @@ function initToyChaining(panel) {
 
                 updateChains();
                 updateAllChainUIs();
+                try {
+                    window.centerBoardOnElement?.(newPanel);
+                } catch (err) {
+                    console.warn('[chain] auto-center failed', err);
+                }
                 delete newPanel.dataset.spawnAutoManaged;
                 delete newPanel.dataset.spawnAutoLeft;
                 delete newPanel.dataset.spawnAutoTop;
