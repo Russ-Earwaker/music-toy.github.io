@@ -226,14 +226,14 @@ body.tutorial-active #topbar .tutorial-play-hidden {
 .goal-reward-icons .toy-spawner-toggle.is-preview {
   width: 56px;
   height: 56px;
-  border-radius: 12px;       /* matches bevelled square feel */
-  font-size: 36px;           /* big '+' like the real button */
+  padding: 6px;
+  border-radius: 999px;
   display: grid;
   place-items: center;
   pointer-events: none;
 }
-.goal-reward-icons .toy-spawner-toggle.is-preview > span[aria-hidden="true"] {
-  line-height: 1;
+.goal-reward-icons .toy-spawner-toggle.is-preview .toy-spawner-icon {
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.28));
 }
 
 /* Quick flash accent (class toggled for ~320ms) */

@@ -1120,71 +1120,85 @@ body.advanced-controls-disabled [data-adv] {
 .toy-spawner-toggle,
 .toy-spawner-trash,
 .toy-spawner-help {
+  --toy-spawner-icon: none;
+  --toy-spawner-bg: rgba(10, 15, 25, 0.92);
   width: var(--toy-spawner-button-size);
   height: var(--toy-spawner-button-size);
-  padding: 0;
-  border-radius: 16px;
+  padding: 6px;
+  border-radius: 999px;
+  border: none;
   display: grid;
-        place-items: center;
-  font-size: 42px;  font-weight: 600;
-  line-height: 1;
+  place-items: center;
+  position: relative;
+  overflow: hidden;
+  background: radial-gradient(120% 120% at 50% 38%, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 46%), var(--toy-spawner-bg);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 10px 28px rgba(0, 0, 0, 0.45);
-  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.25s ease, opacity 0.2s ease;
+  transition: transform 0.16s ease, box-shadow 0.25s ease, filter 0.2s ease, opacity 0.2s ease;
 }
 
-.toy-spawner-toggle span {
-  pointer-events: none;
-  margin-top: -2px;
+.toy-spawner-icon {
+  width: 100%;
+  height: 100%;
+  background: var(--toy-spawner-icon) center/contain no-repeat;
+  display: block;
+  border-radius: inherit;
+  filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.38));
+  transition: transform 0.16s ease, filter 0.16s ease;
 }
 
+.toy-spawner-toggle {
+  --toy-spawner-icon: url('/assets/UI/T_ButtonAddMusic.png');
+  --toy-spawner-bg: rgba(47, 102, 179, 0.85);
+}
 .toy-spawner-help {
-  font-size: 42px;
-  font-weight: 600;
-  color: rgba(226, 233, 255, 0.9);
-  border: 1px solid rgba(95, 179, 255, 0.32);
-  background: rgba(17, 26, 36, 0.92);
-  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+  --toy-spawner-icon: url('/assets/UI/T_ButtonHelp.png');
+  --toy-spawner-bg: rgba(43, 133, 140, 0.88);
+}
+.toy-spawner-trash {
+  --toy-spawner-icon: url('/assets/UI/T_ButtonTrash.png');
+  --toy-spawner-bg: rgba(159, 44, 44, 0.85);
+  opacity: 0.75;
 }
 
-.toy-spawner-help:hover {
-  color: #fff;
-  border-color: rgba(95, 179, 255, 0.6);
+.toy-spawner-toggle:hover,
+.toy-spawner-help:hover,
+.toy-spawner-trash:hover {
+  transform: translateY(-1px) scale(1.02);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 14px 32px rgba(0, 0, 0, 0.55);
+}
+
+.toy-spawner-toggle:hover .toy-spawner-icon,
+.toy-spawner-help:hover .toy-spawner-icon,
+.toy-spawner-trash:hover .toy-spawner-icon {
+  filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.5)) brightness(1.04);
 }
 
 .toy-spawner-help.is-active,
 .toy-spawner-help[aria-pressed='true'] {
-  color: #fff;
-  border-color: rgba(95, 179, 255, 0.9);
-  background: rgba(95, 179, 255, 0.24);
-  box-shadow: 0 0 0 3px rgba(95, 179, 255, 0.2), 0 20px 45px rgba(0, 0, 0, 0.55);
-}
-
-.toy-spawner-trash {
-  opacity: 0.55;
-  border: 1px solid rgba(95, 179, 255, 0.32);
-  background: rgba(17, 26, 36, 0.92);
+  box-shadow: 0 0 0 3px rgba(95, 179, 255, 0.35), 0 18px 40px rgba(0, 0, 0, 0.55);
+  filter: saturate(1.1) brightness(1.05);
 }
 
 .toy-spawner-dock.panel-drag-active .toy-spawner-trash {
   opacity: 1;
 }
 
-.toy-spawner-trash svg {
-  width: 26px;
-  height: 26px;
-  fill: rgba(238, 245, 255, 0.78);
-  transition: transform 0.18s ease, fill 0.18s ease;
-}
-
 .toy-spawner-trash[data-hover='true'] {
-  border-color: rgba(248, 113, 113, 0.85);
-  background: rgba(248, 113, 113, 0.18);
-  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.22), 0 20px 45px rgba(0, 0, 0, 0.55);
+  transform: translateY(-1px) scale(1.05);
+  box-shadow: 0 0 0 4px rgba(248, 113, 113, 0.28), 0 20px 45px rgba(0, 0, 0, 0.55);
+  filter: saturate(1.05);
 }
 
-.toy-spawner-trash[data-hover='true'] svg {
+.toy-spawner-trash[data-hover='true'] .toy-spawner-icon {
   transform: translateY(-1px);
-  fill: #fda4af;
+  filter: drop-shadow(0 10px 16px rgba(248, 113, 113, 0.45)) brightness(1.05);
+}
+
+.toy-spawner-toggle:focus-visible,
+.toy-spawner-trash:focus-visible,
+.toy-spawner-help:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
 }
 
 .toy-spawner-menu {

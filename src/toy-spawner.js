@@ -22,6 +22,8 @@ const state = {
   panelDrag: null,
 };
 
+const BUTTON_ICON_HTML = '<span aria-hidden="true" class="toy-spawner-icon"></span>';
+
 function updateHelpToggleUI(nextState) {
   if (typeof nextState === 'boolean') {
     state.helpActive = nextState;
@@ -45,7 +47,7 @@ function ensureDock() {
   trash.title = 'Delete Toy';
   trash.dataset.helpLabel = 'Drag a toy here to delete it';
   trash.dataset.helpPosition = 'left';
-  trash.innerHTML = `<svg viewBox="0 0 24 24"><path d="M9,3V4H4V6H5V19C5,20.1 5.9,21 7,21H17C18.1,21 19,20.1 19,19V6H20V4H15V3H9M7,6H17V19H7V6M9,8V17H11V8H9M13,8V17H15V8H13Z" /></svg>`;
+  trash.innerHTML = BUTTON_ICON_HTML;
 
   const toggle = document.createElement('button');
   toggle.type = 'button';
@@ -54,7 +56,7 @@ function ensureDock() {
   toggle.title = 'Create Toy';
   toggle.dataset.helpLabel = 'Open the Add Toy menu';
   toggle.dataset.helpPosition = 'left';
-  toggle.innerHTML = '<span aria-hidden="true">+</span>';
+  toggle.innerHTML = BUTTON_ICON_HTML;
 
   const help = document.createElement('button');
   help.type = 'button';
@@ -63,7 +65,7 @@ function ensureDock() {
   help.title = 'Help';
   help.dataset.helpLabel = 'Toggle help labels';
   help.dataset.helpPosition = 'left';
-  help.innerHTML = '<span aria-hidden="true">?</span>';
+  help.innerHTML = BUTTON_ICON_HTML;
 
   const menu = document.createElement('div');
   menu.className = 'toy-spawner-menu';

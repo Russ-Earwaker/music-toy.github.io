@@ -2172,7 +2172,7 @@ let hasDetectedLine = false;
             btn.type = 'button';
             btn.className = 'toy-spawner-toggle toy-btn is-preview';
             btn.setAttribute('aria-label', icon.label || 'Add Toy');
-            btn.innerHTML = '<span aria-hidden="true">+</span>';
+            btn.innerHTML = '<span aria-hidden="true" class="toy-spawner-icon"></span>';
             btn.style.pointerEvents = 'none';
             wrapper.appendChild(btn);
             rewardIcons.appendChild(wrapper);
