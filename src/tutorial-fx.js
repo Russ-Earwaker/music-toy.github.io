@@ -774,7 +774,9 @@ export function stopParticleStream(options = {}) {
 }
 
 if (typeof window !== 'undefined') {
-  const clearParticlesOnSceneReset = () => stopParticleStream({ immediate: true });
+  const stopOnGoalChange = () => stopParticleStream({ immediate: false, clearHighlight: true });
+  window.addEventListener('guide:active-goal-change', stopOnGoalChange);
+  const clearParticlesOnSceneReset = () => stopParticleStream({ immediate: true, clearHighlight: true });
   window.addEventListener('scene:new', clearParticlesOnSceneReset);
   window.addEventListener('guide:close', clearParticlesOnSceneReset);
 }

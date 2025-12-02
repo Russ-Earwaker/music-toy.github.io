@@ -26,7 +26,15 @@ function getHighlighterHost() {
 }
 
 function setActiveGoal(goalId) {
+  const prev = activeGoalId || null;
   activeGoalId = goalId || null;
+  if (prev !== activeGoalId && typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(
+        new CustomEvent('guide:active-goal-change', { detail: { previous: prev, next: activeGoalId } })
+      );
+    } catch {}
+  }
   try {
     if (typeof window !== 'undefined') {
       window.__guideActiveGoal = activeGoalId;
