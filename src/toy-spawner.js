@@ -23,6 +23,9 @@ const state = {
   open: false,
   justSpawned: false,
   panelDrag: null,
+  trashFeedbackTimer: null,
+  trashHelpTimer: null,
+  trashHint: null,
 };
 
 const BUTTON_ICON_HTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
@@ -78,7 +81,6 @@ function ensureDock() {
   const trashCore = trash.querySelector('.c-btn-core');
   if (trashCore) trashCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonTrash.png')");
   trash.style.setProperty('--c-btn-size', 'var(--toy-spawner-button-size)');
-  trash.style.setProperty('--c-btn-bg', 'rgba(159, 44, 44, 0.85)');
 
   const toggle = document.createElement('button');
   toggle.type = 'button';
@@ -155,6 +157,13 @@ function ensureDock() {
   overview.__bound = true;
 
   toggle.addEventListener('click', () => setMenuOpen(!state.open));
+
+  trash.addEventListener('click', (event) => {
+    if (state.panelDrag) return;
+    event.preventDefault();
+    triggerTrashErrorFeedback();
+    showTrashHint();
+  });
 
   document.addEventListener(
     'pointerdown',
@@ -408,6 +417,11 @@ function setTrashHover(active) {
   }
 }
 
+function setTrashArmed(active) {
+  if (!state.trash) return;
+  state.trash.classList.toggle('is-armed', !!active);
+}
+
 function setPanelDragActive(active) {
   if (!state.dock) return;
   state.dock.classList.toggle('panel-drag-active', !!active);
@@ -425,6 +439,7 @@ function beginPanelDrag({ panel, pointerId } = {}) {
   ensureDock();
   state.panelDrag = { panel, pointerId: pointerId ?? null, hovering: false };
   setPanelDragActive(true);
+  setTrashArmed(true);
   setTrashHover(false);
 }
 
@@ -446,6 +461,7 @@ function endPanelDrag({ clientX, clientY, pointerId, canceled } = {}) {
   const shouldRemove = !canceled && panel && typeof clientX === 'number' && typeof clientY === 'number' && isPointOverTrash(clientX, clientY);
   setTrashHover(false);
   setPanelDragActive(false);
+  setTrashArmed(false);
   state.panelDrag = null;
 
   if (shouldRemove && typeof state.config.remove === 'function') {
@@ -461,6 +477,92 @@ function endPanelDrag({ clientX, clientY, pointerId, canceled } = {}) {
 function configure(options) {
   state.config = Object.assign({}, state.config, options || {});
   if (state.open) renderCatalog();
+}
+
+function triggerTrashErrorFeedback() {
+  if (!state.trash) return;
+  state.trash.classList.remove('trash-empty-error');
+  // Force reflow so the animation can replay.
+  void state.trash.offsetWidth;
+  state.trash.classList.add('trash-empty-error');
+  if (state.trashFeedbackTimer) {
+    clearTimeout(state.trashFeedbackTimer);
+  }
+  state.trashFeedbackTimer = setTimeout(() => {
+    state.trash?.classList.remove('trash-empty-error');
+    state.trashFeedbackTimer = null;
+  }, 900);
+}
+
+function showTrashHint() {
+  if (!state.trash) return;
+  const { callout, connector, host } = ensureTrashHint();
+
+  const rect = state.trash.getBoundingClientRect();
+  callout.textContent = 'Drag a toy here to delete it';
+
+  // Measure after text set
+  const width = callout.offsetWidth;
+  const height = callout.offsetHeight;
+  const margin = 18;
+  const left = rect.left - width - margin;
+  const top = rect.top + rect.height / 2 - height / 2;
+
+  callout.style.left = `${left}px`;
+  callout.style.top = `${top}px`;
+  callout.classList.add('visible');
+  host.classList.add('visible');
+
+  // Connector from callout center-right to trash center-left
+  const startX = left + width;
+  const startY = top + height / 2;
+  const endX = rect.left;
+  const endY = rect.top + rect.height / 2;
+  const dx = endX - startX;
+  const dy = endY - startY;
+  const length = Math.sqrt(dx * dx + dy * dy);
+  const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+  connector.style.width = `${length}px`;
+  connector.style.transform = `translate(${startX}px, ${startY}px) rotate(${angle}deg)`;
+  connector.classList.add('visible');
+
+  if (state.trashHelpTimer) clearTimeout(state.trashHelpTimer);
+  state.trashHelpTimer = setTimeout(() => {
+    state.trashHelpTimer = null;
+    hideTrashHint();
+  }, 3000);
+}
+
+function ensureTrashHint() {
+  if (state.trashHint && state.trashHint.host?.isConnected) return state.trashHint;
+
+  const host = document.createElement('div');
+  host.className = 'toy-trash-hint-host';
+
+  const callout = document.createElement('div');
+  callout.className = 'toy-help-callout toy-trash-hint arrow-left';
+  callout.textContent = 'Drag a toy here to delete it';
+
+  const connector = document.createElement('div');
+  connector.className = 'toy-help-connector toy-trash-hint-connector';
+
+  host.append(callout, connector);
+  document.body.appendChild(host);
+
+  state.trashHint = { host, callout, connector };
+  return state.trashHint;
+}
+
+function hideTrashHint() {
+  if (!state.trashHint) return;
+  state.trashHint.callout?.classList.remove('visible');
+  state.trashHint.connector?.classList.remove('visible');
+  state.trashHint.host?.classList.remove('visible');
+  if (state.trashHint.connector) {
+    state.trashHint.connector.style.width = '0px';
+    state.trashHint.connector.style.transform = 'translate(0, 0)';
+  }
 }
 
 export const ToySpawner = {
