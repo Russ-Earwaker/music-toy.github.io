@@ -663,17 +663,48 @@ const toyInitializers = {
     },
 };
 
+const EXPERIMENTAL_TOYS = ['bouncer', 'rippler', 'loopgrid-drum', 'chordwheel'];
+const EXPERIMENTAL_PREF_KEY = 'prefs:enable-experimental-toys';
+
 const toyCatalog = [
     { type: 'drawgrid', name: 'Draw Line', description: 'Sketch out freehand lines that become notes.', size: { width: 420, height: 460 } },
     { type: 'loopgrid', name: 'Simple Rhythm', description: 'Layer drum patterns and melodies with an 8x12 step matrix.', size: { width: 420, height: 420 } },
-    { type: 'bouncer', name: 'Bouncer', description: 'Bounce melodic balls inside a square arena.', size: { width: 420, height: 420 } },
-    { type: 'rippler', name: 'Rippler', description: 'Evolving pads driven by ripple collisions.', size: { width: 420, height: 420 } },
+    { type: 'bouncer', name: 'Bouncer', description: 'Bounce melodic balls inside a square arena.', size: { width: 420, height: 420 }, disabled: true },
+    { type: 'rippler', name: 'Rippler', description: 'Evolving pads driven by ripple collisions.', size: { width: 420, height: 420 }, disabled: true },
     { type: 'loopgrid-drum', name: 'Drum Kit', description: 'Tap a responsive pad while sequencing the 8-step cube grid.', size: { width: 380, height: 420 }, disabled: true },
     { type: 'chordwheel', name: 'Chord Wheel', description: 'Play circle-of-fifths chord progressions instantly.', size: { width: 460, height: 420 }, disabled: true },
 ];
 
+function isExperimentalEnabled() {
+    try {
+        return localStorage.getItem(EXPERIMENTAL_PREF_KEY) === '1';
+    } catch (err) {
+        console.warn('[toys] experimental toggle read failed', err);
+        return false;
+    }
+}
+
+function setExperimentalEnabled(enabled) {
+    try {
+        localStorage.setItem(EXPERIMENTAL_PREF_KEY, enabled ? '1' : '0');
+    } catch (err) {
+        console.warn('[toys] experimental toggle write failed', err);
+    }
+    try {
+        window.ToySpawner?.configure?.({ getCatalog: () => getToyCatalog() });
+    } catch (err) {
+        console.warn('[toys] refresh spawner catalog failed', err);
+    }
+}
+
 function getToyCatalog() {
-    return toyCatalog.map(entry => ({ ...entry }));
+    const experimentalOn = isExperimentalEnabled();
+    return toyCatalog.map((entry) => {
+        if (EXPERIMENTAL_TOYS.includes(entry.type)) {
+            return { ...entry, disabled: entry.disabled && !experimentalOn };
+        }
+        return { ...entry };
+    });
 }
 
 function doesChainHaveActiveNotes(headId) {
@@ -1312,6 +1343,9 @@ try {
         create: createToyPanelAt,
         destroy: destroyToyPanel,
         getCatalog: () => getToyCatalog(),
+        enableExperimentalToys: () => setExperimentalEnabled(true),
+        disableExperimentalToys: () => setExperimentalEnabled(false),
+        isExperimentalToysEnabled: () => isExperimentalEnabled(),
     });
     if (window.ToySpawner && typeof window.ToySpawner.configure === 'function') {
         window.ToySpawner.configure({

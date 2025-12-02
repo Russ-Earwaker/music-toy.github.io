@@ -1234,6 +1234,9 @@ body.advanced-controls-disabled [data-adv] {
 }
 
 .toy-spawner-menu {
+  position: absolute;
+  top: calc(var(--toy-spawner-button-size) + var(--ui-float-gap-sm));
+  right: calc(var(--toy-spawner-button-size) + var(--ui-float-gap-sm));
   display: none;
   flex-direction: column;
   gap: 10px;
@@ -1242,7 +1245,6 @@ body.advanced-controls-disabled [data-adv] {
   max-height: calc(100vh - 160px);
   overflow-y: auto;
   padding: 12px;
-  margin-top: 6px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -1331,6 +1333,8 @@ body.advanced-controls-disabled [data-adv] {
     gap: var(--ui-float-gap-sm);
   }
   .toy-spawner-menu {
+    position: static;
+    margin-top: 6px;
     width: min(92vw, 360px);
     max-height: 60vh;
   }

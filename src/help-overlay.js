@@ -128,6 +128,11 @@ function refreshHelpOverlay() {
   scheduleUpdate();
 }
 
+// Hide help when starting a new scene to avoid stale overlays.
+window.addEventListener('scene:new', () => {
+  setHelpActive(false);
+});
+
 function scheduleUpdate(immediate = false) {
   if (!overlayState.active) return;
   if (immediate) {
