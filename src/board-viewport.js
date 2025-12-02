@@ -1,5 +1,6 @@
 // src/board-viewport.js — pan & zoom coordinator bridge (clean, <=300 lines)
 import { overviewMode } from './overview-mode.js';
+import { makeDebugLogger } from './debug-flags.js';
 import {
   attachWorldElement,
   setGestureTransform,
@@ -9,6 +10,8 @@ import {
   getTransformOrder,
 } from './zoom/ZoomCoordinator.js';
 import { WheelZoomLerper } from './zoom/WheelZoomLerper.js';
+
+const viewportLog = makeDebugLogger('mt_debug_logs');
 
 let __liveViewportTransform = { scale: 1, tx: 0, ty: 0 };
 export function getViewportTransform() {
@@ -87,7 +90,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
   // --- tween helpers ---
   function easeInOutCubic(t){ return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2; }
   function lerp(a,b,t){ return a + (b - a) * t; }
-  console.debug('[board-viewport] transform order =', ORDER);
+  viewportLog('[board-viewport] transform order =', ORDER);
 
   const SCALE_MIN = 0.3;
   const SCALE_MAX = 4.0;
@@ -314,7 +317,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
           const { px, py } = measureScreenFromWorld(wc.x, wc.y, settleScale, settleX, settleY);
           const dx = Math.round(px - viewCx);
           const dy = Math.round(py - viewCy);
-          console.debug('[center settle]', { dx, dy, settleScale, settleX, settleY });
+          viewportLog('[center settle]', { dx, dy, settleScale, settleX, settleY });
         }
       }
     } catch {}
@@ -461,7 +464,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     if (Number.isFinite(left) && Number.isFinite(top)) {
       const wx = left + w * 0.5;
       const wy = top + h * 0.5;
-      console.debug?.('[getWorldCenter:style]', { id: panel?.id, left, top, w, h, wx, wy });
+      viewportLog('[getWorldCenter:style]', { id: panel?.id, left, top, w, h, wx, wy });
       return { x: wx, y: wy };
     }
 
@@ -497,7 +500,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
       wx,
       wy
     };
-    console.debug?.('[getWorldCenter:rect]', dbg);
+    viewportLog('[getWorldCenter:rect]', dbg);
     return Number.isFinite(wx) && Number.isFinite(wy) ? { x: wx, y: wy } : null;
   }
   window.getWorldCenter = getWorldCenter;

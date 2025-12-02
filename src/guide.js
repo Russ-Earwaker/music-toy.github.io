@@ -1,4 +1,8 @@
-﻿const GUIDE_TOGGLE_CLASS = 'guide-launcher';
+import { makeDebugLogger } from './debug-flags.js';
+
+const guideInfoLog = makeDebugLogger('mt_debug_logs', 'info');
+
+const GUIDE_TOGGLE_CLASS = 'guide-launcher';
 const GUIDE_OPEN_CLASS = 'is-open';
 
 let hostRef = null;
@@ -110,7 +114,7 @@ function openGoalPicker(context) {
 
   const header = document.createElement('div');
   header.className = 'guide-goal-picker__header';
-  header.innerHTML = `Goals · <span class="guide-goal-picker__stars"><img src="/assets/UI/T_Star.png" alt="Stars" /> ${collectedRewards}/${totalRewards}</span>`;
+  header.innerHTML = `Goals � <span class="guide-goal-picker__stars"><img src="/assets/UI/T_Star.png" alt="Stars" /> ${collectedRewards}/${totalRewards}</span>`;
   sheet.appendChild(header);
 
   const list = document.createElement('div');
@@ -470,7 +474,7 @@ function ensureHost() {
           lastToggle: { open: willOpen, at: Date.now() },
         });
       } catch {}
-      console.info('[guide] toggle', { open: willOpen, goalCount: Number(hostRef.dataset.goalCount || 0) });
+      guideInfoLog('[guide] toggle', { open: willOpen, goalCount: Number(hostRef.dataset.goalCount || 0) });
     });
     toggleRef.__guideBound = true;
 
@@ -869,7 +873,7 @@ function renderGuide(api, { source = 'unknown' } = {}) {
     });
   } catch {}
 
-  //console.info('[guide] render', { source, goals: goals.length });
+  //guideInfoLog('[guide] render', { source, goals: goals.length });
 }
 
 window.addEventListener('guide:progress-update', () => {
@@ -965,12 +969,12 @@ function startWhenReady() {
   renderGuide(null, { source: 'bootstrap-placeholder' });
 
   if (window.TutorialGoalsAPI) {
-    console.info('[guide] TutorialGoalsAPI available on load');
+    guideInfoLog('[guide] TutorialGoalsAPI available on load');
     renderGuide(window.TutorialGoalsAPI, { source: 'direct' });
     return;
   }
 
-  console.info('[guide] waiting for tutorial:goals-ready event');
+  guideInfoLog('[guide] waiting for tutorial:goals-ready event');
   try { window.__guideDebug = Object.assign({}, window.__guideDebug || {}, { waiting: true }); } catch {}
 
   let fallbackTimer = setTimeout(() => {
@@ -979,7 +983,7 @@ function startWhenReady() {
   }, 2500);
 
   window.addEventListener('tutorial:goals-ready', (event) => {
-    console.info('[guide] tutorial:goals-ready received');
+    guideInfoLog('[guide] tutorial:goals-ready received');
     if (fallbackTimer) {
       clearTimeout(fallbackTimer);
       fallbackTimer = null;
@@ -1023,6 +1027,7 @@ window.addEventListener('drawgrid:activity', (e) => {
   // no pulse; optional: a very lightweight guide refresh without glow
   // renderGuide(lastApi, { source: 'drawgrid-activity', pulse:false });
 });
+
 
 
 

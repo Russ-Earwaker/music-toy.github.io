@@ -1,4 +1,7 @@
 // src/tutorial-fx.js
+import { makeDebugLogger } from './debug-flags.js';
+
+const fxDebug = makeDebugLogger('mt_debug_logs');
 
 let behindCanvas, frontCanvas;
 let behindCtx, frontCtx;
@@ -258,7 +261,7 @@ function startFlight(ctx, canvas, startEl, endEl) {
       }
 
       if (window.__TUTORIAL_STREAM_DEBUG) {
-        console.debug('[FX][stream] spawn', {
+        fxDebug('[FX][stream] spawn', {
           dt,
           accum: startFlight._accum,
           spawnedThisFrame,
@@ -270,7 +273,7 @@ function startFlight(ctx, canvas, startEl, endEl) {
         });
       }
     } else if (window.__TUTORIAL_STREAM_DEBUG) {
-      console.debug('[FX][stream] no spawn', {
+      fxDebug('[FX][stream] no spawn', {
         hasPath: !!(activeStreamStart && activeStreamEnd),
         spawnParticles,
         particles: particles.length,
@@ -281,7 +284,7 @@ function startFlight(ctx, canvas, startEl, endEl) {
         const logicalW = canvasRect.width;
         const logicalH = canvasRect.height;
         if (window.__TUTORIAL_STREAM_DEBUG) {
-            console.debug('[FX][stream] clear', {
+            fxDebug('[FX][stream] clear', {
                 w: logicalW,
                 h: logicalH,
                 dpr: window.devicePixelRatio || 1,
@@ -442,7 +445,7 @@ function startFlight(ctx, canvas, startEl, endEl) {
         animationFrameId = requestAnimationFrame(() => startFlight(ctx, canvas, startEl, endEl));
     } else {
         if (window.__TUTORIAL_STREAM_DEBUG) {
-          console.debug('[FX][stream] end', {
+          fxDebug('[FX][stream] end', {
             particles: particles.length,
           });
         }
@@ -459,14 +462,14 @@ function startFlight(ctx, canvas, startEl, endEl) {
 
 export function startParticleStream(originEl, targetEl, options = {}) {
   const layer = options?.layer === 'behind-target' ? 'behind-target' : 'front';
-  console.debug('[tutorial-fx] resolved layer', {
+  fxDebug('[tutorial-fx] resolved layer', {
     layer,
     originClass: originEl?.className,
     targetClass: targetEl?.className,
   });
   const oRect = originEl?.getBoundingClientRect?.();
   const tRect = targetEl?.getBoundingClientRect?.();
-  console.debug('[DIAG] startParticleStream', {
+  fxDebug('[DIAG] startParticleStream', {
     t: performance?.now?.(),
     layer,
     origin: oRect ? { x: oRect.left, y: oRect.top, w: oRect.width, h: oRect.height } : null,
@@ -604,7 +607,7 @@ export function startParticleStream(originEl, targetEl, options = {}) {
   const now = performance?.now?.() ?? Date.now();
 
   if (newKey === prevKey && (now - lastStopTs) < 200) {
-    console.debug('[FX] startParticleStream deduped (recent stop; continuing)', { key: newKey });
+    fxDebug('[FX] startParticleStream deduped (recent stop; continuing)', { key: newKey });
     const nextLayer = layer === 'behind-target' ? 'behind' : 'front';
     applyFrontCanvasLayer(layer === 'behind-target' ? 'behind-target' : 'front');
     activeLayer = nextLayer;
@@ -694,14 +697,14 @@ export function startParticleStream(originEl, targetEl, options = {}) {
   activeStreamStart = { x: sx, y: sy };
   activeStreamEnd = { x: ex, y: ey };
 
-  console.debug('[tutorial-fx] create stream', {
+  fxDebug('[tutorial-fx] create stream', {
     type: 'burst',
     key: newKey,
     start: { x: sx, y: sy },
     end: { x: ex, y: ey },
   });
   createBurst(sx, sy, { x: ex, y: ey });
-  console.debug('[tutorial-fx] create stream', {
+  fxDebug('[tutorial-fx] create stream', {
     type: 'trail',
     key: newKey,
     rate: PARTICLES_PER_SEC,
@@ -727,11 +730,11 @@ export function startParticleStream(originEl, targetEl, options = {}) {
 }
 
 export function stopParticleStream(options = {}) {
-  console.debug('[DIAG] stopParticleStream', {
+  fxDebug('[DIAG] stopParticleStream', {
     t: performance?.now?.(),
     lastPointerup: window.__LAST_POINTERUP_DIAG__,
   });
-  console.debug('[tutorial-fx] stopParticleStream invoked', {
+  fxDebug('[tutorial-fx] stopParticleStream invoked', {
     t: performance?.now?.(),
     activeCount: particles?.length || 0,
     lastStreamKey,
@@ -766,7 +769,7 @@ export function stopParticleStream(options = {}) {
       const rect = behindCanvas.getBoundingClientRect();
       behindCtx.clearRect(0, 0, rect.width, rect.height);
     }
-    console.debug('[tutorial-fx] destroy stream (immediate)', {
+    fxDebug('[tutorial-fx] destroy stream (immediate)', {
       key: lastStreamKey,
       remaining: particles.length,
     });
@@ -790,7 +793,7 @@ export function stopParticleStream(options = {}) {
     activeOriginEl = null;
     activeStreamStart = null;
     activeStreamEnd = null;
-    console.debug('[tutorial-fx] destroy stream (drain)', {
+    fxDebug('[tutorial-fx] destroy stream (drain)', {
       key: lastStreamKey,
       remaining: particles.length,
     });

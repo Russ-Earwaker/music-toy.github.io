@@ -22,10 +22,13 @@ import { initAudioAssets } from './audio-samples.js';
 import { loadInstrumentEntries as loadInstrumentCatalog } from './instrument-catalog.js';
 import { installIOSAudioUnlock } from './ios-audio-unlock.js';
 import { installAudioDiagnostics } from './audio-diagnostics.js';
+import { makeDebugLogger } from './debug-flags.js';
 import { DEFAULT_BPM, NUM_STEPS, ensureAudioContext, getLoopInfo, setBpm, start, isRunning } from './audio-core.js';
 import { buildGrid } from './grid-core.js';
 import { buildDrumGrid } from './drum-core.js';
 import { tryRestoreOnBoot, startAutosave } from './persistence.js';
+
+const mainLog = makeDebugLogger('mt_debug_logs', 'log');
 
 installIOSAudioUnlock();
 if (document.readyState === 'loading') {
@@ -416,7 +419,7 @@ const CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW = true; // drawChains() canvas connect
 const CHAIN_CANVAS_RESOLUTION_SCALE = 0.5;
 
 
-console.log('[MAIN] module start');
+mainLog('[MAIN] module start');
   // --- Adaptive outline style: scales with zoom, but never below min px on screen ---
   (function installAdaptiveOutlineCSS(){
     const style = document.createElement('style');
@@ -1999,7 +2002,7 @@ async function boot(){
     try {
       await initAudioAssets(CSV_PATH);
       await loadInstrumentCatalog();
-      console.log('[AUDIO] samples loaded');
+      mainLog('[AUDIO] samples loaded');
     } catch(e) {
       console.warn('[AUDIO] init failed', e);
     }
@@ -2033,7 +2036,7 @@ async function boot(){
       const btn = e.target.closest('[data-action="refresh"], .btn-refresh, [data-refresh]');
       if (btn) {
         try { window.Persistence?.flushBeforeRefresh?.(); } catch {}
-        try { console.log('[MAIN] refresh requested -> flushed autosave'); } catch {}
+        try { mainLog('[MAIN] refresh requested -> flushed autosave'); } catch {}
       }
     }, true);
     // Delegate CLEAR button -> treat as user intent so drawgrid honors it

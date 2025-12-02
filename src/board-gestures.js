@@ -1,7 +1,9 @@
 // src/board-gestures.js
 import { setGestureTransform, commitGesture, getZoomState } from './zoom/ZoomCoordinator.js';
+import { makeDebugLogger } from './debug-flags.js';
 
 (function () {
+  const diagLog = makeDebugLogger('mt_debug_logs');
   const layer = document.getElementById('boardGestureLayer');
   const viewport = document.querySelector('.board-viewport');
   const stage = document.querySelector('main#board, #board, #world, .world, .canvas-world');
@@ -131,12 +133,12 @@ import { setGestureTransform, commitGesture, getZoomState } from './zoom/ZoomCoo
     const T0 = performance?.now?.() ?? Date.now();
     window.__LAST_POINTERUP_DIAG__ = { gid: GID, t0: T0 };
 
-    console.debug('[DIAG][pointerup] commitGesture start', { GID, T0, zoom });
+    diagLog('[DIAG][pointerup] commitGesture start', { GID, T0, zoom });
     commitGesture(
       { scale: endScale, x: endX, y: endY },
       { delayMs: 60 }
     );
-    console.debug('[DIAG][pointerup] commitGesture queued', { GID, delayMs: 60 });
+    diagLog('[DIAG][pointerup] commitGesture queued', { GID, delayMs: 60 });
     // Expose a precise settle-until time for consumers like drawgrid.
     try {
       window.__GESTURE_SETTLE_UNTIL_TS = (performance?.now?.() ?? Date.now()) + 60 + 48; // delayMs + small buffer

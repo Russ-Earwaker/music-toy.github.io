@@ -9,6 +9,9 @@ import { createParticleViewport } from './particles/particle-viewport.js';
 import { createField } from './particles/field-generic.js';
 import { overviewMode } from './overview-mode.js';
 import { boardScale as boardScaleHelper } from './board-scale-helpers.js';
+import { makeDebugLogger } from './debug-flags.js';
+
+const drawgridLog = makeDebugLogger('mt_debug_logs', 'log');
 
 const gridAreaLogical = { w: 0, h: 0 };
 
@@ -128,7 +131,7 @@ function dbgPoke(tag) {
   if ((__pokeCounts[tag] % 25) === 1) console.debug('[DG][poke]', tag, { count: __pokeCounts[tag] });
 }
 // quick diagnostics
-function __dgLogFirstPoke(tag, r, s){ if (!window.__DG_POKED__) { window.__DG_POKED__=true; console.log('[DG] poke', tag, {radius:r, strength:s}); } }
+function __dgLogFirstPoke(tag, r, s){ if (!window.__DG_POKED__) { window.__DG_POKED__=true; drawgridLog('[DG] poke', tag, {radius:r, strength:s}); } }
 
 // ---- drawgrid debug gate ----
 const DG_DEBUG = false;           // master switch
@@ -1563,7 +1566,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         }
       );
       window.__dgField = dgField;
-      console.log('[DG] field config', dgField?._config);
+      drawgridLog('[DG] field config', dgField?._config);
       dgViewport?.refreshSize?.({ snap: true });
       dgField?.resize?.();
       requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -6583,7 +6586,7 @@ function startGhostGuide({
     });
     if (!window.__DG_FIRST_GHOST_LOGGED__) {
       window.__DG_FIRST_GHOST_LOGGED__ = true;
-      console.log('[DG][ghostTrail] poke', { x, y, radius: disturbanceRadius, strength: DG_KNOCK.ghostTrail.strength });
+      drawgridLog('[DG][ghostTrail] poke', { x, y, radius: disturbanceRadius, strength: DG_KNOCK.ghostTrail.strength });
     }
     __dgLogFirstPoke('ghostTrail', disturbanceRadius, DG_KNOCK.ghostTrail.strength);
 

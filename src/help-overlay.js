@@ -1,3 +1,8 @@
+import { makeDebugLogger } from './debug-flags.js';
+
+const helpDebug = makeDebugLogger('mt_debug_logs');
+const helpLog = makeDebugLogger('mt_debug_logs', 'log');
+
 const overlayState = {
   active: false,
   host: null,
@@ -189,7 +194,7 @@ function renderOverlay() {
       Number.isFinite(rect.x) &&
       Number.isFinite(rect.y);
 
-    console.debug('[help-overlay] controls label rect', {
+    helpDebug('[help-overlay] controls label rect', {
       x: rect.x,
       y: rect.y,
       w: rect.width,
@@ -209,16 +214,16 @@ function renderOverlay() {
               detail: { rect },
             })
           );
-          console.debug('[help-overlay] dispatched help:overlay-ready');
+          helpDebug('[help-overlay] dispatched help:overlay-ready');
         } catch (err) {
-          console.debug('[help-overlay] failed to dispatch help:overlay-ready', err);
+          helpDebug('[help-overlay] failed to dispatch help:overlay-ready', err);
         }
       });
     } else if (!ready) {
-      console.debug('[help-overlay] controls label not ready yet');
+      helpDebug('[help-overlay] controls label not ready yet');
     }
   } else {
-    console.debug('[help-overlay] no .toy-help-controls found');
+    helpDebug('[help-overlay] no .toy-help-controls found');
   }
 
   if (!entries.length) return;
@@ -366,7 +371,7 @@ function getBoardMetrics(board) {
     try {
       const tf = (window.getComputedStyle(board).transform || 'none');
       if (window.__TUTORIAL_STREAM_DEBUG) {
-        console.log(`Board scale detected: ${scale} from transform: ${tf}`);
+        helpLog(`Board scale detected: ${scale} from transform: ${tf}`);
       }
     } catch {}
   }
@@ -491,7 +496,7 @@ function placeEntry(entry, assigned, gap, cachedPlacement, allowOverlap) {
     // Minimal debug (once per render per label, only on zoom changes)
     const key = `${label}::vol`;
     if (overlayState.shouldLog && !overlayState.debugSeen.has(key)) {
-      console.log(`[${label}] target+footer-based: base=${base.left},${base.top}`);
+      helpLog(`[${label}] target+footer-based: base=${base.left},${base.top}`);
       overlayState.debugSeen.add(key);
     }
   } else if (dir === 'bottom') {
@@ -652,7 +657,7 @@ function applyPlacement(callout, connector, placement, entry) {
     const dbgKey = `${entry.label}::scaled`;
     if (overlayState.shouldLog && (entry.label.includes('Random') || entry.label.toLowerCase().includes('adjust volume')) && !overlayState.debugSeen.has(dbgKey)) {
       if (window.__TUTORIAL_STREAM_DEBUG) {
-        console.log(`[${entry.label}] Scale=${scale}, BoardRect=${boardRect.left},${boardRect.top}, LocalRect=${rect.left},${rect.top}, Final=${screenLeft},${screenTop}`);
+        helpLog(`[${entry.label}] Scale=${scale}, BoardRect=${boardRect.left},${boardRect.top}, LocalRect=${rect.left},${rect.top}, Final=${screenLeft},${screenTop}`);
       }
       overlayState.debugSeen.add(dbgKey);
     }
@@ -669,7 +674,7 @@ function applyPlacement(callout, connector, placement, entry) {
     const dbgKey2 = `${entry.label}::noscale`;
     if (overlayState.shouldLog && entry.label.toLowerCase().includes('adjust volume') && !overlayState.debugSeen.has(dbgKey2)) {
       if (window.__TUTORIAL_STREAM_DEBUG) {
-        console.log(`[${entry.label}] Non-scaled: ${screenLeft},${screenTop}`);
+        helpLog(`[${entry.label}] Non-scaled: ${screenLeft},${screenTop}`);
       }
       overlayState.debugSeen.add(dbgKey2);
     }

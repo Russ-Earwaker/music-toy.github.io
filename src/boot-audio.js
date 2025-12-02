@@ -2,11 +2,14 @@
 // Ensure audio assets are loaded before applying theme defaults.
 
 import { initAudioAssets } from './audio-samples.js';
+import { makeDebugLogger } from './debug-flags.js';
+
+const bootAudioLog = makeDebugLogger('mt_debug_logs', 'log');
 
 async function bootAudio(){
   try{
     await initAudioAssets('./assets/samples/samples.csv');
-    console.log('[boot-audio] samples loaded');
+    bootAudioLog('[boot-audio] samples loaded');
   }catch(e){
     console.warn('[boot-audio] init failed', e);
   }

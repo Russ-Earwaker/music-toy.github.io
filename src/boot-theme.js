@@ -2,6 +2,7 @@
 // Wires the active theme into your boot flow.
 
 import { THEMES } from './themes.js';
+import { makeDebugLogger } from './debug-flags.js';
 import {
   getActiveThemeKey,
   setActiveThemeKey,
@@ -10,6 +11,8 @@ import {
   resolveRipplerSamples,
   resolveWheelSamples
 } from './theme-manager.js';
+
+const themeLog = makeDebugLogger('mt_debug_logs', 'log');
 
 // Load instrument entries from CSV and return [{id, display}] with unique display labels
 async function loadInstrumentEntries(){
@@ -44,7 +47,7 @@ async function loadInstrumentEntries(){
  * @param {string} key The key of the theme to set (e.g., "default").
  */
 function setTheme(key) {
-  console.log(`[boot-theme] Setting theme to: ${key}`);
+  themeLog(`[boot-theme] Setting theme to: ${key}`);
   setActiveThemeKey(key);
 }
 
@@ -73,7 +76,7 @@ async function wireAll(options = {}) {
     console.warn(`[boot-theme] Active theme "${activeThemeKey}" not found.`);
     return;
   }
-  console.log(`[boot-theme] Wiring all toys with theme: ${activeThemeKey}`);
+  themeLog(`[boot-theme] Wiring all toys with theme: ${activeThemeKey}`);
   // Preload full instrument list (CSV display names) once
   let allEntries = [];
   try { allEntries = await loadInstrumentEntries(); } catch {}

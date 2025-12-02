@@ -19,6 +19,9 @@ import {
   screenRadiusToWorld,
   seededRandomFactory,
 } from './particle-density.js';
+import { makeDebugLogger } from '../debug-flags.js';
+
+const fieldLog = makeDebugLogger('mt_debug_logs', 'log');
 
 // Color stops for particles as they fade back home after a poke.
 // Sequence: bright cyan punch -> pink -> clean white settle.
@@ -586,7 +589,7 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
   }
 
   resize();
-  console.log('[FIELD][init]', {
+  fieldLog('[FIELD][init]', {
     id: fieldLabel,
     widthPx: state.w,
     heightPx: state.h,
