@@ -7,6 +7,7 @@ import { getLoopInfo, isRunning } from './audio-core.js';
 import { onZoomChange, getZoomState, getFrameStartState, onFrameStart } from './zoom/ZoomCoordinator.js';
 import { createParticleViewport } from './particles/particle-viewport.js';
 import { createField } from './particles/field-generic.js';
+import { getParticleBudget, getAdaptiveFrameBudget } from './particles/ParticleQuality.js';
 import { overviewMode } from './overview-mode.js';
 import { boardScale as boardScaleHelper } from './board-scale-helpers.js';
 import { makeDebugLogger } from './debug-flags.js';
@@ -1609,11 +1610,29 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     try {
       dgField?.destroy?.();
       dgViewport?.refreshSize?.({ snap: true });
+
+      // Read the global particle budget (FPS & device driven).
+      const budget = (() => {
+        try {
+          return getParticleBudget();
+        } catch {
+          return { spawnScale: 1.0, maxCountScale: 1.0 };
+        }
+      })();
+
+      // Base config values for a "nice" look on fast machines.
+      const BASE_CAP = 2200;
+      const cap = Math.max(200, Math.floor(BASE_CAP * (budget.maxCountScale ?? 1)));
+
+      // Nudge size slightly with quality so low tiers feel less dense and noisy.
+      const baseSize = 1.4;
+      const sizePx = baseSize * (0.8 + 0.4 * (budget.spawnScale ?? 1));
+
       dgField = createField(
         { canvas: particleCanvas, viewport: dgViewport, pausedRef, debugLabel: 'drawgrid-particles' },
         {
           seed: panelSeed,
-          cap: 2200,
+          cap,
           returnSeconds: 2.4,   // slower settle time so brightness/offsets linger
           forceMul: 1.0,
           noise: 0,
@@ -1622,7 +1641,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
           // Restore normal idle particle look (same as Simple Rhythm)
           drawMode: 'dots',
-          sizePx: 1.4,
+          sizePx,
           minAlpha: 0.25,
           maxAlpha: 0.85,
         }
@@ -1631,6 +1650,19 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       drawgridLog('[DG] field config', dgField?._config);
       dgViewport?.refreshSize?.({ snap: true });
       dgField?.resize?.();
+      try {
+        const adaptive = getAdaptiveFrameBudget?.();
+        const pb = adaptive?.particleBudget;
+        if (pb && typeof dgField.applyBudget === 'function') {
+          const maxCountScale = Math.max(0.15, (pb.maxCountScale ?? 1) * (pb.capScale ?? 1));
+          dgField.applyBudget({
+            maxCountScale,
+            capScale: pb.capScale ?? 1,
+            tickModulo: pb.tickModulo ?? 1,
+            sizeScale: pb.sizeScale ?? 1,
+          });
+        }
+      } catch {}
       requestAnimationFrame(() => requestAnimationFrame(() => {
         try {
           dgViewport?.refreshSize?.({ snap: true });
@@ -3452,6 +3484,7 @@ function regenerateMapFromStrokes() {
   // Visibility culling: turn off heavy work when the panel is completely offscreen.
   if (typeof window !== 'undefined' && 'IntersectionObserver' in window) {
     try {
+      let lastVisibleState = isPanelVisible;
       const visObserver = new IntersectionObserver(
         (entries) => {
           for (const entry of entries) {
@@ -3460,6 +3493,18 @@ function regenerateMapFromStrokes() {
               entry.isIntersecting &&
               entry.intersectionRatio > DG_VISIBILITY_THRESHOLD;
             isPanelVisible = !!visible;
+            if (isPanelVisible !== lastVisibleState) {
+              lastVisibleState = isPanelVisible;
+              try {
+                drawgridLog('[DG][cull] visibility change', {
+                  id: panel.id || null,
+                  visible: isPanelVisible,
+                  ratio: Number.isFinite(entry.intersectionRatio)
+                    ? Number(entry.intersectionRatio.toFixed(3))
+                    : null,
+                });
+              } catch {}
+            }
           }
         },
         {
@@ -3474,6 +3519,12 @@ function regenerateMapFromStrokes() {
       isPanelVisible = true;
     }
   }
+  // Also respond to generic toy visibility events (shared culler)
+  panel.addEventListener('toy:visibility', (e) => {
+    if (typeof e?.detail?.visible === 'boolean') {
+      isPanelVisible = !!e.detail.visible;
+    }
+  });
 
   let lastZoomX = 1;
   let lastZoomY = 1;
@@ -5377,31 +5428,35 @@ function syncBackBufferSizes() {
   let __dgFrameProfileMaxMs = 0;
   let __dgFrameProfileLastLogTs = 0;
 
-  function updateParticleQualityFromFps(boardScaleValue) {
-    // Default: assume 60fps / high quality if we don't know.
-    let fps = 60;
-    try {
-      if (typeof window !== 'undefined' && typeof window.__dgFpsValue === 'number') {
-        fps = window.__dgFpsValue;
+  function updatePanelParticleState(boardScaleValue) {
+    const adaptive = (() => {
+      try {
+        return getAdaptiveFrameBudget();
+      } catch {
+        return null;
       }
-    } catch {}
+    })();
+    const particleBudget = adaptive?.particleBudget;
 
     // If we're in overview or super zoomed out, skip the background field entirely.
     const overviewState = (typeof window !== 'undefined' && window.__overviewMode) ? window.__overviewMode : { isActive: () => false };
     const inOverview = !!overviewState?.isActive?.();
     const zoomTooWide = Number.isFinite(boardScaleValue) && boardScaleValue < 0.4;
 
-    if (inOverview || zoomTooWide) {
-      particleFieldEnabled = false;
-      return;
+    const allowField = particleBudget?.allowField !== false;
+    particleFieldEnabled = !!allowField && !inOverview && !zoomTooWide;
+
+    if (dgField && typeof dgField.applyBudget === 'function' && particleBudget) {
+      const maxCountScale = Math.max(0.15, (particleBudget.maxCountScale ?? 1) * (particleBudget.capScale ?? 1));
+      dgField.applyBudget({
+        maxCountScale,
+        capScale: particleBudget.capScale ?? 1,
+        tickModulo: particleBudget.tickModulo ?? 1,
+        sizeScale: particleBudget.sizeScale ?? 1,
+      });
     }
 
-    // Hysteresis based on FPS so we don't thrash on the threshold
-    if (fps < DG_MIN_FPS_FOR_PARTICLE_FIELD) {
-      particleFieldEnabled = false;
-    } else if (fps > DG_FPS_PARTICLE_HYSTERESIS_UP) {
-      particleFieldEnabled = true;
-    }
+    return adaptive;
   }
 
   function renderLoop() {
@@ -5448,10 +5503,12 @@ function syncBackBufferSizes() {
     const zoomDebugFreeze = !!(typeof window !== 'undefined' && window.__zoomDebugFreeze);
 
     // Update per-panel LOD state from global FPS + zoom.
-    updateParticleQualityFromFps(boardScaleValue);
+    const adaptiveState = updatePanelParticleState(boardScaleValue);
 
     // We never draw overlays or particles if the panel is completely offscreen.
     const canDrawAnything = !waitingForStable && isPanelVisible;
+    const renderEvery = 1;
+    const skipNonCritical = false;
 
     // Overlays (notes, playhead, flashes) respect visibility & hydrations guard,
     // but are otherwise always on – they're core UX.

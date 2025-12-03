@@ -3,11 +3,13 @@ import './fullscreen.js';
 // --- Module Imports ---
 import './debug.js';
 import './advanced-controls-toggle.js';
+import './toy-visibility.js';
 import { initializeBouncer } from './bouncer-init.js';
 import './header-buttons-delegate.js';
 import './rippler-init.js';
 import './tutorial.js';
 import './ui-highlights.js';
+import { updateParticleQualityFromFps } from './particles/ParticleQuality.js';
 // import { createBouncer } from './bouncer.main.js'; // This is now handled by bouncer-init.js
 import { initDrawGrid } from './drawgrid-init.js';
 import { createChordWheel } from './chordwheel.js';
@@ -408,9 +410,9 @@ const CHAIN_DEBUG_FRAME_THRESHOLD_MS = 0.0;
 
 // Feature flags so we can selectively disable suspected work during perf debugging.
 // Flip these to false one at a time to see which block removes the slowdown.
-const CHAIN_FEATURE_ENABLE_SCHEDULER      = false; // master toggle for chain work in scheduler()
-const CHAIN_FEATURE_ENABLE_MARK_ACTIVE    = false; // DOM scan + data-chain-active flags
-const CHAIN_FEATURE_ENABLE_SEQUENCER      = false; // __sequencerStep + border pulses
+const CHAIN_FEATURE_ENABLE_SCHEDULER      = true;  // master toggle for chain work in scheduler()
+const CHAIN_FEATURE_ENABLE_MARK_ACTIVE    = true;  // DOM scan + data-chain-active flags
+const CHAIN_FEATURE_ENABLE_SEQUENCER      = true;  // __sequencerStep + border pulses
 const CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW = false; // drawChains() canvas connectors
 // Rendering resolution multiplier for the chain canvas.
 // 1.0 = full resolution (heaviest)
@@ -584,8 +586,23 @@ function initFpsHud() {
       __fpsFrames = 0;
       __fpsLastTs = now;
 
+      // Update HUD text
       if (__fpsHudEl) {
         __fpsHudEl.textContent = `FPS: ${__fpsValue.toFixed(1)}`;
+      }
+
+      // Expose FPS globally for any legacy uses (e.g. drawgrid tuning).
+      try {
+        window.__dgFpsValue = __fpsValue;
+      } catch (err) {
+        // ignore
+      }
+
+      // Feed the shared particle quality system.
+      try {
+        updateParticleQualityFromFps(__fpsValue);
+      } catch (err) {
+        // ignore – debug-only feature should never crash the app
       }
     }
 

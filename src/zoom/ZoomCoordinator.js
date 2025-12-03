@@ -6,10 +6,10 @@ const listeners = new Set();
 const frameStartListeners = new Set();
 
 // --- Lightweight ZoomCoordinator profiling ---
-const ZC_PROFILE = true;
+const ZC_PROFILE = false;
 
 // --- Listener profiling ---
-const ZC_LISTENER_DEBUG = true;
+const ZC_LISTENER_DEBUG = false;
 const ZC_LISTENER_LOG_THRESHOLD_MS = 3.0; // log listeners slower than this
 
 let zcFrameCount = 0;

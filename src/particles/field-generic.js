@@ -23,6 +23,18 @@ import { makeDebugLogger } from '../debug-flags.js';
 
 const fieldLog = makeDebugLogger('mt_debug_logs', 'log');
 
+// Fade tuning
+const FADE_IN_RATE = 1.6;   // per second
+const FADE_OUT_RATE = 0.9;  // per second (slower so reductions are gentler)
+const TWINKLE_PER_SEC = 5;  // always fade this many in/out per second (soft twinkle)
+const TWINKLE_MIN = 0.25;
+const TWINKLE_MAX = 0.75;
+const ADJUST_PER_SEC = 10;  // when scaling up/down for LOD
+const MIN_PARTICLES = 50;   // never drop below this
+const MAX_FADE_OUT_FRACTION = 0.04; // cap how many fade-outs per reconcile step
+const MAX_FADE_OUT_STEP = 16;
+const MIN_FADE_STEP = 2;
+
 // Color stops for particles as they fade back home after a poke.
 // Sequence: bright cyan punch -> pink -> clean white settle.
 export const PARTICLE_RETURN_GRADIENT = Object.freeze([
@@ -130,10 +142,16 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
     h: 1,
     dpr: 1,
     particles: [],
+    targetDesired: 0,
     pulseEnergy: 0,
     lodScale: 1,
+    capScale: 1,
+    tickModulo: 1,
+    tickModuloCounter: 0,
+    tickAccumDt: 0,
     spacing: 18,
   };
+  const baseSizePx = config.sizePx;
   const PARTICLE_HIGHLIGHT_DURATION = 900; // ms
   const PARTICLE_HIGHLIGHT_INTENSITY = 0.6; // base cap
   const PARTICLE_HIGHLIGHT_SIZE_BUMP = 0.25; // relative radius increase at peak highlight
@@ -197,9 +215,13 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
     const spacingCandidate = Number.isFinite(layoutOpts.spacing)
       ? layoutOpts.spacing
       : computedLayout.spacing;
-    state.spacing = Math.max(8, spacingCandidate || computedLayout.spacing || 8);
-    const cap = Number.isFinite(config.cap) ? config.cap : Number.POSITIVE_INFINITY;
-    const target = Math.min(cap, Math.max(1, Math.round(resolvedCount)));
+    const lodScale = Math.max(0.15, Math.min(1, state.lodScale || 1));
+    const spacingScale = lodScale > 0 ? (1 / Math.sqrt(lodScale)) : 1;
+    state.spacing = Math.max(8, (spacingCandidate || computedLayout.spacing || 8) * spacingScale);
+    const capBase = Number.isFinite(config.cap) ? config.cap : Number.POSITIVE_INFINITY;
+    const cap = Math.max(1, Math.round(capBase * Math.max(0.1, Math.min(1.25, state.capScale || 1))));
+    const target = Math.max(MIN_PARTICLES, Math.min(cap, Math.max(1, Math.round(resolvedCount * lodScale))));
+    state.targetDesired = target;
 
     if (state.particles.length) {
       const scaleX = prevW > 0 ? (state.w / prevW) : 1;
@@ -225,22 +247,22 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
       }
     }
 
-    if (target === state.particles.length) return;
-
-    if (target < state.particles.length) {
-      state.particles.length = target;
-      return;
+    // Initial fill: if empty, seed to the target immediately so we don't draw blanks.
+    if (!state.particles.length && target > 0) {
+      const seedKey = `${config.seed}:${state.w}x${state.h}`;
+      const rng = makeRng(seedKey);
+      while (state.particles.length < target) {
+        const x = rng() * state.w;
+        const y = rng() * state.h;
+        const a = rng();
+        const rPx = particleRadiusPx(rng);
+        state.particles.push({
+          x, y, hx: x, hy: y, vx: 0, vy: 0, a, rPx,
+          fade: 1, fadeTarget: 1, fadeRate: FADE_IN_RATE,
+        });
+      }
     }
-
-    const seedKey = `${config.seed}:${state.w}x${state.h}`;
-    const rng = makeRng(seedKey);
-    while (state.particles.length < target) {
-      const x = rng() * state.w;
-      const y = rng() * state.h;
-      const a = rng();
-      const rPx = particleRadiusPx(rng);
-      state.particles.push({ x, y, hx: x, hy: y, vx: 0, vy: 0, a, rPx });
-    }
+    reconcileParticleCount(0, true);
   }
 
   function resize() {
@@ -358,16 +380,20 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
     }
 
     if (config.drawMode === 'dots+links' && state.particles.length <= 1500) {
-      ctx.globalAlpha = config.lineAlpha;
       ctx.strokeStyle = config.strokeStyle;
       ctx.lineWidth = Math.max(0.6, baseWorldRadius * 0.8);
       for (let i = 0; i < state.particles.length; i++) {
         const a = state.particles[i];
+        const fadeA = Number.isFinite(a.fade) ? Math.max(0, Math.min(1, a.fade)) : 1;
+        if (fadeA <= 0.001) continue;
         for (let j = i + 1; j < state.particles.length; j++) {
           const b = state.particles[j];
+          const fadeB = Number.isFinite(b.fade) ? Math.max(0, Math.min(1, b.fade)) : 1;
+          if (fadeB <= 0.001) continue;
           const dx = a.x - b.x;
           const dy = a.y - b.y;
           if (dx * dx + dy * dy < config.linkDist * config.linkDist) {
+            ctx.globalAlpha = config.lineAlpha * Math.min(fadeA, fadeB);
             ctx.beginPath();
             ctx.moveTo(a.x, a.y);
             ctx.lineTo(b.x, b.y);
@@ -381,6 +407,8 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
     const glowFillStyle = 'rgba(201, 228, 255, 0.96)';
     for (let i = 0; i < state.particles.length; i++) {
       const p = state.particles[i];
+      const fadeAlpha = Number.isFinite(p.fade) ? Math.max(0, Math.min(1, p.fade)) : 1;
+      if (fadeAlpha <= 0.001) continue;
       const alpha =
         config.minAlpha +
         (config.maxAlpha - config.minAlpha) *
@@ -419,7 +447,7 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
           (1 + 0.5 * highlightAmp)
       );
       const accentRgb = highlight > 0 ? sampleReturnGradient(highlightProgress) : null;
-      ctx.globalAlpha = Math.min(1, alpha + accent);
+      ctx.globalAlpha = Math.min(1, alpha + accent) * fadeAlpha;
       ctx.fillStyle = (highlight > 0 && accentRgb)
         ? rgbToRgbaString(accentRgb, 1)
         : baseFillStyle;
@@ -429,7 +457,7 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
       if (highlight > 0) {
         const glowAlpha = Math.min(0.85, accent * 1.2);
         const glowRgb = accentRgb || sampleReturnGradient(1);
-        ctx.globalAlpha = glowAlpha;
+        ctx.globalAlpha = glowAlpha * fadeAlpha;
         ctx.fillStyle = glowRgb ? rgbToRgbaString(glowRgb, 0.95) : glowFillStyle;
         ctx.beginPath();
         ctx.arc(p.x, p.y, drawRadius * (1 + highlight * 0.8), 0, Math.PI * 2);
@@ -443,8 +471,177 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
   function tick(dt = 1 / 60) {
     maybeResizeFromLayout();
     setLODFromView();
-    step(dt);
+    let effectiveDt = dt;
+    if (state.tickModulo > 1) {
+      state.tickModuloCounter = (state.tickModuloCounter + 1) % state.tickModulo;
+      state.tickAccumDt += dt;
+      if (state.tickModuloCounter !== 0) {
+        updateFades(dt);
+        twinkle(dt);
+        draw();
+        cleanupFaded();
+        return;
+      }
+      effectiveDt = state.tickAccumDt;
+      state.tickAccumDt = 0;
+    }
+    effectiveDt = Math.min(0.12, effectiveDt); // avoid huge leaps when heavily throttled
+    reconcileParticleCount(effectiveDt);
+    updateFades(effectiveDt);
+    step(effectiveDt);
+    twinkle(effectiveDt);
     draw();
+    cleanupFaded();
+  }
+
+  function applyBudget(budget = {}) {
+    const { maxCountScale, capScale, tickModulo, sizeScale } = budget;
+    let changed = false;
+    if (Number.isFinite(maxCountScale)) {
+      const target = Math.max(0.15, Math.min(1.0, maxCountScale));
+      if (!Number.isFinite(state.lodScale)) state.lodScale = target;
+      const alpha = target > state.lodScale ? 0.12 : 0.05; // ease down slower to avoid sudden drops
+      state.lodScale = state.lodScale + (target - state.lodScale) * alpha;
+      changed = true;
+    }
+    if (Number.isFinite(capScale)) {
+      const target = Math.max(0.1, Math.min(1.25, capScale));
+      if (!Number.isFinite(state.capScale)) state.capScale = target;
+      const alpha = target > state.capScale ? 0.12 : 0.05;
+      state.capScale = state.capScale + (target - state.capScale) * alpha;
+      changed = true;
+    }
+    if (Number.isFinite(tickModulo)) {
+      state.tickModulo = Math.max(1, Math.round(tickModulo));
+      state.tickModuloCounter = 0;
+      state.tickAccumDt = 0;
+      changed = true;
+    }
+    if (Number.isFinite(sizeScale)) {
+      const scaled = Math.max(0.4, baseSizePx * sizeScale);
+      if (scaled !== config.sizePx) {
+        config.sizePx = scaled;
+        changed = true;
+      }
+    }
+    if (changed) rebuild();
+  }
+
+  function reconcileParticleCount(dt = 1 / 60, immediate = false) {
+    const desired = Math.max(MIN_PARTICLES, Math.round(state.targetDesired || 0));
+    const activeParticles = state.particles.filter(p => (p.fadeTarget ?? 1) > 0 || (p.fade ?? 0) > 0.05);
+    const active = activeParticles.length;
+
+    if (immediate && !state.particles.length) {
+      const seedKey = `${config.seed}:${state.w}x${state.h}:init:${desired}`;
+      const rng = makeRng(seedKey);
+      while (state.particles.length < desired) {
+        const x = rng() * state.w;
+        const y = rng() * state.h;
+        const a = rng();
+        const rPx = particleRadiusPx(rng);
+        state.particles.push({
+          x, y, hx: x, hy: y, vx: 0, vy: 0, a, rPx,
+          fade: 1,
+          fadeTarget: 1,
+          fadeRate: FADE_IN_RATE,
+        });
+      }
+      return;
+    }
+
+    const adjustStep = Math.max(1, Math.round(ADJUST_PER_SEC * dt));
+
+    if (active < desired) {
+      const need = desired - active;
+      const toAdd = Math.min(need, adjustStep);
+      const seedKey = `${config.seed}:${state.w}x${state.h}:grow:${state.particles.length}`;
+      const rng = makeRng(seedKey);
+      for (let i = 0; i < toAdd; i++) {
+        const x = rng() * state.w;
+        const y = rng() * state.h;
+        const a = rng();
+        const rPx = particleRadiusPx(rng);
+        state.particles.push({
+          x, y, hx: x, hy: y, vx: 0, vy: 0, a, rPx,
+          fade: 0,
+          fadeTarget: 1,
+          fadeRate: FADE_IN_RATE,
+        });
+      }
+    } else if (active > desired) {
+      const maxTrim = Math.max(MIN_FADE_STEP, Math.round(active * MAX_FADE_OUT_FRACTION));
+      const trimBudget = Math.min(adjustStep, MAX_FADE_OUT_STEP, maxTrim, active - MIN_PARTICLES);
+      const candidates = activeParticles.filter(p => (p.fadeTarget ?? 1) > 0);
+      const budget = Math.min(trimBudget, candidates.length);
+      for (let i = 0; i < budget && candidates.length; i++) {
+        const idx = Math.floor(Math.random() * candidates.length);
+        const p = candidates.splice(idx, 1)[0];
+        p.fadeTarget = 0;
+        p.fadeRate = FADE_OUT_RATE;
+      }
+    }
+  }
+
+  function updateFades(dt) {
+    const len = state.particles.length;
+    for (let i = 0; i < len; i++) {
+      const p = state.particles[i];
+      if (!p) continue;
+      const target = Number.isFinite(p.fadeTarget) ? p.fadeTarget : 1;
+      const rate = Number.isFinite(p.fadeRate) ? p.fadeRate : FADE_IN_RATE;
+      if (!Number.isFinite(p.fade)) p.fade = target;
+      const diff = target - p.fade;
+      if (Math.abs(diff) < 1e-4) {
+        p.fade = target;
+        if (p._fadeReturn && target < 0.999) {
+          p.fadeTarget = 1;
+          p.fadeRate = FADE_IN_RATE * 0.75;
+        } else if (p._fadeReturn && target >= 0.999) {
+          p._fadeReturn = false;
+        }
+        continue;
+      }
+      const step = Math.sign(diff) * rate * dt;
+      if (Math.abs(step) >= Math.abs(diff)) {
+        p.fade = target;
+      } else {
+        p.fade += step;
+      }
+      if (p.fade < 0) p.fade = 0;
+      if (p.fade > 1) p.fade = 1;
+    }
+  }
+
+  function twinkle(dt) {
+    if (!state.particles.length) return;
+    const twinkleBudget = Math.max(1, Math.round(TWINKLE_PER_SEC * dt));
+    for (let i = 0; i < twinkleBudget; i++) {
+      const idx = Math.floor(Math.random() * state.particles.length);
+      const p = state.particles[idx];
+      if (!p || (p.fadeTarget ?? 1) === 0) continue;
+      const next = TWINKLE_MIN + Math.random() * (TWINKLE_MAX - TWINKLE_MIN);
+      p.fadeTarget = next;
+      p.fadeRate = FADE_OUT_RATE * 0.5;
+      p._fadeReturn = true;
+    }
+  }
+
+  function cleanupFaded() {
+    if (!state.particles.length) return;
+    const keep = [];
+    for (let i = 0; i < state.particles.length; i++) {
+      const p = state.particles[i];
+      if (!p) continue;
+      if ((p.fadeTarget ?? 1) === 0 && (p.fade ?? 0) <= 0.01) {
+        continue;
+      }
+      keep.push(p);
+    }
+    if (keep.length !== state.particles.length) {
+      state.particles.length = 0;
+      Array.prototype.push.apply(state.particles, keep);
+    }
   }
 
   function poke(x, y, opts = {}) {
@@ -604,6 +801,7 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
     poke,
     pushDirectional,
     setStyle,
+    applyBudget,
     canvas,
     _state: state,
     _config: config,

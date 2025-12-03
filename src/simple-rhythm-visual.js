@@ -6,6 +6,7 @@ import { midiToName } from './note-helpers.js';
 import { isRunning, getLoopInfo } from './audio-core.js';
 import { createField } from './particles/field-generic.js';
 import { createParticleViewport } from './particles/particle-viewport.js';
+import { getParticleBudget, getAdaptiveFrameBudget } from './particles/ParticleQuality.js';
 import { resizeCanvasForDPR } from './utils.js';
 import { overviewMode } from './overview-mode.js';
 import { onZoomChange } from './zoom/ZoomCoordinator.js';
@@ -362,12 +363,35 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     try {
       const pausedRef = () => !isRunning();
       const panelSeed = panel?.dataset?.toyid || panel?.id || 'loopgrid';
+
+      // Ask the shared particle quality system how aggressive we can be.
+      const budgetState = (() => {
+        try { return getAdaptiveFrameBudget(); } catch { return null; }
+      })();
+      const budget = budgetState?.particleBudget ?? (() => {
+        try {
+          return getParticleBudget();
+        } catch {
+          return { spawnScale: 1.0, maxCountScale: 1.0 };
+        }
+      })();
+
+      // Base cap chosen for a "nice" look on fast machines, but scaled down on lower tiers.
+      const BASE_CAP = 2200;
+      const capScale = Math.max(0.15, (budget.maxCountScale ?? 1) * (budget.capScale ?? 1));
+      const cap = Math.max(140, Math.floor(BASE_CAP * capScale));
+
+      // On lower quality tiers, shorten the "trail" slightly so motion feels lighter.
+      const baseReturnSeconds = 1.0;
+      const extraReturnSeconds = 0.7 * (budget.spawnScale ?? 1);
+      const returnSeconds = baseReturnSeconds + extraReturnSeconds;
+
       particleField = createField(
         { canvas: particleCanvas, viewport: pv, pausedRef, debugLabel: 'simple-rhythm-particles' },
         {
           seed: panelSeed,
-          cap: 2200,
-          returnSeconds: 1.4,
+          cap,
+          returnSeconds,
           forceMul: 1.0,
           noise: 0,
           kick: 0,
@@ -380,6 +404,18 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
         }
       );
       particleField.resize();
+      try {
+        if (budget && typeof particleField.applyBudget === 'function') {
+          particleField.applyBudget({
+            maxCountScale: capScale,
+            capScale: budget.capScale ?? 1,
+            tickModulo: budget.tickModulo ?? 1,
+            sizeScale: budget.sizeScale ?? 1,
+          });
+        }
+      } catch {}
+      // Keep fields visible; rely on budget scaling instead of hiding.
+      // ... ResizeObserver / overview handler follows as before
       if (typeof ResizeObserver !== 'undefined') {
         particleObserver = new ResizeObserver(() => {
           pv.refreshSize({ snap: true });
@@ -700,11 +736,31 @@ function render(panel) {
   const cssH = st._cssH || canvas.clientHeight;
   const renderTime = performance.now();
 
+  const adaptiveBudget = (() => {
+    try { return getAdaptiveFrameBudget(); } catch { return null; }
+  })();
+  const particleBudget = adaptiveBudget?.particleBudget;
+  const allowField = particleBudget?.allowField !== false;
   if (particleField) {
-    if (!Number.isFinite(st.lastParticleTick)) st.lastParticleTick = renderTime;
-    const dt = Math.min(0.05, Math.max(0, (renderTime - st.lastParticleTick) / 1000));
-    st.lastParticleTick = renderTime;
-    try { particleField.tick(dt || (1 / 60)); } catch {}
+    try {
+      if (particleBudget && typeof particleField.applyBudget === 'function') {
+        const maxCountScale = Math.max(0.15, (particleBudget.maxCountScale ?? 1) * (particleBudget.capScale ?? 1));
+        particleField.applyBudget({
+          maxCountScale,
+          capScale: particleBudget.capScale ?? 1,
+          tickModulo: particleBudget.tickModulo ?? 1,
+          sizeScale: particleBudget.sizeScale ?? 1,
+        });
+      }
+    } catch {}
+    if (allowField) {
+      if (!Number.isFinite(st.lastParticleTick)) st.lastParticleTick = renderTime;
+      const dt = Math.min(0.05, Math.max(0, (renderTime - st.lastParticleTick) / 1000));
+      st.lastParticleTick = renderTime;
+      try { particleField.tick(dt || (1 / 60)); } catch {}
+    } else {
+      st.lastParticleTick = renderTime;
+    }
   }
 
   if (!Number.isFinite(st._burstLastTime)) st._burstLastTime = renderTime;
