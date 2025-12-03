@@ -12,7 +12,7 @@ export class WheelZoomLerper {
       targetScale: 1,
       targetX: 0,
       targetY: 0,
-      easing: 0.18, // responsiveness
+      easing: 0.08, // slower responsiveness for smoother pans/zooms
       running: false,
       minScale: 0.3,
       maxScale: 4.0,

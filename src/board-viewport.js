@@ -89,6 +89,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
   }
   // --- tween helpers ---
   function easeInOutCubic(t){ return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2; }
+  function easeOutCubic(t){ return 1 - Math.pow(1 - t, 3); }
   function lerp(a,b,t){ return a + (b - a) * t; }
   viewportLog('[board-viewport] transform order =', ORDER);
 
@@ -601,7 +602,17 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
 
   // Pan & zoom together from current transform to the final "toy centered" transform.
   // The toy will *move toward* center while zooming (not locked to center mid-move).
-  function zoomPanToFinal(xWorld, yWorld, targetScale, { duration = 320, easing = easeInOutCubic } = {}) {
+  function zoomPanToFinal(
+    xWorld,
+    yWorld,
+    targetScale,
+    {
+      duration = 320,
+      easing = easeInOutCubic,
+      centerFracX = 0.5,
+      centerFracY = 0.5,
+    } = {}
+  ) {
     camTweenLock = true;
     const s1 = clampScale(Number(targetScale) || scale);
     // We'll recompute layout/view center each frame to follow any chrome/layout changes.
@@ -631,8 +642,8 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
         const container = stage.closest('.board-viewport') || document.documentElement;
         const viewW = container.clientWidth || window.innerWidth;
         const viewH = container.clientHeight || window.innerHeight;
-        const viewCx = viewW * 0.5;
-        const viewCy = viewH * 0.5;
+        const viewCx = viewW * centerFracX;
+        const viewCy = viewH * centerFracY;
         // Final translate for THIS frame to head toward the correct final center
         const tX = viewCx - layoutLeft - xWorld * s1;
         const tY = viewCy - layoutTop  - yWorld * s1;
@@ -653,8 +664,8 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
           const finalContainer = stage.closest('.board-viewport') || document.documentElement;
           const finalViewW = finalContainer.clientWidth || window.innerWidth;
           const finalViewH = finalContainer.clientHeight || window.innerHeight;
-          const finalViewCx = finalViewW * 0.5;
-          const finalViewCy = finalViewH * 0.5;
+          const finalViewCx = finalViewW * centerFracX;
+          const finalViewCy = finalViewH * centerFracY;
           const finalX = finalViewCx - finalLayoutLeft - xWorld * s1;
           const finalY = finalViewCy - finalLayoutTop  - yWorld * s1;
           if (Number.isFinite(finalX) && Number.isFinite(finalY)) {
@@ -671,15 +682,20 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     });
   }
 
-  window.centerBoardOnWorldPoint = async (xWorld, yWorld, desiredScale = scale) => {
-    if (camTweenLock) return; // ignore while an animation is in progress
-    if (!Number.isFinite(xWorld) || !Number.isFinite(yWorld)) return;
-    const targetScale = clampScale(Number(desiredScale) || scale);
-    // One smooth move: pan & zoom together toward the final centered transform.
-    await zoomPanToFinal(xWorld, yWorld, targetScale, { duration: 320, easing: easeInOutCubic });
-  };
+window.centerBoardOnWorldPoint = async (
+  xWorld,
+  yWorld,
+  desiredScale = scale,
+  { duration = 950, easing = easeOutCubic, centerFracX = 0.54, centerFracY = 0.5 } = {}
+) => {
+  if (camTweenLock) return; // ignore while an animation is in progress
+  if (!Number.isFinite(xWorld) || !Number.isFinite(yWorld)) return;
+  const targetScale = clampScale(Number(desiredScale) || scale);
+  // One smooth move: pan & zoom together toward the final centered transform.
+  await zoomPanToFinal(xWorld, yWorld, targetScale, { duration, easing, centerFracX, centerFracY });
+};
 
-  window.centerBoardOnElement = (el, desiredScale = scale) => {
+window.centerBoardOnElement = (el, desiredScale = scale, { duration = 320, centerFracX = 0.5, centerFracY = 0.5 } = {}) => {
     if (camTweenLock) return;
     if (!el || !stage) return;
     window.__lastFocusEl = el;
@@ -692,8 +708,8 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     const container = stage.closest('.board-viewport') || document.documentElement;
     const viewW = container.clientWidth || window.innerWidth;
     const viewH = container.clientHeight || window.innerHeight;
-    const viewCx = viewW * 0.5;
-    const viewCy = viewH * 0.5;
+  const viewCx = viewW * centerFracX;
+  const viewCy = viewH * centerFracY;
 
     // World-space center of the panel (offsets are relative to #board because board.js ensures position:relative).
   const worldCenter = getWorldCenter(el);
@@ -717,6 +733,19 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
       if (el?.isConnected) nudgeCenterIfOff(el, targetScale);
     }, 0);
   };
+
+// Slower camera pan/zoom helper
+window.centerBoardOnElementSlow = (
+  el,
+  desiredScale = scale,
+  { duration = 1100, centerFracX = 0.54, centerFracY = 0.5 } = {}
+) => {
+  if (!el || !stage) return;
+  if (camTweenLock) return;
+  const wc = getWorldCenter(el);
+  if (!wc) return;
+  return window.centerBoardOnWorldPoint?.(wc.x, wc.y, desiredScale, { duration, centerFracX, centerFracY, easing: easeOutCubic });
+};
 
   const crosshairState = { raf: 0, active: false, x: 0, y: 0 };
 

@@ -5511,8 +5511,9 @@ function syncBackBufferSizes() {
     const zoomTooWide = Number.isFinite(boardScaleValue) && boardScaleValue < 0.4;
     const visiblePanels = Math.max(0, Number(globalDrawgridState?.visibleCount) || 0);
     const allowField = particleBudget?.allowField !== false;
+    const isUnfocused = !!panel?.classList?.contains('toy-unfocused');
     // Keep fields on, but thin them out when many panels are visible.
-    particleFieldEnabled = !!allowField && !inOverview && !zoomTooWide;
+    particleFieldEnabled = !!allowField && !inOverview && !zoomTooWide && !isUnfocused;
 
     if (dgField && typeof dgField.applyBudget === 'function' && particleBudget) {
       const maxCountScaleBase = (particleBudget.maxCountScale ?? 1) * (particleBudget.capScale ?? 1);

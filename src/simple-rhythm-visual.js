@@ -740,7 +740,8 @@ function render(panel) {
     try { return getAdaptiveFrameBudget(); } catch { return null; }
   })();
   const particleBudget = adaptiveBudget?.particleBudget;
-  const allowField = particleBudget?.allowField !== false;
+  const isUnfocused = panel.classList?.contains('toy-unfocused');
+  const allowField = particleBudget?.allowField !== false && !isUnfocused;
   if (particleField) {
     try {
       if (particleBudget && typeof particleField.applyBudget === 'function') {

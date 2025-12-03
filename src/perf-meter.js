@@ -2,19 +2,7 @@
 // Tiny frame-time sampler for pinpointing expensive systems.
 // Enable via ?perf=1 or localStorage.mt_perf_meter = '1'.
 
-const enabled = (() => {
-  try {
-    const params = new URLSearchParams(window.location.search || '');
-    if (params.get('perf') === '1' || params.get('perfMeter') === '1') return true;
-    const ls = window.localStorage?.getItem('mt_perf_meter');
-    if (ls === '0' || ls === 'false') return false;
-    if (ls === '1' || ls === 'true') return true;
-    // Default to on so we can spot hot systems; opt out with mt_perf_meter=0.
-    return true;
-  } catch {
-    return false;
-  }
-})();
+const enabled = false; // Hard-disabled unless code is modified; re-enable via code when profiling.
 
 const buckets = new Map();
 let lastFlush = typeof performance !== 'undefined' ? performance.now() : Date.now();

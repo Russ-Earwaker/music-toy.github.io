@@ -96,7 +96,11 @@ export function initDragBoard(boardSel = '#board') {
       clickedPanel.classList.add('toy-focused');
     }
 
-    const handle = e.target.closest('[data-drag-handle="1"]');
+    let handle = e.target.closest('[data-drag-handle="1"]');
+    // Allow dragging the whole panel when unfocused (header hidden).
+    if (!handle && clickedPanel?.classList?.contains('toy-unfocused')) {
+      handle = clickedPanel;
+    }
     // Ignore clicks on buttons or other interactive elements in the header.
     if (!handle || e.target.closest('button, select, input, a')) return;
     const el = handle.closest('.toy-panel');

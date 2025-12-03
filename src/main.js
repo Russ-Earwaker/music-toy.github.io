@@ -436,6 +436,90 @@ const CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW = true; // drawChains() canvas connect
 // 0.25 = quarter resolution in each dimension (~16x fewer pixels)
 const CHAIN_CANVAS_RESOLUTION_SCALE = 0.35;
 
+// --- Toy Focus Management ----------------------------------------------------
+let g_focusedToyId = null;
+const focusScaleAnimations = new WeakMap();
+
+function getPanelScale(panel) {
+  try {
+    const t = getComputedStyle(panel).transform;
+    if (!t || t === 'none') return 1;
+    if (t.startsWith('matrix3d(')) {
+      const parts = t.slice(9, -1).split(',');
+      const sx = parseFloat(parts[0]) || 1;
+      const sy = parseFloat(parts[5]) || 1;
+      return (Math.abs(sx) + Math.abs(sy)) * 0.5;
+    }
+    if (t.startsWith('matrix(')) {
+      const parts = t.slice(7, -1).split(',');
+      const sx = parseFloat(parts[0]) || 1;
+      const sy = parseFloat(parts[3]) || 1;
+      return (Math.abs(sx) + Math.abs(sy)) * 0.5;
+    }
+  } catch {}
+  return 1;
+}
+
+function animateFocusScale(panel, fromScale, toScale) {
+  if (!panel || typeof panel.animate !== 'function') return;
+  const currentAnim = focusScaleAnimations.get(panel);
+  currentAnim?.cancel?.();
+
+  if (!Number.isFinite(fromScale)) fromScale = toScale;
+  if (!Number.isFinite(toScale)) return;
+  if (Math.abs(toScale - fromScale) < 0.001) {
+    focusScaleAnimations.delete(panel);
+    return;
+  }
+
+  const midScale = toScale * (toScale > fromScale ? 1.2 : 0.8);
+  const anim = panel.animate(
+    [
+      { transform: `scale(${fromScale})` },
+      { transform: `scale(${midScale})`, offset: 0.8 },
+      { transform: `scale(${toScale})` },
+    ],
+    {
+      duration: 1000,
+      easing: 'cubic-bezier(0.2, 0.9, 0.2, 1)',
+      fill: 'forwards',
+    }
+  );
+  focusScaleAnimations.set(panel, anim);
+  anim.finished.then(() => {
+    if (focusScaleAnimations.get(panel) === anim) {
+      focusScaleAnimations.delete(panel);
+      anim.cancel();
+    }
+  }).catch(() => {});
+}
+
+function setToyFocus(panel, { center = false } = {}) { // center retained for API compatibility
+  if (!panel || !panel.isConnected) return;
+  g_focusedToyId = panel.id;
+  document.querySelectorAll('.toy-panel').forEach((p) => {
+    const startScale = getPanelScale(p);
+    const isFocus = p === panel;
+    p.classList.toggle('toy-focused', isFocus);
+    p.classList.toggle('toy-unfocused', !isFocus);
+    const targetScale = p.classList.contains('toy-unfocused') ? 0.75 : 1;
+    animateFocusScale(p, startScale, targetScale);
+    // Prevent interaction on unfocused toys
+    const body = p.querySelector('.toy-body');
+    if (!isFocus) {
+      p.style.pointerEvents = 'auto'; // allow dragging via panel
+      if (body) body.style.pointerEvents = 'none';
+    } else {
+      if (body) body.style.pointerEvents = '';
+    }
+  });
+  try {
+    rebuildChainSegments();
+    g_chainRedrawPendingFull = true;
+    scheduleChainRedraw();
+  } catch {}
+}
+
 
 mainLog('[MAIN] module start');
   // --- Adaptive outline style: scales with zoom, but never below min px on screen ---
@@ -1187,8 +1271,7 @@ function initToyChaining(panel) {
                 if (oldNextPanel) oldNextPanel.dataset.prevToyId = newPanel.id;
             }
 
-            document.querySelectorAll('.toy-panel.toy-focused').forEach(p => p.classList.remove('toy-focused'));
-            newPanel.classList.add('toy-focused');
+            setToyFocus(newPanel, { center: false });
 
             const finalizePlacement = () => {
                 const followUp = ensurePanelSpawnPlacement(newPanel, {
@@ -1209,11 +1292,6 @@ function initToyChaining(panel) {
 
                 updateChains();
                 updateAllChainUIs();
-                try {
-                    window.centerBoardOnElement?.(newPanel);
-                } catch (err) {
-                    console.warn('[chain] auto-center failed', err);
-                }
                 delete newPanel.dataset.spawnAutoManaged;
                 delete newPanel.dataset.spawnAutoLeft;
                 delete newPanel.dataset.spawnAutoTop;
@@ -1321,17 +1399,12 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument, autoCenter } 
     }
     persistToyPosition(panel);
 
-    const shouldAutoCenterCamera = !!autoCenter;
-
     setTimeout(() => {
         if (!panel.isConnected) return;
         try { initializeNewToy(panel); } catch (err) { console.warn('[createToyPanelAt] init failed', err); }
         try { initToyChaining(panel); } catch (err) { console.warn('[createToyPanelAt] chain init failed', err); }
 
-        document.querySelectorAll('.toy-panel.toy-focused').forEach(p => {
-            if (p !== panel) p.classList.remove('toy-focused');
-        });
-        panel.classList.add('toy-focused');
+        setToyFocus(panel, { center: false });
 
         const finalizePlacement = () => {
             const followUp = ensurePanelSpawnPlacement(panel, {
@@ -1348,12 +1421,8 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument, autoCenter } 
             delete panel.dataset.spawnAutoManaged;
             delete panel.dataset.spawnAutoLeft;
             delete panel.dataset.spawnAutoTop;
-            if (shouldAutoCenterCamera && panel.isConnected) {
-                try {
-                    window.centerBoardOnElement?.(panel);
-                } catch (err) {
-                    console.warn('[createToyPanelAt] auto-center failed', err);
-                }
+            if (panel.isConnected) {
+                setToyFocus(panel, { center: false });
             }
         };
 
@@ -1462,33 +1531,36 @@ chainBtnStyle.textContent = `
 `;
 document.head.appendChild(chainBtnStyle);
 
-function getChainAnchor(panel) {
-  // Board-space coordinates of where the connector should start (right edge center of toy body)
+function getChainAnchor(panel, side = 'right') {
+  // Board-space coordinates of where the connector should start/end, accounting for scale transforms.
   const left = (parseFloat(panel.style.left) || 0);
   const top  = (parseFloat(panel.style.top)  || 0);
+  const scale = panel.classList?.contains('toy-unfocused') ? 0.75 : 1;
+  const panelW = panel.offsetWidth || 0;
+  const panelH = panel.offsetHeight || 0;
+  const cx = left + panelW * 0.5;
+  const cy = top  + panelH * 0.5;
+  const halfW = (panelW * 0.5) * scale;
+  const halfH = (panelH * 0.5) * scale;
+
   const body = panel.querySelector('.toy-body');
+  let bodyOffsetY = 0;
   if (body) {
     const bodyTop = body.offsetTop || 0;
-    const bodyH   = body.offsetHeight || panel.offsetHeight || 0;
-    const cx = left + panel.offsetWidth; // start at toy's right edge, independent of button
-    const cy = top + bodyTop + (bodyH / 2);
-    return { x: cx, y: cy };
+    const bodyH   = body.offsetHeight || panelH || 0;
+    bodyOffsetY = (bodyTop + bodyH * 0.5) - (panelH * 0.5);
   }
-  // Fallback to panel center if body missing
-  return {
-    x: left + panel.offsetWidth,
-    y: top + (panel.offsetHeight / 2)
-  };
+
+  const x = side === 'left' ? (cx - halfW) : (cx + halfW);
+  const y = cy + bodyOffsetY * scale;
+  return { x, y };
 }
 
 function getConnectorAnchorPoints(fromPanel, toPanel) {
   if (!fromPanel || !toPanel) return null;
-  const a1 = getChainAnchor(fromPanel);
-  const left = parseFloat(toPanel.style.left) || 0;
-  const top = parseFloat(toPanel.style.top) || 0;
-  const body = toPanel.querySelector('.toy-body');
-  const a2y = body ? top + body.offsetTop + (body.offsetHeight / 2) : top + (toPanel.offsetHeight / 2);
-  return { a1, a2: { x: left, y: a2y } };
+  const a1 = getChainAnchor(fromPanel, 'right');
+  const a2 = getChainAnchor(toPanel, 'left');
+  return { a1, a2 };
 }
 
 function rebuildChainSegments() {
@@ -2188,6 +2260,12 @@ async function boot(){
         console.warn('[CHAIN] initial redraw failed', err);
       }
     }
+    if (!g_focusedToyId) {
+      const firstPanel = document.querySelector('.toy-panel');
+      if (firstPanel) {
+        setToyFocus(firstPanel, { center: false });
+      }
+    }
 
   // Add event listener for grid-based chain activation
   document.addEventListener('chain:wakeup', (e) => {
@@ -2379,6 +2457,47 @@ async function boot(){
         console.warn('[CHAIN] pointerup final redraw failed', err);
       }
     }
+  }, true);
+
+  // Tap-to-focus: focusing an unfocused toy shrinks the rest and recenters the camera.
+  // Focus on pointerup (tap release) to allow click+hold dragging of unfocused toys.
+  let pendingFocus = null;
+  let pendingFocusPos = null;
+  let pendingFocusId = null;
+  const FOCUS_MOVE_THRESH_SQ = 9; // 3px tolerance
+
+  document.addEventListener('pointerdown', (e) => {
+    const panel = e.target && e.target.closest ? e.target.closest('.toy-panel') : null;
+    if (!panel) return;
+    if (panel.classList.contains('toy-unfocused')) {
+      pendingFocus = panel;
+      pendingFocusPos = { x: e.clientX, y: e.clientY };
+      pendingFocusId = e.pointerId;
+    } else {
+      pendingFocus = null;
+      pendingFocusPos = null;
+      pendingFocusId = null;
+    }
+  }, true);
+
+  document.addEventListener('pointermove', (e) => {
+    if (!pendingFocus || pendingFocusId !== e.pointerId || !pendingFocusPos) return;
+    const dx = e.clientX - pendingFocusPos.x;
+    const dy = e.clientY - pendingFocusPos.y;
+    if ((dx * dx + dy * dy) > FOCUS_MOVE_THRESH_SQ) {
+      pendingFocus = null;
+      pendingFocusPos = null;
+      pendingFocusId = null;
+    }
+  }, true);
+
+  document.addEventListener('pointerup', (e) => {
+    if (pendingFocus && pendingFocusId === e.pointerId) {
+      setToyFocus(pendingFocus, { center: false });
+    }
+    pendingFocus = null;
+    pendingFocusPos = null;
+    pendingFocusId = null;
   }, true);
 
     try{ window.ThemeBoot && window.ThemeBoot.wireAll && window.ThemeBoot.wireAll(); }catch{}

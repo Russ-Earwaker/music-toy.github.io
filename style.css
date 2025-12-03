@@ -418,6 +418,38 @@ html, body {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   overflow: hidden;
   width: var(--panel-w, 380px); /* Default width, can be overridden per-toy */
+  --toy-scale: 1;
+  transform: scale(var(--toy-scale, 1));
+  transition: transform 220ms ease, opacity 220ms ease;
+}
+
+/* Focus/unfocus states (logic enforced in JS) */
+.toy-panel.toy-focused {
+  outline: 3px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55);
+}
+.toy-panel.toy-unfocused {
+  --toy-scale: 0.75;
+  transform-origin: center center;
+  opacity: 0.85;
+  pointer-events: auto;
+}
+.toy-panel.toy-unfocused .toy-header,
+.toy-panel.toy-unfocused .toy-footer {
+  display: none !important;
+  height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+}
+.toy-panel.toy-unfocused .toy-body {
+  pointer-events: none;
+}
+.toy-panel.toy-unfocused canvas.toy-particles {
+  display: none !important;
+}
+.toy-panel.toy-unfocused * {
+  pointer-events: none !important;
 }
 
 /* Panel sections */
