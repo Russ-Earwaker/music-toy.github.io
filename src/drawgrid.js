@@ -2484,6 +2484,7 @@ function ensureSizeReady({ force = false } = {}) {
   const isTutorialActive = () => {
     return typeof document !== 'undefined' && !!document.body?.classList?.contains('tutorial-active');
   };
+  const isPanelCulled = () => !isPanelVisible;
   let pendingSwap = false;
   let pendingWrapSize = null;
   let pendingEraserSize = null;
@@ -2809,10 +2810,10 @@ function ensureSizeReady({ force = false } = {}) {
 
   const startTutorialHighlightLoop = () => {
     if (tutorialHighlightMode === 'none') return;
-    if (!isTutorialActive()) return;
+    if (!isTutorialActive() || isPanelCulled()) return;
     if (tutorialHighlightRaf !== null) return;
     const tick = () => {
-      if (tutorialHighlightMode === 'none' || !isTutorialActive()) {
+      if (tutorialHighlightMode === 'none' || !isTutorialActive() || isPanelCulled()) {
         tutorialHighlightRaf = null;
         return;
       }
@@ -5517,8 +5518,16 @@ function syncBackBufferSizes() {
       const maxCountScaleBase = (particleBudget.maxCountScale ?? 1) * (particleBudget.capScale ?? 1);
       // Crowd-based attenuation: more visible panels -> fewer particles per panel, but keep ticks smooth.
       const crowdScale = Math.max(0.18, 1 / Math.max(1, visiblePanels));
-      const maxCountScale = Math.max(0.12, maxCountScaleBase * crowdScale);
-      const capScale = Math.max(0.2, (particleBudget.capScale ?? 1) * crowdScale);
+      const fpsSample = Number.isFinite(adaptive?.smoothedFps)
+        ? adaptive.smoothedFps
+        : (Number.isFinite(adaptive?.fps) ? adaptive.fps : null);
+      // If we're cruising near 60fps with few panels, allow a modest boost above nominal.
+      const fpsBoost = (Number.isFinite(fpsSample) && fpsSample >= 58 && visiblePanels <= 2)
+        ? Math.min(1.3, 1 + 0.02 * (fpsSample - 58))
+        : 1;
+
+      const maxCountScale = Math.max(0.12, maxCountScaleBase * crowdScale * fpsBoost);
+      const capScale = Math.max(0.2, (particleBudget.capScale ?? 1) * crowdScale * fpsBoost);
       const sizeScale = (particleBudget.sizeScale ?? 1);
       // Keep tick cadence steady for smooth lerps; rely on lower counts for performance.
       const tickModulo = 1;
@@ -5527,6 +5536,7 @@ function syncBackBufferSizes() {
         capScale,
         tickModulo,
         sizeScale,
+        spawnScale: Math.max(0.1, (particleBudget.spawnScale ?? 1) * crowdScale * fpsBoost),
       });
     }
 
@@ -6898,6 +6908,11 @@ function startGhostGuide({
   function frame(now) {
     if (!panel.isConnected) return;
     if (!ghostGuideRunning) return;
+    if (isPanelCulled()) {
+      ghostGuideRunning = false;
+      ghostGuideAnimFrame = null;
+      return;
+    }
     const ghostSurface = getActiveGhostCanvas();
     const elapsed = now - startTime;
     const t = Math.min(elapsed / duration, 1);
@@ -7063,6 +7078,10 @@ function startGhostGuide({
 function scheduleGhostIfEmpty({ initialDelay = 150 } = {}) {
   const check = () => {
     if (!panel.isConnected) return;
+    if (isPanelCulled()) {
+      stopAutoGhostGuide({ immediate: true });
+      return;
+    }
     if (isRestoring) {                 // Wait until setState() finishes
       setTimeout(check, 100);
       return;

@@ -414,7 +414,7 @@ let g_chainDragLastUpdateTime = 0;
 const g_chainToyLastPos = new Map(); // toyId -> { left, top }
 
 // Aim for ~60fps max during drag; further throttling is done by the browser's pointermove rate.
-const CHAIN_DRAG_UPDATE_INTERVAL_MS = 16;
+const CHAIN_DRAG_UPDATE_INTERVAL_MS = 24;
 
 // Chain / scheduler debug controls.
 // CHAIN_DEBUG: master flag – turn this off to silence all chain/scheduler logs.
@@ -434,7 +434,7 @@ const CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW = true; // drawChains() canvas connect
 // 1.0 = full resolution (heaviest)
 // 0.5 = half resolution in each dimension (~4x fewer pixels)
 // 0.25 = quarter resolution in each dimension (~16x fewer pixels)
-const CHAIN_CANVAS_RESOLUTION_SCALE = 0.5;
+const CHAIN_CANVAS_RESOLUTION_SCALE = 0.35;
 
 
 mainLog('[MAIN] module start');
@@ -1555,7 +1555,7 @@ function rebuildChainSegments() {
   }
 }
 
-function drawChains() {
+function drawChains(forceFull = false) {
   if (!CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) return;
   if (!chainCanvas || !chainCtx) return;
 
@@ -1576,7 +1576,7 @@ function drawChains() {
 
   // --- Phase 1: resize canvas if board viewport changed ---
   let tAfterResize = tStart;
-  if (canvasW !== width || canvasH !== height) {
+  if (forceFull || canvasW !== width || canvasH !== height) {
     const tResizeStart = performance.now();
 
     chainCanvas.width = width * dpr;
@@ -1618,8 +1618,8 @@ function drawChains() {
 
   const now = performance.now();
   // You can tweak these to taste. Thicker curves = slightly more GPU work.
-  const baseWidth = 6;
-  const pulseExtraWidth = 3;
+  const baseWidth = 4;
+  const pulseExtraWidth = 2;
 
   let connectorCount = 0;
   const tEdgesStart = performance.now();
@@ -1639,7 +1639,7 @@ function drawChains() {
     const dx = p2x - p1x;
     const dy = p2y - p1y;
     const dist = Math.hypot(dx, dy) || 1;
-    const handleLength = Math.max(40, dist * 0.33); // horizontal-only handles
+    const handleLength = Math.max(28, dist * 0.25); // horizontal-only handles
 
     const c1x = p1x + handleLength;
     const c1y = p1y;
@@ -1779,16 +1779,23 @@ function updateChainSegmentsForToy(toyId) {
 }
 // Throttled "redraw once on the next frame" helper for chain connectors.
 let g_chainRedrawScheduled = false;
+let g_chainRedrawPendingFull = false;
+let g_chainRedrawTimer = 0;
 function scheduleChainRedraw() {
     if (!chainCanvas || !chainCtx) return;
-    if (g_chainRedrawScheduled) return;
+    if (g_chainRedrawScheduled) {
+        g_chainRedrawPendingFull = true;
+        return;
+    }
     g_chainRedrawScheduled = true;
 
     const raf = window.requestAnimationFrame?.bind(window) ?? (fn => setTimeout(fn, 16));
     raf(() => {
         g_chainRedrawScheduled = false;
+        const doFull = g_chainRedrawPendingFull;
+        g_chainRedrawPendingFull = false;
         try {
-            drawChains();
+            drawChains(doFull);
         } catch (err) {
             console.warn('[CHAIN] scheduleChainRedraw failed', err);
         }
@@ -1828,16 +1835,17 @@ function updateChains() {
         }
     }
 
-    // Rebuild cached connector geometry whenever chain heads change and redraw once.
-    try {
-        rebuildChainSegments();
-        if (CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) {
-            scheduleChainRedraw();
-        }
-    } catch (err) {
-        if (CHAIN_DEBUG) {
-            console.warn('[CHAIN][perf] rebuildChainSegments/draw failed', err);
-        }
+  // Rebuild cached connector geometry whenever chain heads change and redraw once.
+  try {
+      rebuildChainSegments();
+      if (CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) {
+          g_chainRedrawPendingFull = true;
+          scheduleChainRedraw();
+      }
+  } catch (err) {
+      if (CHAIN_DEBUG) {
+          console.warn('[CHAIN][perf] rebuildChainSegments/draw failed', err);
+      }
     }
 }
 
@@ -2080,6 +2088,7 @@ async function boot(){
     if (CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) {
       try {
         rebuildChainSegments();
+        g_chainRedrawPendingFull = true;
         scheduleChainRedraw();
       } catch (err) {
         if (CHAIN_DEBUG) {
@@ -2096,6 +2105,7 @@ async function boot(){
 
     try {
       rebuildChainSegments();
+      g_chainRedrawPendingFull = true;
       scheduleChainRedraw();
     } catch (err) {
       if (CHAIN_DEBUG) {
@@ -2171,6 +2181,7 @@ async function boot(){
     updateAllChainUIs(); // Set initial instrument button visibility
     try {
       rebuildChainSegments();
+      g_chainRedrawPendingFull = true;
       scheduleChainRedraw();
     } catch (err) {
       if (CHAIN_DEBUG) {
@@ -2262,6 +2273,7 @@ async function boot(){
   window.addEventListener('overview:transition', () => {
     try {
       rebuildChainSegments();
+      g_chainRedrawPendingFull = true;
       scheduleChainRedraw();
     } catch (err) {
       if (CHAIN_DEBUG) {
@@ -2360,6 +2372,7 @@ async function boot(){
 
     try {
       rebuildChainSegments();
+      g_chainRedrawPendingFull = true;
       scheduleChainRedraw();
     } catch (err) {
       if (CHAIN_DEBUG) {
