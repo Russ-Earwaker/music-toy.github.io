@@ -307,21 +307,13 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
   }
 
   const handleZoom = (z = {}) => {
-    const phase = z?.phase;
-    const mode = z?.mode;
-    const currentScale =
-      Number.isFinite(z.currentScale) ? z.currentScale :
-      Number.isFinite(z.targetScale) ? z.targetScale :
-      scale;
-    const currentX =
-      Number.isFinite(z.currentX) ? z.currentX :
-      Number.isFinite(z.targetX) ? z.targetX :
-      x;
-    const currentY =
-      Number.isFinite(z.currentY) ? z.currentY :
-      Number.isFinite(z.targetY) ? z.targetY :
-      y;
+    const phase = z?.phase || null;
 
+    const currentScale = z.currentScale ?? scale;
+    const currentX = z.currentX ?? x;
+    const currentY = z.currentY ?? y;
+
+    // Keep the cheap updates on every phase so dependents stay in sync without layout reads.
     try { stage.style.setProperty('--bv-scale', String(currentScale)); } catch {}
     syncViewportSnapshot({ scale: currentScale, x: currentX, y: currentY });
 
@@ -336,41 +328,37 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
       }
     }
 
-    if (phase === 'prepare' || phase === 'begin') {
+    // Lightweight path for noisy intermediate phases.
+    if (phase === 'recompute' || phase === 'gesturing' || phase === 'prepare' || phase === 'begin') {
       return;
     }
 
-    if (
-      phase === 'gesturing' ||
-      phase === 'progress' ||
-      z?.gesturing ||
-      mode === 'gesturing'
-    ) {
+    const isCommitLike = z.committed || phase === 'commit' || phase === 'done';
+    if (!isCommitLike) {
       return;
     }
 
-    if (phase === 'idle' || phase === 'done') {
-      return;
-    }
+    // Heavy path only on commit/done.
+    scale = currentScale;
+    x = currentX;
+    y = currentY;
+    persist();
+    scheduleNotify({ ...z });
 
-    const isCommitPhase =
-      phase === 'commit' ||
-      phase === 'swap' ||
-      phase === 'recompute';
-
-    if (isCommitPhase) {
-      const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
-        ? performance.now()
-        : Date.now();
-      const commitKey = `${currentScale}|${currentX}|${currentY}`;
-      if (commitKey === lastViewportCommitKey && (now - lastViewportCommitMs) < VIEWPORT_COMMIT_MIN_INTERVAL_MS) {
-        return;
+    const ov = overviewMode?.state;
+    if (camTweenLock) {
+      // While a programmatic tween is active, suppress auto-enter/exit.
+    } else if (ov?.transitioning) {
+      if (scale >= (ov.zoomReturnLevel - 1e-3)) {
+        try { overviewMode.exit(false); } catch {}
+        ov.transitioning = false;
       }
-      if ((now - lastViewportCommitMs) < VIEWPORT_COMMIT_MIN_INTERVAL_MS) {
-        return;
+    } else if (ov) {
+      if (scale < ov.zoomThreshold) {
+        overviewMode.enter();
+      } else {
+        overviewMode.exit(false);
       }
-      lastViewportCommitMs = now;
-      recomputeViewportFromZoom({ ...z, currentScale, currentX, currentY });
     }
   };
   handleZoom.__zcName = 'board-viewport';

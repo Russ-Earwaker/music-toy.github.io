@@ -17,6 +17,19 @@ const gridAreaLogical = { w: 0, h: 0 };
 
 // Lightweight profiling for drawGrid; flip to true when testing.
 const DG_PROFILE = false;
+// Turn on to log slow drawgrid frames (full rAF body).
+const DG_FRAME_PROFILE = true;
+const DG_FRAME_SLOW_THRESHOLD_MS = 10;
+// --- Performance / LOD tuning ----------------------------------------
+
+// Below this FPS we start aggressively disabling the fancy background field.
+// Hysteresis means we only re-enable once FPS climbs comfortably above.
+const DG_MIN_FPS_FOR_PARTICLE_FIELD = 32;  // degrade if we live below this
+const DG_FPS_PARTICLE_HYSTERESIS_UP = 38;  // re-enable once we're above this
+
+// IntersectionObserver visibility threshold – panels with <2% on-screen area
+// are treated as "offscreen" and have their heavy work culled.
+const DG_VISIBILITY_THRESHOLD = 0.02;
 
 let dgProfileFrames = 0;
 let dgProfileSumMs = 0;
@@ -513,6 +526,7 @@ let __dgDrawingActive = false;
 let paintDpr = Math.max(1, Math.min((typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1, 3));
 
 let cssW = 0, cssH = 0, cw = 0, ch = 0, topPad = 0;
+let layoutSizeDirty = true;
 
 function getLineWidth() {
   // Camera-like behaviour: line thickness is in toy space, not scaled by zoom
@@ -858,6 +872,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let dgMap = null;
   let dgField = null;
   let headerSweepDirX = 1;
+  // Visibility + LOD state
+  let isPanelVisible = true;          // IntersectionObserver will keep this updated
+  let particleFieldEnabled = true;    // driven by FPS + zoom with hysteresis
 
   // DEBUG: prove these are per-instance
   dgTraceLog('[drawgrid] instance-state', panel.id, { scope: 'per-instance' });
@@ -2201,6 +2218,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
 function ensureSizeReady({ force = false } = {}) {
   if (!force && zoomFreezeActive()) return true;
+  if (!force && !layoutSizeDirty) return true;
   const nowTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
     ? performance.now()
     : Date.now();
@@ -2211,6 +2229,7 @@ function ensureSizeReady({ force = false } = {}) {
   const measured = host ? measureCSSSize(host) : { w: 0, h: 0 };
   let { w, h } = measured;
   if (!w || !h) return false;
+  layoutSizeDirty = false;
   w = Math.max(1, w);
   h = Math.max(1, h);
 
@@ -3287,6 +3306,7 @@ function regenerateMapFromStrokes() {
     }
 
     if (phase === 'commit' || phase === 'idle' || phase === 'done') {
+      markLayoutSizeDirty();
       try { particles?.snapAllToHomes?.(); } catch {}
       suppressHeaderPushUntil = nowMs() + HEADER_PUSH_SUPPRESS_MS;
 
@@ -3421,6 +3441,7 @@ function regenerateMapFromStrokes() {
   });
 
   const observer = new ResizeObserver(() => {
+    markLayoutSizeDirty();
     if (zoomMode === 'gesturing') {
       pendingZoomResnap = true;
       return;
@@ -3428,11 +3449,41 @@ function regenerateMapFromStrokes() {
     resnapAndRedraw(false);
   });
 
+  // Visibility culling: turn off heavy work when the panel is completely offscreen.
+  if (typeof window !== 'undefined' && 'IntersectionObserver' in window) {
+    try {
+      const visObserver = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (entry.target !== panel) continue;
+            const visible =
+              entry.isIntersecting &&
+              entry.intersectionRatio > DG_VISIBILITY_THRESHOLD;
+            isPanelVisible = !!visible;
+          }
+        },
+        {
+          root: null,
+          threshold: [0, DG_VISIBILITY_THRESHOLD],
+        }
+      );
+      visObserver.observe(panel);
+      panel.__dgVisibilityObserver = visObserver;
+    } catch (e) {
+      // If anything goes wrong, assume visible so we don't break rendering
+      isPanelVisible = true;
+    }
+  }
+
   let lastZoomX = 1;
   let lastZoomY = 1;
 
   function getLayoutSize() {
     return measureCSSSize(wrap);
+  }
+
+  function markLayoutSizeDirty() {
+    layoutSizeDirty = true;
   }
 
   function measureCSSSize(el) {
@@ -5326,9 +5377,39 @@ function syncBackBufferSizes() {
   let __dgFrameProfileMaxMs = 0;
   let __dgFrameProfileLastLogTs = 0;
 
+  function updateParticleQualityFromFps(boardScaleValue) {
+    // Default: assume 60fps / high quality if we don't know.
+    let fps = 60;
+    try {
+      if (typeof window !== 'undefined' && typeof window.__dgFpsValue === 'number') {
+        fps = window.__dgFpsValue;
+      }
+    } catch {}
+
+    // If we're in overview or super zoomed out, skip the background field entirely.
+    const overviewState = (typeof window !== 'undefined' && window.__overviewMode) ? window.__overviewMode : { isActive: () => false };
+    const inOverview = !!overviewState?.isActive?.();
+    const zoomTooWide = Number.isFinite(boardScaleValue) && boardScaleValue < 0.4;
+
+    if (inOverview || zoomTooWide) {
+      particleFieldEnabled = false;
+      return;
+    }
+
+    // Hysteresis based on FPS so we don't thrash on the threshold
+    if (fps < DG_MIN_FPS_FOR_PARTICLE_FIELD) {
+      particleFieldEnabled = false;
+    } else if (fps > DG_FPS_PARTICLE_HYSTERESIS_UP) {
+      particleFieldEnabled = true;
+    }
+  }
+
   function renderLoop() {
     if (!panel.__dgFrame) panel.__dgFrame = 0;
     panel.__dgFrame++;
+    const __dgFrameProfileStart = (DG_FRAME_PROFILE && typeof performance !== 'undefined' && typeof performance.now === 'function')
+      ? performance.now()
+      : null;
     const nowTs = performance?.now?.() ?? Date.now();
 
     // --- FPS accumulation (per panel, debug only) ---
@@ -5355,19 +5436,42 @@ function syncBackBufferSizes() {
     }
 
     const waitingForStable = inCommitWindow;
-    const allowOverlayDraw = !waitingForStable;
-    const allowParticleDraw = DRAWGRID_ENABLE_PARTICLE_FIELD;
+
+    const frameCam = overlayCamState || (typeof getFrameStartState === 'function' ? getFrameStartState() : null);
+    const boardScaleValue = Number.isFinite(frameCam?.scale) ? frameCam.scale : __dgZoomScale();
+    if (Number.isFinite(boardScaleValue)) {
+      if (!Number.isFinite(boardScale) || Math.abs(boardScale - boardScaleValue) > 1e-4) {
+        boardScale = boardScaleValue;
+      }
+    }
+
+    const zoomDebugFreeze = !!(typeof window !== 'undefined' && window.__zoomDebugFreeze);
+
+    // Update per-panel LOD state from global FPS + zoom.
+    updateParticleQualityFromFps(boardScaleValue);
+
+    // We never draw overlays or particles if the panel is completely offscreen.
+    const canDrawAnything = !waitingForStable && isPanelVisible;
+
+    // Overlays (notes, playhead, flashes) respect visibility & hydrations guard,
+    // but are otherwise always on – they're core UX.
+    const allowOverlayDraw = canDrawAnything;
+
+    // Particle field is "expensive candy": only enabled if:
+    // - globally allowed
+    // - we are not in a zoom debug freeze
+    // - the panel is on-screen
+    // - the adaptive LOD says it's OK for current FPS / zoom
+    const allowParticleDraw =
+      DRAWGRID_ENABLE_PARTICLE_FIELD &&
+      canDrawAnything &&
+      !zoomDebugFreeze &&
+      particleFieldEnabled;
     maybeReleaseStalledZoom();
     dgf('start', { f: panel.__dgFrame|0, cssW, cssH, allowOverlayDraw, allowParticleDraw });
     if (!ensureSizeReady()) {
       rafId = requestAnimationFrame(renderLoop);
       return;
-    }
-    const frameCam = overlayCamState || (typeof getFrameStartState === 'function' ? getFrameStartState() : null);
-    if (frameCam && Number.isFinite(frameCam.scale)) {
-      if (!Number.isFinite(boardScale) || Math.abs(boardScale - frameCam.scale) > 1e-4) {
-        boardScale = frameCam.scale;
-      }
     }
     if (frameCam && !panel.__dgFrameCamLogged) {
       const isProd = (typeof process !== 'undefined') && (process?.env?.NODE_ENV === 'production');
@@ -5829,6 +5933,20 @@ function syncBackBufferSizes() {
         fctx.fillText(`fps: ${__dgFpsValue.toFixed(1)}`, 5, 60);
       }
       fctx.restore();
+    }
+
+    if (__dgFrameProfileStart !== null) {
+      const totalDt = performance.now() - __dgFrameProfileStart;
+      if (totalDt > DG_FRAME_SLOW_THRESHOLD_MS) {
+        console.log('[DG][frame][slow]', {
+          dtMs: Number(totalDt.toFixed(2)),
+          frame: panel.__dgFrame | 0,
+          allowOverlayDraw,
+          allowParticleDraw,
+          cssW,
+          cssH,
+        });
+      }
     }
 
     dgf('end', { f: panel.__dgFrame|0 });
@@ -6902,6 +7020,10 @@ function runAutoGhostGuideSweep() {
     }
     persistStateNow({ source: 'toy-remove' });
     try { delete panel.__getDrawgridPersistedState; } catch {}
+    if (panel.__dgVisibilityObserver) {
+      try { panel.__dgVisibilityObserver.disconnect(); } catch {}
+      try { delete panel.__dgVisibilityObserver; } catch {}
+    }
     observer.disconnect();
   }, { once: true });
 
