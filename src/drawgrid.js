@@ -17,10 +17,22 @@ const drawgridLog = makeDebugLogger('mt_debug_logs', 'log');
 
 const gridAreaLogical = { w: 0, h: 0 };
 
+// Shared global state across all drawgrid instances (keeps counts for LOD decisions).
+const globalDrawgridState = (() => {
+  if (typeof window !== 'undefined') {
+    window.__DRAWGRID_GLOBAL = window.__DRAWGRID_GLOBAL || { visibleCount: 0 };
+    return window.__DRAWGRID_GLOBAL;
+  }
+  return { visibleCount: 0 };
+})();
+
+// If more than this many drawgrids are on-screen, disable expensive particle fields per-panel.
+const DG_MAX_PARTICLE_PANELS = 2;
+
 // Lightweight profiling for drawGrid; flip to true when testing.
 const DG_PROFILE = false;
 // Turn on to log slow drawgrid frames (full rAF body).
-const DG_FRAME_PROFILE = true;
+const DG_FRAME_PROFILE = false;
 const DG_FRAME_SLOW_THRESHOLD_MS = 10;
 // --- Performance / LOD tuning ----------------------------------------
 
@@ -31,7 +43,7 @@ const DG_FPS_PARTICLE_HYSTERESIS_UP = 38;  // re-enable once we're above this
 
 // IntersectionObserver visibility threshold – panels with <2% on-screen area
 // are treated as "offscreen" and have their heavy work culled.
-const DG_VISIBILITY_THRESHOLD = 0.02;
+const DG_VISIBILITY_THRESHOLD = 0.06;
 
 let dgProfileFrames = 0;
 let dgProfileSumMs = 0;
@@ -877,6 +889,20 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   // Visibility + LOD state
   let isPanelVisible = true;          // IntersectionObserver will keep this updated
   let particleFieldEnabled = true;    // driven by FPS + zoom with hysteresis
+  let pendingResnapOnVisible = false;
+  let lastResnapTs = 0;
+  let countedVisible = false;
+  const updateGlobalVisibility = (visible) => {
+    const next = !!visible;
+    if (next && !countedVisible) {
+      countedVisible = true;
+      globalDrawgridState.visibleCount = Math.max(0, (globalDrawgridState.visibleCount || 0) + 1);
+    } else if (!next && countedVisible) {
+      countedVisible = false;
+      globalDrawgridState.visibleCount = Math.max(0, (globalDrawgridState.visibleCount || 0) - 1);
+    }
+  };
+  updateGlobalVisibility(isPanelVisible);
 
   // DEBUG: prove these are per-instance
   dgTraceLog('[drawgrid] instance-state', panel.id, { scope: 'per-instance' });
@@ -2455,6 +2481,9 @@ function ensureSizeReady({ force = false } = {}) {
   const SAFE_AREA_FRACTION = 0.05;
   let tutorialHighlightMode = 'none'; // 'none' | 'notes' | 'drag'
   let tutorialHighlightRaf = null;
+  const isTutorialActive = () => {
+    return typeof document !== 'undefined' && !!document.body?.classList?.contains('tutorial-active');
+  };
   let pendingSwap = false;
   let pendingWrapSize = null;
   let pendingEraserSize = null;
@@ -2780,9 +2809,10 @@ function ensureSizeReady({ force = false } = {}) {
 
   const startTutorialHighlightLoop = () => {
     if (tutorialHighlightMode === 'none') return;
+    if (!isTutorialActive()) return;
     if (tutorialHighlightRaf !== null) return;
     const tick = () => {
-      if (tutorialHighlightMode === 'none') {
+      if (tutorialHighlightMode === 'none' || !isTutorialActive()) {
         tutorialHighlightRaf = null;
         return;
       }
@@ -3373,6 +3403,18 @@ function regenerateMapFromStrokes() {
       pendingZoomResnap = true;
       return;
     }
+    if (!isPanelVisible && !forceLayout) {
+      pendingResnapOnVisible = true;
+      return;
+    }
+
+    const nowTs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    if (!forceLayout && (nowTs - lastResnapTs) < 50) {
+      // Too soon; coalesce into a single resnap after the cooldown.
+      pendingResnapOnVisible = true;
+      return;
+    }
+    lastResnapTs = nowTs;
 
     const hasStrokes = Array.isArray(strokes) && strokes.length > 0;
     const hasNodes =
@@ -3494,6 +3536,11 @@ function regenerateMapFromStrokes() {
               entry.isIntersecting &&
               entry.intersectionRatio > DG_VISIBILITY_THRESHOLD;
             isPanelVisible = !!visible;
+            if (isPanelVisible && pendingResnapOnVisible) {
+              pendingResnapOnVisible = false;
+              resnapAndRedraw(true);
+            }
+            updateGlobalVisibility(isPanelVisible);
             if (isPanelVisible !== lastVisibleState) {
               lastVisibleState = isPanelVisible;
               try {
@@ -3524,6 +3571,11 @@ function regenerateMapFromStrokes() {
   panel.addEventListener('toy:visibility', (e) => {
     if (typeof e?.detail?.visible === 'boolean') {
       isPanelVisible = !!e.detail.visible;
+      updateGlobalVisibility(isPanelVisible);
+      if (isPanelVisible && pendingResnapOnVisible) {
+        pendingResnapOnVisible = false;
+        resnapAndRedraw(true);
+      }
     }
   });
 
@@ -5456,17 +5508,25 @@ function syncBackBufferSizes() {
     const overviewState = (typeof window !== 'undefined' && window.__overviewMode) ? window.__overviewMode : { isActive: () => false };
     const inOverview = !!overviewState?.isActive?.();
     const zoomTooWide = Number.isFinite(boardScaleValue) && boardScaleValue < 0.4;
-
+    const visiblePanels = Math.max(0, Number(globalDrawgridState?.visibleCount) || 0);
     const allowField = particleBudget?.allowField !== false;
+    // Keep fields on, but thin them out when many panels are visible.
     particleFieldEnabled = !!allowField && !inOverview && !zoomTooWide;
 
     if (dgField && typeof dgField.applyBudget === 'function' && particleBudget) {
-      const maxCountScale = Math.max(0.15, (particleBudget.maxCountScale ?? 1) * (particleBudget.capScale ?? 1));
+      const maxCountScaleBase = (particleBudget.maxCountScale ?? 1) * (particleBudget.capScale ?? 1);
+      // Crowd-based attenuation: more visible panels -> fewer particles per panel, but keep ticks smooth.
+      const crowdScale = Math.max(0.18, 1 / Math.max(1, visiblePanels));
+      const maxCountScale = Math.max(0.12, maxCountScaleBase * crowdScale);
+      const capScale = Math.max(0.2, (particleBudget.capScale ?? 1) * crowdScale);
+      const sizeScale = (particleBudget.sizeScale ?? 1);
+      // Keep tick cadence steady for smooth lerps; rely on lower counts for performance.
+      const tickModulo = 1;
       dgField.applyBudget({
         maxCountScale,
-        capScale: particleBudget.capScale ?? 1,
-        tickModulo: particleBudget.tickModulo ?? 1,
-        sizeScale: particleBudget.sizeScale ?? 1,
+        capScale,
+        tickModulo,
+        sizeScale,
       });
     }
 
@@ -7124,7 +7184,7 @@ function runAutoGhostGuideSweep() {
   }, { once: true });
 
   panel.addEventListener('tutorial:highlight-notes', (event) => {
-    if (event?.detail?.active) {
+    if (event?.detail?.active && isTutorialActive()) {
       tutorialHighlightMode = 'notes';
       startTutorialHighlightLoop();
     } else if (tutorialHighlightMode === 'notes') {
@@ -7134,7 +7194,7 @@ function runAutoGhostGuideSweep() {
   });
 
   panel.addEventListener('tutorial:highlight-drag', (event) => {
-    if (event?.detail?.active) {
+    if (event?.detail?.active && isTutorialActive()) {
       tutorialHighlightMode = 'drag';
       startTutorialHighlightLoop();
     } else if (tutorialHighlightMode === 'drag') {

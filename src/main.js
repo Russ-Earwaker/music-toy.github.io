@@ -429,7 +429,7 @@ const CHAIN_DEBUG_FRAME_THRESHOLD_MS = 0.0;
 const CHAIN_FEATURE_ENABLE_SCHEDULER      = true;  // master toggle for chain work in scheduler()
 const CHAIN_FEATURE_ENABLE_MARK_ACTIVE    = true;  // DOM scan + data-chain-active flags
 const CHAIN_FEATURE_ENABLE_SEQUENCER      = true;  // __sequencerStep + border pulses
-const CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW = false; // drawChains() canvas connectors
+const CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW = true; // drawChains() canvas connectors
 // Rendering resolution multiplier for the chain canvas.
 // 1.0 = full resolution (heaviest)
 // 0.5 = half resolution in each dimension (~4x fewer pixels)
