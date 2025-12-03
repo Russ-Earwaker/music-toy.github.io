@@ -1,4 +1,4 @@
-import './mobile-viewport.js';
+﻿import './mobile-viewport.js';
 import './fullscreen.js';
 // --- Module Imports ---
 import './debug.js';
@@ -408,10 +408,10 @@ const CHAIN_DEBUG_FRAME_THRESHOLD_MS = 0.0;
 
 // Feature flags so we can selectively disable suspected work during perf debugging.
 // Flip these to false one at a time to see which block removes the slowdown.
-const CHAIN_FEATURE_ENABLE_SCHEDULER      = true; // master toggle for chain work in scheduler()
-const CHAIN_FEATURE_ENABLE_MARK_ACTIVE    = true; // DOM scan + data-chain-active flags
-const CHAIN_FEATURE_ENABLE_SEQUENCER      = true; // __sequencerStep + border pulses
-const CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW = true; // drawChains() canvas connectors
+const CHAIN_FEATURE_ENABLE_SCHEDULER      = false; // master toggle for chain work in scheduler()
+const CHAIN_FEATURE_ENABLE_MARK_ACTIVE    = false; // DOM scan + data-chain-active flags
+const CHAIN_FEATURE_ENABLE_SEQUENCER      = false; // __sequencerStep + border pulses
+const CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW = false; // drawChains() canvas connectors
 // Rendering resolution multiplier for the chain canvas.
 // 1.0 = full resolution (heaviest)
 // 0.5 = half resolution in each dimension (~4x fewer pixels)
@@ -531,6 +531,68 @@ const BOARD_BOOT_CLASS = 'board--booting';
 const boardBootRoot = document.getElementById('board');
 if (boardBootRoot) {
   boardBootRoot.classList.add(BOARD_BOOT_CLASS);
+}
+
+// Global FPS HUD (debug)
+// Flip this to false if you want to hide it again.
+const ENABLE_FPS_HUD = true;
+
+let __fpsHudEl = null;
+let __fpsLastTs = 0;
+let __fpsFrames = 0;
+let __fpsValue = 0;
+
+function initFpsHud() {
+  if (!ENABLE_FPS_HUD) return;
+
+  const host = document.getElementById('topbar') || boardBootRoot || document.body;
+  if (!host || __fpsHudEl) return;
+
+  const el = document.createElement('div');
+  el.id = 'mt-fps-hud';
+  Object.assign(el.style, {
+    position: 'fixed',
+    right: '8px',
+    top: '8px',
+    padding: '4px 8px',
+    fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
+    fontSize: '11px',
+    background: 'rgba(0,0,0,0.6)',
+    color: '#0f0',
+    borderRadius: '4px',
+    zIndex: '99999',
+    pointerEvents: 'none',
+  });
+  el.textContent = 'FPS: --';
+  host.appendChild(el);
+  __fpsHudEl = el;
+
+  const raf = (window.requestAnimationFrame?.bind(window)) ||
+              (cb => setTimeout(() => cb(performance?.now?.() ?? Date.now()), 16));
+
+  function tick(now) {
+    if (!__fpsLastTs) {
+      __fpsLastTs = now;
+      __fpsFrames = 0;
+    }
+
+    __fpsFrames++;
+    const elapsed = now - __fpsLastTs;
+
+    if (elapsed >= 500) { // update roughly twice per second
+      __fpsValue = (__fpsFrames * 1000) / elapsed;
+      __fpsFrames = 0;
+      __fpsLastTs = now;
+
+      if (__fpsHudEl) {
+        __fpsHudEl.textContent = `FPS: ${__fpsValue.toFixed(1)}`;
+      }
+    }
+
+    raf(tick);
+  }
+
+  raf(tick);
 }
 const CSV_PATH = './assets/samples/samples.csv'; // optional
 const $ = (sel, root=document)=> root.querySelector(sel);
@@ -1810,7 +1872,10 @@ function scheduler(){
 
     const info = getLoopInfo();
 
-    if (CHAIN_FEATURE_ENABLE_SCHEDULER && isRunning()){
+    const running = isRunning();
+    const hasChains = g_chainState && g_chainState.size > 0;
+
+    if (CHAIN_FEATURE_ENABLE_SCHEDULER && running && hasChains){
       // --- Phase: advance chains on bar wrap ---
       const phaseJustWrapped = info.phase01 < lastPhase && lastPhase > 0.9;
       lastPhase = info.phase01;
@@ -1834,22 +1899,16 @@ function scheduler(){
       // --- Phase A: chain-active flags ---
       const tActiveStart = performance.now();
       const activeToyIds = new Set(g_chainState.values());
+      const hasActiveToys = activeToyIds.size > 0;
 
-      if (CHAIN_FEATURE_ENABLE_MARK_ACTIVE) {
-        if (activeToyIds.size > 0) {
-          document.querySelectorAll('.toy-panel[id]').forEach(toy => {
-            const isActive = activeToyIds.has(toy.id);
-            const current = toy.dataset.chainActive === 'true';
-            if (current !== isActive) {
-              toy.dataset.chainActive = isActive ? 'true' : 'false';
-            }
-          });
-        } else {
-          // No active toys in any chain: clear flags in one cheap pass.
-          document.querySelectorAll('.toy-panel[data-chain-active="true"]').forEach(toy => {
-            delete toy.dataset.chainActive;
-          });
-        }
+      if (CHAIN_FEATURE_ENABLE_MARK_ACTIVE && hasActiveToys) {
+        document.querySelectorAll('.toy-panel[id]').forEach(toy => {
+          const isActive = activeToyIds.has(toy.id);
+          const current = toy.dataset.chainActive === 'true';
+          if (current !== isActive) {
+            toy.dataset.chainActive = isActive ? 'true' : 'false';
+          }
+        });
       }
       const tActiveEnd = performance.now();
       if (CHAIN_DEBUG && (tActiveEnd - tActiveStart) > CHAIN_DEBUG_LOG_THRESHOLD_MS) {
@@ -1859,7 +1918,8 @@ function scheduler(){
       // --- Phase B: find sequenced toys (DOM scan) ---
       const tSeqStart = performance.now();
       let sequencedToys = [];
-      if (CHAIN_FEATURE_ENABLE_SEQUENCER) {
+      if (CHAIN_FEATURE_ENABLE_SEQUENCER && hasActiveToys) {
+        // Only scan DOM for sequenced toys if there is at least one active chain toy.
         sequencedToys = getSequencedToys(); // querySelectorAll('.toy-panel') + filter
       }
       const tSeqEnd = performance.now();
@@ -1870,7 +1930,7 @@ function scheduler(){
 
       // --- Phase C: per-toy sequencer stepping for active chain links ---
       const tStepStart = performance.now();
-      if (CHAIN_FEATURE_ENABLE_SEQUENCER) {
+      if (CHAIN_FEATURE_ENABLE_SEQUENCER && hasActiveToys) {
         for (const activeToyId of activeToyIds) {
           const toy = document.getElementById(activeToyId);
           if (toy && typeof toy.__sequencerStep === 'function') {
@@ -1896,7 +1956,7 @@ function scheduler(){
         console.log('[CHAIN][perf] sequencerStep batch', (tStepEnd - tStepStart).toFixed(2), 'ms', 'activeToyCount=', activeToyIds.size);
       }
 
-    } else {
+    } else if (!running) {
       // Transport paused — ensure no steady highlight is shown
       try {
         document.querySelectorAll('.toy-panel').forEach(p => {
@@ -1904,7 +1964,6 @@ function scheduler(){
         });
       } catch {}
     }
-
     // --- Whole-frame cost ---
     const now = performance.now();
     const frameCost = now - frameStart;
@@ -1962,6 +2021,19 @@ async function boot(){
     g_boardClientWidth = board.clientWidth || 0;
     g_boardClientHeight = board.clientHeight || 0;
   }
+
+  // Start global FPS HUD once the board exists
+  try {
+    initFpsHud();
+  } catch (err) {
+    console.warn('[FPS] init failed', err);
+  }
+
+  // Hide fullscreen button while FPS HUD sits in the top-right
+  try {
+    const fsBtn = document.getElementById('fullscreenBtn');
+    if (fsBtn) fsBtn.style.display = 'none';
+  } catch {}
 
   window.addEventListener('resize', () => {
     const b = document.getElementById('board');
@@ -2283,3 +2355,5 @@ async function boot(){
 }
 if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
 else boot();
+
+

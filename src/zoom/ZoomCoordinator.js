@@ -5,6 +5,117 @@
 const listeners = new Set();
 const frameStartListeners = new Set();
 
+// --- Lightweight ZoomCoordinator profiling ---
+const ZC_PROFILE = true;
+
+// --- Listener profiling ---
+const ZC_LISTENER_DEBUG = true;
+const ZC_LISTENER_LOG_THRESHOLD_MS = 3.0; // log listeners slower than this
+
+let zcFrameCount = 0;
+let zcAccumMs = 0;
+let zcMinMs = Infinity;
+let zcMaxMs = 0;
+
+let zcCommitCount = 0;
+let zcLastLogTs = 0;
+
+function zcSampleFrame(dtMs) {
+  if (!ZC_PROFILE) return;
+
+  zcFrameCount++;
+  zcAccumMs += dtMs;
+  if (dtMs < zcMinMs) zcMinMs = dtMs;
+  if (dtMs > zcMaxMs) zcMaxMs = dtMs;
+
+  const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+    ? performance.now()
+    : Date.now();
+
+  // Log roughly once per second.
+  if (!zcLastLogTs) zcLastLogTs = now;
+  if (now - zcLastLogTs >= 1000) {
+    const avg = zcFrameCount > 0 ? zcAccumMs / zcFrameCount : 0;
+    console.log('[ZC][profile] frame', {
+      frames: zcFrameCount,
+      avgFrameMs: Number(avg.toFixed(3)),
+      minFrameMs: Number(zcMinMs === Infinity ? 0 : zcMinMs.toFixed(3)),
+      maxFrameMs: Number(zcMaxMs.toFixed(3)),
+      commitEvents: zcCommitCount,
+    });
+
+    zcFrameCount = 0;
+    zcAccumMs = 0;
+    zcMinMs = Infinity;
+    zcMaxMs = 0;
+    zcCommitCount = 0;
+    zcLastLogTs = now;
+  }
+}
+
+function zcSampleCommit() {
+  if (!ZC_PROFILE) return;
+  zcCommitCount++;
+}
+
+// --- ZoomCoordinator commit debounce ---
+const ZC_COMMIT_MIN_INTERVAL_MS = 120; // minimum gap between costly commit passes
+let zcLastCommitTs = 0;
+
+function zcShouldEmitCommit(now) {
+  if (!ZC_PROFILE && !ZC_COMMIT_MIN_INTERVAL_MS) return true;
+  if (!ZC_COMMIT_MIN_INTERVAL_MS) return true;
+  if (!zcLastCommitTs) {
+    zcLastCommitTs = now;
+    return true;
+  }
+  if ((now - zcLastCommitTs) >= ZC_COMMIT_MIN_INTERVAL_MS) {
+    zcLastCommitTs = now;
+    return true;
+  }
+  return false;
+}
+
+function emitZoom(payload) {
+  if (!payload) return;
+  const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+    ? performance.now()
+    : Date.now();
+
+  if (payload.phase === 'commit' || payload.phase === 'done') {
+    if (!zcShouldEmitCommit(now)) return;
+    zcSampleCommit();
+  }
+
+  let idx = 0;
+  for (const fn of listeners) {
+    const t0 = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+      ? performance.now()
+      : Date.now();
+
+    try {
+      fn(payload);
+    } catch (err) {
+      console.warn('[zoom] listener failed', err);
+    } finally {
+      const t1 = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+        ? performance.now()
+        : Date.now();
+      const dt = t1 - t0;
+      if (ZC_PROFILE && ZC_LISTENER_DEBUG && dt > ZC_LISTENER_LOG_THRESHOLD_MS) {
+        const name = fn.__zcName || fn.name || `(listener #${idx})`;
+        console.log('[ZC][listener]', {
+          name,
+          idx,
+          phase: payload?.phase,
+          dtMs: Number(dt.toFixed(3)),
+        });
+      }
+    }
+    idx++;
+  }
+}
+
 const state = {
   currentScale: 1,
   currentX: 0,
@@ -123,7 +234,7 @@ function tick() {
   state.isDirty = false;
 
   // notify listeners AFTER transform
-  for (const fn of listeners) fn({ ...state });
+  emitZoom({ ...state });
 }
 
 function schedule() {
@@ -137,7 +248,8 @@ function startProgressLoop() {
     if (state.mode !== 'gesturing') return;
     if (!lastProgressTs || (ts - lastProgressTs) >= minProgressGapMs) {
       lastProgressTs = ts || performance.now();
-      for (const fn of listeners) fn({ ...state, phase: 'progress', gesturing: true });
+      const payload = { ...state, phase: 'progress', gesturing: true };
+      emitZoom(payload);
     }
     progressRaf = requestAnimationFrame(loop);
   };
@@ -181,31 +293,41 @@ export function commitGesture({ scale, x, y }, { delayMs = 80 } = {}) {
   document.documentElement.classList.add('zoom-commit-freeze');
 
   // Notify listeners that a commit is starting (freeze point: do NOT resize canvases yet).
-  for (const fn of listeners) fn({ ...state, committing: true, phase: 'freeze' });
+  emitZoom({ ...state, committing: true, phase: 'freeze' });
 
   // Phase B on next RAF: allow heavy recompute OFFSCREEN (double buffers) but keep transform frozen.
   requestAnimationFrame(() => {
     if (id !== atomicCommitId) return;
-    for (const fn of listeners) fn({ ...state, committing: true, phase: 'recompute' });
+    emitZoom({ ...state, committing: true, phase: 'recompute' });
 
     // Phase C on next RAF: swap buffers and unfreeze soon after to avoid paint/flicker
     requestAnimationFrame(() => {
       if (id !== atomicCommitId) return;
-      for (const fn of listeners) fn({ ...state, committing: true, phase: 'swap' });
+      emitZoom({ ...state, committing: true, phase: 'swap' });
       try { publishFrameStart(); } catch {}
       // (removed) overlay:instant-once was causing post-commit snaps
       // console.debug('[zoom][commit] swap (no overlay snaps)');
 
       // Small timeout gives Safari a breath to present the new pixels before any other layout.
       setTimeout(() => {
+        const t0 = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+          ? performance.now()
+          : Date.now();
+
         if (id !== atomicCommitId) return;
         state.mode = 'idle';
         document.documentElement.classList.remove('zoom-commit-freeze');
         // Final "committed" notification (single post-commit redraw if anyone needs it)
-        for (const fn of listeners) fn({ ...state, committed: true, phase: 'done' });
+        const payload = { ...state, committed: true, phase: 'done' };
+        emitZoom(payload);
         try { publishFrameStart(); } catch {}
         // (removed) overlay:instant-once was causing post-commit snaps
         // console.debug('[zoom][commit] done (no overlay snaps)');
+
+        const t1 = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+          ? performance.now()
+          : Date.now();
+        zcSampleFrame(t1 - t0);
       }, delayMs);
     });
   });

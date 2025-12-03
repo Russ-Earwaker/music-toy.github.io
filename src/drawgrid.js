@@ -15,6 +15,47 @@ const drawgridLog = makeDebugLogger('mt_debug_logs', 'log');
 
 const gridAreaLogical = { w: 0, h: 0 };
 
+// Lightweight profiling for drawGrid; flip to true when testing.
+const DG_PROFILE = false;
+
+let dgProfileFrames = 0;
+let dgProfileSumMs = 0;
+let dgProfileMinMs = Infinity;
+let dgProfileMaxMs = 0;
+
+function dgProfileSample(dtMs) {
+  dgProfileFrames++;
+  dgProfileSumMs += dtMs;
+  if (dtMs < dgProfileMinMs) dgProfileMinMs = dtMs;
+  if (dtMs > dgProfileMaxMs) dgProfileMaxMs = dtMs;
+
+  // Only log occasionally to avoid spamming the console
+  if (dgProfileFrames % 60 === 0) {
+    let nodeCount = 0;
+    if (currentMap?.nodes && Array.isArray(currentMap.nodes)) {
+      for (const col of currentMap.nodes) {
+        if (!col) continue;
+        // nodes are Sets / Maps with .size
+        if (typeof col.size === 'number') {
+          nodeCount += col.size;
+        }
+      }
+    }
+
+    const avg = dgProfileFrames > 0 ? dgProfileSumMs / dgProfileFrames : 0;
+
+    console.log('[DG][profile] drawGrid', {
+      frames: dgProfileFrames,
+      lastFrameMs: Number(dtMs.toFixed(3)),
+      avgFrameMs: Number(avg.toFixed(3)),
+      minFrameMs: Number(dgProfileMinMs.toFixed(3)),
+      maxFrameMs: Number(dgProfileMaxMs.toFixed(3)),
+      strokes: Array.isArray(strokes) ? strokes.length : null,
+      nodeCount,
+    });
+  }
+}
+
 // --- Global Debug Buffer + helpers ---
 (function () {
   if (typeof window === 'undefined') return;
@@ -136,6 +177,10 @@ function __dgLogFirstPoke(tag, r, s){ if (!window.__DG_POKED__) { window.__DG_PO
 // ---- drawgrid debug gate ----
 const DG_DEBUG = false;           // master switch
 const DG_FRAME_DEBUG = false;     // per-frame spam
+
+// Feature flag: per-panel particle field (ghost / background particles).
+// Flip to false to test performance without dgField.tick().
+const DRAWGRID_ENABLE_PARTICLE_FIELD = true;
 const DG_SWAP_DEBUG = false;      // swap spam;
 
 // Alpha debug (default OFF; toggle via ?dgalpha=1 or localStorage('DG_ALPHA_DEBUG'='1'))
@@ -3206,7 +3251,7 @@ function regenerateMapFromStrokes() {
     });
   }
 
-  const unsubscribeZoom = onZoomChange((z = {}) => {
+  const handleZoom = (z = {}) => {
     __lastZoomEventTs = nowMs();
     noteZoomMotion(z);
     __auditZoomSizes('zoom-change');
@@ -3244,16 +3289,29 @@ function regenerateMapFromStrokes() {
     if (phase === 'commit' || phase === 'idle' || phase === 'done') {
       try { particles?.snapAllToHomes?.(); } catch {}
       suppressHeaderPushUntil = nowMs() + HEADER_PUSH_SUPPRESS_MS;
+
+      // Let ZoomCoordinator know we're done with the freeze,
+      // but only request a heavy layout on 'commit'.
       releaseZoomFreeze({
         reason: `phase-${phase}`,
         refreshLayout: phase === 'commit',
         zoomPayload: z
       });
-      try { layout(true); } catch {}
-      try { dgField?.resize?.(); } catch {}
+
+      if (phase === 'commit') {
+        // Only do heavy layout + field resize on real commit,
+        // not on every 'idle'/'done' transition.
+        try { layout(true); } catch {}
+        try { dgField?.resize?.(); } catch {}
+      }
+
       return;
     }
-  });
+  };
+
+  // Tag for zoom profiling readability
+  handleZoom.__zcName = `drawgrid:${panel.id || 'unknown'}`;
+  const unsubscribeZoom = onZoomChange(handleZoom);
 
   let zoomRAF = null;
 
@@ -3328,10 +3386,12 @@ function regenerateMapFromStrokes() {
       return;
     }
 
-    if (z.phase === 'recompute') {
-      scheduleZoomRecompute();
-      return;
-    }
+  if (z.phase === 'recompute') {
+    // During gesture, we rely on CSS transforms; schedule a resnap so the
+    // backing stores catch up safely outside the current event.
+    scheduleZoomRecompute();
+    return;
+  }
 
     if (z.phase === 'commit') {
       // one-time swap & finalize
@@ -3867,6 +3927,11 @@ function syncBackBufferSizes() {
   }
 
   function drawGrid(){
+    let __dgProfileStart = null;
+    if (DG_PROFILE && typeof performance !== 'undefined' && performance.now) {
+      __dgProfileStart = performance.now();
+    }
+
     resetCtx(gctx);
     withLogicalSpace(gctx, () => {
       const surface = gctx.canvas;
@@ -3949,6 +4014,11 @@ function syncBackBufferSizes() {
           }
       }
     });
+
+    if (__dgProfileStart !== null) {
+      const dt = performance.now() - __dgProfileStart;
+      dgProfileSample(dt);
+    }
   }
 
   function crisp(v) {
@@ -5240,10 +5310,43 @@ function syncBackBufferSizes() {
   });
 
   let rafId = 0;
-    function renderLoop() {
+
+  // Debug FPS (per-panel)
+  // Only used when DG_DEBUG && window.DEBUG_DRAWGRID === 1.
+  let __dgFpsLastTs = 0;
+  let __dgFpsFrameCount = 0;
+  let __dgFpsValue = 0;
+
+  // Per-panel lightweight profiling for renderLoop + drawGrid.
+  // This is separate from the global DG_PROFILE sampling at the top,
+  // and logs once per panel per ~1 second when DG_PROFILE is true.
+  let __dgFrameProfileFrames = 0;
+  let __dgFrameProfileSumMs = 0;
+  let __dgFrameProfileMinMs = Infinity;
+  let __dgFrameProfileMaxMs = 0;
+  let __dgFrameProfileLastLogTs = 0;
+
+  function renderLoop() {
     if (!panel.__dgFrame) panel.__dgFrame = 0;
     panel.__dgFrame++;
     const nowTs = performance?.now?.() ?? Date.now();
+
+    // --- FPS accumulation (per panel, debug only) ---
+    if (DG_DEBUG && window.DEBUG_DRAWGRID === 1) {
+      if (!__dgFpsLastTs) {
+        __dgFpsLastTs = nowTs;
+        __dgFpsFrameCount = 0;
+      }
+      __dgFpsFrameCount++;
+      const elapsed = nowTs - __dgFpsLastTs;
+      if (elapsed >= 500) { // update every ~0.5s
+        __dgFpsValue = (__dgFpsFrameCount * 1000) / elapsed;
+        __dgFpsFrameCount = 0;
+        __dgFpsLastTs = nowTs;
+      }
+    }
+    // ------------------------------------------------
+
     const inCommitWindow = __dgInCommitWindow(nowTs);
     if (inCommitWindow) {
       __dgStableFramesAfterCommit = 0; // still settling - do nothing destructive
@@ -5253,7 +5356,7 @@ function syncBackBufferSizes() {
 
     const waitingForStable = inCommitWindow;
     const allowOverlayDraw = !waitingForStable;
-    const allowParticleDraw = true;                 // particles should never freeze
+    const allowParticleDraw = DRAWGRID_ENABLE_PARTICLE_FIELD;
     maybeReleaseStalledZoom();
     dgf('start', { f: panel.__dgFrame|0, cssW, cssH, allowOverlayDraw, allowParticleDraw });
     if (!ensureSizeReady()) {
@@ -5284,8 +5387,45 @@ function syncBackBufferSizes() {
     }
 
     try {
+      // Measure just the visual work for this panel: grid + nodes.
+      let __dgDrawStart = null;
+      if (DG_PROFILE && typeof performance !== 'undefined' && performance.now) {
+        __dgDrawStart = performance.now();
+      }
+
       drawGrid();
       if (currentMap) drawNodes(currentMap.nodes);
+
+      if (__dgDrawStart !== null) {
+        const now = performance.now();
+        const dt = now - __dgDrawStart;
+
+        __dgFrameProfileFrames++;
+        __dgFrameProfileSumMs += dt;
+        if (dt < __dgFrameProfileMinMs) __dgFrameProfileMinMs = dt;
+        if (dt > __dgFrameProfileMaxMs) __dgFrameProfileMaxMs = dt;
+
+        // Log about once a second per panel
+        if (!__dgFrameProfileLastLogTs || (now - __dgFrameProfileLastLogTs) >= 1000) {
+          const avg = __dgFrameProfileFrames > 0
+            ? (__dgFrameProfileSumMs / __dgFrameProfileFrames)
+            : 0;
+
+          console.log('[DG][profile:panel]', {
+            panelId: panel.id || null,
+            frames: __dgFrameProfileFrames,
+            avgFrameMs: Number(avg.toFixed(3)),
+            minFrameMs: Number(__dgFrameProfileMinMs.toFixed(3)),
+            maxFrameMs: Number(__dgFrameProfileMaxMs.toFixed(3)),
+          });
+
+          __dgFrameProfileFrames = 0;
+          __dgFrameProfileSumMs = 0;
+          __dgFrameProfileMinMs = Infinity;
+          __dgFrameProfileMaxMs = 0;
+          __dgFrameProfileLastLogTs = now;
+        }
+      }
     } catch (e) {
       dglog('drawGrid:error', String((e && e.message) || e));
     }
@@ -5295,7 +5435,7 @@ function syncBackBufferSizes() {
       __dgFrontSwapNextDraw = false;
       try { requestFrontSwap(); } catch (err) { dgs('error', String((err && err.message) || err)); }
     }
-    const dgr = panel?.getBoundingClientRect?.();
+    // const dgr = panel?.getBoundingClientRect?.();
     //console.debug('[DIAG][DG] frame', {
       //f: panel.__dgFrame,
       //lastPointerup: window.__LAST_POINTERUP_DIAG__,
@@ -5685,6 +5825,9 @@ function syncBackBufferSizes() {
       fctx.fillText(`boardScale: ${boardScale.toFixed(2)}`, 5, 15);
       fctx.fillText(`w x h: ${dbgW} x ${dbgH}`, 5, 30);
       fctx.fillText(`pixelScale: ${pxScale}`, 5, 45);
+      if (__dgFpsValue) {
+        fctx.fillText(`fps: ${__dgFpsValue.toFixed(1)}`, 5, 60);
+      }
       fctx.restore();
     }
 

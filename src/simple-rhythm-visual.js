@@ -397,7 +397,7 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
 
       // NEW: keep the particle viewport in sync with board zoom commits
       if (typeof onZoomChange === 'function') {
-        zoomUnsubscribe = onZoomChange((z = {}) => {
+        const zoomHandler = (z = {}) => {
           const phase = z.phase;
           const mode = z.mode;
           const gesturing = mode === 'gesturing';
@@ -411,7 +411,9 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
               // ignore
             }
           }
-        });
+        };
+        zoomHandler.__zcName = 'simple-rhythm-visual';
+        zoomUnsubscribe = onZoomChange(zoomHandler);
       }
     } catch (err) {
       console.warn('[loopgrid] particle field init failed', err);

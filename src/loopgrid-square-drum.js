@@ -8,12 +8,14 @@ if (window.__loopgridDrumBoot) {
   window.__loopgridDrumBoot = true;
   const SEL = '.toy-panel[data-toy="loopgrid-drum"]';
   let zoomMode = 'idle';
-  const unsubscribeZoom = onZoomChange((z) => {
+  const handleZoom = (z) => {
     zoomMode = z.mode || 'idle';
     if (z.committed) {
       requestAnimationFrame(relayout);
     }
-  });
+  };
+  handleZoom.__zcName = 'loopgrid-square-drum';
+  const unsubscribeZoom = onZoomChange(handleZoom);
   window.addEventListener('unload', () => {
     try { unsubscribeZoom?.(); } catch {}
   }, { once: true });

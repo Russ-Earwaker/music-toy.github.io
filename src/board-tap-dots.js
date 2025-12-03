@@ -30,6 +30,7 @@
 
   const DEBUG = false;
   const FORCE_DEBUG_VIS = false;
+  const PROFILE = false; // set true temporarily to log profiling info
 
   // delay before full reset once everything is faded out
   const HANG_MS = 0;
@@ -40,6 +41,8 @@
   // Wave timing (tap ripple)
   const WAVE_DURATION_MS = 200;  // how long the expanding circle travels
   const DOT_WAVE_WIDTH_MS = 220; // per-dot flash + settle time
+  // Safety: hard cap on dots per tap so we don't blow up per-frame work
+  const MAX_DOTS_PER_TAP = 700;
 
   // Base dot appearance
   const BASE_DOT_RADIUS = 1.4; // pixels at scale = 1
@@ -101,6 +104,21 @@
   let dragTargetOffsetY = 0;
   let dragOffsetX = 0;
   let dragOffsetY = 0;
+
+  // Profiling accumulators (enabled when PROFILE === true)
+  let profileLastNow = 0;
+  let profileFrameCount = 0;
+  let profileMinDt = Infinity;
+  let profileMaxDt = 0;
+  let profileSumDt = 0;
+
+  function resetProfile() {
+    profileLastNow = 0;
+    profileFrameCount = 0;
+    profileMinDt = Infinity;
+    profileMaxDt = 0;
+    profileSumDt = 0;
+  }
 
   // Mapping helpers: board space (8k) -> viewport canvas space
   let viewScaleX = 1;
@@ -196,6 +214,8 @@
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     overlay.classList.remove('is-active');
 
+    if (PROFILE) resetProfile();
+
     if (DEBUG) console.debug('[tap-dots] reset');
   }
 
@@ -234,20 +254,46 @@
       2,
       Math.round(Math.log2(Math.max(zoomScale, 0.01)))
     );
-    const tapSpacing = baseTapSpacing / quantizedScale;
-    currentTapSpacing = tapSpacing;
+    let tapSpacing = baseTapSpacing / quantizedScale;
+
+    // Safety: don't let spacing get *too* tiny even at extreme zoom.
+    const minSpacing = baseTapSpacing / 8;
+    if (tapSpacing < minSpacing) tapSpacing = minSpacing;
 
     const minX = x - radiusScreen;
     const maxX = x + radiusScreen;
     const minY = y - radiusScreen;
     const maxY = y + radiusScreen;
 
-    // Align fine grid to the main board grid, similar to the CSS background-position math.
-    const firstColIndex = Math.floor((minX - gridOffsetX) / tapSpacing);
-    const startX = gridOffsetX + firstColIndex * tapSpacing;
+    // We'll adjust startX/startY as spacing changes.
+    let firstColIndex = Math.floor((minX - gridOffsetX) / tapSpacing);
+    let startX = gridOffsetX + firstColIndex * tapSpacing;
 
-    const firstRowIndex = Math.floor((minY - gridOffsetY) / tapSpacing);
-    const startY = gridOffsetY + firstRowIndex * tapSpacing;
+    let firstRowIndex = Math.floor((minY - gridOffsetY) / tapSpacing);
+    let startY = gridOffsetY + firstRowIndex * tapSpacing;
+
+    // Estimate how many dots we'd generate for a given spacing.
+    function estimateCount(spacing) {
+      const cols = Math.floor((maxX - startX) / spacing) + 2;
+      const rows = Math.floor((maxY - startY) / spacing) + 2;
+      return cols * rows;
+    }
+
+    let estimated = estimateCount(tapSpacing);
+
+    // If we're over budget, progressively coarsen the grid until we're under MAX_DOTS_PER_TAP.
+    while (estimated > MAX_DOTS_PER_TAP) {
+      tapSpacing *= 1.25; // gently coarsen
+      firstColIndex = Math.floor((minX - gridOffsetX) / tapSpacing);
+      startX = gridOffsetX + firstColIndex * tapSpacing;
+
+      firstRowIndex = Math.floor((minY - gridOffsetY) / tapSpacing);
+      startY = gridOffsetY + firstRowIndex * tapSpacing;
+
+      estimated = estimateCount(tapSpacing);
+    }
+
+    currentTapSpacing = tapSpacing;
 
     for (let yy = startY; yy <= maxY; yy += tapSpacing) {
       for (let xx = startX; xx <= maxX; xx += tapSpacing) {
@@ -276,11 +322,12 @@
       }
     }
 
-    if (DEBUG) {
+    if (DEBUG || PROFILE) {
       console.debug('[tap-dots] built dots', {
         count: dots.length,
         tapSpacing,
-        radiusScreen
+        radiusScreen,
+        zoomScale
       });
     }
   }
@@ -309,6 +356,17 @@
   function drawWaveFrame(now) {
     // We might still be fading even if the tap wave has finished.
     if (!waveActive && !fadeOutActive && !isPointerDown) return;
+
+    if (PROFILE) {
+      if (profileLastNow !== 0) {
+        const dt = now - profileLastNow;
+        profileFrameCount++;
+        profileSumDt += dt;
+        if (dt < profileMinDt) profileMinDt = dt;
+        if (dt > profileMaxDt) profileMaxDt = dt;
+      }
+      profileLastNow = now;
+    }
 
     const elapsed = now - waveStartTime;
     const totalDuration = WAVE_DURATION_MS + DOT_WAVE_WIDTH_MS;
@@ -350,6 +408,17 @@
     // If we're fully faded and the blob is basically at rest, clean up.
     const dragMag = Math.sqrt(dragOffsetX * dragOffsetX + dragOffsetY * dragOffsetY);
     if (!isPointerDown && fadeFactor <= 0.001 && dragMag <= 0.1) {
+      if (PROFILE && profileFrameCount > 0) {
+        const avgDt = profileSumDt / profileFrameCount;
+        console.log('[tap-dots][profile] wave complete', {
+          dots: dots.length,
+          frames: profileFrameCount,
+          avgFrameMs: Number(avgDt.toFixed(3)),
+          minFrameMs: Number(profileMinDt.toFixed(3)),
+          maxFrameMs: Number(profileMaxDt.toFixed(3))
+        });
+      }
+
       waveActive = false;
       fadeOutActive = false;
       if (HANG_MS > 0) {
@@ -499,6 +568,8 @@
 
     tapX = x;
     tapY = y;
+
+    if (PROFILE) resetProfile();
 
     buildDotsAroundTap(tapX, tapY, tapRadiusScreen, zoomScale);
     resizeCanvas();

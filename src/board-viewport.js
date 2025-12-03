@@ -225,6 +225,9 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
   let pendingListenerPayload = null;
   let notifyRaf = 0;
   let lastNotifiedCommitScale = scale;
+  const VIEWPORT_COMMIT_MIN_INTERVAL_MS = 120;
+  let lastViewportCommitMs = 0;
+  let lastViewportCommitKey = '';
 
   function scheduleNotify(payload) {
     const payloadScale =
@@ -253,10 +256,71 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     }
   }
 
-  onZoomChange((z) => {
-    const currentScale = z.currentScale ?? scale;
-    const currentX = z.currentX ?? x;
-    const currentY = z.currentY ?? y;
+  function recomputeViewportFromZoom(z = {}) {
+    const commitScale =
+      Number.isFinite(z.currentScale) ? z.currentScale :
+      Number.isFinite(z.targetScale) ? z.targetScale :
+      scale;
+    const commitX =
+      Number.isFinite(z.currentX) ? z.currentX :
+      Number.isFinite(z.targetX) ? z.targetX :
+      x;
+    const commitY =
+      Number.isFinite(z.currentY) ? z.currentY :
+      Number.isFinite(z.targetY) ? z.targetY :
+      y;
+
+    lastViewportCommitKey = `${commitScale}|${commitX}|${commitY}`;
+    scale = commitScale;
+    x = commitX;
+    y = commitY;
+    persist();
+
+    scheduleNotify({
+      ...z,
+      committed: true,
+      currentScale: commitScale,
+      currentX: commitX,
+      currentY: commitY,
+      targetScale: Number.isFinite(z.targetScale) ? z.targetScale : commitScale,
+      targetX: Number.isFinite(z.targetX) ? z.targetX : commitX,
+      targetY: Number.isFinite(z.targetY) ? z.targetY : commitY,
+    });
+
+    const ov = overviewMode?.state;
+    if (!ov) return;
+    if (camTweenLock) {
+      return;
+    }
+    if (ov.transitioning) {
+      if (scale >= (ov.zoomReturnLevel - 1e-3)) {
+        try { overviewMode.exit(false); } catch {}
+        ov.transitioning = false;
+      }
+      return;
+    }
+    if (scale < ov.zoomThreshold) {
+      overviewMode.enter();
+    } else {
+      overviewMode.exit(false);
+    }
+  }
+
+  const handleZoom = (z = {}) => {
+    const phase = z?.phase;
+    const mode = z?.mode;
+    const currentScale =
+      Number.isFinite(z.currentScale) ? z.currentScale :
+      Number.isFinite(z.targetScale) ? z.targetScale :
+      scale;
+    const currentX =
+      Number.isFinite(z.currentX) ? z.currentX :
+      Number.isFinite(z.targetX) ? z.targetX :
+      x;
+    const currentY =
+      Number.isFinite(z.currentY) ? z.currentY :
+      Number.isFinite(z.targetY) ? z.targetY :
+      y;
 
     try { stage.style.setProperty('--bv-scale', String(currentScale)); } catch {}
     syncViewportSnapshot({ scale: currentScale, x: currentX, y: currentY });
@@ -272,30 +336,45 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
       }
     }
 
-    if (z.committed) {
-      scale = currentScale;
-      x = currentX;
-      y = currentY;
-      persist();
-      scheduleNotify({ ...z });
-      const ov = overviewMode?.state;
-      if (camTweenLock) {
-        // While our programmatic tween is running, suppress overview auto-enter/exit
-        // Do nothing here.
-      } else if (ov?.transitioning) {
-        if (scale >= (ov.zoomReturnLevel - 1e-3)) {
-          try { overviewMode.exit(false); } catch {}
-          ov.transitioning = false;
-        }
-      } else if (ov) {
-        if (scale < ov.zoomThreshold) {
-          overviewMode.enter();
-        } else {
-          overviewMode.exit(false);
-        }
-      }
+    if (phase === 'prepare' || phase === 'begin') {
+      return;
     }
-  });
+
+    if (
+      phase === 'gesturing' ||
+      phase === 'progress' ||
+      z?.gesturing ||
+      mode === 'gesturing'
+    ) {
+      return;
+    }
+
+    if (phase === 'idle' || phase === 'done') {
+      return;
+    }
+
+    const isCommitPhase =
+      phase === 'commit' ||
+      phase === 'swap' ||
+      phase === 'recompute';
+
+    if (isCommitPhase) {
+      const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+        ? performance.now()
+        : Date.now();
+      const commitKey = `${currentScale}|${currentX}|${currentY}`;
+      if (commitKey === lastViewportCommitKey && (now - lastViewportCommitMs) < VIEWPORT_COMMIT_MIN_INTERVAL_MS) {
+        return;
+      }
+      if ((now - lastViewportCommitMs) < VIEWPORT_COMMIT_MIN_INTERVAL_MS) {
+        return;
+      }
+      lastViewportCommitMs = now;
+      recomputeViewportFromZoom({ ...z, currentScale, currentX, currentY });
+    }
+  };
+  handleZoom.__zcName = 'board-viewport';
+  onZoomChange(handleZoom);
 
   const lerper = new WheelZoomLerper((nextScale, nextX, nextY) => {
     applyTransform({ scale: nextScale, x: nextX, y: nextY });
