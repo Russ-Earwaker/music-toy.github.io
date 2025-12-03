@@ -3,6 +3,7 @@ const __DBG = (globalThis.BOUNCER_DBG_LEVEL|0)||0; const __d=(lvl,...a)=>{ if(__
 // Encapsulates the Bouncer draw loop to keep bouncer.main.js concise.
 import { drawBlock } from './toyhelpers.js';
 import { isRunning } from './audio-core.js';
+import { startSection } from './perf-meter.js';
 
 export function createBouncerDraw(env){
   const {
@@ -32,12 +33,14 @@ export function createBouncerDraw(env){
   let _loggedCubeOnce = false;
 
   function draw(){
-    // Always ensure backing store matches CSS size for crisp rendering
-    try{ resizeCanvasForDPR(canvas, ctx); }catch{}
-    // Track CSS size (optional diagnostics)
-    const cssW = Math.max(1, Math.round(canvas.clientWidth || 0));
-    const cssH = Math.max(1, Math.round(canvas.clientHeight || 0));
-    lastCssW = cssW; lastCssH = cssH;
+    const endPerf = startSection('bouncer:draw');
+    try {
+      // Always ensure backing store matches CSS size for crisp rendering
+      try{ resizeCanvasForDPR(canvas, ctx); }catch{}
+      // Track CSS size (optional diagnostics)
+      const cssW = Math.max(1, Math.round(canvas.clientWidth || 0));
+      const cssH = Math.max(1, Math.round(canvas.clientHeight || 0));
+      lastCssW = cssW; lastCssH = cssH;
 
     // First-frame init: lock world and set launch baseline
     if (!didInit){
@@ -56,11 +59,11 @@ export function createBouncerDraw(env){
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Set playing class for border highlight and handle pulse animation.
-    const currentBall = getBall ? getBall() : env.ball;
-    const isChainHead = !panel.dataset.prevToyId;
-    // A ghost ball on the head of a chain shouldn't trigger the "playing" highlight.
-    const showPlaying = !!currentBall && !(currentBall.isGhost && isChainHead);
-    panel.classList.toggle('toy-playing', showPlaying);
+      const currentBall = getBall ? getBall() : env.ball;
+      const isChainHead = !panel.dataset.prevToyId;
+      // A ghost ball on the head of a chain shouldn't trigger the "playing" highlight.
+      const showPlaying = !!currentBall && !(currentBall.isGhost && isChainHead);
+      panel.classList.toggle('toy-playing', showPlaying);
 
     if (panel.__pulseHighlight && panel.__pulseHighlight > 0) {
       panel.classList.add('toy-playing-pulse');
@@ -565,7 +568,10 @@ export function createBouncerDraw(env){
         prevNow = now;
     } catch(e) { console.warn('[bouncer-render] step failed', e); }
 
-    requestAnimationFrame(draw);
+    } finally {
+      endPerf();
+      requestAnimationFrame(draw);
+    }
   }
 
   // Kick off the self-perpetuating draw loop.

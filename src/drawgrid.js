@@ -11,6 +11,7 @@ import { getParticleBudget, getAdaptiveFrameBudget } from './particles/ParticleQ
 import { overviewMode } from './overview-mode.js';
 import { boardScale as boardScaleHelper } from './board-scale-helpers.js';
 import { makeDebugLogger } from './debug-flags.js';
+import { startSection } from './perf-meter.js';
 
 const drawgridLog = makeDebugLogger('mt_debug_logs', 'log');
 
@@ -4809,7 +4810,20 @@ function syncBackBufferSizes() {
       // The full stroke will be drawn on pointermove.
     }
   }
+  let __dgMoveRAF = 0;
+  let __dgPendingMoveEvt = null;
   function onPointerMove(e){
+    __dgPendingMoveEvt = e;
+    if (__dgMoveRAF) return;
+    __dgMoveRAF = requestAnimationFrame(() => {
+      __dgMoveRAF = 0;
+      const evt = __dgPendingMoveEvt;
+      __dgPendingMoveEvt = null;
+      handlePointerMove(evt || e);
+    });
+  }
+
+  function handlePointerMove(e){
     const p = pointerToPaintLogical(e);
     if (!pctx) {
       DG.warn('pctx missing; forcing front buffers');
@@ -5460,12 +5474,14 @@ function syncBackBufferSizes() {
   }
 
   function renderLoop() {
-    if (!panel.__dgFrame) panel.__dgFrame = 0;
-    panel.__dgFrame++;
-    const __dgFrameProfileStart = (DG_FRAME_PROFILE && typeof performance !== 'undefined' && typeof performance.now === 'function')
-      ? performance.now()
-      : null;
-    const nowTs = performance?.now?.() ?? Date.now();
+    const endPerf = startSection('drawgrid:render');
+    try {
+      if (!panel.__dgFrame) panel.__dgFrame = 0;
+      panel.__dgFrame++;
+      const __dgFrameProfileStart = (DG_FRAME_PROFILE && typeof performance !== 'undefined' && typeof performance.now === 'function')
+        ? performance.now()
+        : null;
+      const nowTs = performance?.now?.() ?? Date.now();
 
     // --- FPS accumulation (per panel, debug only) ---
     if (DG_DEBUG && window.DEBUG_DRAWGRID === 1) {
@@ -5490,106 +5506,126 @@ function syncBackBufferSizes() {
       __dgStableFramesAfterCommit++; // count a couple of stable frames
     }
 
-    const waitingForStable = inCommitWindow;
+      const waitingForStable = inCommitWindow;
 
-    const frameCam = overlayCamState || (typeof getFrameStartState === 'function' ? getFrameStartState() : null);
-    const boardScaleValue = Number.isFinite(frameCam?.scale) ? frameCam.scale : __dgZoomScale();
-    if (Number.isFinite(boardScaleValue)) {
-      if (!Number.isFinite(boardScale) || Math.abs(boardScale - boardScaleValue) > 1e-4) {
-        boardScale = boardScaleValue;
-      }
-    }
-
-    const zoomDebugFreeze = !!(typeof window !== 'undefined' && window.__zoomDebugFreeze);
-
-    // Update per-panel LOD state from global FPS + zoom.
-    const adaptiveState = updatePanelParticleState(boardScaleValue);
-
-    // We never draw overlays or particles if the panel is completely offscreen.
-    const canDrawAnything = !waitingForStable && isPanelVisible;
-    const renderEvery = 1;
-    const skipNonCritical = false;
-
-    // Overlays (notes, playhead, flashes) respect visibility & hydrations guard,
-    // but are otherwise always on – they're core UX.
-    const allowOverlayDraw = canDrawAnything;
-
-    // Particle field is "expensive candy": only enabled if:
-    // - globally allowed
-    // - we are not in a zoom debug freeze
-    // - the panel is on-screen
-    // - the adaptive LOD says it's OK for current FPS / zoom
-    const allowParticleDraw =
-      DRAWGRID_ENABLE_PARTICLE_FIELD &&
-      canDrawAnything &&
-      !zoomDebugFreeze &&
-      particleFieldEnabled;
-    maybeReleaseStalledZoom();
-    dgf('start', { f: panel.__dgFrame|0, cssW, cssH, allowOverlayDraw, allowParticleDraw });
-    if (!ensureSizeReady()) {
-      rafId = requestAnimationFrame(renderLoop);
-      return;
-    }
-    if (frameCam && !panel.__dgFrameCamLogged) {
-      const isProd = (typeof process !== 'undefined') && (process?.env?.NODE_ENV === 'production');
-      if (!isProd && DG_DEBUG && DBG_DRAW) {
-        try { console.debug('[DG][overlay] frameStart camera', frameCam); } catch {}
-      }
-      panel.__dgFrameCamLogged = true;
-    }
-    try {
-      if (allowParticleDraw) {
-        const dtMs = Number.isFinite(frameCam?.dt) ? frameCam.dt : 16.6;
-        const dt = Number.isFinite(dtMs) ? dtMs / 1000 : (1 / 60);
-        dgField?.tick?.(dt);
-      }
-    } catch (e) {
-      dglog('particle-field.tick:error', String((e && e.message) || e));
-    }
-
-    try {
-      // Measure just the visual work for this panel: grid + nodes.
-      let __dgDrawStart = null;
-      if (DG_PROFILE && typeof performance !== 'undefined' && performance.now) {
-        __dgDrawStart = performance.now();
-      }
-
-      drawGrid();
-      if (currentMap) drawNodes(currentMap.nodes);
-
-      if (__dgDrawStart !== null) {
-        const now = performance.now();
-        const dt = now - __dgDrawStart;
-
-        __dgFrameProfileFrames++;
-        __dgFrameProfileSumMs += dt;
-        if (dt < __dgFrameProfileMinMs) __dgFrameProfileMinMs = dt;
-        if (dt > __dgFrameProfileMaxMs) __dgFrameProfileMaxMs = dt;
-
-        // Log about once a second per panel
-        if (!__dgFrameProfileLastLogTs || (now - __dgFrameProfileLastLogTs) >= 1000) {
-          const avg = __dgFrameProfileFrames > 0
-            ? (__dgFrameProfileSumMs / __dgFrameProfileFrames)
-            : 0;
-
-          console.log('[DG][profile:panel]', {
-            panelId: panel.id || null,
-            frames: __dgFrameProfileFrames,
-            avgFrameMs: Number(avg.toFixed(3)),
-            minFrameMs: Number(__dgFrameProfileMinMs.toFixed(3)),
-            maxFrameMs: Number(__dgFrameProfileMaxMs.toFixed(3)),
-          });
-
-          __dgFrameProfileFrames = 0;
-          __dgFrameProfileSumMs = 0;
-          __dgFrameProfileMinMs = Infinity;
-          __dgFrameProfileMaxMs = 0;
-          __dgFrameProfileLastLogTs = now;
+      const frameCam = overlayCamState || (typeof getFrameStartState === 'function' ? getFrameStartState() : null);
+      const boardScaleValue = Number.isFinite(frameCam?.scale) ? frameCam.scale : __dgZoomScale();
+      if (Number.isFinite(boardScaleValue)) {
+        if (!Number.isFinite(boardScale) || Math.abs(boardScale - boardScaleValue) > 1e-4) {
+          boardScale = boardScaleValue;
         }
       }
-    } catch (e) {
-      dglog('drawGrid:error', String((e && e.message) || e));
-    }
+
+      const zoomDebugFreeze = !!(typeof window !== 'undefined' && window.__zoomDebugFreeze);
+
+      // Update per-panel LOD state from global FPS + zoom.
+      const adaptiveState = updatePanelParticleState(boardScaleValue);
+
+      // We never draw overlays or particles if the panel is completely offscreen.
+      const canDrawAnything = !waitingForStable && isPanelVisible;
+      const renderEvery = Math.max(1, adaptiveState?.renderBudget?.skipNonCriticalEvery || 1);
+      const skipNonCritical = false;
+
+      // Overlays (notes, playhead, flashes) respect visibility & hydrations guard,
+      // but are otherwise always on – they're core UX.
+      const allowOverlayDraw = canDrawAnything;
+
+      // Particle field is "expensive candy": only enabled if:
+      // - globally allowed
+      // - we are not in a zoom debug freeze
+      // - the panel is on-screen
+      // - the adaptive LOD says it's OK for current FPS / zoom
+      const allowParticleDraw =
+        DRAWGRID_ENABLE_PARTICLE_FIELD &&
+        canDrawAnything &&
+        !zoomDebugFreeze &&
+        particleFieldEnabled;
+
+      // If we're offscreen and nothing is pending (no swaps or deferred clears),
+      // skip the heavy draw work and let the next visible frame catch up.
+      const skipFrame =
+        !canDrawAnything &&
+        !__dgFrontSwapNextDraw &&
+        !__dgNeedsUIRefresh &&
+        !__hydrationJustApplied;
+      const throttleFrame =
+        renderEvery > 1 &&
+        (panel.__dgFrame % renderEvery !== 0) &&
+        canDrawAnything &&
+        !__dgFrontSwapNextDraw &&
+        !__dgNeedsUIRefresh &&
+        !__hydrationJustApplied;
+
+      maybeReleaseStalledZoom();
+      dgf('start', { f: panel.__dgFrame|0, cssW, cssH, allowOverlayDraw, allowParticleDraw });
+      if (!ensureSizeReady()) {
+        rafId = requestAnimationFrame(renderLoop);
+        return;
+      }
+      if (skipFrame || throttleFrame) {
+        rafId = requestAnimationFrame(renderLoop);
+        return;
+      }
+      if (frameCam && !panel.__dgFrameCamLogged) {
+        const isProd = (typeof process !== 'undefined') && (process?.env?.NODE_ENV === 'production');
+        if (!isProd && DG_DEBUG && DBG_DRAW) {
+          try { console.debug('[DG][overlay] frameStart camera', frameCam); } catch {}
+        }
+        panel.__dgFrameCamLogged = true;
+      }
+      try {
+        if (allowParticleDraw) {
+          const dtMs = Number.isFinite(frameCam?.dt) ? frameCam.dt : 16.6;
+          const dt = Number.isFinite(dtMs) ? dtMs / 1000 : (1 / 60);
+          dgField?.tick?.(dt);
+        }
+      } catch (e) {
+        dglog('particle-field.tick:error', String((e && e.message) || e));
+      }
+
+      try {
+        // Measure just the visual work for this panel: grid + nodes.
+        let __dgDrawStart = null;
+        if (DG_PROFILE && typeof performance !== 'undefined' && performance.now) {
+          __dgDrawStart = performance.now();
+        }
+
+        drawGrid();
+        if (currentMap) drawNodes(currentMap.nodes);
+
+        if (__dgDrawStart !== null) {
+          const now = performance.now();
+          const dt = now - __dgDrawStart;
+
+          __dgFrameProfileFrames++;
+          __dgFrameProfileSumMs += dt;
+          if (dt < __dgFrameProfileMinMs) __dgFrameProfileMinMs = dt;
+          if (dt > __dgFrameProfileMaxMs) __dgFrameProfileMaxMs = dt;
+
+          // Log about once a second per panel
+          if (!__dgFrameProfileLastLogTs || (now - __dgFrameProfileLastLogTs) >= 1000) {
+            const avg = __dgFrameProfileFrames > 0
+              ? (__dgFrameProfileSumMs / __dgFrameProfileFrames)
+              : 0;
+
+            console.log('[DG][profile:panel]', {
+              panelId: panel.id || null,
+              frames: __dgFrameProfileFrames,
+              avgFrameMs: Number(avg.toFixed(3)),
+              minFrameMs: Number(__dgFrameProfileMinMs.toFixed(3)),
+              maxFrameMs: Number(__dgFrameProfileMaxMs.toFixed(3)),
+            });
+
+            __dgFrameProfileFrames = 0;
+            __dgFrameProfileSumMs = 0;
+            __dgFrameProfileMinMs = Infinity;
+            __dgFrameProfileMaxMs = 0;
+            __dgFrameProfileLastLogTs = now;
+          }
+        }
+      } catch (e) {
+        dglog('drawGrid:error', String((e && e.message) || e));
+      }
 
 
     if (__dgFrontSwapNextDraw && typeof requestFrontSwap === 'function') {
@@ -6008,6 +6044,9 @@ function syncBackBufferSizes() {
 
     dgf('end', { f: panel.__dgFrame|0 });
     rafId = requestAnimationFrame(renderLoop);
+    } finally {
+      endPerf();
+    }
   }
   rafId = requestAnimationFrame(renderLoop);
 

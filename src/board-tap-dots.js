@@ -164,13 +164,17 @@
 
     // Mobile Safari can silently drop rendering on oversized canvases. Clamp the backing store so
     // width/height stay under a safe cap, reducing DPR if needed.
-    const MAX_BACKING_DIM = 8192;
+    const MAX_BACKING_DIM = 3072;
     const maxDim = Math.max(width, height);
-    const maxDpr = maxDim > 0 ? (MAX_BACKING_DIM / maxDim) : dpr;
-    const effectiveDpr = Math.max(1, Math.min(dpr, maxDpr));
+    // Allow a bit more resolution when zoomed in (bigger on-screen footprint) but cap aggressively.
+    const zoomScale = getCurrentZoomScale() || 1;
+    const zoomBoost = Math.max(1, zoomScale);
+    const maxDprByCap = (MAX_BACKING_DIM / maxDim) * zoomBoost;
+    let effectiveDpr = Math.min(dpr, maxDprByCap);
+    effectiveDpr = Math.max(0.5, effectiveDpr);
 
-    canvas.width = Math.round(width * effectiveDpr);
-    canvas.height = Math.round(height * effectiveDpr);
+    canvas.width = Math.max(1, Math.round(width * effectiveDpr));
+    canvas.height = Math.max(1, Math.round(height * effectiveDpr));
     canvas.style.width = width + 'px';
     canvas.style.height = height + 'px';
 
@@ -354,6 +358,9 @@
   }
 
   function drawWaveFrame(now) {
+    // Always schedule the next frame up front; resetOverlay() cancels when done.
+    rafId = requestAnimationFrame(drawWaveFrame);
+
     // We might still be fading even if the tap wave has finished.
     if (!waveActive && !fadeOutActive && !isPointerDown) return;
 
@@ -395,15 +402,19 @@
     } else {
       // Relax back towards centre
       dragOffsetX += (0 - dragOffsetX) * DRAG_RETURN;
-      dragOffsetY += (0 - dragOffsetY) * DRAG_RETURN;
-    }
+    dragOffsetY += (0 - dragOffsetY) * DRAG_RETURN;
+  }
 
-    updateBoardToViewTransform();
+  updateBoardToViewTransform();
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // Clear in device pixels; reset transform so clearRect covers full backing store.
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.restore();
 
-    const zoomScale = getCurrentZoomScale();
-    const invZoom = 1 / Math.max(zoomScale, 0.0001);
+  const zoomScale = getCurrentZoomScale();
+  const invZoom = 1 / Math.max(zoomScale, 0.0001);
 
     // If we're fully faded and the blob is basically at rest, clean up.
     const dragMag = Math.sqrt(dragOffsetX * dragOffsetX + dragOffsetY * dragOffsetY);
@@ -540,8 +551,6 @@
     }
 
     ctx.restore();
-
-    rafId = requestAnimationFrame(drawWaveFrame);
   }
 
   function startWave(x, y) {

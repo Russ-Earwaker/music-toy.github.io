@@ -4,6 +4,7 @@ import './fullscreen.js';
 import './debug.js';
 import './advanced-controls-toggle.js';
 import './toy-visibility.js';
+import { onZoomChange } from './zoom/ZoomCoordinator.js';
 import { initializeBouncer } from './bouncer-init.js';
 import './header-buttons-delegate.js';
 import './rippler-init.js';
@@ -40,6 +41,21 @@ if (document.readyState === 'loading') {
 }
 // Ensure at least one non-passive gesture listener exists for iOS unlock
 window.addEventListener('touchstart', ()=>{}, { capture: true, passive: false });
+
+// Track zoom gesture state globally so visual systems can throttle without affecting audio timing.
+(function setupZoomGestureFlag(){
+  try {
+    onZoomChange((payload = {}) => {
+      const { phase, gesturing, mode } = payload;
+      const active = !!(gesturing || mode === 'gesturing' || phase === 'progress' || phase === 'freeze' || phase === 'recompute');
+      if (active) {
+        window.__mtZoomGesturing = true;
+      } else if (phase === 'done' || phase === 'commit' || phase === 'swap') {
+        window.__mtZoomGesturing = false;
+      }
+    });
+  } catch {}
+})();
 
 /**
  * Calculates the visual extents of a panel's content, including any

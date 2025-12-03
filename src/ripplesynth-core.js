@@ -18,6 +18,7 @@ import { drawWaves, drawGenerator } from './ripplesynth-waves.js';
 import { handleBlockTap } from './ripplesynth-zoomtap.js';
 import { makeGetBlockRects } from './ripplesynth-rects.js';
 import { installLoopGuards } from './rippler-loopguard.js';
+import { startSection } from './perf-meter.js';
 import { createScheduler } from './ripplesynth-scheduler.js';
 import { circleRectHit } from './bouncer-helpers.js';
 import { drawBlock } from './toyhelpers.js';
@@ -727,6 +728,7 @@ export function createRippleSynth(selector){
 
   let __lastDrawAT = 0;
   function draw(){
+    const endPerf = startSection('rippler:draw');
     try {
       // A toy is "playing" if it has active ripples, or if it's an empty
       // toy in a chain running its "ghost" timer (lifeline).
@@ -983,7 +985,7 @@ export function createRippleSynth(selector){
         const nowAT = ac.currentTime; spawnRipple(true);
         barStartAT=nowAT; nextSlotAT=barStartAT+stepSeconds(); nextSlotIx=1; pattern.forEach(s=> s.clear()); patternOffsets.forEach(m=> m.clear()); recording=true;
       }
-    } catch (err) { console.error('[rippler draw]', err); } finally { requestAnimationFrame(draw); }
+    } catch (err) { console.error('[rippler draw]', err); } finally { endPerf(); requestAnimationFrame(draw); }
   }
 
   function reset(){

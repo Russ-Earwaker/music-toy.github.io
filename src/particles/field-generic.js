@@ -35,6 +35,14 @@ const MAX_FADE_OUT_FRACTION = 0.04; // cap how many fade-outs per reconcile step
 const MAX_FADE_OUT_STEP = 16;
 const MIN_FADE_STEP = 2;
 
+function isZoomGesturing() {
+  try {
+    return !!(typeof window !== 'undefined' && window.__mtZoomGesturing);
+  } catch {
+    return false;
+  }
+}
+
 // Color stops for particles as they fade back home after a poke.
 // Sequence: bright cyan punch -> pink -> clean white settle.
 export const PARTICLE_RETURN_GRADIENT = Object.freeze([
@@ -150,6 +158,7 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
     tickModuloCounter: 0,
     tickAccumDt: 0,
     spacing: 18,
+    gestureSkip: 0,
   };
   const baseSizePx = config.sizePx;
   const PARTICLE_HIGHLIGHT_DURATION = 900; // ms
@@ -379,7 +388,9 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
       highlightEvents.shift();
     }
 
-    if (config.drawMode === 'dots+links' && state.particles.length <= 1500) {
+    const gestureActive = isZoomGesturing();
+
+    if (!gestureActive && config.drawMode === 'dots+links' && state.particles.length <= 1500) {
       ctx.strokeStyle = config.strokeStyle;
       ctx.lineWidth = Math.max(0.6, baseWorldRadius * 0.8);
       for (let i = 0; i < state.particles.length; i++) {
@@ -486,6 +497,22 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
       state.tickAccumDt = 0;
     }
     effectiveDt = Math.min(0.12, effectiveDt); // avoid huge leaps when heavily throttled
+
+    // During active zoom gestures, throttle particle physics to cut CPU while keeping visuals.
+    const gestureActive = isZoomGesturing();
+    if (gestureActive) {
+      state.gestureSkip = (state.gestureSkip + 1) % 2; // run physics every other frame
+      if (state.gestureSkip !== 0) {
+        updateFades(effectiveDt);
+        twinkle(effectiveDt);
+        cleanupFaded();
+        return;
+      }
+      effectiveDt = Math.min(effectiveDt, 1 / 45); // slower integration during drag
+    } else {
+      state.gestureSkip = 0;
+    }
+
     reconcileParticleCount(effectiveDt);
     updateFades(effectiveDt);
     step(effectiveDt);
@@ -531,6 +558,7 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
     const desired = Math.max(MIN_PARTICLES, Math.round(state.targetDesired || 0));
     const activeParticles = state.particles.filter(p => (p.fadeTarget ?? 1) > 0 || (p.fade ?? 0) > 0.05);
     const active = activeParticles.length;
+    const gestureActive = isZoomGesturing();
 
     if (immediate && !state.particles.length) {
       const seedKey = `${config.seed}:${state.w}x${state.h}:init:${desired}`;
@@ -570,6 +598,7 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
         });
       }
     } else if (active > desired) {
+      if (gestureActive) return; // hold counts steady during active drag to avoid visible drain
       const maxTrim = Math.max(MIN_FADE_STEP, Math.round(active * MAX_FADE_OUT_FRACTION));
       const trimBudget = Math.min(adjustStep, MAX_FADE_OUT_STEP, maxTrim, active - MIN_PARTICLES);
       const candidates = activeParticles.filter(p => (p.fadeTarget ?? 1) > 0);
