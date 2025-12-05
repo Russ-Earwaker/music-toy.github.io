@@ -889,6 +889,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   // Visibility + LOD state
   let isPanelVisible = true;          // IntersectionObserver will keep this updated
   let particleFieldEnabled = true;    // driven by FPS + zoom with hysteresis
+  let particleCanvasVisible = true;
   let pendingResnapOnVisible = false;
   let lastResnapTs = 0;
   let countedVisible = false;
@@ -5611,6 +5612,15 @@ function syncBackBufferSizes() {
         canDrawAnything &&
         !zoomDebugFreeze &&
         particleFieldEnabled;
+      const nextParticleVisible = !!allowParticleDraw;
+      if (particleCanvas && particleCanvasVisible !== nextParticleVisible) {
+        particleCanvasVisible = nextParticleVisible;
+        particleCanvas.style.opacity = nextParticleVisible ? '1' : '0';
+        if (!nextParticleVisible) {
+          const ctx = particleCanvas.getContext('2d');
+          if (ctx) ctx.clearRect(0, 0, particleCanvas.width || 0, particleCanvas.height || 0);
+        }
+      }
 
       // If we're offscreen and nothing is pending (no swaps or deferred clears),
       // skip the heavy draw work and let the next visible frame catch up.

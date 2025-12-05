@@ -16,29 +16,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const overviewButton = document.getElementById('overview-mode-button');
 
-  let resetButton = document.getElementById('reset-view-button');
-  if (!resetButton && controls) {
-    resetButton = document.createElement('button');
-    resetButton.type = 'button';
-    resetButton.id = 'reset-view-button';
-    resetButton.title = 'Reset View';
-    resetButton.setAttribute('aria-label', 'Reset View');
-    resetButton.dataset.helpLabel = 'Reset View';
-    resetButton.innerHTML = '<span>Reset</span>';
-  }
+  const resetButton = document.getElementById('reset-view-button');
+  if (resetButton?.parentElement) resetButton.remove();
 
   let readout = document.getElementById('zoom-readout');
-  if (!readout && controls) {
-    readout = document.createElement('div');
-    readout.id = 'zoom-readout';
-  }
-
-  if (controls) {
-    const controlsToAdd = [];
-    if (resetButton) controlsToAdd.push(resetButton);
-    if (readout) controlsToAdd.push(readout);
-    if (controlsToAdd.length) controls.append(...controlsToAdd);
-  }
+  if (readout?.parentElement) readout.remove();
+  readout = null;
 
   const clampScale = (value) => {
     const safe = Number.isFinite(value) && value > 0 ? value : 1;
@@ -93,23 +76,6 @@ document.addEventListener('DOMContentLoaded', () => {
       overviewMode?.toggle?.(true);
     });
     overviewButton.__bound = true;
-  }
-
-  if (resetButton && !resetButton.__bound) {
-    resetButton.addEventListener('click', () => {
-      try {
-        overviewMode?.exit?.(false);
-      } catch {}
-      if (typeof window.resetBoardView === 'function') {
-        window.resetBoardView();
-      } else {
-        window.setBoardScale?.(1);
-        window.panTo?.(0, 0);
-      }
-      updateOverviewState();
-      updateReadout();
-    });
-    resetButton.__bound = true;
   }
 
   window.addEventListener('board:scale', (event) => {

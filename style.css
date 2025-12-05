@@ -1210,6 +1210,7 @@ body.advanced-controls-disabled [data-adv] {
   --c-btn-bg: rgba(96, 82, 176, 0.9);
   --zoom-progress: 1;
   --zoom-ring-color: var(--accent, #5fb3ff);
+  --zoom-marker-color: #ffffff;
   --zoom-overview-angle: 0deg;
   position: relative;
   overflow: visible;
@@ -1241,6 +1242,7 @@ body.advanced-controls-disabled [data-adv] {
   position: absolute;
   inset: -7px;
   border-radius: 50%;
+  z-index: 1;
   background:
     conic-gradient(from -90deg,
       var(--zoom-ring-color) calc(var(--zoom-progress, 0) * 360deg),
@@ -1260,12 +1262,13 @@ body.advanced-controls-disabled [data-adv] {
   position: absolute;
   inset: -7px;
   border-radius: 50%;
+  z-index: 2;
   background:
     conic-gradient(from -90deg,
       transparent 0deg,
       transparent calc(var(--zoom-overview-angle, 0deg) - 0.6deg),
-      rgba(255, 255, 255, 0.95) calc(var(--zoom-overview-angle, 0deg) - 0.6deg),
-      rgba(255, 255, 255, 0.95) calc(var(--zoom-overview-angle, 0deg) + 0.6deg),
+      var(--zoom-marker-color) calc(var(--zoom-overview-angle, 0deg) - 0.6deg),
+      var(--zoom-marker-color) calc(var(--zoom-overview-angle, 0deg) + 0.6deg),
       transparent calc(var(--zoom-overview-angle, 0deg) + 0.6deg),
       transparent 360deg);
   mask: radial-gradient(circle at 50% 50%, transparent calc(50% - 7px), #000 calc(50% - 5px));

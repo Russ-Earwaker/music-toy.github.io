@@ -307,6 +307,19 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     }
   }
 
+  function maybeUpdateOverview(scaleValue) {
+    const ov = overviewMode?.state;
+    if (!ov) return;
+    if (camTweenLock) return;
+    if (ov.transitioning) return;
+    if (!Number.isFinite(scaleValue)) return;
+    if (scaleValue < ov.zoomThreshold) {
+      overviewMode.enter();
+    } else if (scaleValue >= (ov.zoomReturnLevel - 1e-3)) {
+      overviewMode.exit(false);
+    }
+  }
+
   const handleZoom = (z = {}) => {
     const phase = z?.phase || null;
 
@@ -331,6 +344,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
 
     // Lightweight path for noisy intermediate phases.
     if (phase === 'recompute' || phase === 'gesturing' || phase === 'prepare' || phase === 'begin') {
+      maybeUpdateOverview(currentScale);
       return;
     }
 
@@ -346,21 +360,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     persist();
     scheduleNotify({ ...z });
 
-    const ov = overviewMode?.state;
-    if (camTweenLock) {
-      // While a programmatic tween is active, suppress auto-enter/exit.
-    } else if (ov?.transitioning) {
-      if (scale >= (ov.zoomReturnLevel - 1e-3)) {
-        try { overviewMode.exit(false); } catch {}
-        ov.transitioning = false;
-      }
-    } else if (ov) {
-      if (scale < ov.zoomThreshold) {
-        overviewMode.enter();
-      } else {
-        overviewMode.exit(false);
-      }
-    }
+    maybeUpdateOverview(scale);
   };
   handleZoom.__zcName = 'board-viewport';
   onZoomChange(handleZoom);
