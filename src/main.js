@@ -1074,15 +1074,23 @@ function updateAllChainUIs() {
         }
         const chainBtn = toy.querySelector('.toy-chain-btn');
         if (chainBtn) {
-            const hasOutgoing = !!toy.dataset.nextToyId; // only disable when this toy already points to another
+            const hasOutgoing = (() => {
+                if (toy.dataset.nextToyId) return true;
+                // Fallback to edge model in case datasets are late/cleared.
+                for (const edge of g_chainEdges.values()) {
+                    if (edge.fromToyId === toy.id) return true;
+                }
+                return false;
+            })(); // only disable when this toy already points to another
             const core = chainBtn.querySelector('.c-btn-core');
             if (core) {
                 const icon = hasOutgoing ? 'T_ButtonEmpty.png' : 'T_ButtonExtend.png';
                 core.style.setProperty('--c-btn-icon-url', `url('../assets/UI/${icon}')`);
             }
-            chainBtn.disabled = hasOutgoing;
+            chainBtn.dataset.chainDisabled = hasOutgoing ? '1' : '';
             chainBtn.style.pointerEvents = hasOutgoing ? 'none' : 'auto';
-            chainBtn.classList.toggle('toy-chain-btn-disabled', hasOutgoing);
+            // Keep the icon visible even when locked by an existing outgoing link.
+            chainBtn.classList.remove('toy-chain-btn-disabled');
         }
     });
 }
@@ -1206,7 +1214,7 @@ function initToyChaining(panel) {
     try { updateAllChainUIs(); } catch {}
 
     extendBtn.addEventListener('pointerdown', (e) => {
-        if (extendBtn.disabled || panel.dataset.nextToyId) {
+        if (extendBtn.dataset.chainDisabled === '1' || panel.dataset.nextToyId) {
             return;
         }
         const tStart = performance.now();
@@ -1297,13 +1305,17 @@ function initToyChaining(panel) {
             sourcePanel.dataset.nextToyId = newPanel.id;
             newPanel.dataset.prevToyId = sourcePanel.id;
 
+            // Immediately swap the source "+" texture to the empty state now that it has an outgoing link.
+            const sourceChainCore = sourcePanel.querySelector('.toy-chain-btn .c-btn-core');
+            if (sourceChainCore) {
+                sourceChainCore.style.setProperty('--c-btn-icon-url', `url('../assets/UI/T_ButtonEmpty.png')`);
+            }
+
             if (oldNextId) {
                 const oldNextPanel = document.getElementById(oldNextId);
                 newPanel.dataset.nextToyId = oldNextId;
                 if (oldNextPanel) oldNextPanel.dataset.prevToyId = newPanel.id;
             }
-
-            setToyFocus(newPanel, { center: false });
 
             const finalizePlacement = () => {
                 const followUp = ensurePanelSpawnPlacement(newPanel, {
@@ -1963,7 +1975,8 @@ function updateChains() {
       if (CHAIN_DEBUG) {
           console.warn('[CHAIN][perf] rebuildChainSegments/draw failed', err);
       }
-    }
+  }
+  try { updateAllChainUIs(); } catch {}
 }
 
 try {
@@ -2296,6 +2309,9 @@ async function boot(){
     // Initial sync once toys are present
     try { syncAllBodyOutlines(); } catch {}
     updateAllChainUIs(); // Set initial instrument button visibility
+    requestAnimationFrame(() => updateAllChainUIs()); // After any late-restored links land
+    document.addEventListener('chain:linked', () => { try { updateAllChainUIs(); } catch {} }, true);
+    document.addEventListener('chain:unlinked', () => { try { updateAllChainUIs(); } catch {} }, true);
     try {
       rebuildChainSegments();
       g_chainRedrawPendingFull = true;
