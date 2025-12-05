@@ -431,7 +431,7 @@ html, body {
 .toy-panel.toy-unfocused {
   --toy-scale: 0.75;
   transform-origin: center center;
-  opacity: 0.85;
+  opacity: 1; /* keep unfocused toys fully opaque so connectors behind don't bleed through */
   pointer-events: auto;
 }
 .toy-panel.toy-unfocused .toy-header,
