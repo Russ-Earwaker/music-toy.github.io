@@ -45,6 +45,13 @@ document.addEventListener('DOMContentLoaded', () => {
     return Math.min(SCALE_MAX, Math.max(SCALE_MIN, safe));
   };
 
+  const markerScale = clampScale(overviewMode?.state?.zoomThreshold ?? SCALE_MIN);
+  const getMarkerProgress = () => {
+    const denom = Math.max(SCALE_MAX - SCALE_MIN, 1e-3);
+    const prog = (markerScale - SCALE_MIN) / denom;
+    return Math.min(1, Math.max(0, prog));
+  };
+
   const getScale = () => {
     const scale = typeof window.__boardScale === 'number' ? window.__boardScale : 1;
     return clampScale(scale);
@@ -57,6 +64,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const denom = Math.max(SCALE_MAX - SCALE_MIN, 1e-3);
     const progress = Math.min(1, Math.max(0, (clampScale(scale) - SCALE_MIN) / denom));
     overviewButton.style.setProperty('--zoom-progress', progress.toFixed(3));
+    const markerProgress = getMarkerProgress();
+    const markerAngle = (markerProgress * 360).toFixed(2);
+    overviewButton.style.setProperty('--zoom-overview-angle', `${markerAngle}deg`);
   };
 
   const updateReadout = (scale = getScale()) => {
