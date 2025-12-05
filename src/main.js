@@ -1072,6 +1072,18 @@ function updateAllChainUIs() {
             const isChild = !!toy.dataset.prevToyId;
             instBtn.style.display = isChild ? 'none' : '';
         }
+        const chainBtn = toy.querySelector('.toy-chain-btn');
+        if (chainBtn) {
+            const hasOutgoing = !!toy.dataset.nextToyId; // only disable when this toy already points to another
+            const core = chainBtn.querySelector('.c-btn-core');
+            if (core) {
+                const icon = hasOutgoing ? 'T_ButtonEmpty.png' : 'T_ButtonExtend.png';
+                core.style.setProperty('--c-btn-icon-url', `url('../assets/UI/${icon}')`);
+            }
+            chainBtn.disabled = hasOutgoing;
+            chainBtn.style.pointerEvents = hasOutgoing ? 'none' : 'auto';
+            chainBtn.classList.toggle('toy-chain-btn-disabled', hasOutgoing);
+        }
     });
 }
 
@@ -1190,8 +1202,13 @@ function initToyChaining(panel) {
 
     panel.appendChild(extendBtn);
     panel.style.overflow = 'visible'; // Ensure the button is not clipped by the panel's bounds.
+    // Sync initial icon/enable state with existing chain status.
+    try { updateAllChainUIs(); } catch {}
 
     extendBtn.addEventListener('pointerdown', (e) => {
+        if (extendBtn.disabled || panel.dataset.nextToyId) {
+            return;
+        }
         const tStart = performance.now();
         e.preventDefault();
         e.stopImmediatePropagation?.();
@@ -1313,6 +1330,14 @@ function initToyChaining(panel) {
                 delete newPanel.dataset.spawnAutoManaged;
                 delete newPanel.dataset.spawnAutoLeft;
                 delete newPanel.dataset.spawnAutoTop;
+                const focusNew = () => {
+                    if (newPanel.isConnected) {
+                        setToyFocus(newPanel, { center: false });
+                    }
+                };
+                focusNew();
+                // Reinforce once more on the next frame to win any late focus toggles.
+                raf(() => focusNew());
             };
 
             const raf = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));
