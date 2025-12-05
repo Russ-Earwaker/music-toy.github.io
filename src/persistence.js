@@ -395,6 +395,11 @@ export function applySnapshot(snap){
       }
       byId.set(panelId(panel), panel);
       usedPanels.add(panel);
+      // Restores should land at their normal scale; drop the spawn bounce hint added for brand-new toys.
+      try {
+        delete panel.dataset.spawnScaleHint;
+        panel.removeAttribute?.('data-spawn-scale-hint');
+      } catch {}
       try{
         applyUI(panel, t.ui);
         // collect positions for board.js persistence too
