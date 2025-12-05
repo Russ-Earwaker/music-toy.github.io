@@ -1962,7 +1962,7 @@ let hasDetectedLine = false;
         toggle.classList.add('tutorial-pulse-target', 'tutorial-active-pulse');
         const rewardIcon = goalPanel?.querySelector('.goal-reward-icon .toy-spawner-toggle');
         if (rewardIcon) {
-          startParticleStream(rewardIcon, toggle);
+          startParticleStream(rewardIcon, toggle, { suppressGuideTapAck: true });
         }
       }
     }
@@ -2406,7 +2406,7 @@ let hasDetectedLine = false;
           if (taskEl && targetEl?.isConnected) {
             requestAnimationFrame(() => {
               requestAnimationFrame(() => {
-                startParticleStream(taskEl, targetEl, { layer: 'behind-target' });
+                startParticleStream(taskEl, targetEl, { layer: 'behind-target', suppressGuideTapAck: true });
               });
             });
 
@@ -2500,7 +2500,7 @@ let hasDetectedLine = false;
           if (taskEl && targetToy.isConnected) {
             requestAnimationFrame(() => {
               requestAnimationFrame(() => {
-                startParticleStream(taskEl, targetToy, { layer: 'behind-target' });
+                startParticleStream(taskEl, targetToy, { layer: 'behind-target', suppressGuideTapAck: true });
               });
             });
           }
@@ -2549,7 +2549,7 @@ let hasDetectedLine = false;
             // two rAFs = layout stable & canvases sized
             requestAnimationFrame(() => {
               requestAnimationFrame(() => {
-                startParticleStream(taskEl, targetEl, { layer: 'behind-target' });
+                startParticleStream(taskEl, targetEl, { layer: 'behind-target', suppressGuideTapAck: true });
               });
             });
 
@@ -2630,7 +2630,7 @@ let hasDetectedLine = false;
           if (taskEl && targetEl?.isConnected) {
             requestAnimationFrame(() => {
               requestAnimationFrame(() => {
-                startParticleStream(taskEl, targetEl, { layer: 'behind-target' });
+                startParticleStream(taskEl, targetEl, { layer: 'behind-target', suppressGuideTapAck: true });
               });
             });
 
@@ -2686,13 +2686,13 @@ let hasDetectedLine = false;
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             if (!disposed && taskEl.isConnected && targetEl.isConnected) {
-              startParticleStream(taskEl, targetEl, { layer: 'behind-target' });
+              startParticleStream(taskEl, targetEl, { layer: 'behind-target', suppressGuideTapAck: true });
             }
           });
         });
         setTimeout(() => {
           if (!disposed && taskEl.isConnected && targetEl.isConnected) {
-            startParticleStream(taskEl, targetEl, { layer: 'behind-target' });
+            startParticleStream(taskEl, targetEl, { layer: 'behind-target', suppressGuideTapAck: true });
           }
         }, 200);
       };
@@ -2830,11 +2830,11 @@ let hasDetectedLine = false;
         const taskEl = goalPanel?.querySelector('.goal-task.is-active');
         if (taskEl) {
           if (isToggleTask) {
-            startParticleStream(taskEl, targetEl, { layer: 'behind-target' });
+            startParticleStream(taskEl, targetEl, { layer: 'behind-target', suppressGuideTapAck: true });
           } else if (isDragTask) {
-            startParticleStream(taskEl, targetEl, { layer: 'behind-target' });
+            startParticleStream(taskEl, targetEl, { layer: 'behind-target', suppressGuideTapAck: true });
           } else {
-            startParticleStream(taskEl, targetEl, { layer: 'behind-target' });
+            startParticleStream(taskEl, targetEl, { layer: 'behind-target', suppressGuideTapAck: true });
           }
         }
 

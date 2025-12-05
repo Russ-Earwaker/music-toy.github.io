@@ -1549,7 +1549,12 @@ function hintOffscreenSpawn(panel) {
     const origin = document.querySelector('.toy-spawner-toggle') || document.querySelector('.toy-spawner-dock');
     if (!origin || !origin.isConnected) return;
     try {
-        startParticleStream(origin, panel, { layer: 'front', skipBurst: true, durationMs: 1000 });
+        startParticleStream(origin, panel, {
+            layer: 'front',
+            skipBurst: true,
+            durationMs: 1000,
+            suppressGuideTapAck: true, // Visual hint only; don't mark guide as tapped
+        });
     } catch (err) {
         console.warn('[createToyPanelAt] offscreen hint failed', err);
     }

@@ -536,6 +536,7 @@ export function startParticleStream(originEl, targetEl, options = {}) {
   const layer = options?.layer === 'behind-target' ? 'behind-target' : 'front';
   const durationMs = Number.isFinite(options?.durationMs) ? Math.max(0, options.durationMs) : null;
   const skipBurst = options?.skipBurst === true;
+  const suppressGuideTapAck = options?.suppressGuideTapAck === true;
   fxDebug('[tutorial-fx] resolved layer', {
     layer,
     originClass: originEl?.className,
@@ -678,7 +679,9 @@ export function startParticleStream(originEl, targetEl, options = {}) {
     autoStopTimer = null;
   }
 
-  notifyGuideTaskTapped();
+  if (!suppressGuideTapAck) {
+    notifyGuideTaskTapped();
+  }
 
   const newKey = `o=${elKey(originEl)}->t=${elKey(targetEl)}:L=${layer}`;
   const prevKey = lastStreamKey;

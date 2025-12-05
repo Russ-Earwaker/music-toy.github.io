@@ -13,7 +13,8 @@ const goalExpansionState = new Map();
 let highlighterRef = null;
 let highlightNextTask = false;
 let openFirstGoalNextRender = false;
-const GUIDE_TAP_ACK_KEY = 'guide:task-tap-ack';
+const GUIDE_TASK_TAP_ACK_KEY = 'guide:task-tap-ack';
+const GUIDE_BUTTON_TAP_ACK_KEY = 'guide:button-tap-ack';
 let activeGoalId = null;
 let goalPickerRef = null;
 let moreGoalsButtonRef = null;
@@ -238,12 +239,30 @@ function showHighlighterForElement(el) {
   return true;
 }
 
-function shouldShowTapHighlighter() {
+function shouldShowGuideTapHighlighter() {
   try {
     const topbarMenu = document.getElementById('topbar-menu');
     const menuOpen = topbarMenu && !topbarMenu.hasAttribute('hidden');
     if (menuOpen) return false;
+    if (readGuideButtonAcknowledged()) return false;
 
+    const api = lastApi;
+    if (!api) return false;
+    const goals = api.getGoals?.() || [];
+    if (!Array.isArray(goals) || goals.length === 0) return false;
+    const firstGoal = goals[0];
+    if (!firstGoal || !firstGoal.id) return false;
+    const firstTask = Array.isArray(firstGoal.tasks) ? firstGoal.tasks[0] : null;
+    if (!firstTask || !firstTask.id) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function shouldShowTaskTapHighlighter() {
+  try {
+    if (readGuideTaskAcknowledged()) return false;
     const api = lastApi;
     if (!api) return false;
     const goals = api.getGoals?.() || [];
@@ -268,7 +287,7 @@ function shouldShowTapHighlighter() {
 function showHighlighterForGuide() {
   ensureHost();
   if (!toggleRef || !toggleRef.isConnected) return false;
-  if (!shouldShowTapHighlighter()) return false;
+  if (!shouldShowGuideTapHighlighter()) return false;
   return showHighlighterForElement(toggleRef);
 }
 
@@ -299,29 +318,49 @@ function ensureHighlighter() {
   updateHighlighterTapState();
 }
 
-function readGuideTapAcknowledged() {
+function readGuideTaskAcknowledged() {
   if (typeof window === 'undefined' || !window.localStorage) return false;
   try {
-    return !!window.localStorage.getItem(GUIDE_TAP_ACK_KEY);
+    return !!window.localStorage.getItem(GUIDE_TASK_TAP_ACK_KEY);
   } catch {
     return false;
   }
 }
 
-function setGuideTapAcknowledged(value) {
+function readGuideButtonAcknowledged() {
+  if (typeof window === 'undefined' || !window.localStorage) return false;
+  try {
+    return !!window.localStorage.getItem(GUIDE_BUTTON_TAP_ACK_KEY);
+  } catch {
+    return false;
+  }
+}
+
+function setGuideTaskAcknowledged(value) {
   if (typeof window === 'undefined' || !window.localStorage) return;
   try {
     if (value) {
-      window.localStorage.setItem(GUIDE_TAP_ACK_KEY, '1');
+      window.localStorage.setItem(GUIDE_TASK_TAP_ACK_KEY, '1');
     } else {
-      window.localStorage.removeItem(GUIDE_TAP_ACK_KEY);
+      window.localStorage.removeItem(GUIDE_TASK_TAP_ACK_KEY);
+    }
+  } catch {}
+}
+
+function setGuideButtonAcknowledged(value) {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    if (value) {
+      window.localStorage.setItem(GUIDE_BUTTON_TAP_ACK_KEY, '1');
+    } else {
+      window.localStorage.removeItem(GUIDE_BUTTON_TAP_ACK_KEY);
     }
   } catch {}
 }
 
 function updateHighlighterTapState() {
   if (!highlighterRef) return;
-  const shouldHide = readGuideTapAcknowledged();
+  const shouldHide = readGuideTaskAcknowledged();
   highlighterRef.classList.toggle('guide-task-highlighter--tap-hidden', shouldHide);
 }
 
@@ -448,7 +487,7 @@ function ensureHost() {
       if (willOpen && highlightNextTask) {
         setTimeout(() => {
           let firstTaskEl = null;
-          if (shouldShowTapHighlighter()) {
+          if (shouldShowTaskTapHighlighter()) {
             const firstTaskId = getFirstGoalFirstTaskId();
             if (firstTaskId && panelsRef) {
               firstTaskEl = panelsRef.querySelector(`.goal-task[data-task-id="${firstTaskId}"]`);
@@ -880,16 +919,16 @@ window.addEventListener('guide:progress-update', () => {
   if (lastApi) {
     renderGuide(lastApi, { source: 'progress-update' });
   }
-  if (!shouldShowTapHighlighter() && highlighterRef) {
+  if (!shouldShowGuideTapHighlighter() && !shouldShowTaskTapHighlighter() && highlighterRef) {
     highlighterRef.classList.remove('is-visible');
     highlightNextTask = false;
   }
 });
 
 window.addEventListener('guide:open', () => {
-  setGuideTapAcknowledged(true);
+  setGuideButtonAcknowledged(true);
   updateHighlighterTapState();
-  if (highlighterRef && !shouldShowTapHighlighter()) {
+  if (highlighterRef && !shouldShowGuideTapHighlighter() && !shouldShowTaskTapHighlighter()) {
     highlighterRef.classList.remove('is-visible');
   }
 });
@@ -939,7 +978,7 @@ window.addEventListener('guide:highlight-next-task', () => {
   const guideOpen = hostRef && hostRef.classList.contains(GUIDE_OPEN_CLASS);
   if (guideOpen && panelsRef) {
     let target = null;
-    if (shouldShowTapHighlighter()) {
+    if (shouldShowTaskTapHighlighter()) {
       const firstTaskId = getFirstGoalFirstTaskId();
       if (firstTaskId) {
         target = panelsRef.querySelector(`.goal-task[data-task-id="${firstTaskId}"]`);
@@ -1007,11 +1046,14 @@ if (document.readyState === 'loading') {
 
 if (typeof window !== 'undefined') {
   window.addEventListener('guide:task-tapped', () => {
-    setGuideTapAcknowledged(true);
+    setGuideTaskAcknowledged(true);
     updateHighlighterTapState();
+    if (highlighterRef) highlighterRef.classList.remove('is-visible');
+    highlightNextTask = false;
   });
   window.addEventListener('scene:new', () => {
-    setGuideTapAcknowledged(false);
+    setGuideTaskAcknowledged(false);
+    setGuideButtonAcknowledged(false);
     updateHighlighterTapState();
   });
 }
@@ -1027,7 +1069,6 @@ window.addEventListener('drawgrid:activity', (e) => {
   // no pulse; optional: a very lightweight guide refresh without glow
   // renderGuide(lastApi, { source: 'drawgrid-activity', pulse:false });
 });
-
 
 
 
