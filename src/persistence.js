@@ -455,6 +455,11 @@ export function applySnapshot(snap){
         // Rebuild linear prev/next if not already set
         if (!child.dataset.prevToyId) child.dataset.prevToyId = parent.id;
 
+        // Mark the parent as having at least one child so UI can disable "+" immediately
+        parent.dataset.chainHasChild = '1';
+        // Pre-mark disabled state so hover styles stay off until UI refresh runs
+        try { parent.setAttribute('data-chaindisabled', '1'); } catch {}
+
         // Only set parent's next if it isn't already taken or points to this child
         if (!parent.dataset.nextToyId || parent.dataset.nextToyId === child.id) {
           if (!parentHasNext.has(parent.id)) {
@@ -492,6 +497,10 @@ export function applySnapshot(snap){
     } catch (err) {
       console.warn('[persistence] chain restore failed', err);
     }
+    // Final pass to sync chain UI states after all restores are applied.
+    try { window.updateAllChainUIs?.(); } catch {}
+    try { setTimeout(() => { window.updateAllChainUIs?.(); }, 300); } catch {}
+
     // Remove any panels that were not part of the snapshot so the board matches the saved scene.
     panels.forEach(panel => {
       if (usedPanels.has(panel)) return;

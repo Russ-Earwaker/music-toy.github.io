@@ -17,6 +17,9 @@ import { makeDebugLogger } from './debug-flags.js';
   let dragStart = null;
   let pinchState = null;
   let capturedPointerId = null;
+  function cancelWheelZoomLerp() {
+    try { window.__cancelWheelZoomLerp?.(); } catch {}
+  }
 
   function clampScale(v) {
     if (!Number.isFinite(v)) return SCALE_MIN;
@@ -44,6 +47,7 @@ import { makeDebugLogger } from './debug-flags.js';
 
   function beginDrag(e) {
     const zoom = getZoomState();
+    cancelWheelZoomLerp();
     dragging = true;
     dragStart = {
       pointerX: e.clientX,
@@ -173,6 +177,7 @@ import { makeDebugLogger } from './debug-flags.js';
     if (e.pointerType === 'mouse' && e.button !== 0) return;
 
     activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    cancelWheelZoomLerp();
     if (activePointers.size > 1) {
       e.preventDefault();
       dragging = false;

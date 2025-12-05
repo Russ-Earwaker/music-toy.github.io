@@ -1064,7 +1064,95 @@ function initializeNewToy(panel) {
     }
 }
 
+function lockChainButton(panel, { hasChild = true } = {}) {
+    if (!panel) return;
+    const btn = panel.querySelector('.toy-chain-btn');
+    const core = btn?.querySelector('.c-btn-core');
+    if (CHAIN_DEBUG) {
+        console.log('[chain][btn] lockChainButton', {
+            panel: panel.id,
+            hasChild,
+            btn: !!btn,
+            core: !!core,
+            next: panel.dataset.nextToyId,
+            chainHasChild: panel.dataset.chainHasChild,
+            prev: panel.dataset.prevToyId,
+            btnDisabledAttr: btn?.getAttribute?.('data-chaindisabled') || null,
+            btnHasDisabledClass: btn?.classList?.contains?.('toy-chain-btn-disabled') || false,
+            btnComputedIcon: core ? getComputedStyle(core).getPropertyValue('--c-btn-icon-url') : null,
+        });
+    }
+    if (hasChild) {
+        panel.dataset.chainHasChild = '1';
+        btn?.setAttribute?.('data-chaindisabled', '1');
+        btn?.classList?.add?.('toy-chain-btn-disabled');
+        if (btn) btn.style.pointerEvents = 'none';
+        if (core) {
+            core.style.setProperty('--c-btn-icon-url', `url('/assets/UI/T_ButtonEmpty.png')`);
+        }
+    } else {
+        delete panel.dataset.chainHasChild;
+        btn?.removeAttribute?.('data-chaindisabled');
+        btn?.classList?.remove?.('toy-chain-btn-disabled');
+        if (btn) btn.style.pointerEvents = 'auto';
+        if (core) {
+            core.style.setProperty('--c-btn-icon-url', `url('/assets/UI/T_ButtonExtend.png')`);
+        }
+    }
+}
+
+function removeChainEdgesForToy(toyId) {
+    if (!toyId || !g_edgesByToyId || !g_chainEdges) return;
+    const edgeIdSet = g_edgesByToyId.get(toyId);
+    if (!edgeIdSet || edgeIdSet.size === 0) return;
+
+    for (const edgeId of Array.from(edgeIdSet)) {
+        const edge = g_chainEdges.get(edgeId);
+        if (edge) {
+            const { fromToyId, toToyId } = edge;
+            // Remove edge from main map
+            g_chainEdges.delete(edgeId);
+            // Remove references from adjacency index
+            const fromSet = g_edgesByToyId.get(fromToyId);
+            if (fromSet) fromSet.delete(edgeId);
+            const toSet = g_edgesByToyId.get(toToyId);
+            if (toSet) toSet.delete(edgeId);
+        }
+    }
+    g_edgesByToyId.delete(toyId);
+    g_chainRedrawPendingFull = true;
+    scheduleChainRedraw();
+}
+
 function updateAllChainUIs() {
+    // Normalize child flags from DOM links so refresh/restore can't lose them.
+    const panels = Array.from(document.querySelectorAll('.toy-panel[id]'));
+    panels.forEach(p => {
+        const hasKnownChild = (() => {
+            if (p.dataset.nextToyId) return true;
+            if (p.dataset.chainHasChild === '1') return true;
+            // Check if any panel points to this one
+            return panels.some(el => (el.dataset.prevToyId || el.dataset.chainParent) === p.id);
+        })();
+        if (hasKnownChild) {
+            p.dataset.chainHasChild = '1';
+            p.setAttribute('data-chaindisabled', '1');
+        } else {
+            delete p.dataset.chainHasChild;
+            p.removeAttribute('data-chaindisabled');
+        }
+    });
+
+    // Precompute which toys are referenced as children so we can still
+    // lock the "+" button even if a parent lost its `data-next-toy-id`
+    // during restore. This prevents the icon from flipping back to the
+    // enabled state after a page refresh.
+    const parentHasChild = new Set();
+    document.querySelectorAll('.toy-panel[id]').forEach(child => {
+        const parentId = child.dataset.prevToyId || child.dataset.chainParent;
+        if (parentId) parentHasChild.add(parentId);
+    });
+
     const allToys = Array.from(document.querySelectorAll('.toy-panel[data-toy]'));
     allToys.forEach(toy => {
         const instBtn = toy.querySelector('.toy-inst-btn');
@@ -1076,6 +1164,8 @@ function updateAllChainUIs() {
         if (chainBtn) {
             const hasOutgoing = (() => {
                 if (toy.dataset.nextToyId) return true;
+                if (toy.dataset.chainHasChild === '1') return true;
+                if (parentHasChild.has(toy.id)) return true; // restored child still points at us
                 // Fallback to edge model in case datasets are late/cleared.
                 for (const edge of g_chainEdges.values()) {
                     if (edge.fromToyId === toy.id) return true;
@@ -1084,13 +1174,23 @@ function updateAllChainUIs() {
             })(); // only disable when this toy already points to another
             const core = chainBtn.querySelector('.c-btn-core');
             if (core) {
-                const icon = hasOutgoing ? 'T_ButtonEmpty.png' : 'T_ButtonExtend.png';
-                core.style.setProperty('--c-btn-icon-url', `url('../assets/UI/${icon}')`);
+            const icon = hasOutgoing ? 'T_ButtonEmpty.png' : 'T_ButtonExtend.png';
+            core.style.setProperty('--c-btn-icon-url', `url('/assets/UI/${icon}')`);
             }
-            chainBtn.dataset.chainDisabled = hasOutgoing ? '1' : '';
+            if (hasOutgoing) {
+                chainBtn.setAttribute('data-chaindisabled', '1');
+            } else {
+                chainBtn.removeAttribute('data-chaindisabled');
+            }
             chainBtn.style.pointerEvents = hasOutgoing ? 'none' : 'auto';
             // Keep the icon visible even when locked by an existing outgoing link.
             chainBtn.classList.remove('toy-chain-btn-disabled');
+            // Normalize the flag so future refreshes know this parent has a child
+            if (hasOutgoing) {
+                lockChainButton(toy, { hasChild: true });
+            } else {
+                lockChainButton(toy, { hasChild: false });
+            }
         }
     });
 }
@@ -1187,7 +1287,7 @@ function initToyChaining(panel) {
     
     const core = extendBtn.querySelector('.c-btn-core');
     if (core) {
-        core.style.setProperty('--c-btn-icon-url', `url('../assets/UI/T_ButtonExtend.png')`);
+        core.style.setProperty('--c-btn-icon-url', `url('/assets/UI/T_ButtonExtend.png')`);
     }
     // Ensure the button is vertically centered on the toy body, not the whole panel
     const updateChainBtnPos = () => {
@@ -1210,6 +1310,29 @@ function initToyChaining(panel) {
 
     panel.appendChild(extendBtn);
     panel.style.overflow = 'visible'; // Ensure the button is not clipped by the panel's bounds.
+
+    // Ensure the initial icon/disable state is correct even before the global sync runs.
+    const syncChainBtnImmediate = () => {
+        const btn = extendBtn;
+        const hasChild = !!panel.dataset.nextToyId ||
+            panel.dataset.chainHasChild === '1' ||
+            Array.from(document.querySelectorAll('.toy-panel[id]')).some(el => (el.dataset.prevToyId || el.dataset.chainParent) === panel.id);
+        const coreEl = btn.querySelector('.c-btn-core');
+        if (coreEl) {
+            const icon = hasChild ? 'T_ButtonEmpty.png' : 'T_ButtonExtend.png';
+            coreEl.style.setProperty('--c-btn-icon-url', `url('../assets/UI/${icon}')`);
+        }
+        if (hasChild) {
+            btn.setAttribute('data-chaindisabled', '1');
+            btn.style.pointerEvents = 'none';
+        } else {
+            btn.removeAttribute('data-chaindisabled');
+            btn.style.pointerEvents = 'auto';
+        }
+    };
+    syncChainBtnImmediate();
+    requestAnimationFrame(syncChainBtnImmediate);
+
     // Sync initial icon/enable state with existing chain status.
     try { updateAllChainUIs(); } catch {}
 
@@ -1304,11 +1427,37 @@ function initToyChaining(panel) {
             const oldNextId = sourcePanel.dataset.nextToyId;
             sourcePanel.dataset.nextToyId = newPanel.id;
             newPanel.dataset.prevToyId = sourcePanel.id;
+            lockChainButton(sourcePanel, { hasChild: true });
+            // Always log detailed state for debugging when creating chain links.
+            const btn = sourcePanel.querySelector('.toy-chain-btn');
+            const core = btn?.querySelector('.c-btn-core');
+            console.log('[chain][new-child]', {
+              parent: sourcePanel.id,
+              child: newPanel.id,
+              oldNextId: oldNextId || null,
+              chainHasChild: sourcePanel.dataset.chainHasChild || null,
+              btnDisabledAttr: btn?.getAttribute('data-chaindisabled') || null,
+              btnHasDisabledClass: btn?.classList?.contains?.('toy-chain-btn-disabled') || false,
+              btnComputedIcon: core ? getComputedStyle(core).getPropertyValue('--c-btn-icon-url') : null,
+            });
 
             // Immediately swap the source "+" texture to the empty state now that it has an outgoing link.
             const sourceChainCore = sourcePanel.querySelector('.toy-chain-btn .c-btn-core');
             if (sourceChainCore) {
-                sourceChainCore.style.setProperty('--c-btn-icon-url', `url('../assets/UI/T_ButtonEmpty.png')`);
+                sourceChainCore.style.setProperty('--c-btn-icon-url', `url('/assets/UI/T_ButtonEmpty.png')`);
+                // Force the pseudo-element to update after styles apply
+                requestAnimationFrame(() => {
+                    sourceChainCore.style.setProperty('--c-btn-icon-url', `url('/assets/UI/T_ButtonEmpty.png')`);
+                });
+            }
+            // Lock the source button right away so the user sees it disable without waiting
+            const sourceChainBtn = sourcePanel.querySelector('.toy-chain-btn');
+            if (sourceChainBtn) {
+                sourceChainBtn.setAttribute('data-chaindisabled', '1');
+                sourceChainBtn.style.pointerEvents = 'none';
+                sourceChainBtn.classList.add('toy-chain-btn-disabled');
+                // Nudge a repaint to avoid blank icons when chaining immediately after refresh
+                sourceChainBtn.getBoundingClientRect();
             }
 
             if (oldNextId) {
@@ -1342,13 +1491,14 @@ function initToyChaining(panel) {
                 delete newPanel.dataset.spawnAutoManaged;
                 delete newPanel.dataset.spawnAutoLeft;
                 delete newPanel.dataset.spawnAutoTop;
+                // Always focus the newly created toy, even if the source toy was unfocused.
                 const focusNew = () => {
                     if (newPanel.isConnected) {
                         setToyFocus(newPanel, { center: false });
                     }
                 };
                 focusNew();
-                // Reinforce once more on the next frame to win any late focus toggles.
+                // Reinforce once more on the next frame to override any existing focus state.
                 raf(() => focusNew());
             };
 
@@ -1507,21 +1657,21 @@ function destroyToyPanel(panelOrId) {
     if (prevId) {
         const prev = document.getElementById(prevId);
         if (prev) {
-            if (nextId) {
-                prev.dataset.nextToyId = nextId;
-            } else {
-                delete prev.dataset.nextToyId;
-            }
+            // Break the outgoing link entirely; do NOT auto-bridge to the next toy.
+            delete prev.dataset.nextToyId;
+            // Recompute child flag for the previous node, ignoring the panel being deleted
+            const stillHasChild = Array.from(document.querySelectorAll('.toy-panel[id]')).some(el =>
+                el.id !== panelId && (el.dataset.prevToyId || el.dataset.chainParent) === prev.id
+            );
+            lockChainButton(prev, { hasChild: stillHasChild });
         }
     }
     if (nextId) {
         const next = document.getElementById(nextId);
         if (next) {
-            if (prevId) {
-                next.dataset.prevToyId = prevId;
-            } else {
-                delete next.dataset.prevToyId;
-            }
+            // Clear upstream pointer so the next toy stands alone.
+            if (next.dataset.prevToyId === panelId) delete next.dataset.prevToyId;
+            if (next.dataset.chainParent === panelId) delete next.dataset.chainParent;
         }
     }
 
@@ -1529,6 +1679,13 @@ function destroyToyPanel(panelOrId) {
     delete panel.dataset.nextToyId;
 
     panel.remove();
+
+    // Remove any chain connectors involving this toy
+    try {
+        removeChainEdgesForToy(panelId);
+    } catch (err) {
+        console.warn('[destroyToyPanel] edge cleanup failed', err);
+    }
 
     try {
         const key = 'toyPositions';
@@ -2310,7 +2467,37 @@ async function boot(){
     try { syncAllBodyOutlines(); } catch {}
     updateAllChainUIs(); // Set initial instrument button visibility
     requestAnimationFrame(() => updateAllChainUIs()); // After any late-restored links land
-    document.addEventListener('chain:linked', () => { try { updateAllChainUIs(); } catch {} }, true);
+    setTimeout(() => { try { updateAllChainUIs(); } catch {} }, 400); // Final pass after async inits settle
+    setTimeout(() => { try { updateAllChainUIs(); } catch {} }, 900); // One more pass to cover late restores
+
+    const handleChainLinkedButtonState = (e) => {
+      const parentId = e?.detail?.parent || e?.detail?.parentId;
+      if (!parentId) return;
+      const parent = document.getElementById(parentId);
+      if (!parent) return;
+      lockChainButton(parent, { hasChild: true });
+      // Log the state right when the event fires to diagnose refresh issues
+      try {
+        const btn = parent.querySelector('.toy-chain-btn');
+        const core = btn?.querySelector('.c-btn-core');
+        console.log('[chain][event:linked]', {
+          parent: parent.id,
+          chainHasChild: parent.dataset.chainHasChild || null,
+          btnDisabledAttr: btn?.getAttribute('data-chaindisabled') || null,
+          btnHasDisabledClass: btn?.classList?.contains?.('toy-chain-btn-disabled') || false,
+          btnComputedIcon: core ? getComputedStyle(core).getPropertyValue('--c-btn-icon-url') : null,
+        });
+      } catch {}
+    };
+
+    document.addEventListener('chain:linked', handleChainLinkedButtonState, true);
+    document.addEventListener('chain:linked', () => {
+      try {
+        // Defer to the next frame so the new child is in the DOM and datasets are set.
+        const raf = window.requestAnimationFrame?.bind(window) ?? (fn => setTimeout(fn, 16));
+        raf(() => updateAllChainUIs());
+      } catch {}
+    }, true);
     document.addEventListener('chain:unlinked', () => { try { updateAllChainUIs(); } catch {} }, true);
     try {
       rebuildChainSegments();
@@ -2528,6 +2715,8 @@ async function boot(){
   const FOCUS_MOVE_THRESH_SQ = 9; // 3px tolerance
 
   document.addEventListener('pointerdown', (e) => {
+    // If the press originated on a chain "+" button, don't queue focus for the source toy.
+    if (e.target && e.target.closest && e.target.closest('.toy-chain-btn')) return;
     const panel = e.target && e.target.closest ? e.target.closest('.toy-panel') : null;
     if (!panel) return;
     if (panel.classList.contains('toy-unfocused')) {

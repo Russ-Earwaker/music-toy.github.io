@@ -368,6 +368,8 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
   const lerper = new WheelZoomLerper((nextScale, nextX, nextY) => {
     applyTransform({ scale: nextScale, x: nextX, y: nextY });
   });
+  // Expose a way for other gesture handlers to cancel pending wheel momentum/commits.
+  window.__cancelWheelZoomLerp = cancelWheelCommit;
   // When any lerp settles, commit so downstream listeners see the final transform.
   lerper.onSettle = (settleScale, settleX, settleY) => {
     commitGesture({ scale: settleScale, x: settleX, y: settleY }, { delayMs: 60 });
