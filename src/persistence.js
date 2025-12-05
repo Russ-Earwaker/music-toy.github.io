@@ -71,22 +71,31 @@ function panelId(panel){ return panel.id || panel.dataset.toyid || panel.dataset
 
 function readUI(panel){
   const cs = getComputedStyle(panel);
+  const toy = panel?.dataset?.toy;
+  // Let drawgrid compute its own height from aspect ratio; persisting height
+  // causes header/footer hide/show to stretch the body after reload.
+  const shouldSkipHeight = toy === 'drawgrid';
   return {
     left: cs.left || panel.style.left || '0px',
     top: cs.top || panel.style.top || '0px',
     width: cs.width || panel.style.width || '',
-    height: cs.height || panel.style.height || '',
+    height: shouldSkipHeight ? '' : (cs.height || panel.style.height || ''),
     z: readNumber(panel.style.zIndex, undefined)
   };
 }
 
 function applyUI(panel, ui){
   if (!ui) return;
+   const toy = panel?.dataset?.toy;
   panel.style.position = 'absolute';
   if (ui.left) panel.style.left = String(ui.left);
   if (ui.top) panel.style.top = String(ui.top);
   if (ui.width) panel.style.width = String(ui.width);
-  if (ui.height) panel.style.height = String(ui.height);
+  if (toy === 'drawgrid') {
+    panel.style.height = '';
+  } else if (ui.height) {
+    panel.style.height = String(ui.height);
+  }
   if (ui.z !== undefined) panel.style.zIndex = String(ui.z);
 }
 
