@@ -319,8 +319,15 @@ function onPointerUp(event) {
 function spawnAtDefault(entry) {
   const metrics = getBoardMetrics();
   if (!metrics) return false;
-  const centerX = metrics.offsetWidth / 2;
-  const centerY = metrics.offsetHeight / 2;
+  const container = metrics.board.closest?.('.board-viewport') || document.documentElement;
+  const viewportRect = container.getBoundingClientRect();
+  const targetScreenX = viewportRect.left + viewportRect.width * 0.6;
+  const targetScreenY = viewportRect.top + viewportRect.height * 0.5;
+  const scaleX = Math.max(1e-6, metrics.scaleX || 1);
+  const scaleY = Math.max(1e-6, metrics.scaleY || 1);
+  // Convert viewport screen coords into world/board space, accounting for current zoom.
+  const centerX = (targetScreenX - metrics.rect.left) / scaleX;
+  const centerY = (targetScreenY - metrics.rect.top) / scaleY;
   try {
     const panel = state.config.create?.(entry.type, { centerX, centerY, autoCenter: true });
     return !!panel;

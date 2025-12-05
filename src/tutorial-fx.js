@@ -15,6 +15,8 @@ let activeTargetEl = null;
 let lastStreamKey = null;
 let lastStartTs = 0;
 let lastStopTs = 0;
+let fallbackPanel = null;
+let autoStopTimer = null;
 
 /* << GPT:TASK_MASK_GLOBALS START >> */
 // Rect in canvas CSS coords that should be “punched out” of the front canvas.
@@ -28,6 +30,76 @@ let spawnParticles = false;
 let activeStreamStart = null;
 let activeStreamEnd = null;
 /* << GPT:TASK_MASK_GLOBALS END >> */
+
+function ensureFrontCanvas() {
+  if (typeof document === 'undefined') return null;
+  let front = document.querySelector('.tutorial-particles-front');
+  if (front && front.isConnected) return front;
+  front = document.createElement('canvas');
+  front.className = 'tutorial-particles-front';
+  Object.assign(front.style, {
+    position: 'fixed',
+    inset: '0',
+    pointerEvents: 'none',
+    zIndex: '6000',
+  });
+  document.body.appendChild(front);
+  return front;
+}
+
+function ensurePanelBehindCanvas(panel) {
+  if (!panel || typeof document === 'undefined') return null;
+  let behind = panel.querySelector('.goal-particles-behind');
+  if (behind && behind.isConnected) return behind;
+  behind = document.createElement('canvas');
+  behind.className = 'goal-particles-behind';
+  Object.assign(behind.style, {
+    position: 'absolute',
+    inset: '0',
+    width: '100%',
+    height: '100%',
+    pointerEvents: 'none',
+    zIndex: '590',
+  });
+  panel.appendChild(behind);
+  return behind;
+}
+
+function ensureFallbackPanel() {
+  if (fallbackPanel && fallbackPanel.isConnected) return fallbackPanel;
+  if (typeof document === 'undefined') return null;
+  const host = document.createElement('div');
+  host.className = 'tutorial-fx-fallback-panel';
+  Object.assign(host.style, {
+    position: 'fixed',
+    inset: '0',
+    pointerEvents: 'none',
+    zIndex: '580',
+  });
+  const canvas = document.createElement('canvas');
+  canvas.className = 'goal-particles-behind';
+  Object.assign(canvas.style, {
+    position: 'absolute',
+    inset: '0',
+    width: '100%',
+    height: '100%',
+    pointerEvents: 'none',
+    zIndex: '590',
+  });
+  host.appendChild(canvas);
+  document.body.appendChild(host);
+  fallbackPanel = host;
+  return fallbackPanel;
+}
+
+function resolveParticleSurfaces(originEl) {
+  const panel = originEl?.closest?.('.guide-goals-panel, .tutorial-goals-panel, #tutorial-goals') || null;
+  const panelBehind = panel ? ensurePanelBehindCanvas(panel) : null;
+  const fallback = (!panel || !panelBehind) ? ensureFallbackPanel() : null;
+  const behind = panelBehind || fallback?.querySelector?.('.goal-particles-behind') || null;
+  const front = ensureFrontCanvas();
+  return { panel: panel || fallback, behind, front };
+}
 
 function removeHighlight(el) {
   if (!el || !el.classList) return;
@@ -462,6 +534,8 @@ function startFlight(ctx, canvas, startEl, endEl) {
 
 export function startParticleStream(originEl, targetEl, options = {}) {
   const layer = options?.layer === 'behind-target' ? 'behind-target' : 'front';
+  const durationMs = Number.isFinite(options?.durationMs) ? Math.max(0, options.durationMs) : null;
+  const skipBurst = options?.skipBurst === true;
   fxDebug('[tutorial-fx] resolved layer', {
     layer,
     originClass: originEl?.className,
@@ -599,6 +673,11 @@ export function startParticleStream(originEl, targetEl, options = {}) {
     return;
   }
 
+  if (autoStopTimer) {
+    clearTimeout(autoStopTimer);
+    autoStopTimer = null;
+  }
+
   notifyGuideTaskTapped();
 
   const newKey = `o=${elKey(originEl)}->t=${elKey(targetEl)}:L=${layer}`;
@@ -626,6 +705,12 @@ export function startParticleStream(originEl, targetEl, options = {}) {
     }
     lastStreamKey = newKey;
     lastStartTs = now;
+    if (durationMs) {
+      autoStopTimer = setTimeout(() => {
+        autoStopTimer = null;
+        stopParticleStream({ immediate: false, targetEl });
+      }, durationMs);
+    }
     return;
   }
 
@@ -633,9 +718,7 @@ export function startParticleStream(originEl, targetEl, options = {}) {
     forceReset = true;
   }
 
-  const panel = originEl.closest('.guide-goals-panel, .tutorial-goals-panel, #tutorial-goals');
-  const behind = panel ? panel.querySelector('.goal-particles-behind') : null;
-  const front  = document.querySelector('.tutorial-particles-front');
+  const { panel, behind, front } = resolveParticleSurfaces(originEl);
   if (!behind || !front) {
     console.log('[tutorial-fx] startParticleStream skipped: canvas missing', { hasPanel: !!panel, hasBehind: !!behind, hasFront: !!front });
     activeTaskMaskRect = null;
@@ -703,7 +786,9 @@ export function startParticleStream(originEl, targetEl, options = {}) {
     start: { x: sx, y: sy },
     end: { x: ex, y: ey },
   });
-  createBurst(sx, sy, { x: ex, y: ey });
+  if (!skipBurst) {
+    createBurst(sx, sy, { x: ex, y: ey });
+  }
   fxDebug('[tutorial-fx] create stream', {
     type: 'trail',
     key: newKey,
@@ -725,6 +810,13 @@ export function startParticleStream(originEl, targetEl, options = {}) {
     }
   }
 
+  if (durationMs) {
+    autoStopTimer = setTimeout(() => {
+      autoStopTimer = null;
+      stopParticleStream({ immediate: false, targetEl });
+    }, durationMs);
+  }
+
   // Kick the animation
   animationFrameId = requestAnimationFrame(() => startFlight(drawCtx, drawCanvas, originEl, targetEl));
 }
@@ -742,6 +834,11 @@ export function stopParticleStream(options = {}) {
     clearHighlight: options?.clearHighlight ?? false,
   });
   lastStopTs = performance?.now?.() ?? Date.now();
+
+  if (autoStopTimer) {
+    clearTimeout(autoStopTimer);
+    autoStopTimer = null;
+  }
 
   const { immediate = false, clearHighlight = false, targetEl = null } = options || {};
   if (clearHighlight) {

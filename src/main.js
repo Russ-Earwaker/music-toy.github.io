@@ -9,6 +9,7 @@ import { initializeBouncer } from './bouncer-init.js';
 import './header-buttons-delegate.js';
 import './rippler-init.js';
 import './tutorial.js';
+import { startParticleStream } from './tutorial-fx.js';
 import './ui-highlights.js';
 import { updateParticleQualityFromFps } from './particles/ParticleQuality.js';
 // import { createBouncer } from './bouncer.main.js'; // This is now handled by bouncer-init.js
@@ -1532,6 +1533,28 @@ function pickToyPanelSize(type) {
     return { width: 380, height: 320 };
 }
 
+function isPanelCenterOffscreen(panel) {
+    if (!panel || typeof panel.getBoundingClientRect !== 'function') return false;
+    const viewport = panel.closest?.('.board-viewport') || document.querySelector('.board-viewport') || document.documentElement;
+    if (!viewport) return false;
+    const rect = panel.getBoundingClientRect();
+    const viewRect = viewport.getBoundingClientRect();
+    const cx = rect.left + rect.width * 0.5;
+    const cy = rect.top + rect.height * 0.5;
+    return cx < viewRect.left || cx > viewRect.right || cy < viewRect.top || cy > viewRect.bottom;
+}
+
+function hintOffscreenSpawn(panel) {
+    if (!panel || !panel.isConnected) return;
+    const origin = document.querySelector('.toy-spawner-toggle') || document.querySelector('.toy-spawner-dock');
+    if (!origin || !origin.isConnected) return;
+    try {
+        startParticleStream(origin, panel, { layer: 'front', skipBurst: true, durationMs: 1000 });
+    } catch (err) {
+        console.warn('[createToyPanelAt] offscreen hint failed', err);
+    }
+}
+
 function persistToyPosition(panel) {
     try {
         const key = 'toyPositions';
@@ -1551,6 +1574,7 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument, autoCenter } 
     }
     const board = document.getElementById('board');
     if (!board) return null;
+    const shouldHintOffscreen = !!autoCenter;
 
     const panel = document.createElement('section');
     panel.className = 'toy-panel';
@@ -1630,6 +1654,14 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument, autoCenter } 
             delete panel.dataset.spawnAutoTop;
             if (panel.isConnected) {
                 setToyFocus(panel, { center: false });
+            }
+            if (shouldHintOffscreen) {
+                const rafCheck = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));
+                rafCheck(() => {
+                    if (panel.isConnected && isPanelCenterOffscreen(panel)) {
+                        hintOffscreenSpawn(panel);
+                    }
+                });
             }
         };
 
