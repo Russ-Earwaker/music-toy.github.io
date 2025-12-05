@@ -498,12 +498,16 @@ function setToyFocus(panel, { center = false } = {}) { // center retained for AP
   if (!panel || !panel.isConnected) return;
   g_focusedToyId = panel.id;
   document.querySelectorAll('.toy-panel').forEach((p) => {
-    const startScale = getPanelScale(p);
+    const spawnHint = Number.parseFloat(p.dataset.spawnScaleHint);
+    const startScale = Number.isFinite(spawnHint) ? spawnHint : getPanelScale(p);
     const isFocus = p === panel;
     p.classList.toggle('toy-focused', isFocus);
     p.classList.toggle('toy-unfocused', !isFocus);
     const targetScale = p.classList.contains('toy-unfocused') ? 0.75 : 1;
     animateFocusScale(p, startScale, targetScale);
+    if (Number.isFinite(spawnHint)) {
+      delete p.dataset.spawnScaleHint;
+    }
     // Prevent interaction on unfocused toys
     const body = p.querySelector('.toy-body');
     if (!isFocus) {
@@ -1210,6 +1214,8 @@ function initToyChaining(panel) {
             document.dispatchEvent(new CustomEvent('chain:linked', { detail: { parent: sourcePanel.id, child: newPanel.id, phase: 'create' } }));
             console.log('[chain] new child', { parent: panel.id, child: newPanel.id });
         } catch {}
+        // Hint the focus animator to scale in on first focus.
+        newPanel.dataset.spawnScaleHint = '0.75';
         
         if (sourcePanel.dataset.instrument) {
             newPanel.dataset.instrument = sourcePanel.dataset.instrument;
@@ -1399,6 +1405,8 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument, autoCenter } 
     panel.style.top = `${top}px`;
 
     board.appendChild(panel);
+    // Hint the focus animator to scale in like a focus transition on first render.
+    panel.dataset.spawnScaleHint = '0.75';
 
     const initialPlacement = ensurePanelSpawnPlacement(panel, {
         baseLeft: left,
