@@ -94,7 +94,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
   viewportLog('[board-viewport] transform order =', ORDER);
 
   const SCALE_MIN = 0.3;
-  const SCALE_MAX = 4.0;
+  const SCALE_MAX = 1.0;
   const SCALE_EVENT_EPSILON = 1e-4;
   const SCALE_NOTIFY_EPSILON = 1e-4;
 

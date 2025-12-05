@@ -1208,6 +1208,10 @@ body.advanced-controls-disabled [data-adv] {
 }
 .toy-spawner-overview {
   --c-btn-bg: rgba(96, 82, 176, 0.9);
+  --zoom-progress: 1;
+  --zoom-ring-color: var(--accent, #5fb3ff);
+  position: relative;
+  overflow: visible;
 }
 .toy-spawner-help {
   --c-btn-bg: rgba(43, 133, 140, 0.88);
@@ -1229,6 +1233,30 @@ body.advanced-controls-disabled [data-adv] {
 .toy-spawner-overview[aria-pressed='true'] {
   box-shadow: 0 0 0 3px rgba(95, 179, 255, 0.35), 0 18px 40px rgba(0, 0, 0, 0.55);
   filter: saturate(1.1) brightness(1.05);
+}
+
+#overview-mode-button::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+  background:
+    conic-gradient(from -90deg,
+      var(--zoom-ring-color) calc(var(--zoom-progress, 0) * 360deg),
+      rgba(95, 179, 255, 0.12) calc(var(--zoom-progress, 0) * 360deg)
+    ),
+    conic-gradient(from -90deg, rgba(255, 255, 255, 0.12) 0deg, rgba(255, 255, 255, 0.12) 360deg);
+  mask: radial-gradient(circle at 50% 50%, transparent calc(50% - 7px), #000 calc(50% - 5px));
+  -webkit-mask: radial-gradient(circle at 50% 50%, transparent calc(50% - 7px), #000 calc(50% - 5px));
+  opacity: 0.95;
+  pointer-events: none;
+  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.45));
+  transition: filter 0.18s ease, opacity 0.18s ease;
+}
+
+#overview-mode-button:is(:hover, .is-active, [aria-pressed='true'])::after {
+  opacity: 1;
+  filter: drop-shadow(0 12px 22px rgba(95, 179, 255, 0.65));
 }
 
 .toy-spawner-dock.panel-drag-active .toy-spawner-trash {

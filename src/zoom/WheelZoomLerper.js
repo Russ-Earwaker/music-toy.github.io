@@ -15,7 +15,7 @@ export class WheelZoomLerper {
       easing: 0.08, // slower responsiveness for smoother pans/zooms
       running: false,
       minScale: 0.3,
-      maxScale: 4.0,
+      maxScale: 1.0,
     };
     const z = getZoomState();
     this.state.currentScale = this.state.targetScale = z.currentScale || 1;

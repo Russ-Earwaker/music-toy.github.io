@@ -2,6 +2,8 @@ import { overviewMode } from './overview-mode.js';
 
 const ICON_OVERVIEW_IN = "url('/assets/UI/T_ButtonOverviewZoomIn.png')";
 const ICON_OVERVIEW_OUT = "url('/assets/UI/T_ButtonOverviewZoomOut.png')";
+const SCALE_MIN = 0.3; // Keep in sync with board-viewport.js clamp
+const SCALE_MAX = 1.0; // Max zoom-in level
 
 document.addEventListener('DOMContentLoaded', () => {
   const topbar = document.getElementById('topbar');
@@ -38,14 +40,27 @@ document.addEventListener('DOMContentLoaded', () => {
     if (controlsToAdd.length) controls.append(...controlsToAdd);
   }
 
+  const clampScale = (value) => {
+    const safe = Number.isFinite(value) && value > 0 ? value : 1;
+    return Math.min(SCALE_MAX, Math.max(SCALE_MIN, safe));
+  };
+
   const getScale = () => {
     const scale = typeof window.__boardScale === 'number' ? window.__boardScale : 1;
-    return Number.isFinite(scale) && scale > 0 ? scale : 1;
+    return clampScale(scale);
   };
 
   const formatScale = (scale) => `Zoom ${scale.toFixed(scale >= 10 ? 1 : 2)}x`;
 
+  const updateRing = (scale = getScale()) => {
+    if (!overviewButton) return;
+    const denom = Math.max(SCALE_MAX - SCALE_MIN, 1e-3);
+    const progress = Math.min(1, Math.max(0, (clampScale(scale) - SCALE_MIN) / denom));
+    overviewButton.style.setProperty('--zoom-progress', progress.toFixed(3));
+  };
+
   const updateReadout = (scale = getScale()) => {
+    updateRing(scale);
     if (readout) {
       readout.textContent = formatScale(scale);
     }
