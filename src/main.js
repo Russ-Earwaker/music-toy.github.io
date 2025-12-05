@@ -1149,6 +1149,11 @@ function initToyChaining(panel) {
     if (panel.dataset.tutorial === "true" || panel.classList?.contains("tutorial-panel")) {
         return;
     }
+    // If a chained toy was cloned with a fixed height, clear it so focus changes
+    // can collapse header/footer space correctly.
+    if (panel.dataset.chainParent && panel.style.height) {
+        panel.style.height = '';
+    }
 
     const extendBtn = document.createElement('button');
     extendBtn.className = 'c-btn toy-chain-btn';
@@ -1217,9 +1222,13 @@ function initToyChaining(panel) {
         const sourceRect = sourcePanel.getBoundingClientRect();
         const boardRect = board.getBoundingClientRect();
         const boardScale = window.__boardScale || 1;
+        const sourceWidth = sourceRect.width / boardScale;
+        const sourceHeight = sourceRect.height / boardScale;
 
-        newPanel.style.width = `${sourceRect.width / boardScale}px`;
-        newPanel.style.height = `${sourceRect.height / boardScale}px`;
+        newPanel.style.width = `${sourceWidth}px`;
+        // Height is only needed during the initial placement. Drop it after boot
+        // so chained toys can collapse their headers/footers when unfocused.
+        newPanel.style.height = `${sourceHeight}px`;
         newPanel.style.position = 'absolute';
         newPanel.style.left = `${(sourceRect.right - boardRect.left) / boardScale + 30}px`;
         newPanel.style.top = `${(sourceRect.top - boardRect.top) / boardScale}px`;
@@ -1275,12 +1284,15 @@ function initToyChaining(panel) {
 
             const finalizePlacement = () => {
                 const followUp = ensurePanelSpawnPlacement(newPanel, {
-                    fallbackWidth: sourceRect.width / boardScale,
-                    fallbackHeight: sourceRect.height / boardScale,
+                    fallbackWidth: sourceWidth,
+                    fallbackHeight: sourceHeight,
                     skipIfMoved: true,
-                    // Chained toys don’t need a huge search radius; keep this tight
+                    // Chained toys don't need a huge search radius; keep this tight
                     maxAttempts: 120,
                 });
+                // Let the layout return to natural height so unfocused chained toys
+                // don't retain the old header/footer space.
+                newPanel.style.height = '';
 
                 // Always persist at least once for chained toys so their position is saved,
                 // regardless of whether the helper actually moved them.
