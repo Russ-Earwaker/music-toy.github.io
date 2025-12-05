@@ -1,6 +1,10 @@
-﻿// src/ios-audio-unlock.js
+// src/ios-audio-unlock.js
 // One-time, belt-and-braces unlock for iOS/WebKit + "resume on visibility".
-import { ensureAudioContext } from './audio-core.js';
+import { ensureAudioContext, peekAudioContext } from './audio-core.js';
+
+// Track whether we've already had a real user gesture so we don't
+// spin up the AudioContext during passive events like pageshow/visibility.
+let userGestureSeen = false;
 
 function playSilentClick(ctx) {
   try {
@@ -14,7 +18,15 @@ function playSilentClick(ctx) {
   } catch {}
 }
 
+function shouldAttempt(reason) {
+  if (reason === 'gesture') return true;
+  if (userGestureSeen) return true;
+  // Only resume on non-gesture events if a context already exists.
+  return !!peekAudioContext();
+}
+
 async function tryResume(reason) {
+  if (!shouldAttempt(reason)) return;
   try {
     const ctx = ensureAudioContext();
     if (ctx.state !== 'running') {
@@ -24,7 +36,7 @@ async function tryResume(reason) {
       // Optional: onstatechange sometimes fires "interrupted" -> "running"
     }
   } catch (e) {
-    // Swallow; we’ll try again on the next gesture/visibilitychange
+    // Swallow; we'll try again on the next gesture/visibilitychange
   }
 }
 
@@ -34,7 +46,8 @@ export function installIOSAudioUnlock() {
 
   const once = { once: true, passive: false, capture: true };
   const tryOnce = async (e) => {
-    // Keep the gesture “active”; prevent page zoom/scroll on the very first tap.
+    // Keep the gesture "active"; prevent page zoom/scroll on the very first tap.
+    userGestureSeen = true;
     try { e.preventDefault(); } catch {}
     await tryResume('gesture');
     // Remove all listeners after first success attempt

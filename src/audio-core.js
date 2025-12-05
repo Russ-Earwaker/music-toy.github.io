@@ -13,6 +13,11 @@ export function ensureAudioContext(){
   return __ctx;
 }
 
+// Return the existing AudioContext without creating a new one (used by unlockers).
+export function peekAudioContext(){
+  return __ctx || null;
+}
+
 export function setBpm(v){
   bpm = Math.max(40, Math.min(240, Number(v)||DEFAULT_BPM));
 }
