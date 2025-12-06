@@ -814,6 +814,24 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
     ctx.clearRect(0, 0, state.w, state.h);
   }
 
+  function resetHome() {
+    state.pulseEnergy = 0;
+    highlightEvents.length = 0;
+    state.tickModuloCounter = 0;
+    state.tickAccumDt = 0;
+    for (let i = 0; i < state.particles.length; i++) {
+      const p = state.particles[i];
+      p.x = p.hx;
+      p.y = p.hy;
+      p.vx = 0;
+      p.vy = 0;
+      p.fade = 1;
+      p.fadeTarget = 1;
+      p.fadeRate = FADE_IN_RATE;
+    }
+    draw();
+  }
+
   resize();
   fieldLog('[FIELD][init]', {
     id: fieldLabel,
@@ -831,6 +849,7 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
     pushDirectional,
     setStyle,
     applyBudget,
+    resetHome,
     canvas,
     _state: state,
     _config: config,

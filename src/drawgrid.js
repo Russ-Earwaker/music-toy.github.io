@@ -5603,23 +5603,22 @@ function syncBackBufferSizes() {
       // but are otherwise always on – they're core UX.
       const allowOverlayDraw = canDrawAnything;
 
-      // Particle field is "expensive candy": only enabled if:
-      // - globally allowed
-      // - we are not in a zoom debug freeze
-      // - the panel is on-screen
-      // - the adaptive LOD says it's OK for current FPS / zoom
-      const allowParticleDraw =
+      // Particle field visibility is driven by global allow/overview/zoom state.
+      // Do NOT toggle visibility just because we're in a brief commit window; that caused resets on pan/zoom release.
+      const particleStateAllowed =
         DRAWGRID_ENABLE_PARTICLE_FIELD &&
-        canDrawAnything &&
         !zoomDebugFreeze &&
         particleFieldEnabled;
-      const nextParticleVisible = !!allowParticleDraw;
+      const allowParticleDraw = particleStateAllowed && canDrawAnything;
+      const nextParticleVisible = !!particleStateAllowed;
       if (particleCanvas && particleCanvasVisible !== nextParticleVisible) {
         particleCanvasVisible = nextParticleVisible;
         particleCanvas.style.opacity = nextParticleVisible ? '1' : '0';
         if (!nextParticleVisible) {
           const ctx = particleCanvas.getContext('2d');
           if (ctx) ctx.clearRect(0, 0, particleCanvas.width || 0, particleCanvas.height || 0);
+        } else {
+          try { dgField?.resetHome?.(); } catch {}
         }
       }
 
