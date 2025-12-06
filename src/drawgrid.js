@@ -5507,9 +5507,10 @@ function syncBackBufferSizes() {
     const particleBudget = adaptive?.particleBudget;
 
     // If we're in overview or super zoomed out, skip the background field entirely.
-    const overviewState = (typeof window !== 'undefined' && window.__overviewMode) ? window.__overviewMode : { isActive: () => false };
+    const overviewState = (typeof window !== 'undefined' && window.__overviewMode) ? window.__overviewMode : { isActive: () => false, state: { zoomThreshold: 0.36 } };
     const inOverview = !!overviewState?.isActive?.();
-    const zoomTooWide = Number.isFinite(boardScaleValue) && boardScaleValue < 0.4;
+    const threshold = Number.isFinite(overviewState?.state?.zoomThreshold) ? overviewState.state.zoomThreshold : 0.36;
+    const zoomTooWide = Number.isFinite(boardScaleValue) && boardScaleValue < threshold;
     const visiblePanels = Math.max(0, Number(globalDrawgridState?.visibleCount) || 0);
     const allowField = particleBudget?.allowField !== false;
     const isUnfocused = !!panel?.classList?.contains('toy-unfocused');

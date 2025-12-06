@@ -324,6 +324,8 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     const phase = z?.phase || null;
 
     const currentScale = z.currentScale ?? scale;
+    const targetScale = z.targetScale ?? currentScale;
+    const scaleForState = Number.isFinite(targetScale) ? targetScale : currentScale;
     const currentX = z.currentX ?? x;
     const currentY = z.currentY ?? y;
 
@@ -343,8 +345,8 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     }
 
     // Lightweight path for noisy intermediate phases.
-    if (phase === 'recompute' || phase === 'gesturing' || phase === 'prepare' || phase === 'begin') {
-      maybeUpdateOverview(currentScale);
+    if (phase === 'recompute' || phase === 'gesturing' || phase === 'prepare' || phase === 'begin' || phase === 'progress') {
+      maybeUpdateOverview(scaleForState);
       return;
     }
 
@@ -360,7 +362,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     persist();
     scheduleNotify({ ...z });
 
-    maybeUpdateOverview(scale);
+    maybeUpdateOverview(scaleForState);
   };
   handleZoom.__zcName = 'board-viewport';
   onZoomChange(handleZoom);

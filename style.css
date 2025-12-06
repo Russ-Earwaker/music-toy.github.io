@@ -1210,7 +1210,7 @@ body.advanced-controls-disabled [data-adv] {
   --c-btn-bg: rgba(96, 82, 176, 0.9);
   --zoom-progress: 1;
   --zoom-ring-color: var(--accent, #5fb3ff);
-  --zoom-marker-color: #ffffff;
+  --zoom-marker-color: #cfcbde;
   --zoom-overview-angle: 0deg;
   position: relative;
   overflow: visible;
@@ -1240,7 +1240,7 @@ body.advanced-controls-disabled [data-adv] {
 #overview-mode-button::after {
   content: '';
   position: absolute;
-  inset: -7px;
+  inset: -8px;
   border-radius: 50%;
   z-index: 1;
   background:
@@ -1249,8 +1249,8 @@ body.advanced-controls-disabled [data-adv] {
       rgba(95, 179, 255, 0.12) calc(var(--zoom-progress, 0) * 360deg)
     ),
     conic-gradient(from -90deg, rgba(255, 255, 255, 0.12) 0deg, rgba(255, 255, 255, 0.12) 360deg);
-  mask: radial-gradient(circle at 50% 50%, transparent calc(50% - 7px), #000 calc(50% - 5px));
-  -webkit-mask: radial-gradient(circle at 50% 50%, transparent calc(50% - 7px), #000 calc(50% - 5px));
+  mask: radial-gradient(circle at 50% 50%, transparent 60%, #000 72%);
+  -webkit-mask: radial-gradient(circle at 50% 50%, transparent 60%, #000 72%);
   opacity: 0.95;
   pointer-events: none;
   filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.45));
@@ -1260,19 +1260,19 @@ body.advanced-controls-disabled [data-adv] {
 #overview-mode-button::before {
   content: '';
   position: absolute;
-  inset: -7px;
+  inset: -8px;
   border-radius: 50%;
   z-index: 2;
   background:
     conic-gradient(from -90deg,
       transparent 0deg,
-      transparent calc(var(--zoom-overview-angle, 0deg) - 0.6deg),
-      var(--zoom-marker-color) calc(var(--zoom-overview-angle, 0deg) - 0.6deg),
-      var(--zoom-marker-color) calc(var(--zoom-overview-angle, 0deg) + 0.6deg),
-      transparent calc(var(--zoom-overview-angle, 0deg) + 0.6deg),
+      transparent calc(var(--zoom-overview-angle, 0deg) - 1.6deg),
+      var(--zoom-marker-color) calc(var(--zoom-overview-angle, 0deg) - 1.6deg),
+      var(--zoom-marker-color) calc(var(--zoom-overview-angle, 0deg) + 1.6deg),
+      transparent calc(var(--zoom-overview-angle, 0deg) + 1.6deg),
       transparent 360deg);
-  mask: radial-gradient(circle at 50% 50%, transparent calc(50% - 7px), #000 calc(50% - 5px));
-  -webkit-mask: radial-gradient(circle at 50% 50%, transparent calc(50% - 7px), #000 calc(50% - 5px));
+  mask: radial-gradient(circle at 50% 50%, transparent 60%, #000 72%);
+  -webkit-mask: radial-gradient(circle at 50% 50%, transparent 60%, #000 72%);
   pointer-events: none;
   opacity: 0.88;
   filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.4));

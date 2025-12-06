@@ -3,10 +3,12 @@ import { publishFrameStart } from './zoom/ZoomCoordinator.js';
 const DEFAULT_OVERVIEW_SCALE = 0.3;
 const DEFAULT_NORMAL_SCALE = 1;
 
+const OVERVIEW_ZOOM_THRESHOLD = 0.36;
+
 const overviewState = {
     isActive: false,
-    zoomThreshold: 0.36, // Zoom out further to activate
-    zoomReturnLevel: 0.57, // Zoom in closer on return
+    zoomThreshold: OVERVIEW_ZOOM_THRESHOLD, // Zoom out further to activate
+    zoomReturnLevel: OVERVIEW_ZOOM_THRESHOLD, // Same level to exit for symmetry
     previousScale: 1,
     positions: new Map(), // id -> { left, top, width, height }
     transitioning: false, // latch while we zoom in to a toy
@@ -879,3 +881,7 @@ export const overviewMode = {
     isActive: isOverviewModeActive,
     state: overviewState
 };
+
+try {
+    window.__overviewMode = overviewMode;
+} catch {}
