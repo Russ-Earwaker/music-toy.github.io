@@ -13,6 +13,7 @@ import { startParticleStream } from './tutorial-fx.js';
 import './ui-highlights.js';
 import { updateParticleQualityFromFps } from './particles/ParticleQuality.js';
 // import { createBouncer } from './bouncer.main.js'; // This is now handled by bouncer-init.js
+import './debug-reflow.js';
 import { initDrawGrid } from './drawgrid-init.js';
 import { createChordWheel } from './chordwheel.js';
 import { createRippleSynth } from './ripplesynth.js';

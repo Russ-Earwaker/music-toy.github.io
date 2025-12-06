@@ -1662,10 +1662,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
           seed: panelSeed,
           cap,
           returnSeconds: 2.4,   // slower settle time so brightness/offsets linger
-          // Give pokes some visible impact
-          forceMul: 2.5,
+          forceMul: 1.0,
           noise: 0,
-          kick: 0.25,
+          kick: 0,
           kickDecay: 800.0,
 
           // Restore normal idle particle look (same as Simple Rhythm)

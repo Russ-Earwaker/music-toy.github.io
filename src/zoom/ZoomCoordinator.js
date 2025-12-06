@@ -7,6 +7,8 @@ const frameStartListeners = new Set();
 
 // --- Lightweight ZoomCoordinator profiling ---
 const ZC_PROFILE = false;
+try { if (typeof window !== 'undefined') window.__PERF_DEBUG = false; } catch {}
+const ZC_PERF_DEBUG = (typeof window !== 'undefined') ? !!window.__PERF_DEBUG : false;
 
 // --- Listener profiling ---
 const ZC_LISTENER_DEBUG = false;
@@ -135,6 +137,8 @@ let lastProgressTs = 0;
 let progressHz = 30; // ~30fps progress callbacks while pinching/wheeling
 let minProgressGapMs = 1000 / progressHz;
 let frameStartState = null;
+let cameraDirty = false;
+const ZC_MATRIX_DEBUG = false; // only read back CSS transform matrix when actively debugging
 
 export function attachWorldElement(el) {
   worldEl = el;
@@ -203,19 +207,27 @@ function applyTransform() {
   st.setProperty('--zoom-scale', String(s));
   st.setProperty('--zoom-x', `${x}px`);
   st.setProperty('--zoom-y', `${y}px`);
-  try {
-    const matrix = getComputedStyle(worldEl).transform;
-    if (worldEl.dataset.lastMatrix !== matrix) {
-      worldEl.dataset.lastMatrix = matrix;
-      //console.debug('[zoom] css transform', { order: TRANSFORM_ORDER, matrix });
-    }
-  } catch {}
+  // Only read back the computed matrix when explicitly debugging; this can force layout.
+  if (ZC_MATRIX_DEBUG) {
+    try {
+      const matrix = getComputedStyle(worldEl).transform;
+      if (worldEl.dataset.lastMatrix !== matrix) {
+        worldEl.dataset.lastMatrix = matrix;
+        //console.debug('[zoom] css transform', { order: TRANSFORM_ORDER, matrix });
+      }
+    } catch {}
+  }
 }
 
 function tick() {
+  if (ZC_PERF_DEBUG && typeof console !== 'undefined' && console.time) console.time('[ZC] tick');
   rafId = 0;
-  if (!state.isDirty) return;
+  if (!state.isDirty && !cameraDirty) {
+    if (ZC_PERF_DEBUG && typeof console !== 'undefined' && console.timeEnd) console.timeEnd('[ZC] tick');
+    return;
+  }
 
+  if (ZC_PERF_DEBUG && typeof console !== 'undefined' && console.time) console.time('[ZC] computeViewport');
   // In gesturing mode, we snap current = target (no easing) to keep feel crisp for pinch,
   // but we still do it in RAF to batch DOM writes.
   if (state.mode === 'gesturing') {
@@ -228,13 +240,20 @@ function tick() {
     state.currentX = state.targetX;
     state.currentY = state.targetY;
   }
+  if (ZC_PERF_DEBUG && typeof console !== 'undefined' && console.timeEnd) console.timeEnd('[ZC] computeViewport');
 
+  if (ZC_PERF_DEBUG && typeof console !== 'undefined' && console.time) console.time('[ZC] apply');
   applyTransform();
   publishFrameStart();
   state.isDirty = false;
+  cameraDirty = false;
+  if (ZC_PERF_DEBUG && typeof console !== 'undefined' && console.timeEnd) console.timeEnd('[ZC] apply');
 
+  if (ZC_PERF_DEBUG && typeof console !== 'undefined' && console.time) console.time('[ZC] listeners');
   // notify listeners AFTER transform
   emitZoom({ ...state });
+  if (ZC_PERF_DEBUG && typeof console !== 'undefined' && console.timeEnd) console.timeEnd('[ZC] listeners');
+  if (ZC_PERF_DEBUG && typeof console !== 'undefined' && console.timeEnd) console.timeEnd('[ZC] tick');
 }
 
 function schedule() {
@@ -268,6 +287,7 @@ export function setGestureTransform({ scale, x, y }) {
   state.targetX = x;
   state.targetY = y;
   state.isDirty = true;
+  cameraDirty = true;
   schedule();
   startProgressLoop();
 }
@@ -285,6 +305,7 @@ export function commitGesture({ scale, x, y }, { delayMs = 80 } = {}) {
   // Keep target == last gesture values (assumed already set via setGestureTransform)
   // but mark dirty so we reapply exact transform (no rounding drift).
   state.isDirty = true;
+  cameraDirty = true;
   schedule();
 
   const id = ++atomicCommitId;

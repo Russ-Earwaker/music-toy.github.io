@@ -34,6 +34,7 @@ const MIN_PARTICLES = 50;   // never drop below this
 const MAX_FADE_OUT_FRACTION = 0.04; // cap how many fade-outs per reconcile step
 const MAX_FADE_OUT_STEP = 16;
 const MIN_FADE_STEP = 2;
+const MEASURE_MIN_MS = 120; // throttle layout reads to reduce reflows
 
 function isZoomGesturing() {
   try {
@@ -108,11 +109,40 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
   const ctx = canvas.getContext('2d', { alpha: true });
   const fieldLabel = opts.debugLabel ?? opts.id ?? 'field-unknown';
 
+  const sizeCache = { w: Math.max(1, canvas.clientWidth || canvas.width || 1), h: Math.max(1, canvas.clientHeight || canvas.height || 1), ts: 0 };
+  const updateSizeCache = () => {
+    try {
+      // Avoid forced layout: read from style + attrs first; fall back to client sizes if needed.
+      const styleW = parseFloat(getComputedStyle(canvas).width) || 0;
+      const styleH = parseFloat(getComputedStyle(canvas).height) || 0;
+      const w = Math.max(1, Math.round(styleW || canvas.width || canvas.clientWidth || 1));
+      const h = Math.max(1, Math.round(styleH || canvas.height || canvas.clientHeight || 1));
+      sizeCache.w = w;
+      sizeCache.h = h;
+      sizeCache.ts = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    } catch {}
+  };
+  try {
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(() => updateSizeCache());
+      ro.observe(canvas);
+      canvas.__particleRO = ro;
+    }
+  } catch {}
+
   const measure = () => {
-    const rect = canvas.getBoundingClientRect?.();
-    const w = Math.max(1, Math.round(rect?.width || canvas.clientWidth || canvas.width || 1));
-    const h = Math.max(1, Math.round(rect?.height || canvas.clientHeight || canvas.height || 1));
-    return { w, h };
+    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    // Fresh cache within ~400ms: reuse to avoid layout.
+    if (sizeCache.w > 0 && sizeCache.h > 0 && (now - (sizeCache.ts || 0)) < 400) {
+      return { w: sizeCache.w, h: sizeCache.h };
+    }
+    // Avoid forced layout during live zoom gestures; reuse cache instead.
+    if (isZoomGesturing()) {
+      return { w: sizeCache.w, h: sizeCache.h };
+    }
+    // Throttle layout reads; if stale, update once.
+    updateSizeCache();
+    return { w: sizeCache.w, h: sizeCache.h };
   };
 
   // If an external viewport was provided (from Draw Toy, etc.), reuse it.
@@ -159,6 +189,7 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
     tickAccumDt: 0,
     spacing: 18,
     gestureSkip: 0,
+    lastMeasureTs: 0,
   };
   const baseSizePx = config.sizePx;
   const PARTICLE_HIGHLIGHT_DURATION = 900; // ms
@@ -280,6 +311,12 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
   }
 
   function maybeResizeFromLayout() {
+    const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+      ? performance.now()
+      : Date.now();
+    if (state.lastMeasureTs && (now - state.lastMeasureTs) < MEASURE_MIN_MS) return;
+    if (isZoomGesturing()) return;
+    state.lastMeasureTs = now;
     const rect = measure();
     if (rect.w !== state.w || rect.h !== state.h) {
       resize();

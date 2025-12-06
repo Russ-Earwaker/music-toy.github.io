@@ -12,7 +12,8 @@ export function boardScale(el){
 
   // Fallback: visual width ratio vs first seen
   try{
-    const w = (el.getBoundingClientRect?.().width || el.clientWidth || 0);
+    // Avoid forcing layout: prefer clientWidth; only fall back if zero.
+    const w = (el.clientWidth || el.getBoundingClientRect?.().width || 0);
     if (w > 0){
       let base = __baseW.get(el);
       if (!base || base<=0){ __baseW.set(el, w); base = w; }

@@ -116,16 +116,34 @@ function panelParts(panel) {
     };
 }
 
+// Cache panel/body rects per frame to avoid repeated layout reads during zoom/overview.
+const __ovRectCache = new WeakMap();
 function measurePartRectWithinPanel(panel, el) {
     if (!panel || !el) return null;
+    // Avoid forced reflow during pinch/zoom; reuse last cached rect if available.
+    if (typeof window !== 'undefined' && window.__mtZoomGesturing) {
+        const cachedZoom = __ovRectCache.get(panel);
+        if (cachedZoom && cachedZoom.panel === panel && cachedZoom.el === el) {
+            return cachedZoom.rect;
+        }
+        // If we're mid-gesture with no cache, skip measurement for now.
+        return null;
+    }
+    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    const cached = __ovRectCache.get(panel);
+    if (cached && cached.panel === panel && cached.el === el && (now - cached.ts) < 200) {
+        return cached.rect;
+    }
     const pr = panel.getBoundingClientRect();
     const er = el.getBoundingClientRect();
-    return {
+    const rect = {
         top: er.top - pr.top,
         left: er.left - pr.left,
         width: er.width,
         height: er.height
     };
+    __ovRectCache.set(panel, { panel, el, rect, ts: now });
+    return rect;
 }
 
 function ensureShield(panel) {

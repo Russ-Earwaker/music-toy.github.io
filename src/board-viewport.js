@@ -12,6 +12,29 @@ import {
 import { WheelZoomLerper } from './zoom/WheelZoomLerper.js';
 
 const viewportLog = makeDebugLogger('mt_debug_logs');
+const RELOW_PROFILE = (() => {
+  if (typeof window === 'undefined') return true;
+  try {
+    if (window.__BV_PROFILE_REFLOW === false) return false;
+    const stored = localStorage.getItem('BV_PROFILE_REFLOW');
+    if (stored === '0') return false;
+    if (stored === '1') return true;
+  } catch {}
+  return true; // default ON; set window.__BV_PROFILE_REFLOW = false or localStorage.BV_PROFILE_REFLOW = '0' to disable
+})();
+function profileReflow(tag, fn) {
+  if (!RELOW_PROFILE || typeof performance === 'undefined') return fn();
+  const t0 = performance.now();
+  const res = fn();
+  const dt = performance.now() - t0;
+  if (dt > 0.5) {
+    try { console.warn('[BV][reflow]', tag, `${dt.toFixed(2)}ms`); } catch {}
+  }
+  return res;
+}
+
+let __stageRectCache = null;
+let __stageRectCacheTs = 0;
 
 let __liveViewportTransform = { scale: 1, tx: 0, ty: 0 };
 export function getViewportTransform() {
@@ -175,8 +198,22 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     } catch {}
   }
 
+  let stageRectCache = null;
+  let stageRectCacheTs = 0;
+
+  function getStageRectCached() {
+    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    const zooming = !!window.__mtZoomGesturing;
+    const fresh = stageRectCache && (now - stageRectCacheTs) < 200;
+    if (zooming && fresh) return stageRectCache;
+    const rect = profileReflow('layoutOffset:getBoundingClientRect', () => stage.getBoundingClientRect());
+    stageRectCache = rect;
+    stageRectCacheTs = now;
+    return rect;
+  }
+
   function getLayoutOffset() {
-    const rect = stage.getBoundingClientRect();
+    const rect = getStageRectCached();
     const { x: baseX, y: baseY } = getActiveTransform();
     return { layoutLeft: rect.left - baseX, layoutTop: rect.top - baseY };
   }
@@ -346,7 +383,9 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
 
     // Lightweight path for noisy intermediate phases.
     if (phase === 'recompute' || phase === 'gesturing' || phase === 'prepare' || phase === 'begin' || phase === 'progress') {
-      maybeUpdateOverview(scaleForState);
+      if (!window.__mtZoomGesturing) {
+        maybeUpdateOverview(scaleForState);
+      }
       return;
     }
 
@@ -359,6 +398,8 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     scale = currentScale;
     x = currentX;
     y = currentY;
+    stageRectCache = null;
+    stageRectCacheTs = 0;
     persist();
     scheduleNotify({ ...z });
 
@@ -374,6 +415,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
   window.__cancelWheelZoomLerp = cancelWheelCommit;
   // When any lerp settles, commit so downstream listeners see the final transform.
   lerper.onSettle = (settleScale, settleX, settleY) => {
+    if (window.__mtZoomGesturing) return;
     commitGesture({ scale: settleScale, x: settleX, y: settleY }, { delayMs: 60 });
     if (camTweenLock) return;
     try {
@@ -397,7 +439,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
 
   function zoomAt(clientX, clientY, factor, { commit = true, delayMs = 0 } = {}) {
     if (!Number.isFinite(factor) || factor === 0) return scale;
-    const rect = stage.getBoundingClientRect();
+    const rect = window.__mtZoomGesturing ? getStageRectCached() : profileReflow('zoomAt:getBoundingClientRect', () => stage.getBoundingClientRect());
     const { scale: baseScale, x: baseX, y: baseY } = getActiveTransform();
     const targetScale = clampScale(baseScale * factor);
     if (!Number.isFinite(targetScale) || targetScale === baseScale) {
@@ -437,7 +479,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
       }));
     } catch {}
 
-    const rect = stage.getBoundingClientRect();
+    const rect = profileReflow('wheel:getBoundingClientRect', () => stage.getBoundingClientRect());
     const { x: baseX, y: baseY } = getActiveTransform();
     const layoutLeft = rect.left - baseX;
     const layoutTop = rect.top - baseY;
@@ -526,6 +568,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
 
   function getWorldCenter(el) {
     if (!el || !(el instanceof HTMLElement)) return null;
+    if (window.__mtZoomGesturing) return null;
 
     const panel = getPanel(el) || el;
     const computed = panel ? getComputedStyle(panel) : null;
@@ -555,8 +598,9 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
       Number.isFinite(z?.targetY) ? z.targetY :
       y;
     if (!Number.isFinite(s) || !Number.isFinite(tx) || !Number.isFinite(ty)) return null;
-    const boardRect = stage.getBoundingClientRect();
-    const elRect = targetEl.getBoundingClientRect();
+    const boardRect = window.__mtZoomGesturing ? getStageRectCached() : profileReflow('worldCenter:boardRect', () => stage.getBoundingClientRect());
+    const elRect = window.__mtZoomGesturing ? targetEl.getBoundingClientRect?.() : profileReflow('worldCenter:elRect', () => targetEl.getBoundingClientRect());
+    if (!boardRect || !elRect) return null;
     const screenCx = (elRect.left - boardRect.left) + (elRect.width * 0.5);
     const screenCy = (elRect.top - boardRect.top) + (elRect.height * 0.5);
     const worldVec = screenToWorld(screenCx, screenCy, s, tx, ty);
