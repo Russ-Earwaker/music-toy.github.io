@@ -15,6 +15,7 @@ function buildOverlay(){
   const host = el('div','inst-host');
   // Build a proper panel using existing toy styles
   const panel = el('div','toy-panel inst-panel');
+  panel.dataset.focusSkip = '1'; // treat picker as standalone, not part of toy focus ring
   const header = el('div','toy-header');
   const title = el('div','toy-title'); title.textContent = 'Choose Instrument';
   const right = el('div','toy-controls-right');

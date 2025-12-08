@@ -441,6 +441,9 @@ const CHAIN_CANVAS_RESOLUTION_SCALE = 0.35;
 // --- Toy Focus Management ----------------------------------------------------
 let g_focusedToyId = null;
 const focusScaleAnimations = new WeakMap();
+const isFocusManagedPanel = (panel) => {
+  return panel?.classList?.contains('toy-panel') && panel.dataset.focusSkip !== '1';
+};
 
 function getPanelScale(panel) {
   try {
@@ -497,9 +500,10 @@ function animateFocusScale(panel, fromScale, toScale) {
 }
 
 function setToyFocus(panel, { center = false } = {}) { // center retained for API compatibility
-  if (!panel || !panel.isConnected) return;
+  if (!panel || !panel.isConnected || !isFocusManagedPanel(panel)) return;
   g_focusedToyId = panel.id;
   document.querySelectorAll('.toy-panel').forEach((p) => {
+    if (!isFocusManagedPanel(p)) return;
     const spawnHint = Number.parseFloat(p.dataset.spawnScaleHint);
     const startScale = Number.isFinite(spawnHint) ? spawnHint : getPanelScale(p);
     const isFocus = p === panel;
@@ -2756,7 +2760,7 @@ async function boot(){
     // If the press originated on a chain "+" button, don't queue focus for the source toy.
     if (e.target && e.target.closest && e.target.closest('.toy-chain-btn')) return;
     const panel = e.target && e.target.closest ? e.target.closest('.toy-panel') : null;
-    if (!panel) return;
+    if (!panel || !isFocusManagedPanel(panel)) return;
     if (panel.classList.contains('toy-unfocused')) {
       pendingFocus = panel;
       pendingFocusPos = { x: e.clientX, y: e.clientY };

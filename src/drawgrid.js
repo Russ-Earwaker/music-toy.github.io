@@ -5600,8 +5600,32 @@ function syncBackBufferSizes() {
       const renderEvery = Math.max(1, adaptiveState?.renderBudget?.skipNonCriticalEvery || 1);
       const skipNonCritical = false;
 
+      // Extra throttling for "idle" panels when lots of toys are visible.
+      const visiblePanels = Math.max(0, Number(globalDrawgridState?.visibleCount) || 0);
+      const hasAnyNotes = !!(currentMap && currentMap.active && currentMap.active.some(Boolean));
+      const hasOverlayFx =
+        (noteToggleEffects?.length || 0) > 0 ||
+        (noteBurstEffects?.length || 0) > 0 ||
+        (cellFlashes?.length || 0) > 0;
+      const transportRunning = (typeof isRunning === 'function') && isRunning();
+
+      const isTrulyIdle =
+        !hasAnyNotes &&
+        !hasOverlayFx &&
+        !transportRunning &&
+        !__dgFrontSwapNextDraw &&
+        !__dgNeedsUIRefresh &&
+        !__hydrationJustApplied;
+
+      let effectiveRenderEvery = renderEvery;
+      if (isTrulyIdle && canDrawAnything && visiblePanels >= 4) {
+        // For many visible idle panels, only do a "heavy" frame every few RAF ticks.
+        // (We still tick RAF every frame, but most frames early-out before heavy work.)
+        effectiveRenderEvery = Math.max(effectiveRenderEvery, 3);
+      }
+
       // Overlays (notes, playhead, flashes) respect visibility & hydrations guard,
-      // but are otherwise always on – they're core UX.
+      // but are otherwise always on - they're core UX.
       const allowOverlayDraw = canDrawAnything;
 
       // Particle field visibility is driven by global allow/overview/zoom state.
@@ -5631,8 +5655,8 @@ function syncBackBufferSizes() {
         !__dgNeedsUIRefresh &&
         !__hydrationJustApplied;
       const throttleFrame =
-        renderEvery > 1 &&
-        (panel.__dgFrame % renderEvery !== 0) &&
+        effectiveRenderEvery > 1 &&
+        (panel.__dgFrame % effectiveRenderEvery !== 0) &&
         canDrawAnything &&
         !__dgFrontSwapNextDraw &&
         !__dgNeedsUIRefresh &&
