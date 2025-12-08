@@ -56,6 +56,7 @@ export function makePointerHandlers(cfg) {
   }
 
   function pointerDown(e) {
+    if (window.gFocusedToy === cfg.panel) return;
     const p = posFromEvent(e);
     const hitIx = findHitBlock(p);
 

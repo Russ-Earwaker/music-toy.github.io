@@ -4760,6 +4760,12 @@ function syncBackBufferSizes() {
   }
 
   function onPointerDown(e){
+    e.stopPropagation();
+    if (window.gFocusedToy && window.gFocusedToy !== panel) {
+      // If a different toy is focused, and user clicks on this toy's draw area,
+      // we should not start drawing. Let the main focus handler deal with it.
+      return;
+    }
     stopAutoGhostGuide({ immediate: false });
     markUserChange('pointerdown');
     const p = pointerToPaintLogical(e);

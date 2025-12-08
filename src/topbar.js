@@ -408,7 +408,8 @@ if (document.readyState === 'loading') {
         try{ window.UIHighlights?.onNewScene?.(); }catch{}
         try { window.dispatchEvent(new CustomEvent('guide:close')); } catch {}
         try { window.dispatchEvent(new CustomEvent('scene:new')); } catch {}
-        window.setBoardScale(0.57);
+        window.clearToyFocus?.();
+        window.resetBoardView();
         return;
       }
 

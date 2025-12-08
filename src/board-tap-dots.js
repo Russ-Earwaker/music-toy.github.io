@@ -598,6 +598,7 @@
   }
 
   function handlePointerDown(e) {
+    if (window.__toyFocused) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     if (!e.isPrimary) return;
     if (e.target.closest('.toy-panel, button, a, input, select, textarea')) return;
@@ -655,6 +656,7 @@
   }
 
   function handleTouchStart(e) {
+    if (window.__toyFocused) return;
     if (e.touches.length === 0) return;
     const t = e.touches[0];
 

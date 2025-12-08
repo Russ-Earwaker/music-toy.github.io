@@ -45,3 +45,9 @@
     letter-spacing: 0.02em;
     text-transform: uppercase;
 }
+
+#overview-mode-button.has-focused-toy {
+    box-shadow: 0 0 0 3px red, /* Red outline */
+                0 0 0 6px rgba(255, 0, 0, 0.5); /* Red glow */
+    --c-btn-bg: rgba(255, 0, 0, 0.9); /* Red background */
+}

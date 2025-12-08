@@ -383,6 +383,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
 
     // Lightweight path for noisy intermediate phases.
     if (phase === 'recompute' || phase === 'gesturing' || phase === 'prepare' || phase === 'begin' || phase === 'progress') {
+      if (window.__toyFocused) return;
       if (!window.__mtZoomGesturing) {
         maybeUpdateOverview(scaleForState);
       }
@@ -461,6 +462,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
   }
 
   function handleWheel(e) {
+    if (window.__toyFocused) return;
     if (window.__tutorialZoomLock) {
       e.preventDefault();
       return;
@@ -502,6 +504,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
   window.addEventListener('wheel', handleWheel, { passive: false });
 
   window.panTo = (nx, ny) => {
+    if (window.__toyFocused) return;
     const targetX = Number(nx);
     const targetY = Number(ny);
     applyTransform(
@@ -514,10 +517,13 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     scheduleNotify({ ...getZoomState(), committed: true });
   };
   window.panBy = (dx, dy) => {
+    if (window.__toyFocused) return;
     applyTransform({ x: x + Number(dx || 0), y: y + Number(dy || 0) });
   };
-  window.zoomAt = (clientX, clientY, factor) =>
-    zoomAt(clientX, clientY, factor, { commit: true, delayMs: 0 });
+  window.zoomAt = (clientX, clientY, factor) => {
+    if (window.__toyFocused) return;
+    return zoomAt(clientX, clientY, factor, { commit: true, delayMs: 0 });
+  }
   function animateTo(scaleTarget, xTarget, yTarget) {
     const s = clampScale(Number(scaleTarget) || scale);
     const tx = Number.isFinite(xTarget) ? xTarget : x;
@@ -657,25 +663,35 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     {
       duration = 320,
       easing = easeInOutCubic,
-      centerFracX = 0.5,
+      centerFracX,
       centerFracY = 0.5,
     } = {}
   ) {
     camTweenLock = true;
     const s1 = clampScale(Number(targetScale) || scale);
-    // We'll recompute layout/view center each frame to follow any chrome/layout changes.
 
     const start = getActiveTransform();
     const s0 = start.scale, x0 = start.x, y0 = start.y;
 
-    // If we’re already basically there, snap & commit.
-    // We’ll compute tX/tY inside the step once we know current layout.
-    if (Math.abs(s1 - s0) < 1e-4) {
-      // Keep x/y as-is; a later set will lock to center if already near.
-      applyTransform({ scale: s1, x: x0, y: y0 }, { commit: true, delayMs: 0 });
-      camTweenLock = false;
-      return Promise.resolve();
-    }
+    // --- Target Calculation ---
+    // This MUST be done only ONCE before the animation starts.
+    // getLayoutOffset depends on getActiveTransform, which changes during animation.
+    // By capturing the layout relative to the START of the animation, we get a stable target.
+    const rect = profileReflow('zoomPanToFinal:getBoundingClientRect', () => stage.getBoundingClientRect());
+    const layoutLeft = rect.left - x0;
+    const layoutTop = rect.top - y0;
+
+    const container = stage.closest('.board-viewport') || document.documentElement;
+    const viewW = container.clientWidth || window.innerWidth;
+    const viewH = container.clientHeight || window.innerHeight;
+    const viewCx = viewW * (Number.isFinite(centerFracX) ? centerFracX : 0.5);
+    const viewCy = viewH * (Number.isFinite(centerFracY) ? centerFracY : 0.5);
+
+    // The final translation we want to achieve
+    const tX = viewCx - layoutLeft - xWorld * s1;
+    const tY = viewCy - layoutTop  - yWorld * s1;
+    console.log('[zoomPanToFinal] start:', {s0, x0, y0, s1, xWorld, yWorld, tX, tY, centerFracX, layoutLeft, viewCx});
+    // --- End Target Calculation ---
 
     cancelWheelCommit();
     let t0 = 0;
@@ -684,46 +700,28 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
         if (!t0) t0 = now;
         const k = Math.min(1, (now - t0) / duration);
         const e = easing(k);
-        const s = lerp(s0, s1, e);
-        // Recompute layout + view center this frame
-        const { layoutLeft, layoutTop } = getLayoutOffset();
-        const container = stage.closest('.board-viewport') || document.documentElement;
-        const viewW = container.clientWidth || window.innerWidth;
-        const viewH = container.clientHeight || window.innerHeight;
-        const viewCx = viewW * centerFracX;
-        const viewCy = viewH * centerFracY;
-        // Final translate for THIS frame to head toward the correct final center
-        const tX = viewCx - layoutLeft - xWorld * s1;
-        const tY = viewCy - layoutTop  - yWorld * s1;
+
         if (!Number.isFinite(tX) || !Number.isFinite(tY)) {
           camTweenLock = false;
           resolve();
           return;
         }
-        // Interpolate from the *current* transform toward the *final* transform
+
+        // Interpolate all values from start to target
+        const s = lerp(s0, s1, e);
         const xLerp = lerp(x0, tX, e);
         const yLerp = lerp(y0, tY, e);
+
+        console.log('[zoomPanToFinal.step]', { k, e, s, xLerp, yLerp, tX, tY });
         setGestureTransform({ scale: s, x: xLerp, y: yLerp });
+
         if (k < 1) {
           requestAnimationFrame(step);
         } else {
-          // Recompute one last time at settle to land exactly at the live layout center
-          const { layoutLeft: finalLayoutLeft, layoutTop: finalLayoutTop } = getLayoutOffset();
-          const finalContainer = stage.closest('.board-viewport') || document.documentElement;
-          const finalViewW = finalContainer.clientWidth || window.innerWidth;
-          const finalViewH = finalContainer.clientHeight || window.innerHeight;
-          const finalViewCx = finalViewW * centerFracX;
-          const finalViewCy = finalViewH * centerFracY;
-          const finalX = finalViewCx - finalLayoutLeft - xWorld * s1;
-          const finalY = finalViewCy - finalLayoutTop  - yWorld * s1;
-          if (Number.isFinite(finalX) && Number.isFinite(finalY)) {
-            commitGesture({ scale: s1, x: finalX, y: finalY }, { delayMs: 60 });
-            // Hold lock one more RAF so nobody kicks a follow-up zoom on the commit
-            requestAnimationFrame(() => { camTweenLock = false; resolve(); });
-          } else {
-            camTweenLock = false;
-            resolve();
-          }
+          // Commit the final calculated position.
+          commitGesture({ scale: s1, x: tX, y: tY }, { delayMs: 60 });
+          // Hold lock one more RAF so nobody kicks a follow-up zoom on the commit
+          requestAnimationFrame(() => { camTweenLock = false; resolve(); });
         }
       };
       requestAnimationFrame(step);
@@ -734,7 +732,7 @@ window.centerBoardOnWorldPoint = async (
   xWorld,
   yWorld,
   desiredScale = scale,
-  { duration = 950, easing = easeOutCubic, centerFracX = 0.54, centerFracY = 0.5 } = {}
+  { duration = 950, easing = easeOutCubic, centerFracX, centerFracY = 0.5 } = {}
 ) => {
   if (camTweenLock) return; // ignore while an animation is in progress
   if (!Number.isFinite(xWorld) || !Number.isFinite(yWorld)) return;
@@ -786,7 +784,7 @@ window.centerBoardOnElement = (el, desiredScale = scale, { duration = 320, cente
 window.centerBoardOnElementSlow = (
   el,
   desiredScale = scale,
-  { duration = 1100, centerFracX = 0.54, centerFracY = 0.5 } = {}
+  { duration = 1100, centerFracX, centerFracY = 0.5 } = {}
 ) => {
   if (!el || !stage) return;
   if (camTweenLock) return;
@@ -850,4 +848,5 @@ window.centerBoardOnElementSlow = (
     const initialY = initial.currentY ?? initial.targetY ?? y;
     syncViewportSnapshot({ scale: initialScale, x: initialX, y: initialY });
   }
+
 })();

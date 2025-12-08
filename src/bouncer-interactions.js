@@ -107,6 +107,7 @@ export function installBouncerInteractions({
   }
 
   async function onPointerDown(e){
+    if (window.gFocusedToy === panel) return;
     try { await resumeAudioContextIfNeeded(); } catch {}
     if (shouldDefer()) {
       if (previewApi.has && previewApi.has()) {

@@ -31,6 +31,7 @@ const state = {
 const BUTTON_ICON_HTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
 const OVERVIEW_ICON_OUT = "url('/assets/UI/T_ButtonOverviewZoomOut.png')";
 const OVERVIEW_ICON_IN = "url('/assets/UI/T_ButtonOverviewZoomIn.png')";
+const FOCUS_CLOSE_ICON = "url('/assets/UI/T_ButtonClose.png')";
 
 function updateHelpToggleUI(nextState) {
   if (typeof nextState === 'boolean') {
@@ -56,6 +57,34 @@ function updateOverviewToggleUI(nextState) {
     core.style.setProperty('--c-btn-icon-url', active ? OVERVIEW_ICON_IN : OVERVIEW_ICON_OUT);
   }
 }
+
+window.addEventListener('focus:change', (event) => {
+  const hasFocus = event.detail.hasFocus;
+  const button = state.overviewButton;
+  if (button) {
+    const core = button.querySelector('.c-btn-core');
+    if (core) {
+      if (hasFocus) {
+        core.style.setProperty('--c-btn-icon-url', FOCUS_CLOSE_ICON);
+        button.title = 'Close Focus';
+        // Add this line to change background to red
+        button.style.setProperty('--c-btn-bg', 'rgba(255, 0, 0, 0.9)');
+      } else {
+        const active = !!state.overviewActive;
+        core.style.setProperty('--c-btn-icon-url', active ? OVERVIEW_ICON_IN : OVERVIEW_ICON_OUT);
+        button.title = 'Overview';
+        // Add this line to change background back to purple
+        button.style.setProperty('--c-btn-bg', 'rgba(96, 82, 176, 0.9)'); // Original purple color
+      }
+    }
+  }
+
+  const toggleButton = state.toggle;
+  if (toggleButton) {
+    toggleButton.disabled = hasFocus;
+    toggleButton.style.display = hasFocus ? 'none' : '';
+  }
+});
 
 window.addEventListener('overview:change', (event) => {
   const active = typeof event?.detail?.active === 'boolean'
@@ -151,8 +180,12 @@ function ensureDock() {
 
   overview.addEventListener('click', (event) => {
     event.preventDefault();
-    overviewMode?.toggle?.(true);
-    updateOverviewToggleUI(overviewMode?.isActive?.());
+    if (window.__toyFocused) {
+      window.clearToyFocus();
+    } else {
+      overviewMode?.toggle?.(true);
+      updateOverviewToggleUI(overviewMode?.isActive?.());
+    }
   });
   overview.__bound = true;
 
@@ -321,15 +354,22 @@ function spawnAtDefault(entry) {
   if (!metrics) return false;
   const container = metrics.board.closest?.('.board-viewport') || document.documentElement;
   const viewportRect = container.getBoundingClientRect();
-  const targetScreenX = viewportRect.left + viewportRect.width * 0.6;
+
+  const guide = document.querySelector('.guide-launcher');
+  const spawner = document.querySelector('.toy-spawner-dock');
+  const guideRight = guide ? guide.getBoundingClientRect().right : 0;
+  const spawnerLeft = spawner ? spawner.getBoundingClientRect().left : window.innerWidth;
+  const centerX = (guideRight + spawnerLeft) / 2;
+
+  const targetScreenX = centerX;
   const targetScreenY = viewportRect.top + viewportRect.height * 0.5;
   const scaleX = Math.max(1e-6, metrics.scaleX || 1);
   const scaleY = Math.max(1e-6, metrics.scaleY || 1);
   // Convert viewport screen coords into world/board space, accounting for current zoom.
-  const centerX = (targetScreenX - metrics.rect.left) / scaleX;
-  const centerY = (targetScreenY - metrics.rect.top) / scaleY;
+  const worldCenterX = (targetScreenX - metrics.rect.left) / scaleX;
+  const worldCenterY = (targetScreenY - metrics.rect.top) / scaleY;
   try {
-    const panel = state.config.create?.(entry.type, { centerX, centerY, autoCenter: true });
+    const panel = state.config.create?.(entry.type, { centerX: worldCenterX, centerY: worldCenterY, autoCenter: true });
     return !!panel;
   } catch (err) {
     console.warn('[ToySpawner] default create failed', err);

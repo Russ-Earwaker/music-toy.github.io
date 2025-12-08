@@ -167,7 +167,15 @@ import { makeDebugLogger } from './debug-flags.js';
   }
 
   function onDown(e) {
-    if (e.target.closest('.toy-panel, button, a, input, select, textarea')) {
+    const onInteractive = e.target.closest('.toy-panel, button, a, input, select, textarea');
+    if (window.gFocusedToy && !onInteractive) {
+      // Per user request, do not exit focus mode when clicking on non-interactive
+      // background elements while a toy is focused.
+      e.preventDefault(); // Still prevent default to avoid unintentional text selection, etc.
+      return;
+    }
+
+    if (onInteractive) {
       return;
     }
     if (window.__tutorialZoomLock) {

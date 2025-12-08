@@ -1,7 +1,7 @@
 import { overviewMode } from './overview-mode.js';
 
 const ICON_OVERVIEW_IN = "url('/assets/UI/T_ButtonOverviewZoomIn.png')";
-const ICON_OVERVIEW_OUT = "url('/assets/UI/T_ButtonOverviewZoomOut.png')";
+const ICON_OVERVIEW_OUT = "url('/assets/UI/T_ButtonClose.png')";
 const SCALE_MIN = 0.3; // Keep in sync with board-viewport.js clamp
 const SCALE_MAX = 1.0; // Max zoom-in level
 
@@ -77,6 +77,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     overviewButton.__bound = true;
   }
+
+  window.addEventListener('focus:change', (event) => {
+    if (overviewButton) {
+      const hasFocus = event.detail.hasFocus;
+      overviewButton.classList.toggle('has-focused-toy', hasFocus);
+    }
+  });
 
   window.addEventListener('board:scale', (event) => {
     const nextScale = event?.detail?.scale;

@@ -486,7 +486,7 @@ export function createRippleSynth(selector){
 
   const getBlockRects = makeGetBlockRects(n2x, n2y, sizing, BASE, blocks);
 
-  const input = makePointerHandlers({ generatorRef: {
+  const input = makePointerHandlers({ panel, generatorRef: {
       get x(){ return n2x(generator.nx); },
       get y(){ return n2y(generator.ny); },
       place(x,y){ this.set(x,y); },

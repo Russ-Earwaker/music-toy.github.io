@@ -499,35 +499,64 @@ function animateFocusScale(panel, fromScale, toScale) {
   }).catch(() => {});
 }
 
-function setToyFocus(panel, { center = false } = {}) { // center retained for API compatibility
-  if (!panel || !panel.isConnected || !isFocusManagedPanel(panel)) return;
-  g_focusedToyId = panel.id;
+window.clearToyFocus = () => setToyFocus(null);
+function setToyFocus(panel, { center = true } = {}) { // default center=true
+  if (panel && (!panel.isConnected || !isFocusManagedPanel(panel))) {
+    g_focusedToyId = null;
+    window.__toyFocused = false;
+    window.gFocusedToy = null;
+    return;
+  }
+
+  g_focusedToyId = panel ? panel.id : null;
+  window.__toyFocused = !!panel;
+  window.gFocusedToy = panel;
+
   document.querySelectorAll('.toy-panel').forEach((p) => {
     if (!isFocusManagedPanel(p)) return;
-    const spawnHint = Number.parseFloat(p.dataset.spawnScaleHint);
-    const startScale = Number.isFinite(spawnHint) ? spawnHint : getPanelScale(p);
     const isFocus = p === panel;
+    const wasFocused = p.classList.contains('toy-focused');
+    if (wasFocused === isFocus) return;
+
     p.classList.toggle('toy-focused', isFocus);
     p.classList.toggle('toy-unfocused', !isFocus);
-    const targetScale = p.classList.contains('toy-unfocused') ? 0.75 : 1;
+
+    const spawnHint = Number.parseFloat(p.dataset.spawnScaleHint);
+    const startScale = Number.isFinite(spawnHint) ? spawnHint : getPanelScale(p);
+    const targetScale = isFocus ? 1.0 : 0.75;
     animateFocusScale(p, startScale, targetScale);
     if (Number.isFinite(spawnHint)) {
       delete p.dataset.spawnScaleHint;
     }
-    // Prevent interaction on unfocused toys
+
     const body = p.querySelector('.toy-body');
     if (!isFocus) {
       p.style.pointerEvents = 'auto'; // allow dragging via panel
       if (body) body.style.pointerEvents = 'none';
     } else {
+      p.style.pointerEvents = 'none'; // disable dragging on focused toy
       if (body) body.style.pointerEvents = '';
     }
   });
+
+  if (panel && center) {
+    requestAnimationFrame(() => {
+      const guide = document.querySelector('.guide-launcher');
+      const spawner = document.querySelector('.toy-spawner-dock');
+      const guideRight = guide ? guide.getBoundingClientRect().right : 0;
+      const spawnerLeft = spawner ? spawner.getBoundingClientRect().left : window.innerWidth;
+      const centerX = (guideRight + spawnerLeft) / 2;
+      const centerFracX = centerX / window.innerWidth;
+      window.centerBoardOnElementSlow?.(panel, 1.0, { centerFracX });
+    });
+  }
+  
   try {
     rebuildChainSegments();
     g_chainRedrawPendingFull = true;
     scheduleChainRedraw();
   } catch {}
+  window.dispatchEvent(new CustomEvent('focus:change', { detail: { hasFocus: !!panel } }));
 }
 
 
@@ -1500,7 +1529,7 @@ function initToyChaining(panel) {
                 // Always focus the newly created toy, even if the source toy was unfocused.
                 const focusNew = () => {
                     if (newPanel.isConnected) {
-                        setToyFocus(newPanel, { center: false });
+                        setToyFocus(newPanel, { center: true });
                     }
                 };
                 focusNew();
@@ -1645,8 +1674,6 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument, autoCenter } 
         try { initializeNewToy(panel); } catch (err) { console.warn('[createToyPanelAt] init failed', err); }
         try { initToyChaining(panel); } catch (err) { console.warn('[createToyPanelAt] chain init failed', err); }
 
-        setToyFocus(panel, { center: false });
-
         const finalizePlacement = () => {
             const followUp = ensurePanelSpawnPlacement(panel, {
                 fallbackWidth: width,
@@ -1663,7 +1690,7 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument, autoCenter } 
             delete panel.dataset.spawnAutoLeft;
             delete panel.dataset.spawnAutoTop;
             if (panel.isConnected) {
-                setToyFocus(panel, { center: false });
+                setToyFocus(panel, { center: true });
             }
             if (shouldHintOffscreen) {
                 const rafCheck = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));
@@ -2550,10 +2577,40 @@ async function boot(){
         console.warn('[CHAIN] initial redraw failed', err);
       }
     }
+    /*
     if (!g_focusedToyId) {
       const firstPanel = document.querySelector('.toy-panel');
       if (firstPanel) {
         setToyFocus(firstPanel, { center: false });
+      }
+    }
+    */
+
+    // On load, if no toys are on screen, snap to the nearest one.
+    const allPanels = Array.from(document.querySelectorAll('.toy-panel'));
+    if (allPanels.length > 0) {
+      const allOffscreen = allPanels.every(isPanelCenterOffscreen);
+      if (allOffscreen) {
+        const viewportCenter = window.getViewportCenterWorld && window.getViewportCenterWorld();
+        if (viewportCenter) {
+          let closestPanel = null;
+          let minDistance = Infinity;
+          allPanels.forEach(panel => {
+            const panelCenter = window.getWorldCenter && window.getWorldCenter(panel);
+            if (panelCenter) {
+              const dx = panelCenter.x - viewportCenter.x;
+              const dy = panelCenter.y - viewportCenter.y;
+              const distance = Math.sqrt(dx * dx + dy * dy);
+              if (distance < minDistance) {
+                minDistance = distance;
+                closestPanel = panel;
+              }
+            }
+          });
+          if (closestPanel) {
+            window.centerBoardOnElementSlow && window.centerBoardOnElementSlow(closestPanel);
+          }
+        }
       }
     }
 
@@ -2785,7 +2842,11 @@ async function boot(){
 
   document.addEventListener('pointerup', (e) => {
     if (pendingFocus && pendingFocusId === e.pointerId) {
-      setToyFocus(pendingFocus, { center: false });
+      if (pendingFocus.classList.contains('toy-focused')) {
+        setToyFocus(null);
+      } else {
+        setToyFocus(pendingFocus, { center: true });
+      }
     }
     pendingFocus = null;
     pendingFocusPos = null;
