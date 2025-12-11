@@ -2636,6 +2636,30 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
   background: rgba(255, 255, 255, 0.04);
 }
 
+.scene-slot-thumb {
+  flex: 0 0 auto;
+  width: 72px;
+  height: 40px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scene-slot-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.scene-slot-thumb-placeholder {
+  font-size: 1.2rem;
+  opacity: 0.4;
+}
+
 .scene-slot.empty {
   opacity: 0.8;
 }
@@ -2693,6 +2717,8 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
 .scene-manager-footer {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
   margin-top: 6px;
 }
 
@@ -2704,4 +2730,9 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
   cursor: pointer;
   background: rgba(255, 255, 255, 0.12);
   color: inherit;
+}
+
+/* Ensure board background uses simple color html2canvas can parse */
+#board {
+  background: #000;
 }

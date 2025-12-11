@@ -2,6 +2,7 @@
 // Lightweight scene save/load with versioning and localStorage backend.
 
 import { bpm, setBpm } from './audio-core.js';
+import { setGestureTransform as zcSetGestureTransform, commitGesture as zcCommitGesture, getZoomState as zcGetZoomState } from './zoom/ZoomCoordinator.js';
 import { getActiveThemeKey, setActiveThemeKey } from './theme-manager.js';
 
 // ---- Persistence diagnostics ----
@@ -394,6 +395,123 @@ function applyDrawGrid(panel, state) {
   }
 }
 
+function captureCameraState() {
+  try {
+    const viewport = document.querySelector('.board-viewport');
+    const board = document.getElementById('board');
+    if (!viewport || !board) return null;
+
+    const zoom = (typeof zcGetZoomState === 'function') ? zcGetZoomState() : (typeof window !== 'undefined' && typeof window.getZoomState === 'function' ? window.getZoomState() : null);
+    const zoomScale = Number.isFinite(zoom?.currentScale) ? zoom.currentScale : Number.isFinite(zoom?.targetScale) ? zoom.targetScale : Number(window?.__boardScale);
+    const zoomX = Number.isFinite(zoom?.currentX) ? zoom.currentX : Number.isFinite(zoom?.targetX) ? zoom.targetX : Number(window?.__boardX);
+    const zoomY = Number.isFinite(zoom?.currentY) ? zoom.currentY : Number.isFinite(zoom?.targetY) ? zoom.targetY : Number(window?.__boardY);
+
+    const cs = getComputedStyle(board);
+    const bvScale = cs.getPropertyValue('--bv-scale') || '';
+    const bvOffsetX = cs.getPropertyValue('--bv-offset-x') || '';
+    const bvOffsetY = cs.getPropertyValue('--bv-offset-y') || '';
+
+    const overviewActive = !!(window.__overviewMode?.state?.isActive || window.overviewMode?.state?.isActive);
+
+    return {
+      boardTransform: board.style.transform || '',
+      viewportScrollLeft: viewport.scrollLeft || 0,
+      viewportScrollTop: viewport.scrollTop || 0,
+      bvScale: bvScale.trim() || undefined,
+      bvOffsetX: bvOffsetX.trim() || undefined,
+      bvOffsetY: bvOffsetY.trim() || undefined,
+      scale: Number.isFinite(zoomScale) ? zoomScale : undefined,
+      x: Number.isFinite(zoomX) ? zoomX : undefined,
+      y: Number.isFinite(zoomY) ? zoomY : undefined,
+      overviewActive
+    };
+  } catch (err) {
+    console.warn('[persistence] captureCameraState failed', err);
+    return null;
+  }
+}
+
+function applyCameraState(camera) {
+  if (!camera || typeof camera !== 'object') return;
+  try {
+    const parseNum = (v) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
+
+    // Parse translate/scale from a transform string if present (e.g., "translate3d(xpx, ypx, 0) scale(s)")
+    const parseTransform = (tr) => {
+      if (!tr || typeof tr !== 'string') return {};
+      const match = tr.match(/translate3d?\s*\(\s*([-0-9.]+)px[^0-9.-]*([-0-9.]+)px/i);
+      const scaleMatch = tr.match(/scale\s*\(\s*([-0-9.]+)\s*\)/i);
+      const tx = match ? parseNum(match[1]) : null;
+      const ty = match ? parseNum(match[2]) : null;
+      const sc = scaleMatch ? parseNum(scaleMatch[1]) : null;
+      return { tx, ty, sc };
+    };
+
+    const { tx: parsedTx, ty: parsedTy, sc: parsedScale } = parseTransform(camera.boardTransform);
+    const scaleVal = parseNum(camera.scale ?? camera.bvScale ?? parsedScale);
+    const xVal = parseNum(camera.x ?? camera.bvOffsetX ?? parsedTx);
+    const yVal = parseNum(camera.y ?? camera.bvOffsetY ?? parsedTy);
+
+    const viewport = document.querySelector('.board-viewport');
+    const board = document.getElementById('board');
+
+    // If ZoomCoordinator is available, drive it so internal state matches the restored view.
+    if (typeof zcSetGestureTransform === 'function' && typeof zcCommitGesture === 'function') {
+      const targetScale = Number.isFinite(scaleVal) ? scaleVal : 1;
+      const targetX = Number.isFinite(xVal) ? xVal : 0;
+      const targetY = Number.isFinite(yVal) ? yVal : 0;
+      try { zcSetGestureTransform({ scale: targetScale, x: targetX, y: targetY }); } catch {}
+      try { zcCommitGesture({ scale: targetScale, x: targetX, y: targetY }, { delayMs: 0 }); } catch {}
+      try { localStorage.setItem('boardViewport', JSON.stringify({ scale: targetScale, x: targetX, y: targetY })); } catch {}
+    }
+
+    if (viewport) {
+      if (Number.isFinite(camera.viewportScrollLeft)) {
+        viewport.scrollLeft = camera.viewportScrollLeft;
+      }
+      if (Number.isFinite(camera.viewportScrollTop)) {
+        viewport.scrollTop = camera.viewportScrollTop;
+      }
+    }
+
+    if (board) {
+      if (typeof camera.boardTransform === 'string' && camera.boardTransform) {
+        board.style.transform = camera.boardTransform;
+      }
+
+      const setVar = (name, val) => {
+        if (val === undefined || val === null) return;
+        const s = String(val).trim();
+        if (!s) return;
+        try { board.style.setProperty(name, s); } catch {}
+      };
+
+      setVar('--bv-scale', camera.bvScale);
+      setVar('--bv-offset-x', camera.bvOffsetX);
+      setVar('--bv-offset-y', camera.bvOffsetY);
+    }
+
+    // Restore overview mode toggle if captured
+    if (typeof camera.overviewActive === 'boolean') {
+      const ov = window.__overviewMode || window.overviewMode;
+      if (ov && ov.state) {
+        try {
+          if (camera.overviewActive && !ov.state.isActive) {
+            ov.enter?.(false);
+          } else if (!camera.overviewActive && ov.state.isActive) {
+            ov.exit?.(false);
+          }
+        } catch {}
+      }
+    }
+  } catch (err) {
+    console.warn('[persistence] applyCameraState failed', err);
+  }
+}
+
 const ToySnapshotters = {
   loopgrid: { snap: snapLoopGrid, apply: applyLoopGrid },
   'loopgrid-drum': { snap: snapLoopGrid, apply: applyLoopGrid },
@@ -439,7 +557,8 @@ export function getSnapshot(){
       solo: undefined,
     };
   });
-  // --- Capture chain links (parent → child) ---
+
+  // --- Capture chain links (parent -> child) ---
   const chains = [];
   try {
     const chainedPanels = Array.from(document.querySelectorAll('.toy-panel[id]'));
@@ -449,6 +568,10 @@ export function getSnapshot(){
       if (childId && parentId) chains.push({ parentId, childId });
     }
   } catch {}
+
+  // --- Capture camera / board view ---
+  const camera = captureCameraState();
+
   return {
     schemaVersion: SCHEMA_VERSION,
     createdAt: nowIso(),
@@ -457,6 +580,7 @@ export function getSnapshot(){
     themeId: getActiveThemeKey?.() || undefined,
     toys,
     chains,
+    camera,
   };
 }
 
@@ -481,6 +605,16 @@ export function applySceneSnapshot(snap){
     // Transport
     if (snap.transport && typeof snap.transport.bpm !== 'undefined'){
       try{ setBpm(Number(snap.transport.bpm)||bpm); }catch{}
+    }
+
+    // Camera / board view (newer snapshots)
+    if (snap.camera || snap.boardView) {
+      try {
+        // support either .camera (new) or .boardView (if we ever rename) 
+        applyCameraState(snap.camera || snap.boardView);
+      } catch (err) {
+        console.warn('[persistence] camera restore failed', err);
+      }
     }
 
     // Toys: match by id first, else by type order.
@@ -882,7 +1016,31 @@ try {
 } catch {}
 
 // Expose in window for quick manual access/debug
-try{ window.Persistence = { getSnapshot, applySnapshot, saveScene, loadScene, listScenes, deleteScene, exportScene, importScene, startAutosave, stopAutosave, markDirty, tryRestoreOnBoot, flushAutosaveNow, flushBeforeRefresh, listSceneSlots, getScenePackageFromSlot, saveScenePackageToSlot, deleteSceneSlot, loadSceneFromSlot, SCENE_SLOT_IDS, MAX_SCENE_SLOTS }; }catch{}
+try{ window.Persistence = {
+  getSnapshot,
+  applySnapshot,
+  saveScene,
+  loadScene,
+  listScenes,
+  deleteScene,
+  exportScene,
+  importScene,
+  startAutosave,
+  stopAutosave,
+  markDirty,
+  tryRestoreOnBoot,
+  flushAutosaveNow,
+  flushBeforeRefresh,
+  listSceneSlots,
+  getScenePackageFromSlot,
+  saveScenePackageToSlot,
+  deleteSceneSlot,
+  loadSceneFromSlot,
+  SCENE_SLOT_IDS,
+  MAX_SCENE_SLOTS,
+  wrapSnapshotAsPackage,
+  isScenePackage,
+}; }catch{}
 if (typeof window !== 'undefined') {
   window.__PERSIST_DEBUG = {
     readKey: (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },

@@ -43,6 +43,8 @@
             <ul class="scene-slot-list"></ul>
           </div>
           <div class="scene-manager-footer">
+            <input class="scene-manager-import-input" type="file" accept=".json,.mt,.mtjson,application/json" style="display:none" />
+            <button class="scene-manager-footer-btn" type="button" data-scene-manager-action="import">Import from file</button>
             <button class="scene-manager-footer-btn" type="button" data-scene-manager-action="close">Close</button>
           </div>
         </div>
@@ -57,8 +59,24 @@
     // Close on X or footer Close
     const closeBtn = overlayEl.querySelector('.scene-manager-close');
     const closeFooterBtn = overlayEl.querySelector('[data-scene-manager-action="close"]');
+    const importBtn = overlayEl.querySelector('[data-scene-manager-action="import"]');
+    const importInput = overlayEl.querySelector('.scene-manager-import-input');
+
     if (closeBtn) closeBtn.addEventListener('click', closeSceneManager);
     if (closeFooterBtn) closeFooterBtn.addEventListener('click', closeSceneManager);
+
+    if (importBtn && importInput) {
+      importBtn.addEventListener('click', () => {
+        importInput.value = '';
+        importInput.click();
+      });
+      importInput.addEventListener('change', (evt) => {
+        const file = evt.target.files && evt.target.files[0];
+        if (file) {
+          handleImportFile(file);
+        }
+      });
+    }
 
     // Close when clicking backdrop (but not panel)
     overlayEl.addEventListener('click', (evt) => {
@@ -97,6 +115,22 @@
     const li = document.createElement('li');
     li.className = 'scene-slot' + (isEmpty ? ' empty' : '');
     li.dataset.slotId = slotId;
+
+    // Thumbnail area
+    const thumbWrapper = document.createElement('div');
+    thumbWrapper.className = 'scene-slot-thumb';
+
+    if (!isEmpty && pkg && pkg.thumbnail) {
+      const img = document.createElement('img');
+      img.src = pkg.thumbnail;
+      img.alt = displayName || `Save ${index + 1}`;
+      thumbWrapper.appendChild(img);
+    } else {
+      const ph = document.createElement('div');
+      ph.className = 'scene-slot-thumb-placeholder';
+      ph.textContent = isEmpty ? '+' : '…';
+      thumbWrapper.appendChild(ph);
+    }
 
     const main = document.createElement('div');
     main.className = 'scene-slot-main';
@@ -139,6 +173,14 @@
       loadBtn.addEventListener('click', () => handleLoadSlot(slotId));
       buttons.appendChild(loadBtn);
 
+      // Export button
+      const exportBtn = document.createElement('button');
+      exportBtn.type = 'button';
+      exportBtn.className = 'scene-slot-btn';
+      exportBtn.textContent = 'Export';
+      exportBtn.addEventListener('click', () => handleExportSlot(slotId));
+      buttons.appendChild(exportBtn);
+
       // Delete button
       const delBtn = document.createElement('button');
       delBtn.type = 'button';
@@ -148,6 +190,7 @@
       buttons.appendChild(delBtn);
     }
 
+    li.appendChild(thumbWrapper);
     li.appendChild(main);
     li.appendChild(buttons);
     return li;
@@ -228,6 +271,131 @@
     // No full re-render to keep it simple; caller already updates visible text.
   }
 
+  function canCaptureThumbnail() {
+    const hasWindow = typeof window !== 'undefined';
+    const fnType = hasWindow ? typeof window.html2canvas : 'n/a';
+    const ok = hasWindow && fnType === 'function';
+
+    if (!ok) {
+      console.warn('[SceneManager] html2canvas not available; thumbnails disabled', {
+        hasWindow,
+        html2canvasType: fnType
+      });
+    }
+    return ok;
+  }
+
+  function captureThumbnailForSlot(slotId) {
+    const P = getPersistence();
+    if (!P) return;
+
+    if (!canCaptureThumbnail()) {
+      return;
+    }
+
+    const target = document.querySelector('.board-viewport');
+    if (!target) {
+      console.warn('[SceneManager] no .board-viewport found for thumbnail capture');
+      return;
+    }
+
+    const opts = {
+      scale: 0.25,
+      backgroundColor: '#000000',
+      // IMPORTANT: sanitize in the cloned DOM, not the live DOM
+      onclone: (doc) => {
+        try {
+          const cloneTarget = doc.querySelector('.board-viewport');
+          if (!cloneTarget) {
+            console.warn('[SceneManager] onclone: no .board-viewport in clone');
+            return;
+          }
+
+          const propsToCheck = [
+            'background',
+            'background-image',
+            'background-color',
+            'color',
+            'box-shadow',
+            'border',
+            'border-color',
+            'border-top-color',
+            'border-right-color',
+            'border-bottom-color',
+            'border-left-color',
+            'outline-color',
+            'text-shadow'
+          ];
+
+          const win = doc.defaultView || window;
+
+          function sanitizeEl(el) {
+            const cs = win.getComputedStyle(el);
+            let touched = false;
+
+            for (const prop of propsToCheck) {
+              const val = cs.getPropertyValue(prop);
+              if (val && val.includes('color(')) {
+                touched = true;
+                // Apply a safe inline override on the CLONE
+                if (prop.startsWith('background')) {
+                  el.style.setProperty('background-image', 'none', 'important');
+                  el.style.setProperty('background-color', 'transparent', 'important');
+                } else if (prop === 'color' || prop.endsWith('-color')) {
+                  el.style.setProperty(prop, '#ffffff', 'important');
+                } else if (prop === 'box-shadow' || prop === 'text-shadow') {
+                  el.style.setProperty(prop, 'none', 'important');
+                }
+              }
+            }
+
+            return touched;
+          }
+
+          let patchedCount = 0;
+          // Sanitize the viewport and all its descendants in the clone
+          if (sanitizeEl(cloneTarget)) patchedCount++;
+          cloneTarget.querySelectorAll('*').forEach((el) => {
+            if (sanitizeEl(el)) patchedCount++;
+          });
+
+          if (patchedCount) {
+            console.log('[SceneManager] onclone sanitizer patched elements', patchedCount);
+          }
+        } catch (err) {
+          console.warn('[SceneManager] onclone sanitizer failed', err);
+        }
+      }
+    };
+
+    console.log('[SceneManager] capturing thumbnail for slot', slotId, { target });
+
+    window.html2canvas(target, opts)
+      .then((canvas) => {
+        try {
+          const dataUrl = canvas.toDataURL('image/png');
+          const pkg = P.getScenePackageFromSlot
+            ? P.getScenePackageFromSlot(slotId)
+            : null;
+
+          if (!pkg) {
+            console.warn('[SceneManager] capture ok but no pkg for slot', slotId);
+            return;
+          }
+
+          pkg.thumbnail = dataUrl;
+          P.saveScenePackageToSlot(slotId, pkg);
+          console.log('[SceneManager] thumbnail saved for slot', slotId);
+          renderSlots();
+        } catch (err) {
+          console.warn('[SceneManager] failed to save thumbnail', err);
+        }
+      })
+      .catch((err) => {
+        console.warn('[SceneManager] html2canvas capture failed', err);
+      });
+  }
+
   function handleSaveToSlot(slotId, index) {
     const P = getPersistence();
     if (!P.getSnapshot || !P.saveScenePackageToSlot) return;
@@ -243,13 +411,20 @@
       if (!ok) return;
     }
 
+    // Basic package (no thumbnail yet, or keep existing thumbnail)
+    const existingThumb = existingMeta?.package?.thumbnail || null;
     const pkg = {
       displayName: defaultName,
-      payload: snap
+      payload: snap,
+      thumbnail: existingThumb
     };
 
+    // Save immediately so data is safe
     P.saveScenePackageToSlot(slotId, pkg);
     renderSlots();
+
+    // Then try to capture a fresh thumbnail in the background
+    captureThumbnailForSlot(slotId);
   }
 
   function handleLoadSlot(slotId) {
@@ -261,6 +436,89 @@
     } else {
       window.alert('Could not load this scene.');
     }
+  }
+
+  function handleExportSlot(slotId) {
+    const P = getPersistence();
+    if (!P || !P.getScenePackageFromSlot) return;
+    const pkg = P.getScenePackageFromSlot(slotId);
+    if (!pkg) {
+      window.alert('No scene in this slot to export.');
+      return;
+    }
+
+    const data = JSON.stringify(pkg, null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+
+    const baseName = (pkg.displayName || slotId || 'scene')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'scene';
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `musictoy-${baseName}.mt.json`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 0);
+  }
+
+  function handleImportFile(file) {
+    const P = getPersistence();
+    if (!P) return;
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const text = String(evt.target?.result || '');
+        const raw = JSON.parse(text);
+
+        let pkg = null;
+
+        // Prefer Persistence.isScenePackage if available
+        const isPkg = typeof P.isScenePackage === 'function'
+          ? P.isScenePackage(raw)
+          : (raw && raw.type === 'music-toys-scene' && raw.payload);
+
+        if (isPkg) {
+          pkg = raw;
+        } else {
+          // Treat as bare snapshot or legacy export; wrap into a package if possible
+          const snapshot = (raw && raw.payload && typeof raw.payload === 'object')
+            ? raw.payload
+            : raw;
+          const displayName =
+            (snapshot && snapshot.displayName) ||
+            (typeof file.name === 'string' ? file.name.replace(/\.[^.]+$/, '') : 'Imported scene');
+
+          if (typeof P.wrapSnapshotAsPackage === 'function') {
+            pkg = P.wrapSnapshotAsPackage(snapshot, { displayName });
+          } else {
+            pkg = { displayName, payload: snapshot };
+          }
+        }
+
+        const slots = (P.listSceneSlots && P.listSceneSlots()) || [];
+        let target = slots.find(s => s.isEmpty);
+        if (!target) {
+          window.alert('No empty save slots. Please delete a save before importing.');
+          return;
+        }
+
+        P.saveScenePackageToSlot(target.slotId, pkg);
+        renderSlots();
+        window.alert(`Imported scene into ${target.displayName || target.slotId}.`);
+      } catch (err) {
+        console.warn('[SceneManager] import failed', err);
+        window.alert('Could not import this file. Is it a valid scene export?');
+      }
+    };
+    reader.readAsText(file);
   }
 
   function handleDeleteSlot(slotId) {
