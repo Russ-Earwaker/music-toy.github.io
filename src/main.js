@@ -534,7 +534,8 @@ function setToyFocus(panel, { center = true } = {}) { // default center=true
       p.style.pointerEvents = 'auto'; // allow dragging via panel
       if (body) body.style.pointerEvents = 'none';
     } else {
-      p.style.pointerEvents = 'none'; // disable dragging on focused toy
+      // Keep controls clickable while focused; dragging is already blocked by the global focus guard.
+      p.style.pointerEvents = 'auto';
       if (body) body.style.pointerEvents = '';
     }
   });
