@@ -75,6 +75,28 @@ const MAX_SCENE_SLOTS = 12;
 
 // slot-1, slot-2, ... slot-12
 const SCENE_SLOT_IDS = Array.from({ length: MAX_SCENE_SLOTS }, (_, i) => `slot-${i + 1}`);
+const CURRENT_SCENE_SLOT_KEY = 'scene:current-slot-id';
+
+function getCurrentSceneSlotId() {
+  try {
+    return window.localStorage.getItem(CURRENT_SCENE_SLOT_KEY);
+  } catch (err) {
+    console.warn('[Persistence] getCurrentSceneSlotId failed', err);
+    return null;
+  }
+}
+
+function setCurrentSceneSlotId(slotId) {
+  try {
+    if (!slotId) {
+      window.localStorage.removeItem(CURRENT_SCENE_SLOT_KEY);
+    } else {
+      window.localStorage.setItem(CURRENT_SCENE_SLOT_KEY, String(slotId));
+    }
+  } catch (err) {
+    console.warn('[Persistence] setCurrentSceneSlotId failed', err);
+  }
+}
 
 // Storage key helpers
 function makeSceneStorageKeyFromSlot(slotId) {
@@ -1040,6 +1062,8 @@ try{ window.Persistence = {
   MAX_SCENE_SLOTS,
   wrapSnapshotAsPackage,
   isScenePackage,
+  getCurrentSceneSlotId,
+  setCurrentSceneSlotId,
 }; }catch{}
 if (typeof window !== 'undefined') {
   window.__PERSIST_DEBUG = {

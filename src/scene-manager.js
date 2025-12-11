@@ -1,4 +1,4 @@
-// src/scene-manager.js
+﻿// src/scene-manager.js
 // Scene Manager overlay for save/load/delete using Persistence slots.
 
 (function () {
@@ -8,7 +8,8 @@
   let panelEl = null;
   let listEl = null;
   let modeLabelEl = null;
-  let currentMode = 'manage'; // 'save' | 'load' | 'manage'
+  let currentMode = 'save'; // 'save' | 'load' | 'manage'
+  let currentSlotId = null;
 
   function getPersistence() {
     const P = window.Persistence || {};
@@ -45,7 +46,6 @@
           <div class="scene-manager-footer">
             <input class="scene-manager-import-input" type="file" accept=".json,.mt,.mtjson,application/json" style="display:none" />
             <button class="scene-manager-footer-btn" type="button" data-scene-manager-action="import">Import from file</button>
-            <button class="scene-manager-footer-btn" type="button" data-scene-manager-action="close">Close</button>
           </div>
         </div>
       `;
@@ -56,14 +56,12 @@
     listEl = overlayEl.querySelector('.scene-slot-list');
     modeLabelEl = overlayEl.querySelector('.scene-manager-mode-label');
 
-    // Close on X or footer Close
+    // Close on X
     const closeBtn = overlayEl.querySelector('.scene-manager-close');
-    const closeFooterBtn = overlayEl.querySelector('[data-scene-manager-action="close"]');
     const importBtn = overlayEl.querySelector('[data-scene-manager-action="import"]');
     const importInput = overlayEl.querySelector('.scene-manager-import-input');
 
     if (closeBtn) closeBtn.addEventListener('click', closeSceneManager);
-    if (closeFooterBtn) closeFooterBtn.addEventListener('click', closeSceneManager);
 
     if (importBtn && importInput) {
       importBtn.addEventListener('click', () => {
@@ -85,14 +83,26 @@
       }
     });
 
+    // Capture mouse wheel to scroll the slot list instead of zooming the board behind
+    overlayEl.addEventListener('wheel', (evt) => {
+      if (!listEl) return;
+
+      const deltaY = evt.deltaY;
+      if (deltaY === 0) return;
+
+      listEl.scrollTop += deltaY;
+      evt.preventDefault();
+      evt.stopPropagation();
+    }, { passive: false });
+
     return { overlayEl, panelEl, listEl, modeLabelEl };
   }
 
   function setModeLabel(mode) {
     if (!modeLabelEl) return;
     let label = '';
-    if (mode === 'save') label = '· Save to slot';
-    else if (mode === 'load') label = '· Load scene';
+    if (mode === 'save') label = 'Â· Save to slot';
+    else if (mode === 'load') label = 'Â· Load scene';
     else label = '';
     modeLabelEl.textContent = label;
   }
@@ -100,6 +110,10 @@
   function renderSlots() {
     const P = getPersistence();
     if (!P.listSceneSlots || !listEl) return;
+
+    currentSlotId = typeof P.getCurrentSceneSlotId === 'function'
+      ? P.getCurrentSceneSlotId()
+      : null;
 
     const slots = P.listSceneSlots();
     listEl.textContent = '';
@@ -110,13 +124,28 @@
     });
   }
 
-  function createSlotRow(meta) {
+        function createSlotRow(meta) {
     const { slotId, index, isEmpty, displayName, package: pkg } = meta;
     const li = document.createElement('li');
-    li.className = 'scene-slot' + (isEmpty ? ' empty' : '');
+    let className = 'scene-slot';
+    if (isEmpty) className += ' empty';
+    if (slotId && slotId === currentSlotId) className += ' is-current';
+    li.className = className;
     li.dataset.slotId = slotId;
 
-    // Thumbnail area
+    // Main vertical layout
+    const main = document.createElement('div');
+    main.className = 'scene-slot-main';
+
+    // Name at the top
+    const nameEl = document.createElement('div');
+    nameEl.className = 'scene-slot-name';
+    nameEl.textContent = displayName || `Save ${index + 1}`;
+    nameEl.title = 'Click to rename';
+    nameEl.addEventListener('click', () => beginRenameSlot(slotId, nameEl));
+    main.appendChild(nameEl);
+
+    // Screenshot in the middle
     const thumbWrapper = document.createElement('div');
     thumbWrapper.className = 'scene-slot-thumb';
 
@@ -128,39 +157,33 @@
     } else {
       const ph = document.createElement('div');
       ph.className = 'scene-slot-thumb-placeholder';
-      ph.textContent = isEmpty ? '+' : '…';
+      ph.textContent = isEmpty ? '+' : '\u2026';
       thumbWrapper.appendChild(ph);
     }
 
-    const main = document.createElement('div');
-    main.className = 'scene-slot-main';
+    main.appendChild(thumbWrapper);
 
-    const nameEl = document.createElement('div');
-    nameEl.className = 'scene-slot-name';
-    nameEl.textContent = displayName || `Save ${index + 1}`;
-    nameEl.title = 'Click to rename';
-    nameEl.addEventListener('click', () => beginRenameSlot(slotId, nameEl));
-
+    // Meta line under screenshot
     const metaEl = document.createElement('div');
     metaEl.className = 'scene-slot-meta';
     if (pkg && (pkg.updatedAt || pkg.createdAt)) {
       const updated = pkg.updatedAt || pkg.createdAt;
-      metaEl.textContent = `Slot ${index + 1} · Updated ${formatTimestamp(updated)}`;
+      metaEl.textContent = `Slot ${index + 1} \u00b7 Updated ${formatTimestamp(updated)}`;
     } else {
-      metaEl.textContent = `Slot ${index + 1} · Empty`;
+      metaEl.textContent = `Slot ${index + 1} \u00b7 Empty`;
     }
-
-    main.appendChild(nameEl);
     main.appendChild(metaEl);
 
+    // Buttons at the bottom
     const buttons = document.createElement('div');
     buttons.className = 'scene-slot-buttons';
 
-    // Save button (always present)
+    // Save button (always labelled "Save")
     const saveBtn = document.createElement('button');
     saveBtn.type = 'button';
     saveBtn.className = 'scene-slot-btn primary';
-    saveBtn.textContent = isEmpty ? 'Save' : 'Overwrite';
+    // We confirm overwrites inside handleSaveToSlot if the slot is not empty
+    saveBtn.textContent = 'Save';
     saveBtn.addEventListener('click', () => handleSaveToSlot(slotId, index));
     buttons.appendChild(saveBtn);
 
@@ -173,30 +196,29 @@
       loadBtn.addEventListener('click', () => handleLoadSlot(slotId));
       buttons.appendChild(loadBtn);
 
-      // Export button
-      const exportBtn = document.createElement('button');
-      exportBtn.type = 'button';
-      exportBtn.className = 'scene-slot-btn';
-      exportBtn.textContent = 'Export';
-      exportBtn.addEventListener('click', () => handleExportSlot(slotId));
-      buttons.appendChild(exportBtn);
-
-      // Delete button
+      // Delete button (still on the left group)
       const delBtn = document.createElement('button');
       delBtn.type = 'button';
       delBtn.className = 'scene-slot-btn';
       delBtn.textContent = 'Delete';
       delBtn.addEventListener('click', () => handleDeleteSlot(slotId));
       buttons.appendChild(delBtn);
+
+      // Download to Share (on the far right)
+      const exportBtn = document.createElement('button');
+      exportBtn.type = 'button';
+      exportBtn.className = 'scene-slot-btn scene-slot-btn-download';
+      exportBtn.textContent = 'Download to Share';
+      exportBtn.title = 'Download this scene as a file you can share';
+      exportBtn.addEventListener('click', () => handleExportSlot(slotId));
+      buttons.appendChild(exportBtn);
     }
 
-    li.appendChild(thumbWrapper);
+    main.appendChild(buttons);
     li.appendChild(main);
-    li.appendChild(buttons);
     return li;
   }
-
-  function formatTimestamp(iso) {
+function formatTimestamp(iso) {
     if (!iso) return '';
     try {
       const d = new Date(iso);
@@ -300,7 +322,7 @@
     }
 
     const opts = {
-      scale: 0.25,
+      scale: 0.5,
       backgroundColor: '#000000',
       // IMPORTANT: sanitize in the cloned DOM, not the live DOM
       onclone: (doc) => {
@@ -406,7 +428,7 @@
     const defaultName = existingMeta?.displayName || `Save ${index + 1}`;
 
     // Optional confirm on overwrite when in load/manage mode
-    if (existingMeta && !existingMeta.isEmpty && currentMode !== 'save') {
+    if (existingMeta && !existingMeta.isEmpty) {
       const ok = window.confirm('Overwrite this save slot?');
       if (!ok) return;
     }
@@ -421,6 +443,11 @@
 
     // Save immediately so data is safe
     P.saveScenePackageToSlot(slotId, pkg);
+
+    if (typeof P.setCurrentSceneSlotId === 'function') {
+      P.setCurrentSceneSlotId(slotId);
+    }
+
     renderSlots();
 
     // Then try to capture a fresh thumbnail in the background
@@ -432,6 +459,9 @@
     if (!P.loadSceneFromSlot) return;
     const ok = P.loadSceneFromSlot(slotId);
     if (ok) {
+      if (typeof P.setCurrentSceneSlotId === 'function') {
+        P.setCurrentSceneSlotId(slotId);
+      }
       closeSceneManager();
     } else {
       window.alert('Could not load this scene.');
