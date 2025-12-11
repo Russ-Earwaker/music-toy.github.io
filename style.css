@@ -2885,7 +2885,3 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
     0 6px 16px rgba(0, 0, 0, 0.6);
   transform: translateY(-1px);
 }
-/* Ensure board background uses simple color html2canvas can parse */
-#board {
-  background: #000;
-}
