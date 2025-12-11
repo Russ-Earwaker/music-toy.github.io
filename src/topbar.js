@@ -465,21 +465,20 @@ if (document.readyState === 'loading') {
       }
 
       if (action === 'save-scene'){
-        try{
-          const name = prompt('Save scene as:', (localStorage.getItem('prefs:lastScene')||'default')) || 'default';
-          const P = window.Persistence; if (P && typeof P.saveScene==='function'){ P.saveScene(name); alert('Saved.'); }
-        }catch{}
+        try {
+          if (window.SceneManager && typeof window.SceneManager.open === 'function') {
+            window.SceneManager.open({ mode: 'save' });
+          }
+        } catch {}
         return;
       }
 
       if (action === 'load-scene'){
-        try{
-          const P = window.Persistence; if (!P) return;
-          const scenes = (typeof P.listScenes==='function') ? P.listScenes() : [];
-          const name = prompt('Load scene name:', (scenes && scenes[0]) || (localStorage.getItem('prefs:lastScene')||'default')) || 'default';
-          if (P.loadScene(name)){ alert('Loaded.'); try{ window.organizeBoard && window.organizeBoard(); }catch{} }
-          else alert('No such scene.');
-        }catch{}
+        try {
+          if (window.SceneManager && typeof window.SceneManager.open === 'function') {
+            window.SceneManager.open({ mode: 'load' });
+          }
+        } catch {}
         return;
       }
 
@@ -570,5 +569,4 @@ document.addEventListener('change', (e)=>{
   window.ThemeBoot && window.ThemeBoot.setTheme && window.ThemeBoot.setTheme(val);
 
 });
-
 

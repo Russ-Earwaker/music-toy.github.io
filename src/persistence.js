@@ -63,6 +63,138 @@ const SCHEMA_VERSION = 1;
 const AUTOSAVE_KEY = 'scene:autosave';
 const LAST_SCENE_KEY = 'prefs:lastScene';
 
+// --- Scene package + slot config ---
+
+const SCENE_PACKAGE_TYPE = 'music-toys-scene';
+const SCENE_PACKAGE_SCHEMA_VERSION = 1;
+
+// How many fixed save slots we expose in the UI.
+// We can change this later if needed.
+const MAX_SCENE_SLOTS = 12;
+
+// slot-1, slot-2, ... slot-12
+const SCENE_SLOT_IDS = Array.from({ length: MAX_SCENE_SLOTS }, (_, i) => `slot-${i + 1}`);
+
+// Storage key helpers
+function makeSceneStorageKeyFromSlot(slotId) {
+  return `scene:${slotId}`;
+}
+
+// Type guard: is this object a full scene package?
+function isScenePackage(obj) {
+  return !!(
+    obj &&
+    obj.type === SCENE_PACKAGE_TYPE &&
+    typeof obj.schemaVersion === 'number' &&
+    obj.payload
+  );
+}
+
+// Turn a bare snapshot into a scene package with some metadata.
+// `overrides` can include slotId, displayName, createdAt, thumbnail.
+function wrapSnapshotAsPackage(snapshot, overrides = {}) {
+  const nowIso = new Date().toISOString();
+  return {
+    type: SCENE_PACKAGE_TYPE,
+    schemaVersion: SCENE_PACKAGE_SCHEMA_VERSION,
+    slotId: overrides.slotId ?? null,
+    displayName: overrides.displayName ?? 'Untitled Scene',
+    createdAt: overrides.createdAt ?? nowIso,
+    updatedAt: nowIso,
+    thumbnail: overrides.thumbnail ?? null,
+    payload: snapshot
+  };
+}
+
+// --- Scene slot helpers ---
+
+// Read a scene package from a given slot.
+// If the stored data is an old-style bare snapshot, wrap it as a package.
+function getScenePackageFromSlot(slotId) {
+  const key = makeSceneStorageKeyFromSlot(slotId);
+  const raw = window.localStorage.getItem(key);
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw);
+
+    if (isScenePackage(parsed)) {
+      // Ensure slotId is set
+      if (!parsed.slotId) {
+        parsed.slotId = slotId;
+      }
+      return parsed;
+    }
+
+    // Legacy format: bare snapshot
+    const legacySnapshot = parsed;
+    const slotIndex = SCENE_SLOT_IDS.indexOf(slotId);
+    const defaultName =
+      slotIndex >= 0 ? `Save ${slotIndex + 1}` : 'Imported Scene';
+
+    const pkg = wrapSnapshotAsPackage(legacySnapshot, {
+      slotId,
+      displayName: defaultName
+    });
+
+    // Write back as a proper package so next time is cheaper
+    window.localStorage.setItem(key, JSON.stringify(pkg));
+    return pkg;
+  } catch (err) {
+    console.warn('[Persistence] Failed to parse scene slot', slotId, err);
+    return null;
+  }
+}
+
+// Save / update a scene package in a given slot.
+function saveScenePackageToSlot(slotId, pkg) {
+  const key = makeSceneStorageKeyFromSlot(slotId);
+  const nowIso = new Date().toISOString();
+
+  const merged = {
+    ...pkg,
+    type: SCENE_PACKAGE_TYPE,
+    schemaVersion: SCENE_PACKAGE_SCHEMA_VERSION,
+    slotId,
+    updatedAt: nowIso,
+    // createdAt should be stable if it already existed.
+    createdAt: pkg.createdAt || nowIso
+  };
+
+  window.localStorage.setItem(key, JSON.stringify(merged));
+  return merged;
+}
+
+// Delete all data from a slot.
+function deleteSceneSlot(slotId) {
+  const key = makeSceneStorageKeyFromSlot(slotId);
+  window.localStorage.removeItem(key);
+}
+
+// Return metadata for all slots for UI: slotId, isEmpty, displayName, pkg.
+function listSceneSlots() {
+  return SCENE_SLOT_IDS.map((slotId, index) => {
+    const pkg = getScenePackageFromSlot(slotId);
+    if (!pkg) {
+      return {
+        slotId,
+        index,
+        isEmpty: true,
+        displayName: `Save ${index + 1}`,
+        package: null
+      };
+    }
+
+    return {
+      slotId,
+      index,
+      isEmpty: false,
+      displayName: pkg.displayName || `Save ${index + 1}`,
+      package: pkg
+    };
+  });
+}
+
 function nowIso(){ try{ return new Date().toISOString(); }catch{ return '';} }
 
 function readNumber(v, def){ const n = Number(v); return Number.isFinite(n) ? n : def; }
@@ -330,6 +462,11 @@ export function getSnapshot(){
 
 export function applySnapshot(snap){
   if (!snap || typeof snap !== 'object') return false;
+  return applySceneSnapshot(snap);
+}
+
+export function applySceneSnapshot(snap){
+  if (!snap || typeof snap !== 'object') return false;
   try{
     // try{ persistTraceLog('[persistence] applySnapshot begin', { toys: snap?.toys?.length||0, theme: snap?.themeId, bpm: snap?.transport?.bpm }); }catch{}
     // Theme first so instrument resolution matches theme
@@ -531,6 +668,26 @@ export function applySnapshot(snap){
   }catch(e){ console.warn('[persistence] applySnapshot failed', e); return false; }
 }
 
+// Apply a scene from a given slotId.
+// Returns true if successful, false if the slot is empty or invalid.
+function loadSceneFromSlot(slotId) {
+  const pkg = getScenePackageFromSlot(slotId);
+  if (!pkg) {
+    console.warn('[Persistence] No scene in slot', slotId);
+    return false;
+  }
+
+  const snapshot = isScenePackage(pkg) ? pkg.payload : pkg;
+
+  try {
+    applySceneSnapshot(snapshot);
+    return true;
+  } catch (err) {
+    console.error('[Persistence] Failed to load scene from slot', slotId, err);
+    return false;
+  }
+}
+
 // --- Storage helpers (localStorage) ---
 
 function saveToKey(key, data){
@@ -725,7 +882,7 @@ try {
 } catch {}
 
 // Expose in window for quick manual access/debug
-try{ window.Persistence = { getSnapshot, applySnapshot, saveScene, loadScene, listScenes, deleteScene, exportScene, importScene, startAutosave, stopAutosave, markDirty, tryRestoreOnBoot, flushAutosaveNow, flushBeforeRefresh }; }catch{}
+try{ window.Persistence = { getSnapshot, applySnapshot, saveScene, loadScene, listScenes, deleteScene, exportScene, importScene, startAutosave, stopAutosave, markDirty, tryRestoreOnBoot, flushAutosaveNow, flushBeforeRefresh, listSceneSlots, getScenePackageFromSlot, saveScenePackageToSlot, deleteSceneSlot, loadSceneFromSlot, SCENE_SLOT_IDS, MAX_SCENE_SLOTS }; }catch{}
 if (typeof window !== 'undefined') {
   window.__PERSIST_DEBUG = {
     readKey: (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
@@ -733,6 +890,3 @@ if (typeof window !== 'undefined') {
     stat: __stateStats,
   };
 }
-
-
-

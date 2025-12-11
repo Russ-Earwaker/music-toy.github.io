@@ -2,6 +2,7 @@
 import './fullscreen.js';
 // --- Module Imports ---
 import './debug.js';
+import './scene-manager.js';
 import './advanced-controls-toggle.js';
 import './toy-visibility.js';
 import { onZoomChange } from './zoom/ZoomCoordinator.js';
