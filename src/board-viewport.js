@@ -12,6 +12,8 @@ import {
 import { WheelZoomLerper } from './zoom/WheelZoomLerper.js';
 
 const viewportLog = makeDebugLogger('mt_debug_logs');
+const OV_LOG = (typeof window !== 'undefined' && window.__BV_OV_DBG === true);
+const ovDbg = (...args) => { if (!OV_LOG) return; try { console.debug('[BV][overview]', ...args); } catch {} };
 const RELOW_PROFILE = (() => {
   if (typeof window === 'undefined') return true;
   try {
@@ -120,6 +122,8 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
   const SCALE_MAX = 1.0;
   const SCALE_EVENT_EPSILON = 1e-4;
   const SCALE_NOTIFY_EPSILON = 1e-4;
+  let overviewButtonGate = null;
+  const isOverviewButtonPending = () => (typeof window !== 'undefined' && window.__overviewButtonPending === true);
 
   let scale = 1;
   let x = 0;
@@ -128,6 +132,51 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
   // Prevent re-entrant zooms while our pan+zoom tween is running
   let camTweenLock = false;
   Object.defineProperty(window, '__camTweenLock', { get: () => camTweenLock });
+  try { window.__setOverviewButtonGate = (gate) => { overviewButtonGate = gate; ovDbg('set gate', gate); }; } catch {}
+
+  const crossedThreshold = (gate, scaleVal) => {
+    if (!gate) return true;
+    const { start = scaleVal, threshold = 0.36, dir } = gate;
+    if (dir === 'toOverview') {
+      if (start >= threshold && scaleVal < threshold) {
+        overviewButtonGate = null;
+        ovDbg('gate crossed (toOverview)', { start, threshold, scaleVal });
+        return true;
+      }
+      ovDbg('gate waiting (toOverview)', { start, threshold, scaleVal });
+      return false;
+    }
+    if (dir === 'fromOverview') {
+      if (start < threshold && scaleVal >= threshold) {
+        overviewButtonGate = null;
+        ovDbg('gate crossed (fromOverview)', { start, threshold, scaleVal });
+        return true;
+      }
+      ovDbg('gate waiting (fromOverview)', { start, threshold, scaleVal });
+      return false;
+    }
+    return true;
+  };
+  const clearOverviewButtonPending = () => {
+    try { window.__overviewButtonPending = false; } catch {}
+  };
+  const allowOverviewTransition = (scaleVal) => {
+    if (overviewButtonGate) {
+      const crossed = crossedThreshold(overviewButtonGate, scaleVal);
+      if (crossed) {
+        clearOverviewButtonPending();
+        return true;
+      }
+      ovDbg('allowOverviewTransition: gate blocking', { scale: scaleVal, gate: overviewButtonGate });
+      return false;
+    }
+    if (isOverviewButtonPending()) {
+      ovDbg('blocked by pending flag', { scale: scaleVal });
+      return false;
+    }
+    return true;
+  };
+  const allowOverviewWhileLocked = () => camTweenLock && (overviewButtonGate || isOverviewButtonPending());
 
   try {
     const savedStr = localStorage.getItem('boardViewport') || 'null';
@@ -328,13 +377,17 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     const ov = overviewMode?.state;
     if (!ov) return;
     if (camTweenLock) {
-      return;
+      if (!allowOverviewWhileLocked()) return;
     }
     if (ov.transitioning) {
       if (scale >= (ov.zoomReturnLevel - 1e-3)) {
         try { overviewMode.exit(false); } catch {}
         ov.transitioning = false;
       }
+      return;
+    }
+    if (!allowOverviewTransition(scale)) {
+      ovDbg('recompute: blocked transition', { scale, gate: overviewButtonGate, pending: isOverviewButtonPending(), camTweenLock });
       return;
     }
     if (scale < ov.zoomThreshold) {
@@ -344,21 +397,37 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     }
   }
 
-  function maybeUpdateOverview(scaleValue) {
+  function maybeUpdateOverview(scaleValue, meta = {}) {
     const ov = overviewMode?.state;
     if (!ov) return;
-    if (camTweenLock) return;
-    if (ov.transitioning) return;
-    if (!Number.isFinite(scaleValue)) return;
+    if (camTweenLock && !allowOverviewWhileLocked()) {
+      ovDbg('maybeUpdateOverview: cam tween lock skip', { scaleValue, meta, gate: overviewButtonGate, pending: isOverviewButtonPending(), camTweenLock });
+      return;
+    }
+    if (ov.transitioning) {
+      ovDbg('maybeUpdateOverview: transitioning skip', { scaleValue, meta });
+      return;
+    }
+    if (!Number.isFinite(scaleValue)) {
+      ovDbg('maybeUpdateOverview: non-finite scale skip', { scaleValue, meta });
+      return;
+    }
+    if (!allowOverviewTransition(scaleValue)) {
+      ovDbg('maybeUpdateOverview: blocked transition', { scaleValue, meta, gate: overviewButtonGate, pending: isOverviewButtonPending(), camTweenLock });
+      return;
+    }
     if (scaleValue < ov.zoomThreshold) {
+      ovDbg('maybeUpdateOverview: enter', { scaleValue, threshold: ov.zoomThreshold, meta });
       overviewMode.enter();
     } else if (scaleValue >= (ov.zoomReturnLevel - 1e-3)) {
+      ovDbg('maybeUpdateOverview: exit', { scaleValue, threshold: ov.zoomReturnLevel, meta });
       overviewMode.exit(false);
     }
   }
 
   const handleZoom = (z = {}) => {
     const phase = z?.phase || null;
+    const mode = z?.mode || null;
 
     const currentScale = z.currentScale ?? scale;
     const targetScale = z.targetScale ?? currentScale;
@@ -382,10 +451,27 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     }
 
     // Lightweight path for noisy intermediate phases.
-    if (phase === 'recompute' || phase === 'gesturing' || phase === 'prepare' || phase === 'begin' || phase === 'progress') {
+    const isGesturingLike = phase === 'recompute' || phase === 'gesturing' || phase === 'prepare' || phase === 'begin' || phase === 'progress' || mode === 'gesturing';
+    if (isGesturingLike) {
+      if (overviewButtonGate || isOverviewButtonPending() || camTweenLock) {
+        ovDbg('handleZoom (gesturing)', {
+          phase,
+          mode,
+          scaleForState,
+          currentScale,
+          targetScale,
+          gate: overviewButtonGate,
+          pending: isOverviewButtonPending(),
+          camTweenLock,
+          mtZoomGesturing: !!window.__mtZoomGesturing,
+        });
+      }
       if (window.__toyFocused) return;
-      if (!window.__mtZoomGesturing) {
-        maybeUpdateOverview(scaleForState);
+      const allowWhileGesturing = !window.__mtZoomGesturing || overviewButtonGate || isOverviewButtonPending();
+      if (allowWhileGesturing) {
+        maybeUpdateOverview(scaleForState, { phase, mode, path: 'gesturing', mtZoomGesturing: !!window.__mtZoomGesturing });
+      } else {
+        ovDbg('maybeUpdateOverview: skipped due to __mtZoomGesturing', { scaleForState, phase, mode });
       }
       return;
     }
@@ -404,7 +490,20 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     persist();
     scheduleNotify({ ...z });
 
-    maybeUpdateOverview(scaleForState);
+    if (overviewButtonGate || isOverviewButtonPending() || camTweenLock) {
+      ovDbg('handleZoom (commit)', {
+        phase,
+        mode,
+        scaleForState,
+        currentScale,
+        targetScale,
+        gate: overviewButtonGate,
+        pending: isOverviewButtonPending(),
+        camTweenLock,
+        mtZoomGesturing: !!window.__mtZoomGesturing,
+      });
+    }
+    maybeUpdateOverview(scaleForState, { phase, mode, path: 'commit' });
   };
   handleZoom.__zcName = 'board-viewport';
   onZoomChange(handleZoom);
@@ -690,7 +789,6 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     // The final translation we want to achieve
     const tX = viewCx - layoutLeft - xWorld * s1;
     const tY = viewCy - layoutTop  - yWorld * s1;
-    console.log('[zoomPanToFinal] start:', {s0, x0, y0, s1, xWorld, yWorld, tX, tY, centerFracX, layoutLeft, viewCx});
     // --- End Target Calculation ---
 
     cancelWheelCommit();
@@ -712,7 +810,6 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
         const xLerp = lerp(x0, tX, e);
         const yLerp = lerp(y0, tY, e);
 
-        console.log('[zoomPanToFinal.step]', { k, e, s, xLerp, yLerp, tX, tY });
         setGestureTransform({ scale: s, x: xLerp, y: yLerp });
 
         if (k < 1) {

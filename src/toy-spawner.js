@@ -178,17 +178,6 @@ function ensureDock() {
     updateHelpToggleUI(active);
   });
 
-  overview.addEventListener('click', (event) => {
-    event.preventDefault();
-    if (window.__toyFocused) {
-      window.clearToyFocus();
-    } else {
-      overviewMode?.toggle?.(true);
-      updateOverviewToggleUI(overviewMode?.isActive?.());
-    }
-  });
-  overview.__bound = true;
-
   toggle.addEventListener('click', () => setMenuOpen(!state.open));
 
   trash.addEventListener('click', (event) => {

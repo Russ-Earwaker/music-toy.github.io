@@ -794,6 +794,13 @@ function onToyMouseUp(e) {
       }
 
       if (!__handledSingleTap) {
+                const focusEditingEnabled = (typeof window !== 'undefined' && typeof window.isFocusEditingEnabled === 'function')
+                  ? window.isFocusEditingEnabled()
+                  : true;
+                if (!focusEditingEnabled) {
+                    emitOV('tap', { id, tap: 'double', suppressed: 'focus-editing-disabled' });
+                    return;
+                }
                 // Double tap → proceed with the existing compute-center-and-zoom logic:
                 // (keep your current worldCenter/viewCx… calculation and exitOverviewMode(false) exactly as-is)
                 emitOV('tap', { id, tap: 'double' });

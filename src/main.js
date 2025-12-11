@@ -445,6 +445,119 @@ const isFocusManagedPanel = (panel) => {
   return panel?.classList?.contains('toy-panel') && panel.dataset.focusSkip !== '1';
 };
 
+const FOCUS_PREF_KEY = 'prefs:focusEditingEnabled';
+const FOCUS_LAST_ID_KEY = 'prefs:lastFocusedToyId';
+let g_suppressBootFocus = false;
+let g_isRestoringSnapshot = false;
+let g_restoringFocusId = null;
+const readStoredFocusEditingEnabled = () => {
+  try {
+    const raw = localStorage.getItem(FOCUS_PREF_KEY);
+    if (raw === '0') return false;
+    if (raw === '1') return true;
+  } catch {}
+  return true; // default on
+};
+
+try {
+  // Default off; set localStorage.FOCUS_DBG = '1' to enable.
+  if (localStorage.getItem('FOCUS_DBG') === null) {
+    localStorage.setItem('FOCUS_DBG', '0');
+  }
+  window.__focusDebug = localStorage.getItem('FOCUS_DBG') === '1';
+} catch {}
+
+const readStoredLastFocusedId = () => {
+  try {
+    const raw = localStorage.getItem(FOCUS_LAST_ID_KEY);
+    if (raw === 'none') return null;
+    if (typeof raw === 'string' && raw.trim()) return raw.trim();
+  } catch {}
+  return null;
+};
+
+function isFocusEditingEnabled() {
+  if (typeof window !== 'undefined' && typeof window.__focusEditingEnabled === 'boolean') {
+    return window.__focusEditingEnabled;
+  }
+  return readStoredFocusEditingEnabled();
+}
+
+function resetFocusClasses() {
+  document.querySelectorAll('.toy-panel').forEach((p) => {
+    if (!isFocusManagedPanel(p)) return;
+    p.classList.remove('toy-focused', 'toy-unfocused');
+    p.style.pointerEvents = 'auto';
+    const body = p.querySelector('.toy-body');
+    if (body) body.style.pointerEvents = '';
+  });
+}
+
+function normalizeFocusDom() {
+  try {
+    const dbg = (window.__focusDebug || localStorage.getItem('FOCUS_DBG') === '1');
+    if (dbg) console.log('[focus] normalize DOM');
+  } catch {}
+  document.querySelectorAll('.toy-panel').forEach((p) => {
+    if (!isFocusManagedPanel(p)) return;
+    p.classList.remove('toy-focused', 'toy-unfocused');
+    p.style.pointerEvents = 'auto';
+    const body = p.querySelector('.toy-body');
+    if (body) body.style.pointerEvents = '';
+  });
+}
+
+function applyToyDetailLevel(level = 'high') {
+  const detail = level === 'low' ? 'low' : 'high';
+  window.__toyDetailLevel = detail;
+  const body = document.body;
+  if (body) {
+    body.dataset.toyDetail = detail;
+    body.classList.toggle('toy-detail-low', detail === 'low');
+    body.classList.toggle('toy-detail-high', detail === 'high');
+  }
+  try {
+    window.dispatchEvent(new CustomEvent('toys:detail-level', { detail: { level: detail } }));
+  } catch {}
+  const flipFn = detail === 'low' ? 'flipToLowDetailToys' : 'flipToHighDetailToys';
+  try {
+    const fn = window?.[flipFn];
+    if (typeof fn === 'function') fn();
+  } catch {}
+  return detail;
+}
+
+function setFocusEditingEnabled(enabled, { apply = true } = {}) {
+  const prev = isFocusEditingEnabled();
+  const flag = !!enabled;
+  window.__focusEditingEnabled = flag;
+  try { localStorage.setItem(FOCUS_PREF_KEY, flag ? '1' : '0'); } catch {}
+
+  if (apply) {
+    if (!flag) {
+      setToyFocus(null, { center: false });
+    } else if (window.gFocusedToy) {
+      setToyFocus(window.gFocusedToy, { center: false });
+    } else {
+      // No active focus yet: present the low-detail overview state immediately.
+      setToyFocus(null, { center: false, unfocusAll: true });
+    }
+    if (flag !== prev) {
+      applyToyDetailLevel(flag ? 'low' : 'high');
+    }
+    try { window.dispatchEvent(new CustomEvent('focus:editing-toggle', { detail: { enabled: flag } })); } catch {}
+  }
+  return flag;
+}
+
+// Initialize the global flag and expose helpers for other modules.
+setFocusEditingEnabled(isFocusEditingEnabled(), { apply: false });
+window.isFocusEditingEnabled = isFocusEditingEnabled;
+window.setFocusEditingEnabled = (enabled) => setFocusEditingEnabled(enabled);
+window.setToyDetailLevel = applyToyDetailLevel;
+window.getToyDetailLevel = () => window.__toyDetailLevel || 'high';
+applyToyDetailLevel(isFocusEditingEnabled() ? 'low' : 'high');
+
 function getPanelScale(panel) {
   try {
     const t = getComputedStyle(panel).transform;
@@ -500,7 +613,29 @@ function animateFocusScale(panel, fromScale, toScale) {
 }
 
 window.clearToyFocus = () => setToyFocus(null);
-function setToyFocus(panel, { center = true } = {}) { // default center=true
+function setToyFocus(panel, { center = true, unfocusAll } = {}) { // default center=true
+  const effectiveUnfocusAll = (typeof unfocusAll === 'boolean')
+    ? unfocusAll
+    : (!panel && isFocusEditingEnabled()); // default: when clearing focus, keep toys in low-detail/unfocused state
+
+  const allowRestoreFocus = panel && g_restoringFocusId && panel.id === g_restoringFocusId;
+  if (panel && (g_suppressBootFocus || g_isRestoringSnapshot) && !allowRestoreFocus) {
+    try {
+      const dbg = (window.__focusDebug || localStorage.getItem('FOCUS_DBG') === '1');
+      if (dbg) console.log('[focus] setToyFocus suppressed due to boot/restoring guard', panel.id);
+    } catch {}
+    return;
+  }
+  if (!isFocusEditingEnabled()) {
+    g_focusedToyId = null;
+    window.__toyFocused = false;
+    window.gFocusedToy = null;
+    resetFocusClasses();
+    try { localStorage.setItem(FOCUS_LAST_ID_KEY, 'none'); } catch {}
+    try { window.dispatchEvent(new CustomEvent('focus:change', { detail: { hasFocus: false } })); } catch {}
+    return;
+  }
+
   if (panel && (!panel.isConnected || !isFocusManagedPanel(panel))) {
     g_focusedToyId = null;
     window.__toyFocused = false;
@@ -511,26 +646,39 @@ function setToyFocus(panel, { center = true } = {}) { // default center=true
   g_focusedToyId = panel ? panel.id : null;
   window.__toyFocused = !!panel;
   window.gFocusedToy = panel;
+  try {
+    if (g_focusedToyId) {
+      localStorage.setItem(FOCUS_LAST_ID_KEY, g_focusedToyId);
+    } else {
+      localStorage.setItem(FOCUS_LAST_ID_KEY, 'none');
+    }
+    const dbg = (window.__focusDebug || localStorage.getItem('FOCUS_DBG') === '1');
+    if (dbg) console.log('[focus] setToyFocus', { id: g_focusedToyId, center, unfocusAll: effectiveUnfocusAll });
+  } catch {}
 
   document.querySelectorAll('.toy-panel').forEach((p) => {
     if (!isFocusManagedPanel(p)) return;
     const isFocus = p === panel;
+    const desiredUnfocus = panel ? !isFocus : !!effectiveUnfocusAll;
     const wasFocused = p.classList.contains('toy-focused');
-    if (wasFocused === isFocus) return;
+    const wasUnfocused = p.classList.contains('toy-unfocused');
+    const needsUpdate = (wasFocused !== isFocus) || (wasUnfocused !== desiredUnfocus) || effectiveUnfocusAll;
 
-    p.classList.toggle('toy-focused', isFocus);
-    p.classList.toggle('toy-unfocused', !isFocus);
+    if (needsUpdate) {
+      p.classList.toggle('toy-focused', isFocus);
+      p.classList.toggle('toy-unfocused', desiredUnfocus);
 
-    const spawnHint = Number.parseFloat(p.dataset.spawnScaleHint);
-    const startScale = Number.isFinite(spawnHint) ? spawnHint : getPanelScale(p);
-    const targetScale = isFocus ? 1.0 : 0.75;
-    animateFocusScale(p, startScale, targetScale);
-    if (Number.isFinite(spawnHint)) {
-      delete p.dataset.spawnScaleHint;
+      const spawnHint = Number.parseFloat(p.dataset.spawnScaleHint);
+      const startScale = Number.isFinite(spawnHint) ? spawnHint : getPanelScale(p);
+      const targetScale = isFocus ? 1.0 : 0.75;
+      animateFocusScale(p, startScale, targetScale);
+      if (Number.isFinite(spawnHint)) {
+        delete p.dataset.spawnScaleHint;
+      }
     }
 
     const body = p.querySelector('.toy-body');
-    if (!isFocus) {
+    if (!isFocus && desiredUnfocus) {
       p.style.pointerEvents = 'auto'; // allow dragging via panel
       if (body) body.style.pointerEvents = 'none';
     } else {
@@ -540,7 +688,7 @@ function setToyFocus(panel, { center = true } = {}) { // default center=true
     }
   });
 
-  if (panel && center) {
+  if (panel && center && !g_suppressBootFocus) {
     requestAnimationFrame(() => {
       const guide = document.querySelector('.guide-launcher');
       const spawner = document.querySelector('.toy-spawner-dock');
@@ -558,6 +706,50 @@ function setToyFocus(panel, { center = true } = {}) { // default center=true
     scheduleChainRedraw();
   } catch {}
   window.dispatchEvent(new CustomEvent('focus:change', { detail: { hasFocus: !!panel } }));
+}
+
+function restoreFocusFromStorage() {
+  const enabled = isFocusEditingEnabled();
+  if (!enabled) return;
+  const lastId = readStoredLastFocusedId();
+  g_restoringFocusId = lastId || null;
+  g_suppressBootFocus = true;
+  if (lastId) {
+    const el = document.getElementById(lastId);
+    if (el) {
+      setToyFocus(el, { center: false });
+    }
+  }
+  const clearFocus = () => setToyFocus(null, { center: false, unfocusAll: true });
+  // If no stored focus or element missing, ensure unfocused low-detail state.
+  if (!lastId || !document.getElementById(lastId)) {
+    clearFocus();
+    const raf = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));
+    raf(() => setTimeout(clearFocus, 0));
+  }
+  setTimeout(() => {
+    g_restoringFocusId = null;
+    g_suppressBootFocus = false;
+  }, 800);
+}
+
+function enforceFocusState({ forceUnfocusAll = false } = {}) {
+  if (g_restoringFocusId) return;
+  normalizeFocusDom();
+  if (!isFocusEditingEnabled()) return;
+  if (forceUnfocusAll) {
+    setToyFocus(null, { center: false, unfocusAll: true });
+    return;
+  }
+  const lastId = readStoredLastFocusedId();
+  if (lastId) {
+    const el = document.getElementById(lastId);
+    if (el) {
+      setToyFocus(el, { center: false });
+      return;
+    }
+  }
+  setToyFocus(null, { center: false, unfocusAll: true });
 }
 
 
@@ -1529,7 +1721,7 @@ function initToyChaining(panel) {
                 delete newPanel.dataset.spawnAutoTop;
                 // Always focus the newly created toy, even if the source toy was unfocused.
                 const focusNew = () => {
-                    if (newPanel.isConnected) {
+                    if (newPanel.isConnected && !g_isRestoringSnapshot && !g_suppressBootFocus) {
                         setToyFocus(newPanel, { center: true });
                     }
                 };
@@ -2501,7 +2693,12 @@ async function boot(){
 
     bootTopbar();
     let restored = false;
-    try{ restored = !!tryRestoreOnBoot(); }catch{}
+    try{
+      g_isRestoringSnapshot = true;
+      restored = !!tryRestoreOnBoot();
+    }catch{} finally {
+      g_isRestoringSnapshot = false;
+    }
     bootGrids();
     bootDrawGrids();
     document.addEventListener('click', (e) => {
@@ -2539,6 +2736,11 @@ async function boot(){
     requestAnimationFrame(() => updateAllChainUIs()); // After any late-restored links land
     setTimeout(() => { try { updateAllChainUIs(); } catch {} }, 400); // Final pass after async inits settle
     setTimeout(() => { try { updateAllChainUIs(); } catch {} }, 900); // One more pass to cover late restores
+
+    try { restoreFocusFromStorage(); } catch {}
+  // Reassert focus state after any late restores to avoid stray persisted classes.
+  setTimeout(() => { try { enforceFocusState(); } catch {} }, 120);
+  setTimeout(() => { try { enforceFocusState(); } catch {} }, 380);
 
     const handleChainLinkedButtonState = (e) => {
       const parentId = e?.detail?.parent || e?.detail?.parentId;
@@ -2589,7 +2791,7 @@ async function boot(){
 
     // On load, if no toys are on screen, snap to the nearest one.
     const allPanels = Array.from(document.querySelectorAll('.toy-panel'));
-    if (allPanels.length > 0) {
+    if (allPanels.length > 0 && !g_focusedToyId && !window.__toyFocused && !isFocusEditingEnabled() && !g_suppressBootFocus && !g_isRestoringSnapshot) {
       const allOffscreen = allPanels.every(isPanelCenterOffscreen);
       if (allOffscreen) {
         const viewportCenter = window.getViewportCenterWorld && window.getViewportCenterWorld();
@@ -2874,5 +3076,3 @@ async function boot(){
 }
 if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
 else boot();
-
-

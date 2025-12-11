@@ -203,6 +203,35 @@ function ensureTopbar(){
       }
     };
 
+    const ensureFocusEditingRow = () => {
+      if (!menuPanel) return;
+      let row = menuPanel.querySelector('.menu-row-focus-editing');
+      if (!row) {
+        row = document.createElement('div');
+        row.className = 'menu-item menu-row menu-row-focus-editing';
+        const label = document.createElement('label');
+        label.textContent = 'Enable focused editing';
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'menu-inline-btn';
+        toggle.dataset.action = 'toggle-focus-editing';
+        row.append(label, toggle);
+        menuPanel.appendChild(row);
+      }
+      const btn = row.querySelector('button[data-action="toggle-focus-editing"]');
+      const update = () => {
+        const enabled = (typeof window !== 'undefined' && typeof window.isFocusEditingEnabled === 'function')
+          ? window.isFocusEditingEnabled()
+          : true;
+        if (btn) {
+          btn.textContent = enabled ? 'On' : 'Off';
+          btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+        }
+      };
+      row.__updateFocusToggle = update;
+      update();
+    };
+
     ensureMenuButton('new-scene', 'New Scene');
     ensureMenuButton('save-scene', 'Save Scene');
     ensureMenuButton('load-scene', 'Load Scene');
@@ -210,6 +239,7 @@ function ensureTopbar(){
     ensureMenuButton('import-scene', 'Import Scene');
     ensureThemeRow();
     ensurePresetRow();
+    ensureFocusEditingRow();
     ensureMenuButton('organize', 'Organize Board');
 
     let controls = bar.querySelector('.topbar-controls');
@@ -314,6 +344,11 @@ if (document.readyState === 'loading') {
       playBtn.addEventListener('click', resume, { passive: true });
     }
 
+    window.addEventListener('focus:editing-toggle', () => {
+      const row = bar.querySelector('.menu-row-focus-editing');
+      if (row && typeof row.__updateFocusToggle === 'function') row.__updateFocusToggle();
+    });
+
     bar.addEventListener('click', async (e)=>{
       const b = e.target.closest('button[data-action]');
       if (!b) return;
@@ -329,6 +364,17 @@ if (document.readyState === 'loading') {
 
       if (action !== 'menu-toggle'){
         menuState?.close?.();
+      }
+
+      if (action === 'toggle-focus-editing') {
+        e.preventDefault();
+        const current = (typeof window !== 'undefined' && typeof window.isFocusEditingEnabled === 'function')
+          ? window.isFocusEditingEnabled()
+          : true;
+        try { window.setFocusEditingEnabled?.(!current); } catch {}
+        const row = b.closest('.menu-row-focus-editing');
+        if (row && typeof row.__updateFocusToggle === 'function') row.__updateFocusToggle();
+        return;
       }
 
       if (action === 'organize'){
