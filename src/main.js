@@ -19,11 +19,13 @@ import { initDrawGrid } from './drawgrid-init.js';
 import { createChordWheel } from './chordwheel.js';
 import { createRippleSynth } from './ripplesynth.js';
 import { applyStackingOrder } from './stacking-manager.js';
+import { getViewportTransform, getViewportElement, screenToWorld } from './board-viewport.js';
 
 import './toy-audio.js';
 import './toy-layout-manager.js';
 import './zoom-overlay.js';
 import './toy-spawner.js';
+import './board-tap-dots.js';
 import { initAudioAssets } from './audio-samples.js';
 import { loadInstrumentEntries as loadInstrumentCatalog } from './instrument-catalog.js';
 import { installIOSAudioUnlock } from './ios-audio-unlock.js';
@@ -302,8 +304,8 @@ function ensurePanelSpawnPlacement(panel, {
         return existingBounds.some(other => boundsOverlap(bounds, other));
     };
 
-    let candidateLeft = Math.max(0, basePosition.left);
-    let candidateTop = Math.max(0, basePosition.top);
+    let candidateLeft = basePosition.left;
+    let candidateTop = basePosition.top;
 
     if (!overlapsAt(candidateLeft, candidateTop)) {
         const changed = Math.abs(candidateLeft - currentPos.left) > 1 || Math.abs(candidateTop - currentPos.top) > 1;
@@ -326,12 +328,12 @@ function ensurePanelSpawnPlacement(panel, {
     const visited = new Set();
 
     const enqueue = (left, top) => {
-        const clampedLeft = Math.max(0, Math.min(Math.round(left), maxX));
-        const clampedTop = Math.max(0, Math.min(Math.round(top), maxY));
-        const key = `${clampedLeft}|${clampedTop}`;
+        const qLeft = Math.round(left);
+        const qTop = Math.round(top);
+        const key = `${qLeft}|${qTop}`;
         if (!visited.has(key)) {
             visited.add(key);
-            queue.push({ left: clampedLeft, top: clampedTop });
+            queue.push({ left: qLeft, top: qTop });
         }
     };
 
@@ -362,9 +364,7 @@ function ensurePanelSpawnPlacement(panel, {
             [current.left, current.top - halfStepY],
         ];
 
-        for (const [nx, ny] of neighbors) {
-            if (nx >= 0 && ny >= 0) enqueue(nx, ny);
-        }
+        for (const [nx, ny] of neighbors) enqueue(nx, ny);
     }
 
     if (best) {
@@ -2110,6 +2110,18 @@ function drawChains(forceFull = false) {
 
   const width = g_boardClientWidth || 0;
   const height = g_boardClientHeight || 0;
+  const { scale = 1, tx = 0, ty = 0 } = getViewportTransform() || {};
+  const safeScale = (Number.isFinite(scale) && Math.abs(scale) > 1e-6) ? scale : 1;
+
+  // Position the chain canvas in WORLD space so that after board transform
+  // it exactly covers the visible viewport.
+  const tl = screenToWorld({ x: 0, y: 0 });
+  const worldLeft = tl.x;
+  const worldTop  = tl.y;
+
+  // Canvas CSS size in WORLD units so that after scaling it matches viewport pixels.
+  const worldW = width / safeScale;
+  const worldH = height / safeScale;
   const edgeCount = g_chainEdges ? g_chainEdges.size : 0;
 
   if (!width || !height) return;
@@ -2125,15 +2137,17 @@ function drawChains(forceFull = false) {
 
   // --- Phase 1: resize canvas if board viewport changed ---
   let tAfterResize = tStart;
-  if (forceFull || canvasW !== width || canvasH !== height) {
+  if (forceFull || canvasW !== worldW || canvasH !== worldH) {
     const tResizeStart = performance.now();
 
-    chainCanvas.width = width * dpr;
-    chainCanvas.height = height * dpr;
-    chainCanvas.style.left = '0px';
-    chainCanvas.style.top = '0px';
-    chainCanvas.style.width = `${width}px`;
-    chainCanvas.style.height = `${height}px`;
+    chainCanvas.width = worldW * dpr;
+    chainCanvas.height = worldH * dpr;
+
+    // World position + world size (the board transform will scale it to screen)
+    chainCanvas.style.left = `${worldLeft}px`;
+    chainCanvas.style.top = `${worldTop}px`;
+    chainCanvas.style.width = `${worldW}px`;
+    chainCanvas.style.height = `${worldH}px`;
 
     tAfterResize = performance.now();
 
@@ -2163,7 +2177,7 @@ function drawChains(forceFull = false) {
   }
 
   // --- Phase 3: draw all edges ---
-  chainCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  chainCtx.setTransform(dpr, 0, 0, dpr, -worldLeft * dpr, -worldTop * dpr);
 
   const now = performance.now();
   // You can tweak these to taste. Thicker curves = slightly more GPU work.
@@ -2608,10 +2622,12 @@ if (document.readyState === 'loading') {
 
 async function boot(){
   const board = document.getElementById('board');
-  if (board) {
-    g_boardClientWidth = board.clientWidth || 0;
-    g_boardClientHeight = board.clientHeight || 0;
+  const viewport = getViewportElement();
+  if (viewport) {
+    g_boardClientWidth = viewport.clientWidth || 0;
+    g_boardClientHeight = viewport.clientHeight || 0;
   }
+  console.log('[viewport] element=', viewport, 'client=', g_boardClientWidth, g_boardClientHeight);
 
   // Start global FPS HUD once the board exists
   try {
@@ -2627,12 +2643,12 @@ async function boot(){
   } catch {}
 
   window.addEventListener('resize', () => {
-    const b = document.getElementById('board');
-    if (!b) return;
+    const vp = getViewportElement();
+    if (!vp) return;
 
-    // Cache board client size for the chain canvas
-    g_boardClientWidth = b.clientWidth || 0;
-    g_boardClientHeight = b.clientHeight || 0;
+    // Cache viewport client size for the chain canvas (NOT the board size)
+    g_boardClientWidth = vp.clientWidth || 0;
+    g_boardClientHeight = vp.clientHeight || 0;
 
     // Rebuild connector geometry + redraw once, event-driven, off the hot path
     if (CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) {
@@ -2683,8 +2699,18 @@ async function boot(){
         });
         board.prepend(chainCanvas);
         chainCtx = chainCanvas.getContext('2d');
+
+        // IMPORTANT: initialise viewport size immediately so drawChains() doesn't early-out.
+        try {
+          const vp = getViewportElement();
+          g_boardClientWidth = vp?.clientWidth || 0;
+          g_boardClientHeight = vp?.clientHeight || 0;
+        } catch {}
         try {
             updateChains();
+            // Force one draw pass now that size is known.
+            g_chainRedrawPendingFull = true;
+            scheduleChainRedraw();
         } catch (err) {
             if (CHAIN_DEBUG) {
                 console.warn('[CHAIN] initial updateChains failed', err);

@@ -52,6 +52,16 @@ export function getViewportScale() {
   return Number.isFinite(state?.scale) ? state.scale : 1;
 }
 
+export function getViewportElement() {
+  const el =
+    document.querySelector('.board-viewport') ||
+    document.querySelector('.board-wrap') ||
+    document.querySelector('.toy-area') ||
+    document.getElementById('boardViewport') ||
+    document.getElementById('viewport');
+  return el || document.documentElement;
+}
+
 export function screenToWorld(point = { x: 0, y: 0 }) {
   const { scale = 1, tx = 0, ty = 0 } = getViewportState() || {};
   const safeScale = Number.isFinite(scale) && Math.abs(scale) > 1e-6 ? scale : 1;
@@ -59,6 +69,19 @@ export function screenToWorld(point = { x: 0, y: 0 }) {
   const translateY = Number.isFinite(ty) ? ty : 0;
   const screenX = Number.isFinite(point?.x) ? point.x : 0;
   const screenY = Number.isFinite(point?.y) ? point.y : 0;
+
+  // Subtract stage layout offset so world coords line up with what you see.
+  const stage = document.querySelector('main#board, #board, #world, .world, .canvas-world');
+  if (stage?.getBoundingClientRect) {
+    const rect = stage.getBoundingClientRect();
+    // IMPORTANT: rect.left/top already includes the current CSS transform translate.
+    // So DO NOT also apply tx/ty here, or the mapping will invert / offset.
+    const sx = screenX - rect.left;
+    const sy = screenY - rect.top;
+    return { x: sx / safeScale, y: sy / safeScale };
+  }
+
+  // Fallback to original behaviour if stage unavailable.
   return {
     x: (screenX - translateX) / safeScale,
     y: (screenY - translateY) / safeScale,
@@ -72,6 +95,16 @@ export function worldToScreen(point = { x: 0, y: 0 }) {
   const translateY = Number.isFinite(ty) ? ty : 0;
   const worldX = Number.isFinite(point?.x) ? point.x : 0;
   const worldY = Number.isFinite(point?.y) ? point.y : 0;
+
+  // Apply scale/translate then add stage layout offset so screen coords match DOM position.
+  const stage = document.querySelector('main#board, #board, #world, .world, .canvas-world');
+  if (stage?.getBoundingClientRect) {
+    const rect = stage.getBoundingClientRect();
+    // rect.left/top already includes the current translate, so only apply scale here.
+    return { x: worldX * safeScale + rect.left, y: worldY * safeScale + rect.top };
+  }
+
+  // Fallback to original behaviour if stage unavailable.
   return {
     x: worldX * safeScale + translateX,
     y: worldY * safeScale + translateY,
@@ -200,13 +233,23 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
   } = {}) {
     const safeScale = Number.isFinite(nextScale) ? nextScale : 1;
     const safeX = Number.isFinite(nextX) ? nextX : 0;
-    const safeY = Number.isFinite(nextY) ? nextY : 0;
-    __liveViewportTransform = { scale: safeScale, tx: safeX, ty: safeY };
-    window.__boardScale = safeScale;
-    window.__boardX = safeX;
-    window.__boardY = safeY;
-    try { stage?.style?.setProperty('--bv-scale', String(safeScale)); } catch {}
-  }
+  const safeY = Number.isFinite(nextY) ? nextY : 0;
+  __liveViewportTransform = { scale: safeScale, tx: safeX, ty: safeY };
+  window.__boardScale = safeScale;
+  window.__boardX = safeX;
+  window.__boardY = safeY;
+  try {
+    stage?.style?.setProperty('--bv-scale', String(safeScale));
+    stage?.style?.setProperty('--bv-tx', `${safeX}px`);
+    stage?.style?.setProperty('--bv-ty', `${safeY}px`);
+    const viewportEl = getViewportElement?.();
+    if (viewportEl) {
+      viewportEl.style.setProperty('--bv-scale', String(safeScale));
+      viewportEl.style.setProperty('--bv-tx', `${safeX}px`);
+      viewportEl.style.setProperty('--bv-ty', `${safeY}px`);
+    }
+  } catch {}
+}
 
   syncViewportSnapshot();
 

@@ -309,20 +309,8 @@ html, body {
     calc(var(--board-dot-min-screen) / var(--board-zoom-scale))
   );
   position: absolute;
-  width: 8000px;
-  height: 8000px;
-  left: -4000px;
-  top: -4000px;
   transform-origin: 0 0 !important;
   overflow: visible !important;
-  background-color: #000;
-  background-image: radial-gradient(
-    circle,
-    #131c2a var(--board-dot-size),
-    transparent calc(var(--board-dot-size) + 0.8px)
-  );
-  background-size: var(--board-grid-spacing) var(--board-grid-spacing);
-  background-position: var(--board-grid-offset);
 }
 
 .board-viewport,
@@ -330,6 +318,40 @@ html, body {
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
+}
+
+.board-viewport {
+  position: relative;
+  overflow: hidden;
+}
+
+.board-viewport::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+
+  --bv-scale-safe: max(var(--bv-scale, 1), 0.001);
+  --dot-size-screen: max(
+    var(--board-dot-min-screen, 1px),
+    calc((var(--board-grid-spacing, 90px) * 0.022) * var(--bv-scale-safe))
+  );
+
+  background-color: #000;
+  background-image: radial-gradient(
+    circle,
+    #131c2a var(--dot-size-screen),
+    transparent calc(var(--dot-size-screen) + 0.8px)
+  );
+
+  background-size:
+    calc(var(--board-grid-spacing, 90px) * var(--bv-scale-safe))
+    calc(var(--board-grid-spacing, 90px) * var(--bv-scale-safe));
+
+  background-position:
+    calc(var(--bv-tx, 0px) + (var(--board-grid-offset-x, -45px) * var(--bv-scale-safe)))
+    calc(var(--bv-ty, 0px) + (var(--board-grid-offset-y, -45px) * var(--bv-scale-safe)));
 }
 
 @property --tap-ripple-scale {
@@ -355,9 +377,12 @@ html, body {
 
 .board-viewport .board-tap-overlay {
   position: absolute;
-  inset: 0;
+  /* JS positions/sizes this in WORLD space (left/top/width/height).
+     Avoid inset or it overrides those inline styles. */
+  left: 0;
+  top: 0;
   pointer-events: none;
-  z-index: 0; /* sit with canvases; DOM order keeps it behind toys */
+  z-index: 1; /* above board background; still behind toys */
   opacity: 0;
   transition: opacity 80ms ease;
 }

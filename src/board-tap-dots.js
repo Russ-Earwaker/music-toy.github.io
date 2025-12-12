@@ -1,8 +1,15 @@
+import { getViewportTransform, screenToWorld, getViewportElement } from './board-viewport.js';
+
 // Tap dots overlay: canvas-based ripple where each dot wakes up as the wave hits it.
 (() => {
   const board = document.getElementById('board');
-  const viewport = document.querySelector('.board-viewport');
-  if (!board || !viewport) return;
+  const viewport = getViewportElement();
+  console.log('[tap-dots] viewport=', viewport);
+  if (!board) return;
+  if (!viewport) {
+    console.warn('[tap-dots] no viewport element found');
+    return;
+  }
 
   // Root the overlay on the board so it layers under toys/UI but above the board background.
   let overlay = board.querySelector('.board-tap-overlay');
@@ -72,8 +79,9 @@
 
   // Board / grid settings (aligned with CSS vars)
   const style = getComputedStyle(board);
-  const boardW = board.offsetWidth || 8000;
-  const boardH = board.offsetHeight || 8000;
+  // We treat tap dots in WORLD space, not board-rectangle space.
+  const boardW = 0;
+  const boardH = 0;
   const baseSpacing =
     parseFloat(style.getPropertyValue('--board-grid-spacing')) || 90;
   const baseTapSpacing =
@@ -133,8 +141,9 @@
   }
 
   function getOverlayCssSize() {
-    const w = overlay.clientWidth || boardW;
-    const h = overlay.clientHeight || boardH;
+    // We want the overlay backing buffer sized to the viewport, not the board.
+    const w = viewport.clientWidth || 1;
+    const h = viewport.clientHeight || 1;
     return { width: w, height: h };
   }
 
@@ -173,12 +182,36 @@
     let effectiveDpr = Math.min(dpr, maxDprByCap);
     effectiveDpr = Math.max(0.5, effectiveDpr);
 
-    canvas.width = Math.max(1, Math.round(width * effectiveDpr));
-    canvas.height = Math.max(1, Math.round(height * effectiveDpr));
-    canvas.style.width = width + 'px';
-    canvas.style.height = height + 'px';
+    // Anchor the overlay to the viewport in WORLD space (same trick as chain canvas)
+    const { scale = 1, tx = 0, ty = 0 } = getViewportTransform() || {};
+    const safeScale = (Number.isFinite(scale) && Math.abs(scale) > 1e-6) ? scale : 1;
+    const tl = screenToWorld({ x: 0, y: 0 });
+    const br = screenToWorld({ x: cssSize.width || 1, y: cssSize.height || 1 });
+    const worldLeft = tl.x;
+    const worldTop  = tl.y;
+    const worldW = (br.x - tl.x) || ((cssSize.width || 1) / safeScale);
+    const worldH = (br.y - tl.y) || ((cssSize.height || 1) / safeScale);
 
-    ctx.setTransform(effectiveDpr, 0, 0, effectiveDpr, 0, 0);
+    overlay.style.left = `${worldLeft}px`;
+    overlay.style.top = `${worldTop}px`;
+    overlay.style.width = `${worldW}px`;
+    overlay.style.height = `${worldH}px`;
+
+    // Screen-sized backing store; element sized in world units
+    canvas.width = Math.max(1, Math.round((cssSize.width || 1) * effectiveDpr));
+    canvas.height = Math.max(1, Math.round((cssSize.height || 1) * effectiveDpr));
+    canvas.style.width = `${worldW}px`;
+    canvas.style.height = `${worldH}px`;
+
+    // Draw in world coords with zoom baked into the transform
+    ctx.setTransform(
+      effectiveDpr * safeScale,
+      0,
+      0,
+      effectiveDpr * safeScale,
+      -worldLeft * safeScale * effectiveDpr,
+      -worldTop * safeScale * effectiveDpr
+    );
 
     if (DEBUG) {
       console.debug('[tap-dots] resizeCanvas', {
@@ -224,30 +257,9 @@
   }
 
   function clientToBoardPoint(e) {
-    // Measure relative to the overlay we're actually drawing into,
-    // not the full offscreen board.
-    const rect = getOverlayRect();
-    const fx = (e.clientX - rect.left) / (rect.width || 1);
-    const fy = (e.clientY - rect.top) / (rect.height || 1);
-    const x = fx * boardW;
-    const y = fy * boardH;
-    if (DEBUG) {
-      console.debug('[tap-dots] clientToBoardPoint', {
-        clientX: e.clientX,
-        clientY: e.clientY,
-        viewScaleX,
-        viewScaleY,
-        overlayCssSize: getOverlayCssSize(),
-        overlayRect: {
-          left: rect.left,
-          top: rect.top,
-          width: rect.width,
-          height: rect.height
-        },
-        mapped: { x, y }
-      });
-    }
-    return { x, y };
+    // Convert screen -> world using the live viewport transform.
+    const world = screenToWorld({ x: e.clientX, y: e.clientY });
+    return { x: world.x, y: world.y };
   }
 
   function buildDotsAroundTap(x, y, radiusScreen, zoomScale) {
