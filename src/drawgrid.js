@@ -2351,6 +2351,7 @@ function ensureSizeReady({ force = false } = {}) {
       // Particle field handles its own throttling; no extra hooks needed.
     });
     panelEl.addEventListener('overview:commit', () => {
+      const t0 = performance?.now?.() ?? Date.now();
       try {
         try { dgViewport?.setNonReactive?.(zoomFreezeActive() ? true : null); } catch {}
         __dgDeferUntilTs = 0;
@@ -2367,6 +2368,10 @@ function ensureSizeReady({ force = false } = {}) {
         try { if (DG_OV_DBG) console.debug('[DG] overview:commit sizeReady', { sizeChanged, cssW, cssH }); } catch {}
         // Always resnap/redraw to refresh paint + grid in overview, but avoid relayout
         resnapAndRedraw(false, { preservePaintIfNoStrokes: true, skipLayout: true });
+        const t1 = performance?.now?.() ?? Date.now();
+        try {
+          if (DG_OV_DBG) console.debug('[DG][overview] commit redraw ms=', (t1 - t0).toFixed(1), { cssW, cssH, sizeChanged });
+        } catch {}
       } catch (err) {
         dglog('overview:commit:sync-error', String((err && err.message) || err));
       }

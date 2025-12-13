@@ -3,7 +3,7 @@
 
 import { setParticleQualityLock } from '../particles/ParticleQuality.js';
 import { runBenchmark } from './PerfHarness.js';
-import { makePanZoomScript, makeOverviewSpamScript } from './PerfScripts.js';
+import { makePanZoomScript, makeOverviewSpamScript, makeOverviewOnceScript } from './PerfScripts.js';
 import { buildParticleWorstCase } from './StressSceneParticles.js';
 
 // Global perf toggles consumed by shared particle code.
@@ -48,6 +48,7 @@ function ensureUI() {
           <button class="perf-lab-btn" data-act="runP3a">Run P3a: Static (30s)</button>
           <button class="perf-lab-btn" data-act="runP3b">Run P3b: Pan/Zoom (30s)</button>
           <button class="perf-lab-btn" data-act="runP3c">Run P3c: Overview (30s)</button>
+          <button class="perf-lab-btn" data-act="runP3d">Run P3d: Overview Once (30s)</button>
         </div>
         <div class="perf-lab-row">
           <label class="perf-lab-toggle">
@@ -128,6 +129,7 @@ function ensureUI() {
     if (act === 'runP3a') await runP3a();
     if (act === 'runP3b') await runP3b();
     if (act === 'runP3c') await runP3c();
+    if (act === 'runP3d') await runP3d();
     if (act === 'copy') copyLast();
   });
 
@@ -281,6 +283,14 @@ async function runP3c() {
   await runVariant('P3c_drawgrid_overview', step, 'Running P3c (overview spam)…');
 }
 
+async function runP3d() {
+  const step = makeOverviewOnceScript({
+    idleMs: 2000,
+    onMs: 6000,
+  });
+  await runVariant('P3d_drawgrid_overview_once', step, 'Running P3d (overview once)…');
+}
+
 async function copyLast() {
   if (!lastResult) {
     setStatus('No results to copy');
@@ -306,4 +316,4 @@ window.addEventListener('keydown', (e) => {
 });
 
 // Expose for manual console use
-try { window.__PerfLab = { show, hide, toggle, buildP2, buildP3, runP2a, runP2b, runP2c, runP3a, runP3b, runP3c }; } catch {}
+try { window.__PerfLab = { show, hide, toggle, buildP2, buildP3, runP2a, runP2b, runP2c, runP3a, runP3b, runP3c, runP3d }; } catch {}

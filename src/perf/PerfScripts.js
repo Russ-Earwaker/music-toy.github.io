@@ -95,3 +95,22 @@ export function makeOverviewSpamScript({
     }
   };
 }
+
+// Single overview toggle: on once, then off once after a delay.
+export function makeOverviewOnceScript({
+  idleMs = 2000,
+  onMs = 6000,
+} = {}) {
+  return function step(tMs) {
+    if (tMs < idleMs) return;
+    if (!step.__didOn) {
+      step.__didOn = true;
+      try { (overviewMode.enable?.() ?? overviewMode.toggle?.()); } catch {}
+      return;
+    }
+    if (!step.__didOff && tMs > idleMs + onMs) {
+      step.__didOff = true;
+      try { (overviewMode.disable?.() ?? overviewMode.toggle?.()); } catch {}
+    }
+  };
+}

@@ -641,8 +641,8 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
         if (!skipDraw) {
           // If we're in a throttled tickModulo phase, also avoid drawing every frame.
           const dm = isZoomGesturing() ? readPerfGestureDrawModulo() : 2;
-          state.gestureDrawCounter = (state.gestureDrawCounter + 1) % Math.max(1, dm);
-          if (state.gestureDrawCounter === 0) draw();
+          state.drawCounter = (state.drawCounter + 1) % Math.max(1, dm);
+          if (state.drawCounter === 0) draw();
         }
         cleanupFaded();
         return;
