@@ -730,9 +730,12 @@ export function createRippleSynth(selector){
   function draw(){
     const endPerf = startSection('rippler:draw');
     try {
+      const transportRunning = isRunning();
+      const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
+      const isActiveInChain = isChained ? panel.dataset.chainActive === 'true' : true;
       // A toy is "playing" if it has active ripples, or if it's an empty
       // toy in a chain running its "ghost" timer (lifeline).
-      const isPlaying = (ripples.length > 0 && generator.placed) || !!__schedState.ghostSpawnTime;
+      const isPlaying = transportRunning && isActiveInChain && ((ripples.length > 0 && generator.placed) || !!__schedState.ghostSpawnTime);
       panel.classList.toggle('toy-playing', isPlaying);
       try { panel.dataset.ripplerIsPlaying = String(isPlaying); } catch(e){}
 

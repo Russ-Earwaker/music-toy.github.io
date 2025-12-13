@@ -718,15 +718,11 @@ function render(panel) {
   const chainHasNotes = head ? chainHasSequencedNotes(head) : hasActiveNotes;
 
   const transportRunning = isRunning();
-  let showPlaying;
-  if (transportRunning) {
-    // A chained toy only shows its highlight if the chain itself currently has notes.
-    // For standalone toys, only show highlight if there are notes to play.
-    showPlaying = isChained ? (isActiveInChain && chainHasNotes) : hasActiveNotes;
-  } else {
-    // When paused, highlight chained toys only if the chain retains any active notes.
-    showPlaying = isChained ? chainHasNotes : hasActiveNotes;
-  }
+  // Only show the steady outline while transport is running.
+  // Chained toys require both an active link and notes somewhere in the chain.
+  const showPlaying = transportRunning
+    ? (isChained ? (isActiveInChain && chainHasNotes) : hasActiveNotes)
+    : false;
   panel.classList.toggle('toy-playing', showPlaying);
 
   const { ctx, canvas, tapLabel, particleCanvas, sequencerWrap, particleField } = st;

@@ -5786,13 +5786,12 @@ function syncBackBufferSizes() {
     const head = isChained ? findChainHead(panel) : panel;
     const chainHasNotes = head ? chainHasSequencedNotes(head) : hasActiveNotes;
 
-    let showPlaying;
-    if (isRunning()) {
-        // A chained toy only shows its highlight if the chain itself currently has notes.
-        showPlaying = isChained ? (isActiveInChain && chainHasNotes) : hasActiveNotes;
-    } else {
-        showPlaying = isChained ? chainHasNotes : hasActiveNotes;
-    }
+    const transportRunning = isRunning();
+    // Only show the steady highlight while the transport is running.
+    // Chained toys require both an active chain link and notes somewhere in the chain.
+    const showPlaying = transportRunning
+      ? (isChained ? (isActiveInChain && chainHasNotes) : hasActiveNotes)
+      : false;
     panel.classList.toggle('toy-playing', showPlaying);
 
     const flashSurface = getActiveFlashCanvas();
@@ -7274,4 +7273,3 @@ function runAutoGhostGuideSweep() {
   try { panel.dispatchEvent(new CustomEvent('drawgrid:ready', { bubbles: true })); } catch {}
   return api;
 }
-

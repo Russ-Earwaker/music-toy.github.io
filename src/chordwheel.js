@@ -610,11 +610,12 @@ export function createChordWheel(panel){
     const head = isChained ? findChainHead(panel) : panel;
     const chainHasNotes = head ? chainHasSequencedNotes(head) : hasActiveSteps;
 
+    // Only show the outline while transport is running.
     let showPlaying;
     if (running) {
       showPlaying = isChained ? (isActiveInChain && chainHasNotes) : hasActiveSteps;
     } else {
-      showPlaying = isChained ? chainHasNotes : hasActiveSteps;
+      showPlaying = false;
     }
     panel.classList.toggle('toy-playing', showPlaying);
 
@@ -1347,6 +1348,5 @@ function randomPentatonicProgression16(){
 
   return [...loopA, ...loopB];
 }
-
 
 

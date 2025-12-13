@@ -61,8 +61,12 @@ export function createBouncerDraw(env){
     // Set playing class for border highlight and handle pulse animation.
       const currentBall = getBall ? getBall() : env.ball;
       const isChainHead = !panel.dataset.prevToyId;
+      const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
+      const isActiveInChain = isChained ? panel.dataset.chainActive === 'true' : true;
+      const transportRunning = isRunning();
       // A ghost ball on the head of a chain shouldn't trigger the "playing" highlight.
-      const showPlaying = !!currentBall && !(currentBall.isGhost && isChainHead);
+      const hasBallForHighlight = !!currentBall && !(currentBall.isGhost && isChainHead);
+      const showPlaying = transportRunning && isActiveInChain && hasBallForHighlight;
       panel.classList.toggle('toy-playing', showPlaying);
 
     if (panel.__pulseHighlight && panel.__pulseHighlight > 0) {
@@ -579,7 +583,6 @@ export function createBouncerDraw(env){
 
   return draw;
 }
-
 
 
 

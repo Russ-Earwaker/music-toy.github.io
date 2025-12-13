@@ -964,10 +964,6 @@ function bootTopbar(){
     } catch (err) {
       console.warn('[chain] play cascade failed', err);
     }
-    // Globally mark all toys as "playing" (steady outer highlight even if empty)
-    try {
-      document.querySelectorAll('.toy-panel').forEach(p => p.classList.add('toy-playing'));
-    } catch {}
   });
   stopBtn?.addEventListener('click', ()=>{
     try { ensureAudioContext().suspend(); } catch {}
