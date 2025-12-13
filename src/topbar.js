@@ -34,6 +34,17 @@ import { resumeAudioContextIfNeeded } from './audio-core.js';
 
   }
 
+  function updateFocusToggleButton(btn){
+    if (!btn) return;
+    const enabled = (typeof window !== 'undefined' && typeof window.isFocusEditingEnabled === 'function')
+      ? window.isFocusEditingEnabled()
+      : true;
+    btn.textContent = enabled ? 'On' : 'Off';
+    btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+    btn.classList.toggle('is-on', enabled);
+    btn.classList.toggle('is-off', !enabled);
+  }
+
   // Import presets in module scope (dynamic import to keep file order loose)
 
   let Presets = null;
@@ -61,6 +72,67 @@ import { resumeAudioContextIfNeeded } from './audio-core.js';
   }
 
   
+  function ensurePreferencesOverlay(){
+    let overlay = document.getElementById('preferences-overlay');
+    if (!overlay){
+      overlay = document.createElement('div');
+      overlay.id = 'preferences-overlay';
+      overlay.className = 'scene-manager-overlay';
+      overlay.style.display = 'none';
+      overlay.innerHTML = `
+        <div class="scene-manager-panel preferences-panel">
+          <div class="scene-manager-header">
+            <div class="scene-manager-title">
+              <span class="scene-manager-title-main">Preferences</span>
+              <span class="scene-manager-mode-label"></span>
+            </div>
+            <button class="scene-manager-close" type="button" aria-label="Close">&times;</button>
+          </div>
+          <div class="scene-manager-body">
+            <div class="preferences-list">
+              <div class="pref-row pref-row-focus">
+                <div class="pref-label">
+                  <div class="pref-title">Focus editing</div>
+                  <div class="pref-subtitle">Dim other toys until one is focused</div>
+                </div>
+                <button class="menu-inline-btn focus-toggle-btn" type="button" data-pref-action="toggle-focus-editing">Off</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+    }
+
+    const closeBtn = overlay.querySelector('.scene-manager-close');
+    const toggleBtn = overlay.querySelector('[data-pref-action="toggle-focus-editing"]');
+
+    const hide = () => { overlay.style.display = 'none'; };
+    const show = () => {
+      updateFocusToggleButton(toggleBtn);
+      overlay.style.display = 'flex';
+    };
+
+    if (!overlay.__wired){
+      overlay.addEventListener('click', (evt) => {
+        if (evt.target === overlay) hide();
+      });
+      closeBtn?.addEventListener('click', hide);
+      toggleBtn?.addEventListener('click', () => {
+        const current = (typeof window !== 'undefined' && typeof window.isFocusEditingEnabled === 'function')
+          ? window.isFocusEditingEnabled()
+          : true;
+        try { window.setFocusEditingEnabled?.(!current); } catch {}
+        updateFocusToggleButton(toggleBtn);
+      });
+      overlay.__wired = true;
+    }
+
+    overlay.__show = show;
+    overlay.__updateFocusToggle = () => updateFocusToggleButton(toggleBtn);
+    return overlay;
+  }
+
 function ensureTopbar(){
     let bar = document.getElementById('topbar');
     if (!bar){
@@ -203,44 +275,9 @@ function ensureTopbar(){
       }
     };
 
-    const ensureFocusEditingRow = () => {
-      if (!menuPanel) return;
-      let row = menuPanel.querySelector('.menu-row-focus-editing');
-      if (!row) {
-        row = document.createElement('div');
-        row.className = 'menu-item menu-row menu-row-focus-editing';
-        const label = document.createElement('label');
-        label.textContent = 'Enable focused editing';
-        const toggle = document.createElement('button');
-        toggle.type = 'button';
-        toggle.className = 'menu-inline-btn';
-        toggle.dataset.action = 'toggle-focus-editing';
-        row.append(label, toggle);
-        menuPanel.appendChild(row);
-      }
-      const btn = row.querySelector('button[data-action="toggle-focus-editing"]');
-      const update = () => {
-        const enabled = (typeof window !== 'undefined' && typeof window.isFocusEditingEnabled === 'function')
-          ? window.isFocusEditingEnabled()
-          : true;
-        if (btn) {
-          btn.textContent = enabled ? 'On' : 'Off';
-          btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
-        }
-      };
-      row.__updateFocusToggle = update;
-      update();
-    };
-
-    ensureMenuButton('new-scene', 'New Scene');
-    ensureMenuButton('save-scene', 'Save Scene');
-    ensureMenuButton('load-scene', 'Load Scene');
-    ensureMenuButton('export-scene', 'Export Scene');
-    ensureMenuButton('import-scene', 'Import Scene');
-    ensureThemeRow();
-    ensurePresetRow();
-    ensureFocusEditingRow();
-    ensureMenuButton('organize', 'Organize Board');
+    ensureMenuButton('new-scene', 'New Creation');
+    ensureMenuButton('open-creations', 'Your Creations');
+    ensureMenuButton('open-preferences', 'Preferences');
 
     let controls = bar.querySelector('.topbar-controls');
     if (!controls){
@@ -345,8 +382,8 @@ if (document.readyState === 'loading') {
     }
 
     window.addEventListener('focus:editing-toggle', () => {
-      const row = bar.querySelector('.menu-row-focus-editing');
-      if (row && typeof row.__updateFocusToggle === 'function') row.__updateFocusToggle();
+      const pref = document.getElementById('preferences-overlay');
+      if (pref && typeof pref.__updateFocusToggle === 'function') pref.__updateFocusToggle();
     });
 
     bar.addEventListener('click', async (e)=>{
@@ -364,17 +401,6 @@ if (document.readyState === 'loading') {
 
       if (action !== 'menu-toggle'){
         menuState?.close?.();
-      }
-
-      if (action === 'toggle-focus-editing') {
-        e.preventDefault();
-        const current = (typeof window !== 'undefined' && typeof window.isFocusEditingEnabled === 'function')
-          ? window.isFocusEditingEnabled()
-          : true;
-        try { window.setFocusEditingEnabled?.(!current); } catch {}
-        const row = b.closest('.menu-row-focus-editing');
-        if (row && typeof row.__updateFocusToggle === 'function') row.__updateFocusToggle();
-        return;
       }
 
       if (action === 'organize'){
@@ -456,6 +482,21 @@ if (document.readyState === 'loading') {
         try { window.dispatchEvent(new CustomEvent('scene:new')); } catch {}
         window.clearToyFocus?.();
         window.resetBoardView();
+        return;
+      }
+
+      if (action === 'open-creations'){
+        try {
+          if (window.SceneManager && typeof window.SceneManager.open === 'function') {
+            window.SceneManager.open({ mode: 'manage' });
+          }
+        } catch {}
+        return;
+      }
+
+      if (action === 'open-preferences'){
+        const overlay = ensurePreferencesOverlay();
+        overlay?.__show?.();
         return;
       }
 
@@ -569,4 +610,3 @@ document.addEventListener('change', (e)=>{
   window.ThemeBoot && window.ThemeBoot.setTheme && window.ThemeBoot.setTheme(val);
 
 });
-

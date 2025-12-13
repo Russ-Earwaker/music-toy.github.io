@@ -1,4 +1,4 @@
-﻿// src/scene-manager.js
+// src/scene-manager.js
 // Scene Manager overlay for save/load/delete using Persistence slots.
 
 (function () {
@@ -35,7 +35,7 @@
         <div class="scene-manager-panel">
           <div class="scene-manager-header">
             <div class="scene-manager-title">
-              <span>Scenes</span>
+              <span>Your Creations</span>
               <span class="scene-manager-mode-label"></span>
             </div>
             <button class="scene-manager-close" type="button" aria-label="Close">&times;</button>
@@ -101,9 +101,13 @@
   function setModeLabel(mode) {
     if (!modeLabelEl) return;
     let label = '';
-    if (mode === 'save') label = 'Â· Save to slot';
-    else if (mode === 'load') label = 'Â· Load scene';
-    else label = '';
+    if (mode === 'save') {
+      label = 'Save to slot';
+    } else if (mode === 'load') {
+      label = 'Load creation';
+    } else {
+      label = '';
+    }
     modeLabelEl.textContent = label;
   }
 
@@ -209,7 +213,7 @@
       exportBtn.type = 'button';
       exportBtn.className = 'scene-slot-btn scene-slot-btn-download';
       exportBtn.textContent = 'Download to Share';
-      exportBtn.title = 'Download this scene as a file you can share';
+      exportBtn.title = 'Download this creation as a file you can share';
       exportBtn.addEventListener('click', () => handleExportSlot(slotId));
       buttons.appendChild(exportBtn);
     }
@@ -464,7 +468,7 @@ function formatTimestamp(iso) {
       }
       closeSceneManager();
     } else {
-      window.alert('Could not load this scene.');
+      window.alert('Could not load this creation.');
     }
   }
 
@@ -473,7 +477,7 @@ function formatTimestamp(iso) {
     if (!P || !P.getScenePackageFromSlot) return;
     const pkg = P.getScenePackageFromSlot(slotId);
     if (!pkg) {
-      window.alert('No scene in this slot to export.');
+      window.alert('No creation in this slot to export.');
       return;
     }
 
@@ -481,10 +485,10 @@ function formatTimestamp(iso) {
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
 
-    const baseName = (pkg.displayName || slotId || 'scene')
+    const baseName = (pkg.displayName || slotId || 'creation')
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '') || 'scene';
+      .replace(/^-+|-+$/g, '') || 'creation';
 
     const a = document.createElement('a');
     a.href = url;
@@ -524,7 +528,7 @@ function formatTimestamp(iso) {
             : raw;
           const displayName =
             (snapshot && snapshot.displayName) ||
-            (typeof file.name === 'string' ? file.name.replace(/\.[^.]+$/, '') : 'Imported scene');
+            (typeof file.name === 'string' ? file.name.replace(/\.[^.]+$/, '') : 'Imported creation');
 
           if (typeof P.wrapSnapshotAsPackage === 'function') {
             pkg = P.wrapSnapshotAsPackage(snapshot, { displayName });
@@ -542,10 +546,10 @@ function formatTimestamp(iso) {
 
         P.saveScenePackageToSlot(target.slotId, pkg);
         renderSlots();
-        window.alert(`Imported scene into ${target.displayName || target.slotId}.`);
+        window.alert(`Imported creation into ${target.displayName || target.slotId}.`);
       } catch (err) {
         console.warn('[SceneManager] import failed', err);
-        window.alert('Could not import this file. Is it a valid scene export?');
+        window.alert('Could not import this file. Is it a valid creation export?');
       }
     };
     reader.readAsText(file);
