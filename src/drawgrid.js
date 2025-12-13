@@ -2329,15 +2329,15 @@ function ensureSizeReady({ force = false } = {}) {
           try {
             // Mark dirty so ensureSizeReady can resize IF needed, but avoid forced resize
             // (forced resize clears the paint canvas and nukes drawn lines)
-            try { markLayoutSizeDirty(); } catch {}
-            ensureSizeReady({ force: false });
-            const sizeChanged = !!__dgLastEnsureSizeChanged;
-            try { console.debug('[DG] overview:commit sizeReady', { sizeChanged, cssW, cssH }); } catch {}
-            // Always resnap/redraw to refresh paint + grid in overview, but avoid relayout
-            resnapAndRedraw(false, { preservePaintIfNoStrokes: true, skipLayout: true });
-          } catch (err) {
-            dglog('overview:commit:sync-error', String((err && err.message) || err));
-          }
+        try { markLayoutSizeDirty(); } catch {}
+        ensureSizeReady({ force: false });
+        const sizeChanged = !!__dgLastEnsureSizeChanged;
+        try { if (DG_OV_DBG) console.debug('[DG] overview:commit sizeReady', { sizeChanged, cssW, cssH }); } catch {}
+        // Always resnap/redraw to refresh paint + grid in overview, but avoid relayout
+        resnapAndRedraw(false, { preservePaintIfNoStrokes: true, skipLayout: true });
+      } catch (err) {
+        dglog('overview:commit:sync-error', String((err && err.message) || err));
+      }
         };
         requestAnimationFrame(() => requestAnimationFrame(sync));
       } catch (err) {

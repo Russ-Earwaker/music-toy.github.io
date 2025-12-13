@@ -2394,6 +2394,28 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
   border-color: transparent !important;
   visibility: hidden !important;
   opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Also hide internal header/footer content within drawgrid panels in overview */
+.overview-mode .toy-panel[data-toy="drawgrid"] .toy-header *,
+.overview-mode .toy-panel[data-toy="drawgrid"] .toy-footer *,
+.board-overview .toy-panel[data-toy="drawgrid"] .toy-header *,
+.board-overview .toy-panel[data-toy="drawgrid"] .toy-footer * {
+  visibility: hidden !important;
+  opacity: 0 !important;
+  color: transparent !important;
+  background: transparent !important;
+}
+/* Drawgrid panel/background should vanish in overview (but keep layout) */
+.overview-mode .toy-panel[data-toy="drawgrid"],
+.board-overview .toy-panel[data-toy="drawgrid"] {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.overview-mode .toy-panel[data-toy="drawgrid"] .toy-body,
+.board-overview .toy-panel[data-toy="drawgrid"] .toy-body {
+  background: transparent !important;
 }
 
 #overview-mode-text {

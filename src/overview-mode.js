@@ -154,7 +154,7 @@ function safePartRect(panel, el) {
     const h = Math.max(0, el.offsetHeight || el.clientHeight || 0);
     const top = 0; // avoid offsetTop-based shifts; keep body aligned
     if (h > 0) {
-        try { console.debug('[overview] fallback rect', { top, h, tag: el.tagName, cls: el.className }); } catch {}
+        try { if (OV_DEBUG) console.debug('[overview] fallback rect', { top, h, tag: el.tagName, cls: el.className }); } catch {}
         return { top, left: 0, width: el.offsetWidth || 0, height: h, __fallback: true };
     }
     return measured;
