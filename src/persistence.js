@@ -1,7 +1,7 @@
 // src/persistence.js
 // Lightweight scene save/load with versioning and localStorage backend.
 
-import { bpm, setBpm } from './audio-core.js';
+import { bpm, setBpm, stop as stopTransport } from './audio-core.js';
 import { setGestureTransform as zcSetGestureTransform, commitGesture as zcCommitGesture, getZoomState as zcGetZoomState } from './zoom/ZoomCoordinator.js';
 import { getActiveThemeKey, setActiveThemeKey } from './theme-manager.js';
 
@@ -614,6 +614,8 @@ export function applySnapshot(snap){
 export function applySceneSnapshot(snap){
   if (!snap || typeof snap !== 'object') return false;
   try{
+    // Always pause transport when applying a scene so it doesn't auto-play after load.
+    try { if (typeof stopTransport === 'function') stopTransport(); } catch {}
     // try{ persistTraceLog('[persistence] applySnapshot begin', { toys: snap?.toys?.length||0, theme: snap?.themeId, bpm: snap?.transport?.bpm }); }catch{}
     // Theme first so instrument resolution matches theme
     if (snap.themeId && typeof setActiveThemeKey === 'function'){

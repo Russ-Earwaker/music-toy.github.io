@@ -34,6 +34,14 @@ import { resumeAudioContextIfNeeded } from './audio-core.js';
 
   }
 
+  function pauseTransportAndSyncUI(){
+    try{ Core?.stop?.(); }catch{}
+    try{
+      const btn = document.querySelector('#topbar [data-action="toggle-play"]');
+      if (btn) updatePlayButtonVisual(btn, false);
+    }catch{}
+  }
+
   function updateFocusToggleButton(btn){
     if (!btn) return;
     const enabled = (typeof window !== 'undefined' && typeof window.isFocusEditingEnabled === 'function')
@@ -379,6 +387,14 @@ if (document.readyState === 'loading') {
         playBtn.addEventListener(evt, resume, { passive: true });
       });
       playBtn.addEventListener('click', resume, { passive: true });
+      if (!playBtn.__transportSyncBound){
+        const sync = () => {
+          try{ updatePlayButtonVisual(playBtn, !!Core?.isRunning?.()); }catch{}
+        };
+        document.addEventListener('transport:resume', sync, { passive: true });
+        document.addEventListener('transport:pause', sync, { passive: true });
+        playBtn.__transportSyncBound = true;
+      }
     }
 
     window.addEventListener('focus:editing-toggle', () => {
@@ -474,6 +490,7 @@ if (document.readyState === 'loading') {
       };
 
       if (action === 'new-scene'){
+        pauseTransportAndSyncUI();
         runSceneClear({ removePanels: true });
         menuState?.close?.();
         try{ localStorage.removeItem('prefs:lastScene'); }catch{}
