@@ -2277,7 +2277,10 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   // Draw a tiny corner probe (debug only) so we can see the visible canvas is active.
   const DG_CORNER_PROBE = !!(location.search.includes('dgprobe=1') || localStorage.getItem('DG_CORNER_PROBE') === '1');
 
+  let __dgLastEnsureSizeChanged = false;
+
 function ensureSizeReady({ force = false } = {}) {
+  let changed = false;
   if (!force && zoomFreezeActive()) return true;
   if (!force && !layoutSizeDirty) return true;
   const nowTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
@@ -2294,7 +2297,7 @@ function ensureSizeReady({ force = false } = {}) {
   w = Math.max(1, w);
   h = Math.max(1, h);
 
-  const changed = force || Math.abs(w - cssW) > 0.5 || Math.abs(h - cssH) > 0.5;
+  changed = force || Math.abs(w - cssW) > 0.5 || Math.abs(h - cssH) > 0.5;
   if (changed) {
     cssW = w; cssH = h;
     progressMeasureW = cssW; progressMeasureH = cssH;
@@ -2306,6 +2309,7 @@ function ensureSizeReady({ force = false } = {}) {
     __dgFrontSwapNextDraw = true;
     dglog('ensureSizeReady:update', { cssW, cssH });
   }
+  __dgLastEnsureSizeChanged = changed;
   return true;
 }
 
@@ -2323,8 +2327,14 @@ function ensureSizeReady({ force = false } = {}) {
         __dgFrontSwapNextDraw = true;
         const sync = () => {
           try {
-            ensureSizeReady({ force: true });
-            resnapAndRedraw(true);
+            // Mark dirty so ensureSizeReady can resize IF needed, but avoid forced resize
+            // (forced resize clears the paint canvas and nukes drawn lines)
+            try { markLayoutSizeDirty(); } catch {}
+            ensureSizeReady({ force: false });
+            const sizeChanged = !!__dgLastEnsureSizeChanged;
+            try { console.debug('[DG] overview:commit sizeReady', { sizeChanged, cssW, cssH }); } catch {}
+            // Always resnap/redraw to refresh paint + grid in overview, but avoid relayout
+            resnapAndRedraw(false, { preservePaintIfNoStrokes: true, skipLayout: true });
           } catch (err) {
             dglog('overview:commit:sync-error', String((err && err.message) || err));
           }
@@ -3401,7 +3411,9 @@ function regenerateMapFromStrokes() {
 
   let zoomRAF = null;
 
-  function resnapAndRedraw(forceLayout = false) {
+function resnapAndRedraw(forceLayout = false, opts = {}) {
+    const preservePaintIfNoStrokes = !!opts.preservePaintIfNoStrokes;
+    const skipLayout = !!opts.skipLayout;
     if (zoomMode === 'gesturing' && !forceLayout) {
       pendingZoomResnap = true;
       return;
@@ -3426,7 +3438,9 @@ function regenerateMapFromStrokes() {
       currentMap.nodes.some(set => set && set.size > 0);
 
     syncLetterFade({ immediate: true });
-    layout(!!forceLayout);
+    if (!skipLayout) {
+      layout(!!forceLayout);
+    }
 
     requestAnimationFrame(() => {
       if (!panel.isConnected) return;
@@ -3456,6 +3470,14 @@ function regenerateMapFromStrokes() {
       }
 
       const inboundNonEmpty = inboundWasNonEmpty();
+      if (preservePaintIfNoStrokes) {
+        dgTraceWarn('[drawgrid][resnap] preserve paint (no strokes/nodes)', {
+          guardActive: DG_HYDRATE.guardActive,
+          inboundNonEmpty,
+        });
+        updateGeneratorButtons();
+        return;
+      }
       if (!inboundNonEmpty && !DG_HYDRATE.guardActive) {
         api.clear({ reason: 'resnap-empty' });
       } else {

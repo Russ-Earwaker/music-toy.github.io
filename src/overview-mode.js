@@ -147,6 +147,19 @@ function measurePartRectWithinPanel(panel, el) {
     return rect;
 }
 
+function safePartRect(panel, el) {
+    const measured = measurePartRectWithinPanel(panel, el);
+    if (measured && Number.isFinite(measured.height) && measured.height > 0) return measured;
+    if (!el) return null;
+    const h = Math.max(0, el.offsetHeight || el.clientHeight || 0);
+    const top = 0; // avoid offsetTop-based shifts; keep body aligned
+    if (h > 0) {
+        try { console.debug('[overview] fallback rect', { top, h, tag: el.tagName, cls: el.className }); } catch {}
+        return { top, left: 0, width: el.offsetWidth || 0, height: h, __fallback: true };
+    }
+    return measured;
+}
+
 function ensureShield(panel) {
     let shield = panel.querySelector(':scope > .ov-shield');
     if (!shield) {
@@ -155,6 +168,40 @@ function ensureShield(panel) {
         panel.appendChild(shield);
     }
     return shield;
+}
+
+function stashFrameStyles(panel) {
+    if (!panel || panel.__ovFrameStyles) return;
+    try {
+        const body = panel.querySelector('.toy-body');
+        panel.__ovFrameStyles = {
+            panelBg: panel.style.background,
+            panelBgColor: panel.style.backgroundColor,
+            panelBorder: panel.style.border,
+            panelBoxShadow: panel.style.boxShadow,
+            bodyBg: body?.style?.background
+        };
+    } catch {}
+}
+
+function restoreFrameStyles(panel) {
+    if (!panel) return;
+    const body = panel.querySelector('.toy-body');
+    const cache = panel.__ovFrameStyles;
+    if (cache) {
+        panel.style.background = cache.panelBg;
+        panel.style.backgroundColor = cache.panelBgColor;
+        panel.style.border = cache.panelBorder;
+        panel.style.boxShadow = cache.panelBoxShadow;
+        if (body) body.style.background = cache.bodyBg;
+    } else {
+        panel.style.background = '';
+        panel.style.backgroundColor = '';
+        panel.style.border = '';
+        panel.style.boxShadow = '';
+        if (body) body.style.background = '';
+    }
+    delete panel.__ovFrameStyles;
 }
 
 // Block stray clicks that slip through right after a drag
@@ -290,14 +337,23 @@ function applyOverviewDecorations(panel, { fireEvents = true } = {}) {
         }
     }
 
-    const hR = header ? measurePartRectWithinPanel(panel, header) : null;
-    const fR = footer ? measurePartRectWithinPanel(panel, footer) : null;
+    const hR = header ? safePartRect(panel, header) : null;
+    const fR = footer ? safePartRect(panel, footer) : null;
     panel.style.setProperty('--ov-hdr-top', hR ? px(hR.top) : '0px');
     panel.style.setProperty('--ov-hdr-h', hR ? px(hR.height) : '0px');
     panel.style.setProperty('--ov-ftr-top', fR ? px(fR.top) : '0px');
     panel.style.setProperty('--ov-ftr-h', fR ? px(fR.height) : '0px');
+    // Lock header/footer height so body/canvas layout stays identical in overview.
+    if (header && hR) {
+        header.style.minHeight = px(hR.height);
+        header.style.height = px(hR.height);
+    }
+    if (footer && fR) {
+        footer.style.minHeight = px(fR.height);
+        footer.style.height = px(fR.height);
+    }
     const hdrHScreen = hR ? hR.height : 0;
-    if (snap && Number.isFinite(hdrHScreen) && hdrHScreen > 0) {
+    if (snap && Number.isFinite(hdrHScreen) && hdrHScreen > 0 && !(hR && hR.__fallback)) {
         if (panel.dataset._ovCompApplied === '1') {
             console.warn('[overview][comp] already applied; skipping', { id });
         } else {
@@ -355,37 +411,10 @@ function applyOverviewDecorations(panel, { fireEvents = true } = {}) {
             panel.dataset._ovCompApplied = '1';
         }
     }
-    if (header && hR) {
-        header.style.position = 'absolute';
-        header.style.top = px(hR.top);
-        header.style.left = '0';
-        header.style.right = '0';
-        header.style.height = px(hR.height);
-    }
-    if (footer && fR) {
-        footer.style.position = 'absolute';
-        footer.style.top = px(fR.top);
-        footer.style.left = '0';
-        footer.style.right = '0';
-        footer.style.height = px(fR.height);
-    }
+    // Keep header/footer in normal flow so the body doesn't jump when they hide in overview.
     if (header || footer) {
         panel.classList.add('ov-freeze');
         requestAnimationFrame(() => {
-            if (header) {
-                header.style.position = '';
-                header.style.top = '';
-                header.style.left = '';
-                header.style.right = '';
-                header.style.height = '';
-            }
-            if (footer) {
-                footer.style.position = '';
-                footer.style.top = '';
-                footer.style.left = '';
-                footer.style.right = '';
-                footer.style.height = '';
-            }
             panel.classList.add('ov-collapse');
         });
     }
@@ -506,11 +535,16 @@ function enterOverviewMode(isButton) {
 
     // Hide the entire frame of all toys by making backgrounds transparent and removing borders/shadows
     document.querySelectorAll('.toy-panel').forEach(panel => {
-        panel.style.background = 'transparent';
+        const toyKind = (panel.dataset?.toy || panel.dataset?.toyid || '').toLowerCase();
+        stashFrameStyles(panel);
         panel.style.border = 'none';
         panel.style.boxShadow = 'none';
+        if (toyKind !== 'drawgrid') {
+            panel.style.background = 'transparent';
+            panel.style.backgroundColor = 'transparent';
+        }
         const body = panel.querySelector('.toy-body');
-        if (body) {
+        if (body && toyKind !== 'drawgrid') {
             body.style.background = 'transparent';
         }
     });
@@ -579,6 +613,7 @@ function exitOverviewMode(isButton) {
                 header.style.left = '';
                 header.style.right = '';
                 header.style.height = '';
+                header.style.removeProperty('min-height');
             }
             if (footer) {
                 footer.style.position = '';
@@ -586,6 +621,7 @@ function exitOverviewMode(isButton) {
                 footer.style.left = '';
                 footer.style.right = '';
                 footer.style.height = '';
+                footer.style.removeProperty('min-height');
             }
             try {
                 const body = panel.querySelector('.toy-body');
@@ -637,14 +673,8 @@ function exitOverviewMode(isButton) {
 
     // Restore the original appearance of all toys
     document.querySelectorAll('.toy-panel').forEach(panel => {
-        panel.style.background = '';
-        panel.style.border = '';
-        panel.style.boxShadow = '';
+        restoreFrameStyles(panel);
         panel.classList.remove('ov-collapse', 'ov-freeze', 'ov-body-border');
-        const body = panel.querySelector('.toy-body');
-        if (body) {
-            body.style.background = '';
-        }
     });
     panelsForEvents.forEach(panel => {
         try { panel.dispatchEvent(new CustomEvent('overview:commit', { bubbles: true })); } catch {}

@@ -2329,15 +2329,15 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
     opacity: 0;
     pointer-events: none;
     cursor: default;
-    transition: opacity 0.3s ease, visibility 0.3s ease, height 0.3s ease, padding 0.3s ease;
-    height: 0;
-    padding: 0;
-    border: 0;
-    margin: 0;
+
+    /* IMPORTANT: do NOT collapse layout; keep height so toy-body doesn't jump */
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+    background: transparent !important;
+    box-shadow: none !important;
+    border-color: transparent !important;
 }
 
 .overview-mode [data-action="advanced"],
-.overview-mode .toy-chain-btn,
 .overview-mode .toy-title,
 .overview-mode .toy-instrument {
     visibility: hidden;
@@ -2347,12 +2347,14 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
     transition: opacity 0.3s ease, visibility 0.3s ease;
 }
 
-.overview-mode .toy-panel .toy-header *,
-.overview-mode .toy-panel .toy-footer * {
-    display: none;
+/* Keep chain button visible/usable in overview for linking toys */
+.overview-mode .toy-chain-btn {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+    cursor: pointer;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
 }
-
-
 
 .overview-mode .toy-panel {
     cursor: grab;
@@ -2360,6 +2362,38 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
 
 .overview-mode .toy-panel:active {
     cursor: grabbing;
+}
+
+/* --- Overview: hide expensive particle layers for Simple Rhythm --- */
+.overview-mode .toy-panel[data-toy="loopgrid"] .toy-particles,
+.overview-mode .toy-panel[data-toy="loopgrid"] .particle-canvas,
+.overview-mode .toy-panel[data-toy="loopgrid-drum"] .toy-particles,
+.overview-mode .toy-panel[data-toy="loopgrid-drum"] .particle-canvas,
+.overview-mode .toy-panel[data-toy="loopgrid-drum"] .drum-particles {
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+/* Drawgrid: ensure header/footer fully vanish visually while space is kept */
+.overview-mode .toy-panel[data-toy="drawgrid"] .toy-header,
+.overview-mode .toy-panel[data-toy="drawgrid"] .toy-footer {
+  background: transparent !important;
+  color: transparent !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
+/* Same, but for board-overview freeze/collapse path */
+.board-overview .toy-panel[data-toy="drawgrid"] .toy-header,
+.board-overview .toy-panel[data-toy="drawgrid"] .toy-footer {
+  background: transparent !important;
+  color: transparent !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
 }
 
 #overview-mode-text {
@@ -2550,20 +2584,17 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
 /* When we freeze a panel for Overview, take header/footer out of flow */
 .board-overview .toy-panel.ov-freeze .toy-header,
 .board-overview .toy-panel.ov-freeze .toy-footer {
-  position: absolute;
+  position: relative; /* keep layout space so the body stays put */
   left: 0; right: 0;
-  /* We'll place them with vars measured from JS */
+  min-height: var(--ov-hdr-h, auto);
+  height: var(--ov-hdr-h, auto);
   transform-origin: 50% 0%;
   will-change: transform, opacity, height;
   pointer-events: none;
 }
-.board-overview .toy-panel.ov-freeze .toy-header {
-  top: var(--ov-hdr-top, 0px);
-  height: var(--ov-hdr-h, 0px);
-}
 .board-overview .toy-panel.ov-freeze .toy-footer {
-  top: calc(var(--ov-ftr-top, 0px));
-  height: var(--ov-ftr-h, 0px);
+  min-height: var(--ov-ftr-h, auto);
+  height: var(--ov-ftr-h, auto);
 }
 /* Collapse animation (doesn't push the body anymore) */
 .board-overview .toy-panel.ov-freeze.ov-collapse .toy-header {

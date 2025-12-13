@@ -677,20 +677,37 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     }
   });
 
+  let needsRedraw = false;
+  // Overview mode hooks (match drawgrid style)
+  try {
+    panel?.addEventListener?.('overview:precommit', () => {
+      try { console.debug('[loopgrid][overview] precommit'); } catch {}
+      needsRedraw = true;
+    });
+    panel?.addEventListener?.('overview:commit', () => {
+      try { console.debug('[loopgrid][overview] commit', { active: !!overviewMode?.isActive?.() }); } catch {}
+      // Force the next frame to apply visibility/pause logic immediately.
+      try { needsRedraw = true; } catch {}
+    });
+  } catch {}
+
   // Start the render loop
   if (!panel.__simpleRhythmRenderLoop) {
     const renderLoop = () => {
       if (!panel.isConnected) return; // Stop rendering if panel is removed
-      render(panel);
+      const forceNudge = needsRedraw;
+      needsRedraw = false;
+      render(panel, { forceNudge });
       panel.__simpleRhythmRenderLoop = requestAnimationFrame(renderLoop);
     };
     renderLoop();
   }
 }
 
-function render(panel) {
+function render(panel, opts = {}) {
   const st = panel.__simpleRhythmVisualState;
   if (!st) return;
+  const forceNudge = !!opts.forceNudge;
 
   // Handle the highlight pulse animation on note hits.
   if (panel.__pulseRearm) {
@@ -731,13 +748,30 @@ function render(panel) {
   const cssW = st._cssW || canvas.clientWidth;
   const cssH = st._cssH || canvas.clientHeight;
   const renderTime = performance.now();
+  if (forceNudge) {
+    st.lastParticleTick = renderTime;
+  }
 
   const adaptiveBudget = (() => {
     try { return getAdaptiveFrameBudget(); } catch { return null; }
   })();
   const particleBudget = adaptiveBudget?.particleBudget;
   const isUnfocused = panel.classList?.contains('toy-unfocused');
-  const allowField = particleBudget?.allowField !== false && !isUnfocused;
+  const isOverview = (() => {
+    try { return !!overviewMode?.isActive?.(); } catch { return false; }
+  })();
+  const allowField = particleBudget?.allowField !== false && !isUnfocused && !isOverview;
+  if (particleCanvas) {
+    try {
+      if (isOverview) {
+        particleCanvas.style.opacity = '0';
+        particleCanvas.style.visibility = 'hidden';
+      } else {
+        particleCanvas.style.opacity = '';
+        particleCanvas.style.visibility = '';
+      }
+    } catch {}
+  }
   if (particleField) {
     try {
       if (particleBudget && typeof particleField.applyBudget === 'function') {
