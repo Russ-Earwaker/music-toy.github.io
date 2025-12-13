@@ -43,6 +43,7 @@ const SQUELCH_MS = 250;
 const CLICKY_EVENTS = ['click', 'contextmenu'];
 
 let docAbsorbArmed = false;
+let boardObserver = null;
 
 // ---- Overview logging gate ----
 const OV_DEBUG = false;
@@ -195,6 +196,224 @@ function disarmDocAbsorb() {
     docAbsorbArmed = false;
 }
 
+function snapshotPanelPosition(panel) {
+    if (!panel) return null;
+    const id = panel.id || panel.dataset.toyid || panel.dataset.toy;
+    if (!id) return null;
+    try {
+        const computed = getComputedStyle(panel);
+        let left = parseFloat(panel.style.left || computed.left || '0');
+        if (!Number.isFinite(left)) left = 0;
+        let top = parseFloat(panel.style.top || computed.top || '0');
+        if (!Number.isFinite(top)) top = 0;
+        const width = Number.isFinite(panel.offsetWidth) ? panel.offsetWidth : parseFloat(computed.width || '0') || 0;
+        const height = Number.isFinite(panel.offsetHeight) ? panel.offsetHeight : parseFloat(computed.height || '0') || 0;
+        const snap = { left, top, width, height };
+        overviewState.positions.set(id, snap);
+        return snap;
+    } catch {
+        return null;
+    }
+}
+
+function applyOverviewDecorations(panel, { fireEvents = true } = {}) {
+    if (!panel || !overviewState.isActive) return;
+
+    const { header, footer } = panelParts(panel);
+    const bodyEl = panel.querySelector('.toy-body') ||
+        panel.querySelector('.toy-interactive, .grid-canvas, .drawgrid-canvas, .loopgrid-grid, .rippler-canvas, .bouncer-canvas, .wheel-canvas, .cells, canvas, svg');
+
+    const id = panel.id || panel.dataset.toyid || panel.dataset.toy;
+    const snap = snapshotPanelPosition(panel) || overviewState.positions.get(id) || null;
+
+    if (fireEvents) {
+        try { panel.dispatchEvent(new CustomEvent('overview:precommit', { bubbles: true })); } catch {}
+    }
+
+    panel.classList.add('ov-body-border');
+    bindPanelDragCapture(panel);
+
+    if (bodyEl) {
+        // Disable direct interaction; drag is handled via the shield.
+        try {
+            if (bodyEl.dataset.ovOrigPe === undefined) {
+                bodyEl.dataset.ovOrigPe = bodyEl.style.pointerEvents || '';
+            }
+            bodyEl.style.pointerEvents = 'none';
+        } catch {}
+        try {
+            const shield = ensureShield(panel);
+            const supportsPointerEvents = typeof window !== 'undefined' && 'PointerEvent' in window;
+            const absorb = (ev) => {
+                ovdbg('[overview][shield absorb]', ev.type, 'on', panel.id || '(no-id)', 'target=', ev.target?.tagName || '(unknown)', ev.target?.className || '');
+                if (ev.cancelable) ev.preventDefault();
+                ev.stopImmediatePropagation();
+                ev.stopPropagation();
+            };
+
+            if (panel.__ovPanelAbsorbHandler) {
+                CLICKY_EVENTS.forEach(type => panel.removeEventListener(type, panel.__ovPanelAbsorbHandler, true));
+            }
+            const panelAbsorb = (ev) => {
+                ovdbg('[overview][panel absorb]', ev.type, 'on', panel.id || '(no-id)');
+                if (ev.cancelable) ev.preventDefault();
+                ev.stopImmediatePropagation();
+                ev.stopPropagation();
+            };
+            panel.__ovPanelAbsorbHandler = panelAbsorb;
+            CLICKY_EVENTS.forEach(type => panel.addEventListener(type, panelAbsorb, { capture: true, passive: false }));
+
+            const onShieldPointerDown = (ev) => {
+              ovdbg('[overview] drag start attempt', { id: panel.id || '(no-id)', type: ev.type });
+              if (dragInfo.isDragging && (dragInfo.usingPointer || dragInfo.usingTouch)) {
+                  absorb(ev);
+                  return;
+              }
+              if (typeof ev.button === 'number' && ev.button !== 0) {
+                  absorb(ev);
+                  return;
+              }
+              try { onToyMouseDown(ev); } catch {}
+              squelchClicksUntil = (typeof performance !== 'undefined' ? performance.now() : 0) + SQUELCH_MS;
+              absorb(ev);
+            };
+            if (supportsPointerEvents) {
+                shield.addEventListener('pointerdown', onShieldPointerDown, { passive: false, capture: true });
+            } else {
+                shield.addEventListener('touchstart', onShieldPointerDown, { passive: false, capture: true });
+            }
+            shield.addEventListener('mousedown', onShieldPointerDown, { passive: false, capture: true });
+
+            CLICKY_EVENTS.forEach(type => shield.addEventListener(type, absorb, { capture: true, passive: false }));
+        } catch (err) {
+            console.warn('[overview] failed to create shield', err);
+        }
+    }
+
+    const hR = header ? measurePartRectWithinPanel(panel, header) : null;
+    const fR = footer ? measurePartRectWithinPanel(panel, footer) : null;
+    panel.style.setProperty('--ov-hdr-top', hR ? px(hR.top) : '0px');
+    panel.style.setProperty('--ov-hdr-h', hR ? px(hR.height) : '0px');
+    panel.style.setProperty('--ov-ftr-top', fR ? px(fR.top) : '0px');
+    panel.style.setProperty('--ov-ftr-h', fR ? px(fR.height) : '0px');
+    const hdrHScreen = hR ? hR.height : 0;
+    if (snap && Number.isFinite(hdrHScreen) && hdrHScreen > 0) {
+        if (panel.dataset._ovCompApplied === '1') {
+            console.warn('[overview][comp] already applied; skipping', { id });
+        } else {
+            const scale = window.__boardScale || 1;
+            const dyWorld = hdrHScreen / Math.max(0.0001, scale);
+            const compensatedTop = snap.top + dyWorld;
+            let appliedTop = false;
+            try {
+                const body = bodyEl ||
+                    panel.querySelector('.toy-body') ||
+                    panel.querySelector('.grid-canvas, .rippler-canvas, .bouncer-canvas, .wheel-canvas, canvas, svg');
+                const innerTop = body ? (body.offsetTop || 0) : 0;
+                const innerH = body ? (body.offsetHeight || 0) : (Number.isFinite(snap.height) ? snap.height : panel.offsetHeight || 0);
+                const worldBefore = {
+                    x: snap.left + (panel.offsetWidth * 0.5),
+                    y: snap.top + innerTop + innerH * 0.5
+                };
+                const container = document.querySelector('.board-viewport') || document.documentElement;
+                const viewW = container.clientWidth || window.innerWidth;
+                const viewH = container.clientHeight || window.innerHeight;
+                const viewCx = Math.round(viewW * 0.5);
+                const viewCy = Math.round(viewH * 0.5);
+                const z = window.getZoomState?.() || {};
+                const s = Number.isFinite(z.currentScale) ? z.currentScale : Number.isFinite(z.targetScale) ? z.targetScale : window.__boardScale || 1;
+                const tx = Number.isFinite(z.currentX) ? z.currentX : Number.isFinite(z.targetX) ? z.targetX : window.__boardX || 0;
+                const ty = Number.isFinite(z.currentY) ? z.currentY : Number.isFinite(z.targetY) ? z.targetY : window.__boardY || 0;
+                const pxBefore = Math.round(worldBefore.x * s + tx);
+                const pyBefore = Math.round(worldBefore.y * s + ty);
+                panel.style.top = `${compensatedTop}px`;
+                appliedTop = true;
+                const worldAfter = { x: worldBefore.x, y: compensatedTop + innerTop + innerH * 0.5 };
+                const pxAfter = Math.round(worldAfter.x * s + tx);
+                const pyAfter = Math.round(worldAfter.y * s + ty);
+                ovdbg('[overview][comp]', {
+                    id,
+                    hdrHScreen,
+                    scale,
+                    dyWorld,
+                    snapTop: snap.top,
+                    compTop: compensatedTop,
+                    viewCx,
+                    viewCy,
+                    before: { px: pxBefore, py: pyBefore },
+                    after: { px: pxAfter, py: pyAfter },
+                    delta: { dx: pxAfter - pxBefore, dy: pyAfter - pyBefore }
+                });
+            } catch (e) {
+                ovdbg('[overview][comp] debug failed', e);
+            } finally {
+                if (!appliedTop) {
+                    panel.style.top = `${compensatedTop}px`;
+                }
+            }
+            panel.dataset.ovCompTop = String(compensatedTop);
+            panel.dataset._ovCompApplied = '1';
+        }
+    }
+    if (header && hR) {
+        header.style.position = 'absolute';
+        header.style.top = px(hR.top);
+        header.style.left = '0';
+        header.style.right = '0';
+        header.style.height = px(hR.height);
+    }
+    if (footer && fR) {
+        footer.style.position = 'absolute';
+        footer.style.top = px(fR.top);
+        footer.style.left = '0';
+        footer.style.right = '0';
+        footer.style.height = px(fR.height);
+    }
+    if (header || footer) {
+        panel.classList.add('ov-freeze');
+        requestAnimationFrame(() => {
+            if (header) {
+                header.style.position = '';
+                header.style.top = '';
+                header.style.left = '';
+                header.style.right = '';
+                header.style.height = '';
+            }
+            if (footer) {
+                footer.style.position = '';
+                footer.style.top = '';
+                footer.style.left = '';
+                footer.style.right = '';
+                footer.style.height = '';
+            }
+            panel.classList.add('ov-collapse');
+        });
+    }
+
+    if (fireEvents) {
+        try { panel.dispatchEvent(new CustomEvent('overview:commit', { bubbles: true })); } catch {}
+    }
+}
+
+function ensureBoardObserver() {
+    if (boardObserver) return;
+    const board = document.querySelector('#board');
+    if (!board || typeof MutationObserver === 'undefined') return;
+    boardObserver = new MutationObserver((mutations) => {
+        if (!overviewState.isActive) return;
+        mutations.forEach((m) => {
+            m.addedNodes.forEach((node) => {
+                if (!(node instanceof HTMLElement)) return;
+                const panels = [];
+                if (node.classList?.contains('toy-panel')) panels.push(node);
+                node.querySelectorAll?.('.toy-panel')?.forEach?.(el => panels.push(el));
+                panels.forEach(p => applyOverviewDecorations(p, { fireEvents: true }));
+            });
+        });
+    });
+    boardObserver.observe(board, { childList: true });
+}
+
 function bindPanelDragCapture(panel) {
     if (!panel) return;
     const handler = (ev) => {
@@ -236,21 +455,11 @@ function enterOverviewMode(isButton) {
     overviewState.positions.clear();
     try {
         const board = document.querySelector('#board');
-        board?.querySelectorAll(':scope > .toy-panel').forEach(panel => {
-            const id = panel.id || panel.dataset.toyid || panel.dataset.toy;
-            if (!id) return;
-            const computed = getComputedStyle(panel);
-            let left = parseFloat(panel.style.left || computed.left || '0');
-            if (!Number.isFinite(left)) left = 0;
-            let top = parseFloat(panel.style.top || computed.top || '0');
-            if (!Number.isFinite(top)) top = 0;
-            const width = Number.isFinite(panel.offsetWidth) ? panel.offsetWidth : parseFloat(computed.width || '0') || 0;
-            const height = Number.isFinite(panel.offsetHeight) ? panel.offsetHeight : parseFloat(computed.height || '0') || 0;
-            overviewState.positions.set(id, { left, top, width, height });
-        });
+        board?.querySelectorAll(':scope > .toy-panel').forEach(panel => snapshotPanelPosition(panel));
     } catch (err) {
         console.warn('[overview] failed to snapshot panel positions', err);
     }
+    ensureBoardObserver();
     const boardForClass = document.querySelector('#board, main#board, .world, .canvas-world');
     if (boardForClass) boardForClass.classList.add('board-overview');
     let panels = [];
@@ -260,165 +469,7 @@ function enterOverviewMode(isButton) {
             try { panel.dispatchEvent(new CustomEvent('overview:precommit', { bubbles: true })); } catch {}
         });
         panels.forEach(panel => {
-            const { header, footer } = panelParts(panel);
-            const bodyEl = panel.querySelector('.toy-body') ||
-                panel.querySelector('.toy-interactive, .grid-canvas, .drawgrid-canvas, .loopgrid-grid, .rippler-canvas, .bouncer-canvas, .wheel-canvas, .cells, canvas, svg');
-            panel.classList.add('ov-body-border');
-            bindPanelDragCapture(panel);
-
-            if (bodyEl) {
-                try {
-                    const shield = ensureShield(panel);
-                    const supportsPointerEvents = typeof window !== 'undefined' && 'PointerEvent' in window;
-                    const absorb = (ev) => {
-                        ovdbg('[overview][shield absorb]', ev.type, 'on', panel.id || '(no-id)', 'target=', ev.target?.tagName || '(unknown)', ev.target?.className || '');
-                        if (ev.cancelable) ev.preventDefault();
-                        ev.stopImmediatePropagation();
-                        ev.stopPropagation();
-                    };
-
-                    if (panel.__ovPanelAbsorbHandler) {
-                        CLICKY_EVENTS.forEach(type => panel.removeEventListener(type, panel.__ovPanelAbsorbHandler, true));
-                    }
-                    const panelAbsorb = (ev) => {
-                        ovdbg('[overview][panel absorb]', ev.type, 'on', panel.id || '(no-id)');
-                        if (ev.cancelable) ev.preventDefault();
-                        ev.stopImmediatePropagation();
-                        ev.stopPropagation();
-                    };
-                    panel.__ovPanelAbsorbHandler = panelAbsorb;
-                    CLICKY_EVENTS.forEach(type => panel.addEventListener(type, panelAbsorb, { capture: true, passive: false }));
-
-                    const onShieldPointerDown = (ev) => {
-                      ovdbg('[overview] drag start attempt', { id: panel.id || '(no-id)', type: ev.type });
-                      if (dragInfo.isDragging && (dragInfo.usingPointer || dragInfo.usingTouch)) {
-                          absorb(ev);
-                          return;
-                      }
-                      if (typeof ev.button === 'number' && ev.button !== 0) {
-                          absorb(ev);
-                          return;
-                      }
-                      // Kick off drag on the shield so we can move panels reliably.
-                      try { onToyMouseDown(ev); } catch {}
-                      squelchClicksUntil = (typeof performance !== 'undefined' ? performance.now() : 0) + SQUELCH_MS;
-                      absorb(ev);
-                    };
-                    if (supportsPointerEvents) {
-                        shield.addEventListener('pointerdown', onShieldPointerDown, { passive: false, capture: true });
-                    } else {
-                        shield.addEventListener('touchstart', onShieldPointerDown, { passive: false, capture: true });
-                    }
-                    shield.addEventListener('mousedown', onShieldPointerDown, { passive: false, capture: true });
-
-                    CLICKY_EVENTS.forEach(type => shield.addEventListener(type, absorb, { capture: true, passive: false }));
-
-                } catch (err) {
-                    console.warn('[overview] failed to create shield', err);
-                }
-            }
-
-            const hR = header ? measurePartRectWithinPanel(panel, header) : null;
-            const fR = footer ? measurePartRectWithinPanel(panel, footer) : null;
-            panel.style.setProperty('--ov-hdr-top', hR ? px(hR.top) : '0px');
-            panel.style.setProperty('--ov-hdr-h', hR ? px(hR.height) : '0px');
-            panel.style.setProperty('--ov-ftr-top', fR ? px(fR.top) : '0px');
-            panel.style.setProperty('--ov-ftr-h', fR ? px(fR.height) : '0px');
-            const id = panel.id || panel.dataset.toyid || panel.dataset.toy;
-            const snap = id ? overviewState.positions.get(id) : null;
-            const hdrHScreen = hR ? hR.height : 0;
-            if (snap && Number.isFinite(hdrHScreen) && hdrHScreen > 0) {
-                if (panel.dataset._ovCompApplied === '1') {
-                    console.warn('[overview][comp] already applied; skipping', { id });
-                } else {
-                    const scale = window.__boardScale || 1;
-                    const dyWorld = hdrHScreen / Math.max(0.0001, scale);
-                    const compensatedTop = snap.top + dyWorld;
-                    let appliedTop = false;
-                    try {
-                        const body = bodyEl ||
-                            panel.querySelector('.toy-body') ||
-                            panel.querySelector('.grid-canvas, .rippler-canvas, .bouncer-canvas, .wheel-canvas, canvas, svg');
-                        const innerTop = body ? (body.offsetTop || 0) : 0;
-                        const innerH = body ? (body.offsetHeight || 0) : (Number.isFinite(snap.height) ? snap.height : panel.offsetHeight || 0);
-                        const worldBefore = {
-                            x: snap.left + (panel.offsetWidth * 0.5),
-                            y: snap.top + innerTop + innerH * 0.5
-                        };
-                        const container = document.querySelector('.board-viewport') || document.documentElement;
-                        const viewW = container.clientWidth || window.innerWidth;
-                        const viewH = container.clientHeight || window.innerHeight;
-                        const viewCx = Math.round(viewW * 0.5);
-                        const viewCy = Math.round(viewH * 0.5);
-                        const z = window.getZoomState?.() || {};
-                        const s = Number.isFinite(z.currentScale) ? z.currentScale : Number.isFinite(z.targetScale) ? z.targetScale : window.__boardScale || 1;
-                        const tx = Number.isFinite(z.currentX) ? z.currentX : Number.isFinite(z.targetX) ? z.targetX : window.__boardX || 0;
-                        const ty = Number.isFinite(z.currentY) ? z.currentY : Number.isFinite(z.targetY) ? z.targetY : window.__boardY || 0;
-                        const pxBefore = Math.round(worldBefore.x * s + tx);
-                        const pyBefore = Math.round(worldBefore.y * s + ty);
-                        panel.style.top = `${compensatedTop}px`;
-                        appliedTop = true;
-                        const worldAfter = { x: worldBefore.x, y: compensatedTop + innerTop + innerH * 0.5 };
-                        const pxAfter = Math.round(worldAfter.x * s + tx);
-                        const pyAfter = Math.round(worldAfter.y * s + ty);
-                        ovdbg('[overview][comp]', {
-                            id,
-                            hdrHScreen,
-                            scale,
-                            dyWorld,
-                            snapTop: snap.top,
-                            compTop: compensatedTop,
-                            viewCx,
-                            viewCy,
-                            before: { px: pxBefore, py: pyBefore },
-                            after: { px: pxAfter, py: pyAfter },
-                            delta: { dx: pxAfter - pxBefore, dy: pyAfter - pyBefore }
-                        });
-                    } catch (e) {
-                        ovdbg('[overview][comp] debug failed', e);
-                    } finally {
-                        if (!appliedTop) {
-                            panel.style.top = `${compensatedTop}px`;
-                        }
-                    }
-                    panel.dataset.ovCompTop = String(compensatedTop);
-                    panel.dataset._ovCompApplied = '1';
-                }
-            }
-            if (header && hR) {
-                header.style.position = 'absolute';
-                header.style.top = px(hR.top);
-                header.style.left = '0';
-                header.style.right = '0';
-                header.style.height = px(hR.height);
-            }
-            if (footer && fR) {
-                footer.style.position = 'absolute';
-                footer.style.top = px(fR.top);
-                footer.style.left = '0';
-                footer.style.right = '0';
-                footer.style.height = px(fR.height);
-            }
-            if (header || footer) {
-                panel.classList.add('ov-freeze');
-                requestAnimationFrame(() => {
-                    if (header) {
-                        header.style.position = '';
-                        header.style.top = '';
-                        header.style.left = '';
-                        header.style.right = '';
-                        header.style.height = '';
-                    }
-                    if (footer) {
-                        footer.style.position = '';
-                        footer.style.top = '';
-                        footer.style.left = '';
-                        footer.style.right = '';
-                        footer.style.height = '';
-                    }
-                    panel.classList.add('ov-collapse');
-                });
-            }
+            applyOverviewDecorations(panel, { fireEvents: false });
         });
     } catch {}
     armDocAbsorb();
@@ -536,6 +587,15 @@ function exitOverviewMode(isButton) {
                 footer.style.right = '';
                 footer.style.height = '';
             }
+            try {
+                const body = panel.querySelector('.toy-body');
+                if (body && body.dataset.ovOrigPe !== undefined) {
+                    const pe = body.dataset.ovOrigPe;
+                    if (pe) body.style.pointerEvents = pe;
+                    else body.style.removeProperty('pointer-events');
+                    delete body.dataset.ovOrigPe;
+                }
+            } catch {}
             const shield = panel.querySelector(':scope > .ov-shield');
             if (shield) shield.remove();
             if (panel.__ovPanelAbsorbHandler) {
