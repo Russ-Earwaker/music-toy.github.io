@@ -20,7 +20,7 @@ function toTitleCase(str) {
 function initThemeSwitcher() {
   const select = document.getElementById('theme-select');
   if (!select) {
-    console.warn('[theme-switcher] Could not find #theme-select element.');
+    // Silently skip if topbar theme select is not present.
     return;
   }
 

@@ -463,9 +463,9 @@ const readStoredFocusEditingEnabled = () => {
 };
 
 try {
-  // Default off; set localStorage.FOCUS_DBG = '1' to enable.
+  // Default ON so focus centering issues are visible; set localStorage.FOCUS_DBG='0' to silence.
   if (localStorage.getItem('FOCUS_DBG') === null) {
-    localStorage.setItem('FOCUS_DBG', '0');
+    localStorage.setItem('FOCUS_DBG', '1');
   }
   window.__focusDebug = localStorage.getItem('FOCUS_DBG') === '1';
 } catch {}
@@ -699,6 +699,16 @@ function setToyFocus(panel, { center = true, unfocusAll } = {}) { // default cen
       const spawnerLeft = spawner ? spawner.getBoundingClientRect().left : window.innerWidth;
       const centerX = (guideRight + spawnerLeft) / 2;
       const centerFracX = centerX / window.innerWidth;
+      try {
+        if (window.__focusDebug || localStorage.getItem('FOCUS_DBG') === '1') {
+          console.log('[focus] center request', {
+            id: panel.id,
+            centerFracX,
+            scaleTarget: 1.0,
+            camLock: typeof window.__camTweenLock === 'boolean' ? window.__camTweenLock : '(unknown)',
+          });
+        }
+      } catch {}
       window.centerBoardOnElementSlow?.(panel, 1.0, { centerFracX });
     });
   }

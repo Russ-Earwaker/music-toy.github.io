@@ -10,12 +10,12 @@
 
   const ENABLED = (() => {
     try {
-      if (window.__MT_REFLOW_DEBUG === false) return false;
+      if (window.__MT_REFLOW_DEBUG === true) return true;
       const stored = localStorage.getItem('MT_REFLOW_DEBUG');
-      if (stored === '0') return false;
       if (stored === '1') return true;
+      if (stored === '0') return false;
     } catch {}
-    return true; // default ON for diagnostics
+    return false; // default OFF unless explicitly enabled
   })();
   if (!ENABLED) return;
 

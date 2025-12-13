@@ -193,7 +193,11 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
   const clearOverviewButtonPending = () => {
     try { window.__overviewButtonPending = false; } catch {}
   };
+  const isFocusEditingEnabled = () => {
+    try { return window.isFocusEditingEnabled?.() === true; } catch { return false; }
+  };
   const allowOverviewTransition = (scaleVal) => {
+    if (isFocusEditingEnabled()) return false;
     if (overviewButtonGate) {
       const crossed = crossedThreshold(overviewButtonGate, scaleVal);
       if (crossed) {
@@ -422,6 +426,12 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     if (camTweenLock) {
       if (!allowOverviewWhileLocked()) return;
     }
+    if (isFocusEditingEnabled()) {
+      if (ov.isActive) {
+        try { overviewMode.exit(false); } catch {}
+      }
+      return;
+    }
     if (ov.transitioning) {
       if (scale >= (ov.zoomReturnLevel - 1e-3)) {
         try { overviewMode.exit(false); } catch {}
@@ -443,6 +453,12 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
   function maybeUpdateOverview(scaleValue, meta = {}) {
     const ov = overviewMode?.state;
     if (!ov) return;
+    if (isFocusEditingEnabled()) {
+      if (ov.isActive) {
+        try { overviewMode.exit(false); } catch {}
+      }
+      return;
+    }
     if (camTweenLock && !allowOverviewWhileLocked()) {
       ovDbg('maybeUpdateOverview: cam tween lock skip', { scaleValue, meta, gate: overviewButtonGate, pending: isOverviewButtonPending(), camTweenLock });
       return;
@@ -716,7 +732,15 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
 
   function getWorldCenter(el) {
     if (!el || !(el instanceof HTMLElement)) return null;
-    if (window.__mtZoomGesturing) return null;
+    const focusEnabled = (typeof window !== 'undefined' && typeof window.isFocusEditingEnabled === 'function')
+      ? window.isFocusEditingEnabled()
+      : false;
+    if (window.__mtZoomGesturing && !focusEnabled) return null;
+    try {
+      if (window.__focusDebug || localStorage.getItem('FOCUS_DBG') === '1') {
+        console.log('[focus][getWorldCenter:enter]', { id: el.id, cls: el.className });
+      }
+    } catch {}
 
     const panel = getPanel(el) || el;
     const computed = panel ? getComputedStyle(panel) : null;
@@ -732,6 +756,14 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     }
 
     const targetEl = getTargetElementForPanel(panel) || panel;
+    if (!targetEl) {
+      try {
+        if (window.__focusDebug || localStorage.getItem('FOCUS_DBG') === '1') {
+          console.warn('[focus][getWorldCenter] no targetEl', { id: panel?.id });
+        }
+      } catch {}
+      return null;
+    }
     const z = getZoomState();
     const s =
       Number.isFinite(z?.currentScale) ? z.currentScale :
@@ -748,12 +780,55 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     if (!Number.isFinite(s) || !Number.isFinite(tx) || !Number.isFinite(ty)) return null;
     const boardRect = window.__mtZoomGesturing ? getStageRectCached() : profileReflow('worldCenter:boardRect', () => stage.getBoundingClientRect());
     const elRect = window.__mtZoomGesturing ? targetEl.getBoundingClientRect?.() : profileReflow('worldCenter:elRect', () => targetEl.getBoundingClientRect());
-    if (!boardRect || !elRect) return null;
+    if (!boardRect || !elRect || !Number.isFinite(elRect.width) || !Number.isFinite(elRect.height)) {
+      try {
+        if (window.__focusDebug || localStorage.getItem('FOCUS_DBG') === '1') {
+          console.warn('[focus][getWorldCenter] invalid rect', { id: panel?.id, boardRect, elRect });
+        }
+      } catch {}
+      // Fallback: derive from stored spawn positions or offsets.
+      const dsLeft = parsePx(panel?.dataset?.spawnAutoLeft);
+      const dsTop = parsePx(panel?.dataset?.spawnAutoTop);
+      const fbLeft = Number.isFinite(dsLeft) ? dsLeft : parsePx(panel?.style?.left);
+      const fbTop = Number.isFinite(dsTop) ? dsTop : parsePx(panel?.style?.top);
+      const fbW = Number.isFinite(w) && w > 0 ? w : (panel?.offsetWidth ?? 0);
+      const fbH = Number.isFinite(h) && h > 0 ? h : (panel?.offsetHeight ?? 0);
+      if (Number.isFinite(fbLeft) && Number.isFinite(fbTop) && fbW > 0 && fbH > 0) {
+        const wx = fbLeft + fbW * 0.5;
+        const wy = fbTop + fbH * 0.5;
+        try {
+          if (window.__focusDebug || localStorage.getItem('FOCUS_DBG') === '1') {
+            console.log('[focus][getWorldCenter:fallback]', { id: panel?.id, fbLeft, fbTop, fbW, fbH, wx, wy });
+          }
+        } catch {}
+        return { x: wx, y: wy };
+      }
+      return null;
+    }
     const screenCx = (elRect.left - boardRect.left) + (elRect.width * 0.5);
     const screenCy = (elRect.top - boardRect.top) + (elRect.height * 0.5);
     const worldVec = screenToWorld(screenCx, screenCy, s, tx, ty);
     const wx = worldVec.x;
     const wy = worldVec.y;
+    if (!Number.isFinite(wx) || !Number.isFinite(wy)) {
+      try {
+        if (window.__focusDebug || localStorage.getItem('FOCUS_DBG') === '1') {
+          console.warn('[focus][getWorldCenter] non-finite world coords', { id: panel?.id, screenCx, screenCy, s, tx, ty, wx, wy });
+        }
+      } catch {}
+      const dsLeft = parsePx(panel?.dataset?.spawnAutoLeft);
+      const dsTop = parsePx(panel?.dataset?.spawnAutoTop);
+      const fbLeft = Number.isFinite(dsLeft) ? dsLeft : parsePx(panel?.style?.left);
+      const fbTop = Number.isFinite(dsTop) ? dsTop : parsePx(panel?.style?.top);
+      const fbW = Number.isFinite(w) && w > 0 ? w : (panel?.offsetWidth ?? 0);
+      const fbH = Number.isFinite(h) && h > 0 ? h : (panel?.offsetHeight ?? 0);
+      if (Number.isFinite(fbLeft) && Number.isFinite(fbTop) && fbW > 0 && fbH > 0) {
+        const wx2 = fbLeft + fbW * 0.5;
+        const wy2 = fbTop + fbH * 0.5;
+        return { x: wx2, y: wy2 };
+      }
+      return null;
+    }
     const dbg = {
       id: panel?.id,
       screenCx,
@@ -868,45 +943,65 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     });
   }
 
-window.centerBoardOnWorldPoint = async (
+  window.centerBoardOnWorldPoint = async (
   xWorld,
   yWorld,
   desiredScale = scale,
   { duration = 950, easing = easeOutCubic, centerFracX, centerFracY = 0.5 } = {}
 ) => {
-  if (camTweenLock) return; // ignore while an animation is in progress
+  const focusEnabled = (typeof window !== 'undefined' && typeof window.isFocusEditingEnabled === 'function')
+    ? window.isFocusEditingEnabled()
+    : false;
+  if (camTweenLock && !focusEnabled) return; // ignore while an animation is in progress
   if (!Number.isFinite(xWorld) || !Number.isFinite(yWorld)) return;
   const targetScale = clampScale(Number(desiredScale) || scale);
   // One smooth move: pan & zoom together toward the final centered transform.
   await zoomPanToFinal(xWorld, yWorld, targetScale, { duration, easing, centerFracX, centerFracY });
 };
 
-window.centerBoardOnElement = (el, desiredScale = scale, { duration = 320, centerFracX = 0.5, centerFracY = 0.5 } = {}) => {
-    if (camTweenLock) return;
+  window.centerBoardOnElement = (el, desiredScale = scale, { duration = 320, centerFracX = 0.5, centerFracY = 0.5 } = {}) => {
     if (!el || !stage) return;
+    const focusEnabled = (typeof window !== 'undefined' && typeof window.isFocusEditingEnabled === 'function')
+      ? window.isFocusEditingEnabled()
+      : false;
+    if (camTweenLock && !focusEnabled) return;
     window.__lastFocusEl = el;
     cancelWheelCommit();
     const targetScale = clampScale(Number(desiredScale) || scale);
     const active = getActiveTransform();
     const currentScale = active.scale || 1;
 
-    // The viewport container that actually frames the board.
     const container = stage.closest('.board-viewport') || document.documentElement;
     const viewW = container.clientWidth || window.innerWidth;
     const viewH = container.clientHeight || window.innerHeight;
-  const viewCx = viewW * centerFracX;
-  const viewCy = viewH * centerFracY;
+    const viewCx = viewW * centerFracX;
+    const viewCy = viewH * centerFracY;
 
-    // World-space center of the panel (offsets are relative to #board because board.js ensures position:relative).
-  const worldCenter = getWorldCenter(el);
-  const elCxWorld = worldCenter?.x ?? 0;
-  const elCyWorld = worldCenter?.y ?? 0;
+    let worldCenter = getWorldCenter(el);
+    if (!worldCenter) {
+      const left = parsePx(el?.style?.left);
+      const top = parsePx(el?.style?.top);
+      const w = el?.offsetWidth || 0;
+      const h = el?.offsetHeight || 0;
+      if (Number.isFinite(left) && Number.isFinite(top) && w > 0 && h > 0) {
+        worldCenter = { x: left + w * 0.5, y: top + h * 0.5 };
+      }
+    }
+    if (!worldCenter) {
+      try {
+        if (window.__focusDebug || localStorage.getItem('FOCUS_DBG') === '1') {
+          console.warn('[focus][center] missing world center', { id: el?.id });
+        }
+      } catch {}
+      return;
+    }
+    const elCxWorld = worldCenter.x ?? 0;
+    const elCyWorld = worldCenter.y ?? 0;
 
-  const { layoutLeft, layoutTop } = getLayoutOffset();
-  const nextX = viewCx - layoutLeft - elCxWorld * targetScale;
-  const nextY = viewCy - layoutTop - elCyWorld * targetScale;
+    const { layoutLeft, layoutTop } = getLayoutOffset();
+    const nextX = viewCx - layoutLeft - elCxWorld * targetScale;
+    const nextY = viewCy - layoutTop - elCyWorld * targetScale;
 
-    // Guard against NaN/Infinity
     if (!Number.isFinite(nextX) || !Number.isFinite(nextY)) {
       console.warn('[centerBoardOnElement] bad coords; falling back to no-op', {
         targetScale, currentScale, elCxWorld, elCyWorld, viewW, viewH
@@ -921,14 +1016,45 @@ window.centerBoardOnElement = (el, desiredScale = scale, { duration = 320, cente
   };
 
 // Slower camera pan/zoom helper
-window.centerBoardOnElementSlow = (
+  window.centerBoardOnElementSlow = (
   el,
   desiredScale = scale,
   { duration = 1100, centerFracX, centerFracY = 0.5 } = {}
 ) => {
   if (!el || !stage) return;
-  if (camTweenLock) return;
+  const focusEnabled = (typeof window !== 'undefined' && typeof window.isFocusEditingEnabled === 'function')
+    ? window.isFocusEditingEnabled()
+    : false;
+  if (camTweenLock && !focusEnabled) return;
+  try {
+    if (window.__focusDebug || localStorage.getItem('FOCUS_DBG') === '1') {
+      console.log('[focus][centerSlow]', {
+        id: el?.id,
+        focusEnabled,
+        camTweenLock,
+        desiredScale,
+        duration,
+      });
+    }
+  } catch {}
   const wc = getWorldCenter(el);
+  if (!wc) {
+    try {
+      if (window.__focusDebug || localStorage.getItem('FOCUS_DBG') === '1') {
+        console.warn('[focus][centerSlow] missing world center', { id: el?.id });
+      }
+    } catch {}
+    const left = parsePx(el?.style?.left);
+    const top = parsePx(el?.style?.top);
+    const w = el?.offsetWidth || 0;
+    const h = el?.offsetHeight || 0;
+    if (Number.isFinite(left) && Number.isFinite(top) && w > 0 && h > 0) {
+      const wx = left + w * 0.5;
+      const wy = top + h * 0.5;
+      return window.centerBoardOnWorldPoint?.(wx, wy, desiredScale, { duration, centerFracX, centerFracY, easing: easeOutCubic });
+    }
+    return;
+  }
   if (!wc) return;
   return window.centerBoardOnWorldPoint?.(wc.x, wc.y, desiredScale, { duration, centerFracX, centerFracY, easing: easeOutCubic });
 };

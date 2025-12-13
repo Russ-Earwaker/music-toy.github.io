@@ -1,4 +1,4 @@
-import { publishFrameStart } from './zoom/ZoomCoordinator.js';
+﻿import { publishFrameStart } from './zoom/ZoomCoordinator.js';
 
 const DEFAULT_OVERVIEW_SCALE = 0.3;
 const DEFAULT_NORMAL_SCALE = 1;
@@ -871,33 +871,29 @@ function onToyMouseUp(e) {
       // Update tap memory
       lastTap = { time: now, id };
 
-      let __handledSingleTap = false;
-      if (!isDoubleTap) {
-                  // Single tap: do NOT zoom. Optionally provide a tiny visual affordance here.
-                  // e.g., panel.classList.add('ov-tap'); setTimeout(() => panel.classList.remove('ov-tap'), 150);
-                  emitOV('tap', { id, tap: 'single' });
-                  ovdbg('[overview] single tap (awaiting second tap)', { id });        // Absorb; don’t exit overview.
+      const focusEditingEnabled = (typeof window !== 'undefined' && typeof window.isFocusEditingEnabled === 'function')
+        ? window.isFocusEditingEnabled()
+        : true;
+      const shouldZoomFromSingleTap = focusEditingEnabled && !isDoubleTap;
+
+      if (!isDoubleTap && !shouldZoomFromSingleTap) {
+        emitOV('tap', { id, tap: 'single' });
+        ovdbg('[overview] single tap (awaiting second tap)', { id });
         if (typeof e.preventDefault === 'function') e.preventDefault();
         if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
         if (typeof e.stopPropagation === 'function') e.stopPropagation();
-        __handledSingleTap = true;
+        return;
       }
 
-      if (!__handledSingleTap) {
-                const focusEditingEnabled = (typeof window !== 'undefined' && typeof window.isFocusEditingEnabled === 'function')
-                  ? window.isFocusEditingEnabled()
-                  : true;
-                if (!focusEditingEnabled) {
-                    emitOV('tap', { id, tap: 'double', suppressed: 'focus-editing-disabled' });
-                    return;
-                }
-                // Double tap → proceed with the existing compute-center-and-zoom logic:
-                // (keep your current worldCenter/viewCx… calculation and exitOverviewMode(false) exactly as-is)
-                emitOV('tap', { id, tap: 'double' });
-                emitOV('zoom-in', { id });
-                ovdbg('[overview] double tap → zoom', { id });
-      // Ensure the panel’s FINAL drag result is already committed (Fix #1) before zoom,
-      // then run your existing “snapshot forward-projection” and exitOverviewMode(false)
+      if (!focusEditingEnabled) {
+        emitOV('tap', { id, tap: 'double', suppressed: 'focus-editing-disabled' });
+        return;
+      }
+      emitOV('tap', { id, tap: 'double' });
+      emitOV('zoom-in', { id });
+      ovdbg('[overview] tap -> zoom', { id, via: shouldZoomFromSingleTap ? 'single' : 'double' });
+      // Ensure the panel's FINAL drag result is already committed (Fix #1) before zoom,
+      // then run your existing "snapshot forward-projection" and exitOverviewMode(false)
       // (No further changes needed below this comment.)
       if (!panel) {
           console.warn('[overview] tap target missing panel reference');
@@ -957,7 +953,6 @@ function onToyMouseUp(e) {
               window.centerBoardOnElement?.(panel, overviewState.zoomReturnLevel);
           }
       });
-      }
     }
 
     dragInfo.isDragging = false;
