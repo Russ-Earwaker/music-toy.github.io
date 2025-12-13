@@ -2299,12 +2299,38 @@ function ensureSizeReady({ force = false } = {}) {
 
   changed = force || Math.abs(w - cssW) > 0.5 || Math.abs(h - cssH) > 0.5;
   if (changed) {
+    // Snapshot current paint to preserve drawn lines across resize.
+    let paintSnapshot = null;
+    try {
+      const snapSrc = (typeof getActivePaintCanvas === 'function' ? getActivePaintCanvas() : paint) || paint;
+      if (snapSrc && snapSrc.width > 0 && snapSrc.height > 0) {
+        paintSnapshot = document.createElement('canvas');
+        paintSnapshot.width = snapSrc.width;
+        paintSnapshot.height = snapSrc.height;
+        paintSnapshot.getContext('2d')?.drawImage(snapSrc, 0, 0);
+      }
+    } catch {}
+
     cssW = w; cssH = h;
     progressMeasureW = cssW; progressMeasureH = cssH;
 
     try { dgViewport?.refreshSize?.({ snap: true }); } catch {}
 
     resizeSurfacesFor(cssW, cssH, window.devicePixelRatio || paintDpr || 1);
+    if (paintSnapshot) {
+      try {
+        const ctx = typeof getActivePaintCtx === 'function' ? getActivePaintCtx() : pctx;
+        if (ctx) {
+          resetPaintBlend?.(ctx);
+          ctx.clearRect(0, 0, cssW, cssH);
+          ctx.drawImage(
+            paintSnapshot,
+            0, 0, paintSnapshot.width, paintSnapshot.height,
+            0, 0, cssW, cssH
+          );
+        }
+      } catch {}
+    }
 
     __dgFrontSwapNextDraw = true;
     dglog('ensureSizeReady:update', { cssW, cssH });
