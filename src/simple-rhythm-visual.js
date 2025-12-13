@@ -387,7 +387,13 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
       const returnSeconds = baseReturnSeconds + extraReturnSeconds;
 
       particleField = createField(
-        { canvas: particleCanvas, viewport: pv, pausedRef, debugLabel: 'simple-rhythm-particles' },
+        {
+          canvas: particleCanvas,
+          viewport: pv,
+          pausedRef,
+          debugLabel: 'simple-rhythm-particles',
+          isFocusedRef: () => !!panel?.classList?.contains('toy-focused'),
+        },
         {
           seed: panelSeed,
           cap,
@@ -681,11 +687,11 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
   // Overview mode hooks (match drawgrid style)
   try {
     panel?.addEventListener?.('overview:precommit', () => {
-      try { console.debug('[loopgrid][overview] precommit'); } catch {}
+      try { if (window.__PERF_LAB_VERBOSE) console.debug('[loopgrid][overview] precommit'); } catch {}
       needsRedraw = true;
     });
     panel?.addEventListener?.('overview:commit', () => {
-      try { console.debug('[loopgrid][overview] commit', { active: !!overviewMode?.isActive?.() }); } catch {}
+      try { if (window.__PERF_LAB_VERBOSE) console.debug('[loopgrid][overview] commit', { active: !!overviewMode?.isActive?.() }); } catch {}
       // Force the next frame to apply visibility/pause logic immediately.
       try { needsRedraw = true; } catch {}
     });

@@ -1657,7 +1657,13 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       const sizePx = baseSize * (0.8 + 0.4 * (budget.spawnScale ?? 1));
 
       dgField = createField(
-        { canvas: particleCanvas, viewport: dgViewport, pausedRef, debugLabel: 'drawgrid-particles' },
+        {
+          canvas: particleCanvas,
+          viewport: dgViewport,
+          pausedRef,
+          debugLabel: 'drawgrid-particles',
+          isFocusedRef: () => !!panel?.classList?.contains('toy-focused'),
+        },
         {
           seed: panelSeed,
           cap,

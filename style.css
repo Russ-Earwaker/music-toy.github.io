@@ -3029,3 +3029,69 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
     0 6px 16px rgba(0, 0, 0, 0.6);
   transform: translateY(-1px);
 }
+/* --- Perf Lab overlay (benchmark harness) --- */
+.perf-lab-overlay{
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.68);
+  z-index: 5400;
+}
+.perf-lab-panel{
+  width: min(560px, 92vw);
+  max-height: 82vh;
+  background: rgba(12, 18, 26, 0.97);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 22px 45px rgba(0,0,0,0.7);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--text);
+}
+.perf-lab-header{
+  display:flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+.perf-lab-title{ font-weight: 650; letter-spacing: 0.02em; }
+.perf-lab-sub{ color: var(--muted); font-size: 0.8rem; margin-top: 2px; }
+.perf-lab-body{ display:flex; flex-direction: column; gap: 10px; min-height:0; }
+.perf-lab-row{ display:flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.perf-lab-btn{
+  font-size: 0.78rem;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(32, 46, 64, 0.9);
+  cursor: pointer;
+  background: rgba(14, 22, 34, 0.96);
+  color: var(--text);
+  transition: background 0.15s ease-out, border-color 0.15s ease-out, transform 0.1s ease-out;
+}
+.perf-lab-btn:hover,
+.perf-lab-btn:focus-visible{
+  background: rgba(32, 46, 64, 0.95);
+  border-color: rgba(95, 179, 255, 0.5);
+  transform: translateY(-1px);
+}
+.perf-lab-btn.primary{
+  font-weight: 650;
+  background: linear-gradient(135deg, rgba(95, 179, 255, 0.9), rgba(88, 208, 255, 0.85));
+  border-color: rgba(146, 226, 255, 0.9);
+  color: #020712;
+}
+.perf-lab-status{ color: var(--muted); font-size: 0.8rem; }
+.perf-lab-output{
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(32, 46, 64, 0.6);
+  border-radius: 10px;
+  padding: 10px;
+  overflow: auto;
+  max-height: 46vh;
+  font-size: 12px;
+  line-height: 1.35;
+}

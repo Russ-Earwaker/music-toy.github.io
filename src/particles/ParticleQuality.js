@@ -12,6 +12,7 @@ export const QUALITY = {
 let currentQuality = QUALITY.ULTRA;
 let lastFpsSample = 60;
 let smoothedFps = 60;
+let qualityLock = null; // when set, prevents FPS-driven changes
 
 // Low-pass filter for noisy FPS samples so we don't thrash quality tiers.
 const FPS_SMOOTH_ALPHA = 0.18;
@@ -21,6 +22,16 @@ const FPS_SMOOTH_ALPHA = 0.18;
  * It maps a recent FPS sample to a quality tier.
  */
 export function updateParticleQualityFromFps(fps) {
+  if (qualityLock) {
+    if (Number.isFinite(fps) && fps > 0) {
+      lastFpsSample = fps;
+      if (!Number.isFinite(smoothedFps)) smoothedFps = fps;
+      smoothedFps = smoothedFps + (fps - smoothedFps) * FPS_SMOOTH_ALPHA;
+    }
+    currentQuality = qualityLock;
+    return currentQuality;
+  }
+
   if (!Number.isFinite(fps) || fps <= 0) return;
   lastFpsSample = fps;
   if (!Number.isFinite(smoothedFps)) smoothedFps = fps;
@@ -62,22 +73,52 @@ export function getLastFpsSample() {
   return lastFpsSample;
 }
 
+// Benchmark/testing helper: lock particle quality to a fixed tier (or null to unlock).
+export function setParticleQualityLock(q) {
+  if (q == null) { qualityLock = null; return; }
+  const s = String(q).toLowerCase();
+  qualityLock =
+    s === QUALITY.ULTRA ? QUALITY.ULTRA :
+    s === QUALITY.HIGH ? QUALITY.HIGH :
+    s === QUALITY.MEDIUM ? QUALITY.MEDIUM :
+    s === QUALITY.LOW ? QUALITY.LOW :
+    QUALITY.ULTRA;
+  currentQuality = qualityLock;
+}
+
+export function getParticleQualityLock() { return qualityLock; }
+
 /**
  * Returns a simple "budget" object that particle systems / toys can use
  * to scale their spawn rates, caps, etc.
  */
 export function getParticleBudget() {
+  let budget;
   switch (currentQuality) {
     case QUALITY.ULTRA:
-      return { spawnScale: 1.0, maxCountScale: 1.0 };
+      budget = { spawnScale: 1.0, maxCountScale: 1.0 }; break;
     case QUALITY.HIGH:
-      return { spawnScale: 0.7, maxCountScale: 0.75 };
+      budget = { spawnScale: 0.7, maxCountScale: 0.75 }; break;
     case QUALITY.MEDIUM:
-      return { spawnScale: 0.45, maxCountScale: 0.5 };
+      budget = { spawnScale: 0.45, maxCountScale: 0.5 }; break;
     case QUALITY.LOW:
     default:
-      return { spawnScale: 0.2, maxCountScale: 0.25 };
+      budget = { spawnScale: 0.2, maxCountScale: 0.25 }; break;
   }
+
+  // PerfLab override: scale budgets for quick A/B testing.
+  try {
+    const mul = (window.__PERF_PARTICLES && typeof window.__PERF_PARTICLES.budgetMul === 'number')
+      ? window.__PERF_PARTICLES.budgetMul
+      : 1;
+    if (budget && mul !== 1) {
+      if (typeof budget.spawnScale === 'number') budget.spawnScale = Math.max(0, budget.spawnScale * mul);
+      if (typeof budget.maxCountScale === 'number') budget.maxCountScale = Math.max(0, budget.maxCountScale * mul);
+      if (budget.allowField === false) {} else budget.allowField = mul > 0;
+    }
+  } catch {}
+
+  return budget;
 }
 
 /**
