@@ -387,6 +387,8 @@ let chainCanvas, chainCtx;
 // Cached layout data so drawChains() avoids DOM reads per frame
 let g_boardClientWidth = 0;
 let g_boardClientHeight = 0;
+let g_chainCanvasWorldLeft = 0;
+let g_chainCanvasWorldTop = 0;
 
 /**
  * @typedef {Object} Edge
@@ -2113,6 +2115,11 @@ function drawChains(forceFull = false) {
   const { scale = 1, tx = 0, ty = 0 } = getViewportTransform() || {};
   const safeScale = (Number.isFinite(scale) && Math.abs(scale) > 1e-6) ? scale : 1;
 
+  // Track the world-space rect covered by the chain canvas so we can reposition it
+  // when the camera pans, even if the viewport size stays the same.
+  const prevWorldLeft = g_chainCanvasWorldLeft;
+  const prevWorldTop  = g_chainCanvasWorldTop;
+
   // Position the chain canvas in WORLD space so that after board transform
   // it exactly covers the visible viewport.
   const tl = screenToWorld({ x: 0, y: 0 });
@@ -2137,18 +2144,14 @@ function drawChains(forceFull = false) {
 
   // --- Phase 1: resize canvas if board viewport changed ---
   let tAfterResize = tStart;
-  if (forceFull || canvasW !== worldW || canvasH !== worldH) {
+  const sizeChanged = forceFull || canvasW !== worldW || canvasH !== worldH;
+  const positionChanged = worldLeft !== prevWorldLeft || worldTop !== prevWorldTop;
+
+  if (sizeChanged) {
     const tResizeStart = performance.now();
 
     chainCanvas.width = worldW * dpr;
     chainCanvas.height = worldH * dpr;
-
-    // World position + world size (the board transform will scale it to screen)
-    chainCanvas.style.left = `${worldLeft}px`;
-    chainCanvas.style.top = `${worldTop}px`;
-    chainCanvas.style.width = `${worldW}px`;
-    chainCanvas.style.height = `${worldH}px`;
-
     tAfterResize = performance.now();
 
     if (CHAIN_DEBUG) {
@@ -2156,6 +2159,16 @@ function drawChains(forceFull = false) {
     }
   } else {
     tAfterResize = performance.now();
+  }
+
+  // Always update the canvas positioning if either the size or world origin changed.
+  if (sizeChanged || positionChanged) {
+    chainCanvas.style.left = `${worldLeft}px`;
+    chainCanvas.style.top = `${worldTop}px`;
+    chainCanvas.style.width = `${worldW}px`;
+    chainCanvas.style.height = `${worldH}px`;
+    g_chainCanvasWorldLeft = worldLeft;
+    g_chainCanvasWorldTop = worldTop;
   }
 
   // --- Phase 2: clear the canvas ---
@@ -2360,10 +2373,27 @@ function scheduleChainRedraw() {
         try {
             drawChains(doFull);
         } catch (err) {
-            console.warn('[CHAIN] scheduleChainRedraw failed', err);
-        }
-    });
+        console.warn('[CHAIN] scheduleChainRedraw failed', err);
+    }
+  });
 }
+
+// Keep chain connectors in sync with camera pans/zooms by redrawing on viewport changes.
+(function setupChainViewportSync(){
+  try {
+    const handler = (payload = {}) => {
+      if (!CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) return;
+      // Always redraw once per frame; scheduleChainRedraw is already throttled.
+      scheduleChainRedraw();
+    };
+    handler.__zcName = 'chain-viewport-sync';
+    onZoomChange(handler);
+  } catch (err) {
+    if (CHAIN_DEBUG) {
+      console.warn('[CHAIN] viewport sync init failed', err);
+    }
+  }
+})();
 const g_chainState = new Map();
 
 function findChainHead(toy) {
