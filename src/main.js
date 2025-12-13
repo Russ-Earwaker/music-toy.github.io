@@ -2474,8 +2474,20 @@ try {
     updateOutlineVars(window.__boardScale || 1);
 
     // update on zoom/overview transitions + window resize
-    window.addEventListener('overview:transition', () => updateOutlineVars(window.__boardScale || 1), { passive: true });
-    window.addEventListener('overview:transition', () => { try { syncAllBodyOutlines(); } catch {} }, { passive: true });
+  window.addEventListener('overview:transition', () => updateOutlineVars(window.__boardScale || 1), { passive: true });
+  window.addEventListener('overview:transition', () => { try { syncAllBodyOutlines(); } catch {} }, { passive: true });
+  window.addEventListener('overview:transition', (e) => {
+    // When exiting overview, any active pulse should jump back to the full panel outline.
+    // Force-restart the pulse animation so the box-shadow is recalculated on the outer frame.
+    if (e?.detail?.active === false) {
+      const pulsePanels = Array.from(document.querySelectorAll('.toy-panel.toy-playing-pulse'));
+      pulsePanels.forEach((panel) => {
+        panel.classList.remove('toy-playing-pulse');
+        try { panel.offsetWidth; } catch {}
+        panel.classList.add('toy-playing-pulse');
+      });
+    }
+  }, { passive: true });
     window.addEventListener('resize', () => updateOutlineVars(window.__boardScale || 1), { passive: true });
     window.addEventListener('resize', () => { try { syncAllBodyOutlines(); } catch {} }, { passive: true });
 
@@ -2961,6 +2973,21 @@ async function boot(){
         console.warn('[CHAIN] overview:transition redraw failed', err);
       }
     }
+  }, { passive: true });
+  // After overview commit, run a delayed rebuild to catch any late layout/scale snaps.
+  window.addEventListener('overview:change', () => {
+    const raf = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));
+    raf(() => {
+      try {
+        rebuildChainSegments();
+        g_chainRedrawPendingFull = true;
+        scheduleChainRedraw();
+      } catch (err) {
+        if (CHAIN_DEBUG) {
+          console.warn('[CHAIN] overview:change redraw failed', err);
+        }
+      }
+    });
   }, { passive: true });
 
   // Start tracking drag when pressing down on a toy panel
