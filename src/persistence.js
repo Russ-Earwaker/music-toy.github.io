@@ -527,6 +527,9 @@ function applyCameraState(camera) {
             ov.exit?.(false);
           }
         } catch {}
+      } else {
+        // Overview module not ready yet; request a deferred restore.
+        try { window.__pendingOverviewRestore = camera.overviewActive; } catch {}
       }
     }
   } catch (err) {

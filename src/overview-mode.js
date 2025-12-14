@@ -60,6 +60,23 @@ function emitOV(name, detail = {}) {
   } catch {}
 }
 
+// ---- Overview debug coloration (toggle with localStorage.setItem('OV_COLORS','1')) ----
+function ovColorsEnabled() {
+  try { return localStorage.getItem('OV_COLORS') === '1'; } catch { return false; }
+}
+function applyOvColorsClass() {
+  try {
+    document.documentElement.classList.toggle('ov-debug-colors', ovColorsEnabled());
+  } catch {}
+}
+// Debug helper: call from console
+window.__setOvDebugColors = function (on) {
+  try {
+    document.documentElement.classList.toggle('ov-debug-colors', !!on);
+    console.log('[overview] ov-debug-colors =', !!on);
+  } catch {}
+};
+
 function safeScale(value, fallback = DEFAULT_NORMAL_SCALE) {
   const n = typeof value === 'number' ? value : NaN;
   return Number.isFinite(n) && n > 0 ? n : fallback;
@@ -161,11 +178,13 @@ function safePartRect(panel, el) {
 }
 
 function ensureShield(panel) {
-    let shield = panel.querySelector(':scope > .ov-shield');
+    let shield = panel.querySelector('.ov-shield');
     if (!shield) {
         shield = document.createElement('div');
         shield.className = 'ov-shield';
-        panel.appendChild(shield);
+        // Attach shield to the body so it doesn't cover header/footer spacer area
+        const body = panel.querySelector('.toy-body') || panel;
+        body.appendChild(shield);
     }
     return shield;
 }
@@ -247,6 +266,12 @@ function snapshotPanelPosition(panel) {
     if (!panel) return null;
     const id = panel.id || panel.dataset.toyid || panel.dataset.toy;
     if (!id) return null;
+
+    // HARD LOCK: once overview has snapped positions, never resample until exit
+    if (overviewState.isActive && overviewState.positionsLocked && overviewState.positions.has(id)) {
+        return overviewState.positions.get(id);
+    }
+
     try {
         const computed = getComputedStyle(panel);
         let left = parseFloat(panel.style.left || computed.left || '0');
@@ -271,7 +296,8 @@ function applyOverviewDecorations(panel, { fireEvents = true } = {}) {
         panel.querySelector('.toy-interactive, .grid-canvas, .drawgrid-canvas, .loopgrid-grid, .rippler-canvas, .bouncer-canvas, .wheel-canvas, .cells, canvas, svg');
 
     const id = panel.id || panel.dataset.toyid || panel.dataset.toy;
-    const snap = snapshotPanelPosition(panel) || overviewState.positions.get(id) || null;
+    // IMPORTANT: prefer the stored pre-overview snap; re-snapshotting after compensation causes drift.
+    const snap = overviewState.positions.get(id) || snapshotPanelPosition(panel) || null;
 
     if (fireEvents) {
         try { panel.dispatchEvent(new CustomEvent('overview:precommit', { bubbles: true })); } catch {}
@@ -352,65 +378,10 @@ function applyOverviewDecorations(panel, { fireEvents = true } = {}) {
         footer.style.minHeight = px(fR.height);
         footer.style.height = px(fR.height);
     }
-    const hdrHScreen = hR ? hR.height : 0;
-    if (snap && Number.isFinite(hdrHScreen) && hdrHScreen > 0 && !(hR && hR.__fallback)) {
-        if (panel.dataset._ovCompApplied === '1') {
-            console.warn('[overview][comp] already applied; skipping', { id });
-        } else {
-            const scale = window.__boardScale || 1;
-            const dyWorld = hdrHScreen / Math.max(0.0001, scale);
-            const compensatedTop = snap.top + dyWorld;
-            let appliedTop = false;
-            try {
-                const body = bodyEl ||
-                    panel.querySelector('.toy-body') ||
-                    panel.querySelector('.grid-canvas, .rippler-canvas, .bouncer-canvas, .wheel-canvas, canvas, svg');
-                const innerTop = body ? (body.offsetTop || 0) : 0;
-                const innerH = body ? (body.offsetHeight || 0) : (Number.isFinite(snap.height) ? snap.height : panel.offsetHeight || 0);
-                const worldBefore = {
-                    x: snap.left + (panel.offsetWidth * 0.5),
-                    y: snap.top + innerTop + innerH * 0.5
-                };
-                const container = document.querySelector('.board-viewport') || document.documentElement;
-                const viewW = container.clientWidth || window.innerWidth;
-                const viewH = container.clientHeight || window.innerHeight;
-                const viewCx = Math.round(viewW * 0.5);
-                const viewCy = Math.round(viewH * 0.5);
-                const z = window.getZoomState?.() || {};
-                const s = Number.isFinite(z.currentScale) ? z.currentScale : Number.isFinite(z.targetScale) ? z.targetScale : window.__boardScale || 1;
-                const tx = Number.isFinite(z.currentX) ? z.currentX : Number.isFinite(z.targetX) ? z.targetX : window.__boardX || 0;
-                const ty = Number.isFinite(z.currentY) ? z.currentY : Number.isFinite(z.targetY) ? z.targetY : window.__boardY || 0;
-                const pxBefore = Math.round(worldBefore.x * s + tx);
-                const pyBefore = Math.round(worldBefore.y * s + ty);
-                panel.style.top = `${compensatedTop}px`;
-                appliedTop = true;
-                const worldAfter = { x: worldBefore.x, y: compensatedTop + innerTop + innerH * 0.5 };
-                const pxAfter = Math.round(worldAfter.x * s + tx);
-                const pyAfter = Math.round(worldAfter.y * s + ty);
-                ovdbg('[overview][comp]', {
-                    id,
-                    hdrHScreen,
-                    scale,
-                    dyWorld,
-                    snapTop: snap.top,
-                    compTop: compensatedTop,
-                    viewCx,
-                    viewCy,
-                    before: { px: pxBefore, py: pyBefore },
-                    after: { px: pxAfter, py: pyAfter },
-                    delta: { dx: pxAfter - pxBefore, dy: pyAfter - pyBefore }
-                });
-            } catch (e) {
-                ovdbg('[overview][comp] debug failed', e);
-            } finally {
-                if (!appliedTop) {
-                    panel.style.top = `${compensatedTop}px`;
-                }
-            }
-            panel.dataset.ovCompTop = String(compensatedTop);
-            panel.dataset._ovCompApplied = '1';
-        }
-    }
+    // NOTE: We intentionally do NOT apply any "header height compensation" to panel.top.
+    // We keep header/footer in normal flow (ov-freeze) with locked heights, so the toy-body
+    // does not jump when chrome fades/collapses in Overview. Applying compensation here
+    // causes a visible downward drift when entering Overview via wheel zoom.
     // Keep header/footer in normal flow so the body doesn't jump when they hide in overview.
     if (header || footer) {
         panel.classList.add('ov-freeze');
@@ -488,6 +459,7 @@ function enterOverviewMode(isButton) {
     } catch (err) {
         console.warn('[overview] failed to snapshot panel positions', err);
     }
+    overviewState.positionsLocked = true;
     ensureBoardObserver();
     const boardForClass = document.querySelector('#board, main#board, .world, .canvas-world');
     if (boardForClass) boardForClass.classList.add('board-overview');
@@ -504,9 +476,11 @@ function enterOverviewMode(isButton) {
     armDocAbsorb();
 
     document.body.classList.add('overview-mode');
+    applyOvColorsClass();
     panels.forEach(panel => {
         try { panel.dispatchEvent(new CustomEvent('overview:commit', { bubbles: true })); } catch {}
     });
+    try { console.debug('[overview] enter: classes', { body: document.body.className, board: document.querySelector('#board')?.className }); } catch {}
     try {
         window.dispatchEvent(new CustomEvent('overview:change', { detail: { active: true } }));
     } catch {}
@@ -551,6 +525,7 @@ function enterOverviewMode(isButton) {
 }
 
 function exitOverviewMode(isButton) {
+    overviewState.positionsLocked = false;
     if (!overviewState.isActive) return;
     const buttonTriggered = !!isButton;
     const currentScale = readBoardScale();
@@ -581,6 +556,7 @@ function exitOverviewMode(isButton) {
     }
     overviewState.positions.clear();
     document.body.classList.remove('overview-mode');
+    try { document.documentElement.classList.remove('ov-debug-colors'); } catch {}
     try {
         window.dispatchEvent(new CustomEvent('overview:change', { detail: { active: false } }));
     } catch {}
@@ -632,7 +608,7 @@ function exitOverviewMode(isButton) {
                     delete body.dataset.ovOrigPe;
                 }
             } catch {}
-            const shield = panel.querySelector(':scope > .ov-shield');
+            const shield = panel.querySelector('.ov-shield');
             if (shield) shield.remove();
             if (panel.__ovPanelAbsorbHandler) {
                 CLICKY_EVENTS.forEach(type => panel.removeEventListener(type, panel.__ovPanelAbsorbHandler, true));
@@ -705,7 +681,7 @@ function onToyMouseDown(e) {
 
     const startX = getEventClientX(e);
     const startY = getEventClientY(e);
-    const shield = panel.querySelector(':scope > .ov-shield');
+    const shield = panel.querySelector('.ov-shield');
     const eventType = e?.type || '';
     const usingPointer = eventType.startsWith('pointer');
     const usingTouch = !usingPointer && eventType.startsWith('touch');
@@ -984,14 +960,40 @@ function isOverviewModeActive() {
     return overviewState.isActive;
 }
 
+// Re-apply overview styling when already active (e.g., after refresh restoring overview).
+function refreshOverviewDecorations() {
+    if (!overviewState.isActive) return;
+    const boardForClass = document.querySelector('#board, main#board, .world, .canvas-world');
+    if (boardForClass) boardForClass.classList.add('board-overview');
+    document.body.classList.add('overview-mode');
+    try {
+        document.querySelectorAll('#board .toy-panel').forEach(panel => {
+            applyOverviewDecorations(panel, { fireEvents: false });
+        });
+        window.__syncAllBodyOutlines?.();
+    } catch {}
+}
+
 export const overviewMode = {
     enter: enterOverviewMode,
     exit: exitOverviewMode,
     toggle: toggleOverviewMode,
     isActive: isOverviewModeActive,
+    refreshDecorations: refreshOverviewDecorations,
     state: overviewState
 };
 
 try {
     window.__overviewMode = overviewMode;
+} catch {}
+
+// Deferred overview restore (when persistence runs before overview-mode is ready)
+try {
+    if (window.__pendingOverviewRestore === true && !overviewState.isActive) {
+        window.__pendingOverviewRestore = false;
+        enterOverviewMode(false);
+    } else if (window.__pendingOverviewRestore === false && overviewState.isActive) {
+        window.__pendingOverviewRestore = false;
+        exitOverviewMode(false);
+    }
 } catch {}

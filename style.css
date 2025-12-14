@@ -2315,6 +2315,51 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
 
 
 
+/* ===== Overview debug colours ===== */
+.ov-debug-colors .toy-panel { outline: 4px solid #00ffff !important; }
+.ov-debug-colors .toy-header { background: rgba(255, 0, 0, 0.55) !important; outline: 2px solid red !important; }
+.ov-debug-colors .toy-footer { background: rgba(0, 0, 255, 0.55) !important; outline: 2px solid blue !important; }
+
+.ov-debug-colors .toy-body { background: rgba(0, 255, 0, 0.35) !important; outline: 2px solid lime !important; }
+
+/* The overview interaction shield (often the culprit) */
+.ov-debug-colors .ov-shield { background: rgba(255, 0, 255, 0.35) !important; outline: 3px dashed magenta !important; }
+
+/* Catch common pseudo-element overlays */
+/* Only tint pseudo-elements if they already exist.
+   DO NOT force `content`, otherwise we create fake overlays. */
+.ov-debug-colors .toy-panel::before,
+.ov-debug-colors .toy-panel::after,
+.ov-debug-colors .toy-body::before,
+.ov-debug-colors .toy-body::after {
+  outline: 2px solid yellow !important;
+  /* keep background off by default; turn on only if needed */
+  background: transparent !important;
+}
+
+/* === Debug: colour common layers so we can identify the grey strip quickly === */
+.ov-debug-colors .toy-header,
+.ov-debug-colors .toy-footer {
+  outline: 2px solid rgba(255, 0, 255, 0.9) !important;
+  /* DO NOT force visibility/opacity; overview-mode may intentionally hide these */
+}
+
+.ov-debug-colors .toy-body {
+  background: rgba(0, 255, 255, 0.12) !important; /* cyan */
+  outline: 2px solid rgba(0, 255, 255, 0.9) !important;
+}
+
+.ov-debug-colors .toy-panel canvas {
+  outline: 2px solid rgba(0, 255, 0, 0.9) !important; /* green = canvas bounds */
+  background: rgba(0, 255, 0, 0.06) !important;
+}
+
+.ov-debug-showhidden .toy-header,
+.ov-debug-showhidden .toy-footer {
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
 
 .overview-mode .toy-panel .toy-body > :not(canvas):not(svg),
 .overview-mode .toy-panel .toy-body {
@@ -2335,6 +2380,10 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
     background: transparent !important;
     box-shadow: none !important;
     border-color: transparent !important;
+}
+.overview-mode .toy-panel .toy-header,
+.overview-mode .toy-panel .toy-footer {
+    border: 0 !important;
 }
 
 .overview-mode [data-action="advanced"],
@@ -2396,6 +2445,10 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
   opacity: 0 !important;
   pointer-events: none !important;
 }
+.board-overview .toy-panel.ov-freeze .toy-header,
+.board-overview .toy-panel.ov-freeze .toy-footer {
+  border: 0 !important;
+}
 
 /* Also hide internal header/footer content within drawgrid panels in overview */
 .overview-mode .toy-panel[data-toy="drawgrid"] .toy-header *,
@@ -2416,6 +2469,22 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
 .overview-mode .toy-panel[data-toy="drawgrid"] .toy-body,
 .board-overview .toy-panel[data-toy="drawgrid"] .toy-body {
   background: transparent !important;
+}
+
+/* === Overview: ensure panel frame can't "shine through" hidden header/footer space (refresh-safe) === */
+.overview-mode .toy-panel:not([data-toy="drawgrid"]) {
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+}
+
+/* Same intent for the board-overview freeze/collapse path */
+.board-overview .toy-panel.ov-freeze:not([data-toy="drawgrid"]) {
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
 }
 
 #overview-mode-text {
@@ -2632,6 +2701,16 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
   transition: transform 160ms ease, opacity 160ms ease;
 }
 
+/* === Overview: prevent toy internals (esp canvases) bleeding into the reserved header/footer space === */
+.board-overview .toy-panel.ov-freeze {
+  overflow: hidden;
+}
+
+/* Extra safety: many toys paint in the body; clip body too */
+.board-overview .toy-panel.ov-freeze .toy-body {
+  overflow: hidden;
+}
+
 /* Body-only activity border in Overview */
 .board-overview .toy-panel.ov-body-border .toy-body {
   outline: 2px solid var(--toy-active, #3af);
@@ -2648,10 +2727,7 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
 /* Overview: transparent input shield over the interactive body */
 .board-overview .toy-panel .ov-shield {
   position: absolute;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
+  inset: 0;
   pointer-events: auto;
   background: transparent;
   z-index: 9999; /* sit above any canvas with high z-index */

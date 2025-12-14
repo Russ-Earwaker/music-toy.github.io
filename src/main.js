@@ -1061,6 +1061,7 @@ function syncBodyOutline(panel){
 function syncAllBodyOutlines(){
   document.querySelectorAll('.toy-panel').forEach(syncBodyOutline);
 }
+try { window.__syncAllBodyOutlines = syncAllBodyOutlines; } catch {}
 function bootDrawGrids(){
   const panels = Array.from(document.querySelectorAll('.toy-panel[data-toy="drawgrid"]'));
   panels.forEach(p => initDrawGrid(p));
@@ -2855,6 +2856,18 @@ async function boot(){
     document.querySelectorAll('.toy-panel').forEach(initToyChaining);
     // Initial sync once toys are present
     try { syncAllBodyOutlines(); } catch {}
+    // Run a couple of follow-up syncs after layout settles (fonts/DOM can land late)
+    requestAnimationFrame(() => { try { syncAllBodyOutlines(); } catch {} });
+    setTimeout(() => { try { syncAllBodyOutlines(); } catch {} }, 160);
+    // If overview was restored on load, reapply its decorations once toys exist.
+    requestAnimationFrame(() => {
+      try {
+        if (overviewMode?.isActive?.()) {
+          overviewMode.refreshDecorations?.();
+          syncAllBodyOutlines();
+        }
+      } catch {}
+    });
     updateAllChainUIs(); // Set initial instrument button visibility
     requestAnimationFrame(() => updateAllChainUIs()); // After any late-restored links land
     setTimeout(() => { try { updateAllChainUIs(); } catch {} }, 400); // Final pass after async inits settle

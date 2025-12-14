@@ -1,6 +1,7 @@
 // src/drawgrid.js
 // Minimal, scoped Drawing Grid -- 16x12, draw strokes, build snapped nodes on release.
 // Strictly confined to the provided panel element.
+console.log('[DG] LOADED src/drawgrid.js', 'v=' + Date.now());
 import { buildPalette, midiToName } from './note-helpers.js';
 import { drawBlock } from './toyhelpers.js';
 import { getLoopInfo, isRunning } from './audio-core.js';
@@ -3375,9 +3376,29 @@ function regenerateMapFromStrokes() {
       zoomRAF = 0;
       paintDpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
       pendingZoomResnap = false;
+
+      // IMPORTANT:
+      // Zoom recompute can rebuild/resize backing stores (and resnap can clear paint if it
+      // thinks there's "no content"). In DrawGrid, the paint canvas may be the source of truth,
+      // so we must preserve it across this path.
+      const snap = capturePaintSnapshot();
+      const hadInk = !!snap;
+      const hadStrokes = Array.isArray(strokes) && strokes.length > 0;
+      const hadNodes =
+        currentMap &&
+        Array.isArray(currentMap.nodes) &&
+        currentMap.nodes.some(set => set && set.size > 0);
+
       useBackBuffers();
       updatePaintBackingStores({ force: true, target: 'back' });
-      resnapAndRedraw(true);
+
+      // If paint is non-empty but there are no reconstructible sources, never clear it here.
+      resnapAndRedraw(true, { preservePaintIfNoStrokes: hadInk && !hadStrokes && !hadNodes });
+
+      // After backing-store churn, restore paint if it was our only source of truth.
+      if (hadInk && !hadStrokes && !hadNodes) {
+        restorePaintSnapshot(snap);
+      }
       drawIntoBackOnly();
       pendingSwap = true;
     });
@@ -3546,6 +3567,7 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
   if (z.phase === 'recompute') {
     // During gesture, we rely on CSS transforms; schedule a resnap so the
     // backing stores catch up safely outside the current event.
+    // dglog('toy-zoom:recompute', { zoomGestureActive, zoomMode, __zoomActive, __overviewActive });
     scheduleZoomRecompute();
     return;
   }
@@ -3957,11 +3979,14 @@ function syncBackBufferSizes() {
     const bodySize = measureCSSSize(body);
     const bodyW = bodySize.w;
     const bodyH = bodySize.h;
+    // Always keep wrap sized in CSS so measurement is stable during zoom.
+    // pendingWrapSize is still useful as a fallback for the commit flush path.
+    wrap.style.width  = bodyW + 'px';
+    wrap.style.height = bodyH + 'px';
     if (usingBackBuffers) {
       pendingWrapSize = { width: bodyW, height: bodyH };
     } else {
-      wrap.style.width  = bodyW + 'px';
-      wrap.style.height = bodyH + 'px';
+      pendingWrapSize = null;
     }
 
 
@@ -3979,15 +4004,17 @@ function syncBackBufferSizes() {
     if ((!zoomGestureActive && (force || Math.abs(newW - cssW) > 1 || Math.abs(newH - cssH) > 1)) || (force && zoomGestureActive)) {
       const oldW = cssW;
       const oldH = cssH;
-      // Snapshot current paint to preserve erased/drawn content across resize
+      // Snapshot current paint to preserve erased/drawn content across resize.
+      // IMPORTANT: snapshot the ACTIVE paint surface (front/back), not just `paint`,
+      // otherwise wheel-zoom / overview can wipe the user's line.
       let paintSnapshot = null;
       try {
-        if (paint.width > 0 && paint.height > 0) {
+        const snapSrc = (typeof getActivePaintCanvas === 'function' ? getActivePaintCanvas() : null) || paint;
+        if (snapSrc && snapSrc.width > 0 && snapSrc.height > 0) {
           paintSnapshot = document.createElement('canvas');
-          paintSnapshot.width = paint.width;
-          paintSnapshot.height = paint.height;
-          const psctx = paintSnapshot.getContext('2d');
-          psctx.drawImage(paint, 0, 0);
+          paintSnapshot.width = snapSrc.width;
+          paintSnapshot.height = snapSrc.height;
+          paintSnapshot.getContext('2d')?.drawImage(snapSrc, 0, 0);
         }
       } catch {}
 
@@ -4003,13 +4030,26 @@ function syncBackBufferSizes() {
       lastZoomX = zoomX;
       lastZoomY = zoomY;
 
-      // Scale the logical stroke data if we have it and the canvas was resized
-      if (strokes.length > 0 && oldW > 0 && oldH > 0 && !isRestoring) {
+      // Scale stroke geometry ONLY when this is a “real” panel resize.
+      // During zoom/overview transitions we must NOT mutate stroke points,
+      // or lines will drift/vanish permanently.
+      const okToScaleStrokeGeometry =
+        !zoomGestureActive &&
+        zoomMode !== 'gesturing' &&
+        !__zoomActive &&
+        !__overviewActive;
+
+      if (okToScaleStrokeGeometry && strokes.length > 0 && oldW > 0 && oldH > 0 && !isRestoring) {
         const scaleX = cssW / oldW;
         const scaleY = cssH / oldH;
         if (scaleX !== 1 || scaleY !== 1) {
-          for (const s of strokes) { s.pts = s.pts.map(p => ({ x: p.x * scaleX, y: p.y * scaleY })); }
+          for (const s of strokes) {
+            s.pts = s.pts.map(p => ({ x: p.x * scaleX, y: p.y * scaleY }));
+          }
         }
+      } else if (!okToScaleStrokeGeometry && strokes.length > 0 && oldW > 0 && oldH > 0) {
+        // Optional debug:
+        // dgTraceLog?.('[DG][layout] skip stroke scaling (zoom/overview)', { zoomGestureActive, zoomMode, __zoomActive, __overviewActive, oldW, oldH, cssW, cssH });
       }
 
       const logicalSize = getToyLogicalSize();
@@ -4074,13 +4114,35 @@ function syncBackBufferSizes() {
       if (paintSnapshot && zoomCommitPhase !== 'recompute') {
         try {
           if (!drawing) {
-            updatePaintBackingStores({ target: usingBackBuffers ? 'back' : 'both' });
-            clearCanvas(pctx);
-            pctx.drawImage(
-              paintSnapshot,
-              0, 0, paintSnapshot.width, paintSnapshot.height,
-              0, 0, cssW, cssH
-            );
+            // When using back buffers, keep BOTH in sync so front/back swaps don't "lose" the line.
+            updatePaintBackingStores({ target: usingBackBuffers ? 'both' : 'both' });
+            const ctx = (typeof getActivePaintCtx === 'function' ? getActivePaintCtx() : null) || pctx;
+            if (ctx) {
+              resetPaintBlend?.(ctx);
+              ctx.clearRect(0, 0, cssW, cssH);
+              ctx.drawImage(
+                paintSnapshot,
+                0, 0, paintSnapshot.width, paintSnapshot.height,
+                0, 0, cssW, cssH
+              );
+            }
+            // If we have explicit front/back contexts, mirror the snapshot into both.
+            try {
+              if (usingBackBuffers && typeof getPaintCtxFront === 'function' && typeof getPaintCtxBack === 'function') {
+                const f = getPaintCtxFront();
+                const b = getPaintCtxBack();
+                for (const c of [f, b]) {
+                  if (!c) continue;
+                  resetPaintBlend?.(c);
+                  c.clearRect(0, 0, cssW, cssH);
+                  c.drawImage(
+                    paintSnapshot,
+                    0, 0, paintSnapshot.width, paintSnapshot.height,
+                    0, 0, cssW, cssH
+                  );
+                }
+              }
+            } catch {}
           }
         } catch {}
       }
