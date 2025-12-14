@@ -418,6 +418,7 @@ function bindPanelDragCapture(panel) {
     if (!panel) return;
     const handler = (ev) => {
         if (!overviewState.isActive) return;
+        if (ev?.target?.closest?.('.toy-chain-btn')) return;
         const { header, footer } = panelParts(panel);
         if ((header && header.contains?.(ev.target)) || (footer && footer.contains?.(ev.target))) return;
         onToyMouseDown(ev);
@@ -661,6 +662,7 @@ function exitOverviewMode(isButton) {
 
 function onToyMouseDown(e) {
     if (!overviewState.isActive) return;
+    if (e?.target?.closest?.('.toy-chain-btn')) return;
 
     if (dragInfo.isDragging) {
         if (dragInfo.usingPointer && e.type === 'mousedown') {

@@ -418,13 +418,18 @@ let g_chainDragToyId = null;
 let g_chainDragLastUpdateTime = 0;
 // Tracks last known board-space position for each toy we drag (left/top from style).
 const g_chainToyLastPos = new Map(); // toyId -> { left, top }
+// Overview drag state (when shield is non-interactive)
+let g_overviewPanelDrag = null;
+// Track the most recent chained panel for post-zoom debug logs.
+let g_lastChainedDebugPanel = null;
 
 // Aim for ~60fps max during drag; further throttling is done by the browser's pointermove rate.
 const CHAIN_DRAG_UPDATE_INTERVAL_MS = 24;
 
 // Chain / scheduler debug controls.
-// CHAIN_DEBUG: master flag – turn this off to silence all chain/scheduler logs.
+// CHAIN_DEBUG: master flag - turn this off to silence all chain/scheduler logs.
 const CHAIN_DEBUG = false;
+const CHAIN_OV_DBG = (window.__chainOvDbg || localStorage.getItem('CHAIN_OV_DBG') === '1');
 // Log phase timings that take longer than this in ms.
 const CHAIN_DEBUG_LOG_THRESHOLD_MS = 1;
 // Log whole-frame cost if it exceeds this in ms (we'll also rate-limit logs).
@@ -441,6 +446,43 @@ const CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW = true; // drawChains() canvas connect
 // 0.5 = half resolution in each dimension (~4x fewer pixels)
 // 0.25 = quarter resolution in each dimension (~16x fewer pixels)
 const CHAIN_CANVAS_RESOLUTION_SCALE = 0.35;
+
+function dbgOvEv(tag, e, panelId) {
+  try {
+    const t = e?.target;
+    console.log(tag, {
+      panelId,
+      type: e?.type,
+      button: e?.button,
+      pointerType: e?.pointerType,
+      target: t ? (t.className || t.tagName) : null,
+      isChainBtn: !!(t && t.closest && t.closest('.toy-chain-btn')),
+      defaultPrevented: !!e?.defaultPrevented,
+    });
+  } catch {}
+}
+
+function dbgPanelRect(panel, tag) {
+  try {
+    if (!panel) return;
+    const r = panel.getBoundingClientRect();
+    const cs = getComputedStyle(panel);
+    console.log('[OVDBG][panelRect]', tag, {
+      id: panel.id,
+      styleLeft: panel.style.left,
+      styleTop: panel.style.top,
+      computedPos: cs.position,
+      computedLeft: cs.left,
+      computedTop: cs.top,
+      rect: {
+        x: Math.round(r.x),
+        y: Math.round(r.y),
+        w: Math.round(r.width),
+        h: Math.round(r.height)
+      }
+    });
+  } catch {}
+}
 
 // --- Toy Focus Management ----------------------------------------------------
 let g_focusedToyId = null;
@@ -1540,9 +1582,22 @@ function serviceToyPulses(nowMs) {
 }
 
 function initToyChaining(panel) {
-    if (!panel) return;
+    if (!panel || !panel.isConnected) return;
     if (panel.dataset.tutorial === "true" || panel.classList?.contains("tutorial-panel")) {
         return;
+    }
+    // Guard: prevent duplicate chain buttons/listeners on the same panel.
+    if (panel.dataset.chainInit === '1') return;
+    panel.dataset.chainInit = '1';
+    // Idempotency + dedupe: init can run more than once (refresh/restore/overview refreshDecorations).
+    // We must never leave duplicate buttons behind.
+    const existingBtns = Array.from(panel.querySelectorAll('.toy-chain-btn'));
+    let extendBtn = existingBtns[0] || null;
+    if (existingBtns.length > 1) {
+        // Keep the first, remove the rest
+        for (let i = 1; i < existingBtns.length; i++) {
+            try { existingBtns[i].remove(); } catch {}
+        }
     }
     // If a chained toy was cloned with a fixed height, clear it so focus changes
     // can collapse header/footer space correctly.
@@ -1550,11 +1605,19 @@ function initToyChaining(panel) {
         panel.style.height = '';
     }
 
-    const extendBtn = document.createElement('button');
-    extendBtn.className = 'c-btn toy-chain-btn';
-    extendBtn.title = 'Extend with a new toy';
-    extendBtn.style.setProperty('--c-btn-size', '65px');
-    extendBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>`;
+    if (!extendBtn) {
+        extendBtn = document.createElement('button');
+        extendBtn.className = 'c-btn toy-chain-btn';
+        extendBtn.title = 'Extend with a new toy';
+        extendBtn.style.setProperty('--c-btn-size', '65px');
+        extendBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>`;
+    }
+    // Force stable positioning regardless of overview layout changes
+    // Alignment requirement: left edge of button touches right edge of the toy
+    extendBtn.style.position = 'absolute';
+    extendBtn.style.left = '100%';
+    extendBtn.style.right = 'auto';
+    extendBtn.style.zIndex = '10050';  // must be above ov-shield / drag surfaces
     
     const core = extendBtn.querySelector('.c-btn-core');
     if (core) {
@@ -1568,6 +1631,7 @@ function initToyChaining(panel) {
         // Position via absolute top in panel coords so it matches the connector Y
         const targetTop = (body.offsetTop || 0) + (body.offsetHeight || 0) / 2;
         extendBtn.style.top = `${targetTop}px`;
+        // No X translation: left edge touches panel edge; only center vertically.
         extendBtn.style.transform = 'translateY(-50%)';
       } catch {}
     };
@@ -1579,6 +1643,11 @@ function initToyChaining(panel) {
     window.addEventListener('resize', updateChainBtnPos, { passive: true });
     requestAnimationFrame(updateChainBtnPos);
 
+    console.log('[chain][initToyChaining] attach', {
+      panel: panel.id,
+      hasExisting: !!panel.querySelector(':scope > .toy-chain-btn'),
+      chainInitFlag: panel.dataset.chainInit
+    });
     panel.appendChild(extendBtn);
     panel.style.overflow = 'visible'; // Ensure the button is not clipped by the panel's bounds.
 
@@ -1608,13 +1677,68 @@ function initToyChaining(panel) {
     try { updateAllChainUIs(); } catch {}
 
     extendBtn.addEventListener('pointerdown', (e) => {
+        if (typeof e.button === 'number' && e.button !== 0) return;
+        // Chain button must win the interaction on first click.
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation?.();
+        try { e.target?.releasePointerCapture?.(e.pointerId); } catch {}
+
+        try {
+          if (CHAIN_OV_DBG) {
+            const board = document.getElementById('board');
+            const overviewActive =
+              !!(window.__overviewMode?.isActive?.() ||
+                 board?.classList?.contains('board-overview') ||
+                 document.body?.classList?.contains('overview-mode'));
+
+            const btn = extendBtn;
+            const shield = panel.querySelector('.ov-shield');
+            const btnCS = btn ? getComputedStyle(btn) : null;
+            const shieldCS = shield ? getComputedStyle(shield) : null;
+
+            console.log('[CHAIN][ov][extendBtn:pointerdown]', {
+              overviewActive,
+              panelId: panel.id,
+              target: e.target?.className || e.target?.tagName,
+              pointerType: e.pointerType,
+              button: e.button,
+              btn_pe: btnCS?.pointerEvents,
+              btn_z: btnCS?.zIndex,
+              shield_exists: !!shield,
+              shield_pe: shieldCS?.pointerEvents,
+              shield_z: shieldCS?.zIndex,
+            });
+            try {
+              const x = e.clientX, y = e.clientY;
+              const el = document.elementFromPoint(x, y);
+              const path = (typeof e.composedPath === 'function') ? e.composedPath() : [];
+              console.log('[CHAIN][ov][hitTest]', {
+                x, y,
+                elementFromPoint: el ? (el.className || el.tagName) : null,
+                elementFromPoint_id: el?.id || null,
+                elementFromPoint_pe: el ? getComputedStyle(el).pointerEvents : null,
+                composedPathTop: path.slice(0, 6).map(n => n?.className || n?.tagName),
+              });
+            } catch {}
+          }
+        } catch {}
+        if (CHAIN_OV_DBG) {
+          dbgOvEv('[OVDBG][chainBtn:pointerdown]', e, panel.id);
+          console.log('[CHAIN][ov][extendBtn:gate]', {
+            panelId: panel.id,
+            chainDisabled: extendBtn.dataset.chainDisabled,
+            nextToyId: panel.dataset.nextToyId || null,
+            chainHasChild: panel.dataset.chainHasChild || null,
+          });
+        }
         if (extendBtn.dataset.chainDisabled === '1' || panel.dataset.nextToyId) {
             return;
         }
         const tStart = performance.now();
-        e.preventDefault();
-        e.stopImmediatePropagation?.();
-        e.stopPropagation();
+        if (CHAIN_OV_DBG) {
+          dbgPanelRect(panel, 'before-chain-create');
+        }
 
         const sourcePanel = panel;
         const toyType = sourcePanel.dataset.toy;
@@ -1644,21 +1768,87 @@ function initToyChaining(panel) {
         }
 
         const board = document.getElementById('board');
-        const sourceRect = sourcePanel.getBoundingClientRect();
-        const boardRect = board.getBoundingClientRect();
         const boardScale = window.__boardScale || 1;
-        const sourceWidth = sourceRect.width / boardScale;
-        const sourceHeight = sourceRect.height / boardScale;
+        const sourceWidth = sourcePanel.offsetWidth || (sourcePanel.getBoundingClientRect().width / boardScale);
+        const sourceHeight = sourcePanel.offsetHeight || (sourcePanel.getBoundingClientRect().height / boardScale);
 
         newPanel.style.width = `${sourceWidth}px`;
         // Height is only needed during the initial placement. Drop it after boot
         // so chained toys can collapse their headers/footers when unfocused.
         newPanel.style.height = `${sourceHeight}px`;
         newPanel.style.position = 'absolute';
-        newPanel.style.left = `${(sourceRect.right - boardRect.left) / boardScale + 30}px`;
-        newPanel.style.top = `${(sourceRect.top - boardRect.top) / boardScale}px`;
+        // Cache "normal mode" placement (board/world coords).
+        // IMPORTANT: In overview, getBoundingClientRect() is in SCREEN space under a different zoom.
+        // So prefer the panel's existing world-space left/top if available.
+        let srcLeft = parseFloat(sourcePanel.style.left);
+        let srcTop  = parseFloat(sourcePanel.style.top);
+
+        if (!Number.isFinite(srcLeft) || !Number.isFinite(srcTop)) {
+            // Fallback: derive from rects (best-effort)
+            const sourceRect = sourcePanel.getBoundingClientRect();
+            const boardRect = board?.getBoundingClientRect?.();
+            const boardScale = window.__boardScale || 1;
+            if (boardRect) {
+              srcLeft = (sourceRect.left - boardRect.left) / boardScale;
+              srcTop  = (sourceRect.top - boardRect.top) / boardScale;
+            } else {
+              srcLeft = sourceRect.left / boardScale;
+              srcTop  = sourceRect.top / boardScale;
+            }
+        }
+
+        const normalLeft = srcLeft + sourceWidth + 30;
+        const normalTop  = srcTop;
+
+        newPanel.style.left = `${normalLeft}px`;
+        newPanel.style.top  = `${normalTop}px`;
+
+        // If Overview is active, register this panel's normal position so it restores correctly on exit,
+        // and ensure overview decorations get applied.
+        const overviewActive =
+            !!(window.__overviewMode?.isActive?.() ||
+               document.querySelector('#board')?.classList?.contains('board-overview') ||
+               document.body?.classList?.contains('overview-mode'));
+        const overviewActiveAtCreate = overviewActive;
+        const oldNextId = sourcePanel.dataset.nextToyId || null;
+
+        // Lock the chain immediately to avoid multi-click races before async init completes.
+        sourcePanel.dataset.nextToyId = newPanel.id;
+        newPanel.dataset.prevToyId = sourcePanel.id;
+        lockChainButton(sourcePanel, { hasChild: true });
+
+        if (overviewActive) {
+            try {
+                // Ensure this new toy has a saved "pre-overview" position so it won't snap on zoom-in.
+                const st = window.__overviewMode?.state;
+                if (st?.positions?.set) {
+                    st.positions.set(newPanel.id, {
+                        left: normalLeft,
+                        top: normalTop,
+                        width: sourceWidth,
+                        height: sourceHeight
+                    });
+                }
+            } catch (err) {
+                console.warn('[chain][overview] failed to register new panel in overview positions', err);
+            }
+
+            // Add an immediate input shield so the new toy can't be interacted with in overview
+            // (overview-mode will also add/relocate this later).
+            try {
+                if (!newPanel.querySelector('.ov-shield')) {
+                    const shield = document.createElement('div');
+                    shield.className = 'ov-shield';
+                    newPanel.appendChild(shield);
+                }
+            } catch {}
+        }
 
         board.appendChild(newPanel);
+        g_lastChainedDebugPanel = newPanel;
+        if (CHAIN_OV_DBG) {
+          dbgPanelRect(newPanel, 'after-chain-create');
+        }
 
         // Defer the rest of the initialization to the next event loop cycle.
         // This gives the browser time to calculate the new panel's layout,
@@ -1668,6 +1858,15 @@ function initToyChaining(panel) {
 
             initializeNewToy(newPanel);
             initToyChaining(newPanel); // Give the new toy its own extend button
+            // If Overview is active, apply overview decorations to include this newly created toy
+            // (shield, collapsed header/footer behavior, outline sync, etc.)
+            try {
+                if (window.__overviewMode?.isActive?.()) {
+                    window.__overviewMode.refreshDecorations?.();
+                }
+            } catch (err) {
+                console.warn('[chain][overview] refreshDecorations failed', err);
+            }
             const enqueueClear = (typeof queueMicrotask === 'function')
                 ? queueMicrotask
                 : ((fn) => {
@@ -1695,10 +1894,6 @@ function initToyChaining(panel) {
                 }
             });
 
-            const oldNextId = sourcePanel.dataset.nextToyId;
-            sourcePanel.dataset.nextToyId = newPanel.id;
-            newPanel.dataset.prevToyId = sourcePanel.id;
-            lockChainButton(sourcePanel, { hasChild: true });
             // Always log detailed state for debugging when creating chain links.
             const btn = sourcePanel.querySelector('.toy-chain-btn');
             const core = btn?.querySelector('.c-btn-core');
@@ -1738,7 +1933,24 @@ function initToyChaining(panel) {
             }
 
             const finalizePlacement = () => {
-                const followUp = ensurePanelSpawnPlacement(newPanel, {
+                // If this toy was created while overview was active, skip auto-placement and auto-focus
+                // to avoid post-create snapping when zooming back in.
+                if (overviewActiveAtCreate) {
+                    newPanel.style.height = '';
+                    try {
+                        persistToyPosition(newPanel);
+                    } catch (err) {
+                        console.warn('[chain] persistToyPosition failed', err);
+                    }
+                    updateChains();
+                    updateAllChainUIs();
+                    delete newPanel.dataset.spawnAutoManaged;
+                    delete newPanel.dataset.spawnAutoLeft;
+                    delete newPanel.dataset.spawnAutoTop;
+                    return;
+                }
+
+                ensurePanelSpawnPlacement(newPanel, {
                     fallbackWidth: sourceWidth,
                     fallbackHeight: sourceHeight,
                     skipIfMoved: true,
@@ -1780,7 +1992,7 @@ function initToyChaining(panel) {
             const dt = performance.now() - tStart;
             console.log('[CHAIN][perf] chained toy created in', dt.toFixed(1), 'ms');
         } catch {}
-    });
+    }, true);
 }
 
 function pickToyPanelSize(type) {
@@ -3058,13 +3270,153 @@ async function boot(){
           console.warn('[CHAIN] overview:change redraw failed', err);
         }
       }
+      if (CHAIN_OV_DBG && g_lastChainedDebugPanel) {
+        if (g_lastChainedDebugPanel.isConnected) {
+          dbgPanelRect(g_lastChainedDebugPanel, 'after-zoom-settled');
+        }
+        g_lastChainedDebugPanel = null;
+      } else if (g_lastChainedDebugPanel && !g_lastChainedDebugPanel.isConnected) {
+        g_lastChainedDebugPanel = null;
+      }
     });
   }, { passive: true });
 
-  // Start tracking drag when pressing down on a toy panel
-  document.addEventListener('pointerdown', (e) => {
+  function isActivelyEditingToy() {
+    try {
+      if (typeof window !== 'undefined') {
+        if (window.__focusEditingActive === true) return true;
+        if (window.__isFocusEditing === true) return true;
+      }
+      const body = document.body;
+      if (!body) return false;
+      return body.classList.contains('toy-editing') ||
+             body.classList.contains('focused-editing') ||
+             body.classList.contains('toy-focus-editing') ||
+             body.classList.contains('focus-editing');
+    } catch {
+      return false;
+    }
+  }
+
+  function handleOverviewPanelMove(e) {
+    const st = g_overviewPanelDrag;
+    if (!st) return;
+    if (st.pointerId != null && typeof e.pointerId === 'number' && e.pointerId !== st.pointerId) return;
+    const scale = window.__boardScale || 1;
+    const dx = e.clientX - st.startX;
+    const dy = e.clientY - st.startY;
+    const nx = st.startLeft + dx / Math.max(scale, 0.0001);
+    const ny = st.startTop + dy / Math.max(scale, 0.0001);
+    st.panel.style.left = `${nx}px`;
+    st.panel.style.top = `${ny}px`;
+    if (CHAIN_OV_DBG) {
+      console.log('[OVDBG][overviewDragMove]', {
+        panelId: st.panel.id,
+        nx,
+        ny,
+        pointerType: e.pointerType
+      });
+    }
+  }
+
+  function endOverviewPanelDrag(e) {
+    const st = g_overviewPanelDrag;
+    if (!st) return;
+    if (st.pointerId != null && typeof e.pointerId === 'number' && e.pointerId !== st.pointerId) return;
+    try { st.panel.releasePointerCapture?.(st.pointerId); } catch {}
+    window.removeEventListener('pointermove', handleOverviewPanelMove, true);
+    window.removeEventListener('pointerup', endOverviewPanelDrag, true);
+    window.removeEventListener('pointercancel', endOverviewPanelDrag, true);
+    g_overviewPanelDrag = null;
+  }
+
+  // Overview-mode: click-anywhere drag for toy panels (except chain button).
+  // In normal view: drag uses header. In overview: drag uses whole panel.
+  function handleOverviewPointerDown(e) {
+    if (e.target?.closest?.('.toy-chain-btn')) return;
+    const board = document.getElementById('board');
+    const overviewActive =
+      !!(window.__overviewMode?.isActive?.() ||
+         board?.classList?.contains('board-overview') ||
+         document.body?.classList?.contains('overview-mode'));
+    if (!overviewActive) return;
+    if (isActivelyEditingToy()) return;
+
+    const panel = e.target?.closest?.('.toy-panel');
+    if (!panel) return;
+
+    // Left click / primary only
+    if (typeof e.button === 'number' && e.button !== 0) return;
+
+    if (CHAIN_OV_DBG) {
+      console.log('[OVDBG][overviewDragStart]', {
+        panelId: panel.id,
+        target: e.target?.className || e.target?.tagName,
+        button: e.button,
+        pointerType: e.pointerType
+      });
+    }
+
+    const startLeft = parseFloat(panel.style.left);
+    const startTop = parseFloat(panel.style.top);
+    g_overviewPanelDrag = {
+      panel,
+      startX: e.clientX,
+      startY: e.clientY,
+      startLeft: Number.isFinite(startLeft) ? startLeft : 0,
+      startTop: Number.isFinite(startTop) ? startTop : 0,
+      pointerId: typeof e.pointerId === 'number' ? e.pointerId : null
+    };
+
+    try { panel.setPointerCapture?.(g_overviewPanelDrag.pointerId); } catch {}
+
+    window.addEventListener('pointermove', handleOverviewPanelMove, true);
+    window.addEventListener('pointerup', endOverviewPanelDrag, true);
+    window.addEventListener('pointercancel', endOverviewPanelDrag, true);
+  }
+
+  if (!window.__OV_DRAG_INSTALLED__) {
+    window.__OV_DRAG_INSTALLED__ = true;
+    document.addEventListener('pointerdown', handleOverviewPointerDown, true);
+  }
+
+  function handleChainPanelPointerDown(e) {
     const panel = e.target && e.target.closest ? e.target.closest('.toy-panel') : null;
     if (!panel) return;
+    const panelId = panel.id;
+    if (typeof e.button === 'number' && e.button !== 0) return;
+
+    if (e.target && e.target.closest && e.target.closest('.toy-chain-btn')) {
+      if (CHAIN_OV_DBG) {
+        dbgOvEv('[OVDBG][panel:pointerdown][skip:chainBtn]', e, panelId);
+      }
+      return;
+    }
+
+    const board = document.getElementById('board');
+    const overviewActive =
+      !!(window.__overviewMode?.isActive?.() ||
+         board?.classList?.contains('board-overview') ||
+         document.body?.classList?.contains('overview-mode'));
+
+    if (isActivelyEditingToy()) return;
+
+    if (!overviewActive) {
+      const header = panel.querySelector('.toy-header');
+      const inHeader = header && (header === e.target || header.contains(e.target));
+      if (!inHeader) return;
+    }
+
+    try {
+      if (CHAIN_OV_DBG) {
+        console.log('[CHAIN][ov][panel:pointerdown]', {
+          overviewActive,
+          panelId: panel.id,
+          target: e.target?.className || e.target?.tagName,
+        });
+        dbgOvEv('[OVDBG][panel:pointerdown]', e, panelId);
+      }
+    } catch {}
 
     g_chainDragToyId = panel.id;
     g_chainDragLastUpdateTime = performance.now();
@@ -3084,10 +3436,9 @@ async function boot(){
         top: panel.style.top
       });
     }
-  }, true);
+  }
 
-  // While dragging, update only the segments connected to the dragged toy at a throttled rate
-  document.addEventListener('pointermove', (e) => {
+  function handleChainPanelPointerMove(e) {
     if (!g_chainDragToyId) return;
     if (!CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) return;
 
@@ -3138,10 +3489,9 @@ async function boot(){
         dt.toFixed(1)
       );
     }
-  }, true);
+  }
 
-  // On drag end, do a final precise rebuild and clear drag state
-  document.addEventListener('pointerup', () => {
+  function handleChainPanelPointerUp() {
     if (!g_chainDragToyId) return; // not dragging a toy
     const toyId = g_chainDragToyId;
     g_chainDragToyId = null;
@@ -3158,7 +3508,14 @@ async function boot(){
         console.warn('[CHAIN] pointerup final redraw failed', err);
       }
     }
-  }, true);
+  }
+
+  if (!window.__CHAIN_DRAG_INIT__) {
+    window.__CHAIN_DRAG_INIT__ = true;
+    document.addEventListener('pointerdown', handleChainPanelPointerDown, true);
+    document.addEventListener('pointermove', handleChainPanelPointerMove, true);
+    document.addEventListener('pointerup', handleChainPanelPointerUp, true);
+  }
 
   // Tap-to-focus: focusing an unfocused toy shrinks the rest and recenters the camera.
   // Focus on pointerup (tap release) to allow click+hold dragging of unfocused toys.

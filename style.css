@@ -2366,6 +2366,40 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
     pointer-events: none !important;
 }
 
+/* Overview mode should NOT allow interacting with toy canvases (drawgrid, etc.) */
+.overview-mode .toy-panel canvas {
+  pointer-events: none !important;
+}
+
+/* Block SVG hit-tests in overview for toys that use inline SVG */
+.overview-mode .toy-panel svg,
+.overview-mode .toy-panel svg * {
+  pointer-events: none !important;
+}
+
+/* Overview-mode: do NOT change panel positioning; keep absolute world-space left/top.
+   Use the pseudo-element as a drag surface without altering positioning. */
+.overview-mode .toy-panel {
+  /* intentionally no position override here */
+}
+
+/* Drag surface */
+.overview-mode .toy-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 5;            /* above toy internals */
+  pointer-events: auto;  /* receives pointerdown for drag */
+  background: transparent;
+}
+
+/* But keep chain button above the drag surface */
+.overview-mode .toy-chain-btn {
+  position: absolute;
+  z-index: 10050;
+  cursor: pointer;
+}
+
 
 
 .overview-mode .toy-panel .toy-header,
@@ -2668,9 +2702,10 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
   -webkit-backface-visibility: hidden;
 }
 
-/* ==== Overview mode: freeze body position and collapse header/footer ==== */
+/* ==== Overview mode: keep panels in world-space (left/top) ==== */
+/* IMPORTANT: panels must remain absolute so they don't snap/move when zooming in/out */
 .board-overview .toy-panel {
-  position: relative;
+  position: absolute !important;
 }
 /* When we freeze a panel for Overview, take header/footer out of flow */
 .board-overview .toy-panel.ov-freeze .toy-header,
@@ -2728,15 +2763,25 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
 .board-overview .toy-panel .ov-shield {
   position: absolute;
   inset: 0;
-  pointer-events: auto;
+  pointer-events: none !important;
   background: transparent;
-  z-index: 9999; /* sit above any canvas with high z-index */
+  z-index: 50; /* below chain button, above canvases */
+}
+/* Make sure the chain + button sits ABOVE the overview input shield */
+.board-overview .toy-panel .toy-chain-btn {
+  position: absolute;
+  z-index: 10050; /* above ov-shield */
 }
 .board-overview .toy-panel,
 .board-overview .toy-panel .toy-body,
 .board-overview .toy-panel canvas,
 .board-overview .toy-panel * {
   cursor: grab !important;
+}
+/* Overview: allow real "button" cursor on the chain + button */
+.board-overview .toy-panel .toy-chain-btn,
+.board-overview .toy-panel .toy-chain-btn * {
+  cursor: pointer !important;
 }
 .board-overview .toy-panel.grabbing,
 .board-overview .toy-panel .ov-shield.grabbing {
