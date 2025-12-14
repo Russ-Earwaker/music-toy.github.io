@@ -434,6 +434,8 @@ const CHAIN_OV_DBG = (window.__chainOvDbg || localStorage.getItem('CHAIN_OV_DBG'
 const CHAIN_DEBUG_LOG_THRESHOLD_MS = 1;
 // Log whole-frame cost if it exceeds this in ms (we'll also rate-limit logs).
 const CHAIN_DEBUG_FRAME_THRESHOLD_MS = 0.0;
+// Standard gap between chained toys (world-space px), matching normal spawn spacing expectations.
+const CHAIN_SPAWN_GAP = 60;
 
 // Feature flags so we can selectively disable suspected work during perf debugging.
 // Flip these to false one at a time to see which block removes the slowdown.
@@ -1797,7 +1799,7 @@ function initToyChaining(panel) {
             }
         }
 
-        const normalLeft = srcLeft + sourceWidth + 30;
+        const normalLeft = srcLeft + sourceWidth + CHAIN_SPAWN_GAP;
         const normalTop  = srcTop;
 
         newPanel.style.left = `${normalLeft}px`;
@@ -1845,6 +1847,19 @@ function initToyChaining(panel) {
         }
 
         board.appendChild(newPanel);
+        // Place the new panel immediately using the standard gap, avoiding later snap adjustments.
+        const initialPlacement = ensurePanelSpawnPlacement(newPanel, {
+            baseLeft: normalLeft,
+            baseTop: normalTop,
+            fallbackWidth: sourceWidth,
+            fallbackHeight: sourceHeight,
+        });
+        if (!overviewActiveAtCreate && initialPlacement?.changed) {
+            try { persistToyPosition(newPanel); } catch (err) { console.warn('[chain] persistToyPosition failed', err); }
+        }
+        delete newPanel.dataset.spawnAutoManaged;
+        delete newPanel.dataset.spawnAutoLeft;
+        delete newPanel.dataset.spawnAutoTop;
         g_lastChainedDebugPanel = newPanel;
         if (CHAIN_OV_DBG) {
           dbgPanelRect(newPanel, 'after-chain-create');
@@ -1950,13 +1965,6 @@ function initToyChaining(panel) {
                     return;
                 }
 
-                ensurePanelSpawnPlacement(newPanel, {
-                    fallbackWidth: sourceWidth,
-                    fallbackHeight: sourceHeight,
-                    skipIfMoved: true,
-                    // Chained toys don't need a huge search radius; keep this tight
-                    maxAttempts: 120,
-                });
                 // Let the layout return to natural height so unfocused chained toys
                 // don't retain the old header/footer space.
                 newPanel.style.height = '';
