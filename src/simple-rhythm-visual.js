@@ -43,6 +43,51 @@ const NUM_CUBES_GLOBAL = NUM_CUBES;
 // This keeps them stable across zoom levels and lets the global board zoom
 // handle visual scaling (just like Bouncer).
 
+// --- Global render scheduler (single RAF for all loopgrids) -----------------
+const __LG = (() => {
+  const g = (typeof window !== 'undefined') ? window : null;
+  if (!g) return { panels: new Set(), running: false };
+
+  if (g.__LOOPGRID_RENDER_SCHED) return g.__LOOPGRID_RENDER_SCHED;
+
+  const sched = {
+    panels: new Set(),
+    running: false,
+    frame: 0,
+    rafId: 0,
+    start() {
+      if (this.running) return;
+      this.running = true;
+      const tick = () => {
+        if (!this.running) return;
+        this.frame++;
+        const chainNotesCache = (window.__PERF_LOOPGRID_CHAIN_CACHE ? new Map() : null);
+        const arr = Array.from(this.panels);
+        for (const panel of arr) {
+          try {
+            if (!panel || !panel.isConnected) { this.panels.delete(panel); continue; }
+            if (window.__PERF_DISABLE_LOOPGRID_RENDER) continue;
+            const mod = panel.__loopgridFrameModulo | 0;
+            if (mod > 1 && (this.frame % mod) !== 0) continue;
+            const isGesture = !!(window.__ZoomCoordinator?.isGesturing?.() || document.body?.classList?.contains?.('is-gesturing'));
+            render(panel, { forceNudge: false, isGesture, chainNotesCache });
+          } catch {}
+        }
+        this.rafId = requestAnimationFrame(tick);
+      };
+      this.rafId = requestAnimationFrame(tick);
+    },
+    stop() {
+      this.running = false;
+      try { cancelAnimationFrame(this.rafId); } catch {}
+      this.rafId = 0;
+    },
+  };
+
+  g.__LOOPGRID_RENDER_SCHED = sched;
+  return sched;
+})();
+
 const GAP = 4; // A few pixels of space between each cube
 const BORDER_MARGIN = 4;
 
@@ -286,6 +331,8 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
   // 1) Defer the first layout until the box is real & stable
   const box = await waitForStableBox(targetEl);
   st.computeLayout(box.width, box.height);
+  st._lastLayoutW = box.width;
+  st._lastLayoutH = box.height;
 
   // 2) Re-layout on container size changes
   st._resizer = new ResizeObserver((entries) => {
@@ -294,20 +341,25 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
       const w = Math.round(cr.width), h = Math.round(cr.height);
       if (w > 0 && h > 0) {
         st.computeLayout(w, h);
+        st._lastLayoutW = w;
+        st._lastLayoutH = h;
       }
     }
   });
   st._resizer.observe(targetEl);
 
   // 3) Re-layout on zoom settle (hook whatever you already have)
-  panel.zoom?.on?.('end', () => {
+  panel.zoom?.on?.('end', async () => {
+    // Wait a frame so layout settles, then compute once if changed.
+    await raf();
     const rect = targetEl.getBoundingClientRect();
-    st.computeLayout(Math.round(rect.width), Math.round(rect.height));
-  });
-
-  panel.zoom?.on?.('tick', () => {
-    const rect = targetEl.getBoundingClientRect();
-    st.computeLayout(Math.round(rect.width), Math.round(rect.height));
+    const w = Math.round(rect.width);
+    const h = Math.round(rect.height);
+    if (w === st._lastLayoutW && h === st._lastLayoutH) return;
+    st._lastLayoutW = w;
+    st._lastLayoutH = h;
+    st.computeLayout(w, h);
+    panel.__loopgridNeedsRedraw = true;
   });
 
   // --- Particle Canvas Setup (moved after st definition) ---
@@ -572,6 +624,7 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     try { st.particleObserver?.disconnect?.(); } catch {} // Use st.particleObserver
     try { st.particleField?.destroy?.(); } catch {} // Use st.particleField
     st._resizer?.disconnect?.(); // Disconnect the main resizer
+    try { __LG.panels.delete(panel); } catch {}
   };
   panel.addEventListener('toy:remove', teardownParticles, { once: true });
 
@@ -689,31 +742,46 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     panel?.addEventListener?.('overview:precommit', () => {
       try { if (window.__PERF_LAB_VERBOSE) console.debug('[loopgrid][overview] precommit'); } catch {}
       needsRedraw = true;
+      panel.__loopgridNeedsRedraw = true;
     });
     panel?.addEventListener?.('overview:commit', () => {
       try { if (window.__PERF_LAB_VERBOSE) console.debug('[loopgrid][overview] commit', { active: !!overviewMode?.isActive?.() }); } catch {}
       // Force the next frame to apply visibility/pause logic immediately.
-      try { needsRedraw = true; } catch {}
+      try { needsRedraw = true; panel.__loopgridNeedsRedraw = true; } catch {}
     });
   } catch {}
 
-  // Start the render loop
-  if (!panel.__simpleRhythmRenderLoop) {
-    const renderLoop = () => {
-      if (!panel.isConnected) return; // Stop rendering if panel is removed
-      const forceNudge = needsRedraw;
-      needsRedraw = false;
-      render(panel, { forceNudge });
-      panel.__simpleRhythmRenderLoop = requestAnimationFrame(renderLoop);
-    };
-    renderLoop();
+  // Register with global scheduler (one RAF for all loopgrids)
+  if (!panel.__simpleRhythmScheduled) {
+    panel.__simpleRhythmScheduled = true;
+    __LG.panels.add(panel);
+    __LG.start();
   }
 }
 
 function render(panel, opts = {}) {
   const st = panel.__simpleRhythmVisualState;
   if (!st) return;
-  const forceNudge = !!opts.forceNudge;
+  const forceNudge = !!(opts.forceNudge || panel.__loopgridNeedsRedraw);
+  panel.__loopgridNeedsRedraw = false;
+
+  // PerfLab: freeze all unfocused toys during stress tests
+  if (window.__PERF_FREEZE_ALL_UNFOCUSED) {
+    try {
+      const isFocused = !!(panel?.classList?.contains('focused') || panel?.parentElement?.classList?.contains('focused'));
+      if (!isFocused) return;
+    } catch {}
+  }
+
+  // Cheap default culling: unfocused loopgrids render at lower cadence during gestures.
+  // Scheduler reads panel.__loopgridFrameModulo.
+  const isFocused = panel.classList?.contains('toy-focused') || panel.classList?.contains('focused');
+  const isUnfocused = panel.classList?.contains('toy-unfocused');
+  if (window.__PERF_LOOPGRID_UNFOCUSED_MOD) {
+    panel.__loopgridFrameModulo = isFocused ? 1 : (window.__PERF_LOOPGRID_UNFOCUSED_MOD | 0);
+  } else {
+    panel.__loopgridFrameModulo = isFocused ? 1 : 2;
+  }
 
   // Handle the highlight pulse animation on note hits.
   if (panel.__pulseRearm) {
@@ -724,9 +792,40 @@ function render(panel, opts = {}) {
 
   if (panel.__pulseHighlight && panel.__pulseHighlight > 0) {
     panel.classList.add('toy-playing-pulse');
+    panel.__loopgridNeedsRedraw = true;
     panel.__pulseHighlight = Math.max(0, panel.__pulseHighlight - 0.05); // Decay over ~20 frames
   } else if (panel.classList.contains('toy-playing-pulse')) {
     panel.classList.remove('toy-playing-pulse');
+  }
+
+  // Compute playhead early for step-driven gating
+  const loopInfo = getLoopInfo();
+  const playheadCol = loopInfo ? Math.floor(loopInfo.phase01 * NUM_CUBES) : -1;
+
+  // PerfLab: redraw unfocused only when playhead step changes (or forced/pulsing).
+  const mode = window.__PERF_LOOPGRID_UNFOCUSED_MODE;
+  const stepOnly = (mode === 'stepOnly');
+  if (stepOnly && isUnfocused && !isFocused) {
+    const hasPulse = !!(panel.__pulseHighlight && panel.__pulseHighlight > 0);
+    const wantsRedraw = !!forceNudge; // includes __loopgridNeedsRedraw
+
+    const last = (panel.__loopgridLastPlayheadCol ?? -999);
+    const changed = (playheadCol !== last);
+    panel.__loopgridLastPlayheadCol = playheadCol;
+
+    if (!changed && !hasPulse && !wantsRedraw) return;
+  } else {
+    panel.__loopgridLastPlayheadCol = playheadCol;
+  }
+
+  // PerfLab: event-driven redraw for unfocused loopgrids
+  const pulseOnly = (window.__PERF_LOOPGRID_UNFOCUSED_MODE === 'pulseOnly');
+  if (pulseOnly && isUnfocused && !isFocused) {
+    const hasPulse = !!(panel.__pulseHighlight && panel.__pulseHighlight > 0);
+    const wantsRedraw = !!forceNudge; // includes __loopgridNeedsRedraw path
+    if (!hasPulse && !wantsRedraw) {
+      return;
+    }
   }
 
   // Set playing class for border highlight
@@ -738,7 +837,22 @@ function render(panel, opts = {}) {
   const hasActiveNotes = state.steps && state.steps.some(s => s);
 
   const head = isChained ? findChainHead(panel) : panel;
-  const chainHasNotes = head ? chainHasSequencedNotes(head) : hasActiveNotes;
+  const chainHasNotes = (() => {
+    if (!isChained) return hasActiveNotes;
+    const cache = window.__PERF_LOOPGRID_CHAIN_CACHE ? opts.chainNotesCache : null;
+    let anyNotes = hasActiveNotes;
+    if (cache && head) {
+      if (cache.has(head)) {
+        anyNotes = cache.get(head);
+      } else {
+        anyNotes = chainHasSequencedNotes(head);
+        cache.set(head, anyNotes);
+      }
+    } else {
+      anyNotes = head ? chainHasSequencedNotes(head) : hasActiveNotes;
+    }
+    return anyNotes;
+  })();
 
   const transportRunning = isRunning();
   // Only show the steady outline while transport is running.
@@ -748,7 +862,30 @@ function render(panel, opts = {}) {
     : false;
   panel.classList.toggle('toy-playing', showPlaying);
 
+  // Gesture-only render throttle for unfocused toys: skip heavy draw, still update classes.
+  const gestureRenderMod = Math.max(1, Number(window.__PERF_LOOPGRID_GESTURE_RENDER_MOD) || 1);
+  const isGesturing = !!(
+    opts.isGesture ||
+    window.__ZoomCoordinator?.isGesturing?.() ||
+    document.body?.classList?.contains?.('is-gesturing')
+  );
+
+  let skipHeavy = false;
+  if (isGesturing && !isFocused && gestureRenderMod > 1) {
+    st.__gestureRenderFrame = (st.__gestureRenderFrame || 0) + 1;
+    if ((st.__gestureRenderFrame % gestureRenderMod) !== 0) {
+      skipHeavy = true;
+      if (window.__PERF_LAB_VERBOSE) {
+        window.__PERF_LOOPGRID_GESTURE_SKIP = (window.__PERF_LOOPGRID_GESTURE_SKIP || 0) + 1;
+        if ((window.__PERF_LOOPGRID_GESTURE_SKIP % 120) === 0) {
+          console.debug('[loopgrid][perf] gesture skipHeavy', { skips: window.__PERF_LOOPGRID_GESTURE_SKIP, mod: gestureRenderMod });
+        }
+      }
+    }
+  }
+
   const { ctx, canvas, tapLabel, particleCanvas, sequencerWrap, particleField } = st;
+  if (skipHeavy) return;
   const w = canvas.width;
   const h = canvas.height;
   const cssW = st._cssW || canvas.clientWidth;
@@ -762,7 +899,6 @@ function render(panel, opts = {}) {
     try { return getAdaptiveFrameBudget(); } catch { return null; }
   })();
   const particleBudget = adaptiveBudget?.particleBudget;
-  const isUnfocused = panel.classList?.contains('toy-unfocused');
   const isOverview = (() => {
     try { return !!overviewMode?.isActive?.(); } catch { return false; }
   })();
@@ -888,9 +1024,6 @@ function render(panel, opts = {}) {
       ctx.globalAlpha = 1;
     }
   }
-
-  const loopInfo = getLoopInfo();
-  const playheadCol = loopInfo ? Math.floor(loopInfo.phase01 * NUM_CUBES) : -1;
 
   const fieldHost = sequencerWrap || particleCanvas || canvas;
   if (fieldHost) {

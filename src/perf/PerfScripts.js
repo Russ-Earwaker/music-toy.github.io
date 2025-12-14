@@ -30,12 +30,20 @@ export function makePanZoomScript({
   const overviewStart = idleDur + panDur + zoomDur;
   const toggleEvery = (overviewToggles > 0 && overviewDur > 0) ? (overviewDur / overviewToggles) : 0;
 
+  function setGesturing(on) {
+    try { document.body.classList.toggle('is-gesturing', !!on); } catch {}
+  }
+
   return function step(tMs /*, dtMs, progress */) {
     // Phase 1: idle (do nothing)
-    if (tMs < idleDur) return;
+    if (tMs < idleDur) {
+      setGesturing(false);
+      return;
+    }
 
     // Phase 2: pan (sinusoidal path)
     if (panDur > 0 && tMs < idleDur + panDur) {
+      setGesturing(true);
       const u = (tMs - idleDur) / panDur; // 0..1
       const angle = u * Math.PI * 2;
       const x = start.x + Math.cos(angle) * panPx;
@@ -46,6 +54,7 @@ export function makePanZoomScript({
 
     // Phase 3: zoom in/out while gently panning
     if (zoomDur > 0 && tMs < idleDur + panDur + zoomDur) {
+      setGesturing(true);
       const u = (tMs - (idleDur + panDur)) / zoomDur;
       const wobble = (Math.sin(u * Math.PI * 2) * 0.5 + 0.5); // 0..1
       const scale = lerp(zoomMin, zoomMax, wobble);
@@ -57,6 +66,7 @@ export function makePanZoomScript({
 
     // Phase 4: overview toggle spam
     if (overviewToggles > 0 && toggleEvery > 0 && tMs < overviewStart + overviewDur) {
+      setGesturing(false);
       const k = Math.floor((tMs - overviewStart) / toggleEvery);
       // toggle on integer boundary using a stable latch on the function object
       if (step.__lastToggleK !== k) {
@@ -71,6 +81,7 @@ export function makePanZoomScript({
       step.__didCommit = true;
       try { commitGesture(); } catch {}
     }
+    setGesturing(false);
   };
 }
 

@@ -1494,16 +1494,48 @@ function triggerConnectorPulse(fromId, toId) {
     }, durationMs);
 }
 
-// Unified border pulse helper for both modes
+const g_outlineSyncQueue = new Set();
+let g_outlineSyncRaf = 0;
+// Pulse bookkeeping (avoid per-pulse timeouts)
+const g_pulseUntil = new Map(); // panelId -> untilMs
+
+function queueBodyOutlineSync(panel) {
+  if (!panel || !panel.isConnected) return;
+  g_outlineSyncQueue.add(panel);
+  if (g_outlineSyncRaf) return;
+  g_outlineSyncRaf = requestAnimationFrame(() => {
+    g_outlineSyncRaf = 0;
+    for (const p of g_outlineSyncQueue) {
+      try { syncBodyOutline(p); } catch {}
+    }
+    g_outlineSyncQueue.clear();
+  });
+}
+
 function pulseToyBorder(panel, durationMs = 320) {
   if (!panel || !panel.isConnected) return;
-  // Ensure base playing outline is present
+  if (window.__PERF_DISABLE_PULSES) return;
+
+  window.__PERF_PULSE_COUNT = (window.__PERF_PULSE_COUNT || 0) + 1;
   panel.classList.add('toy-playing');
-  // Trigger the pulse animation
   panel.classList.add('toy-playing-pulse');
-  setTimeout(() => panel.classList.remove('toy-playing-pulse'), durationMs);
-  // Keep overlay geometry aligned even if pulse happens mid-layout change
-  try { syncBodyOutline(panel); } catch {}
+
+  const until = performance.now() + durationMs;
+  g_pulseUntil.set(panel.id, until);
+
+  // Keep overlay geometry aligned, but do it batched.
+  window.__PERF_OUTLINE_SYNC_COUNT = (window.__PERF_OUTLINE_SYNC_COUNT || 0) + 1;
+  try { queueBodyOutlineSync(panel); } catch {}
+}
+
+function serviceToyPulses(nowMs) {
+  if (g_pulseUntil.size === 0) return;
+  for (const [id, until] of g_pulseUntil.entries()) {
+    if (until > nowMs) continue;
+    const panel = document.getElementById(id);
+    if (panel) panel.classList.remove('toy-playing-pulse');
+    g_pulseUntil.delete(id);
+  }
 }
 
 function initToyChaining(panel) {
@@ -2114,6 +2146,7 @@ function rebuildChainSegments() {
 }
 
 function drawChains(forceFull = false) {
+  if (window.__PERF_DISABLE_CHAINS) return;
   if (!CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) return;
   if (!chainCanvas || !chainCtx) return;
 
@@ -2365,6 +2398,7 @@ let g_chainRedrawScheduled = false;
 let g_chainRedrawPendingFull = false;
 let g_chainRedrawTimer = 0;
 function scheduleChainRedraw() {
+    if (window.__PERF_DISABLE_CHAINS) return;
     if (!chainCanvas || !chainCtx) return;
     if (g_chainRedrawScheduled) {
         g_chainRedrawPendingFull = true;
@@ -2515,9 +2549,13 @@ function scheduler(){
   let lastPhase = 0;
   const lastCol = new Map();
   let lastPerfLog = 0;
+  const prevActiveToyIds = new Set();
+  let prevHadActiveToys = false;
 
   function step(){
     const frameStart = performance.now();
+    // Clear expired pulse classes without timers
+    try { serviceToyPulses(frameStart); } catch {}
 
     // Keep outline-related CSS vars synced with zoom; heavy geometry sync happens on demand.
     try {
@@ -2555,32 +2593,41 @@ function scheduler(){
       const activeToyIds = new Set(g_chainState.values());
       const hasActiveToys = activeToyIds.size > 0;
 
-      if (CHAIN_FEATURE_ENABLE_MARK_ACTIVE && hasActiveToys) {
+      const activeChanged = (() => {
+        if (hasActiveToys !== prevHadActiveToys) return true;
+        if (activeToyIds.size !== prevActiveToyIds.size) return true;
+        for (const id of activeToyIds) {
+          if (!prevActiveToyIds.has(id)) return true;
+        }
+        return false;
+      })();
+
+      if (CHAIN_FEATURE_ENABLE_MARK_ACTIVE && hasActiveToys && activeChanged) {
         document.querySelectorAll('.toy-panel[id]').forEach(toy => {
           const isActive = activeToyIds.has(toy.id);
           const current = toy.dataset.chainActive === 'true';
+
+          // If this toy just lost chain focus, drop any lingering pulse so the flash
+          // doesn't bleed into the next active link.
+          if (current && !isActive) {
+            try { g_pulseUntil.delete(toy.id); } catch {}
+            try { toy.classList.remove('toy-playing-pulse'); } catch {}
+            try { toy.__pulseHighlight = 0; toy.__pulseRearm = false; } catch {}
+          }
+
           if (current !== isActive) {
             toy.dataset.chainActive = isActive ? 'true' : 'false';
           }
         });
+
+        prevActiveToyIds.clear();
+        for (const id of activeToyIds) prevActiveToyIds.add(id);
+        prevHadActiveToys = hasActiveToys;
       }
       const tActiveEnd = performance.now();
       if (CHAIN_DEBUG && (tActiveEnd - tActiveStart) > CHAIN_DEBUG_LOG_THRESHOLD_MS) {
         console.log('[CHAIN][perf] mark-active', (tActiveEnd - tActiveStart).toFixed(2), 'ms', 'activeToyCount=', activeToyIds.size);
       }
-
-      // --- Phase B: find sequenced toys (DOM scan) ---
-      const tSeqStart = performance.now();
-      let sequencedToys = [];
-      if (CHAIN_FEATURE_ENABLE_SEQUENCER && hasActiveToys) {
-        // Only scan DOM for sequenced toys if there is at least one active chain toy.
-        sequencedToys = getSequencedToys(); // querySelectorAll('.toy-panel') + filter
-      }
-      const tSeqEnd = performance.now();
-      if (CHAIN_DEBUG && CHAIN_FEATURE_ENABLE_SEQUENCER && (tSeqEnd - tSeqStart) > CHAIN_DEBUG_LOG_THRESHOLD_MS) {
-        console.log('[CHAIN][perf] getSequencedToys', (tSeqEnd - tSeqStart).toFixed(2), 'ms', 'count=', sequencedToys.length);
-      }
-      // (existing behaviour: the actual stepping loop below uses activeToyIds, not sequencedToys)
 
       // --- Phase C: per-toy sequencer stepping for active chain links ---
       const tStepStart = performance.now();

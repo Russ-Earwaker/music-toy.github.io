@@ -72,6 +72,7 @@ import { getViewportTransform, screenToWorld, getViewportElement } from './board
 
   let hideTimer = 0;
   let rafId = 0;
+  let hasActiveDots = false;
 
   let isPointerDown = false;
   let waveActive = false;
@@ -247,6 +248,7 @@ import { getViewportTransform, screenToWorld, getViewportElement } from './board
     dragOffsetY = 0;
 
     dots = [];
+    hasActiveDots = false;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     overlay.classList.remove('is-active');
@@ -338,6 +340,8 @@ import { getViewportTransform, screenToWorld, getViewportElement } from './board
       }
     }
 
+    hasActiveDots = dots.length > 0;
+
     if (DEBUG || PROFILE) {
       console.debug('[tap-dots] built dots', {
         count: dots.length,
@@ -370,6 +374,13 @@ import { getViewportTransform, screenToWorld, getViewportElement } from './board
   }
 
   function drawWaveFrame(now) {
+    if (window.__PERF_DISABLE_TAP_DOTS) return;
+    if (!hasActiveDots) return;
+    const isGesturing = !!(window.__ZoomCoordinator?.isGesturing?.() || document.body?.classList?.contains?.('is-gesturing'));
+    if (isGesturing) {
+      rafId = requestAnimationFrame(drawWaveFrame);
+      return;
+    }
     // Always schedule the next frame up front; resetOverlay() cancels when done.
     rafId = requestAnimationFrame(drawWaveFrame);
 
