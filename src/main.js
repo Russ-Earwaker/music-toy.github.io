@@ -837,11 +837,7 @@ function setToyFocus(panel, { center = true, unfocusAll } = {}) { // default cen
     });
   }
   
-  try {
-    rebuildChainSegments();
-    g_chainRedrawPendingFull = true;
-    scheduleChainRedraw();
-  } catch {}
+  
   window.dispatchEvent(new CustomEvent('focus:change', { detail: { hasFocus: !!panel } }));
 }
 
@@ -3057,6 +3053,37 @@ async function boot(){
   } catch (err) {
     console.warn('[FPS] init failed', err);
   }
+
+  window.addEventListener('focus:change', () => {
+    const duration = 1000; // ms, same as focus animation
+    const startTime = performance.now();
+
+    function animateConnectors(now) {
+        const elapsed = now - startTime;
+        
+        try {
+            rebuildChainSegments();
+            g_chainRedrawPendingFull = true;
+            scheduleChainRedraw();
+        } catch(e) {
+            if (CHAIN_DEBUG) console.warn('[CHAIN] animation frame rebuild failed', e);
+        }
+
+        if (elapsed < duration) {
+            requestAnimationFrame(animateConnectors);
+        } else {
+            // One final redraw for perfect alignment at the end.
+            try {
+                rebuildChainSegments();
+                g_chainRedrawPendingFull = true;
+                scheduleChainRedraw();
+            } catch(e) {
+                if (CHAIN_DEBUG) console.warn('[CHAIN] final animation frame rebuild failed', e);
+            }
+        }
+    }
+    requestAnimationFrame(animateConnectors);
+  });
 
   // Hide fullscreen button while FPS HUD sits in the top-right
   try {
