@@ -1379,6 +1379,11 @@ body.advanced-controls-disabled [data-adv] {
   filter: drop-shadow(0 12px 22px rgba(95, 179, 255, 0.65));
 }
 
+#overview-mode-button.has-focused-toy::before,
+#overview-mode-button.has-focused-toy::after {
+  display: none;
+}
+
 .toy-spawner-dock.panel-drag-active .toy-spawner-trash {
   opacity: 1;
 }
