@@ -24,10 +24,10 @@ const CORE_BASE_R_PX = 12;
 const CORE_PULSE_R_PX = 18;
 
 const CORE_PARTICLE_COUNT = 18;
-const CORE_PARTICLE_R_PX = 2.2;
-const CORE_PARTICLE_RING_R_PX = 10;
+const CORE_PARTICLE_R_PX = 5.2; // bigger "blob" particles
+const CORE_PARTICLE_RING_R_PX = 6.5; // closer to center
 
-const MOON_COUNT = 9;
+const MOON_COUNT = 12;
 const MOON_R_PX = 2.8;
 const MAX_DT = 0.050; // cap dt to avoid big jumps when tab refocuses
 
@@ -94,6 +94,20 @@ function getZoomScale() {
   return 1.0;
 }
 
+function getMoonSpeedMulFromBeat() {
+  // Desired while playing:
+  // - 1 orbit = 2 bars (requested)
+  // - A bar = BEATS_PER_BAR beats
+  // - So radians per second = 2π / (2 bars) = π per bar
+  // - bar seconds = beatDurSec * BEATS_PER_BAR
+  // => rad/sec = π / (beatDurSec * BEATS_PER_BAR)
+  const bd = Math.max(0.08, beatDurSec || 0.5);
+    const radPerSec = (2 * Math.PI) / (bd * BEATS_PER_BAR);
+  // Our integrator uses (dt * m.speed * mul) so choose mul such that:
+  // average |m.speed| ~= 1.0 gives radPerSec.
+  return radPerSec;
+}
+
 function ensureCanvas() {
   if (canvas) return canvas;
   const host = pickHost();
@@ -132,12 +146,16 @@ function initCoreParticles() {
   corePts = [];
   for (let i = 0; i < CORE_PARTICLE_COUNT; i++) {
     const a = (i / CORE_PARTICLE_COUNT) * Math.PI * 2;
+    const dir = (Math.random() < 0.5) ? -1 : 1;
+    const spRand = 0.35 + Math.random() * 1.25; // wider range
+    const sizeMul = 0.75 + Math.random() * 0.85;
     corePts.push({
       a,
-      speed: 0.6 + 0.35 * ((i % 5) / 4),
+      speed: dir * spRand,
       ring: CORE_PARTICLE_RING_R_PX * (0.7 + 0.35 * ((i % 3) / 2)),
       phase: i * 0.37,
       theta: a, // persistent angle
+      sizeMul,
     });
   }
 }
@@ -391,11 +409,9 @@ function integrateOrbits(dt, running) {
   for (const p of corePts) {
     p.theta += dt * speedMul * p.speed;
   }
-  // Moons: when running they are bar-locked (1 orbit per bar); when idle they drift.
-  if (!running) {
-    for (const m of moons) {
-      m.t += dt * speedMul * m.speed;
-    }
+  // Moons: always integrate so there's never a state-swap pop.
+  for (const m of moons) {
+    m.t += dt * m.speed * (running ? getMoonSpeedMulFromBeat() : 1.0);
   }
 }
 
@@ -508,7 +524,7 @@ function drawGradient(local, distWorld, running, drawScale = 1) {
 
   const grad = ctx.createRadialGradient(gx, gy, 0, gx, gy, r);
   grad.addColorStop(0.00, `rgba(120, 200, 255, ${alpha})`);
-  grad.addColorStop(0.28, `rgba(120, 120, 255, ${alpha * 0.70})`);
+    grad.addColorStop(0.28, `rgba(130, 210, 255, ${alpha * 0.70})`);
   grad.addColorStop(1.00, `rgba(0, 0, 0, 0)`);
 
   ctx.save();
@@ -543,7 +559,7 @@ function drawAnchorParticles(local, nowSec, running, drawScale = 1) {
   const g = ctx.createRadialGradient(0, 0, 0, 0, 0, coreR * 3.6);
   g.addColorStop(0.00, `rgba(255,255,255,${0.36 + 0.12 * energy})`);
   g.addColorStop(0.20, `rgba(64,200,255,${0.24 + 0.11 * energy})`);
-  g.addColorStop(0.58, `rgba(255,96,210,${0.12 + 0.09 * energy})`);
+    g.addColorStop(0.58, `rgba(130, 210, 255,${0.12 + 0.09 * energy})`);
   g.addColorStop(1.00, `rgba(0,0,0,0)`);
 
   ctx.save();
@@ -558,14 +574,16 @@ function drawAnchorParticles(local, nowSec, running, drawScale = 1) {
   for (let i = 0; i < corePts.length; i++) {
     const p = corePts[i];
     const a = p.theta + p.phase;
-    const rr = p.ring + energy * 2.2;
+    const rr = p.ring + energy * 1.1;
     const px = Math.cos(a) * rr;
     const py = Math.sin(a) * rr;
 
-    const pr = CORE_PARTICLE_R_PX * (0.85 + 0.35 * (i % 3) / 2) * (1 + 0.12 * energy);
+    const pr = CORE_PARTICLE_R_PX
+      * (p.sizeMul || 1)
+      * (1 + 0.10 * energy);
     const pg = ctx.createRadialGradient(px, py, 0, px, py, pr * 7);
-    pg.addColorStop(0.0, `rgba(255,255,255,${0.50 + 0.12 * energy})`);
-    pg.addColorStop(0.4, `rgba(64,200,255,${0.22 + 0.10 * energy})`);
+    pg.addColorStop(0.0, `rgba(255,255,255,${0.75 + 0.12 * energy})`);
+    pg.addColorStop(0.4, `rgba(64,200,255,${0.4 + 0.10 * energy})`);
     pg.addColorStop(1.0, `rgba(0,0,0,0)`);
 
     ctx.fillStyle = pg;
@@ -573,29 +591,31 @@ function drawAnchorParticles(local, nowSec, running, drawScale = 1) {
     ctx.arc(px, py, pr * 7, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = `rgba(255,255,255,${0.70 + 0.10 * energy})`;
+        ctx.fillStyle = `rgba(255,255,255,${0.85 + 0.10 * energy})`;
     ctx.beginPath();
     ctx.arc(px, py, pr, 0, Math.PI * 2);
     ctx.fill();
   }
 
   // Central sparkle (keeps a “ball” presence)
-  ctx.fillStyle = `rgba(255,255,255,${0.55 + 0.10 * energy})`;
+  ctx.fillStyle = `rgba(255,255,255,${0.75 + 0.10 * energy})`;
   ctx.beginPath();
   ctx.arc(0, 0, coreR * 0.55, 0, Math.PI * 2);
   ctx.fill();
 
   // --- Moons with elliptical orbits ---
-  const orbitBoost = 1 + energy * 0.16;
+  const idleEnergy = (running ? 0.52 : 0.28) + idle * 0.20;
+  const stableCoreR = CORE_BASE_R_PX + idleEnergy * CORE_PULSE_R_PX;
   for (let i = 0; i < moons.length; i++) {
     const m = moons[i];
-    const t = (running ? barAngle : m.t) + m.phase;
+    const t = m.t + m.phase;
 
     // Requested: distance range based on the current blob radius:
     // min = outer edge of central blob, max = 4x core radius.
-    const minR = coreR * 1.02;         // just outside blob
-    const maxR = coreR * 4.0;          // up to 4x blob radius
-    const baseR = (minR + (maxR - minR) * (m.dist01 || 0.5)) * orbitBoost;
+    const minR = stableCoreR * 1.00;         // right at blob edge
+    const maxR = stableCoreR * 1.75;         // closer in (was 2.6)
+    // IMPORTANT: moons are NOT affected by the blob "breathing" (no orbitBoost).
+    const baseR = (minR + (maxR - minR) * (m.dist01 || 0.5));
 
     // Ellipse aspect per moon (subtle variation, stable)
     const aspect = 0.62 + 0.28 * (((i * 7) % 10) / 9);
@@ -611,18 +631,18 @@ function drawAnchorParticles(local, nowSec, running, drawScale = 1) {
     const mx = rx;
     const my = ry;
 
-    const moonGlowR = MOON_R_PX * (8 + moonPulse * 3.0);
-    const mg = ctx.createRadialGradient(mx, my, 0, mx, my, moonGlowR);
-    mg.addColorStop(0, `rgba(64,200,255,${0.26 + 0.08 * energy})`);
+            const moonGlowR = MOON_R_PX * 4;
+        const mg = ctx.createRadialGradient(mx, my, 0, mx, my, moonGlowR);
+    mg.addColorStop(0, `rgba(64,200,255,${0.26 + 0.08 * energy + moonPulse * 0.15})`);
     mg.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = mg;
     ctx.beginPath();
     ctx.arc(mx, my, moonGlowR, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = `rgba(255,255,255,${0.55 + 0.10 * energy})`;
+        ctx.fillStyle = `rgba(255,255,255,${0.55 + 0.10 * energy + moonPulse * 0.2})`;
     ctx.beginPath();
-    ctx.arc(mx, my, MOON_R_PX * (1 + moonPulse * 0.25), 0, Math.PI * 2);
+    ctx.arc(mx, my, MOON_R_PX, 0, Math.PI * 2);
     ctx.fill();
   }
 
