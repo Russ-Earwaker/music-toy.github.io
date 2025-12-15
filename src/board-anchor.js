@@ -27,8 +27,8 @@ const CORE_PARTICLE_COUNT = 18;
 const CORE_PARTICLE_R_PX = 5.2; // bigger "blob" particles
 const CORE_PARTICLE_RING_R_PX = 6.5; // closer to center
 
-const MOON_COUNT = 12;
-const MOON_R_PX = 2.8;
+const MOON_COUNT = 14;
+const MOON_R_PX = 1.8;
 const MAX_DT = 0.050; // cap dt to avoid big jumps when tab refocuses
 
 // Gradient (requested: bigger + more opaque, min opacity never hits 0)
@@ -279,12 +279,12 @@ function ensureMiniButton() {
         pointer-events: auto;
         position: relative;
 
-        /* More “standard” readable gradient */
-        background: radial-gradient(circle at 35% 35%,
-          rgba(255,255,255,0.95),
-          rgba(120,200,255,0.70) 32%,
-          rgba(120,120,255,0.40) 55%,
-          rgba(0,0,0,0) 72%
+        /* Match the anchor's outer glow */
+        background: radial-gradient(circle,
+          rgba(255,255,255,0.4),
+          rgba(64,200,255,0.3) 25%,
+          rgba(130,210,255,0.15) 60%,
+          transparent 80%
         );
 
         box-shadow:
@@ -294,10 +294,11 @@ function ensureMiniButton() {
       .anchor-mini-btn::before{
         content: '';
         position: absolute;
-        inset: 6px;
+        width: 10px;
+        height: 10px;
+        background: white;
         border-radius: 999px;
-        border: 1px solid rgba(255,255,255,0.50);
-        opacity: 0.95;
+        animation: pulseCore 2.5s ease-in-out infinite;
       }
       .anchor-mini-btn .mini-moon{
         position: absolute;
@@ -311,6 +312,10 @@ function ensureMiniButton() {
       @keyframes miniOrbit{
         from { transform: translate(0px, -14px) rotate(0deg) translate(0px, 14px); }
         to   { transform: translate(0px, -14px) rotate(360deg) translate(0px, 14px); }
+      }
+      @keyframes pulseCore {
+        0%, 100% { transform: scale(1); background: rgb(180, 220, 255); }
+        50% { transform: scale(1.2); background: rgb(255, 255, 255); }
       }
     `;
     document.head.appendChild(miniStyleEl);
@@ -410,8 +415,13 @@ function integrateOrbits(dt, running) {
     p.theta += dt * speedMul * p.speed;
   }
   // Moons: always integrate so there's never a state-swap pop.
-  for (const m of moons) {
-    m.t += dt * m.speed * (running ? getMoonSpeedMulFromBeat() : 1.0);
+  for (let i = 0; i < moons.length; i++) {
+    const m = moons[i];
+    let speedMultiplier = (running ? getMoonSpeedMulFromBeat() : 1.0);
+    if (running && i < 4) {
+      speedMultiplier *= 2;
+    }
+    m.t += dt * m.speed * speedMultiplier;
   }
 }
 
@@ -571,34 +581,13 @@ function drawAnchorParticles(local, nowSec, running, drawScale = 1) {
 
   // --- Core made of multiple particles rotating around ---
   ctx.globalCompositeOperation = 'source-over';
-  for (let i = 0; i < corePts.length; i++) {
-    const p = corePts[i];
-    const a = p.theta + p.phase;
-    const rr = p.ring + energy * 1.1;
-    const px = Math.cos(a) * rr;
-    const py = Math.sin(a) * rr;
-
-    const pr = CORE_PARTICLE_R_PX
-      * (p.sizeMul || 1)
-      * (1 + 0.10 * energy);
-    const pg = ctx.createRadialGradient(px, py, 0, px, py, pr * 7);
-    pg.addColorStop(0.0, `rgba(255,255,255,${0.75 + 0.12 * energy})`);
-    pg.addColorStop(0.4, `rgba(64,200,255,${0.4 + 0.10 * energy})`);
-    pg.addColorStop(1.0, `rgba(0,0,0,0)`);
-
-    ctx.fillStyle = pg;
-    ctx.beginPath();
-    ctx.arc(px, py, pr * 7, 0, Math.PI * 2);
-    ctx.fill();
-
-        ctx.fillStyle = `rgba(255,255,255,${0.85 + 0.10 * energy})`;
-    ctx.beginPath();
-    ctx.arc(px, py, pr, 0, Math.PI * 2);
-    ctx.fill();
-  }
 
   // Central sparkle (keeps a “ball” presence)
-  ctx.fillStyle = `rgba(255,255,255,${0.75 + 0.10 * energy})`;
+  const pulseFactor = clamp(pulseBeat + pulseBar, 0, 2.0) / 2.0;
+  const sparkR = Math.floor(180 + 75 * pulseFactor);
+  const sparkG = Math.floor(220 + 35 * pulseFactor);
+  const sparkB = 255;
+  ctx.fillStyle = `rgb(${sparkR},${sparkG},${sparkB})`;
   ctx.beginPath();
   ctx.arc(0, 0, coreR * 0.55, 0, Math.PI * 2);
   ctx.fill();
@@ -618,7 +607,7 @@ function drawAnchorParticles(local, nowSec, running, drawScale = 1) {
     const baseR = (minR + (maxR - minR) * (m.dist01 || 0.5));
 
     // Ellipse aspect per moon (subtle variation, stable)
-    const aspect = 0.62 + 0.28 * (((i * 7) % 10) / 9);
+        const aspect = 0.2 + 0.4 * (((i * 7) % 10) / 9);
     const ax = baseR;
     const by = baseR * aspect;
 
@@ -631,16 +620,7 @@ function drawAnchorParticles(local, nowSec, running, drawScale = 1) {
     const mx = rx;
     const my = ry;
 
-            const moonGlowR = MOON_R_PX * 4;
-        const mg = ctx.createRadialGradient(mx, my, 0, mx, my, moonGlowR);
-    mg.addColorStop(0, `rgba(64,200,255,${0.26 + 0.08 * energy + moonPulse * 0.15})`);
-    mg.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = mg;
-    ctx.beginPath();
-    ctx.arc(mx, my, moonGlowR, 0, Math.PI * 2);
-    ctx.fill();
-
-        ctx.fillStyle = `rgba(255,255,255,${0.55 + 0.10 * energy + moonPulse * 0.2})`;
+                ctx.fillStyle = `rgba(255,255,255,${0.8 + moonPulse * 0.2})`;
     ctx.beginPath();
     ctx.arc(mx, my, MOON_R_PX, 0, Math.PI * 2);
     ctx.fill();
