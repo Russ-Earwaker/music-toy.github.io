@@ -36,6 +36,7 @@ import { DEFAULT_BPM, NUM_STEPS, ensureAudioContext, getLoopInfo, setBpm, start,
 import { buildGrid } from './grid-core.js';
 import { buildDrumGrid } from './drum-core.js';
 import { tryRestoreOnBoot, startAutosave } from './persistence.js';
+import { initBoardAnchor, tickBoardAnchor } from './board-anchor.js';
 
 const mainLog = makeDebugLogger('mt_debug_logs', 'log');
 
@@ -2887,6 +2888,10 @@ function scheduler(){
     const info = getLoopInfo();
 
     const running = isRunning();
+
+    // Screen-space "home" anchor: gradient + particle landmark.
+    // Keep this cheap and frame-synced by piggybacking on the main scheduler rAF.
+    try { tickBoardAnchor({ nowMs: frameStart, loopInfo: info, running }); } catch {}
     const hasChains = g_chainState && g_chainState.size > 0;
 
     if (CHAIN_FEATURE_ENABLE_SCHEDULER && running && hasChains){
@@ -3166,6 +3171,9 @@ async function boot(){
             }
         }
     }
+
+    // Screen-space "home" anchor (can be disabled via window.__MT_ANCHOR_DISABLED or localStorage.mt_anchor_enabled='0')
+    try { initBoardAnchor(); } catch (err) { console.warn('[ANCHOR] init failed', err); }
 
     bootTopbar();
     let restored = false;
