@@ -429,7 +429,7 @@ const CHAIN_DRAG_UPDATE_INTERVAL_MS = 24;
 // Chain / scheduler debug controls.
 // CHAIN_DEBUG: master flag - turn this off to silence all chain/scheduler logs.
 const CHAIN_DEBUG = false;
-const CHAIN_OV_DBG = (window.__chainOvDbg || localStorage.getItem('CHAIN_OV_DBG') === '1');
+const CHAIN_OV_DBG = false; // locked off; re-enable manually if deep OV debugging is needed.
 // Log phase timings that take longer than this in ms.
 const CHAIN_DEBUG_LOG_THRESHOLD_MS = 1;
 // Log whole-frame cost if it exceeds this in ms (we'll also rate-limit logs).
@@ -1645,13 +1645,39 @@ function initToyChaining(panel) {
     window.addEventListener('resize', updateChainBtnPos, { passive: true });
     requestAnimationFrame(updateChainBtnPos);
 
-    console.log('[chain][initToyChaining] attach', {
-      panel: panel.id,
-      hasExisting: !!panel.querySelector(':scope > .toy-chain-btn'),
-      chainInitFlag: panel.dataset.chainInit
-    });
+    if (CHAIN_DEBUG) {
+      console.log('[chain][initToyChaining] attach', {
+        panel: panel.id,
+        hasExisting: !!panel.querySelector(':scope > .toy-chain-btn'),
+        chainInitFlag: panel.dataset.chainInit
+      });
+    }
     panel.appendChild(extendBtn);
     panel.style.overflow = 'visible'; // Ensure the button is not clipped by the panel's bounds.
+
+    // Hover fallback: in some focus-edit/unfocused states CSS :hover can be suppressed by pointer-event guards.
+    // We mirror the hover state with a class so the button still highlights reliably.
+    if (!extendBtn.__hoverWired) {
+      extendBtn.__hoverWired = true;
+
+      extendBtn.addEventListener('pointerenter', () => {
+        if (extendBtn.getAttribute('data-chaindisabled') === '1' || extendBtn.classList.contains('toy-chain-btn-disabled')) return;
+        extendBtn.classList.add('is-hover');
+      }, { passive: true });
+
+      extendBtn.addEventListener('pointerleave', () => {
+        extendBtn.classList.remove('is-hover');
+      }, { passive: true });
+
+      // Safety: clear if capture ends oddly.
+      extendBtn.addEventListener('pointerup', () => {
+        extendBtn.classList.remove('is-hover');
+      }, { passive: true });
+
+      extendBtn.addEventListener('pointercancel', () => {
+        extendBtn.classList.remove('is-hover');
+      }, { passive: true });
+    }
 
     // Ensure the initial icon/disable state is correct even before the global sync runs.
     const syncChainBtnImmediate = () => {
@@ -3406,8 +3432,6 @@ async function boot(){
       !!(window.__overviewMode?.isActive?.() ||
          board?.classList?.contains('board-overview') ||
          document.body?.classList?.contains('overview-mode'));
-
-    if (isActivelyEditingToy()) return;
 
     if (!overviewActive) {
       const header = panel.querySelector('.toy-header');

@@ -516,7 +516,7 @@ html, body {
   pointer-events: auto !important;
   opacity: 1 !important;
   mix-blend-mode: normal;
-  filter: none;
+  /* IMPORTANT: do NOT set filter here, or it will override hover highlight in unfocused state */
 }
 .toy-chain-btn.toy-chain-btn-disabled {
   cursor: default;
@@ -543,6 +543,37 @@ html, body {
   --c-btn-icon-url: url('/assets/UI/T_ButtonEmpty.png');
 }
 
+/* Keep chain button interactive/hoverable in focus-editing mode */
+.focus-editing .toy-chain-btn:not([data-chaindisabled="1"]):not(.toy-chain-btn-disabled),
+.toy-focus-editing .toy-chain-btn:not([data-chaindisabled="1"]):not(.toy-chain-btn-disabled),
+.toy-editing .toy-chain-btn:not([data-chaindisabled="1"]):not(.toy-chain-btn-disabled),
+.focused-editing .toy-chain-btn:not([data-chaindisabled="1"]):not(.toy-chain-btn-disabled) {
+  pointer-events: auto !important;
+  opacity: 1 !important;
+  filter: none;
+}
+.focus-editing .toy-chain-btn:not([data-chaindisabled="1"]):not(.toy-chain-btn-disabled):hover,
+.toy-focus-editing .toy-chain-btn:not([data-chaindisabled="1"]):not(.toy-chain-btn-disabled):hover,
+.toy-editing .toy-chain-btn:not([data-chaindisabled="1"]):not(.toy-chain-btn-disabled):hover,
+.focused-editing .toy-chain-btn:not([data-chaindisabled="1"]):not(.toy-chain-btn-disabled):hover {
+  filter: brightness(2) saturate(1.5);
+}
+
+/* JS-driven hover fallback (see initToyChaining in main.js) */
+.toy-chain-btn.is-hover:not([data-chaindisabled="1"]):not(.toy-chain-btn-disabled) {
+  filter: brightness(2) saturate(1.5);
+}
+.toy-chain-btn.is-hover .c-btn-glow {
+  opacity: 0.85;
+}
+.toy-chain-btn.is-hover .c-btn-core::before {
+  transform: translate(-50%, -50%) scale(1.04);
+  filter: brightness(1.12);
+}
+.toy-chain-btn.is-hover .c-btn-core::after {
+  transform: translate(-50%, -50%) scale(1.08);
+  filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.55)) brightness(1.02);
+}
 /* Panel sections */
 .toy-header {
   position: relative;
