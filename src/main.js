@@ -3449,6 +3449,11 @@ async function boot(){
     const ny = st.startTop + dy / Math.max(scale, 0.0001);
     st.panel.style.left = `${nx}px`;
     st.panel.style.top = `${ny}px`;
+
+    try {
+      window.ToySpawner?.updatePanelDrag?.({ clientX: e.clientX, clientY: e.clientY });
+    } catch (err) { console.warn('[main] ToySpawner.updatePanelDrag failed', err); }
+
     if (CHAIN_OV_DBG) {
       console.log('[OVDBG][overviewDragMove]', {
         panelId: st.panel.id,
@@ -3467,6 +3472,18 @@ async function boot(){
     window.removeEventListener('pointermove', handleOverviewPanelMove, true);
     window.removeEventListener('pointerup', endOverviewPanelDrag, true);
     window.removeEventListener('pointercancel', endOverviewPanelDrag, true);
+
+    try {
+      const wasDeleted = window.ToySpawner?.endPanelDrag?.({
+        clientX: e.clientX,
+        clientY: e.clientY,
+        pointerId: e.pointerId,
+        canceled: e.type === 'pointercancel'
+      });
+      // If the toy was deleted, the panel element is gone. Bail out.
+      if (wasDeleted) return;
+    } catch(err) { console.warn('[main] ToySpawner.endPanelDrag failed', err); }
+
     g_overviewPanelDrag = null;
   }
 
@@ -3496,6 +3513,10 @@ async function boot(){
         pointerType: e.pointerType
       });
     }
+
+    try {
+      window.ToySpawner?.beginPanelDrag?.({ panel, pointerId: e.pointerId });
+    } catch(err) { console.warn('[main] ToySpawner.beginPanelDrag failed', err); }
 
     const startLeft = parseFloat(panel.style.left);
     const startTop = parseFloat(panel.style.top);
