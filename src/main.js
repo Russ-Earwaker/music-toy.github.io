@@ -423,6 +423,85 @@ let g_overviewPanelDrag = null;
 // Track the most recent chained panel for post-zoom debug logs.
 let g_lastChainedDebugPanel = null;
 
+// --- Chain position observer (keeps connectors synced even when drag path bypasses our pointer hooks) ---
+let g_chainPosObserver = null;
+let g_chainPosDirtyToyIds = new Set();
+let g_chainPosFlushRaf = 0;
+let g_chainPosLastFlushMs = 0;
+
+// Keep this fairly light; we only need "feels live" while dragging.
+const CHAIN_POS_OBS_MIN_INTERVAL_MS = 16;
+
+function installChainPositionObserver() {
+  if (window.__CHAIN_POS_OBS_INSTALLED__) return;
+  window.__CHAIN_POS_OBS_INSTALLED__ = true;
+
+  const board = document.getElementById('board');
+  if (!board || typeof MutationObserver === 'undefined') return;
+
+  const flush = () => {
+    g_chainPosFlushRaf = 0;
+    if (!CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) {
+      g_chainPosDirtyToyIds.clear();
+      return;
+    }
+
+    const now = performance.now();
+    if (now - g_chainPosLastFlushMs < CHAIN_POS_OBS_MIN_INTERVAL_MS) {
+      // Re-schedule if we’re being spammed.
+      g_chainPosFlushRaf = requestAnimationFrame(flush);
+      return;
+    }
+    g_chainPosLastFlushMs = now;
+
+    try {
+      for (const toyId of g_chainPosDirtyToyIds) {
+        updateChainSegmentsForToy(toyId);
+      }
+      g_chainPosDirtyToyIds.clear();
+      scheduleChainRedraw();
+    } catch (err) {
+      // Keep silent unless debugging.
+      if (CHAIN_DEBUG) console.warn('[CHAIN][pos-obs] flush failed', err);
+      g_chainPosDirtyToyIds.clear();
+    }
+  };
+
+  g_chainPosObserver = new MutationObserver((mutations) => {
+    // Only care when focus editing or overview — basically anytime connectors might be visible.
+    // (This keeps us from doing work in totally irrelevant states.)
+    const boardEl = document.getElementById('board');
+    const overviewActive =
+      !!(window.__overviewMode?.isActive?.() ||
+         boardEl?.classList?.contains('board-overview') ||
+         document.body?.classList?.contains('overview-mode'));
+
+    const focusEditActive = isFocusEditingEnabled?.() || isActivelyEditingToy?.();
+    if (!overviewActive && !focusEditActive) return;
+
+    for (const m of mutations) {
+      const el = m.target;
+      if (!el || !el.classList || !el.classList.contains('toy-panel')) continue;
+      if (!el.id) continue;
+
+      // Only bother if this toy actually participates in chains.
+      if (!g_edgesByToyId || !g_edgesByToyId.has(el.id)) continue;
+
+      g_chainPosDirtyToyIds.add(el.id);
+    }
+
+    if (g_chainPosDirtyToyIds.size > 0 && !g_chainPosFlushRaf) {
+      g_chainPosFlushRaf = requestAnimationFrame(flush);
+    }
+  });
+
+  g_chainPosObserver.observe(board, {
+    attributes: true,
+    attributeFilter: ['style'],
+    subtree: true,
+  });
+}
+
 // Aim for ~60fps max during drag; further throttling is done by the browser's pointermove rate.
 const CHAIN_DRAG_UPDATE_INTERVAL_MS = 24;
 
@@ -3434,9 +3513,16 @@ async function boot(){
          document.body?.classList?.contains('overview-mode'));
 
     if (!overviewActive) {
-      const header = panel.querySelector('.toy-header');
-      const inHeader = header && (header === e.target || header.contains(e.target));
-      if (!inHeader) return;
+      // In focus-edit mode, unfocused toys hide their headers, but they can still be dragged.
+      // Allow chain tracking to arm on the whole panel in that state so connectors update while moving.
+      const allowPanelDragInFocusEdit =
+        isFocusEditingEnabled() && panel.classList.contains('toy-unfocused');
+
+      if (!allowPanelDragInFocusEdit) {
+        const header = panel.querySelector('.toy-header');
+        const inHeader = header && (header === e.target || header.contains(e.target));
+        if (!inHeader) return;
+      }
     }
 
     try {
@@ -3547,6 +3633,8 @@ async function boot(){
     document.addEventListener('pointerdown', handleChainPanelPointerDown, true);
     document.addEventListener('pointermove', handleChainPanelPointerMove, true);
     document.addEventListener('pointerup', handleChainPanelPointerUp, true);
+    document.addEventListener('pointercancel', handleChainPanelPointerUp, true);
+    try { installChainPositionObserver(); } catch {}
   }
 
   // Tap-to-focus: focusing an unfocused toy shrinks the rest and recenters the camera.
