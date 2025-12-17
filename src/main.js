@@ -54,10 +54,16 @@ window.addEventListener('touchstart', ()=>{}, { capture: true, passive: false })
   try {
     onZoomChange((payload = {}) => {
       const { phase, gesturing, mode } = payload;
-      const active = !!(gesturing || mode === 'gesturing' || phase === 'progress' || phase === 'freeze' || phase === 'recompute');
+      const active =
+        !!gesturing ||
+        phase === 'progress' ||
+        phase === 'freeze' ||
+        phase === 'recompute' ||
+        phase === 'begin' ||
+        phase === 'prepare';
       if (active) {
         window.__mtZoomGesturing = true;
-      } else if (phase === 'done' || phase === 'commit' || phase === 'swap') {
+      } else if (phase === 'done' || phase === 'commit' || phase === 'swap' || phase === 'idle' || mode === 'idle') {
         window.__mtZoomGesturing = false;
       }
     });

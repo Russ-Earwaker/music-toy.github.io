@@ -574,7 +574,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
   window.__cancelWheelZoomLerp = cancelWheelCommit;
   // When any lerp settles, commit so downstream listeners see the final transform.
   lerper.onSettle = (settleScale, settleX, settleY) => {
-    if (window.__mtZoomGesturing) return;
+    // Always commit on settle; the commit is what ends ZoomCoordinator gesturing mode.
     commitGesture({ scale: settleScale, x: settleX, y: settleY }, { delayMs: 60 });
     if (camTweenLock) return;
     try {
