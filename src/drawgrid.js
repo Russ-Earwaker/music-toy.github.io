@@ -2740,7 +2740,7 @@ function ensureSizeReady({ force = false } = {}) {
         const steps = Math.max(1, li.steps);
         return ((li.step || 0) % steps) / steps;
       }
-      const bpmSafe = Math.max(30, Math.min(300, Number.isFinite(bpm) ? bpm : 120));
+      const bpmSafe = Math.max(30, Math.min(200, Number.isFinite(bpm) ? bpm : 120));
       const stepCount = Math.max(1, currentCols || initialCols || 8);
       const loopSeconds = (60 / bpmSafe) * stepCount;
       if (!Number.isFinite(loopSeconds) || loopSeconds <= 0) return null;

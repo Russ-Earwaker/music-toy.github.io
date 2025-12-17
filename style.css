@@ -2333,6 +2333,153 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
   background-size: 50%;
 }
 
+#topbar [data-action="bpm"] {
+  position: fixed !important;
+  top: var(--top-btn-offset) !important;
+  left: calc(50% + var(--top-btn-size) + var(--ui-float-gap-sm)) !important;
+  right: auto !important;
+  width: var(--top-btn-size) !important;
+  height: var(--top-btn-size) !important;
+  --c-btn-size: var(--top-btn-size) !important;
+  --c-btn-bg: #000 !important;
+  --c-btn-border: rgba(255,255,255,0.35) !important;
+  --c-btn-highlight: rgba(255,255,255,0.08) !important;
+  transform: translateX(-50%) !important;
+  z-index: 1450 !important;
+  pointer-events: auto !important;
+}
+
+#topbar [data-action="bpm"] .c-btn-outer {
+  border-width: 1px;
+}
+
+#topbar [data-action="bpm"] .c-btn-glow {
+  opacity: 0.25;
+  border-width: 1px;
+}
+
+#topbar [data-action="bpm"] .c-btn-core::after {
+  display: none;
+}
+
+#topbar [data-action="bpm"] .bpm-label {
+  position: absolute;
+  left: 50%;
+  bottom: 10%;
+  transform: translateX(-50%);
+  z-index: 6;
+  font: 800 18px/1 system-ui, -apple-system, Segoe UI, sans-serif;
+  letter-spacing: 0.04em;
+  color: rgba(226, 232, 240, 0.92);
+  text-shadow: 0 8px 14px rgba(0,0,0,0.55);
+  pointer-events: none;
+}
+
+#topbar [data-action="bpm"] .metro-base {
+  position: absolute;
+  left: 50%;
+  bottom: 18%;
+  transform: translateX(-50%);
+  width: 46%;
+  height: 14%;
+  border-radius: 6px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.18), rgba(0,0,0,0.15));
+  border: 1px solid rgba(255,255,255,0.18);
+  box-shadow: 0 10px 18px rgba(0,0,0,0.35);
+  z-index: 4;
+  pointer-events: none;
+}
+
+#topbar [data-action="bpm"] .metro-arm {
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  width: 4px;
+  height: 56%;
+  transform: translate(-50%, -50%) rotate(0deg);
+  transform-origin: 50% 92%;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0.22));
+  box-shadow: 0 10px 16px rgba(0,0,0,0.45);
+  z-index: 5;
+  pointer-events: none;
+  transition: filter 80ms ease;
+}
+
+#topbar [data-action="bpm"] .metro-weight {
+  position: absolute;
+  left: 50%;
+  top: 32%;
+  transform: translate(-50%, -50%);
+  width: 16px;
+  height: 12px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.65);
+  border: 1px solid rgba(0,0,0,0.12);
+  box-shadow: 0 8px 12px rgba(0,0,0,0.35);
+}
+
+#topbar [data-action="bpm"] .metro-arm.metro-beat-flash {
+  filter: brightness(1.85);
+}
+
+@keyframes metroBarPulse {
+  0% { box-shadow: inset 0 0 0 rgba(255,255,255,0), 0 0 0 rgba(95, 179, 255, 0); }
+  40% { box-shadow: inset 0 0 0 rgba(255,255,255,0), 0 0 0 3px rgba(255,255,255,0.75), 0 0 22px rgba(95, 179, 255, 0.65); }
+  100% { box-shadow: inset 0 0 0 rgba(255,255,255,0), 0 0 0 rgba(95, 179, 255, 0); }
+}
+
+#topbar [data-action="bpm"].metro-bar-flash .c-btn-outer,
+#topbar [data-action="bpm"].metro-bar-flash .c-btn-glow {
+  animation: metroBarPulse 340ms ease-out 1;
+}
+
+.topbar-bpm-panel {
+  position: fixed;
+  top: calc(var(--top-btn-offset) + var(--top-btn-size) + 10px);
+  left: calc(50% + var(--top-btn-size) + var(--ui-float-gap-sm));
+  transform: translateX(-50%);
+  min-width: 240px;
+  padding: 12px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(60, 80, 104, 0.75);
+  background: rgba(12, 18, 26, 0.95);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  z-index: 9200;
+  pointer-events: auto;
+  color: var(--text);
+}
+
+.topbar-bpm-panel[hidden] { display: none; }
+
+.topbar-bpm-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  font: 650 13px/1.1 system-ui, -apple-system, Segoe UI, sans-serif;
+  color: rgba(226, 232, 240, 0.92);
+}
+
+.topbar-bpm-title {
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(154, 164, 178, 0.95);
+}
+
+.topbar-bpm-value {
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.topbar-bpm-slider {
+  width: 100%;
+  height: 28px;
+  touch-action: manipulation;
+}
+
 
 
 

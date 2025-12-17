@@ -34,6 +34,98 @@ import { resumeAudioContextIfNeeded } from './audio-core.js';
 
   }
 
+  function updateBpmButtonVisual(btn){
+    if (!btn) return;
+    const raw = Number(Core?.bpm);
+    const safe = Number.isFinite(raw) ? raw : (Core?.DEFAULT_BPM ?? 120);
+    const bpmNow = Math.round(safe);
+    const label = btn.querySelector('.bpm-label');
+    if (label) label.textContent = String(bpmNow);
+    btn.title = `Tempo: ${bpmNow} BPM`;
+  }
+
+  function ensureBpmMetronomeAnimator(bar){
+    if (!bar || bar.__bpmMetronomeAnimator) return;
+
+    const state = (bar.__bpmMetronomeAnimator = {
+      raf: 0,
+      lastBeatIndex: null,
+      lastBpm: null,
+      beatFlashTimeout: 0,
+      barFlashTimeout: 0,
+    });
+
+    const clearTimers = ()=>{
+      try{ if (state.beatFlashTimeout) clearTimeout(state.beatFlashTimeout); }catch{}
+      try{ if (state.barFlashTimeout) clearTimeout(state.barFlashTimeout); }catch{}
+      state.beatFlashTimeout = 0;
+      state.barFlashTimeout = 0;
+    };
+
+    const tick = ()=>{
+      try{
+        const bpmState = bar.__bpmState || {};
+        const btn = bpmState.btn || bar.querySelector('[data-action="bpm"]');
+        const arm = btn?.querySelector?.('.metro-arm') || null;
+
+        const bpmRounded = Math.round(Number(Core?.bpm) || (Core?.DEFAULT_BPM ?? 120));
+        if (btn && bpmRounded !== state.lastBpm){
+          updateBpmButtonVisual(btn);
+          if (bpmState.open && typeof bpmState.sync === 'function') bpmState.sync();
+          state.lastBpm = bpmRounded;
+        }
+
+        const playing = !!Core?.isRunning?.();
+        if (!btn || !arm){
+          state.raf = requestAnimationFrame(tick);
+          return;
+        }
+
+        if (!playing){
+          clearTimers();
+          arm.style.transform = 'translate(-50%, -50%) rotate(0deg)';
+          arm.classList.remove('metro-beat-flash');
+          btn.classList.remove('metro-bar-flash');
+          state.lastBeatIndex = null;
+          state.raf = requestAnimationFrame(tick);
+          return;
+        }
+
+        const li = (typeof Core?.getLoopInfo === 'function') ? (Core.getLoopInfo() || {}) : {};
+        const phase01 = Number.isFinite(li.phase01) ? li.phase01 : 0;
+        const beatsPerBar = Number(Core?.BEATS_PER_BAR) || 4;
+
+        const beatPos = phase01 * beatsPerBar;
+        const beatIndex = ((Math.floor(beatPos) % beatsPerBar) + beatsPerBar) % beatsPerBar;
+        const swing = Math.cos(beatPos * Math.PI);
+        const deg = swing * 34;
+
+        arm.style.transform = `translate(-50%, -50%) rotate(${deg.toFixed(2)}deg)`;
+
+        if (state.lastBeatIndex !== null && beatIndex !== state.lastBeatIndex){
+          arm.classList.remove('metro-beat-flash');
+          btn.classList.remove('metro-bar-flash');
+          void arm.offsetWidth;
+          arm.classList.add('metro-beat-flash');
+          clearTimers();
+          state.beatFlashTimeout = setTimeout(()=>{ try{ arm.classList.remove('metro-beat-flash'); }catch{} }, 140);
+
+          if (beatIndex === 0){
+            void btn.offsetWidth;
+            btn.classList.add('metro-bar-flash');
+            state.barFlashTimeout = setTimeout(()=>{ try{ btn.classList.remove('metro-bar-flash'); }catch{} }, 360);
+          }
+        }
+
+        state.lastBeatIndex = beatIndex;
+      }catch{}
+
+      state.raf = requestAnimationFrame(tick);
+    };
+
+    state.raf = requestAnimationFrame(tick);
+  }
+
   function pauseTransportAndSyncUI(){
     try{ Core?.stop?.(); }catch{}
     try{
@@ -310,6 +402,123 @@ function ensureTopbar(){
     }
     updatePlayButtonVisual(playBtn, !!Core?.isRunning?.());
 
+    let bpmBtn = bar.querySelector('[data-action="bpm"]');
+    if (!bpmBtn){
+      bpmBtn = document.createElement('button');
+      bpmBtn.type = 'button';
+      bpmBtn.className = 'c-btn';
+      bpmBtn.dataset.action = 'bpm';
+      bpmBtn.dataset.helpLabel = 'Tempo (BPM)';
+      bpmBtn.dataset.helpPosition = 'bottom';
+      bpmBtn.title = 'Tempo';
+      bpmBtn.innerHTML = [
+        '<div class="c-btn-outer"></div>',
+        '<div class="c-btn-glow"></div>',
+        '<div class="c-btn-core">',
+          '<div class="metro-base"></div>',
+          '<div class="metro-arm"><div class="metro-weight"></div></div>',
+          '<div class="bpm-label">120</div>',
+        '</div>',
+      ].join('');
+      playBtn?.insertAdjacentElement('afterend', bpmBtn);
+    } else {
+      bpmBtn.classList.add('c-btn');
+      bpmBtn.type = 'button';
+      if (!bpmBtn.dataset.helpPosition) bpmBtn.dataset.helpPosition = 'bottom';
+    }
+    updateBpmButtonVisual(bpmBtn);
+
+    let bpmPanel = bar.querySelector('#topbar-bpm-panel');
+    if (!bpmPanel){
+      bpmPanel = document.createElement('div');
+      bpmPanel.id = 'topbar-bpm-panel';
+      bpmPanel.className = 'topbar-bpm-panel';
+      bpmPanel.setAttribute('hidden','');
+      bpmPanel.innerHTML = `
+        <div class="topbar-bpm-row">
+          <div class="topbar-bpm-title">BPM</div>
+          <div class="topbar-bpm-value">120 BPM</div>
+        </div>
+        <input class="topbar-bpm-slider" type="range" min="30" max="200" step="1" value="120" aria-label="Tempo (BPM)" />
+      `;
+      bar.appendChild(bpmPanel);
+    } else {
+      bpmPanel.classList.add('topbar-bpm-panel');
+    }
+    bpmPanel.setAttribute('role','dialog');
+    bpmPanel.setAttribute('aria-label','Tempo');
+
+    const bpmState = bar.__bpmState || (bar.__bpmState = {});
+    bpmState.btn = bpmBtn;
+    bpmState.panel = bpmPanel;
+    bpmState.open = !!bpmState.open;
+
+    if (!bpmState.setOpen){
+      bpmState.setOpen = (open)=>{
+        bpmState.open = !!open;
+        const panel = bpmState.panel || bpmPanel;
+        const btnRef = bpmState.btn || bpmBtn;
+        if (!panel) return;
+        if (bpmState.open){
+          panel.removeAttribute('hidden');
+          panel.classList.add('is-open');
+          btnRef?.setAttribute('aria-expanded','true');
+          try{ bpmState.sync?.(); }catch{}
+        } else {
+          if (!panel.hasAttribute('hidden')) panel.setAttribute('hidden','');
+          panel.classList.remove('is-open');
+          btnRef?.setAttribute('aria-expanded','false');
+        }
+      };
+      bpmState.close = ()=> bpmState.setOpen(false);
+      bpmState.toggle = ()=> bpmState.setOpen(!bpmState.open);
+    }
+    bpmState.setOpen(false);
+
+    if (!bpmState.wired && bpmPanel){
+      bpmState.slider = bpmPanel.querySelector('input[type="range"]');
+      bpmState.valueEl = bpmPanel.querySelector('.topbar-bpm-value');
+      bpmState.sync = ()=>{
+        const raw = Number(Core?.bpm);
+        const safe = Number.isFinite(raw) ? raw : (Core?.DEFAULT_BPM ?? 120);
+        const v = Math.round(safe);
+        if (bpmState.slider) bpmState.slider.value = String(v);
+        if (bpmState.valueEl) bpmState.valueEl.textContent = `${v} BPM`;
+        updateBpmButtonVisual(bpmBtn);
+      };
+      const apply = ()=>{
+        const v = Number(bpmState.slider?.value);
+        try{ Core?.setBpm?.(v); }catch{}
+        bpmState.sync?.();
+      };
+      bpmState.slider?.addEventListener('input', apply, { passive: true });
+      bpmState.slider?.addEventListener('change', apply, { passive: true });
+      bpmState.wired = true;
+      try{ bpmState.sync(); }catch{}
+    }
+
+    if (!bpmState.boundOutside && bpmPanel && bpmBtn){
+      bpmState.boundOutside = (evt)=>{
+        if (!bpmState.open) return;
+        const panel = bpmState.panel || bpmPanel;
+        const btnRef = bpmState.btn || bpmBtn;
+        const target = evt.target;
+        if (panel && panel.contains(target)) return;
+        if (btnRef && btnRef.contains(target)) return;
+        bpmState.close?.();
+      };
+      document.addEventListener('pointerdown', bpmState.boundOutside);
+    }
+
+    if (!bpmState.boundEscape){
+      bpmState.boundEscape = (evt)=>{
+        if (evt.key === 'Escape'){
+          bpmState.close?.();
+        }
+      };
+      document.addEventListener('keydown', bpmState.boundEscape);
+    }
+
     const menuState = bar.__menuState || (bar.__menuState = {});
     menuState.btn = menuBtn;
     menuState.panel = menuPanel;
@@ -396,6 +605,7 @@ if (document.readyState === 'loading') {
         playBtn.__transportSyncBound = true;
       }
     }
+    try{ ensureBpmMetronomeAnimator(bar); }catch{}
 
     window.addEventListener('focus:editing-toggle', () => {
       const pref = document.getElementById('preferences-overlay');
@@ -408,15 +618,23 @@ if (document.readyState === 'loading') {
 
       const action = b.dataset.action;
       const menuState = bar.__menuState;
+      const bpmState = bar.__bpmState;
 
       if (action === 'menu-toggle'){
         e.preventDefault();
+        bpmState?.close?.();
         menuState?.toggle?.();
         return;
       }
 
       if (action !== 'menu-toggle'){
         menuState?.close?.();
+      }
+
+      if (action === 'bpm'){
+        e.preventDefault();
+        bpmState?.toggle?.();
+        return;
       }
 
       if (action === 'organize'){

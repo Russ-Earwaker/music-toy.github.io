@@ -2,6 +2,8 @@
 export const DEFAULT_BPM = 120;
 export const NUM_STEPS = 8;
 export const BEATS_PER_BAR = 4;
+export const MIN_BPM = 30;
+export const MAX_BPM = 200;
 
 let __ctx;
 export let bpm = DEFAULT_BPM;
@@ -19,7 +21,30 @@ export function peekAudioContext(){
 }
 
 export function setBpm(v){
-  bpm = Math.max(40, Math.min(240, Number(v)||DEFAULT_BPM));
+  const next = Math.max(MIN_BPM, Math.min(MAX_BPM, Number(v)||DEFAULT_BPM));
+  if (next === bpm) return;
+
+  // Preserve musical phase when changing tempo while running:
+  // The bar length changes with BPM, so adjust the epoch so (now-epoch) maps
+  // to the same phase within the new bar length (i.e. speed changes, position doesn't jump).
+  try{
+    if (__started && __epochStart){
+      const ctx = __ctx || null;
+      const now = ctx?.currentTime ?? 0;
+      const oldBarLen = (60 / bpm) * BEATS_PER_BAR;
+      if (Number.isFinite(now) && Number.isFinite(oldBarLen) && oldBarLen > 0){
+        const phase01 = ((now - __epochStart) % oldBarLen + oldBarLen) % oldBarLen / oldBarLen;
+        bpm = next;
+        const newBarLen = (60 / bpm) * BEATS_PER_BAR;
+        if (Number.isFinite(newBarLen) && newBarLen > 0){
+          __epochStart = now - phase01 * newBarLen;
+          return;
+        }
+      }
+    }
+  }catch{}
+
+  bpm = next;
 }
 
 export function beatSeconds(){ return 60 / bpm; }
