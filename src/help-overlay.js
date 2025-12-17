@@ -435,6 +435,7 @@ const LABEL_POSITIONS = {
   'drag a toy here to delete it': { dir: 'left', offsetX: -25, offsetY: 0 },
   'toggle overview mode': { dir: 'left', offsetX: -25, offsetY: 0 },
   'toggle help labels': { dir: 'left', offsetX: -25, offsetY: 0 },
+  'return home': { dir: 'left', offsetX: -34, offsetY: 0 },
 };
 
 function placeEntry(entry, assigned, gap, cachedPlacement, allowOverlap) {
@@ -820,7 +821,6 @@ try {
 } catch (err) {
   // no-op
 }
-
 
 
 

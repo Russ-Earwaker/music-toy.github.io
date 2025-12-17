@@ -31,12 +31,14 @@ const GRAD_OFFSCREEN_R_PX = 740;
 const GRAD_MIN_ALPHA = 0.12;
 const GRAD_MAX_ALPHA = 0.34;
 const GRAD_EDGE_PAD_PX = 34;
+const GRAD_OFFSCREEN_FADE_SEC = 1.0;
 
 let __enabled = true;
 
 let canvas = null;
 let ctx = null;
 let lastNowMs = 0;
+let offscreenFade01 = 0;
 
 let lastPhase01 = 0;
 let lastBeatIndex = -1;
@@ -150,6 +152,7 @@ function teardown() {
   canvas = null;
   ctx = null;
   lastNowMs = 0;
+  offscreenFade01 = 0;
   lastPhase01 = 0;
   lastBeatIndex = -1;
   pulseBeat = 0;
@@ -228,6 +231,7 @@ function ensureMiniButton() {
         user-select: none;
         pointer-events: auto;
         position: relative;
+        overflow: hidden;
 
         /* Match the anchor's outer glow */
         background: radial-gradient(circle,
@@ -241,31 +245,57 @@ function ensureMiniButton() {
           0 0 20px rgba(120,200,255,0.45),
           0 0 34px rgba(120,120,255,0.22);
       }
-      .anchor-mini-btn::before{
-        content: '';
+
+      .anchor-mini-btn .anchor-mini-grid{
         position: absolute;
-        width: 10px;
-        height: 10px;
-        background: white;
-        border-radius: 999px;
-        animation: pulseCore 2.5s ease-in-out infinite;
+        inset: 22%;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        grid-template-rows: repeat(4, 1fr);
+        gap: 2px;
+        pointer-events: none;
+        opacity: 0.7;
+        filter: blur(0.15px);
       }
-      .anchor-mini-btn .mini-moon{
+
+      .anchor-mini-btn .anchor-mini-grid .mini-cell{
+        background: rgba(10, 14, 22, 0.42);
+        border-radius: 2px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.18);
+      }
+
+      /* sprinkle a few brighter squares */
+      .anchor-mini-btn .anchor-mini-grid .mini-cell:nth-child(3),
+      .anchor-mini-btn .anchor-mini-grid .mini-cell:nth-child(8),
+      .anchor-mini-btn .anchor-mini-grid .mini-cell:nth-child(14){
+        background: rgba(255,255,255,0.85);
+        box-shadow: 0 0 12px rgba(120,200,255,0.22);
+      }
+
+      .anchor-mini-btn .anchor-mini-core{
         position: absolute;
-        width: 4px; height: 4px;
+        left: 50%;
+        top: 50%;
+        width: 42%;
+        height: 42%;
+        transform: translate(-50%, -50%);
         border-radius: 999px;
-        background: rgba(255,255,255,0.92);
-        box-shadow: 0 0 10px rgba(120,200,255,0.55);
-        animation: miniOrbit 2.6s linear infinite;
+        pointer-events: none;
+        background: radial-gradient(circle,
+          rgba(255,255,255,0.92) 0%,
+          rgba(120, 130, 255,0.82) 40%,
+          rgba(90, 100, 255,0.35) 70%,
+          rgba(0,0,0,0) 100%
+        );
+        box-shadow:
+          0 0 10px rgba(120,200,255,0.35),
+          0 0 18px rgba(120,120,255,0.18);
+        animation: anchorMiniCorePulse 2.6s ease-in-out infinite;
       }
-      .anchor-mini-btn .mini-moon.m2{ animation-duration: 3.5s; opacity: 0.85; }
-      @keyframes miniOrbit{
-        from { transform: translate(0px, -14px) rotate(0deg) translate(0px, 14px); }
-        to   { transform: translate(0px, -14px) rotate(360deg) translate(0px, 14px); }
-      }
-      @keyframes pulseCore {
-        0%, 100% { transform: scale(1); background: rgb(180, 220, 255); }
-        50% { transform: scale(1.2); background: rgb(255, 255, 255); }
+
+      @keyframes anchorMiniCorePulse {
+        0%, 100% { transform: translate(-50%, -50%) scale(0.98); filter: brightness(1.0); }
+        50% { transform: translate(-50%, -50%) scale(1.08); filter: brightness(1.12); }
       }
     `;
     document.head.appendChild(miniStyleEl);
@@ -273,11 +303,14 @@ function ensureMiniButton() {
 
   miniBtnEl = document.createElement('div');
   miniBtnEl.className = 'anchor-mini-btn';
-  miniBtnEl.title = 'Return to anchor';
-  miniBtnEl.setAttribute('aria-label', 'Return to anchor');
+  miniBtnEl.title = 'Return home';
+  miniBtnEl.setAttribute('aria-label', 'Return home');
+  miniBtnEl.dataset.helpLabel = 'Return home';
+  miniBtnEl.dataset.helpPosition = 'left';
 
   // IMPORTANT: real HTML (no escaped entities)
-  miniBtnEl.innerHTML = `<div class="mini-moon"></div><div class="mini-moon m2"></div>`;
+  const cells = new Array(16).fill(0).map(() => '<span class="mini-cell"></span>').join('');
+  miniBtnEl.innerHTML = `<div class="anchor-mini-grid" aria-hidden="true">${cells}</div><div class="anchor-mini-core" aria-hidden="true"></div>`;
 
   // Match the actual size of other dock buttons (so this always aligns).
   try {
@@ -481,29 +514,31 @@ function drawGradient(local, distWorld, running, drawScale = 1) {
   const travel = clamp(distWorld / 2800, 0, 2.4);
   const travelFade = 1 / (1 + travel * travel);
   const base = (running ? 1.0 : 0.78) * travelFade;
-  const alpha = clamp(GRAD_MAX_ALPHA * base, GRAD_MIN_ALPHA, GRAD_MAX_ALPHA);
+  const baseAlpha = clamp(GRAD_MAX_ALPHA * base, GRAD_MIN_ALPHA, GRAD_MAX_ALPHA);
 
-  let gx = local.x;
-  let gy = local.y;
-  let r = GRAD_ONSCREEN_R_PX * drawScale;
+  const paint = (gx, gy, r, alpha) => {
+    if (!Number.isFinite(alpha) || alpha <= 0.0001) return;
+    const grad = ctx.createRadialGradient(gx, gy, 0, gx, gy, r);
+    grad.addColorStop(0.00, `rgba(90, 100, 255, ${alpha})`);
+    grad.addColorStop(0.28, `rgba(120, 130, 255, ${alpha * 0.70})`);
+    grad.addColorStop(1.00, `rgba(0, 0, 0, 0)`);
 
-  if (!onScreen) {
-    const edgePt = clampToEdge(cx, cy, local.x, local.y, w, h, GRAD_EDGE_PAD_PX);
-    gx = edgePt.x;
-    gy = edgePt.y;
-    r = GRAD_OFFSCREEN_R_PX * drawScale;
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+    ctx.restore();
+  };
+
+  if (onScreen) {
+    paint(local.x, local.y, GRAD_ONSCREEN_R_PX * drawScale, baseAlpha);
   }
 
-  const grad = ctx.createRadialGradient(gx, gy, 0, gx, gy, r);
-  grad.addColorStop(0.00, `rgba(90, 100, 255, ${alpha})`);
-    grad.addColorStop(0.28, `rgba(120, 130, 255, ${alpha * 0.70})`);
-  grad.addColorStop(1.00, `rgba(0, 0, 0, 0)`);
-
-  ctx.save();
-  ctx.globalCompositeOperation = 'screen';
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, w, h);
-  ctx.restore();
+  // Directional edge hint: when offscreen, fade in; when returning onscreen, fade out smoothly.
+  if (!onScreen || offscreenFade01 > 0.0001) {
+    const edgePt = clampToEdge(cx, cy, local.x, local.y, w, h, GRAD_EDGE_PAD_PX);
+    paint(edgePt.x, edgePt.y, GRAD_OFFSCREEN_R_PX * drawScale, baseAlpha * offscreenFade01);
+  }
 }
 
 function getSquareMetrics(anchorWorld) {
@@ -621,6 +656,13 @@ export function tickBoardAnchor({ nowMs, loopInfo, running } = {}) {
 
   const local = getViewportLocalPointFromWorld(anchorWorld);
   if (!local) return;
+
+  // Fade the offscreen directional gradient in/out over ~1s (smooths boundary snapping).
+  const onScreen = (local.x >= 0 && local.x <= local.w && local.y >= 0 && local.y <= local.h);
+  const target = onScreen ? 0 : 1;
+  const step = clamp(dt / GRAD_OFFSCREEN_FADE_SEC, 0, 1);
+  if (target > offscreenFade01) offscreenFade01 = Math.min(1, offscreenFade01 + step);
+  else if (target < offscreenFade01) offscreenFade01 = Math.max(0, offscreenFade01 - step);
 
   clearFrame();
 
