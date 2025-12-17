@@ -3,7 +3,7 @@
 //
 // Features:
 // - Screen-space canvas overlay (not affected by board pan/zoom transform)
-// - Particle "energy ball" made of many rotating particles + orbiting moons
+// - Central "energy ball" (simple circle + glow)
 // - Idle animation when transport is stopped
 // - Beat/bar pulses when transport is running
 // - Directional background gradient that points toward the anchor when off-screen
@@ -23,12 +23,6 @@ const ZOOM_SCALE_CLAMP_MAX = 2.5;
 const CORE_BASE_R_PX = 12;
 const CORE_PULSE_R_PX = 18;
 
-const CORE_PARTICLE_COUNT = 18;
-const CORE_PARTICLE_R_PX = 5.2; // bigger "blob" particles
-const CORE_PARTICLE_RING_R_PX = 6.5; // closer to center
-
-const MOON_COUNT = 0;
-const MOON_R_PX = 1.8;
 const MAX_DT = 0.050; // cap dt to avoid big jumps when tab refocuses
 
 // Gradient (requested: bigger + more opaque, min opacity never hits 0)
@@ -52,12 +46,6 @@ let pulseBar = 0;
 let pulseBeatT = 1; // 0..1
 let pulseBarT = 1;  // 0..1
 let beatDurSec = 0.5;
-let prevRunning = false;
-let barTurns = 0; // counts completed bars while running
-let barAngle = 0; // monotonically increasing radians
-
-let moons = [];
-let corePts = [];
 let flashingCells = [];
 let lastFlashedCells = new Set();
 
@@ -94,20 +82,6 @@ function getZoomScale() {
     }
   } catch {}
   return 1.0;
-}
-
-function getMoonSpeedMulFromBeat() {
-  // Desired while playing:
-  // - 1 orbit = 2 bars (requested)
-  // - A bar = BEATS_PER_BAR beats
-  // - So radians per second = 2π / (2 bars) = π per bar
-  // - bar seconds = beatDurSec * BEATS_PER_BAR
-  // => rad/sec = π / (beatDurSec * BEATS_PER_BAR)
-  const bd = Math.max(0.08, beatDurSec || 0.5);
-    const radPerSec = (2 * Math.PI) / (bd * BEATS_PER_BAR);
-  // Our integrator uses (dt * m.speed * mul) so choose mul such that:
-  // average |m.speed| ~= 1.0 gives radPerSec.
-  return radPerSec;
 }
 
 function getGridInfo() {
@@ -151,47 +125,9 @@ function ensureCanvas() {
   window.addEventListener('resize', onResize, { passive: true });
   try { window.addEventListener('overview:transition', onResize, { passive: true }); } catch {}
 
-  initCoreParticles();
-  initMoons();
   ensureMarker();
   ensureMiniButton();
   return canvas;
-}
-
-function initCoreParticles() {
-  corePts = [];
-  for (let i = 0; i < CORE_PARTICLE_COUNT; i++) {
-    const a = (i / CORE_PARTICLE_COUNT) * Math.PI * 2;
-    const dir = (Math.random() < 0.5) ? -1 : 1;
-    const spRand = 0.35 + Math.random() * 1.25; // wider range
-    const sizeMul = 0.75 + Math.random() * 0.85;
-    corePts.push({
-      a,
-      speed: dir * spRand,
-      ring: CORE_PARTICLE_RING_R_PX * (0.7 + 0.35 * ((i % 3) / 2)),
-      phase: i * 0.37,
-      theta: a, // persistent angle
-      sizeMul,
-    });
-  }
-}
-
-function initMoons() {
-  moons = [];
-  for (let i = 0; i < MOON_COUNT; i++) {
-    const a0 = (i / MOON_COUNT) * Math.PI * 2;
-    // Even 0..1 distribution of distance, used later against core radius.
-    const dist01 = (i + 0.5) / MOON_COUNT;
-    moons.push({
-      a0,
-      // Half clockwise, half counter-clockwise (requested).
-      speed: (0.22 + 0.18 * ((i % 4) / 3)) * ((i % 2) ? -1 : 1),
-      tilt: (i * 0.33) % (Math.PI * 2),
-      dist01,
-      phase: i * 0.9,
-      t: a0, // persistent parameter
-    });
-  }
 }
 
 function onResize() {
@@ -218,8 +154,6 @@ function teardown() {
   lastBeatIndex = -1;
   pulseBeat = 0;
   pulseBar = 0;
-  moons = [];
-  corePts = [];
   if (markerEl && markerEl.parentElement) markerEl.parentElement.removeChild(markerEl);
   markerEl = null;
   if (miniBtnEl && miniBtnEl.parentElement) miniBtnEl.parentElement.removeChild(miniBtnEl);
@@ -407,13 +341,11 @@ function triggerBeatPulse(intensity = 1) {
   pulseBeat = clamp(intensity, 0, 2.0);
     pulseBeatT = 0;
   triggerGridFlash(3);
-  generateLines(3);
 }
 function triggerBarPulse(intensity = 1) {
   pulseBar = clamp(intensity, 0, 3.0);
     pulseBarT = 0;
   triggerGridFlash(6);
-  generateLines(6);
 }
 function servicePulses(dt) {
   const d = Math.max(0.08, beatDurSec || 0.5);
@@ -439,61 +371,6 @@ function serviceFlashes(dt) {
   }
 }
 
-let activeLines = [];
-
-function serviceLines(dt) {
-  if (activeLines.length === 0) return;
-  for (let i = activeLines.length - 1; i >= 0; i--) {
-    const line = activeLines[i];
-    line.alpha -= dt * 1.5; // Fade out over ~0.66s
-    if (line.alpha <= 0) {
-      activeLines.splice(i, 1);
-    }
-  }
-}
-
-function generateLines(count) {
-  const occupied = new Set();
-  const startDirections = [[0,1], [0,-1], [1,0], [-1,0]];
-  
-  for (let i = 0; i < count; i++) {
-    const path = [];
-    let current = { x: 3, y: 3 }; // Start at center intersection of 6x6 grid
-    path.push(current);
-    occupied.add(`${current.x},${current.y}`);
-
-    let dir = startDirections.splice(Math.floor(Math.random() * startDirections.length), 1)[0] || [Math.random() > 0.5 ? 1:-1, 0];
-    
-    for (let step = 0; step < 15; step++) {
-      let next = { x: current.x + dir[0], y: current.y + dir[1] };
-      
-      let attempts = 0;
-      while(occupied.has(`${next.x},${next.y}`) && attempts < 4) {
-        dir = startDirections[Math.floor(Math.random() * startDirections.length)] || [dir[0] * -1, dir[1] * -1];
-        if (!dir) { dir = [1,0]; } // fallback
-        next = { x: current.x + dir[0], y: current.y + dir[1] };
-        attempts++;
-      }
-
-      if (next.x < 0 || next.x > 6 || next.y < 0 || next.y > 6) {
-        break; 
-      }
-
-      current = next;
-      path.push(current);
-      occupied.add(`${current.x},${current.y}`);
-
-      if (Math.random() > 0.6) { // chance to turn
-         const newDirX = dir[1] !== 0 ? (Math.random() > 0.5 ? 1: -1) : 0;
-         const newDirY = dir[0] !== 0 ? (Math.random() > 0.5 ? 1: -1) : 0;
-         dir = [newDirX, newDirY];
-      }
-    }
-    activeLines.push({ path, progress: path.length, alpha: 1.0 });
-  }
-}
-
-
 function triggerGridFlash(count) {
   const newCells = new Set();
   let attempts = 0;
@@ -514,23 +391,6 @@ function triggerGridFlash(count) {
   }
 }
 
-function integrateOrbits(dt, running) {
-  const speedMul = running ? 1.8 : 1.0;
-
-  for (const p of corePts) {
-    p.theta += dt * speedMul * p.speed;
-  }
-  // Moons: always integrate so there's never a state-swap pop.
-  for (let i = 0; i < moons.length; i++) {
-    const m = moons[i];
-    let speedMultiplier = (running ? getMoonSpeedMulFromBeat() : 1.0);
-    if (running && i < 4) {
-      speedMultiplier *= 2;
-    }
-    m.t += dt * m.speed * speedMultiplier;
-  }
-}
-
 function serviceLoopTriggers(loopInfo, running) {
   if (!loopInfo) return;
   const phase01 = Number.isFinite(loopInfo.phase01) ? loopInfo.phase01 : 0;
@@ -548,16 +408,12 @@ function serviceLoopTriggers(loopInfo, running) {
   if (running) {
     const wrapped = phase01 < lastPhase01 && lastPhase01 > 0.65;
     if (wrapped) {
-      barTurns++;
       triggerBarPulse(1);
     }
     if (beatIndex !== lastBeatIndex) {
       triggerBeatPulse(beatIndex === 0 ? 1.0 : 0.75);
       lastBeatIndex = beatIndex;
     }
-
-    // Monotonic bar angle: 1 orbit per bar
-    barAngle = (barTurns + phase01) * Math.PI * 2;
   } else {
     lastBeatIndex = beatIndex;
   }
@@ -686,53 +542,11 @@ function drawAnchorGrid(local, drawScale = 1) {
     ctx.restore();
 }
 
-function drawAnchorElements(local, drawScale = 1, pulseBeat = 0, pulseBar = 0) {
-  if (!ctx) return;
-
-  ctx.save();
-  ctx.translate(local.x, local.y);
-  ctx.scale(drawScale, drawScale);
-
-  const anchorWorld = getAnchorWorld();
-  const { dx, dy, largeSquareSize } = getSquareMetrics(anchorWorld);
-  
-  // --- SMALL BOX ---
-  const smallSquareSize = largeSquareSize / 4;
-  const largeSquareCenterX = dx + largeSquareSize / 2;
-  const largeSquareCenterY = dy + largeSquareSize / 2;
-  const smallTopLeftX = largeSquareCenterX - smallSquareSize / 2;
-  const smallTopLeftY = largeSquareCenterY - smallSquareSize / 2;
-  
-  // Fill with dark blue
-  ctx.fillStyle = 'rgb(0, 0, 100)';
-  ctx.fillRect(smallTopLeftX, smallTopLeftY, smallSquareSize, smallSquareSize);
-  
-  // White outline for inner box
-  ctx.strokeStyle = 'white';
-  ctx.lineWidth = (2 + pulseBeat * 2 + pulseBar * 4) / drawScale;
-  ctx.strokeRect(smallTopLeftX, smallTopLeftY, smallSquareSize, smallSquareSize);
-
-  // Draw cross lines
-  // Vertical line
-  ctx.beginPath();
-  ctx.moveTo(largeSquareCenterX, smallTopLeftY);
-  ctx.lineTo(largeSquareCenterX, smallTopLeftY + smallSquareSize);
-  ctx.stroke();
-  // Horizontal line
-  ctx.beginPath();
-  ctx.moveTo(smallTopLeftX, largeSquareCenterY);
-  ctx.lineTo(smallTopLeftX + smallSquareSize, largeSquareCenterY);
-  ctx.stroke();
-
-  ctx.restore();
-}
-
 function drawAnchorParticles(local, nowSec, running, drawScale = 1, pulseBeat = 0, pulseBar = 0) {
     if (!ctx) return;
 
     const idle = 0.5 + 0.5 * Math.sin(nowSec * 1.2);
     const energy = clamp((running ? 0.52 : 0.28) + idle * 0.20 + pulseBeat * 0.25 + pulseBar * 0.48, 0, 2.6);
-    const moonPulse = clamp((pulseBeat * 0.9) + (pulseBar * 1.2), 0, 3.0);
     const coreR = CORE_BASE_R_PX + energy * CORE_PULSE_R_PX;
 
     ctx.save();
@@ -766,36 +580,6 @@ function drawAnchorParticles(local, nowSec, running, drawScale = 1, pulseBeat = 
     ctx.arc(0, 0, coreR * 0.55, 0, Math.PI * 2);
     ctx.fill();
 
-    // --- Moons with elliptical orbits ---
-    const idleEnergy = (running ? 0.52 : 0.28) + idle * 0.20;
-    const stableCoreR = CORE_BASE_R_PX + idleEnergy * CORE_PULSE_R_PX;
-    for (let i = 0; i < moons.length; i++) {
-        const m = moons[i];
-        const t = m.t + m.phase;
-
-        const minR = stableCoreR * 1.00;
-        const maxR = stableCoreR * 1.75;
-        const baseR = (minR + (maxR - minR) * (m.dist01 || 0.5));
-
-        const aspect = 0.2 + 0.4 * (((i * 7) % 10) / 9);
-        const ax = baseR;
-        const by = baseR * aspect;
-
-        const ex = Math.cos(t) * ax;
-        const ey = Math.sin(t) * by;
-        const ct = Math.cos(m.tilt), st = Math.sin(m.tilt);
-        const rx = ex * ct - ey * st;
-        const ry = ex * st + ey * ct;
-
-        const mx = rx;
-        const my = ry;
-
-        ctx.fillStyle = `rgba(255,255,255,${0.8 + moonPulse * 0.2})`;
-        ctx.beginPath();
-        ctx.arc(mx, my, MOON_R_PX, 0, Math.PI * 2);
-        ctx.fill();
-    }
-
     ctx.restore(); // for scale/translate
 }
 
@@ -828,23 +612,9 @@ export function tickBoardAnchor({ nowMs, loopInfo, running } = {}) {
   const dt = clamp(((now - (lastNowMs || now)) / 1000), 0, MAX_DT);
   lastNowMs = now;
 
-  integrateOrbits(dt, !!running);
   serviceLoopTriggers(loopInfo, !!running);
   servicePulses(dt);
   serviceFlashes(dt);
-  serviceLines(dt);
-
-  // On start: align barTurns so barAngle matches current moon phase (no pop).
-  if (!!running && !prevRunning) {
-    const phase01 = loopInfo && Number.isFinite(loopInfo.phase01) ? loopInfo.phase01 : 0;
-    const ref = (moons && moons[0] && Number.isFinite(moons[0].t)) ? moons[0].t : 0;
-    const wantTurns = Math.floor((ref / (Math.PI * 2)) - phase01);
-    if (Number.isFinite(wantTurns)) {
-      barTurns = wantTurns;
-      barAngle = (barTurns + phase01) * Math.PI * 2;
-    }
-  }
-  prevRunning = !!running;
 
   const anchorWorld = getAnchorWorld();
   updateMarkerPos(anchorWorld);

@@ -49,18 +49,24 @@ import { resumeAudioContextIfNeeded } from './audio-core.js';
 
     const state = (bar.__bpmMetronomeAnimator = {
       raf: 0,
-      lastBeatIndex: null,
+      lastBeatNum: null,
       lastBpm: null,
       beatFlashTimeout: 0,
       barFlashTimeout: 0,
       snap: { buffer: null, pending: null, lastAt: 0 },
+      interactiveStartMs: 0,
+      pausedLastMs: 0,
+      pausedBeatPos: 0,
+      outlineTimeout: 0,
     });
 
     const clearTimers = ()=>{
       try{ if (state.beatFlashTimeout) clearTimeout(state.beatFlashTimeout); }catch{}
       try{ if (state.barFlashTimeout) clearTimeout(state.barFlashTimeout); }catch{}
+      try{ if (state.outlineTimeout) clearTimeout(state.outlineTimeout); }catch{}
       state.beatFlashTimeout = 0;
       state.barFlashTimeout = 0;
+      state.outlineTimeout = 0;
     };
 
     const ensureFingerSnapBuffer = async ()=>{
@@ -147,51 +153,73 @@ import { resumeAudioContextIfNeeded } from './audio-core.js';
         const interactive = !!bpmState.open;
         if (!playing && !interactive){
           clearTimers();
-          arm.style.transform = 'translate(-50%, -50%) rotate(0deg)';
+          arm.style.transform = 'translate(-50%, -50%) rotate(-34deg)';
           arm.classList.remove('metro-beat-flash');
-          btn.classList.remove('metro-bar-flash');
-          state.lastBeatIndex = null;
+          btn.classList.remove('metro-beat-outline');
+          btn.classList.remove('metro-bar-outline');
+          state.lastBeatNum = null;
           state.raf = requestAnimationFrame(tick);
           return;
         }
 
         const beatsPerBar = Number(Core?.BEATS_PER_BAR) || 4;
         let beatPos = 0;
+        let beatNum = 0;
+        let beatInBar = 0;
         if (playing){
           const li = (typeof Core?.getLoopInfo === 'function') ? (Core.getLoopInfo() || {}) : {};
           const phase01 = Number.isFinite(li.phase01) ? li.phase01 : 0;
           beatPos = phase01 * beatsPerBar;
+          beatNum = Math.floor(beatPos);
+          beatInBar = ((beatNum % beatsPerBar) + beatsPerBar) % beatsPerBar;
         } else {
           const nowMs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
             ? performance.now()
             : Date.now();
-          const beatLen = 60 / Math.max(1e-6, (Number(Core?.bpm) || (Core?.DEFAULT_BPM ?? 120)));
-          beatPos = (nowMs / 1000) / beatLen;
+          const bpmNow = Math.max(1e-6, (Number(Core?.bpm) || (Core?.DEFAULT_BPM ?? 120)));
+          const dt = (Number.isFinite(state.pausedLastMs) && state.pausedLastMs > 0)
+            ? Math.max(0, (nowMs - state.pausedLastMs)) / 1000
+            : 0;
+          state.pausedLastMs = nowMs;
+          state.pausedBeatPos = (Number.isFinite(state.pausedBeatPos) ? state.pausedBeatPos : 0) + (dt * (bpmNow / 60));
+          beatPos = state.pausedBeatPos;
+          beatNum = Math.floor(beatPos);
+          beatInBar = ((beatNum % beatsPerBar) + beatsPerBar) % beatsPerBar;
         }
 
-        const beatIndex = ((Math.floor(beatPos) % beatsPerBar) + beatsPerBar) % beatsPerBar;
+        if (!Number.isFinite(beatPos) || !Number.isFinite(beatNum)){
+          state.raf = requestAnimationFrame(tick);
+          return;
+        }
+
         const swing = Math.cos(beatPos * Math.PI);
         const deg = swing * 34;
 
         arm.style.transform = `translate(-50%, -50%) rotate(${deg.toFixed(2)}deg)`;
 
-        if (state.lastBeatIndex !== null && beatIndex !== state.lastBeatIndex){
+        if (state.lastBeatNum !== null && beatNum !== state.lastBeatNum){
           arm.classList.remove('metro-beat-flash');
-          btn.classList.remove('metro-bar-flash');
+          btn.classList.remove('metro-beat-outline');
+          btn.classList.remove('metro-bar-outline');
           void arm.offsetWidth;
+          void btn.offsetWidth;
           arm.classList.add('metro-beat-flash');
+          btn.classList.add('metro-beat-outline');
           clearTimers();
           state.beatFlashTimeout = setTimeout(()=>{ try{ arm.classList.remove('metro-beat-flash'); }catch{} }, 140);
           if (interactive) playFingerSnap();
 
-          if (beatIndex === 0){
-            void btn.offsetWidth;
-            btn.classList.add('metro-bar-flash');
-            state.barFlashTimeout = setTimeout(()=>{ try{ btn.classList.remove('metro-bar-flash'); }catch{} }, 360);
+          if (beatInBar === 0){
+            btn.classList.add('metro-bar-outline');
+            state.barFlashTimeout = setTimeout(()=>{ try{ btn.classList.remove('metro-bar-outline'); }catch{} }, 420);
           }
+
+          state.outlineTimeout = setTimeout(()=>{
+            try{ btn.classList.remove('metro-beat-outline'); }catch{}
+          }, 260);
         }
 
-        state.lastBeatIndex = beatIndex;
+        state.lastBeatNum = beatNum;
       }catch{}
 
       state.raf = requestAnimationFrame(tick);
@@ -538,7 +566,14 @@ function ensureTopbar(){
           panel.classList.add('is-open');
           btnRef?.setAttribute('aria-expanded','true');
           try{
-            if (bar.__bpmMetronomeAnimator) bar.__bpmMetronomeAnimator.lastBeatIndex = null;
+            if (bar.__bpmMetronomeAnimator){
+              bar.__bpmMetronomeAnimator.lastBeatNum = null;
+              bar.__bpmMetronomeAnimator.interactiveStartMs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+                ? performance.now()
+                : Date.now();
+              bar.__bpmMetronomeAnimator.pausedBeatPos = 1;
+              bar.__bpmMetronomeAnimator.pausedLastMs = bar.__bpmMetronomeAnimator.interactiveStartMs;
+            }
           }catch{}
           try{
             resumeAudioContextIfNeeded().catch(()=>{});
@@ -578,6 +613,7 @@ function ensureTopbar(){
       bpmState.slider?.addEventListener('pointerup', blur, { passive: true });
       bpmState.slider?.addEventListener('touchend', blur, { passive: true });
       bpmState.slider?.addEventListener('mouseup', blur, { passive: true });
+
       bpmState.wired = true;
       try{ bpmState.sync(); }catch{}
     }
@@ -796,7 +832,7 @@ if (document.readyState === 'loading') {
 
       if (action === 'new-scene'){
         pauseTransportAndSyncUI();
-        try{ Core?.setBpm?.(Core?.DEFAULT_BPM ?? 120); }catch{}
+        try{ Core?.setBpm?.(105); }catch{}
         try{ bar.__bpmState?.sync?.(); }catch{}
         runSceneClear({ removePanels: true });
         menuState?.close?.();
