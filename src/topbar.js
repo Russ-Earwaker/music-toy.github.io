@@ -53,6 +53,7 @@ import { resumeAudioContextIfNeeded } from './audio-core.js';
       lastBpm: null,
       beatFlashTimeout: 0,
       barFlashTimeout: 0,
+      snap: { buffer: null, pending: null, lastAt: 0 },
     });
 
     const clearTimers = ()=>{
@@ -62,16 +63,78 @@ import { resumeAudioContextIfNeeded } from './audio-core.js';
       state.barFlashTimeout = 0;
     };
 
+    const ensureFingerSnapBuffer = async ()=>{
+      if (state.snap.buffer) return state.snap.buffer;
+      if (state.snap.pending) return state.snap.pending;
+      state.snap.pending = (async ()=>{
+        try{
+          const ctx = Core?.ensureAudioContext?.();
+          if (!ctx) return null;
+          const resp = await fetch('/assets/samples/FingerSnap.wav', { cache: 'force-cache' });
+          const arr = await resp.arrayBuffer();
+          const buf = await new Promise((resolve, reject)=>{
+            try{
+              ctx.decodeAudioData(arr, resolve, reject);
+            }catch(err){
+              reject(err);
+            }
+          });
+          state.snap.buffer = buf;
+          return buf;
+        }catch{
+          return null;
+        }finally{
+          state.snap.pending = null;
+        }
+      })();
+      return state.snap.pending;
+    };
+
+    const playFingerSnap = ()=>{
+      try{
+        const bpmState = bar.__bpmState || {};
+        if (!bpmState.open) return;
+        const ctx = Core?.ensureAudioContext?.();
+        if (!ctx) return;
+        const buf = state.snap.buffer;
+        if (!buf) return;
+        const now = ctx.currentTime || 0;
+        if (!Number.isFinite(now)) return;
+        if (now - (state.snap.lastAt || 0) < 0.06) return;
+        state.snap.lastAt = now;
+
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        const g = ctx.createGain();
+        g.gain.value = 0.45;
+        src.connect(g);
+        g.connect(ctx.destination);
+        try{ src.start(now); }catch{ src.start(); }
+      }catch{}
+    };
+
+    state.ensureFingerSnapBuffer = ensureFingerSnapBuffer;
+    state.playFingerSnap = ()=>{ try{ playFingerSnap(); }catch{} };
+
     const tick = ()=>{
       try{
         const bpmState = bar.__bpmState || {};
         const btn = bpmState.btn || bar.querySelector('[data-action="bpm"]');
         const arm = btn?.querySelector?.('.metro-arm') || null;
+        const weight = btn?.querySelector?.('.metro-weight') || null;
 
         const bpmRounded = Math.round(Number(Core?.bpm) || (Core?.DEFAULT_BPM ?? 120));
         if (btn && bpmRounded !== state.lastBpm){
           updateBpmButtonVisual(btn);
           if (bpmState.open && typeof bpmState.sync === 'function') bpmState.sync();
+          if (arm && weight){
+            const min = Number(Core?.MIN_BPM) || 30;
+            const max = Number(Core?.MAX_BPM) || 200;
+            const t = (bpmRounded - min) / Math.max(1, (max - min));
+            const tt = Math.max(0, Math.min(1, t));
+            const posPct = 72 + (22 - 72) * tt; // low BPM -> low weight, high BPM -> high weight
+            arm.style.setProperty('--metro-weight-pos', `${posPct.toFixed(1)}%`);
+          }
           state.lastBpm = bpmRounded;
         }
 
@@ -81,7 +144,8 @@ import { resumeAudioContextIfNeeded } from './audio-core.js';
           return;
         }
 
-        if (!playing){
+        const interactive = !!bpmState.open;
+        if (!playing && !interactive){
           clearTimers();
           arm.style.transform = 'translate(-50%, -50%) rotate(0deg)';
           arm.classList.remove('metro-beat-flash');
@@ -91,11 +155,20 @@ import { resumeAudioContextIfNeeded } from './audio-core.js';
           return;
         }
 
-        const li = (typeof Core?.getLoopInfo === 'function') ? (Core.getLoopInfo() || {}) : {};
-        const phase01 = Number.isFinite(li.phase01) ? li.phase01 : 0;
         const beatsPerBar = Number(Core?.BEATS_PER_BAR) || 4;
+        let beatPos = 0;
+        if (playing){
+          const li = (typeof Core?.getLoopInfo === 'function') ? (Core.getLoopInfo() || {}) : {};
+          const phase01 = Number.isFinite(li.phase01) ? li.phase01 : 0;
+          beatPos = phase01 * beatsPerBar;
+        } else {
+          const nowMs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+            ? performance.now()
+            : Date.now();
+          const beatLen = 60 / Math.max(1e-6, (Number(Core?.bpm) || (Core?.DEFAULT_BPM ?? 120)));
+          beatPos = (nowMs / 1000) / beatLen;
+        }
 
-        const beatPos = phase01 * beatsPerBar;
         const beatIndex = ((Math.floor(beatPos) % beatsPerBar) + beatsPerBar) % beatsPerBar;
         const swing = Math.cos(beatPos * Math.PI);
         const deg = swing * 34;
@@ -109,6 +182,7 @@ import { resumeAudioContextIfNeeded } from './audio-core.js';
           arm.classList.add('metro-beat-flash');
           clearTimers();
           state.beatFlashTimeout = setTimeout(()=>{ try{ arm.classList.remove('metro-beat-flash'); }catch{} }, 140);
+          if (interactive) playFingerSnap();
 
           if (beatIndex === 0){
             void btn.offsetWidth;
@@ -124,6 +198,7 @@ import { resumeAudioContextIfNeeded } from './audio-core.js';
     };
 
     state.raf = requestAnimationFrame(tick);
+    try{ ensureFingerSnapBuffer(); }catch{}
   }
 
   function pauseTransportAndSyncUI(){
@@ -415,7 +490,6 @@ function ensureTopbar(){
         '<div class="c-btn-outer"></div>',
         '<div class="c-btn-glow"></div>',
         '<div class="c-btn-core">',
-          '<div class="metro-base"></div>',
           '<div class="metro-arm"><div class="metro-weight"></div></div>',
           '<div class="bpm-label">120</div>',
         '</div>',
@@ -463,6 +537,13 @@ function ensureTopbar(){
           panel.removeAttribute('hidden');
           panel.classList.add('is-open');
           btnRef?.setAttribute('aria-expanded','true');
+          try{
+            if (bar.__bpmMetronomeAnimator) bar.__bpmMetronomeAnimator.lastBeatIndex = null;
+          }catch{}
+          try{
+            resumeAudioContextIfNeeded().catch(()=>{});
+            bar.__bpmMetronomeAnimator?.ensureFingerSnapBuffer?.();
+          }catch{}
           try{ bpmState.sync?.(); }catch{}
         } else {
           if (!panel.hasAttribute('hidden')) panel.setAttribute('hidden','');
@@ -493,6 +574,10 @@ function ensureTopbar(){
       };
       bpmState.slider?.addEventListener('input', apply, { passive: true });
       bpmState.slider?.addEventListener('change', apply, { passive: true });
+      const blur = ()=>{ try{ bpmState.slider?.blur?.(); }catch{} };
+      bpmState.slider?.addEventListener('pointerup', blur, { passive: true });
+      bpmState.slider?.addEventListener('touchend', blur, { passive: true });
+      bpmState.slider?.addEventListener('mouseup', blur, { passive: true });
       bpmState.wired = true;
       try{ bpmState.sync(); }catch{}
     }
@@ -633,7 +718,9 @@ if (document.readyState === 'loading') {
 
       if (action === 'bpm'){
         e.preventDefault();
+        try{ await resumeAudioContextIfNeeded(); }catch{}
         bpmState?.toggle?.();
+        try{ if (bpmState?.open) bpmState?.slider?.focus?.(); }catch{}
         return;
       }
 
@@ -709,6 +796,8 @@ if (document.readyState === 'loading') {
 
       if (action === 'new-scene'){
         pauseTransportAndSyncUI();
+        try{ Core?.setBpm?.(Core?.DEFAULT_BPM ?? 120); }catch{}
+        try{ bar.__bpmState?.sync?.(); }catch{}
         runSceneClear({ removePanels: true });
         menuState?.close?.();
         try{ localStorage.removeItem('prefs:lastScene'); }catch{}
@@ -812,7 +901,16 @@ if (document.readyState === 'loading') {
 
       const tgt = e.target;
 
-      if (tgt && ((tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.isContentEditable))) return;
+      if (tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.isContentEditable)){
+        try{
+          const isBpmRange = (tgt.tagName === 'INPUT'
+            && String(tgt.type || '').toLowerCase() === 'range'
+            && !!tgt.closest?.('#topbar-bpm-panel'));
+          if (!isBpmRange) return;
+        }catch{
+          return;
+        }
+      }
 
       e.preventDefault();
 
