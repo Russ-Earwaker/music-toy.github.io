@@ -1662,10 +1662,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
           canvas: particleCanvas,
           viewport: dgViewport,
           pausedRef,
-          debugLabel: 'drawgrid-particles',
-          isFocusedRef: () => !!panel?.classList?.contains('toy-focused'),
         },
         {
+          debugLabel: 'drawgrid-particles',
           seed: panelSeed,
           cap,
           returnSeconds: 2.4,   // slower settle time so brightness/offsets linger
@@ -1680,6 +1679,14 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
           sizePx,
           minAlpha: 0.25,
           maxAlpha: 0.85,
+
+          // Avoid "stuck" feeling when only a couple DrawGrid panels exist.
+          // We only freeze unfocused panels during gestures when the scene is busy.
+          isFocusedRef: () => !!panel?.classList?.contains('toy-focused'),
+          freezeUnfocusedDuringGestureRef: () => {
+            const visiblePanels = Math.max(0, Number(globalDrawgridState?.visibleCount) || 0);
+            return visiblePanels >= 4;
+          },
         }
       );
       window.__dgField = dgField;
@@ -5674,6 +5681,11 @@ function syncBackBufferSizes() {
     return adaptive;
   }
 
+  // Warn (debug only) if we end up throttling particles for too long during a zoom gesture.
+  let __dgParticleZoomThrottleSince = 0;
+  let __dgParticleZoomThrottleWarned = false;
+  const DG_PARTICLE_ZOOM_THROTTLE_WARN_MS = 250;
+
   function renderLoop() {
     const endPerf = startSection('drawgrid:render');
     try {
@@ -5761,7 +5773,26 @@ function syncBackBufferSizes() {
         DRAWGRID_ENABLE_PARTICLE_FIELD &&
         !zoomDebugFreeze &&
         particleFieldEnabled;
-      const allowParticleDraw = particleStateAllowed && canDrawAnything;
+
+      const zoomGesturing = (typeof window !== 'undefined' && window.__mtZoomGesturing === true);
+      // Only throttle particles during zoom if the scene is busy.
+      // With 1-2 toys, keep particles running for responsiveness.
+      const shouldThrottleForZoom = zoomGesturing && (visiblePanels >= 4);
+      if (shouldThrottleForZoom) {
+        if (!__dgParticleZoomThrottleSince) __dgParticleZoomThrottleSince = nowTs;
+        if (!__dgParticleZoomThrottleWarned && (nowTs - __dgParticleZoomThrottleSince) > DG_PARTICLE_ZOOM_THROTTLE_WARN_MS) {
+          __dgParticleZoomThrottleWarned = true;
+          dglog('particle-field:throttle zoom gesture (still active)', { visiblePanels });
+        }
+      } else {
+        __dgParticleZoomThrottleSince = 0;
+        __dgParticleZoomThrottleWarned = false;
+      }
+
+      const allowParticleDraw =
+        particleStateAllowed &&
+        canDrawAnything &&
+        !shouldThrottleForZoom;
       const nextParticleVisible = !!particleStateAllowed;
       if (particleCanvas && particleCanvasVisible !== nextParticleVisible) {
         particleCanvasVisible = nextParticleVisible;

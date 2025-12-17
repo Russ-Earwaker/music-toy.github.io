@@ -152,13 +152,14 @@ function readOverview(viewport) {
   }
 }
 
-export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
+export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLabel } = {}, opts = {}) {
   if (!canvas) throw new Error('createField requires a canvas reference');
   // Static mode: no ambient noise, no radial "kick" gravity. Only reacts to pokes.
   const STATIC_MODE = !!opts.staticMode;
   const ctx = canvas.getContext('2d', { alpha: true });
   const fieldLabel =
     opts?.debugLabel ??
+    debugLabel ??
     opts?.id ??
     opts?.seed ??
     (canvas?.closest?.('.toy-panel')?.dataset?.toy) ??
@@ -583,9 +584,22 @@ export function createField({ canvas, viewport, pausedRef } = {}, opts = {}) {
 
     // Real policy: during pan/zoom, freeze particle fields for unfocused toys.
     // (Diagnostic modulo can still run below if enabled.)
-    if (gestureActive && readPerfFreezeUnfocused()) {
+    const shouldFreezeUnfocusedDuringGesture = (() => {
       try {
-        const focused = (typeof opts.isFocusedRef === 'function') ? !!opts.isFocusedRef() : false;
+        if (typeof opts.freezeUnfocusedDuringGesture === 'boolean') return opts.freezeUnfocusedDuringGesture;
+        if (typeof opts.freezeUnfocusedDuringGestureRef === 'function') return !!opts.freezeUnfocusedDuringGestureRef();
+        return readPerfFreezeUnfocused();
+      } catch {
+        return readPerfFreezeUnfocused();
+      }
+    })();
+
+    if (gestureActive && shouldFreezeUnfocusedDuringGesture) {
+      try {
+        const focusRef = (typeof opts.isFocusedRef === 'function')
+          ? opts.isFocusedRef
+          : (typeof isFocusedRef === 'function' ? isFocusedRef : null);
+        const focused = focusRef ? !!focusRef() : false;
         if (!focused) {
           if (shouldLogFreeze()) {
             const now = performance?.now?.() ?? Date.now();

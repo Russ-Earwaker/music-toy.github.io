@@ -649,12 +649,23 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     clearTimeout(wheelCommitTimer);
     wheelCommitTimer = setTimeout(() => {
       requestAnimationFrame(() => {
-        if (!lerper.state?.running) return;
-        const target = lerper.state;
-        commitGesture(
-          { scale: target.targetScale, x: target.targetX, y: target.targetY },
-          { delayMs: 60 }
-        );
+        const st = lerper.state;
+        let scale = st?.targetScale;
+        let x = st?.targetX;
+        let y = st?.targetY;
+
+        if (!Number.isFinite(scale) || !Number.isFinite(x) || !Number.isFinite(y)) {
+          const z = getZoomState?.() || {};
+          scale = z.targetScale ?? z.currentScale ?? scale;
+          x = z.targetX ?? z.currentX ?? x;
+          y = z.targetY ?? z.currentY ?? y;
+        }
+
+        if (!Number.isFinite(scale)) scale = 1;
+        if (!Number.isFinite(x)) x = 0;
+        if (!Number.isFinite(y)) y = 0;
+
+        commitGesture({ scale, x, y }, { delayMs: 60 });
       });
     }, 120);
   }
