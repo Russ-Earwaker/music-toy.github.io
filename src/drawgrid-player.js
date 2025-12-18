@@ -2,6 +2,7 @@
 import { triggerInstrument } from './audio-samples.js';
 import { gateTriggerForToy } from './toy-audio.js';
 import { buildPalette, midiToName } from './note-helpers.js';
+import { resumeAudioContextIfNeeded, isRunning as isTransportRunning } from './audio-core.js';
 
 function markPlayingColumn(panel, colIndex){
   try{ panel.dispatchEvent(new CustomEvent('drawgrid:playcol', { detail:{ col: colIndex }, bubbles:true })); }catch{}
@@ -42,6 +43,27 @@ export function connectDrawGridToPlayer(panel) {
 
   panel.addEventListener('toy-instrument', (e) => {
     instrument = e.detail?.value || instrument;
+  });
+
+  async function previewDraggedNote(col, row) {
+    // Avoid double-hitting during transport playback; only audition when stopped.
+    if (typeof isTransportRunning === 'function' && isTransportRunning()) return;
+    if (!Number.isInteger(col) || col < 0) return;
+    if (!Number.isInteger(row) || row < 0 || row >= notePalette.length) return;
+    const nodes = gridState?.nodes?.[col];
+    if (!(nodes instanceof Set) || !nodes.has(row)) return;
+    const disabled = gridState?.disabled?.[col];
+    if (disabled instanceof Set && disabled.has(row)) return;
+    const midiNote = notePalette[row];
+    if (midiNote === undefined) return;
+    try { await resumeAudioContextIfNeeded(); } catch {}
+    playNote(instrument, midiToName(midiNote));
+  }
+
+  panel.addEventListener('drawgrid:node-drag-end', (e) => {
+    const col = e?.detail?.col;
+    const row = e?.detail?.row;
+    previewDraggedNote(col, row)?.catch?.(() => {});
   });
 
   function step(col) {

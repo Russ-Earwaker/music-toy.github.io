@@ -483,7 +483,9 @@ function installChainPositionObserver() {
          boardEl?.classList?.contains('board-overview') ||
          document.body?.classList?.contains('overview-mode'));
 
-    const focusEditActive = isFocusEditingEnabled?.() || isActivelyEditingToy?.();
+    const focusEditActive =
+      (typeof isFocusEditingEnabled === 'function' && isFocusEditingEnabled()) ||
+      (typeof isActivelyEditingToy === 'function' && isActivelyEditingToy());
     if (!overviewActive && !focusEditActive) return;
 
     for (const m of mutations) {

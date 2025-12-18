@@ -1,7 +1,7 @@
 // src/instrument-picker.js
 // Full-screen instrument picker overlay with categories and preview.
 
-import { loadInstrumentEntries, categorize } from './instrument-catalog.js';
+import { loadInstrumentEntries } from './instrument-catalog.js';
 import { ensureAudioContext, setToyVolume, getToyVolume } from './audio-core.js';
 import { triggerInstrument } from './audio-samples.js';
 
@@ -22,9 +22,21 @@ function buildOverlay(){
   header.append(title, right);
   const body = el('div','toy-body');
   const bodyWrap = el('div','inst-body');
-  const tabs = el('div','inst-tabs');
+  bodyWrap.style.display = 'grid';
+  bodyWrap.style.gridTemplateColumns = '220px 1fr';
+  bodyWrap.style.gap = '16px';
+  bodyWrap.style.alignItems = 'start';
+
+  const filters = el('div','inst-filters');
+  filters.style.display = 'flex';
+  filters.style.flexDirection = 'column';
+  filters.style.gap = '12px';
+  filters.style.alignSelf = 'stretch';
   const grid = el('div','inst-grid');
-  bodyWrap.append(tabs, grid);
+  grid.style.maxHeight = '70vh';
+  grid.style.overflowY = 'auto';
+  grid.style.paddingRight = '6px';
+  bodyWrap.append(filters, grid);
   body.appendChild(bodyWrap);
   const footer = el('div','inst-picker-footer');
   const okBtn = el('button','toy-btn inst-ok','✓');
@@ -38,19 +50,31 @@ function buildOverlay(){
 }
 
 function titleCase(s){ return String(s||'').replace(/[_-]/g,' ').replace(/\w\S*/g, t=> t[0].toUpperCase()+t.slice(1).toLowerCase()); }
+function makeFilterSection(title){
+  const wrap = el('div','inst-filter-section');
+  const heading = el('div','inst-filter-title', title);
+  heading.style.fontWeight = '600';
+  heading.style.marginBottom = '6px';
+  const buttons = el('div','inst-filter-buttons');
+  buttons.style.display = 'flex';
+  buttons.style.flexWrap = 'wrap';
+  buttons.style.gap = '8px';
+  wrap.append(heading, buttons);
+  return { wrap, buttons };
+}
 
 export async function openInstrumentPicker({ panel, toyId }){
   const ov = buildOverlay();
-  const tabs = ov.querySelector('.inst-tabs');
+  const host = ov.querySelector('.inst-host');
+  const filters = ov.querySelector('.inst-filters');
   const grid = ov.querySelector('.inst-grid');
   const okBtn = ov.querySelector('.inst-ok');
   const cancelBtn = ov.querySelector('.inst-cancel');
   const backdrop = ov.querySelector('.inst-picker-backdrop');
+  const footer = ov.querySelector('.inst-picker-footer');
 
   // Load entries and build categories
   const entries = await loadInstrumentEntries();
-  const cats = categorize(entries);
-  const catNames = Array.from(cats.keys());
 
   const normalizeId = (val)=> String(val || '').trim().toLowerCase().replace(/_/g, '-');
   const getEntryKey = (entry)=>{
@@ -60,47 +84,72 @@ export async function openInstrumentPicker({ panel, toyId }){
     const synth = String(entry.synth || '').trim();
     return synth ? synth.toLowerCase().replace(/_/g, '-') : '';
   };
-  const findCategoryForInstrument = (instrumentId)=>{
-    const target = normalizeId(instrumentId);
-    if (!target) return null;
-    const themeHits = [];
-    const typeHits = [];
-    for (const [cat, list] of cats.entries()){
-      const has = list.some(entry => normalizeId(getEntryKey(entry)) === target);
-      if (!has) continue;
-      if (cat.startsWith('Theme: ')) themeHits.push(cat);
-      else if (cat !== 'All') typeHits.push(cat);
-    }
-    if (themeHits.length) return themeHits[0];
-    if (typeHits.length) return typeHits[0];
-    return cats.has('All') ? 'All' : null;
-  };
-
   const current = String(panel?.dataset?.instrument || '').trim();
   let selected = current || '';
 
-  // Build tabs + grid
+  // Build filter lists
   const tgtId = String(toyId || panel?.dataset?.toy || panel?.dataset?.toyid || panel?.id || 'master').toLowerCase();
-  const initialCat = findCategoryForInstrument(selected);
-  let activeCat = (initialCat && catNames.includes(initialCat)) ? initialCat : (catNames.includes('All') ? 'All' : (catNames[0] || ''));
-  let initialSelectionRevealPending = Boolean(initialCat);
+  const allThemes = Array.from(new Set(entries.flatMap(e=> (e.themes||[]).filter(Boolean)))).sort((a,b)=> a.localeCompare(b));
+  const allTypes = Array.from(new Set(entries.map(e=> String(e.type||'Other').trim() || 'Other'))).sort((a,b)=> a.localeCompare(b));
+  const selectedThemes = new Set();
+  const selectedTypes = new Set();
+  const toyKind = String(panel?.dataset?.toy || '').toLowerCase();
+  let initialSelectionRevealPending = Boolean(selected);
 
-  function renderTabs(){
-    tabs.innerHTML='';
-    if (activeCat && !catNames.includes(activeCat) && catNames.length){
-      activeCat = catNames[0];
-    }
-    catNames.forEach(name=>{
-      const t = el('button','inst-tab', name);
-      if (name===activeCat) t.classList.add('selected');
-      t.addEventListener('click', ()=>{ activeCat=name; renderTabs(); renderGrid(); });
-      tabs.appendChild(t);
-    });
-  }
+  const isRecommendedForToy = (entry)=>{
+    if (!toyKind) return false;
+    if (!entry || !Array.isArray(entry.recommendedToys)) return false;
+    return entry.recommendedToys.some(t=> t === toyKind);
+  };
+
+  const themeSection = makeFilterSection('Theme');
+  const typeSection = makeFilterSection('Instrument Type');
+  filters.innerHTML = '';
+  filters.append(themeSection.wrap, typeSection.wrap);
 
   function highlight(btn){
-    grid.querySelectorAll('.inst-item.selected').forEach(n=> n.classList.remove('selected'));
-    if (btn) btn.classList.add('selected');
+    grid.querySelectorAll('.inst-item.selected').forEach(n=>{
+      n.classList.remove('selected');
+      if (n.dataset.recommended === '1') {
+        n.style.border = '1px solid rgba(34,211,238,0.8)';
+      }
+    });
+    if (btn){
+      btn.classList.add('selected');
+      if (btn.dataset.recommended === '1') {
+        btn.style.border = '2px solid #ffffff';
+      }
+    }
+  }
+
+  function renderFilters(){
+    const renderButtons = (buttonsEl, items, selectedSet)=>{
+      buttonsEl.innerHTML='';
+      items.forEach(name=>{
+        const label = titleCase(name);
+        const b = el('button','inst-filter-btn', label);
+        b.style.padding = '6px 10px';
+        b.style.borderRadius = '10px';
+        b.style.border = '1px solid var(--inst-filter-border, #1f2937)';
+        b.style.background = selectedSet.has(name)
+          ? 'var(--inst-filter-active-bg, #2563eb)'
+          : 'var(--inst-filter-bg, #111827)';
+        b.style.color = 'var(--inst-filter-text, #ffffff)';
+        b.style.cursor = 'pointer';
+        b.style.boxShadow = '0 0 0 1px rgba(255,255,255,0.05) inset';
+        b.dataset.value = name;
+        if (selectedSet.has(name)) b.classList.add('active');
+        b.addEventListener('click', ()=>{
+          if (selectedSet.has(name)) selectedSet.delete(name);
+          else selectedSet.add(name);
+          renderFilters();
+          renderGrid();
+        });
+        buttonsEl.appendChild(b);
+      });
+    };
+    renderButtons(themeSection.buttons, allThemes, selectedThemes);
+    renderButtons(typeSection.buttons, allTypes, selectedTypes);
   }
 
   function ensureSelectedVisible(btn){
@@ -115,13 +164,38 @@ export async function openInstrumentPicker({ panel, toyId }){
 
   function renderGrid(){
     grid.innerHTML='';
-    const list = cats.get(activeCat) || cats.get('All') || [];
+    const filtered = entries.filter(e=>{
+      const themeOk = selectedThemes.size === 0 || (e.themes||[]).some(t=> selectedThemes.has(t));
+      const typeOk = selectedTypes.size === 0 || selectedTypes.has(String(e.type||'Other').trim() || 'Other');
+      return themeOk && typeOk;
+    }).sort((a,b)=>{
+      const aReco = isRecommendedForToy(a);
+      const bReco = isRecommendedForToy(b);
+      if (aReco !== bReco) return aReco ? -1 : 1;
+      return a.display.localeCompare(b.display);
+    });
+    const list = filtered;
     const normalizedSelected = normalizeId(selected);
     let matchBtn = null;
     list.forEach(e=>{
       const b = el('button','inst-item', e.display);
       const key = getEntryKey(e);
       b.dataset.value = key;
+      const recommended = Array.isArray(e.recommendedToys) && e.recommendedToys.some(t=> t === toyKind);
+      b.dataset.recommended = recommended ? '1' : '0';
+      if (recommended){
+        b.style.position = 'relative';
+        b.style.background = 'linear-gradient(135deg, rgba(34,211,238,0.18), rgba(37,99,235,0.18))';
+        b.style.border = '1px solid rgba(34,211,238,0.8)';
+        b.style.color = '#ffffff';
+        const star = el('div','inst-reco-star','*');
+        star.style.position = 'absolute';
+        star.style.top = '6px';
+        star.style.right = '8px';
+        star.style.color = '#22d3ee';
+        star.style.fontWeight = '700';
+        b.appendChild(star);
+      }
 
       if (!matchBtn && normalizedSelected && normalizeId(key) === normalizedSelected) {
         matchBtn = b;
@@ -143,8 +217,40 @@ export async function openInstrumentPicker({ panel, toyId }){
     }
   }
 
-  renderTabs();
+  renderFilters();
   renderGrid();
+
+  // Recommended legend in footer
+  if (footer && !footer.querySelector('.inst-reco-note')){
+    footer.style.display = 'flex';
+    footer.style.alignItems = 'center';
+    footer.style.gap = '12px';
+    footer.style.justifyContent = 'space-between';
+    const note = el('div','inst-reco-note');
+    const star = document.createElement('span');
+    star.textContent = '*';
+    star.style.color = '#22d3ee';
+    star.style.marginRight = '6px';
+    const txt = document.createElement('span');
+    txt.textContent = 'recommended';
+    txt.style.color = '#ffffff';
+    note.style.display = 'flex';
+    note.style.alignItems = 'center';
+    note.append(star, txt);
+    footer.prepend(note);
+  }
+
+  // Block background zoom/pan while picker is open; allow grid scrolling.
+  const wheelBlocker = (e)=>{
+    const inGrid = e.target && e.target.closest && e.target.closest('.inst-grid');
+    if (inGrid){
+      e.stopPropagation(); // let default scrolling happen inside the grid
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  host?.addEventListener('wheel', wheelBlocker, { passive: false });
 
   // Wire controls
   // Volume ducking: reduce other toys to ~20% while picker is open.
@@ -183,6 +289,7 @@ export async function openInstrumentPicker({ panel, toyId }){
   function close(result){
     ov.classList.remove('open');
     window.setTimeout(()=>{ ov.style.display='none'; }, 120);
+    try{ host?.removeEventListener('wheel', wheelBlocker, { passive: false }); }catch{}
     // Restore volumes using ref-counted ducking
     try{
       duckedThisOpen.forEach((id)=>{

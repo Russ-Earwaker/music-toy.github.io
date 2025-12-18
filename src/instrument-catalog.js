@@ -27,6 +27,7 @@ export async function loadInstrumentEntries(){
       const synthIdx= header.findIndex(h=>/^(synth|synth_id|tone)$/i.test(h));
       const typeIdx = header.findIndex(h=>/^(instrument\s*_?type|type|category)$/i.test(h));
       const themeIdx= header.findIndex(h=>/^themes?$/i.test(h));
+      const recoIdx = header.findIndex(h=>/^recommended[_-]?toys$/i.test(h));
       ID_TO_DISPLAY_NAME.clear(); DISPLAY_NAME_TO_ID.clear(); ID_TO_THEMES.clear(); ALL_THEMES.clear();
       const out = [];
       for (const line of lines){
@@ -37,8 +38,10 @@ export async function loadInstrumentEntries(){
         const synth = String((cells[synthIdx]||'')).trim();
         const themesRaw = themeIdx >= 0 ? String(cells[themeIdx] || '') : '';
         const themes = themesRaw.split(/[;|]/).map(t=>t.trim()).filter(Boolean);
+        const recoRaw = recoIdx >= 0 ? String(cells[recoIdx] || '') : '';
+        const recommendedToys = recoRaw.split(/[;|]/).map(t=>t.trim().toLowerCase()).filter(Boolean);
         if (!id || !display) continue;
-        out.push({ id, display, type, synth, themes });
+        out.push({ id, display, type, synth, themes, recommendedToys });
         ID_TO_DISPLAY_NAME.set(id, display);
         DISPLAY_NAME_TO_ID.set(display, id);
         if (themes.length){

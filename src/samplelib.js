@@ -1,6 +1,6 @@
 // src/samplelib.js
 // Minimal CSV-driven sample/synth library.
-// CSV columns: filename,instrument_type,instrument,function,display_name,synth_id(optional),instrument_id,base_note,base_oct,theme
+// CSV columns: filename,instrument_type,instrument,function,display_name,synth_id(optional),instrument_id,base_note,base_oct,theme,recommended_toys
 // - If filename is provided -> sample in ./assets/samples/<filename>
 // - Else if synth_id is provided -> a synth instrument, resolved by your audio engine
 // - `theme` can list multiple tags separated by `;` (e.g., "Drum and Bass; Gaming")
@@ -31,6 +31,9 @@ export const SampleLib = {
       headers.forEach((h, j)=> row[h] = (cols[j] ?? '').trim());
       if (row.theme){
         row.themes = row.theme.split(/[;|]/).map(t=> t.trim()).filter(Boolean);
+      }
+      if (row.recommended_toys){
+        row.recommended_toys = row.recommended_toys.split(/[;|]/).map(t=> t.trim()).filter(Boolean);
       }
       if (!row.display_name) continue;
       rows.push(row);

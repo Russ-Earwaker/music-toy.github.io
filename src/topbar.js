@@ -832,7 +832,7 @@ if (document.readyState === 'loading') {
 
       if (action === 'new-scene'){
         pauseTransportAndSyncUI();
-        try{ Core?.setBpm?.(105); }catch{}
+        try{ Core?.setBpm?.(Core?.DEFAULT_BPM ?? 120); }catch{}
         try{ bar.__bpmState?.sync?.(); }catch{}
         runSceneClear({ removePanels: true });
         menuState?.close?.();

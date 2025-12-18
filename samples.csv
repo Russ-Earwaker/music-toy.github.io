@@ -1,68 +1,68 @@
-﻿filename,instrument_type,instrument,function,display_name,synth_id,instrument_id,base_note,base_oct,theme
-# --- Samples ---,,,,,,,,
-8-bit-punch.wav,effects,drum,short note,Punch,,PUNCH,,,Gaming; Drum and Bass
-drums1.mp3,percussion,drum,short note,Drum 1,,DRUM 1,,,Drum and Bass
-drums2.mp3,percussion,drum,short note,Drum 2,,DRUM 2,,,Drum and Bass
-drums3.mp3,percussion,drum,short note,Drum 3,,DRUM 3,,,Drum and Bass
-hi-hat-closed.wav,percussion,drum,short note,Hi-Hat Closed,,HI-HAT CLOSED,,,Drum and Bass
-hi-hat-open.wav,percussion,drum,short note,Hi-Hat Open,,HI-HAT OPEN,,,Drum and Bass
-PianoMiddleC.wav,piano,piano,short note,Piano,,PIANO,,,Acoustic
-Brk_Snr.mp3,percussion,drum,short note,Snare,,SNARE,,,Drum and Bass
-hi-hat-closed.wav,percussion,drum,short note,Hi-Hat Closed,,HI-HAT CLOSED,,,Drum and Bass
-clap.mp3,percussion,clap,short note,Hand clap,,HAND CLAP,,,Drum and Bass
-RP4_KICK_1.mp3,percussion,drum,short note,Kick drum,,KICK DRUM,,,Drum and Bass
-c-bass guitar- slap.wav,string,bass guitar,short note,Slap Bass Guitar,,SLAP BASS GUITAR,,,Drum and Bass; Acoustic
-c-bass guitar-pickmuted.wav,string,bass guitar,short note,Muted Bass Guitar,,MUTED BASS GUITAR,,,Drum and Bass; Acoustic
-c-kalimba.wav,percussion,kalimba,short note,Kalimba,,KALIMBA,,,World
-c-nylon-guitar.wav,string,guitar,short note,Guitar,,GUITAR,,,Acoustic
-c-old-piano.wav,piano,piano,short note,Old Timey Piano,,OLD TIMEY PIANO,,,Acoustic
-c-solid-tone.wav,synth,solid tone,loop,Solid Tone,,SOLID TONE,,,Default
-C-xylophone.wav,percussion,xylophone,short note,Xylophone,,XYLOPHONE,,,World
-marimba_c.wav,percussion,marimba,short note,Marimba,,MARIMBA,,,World
-toyPiano_c.wav,piano,piano,short note,Toy Piano,,TOY PIANO,,,World; Acoustic
-uke_c.wav,string,ukulele,short note,Ukulele,,UKULELE,,,Acoustic
-djembe_bass.wav,percussion,djembe,short note,Djembe Bass,,DJEMBE BASS,,,World
-djembe_tone.wav,percussion,djembe,short note,Djembe Tone,,DJEMBE TONE,,,World
-djembe_slap.wav,percussion,djembe,short note,Djembe Slap,,DJEMBE SLAP,,,World
-guitar_acoustic_c.wav,string,guitar,short note,Acoustic Guitar,,ACOUSTIC GUITAR,,3,Acoustic
-Guitar_Chord_Am.wav,string,guitar,chord,Acoustic Guitar Chords,,ACOUSTIC GUITAR CHORDS AM,,,Acoustic
-Guitar_Chord_C.wav,string,guitar,chord,Acoustic Guitar Chords,,ACOUSTIC GUITAR CHORDS C,,,Acoustic
-Guitar_Chord_Dm.wav,string,guitar,chord,Acoustic Guitar Chords,,ACOUSTIC GUITAR CHORDS Dm,,,Acoustic
-Guitar_Chord_E.wav,string,guitar,chord,Acoustic Guitar Chords,,ACOUSTIC GUITAR CHORDS E,,,Acoustic
-Guitar_Chord_Em.wav,string,guitar,chord,Acoustic Guitar Chords,,ACOUSTIC GUITAR CHORDS Em,,,Acoustic
-Guitar_Chord_F.wav,string,guitar,chord,Acoustic Guitar Chords,,ACOUSTIC GUITAR CHORDS F,,,Acoustic
-Guitar_Chord_G.wav,string,guitar,chord,Acoustic Guitar Chords,,ACOUSTIC GUITAR CHORDS G,,,Acoustic
-cowbell.wav,percussion,cowbell,short note,Cowbell,,COWBELL,,,Drum and Bass
-BassTone1.wav,percussion,bass tone,short note,Bass Tone 1,,BASS TONE 1,,,Drum and Bass
-BassTone2.wav,percussion,bass tone,short note,Bass Tone 2,,BASS TONE 2,,,Drum and Bass
-BassTone3.wav,percussion,bass tone,short note,Bass Tone 3,,BASS TONE 3,,,Drum and Bass
-BassTone4.wav,percussion,bass tone,short note,Bass Tone 4,,BASS TONE 4,,,Drum and Bass
-Accordian.wav,wind,accordian,short note,Accordian,,ACCORDIAN,,,World
-AcousticGuitar2.mp3,string,guitar,short note,Acoustic Guitar 2,,ACOUSTIC GUITAR 2,,,Acoustic
-clapElectro.mp3,percussion,clap,short note,Hand clap (electro),,HAND CLAP (ELECTRO),,,Gaming; Drum and Bass
-tamborine.wav,percussion,tamborine,short note,tamborine,,TAMBORINE,,,Acoustic
-AcousticClap.wav,percussion,clap,short note,Clap Acoustic,,CLAP ACOUSTIC,,,Acoustic
-FingerSnap.wav,percussion,snap,short note,Finger Snap,,FINGER SNAP,,,Acoustic
-kazoo.wav,wind,kazoo,short note,Kazoo,,KAZOO,,,World
-PanFlute.mp3,wind,panflute,short note,Panflute,,PANFLUTE,,,World
-RetroGaming.mp3,synth,bling,short note,Gaming Bling,,GAMING BLING,,,Gaming
-stylophone1.wav,synth,stylophone,short note,Stylophone 1,,STYLOPHONE1,,,Gaming
-stylophone2.wav,synth,stylophone,short note,Stylophone 2,,STYLOPHONE2,,,Gaming
-bell-ring_E_minor.wav,percussion,bell,short note,Bell,,BELL,,,Acoustic
-,,,,,,,,,
-,,,,,,,,,
-,,,,,,,,,
-,,,,,,,,,
-# --- Synths (no filename; specify synth_id from engine) ---,,,,,,,,
-,synth,synth,sustain,Tone (Sine),tone,TONE,,,Default
-,synth,synth,short note,Keypad,keypad,KEYPAD,,,Gaming
-,synth,synth,short note,Pop,pop,POP,,,Default
-,synth,synth,sustain,Pad,pad,PAD,,,Default
-,synth,synth,short note,Retro Square,retro-square,RETRO SQUARE,,,Gaming
-,synth,synth,short note,Retro Saw,retro-saw,RETRO SAW,,,Gaming
-,synth,synth,short note,Retro Triangle,retro-tri,RETRO TRIANGLE,,,Gaming
-,synth,synth,short note,Laser,laser,LASER,,,Gaming
-,synth,synth,sustain,Windy,windy,WINDY,,,Default
-,synth,synth,short note,Alien,alien,ALIEN,,,Gaming
-,synth,synth,short note,Organish,organish,ORGANISH,,,Default
-,synth,synth,short note,Droplet,droplet,DROPLET,,,Default
+﻿filename,instrument_type,instrument,function,display_name,synth_id,instrument_id,base_note,base_oct,theme,recommended_toys
+# --- Samples ---,,,,,,,,,,
+8-bit-punch.wav,effects,drum,short note,Punch,,PUNCH,,,Gaming; Drum and Bass,loopgrid-drum
+drums1.mp3,percussion,drum,short note,Drum 1,,DRUM 1,,,Drum and Bass,loopgrid-drum
+drums2.mp3,percussion,drum,short note,Drum 2,,DRUM 2,,,Drum and Bass,loopgrid-drum
+drums3.mp3,percussion,drum,short note,Drum 3,,DRUM 3,,,Drum and Bass,loopgrid-drum
+hi-hat-closed.wav,percussion,drum,short note,Hi-Hat Closed,,HI-HAT CLOSED,,,Drum and Bass,loopgrid-drum
+hi-hat-open.wav,percussion,drum,short note,Hi-Hat Open,,HI-HAT OPEN,,,Drum and Bass,loopgrid-drum
+PianoMiddleC.wav,piano,piano,short note,Piano,,PIANO,,,Acoustic,drawgrid
+Brk_Snr.mp3,percussion,drum,short note,Snare,,SNARE,,,Drum and Bass,loopgrid-drum
+hi-hat-closed.wav,percussion,drum,short note,Hi-Hat Closed,,HI-HAT CLOSED,,,Drum and Bass,loopgrid-drum
+clap.mp3,percussion,clap,short note,Hand clap,,HAND CLAP,,,Drum and Bass,loopgrid-drum
+RP4_KICK_1.mp3,percussion,drum,short note,Kick drum,,KICK DRUM,,,Drum and Bass,loopgrid-drum
+c-bass guitar- slap.wav,string,bass guitar,short note,Slap Bass Guitar,,SLAP BASS GUITAR,,,Drum and Bass; Acoustic,bouncer
+c-bass guitar-pickmuted.wav,string,bass guitar,short note,Muted Bass Guitar,,MUTED BASS GUITAR,,,Drum and Bass; Acoustic,bouncer
+c-kalimba.wav,percussion,kalimba,short note,Kalimba,,KALIMBA,,,World,rippler
+c-nylon-guitar.wav,string,guitar,short note,Guitar,,GUITAR,,,Acoustic,chordwheel
+c-old-piano.wav,piano,piano,short note,Old Timey Piano,,OLD TIMEY PIANO,,,Acoustic,drawgrid
+c-solid-tone.wav,synth,solid tone,loop,Solid Tone,,SOLID TONE,,,Default,loopgrid
+C-xylophone.wav,percussion,xylophone,short note,Xylophone,,XYLOPHONE,,,World,bouncer
+marimba_c.wav,percussion,marimba,short note,Marimba,,MARIMBA,,,World,bouncer
+toyPiano_c.wav,piano,piano,short note,Toy Piano,,TOY PIANO,,,World; Acoustic,drawgrid
+uke_c.wav,string,ukulele,short note,Ukulele,,UKULELE,,,Acoustic,chordwheel
+djembe_bass.wav,percussion,djembe,short note,Djembe Bass,,DJEMBE BASS,,,World,bouncer
+djembe_tone.wav,percussion,djembe,short note,Djembe Tone,,DJEMBE TONE,,,World,bouncer
+djembe_slap.wav,percussion,djembe,short note,Djembe Slap,,DJEMBE SLAP,,,World,bouncer
+guitar_acoustic_c.wav,string,guitar,short note,Acoustic Guitar,,ACOUSTIC GUITAR,,3,Acoustic,chordwheel
+Guitar_Chord_Am.wav,string,guitar,chord,Acoustic Guitar Chords,,ACOUSTIC GUITAR CHORDS AM,,,Acoustic,chordwheel
+Guitar_Chord_C.wav,string,guitar,chord,Acoustic Guitar Chords,,ACOUSTIC GUITAR CHORDS C,,,Acoustic,chordwheel
+Guitar_Chord_Dm.wav,string,guitar,chord,Acoustic Guitar Chords,,ACOUSTIC GUITAR CHORDS Dm,,,Acoustic,chordwheel
+Guitar_Chord_E.wav,string,guitar,chord,Acoustic Guitar Chords,,ACOUSTIC GUITAR CHORDS E,,,Acoustic,chordwheel
+Guitar_Chord_Em.wav,string,guitar,chord,Acoustic Guitar Chords,,ACOUSTIC GUITAR CHORDS Em,,,Acoustic,chordwheel
+Guitar_Chord_F.wav,string,guitar,chord,Acoustic Guitar Chords,,ACOUSTIC GUITAR CHORDS F,,,Acoustic,chordwheel
+Guitar_Chord_G.wav,string,guitar,chord,Acoustic Guitar Chords,,ACOUSTIC GUITAR CHORDS G,,,Acoustic,chordwheel
+cowbell.wav,percussion,cowbell,short note,Cowbell,,COWBELL,,,Drum and Bass,loopgrid-drum
+BassTone1.wav,percussion,bass tone,short note,Bass Tone 1,,BASS TONE 1,,,Drum and Bass,loopgrid-drum
+BassTone2.wav,percussion,bass tone,short note,Bass Tone 2,,BASS TONE 2,,,Drum and Bass,loopgrid-drum
+BassTone3.wav,percussion,bass tone,short note,Bass Tone 3,,BASS TONE 3,,,Drum and Bass,loopgrid-drum
+BassTone4.wav,percussion,bass tone,short note,Bass Tone 4,,BASS TONE 4,,,Drum and Bass,loopgrid-drum
+Accordian.wav,wind,accordian,short note,Accordian,,ACCORDIAN,,,World,rippler
+AcousticGuitar2.mp3,string,guitar,short note,Acoustic Guitar 2,,ACOUSTIC GUITAR 2,,,Acoustic,chordwheel
+clapElectro.mp3,percussion,clap,short note,Hand clap (electro),,HAND CLAP (ELECTRO),,,Gaming; Drum and Bass,loopgrid-drum
+tamborine.wav,percussion,tamborine,short note,tamborine,,TAMBORINE,,,Acoustic,bouncer
+AcousticClap.wav,percussion,clap,short note,Clap Acoustic,,CLAP ACOUSTIC,,,Acoustic,loopgrid-drum
+FingerSnap.wav,percussion,snap,short note,Finger Snap,,FINGER SNAP,,,Acoustic,loopgrid-drum
+kazoo.wav,wind,kazoo,short note,Kazoo,,KAZOO,,,World,rippler
+PanFlute.mp3,wind,panflute,short note,Panflute,,PANFLUTE,,,World,rippler
+RetroGaming.mp3,synth,bling,short note,Gaming Bling,,GAMING BLING,,,Gaming,loopgrid
+stylophone1.wav,synth,stylophone,short note,Stylophone 1,,STYLOPHONE1,,,Gaming,loopgrid
+stylophone2.wav,synth,stylophone,short note,Stylophone 2,,STYLOPHONE2,,,Gaming,loopgrid
+bell-ring_E_minor.wav,percussion,bell,short note,Bell,,BELL,,,Acoustic,bouncer
+,,,,,,,,,,
+,,,,,,,,,,
+,,,,,,,,,,
+,,,,,,,,,,
+# --- Synths (no filename; specify synth_id from engine) ---,,,,,,,,,,
+,synth,synth,sustain,Tone (Sine),tone,TONE,,,Default,loopgrid
+,synth,synth,short note,Keypad,keypad,KEYPAD,,,Gaming,loopgrid
+,synth,synth,short note,Pop,pop,POP,,,Default,loopgrid
+,synth,synth,sustain,Pad,pad,PAD,,,Default,loopgrid
+,synth,synth,short note,Retro Square,retro-square,RETRO SQUARE,,,Gaming,loopgrid
+,synth,synth,short note,Retro Saw,retro-saw,RETRO SAW,,,Gaming,loopgrid
+,synth,synth,short note,Retro Triangle,retro-tri,RETRO TRIANGLE,,,Gaming,loopgrid
+,synth,synth,short note,Laser,laser,LASER,,,Gaming,loopgrid
+,synth,synth,sustain,Windy,windy,WINDY,,,Default,loopgrid
+,synth,synth,short note,Alien,alien,ALIEN,,,Gaming,loopgrid
+,synth,synth,short note,Organish,organish,ORGANISH,,,Default,loopgrid
+,synth,synth,short note,Droplet,droplet,DROPLET,,,Default,loopgrid
