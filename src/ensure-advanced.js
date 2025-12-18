@@ -5,7 +5,7 @@ function msNow(){ return Date.now ? Date.now() : (new Date()).getTime(); }
 async function loadInstrumentEntries(){
   // Always prefer CSV so we can use display_name
   try{
-    const url = './assets/samples/samples.csv';
+    const url = './samples.csv';
     const res = await fetch(url);
     if (res && res.ok){
       const txt = await res.text();

@@ -17,7 +17,7 @@ const themeLog = makeDebugLogger('mt_debug_logs', 'log');
 // Load instrument entries from CSV and return [{id, display}] with unique display labels
 async function loadInstrumentEntries(){
   try{
-    const url = './assets/samples/samples.csv';
+    const url = './samples.csv';
     const res = await fetch(url);
     if (res && res.ok){
       const txt = await res.text();

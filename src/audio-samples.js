@@ -44,7 +44,7 @@ async function loadBuffer(url){
 }
 
 // Initialize sample library from CSV
-export async function initAudioAssets(csvUrl='./assets/samples/samples.csv'){
+export async function initAudioAssets(csvUrl='./samples.csv'){
   const res = await fetch(csvUrl);
   if (!res.ok) throw new Error(`CSV load failed: ${res.status}`);
   const text = await res.text();
@@ -64,8 +64,9 @@ export async function initAudioAssets(csvUrl='./assets/samples/samples.csv'){
   };
 
   // Build entries and decode buffers
-  const base = new URL(csvUrl, window.location.href);
-  const baseDir = base.href.substring(0, base.href.lastIndexOf('/')+1);
+  const csvBase = new URL(csvUrl, window.location.href);
+  const csvDir = csvBase.href.substring(0, csvBase.href.lastIndexOf('/') + 1);
+  const sampleBaseDir = new URL('./assets/samples/', window.location.href).href;
 
   for (const line of lines){
     const parts = line.split(',');
@@ -75,7 +76,12 @@ export async function initAudioAssets(csvUrl='./assets/samples/samples.csv'){
     const disp  = (col.display>=0 ? parts[col.display] : '').trim();
     const synth = (col.synth>=0 ? parts[col.synth] : '').trim().toLowerCase();
     const aliasStr = (col.aliases>=0 ? parts[col.aliases] : '').trim();
-    const url   = fn ? (baseDir + fn) : '';
+    const url = (() => {
+      if (!fn) return '';
+      if (/^https?:\/\//i.test(fn)) return fn;
+      const baseHref = (fn.includes('/') || fn.includes('\\')) ? csvDir : sampleBaseDir;
+      try { return new URL(fn, baseHref).href; } catch { return baseHref + fn; }
+    })();
     // Optional base note metadata to align pitch for this sample family
     let baseNoteCsv = (col.base_note>=0 ? parts[col.base_note] : '').trim();
     const baseOctCsv = (col.base_oct>=0 ? parts[col.base_oct] : '').trim();

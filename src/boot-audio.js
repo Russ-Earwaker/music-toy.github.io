@@ -8,7 +8,7 @@ const bootAudioLog = makeDebugLogger('mt_debug_logs', 'log');
 
 async function bootAudio(){
   try{
-    await initAudioAssets('./assets/samples/samples.csv');
+    await initAudioAssets('./samples.csv');
     bootAudioLog('[boot-audio] samples loaded');
   }catch(e){
     console.warn('[boot-audio] init failed', e);

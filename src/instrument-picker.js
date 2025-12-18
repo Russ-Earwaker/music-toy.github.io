@@ -50,7 +50,7 @@ export async function openInstrumentPicker({ panel, toyId }){
   // Load entries and build categories
   const entries = await loadInstrumentEntries();
   const cats = categorize(entries);
-  const catNames = Array.from(cats.keys()).filter(n=> n !== 'All');
+  const catNames = Array.from(cats.keys());
 
   const normalizeId = (val)=> String(val || '').trim().toLowerCase().replace(/_/g, '-');
   const getEntryKey = (entry)=>{
@@ -63,11 +63,17 @@ export async function openInstrumentPicker({ panel, toyId }){
   const findCategoryForInstrument = (instrumentId)=>{
     const target = normalizeId(instrumentId);
     if (!target) return null;
+    const themeHits = [];
+    const typeHits = [];
     for (const [cat, list] of cats.entries()){
-      if (cat === 'All') continue;
-      if (list.some(entry => normalizeId(getEntryKey(entry)) === target)) return cat;
+      const has = list.some(entry => normalizeId(getEntryKey(entry)) === target);
+      if (!has) continue;
+      if (cat.startsWith('Theme: ')) themeHits.push(cat);
+      else if (cat !== 'All') typeHits.push(cat);
     }
-    return null;
+    if (themeHits.length) return themeHits[0];
+    if (typeHits.length) return typeHits[0];
+    return cats.has('All') ? 'All' : null;
   };
 
   const current = String(panel?.dataset?.instrument || '').trim();
@@ -76,7 +82,7 @@ export async function openInstrumentPicker({ panel, toyId }){
   // Build tabs + grid
   const tgtId = String(toyId || panel?.dataset?.toy || panel?.dataset?.toyid || panel?.id || 'master').toLowerCase();
   const initialCat = findCategoryForInstrument(selected);
-  let activeCat = (initialCat && catNames.includes(initialCat)) ? initialCat : (catNames[0] || '');
+  let activeCat = (initialCat && catNames.includes(initialCat)) ? initialCat : (catNames.includes('All') ? 'All' : (catNames[0] || ''));
   let initialSelectionRevealPending = Boolean(initialCat);
 
   function renderTabs(){
@@ -109,7 +115,7 @@ export async function openInstrumentPicker({ panel, toyId }){
 
   function renderGrid(){
     grid.innerHTML='';
-    const list = (cats.get(activeCat)||[]);
+    const list = cats.get(activeCat) || cats.get('All') || [];
     const normalizedSelected = normalizeId(selected);
     let matchBtn = null;
     list.forEach(e=>{

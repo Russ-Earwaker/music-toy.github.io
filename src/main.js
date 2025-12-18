@@ -1083,7 +1083,7 @@ function initFpsHud() {
 
   raf(tick);
 }
-const CSV_PATH = './assets/samples/samples.csv'; // optional
+const CSV_PATH = './samples.csv'; // optional
 const $ = (sel, root=document)=> root.querySelector(sel);
 function bootTopbar(){
   const playBtn = $('#play'), stopBtn = $('#stop'), bpmInput = $('#bpm');
