@@ -142,15 +142,28 @@ function getBodyOffsetTop(panel) {
 function applyBodyOffsetCompensation(panel, prevBodyOffset) {
     if (!panel) return;
     const OV_NUDGE_DBG = (typeof localStorage !== 'undefined' && localStorage.getItem('OV_NUDGE_DBG') === '1');
+    if (panel.dataset?.ovLockHeights === '1') {
+        try { panel.dataset.ovBodyDelta = '0'; } catch {}
+        try { panel.dataset.ovBodyDesired = String(getBodyOffsetTop(panel) || 0); } catch {}
+        return;
+    }
+    const baseTop = (() => {
+        const stored = parseFloat(panel.dataset?.ovBaseTop || '');
+        if (Number.isFinite(stored)) return stored;
+        const cur = parseFloat(panel.style.top || '0');
+        const next = Number.isFinite(cur) ? cur : 0;
+        try { panel.dataset.ovBaseTop = String(next); } catch {}
+        return next;
+    })();
     const currentOffset = getBodyOffsetTop(panel);
     let desiredOffset = prevBodyOffset;
     if (!Number.isFinite(desiredOffset)) {
         desiredOffset = currentOffset;
     }
     const delta = desiredOffset - currentOffset;
-    if (Math.abs(delta) > 0.5) {
-        const top = parseFloat(panel.style.top || '0') || 0;
-        panel.style.top = `${top + delta}px`;
+    const newTop = baseTop + delta;
+    if (Math.abs(newTop - (parseFloat(panel.style.top || '0') || 0)) > 0.5) {
+        panel.style.top = `${newTop}px`;
     }
     if (OV_NUDGE_DBG) {
         try {
@@ -160,11 +173,14 @@ function applyBodyOffsetCompensation(panel, prevBodyOffset) {
                 prevBodyOffset: Number.isFinite(prevBodyOffset) ? prevBodyOffset : null,
                 currentOffset,
                 delta,
+                desiredOffset,
+                baseTop,
                 top: panel.style.top
             });
         } catch {}
     }
     try { panel.dataset.ovBodyDelta = String(delta || 0); } catch {}
+    try { panel.dataset.ovBodyDesired = String(desiredOffset || 0); } catch {}
 }
 
 // Cache panel/body rects per frame to avoid repeated layout reads during zoom/overview.
@@ -402,18 +418,22 @@ function applyOverviewDecorations(panel, { fireEvents = true, force = false } = 
 
     const hR = header ? safePartRect(panel, header) : null;
     const fR = footer ? safePartRect(panel, footer) : null;
+    const lockedHdr = parseFloat(panel.dataset?.ovHdrH || '');
+    const lockedFtr = parseFloat(panel.dataset?.ovFtrH || '');
+    const hdrH = Number.isFinite(lockedHdr) ? lockedHdr : (hR ? hR.height : 0);
+    const ftrH = Number.isFinite(lockedFtr) ? lockedFtr : (fR ? fR.height : 0);
     panel.style.setProperty('--ov-hdr-top', hR ? px(hR.top) : '0px');
-    panel.style.setProperty('--ov-hdr-h', hR ? px(hR.height) : '0px');
+    panel.style.setProperty('--ov-hdr-h', px(hdrH));
     panel.style.setProperty('--ov-ftr-top', fR ? px(fR.top) : '0px');
-    panel.style.setProperty('--ov-ftr-h', fR ? px(fR.height) : '0px');
+    panel.style.setProperty('--ov-ftr-h', px(ftrH));
     // Lock header/footer height so body/canvas layout stays identical in overview.
-    if (header && hR) {
-        header.style.minHeight = px(hR.height);
-        header.style.height = px(hR.height);
+    if (header) {
+        header.style.minHeight = px(hdrH);
+        header.style.height = px(hdrH);
     }
-    if (footer && fR) {
-        footer.style.minHeight = px(fR.height);
-        footer.style.height = px(fR.height);
+    if (footer) {
+        footer.style.minHeight = px(ftrH);
+        footer.style.height = px(ftrH);
     }
     // NOTE: We intentionally do NOT apply any "header height compensation" to panel.top.
     // We keep header/footer in normal flow (ov-freeze) with locked heights, so the toy-body
@@ -523,16 +543,25 @@ function enterOverviewMode(isButton) {
     try {
         panels = Array.from(document.querySelectorAll('#board .toy-panel'));
         const bodyOffsetsBefore = new Map();
-        panels.forEach(panel => bodyOffsetsBefore.set(panel, getBodyOffsetTop(panel)));
+        panels.forEach(panel => {
+            bodyOffsetsBefore.set(panel, getBodyOffsetTop(panel));
+            const header = panel.querySelector('.toy-header');
+            const footer = panel.querySelector('.toy-footer');
+            if (header) panel.dataset.ovHdrH = String(header.offsetHeight || 0);
+            if (footer) panel.dataset.ovFtrH = String(footer.offsetHeight || 0);
+            panel.dataset.ovLockHeights = '1';
+        });
         panels.forEach(panel => {
             try { panel.dispatchEvent(new CustomEvent('overview:precommit', { bubbles: true })); } catch {}
         });
         panels.forEach(panel => {
             applyOverviewDecorations(panel, { fireEvents: false });
+            applyBodyOffsetCompensation(panel, bodyOffsetsBefore.get(panel));
         });
         const raf = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));
         raf(() => raf(() => {
             panels.forEach(panel => applyBodyOffsetCompensation(panel, bodyOffsetsBefore.get(panel)));
+            try { window.updateChains?.(); } catch {}
         }));
     } catch {}
     armDocAbsorb();
@@ -603,7 +632,7 @@ function exitOverviewMode(isButton) {
         try { panel.dispatchEvent(new CustomEvent('overview:precommit', { bubbles: true })); } catch {}
     });
     overviewState.transitioning = false;
-    const exitDeltas = new Map();
+    const exitSnaps = new Map();
     try {
         const board = document.querySelector('#board');
         board?.querySelectorAll(':scope > .toy-panel').forEach(panel => {
@@ -611,9 +640,23 @@ function exitOverviewMode(isButton) {
             const snap = id ? overviewState.positions.get(id) : null;
             if (!snap) return;
             const delta = parseFloat(panel.dataset?.ovBodyDelta || '0') || 0;
-            exitDeltas.set(panel, { snap, delta });
-            panel.style.left = `${snap.left}px`;
-            panel.style.top = `${snap.top + delta}px`;
+            const desired = parseFloat(panel.dataset?.ovBodyDesired || '0') || 0;
+            if (typeof localStorage !== 'undefined' && localStorage.getItem('OV_NUDGE_DBG') === '1') {
+                try {
+                    console.log('[OV_NUDGE][exit-store]', {
+                        id,
+                        snapTop: snap.top,
+                        baseTop: panel.dataset?.ovBaseTop || null,
+                        bodyOffset: getBodyOffsetTop(panel),
+                        delta,
+                        desired
+                    });
+                } catch {}
+            }
+            exitSnaps.set(panel, { snap, delta, desired });
+            if (Math.abs(delta) > 0.5) {
+                panel.style.top = `${snap.top + delta}px`;
+            }
         });
     } catch (err) {
         console.warn('[overview] failed to restore panel positions', err);
@@ -646,6 +689,11 @@ function exitOverviewMode(isButton) {
             panel.style.removeProperty('--ov-ftr-h');
             try { delete panel.dataset.ovDecorated; } catch {}
             try { delete panel.dataset.ovBodyDelta; } catch {}
+            try { delete panel.dataset.ovBodyDesired; } catch {}
+            try { delete panel.dataset.ovBaseTop; } catch {}
+            try { delete panel.dataset.ovHdrH; } catch {}
+            try { delete panel.dataset.ovFtrH; } catch {}
+            try { delete panel.dataset.ovLockHeights; } catch {}
             delete panel.dataset.ovCompTop;
             delete panel.dataset._ovCompApplied;
             const { header, footer } = panelParts(panel);
@@ -726,20 +774,33 @@ function exitOverviewMode(isButton) {
 
     // Finalize positions after headers/footers return.
     const raf = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));
-    raf(() => raf(() => {
+    raf(() => {
         let anyShift = false;
-        exitDeltas.forEach((info, panel) => {
+        exitSnaps.forEach((info, panel) => {
             if (!panel || !panel.isConnected) return;
-            const { snap } = info;
+            const { snap, delta, desired } = info || {};
             if (!snap) return;
             panel.style.left = `${snap.left}px`;
-            panel.style.top = `${snap.top}px`;
+            if (typeof localStorage !== 'undefined' && localStorage.getItem('OV_NUDGE_DBG') === '1') {
+                try {
+                    const id = panel.id || panel.dataset?.toyid || panel.dataset?.toy;
+                    console.log('[OV_NUDGE][exit-final]', {
+                        id,
+                        snapTop: snap.top,
+                        bodyOffset: getBodyOffsetTop(panel),
+                        top: panel.style.top,
+                        delta,
+                        desired
+                    });
+                } catch {}
+            }
             anyShift = true;
         });
         if (anyShift) {
-            try { window.updateChains?.(); } catch {}
+            const raf2 = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));
+            raf2(() => { try { window.updateChains?.(); } catch {} });
         }
-    }));
+    });
 }
 
 function onToyMouseDown(e) {
@@ -1052,10 +1113,21 @@ function refreshOverviewDecorations() {
     if (boardForClass) boardForClass.classList.add('board-overview');
     document.body.classList.add('overview-mode');
     try {
+        let anyForced = false;
         document.querySelectorAll('#board .toy-panel').forEach(panel => {
             const shouldForce = panel?.dataset?.ovDecorated !== '1';
             applyOverviewDecorations(panel, { fireEvents: false, force: shouldForce });
+            if (shouldForce) {
+                anyForced = true;
+                applyBodyOffsetCompensation(panel);
+            }
         });
+        if (anyForced) {
+            const raf = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));
+            raf(() => raf(() => {
+                try { window.updateChains?.(); } catch {}
+            }));
+        }
         window.__syncAllBodyOutlines?.();
     } catch {}
 }

@@ -2210,7 +2210,8 @@ function syncOverviewPosition(panel) {
         if (!Number.isFinite(left)) left = 0;
         if (!Number.isFinite(top)) top = 0;
         const delta = parseFloat(panel.dataset?.ovBodyDelta || '0') || 0;
-        const storedTop = top - delta;
+        const baseTop = parseFloat(panel.dataset?.ovBaseTop || '');
+        const storedTop = Number.isFinite(baseTop) ? baseTop : (top - delta);
         const width = Number.isFinite(panel.offsetWidth) ? panel.offsetWidth : parseFloat(cs.width || '0') || 0;
         const height = Number.isFinite(panel.offsetHeight) ? panel.offsetHeight : parseFloat(cs.height || '0') || 0;
         st.positions.set(id, { left, top: storedTop, width, height });
