@@ -1882,8 +1882,8 @@ function initToyChaining(panel) {
 
         const board = document.getElementById('board');
         const boardScale = window.__boardScale || 1;
-        const sourceWidth = sourcePanel.offsetWidth || (sourcePanel.getBoundingClientRect().width / boardScale);
-        const sourceHeight = sourcePanel.offsetHeight || (sourcePanel.getBoundingClientRect().height / boardScale);
+        let sourceWidth = sourcePanel.offsetWidth || (sourcePanel.getBoundingClientRect().width / boardScale);
+        let sourceHeight = sourcePanel.offsetHeight || (sourcePanel.getBoundingClientRect().height / boardScale);
 
         newPanel.style.width = `${sourceWidth}px`;
         // Height is only needed during the initial placement. Drop it after boot
@@ -1895,6 +1895,22 @@ function initToyChaining(panel) {
         // So prefer the panel's existing world-space left/top if available.
         let srcLeft = parseFloat(sourcePanel.style.left);
         let srcTop  = parseFloat(sourcePanel.style.top);
+
+        const overviewActive =
+            !!(window.__overviewMode?.isActive?.() ||
+               document.querySelector('#board')?.classList?.contains('board-overview') ||
+               document.body?.classList?.contains('overview-mode'));
+
+        if (overviewActive) {
+            const ovState = window.__overviewMode?.state;
+            const snap = ovState?.positions?.get?.(sourcePanel.id);
+            if (snap && Number.isFinite(snap.left) && Number.isFinite(snap.top)) {
+                srcLeft = snap.left;
+                srcTop = snap.top;
+                if (Number.isFinite(snap.width) && snap.width > 0) sourceWidth = snap.width;
+                if (Number.isFinite(snap.height) && snap.height > 0) sourceHeight = snap.height;
+            }
+        }
 
         if (!Number.isFinite(srcLeft) || !Number.isFinite(srcTop)) {
             // Fallback: derive from rects (best-effort)
@@ -1918,10 +1934,6 @@ function initToyChaining(panel) {
 
         // If Overview is active, register this panel's normal position so it restores correctly on exit,
         // and ensure overview decorations get applied.
-        const overviewActive =
-            !!(window.__overviewMode?.isActive?.() ||
-               document.querySelector('#board')?.classList?.contains('board-overview') ||
-               document.body?.classList?.contains('overview-mode'));
         const overviewActiveAtCreate = overviewActive;
         const oldNextId = sourcePanel.dataset.nextToyId || null;
 
@@ -1940,6 +1952,16 @@ function initToyChaining(panel) {
                         top: normalTop,
                         width: sourceWidth,
                         height: sourceHeight
+                    });
+                }
+                if (typeof localStorage !== 'undefined' && localStorage.getItem('OV_NUDGE_DBG') === '1') {
+                    console.log('[OV_NUDGE][chain-create]', {
+                        parent: sourcePanel.id,
+                        child: newPanel.id,
+                        parentTop: sourcePanel.style.top,
+                        parentBodyOffset: sourcePanel.querySelector('.toy-body')?.offsetTop || 0,
+                        childTop: newPanel.style.top,
+                        childBodyOffset: newPanel.querySelector('.toy-body')?.offsetTop || 0
                     });
                 }
             } catch (err) {
@@ -1965,6 +1987,7 @@ function initToyChaining(panel) {
             fallbackWidth: sourceWidth,
             fallbackHeight: sourceHeight,
         });
+        syncOverviewPosition(newPanel);
         if (!overviewActiveAtCreate && initialPlacement?.changed) {
             try { persistToyPosition(newPanel); } catch (err) { console.warn('[chain] persistToyPosition failed', err); }
         }
@@ -2068,6 +2091,7 @@ function initToyChaining(panel) {
                     } catch (err) {
                         console.warn('[chain] persistToyPosition failed', err);
                     }
+                    syncOverviewPosition(newPanel);
                     updateChains();
                     updateAllChainUIs();
                     delete newPanel.dataset.spawnAutoManaged;
@@ -2172,6 +2196,27 @@ function persistToyPosition(panel) {
     }
 }
 
+function syncOverviewPosition(panel) {
+    try {
+        if (!panel) return;
+        if (!window.__overviewMode?.isActive?.()) return;
+        const st = window.__overviewMode?.state;
+        if (!st?.positions?.set) return;
+        const id = panel.id || panel.dataset.toyid || panel.dataset.toy;
+        if (!id) return;
+        const cs = getComputedStyle(panel);
+        let left = parseFloat(panel.style.left || cs.left || '0');
+        let top = parseFloat(panel.style.top || cs.top || '0');
+        if (!Number.isFinite(left)) left = 0;
+        if (!Number.isFinite(top)) top = 0;
+        const delta = parseFloat(panel.dataset?.ovBodyDelta || '0') || 0;
+        const storedTop = top - delta;
+        const width = Number.isFinite(panel.offsetWidth) ? panel.offsetWidth : parseFloat(cs.width || '0') || 0;
+        const height = Number.isFinite(panel.offsetHeight) ? panel.offsetHeight : parseFloat(cs.height || '0') || 0;
+        st.positions.set(id, { left, top: storedTop, width, height });
+    } catch {}
+}
+
 function createToyPanelAt(toyType, { centerX, centerY, instrument, autoCenter } = {}) {
     const type = String(toyType || '').toLowerCase();
     if (!type || !toyInitializers[type]) {
@@ -2241,6 +2286,7 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument, autoCenter } 
     if (initialPlacement?.changed) {
         // The helper already wrote the updated position to the style attributes.
     }
+    syncOverviewPosition(panel);
     persistToyPosition(panel);
 
     setTimeout(() => {
@@ -2257,13 +2303,17 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument, autoCenter } 
             if (followUp?.changed) {
                 persistToyPosition(panel);
             }
+            syncOverviewPosition(panel);
             try { updateChains(); updateAllChainUIs(); } catch (err) { console.warn('[createToyPanelAt] chain update failed', err); }
             try { applyStackingOrder(); } catch (err) { console.warn('[createToyPanelAt] stacking failed', err); }
             try { window.Persistence?.markDirty?.(); } catch (err) { console.warn('[createToyPanelAt] mark dirty failed', err); }
             delete panel.dataset.spawnAutoManaged;
             delete panel.dataset.spawnAutoLeft;
             delete panel.dataset.spawnAutoTop;
-            if (panel.isConnected) {
+            const overviewActive = !!(window.__overviewMode?.isActive?.() ||
+                document.querySelector('#board')?.classList?.contains('board-overview') ||
+                document.body?.classList?.contains('overview-mode'));
+            if (panel.isConnected && !overviewActive) {
                 setToyFocus(panel, { center: true });
             }
             if (shouldHintOffscreen) {

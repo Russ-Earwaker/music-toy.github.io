@@ -2815,6 +2815,22 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
     border: 0 !important;
 }
 
+/* In overview, keep header/footer layout even if focus mode marks toys as unfocused */
+.overview-mode .toy-panel.toy-unfocused .toy-header,
+.overview-mode .toy-panel.toy-unfocused .toy-footer,
+.board-overview .toy-panel.toy-unfocused .toy-header,
+.board-overview .toy-panel.toy-unfocused .toy-footer {
+  display: flex !important;
+  height: auto !important;
+  padding: 8px 10px !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+}
+.overview-mode .toy-panel.toy-unfocused .toy-footer,
+.board-overview .toy-panel.toy-unfocused .toy-footer {
+  padding: 10px !important;
+}
+
 .overview-mode [data-action="advanced"],
 .overview-mode .toy-title,
 .overview-mode .toy-instrument {

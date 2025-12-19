@@ -134,6 +134,39 @@ function panelParts(panel) {
     };
 }
 
+function getBodyOffsetTop(panel) {
+    const body = panel?.querySelector?.('.toy-body') || panel;
+    return body ? (body.offsetTop || 0) : 0;
+}
+
+function applyBodyOffsetCompensation(panel, prevBodyOffset) {
+    if (!panel) return;
+    const OV_NUDGE_DBG = (typeof localStorage !== 'undefined' && localStorage.getItem('OV_NUDGE_DBG') === '1');
+    const currentOffset = getBodyOffsetTop(panel);
+    let desiredOffset = prevBodyOffset;
+    if (!Number.isFinite(desiredOffset)) {
+        desiredOffset = currentOffset;
+    }
+    const delta = desiredOffset - currentOffset;
+    if (Math.abs(delta) > 0.5) {
+        const top = parseFloat(panel.style.top || '0') || 0;
+        panel.style.top = `${top + delta}px`;
+    }
+    if (OV_NUDGE_DBG) {
+        try {
+            const id = panel.id || panel.dataset?.toyid || panel.dataset?.toy;
+            console.log('[OV_NUDGE][comp]', {
+                id,
+                prevBodyOffset: Number.isFinite(prevBodyOffset) ? prevBodyOffset : null,
+                currentOffset,
+                delta,
+                top: panel.style.top
+            });
+        } catch {}
+    }
+    try { panel.dataset.ovBodyDelta = String(delta || 0); } catch {}
+}
+
 // Cache panel/body rects per frame to avoid repeated layout reads during zoom/overview.
 const __ovRectCache = new WeakMap();
 function measurePartRectWithinPanel(panel, el) {
@@ -288,8 +321,12 @@ function snapshotPanelPosition(panel) {
     }
 }
 
-function applyOverviewDecorations(panel, { fireEvents = true } = {}) {
+function applyOverviewDecorations(panel, { fireEvents = true, force = false } = {}) {
     if (!panel || !overviewState.isActive) return;
+    if (!force && panel.dataset?.ovDecorated === '1') {
+        return;
+    }
+    const OV_NUDGE_DBG = (typeof localStorage !== 'undefined' && localStorage.getItem('OV_NUDGE_DBG') === '1');
 
     const { header, footer } = panelParts(panel);
     const bodyEl = panel.querySelector('.toy-body') ||
@@ -393,6 +430,24 @@ function applyOverviewDecorations(panel, { fireEvents = true } = {}) {
     if (fireEvents) {
         try { panel.dispatchEvent(new CustomEvent('overview:commit', { bubbles: true })); } catch {}
     }
+    if (!panel.dataset?.ovBodyDelta) {
+        applyBodyOffsetCompensation(panel);
+    }
+    if (OV_NUDGE_DBG) {
+        try {
+            const id = panel.id || panel.dataset?.toyid || panel.dataset?.toy;
+            const body = panel.querySelector('.toy-body') || panel;
+            console.log('[OV_NUDGE][decorate]', {
+                id,
+                top: panel.style.top,
+                bodyOffset: body?.offsetTop || 0,
+                ovBodyDelta: panel.dataset?.ovBodyDelta || null,
+                fireEvents,
+                force
+            });
+        } catch {}
+    }
+    try { panel.dataset.ovDecorated = '1'; } catch {}
 }
 
 function ensureBoardObserver() {
@@ -467,12 +522,18 @@ function enterOverviewMode(isButton) {
     let panels = [];
     try {
         panels = Array.from(document.querySelectorAll('#board .toy-panel'));
+        const bodyOffsetsBefore = new Map();
+        panels.forEach(panel => bodyOffsetsBefore.set(panel, getBodyOffsetTop(panel)));
         panels.forEach(panel => {
             try { panel.dispatchEvent(new CustomEvent('overview:precommit', { bubbles: true })); } catch {}
         });
         panels.forEach(panel => {
             applyOverviewDecorations(panel, { fireEvents: false });
         });
+        const raf = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));
+        raf(() => raf(() => {
+            panels.forEach(panel => applyBodyOffsetCompensation(panel, bodyOffsetsBefore.get(panel)));
+        }));
     } catch {}
     armDocAbsorb();
 
@@ -542,15 +603,17 @@ function exitOverviewMode(isButton) {
         try { panel.dispatchEvent(new CustomEvent('overview:precommit', { bubbles: true })); } catch {}
     });
     overviewState.transitioning = false;
+    const exitDeltas = new Map();
     try {
         const board = document.querySelector('#board');
         board?.querySelectorAll(':scope > .toy-panel').forEach(panel => {
             const id = panel.id || panel.dataset.toyid || panel.dataset.toy;
             const snap = id ? overviewState.positions.get(id) : null;
-            if (snap) {
-                panel.style.left = `${snap.left}px`;
-                panel.style.top = `${snap.top}px`;
-            }
+            if (!snap) return;
+            const delta = parseFloat(panel.dataset?.ovBodyDelta || '0') || 0;
+            exitDeltas.set(panel, { snap, delta });
+            panel.style.left = `${snap.left}px`;
+            panel.style.top = `${snap.top + delta}px`;
         });
     } catch (err) {
         console.warn('[overview] failed to restore panel positions', err);
@@ -581,6 +644,8 @@ function exitOverviewMode(isButton) {
             panel.style.removeProperty('--ov-hdr-h');
             panel.style.removeProperty('--ov-ftr-top');
             panel.style.removeProperty('--ov-ftr-h');
+            try { delete panel.dataset.ovDecorated; } catch {}
+            try { delete panel.dataset.ovBodyDelta; } catch {}
             delete panel.dataset.ovCompTop;
             delete panel.dataset._ovCompApplied;
             const { header, footer } = panelParts(panel);
@@ -658,6 +723,23 @@ function exitOverviewMode(isButton) {
     });
     overviewState.enteredByButton = false;
     overviewState.buttonCenterWorld = null;
+
+    // Finalize positions after headers/footers return.
+    const raf = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));
+    raf(() => raf(() => {
+        let anyShift = false;
+        exitDeltas.forEach((info, panel) => {
+            if (!panel || !panel.isConnected) return;
+            const { snap } = info;
+            if (!snap) return;
+            panel.style.left = `${snap.left}px`;
+            panel.style.top = `${snap.top}px`;
+            anyShift = true;
+        });
+        if (anyShift) {
+            try { window.updateChains?.(); } catch {}
+        }
+    }));
 }
 
 function onToyMouseDown(e) {
@@ -834,9 +916,10 @@ function onToyMouseUp(e) {
       let top  = parseFloat(panel.style.top  || cs.top  || '0') || 0;
       const width  = Number.isFinite(panel.offsetWidth)  ? panel.offsetWidth  : parseFloat(cs.width  || '0') || 0;
       const height = Number.isFinite(panel.offsetHeight) ? panel.offsetHeight : parseFloat(cs.height || '0') || 0;
-
-                // Commit the updated snapshot so exitOverviewMode uses the NEW position
-                try { overviewState.positions.set(id, { left, top, width, height }); } catch {}
+      const delta = parseFloat(panel.dataset?.ovBodyDelta || '0') || 0;
+      const storedTop = top - delta;
+      // Commit the updated snapshot so exitOverviewMode uses the NEW position
+      try { overviewState.positions.set(id, { left, top: storedTop, width, height }); } catch {}
                 emitOV('drag-end', { id, left, top, width, height });
       
                 ovdbg('[overview] drag commit', { id, left, top, width, height });    }
@@ -970,7 +1053,8 @@ function refreshOverviewDecorations() {
     document.body.classList.add('overview-mode');
     try {
         document.querySelectorAll('#board .toy-panel').forEach(panel => {
-            applyOverviewDecorations(panel, { fireEvents: false });
+            const shouldForce = panel?.dataset?.ovDecorated !== '1';
+            applyOverviewDecorations(panel, { fireEvents: false, force: shouldForce });
         });
         window.__syncAllBodyOutlines?.();
     } catch {}
