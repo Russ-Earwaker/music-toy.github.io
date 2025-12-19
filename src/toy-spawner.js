@@ -178,6 +178,10 @@ function ensureDock() {
     updateHelpToggleUI(active);
   });
 
+  window.addEventListener('help:toggle', (event) => {
+    updateHelpToggleUI(!!event?.detail?.active);
+  });
+
   toggle.addEventListener('click', () => setMenuOpen(!state.open));
 
   trash.addEventListener('click', (event) => {

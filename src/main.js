@@ -29,6 +29,7 @@ import './toy-spawner.js';
 import './board-tap-dots.js';
 import { initAudioAssets } from './audio-samples.js';
 import { loadInstrumentEntries as loadInstrumentCatalog } from './instrument-catalog.js';
+import { collectUsedInstruments, getSoundThemeKey, pickInstrumentForToy } from './sound-theme.js';
 import { installIOSAudioUnlock } from './ios-audio-unlock.js';
 import { installAudioDiagnostics } from './audio-diagnostics.js';
 import { makeDebugLogger } from './debug-flags.js';
@@ -2180,6 +2181,13 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument, autoCenter } 
     const board = document.getElementById('board');
     if (!board) return null;
     const shouldHintOffscreen = !!autoCenter;
+    let chosenInstrument = instrument;
+    if (!chosenInstrument) {
+        const theme = getSoundThemeKey?.() || '';
+        const used = collectUsedInstruments();
+        const picked = pickInstrumentForToy(type, { theme, usedIds: used });
+        if (picked) chosenInstrument = picked;
+    }
 
     const panel = document.createElement('section');
     panel.className = 'toy-panel';
@@ -2192,8 +2200,8 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument, autoCenter } 
     }
     panel.style.position = 'absolute';
 
-    if (instrument) {
-        panel.dataset.instrument = instrument;
+    if (chosenInstrument) {
+        panel.dataset.instrument = chosenInstrument;
         panel.dataset.instrumentPersisted = '1';
     }
 

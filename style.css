@@ -1606,7 +1606,7 @@ body.advanced-controls-disabled [data-adv] {
 
 
 
-body.toy-help-mode [data-help-label] {
+body.toy-help-mode [data-help-label]:not(.toy-spawner-help.is-active):not(.toy-spawner-help[aria-pressed='true']) {
   outline: none !important;
   box-shadow: none !important;
 }
@@ -2478,6 +2478,158 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
 }
 
 .topbar-bpm-panel[hidden] { display: none; }
+
+.topbar-sound-theme-panel {
+  position: fixed;
+  transform: translateX(-50%);
+  min-width: 220px;
+  max-width: min(320px, 92vw);
+  padding: 12px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(60, 80, 104, 0.75);
+  background: rgba(12, 18, 26, 0.95);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  z-index: 9200;
+  pointer-events: auto;
+  color: var(--text);
+}
+
+.topbar-sound-theme-panel[hidden] { display: none; }
+
+.sound-theme-title {
+  font: 650 12px/1.1 system-ui, -apple-system, Segoe UI, sans-serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(154, 164, 178, 0.95);
+  margin-bottom: 10px;
+}
+
+.sound-theme-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.sound-theme-option {
+  appearance: none;
+  border: 1px solid rgba(60, 80, 104, 0.65);
+  background: rgba(18, 26, 36, 0.7);
+  color: var(--text);
+  font: 600 12px/1.2 system-ui, -apple-system, Segoe UI, sans-serif;
+  padding: 8px 10px;
+  border-radius: 8px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+}
+
+.sound-theme-option:hover,
+.sound-theme-option:focus-visible {
+  background: rgba(80, 120, 168, 0.75);
+  border-color: rgba(94, 171, 255, 0.7);
+  transform: translateX(2px);
+}
+
+.sound-theme-option.is-active {
+  background: rgba(94, 171, 255, 0.28);
+  border-color: rgba(94, 171, 255, 0.9);
+  box-shadow: 0 0 0 1px rgba(94, 171, 255, 0.4);
+}
+
+#topbar [data-action="sound-theme"] {
+  position: fixed !important;
+  top: var(--top-btn-offset) !important;
+  left: calc(50% + (var(--top-btn-size) * 2) + (var(--ui-float-gap-sm) * 2)) !important;
+  right: auto !important;
+  width: var(--top-btn-size) !important;
+  height: var(--top-btn-size) !important;
+  --c-btn-size: var(--top-btn-size) !important;
+  transform: translateX(-50%) !important;
+  z-index: 1450 !important;
+  pointer-events: auto !important;
+}
+
+#topbar [data-action="sound-theme"] .c-btn-core {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sound-theme-btn .c-btn-core::after {
+  width: 80%;
+  height: 80%;
+  opacity: 0.9;
+}
+
+.sound-theme-floating-label {
+  position: fixed;
+  transform: translateX(-50%);
+  font: 700 10px/1.1 system-ui, -apple-system, Segoe UI, sans-serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(226, 232, 240, 0.9);
+  text-align: center;
+  z-index: 1450;
+  max-width: clamp(110px, calc(160px * var(--ui-scale)), 200px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.sound-theme-panel .sound-theme-prompt {
+  font: 600 0.9rem/1.4 system-ui, -apple-system, Segoe UI, sans-serif;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+
+.sound-theme-panel .sound-theme-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.sound-theme-panel .inst-ok {
+  --accent: #3ad46f;
+  --c-btn-border: rgba(58, 212, 111, 0.85);
+  --c-btn-bg: color-mix(in srgb, #1fa854 65%, #0d141d 35%);
+}
+
+.sound-theme-panel .inst-cancel {
+  --accent: #f26b6b;
+  --c-btn-border: rgba(242, 107, 107, 0.85);
+  --c-btn-bg: color-mix(in srgb, #c13939 65%, #0d141d 35%);
+}
+
+.sound-theme-panel .scene-manager-close {
+  align-self: flex-end;
+}
+
+.sound-theme-list {
+  scrollbar-width: thin;
+  scrollbar-color: #0141a9 #1a1a1d;
+}
+
+.sound-theme-list::-webkit-scrollbar {
+  width: 12px;
+}
+
+.sound-theme-list::-webkit-scrollbar-track {
+  background: #1a1a1d;
+  border: 1px solid #1c2430;
+  border-radius: 999px;
+}
+
+.sound-theme-list::-webkit-scrollbar-thumb {
+  background: #0141a9;
+  border: 2px solid #1a1a1d;
+  border-radius: 999px;
+}
 
 .topbar-bpm-row {
   display: flex;

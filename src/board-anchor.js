@@ -52,6 +52,7 @@ let flashingCells = [];
 let lastFlashedCells = new Set();
 let chainCellAssignments = new Map(); // chainHeadId -> { i, j, color }
 let assignedCellKeys = new Set();
+let assignedColors = new Set();
 let noteListenerActive = false;
 
 let markerEl = null;        // invisible world-space DOM marker (for centering)
@@ -164,6 +165,7 @@ function teardown() {
   lastFlashedCells = new Set();
   chainCellAssignments = new Map();
   assignedCellKeys = new Set();
+  assignedColors = new Set();
   if (markerEl && markerEl.parentElement) markerEl.parentElement.removeChild(markerEl);
   markerEl = null;
   if (miniBtnEl && miniBtnEl.parentElement) miniBtnEl.parentElement.removeChild(miniBtnEl);
@@ -429,9 +431,18 @@ function getChainHeadId(toyId) {
 }
 
 function randomBrightColor() {
-  const hue = Math.floor(Math.random() * 360);
   const sat = 82 + Math.floor(Math.random() * 16);
   const light = 54 + Math.floor(Math.random() * 14);
+  let color = '';
+  let attempts = 0;
+  while (attempts < 120) {
+    const hue = Math.floor(Math.random() * 360);
+    color = `hsl(${hue} ${sat}% ${light}%)`;
+    if (!assignedColors.has(color)) return color;
+    attempts++;
+  }
+  // If we couldn't find a unique hue quickly, fall back to a deterministic offset.
+  const hue = (assignedColors.size * 47) % 360;
   return `hsl(${hue} ${sat}% ${light}%)`;
 }
 
@@ -458,6 +469,7 @@ function assignCellForChain(chainHeadId) {
   const entry = { i, j, color };
   chainCellAssignments.set(chainHeadId, entry);
   assignedCellKeys.add(key);
+  assignedColors.add(color);
   return entry;
 }
 
@@ -711,6 +723,7 @@ export function initBoardAnchor() {
       const entry = chainCellAssignments.get(id);
       if (entry) {
         assignedCellKeys.delete(`${entry.i},${entry.j}`);
+        assignedColors.delete(entry.color);
         chainCellAssignments.delete(id);
       }
     });

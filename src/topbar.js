@@ -1,6 +1,14 @@
 // src/topbar.js - wires page header buttons to board helpers
 import * as Core from './audio-core.js';
 import { resumeAudioContextIfNeeded } from './audio-core.js';
+import {
+  applySoundThemeToScene,
+  getSoundThemeKey,
+  getSoundThemeLabel,
+  getSoundThemes,
+  pickRandomSoundTheme,
+  setSoundThemeKey,
+} from './sound-theme.js';
 
 (function(){
 
@@ -336,6 +344,67 @@ import { resumeAudioContextIfNeeded } from './audio-core.js';
     return overlay;
   }
 
+  function ensureSoundThemeOverlay() {
+    let overlay = document.getElementById('sound-theme-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'sound-theme-overlay';
+      overlay.className = 'scene-manager-overlay';
+      overlay.style.display = 'none';
+      overlay.innerHTML = `
+        <div class="scene-manager-panel sound-theme-panel">
+          <button class="scene-manager-close" type="button" aria-label="Close">&times;</button>
+          <div class="scene-manager-body">
+            <div class="sound-theme-prompt">Apply this theme to the scene?</div>
+            <div class="sound-theme-actions">
+              <button class="c-btn inst-ok" type="button" data-action="sound-theme-apply" aria-label="Apply theme">
+                <div class="c-btn-outer"></div>
+                <div class="c-btn-glow"></div>
+                <div class="c-btn-core"></div>
+              </button>
+              <button class="c-btn inst-cancel" type="button" data-action="sound-theme-skip" aria-label="Keep current instruments">
+                <div class="c-btn-outer"></div>
+                <div class="c-btn-glow"></div>
+                <div class="c-btn-core"></div>
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+    }
+
+    const closeBtn = overlay.querySelector('.scene-manager-close');
+    const applyBtn = overlay.querySelector('[data-action="sound-theme-apply"]');
+    const skipBtn = overlay.querySelector('[data-action="sound-theme-skip"]');
+    const prompt = overlay.querySelector('.sound-theme-prompt');
+    const okCore = applyBtn?.querySelector?.('.c-btn-core');
+    const cancelCore = skipBtn?.querySelector?.('.c-btn-core');
+    if (okCore) okCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonTick.png')");
+    if (cancelCore) cancelCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonClose.png')");
+
+    const hide = () => { overlay.style.display = 'none'; };
+    const show = (themeLabel) => {
+      const label = themeLabel || 'No Theme';
+      if (prompt) prompt.textContent = `Apply ${label} theme to the scene`;
+      overlay.style.display = 'flex';
+    };
+
+    if (!overlay.__wired) {
+      overlay.addEventListener('click', (evt) => {
+        if (evt.target === overlay) hide();
+      });
+      closeBtn?.addEventListener('click', hide);
+      skipBtn?.addEventListener('click', hide);
+      overlay.__wired = true;
+    }
+
+    overlay.__show = show;
+    overlay.__hide = hide;
+    overlay.__applyBtn = applyBtn;
+    return overlay;
+  }
+
 function ensureTopbar(){
     let bar = document.getElementById('topbar');
     if (!bar){
@@ -530,6 +599,56 @@ function ensureTopbar(){
     }
     updateBpmButtonVisual(bpmBtn);
 
+    let soundThemeBtn = bar.querySelector('[data-action="sound-theme"]');
+    if (!soundThemeBtn) {
+      soundThemeBtn = document.createElement('button');
+      soundThemeBtn.type = 'button';
+      soundThemeBtn.className = 'c-btn sound-theme-btn';
+      soundThemeBtn.dataset.action = 'sound-theme';
+      soundThemeBtn.dataset.helpLabel = 'Sound theme';
+      soundThemeBtn.dataset.helpPosition = 'bottom';
+      soundThemeBtn.title = 'Sound theme';
+      soundThemeBtn.innerHTML = [
+        '<div class="c-btn-outer"></div>',
+        '<div class="c-btn-glow"></div>',
+        '<div class="c-btn-core"></div>',
+      ].join('');
+      const themeCore = soundThemeBtn.querySelector('.c-btn-core');
+      if (themeCore) themeCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonTheme.png')");
+      bpmBtn?.insertAdjacentElement('afterend', soundThemeBtn);
+    } else {
+      soundThemeBtn.classList.add('c-btn', 'sound-theme-btn');
+      soundThemeBtn.type = 'button';
+      if (!soundThemeBtn.dataset.helpPosition) soundThemeBtn.dataset.helpPosition = 'bottom';
+      const themeCore = soundThemeBtn.querySelector('.c-btn-core');
+      if (themeCore) themeCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonTheme.png')");
+    }
+
+    let soundThemePanel = bar.querySelector('#topbar-sound-theme-panel');
+    if (!soundThemePanel) {
+      soundThemePanel = document.createElement('div');
+      soundThemePanel.id = 'topbar-sound-theme-panel';
+      soundThemePanel.className = 'topbar-sound-theme-panel';
+      soundThemePanel.setAttribute('hidden', '');
+      soundThemePanel.innerHTML = `
+        <div class="sound-theme-title">Sound Theme</div>
+        <div class="sound-theme-list"></div>
+      `;
+      bar.appendChild(soundThemePanel);
+    } else {
+      soundThemePanel.classList.add('topbar-sound-theme-panel');
+    }
+    soundThemePanel.setAttribute('role', 'dialog');
+    soundThemePanel.setAttribute('aria-label', 'Sound theme');
+
+    let soundThemeLabel = bar.querySelector('#topbar-sound-theme-label');
+    if (!soundThemeLabel) {
+      soundThemeLabel = document.createElement('div');
+      soundThemeLabel.id = 'topbar-sound-theme-label';
+      soundThemeLabel.className = 'sound-theme-floating-label';
+      bar.appendChild(soundThemeLabel);
+    }
+
     let bpmPanel = bar.querySelector('#topbar-bpm-panel');
     if (!bpmPanel){
       bpmPanel = document.createElement('div');
@@ -640,6 +759,129 @@ function ensureTopbar(){
       document.addEventListener('keydown', bpmState.boundEscape);
     }
 
+    const soundThemeState = bar.__soundThemeState || (bar.__soundThemeState = {});
+    soundThemeState.btn = soundThemeBtn;
+    soundThemeState.panel = soundThemePanel;
+    soundThemeState.label = soundThemeLabel;
+    soundThemeState.open = !!soundThemeState.open;
+
+    const updateSoundThemeLabel = () => {
+      const label = soundThemeLabel;
+      if (!label) return;
+      const theme = getSoundThemeKey?.() || '';
+      label.textContent = getSoundThemeLabel(theme);
+      positionSoundThemePanel();
+    };
+
+    const renderSoundThemeOptions = () => {
+      if (!soundThemePanel) return;
+      const list = soundThemePanel.querySelector('.sound-theme-list');
+      if (!list) return;
+      const current = getSoundThemeKey?.() || '';
+      const themes = getSoundThemes?.() || [];
+      const options = [{ key: '', label: 'No Theme' }, ...themes.map(t => ({ key: t, label: t }))];
+      list.innerHTML = '';
+      options.forEach((opt) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'sound-theme-option';
+        btn.dataset.theme = opt.key;
+        btn.textContent = opt.label;
+        if (opt.key === current) btn.classList.add('is-active');
+        btn.addEventListener('click', () => {
+          const nextTheme = btn.dataset.theme || '';
+          const prevTheme = getSoundThemeKey?.() || '';
+          if (nextTheme !== prevTheme) {
+            setSoundThemeKey(nextTheme);
+            const overlay = ensureSoundThemeOverlay();
+            overlay.__show?.(getSoundThemeLabel(nextTheme));
+            if (overlay.__applyBtn) {
+              overlay.__applyBtn.onclick = () => {
+                try { applySoundThemeToScene({ theme: nextTheme }); } catch {}
+                overlay.__hide?.();
+              };
+            }
+          }
+          soundThemeState.close?.();
+        });
+        list.appendChild(btn);
+      });
+    };
+
+    const positionSoundThemePanel = () => {
+      if (!soundThemePanel || !soundThemeBtn) return;
+      const rect = soundThemeBtn.getBoundingClientRect();
+      soundThemePanel.style.left = `${rect.left + rect.width / 2}px`;
+      soundThemePanel.style.top = `${rect.bottom + 10}px`;
+      if (soundThemeLabel) {
+        soundThemeLabel.style.left = `${rect.left + rect.width / 2}px`;
+        soundThemeLabel.style.top = `${rect.bottom + 6}px`;
+      }
+    };
+
+    if (!soundThemeState.setOpen) {
+      soundThemeState.setOpen = (open) => {
+        soundThemeState.open = !!open;
+        const panel = soundThemeState.panel || soundThemePanel;
+        const btnRef = soundThemeState.btn || soundThemeBtn;
+        if (!panel) return;
+        if (soundThemeState.open) {
+          renderSoundThemeOptions();
+          updateSoundThemeLabel();
+          positionSoundThemePanel();
+          panel.removeAttribute('hidden');
+          panel.classList.add('is-open');
+          btnRef?.setAttribute('aria-expanded', 'true');
+        } else {
+          if (!panel.hasAttribute('hidden')) panel.setAttribute('hidden', '');
+          panel.classList.remove('is-open');
+          btnRef?.setAttribute('aria-expanded', 'false');
+        }
+      };
+      soundThemeState.close = () => soundThemeState.setOpen(false);
+      soundThemeState.toggle = () => soundThemeState.setOpen(!soundThemeState.open);
+    }
+    soundThemeState.setOpen(false);
+
+    if (!soundThemeState.boundOutside && soundThemePanel && soundThemeBtn) {
+      soundThemeState.boundOutside = (evt) => {
+        if (!soundThemeState.open) return;
+        const panel = soundThemeState.panel || soundThemePanel;
+        const btnRef = soundThemeState.btn || soundThemeBtn;
+        const target = evt.target;
+        if (panel && panel.contains(target)) return;
+        if (btnRef && btnRef.contains(target)) return;
+        soundThemeState.close?.();
+      };
+      document.addEventListener('pointerdown', soundThemeState.boundOutside);
+    }
+
+    if (!soundThemeState.boundEscape) {
+      soundThemeState.boundEscape = (evt) => {
+        if (evt.key === 'Escape') {
+          soundThemeState.close?.();
+        }
+      };
+      document.addEventListener('keydown', soundThemeState.boundEscape);
+    }
+
+    if (!soundThemeState.boundEvents) {
+      soundThemeState.boundEvents = true;
+      window.addEventListener('sound-theme:change', () => {
+        updateSoundThemeLabel();
+        renderSoundThemeOptions();
+      });
+      window.addEventListener('instrument-catalog:loaded', () => {
+        renderSoundThemeOptions();
+        updateSoundThemeLabel();
+      });
+      window.addEventListener('resize', () => {
+        positionSoundThemePanel();
+      });
+    }
+    updateSoundThemeLabel();
+
+
     const menuState = bar.__menuState || (bar.__menuState = {});
     menuState.btn = menuBtn;
     menuState.panel = menuPanel;
@@ -744,6 +986,7 @@ if (document.readyState === 'loading') {
       if (action === 'menu-toggle'){
         e.preventDefault();
         bpmState?.close?.();
+        bar.__soundThemeState?.close?.();
         menuState?.toggle?.();
         return;
       }
@@ -755,8 +998,16 @@ if (document.readyState === 'loading') {
       if (action === 'bpm'){
         e.preventDefault();
         try{ await resumeAudioContextIfNeeded(); }catch{}
+        bar.__soundThemeState?.close?.();
         bpmState?.toggle?.();
         try{ if (bpmState?.open) bpmState?.slider?.focus?.(); }catch{}
+        return;
+      }
+
+      if (action === 'sound-theme'){
+        e.preventDefault();
+        bpmState?.close?.();
+        bar.__soundThemeState?.toggle?.();
         return;
       }
 
@@ -836,6 +1087,10 @@ if (document.readyState === 'loading') {
         try{ bar.__bpmState?.sync?.(); }catch{}
         runSceneClear({ removePanels: true });
         menuState?.close?.();
+        try {
+          const nextTheme = pickRandomSoundTheme();
+          setSoundThemeKey(nextTheme);
+        } catch {}
         try{ localStorage.removeItem('prefs:lastScene'); }catch{}
         try{ window.UIHighlights?.onNewScene?.(); }catch{}
         try { window.dispatchEvent(new CustomEvent('guide:close')); } catch {}

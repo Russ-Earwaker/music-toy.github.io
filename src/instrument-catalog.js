@@ -5,10 +5,12 @@ const ID_TO_DISPLAY_NAME = new Map();
 const DISPLAY_NAME_TO_ID = new Map();
 const ID_TO_THEMES = new Map();
 const ALL_THEMES = new Set();
+let LAST_ENTRIES = [];
 
 export function getDisplayNameForId(id) { return ID_TO_DISPLAY_NAME.get(id); }
 export function getIdForDisplayName(displayName) { return DISPLAY_NAME_TO_ID.get(displayName); }
 export function getAllIds() { return Array.from(ID_TO_DISPLAY_NAME.keys()); }
+export function getInstrumentEntries() { return Array.from(LAST_ENTRIES); }
 export function getThemesForId(id){ return ID_TO_THEMES.get(id) || []; }
 export function getAllThemes(){ return Array.from(ALL_THEMES.values()).sort((a,b)=> a.localeCompare(b)); }
 
@@ -52,9 +54,14 @@ export async function loadInstrumentEntries(){
       // Dedup by display label; keep first id per label
       const byLabel = new Map();
       for (const e of out){ if (!byLabel.has(e.display)) byLabel.set(e.display, e); }
-      return Array.from(byLabel.values());
+      LAST_ENTRIES = Array.from(byLabel.values());
+      try {
+        window.dispatchEvent(new CustomEvent('instrument-catalog:loaded', { detail: { entries: LAST_ENTRIES } }));
+      } catch {}
+      return Array.from(LAST_ENTRIES);
     }
   }catch{}
+  LAST_ENTRIES = [];
   return [];
 }
 

@@ -428,6 +428,8 @@ const LABEL_POSITIONS = {
   'guide': { dir: 'right', offsetX: 38, offsetY: -70 },
   'goal select menu': { dir: 'right', offsetX: 32, offsetY: 0 },
   'toggle play/pause': { dir: 'bottom', offsetX: 0, offsetY: 30 },
+  'tempo (bpm)': { dir: 'bottom', offsetX: 0, offsetY: 26 },
+  'sound theme': { dir: 'bottom', offsetX: 0, offsetY: 26 },
   'mute': { dir: 'bottom', offsetX: 0, offsetY: 15 },
   'adjust volume': { dir: 'bottom', offsetX: 0, offsetY: 15 },
   // Spawner buttons

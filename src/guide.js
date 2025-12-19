@@ -21,6 +21,7 @@ let moreGoalsButtonRef = null;
 let lastGuideContext = null;
 let buttonsWrapRef = null;
 let lastActiveTaskSelectionId = null;
+let highlighterTarget = null;
 
 function getHighlighterHost() {
   if (typeof document === 'undefined') return null;
@@ -999,6 +1000,48 @@ window.addEventListener('guide:highlight-hide', () => {
   highlightNextTask = false;
   if (highlighterRef) highlighterRef.classList.remove('is-visible');
 });
+
+let highlighterRefreshRaf = 0;
+let highlighterRefreshTimer = 0;
+let highlighterObserver = null;
+
+function runHighlighterRefresh() {
+  if (!highlighterRef || !highlighterTarget) return;
+  if (!highlighterRef.classList.contains('is-visible')) return;
+  if (!highlighterTarget.isConnected) return;
+  showHighlighterForElement(highlighterTarget);
+}
+
+function scheduleHighlighterRefresh() {
+  if (!highlighterRefreshRaf) {
+    highlighterRefreshRaf = requestAnimationFrame(() => {
+      highlighterRefreshRaf = 0;
+      runHighlighterRefresh();
+    });
+  }
+  if (highlighterRefreshTimer) clearTimeout(highlighterRefreshTimer);
+  highlighterRefreshTimer = setTimeout(() => {
+    highlighterRefreshTimer = 0;
+    runHighlighterRefresh();
+  }, 140);
+}
+
+function watchUiScaleChanges() {
+  if (highlighterObserver) return;
+  if (typeof MutationObserver === 'undefined') return;
+  highlighterObserver = new MutationObserver(() => scheduleHighlighterRefresh());
+  highlighterObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['style', 'class'],
+  });
+}
+
+window.addEventListener('resize', scheduleHighlighterRefresh);
+window.addEventListener('orientationchange', scheduleHighlighterRefresh);
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', scheduleHighlighterRefresh);
+}
+watchUiScaleChanges();
 
 window.addEventListener('guide:open-goal-picker', () => {
   openGoalPicker();
