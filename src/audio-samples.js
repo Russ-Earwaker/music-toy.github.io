@@ -230,6 +230,11 @@ export function triggerInstrument(instrument, noteName='C4', when, toyId, option
   const id  = normId(instrument || 'TONE');
   const t   = safeStartTime(ctx, when);
   const vel = Math.max(0.001, Math.min(1.0, velocity));
+  try{
+    if (toyId && toyId !== 'master') {
+      window.dispatchEvent(new CustomEvent('toy:note', { detail: { toyId: String(toyId), instrument: id, note: noteName } }));
+    }
+  }catch{}
 
   // If id looks like a tone name in friendly form, normalize spaces/underscores/parentheses
   try{

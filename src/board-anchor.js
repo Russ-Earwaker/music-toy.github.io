@@ -50,6 +50,9 @@ let pulseBarT = 1;  // 0..1
 let beatDurSec = 0.5;
 let flashingCells = [];
 let lastFlashedCells = new Set();
+let chainCellAssignments = new Map(); // chainHeadId -> { i, j, color }
+let assignedCellKeys = new Set();
+let noteListenerActive = false;
 
 let markerEl = null;        // invisible world-space DOM marker (for centering)
 let miniBtnEl = null;       // UI button under ? launcher
@@ -157,6 +160,10 @@ function teardown() {
   lastBeatIndex = -1;
   pulseBeat = 0;
   pulseBar = 0;
+  flashingCells = [];
+  lastFlashedCells = new Set();
+  chainCellAssignments = new Map();
+  assignedCellKeys = new Set();
   if (markerEl && markerEl.parentElement) markerEl.parentElement.removeChild(markerEl);
   markerEl = null;
   if (miniBtnEl && miniBtnEl.parentElement) miniBtnEl.parentElement.removeChild(miniBtnEl);
@@ -404,6 +411,67 @@ function serviceFlashes(dt) {
   }
 }
 
+function getChainHeadId(toyId) {
+  if (!toyId) return null;
+  const start = document.getElementById(toyId);
+  if (!start) return null;
+  let node = start;
+  let safety = 0;
+  while (node && safety < 40) {
+    const parentId = node.dataset.chainParent || node.dataset.prevToyId;
+    if (!parentId) break;
+    const parent = document.getElementById(parentId);
+    if (!parent || parent === node) break;
+    node = parent;
+    safety++;
+  }
+  return node && node.id ? node.id : null;
+}
+
+function randomBrightColor() {
+  const hue = Math.floor(Math.random() * 360);
+  const sat = 82 + Math.floor(Math.random() * 16);
+  const light = 54 + Math.floor(Math.random() * 14);
+  return `hsl(${hue} ${sat}% ${light}%)`;
+}
+
+function assignCellForChain(chainHeadId) {
+  if (!chainHeadId) return null;
+  const existing = chainCellAssignments.get(chainHeadId);
+  if (existing) return existing;
+
+  let i = 0;
+  let j = 0;
+  let key = '';
+  const maxCells = 36;
+  const canReserve = assignedCellKeys.size < maxCells;
+  let attempts = 0;
+  while (attempts < 120) {
+    i = Math.floor(Math.random() * 6);
+    j = Math.floor(Math.random() * 6);
+    key = `${i},${j}`;
+    if (!canReserve || !assignedCellKeys.has(key)) break;
+    attempts++;
+  }
+
+  const color = randomBrightColor();
+  const entry = { i, j, color };
+  chainCellAssignments.set(chainHeadId, entry);
+  assignedCellKeys.add(key);
+  return entry;
+}
+
+function flashCell(i, j, color, intensity = 1.0) {
+  for (let idx = 0; idx < flashingCells.length; idx++) {
+    const cell = flashingCells[idx];
+    if (cell.i === i && cell.j === j && cell.color === color) {
+      cell.alpha = Math.max(cell.alpha, intensity);
+      return;
+    }
+  }
+  flashingCells.push({ i, j, alpha: intensity, color });
+}
+
 function triggerGridFlash(count) {
   const newCells = new Set();
   let attempts = 0;
@@ -411,7 +479,7 @@ function triggerGridFlash(count) {
     const i = Math.floor(Math.random() * 6);
     const j = Math.floor(Math.random() * 6);
     const key = `${i},${j}`;
-    if (!lastFlashedCells.has(key)) {
+    if (!lastFlashedCells.has(key) && !assignedCellKeys.has(key)) {
       newCells.add(key);
     }
     attempts++;
@@ -420,7 +488,7 @@ function triggerGridFlash(count) {
   lastFlashedCells = new Set(newCells);
   for (const key of newCells) {
     const [i, j] = key.split(',').map(Number);
-    flashingCells.push({ i, j, alpha: 1.0 });
+    flashCell(i, j, '#ffffff', 1.0);
   }
 }
 
@@ -570,8 +638,11 @@ function drawAnchorGrid(local, drawScale = 1) {
     
     // --- Flashing cells ---
     for (const cell of flashingCells) {
-      ctx.fillStyle = `rgba(255, 255, 255, ${cell.alpha * 0.8})`;
+      ctx.save();
+      ctx.globalAlpha = cell.alpha * 0.8;
+      ctx.fillStyle = cell.color || '#ffffff';
       ctx.fillRect(dx + cell.i * gridSize, dy + cell.j * gridSize, gridSize, gridSize);
+      ctx.restore();
     }
     
     ctx.restore();
@@ -622,6 +693,28 @@ export function initBoardAnchor() {
   __enabled = readEnabled();
   if (!__enabled) { teardown(); return; }
   ensureCanvas();
+  if (!noteListenerActive) {
+    noteListenerActive = true;
+    window.addEventListener('toy:note', (e) => {
+      const toyId = e?.detail?.toyId;
+      if (!toyId || toyId === 'master') return;
+      const chainHeadId = getChainHeadId(String(toyId));
+      if (!chainHeadId) return;
+      const entry = assignCellForChain(chainHeadId);
+      if (!entry) return;
+      flashCell(entry.i, entry.j, entry.color, 1.0);
+    });
+    document.addEventListener('toy:remove', (e) => {
+      const panel = e?.detail?.panel;
+      const id = panel?.id;
+      if (!id) return;
+      const entry = chainCellAssignments.get(id);
+      if (entry) {
+        assignedCellKeys.delete(`${entry.i},${entry.j}`);
+        chainCellAssignments.delete(id);
+      }
+    });
+  }
 }
 
 export function setBoardAnchorEnabled(nextEnabled) {
