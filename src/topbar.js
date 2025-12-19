@@ -591,11 +591,12 @@ function ensureTopbar(){
           '<div class="bpm-label">120</div>',
         '</div>',
       ].join('');
-      playBtn?.insertAdjacentElement('afterend', bpmBtn);
+      playBtn?.insertAdjacentElement('beforebegin', bpmBtn);
     } else {
       bpmBtn.classList.add('c-btn');
       bpmBtn.type = 'button';
       if (!bpmBtn.dataset.helpPosition) bpmBtn.dataset.helpPosition = 'bottom';
+      playBtn?.insertAdjacentElement('beforebegin', bpmBtn);
     }
     updateBpmButtonVisual(bpmBtn);
 
@@ -615,13 +616,14 @@ function ensureTopbar(){
       ].join('');
       const themeCore = soundThemeBtn.querySelector('.c-btn-core');
       if (themeCore) themeCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonTheme.png')");
-      bpmBtn?.insertAdjacentElement('afterend', soundThemeBtn);
+      playBtn?.insertAdjacentElement('afterend', soundThemeBtn);
     } else {
       soundThemeBtn.classList.add('c-btn', 'sound-theme-btn');
       soundThemeBtn.type = 'button';
       if (!soundThemeBtn.dataset.helpPosition) soundThemeBtn.dataset.helpPosition = 'bottom';
       const themeCore = soundThemeBtn.querySelector('.c-btn-core');
       if (themeCore) themeCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonTheme.png')");
+      playBtn?.insertAdjacentElement('afterend', soundThemeBtn);
     }
 
     let soundThemePanel = bar.querySelector('#topbar-sound-theme-panel');

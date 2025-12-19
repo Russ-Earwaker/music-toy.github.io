@@ -180,6 +180,7 @@ html, body {
   background: #0d141d;
   border-bottom: 1px solid #1c2430;
   z-index: 1300;
+  --topbar-side-btn-size: var(--side-icon-size);
 }
 
 .topbar-menu-wrap {
@@ -2391,11 +2392,11 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
 #topbar [data-action="bpm"] {
   position: fixed !important;
   top: var(--top-btn-offset) !important;
-  left: calc(50% + var(--top-btn-size) + var(--ui-float-gap-sm)) !important;
+  left: calc(50% - (var(--top-btn-size) / 2) - var(--ui-float-gap-sm) - (var(--topbar-side-btn-size) / 2)) !important;
   right: auto !important;
-  width: var(--top-btn-size) !important;
-  height: var(--top-btn-size) !important;
-  --c-btn-size: var(--top-btn-size) !important;
+  width: var(--topbar-side-btn-size) !important;
+  height: var(--topbar-side-btn-size) !important;
+  --c-btn-size: var(--topbar-side-btn-size) !important;
   --c-btn-bg: #000 !important;
   --c-btn-border: rgba(255,255,255,0.35) !important;
   --c-btn-highlight: rgba(255,255,255,0.08) !important;
@@ -2422,9 +2423,12 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
   left: 50%;
   top: 50%;
   /* Lift the label by half the button radius (¼ diameter). */
-  transform: translate(-50%, -50%) translateY(calc(var(--top-btn-size) * -0.25));
+  transform: translate(-50%, -50%) translateY(calc(var(--topbar-side-btn-size) * -0.25));
   z-index: 2;
-  font: 900 28px/1 system-ui, -apple-system, Segoe UI, sans-serif;
+  font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+  font-size: calc(var(--topbar-side-btn-size) * 0.36);
+  font-weight: 900;
+  line-height: 1;
   letter-spacing: 0.04em;
   color: rgba(80, 88, 98, 0.95);
   text-shadow: none;
@@ -2490,8 +2494,8 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
 
 .topbar-bpm-panel {
   position: fixed;
-  top: calc(var(--top-btn-offset) + var(--top-btn-size) + 10px);
-  left: calc(50% + var(--top-btn-size) + var(--ui-float-gap-sm));
+  top: calc(var(--top-btn-offset) + var(--topbar-side-btn-size) + 10px);
+  left: calc(50% - (var(--top-btn-size) / 2) - var(--ui-float-gap-sm) - (var(--topbar-side-btn-size) / 2));
   transform: translateX(-50%);
   min-width: 240px;
   padding: 12px 12px;
@@ -2571,11 +2575,11 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
 #topbar [data-action="sound-theme"] {
   position: fixed !important;
   top: var(--top-btn-offset) !important;
-  left: calc(50% + (var(--top-btn-size) * 2) + (var(--ui-float-gap-sm) * 2)) !important;
+  left: calc(50% + (var(--top-btn-size) / 2) + var(--ui-float-gap-sm) + (var(--topbar-side-btn-size) / 2)) !important;
   right: auto !important;
-  width: var(--top-btn-size) !important;
-  height: var(--top-btn-size) !important;
-  --c-btn-size: var(--top-btn-size) !important;
+  width: var(--topbar-side-btn-size) !important;
+  height: var(--topbar-side-btn-size) !important;
+  --c-btn-size: var(--topbar-side-btn-size) !important;
   transform: translateX(-50%) !important;
   z-index: 1450 !important;
   pointer-events: auto !important;
