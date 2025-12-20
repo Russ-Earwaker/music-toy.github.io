@@ -17,6 +17,11 @@ let activeStreamMode = 'line'; // line | orbit
 let activeOrbitCenter = null;
 let activeOrbitRadius = 0;
 let activeOrbitScale = 1;
+let anchorCanvasPrevZ = null;
+let anchorCanvasPrevParent = null;
+let anchorCanvasPrevNext = null;
+let anchorCanvasPrevPos = null;
+let anchorCanvasPrevInset = null;
 let anchorHoverStrength = 0;
 let anchorOrbitPhase = 0;
 let anchorOrbitSpeed = 0.9;
@@ -550,8 +555,14 @@ function startFlight(ctx, canvas, startEl, endEl) {
         } else { // Regular stream
             p.progress = Math.min(1, p.progress + p.speed * (dt * 60));
             const t = p.progress;
-            p.x = p.startX + (p.endX - p.startX) * t;
-            p.y = p.startY + (p.endY - p.startY) * t + Math.sin(p.phase + t * Math.PI * 2 * p.frequency) * p.amplitude;
+            const dx = p.endX - p.startX;
+            const dy = p.endY - p.startY;
+            const len = Math.sqrt(dx * dx + dy * dy) || 1;
+            const perpX = -dy / len;
+            const perpY = dx / len;
+            const wiggle = Math.sin(p.phase + t * Math.PI * 2 * p.frequency) * p.amplitude;
+            p.x = p.startX + dx * t + perpX * wiggle;
+            p.y = p.startY + dy * t + perpY * wiggle;
 
             if (p.progress >= 1) {
                 particles.splice(i, 1);
@@ -822,6 +833,26 @@ export function startParticleStream(originEl, targetEl, options = {}) {
   activeOwner = owner;
   activeStreamMode = 'line';
 
+  if (
+    owner === 'guide' &&
+    activeOriginEl === originEl &&
+    activeTargetEl === targetEl &&
+    (now - lastStartTs) < 500
+  ) {
+    return;
+  }
+
+  if (newKey === prevKey && (now - lastStartTs) < 350) {
+    return;
+  }
+
+  if (newKey === prevKey && spawnParticles && activeStreamMode === 'line' && activeOwner === owner) {
+    activeOriginEl = originEl;
+    activeTargetEl = targetEl;
+    recomputeActiveTaskMaskRect(frontCanvas);
+    return;
+  }
+
   if (newKey === prevKey && (now - lastStopTs) < 200) {
     fxDebug('[FX] startParticleStream deduped (recent stop; continuing)', { key: newKey });
     const nextLayer = layer === 'behind-target' ? 'behind' : 'front';
@@ -969,6 +1000,22 @@ export function startOrbitParticleStreamAtPoint(centerClient, options = {}) {
 
   setupCanvases(null, front);
   applyFrontCanvasLayer('front');
+  if (options?.layer === 'behind-world' && frontCanvas) {
+    if (anchorCanvasPrevZ == null) {
+      anchorCanvasPrevZ = frontCanvas.style.zIndex || '';
+    }
+    if (!anchorCanvasPrevParent) {
+      anchorCanvasPrevParent = frontCanvas.parentElement;
+      anchorCanvasPrevNext = frontCanvas.nextSibling;
+      anchorCanvasPrevPos = frontCanvas.style.position || '';
+      anchorCanvasPrevInset = frontCanvas.style.inset || '';
+    }
+    const host = document.querySelector('.board-viewport') || document.body;
+    host.prepend(frontCanvas);
+    frontCanvas.style.position = 'absolute';
+    frontCanvas.style.inset = '0';
+    frontCanvas.style.setProperty('z-index', '0', 'important');
+  }
 
   const rect = front.getBoundingClientRect();
   const cx = Number.isFinite(centerClient?.x) ? centerClient.x - rect.left : rect.width * 0.5;
@@ -1090,6 +1137,23 @@ export function stopParticleStream(options = {}) {
     activeOrbitCenter = null;
     activeOrbitRadius = 0;
     activeOwner = null;
+    if (owner === 'anchor' && frontCanvas) {
+      frontCanvas.style.zIndex = anchorCanvasPrevZ ?? '';
+      anchorCanvasPrevZ = null;
+      if (anchorCanvasPrevParent) {
+        if (anchorCanvasPrevNext && anchorCanvasPrevNext.parentElement === anchorCanvasPrevParent) {
+          anchorCanvasPrevParent.insertBefore(frontCanvas, anchorCanvasPrevNext);
+        } else {
+          anchorCanvasPrevParent.appendChild(frontCanvas);
+        }
+        frontCanvas.style.position = anchorCanvasPrevPos ?? '';
+        frontCanvas.style.inset = anchorCanvasPrevInset ?? '';
+        anchorCanvasPrevParent = null;
+        anchorCanvasPrevNext = null;
+        anchorCanvasPrevPos = null;
+        anchorCanvasPrevInset = null;
+      }
+    }
     return;
   }
 
@@ -1106,6 +1170,23 @@ export function stopParticleStream(options = {}) {
     activeOrbitCenter = null;
     activeOrbitRadius = 0;
     activeOwner = null;
+    if (owner === 'anchor' && frontCanvas) {
+      frontCanvas.style.zIndex = anchorCanvasPrevZ ?? '';
+      anchorCanvasPrevZ = null;
+      if (anchorCanvasPrevParent) {
+        if (anchorCanvasPrevNext && anchorCanvasPrevNext.parentElement === anchorCanvasPrevParent) {
+          anchorCanvasPrevParent.insertBefore(frontCanvas, anchorCanvasPrevNext);
+        } else {
+          anchorCanvasPrevParent.appendChild(frontCanvas);
+        }
+        frontCanvas.style.position = anchorCanvasPrevPos ?? '';
+        frontCanvas.style.inset = anchorCanvasPrevInset ?? '';
+        anchorCanvasPrevParent = null;
+        anchorCanvasPrevNext = null;
+        anchorCanvasPrevPos = null;
+        anchorCanvasPrevInset = null;
+      }
+    }
     fxDebug('[tutorial-fx] destroy stream (drain)', {
       key: lastStreamKey,
       remaining: particles.length,

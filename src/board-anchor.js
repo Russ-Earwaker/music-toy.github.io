@@ -490,6 +490,10 @@ function clearAnchorGuideHighlight() {
 
 function applyAnchorGuideHighlight(target, highlight) {
   if (!target) return;
+  if (highlight === 'toy') {
+    clearAnchorGuideHighlight();
+    return;
+  }
   if (lastAnchorGuideTarget && lastAnchorGuideTarget !== target) {
     clearAnchorGuideHighlight();
   }
@@ -591,6 +595,7 @@ function updateHoverFx(local, drawScale) {
       orbitRadius,
       scale: zoomScale,
       forceBurst: hoverForceBurstNext,
+      layer: 'behind-world',
     });
     hoverForceBurstNext = false;
     hoverActive = !!started;
@@ -929,7 +934,7 @@ function drawAnchorParticles(local, nowSec, running, drawScale = 1, pulseBeat = 
 
   // Central sparkle (keeps a “ball” presence)
   const pulseFactor = clamp(pulseBeat + pulseBar, 0, 2.0) / 2.0;
-  const base = { r: 40, g: 60, b: 120 };
+  const base = { r: 80, g: 60, b: 220 };
   const cyan = { r: 92, g: 178, b: 255 };
   const idlePulse = 0.5 + 0.5 * Math.sin(nowSec * 2.35 + pulseBeat * 1.5 + pulseBar * 1.1);
   const mix = corePulseActive
@@ -942,6 +947,11 @@ function drawAnchorParticles(local, nowSec, running, drawScale = 1, pulseBeat = 
   ctx.save();
   ctx.globalCompositeOperation = 'source-over';
   ctx.globalAlpha = 1;
+  // Solid base to avoid any "hole" look.
+  ctx.fillStyle = `rgb(${base.r},${base.g},${base.b})`;
+  ctx.beginPath();
+  ctx.arc(0, 0, coreR * 0.62, 0, Math.PI * 2);
+  ctx.fill();
   ctx.fillStyle = corePulseActive
     ? `rgba(${sparkR},${sparkG},${sparkB},${sparkA.toFixed(3)})`
     : `rgb(${sparkR},${sparkG},${sparkB})`;
