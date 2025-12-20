@@ -11,6 +11,7 @@
 // - Entire system can be disabled via window.__MT_ANCHOR_DISABLED or localStorage.mt_anchor_enabled='0'
 
 import { getViewportElement, worldToScreen } from './board-viewport.js';
+import { startOrbitParticleStreamAtPoint, stopParticleStream, updateOrbitParticleStreamCenter } from './tutorial-fx.js';
 import { BEATS_PER_BAR } from './audio-core.js';
 
 const DEFAULT_WORLD_POS = Object.freeze({ x: 0, y: 0 });
@@ -32,6 +33,8 @@ const GRAD_MIN_ALPHA = 0.12;
 const GRAD_MAX_ALPHA = 0.34;
 const GRAD_EDGE_PAD_PX = 34;
 const GRAD_OFFSCREEN_FADE_SEC = 1.0;
+const HOVER_RADIUS_BASE_PX = 34;
+const HOVER_ORBIT_RADIUS_BASE_PX = 32;
 
 let __enabled = true;
 
@@ -58,6 +61,12 @@ let noteListenerActive = false;
 let markerEl = null;        // invisible world-space DOM marker (for centering)
 let miniBtnEl = null;       // UI button under ? launcher
 let miniStyleEl = null;
+let hoverActive = false;
+let hoverPointer = null;
+let hoverBound = false;
+let hoverHostEl = null;
+let hoverMoveHandler = null;
+let hoverLeaveHandler = null;
 
 function readEnabled() {
   try {
@@ -133,6 +142,7 @@ function ensureCanvas() {
 
   ensureMarker();
   ensureMiniButton();
+  ensureHoverListeners();
   return canvas;
 }
 
@@ -152,9 +162,20 @@ function onResize() {
 function teardown() {
   try { window.removeEventListener('resize', onResize); } catch {}
   try { window.removeEventListener('overview:transition', onResize); } catch {}
+  try {
+    if (hoverHostEl && hoverMoveHandler) hoverHostEl.removeEventListener('pointermove', hoverMoveHandler);
+    if (hoverHostEl && hoverLeaveHandler) hoverHostEl.removeEventListener('pointerleave', hoverLeaveHandler);
+  } catch {}
   if (canvas && canvas.parentElement) canvas.parentElement.removeChild(canvas);
   canvas = null;
   ctx = null;
+  hoverActive = false;
+  hoverPointer = null;
+  hoverBound = false;
+  hoverHostEl = null;
+  hoverMoveHandler = null;
+  hoverLeaveHandler = null;
+  try { stopParticleStream({ immediate: true, owner: 'anchor' }); } catch {}
   lastNowMs = 0;
   offscreenFade01 = 0;
   lastPhase01 = 0;
@@ -366,6 +387,65 @@ function getViewportLocalPointFromWorld(worldPt) {
   const x = abs.x - vpRect.left;
   const y = abs.y - vpRect.top;
   return { x, y, w: vpRect.width, h: vpRect.height };
+}
+
+function ensureHoverListeners() {
+  if (hoverBound) return;
+  const host = pickHost();
+  if (!host) return;
+  const onMove = (evt) => {
+    const rect = host.getBoundingClientRect();
+    hoverPointer = {
+      x: evt.clientX - rect.left,
+      y: evt.clientY - rect.top,
+      rectLeft: rect.left,
+      rectTop: rect.top,
+    };
+  };
+  const onLeave = () => {
+    hoverPointer = null;
+    if (hoverActive) {
+      hoverActive = false;
+      try { stopParticleStream({ immediate: false, owner: 'anchor' }); } catch {}
+    }
+  };
+  hoverHostEl = host;
+  hoverMoveHandler = onMove;
+  hoverLeaveHandler = onLeave;
+  host.addEventListener('pointermove', onMove, { passive: true });
+  host.addEventListener('pointerleave', onLeave, { passive: true });
+  hoverBound = true;
+}
+
+function updateHoverFx(local, drawScale) {
+  if (!hoverPointer || !local) {
+    if (hoverActive) {
+      hoverActive = false;
+      try { stopParticleStream({ immediate: false, owner: 'anchor' }); } catch {}
+    }
+    return;
+  }
+  const dx = hoverPointer.x - local.x;
+  const dy = hoverPointer.y - local.y;
+  const radius = Math.max(HOVER_RADIUS_BASE_PX, HOVER_RADIUS_BASE_PX * drawScale);
+  const inside = (dx * dx + dy * dy) <= (radius * radius);
+  const centerClient = {
+    x: hoverPointer.rectLeft + local.x,
+    y: hoverPointer.rectTop + local.y,
+  };
+
+  if (inside && !hoverActive) {
+    const orbitRadius = Math.max(HOVER_ORBIT_RADIUS_BASE_PX, HOVER_ORBIT_RADIUS_BASE_PX * drawScale);
+    const started = startOrbitParticleStreamAtPoint(centerClient, { owner: 'anchor', orbitRadius });
+    hoverActive = !!started;
+  } else if (!inside && hoverActive) {
+    hoverActive = false;
+    try { stopParticleStream({ immediate: false, owner: 'anchor' }); } catch {}
+  }
+
+  if (hoverActive) {
+    updateOrbitParticleStreamCenter(centerClient);
+  }
 }
 
 function getDistanceWorldFromCenter(anchorWorld) {
@@ -782,6 +862,7 @@ export function tickBoardAnchor({ nowMs, loopInfo, running } = {}) {
 
           drawGradient(local, distWorld, !!running, drawScale);
   drawAnchorParticles(local, nowSec, !!running, drawScale, pulseBeat, pulseBar);
+  updateHoverFx(local, drawScale);
 }
 
 try {

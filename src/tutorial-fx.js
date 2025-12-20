@@ -12,6 +12,14 @@ let activeCanvas = null;
 let activeCtx = null;
 let activeLayer = 'front';
 let activeTargetEl = null;
+let activeOwner = null;
+let activeStreamMode = 'line'; // line | orbit
+let activeOrbitCenter = null;
+let activeOrbitRadius = 0;
+let anchorHoverStrength = 0;
+let anchorOrbitPhase = 0;
+let anchorOrbitSpeed = 0.9;
+let anchorPulsePhase = 0;
 let lastStreamKey = null;
 let lastStartTs = 0;
 let lastStopTs = 0;
@@ -123,6 +131,13 @@ function elKey(el) {
 const PARTICLES_PER_SEC = 60;
 const BURST_COLOR_RGB = { r: 92, g: 178, b: 255 };
 const burstColor = (alpha = 1) => `rgba(${BURST_COLOR_RGB.r}, ${BURST_COLOR_RGB.g}, ${BURST_COLOR_RGB.b}, ${alpha})`;
+const anchorColor = (alpha, pulse) => {
+  const whiteMix = Math.max(0, Math.min(0.45, pulse * 0.45));
+  const r = Math.round(BURST_COLOR_RGB.r + (255 - BURST_COLOR_RGB.r) * whiteMix);
+  const g = Math.round(BURST_COLOR_RGB.g + (255 - BURST_COLOR_RGB.g) * whiteMix);
+  const b = Math.round(BURST_COLOR_RGB.b + (255 - BURST_COLOR_RGB.b) * whiteMix);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
 
 function recomputeActiveTaskMaskRect(front) {
   if (!front || !activeOriginEl) {
@@ -222,6 +237,9 @@ function createParticle(x, y, endPos) {
     orbitRadius: 0,
     orbitPhase: 0,
     orbitSpeed: 0,
+    isOrbit: false,
+    isAnchorSun: false,
+    isAnchorMoon: false,
   };
 }
 
@@ -269,6 +287,39 @@ function createBurst(x, y, endPos) {
   }
 }
 
+function createOrbitParticle(center, radius) {
+  const p = createParticle(center.x, center.y, null);
+  p.isOrbit = true;
+  p.life = 1.0;
+  p.size = 1.6 + Math.random() * 0.8;
+  p.orbitRadius = radius * (0.9 + Math.random() * 0.25);
+  p.orbitPhase = Math.random() * Math.PI * 2;
+  p.orbitSpeed = 0.7 + Math.random() * 0.4;
+  return p;
+}
+
+function createAnchorBurst(center) {
+  const sun = createParticle(center.x, center.y, null);
+  sun.isAnchorSun = true;
+  sun.size = 10.5;
+  sun.life = 1.0;
+  particles.push(sun);
+
+  const speed = 0.85 + Math.random() * 0.2;
+  anchorOrbitSpeed = speed;
+  anchorOrbitPhase = Math.random() * Math.PI * 2;
+  for (let i = 0; i < 2; i++) {
+    const moon = createParticle(center.x, center.y, null);
+    moon.isAnchorMoon = true;
+    moon.size = 3.6;
+    moon.orbitRadius = 28;
+    moon.orbitPhase = i * Math.PI;
+    moon.orbitSpeed = speed;
+    moon.life = 1.0;
+    particles.push(moon);
+  }
+}
+
 function startFlight(ctx, canvas, startEl, endEl) {
     // If we lose the canvas/context entirely, bail and clear highlights.
     if (!ctx || !canvas) {
@@ -286,8 +337,18 @@ function startFlight(ctx, canvas, startEl, endEl) {
     if (typeof startFlight._accum !== 'number') startFlight._accum = 0;
 
     const now = performance.now();
-    const shimmerPhase = now * 0.012;
     const dt = Math.max(0, now - startFlight._lastTs) / 1000;
+    const shimmerPhase = now * 0.012;
+    const anchorMode = activeStreamMode === 'orbit' && activeOwner === 'anchor';
+    if (anchorMode) {
+      const target = spawnParticles ? 1 : 0;
+      const ramp = Math.min(1, dt * 3.2);
+      anchorHoverStrength += (target - anchorHoverStrength) * ramp;
+      anchorPulsePhase += dt * 0.85;
+      anchorOrbitPhase += dt * 1.6 * anchorOrbitSpeed;
+    } else {
+      anchorHoverStrength = 0;
+    }
     startFlight._lastTs = now;
 
     const canvasRect = canvas.getBoundingClientRect();
@@ -314,10 +375,12 @@ function startFlight(ctx, canvas, startEl, endEl) {
         };
       }
     };
-    maybeUpdateStreamEndpoints();
+    if (activeStreamMode === 'line') {
+      maybeUpdateStreamEndpoints();
+    }
 
     let sx = 0, sy = 0, ex = 0, ey = 0;
-    if (spawnParticles && activeStreamStart && activeStreamEnd) {
+    if (spawnParticles && activeStreamMode === 'line' && activeStreamStart && activeStreamEnd) {
       sx = activeStreamStart.x;
       sy = activeStreamStart.y;
       ex = activeStreamEnd.x;
@@ -350,6 +413,13 @@ function startFlight(ctx, canvas, startEl, endEl) {
         spawnParticles,
         particles: particles.length,
       });
+    }
+    if (spawnParticles && activeStreamMode === 'orbit' && activeOrbitCenter) {
+      startFlight._accum += PARTICLES_PER_SEC * dt;
+      while (startFlight._accum >= 1) {
+        particles.push(createOrbitParticle(activeOrbitCenter, activeOrbitRadius));
+        startFlight._accum -= 1;
+      }
     }
 
     if (canvas && ctx) {
@@ -387,7 +457,36 @@ function startFlight(ctx, canvas, startEl, endEl) {
     for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
 
-        if (p.isBurst && !p.isSun && !p.isSweeper) { // Orbiter
+        if (p.isAnchorSun) {
+            if (activeOrbitCenter) {
+              p.x = activeOrbitCenter.x;
+              p.y = activeOrbitCenter.y;
+            }
+            if (!spawnParticles && anchorHoverStrength < 0.02) {
+              particles.splice(i, 1);
+              continue;
+            }
+        } else if (p.isAnchorMoon) {
+            if (activeOrbitCenter) {
+              const phase = anchorOrbitPhase + (p.orbitPhase || 0);
+              p.x = activeOrbitCenter.x + Math.cos(phase) * p.orbitRadius;
+              p.y = activeOrbitCenter.y + Math.sin(phase) * p.orbitRadius;
+            }
+            if (!spawnParticles && anchorHoverStrength < 0.02) {
+              particles.splice(i, 1);
+              continue;
+            }
+        } else if (p.isOrbit) {
+            p.life -= dt * 0.55;
+            p.orbitPhase += (dt * 6) * p.orbitSpeed;
+            const c = activeOrbitCenter || { x: p.startX, y: p.startY };
+            p.x = c.x + Math.cos(p.orbitPhase) * p.orbitRadius;
+            p.y = c.y + Math.sin(p.orbitPhase) * p.orbitRadius;
+            if (p.life <= 0) {
+                particles.splice(i, 1);
+                continue;
+            }
+        } else if (p.isBurst && !p.isSun && !p.isSweeper) { // Orbiter
             if (sun) {
                 p.progress = sun.progress;
                 const orbitAngle = p.orbitPhase + sun.progress * 20 * p.orbitSpeed;
@@ -455,10 +554,20 @@ function startFlight(ctx, canvas, startEl, endEl) {
 
         if(ctx){
             ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            const anchorScale = (p.isAnchorSun || p.isAnchorMoon || p.isOrbit)
+              ? Math.max(0.001, anchorHoverStrength)
+              : 1;
+            ctx.arc(p.x, p.y, p.size * anchorScale, 0, Math.PI * 2);
             let fillAlpha = 0.85;
             let trailHighlightAlpha = null;
-            if (p.isSun || (p.isBurst && !p.isSun && !p.isSweeper)) {
+            if (p.isAnchorSun) {
+              const shimmer = Math.sin(shimmerPhase);
+              fillAlpha = Math.min(1, Math.max(0.55, 0.78 + 0.22 * shimmer)) * anchorHoverStrength;
+            } else if (p.isAnchorMoon) {
+              fillAlpha = 0.9 * anchorHoverStrength;
+            } else if (p.isOrbit) {
+              fillAlpha = 0.65 * anchorHoverStrength;
+            } else if (p.isSun || (p.isBurst && !p.isSun && !p.isSweeper)) {
               const phaseOffset = (p.orbitPhase ?? p.phase ?? 0) * 0.8;
               const shimmer = Math.sin(shimmerPhase + phaseOffset);
               fillAlpha = Math.min(1, Math.max(0.45, 0.75 + 0.25 * shimmer));
@@ -470,7 +579,12 @@ function startFlight(ctx, canvas, startEl, endEl) {
               fillAlpha = 0.78;
             }
 
-            ctx.fillStyle = burstColor(fillAlpha);
+            if (anchorMode && (p.isAnchorSun || p.isAnchorMoon || p.isOrbit)) {
+              const pulse = 0.5 + 0.5 * Math.sin(anchorPulsePhase);
+              ctx.fillStyle = anchorColor(fillAlpha, pulse);
+            } else {
+              ctx.fillStyle = burstColor(fillAlpha);
+            }
             ctx.fill();
 
             if (p.isTrail && p.trailBaseSize) {
@@ -528,6 +642,10 @@ function startFlight(ctx, canvas, startEl, endEl) {
         activeTargetEl = null;
         activeTaskMaskRect = null;
         activeOriginEl = null;
+        activeStreamMode = 'line';
+        activeOrbitCenter = null;
+        activeOrbitRadius = 0;
+        activeOwner = null;
     }
 }
 
@@ -537,6 +655,7 @@ export function startParticleStream(originEl, targetEl, options = {}) {
   const durationMs = Number.isFinite(options?.durationMs) ? Math.max(0, options.durationMs) : null;
   const skipBurst = options?.skipBurst === true;
   const suppressGuideTapAck = options?.suppressGuideTapAck === true;
+  const owner = options?.owner || 'guide';
   fxDebug('[tutorial-fx] resolved layer', {
     layer,
     originClass: originEl?.className,
@@ -683,10 +802,13 @@ export function startParticleStream(originEl, targetEl, options = {}) {
     notifyGuideTaskTapped();
   }
 
-  const newKey = `o=${elKey(originEl)}->t=${elKey(targetEl)}:L=${layer}`;
+  const newKey = `o=${elKey(originEl)}->t=${elKey(targetEl)}:L=${layer}:O=${owner}`;
   const prevKey = lastStreamKey;
   let forceReset = !prevKey || (prevKey && newKey !== prevKey);
   const now = performance?.now?.() ?? Date.now();
+
+  activeOwner = owner;
+  activeStreamMode = 'line';
 
   if (newKey === prevKey && (now - lastStopTs) < 200) {
     fxDebug('[FX] startParticleStream deduped (recent stop; continuing)', { key: newKey });
@@ -802,6 +924,8 @@ export function startParticleStream(originEl, targetEl, options = {}) {
   activeCtx = drawCtx;
   activeCanvas = drawCanvas;
   activeTargetEl = targetEl;
+  activeOrbitCenter = null;
+  activeOrbitRadius = 0;
   if (forceReset) {
     if (layer === 'behind-target' && frontCanvas && frontCtx) {
       const rect = frontCanvas.getBoundingClientRect();
@@ -824,6 +948,59 @@ export function startParticleStream(originEl, targetEl, options = {}) {
   animationFrameId = requestAnimationFrame(() => startFlight(drawCtx, drawCanvas, originEl, targetEl));
 }
 
+export function startOrbitParticleStreamAtPoint(centerClient, options = {}) {
+  const owner = options?.owner || 'anchor';
+  if (activeOwner && activeOwner !== owner) return false;
+
+  const front = ensureFrontCanvas();
+  if (!front) return false;
+
+  setupCanvases(null, front);
+  applyFrontCanvasLayer('front');
+
+  const rect = front.getBoundingClientRect();
+  const cx = Number.isFinite(centerClient?.x) ? centerClient.x - rect.left : rect.width * 0.5;
+  const cy = Number.isFinite(centerClient?.y) ? centerClient.y - rect.top : rect.height * 0.5;
+  activeOrbitCenter = { x: cx, y: cy };
+  activeOrbitRadius = Number.isFinite(options?.orbitRadius) ? options.orbitRadius : 42;
+  activeStreamMode = 'orbit';
+  activeOwner = owner;
+  activeTargetEl = null;
+  activeTaskMaskRect = null;
+  activeOriginEl = null;
+  spawnParticles = true;
+
+  const newKey = `orbit:${Math.round(cx)}:${Math.round(cy)}:R=${Math.round(activeOrbitRadius)}:O=${owner}`;
+  const now = performance?.now?.() ?? Date.now();
+  lastStreamKey = newKey;
+  lastStartTs = now;
+
+  if (!particles.length) {
+    createAnchorBurst(activeOrbitCenter);
+  }
+
+  const drawCtx = frontCtx;
+  const drawCanvas = frontCanvas;
+  if (!drawCtx || !drawCanvas) return false;
+  activeLayer = 'front';
+  activeCtx = drawCtx;
+  activeCanvas = drawCanvas;
+  if (!animationFrameId) {
+    startFlight._lastTs = performance?.now?.() ?? Date.now();
+    startFlight._accum = 0;
+    animationFrameId = requestAnimationFrame(() => startFlight(drawCtx, drawCanvas, null, null));
+  }
+  return true;
+}
+
+export function updateOrbitParticleStreamCenter(centerClient) {
+  if (activeStreamMode !== 'orbit' || !activeCanvas) return;
+  const rect = activeCanvas.getBoundingClientRect();
+  const cx = Number.isFinite(centerClient?.x) ? centerClient.x - rect.left : rect.width * 0.5;
+  const cy = Number.isFinite(centerClient?.y) ? centerClient.y - rect.top : rect.height * 0.5;
+  activeOrbitCenter = { x: cx, y: cy };
+}
+
 export function stopParticleStream(options = {}) {
   fxDebug('[DIAG] stopParticleStream', {
     t: performance?.now?.(),
@@ -843,7 +1020,10 @@ export function stopParticleStream(options = {}) {
     autoStopTimer = null;
   }
 
-  const { immediate = false, clearHighlight = false, targetEl = null } = options || {};
+  const { immediate = false, clearHighlight = false, targetEl = null, owner = null } = options || {};
+  if (owner && activeOwner && activeOwner !== owner) {
+    return;
+  }
   if (clearHighlight) {
     removeHighlight(targetEl || activeTargetEl || activeOriginEl);
   }
@@ -881,6 +1061,10 @@ export function stopParticleStream(options = {}) {
     activeLayer = 'front';
     activeStreamStart = null;
     activeStreamEnd = null;
+    activeStreamMode = 'line';
+    activeOrbitCenter = null;
+    activeOrbitRadius = 0;
+    activeOwner = null;
     return;
   }
 
@@ -893,6 +1077,10 @@ export function stopParticleStream(options = {}) {
     activeOriginEl = null;
     activeStreamStart = null;
     activeStreamEnd = null;
+    activeStreamMode = 'line';
+    activeOrbitCenter = null;
+    activeOrbitRadius = 0;
+    activeOwner = null;
     fxDebug('[tutorial-fx] destroy stream (drain)', {
       key: lastStreamKey,
       remaining: particles.length,
