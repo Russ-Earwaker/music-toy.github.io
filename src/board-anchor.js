@@ -40,6 +40,13 @@ const GRAD_EDGE_PAD_PX = 34;
 const GRAD_OFFSCREEN_FADE_SEC = 1.0;
 const HOVER_RADIUS_BASE_PX = 34;
 const HOVER_ORBIT_RADIUS_BASE_PX = 32;
+const WHITE_FLASH_INTENSITY = 0.45;
+const NOTE_FLASH_INTENSITY = 1.35;
+const WHITE_FLASH_ALPHA = 0.35;
+const NOTE_FLASH_ALPHA = 1.1;
+const WHITE_FLASH_DECAY = 1.6;
+const NOTE_FLASH_MIN_FADE_SEC = 0.06;
+const NOTE_FLASH_GLOW = 0.85;
 
 let __enabled = true;
 
@@ -697,9 +704,13 @@ function servicePulses(dt) {
 
 function serviceFlashes(dt) {
   if (flashingCells.length === 0) return;
+  const barSec = Math.max(0.001, beatDurSec * BEATS_PER_BAR);
+  const noteFadeSec = Math.max(NOTE_FLASH_MIN_FADE_SEC, barSec / 8);
   for (let i = flashingCells.length - 1; i >= 0; i--) {
     const cell = flashingCells[i];
-    cell.alpha -= dt * 2.5;
+    const isWhite = !cell.color || cell.color === '#ffffff' || cell.color === '#fff';
+    const decay = isWhite ? WHITE_FLASH_DECAY : (1 / noteFadeSec);
+    cell.alpha -= dt * decay;
     if (cell.alpha <= 0) {
       flashingCells.splice(i, 1);
     }
@@ -793,7 +804,7 @@ function triggerGridFlash(count) {
   lastFlashedCells = new Set(newCells);
   for (const key of newCells) {
     const [i, j] = key.split(',').map(Number);
-    flashCell(i, j, '#ffffff', 1.0);
+    flashCell(i, j, '#ffffff', WHITE_FLASH_INTENSITY);
   }
 }
 
@@ -943,9 +954,16 @@ function drawAnchorGrid(local, drawScale = 1) {
     
     // --- Flashing cells ---
     for (const cell of flashingCells) {
+      const isWhite = !cell.color || cell.color === '#ffffff' || cell.color === '#fff';
+      const alphaMult = isWhite ? WHITE_FLASH_ALPHA : NOTE_FLASH_ALPHA;
       ctx.save();
-      ctx.globalAlpha = cell.alpha * 0.8;
+      ctx.globalCompositeOperation = isWhite ? 'source-over' : 'screen';
+      ctx.globalAlpha = clamp(cell.alpha * alphaMult, 0, 1);
       ctx.fillStyle = cell.color || '#ffffff';
+      if (!isWhite) {
+        ctx.shadowColor = cell.color || '#ffffff';
+        ctx.shadowBlur = gridSize * NOTE_FLASH_GLOW;
+      }
       ctx.fillRect(dx + cell.i * gridSize, dy + cell.j * gridSize, gridSize, gridSize);
       ctx.restore();
     }
@@ -1025,7 +1043,7 @@ export function initBoardAnchor() {
       if (!chainHeadId) return;
       const entry = assignCellForChain(chainHeadId);
       if (!entry) return;
-      flashCell(entry.i, entry.j, entry.color, 1.0);
+      flashCell(entry.i, entry.j, entry.color, NOTE_FLASH_INTENSITY);
     });
     document.addEventListener('toy:remove', (e) => {
       const panel = e?.detail?.panel;

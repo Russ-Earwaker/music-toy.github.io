@@ -651,7 +651,7 @@ function renderGuide(api, { source = 'unknown', skipSwap = false } = {}) {
         break;
       }
     }
-    if (!hideTaskList && (completedGoals.has(goalId) || claimedRewards.has(goalId)) && goalTasks.length) {
+    if (!hideTaskList && !replaySession && (completedGoals.has(goalId) || claimedRewards.has(goalId)) && goalTasks.length) {
       activeTaskId = goalTasks[0]?.id || activeTaskId;
       activeTaskIndex = 0;
     }
