@@ -1,4 +1,4 @@
-﻿/* ========== Mobile Viewport & Safe Areas (landscape MVP) ========== */
+/* ========== Mobile Viewport & Safe Areas (landscape MVP) ========== */
 
 /* Use dynamic viewport units to avoid iOS 100vh bugs, and expose safe area vars */
 :root {
@@ -32,7 +32,7 @@ html, body {
   box-sizing: border-box;
 }
 
-/* Full-bleed â€œboardâ€ or main stage should not be clipped by notches */
+/* Full-bleed “board” or main stage should not be clipped by notches */
 .board-viewport, .main-stage, .toy-area {
   position: relative;
   width: 100%;
@@ -41,7 +41,7 @@ html, body {
   /* If you ever use fixed headers/footers, subtract them with calc(...) */
 }
 
-/* Interactive layers must disable browser gestures (weâ€™ll implement our own) */
+/* Interactive layers must disable browser gestures (we’ll implement our own) */
 canvas, .board-viewport, .toy-panel, .gesture-layer {
   touch-action: none;                /* disables browser pinch/scroll on the element */
 }
@@ -92,7 +92,7 @@ input, select, textarea, button {
   --ui-float-gap: clamp(14px, calc(24px * var(--ui-scale)), 30px);
   --ui-float-gap-sm: clamp(10px, calc(18px * var(--ui-scale)), 22px);
 
-  /* Base cube size â€“ this should match the Rippler debug cube size (59) */
+  /* Base cube size – this should match the Rippler debug cube size (59) */
   --loopgrid-cube-size: 59px;
 
   /* Horizontal gap between cubes */
@@ -101,7 +101,7 @@ input, select, textarea, button {
   /* 1 cube margin left/right */
   --loopgrid-border-units: 1;
 
-  /* top + row + bottom = 3 â€œcube heightsâ€ total */
+  /* top + row + bottom = 3 “cube heights” total */
   --loopgrid-vertical-factor: 3;
 }
 
@@ -779,7 +779,7 @@ select.toy-instrument {
   outline: none;
   flex: 1;
 
-  /* JS (initToyVolumeSliders) keeps this updated 0â€“100% */
+  /* JS (initToyVolumeSliders) keeps this updated 0–100% */
   --vol-fill-pct: 0%;
 }
 
@@ -1003,8 +1003,8 @@ select.toy-instrument {
   width: 100%;
   aspect-ratio: 8 / 1;      /* wide and shallow */
   flex-shrink: 0;
-  min-height: 48px;         /* guardrail â€“ tweak as needed */
-  max-height: 22vh;         /* donâ€™t let it get too tall */
+  min-height: 48px;         /* guardrail – tweak as needed */
+  max-height: 22vh;         /* don’t let it get too tall */
 }
 .sequencer-wrap canvas {
   width: 100%;
@@ -1047,7 +1047,7 @@ select.toy-instrument {
 
 /* Configurable edge buffer around the cube grid inside the circular pad */
 .toy-panel[data-toy="loopgrid-drum"] {
-  --edge-buffer: 10px; /* tweak 8â€“16px as you like */
+  --edge-buffer: 10px; /* tweak 8–16px as you like */
 }
 
 /* Ensure the pad is positioned context for absolute children */
@@ -1933,6 +1933,7 @@ body.tutorial-active #topbar #theme-switcher-wrap {
 .goal-task-icon--random { background-image: url('/assets/UI/T_ButtonRandom.png'); }
 .goal-task-icon--clear { background-image: url('/assets/UI/T_ButtonClear.png'); }
 .goal-task-icon--instruments { background-image: url('/assets/UI/T_ButtonInstruments.png'); }
+.goal-task-icon--more { background-image: url('/assets/UI/T_3Dots.png'); }
 
 .guide-launcher {
   position: fixed;
@@ -2425,7 +2426,7 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
   position: absolute;
   left: 50%;
   top: 50%;
-  /* Lift the label by half the button radius (¼ diameter). */
+  /* Lift the label by half the button radius (� diameter). */
   transform: translate(-50%, -50%) translateY(calc(var(--topbar-side-btn-size) * -0.25));
   z-index: 2;
   font-family: system-ui, -apple-system, Segoe UI, sans-serif;
@@ -2976,7 +2977,7 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
   user-select: none;
 }
 
-/* Typical placement â€“ tweak selectors/offsets to your UI */
+/* Typical placement – tweak selectors/offsets to your UI */
 .play-button {
   right: calc(12px + var(--safe-right));
   bottom: calc(12px + var(--safe-bottom));
@@ -2993,7 +2994,7 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
 
 /* add a little extra buffer on iOS to reduce edge-swipes */
 .ios:root {
-  --edge-buffer: 12px; /* tweak to taste: 8â€“16px */
+  --edge-buffer: 12px; /* tweak to taste: 8–16px */
   --app-pad-left:  calc(env(safe-area-inset-left, 0px) + var(--edge-buffer));
   --app-pad-right: calc(env(safe-area-inset-right,0px) + var(--edge-buffer));
   --app-pad-bottom:calc(env(safe-area-inset-bottom,0px) + var(--edge-buffer));

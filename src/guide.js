@@ -22,6 +22,13 @@ let lastGuideContext = null;
 let buttonsWrapRef = null;
 let lastActiveTaskSelectionId = null;
 let highlighterTarget = null;
+let lastRenderedGuideTaskId = null;
+let lastRenderedGuideTaskIndex = 0;
+let lastRenderedGuideGoalId = null;
+let guideTaskSwapInProgress = false;
+let guideTaskSwapTimer = 0;
+let pendingGuideRender = null;
+let userSelectedGoalId = null;
 
 function getHighlighterHost() {
   if (typeof document === 'undefined') return null;
@@ -202,6 +209,7 @@ function openGoalPicker(context) {
       }
 
       if (goal?.id) setActiveGoal(goal.id);
+      userSelectedGoalId = goal?.id || null;
       if (highlighterRef) highlighterRef.classList.remove('is-visible');
       highlightNextTask = false;
       closeGoalPicker();
@@ -552,6 +560,9 @@ function closeGuide() {
   if (!hostRef) hostRef = document.querySelector(`.${GUIDE_TOGGLE_CLASS}`) || hostRef;
   if (!panelsRef) panelsRef = document.querySelector('.guide-panels-container') || panelsRef;
   if (!hostRef || !panelsRef) return;
+  if (guideTaskSwapTimer) { clearTimeout(guideTaskSwapTimer); guideTaskSwapTimer = 0; }
+  guideTaskSwapInProgress = false;
+  pendingGuideRender = null;
   if (highlighterRef) highlighterRef.classList.remove('is-visible');
   hostRef.classList.remove(GUIDE_OPEN_CLASS);
   panelsRef.style.display = 'none';
@@ -570,10 +581,21 @@ function clearPanels() {
   while (panelsRef.firstChild) panelsRef.removeChild(panelsRef.firstChild);
 }
 
-function renderGuide(api, { source = 'unknown' } = {}) {
+function renderGuide(api, { source = 'unknown', skipSwap = false } = {}) {
   ensureStyles();
   ensureHost();
   if (api) lastApi = api;
+
+  const guideOpen = hostRef && hostRef.classList.contains(GUIDE_OPEN_CLASS);
+  if (!guideOpen && guideTaskSwapInProgress) {
+    if (guideTaskSwapTimer) { clearTimeout(guideTaskSwapTimer); guideTaskSwapTimer = 0; }
+    guideTaskSwapInProgress = false;
+    pendingGuideRender = null;
+  }
+  if (guideTaskSwapInProgress && !skipSwap) {
+    pendingGuideRender = { api, source };
+    return;
+  }
 
   const stamp = Date.now();
   let goals = [];
@@ -600,6 +622,104 @@ function renderGuide(api, { source = 'unknown' } = {}) {
   );
   lastGuideContext = { goals, api, completedTasks, completedGoals, claimedRewards, pendingRewards };
 
+  if (userSelectedGoalId && !goals.some((goal) => goal && goal.id === userSelectedGoalId)) {
+    userSelectedGoalId = null;
+  }
+
+  const allGoalsComplete = hasGoals && goals.every((goal) => goal && goal.id && completedGoals.has(goal.id));
+  const showAllGoalsComplete = allGoalsComplete && pendingRewards.size === 0 && !userSelectedGoalId;
+
+  const resolveGoalState = (goal) => {
+    const goalId = goal?.id;
+    const goalTasks = Array.isArray(goal?.tasks) ? goal.tasks : [];
+    const replaySession = claimedRewards.has(goalId) && goalId === activeGoalId;
+    let panelCompletedTasks = completedTasks;
+    if (replaySession) {
+      const sessionSet = replayTasks.get(goalId);
+      panelCompletedTasks = sessionSet instanceof Set ? new Set(sessionSet) : new Set();
+    }
+    const isPendingReward = pendingRewards.has(goalId);
+    const hideTaskList = isPendingReward && completedGoals.has(goalId) && !replaySession;
+    let activeTaskId = null;
+    let activeTaskIndex = 0;
+    for (let i = 0; i < goalTasks.length; i += 1) {
+      const taskId = goalTasks[i]?.id;
+      if (!taskId) continue;
+      if (!panelCompletedTasks.has(taskId)) {
+        activeTaskId = taskId;
+        activeTaskIndex = i;
+        break;
+      }
+    }
+    if (!hideTaskList && (completedGoals.has(goalId) || claimedRewards.has(goalId)) && goalTasks.length) {
+      activeTaskId = goalTasks[0]?.id || activeTaskId;
+      activeTaskIndex = 0;
+    }
+    if (hideTaskList) {
+      activeTaskId = null;
+      activeTaskIndex = goalTasks.length;
+    }
+    const replayComplete = replaySession && goalTasks.every(
+      (task) => !task?.id || panelCompletedTasks.has(task.id)
+    );
+    return { goalTasks, replaySession, panelCompletedTasks, activeTaskId, activeTaskIndex, replayComplete, hideTaskList, isPendingReward };
+  };
+
+  const selectedGoal = userSelectedGoalId
+    ? goals.find((goal) => goal && goal.id === userSelectedGoalId)
+    : null;
+  const visibleGoal = showAllGoalsComplete
+    ? (goals[0] || null)
+    : (selectedGoal || getActiveGoal(goals, { completedGoals, claimedRewards }));
+  const visibleGoalId = visibleGoal?.id || null;
+  const visibleState = (!showAllGoalsComplete && visibleGoal) ? resolveGoalState(visibleGoal) : null;
+  const nextTaskId = visibleState?.activeTaskId || null;
+  const nextTaskIndex = Number.isFinite(visibleState?.activeTaskIndex) ? visibleState.activeTaskIndex : 0;
+  const goalPendingReward = !!visibleState?.isPendingReward;
+  const shouldSwap =
+    lastRenderedGuideTaskId &&
+    ((nextTaskId && nextTaskId !== lastRenderedGuideTaskId) || (!nextTaskId && goalPendingReward));
+
+  if (visibleGoalId && lastRenderedGuideGoalId && visibleGoalId !== lastRenderedGuideGoalId) {
+    lastRenderedGuideTaskId = null;
+    lastRenderedGuideTaskIndex = 0;
+  }
+
+  if (
+    guideOpen &&
+    !skipSwap &&
+    !guideTaskSwapInProgress &&
+    !showAllGoalsComplete &&
+    visibleGoalId &&
+    lastRenderedGuideGoalId === visibleGoalId &&
+    shouldSwap
+  ) {
+    const currentTaskEl = panelsRef?.querySelector('.guide-goals-panel .goal-task.is-active')
+      || panelsRef?.querySelector('.guide-goals-panel .goal-task');
+    if (currentTaskEl) {
+      guideTaskSwapInProgress = true;
+      const isBacktrack = nextTaskId && nextTaskIndex < lastRenderedGuideTaskIndex;
+      const useBacktrack = isBacktrack && !goalPendingReward;
+      currentTaskEl.classList.remove('is-exiting-complete', 'is-exiting-backtrack');
+      void currentTaskEl.offsetWidth;
+      currentTaskEl.classList.add(useBacktrack ? 'is-exiting-backtrack' : 'is-exiting-complete');
+      if (guideTaskSwapTimer) clearTimeout(guideTaskSwapTimer);
+      guideTaskSwapTimer = setTimeout(() => {
+        guideTaskSwapInProgress = false;
+        guideTaskSwapTimer = 0;
+        const pending = pendingGuideRender;
+        pendingGuideRender = null;
+        if (pending) {
+          renderGuide(pending.api, { source: pending.source, skipSwap: true });
+        } else {
+          renderGuide(api, { source: 'task-swap', skipSwap: true });
+        }
+      }, 420);
+      pendingGuideRender = { api, source };
+      return;
+    }
+  }
+
   hostRef.dataset.guideState = hasGoals ? 'has-goals' : 'no-goals';
   hostRef.dataset.goalCount = String(goals.length);
 
@@ -610,8 +730,9 @@ function renderGuide(api, { source = 'unknown' } = {}) {
     const panelMeta = [];
     let expandedCount = 0;
 
-    const visibleGoal = getActiveGoal(goals, { completedGoals, claimedRewards });
-    if (visibleGoal && visibleGoal.id && activeGoalId !== visibleGoal.id) {
+    if (showAllGoalsComplete) {
+      if (activeGoalId) setActiveGoal(null);
+    } else if (visibleGoal && visibleGoal.id && activeGoalId !== visibleGoal.id) {
       setActiveGoal(visibleGoal.id);
     } else if (!visibleGoal && activeGoalId) {
       setActiveGoal(null);
@@ -628,44 +749,21 @@ function renderGuide(api, { source = 'unknown' } = {}) {
       panel.classList.add('guide-goals-panel');
       panel.removeAttribute('id');
 
-      let goalTasks = Array.isArray(goal.tasks) ? goal.tasks : [];
-      let replaySession = false;
-      let panelCompletedTasks = completedTasks;
-      let replayComplete = false;
+      const { goalTasks, replaySession, panelCompletedTasks, activeTaskId, replayComplete, hideTaskList } = resolveGoalState(goal);
+      const activeTaskIdForPanel = showAllGoalsComplete ? null : activeTaskId;
       try {
-        replaySession = claimedRewards.has(goalId) && goalId === activeGoalId;
-        panelCompletedTasks = completedTasks;
-        if (replaySession) {
-          const sessionSet = replayTasks.get(goalId);
-          panelCompletedTasks = sessionSet instanceof Set ? new Set(sessionSet) : new Set();
-        }
-        let activeTaskId = null;
-        for (const task of goalTasks) {
-          const taskId = task?.id;
-          if (!taskId) continue;
-          if (!panelCompletedTasks.has(taskId)) {
-            activeTaskId = taskId;
-            break;
-          }
-        }
-        // If the goal is already completed/claimed, still show from the top
-        if ((completedGoals.has(goalId) || claimedRewards.has(goalId)) && goalTasks.length) {
-          activeTaskId = goalTasks[0]?.id || activeTaskId;
-        }
-        replayComplete = replaySession && goalTasks.every(
-          (task) => !task?.id || panelCompletedTasks.has(task.id)
-        );
-
         api.populatePanel?.(panel, goal, {
           taskIndex: 0,
           showClaimButton: true,
-          activeTaskId,
+          activeTaskId: activeTaskIdForPanel,
           completedTaskIds: panelCompletedTasks,
           completedGoals,
           claimedRewards,
           pendingRewards,
           replaySession,
           replayComplete,
+          allGoalsComplete: showAllGoalsComplete,
+          hideTaskList,
         });
       } catch (err) {
         console.warn('[guide] populatePanel failed', err);
@@ -693,27 +791,35 @@ function renderGuide(api, { source = 'unknown' } = {}) {
           if (alreadyClaimed) {
             // Replay mode: no reward, just refresh panel
             setActiveGoal(null);
+            userSelectedGoalId = null;
             renderGuide(api, { source: 'replay-complete' });
             return;
           }
           setActiveGoal(null);
+          userSelectedGoalId = null;
           if (typeof api.claimReward === 'function') {
             api.claimReward(targetGoalId);
           }
         });
       }
       if (claimBtn) {
-        const alreadyClaimed = claimedRewards.has(goalId);
-        const allDone = replaySession
-          ? replayComplete
-          : goalTasks.every(task => !task?.id || panelCompletedTasks.has(task.id));
-        const showClaim = allDone;
-        claimBtn.textContent = replaySession
-          ? 'Complete'
-          : (alreadyClaimed ? 'Complete' : 'Collect Reward');
-        claimBtn.style.display = showClaim ? '' : 'none';
-        claimBtn.classList.toggle('is-visible', showClaim);
-        claimBtn.disabled = !showClaim;
+        if (showAllGoalsComplete) {
+          claimBtn.style.display = 'none';
+          claimBtn.classList.remove('is-visible');
+          claimBtn.disabled = true;
+        } else {
+          const alreadyClaimed = claimedRewards.has(goalId);
+          const allDone = replaySession
+            ? replayComplete
+            : goalTasks.every(task => !task?.id || panelCompletedTasks.has(task.id));
+          const showClaim = allDone;
+          claimBtn.textContent = replaySession
+            ? 'Complete'
+            : (alreadyClaimed ? 'Complete' : 'Collect Your Reward');
+          claimBtn.style.display = showClaim ? '' : 'none';
+          claimBtn.classList.toggle('is-visible', showClaim);
+          claimBtn.disabled = !showClaim;
+        }
       }
 
       if (claimedRewards.has(goalId) && !pendingRewards.has(goalId)) {
@@ -882,11 +988,24 @@ function renderGuide(api, { source = 'unknown' } = {}) {
         } catch {}
       }
     }
+    if (showAllGoalsComplete || !visibleGoalId) {
+      lastRenderedGuideTaskId = null;
+      lastRenderedGuideTaskIndex = 0;
+      lastRenderedGuideGoalId = null;
+    } else {
+      lastRenderedGuideTaskId = nextTaskId;
+      lastRenderedGuideTaskIndex = nextTaskIndex;
+      lastRenderedGuideGoalId = visibleGoalId;
+    }
+
   } else {
     const empty = document.createElement('div');
     empty.className = 'guide-empty-state';
     empty.textContent = 'Guide will unlock once tutorial goals are available.';
     panelsRef.appendChild(empty);
+    lastRenderedGuideTaskId = null;
+    lastRenderedGuideTaskIndex = 0;
+    lastRenderedGuideGoalId = null;
   }
 
   const open = hostRef.classList.contains(GUIDE_OPEN_CLASS);
@@ -953,6 +1072,13 @@ window.addEventListener('scene:new', () => {
   }
   goalExpansionState.clear();
   setActiveGoal(null);
+  userSelectedGoalId = null;
+  lastRenderedGuideTaskId = null;
+  lastRenderedGuideTaskIndex = 0;
+  lastRenderedGuideGoalId = null;
+  if (guideTaskSwapTimer) { clearTimeout(guideTaskSwapTimer); guideTaskSwapTimer = 0; }
+  guideTaskSwapInProgress = false;
+  pendingGuideRender = null;
   openFirstGoalNextRender = true;
   highlightNextTask = true;
   requestAnimationFrame(() => {

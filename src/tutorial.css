@@ -318,8 +318,49 @@ body.tutorial-active #topbar .tutorial-play-hidden {
   border-color: var(--accent, #5fb3ff);
 }
 
+.goal-task.is-exiting-complete {
+  animation: goalTaskComplete 0.38s ease forwards;
+}
+
+.goal-task.is-exiting-backtrack {
+  animation: goalTaskBacktrack 0.42s ease forwards;
+}
+
+@keyframes goalTaskComplete {
+  0% { opacity: 1; transform: translateY(0) scale(1); box-shadow: 0 0 0 rgba(255,255,255,0); }
+  35% { opacity: 1; box-shadow: 0 0 18px rgba(255,255,255,0.65), 0 0 36px rgba(255,255,255,0.35); }
+  100% { opacity: 0; transform: translateY(-6px) scale(0.98); box-shadow: 0 0 0 rgba(255,255,255,0); }
+}
+
+@keyframes goalTaskBacktrack {
+  0% { opacity: 1; transform: translateX(0) scale(1); }
+  20% { transform: translateX(-6px) scale(1); background: rgba(255, 80, 80, 0.18); border-color: rgba(255, 120, 120, 0.6); }
+  40% { transform: translateX(6px) scale(1); background: rgba(255, 80, 80, 0.18); border-color: rgba(255, 120, 120, 0.6); }
+  60% { transform: translateX(-4px) scale(1); background: rgba(255, 80, 80, 0.18); border-color: rgba(255, 120, 120, 0.6); }
+  100% { opacity: 0; transform: translateY(6px) scale(0.98); box-shadow: 0 0 18px rgba(255,80,80,0.45); }
+}
+
 .goal-task.is-complete {
   opacity: 0.7;
+}
+
+.goal-task.goal-task--final {
+  background: rgba(15, 22, 38, 0.75);
+  border-color: rgba(90, 130, 220, 0.35);
+}
+
+.goal-complete-message {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.goal-complete-icon {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 6px rgba(130, 170, 255, 0.4));
 }
 /* << GPT:TASK_PANEL_FLAT_STYLE END >> */
 

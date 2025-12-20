@@ -2071,14 +2071,14 @@ let hasDetectedLine = false;
         <p class="goal-reward-description"></p>
         <div class="goal-reward-icons"></div>
       </footer>
-      <button class="tutorial-claim-btn" type="button">Collect Reward</button>
+      <button class="tutorial-claim-btn" type="button">Collect Your Reward</button>
     `;
     return container;
   }
 
-  function populateGoalPanel(panelEl, goal, options = {}) {
-    if (!panelEl || !goal) return;
-    const replaySession = !!options.replaySession;
+    function populateGoalPanel(panelEl, goal, options = {}) {
+      if (!panelEl || !goal) return;
+      const replaySession = !!options.replaySession;
     const replayComplete = !!options.replayComplete;
     const tasks = Array.isArray(goal.tasks) ? goal.tasks : [];
     const rawTaskIndex = Number.isFinite(options.taskIndex) ? options.taskIndex : 0;
@@ -2116,7 +2116,13 @@ let hasDetectedLine = false;
 
     const headerEl = panelEl.querySelector('.tutorial-goals-header');
     const titleEl = panelEl.querySelector('.tutorial-goals-title');
-    if (titleEl) titleEl.textContent = goal.title || '';
+      if (titleEl) {
+        if (options.allGoalsComplete) {
+          titleEl.textContent = 'All goals complete';
+        } else {
+          titleEl.textContent = goal.title || '';
+        }
+      }
 
     const goalId = goal.id || '';
     const goalComplete = goalId ? completedGoals.has(goalId) : false;
@@ -2141,22 +2147,43 @@ let hasDetectedLine = false;
       return firstIncomplete?.id || null;
     })();
 
+    const hideTaskList = !!options.hideTaskList;
     const listEl = panelEl.querySelector('.tutorial-goals-tasklist');
+    const tasksSection = panelEl.querySelector('.tutorial-goals-tasks');
+    if (tasksSection) tasksSection.style.display = hideTaskList ? 'none' : '';
     if (listEl) {
       listEl.innerHTML = '';
-      tasks.forEach((task, index) => {
-        const taskId = task?.id || `task-${index}`;
+      if (options.allGoalsComplete) {
         const li = document.createElement('li');
-        li.className = 'goal-task';
-        li.dataset.taskId = taskId;
-        if (completedTaskIds.has(taskId)) li.classList.add('is-complete');
-        if (resolvedActiveTaskId && resolvedActiveTaskId === taskId) li.classList.add('is-active');
-        li.innerHTML = `<span class="goal-task-index">${index + 1}</span><span class="goal-task-label">${task?.label || ''}</span>`;
-        if (disabledTaskIds.has(taskId)) li.classList.add('is-disabled');
+        li.className = 'goal-task goal-task--final';
+        li.innerHTML = `
+          <span class="goal-task-label goal-complete-message">
+            <span class="goal-task-icon goal-task-icon--more" aria-hidden="true"></span>
+            All goals complete. Click the goal select button to replay them
+          </span>
+        `;
         listEl.appendChild(li);
-      });
+      } else if (!hideTaskList) {
+        const activeIndex = (() => {
+          if (resolvedActiveTaskId) {
+            const idx = tasks.findIndex((task, i) => (task?.id || `task-${i}`) === resolvedActiveTaskId);
+            if (idx >= 0) return idx;
+          }
+          return taskIndex;
+        })();
+        const task = tasks[activeIndex];
+        if (task) {
+          const taskId = task?.id || `task-${activeIndex}`;
+          const li = document.createElement('li');
+          li.className = 'goal-task is-active';
+          li.dataset.taskId = taskId;
+          if (completedTaskIds.has(taskId)) li.classList.add('is-complete');
+          if (disabledTaskIds.has(taskId)) li.classList.add('is-disabled');
+          li.innerHTML = `<span class="goal-task-index">${activeIndex + 1}</span><span class="goal-task-label">${task?.label || ''}</span>`;
+          listEl.appendChild(li);
+        }
+      }
     }
-
     const completedTasksCount = tasks.reduce((count, task, index) => {
       const taskId = task?.id || `task-${index}`;
       return completedTaskIds.has(taskId) ? count + 1 : count;
@@ -2226,7 +2253,17 @@ let hasDetectedLine = false;
       }
     }
 
-    if (options.showClaimButton === false) {
+    const progressSection = panelEl.querySelector('.tutorial-goals-progress');
+    if (progressSection) progressSection.style.display = options.allGoalsComplete ? 'none' : '';
+    if (rewardSection) rewardSection.style.display = options.allGoalsComplete ? 'none' : '';
+    if (options.allGoalsComplete) {
+      const btn = panelEl.querySelector('.tutorial-claim-btn');
+      if (btn) {
+        btn.style.display = 'none';
+        btn.classList.remove('is-visible');
+        btn.disabled = true;
+      }
+    } else if (options.showClaimButton === false) {
       const btn = panelEl.querySelector('.tutorial-claim-btn');
       if (btn) {
         if (rewardSection && btn.parentElement !== rewardSection) {
@@ -2254,7 +2291,7 @@ let hasDetectedLine = false;
           btn.textContent = 'Replay complete';
         } else {
           // Normal first-time completion
-          btn.textContent = 'Collect Reward';
+          btn.textContent = 'Collect Your Reward';
         }
 
         if (visible) {
@@ -2311,41 +2348,128 @@ let hasDetectedLine = false;
     return GOAL_FLOW[tutorialState.goalIndex] || null;
   }
 
-  function getCurrentTask() {
-    const goal = getCurrentGoal();
-    if (!goal) return null;
-    return goal.tasks[tutorialState.taskIndex] || null;
-  }
-
-  function renderGoalPanel() {
-    if (!goalPanel) return;
-    const goal = getCurrentGoal();
-    if (!tutorialState || !goal) {
-      updateClaimButtonVisibility();
-      return;
+    function getCurrentTask() {
+      const goal = getCurrentGoal();
+      if (!goal) return null;
+      return goal.tasks[tutorialState.taskIndex] || null;
     }
 
-    const progress = getGuideProgressSnapshot();
-    const completedTaskSet = new Set(progress.completedTasks || []);
-    const completedGoalSet = new Set(progress.completedGoals || []);
-    const claimedRewardSet = new Set(progress.claimedRewards || []);
-    const pendingRewardSet = new Set([...completedGoalSet].filter(id => !claimedRewardSet.has(id)));
+    let lastRenderedTaskId = null;
+    let lastRenderedTaskIndex = 0;
+    let taskSwapTimer = 0;
+    let taskSwapInProgress = false;
+    let pendingTaskSwap = null;
 
-    populateGoalPanel(goalPanel, goal, {
-      taskIndex: tutorialState.taskIndex,
-      unlockedRewards: tutorialState.unlockedRewards,
-      activeTaskId: getCurrentTask()?.id || null,
-      completedTaskIds: completedTaskSet,
-      completedGoals: completedGoalSet,
-      claimedRewards: claimedRewardSet,
-      pendingRewards: pendingRewardSet,
-      disabledTaskIds: computeDisabledTasksForGoal(goal),
-    });
-    updateClaimButtonVisibility();
-    try {
-      window.dispatchEvent(new CustomEvent('tutorial:goals-updated', { detail: { goal } }));
-    } catch {}
-  }
+    function renderGoalPanel() {
+      if (!goalPanel) return;
+      const goal = getCurrentGoal();
+      if (!tutorialState) {
+        updateClaimButtonVisibility();
+        return;
+      }
+
+      const progress = getGuideProgressSnapshot();
+      const completedTaskSet = new Set(progress.completedTasks || []);
+      const completedGoalSet = new Set(progress.completedGoals || []);
+      const claimedRewardSet = new Set(progress.claimedRewards || []);
+      const pendingRewardSet = new Set([...completedGoalSet].filter(id => !claimedRewardSet.has(id)));
+
+      const allGoalsComplete = GOAL_FLOW.every(goalItem => completedGoalSet.has(goalItem.id));
+      if (!goal) {
+        if (allGoalsComplete) {
+          const fallbackGoal = GOAL_FLOW[0] || { id: 'complete', title: 'Goals', tasks: [] };
+          populateGoalPanel(goalPanel, fallbackGoal, {
+            taskIndex: 0,
+            unlockedRewards: tutorialState.unlockedRewards,
+            activeTaskId: null,
+            completedTaskIds: completedTaskSet,
+            completedGoals: completedGoalSet,
+            claimedRewards: claimedRewardSet,
+            pendingRewards: pendingRewardSet,
+            disabledTaskIds: new Set(),
+            allGoalsComplete: true,
+          });
+        }
+        updateClaimButtonVisibility();
+        return;
+      }
+
+      const nextTask = getCurrentTask();
+      const nextTaskId = nextTask?.id || null;
+      const nextTaskIndex = tutorialState.taskIndex || 0;
+
+      let displayTaskId = nextTaskId;
+      let displayTaskIndex = nextTaskIndex;
+      if (allGoalsComplete) {
+        displayTaskId = null;
+      } else if (pendingRewardSet.has(goal.id) || (completedGoalSet.has(goal.id) && nextTaskIndex >= goal.tasks.length)) {
+        const lastTask = goal.tasks[goal.tasks.length - 1];
+        displayTaskId = lastTask?.id || null;
+        displayTaskIndex = Math.max(0, goal.tasks.length - 1);
+      } else if (!displayTaskId && completedGoalSet.has(goal.id) && lastRenderedTaskId) {
+        displayTaskId = lastRenderedTaskId;
+        displayTaskIndex = lastRenderedTaskIndex;
+      }
+
+      if (taskSwapInProgress) {
+        pendingTaskSwap = { id: displayTaskId, index: displayTaskIndex, allGoalsComplete };
+        return;
+      }
+
+    const listEl = goalPanel.querySelector('.tutorial-goals-tasklist');
+      const currentTaskEl = listEl ? listEl.querySelector('.goal-task') : null;
+      const hasSwap = !!currentTaskEl && lastRenderedTaskId && displayTaskId && displayTaskId !== lastRenderedTaskId;
+
+      if (hasSwap && !taskSwapInProgress) {
+        taskSwapInProgress = true;
+        const isBacktrack = displayTaskIndex < lastRenderedTaskIndex;
+        currentTaskEl.classList.remove('is-exiting-complete', 'is-exiting-backtrack');
+        void currentTaskEl.offsetWidth;
+        currentTaskEl.classList.add(isBacktrack ? 'is-exiting-backtrack' : 'is-exiting-complete');
+        if (taskSwapTimer) clearTimeout(taskSwapTimer);
+        taskSwapTimer = setTimeout(() => {
+          taskSwapInProgress = false;
+          lastRenderedTaskId = displayTaskId;
+          lastRenderedTaskIndex = displayTaskIndex;
+          populateGoalPanel(goalPanel, goal, {
+            taskIndex: tutorialState.taskIndex,
+            unlockedRewards: tutorialState.unlockedRewards,
+            activeTaskId: displayTaskId,
+            completedTaskIds: completedTaskSet,
+            completedGoals: completedGoalSet,
+            claimedRewards: claimedRewardSet,
+            pendingRewards: pendingRewardSet,
+            disabledTaskIds: computeDisabledTasksForGoal(goal),
+            allGoalsComplete,
+          });
+          updateClaimButtonVisibility();
+          if (pendingTaskSwap) {
+            pendingTaskSwap = null;
+            renderGoalPanel();
+          }
+        }, 420);
+        pendingTaskSwap = { id: displayTaskId, index: displayTaskIndex, allGoalsComplete };
+        return;
+      }
+
+      populateGoalPanel(goalPanel, goal, {
+        taskIndex: tutorialState.taskIndex,
+        unlockedRewards: tutorialState.unlockedRewards,
+        activeTaskId: displayTaskId,
+        completedTaskIds: completedTaskSet,
+        completedGoals: completedGoalSet,
+        claimedRewards: claimedRewardSet,
+        pendingRewards: pendingRewardSet,
+        disabledTaskIds: computeDisabledTasksForGoal(goal),
+        allGoalsComplete,
+      });
+      lastRenderedTaskId = displayTaskId;
+      lastRenderedTaskIndex = displayTaskIndex;
+      updateClaimButtonVisibility();
+      try {
+        window.dispatchEvent(new CustomEvent('tutorial:goals-updated', { detail: { goal } }));
+      } catch {}
+    }
 
   function updateClaimButtonVisibility() {
     if (!goalPanel) return;
@@ -2362,7 +2486,7 @@ let hasDetectedLine = false;
     if (awaitingClaim) {
       btn.classList.add('is-visible');
       btn.disabled = false;
-      btn.textContent = 'Collect Reward';
+      btn.textContent = 'Collect Your Reward';
     } else {
       btn.classList.remove('is-visible');
       btn.disabled = true;
@@ -2940,10 +3064,10 @@ let hasDetectedLine = false;
             }
           } else if (isToggleTask) {
             targetEl.classList.add('tutorial-guide-foreground');
-            try { targetEl.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: true } })); } catch {}
+            try { targetEl.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: true, allowGuide: !tutorialActive } })); } catch {}
           } else if (isDragTask) {
             targetEl.classList.add('tutorial-guide-foreground');
-            try { targetEl.dispatchEvent(new CustomEvent('tutorial:highlight-drag', { detail: { active: true } })); } catch {}
+            try { targetEl.dispatchEvent(new CustomEvent('tutorial:highlight-drag', { detail: { active: true, allowGuide: !tutorialActive } })); } catch {}
           } else {
             targetEl.classList.add('tutorial-pulse-target', 'tutorial-active-pulse');
           }
@@ -2978,8 +3102,8 @@ let hasDetectedLine = false;
         stopParticleStream();
         document.querySelectorAll('.tutorial-pulse-target, .tutorial-active-pulse, .tutorial-addtoy-pulse, .tutorial-guide-foreground').forEach(el => {
           if (el.matches?.('.toy-panel[data-toy="drawgrid"]')) {
-            try { el.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: false } })); } catch {}
-            try { el.dispatchEvent(new CustomEvent('tutorial:highlight-drag', { detail: { active: false } })); } catch {}
+            try { el.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: false, allowGuide: false } })); } catch {}
+            try { el.dispatchEvent(new CustomEvent('tutorial:highlight-drag', { detail: { active: false, allowGuide: false } })); } catch {}
           }
           el.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-addtoy-pulse', 'tutorial-guide-foreground');
         });
@@ -3027,8 +3151,8 @@ let hasDetectedLine = false;
         }
         document.querySelectorAll('.tutorial-pulse-target, .tutorial-active-pulse, .tutorial-addtoy-pulse, .tutorial-guide-foreground').forEach(el => {
           if (el.matches?.('.toy-panel[data-toy="drawgrid"]')) {
-            try { el.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: false } })); } catch {}
-            try { el.dispatchEvent(new CustomEvent('tutorial:highlight-drag', { detail: { active: false } })); } catch {}
+            try { el.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: false, allowGuide: false } })); } catch {}
+            try { el.dispatchEvent(new CustomEvent('tutorial:highlight-drag', { detail: { active: false, allowGuide: false } })); } catch {}
           }
           el.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-addtoy-pulse', 'tutorial-guide-foreground');
         });
@@ -3048,8 +3172,8 @@ let hasDetectedLine = false;
       }
       document.querySelectorAll('.tutorial-pulse-target, .tutorial-active-pulse, .tutorial-addtoy-pulse, .tutorial-guide-foreground').forEach(el => {
         if (el.matches?.('.toy-panel[data-toy=\"drawgrid\"]')) {
-          try { el.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: false } })); } catch {}
-          try { el.dispatchEvent(new CustomEvent('tutorial:highlight-drag', { detail: { active: false } })); } catch {}
+          try { el.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: false, allowGuide: false } })); } catch {}
+          try { el.dispatchEvent(new CustomEvent('tutorial:highlight-drag', { detail: { active: false, allowGuide: false } })); } catch {}
         }
         el.classList.remove('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-addtoy-pulse', 'tutorial-guide-foreground');
       });
@@ -4343,7 +4467,7 @@ try {
     if (panelHighlightTask) {
       targetElement.classList.add('tutorial-guide-foreground');
       const eventName = isDragTask ? 'tutorial:highlight-drag' : 'tutorial:highlight-notes';
-      try { targetElement.dispatchEvent(new CustomEvent(eventName, { detail: { active: true } })); } catch {}
+      try { targetElement.dispatchEvent(new CustomEvent(eventName, { detail: { active: true, allowGuide: !tutorialActive } })); } catch {}
     } else {
       pulseTarget.classList.add('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-flash');
       if (wantsWhitePulse) {
@@ -4390,7 +4514,7 @@ try {
       if (panelHighlightTask) {
         targetElement.classList.remove('tutorial-guide-foreground');
         const eventName = isDragTask ? 'tutorial:highlight-drag' : 'tutorial:highlight-notes';
-        try { targetElement.dispatchEvent(new CustomEvent(eventName, { detail: { active: false } })); } catch {}
+        try { targetElement.dispatchEvent(new CustomEvent(eventName, { detail: { active: false, allowGuide: false } })); } catch {}
       } else {
         if (taskId === 'sequence-chain-toy') {
           console.log('[tutorial][sequence-chain-toy] cleanup pulses', {
@@ -4449,8 +4573,8 @@ try {
     activeGuideRequirement = null;
     stopParticleStream();
     document.querySelectorAll('.toy-panel[data-toy="drawgrid"]').forEach(panel => {
-      try { panel.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: false } })); } catch {}
-      try { panel.dispatchEvent(new CustomEvent('tutorial:highlight-drag', { detail: { active: false } })); } catch {}
+      try { panel.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: false, allowGuide: false } })); } catch {}
+      try { panel.dispatchEvent(new CustomEvent('tutorial:highlight-drag', { detail: { active: false, allowGuide: false } })); } catch {}
       panel.classList.remove('tutorial-guide-foreground');
     });
     const spawner = getAddToyToggle();
@@ -4472,8 +4596,8 @@ try {
     guideToyTracker.reset?.();
     resetGuideProgress();
     document.querySelectorAll('.toy-panel[data-toy="drawgrid"]').forEach(panel => {
-      try { panel.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: false } })); } catch {}
-      try { panel.dispatchEvent(new CustomEvent('tutorial:highlight-drag', { detail: { active: false } })); } catch {}
+      try { panel.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: false, allowGuide: false } })); } catch {}
+      try { panel.dispatchEvent(new CustomEvent('tutorial:highlight-drag', { detail: { active: false, allowGuide: false } })); } catch {}
       panel.classList.remove('tutorial-guide-foreground');
     });
     const helpBtn = document.querySelector('.toy-spawner-help');

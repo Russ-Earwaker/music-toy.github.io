@@ -2538,9 +2538,11 @@ function ensureSizeReady({ force = false } = {}) {
   const SAFE_AREA_FRACTION = 0.05;
   let tutorialHighlightMode = 'none'; // 'none' | 'notes' | 'drag'
   let tutorialHighlightRaf = null;
+  let tutorialHighlightOverride = false;
   const isTutorialActive = () => {
     return typeof document !== 'undefined' && !!document.body?.classList?.contains('tutorial-active');
   };
+  const isHighlightActive = () => isTutorialActive() || tutorialHighlightOverride;
   const isPanelCulled = () => !isPanelVisible;
   let pendingSwap = false;
   let pendingWrapSize = null;
@@ -2867,7 +2869,7 @@ function ensureSizeReady({ force = false } = {}) {
 
   const startTutorialHighlightLoop = () => {
     if (tutorialHighlightMode === 'none') return;
-    if (!isTutorialActive() || isPanelCulled()) return;
+    if (!isHighlightActive() || isPanelCulled()) return;
     if (tutorialHighlightRaf !== null) return;
     const tick = () => {
       if (tutorialHighlightMode === 'none' || !isTutorialActive() || isPanelCulled()) {
@@ -7395,21 +7397,27 @@ function runAutoGhostGuideSweep() {
   }, { once: true });
 
   panel.addEventListener('tutorial:highlight-notes', (event) => {
-    if (event?.detail?.active && isTutorialActive()) {
+    const allowGuide = !!event?.detail?.allowGuide;
+    if (event?.detail?.active && (isTutorialActive() || allowGuide)) {
+      tutorialHighlightOverride = allowGuide && !isTutorialActive();
       tutorialHighlightMode = 'notes';
       startTutorialHighlightLoop();
     } else if (tutorialHighlightMode === 'notes') {
       tutorialHighlightMode = 'none';
+      tutorialHighlightOverride = false;
       stopTutorialHighlightLoop();
     }
   });
 
   panel.addEventListener('tutorial:highlight-drag', (event) => {
-    if (event?.detail?.active && isTutorialActive()) {
+    const allowGuide = !!event?.detail?.allowGuide;
+    if (event?.detail?.active && (isTutorialActive() || allowGuide)) {
+      tutorialHighlightOverride = allowGuide && !isTutorialActive();
       tutorialHighlightMode = 'drag';
       startTutorialHighlightLoop();
     } else if (tutorialHighlightMode === 'drag') {
       tutorialHighlightMode = 'none';
+      tutorialHighlightOverride = false;
       stopTutorialHighlightLoop();
     }
   });
