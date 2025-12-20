@@ -970,6 +970,77 @@ let hasDetectedLine = false;
     }
   } catch {}
 
+  function getGuideTaskTargetInfo() {
+    const activeTaskEl = document.querySelector('.goal-task.is-active-guide-task')
+      || document.querySelector('.guide-goals-panel .goal-task.is-active')
+      || document.querySelector('.tutorial-goals-panel .goal-task.is-active');
+    if (!activeTaskEl) return null;
+    const taskId = activeTaskEl.dataset?.taskId || null;
+    if (!taskId) return null;
+
+    const helpTasks = new Set(['press-help', 'pan-camera', 'zoom-camera']);
+    let rawTarget = null;
+    if (helpTasks.has(taskId)) {
+      rawTarget = getPanZoomHelpTarget();
+      if (!rawTarget || !rawTarget.isConnected) return null;
+    } else {
+      const selectors = {
+        'recycle-toy': '.toy-spawner-trash',
+        'close-help': '.toy-spawner-help',
+        'press-play': '#topbar [data-action="toggle-play"]',
+        'sequence-press-play': '#topbar [data-action="toggle-play"]',
+        'press-clear': '.toy-panel[data-toy="drawgrid"] [data-action="clear"], .toy-panel [data-action="clear"]',
+        'press-random': '.toy-panel[data-toy="drawgrid"] [data-action="random"], .toy-panel [data-action="random"]',
+        'change-instrument-add-toy': ADD_TOY_TOGGLE_SELECTOR,
+        'change-instrument-select': INSTRUMENT_SELECTOR,
+        'sequence-chain-toy': '.toy-chain-btn',
+        'toggle-node': '.toy-panel[data-toy="drawgrid"]',
+        'drag-note': '.toy-panel[data-toy="drawgrid"]',
+        'draw-line': '.toy-panel[data-toy="drawgrid"] canvas[data-role="drawgrid-paint"]',
+        'add-draw-toy': '.toy-spawner-toggle',
+        'add-rhythm-toy': '.toy-spawner-toggle',
+        'add-any-toy': '.toy-spawner-toggle',
+        'place-any-toy': '.toy-spawner-toggle',
+        'sequence-add-toy': '.toy-spawner-toggle',
+      };
+
+      const selector = selectors[taskId];
+      if (!selector) return null;
+      rawTarget = document.querySelector(selector);
+    }
+    if (!rawTarget || !rawTarget.isConnected) return null;
+
+    let target = rawTarget;
+    const isNoteTask = taskId === 'toggle-node' || taskId === 'drag-note';
+    if (isNoteTask) {
+      target = rawTarget.querySelector('canvas[data-role="drawgrid-nodes"]') || rawTarget;
+    }
+    const highlightTarget = isNoteTask
+      ? (rawTarget.closest('.toy-panel') || rawTarget)
+      : null;
+
+    const addToyTasks = new Set([
+      'add-draw-toy',
+      'add-rhythm-toy',
+      'add-any-toy',
+      'place-any-toy',
+      'sequence-add-toy',
+      'change-instrument-add-toy',
+    ]);
+    const highlight = addToyTasks.has(taskId) ? 'add-toy' : null;
+
+    const highlightEvent = taskId === 'drag-note'
+      ? 'tutorial:highlight-drag'
+      : (taskId === 'toggle-node' ? 'tutorial:highlight-notes' : null);
+
+    return { target, highlight, taskId, highlightEvent, highlightTarget };
+  }
+  try {
+    if (typeof window !== 'undefined') {
+      window.__getGuideTaskTarget = getGuideTaskTargetInfo;
+    }
+  } catch {}
+
   function computeDrawIntroDisabledTaskIds() {
     const disabled = new Set();
     if (!guideProgress.tasks.has(DRAW_INTRO_TASK_IDS.add)) {

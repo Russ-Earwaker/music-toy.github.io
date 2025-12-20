@@ -75,6 +75,7 @@ let hoverLeaveHandler = null;
 let hoverDownHandler = null;
 let hoverSuppressUntil = 0;
 let lastAnchorGuideTarget = null;
+let lastAnchorGuideInfo = null;
 let anchorGuideFlashTimer = 0;
 let anchorGuideStopBound = false;
 let anchorGuideIgnoreUntil = 0;
@@ -192,6 +193,7 @@ function teardown() {
   hoverDownHandler = null;
   hoverSuppressUntil = 0;
   lastAnchorGuideTarget = null;
+  lastAnchorGuideInfo = null;
   if (anchorGuideFlashTimer) {
     try { clearTimeout(anchorGuideFlashTimer); } catch {}
     anchorGuideFlashTimer = 0;
@@ -454,7 +456,20 @@ function ensureHoverListeners() {
     evt.preventDefault();
     evt.stopPropagation();
 
+    if (anchorGuideActive) {
+      anchorGuideActive = false;
+      if (anchorGuideStopBound) {
+        anchorGuideStopBound = false;
+        try { document.removeEventListener('pointerdown', handleAnchorGuideStop, true); } catch {}
+      }
+      try { stopParticleStream({ immediate: true, owner: 'anchor-guide' }); } catch {}
+      clearAnchorGuideHighlight();
+      hoverSuppressUntil = 0;
+      return;
+    }
+
     hoverSuppressUntil = 0;
+    try { window.dispatchEvent(new CustomEvent('guide:clear-active-task', { bubbles: true, composed: true })); } catch {}
     hoverForceBurstNext = true;
     hoverActive = false;
     hoverPointer = null;
@@ -472,7 +487,10 @@ function ensureHoverListeners() {
 }
 
 function clearAnchorGuideHighlight() {
-  if (!lastAnchorGuideTarget) return;
+  if (!lastAnchorGuideTarget && !lastAnchorGuideInfo) return;
+  if (lastAnchorGuideInfo) {
+    clearAnchorGuideSpecialHighlight(lastAnchorGuideInfo);
+  }
   try {
     lastAnchorGuideTarget.classList.remove(
       'tutorial-pulse-target',
@@ -486,8 +504,28 @@ function clearAnchorGuideHighlight() {
     anchorGuideFlashTimer = 0;
   }
   lastAnchorGuideTarget = null;
+  lastAnchorGuideInfo = null;
 }
 
+function clearAnchorGuideSpecialHighlight(info) {
+  const eventName = info?.highlightEvent;
+  if (!eventName) return;
+  const target = info?.highlightTarget || info?.target;
+  if (!target || !target.isConnected) return;
+  try {
+    target.dispatchEvent(new CustomEvent(eventName, { detail: { active: false, allowGuide: false } }));
+  } catch {}
+}
+
+function applyAnchorGuideSpecialHighlight(info) {
+  const eventName = info?.highlightEvent;
+  if (!eventName) return;
+  const target = info?.highlightTarget || info?.target;
+  if (!target || !target.isConnected) return;
+  try {
+    target.dispatchEvent(new CustomEvent(eventName, { detail: { active: true, allowGuide: true } }));
+  } catch {}
+}
 function applyAnchorGuideHighlight(target, highlight) {
   if (!target) return;
   if (highlight === 'toy') {
@@ -507,11 +545,20 @@ function applyAnchorGuideHighlight(target, highlight) {
     try { target.classList.remove('tutorial-flash'); } catch {}
   }, 360);
   lastAnchorGuideTarget = target;
+  lastAnchorGuideInfo = null;
 }
 
 function triggerAnchorGuideStream() {
-  const resolver = (typeof window !== 'undefined') ? window.__getAnchorGuideTarget : null;
-  const info = (typeof resolver === 'function') ? resolver() : null;
+  const guideOpen = !!document.querySelector('.guide-launcher.is-open');
+  const guideResolver = (typeof window !== 'undefined') ? window.__getGuideTaskTarget : null;
+  const fallbackResolver = (typeof window !== 'undefined') ? window.__getAnchorGuideTarget : null;
+  let info = null;
+  if (guideOpen && typeof guideResolver === 'function') {
+    try { info = guideResolver(); } catch { info = null; }
+  }
+  if (!info && typeof fallbackResolver === 'function') {
+    try { info = fallbackResolver(); } catch { info = null; }
+  }
   const target = info?.target;
   if (!target || !target.isConnected) return;
   if (!markerEl || !markerEl.isConnected) ensureMarker();
@@ -519,6 +566,8 @@ function triggerAnchorGuideStream() {
   if (!origin || !origin.isConnected) return;
 
   applyAnchorGuideHighlight(target, info?.highlight);
+  applyAnchorGuideSpecialHighlight(info);
+  lastAnchorGuideInfo = info;
   anchorGuideActive = true;
   try {
     startParticleStream(origin, target, {

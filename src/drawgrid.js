@@ -2810,7 +2810,7 @@ function ensureSizeReady({ force = false } = {}) {
         : Date.now();
       const pulsePhase = (now / 480) % (Math.PI * 2);
       const pulseScale = 1 + Math.sin(pulsePhase) * 0.24;
-      let highlightNodes = nodeCoordsForHitTest;
+      const highlightNodes = nodeCoordsForHitTest;
       let anchorNode = null;
       if (tutorialHighlightMode === 'drag') {
         const effectiveWidth = (gridArea.w && gridArea.w > 0) ? gridArea.w : (cw * cols);
@@ -2819,7 +2819,6 @@ function ensureSizeReady({ force = false } = {}) {
         const fallbackY = gridArea.y + topPad + Math.max(0, effectiveHeight - topPad) / 2;
         const activeNode = nodeCoordsForHitTest.find(node => !node?.disabled);
         anchorNode = activeNode || (nodeCoordsForHitTest.length ? nodeCoordsForHitTest[0] : { x: fallbackX, y: fallbackY });
-        highlightNodes = [anchorNode];
       }
 
       highlightNodes.forEach((node) => {
@@ -2834,7 +2833,7 @@ function ensureSizeReady({ force = false } = {}) {
 
       if (tutorialHighlightMode === 'drag' && anchorNode) {
         const bob = Math.sin(now / 420) * Math.min(12, ch * 0.35);
-        const arrowColor = 'rgba(148, 181, 255, 0.92)';
+        const arrowColor = 'rgba(255, 255, 255, 0.9)';
         const arrowWidth = Math.max(10, Math.min(cw, ch) * 0.45);
         const arrowHeight = arrowWidth * 1.25;
 
@@ -2855,10 +2854,13 @@ function ensureSizeReady({ force = false } = {}) {
           tutorialCtx.fill();
         };
 
-        const topY = anchorNode.y - baseRadius - arrowHeight - 16 - bob;
-        const bottomY = anchorNode.y + baseRadius + arrowHeight + 16 + bob;
-        drawArrow(anchorNode.x, topY, -1);
-        drawArrow(anchorNode.x, bottomY, 1);
+        highlightNodes.forEach((node) => {
+          if (!node) return;
+          const topY = node.y - baseRadius - arrowHeight - 16 - bob;
+          const bottomY = node.y + baseRadius + arrowHeight + 16 + bob;
+          drawArrow(node.x, topY, -1);
+          drawArrow(node.x, bottomY, 1);
+        });
         tutorialCtx.globalAlpha = 1;
       }
       tutorialCtx.restore();
