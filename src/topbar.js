@@ -10,6 +10,8 @@ import {
   setSoundThemeKey,
 } from './sound-theme.js';
 
+const NEW_SCENE_ZOOM = 0.6; // adjust this to change the starting zoom when creating a new scene
+
 (function(){
 
   function tryInitToggle(){
@@ -243,6 +245,17 @@ import {
       const btn = document.querySelector('#topbar [data-action="toggle-play"]');
       if (btn) updatePlayButtonVisual(btn, false);
     }catch{}
+  }
+
+  function centerBoardOnAnchorForNewScene(){
+    const anchor = (typeof window !== 'undefined') ? window.__MT_ANCHOR_WORLD : null;
+    const x = Number.isFinite(anchor?.x) ? anchor.x : 0;
+    const y = Number.isFinite(anchor?.y) ? anchor.y : 0;
+    if (typeof window.centerBoardOnWorldPoint === 'function') {
+      window.centerBoardOnWorldPoint(x, y, NEW_SCENE_ZOOM, { duration: 180, centerFracX: 0.5, centerFracY: 0.5 });
+      return;
+    }
+    window.resetBoardView?.();
   }
 
   function updateFocusToggleButton(btn){
@@ -1098,7 +1111,7 @@ if (document.readyState === 'loading') {
         try { window.dispatchEvent(new CustomEvent('guide:close')); } catch {}
         try { window.dispatchEvent(new CustomEvent('scene:new')); } catch {}
         window.clearToyFocus?.();
-        window.resetBoardView();
+        centerBoardOnAnchorForNewScene();
         return;
       }
 
