@@ -835,6 +835,7 @@ export function startParticleStream(originEl, targetEl, options = {}) {
 
   if (
     owner === 'guide' &&
+    spawnParticles &&
     activeOriginEl === originEl &&
     activeTargetEl === targetEl &&
     (now - lastStartTs) < 500
@@ -842,7 +843,7 @@ export function startParticleStream(originEl, targetEl, options = {}) {
     return;
   }
 
-  if (newKey === prevKey && (now - lastStartTs) < 350) {
+  if (spawnParticles && newKey === prevKey && (now - lastStartTs) < 350) {
     return;
   }
 

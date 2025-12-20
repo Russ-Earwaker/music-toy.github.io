@@ -4410,8 +4410,8 @@ try {
       }
     };
 
-    scheduleParticles();
-    setTimeout(() => scheduleParticles(true), 200);
+      scheduleParticles();
+      setTimeout(() => { if (!didStart) scheduleParticles(true); }, 200);
     window.addEventListener('resize', onResize, { passive: true });
 
     renderGoalPanel();
