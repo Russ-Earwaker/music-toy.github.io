@@ -16,6 +16,7 @@ let activeOwner = null;
 let activeStreamMode = 'line'; // line | orbit
 let activeOrbitCenter = null;
 let activeOrbitRadius = 0;
+let activeOrbitScale = 1;
 let anchorHoverStrength = 0;
 let anchorOrbitPhase = 0;
 let anchorOrbitSpeed = 0.9;
@@ -291,8 +292,9 @@ function createOrbitParticle(center, radius) {
   const p = createParticle(center.x, center.y, null);
   p.isOrbit = true;
   p.life = 1.0;
-  p.size = 1.6 + Math.random() * 0.8;
+  p.size = 2.0 + Math.random() * 2.0;
   p.orbitRadius = radius * (0.9 + Math.random() * 0.25);
+  p.orbitRadiusFactor = p.orbitRadius / Math.max(1e-6, radius);
   p.orbitPhase = Math.random() * Math.PI * 2;
   p.orbitSpeed = 0.7 + Math.random() * 0.4;
   return p;
@@ -301,8 +303,9 @@ function createOrbitParticle(center, radius) {
 function createAnchorBurst(center) {
   const sun = createParticle(center.x, center.y, null);
   sun.isAnchorSun = true;
-  sun.size = 10.5;
+  sun.size = 17.0;
   sun.life = 1.0;
+  sun.baseSize = sun.size;
   particles.push(sun);
 
   const speed = 0.85 + Math.random() * 0.2;
@@ -311,8 +314,10 @@ function createAnchorBurst(center) {
   for (let i = 0; i < 2; i++) {
     const moon = createParticle(center.x, center.y, null);
     moon.isAnchorMoon = true;
-    moon.size = 3.6;
+    moon.size = 5.6;
+    moon.baseSize = moon.size;
     moon.orbitRadius = 28;
+    moon.orbitRadiusFactor = 1;
     moon.orbitPhase = i * Math.PI;
     moon.orbitSpeed = speed;
     moon.life = 1.0;
@@ -469,8 +474,9 @@ function startFlight(ctx, canvas, startEl, endEl) {
         } else if (p.isAnchorMoon) {
             if (activeOrbitCenter) {
               const phase = anchorOrbitPhase + (p.orbitPhase || 0);
-              p.x = activeOrbitCenter.x + Math.cos(phase) * p.orbitRadius;
-              p.y = activeOrbitCenter.y + Math.sin(phase) * p.orbitRadius;
+              const orbitR = activeOrbitRadius * 0.45;
+              p.x = activeOrbitCenter.x + Math.cos(phase) * orbitR;
+              p.y = activeOrbitCenter.y + Math.sin(phase) * orbitR;
             }
             if (!spawnParticles && anchorHoverStrength < 0.02) {
               particles.splice(i, 1);
@@ -480,8 +486,9 @@ function startFlight(ctx, canvas, startEl, endEl) {
             p.life -= dt * 0.55;
             p.orbitPhase += (dt * 6) * p.orbitSpeed;
             const c = activeOrbitCenter || { x: p.startX, y: p.startY };
-            p.x = c.x + Math.cos(p.orbitPhase) * p.orbitRadius;
-            p.y = c.y + Math.sin(p.orbitPhase) * p.orbitRadius;
+            const orbitR = activeOrbitRadius * (p.orbitRadiusFactor || 1);
+            p.x = c.x + Math.cos(p.orbitPhase) * orbitR;
+            p.y = c.y + Math.sin(p.orbitPhase) * orbitR;
             if (p.life <= 0) {
                 particles.splice(i, 1);
                 continue;
@@ -554,19 +561,24 @@ function startFlight(ctx, canvas, startEl, endEl) {
 
         if(ctx){
             ctx.beginPath();
-            const anchorScale = (p.isAnchorSun || p.isAnchorMoon || p.isOrbit)
-              ? Math.max(0.001, anchorHoverStrength)
+            const anchorVisible = (anchorMode && (p.isAnchorSun || p.isAnchorMoon || p.isOrbit))
+              ? (spawnParticles ? 1 : anchorHoverStrength)
               : 1;
-            ctx.arc(p.x, p.y, p.size * anchorScale, 0, Math.PI * 2);
+            const anchorScale = (p.isAnchorSun || p.isAnchorMoon || p.isOrbit)
+              ? Math.max(0.001, anchorVisible)
+              : 1;
+            const sizeScale = (p.isAnchorSun || p.isAnchorMoon || p.isOrbit)
+              ? activeOrbitScale
+              : 1;
+            ctx.arc(p.x, p.y, p.size * anchorScale * sizeScale, 0, Math.PI * 2);
             let fillAlpha = 0.85;
             let trailHighlightAlpha = null;
             if (p.isAnchorSun) {
-              const shimmer = Math.sin(shimmerPhase);
-              fillAlpha = Math.min(1, Math.max(0.55, 0.78 + 0.22 * shimmer)) * anchorHoverStrength;
+              fillAlpha = 0.85 * anchorVisible;
             } else if (p.isAnchorMoon) {
-              fillAlpha = 0.9 * anchorHoverStrength;
+              fillAlpha = 0.9 * anchorVisible;
             } else if (p.isOrbit) {
-              fillAlpha = 0.65 * anchorHoverStrength;
+              fillAlpha = 0.65 * anchorVisible;
             } else if (p.isSun || (p.isBurst && !p.isSun && !p.isSweeper)) {
               const phaseOffset = (p.orbitPhase ?? p.phase ?? 0) * 0.8;
               const shimmer = Math.sin(shimmerPhase + phaseOffset);
@@ -963,6 +975,7 @@ export function startOrbitParticleStreamAtPoint(centerClient, options = {}) {
   const cy = Number.isFinite(centerClient?.y) ? centerClient.y - rect.top : rect.height * 0.5;
   activeOrbitCenter = { x: cx, y: cy };
   activeOrbitRadius = Number.isFinite(options?.orbitRadius) ? options.orbitRadius : 42;
+  activeOrbitScale = Number.isFinite(options?.scale) ? Math.max(0.1, options.scale) : 1;
   activeStreamMode = 'orbit';
   activeOwner = owner;
   activeTargetEl = null;
@@ -975,6 +988,11 @@ export function startOrbitParticleStreamAtPoint(centerClient, options = {}) {
   lastStreamKey = newKey;
   lastStartTs = now;
 
+  const forceBurst = options?.forceBurst === true;
+  if (forceBurst) {
+    particles = [];
+    startFlight._accum = 0;
+  }
   if (!particles.length) {
     createAnchorBurst(activeOrbitCenter);
   }
@@ -999,6 +1017,13 @@ export function updateOrbitParticleStreamCenter(centerClient) {
   const cx = Number.isFinite(centerClient?.x) ? centerClient.x - rect.left : rect.width * 0.5;
   const cy = Number.isFinite(centerClient?.y) ? centerClient.y - rect.top : rect.height * 0.5;
   activeOrbitCenter = { x: cx, y: cy };
+}
+
+export function updateOrbitParticleStreamMetrics({ centerClient, orbitRadius, scale } = {}) {
+  if (activeStreamMode !== 'orbit' || !activeCanvas) return;
+  if (centerClient) updateOrbitParticleStreamCenter(centerClient);
+  if (Number.isFinite(orbitRadius)) activeOrbitRadius = orbitRadius;
+  if (Number.isFinite(scale)) activeOrbitScale = Math.max(0.1, scale);
 }
 
 export function stopParticleStream(options = {}) {

@@ -931,6 +931,45 @@ let hasDetectedLine = false;
     return new Set();
   }
 
+  function getAnchorGuideTargetInfo() {
+    const hasAnyToy = placeToyPanels.size > 0 || (() => {
+      try { return !!document.querySelector('.toy-panel'); } catch { return false; }
+    })();
+    if (!hasAnyToy) {
+      return { target: getAddToyToggle(), highlight: 'add-toy' };
+    }
+
+    const pickUninteractedToy = () => {
+      const primary = (lastPlacedToy && lastPlacedToy.isConnected) ? lastPlacedToy : null;
+      if (primary && !placeToyTriggerState.get(primary)) return primary;
+      for (const panel of placeToyPanels) {
+        if (panel && panel.isConnected && !placeToyTriggerState.get(panel)) return panel;
+      }
+      return null;
+    };
+    const toy = pickUninteractedToy();
+    if (toy) return { target: toy, highlight: 'toy' };
+
+    const playing = typeof isRunning === 'function' ? !!isRunning() : false;
+    if (!playing) {
+      const playBtn = document.querySelector('#topbar [data-action="toggle-play"]');
+      if (playBtn) return { target: playBtn, highlight: 'play' };
+    }
+
+    const guideBtn =
+      document.querySelector('.guide-launcher .guide-toggle') ||
+      document.querySelector('.guide-toggle') ||
+      document.querySelector('.guide-launcher');
+    if (guideBtn) return { target: guideBtn, highlight: 'guide' };
+
+    return null;
+  }
+  try {
+    if (typeof window !== 'undefined') {
+      window.__getAnchorGuideTarget = getAnchorGuideTargetInfo;
+    }
+  } catch {}
+
   function computeDrawIntroDisabledTaskIds() {
     const disabled = new Set();
     if (!guideProgress.tasks.has(DRAW_INTRO_TASK_IDS.add)) {

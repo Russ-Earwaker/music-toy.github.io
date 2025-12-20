@@ -11,7 +11,12 @@
 // - Entire system can be disabled via window.__MT_ANCHOR_DISABLED or localStorage.mt_anchor_enabled='0'
 
 import { getViewportElement, worldToScreen } from './board-viewport.js';
-import { startOrbitParticleStreamAtPoint, stopParticleStream, updateOrbitParticleStreamCenter } from './tutorial-fx.js';
+import {
+  startOrbitParticleStreamAtPoint,
+  startParticleStream,
+  stopParticleStream,
+  updateOrbitParticleStreamMetrics,
+} from './tutorial-fx.js';
 import { BEATS_PER_BAR } from './audio-core.js';
 
 const DEFAULT_WORLD_POS = Object.freeze({ x: 0, y: 0 });
@@ -67,6 +72,14 @@ let hoverBound = false;
 let hoverHostEl = null;
 let hoverMoveHandler = null;
 let hoverLeaveHandler = null;
+let hoverDownHandler = null;
+let hoverSuppressUntil = 0;
+let lastAnchorGuideTarget = null;
+let anchorGuideFlashTimer = 0;
+let anchorGuideStopBound = false;
+let anchorGuideIgnoreUntil = 0;
+let hoverForceBurstNext = false;
+let anchorGuideActive = false;
 
 function readEnabled() {
   try {
@@ -165,6 +178,7 @@ function teardown() {
   try {
     if (hoverHostEl && hoverMoveHandler) hoverHostEl.removeEventListener('pointermove', hoverMoveHandler);
     if (hoverHostEl && hoverLeaveHandler) hoverHostEl.removeEventListener('pointerleave', hoverLeaveHandler);
+    if (hoverHostEl && hoverDownHandler) hoverHostEl.removeEventListener('pointerdown', hoverDownHandler);
   } catch {}
   if (canvas && canvas.parentElement) canvas.parentElement.removeChild(canvas);
   canvas = null;
@@ -175,7 +189,19 @@ function teardown() {
   hoverHostEl = null;
   hoverMoveHandler = null;
   hoverLeaveHandler = null;
+  hoverDownHandler = null;
+  hoverSuppressUntil = 0;
+  lastAnchorGuideTarget = null;
+  if (anchorGuideFlashTimer) {
+    try { clearTimeout(anchorGuideFlashTimer); } catch {}
+    anchorGuideFlashTimer = 0;
+  }
+  anchorGuideStopBound = false;
+  anchorGuideIgnoreUntil = 0;
+  hoverForceBurstNext = false;
+  anchorGuideActive = false;
   try { stopParticleStream({ immediate: true, owner: 'anchor' }); } catch {}
+  try { stopParticleStream({ immediate: true, owner: 'anchor-guide' }); } catch {}
   lastNowMs = 0;
   offscreenFade01 = 0;
   lastPhase01 = 0;
@@ -409,19 +435,142 @@ function ensureHoverListeners() {
       try { stopParticleStream({ immediate: false, owner: 'anchor' }); } catch {}
     }
   };
+  const onDown = (evt) => {
+    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    const anchorWorld = getAnchorWorld();
+    const local = getViewportLocalPointFromWorld(anchorWorld);
+    if (!local) return;
+    const zoomScale = clamp(getZoomScale(), ZOOM_SCALE_CLAMP_MIN, ZOOM_SCALE_CLAMP_MAX);
+    const drawScale = ANCHOR_SIZE_MULT * zoomScale;
+    const rect = host.getBoundingClientRect();
+    const px = evt.clientX - rect.left;
+    const py = evt.clientY - rect.top;
+    const dx = px - local.x;
+    const dy = py - local.y;
+    const radius = Math.max(HOVER_RADIUS_BASE_PX, HOVER_RADIUS_BASE_PX * drawScale);
+    const inside = (dx * dx + dy * dy) <= (radius * radius);
+    if (!inside) return;
+
+    evt.preventDefault();
+    evt.stopPropagation();
+
+    hoverSuppressUntil = 0;
+    hoverForceBurstNext = true;
+    hoverActive = false;
+    hoverPointer = null;
+    try { stopParticleStream({ immediate: false, owner: 'anchor' }); } catch {}
+    triggerAnchorGuideStream();
+  };
   hoverHostEl = host;
   hoverMoveHandler = onMove;
   hoverLeaveHandler = onLeave;
+  hoverDownHandler = onDown;
   host.addEventListener('pointermove', onMove, { passive: true });
   host.addEventListener('pointerleave', onLeave, { passive: true });
+  host.addEventListener('pointerdown', onDown, { passive: false });
   hoverBound = true;
 }
 
+function clearAnchorGuideHighlight() {
+  if (!lastAnchorGuideTarget) return;
+  try {
+    lastAnchorGuideTarget.classList.remove(
+      'tutorial-pulse-target',
+      'tutorial-active-pulse',
+      'tutorial-addtoy-pulse',
+      'tutorial-flash'
+    );
+  } catch {}
+  if (anchorGuideFlashTimer) {
+    try { clearTimeout(anchorGuideFlashTimer); } catch {}
+    anchorGuideFlashTimer = 0;
+  }
+  lastAnchorGuideTarget = null;
+}
+
+function applyAnchorGuideHighlight(target, highlight) {
+  if (!target) return;
+  if (lastAnchorGuideTarget && lastAnchorGuideTarget !== target) {
+    clearAnchorGuideHighlight();
+  }
+  target.classList.add('tutorial-pulse-target', 'tutorial-active-pulse');
+  if (highlight === 'add-toy') {
+    target.classList.add('tutorial-addtoy-pulse');
+  }
+  target.classList.add('tutorial-flash');
+  if (anchorGuideFlashTimer) clearTimeout(anchorGuideFlashTimer);
+  anchorGuideFlashTimer = setTimeout(() => {
+    try { target.classList.remove('tutorial-flash'); } catch {}
+  }, 360);
+  lastAnchorGuideTarget = target;
+}
+
+function triggerAnchorGuideStream() {
+  const resolver = (typeof window !== 'undefined') ? window.__getAnchorGuideTarget : null;
+  const info = (typeof resolver === 'function') ? resolver() : null;
+  const target = info?.target;
+  if (!target || !target.isConnected) return;
+  if (!markerEl || !markerEl.isConnected) ensureMarker();
+  const origin = markerEl;
+  if (!origin || !origin.isConnected) return;
+
+  applyAnchorGuideHighlight(target, info?.highlight);
+  anchorGuideActive = true;
+  try {
+    startParticleStream(origin, target, {
+      layer: 'behind-target',
+      suppressGuideTapAck: true,
+      owner: 'anchor-guide',
+    });
+  } catch {}
+  anchorGuideIgnoreUntil = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) + 220;
+  if (!anchorGuideStopBound) {
+    anchorGuideStopBound = true;
+    document.addEventListener('pointerdown', handleAnchorGuideStop, true);
+  }
+}
+
+function handleAnchorGuideStop(evt) {
+  const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  if (anchorGuideIgnoreUntil && now < anchorGuideIgnoreUntil) return;
+  try {
+    const host = pickHost();
+    const anchorWorld = getAnchorWorld();
+    const local = getViewportLocalPointFromWorld(anchorWorld);
+    if (host && local) {
+      const rect = host.getBoundingClientRect();
+      const px = evt.clientX - rect.left;
+      const py = evt.clientY - rect.top;
+      const zoomScale = clamp(getZoomScale(), ZOOM_SCALE_CLAMP_MIN, ZOOM_SCALE_CLAMP_MAX);
+      const drawScale = ANCHOR_SIZE_MULT * zoomScale;
+      const radius = Math.max(HOVER_RADIUS_BASE_PX, HOVER_RADIUS_BASE_PX * drawScale);
+      const dx = px - local.x;
+      const dy = py - local.y;
+      if ((dx * dx + dy * dy) <= (radius * radius)) return;
+    }
+  } catch {}
+  anchorGuideStopBound = false;
+  anchorGuideActive = false;
+  try { document.removeEventListener('pointerdown', handleAnchorGuideStop, true); } catch {}
+  try { stopParticleStream({ immediate: true, owner: 'anchor-guide' }); } catch {}
+  clearAnchorGuideHighlight();
+  hoverSuppressUntil = 0;
+}
+
 function updateHoverFx(local, drawScale) {
-  if (!hoverPointer || !local) {
+  const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  if (hoverSuppressUntil && now < hoverSuppressUntil) {
     if (hoverActive) {
       hoverActive = false;
       try { stopParticleStream({ immediate: false, owner: 'anchor' }); } catch {}
+    }
+    return;
+  }
+  if (!hoverPointer || !local) {
+    if (hoverActive) {
+      hoverActive = false;
+      hoverForceBurstNext = true;
+      try { stopParticleStream({ immediate: true, owner: 'anchor' }); } catch {}
     }
     return;
   }
@@ -436,15 +585,25 @@ function updateHoverFx(local, drawScale) {
 
   if (inside && !hoverActive) {
     const orbitRadius = Math.max(HOVER_ORBIT_RADIUS_BASE_PX, HOVER_ORBIT_RADIUS_BASE_PX * drawScale);
-    const started = startOrbitParticleStreamAtPoint(centerClient, { owner: 'anchor', orbitRadius });
+    const zoomScale = clamp(getZoomScale(), ZOOM_SCALE_CLAMP_MIN, ZOOM_SCALE_CLAMP_MAX);
+    const started = startOrbitParticleStreamAtPoint(centerClient, {
+      owner: 'anchor',
+      orbitRadius,
+      scale: zoomScale,
+      forceBurst: hoverForceBurstNext,
+    });
+    hoverForceBurstNext = false;
     hoverActive = !!started;
   } else if (!inside && hoverActive) {
     hoverActive = false;
-    try { stopParticleStream({ immediate: false, owner: 'anchor' }); } catch {}
+    hoverForceBurstNext = true;
+    try { stopParticleStream({ immediate: true, owner: 'anchor' }); } catch {}
   }
 
   if (hoverActive) {
-    updateOrbitParticleStreamCenter(centerClient);
+    const orbitRadius = Math.max(HOVER_ORBIT_RADIUS_BASE_PX, HOVER_ORBIT_RADIUS_BASE_PX * drawScale);
+    const zoomScale = clamp(getZoomScale(), ZOOM_SCALE_CLAMP_MIN, ZOOM_SCALE_CLAMP_MAX);
+    updateOrbitParticleStreamMetrics({ centerClient, orbitRadius, scale: zoomScale });
   }
 }
 
@@ -740,7 +899,7 @@ function drawAnchorGrid(local, drawScale = 1) {
     ctx.restore();
 }
 
-function drawAnchorParticles(local, nowSec, running, drawScale = 1, pulseBeat = 0, pulseBar = 0) {
+function drawAnchorParticles(local, nowSec, running, drawScale = 1, pulseBeat = 0, pulseBar = 0, corePulseActive = false) {
     if (!ctx) return;
 
     const idle = 0.5 + 0.5 * Math.sin(nowSec * 1.2);
@@ -768,15 +927,28 @@ function drawAnchorParticles(local, nowSec, running, drawScale = 1, pulseBeat = 
 
     ctx.globalCompositeOperation = 'source-over';
 
-    // Central sparkle (keeps a “ball” presence)
-    const pulseFactor = clamp(pulseBeat + pulseBar, 0, 2.0) / 2.0;
-    const sparkR = Math.floor(90 + 165 * pulseFactor);
-    const sparkG = Math.floor(100 + 155 * pulseFactor);
-    const sparkB = 255;
-    ctx.fillStyle = `rgb(${sparkR},${sparkG},${sparkB})`;
-    ctx.beginPath();
-    ctx.arc(0, 0, coreR * 0.55, 0, Math.PI * 2);
-    ctx.fill();
+  // Central sparkle (keeps a “ball” presence)
+  const pulseFactor = clamp(pulseBeat + pulseBar, 0, 2.0) / 2.0;
+  const base = { r: 40, g: 60, b: 120 };
+  const cyan = { r: 92, g: 178, b: 255 };
+  const idlePulse = 0.5 + 0.5 * Math.sin(nowSec * 2.35 + pulseBeat * 1.5 + pulseBar * 1.1);
+  const mix = corePulseActive
+    ? (0.15 + 0.85 * clamp((idlePulse + pulseFactor) * 0.5, 0, 1))
+    : 0.0;
+  const sparkR = Math.floor(base.r + (cyan.r - base.r) * mix);
+  const sparkG = Math.floor(base.g + (cyan.g - base.g) * mix);
+  const sparkB = Math.floor(base.b + (cyan.b - base.b) * mix);
+  const sparkA = corePulseActive ? (0.55 + 0.45 * mix) : 1.0;
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = corePulseActive
+    ? `rgba(${sparkR},${sparkG},${sparkB},${sparkA.toFixed(3)})`
+    : `rgb(${sparkR},${sparkG},${sparkB})`;
+  ctx.beginPath();
+  ctx.arc(0, 0, coreR * 0.55, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 
     ctx.restore(); // for scale/translate
 }
@@ -861,7 +1033,7 @@ export function tickBoardAnchor({ nowMs, loopInfo, running } = {}) {
       drawAnchorGrid(local, drawScale);
 
           drawGradient(local, distWorld, !!running, drawScale);
-  drawAnchorParticles(local, nowSec, !!running, drawScale, pulseBeat, pulseBar);
+  drawAnchorParticles(local, nowSec, !!running, drawScale, pulseBeat, pulseBar, anchorGuideActive);
   updateHoverFx(local, drawScale);
 }
 
