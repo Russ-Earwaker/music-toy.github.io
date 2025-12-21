@@ -39,7 +39,11 @@
         <button class="menu-item" data-action="open-preferences" type="button">Preferences</button>
       </div>
     </div>
-    <div class="topbar-controls"></div>
+    <div class="topbar-controls">
+      <button id="feedback-support-btn" class="topbar-feedback-btn" type="button">
+        Feedback / Support
+      </button>
+    </div>
   </header>
 
   <button id="fullscreenBtn" class="fullscreen-button" aria-pressed="false" aria-label="Enter fullscreen" onclick="window.__Fullscreen?.toggle?.()">
@@ -54,6 +58,47 @@
   <div class="edge-deadzone right" aria-hidden="true"></div>
   <div class="edge-deadzone bottom" aria-hidden="true"></div>
 
+  <div id="feedback-support-overlay" class="feedback-support-overlay" hidden aria-hidden="true">
+    <div class="feedback-support-backdrop" data-action="close-feedback-support"></div>
+    <div class="feedback-support-panel" role="dialog" aria-modal="true" aria-label="Feedback and Support">
+      <div class="feedback-support-header">
+        <div class="feedback-support-title">Feedback & Support</div>
+        <button class="feedback-support-close" type="button" data-action="close-feedback-support" aria-label="Close">
+          &times;
+        </button>
+      </div>
+      <div class="feedback-support-tabs" role="tablist">
+        <button class="feedback-support-tab is-active" type="button" role="tab" aria-selected="true" data-tab="feedback">
+          Feedback
+        </button>
+        <button class="feedback-support-tab" type="button" role="tab" aria-selected="false" data-tab="support">
+          Support
+        </button>
+      </div>
+      <div class="feedback-support-body">
+        <section class="feedback-support-pane is-active" role="tabpanel" data-pane="feedback">
+          <label class="feedback-support-label" for="feedback-support-text">Tell us what you think</label>
+          <textarea id="feedback-support-text" class="feedback-support-text" rows="5" placeholder="Share your thoughts, ideas, or bugs..."></textarea>
+          <div class="feedback-support-actions">
+            <button id="feedback-support-send" class="feedback-support-send" type="button">Send</button>
+            <span id="feedback-support-confirm" class="feedback-support-confirm" role="status" aria-live="polite"></span>
+          </div>
+        </section>
+        <section class="feedback-support-pane" role="tabpanel" data-pane="support" aria-hidden="true">
+          <div class="feedback-support-embed">
+            <iframe
+              title="Support Music Toys"
+              src="https://ko-fi.com/"
+              loading="lazy"
+              referrerpolicy="no-referrer-when-downgrade"
+            ></iframe>
+          </div>
+          <div class="feedback-support-note">This tab will host your donation widget or support page.</div>
+        </section>
+      </div>
+    </div>
+  </div>
+
   <!-- App boot scripts -->
   <script src="./vendor/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -63,6 +108,7 @@
   <script type="module" src="./src/board-gestures.js" defer></script>
   <script type="module" src="./src/board-tap-dots.js" defer></script>
   <script type="module" src="./src/topbar.js" defer></script>
+  <script type="module" src="./src/feedback-support.js" defer></script>
   <script type="module" src="./src/guide.js" defer></script>
   <script type="module" src="./src/overview-mode.js" defer></script>
   <script type="module" src="./src/overview-button.js" defer></script>
