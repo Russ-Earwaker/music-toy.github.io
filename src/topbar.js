@@ -266,12 +266,17 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
           timers: [],
           token: 0,
           prevMuted: new Map(),
+          toggleOffChains: new Set(),
+          togglePrevMuted: new Map(),
+          toggleBuildUp: false,
+          leadInOffChains: new Set(),
           randomizeEnabled: false,
           randomizeBars: LEAD_IN_RANDOMIZE_DEFAULT_BARS,
           toggleEnabled: false,
           toggleBars: LEAD_IN_TOGGLE_DEFAULT_BARS,
           randomTimers: [],
           randomToken: 0,
+          randomizeQueue: [],
         })
       : {
           enabled: false,
@@ -279,12 +284,17 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
           timers: [],
           token: 0,
           prevMuted: new Map(),
+          toggleOffChains: new Set(),
+          togglePrevMuted: new Map(),
+          toggleBuildUp: false,
+          leadInOffChains: new Set(),
           randomizeEnabled: false,
           randomizeBars: LEAD_IN_RANDOMIZE_DEFAULT_BARS,
           toggleEnabled: false,
           toggleBars: LEAD_IN_TOGGLE_DEFAULT_BARS,
           randomTimers: [],
           randomToken: 0,
+          randomizeQueue: [],
         };
 
     if (!state.__initialized) {
@@ -372,9 +382,10 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
       const headId = head?.id || panel?.id;
       if (!headId || seenHeads.has(headId)) return;
       seenHeads.add(headId);
-      chains.push(buildChainGroup(head, panelsById));
+      const group = buildChainGroup(head, panelsById);
+      chains.push({ id: headId, panels: group });
     });
-    return chains.filter(group => group && group.length);
+    return chains.filter(chain => chain && chain.panels && chain.panels.length);
   }
 
   function cancelLeadInSequence(bar, { restore = true } = {}) {
@@ -388,6 +399,15 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
       });
     }
     state.prevMuted = new Map();
+    if (state.leadInOffChains && state.leadInOffChains.size) {
+      const chains = getLeadInChains();
+      chains.forEach((chain) => {
+        if (state.leadInOffChains.has(chain.id)) {
+          setChainMutedVisual(chain, false);
+        }
+      });
+      state.leadInOffChains.clear();
+    }
   }
 
   function cancelRandomization(bar) {
@@ -397,34 +417,96 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
     state.randomTimers = [];
   }
 
-  function randomizeOneToy() {
-    const panels = getLeadInToyPanels();
-    if (!panels.length) return;
-    const panel = panels[Math.floor(Math.random() * panels.length)];
-    if (!panel) return;
-    try { panel.dispatchEvent(new CustomEvent('toy-random', { bubbles: true })); } catch {}
+  function setChainAutoMuted(chain, muted, state) {
+    if (!chain || !chain.panels) return;
+    chain.panels.forEach((panel) => {
+      const toyId = panel?.dataset?.toyid || panel?.id;
+      if (!toyId) return;
+      if (muted) {
+        if (!state.togglePrevMuted.has(toyId)) {
+          let wasMuted = false;
+          try { wasMuted = !!Core?.isToyMuted?.(toyId); } catch {}
+          state.togglePrevMuted.set(toyId, wasMuted);
+        }
+        try { Core?.setToyMuted?.(toyId, true); } catch {}
+        try { panel.classList.add('toy-muted-auto'); } catch {}
+      } else {
+        const wasMuted = state.togglePrevMuted.get(toyId);
+        if (wasMuted != null) {
+          try { Core?.setToyMuted?.(toyId, !!wasMuted); } catch {}
+        } else {
+          try { Core?.setToyMuted?.(toyId, false); } catch {}
+        }
+        state.togglePrevMuted.delete(toyId);
+        try { panel.classList.remove('toy-muted-auto'); } catch {}
+      }
+    });
   }
 
-  function toggleRandomToyMute() {
-    if (typeof Core?.isToyMuted !== 'function' || typeof Core?.setToyMuted !== 'function') return;
-    const panels = getLeadInToyPanels();
-    if (!panels.length) return;
-    const items = panels
-      .map(panel => {
-        const toyId = panel?.dataset?.toyid || panel?.id;
-        if (!toyId) return null;
-        return { panel, toyId, muted: !!Core.isToyMuted(toyId) };
-      })
-      .filter(Boolean);
-    if (!items.length) return;
+  function setChainMutedVisual(chain, muted) {
+    if (!chain || !chain.panels) return;
+    chain.panels.forEach((panel) => {
+      try { panel.classList.toggle('toy-muted-auto', !!muted); } catch {}
+    });
+  }
 
-    const muted = items.filter(it => it.muted);
-    const unmuted = items.filter(it => !it.muted);
+  function restoreToggleOffChains(bar) {
+    const state = getLeadInState(bar);
+    if (!state.toggleOffChains || !state.toggleOffChains.size) return;
+    const chains = getLeadInChains();
+    chains.forEach((chain) => {
+      if (state.toggleOffChains.has(chain.id)) {
+        setChainAutoMuted(chain, false, state);
+      }
+    });
+    state.toggleOffChains.clear();
+    state.togglePrevMuted.clear();
+  }
+
+  function randomizeOneChain(bar) {
+    const state = getLeadInState(bar);
+    const chains = getLeadInChains();
+    if (!chains.length) return;
+    const ids = chains.map(chain => chain.id);
+    if (!state.randomizeQueue || !state.randomizeQueue.length) {
+      const shuffled = ids.slice();
+      for (let i = shuffled.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const tmp = shuffled[i];
+        shuffled[i] = shuffled[j];
+        shuffled[j] = tmp;
+      }
+      state.randomizeQueue = shuffled;
+    }
+    let nextId = state.randomizeQueue.shift();
+    if (!nextId || !ids.includes(nextId)) {
+      state.randomizeQueue = [];
+      nextId = ids[Math.floor(Math.random() * ids.length)];
+    }
+    const chain = chains.find(c => c.id === nextId) || chains[Math.floor(Math.random() * chains.length)];
+    if (!chain) return;
+    chain.panels.forEach((panel) => {
+      try { panel.dispatchEvent(new CustomEvent('toy-random', { bubbles: true })); } catch {}
+    });
+  }
+
+  function toggleRandomChainMute(bar) {
+    if (typeof Core?.isToyMuted !== 'function' || typeof Core?.setToyMuted !== 'function') return;
+    const state = getLeadInState(bar);
+    const chains = getLeadInChains();
+    if (!chains.length) return;
+
+    const muted = chains.filter(chain => state.toggleOffChains?.has(chain.id));
+    const unmuted = chains.filter(chain => !state.toggleOffChains?.has(chain.id));
+
+    const minActive = 2;
+    if (unmuted.length <= minActive) state.toggleBuildUp = true;
+    if (unmuted.length >= chains.length) state.toggleBuildUp = false;
 
     let target = null;
     let shouldMute = false;
 
-    if (unmuted.length <= 1) {
+    if (unmuted.length <= minActive) {
       if (!muted.length) return;
       target = muted[Math.floor(Math.random() * muted.length)];
       shouldMute = false;
@@ -432,17 +514,24 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
       target = unmuted[Math.floor(Math.random() * unmuted.length)];
       shouldMute = true;
     } else {
-      if (Math.random() < 0.5) {
-        target = unmuted[Math.floor(Math.random() * unmuted.length)];
-        shouldMute = true;
-      } else {
+      const bias = state.toggleBuildUp ? 0.7 : 0.3;
+      if (Math.random() < bias) {
         target = muted[Math.floor(Math.random() * muted.length)];
         shouldMute = false;
+      } else {
+        target = unmuted[Math.floor(Math.random() * unmuted.length)];
+        shouldMute = true;
       }
     }
 
     if (!target) return;
-    try { Core.setToyMuted(target.toyId, shouldMute); } catch {}
+    if (shouldMute) {
+      state.toggleOffChains.add(target.id);
+      setChainAutoMuted(target, true, state);
+    } else {
+      state.toggleOffChains.delete(target.id);
+      setChainAutoMuted(target, false, state);
+    }
   }
 
   function scheduleRandomization(bar, delayMs = 0) {
@@ -471,10 +560,10 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
     };
 
     if (state.randomizeEnabled) {
-      schedule(randomizeOneToy, state.randomizeBars || 1);
+      schedule(() => randomizeOneChain(bar), state.randomizeBars || 1);
     }
     if (state.toggleEnabled) {
-      schedule(toggleRandomToyMute, state.toggleBars || 1);
+      schedule(() => toggleRandomChainMute(bar), state.toggleBars || 1);
     }
   }
 
@@ -495,9 +584,15 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
     const chains = getLeadInChains();
     if (!chains.length) return { totalDelayMs: 0 };
 
+    state.leadInOffChains = new Set();
+    chains.forEach((chain) => {
+      state.leadInOffChains.add(chain.id);
+      setChainMutedVisual(chain, true);
+    });
+
     if (typeof Core?.isToyMuted === 'function' && typeof Core?.setToyMuted === 'function') {
-      chains.forEach((group) => {
-        group.forEach((panel) => {
+      chains.forEach((chain) => {
+        chain.panels.forEach((panel) => {
           const toyId = panel?.dataset?.toyid || panel?.id;
           if (!toyId) return;
           const wasMuted = !!Core.isToyMuted(toyId);
@@ -512,11 +607,13 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
     const intervalSec = Math.max(0.05, barLen) * Math.max(1, state.bars || 1);
     const token = ++state.token;
 
-    chains.forEach((group, idx) => {
+    chains.forEach((chain, idx) => {
       const delayMs = Math.max(0, Math.round(idx * intervalSec * 1000));
       const t = setTimeout(() => {
         if (state.token !== token) return;
-        group.forEach((panel) => {
+        state.leadInOffChains.delete(chain.id);
+        setChainMutedVisual(chain, false);
+        chain.panels.forEach((panel) => {
           const toyId = panel?.dataset?.toyid || panel?.id;
           if (!toyId) return;
           const wasMuted = state.prevMuted.get(toyId);
@@ -1478,6 +1575,9 @@ function ensureTopbar(){
         state.toggleEnabled = !state.toggleEnabled;
         try { localStorage.setItem(LEAD_IN_TOGGLE_ENABLED_KEY, state.toggleEnabled ? '1' : '0'); } catch {}
         updateRandomUI();
+        if (!state.toggleEnabled) {
+          restoreToggleOffChains(bar);
+        }
         if (!state.randomizeEnabled && !state.toggleEnabled) {
           cancelRandomization(bar);
         } else if (Core?.isRunning?.()) {
@@ -1677,6 +1777,7 @@ if (document.readyState === 'loading') {
               updatePlayButtonVisual(b, false);
               cancelLeadInSequence(bar, { restore: true });
               cancelRandomization(bar);
+              restoreToggleOffChains(bar);
             } else {
               Core?.start?.();
               updatePlayButtonVisual(b, true);

@@ -4180,3 +4180,18 @@ body.feedback-support-open #board {
   font-size: 12px;
   line-height: 1.35;
 }
+
+/* Auto-muted chain styling (lead-in random toggle) */
+.toy-panel.toy-muted-auto {
+  --toy-active: transparent;
+  filter: saturate(0.55) brightness(0.75);
+  opacity: 0.65;
+  box-shadow: none !important;
+}
+.toy-panel.toy-muted-auto,
+.toy-panel.toy-muted-auto .toy-body {
+  outline: none !important;
+}
+.toy-panel.toy-muted-auto .toy-body {
+  box-shadow: none !important;
+}
