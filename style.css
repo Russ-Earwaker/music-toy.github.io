@@ -4195,3 +4195,27 @@ body.feedback-support-open #board {
 .toy-panel.toy-muted-auto .toy-body {
   box-shadow: none !important;
 }
+/* Toy randomize flash */
+.toy-random-flash {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 40;
+  animation: toy-random-flash 760ms ease-out forwards;
+}
+.toy-random-flash::before {
+  content: '';
+  width: min(240px, 60%);
+  aspect-ratio: 1 / 1;
+  background: url('/assets/UI/T_ButtonRandom.png') no-repeat center / contain;
+  opacity: 0.95;
+  filter: drop-shadow(0 10px 26px rgba(0, 0, 0, 0.45));
+}
+@keyframes toy-random-flash {
+  0% { opacity: 0; transform: scale(0.7); }
+  35% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.2); }
+}

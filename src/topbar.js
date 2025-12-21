@@ -269,6 +269,7 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
           toggleOffChains: new Set(),
           togglePrevMuted: new Map(),
           toggleBuildUp: false,
+          chainToggleAt: new Map(),
           leadInOffChains: new Set(),
           randomizeEnabled: false,
           randomizeBars: LEAD_IN_RANDOMIZE_DEFAULT_BARS,
@@ -287,6 +288,7 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
           toggleOffChains: new Set(),
           togglePrevMuted: new Map(),
           toggleBuildUp: false,
+          chainToggleAt: new Map(),
           leadInOffChains: new Set(),
           randomizeEnabled: false,
           randomizeBars: LEAD_IN_RANDOMIZE_DEFAULT_BARS,
@@ -443,6 +445,59 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
     });
   }
 
+  function getNowMs() {
+    if (typeof performance !== 'undefined' && typeof performance.now === 'function') return performance.now();
+    return Date.now();
+  }
+
+  function ensureChainToggleTimes(state, chains) {
+    if (!state.chainToggleAt) state.chainToggleAt = new Map();
+    const now = getNowMs();
+    chains.forEach((chain) => {
+      if (!state.chainToggleAt.has(chain.id)) state.chainToggleAt.set(chain.id, now);
+    });
+  }
+
+  function markChainToggleTime(chain, state) {
+    if (!state.chainToggleAt) state.chainToggleAt = new Map();
+    state.chainToggleAt.set(chain.id, getNowMs());
+  }
+
+  function getChainToggleAge(chain, state) {
+    const now = getNowMs();
+    const last = state.chainToggleAt?.get(chain.id);
+    if (!Number.isFinite(last)) return 0;
+    return Math.max(0, now - last);
+  }
+
+  function pickWeighted(items, weightFn) {
+    if (!items.length) return null;
+    const weights = items.map((item) => Math.max(0.001, Number(weightFn(item)) || 0.001));
+    const total = weights.reduce((acc, w) => acc + w, 0);
+    let roll = Math.random() * total;
+    for (let i = 0; i < items.length; i += 1) {
+      roll -= weights[i];
+      if (roll <= 0) return items[i];
+    }
+    return items[items.length - 1];
+  }
+
+  function flashToyRandom(panel) {
+    if (!panel) return;
+    const host = panel.querySelector('.toy-body') || panel;
+    if (!host) return;
+    const existing = host.querySelector('.toy-random-flash');
+    if (existing) {
+      try { existing.remove(); } catch {}
+    }
+    const flash = document.createElement('div');
+    flash.className = 'toy-random-flash';
+    host.appendChild(flash);
+    const remove = () => { try { flash.remove(); } catch {} };
+    flash.addEventListener('animationend', remove, { once: true });
+    setTimeout(remove, 900);
+  }
+
   function setChainMutedVisual(chain, muted) {
     if (!chain || !chain.panels) return;
     chain.panels.forEach((panel) => {
@@ -486,6 +541,7 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
     const chain = chains.find(c => c.id === nextId) || chains[Math.floor(Math.random() * chains.length)];
     if (!chain) return;
     chain.panels.forEach((panel) => {
+      flashToyRandom(panel);
       try { panel.dispatchEvent(new CustomEvent('toy-random', { bubbles: true })); } catch {}
     });
   }
@@ -495,6 +551,7 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
     const state = getLeadInState(bar);
     const chains = getLeadInChains();
     if (!chains.length) return;
+    ensureChainToggleTimes(state, chains);
 
     const muted = chains.filter(chain => state.toggleOffChains?.has(chain.id));
     const unmuted = chains.filter(chain => !state.toggleOffChains?.has(chain.id));
@@ -508,18 +565,30 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
 
     if (unmuted.length <= minActive) {
       if (!muted.length) return;
-      target = muted[Math.floor(Math.random() * muted.length)];
+      target = pickWeighted(muted, (chain) => {
+        const ageSec = Math.min(60, getChainToggleAge(chain, state) / 1000);
+        return 1 + ageSec;
+      });
       shouldMute = false;
     } else if (!muted.length) {
-      target = unmuted[Math.floor(Math.random() * unmuted.length)];
+      target = pickWeighted(unmuted, (chain) => {
+        const ageSec = Math.min(60, getChainToggleAge(chain, state) / 1000);
+        return 1 + ageSec;
+      });
       shouldMute = true;
     } else {
       const bias = state.toggleBuildUp ? 0.7 : 0.3;
       if (Math.random() < bias) {
-        target = muted[Math.floor(Math.random() * muted.length)];
+        target = pickWeighted(muted, (chain) => {
+          const ageSec = Math.min(60, getChainToggleAge(chain, state) / 1000);
+          return 1 + ageSec;
+        });
         shouldMute = false;
       } else {
-        target = unmuted[Math.floor(Math.random() * unmuted.length)];
+        target = pickWeighted(unmuted, (chain) => {
+          const ageSec = Math.min(60, getChainToggleAge(chain, state) / 1000);
+          return 1 + ageSec;
+        });
         shouldMute = true;
       }
     }
@@ -528,9 +597,11 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
     if (shouldMute) {
       state.toggleOffChains.add(target.id);
       setChainAutoMuted(target, true, state);
+      markChainToggleTime(target, state);
     } else {
       state.toggleOffChains.delete(target.id);
       setChainAutoMuted(target, false, state);
+      markChainToggleTime(target, state);
     }
   }
 
