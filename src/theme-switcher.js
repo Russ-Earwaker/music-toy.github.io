@@ -43,16 +43,7 @@ function initThemeSwitcher() {
     console.warn('[theme-switcher] Could not get active theme on boot.', e);
   }
 
-  // 3. Handle changes and call the global ThemeBoot API from boot-theme.js
-  select.addEventListener('change', () => {
-    const newTheme = select.value;
-    if (window.ThemeBoot && window.ThemeBoot.setTheme) {
-      window.ThemeBoot.setTheme(newTheme);
-      if (window.ThemeBoot.wireAll) window.ThemeBoot.wireAll({ force: true });
-    } else {
-      console.warn('[theme-switcher] window.ThemeBoot API not found. Cannot change theme.');
-    }
-  });
+  // Apply is handled by the topbar options panel button.
 }
 
 // Wait for the DOM to be ready before manipulating it.

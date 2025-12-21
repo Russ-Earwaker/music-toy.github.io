@@ -68,17 +68,38 @@ export function getLoopInfo(){
 const __buses = new Map();       // id -> GainNode
 const __vol = new Map();         // id -> volume [0..1]
 const __mute = new Map();        // id -> bool
+let __masterGain = null;
+
+function ensureMasterGain() {
+  if (__masterGain) return __masterGain;
+  const ctx = ensureAudioContext();
+  const g = ctx.createGain();
+  const masterVol = __vol.get('master') ?? 1.0;
+  g.gain.value = __mute.get('master') ? 0 : masterVol;
+  g.connect(ctx.destination);
+  __masterGain = g;
+  __buses.set('master', g);
+  return g;
+}
 
 export function getToyGain(id='master'){
   const key = String(id||'master').toLowerCase();
-  if (!__buses.has(key)){
-    const ctx = ensureAudioContext();
-    const g = ctx.createGain();
-    g.gain.value = __mute.get(key) ? 0 : (__vol.get(key) ?? 1.0);
+  if (__buses.has(key)) return __buses.get(key);
+
+  const ctx = ensureAudioContext();
+  const g = ctx.createGain();
+  g.gain.value = __mute.get(key) ? 0 : (__vol.get(key) ?? 1.0);
+
+  if (key === 'master') {
     g.connect(ctx.destination);
-    __buses.set(key, g);
+    __masterGain = g;
+  } else {
+    const master = ensureMasterGain();
+    g.connect(master);
   }
-  return __buses.get(key);
+
+  __buses.set(key, g);
+  return g;
 }
 
 export function setToyVolume(id='master', v=1){

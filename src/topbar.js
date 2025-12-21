@@ -11,6 +11,15 @@ import {
 } from './sound-theme.js';
 
 const NEW_SCENE_ZOOM = 0.6; // adjust this to change the starting zoom when creating a new scene
+const LEAD_IN_ENABLED_KEY = 'prefs:leadInEnabled';
+const LEAD_IN_BARS_KEY = 'prefs:leadInBars';
+const LEAD_IN_DEFAULT_BARS = 4;
+const LEAD_IN_RANDOMIZE_ENABLED_KEY = 'prefs:leadInRandomizeEnabled';
+const LEAD_IN_RANDOMIZE_BARS_KEY = 'prefs:leadInRandomizeBars';
+const LEAD_IN_TOGGLE_ENABLED_KEY = 'prefs:leadInToggleEnabled';
+const LEAD_IN_TOGGLE_BARS_KEY = 'prefs:leadInToggleBars';
+const LEAD_IN_RANDOMIZE_DEFAULT_BARS = 4;
+const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
 
 (function(){
 
@@ -124,7 +133,8 @@ const NEW_SCENE_ZOOM = 0.6; // adjust this to change the starting zoom when crea
         const g = ctx.createGain();
         g.gain.value = 0.45;
         src.connect(g);
-        g.connect(ctx.destination);
+        const master = typeof Core?.getToyGain === 'function' ? Core.getToyGain('master') : null;
+        g.connect(master || ctx.destination);
         try{ src.start(now); }catch{ src.start(); }
       }catch{}
     };
@@ -245,6 +255,278 @@ const NEW_SCENE_ZOOM = 0.6; // adjust this to change the starting zoom when crea
       const btn = document.querySelector('#topbar [data-action="toggle-play"]');
       if (btn) updatePlayButtonVisual(btn, false);
     }catch{}
+  }
+
+  function getLeadInState(bar) {
+    const host = bar || document.getElementById('topbar');
+    const state = host
+      ? (host.__leadInState = host.__leadInState || {
+          enabled: false,
+          bars: LEAD_IN_DEFAULT_BARS,
+          timers: [],
+          token: 0,
+          prevMuted: new Map(),
+          randomizeEnabled: false,
+          randomizeBars: LEAD_IN_RANDOMIZE_DEFAULT_BARS,
+          toggleEnabled: false,
+          toggleBars: LEAD_IN_TOGGLE_DEFAULT_BARS,
+          randomTimers: [],
+          randomToken: 0,
+        })
+      : {
+          enabled: false,
+          bars: LEAD_IN_DEFAULT_BARS,
+          timers: [],
+          token: 0,
+          prevMuted: new Map(),
+          randomizeEnabled: false,
+          randomizeBars: LEAD_IN_RANDOMIZE_DEFAULT_BARS,
+          toggleEnabled: false,
+          toggleBars: LEAD_IN_TOGGLE_DEFAULT_BARS,
+          randomTimers: [],
+          randomToken: 0,
+        };
+
+    if (!state.__initialized) {
+      state.__initialized = true;
+      try {
+        const savedEnabled = localStorage.getItem(LEAD_IN_ENABLED_KEY);
+        if (savedEnabled != null) state.enabled = savedEnabled === '1';
+      } catch {}
+      try {
+        const savedBars = Number(localStorage.getItem(LEAD_IN_BARS_KEY));
+        if (Number.isFinite(savedBars) && savedBars > 0) state.bars = savedBars;
+      } catch {}
+      try {
+        const savedRandEnabled = localStorage.getItem(LEAD_IN_RANDOMIZE_ENABLED_KEY);
+        if (savedRandEnabled != null) state.randomizeEnabled = savedRandEnabled === '1';
+      } catch {}
+      try {
+        const savedRandBars = Number(localStorage.getItem(LEAD_IN_RANDOMIZE_BARS_KEY));
+        if (Number.isFinite(savedRandBars) && savedRandBars > 0) state.randomizeBars = savedRandBars;
+      } catch {}
+      try {
+        const savedToggleEnabled = localStorage.getItem(LEAD_IN_TOGGLE_ENABLED_KEY);
+        if (savedToggleEnabled != null) state.toggleEnabled = savedToggleEnabled === '1';
+      } catch {}
+      try {
+        const savedToggleBars = Number(localStorage.getItem(LEAD_IN_TOGGLE_BARS_KEY));
+        if (Number.isFinite(savedToggleBars) && savedToggleBars > 0) state.toggleBars = savedToggleBars;
+      } catch {}
+    }
+
+    return state;
+  }
+
+  function getLeadInToyPanels() {
+    return Array.from(document.querySelectorAll('#board > .toy-panel'));
+  }
+
+  function getChainHead(panel) {
+    let current = panel;
+    const seen = new Set();
+    while (current && current.dataset && current.dataset.chainParent) {
+      if (seen.has(current)) break;
+      seen.add(current);
+      const parentId = current.dataset.chainParent;
+      const parent = parentId ? document.getElementById(parentId) : null;
+      if (!parent) break;
+      current = parent;
+    }
+    return current || panel;
+  }
+
+  function buildChainGroup(head, panelsById) {
+    const ordered = [];
+    const seen = new Set();
+    let current = head;
+    while (current && !seen.has(current)) {
+      seen.add(current);
+      ordered.push(current);
+      const nextId = current.dataset?.nextToyId;
+      if (!nextId) break;
+      const next = panelsById.get(nextId) || document.getElementById(nextId);
+      if (!next) break;
+      current = next;
+    }
+    if (ordered.length > 1) return ordered;
+
+    const fallback = [];
+    panelsById.forEach((panel) => {
+      if (getChainHead(panel) === head) fallback.push(panel);
+    });
+    return fallback.length ? fallback : ordered;
+  }
+
+  function getLeadInChains() {
+    const panels = getLeadInToyPanels();
+    const panelsById = new Map();
+    panels.forEach((panel) => {
+      if (panel?.id) panelsById.set(panel.id, panel);
+    });
+
+    const chains = [];
+    const seenHeads = new Set();
+    panels.forEach((panel) => {
+      const head = getChainHead(panel);
+      const headId = head?.id || panel?.id;
+      if (!headId || seenHeads.has(headId)) return;
+      seenHeads.add(headId);
+      chains.push(buildChainGroup(head, panelsById));
+    });
+    return chains.filter(group => group && group.length);
+  }
+
+  function cancelLeadInSequence(bar, { restore = true } = {}) {
+    const state = getLeadInState(bar);
+    state.token++;
+    state.timers.forEach((t) => { try { clearTimeout(t); } catch {} });
+    state.timers = [];
+    if (restore && state.prevMuted && typeof Core?.setToyMuted === 'function') {
+      state.prevMuted.forEach((wasMuted, toyId) => {
+        try { Core.setToyMuted(toyId, !!wasMuted); } catch {}
+      });
+    }
+    state.prevMuted = new Map();
+  }
+
+  function cancelRandomization(bar) {
+    const state = getLeadInState(bar);
+    state.randomToken++;
+    state.randomTimers.forEach((t) => { try { clearTimeout(t); } catch {} });
+    state.randomTimers = [];
+  }
+
+  function randomizeOneToy() {
+    const panels = getLeadInToyPanels();
+    if (!panels.length) return;
+    const panel = panels[Math.floor(Math.random() * panels.length)];
+    if (!panel) return;
+    try { panel.dispatchEvent(new CustomEvent('toy-random', { bubbles: true })); } catch {}
+  }
+
+  function toggleRandomToyMute() {
+    if (typeof Core?.isToyMuted !== 'function' || typeof Core?.setToyMuted !== 'function') return;
+    const panels = getLeadInToyPanels();
+    if (!panels.length) return;
+    const items = panels
+      .map(panel => {
+        const toyId = panel?.dataset?.toyid || panel?.id;
+        if (!toyId) return null;
+        return { panel, toyId, muted: !!Core.isToyMuted(toyId) };
+      })
+      .filter(Boolean);
+    if (!items.length) return;
+
+    const muted = items.filter(it => it.muted);
+    const unmuted = items.filter(it => !it.muted);
+
+    let target = null;
+    let shouldMute = false;
+
+    if (unmuted.length <= 1) {
+      if (!muted.length) return;
+      target = muted[Math.floor(Math.random() * muted.length)];
+      shouldMute = false;
+    } else if (!muted.length) {
+      target = unmuted[Math.floor(Math.random() * unmuted.length)];
+      shouldMute = true;
+    } else {
+      if (Math.random() < 0.5) {
+        target = unmuted[Math.floor(Math.random() * unmuted.length)];
+        shouldMute = true;
+      } else {
+        target = muted[Math.floor(Math.random() * muted.length)];
+        shouldMute = false;
+      }
+    }
+
+    if (!target) return;
+    try { Core.setToyMuted(target.toyId, shouldMute); } catch {}
+  }
+
+  function scheduleRandomization(bar, delayMs = 0) {
+    const state = getLeadInState(bar);
+    cancelRandomization(bar);
+    if (!state.randomizeEnabled && !state.toggleEnabled) return;
+    const li = (typeof Core?.getLoopInfo === 'function') ? (Core.getLoopInfo() || {}) : {};
+    const barLen = Number(li.barLen) || (60 / (Core?.bpm || 120)) * (Core?.BEATS_PER_BAR || 4);
+    const token = ++state.randomToken;
+
+    const schedule = (fn, bars) => {
+      const intervalMs = Math.max(0.05, barLen) * Math.max(1, bars) * 1000;
+      const start = setTimeout(() => {
+        if (state.randomToken !== token) return;
+        fn();
+        const interval = setInterval(() => {
+          if (state.randomToken !== token) {
+            clearInterval(interval);
+            return;
+          }
+          fn();
+        }, intervalMs);
+        state.randomTimers.push(interval);
+      }, Math.max(0, delayMs));
+      state.randomTimers.push(start);
+    };
+
+    if (state.randomizeEnabled) {
+      schedule(randomizeOneToy, state.randomizeBars || 1);
+    }
+    if (state.toggleEnabled) {
+      schedule(toggleRandomToyMute, state.toggleBars || 1);
+    }
+  }
+
+  function getLeadInDelayMs(bar) {
+    const state = getLeadInState(bar);
+    if (!state.enabled) return 0;
+    const chains = getLeadInChains();
+    if (!chains.length) return 0;
+    const li = (typeof Core?.getLoopInfo === 'function') ? (Core.getLoopInfo() || {}) : {};
+    const barLen = Number(li.barLen) || (60 / (Core?.bpm || 120)) * (Core?.BEATS_PER_BAR || 4);
+    const intervalSec = Math.max(0.05, barLen) * Math.max(1, state.bars || 1);
+    return Math.max(0, Math.round(chains.length * intervalSec * 1000));
+  }
+
+  function startLeadInSequence(bar) {
+    const state = getLeadInState(bar);
+    cancelLeadInSequence(bar, { restore: false });
+    const chains = getLeadInChains();
+    if (!chains.length) return { totalDelayMs: 0 };
+
+    if (typeof Core?.isToyMuted === 'function' && typeof Core?.setToyMuted === 'function') {
+      chains.forEach((group) => {
+        group.forEach((panel) => {
+          const toyId = panel?.dataset?.toyid || panel?.id;
+          if (!toyId) return;
+          const wasMuted = !!Core.isToyMuted(toyId);
+          state.prevMuted.set(toyId, wasMuted);
+          try { Core.setToyMuted(toyId, true); } catch {}
+        });
+      });
+    }
+
+    const li = (typeof Core?.getLoopInfo === 'function') ? (Core.getLoopInfo() || {}) : {};
+    const barLen = Number(li.barLen) || (60 / (Core?.bpm || 120)) * (Core?.BEATS_PER_BAR || 4);
+    const intervalSec = Math.max(0.05, barLen) * Math.max(1, state.bars || 1);
+    const token = ++state.token;
+
+    chains.forEach((group, idx) => {
+      const delayMs = Math.max(0, Math.round(idx * intervalSec * 1000));
+      const t = setTimeout(() => {
+        if (state.token !== token) return;
+        group.forEach((panel) => {
+          const toyId = panel?.dataset?.toyid || panel?.id;
+          if (!toyId) return;
+          const wasMuted = state.prevMuted.get(toyId);
+          if (wasMuted) return;
+          try { Core?.setToyMuted?.(toyId, false); } catch {}
+        });
+      }, delayMs);
+      state.timers.push(t);
+    });
+    return { totalDelayMs: Math.max(0, Math.round(chains.length * intervalSec * 1000)) };
   }
 
   function centerBoardOnAnchorForNewScene(){
@@ -410,9 +692,11 @@ const NEW_SCENE_ZOOM = 0.6; // adjust this to change the starting zoom when crea
     if (cancelCore) cancelCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonClose.png')");
 
     const hide = () => { overlay.style.display = 'none'; };
-    const show = (themeLabel) => {
+    const show = (themeLabel, promptOverride) => {
       const label = themeLabel || 'No Theme';
-      if (prompt) prompt.textContent = `Apply ${label} theme to the scene`;
+      if (prompt) {
+        prompt.textContent = promptOverride || `Apply ${label} theme to the scene`;
+      }
       overlay.style.display = 'flex';
     };
 
@@ -428,6 +712,9 @@ const NEW_SCENE_ZOOM = 0.6; // adjust this to change the starting zoom when crea
     overlay.__show = show;
     overlay.__hide = hide;
     overlay.__applyBtn = applyBtn;
+    overlay.__setPrompt = (text) => {
+      if (prompt) prompt.textContent = text || '';
+    };
     return overlay;
   }
 
@@ -590,31 +877,6 @@ function ensureTopbar(){
       return btn;
     };
 
-    const ensureThemeRow = () => {
-      if (!menuPanel) return;
-      let select = menuPanel.querySelector('#theme-select');
-      if (select){
-        const row = select.closest('.menu-row') || select.parentElement;
-        if (row){
-          row.classList.add('menu-item','menu-row','menu-row-theme');
-        }
-        select.classList.add('toy-btn');
-        if (!select.dataset.action) select.dataset.action = 'theme';
-        return;
-      }
-      const row = document.createElement('div');
-      row.className = 'menu-item menu-row menu-row-theme';
-      const label = document.createElement('label');
-      label.setAttribute('for','theme-select');
-      label.textContent = 'Theme';
-      const sel = document.createElement('select');
-      sel.id = 'theme-select';
-      sel.className = 'toy-btn';
-      sel.dataset.action = 'theme';
-      row.append(label, sel);
-      menuPanel.appendChild(row);
-    };
-
     const ensurePresetRow = () => {
       if (!menuPanel) return;
       let select = menuPanel.querySelector('#preset-select');
@@ -709,23 +971,25 @@ function ensureTopbar(){
       soundThemeBtn.type = 'button';
       soundThemeBtn.className = 'c-btn sound-theme-btn';
       soundThemeBtn.dataset.action = 'sound-theme';
-      soundThemeBtn.dataset.helpLabel = 'Sound theme';
+      soundThemeBtn.dataset.helpLabel = 'Play options';
       soundThemeBtn.dataset.helpPosition = 'bottom';
-      soundThemeBtn.title = 'Sound theme';
+      soundThemeBtn.title = 'Play options';
       soundThemeBtn.innerHTML = [
         '<div class="c-btn-outer"></div>',
         '<div class="c-btn-glow"></div>',
         '<div class="c-btn-core"></div>',
       ].join('');
       const themeCore = soundThemeBtn.querySelector('.c-btn-core');
-      if (themeCore) themeCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonTheme.png')");
+      if (themeCore) themeCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonPlayOptions.png')");
       playBtn?.insertAdjacentElement('afterend', soundThemeBtn);
     } else {
       soundThemeBtn.classList.add('c-btn', 'sound-theme-btn');
       soundThemeBtn.type = 'button';
       if (!soundThemeBtn.dataset.helpPosition) soundThemeBtn.dataset.helpPosition = 'bottom';
+      if (!soundThemeBtn.dataset.helpLabel) soundThemeBtn.dataset.helpLabel = 'Play options';
+      if (!soundThemeBtn.title) soundThemeBtn.title = 'Play options';
       const themeCore = soundThemeBtn.querySelector('.c-btn-core');
-      if (themeCore) themeCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonTheme.png')");
+      if (themeCore) themeCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonPlayOptions.png')");
       playBtn?.insertAdjacentElement('afterend', soundThemeBtn);
     }
 
@@ -733,18 +997,67 @@ function ensureTopbar(){
     if (!soundThemePanel) {
       soundThemePanel = document.createElement('div');
       soundThemePanel.id = 'topbar-sound-theme-panel';
-      soundThemePanel.className = 'topbar-sound-theme-panel';
+      soundThemePanel.className = 'topbar-sound-theme-panel options-panel';
       soundThemePanel.setAttribute('hidden', '');
       soundThemePanel.innerHTML = `
-        <div class="sound-theme-title">Sound Theme</div>
-        <div class="sound-theme-list"></div>
+        <div class="options-section">
+          <div class="options-section-title">Master Volume</div>
+          <div class="options-volume-row">
+            <div class="toy-volwrap options-volwrap">
+              <input class="options-volume-slider" type="range" min="0" max="100" step="1" value="100" aria-label="Master volume" />
+              <button class="c-btn toy-mute-btn options-mute-btn" type="button" aria-label="Mute">
+                <div class="c-btn-outer"></div>
+                <div class="c-btn-glow"></div>
+                <div class="c-btn-core"></div>
+              </button>
+            </div>
+            <div class="options-volume-value">100%</div>
+          </div>
+        </div>
+        <div class="options-divider"></div>
+        <div class="options-section">
+          <div class="sound-theme-title">Sound Theme</div>
+          <div class="options-theme-row">
+            <select id="sound-theme-select" class="toy-btn options-theme-select"></select>
+            <button class="menu-inline-btn options-apply-btn" type="button" data-action="apply-sound-theme">Apply</button>
+          </div>
+        </div>
+        <div class="options-divider"></div>
+        <div class="options-section options-leadin-section">
+          <div class="options-section-title">Play With Lead In</div>
+          <div class="options-leadin-row">
+            <div class="options-leadin-count">
+              <button class="options-step-btn" type="button" data-action="lead-in-minus" aria-label="Decrease bars">-</button>
+              <div class="options-leadin-value">4 bars</div>
+              <button class="options-step-btn" type="button" data-action="lead-in-plus" aria-label="Increase bars">+</button>
+            </div>
+            <button class="menu-inline-btn options-toggle-btn" type="button" data-action="lead-in-toggle" aria-pressed="false">Off</button>
+          </div>
+          <div class="options-subsection-title">Randomisation After Lead In</div>
+          <div class="options-leadin-row">
+            <div class="options-leadin-count">
+              <button class="options-step-btn" type="button" data-action="lead-in-random-minus" aria-label="Decrease randomise bars">-</button>
+              <div class="options-leadin-value options-randomize-value">Randomise every 4 bars</div>
+              <button class="options-step-btn" type="button" data-action="lead-in-random-plus" aria-label="Increase randomise bars">+</button>
+            </div>
+            <button class="menu-inline-btn options-toggle-btn" type="button" data-action="lead-in-random-toggle" aria-pressed="false">Off</button>
+          </div>
+          <div class="options-leadin-row">
+            <div class="options-leadin-count">
+              <button class="options-step-btn" type="button" data-action="lead-in-toggle-minus" aria-label="Decrease toggle bars">-</button>
+              <div class="options-leadin-value options-toggle-value">Toggle every 4 bars</div>
+              <button class="options-step-btn" type="button" data-action="lead-in-toggle-plus" aria-label="Increase toggle bars">+</button>
+            </div>
+            <button class="menu-inline-btn options-toggle-btn" type="button" data-action="lead-in-toggle-toggle" aria-pressed="false">Off</button>
+          </div>
+        </div>
       `;
       bar.appendChild(soundThemePanel);
     } else {
-      soundThemePanel.classList.add('topbar-sound-theme-panel');
+      soundThemePanel.classList.add('topbar-sound-theme-panel', 'options-panel');
     }
     soundThemePanel.setAttribute('role', 'dialog');
-    soundThemePanel.setAttribute('aria-label', 'Sound theme');
+    soundThemePanel.setAttribute('aria-label', 'Play options');
 
     let soundThemeLabel = bar.querySelector('#topbar-sound-theme-label');
     if (!soundThemeLabel) {
@@ -870,6 +1183,76 @@ function ensureTopbar(){
     soundThemeState.label = soundThemeLabel;
     soundThemeState.open = !!soundThemeState.open;
 
+    const optionsState = bar.__optionsState || (bar.__optionsState = {});
+    optionsState.panel = soundThemePanel;
+    optionsState.masterSlider = soundThemePanel?.querySelector?.('.options-volume-slider') || null;
+    optionsState.masterValue = soundThemePanel?.querySelector?.('.options-volume-value') || null;
+    optionsState.masterMuteBtn = soundThemePanel?.querySelector?.('.options-mute-btn') || null;
+    optionsState.soundThemeSelect = soundThemePanel?.querySelector?.('#sound-theme-select') || null;
+    optionsState.leadInToggleBtn = soundThemePanel?.querySelector?.('[data-action="lead-in-toggle"]') || null;
+    optionsState.leadInValue = soundThemePanel?.querySelector?.('.options-leadin-value') || null;
+    optionsState.leadInMinus = soundThemePanel?.querySelector?.('[data-action="lead-in-minus"]') || null;
+    optionsState.leadInPlus = soundThemePanel?.querySelector?.('[data-action="lead-in-plus"]') || null;
+    optionsState.randomizeToggleBtn = soundThemePanel?.querySelector?.('[data-action="lead-in-random-toggle"]') || null;
+    optionsState.randomizeValue = soundThemePanel?.querySelector?.('.options-randomize-value') || null;
+    optionsState.randomizeMinus = soundThemePanel?.querySelector?.('[data-action="lead-in-random-minus"]') || null;
+    optionsState.randomizePlus = soundThemePanel?.querySelector?.('[data-action="lead-in-random-plus"]') || null;
+    optionsState.toggleToggleBtn = soundThemePanel?.querySelector?.('[data-action="lead-in-toggle-toggle"]') || null;
+    optionsState.toggleValue = soundThemePanel?.querySelector?.('.options-toggle-value') || null;
+    optionsState.toggleMinus = soundThemePanel?.querySelector?.('[data-action="lead-in-toggle-minus"]') || null;
+    optionsState.togglePlus = soundThemePanel?.querySelector?.('[data-action="lead-in-toggle-plus"]') || null;
+
+    const updateVolumeFill = (slider) => {
+      if (!slider) return;
+      const min = slider.min ? parseFloat(slider.min) : 0;
+      const max = slider.max ? parseFloat(slider.max) : 100;
+      const val = slider.value ? parseFloat(slider.value) : 0;
+      const pct = (max > min) ? ((val - min) / (max - min)) : 0;
+      slider.style.setProperty('--vol-fill-pct', `${Math.max(0, Math.min(1, pct)) * 100}%`);
+    };
+
+    const syncMasterVolume = () => {
+      const slider = optionsState.masterSlider;
+      const valueEl = optionsState.masterValue;
+      if (!slider) return;
+      const current = typeof Core?.getToyVolume === 'function' ? Core.getToyVolume('master') : 1;
+      const safe = Number.isFinite(current) ? current : 1;
+      const pct = Math.round(Math.max(0, Math.min(1, safe)) * 100);
+      slider.value = String(pct);
+      if (valueEl) valueEl.textContent = `${pct}%`;
+      updateVolumeFill(slider);
+    };
+
+    const setMasterMuteVisual = (muted) => {
+      const btn = optionsState.masterMuteBtn;
+      if (!btn) return;
+      btn.setAttribute('aria-pressed', String(!!muted));
+      const title = muted ? 'Unmute' : 'Mute';
+      btn.title = title;
+      btn.setAttribute('aria-label', title);
+      const core = btn.querySelector('.c-btn-core');
+      if (core) {
+        const iconUrl = muted ? "/assets/UI/T_Mute.png" : "/assets/UI/T_Unmute.png";
+        core.style.setProperty('--c-btn-icon-url', `url('${iconUrl}')`);
+      }
+    };
+
+    const syncSoundThemeSelect = () => {
+      const select = optionsState.soundThemeSelect;
+      if (!select) return;
+      const current = getSoundThemeKey?.() || '';
+      const themes = getSoundThemes?.() || [];
+      const options = [{ key: '', label: 'No Theme' }, ...themes.map(t => ({ key: t, label: t }))];
+      select.innerHTML = '';
+      options.forEach((opt) => {
+        const option = document.createElement('option');
+        option.value = opt.key;
+        option.textContent = opt.label;
+        select.appendChild(option);
+      });
+      try { select.value = current; } catch {}
+    };
+
     const updateSoundThemeLabel = () => {
       const label = soundThemeLabel;
       if (!label) return;
@@ -878,39 +1261,53 @@ function ensureTopbar(){
       positionSoundThemePanel();
     };
 
+    const updateLeadInUI = () => {
+      const state = getLeadInState(bar);
+      const btn = optionsState.leadInToggleBtn;
+      if (btn) {
+        btn.textContent = state.enabled ? 'On' : 'Off';
+        btn.setAttribute('aria-pressed', state.enabled ? 'true' : 'false');
+        btn.classList.toggle('is-on', state.enabled);
+        btn.classList.toggle('is-off', !state.enabled);
+      }
+      const valueEl = optionsState.leadInValue;
+      if (valueEl) {
+        const bars = Math.max(1, Number(state.bars) || 1);
+        valueEl.textContent = `${bars} ${bars === 1 ? 'bar' : 'bars'}`;
+      }
+    };
+
+    const updateRandomUI = () => {
+      const state = getLeadInState(bar);
+      const randBtn = optionsState.randomizeToggleBtn;
+      if (randBtn) {
+        randBtn.textContent = state.randomizeEnabled ? 'On' : 'Off';
+        randBtn.setAttribute('aria-pressed', state.randomizeEnabled ? 'true' : 'false');
+        randBtn.classList.toggle('is-on', state.randomizeEnabled);
+        randBtn.classList.toggle('is-off', !state.randomizeEnabled);
+      }
+      const randVal = optionsState.randomizeValue;
+      if (randVal) {
+        const bars = Math.max(1, Number(state.randomizeBars) || 1);
+        randVal.textContent = `Randomise every ${bars} ${bars === 1 ? 'bar' : 'bars'}`;
+      }
+
+      const toggleBtn = optionsState.toggleToggleBtn;
+      if (toggleBtn) {
+        toggleBtn.textContent = state.toggleEnabled ? 'On' : 'Off';
+        toggleBtn.setAttribute('aria-pressed', state.toggleEnabled ? 'true' : 'false');
+        toggleBtn.classList.toggle('is-on', state.toggleEnabled);
+        toggleBtn.classList.toggle('is-off', !state.toggleEnabled);
+      }
+      const toggleVal = optionsState.toggleValue;
+      if (toggleVal) {
+        const bars = Math.max(1, Number(state.toggleBars) || 1);
+        toggleVal.textContent = `Toggle every ${bars} ${bars === 1 ? 'bar' : 'bars'}`;
+      }
+    };
+
     const renderSoundThemeOptions = () => {
-      if (!soundThemePanel) return;
-      const list = soundThemePanel.querySelector('.sound-theme-list');
-      if (!list) return;
-      const current = getSoundThemeKey?.() || '';
-      const themes = getSoundThemes?.() || [];
-      const options = [{ key: '', label: 'No Theme' }, ...themes.map(t => ({ key: t, label: t }))];
-      list.innerHTML = '';
-      options.forEach((opt) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'sound-theme-option';
-        btn.dataset.theme = opt.key;
-        btn.textContent = opt.label;
-        if (opt.key === current) btn.classList.add('is-active');
-        btn.addEventListener('click', () => {
-          const nextTheme = btn.dataset.theme || '';
-          const prevTheme = getSoundThemeKey?.() || '';
-          if (nextTheme !== prevTheme) {
-            setSoundThemeKey(nextTheme);
-            const overlay = ensureSoundThemeOverlay();
-            overlay.__show?.(getSoundThemeLabel(nextTheme));
-            if (overlay.__applyBtn) {
-              overlay.__applyBtn.onclick = () => {
-                try { applySoundThemeToScene({ theme: nextTheme }); } catch {}
-                overlay.__hide?.();
-              };
-            }
-          }
-          soundThemeState.close?.();
-        });
-        list.appendChild(btn);
-      });
+      syncSoundThemeSelect();
     };
 
     const positionSoundThemePanel = () => {
@@ -933,6 +1330,11 @@ function ensureTopbar(){
         if (soundThemeState.open) {
           renderSoundThemeOptions();
           updateSoundThemeLabel();
+          syncMasterVolume();
+          const isMuted = typeof Core?.isToyMuted === 'function' ? Core.isToyMuted('master') : false;
+          setMasterMuteVisual(!!isMuted);
+          updateLeadInUI();
+          updateRandomUI();
           positionSoundThemePanel();
           panel.removeAttribute('hidden');
           panel.classList.add('is-open');
@@ -973,8 +1375,8 @@ function ensureTopbar(){
     if (!soundThemeState.boundEvents) {
       soundThemeState.boundEvents = true;
       window.addEventListener('sound-theme:change', () => {
-        updateSoundThemeLabel();
         renderSoundThemeOptions();
+        updateSoundThemeLabel();
       });
       window.addEventListener('instrument-catalog:loaded', () => {
         renderSoundThemeOptions();
@@ -985,6 +1387,121 @@ function ensureTopbar(){
       });
     }
     updateSoundThemeLabel();
+
+    if (!optionsState.wired && optionsState.masterSlider) {
+      optionsState.wired = true;
+      optionsState.masterSlider.addEventListener('input', () => {
+        const pct = Number(optionsState.masterSlider.value);
+        const next = Math.max(0, Math.min(100, Number.isFinite(pct) ? pct : 0)) / 100;
+        try { Core?.setToyVolume?.('master', next); } catch {}
+        if (optionsState.masterValue) optionsState.masterValue.textContent = `${Math.round(next * 100)}%`;
+        updateVolumeFill(optionsState.masterSlider);
+        if (next > 0 && typeof Core?.isToyMuted === 'function' && Core.isToyMuted('master')) {
+          try { Core?.setToyMuted?.('master', false); } catch {}
+          setMasterMuteVisual(false);
+        }
+      }, { passive: true });
+      optionsState.masterMuteBtn?.addEventListener('click', () => {
+        const muted = typeof Core?.isToyMuted === 'function' ? Core.isToyMuted('master') : false;
+        const shouldMute = !muted;
+        try { Core?.setToyMuted?.('master', shouldMute); } catch {}
+        setMasterMuteVisual(shouldMute);
+        const slider = optionsState.masterSlider;
+        if (!slider) return;
+        if (shouldMute) {
+          slider.dataset.preMute = slider.value;
+          slider.value = '0';
+          updateVolumeFill(slider);
+          if (optionsState.masterValue) optionsState.masterValue.textContent = '0%';
+        } else {
+          slider.value = slider.dataset.preMute || '80';
+          const pct = Number(slider.value);
+          const next = Math.max(0, Math.min(100, Number.isFinite(pct) ? pct : 0)) / 100;
+          try { Core?.setToyVolume?.('master', next); } catch {}
+          if (optionsState.masterValue) optionsState.masterValue.textContent = `${Math.round(next * 100)}%`;
+          updateVolumeFill(slider);
+        }
+      });
+      optionsState.leadInToggleBtn?.addEventListener('click', () => {
+        const state = getLeadInState(bar);
+        state.enabled = !state.enabled;
+        try { localStorage.setItem(LEAD_IN_ENABLED_KEY, state.enabled ? '1' : '0'); } catch {}
+        updateLeadInUI();
+        if (!state.enabled) {
+          cancelLeadInSequence(bar, { restore: true });
+          cancelRandomization(bar);
+        } else if (Core?.isRunning?.()) {
+          scheduleRandomization(bar, getLeadInDelayMs(bar));
+        }
+      });
+      optionsState.leadInMinus?.addEventListener('click', () => {
+        const state = getLeadInState(bar);
+        state.bars = Math.max(1, (Number(state.bars) || 1) - 1);
+        try { localStorage.setItem(LEAD_IN_BARS_KEY, String(state.bars)); } catch {}
+        updateLeadInUI();
+        if (Core?.isRunning?.()) scheduleRandomization(bar, getLeadInDelayMs(bar));
+      });
+      optionsState.leadInPlus?.addEventListener('click', () => {
+        const state = getLeadInState(bar);
+        state.bars = Math.min(16, (Number(state.bars) || 1) + 1);
+        try { localStorage.setItem(LEAD_IN_BARS_KEY, String(state.bars)); } catch {}
+        updateLeadInUI();
+        if (Core?.isRunning?.()) scheduleRandomization(bar, getLeadInDelayMs(bar));
+      });
+      optionsState.randomizeToggleBtn?.addEventListener('click', () => {
+        const state = getLeadInState(bar);
+        state.randomizeEnabled = !state.randomizeEnabled;
+        try { localStorage.setItem(LEAD_IN_RANDOMIZE_ENABLED_KEY, state.randomizeEnabled ? '1' : '0'); } catch {}
+        updateRandomUI();
+        if (!state.randomizeEnabled && !state.toggleEnabled) {
+          cancelRandomization(bar);
+        } else if (Core?.isRunning?.()) {
+          scheduleRandomization(bar, getLeadInDelayMs(bar));
+        }
+      });
+      optionsState.randomizeMinus?.addEventListener('click', () => {
+        const state = getLeadInState(bar);
+        state.randomizeBars = Math.max(1, (Number(state.randomizeBars) || 1) - 1);
+        try { localStorage.setItem(LEAD_IN_RANDOMIZE_BARS_KEY, String(state.randomizeBars)); } catch {}
+        updateRandomUI();
+        if (Core?.isRunning?.()) scheduleRandomization(bar, getLeadInDelayMs(bar));
+      });
+      optionsState.randomizePlus?.addEventListener('click', () => {
+        const state = getLeadInState(bar);
+        state.randomizeBars = Math.min(16, (Number(state.randomizeBars) || 1) + 1);
+        try { localStorage.setItem(LEAD_IN_RANDOMIZE_BARS_KEY, String(state.randomizeBars)); } catch {}
+        updateRandomUI();
+        if (Core?.isRunning?.()) scheduleRandomization(bar, getLeadInDelayMs(bar));
+      });
+      optionsState.toggleToggleBtn?.addEventListener('click', () => {
+        const state = getLeadInState(bar);
+        state.toggleEnabled = !state.toggleEnabled;
+        try { localStorage.setItem(LEAD_IN_TOGGLE_ENABLED_KEY, state.toggleEnabled ? '1' : '0'); } catch {}
+        updateRandomUI();
+        if (!state.randomizeEnabled && !state.toggleEnabled) {
+          cancelRandomization(bar);
+        } else if (Core?.isRunning?.()) {
+          scheduleRandomization(bar, getLeadInDelayMs(bar));
+        }
+      });
+      optionsState.toggleMinus?.addEventListener('click', () => {
+        const state = getLeadInState(bar);
+        state.toggleBars = Math.max(1, (Number(state.toggleBars) || 1) - 1);
+        try { localStorage.setItem(LEAD_IN_TOGGLE_BARS_KEY, String(state.toggleBars)); } catch {}
+        updateRandomUI();
+        if (Core?.isRunning?.()) scheduleRandomization(bar, getLeadInDelayMs(bar));
+      });
+      optionsState.togglePlus?.addEventListener('click', () => {
+        const state = getLeadInState(bar);
+        state.toggleBars = Math.min(16, (Number(state.toggleBars) || 1) + 1);
+        try { localStorage.setItem(LEAD_IN_TOGGLE_BARS_KEY, String(state.toggleBars)); } catch {}
+        updateRandomUI();
+        if (Core?.isRunning?.()) scheduleRandomization(bar, getLeadInDelayMs(bar));
+      });
+      syncMasterVolume();
+      updateLeadInUI();
+      updateRandomUI();
+    }
 
 
     const menuState = bar.__menuState || (bar.__menuState = {});
@@ -1122,6 +1639,27 @@ if (document.readyState === 'loading') {
         return;
       }
 
+      if (action === 'apply-sound-theme'){
+        e.preventDefault();
+        const sel = document.getElementById('sound-theme-select');
+        const nextTheme = sel?.value || '';
+        const prevTheme = getSoundThemeKey?.() || '';
+        if (nextTheme !== prevTheme) {
+          setSoundThemeKey(nextTheme);
+        }
+        updateSoundThemeLabel();
+        const overlay = ensureSoundThemeOverlay();
+        if (overlay.__applyBtn) {
+          overlay.__applyBtn.onclick = () => {
+            try { applySoundThemeToScene({ theme: nextTheme }); } catch {}
+            overlay.__hide?.();
+          };
+        }
+        overlay.__show?.(getSoundThemeLabel(nextTheme), 'Change all instruments to fit this theme?');
+        return;
+      }
+
+
       if (action === 'organize'){
         try { window.organizeBoard && window.organizeBoard(); } catch(e){}
         try { window.applyStackingOrder && window.applyStackingOrder(); } catch(e){}
@@ -1137,9 +1675,20 @@ if (document.readyState === 'loading') {
             if (Core?.isRunning?.()){
               Core?.stop?.();
               updatePlayButtonVisual(b, false);
+              cancelLeadInSequence(bar, { restore: true });
+              cancelRandomization(bar);
             } else {
               Core?.start?.();
               updatePlayButtonVisual(b, true);
+              const leadState = getLeadInState(bar);
+              let leadInfo = null;
+              if (leadState.enabled) {
+                leadInfo = startLeadInSequence(bar);
+              } else {
+                cancelLeadInSequence(bar, { restore: false });
+              }
+              const delayMs = leadInfo?.totalDelayMs || 0;
+              scheduleRandomization(bar, delayMs);
             }
           }catch{}
         };
@@ -1351,19 +1900,3 @@ if (document.readyState === 'loading') {
   tryInitToggle();
 
 })();
-
-
-
-document.addEventListener('change', (e)=>{
-
-  const sel = e.target.closest('#theme-select'); if (!sel) return;
-
-  const val = sel.value||'';
-
-  document.documentElement.setAttribute('data-theme', val);
-
-  document.body.setAttribute('data-theme', val);
-
-  window.ThemeBoot && window.ThemeBoot.setTheme && window.ThemeBoot.setTheme(val);
-
-});
