@@ -3111,29 +3111,30 @@ function ensureSizeReady({ force = false } = {}) {
   try { panel.__dgUpdateButtons = updateGeneratorButtons; } catch{}
 
   // New central helper to redraw the paint canvas and regenerate the node map from the `strokes` array.
-  function clearAndRedrawFromStrokes(targetCtx = backCtx) {
-    if (!targetCtx) return;
+  function clearAndRedrawFromStrokes(targetCtx) {
+    const ctx = targetCtx || (typeof getActivePaintCtx === 'function' ? getActivePaintCtx() : null) || backCtx || pctx;
+    if (!ctx) return;
     const normalStrokes = strokes.filter(s => !s.justCreated);
     const newStrokes = strokes.filter(s => s.justCreated);
-    resetCtx(targetCtx);
-    withLogicalSpace(targetCtx, () => {
-      const surface = targetCtx.canvas;
+    resetCtx(ctx);
+    withLogicalSpace(ctx, () => {
+      const surface = ctx.canvas;
       const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
       const width = cssW || (surface?.width ?? 0) / scale;
       const height = cssH || (surface?.height ?? 0) / scale;
-      targetCtx.clearRect(0, 0, width, height);
+      ctx.clearRect(0, 0, width, height);
 
       // 1. Draw all existing, non-new strokes first.
       for (const s of normalStrokes) {
-        drawFullStroke(targetCtx, s);
+        drawFullStroke(ctx, s);
       }
       // 2. Apply the global erase mask to the existing strokes.
       for (const s of eraseStrokes) {
-        drawEraseStroke(targetCtx, s);
+        drawEraseStroke(ctx, s);
       }
       // 3. Draw the brand new strokes on top, so they are not affected by old erasures.
       for (const s of newStrokes) {
-        drawFullStroke(targetCtx, s);
+        drawFullStroke(ctx, s);
       }
     });
 

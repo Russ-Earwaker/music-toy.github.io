@@ -11,6 +11,7 @@ import {
 } from './sound-theme.js';
 
 const NEW_SCENE_ZOOM = 0.6; // adjust this to change the starting zoom when creating a new scene
+try { window.__MT_NEW_SCENE_ZOOM = NEW_SCENE_ZOOM; } catch {}
 const LEAD_IN_ENABLED_KEY = 'prefs:leadInEnabled';
 const LEAD_IN_BARS_KEY = 'prefs:leadInBars';
 const LEAD_IN_DEFAULT_BARS = 4;

@@ -390,11 +390,28 @@ function applyDrawGrid(panel, state) {
     return;
   }
 
-  try {
-    const hasStrokes = Array.isArray(state?.strokes) && state.strokes.length > 0;
-    const hasErase = Array.isArray(state?.eraseStrokes) && state.eraseStrokes.length > 0;
-    const hasActiveNodes = Array.isArray(state?.nodes?.active) && state.nodes.active.some(Boolean);
-    const meaningful = hasStrokes || hasErase || hasActiveNodes || (typeof state?.steps === 'number');
+    try {
+      const hasStrokes = Array.isArray(state?.strokes) && state.strokes.length > 0;
+      const hasErase = Array.isArray(state?.eraseStrokes) && state.eraseStrokes.length > 0;
+      const hasActiveNodes = Array.isArray(state?.nodes?.active) && state.nodes.active.some(Boolean);
+      const hasExplicitStrokes = !!state && Object.prototype.hasOwnProperty.call(state, 'strokes');
+      const hasExplicitErase = !!state && Object.prototype.hasOwnProperty.call(state, 'eraseStrokes');
+      const hasExplicitNodes = !!state && Object.prototype.hasOwnProperty.call(state, 'nodes');
+      const hasExplicitSteps = typeof state?.steps === 'number';
+      const hasExplicitMeta =
+        !!state &&
+        (Object.prototype.hasOwnProperty.call(state, 'autotune') ||
+          Object.prototype.hasOwnProperty.call(state, 'instrument') ||
+          Object.prototype.hasOwnProperty.call(state, 'manualOverrides'));
+      const meaningful =
+        hasStrokes ||
+        hasErase ||
+        hasActiveNodes ||
+        hasExplicitStrokes ||
+        hasExplicitErase ||
+        hasExplicitNodes ||
+        hasExplicitSteps ||
+        hasExplicitMeta;
 
     if (meaningful) {
       persistTraceLog('[persistence][drawgrid] APPLY (meaningful)', panel.id, sum(state));

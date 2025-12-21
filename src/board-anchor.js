@@ -268,7 +268,8 @@ function centerCameraOnAnchor() {
   try {
     if (!markerEl || !markerEl.isConnected) ensureMarker();
     if (markerEl && typeof window.centerBoardOnElementSlow === 'function') {
-      window.centerBoardOnElementSlow(markerEl, 1.0, { centerFracX: 0.5 });
+      const zoom = Number.isFinite(window.__MT_NEW_SCENE_ZOOM) ? window.__MT_NEW_SCENE_ZOOM : 1.0;
+      window.centerBoardOnElementSlow(markerEl, zoom, { centerFracX: 0.5 });
       return;
     }
   } catch {}
