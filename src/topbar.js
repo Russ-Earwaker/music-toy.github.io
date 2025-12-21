@@ -789,6 +789,13 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
                 </div>
                 <button class="menu-inline-btn focus-toggle-btn" type="button" data-pref-action="toggle-focus-editing">Off</button>
               </div>
+              <div class="pref-row pref-row-guide-progress">
+                <div class="pref-label">
+                  <div class="pref-title">Guide progress</div>
+                  <div class="pref-subtitle">Reset completed goals and rewards.</div>
+                </div>
+                <button class="menu-inline-btn" type="button" data-pref-action="reset-guide-progress">Reset</button>
+              </div>
             </div>
           </div>
         </div>
@@ -798,6 +805,7 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
 
     const closeBtn = overlay.querySelector('.scene-manager-close');
     const toggleBtn = overlay.querySelector('[data-pref-action="toggle-focus-editing"]');
+    const resetGuideBtn = overlay.querySelector('[data-pref-action="reset-guide-progress"]');
 
     const hide = () => { overlay.style.display = 'none'; };
     const show = () => {
@@ -818,6 +826,10 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
         try { window.setFocusEditingEnabled?.(!current); } catch {}
         updateFocusToggleButton(toggleBtn);
       });
+      resetGuideBtn?.addEventListener('click', () => {
+        const resetOverlay = ensureGuideResetOverlay();
+        resetOverlay?.__show?.('Reset guide progress?');
+      });
       window.addEventListener('prefs:small-screen-editing-toggle-unlock', () => {
         updateFocusToggleButton(toggleBtn);
       });
@@ -826,6 +838,69 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
 
     overlay.__show = show;
     overlay.__updateFocusToggle = () => updateFocusToggleButton(toggleBtn);
+    return overlay;
+  }
+
+  function ensureGuideResetOverlay() {
+    let overlay = document.getElementById('guide-reset-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'guide-reset-overlay';
+      overlay.className = 'scene-manager-overlay';
+      overlay.style.display = 'none';
+      overlay.innerHTML = `
+        <div class="scene-manager-panel sound-theme-panel guide-reset-panel">
+          <button class="scene-manager-close" type="button" aria-label="Close">&times;</button>
+          <div class="scene-manager-body">
+            <div class="sound-theme-prompt">Reset guide progress?</div>
+            <div class="sound-theme-actions">
+              <button class="c-btn inst-ok" type="button" data-action="guide-reset-confirm" aria-label="Reset guide progress">
+                <div class="c-btn-outer"></div>
+                <div class="c-btn-glow"></div>
+                <div class="c-btn-core"></div>
+              </button>
+              <button class="c-btn inst-cancel" type="button" data-action="guide-reset-cancel" aria-label="Cancel reset">
+                <div class="c-btn-outer"></div>
+                <div class="c-btn-glow"></div>
+                <div class="c-btn-core"></div>
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+    }
+
+    const closeBtn = overlay.querySelector('.scene-manager-close');
+    const confirmBtn = overlay.querySelector('[data-action="guide-reset-confirm"]');
+    const cancelBtn = overlay.querySelector('[data-action="guide-reset-cancel"]');
+    const prompt = overlay.querySelector('.sound-theme-prompt');
+    const okCore = confirmBtn?.querySelector?.('.c-btn-core');
+    const cancelCore = cancelBtn?.querySelector?.('.c-btn-core');
+    if (okCore) okCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonTick.png')");
+    if (cancelCore) cancelCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonClose.png')");
+
+    const hide = () => { overlay.style.display = 'none'; };
+    const show = (promptOverride) => {
+      if (prompt) prompt.textContent = promptOverride || 'Reset guide progress?';
+      overlay.style.display = 'flex';
+    };
+
+    if (!overlay.__wired) {
+      overlay.addEventListener('click', (evt) => {
+        if (evt.target === overlay) hide();
+      });
+      closeBtn?.addEventListener('click', hide);
+      cancelBtn?.addEventListener('click', hide);
+      confirmBtn?.addEventListener('click', () => {
+        try { window.resetGuideProgress?.(); } catch {}
+        hide();
+      });
+      overlay.__wired = true;
+    }
+
+    overlay.__show = show;
+    overlay.__hide = hide;
     return overlay;
   }
 

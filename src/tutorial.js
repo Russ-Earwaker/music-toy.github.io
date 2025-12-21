@@ -416,6 +416,8 @@ function resetGuideProgress() {
   guideProgress.tasks.clear();
   guideProgress.goals.clear();
   guideProgress.claimedRewards.clear();
+  replaySessionTasks.clear();
+  try { if (typeof window !== 'undefined') window.__guideReplayTasks = []; } catch {}
   lastPlacedToy = null;
   requirementCompletionState.clear();
   drawToyPanels.clear();
@@ -425,6 +427,8 @@ function resetGuideProgress() {
   saveGuideProgress();
   dispatchGuideProgressUpdate({ via: 'resetGuideProgress' });
 }
+
+try { if (typeof window !== 'undefined') window.resetGuideProgress = resetGuideProgress; } catch {}
 
 function recordRequirementProgress(requirement, shouldComplete = true) {
   if (!requirement) return { updated: false, blocked: false };
@@ -3409,8 +3413,6 @@ let hasDetectedLine = false;
 
     updateButtonVisual();
 
-    resetGuideProgress();
-
     if (!document.getElementById('tutorial-override-styles')) {
       const style = document.createElement('style');
       style.id = 'tutorial-override-styles';
@@ -4665,7 +4667,6 @@ try {
     }
     lastPlacedToy = null;
     guideToyTracker.reset?.();
-    resetGuideProgress();
     document.querySelectorAll('.toy-panel[data-toy="drawgrid"]').forEach(panel => {
       try { panel.dispatchEvent(new CustomEvent('tutorial:highlight-notes', { detail: { active: false, allowGuide: false } })); } catch {}
       try { panel.dispatchEvent(new CustomEvent('tutorial:highlight-drag', { detail: { active: false, allowGuide: false } })); } catch {}

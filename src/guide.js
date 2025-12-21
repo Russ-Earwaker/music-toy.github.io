@@ -29,6 +29,7 @@ let guideTaskSwapInProgress = false;
 let guideTaskSwapTimer = 0;
 let pendingGuideRender = null;
 let userSelectedGoalId = null;
+let lastCollectedRewards = null;
 
 function getHighlighterHost() {
   if (typeof document === 'undefined') return null;
@@ -107,8 +108,6 @@ function openGoalPicker(context) {
   const pendingRewards = ctx.pendingRewards || new Set(
     [...completedGoals].filter((id) => !claimedRewards.has(id))
   );
-  const totalRewards = goals.length;
-  const collectedRewards = claimedRewards.size;
 
   goalPickerRef = document.createElement('div');
   goalPickerRef.className = 'guide-goal-picker';
@@ -123,7 +122,7 @@ function openGoalPicker(context) {
 
   const header = document.createElement('div');
   header.className = 'guide-goal-picker__header';
-  header.innerHTML = `Goals · <span class="guide-goal-picker__stars"><img src="/assets/UI/T_Star.png" alt="Stars" /> ${collectedRewards}/${totalRewards}</span>`;
+  header.textContent = 'Goals';
   sheet.appendChild(header);
 
   const list = document.createElement('div');
@@ -581,7 +580,18 @@ function clearPanels() {
   while (panelsRef.firstChild) panelsRef.removeChild(panelsRef.firstChild);
 }
 
-function renderGuide(api, { source = 'unknown', skipSwap = false } = {}) {
+
+function buildGuideProgressSummary(collectedRewards, totalRewards) {
+  const summary = document.createElement('div');
+  summary.className = 'guide-progress-summary';
+  summary.innerHTML = `
+    <span class="guide-progress-summary__stars">
+      <img src="/assets/UI/T_Star.png" alt="Stars" />
+      ${collectedRewards}/${totalRewards}
+    </span>
+  `;
+  return summary;
+}function renderGuide(api, { source = 'unknown', skipSwap = false } = {}) {
   ensureStyles();
   ensureHost();
   if (api) lastApi = api;
@@ -613,6 +623,10 @@ function renderGuide(api, { source = 'unknown', skipSwap = false } = {}) {
   const completedTasks = toSet(progress.completedTasks || []);
   const completedGoals = toSet(progress.completedGoals || []);
   const claimedRewards = toSet(progress.claimedRewards || []);
+  const totalRewards = goals.length;
+  const collectedRewards = claimedRewards.size;
+  const prevCollectedRewards = Number.isFinite(lastCollectedRewards) ? lastCollectedRewards : null;
+  const shouldBumpProgress = prevCollectedRewards !== null && collectedRewards > prevCollectedRewards;
   const pendingRewards = new Set([...completedGoals].filter((id) => !claimedRewards.has(id)));
   const replayTasksRaw = (typeof window !== 'undefined' && window.__guideReplayTasks) || [];
   const replayTasks = new Map(
@@ -950,6 +964,14 @@ function renderGuide(api, { source = 'unknown', skipSwap = false } = {}) {
     const orderedPanels = [...activePanels];
     orderedPanels.forEach(panel => panelsRef.appendChild(panel));
 
+    if (totalRewards > 0) {
+      const summary = buildGuideProgressSummary(collectedRewards, totalRewards);
+      panelsRef.appendChild(summary);
+      if (shouldBumpProgress) {
+        requestAnimationFrame(() => summary.classList.add('is-bump'));
+      }
+    }
+
     if (openFirstGoalNextRender && orderedPanels.length > 0) {
       const targetPanel = orderedPanels[0];
       const meta = panelMeta.find(entry => entry.panel === targetPanel);
@@ -1022,6 +1044,7 @@ function renderGuide(api, { source = 'unknown', skipSwap = false } = {}) {
   } catch {
     removeGuidePulse();
   }
+  lastCollectedRewards = hasGoals ? collectedRewards : null;
 
   try {
     window.__guideDebug = Object.assign({}, window.__guideDebug || {}, {
