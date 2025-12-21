@@ -1093,7 +1093,13 @@ export function stopParticleStream(options = {}) {
     autoStopTimer = null;
   }
 
-  const { immediate = false, clearHighlight = false, targetEl = null, owner = null } = options || {};
+  const {
+    immediate = false,
+    clearHighlight = false,
+    targetEl = null,
+    owner = null,
+    releaseOwner = false,
+  } = options || {};
   if (owner && activeOwner && activeOwner !== owner) {
     return;
   }
@@ -1102,6 +1108,9 @@ export function stopParticleStream(options = {}) {
   }
 
   spawnParticles = false;
+  if (releaseOwner && !immediate) {
+    activeOwner = null;
+  }
   startFlight._lastTs = undefined;
   startFlight._accum = 0;
   if (!immediate && !animationFrameId && activeCtx && activeCanvas && particles.length > 0) {

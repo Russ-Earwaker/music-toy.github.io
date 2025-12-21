@@ -613,7 +613,7 @@ function handleAnchorGuideStop(evt) {
   anchorGuideStopBound = false;
   anchorGuideActive = false;
   try { document.removeEventListener('pointerdown', handleAnchorGuideStop, true); } catch {}
-  try { stopParticleStream({ immediate: true, owner: 'anchor-guide' }); } catch {}
+  try { stopParticleStream({ immediate: false, owner: 'anchor-guide', releaseOwner: true }); } catch {}
   clearAnchorGuideHighlight();
   hoverSuppressUntil = 0;
 }
