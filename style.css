@@ -2935,7 +2935,7 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
   max-width: clamp(110px, calc(160px * var(--ui-scale)), 200px);
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: pre-line;
   pointer-events: none;
 }
 
@@ -4017,7 +4017,7 @@ body.feedback-support-open #board {
   font-weight: 600;
   font-size: 0.9rem;
   color: var(--text);
-  white-space: nowrap;
+  white-space: pre-line;
   overflow: hidden;
   text-overflow: ellipsis;
 }

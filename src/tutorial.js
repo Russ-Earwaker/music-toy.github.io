@@ -965,6 +965,26 @@ let hasDetectedLine = false;
       return { target: getAddToyToggle(), highlight: 'add-toy' };
     }
 
+    const activeTask = (() => {
+      try { return getCurrentTask?.() || null; } catch { return null; }
+    })();
+    if (activeTask?.id === 'sequence-interact') {
+      const sequenceToy = (() => {
+        if (lastPlacedToy && lastPlacedToy.isConnected && lastPlacedToy.dataset?.chainParent) {
+          return lastPlacedToy;
+        }
+        for (const panel of placeToyPanels) {
+          if (panel && panel.isConnected && panel.dataset?.chainParent) return panel;
+        }
+        try {
+          return document.querySelector('.toy-panel[data-chain-parent]');
+        } catch {
+          return null;
+        }
+      })();
+      if (sequenceToy) return { target: sequenceToy, highlight: 'toy' };
+    }
+
     const pickUninteractedToy = () => {
       const primary = (lastPlacedToy && lastPlacedToy.isConnected) ? lastPlacedToy : null;
       if (primary && !placeToyTriggerState.get(primary)) return primary;

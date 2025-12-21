@@ -1277,7 +1277,7 @@ function ensureTopbar(){
         </div>
         <div class="options-divider"></div>
         <div class="options-section">
-          <div class="sound-theme-title">Sound Theme</div>
+          <div class="sound-theme-title">Sound theme for new toys</div>
           <div class="options-theme-row">
             <select id="sound-theme-select" class="toy-btn options-theme-select"></select>
             <button class="menu-inline-btn options-apply-btn" type="button" data-action="apply-sound-theme">Apply</button>
@@ -1518,7 +1518,7 @@ function ensureTopbar(){
       const label = soundThemeLabel;
       if (!label) return;
       const theme = getSoundThemeKey?.() || '';
-      label.textContent = getSoundThemeLabel(theme);
+      label.textContent = `SOUND THEME:\n${getSoundThemeLabel(theme)}`;
       positionSoundThemePanel();
     };
 
@@ -1682,6 +1682,11 @@ function ensureTopbar(){
           if (optionsState.masterValue) optionsState.masterValue.textContent = `${Math.round(next * 100)}%`;
           updateVolumeFill(slider);
         }
+      });
+      optionsState.soundThemeSelect?.addEventListener('change', () => {
+        const nextTheme = optionsState.soundThemeSelect?.value || '';
+        try { setSoundThemeKey(nextTheme); } catch {}
+        updateSoundThemeLabel();
       });
       optionsState.leadInToggleBtn?.addEventListener('click', () => {
         const state = getLeadInState(bar);
@@ -1909,7 +1914,8 @@ if (document.readyState === 'loading') {
         const nextTheme = sel?.value || '';
         const overlay = ensureSoundThemeOverlay();
         overlay.__pendingTheme = nextTheme;
-        overlay.__show?.(getSoundThemeLabel(nextTheme), 'Change all instruments to fit this theme?');
+        const nextLabel = getSoundThemeLabel(nextTheme);
+        overlay.__show?.(nextLabel, `Change all instruments to fit the theme ${nextLabel}?`);
         return;
       }
 
