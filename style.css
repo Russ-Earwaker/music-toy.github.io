@@ -122,9 +122,9 @@ input, select, textarea, button {
   z-index: 4;
 }
 .loopgrid-tap-label {
-  letter-spacing: 0.16em;
-  color: rgba(80, 120, 180, 0.2);
-  text-shadow: none;
+  letter-spacing: 0.08em;
+  color: var(--tap-label-color, rgba(160,188,255,0.72));
+  text-shadow: var(--tap-label-shadow, 0 2px 10px rgba(40,60,120,0.55));
   mix-blend-mode: normal;
   text-rendering: geometricPrecision;
   -webkit-font-smoothing: antialiased;
@@ -132,8 +132,8 @@ input, select, textarea, button {
 }
 .loopgrid-tap-label .loopgrid-tap-letter-char {
   display: inline-block;
-  transition: color 0.12s ease, text-shadow 0.12s ease;
-  will-change: color, text-shadow;
+  transition: none;
+  will-change: transform, opacity, filter;
 }
 * {
   box-sizing: border-box;

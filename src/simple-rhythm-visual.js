@@ -39,6 +39,25 @@ async function waitForStableBox(el, { maxFrames = 6 } = {}) {
 const NUM_CUBES = 8;
 const NUM_CUBES_GLOBAL = NUM_CUBES;
 
+const TAP_LETTER_PHYS = Object.freeze({
+  k: 0.02,
+  damping: 0.82,
+  impulse: 0.05,
+  max: 42,
+  epsilon: 0.02,
+});
+const TAP_LETTER_VIS = Object.freeze({
+  flashUpMs: 0,
+  flashDownMs: 260,
+  flashBoost: 1.75,
+  flashColor: 'rgba(51, 97, 234, 1)',
+  opacityBase: 0.35,
+  opacityBoost: 0.9,
+  ghostCoreHitMul: 0.55,
+  flashShadow: '',
+});
+const TAP_LABEL_OPACITY_BASE = 1;
+
 // Simple Rhythm cubes: size purely from the local canvas, not boardScale.
 // This keeps them stable across zoom levels and lets the global board zoom
 // handle visual scaling (just like Bouncer).
@@ -145,6 +164,11 @@ function ensureTapLetters(label) {
       const span = document.createElement('span');
       span.className = 'loopgrid-tap-letter-char';
       span.textContent = ch;
+      span.style.display = 'inline-block';
+      span.style.willChange = 'transform';
+      span.style.transform = 'translate3d(0,0,0)';
+      span.style.opacity = `${TAP_LETTER_VIS.opacityBase}`;
+      span.style.filter = 'none';
       label.appendChild(span);
     }
     spans = Array.from(label.querySelectorAll('.loopgrid-tap-letter-char'));
@@ -154,19 +178,23 @@ function ensureTapLetters(label) {
 
 function triggerTapLettersForColumn(state, columnIndex, centerNorm, cubeCenterX, cubeCenterY) {
   const bounds = state.tapLetterBounds;
-  const flashes = state.tapLetterFlash;
   const lastLoop = state.tapLetterLastLoop;
   const velX = state.tapLetterVelocityX;
   const velY = state.tapLetterVelocityY;
+  const hitTs = state.tapLetterHitTs;
   const loopIndex = typeof state.tapLoopIndex === 'number' ? state.tapLoopIndex : 0;
-  if (!Array.isArray(bounds) || !Array.isArray(flashes) || !Array.isArray(lastLoop)) return;
+  if (!Array.isArray(bounds) || !Array.isArray(lastLoop)) return;
   for (let i = 0; i < bounds.length; i++) {
     const bound = bounds[i];
     if (!bound) continue;
     if (centerNorm < bound.start || centerNorm > bound.end) continue;
     if (lastLoop[i] === loopIndex) continue;
-    flashes[i] = 1;
     lastLoop[i] = loopIndex;
+    if (Array.isArray(hitTs)) {
+      hitTs[i] = (typeof performance !== 'undefined' && performance.now)
+        ? performance.now()
+        : Date.now();
+    }
     if (Array.isArray(velX) && Array.isArray(velY)) {
       const centerX = bound.centerX ?? cubeCenterX;
       const centerY = bound.centerY ?? cubeCenterY;
@@ -254,11 +282,11 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
 
   // --- Sizing and Layout Setup ---
   const targetEl = sequencerWrap; // Element to observe for size changes
-  const st = { // Define st here so it's available for computeLayout
-    panel,
-    canvas,
-    ctx,
-    sequencerWrap,
+    const st = { // Define st here so it's available for computeLayout
+      panel,
+      canvas,
+      ctx,
+      sequencerWrap,
     particleCanvas: null, // Will be set later
     particleField: null,
     particleObserver: null,
@@ -270,12 +298,12 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     localLastPhase: 0,
     tapLabel: null, // Will be set later
     tapLetters: [],
-    tapLetterFlash: [],
-    tapLetterLastLoop: [],
-    tapLetterBounds: null,
-    tapLetterOffsetX: [],
-    tapLetterOffsetY: [],
-    tapLetterVelocityX: [],
+      tapLetterHitTs: [],
+      tapLetterLastLoop: [],
+      tapLetterBounds: null,
+      tapLetterOffsetX: [],
+      tapLetterOffsetY: [],
+      tapLetterVelocityX: [],
     tapLetterVelocityY: [],
     tapFieldRect: null,
     tapPromptVisible: false,
@@ -610,9 +638,17 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
   if (!tapLabel && sequencerWrap) {
     tapLabel = document.createElement('div');
     tapLabel.className = 'toy-action-label loopgrid-tap-label';
-    tapLabel.style.lineHeight = '1';
-    tapLabel.style.whiteSpace = 'nowrap';
-    tapLabel.style.transition = 'none';
+    Object.assign(tapLabel.style, {
+      lineHeight: '1',
+      whiteSpace: 'nowrap',
+      transition: 'none',
+      fontFamily: 'system-ui, sans-serif',
+      fontWeight: '700',
+      letterSpacing: '0.08em',
+      textTransform: 'uppercase',
+      color: 'var(--tap-label-color, rgba(160,188,255,0.72))',
+      textShadow: 'var(--tap-label-shadow, 0 2px 10px rgba(40,60,120,0.55))',
+    });
     sequencerWrap.appendChild(tapLabel);
   }
   st.tapLabel = tapLabel; // Assign to st
@@ -1054,8 +1090,8 @@ function render(panel, opts = {}) {
   if (tapLabel && st.tapLetters?.length) {
     const tapLetters = st.tapLetters;
     const letterCount = tapLetters.length;
-    if (!Array.isArray(st.tapLetterFlash) || st.tapLetterFlash.length !== letterCount) {
-      st.tapLetterFlash = Array.from({ length: letterCount }, () => 0);
+    if (!Array.isArray(st.tapLetterHitTs) || st.tapLetterHitTs.length !== letterCount) {
+      st.tapLetterHitTs = Array.from({ length: letterCount }, () => 0);
     }
     if (!Array.isArray(st.tapLetterLastLoop) || st.tapLetterLastLoop.length !== letterCount) {
       st.tapLetterLastLoop = Array.from({ length: letterCount }, () => -1);
@@ -1081,18 +1117,20 @@ function render(panel, opts = {}) {
       st.tapLoopIndex = 0;
       if (Array.isArray(st.tapLetterLastLoop)) st.tapLetterLastLoop.fill(-1);
       for (let i = 0; i < letterCount; i++) {
-        st.tapLetterFlash[i] = 0;
+        if (st.tapLetterHitTs) st.tapLetterHitTs[i] = 0;
         if (st.tapLetterOffsetX) st.tapLetterOffsetX[i] = 0;
         if (st.tapLetterOffsetY) st.tapLetterOffsetY[i] = 0;
         if (st.tapLetterVelocityX) st.tapLetterVelocityX[i] = 0;
         if (st.tapLetterVelocityY) st.tapLetterVelocityY[i] = 0;
-        tapLetters[i].style.color = 'rgba(80, 120, 180, 0)';
-        tapLetters[i].style.textShadow = 'none';
+        tapLetters[i].style.opacity = '0';
+        tapLetters[i].style.color = '';
+        tapLetters[i].style.textShadow = '';
+        tapLetters[i].style.filter = 'none';
         tapLetters[i].style.transform = 'none';
       }
     } else {
       st.tapPromptVisible = true;
-      tapLabel.style.opacity = '1';
+      tapLabel.style.opacity = `${TAP_LABEL_OPACITY_BASE}`;
       const fieldElement = particleCanvas || tapLabel;
       let fieldRect = null;
       try { fieldRect = fieldElement.getBoundingClientRect(); } catch {}
@@ -1133,13 +1171,28 @@ function render(panel, opts = {}) {
       const offsetsY = st.tapLetterOffsetY;
       const velX = st.tapLetterVelocityX;
       const velY = st.tapLetterVelocityY;
-      const spring = 0.14;
-      const damping = 0.82;
-      const maxOffset = 26;
+      const spring = TAP_LETTER_PHYS.k;
+      const damping = TAP_LETTER_PHYS.damping;
+      const maxOffset = TAP_LETTER_PHYS.max;
+      const now = (typeof performance !== 'undefined' && performance.now)
+        ? performance.now()
+        : Date.now();
       for (let i = 0; i < letterCount; i++) {
-        let activeFlash = st.tapLetterFlash[i] || 0;
-        activeFlash = Math.max(0, activeFlash * 0.86 - 0.02);
-        st.tapLetterFlash[i] = activeFlash;
+        const lastHit = st.tapLetterHitTs ? st.tapLetterHitTs[i] : 0;
+        let flashAmt = 0;
+        if (lastHit > 0) {
+          const t = now - lastHit;
+          if (t <= TAP_LETTER_VIS.flashUpMs) {
+            flashAmt = TAP_LETTER_VIS.flashUpMs > 0
+              ? t / Math.max(1, TAP_LETTER_VIS.flashUpMs)
+              : 1;
+          } else if (t <= TAP_LETTER_VIS.flashUpMs + TAP_LETTER_VIS.flashDownMs) {
+            const d = (t - TAP_LETTER_VIS.flashUpMs) / Math.max(1, TAP_LETTER_VIS.flashDownMs);
+            flashAmt = 1 - d;
+          } else {
+            flashAmt = 0;
+          }
+        }
 
         let offX = offsetsX ? offsetsX[i] || 0 : 0;
         let offY = offsetsY ? offsetsY[i] || 0 : 0;
@@ -1165,22 +1218,27 @@ function render(panel, opts = {}) {
         if (velX) velX[i] = vx;
         if (velY) velY[i] = vy;
 
-        const baseAlpha = 0.3;
-        const finalAlpha = Math.max(baseAlpha, Math.min(1, baseAlpha + activeFlash * 0.75));
-        tapLetters[i].style.color = `rgba(80, 120, 180, ${finalAlpha})`;
+        if (Math.abs(offX) < TAP_LETTER_PHYS.epsilon) offX = 0;
+        if (Math.abs(offY) < TAP_LETTER_PHYS.epsilon) offY = 0;
 
-        if (activeFlash > 0) {
-          const glowRadius = 100 + activeFlash * 24;
-          const glowAlpha = 0.25 + activeFlash * 0.45;
-          tapLetters[i].style.textShadow = `0 0 ${glowRadius.toFixed(0)}px rgba(150, 190, 255, ${glowAlpha.toFixed(2)})`;
+        const opacity = Math.min(1, TAP_LETTER_VIS.opacityBase + TAP_LETTER_VIS.opacityBoost * flashAmt);
+        tapLetters[i].style.opacity = `${Math.max(0, opacity)}`;
+
+        if (flashAmt > 0) {
+          const boost = 1 + (TAP_LETTER_VIS.flashBoost - 1) * flashAmt;
+          tapLetters[i].style.filter = `brightness(${boost.toFixed(3)})`;
+          tapLetters[i].style.color = TAP_LETTER_VIS.flashColor;
+          tapLetters[i].style.textShadow = TAP_LETTER_VIS.flashShadow;
         } else {
-          tapLetters[i].style.textShadow = 'none';
+          tapLetters[i].style.filter = 'none';
+          tapLetters[i].style.color = '';
+          tapLetters[i].style.textShadow = '';
         }
 
-        if (Math.abs(offX) < 0.02 && Math.abs(offY) < 0.02) {
+        if (Math.abs(offX) < TAP_LETTER_PHYS.epsilon && Math.abs(offY) < TAP_LETTER_PHYS.epsilon) {
           tapLetters[i].style.transform = 'none';
         } else {
-          tapLetters[i].style.transform = `translate(${offX.toFixed(2)}px, ${offY.toFixed(2)}px)`;
+          tapLetters[i].style.transform = `translate3d(${offX.toFixed(2)}px, ${offY.toFixed(2)}px, 0)`;
         }
       }
     }
