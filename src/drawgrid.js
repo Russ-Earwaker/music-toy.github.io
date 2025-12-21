@@ -1496,7 +1496,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       ensureLetterPhysicsLoop();
       // ---- visual: register a hit only for ghost fingers within the core radius ----
       const coreHitRadius = scaledRadius * LETTER_VIS.ghostCoreHitMul;
-      if ((source === 'ghost' || source === 'line') && dist <= coreHitRadius) {
+        if ((source === 'ghost' || source === 'line' || source === 'header') && dist <= coreHitRadius) {
         st.lastHitTs = (typeof performance !== 'undefined' && performance.now)
           ? performance.now()
           : Date.now();
@@ -1926,6 +1926,14 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
           dirY: 0,
         },
       );
+      const lettersRadius = Math.max(40, radius * 1.6);
+      const localX = xToy - (area.x || 0);
+      const localY = (area.h || 0) * 0.5;
+      knockLettersAt(localX, localY, {
+        radius: lettersRadius,
+        strength: DG_KNOCK.lettersMove.strength,
+        source: 'header',
+      });
     } catch (err) {
       if (DG_DEBUG) console.warn('[DG][pushHeaderSweepAt] failed', err);
     }
