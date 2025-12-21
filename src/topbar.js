@@ -655,14 +655,22 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
     const chains = getLeadInChains();
     if (!chains.length) return { totalDelayMs: 0 };
 
+    const order = chains.slice();
+    for (let i = order.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = order[i];
+      order[i] = order[j];
+      order[j] = tmp;
+    }
+
     state.leadInOffChains = new Set();
-    chains.forEach((chain) => {
+    order.forEach((chain) => {
       state.leadInOffChains.add(chain.id);
       setChainMutedVisual(chain, true);
     });
 
     if (typeof Core?.isToyMuted === 'function' && typeof Core?.setToyMuted === 'function') {
-      chains.forEach((chain) => {
+      order.forEach((chain) => {
         chain.panels.forEach((panel) => {
           const toyId = panel?.dataset?.toyid || panel?.id;
           if (!toyId) return;
@@ -678,7 +686,7 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
     const intervalSec = Math.max(0.05, barLen) * Math.max(1, state.bars || 1);
     const token = ++state.token;
 
-    chains.forEach((chain, idx) => {
+    order.forEach((chain, idx) => {
       const delayMs = Math.max(0, Math.round(idx * intervalSec * 1000));
       const t = setTimeout(() => {
         if (state.token !== token) return;
@@ -872,6 +880,13 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
       overlay.addEventListener('click', (evt) => {
         if (evt.target === overlay) hide();
       });
+      applyBtn?.addEventListener('click', () => {
+        const theme = overlay.__pendingTheme ?? (typeof getSoundThemeKey === 'function' ? getSoundThemeKey() : '');
+        try { setSoundThemeKey(theme); } catch {}
+        try { applySoundThemeToScene({ theme }); } catch {}
+        overlay.__pendingTheme = null;
+        hide();
+      });
       closeBtn?.addEventListener('click', hide);
       skipBtn?.addEventListener('click', hide);
       overlay.__wired = true;
@@ -880,6 +895,7 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
     overlay.__show = show;
     overlay.__hide = hide;
     overlay.__applyBtn = applyBtn;
+    overlay.__pendingTheme = null;
     overlay.__setPrompt = (text) => {
       if (prompt) prompt.textContent = text || '';
     };
@@ -1814,18 +1830,8 @@ if (document.readyState === 'loading') {
         e.preventDefault();
         const sel = document.getElementById('sound-theme-select');
         const nextTheme = sel?.value || '';
-        const prevTheme = getSoundThemeKey?.() || '';
-        if (nextTheme !== prevTheme) {
-          setSoundThemeKey(nextTheme);
-        }
-        updateSoundThemeLabel();
         const overlay = ensureSoundThemeOverlay();
-        if (overlay.__applyBtn) {
-          overlay.__applyBtn.onclick = () => {
-            try { applySoundThemeToScene({ theme: nextTheme }); } catch {}
-            overlay.__hide?.();
-          };
-        }
+        overlay.__pendingTheme = nextTheme;
         overlay.__show?.(getSoundThemeLabel(nextTheme), 'Change all instruments to fit this theme?');
         return;
       }
