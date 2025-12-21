@@ -1,5 +1,5 @@
 // src/audio-tones.js — tone synths (<=300 lines)
-import { ensureAudioContext } from './audio-core.js';
+import { ensureAudioContext, registerActiveNode } from './audio-core.js';
 export const TONE_NAMES = ['keypad','chime','pop','pluck','pad','retro-square','retro-saw','retro-triangle','laser','wind','alien','fm','organ','drop','bleep','sine','tone'];
 
 function envGain(acx, t0, points){
@@ -20,6 +20,7 @@ export function playToneAt(freq, when, dest){
   g.gain.exponentialRampToValueAtTime(0.25, when+0.01);
   g.gain.exponentialRampToValueAtTime(0.0001, when+0.25);
   o.connect(g).connect(dest||acx.destination); o.start(when); o.stop(when+0.26);
+  try{ registerActiveNode(o); }catch{}
 }
 function playKeypadAt(freq, when, dest){
   const acx = ensureAudioContext(), t0=when;
@@ -27,26 +28,31 @@ function playKeypadAt(freq, when, dest){
   const o1=acx.createOscillator(), o2=acx.createOscillator(); o1.type='square'; o2.type='square';
   o1.frequency.setValueAtTime(freq, t0); o2.frequency.setValueAtTime(freq*2, t0);
   o1.connect(g); o2.connect(g); g.connect(dest||acx.destination); o1.start(t0); o2.start(t0); o1.stop(t0+0.2); o2.stop(t0+0.2);
+  try{ registerActiveNode(o1); registerActiveNode(o2); }catch{}
 }
 function playPopAt(freq, when, dest){
   const acx=ensureAudioContext(), t0=when; const o=acx.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(freq, t0);
   const g=envGain(acx,t0,[{t:0,v:0.0001},{t:0.006,v:0.35},{t:0.12,v:0.0008}]); o.connect(g).connect(dest||acx.destination);
   o.start(t0); o.stop(t0+0.14);
+  try{ registerActiveNode(o); }catch{}
 }
 function playPadAt(freq, when, dest){
   const acx=ensureAudioContext(), t0=when; const o=acx.createOscillator(); o.type='triangle'; o.frequency.setValueAtTime(freq, t0);
   const g=envGain(acx,t0,[{t:0,v:0.0001},{t:0.20,v:0.3},{t:0.80,v:0.15},{t:1.20,v:0.0008}]);
   const lp=acx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=Math.max(50,freq*2); lp.Q.value=0.5;
   o.connect(lp).connect(g).connect(dest||acx.destination); o.start(t0); o.stop(t0+1.25);
+  try{ registerActiveNode(o); }catch{}
 }
 function playRetroAt(freq, when, wave, dest){
   const acx=ensureAudioContext(), t0=when; const o=acx.createOscillator(); o.type=wave; o.frequency.setValueAtTime(freq, t0);
   const g=envGain(acx,t0,[{t:0,v:0.0001},{t:0.01,v:0.25},{t:0.25,v:0.0008}]); o.connect(g).connect(dest||acx.destination); o.start(t0); o.stop(t0+0.27);
+  try{ registerActiveNode(o); }catch{}
 }
 function playLaserAt(freq, when, dest){
   const acx=ensureAudioContext(), t0=when; const o=acx.createOscillator(); o.type='sawtooth';
   const f0=Math.max(30,freq*2); o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(Math.max(20,freq/3), t0+0.5);
   const g=envGain(acx,t0,[{t:0,v:0.0001},{t:0.02,v:0.25},{t:0.5,v:0.0008}]); o.connect(g).connect(dest||acx.destination); o.start(t0); o.stop(t0+0.52);
+  try{ registerActiveNode(o); }catch{}
 }
 function playWindyAt(freq, when, dest){
   const acx=ensureAudioContext(), t0=when; const n=acx.createBufferSource();
@@ -55,6 +61,7 @@ function playWindyAt(freq, when, dest){
   const bp=acx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=Math.max(50,freq); bp.Q.value=3;
   const g=envGain(acx,t0,[{t:0,v:0.0001},{t:0.04,v:0.25},{t:0.25,v:0.0008}]);
   n.buffer=buf; n.connect(bp).connect(g).connect(dest||acx.destination); n.start(t0); n.stop(t0+0.26);
+  try{ registerActiveNode(n); }catch{}
 }
 function playAlienAt(freq, when, dest){
   const acx=ensureAudioContext(), t0=when; const mod=acx.createOscillator(), car=acx.createOscillator();
@@ -62,10 +69,11 @@ function playAlienAt(freq, when, dest){
   const mg=acx.createGain(); mg.gain.value = Math.max(1, freq*0.5); mod.connect(mg).connect(car.frequency);
   const g=envGain(acx,t0,[{t:0,v:0.0001},{t:0.02,v:0.22},{t:0.5,v:0.0008}]); car.connect(g).connect(dest||acx.destination);
   mod.start(t0); car.start(t0); mod.stop(t0+0.52); car.stop(t0+0.52);
+  try{ registerActiveNode(mod); registerActiveNode(car); }catch{}
 }
 function playOrganishAt(freq, when, dest){
   const acx=ensureAudioContext(), t0=when; const g=envGain(acx,t0,[{t:0,v:0.0001},{t:0.02,v:0.22},{t:0.40,v:0.0008}]);
-  [0,0.5,-0.5].forEach(det=>{ const o=acx.createOscillator(); o.type='triangle'; o.frequency.setValueAtTime(freq*Math.pow(2,det/12), t0); o.connect(g); o.start(t0); o.stop(t0+0.42); });
+  [0,0.5,-0.5].forEach(det=>{ const o=acx.createOscillator(); o.type='triangle'; o.frequency.setValueAtTime(freq*Math.pow(2,det/12), t0); o.connect(g); o.start(t0); o.stop(t0+0.42); try{ registerActiveNode(o); }catch{} });
   g.connect(dest||acx.destination);
 }
 function playDropletAt(freq, when, dest){
@@ -73,6 +81,7 @@ function playDropletAt(freq, when, dest){
   o.frequency.setValueAtTime(freq*2, t0); o.frequency.exponentialRampToValueAtTime(Math.max(20,freq/3), t0+0.25);
   const g=envGain(acx,t0,[{t:0,v:0.0001},{t:0.01,v:0.30},{t:0.25,v:0.0008}]); o.connect(g).connect(dest||acx.destination);
   o.start(t0); o.stop(t0+0.26);
+  try{ registerActiveNode(o); }catch{}
 }
 export function playById(id, freq, when, dest, velocity = 1.0, options = {}){
   const s=String(id||'tone').toLowerCase();
@@ -97,6 +106,7 @@ export function playById(id, freq, when, dest, velocity = 1.0, options = {}){
     o.connect(g).connect(dest || acx.destination);
     o.start(t);
     o.stop(t + d + 0.12);
+    try{ registerActiveNode(o); }catch{}
     return true; // Handled
   }
 

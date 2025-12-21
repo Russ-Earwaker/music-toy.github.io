@@ -1,6 +1,6 @@
 // src/chordwheel.js — chord wheel with 16-step radial ring (per active segment)
 import { initToyUI } from './toyui.js';
-import { NUM_STEPS, getLoopInfo, ensureAudioContext, getToyGain, isRunning } from './audio-core.js';
+import { NUM_STEPS, getLoopInfo, ensureAudioContext, getToyGain, isRunning, registerActiveNode } from './audio-core.js';
 import { createBouncerParticles } from './bouncer-particles.js';
 import { triggerNoteForToy } from './audio-trigger.js';
 import { drawBlock, whichThirdRect } from './toyhelpers.js';
@@ -822,6 +822,7 @@ export function createChordWheel(panel){
       noise.connect(bp).connect(g).connect(toyGain);
       noise.start(time);
       noise.stop(time + dur + 0.01);
+      try{ registerActiveNode(noise); }catch{}
     } catch (e) { console.warn('[chordwheel] Strum noise failed', e); }
   }
 
@@ -1348,5 +1349,4 @@ function randomPentatonicProgression16(){
 
   return [...loopA, ...loopB];
 }
-
 

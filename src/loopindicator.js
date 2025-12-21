@@ -1,5 +1,5 @@
 // src/loopindicator.js
-import { ensureAudioContext, getLoopInfo, getToyGain, bpm as currentBpm, isRunning } from './audio-core.js';
+import { ensureAudioContext, getLoopInfo, getToyGain, bpm as currentBpm, isRunning, registerActiveNode } from './audio-core.js';
 
 /**
  * Create a single pulsing red loop indicator.
@@ -96,6 +96,7 @@ export function createLoopIndicator(targetSelector = '#topbar'){
       const g = ctx.createGain();
       g.gain.value = 0.7;
       src.connect(g).connect(getToyGain(toyId));
+      try{ registerActiveNode(src); }catch{}
       src.start(now);
       return;
     }
@@ -112,6 +113,7 @@ export function createLoopIndicator(targetSelector = '#topbar'){
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.08);
     osc.start(t0);
     osc.stop(t0 + 0.1);
+    try{ registerActiveNode(osc); }catch{}
   }
 
   function animate(){

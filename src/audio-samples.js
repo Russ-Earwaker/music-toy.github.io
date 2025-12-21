@@ -1,5 +1,5 @@
 // src/audio-samples.js — samples + tone fallback (<=300 lines)
-import { ensureAudioContext, getToyGain } from './audio-core.js';
+import { ensureAudioContext, getToyGain, registerActiveNode } from './audio-core.js';
 import { playById, noteToFreq, TONE_NAMES } from './audio-tones.js';
 
 // id -> { url, synth }
@@ -199,6 +199,7 @@ function playSampleAt(id, when, gain=1, toyId, noteName, options = {}){
       g.gain.value = gain;
     }
     src.connect(g).connect(getToyGain(toyId||'master'));
+    try{ registerActiveNode(src); }catch{}
     const __startAt = tStart;
     if (window && window.BOUNCER_LOOP_DBG) {
       try { console.log('[audio-samples] start', id, noteName||'C4', 'in', (__startAt - ctx.currentTime).toFixed(3)); } catch (e) {}

@@ -7,6 +7,7 @@ export const MAX_BPM = 200;
 
 let __ctx;
 export let bpm = DEFAULT_BPM;
+const __activeNodes = new Set();
 
 export function ensureAudioContext(){
   if (__ctx) return __ctx;
@@ -126,6 +127,28 @@ export function setToyMuted(id='master', muted=false, rampTime = 0){
   }
 }
 
+export function registerActiveNode(node){
+  if (!node) return;
+  __activeNodes.add(node);
+  const cleanup = ()=>{ __activeNodes.delete(node); };
+  try{ node.addEventListener?.('ended', cleanup); }catch{}
+  try{
+    const prev = node.onended;
+    node.onended = (e)=>{ try{ cleanup(); } finally { if (typeof prev === 'function') prev.call(node, e); } };
+  }catch{}
+}
+
+export function stopAllActiveNodes(){
+  const ctx = __ctx || null;
+  const now = ctx?.currentTime ?? 0;
+  const nodes = Array.from(__activeNodes);
+  __activeNodes.clear();
+  for (const node of nodes){
+    try{ node.stop?.(now); }catch{}
+    try{ node.disconnect?.(); }catch{}
+  }
+}
+
 // Transport helpers
 let __started = false;
 export function start(){
@@ -143,6 +166,7 @@ export function start(){
 export function stop(){
   __started = false;
   __epochStart = 0; // Reset epoch on stop to ensure clean restart.
+  try{ stopAllActiveNodes(); }catch{}
   try{ const ctx = ensureAudioContext(); ctx && ctx.suspend && ctx.suspend(); }catch{}
   try{
     if (localStorage.getItem('mt_audio_dbg')==='1') console.log('[audio] transport:pause');

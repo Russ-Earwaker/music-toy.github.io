@@ -3,7 +3,7 @@
 // - triggerInstrument(..., destOrId) accepts either a GainNode (dest) OR a string toyId
 // - setToyVolume/muteToy accept either a GainNode or a string toyId
 
-import { ensureAudioContext } from './audio-core.js';
+import { ensureAudioContext, registerActiveNode } from './audio-core.js';
 import { getSample } from './audio-samples.js';
 
 const channels = new Map(); // id -> GainNode
@@ -36,6 +36,7 @@ export function triggerInstrument(name, noteName, time, destOrId){
   src.buffer = sample;
   const dest = resolveDest(destOrId);
   src.connect(dest);
+  try{ registerActiveNode(src); }catch{}
   try { src.start(time || ctx.currentTime); } catch { /* ignore */ }
 }
 

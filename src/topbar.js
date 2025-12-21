@@ -136,6 +136,7 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
         src.connect(g);
         const master = typeof Core?.getToyGain === 'function' ? Core.getToyGain('master') : null;
         g.connect(master || ctx.destination);
+        try{ Core?.registerActiveNode?.(src); }catch{}
         try{ src.start(now); }catch{ src.start(); }
       }catch{}
     };

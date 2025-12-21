@@ -1,6 +1,6 @@
 // src/ambient-glide.js — Ambient Glide toy (<=300 lines)
 import { initToyUI } from './toyui.js';
-import { ensureAudioContext } from './audio-core.js';
+import { ensureAudioContext, registerActiveNode } from './audio-core.js';
 import { getIntensity } from './intensity.js';
 
 export function createAmbientGlide(panel){
@@ -62,6 +62,7 @@ const ac = ensureAudioContext();
     src.connect(filter);
     const t = ac.currentTime + 0.01;
     src.start(t);
+    try{ registerActiveNode(src); }catch{}
     noiseSrc = src;
   }
   function stopNoise(){
