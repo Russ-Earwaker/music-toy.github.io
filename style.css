@@ -318,6 +318,21 @@ html, body {
   box-shadow: none;
 }
 
+.focus-toggle-btn.is-locked,
+.focus-toggle-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background: rgba(24, 34, 48, 0.6);
+  border-color: rgba(60, 80, 104, 0.4);
+  color: rgba(226, 232, 240, 0.6);
+}
+
+.focus-toggle-btn:disabled:hover,
+.focus-toggle-btn:disabled:focus-visible {
+  background: rgba(24, 34, 48, 0.6);
+  border-color: rgba(60, 80, 104, 0.4);
+}
+
 .focus-toggle-btn.is-on:hover,
 .focus-toggle-btn.is-on:focus-visible {
   background: linear-gradient(120deg, #41c775, #61e19c);
@@ -3560,8 +3575,28 @@ body.feedback-support-open #board {
 }
 
 .pref-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-weight: 600;
   color: var(--text);
+}
+
+.pref-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.pref-badge-experimental {
+  color: #f8c15a;
+  background: rgba(248, 193, 90, 0.18);
+  border: 1px solid rgba(248, 193, 90, 0.5);
 }
 
 .pref-subtitle {

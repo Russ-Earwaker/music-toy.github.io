@@ -263,10 +263,19 @@ const NEW_SCENE_ZOOM = 0.6; // adjust this to change the starting zoom when crea
     const enabled = (typeof window !== 'undefined' && typeof window.isFocusEditingEnabled === 'function')
       ? window.isFocusEditingEnabled()
       : true;
+    const unlocked = (typeof window !== 'undefined' && window.__enableSmallScreenEditingToggle === true);
     btn.textContent = enabled ? 'On' : 'Off';
     btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
     btn.classList.toggle('is-on', enabled);
     btn.classList.toggle('is-off', !enabled);
+    btn.disabled = !unlocked;
+    btn.setAttribute('aria-disabled', unlocked ? 'false' : 'true');
+    btn.classList.toggle('is-locked', !unlocked);
+    if (!unlocked) {
+      btn.title = 'Experimental: unlock via debug console to toggle.';
+    } else {
+      btn.removeAttribute('title');
+    }
   }
 
   // Import presets in module scope (dynamic import to keep file order loose)
@@ -316,8 +325,8 @@ const NEW_SCENE_ZOOM = 0.6; // adjust this to change the starting zoom when crea
             <div class="preferences-list">
               <div class="pref-row pref-row-focus">
                 <div class="pref-label">
-                  <div class="pref-title">Focus editing</div>
-                  <div class="pref-subtitle">Dim other toys until one is focused</div>
+                  <div class="pref-title">Small Screen Editing mode <span class="pref-badge pref-badge-experimental">Experimental</span></div>
+                  <div class="pref-subtitle">Focus on editing one toy at a time.</div>
                 </div>
                 <button class="menu-inline-btn focus-toggle-btn" type="button" data-pref-action="toggle-focus-editing">Off</button>
               </div>
@@ -343,10 +352,14 @@ const NEW_SCENE_ZOOM = 0.6; // adjust this to change the starting zoom when crea
       });
       closeBtn?.addEventListener('click', hide);
       toggleBtn?.addEventListener('click', () => {
+        if (toggleBtn?.disabled) return;
         const current = (typeof window !== 'undefined' && typeof window.isFocusEditingEnabled === 'function')
           ? window.isFocusEditingEnabled()
           : true;
         try { window.setFocusEditingEnabled?.(!current); } catch {}
+        updateFocusToggleButton(toggleBtn);
+      });
+      window.addEventListener('prefs:small-screen-editing-toggle-unlock', () => {
         updateFocusToggleButton(toggleBtn);
       });
       overlay.__wired = true;
@@ -416,6 +429,83 @@ const NEW_SCENE_ZOOM = 0.6; // adjust this to change the starting zoom when crea
     overlay.__hide = hide;
     overlay.__applyBtn = applyBtn;
     return overlay;
+  }
+
+  function ensureDiscardSceneOverlay() {
+    let overlay = document.getElementById('discard-scene-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'discard-scene-overlay';
+      overlay.className = 'scene-manager-overlay';
+      overlay.style.display = 'none';
+      overlay.innerHTML = `
+        <div class="scene-manager-panel sound-theme-panel discard-scene-panel">
+          <button class="scene-manager-close" type="button" aria-label="Close">&times;</button>
+          <div class="scene-manager-body">
+            <div class="sound-theme-prompt">Discard current scene?</div>
+            <div class="sound-theme-actions">
+              <button class="c-btn inst-ok" type="button" data-action="discard-scene-confirm" aria-label="Discard current scene">
+                <div class="c-btn-outer"></div>
+                <div class="c-btn-glow"></div>
+                <div class="c-btn-core"></div>
+              </button>
+              <button class="c-btn inst-cancel" type="button" data-action="discard-scene-cancel" aria-label="Keep current scene">
+                <div class="c-btn-outer"></div>
+                <div class="c-btn-glow"></div>
+                <div class="c-btn-core"></div>
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+    }
+
+    const closeBtn = overlay.querySelector('.scene-manager-close');
+    const okBtn = overlay.querySelector('[data-action="discard-scene-confirm"]');
+    const cancelBtn = overlay.querySelector('[data-action="discard-scene-cancel"]');
+    const prompt = overlay.querySelector('.sound-theme-prompt');
+    const okCore = okBtn?.querySelector?.('.c-btn-core');
+    const cancelCore = cancelBtn?.querySelector?.('.c-btn-core');
+    if (okCore) okCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonTick.png')");
+    if (cancelCore) cancelCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonClose.png')");
+
+    const hide = () => { overlay.style.display = 'none'; };
+    const resolve = (value) => {
+      const resolver = overlay.__resolve;
+      overlay.__resolve = null;
+      if (typeof resolver === 'function') resolver(value);
+      hide();
+    };
+
+    if (!overlay.__wired) {
+      overlay.addEventListener('click', (evt) => {
+        if (evt.target === overlay) resolve(false);
+      });
+      closeBtn?.addEventListener('click', () => resolve(false));
+      cancelBtn?.addEventListener('click', () => resolve(false));
+      okBtn?.addEventListener('click', () => resolve(true));
+      overlay.__wired = true;
+    }
+
+    overlay.__confirm = (message) => {
+      if (overlay.__resolve) resolve(false);
+      if (prompt) prompt.textContent = message || 'Discard current scene?';
+      overlay.style.display = 'flex';
+      return new Promise((resolver) => {
+        overlay.__resolve = resolver;
+      });
+    };
+
+    return overlay;
+  }
+
+  function hasSceneToys() {
+    try {
+      const snap = window.Persistence?.getSnapshot?.();
+      if (snap && Array.isArray(snap.toys)) return snap.toys.length > 0;
+    } catch {}
+    return document.querySelectorAll('#board > .toy-panel').length > 0;
   }
 
 function ensureTopbar(){
@@ -966,6 +1056,12 @@ if (document.readyState === 'loading') {
     if (!bar) return;
     if (window.__topbarWired) return;
     window.__topbarWired = true;
+    try {
+      window.SceneDiscardPrompt = {
+        confirm: (message) => ensureDiscardSceneOverlay().__confirm?.(message),
+        hasSceneToys
+      };
+    } catch {}
 
     const playBtn = bar.querySelector('[data-action="toggle-play"]');
     if (playBtn) {
@@ -1097,6 +1193,15 @@ if (document.readyState === 'loading') {
       };
 
       if (action === 'new-scene'){
+        const needsConfirm = typeof window.SceneDiscardPrompt?.hasSceneToys === 'function'
+          ? window.SceneDiscardPrompt.hasSceneToys()
+          : hasSceneToys();
+        if (needsConfirm) {
+          const ok = typeof window.SceneDiscardPrompt?.confirm === 'function'
+            ? await window.SceneDiscardPrompt.confirm('Discard current scene?')
+            : window.confirm('Discard current scene?');
+          if (!ok) return;
+        }
         pauseTransportAndSyncUI();
         try{ Core?.setBpm?.(Core?.DEFAULT_BPM ?? 120); }catch{}
         try{ bar.__bpmState?.sync?.(); }catch{}
@@ -1172,7 +1277,20 @@ if (document.readyState === 'loading') {
           input.onchange = async ()=>{
             const f = input.files && input.files[0]; if (!f) return;
             const txt = await f.text();
-            const P = window.Persistence; if (P && P.importScene(txt)){ alert('Imported.'); try{ window.organizeBoard && window.organizeBoard(); }catch{} }
+            const needsConfirm = typeof window.SceneDiscardPrompt?.hasSceneToys === 'function'
+              ? window.SceneDiscardPrompt.hasSceneToys()
+              : hasSceneToys();
+            if (needsConfirm) {
+              const ok = typeof window.SceneDiscardPrompt?.confirm === 'function'
+                ? await window.SceneDiscardPrompt.confirm('Discard current scene?')
+                : window.confirm('Discard current scene?');
+              if (!ok) return;
+            }
+            const P = window.Persistence;
+            if (P && P.importScene(txt)){
+              alert('Imported.');
+              try{ window.organizeBoard && window.organizeBoard(); }catch{}
+            }
           };
           input.click();
         }catch{}

@@ -28,7 +28,16 @@ window.debugViewport = () => {
     console.log('  Pan Y:', window.__boardY);
 };
 
+window.enableSmallScreenEditingToggle = () => {
+    window.__enableSmallScreenEditingToggle = true;
+    try {
+        window.dispatchEvent(new CustomEvent('prefs:small-screen-editing-toggle-unlock'));
+    } catch {}
+    console.log('Small Screen Editing mode toggle unlocked.');
+    return true;
+};
+
 const DEBUG_HELPERS_VERBOSE = false;
 if (DEBUG_HELPERS_VERBOSE) {
-    console.log('Debug helpers loaded. Use debugBoard(), debugTutorialToy(), and debugViewport() in the console.');
+    console.log('Debug helpers loaded. Use debugBoard(), debugTutorialToy(), debugViewport(), and enableSmallScreenEditingToggle() in the console.');
 }

@@ -422,7 +422,7 @@ function formatTimestamp(iso) {
       });
   }
 
-  function handleSaveToSlot(slotId, index) {
+  async function handleSaveToSlot(slotId, index) {
     const P = getPersistence();
     if (!P.getSnapshot || !P.saveScenePackageToSlot) return;
 
@@ -433,7 +433,9 @@ function formatTimestamp(iso) {
 
     // Optional confirm on overwrite when in load/manage mode
     if (existingMeta && !existingMeta.isEmpty) {
-      const ok = window.confirm('Overwrite this save slot?');
+      const ok = typeof window.SceneDiscardPrompt?.confirm === 'function'
+        ? await window.SceneDiscardPrompt.confirm('Overwrite this save slot?')
+        : window.confirm('Overwrite this save slot?');
       if (!ok) return;
     }
 
@@ -461,15 +463,18 @@ function formatTimestamp(iso) {
   function handleLoadSlot(slotId) {
     const P = getPersistence();
     if (!P.loadSceneFromSlot) return;
-    const ok = P.loadSceneFromSlot(slotId);
-    if (ok) {
-      if (typeof P.setCurrentSceneSlotId === 'function') {
-        P.setCurrentSceneSlotId(slotId);
+    confirmDiscardIfNeeded().then((okToDiscard) => {
+      if (!okToDiscard) return;
+      const ok = P.loadSceneFromSlot(slotId);
+      if (ok) {
+        if (typeof P.setCurrentSceneSlotId === 'function') {
+          P.setCurrentSceneSlotId(slotId);
+        }
+        closeSceneManager();
+      } else {
+        window.alert('Could not load this creation.');
       }
-      closeSceneManager();
-    } else {
-      window.alert('Could not load this creation.');
-    }
+    });
   }
 
   function handleExportSlot(slotId) {
@@ -501,52 +506,63 @@ function formatTimestamp(iso) {
     }, 0);
   }
 
+  function hasCurrentSceneToys() {
+    try {
+      const P = getPersistence();
+      const snap = P.getSnapshot?.();
+      if (snap && Array.isArray(snap.toys)) return snap.toys.length > 0;
+    } catch {}
+    return document.querySelectorAll('#board > .toy-panel').length > 0;
+  }
+
+  async function confirmDiscardIfNeeded() {
+    const needsConfirm = typeof window.SceneDiscardPrompt?.hasSceneToys === 'function'
+      ? window.SceneDiscardPrompt.hasSceneToys()
+      : hasCurrentSceneToys();
+    if (!needsConfirm) return true;
+    if (typeof window.SceneDiscardPrompt?.confirm === 'function') {
+      return window.SceneDiscardPrompt.confirm('Discard current scene?');
+    }
+    return window.confirm('Discard current scene?');
+  }
+
   function handleImportFile(file) {
     const P = getPersistence();
     if (!P) return;
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       try {
         const text = String(evt.target?.result || '');
         const raw = JSON.parse(text);
 
-        let pkg = null;
-
-        // Prefer Persistence.isScenePackage if available
         const isPkg = typeof P.isScenePackage === 'function'
           ? P.isScenePackage(raw)
           : (raw && raw.type === 'music-toys-scene' && raw.payload);
+        const snapshot = isPkg
+          ? raw.payload
+          : ((raw && raw.payload && typeof raw.payload === 'object') ? raw.payload : raw);
 
-        if (isPkg) {
-          pkg = raw;
-        } else {
-          // Treat as bare snapshot or legacy export; wrap into a package if possible
-          const snapshot = (raw && raw.payload && typeof raw.payload === 'object')
-            ? raw.payload
-            : raw;
-          const displayName =
-            (snapshot && snapshot.displayName) ||
-            (typeof file.name === 'string' ? file.name.replace(/\.[^.]+$/, '') : 'Imported creation');
-
-          if (typeof P.wrapSnapshotAsPackage === 'function') {
-            pkg = P.wrapSnapshotAsPackage(snapshot, { displayName });
-          } else {
-            pkg = { displayName, payload: snapshot };
-          }
-        }
-
-        const slots = (P.listSceneSlots && P.listSceneSlots()) || [];
-        let target = slots.find(s => s.isEmpty);
-        if (!target) {
-          window.alert('No empty save slots. Please delete a save before importing.');
+        if (!snapshot || typeof snapshot !== 'object') {
+          window.alert('Could not import this file. Is it a valid creation export?');
           return;
         }
 
-        P.saveScenePackageToSlot(target.slotId, pkg);
-        renderSlots();
-        window.alert(`Imported creation into ${target.displayName || target.slotId}.`);
+        const okToDiscard = await confirmDiscardIfNeeded();
+        if (!okToDiscard) return;
+
+        const ok = typeof P.applySnapshot === 'function'
+          ? P.applySnapshot(snapshot)
+          : false;
+        if (!ok) {
+          window.alert('Could not import this file. Is it a valid creation export?');
+          return;
+        }
+        if (typeof P.setCurrentSceneSlotId === 'function') {
+          P.setCurrentSceneSlotId(null);
+        }
+        closeSceneManager();
       } catch (err) {
         console.warn('[SceneManager] import failed', err);
         window.alert('Could not import this file. Is it a valid creation export?');
