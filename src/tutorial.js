@@ -936,6 +936,28 @@ let hasDetectedLine = false;
   }
 
   function getAnchorGuideTargetInfo() {
+    const allGoalsComplete = GOAL_FLOW.every(goalItem => guideProgress.goals.has(goalItem.id));
+    if (allGoalsComplete) {
+      const feedbackBtn = document.querySelector('#feedback-support-btn');
+      if (feedbackBtn) return { target: feedbackBtn, highlight: 'guide' };
+    }
+
+    const guideBtn =
+      document.querySelector('.guide-launcher .guide-toggle') ||
+      document.querySelector('.guide-toggle') ||
+      document.querySelector('.guide-launcher');
+
+    const playing = typeof isRunning === 'function' ? !!isRunning() : false;
+    const hasActiveNotesToy = (() => {
+      for (const [panel, hasSound] of placeToyTriggerState.entries()) {
+        if (hasSound && panel?.isConnected) return true;
+      }
+      return false;
+    })();
+    if (playing && hasActiveNotesToy && guideBtn) {
+      return { target: guideBtn, highlight: 'guide' };
+    }
+
     const hasAnyToy = placeToyPanels.size > 0 || (() => {
       try { return !!document.querySelector('.toy-panel'); } catch { return false; }
     })();
@@ -954,16 +976,10 @@ let hasDetectedLine = false;
     const toy = pickUninteractedToy();
     if (toy) return { target: toy, highlight: 'toy' };
 
-    const playing = typeof isRunning === 'function' ? !!isRunning() : false;
     if (!playing) {
       const playBtn = document.querySelector('#topbar [data-action="toggle-play"]');
       if (playBtn) return { target: playBtn, highlight: 'play' };
     }
-
-    const guideBtn =
-      document.querySelector('.guide-launcher .guide-toggle') ||
-      document.querySelector('.guide-toggle') ||
-      document.querySelector('.guide-launcher');
     if (guideBtn) return { target: guideBtn, highlight: 'guide' };
 
     return null;

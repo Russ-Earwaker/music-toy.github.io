@@ -2035,6 +2035,20 @@ body.tutorial-active #topbar #theme-switcher-wrap {
   100% { transform: translateY(-50%) scale(1); }
 }
 
+@keyframes tutorialPulseFeedbackBtn {
+  0%   { transform: translateY(-50%) scale(1); }
+  10%  { transform: translateY(-50%) scale(1.08); }
+  25%  { transform: translateY(-50%) scale(1.00); }
+  50%  { transform: translateY(-50%) scale(1.06); }
+  100% { transform: translateY(-50%) scale(1); }
+}
+
+@keyframes tutorialPulseGlow {
+  0%   { box-shadow: 0 0 0 0 rgba(94, 179, 255, 0.35); opacity: 0.9; }
+  50%  { box-shadow: 0 0 0 10px rgba(94, 179, 255, 0); opacity: 1; }
+  100% { box-shadow: 0 0 0 0 rgba(94, 179, 255, 0.35); opacity: 0.9; }
+}
+
 .tutorial-pulse-target {
   animation: tutorialPulse 2s ease-in-out infinite;
   transform-origin: 50% 50%;
@@ -2044,14 +2058,37 @@ body.tutorial-active #topbar #theme-switcher-wrap {
   animation-name: tutorialPulseChainBtn;
 }
 
-.tutorial-active-pulse:not(.c-btn) {
+.topbar-feedback-btn.tutorial-pulse-target {
+  animation: none;
+}
+
+.topbar-feedback-btn.tutorial-pulse-target::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: inherit;
+  box-shadow: 0 0 0 0 rgba(94, 179, 255, 0.35);
+  animation: tutorialPulseGlow 1.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.topbar-feedback-btn.tutorial-active-pulse {
+  position: absolute !important;
+  top: 50% !important;
+  right: calc(var(--app-pad-right) + var(--ui-float-gap) + var(--side-icon-size)) !important;
+  left: auto !important;
+  margin-left: 0 !important;
+  transform: translateY(-50%) !important;
+}
+
+.tutorial-active-pulse:not(.c-btn):not(.topbar-feedback-btn) {
   position: relative;
   isolation: isolate;
   box-shadow: 0 0 20px rgba(94, 179, 255, 0.55);
   transition: box-shadow 0.25s ease;
 }
 
-.tutorial-active-pulse:not(.c-btn)::after {
+.tutorial-active-pulse:not(.c-btn):not(.topbar-feedback-btn)::after {
   content: '';
   position: absolute;
   inset: -6px;
