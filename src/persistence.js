@@ -15,6 +15,32 @@ function __diagNow() {
 const PERSIST_TRACE_DEBUG = false;
 const persistTraceLog = (...args) => { if (PERSIST_TRACE_DEBUG) console.log(...args); };
 const persistTraceWarn = (...args) => { if (PERSIST_TRACE_DEBUG) console.warn(...args); };
+let __quotaWarned = false;
+let __quotaCleanupAttempted = false;
+function __isQuotaExceededError(err) {
+  try {
+    if (!err) return false;
+    if (err.name === 'QuotaExceededError') return true;
+    if (err.code === 22 || err.code === 1014) return true;
+    return typeof err.message === 'string' && err.message.toLowerCase().includes('quota');
+  } catch {
+    return false;
+  }
+}
+function __evictDrawgridCache() {
+  try {
+    const keys = Object.keys(localStorage);
+    let removed = 0;
+    for (const k of keys) {
+      if (k.startsWith('drawgrid:saved:')) {
+        try { localStorage.removeItem(k); removed++; } catch {}
+      }
+    }
+    return removed;
+  } catch {
+    return 0;
+  }
+}
 function __stateStats(payload) {
   if (payload && typeof payload === 'object') {
     if (payload.payload && typeof payload.payload === 'object') {
@@ -391,6 +417,22 @@ function applyDrawGrid(panel, state) {
   }
 
     try {
+      const incomingStats = __stateStats(state);
+      if (!incomingStats.nonEmpty) {
+        let existingStats = null;
+        try { existingStats = __stateStats(toy.getState?.()); } catch {}
+        if (!existingStats || !existingStats.nonEmpty) {
+          try { existingStats = __stateStats(panel.__getDrawgridPersistedState?.()); } catch {}
+        }
+        if (existingStats?.nonEmpty) {
+          persistTraceLog('[persistence][drawgrid] SKIP (empty incoming would overwrite existing)', {
+            panelId: panel.id,
+            incoming: incomingStats,
+            existing: existingStats,
+          });
+          return;
+        }
+      }
       const hasStrokes = Array.isArray(state?.strokes) && state.strokes.length > 0;
       const hasErase = Array.isArray(state?.eraseStrokes) && state.eraseStrokes.length > 0;
       const hasActiveNodes = Array.isArray(state?.nodes?.active) && state.nodes.active.some(Boolean);
@@ -869,6 +911,7 @@ function loadSceneFromSlot(slotId) {
 // --- Storage helpers (localStorage) ---
 
 function saveToKey(key, data){
+  let serialized = null;
   try{
     const stateToWrite = data && typeof data === 'object' ? data : null;
     try {
@@ -900,7 +943,7 @@ function saveToKey(key, data){
     } catch (guardErr) {
       persistTraceWarn('[persist] veto check failed (continuing)', guardErr);
     }
-    const serialized = JSON.stringify(data);
+    serialized = JSON.stringify(data);
     localStorage.setItem(key, serialized);
     try {
       let payloadForStats = stateToWrite;
@@ -915,7 +958,27 @@ function saveToKey(key, data){
       persistTraceWarn('[persist] write stat log failed', logErr);
     }
     return true;
-  }catch(e){ console.warn('[persistence] save failed', e); return false; }
+  }catch(e){
+    if (__isQuotaExceededError(e)) {
+      if (!__quotaCleanupAttempted) {
+        __quotaCleanupAttempted = true;
+        const removed = __evictDrawgridCache();
+        if (removed && serialized !== null) {
+          try {
+            localStorage.setItem(key, serialized);
+            return true;
+          } catch {}
+        }
+      }
+      if (!__quotaWarned) {
+        __quotaWarned = true;
+        console.warn('[persistence] save failed (storage quota exceeded)', e);
+      }
+      return false;
+    }
+    console.warn('[persistence] save failed', e);
+    return false;
+  }
 }
 function loadFromKey(key){
   try{

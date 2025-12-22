@@ -177,16 +177,7 @@ window.addEventListener('keydown', (e) => {
   });
 });
 
-// Restore preference (same tab) if user had FS on
-window.addEventListener('pageshow', () => {
-  const want = sessionStorage.getItem('app_fs') === '1';
-  if (!want) return;
-  if (canRealFullscreen) {
-    if (!inRealFullscreen()) enterRealFullscreen();
-  } else {
-    if (!pseudo) enterPseudoFullscreen();
-  }
-});
+// Note: avoid auto-restoring fullscreen on pageshow to keep user-gesture requirements.
 
 // Public helpers (optional)
 window.__Fullscreen = {

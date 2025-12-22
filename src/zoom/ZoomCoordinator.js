@@ -6,13 +6,14 @@ const listeners = new Set();
 const frameStartListeners = new Set();
 
 // --- Lightweight ZoomCoordinator profiling ---
-const ZC_PROFILE = true;
+const ZC_PROFILE = false;
 try { if (typeof window !== 'undefined') window.__PERF_DEBUG = false; } catch {}
 const ZC_PERF_DEBUG = (typeof window !== 'undefined') ? !!window.__PERF_DEBUG : false;
 
 // --- Listener profiling ---
-const ZC_LISTENER_DEBUG = true;
+const ZC_LISTENER_DEBUG = false;
 const ZC_LISTENER_LOG_THRESHOLD_MS = 1.0; // log listeners slower than this
+const ZC_GESTURE_LOG = false; // suppress zoom-gesture-flag console spam by default
 
 let zcFrameCount = 0;
 let zcAccumMs = 0;
@@ -144,6 +145,7 @@ const state = {
 };
 
 function __zoomGestureLogEnabled() {
+  if (!ZC_GESTURE_LOG) return false;
   try {
     if (window.__MT_ZOOM_GESTURE_LOG) return true;
     if (typeof localStorage !== 'undefined' && localStorage.getItem('mt_zoom_gesture_log') === '1') return true;

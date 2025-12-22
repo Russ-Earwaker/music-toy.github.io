@@ -592,6 +592,13 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     maybeResizeFromLayout();
     setLODFromView();
     const gestureActive = isZoomGesturing();
+    const gestureThrottlingActive = gestureActive && (() => {
+      try {
+        if (typeof opts.gestureThrottle === 'boolean') return opts.gestureThrottle;
+        if (typeof opts.gestureThrottleRef === 'function') return !!opts.gestureThrottleRef();
+      } catch {}
+      return true;
+    })();
 
     // Real policy: during pan/zoom, freeze particle fields for unfocused toys.
     // (Diagnostic modulo can still run below if enabled.)
@@ -605,7 +612,7 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
       }
     })();
 
-    if (gestureActive && shouldFreezeUnfocusedDuringGesture) {
+    if (gestureThrottlingActive && shouldFreezeUnfocusedDuringGesture) {
       try {
         const focusRef = (typeof opts.isFocusedRef === 'function')
           ? opts.isFocusedRef
@@ -626,7 +633,7 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
 
     // PerfLab diagnostic: during gesture, only allow 1/N fields to tick fully.
     // This tests whether "too many canvases updating at once" is the main pan/zoom multiplier.
-    if (gestureActive) {
+    if (gestureThrottlingActive) {
       const fm = readPerfGestureFieldModulo();
       if (fm > 1) {
         const k = ((fieldId % fm) | 0);
@@ -641,7 +648,7 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     }
 
     // During active pan/zoom, clamp LOD BEFORE reconcile so particle count actually drops.
-    if (gestureActive) {
+    if (gestureThrottlingActive) {
       state.lodScale = Math.min(state.lodScale || 1, 0.35);
       state.capScale = Math.min(state.capScale || 1, 0.6);
     }
@@ -665,7 +672,7 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
         twinkle(dt);
         if (!skipDraw) {
           // If we're in a throttled tickModulo phase, also avoid drawing every frame.
-          const dm = isZoomGesturing() ? readPerfGestureDrawModulo() : 2;
+          const dm = gestureThrottlingActive ? readPerfGestureDrawModulo() : 2;
           state.drawCounter = (state.drawCounter + 1) % Math.max(1, dm);
           if (state.drawCounter === 0) draw();
         }
@@ -678,7 +685,7 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     effectiveDt = Math.min(0.12, effectiveDt); // avoid huge leaps when heavily throttled
 
     // During active zoom gestures, throttle particle physics to cut CPU while keeping visuals.
-    if (gestureActive) {
+    if (gestureThrottlingActive) {
       state.gestureSkip = (state.gestureSkip + 1) % 2; // run physics every other frame
       if (state.gestureSkip !== 0) {
         // On non-physics frames, do minimal work; only do the heavier loops when we're going to draw.
@@ -704,7 +711,7 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     step(effectiveDt);
     twinkle(effectiveDt);
     if (!skipDraw) {
-      if (gestureActive) {
+      if (gestureThrottlingActive) {
         const dm = readPerfGestureDrawModulo();
         state.drawCounter = (state.drawCounter + 1) % dm;
         if (state.drawCounter === 0) draw();
@@ -751,9 +758,16 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
   function reconcileParticleCount(dt = 1 / 60, immediate = false) {
     const desired = Math.max(MIN_PARTICLES, Math.round(state.targetDesired || 0));
     const gestureActive = isZoomGesturing();
+    const gestureThrottlingActive = gestureActive && (() => {
+      try {
+        if (typeof opts.gestureThrottle === 'boolean') return opts.gestureThrottle;
+        if (typeof opts.gestureThrottleRef === 'function') return !!opts.gestureThrottleRef();
+      } catch {}
+      return true;
+    })();
     // During active drag/zoom, avoid heavy filtering + count churn.
     // We keep counts stable until gesture ends.
-    if (gestureActive && !immediate) return;
+    if (gestureThrottlingActive && !immediate) return;
 
     const activeParticles = state.particles.filter(p => (p.fadeTarget ?? 1) > 0 || (p.fade ?? 0) > 0.05);
     const active = activeParticles.length;
