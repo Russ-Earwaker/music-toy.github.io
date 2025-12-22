@@ -3117,7 +3117,7 @@ async function boot(){
     g_boardClientWidth = viewport.clientWidth || 0;
     g_boardClientHeight = viewport.clientHeight || 0;
   }
-  console.log('[viewport] element=', viewport, 'client=', g_boardClientWidth, g_boardClientHeight);
+  // console.log('[viewport] element=', viewport, 'client=', g_boardClientWidth, g_boardClientHeight);
 
   // Start global FPS HUD once the board exists
   try {

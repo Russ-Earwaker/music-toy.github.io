@@ -4,7 +4,7 @@ import { getViewportTransform, screenToWorld, getViewportElement } from './board
 (() => {
   const board = document.getElementById('board');
   const viewport = getViewportElement();
-  console.log('[tap-dots] viewport=', viewport);
+  // console.log('[tap-dots] viewport=', viewport);
   if (!board) return;
   if (!viewport) {
     console.warn('[tap-dots] no viewport element found');

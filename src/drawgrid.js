@@ -2330,7 +2330,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   function resizeSurfacesFor(nextCssW, nextCssH, nextDpr) {
     if (!resizeSurfacesFor.__commitResizeCount && (() => { try { return !!window.__ZOOM_COMMIT_PHASE; } catch {} return false; })()) {
       resizeSurfacesFor.__commitResizeCount = 1;
-      try { console.warn('[DG] resizeSurfacesFor during commit'); } catch {}
+      if (DG_DEBUG) { try { console.warn('[DG] resizeSurfacesFor during commit'); } catch {} }
     }
     const dpr = Math.max(1, Number.isFinite(nextDpr) ? nextDpr : (window.devicePixelRatio || 1));
     paintDpr = Math.max(1, Math.min(dpr, 3));
@@ -2412,8 +2412,10 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
           const wrongBackingStore = (frontCanvas.width !== expW || frontCanvas.height !== expH);
           if (wrongBackingStore && looksLikeScaledRect) {
             dgPaintTrace('swapGuard:frontBackingStoreWrong', { expW, expH, rectW, rectH, frontW: frontCanvas.width, frontH: frontCanvas.height });
-            console.warn('[DG][swapGuard] front canvas backing store was scaled-rect sized; restoring + redrawing', { expW, expH, rectW, rectH, frontW: frontCanvas.width, frontH: frontCanvas.height });
-            console.trace('[DG][swapGuard] stack (who resized front canvas?)');
+            if (DG_SWAP_DEBUG || DG_DEBUG) {
+              console.warn('[DG][swapGuard] front canvas backing store was scaled-rect sized; restoring + redrawing', { expW, expH, rectW, rectH, frontW: frontCanvas.width, frontH: frontCanvas.height });
+              console.trace('[DG][swapGuard] stack (who resized front canvas?)');
+            }
             // Restore the correct backing store size (clears, so immediately redraw strokes).
             frontCanvas.width = expW;
             frontCanvas.height = expH;
