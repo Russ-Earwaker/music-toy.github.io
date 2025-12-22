@@ -134,6 +134,8 @@ import { getViewportTransform, screenToWorld, getViewportElement } from './board
   let viewScaleY = 1;
   let viewOriginX = 0;
   let viewOriginY = 0;
+  let __tapDotsResizeDeferred = false;
+  let __tapDotsResizeRaf = 0;
 
   function getOverlayRect() {
     const rect = overlay.getBoundingClientRect();
@@ -164,6 +166,19 @@ import { getViewportTransform, screenToWorld, getViewportElement } from './board
   }
 
   function resizeCanvas() {
+    try {
+      if (window.__ZOOM_COMMIT_PHASE) {
+        __tapDotsResizeDeferred = true;
+        if (!__tapDotsResizeRaf) {
+          __tapDotsResizeRaf = requestAnimationFrame(() => {
+            __tapDotsResizeRaf = 0;
+            if (__tapDotsResizeDeferred) resizeCanvas();
+          });
+        }
+        return;
+      }
+    } catch {}
+    __tapDotsResizeDeferred = false;
     const dpr = window.devicePixelRatio || 1;
     // Keep the canvas locked to the overlay's visible rect so all transforms use the same size.
     // Use the untransformed CSS size for the backing buffer so the world transform (scale/translate)

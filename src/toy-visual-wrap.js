@@ -32,17 +32,37 @@
     const target = container || canvas.parentElement || canvas;
     if (!target) return;
     let raf = 0;
+    let retryRaf = 0;
+    let resizeDeferred = false;
+    const shouldSkipResize = ()=>{
+      try { return !!window.__ZOOM_COMMIT_PHASE; } catch {}
+      return false;
+    };
+    const tryResize = ()=>{
+      if (shouldSkipResize()){
+        resizeDeferred = true;
+        if (!retryRaf){
+          retryRaf = requestAnimationFrame(()=>{
+            retryRaf = 0;
+            if (resizeDeferred) tryResize();
+          });
+        }
+        return;
+      }
+      resizeDeferred = false;
+      const rect = target.getBoundingClientRect();
+      const w = Math.max(1, Math.round(rect.width));
+      const h = Math.max(1, Math.round(rect.height));
+      const pxW = Math.max(1, Math.round(w * DPR()));
+      const pxH = Math.max(1, Math.round(h * DPR()));
+      if (canvas.width !== pxW) canvas.width = pxW;
+      if (canvas.height !== pxH) canvas.height = pxH;
+    };
     const resize = ()=>{
       if (raf) return;
       raf = requestAnimationFrame(()=>{
         raf = 0;
-        const rect = target.getBoundingClientRect();
-        const w = Math.max(1, Math.round(rect.width));
-        const h = Math.max(1, Math.round(rect.height));
-        const pxW = Math.max(1, Math.round(w * DPR()));
-        const pxH = Math.max(1, Math.round(h * DPR()));
-        if (canvas.width !== pxW) canvas.width = pxW;
-        if (canvas.height !== pxH) canvas.height = pxH;
+        tryResize();
       });
     };
     const ro = new ResizeObserver(resize);

@@ -31,6 +31,44 @@ const CORE_PULSE_R_PX = 18;
 
 const MAX_DT = 0.050; // cap dt to avoid big jumps when tab refocuses
 
+function perfMark(dt) {
+  try { window.__PerfFrameProf?.mark?.('anchor', dt); } catch {}
+}
+
+function __anchIsGesturing() {
+  try { return !!window.__GESTURE_ACTIVE; } catch {}
+  return false;
+}
+
+function __anchGestureDrawModulo() {
+  let base = 1;
+  let hasAnchorOverride = false;
+  try {
+    const m = window?.__PERF_ANCHOR?.gestureModulo;
+    if (Number.isFinite(m) && m >= 1) {
+      base = Math.floor(m);
+      hasAnchorOverride = true;
+    }
+  } catch {}
+
+  if (!hasAnchorOverride) {
+    try {
+      const m = window?.__PERF_PARTICLES?.gestureDrawModulo;
+      if (Number.isFinite(m) && m >= 1) base = Math.floor(m);
+    } catch {}
+  }
+
+  // Keep anchor smooth when scene load is light (<=2 drawgrids visible).
+  try {
+    const vc = window?.__DRAWGRID_GLOBAL?.visibleCount;
+    if (Number.isFinite(vc) && vc <= 2) return 1;
+  } catch {}
+
+  return base;
+}
+
+let __anchFrameIdx = 0;
+
 // Gradient (requested: bigger + more opaque, min opacity never hits 0)
 const GRAD_ONSCREEN_R_PX = 240;
 const GRAD_OFFSCREEN_R_PX = 740;
@@ -57,6 +95,8 @@ let offscreenFade01 = 0;
 
 let lastPhase01 = 0;
 let lastBeatIndex = -1;
+let lastCenterWorld = null;
+let lastCenterWorldTs = 0;
 
 let pulseBeat = 0;
 let pulseBar = 0;
@@ -671,8 +711,15 @@ function updateHoverFx(local, drawScale) {
 
 function getDistanceWorldFromCenter(anchorWorld) {
   try {
+    if (window.__ZOOM_COMMIT_PHASE && lastCenterWorld) {
+      const dx = anchorWorld.x - lastCenterWorld.x;
+      const dy = anchorWorld.y - lastCenterWorld.y;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
     const c = (typeof window.getViewportCenterWorld === 'function') ? window.getViewportCenterWorld() : null;
     if (!c) return 0;
+    lastCenterWorld = c;
+    lastCenterWorldTs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
     const dx = anchorWorld.x - c.x;
     const dy = anchorWorld.y - c.y;
     return Math.sqrt(dx * dx + dy * dy);
@@ -1068,6 +1115,7 @@ export function setBoardAnchorEnabled(nextEnabled) {
 }
 
 export function tickBoardAnchor({ nowMs, loopInfo, running } = {}) {
+  const tA = (typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf) ? performance.now() : 0;
   const want = readEnabled();
   if (!want) {
     if (canvas) teardown();
@@ -1089,6 +1137,15 @@ export function tickBoardAnchor({ nowMs, loopInfo, running } = {}) {
 
   const anchorWorld = getAnchorWorld();
   updateMarkerPos(anchorWorld);
+  const gesturing = __anchIsGesturing();
+  const mod = __anchGestureDrawModulo();
+  __anchFrameIdx++;
+  const frameIndex = __anchFrameIdx;
+  const doFull = (!gesturing) || mod <= 1 || ((frameIndex % mod) === 0);
+  if (!doFull) {
+    if (tA) perfMark(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - tA);
+    return;
+  }
 
   const local = getViewportLocalPointFromWorld(anchorWorld);
   if (!local) return;
@@ -1113,6 +1170,7 @@ export function tickBoardAnchor({ nowMs, loopInfo, running } = {}) {
           drawGradient(local, distWorld, !!running, drawScale);
   drawAnchorParticles(local, nowSec, !!running, drawScale, pulseBeat, pulseBar, anchorGuideActive);
   updateHoverFx(local, drawScale);
+  if (tA) perfMark(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - tA);
 }
 
 try {

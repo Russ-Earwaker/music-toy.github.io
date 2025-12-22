@@ -1,10 +1,11 @@
-﻿// src/perf/perf-lab.js
+// src/perf/perf-lab.js
 // Perf Lab: generates stress scenes + runs scripted benchmarks + copies JSON results.
 
 import { setParticleQualityLock } from '../particles/ParticleQuality.js';
 import { start as startTransport, stop as stopTransport, isRunning } from '../audio-core.js';
+import { initBoardAnchor } from '../board-anchor.js';
 import { runBenchmark } from './PerfHarness.js';
-import { makePanZoomScript, makeOverviewSpamScript, makeOverviewOnceScript } from './PerfScripts.js';
+import { makePanZoomScript, makePanZoomCommitSpamScript, makeOverviewSpamScript, makeOverviewOnceScript, makeDrawgridRandomiseOnceScript } from './PerfScripts.js';
 import { buildParticleWorstCase } from './StressSceneParticles.js';
 import { buildChainedLoopgridStress } from './StressSceneChains.js';
 
@@ -49,7 +50,7 @@ function ensureUI() {
   }
 
   const P2 = {
-    title: 'P2 — Particles',
+    title: 'P2 � Particles',
     build: btn('buildP2', 'Build P2: Particle Worst-Case', 'primary'),
     runs: sortByLabel([
       { act: 'runP2a', label: 'Run P2a: Static (30s)' },
@@ -59,18 +60,40 @@ function ensureUI() {
   };
 
   const P3 = {
-    title: 'P3 — DrawGrid',
+    title: 'P3 � DrawGrid',
     build: btn('buildP3', 'Build P3: DrawGrid Worst-Case', 'primary'),
     runs: sortByLabel([
       { act: 'runP3a', label: 'Run P3a: Static (30s)' },
       { act: 'runP3b', label: 'Run P3b: Pan/Zoom (30s)' },
       { act: 'runP3c', label: 'Run P3c: Overview (30s)' },
       { act: 'runP3d', label: 'Run P3d: Overview Once (30s)' },
+      { act: 'runP3g', label: 'Run P3g: Pan/Zoom + Rand Once (Anchor ON)' },
+      { act: 'runP3g2', label: 'Run P3g2: Pan/Zoom + Rand Once (Anchor OFF)' },
+      { act: 'runP3h', label: 'Run P3h: Playing Pan/Zoom + Rand Once (Anchor ON, Gesture x1)' },
+      { act: 'runP3h2', label: 'Run P3h2: Playing Pan/Zoom + Rand Once (Anchor ON, Gesture x4)' },
+      { act: 'runP3i', label: 'Run P3i: Playing Pan/Zoom + Rand Once (Anchor ON, Gesture x1, Field x2)' },
+      { act: 'runP3i2', label: 'Run P3i2: Playing Pan/Zoom + Rand Once (Anchor ON, Gesture x4, Field x2)' },
+      { act: 'runP3j', label: 'Run P3j: Playing Pan/Zoom + Rand Once (Anchor ON, Freeze Off)' },
+      { act: 'runP3j2', label: 'Run P3j2: Playing Pan/Zoom + Rand Once (Anchor OFF, Freeze Off)' },
+      { act: 'runP3k', label: 'Run P3k: Anchor Only Pan/Zoom (Anchor ON)' },
+      { act: 'runP3k2', label: 'Run P3k2: Anchor Only Pan/Zoom (Anchor OFF)' },
+      { act: 'runP3l', label: 'Run P3l: Playing Pan/Zoom CommitSpam (Anchor ON)' },
+      { act: 'runP3l2', label: 'Run P3l2: Playing Pan/Zoom CommitSpam (Anchor OFF)' },
+      { act: 'runP3l3', label: 'Run P3l3: Playing Pan/Zoom CommitSpam (Delay 0)' },
+      { act: 'runP3l4', label: 'Run P3l4: Playing Pan/Zoom CommitSpam (Delay 80)' },
+      { act: 'runP3l5', label: 'Run P3l5: Playing Pan/Zoom CommitSpam (MinGap 250)' },
+      { act: 'runP3l6', label: 'Run P3l6: Playing Pan/Zoom CommitSpam (MinGap 500)' },
+      { act: 'runP3m', label: 'Run P3m: Playing Pan/Zoom + Rand Once (Anchor Gesture x1)' },
+      { act: 'runP3m2', label: 'Run P3m2: Playing Pan/Zoom + Rand Once (Anchor Gesture x4)' },
+      { act: 'runP3e',  label: 'Run P3e: Playing + Random Notes (Anchor ON)' },
+      { act: 'runP3e2', label: 'Run P3e2: Playing + Random Notes (Anchor OFF)' },
+      { act: 'runP3f',  label: 'Run P3f: Playing Pan/Zoom + Random Notes (Anchor ON)' },
+      { act: 'runP3f2', label: 'Run P3f2: Playing Pan/Zoom + Random Notes (Anchor OFF)' },
     ]),
   };
 
   const P4 = {
-    title: 'P4 — Chained Simple Rhythm (Loopgrid)',
+    title: 'P4 � Chained Simple Rhythm (Loopgrid)',
     build: [
       btn('buildP4',  'Build P4: Chained Simple Rhythm (Random)', 'primary'),
       btn('buildP4h', 'Build P4H: Chained SR (Heavy Play)', 'primary'),
@@ -80,10 +103,10 @@ function ensureUI() {
       { act: 'runP4b',  label: 'Run P4b: Playing Pan/Zoom (30s)' },
       { act: 'runP4c',  label: 'Run P4c: Playing Static (No Particle Draw)' },
       { act: 'runP4d',  label: 'Run P4d: Playing Static (No Particle Update+Draw)' },
-      { act: 'runP4e',  label: 'Run P4e: Pan/Zoom (Toy Draw ÷2)' },
+      { act: 'runP4e',  label: 'Run P4e: Pan/Zoom (Toy Draw �2)' },
       { act: 'runP4f',  label: 'Run P4f: Pan/Zoom (Freeze Unfocused)' },
-      { act: 'runP4g',  label: 'Run P4g: Pan/Zoom (Unfocused ÷2)' },
-      { act: 'runP4h2', label: 'Run P4h2: Pan/Zoom (Unfocused ÷4)' },
+      { act: 'runP4g',  label: 'Run P4g: Pan/Zoom (Unfocused �2)' },
+      { act: 'runP4h2', label: 'Run P4h2: Pan/Zoom (Unfocused �4)' },
       { act: 'runP4i',  label: 'Run P4i: Pan/Zoom (Unfocused Pulse-Only)' },
       { act: 'runP4j',  label: 'Run P4j: Pan/Zoom (Unfocused Step-Only)' },
       { act: 'runP4k',  label: 'Run P4k: Playing Pan/Zoom (No zoom-tick relayout)' },
@@ -95,12 +118,18 @@ function ensureUI() {
       { act: 'runP4r',  label: 'Run P4r: Playing Pan/Zoom (No Tap Dots)' },
       { act: 'runP4s',  label: 'Run P4s: Playing Pan/Zoom (No Overlays)' },
       { act: 'runP4t',  label: 'Run P4t: Playing Pan/Zoom (No Loopgrid Render)' },
-      { act: 'runP4u',  label: 'Run P4u: Playing Pan/Zoom (Gesture Render ÷2)' },
-      { act: 'runP4v',  label: 'Run P4v: Playing Pan/Zoom (Gesture Render ÷4)' },
-      { act: 'runP4w',  label: 'Run P4w: Playing Pan/Zoom (Gesture ÷4 + No Tap Dots)' },
-      { act: 'runP4x',  label: 'Run P4x: Pan/Zoom (Gesture ÷4 + No Tap Dots + Chain Cache)' },
+      { act: 'runP4u',  label: 'Run P4u: Playing Pan/Zoom (Gesture Render �2)' },
+      { act: 'runP4v',  label: 'Run P4v: Playing Pan/Zoom (Gesture Render �4)' },
+      { act: 'runP4w',  label: 'Run P4w: Playing Pan/Zoom (Gesture �4 + No Tap Dots)' },
+      { act: 'runP4x',  label: 'Run P4x: Pan/Zoom (Gesture �4 + No Tap Dots + Chain Cache)' },
     ]),
   };
+
+  const tests = [...P2.runs, ...P3.runs, ...P4.runs];
+  if (!window.__PERF_LAB_TESTS_LOGGED) {
+    window.__PERF_LAB_TESTS_LOGGED = true;
+    try { console.log('[perf-lab] tests:', tests.map(t => t.label)); } catch {}
+  }
 
   const sectionsHtml = [
     section(P2.title, `${P2.build}${P2.runs.map(r => btn(r.act, r.label)).join('')}`),
@@ -115,7 +144,7 @@ function ensureUI() {
           <div class="perf-lab-title">Perf Lab</div>
           <div class="perf-lab-sub">Repeatable stress tests</div>
         </div>
-        <button class="perf-lab-btn" data-act="close">✕</button>
+        <button class="perf-lab-btn" data-act="close">?</button>
       </div>
 
       <div class="perf-lab-body perf-lab-split">
@@ -251,6 +280,28 @@ function ensureUI() {
     if (act === 'runP3b') await runP3b();
     if (act === 'runP3c') await runP3c();
     if (act === 'runP3d') await runP3d();
+    if (act === 'runP3g') await runP3g();
+    if (act === 'runP3g2') await runP3g2();
+    if (act === 'runP3h') await runP3h();
+    if (act === 'runP3h2') await runP3h2();
+    if (act === 'runP3i') await runP3i();
+    if (act === 'runP3i2') await runP3i2();
+    if (act === 'runP3j') await runP3j();
+    if (act === 'runP3j2') await runP3j2();
+    if (act === 'runP3k') await runP3k();
+    if (act === 'runP3k2') await runP3k2();
+    if (act === 'runP3l') await runP3l();
+    if (act === 'runP3l2') await runP3l2();
+    if (act === 'runP3l3') await runP3l3();
+    if (act === 'runP3l4') await runP3l4();
+    if (act === 'runP3l5') await runP3l5();
+    if (act === 'runP3l6') await runP3l6();
+    if (act === 'runP3m') await runP3m();
+    if (act === 'runP3m2') await runP3m2();
+    if (act === 'runP3e') await runP3e();
+    if (act === 'runP3e2') await runP3e2();
+    if (act === 'runP3f') await runP3f();
+    if (act === 'runP3f2') await runP3f2();
     if (act === 'buildP4') buildP4();
     if (act === 'buildP4h') buildP4h();
     if (act === 'runP4a') await runP4a();
@@ -298,6 +349,7 @@ function ensureUI() {
 }
 
 let lastResult = null;
+let lastResults = [];
 
 function setStatus(s) {
   const el = document.getElementById('perf-lab-status');
@@ -326,14 +378,14 @@ function toggle() {
 }
 
 function buildP2() {
-  setStatus('Building P2â€¦');
+  setStatus('Building P2…');
   // Particles worst-case: lots of loopgrids (heavy particle fields).
   buildParticleWorstCase({ toyType: 'loopgrid', rows: 8, cols: 10, spacing: 400 });
   setStatus('P2 built');
 }
 
 function buildP3() {
-  setStatus('Building P3â€¦');
+  setStatus('Building P3…');
   // DrawGrid worst-case: lots of drawgrids for canvas-heavy stress.
   buildParticleWorstCase({ toyType: 'drawgrid', rows: 6, cols: 8, spacing: 420 });
   setStatus('P3 built');
@@ -378,11 +430,11 @@ function buildP4h() {
 }
 
 async function runVariant(label, step, statusText) {
-  setStatus(statusText || `Running ${label}â€¦`);
+  setStatus(statusText || `Running ${label}…`);
   setOutput(null);
   lastResult = null;
 
-  // Lock particle quality so FPS-driven LOD doesnâ€™t â€œsave usâ€ during the test.
+  // Lock particle quality so FPS-driven LOD doesn’t “save us” during the test.
   setParticleQualityLock('ultra');
 
   const result = await runBenchmark({
@@ -403,12 +455,25 @@ async function runVariant(label, step, statusText) {
     };
   } catch {}
   lastResult = result;
+  lastResults.push(result);
   setOutput(result);
   setStatus('Done');
   try { console.log('[PerfLab] result', result); } catch {}
 }
 
 async function runVariantPlaying(label, step, statusText) {
+  const prof = makeFrameProfiler({ slowMs: 50, maxSamples: 120 });
+  window.__PerfFrameProf = prof; // so you can dump it from console
+  const scriptStep = step;
+  const nowMs = () => (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  const profStep = (tMs, dtMs, progress) => {
+    const t0 = nowMs();
+    const s0 = nowMs();
+    try { if (scriptStep) scriptStep(tMs, dtMs, progress); } catch {}
+    prof.mark('script', nowMs() - s0);
+    const frameDt = Number.isFinite(dtMs) ? dtMs : (nowMs() - t0);
+    prof.endFrame(frameDt);
+  };
   setStatus(statusText || `Running ${label}...`);
   setOutput(null);
   lastResult = null;
@@ -431,7 +496,7 @@ async function runVariantPlaying(label, step, statusText) {
     label,
     durationMs: 30000,
     warmupMs: 1200,
-    step,
+    step: profStep,
   });
 
   try {
@@ -471,7 +536,10 @@ async function runVariantPlaying(label, step, statusText) {
     result.gestureSkipCount = window.__PERF_LOOPGRID_GESTURE_SKIP || 0;
   } catch {}
 
+  try { window.__PerfFrameProf?.dump?.(label); } catch {}
+
   lastResult = result;
+  lastResults.push(result);
   setOutput(result);
   setStatus('Done');
   try { console.log('[PerfLab] result', result); } catch {}
@@ -489,10 +557,87 @@ async function withTempPerfParticles(patch, fn) {
   }
 }
 
-async function runP2a() {
+function makeFrameProfiler({ slowMs = 50, maxSamples = 120 } = {}) {
+  const out = [];
+  return {
+    mark(name, dt) {
+      // accumulate by name for the current frame
+      const cur = (this.__cur ||= { t: performance.now(), parts: {} });
+      cur.parts[name] = (cur.parts[name] || 0) + (dt || 0);
+    },
+    endFrame(frameDt) {
+      if (!this.__cur) return;
+      const cur = this.__cur;
+      this.__cur = null;
+
+      const parts = cur.parts || {};
+      let sum = 0;
+      for (const k in parts) {
+        const v = parts[k];
+        if (Number.isFinite(v)) sum += v;
+      }
+      const unattributed = Math.max(0, frameDt - sum);
+      if (unattributed > 0) parts.unattributed = unattributed;
+
+      if (frameDt >= slowMs) {
+        out.push({ t: cur.t, frameDt, parts });
+        if (out.length > maxSamples) out.shift();
+      }
+    },
+    dump(label = 'frame-profiler') {
+      console.log(`[${label}] samples=${out.length}`, out);
+      return out;
+    },
+    reset() { out.length = 0; },
+  };
+}
+function composeSteps(...steps) {
+  return function step(tMs, dtMs, progress) {
+    for (const s of steps) {
+      try { if (typeof s === 'function') s(tMs, dtMs, progress); } catch {}
+    }
+  };
+}
+
+async function withTempAnchorDisabled(disabled, fn) {
+  const prev = window.__MT_ANCHOR_DISABLED;
+  window.__MT_ANCHOR_DISABLED = !!disabled;
+  try { initBoardAnchor(); } catch {}
+  try { return await fn(); }
+  finally {
+    window.__MT_ANCHOR_DISABLED = prev;
+    try { initBoardAnchor(); } catch {}
+  }
+}
+
+
+async function withTempAnchorEnabled(fn) {
+  let prev = null;
+  let hadPrev = false;
+  try {
+    prev = localStorage.getItem('mt_anchor_enabled');
+    hadPrev = prev !== null;
+    localStorage.setItem('mt_anchor_enabled', '1');
+  } catch {}
+  try { return await withTempAnchorDisabled(false, fn); }
+  finally {
+    try {
+      if (hadPrev) localStorage.setItem('mt_anchor_enabled', prev);
+      else localStorage.removeItem('mt_anchor_enabled');
+    } catch {}
+  }
+}
+
+async function withTempPerfAnchor(patch, fn) {
+  const st = (window.__PERF_ANCHOR = window.__PERF_ANCHOR || {});
+  const prev = { ...st };
+  Object.assign(st, patch || {});
+  try { return await fn(); }
+  finally { Object.assign(st, prev); }
+}async function runP2a() {
   // Static: no pan/zoom, no overview.
   const step = () => {};
-  await runVariant('P2a_particles_static', step, 'Running P2a (static)â€¦');
+  await runVariant('P2a_particles_static', step, 'Running P2a (static)…');
 }
 
 async function runP2b() {
@@ -507,7 +652,7 @@ async function runP2b() {
     overviewToggles: 0,
     overviewSpanMs: 0,
   });
-  await runVariant('P2b_particles_panzoom', step, 'Running P2b (pan/zoom)â€¦');
+  await runVariant('P2b_particles_panzoom', step, 'Running P2b (pan/zoom)…');
 }
 
 async function runP2c() {
@@ -517,12 +662,12 @@ async function runP2c() {
     toggles: 12,
     spanMs: 26000,
   });
-  await runVariant('P2c_particles_overview', step, 'Running P2c (overview spam)â€¦');
+  await runVariant('P2c_particles_overview', step, 'Running P2c (overview spam)…');
 }
 
 async function runP3a() {
   const step = () => {};
-  await runVariant('P3a_drawgrid_static', step, 'Running P3a (static)â€¦');
+  await runVariant('P3a_drawgrid_static', step, 'Running P3a (static)…');
 }
 
 async function runP3b() {
@@ -536,7 +681,7 @@ async function runP3b() {
     overviewToggles: 0,
     overviewSpanMs: 0,
   });
-  await runVariant('P3b_drawgrid_panzoom', step, 'Running P3b (pan/zoom)â€¦');
+  await runVariant('P3b_drawgrid_panzoom', step, 'Running P3b (pan/zoom)…');
 }
 
 async function runP3c() {
@@ -545,7 +690,7 @@ async function runP3c() {
     toggles: 12,
     spanMs: 26000,
   });
-  await runVariant('P3c_drawgrid_overview', step, 'Running P3c (overview spam)â€¦');
+  await runVariant('P3c_drawgrid_overview', step, 'Running P3c (overview spam)…');
 }
 
 async function runP3d() {
@@ -553,10 +698,489 @@ async function runP3d() {
     idleMs: 2000,
     onMs: 6000,
   });
-  await runVariant('P3d_drawgrid_overview_once', step, 'Running P3d (overview once)â€¦');
+  await runVariant('P3d_drawgrid_overview_once', step, 'Running P3d (overview once)…');
+}
+async function runP3e() {
+  const randOnce = makeDrawgridRandomiseOnceScript({ atMs: 250, seed: 1337, useSeededRandom: true });
+  const step = composeSteps(randOnce);
+  await withTempAnchorDisabled(false, async () => {
+    await runVariantPlaying(
+      'P3e_drawgrid_playing_rand_once_anchor_on',
+      step,
+      'Running P3e (playing + randomise once, anchor ON)...'
+    );
+  });
 }
 
-async function runP4a() {
+async function runP3e2() {
+  const randOnce = makeDrawgridRandomiseOnceScript({ atMs: 250, seed: 1337, useSeededRandom: true });
+  const step = composeSteps(randOnce);
+  await withTempAnchorDisabled(true, async () => {
+    await runVariantPlaying(
+      'P3e2_drawgrid_playing_rand_once_anchor_off',
+      step,
+      'Running P3e2 (playing + randomise once, anchor OFF)...'
+    );
+  });
+}
+
+async function runP3f() {
+  const panZoom = makePanZoomScript({
+    panPx: 2400,
+    zoomMin: 0.40,
+    zoomMax: 1.20,
+    idleMs: 2500,
+    panMs: 13500,
+    zoomMs: 13500,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+  });
+  const randOnce = makeDrawgridRandomiseOnceScript({ atMs: 250, seed: 1337, useSeededRandom: true });
+  const step = composeSteps(panZoom, randOnce);
+  await withTempAnchorDisabled(false, async () => {
+    await runVariantPlaying(
+      'P3f_drawgrid_playing_panzoom_rand_once_anchor_on',
+      step,
+      'Running P3f (playing pan/zoom + randomise once, anchor ON)...'
+    );
+  });
+}
+
+async function runP3f2() {
+  const panZoom = makePanZoomScript({
+    panPx: 2400,
+    zoomMin: 0.40,
+    zoomMax: 1.20,
+    idleMs: 2500,
+    panMs: 13500,
+    zoomMs: 13500,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+  });
+  const randOnce = makeDrawgridRandomiseOnceScript({ atMs: 250, seed: 1337, useSeededRandom: true });
+  const step = composeSteps(panZoom, randOnce);
+  await withTempAnchorDisabled(true, async () => {
+    await runVariantPlaying(
+      'P3f2_drawgrid_playing_panzoom_rand_once_anchor_off',
+      step,
+      'Running P3f2 (playing pan/zoom + randomise once, anchor OFF)...'
+    );
+  });
+}
+
+
+async function runP3g() {
+  const panZoom = makePanZoomScript({
+    panPx: 2400,
+    zoomMin: 0.40,
+    zoomMax: 1.20,
+    idleMs: 2500,
+    panMs: 13500,
+    zoomMs: 13500,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+  });
+  const randOnce = makeDrawgridRandomiseOnceScript({ atMs: 250, seed: 1337, useSeededRandom: true });
+  const step = composeSteps(panZoom, randOnce);
+  await withTempAnchorDisabled(false, async () => {
+    await runVariant(
+      'P3g_drawgrid_panzoom_rand_once_anchor_on',
+      step,
+      'Running P3g (pan/zoom + rand once, anchor ON)...'
+    );
+  });
+}
+
+async function runP3g2() {
+  const panZoom = makePanZoomScript({
+    panPx: 2400,
+    zoomMin: 0.40,
+    zoomMax: 1.20,
+    idleMs: 2500,
+    panMs: 13500,
+    zoomMs: 13500,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+  });
+  const randOnce = makeDrawgridRandomiseOnceScript({ atMs: 250, seed: 1337, useSeededRandom: true });
+  const step = composeSteps(panZoom, randOnce);
+  await withTempAnchorDisabled(true, async () => {
+    await runVariant(
+      'P3g2_drawgrid_panzoom_rand_once_anchor_off',
+      step,
+      'Running P3g2 (pan/zoom + rand once, anchor OFF)...'
+    );
+  });
+}
+async function runP3h() {
+  const panZoom = makePanZoomScript({
+    panPx: 2400,
+    zoomMin: 0.40,
+    zoomMax: 1.20,
+    idleMs: 2500,
+    panMs: 13500,
+    zoomMs: 13500,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+  });
+  const randOnce = makeDrawgridRandomiseOnceScript({ atMs: 250, seed: 1337, useSeededRandom: true });
+  const step = composeSteps(panZoom, randOnce);
+  await withTempAnchorDisabled(false, async () => {
+    await withTempPerfParticles({ gestureDrawModulo: 1 }, async () => {
+      await runVariantPlaying(
+        'P3h_drawgrid_playing_panzoom_rand_once_anchor_on_gesture1',
+        step,
+        'Running P3h (playing pan/zoom + rand once, anchor ON, gesture x1)...'
+      );
+    });
+  });
+}
+
+async function runP3h2() {
+  const panZoom = makePanZoomScript({
+    panPx: 2400,
+    zoomMin: 0.40,
+    zoomMax: 1.20,
+    idleMs: 2500,
+    panMs: 13500,
+    zoomMs: 13500,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+  });
+  const randOnce = makeDrawgridRandomiseOnceScript({ atMs: 250, seed: 1337, useSeededRandom: true });
+  const step = composeSteps(panZoom, randOnce);
+  await withTempAnchorDisabled(false, async () => {
+    await withTempPerfParticles({ gestureDrawModulo: 4 }, async () => {
+      await runVariantPlaying(
+        'P3h2_drawgrid_playing_panzoom_rand_once_anchor_on_gesture4',
+        step,
+        'Running P3h2 (playing pan/zoom + rand once, anchor ON, gesture x4)...'
+      );
+    });
+  });
+}
+async function runP3i() {
+  const panZoom = makePanZoomScript({
+    panPx: 2400,
+    zoomMin: 0.40,
+    zoomMax: 1.20,
+    idleMs: 2500,
+    panMs: 13500,
+    zoomMs: 13500,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+  });
+  const randOnce = makeDrawgridRandomiseOnceScript({ atMs: 250, seed: 1337, useSeededRandom: true });
+  const step = composeSteps(panZoom, randOnce);
+  await withTempAnchorDisabled(false, async () => {
+    await withTempPerfParticles({ gestureDrawModulo: 1, gestureFieldModulo: 2 }, async () => {
+      await runVariantPlaying(
+        'P3i_drawgrid_playing_panzoom_rand_once_anchor_on_gesture1_field2',
+        step,
+        'Running P3i (playing pan/zoom + rand once, anchor ON, gesture x1, field x2)...'
+      );
+    });
+  });
+}
+
+async function runP3i2() {
+  const panZoom = makePanZoomScript({
+    panPx: 2400,
+    zoomMin: 0.40,
+    zoomMax: 1.20,
+    idleMs: 2500,
+    panMs: 13500,
+    zoomMs: 13500,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+  });
+  const randOnce = makeDrawgridRandomiseOnceScript({ atMs: 250, seed: 1337, useSeededRandom: true });
+  const step = composeSteps(panZoom, randOnce);
+  await withTempAnchorDisabled(false, async () => {
+    await withTempPerfParticles({ gestureDrawModulo: 4, gestureFieldModulo: 2 }, async () => {
+      await runVariantPlaying(
+        'P3i2_drawgrid_playing_panzoom_rand_once_anchor_on_gesture4_field2',
+        step,
+        'Running P3i2 (playing pan/zoom + rand once, anchor ON, gesture x4, field x2)...'
+      );
+    });
+  });
+}
+async function runP3j() {
+  const panZoom = makePanZoomScript({
+    panPx: 2400,
+    zoomMin: 0.40,
+    zoomMax: 1.20,
+    idleMs: 2500,
+    panMs: 13500,
+    zoomMs: 13500,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+  });
+  const randOnce = makeDrawgridRandomiseOnceScript({ atMs: 250, seed: 1337, useSeededRandom: true });
+  const step = composeSteps(panZoom, randOnce);
+  await withTempAnchorDisabled(false, async () => {
+    await withTempPerfParticles({ freezeUnfocusedDuringGesture: false }, async () => {
+      await runVariantPlaying(
+        'P3j_drawgrid_playing_panzoom_rand_once_anchor_on_freezeOff',
+        step,
+        'Running P3j (playing pan/zoom + rand once, anchor ON, freeze off)...'
+      );
+    });
+  });
+}
+
+async function runP3j2() {
+  const panZoom = makePanZoomScript({
+    panPx: 2400,
+    zoomMin: 0.40,
+    zoomMax: 1.20,
+    idleMs: 2500,
+    panMs: 13500,
+    zoomMs: 13500,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+  });
+  const randOnce = makeDrawgridRandomiseOnceScript({ atMs: 250, seed: 1337, useSeededRandom: true });
+  const step = composeSteps(panZoom, randOnce);
+  await withTempAnchorDisabled(true, async () => {
+    await withTempPerfParticles({ freezeUnfocusedDuringGesture: false }, async () => {
+      await runVariantPlaying(
+        'P3j2_drawgrid_playing_panzoom_rand_once_anchor_off_freezeOff',
+        step,
+        'Running P3j2 (playing pan/zoom + rand once, anchor OFF, freeze off)...'
+      );
+    });
+  });
+}
+
+async function runP3k() {
+  const panZoom = makePanZoomScript({
+    panPx: 2400,
+    zoomMin: 0.40,
+    zoomMax: 1.20,
+    idleMs: 2500,
+    panMs: 13500,
+    zoomMs: 13500,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+  });
+  const step = composeSteps(panZoom);
+  try { buildParticleWorstCase({ toyType: 'drawgrid', rows: 0, cols: 0, spacing: 420 }); } catch {}
+  await withTempAnchorEnabled(async () => {
+    await runVariant(
+      'P3k_anchor_only_panzoom_on',
+      step,
+      'Running P3k (anchor-only pan/zoom, anchor ON)...'
+    );
+  });
+}
+
+async function runP3k2() {
+  const panZoom = makePanZoomScript({
+    panPx: 2400,
+    zoomMin: 0.40,
+    zoomMax: 1.20,
+    idleMs: 2500,
+    panMs: 13500,
+    zoomMs: 13500,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+  });
+  const step = composeSteps(panZoom);
+  try { buildParticleWorstCase({ toyType: 'drawgrid', rows: 0, cols: 0, spacing: 420 }); } catch {}
+  await withTempAnchorDisabled(true, async () => {
+    await runVariant(
+      'P3k_anchor_only_panzoom_off',
+      step,
+      'Running P3k2 (anchor-only pan/zoom, anchor OFF)...'
+    );
+  });
+}
+
+async function runP3l() {
+  const panZoom = makePanZoomCommitSpamScript({
+    panPx: 2400,
+    zoomMin: 0.40,
+    zoomMax: 1.20,
+    idleMs: 2500,
+    panMs: 13500,
+    zoomMs: 13500,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+    commitEveryMs: 250,
+  });
+  const step = composeSteps(panZoom);
+  await withTempAnchorEnabled(async () => {
+    await runVariantPlaying(
+      'P3l_drawgrid_playing_panzoom_commitspam_anchor_on',
+      step,
+      'Running P3l (playing pan/zoom commitspam, anchor ON)...'
+    );
+  });
+}
+
+async function runP3l2() {
+  const panZoom = makePanZoomCommitSpamScript({
+    panPx: 2400,
+    zoomMin: 0.40,
+    zoomMax: 1.20,
+    idleMs: 2500,
+    panMs: 13500,
+    zoomMs: 13500,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+    commitEveryMs: 250,
+  });
+  const step = composeSteps(panZoom);
+  await withTempAnchorDisabled(true, async () => {
+    await runVariantPlaying(
+      'P3l2_drawgrid_playing_panzoom_commitspam_anchor_off',
+      step,
+      'Running P3l2 (playing pan/zoom commitspam, anchor OFF)...'
+    );
+  });
+}
+
+
+async function runP3l3() {
+  const panZoom = makePanZoomCommitSpamScript({
+    panPx: 2400,
+    zoomMin: 0.40,
+    zoomMax: 1.20,
+    idleMs: 2500,
+    panMs: 13500,
+    zoomMs: 13500,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+    commitEveryMs: 250,
+    commitDelayMs: 0,
+  });
+  const step = composeSteps(panZoom);
+  await withTempAnchorEnabled(async () => {
+    await runVariantPlaying(
+      'P3l3_drawgrid_playing_panzoom_commitspam_delay0',
+      step,
+      'Running P3l3 (playing pan/zoom commitspam, delay 0)...'
+    );
+  });
+}
+
+async function runP3l4() {
+  const panZoom = makePanZoomCommitSpamScript({
+    panPx: 2400,
+    zoomMin: 0.40,
+    zoomMax: 1.20,
+    idleMs: 2500,
+    panMs: 13500,
+    zoomMs: 13500,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+    commitEveryMs: 250,
+    commitDelayMs: 80,
+  });
+  const step = composeSteps(panZoom);
+  await withTempAnchorEnabled(async () => {
+    await runVariantPlaying(
+      'P3l4_drawgrid_playing_panzoom_commitspam_delay80',
+      step,
+      'Running P3l4 (playing pan/zoom commitspam, delay 80)...'
+    );
+  });
+}
+async function runP3l5() {
+  const panZoom = makePanZoomCommitSpamScript({
+    panPx: 2400,
+    zoomMin: 0.40,
+    zoomMax: 1.20,
+    idleMs: 2500,
+    panMs: 13500,
+    zoomMs: 13500,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+    commitEveryMs: 250,
+    commitDelayMs: 80,
+    commitMinGapMs: 250,
+  });
+  const step = composeSteps(panZoom);
+  await withTempAnchorEnabled(async () => {
+    await runVariantPlaying(
+      'P3l5_drawgrid_playing_panzoom_commitspam_mingap250',
+      step,
+      'Running P3l5 (playing pan/zoom commitspam, min gap 250)...'
+    );
+  });
+}
+
+async function runP3l6() {
+  const panZoom = makePanZoomCommitSpamScript({
+    panPx: 2400,
+    zoomMin: 0.40,
+    zoomMax: 1.20,
+    idleMs: 2500,
+    panMs: 13500,
+    zoomMs: 13500,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+    commitEveryMs: 250,
+    commitDelayMs: 80,
+    commitMinGapMs: 500,
+  });
+  const step = composeSteps(panZoom);
+  await withTempAnchorEnabled(async () => {
+    await runVariantPlaying(
+      'P3l6_drawgrid_playing_panzoom_commitspam_mingap500',
+      step,
+      'Running P3l6 (playing pan/zoom commitspam, min gap 500)...'
+    );
+  });
+}async function runP3m() {
+  const panZoom = makePanZoomScript({
+    panPx: 2400,
+    zoomMin: 0.40,
+    zoomMax: 1.20,
+    idleMs: 2500,
+    panMs: 13500,
+    zoomMs: 13500,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+  });
+  const randOnce = makeDrawgridRandomiseOnceScript({ atMs: 250, seed: 1337, useSeededRandom: true });
+  const step = composeSteps(panZoom, randOnce);
+  await withTempAnchorEnabled(async () => {
+    await withTempPerfAnchor({ gestureModulo: 1 }, async () => {
+      await runVariantPlaying(
+        'P3m_anchor_gestureModulo1',
+        step,
+        'Running P3m (anchor gesture x1)...'
+      );
+    });
+  });
+}
+
+async function runP3m2() {
+  const panZoom = makePanZoomScript({
+    panPx: 2400,
+    zoomMin: 0.40,
+    zoomMax: 1.20,
+    idleMs: 2500,
+    panMs: 13500,
+    zoomMs: 13500,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+  });
+  const randOnce = makeDrawgridRandomiseOnceScript({ atMs: 250, seed: 1337, useSeededRandom: true });
+  const step = composeSteps(panZoom, randOnce);
+  await withTempAnchorEnabled(async () => {
+    await withTempPerfAnchor({ gestureModulo: 4 }, async () => {
+      await runVariantPlaying(
+        'P3m2_anchor_gestureModulo4',
+        step,
+        'Running P3m2 (anchor gesture x4)...'
+      );
+    });
+  });
+}async function runP4a() {
   const step = () => {};
   await runVariantPlaying('P4a_chain_loopgrid_playing_static', step, 'Running P4a (playing static)...');
 }
@@ -593,7 +1217,7 @@ async function runP4o() {
     await runVariantPlaying(
       'P4o_chain_loopgrid_playing_panzoom_no_pulses',
       step,
-      'Running P4o (no border pulses)â€¦'
+      'Running P4o (no border pulses)…'
     );
     console.log('[PerfLab] P4o pulseCount', window.__PERF_PULSE_COUNT, 'outlineSyncCount', window.__PERF_OUTLINE_SYNC_COUNT);
   } finally {
@@ -625,7 +1249,7 @@ async function runP4p() {
       await runVariantPlaying(
         'P4p_chain_loopgrid_playing_panzoom_audio_step_only',
         step,
-        'Running P4p (audio+sequencer only)â€¦'
+        'Running P4p (audio+sequencer only)…'
       );
     } finally {
       window.__PERF_DISABLE_LOOPGRID_RENDER = false;
@@ -754,7 +1378,7 @@ async function runP4u() {
     await runVariantPlaying(
       'P4u_chain_loopgrid_playing_panzoom_gesture_render_div2',
       step,
-      'Running P4u (gesture render Ã·2)...'
+      'Running P4u (gesture render ÷2)...'
     );
   } finally {
     window.__PERF_LOOPGRID_GESTURE_RENDER_MOD = prev;
@@ -783,7 +1407,7 @@ async function runP4v() {
     await runVariantPlaying(
       'P4v_chain_loopgrid_playing_panzoom_gesture_render_div4',
       step,
-      'Running P4v (gesture render Ã·4)...'
+      'Running P4v (gesture render ÷4)...'
     );
   } finally {
     window.__PERF_LOOPGRID_GESTURE_RENDER_MOD = prev;
@@ -814,7 +1438,7 @@ async function runP4w() {
     await runVariantPlaying(
       'P4w_chain_loopgrid_playing_panzoom_gesture_render_div4_no_tapdots',
       step,
-      'Running P4w (gesture Ã·4 + no tap dots)...'
+      'Running P4w (gesture ÷4 + no tap dots)...'
     );
   } finally {
     window.__PERF_LOOPGRID_GESTURE_RENDER_MOD = prevMod;
@@ -851,7 +1475,7 @@ async function runP4x() {
     await runVariantPlaying(
       'P4x_chain_loopgrid_playing_panzoom_gesture_div4_no_tapdots_chain_cache',
       step,
-      'Running P4x (gesture ÷4 + no tap dots + chain cache)...'
+      'Running P4x (gesture �4 + no tap dots + chain cache)...'
     );
   } finally {
     window.__PERF_LOOPGRID_GESTURE_RENDER_MOD = prevMod;
@@ -876,7 +1500,7 @@ async function runP4x() {
     await runVariantPlaying(
       'P4e_chain_loopgrid_playing_panzoom_toydraw_div2',
       step,
-      'Running P4e (pan/zoom, toy draw Ã·2)...'
+      'Running P4e (pan/zoom, toy draw ÷2)...'
     );
   });
 }
@@ -944,7 +1568,7 @@ async function runP4g() {
     await runVariantPlaying(
       'P4g_chain_loopgrid_playing_panzoom_unfocused_div2',
       step,
-      'Running P4g (unfocused Ã·2)...'
+      'Running P4g (unfocused ÷2)...'
     );
   } finally {
     window.__PERF_LOOPGRID_UNFOCUSED_MOD = 0;
@@ -968,7 +1592,7 @@ async function runP4h2() {
     await runVariantPlaying(
       'P4h2_chain_loopgrid_playing_panzoom_unfocused_div4',
       step,
-      'Running P4h2 (unfocused Ã·4)...'
+      'Running P4h2 (unfocused ÷4)...'
     );
   } finally {
     window.__PERF_LOOPGRID_UNFOCUSED_MOD = 0;
@@ -1091,7 +1715,7 @@ async function runP4n() {
     await runVariantPlaying(
       'P4n_chain_loopgrid_playing_panzoom_no_chains_dots_overlays',
       step,
-      'Running P4n (no chains/dots/overlays)â€¦'
+      'Running P4n (no chains/dots/overlays)…'
     );
   } finally {
     window.__PERF_DISABLE_LOOPGRID_RENDER = false;
@@ -1101,6 +1725,23 @@ async function runP4n() {
   }
 }
 
+
+async function runQueue(list = []) {
+  const items = Array.isArray(list) ? list : [list];
+  const results = [];
+  for (const item of items) {
+    const fn = (typeof item === 'function') ? item : window.__PerfLab?.[item];
+    if (typeof fn !== 'function') {
+      console.warn('[PerfLab] missing test', item);
+      continue;
+    }
+    try { await fn(); } catch (err) { console.warn('[PerfLab] test failed', item, err); }
+    if (lastResult) results.push(lastResult);
+  }
+  lastResults = results;
+  try { console.log('[PerfLab] queue results', results); } catch {}
+  return results;
+}
 async function copyLast() {
   if (!lastResult) {
     setStatus('No results to copy');
@@ -1126,7 +1767,10 @@ window.addEventListener('keydown', (e) => {
 });
 
 // Expose for manual console use
-try { window.__PerfLab = { show, hide, toggle, buildP2, buildP3, buildP4, buildP4h, runP2a, runP2b, runP2c, runP3a, runP3b, runP3c, runP3d, runP4a, runP4b, runP4o, runP4p, runP4q, runP4r, runP4s, runP4t, runP4u, runP4v, runP4w, runP4x, runP4e, runP4c, runP4d, runP4f, runP4g, runP4h2, runP4i, runP4j, runP4k, runP4m, runP4n }; } catch {}
+try { window.__PerfLab = { show, hide, toggle, buildP2, buildP3, buildP4, buildP4h, runP2a, runP2b, runP2c, runP3a, runP3b, runP3c, runP3d, runP3e, runP3e2, runP3f, runP3f2, runP3g, runP3g2, runP3h, runP3h2, runP3i, runP3i2, runP3j, runP3j2, runP3k, runP3k2, runP3l, runP3l2, runP3l3, runP3l4, runP3l5, runP3l6, runP3m, runP3m2, runQueue, runP4a, runP4b, runP4o, runP4p, runP4q, runP4r, runP4s, runP4t, runP4u, runP4v, runP4w, runP4x, runP4e, runP4c, runP4d, runP4f, runP4g, runP4h2, runP4i, runP4j, runP4k, runP4m, runP4n, getResults: () => lastResults, clearResults: () => { lastResults = []; } }; } catch {}
+
+
+
 
 
 

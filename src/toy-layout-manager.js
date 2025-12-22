@@ -10,9 +10,39 @@
   function manageCanvas(canvas) {
     if (!canvas || canvas.__layoutManaged) return;
     canvas.__layoutManaged = true;
+    let retryRaf = 0;
+    let resizeDeferred = false;
+    const shouldSkipResize = ()=>{
+      try { return !!window.__ZOOM_COMMIT_PHASE; } catch {}
+      return false;
+    };
+    const maybeRetry = ()=>{
+      if (retryRaf) return;
+      retryRaf = requestAnimationFrame(()=>{
+        retryRaf = 0;
+        if (!resizeDeferred) return;
+        if (shouldSkipResize()) {
+          maybeRetry();
+          return;
+        }
+        resizeDeferred = false;
+        const rect = canvas.getBoundingClientRect();
+        const newWidth = Math.round(rect.width * DPR());
+        const newHeight = Math.round(rect.height * DPR());
+        if (canvas.width !== newWidth || canvas.height !== newHeight) {
+          canvas.width = newWidth;
+          canvas.height = newHeight;
+        }
+      });
+    };
 
     const observer = new ResizeObserver(entries => {
       for (const entry of entries) {
+        if (shouldSkipResize()) {
+          resizeDeferred = true;
+          maybeRetry();
+          continue;
+        }
         const rect = entry.target.getBoundingClientRect();
         const newWidth = Math.round(rect.width * DPR());
         const newHeight = Math.round(rect.height * DPR());

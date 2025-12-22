@@ -5,7 +5,7 @@ console.log('[DG] LOADED src/drawgrid.js', 'v=' + Date.now());
 import { buildPalette, midiToName } from './note-helpers.js';
 import { drawBlock } from './toyhelpers.js';
 import { getLoopInfo, isRunning } from './audio-core.js';
-import { onZoomChange, getZoomState, getFrameStartState, onFrameStart } from './zoom/ZoomCoordinator.js';
+import { onZoomChange, getZoomState, getFrameStartState, onFrameStart, namedZoomListener } from './zoom/ZoomCoordinator.js';
 import { createParticleViewport } from './particles/particle-viewport.js';
 import { createField } from './particles/field-generic.js';
 import { getParticleBudget, getAdaptiveFrameBudget } from './particles/ParticleQuality.js';
@@ -35,6 +35,42 @@ const DG_PROFILE = false;
 // Turn on to log slow drawgrid frames (full rAF body).
 const DG_FRAME_PROFILE = false;
 const DG_FRAME_SLOW_THRESHOLD_MS = 10;
+
+let __dgFrameIdx = 0;
+let __dgLastResizeTargetW = 0;
+let __dgLastResizeTargetH = 0;
+let __dgLastResizeDpr = 0;
+
+function perfMark(dtUpdate, dtDraw) {
+  try {
+    if (Number.isFinite(dtUpdate)) window.__PerfFrameProf?.mark?.('drawgrid.update', dtUpdate);
+    if (Number.isFinite(dtDraw)) window.__PerfFrameProf?.mark?.('drawgrid.draw', dtDraw);
+  } catch {}
+}
+
+function __dgIsGesturing() {
+  try { return !!window.__GESTURE_ACTIVE; } catch {}
+  return false;
+}
+
+function __dgGestureDrawModulo() {
+  // Base modulo from perf toggles (stress harness)
+  let base = 1;
+  try {
+    const m = window?.__PERF_PARTICLES?.gestureDrawModulo;
+    if (Number.isFinite(m) && m >= 1) base = Math.floor(m);
+  } catch {}
+
+  // If we only have a couple of drawgrids visible, DO NOT throttle draw frequency.
+  // This preserves "smooth" feel for single-toy pan/zoom.
+  try {
+    const vc = window?.__DRAWGRID_GLOBAL?.visibleCount;
+    if (Number.isFinite(vc) && vc <= 2) return 1;
+  } catch {}
+
+  return base;
+}
+
 // --- Performance / LOD tuning ----------------------------------------
 
 // Below this FPS we start aggressively disabling the fancy background field.
@@ -2019,6 +2055,10 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   }
 
   function resizeSurfacesFor(nextCssW, nextCssH, nextDpr) {
+    if (!resizeSurfacesFor.__commitResizeCount && (() => { try { return !!window.__ZOOM_COMMIT_PHASE; } catch {} return false; })()) {
+      resizeSurfacesFor.__commitResizeCount = 1;
+      try { console.warn('[DG] resizeSurfacesFor during commit'); } catch {}
+    }
     const dpr = Math.max(1, Number.isFinite(nextDpr) ? nextDpr : (window.devicePixelRatio || 1));
     paintDpr = Math.max(1, Math.min(dpr, 3));
     const targetW = Math.max(1, Math.round(nextCssW * paintDpr));
@@ -2050,7 +2090,16 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     resize(tutorialBackCanvas);
     resize(frontCanvas);
     resize(backCanvas);
-    updatePaintBackingStores({ force: true, target: 'both' });
+    const dprChanged = Math.abs(paintDpr - __dgLastResizeDpr) > 0.001;
+    const sizeChanged = targetW !== __dgLastResizeTargetW || targetH !== __dgLastResizeTargetH;
+    __dgLastResizeTargetW = targetW;
+    __dgLastResizeTargetH = targetH;
+    __dgLastResizeDpr = paintDpr;
+    if (dprChanged || sizeChanged) {
+      updatePaintBackingStores({ force: true, target: 'both' });
+    } else {
+      updatePaintBackingStores({ force: false, target: 'both' });
+    }
     try { ensureBackVisualsFreshFromFront?.(); } catch {}
   }
 
@@ -2308,6 +2357,12 @@ function ensureSizeReady({ force = false } = {}) {
   const nowTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
     ? performance.now()
     : Date.now();
+  if (!force) {
+    try {
+      // Never resize surfaces during zoom commit pipeline; it causes backing-store churn.
+      if (window.__ZOOM_COMMIT_PHASE) return true;
+    } catch {}
+  }
   if (!force && __dgInCommitWindow(nowTs)) {
     return true;
   }
@@ -3394,6 +3449,9 @@ function regenerateMapFromStrokes() {
     if (zoomRAF) return;
     zoomRAF = requestAnimationFrame(() => {
       zoomRAF = 0;
+      try {
+        if (window.__ZOOM_COMMIT_PHASE) return;
+      } catch {}
       paintDpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
       pendingZoomResnap = false;
 
@@ -3465,18 +3523,19 @@ function regenerateMapFromStrokes() {
       suppressHeaderPushUntil = nowMs() + HEADER_PUSH_SUPPRESS_MS;
 
       // Let ZoomCoordinator know we're done with the freeze,
-      // but only request a heavy layout on 'commit'.
+      // but only request a heavy layout on 'done'.
       releaseZoomFreeze({
         reason: `phase-${phase}`,
-        refreshLayout: phase === 'commit',
+        refreshLayout: phase === 'done',
         zoomPayload: z
       });
 
-      if (phase === 'commit') {
-        // Only do heavy layout + field resize on real commit,
-        // not on every 'idle'/'done' transition.
+      if (phase === 'done') {
+        // Only do heavy layout + field resize once commit fully settles.
         try { layout(true); } catch {}
         try { dgField?.resize?.(); } catch {}
+        layoutSizeDirty = true;
+        ensureSizeReady({ force: true });
       }
 
       return;
@@ -3485,7 +3544,7 @@ function regenerateMapFromStrokes() {
 
   // Tag for zoom profiling readability
   handleZoom.__zcName = `drawgrid:${panel.id || 'unknown'}`;
-  const unsubscribeZoom = onZoomChange(handleZoom);
+  const unsubscribeZoom = onZoomChange(namedZoomListener('drawgrid:zoom', handleZoom));
 
   let zoomRAF = null;
 
@@ -5850,6 +5909,14 @@ function syncBackBufferSizes() {
         }
         panel.__dgFrameCamLogged = true;
       }
+      __dgFrameIdx++;
+      const gesturing = __dgIsGesturing();
+      const mod = __dgGestureDrawModulo();
+      const doFullDraw = (!gesturing) || mod <= 1 || ((__dgFrameIdx % mod) === 0);
+      let __dgUpdateStart = null;
+      if (typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf) {
+        __dgUpdateStart = performance.now();
+      }
       try {
         if (allowParticleDraw) {
           const dtMs = Number.isFinite(frameCam?.dt) ? frameCam.dt : 16.6;
@@ -5860,17 +5927,33 @@ function syncBackBufferSizes() {
         dglog('particle-field.tick:error', String((e && e.message) || e));
       }
 
+      const __dgUpdateDt = (__dgUpdateStart !== null) ? (performance.now() - __dgUpdateStart) : 0;
+
       try {
-        // Measure just the visual work for this panel: grid + nodes.
-        let __dgDrawStart = null;
-        if (DG_PROFILE && typeof performance !== 'undefined' && performance.now) {
-          __dgDrawStart = performance.now();
+        if (window.__ZOOM_COMMIT_PHASE) {
+          perfMark(__dgUpdateDt, 0);
+          rafId = requestAnimationFrame(renderLoop);
+          return;
         }
+      } catch {}
 
-        drawGrid();
-        if (currentMap) drawNodes(currentMap.nodes);
+      let __dgDrawDt = 0;
+      if (doFullDraw) {
+        try {
+          // Measure just the visual work for this panel: grid + nodes.
+          let __dgDrawStart = null;
+          let __dgDrawStartPerf = null;
+          if (typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf) {
+            __dgDrawStartPerf = performance.now();
+          }
+          if (DG_PROFILE && typeof performance !== 'undefined' && performance.now) {
+            __dgDrawStart = performance.now();
+          }
 
-        if (__dgDrawStart !== null) {
+          drawGrid();
+          if (currentMap) drawNodes(currentMap.nodes);
+
+          if (__dgDrawStart !== null) {
           const now = performance.now();
           const dt = now - __dgDrawStart;
 
@@ -5900,9 +5983,16 @@ function syncBackBufferSizes() {
             __dgFrameProfileLastLogTs = now;
           }
         }
+
+        if (__dgDrawStartPerf !== null) {
+          __dgDrawDt = performance.now() - __dgDrawStartPerf;
+        }
       } catch (e) {
         dglog('drawGrid:error', String((e && e.message) || e));
       }
+    }
+
+    perfMark(__dgUpdateDt, __dgDrawDt);
 
 
     if (__dgFrontSwapNextDraw && typeof requestFrontSwap === 'function') {

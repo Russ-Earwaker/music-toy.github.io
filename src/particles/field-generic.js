@@ -168,6 +168,12 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
   const fieldId = hashSeed(fieldLabel + ':' + (opts.seed ?? '') + ':' + (opts.debugLabel ?? '')) >>> 0;
 
   const sizeCache = { w: Math.max(1, canvas.clientWidth || canvas.width || 1), h: Math.max(1, canvas.clientHeight || canvas.height || 1), ts: 0 };
+  let __resizeDeferred = false;
+
+  function shouldSkipResize() {
+    try { return !!window.__ZOOM_COMMIT_PHASE; } catch {}
+    return false;
+  }
   const updateSizeCache = () => {
     try {
       // Avoid forced layout: read from style + attrs first; fall back to client sizes if needed.
@@ -366,6 +372,11 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
   }
 
   function resize() {
+    if (shouldSkipResize()) {
+      __resizeDeferred = true;
+      return;
+    }
+    if (__resizeDeferred) __resizeDeferred = false;
     pv?.refreshSize?.({ snap: true });
     rebuild();
   }

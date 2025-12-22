@@ -1,6 +1,6 @@
 // src/loopgrid-square-drum.js — circular pad that triggers current instrument (<=300 lines)
 import { isRunning } from './audio-core.js';
-import { onZoomChange } from './zoom/ZoomCoordinator.js';
+import { onZoomChange, namedZoomListener } from './zoom/ZoomCoordinator.js';
 
 if (window.__loopgridDrumBoot) {
   // already booted
@@ -15,7 +15,7 @@ if (window.__loopgridDrumBoot) {
     }
   };
   handleZoom.__zcName = 'loopgrid-square-drum';
-  const unsubscribeZoom = onZoomChange(handleZoom);
+  const unsubscribeZoom = onZoomChange(namedZoomListener('loopgrid-square-drum', handleZoom));
   window.addEventListener('unload', () => {
     try { unsubscribeZoom?.(); } catch {}
   }, { once: true });

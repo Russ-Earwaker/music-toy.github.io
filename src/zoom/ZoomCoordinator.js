@@ -6,13 +6,13 @@ const listeners = new Set();
 const frameStartListeners = new Set();
 
 // --- Lightweight ZoomCoordinator profiling ---
-const ZC_PROFILE = false;
+const ZC_PROFILE = true;
 try { if (typeof window !== 'undefined') window.__PERF_DEBUG = false; } catch {}
 const ZC_PERF_DEBUG = (typeof window !== 'undefined') ? !!window.__PERF_DEBUG : false;
 
 // --- Listener profiling ---
-const ZC_LISTENER_DEBUG = false;
-const ZC_LISTENER_LOG_THRESHOLD_MS = 3.0; // log listeners slower than this
+const ZC_LISTENER_DEBUG = true;
+const ZC_LISTENER_LOG_THRESHOLD_MS = 1.0; // log listeners slower than this
 
 let zcFrameCount = 0;
 let zcAccumMs = 0;
@@ -61,17 +61,31 @@ function zcSampleCommit() {
 }
 
 // --- ZoomCoordinator commit debounce ---
-const ZC_COMMIT_MIN_INTERVAL_MS = 120; // minimum gap between costly commit passes
+let ZC_COMMIT_MIN_INTERVAL_MS = 120; // minimum gap between costly commit passes
+try {
+  const v = window?.__ZC_COMMIT_MIN_INTERVAL_MS;
+  if (Number.isFinite(v)) ZC_COMMIT_MIN_INTERVAL_MS = Math.max(0, v);
+} catch {}
+
+function zcGetCommitMinInterval() {
+  let v = ZC_COMMIT_MIN_INTERVAL_MS;
+  try {
+    const w = window?.__ZC_COMMIT_MIN_INTERVAL_MS;
+    if (Number.isFinite(w)) v = Math.max(0, w);
+  } catch {}
+  return v;
+}
 let zcLastCommitTs = 0;
 
 function zcShouldEmitCommit(now) {
-  if (!ZC_PROFILE && !ZC_COMMIT_MIN_INTERVAL_MS) return true;
-  if (!ZC_COMMIT_MIN_INTERVAL_MS) return true;
+  const minGap = zcGetCommitMinInterval();
+  if (!ZC_PROFILE && !minGap) return true;
+  if (!minGap) return true;
   if (!zcLastCommitTs) {
     zcLastCommitTs = now;
     return true;
   }
-  if ((now - zcLastCommitTs) >= ZC_COMMIT_MIN_INTERVAL_MS) {
+  if ((now - zcLastCommitTs) >= minGap) {
     zcLastCommitTs = now;
     return true;
   }
@@ -128,6 +142,58 @@ const state = {
   mode: 'idle', // 'gesturing' | 'committing' | 'idle'
   isDirty: false,
 };
+
+function __zoomGestureLogEnabled() {
+  try {
+    if (window.__MT_ZOOM_GESTURE_LOG) return true;
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('mt_zoom_gesture_log') === '1') return true;
+  } catch {}
+  return false;
+}
+
+function publishGestureFlag(reason = '') {
+  try {
+    const flag = {
+      mode: state.mode,
+      active: state.mode !== 'idle',
+      phase:
+        state.mode === 'gesturing' ? 'begin' :
+        state.mode === 'committing' ? 'commit' :
+        'done',
+      reason,
+      currentScale: state.currentScale,
+      targetScale: state.targetScale,
+      targetX: state.targetX,
+      targetY: state.targetY,
+      ts: (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(),
+    };
+
+    const prev = window.__ZOOM_GESTURE_FLAG;
+    window.__ZOOM_GESTURE_FLAG = flag;
+    // Simple global for other modules that only need "are we gesturing?"
+    // (DrawGrid particle throttling, anchor throttling, etc.)
+    try { window.__GESTURE_ACTIVE = !!flag.active; } catch {}
+    try {
+      // True during the heavy multi-stage commit pipeline.
+      // Remains false during 'progress' gesturing updates.
+      window.__ZOOM_COMMIT_PHASE =
+        flag.phase === 'freeze' ||
+        flag.phase === 'recompute' ||
+        flag.phase === 'swap' ||
+        flag.phase === 'commit';
+    } catch {}
+
+    if (__zoomGestureLogEnabled()) {
+      const changed =
+        !prev ||
+        prev.mode !== flag.mode ||
+        prev.active !== flag.active ||
+        prev.phase !== flag.phase;
+
+      if (changed) console.debug('[zoom-gesture-flag][change]', flag);
+    }
+  } catch {}
+}
 
 let rafId = 0;
 let worldEl = null;
@@ -283,6 +349,7 @@ function stopProgressLoop() {
 
 export function setGestureTransform({ scale, x, y }) {
   state.mode = 'gesturing';
+  publishGestureFlag('setGestureTransform');
   state.targetScale = scale;
   state.targetX = x;
   state.targetY = y;
@@ -302,6 +369,7 @@ export function commitGesture({ scale, x, y }, { delayMs = 80 } = {}) {
 
   stopProgressLoop();
   state.mode = 'committing';
+  publishGestureFlag('commitGesture');
   // Keep target == last gesture values (assumed already set via setGestureTransform)
   // but mark dirty so we reapply exact transform (no rounding drift).
   state.isDirty = true;
@@ -337,11 +405,15 @@ export function commitGesture({ scale, x, y }, { delayMs = 80 } = {}) {
 
         if (id !== atomicCommitId) return;
         state.mode = 'idle';
+        publishGestureFlag('commitDone');
         document.documentElement.classList.remove('zoom-commit-freeze');
         // Final "committed" notification (single post-commit redraw if anyone needs it)
         const payload = { ...state, committed: true, phase: 'done' };
-        emitZoom(payload);
-        try { publishFrameStart(); } catch {}
+        const suppressDone = (() => { try { return !!window.__ZC_SUPPRESS_DONE_NOTIFY; } catch {} return false; })();
+        if (!suppressDone) {
+          emitZoom(payload);
+          try { publishFrameStart(); } catch {}
+        }
         // (removed) overlay:instant-once was causing post-commit snaps
         // console.debug('[zoom][commit] done (no overlay snaps)');
 
@@ -357,6 +429,17 @@ export function commitGesture({ scale, x, y }, { delayMs = 80 } = {}) {
 export function onZoomChange(fn) {
   listeners.add(fn);
   return () => listeners.delete(fn);
+}
+
+export function namedZoomListener(name, fn) {
+  if (typeof fn !== 'function') return fn;
+  try { fn.__zcName = String(name || fn.name || 'zoom-listener'); } catch {}
+  return fn;
+}
+
+export function zcIsCommitPhase(p) {
+  const ph = p?.phase;
+  return ph === 'freeze' || ph === 'recompute' || ph === 'swap' || ph === 'done' || ph === 'commit';
 }
 
 export function getZoomState() {

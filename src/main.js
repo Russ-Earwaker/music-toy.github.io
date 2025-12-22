@@ -6,7 +6,7 @@ import './scene-manager.js';
 import './perf/perf-lab.js';
 import './advanced-controls-toggle.js';
 import './toy-visibility.js';
-import { onZoomChange } from './zoom/ZoomCoordinator.js';
+import { onZoomChange, namedZoomListener } from './zoom/ZoomCoordinator.js';
 import { initializeBouncer } from './bouncer-init.js';
 import './header-buttons-delegate.js';
 import './rippler-init.js';
@@ -53,7 +53,7 @@ window.addEventListener('touchstart', ()=>{}, { capture: true, passive: false })
 // Track zoom gesture state globally so visual systems can throttle without affecting audio timing.
 (function setupZoomGestureFlag(){
   try {
-    onZoomChange((payload = {}) => {
+    onZoomChange(namedZoomListener('main:gesture-flag', (payload = {}) => {
       const { phase, gesturing, mode } = payload;
       const active =
         !!gesturing ||
@@ -67,7 +67,7 @@ window.addEventListener('touchstart', ()=>{}, { capture: true, passive: false })
       } else if (phase === 'done' || phase === 'commit' || phase === 'swap' || phase === 'idle' || mode === 'idle') {
         window.__mtZoomGesturing = false;
       }
-    });
+    }));
   } catch {}
 })();
 
@@ -2818,7 +2818,7 @@ function scheduleChainRedraw() {
       scheduleChainRedraw();
     };
     handler.__zcName = 'chain-viewport-sync';
-    onZoomChange(handler);
+    onZoomChange(namedZoomListener('main:zoom-handler', handler));
   } catch (err) {
     if (CHAIN_DEBUG) {
       console.warn('[CHAIN] viewport sync init failed', err);

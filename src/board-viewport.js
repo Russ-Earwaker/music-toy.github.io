@@ -7,6 +7,7 @@ import {
   commitGesture,
   getZoomState,
   onZoomChange,
+  namedZoomListener,
   getTransformOrder,
 } from './zoom/ZoomCoordinator.js';
 import { WheelZoomLerper } from './zoom/WheelZoomLerper.js';
@@ -37,6 +38,7 @@ function profileReflow(tag, fn) {
 
 let __stageRectCache = null;
 let __stageRectCacheTs = 0;
+let __bvLastPersistTs = 0;
 
 let __liveViewportTransform = { scale: 1, tx: 0, ty: 0 };
 export function getViewportTransform() {
@@ -301,6 +303,9 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
     const zooming = !!window.__mtZoomGesturing;
     const fresh = stageRectCache && (now - stageRectCacheTs) < 200;
+    try {
+      if (window.__ZOOM_COMMIT_PHASE && stageRectCache) return stageRectCache;
+    } catch {}
     if (zooming && fresh) return stageRectCache;
     const rect = profileReflow('layoutOffset:getBoundingClientRect', () => stage.getBoundingClientRect());
     stageRectCache = rect;
@@ -535,7 +540,8 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
       return;
     }
 
-    const isCommitLike = z.committed || phase === 'commit' || phase === 'done';
+    const isDone = phase === 'done' || z.committed === true;
+    const isCommitLike = isDone || phase === 'commit';
     if (!isCommitLike) {
       return;
     }
@@ -544,10 +550,20 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     scale = currentScale;
     x = currentX;
     y = currentY;
-    stageRectCache = null;
-    stageRectCacheTs = 0;
-    persist();
-    scheduleNotify({ ...z });
+    if (isDone) {
+      stageRectCache = null;
+      stageRectCacheTs = 0;
+    }
+    if (isDone) {
+      const now = (typeof performance !== 'undefined' && performance.now)
+        ? performance.now()
+        : Date.now();
+      if (now - __bvLastPersistTs > 250) {
+        __bvLastPersistTs = now;
+        persist();
+      }
+      scheduleNotify({ ...z });
+    }
 
     if (overviewButtonGate || isOverviewButtonPending() || camTweenLock) {
       ovDbg('handleZoom (commit)', {
@@ -562,10 +578,10 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
         mtZoomGesturing: !!window.__mtZoomGesturing,
       });
     }
-    maybeUpdateOverview(scaleForState, { phase, mode, path: 'commit' });
+    maybeUpdateOverview(scaleForState, { phase, mode, path: isDone ? 'done' : 'commit' });
   };
   handleZoom.__zcName = 'board-viewport';
-  onZoomChange(handleZoom);
+  onZoomChange(namedZoomListener('board-viewport', handleZoom));
 
   const lerper = new WheelZoomLerper((nextScale, nextX, nextY) => {
     applyTransform({ scale: nextScale, x: nextX, y: nextY });

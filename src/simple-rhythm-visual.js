@@ -9,7 +9,7 @@ import { createParticleViewport } from './particles/particle-viewport.js';
 import { getParticleBudget, getAdaptiveFrameBudget } from './particles/ParticleQuality.js';
 import { resizeCanvasForDPR } from './utils.js';
 import { overviewMode } from './overview-mode.js';
-import { onZoomChange } from './zoom/ZoomCoordinator.js';
+import { onZoomChange, namedZoomListener } from './zoom/ZoomCoordinator.js';
 
 // --- sizing helpers ---------------------------------------------------------
 function raf() {
@@ -535,7 +535,7 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
           }
         };
         zoomHandler.__zcName = 'simple-rhythm-visual';
-        zoomUnsubscribe = onZoomChange(zoomHandler);
+        zoomUnsubscribe = onZoomChange(namedZoomListener('simple-rhythm-visual', zoomHandler));
       }
     } catch (err) {
       console.warn('[loopgrid] particle field init failed', err);
