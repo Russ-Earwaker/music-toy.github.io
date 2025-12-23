@@ -14,22 +14,22 @@ RP4_KICK_1.mp3,percussion,drum,short note,Kick drum,,KICK DRUM,,,Drum and Bass,l
 c-bass guitar- slap.wav,string,bass guitar,short note,Slap Bass Guitar,,SLAP BASS GUITAR,,,Drum and Bass; Acoustic,bouncer
 c-bass guitar-pickmuted.wav,string,bass guitar,short note,Muted Bass Guitar,,MUTED BASS GUITAR,,,Drum and Bass; Acoustic,bouncer
 c-kalimba.wav,percussion,kalimba,short note,Kalimba,,KALIMBA,,,World,rippler
-c-nylon-guitar.wav,string,guitar,short note,Guitar,,GUITAR,,,Acoustic,chordwheel
+c-nylon-guitar.wav,string,guitar,short note,Guitar (Nylon String),,GUITAR NYLON,,3,Acoustic,chordwheel
 c-old-piano.wav,piano,piano,short note,Old Timey Piano,,OLD TIMEY PIANO,,,Acoustic,drawgrid
 c-solid-tone.wav,synth,solid tone,loop,Solid Tone,,SOLID TONE,,,Default,loopgrid
 C-xylophone.wav,percussion,xylophone,short note,Xylophone,,XYLOPHONE,,,World,bouncer
 marimba_c.wav,percussion,marimba,short note,Marimba,,MARIMBA,,,World,bouncer
 toyPiano_c.wav,piano,piano,short note,Toy Piano,,TOY PIANO,,5,World; Acoustic,drawgrid
 uke_c.wav,string,ukulele,short note,Ukulele,,UKULELE,,,Acoustic,chordwheel
-djembe_bass.wav,percussion,djembe,short note,Djembe Bass,,DJEMBE BASS,,,World,bouncer
+djembe_bass.wav,percussion,djembe,short note,Djembe Bass,,DJEMBE BASS,,3,World,bouncer
 djembe_tone.wav,percussion,djembe,short note,Djembe Tone,,DJEMBE TONE,,,World,bouncer
 djembe_slap.wav,percussion,djembe,short note,Djembe Slap,,DJEMBE SLAP,,,World,bouncer
 guitar_acoustic_c.wav,string,guitar,short note,Acoustic Guitar,,ACOUSTIC GUITAR,,3,Acoustic,chordwheel
 cowbell.wav,percussion,cowbell,short note,Cowbell,,COWBELL,,,Drum and Bass,loopgrid-drum
-BassTone1.wav,percussion,bass tone,short note,Bass Tone 1,,BASS TONE 1,,,Drum and Bass,loopgrid-drum
-BassTone2.wav,percussion,bass tone,short note,Bass Tone 2,,BASS TONE 2,,,Drum and Bass,loopgrid-drum
-BassTone3.wav,percussion,bass tone,short note,Bass Tone 3,,BASS TONE 3,,,Drum and Bass,loopgrid-drum
-BassTone4.wav,percussion,bass tone,short note,Bass Tone 4,,BASS TONE 4,,,Drum and Bass,loopgrid-drum
+BassTone1.wav,percussion,bass tone,short note,Bass Tone 1,,BASS TONE 1,,3,Drum and Bass,loopgrid-drum
+BassTone2.wav,percussion,bass tone,short note,Bass Tone 2,,BASS TONE 2,,3,Drum and Bass,loopgrid-drum
+BassTone3.wav,percussion,bass tone,short note,Bass Tone 3,,BASS TONE 3,,3,Drum and Bass,loopgrid-drum
+BassTone4.wav,percussion,bass tone,short note,Bass Tone 4,,BASS TONE 4,,3,Drum and Bass,loopgrid-drum
 Accordian.wav,wind,accordian,short note,Accordian,,ACCORDIAN,,,World,rippler
 AcousticGuitar2.mp3,string,guitar,short note,Acoustic Guitar 2,,ACOUSTIC GUITAR 2,,,Acoustic,chordwheel
 clapElectro.mp3,percussion,clap,short note,Hand clap (electro),,HAND CLAP (ELECTRO),,,Gaming; Drum and Bass,loopgrid-drum
@@ -41,7 +41,7 @@ PanFlute.mp3,wind,panflute,short note,Panflute,,PANFLUTE,,,World,rippler
 RetroGaming.mp3,synth,bling,short note,Gaming Bling,,GAMING BLING,,,Gaming,loopgrid
 stylophone1.wav,synth,stylophone,short note,Stylophone 1,,STYLOPHONE1,,,Gaming,loopgrid
 stylophone2.wav,synth,stylophone,short note,Stylophone 2,,STYLOPHONE2,,,Gaming,loopgrid
-bell-ring_E_minor.wav,percussion,bell,short note,Bell,,BELL,,,Acoustic,bouncer
+bell_ring_C.wav,percussion,bell,short note,Bell,,BELL,,5,Acoustic,bouncer
 ,,,,,,,,,,
 ,,,,,,,,,,
 ,,,,,,,,,,
@@ -58,4 +58,3 @@ bell-ring_E_minor.wav,percussion,bell,short note,Bell,,BELL,,,Acoustic,bouncer
 ,synth,synth,sustain,Windy,windy,WINDY,,,Default,loopgrid
 ,synth,synth,short note,Alien,alien,ALIEN,,,Gaming,loopgrid
 ,synth,synth,short note,Organish,organish,ORGANISH,,,Default,loopgrid
-,synth,synth,short note,Droplet,droplet,DROPLET,,,Default,loopgrid

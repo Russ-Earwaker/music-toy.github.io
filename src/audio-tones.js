@@ -64,50 +64,152 @@ function playWindyAt(freq, when, dest){
   try{ registerActiveNode(n); }catch{}
 }
 function playAlienAt(freq, when, dest){
-  const acx=ensureAudioContext(), t0=when;
-  const base = noteToFreq('C4');
+  const acx = ensureAudioContext();
+  const t0 = when;
 
-  const car=acx.createOscillator();
-  const mod=acx.createOscillator();
-  const mg=acx.createGain();
-  const vib=acx.createOscillator();
-  const vibGain=acx.createGain();
-  const trem=acx.createOscillator();
-  const tremGain=acx.createGain();
-  const amp=acx.createGain();
-  const filter=acx.createBiquadFilter();
+  // Respect incoming freq (fallback to C4 if missing)
+  const base = (Number.isFinite(freq) && freq > 0) ? freq : noteToFreq('C4');
 
-  car.type='sawtooth';
-  car.frequency.setValueAtTime(base, t0);
+  // --- Core voice: 2 oscillators + gentle FM ---
+  const oscA = acx.createOscillator(); // bright body
+  const oscB = acx.createOscillator(); // hollow ghost
+  const mod  = acx.createOscillator(); // FM modulator
+  const modG = acx.createGain();
 
-  mod.type='sine';
-  mod.frequency.setValueAtTime(base*2.15, t0);
-  mg.gain.setValueAtTime(base*0.6, t0);
-  mod.connect(mg).connect(car.frequency);
+  oscA.type = 'sawtooth';
+  oscB.type = 'triangle';
+  mod.type  = 'sine';
 
-  vib.type='sine';
-  vib.frequency.setValueAtTime(4.5, t0);
-  vibGain.gain.setValueAtTime(8, t0);
-  vib.connect(vibGain).connect(car.detune);
+  // Base pitch + slight detune for character
+  oscA.frequency.setValueAtTime(base, t0);
+  oscB.frequency.setValueAtTime(base * Math.pow(2, 18/1200), t0);
 
-  trem.type='sine';
-  trem.frequency.setValueAtTime(7.5, t0);
-  tremGain.gain.setValueAtTime(0.35, t0);
-  trem.connect(tremGain).connect(amp.gain);
-  amp.gain.setValueAtTime(0.7, t0);
+  // FM: subtle "alien throat" wobble (not harsh)
+  mod.frequency.setValueAtTime(28, t0);
+  mod.frequency.exponentialRampToValueAtTime(12, t0 + 0.9);
+  modG.gain.setValueAtTime(base * 0.018, t0);     // depth
+  modG.gain.exponentialRampToValueAtTime(base * 0.028, t0 + 0.35);
+  modG.gain.exponentialRampToValueAtTime(base * 0.010, t0 + 1.4);
 
-  filter.type='bandpass';
-  filter.Q.value=8;
-  filter.frequency.setValueAtTime(base*1.1, t0);
-  filter.frequency.exponentialRampToValueAtTime(base*2.4, t0+0.55);
-  filter.frequency.exponentialRampToValueAtTime(base*0.95, t0+1.0);
+  mod.connect(modG);
+  modG.connect(oscA.frequency);
+  modG.connect(oscB.frequency);
 
-  const g=envGain(acx,t0,[{t:0,v:0.0001},{t:0.04,v:0.22},{t:0.7,v:0.12},{t:1.05,v:0.0008}]);
-  car.connect(filter).connect(amp).connect(g).connect(dest||acx.destination);
+  // --- Pitch vibrato (wobbley but toy-friendly) ---
+  const vib = acx.createOscillator();
+  const vibG = acx.createGain();
+  vib.type = 'sine';
+  // Slightly slower wobble reads more "wobbley", less "nervous"
+  vib.frequency.setValueAtTime(2.2, t0);
+  vib.frequency.exponentialRampToValueAtTime(3.0, t0 + 0.7);
+  vib.frequency.exponentialRampToValueAtTime(2.0, t0 + 1.6);
 
-  mod.start(t0); car.start(t0); vib.start(t0); trem.start(t0);
-  mod.stop(t0+1.1); car.stop(t0+1.1); vib.stop(t0+1.1); trem.stop(t0+1.1);
-  try{ registerActiveNode(mod); registerActiveNode(car); registerActiveNode(vib); registerActiveNode(trem); }catch{}
+  // Bigger cents depth so it's clearly audible
+  const vibHz = base * Math.log(2) * (48 / 1200); // ~48 cents
+  vibG.gain.setValueAtTime(vibHz, t0);
+  vib.connect(vibG);
+  vibG.connect(oscA.frequency);
+  vibG.connect(oscB.frequency);
+
+  // --- “Mouth” / formant filtering for alien-voice character ---
+  const formant = acx.createBiquadFilter();
+  const lp      = acx.createBiquadFilter();
+
+  formant.type = 'bandpass';
+  formant.Q.setValueAtTime(12, t0);
+  formant.frequency.setValueAtTime(base * 2.2, t0); // vowel-ish region
+  formant.frequency.exponentialRampToValueAtTime(base * 4.6, t0 + 0.55);
+  formant.frequency.exponentialRampToValueAtTime(base * 1.8, t0 + 1.45);
+
+  lp.type = 'lowpass';
+  lp.Q.setValueAtTime(0.7, t0);
+  lp.frequency.setValueAtTime(Math.min(2200, base * 7.5), t0);
+  lp.frequency.exponentialRampToValueAtTime(Math.min(1600, base * 5.5), t0 + 0.6);
+  lp.frequency.exponentialRampToValueAtTime(Math.min(2000, base * 6.5), t0 + 1.6);
+
+  // Slow formant motion for “alive” feeling
+  const mouth = acx.createOscillator();
+  const mouthG = acx.createGain();
+  mouth.type = 'sine';
+  mouth.frequency.setValueAtTime(0.18, t0);
+  mouthG.gain.setValueAtTime(180, t0);
+  mouth.connect(mouthG);
+  mouthG.connect(formant.frequency);
+
+  // --- Amp + gentle tremolo for spooky flutter ---
+  const amp = acx.createGain();
+  amp.gain.setValueAtTime(1.25, t0);
+
+  const trem = acx.createOscillator();
+  const tremG = acx.createGain();
+  trem.type = 'sine';
+  trem.frequency.setValueAtTime(0.9, t0);
+  tremG.gain.setValueAtTime(0.06, t0);
+  trem.connect(tremG);
+  tremG.connect(amp.gain);
+
+  // --- Spooky tail: feedback delay (small, fun, not a mess) ---
+  const dry = acx.createGain();
+  const wet = acx.createGain();
+  const mix = acx.createGain();
+
+  const delay = acx.createDelay(1.0);
+  const fb    = acx.createGain();
+
+  delay.delayTime.setValueAtTime(0.23, t0);
+  fb.gain.setValueAtTime(0.62, t0);
+
+  // Wet/dry
+  dry.gain.setValueAtTime(0.74, t0);
+  wet.gain.setValueAtTime(0.26, t0);
+
+  // --- Envelope (longer, more character) ---
+  // Longer note with clear "arrival" and spooky decay
+  const g = envGain(acx, t0, [
+    {t:0.00, v:0.0001},
+    {t:0.05, v:0.48},
+    {t:0.35, v:0.36},
+    {t:1.05, v:0.26},
+    {t:1.70, v:0.0010}
+  ]);
+
+  // Routing
+  // oscA+oscB -> formant -> lp -> amp -> split dry/wet -> mix -> env -> dest
+  oscA.connect(formant);
+  oscB.connect(formant);
+
+  formant.connect(lp);
+  lp.connect(amp);
+
+  amp.connect(dry);
+  amp.connect(delay);
+
+  delay.connect(wet);
+  delay.connect(fb);
+  fb.connect(delay);
+
+  dry.connect(mix);
+  wet.connect(mix);
+
+  mix.connect(g).connect(dest || acx.destination);
+
+  // Start/stop
+  const tEnd = t0 + 1.75;
+
+  mod.start(t0); vib.start(t0); mouth.start(t0); trem.start(t0);
+  oscA.start(t0); oscB.start(t0);
+
+  mod.stop(tEnd); vib.stop(tEnd); mouth.stop(tEnd); trem.stop(tEnd);
+  oscA.stop(tEnd); oscB.stop(tEnd);
+
+  try{
+    registerActiveNode(mod);
+    registerActiveNode(vib);
+    registerActiveNode(mouth);
+    registerActiveNode(trem);
+    registerActiveNode(oscA);
+    registerActiveNode(oscB);
+  }catch{}
 }
 function playOrganishAt(freq, when, dest){
   const acx=ensureAudioContext(), t0=when; const g=envGain(acx,t0,[{t:0,v:0.0001},{t:0.02,v:0.22},{t:0.40,v:0.0008}]);
