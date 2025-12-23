@@ -74,8 +74,22 @@ function resolveOctaveForToy(noteName, toyId, options = {}, instrumentId = ''){
     }
   }
   if (!pitchShiftEnabled) {
-    const baseNote = options?.baseNote || entries.get(normId(instrumentId))?.baseNote;
-    return baseNote || noteName;
+    const entry = entries.get(normId(instrumentId));
+    if (entry && entry.baseNote) {
+      const m = /(-?\d+)/.exec(String(entry.baseNote));
+      if (m) {
+        const baseOct = parseInt(m[1], 10);
+        if (Number.isFinite(baseOct)) {
+          const raw = String(noteName ?? '').trim();
+          const match = /^([A-G]#?)(-?\d+)$/i.exec(raw);
+          if (match) {
+            return `${match[1].toUpperCase()}${baseOct}`;
+          }
+        }
+      }
+      return entry.baseNote;
+    }
+    return noteName;
   }
   if (Number.isFinite(options.octave)) {
     octave = options.octave;

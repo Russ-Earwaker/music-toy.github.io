@@ -75,22 +75,7 @@ function makeFilterSection(title){
 }
 
 function getOctaveBounds(){
-  let min = Infinity;
-  let max = -Infinity;
-  if (Array.isArray(noteList)) {
-    for (const note of noteList) {
-      const m = /(-?\d+)/.exec(String(note || ''));
-      if (!m) continue;
-      const v = parseInt(m[1], 10);
-      if (!Number.isFinite(v)) continue;
-      min = Math.min(min, v);
-      max = Math.max(max, v);
-    }
-  }
-  if (!Number.isFinite(min) || !Number.isFinite(max)) {
-    return { min: 0, max: 8 };
-  }
-  return { min, max };
+  return { min: 2, max: 6 };
 }
 
 function parseOctaveFromNote(note){
@@ -143,7 +128,7 @@ export async function openInstrumentPicker({ panel, toyId }){
   const clampOctave = (value)=> Math.max(octaveBounds.min, Math.min(octaveBounds.max, value));
   const dsOctave = parseInt(panel?.dataset?.instrumentOctave || '', 10);
   const dsNoteOctave = parseOctaveFromNote(panel?.dataset?.instrumentNote);
-  let selectedOctave = clampOctave(Number.isFinite(dsOctave) ? dsOctave : (Number.isFinite(dsNoteOctave) ? dsNoteOctave : 4));
+  let selectedOctave = clampOctave(Number.isFinite(dsOctave) ? dsOctave : (Number.isFinite(dsNoteOctave) ? dsNoteOctave : 3));
 
   // Build filter lists
   const tgtId = String(toyId || panel?.dataset?.toy || panel?.dataset?.toyid || panel?.id || 'master').toLowerCase();
@@ -194,7 +179,7 @@ export async function openInstrumentPicker({ panel, toyId }){
   };
   const previewNoteForInstrument = (id)=>{
     if (pitchShiftEnabled) return noteForOctave();
-    return baseNoteForInstrument(id) || 'C4';
+    return baseNoteForInstrument(id) || 'C3';
   };
   const updateOctaveUI = ()=>{
     octValue.textContent = `Octave ${selectedOctave}`;
