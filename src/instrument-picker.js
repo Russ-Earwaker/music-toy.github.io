@@ -2,7 +2,8 @@
 // Full-screen instrument picker overlay with categories and preview.
 
 import { loadInstrumentEntries } from './instrument-catalog.js';
-import { ensureAudioContext, setToyVolume, getToyVolume } from './audio-core.js';
+import { resumeAudioContextIfNeeded, setToyVolume, getToyVolume } from './audio-core.js';
+import { noteList } from './utils.js';
 import { triggerInstrument } from './audio-samples.js';
 
 function el(tag, cls, text){ const e=document.createElement(tag); if(cls) e.className=cls; if(text) e.textContent=text; return e; }
@@ -73,6 +74,32 @@ function makeFilterSection(title){
   return { wrap, buttons };
 }
 
+function getOctaveBounds(){
+  let min = Infinity;
+  let max = -Infinity;
+  if (Array.isArray(noteList)) {
+    for (const note of noteList) {
+      const m = /(-?\d+)/.exec(String(note || ''));
+      if (!m) continue;
+      const v = parseInt(m[1], 10);
+      if (!Number.isFinite(v)) continue;
+      min = Math.min(min, v);
+      max = Math.max(max, v);
+    }
+  }
+  if (!Number.isFinite(min) || !Number.isFinite(max)) {
+    return { min: 0, max: 8 };
+  }
+  return { min, max };
+}
+
+function parseOctaveFromNote(note){
+  const m = /(-?\d+)/.exec(String(note || ''));
+  if (!m) return null;
+  const v = parseInt(m[1], 10);
+  return Number.isFinite(v) ? v : null;
+}
+
 export async function openInstrumentPicker({ panel, toyId }){
   const ov = buildOverlay();
   const host = ov.querySelector('.inst-host');
@@ -94,8 +121,29 @@ export async function openInstrumentPicker({ panel, toyId }){
     const synth = String(entry.synth || '').trim();
     return synth ? synth.toLowerCase().replace(/_/g, '-') : '';
   };
+  const baseNoteByKey = new Map();
+  const baseNoteByNorm = new Map();
+  const getOctaveFromNote = (note)=>{
+    const m = /(-?\d+)/.exec(String(note || ''));
+    if (!m) return null;
+    const v = parseInt(m[1], 10);
+    return Number.isFinite(v) ? v : null;
+  };
+  entries.forEach((entry)=>{
+    const key = getEntryKey(entry);
+    const baseNote = entry && entry.baseNote ? String(entry.baseNote).trim() : '';
+    if (key && baseNote) {
+      baseNoteByKey.set(key, baseNote);
+      baseNoteByNorm.set(normalizeId(key), baseNote);
+    }
+  });
   const current = String(panel?.dataset?.instrument || '').trim();
   let selected = current || '';
+  const octaveBounds = getOctaveBounds();
+  const clampOctave = (value)=> Math.max(octaveBounds.min, Math.min(octaveBounds.max, value));
+  const dsOctave = parseInt(panel?.dataset?.instrumentOctave || '', 10);
+  const dsNoteOctave = parseOctaveFromNote(panel?.dataset?.instrumentNote);
+  let selectedOctave = clampOctave(Number.isFinite(dsOctave) ? dsOctave : (Number.isFinite(dsNoteOctave) ? dsNoteOctave : 4));
 
   // Build filter lists
   const tgtId = String(toyId || panel?.dataset?.toy || panel?.dataset?.toyid || panel?.id || 'master').toLowerCase();
@@ -115,7 +163,63 @@ export async function openInstrumentPicker({ panel, toyId }){
   const themeSection = makeFilterSection('Theme');
   const typeSection = makeFilterSection('Instrument Type');
   filters.innerHTML = '';
-  filters.append(themeSection.wrap, typeSection.wrap);
+  const octaveSection = el('div','inst-octave-section');
+  const octaveTitle = el('div','inst-filter-title','Pitch Shifting');
+  octaveTitle.style.fontWeight = '600';
+  octaveTitle.style.marginBottom = '6px';
+  const pitchRow = el('div','inst-pitch-row');
+  const pitchLabel = el('div','inst-pitch-label','Pitch shifting');
+  const octaveControls = el('div','options-leadin-count inst-octave-controls');
+  const octDown = el('button','options-step-btn inst-octave-step','-');
+  octDown.type = 'button';
+  octDown.setAttribute('aria-label', 'Decrease octave');
+  const octValue = el('div','options-leadin-value inst-octave-value','');
+  const octUp = el('button','options-step-btn inst-octave-step','+');
+  octUp.type = 'button';
+  octUp.setAttribute('aria-label', 'Increase octave');
+  octaveControls.append(octDown, octValue, octUp);
+  const pitchToggle = el('button','menu-inline-btn options-toggle-btn inst-pitch-toggle', 'Off');
+  pitchToggle.type = 'button';
+  pitchToggle.setAttribute('aria-pressed', 'false');
+  pitchRow.append(pitchLabel, pitchToggle);
+  octaveSection.append(octaveTitle, pitchRow, octaveControls);
+  filters.append(octaveSection, themeSection.wrap, typeSection.wrap);
+
+  const dsPitchShift = String(panel?.dataset?.instrumentPitchShift || '').toLowerCase();
+  let pitchShiftEnabled = (dsPitchShift === '1' || dsPitchShift === 'true');
+  const noteForOctave = ()=> `C${selectedOctave}`;
+  const baseNoteForInstrument = (id)=>{
+    if (!id) return '';
+    return baseNoteByKey.get(id) || baseNoteByNorm.get(normalizeId(id)) || '';
+  };
+  const previewNoteForInstrument = (id)=>{
+    if (pitchShiftEnabled) return noteForOctave();
+    return baseNoteForInstrument(id) || 'C4';
+  };
+  const updateOctaveUI = ()=>{
+    octValue.textContent = `Octave ${selectedOctave}`;
+    octDown.disabled = selectedOctave <= octaveBounds.min;
+    octUp.disabled = selectedOctave >= octaveBounds.max;
+    pitchToggle.setAttribute('aria-pressed', pitchShiftEnabled ? 'true' : 'false');
+    pitchToggle.textContent = pitchShiftEnabled ? 'On' : 'Off';
+    pitchToggle.classList.toggle('is-on', pitchShiftEnabled);
+    pitchToggle.classList.toggle('is-off', !pitchShiftEnabled);
+    octaveControls.style.display = pitchShiftEnabled ? 'inline-flex' : 'none';
+  };
+  updateOctaveUI();
+  octDown.onclick = ()=>{ selectedOctave = clampOctave(selectedOctave - 1); updateOctaveUI(); };
+  octUp.onclick = ()=>{ selectedOctave = clampOctave(selectedOctave + 1); updateOctaveUI(); };
+  pitchToggle.onclick = ()=>{
+    const next = !pitchShiftEnabled;
+    pitchShiftEnabled = next;
+    if (pitchShiftEnabled) {
+      const refId = selected || current || '';
+      const baseNote = baseNoteForInstrument(refId);
+      const baseOct = getOctaveFromNote(baseNote);
+      if (Number.isFinite(baseOct)) selectedOctave = clampOctave(baseOct);
+    }
+    updateOctaveUI();
+  };
 
   function highlight(btn){
     grid.querySelectorAll('.inst-item.selected').forEach(n=>{
@@ -214,7 +318,16 @@ export async function openInstrumentPicker({ panel, toyId }){
         ev.stopPropagation();
         b.classList.add('tapping'); setTimeout(()=> b.classList.remove('tapping'), 120);
         b.classList.add('flash'); setTimeout(()=> b.classList.remove('flash'), 180);
-        try{ ensureAudioContext(); triggerInstrument(b.dataset.value, 'C4', undefined, tgtId); }catch{}
+        try{
+          const resume = resumeAudioContextIfNeeded();
+          const noteForPreview = previewNoteForInstrument(b.dataset.value);
+          const previewOptions = { octave: selectedOctave, pitchShift: pitchShiftEnabled };
+          if (resume && typeof resume.then === 'function') {
+            resume.then(()=>{ try{ triggerInstrument(b.dataset.value, noteForPreview, undefined, tgtId, previewOptions); }catch{}; }).catch(()=>{});
+          } else {
+            triggerInstrument(b.dataset.value, noteForPreview, undefined, tgtId, previewOptions);
+          }
+        }catch{}
         selected = b.dataset.value; highlight(b);
       });
       grid.appendChild(b);
@@ -332,7 +445,11 @@ export async function openInstrumentPicker({ panel, toyId }){
   }
   let resolve;
   const p = new Promise(r=> resolve=r);
-  okBtn.onclick = ()=> close(selected||current||null);
+  okBtn.onclick = ()=>{
+    const finalValue = selected || current || null;
+    if (!finalValue) return close(null);
+    close({ value: finalValue, note: pitchShiftEnabled ? noteForOctave() : null, octave: selectedOctave, pitchShift: pitchShiftEnabled });
+  };
   cancelBtn.onclick = ()=> close(null);
   backdrop.onclick = ()=> close(null);
 

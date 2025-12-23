@@ -60,7 +60,7 @@
 
   <div id="feedback-support-overlay" class="feedback-support-overlay" hidden aria-hidden="true">
     <div class="feedback-support-backdrop" data-action="close-feedback-support"></div>
-    <div class="feedback-support-panel" role="dialog" aria-modal="true" aria-label="Feedback and Support">
+    <div class="feedback-support-panel" role="dialog" aria-modal="true" aria-label="Feedback and Support" data-disabled="true">
       <div class="feedback-support-header">
         <div class="feedback-support-title">Feedback & Support</div>
         <button class="feedback-support-close" type="button" data-action="close-feedback-support" aria-label="Close">
@@ -95,6 +95,9 @@
           </div>
           <div class="feedback-support-note">This tab will host your donation widget or support page.</div>
         </section>
+      </div>
+      <div class="feedback-support-disabled-overlay" aria-hidden="true">
+        <div class="feedback-support-disabled-text">Coming soon</div>
       </div>
     </div>
   </div>

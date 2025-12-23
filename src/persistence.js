@@ -79,6 +79,48 @@ function __stateStats(payload) {
   const nonEmpty = (strokes > 0) || (nodeCount > 0) || (activeCols > 0);
   return { strokes, nodeCount, activeCols, nonEmpty };
 }
+
+function snapInstrumentPitch(panel){
+  const out = {};
+  try{
+    if (!panel || !panel.dataset) return out;
+    if (Object.prototype.hasOwnProperty.call(panel.dataset, 'instrumentPitchShift')) {
+      const flag = String(panel.dataset.instrumentPitchShift || '').toLowerCase();
+      out.instrumentPitchShift = (flag === '1' || flag === 'true');
+    }
+    if (panel.dataset.instrumentOctave != null && panel.dataset.instrumentOctave !== '') {
+      const oct = parseInt(panel.dataset.instrumentOctave, 10);
+      if (Number.isFinite(oct)) out.instrumentOctave = oct;
+    }
+    if (panel.dataset.instrumentNote != null && panel.dataset.instrumentNote !== '') {
+      out.instrumentNote = String(panel.dataset.instrumentNote);
+    }
+  }catch{}
+  return out;
+}
+
+function applyInstrumentPitch(panel, state){
+  try{
+    if (!panel || !panel.dataset || !state || typeof state !== 'object') return;
+    if (Object.prototype.hasOwnProperty.call(state, 'instrumentPitchShift')) {
+      const flag = state.instrumentPitchShift;
+      const enabled = (flag === true || flag === 1 || String(flag).toLowerCase() === 'true' || String(flag) === '1');
+      panel.dataset.instrumentPitchShift = enabled ? '1' : '0';
+      if (!enabled && !Object.prototype.hasOwnProperty.call(state, 'instrumentNote')) {
+        delete panel.dataset.instrumentNote;
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(state, 'instrumentOctave')) {
+      const oct = parseInt(state.instrumentOctave, 10);
+      if (Number.isFinite(oct)) panel.dataset.instrumentOctave = String(oct);
+    }
+    if (Object.prototype.hasOwnProperty.call(state, 'instrumentNote')) {
+      const note = state.instrumentNote;
+      if (note) panel.dataset.instrumentNote = String(note);
+      else delete panel.dataset.instrumentNote;
+    }
+  }catch{}
+}
 function __shouldVetoEmptyOverwrite(prevPayload, nextPayload, meta) {
   const prev = __stateStats(prevPayload);
   const next = __stateStats(nextPayload);
@@ -289,6 +331,7 @@ function snapLoopGrid(panel){
     notes: Array.isArray(st.notes) ? Array.from(st.notes) : undefined,
     noteIndices: Array.isArray(st.noteIndices) ? Array.from(st.noteIndices) : [],
     instrument: panel.dataset.instrument || undefined,
+    ...snapInstrumentPitch(panel),
   };
 }
 
@@ -312,7 +355,10 @@ function applyLoopGrid(panel, state){
         steps: Array.isArray(state.steps) ? Array.from(state.steps).map(v=>!!v) : undefined,
         notes: Array.isArray(state.notes) ? Array.from(state.notes).map(x=>x|0) : undefined,
         noteIndices: Array.isArray(state.noteIndices) ? Array.from(state.noteIndices).map(x=>x|0) : undefined,
-        instrument: state.instrument
+        instrument: state.instrument,
+        instrumentPitchShift: state.instrumentPitchShift,
+        instrumentOctave: state.instrumentOctave,
+        instrumentNote: state.instrumentNote,
       };
       // try{ persistTraceLog('[persistence] stashed loopgrid state for later apply', { steps: state.steps?.length, noteIndices: state.noteIndices?.length }); }catch{}
     }
@@ -323,21 +369,24 @@ function applyLoopGrid(panel, state){
     } else {
       delete panel.dataset.instrumentPersisted;
     }
+    applyInstrumentPitch(panel, state);
   }catch(e){ console.warn('[persistence] applyLoopGrid failed', e); }
 }
 
 function snapBouncer(panel){
   try{
     if (typeof panel.__getBouncerSnapshot === 'function'){
-      return panel.__getBouncerSnapshot();
+      const snap = panel.__getBouncerSnapshot();
+      return { ...(snap || {}), ...snapInstrumentPitch(panel) };
     }
   }catch{}
   // Fallback
-  return {
-    instrument: panel.dataset.instrument || undefined,
-    speed: parseFloat(panel.dataset.speed||'') || undefined,
-    quantDiv: parseFloat(panel.dataset.quantDiv||panel.dataset.quant||'') || undefined,
-  };
+    return {
+      instrument: panel.dataset.instrument || undefined,
+      ...snapInstrumentPitch(panel),
+      speed: parseFloat(panel.dataset.speed||'') || undefined,
+      quantDiv: parseFloat(panel.dataset.quantDiv||panel.dataset.quant||'') || undefined,
+    };
 }
 
 function applyBouncer(panel, state){
@@ -356,6 +405,8 @@ function applyBouncer(panel, state){
     } else {
       delete panel.dataset.instrumentPersisted;
     }
+    applyInstrumentPitch(panel, state);
+    applyInstrumentPitch(panel, state);
     if (typeof state?.speed === 'number'){
       try{ panel.dataset.speed = String(state.speed); }catch{}
     }
@@ -366,8 +417,13 @@ function applyBouncer(panel, state){
 }
 
 function snapRippler(panel){
-  try{ if (typeof panel.__getRipplerSnapshot === 'function') return panel.__getRipplerSnapshot(); }catch{}
-  return { instrument: panel.dataset.instrument || undefined };
+  try{
+    if (typeof panel.__getRipplerSnapshot === 'function') {
+      const snap = panel.__getRipplerSnapshot();
+      return { ...(snap || {}), ...snapInstrumentPitch(panel) };
+    }
+  }catch{}
+  return { instrument: panel.dataset.instrument || undefined, ...snapInstrumentPitch(panel) };
 }
 function applyRippler(panel, state){
   try{
@@ -390,9 +446,9 @@ function applyRippler(panel, state){
 function snapDrawGrid(panel) {
   const toy = panel.__drawToy;
   if (toy && typeof toy.getState === 'function') {
-    return toy.getState();
+    return { ...toy.getState(), ...snapInstrumentPitch(panel) };
   }
-  return {};
+  return { ...snapInstrumentPitch(panel) };
 }
 
 function applyDrawGrid(panel, state) {
@@ -408,13 +464,14 @@ function applyDrawGrid(panel, state) {
   };
 
   // If toy isn't initialized yet, stash full state for init-time apply.
-  if (!toy || typeof toy.setState !== 'function') {
-    try {
-      panel.__pendingDrawGridState = state || {};
-      persistTraceLog('[persistence][drawgrid] STASH (toy-not-ready)', panel.id, sum(state));
-    } catch {}
-    return;
-  }
+    if (!toy || typeof toy.setState !== 'function') {
+      try {
+        panel.__pendingDrawGridState = state || {};
+        applyInstrumentPitch(panel, state);
+        persistTraceLog('[persistence][drawgrid] STASH (toy-not-ready)', panel.id, sum(state));
+      } catch {}
+      return;
+    }
 
     try {
       const incomingStats = __stateStats(state);
@@ -455,11 +512,12 @@ function applyDrawGrid(panel, state) {
         hasExplicitSteps ||
         hasExplicitMeta;
 
-    if (meaningful) {
-      persistTraceLog('[persistence][drawgrid] APPLY (meaningful)', panel.id, sum(state));
-      toy.setState(state);
-      return;
-    }
+      if (meaningful) {
+        persistTraceLog('[persistence][drawgrid] APPLY (meaningful)', panel.id, sum(state));
+        applyInstrumentPitch(panel, state);
+        toy.setState(state);
+        return;
+      }
 
     // Fallback path: empty snapshot — hydrate directly from localStorage.
     let local = null;
@@ -601,25 +659,31 @@ const ToySnapshotters = {
   'loopgrid-drum': { snap: snapLoopGrid, apply: applyLoopGrid },
   bouncer: { snap: snapBouncer, apply: applyBouncer },
   rippler: { snap: snapRippler, apply: applyRippler },
-  chordwheel: {
-    snap: (panel)=>{
-      try{ if (typeof panel.__getChordwheelSnapshot === 'function') return panel.__getChordwheelSnapshot(); }catch{}
-      // Fallback minimal snapshot
-      return { instrument: panel.dataset.instrument || undefined, steps: Number(panel.dataset.steps)||undefined };
-    },
+    chordwheel: {
+      snap: (panel)=>{
+        try{
+          if (typeof panel.__getChordwheelSnapshot === 'function') {
+            const snap = panel.__getChordwheelSnapshot();
+            return { ...(snap || {}), ...snapInstrumentPitch(panel) };
+          }
+        }catch{}
+        // Fallback minimal snapshot
+        return { instrument: panel.dataset.instrument || undefined, steps: Number(panel.dataset.steps)||undefined, ...snapInstrumentPitch(panel) };
+      },
     apply: (panel, state)=>{
       try{
         if (typeof panel.__applyChordwheelSnapshot === 'function'){ panel.__applyChordwheelSnapshot(state||{}); return; }
         // Stash until toy init; also apply light hints now
         try{ panel.__pendingChordwheelState = state || {}; }catch{}
-        if (state?.instrument){
-          try{
-            panel.dataset.instrument = state.instrument;
-            panel.dataset.instrumentPersisted = '1';
-          }catch{}
-        } else {
-          delete panel.dataset.instrumentPersisted;
-        }
+          if (state?.instrument){
+            try{
+              panel.dataset.instrument = state.instrument;
+              panel.dataset.instrumentPersisted = '1';
+            }catch{}
+          } else {
+            delete panel.dataset.instrumentPersisted;
+          }
+          applyInstrumentPitch(panel, state);
         if (typeof state?.steps === 'number'){ try{ panel.dataset.steps = String(state.steps); }catch{} }
       }catch(e){ console.warn('[persistence] applyChordwheel failed', e); }
     }

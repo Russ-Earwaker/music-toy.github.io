@@ -19,19 +19,12 @@ c-old-piano.wav,piano,piano,short note,Old Timey Piano,,OLD TIMEY PIANO,,,Acoust
 c-solid-tone.wav,synth,solid tone,loop,Solid Tone,,SOLID TONE,,,Default,loopgrid
 C-xylophone.wav,percussion,xylophone,short note,Xylophone,,XYLOPHONE,,,World,bouncer
 marimba_c.wav,percussion,marimba,short note,Marimba,,MARIMBA,,,World,bouncer
-toyPiano_c.wav,piano,piano,short note,Toy Piano,,TOY PIANO,,,World; Acoustic,drawgrid
+toyPiano_c.wav,piano,piano,short note,Toy Piano,,TOY PIANO,,5,World; Acoustic,drawgrid
 uke_c.wav,string,ukulele,short note,Ukulele,,UKULELE,,,Acoustic,chordwheel
 djembe_bass.wav,percussion,djembe,short note,Djembe Bass,,DJEMBE BASS,,,World,bouncer
 djembe_tone.wav,percussion,djembe,short note,Djembe Tone,,DJEMBE TONE,,,World,bouncer
 djembe_slap.wav,percussion,djembe,short note,Djembe Slap,,DJEMBE SLAP,,,World,bouncer
 guitar_acoustic_c.wav,string,guitar,short note,Acoustic Guitar,,ACOUSTIC GUITAR,,3,Acoustic,chordwheel
-Guitar_Chord_Am.wav,string,guitar,chord,Acoustic Guitar Chords,,ACOUSTIC GUITAR CHORDS AM,,,Acoustic,chordwheel
-Guitar_Chord_C.wav,string,guitar,chord,Acoustic Guitar Chords,,ACOUSTIC GUITAR CHORDS C,,,Acoustic,chordwheel
-Guitar_Chord_Dm.wav,string,guitar,chord,Acoustic Guitar Chords,,ACOUSTIC GUITAR CHORDS Dm,,,Acoustic,chordwheel
-Guitar_Chord_E.wav,string,guitar,chord,Acoustic Guitar Chords,,ACOUSTIC GUITAR CHORDS E,,,Acoustic,chordwheel
-Guitar_Chord_Em.wav,string,guitar,chord,Acoustic Guitar Chords,,ACOUSTIC GUITAR CHORDS Em,,,Acoustic,chordwheel
-Guitar_Chord_F.wav,string,guitar,chord,Acoustic Guitar Chords,,ACOUSTIC GUITAR CHORDS F,,,Acoustic,chordwheel
-Guitar_Chord_G.wav,string,guitar,chord,Acoustic Guitar Chords,,ACOUSTIC GUITAR CHORDS G,,,Acoustic,chordwheel
 cowbell.wav,percussion,cowbell,short note,Cowbell,,COWBELL,,,Drum and Bass,loopgrid-drum
 BassTone1.wav,percussion,bass tone,short note,Bass Tone 1,,BASS TONE 1,,,Drum and Bass,loopgrid-drum
 BassTone2.wav,percussion,bass tone,short note,Bass Tone 2,,BASS TONE 2,,,Drum and Bass,loopgrid-drum

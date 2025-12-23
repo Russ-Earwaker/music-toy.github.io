@@ -616,6 +616,37 @@ html, body {
 .inst-host { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); pointer-events:auto; }
 .inst-panel { position:relative !important; left:auto !important; top:auto !important; width:min(1000px, 96vw); height:80vh; max-height:80vh; display:flex; flex-direction:column; }
 .inst-panel .inst-body { display:grid; grid-template-columns: 220px 1fr; height:100%; }
+.inst-octave-section {
+  padding: 12px 10px;
+  border-bottom: 1px solid #1c2430;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.inst-pitch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.inst-pitch-label {
+  font: 650 12px/1 system-ui, -apple-system, Segoe UI, sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(226, 232, 240, 0.85);
+}
+.inst-octave-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  justify-content: space-between;
+}
+.inst-octave-value {
+  min-width: 96px;
+  flex: 1;
+  text-align: center;
+}
 .inst-tabs { padding:12px 10px; border-right:1px solid #1c2430; overflow:auto; display:flex; flex-direction:column; gap:8px; }
 .inst-tab { padding:8px 10px; text-align:left; border-radius:8px; border:1px solid #1c2430; background:#121a24; color:#e6e8ef; cursor:pointer; }
 .inst-tab:hover { border-color:#5fb3ff; }
@@ -2478,7 +2509,7 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
   position: absolute;
   left: 50%;
   top: 50%;
-  /* Lift the label by half the button radius (¼ diameter). */
+  /* Lift the label by half the button radius (ï¿½ diameter). */
   transform: translate(-50%, -50%) translateY(calc(var(--topbar-side-btn-size) * -0.25));
   z-index: 2;
   font-family: system-ui, -apple-system, Segoe UI, sans-serif;
@@ -3597,6 +3628,38 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
   gap: 12px;
   padding: 14px 16px 16px;
   z-index: 1;
+}
+
+.feedback-support-panel[data-disabled="true"] .feedback-support-tabs,
+.feedback-support-panel[data-disabled="true"] .feedback-support-body {
+  pointer-events: none;
+  user-select: none;
+}
+
+.feedback-support-disabled-overlay {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: rgba(6, 10, 14, 0.72);
+  z-index: 2;
+  text-align: center;
+  pointer-events: none;
+}
+
+.feedback-support-panel[data-disabled="true"] .feedback-support-disabled-overlay {
+  display: flex;
+}
+
+.feedback-support-disabled-text {
+  font-size: clamp(1.6rem, 3.6vw, 2.8rem);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(239, 245, 255, 0.92);
+  text-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
 .feedback-support-header {

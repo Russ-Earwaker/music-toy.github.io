@@ -30,6 +30,8 @@ export async function loadInstrumentEntries(){
       const typeIdx = header.findIndex(h=>/^(instrument\s*_?type|type|category)$/i.test(h));
       const themeIdx= header.findIndex(h=>/^themes?$/i.test(h));
       const recoIdx = header.findIndex(h=>/^recommended[_-]?toys$/i.test(h));
+      const baseNoteIdx = header.findIndex(h=>/^(base\s*_?note|baseNote|note_base)$/i.test(h));
+      const baseOctIdx = header.findIndex(h=>/^(base\s*_?oct(ave)?|baseOct(ave)?|octave)$/i.test(h));
       ID_TO_DISPLAY_NAME.clear(); DISPLAY_NAME_TO_ID.clear(); ID_TO_THEMES.clear(); ALL_THEMES.clear();
       const out = [];
       for (const line of lines){
@@ -38,12 +40,15 @@ export async function loadInstrumentEntries(){
         const display = String((cells[dispIdx] || id)).trim();
         const type = String((cells[typeIdx]||'')).trim();
         const synth = String((cells[synthIdx]||'')).trim();
+        let baseNote = String((baseNoteIdx >= 0 ? cells[baseNoteIdx] : '') || '').trim();
+        const baseOct = String((baseOctIdx >= 0 ? cells[baseOctIdx] : '') || '').trim();
+        if (!baseNote && baseOct) baseNote = `C${baseOct}`;
         const themesRaw = themeIdx >= 0 ? String(cells[themeIdx] || '') : '';
         const themes = themesRaw.split(/[;|]/).map(t=>t.trim()).filter(Boolean);
         const recoRaw = recoIdx >= 0 ? String(cells[recoIdx] || '') : '';
         const recommendedToys = recoRaw.split(/[;|]/).map(t=>t.trim().toLowerCase()).filter(Boolean);
         if (!id || !display) continue;
-        out.push({ id, display, type, synth, themes, recommendedToys });
+        out.push({ id, display, type, synth, themes, recommendedToys, baseNote: baseNote || undefined });
         ID_TO_DISPLAY_NAME.set(id, display);
         DISPLAY_NAME_TO_ID.set(display, id);
         if (themes.length){

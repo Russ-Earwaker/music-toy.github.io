@@ -724,7 +724,10 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
           try{ const h = panel.querySelector('.toy-header'); if (h){ h.classList.remove('pulse-accept'); h.classList.add('pulse-cancel'); setTimeout(()=> h.classList.remove('pulse-cancel'), 650); } }catch{}
           return; // cancelled
         }
-        const val = String(chosen || '');
+        const val = String((typeof chosen === 'string' ? chosen : chosen?.value) || '');
+        const chosenNote = (typeof chosen === 'object' && chosen) ? chosen.note : null;
+        const chosenOctave = (typeof chosen === 'object' && chosen) ? chosen.octave : null;
+        const chosenPitchShift = (typeof chosen === 'object' && chosen) ? chosen.pitchShift : null;
         // Update UI select to contain and select it
         let has = Array.from(sel.options).some(o=> o.value === val);
         if (!has){ const o=document.createElement('option'); o.value=val; o.textContent=val.replace(/[_-]/g,' ').replace(/\w\S*/g, t=> t[0].toUpperCase()+t.slice(1).toLowerCase()); sel.appendChild(o); }
@@ -732,8 +735,19 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
         // Apply to toy
         panel.dataset.instrument = val;
         panel.dataset.instrumentPersisted = '1';
-        try{ panel.dispatchEvent(new CustomEvent('toy-instrument', { detail:{ value: val }, bubbles:true })); }catch{}
-        try{ panel.dispatchEvent(new CustomEvent('toy:instrument', { detail:{ name: val, value: val }, bubbles:true })); }catch{}
+        if (chosenOctave !== null && chosenOctave !== undefined) {
+          panel.dataset.instrumentOctave = String(chosenOctave);
+        }
+        if (chosenPitchShift !== null && chosenPitchShift !== undefined) {
+          panel.dataset.instrumentPitchShift = chosenPitchShift ? '1' : '0';
+        }
+        if (chosenNote) {
+          panel.dataset.instrumentNote = String(chosenNote);
+        } else {
+          delete panel.dataset.instrumentNote;
+        }
+        try{ panel.dispatchEvent(new CustomEvent('toy-instrument', { detail:{ value: val, note: chosenNote, octave: chosenOctave, pitchShift: chosenPitchShift }, bubbles:true })); }catch{}
+        try{ panel.dispatchEvent(new CustomEvent('toy:instrument', { detail:{ name: val, value: val, note: chosenNote, octave: chosenOctave, pitchShift: chosenPitchShift }, bubbles:true })); }catch{}
         try{ const h = panel.querySelector('.toy-header'); if (h){ h.classList.remove('pulse-cancel'); h.classList.add('pulse-accept'); setTimeout(()=> h.classList.remove('pulse-accept'), 650); } }catch{}
       }catch{}
     });

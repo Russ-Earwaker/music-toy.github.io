@@ -25,6 +25,73 @@ function normId(s){
   return x;
 }
 
+function resolveOctaveForToy(noteName, toyId, options = {}, instrumentId = ''){
+  if (!toyId || typeof document === 'undefined') return noteName;
+  const findChainHeadPanel = (panel) => {
+    let current = panel;
+    let safety = 0;
+    while (current && safety++ < 24) {
+      const parentId = current.dataset?.chainParent || current.dataset?.prevToyId;
+      if (!parentId) break;
+      const parent = document.getElementById(parentId)
+        || document.querySelector(`.toy-panel[data-toyid="${parentId}"], .toy-panel[data-toy="${parentId}"]`);
+      if (!parent || parent === current) break;
+      current = parent;
+    }
+    return current || panel;
+  };
+  const readPitchShiftFromPanel = (panel) => {
+    const flag = String(panel?.dataset?.instrumentPitchShift || '').toLowerCase();
+    if (flag === '1' || flag === 'true') return true;
+    if (flag === '0' || flag === 'false') return false;
+    return null;
+  };
+  const readOctaveFromPanel = (panel) => {
+    const dsOctave = panel?.dataset?.instrumentOctave;
+    if (dsOctave != null && dsOctave !== '') {
+      const parsed = parseInt(dsOctave, 10);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    if (panel?.dataset?.instrumentNote) {
+      const m = /(-?\d+)/.exec(String(panel.dataset.instrumentNote));
+      if (m) {
+        const parsed = parseInt(m[1], 10);
+        if (Number.isFinite(parsed)) return parsed;
+      }
+    }
+    return null;
+  };
+  let octave = null;
+  const panel = document.querySelector(`.toy-panel[data-toyid="${toyId}"], .toy-panel[data-toy="${toyId}"], #${toyId}`);
+  const headPanel = panel ? findChainHeadPanel(panel) : panel;
+  let pitchShiftEnabled = null;
+  if (typeof options.pitchShift === 'boolean') {
+    pitchShiftEnabled = options.pitchShift;
+  } else {
+    pitchShiftEnabled = readPitchShiftFromPanel(headPanel || panel);
+    if (pitchShiftEnabled === null) {
+      pitchShiftEnabled = readPitchShiftFromPanel(panel);
+    }
+  }
+  if (!pitchShiftEnabled) {
+    const baseNote = options?.baseNote || entries.get(normId(instrumentId))?.baseNote;
+    return baseNote || noteName;
+  }
+  if (Number.isFinite(options.octave)) {
+    octave = options.octave;
+  } else {
+    octave = readOctaveFromPanel(headPanel || panel);
+    if (!Number.isFinite(octave)) {
+      octave = readOctaveFromPanel(panel);
+    }
+  }
+  if (!Number.isFinite(octave)) return noteName;
+  const raw = String(noteName ?? '').trim();
+  const match = /^([A-G]#?)(-?\d+)$/i.exec(raw);
+  if (!match) return noteName;
+  return `${match[1].toUpperCase()}${octave}`;
+}
+
 // Convenience: add multiple normalized keys to the map for the same entry
 function addAliasesFor(id, data, displayName){
   const variants = new Set();
@@ -229,11 +296,12 @@ function playSampleAt(id, when, gain=1, toyId, noteName, options = {}){
 export function triggerInstrument(instrument, noteName='C4', when, toyId, options = {}, velocity = 1.0){
   const ctx = ensureAudioContext();
   const id  = normId(instrument || 'TONE');
+  const resolvedNote = resolveOctaveForToy(noteName, toyId, options, id);
   const t   = safeStartTime(ctx, when);
   const vel = Math.max(0.001, Math.min(1.0, velocity));
   try{
     if (toyId && toyId !== 'master') {
-      window.dispatchEvent(new CustomEvent('toy:note', { detail: { toyId: String(toyId), instrument: id, note: noteName } }));
+      window.dispatchEvent(new CustomEvent('toy:note', { detail: { toyId: String(toyId), instrument: id, note: resolvedNote } }));
     }
   }catch{}
 
@@ -243,16 +311,16 @@ export function triggerInstrument(instrument, noteName='C4', when, toyId, option
     // Common "tone (sine)" pattern: prefer the inner token if present
     const m = /\(([a-z-\s_]+)\)/.exec(id.toLowerCase());
     const inner = m ? m[1].trim().replace(/[_\s]+/g,'-') : '';
-    if (inner && TONE_NAMES.includes(inner)) return playById(inner, noteToFreq(noteName), t, getToyGain(toyId||'master'));
-    if (TONE_NAMES.includes(idLoose)) return playById(idLoose, noteToFreq(noteName), t, getToyGain(toyId||'master'));
-  }catch{}
+      if (inner && TONE_NAMES.includes(inner)) return playById(inner, noteToFreq(resolvedNote), t, getToyGain(toyId||'master'));
+      if (TONE_NAMES.includes(idLoose)) return playById(idLoose, noteToFreq(resolvedNote), t, getToyGain(toyId||'master'));
+    }catch{}
 
   // exact or alias match first
-  if (playSampleAt(id, t, vel, toyId, noteName, options)) { try{ window.__toyActivityAt = ensureAudioContext().currentTime; }catch{}; return; }
+  if (playSampleAt(id, t, vel, toyId, resolvedNote, options)) { try{ window.__toyActivityAt = ensureAudioContext().currentTime; }catch{}; return; }
 
   // try family (e.g., djembe_bass -> djembe)
   const fam = id.split('_')[0];
-  if (fam !== id && playSampleAt(fam, t, vel, toyId, noteName, options)) { try{ window.__toyActivityAt = ensureAudioContext().currentTime; }catch{}; return; }
+  if (fam !== id && playSampleAt(fam, t, vel, toyId, resolvedNote, options)) { try{ window.__toyActivityAt = ensureAudioContext().currentTime; }catch{}; return; }
 
   // synth alias fallback: if an entry exists whose synth matches the id, use that tone
   try{
@@ -262,7 +330,7 @@ export function triggerInstrument(instrument, noteName='C4', when, toyId, option
       const iNorm = id.replace(/[()]/g,'').replace(/[_\s]+/g,'-');
       if (s && (s === id || sNorm === id || s === iNorm || sNorm === iNorm)){
         const toneId2 = TONE_NAMES.includes(sNorm) ? sNorm : (TONE_NAMES.includes(s) ? s : 'tone');
-        const ok = playById(toneId2, noteToFreq(noteName), t, getToyGain(toyId||'master'), vel);
+        const ok = playById(toneId2, noteToFreq(resolvedNote), t, getToyGain(toyId||'master'), vel);
         if (ok) { try{ window.__toyActivityAt = ensureAudioContext().currentTime; }catch{} }
         return ok;
       }
@@ -271,7 +339,7 @@ export function triggerInstrument(instrument, noteName='C4', when, toyId, option
 
   // If we've reached here, no sample or synth alias was found for 'id'.
   // Before falling back to a generic tone, try 'acoustic_guitar' as a last resort for samples.
-  if (id !== 'acoustic_guitar' && playSampleAt('acoustic_guitar', t, vel, toyId, noteName, options)) {
+  if (id !== 'acoustic_guitar' && playSampleAt('acoustic_guitar', t, vel, toyId, resolvedNote, options)) {
     console.warn(`[audio] instrument not found: '${id}' — using fallback 'acoustic_guitar'`);
     try { window.__toyActivityAt = ensureAudioContext().currentTime; } catch {}
     return; // Successfully played fallback sample
@@ -285,7 +353,7 @@ export function triggerInstrument(instrument, noteName='C4', when, toyId, option
       console.warn('[audio] instrument not found:', id, '— using', toneId);
     }
   }catch{}
-  const ok = playById(toneId, noteToFreq(noteName), t, getToyGain(toyId||'master'), vel, options);
+  const ok = playById(toneId, noteToFreq(resolvedNote), t, getToyGain(toyId||'master'), vel, options);
   if (ok) { try{ window.__toyActivityAt = ensureAudioContext().currentTime; }catch{} }
   return ok;
 }

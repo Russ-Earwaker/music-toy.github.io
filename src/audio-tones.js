@@ -64,12 +64,50 @@ function playWindyAt(freq, when, dest){
   try{ registerActiveNode(n); }catch{}
 }
 function playAlienAt(freq, when, dest){
-  const acx=ensureAudioContext(), t0=when; const mod=acx.createOscillator(), car=acx.createOscillator();
-  mod.type='sine'; car.type='sine'; car.frequency.setValueAtTime(freq, t0); mod.frequency.setValueAtTime(Math.max(0.5,freq*0.25), t0);
-  const mg=acx.createGain(); mg.gain.value = Math.max(1, freq*0.5); mod.connect(mg).connect(car.frequency);
-  const g=envGain(acx,t0,[{t:0,v:0.0001},{t:0.02,v:0.22},{t:0.5,v:0.0008}]); car.connect(g).connect(dest||acx.destination);
-  mod.start(t0); car.start(t0); mod.stop(t0+0.52); car.stop(t0+0.52);
-  try{ registerActiveNode(mod); registerActiveNode(car); }catch{}
+  const acx=ensureAudioContext(), t0=when;
+  const base = noteToFreq('C4');
+
+  const car=acx.createOscillator();
+  const mod=acx.createOscillator();
+  const mg=acx.createGain();
+  const vib=acx.createOscillator();
+  const vibGain=acx.createGain();
+  const trem=acx.createOscillator();
+  const tremGain=acx.createGain();
+  const amp=acx.createGain();
+  const filter=acx.createBiquadFilter();
+
+  car.type='sawtooth';
+  car.frequency.setValueAtTime(base, t0);
+
+  mod.type='sine';
+  mod.frequency.setValueAtTime(base*2.15, t0);
+  mg.gain.setValueAtTime(base*0.6, t0);
+  mod.connect(mg).connect(car.frequency);
+
+  vib.type='sine';
+  vib.frequency.setValueAtTime(4.5, t0);
+  vibGain.gain.setValueAtTime(8, t0);
+  vib.connect(vibGain).connect(car.detune);
+
+  trem.type='sine';
+  trem.frequency.setValueAtTime(7.5, t0);
+  tremGain.gain.setValueAtTime(0.35, t0);
+  trem.connect(tremGain).connect(amp.gain);
+  amp.gain.setValueAtTime(0.7, t0);
+
+  filter.type='bandpass';
+  filter.Q.value=8;
+  filter.frequency.setValueAtTime(base*1.1, t0);
+  filter.frequency.exponentialRampToValueAtTime(base*2.4, t0+0.55);
+  filter.frequency.exponentialRampToValueAtTime(base*0.95, t0+1.0);
+
+  const g=envGain(acx,t0,[{t:0,v:0.0001},{t:0.04,v:0.22},{t:0.7,v:0.12},{t:1.05,v:0.0008}]);
+  car.connect(filter).connect(amp).connect(g).connect(dest||acx.destination);
+
+  mod.start(t0); car.start(t0); vib.start(t0); trem.start(t0);
+  mod.stop(t0+1.1); car.stop(t0+1.1); vib.stop(t0+1.1); trem.stop(t0+1.1);
+  try{ registerActiveNode(mod); registerActiveNode(car); registerActiveNode(vib); registerActiveNode(trem); }catch{}
 }
 function playOrganishAt(freq, when, dest){
   const acx=ensureAudioContext(), t0=when; const g=envGain(acx,t0,[{t:0,v:0.0001},{t:0.02,v:0.22},{t:0.40,v:0.0008}]);
