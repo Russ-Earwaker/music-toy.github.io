@@ -23,12 +23,46 @@ export function playToneAt(freq, when, dest){
   try{ registerActiveNode(o); }catch{}
 }
 function playKeypadAt(freq, when, dest){
-  const acx = ensureAudioContext(), t0=when;
-  const g = envGain(acx,t0,[{t:0,v:0.0001},{t:0.01,v:0.28},{t:0.18,v:0.0008}]);
-  const o1=acx.createOscillator(), o2=acx.createOscillator(); o1.type='square'; o2.type='square';
-  o1.frequency.setValueAtTime(freq, t0); o2.frequency.setValueAtTime(freq*2, t0);
-  o1.connect(g); o2.connect(g); g.connect(dest||acx.destination); o1.start(t0); o2.start(t0); o1.stop(t0+0.2); o2.stop(t0+0.2);
-  try{ registerActiveNode(o1); registerActiveNode(o2); }catch{}
+  const acx = ensureAudioContext();
+  const t0 = when;
+
+  // A keypad tone is typically a mix of two sine waves (DTMF).
+  // We'll use the given frequency and another one a major third above it
+  // for a pleasant, standard "notification" or "key press" chord.
+  const freq2 = freq * (5/4);
+
+  // Use sine waves for a clean, pure tone, unlike the harshness of squares.
+  const o1 = acx.createOscillator();
+  const o2 = acx.createOscillator();
+  o1.type = 'sine';
+  o2.type = 'sine';
+
+  o1.frequency.setValueAtTime(freq, t0);
+  o2.frequency.setValueAtTime(freq2, t0);
+
+  // A very short, clicky envelope typical of a button press.
+  const g = envGain(acx, t0, [
+    { t: 0.000, v: 0.0001 },
+    { t: 0.005, v: 0.25 }, // Quick attack
+    { t: 0.100, v: 0.0001 }  // Fast decay
+  ]);
+
+  // Mix them together
+  o1.connect(g);
+  o2.connect(g);
+  g.connect(dest || acx.destination);
+
+  // Schedule start and stop
+  const tEnd = t0 + 0.12;
+  o1.start(t0);
+  o2.start(t0);
+  o1.stop(tEnd);
+  o2.stop(tEnd);
+
+  try {
+    registerActiveNode(o1);
+    registerActiveNode(o2);
+  } catch {}
 }
 function playPopAt(freq, when, dest){
   const acx=ensureAudioContext(), t0=when; const o=acx.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(freq, t0);

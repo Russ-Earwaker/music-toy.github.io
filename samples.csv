@@ -10,9 +10,9 @@ PianoMiddleC.wav,piano,piano,short note,Piano,,PIANO,,,Acoustic,drawgrid
 Brk_Snr.mp3,percussion,drum,short note,Snare,,SNARE,,,Drum and Bass,loopgrid-drum
 hi-hat-closed.wav,percussion,drum,short note,Hi-Hat Closed,,HI-HAT CLOSED,,,Drum and Bass,loopgrid-drum
 clap.mp3,percussion,clap,short note,Hand clap,,HAND CLAP,,,Drum and Bass,loopgrid-drum
-RP4_KICK_1.mp3,percussion,drum,short note,Kick drum,,KICK DRUM,,,Drum and Bass,loopgrid-drum
-c-bass guitar- slap.wav,string,bass guitar,short note,Slap Bass Guitar,,SLAP BASS GUITAR,,,Drum and Bass; Acoustic,bouncer
-c-bass guitar-pickmuted.wav,string,bass guitar,short note,Muted Bass Guitar,,MUTED BASS GUITAR,,,Drum and Bass; Acoustic,bouncer
+RP4_KICK_1.mp3,percussion,drum,short note,Kick drum,,KICK DRUM,,3,Drum and Bass,loopgrid-drum
+bass guitar- slap-C3.wav,string,bass guitar,short note,Bass Guitar Slap,,BASS GUITAR SLAP,,3,Drum and Bass; Acoustic,bouncer
+c-bass guitar-pickmuted.wav,string,bass guitar,short note,Bass Guitar Muted,,BASS GUITAR MUTED,,,Drum and Bass; Acoustic,bouncer
 c-kalimba.wav,percussion,kalimba,short note,Kalimba,,KALIMBA,,,World,rippler
 c-nylon-guitar.wav,string,guitar,short note,Guitar (Nylon String),,GUITAR NYLON,,3,Acoustic,chordwheel
 c-old-piano.wav,piano,piano,short note,Old Timey Piano,,OLD TIMEY PIANO,,,Acoustic,drawgrid
@@ -48,7 +48,6 @@ bell_ring_C.wav,percussion,bell,short note,Bell,,BELL,,5,Acoustic,bouncer
 ,,,,,,,,,,
 # --- Synths (no filename; specify synth_id from engine) ---,,,,,,,,,,
 ,synth,synth,sustain,Tone (Sine),tone,TONE,,,Default,loopgrid
-,synth,synth,short note,Keypad,keypad,KEYPAD,,,Gaming,loopgrid
 ,synth,synth,short note,Pop,pop,POP,,,Default,loopgrid
 ,synth,synth,sustain,Pad,pad,PAD,,,Default,loopgrid
 ,synth,synth,short note,Retro Square,retro-square,RETRO SQUARE,,,Gaming,loopgrid
@@ -57,4 +56,3 @@ bell_ring_C.wav,percussion,bell,short note,Bell,,BELL,,5,Acoustic,bouncer
 ,synth,synth,short note,Laser,laser,LASER,,,Gaming,loopgrid
 ,synth,synth,sustain,Windy,windy,WINDY,,,Default,loopgrid
 ,synth,synth,short note,Alien,alien,ALIEN,,,Gaming,loopgrid
-,synth,synth,short note,Organish,organish,ORGANISH,,,Default,loopgrid
