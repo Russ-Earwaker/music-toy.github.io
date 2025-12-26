@@ -792,7 +792,7 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
               </div>
               <div class="pref-row pref-row-guide-progress">
                 <div class="pref-label">
-                  <div class="pref-title">Guide progress</div>
+                  <div class="pref-title">Reset Progress</div>
                   <div class="pref-subtitle">Reset completed goals and rewards.</div>
                 </div>
                 <button class="menu-inline-btn" type="button" data-pref-action="reset-guide-progress">Reset</button>
@@ -829,7 +829,7 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
       });
       resetGuideBtn?.addEventListener('click', () => {
         const resetOverlay = ensureGuideResetOverlay();
-        resetOverlay?.__show?.('Reset guide progress?');
+        resetOverlay?.__show?.('Reset progress?');
       });
       window.addEventListener('prefs:small-screen-editing-toggle-unlock', () => {
         updateFocusToggleButton(toggleBtn);
@@ -853,9 +853,9 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
         <div class="scene-manager-panel sound-theme-panel guide-reset-panel">
           <button class="scene-manager-close" type="button" aria-label="Close">&times;</button>
           <div class="scene-manager-body">
-            <div class="sound-theme-prompt">Reset guide progress?</div>
+            <div class="sound-theme-prompt">Reset progress?</div>
             <div class="sound-theme-actions">
-              <button class="c-btn inst-ok" type="button" data-action="guide-reset-confirm" aria-label="Reset guide progress">
+              <button class="c-btn inst-ok" type="button" data-action="guide-reset-confirm" aria-label="Reset progress">
                 <div class="c-btn-outer"></div>
                 <div class="c-btn-glow"></div>
                 <div class="c-btn-core"></div>
@@ -883,7 +883,7 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
 
     const hide = () => { overlay.style.display = 'none'; };
     const show = (promptOverride) => {
-      if (prompt) prompt.textContent = promptOverride || 'Reset guide progress?';
+      if (prompt) prompt.textContent = promptOverride || 'Reset progress?';
       overlay.style.display = 'flex';
     };
 
@@ -895,6 +895,7 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
       cancelBtn?.addEventListener('click', hide);
       confirmBtn?.addEventListener('click', () => {
         try { window.resetGuideProgress?.(); } catch {}
+        try { window.IntroOverlay?.reset?.(); } catch {}
         hide();
       });
       overlay.__wired = true;
@@ -1567,6 +1568,21 @@ function ensureTopbar(){
       }
     };
 
+    const resetLeadInOptions = () => {
+      const state = getLeadInState(bar);
+      state.enabled = false;
+      state.randomizeEnabled = false;
+      state.toggleEnabled = false;
+      try { localStorage.setItem(LEAD_IN_ENABLED_KEY, '0'); } catch {}
+      try { localStorage.setItem(LEAD_IN_RANDOMIZE_ENABLED_KEY, '0'); } catch {}
+      try { localStorage.setItem(LEAD_IN_TOGGLE_ENABLED_KEY, '0'); } catch {}
+      cancelLeadInSequence(bar, { restore: true });
+      cancelRandomization(bar);
+      restoreToggleOffChains(bar);
+      updateLeadInUI();
+      updateRandomUI();
+    };
+
     const renderSoundThemeOptions = () => {
       syncSoundThemeSelect();
     };
@@ -1648,6 +1664,10 @@ function ensureTopbar(){
       });
     }
     updateSoundThemeLabel();
+
+    if (!optionsState.resetLeadInOptions) {
+      optionsState.resetLeadInOptions = resetLeadInOptions;
+    }
 
     if (!optionsState.wired && optionsState.masterSlider) {
       optionsState.wired = true;
@@ -1770,6 +1790,12 @@ function ensureTopbar(){
       syncMasterVolume();
       updateLeadInUI();
       updateRandomUI();
+    }
+
+    if (!bar.__leadInResetBound) {
+      bar.__leadInResetBound = true;
+      window.addEventListener('scene:new', () => optionsState.resetLeadInOptions?.());
+      window.addEventListener('scene:load', () => optionsState.resetLeadInOptions?.());
     }
 
 

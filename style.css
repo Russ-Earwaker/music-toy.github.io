@@ -3832,6 +3832,57 @@ body.feedback-support-open #board {
   pointer-events: none !important;
 }
 
+body.intro-open #topbar,
+body.intro-open #fullscreenBtn,
+body.intro-open .board-viewport,
+body.intro-open .gesture-layer,
+body.intro-open #board,
+body.intro-open .guide-launcher,
+body.intro-open .topbar-menu,
+body.intro-open .topbar-controls,
+body.intro-open .topbar-menu-wrap {
+  pointer-events: none !important;
+}
+
+/* Intro overlay */
+.intro-overlay {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 15% 10%, rgba(120, 190, 255, 0.16), transparent 55%),
+    radial-gradient(circle at 85% 100%, rgba(255, 180, 110, 0.12), transparent 50%),
+    rgba(0, 0, 0, 0.72);
+  z-index: 5600;
+}
+
+.intro-overlay.is-open {
+  display: flex;
+}
+
+.intro-panel {
+  width: min(520px, 86vw);
+  padding: 18px 20px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: rgba(10, 14, 20, 0.96);
+  color: var(--text);
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.7);
+  font: 500 16px/1.5 system-ui, -apple-system, Segoe UI, sans-serif;
+  letter-spacing: 0.01em;
+  text-align: left;
+}
+
+.intro-panel p {
+  margin: 0 0 12px;
+}
+
+.intro-panel p:last-child {
+  margin-bottom: 0;
+}
+
 /* Scene Manager overlay */
 
 .scene-manager-overlay {

@@ -20,7 +20,7 @@ GuitarElectricDistorted.wav,string,electric guitar,short note,Guitar Distorted,,
 GuitarElectricDistorted2.wav,string,electric guitar,short note,Guitar Distorted 2,,GUITAR DISTORTED 2,,3,Rock;,drawgrid
 ,,,,,,,,,,
 Kalimba.wav,percussion,kalimba,short note,Kalimba,,KALIMBA,,4,Pop; World,drawgrid
-GuitarNylonString.wav,string,guitar,short note,Guitar (Nylon String),,GUITAR NYLON,,3,Pop; Dance; Rock; Jazz,drawgrid
+GuitarNylonString.wav,string,guitar,short note,Guitar (Nylon String),,GUITAR NYLON,,3,Pop; Jazz,drawgrid
 PianoOldTimey.wav,piano,piano,short note,Piano Old Timey,,PIANO OLD TIMEY,,4,Pop; Jazz,drawgrid
 Xylophone.wav,percussion,xylophone,short note,Xylophone,,XYLOPHONE,,4,World; Toybox,drawgrid
 Xylophone2.wav,percussion,xylophone,short note,Xylophone 2,,XYLOPHONE 2,,4,World; Toybox,drawgrid
@@ -56,14 +56,14 @@ SynthFunk.wav,synth,synth,short note,Synth Funk,,SYNTH FUNK,,5,Pop; Dance; ,draw
 SynthShimmer.wav,synth,synth,short note,Synth Shimmer,,SYNTH SHIMMER,,5,Pop; Dance; ,drawgrid
 SynthOrgan.wav,synth,synth,short note,Synth Organ,,SYNTH ORGAN,,5,Pop; Dance; ,drawgrid
 SynthStrike.wav,synth,synth,short note,Synth Strike,,SYNTH STRIKE,,5,Pop; Dance; ,drawgrid
-RubberBand.wav,synth,synth,short note,Rubber Band,,RUBBER BAND,,5,Toybox,drawgrid
+RubberBand.wav,synth,natural,short note,Rubber Band,,RUBBER BAND,,5,Toybox,drawgrid
 ,,,,,,,,,,
 # --- Synths (no filename; specify synth_id from engine) ---,,,,,,,,,,
 ,synth,synth,sustain,Tone (Sine),tone,TONE,,4,Gaming,drawgrid
 ,synth,synth,short note,Pop,pop,POP,,4,Toybox,drawgrid
 ,synth,synth,sustain,Pad,pad,PAD,,4,Toybox,drawgrid
-,synth,synth,short note,Retro Square,retro-square,RETRO SQUARE,,4,Gaming,drawgrid
-,synth,synth,short note,Retro Saw,retro-saw,RETRO SAW,,4,Gaming,drawgrid
-,synth,synth,short note,Retro Triangle,retro-tri,RETRO TRIANGLE,,4,Gaming,drawgrid
+,synth,synth,short note,Retro Square,retro-square,RETRO SQUARE,,4,Gaming,drawgrid; loopgrid
+,synth,synth,short note,Retro Saw,retro-saw,RETRO SAW,,4,Gaming,drawgrid; loopgrid
+,synth,synth,short note,Retro Triangle,retro-tri,RETRO TRIANGLE,,4,Gaming,drawgrid; loopgrid
 ,synth,synth,short note,Laser,laser,LASER,,4,Gaming,drawgrid
 ,synth,synth,short note,Alien,alien,ALIEN,,4,Toybox,drawgrid

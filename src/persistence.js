@@ -947,6 +947,7 @@ export function applySceneSnapshot(snap){
         localStorage.removeItem('toyPositions');
       }
     }catch{}
+    try { window.dispatchEvent(new CustomEvent('scene:load')); } catch {}
     // try{ persistTraceLog('[persistence] applySnapshot end', { applied: appliedCount }); }catch{}
     return true;
   }catch(e){ console.warn('[persistence] applySnapshot failed', e); return false; }
