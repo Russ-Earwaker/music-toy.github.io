@@ -10,7 +10,7 @@
 // - Mini "home" button under the ? button to recenter the camera
 // - Entire system can be disabled via window.__MT_ANCHOR_DISABLED or localStorage.mt_anchor_enabled='0'
 
-import { getViewportElement, worldToScreen } from './board-viewport.js';
+import { getViewportElement, getViewportTransform } from './board-viewport.js';
 import {
   startOrbitParticleStreamAtPoint,
   startParticleStream,
@@ -459,9 +459,31 @@ function getViewportLocalPointFromWorld(worldPt) {
   const host = pickHost();
   if (!host) return null;
   const vpRect = host.getBoundingClientRect();
-  const abs = worldToScreen({ x: worldPt.x, y: worldPt.y });
-  const x = abs.x - vpRect.left;
-  const y = abs.y - vpRect.top;
+  let { scale = 1, tx = 0, ty = 0 } = getViewportTransform?.() || {};
+  const flag = window?.__ZOOM_GESTURE_FLAG;
+  if (flag?.active) {
+    scale = Number.isFinite(flag.targetScale) ? flag.targetScale : scale;
+    tx = Number.isFinite(flag.targetX) ? flag.targetX : tx;
+    ty = Number.isFinite(flag.targetY) ? flag.targetY : ty;
+  }
+  const safeScale = Number.isFinite(scale) && Math.abs(scale) > 1e-6 ? scale : 1;
+  const safeTx = Number.isFinite(tx) ? tx : 0;
+  const safeTy = Number.isFinite(ty) ? ty : 0;
+
+  let x = worldPt.x * safeScale + safeTx;
+  let y = worldPt.y * safeScale + safeTy;
+
+  const board = document.getElementById('board');
+  const boardRect = board?.getBoundingClientRect?.();
+  if (boardRect) {
+    const expectedLeft = vpRect.left + safeTx;
+    const expectedTop = vpRect.top + safeTy;
+    const rectOk = Math.abs(boardRect.left - expectedLeft) < 0.5 && Math.abs(boardRect.top - expectedTop) < 0.5;
+    if (rectOk) {
+      x = worldPt.x * safeScale + (boardRect.left - vpRect.left);
+      y = worldPt.y * safeScale + (boardRect.top - vpRect.top);
+    }
+  }
   return { x, y, w: vpRect.width, h: vpRect.height };
 }
 
@@ -1141,12 +1163,8 @@ export function tickBoardAnchor({ nowMs, loopInfo, running } = {}) {
   const mod = __anchGestureDrawModulo();
   __anchFrameIdx++;
   const frameIndex = __anchFrameIdx;
+  // Keep position smooth; only throttle the heavier grid flashes while gesturing.
   const doFull = (!gesturing) || mod <= 1 || ((frameIndex % mod) === 0);
-  if (!doFull) {
-    if (tA) perfMark(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - tA);
-    return;
-  }
-
   const local = getViewportLocalPointFromWorld(anchorWorld);
   if (!local) return;
 
@@ -1165,9 +1183,9 @@ export function tickBoardAnchor({ nowMs, loopInfo, running } = {}) {
   const zoomScale = clamp(getZoomScale(), ZOOM_SCALE_CLAMP_MIN, ZOOM_SCALE_CLAMP_MAX);
   const drawScale = ANCHOR_SIZE_MULT * zoomScale;
 
-      drawAnchorGrid(local, drawScale);
+  if (doFull) drawAnchorGrid(local, drawScale);
 
-          drawGradient(local, distWorld, !!running, drawScale);
+  drawGradient(local, distWorld, !!running, drawScale);
   drawAnchorParticles(local, nowSec, !!running, drawScale, pulseBeat, pulseBar, anchorGuideActive);
   updateHoverFx(local, drawScale);
   if (tA) perfMark(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - tA);
