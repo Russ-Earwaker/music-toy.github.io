@@ -90,6 +90,8 @@ function __dgGestureDrawModulo() {
 // Hysteresis means we only re-enable once FPS climbs comfortably above.
 const DG_MIN_FPS_FOR_PARTICLE_FIELD = 32;  // degrade if we live below this
 const DG_FPS_PARTICLE_HYSTERESIS_UP = 38;  // re-enable once we're above this
+const DG_PLAYHEAD_FPS_SIMPLE_ENTER = 28;
+const DG_PLAYHEAD_FPS_SIMPLE_EXIT = 34;
 
 // IntersectionObserver visibility threshold – panels with <2% on-screen area
 // are treated as "offscreen" and have their heavy work culled.
@@ -2970,6 +2972,16 @@ function ensureSizeReady({ force = false } = {}) {
       (Number.isFinite(cw) && cw > 0)
         ? cw
         : (Number.isFinite(ch) && ch > 0 ? ch : 24);
+    const lowFps = __dgLowFpsMode || (() => {
+      const fpsSample = Number.isFinite(window.__MT_SM_FPS)
+        ? window.__MT_SM_FPS
+        : (Number.isFinite(window.__MT_FPS) ? window.__MT_FPS : null);
+      return Number.isFinite(fpsSample) && fpsSample <= DG_PLAYHEAD_FPS_SIMPLE_ENTER;
+    })();
+    const emergency = __dgLowFpsMode;
+    const count = emergency ? 20 : (lowFps ? 28 : 48);
+    const sizeBoost = emergency ? 2.0 : (lowFps ? 1.7 : 1);
+    const lifeBase = emergency ? 0.42 : (lowFps ? 0.55 : 0.8);
 
     // Travel radius target: ~0.5 of a grid square
     const travelRadius =
@@ -2980,7 +2992,6 @@ function ensureSizeReady({ force = false } = {}) {
           : cell * 0.5
       );
 
-    const count = 48;
     const particles = [];
 
     for (let i = 0; i < count; i++) {
@@ -2998,17 +3009,18 @@ function ensureSizeReady({ force = false } = {}) {
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         // Enough life so the faster particles can travel visibly
-        life: 0.8,
+        life: lifeBase,
         // Larger, more obvious dots
-        size: 0.25 + Math.random() * 2,
+        size: (0.25 + Math.random() * 2) * sizeBoost,
       });
     }
 
     noteBurstEffects.push({ particles });
 
     // Cap the number of active bursts so we don't leak
-    if (noteBurstEffects.length > 32) {
-      noteBurstEffects.splice(0, noteBurstEffects.length - 32);
+    const maxBursts = emergency ? 16 : (lowFps ? 24 : 32);
+    if (noteBurstEffects.length > maxBursts) {
+      noteBurstEffects.splice(0, noteBurstEffects.length - maxBursts);
     }
   }
   let nodeGroupMap = []; // Per-column Map(row -> groupId or [groupIds]) to avoid cross-line connections and track z-order
@@ -6568,14 +6580,17 @@ function syncBackBufferSizes() {
       const fpsSample = Number.isFinite(adaptive?.smoothedFps)
         ? adaptive.smoothedFps
         : (Number.isFinite(adaptive?.fps) ? adaptive.fps : null);
+      const emergencyMode = !!adaptive?.emergencyMode;
       // If we're cruising near 60fps with few panels, allow a modest boost above nominal.
       const fpsBoost = (Number.isFinite(fpsSample) && fpsSample >= 58 && visiblePanels <= 2)
         ? Math.min(1.3, 1 + 0.02 * (fpsSample - 58))
         : 1;
 
-      const maxCountScale = Math.max(0.12, maxCountScaleBase * crowdScale * fpsBoost);
-      const capScale = Math.max(0.2, (particleBudget.capScale ?? 1) * crowdScale * fpsBoost);
-      const sizeScale = (particleBudget.sizeScale ?? 1);
+      const emergencyScale = emergencyMode ? 0.65 : 1;
+      const emergencySize = emergencyMode ? 1.2 : 1;
+      const maxCountScale = Math.max(0.12, maxCountScaleBase * crowdScale * fpsBoost * emergencyScale);
+      const capScale = Math.max(0.2, (particleBudget.capScale ?? 1) * crowdScale * fpsBoost * emergencyScale);
+      const sizeScale = (particleBudget.sizeScale ?? 1) * emergencySize;
       // Keep tick cadence steady for smooth lerps; rely on lower counts for performance.
       const tickModulo = 1;
       dgField.applyBudget({
@@ -6583,7 +6598,10 @@ function syncBackBufferSizes() {
         capScale,
         tickModulo,
         sizeScale,
-        spawnScale: Math.max(0.1, (particleBudget.spawnScale ?? 1) * crowdScale * fpsBoost),
+        spawnScale: Math.max(0.1, (particleBudget.spawnScale ?? 1) * crowdScale * fpsBoost * emergencyScale),
+        minCount: __dgLowFpsMode ? 0 : undefined,
+        emergencyFade: __dgLowFpsMode,
+        emergencyFadeSeconds: 5,
       });
     }
 
@@ -6594,6 +6612,8 @@ function syncBackBufferSizes() {
   let __dgParticleZoomThrottleSince = 0;
   let __dgParticleZoomThrottleWarned = false;
   let __dgParticlePokeTs = 0;
+  let __dgPlayheadSimpleMode = false;
+  let __dgLowFpsMode = false;
   const DG_PARTICLE_ZOOM_THROTTLE_WARN_MS = 250;
   const DG_PARTICLE_POKE_GRACE_MS = 220;
 
@@ -6655,6 +6675,17 @@ function syncBackBufferSizes() {
 
       // Update per-panel LOD state from global FPS + zoom.
       const adaptiveState = updatePanelParticleState(boardScaleValue);
+      __dgLowFpsMode = !!adaptiveState?.emergencyMode;
+      const fpsSample = Number.isFinite(adaptiveState?.smoothedFps)
+        ? adaptiveState.smoothedFps
+        : (Number.isFinite(adaptiveState?.fps) ? adaptiveState.fps : null);
+      if (Number.isFinite(fpsSample)) {
+        if (__dgPlayheadSimpleMode) {
+          if (fpsSample >= DG_PLAYHEAD_FPS_SIMPLE_EXIT) __dgPlayheadSimpleMode = false;
+        } else if (fpsSample <= DG_PLAYHEAD_FPS_SIMPLE_ENTER) {
+          __dgPlayheadSimpleMode = true;
+        }
+      }
 
       // We never draw overlays or particles if the panel is completely offscreen.
       const canDrawAnything = !waitingForStable && isPanelVisible;
@@ -6745,10 +6776,11 @@ function syncBackBufferSizes() {
       }
 
       const recentPoke = Number.isFinite(__dgParticlePokeTs) && (nowTs - __dgParticlePokeTs) <= DG_PARTICLE_POKE_GRACE_MS;
+      const emergencyMode = !!adaptiveState?.emergencyMode;
       const allowParticleDraw =
         particleStateAllowed &&
         canDrawAnything &&
-        (!shouldThrottleForZoom || recentPoke);
+        (!shouldThrottleForZoom || recentPoke || emergencyMode);
       const skipDomUpdates =
         !!(typeof window !== 'undefined' && window.__PERF_NO_DOM_UPDATES) &&
         (typeof window !== 'undefined' && window.__mtZoomGesturing === true);
@@ -7172,70 +7204,75 @@ function syncBackBufferSizes() {
     // Pink radial bursts for active notes
     if (noteBurstEffects.length > 0) {
       try {
-        const dtMs = Number.isFinite(frameCam?.dt) ? frameCam.dt : 16.6;
-        const dt = Number.isFinite(dtMs) ? dtMs / 1000 : (1 / 60);
-
-        if (allowOverlayDrawHeavy) {
-          const __dgOverlayStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
-            ? performance.now()
-            : 0;
-          fctx.save();
-          fctx.globalCompositeOperation = 'lighter';
-          for (let i = noteBurstEffects.length - 1; i >= 0; i--) {
-            const burst = noteBurstEffects[i];
-            let anyAlive = false;
-
-            for (let j = burst.particles.length - 1; j >= 0; j--) {
-              const p = burst.particles[j];
-
-              // Fade out – faster fade so the burst clears quickly
-              p.life -= dt * 2.0;
-              if (p.life <= 0) {
-                burst.particles.splice(j, 1);
-                continue;
-              }
-
-              anyAlive = true;
-
-              // Integrate
-              p.x += p.vx * dt;
-              p.y += p.vy * dt;
-
-              // Gentle damping so they slow as they fade
-              p.vx *= 0.9;
-              p.vy *= 0.9;
-
-              const alpha = p.life;
-              const radius = p.size;
-
-              fctx.globalAlpha = alpha;
-              fctx.fillStyle = 'rgba(255, 180, 210, 1)';
-              fctx.beginPath();
-              fctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
-              fctx.fill();
-            }
-
-            if (!anyAlive) {
-              noteBurstEffects.splice(i, 1);
-            }
-          }
-          fctx.restore();
-          if (__dgOverlayStart) {
-            const __dgOverlayDt = performance.now() - __dgOverlayStart;
-            try { window.__PerfFrameProf?.mark?.('drawgrid.overlay', __dgOverlayDt); } catch {}
-          }
+        if (__dgLowFpsMode) {
+          noteBurstEffects.length = 0;
+          // Skip burst draw work, but keep the rest of the overlay rendering.
         } else {
-          for (let i = noteBurstEffects.length - 1; i >= 0; i--) {
-            const burst = noteBurstEffects[i];
-            for (let j = burst.particles.length - 1; j >= 0; j--) {
-              const p = burst.particles[j];
-              p.life -= dt * 2.8;
-              if (p.life <= 0) {
-                burst.particles.splice(j, 1);
+          const dtMs = Number.isFinite(frameCam?.dt) ? frameCam.dt : 16.6;
+          const dt = Number.isFinite(dtMs) ? dtMs / 1000 : (1 / 60);
+
+          if (allowOverlayDrawHeavy) {
+            const __dgOverlayStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+              ? performance.now()
+              : 0;
+            fctx.save();
+            fctx.globalCompositeOperation = 'lighter';
+            for (let i = noteBurstEffects.length - 1; i >= 0; i--) {
+              const burst = noteBurstEffects[i];
+              let anyAlive = false;
+
+              for (let j = burst.particles.length - 1; j >= 0; j--) {
+                const p = burst.particles[j];
+
+                // Fade out – faster fade so the burst clears quickly
+                p.life -= dt * 2.0;
+                if (p.life <= 0) {
+                  burst.particles.splice(j, 1);
+                  continue;
+                }
+
+                anyAlive = true;
+
+                // Integrate
+                p.x += p.vx * dt;
+                p.y += p.vy * dt;
+
+                // Gentle damping so they slow as they fade
+                p.vx *= 0.9;
+                p.vy *= 0.9;
+
+                const alpha = p.life;
+                const radius = p.size;
+
+                fctx.globalAlpha = alpha;
+                fctx.fillStyle = 'rgba(255, 180, 210, 1)';
+                fctx.beginPath();
+                fctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+                fctx.fill();
+              }
+
+              if (!anyAlive) {
+                noteBurstEffects.splice(i, 1);
               }
             }
-            if (!burst.particles.length) {
-              noteBurstEffects.splice(i, 1);
+            fctx.restore();
+            if (__dgOverlayStart) {
+              const __dgOverlayDt = performance.now() - __dgOverlayStart;
+              try { window.__PerfFrameProf?.mark?.('drawgrid.overlay', __dgOverlayDt); } catch {}
+            }
+          } else {
+            for (let i = noteBurstEffects.length - 1; i >= 0; i--) {
+              const burst = noteBurstEffects[i];
+              for (let j = burst.particles.length - 1; j >= 0; j--) {
+                const p = burst.particles[j];
+                p.life -= dt * 2.8;
+                if (p.life <= 0) {
+                  burst.particles.splice(j, 1);
+                }
+              }
+              if (!burst.particles.length) {
+                noteBurstEffects.splice(i, 1);
+              }
             }
           }
         }
@@ -7288,55 +7325,70 @@ function syncBackBufferSizes() {
           pushHeaderSweepAt(playheadX, { lineWidthPx: gradientWidth });
           dbgPoke('header');
         } catch (e) { /* fail silently */ }
+
         const t = performance.now();
         const hue = 200 + 20 * Math.sin((t / 800) * Math.PI * 2);
         const midColor = `hsla(${(hue + 45).toFixed(0)}, 100%, 70%, 0.25)`;
 
-        const bgGrad = fctx.createLinearGradient(playheadX - gradientWidth / 2, 0, playheadX + gradientWidth / 2, 0);
-        bgGrad.addColorStop(0, 'rgba(0,0,0,0)');
-        bgGrad.addColorStop(0.5, midColor);
-        bgGrad.addColorStop(1, 'rgba(0,0,0,0)');
+        if (__dgPlayheadSimpleMode) {
+          fctx.globalAlpha = 0.9;
+          fctx.strokeStyle = `hsl(${(hue + 45).toFixed(0)}, 100%, 70%)`;
+          fctx.lineWidth = Math.max(2, cw * 0.08);
+          fctx.shadowColor = 'transparent';
+          fctx.shadowBlur = 0;
+          fctx.beginPath();
+          fctx.moveTo(playheadX, gridArea.y);
+          fctx.lineTo(playheadX, gridArea.y + gridArea.h);
+          fctx.stroke();
+          fctx.globalAlpha = 1.0;
+        } else {
 
-        fctx.fillStyle = bgGrad;
-        fctx.fillRect(playheadX - gradientWidth / 2, gridArea.y, gradientWidth, gridArea.h);
+          const bgGrad = fctx.createLinearGradient(playheadX - gradientWidth / 2, 0, playheadX + gradientWidth / 2, 0);
+          bgGrad.addColorStop(0, 'rgba(0,0,0,0)');
+          bgGrad.addColorStop(0.5, midColor);
+          bgGrad.addColorStop(1, 'rgba(0,0,0,0)');
 
-        // Optional: scale shadow/line widths a bit with cw
-        const trailLineWidth = Math.max(1.5, cw * 0.08);
-        fctx.lineWidth = trailLineWidth;
+          fctx.fillStyle = bgGrad;
+          fctx.fillRect(playheadX - gradientWidth / 2, gridArea.y, gradientWidth, gridArea.h);
 
-        // Create a vertical gradient that mimics the "Line 1" animated gradient.
-        const grad = fctx.createLinearGradient(playheadX, gridArea.y, playheadX, gridArea.y + gridArea.h);
-        grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 70%)`);
-        grad.addColorStop(0.5, `hsl(${(hue + 45).toFixed(0)}, 100%, 70%)`);
-        grad.addColorStop(1,  `hsl(${(hue + 90).toFixed(0)}, 100%, 68%)`);
+          // Optional: scale shadow/line widths a bit with cw
+          const trailLineWidth = Math.max(1.5, cw * 0.08);
+          fctx.lineWidth = trailLineWidth;
 
-        // --- Trailing lines ---
-        fctx.strokeStyle = grad; // Use same gradient for all
-        fctx.shadowColor = 'transparent'; // No shadow for trails
-        fctx.shadowBlur = 0;
+          // Create a vertical gradient that mimics the "Line 1" animated gradient.
+          const grad = fctx.createLinearGradient(playheadX, gridArea.y, playheadX, gridArea.y + gridArea.h);
+          grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 70%)`);
+          grad.addColorStop(0.5, `hsl(${(hue + 45).toFixed(0)}, 100%, 70%)`);
+          grad.addColorStop(1,  `hsl(${(hue + 90).toFixed(0)}, 100%, 68%)`);
 
-        const trailLineCount = 3;
-        const gap = 28; // A constant, larger gap
-        for (let i = 0; i < trailLineCount; i++) {
-            const trailX = playheadX - (i + 1) * gap;
-            fctx.globalAlpha = 0.6 - i * 0.18;
-            fctx.lineWidth = Math.max(1.0, 2.5 - i * 0.6);
-            fctx.beginPath();
-            fctx.moveTo(trailX, gridArea.y);
-            fctx.lineTo(trailX, gridArea.y + gridArea.h);
-            fctx.stroke();
+          // --- Trailing lines ---
+          fctx.strokeStyle = grad; // Use same gradient for all
+          fctx.shadowColor = 'transparent'; // No shadow for trails
+          fctx.shadowBlur = 0;
+
+          const trailLineCount = 3;
+          const gap = 28; // A constant, larger gap
+          for (let i = 0; i < trailLineCount; i++) {
+              const trailX = playheadX - (i + 1) * gap;
+              fctx.globalAlpha = 0.6 - i * 0.18;
+              fctx.lineWidth = Math.max(1.0, 2.5 - i * 0.6);
+              fctx.beginPath();
+              fctx.moveTo(trailX, gridArea.y);
+              fctx.lineTo(trailX, gridArea.y + gridArea.h);
+              fctx.stroke();
+          }
+          fctx.globalAlpha = 1.0; // Reset for main line
+
+          fctx.strokeStyle = grad;
+          fctx.lineWidth = 3;
+          fctx.shadowColor = 'rgba(255, 255, 255, 0.7)';
+          fctx.shadowBlur = 8;
+
+          fctx.beginPath();
+          fctx.moveTo(playheadX, gridArea.y);
+          fctx.lineTo(playheadX, gridArea.y + gridArea.h);
+          fctx.stroke();
         }
-        fctx.globalAlpha = 1.0; // Reset for main line
-
-        fctx.strokeStyle = grad;
-        fctx.lineWidth = 3;
-        fctx.shadowColor = 'rgba(255, 255, 255, 0.7)';
-        fctx.shadowBlur = 8;
-
-        fctx.beginPath();
-        fctx.moveTo(playheadX, gridArea.y);
-        fctx.lineTo(playheadX, gridArea.y + gridArea.h);
-        fctx.stroke();
 
         fctx.restore();
       }

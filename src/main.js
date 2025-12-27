@@ -1067,6 +1067,11 @@ function initFpsHud() {
       // Update HUD text
       if (__fpsHudEl) {
         __fpsHudEl.textContent = `FPS: ${__fpsValue.toFixed(1)}`;
+        const nowTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+          ? performance.now()
+          : Date.now();
+        const emergencyActive = !!window.__DG_EMERGENCY_MODE;
+        __fpsHudEl.style.color = emergencyActive ? '#ff3b30' : '#0f0';
       }
 
       // Expose FPS globally for any legacy uses (e.g. drawgrid tuning).

@@ -1051,9 +1051,7 @@ function render(panel, opts = {}) {
 
   // Gesture-only render throttle for unfocused toys: skip heavy draw, still update classes.
   let gestureRenderMod = Math.max(1, Number(window.__PERF_LOOPGRID_GESTURE_RENDER_MOD) || 1);
-  if (isGesturing && visibleCount >= 6) gestureRenderMod = Math.max(gestureRenderMod, 2);
-  if (isGesturing && visibleCount >= 10) gestureRenderMod = Math.max(gestureRenderMod, 3);
-  if (isGesturing && visibleCount >= 14) gestureRenderMod = Math.max(gestureRenderMod, 4);
+  if (isGesturing && visibleCount >= 12) gestureRenderMod = Math.max(gestureRenderMod, 2);
 
   let skipHeavy = false;
   if (isGesturing && !isFocused && gestureRenderMod > 1) {
@@ -1085,18 +1083,15 @@ function render(panel, opts = {}) {
   const adaptiveBudget = (() => {
     try { return getAdaptiveFrameBudget(); } catch { return null; }
   })();
+  const emergencyMode = !!adaptiveBudget?.emergencyMode;
   const particleBudget = adaptiveBudget?.particleBudget;
   const isOverview = (() => {
     try { return !!overviewMode?.isActive?.(); } catch { return false; }
   })();
-  const busyGesture = isGesturing && visibleCount >= 6;
-  const allowField = particleBudget?.allowField !== false && !isUnfocused && !isOverview && !busyGesture;
+  const allowField = particleBudget?.allowField !== false && !isUnfocused && !isOverview;
   if (particleCanvas) {
     try {
       if (isOverview) {
-        particleCanvas.style.opacity = '0';
-        particleCanvas.style.visibility = 'hidden';
-      } else if (busyGesture) {
         particleCanvas.style.opacity = '0';
         particleCanvas.style.visibility = 'hidden';
       } else {
@@ -1105,18 +1100,21 @@ function render(panel, opts = {}) {
       }
     } catch {}
   }
-  if (particleField) {
-    try {
-      if (particleBudget && typeof particleField.applyBudget === 'function') {
-        const maxCountScale = Math.max(0.15, (particleBudget.maxCountScale ?? 1) * (particleBudget.capScale ?? 1));
-        particleField.applyBudget({
-          maxCountScale,
-          capScale: particleBudget.capScale ?? 1,
-          tickModulo: particleBudget.tickModulo ?? 1,
-          sizeScale: particleBudget.sizeScale ?? 1,
-        });
-      }
-    } catch {}
+    if (particleField) {
+      try {
+        if (particleBudget && typeof particleField.applyBudget === 'function') {
+          const maxCountScale = Math.max(0.15, (particleBudget.maxCountScale ?? 1) * (particleBudget.capScale ?? 1));
+          particleField.applyBudget({
+            maxCountScale,
+            capScale: particleBudget.capScale ?? 1,
+            tickModulo: particleBudget.tickModulo ?? 1,
+            sizeScale: particleBudget.sizeScale ?? 1,
+            minCount: emergencyMode ? 0 : undefined,
+            emergencyFade: emergencyMode,
+            emergencyFadeSeconds: 5,
+          });
+        }
+      } catch {}
     if (allowField) {
       if (!Number.isFinite(st.lastParticleTick)) st.lastParticleTick = renderTime;
       const dt = Math.min(0.05, Math.max(0, (renderTime - st.lastParticleTick) / 1000));

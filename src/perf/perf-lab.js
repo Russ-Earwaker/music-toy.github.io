@@ -1143,18 +1143,44 @@ function makeToyRandomiseOnceScript({
   useSeededRandom = true,
   eventName = 'toy-random-notes',
   eventNames = null,
+  readyCheck = null,
+  retryMs = 250,
+  timeoutMs = 4000,
+  repeatCount = 1,
+  repeatEveryMs = 400,
 } = {}) {
   const fireAt = Math.max(0, Number(atMs) || 0);
   const sel = selector || '.toy-panel';
   const events = (Array.isArray(eventNames) && eventNames.length) ? eventNames : [eventName];
+  const retryEvery = Math.max(50, Number(retryMs) || 250);
+  const timeout = Math.max(0, Number(timeoutMs) || 0);
+  const repeats = Math.max(1, Math.round(repeatCount || 1));
+  const repeatEvery = Math.max(80, Number(repeatEveryMs) || 400);
 
   return function step(tMs) {
     if (step.__didFire) return;
     if (tMs < fireAt) return;
-    step.__didFire = true;
+    if (!step.__firstTryMs) step.__firstTryMs = tMs;
+    if (timeout > 0 && (tMs - step.__firstTryMs) > timeout) {
+      step.__didFire = true;
+      return;
+    }
 
     const panels = document.querySelectorAll(sel);
     if (!panels || panels.length === 0) return;
+    if (typeof readyCheck === 'function') {
+      let allReady = true;
+      panels.forEach((panel) => {
+        try { if (!readyCheck(panel)) allReady = false; } catch { allReady = false; }
+      });
+      if (!allReady) {
+        const k = Math.floor((tMs - fireAt) / retryEvery);
+        if (k !== step.__lastRetryK) step.__lastRetryK = k;
+        return;
+      }
+    }
+
+    if (!step.__fireStartMs) step.__fireStartMs = tMs;
 
     const fire = () => {
       panels.forEach((panel) => {
@@ -1164,21 +1190,36 @@ function makeToyRandomiseOnceScript({
       });
     };
 
-    if (useSeededRandom) {
-      const prev = Math.random;
-      let s = (seed >>> 0);
-      Math.random = () => {
-        s = (1664525 * s + 1013904223) >>> 0;
-        return s / 4294967296;
-      };
-      try {
+    const k = Math.floor((tMs - step.__fireStartMs) / repeatEvery);
+    if (k !== step.__lastFireK && k < repeats) {
+      step.__lastFireK = k;
+      if (useSeededRandom) {
+        const prev = Math.random;
+        let s = (seed + k * 1013904223) >>> 0;
+        Math.random = () => {
+          s = (1664525 * s + 1013904223) >>> 0;
+          return s / 4294967296;
+        };
+        try {
+          fire();
+        } finally {
+          Math.random = prev;
+        }
+      } else {
         fire();
-      } finally {
-        Math.random = prev;
       }
-    } else {
-      fire();
     }
+    if (k >= (repeats - 1)) step.__didFire = true;
+  };
+}
+
+function makeEnsureTransportScript({ atMs = 400 } = {}) {
+  const fireAt = Math.max(0, Number(atMs) || 0);
+  return function step(tMs) {
+    if (step.__didFire) return;
+    if (tMs < fireAt) return;
+    step.__didFire = true;
+    try { if (typeof startTransport === 'function') startTransport(); } catch {}
   };
 }
 
@@ -2290,6 +2331,11 @@ async function runP5a() {
     seed: 1337,
     useSeededRandom: true,
     eventNames: ['toy-random', 'toy-random-notes'],
+    readyCheck: (panel) => !!panel?.__dgPerfWarmup,
+    retryMs: 300,
+    timeoutMs: 6000,
+    repeatCount: 4,
+    repeatEveryMs: 500,
   });
   const randLoop = makeToyRandomiseOnceScript({
     selector: '.toy-panel[data-toy="loopgrid"], .toy-panel[data-toy="loopgrid-drum"]',
@@ -2297,6 +2343,11 @@ async function runP5a() {
     seed: 1337,
     useSeededRandom: true,
     eventNames: ['toy-random', 'toy-random-notes'],
+    readyCheck: (panel) => !!panel?.__simpleRhythmVisualState,
+    retryMs: 300,
+    timeoutMs: 6000,
+    repeatCount: 3,
+    repeatEveryMs: 500,
   });
   const step = composeSteps(panZoom, randDraw, randLoop);
   await runVariantPlaying(
@@ -2335,6 +2386,11 @@ async function runP6a() {
     seed: 1337,
     useSeededRandom: true,
     eventNames: ['toy-random', 'toy-random-notes'],
+    readyCheck: (panel) => !!panel?.__dgPerfWarmup,
+    retryMs: 300,
+    timeoutMs: 6000,
+    repeatCount: 4,
+    repeatEveryMs: 500,
   });
   const randLoop = makeToyRandomiseOnceScript({
     selector: '.toy-panel[data-toy="loopgrid"], .toy-panel[data-toy="loopgrid-drum"]',
@@ -2342,6 +2398,11 @@ async function runP6a() {
     seed: 1337,
     useSeededRandom: true,
     eventNames: ['toy-random', 'toy-random-notes'],
+    readyCheck: (panel) => !!panel?.__simpleRhythmVisualState,
+    retryMs: 300,
+    timeoutMs: 6000,
+    repeatCount: 3,
+    repeatEveryMs: 500,
   });
   const step = composeSteps(panZoom, randDraw, randLoop);
   await runVariantPlaying(
@@ -2366,7 +2427,8 @@ async function runP6b() {
     useSeededRandom: true,
     eventNames: ['toy-random', 'toy-random-notes'],
   });
-  const step = composeSteps(randDraw, randLoop);
+  const ensurePlay = makeEnsureTransportScript({ atMs: 600 });
+  const step = composeSteps(randDraw, randLoop, ensurePlay);
   await runVariantPlaying(
     'P6b_avg_mix_playing_static_rand',
     step,
@@ -2399,7 +2461,8 @@ async function runP6c() {
     useSeededRandom: true,
     eventNames: ['toy-random', 'toy-random-notes'],
   });
-  const step = composeSteps(panZoom, randDraw, randLoop);
+  const ensurePlay = makeEnsureTransportScript({ atMs: 600 });
+  const step = composeSteps(panZoom, randDraw, randLoop, ensurePlay);
   await runVariantPlaying(
     'P6c_avg_mix_playing_extreme_zoom',
     step,

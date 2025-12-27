@@ -13,29 +13,65 @@ let currentQuality = QUALITY.ULTRA;
 let lastFpsSample = 60;
 let smoothedFps = 60;
 let qualityLock = null; // when set, prevents FPS-driven changes
+let emergencyMode = false;
+let emergencySince = 0;
+let emergencyExitSince = 0;
 
 // Low-pass filter for noisy FPS samples so we don't thrash quality tiers.
 const FPS_SMOOTH_ALPHA = 0.18;
+const EMERGENCY_FPS_ENTER = 22;
+const EMERGENCY_FPS_EXIT = 28;
+const EMERGENCY_SUSTAIN_MS = 1200;
+const EMERGENCY_EXIT_SUSTAIN_MS = 1200;
 
 /**
  * Call this from the global FPS HUD once per frame-ish.
  * It maps a recent FPS sample to a quality tier.
  */
 export function updateParticleQualityFromFps(fps) {
-  if (qualityLock) {
-    if (Number.isFinite(fps) && fps > 0) {
-      lastFpsSample = fps;
-      if (!Number.isFinite(smoothedFps)) smoothedFps = fps;
-      smoothedFps = smoothedFps + (fps - smoothedFps) * FPS_SMOOTH_ALPHA;
-    }
-    currentQuality = qualityLock;
-    return currentQuality;
-  }
-
   if (!Number.isFinite(fps) || fps <= 0) return;
   lastFpsSample = fps;
   if (!Number.isFinite(smoothedFps)) smoothedFps = fps;
   smoothedFps = smoothedFps + (fps - smoothedFps) * FPS_SMOOTH_ALPHA;
+
+  const nowTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+    ? performance.now()
+    : Date.now();
+  const emergencySample = Math.min(smoothedFps, lastFpsSample);
+  const prevEmergency = emergencyMode;
+  if (emergencySample <= EMERGENCY_FPS_ENTER) {
+    if (!emergencySince) emergencySince = nowTs;
+    emergencyExitSince = 0;
+    if (!emergencyMode && (nowTs - emergencySince) >= EMERGENCY_SUSTAIN_MS) {
+      emergencyMode = true;
+    }
+  } else if (emergencySample >= EMERGENCY_FPS_EXIT) {
+    emergencySince = 0;
+    if (emergencyMode) {
+      if (!emergencyExitSince) emergencyExitSince = nowTs;
+      if ((nowTs - emergencyExitSince) >= EMERGENCY_EXIT_SUSTAIN_MS) {
+        emergencyMode = false;
+        emergencyExitSince = 0;
+      }
+    } else {
+      emergencyExitSince = 0;
+    }
+  } else if (!emergencyMode) {
+    emergencySince = 0;
+    emergencyExitSince = 0;
+  }
+  if (prevEmergency !== emergencyMode) {
+    try { if (window.__PERF_LAB_VERBOSE) console.log('[Particles][emergency] mode', { active: emergencyMode, fps: lastFpsSample, smoothed: smoothedFps }); } catch {}
+  }
+  try {
+    window.__DG_EMERGENCY_MODE = emergencyMode;
+    if (emergencyMode) window.__DG_EMERGENCY_MODE_TS = nowTs;
+  } catch {}
+
+  if (qualityLock) {
+    currentQuality = qualityLock;
+    return currentQuality;
+  }
 
   // Hysteretic mapping to avoid chatter around thresholds.
   const q = currentQuality;
@@ -50,6 +86,7 @@ export function updateParticleQualityFromFps(fps) {
   }
 
   // Keep fields on; rely on budget scaling rather than full disable for reactivity.
+
 }
 
 /**
@@ -87,6 +124,7 @@ export function setParticleQualityLock(q) {
 }
 
 export function getParticleQualityLock() { return qualityLock; }
+export function getEmergencyParticleMode() { return emergencyMode; }
 
 /**
  * Returns a simple "budget" object that particle systems / toys can use
@@ -158,6 +196,7 @@ export function getAdaptiveFrameBudget() {
     fps: lastFpsSample,
     smoothedFps,
     quality,
+    emergencyMode,
     particleBudget: {
       ...baseBudget,
       capScale: particleCapScale,

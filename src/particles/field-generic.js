@@ -41,6 +41,8 @@ const MAX_FADE_OUT_STEP = 16;
 const MIN_FADE_STEP = 2;
 const MEASURE_MIN_MS = 120; // throttle layout reads to reduce reflows
 const VISIBILITY_MIN_MS = 220; // throttle viewport checks
+const VISIBILITY_ENTER_MARGIN_PX = 30; // stricter for re-enter
+const VISIBILITY_EXIT_MARGIN_PX = -60; // lenient for staying visible
 const ZOOM_DENSITY_MIN = 0.4;
 const ZOOM_DENSITY_MAX = 2.2;
 const ZOOM_DENSITY_SMOOTH = 0.2;
@@ -325,6 +327,11 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     pulseEnergy: 0,
     lodScale: 1,
     capScale: 1,
+    minParticles: MIN_PARTICLES,
+    emergencyFade: false,
+    emergencyFadeSeconds: 5,
+    smoothRecoverUntil: 0,
+    emergencyDbg: { ticks: 0, fades: 0, lastTs: 0 },
     tickModulo: 1,
     tickModuloCounter: 0,
     tickAccumDt: 0,
@@ -419,9 +426,12 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     const lodScale = Math.max(0.15, Math.min(1, state.lodScale || 1));
     const spacingScale = lodScale > 0 ? (1 / Math.sqrt(lodScale)) : 1;
     state.spacing = Math.max(8, (spacingCandidate || computedLayout.spacing || 8) * spacingScale);
+    const minParticles = Number.isFinite(state.minParticles) ? Math.max(0, Math.round(state.minParticles)) : MIN_PARTICLES;
     const capBase = Number.isFinite(config.cap) ? config.cap : Number.POSITIVE_INFINITY;
-    const cap = Math.max(1, Math.round(capBase * Math.max(0.1, Math.min(1.25, state.capScale || 1))));
-    const target = Math.max(MIN_PARTICLES, Math.min(cap, Math.max(1, Math.round(resolvedCount * lodScale))));
+    const capScale = Math.max(0, Math.min(1.25, state.capScale || 1));
+    const cap = Math.max(1, Math.round(capBase * capScale));
+    let target = Math.max(minParticles, Math.min(cap, Math.max(1, Math.round(resolvedCount * lodScale))));
+    if (state.emergencyFade && minParticles === 0) target = 0;
     state.targetDesired = target;
 
     if (state.particles.length) {
@@ -448,22 +458,30 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
       }
     }
 
+    const nowTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+      ? performance.now()
+      : Date.now();
+    const smoothRecover = !state.emergencyFade && state.smoothRecoverUntil && nowTs < state.smoothRecoverUntil;
+
     // Initial fill: if empty, seed to the target immediately so we don't draw blanks.
     if (!state.particles.length && target > 0) {
       const seedKey = `${config.seed}:${state.w}x${state.h}`;
       const rng = makeRng(seedKey);
-      while (state.particles.length < target) {
+      const seedCount = smoothRecover ? Math.max(6, Math.round(target * 0.12)) : target;
+      while (state.particles.length < seedCount) {
         const x = rng() * state.w;
         const y = rng() * state.h;
         const a = rng();
         const rPx = particleRadiusPx(rng);
         state.particles.push({
           x, y, hx: x, hy: y, vx: 0, vy: 0, a, rPx,
-          fade: 1, fadeTarget: 1, fadeRate: FADE_IN_RATE,
+          fade: smoothRecover ? 0 : 1,
+          fadeTarget: 1,
+          fadeRate: smoothRecover ? FADE_IN_RATE * 0.6 : FADE_IN_RATE,
         });
       }
     }
-    reconcileParticleCount(0, true);
+    reconcileParticleCount(0, !smoothRecover);
   }
 
   function resize() {
@@ -502,8 +520,15 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     const rect = canvas.getBoundingClientRect();
     const vw = window.innerWidth || 0;
     const vh = window.innerHeight || 0;
+    const marginPx = __lastVisible ? VISIBILITY_EXIT_MARGIN_PX : VISIBILITY_ENTER_MARGIN_PX;
+    let left = marginPx;
+    let top = marginPx;
+    let right = vw - marginPx;
+    let bottom = vh - marginPx;
+    if (right < left) right = left;
+    if (bottom < top) bottom = top;
     const visible = !!rect && rect.width > 0 && rect.height > 0 &&
-      rect.right >= 0 && rect.bottom >= 0 && rect.left <= vw && rect.top <= vh;
+      rect.right >= left && rect.bottom >= top && rect.left <= right && rect.top <= bottom;
     __lastVisible = visible;
     return visible;
   }
@@ -729,6 +754,24 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
       } catch {}
       return true;
     })();
+    if (state.emergencyFade) {
+      // Allow emergency fades to progress even during heavy gestures.
+      state.gestureSkip = 0;
+      state.gestureDrawCounter = 0;
+      try {
+        const dbg = state.emergencyDbg || (state.emergencyDbg = { ticks: 0, fades: 0, lastTs: 0 });
+        dbg.ticks += 1;
+        const now = performance?.now?.() ?? Date.now();
+        if (now - dbg.lastTs > 800) {
+          dbg.lastTs = now;
+          const active = Array.isArray(state.particles) ? state.particles.length : 0;
+          const desired = Number.isFinite(state.targetDesired) ? Math.round(state.targetDesired) : null;
+          if (window.__PERF_LAB_VERBOSE) {
+            console.log('[Particles][emergency] tick', { label: fieldLabel, ticks: dbg.ticks, fades: dbg.fades, active, desired, min: state.minParticles, emergency: state.emergencyFade });
+          }
+        }
+      } catch {}
+    }
 
     // Real policy: during pan/zoom, freeze particle fields for unfocused toys.
     // (Diagnostic modulo can still run below if enabled.)
@@ -742,7 +785,7 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
       }
     })();
 
-    if (gestureThrottlingActive && shouldFreezeUnfocusedDuringGesture) {
+    if (gestureThrottlingActive && shouldFreezeUnfocusedDuringGesture && !state.emergencyFade) {
       try {
         const focusRef = (typeof opts.isFocusedRef === 'function')
           ? opts.isFocusedRef
@@ -763,7 +806,7 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
 
     // PerfLab diagnostic: during gesture, only allow 1/N fields to tick fully.
     // This tests whether "too many canvases updating at once" is the main pan/zoom multiplier.
-    if (gestureThrottlingActive) {
+    if (gestureThrottlingActive && !state.emergencyFade) {
       const fm = readPerfGestureFieldModulo();
       if (fm > 1) {
         const k = ((fieldId % fm) | 0);
@@ -815,7 +858,7 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     effectiveDt = Math.min(0.12, effectiveDt); // avoid huge leaps when heavily throttled
 
     // During active zoom gestures, throttle particle physics to cut CPU while keeping visuals.
-    if (gestureThrottlingActive) {
+    if (gestureThrottlingActive && !state.emergencyFade) {
       state.gestureSkip = (state.gestureSkip + 1) % 2; // run physics every other frame
       if (state.gestureSkip !== 0) {
         // On non-physics frames, do minimal work; only do the heavier loops when we're going to draw.
@@ -837,11 +880,17 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     }
 
     reconcileParticleCount(effectiveDt);
+    if (state.emergencyFade) {
+      try {
+        const dbg = state.emergencyDbg || (state.emergencyDbg = { ticks: 0, fades: 0, lastTs: 0 });
+        dbg.fades += 1;
+      } catch {}
+    }
     updateFades(effectiveDt);
     step(effectiveDt);
     twinkle(effectiveDt);
     if (!skipDraw) {
-      if (gestureThrottlingActive) {
+      if (gestureThrottlingActive && !state.emergencyFade) {
         const dm = readPerfGestureDrawModulo();
         state.drawCounter = (state.drawCounter + 1) % dm;
         if (state.drawCounter === 0) draw();
@@ -861,17 +910,46 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
   }
 
   function applyBudget(budget = {}) {
-    const { maxCountScale, capScale, tickModulo, sizeScale } = budget;
+    const { maxCountScale, capScale, tickModulo, sizeScale, minCount, emergencyFade, emergencyFadeSeconds } = budget;
     let changed = false;
+    if (Number.isFinite(minCount) || (emergencyFade === true && !Number.isFinite(minCount))) {
+      const nextMin = Math.max(0, Math.round(Number.isFinite(minCount) ? minCount : 0));
+      if (state.minParticles !== nextMin) {
+        state.minParticles = nextMin;
+        changed = true;
+      }
+    }
+    if (typeof emergencyFade === 'boolean') {
+      if (state.emergencyFade !== emergencyFade) {
+        const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+          ? performance.now()
+          : Date.now();
+        if (state.emergencyFade && !emergencyFade) {
+          state.smoothRecoverUntil = now + 3000;
+        }
+        state.emergencyFade = emergencyFade;
+        try { if (window.__PERF_LAB_VERBOSE) console.log('[Particles][emergency] field', { label: fieldLabel, active: emergencyFade }); } catch {}
+        changed = true;
+      }
+    }
+    if (Number.isFinite(emergencyFadeSeconds)) {
+      const nextSeconds = Math.max(0.2, emergencyFadeSeconds);
+      if (state.emergencyFadeSeconds !== nextSeconds) {
+        state.emergencyFadeSeconds = nextSeconds;
+        changed = true;
+      }
+    }
     if (Number.isFinite(maxCountScale)) {
-      const target = Math.max(0.15, Math.min(1.0, maxCountScale));
+      const minScale = (Number.isFinite(state.minParticles) && state.minParticles <= 0) ? 0 : 0.15;
+      const target = Math.max(minScale, Math.min(1.0, maxCountScale));
       if (!Number.isFinite(state.lodScale)) state.lodScale = target;
       const alpha = target > state.lodScale ? 0.12 : 0.05; // ease down slower to avoid sudden drops
       state.lodScale = state.lodScale + (target - state.lodScale) * alpha;
       changed = true;
     }
     if (Number.isFinite(capScale)) {
-      const target = Math.max(0.1, Math.min(1.25, capScale));
+      const minCap = (Number.isFinite(state.minParticles) && state.minParticles <= 0) ? 0 : 0.1;
+      const target = Math.max(minCap, Math.min(1.25, capScale));
       if (!Number.isFinite(state.capScale)) state.capScale = target;
       const alpha = target > state.capScale ? 0.12 : 0.05;
       state.capScale = state.capScale + (target - state.capScale) * alpha;
@@ -894,7 +972,9 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
   }
 
   function reconcileParticleCount(dt = 1 / 60, immediate = false) {
-    const desired = Math.max(MIN_PARTICLES, Math.round(state.targetDesired || 0));
+    const minParticles = Number.isFinite(state.minParticles) ? Math.max(0, Math.round(state.minParticles)) : MIN_PARTICLES;
+    let desired = Math.max(minParticles, Math.round(state.targetDesired || 0));
+    if (state.emergencyFade && minParticles === 0) desired = 0;
     const gestureActive = isZoomGesturing();
     const gestureThrottlingActive = gestureActive && canGestureThrottle() && (() => {
       try {
@@ -903,9 +983,9 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
       } catch {}
       return true;
     })();
-    // During active drag/zoom, avoid heavy filtering + count churn.
-    // We keep counts stable until gesture ends.
-    if (gestureThrottlingActive && !immediate) return;
+    // During active drag/zoom, avoid heavy filtering + count churn,
+    // unless we're in emergency fade and need to drop counts quickly.
+    if (gestureThrottlingActive && !immediate && !state.emergencyFade) return;
 
     const activeParticles = state.particles.filter(p => (p.fadeTarget ?? 1) > 0 || (p.fade ?? 0) > 0.05);
     const active = activeParticles.length;
@@ -928,7 +1008,11 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
       return;
     }
 
-    const adjustStep = Math.max(1, Math.round(ADJUST_PER_SEC * dt));
+    let adjustStep = Math.max(1, Math.round(ADJUST_PER_SEC * dt));
+    if (state.emergencyFade) {
+      const emergencyTarget = Math.ceil(active * Math.max(0.05, dt / Math.max(0.5, state.emergencyFadeSeconds || 5)));
+      adjustStep = Math.max(adjustStep, emergencyTarget);
+    }
 
     if (active < desired) {
       const need = desired - active;
@@ -948,15 +1032,16 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
         });
       }
     } else if (active > desired) {
-      const maxTrim = Math.max(MIN_FADE_STEP, Math.round(active * MAX_FADE_OUT_FRACTION));
-      const trimBudget = Math.min(adjustStep, MAX_FADE_OUT_STEP, maxTrim, active - MIN_PARTICLES);
+      const maxTrim = Math.max(MIN_FADE_STEP, Math.round(active * (state.emergencyFade ? 0.2 : MAX_FADE_OUT_FRACTION)));
+      const maxStep = state.emergencyFade ? (MAX_FADE_OUT_STEP * 4) : MAX_FADE_OUT_STEP;
+      const trimBudget = Math.min(adjustStep, maxStep, maxTrim, active - minParticles);
       const candidates = activeParticles.filter(p => (p.fadeTarget ?? 1) > 0);
       const budget = Math.min(trimBudget, candidates.length);
       for (let i = 0; i < budget && candidates.length; i++) {
         const idx = Math.floor(Math.random() * candidates.length);
         const p = candidates.splice(idx, 1)[0];
         p.fadeTarget = 0;
-        p.fadeRate = FADE_OUT_RATE;
+        p.fadeRate = state.emergencyFade ? (FADE_OUT_RATE * 2.2) : FADE_OUT_RATE;
       }
     }
   }
