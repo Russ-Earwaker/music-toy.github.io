@@ -6491,7 +6491,16 @@ function syncBackBufferSizes() {
   function updatePanelParticleState(boardScaleValue) {
     const adaptive = (() => {
       try {
-        return getAdaptiveFrameBudget();
+        const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+          ? performance.now()
+          : Date.now();
+        const cache = globalDrawgridState?.__adaptiveCache;
+        if (cache && cache.value && (now - cache.ts) < 80) return cache.value;
+        const value = getAdaptiveFrameBudget();
+        if (globalDrawgridState && value) {
+          globalDrawgridState.__adaptiveCache = { value, ts: now };
+        }
+        return value;
       } catch {
         return null;
       }
