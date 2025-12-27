@@ -1,0 +1,12 @@
+{
+  "queue": [
+    "buildP6",
+    "runP6e",
+    "runP6eNoPaint",
+    "runP6ePaintOnly",
+    "runP6eNoDom"
+  ],
+  "notes": "Avg mix: 4 draw toys + 4 loopgrid chains (len 4) extreme zoom. Loopgrid playhead/burst sprite caching.",
+  "runTag": "loopgrid-sprites",
+  "postUrl": "http://localhost:5174/perf-lab-results"
+}

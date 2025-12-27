@@ -1,0 +1,68 @@
+{
+  "createdAt": "2025-12-26T16:16:50.324Z",
+  "href": "http://192.168.0.62:5500/index.html",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+  "meta": {
+    "queue": [
+      "buildP6",
+      "runP6a"
+    ],
+    "notes": "Avg mix: 4 draw toys + 4 loopgrid chains (len 4) pan/zoom.",
+    "runId": ""
+  },
+  "results": [
+    {
+      "label": "P6a_avg_mix_playing_panzoom_rand",
+      "durationMs": 30000,
+      "warmupMs": 1200,
+      "createdAt": "2025-12-26T16:16:50.323Z",
+      "samples": 1115,
+      "frameMs": {
+        "avg": 25.8360538116592,
+        "p50": 16.700000000004366,
+        "p95": 66.69999999999709,
+        "p99": 83.39999999999418,
+        "worst": 100.19999999999709
+      },
+      "counts": {
+        "over16ms": 652,
+        "over33ms": 365,
+        "over50ms": 83
+      },
+      "pulseCount": 0,
+      "outlineSyncCount": 0,
+      "sceneMeta": {
+        "toys": 20,
+        "chainMarkers": 16,
+        "cam": null
+      },
+      "particleToggles": {
+        "skipUpdate": false,
+        "skipDraw": false,
+        "budgetMul": 1,
+        "gestureDrawModulo": 2,
+        "gestureFieldModulo": 2,
+        "freezeUnfocusedDuringGesture": true,
+        "logFreeze": false,
+        "__gestureAuto": {
+          "toys": 20,
+          "fps": 41.398820303962225,
+          "mode": "draw"
+        }
+      },
+      "particleTempPatch": null,
+      "playing": true,
+      "flags": {
+        "disableLoopgridRender": false,
+        "disableChains": false,
+        "disableTapDots": false,
+        "disableOverlays": false,
+        "disablePulses": false,
+        "freezeAllUnfocused": false,
+        "loopgridGestureRenderMod": 1,
+        "loopgridChainCache": false
+      },
+      "gestureSkipCount": 0
+    }
+  ]
+}

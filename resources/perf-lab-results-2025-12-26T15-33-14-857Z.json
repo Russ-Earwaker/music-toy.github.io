@@ -1,0 +1,63 @@
+{
+  "createdAt": "2025-12-26T15:33:14.849Z",
+  "href": "http://192.168.0.62:5500/index.html",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+  "meta": {
+    "queue": [
+      "buildP5",
+      "runP5a"
+    ],
+    "notes": "Mixed draw + loopgrid pan/zoom run.",
+    "runId": ""
+  },
+  "results": [
+    {
+      "label": "P5a_mixed_draw_loopgrid_playing_panzoom_rand",
+      "durationMs": 30000,
+      "warmupMs": 1200,
+      "createdAt": "2025-12-26T15:33:14.846Z",
+      "samples": 696,
+      "frameMs": {
+        "avg": 41.53333333333334,
+        "p50": 33.400000000001455,
+        "p95": 83.39999999999418,
+        "p99": 100.19999999999709,
+        "worst": 199.6999999999971
+      },
+      "counts": {
+        "over16ms": 666,
+        "over33ms": 603,
+        "over50ms": 142
+      },
+      "pulseCount": 963,
+      "outlineSyncCount": 963,
+      "sceneMeta": {
+        "toys": 24,
+        "chainMarkers": 0,
+        "cam": null
+      },
+      "particleToggles": {
+        "skipUpdate": false,
+        "skipDraw": false,
+        "budgetMul": 1,
+        "gestureDrawModulo": 4,
+        "gestureFieldModulo": 1,
+        "freezeUnfocusedDuringGesture": true,
+        "logFreeze": false
+      },
+      "particleTempPatch": null,
+      "playing": true,
+      "flags": {
+        "disableLoopgridRender": false,
+        "disableChains": false,
+        "disableTapDots": false,
+        "disableOverlays": false,
+        "disablePulses": false,
+        "freezeAllUnfocused": false,
+        "loopgridGestureRenderMod": 1,
+        "loopgridChainCache": false
+      },
+      "gestureSkipCount": 0
+    }
+  ]
+}

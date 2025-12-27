@@ -4,6 +4,7 @@
 import { setParticleQualityLock } from '../particles/ParticleQuality.js';
 import { start as startTransport, stop as stopTransport, isRunning } from '../audio-core.js';
 import { initBoardAnchor } from '../board-anchor.js';
+import { getCommittedState } from '../zoom/ZoomCoordinator.js';
 import { runBenchmark } from './PerfHarness.js';
 import { makePanZoomScript, makePanZoomCommitSpamScript, makeOverviewSpamScript, makeOverviewOnceScript, makeDrawgridRandomiseOnceScript } from './PerfScripts.js';
 import { buildParticleWorstCase } from './StressSceneParticles.js';
@@ -125,7 +126,34 @@ function ensureUI() {
     ]),
   };
 
-  const tests = [...P2.runs, ...P3.runs, ...P4.runs];
+  
+
+  const P5 = {
+    title: 'P5 - Mixed Draw + Simple Rhythm',
+    build: btn('buildP5', 'Build P5: Mixed Draw + SR', 'primary'),
+    runs: sortByLabel([
+      { act: 'runP5a', label: 'Run P5a: Playing Pan/Zoom (Random Notes)' },
+      { act: 'runP5b', label: 'Run P5b: Pan/Zoom (Gesture Draw 1/2)' },
+      { act: 'runP5c', label: 'Run P5c: Pan/Zoom (Gesture Fields 1/2)' },
+    ]),
+  };
+
+    const P6 = {
+    title: 'P6 - Avg Mix (4 SR Chains + 4 Draw)',
+    build: btn('buildP6', 'Build P6: Avg Mix', 'primary'),
+    runs: sortByLabel([
+      { act: 'runP6a', label: 'Run P6a: Playing Pan/Zoom (Random Notes)' },
+      { act: 'runP6b', label: 'Run P6b: Playing Static (Random Notes)' },
+      { act: 'runP6c', label: 'Run P6c: Playing Extreme Zoom (Random Notes)' },
+      { act: 'runP6d', label: 'Run P6d: Extreme Zoom (Gesture Mod 1/4)' },
+      { act: 'runP6e', label: 'Run P6e: Extreme Zoom + Zoom Profiling' },
+      { act: 'runP6eNoPaint', label: 'Run P6e: Extreme Zoom + No Paint' },
+      { act: 'runP6ePaintOnly', label: 'Run P6e: Extreme Zoom + Paint Only' },
+      { act: 'runP6eNoDom', label: 'Run P6e: Extreme Zoom + No DOM Updates' },
+    ]),
+  };
+
+  const tests = [...P2.runs, ...P3.runs, ...P4.runs, ...P5.runs, ...P6.runs];
   if (!window.__PERF_LAB_TESTS_LOGGED) {
     window.__PERF_LAB_TESTS_LOGGED = true;
     try { console.log('[perf-lab] tests:', tests.map(t => t.label)); } catch {}
@@ -135,6 +163,8 @@ function ensureUI() {
     section(P2.title, `${P2.build}${P2.runs.map(r => btn(r.act, r.label)).join('')}`),
     section(P3.title, `${P3.build}${P3.runs.map(r => btn(r.act, r.label)).join('')}`),
     section(P4.title, `${P4.build}${P4.runs.map(r => btn(r.act, r.label)).join('')}`),
+    section(P5.title, `${P5.build}${P5.runs.map(r => btn(r.act, r.label)).join('')}`),
+    section(P6.title, `${P6.build}${P6.runs.map(r => btn(r.act, r.label)).join('')}`),
   ].join('');
 
   ov.innerHTML = `
@@ -177,6 +207,7 @@ function ensureUI() {
           </div>
 
           <div class="perf-lab-row perf-lab-footer">
+            <button class="perf-lab-btn" data-act="auto">Run Auto (Saved)</button>
             <button class="perf-lab-btn" data-act="copy">Copy Last Results</button>
             <div class="perf-lab-status" id="perf-lab-status">Idle</div>
           </div>
@@ -327,6 +358,28 @@ function ensureUI() {
     if (act === 'runP4k') await runP4k();
     if (act === 'runP4m') await runP4m();
     if (act === 'runP4n') await runP4n();
+    if (act === 'buildP5') buildP5();
+    if (act === 'runP5a') await runP5a();
+    if (act === 'runP5b') await runP5b();
+    if (act === 'runP5c') await runP5c();
+    if (act === 'buildP6') buildP6();
+    if (act === 'runP6a') await runP6a();
+    if (act === 'runP6b') await runP6b();
+    if (act === 'runP6c') await runP6c();
+    if (act === 'runP6d') await runP6d();
+    if (act === 'runP6e') await runP6e();
+    if (act === 'runP6eNoPaint') await runP6eNoPaint();
+    if (act === 'runP6ePaintOnly') await runP6ePaintOnly();
+    if (act === 'runP6eNoDom') await runP6eNoDom();
+    if (act === 'auto') {
+      const cfgFile = await readAutoConfigFromFile();
+      const cfg = cfgFile || readAutoConfig();
+      if (!cfg || !cfg.queue || !cfg.queue.length) {
+        setStatus('Auto-run: no saved config');
+        return;
+      }
+      await runAuto(cfg);
+    }
     if (act === 'copy') copyLast();
   });
 
@@ -350,6 +403,222 @@ function ensureUI() {
 
 let lastResult = null;
 let lastResults = [];
+
+let lastBundle = null;
+
+const PERF_LAB_STORAGE_KEY = 'perfLab:lastResults';
+const PERF_LAB_AUTO_KEY = 'perfLab:auto';
+
+function normalizeQueue(input) {
+  if (!input) return [];
+  if (Array.isArray(input)) return input.map(s => String(s || '').trim()).filter(Boolean);
+  if (typeof input === 'string') {
+    return input
+      .split(/[,\s]+/)
+      .map(s => s.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function safeJsonParse(raw) {
+  try { return JSON.parse(raw); } catch { return null; }
+}
+
+function buildResultsBundle(results, meta = {}) {
+  const href = (typeof location !== 'undefined' && location.href) ? location.href : '';
+  const ua = (typeof navigator !== 'undefined' && navigator.userAgent) ? navigator.userAgent : '';
+  return {
+    createdAt: new Date().toISOString(),
+    href,
+    userAgent: ua,
+    meta: { ...meta },
+    results: Array.isArray(results) ? results : [],
+  };
+}
+
+function saveResultsBundle(bundle, key = PERF_LAB_STORAGE_KEY) {
+  if (!bundle) return false;
+  try {
+    localStorage.setItem(key, JSON.stringify(bundle));
+    return true;
+  } catch (err) {
+    console.warn('[PerfLab] saveResults failed', err);
+    return false;
+  }
+}
+
+async function postResultsBundle(bundle, url) {
+  if (!bundle || !url) return false;
+  try {
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bundle),
+    });
+    return true;
+  } catch (err) {
+    console.warn('[PerfLab] postResults failed', err);
+    return false;
+  }
+}
+
+function downloadResultsBundle(bundle, filename = 'perf-lab-results.json') {
+  if (!bundle) return false;
+  try {
+    const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    return true;
+  } catch (err) {
+    console.warn('[PerfLab] downloadResults failed', err);
+    return false;
+  }
+}
+
+function readAutoConfig() {
+  let cfg = null;
+  try {
+    const params = new URLSearchParams(window.location.search || '');
+    const raw = params.get('perfAuto') || params.get('perfLabAuto') || '';
+    if (raw) {
+      const parsed = safeJsonParse(raw);
+      if (parsed && typeof parsed === 'object') cfg = parsed;
+      else cfg = { queue: normalizeQueue(raw) };
+      const delayMs = Number(params.get('perfAutoDelay') || '');
+      if (Number.isFinite(delayMs)) cfg.delayMs = delayMs;
+      const postUrl = params.get('perfResultsUrl');
+      if (postUrl) cfg.postUrl = postUrl;
+      const saveKey = params.get('perfSaveKey');
+      if (saveKey) cfg.saveKey = saveKey;
+      const download = params.get('perfDownload');
+      const autoStart = params.get('perfAutoStart');
+      if (autoStart === '1' || autoStart === 'true') cfg.autoStart = true;
+      if (download === '1' || download === 'true') cfg.download = true;
+    }
+  } catch {}
+
+  if (!cfg) {
+    try {
+      const stored = localStorage.getItem(PERF_LAB_AUTO_KEY);
+      const parsed = safeJsonParse(stored || '');
+      if (parsed && typeof parsed === 'object') cfg = parsed;
+    } catch {}
+  }
+
+  if (!cfg && typeof window !== 'undefined' && window.__PERF_LAB_AUTO) {
+    cfg = (typeof window.__PERF_LAB_AUTO === 'object')
+      ? { ...window.__PERF_LAB_AUTO }
+      : { queue: normalizeQueue(window.__PERF_LAB_AUTO) };
+  }
+
+  if (cfg) cfg.queue = normalizeQueue(cfg.queue || cfg.list || cfg.tests);
+  return cfg;
+}
+
+async function readAutoConfigFromFile(filePath = 'resources/perf-lab-auto.json') {
+  try {
+    const res = await fetch(filePath, { cache: 'no-store' });
+    if (!res || !res.ok) return null;
+    const data = await res.json();
+    if (!data || typeof data !== 'object') return null;
+    data.queue = normalizeQueue(data.queue || data.list || data.tests);
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+
+async function resolveResultsConfig() {
+  const cfgFile = await readAutoConfigFromFile();
+  const cfg = cfgFile || readAutoConfig() || {};
+  return cfg;
+}
+
+async function publishResultBundle(result, meta = {}) {
+  if (!result) return null;
+  const cfg = await resolveResultsConfig();
+  const bundle = buildResultsBundle([result], {
+    queue: meta.queue || cfg.queue || [],
+    notes: (meta.notes != null) ? meta.notes : (cfg.notes || ''),
+    runId: (meta.runId != null) ? meta.runId : (cfg.runId || ''),
+  });
+  lastBundle = bundle;
+
+  const saveKey = cfg.saveKey || PERF_LAB_STORAGE_KEY;
+  if (cfg.save !== false) saveResultsBundle(bundle, saveKey);
+
+  const postUrl = cfg.postUrl || window.__PERF_LAB_RESULTS_URL;
+  if (postUrl) await postResultsBundle(bundle, postUrl);
+
+  if (cfg.download) downloadResultsBundle(bundle, cfg.downloadName || 'perf-lab-results.json');
+  return bundle;
+}
+
+async function runAuto(config = {}) {
+  const cfg = (config && typeof config === 'object') ? config : { queue: normalizeQueue(config) };
+  const queue = normalizeQueue(cfg.queue || cfg.list || cfg.tests);
+  if (!queue.length) {
+    setStatus('Auto-run: no tests');
+    return [];
+  }
+
+  if (cfg.clear === true) {
+    lastResult = null;
+    lastResults = [];
+    setOutput(null);
+  }
+
+  setStatus('Auto-run: ' + queue.length + ' tests');
+  const __prevCtx = window.__PERF_LAB_RUN_CONTEXT;
+  const __prevRunTag = window.__PERF_RUN_TAG;
+  window.__PERF_LAB_RUN_CONTEXT = 'auto';
+  if (cfg.runTag != null) window.__PERF_RUN_TAG = String(cfg.runTag);
+  let results;
+  try {
+    results = await runQueue(queue);
+  } finally {
+    window.__PERF_LAB_RUN_CONTEXT = __prevCtx;
+    window.__PERF_RUN_TAG = __prevRunTag;
+  }
+  const bundle = buildResultsBundle(results, {
+    queue,
+    notes: cfg.notes || '',
+    runId: cfg.runId || '',
+  });
+  lastBundle = bundle;
+
+  const saveKey = cfg.saveKey || PERF_LAB_STORAGE_KEY;
+  if (cfg.save !== false) saveResultsBundle(bundle, saveKey);
+
+  const postUrl = cfg.postUrl || window.__PERF_LAB_RESULTS_URL;
+  if (postUrl) await postResultsBundle(bundle, postUrl);
+
+  if (cfg.download) downloadResultsBundle(bundle, cfg.downloadName || 'perf-lab-results.json');
+
+  setStatus('Auto-run: done (' + results.length + ' results)');
+  return results;
+}
+
+function scheduleAutoRun() {
+  const cfg = readAutoConfig();
+  if (!cfg || !cfg.queue || !cfg.queue.length) return;
+  const autoStart = (cfg.autoStart === true) || (cfg.runNow === true);
+  if (!autoStart) return;
+  const delayMs = Number.isFinite(cfg.delayMs) ? cfg.delayMs : 1200;
+  setTimeout(() => {
+    runAuto(cfg).catch((err) => console.warn('[PerfLab] auto-run failed', err));
+  }, Math.max(0, delayMs));
+}
+
 
 function setStatus(s) {
   const el = document.getElementById('perf-lab-status');
@@ -429,6 +698,31 @@ function buildP4h() {
   setStatus('P4H built');
 }
 
+function buildP5() {
+  setStatus('Building P5...');
+  buildMixedScene({ drawRows: 3, drawCols: 4, loopRows: 3, loopCols: 4, spacing: 420, gap: 320 });
+  setStatus('P5 built');
+}
+
+function buildP6() {
+  setStatus('Building P6...');
+  buildChainedLoopgridStress({
+    toyType: 'loopgrid',
+    chains: 4,
+    chainLength: 4,
+    gridCols: 2,
+    seed: 1337,
+    density: 0.35,
+    noteMin: 0,
+    noteMax: 35,
+    headSpacingX: 560,
+    headSpacingY: 420,
+    linkSpacingX: 420,
+  });
+  createToyGrid({ toyType: 'drawgrid', rows: 2, cols: 2, spacing: 460, centerX: getCommittedState().x + 900, centerY: getCommittedState().y });
+  setStatus('P6 built');
+}
+
 async function runVariant(label, step, statusText) {
   setStatus(statusText || `Running ${label}…`);
   setOutput(null);
@@ -459,10 +753,17 @@ async function runVariant(label, step, statusText) {
   setOutput(result);
   setStatus('Done');
   try { console.log('[PerfLab] result', result); } catch {}
+  try { if (window.__PERF_LAB_RUN_CONTEXT !== 'auto') await publishResultBundle(result, { queue: [label], notes: statusText || '', runId: 'manual' }); } catch {}
 }
 
 async function runVariantPlaying(label, step, statusText) {
-  const prof = makeFrameProfiler({ slowMs: 50, maxSamples: 120 });
+  const slowMs = (typeof window !== 'undefined' && Number.isFinite(window.__PERF_FRAME_PROF_SLOW_MS))
+    ? window.__PERF_FRAME_PROF_SLOW_MS
+    : 50;
+  const maxSamples = (typeof window !== 'undefined' && Number.isFinite(window.__PERF_FRAME_PROF_MAX))
+    ? window.__PERF_FRAME_PROF_MAX
+    : 120;
+  const prof = makeFrameProfiler({ slowMs, maxSamples });
   window.__PerfFrameProf = prof; // so you can dump it from console
   const scriptStep = step;
   const nowMs = () => (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
@@ -472,7 +773,9 @@ async function runVariantPlaying(label, step, statusText) {
     try { if (scriptStep) scriptStep(tMs, dtMs, progress); } catch {}
     prof.mark('script', nowMs() - s0);
     const frameDt = Number.isFinite(dtMs) ? dtMs : (nowMs() - t0);
-    prof.endFrame(frameDt);
+    const workMs = Math.max(0, nowMs() - t0);
+    const idleMs = Math.max(0, frameDt - workMs);
+    prof.endFrame(frameDt, { workMs, idleMs });
   };
   setStatus(statusText || `Running ${label}...`);
   setOutput(null);
@@ -505,6 +808,10 @@ async function runVariantPlaying(label, step, statusText) {
   } catch {}
 
   try {
+    result.frameProfile = summarizeFrameProfile(prof.snapshot());
+  } catch {}
+
+  try {
     const toys = document.querySelectorAll('.toy-panel, .toy').length;
     const chains = document.querySelectorAll('[data-chain-parent], [data-chain-has-child]').length;
     result.sceneMeta = {
@@ -532,6 +839,11 @@ async function runVariantPlaying(label, step, statusText) {
       freezeAllUnfocused: !!window.__PERF_FREEZE_ALL_UNFOCUSED,
       loopgridGestureRenderMod: Number(window.__PERF_LOOPGRID_GESTURE_RENDER_MOD) || 1,
       loopgridChainCache: !!window.__PERF_LOOPGRID_CHAIN_CACHE,
+      noPaint: !!window.__PERF_NO_PAINT,
+      noPaintActive: !!window.__PERF_NO_PAINT_ACTIVE,
+      paintOnlyActive: !!window.__PERF_PAINT_ONLY_ACTIVE,
+      noDomUpdates: !!window.__PERF_NO_DOM_UPDATES,
+      runTag: String(window.__PERF_RUN_TAG || ''),
     };
     result.gestureSkipCount = window.__PERF_LOOPGRID_GESTURE_SKIP || 0;
   } catch {}
@@ -543,6 +855,7 @@ async function runVariantPlaying(label, step, statusText) {
   setOutput(result);
   setStatus('Done');
   try { console.log('[PerfLab] result', result); } catch {}
+  try { if (window.__PERF_LAB_RUN_CONTEXT !== 'auto') await publishResultBundle(result, { queue: [label], notes: statusText || '', runId: 'manual' }); } catch {}
 }
 
 async function withTempPerfParticles(patch, fn) {
@@ -565,7 +878,7 @@ function makeFrameProfiler({ slowMs = 50, maxSamples = 120 } = {}) {
       const cur = (this.__cur ||= { t: performance.now(), parts: {} });
       cur.parts[name] = (cur.parts[name] || 0) + (dt || 0);
     },
-    endFrame(frameDt) {
+    endFrame(frameDt, meta = {}) {
       if (!this.__cur) return;
       const cur = this.__cur;
       this.__cur = null;
@@ -578,18 +891,49 @@ function makeFrameProfiler({ slowMs = 50, maxSamples = 120 } = {}) {
       }
       const unattributed = Math.max(0, frameDt - sum);
       if (unattributed > 0) parts.unattributed = unattributed;
+      const scriptMs = Number.isFinite(parts.script) ? parts.script : 0;
+      const nonScript = Math.max(0, frameDt - scriptMs);
+      if (nonScript > 0) parts['frame.nonScript'] = nonScript;
 
       if (frameDt >= slowMs) {
-        out.push({ t: cur.t, frameDt, parts });
+        out.push({ t: cur.t, frameDt, parts, workMs: meta.workMs, idleMs: meta.idleMs });
         if (out.length > maxSamples) out.shift();
       }
     },
+    snapshot() { return out.slice(); },
     dump(label = 'frame-profiler') {
       console.log(`[${label}] samples=${out.length}`, out);
       return out;
     },
     reset() { out.length = 0; },
   };
+}
+
+function summarizeFrameProfile(samples) {
+  const out = { samples: 0, parts: {}, work: { totalMs: 0, avgMs: 0 }, idle: { totalMs: 0, avgMs: 0 } };
+  if (!Array.isArray(samples) || samples.length === 0) return out;
+  out.samples = samples.length;
+  for (const s of samples) {
+    const parts = s?.parts || {};
+    if (Number.isFinite(s?.workMs)) out.work.totalMs += s.workMs;
+    if (Number.isFinite(s?.idleMs)) out.idle.totalMs += s.idleMs;
+    for (const k in parts) {
+      const v = parts[k];
+      if (!Number.isFinite(v)) continue;
+      const p = (out.parts[k] ||= { totalMs: 0 });
+      p.totalMs += v;
+    }
+  }
+  for (const k in out.parts) {
+    const v = out.parts[k];
+    if (!v || !Number.isFinite(v.totalMs)) continue;
+    v.avgMs = v.totalMs / out.samples;
+  }
+  if (out.samples > 0) {
+    out.work.avgMs = out.work.totalMs / out.samples;
+    out.idle.avgMs = out.idle.totalMs / out.samples;
+  }
+  return out;
 }
 function composeSteps(...steps) {
   return function step(tMs, dtMs, progress) {
@@ -634,7 +978,115 @@ async function withTempPerfAnchor(patch, fn) {
   Object.assign(st, patch || {});
   try { return await fn(); }
   finally { Object.assign(st, prev); }
-}async function runP2a() {
+}
+
+function clearSceneViaSnapshot() {
+  const P = window.Persistence;
+  if (!P || typeof P.getSnapshot !== 'function' || typeof P.applySnapshot !== 'function') {
+    console.warn('[PerfLab] Persistence API not ready');
+    return false;
+  }
+  const snap = P.getSnapshot();
+  snap.toys = [];
+  snap.chains = [];
+  return !!P.applySnapshot(snap);
+}
+
+function createToyGrid({ toyType, rows, cols, spacing, centerX, centerY }) {
+  const factory = window.MusicToyFactory;
+  if (!factory || typeof factory.create !== 'function') {
+    console.warn('[PerfLab] MusicToyFactory.create not ready');
+    return false;
+  }
+
+  const totalW = (cols - 1) * spacing;
+  const totalH = (rows - 1) * spacing;
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const x = centerX + (c * spacing - totalW / 2);
+      const y = centerY + (r * spacing - totalH / 2);
+      try {
+        factory.create(toyType, { centerX: x, centerY: y, autoCenter: false });
+      } catch (err) {
+        console.warn('[PerfLab] create failed', { toyType, r, c }, err);
+      }
+    }
+  }
+  return true;
+}
+
+function buildMixedScene({
+  drawRows = 3,
+  drawCols = 4,
+  loopRows = 3,
+  loopCols = 4,
+  spacing = 420,
+  gap = 320,
+} = {}) {
+  clearSceneViaSnapshot();
+
+  const cam = getCommittedState();
+  const drawW = (drawCols - 1) * spacing;
+  const loopW = (loopCols - 1) * spacing;
+  const totalW = drawW + loopW + gap;
+  const leftX = cam.x - totalW / 2;
+  const drawCenterX = leftX + drawW / 2;
+  const loopCenterX = leftX + drawW + gap + loopW / 2;
+  const centerY = cam.y;
+
+  createToyGrid({ toyType: 'drawgrid', rows: drawRows, cols: drawCols, spacing, centerX: drawCenterX, centerY });
+  createToyGrid({ toyType: 'loopgrid', rows: loopRows, cols: loopCols, spacing, centerX: loopCenterX, centerY });
+  return true;
+}
+
+function makeToyRandomiseOnceScript({
+  selector,
+  atMs = 250,
+  seed = 1337,
+  useSeededRandom = true,
+  eventName = 'toy-random-notes',
+  eventNames = null,
+} = {}) {
+  const fireAt = Math.max(0, Number(atMs) || 0);
+  const sel = selector || '.toy-panel';
+  const events = (Array.isArray(eventNames) && eventNames.length) ? eventNames : [eventName];
+
+  return function step(tMs) {
+    if (step.__didFire) return;
+    if (tMs < fireAt) return;
+    step.__didFire = true;
+
+    const panels = document.querySelectorAll(sel);
+    if (!panels || panels.length === 0) return;
+
+    const fire = () => {
+      panels.forEach((panel) => {
+        for (const evt of events) {
+          try { panel.dispatchEvent(new CustomEvent(evt, { bubbles: true })); } catch {}
+        }
+      });
+    };
+
+    if (useSeededRandom) {
+      const prev = Math.random;
+      let s = (seed >>> 0);
+      Math.random = () => {
+        s = (1664525 * s + 1013904223) >>> 0;
+        return s / 4294967296;
+      };
+      try {
+        fire();
+      } finally {
+        Math.random = prev;
+      }
+    } else {
+      fire();
+    }
+  };
+}
+
+async function runP2a() {
   // Static: no pan/zoom, no overview.
   const step = () => {};
   await runVariant('P2a_particles_static', step, 'Running P2a (static)…');
@@ -1725,6 +2177,248 @@ async function runP4n() {
   }
 }
 
+async function runP5a() {
+  const panZoom = makePanZoomScript({
+    panPx: 2400,
+    zoomMin: 0.40,
+    zoomMax: 1.20,
+    idleMs: 2500,
+    panMs: 13500,
+    zoomMs: 13500,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+  });
+  const randDraw = makeToyRandomiseOnceScript({
+    selector: '.toy-panel[data-toy="drawgrid"]',
+    atMs: 300,
+    seed: 1337,
+    useSeededRandom: true,
+    eventNames: ['toy-random', 'toy-random-notes'],
+  });
+  const randLoop = makeToyRandomiseOnceScript({
+    selector: '.toy-panel[data-toy="loopgrid"], .toy-panel[data-toy="loopgrid-drum"]',
+    atMs: 300,
+    seed: 1337,
+    useSeededRandom: true,
+    eventNames: ['toy-random', 'toy-random-notes'],
+  });
+  const step = composeSteps(panZoom, randDraw, randLoop);
+  await runVariantPlaying(
+    'P5a_mixed_draw_loopgrid_playing_panzoom_rand',
+    step,
+    'Running P5a (mixed draw + loopgrid, playing pan/zoom)...'
+  );
+}
+
+async function runP5b() {
+  await withTempPerfParticles({ gestureDrawModulo: 2 }, async () => {
+    await runP5a();
+  });
+}
+
+async function runP5c() {
+  await withTempPerfParticles({ gestureFieldModulo: 2 }, async () => {
+    await runP5a();
+  });
+}
+
+async function runP6a() {
+  const panZoom = makePanZoomScript({
+    panPx: 2200,
+    zoomMin: 0.45,
+    zoomMax: 1.15,
+    idleMs: 2500,
+    panMs: 13500,
+    zoomMs: 13500,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+  });
+  const randDraw = makeToyRandomiseOnceScript({
+    selector: '.toy-panel[data-toy="drawgrid"]',
+    atMs: 300,
+    seed: 1337,
+    useSeededRandom: true,
+    eventNames: ['toy-random', 'toy-random-notes'],
+  });
+  const randLoop = makeToyRandomiseOnceScript({
+    selector: '.toy-panel[data-toy="loopgrid"], .toy-panel[data-toy="loopgrid-drum"]',
+    atMs: 300,
+    seed: 1337,
+    useSeededRandom: true,
+    eventNames: ['toy-random', 'toy-random-notes'],
+  });
+  const step = composeSteps(panZoom, randDraw, randLoop);
+  await runVariantPlaying(
+    'P6a_avg_mix_playing_panzoom_rand',
+    step,
+    'Running P6a (avg mix, playing pan/zoom)...'
+  );
+}
+
+async function runP6b() {
+  const randDraw = makeToyRandomiseOnceScript({
+    selector: '.toy-panel[data-toy="drawgrid"]',
+    atMs: 300,
+    seed: 1337,
+    useSeededRandom: true,
+    eventNames: ['toy-random', 'toy-random-notes'],
+  });
+  const randLoop = makeToyRandomiseOnceScript({
+    selector: '.toy-panel[data-toy="loopgrid"], .toy-panel[data-toy="loopgrid-drum"]',
+    atMs: 300,
+    seed: 1337,
+    useSeededRandom: true,
+    eventNames: ['toy-random', 'toy-random-notes'],
+  });
+  const step = composeSteps(randDraw, randLoop);
+  await runVariantPlaying(
+    'P6b_avg_mix_playing_static_rand',
+    step,
+    'Running P6b (avg mix, playing static)...'
+  );
+}
+
+async function runP6c() {
+  const panZoom = makePanZoomScript({
+    panPx: 2600,
+    zoomMin: 0.2,
+    zoomMax: 2.2,
+    idleMs: 2000,
+    panMs: 12000,
+    zoomMs: 15000,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+  });
+  const randDraw = makeToyRandomiseOnceScript({
+    selector: '.toy-panel[data-toy="drawgrid"]',
+    atMs: 300,
+    seed: 1337,
+    useSeededRandom: true,
+    eventNames: ['toy-random', 'toy-random-notes'],
+  });
+  const randLoop = makeToyRandomiseOnceScript({
+    selector: '.toy-panel[data-toy="loopgrid"], .toy-panel[data-toy="loopgrid-drum"]',
+    atMs: 300,
+    seed: 1337,
+    useSeededRandom: true,
+    eventNames: ['toy-random', 'toy-random-notes'],
+  });
+  const step = composeSteps(panZoom, randDraw, randLoop);
+  await runVariantPlaying(
+    'P6c_avg_mix_playing_extreme_zoom',
+    step,
+    'Running P6c (avg mix, extreme zoom)...'
+  );
+}
+
+async function runP6d() {
+  await withTempPerfParticles({ gestureDrawModulo: 4, gestureFieldModulo: 4 }, async () => {
+    await runP6c();
+  });
+}
+
+async function runP6e() {
+  const prev = window.__PERF_ZOOM_PROFILE;
+  const prevField = window.__PERF_PARTICLE_FIELD_PROFILE;
+  const prevSlow = window.__PERF_FRAME_PROF_SLOW_MS;
+  const prevMax = window.__PERF_FRAME_PROF_MAX;
+  window.__PERF_ZOOM_PROFILE = true;
+  window.__PERF_FRAME_PROF_SLOW_MS = 0;
+  window.__PERF_FRAME_PROF_MAX = 240;
+  window.__PERF_PARTICLE_FIELD_PROFILE = true;
+  try {
+    await runP6d();
+  } finally {
+    window.__PERF_ZOOM_PROFILE = prev;
+    window.__PERF_FRAME_PROF_SLOW_MS = prevSlow;
+    window.__PERF_FRAME_PROF_MAX = prevMax;
+    window.__PERF_PARTICLE_FIELD_PROFILE = prevField;
+  }
+}
+
+function installNoPaintPatch() {
+  if (window.__PERF_NO_PAINT_PATCH) return;
+  const proto = (typeof CanvasRenderingContext2D !== 'undefined') ? CanvasRenderingContext2D.prototype : null;
+  if (!proto) return;
+  const methods = [
+    'clearRect', 'fillRect', 'strokeRect', 'beginPath', 'closePath',
+    'moveTo', 'lineTo', 'rect', 'arc', 'arcTo', 'ellipse',
+    'quadraticCurveTo', 'bezierCurveTo', 'fill', 'stroke',
+    'drawImage', 'fillText', 'strokeText', 'clip',
+    'save', 'restore', 'translate', 'scale', 'rotate',
+    'setTransform', 'resetTransform'
+  ];
+  const patch = { methods: {} };
+  for (const name of methods) {
+    const orig = proto[name];
+    if (typeof orig !== 'function') continue;
+    patch.methods[name] = orig;
+    proto[name] = function(...args) {
+      if (window.__PERF_NO_PAINT) return;
+      return orig.apply(this, args);
+    };
+  }
+  window.__PERF_NO_PAINT_PATCH = patch;
+}
+
+function setNoPaintEnabled(enabled) {
+  window.__PERF_NO_PAINT = !!enabled;
+  if (window.__PERF_NO_PAINT) installNoPaintPatch();
+}
+
+async function withNoPaint(fn) {
+  const prev = window.__PERF_NO_PAINT;
+  window.__PERF_NO_PAINT_ACTIVE = true;
+  setNoPaintEnabled(true);
+  try { return await fn(); }
+  finally {
+    window.__PERF_NO_PAINT = prev;
+    window.__PERF_NO_PAINT_ACTIVE = false;
+  }
+}
+
+async function runP6eNoPaint() {
+  const prevTag = window.__PERF_RUN_TAG;
+  window.__PERF_RUN_TAG = 'P6eNoPaint';
+  try {
+    await withNoPaint(async () => {
+      await runP6e();
+    });
+  } finally {
+    window.__PERF_RUN_TAG = prevTag;
+  }
+}
+
+async function runP6ePaintOnly() {
+  const prevTag = window.__PERF_RUN_TAG;
+  const prevPaintOnly = window.__PERF_PAINT_ONLY_ACTIVE;
+  window.__PERF_RUN_TAG = 'P6ePaintOnly';
+  window.__PERF_PAINT_ONLY_ACTIVE = true;
+  try {
+    await withTempPerfParticles({ skipUpdate: true, skipDraw: false }, async () => {
+      await runP6e();
+    });
+  } finally {
+    window.__PERF_RUN_TAG = prevTag;
+    window.__PERF_PAINT_ONLY_ACTIVE = prevPaintOnly;
+  }
+}
+
+async function runP6eNoDom() {
+  const prevTag = window.__PERF_RUN_TAG;
+  const prevNoDom = window.__PERF_NO_DOM_UPDATES;
+  window.__PERF_RUN_TAG = 'P6eNoDom';
+  window.__PERF_NO_DOM_UPDATES = true;
+  try {
+    await runP6e();
+  } finally {
+    window.__PERF_RUN_TAG = prevTag;
+    window.__PERF_NO_DOM_UPDATES = prevNoDom;
+  }
+}
+
+
+
 
 async function runQueue(list = []) {
   const items = Array.isArray(list) ? list : [list];
@@ -1767,7 +2461,7 @@ window.addEventListener('keydown', (e) => {
 });
 
 // Expose for manual console use
-try { window.__PerfLab = { show, hide, toggle, buildP2, buildP3, buildP4, buildP4h, runP2a, runP2b, runP2c, runP3a, runP3b, runP3c, runP3d, runP3e, runP3e2, runP3f, runP3f2, runP3g, runP3g2, runP3h, runP3h2, runP3i, runP3i2, runP3j, runP3j2, runP3k, runP3k2, runP3l, runP3l2, runP3l3, runP3l4, runP3l5, runP3l6, runP3m, runP3m2, runQueue, runP4a, runP4b, runP4o, runP4p, runP4q, runP4r, runP4s, runP4t, runP4u, runP4v, runP4w, runP4x, runP4e, runP4c, runP4d, runP4f, runP4g, runP4h2, runP4i, runP4j, runP4k, runP4m, runP4n, getResults: () => lastResults, clearResults: () => { lastResults = []; } }; } catch {}
+try { window.__PerfLab = { show, hide, toggle, buildP2, buildP3, buildP4, buildP4h, buildP5, buildP6, runP2a, runP2b, runP2c, runP3a, runP3b, runP3c, runP3d, runP3e, runP3e2, runP3f, runP3f2, runP3g, runP3g2, runP3h, runP3h2, runP3i, runP3i2, runP3j, runP3j2, runP3k, runP3k2, runP3l, runP3l2, runP3l3, runP3l4, runP3l5, runP3l6, runP3m, runP3m2, runQueue, runAuto, runP4a, runP4b, runP4o, runP4p, runP4q, runP4r, runP4s, runP4t, runP4u, runP4v, runP4w, runP4x, runP4e, runP4c, runP4d, runP4f, runP4g, runP4h2, runP4i, runP4j, runP4k, runP4m, runP4n, runP5a, runP5b, runP5c, runP6a, runP6b, runP6c, runP6d, runP6e, runP6eNoPaint, runP6ePaintOnly, runP6eNoDom, readAutoConfig, readAutoConfigFromFile, saveResultsBundle, postResultsBundle, downloadResultsBundle, getResults: () => lastResults, getBundle: () => lastBundle, clearResults: () => { lastResults = []; } }; } catch {}
 
 
 
@@ -1780,3 +2474,6 @@ try { window.__PerfLab = { show, hide, toggle, buildP2, buildP3, buildP4, buildP
 
 
 
+
+
+try { scheduleAutoRun(); } catch {}

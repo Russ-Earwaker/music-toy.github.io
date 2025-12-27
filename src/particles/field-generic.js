@@ -35,6 +35,7 @@ const MAX_FADE_OUT_FRACTION = 0.04; // cap how many fade-outs per reconcile step
 const MAX_FADE_OUT_STEP = 16;
 const MIN_FADE_STEP = 2;
 const MEASURE_MIN_MS = 120; // throttle layout reads to reduce reflows
+const VISIBILITY_MIN_MS = 220; // throttle viewport checks
 
 function isZoomGesturing() {
   try {
@@ -152,6 +153,65 @@ function readOverview(viewport) {
   }
 }
 
+const __toyCountCache = { value: 0, ts: 0 };
+const __toyVisibleCache = { value: 0, ts: 0 };
+function getToyCountCached() {
+  const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  if ((now - __toyCountCache.ts) < 500) return __toyCountCache.value || 0;
+  let count = 0;
+  try { count = document.querySelectorAll('.toy-panel').length; } catch {}
+  __toyCountCache.value = count || 0;
+  __toyCountCache.ts = now;
+  return __toyCountCache.value;
+}
+function getVisibleToyCountCached() {
+  const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  if ((now - __toyVisibleCache.ts) < 500) return __toyVisibleCache.value || 0;
+  let count = 0;
+  try {
+    const panels = document.querySelectorAll('.toy-panel');
+    const vw = window.innerWidth || 0;
+    const vh = window.innerHeight || 0;
+    for (const el of panels) {
+      const r = el.getBoundingClientRect?.();
+      if (!r) continue;
+      if (r.width <= 0 || r.height <= 0) continue;
+      if (r.right < 0 || r.bottom < 0 || r.left > vw || r.top > vh) continue;
+      count++;
+    }
+  } catch {}
+  __toyVisibleCache.value = count || 0;
+  __toyVisibleCache.ts = now;
+  return __toyVisibleCache.value;
+}
+
+function readPerfFpsHint() {
+  try {
+    const auto = window.__PERF_PARTICLES?.__gestureAuto;
+    if (auto && Number.isFinite(auto.fps)) return auto.fps;
+  } catch {}
+  try {
+    const v = window.__dgFpsValue;
+    if (Number.isFinite(v)) return v;
+  } catch {}
+  return null;
+}
+
+function canGestureThrottle() {
+  try {
+    if (window.__PERF_FORCE_GESTURE_THROTTLE) return true;
+    const visible = getVisibleToyCountCached();
+    if (visible <= 4) return false;
+    const total = getToyCountCached();
+    if (total <= 4) return false;
+    const fpsHint = readPerfFpsHint();
+    if (Number.isFinite(fpsHint) && fpsHint >= 52) return false;
+    return true;
+  } catch {
+    return true;
+  }
+}
+
 export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLabel } = {}, opts = {}) {
   if (!canvas) throw new Error('createField requires a canvas reference');
   // Static mode: no ambient noise, no radial "kick" gravity. Only reacts to pokes.
@@ -169,6 +229,8 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
 
   const sizeCache = { w: Math.max(1, canvas.clientWidth || canvas.width || 1), h: Math.max(1, canvas.clientHeight || canvas.height || 1), ts: 0 };
   let __resizeDeferred = false;
+  let __lastVisible = true;
+  let __lastVisCheck = 0;
 
   function shouldSkipResize() {
     try { return !!window.__ZOOM_COMMIT_PHASE; } catch {}
@@ -394,6 +456,25 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     }
   }
 
+  function isFieldVisible() {
+    try {
+      if (typeof opts.isVisibleRef === 'function') return !!opts.isVisibleRef();
+    } catch {}
+    if (typeof window === 'undefined' || !canvas?.getBoundingClientRect) return true;
+    const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+      ? performance.now()
+      : Date.now();
+    if (__lastVisCheck && (now - __lastVisCheck) < VISIBILITY_MIN_MS) return __lastVisible;
+    __lastVisCheck = now;
+    const rect = canvas.getBoundingClientRect();
+    const vw = window.innerWidth || 0;
+    const vh = window.innerHeight || 0;
+    const visible = !!rect && rect.width > 0 && rect.height > 0 &&
+      rect.right >= 0 && rect.bottom >= 0 && rect.left <= vw && rect.top <= vh;
+    __lastVisible = visible;
+    return visible;
+  }
+
   function setLODFromView() {
     const zoom = readZoom(viewport);
     const inOverview = readOverview(viewport);
@@ -589,10 +670,15 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
   }
 
   function tick(dt = 1 / 60) {
-    maybeResizeFromLayout();
-    setLODFromView();
+    const __perfOn = !!window.__PERF_PARTICLE_FIELD_PROFILE;
+    const __perfStart = __perfOn && typeof performance !== 'undefined' ? performance.now() : 0;
+    try {
+      if (!isFieldVisible()) return;
+      maybeResizeFromLayout();
+      setLODFromView();
     const gestureActive = isZoomGesturing();
-    const gestureThrottlingActive = gestureActive && (() => {
+    const allowGestureThrottle = canGestureThrottle();
+    const gestureThrottlingActive = gestureActive && allowGestureThrottle && (() => {
       try {
         if (typeof opts.gestureThrottle === 'boolean') return opts.gestureThrottle;
         if (typeof opts.gestureThrottleRef === 'function') return !!opts.gestureThrottleRef();
@@ -720,6 +806,14 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
       }
     }
     cleanupFaded();
+  } finally {
+    if (__perfOn && __perfStart) {
+      const __perfEnd = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
+      if (__perfEnd) {
+        try { window.__PerfFrameProf?.mark?.('particle.field', __perfEnd - __perfStart); } catch {}
+      }
+    }
+  }
   }
 
   function applyBudget(budget = {}) {
@@ -758,7 +852,7 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
   function reconcileParticleCount(dt = 1 / 60, immediate = false) {
     const desired = Math.max(MIN_PARTICLES, Math.round(state.targetDesired || 0));
     const gestureActive = isZoomGesturing();
-    const gestureThrottlingActive = gestureActive && (() => {
+    const gestureThrottlingActive = gestureActive && canGestureThrottle() && (() => {
       try {
         if (typeof opts.gestureThrottle === 'boolean') return opts.gestureThrottle;
         if (typeof opts.gestureThrottleRef === 'function') return !!opts.gestureThrottleRef();

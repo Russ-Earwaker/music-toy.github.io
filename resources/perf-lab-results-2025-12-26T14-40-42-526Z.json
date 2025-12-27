@@ -1,0 +1,43 @@
+{
+  "createdAt": "2025-12-26T14:40:42.507Z",
+  "href": "http://192.168.0.62:5500/index.html",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+  "meta": {
+    "queue": [
+      "buildP3",
+      "runP3a"
+    ],
+    "notes": "",
+    "runId": ""
+  },
+  "results": [
+    {
+      "label": "P3a_drawgrid_static",
+      "durationMs": 30000,
+      "warmupMs": 1200,
+      "createdAt": "2025-12-26T14:40:42.507Z",
+      "samples": 671,
+      "frameMs": {
+        "avg": 43.328464977645304,
+        "p50": 33.39999999999782,
+        "p95": 50.10000000000218,
+        "p99": 333.60000000000036,
+        "worst": 1000.8999999999996
+      },
+      "counts": {
+        "over16ms": 639,
+        "over33ms": 437,
+        "over50ms": 74
+      },
+      "particleToggles": {
+        "skipUpdate": false,
+        "skipDraw": false,
+        "budgetMul": 1,
+        "gestureDrawModulo": 4,
+        "gestureFieldModulo": 1,
+        "freezeUnfocusedDuringGesture": true,
+        "logFreeze": false
+      }
+    }
+  ]
+}

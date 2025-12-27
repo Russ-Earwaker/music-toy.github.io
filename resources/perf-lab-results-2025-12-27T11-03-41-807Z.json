@@ -1,0 +1,490 @@
+{
+  "createdAt": "2025-12-27T11:03:41.803Z",
+  "href": "http://192.168.0.62:5500/index.html",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+  "meta": {
+    "queue": [
+      "buildP6",
+      "runP6e",
+      "runP6eNoPaint",
+      "runP6ePaintOnly",
+      "runP6eNoDom"
+    ],
+    "notes": "Avg mix: 4 draw toys + 4 loopgrid chains (len 4) extreme zoom. Loopgrid playhead/burst sprite caching.",
+    "runId": ""
+  },
+  "results": [
+    {
+      "label": "P6c_avg_mix_playing_extreme_zoom",
+      "durationMs": 30000,
+      "warmupMs": 1200,
+      "createdAt": "2025-12-27T11:02:11.776Z",
+      "samples": 1368,
+      "frameMs": {
+        "avg": 21.057894736842105,
+        "p50": 16.700000000000728,
+        "p95": 33.5,
+        "p99": 50.10000000000218,
+        "worst": 149.90000000000146
+      },
+      "counts": {
+        "over16ms": 795,
+        "over33ms": 229,
+        "over50ms": 26
+      },
+      "pulseCount": 0,
+      "outlineSyncCount": 0,
+      "frameProfile": {
+        "samples": 240,
+        "parts": {
+          "drawgrid.update": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.draw": {
+            "totalMs": 283.0999984741211,
+            "avgMs": 1.1795833269755045
+          },
+          "drawgrid.render": {
+            "totalMs": 283.2999985218048,
+            "avgMs": 1.1804166605075201
+          },
+          "drawgrid.overlay": {
+            "totalMs": 4.299999952316284,
+            "avgMs": 0.017916666467984517
+          },
+          "anchor": {
+            "totalMs": 64.80000162124634,
+            "avgMs": 0.2700000067551931
+          },
+          "zoom.emit.progress": {
+            "totalMs": 25.299998998641968,
+            "avgMs": 0.10541666249434153
+          },
+          "script": {
+            "totalMs": 1.299999713897705,
+            "avgMs": 0.005416665474573771
+          },
+          "unattributed": {
+            "totalMs": 2496.4000034809214,
+            "avgMs": 10.401666681170505
+          },
+          "frame.nonScript": {
+            "totalMs": 5186.400000286103,
+            "avgMs": 21.610000001192095
+          },
+          "particle.field": {
+            "totalMs": 1316.1999969482422,
+            "avgMs": 5.484166653951009
+          },
+          "loopgrid.draw": {
+            "totalMs": 45.400001764297485,
+            "avgMs": 0.18916667401790618
+          },
+          "loopgrid.render": {
+            "totalMs": 1405.6999988555908,
+            "avgMs": 5.857083328564962
+          },
+          "zoom.reflow": {
+            "totalMs": 0,
+            "avgMs": 0
+          }
+        },
+        "work": {
+          "totalMs": 2.200000047683716,
+          "avgMs": 0.009166666865348816
+        },
+        "idle": {
+          "totalMs": 5185.499999952317,
+          "avgMs": 21.60624999980132
+        }
+      },
+      "sceneMeta": {
+        "toys": 20,
+        "chainMarkers": 16,
+        "cam": null
+      },
+      "particleToggles": {
+        "skipUpdate": false,
+        "skipDraw": false,
+        "budgetMul": 1,
+        "gestureDrawModulo": 4,
+        "gestureFieldModulo": 4,
+        "freezeUnfocusedDuringGesture": true,
+        "logFreeze": false
+      },
+      "particleTempPatch": {
+        "gestureDrawModulo": 4,
+        "gestureFieldModulo": 4
+      },
+      "playing": true,
+      "flags": {
+        "disableLoopgridRender": false,
+        "disableChains": false,
+        "disableTapDots": false,
+        "disableOverlays": false,
+        "disablePulses": false,
+        "freezeAllUnfocused": false,
+        "loopgridGestureRenderMod": 1,
+        "loopgridChainCache": false,
+        "noPaint": false,
+        "noPaintActive": false,
+        "paintOnlyActive": false,
+        "noDomUpdates": false,
+        "runTag": "loopgrid-sprites"
+      },
+      "gestureSkipCount": 0
+    },
+    {
+      "label": "P6c_avg_mix_playing_extreme_zoom",
+      "durationMs": 30000,
+      "warmupMs": 1200,
+      "createdAt": "2025-12-27T11:02:41.786Z",
+      "samples": 1401,
+      "frameMs": {
+        "avg": 20.561812990720913,
+        "p50": 16.69999999999709,
+        "p95": 33.400000000001455,
+        "p99": 33.5,
+        "worst": 50
+      },
+      "counts": {
+        "over16ms": 697,
+        "over33ms": 254,
+        "over50ms": 0
+      },
+      "pulseCount": 327,
+      "outlineSyncCount": 327,
+      "frameProfile": {
+        "samples": 240,
+        "parts": {
+          "anchor": {
+            "totalMs": 84.20000052452087,
+            "avgMs": 0.350833335518837
+          },
+          "zoom.emit.progress": {
+            "totalMs": 17.500000953674316,
+            "avgMs": 0.07291667064030966
+          },
+          "script": {
+            "totalMs": 1.7000000476837158,
+            "avgMs": 0.007083333532015483
+          },
+          "unattributed": {
+            "totalMs": 2752.1000019550193,
+            "avgMs": 11.467083341479247
+          },
+          "frame.nonScript": {
+            "totalMs": 4718.899999952315,
+            "avgMs": 19.662083333134646
+          },
+          "particle.field": {
+            "totalMs": 1389.100002527237,
+            "avgMs": 5.7879166771968205
+          },
+          "loopgrid.draw": {
+            "totalMs": 36.19999647140503,
+            "avgMs": 0.15083331863085428
+          },
+          "loopgrid.render": {
+            "totalMs": 1492.5999994277954,
+            "avgMs": 6.219166664282481
+          },
+          "zoom.reflow": {
+            "totalMs": 0.20000004768371582,
+            "avgMs": 0.0008333335320154826
+          },
+          "drawgrid.update": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.draw": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.render": {
+            "totalMs": 0,
+            "avgMs": 0
+          }
+        },
+        "work": {
+          "totalMs": 2,
+          "avgMs": 0.008333333333333333
+        },
+        "idle": {
+          "totalMs": 4718.5999999999985,
+          "avgMs": 19.660833333333326
+        }
+      },
+      "sceneMeta": {
+        "toys": 20,
+        "chainMarkers": 16,
+        "cam": null
+      },
+      "particleToggles": {
+        "skipUpdate": false,
+        "skipDraw": false,
+        "budgetMul": 1,
+        "gestureDrawModulo": 4,
+        "gestureFieldModulo": 4,
+        "freezeUnfocusedDuringGesture": true,
+        "logFreeze": false
+      },
+      "particleTempPatch": {
+        "gestureDrawModulo": 4,
+        "gestureFieldModulo": 4
+      },
+      "playing": true,
+      "flags": {
+        "disableLoopgridRender": false,
+        "disableChains": false,
+        "disableTapDots": false,
+        "disableOverlays": false,
+        "disablePulses": false,
+        "freezeAllUnfocused": false,
+        "loopgridGestureRenderMod": 1,
+        "loopgridChainCache": false,
+        "noPaint": true,
+        "noPaintActive": true,
+        "paintOnlyActive": false,
+        "noDomUpdates": false,
+        "runTag": "P6eNoPaint"
+      },
+      "gestureSkipCount": 0
+    },
+    {
+      "label": "P6c_avg_mix_playing_extreme_zoom",
+      "durationMs": 30000,
+      "warmupMs": 1200,
+      "createdAt": "2025-12-27T11:03:11.794Z",
+      "samples": 1297,
+      "frameMs": {
+        "avg": 22.2106399383192,
+        "p50": 16.69999999999709,
+        "p95": 33.40000000000873,
+        "p99": 33.5,
+        "worst": 166.8000000000029
+      },
+      "counts": {
+        "over16ms": 620,
+        "over33ms": 380,
+        "over50ms": 2
+      },
+      "pulseCount": 687,
+      "outlineSyncCount": 687,
+      "frameProfile": {
+        "samples": 240,
+        "parts": {
+          "anchor": {
+            "totalMs": 113.10000085830688,
+            "avgMs": 0.47125000357627866
+          },
+          "zoom.emit.progress": {
+            "totalMs": 25.699997186660767,
+            "avgMs": 0.10708332161108652
+          },
+          "script": {
+            "totalMs": 1.8999996185302734,
+            "avgMs": 0.007916665077209473
+          },
+          "unattributed": {
+            "totalMs": 2898.2000029564515,
+            "avgMs": 12.075833345651882
+          },
+          "frame.nonScript": {
+            "totalMs": 5152.5000003814785,
+            "avgMs": 21.468750001589495
+          },
+          "particle.field": {
+            "totalMs": 1434.1000037193298,
+            "avgMs": 5.975416682163874
+          },
+          "loopgrid.draw": {
+            "totalMs": 71.29999780654907,
+            "avgMs": 0.29708332419395445
+          },
+          "loopgrid.render": {
+            "totalMs": 1612.1000008583069,
+            "avgMs": 6.717083336909612
+          },
+          "zoom.reflow": {
+            "totalMs": 0.09999990463256836,
+            "avgMs": 0.00041666626930236816
+          },
+          "drawgrid.update": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.draw": {
+            "totalMs": 1.500000238418579,
+            "avgMs": 0.006250000993410746
+          },
+          "drawgrid.render": {
+            "totalMs": 1.500000238418579,
+            "avgMs": 0.006250000993410746
+          }
+        },
+        "work": {
+          "totalMs": 2.299999713897705,
+          "avgMs": 0.009583332141240438
+        },
+        "idle": {
+          "totalMs": 5152.100000286111,
+          "avgMs": 21.467083334525462
+        }
+      },
+      "sceneMeta": {
+        "toys": 20,
+        "chainMarkers": 16,
+        "cam": null
+      },
+      "particleToggles": {
+        "skipUpdate": true,
+        "skipDraw": false,
+        "budgetMul": 1,
+        "gestureDrawModulo": 4,
+        "gestureFieldModulo": 4,
+        "freezeUnfocusedDuringGesture": true,
+        "logFreeze": false
+      },
+      "particleTempPatch": {
+        "gestureDrawModulo": 4,
+        "gestureFieldModulo": 4
+      },
+      "playing": true,
+      "flags": {
+        "disableLoopgridRender": false,
+        "disableChains": false,
+        "disableTapDots": false,
+        "disableOverlays": false,
+        "disablePulses": false,
+        "freezeAllUnfocused": false,
+        "loopgridGestureRenderMod": 1,
+        "loopgridChainCache": false,
+        "noPaint": false,
+        "noPaintActive": false,
+        "paintOnlyActive": true,
+        "noDomUpdates": false,
+        "runTag": "P6ePaintOnly"
+      },
+      "gestureSkipCount": 0
+    },
+    {
+      "label": "P6c_avg_mix_playing_extreme_zoom",
+      "durationMs": 30000,
+      "warmupMs": 1200,
+      "createdAt": "2025-12-27T11:03:41.802Z",
+      "samples": 1325,
+      "frameMs": {
+        "avg": 21.741433962264146,
+        "p50": 16.69999999999709,
+        "p95": 33.40000000000873,
+        "p99": 33.5,
+        "worst": 33.59999999999127
+      },
+      "counts": {
+        "over16ms": 598,
+        "over33ms": 372,
+        "over50ms": 0
+      },
+      "pulseCount": 695,
+      "outlineSyncCount": 695,
+      "frameProfile": {
+        "samples": 240,
+        "parts": {
+          "anchor": {
+            "totalMs": 119.00000143051147,
+            "avgMs": 0.4958333392937978
+          },
+          "zoom.emit.progress": {
+            "totalMs": 23.60000252723694,
+            "avgMs": 0.09833334386348724
+          },
+          "script": {
+            "totalMs": 1.8000004291534424,
+            "avgMs": 0.007500001788139343
+          },
+          "unattributed": {
+            "totalMs": 2815.9999957084074,
+            "avgMs": 11.733333315451697
+          },
+          "frame.nonScript": {
+            "totalMs": 5169.399999570844,
+            "avgMs": 21.539166664878515
+          },
+          "particle.field": {
+            "totalMs": 1499.900000333786,
+            "avgMs": 6.249583334724108
+          },
+          "loopgrid.draw": {
+            "totalMs": 76.59999942779541,
+            "avgMs": 0.31916666428248086
+          },
+          "loopgrid.render": {
+            "totalMs": 1653.9999995231628,
+            "avgMs": 6.891666664679845
+          },
+          "zoom.reflow": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.update": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.draw": {
+            "totalMs": 0.7000002861022949,
+            "avgMs": 0.002916667858759562
+          },
+          "drawgrid.render": {
+            "totalMs": 0.9000000953674316,
+            "avgMs": 0.0037500003973642984
+          }
+        },
+        "work": {
+          "totalMs": 2.200000286102295,
+          "avgMs": 0.009166667858759562
+        },
+        "idle": {
+          "totalMs": 5168.999999713895,
+          "avgMs": 21.537499998807895
+        }
+      },
+      "sceneMeta": {
+        "toys": 20,
+        "chainMarkers": 16,
+        "cam": null
+      },
+      "particleToggles": {
+        "skipUpdate": false,
+        "skipDraw": false,
+        "budgetMul": 1,
+        "gestureDrawModulo": 4,
+        "gestureFieldModulo": 4,
+        "freezeUnfocusedDuringGesture": true,
+        "logFreeze": false
+      },
+      "particleTempPatch": {
+        "gestureDrawModulo": 4,
+        "gestureFieldModulo": 4
+      },
+      "playing": true,
+      "flags": {
+        "disableLoopgridRender": false,
+        "disableChains": false,
+        "disableTapDots": false,
+        "disableOverlays": false,
+        "disablePulses": false,
+        "freezeAllUnfocused": false,
+        "loopgridGestureRenderMod": 1,
+        "loopgridChainCache": false,
+        "noPaint": false,
+        "noPaintActive": false,
+        "paintOnlyActive": false,
+        "noDomUpdates": true,
+        "runTag": "P6eNoDom"
+      },
+      "gestureSkipCount": 0
+    }
+  ]
+}

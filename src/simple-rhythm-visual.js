@@ -36,6 +36,55 @@ async function waitForStableBox(el, { maxFrames = 6 } = {}) {
   return { width: Math.round(rect.width), height: Math.round(rect.height) };
 }
 
+function getBurstSprite(st, radiusPx, color) {
+  if (!st || !Number.isFinite(radiusPx) || radiusPx <= 0) return null;
+  const key = `${Math.round(radiusPx * 10) / 10}|${color || ''}`;
+  const cache = st._burstSpriteCache || (st._burstSpriteCache = new Map());
+  const cached = cache.get(key);
+  if (cached) return cached;
+
+  const r = Math.max(1, Math.ceil(radiusPx));
+  const size = r * 2 + 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, size, size);
+    ctx.fillStyle = color || 'rgba(255, 180, 220, 0.9)';
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const sprite = { canvas, size, half: size / 2 };
+  cache.set(key, sprite);
+  return sprite;
+}
+
+function getPlayheadSprite(st, blockSizePx, borderSize, color) {
+  if (!st || !Number.isFinite(blockSizePx) || blockSizePx <= 0) return null;
+  const key = `${blockSizePx}|${borderSize}|${color || ''}`;
+  const cache = st._playheadSpriteCache || (st._playheadSpriteCache = new Map());
+  const cached = cache.get(key);
+  if (cached) return cached;
+
+  const size = Math.max(1, blockSizePx + borderSize * 2);
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, size, size);
+    ctx.fillStyle = color || 'rgba(255, 255, 255, 0.4)';
+    ctx.fillRect(0, 0, size, size);
+  }
+  const sprite = { canvas, size };
+  cache.set(key, sprite);
+  return sprite;
+}
+
 const NUM_CUBES = 8;
 const NUM_CUBES_GLOBAL = NUM_CUBES;
 
@@ -266,11 +315,30 @@ function cssRect(el) {
   };
 }
 
+function isPanelVisible(panel, st) {
+  if (!panel || !panel.getBoundingClientRect) return true;
+  const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  const cache = st._visCache || (st._visCache = { ts: 0, visible: true });
+  if (cache.ts && (now - cache.ts) < 220) return cache.visible;
+  cache.ts = now;
+  const rect = panel.getBoundingClientRect();
+  const vw = window.innerWidth || 0;
+  const vh = window.innerHeight || 0;
+  const visible = rect.width > 0 && rect.height > 0 &&
+    rect.right >= 0 && rect.bottom >= 0 && rect.left <= vw && rect.top <= vh;
+  if (!cache.visible && visible) {
+    try { panel.__loopgridNeedsRedraw = true; } catch {}
+  }
+  cache.visible = visible;
+  return visible;
+}
+
 export async function attachSimpleRhythmVisual(panel) { // Made async
   if (!panel || panel.__simpleRhythmVisualAttached) return;
   panel.__simpleRhythmVisualAttached = true;
 
   const sequencerWrap = panel.querySelector('.sequencer-wrap');
+  let pv = null;
   let canvas = sequencerWrap
     ? (sequencerWrap.querySelector('.grid-canvas')
        || sequencerWrap.querySelector('canvas:not(.toy-particles)'))
@@ -312,6 +380,9 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     _debugBurstSettings: null,
     _debugBurstLine: null,
     burstParticles: [],
+    _burstSpriteCache: null,
+    _playheadSpriteCache: null,
+    _particleFieldBox: null,
     burstConfig: {
       particleCount: 16,
       lifeSeconds: 0.35,
@@ -339,6 +410,29 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
       st._yOffset = yOffset;
       st._blockWidthWithGap = blockWidthWithGap;
       st._localGap = localGap;
+      try { st._burstSpriteCache?.clear?.(); } catch {}
+      try { st._playheadSpriteCache?.clear?.(); } catch {}
+      const fieldWidth = Math.max(1, Math.round(cssW));
+      const fieldHeight = Math.max(1, Math.round(cssH));
+      const fieldLeft = 0;
+      const fieldTop = 0;
+      const clampedHeight = fieldHeight;
+      st._particleFieldBox = {
+        left: fieldLeft,
+        top: fieldTop,
+        width: fieldWidth,
+        height: clampedHeight,
+      };
+      if (st.particleCanvas) {
+        st.particleCanvas.style.right = 'auto';
+        st.particleCanvas.style.bottom = 'auto';
+        st.particleCanvas.style.left = `${fieldLeft}px`;
+        st.particleCanvas.style.top = `${fieldTop}px`;
+        st.particleCanvas.style.width = `${fieldWidth}px`;
+        st.particleCanvas.style.height = `${clampedHeight}px`;
+        try { pv?.refreshSize?.({ snap: true }); } catch {}
+        try { st.particleField?.resize?.(); } catch {}
+      }
 
     },
   };
@@ -398,7 +492,10 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     sequencerWrap.insertBefore(particleCanvas, sequencerWrap.firstChild || null);
     Object.assign(particleCanvas.style, {
       position: 'absolute',
-      inset: '0',
+      left: '0',
+      top: '0',
+      right: 'auto',
+      bottom: 'auto',
       width: '100%',
       height: '100%',
       pointerEvents: 'none',
@@ -406,18 +503,26 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     });
   }
   st.particleCanvas = particleCanvas; // Assign to st
+  if (particleCanvas && st._particleFieldBox) {
+    const box = st._particleFieldBox;
+    particleCanvas.style.right = 'auto';
+    particleCanvas.style.bottom = 'auto';
+    particleCanvas.style.left = `${box.left}px`;
+    particleCanvas.style.top = `${box.top}px`;
+    particleCanvas.style.width = `${box.width}px`;
+    particleCanvas.style.height = `${box.height}px`;
+  }
 
   let particleField = null;
   let particleObserver = null;
   let overviewHandler = null;
   let zoomUnsubscribe = null;
-  const pv = createParticleViewport(() => {
-    const host = sequencerWrap || panel;
-    const r = host?.getBoundingClientRect?.();
-    return {
-      w: Math.max(1, Math.round(r?.width || 1)),
-      h: Math.max(1, Math.round(r?.height || 1)),
-    };
+  pv = createParticleViewport(() => {
+    const host = st?.particleCanvas || sequencerWrap || panel;
+    // Match DrawGrid behavior: use unscaled logical size (client box), not zoomed rect.
+    const w = Math.max(1, Math.round(host?.clientWidth || 1));
+    const h = Math.max(1, Math.round(host?.clientHeight || 1));
+    return { w, h };
   });
   // Make the Simple Rhythm particle viewport zoom-aware, like DrawGrid's.
   Object.assign(pv, {
@@ -456,15 +561,20 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
         }
       })();
 
-      // Base cap chosen for a "nice" look on fast machines, but scaled down on lower tiers.
-      const BASE_CAP = 2200;
+      // Match DrawGrid's particle density, but scale by the local field area.
+      const baseDensity = 2200 / (420 * 420);
+      const sizeNow = pv.map?.size?.() || { w: 1, h: 1 };
+      const area = Math.max(1, (sizeNow.w || 1) * (sizeNow.h || 1));
+      const baseCap = Math.round(baseDensity * area);
       const capScale = Math.max(0.15, (budget.maxCountScale ?? 1) * (budget.capScale ?? 1));
-      const cap = Math.max(140, Math.floor(BASE_CAP * capScale));
+      const cap = Math.max(140, Math.min(2200, Math.floor(baseCap * capScale)));
 
-      // On lower quality tiers, shorten the "trail" slightly so motion feels lighter.
-      const baseReturnSeconds = 1.0;
-      const extraReturnSeconds = 0.7 * (budget.spawnScale ?? 1);
-      const returnSeconds = baseReturnSeconds + extraReturnSeconds;
+      // Match DrawGrid's sizing so fidelity is comparable at the same density.
+      const baseSize = 1.4;
+      const sizePx = baseSize * (0.8 + 0.4 * (budget.spawnScale ?? 1));
+
+      // Keep trails a touch longer, but let cap handle the real cost.
+      const returnSeconds = 2.4;
 
       particleField = createField(
         {
@@ -483,6 +593,7 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
           kick: 0,
           kickDecay: 8.0,
           drawMode: 'dots',
+          sizePx,
           minAlpha: 0.25,
           maxAlpha: 0.85,
           // IMPORTANT: let particles actually respond to pushes
@@ -507,7 +618,7 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
           pv.refreshSize({ snap: true });
           particleField.resize();
         });
-        particleObserver.observe(sequencerWrap || panel);
+        particleObserver.observe(particleCanvas || sequencerWrap || panel);
       }
       overviewHandler = () => {
         pv.setNonReactive?.(true);
@@ -863,6 +974,7 @@ function render(panel, opts = {}) {
       return;
     }
   }
+  if (!isPanelVisible(panel, st)) return;
 
   // Set playing class for border highlight
   const state = panel.__gridState || {};
@@ -922,6 +1034,8 @@ function render(panel, opts = {}) {
 
   const { ctx, canvas, tapLabel, particleCanvas, sequencerWrap, particleField } = st;
   if (skipHeavy) return;
+  const __perfOn = !!window.__PERF_ZOOM_PROFILE;
+  const __perfStart = __perfOn && typeof performance !== 'undefined' ? performance.now() : 0;
   const w = canvas.width;
   const h = canvas.height;
   const cssW = st._cssW || canvas.clientWidth;
@@ -966,7 +1080,12 @@ function render(panel, opts = {}) {
       if (!Number.isFinite(st.lastParticleTick)) st.lastParticleTick = renderTime;
       const dt = Math.min(0.05, Math.max(0, (renderTime - st.lastParticleTick) / 1000));
       st.lastParticleTick = renderTime;
+      const __pfStart = (__perfOn && !window.__PERF_PARTICLE_FIELD_PROFILE) ? performance.now() : 0;
       try { particleField.tick(dt || (1 / 60)); } catch {}
+      if (__perfOn && __pfStart) {
+        const __pfEnd = performance.now();
+        try { window.__PerfFrameProf?.mark?.('loopgrid.particle', __pfEnd - __pfStart); } catch {}
+      }
     } else {
       st.lastParticleTick = renderTime;
     }
@@ -976,7 +1095,15 @@ function render(panel, opts = {}) {
   const burstDt = Math.min(0.05, Math.max(0, (renderTime - st._burstLastTime) / 1000));
   st._burstLastTime = renderTime;
 
-  if (!cssW || !cssH || !w || !h) return;
+  if (!cssW || !cssH || !w || !h) {
+    if (__perfOn && __perfStart) {
+      const __perfEnd = performance.now();
+      try { window.__PerfFrameProf?.mark?.('loopgrid.render', __perfEnd - __perfStart); } catch {}
+    }
+    return;
+  }
+
+  const __drawStart = __perfOn ? performance.now() : 0;
 
   const scaleX = cssW ? (w / cssW) : 1;
   const scaleY = cssH ? (h / cssH) : 1;
@@ -1046,14 +1173,19 @@ function render(panel, opts = {}) {
         const amp = p.amp || 1;
         const stretchY = 1 + amp * pulse; // middle particles have bigger amp
 
+        const sprite = getBurstSprite(st, baseR, p.color);
         ctx.save();
         ctx.translate(cx, cy);
         ctx.scale(1, stretchY); // vertical scale only
         ctx.globalAlpha = alpha;
-        ctx.beginPath();
-        ctx.arc(0, 0, baseR, 0, Math.PI * 2);
-        ctx.fillStyle = p.color || 'rgba(255, 180, 220, 0.9)';
-        ctx.fill();
+        if (sprite?.canvas) {
+          ctx.drawImage(sprite.canvas, -sprite.half, -sprite.half, sprite.size, sprite.size);
+        } else {
+          ctx.beginPath();
+          ctx.arc(0, 0, baseR, 0, Math.PI * 2);
+          ctx.fillStyle = p.color || 'rgba(255, 180, 220, 0.9)';
+          ctx.fill();
+        }
         ctx.restore();
       }
       ctx.restore();
@@ -1279,36 +1411,75 @@ function render(panel, opts = {}) {
     if (Array.isArray(st.tapLetterLastLoop)) st.tapLetterLastLoop.fill(-1);
   }
 
-  for (let i = 0; i < NUM_CUBES; i++) {
-    const flash = st.flash[i] || 0;
-    const isEnabled = !!steps[i];
+  const gridCache = (st._gridCache ||= { canvas: null, ctx: null, key: '' });
+  const stepsKey = Array.isArray(steps) ? steps.map(v => v ? '1' : '0').join('') : '';
+  const noteKey = isZoomed
+    ? `${(noteIndices || []).join(',')}|${(notePalette || []).join(',')}`
+    : '';
+  const cacheKey = [
+    w, h, blockSizePx, rowY, xOffset, yOffset, blockWidthWithGap, localGap, isZoomed, stepsKey, noteKey,
+  ].join('|');
+  if (!gridCache.canvas || gridCache.key !== cacheKey) {
+    const cacheCanvas = gridCache.canvas || document.createElement('canvas');
+    cacheCanvas.width = w;
+    cacheCanvas.height = h;
+    const cacheCtx = cacheCanvas.getContext('2d');
+    if (cacheCtx) {
+      cacheCtx.setTransform(1, 0, 0, 1, 0, 0);
+      cacheCtx.clearRect(0, 0, w, h);
+      for (let i = 0; i < NUM_CUBES; i++) {
+        const isEnabled = !!steps[i];
+        const cubeRectCss = {
+          x: xOffset + i * blockWidthWithGap,
+          y: yOffset,
+          w: cubeSize,
+          h: cubeSize,
+        };
+        const cubeRect = {
+          x: Math.round(pxX(cubeRectCss.x)),
+          y: rowY,
+          w: blockSizePx,
+          h: blockSizePx,
+        };
+        const noteMidi = notePalette[noteIndices[i]];
+        drawBlock(cacheCtx, cubeRect, {
+          baseColor: isEnabled ? '#ff8c00' : '#333',
+          active: isEnabled,
+          variant: 'button',
+          noteLabel: isZoomed ? midiToName(noteMidi) : null,
+          showArrows: isZoomed,
+        });
+      }
+    }
+    gridCache.canvas = cacheCanvas;
+    gridCache.ctx = cacheCtx;
+    gridCache.key = cacheKey;
+  }
 
-    // CSS-space position using our layout (1-cube buffers and gap)
+  // Draw playhead highlight under the cached grid
+  if ((isActiveInChain || !isChained) && transportRunning && Number.isFinite(playheadCol) && !probablyStale) {
+    const i = playheadCol;
     const cubeRectCss = {
       x: xOffset + i * blockWidthWithGap,
       y: yOffset,
       w: cubeSize,
       h: cubeSize,
     };
-
-    // Final on-screen rectangle in pixel space:
-    // - position derived from CSS-space layout
-    // - size forced square using blockSizePx
     const cubeRect = {
       x: Math.round(pxX(cubeRectCss.x)),
       y: rowY,
       w: blockSizePx,
       h: blockSizePx,
     };
-
-    if (!st._loggedCubeOnce && i === 0) {
-      st._loggedCubeOnce = true;
-    }
-
-    // Draw playhead highlight first, so it's underneath the cube
-    // The playhead should scroll if the toy is standalone, or if it's the active toy in a chain.
-    if ((isActiveInChain || !isChained) && transportRunning && i === playheadCol && !probablyStale) {
-      const borderSize = 4;
+    const borderSize = 4;
+    const playheadSprite = getPlayheadSprite(st, blockSizePx, borderSize, 'rgba(255, 255, 255, 0.4)');
+    if (playheadSprite?.canvas) {
+      ctx.drawImage(
+        playheadSprite.canvas,
+        cubeRect.x - borderSize,
+        cubeRect.y - borderSize
+      );
+    } else {
       ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
       ctx.fillRect(
         cubeRect.x - borderSize,
@@ -1316,37 +1487,61 @@ function render(panel, opts = {}) {
         cubeRect.w + borderSize * 2,
         cubeRect.h + borderSize * 2
       );
-      if (showTapPrompt && fieldRectData && Number.isFinite(fieldRectData.left) && fieldRectData.width > 0 && gridRect.width > 0 && Array.isArray(st.tapLetterBounds)) {
-        // Map the CSS-space center of this cube into the field for TAP letters.
-        const cubeCenterCssX = cubeRectCss.x + cubeRectCss.w / 2;
-        const cubeCenterCssY = cubeRectCss.y + cubeRectCss.h / 2;
-        const columnCenterPx = gridRect.left + (cubeCenterCssX / cssW) * gridRect.width;
-        const columnCenterPy = gridRect.top + (cubeCenterCssY / cssH) * gridRect.height;
-        const centerNorm = (columnCenterPx - fieldRectData.left) / fieldRectData.width;
-        if (Number.isFinite(centerNorm)) {
-          const clamped = Math.max(0, Math.min(1, centerNorm));
-          triggerTapLettersForColumn(st, i, clamped, columnCenterPx, columnCenterPy);
-        }
+    }
+    if (showTapPrompt && fieldRectData && Number.isFinite(fieldRectData.left) && fieldRectData.width > 0 && gridRect.width > 0 && Array.isArray(st.tapLetterBounds)) {
+      const cubeCenterCssX = cubeRectCss.x + cubeRectCss.w / 2;
+      const cubeCenterCssY = cubeRectCss.y + cubeRectCss.h / 2;
+      const columnCenterPx = gridRect.left + (cubeCenterCssX / cssW) * gridRect.width;
+      const columnCenterPy = gridRect.top + (cubeCenterCssY / cssH) * gridRect.height;
+      const centerNorm = (columnCenterPx - fieldRectData.left) / fieldRectData.width;
+      if (Number.isFinite(centerNorm)) {
+        const clamped = Math.max(0, Math.min(1, centerNorm));
+        triggerTapLettersForColumn(st, i, clamped, columnCenterPx, columnCenterPy);
       }
     }
+  }
 
+  if (gridCache.canvas) {
+    ctx.drawImage(gridCache.canvas, 0, 0);
+  }
+
+  // Flash overlays (only for active flashes)
+  for (let i = 0; i < NUM_CUBES; i++) {
+    const flash = st.flash[i] || 0;
+    if (flash <= 0) continue;
+    const cubeRectCss = {
+      x: xOffset + i * blockWidthWithGap,
+      y: yOffset,
+      w: cubeSize,
+      h: cubeSize,
+    };
+    const cubeRect = {
+      x: Math.round(pxX(cubeRectCss.x)),
+      y: rowY,
+      w: blockSizePx,
+      h: blockSizePx,
+    };
     ctx.save();
-    if (flash > 0) {
-      const scale = 1 + 0.15 * Math.sin(flash * Math.PI);
-      ctx.translate(cubeRect.x + cubeRect.w / 2, cubeRect.y + cubeRect.h / 2);
-      ctx.scale(scale, scale);
-      ctx.translate(-(cubeRect.x + cubeRect.w / 2), -(cubeRect.y + cubeRect.h / 2));
-      st.flash[i] = Math.max(0, flash - 0.08);
-    }
-
-    const noteMidi = notePalette[noteIndices[i]];
+    const scale = 1 + 0.15 * Math.sin(flash * Math.PI);
+    ctx.translate(cubeRect.x + cubeRect.w / 2, cubeRect.y + cubeRect.h / 2);
+    ctx.scale(scale, scale);
+    ctx.translate(-(cubeRect.x + cubeRect.w / 2), -(cubeRect.y + cubeRect.h / 2));
+    st.flash[i] = Math.max(0, flash - 0.08);
     drawBlock(ctx, cubeRect, {
-      baseColor: flash > 0.01 ? '#FFFFFF' : (isEnabled ? '#ff8c00' : '#333'),
-      active: flash > 0.01 || isEnabled,
+      baseColor: '#FFFFFF',
+      active: true,
       variant: 'button',
-      noteLabel: isZoomed ? midiToName(noteMidi) : null,
+      noteLabel: isZoomed ? midiToName(notePalette[noteIndices[i]]) : null,
       showArrows: isZoomed,
     });
     ctx.restore();
+  }
+  if (__perfOn && __drawStart) {
+    const __drawEnd = performance.now();
+    try { window.__PerfFrameProf?.mark?.('loopgrid.draw', __drawEnd - __drawStart); } catch {}
+  }
+  if (__perfOn && __perfStart) {
+    const __perfEnd = performance.now();
+    try { window.__PerfFrameProf?.mark?.('loopgrid.render', __perfEnd - __perfStart); } catch {}
   }
 }

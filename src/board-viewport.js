@@ -30,6 +30,7 @@ function profileReflow(tag, fn) {
   const t0 = performance.now();
   const res = fn();
   const dt = performance.now() - t0;
+  try { window.__PerfFrameProf?.mark?.('zoom.reflow', dt); } catch {}
   if (dt > 0.5) {
     try { console.warn('[BV][reflow]', tag, `${dt.toFixed(2)}ms`); } catch {}
   }
@@ -346,7 +347,19 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     x = Number.isFinite(nextX) ? nextX : x;
     y = Number.isFinite(nextY) ? nextY : y;
 
+    const __perfOn = !!window.__PERF_ZOOM_PROFILE;
+    const __perfStart = __perfOn && typeof performance !== 'undefined' ? performance.now() : 0;
+    const __commitPerfEnd = () => {
+      if (!__perfOn || !__perfStart) return;
+      const __perfEnd = performance.now();
+      try { window.__PerfFrameProf?.mark?.('zoom.commit', __perfEnd - __perfStart); } catch {}
+    };
+
     setGestureTransform({ scale, x, y });
+    if (__perfOn && __perfStart) {
+      const __perfEnd = performance.now();
+      try { window.__PerfFrameProf?.mark?.('zoom.apply', __perfEnd - __perfStart); } catch {}
+    }
     syncViewportSnapshot({ scale, x, y });
     if (commit) {
       commitGesture({ scale, x, y }, { delayMs });
@@ -541,6 +554,9 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     }
 
     const isDone = phase === 'done' || z.committed === true;
+
+    const __perfOn = !!window.__PERF_ZOOM_PROFILE;
+    const __perfStart = __perfOn && typeof performance !== 'undefined' ? performance.now() : 0;
     const isCommitLike = isDone || phase === 'commit';
     if (!isCommitLike) {
       return;
@@ -579,6 +595,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
       });
     }
     maybeUpdateOverview(scaleForState, { phase, mode, path: isDone ? 'done' : 'commit' });
+    try { __commitPerfEnd(); } catch {}
   };
   handleZoom.__zcName = 'board-viewport';
   onZoomChange(namedZoomListener('board-viewport', handleZoom));

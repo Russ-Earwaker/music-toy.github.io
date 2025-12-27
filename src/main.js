@@ -4,6 +4,7 @@ import './fullscreen.js';
 import './debug.js';
 import './scene-manager.js';
 import './perf/perf-lab.js';
+import './perf/perf-gesture-autotune.js';
 import './advanced-controls-toggle.js';
 import './toy-visibility.js';
 import { onZoomChange, namedZoomListener } from './zoom/ZoomCoordinator.js';
@@ -588,12 +589,14 @@ let g_suppressBootFocus = false;
 let g_isRestoringSnapshot = false;
 let g_restoringFocusId = null;
 const readStoredFocusEditingEnabled = () => {
+  const unlocked = (typeof window !== 'undefined' && window.__enableSmallScreenEditingToggle === true);
+  if (!unlocked) return false;
   try {
     const raw = localStorage.getItem(FOCUS_PREF_KEY);
     if (raw === '0') return false;
     if (raw === '1') return true;
   } catch {}
-  return true; // default on
+  return false; // default off
 };
 
 try {

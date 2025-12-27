@@ -93,8 +93,20 @@ function zcShouldEmitCommit(now) {
   return false;
 }
 
+function zcPerfEnabled() {
+  try { return !!window.__PERF_ZOOM_PROFILE; } catch { return false; }
+}
+
+function zcPerfMark(name, dt) {
+  if (!zcPerfEnabled()) return;
+  try { window.__PerfFrameProf?.mark?.(name, dt); } catch {}
+}
+
 function emitZoom(payload) {
   if (!payload) return;
+  const __perfOn = zcPerfEnabled();
+  const __perfStart = __perfOn && typeof performance !== 'undefined' ? performance.now() : 0;
+  const __perfPhase = payload?.phase || (payload?.committing ? 'commit' : 'progress');
   const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
     ? performance.now()
     : Date.now();
@@ -130,6 +142,10 @@ function emitZoom(payload) {
       }
     }
     idx++;
+  }
+  if (__perfOn && __perfStart) {
+    const __perfEnd = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
+    if (__perfEnd) zcPerfMark('zoom.emit.' + __perfPhase, __perfEnd - __perfStart);
   }
 }
 

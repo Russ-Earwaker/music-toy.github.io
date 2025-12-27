@@ -2548,8 +2548,30 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   // Suppress header sweep pushes while zoom/pan gestures are active.
   let suppressHeaderPushUntil = 0;
   const HEADER_PUSH_SUPPRESS_MS = 180; // cooldown after zoom motion/commit
+  function readHeaderFpsHint() {
+    try {
+      const auto = window.__PERF_PARTICLES?.__gestureAuto;
+      if (auto && Number.isFinite(auto.fps)) return auto.fps;
+    } catch {}
+    try {
+      const v = window.__dgFpsValue;
+      if (Number.isFinite(v)) return v;
+    } catch {}
+    return null;
+  }
+  function allowHeaderPushDuringGesture() {
+    try {
+      if (window.__PERF_FORCE_HEADER_SUPPRESS) return false;
+      const visible = Number(globalDrawgridState?.visibleCount) || 0;
+      if (visible > 1) return false;
+      const fps = readHeaderFpsHint();
+      return Number.isFinite(fps) && fps >= 52;
+    } catch {}
+    return false;
+  }
   function headerPushSuppressed() {
     const now = nowMs();
+    if (allowHeaderPushDuringGesture()) return false;
     const midGesture = zoomGestureActive;
     const inMotionCooldown = __lastZoomMotionTs && (now - __lastZoomMotionTs) < HEADER_PUSH_SUPPRESS_MS;
     return midGesture || inMotionCooldown || (now < suppressHeaderPushUntil);
@@ -3075,8 +3097,27 @@ function ensureSizeReady({ force = false } = {}) {
           __dgNeedsUIRefresh = true;
           __dgStableFramesAfterCommit = 0;
 
+          let __dgGridStart = null;
+          if (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf) {
+            __dgGridStart = performance.now();
+          }
           drawGrid();
-          if (currentMap) drawNodes(currentMap.nodes);
+          if (__dgGridStart !== null) {
+            const __dgGridDt = performance.now() - __dgGridStart;
+            try { window.__PerfFrameProf?.mark?.('drawgrid.grid', __dgGridDt); } catch {}
+          }
+
+          if (currentMap) {
+            let __dgNodesStart = null;
+            if (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf) {
+              __dgNodesStart = performance.now();
+            }
+            drawNodes(currentMap.nodes);
+            if (__dgNodesStart !== null) {
+              const __dgNodesDt = performance.now() - __dgNodesStart;
+              try { window.__PerfFrameProf?.mark?.('drawgrid.nodes', __dgNodesDt); } catch {}
+            }
+          }
 
           const flashTarget = getActiveFlashCanvas();
           resetCtx(fctx);
@@ -4761,6 +4802,25 @@ function syncBackBufferSizes() {
     }, 100); // Start fade after a short hold
   }
 
+  let __dgGridPath = null;
+  let __dgGridPathKey = '';
+  function buildGridPath(noteGridY) {
+    const path = new Path2D();
+    // Verticals (including outer lines)
+    for (let i = 0; i <= cols; i++) {
+      const x = crisp(gridArea.x + i * cw);
+      path.moveTo(x, noteGridY);
+      path.lineTo(x, gridArea.y + gridArea.h);
+    }
+    // Horizontals (including outer lines)
+    for (let j = 0; j <= rows; j++) {
+      const y = crisp(noteGridY + j * ch);
+      path.moveTo(gridArea.x, y);
+      path.lineTo(gridArea.x + gridArea.w, y);
+    }
+    return path;
+  }
+
   function drawGrid(){
     let __dgProfileStart = null;
     if (DG_PROFILE && typeof performance !== 'undefined' && performance.now) {
@@ -4809,21 +4869,33 @@ function syncBackBufferSizes() {
       const gridLineWidthPx = Math.max(1, Math.min(cell * 0.03, 8));
       gctx.strokeStyle = 'rgba(143, 168, 255, 0.35)';
       gctx.lineWidth = gridLineWidthPx;
-      // Verticals (including outer lines)
-      for (let i = 0; i <= cols; i++) {
-          const x = crisp(gridArea.x + i * cw);
-          gctx.beginPath();
-          gctx.moveTo(x, noteGridY);
-          gctx.lineTo(x, gridArea.y + gridArea.h);
-          gctx.stroke();
-      }
-      // Horizontals (including outer lines)
-      for (let j = 0; j <= rows; j++) {
-          const y = crisp(noteGridY + j * ch);
-          gctx.beginPath();
-          gctx.moveTo(gridArea.x, y);
-          gctx.lineTo(gridArea.x + gridArea.w, y);
-          gctx.stroke();
+      if (typeof Path2D !== 'undefined') {
+        const key = [
+          gridArea.x, gridArea.y, gridArea.w, gridArea.h,
+          rows, cols, cw, ch, topPad, noteGridY,
+        ].join('|');
+        if (key !== __dgGridPathKey || !__dgGridPath) {
+          __dgGridPath = buildGridPath(noteGridY);
+          __dgGridPathKey = key;
+        }
+        gctx.stroke(__dgGridPath);
+      } else {
+        // Verticals (including outer lines)
+        for (let i = 0; i <= cols; i++) {
+            const x = crisp(gridArea.x + i * cw);
+            gctx.beginPath();
+            gctx.moveTo(x, noteGridY);
+            gctx.lineTo(x, gridArea.y + gridArea.h);
+            gctx.stroke();
+        }
+        // Horizontals (including outer lines)
+        for (let j = 0; j <= rows; j++) {
+            const y = crisp(noteGridY + j * ch);
+            gctx.beginPath();
+            gctx.moveTo(gridArea.x, y);
+            gctx.lineTo(gridArea.x + gridArea.w, y);
+            gctx.stroke();
+        }
       }
 
       // 4. Highlight active columns by thickening their vertical lines
@@ -5039,6 +5111,8 @@ function syncBackBufferSizes() {
     requestAnimationFrame(frame);
   }
 
+  let __dgNodesCache = { canvas: null, ctx: null, key: '' };
+
   function drawNodes(nodes) {
     const nodeCoords = [];
     nodeCoordsForHitTest = [];
@@ -5050,12 +5124,36 @@ function syncBackBufferSizes() {
       const width = cssW || (surface?.width ?? 0) / scale;
       const height = cssH || (surface?.height ?? 0) / scale;
       nctx.clearRect(0, 0, width, height);
-      renderDragScaleBlueHints(nctx);
       if (!nodes) {
         return;
       }
 
       const radius = Math.max(4, Math.min(cw, ch) * 0.20);
+      const isZoomed = panel.classList.contains('toy-zoomed');
+      let __dgHash = 2166136261;
+      const __dgHashStep = (h, v) => {
+        const n = (Number.isFinite(v) ? v : 0) | 0;
+        return ((h ^ n) * 16777619) >>> 0;
+      };
+      __dgHash = __dgHashStep(__dgHash, rows);
+      __dgHash = __dgHashStep(__dgHash, cols);
+      __dgHash = __dgHashStep(__dgHash, Math.round(cw * 1000));
+      __dgHash = __dgHashStep(__dgHash, Math.round(ch * 1000));
+      __dgHash = __dgHashStep(__dgHash, Math.round(topPad * 1000));
+      __dgHash = __dgHashStep(__dgHash, Math.round((gridArea?.x || 0) * 1000));
+      __dgHash = __dgHashStep(__dgHash, Math.round((gridArea?.y || 0) * 1000));
+      __dgHash = __dgHashStep(__dgHash, Math.round((gridArea?.w || 0) * 1000));
+      __dgHash = __dgHashStep(__dgHash, Math.round((gridArea?.h || 0) * 1000));
+      __dgHash = __dgHashStep(__dgHash, isZoomed ? 1 : 0);
+
+      const activeCols = currentMap?.active || [];
+      for (let c = 0; c < cols; c++) {
+        __dgHash = __dgHashStep(__dgHash, activeCols[c] ? 1 : 0);
+      }
+      const dragCol = (typeof dragScaleHighlightCol === 'number') ? dragScaleHighlightCol : -1;
+      const dragRow = (draggedNode && typeof draggedNode.row === 'number') ? draggedNode.row : -1;
+      __dgHash = __dgHashStep(__dgHash, dragCol);
+      __dgHash = __dgHashStep(__dgHash, dragRow);
 
       for (let c = 0; c < cols; c++) {
         if (!nodes[c] || nodes[c].size === 0) continue;
@@ -5068,12 +5166,20 @@ function syncBackBufferSizes() {
           if (Array.isArray(groupEntry) && groupEntry.length > 0) {
             for (let i = groupEntry.length - 1; i >= 0; i--) {
               const gid = groupEntry[i];
+              __dgHash = __dgHashStep(__dgHash, c);
+              __dgHash = __dgHashStep(__dgHash, r);
+              __dgHash = __dgHashStep(__dgHash, isDisabled ? 1 : 0);
+              __dgHash = __dgHashStep(__dgHash, (gid == null ? -1 : gid));
               const nodeData = { x, y, col: c, row: r, radius: radius * 1.5, group: gid, disabled: isDisabled };
               nodeCoords.push(nodeData);
               nodeCoordsForHitTest.push(nodeData);
             }
           } else {
             const groupId = typeof groupEntry === 'number' ? groupEntry : null;
+            __dgHash = __dgHashStep(__dgHash, c);
+            __dgHash = __dgHashStep(__dgHash, r);
+            __dgHash = __dgHashStep(__dgHash, isDisabled ? 1 : 0);
+            __dgHash = __dgHashStep(__dgHash, (groupId == null ? -1 : groupId));
             const nodeData = { x, y, col: c, row: r, radius: radius * 1.5, group: groupId, disabled: isDisabled };
             nodeCoords.push(nodeData);
             nodeCoordsForHitTest.push(nodeData);
@@ -5081,6 +5187,18 @@ function syncBackBufferSizes() {
         }
       }
 
+      const cache = __dgNodesCache;
+      const surfacePxW = surface?.width ?? nctx.canvas?.width ?? 0;
+      const surfacePxH = surface?.height ?? nctx.canvas?.height ?? 0;
+      if (!cache.canvas) cache.canvas = document.createElement('canvas');
+      if (cache.canvas.width !== surfacePxW) cache.canvas.width = surfacePxW;
+      if (cache.canvas.height !== surfacePxH) cache.canvas.height = surfacePxH;
+      if (!cache.ctx) cache.ctx = cache.canvas.getContext('2d');
+      const cacheKey = `${__dgHash}|${Math.round(radius * 1000)}|${surfacePxW}x${surfacePxH}`;
+      const cacheMiss = cache.key !== cacheKey;
+
+      if (cacheMiss) {
+      renderDragScaleBlueHints(nctx);
       nctx.lineWidth = 3;
       const colsMap = new Map();
       for (const node of nodeCoords) {
@@ -5206,6 +5324,16 @@ function syncBackBufferSizes() {
           nctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
           nctx.stroke();
         }
+      }
+
+      if (cache.ctx) {
+        cache.ctx.setTransform(1, 0, 0, 1, 0, 0);
+        cache.ctx.clearRect(0, 0, cache.canvas.width, cache.canvas.height);
+        cache.ctx.drawImage(nctx.canvas, 0, 0);
+      }
+      cache.key = cacheKey;
+      } else if (cache.canvas) {
+        nctx.drawImage(cache.canvas, 0, 0);
       }
 
       for (const node of nodeCoords) {
@@ -6342,8 +6470,11 @@ function syncBackBufferSizes() {
         particleStateAllowed &&
         canDrawAnything &&
         !shouldThrottleForZoom;
+      const skipDomUpdates =
+        !!(typeof window !== 'undefined' && window.__PERF_NO_DOM_UPDATES) &&
+        (typeof window !== 'undefined' && window.__mtZoomGesturing === true);
       const nextParticleVisible = !!particleStateAllowed;
-      if (particleCanvas && particleCanvasVisible !== nextParticleVisible) {
+      if (!skipDomUpdates && particleCanvas && particleCanvasVisible !== nextParticleVisible) {
         particleCanvasVisible = nextParticleVisible;
         particleCanvas.style.opacity = nextParticleVisible ? '1' : '0';
         if (!nextParticleVisible) {
@@ -6379,6 +6510,8 @@ function syncBackBufferSizes() {
         rafId = requestAnimationFrame(renderLoop);
         return;
       }
+      const __perfOn = !!window.__PERF_ZOOM_PROFILE;
+      const __perfRenderStart = __perfOn && typeof performance !== 'undefined' ? performance.now() : 0;
       if (frameCam && !panel.__dgFrameCamLogged) {
         const isProd = (typeof process !== 'undefined') && (process?.env?.NODE_ENV === 'production');
         if (!isProd && DG_DEBUG && DBG_DRAW) {
@@ -6398,7 +6531,12 @@ function syncBackBufferSizes() {
         if (allowParticleDraw) {
           const dtMs = Number.isFinite(frameCam?.dt) ? frameCam.dt : 16.6;
           const dt = Number.isFinite(dtMs) ? dtMs / 1000 : (1 / 60);
+          const __pfStart = __perfOn && typeof performance !== 'undefined' ? performance.now() : 0;
           dgField?.tick?.(dt);
+          if (__perfOn && __pfStart && !window.__PERF_PARTICLE_FIELD_PROFILE) {
+            const __pfEnd = performance.now();
+            try { window.__PerfFrameProf?.mark?.('drawgrid.particle', __pfEnd - __pfStart); } catch {}
+          }
         }
       } catch (e) {
         dglog('particle-field.tick:error', String((e && e.message) || e));
@@ -6470,6 +6608,10 @@ function syncBackBufferSizes() {
     }
 
     perfMark(__dgUpdateDt, __dgDrawDt);
+    if (__perfOn && __perfRenderStart) {
+      const __perfEnd = performance.now();
+      try { window.__PerfFrameProf?.mark?.('drawgrid.render', __perfEnd - __perfRenderStart); } catch {}
+    }
 
 
     if (__dgFrontSwapNextDraw && typeof requestFrontSwap === 'function') {
@@ -6527,17 +6669,19 @@ function syncBackBufferSizes() {
     }
     if (!panel.isConnected) { cancelAnimationFrame(rafId); return; }
 
-    if (panel.__pulseRearm) {
-      panel.classList.remove('toy-playing-pulse');
-      try { panel.offsetWidth; } catch {}
-      panel.__pulseRearm = false;
-    }
+    if (!skipDomUpdates) {
+      if (panel.__pulseRearm) {
+        panel.classList.remove('toy-playing-pulse');
+        try { panel.offsetWidth; } catch {}
+        panel.__pulseRearm = false;
+      }
 
-    if (panel.__pulseHighlight && panel.__pulseHighlight > 0) {
-      panel.classList.add('toy-playing-pulse');
-      panel.__pulseHighlight = Math.max(0, panel.__pulseHighlight - 0.05);
-    } else if (panel.classList.contains('toy-playing-pulse')) {
-      panel.classList.remove('toy-playing-pulse');
+      if (panel.__pulseHighlight && panel.__pulseHighlight > 0) {
+        panel.classList.add('toy-playing-pulse');
+        panel.__pulseHighlight = Math.max(0, panel.__pulseHighlight - 0.05);
+      } else if (panel.classList.contains('toy-playing-pulse')) {
+        panel.classList.remove('toy-playing-pulse');
+      }
     }
 
     // Set playing class for border highlight
@@ -6554,13 +6698,18 @@ function syncBackBufferSizes() {
     const showPlaying = transportRunning
       ? (isChained ? (isActiveInChain && chainHasNotes) : hasActiveNotes)
       : false;
-    panel.classList.toggle('toy-playing', showPlaying);
+    if (!skipDomUpdates) {
+      panel.classList.toggle('toy-playing', showPlaying);
+    }
 
     const flashSurface = getActiveFlashCanvas();
     const ghostSurface = getActiveGhostCanvas();
 
     // --- other overlay layers still respect allowOverlayDraw ---
     if (allowOverlayDraw) {
+      const __dgOverlayStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+        ? performance.now()
+        : 0;
       // Clear flash canvas for this frame's animations
       resetCtx(fctx);
       withLogicalSpace(fctx, () => {
@@ -6612,6 +6761,10 @@ function syncBackBufferSizes() {
           fctx.restore();
       } else {
       }
+      if (__dgOverlayStart) {
+        const __dgOverlayDt = performance.now() - __dgOverlayStart;
+        try { window.__PerfFrameProf?.mark?.('drawgrid.overlay', __dgOverlayDt); } catch {}
+      }
     }
 
     for (let i = 0; i < flashes.length; i++) {
@@ -6621,6 +6774,9 @@ function syncBackBufferSizes() {
     }
 
     if (allowOverlayDraw) {
+      const __dgOverlayStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+        ? performance.now()
+        : 0;
       // Draw cell flashes
       try {
           if (cellFlashes.length > 0) {
@@ -6642,11 +6798,18 @@ function syncBackBufferSizes() {
               fctx.restore();
           }
       } catch (e) { /* fail silently */ }
+      if (__dgOverlayStart) {
+        const __dgOverlayDt = performance.now() - __dgOverlayStart;
+        try { window.__PerfFrameProf?.mark?.('drawgrid.overlay', __dgOverlayDt); } catch {}
+      }
     }
 
     if (noteToggleEffects.length > 0) {
       try {
         if (allowOverlayDraw) {
+          const __dgOverlayStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+            ? performance.now()
+            : 0;
           fctx.save();
           for (let i = noteToggleEffects.length - 1; i >= 0; i--) {
             const effect = noteToggleEffects[i];
@@ -6666,6 +6829,10 @@ function syncBackBufferSizes() {
             fctx.stroke();
           }
           fctx.restore();
+          if (__dgOverlayStart) {
+            const __dgOverlayDt = performance.now() - __dgOverlayStart;
+            try { window.__PerfFrameProf?.mark?.('drawgrid.overlay', __dgOverlayDt); } catch {}
+          }
         } else {
           // Even if we skip drawing, continue advancing animations so they stay in sync.
           for (let i = noteToggleEffects.length - 1; i >= 0; i--) {
@@ -6687,6 +6854,9 @@ function syncBackBufferSizes() {
         const dt = Number.isFinite(dtMs) ? dtMs / 1000 : (1 / 60);
 
         if (allowOverlayDraw) {
+          const __dgOverlayStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+            ? performance.now()
+            : 0;
           fctx.save();
           fctx.globalCompositeOperation = 'lighter';
           for (let i = noteBurstEffects.length - 1; i >= 0; i--) {
@@ -6728,6 +6898,10 @@ function syncBackBufferSizes() {
             }
           }
           fctx.restore();
+          if (__dgOverlayStart) {
+            const __dgOverlayDt = performance.now() - __dgOverlayStart;
+            try { window.__PerfFrameProf?.mark?.('drawgrid.overlay', __dgOverlayDt); } catch {}
+          }
         } else {
           for (let i = noteBurstEffects.length - 1; i >= 0; i--) {
             const burst = noteBurstEffects[i];
@@ -6748,6 +6922,9 @@ function syncBackBufferSizes() {
 
     // Draw scrolling playhead
     if (allowOverlayDraw) {
+      const __dgOverlayStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+        ? performance.now()
+        : 0;
       try {
         const info = getLoopInfo();
         const prevPhase = Number.isFinite(localLastPhase) ? localLastPhase : null;
@@ -7634,6 +7811,10 @@ function syncBackBufferSizes() {
         if (labelBand) drawGhostDebugBand(ghostCtx, labelBand);
         drawGhostDebugPath(ghostCtx, { from, to, crossY });
       } catch {}
+      if (__dgOverlayStart) {
+        const __dgOverlayDt = performance.now() - __dgOverlayStart;
+        try { window.__PerfFrameProf?.mark?.('drawgrid.overlay', __dgOverlayDt); } catch {}
+      }
     }
     if (step < 5) {
       ghostFadeRAF = requestAnimationFrame(() => fadeOutGhostTrail(step + 1));
