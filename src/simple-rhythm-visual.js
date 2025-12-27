@@ -950,6 +950,14 @@ function render(panel, opts = {}) {
   // Compute playhead early for step-driven gating
   const loopInfo = getLoopInfo();
   const playheadCol = loopInfo ? Math.floor(loopInfo.phase01 * NUM_CUBES) : -1;
+  // Chain state can force a clear when this toy hands off to another.
+  const isActiveInChain = panel.dataset.chainActive === 'true';
+  const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
+  const lastChainActive = panel.__loopgridLastChainActive;
+  const chainActiveChanged = (typeof lastChainActive === 'boolean') && (lastChainActive !== isActiveInChain);
+  panel.__loopgridLastChainActive = isActiveInChain;
+  const lastDrawColForClear = (panel.__loopgridLastDrawPlayheadCol ?? -999);
+  const needsClear = (!transportRunning || (isChained && !isActiveInChain)) && lastDrawColForClear !== -999;
 
   // PerfLab: redraw unfocused only when playhead step changes (or forced/pulsing).
   const mode = window.__PERF_LOOPGRID_UNFOCUSED_MODE;
@@ -965,7 +973,7 @@ function render(panel, opts = {}) {
   })();
   if (autoGate && isUnfocused && !isFocused) {
     const hasPulse = !!(panel.__pulseHighlight && panel.__pulseHighlight > 0);
-    const wantsRedraw = !!forceNudge;
+    const wantsRedraw = !!forceNudge || needsClear || chainActiveChanged;
     const last = (panel.__loopgridLastPlayheadCol ?? -999);
     const changed = (playheadCol !== last);
     panel.__loopgridLastPlayheadCol = playheadCol;
@@ -973,7 +981,7 @@ function render(panel, opts = {}) {
   }
   if (stepOnly && isUnfocused && !isFocused) {
     const hasPulse = !!(panel.__pulseHighlight && panel.__pulseHighlight > 0);
-    const wantsRedraw = !!forceNudge; // includes __loopgridNeedsRedraw
+    const wantsRedraw = !!forceNudge || needsClear || chainActiveChanged; // includes __loopgridNeedsRedraw
 
     const last = (panel.__loopgridLastPlayheadCol ?? -999);
     const changed = (playheadCol !== last);
@@ -988,7 +996,7 @@ function render(panel, opts = {}) {
   const pulseOnly = (window.__PERF_LOOPGRID_UNFOCUSED_MODE === 'pulseOnly');
   if (pulseOnly && isUnfocused && !isFocused) {
     const hasPulse = !!(panel.__pulseHighlight && panel.__pulseHighlight > 0);
-    const wantsRedraw = !!forceNudge; // includes __loopgridNeedsRedraw path
+    const wantsRedraw = !!forceNudge || needsClear || chainActiveChanged; // includes __loopgridNeedsRedraw path
     if (!hasPulse && !wantsRedraw) {
       return;
     }
@@ -997,10 +1005,6 @@ function render(panel, opts = {}) {
 
   // Set playing class for border highlight
   const state = panel.__gridState || {};
-  // A toy is only active in a chain if the scheduler has explicitly set this to 'true'.
-  // Checking for `!== 'false'` incorrectly defaults to true when the attribute is missing.
-  const isActiveInChain = panel.dataset.chainActive === 'true';
-  const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
   const hasActiveNotes = state.steps && state.steps.some(s => s);
 
   const head = isChained ? findChainHead(panel) : panel;
@@ -1135,81 +1139,6 @@ function render(panel, opts = {}) {
   // Use a uniform pixel size for cubes so they stay visually square,
   // even if scaleX and scaleY differ slightly.
   const cubePixelSize = Math.round(st._cubeSize * scaleX);
-
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, w, h);
-
-  const debugSettings = st._debugBurstSettings;
-  const debugLine = st._debugBurstLine;
-  if (debugSettings?.showIndicator && debugLine) {
-    if (renderTime >= debugLine.expire) {
-      st._debugBurstLine = null;
-    } else if (ctx) {
-      const rectX = debugLine.x * scaleX;
-      const rectY = debugLine.y * scaleY;
-      const rectW = debugLine.size * scaleX;
-      const rectH = debugLine.size * scaleY;
-      ctx.save();
-      ctx.strokeStyle = debugSettings.lineColor;
-      ctx.lineWidth = Math.max(1, debugSettings.lineWidth);
-      if (ctx.setLineDash) ctx.setLineDash(debugSettings.lineDash || []);
-      ctx.strokeRect(rectX, rectY, rectW, rectH);
-      ctx.restore();
-    }
-  }
-
-  // --- Note burst particles: vertical scale from cube center (no movement) ---
-  if (Array.isArray(st.burstParticles) && st.burstParticles.length && ctx) {
-    const particles = st.burstParticles;
-    const remaining = [];
-    for (let i = 0; i < particles.length; i++) {
-      const p = particles[i];
-      const lifeSeconds = p.lifeSeconds || 0.35;
-      const decay = lifeSeconds > 0 ? (burstDt / lifeSeconds) : burstDt * 3;
-      p.life -= decay;
-      if (p.life <= 0) continue; // drop fully faded particles
-
-      remaining.push(p);
-    }
-    st.burstParticles = remaining;
-
-    if (remaining.length) {
-      ctx.save();
-      for (const p of remaining) {
-        const alpha = Math.max(0, Math.min(1, p.life));
-        const cx = p.x * scaleX;
-        const cy = p.y * scaleY;
-
-        // Base radius in pixels from CSS-space size
-        const baseR = (p.size * 0.5) * ((scaleX + scaleY) * 0.5 || 1);
-
-        // Time progress 0..1 (0 at spawn, 1 at end)
-        const tNorm = 1 - p.life;
-        // Up-and-down pulse over lifetime
-        const pulse = Math.sin(tNorm * Math.PI); // 0 -> 1 -> 0
-
-        const amp = p.amp || 1;
-        const stretchY = 1 + amp * pulse; // middle particles have bigger amp
-
-        const sprite = getBurstSprite(st, baseR, p.color);
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.scale(1, stretchY); // vertical scale only
-        ctx.globalAlpha = alpha;
-        if (sprite?.canvas) {
-          ctx.drawImage(sprite.canvas, -sprite.half, -sprite.half, sprite.size, sprite.size);
-        } else {
-          ctx.beginPath();
-          ctx.arc(0, 0, baseR, 0, Math.PI * 2);
-          ctx.fillStyle = p.color || 'rgba(255, 180, 220, 0.9)';
-          ctx.fill();
-        }
-        ctx.restore();
-      }
-      ctx.restore();
-      ctx.globalAlpha = 1;
-    }
-  }
 
   const fieldHost = sequencerWrap || particleCanvas || canvas;
   if (fieldHost) {
@@ -1437,7 +1366,8 @@ function render(panel, opts = {}) {
   const cacheKey = [
     w, h, blockSizePx, rowY, xOffset, yOffset, blockWidthWithGap, localGap, isZoomed, stepsKey, noteKey,
   ].join('|');
-  if (!gridCache.canvas || gridCache.key !== cacheKey) {
+  const gridCacheDirty = (!gridCache.canvas || gridCache.key !== cacheKey);
+  if (gridCacheDirty) {
     const cacheCanvas = gridCache.canvas || document.createElement('canvas');
     cacheCanvas.width = w;
     cacheCanvas.height = h;
@@ -1474,8 +1404,115 @@ function render(panel, opts = {}) {
     gridCache.key = cacheKey;
   }
 
+  const debugSettings = st._debugBurstSettings;
+  const debugLine = st._debugBurstLine;
+  let debugActive = false;
+  if (debugSettings?.showIndicator && debugLine) {
+    if (renderTime >= debugLine.expire) {
+      st._debugBurstLine = null;
+    } else {
+      debugActive = true;
+    }
+  }
+
+  const hasBurst = Array.isArray(st.burstParticles) && st.burstParticles.length > 0;
+  const playheadActive = (isActiveInChain || !isChained)
+    && transportRunning
+    && Number.isFinite(playheadCol)
+    && !probablyStale;
+  const lastDrawCol = (panel.__loopgridLastDrawPlayheadCol ?? -999);
+  const playheadChanged = playheadActive && playheadCol !== lastDrawCol;
+  const playheadNeedsClear = !playheadActive && lastDrawCol !== -999;
+  const hasDrawn = !!panel.__loopgridHasDrawn;
+  const needsCanvasUpdate = forceNudge
+    || gridCacheDirty
+    || hasFlash
+    || hasBurst
+    || debugActive
+    || playheadChanged
+    || playheadNeedsClear
+    || needsClear
+    || chainActiveChanged
+    || !hasDrawn;
+  if (!needsCanvasUpdate) {
+    if (__perfOn && __perfStart) {
+      const __perfEnd = performance.now();
+      try { window.__PerfFrameProf?.mark?.('loopgrid.render', __perfEnd - __perfStart); } catch {}
+    }
+    return;
+  }
+
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+
+  if (debugActive && debugLine && ctx) {
+    const rectX = debugLine.x * scaleX;
+    const rectY = debugLine.y * scaleY;
+    const rectW = debugLine.size * scaleX;
+    const rectH = debugLine.size * scaleY;
+    ctx.save();
+    ctx.strokeStyle = debugSettings.lineColor;
+    ctx.lineWidth = Math.max(1, debugSettings.lineWidth);
+    if (ctx.setLineDash) ctx.setLineDash(debugSettings.lineDash || []);
+    ctx.strokeRect(rectX, rectY, rectW, rectH);
+    ctx.restore();
+  }
+
+  // --- Note burst particles: vertical scale from cube center (no movement) ---
+  if (Array.isArray(st.burstParticles) && st.burstParticles.length && ctx) {
+    const particles = st.burstParticles;
+    const remaining = [];
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+      const lifeSeconds = p.lifeSeconds || 0.35;
+      const decay = lifeSeconds > 0 ? (burstDt / lifeSeconds) : burstDt * 3;
+      p.life -= decay;
+      if (p.life <= 0) continue; // drop fully faded particles
+
+      remaining.push(p);
+    }
+    st.burstParticles = remaining;
+
+    if (remaining.length) {
+      ctx.save();
+      for (const p of remaining) {
+        const alpha = Math.max(0, Math.min(1, p.life));
+        const cx = p.x * scaleX;
+        const cy = p.y * scaleY;
+
+        // Base radius in pixels from CSS-space size
+        const baseR = (p.size * 0.5) * ((scaleX + scaleY) * 0.5 || 1);
+
+        // Time progress 0..1 (0 at spawn, 1 at end)
+        const tNorm = 1 - p.life;
+        // Up-and-down pulse over lifetime
+        const pulse = Math.sin(tNorm * Math.PI); // 0 -> 1 -> 0
+
+        const amp = p.amp || 1;
+        const stretchY = 1 + amp * pulse; // middle particles have bigger amp
+
+        const sprite = getBurstSprite(st, baseR, p.color);
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(1, stretchY); // vertical scale only
+        ctx.globalAlpha = alpha;
+        if (sprite?.canvas) {
+          ctx.drawImage(sprite.canvas, -sprite.half, -sprite.half, sprite.size, sprite.size);
+        } else {
+          ctx.beginPath();
+          ctx.arc(0, 0, baseR, 0, Math.PI * 2);
+          ctx.fillStyle = p.color || 'rgba(255, 180, 220, 0.9)';
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
+  }
+
   // Draw playhead highlight under the cached grid
-  if ((isActiveInChain || !isChained) && transportRunning && Number.isFinite(playheadCol) && !probablyStale) {
+  if (playheadActive) {
     const i = playheadCol;
     const cubeRectCss = {
       x: xOffset + i * blockWidthWithGap,
@@ -1554,6 +1591,8 @@ function render(panel, opts = {}) {
     });
     ctx.restore();
   }
+  panel.__loopgridHasDrawn = true;
+  panel.__loopgridLastDrawPlayheadCol = playheadActive ? playheadCol : -999;
   if (__perfOn && __drawStart) {
     const __drawEnd = performance.now();
     try { window.__PerfFrameProf?.mark?.('loopgrid.draw', __drawEnd - __drawStart); } catch {}

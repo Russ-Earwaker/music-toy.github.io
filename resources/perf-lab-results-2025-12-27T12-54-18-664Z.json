@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-12-27T13:43:26.796Z",
+  "createdAt": "2025-12-27T12:54:18.658Z",
   "href": "http://192.168.0.62:5500/index.html",
   "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
   "meta": {
@@ -18,19 +18,19 @@
       "label": "P6c_avg_mix_playing_extreme_zoom",
       "durationMs": 30000,
       "warmupMs": 1200,
-      "createdAt": "2025-12-27T13:41:56.768Z",
-      "samples": 1389,
+      "createdAt": "2025-12-27T12:52:48.631Z",
+      "samples": 1415,
       "frameMs": {
-        "avg": 20.7394528437725,
+        "avg": 20.358445229681983,
         "p50": 16.700000000000728,
         "p95": 50,
-        "p99": 66.79999999999927,
-        "worst": 100.09999999999854
+        "p99": 66.70000000000073,
+        "worst": 83.5
       },
       "counts": {
-        "over16ms": 773,
-        "over33ms": 173,
-        "over50ms": 53
+        "over16ms": 793,
+        "over33ms": 164,
+        "over50ms": 58
       },
       "pulseCount": 0,
       "outlineSyncCount": 0,
@@ -38,65 +38,65 @@
         "samples": 240,
         "parts": {
           "particle.field": {
-            "totalMs": 1107.8000004291534,
-            "avgMs": 4.615833335121473
+            "totalMs": 1131.5,
+            "avgMs": 4.714583333333334
+          },
+          "loopgrid.draw": {
+            "totalMs": 25.19999885559082,
+            "avgMs": 0.10499999523162842
           },
           "loopgrid.render": {
-            "totalMs": 991.5999984741211,
-            "avgMs": 4.131666660308838
+            "totalMs": 1035.5999987125397,
+            "avgMs": 4.314999994635582
           },
           "drawgrid.update": {
-            "totalMs": 224.80000066757202,
-            "avgMs": 0.9366666694482167
+            "totalMs": 216.1999990940094,
+            "avgMs": 0.9008333295583725
           },
           "drawgrid.draw": {
-            "totalMs": 337.4000005722046,
-            "avgMs": 1.4058333357175192
-          },
-          "drawgrid.render": {
-            "totalMs": 563.0000009536743,
-            "avgMs": 2.3458333373069764
-          },
-          "drawgrid.overlay": {
-            "totalMs": 17.500001430511475,
-            "avgMs": 0.07291667262713114
-          },
-          "anchor": {
-            "totalMs": 65.8999969959259,
-            "avgMs": 0.27458332081635795
-          },
-          "zoom.emit.progress": {
-            "totalMs": 35.1000018119812,
-            "avgMs": 0.14625000754992168
-          },
-          "script": {
-            "totalMs": 2.59999942779541,
-            "avgMs": 0.010833330949147542
-          },
-          "unattributed": {
-            "totalMs": 4554.299999904637,
-            "avgMs": 18.976249999602654
-          },
-          "frame.nonScript": {
-            "totalMs": 7336.800000572206,
-            "avgMs": 30.57000000238419
-          },
-          "zoom.reflow": {
             "totalMs": 0,
             "avgMs": 0
           },
-          "loopgrid.draw": {
-            "totalMs": 0.19999980926513672,
-            "avgMs": 0.0008333325386047363
+          "drawgrid.render": {
+            "totalMs": 216.89999914169312,
+            "avgMs": 0.9037499964237213
+          },
+          "drawgrid.overlay": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "anchor": {
+            "totalMs": 61.60000038146973,
+            "avgMs": 0.2566666682561239
+          },
+          "zoom.emit.progress": {
+            "totalMs": 22.799998998641968,
+            "avgMs": 0.09499999582767486
+          },
+          "script": {
+            "totalMs": 2.4000003337860107,
+            "avgMs": 0.010000001390775044
+          },
+          "unattributed": {
+            "totalMs": 4907.200002002744,
+            "avgMs": 20.446666675011436
+          },
+          "frame.nonScript": {
+            "totalMs": 6953.499999666215,
+            "avgMs": 28.972916665275896
+          },
+          "zoom.reflow": {
+            "totalMs": 0.09999990463256836,
+            "avgMs": 0.00041666626930236816
           }
         },
         "work": {
-          "totalMs": 2.8999996185302734,
-          "avgMs": 0.012083331743876139
+          "totalMs": 2.700000286102295,
+          "avgMs": 0.011250001192092896
         },
         "idle": {
-          "totalMs": 7336.500000381471,
-          "avgMs": 30.568750001589464
+          "totalMs": 6953.199999713899,
+          "avgMs": 28.97166666547458
         }
       },
       "sceneMeta": {
@@ -139,56 +139,56 @@
       "label": "P6c_avg_mix_playing_extreme_zoom",
       "durationMs": 30000,
       "warmupMs": 1200,
-      "createdAt": "2025-12-27T13:42:26.778Z",
-      "samples": 1360,
+      "createdAt": "2025-12-27T12:53:18.639Z",
+      "samples": 1379,
       "frameMs": {
-        "avg": 21.181691176470586,
+        "avg": 20.889992748368385,
         "p50": 16.700000000004366,
         "p95": 33.400000000001455,
-        "p99": 33.5,
-        "worst": 83.40000000000146
+        "p99": 33.599999999998545,
+        "worst": 66.69999999999709
       },
       "counts": {
-        "over16ms": 698,
-        "over33ms": 299,
+        "over16ms": 696,
+        "over33ms": 278,
         "over50ms": 5
       },
-      "pulseCount": 769,
-      "outlineSyncCount": 769,
+      "pulseCount": 813,
+      "outlineSyncCount": 813,
       "frameProfile": {
         "samples": 240,
         "parts": {
-          "anchor": {
-            "totalMs": 100.00000071525574,
-            "avgMs": 0.4166666696468989
-          },
-          "zoom.emit.progress": {
-            "totalMs": 17.300000190734863,
-            "avgMs": 0.07208333412806193
-          },
-          "script": {
-            "totalMs": 1.3999998569488525,
-            "avgMs": 0.005833332737286885
-          },
-          "unattributed": {
-            "totalMs": 4077.499999713902,
-            "avgMs": 16.989583332141258
-          },
-          "frame.nonScript": {
-            "totalMs": 4752.600000143051,
-            "avgMs": 19.802500000596048
-          },
           "particle.field": {
-            "totalMs": 384.10000014305115,
-            "avgMs": 1.6004166672627131
+            "totalMs": 390.6999988555908,
+            "avgMs": 1.627916661898295
           },
           "loopgrid.draw": {
-            "totalMs": 3.7999989986419678,
-            "avgMs": 0.0158333291610082
+            "totalMs": 3.500000476837158,
+            "avgMs": 0.014583335320154826
           },
           "loopgrid.render": {
-            "totalMs": 423.69999980926514,
-            "avgMs": 1.7654166658719381
+            "totalMs": 429.3999981880188,
+            "avgMs": 1.789166659116745
+          },
+          "anchor": {
+            "totalMs": 100.90000057220459,
+            "avgMs": 0.42041666905085245
+          },
+          "zoom.emit.progress": {
+            "totalMs": 19.000000953674316,
+            "avgMs": 0.07916667064030965
+          },
+          "script": {
+            "totalMs": 1.499999761581421,
+            "avgMs": 0.0062499990065892535
+          },
+          "unattributed": {
+            "totalMs": 4024.2999998092564,
+            "avgMs": 16.7679166658719
+          },
+          "frame.nonScript": {
+            "totalMs": 4702.600000238417,
+            "avgMs": 19.594166667660073
           },
           "zoom.reflow": {
             "totalMs": 0,
@@ -200,8 +200,8 @@
           "avgMs": 0.0066666662693023685
         },
         "idle": {
-          "totalMs": 4752.400000095367,
-          "avgMs": 19.80166666706403
+          "totalMs": 4702.500000095366,
+          "avgMs": 19.593750000397357
         }
       },
       "sceneMeta": {
@@ -244,57 +244,57 @@
       "label": "P6c_avg_mix_playing_extreme_zoom",
       "durationMs": 30000,
       "warmupMs": 1200,
-      "createdAt": "2025-12-27T13:42:56.784Z",
-      "samples": 1292,
+      "createdAt": "2025-12-27T12:53:48.647Z",
+      "samples": 1284,
       "frameMs": {
-        "avg": 22.296594427244578,
+        "avg": 22.43551401869159,
         "p50": 16.69999999999709,
         "p95": 33.40000000000873,
         "p99": 100,
-        "worst": 317
+        "worst": 283.6000000000058
       },
       "counts": {
-        "over16ms": 561,
-        "over33ms": 318,
-        "over50ms": 17
+        "over16ms": 554,
+        "over33ms": 332,
+        "over50ms": 18
       },
-      "pulseCount": 1083,
-      "outlineSyncCount": 1083,
+      "pulseCount": 1166,
+      "outlineSyncCount": 1166,
       "frameProfile": {
         "samples": 240,
         "parts": {
-          "anchor": {
-            "totalMs": 124.4000015258789,
-            "avgMs": 0.5183333396911621
-          },
-          "zoom.emit.progress": {
-            "totalMs": 23.899996757507324,
-            "avgMs": 0.09958331982294719
-          },
-          "script": {
-            "totalMs": 2.1000006198883057,
-            "avgMs": 0.00875000258286794
-          },
-          "unattributed": {
-            "totalMs": 5137.400001096728,
-            "avgMs": 21.405833337903037
-          },
-          "frame.nonScript": {
-            "totalMs": 5285.699999380115,
-            "avgMs": 22.023749997417145
-          },
           "zoom.reflow": {
             "totalMs": 0,
             "avgMs": 0
+          },
+          "anchor": {
+            "totalMs": 118.8000009059906,
+            "avgMs": 0.49500000377496084
+          },
+          "zoom.emit.progress": {
+            "totalMs": 39.09999942779541,
+            "avgMs": 0.1629166642824809
+          },
+          "script": {
+            "totalMs": 1.9999992847442627,
+            "avgMs": 0.008333330353101095
+          },
+          "unattributed": {
+            "totalMs": 5177.900000381473,
+            "avgMs": 21.574583334922803
+          },
+          "frame.nonScript": {
+            "totalMs": 5335.800000715259,
+            "avgMs": 22.232500002980245
           }
         },
         "work": {
-          "totalMs": 2.6000006198883057,
-          "avgMs": 0.010833335916201274
+          "totalMs": 2.8999991416931152,
+          "avgMs": 0.012083329757054647
         },
         "idle": {
-          "totalMs": 5285.199999380115,
-          "avgMs": 22.02166666408381
+          "totalMs": 5334.90000085831,
+          "avgMs": 22.22875000357629
         }
       },
       "sceneMeta": {
@@ -337,57 +337,57 @@
       "label": "P6c_avg_mix_playing_extreme_zoom",
       "durationMs": 30000,
       "warmupMs": 1200,
-      "createdAt": "2025-12-27T13:43:26.794Z",
-      "samples": 1348,
+      "createdAt": "2025-12-27T12:54:18.657Z",
+      "samples": 1328,
       "frameMs": {
-        "avg": 21.370326409495547,
+        "avg": 21.69216867469879,
         "p50": 16.69999999999709,
         "p95": 33.40000000000873,
         "p99": 33.5,
-        "worst": 116.5
+        "worst": 83.5
       },
       "counts": {
-        "over16ms": 576,
-        "over33ms": 329,
-        "over50ms": 8
+        "over16ms": 615,
+        "over33ms": 354,
+        "over50ms": 7
       },
-      "pulseCount": 1151,
-      "outlineSyncCount": 1151,
+      "pulseCount": 1219,
+      "outlineSyncCount": 1219,
       "frameProfile": {
         "samples": 240,
         "parts": {
           "anchor": {
-            "totalMs": 120.90000224113464,
-            "avgMs": 0.503750009338061
+            "totalMs": 117.99999952316284,
+            "avgMs": 0.49166666467984516
           },
           "zoom.emit.progress": {
-            "totalMs": 22.000001668930054,
-            "avgMs": 0.09166667362054189
+            "totalMs": 21.999998331069946,
+            "avgMs": 0.09166665971279145
           },
           "script": {
-            "totalMs": 2.200000047683716,
-            "avgMs": 0.009166666865348816
+            "totalMs": 1.1999998092651367,
+            "avgMs": 0.004999999205271403
           },
           "unattributed": {
-            "totalMs": 5159.29999604226,
-            "avgMs": 21.49708331684275
+            "totalMs": 5163.0000022888125,
+            "avgMs": 21.51250000953672
           },
           "frame.nonScript": {
-            "totalMs": 5302.199999952325,
-            "avgMs": 22.092499999801355
+            "totalMs": 5303.200000190729,
+            "avgMs": 22.09666666746137
           },
           "zoom.reflow": {
-            "totalMs": 0,
-            "avgMs": 0
+            "totalMs": 0.20000004768371582,
+            "avgMs": 0.0008333335320154826
           }
         },
         "work": {
-          "totalMs": 2.6000001430511475,
-          "avgMs": 0.01083333392937978
+          "totalMs": 1.700000286102295,
+          "avgMs": 0.007083334525426229
         },
         "idle": {
-          "totalMs": 5301.799999856958,
-          "avgMs": 22.090833332737322
+          "totalMs": 5302.699999713892,
+          "avgMs": 22.094583332141216
         }
       },
       "sceneMeta": {

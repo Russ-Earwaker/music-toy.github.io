@@ -3010,10 +3010,14 @@ function scheduler(){
             try { g_pulseUntil.delete(toy.id); } catch {}
             try { toy.classList.remove('toy-playing-pulse'); } catch {}
             try { toy.__pulseHighlight = 0; toy.__pulseRearm = false; } catch {}
+            try { toy.__simpleRhythmVisualState?.flash?.fill?.(0); } catch {}
+            try { toy.__loopgridLastDrawPlayheadCol = -999; } catch {}
+            try { toy.__loopgridNeedsRedraw = true; } catch {}
           }
 
           if (current !== isActive) {
             toy.dataset.chainActive = isActive ? 'true' : 'false';
+            try { toy.__loopgridNeedsRedraw = true; } catch {}
           }
         });
 
