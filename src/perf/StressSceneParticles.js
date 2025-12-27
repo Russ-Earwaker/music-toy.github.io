@@ -1,7 +1,7 @@
 // src/perf/StressSceneParticles.js
 // Particle worst-case scene generator (deterministic, no randomness).
 
-import { getCommittedState } from '../zoom/ZoomCoordinator.js';
+import { getViewportElement, screenToWorld } from '../board-viewport.js';
 
 function clearSceneViaSnapshot() {
   const P = window.Persistence;
@@ -30,10 +30,14 @@ export function buildParticleWorstCase({
 
   clearSceneViaSnapshot();
 
-  const cam = getCommittedState();
-  // Place toys around the current camera anchor.
-  const centerX = cam.x;
-  const centerY = cam.y;
+  const viewEl = getViewportElement?.() || document.documentElement;
+  const viewRect = viewEl?.getBoundingClientRect?.();
+  const viewCx = (viewRect?.left ?? 0) + (viewRect?.width ?? window.innerWidth) * 0.5;
+  const viewCy = (viewRect?.top ?? 0) + (viewRect?.height ?? window.innerHeight) * 0.5;
+  const world = screenToWorld({ x: viewCx, y: viewCy });
+  // Place toys around the current camera center in world space.
+  const centerX = Number.isFinite(world?.x) ? world.x : 0;
+  const centerY = Number.isFinite(world?.y) ? world.y : 0;
 
   const totalW = (cols - 1) * spacing;
   const totalH = (rows - 1) * spacing;
@@ -52,4 +56,3 @@ export function buildParticleWorstCase({
 
   return true;
 }
-

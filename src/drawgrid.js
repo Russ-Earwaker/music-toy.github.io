@@ -1448,7 +1448,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
   // Per-letter physics state
   let letterStates = []; // [{ el, x, y, vx, vy }]
+  let drawLabelVisible = true;
   let lettersRAF = null;
+  let lastDrawLabelPx = null;
 
   function __dgClamp01(value) {
     if (typeof value !== 'number') return 0;
@@ -1495,8 +1497,13 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   }
 
   function ensureLetterPhysicsLoop() {
+    if (!drawLabelVisible || !isPanelVisible) return;
     if (lettersRAF) return;
     const step = () => {
+      if (!drawLabelVisible || !isPanelVisible) {
+        lettersRAF = null;
+        return;
+      }
       let rafNeeded = false;
       for (const st of letterStates) {
         const ax = -LETTER_PHYS.k * st.x;
@@ -1530,18 +1537,23 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
             flashAmt = 0;
           }
         }
-        const opacity = Math.min(1, LETTER_VIS.opacityBase + LETTER_VIS.opacityBoost * flashAmt);
-        st.el.style.opacity = `${Math.max(0, opacity)}`;
+        const hadFlash = !!st.flashActive;
+        const hasFlash = flashAmt > 0;
+        st.flashActive = hasFlash;
+        if (hasFlash || hadFlash) {
+          const opacity = Math.min(1, LETTER_VIS.opacityBase + LETTER_VIS.opacityBoost * flashAmt);
+          st.el.style.opacity = `${Math.max(0, opacity)}`;
 
-        if (flashAmt > 0) {
-          const boost = 1 + (LETTER_VIS.flashBoost - 1) * flashAmt;
-          st.el.style.filter = `brightness(${boost.toFixed(3)})`;
-          st.el.style.color = LETTER_VIS.flashColor;
-          st.el.style.textShadow = LETTER_VIS.flashShadow;
-        } else {
-          st.el.style.filter = 'none';
-          st.el.style.color = '';
-          st.el.style.textShadow = '';
+          if (hasFlash) {
+            const boost = 1 + (LETTER_VIS.flashBoost - 1) * flashAmt;
+            st.el.style.filter = `brightness(${boost.toFixed(3)})`;
+            st.el.style.color = LETTER_VIS.flashColor;
+            st.el.style.textShadow = LETTER_VIS.flashShadow;
+          } else {
+            st.el.style.filter = 'none';
+            st.el.style.color = '';
+            st.el.style.textShadow = '';
+          }
         }
 
         if (
@@ -1551,6 +1563,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         ) {
           rafNeeded = true;
         }
+        if (hasFlash) rafNeeded = true;
       }
       lettersRAF = rafNeeded ? requestAnimationFrame(step) : null;
     };
@@ -1566,6 +1579,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       letterStates.push({
         el, x: 0, y: 0, vx: 0, vy: 0,
         lastHitTs: 0,      // ms timestamp of last hit
+        flashActive: false,
       });
     }
     ensureLetterPhysicsLoop();
@@ -1601,9 +1615,16 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       drawLabel.style.display = 'flex';
       // Restore base opacity whenever we show it
       drawLabel.style.opacity = `${DRAW_LABEL_OPACITY_BASE}`;
+      drawLabelVisible = true;
+      ensureLetterPhysicsLoop();
     } else {
       drawLabel.style.opacity = '0';
       drawLabel.style.display = 'none';
+      drawLabelVisible = false;
+      if (lettersRAF) {
+        cancelAnimationFrame(lettersRAF);
+        lettersRAF = null;
+      }
     }
   }
 
@@ -4133,6 +4154,9 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
               resnapAndRedraw(true);
             }
             updateGlobalVisibility(isPanelVisible);
+            if (isPanelVisible && drawLabelVisible) {
+              ensureLetterPhysicsLoop();
+            }
             if (isPanelVisible !== lastVisibleState) {
               lastVisibleState = isPanelVisible;
               try {
@@ -4167,6 +4191,9 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
       if (isPanelVisible && pendingResnapOnVisible) {
         pendingResnapOnVisible = false;
         resnapAndRedraw(true);
+      }
+      if (isPanelVisible && drawLabelVisible) {
+        ensureLetterPhysicsLoop();
       }
     }
   });
@@ -4746,19 +4773,24 @@ function syncBackBufferSizes() {
       const areaH = gridAreaLogical?.h || wrap?.clientHeight || 0;
       const minDim = Math.max(1, Math.min(areaW, areaH));
       const labelSizePx = Math.max(48, Math.min(240, minDim * 0.26));
-      if (drawLabel?.style) {
+      const labelSizeChanged = (lastDrawLabelPx !== labelSizePx);
+      if (labelSizeChanged && drawLabel?.style) {
         drawLabel.style.fontSize = `${labelSizePx}px`;
+        lastDrawLabelPx = labelSizePx;
       }
       if (Array.isArray(drawLabelLetters)) {
-        letterStates = drawLabelLetters.map((el, i) => {
-          const prev = letterStates[i];
-          if (prev) {
-            prev.el = el;
-            return prev;
-          }
-          return { el, x: 0, y: 0, vx: 0, vy: 0 };
-        });
-        ensureLetterPhysicsLoop();
+        const needsLetterSync = labelSizeChanged || (letterStates.length !== drawLabelLetters.length);
+        if (needsLetterSync) {
+          letterStates = drawLabelLetters.map((el, i) => {
+            const prev = letterStates[i];
+            if (prev) {
+              prev.el = el;
+              return prev;
+            }
+            return { el, x: 0, y: 0, vx: 0, vy: 0, lastHitTs: 0, flashActive: false };
+          });
+          ensureLetterPhysicsLoop();
+        }
       }
 
 

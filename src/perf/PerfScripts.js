@@ -1,7 +1,8 @@
-// src/perf/PerfScripts.js
+﻿// src/perf/PerfScripts.js
 // Deterministic camera / overview scripts for repeatable perf tests.
 
 import { getCommittedState, setGestureTransform, commitGesture } from '../zoom/ZoomCoordinator.js';
+import { getViewportElement, getViewportTransform, screenToWorld } from '../board-viewport.js';
 import { overviewMode } from '../overview-mode.js';
 
 function lerp(a, b, t) { return a + (b - a) * t; }
@@ -11,6 +12,8 @@ export function makePanZoomScript({
   panPx = 2200,
   zoomMin = 0.45,
   zoomMax = 1.15,
+  targetSelector = '.toy-panel',
+  boundsPadding = 0.15,
   // phases in ms
   idleMs = 3000,
   panMs = 9000,
@@ -19,7 +22,12 @@ export function makePanZoomScript({
   overviewSpanMs = 9000,
 }) {
   const s0 = base || getCommittedState();
-  const start = { x: s0.x, y: s0.y, scale: s0.scale };
+  let start = { x: s0.x, y: s0.y, scale: s0.scale };
+  let panRadius = panPx;
+  let boundsResolved = false;
+  let boundsFound = false;
+  let centerWorld = null;
+  let panRadiusWorld = panPx;
 
   // precompute overview toggle times (deterministic)
   const panDur = Math.max(0, Number(panMs) || 0);
@@ -35,7 +43,93 @@ function setGesturing(on) {
   try { window.__GESTURE_ACTIVE = !!on; } catch {}
 }
 
+  function resolveTargetBounds() {
+    if (!targetSelector) return null;
+    const panels = document.querySelectorAll(targetSelector);
+    if (!panels || panels.length === 0) return null;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    panels.forEach((panel) => {
+      try {
+        const left = parseFloat(panel?.style?.left || '');
+        const top = parseFloat(panel?.style?.top || '');
+        const width = Number.isFinite(panel?.offsetWidth) ? panel.offsetWidth : NaN;
+        const height = Number.isFinite(panel?.offsetHeight) ? panel.offsetHeight : NaN;
+        if (Number.isFinite(left) && Number.isFinite(top) && Number.isFinite(width) && Number.isFinite(height)) {
+          minX = Math.min(minX, left);
+          minY = Math.min(minY, top);
+          maxX = Math.max(maxX, left + width);
+          maxY = Math.max(maxY, top + height);
+          return;
+        }
+        const rect = panel.getBoundingClientRect?.();
+        if (!rect || !Number.isFinite(rect.left) || !Number.isFinite(rect.top)) return;
+        const tl = screenToWorld({ x: rect.left, y: rect.top });
+        const br = screenToWorld({ x: rect.right, y: rect.bottom });
+        if (!Number.isFinite(tl.x) || !Number.isFinite(tl.y) || !Number.isFinite(br.x) || !Number.isFinite(br.y)) return;
+        minX = Math.min(minX, tl.x, br.x);
+        minY = Math.min(minY, tl.y, br.y);
+        maxX = Math.max(maxX, tl.x, br.x);
+        maxY = Math.max(maxY, tl.y, br.y);
+      } catch {}
+    });
+    if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) return null;
+    const centerX = (minX + maxX) * 0.5;
+    const centerY = (minY + maxY) * 0.5;
+    const halfW = Math.max(1, (maxX - minX) * 0.5);
+    const halfH = Math.max(1, (maxY - minY) * 0.5);
+    return { centerX, centerY, halfW, halfH, minX, minY, maxX, maxY };
+  }
+
+  function worldToTranslate(worldX, worldY, scale) {
+    const stage = document.querySelector('main#board, #board, #world, .world, .canvas-world');
+    const stageRect = stage?.getBoundingClientRect?.();
+    const live = getViewportTransform?.() || {};
+    const committed = getCommittedState?.() || {};
+    const tx = Number.isFinite(live.tx) ? live.tx : (Number.isFinite(committed.x) ? committed.x : 0);
+    const ty = Number.isFinite(live.ty) ? live.ty : (Number.isFinite(committed.y) ? committed.y : 0);
+    const viewEl = getViewportElement?.() || document.documentElement;
+    const viewRect = viewEl?.getBoundingClientRect?.();
+    const viewCx = (viewRect?.left ?? 0) + (viewRect?.width ?? window.innerWidth) * 0.5;
+    const viewCy = (viewRect?.top ?? 0) + (viewRect?.height ?? window.innerHeight) * 0.5;
+    const safeScale = Number.isFinite(scale) && Math.abs(scale) > 1e-6 ? scale : 1;
+    const layoutLeft = stageRect ? (stageRect.left - tx) : 0;
+    const layoutTop = stageRect ? (stageRect.top - ty) : 0;
+    return {
+      x: viewCx - layoutLeft - worldX * safeScale,
+      y: viewCy - layoutTop - worldY * safeScale,
+    };
+  }
+
   return function step(tMs /*, dtMs, progress */) {
+    if (!boundsResolved) {
+      const bounds = resolveTargetBounds();
+      if (bounds) {
+        boundsResolved = true;
+        boundsFound = true;
+        const pad = Math.max(0, Number(boundsPadding) || 0);
+        const maxHalf = Math.max(bounds.halfW, bounds.halfH);
+        const padded = Math.max(200, maxHalf * (1 + pad));
+        panRadiusWorld = Math.max(120, Math.min(panRadiusWorld || padded, Math.min(bounds.halfW, bounds.halfH) * (1 - pad)));
+        centerWorld = { x: bounds.centerX, y: bounds.centerY };
+        const initial = worldToTranslate(centerWorld.x, centerWorld.y, start.scale);
+        start = { x: initial.x, y: initial.y, scale: start.scale };
+        try {
+          window.__PERF_CAM_BOUNDS = {
+            selector: targetSelector || null,
+            minX: bounds.minX, minY: bounds.minY, maxX: bounds.maxX, maxY: bounds.maxY,
+            centerX: bounds.centerX, centerY: bounds.centerY,
+            startX: start.x, startY: start.y,
+            panRadius: panRadiusWorld,
+          };
+        } catch {}
+      } else if (tMs >= (idleDur + panDur + zoomDur)) {
+        boundsResolved = true;
+      }
+    }
+    if (boundsFound && !step.__centered && tMs < idleDur) {
+      step.__centered = true;
+      try { setGestureTransform({ x: start.x, y: start.y, scale: start.scale }); } catch {}
+    }
     // Phase 1: idle (do nothing)
     if (tMs < idleDur) {
       setGesturing(false);
@@ -47,8 +141,10 @@ function setGesturing(on) {
       setGesturing(true);
       const u = (tMs - idleDur) / panDur; // 0..1
       const angle = u * Math.PI * 2;
-      const x = start.x + Math.cos(angle) * panPx;
-      const y = start.y + Math.sin(angle * 0.9) * panPx;
+      const center = centerWorld || { x: start.x, y: start.y };
+      const wX = center.x + Math.cos(angle) * panRadiusWorld;
+      const wY = center.y + Math.sin(angle * 0.9) * panRadiusWorld;
+      const { x, y } = worldToTranslate(wX, wY, start.scale);
       setGestureTransform({ x, y, scale: start.scale });
       return;
     }
@@ -59,8 +155,10 @@ function setGesturing(on) {
       const u = (tMs - (idleDur + panDur)) / zoomDur;
       const wobble = (Math.sin(u * Math.PI * 2) * 0.5 + 0.5); // 0..1
       const scale = lerp(zoomMin, zoomMax, wobble);
-      const x = start.x + Math.cos(u * Math.PI * 2) * (panPx * 0.35);
-      const y = start.y + Math.sin(u * Math.PI * 2) * (panPx * 0.25);
+      const center = centerWorld || { x: start.x, y: start.y };
+      const wX = center.x + Math.cos(u * Math.PI * 2) * (panRadiusWorld * 0.35);
+      const wY = center.y + Math.sin(u * Math.PI * 2) * (panRadiusWorld * 0.25);
+      const { x, y } = worldToTranslate(wX, wY, scale);
       setGestureTransform({ x, y, scale });
       return;
     }
@@ -92,6 +190,8 @@ export function makePanZoomCommitSpamScript({
   panPx = 2200,
   zoomMin = 0.45,
   zoomMax = 1.15,
+  targetSelector = '.toy-panel',
+  boundsPadding = 0.15,
   // phases in ms
   idleMs = 3000,
   panMs = 9000,
@@ -103,7 +203,12 @@ export function makePanZoomCommitSpamScript({
   commitMinGapMs = 0,
 } = {}) {
   const s0 = base || getCommittedState();
-  const start = { x: s0.x, y: s0.y, scale: s0.scale };
+  let start = { x: s0.x, y: s0.y, scale: s0.scale };
+  let panRadius = panPx;
+  let boundsResolved = false;
+  let boundsFound = false;
+  let centerWorld = null;
+  let panRadiusWorld = panPx;
 
   const panDur = Math.max(0, Number(panMs) || 0);
   const zoomDur = Math.max(0, Number(zoomMs) || 0);
@@ -120,7 +225,93 @@ export function makePanZoomCommitSpamScript({
     try { window.__GESTURE_ACTIVE = !!on; } catch {}
   }
 
+  function resolveTargetBounds() {
+    if (!targetSelector) return null;
+    const panels = document.querySelectorAll(targetSelector);
+    if (!panels || panels.length === 0) return null;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    panels.forEach((panel) => {
+      try {
+        const left = parseFloat(panel?.style?.left || '');
+        const top = parseFloat(panel?.style?.top || '');
+        const width = Number.isFinite(panel?.offsetWidth) ? panel.offsetWidth : NaN;
+        const height = Number.isFinite(panel?.offsetHeight) ? panel.offsetHeight : NaN;
+        if (Number.isFinite(left) && Number.isFinite(top) && Number.isFinite(width) && Number.isFinite(height)) {
+          minX = Math.min(minX, left);
+          minY = Math.min(minY, top);
+          maxX = Math.max(maxX, left + width);
+          maxY = Math.max(maxY, top + height);
+          return;
+        }
+        const rect = panel.getBoundingClientRect?.();
+        if (!rect || !Number.isFinite(rect.left) || !Number.isFinite(rect.top)) return;
+        const tl = screenToWorld({ x: rect.left, y: rect.top });
+        const br = screenToWorld({ x: rect.right, y: rect.bottom });
+        if (!Number.isFinite(tl.x) || !Number.isFinite(tl.y) || !Number.isFinite(br.x) || !Number.isFinite(br.y)) return;
+        minX = Math.min(minX, tl.x, br.x);
+        minY = Math.min(minY, tl.y, br.y);
+        maxX = Math.max(maxX, tl.x, br.x);
+        maxY = Math.max(maxY, tl.y, br.y);
+      } catch {}
+    });
+    if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) return null;
+    const centerX = (minX + maxX) * 0.5;
+    const centerY = (minY + maxY) * 0.5;
+    const halfW = Math.max(1, (maxX - minX) * 0.5);
+    const halfH = Math.max(1, (maxY - minY) * 0.5);
+    return { centerX, centerY, halfW, halfH, minX, minY, maxX, maxY };
+  }
+
+  function worldToTranslate(worldX, worldY, scale) {
+    const stage = document.querySelector('main#board, #board, #world, .world, .canvas-world');
+    const stageRect = stage?.getBoundingClientRect?.();
+    const live = getViewportTransform?.() || {};
+    const committed = getCommittedState?.() || {};
+    const tx = Number.isFinite(live.tx) ? live.tx : (Number.isFinite(committed.x) ? committed.x : 0);
+    const ty = Number.isFinite(live.ty) ? live.ty : (Number.isFinite(committed.y) ? committed.y : 0);
+    const viewEl = getViewportElement?.() || document.documentElement;
+    const viewRect = viewEl?.getBoundingClientRect?.();
+    const viewCx = (viewRect?.left ?? 0) + (viewRect?.width ?? window.innerWidth) * 0.5;
+    const viewCy = (viewRect?.top ?? 0) + (viewRect?.height ?? window.innerHeight) * 0.5;
+    const safeScale = Number.isFinite(scale) && Math.abs(scale) > 1e-6 ? scale : 1;
+    const layoutLeft = stageRect ? (stageRect.left - tx) : 0;
+    const layoutTop = stageRect ? (stageRect.top - ty) : 0;
+    return {
+      x: viewCx - layoutLeft - worldX * safeScale,
+      y: viewCy - layoutTop - worldY * safeScale,
+    };
+  }
+
   return function step(tMs /*, dtMs, progress */) {
+    if (!boundsResolved) {
+      const bounds = resolveTargetBounds();
+      if (bounds) {
+        boundsResolved = true;
+        boundsFound = true;
+        const pad = Math.max(0, Number(boundsPadding) || 0);
+        const maxHalf = Math.max(bounds.halfW, bounds.halfH);
+        const padded = Math.max(200, maxHalf * (1 + pad));
+        panRadiusWorld = Math.max(120, Math.min(panRadiusWorld || padded, Math.min(bounds.halfW, bounds.halfH) * (1 - pad)));
+        centerWorld = { x: bounds.centerX, y: bounds.centerY };
+        const initial = worldToTranslate(centerWorld.x, centerWorld.y, start.scale);
+        start = { x: initial.x, y: initial.y, scale: start.scale };
+        try {
+          window.__PERF_CAM_BOUNDS = {
+            selector: targetSelector || null,
+            minX: bounds.minX, minY: bounds.minY, maxX: bounds.maxX, maxY: bounds.maxY,
+            centerX: bounds.centerX, centerY: bounds.centerY,
+            startX: start.x, startY: start.y,
+            panRadius: panRadiusWorld,
+          };
+        } catch {}
+      } else if (tMs >= (idleDur + panDur + zoomDur)) {
+        boundsResolved = true;
+      }
+    }
+    if (boundsFound && !step.__centered && tMs < idleDur) {
+      step.__centered = true;
+      try { setGestureTransform({ x: start.x, y: start.y, scale: start.scale }); } catch {}
+    }
     const commitK = Math.floor(tMs / commitEvery);
     const shouldCommitNow = () => {
       if (commitGap <= 0) return true;
@@ -144,8 +335,10 @@ export function makePanZoomCommitSpamScript({
       setGesturing(true);
       const u = (tMs - idleDur) / panDur;
       const angle = u * Math.PI * 2;
-      const x = start.x + Math.cos(angle) * panPx;
-      const y = start.y + Math.sin(angle * 0.9) * panPx;
+      const center = centerWorld || { x: start.x, y: start.y };
+      const wX = center.x + Math.cos(angle) * panRadiusWorld;
+      const wY = center.y + Math.sin(angle * 0.9) * panRadiusWorld;
+      const { x, y } = worldToTranslate(wX, wY, start.scale);
       setGestureTransform({ x, y, scale: start.scale });
       if (step.__lastCommitK !== commitK) {
         step.__lastCommitK = commitK;
@@ -161,8 +354,10 @@ export function makePanZoomCommitSpamScript({
       const u = (tMs - (idleDur + panDur)) / zoomDur;
       const wobble = (Math.sin(u * Math.PI * 2) * 0.5 + 0.5);
       const scale = lerp(zoomMin, zoomMax, wobble);
-      const x = start.x + Math.cos(u * Math.PI * 2) * (panPx * 0.35);
-      const y = start.y + Math.sin(u * Math.PI * 2) * (panPx * 0.25);
+      const center = centerWorld || { x: start.x, y: start.y };
+      const wX = center.x + Math.cos(u * Math.PI * 2) * (panRadiusWorld * 0.35);
+      const wY = center.y + Math.sin(u * Math.PI * 2) * (panRadiusWorld * 0.25);
+      const { x, y } = worldToTranslate(wX, wY, scale);
       setGestureTransform({ x, y, scale });
       if (step.__lastCommitK !== commitK) {
         step.__lastCommitK = commitK;
