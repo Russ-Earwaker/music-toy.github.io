@@ -4905,6 +4905,7 @@ function syncBackBufferSizes() {
 
   let __dgGridPath = null;
   let __dgGridPathKey = '';
+  let __dgGridCache = { canvas: null, ctx: null, key: '' };
   function buildGridPath(noteGridY) {
     const path = new Path2D();
     // Verticals (including outer lines)
@@ -4922,45 +4923,32 @@ function syncBackBufferSizes() {
     return path;
   }
 
-  function drawGrid(){
-    let __dgProfileStart = null;
-    if (DG_PROFILE && typeof performance !== 'undefined' && performance.now) {
-      __dgProfileStart = performance.now();
-    }
-
-    resetCtx(gctx);
-    withLogicalSpace(gctx, () => {
-      const surface = gctx.canvas;
-      const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
-      const width = cssW || (surface?.width ?? 0) / scale;
-      const height = cssH || (surface?.height ?? 0) / scale;
-      gctx.clearRect(0, 0, width, height);
+  function renderGridTo(ctx, width, height, noteGridY, noteGridH, hasTwoLines) {
+    if (!ctx) return;
+    resetCtx(ctx);
+    withLogicalSpace(ctx, () => {
+      ctx.clearRect(0, 0, width, height);
 
       // 1. Draw the note grid area below the top padding
-      const noteGridY = gridArea.y + topPad;
-      const noteGridH = gridArea.h - topPad;
-      gctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-      gctx.fillRect(gridArea.x, noteGridY, gridArea.w, noteGridH);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+      ctx.fillRect(gridArea.x, noteGridY, gridArea.w, noteGridH);
 
       // 2. Subtle fill for active columns
       if (currentMap) {
-          for (let c = 0; c < cols; c++) {
-              if (currentMap.nodes[c]?.size > 0 && currentMap.active[c]) {
-                  let fillOpacity = 0.1; // default opacity
-                  const hasTwoLines = strokes.some(s => s.generatorId === 2);
-                  if (hasTwoLines) {
-                      const totalNodes = currentMap.nodes[c].size;
-                      const disabledNodes = currentMap.disabled[c]?.size || 0;
-                      const activeNodes = totalNodes - disabledNodes;
-                      if (activeNodes === 1) {
-                          fillOpacity = 0.05; // more subtle
-                      }
-                  }
-                  gctx.fillStyle = `rgba(143, 168, 255, ${fillOpacity})`;
-                  const x = gridArea.x + c * cw;
-                  gctx.fillRect(x, noteGridY, cw, noteGridH);
-              }
+        for (let c = 0; c < cols; c++) {
+          if (currentMap.nodes[c]?.size > 0 && currentMap.active[c]) {
+            let fillOpacity = 0.1;
+            if (hasTwoLines) {
+              const totalNodes = currentMap.nodes[c].size;
+              const disabledNodes = currentMap.disabled[c]?.size || 0;
+              const activeNodes = totalNodes - disabledNodes;
+              if (activeNodes === 1) fillOpacity = 0.05;
+            }
+            ctx.fillStyle = `rgba(143, 168, 255, ${fillOpacity})`;
+            const x = gridArea.x + c * cw;
+            ctx.fillRect(x, noteGridY, cw, noteGridH);
           }
+        }
       }
 
       // 3. Draw all grid lines with the base color
@@ -4968,8 +4956,8 @@ function syncBackBufferSizes() {
       const cellH = ch || 24;
       const cell = Math.max(4, Math.min(cellW, cellH));
       const gridLineWidthPx = Math.max(1, Math.min(cell * 0.03, 8));
-      gctx.strokeStyle = 'rgba(143, 168, 255, 0.35)';
-      gctx.lineWidth = gridLineWidthPx;
+      ctx.strokeStyle = 'rgba(143, 168, 255, 0.35)';
+      ctx.lineWidth = gridLineWidthPx;
       if (typeof Path2D !== 'undefined') {
         const key = [
           gridArea.x, gridArea.y, gridArea.w, gridArea.h,
@@ -4979,48 +4967,107 @@ function syncBackBufferSizes() {
           __dgGridPath = buildGridPath(noteGridY);
           __dgGridPathKey = key;
         }
-        gctx.stroke(__dgGridPath);
+        ctx.stroke(__dgGridPath);
       } else {
         // Verticals (including outer lines)
         for (let i = 0; i <= cols; i++) {
-            const x = crisp(gridArea.x + i * cw);
-            gctx.beginPath();
-            gctx.moveTo(x, noteGridY);
-            gctx.lineTo(x, gridArea.y + gridArea.h);
-            gctx.stroke();
+          const x = crisp(gridArea.x + i * cw);
+          ctx.beginPath();
+          ctx.moveTo(x, noteGridY);
+          ctx.lineTo(x, gridArea.y + gridArea.h);
+          ctx.stroke();
         }
         // Horizontals (including outer lines)
         for (let j = 0; j <= rows; j++) {
-            const y = crisp(noteGridY + j * ch);
-            gctx.beginPath();
-            gctx.moveTo(gridArea.x, y);
-            gctx.lineTo(gridArea.x + gridArea.w, y);
-            gctx.stroke();
+          const y = crisp(noteGridY + j * ch);
+          ctx.beginPath();
+          ctx.moveTo(gridArea.x, y);
+          ctx.lineTo(gridArea.x + gridArea.w, y);
+          ctx.stroke();
         }
       }
 
       // 4. Highlight active columns by thickening their vertical lines
       if (currentMap) {
-          gctx.strokeStyle = 'rgba(143, 168, 255, 0.7)'; // Brighter version of grid color
-          for (let c = 0; c < cols; c++) {
-              // Highlight only if there are nodes AND the column is active
-              if (currentMap.nodes[c]?.size > 0 && currentMap.active[c]) {
-                  // Left line of the column
-                  const x1 = crisp(gridArea.x + c * cw);
-                  gctx.beginPath();
-                  gctx.moveTo(x1, noteGridY);
-                  gctx.lineTo(x1, gridArea.y + gridArea.h);
-                  gctx.stroke();
+        ctx.strokeStyle = 'rgba(143, 168, 255, 0.7)';
+        for (let c = 0; c < cols; c++) {
+          if (currentMap.nodes[c]?.size > 0 && currentMap.active[c]) {
+            const x1 = crisp(gridArea.x + c * cw);
+            ctx.beginPath();
+            ctx.moveTo(x1, noteGridY);
+            ctx.lineTo(x1, gridArea.y + gridArea.h);
+            ctx.stroke();
 
-                  // Right line of the column
-                  const x2 = crisp(gridArea.x + (c + 1) * cw);
-                  gctx.beginPath();
-                  gctx.moveTo(x2, noteGridY);
-                  gctx.lineTo(x2, gridArea.y + gridArea.h);
-                  gctx.stroke();
-              }
+            const x2 = crisp(gridArea.x + (c + 1) * cw);
+            ctx.beginPath();
+            ctx.moveTo(x2, noteGridY);
+            ctx.lineTo(x2, gridArea.y + gridArea.h);
+            ctx.stroke();
           }
+        }
       }
+    });
+  }
+
+  function drawGrid(){
+    let __dgProfileStart = null;
+    if (DG_PROFILE && typeof performance !== 'undefined' && performance.now) {
+      __dgProfileStart = performance.now();
+    }
+
+    const surface = gctx.canvas;
+    const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+    const width = cssW || (surface?.width ?? 0) / scale;
+    const height = cssH || (surface?.height ?? 0) / scale;
+    const noteGridY = gridArea.y + topPad;
+    const noteGridH = gridArea.h - topPad;
+    const hasTwoLines = strokes.some(s => s.generatorId === 2);
+
+    let __dgHash = 2166136261;
+    const __dgHashStep = (h, v) => {
+      const n = (Number.isFinite(v) ? v : 0) | 0;
+      return ((h ^ n) * 16777619) >>> 0;
+    };
+    __dgHash = __dgHashStep(__dgHash, rows);
+    __dgHash = __dgHashStep(__dgHash, cols);
+    __dgHash = __dgHashStep(__dgHash, Math.round(cw * 1000));
+    __dgHash = __dgHashStep(__dgHash, Math.round(ch * 1000));
+    __dgHash = __dgHashStep(__dgHash, Math.round(topPad * 1000));
+    __dgHash = __dgHashStep(__dgHash, Math.round((gridArea?.x || 0) * 1000));
+    __dgHash = __dgHashStep(__dgHash, Math.round((gridArea?.y || 0) * 1000));
+    __dgHash = __dgHashStep(__dgHash, Math.round((gridArea?.w || 0) * 1000));
+    __dgHash = __dgHashStep(__dgHash, Math.round((gridArea?.h || 0) * 1000));
+    __dgHash = __dgHashStep(__dgHash, hasTwoLines ? 1 : 0);
+    if (currentMap) {
+      for (let c = 0; c < cols; c++) {
+        const nodes = currentMap.nodes[c];
+        const totalNodes = nodes ? nodes.size : 0;
+        const disabledNodes = currentMap.disabled[c]?.size || 0;
+        const active = currentMap.active[c] ? 1 : 0;
+        __dgHash = __dgHashStep(__dgHash, totalNodes);
+        __dgHash = __dgHashStep(__dgHash, disabledNodes);
+        __dgHash = __dgHashStep(__dgHash, active);
+      }
+    }
+
+    const cache = __dgGridCache;
+    const surfacePxW = surface?.width ?? gctx.canvas?.width ?? 0;
+    const surfacePxH = surface?.height ?? gctx.canvas?.height ?? 0;
+    if (!cache.canvas) cache.canvas = document.createElement('canvas');
+    if (cache.canvas.width !== surfacePxW) cache.canvas.width = surfacePxW;
+    if (cache.canvas.height !== surfacePxH) cache.canvas.height = surfacePxH;
+    if (!cache.ctx) cache.ctx = cache.canvas.getContext('2d');
+    const cacheKey = `${__dgHash}|${surfacePxW}x${surfacePxH}`;
+
+    if (cache.key !== cacheKey) {
+      renderGridTo(cache.ctx, width, height, noteGridY, noteGridH, hasTwoLines);
+      cache.key = cacheKey;
+    }
+
+    resetCtx(gctx);
+    withLogicalSpace(gctx, () => {
+      gctx.clearRect(0, 0, width, height);
+      if (cache.canvas) gctx.drawImage(cache.canvas, 0, 0, width, height);
     });
 
     if (__dgProfileStart !== null) {
@@ -5213,6 +5260,7 @@ function syncBackBufferSizes() {
   }
 
   let __dgNodesCache = { canvas: null, ctx: null, key: '' };
+  let __dgBlocksCache = { canvas: null, ctx: null, key: '' };
 
   function drawNodes(nodes) {
     const nodeCoords = [];
@@ -5271,21 +5319,21 @@ function syncBackBufferSizes() {
               __dgHash = __dgHashStep(__dgHash, r);
               __dgHash = __dgHashStep(__dgHash, isDisabled ? 1 : 0);
               __dgHash = __dgHashStep(__dgHash, (gid == null ? -1 : gid));
-              const nodeData = { x, y, col: c, row: r, radius: radius * 1.5, group: gid, disabled: isDisabled };
-              nodeCoords.push(nodeData);
-              nodeCoordsForHitTest.push(nodeData);
-            }
-          } else {
-            const groupId = typeof groupEntry === 'number' ? groupEntry : null;
-            __dgHash = __dgHashStep(__dgHash, c);
-            __dgHash = __dgHashStep(__dgHash, r);
-            __dgHash = __dgHashStep(__dgHash, isDisabled ? 1 : 0);
-            __dgHash = __dgHashStep(__dgHash, (groupId == null ? -1 : groupId));
-            const nodeData = { x, y, col: c, row: r, radius: radius * 1.5, group: groupId, disabled: isDisabled };
+            const nodeData = { x, y, col: c, row: r, radius: radius * 1.5, group: gid, disabled: isDisabled };
             nodeCoords.push(nodeData);
             nodeCoordsForHitTest.push(nodeData);
           }
+        } else {
+          const groupId = typeof groupEntry === 'number' ? groupEntry : null;
+          __dgHash = __dgHashStep(__dgHash, c);
+          __dgHash = __dgHashStep(__dgHash, r);
+          __dgHash = __dgHashStep(__dgHash, isDisabled ? 1 : 0);
+          __dgHash = __dgHashStep(__dgHash, (groupId == null ? -1 : groupId));
+          const nodeData = { x, y, col: c, row: r, radius: radius * 1.5, group: groupId, disabled: isDisabled };
+          nodeCoords.push(nodeData);
+          nodeCoordsForHitTest.push(nodeData);
         }
+      }
       }
 
       const cache = __dgNodesCache;
@@ -5437,31 +5485,57 @@ function syncBackBufferSizes() {
         nctx.drawImage(cache.canvas, 0, 0);
       }
 
+      const blockCache = __dgBlocksCache;
+      if (!blockCache.canvas) blockCache.canvas = document.createElement('canvas');
+      if (blockCache.canvas.width !== surfacePxW) blockCache.canvas.width = surfacePxW;
+      if (blockCache.canvas.height !== surfacePxH) blockCache.canvas.height = surfacePxH;
+      if (!blockCache.ctx) blockCache.ctx = blockCache.canvas.getContext('2d');
+      const blockKey = `${__dgHash}|${Math.round(radius * 1000)}|${surfacePxW}x${surfacePxH}|blocks`;
+      if (blockCache.key !== blockKey && blockCache.ctx) {
+        blockCache.key = blockKey;
+        resetCtx(blockCache.ctx);
+        withLogicalSpace(blockCache.ctx, () => {
+          blockCache.ctx.clearRect(0, 0, width, height);
+          for (const node of nodeCoords) {
+            const colActive = currentMap?.active?.[node.col] ?? true;
+            const nodeOn = colActive && !node.disabled;
+            const size = radius * 2;
+            const cubeRect = { x: node.x - size / 2, y: node.y - size / 2, w: size, h: size };
+            drawBlock(blockCache.ctx, cubeRect, {
+              baseColor: nodeOn ? '#ff8c00' : '#333',
+              active: nodeOn,
+              variant: 'button',
+              noteLabel: null,
+              showArrows: false,
+            });
+          }
+          drawNoteLabelsTo(blockCache.ctx, nodes);
+        });
+      }
+
+      if (blockCache.canvas) {
+        nctx.drawImage(blockCache.canvas, 0, 0);
+      }
+
       for (const node of nodeCoords) {
-        const colActive = currentMap?.active?.[node.col] ?? true;
-        const nodeOn = colActive && !node.disabled;
         const flash = flashes[node.col] || 0;
+        if (flash <= 0) continue;
         const size = radius * 2;
         const cubeRect = { x: node.x - size / 2, y: node.y - size / 2, w: size, h: size };
-
         nctx.save();
-        if (flash > 0) {
-          const scale = 1 + 0.15 * Math.sin(flash * Math.PI);
-          nctx.translate(node.x, node.y);
-          nctx.scale(scale, scale);
-          nctx.translate(-node.x, -node.y);
-        }
+        const scale = 1 + 0.15 * Math.sin(flash * Math.PI);
+        nctx.translate(node.x, node.y);
+        nctx.scale(scale, scale);
+        nctx.translate(-node.x, -node.y);
         drawBlock(nctx, cubeRect, {
-          baseColor: flash > 0.01 ? '#FFFFFF' : (nodeOn ? '#ff8c00' : '#333'),
-          active: flash > 0.01 || nodeOn,
+          baseColor: '#FFFFFF',
+          active: true,
           variant: 'button',
           noteLabel: null,
           showArrows: false,
         });
         nctx.restore();
       }
-
-      drawNoteLabels(nodes);
       if (tutorialHighlightMode !== 'none') {
         renderTutorialHighlight();
       } else {
@@ -5472,12 +5546,13 @@ function syncBackBufferSizes() {
     });
   }
 
-  function drawNoteLabels(nodes) {
-    withLogicalSpace(nctx, () => {
-      nctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-      nctx.font = '600 12px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
-      nctx.textAlign = 'center';
-      nctx.textBaseline = 'alphabetic';
+  function drawNoteLabelsTo(ctx, nodes) {
+    if (!ctx) return;
+    withLogicalSpace(ctx, () => {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.font = '600 12px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
       const labelY = Math.round((cssH || 0) - 10);
 
       for (let c = 0; c < cols; c++) {
@@ -5491,9 +5566,13 @@ function syncBackBufferSizes() {
         const midiNote = chromaticPalette[r];
         if (midiNote === undefined) continue;
         const tx = Math.round(gridArea.x + c * cw + cw * 0.5);
-        nctx.fillText(midiToName(midiNote), tx, labelY);
+        ctx.fillText(midiToName(midiNote), tx, labelY);
       }
     });
+  }
+
+  function drawNoteLabels(nodes) {
+    drawNoteLabelsTo(nctx, nodes);
   }
 
   // --- Note Palettes for Snapping ---
@@ -6565,7 +6644,23 @@ function syncBackBufferSizes() {
           }
           return false;
         })();
-        const overlayActive = allowOverlayDraw && (hasOverlayFx || transportRunning || hasOverlayStrokes || (cur && previewGid));
+      const overlayActive = allowOverlayDraw && (hasOverlayFx || transportRunning || hasOverlayStrokes || (cur && previewGid));
+      if (allowOverlayDraw) {
+        const lastTransportRunning = !!panel.__dgLastTransportRunning;
+        if (lastTransportRunning && !transportRunning && !overlayActive) {
+          try {
+            const flashSurface = getActiveFlashCanvas();
+            resetCtx(fctx);
+            withLogicalSpace(fctx, () => {
+              const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+              const width = cssW || (flashSurface?.width ?? 0) / scale;
+              const height = cssH || (flashSurface?.height ?? 0) / scale;
+              fctx.clearRect(0, 0, width, height);
+            });
+          } catch {}
+        }
+        panel.__dgLastTransportRunning = transportRunning;
+      }
 
       // Particle field visibility is driven by global allow/overview/zoom state.
       // Do NOT toggle visibility just because we're in a brief commit window; that caused resets on pan/zoom release.

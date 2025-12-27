@@ -12,7 +12,12 @@
 
 import { createParticleViewport } from './particle-viewport.js';
 import {
+  BASE_AREA,
+  BASE_COUNT,
   BASE_RADIUS_PX,
+  GRID_RELAX,
+  MAX_COUNT,
+  MIN_COUNT,
   RNG_SEED_PER_TOY,
   computeParticleLayout,
   particleRadiusPx,
@@ -36,6 +41,11 @@ const MAX_FADE_OUT_STEP = 16;
 const MIN_FADE_STEP = 2;
 const MEASURE_MIN_MS = 120; // throttle layout reads to reduce reflows
 const VISIBILITY_MIN_MS = 220; // throttle viewport checks
+const ZOOM_DENSITY_MIN = 0.4;
+const ZOOM_DENSITY_MAX = 2.2;
+const ZOOM_DENSITY_SMOOTH = 0.2;
+const ZOOM_DENSITY_REBUILD_DELTA = 0.08;
+const ZOOM_DENSITY_REBUILD_MS = 180;
 
 function isZoomGesturing() {
   try {
@@ -140,6 +150,11 @@ function readZoom(viewport) {
   }
   const fallback = Number(window.__boardScale);
   return Number.isFinite(fallback) && fallback > 0 ? fallback : 1;
+}
+
+function clampZoomForDensity(zoom) {
+  const z = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+  return Math.max(ZOOM_DENSITY_MIN, Math.min(ZOOM_DENSITY_MAX, z));
 }
 
 function readOverview(viewport) {
@@ -318,6 +333,8 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     gestureDrawCounter: 0,
     drawCounter: 0,
     lastMeasureTs: 0,
+    zoomForDensity: 1,
+    lastZoomRebuildTs: 0,
   };
   const baseSizePx = config.sizePx;
   const PARTICLE_HIGHLIGHT_DURATION = 900; // ms
@@ -368,21 +385,37 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
 
     const layoutOpts = config.layoutOverrides || {};
+    const rawZoom = readZoom(viewport || pv);
+    const clampedZoom = clampZoomForDensity(rawZoom);
+    const prevZoomForDensity = Number.isFinite(state.zoomForDensity) ? state.zoomForDensity : clampedZoom;
+    const nextZoomForDensity = prevZoomForDensity + (clampedZoom - prevZoomForDensity) * ZOOM_DENSITY_SMOOTH;
+    state.zoomForDensity = nextZoomForDensity;
+    const densityZoom = Math.max(0.01, nextZoomForDensity);
+    const layoutBaseArea = Number.isFinite(layoutOpts.baseArea) ? layoutOpts.baseArea : BASE_AREA;
+    const layoutBaseCount = Number.isFinite(layoutOpts.baseCount) ? layoutOpts.baseCount : BASE_COUNT;
+    const layoutMinCount = Number.isFinite(layoutOpts.minCount) ? layoutOpts.minCount : MIN_COUNT;
+    const layoutMaxCount = Number.isFinite(layoutOpts.maxCount) ? layoutOpts.maxCount : MAX_COUNT;
     const computedLayout = computeParticleLayout({
-      widthPx: state.w,
-      heightPx: state.h,
-      baseArea: layoutOpts.baseArea,
-      baseCount: layoutOpts.baseCount,
-      minCount: layoutOpts.minCount,
-      maxCount: layoutOpts.maxCount,
+      widthPx: state.w / densityZoom,
+      heightPx: state.h / densityZoom,
+      baseArea: layoutBaseArea,
+      baseCount: layoutBaseCount,
+      minCount: layoutMinCount,
+      maxCount: layoutMaxCount,
       debugLabel: opts.debugLabel || config.seed || 'field',
     });
+    const layoutArea = Math.max(1, (state.w / densityZoom) * (state.h / densityZoom));
+    const idealCount = (layoutArea / layoutBaseArea) * layoutBaseCount;
     const resolvedCount = Number.isFinite(layoutOpts.count)
       ? Math.max(1, Math.round(layoutOpts.count))
       : computedLayout.count;
-    const spacingCandidate = Number.isFinite(layoutOpts.spacing)
+    let spacingCandidate = Number.isFinite(layoutOpts.spacing)
       ? layoutOpts.spacing
       : computedLayout.spacing;
+    if (!Number.isFinite(layoutOpts.spacing) && idealCount > layoutMaxCount) {
+      const baseSpacing = Math.sqrt(layoutBaseArea / layoutBaseCount) * GRID_RELAX;
+      spacingCandidate = Math.min(spacingCandidate, baseSpacing);
+    }
     const lodScale = Math.max(0.15, Math.min(1, state.lodScale || 1));
     const spacingScale = lodScale > 0 ? (1 / Math.sqrt(lodScale)) : 1;
     state.spacing = Math.max(8, (spacingCandidate || computedLayout.spacing || 8) * spacingScale);
@@ -476,7 +509,7 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
   }
 
   function setLODFromView() {
-    const zoom = readZoom(viewport);
+    const zoom = readZoom(viewport || pv);
     const inOverview = readOverview(viewport);
     const paused = pausedRef?.() ?? false;
 
@@ -485,6 +518,17 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     const pauseFactor = paused ? 0.85 : 1.0;
     const perfMul = readPerfBudgetMul();
     state.lodScale = overviewFactor * zoomFactor * pauseFactor * Math.max(0.05, perfMul);
+
+    const densityZoom = clampZoomForDensity(zoom);
+    const prevZoomForDensity = Number.isFinite(state.zoomForDensity) ? state.zoomForDensity : densityZoom;
+    const diff = Math.abs(densityZoom - prevZoomForDensity);
+    if (!isZoomGesturing() && diff > ZOOM_DENSITY_REBUILD_DELTA) {
+      const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      if (!state.lastZoomRebuildTs || (now - state.lastZoomRebuildTs) > ZOOM_DENSITY_REBUILD_MS) {
+        state.lastZoomRebuildTs = now;
+        rebuild();
+      }
+    }
   }
 
   function pulse(intensity = 0.6) {

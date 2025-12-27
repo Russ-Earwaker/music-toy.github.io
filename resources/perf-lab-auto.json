@@ -2,13 +2,10 @@
   "queue": [
     "buildP6",
     "runP6e",
-    "runP6eNoPaint",
-    "runP6ePaintOnly",
-    "runP6eNoDom",
     "buildP3",
     "runP3f"
   ],
-  "notes": "Avg mix: 4 draw toys + 4 loopgrid chains (len 4) extreme zoom. Loopgrid playhead/burst sprite caching. Add P3f drawgrid pan/zoom + random once.",
+  "notes": "Avg mix: 4 draw toys + 4 loopgrid chains (len 4) extreme zoom. P3f drawgrid pan/zoom + random once.",
   "runTag": "loopgrid-sprites",
   "postUrl": "http://localhost:5174/perf-lab-results"
 }
