@@ -1183,6 +1183,19 @@ export function tickBoardAnchor({ nowMs, loopInfo, running } = {}) {
   const zoomScale = clamp(getZoomScale(), ZOOM_SCALE_CLAMP_MIN, ZOOM_SCALE_CLAMP_MAX);
   const drawScale = ANCHOR_SIZE_MULT * zoomScale;
 
+  const buffer = GRAD_EDGE_PAD_PX * 2;
+  const onScreenWithPad =
+    local.x >= -buffer &&
+    local.x <= (local.w + buffer) &&
+    local.y >= -buffer &&
+    local.y <= (local.h + buffer);
+  const offscreenOnly = !onScreenWithPad && !anchorGuideActive && !hoverActive;
+  if (offscreenOnly) {
+    drawGradient(local, distWorld, !!running, drawScale);
+    if (tA) perfMark(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - tA);
+    return;
+  }
+
   if (doFull) drawAnchorGrid(local, drawScale);
 
   drawGradient(local, distWorld, !!running, drawScale);

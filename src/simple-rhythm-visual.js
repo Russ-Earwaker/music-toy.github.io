@@ -945,6 +945,8 @@ function render(panel, opts = {}) {
     panel.classList.remove('toy-playing-pulse');
   }
 
+  const transportRunning = (typeof isRunning === 'function') && isRunning();
+
   // Compute playhead early for step-driven gating
   const loopInfo = getLoopInfo();
   const playheadCol = loopInfo ? Math.floor(loopInfo.phase01 * NUM_CUBES) : -1;
@@ -952,6 +954,23 @@ function render(panel, opts = {}) {
   // PerfLab: redraw unfocused only when playhead step changes (or forced/pulsing).
   const mode = window.__PERF_LOOPGRID_UNFOCUSED_MODE;
   const stepOnly = (mode === 'stepOnly');
+  const autoGate = (mode == null || mode === 'auto');
+  const hasFlash = (() => {
+    const flashes = st.flash;
+    if (!flashes || typeof flashes.length !== 'number') return false;
+    for (let i = 0; i < flashes.length; i++) {
+      if (flashes[i] > 0) return true;
+    }
+    return false;
+  })();
+  if (autoGate && isUnfocused && !isFocused) {
+    const hasPulse = !!(panel.__pulseHighlight && panel.__pulseHighlight > 0);
+    const wantsRedraw = !!forceNudge;
+    const last = (panel.__loopgridLastPlayheadCol ?? -999);
+    const changed = (playheadCol !== last);
+    panel.__loopgridLastPlayheadCol = playheadCol;
+    if (!wantsRedraw && !hasPulse && !hasFlash && !(transportRunning && changed)) return;
+  }
   if (stepOnly && isUnfocused && !isFocused) {
     const hasPulse = !!(panel.__pulseHighlight && panel.__pulseHighlight > 0);
     const wantsRedraw = !!forceNudge; // includes __loopgridNeedsRedraw
@@ -1002,7 +1021,6 @@ function render(panel, opts = {}) {
     return anyNotes;
   })();
 
-  const transportRunning = isRunning();
   // Only show the steady outline while transport is running.
   // Chained toys require both an active link and notes somewhere in the chain.
   const showPlaying = transportRunning

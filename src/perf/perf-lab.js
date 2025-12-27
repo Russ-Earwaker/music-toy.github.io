@@ -647,6 +647,7 @@ function toggle() {
 }
 
 function buildP2() {
+  try { clearSceneViaSnapshot(); } catch {}
   setStatus('Building P2…');
   // Particles worst-case: lots of loopgrids (heavy particle fields).
   buildParticleWorstCase({ toyType: 'loopgrid', rows: 8, cols: 10, spacing: 400 });
@@ -654,6 +655,7 @@ function buildP2() {
 }
 
 function buildP3() {
+  try { clearSceneViaSnapshot(); } catch {}
   setStatus('Building P3…');
   // DrawGrid worst-case: lots of drawgrids for canvas-heavy stress.
   buildParticleWorstCase({ toyType: 'drawgrid', rows: 6, cols: 8, spacing: 420 });
@@ -661,6 +663,7 @@ function buildP3() {
 }
 
 function buildP4() {
+  try { clearSceneViaSnapshot(); } catch {}
   setStatus('Building P4...');
   // Chained Simple Rhythm === loopgrid
   buildChainedLoopgridStress({
@@ -680,6 +683,7 @@ function buildP4() {
 }
 
 function buildP4h() {
+  try { clearSceneViaSnapshot(); } catch {}
   setStatus('Building P4H...');
   buildChainedLoopgridStress({
     toyType: 'loopgrid',
@@ -699,12 +703,14 @@ function buildP4h() {
 }
 
 function buildP5() {
+  try { clearSceneViaSnapshot(); } catch {}
   setStatus('Building P5...');
   buildMixedScene({ drawRows: 3, drawCols: 4, loopRows: 3, loopCols: 4, spacing: 420, gap: 320 });
   setStatus('P5 built');
 }
 
 function buildP6() {
+  try { clearSceneViaSnapshot(); } catch {}
   setStatus('Building P6...');
   buildChainedLoopgridStress({
     toyType: 'loopgrid',
@@ -2428,6 +2434,9 @@ async function runQueue(list = []) {
     if (typeof fn !== 'function') {
       console.warn('[PerfLab] missing test', item);
       continue;
+    }
+    if (typeof item === 'string' && item.startsWith('build')) {
+      try { clearSceneViaSnapshot(); } catch {}
     }
     try { await fn(); } catch (err) { console.warn('[PerfLab] test failed', item, err); }
     if (lastResult) results.push(lastResult);

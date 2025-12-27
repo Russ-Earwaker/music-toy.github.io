@@ -890,7 +890,15 @@ function drawLiveStrokePoint(ctx, pt, prevPt, strokeOrColor) {
 
 // --- Commit/settle gating for overlay clears ---
 let __dgDeferUntilTs = 0;
+let __dgBypassCommitUntil = 0;
 let __dgNeedsUIRefresh = false;
+let __dgForceFullDrawUntil = 0;
+let __dgForceFullDrawNext = false;
+let __dgForceFullDrawFrames = 0;
+let __dgForceOverlayClearNext = false;
+let __dgForceSwapNext = false;
+let __dgPostReleaseRaf = 0;
+let __dgPostReleaseRaf2 = 0;
 let __hydrationJustApplied = false;
 let __dgLayoutStableFrames = 0;
 let __dgLastLayoutKey = '';
@@ -917,6 +925,7 @@ function scheduleHydrationLayoutRetry(panel, layoutFn) {
 let __dgStableFramesAfterCommit = 0;
 
 function __dgInCommitWindow(nowTs) {
+  if (Number.isFinite(__dgBypassCommitUntil) && nowTs < __dgBypassCommitUntil) return false;
   const win = (typeof window !== 'undefined') ? window : null;
   const lp = win?.__LAST_POINTERUP_DIAG__;
   const gestureSettle = win?.__GESTURE_SETTLE_UNTIL_TS || (lp?.t0 ? lp.t0 + 200 : 0);
@@ -2627,6 +2636,36 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     zoomCommitPhase = 'idle';
     pendingPaintSwap = false;
     pendingSwap = false;
+    __dgNeedsUIRefresh = true;
+    __dgForceFullDrawUntil = nowMs() + 220;
+    __dgBypassCommitUntil = nowMs() + 220;
+    __dgForceFullDrawNext = true;
+    __dgForceFullDrawFrames = 8;
+    __dgForceOverlayClearNext = true;
+    __dgForceSwapNext = true;
+    __dgStableFramesAfterCommit = 2;
+    __dgDeferUntilTs = 0;
+    if (__dgPostReleaseRaf) { try { cancelAnimationFrame(__dgPostReleaseRaf); } catch {} }
+    __dgPostReleaseRaf = requestAnimationFrame(() => {
+      __dgPostReleaseRaf = 0;
+      const redrawNow = () => {
+        if (!panel?.isConnected) return;
+        if (!isPanelVisible) return;
+        try {
+          drawGrid();
+          if (currentMap) drawNodes(currentMap.nodes);
+          __dgNeedsUIRefresh = true;
+          __dgFrontSwapNextDraw = true;
+          if (typeof requestFrontSwap === 'function') requestFrontSwap(useFrontBuffers);
+        } catch {}
+      };
+      redrawNow();
+      if (__dgPostReleaseRaf2) { try { cancelAnimationFrame(__dgPostReleaseRaf2); } catch {} }
+      __dgPostReleaseRaf2 = requestAnimationFrame(() => {
+        __dgPostReleaseRaf2 = 0;
+        redrawNow();
+      });
+    });
     zoomMode = zoomPayload?.mode && zoomPayload.mode !== 'gesturing' ? zoomPayload.mode : 'idle';
     try { dgViewport?.setNonReactive?.(null); } catch {}
     resetZoomFreezeTracking();
@@ -4132,6 +4171,35 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
     }
   });
 
+  const onGlobalPointerUp = () => {
+    const now = nowMs();
+    let wasGesturing = false;
+    try {
+      wasGesturing = !!(window.__mtZoomGesturing || window.__GESTURE_ACTIVE || document.body?.classList?.contains?.('is-gesturing'));
+    } catch {}
+    let inSettle = false;
+    try {
+      const settle = window.__GESTURE_SETTLE_UNTIL_TS;
+      if (Number.isFinite(settle) && now < settle) inSettle = true;
+    } catch {}
+    if (!wasGesturing && !inSettle) return;
+    __dgBypassCommitUntil = now + 240;
+    __dgForceFullDrawUntil = now + 240;
+    __dgForceFullDrawNext = true;
+    __dgForceFullDrawFrames = Math.max(__dgForceFullDrawFrames || 0, 8);
+    __dgForceOverlayClearNext = true;
+    __dgForceSwapNext = true;
+    __dgNeedsUIRefresh = true;
+    __dgStableFramesAfterCommit = 2;
+    __dgDeferUntilTs = 0;
+  };
+  try {
+    window.addEventListener('pointerup', onGlobalPointerUp, true);
+    panel.addEventListener('toy:remove', () => {
+      try { window.removeEventListener('pointerup', onGlobalPointerUp, true); } catch {}
+    }, { once: true });
+  } catch {}
+
   let lastZoomX = 1;
   let lastZoomY = 1;
 
@@ -4746,9 +4814,10 @@ function syncBackBufferSizes() {
       // Clear other content canvases. The caller is responsible for redrawing nodes/overlay.
       // Defer overlay clears if we are in/near a gesture commit; renderLoop will clear safely.
       const __now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-      if (__dgInCommitWindow(__now) || __dgStableFramesAfterCommit < 2) {
+      if ((__dgInCommitWindow(__now) || __dgStableFramesAfterCommit < 2) && !__dgForceOverlayClearNext) {
         __dgNeedsUIRefresh = true;
       } else {
+        __dgForceOverlayClearNext = false;
         clearCanvas(nctx);
         const flashTarget = getActiveFlashCanvas();
         resetCtx(fctx);
@@ -6389,14 +6458,25 @@ function syncBackBufferSizes() {
     }
     // ------------------------------------------------
 
-    const inCommitWindow = __dgInCommitWindow(nowTs);
-    if (inCommitWindow) {
-      __dgStableFramesAfterCommit = 0; // still settling - do nothing destructive
-    } else if (__dgStableFramesAfterCommit < 2) {
-      __dgStableFramesAfterCommit++; // count a couple of stable frames
-    }
+    let inCommitWindow = __dgInCommitWindow(nowTs);
+        const forcePostRelease = (__dgForceFullDrawNext || (__dgForceFullDrawFrames > 0) || __dgForceOverlayClearNext || __dgForceSwapNext);
+        if (forcePostRelease) inCommitWindow = false;
+        if (inCommitWindow) {
+          __dgStableFramesAfterCommit = 0; // still settling - do nothing destructive
+        } else if (__dgStableFramesAfterCommit < 2) {
+          __dgStableFramesAfterCommit++; // count a couple of stable frames
+        }
 
-      const waitingForStable = inCommitWindow;
+        const waitingForStable = inCommitWindow;
+
+      const shouldSkipOffscreen = !isPanelVisible &&
+        !__dgFrontSwapNextDraw &&
+        !__dgNeedsUIRefresh &&
+        !__hydrationJustApplied;
+      if (shouldSkipOffscreen) {
+        rafId = requestAnimationFrame(renderLoop);
+        return;
+      }
 
       const frameCam = overlayCamState || (typeof getFrameStartState === 'function' ? getFrameStartState() : null);
       const boardScaleValue = Number.isFinite(frameCam?.scale) ? frameCam.scale : __dgZoomScale();
@@ -6443,6 +6523,17 @@ function syncBackBufferSizes() {
       // Overlays (notes, playhead, flashes) respect visibility & hydrations guard,
       // but are otherwise always on - they're core UX.
       const allowOverlayDraw = canDrawAnything;
+        const hasOverlayStrokes = (() => {
+          const list = strokes;
+          if (!list || !list.length) return false;
+          for (let i = 0; i < list.length; i++) {
+            const s = list[i];
+            if (!s) continue;
+            if (s.isSpecial || s.overlayColorize) return true;
+          }
+          return false;
+        })();
+        const overlayActive = allowOverlayDraw && (hasOverlayFx || transportRunning || hasOverlayStrokes || (cur && previewGid));
 
       // Particle field visibility is driven by global allow/overview/zoom state.
       // Do NOT toggle visibility just because we're in a brief commit window; that caused resets on pan/zoom release.
@@ -6522,7 +6613,18 @@ function syncBackBufferSizes() {
       __dgFrameIdx++;
       const gesturing = __dgIsGesturing();
       const mod = __dgGestureDrawModulo();
-      const doFullDraw = (!gesturing) || mod <= 1 || ((__dgFrameIdx % mod) === 0);
+      let doFullDraw = (!gesturing) || mod <= 1 || ((__dgFrameIdx % mod) === 0);
+      if (__dgForceFullDrawNext) {
+        __dgForceFullDrawNext = false;
+        doFullDraw = true;
+      }
+      if (__dgForceFullDrawFrames > 0) {
+        __dgForceFullDrawFrames -= 1;
+        doFullDraw = true;
+      }
+      if (doFullDraw && isTrulyIdle && canDrawAnything && !__dgNeedsUIRefresh && !__dgFrontSwapNextDraw && !__hydrationJustApplied && !(Number.isFinite(__dgForceFullDrawUntil) && nowTs < __dgForceFullDrawUntil)) {
+        doFullDraw = false;
+      }
       let __dgUpdateStart = null;
       if (typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf) {
         __dgUpdateStart = performance.now();
@@ -6706,7 +6808,7 @@ function syncBackBufferSizes() {
     const ghostSurface = getActiveGhostCanvas();
 
     // --- other overlay layers still respect allowOverlayDraw ---
-    if (allowOverlayDraw) {
+    if (allowOverlayDraw && (overlayActive || __dgNeedsUIRefresh)) {
       const __dgOverlayStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
         ? performance.now()
         : 0;
