@@ -244,6 +244,7 @@ function triggerTapLettersForColumn(state, columnIndex, centerNorm, cubeCenterX,
         ? performance.now()
         : Date.now();
     }
+    state.tapPromptAnimating = true;
     if (Array.isArray(velX) && Array.isArray(velY)) {
       const centerX = bound.centerX ?? cubeCenterX;
       const centerY = bound.centerY ?? cubeCenterY;
@@ -1169,6 +1170,8 @@ function render(panel, opts = {}) {
   if (tapLabel && st.tapLetters?.length) {
     const tapLetters = st.tapLetters;
     const letterCount = tapLetters.length;
+    const promptWasVisible = !!st.tapPromptVisible;
+    const promptJustEnabled = showTapPrompt && !promptWasVisible;
     if (!Array.isArray(st.tapLetterHitTs) || st.tapLetterHitTs.length !== letterCount) {
       st.tapLetterHitTs = Array.from({ length: letterCount }, () => 0);
     }
@@ -1194,6 +1197,7 @@ function render(panel, opts = {}) {
       st.tapFieldRect = null;
       st.tapPromptVisible = false;
       st.tapLoopIndex = 0;
+      st.tapPromptAnimating = false;
       if (Array.isArray(st.tapLetterLastLoop)) st.tapLetterLastLoop.fill(-1);
       for (let i = 0; i < letterCount; i++) {
         if (st.tapLetterHitTs) st.tapLetterHitTs[i] = 0;
@@ -1210,115 +1214,130 @@ function render(panel, opts = {}) {
     } else {
       st.tapPromptVisible = true;
       tapLabel.style.opacity = `${TAP_LABEL_OPACITY_BASE}`;
+      const needsTapLayout = promptJustEnabled || forceNudge || !st.tapFieldRect || !st.tapLetterBounds;
       const fieldElement = particleCanvas || tapLabel;
-      let fieldRect = null;
-      try { fieldRect = fieldElement.getBoundingClientRect(); } catch {}
-      if (fieldRect && fieldRect.width > 0) {
-        const s = Math.max(0.001, Number(boardScale(panel)) || 1);
-        // Use the unscaled field size so the label stays a constant
-        // fraction of its frame regardless of zoom.
-        const rawH = (fieldRect.height || fieldRect.width) / s;
-        const rawW = (fieldRect.width) / s;
-        const heightBased = rawH / 3.0;
-        const widthBased  = rawW / 2.4;
-        const labelSize = Math.max(24, Math.min(heightBased, widthBased) * 2.5);
-        tapLabel.style.fontSize = `${Math.round(labelSize)}px`;
-        st.tapFieldRect = { left: fieldRect.left, width: fieldRect.width, top: fieldRect.top, height: fieldRect.height };
-        st.tapLetterBounds = tapLetters.map(letter => {
-          const rect = letter.getBoundingClientRect();
-          const start = (rect.left - fieldRect.left) / fieldRect.width;
-          const end = (rect.right - fieldRect.left) / fieldRect.width;
-          return {
-            start: Math.max(0, Math.min(1, start)),
-            end: Math.max(0, Math.min(1, end)),
-            centerX: rect.left + rect.width / 2,
-            centerY: rect.top + rect.height / 2,
-          };
-        });
-      } else {
-        // Fallback if fieldRect missing
-        const s = Math.max(0.001, Number(boardScale(panel)) || 1);
-        const particleFieldW = (st.fieldWidth  || 320) / s;
-        const particleFieldH = (st.fieldHeight || 180) / s;
-        const heightBased = particleFieldH / 3.0;
-        const widthBased  = particleFieldW / 2.4;
-        const fallbackSize = Math.max(24, Math.min(heightBased, widthBased));
-        tapLabel.style.fontSize = `${Math.round(fallbackSize)}px`;
+      if (needsTapLayout) {
+        let fieldRect = null;
+        try { fieldRect = fieldElement.getBoundingClientRect(); } catch {}
+        if (fieldRect && fieldRect.width > 0) {
+          const s = Math.max(0.001, Number(boardScale(panel)) || 1);
+          // Use the unscaled field size so the label stays a constant
+          // fraction of its frame regardless of zoom.
+          const rawH = (fieldRect.height || fieldRect.width) / s;
+          const rawW = (fieldRect.width) / s;
+          const heightBased = rawH / 3.0;
+          const widthBased  = rawW / 2.4;
+          const labelSize = Math.max(24, Math.min(heightBased, widthBased) * 2.5);
+          tapLabel.style.fontSize = `${Math.round(labelSize)}px`;
+          st.tapFieldRect = { left: fieldRect.left, width: fieldRect.width, top: fieldRect.top, height: fieldRect.height };
+          st.tapLetterBounds = tapLetters.map(letter => {
+            const rect = letter.getBoundingClientRect();
+            const start = (rect.left - fieldRect.left) / fieldRect.width;
+            const end = (rect.right - fieldRect.left) / fieldRect.width;
+            return {
+              start: Math.max(0, Math.min(1, start)),
+              end: Math.max(0, Math.min(1, end)),
+              centerX: rect.left + rect.width / 2,
+              centerY: rect.top + rect.height / 2,
+            };
+          });
+        } else {
+          // Fallback if fieldRect missing
+          const s = Math.max(0.001, Number(boardScale(panel)) || 1);
+          const particleFieldW = (st.fieldWidth  || 320) / s;
+          const particleFieldH = (st.fieldHeight || 180) / s;
+          const heightBased = particleFieldH / 3.0;
+          const widthBased  = particleFieldW / 2.4;
+          const fallbackSize = Math.max(24, Math.min(heightBased, widthBased));
+          tapLabel.style.fontSize = `${Math.round(fallbackSize)}px`;
+        }
       }
 
-      const offsetsX = st.tapLetterOffsetX;
-      const offsetsY = st.tapLetterOffsetY;
-      const velX = st.tapLetterVelocityX;
-      const velY = st.tapLetterVelocityY;
-      const spring = TAP_LETTER_PHYS.k;
-      const damping = TAP_LETTER_PHYS.damping;
-      const maxOffset = TAP_LETTER_PHYS.max;
-      const now = (typeof performance !== 'undefined' && performance.now)
-        ? performance.now()
-        : Date.now();
-      for (let i = 0; i < letterCount; i++) {
-        const lastHit = st.tapLetterHitTs ? st.tapLetterHitTs[i] : 0;
-        let flashAmt = 0;
-        if (lastHit > 0) {
-          const t = now - lastHit;
-          if (t <= TAP_LETTER_VIS.flashUpMs) {
-            flashAmt = TAP_LETTER_VIS.flashUpMs > 0
-              ? t / Math.max(1, TAP_LETTER_VIS.flashUpMs)
-              : 1;
-          } else if (t <= TAP_LETTER_VIS.flashUpMs + TAP_LETTER_VIS.flashDownMs) {
-            const d = (t - TAP_LETTER_VIS.flashUpMs) / Math.max(1, TAP_LETTER_VIS.flashDownMs);
-            flashAmt = 1 - d;
+      const shouldUpdateTapDom = promptJustEnabled || needsTapLayout || !!st.tapPromptAnimating;
+      if (shouldUpdateTapDom) {
+        const offsetsX = st.tapLetterOffsetX;
+        const offsetsY = st.tapLetterOffsetY;
+        const velX = st.tapLetterVelocityX;
+        const velY = st.tapLetterVelocityY;
+        const spring = TAP_LETTER_PHYS.k;
+        const damping = TAP_LETTER_PHYS.damping;
+        const maxOffset = TAP_LETTER_PHYS.max;
+        const now = (typeof performance !== 'undefined' && performance.now)
+          ? performance.now()
+          : Date.now();
+        let tapAnimating = false;
+        for (let i = 0; i < letterCount; i++) {
+          const lastHit = st.tapLetterHitTs ? st.tapLetterHitTs[i] : 0;
+          let flashAmt = 0;
+          if (lastHit > 0) {
+            const t = now - lastHit;
+            if (t <= TAP_LETTER_VIS.flashUpMs) {
+              flashAmt = TAP_LETTER_VIS.flashUpMs > 0
+                ? t / Math.max(1, TAP_LETTER_VIS.flashUpMs)
+                : 1;
+            } else if (t <= TAP_LETTER_VIS.flashUpMs + TAP_LETTER_VIS.flashDownMs) {
+              const d = (t - TAP_LETTER_VIS.flashUpMs) / Math.max(1, TAP_LETTER_VIS.flashDownMs);
+              flashAmt = 1 - d;
+            } else {
+              flashAmt = 0;
+            }
+          }
+
+          let offX = offsetsX ? offsetsX[i] || 0 : 0;
+          let offY = offsetsY ? offsetsY[i] || 0 : 0;
+          let vx = velX ? velX[i] || 0 : 0;
+          let vy = velY ? velY[i] || 0 : 0;
+
+          vx += (-offX) * spring;
+          vy += (-offY) * spring;
+          vx *= damping;
+          vy *= damping;
+          offX += vx;
+          offY += vy;
+
+          const mag = Math.hypot(offX, offY);
+          if (mag > maxOffset && mag > 0) {
+            const scale = maxOffset / mag;
+            offX *= scale;
+            offY *= scale;
+          }
+
+          if (offsetsX) offsetsX[i] = offX;
+          if (offsetsY) offsetsY[i] = offY;
+          if (velX) velX[i] = vx;
+          if (velY) velY[i] = vy;
+
+          if (Math.abs(offX) < TAP_LETTER_PHYS.epsilon) offX = 0;
+          if (Math.abs(offY) < TAP_LETTER_PHYS.epsilon) offY = 0;
+
+          const opacity = Math.min(1, TAP_LETTER_VIS.opacityBase + TAP_LETTER_VIS.opacityBoost * flashAmt);
+          tapLetters[i].style.opacity = `${Math.max(0, opacity)}`;
+
+          if (flashAmt > 0) {
+            const boost = 1 + (TAP_LETTER_VIS.flashBoost - 1) * flashAmt;
+            tapLetters[i].style.filter = `brightness(${boost.toFixed(3)})`;
+            tapLetters[i].style.color = TAP_LETTER_VIS.flashColor;
+            tapLetters[i].style.textShadow = TAP_LETTER_VIS.flashShadow;
           } else {
-            flashAmt = 0;
+            tapLetters[i].style.filter = 'none';
+            tapLetters[i].style.color = '';
+            tapLetters[i].style.textShadow = '';
+          }
+
+          if (Math.abs(offX) < TAP_LETTER_PHYS.epsilon && Math.abs(offY) < TAP_LETTER_PHYS.epsilon) {
+            tapLetters[i].style.transform = 'none';
+          } else {
+            tapLetters[i].style.transform = `translate3d(${offX.toFixed(2)}px, ${offY.toFixed(2)}px, 0)`;
+          }
+          if (flashAmt > 0 || Math.abs(offX) >= TAP_LETTER_PHYS.epsilon || Math.abs(offY) >= TAP_LETTER_PHYS.epsilon) {
+            tapAnimating = true;
           }
         }
-
-        let offX = offsetsX ? offsetsX[i] || 0 : 0;
-        let offY = offsetsY ? offsetsY[i] || 0 : 0;
-        let vx = velX ? velX[i] || 0 : 0;
-        let vy = velY ? velY[i] || 0 : 0;
-
-        vx += (-offX) * spring;
-        vy += (-offY) * spring;
-        vx *= damping;
-        vy *= damping;
-        offX += vx;
-        offY += vy;
-
-        const mag = Math.hypot(offX, offY);
-        if (mag > maxOffset && mag > 0) {
-          const scale = maxOffset / mag;
-          offX *= scale;
-          offY *= scale;
+        if (!tapAnimating) {
+          const anyHit = Array.isArray(st.tapLetterHitTs) && st.tapLetterHitTs.some(ts => ts > 0);
+          tapAnimating = anyHit;
         }
-
-        if (offsetsX) offsetsX[i] = offX;
-        if (offsetsY) offsetsY[i] = offY;
-        if (velX) velX[i] = vx;
-        if (velY) velY[i] = vy;
-
-        if (Math.abs(offX) < TAP_LETTER_PHYS.epsilon) offX = 0;
-        if (Math.abs(offY) < TAP_LETTER_PHYS.epsilon) offY = 0;
-
-        const opacity = Math.min(1, TAP_LETTER_VIS.opacityBase + TAP_LETTER_VIS.opacityBoost * flashAmt);
-        tapLetters[i].style.opacity = `${Math.max(0, opacity)}`;
-
-        if (flashAmt > 0) {
-          const boost = 1 + (TAP_LETTER_VIS.flashBoost - 1) * flashAmt;
-          tapLetters[i].style.filter = `brightness(${boost.toFixed(3)})`;
-          tapLetters[i].style.color = TAP_LETTER_VIS.flashColor;
-          tapLetters[i].style.textShadow = TAP_LETTER_VIS.flashShadow;
-        } else {
-          tapLetters[i].style.filter = 'none';
-          tapLetters[i].style.color = '';
-          tapLetters[i].style.textShadow = '';
-        }
-
-        if (Math.abs(offX) < TAP_LETTER_PHYS.epsilon && Math.abs(offY) < TAP_LETTER_PHYS.epsilon) {
-          tapLetters[i].style.transform = 'none';
-        } else {
-          tapLetters[i].style.transform = `translate3d(${offX.toFixed(2)}px, ${offY.toFixed(2)}px, 0)`;
-        }
+        st.tapPromptAnimating = tapAnimating;
       }
     }
   }

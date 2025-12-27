@@ -6772,18 +6772,28 @@ function syncBackBufferSizes() {
     if (!panel.isConnected) { cancelAnimationFrame(rafId); return; }
 
     if (!skipDomUpdates) {
+      let pulseClassOn = !!panel.__dgPulseClassOn;
       if (panel.__pulseRearm) {
-        panel.classList.remove('toy-playing-pulse');
-        try { panel.offsetWidth; } catch {}
+        if (pulseClassOn) {
+          panel.classList.remove('toy-playing-pulse');
+          try { panel.offsetWidth; } catch {}
+          pulseClassOn = false;
+        }
         panel.__pulseRearm = false;
       }
 
-      if (panel.__pulseHighlight && panel.__pulseHighlight > 0) {
-        panel.classList.add('toy-playing-pulse');
+      const pulseActive = !!(panel.__pulseHighlight && panel.__pulseHighlight > 0);
+      if (pulseActive) {
+        if (!pulseClassOn) {
+          panel.classList.add('toy-playing-pulse');
+          pulseClassOn = true;
+        }
         panel.__pulseHighlight = Math.max(0, panel.__pulseHighlight - 0.05);
-      } else if (panel.classList.contains('toy-playing-pulse')) {
+      } else if (pulseClassOn) {
         panel.classList.remove('toy-playing-pulse');
+        pulseClassOn = false;
       }
+      panel.__dgPulseClassOn = pulseClassOn;
     }
 
     // Set playing class for border highlight
@@ -6801,7 +6811,11 @@ function syncBackBufferSizes() {
       ? (isChained ? (isActiveInChain && chainHasNotes) : hasActiveNotes)
       : false;
     if (!skipDomUpdates) {
-      panel.classList.toggle('toy-playing', showPlaying);
+      const lastPlaying = !!panel.__dgShowPlaying;
+      if (showPlaying !== lastPlaying) {
+        panel.classList.toggle('toy-playing', showPlaying);
+        panel.__dgShowPlaying = showPlaying;
+      }
     }
 
     const flashSurface = getActiveFlashCanvas();
