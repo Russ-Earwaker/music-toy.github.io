@@ -1,4 +1,4 @@
-// src/perf/perf-lab.js
+ï»¿// src/perf/perf-lab.js
 // Perf Lab: generates stress scenes + runs scripted benchmarks + copies JSON results.
 
 import { setParticleQualityLock } from '../particles/ParticleQuality.js';
@@ -51,7 +51,7 @@ function ensureUI() {
   }
 
   const P2 = {
-    title: 'P2 ù Particles',
+    title: 'P2 ï¿½ Particles',
     build: btn('buildP2', 'Build P2: Particle Worst-Case', 'primary'),
     runs: sortByLabel([
       { act: 'runP2a', label: 'Run P2a: Static (30s)' },
@@ -61,7 +61,7 @@ function ensureUI() {
   };
 
   const P3 = {
-    title: 'P3 ù DrawGrid',
+    title: 'P3 ï¿½ DrawGrid',
     build: btn('buildP3', 'Build P3: DrawGrid Worst-Case', 'primary'),
     runs: sortByLabel([
       { act: 'runP3a', label: 'Run P3a: Static (30s)' },
@@ -94,7 +94,7 @@ function ensureUI() {
   };
 
   const P4 = {
-    title: 'P4 ù Chained Simple Rhythm (Loopgrid)',
+    title: 'P4 ï¿½ Chained Simple Rhythm (Loopgrid)',
     build: [
       btn('buildP4',  'Build P4: Chained Simple Rhythm (Random)', 'primary'),
       btn('buildP4h', 'Build P4H: Chained SR (Heavy Play)', 'primary'),
@@ -104,10 +104,10 @@ function ensureUI() {
       { act: 'runP4b',  label: 'Run P4b: Playing Pan/Zoom (30s)' },
       { act: 'runP4c',  label: 'Run P4c: Playing Static (No Particle Draw)' },
       { act: 'runP4d',  label: 'Run P4d: Playing Static (No Particle Update+Draw)' },
-      { act: 'runP4e',  label: 'Run P4e: Pan/Zoom (Toy Draw ¸2)' },
+      { act: 'runP4e',  label: 'Run P4e: Pan/Zoom (Toy Draw ï¿½2)' },
       { act: 'runP4f',  label: 'Run P4f: Pan/Zoom (Freeze Unfocused)' },
-      { act: 'runP4g',  label: 'Run P4g: Pan/Zoom (Unfocused ¸2)' },
-      { act: 'runP4h2', label: 'Run P4h2: Pan/Zoom (Unfocused ¸4)' },
+      { act: 'runP4g',  label: 'Run P4g: Pan/Zoom (Unfocused ï¿½2)' },
+      { act: 'runP4h2', label: 'Run P4h2: Pan/Zoom (Unfocused ï¿½4)' },
       { act: 'runP4i',  label: 'Run P4i: Pan/Zoom (Unfocused Pulse-Only)' },
       { act: 'runP4j',  label: 'Run P4j: Pan/Zoom (Unfocused Step-Only)' },
       { act: 'runP4k',  label: 'Run P4k: Playing Pan/Zoom (No zoom-tick relayout)' },
@@ -119,10 +119,10 @@ function ensureUI() {
       { act: 'runP4r',  label: 'Run P4r: Playing Pan/Zoom (No Tap Dots)' },
       { act: 'runP4s',  label: 'Run P4s: Playing Pan/Zoom (No Overlays)' },
       { act: 'runP4t',  label: 'Run P4t: Playing Pan/Zoom (No Loopgrid Render)' },
-      { act: 'runP4u',  label: 'Run P4u: Playing Pan/Zoom (Gesture Render ¸2)' },
-      { act: 'runP4v',  label: 'Run P4v: Playing Pan/Zoom (Gesture Render ¸4)' },
-      { act: 'runP4w',  label: 'Run P4w: Playing Pan/Zoom (Gesture ¸4 + No Tap Dots)' },
-      { act: 'runP4x',  label: 'Run P4x: Pan/Zoom (Gesture ¸4 + No Tap Dots + Chain Cache)' },
+      { act: 'runP4u',  label: 'Run P4u: Playing Pan/Zoom (Gesture Render ï¿½2)' },
+      { act: 'runP4v',  label: 'Run P4v: Playing Pan/Zoom (Gesture Render ï¿½4)' },
+      { act: 'runP4w',  label: 'Run P4w: Playing Pan/Zoom (Gesture ï¿½4 + No Tap Dots)' },
+      { act: 'runP4x',  label: 'Run P4x: Pan/Zoom (Gesture ï¿½4 + No Tap Dots + Chain Cache)' },
     ]),
   };
 
@@ -604,6 +604,10 @@ async function runAuto(config = {}) {
 
   if (cfg.download) downloadResultsBundle(bundle, cfg.downloadName || 'perf-lab-results.json');
 
+  if (cfg.clearAfter !== false) {
+    try { clearSceneViaSnapshot(); } catch {}
+  }
+
   setStatus('Auto-run: done (' + results.length + ' results)');
   return results;
 }
@@ -648,7 +652,7 @@ function toggle() {
 
 function buildP2() {
   try { clearSceneViaSnapshot(); } catch {}
-  setStatus('Building P2ÔÇª');
+  setStatus('Building P2ï¿½Çª');
   // Particles worst-case: lots of loopgrids (heavy particle fields).
   buildParticleWorstCase({ toyType: 'loopgrid', rows: 8, cols: 10, spacing: 400 });
   setStatus('P2 built');
@@ -656,7 +660,7 @@ function buildP2() {
 
 function buildP3() {
   try { clearSceneViaSnapshot(); } catch {}
-  setStatus('Building P3ÔÇª');
+  setStatus('Building P3ï¿½Çª');
   // DrawGrid worst-case: lots of drawgrids for canvas-heavy stress.
   buildParticleWorstCase({ toyType: 'drawgrid', rows: 6, cols: 8, spacing: 420 });
   // Seed drawgrid notes for worst-case visuals.
@@ -749,14 +753,36 @@ function collectToyTypeCounts() {
   return counts;
 }
 
+function forcePerfWarmup() {
+  try {
+    const panels = document.querySelectorAll('.toy-panel[data-toy="drawgrid"]');
+    let did = false;
+    panels.forEach((panel) => {
+      try {
+        if (panel?.__dgPerfWarmup) {
+          did = true;
+          panel.__dgPerfWarmup();
+        }
+      } catch {}
+    });
+    if (did) {
+      try {
+        window.__PERF_WARMUP_COUNT = (window.__PERF_WARMUP_COUNT || 0) + 1;
+        window.__PERF_WARMUP_TS = Date.now();
+      } catch {}
+      try { window.__PerfFrameProf?.mark?.('perf.warmup', 0.001); } catch {}
+    }
+  } catch {}
+}
+
 async function runVariant(label, step, statusText) {
-  setStatus(statusText || `Running ${label}ÔÇª`);
+  setStatus(statusText || `Running ${label}ï¿½Çª`);
   setOutput(null);
   lastResult = null;
 
   try { window.__PERF_CAM_BOUNDS = null; } catch {}
 
-  // Lock particle quality so FPS-driven LOD doesnÔÇÖt ÔÇ£save usÔÇØ during the test.
+  // Lock particle quality so FPS-driven LOD doesnï¿½ï¿½ï¿½t ï¿½Ç£save usï¿½ï¿½ï¿½ during the test.
   setParticleQualityLock('ultra');
 
   const result = await runBenchmark({
@@ -764,6 +790,7 @@ async function runVariant(label, step, statusText) {
     durationMs: 30000,
     warmupMs: 1200,
     step,
+    warmupAction: forcePerfWarmup,
   });
 
   try {
@@ -797,6 +824,7 @@ async function runVariant(label, step, statusText) {
 }
 
 async function runVariantPlaying(label, step, statusText) {
+  const warmupMs = 1200;
   const slowMs = (typeof window !== 'undefined' && Number.isFinite(window.__PERF_FRAME_PROF_SLOW_MS))
     ? window.__PERF_FRAME_PROF_SLOW_MS
     : 50;
@@ -807,15 +835,24 @@ async function runVariantPlaying(label, step, statusText) {
   window.__PerfFrameProf = prof; // so you can dump it from console
   const scriptStep = step;
   const nowMs = () => (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  let warmupDid = false;
   const profStep = (tMs, dtMs, progress) => {
     const t0 = nowMs();
     const s0 = nowMs();
     try { if (scriptStep) scriptStep(tMs, dtMs, progress); } catch {}
+    let forceSample = false;
+    let warmupTag = false;
+    if (!warmupDid && tMs >= warmupMs * 0.5) {
+      warmupDid = true;
+      forceSample = true;
+      warmupTag = true;
+      try { forcePerfWarmup(); } catch {}
+    }
     prof.mark('script', nowMs() - s0);
     const frameDt = Number.isFinite(dtMs) ? dtMs : (nowMs() - t0);
     const workMs = Math.max(0, nowMs() - t0);
     const idleMs = Math.max(0, frameDt - workMs);
-    prof.endFrame(frameDt, { workMs, idleMs });
+    prof.endFrame(frameDt, { workMs, idleMs, forceSample, warmupTag });
   };
   setStatus(statusText || `Running ${label}...`);
   setOutput(null);
@@ -835,22 +872,26 @@ async function runVariantPlaying(label, step, statusText) {
   try {
     window.__PERF_PULSE_COUNT = 0;
     window.__PERF_OUTLINE_SYNC_COUNT = 0;
+    window.__PERF_WARMUP_COUNT = 0;
   } catch {}
 
   const result = await runBenchmark({
     label,
     durationMs: 30000,
-    warmupMs: 1200,
+    warmupMs,
     step: profStep,
   });
 
   try {
     result.pulseCount = window.__PERF_PULSE_COUNT || 0;
     result.outlineSyncCount = window.__PERF_OUTLINE_SYNC_COUNT || 0;
+    result.warmupCount = window.__PERF_WARMUP_COUNT || 0;
+    result.warmupTs = window.__PERF_WARMUP_TS || null;
   } catch {}
 
   try {
     result.frameProfile = summarizeFrameProfile(prof.snapshot());
+    result.warmupProfile = prof.getWarmup ? prof.getWarmup() : null;
   } catch {}
 
   try {
@@ -916,6 +957,7 @@ async function withTempPerfParticles(patch, fn) {
 
 function makeFrameProfiler({ slowMs = 50, maxSamples = 120 } = {}) {
   const out = [];
+  let warmup = null;
   return {
     mark(name, dt) {
       // accumulate by name for the current frame
@@ -939,12 +981,22 @@ function makeFrameProfiler({ slowMs = 50, maxSamples = 120 } = {}) {
       const nonScript = Math.max(0, frameDt - scriptMs);
       if (nonScript > 0) parts['frame.nonScript'] = nonScript;
 
-      if (frameDt >= slowMs) {
+      if (meta.warmupTag) {
+        warmup = {
+          t: cur.t,
+          frameDt,
+          parts: { ...parts },
+          workMs: meta.workMs,
+          idleMs: meta.idleMs,
+        };
+      }
+      if (frameDt >= slowMs || meta.forceSample) {
         out.push({ t: cur.t, frameDt, parts, workMs: meta.workMs, idleMs: meta.idleMs });
         if (out.length > maxSamples) out.shift();
       }
     },
     snapshot() { return out.slice(); },
+    getWarmup() { return warmup ? { ...warmup, parts: { ...(warmup.parts || {}) } } : null; },
     dump(label = 'frame-profiler') {
       console.log(`[${label}] samples=${out.length}`, out);
       return out;
@@ -1133,7 +1185,7 @@ function makeToyRandomiseOnceScript({
 async function runP2a() {
   // Static: no pan/zoom, no overview.
   const step = () => {};
-  await runVariant('P2a_particles_static', step, 'Running P2a (static)ÔÇª');
+  await runVariant('P2a_particles_static', step, 'Running P2a (static)ï¿½Çª');
 }
 
 async function runP2b() {
@@ -1148,7 +1200,7 @@ async function runP2b() {
     overviewToggles: 0,
     overviewSpanMs: 0,
   });
-  await runVariant('P2b_particles_panzoom', step, 'Running P2b (pan/zoom)ÔÇª');
+  await runVariant('P2b_particles_panzoom', step, 'Running P2b (pan/zoom)ï¿½Çª');
 }
 
 async function runP2c() {
@@ -1158,12 +1210,12 @@ async function runP2c() {
     toggles: 12,
     spanMs: 26000,
   });
-  await runVariant('P2c_particles_overview', step, 'Running P2c (overview spam)ÔÇª');
+  await runVariant('P2c_particles_overview', step, 'Running P2c (overview spam)ï¿½Çª');
 }
 
 async function runP3a() {
   const step = () => {};
-  await runVariant('P3a_drawgrid_static', step, 'Running P3a (static)ÔÇª');
+  await runVariant('P3a_drawgrid_static', step, 'Running P3a (static)ï¿½Çª');
 }
 
 async function runP3b() {
@@ -1177,7 +1229,7 @@ async function runP3b() {
     overviewToggles: 0,
     overviewSpanMs: 0,
   });
-  await runVariant('P3b_drawgrid_panzoom', step, 'Running P3b (pan/zoom)ÔÇª');
+  await runVariant('P3b_drawgrid_panzoom', step, 'Running P3b (pan/zoom)ï¿½Çª');
 }
 
 async function runP3c() {
@@ -1186,7 +1238,7 @@ async function runP3c() {
     toggles: 12,
     spanMs: 26000,
   });
-  await runVariant('P3c_drawgrid_overview', step, 'Running P3c (overview spam)ÔÇª');
+  await runVariant('P3c_drawgrid_overview', step, 'Running P3c (overview spam)ï¿½Çª');
 }
 
 async function runP3d() {
@@ -1194,7 +1246,7 @@ async function runP3d() {
     idleMs: 2000,
     onMs: 6000,
   });
-  await runVariant('P3d_drawgrid_overview_once', step, 'Running P3d (overview once)ÔÇª');
+  await runVariant('P3d_drawgrid_overview_once', step, 'Running P3d (overview once)ï¿½Çª');
 }
 async function runP3e() {
   const randOnce = makeDrawgridRandomiseOnceScript({ atMs: 250, seed: 1337, useSeededRandom: true });
@@ -1713,7 +1765,7 @@ async function runP4o() {
     await runVariantPlaying(
       'P4o_chain_loopgrid_playing_panzoom_no_pulses',
       step,
-      'Running P4o (no border pulses)ÔÇª'
+      'Running P4o (no border pulses)ï¿½Çª'
     );
     console.log('[PerfLab] P4o pulseCount', window.__PERF_PULSE_COUNT, 'outlineSyncCount', window.__PERF_OUTLINE_SYNC_COUNT);
   } finally {
@@ -1745,7 +1797,7 @@ async function runP4p() {
       await runVariantPlaying(
         'P4p_chain_loopgrid_playing_panzoom_audio_step_only',
         step,
-        'Running P4p (audio+sequencer only)ÔÇª'
+        'Running P4p (audio+sequencer only)ï¿½Çª'
       );
     } finally {
       window.__PERF_DISABLE_LOOPGRID_RENDER = false;
@@ -1874,7 +1926,7 @@ async function runP4u() {
     await runVariantPlaying(
       'P4u_chain_loopgrid_playing_panzoom_gesture_render_div2',
       step,
-      'Running P4u (gesture render ?À2)...'
+      'Running P4u (gesture render ?ï¿½2)...'
     );
   } finally {
     window.__PERF_LOOPGRID_GESTURE_RENDER_MOD = prev;
@@ -1903,7 +1955,7 @@ async function runP4v() {
     await runVariantPlaying(
       'P4v_chain_loopgrid_playing_panzoom_gesture_render_div4',
       step,
-      'Running P4v (gesture render ?À4)...'
+      'Running P4v (gesture render ?ï¿½4)...'
     );
   } finally {
     window.__PERF_LOOPGRID_GESTURE_RENDER_MOD = prev;
@@ -1934,7 +1986,7 @@ async function runP4w() {
     await runVariantPlaying(
       'P4w_chain_loopgrid_playing_panzoom_gesture_render_div4_no_tapdots',
       step,
-      'Running P4w (gesture ?À4 + no tap dots)...'
+      'Running P4w (gesture ?ï¿½4 + no tap dots)...'
     );
   } finally {
     window.__PERF_LOOPGRID_GESTURE_RENDER_MOD = prevMod;
@@ -1971,7 +2023,7 @@ async function runP4x() {
     await runVariantPlaying(
       'P4x_chain_loopgrid_playing_panzoom_gesture_div4_no_tapdots_chain_cache',
       step,
-      'Running P4x (gesture ¸4 + no tap dots + chain cache)...'
+      'Running P4x (gesture ï¿½4 + no tap dots + chain cache)...'
     );
   } finally {
     window.__PERF_LOOPGRID_GESTURE_RENDER_MOD = prevMod;
@@ -1996,7 +2048,7 @@ async function runP4x() {
     await runVariantPlaying(
       'P4e_chain_loopgrid_playing_panzoom_toydraw_div2',
       step,
-      'Running P4e (pan/zoom, toy draw ?À2)...'
+      'Running P4e (pan/zoom, toy draw ?ï¿½2)...'
     );
   });
 }
@@ -2064,7 +2116,7 @@ async function runP4g() {
     await runVariantPlaying(
       'P4g_chain_loopgrid_playing_panzoom_unfocused_div2',
       step,
-      'Running P4g (unfocused ?À2)...'
+      'Running P4g (unfocused ?ï¿½2)...'
     );
   } finally {
     window.__PERF_LOOPGRID_UNFOCUSED_MOD = 0;
@@ -2088,7 +2140,7 @@ async function runP4h2() {
     await runVariantPlaying(
       'P4h2_chain_loopgrid_playing_panzoom_unfocused_div4',
       step,
-      'Running P4h2 (unfocused ?À4)...'
+      'Running P4h2 (unfocused ?ï¿½4)...'
     );
   } finally {
     window.__PERF_LOOPGRID_UNFOCUSED_MOD = 0;
@@ -2211,7 +2263,7 @@ async function runP4n() {
     await runVariantPlaying(
       'P4n_chain_loopgrid_playing_panzoom_no_chains_dots_overlays',
       step,
-      'Running P4n (no chains/dots/overlays)ÔÇª'
+      'Running P4n (no chains/dots/overlays)ï¿½Çª'
     );
   } finally {
     window.__PERF_DISABLE_LOOPGRID_RENDER = false;
@@ -2524,3 +2576,4 @@ try { window.__PerfLab = { show, hide, toggle, buildP2, buildP3, buildP4, buildP
 
 
 try { scheduleAutoRun(); } catch {}
+

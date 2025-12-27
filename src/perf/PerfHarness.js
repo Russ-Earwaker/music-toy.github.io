@@ -38,6 +38,7 @@ export async function runBenchmark({
   warmupMs = 1000,
   label = 'benchmark',
   step = null, // (tMs, dtMs, progress01) => void
+  warmupAction = null, // () => void, invoked once during warmup
 }) {
   const now = () => (performance && performance.now) ? performance.now() : Date.now();
   const raf = (fn) => (window.requestAnimationFrame ? window.requestAnimationFrame(fn) : setTimeout(() => fn(now()), 16));
@@ -45,6 +46,8 @@ export async function runBenchmark({
   const startMs = now();
   let lastMs = startMs;
   let ended = false;
+  let warmupDid = false;
+  const warmupTriggerMs = Math.max(0, Math.min(warmupMs - 50, warmupMs * 0.5));
 
   const frameMs = [];
 
@@ -61,6 +64,12 @@ export async function runBenchmark({
       } catch (err) {
         // keep bench alive; step errors shouldn't abort sampling
         console.warn('[PerfHarness] step error', err);
+      }
+
+      // optional warmup hook (fires once before sampling)
+      if (!warmupDid && typeof warmupAction === 'function' && t >= warmupTriggerMs && t <= warmupMs) {
+        warmupDid = true;
+        try { warmupAction(); } catch (err) { console.warn('[PerfHarness] warmupAction error', err); }
       }
 
       // warmup skip (avoid first-frame noise)
@@ -84,4 +93,3 @@ export async function runBenchmark({
     raf(onFrame);
   });
 }
-

@@ -118,6 +118,11 @@ const __LG = (() => {
 
   if (g.__LOOPGRID_RENDER_SCHED) return g.__LOOPGRID_RENDER_SCHED;
 
+  const globalState = g.__LOOPGRID_GLOBAL || (g.__LOOPGRID_GLOBAL = {
+    visibleCount: 0,
+    lastVisTs: 0,
+  });
+
   const sched = {
     panels: new Set(),
     running: false,
@@ -131,16 +136,21 @@ const __LG = (() => {
         this.frame++;
         const chainNotesCache = (window.__PERF_LOOPGRID_CHAIN_CACHE ? new Map() : null);
         const arr = Array.from(this.panels);
+        let visibleCount = 0;
         for (const panel of arr) {
           try {
             if (!panel || !panel.isConnected) { this.panels.delete(panel); continue; }
             if (window.__PERF_DISABLE_LOOPGRID_RENDER) continue;
+            const st = panel.__simpleRhythmVisualState;
+            if (st && isPanelVisible(panel, st)) visibleCount++;
             const mod = panel.__loopgridFrameModulo | 0;
             if (mod > 1 && (this.frame % mod) !== 0) continue;
             const isGesture = !!(window.__ZoomCoordinator?.isGesturing?.() || document.body?.classList?.contains?.('is-gesturing'));
             render(panel, { forceNudge: false, isGesture, chainNotesCache });
           } catch {}
         }
+        globalState.visibleCount = visibleCount;
+        globalState.lastVisTs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
         this.rafId = requestAnimationFrame(tick);
       };
       this.rafId = requestAnimationFrame(tick);
@@ -925,6 +935,12 @@ function render(panel, opts = {}) {
   // Scheduler reads panel.__loopgridFrameModulo.
   const isFocused = panel.classList?.contains('toy-focused') || panel.classList?.contains('focused');
   const isUnfocused = panel.classList?.contains('toy-unfocused');
+  const isGesturing = !!(
+    opts.isGesture ||
+    window.__ZoomCoordinator?.isGesturing?.() ||
+    document.body?.classList?.contains?.('is-gesturing')
+  );
+  const visibleCount = Number(window.__LOOPGRID_GLOBAL?.visibleCount) || 0;
   if (window.__PERF_LOOPGRID_UNFOCUSED_MOD) {
     panel.__loopgridFrameModulo = isFocused ? 1 : (window.__PERF_LOOPGRID_UNFOCUSED_MOD | 0);
   } else {
@@ -1034,12 +1050,10 @@ function render(panel, opts = {}) {
   panel.classList.toggle('toy-playing', showPlaying);
 
   // Gesture-only render throttle for unfocused toys: skip heavy draw, still update classes.
-  const gestureRenderMod = Math.max(1, Number(window.__PERF_LOOPGRID_GESTURE_RENDER_MOD) || 1);
-  const isGesturing = !!(
-    opts.isGesture ||
-    window.__ZoomCoordinator?.isGesturing?.() ||
-    document.body?.classList?.contains?.('is-gesturing')
-  );
+  let gestureRenderMod = Math.max(1, Number(window.__PERF_LOOPGRID_GESTURE_RENDER_MOD) || 1);
+  if (isGesturing && visibleCount >= 6) gestureRenderMod = Math.max(gestureRenderMod, 2);
+  if (isGesturing && visibleCount >= 10) gestureRenderMod = Math.max(gestureRenderMod, 3);
+  if (isGesturing && visibleCount >= 14) gestureRenderMod = Math.max(gestureRenderMod, 4);
 
   let skipHeavy = false;
   if (isGesturing && !isFocused && gestureRenderMod > 1) {
@@ -1075,10 +1089,14 @@ function render(panel, opts = {}) {
   const isOverview = (() => {
     try { return !!overviewMode?.isActive?.(); } catch { return false; }
   })();
-  const allowField = particleBudget?.allowField !== false && !isUnfocused && !isOverview;
+  const busyGesture = isGesturing && visibleCount >= 6;
+  const allowField = particleBudget?.allowField !== false && !isUnfocused && !isOverview && !busyGesture;
   if (particleCanvas) {
     try {
       if (isOverview) {
+        particleCanvas.style.opacity = '0';
+        particleCanvas.style.visibility = 'hidden';
+      } else if (busyGesture) {
         particleCanvas.style.opacity = '0';
         particleCanvas.style.visibility = 'hidden';
       } else {
