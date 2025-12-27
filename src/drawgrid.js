@@ -2858,6 +2858,25 @@ function ensureSizeReady({ force = false } = {}) {
   let cur = null;
   let curErase = null;
   let strokes = []; // Store all completed stroke objects
+  let __dgOverlayStrokeCache = { value: false, len: 0, ts: 0 };
+
+  function hasOverlayStrokesCached() {
+    const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+      ? performance.now()
+      : Date.now();
+    const len = Array.isArray(strokes) ? strokes.length : 0;
+    if (__dgOverlayStrokeCache.len === len && (now - (__dgOverlayStrokeCache.ts || 0)) < 120) {
+      return __dgOverlayStrokeCache.value;
+    }
+    let hasOverlay = false;
+    for (let i = 0; i < len; i++) {
+      const s = strokes[i];
+      if (!s) continue;
+      if (s.isSpecial || s.overlayColorize) { hasOverlay = true; break; }
+    }
+    __dgOverlayStrokeCache = { value: hasOverlay, len, ts: now };
+    return hasOverlay;
+  }
   let prevStrokeCount = Array.isArray(strokes) ? strokes.length : 0;
   // Debug-only: trap suspicious clears that cause 1->0 flips
   let __dbgStrokesProxyInstalled = false;
@@ -6643,16 +6662,10 @@ function syncBackBufferSizes() {
       // Overlays (notes, playhead, flashes) respect visibility & hydrations guard,
       // but are otherwise always on - they're core UX.
       const allowOverlayDraw = canDrawAnything;
-        const hasOverlayStrokes = (() => {
-          const list = strokes;
-          if (!list || !list.length) return false;
-          for (let i = 0; i < list.length; i++) {
-            const s = list[i];
-            if (!s) continue;
-            if (s.isSpecial || s.overlayColorize) return true;
-          }
-          return false;
-        })();
+      let hasOverlayStrokes = false;
+      if (allowOverlayDraw) {
+        hasOverlayStrokes = hasOverlayStrokesCached();
+      }
       const overlayActive = allowOverlayDraw && (hasOverlayFx || transportRunning || hasOverlayStrokes || (cur && previewGid));
       if (allowOverlayDraw) {
         const lastTransportRunning = !!panel.__dgLastTransportRunning;
@@ -6974,13 +6987,22 @@ function syncBackBufferSizes() {
 
       // Animate special stroke paint (hue cycling) without resurrecting erased areas:
       // Draw animated special strokes into flashCanvas, then mask with current paint alpha.
-      const specialStrokes = strokes.filter(s => s.isSpecial);
-      if (specialStrokes.length > 0 || (cur && previewGid)) {
+      if (hasOverlayStrokes || (cur && previewGid)) {
+        const specialStrokes = [];
+        const colorized = [];
+        if (hasOverlayStrokes) {
+          for (let i = 0; i < strokes.length; i++) {
+            const s = strokes[i];
+            if (!s) continue;
+            if (s.isSpecial) specialStrokes.push(s);
+            if (s.overlayColorize) colorized.push(s);
+          }
+        }
+        if (specialStrokes.length > 0 || colorized.length > 0 || (cur && previewGid)) {
           fctx.save();
           // Draw animated strokes with device transform
           // Draw demoted colorized strokes as static overlay tints
           try {
-            const colorized = strokes.filter(s => s.overlayColorize);
             for (const s of colorized) drawFullStroke(fctx, s);
           } catch {}
           // Then draw animated special lines on top of normal lines
@@ -7011,7 +7033,7 @@ function syncBackBufferSizes() {
             });
           }
           fctx.restore();
-      } else {
+        }
       }
       if (__dgOverlayStart) {
         const __dgOverlayDt = performance.now() - __dgOverlayStart;
