@@ -153,6 +153,7 @@ const __LG = (() => {
         globalState.lastVisTs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
         this.rafId = requestAnimationFrame(tick);
       };
+      tick.__perfRafTag = 'perf.raf.loopgrid';
       this.rafId = requestAnimationFrame(tick);
     },
     stop() {
@@ -1088,7 +1089,7 @@ function render(panel, opts = {}) {
   const isOverview = (() => {
     try { return !!overviewMode?.isActive?.(); } catch { return false; }
   })();
-  const allowField = particleBudget?.allowField !== false && !isUnfocused && !isOverview;
+  const allowField = particleBudget?.allowField !== false && !isOverview;
   if (particleCanvas) {
     try {
       if (isOverview) {
@@ -1103,12 +1104,25 @@ function render(panel, opts = {}) {
     if (particleField) {
       try {
         if (particleBudget && typeof particleField.applyBudget === 'function') {
-          const maxCountScale = Math.max(0.15, (particleBudget.maxCountScale ?? 1) * (particleBudget.capScale ?? 1));
+          const crowdScale = (() => {
+            const base = 1 / Math.max(1, visibleCount);
+            if (visibleCount <= 6) return Math.max(0.18, base);
+            const minScale =
+              visibleCount >= 36 ? 0.08 :
+              visibleCount >= 24 ? 0.1 :
+              visibleCount >= 16 ? 0.12 :
+              0.16;
+            return Math.max(minScale, base);
+          })();
+          const emergencyScale = emergencyMode ? 0.45 : 1;
+          const maxCountScaleBase = (particleBudget.maxCountScale ?? 1) * (particleBudget.capScale ?? 1);
+          const maxCountScale = Math.max(0.08, maxCountScaleBase * crowdScale * emergencyScale);
+          const capScale = Math.max(0.08, (particleBudget.capScale ?? 1) * crowdScale * emergencyScale);
           particleField.applyBudget({
             maxCountScale,
-            capScale: particleBudget.capScale ?? 1,
+            capScale,
             tickModulo: particleBudget.tickModulo ?? 1,
-            sizeScale: particleBudget.sizeScale ?? 1,
+            sizeScale: (particleBudget.sizeScale ?? 1) * (emergencyMode ? 1.1 : 1),
             minCount: emergencyMode ? 0 : undefined,
             emergencyFade: emergencyMode,
             emergencyFadeSeconds: 5,

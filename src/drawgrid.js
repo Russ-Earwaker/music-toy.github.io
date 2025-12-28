@@ -5069,6 +5069,7 @@ function syncBackBufferSizes() {
     if (DG_PROFILE && typeof performance !== 'undefined' && performance.now) {
       __dgProfileStart = performance.now();
     }
+    const __perfOn = !!(window.__PerfFrameProf && typeof performance !== 'undefined' && performance.now);
 
     const surface = gctx.canvas;
     const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
@@ -5115,15 +5116,23 @@ function syncBackBufferSizes() {
     const cacheKey = `${__dgHash}|${surfacePxW}x${surfacePxH}`;
 
     if (cache.key !== cacheKey) {
+      const __cacheStart = __perfOn ? performance.now() : 0;
       renderGridTo(cache.ctx, width, height, noteGridY, noteGridH, hasTwoLines);
+      if (__perfOn && __cacheStart) {
+        try { window.__PerfFrameProf?.mark?.('drawgrid.grid.cache', performance.now() - __cacheStart); } catch {}
+      }
       cache.key = cacheKey;
     }
 
     resetCtx(gctx);
+    const __blitStart = __perfOn ? performance.now() : 0;
     withLogicalSpace(gctx, () => {
       gctx.clearRect(0, 0, width, height);
       if (cache.canvas) gctx.drawImage(cache.canvas, 0, 0, width, height);
     });
+    if (__perfOn && __blitStart) {
+      try { window.__PerfFrameProf?.mark?.('drawgrid.grid.blit', performance.now() - __blitStart); } catch {}
+    }
 
     if (__dgProfileStart !== null) {
       const dt = performance.now() - __dgProfileStart;
@@ -5320,6 +5329,8 @@ function syncBackBufferSizes() {
   function drawNodes(nodes) {
     const nodeCoords = [];
     nodeCoordsForHitTest = [];
+    const __perfOn = !!(window.__PerfFrameProf && typeof performance !== 'undefined' && performance.now);
+    const __layoutStart = __perfOn ? performance.now() : 0;
     resetCtx(nctx);
     resetCtx(nctx);
     withLogicalSpace(nctx, () => {
@@ -5391,6 +5402,10 @@ function syncBackBufferSizes() {
       }
       }
 
+      if (__perfOn && __layoutStart) {
+        try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.layout', performance.now() - __layoutStart); } catch {}
+      }
+
       const cache = __dgNodesCache;
       const surfacePxW = surface?.width ?? nctx.canvas?.width ?? 0;
       const surfacePxH = surface?.height ?? nctx.canvas?.height ?? 0;
@@ -5402,6 +5417,7 @@ function syncBackBufferSizes() {
       const cacheMiss = cache.key !== cacheKey;
 
       if (cacheMiss) {
+      const __drawStart = __perfOn ? performance.now() : 0;
       renderDragScaleBlueHints(nctx);
       nctx.lineWidth = 3;
       const colsMap = new Map();
@@ -5422,6 +5438,7 @@ function syncBackBufferSizes() {
         return value === gid;
       };
 
+      const __connStart = __perfOn ? performance.now() : 0;
       for (let c = 0; c < cols - 1; c++) {
         const currentColNodes = colsMap.get(c);
         const nextColNodes = colsMap.get(c + 1);
@@ -5456,6 +5473,9 @@ function syncBackBufferSizes() {
         drawGroupConnections(2);
         drawGroupConnections(null);
       }
+      if (__perfOn && __connStart) {
+        try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.connections', performance.now() - __connStart); } catch {}
+      }
 
       nctx.shadowColor = 'transparent';
       nctx.shadowBlur = 0;
@@ -5473,6 +5493,7 @@ function syncBackBufferSizes() {
         return gradientCache.get(key);
       };
 
+      const __circleStart = __perfOn ? performance.now() : 0;
       for (const node of nodeCoords) {
         const disabled = node.disabled || currentMap?.disabled?.[node.col]?.has(node.row);
         const group = node.group ?? null;
@@ -5511,8 +5532,12 @@ function syncBackBufferSizes() {
         nctx.arc(node.x, node.y - node.radius * 0.3, node.radius * 0.3, 0, Math.PI * 2);
         nctx.fill();
       }
+      if (__perfOn && __circleStart) {
+        try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.circles', performance.now() - __circleStart); } catch {}
+      }
 
       if (panel.classList.contains('toy-zoomed')) {
+        const __outlineStart = __perfOn ? performance.now() : 0;
         for (const node of nodeCoords) {
           if (!node.group) continue;
           const disabled = node.disabled || currentMap?.disabled?.[node.col]?.has(node.row);
@@ -5528,6 +5553,9 @@ function syncBackBufferSizes() {
           nctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
           nctx.stroke();
         }
+        if (__perfOn && __outlineStart) {
+          try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.outlines', performance.now() - __outlineStart); } catch {}
+        }
       }
 
       if (cache.ctx) {
@@ -5536,8 +5564,15 @@ function syncBackBufferSizes() {
         cache.ctx.drawImage(nctx.canvas, 0, 0);
       }
       cache.key = cacheKey;
+      if (__perfOn && __drawStart) {
+        try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.draw', performance.now() - __drawStart); } catch {}
+      }
       } else if (cache.canvas) {
+        const __cacheBlitStart = __perfOn ? performance.now() : 0;
         nctx.drawImage(cache.canvas, 0, 0);
+        if (__perfOn && __cacheBlitStart) {
+          try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.cacheBlit', performance.now() - __cacheBlitStart); } catch {}
+        }
       }
 
       const blockCache = __dgBlocksCache;
@@ -5547,6 +5582,7 @@ function syncBackBufferSizes() {
       if (!blockCache.ctx) blockCache.ctx = blockCache.canvas.getContext('2d');
       const blockKey = `${__dgHash}|${Math.round(radius * 1000)}|${surfacePxW}x${surfacePxH}|blocks`;
       if (blockCache.key !== blockKey && blockCache.ctx) {
+        const __blocksBuildStart = __perfOn ? performance.now() : 0;
         blockCache.key = blockKey;
         resetCtx(blockCache.ctx);
         withLogicalSpace(blockCache.ctx, () => {
@@ -5566,12 +5602,20 @@ function syncBackBufferSizes() {
           }
           drawNoteLabelsTo(blockCache.ctx, nodes);
         });
+        if (__perfOn && __blocksBuildStart) {
+          try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.blocks.build', performance.now() - __blocksBuildStart); } catch {}
+        }
       }
 
       if (blockCache.canvas) {
+        const __blocksBlitStart = __perfOn ? performance.now() : 0;
         nctx.drawImage(blockCache.canvas, 0, 0);
+        if (__perfOn && __blocksBlitStart) {
+          try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.blocks.blit', performance.now() - __blocksBlitStart); } catch {}
+        }
       }
 
+      const __flashStart = __perfOn ? performance.now() : 0;
       for (const node of nodeCoords) {
         const flash = flashes[node.col] || 0;
         if (flash <= 0) continue;
@@ -5591,10 +5635,21 @@ function syncBackBufferSizes() {
         });
         nctx.restore();
       }
+      if (__perfOn && __flashStart) {
+        try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.flash', performance.now() - __flashStart); } catch {}
+      }
       if (tutorialHighlightMode !== 'none') {
+        const __tutorialStart = __perfOn ? performance.now() : 0;
         renderTutorialHighlight();
+        if (__perfOn && __tutorialStart) {
+          try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.tutorial', performance.now() - __tutorialStart); } catch {}
+        }
       } else {
+        const __tutorialStart = __perfOn ? performance.now() : 0;
         clearTutorialHighlight();
+        if (__perfOn && __tutorialStart) {
+          try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.tutorial', performance.now() - __tutorialStart); } catch {}
+        }
       }
 
       nodeCoordsForHitTest = nodeCoords;
@@ -6569,14 +6624,24 @@ function syncBackBufferSizes() {
     const zoomTooWide = Number.isFinite(boardScaleValue) && boardScaleValue < threshold;
     const visiblePanels = Math.max(0, Number(globalDrawgridState?.visibleCount) || 0);
     const allowField = particleBudget?.allowField !== false;
-    const isUnfocused = !!panel?.classList?.contains('toy-unfocused');
     // Keep fields on, but thin them out when many panels are visible.
-    particleFieldEnabled = !!allowField && !inOverview && !zoomTooWide && !isUnfocused;
+    // Do not vary by focus state so particles feel consistent across panels.
+    particleFieldEnabled = !!allowField && !inOverview && !zoomTooWide;
 
     if (dgField && typeof dgField.applyBudget === 'function' && particleBudget) {
+      const round = (v) => Math.round((Number.isFinite(v) ? v : 0) * 10000) / 10000;
       const maxCountScaleBase = (particleBudget.maxCountScale ?? 1) * (particleBudget.capScale ?? 1);
-      // Crowd-based attenuation: more visible panels -> fewer particles per panel, but keep ticks smooth.
-      const crowdScale = Math.max(0.18, 1 / Math.max(1, visiblePanels));
+      // Crowd-based attenuation: more visible panels -> fewer particles per panel.
+      const crowdScale = (() => {
+        const base = 1 / Math.max(1, visiblePanels);
+        if (visiblePanels <= 6) return Math.max(0.18, base);
+        const minScale =
+          visiblePanels >= 36 ? 0.08 :
+          visiblePanels >= 24 ? 0.1 :
+          visiblePanels >= 16 ? 0.12 :
+          0.16;
+        return Math.max(minScale, base);
+      })();
       const fpsSample = Number.isFinite(adaptive?.smoothedFps)
         ? adaptive.smoothedFps
         : (Number.isFinite(adaptive?.fps) ? adaptive.fps : null);
@@ -6586,23 +6651,37 @@ function syncBackBufferSizes() {
         ? Math.min(1.3, 1 + 0.02 * (fpsSample - 58))
         : 1;
 
-      const emergencyScale = emergencyMode ? 0.65 : 1;
-      const emergencySize = emergencyMode ? 1.2 : 1;
+      const emergencyScale = emergencyMode ? 0.45 : 1;
+      const emergencySize = emergencyMode ? 1.1 : 1;
       const maxCountScale = Math.max(0.12, maxCountScaleBase * crowdScale * fpsBoost * emergencyScale);
       const capScale = Math.max(0.2, (particleBudget.capScale ?? 1) * crowdScale * fpsBoost * emergencyScale);
       const sizeScale = (particleBudget.sizeScale ?? 1) * emergencySize;
+      const spawnScale = Math.max(0.1, (particleBudget.spawnScale ?? 1) * crowdScale * fpsBoost * emergencyScale);
       // Keep tick cadence steady for smooth lerps; rely on lower counts for performance.
       const tickModulo = 1;
-      dgField.applyBudget({
-        maxCountScale,
-        capScale,
+      const budgetKey = [
+        round(maxCountScale),
+        round(capScale),
+        round(sizeScale),
+        round(spawnScale),
         tickModulo,
-        sizeScale,
-        spawnScale: Math.max(0.1, (particleBudget.spawnScale ?? 1) * crowdScale * fpsBoost * emergencyScale),
-        minCount: __dgLowFpsMode ? 0 : undefined,
-        emergencyFade: __dgLowFpsMode,
-        emergencyFadeSeconds: 5,
-      });
+        __dgLowFpsMode ? 1 : 0,
+        emergencyMode ? 1 : 0,
+        particleFieldEnabled ? 1 : 0,
+      ].join('|');
+      if (panel.__dgParticleBudgetKey !== budgetKey) {
+        panel.__dgParticleBudgetKey = budgetKey;
+        dgField.applyBudget({
+          maxCountScale,
+          capScale,
+          tickModulo,
+          sizeScale,
+          spawnScale,
+          minCount: __dgLowFpsMode ? 0 : undefined,
+          emergencyFade: __dgLowFpsMode,
+          emergencyFadeSeconds: 5,
+        });
+      }
     }
 
     return adaptive;
@@ -6619,6 +6698,8 @@ function syncBackBufferSizes() {
 
   function renderLoop() {
     const endPerf = startSection('drawgrid:render');
+    const __perfOn = !!(window.__PerfFrameProf && typeof performance !== 'undefined' && performance.now);
+    const __rafStart = __perfOn ? performance.now() : 0;
     try {
       if (!panel.__dgFrame) panel.__dgFrame = 0;
       panel.__dgFrame++;
@@ -6643,6 +6724,7 @@ function syncBackBufferSizes() {
     }
     // ------------------------------------------------
 
+    const __prepStart = __perfOn ? performance.now() : 0;
     let inCommitWindow = __dgInCommitWindow(nowTs);
         const forcePostRelease = (__dgForceFullDrawNext || (__dgForceFullDrawFrames > 0) || __dgForceOverlayClearNext || __dgForceSwapNext);
         if (forcePostRelease) inCommitWindow = false;
@@ -6654,15 +6736,20 @@ function syncBackBufferSizes() {
 
         const waitingForStable = inCommitWindow;
 
+      const __visibilityStart = __perfOn ? performance.now() : 0;
       const shouldSkipOffscreen = !isPanelVisible &&
         !__dgFrontSwapNextDraw &&
         !__dgNeedsUIRefresh &&
         !__hydrationJustApplied;
+      if (__perfOn && __visibilityStart) {
+        try { window.__PerfFrameProf?.mark?.('drawgrid.prep.visibility', performance.now() - __visibilityStart); } catch {}
+      }
       if (shouldSkipOffscreen) {
         rafId = requestAnimationFrame(renderLoop);
         return;
       }
 
+      const __cameraStart = __perfOn ? performance.now() : 0;
       const frameCam = overlayCamState || (typeof getFrameStartState === 'function' ? getFrameStartState() : null);
       const boardScaleValue = Number.isFinite(frameCam?.scale) ? frameCam.scale : __dgZoomScale();
       if (Number.isFinite(boardScaleValue)) {
@@ -6670,10 +6757,14 @@ function syncBackBufferSizes() {
           boardScale = boardScaleValue;
         }
       }
+      if (__perfOn && __cameraStart) {
+        try { window.__PerfFrameProf?.mark?.('drawgrid.prep.camera', performance.now() - __cameraStart); } catch {}
+      }
 
       const zoomDebugFreeze = !!(typeof window !== 'undefined' && window.__zoomDebugFreeze);
 
       // Update per-panel LOD state from global FPS + zoom.
+      const __adaptiveStart = __perfOn ? performance.now() : 0;
       const adaptiveState = updatePanelParticleState(boardScaleValue);
       __dgLowFpsMode = !!adaptiveState?.emergencyMode;
       const fpsSample = Number.isFinite(adaptiveState?.smoothedFps)
@@ -6685,6 +6776,9 @@ function syncBackBufferSizes() {
         } else if (fpsSample <= DG_PLAYHEAD_FPS_SIMPLE_ENTER) {
           __dgPlayheadSimpleMode = true;
         }
+      }
+      if (__perfOn && __adaptiveStart) {
+        try { window.__PerfFrameProf?.mark?.('drawgrid.prep.adaptive', performance.now() - __adaptiveStart); } catch {}
       }
 
       // We never draw overlays or particles if the panel is completely offscreen.
@@ -6720,6 +6814,7 @@ function syncBackBufferSizes() {
 
       // Overlays (notes, playhead, flashes) respect visibility & hydrations guard,
       // but are otherwise always on - they're core UX.
+      const __overlayGateStart = __perfOn ? performance.now() : 0;
       const allowOverlayDraw = canDrawAnything;
       let hasOverlayStrokes = false;
       if (allowOverlayDraw) {
@@ -6735,10 +6830,17 @@ function syncBackBufferSizes() {
       }
       const skipOverlayHeavy = overlayEvery > 1 && ((panel.__dgOverlayFrame % overlayEvery) !== 0);
       const allowOverlayDrawHeavy = allowOverlayDraw && (!skipOverlayHeavy || __dgNeedsUIRefresh);
+      if (__perfOn && __overlayGateStart) {
+        try { window.__PerfFrameProf?.mark?.('drawgrid.prep.overlayGate', performance.now() - __overlayGateStart); } catch {}
+      }
+      if (__perfOn && __prepStart) {
+        try { window.__PerfFrameProf?.mark?.('drawgrid.render.prep', performance.now() - __prepStart); } catch {}
+      }
 
       if (allowOverlayDraw) {
         const lastTransportRunning = !!panel.__dgLastTransportRunning;
         if ((allowOverlayDrawHeavy || (lastTransportRunning && !transportRunning)) && !transportRunning && !overlayActive) {
+          const __overlayClearStart = __perfOn ? performance.now() : 0;
           try {
             const flashSurface = getActiveFlashCanvas();
             resetCtx(fctx);
@@ -6749,12 +6851,16 @@ function syncBackBufferSizes() {
               fctx.clearRect(0, 0, width, height);
             });
           } catch {}
+          if (__perfOn && __overlayClearStart) {
+            try { window.__PerfFrameProf?.mark?.('drawgrid.prep.overlayClear', performance.now() - __overlayClearStart); } catch {}
+          }
         }
         panel.__dgLastTransportRunning = transportRunning;
       }
 
       // Particle field visibility is driven by global allow/overview/zoom state.
       // Do NOT toggle visibility just because we're in a brief commit window; that caused resets on pan/zoom release.
+      const __particlePrepStart = __perfOn ? performance.now() : 0;
       const particleStateAllowed =
         DRAWGRID_ENABLE_PARTICLE_FIELD &&
         !zoomDebugFreeze &&
@@ -6786,6 +6892,7 @@ function syncBackBufferSizes() {
         (typeof window !== 'undefined' && window.__mtZoomGesturing === true);
       const nextParticleVisible = !!particleStateAllowed;
       if (!skipDomUpdates && particleCanvas && particleCanvasVisible !== nextParticleVisible) {
+        const __particleToggleStart = __perfOn ? performance.now() : 0;
         particleCanvasVisible = nextParticleVisible;
         particleCanvas.style.opacity = nextParticleVisible ? '1' : '0';
         if (!nextParticleVisible) {
@@ -6794,6 +6901,12 @@ function syncBackBufferSizes() {
         } else {
           try { dgField?.resetHome?.(); } catch {}
         }
+        if (__perfOn && __particleToggleStart) {
+          try { window.__PerfFrameProf?.mark?.('drawgrid.prep.particleToggle', performance.now() - __particleToggleStart); } catch {}
+        }
+      }
+      if (__perfOn && __particlePrepStart) {
+        try { window.__PerfFrameProf?.mark?.('drawgrid.render.particles', performance.now() - __particlePrepStart); } catch {}
       }
 
       // If we're offscreen and nothing is pending (no swaps or deferred clears),
@@ -6821,8 +6934,8 @@ function syncBackBufferSizes() {
         rafId = requestAnimationFrame(renderLoop);
         return;
       }
-      const __perfOn = !!window.__PERF_ZOOM_PROFILE;
-      const __perfRenderStart = __perfOn && typeof performance !== 'undefined' ? performance.now() : 0;
+      const __perfZoomOn = !!window.__PERF_ZOOM_PROFILE;
+      const __perfRenderStart = __perfZoomOn && typeof performance !== 'undefined' ? performance.now() : 0;
       if (frameCam && !panel.__dgFrameCamLogged) {
         const isProd = (typeof process !== 'undefined') && (process?.env?.NODE_ENV === 'production');
         if (!isProd && DG_DEBUG && DBG_DRAW) {
@@ -6856,9 +6969,15 @@ function syncBackBufferSizes() {
         if (allowParticleDraw) {
           const dtMs = Number.isFinite(frameCam?.dt) ? frameCam.dt : 16.6;
           const dt = Number.isFinite(dtMs) ? dtMs / 1000 : (1 / 60);
-          const __pfStart = __perfOn && typeof performance !== 'undefined' ? performance.now() : 0;
+          const __pfStart = __perfZoomOn && typeof performance !== 'undefined' ? performance.now() : 0;
+          const __pfUpdateStart = (__perfOn && typeof performance !== 'undefined' && performance.now)
+            ? performance.now()
+            : 0;
           dgField?.tick?.(dt);
-          if (__perfOn && __pfStart && !window.__PERF_PARTICLE_FIELD_PROFILE) {
+          if (__perfOn && __pfUpdateStart) {
+            try { window.__PerfFrameProf?.mark?.('drawgrid.update.particles', performance.now() - __pfUpdateStart); } catch {}
+          }
+          if (__perfZoomOn && __pfStart && !window.__PERF_PARTICLE_FIELD_PROFILE) {
             const __pfEnd = performance.now();
             try { window.__PerfFrameProf?.mark?.('drawgrid.particle', __pfEnd - __pfStart); } catch {}
           }
@@ -6933,7 +7052,7 @@ function syncBackBufferSizes() {
     }
 
     perfMark(__dgUpdateDt, __dgDrawDt);
-    if (__perfOn && __perfRenderStart) {
+    if (__perfZoomOn && __perfRenderStart) {
       const __perfEnd = performance.now();
       try { window.__PerfFrameProf?.mark?.('drawgrid.render', __perfEnd - __perfRenderStart); } catch {}
     }
@@ -6949,6 +7068,9 @@ function syncBackBufferSizes() {
       //lastPointerup: window.__LAST_POINTERUP_DIAG__,
       //box: dgr ? { x: dgr.left, y: dgr.top, w: dgr.width, h: dgr.height } : null,
     //});
+    const __uiRefreshStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+      ? performance.now()
+      : 0;
     if (__dgNeedsUIRefresh && __dgStableFramesAfterCommit >= 2) {
       __dgNeedsUIRefresh = false;
       __dgDeferUntilTs = 0;
@@ -6992,8 +7114,15 @@ function syncBackBufferSizes() {
         DG.warn('deferred UI clear failed', err);
       }
     }
+    if (__uiRefreshStart) {
+      const __uiRefreshDt = performance.now() - __uiRefreshStart;
+      try { window.__PerfFrameProf?.mark?.('drawgrid.ui.refresh', __uiRefreshDt); } catch {}
+    }
     if (!panel.isConnected) { cancelAnimationFrame(rafId); return; }
 
+    const __domPulseStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+      ? performance.now()
+      : 0;
     if (!skipDomUpdates) {
       let pulseClassOn = !!panel.__dgPulseClassOn;
       if (panel.__pulseRearm) {
@@ -7018,6 +7147,10 @@ function syncBackBufferSizes() {
       }
       panel.__dgPulseClassOn = pulseClassOn;
     }
+    if (__domPulseStart) {
+      const __domPulseDt = performance.now() - __domPulseStart;
+      try { window.__PerfFrameProf?.mark?.('drawgrid.dom.pulse', __domPulseDt); } catch {}
+    }
 
     // Set playing class for border highlight
     const hasChainLink = panel.dataset.nextToyId || panel.dataset.prevToyId;
@@ -7033,12 +7166,19 @@ function syncBackBufferSizes() {
     const showPlaying = transportRunning
       ? (isChained ? (isActiveInChain && chainHasNotes) : hasActiveNotes)
       : false;
+    const __domPlayingStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+      ? performance.now()
+      : 0;
     if (!skipDomUpdates) {
       const lastPlaying = !!panel.__dgShowPlaying;
       if (showPlaying !== lastPlaying) {
         panel.classList.toggle('toy-playing', showPlaying);
         panel.__dgShowPlaying = showPlaying;
       }
+    }
+    if (__domPlayingStart) {
+      const __domPlayingDt = performance.now() - __domPlayingStart;
+      try { window.__PerfFrameProf?.mark?.('drawgrid.dom.playing', __domPlayingDt); } catch {}
     }
 
     // --- other overlay layers still respect allowOverlayDraw ---
@@ -7047,6 +7187,9 @@ function syncBackBufferSizes() {
         ? performance.now()
         : 0;
       // Clear flash canvas for this frame's animations
+      const __overlayClearStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+        ? performance.now()
+        : 0;
       const flashSurface = getActiveFlashCanvas();
       resetCtx(fctx);
       withLogicalSpace(fctx, () => {
@@ -7056,10 +7199,17 @@ function syncBackBufferSizes() {
         fctx.clearRect(0, 0, width, height);
         emitDG('overlay-clear', { reason: 'pre-redraw' });
       });
+      if (__overlayClearStart) {
+        const __overlayClearDt = performance.now() - __overlayClearStart;
+        try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.clear', __overlayClearDt); } catch {}
+      }
 
       // Animate special stroke paint (hue cycling) without resurrecting erased areas:
       // Draw animated special strokes into flashCanvas, then mask with current paint alpha.
       if (hasOverlayStrokes || (cur && previewGid)) {
+        const __overlayStrokeStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+          ? performance.now()
+          : 0;
         const specialStrokes = [];
         const colorized = [];
         if (hasOverlayStrokes) {
@@ -7106,10 +7256,14 @@ function syncBackBufferSizes() {
           }
           fctx.restore();
         }
+        if (__overlayStrokeStart) {
+          const __overlayStrokeDt = performance.now() - __overlayStrokeStart;
+          try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.strokes', __overlayStrokeDt); } catch {}
+        }
       }
       if (__dgOverlayStart) {
         const __dgOverlayDt = performance.now() - __dgOverlayStart;
-        try { window.__PerfFrameProf?.mark?.('drawgrid.overlay', __dgOverlayDt); } catch {}
+        try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.core', __dgOverlayDt); } catch {}
       }
     }
 
@@ -7154,7 +7308,7 @@ function syncBackBufferSizes() {
       } catch (e) { /* fail silently */ }
       if (__dgOverlayStart && allowOverlayDrawHeavy) {
         const __dgOverlayDt = performance.now() - __dgOverlayStart;
-        try { window.__PerfFrameProf?.mark?.('drawgrid.overlay', __dgOverlayDt); } catch {}
+        try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.cellFlashes', __dgOverlayDt); } catch {}
       }
     }
 
@@ -7185,7 +7339,7 @@ function syncBackBufferSizes() {
           fctx.restore();
           if (__dgOverlayStart) {
             const __dgOverlayDt = performance.now() - __dgOverlayStart;
-            try { window.__PerfFrameProf?.mark?.('drawgrid.overlay', __dgOverlayDt); } catch {}
+            try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.toggles', __dgOverlayDt); } catch {}
           }
         } else {
           // Even if we skip drawing, continue advancing animations so they stay in sync.
@@ -7258,7 +7412,7 @@ function syncBackBufferSizes() {
             fctx.restore();
             if (__dgOverlayStart) {
               const __dgOverlayDt = performance.now() - __dgOverlayStart;
-              try { window.__PerfFrameProf?.mark?.('drawgrid.overlay', __dgOverlayDt); } catch {}
+              try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.bursts', __dgOverlayDt); } catch {}
             }
           } else {
             for (let i = noteBurstEffects.length - 1; i >= 0; i--) {
@@ -7439,8 +7593,12 @@ function syncBackBufferSizes() {
     rafId = requestAnimationFrame(renderLoop);
     } finally {
       endPerf();
+      if (__perfOn && __rafStart) {
+        try { window.__PerfFrameProf.mark('perf.raf.drawgrid', performance.now() - __rafStart); } catch {}
+      }
     }
   }
+  renderLoop.__perfRafTag = 'perf.raf.drawgrid';
   rafId = requestAnimationFrame(renderLoop);
 
   function applyInstrumentFromState(value, { emitEvents = true } = {}) {

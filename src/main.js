@@ -1223,6 +1223,17 @@ function syncBodyOutline(panel){
 }
 
 function syncAllBodyOutlines(){
+  const __perfOn = !!(window.__PerfFrameProf && typeof performance !== 'undefined' && performance.now);
+  if (__perfOn) {
+    const t0 = performance.now();
+    const panels = document.querySelectorAll('.toy-panel');
+    window.__PerfFrameProf.mark('outline.syncAll.query', performance.now() - t0);
+    const t1 = performance.now();
+    panels.forEach(syncBodyOutline);
+    window.__PerfFrameProf.mark('outline.syncAll.apply', performance.now() - t1);
+    window.__PerfFrameProf.mark('outline.syncAll', performance.now() - t0);
+    return;
+  }
   document.querySelectorAll('.toy-panel').forEach(syncBodyOutline);
 }
 try { window.__syncAllBodyOutlines = syncAllBodyOutlines; } catch {}
@@ -1528,8 +1539,13 @@ function removeChainEdgesForToy(toyId) {
 }
 
 function updateAllChainUIs() {
+    const __perfOn = !!(window.__PerfFrameProf && typeof performance !== 'undefined' && performance.now);
+    const __perfStart = __perfOn ? performance.now() : 0;
     // Normalize child flags from DOM links so refresh/restore can't lose them.
     const panels = Array.from(document.querySelectorAll('.toy-panel[id]'));
+    if (__perfOn) {
+        window.__PerfFrameProf.mark('chain.ui.query', performance.now() - __perfStart);
+    }
     panels.forEach(p => {
         const hasKnownChild = (() => {
             if (p.dataset.nextToyId) return true;
@@ -1555,6 +1571,9 @@ function updateAllChainUIs() {
         const parentId = child.dataset.prevToyId || child.dataset.chainParent;
         if (parentId) parentHasChild.add(parentId);
     });
+    if (__perfOn) {
+        window.__PerfFrameProf.mark('chain.ui.parents', performance.now() - __perfStart);
+    }
 
     const allToys = Array.from(document.querySelectorAll('.toy-panel[data-toy]'));
     allToys.forEach(toy => {
@@ -1596,6 +1615,9 @@ function updateAllChainUIs() {
             }
         }
     });
+    if (__perfOn) {
+        window.__PerfFrameProf.mark('chain.ui', performance.now() - __perfStart);
+    }
 }
 
 function triggerConnectorPulse(fromId, toId) {
@@ -2580,6 +2602,7 @@ function drawChains(forceFull = false) {
   if (window.__PERF_DISABLE_CHAINS) return;
   if (!CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) return;
   if (!chainCanvas || !chainCtx) return;
+  const __perfOn = !!(window.__PerfFrameProf && typeof performance !== 'undefined' && performance.now);
 
   const width = g_boardClientWidth || 0;
   const height = g_boardClientHeight || 0;
@@ -2656,6 +2679,9 @@ function drawChains(forceFull = false) {
       if (total > CHAIN_DEBUG_LOG_THRESHOLD_MS) {
         console.log('[CHAIN][perf] drawChains(empty)', 'total=', total.toFixed(2), 'ms', 'resize=', resizeCost.toFixed(2), 'ms', 'clear=', clearCost.toFixed(2), 'ms', 'edges=', edgeCount)
       }
+    }
+    if (__perfOn) {
+      window.__PerfFrameProf.mark('chain.draw', performance.now() - tStart);
     }
     return;
   }
@@ -2737,6 +2763,9 @@ function drawChains(forceFull = false) {
         'edgeCount=', edgeCount
       )
     }
+  }
+  if (__perfOn) {
+    window.__PerfFrameProf.mark('chain.draw', performance.now() - tStart);
   }
 }
 
@@ -2868,6 +2897,35 @@ function scheduleChainRedraw() {
 })();
 const g_chainState = new Map();
 
+function resetChainState({ clearDom = true } = {}) {
+  try {
+    g_chainState.clear();
+    g_chainEdges.clear();
+    g_edgesByToyId.clear();
+    g_chainSegments.length = 0;
+    g_pulsingConnectors.clear();
+    g_chainToyLastPos.clear();
+    g_chainPosDirtyToyIds.clear();
+    g_chainDragToyId = null;
+    g_chainDragLastUpdateTime = 0;
+    g_chainRedrawPendingFull = false;
+  } catch {}
+  if (clearDom) {
+    try {
+      document.querySelectorAll('.toy-panel').forEach((panel) => {
+        delete panel.dataset.prevToyId;
+        delete panel.dataset.nextToyId;
+        delete panel.dataset.chainParent;
+        delete panel.dataset.chainHasChild;
+        panel.removeAttribute('data-chaindisabled');
+      });
+    } catch {}
+  }
+  try { updateAllChainUIs(); } catch {}
+  try { scheduleChainRedraw(); } catch {}
+}
+try { window.resetChainState = resetChainState; } catch {}
+
 function findChainHead(toy) {
     if (!toy) return null;
     let current = toy;
@@ -2968,14 +3026,24 @@ try {
     window.addEventListener('resize', () => { try { syncAllBodyOutlines(); } catch {} }, { passive: true });
 
     // also piggyback on the main rAF loop to catch any scale changes
-    window.__updateOutlineScaleIfNeeded = function(){
-      const scale = window.__boardScale || 1;
-      if (scale !== lastScale){
-        lastScale = scale;
-        updateOutlineVars(scale);
-      }
-    };
-  })();
+  window.__updateOutlineScaleIfNeeded = function(){
+    const scale = window.__boardScale || 1;
+    if (scale !== lastScale){
+      lastScale = scale;
+      updateOutlineVars(scale);
+    }
+  };
+})();
+
+function withPerfMark(name, fn) {
+  const __perfOn = !!(window.__PerfFrameProf && typeof performance !== 'undefined' && performance.now);
+  if (!__perfOn) return fn();
+  const t0 = performance.now();
+  try { return fn(); }
+  finally {
+    try { window.__PerfFrameProf.mark(name, performance.now() - t0); } catch {}
+  }
+}
 function scheduler(){
   let lastPhase = 0;
   const lastCol = new Map();
@@ -2985,8 +3053,19 @@ function scheduler(){
 
   function step(){
     const frameStart = performance.now();
+    const __perfOn = !!(window.__PerfFrameProf && typeof performance !== 'undefined' && performance.now);
+    const __rafStart = __perfOn ? performance.now() : 0;
     // Clear expired pulse classes without timers
-    try { serviceToyPulses(frameStart); } catch {}
+    try {
+      if (__perfOn) {
+        const t0 = performance.now();
+        serviceToyPulses(frameStart);
+        const dt = performance.now() - t0;
+        window.__PerfFrameProf.mark('pulse.service', dt);
+      } else {
+        serviceToyPulses(frameStart);
+      }
+    } catch {}
 
     // Keep outline-related CSS vars synced with zoom; heavy geometry sync happens on demand.
     try {
@@ -3001,14 +3080,15 @@ function scheduler(){
     // Keep this cheap and frame-synced by piggybacking on the main scheduler rAF.
     try { tickBoardAnchor({ nowMs: frameStart, loopInfo: info, running }); } catch {}
     const hasChains = g_chainState && g_chainState.size > 0;
+    const allowChainWork = !window.__PERF_DISABLE_CHAIN_WORK;
 
-    if (CHAIN_FEATURE_ENABLE_SCHEDULER && running && hasChains){
+    if (CHAIN_FEATURE_ENABLE_SCHEDULER && running && hasChains && allowChainWork){
       // --- Phase: advance chains on bar wrap ---
       const phaseJustWrapped = info.phase01 < lastPhase && lastPhase > 0.9;
       lastPhase = info.phase01;
 
       if (phaseJustWrapped) {
-        const tAdvanceStart = performance.now();
+        const tAdvanceStart = __perfOn ? performance.now() : 0;
         for (const [headId] of g_chainState.entries()) {
           const activeToy = document.getElementById(g_chainState.get(headId));
           // Bouncers and Ripplers manage their own advancement via the 'chain:next' event.
@@ -3017,14 +3097,17 @@ function scheduler(){
             advanceChain(headId);
           }
         }
-        const tAdvanceEnd = performance.now();
+        const tAdvanceEnd = __perfOn ? performance.now() : 0;
+        if (__perfOn) {
+          window.__PerfFrameProf.mark('chain.advance', tAdvanceEnd - tAdvanceStart);
+        }
         if (CHAIN_DEBUG && (tAdvanceEnd - tAdvanceStart) > CHAIN_DEBUG_LOG_THRESHOLD_MS) {
           console.log('[CHAIN][perf] advanceChain batch', (tAdvanceEnd - tAdvanceStart).toFixed(2), 'ms', 'heads=', g_chainState.size);
         }
       }
 
       // --- Phase A: chain-active flags ---
-      const tActiveStart = performance.now();
+      const tActiveStart = __perfOn ? performance.now() : 0;
       const activeToyIds = new Set(g_chainState.values());
       const hasActiveToys = activeToyIds.size > 0;
 
@@ -3038,6 +3121,7 @@ function scheduler(){
       })();
 
       if (CHAIN_FEATURE_ENABLE_MARK_ACTIVE && hasActiveToys && activeChanged) {
+        const tMarkDomStart = __perfOn ? performance.now() : 0;
         document.querySelectorAll('.toy-panel[id]').forEach(toy => {
           const isActive = activeToyIds.has(toy.id);
           const current = toy.dataset.chainActive === 'true';
@@ -3062,14 +3146,20 @@ function scheduler(){
         prevActiveToyIds.clear();
         for (const id of activeToyIds) prevActiveToyIds.add(id);
         prevHadActiveToys = hasActiveToys;
+        if (__perfOn) {
+          window.__PerfFrameProf.mark('chain.markActive.dom', performance.now() - tMarkDomStart);
+        }
       }
-      const tActiveEnd = performance.now();
+      const tActiveEnd = __perfOn ? performance.now() : 0;
+      if (__perfOn) {
+        window.__PerfFrameProf.mark('chain.markActive', tActiveEnd - tActiveStart);
+      }
       if (CHAIN_DEBUG && (tActiveEnd - tActiveStart) > CHAIN_DEBUG_LOG_THRESHOLD_MS) {
         console.log('[CHAIN][perf] mark-active', (tActiveEnd - tActiveStart).toFixed(2), 'ms', 'activeToyCount=', activeToyIds.size);
       }
 
       // --- Phase C: per-toy sequencer stepping for active chain links ---
-      const tStepStart = performance.now();
+      const tStepStart = __perfOn ? performance.now() : 0;
       if (CHAIN_FEATURE_ENABLE_SEQUENCER && hasActiveToys) {
         for (const activeToyId of activeToyIds) {
           const toy = document.getElementById(activeToyId);
@@ -3091,7 +3181,10 @@ function scheduler(){
           }
         }
       }
-      const tStepEnd = performance.now();
+      const tStepEnd = __perfOn ? performance.now() : 0;
+      if (__perfOn) {
+        window.__PerfFrameProf.mark('chain.sequencer', tStepEnd - tStepStart);
+      }
       if (CHAIN_DEBUG && CHAIN_FEATURE_ENABLE_SEQUENCER && (tStepEnd - tStepStart) > CHAIN_DEBUG_LOG_THRESHOLD_MS) {
         console.log('[CHAIN][perf] sequencerStep batch', (tStepEnd - tStepStart).toFixed(2), 'ms', 'activeToyCount=', activeToyIds.size);
       }
@@ -3121,6 +3214,9 @@ function scheduler(){
         'edges=', edgeCount,
         'connectorsOn=', connectorsOn
       );
+    }
+    if (__perfOn && __rafStart) {
+      window.__PerfFrameProf.mark('perf.raf.scheduler', performance.now() - __rafStart);
     }
 
     // Connectors are now updated on-demand, not every frame.
@@ -3176,28 +3272,30 @@ async function boot(){
     const startTime = performance.now();
 
     function animateConnectors(now) {
-        const elapsed = now - startTime;
-        
-        try {
-            rebuildChainSegments();
-            g_chainRedrawPendingFull = true;
-            scheduleChainRedraw();
-        } catch(e) {
-            if (CHAIN_DEBUG) console.warn('[CHAIN] animation frame rebuild failed', e);
-        }
+        withPerfMark('perf.raf.connectors', () => {
+          const elapsed = now - startTime;
 
-        if (elapsed < duration) {
-            requestAnimationFrame(animateConnectors);
-        } else {
-            // One final redraw for perfect alignment at the end.
-            try {
-                rebuildChainSegments();
-                g_chainRedrawPendingFull = true;
-                scheduleChainRedraw();
-            } catch(e) {
-                if (CHAIN_DEBUG) console.warn('[CHAIN] final animation frame rebuild failed', e);
-            }
-        }
+          try {
+              rebuildChainSegments();
+              g_chainRedrawPendingFull = true;
+              scheduleChainRedraw();
+          } catch(e) {
+              if (CHAIN_DEBUG) console.warn('[CHAIN] animation frame rebuild failed', e);
+          }
+
+          if (elapsed < duration) {
+              requestAnimationFrame(animateConnectors);
+          } else {
+              // One final redraw for perfect alignment at the end.
+              try {
+                  rebuildChainSegments();
+                  g_chainRedrawPendingFull = true;
+                  scheduleChainRedraw();
+              } catch(e) {
+                  if (CHAIN_DEBUG) console.warn('[CHAIN] final animation frame rebuild failed', e);
+              }
+          }
+        });
     }
     requestAnimationFrame(animateConnectors);
   });
@@ -3329,19 +3427,25 @@ async function boot(){
     // Initial sync once toys are present
     try { syncAllBodyOutlines(); } catch {}
     // Run a couple of follow-up syncs after layout settles (fonts/DOM can land late)
-    requestAnimationFrame(() => { try { syncAllBodyOutlines(); } catch {} });
+    requestAnimationFrame(() => {
+      withPerfMark('perf.raf.outlines', () => { try { syncAllBodyOutlines(); } catch {} });
+    });
     setTimeout(() => { try { syncAllBodyOutlines(); } catch {} }, 160);
     // If overview was restored on load, reapply its decorations once toys exist.
     requestAnimationFrame(() => {
-      try {
-        if (overviewMode?.isActive?.()) {
-          overviewMode.refreshDecorations?.();
-          syncAllBodyOutlines();
-        }
-      } catch {}
+      withPerfMark('perf.raf.overviewDecor', () => {
+        try {
+          if (overviewMode?.isActive?.()) {
+            overviewMode.refreshDecorations?.();
+            syncAllBodyOutlines();
+          }
+        } catch {}
+      });
     });
     updateAllChainUIs(); // Set initial instrument button visibility
-    requestAnimationFrame(() => updateAllChainUIs()); // After any late-restored links land
+    requestAnimationFrame(() => {
+      withPerfMark('perf.raf.chainUI', () => { try { updateAllChainUIs(); } catch {} });
+    }); // After any late-restored links land
     setTimeout(() => { try { updateAllChainUIs(); } catch {} }, 400); // Final pass after async inits settle
     setTimeout(() => { try { updateAllChainUIs(); } catch {} }, 900); // One more pass to cover late restores
 
@@ -3357,17 +3461,19 @@ async function boot(){
       if (!parent) return;
       lockChainButton(parent, { hasChild: true });
       // Log the state right when the event fires to diagnose refresh issues
-      try {
-        const btn = parent.querySelector('.toy-chain-btn');
-        const core = btn?.querySelector('.c-btn-core');
-        console.log('[chain][event:linked]', {
-          parent: parent.id,
-          chainHasChild: parent.dataset.chainHasChild || null,
-          btnDisabledAttr: btn?.getAttribute('data-chaindisabled') || null,
-          btnHasDisabledClass: btn?.classList?.contains?.('toy-chain-btn-disabled') || false,
-          btnComputedIcon: core ? getComputedStyle(core).getPropertyValue('--c-btn-icon-url') : null,
-        });
-      } catch {}
+      if (CHAIN_DEBUG) {
+        try {
+          const btn = parent.querySelector('.toy-chain-btn');
+          const core = btn?.querySelector('.c-btn-core');
+          console.log('[chain][event:linked]', {
+            parent: parent.id,
+            chainHasChild: parent.dataset.chainHasChild || null,
+            btnDisabledAttr: btn?.getAttribute('data-chaindisabled') || null,
+            btnHasDisabledClass: btn?.classList?.contains?.('toy-chain-btn-disabled') || false,
+            btnComputedIcon: core ? getComputedStyle(core).getPropertyValue('--c-btn-icon-url') : null,
+          });
+        } catch {}
+      }
     };
 
     document.addEventListener('chain:linked', handleChainLinkedButtonState, true);

@@ -1099,6 +1099,38 @@ function forcePerfWarmup() {
   } catch {}
 }
 
+function percentile(sortedAsc, p) {
+  if (!sortedAsc.length) return 0;
+  const idx = Math.min(sortedAsc.length - 1, Math.max(0, Math.floor((p / 100) * (sortedAsc.length - 1))));
+  return sortedAsc[idx];
+}
+
+function statsFromFrameMs(frameMs) {
+  const sorted = frameMs.slice().sort((a, b) => a - b);
+  const sum = frameMs.reduce((a, b) => a + b, 0);
+  const avg = frameMs.length ? sum / frameMs.length : 0;
+
+  const over16 = frameMs.filter(v => v > 16.7).length;
+  const over33 = frameMs.filter(v => v > 33.3).length;
+  const over50 = frameMs.filter(v => v > 50.0).length;
+
+  return {
+    samples: frameMs.length,
+    frameMs: {
+      avg,
+      p50: percentile(sorted, 50),
+      p95: percentile(sorted, 95),
+      p99: percentile(sorted, 99),
+      worst: sorted.length ? sorted[sorted.length - 1] : 0,
+    },
+    counts: {
+      over16ms: over16,
+      over33ms: over33,
+      over50ms: over50,
+    }
+  };
+}
+
 async function runVariant(label, step, statusText) {
   setStatus(statusText || `Running ${label}�Ǫ`);
   setOutput(null);
@@ -1157,27 +1189,20 @@ async function runVariantPlaying(label, step, statusText) {
     : 120;
   const prof = makeFrameProfiler({ slowMs, maxSamples });
   window.__PerfFrameProf = prof; // so you can dump it from console
+  const durationMs = 30000;
   const scriptStep = step;
   const nowMs = () => (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  const raf = (fn) => (window.requestAnimationFrame ? window.requestAnimationFrame(fn) : setTimeout(() => fn(nowMs()), 16));
+  const defer = (fn) => (typeof setTimeout === 'function' ? setTimeout(fn, 0) : raf(fn));
   let warmupDid = false;
-  const profStep = (tMs, dtMs, progress) => {
-    const t0 = nowMs();
-    const s0 = nowMs();
-    try { if (scriptStep) scriptStep(tMs, dtMs, progress); } catch {}
-    let forceSample = false;
-    let warmupTag = false;
-    if (!warmupDid && tMs >= warmupMs * 0.5) {
-      warmupDid = true;
-      forceSample = true;
-      warmupTag = true;
-      try { forcePerfWarmup(); } catch {}
-    }
-    prof.mark('script', nowMs() - s0);
-    const frameDt = Number.isFinite(dtMs) ? dtMs : (nowMs() - t0);
-    const workMs = Math.max(0, nowMs() - t0);
-    const idleMs = Math.max(0, frameDt - workMs);
-    prof.endFrame(frameDt, { workMs, idleMs, forceSample, warmupTag });
-  };
+  let pendingFrame = null;
+  let pendingFrameTimer = 0;
+  let rafWrapped = false;
+  let rafOriginal = null;
+  const frameMs = [];
+  const warmupTriggerMs = Math.max(0, Math.min(warmupMs - 50, warmupMs * 0.5));
+  let startMs = null;
+  let lastMs = null;
   setStatus(statusText || `Running ${label}...`);
   setOutput(null);
   lastResult = null;
@@ -1192,6 +1217,29 @@ async function runVariantPlaying(label, step, statusText) {
     if (!isRunning()) startTransport();
   } catch {}
 
+  // Wrap rAF to catch untagged work inside rAF callbacks.
+  try {
+    if (!window.__PERF_RAF_WRAPPED && typeof window.requestAnimationFrame === 'function') {
+      rafOriginal = window.requestAnimationFrame;
+      window.__PERF_RAF_ORIG = rafOriginal;
+      window.requestAnimationFrame = function(callback) {
+        return rafOriginal.call(window, function(ts) {
+          const __perfOn = !!(window.__PerfFrameProf && typeof performance !== 'undefined' && performance.now);
+          const t0 = __perfOn ? performance.now() : 0;
+          const tag = (callback && typeof callback.__perfRafTag === 'string') ? callback.__perfRafTag : 'perf.raf.other';
+          try { return callback(ts); }
+          finally {
+            if (__perfOn && t0) {
+              try { window.__PerfFrameProf.mark(tag, performance.now() - t0); } catch {}
+            }
+          }
+        });
+      };
+      window.__PERF_RAF_WRAPPED = true;
+      rafWrapped = true;
+    }
+  } catch {}
+
   // Reset per-run pulse/outline counters
   try {
     window.__PERF_PULSE_COUNT = 0;
@@ -1199,11 +1247,61 @@ async function runVariantPlaying(label, step, statusText) {
     window.__PERF_WARMUP_COUNT = 0;
   } catch {}
 
-  const result = await runBenchmark({
-    label,
-    durationMs: 30000,
-    warmupMs,
-    step: profStep,
+  const result = await new Promise((resolve) => {
+    const finalizePendingFrame = () => {
+      if (!pendingFrame) return;
+      prof.endFrame(pendingFrame.frameDt, pendingFrame.meta);
+      pendingFrame = null;
+      pendingFrameTimer = 0;
+    };
+
+    const stepFrame = (ts) => {
+      if (startMs === null) {
+        startMs = ts;
+        lastMs = ts;
+      }
+
+      const t = ts - startMs;
+      const dtMs = ts - lastMs;
+      lastMs = ts;
+
+      if (pendingFrame) finalizePendingFrame();
+
+      const t0 = nowMs();
+      const s0 = nowMs();
+      try { if (scriptStep) scriptStep(t, dtMs, Math.min(1, t / durationMs)); } catch {}
+      let forceSample = false;
+      let warmupTag = false;
+      if (!warmupDid && t >= warmupTriggerMs && t <= warmupMs) {
+        warmupDid = true;
+        forceSample = true;
+        warmupTag = true;
+        try { forcePerfWarmup(); } catch {}
+      }
+      prof.mark('script', nowMs() - s0);
+      const workMs = Math.max(0, nowMs() - t0);
+      const frameDt = Number.isFinite(dtMs) ? dtMs : (nowMs() - t0);
+      const idleMs = Math.max(0, frameDt - workMs);
+      pendingFrame = { frameDt, meta: { workMs, idleMs, forceSample, warmupTag } };
+      if (!pendingFrameTimer) pendingFrameTimer = defer(finalizePendingFrame);
+
+      if (t > warmupMs) frameMs.push(frameDt);
+
+      if (t >= durationMs) {
+        if (pendingFrame) finalizePendingFrame();
+        const s = statsFromFrameMs(frameMs);
+        resolve({
+          label,
+          durationMs,
+          warmupMs,
+          createdAt: new Date().toISOString(),
+          ...s,
+        });
+        return;
+      }
+      raf(stepFrame);
+    };
+    raf(stepFrame);
   });
 
   try {
@@ -1232,6 +1330,13 @@ async function runVariantPlaying(label, step, statusText) {
 
   // Stop after test to avoid surprise audio continuing
   try { stopTransport(); } catch {}
+
+  // Restore rAF if we wrapped it.
+  if (rafWrapped && rafOriginal) {
+    try { window.requestAnimationFrame = rafOriginal; } catch {}
+    try { delete window.__PERF_RAF_WRAPPED; } catch {}
+    try { delete window.__PERF_RAF_ORIG; } catch {}
+  }
 
   setParticleQualityLock(null);
 
@@ -1409,7 +1514,9 @@ function clearSceneViaSnapshot() {
   const snap = P.getSnapshot();
   snap.toys = [];
   snap.chains = [];
-  return !!P.applySnapshot(snap);
+  const ok = !!P.applySnapshot(snap);
+  try { window.resetChainState?.({ clearDom: true }); } catch {}
+  return ok;
 }
 
 function createToyGrid({ toyType, rows, cols, spacing, centerX, centerY }) {
@@ -1638,6 +1745,7 @@ async function runP3e2() {
 }
 
 async function runP3f() {
+  try { window.__PERF_DISABLE_CHAIN_WORK = true; } catch {}
   const panZoom = makePanZoomScript({
     panPx: 2400,
     zoomMin: 0.40,
@@ -1657,9 +1765,11 @@ async function runP3f() {
       'Running P3f (playing pan/zoom + randomise once, anchor ON)...'
     );
   });
+  try { window.__PERF_DISABLE_CHAIN_WORK = false; } catch {}
 }
 
 async function runP3f2() {
+  try { window.__PERF_DISABLE_CHAIN_WORK = true; } catch {}
   const panZoom = makePanZoomScript({
     panPx: 2400,
     zoomMin: 0.40,
@@ -1679,6 +1789,7 @@ async function runP3f2() {
       'Running P3f2 (playing pan/zoom + randomise once, anchor OFF)...'
     );
   });
+  try { window.__PERF_DISABLE_CHAIN_WORK = false; } catch {}
 }
 
 
@@ -2912,11 +3023,13 @@ async function runQueue(list = []) {
       console.warn('[PerfLab] missing test', item);
       continue;
     }
-    if (typeof item === 'string' && item.startsWith('build')) {
+    const isBuild = (typeof item === 'string' && item.startsWith('build'));
+    if (isBuild) {
       try { clearSceneViaSnapshot(); } catch {}
+      lastResult = null;
     }
     try { await fn(); } catch (err) { console.warn('[PerfLab] test failed', item, err); }
-    if (lastResult) results.push(lastResult);
+    if (!isBuild && lastResult) results.push(lastResult);
   }
   lastResults = results;
   try { console.log('[PerfLab] queue results', results); } catch {}

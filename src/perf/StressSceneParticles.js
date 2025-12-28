@@ -13,7 +13,9 @@ function clearSceneViaSnapshot() {
   snap.toys = [];
   snap.chains = [];
   // preserve camera/theme/bpm in snap
-  return !!P.applySnapshot(snap);
+  const ok = !!P.applySnapshot(snap);
+  try { window.resetChainState?.({ clearDom: true }); } catch {}
+  return ok;
 }
 
 export function buildParticleWorstCase({

@@ -23,6 +23,7 @@ const EMERGENCY_FPS_ENTER = 22;
 const EMERGENCY_FPS_EXIT = 28;
 const EMERGENCY_SUSTAIN_MS = 1200;
 const EMERGENCY_EXIT_SUSTAIN_MS = 1200;
+const EMERGENCY_FIELD_OFF_FPS = 18;
 
 /**
  * Call this from the global FPS HUD once per frame-ish.
@@ -190,7 +191,8 @@ export function getAdaptiveFrameBudget() {
     }
   })();
 
-  const allowField = true;
+  const emergencySample = Math.min(smoothedFps, lastFpsSample);
+  const allowField = !(emergencyMode && emergencySample <= EMERGENCY_FIELD_OFF_FPS);
 
   return {
     fps: lastFpsSample,

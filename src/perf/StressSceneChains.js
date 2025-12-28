@@ -12,7 +12,9 @@ function clearSceneViaSnapshot() {
   const snap = P.getSnapshot();
   snap.toys = [];
   snap.chains = [];
-  return !!P.applySnapshot(snap);
+  const ok = !!P.applySnapshot(snap);
+  try { window.resetChainState?.({ clearDom: true }); } catch {}
+  return ok;
 }
 
 // Small, deterministic RNG (seeded)

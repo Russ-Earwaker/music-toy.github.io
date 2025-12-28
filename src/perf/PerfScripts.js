@@ -28,6 +28,8 @@ export function makePanZoomScript({
   let boundsFound = false;
   let centerWorld = null;
   let panRadiusWorld = panPx;
+  let layoutCache = null;
+  let layoutCacheValid = false;
 
   // precompute overview toggle times (deterministic)
   const panDur = Math.max(0, Number(panMs) || 0);
@@ -38,15 +40,50 @@ export function makePanZoomScript({
   const overviewStart = idleDur + panDur + zoomDur;
   const toggleEvery = (overviewToggles > 0 && overviewDur > 0) ? (overviewDur / overviewToggles) : 0;
 
-function setGesturing(on) {
-  try { document.body.classList.toggle('is-gesturing', !!on); } catch {}
-  try { window.__GESTURE_ACTIVE = !!on; } catch {}
-}
+  const invalidateLayoutCache = () => { layoutCacheValid = false; };
+  try {
+    window.addEventListener('resize', invalidateLayoutCache, { passive: true });
+    window.addEventListener('overview:transition', invalidateLayoutCache, { passive: true });
+  } catch {}
+
+  function getLayoutCache() {
+    if (layoutCacheValid && layoutCache) return layoutCache;
+    const stage = document.querySelector('main#board, #board, #world, .world, .canvas-world');
+    const stageRect = stage?.getBoundingClientRect?.();
+    const viewEl = getViewportElement?.() || document.documentElement;
+    const viewRect = viewEl?.getBoundingClientRect?.();
+    if (!stageRect || !viewRect) return null;
+    const live = getViewportTransform?.() || {};
+    const committed = getCommittedState?.() || {};
+    const tx = Number.isFinite(live.tx) ? live.tx : (Number.isFinite(committed.x) ? committed.x : 0);
+    const ty = Number.isFinite(live.ty) ? live.ty : (Number.isFinite(committed.y) ? committed.y : 0);
+    const viewCx = (viewRect.left ?? 0) + (viewRect.width ?? window.innerWidth) * 0.5;
+    const viewCy = (viewRect.top ?? 0) + (viewRect.height ?? window.innerHeight) * 0.5;
+    layoutCache = {
+      viewCx,
+      viewCy,
+      layoutLeftBase: stageRect.left - tx,
+      layoutTopBase: stageRect.top - ty,
+    };
+    layoutCacheValid = true;
+    return layoutCache;
+  }
+
+  function setGesturing(on) {
+    try { document.body.classList.toggle('is-gesturing', !!on); } catch {}
+    try { window.__GESTURE_ACTIVE = !!on; } catch {}
+  }
 
   function resolveTargetBounds() {
     if (!targetSelector) return null;
+    const __perfOn = !!(window.__PerfFrameProf && typeof performance !== 'undefined' && performance.now);
+    const t0 = __perfOn ? performance.now() : 0;
     const panels = document.querySelectorAll(targetSelector);
+    if (__perfOn) {
+      window.__PerfFrameProf.mark('perf.bounds.query', performance.now() - t0);
+    }
     if (!panels || panels.length === 0) return null;
+    const t1 = __perfOn ? performance.now() : 0;
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     panels.forEach((panel) => {
       try {
@@ -72,6 +109,9 @@ function setGesturing(on) {
         maxY = Math.max(maxY, tl.y, br.y);
       } catch {}
     });
+    if (__perfOn) {
+      window.__PerfFrameProf.mark('perf.bounds.compute', performance.now() - t1);
+    }
     if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) return null;
     const centerX = (minX + maxX) * 0.5;
     const centerY = (minY + maxY) * 0.5;
@@ -81,19 +121,21 @@ function setGesturing(on) {
   }
 
   function worldToTranslate(worldX, worldY, scale) {
-    const stage = document.querySelector('main#board, #board, #world, .world, .canvas-world');
-    const stageRect = stage?.getBoundingClientRect?.();
+    const __perfOn = !!(window.__PerfFrameProf && typeof performance !== 'undefined' && performance.now);
+    const t0 = __perfOn ? performance.now() : 0;
+    const cached = getLayoutCache();
     const live = getViewportTransform?.() || {};
     const committed = getCommittedState?.() || {};
     const tx = Number.isFinite(live.tx) ? live.tx : (Number.isFinite(committed.x) ? committed.x : 0);
     const ty = Number.isFinite(live.ty) ? live.ty : (Number.isFinite(committed.y) ? committed.y : 0);
-    const viewEl = getViewportElement?.() || document.documentElement;
-    const viewRect = viewEl?.getBoundingClientRect?.();
-    const viewCx = (viewRect?.left ?? 0) + (viewRect?.width ?? window.innerWidth) * 0.5;
-    const viewCy = (viewRect?.top ?? 0) + (viewRect?.height ?? window.innerHeight) * 0.5;
+    const viewCx = cached?.viewCx ?? ((window.innerWidth || 0) * 0.5);
+    const viewCy = cached?.viewCy ?? ((window.innerHeight || 0) * 0.5);
     const safeScale = Number.isFinite(scale) && Math.abs(scale) > 1e-6 ? scale : 1;
-    const layoutLeft = stageRect ? (stageRect.left - tx) : 0;
-    const layoutTop = stageRect ? (stageRect.top - ty) : 0;
+    const layoutLeft = cached ? cached.layoutLeftBase : 0;
+    const layoutTop = cached ? cached.layoutTopBase : 0;
+    if (__perfOn) {
+      window.__PerfFrameProf.mark('perf.worldToTranslate', performance.now() - t0);
+    }
     return {
       x: viewCx - layoutLeft - worldX * safeScale,
       y: viewCy - layoutTop - worldY * safeScale,
@@ -102,7 +144,12 @@ function setGesturing(on) {
 
   return function step(tMs /*, dtMs, progress */) {
     if (!boundsResolved) {
+      const __perfOn = !!(window.__PerfFrameProf && typeof performance !== 'undefined' && performance.now);
+      const t0 = __perfOn ? performance.now() : 0;
       const bounds = resolveTargetBounds();
+      if (__perfOn) {
+        window.__PerfFrameProf.mark('perf.bounds.total', performance.now() - t0);
+      }
       if (bounds) {
         boundsResolved = true;
         boundsFound = true;
@@ -128,7 +175,12 @@ function setGesturing(on) {
     }
     if (boundsFound && !step.__centered && tMs < idleDur) {
       step.__centered = true;
+      const __perfOn = !!(window.__PerfFrameProf && typeof performance !== 'undefined' && performance.now);
+      const t0 = __perfOn ? performance.now() : 0;
       try { setGestureTransform({ x: start.x, y: start.y, scale: start.scale }); } catch {}
+      if (__perfOn) {
+        window.__PerfFrameProf.mark('perf.gesture.set', performance.now() - t0);
+      }
     }
     // Phase 1: idle (do nothing)
     if (tMs < idleDur) {
@@ -144,8 +196,13 @@ function setGesturing(on) {
       const center = centerWorld || { x: start.x, y: start.y };
       const wX = center.x + Math.cos(angle) * panRadiusWorld;
       const wY = center.y + Math.sin(angle * 0.9) * panRadiusWorld;
+      const __perfOn = !!(window.__PerfFrameProf && typeof performance !== 'undefined' && performance.now);
+      const t0 = __perfOn ? performance.now() : 0;
       const { x, y } = worldToTranslate(wX, wY, start.scale);
       setGestureTransform({ x, y, scale: start.scale });
+      if (__perfOn) {
+        window.__PerfFrameProf.mark('perf.gesture.pan', performance.now() - t0);
+      }
       return;
     }
 
@@ -158,8 +215,13 @@ function setGesturing(on) {
       const center = centerWorld || { x: start.x, y: start.y };
       const wX = center.x + Math.cos(u * Math.PI * 2) * (panRadiusWorld * 0.35);
       const wY = center.y + Math.sin(u * Math.PI * 2) * (panRadiusWorld * 0.25);
+      const __perfOn = !!(window.__PerfFrameProf && typeof performance !== 'undefined' && performance.now);
+      const t0 = __perfOn ? performance.now() : 0;
       const { x, y } = worldToTranslate(wX, wY, scale);
       setGestureTransform({ x, y, scale });
+      if (__perfOn) {
+        window.__PerfFrameProf.mark('perf.gesture.zoom', performance.now() - t0);
+      }
       return;
     }
 
@@ -209,6 +271,8 @@ export function makePanZoomCommitSpamScript({
   let boundsFound = false;
   let centerWorld = null;
   let panRadiusWorld = panPx;
+  let layoutCache = null;
+  let layoutCacheValid = false;
 
   const panDur = Math.max(0, Number(panMs) || 0);
   const zoomDur = Math.max(0, Number(zoomMs) || 0);
@@ -223,6 +287,35 @@ export function makePanZoomCommitSpamScript({
   function setGesturing(on) {
     try { document.body.classList.toggle('is-gesturing', !!on); } catch {}
     try { window.__GESTURE_ACTIVE = !!on; } catch {}
+  }
+
+  const invalidateLayoutCache = () => { layoutCacheValid = false; };
+  try {
+    window.addEventListener('resize', invalidateLayoutCache, { passive: true });
+    window.addEventListener('overview:transition', invalidateLayoutCache, { passive: true });
+  } catch {}
+
+  function getLayoutCache() {
+    if (layoutCacheValid && layoutCache) return layoutCache;
+    const stage = document.querySelector('main#board, #board, #world, .world, .canvas-world');
+    const stageRect = stage?.getBoundingClientRect?.();
+    const viewEl = getViewportElement?.() || document.documentElement;
+    const viewRect = viewEl?.getBoundingClientRect?.();
+    if (!stageRect || !viewRect) return null;
+    const live = getViewportTransform?.() || {};
+    const committed = getCommittedState?.() || {};
+    const tx = Number.isFinite(live.tx) ? live.tx : (Number.isFinite(committed.x) ? committed.x : 0);
+    const ty = Number.isFinite(live.ty) ? live.ty : (Number.isFinite(committed.y) ? committed.y : 0);
+    const viewCx = (viewRect.left ?? 0) + (viewRect.width ?? window.innerWidth) * 0.5;
+    const viewCy = (viewRect.top ?? 0) + (viewRect.height ?? window.innerHeight) * 0.5;
+    layoutCache = {
+      viewCx,
+      viewCy,
+      layoutLeftBase: stageRect.left - tx,
+      layoutTopBase: stageRect.top - ty,
+    };
+    layoutCacheValid = true;
+    return layoutCache;
   }
 
   function resolveTargetBounds() {
@@ -263,19 +356,16 @@ export function makePanZoomCommitSpamScript({
   }
 
   function worldToTranslate(worldX, worldY, scale) {
-    const stage = document.querySelector('main#board, #board, #world, .world, .canvas-world');
-    const stageRect = stage?.getBoundingClientRect?.();
+    const cached = getLayoutCache();
     const live = getViewportTransform?.() || {};
     const committed = getCommittedState?.() || {};
     const tx = Number.isFinite(live.tx) ? live.tx : (Number.isFinite(committed.x) ? committed.x : 0);
     const ty = Number.isFinite(live.ty) ? live.ty : (Number.isFinite(committed.y) ? committed.y : 0);
-    const viewEl = getViewportElement?.() || document.documentElement;
-    const viewRect = viewEl?.getBoundingClientRect?.();
-    const viewCx = (viewRect?.left ?? 0) + (viewRect?.width ?? window.innerWidth) * 0.5;
-    const viewCy = (viewRect?.top ?? 0) + (viewRect?.height ?? window.innerHeight) * 0.5;
+    const viewCx = cached?.viewCx ?? ((window.innerWidth || 0) * 0.5);
+    const viewCy = cached?.viewCy ?? ((window.innerHeight || 0) * 0.5);
     const safeScale = Number.isFinite(scale) && Math.abs(scale) > 1e-6 ? scale : 1;
-    const layoutLeft = stageRect ? (stageRect.left - tx) : 0;
-    const layoutTop = stageRect ? (stageRect.top - ty) : 0;
+    const layoutLeft = cached ? cached.layoutLeftBase : 0;
+    const layoutTop = cached ? cached.layoutTopBase : 0;
     return {
       x: viewCx - layoutLeft - worldX * safeScale,
       y: viewCy - layoutTop - worldY * safeScale,
@@ -485,6 +575,8 @@ export function makeDrawgridRandomiseOnceScript({
 
     const panels = document.querySelectorAll('.toy-panel[data-toy="drawgrid"]');
     if (!panels || panels.length === 0) return;
+    const __perfOn = !!(window.__PerfFrameProf && typeof performance !== 'undefined' && performance.now);
+    const t0 = __perfOn ? performance.now() : 0;
 
     if (useSeededRandom) {
       const prev = Math.random;
@@ -504,6 +596,9 @@ export function makeDrawgridRandomiseOnceScript({
       panels.forEach((panel) => {
         try { panel.dispatchEvent(new CustomEvent('toy-random-notes', { bubbles: true })); } catch {}
       });
+    }
+    if (__perfOn) {
+      window.__PerfFrameProf.mark('perf.drawgrid.randomOnce', performance.now() - t0);
     }
   };
 }

@@ -342,6 +342,7 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     lastMeasureTs: 0,
     zoomForDensity: 1,
     lastZoomRebuildTs: 0,
+    wasHidden: false,
   };
   const baseSizePx = config.sizePx;
   const PARTICLE_HIGHLIGHT_DURATION = 900; // ms
@@ -742,7 +743,15 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     const __perfOn = !!window.__PERF_PARTICLE_FIELD_PROFILE;
     const __perfStart = __perfOn && typeof performance !== 'undefined' ? performance.now() : 0;
     try {
-      if (!isFieldVisible()) return;
+      const visible = isFieldVisible();
+      if (!visible) {
+        state.wasHidden = true;
+        return;
+      }
+      if (state.wasHidden) {
+        state.wasHidden = false;
+        try { snapToBudget(); } catch {}
+      }
       maybeResizeFromLayout();
       setLODFromView();
     const gestureActive = isZoomGesturing();
@@ -969,6 +978,34 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
       }
     }
     if (changed) rebuild();
+  }
+
+  function snapToBudget() {
+    rebuild();
+    const minParticles = Number.isFinite(state.minParticles) ? Math.max(0, Math.round(state.minParticles)) : MIN_PARTICLES;
+    let desired = Math.max(minParticles, Math.round(state.targetDesired || 0));
+    if (state.emergencyFade && minParticles === 0) desired = 0;
+    const current = state.particles.length;
+    if (current > desired) {
+      state.particles.length = desired;
+      return;
+    }
+    if (current < desired) {
+      const seedKey = `${config.seed}:${state.w}x${state.h}:snap:${desired}:${current}`;
+      const rng = makeRng(seedKey);
+      while (state.particles.length < desired) {
+        const x = rng() * state.w;
+        const y = rng() * state.h;
+        const a = rng();
+        const rPx = particleRadiusPx(rng);
+        state.particles.push({
+          x, y, hx: x, hy: y, vx: 0, vy: 0, a, rPx,
+          fade: 1,
+          fadeTarget: 1,
+          fadeRate: FADE_IN_RATE,
+        });
+      }
+    }
   }
 
   function reconcileParticleCount(dt = 1 / 60, immediate = false) {

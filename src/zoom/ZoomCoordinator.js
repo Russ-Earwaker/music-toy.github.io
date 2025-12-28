@@ -341,6 +341,7 @@ function tick() {
 }
 
 function schedule() {
+  if (!tick.__perfRafTag) tick.__perfRafTag = 'perf.raf.zoomTick';
   if (!rafId) rafId = requestAnimationFrame(tick);
 }
 
@@ -356,6 +357,7 @@ function startProgressLoop() {
     }
     progressRaf = requestAnimationFrame(loop);
   };
+  loop.__perfRafTag = 'perf.raf.zoomProgress';
   progressRaf = requestAnimationFrame(loop);
 }
 
