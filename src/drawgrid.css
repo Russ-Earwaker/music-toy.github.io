@@ -46,6 +46,10 @@ canvas[data-role='drawgrid-flash'] { z-index: 4; pointer-events: none; }
 canvas[data-role='drawgrid-nodes'] { z-index: 5; pointer-events: none; }
 canvas[data-role='drawgrid-tutorial-highlight'] { z-index: 6; pointer-events: none; }
 
+/* Combined grid+nodes: ensure the shared surface stays above paint. */
+.drawgrid-combined canvas[data-role='drawgrid-grid'] { z-index: 5; pointer-events: none; }
+.drawgrid-combined canvas[data-role='drawgrid-paint'] { z-index: 1; }
+
 
 .drawtoy-label {
   display: none !important; 
