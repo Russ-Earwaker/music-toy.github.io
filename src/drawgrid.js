@@ -933,7 +933,7 @@ let markSingleCanvasDirty = () => {};
 let __dgProbeDidFirstDraw = false;
 try {
   if (typeof window !== 'undefined' && window.__DG_PROBE_ON === undefined) {
-    window.__DG_PROBE_ON = true;
+    window.__DG_PROBE_ON = false;
   }
 } catch {}
 let __dgLayerDebugLastTs = 0;
@@ -1503,18 +1503,13 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
           })(),
         },
       };
-      console.log('[DG][probe]', dump);
-    } catch (err) {
-      console.warn('[DG][probe] failed', err);
-    }
+      if (typeof window !== 'undefined' && window.__DG_PROBE_ON) {
+        console.log('[DG][probe]', dump);
+      }
+    } catch {}
   }
   try { panel.__dgProbe = __dgProbeDump; } catch {}
   try { window.__DG_PROBE__ = window.__DG_PROBE__ || __dgProbeDump; } catch {}
-  try {
-    if (typeof window !== 'undefined' && window.__DG_PROBE_ON !== false) {
-      setTimeout(() => __dgProbeDump('init'), 0);
-    }
-  } catch {}
   Object.assign(particleCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 0, pointerEvents: 'none' });
   particleCanvas.style.background = 'transparent';
   Object.assign(grid.style,           { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: DG_COMBINE_GRID_NODES ? 5 : 1 });
@@ -7060,7 +7055,6 @@ function syncBackBufferSizes() {
   let __dgFpsLastTs = 0;
   let __dgFpsFrameCount = 0;
   let __dgFpsValue = 0;
-  let __dgOverlayCompositeDiagTs = 0;
 
   // Per-panel lightweight profiling for renderLoop + drawGrid.
   // This is separate from the global DG_PROFILE sampling at the top,
@@ -8153,17 +8147,6 @@ function syncBackBufferSizes() {
     if (DG_SINGLE_CANVAS && canDrawAnything && overlayCompositeNeeded) {
       compositeSingleCanvas();
       __dgSingleCompositeDirty = false;
-      const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-      if ((now - __dgOverlayCompositeDiagTs) > 10000) {
-        __dgOverlayCompositeDiagTs = now;
-        let flashDisplay = null;
-        try { flashDisplay = flashCanvas ? getComputedStyle(flashCanvas).display : null; } catch {}
-        console.log('[DG][composite] overlay->single', {
-          panelId: panel?.id || null,
-          flashDisplay,
-          overlayCompositeNeeded,
-        });
-      }
     }
 
     if (__dgFrameProfileStart !== null) {
