@@ -306,7 +306,7 @@ function ensureUI() {
     if (act === 'runP2a') await runP2a();
     if (act === 'runP2b') await runP2b();
     if (act === 'runP2c') await runP2c();
-    if (act === 'buildP3') buildP3();
+    if (act === 'buildP3') await buildP3();
     if (act === 'runP3a') await runP3a();
     if (act === 'runP3b') await runP3b();
     if (act === 'runP3c') await runP3c();
@@ -362,7 +362,7 @@ function ensureUI() {
     if (act === 'runP5a') await runP5a();
     if (act === 'runP5b') await runP5b();
     if (act === 'runP5c') await runP5c();
-    if (act === 'buildP6') buildP6();
+    if (act === 'buildP6') await buildP6();
     if (act === 'runP6a') await runP6a();
     if (act === 'runP6b') await runP6b();
     if (act === 'runP6c') await runP6c();
@@ -405,6 +405,302 @@ let lastResult = null;
 let lastResults = [];
 
 let lastBundle = null;
+
+const PERF_SPAWN_PADDING = 40;
+const PERF_CHAIN_PAD_X = 80;
+const PERF_MODE_PAD_X = 48;
+const PERF_DRAWGRID_WIDTH = 800;
+const PERF_DRAWGRID_HEIGHT_PAD = 160;
+const PERF_DRAWGRID_ASPECT = 3 / 4;
+
+const perfMeasuredFootprints = new Map();
+
+async function waitForPanelReady(panel, { timeoutMs = 1200 } = {}) {
+  if (!panel) return false;
+  const start = performance?.now?.() ?? Date.now();
+  const needsModeButtons = ['loopgrid', 'loopgrid-drum', 'bouncer', 'rippler', 'chordwheel', 'drawgrid']
+    .includes(panel?.dataset?.toy || '');
+  return await new Promise((resolve) => {
+    const tick = () => {
+      if (!panel.isConnected) return resolve(false);
+      const body = panel.querySelector('.toy-body');
+      const chain = panel.querySelector(':scope > .toy-chain-btn');
+      const modeBtn = needsModeButtons ? panel.querySelector(':scope > .toy-mode-btn') : null;
+      if (body && chain && (!needsModeButtons || modeBtn)) return resolve(true);
+      const now = performance?.now?.() ?? Date.now();
+      if ((now - start) > timeoutMs) return resolve(false);
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
+async function waitForStablePanelRect(panel, { stableFrames = 3, timeoutMs = 1200 } = {}) {
+  if (!panel) return false;
+  const start = performance?.now?.() ?? Date.now();
+  let last = null;
+  let stableCount = 0;
+  return await new Promise((resolve) => {
+    const tick = () => {
+      if (!panel.isConnected) return resolve(false);
+      const rect = panel.getBoundingClientRect?.();
+      if (rect && rect.width > 0 && rect.height > 0) {
+        if (last && Math.abs(rect.width - last.width) < 0.5 && Math.abs(rect.height - last.height) < 0.5) {
+          stableCount += 1;
+        } else {
+          stableCount = 0;
+        }
+        last = { width: rect.width, height: rect.height };
+        if (stableCount >= stableFrames) return resolve(true);
+      }
+      const now = performance?.now?.() ?? Date.now();
+      if ((now - start) > timeoutMs) return resolve(false);
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
+function measurePanelFootprint(panel) {
+  if (!panel) return null;
+  const rects = [panel, ...panel.querySelectorAll(':scope > .toy-mode-btn, :scope > .toy-chain-btn')];
+  let minLeft = Infinity;
+  let minTop = Infinity;
+  let maxRight = -Infinity;
+  let maxBottom = -Infinity;
+
+  const readBox = (el) => {
+    if (el === panel) {
+      const w = el.offsetWidth || 0;
+      const h = el.offsetHeight || 0;
+      return (w > 0 && h > 0) ? { left: 0, top: 0, right: w, bottom: h } : null;
+    }
+    const w = el.offsetWidth || 0;
+    const h = el.offsetHeight || 0;
+    if (w > 0 && h > 0) {
+      const left = el.offsetLeft || 0;
+      const top = el.offsetTop || 0;
+      return { left, top, right: left + w, bottom: top + h };
+    }
+    const left = parseFloat(el.style.left || '0') || 0;
+    const top = parseFloat(el.style.top || '0') || 0;
+    const size = parseFloat(el.style.getPropertyValue('--c-btn-size') || '0') || 0;
+    if (size > 0) {
+      return { left, top, right: left + size, bottom: top + size };
+    }
+    return null;
+  };
+
+  for (const el of rects) {
+    const r = readBox(el);
+    if (!r) continue;
+    minLeft = Math.min(minLeft, r.left);
+    minTop = Math.min(minTop, r.top);
+    maxRight = Math.max(maxRight, r.right);
+    maxBottom = Math.max(maxBottom, r.bottom);
+  }
+
+  if (!Number.isFinite(minLeft) || !Number.isFinite(maxRight)) return null;
+  return { width: Math.max(1, maxRight - minLeft), height: Math.max(1, maxBottom - minTop) };
+}
+
+async function ensureMeasuredFootprint(toyType) {
+  if (perfMeasuredFootprints.has(toyType)) return perfMeasuredFootprints.get(toyType);
+  const factory = window.MusicToyFactory;
+  const board = document.getElementById('board');
+  if (!factory?.create || !factory?.destroy || !board) return null;
+
+  let storedPositions = null;
+  try { storedPositions = localStorage.getItem('toyPositions'); } catch {}
+
+  let panel = null;
+  try {
+    panel = factory.create(toyType, { centerX: 120, centerY: 120, autoCenter: false });
+    if (panel) {
+      panel.style.opacity = '0';
+      panel.style.pointerEvents = 'none';
+    }
+  } catch {}
+
+  if (!panel) return null;
+  await waitForPanelReady(panel);
+  await waitForStablePanelRect(panel);
+
+  const measured = measurePanelFootprint(panel);
+  try { factory.destroy(panel); } catch {}
+  try {
+    if (storedPositions != null) localStorage.setItem('toyPositions', storedPositions);
+    else localStorage.removeItem('toyPositions');
+  } catch {}
+
+  if (measured) {
+    perfMeasuredFootprints.set(toyType, measured);
+  }
+  return measured;
+}
+
+function getCssPanelSize(toyType) {
+  const board = document.getElementById('board');
+  if (!board) return { width: 0, height: 0 };
+  const probe = document.createElement('section');
+  probe.className = 'toy-panel';
+  probe.dataset.toy = toyType;
+  probe.style.position = 'absolute';
+  probe.style.left = '-10000px';
+  probe.style.top = '-10000px';
+  probe.style.visibility = 'hidden';
+  board.appendChild(probe);
+  let width = 0;
+  let height = 0;
+  try {
+    const cs = getComputedStyle(probe);
+    width = parseFloat(cs.width) || 0;
+    height = parseFloat(cs.height) || 0;
+  } catch {}
+  probe.remove();
+  return { width, height };
+}
+
+function getCatalogSize(toyType) {
+  try {
+    const catalog = window.MusicToyFactory?.getCatalog?.() || [];
+    const match = catalog.find(entry => entry?.type === toyType);
+    const size = match?.size || {};
+    const cssSize = getCssPanelSize(toyType);
+    const width = Math.max(Number(cssSize.width) || 0, Number(size.width) || 0, 380);
+    const height = Math.max(Number(cssSize.height) || 0, Number(size.height) || 0, 320);
+    return { width, height };
+  } catch {
+    return { width: 380, height: 320 };
+  }
+}
+
+function estimateToyFootprint(toyType, { padding = PERF_SPAWN_PADDING, chainPadX = PERF_CHAIN_PAD_X } = {}) {
+  const measured = perfMeasuredFootprints.get(toyType);
+  const base = getCatalogSize(toyType);
+  const hasExternalButtons = ['loopgrid', 'loopgrid-drum', 'bouncer', 'rippler', 'chordwheel', 'drawgrid'].includes(toyType);
+  const leftPad = measured ? 0 : (hasExternalButtons ? PERF_MODE_PAD_X : 0);
+  let baseWidth = Math.max(1, measured?.width || base.width);
+  let baseHeight = Math.max(1, measured?.height || base.height);
+  if (toyType === 'drawgrid') {
+    baseWidth = Math.max(baseWidth, PERF_DRAWGRID_WIDTH);
+    const inferredHeight = Math.round(baseWidth * PERF_DRAWGRID_ASPECT + PERF_DRAWGRID_HEIGHT_PAD);
+    baseHeight = Math.max(baseHeight, inferredHeight);
+  }
+  const extraChainPad = measured ? 0 : chainPadX;
+  const width = Math.max(1, baseWidth + (padding * 2) + extraChainPad + leftPad);
+  const height = Math.max(1, baseHeight + (padding * 2));
+  return { width, height };
+}
+
+function estimateGridSpacing(toyType, spacing) {
+  const footprint = estimateToyFootprint(toyType);
+  const minSpacing = Math.max(footprint.width, footprint.height);
+  return Math.max(spacing || 0, minSpacing);
+}
+
+function logPerfFootprintDebug(toyType, spacing) {
+  try {
+    const measured = perfMeasuredFootprints.get(toyType) || null;
+    const catalog = getCatalogSize(toyType);
+    const footprint = estimateToyFootprint(toyType);
+    const minSpacing = Math.max(footprint.width, footprint.height);
+    console.log('[PerfLab][footprint]', {
+      toyType,
+      measured,
+      catalog,
+      footprint,
+      baseSpacing: spacing,
+      resolvedSpacing: Math.max(spacing || 0, minSpacing),
+    });
+  } catch (err) {
+    console.warn('[PerfLab][footprint] debug failed', err);
+  }
+}
+
+function getPanelBounds(panel) {
+  if (!panel) return null;
+  const rects = [panel, ...panel.querySelectorAll(':scope > .toy-mode-btn, :scope > .toy-chain-btn')];
+  let minLeft = Infinity;
+  let minTop = Infinity;
+  let maxRight = -Infinity;
+  let maxBottom = -Infinity;
+
+  const readBox = (el) => {
+    if (el === panel) {
+      const w = el.offsetWidth || 0;
+      const h = el.offsetHeight || 0;
+      return (w > 0 && h > 0) ? { left: 0, top: 0, right: w, bottom: h } : null;
+    }
+    const w = el.offsetWidth || 0;
+    const h = el.offsetHeight || 0;
+    if (w > 0 && h > 0) {
+      const left = el.offsetLeft || 0;
+      const top = el.offsetTop || 0;
+      return { left, top, right: left + w, bottom: top + h };
+    }
+    const left = parseFloat(el.style.left || '0') || 0;
+    const top = parseFloat(el.style.top || '0') || 0;
+    const size = parseFloat(el.style.getPropertyValue('--c-btn-size') || '0') || 0;
+    if (size > 0) {
+      return { left, top, right: left + size, bottom: top + size };
+    }
+    return null;
+  };
+
+  for (const el of rects) {
+    const r = readBox(el);
+    if (!r) continue;
+    minLeft = Math.min(minLeft, r.left);
+    minTop = Math.min(minTop, r.top);
+    maxRight = Math.max(maxRight, r.right);
+    maxBottom = Math.max(maxBottom, r.bottom);
+  }
+
+  if (!Number.isFinite(minLeft) || !Number.isFinite(maxRight)) return null;
+  const baseLeft = panel.offsetLeft || 0;
+  const baseTop = panel.offsetTop || 0;
+  return {
+    left: baseLeft + minLeft,
+    right: baseLeft + maxRight,
+    top: baseTop + minTop,
+    bottom: baseTop + maxBottom,
+    width: Math.max(1, maxRight - minLeft),
+    height: Math.max(1, maxBottom - minTop),
+  };
+}
+
+function logOverlapReport(selector = '.toy-panel[data-toy="drawgrid"]', limit = 12) {
+  try {
+    const panels = Array.from(document.querySelectorAll(selector));
+    const bounds = panels.map(panel => ({ panel, id: panel.id, bounds: getPanelBounds(panel) }))
+      .filter(entry => entry.bounds);
+    const overlaps = [];
+    for (let i = 0; i < bounds.length; i++) {
+      const a = bounds[i];
+      for (let j = i + 1; j < bounds.length; j++) {
+        const b = bounds[j];
+        if (a.bounds.right <= b.bounds.left || a.bounds.left >= b.bounds.right) continue;
+        if (a.bounds.bottom <= b.bounds.top || a.bounds.top >= b.bounds.bottom) continue;
+        overlaps.push({
+          a: a.id,
+          b: b.id,
+          aBounds: a.bounds,
+          bBounds: b.bounds,
+        });
+        if (overlaps.length >= limit) break;
+      }
+      if (overlaps.length >= limit) break;
+    }
+    console.log('[PerfLab][overlap]', {
+      selector,
+      count: overlaps.length,
+      overlaps,
+    });
+  } catch (err) {
+    console.warn('[PerfLab][overlap] debug failed', err);
+  }
+}
 
 const PERF_LAB_STORAGE_KEY = 'perfLab:lastResults';
 const PERF_LAB_AUTO_KEY = 'perfLab:auto';
@@ -658,11 +954,18 @@ function buildP2() {
   setStatus('P2 built');
 }
 
-function buildP3() {
+async function buildP3() {
   try { clearSceneViaSnapshot(); } catch {}
   setStatus('Building P3�Ǫ');
   // DrawGrid worst-case: lots of drawgrids for canvas-heavy stress.
-  buildParticleWorstCase({ toyType: 'drawgrid', rows: 6, cols: 8, spacing: 420 });
+  await ensureMeasuredFootprint('drawgrid');
+  const spacing = estimateGridSpacing('drawgrid', 420);
+  logPerfFootprintDebug('drawgrid', 420);
+  buildParticleWorstCase({ toyType: 'drawgrid', rows: 6, cols: 8, spacing });
+  try {
+    const raf = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));
+    raf(() => raf(() => window.resolveToyPanelOverlaps?.()));
+  } catch {}
   // Seed drawgrid notes for worst-case visuals.
   try {
     setTimeout(() => {
@@ -671,6 +974,9 @@ function buildP3() {
       document.querySelectorAll('.toy-panel[data-toy=drawgrid]')
         .forEach(p => { try { p.dispatchEvent(new CustomEvent('toy-random-notes', { bubbles: true })); } catch {} });
     }, 0);
+  } catch {}
+  try {
+    setTimeout(() => logOverlapReport('.toy-panel[data-toy="drawgrid"]'), 800);
   } catch {}
   setStatus('P3 built');
 }
@@ -722,23 +1028,41 @@ function buildP5() {
   setStatus('P5 built');
 }
 
-function buildP6() {
+async function buildP6() {
   try { clearSceneViaSnapshot(); } catch {}
   setStatus('Building P6...');
+  await ensureMeasuredFootprint('drawgrid');
+  const loopFootprint = estimateToyFootprint('loopgrid');
+  const headSpacingX = Math.max(560, loopFootprint.width);
+  const headSpacingY = Math.max(420, loopFootprint.height);
+  const linkSpacingX = Math.max(420, loopFootprint.width);
+  const chainLength = 4;
+  const gridCols = 2;
   buildChainedLoopgridStress({
     toyType: 'loopgrid',
     chains: 4,
-    chainLength: 4,
-    gridCols: 2,
+    chainLength,
+    gridCols,
     seed: 1337,
     density: 0.35,
     noteMin: 0,
     noteMax: 35,
-    headSpacingX: 560,
-    headSpacingY: 420,
-    linkSpacingX: 420,
+    headSpacingX,
+    headSpacingY,
+    linkSpacingX,
+    jitterY: 0,
   });
-  createToyGrid({ toyType: 'drawgrid', rows: 2, cols: 2, spacing: 460, centerX: getCommittedState().x + 900, centerY: getCommittedState().y });
+  const drawSpacing = estimateGridSpacing('drawgrid', 460);
+  const cam = getCommittedState();
+  const chainTotalW = (gridCols - 1) * headSpacingX + (chainLength - 1) * linkSpacingX;
+  const drawTotalW = (2 - 1) * drawSpacing;
+  const gap = Math.max(320, PERF_SPAWN_PADDING * 2);
+  const drawCenterX = cam.x + chainTotalW / 2 + gap + drawTotalW / 2;
+  createToyGrid({ toyType: 'drawgrid', rows: 2, cols: 2, spacing: drawSpacing, centerX: drawCenterX, centerY: cam.y });
+  try {
+    const raf = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));
+    raf(() => raf(() => window.resolveToyPanelOverlaps?.()));
+  } catch {}
   setStatus('P6 built');
 }
 
@@ -1103,7 +1427,7 @@ function createToyGrid({ toyType, rows, cols, spacing, centerX, centerY }) {
       const x = centerX + (c * spacing - totalW / 2);
       const y = centerY + (r * spacing - totalH / 2);
       try {
-        factory.create(toyType, { centerX: x, centerY: y, autoCenter: false });
+        factory.create(toyType, { centerX: x, centerY: y, autoCenter: false, allowOffscreen: true, skipSpawnPlacement: true });
       } catch (err) {
         console.warn('[PerfLab] create failed', { toyType, r, c }, err);
       }

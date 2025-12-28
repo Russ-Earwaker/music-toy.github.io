@@ -47,7 +47,7 @@ export function buildParticleWorstCase({
       const x = centerX + (c * spacing - totalW / 2);
       const y = centerY + (r * spacing - totalH / 2);
       try {
-        factory.create(toyType, { centerX: x, centerY: y, autoCenter: false });
+        factory.create(toyType, { centerX: x, centerY: y, autoCenter: false, allowOffscreen: true, skipSpawnPlacement: true });
       } catch (err) {
         console.warn('[StressSceneParticles] create failed', { toyType, r, c }, err);
       }

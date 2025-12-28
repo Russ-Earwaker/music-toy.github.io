@@ -175,8 +175,35 @@ function addGapAfterOrganize() {
 // Expose layout functions to be callable from other scripts (like topbar.js)
 window.applyStackingOrder = applyStackingOrder;
 window.addGapAfterOrganize = addGapAfterOrganize;
+window.resolveToyPanelOverlaps = function resolveToyPanelOverlaps({
+    padding = SPAWN_PADDING,
+    maxPasses = 2,
+    skipIfMoved = false,
+} = {}) {
+    const board = document.getElementById('board');
+    if (!board) return false;
+    const panels = Array.from(board.querySelectorAll(':scope > .toy-panel'));
+    if (!panels.length) return false;
+    let movedAny = false;
+    for (let pass = 0; pass < Math.max(1, maxPasses); pass++) {
+        let movedThisPass = false;
+        for (const panel of panels) {
+            const res = ensurePanelSpawnPlacement(panel, {
+                padding,
+                skipIfMoved,
+            });
+            if (res?.changed) {
+                movedThisPass = true;
+                movedAny = true;
+                persistToyPosition(panel);
+            }
+        }
+        if (!movedThisPass) break;
+    }
+    return movedAny;
+};
 
-const SPAWN_PADDING = 36;
+const SPAWN_PADDING = 40;
 
 function pickPositive(...values) {
     for (const value of values) {
@@ -1229,7 +1256,7 @@ const EXPERIMENTAL_TOYS = ['bouncer', 'rippler', 'loopgrid-drum', 'chordwheel'];
 const EXPERIMENTAL_PREF_KEY = 'prefs:enable-experimental-toys';
 
 const toyCatalog = [
-    { type: 'drawgrid', name: 'Draw Line', description: 'Sketch out freehand lines that become notes.', size: { width: 420, height: 460 } },
+    { type: 'drawgrid', name: 'Draw Line', description: 'Sketch out freehand lines that become notes.', size: { width: 800, height: 760 } },
     { type: 'loopgrid', name: 'Simple Rhythm', description: 'Layer drum patterns and melodies with an 8x12 step matrix.', size: { width: 420, height: 420 } },
     { type: 'bouncer', name: 'Bouncer', description: 'Bounce melodic balls inside a square arena.', size: { width: 420, height: 420 }, disabled: true },
     { type: 'rippler', name: 'Rippler', description: 'Evolving pads driven by ripple collisions.', size: { width: 420, height: 420 }, disabled: true },
@@ -2226,7 +2253,7 @@ function syncOverviewPosition(panel) {
     } catch {}
 }
 
-function createToyPanelAt(toyType, { centerX, centerY, instrument, autoCenter } = {}) {
+function createToyPanelAt(toyType, { centerX, centerY, instrument, autoCenter, allowOffscreen = false, skipSpawnPlacement = false } = {}) {
     const type = String(toyType || '').toLowerCase();
     if (!type || !toyInitializers[type]) {
         console.warn('[createToyPanelAt] unknown toy type', toyType);
@@ -2276,8 +2303,10 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument, autoCenter } 
       }
     }
 
-    const left = Number.isFinite(centerX) ? Math.max(0, centerX - (width || 0) / 2) : 0;
-    const top = Number.isFinite(centerY) ? Math.max(0, centerY - (height || 0) / 2) : 0;
+    const rawLeft = Number.isFinite(centerX) ? (centerX - (width || 0) / 2) : 0;
+    const rawTop = Number.isFinite(centerY) ? (centerY - (height || 0) / 2) : 0;
+    const left = allowOffscreen ? rawLeft : Math.max(0, rawLeft);
+    const top = allowOffscreen ? rawTop : Math.max(0, rawTop);
 
     panel.style.left = `${left}px`;
     panel.style.top = `${top}px`;
@@ -2286,14 +2315,16 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument, autoCenter } 
     // Hint the focus animator to scale in like a focus transition on first render.
     panel.dataset.spawnScaleHint = '0.75';
 
-    const initialPlacement = ensurePanelSpawnPlacement(panel, {
-        baseLeft: left,
-        baseTop: top,
-        fallbackWidth: width,
-        fallbackHeight: height,
-    });
-    if (initialPlacement?.changed) {
-        // The helper already wrote the updated position to the style attributes.
+    if (!skipSpawnPlacement) {
+        const initialPlacement = ensurePanelSpawnPlacement(panel, {
+            baseLeft: left,
+            baseTop: top,
+            fallbackWidth: width,
+            fallbackHeight: height,
+        });
+        if (initialPlacement?.changed) {
+            // The helper already wrote the updated position to the style attributes.
+        }
     }
     syncOverviewPosition(panel);
     persistToyPosition(panel);
@@ -2304,13 +2335,15 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument, autoCenter } 
         try { initToyChaining(panel); } catch (err) { console.warn('[createToyPanelAt] chain init failed', err); }
 
         const finalizePlacement = () => {
-            const followUp = ensurePanelSpawnPlacement(panel, {
-                fallbackWidth: width,
-                fallbackHeight: height,
-                skipIfMoved: true,
-            });
-            if (followUp?.changed) {
-                persistToyPosition(panel);
+            if (!skipSpawnPlacement) {
+                const followUp = ensurePanelSpawnPlacement(panel, {
+                    fallbackWidth: width,
+                    fallbackHeight: height,
+                    skipIfMoved: true,
+                });
+                if (followUp?.changed) {
+                    persistToyPosition(panel);
+                }
             }
             syncOverviewPosition(panel);
             try { updateChains(); updateAllChainUIs(); } catch (err) { console.warn('[createToyPanelAt] chain update failed', err); }

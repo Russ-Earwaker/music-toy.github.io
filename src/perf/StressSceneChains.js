@@ -166,6 +166,7 @@ export function buildChainedLoopgridStress({
   headSpacingX = 520,
   headSpacingY = 420,
   linkSpacingX = 420,    // spacing between linked toys along the chain
+  jitterY = 80,
 
   // content
   seed = 1337,
@@ -212,11 +213,12 @@ export function buildChainedLoopgridStress({
 
     for (let k = 0; k < chainLength; k++) {
       const x = headX + k * linkSpacingX;
-      const y = headY + Math.round((rand() * 2 - 1) * 80); // small vertical jitter
+      const jitter = Math.max(0, Number.isFinite(jitterY) ? jitterY : 0);
+      const y = headY + Math.round((rand() * 2 - 1) * jitter); // optional vertical jitter
 
       let panel = null;
       try {
-        panel = factory.create(toyType, { centerX: x, centerY: y, autoCenter: false });
+        panel = factory.create(toyType, { centerX: x, centerY: y, autoCenter: false, allowOffscreen: true, skipSpawnPlacement: true });
       } catch (err) {
         console.warn('[StressSceneChains] create failed', { toyType, i, k }, err);
       }
