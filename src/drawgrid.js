@@ -1978,6 +1978,25 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const ghostBackCtx = ghostBackCanvas.getContext('2d');
   let ghostCtx = ghostFrontCtx;
 
+  function updateFlatLayerVisibility() {
+    const flat = !!(typeof window !== 'undefined' && window.__PERF_DRAWGRID_FLAT_LAYERS);
+    if (panel.__dgFlatLayerMode === flat) return;
+    panel.__dgFlatLayerMode = flat;
+    const toggle = (el, visible) => {
+      if (!el || !el.style) return;
+      el.style.display = visible ? 'block' : 'none';
+    };
+    // Keep the main paint canvas visible; hide auxiliary layers in flat mode.
+    toggle(paint, true);
+    toggle(grid, !flat);
+    toggle(nodesCanvas, !flat);
+    toggle(ghostCanvas, !flat);
+    toggle(flashCanvas, !flat);
+    toggle(tutorialCanvas, !flat);
+    toggle(particleCanvas, !flat);
+  }
+  updateFlatLayerVisibility();
+
   function pokeFieldToy(source, xToy, yToy, radiusToy, strength, extra = {}) {
     try {
       const config = DG_KNOCK[source] || {};
@@ -6700,6 +6719,9 @@ function syncBackBufferSizes() {
     const endPerf = startSection('drawgrid:render');
     const __perfOn = !!(window.__PerfFrameProf && typeof performance !== 'undefined' && performance.now);
     const __rafStart = __perfOn ? performance.now() : 0;
+    const __frameStart = (__perfOn && typeof performance !== 'undefined' && performance.now)
+      ? performance.now()
+      : 0;
     try {
       if (!panel.__dgFrame) panel.__dgFrame = 0;
       panel.__dgFrame++;
@@ -6707,6 +6729,7 @@ function syncBackBufferSizes() {
         ? performance.now()
         : null;
       const nowTs = performance?.now?.() ?? Date.now();
+      updateFlatLayerVisibility();
 
     // --- FPS accumulation (per panel, debug only) ---
     if (DG_DEBUG && window.DEBUG_DRAWGRID === 1) {
@@ -6926,9 +6949,16 @@ function syncBackBufferSizes() {
 
       maybeReleaseStalledZoom();
       dgf('start', { f: panel.__dgFrame|0, cssW, cssH, allowOverlayDraw, allowParticleDraw });
+      const __ensureSizeStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+        ? performance.now()
+        : 0;
       if (!ensureSizeReady()) {
         rafId = requestAnimationFrame(renderLoop);
         return;
+      }
+      if (__ensureSizeStart) {
+        const __ensureSizeDt = performance.now() - __ensureSizeStart;
+        try { window.__PerfFrameProf?.mark?.('drawgrid.ensureSize', __ensureSizeDt); } catch {}
       }
       if (skipFrame || throttleFrame) {
         rafId = requestAnimationFrame(renderLoop);
@@ -7009,8 +7039,25 @@ function syncBackBufferSizes() {
             __dgDrawStart = performance.now();
           }
 
+          const __gridDrawStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+            ? performance.now()
+            : 0;
           drawGrid();
-          if (currentMap) drawNodes(currentMap.nodes);
+          if (__gridDrawStart) {
+            const __gridDrawDt = performance.now() - __gridDrawStart;
+            try { window.__PerfFrameProf?.mark?.('drawgrid.draw.grid', __gridDrawDt); } catch {}
+          }
+
+          if (currentMap) {
+            const __nodesDrawStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+              ? performance.now()
+              : 0;
+            drawNodes(currentMap.nodes);
+            if (__nodesDrawStart) {
+              const __nodesDrawDt = performance.now() - __nodesDrawStart;
+              try { window.__PerfFrameProf?.mark?.('drawgrid.draw.nodes', __nodesDrawDt); } catch {}
+            }
+          }
 
           if (__dgDrawStart !== null) {
           const now = performance.now();
@@ -7060,7 +7107,14 @@ function syncBackBufferSizes() {
 
     if (__dgFrontSwapNextDraw && typeof requestFrontSwap === 'function') {
       __dgFrontSwapNextDraw = false;
+      const __frontSwapStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+        ? performance.now()
+        : 0;
       try { requestFrontSwap(); } catch (err) { dgs('error', String((err && err.message) || err)); }
+      if (__frontSwapStart) {
+        const __frontSwapDt = performance.now() - __frontSwapStart;
+        try { window.__PerfFrameProf?.mark?.('drawgrid.frontSwap', __frontSwapDt); } catch {}
+      }
     }
     // const dgr = panel?.getBoundingClientRect?.();
     //console.debug('[DIAG][DG] frame', {
@@ -7077,8 +7131,18 @@ function syncBackBufferSizes() {
       try {
         if (!__hydrationJustApplied) {
           if (typeof ensureBackVisualsFreshFromFront === 'function') {
+            const __backSyncStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+              ? performance.now()
+              : 0;
             ensureBackVisualsFreshFromFront();
+            if (__backSyncStart) {
+              const __backSyncDt = performance.now() - __backSyncStart;
+              try { window.__PerfFrameProf?.mark?.('drawgrid.ui.backSync', __backSyncDt); } catch {}
+            }
           }
+          const __uiClearStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+            ? performance.now()
+            : 0;
           if (ghostCtx?.canvas) {
             const ghostSurface = getActiveGhostCanvas();
             resetCtx(ghostCtx);
@@ -7109,6 +7173,10 @@ function syncBackBufferSizes() {
               tutorialCtx.clearRect(0, 0, tw, th);
             });
           }
+          if (__uiClearStart) {
+            const __uiClearDt = performance.now() - __uiClearStart;
+            try { window.__PerfFrameProf?.mark?.('drawgrid.ui.clear', __uiClearDt); } catch {}
+          }
         }
       } catch (err) {
         DG.warn('deferred UI clear failed', err);
@@ -7118,7 +7186,14 @@ function syncBackBufferSizes() {
       const __uiRefreshDt = performance.now() - __uiRefreshStart;
       try { window.__PerfFrameProf?.mark?.('drawgrid.ui.refresh', __uiRefreshDt); } catch {}
     }
-    if (!panel.isConnected) { cancelAnimationFrame(rafId); return; }
+    if (!panel.isConnected) {
+      if (__frameStart) {
+        const __frameDt = performance.now() - __frameStart;
+        try { window.__PerfFrameProf?.mark?.('drawgrid.frame.total', __frameDt); } catch {}
+      }
+      cancelAnimationFrame(rafId);
+      return;
+    }
 
     const __domPulseStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
       ? performance.now()
@@ -7310,6 +7385,11 @@ function syncBackBufferSizes() {
         const __dgOverlayDt = performance.now() - __dgOverlayStart;
         try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.cellFlashes', __dgOverlayDt); } catch {}
       }
+    }
+
+    if (__frameStart) {
+      const __frameDt = performance.now() - __frameStart;
+      try { window.__PerfFrameProf?.mark?.('drawgrid.frame.total', __frameDt); } catch {}
     }
 
     if (noteToggleEffects.length > 0) {

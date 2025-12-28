@@ -90,6 +90,11 @@ function ensureUI() {
       { act: 'runP3e2', label: 'Run P3e2: Playing + Random Notes (Anchor OFF)' },
       { act: 'runP3f',  label: 'Run P3f: Playing Pan/Zoom + Random Notes (Anchor ON)' },
       { act: 'runP3f2', label: 'Run P3f2: Playing Pan/Zoom + Random Notes (Anchor OFF)' },
+      { act: 'runP3fNoPaint', label: 'Run P3f: Playing Pan/Zoom + Random Notes (No Paint)' },
+      { act: 'runP3fNoDom', label: 'Run P3f: Playing Pan/Zoom + Random Notes (No DOM Updates)' },
+      { act: 'runP3fNoParticles', label: 'Run P3f: Playing Pan/Zoom + Random Notes (No Particles)' },
+      { act: 'runP3fNoOverlays', label: 'Run P3f: Playing Pan/Zoom + Random Notes (No Overlays)' },
+      { act: 'runP3fFlatLayers', label: 'Run P3f: Playing Pan/Zoom + Random Notes (Flat Layers)' },
     ]),
   };
 
@@ -333,6 +338,11 @@ function ensureUI() {
     if (act === 'runP3e2') await runP3e2();
     if (act === 'runP3f') await runP3f();
     if (act === 'runP3f2') await runP3f2();
+    if (act === 'runP3fNoPaint') await runP3fNoPaint();
+    if (act === 'runP3fNoDom') await runP3fNoDom();
+    if (act === 'runP3fNoParticles') await runP3fNoParticles();
+    if (act === 'runP3fNoOverlays') await runP3fNoOverlays();
+    if (act === 'runP3fFlatLayers') await runP3fFlatLayers();
     if (act === 'buildP4') buildP4();
     if (act === 'buildP4h') buildP4h();
     if (act === 'runP4a') await runP4a();
@@ -1792,6 +1802,68 @@ async function runP3f2() {
   try { window.__PERF_DISABLE_CHAIN_WORK = false; } catch {}
 }
 
+async function runP3fNoPaint() {
+  const prevTag = window.__PERF_RUN_TAG;
+  window.__PERF_RUN_TAG = 'P3fNoPaint';
+  try {
+    await withNoPaint(async () => {
+      await runP3f();
+    });
+  } finally {
+    window.__PERF_RUN_TAG = prevTag;
+  }
+}
+
+async function runP3fNoDom() {
+  const prevTag = window.__PERF_RUN_TAG;
+  const prevNoDom = window.__PERF_NO_DOM_UPDATES;
+  window.__PERF_RUN_TAG = 'P3fNoDom';
+  window.__PERF_NO_DOM_UPDATES = true;
+  try {
+    await runP3f();
+  } finally {
+    window.__PERF_RUN_TAG = prevTag;
+    window.__PERF_NO_DOM_UPDATES = prevNoDom;
+  }
+}
+
+async function runP3fNoParticles() {
+  const prevTag = window.__PERF_RUN_TAG;
+  window.__PERF_RUN_TAG = 'P3fNoParticles';
+  try {
+    await withTempPerfParticles({ skipUpdate: true, skipDraw: true }, async () => {
+      await runP3f();
+    });
+  } finally {
+    window.__PERF_RUN_TAG = prevTag;
+  }
+}
+
+async function runP3fNoOverlays() {
+  const prevTag = window.__PERF_RUN_TAG;
+  window.__PERF_RUN_TAG = 'P3fNoOverlays';
+  window.__PERF_DISABLE_OVERLAYS = true;
+  try {
+    await runP3f();
+  } finally {
+    window.__PERF_RUN_TAG = prevTag;
+    window.__PERF_DISABLE_OVERLAYS = false;
+  }
+}
+
+async function runP3fFlatLayers() {
+  const prevTag = window.__PERF_RUN_TAG;
+  const prevFlat = window.__PERF_DRAWGRID_FLAT_LAYERS;
+  window.__PERF_RUN_TAG = 'P3fFlatLayers';
+  window.__PERF_DRAWGRID_FLAT_LAYERS = true;
+  try {
+    await runP3f();
+  } finally {
+    window.__PERF_RUN_TAG = prevTag;
+    window.__PERF_DRAWGRID_FLAT_LAYERS = prevFlat;
+  }
+}
+
 
 async function runP3g() {
   const panZoom = makePanZoomScript({
@@ -3060,7 +3132,7 @@ window.addEventListener('keydown', (e) => {
 });
 
 // Expose for manual console use
-try { window.__PerfLab = { show, hide, toggle, buildP2, buildP3, buildP4, buildP4h, buildP5, buildP6, runP2a, runP2b, runP2c, runP3a, runP3b, runP3c, runP3d, runP3e, runP3e2, runP3f, runP3f2, runP3g, runP3g2, runP3h, runP3h2, runP3i, runP3i2, runP3j, runP3j2, runP3k, runP3k2, runP3l, runP3l2, runP3l3, runP3l4, runP3l5, runP3l6, runP3m, runP3m2, runQueue, runAuto, runP4a, runP4b, runP4o, runP4p, runP4q, runP4r, runP4s, runP4t, runP4u, runP4v, runP4w, runP4x, runP4e, runP4c, runP4d, runP4f, runP4g, runP4h2, runP4i, runP4j, runP4k, runP4m, runP4n, runP5a, runP5b, runP5c, runP6a, runP6b, runP6c, runP6d, runP6e, runP6eNoPaint, runP6ePaintOnly, runP6eNoDom, readAutoConfig, readAutoConfigFromFile, saveResultsBundle, postResultsBundle, downloadResultsBundle, getResults: () => lastResults, getBundle: () => lastBundle, clearResults: () => { lastResults = []; } }; } catch {}
+try { window.__PerfLab = { show, hide, toggle, buildP2, buildP3, buildP4, buildP4h, buildP5, buildP6, runP2a, runP2b, runP2c, runP3a, runP3b, runP3c, runP3d, runP3e, runP3e2, runP3f, runP3f2, runP3fNoPaint, runP3fNoDom, runP3fNoParticles, runP3fNoOverlays, runP3fFlatLayers, runP3g, runP3g2, runP3h, runP3h2, runP3i, runP3i2, runP3j, runP3j2, runP3k, runP3k2, runP3l, runP3l2, runP3l3, runP3l4, runP3l5, runP3l6, runP3m, runP3m2, runQueue, runAuto, runP4a, runP4b, runP4o, runP4p, runP4q, runP4r, runP4s, runP4t, runP4u, runP4v, runP4w, runP4x, runP4e, runP4c, runP4d, runP4f, runP4g, runP4h2, runP4i, runP4j, runP4k, runP4m, runP4n, runP5a, runP5b, runP5c, runP6a, runP6b, runP6c, runP6d, runP6e, runP6eNoPaint, runP6ePaintOnly, runP6eNoDom, readAutoConfig, readAutoConfigFromFile, saveResultsBundle, postResultsBundle, downloadResultsBundle, getResults: () => lastResults, getBundle: () => lastBundle, clearResults: () => { lastResults = []; } }; } catch {}
 
 
 
