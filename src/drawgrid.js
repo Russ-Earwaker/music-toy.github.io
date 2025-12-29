@@ -7867,13 +7867,15 @@ function syncBackBufferSizes() {
                 try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.strokes.preview', performance.now() - __previewStart); } catch {}
               }
             }
-            // Mask the overlay with the current paint alpha, scaled to the flash surface size.
-            // IMPORTANT: If a live preview is active, skip masking so the preview remains visible.
-            if (!(cur && previewGid && cur.pts && cur.pts.length)) {
-              const __maskStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
-                ? performance.now()
-                : 0;
-              withDeviceSpace(fctx, () => {
+              // Mask the overlay with the current paint alpha, scaled to the flash surface size.
+              // IMPORTANT: If a live preview is active, skip masking so the preview remains visible.
+              const skipMaskBecausePreview = !!(cur && previewGid && cur.pts && cur.pts.length);
+              const skipMaskBecauseNoErase = !eraseStrokes || eraseStrokes.length === 0;
+              if (!skipMaskBecausePreview && !skipMaskBecauseNoErase) {
+                const __maskStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+                  ? performance.now()
+                  : 0;
+                withDeviceSpace(fctx, () => {
                 const flashSurface = getActiveFlashCanvas();
                 const baseW = flashSurface?.width || fctx.canvas?.width || paint?.width || 0;
                 const baseH = flashSurface?.height || fctx.canvas?.height || paint?.height || 0;

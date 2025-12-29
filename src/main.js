@@ -3226,6 +3226,7 @@ function scheduler(){
     requestAnimationFrame(step);
   }
 
+  step.__perfRafTag = 'perf.raf.main';
   updateChains();
   requestAnimationFrame(step);
 }

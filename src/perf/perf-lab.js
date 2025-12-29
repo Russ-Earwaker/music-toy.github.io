@@ -1333,10 +1333,10 @@ async function runVariantPlaying(label, step, statusText) {
       pendingFrameTimer = 0;
     };
 
-    const stepFrame = (ts) => {
-      if (startMs === null) {
-        startMs = ts;
-        lastMs = ts;
+      const stepFrame = (ts) => {
+        if (startMs === null) {
+          startMs = ts;
+          lastMs = ts;
       }
 
       const t = ts - startMs;
@@ -1382,10 +1382,11 @@ async function runVariantPlaying(label, step, statusText) {
         });
         return;
       }
+        raf(stepFrame);
+      };
+      stepFrame.__perfRafTag = 'perf.raf.benchmark';
       raf(stepFrame);
-    };
-    raf(stepFrame);
-  });
+    });
 
   try {
     result.pulseCount = window.__PERF_PULSE_COUNT || 0;
@@ -1830,19 +1831,25 @@ async function runP3e2() {
   });
 }
 
-async function runP3f() {
-  const prevDisableOverlays = window.__PERF_DISABLE_OVERLAYS;
-  const prevOverlayCore = window.__PERF_DG_OVERLAY_CORE_OFF;
-  const prevOverlayStrokes = window.__PERF_DG_OVERLAY_STROKES_OFF;
-  const prevForceSequencerAll = window.__PERF_FORCE_SEQUENCER_ALL;
-  const prevDisableChainWork = window.__PERF_DISABLE_CHAIN_WORK;
-  try {
-    window.__PERF_DISABLE_CHAIN_WORK = false;
-    window.__PERF_DISABLE_OVERLAYS = false;
-    window.__PERF_DG_OVERLAY_CORE_OFF = false;
-    window.__PERF_DG_OVERLAY_STROKES_OFF = false;
-    window.__PERF_FORCE_SEQUENCER_ALL = true;
-  } catch {}
+  async function runP3f() {
+    const prevDisableOverlays = window.__PERF_DISABLE_OVERLAYS;
+    const prevOverlayCore = window.__PERF_DG_OVERLAY_CORE_OFF;
+    const prevOverlayStrokes = window.__PERF_DG_OVERLAY_STROKES_OFF;
+    const prevForceSequencerAll = window.__PERF_FORCE_SEQUENCER_ALL;
+    const prevDisableChainWork = window.__PERF_DISABLE_CHAIN_WORK;
+    const forceOverlays =
+      !window.__PERF_DISABLE_OVERLAYS &&
+      !window.__PERF_DG_OVERLAY_CORE_OFF &&
+      !window.__PERF_DG_OVERLAY_STROKES_OFF;
+    try {
+      window.__PERF_DISABLE_CHAIN_WORK = false;
+      if (forceOverlays) {
+        window.__PERF_DISABLE_OVERLAYS = false;
+        window.__PERF_DG_OVERLAY_CORE_OFF = false;
+        window.__PERF_DG_OVERLAY_STROKES_OFF = false;
+      }
+      window.__PERF_FORCE_SEQUENCER_ALL = true;
+    } catch {}
   const panZoom = makePanZoomScript({
     panPx: 2400,
     zoomMin: 0.40,

@@ -90,6 +90,7 @@ export async function runBenchmark({
       }
       raf(onFrame);
     }
+    onFrame.__perfRafTag = 'perf.raf.benchmark';
     raf(onFrame);
   });
 }
