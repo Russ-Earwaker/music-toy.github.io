@@ -120,10 +120,10 @@ try {
     return midiToName(midi);
   };
 
-  panel.__playCurrent = (step = -1) => {
+  panel.__playCurrent = (step = -1, when) => {
     const instrument = panel.dataset.instrument || 'tone';
     const note = step >= 0 ? getNoteForStep(step) : 'C4';
-    triggerInstrument(instrument, note, undefined, toyId);
+    triggerInstrument(instrument, note, when, toyId);
   };
 
   // Listen for note changes from the visual module to provide audio feedback.
@@ -176,7 +176,9 @@ try {
   panel.__sequencerStep = (col) => {
     markPlayingColumn(panel, col);
     if (panel.__gridState.steps[col]) {
-      panel.__playCurrent(col);
+      if (!window.__NOTE_SCHEDULER_ENABLED) {
+        panel.__playCurrent(col);
+      }
       panel.__pulseHighlight = 1.0; // For border pulse animation
       panel.__pulseRearm = true;
       // Trigger visual flashes and particle burst.
@@ -191,6 +193,12 @@ try {
           vis.triggerNoteParticleBurst?.(col);
         } catch {}
       }
+    }
+  };
+
+  panel.__sequencerSchedule = (col, when) => {
+    if (panel.__gridState.steps[col]) {
+      panel.__playCurrent(col, when);
     }
   };
 

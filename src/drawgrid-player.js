@@ -66,9 +66,8 @@ export function connectDrawGridToPlayer(panel) {
     previewDraggedNote(col, row)?.catch?.(() => {});
   });
 
-  function step(col) {
-    // Visual playhead pulse for the toy
-    markPlayingColumn(panel, col);
+  function playColumn(col, when, { visual = true, audio = true } = {}) {
+    if (visual) markPlayingColumn(panel, col);
 
     const map = gridState;
     const nodesArr = (map && Array.isArray(map.nodes)) ? map.nodes : [];
@@ -117,10 +116,16 @@ export function connectDrawGridToPlayer(panel) {
       // Log the exact note we’re about to play.
       //console.log('[PLAYER] trigger', { instrument, row, midiNote });
 
-      playNote(instrument, midiToName(midiNote));
+      if (audio) playNote(instrument, midiToName(midiNote), when);
     }
   }
 
-  panel.__sequencerStep = step;
+  panel.__sequencerStep = (col) => {
+    const useScheduler = !!window.__NOTE_SCHEDULER_ENABLED;
+    playColumn(col, undefined, { visual: true, audio: !useScheduler });
+  };
+  panel.__sequencerSchedule = (col, when) => {
+    if (col >= 0 && col < steps) playColumn(col, when, { visual: false });
+  };
 }
 

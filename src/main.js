@@ -35,6 +35,7 @@ import { installIOSAudioUnlock } from './ios-audio-unlock.js';
 import { installAudioDiagnostics } from './audio-diagnostics.js';
 import { makeDebugLogger } from './debug-flags.js';
 import { DEFAULT_BPM, NUM_STEPS, ensureAudioContext, getLoopInfo, setBpm, start, isRunning } from './audio-core.js';
+import { createSequencerScheduler } from './note-scheduler.js';
 import { buildGrid } from './grid-core.js';
 import { buildDrumGrid } from './drum-core.js';
 import { tryRestoreOnBoot, startAutosave } from './persistence.js';
@@ -3066,6 +3067,8 @@ function scheduler(){
   let lastPerfLog = 0;
   const prevActiveToyIds = new Set();
   let prevHadActiveToys = false;
+  const sequencerScheduler = createSequencerScheduler({ lookaheadSec: 0.2, leadSec: 0.01 });
+  try { window.__NOTE_SCHEDULER_ENABLED = true; } catch {}
 
   function step(){
     const frameStart = performance.now();
@@ -3175,6 +3178,20 @@ function scheduler(){
       }
       if (CHAIN_DEBUG && (tActiveEnd - tActiveStart) > CHAIN_DEBUG_LOG_THRESHOLD_MS) {
         console.log('[CHAIN][perf] mark-active', (tActiveEnd - tActiveStart).toFixed(2), 'ms', 'activeToyCount=', activeToyIds.size);
+      }
+
+      // --- Phase B: schedule audio ahead for active chain links ---
+      if (CHAIN_FEATURE_ENABLE_SEQUENCER && hasActiveToys) {
+        const ctx = ensureAudioContext();
+        const nowAt = ctx?.currentTime ?? 0;
+        try {
+          sequencerScheduler.tick({
+            activeToyIds,
+            getToy: (id) => document.getElementById(id),
+            loopInfo: info,
+            nowAt,
+          });
+        } catch {}
       }
 
       // --- Phase C: per-toy sequencer stepping for active chain links ---

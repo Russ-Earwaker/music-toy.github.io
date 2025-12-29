@@ -223,10 +223,10 @@ export function buildDrumGrid(panel, numSteps = 8){
     return midiToName(midi);
   };
 
-  panel.__playCurrent = (step = -1) => {
+  panel.__playCurrent = (step = -1, when) => {
     const instrument = panel.dataset.instrument || 'tone';
     const note = step >= 0 ? getNoteForStep(step) : 'C4';
-    triggerInstrument(instrument, note, undefined, toyId);
+    triggerInstrument(instrument, note, when, toyId);
   };
 
   // Listen for note changes from the visual module to provide audio feedback.
@@ -325,7 +325,9 @@ export function buildDrumGrid(panel, numSteps = 8){
   panel.__sequencerStep = (col) => {
     markPlayingColumn(panel, col);
     if (panel.__gridState.steps[col]) {
-      panel.__playCurrent(col);
+      if (!window.__NOTE_SCHEDULER_ENABLED) {
+        panel.__playCurrent(col);
+      }
       if (panel.__particles) panel.__particles.disturb();
       // Trigger visual flashes.
       if (panel.__drumVisualState) {
@@ -334,6 +336,12 @@ export function buildDrumGrid(panel, numSteps = 8){
         // Flash for the main background.
         panel.__drumVisualState.bgFlash = 1.0;
       }
+    }
+  };
+
+  panel.__sequencerSchedule = (col, when) => {
+    if (panel.__gridState.steps[col]) {
+      panel.__playCurrent(col, when);
     }
   };
   panel.dataset.steps = numSteps;
