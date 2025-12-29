@@ -94,6 +94,9 @@ function ensureUI() {
       { act: 'runP3fNoDom', label: 'Run P3f: Playing Pan/Zoom + Random Notes (No DOM Updates)' },
       { act: 'runP3fNoParticles', label: 'Run P3f: Playing Pan/Zoom + Random Notes (No Particles)' },
       { act: 'runP3fNoOverlays', label: 'Run P3f: Playing Pan/Zoom + Random Notes (No Overlays)' },
+      { act: 'runP3fNoOverlayStrokes', label: 'Run P3f: Playing Pan/Zoom + Random Notes (No Overlay Strokes)' },
+      { act: 'runP3fNoOverlayCore', label: 'Run P3f: Playing Pan/Zoom + Random Notes (No Overlay Core)' },
+      { act: 'runP3fParticleProfile', label: 'Run P3f: Playing Pan/Zoom + Random Notes (Particle Profile)' },
       { act: 'runP3fFlatLayers', label: 'Run P3f: Playing Pan/Zoom + Random Notes (Flat Layers)' },
     ]),
   };
@@ -204,6 +207,7 @@ function ensureUI() {
                 </select>
               </label>
               <label class="perf-lab-toggle"><input type="checkbox" data-tog="freezeUnfocusedDuringGesture" checked /> Freeze unfocused</label>
+              <label class="perf-lab-toggle"><input type="checkbox" data-perf="traceMarks" /> Trace marks</label>
             </div>
           </div>
 
@@ -300,6 +304,12 @@ function ensureUI() {
         el.value = String(Number(val));
       }
     });
+    ov.querySelectorAll('[data-perf]').forEach((el) => {
+      const key = el.getAttribute('data-perf');
+      if (!key) return;
+      const v = window.__PERF_TRACE_MARKS;
+      if (el.tagName === 'INPUT' && el.type === 'checkbox') el.checked = !!v;
+    });
   } catch {}
 
   ov.addEventListener('click', async (e) => {
@@ -342,6 +352,9 @@ function ensureUI() {
     if (act === 'runP3fNoDom') await runP3fNoDom();
     if (act === 'runP3fNoParticles') await runP3fNoParticles();
     if (act === 'runP3fNoOverlays') await runP3fNoOverlays();
+    if (act === 'runP3fNoOverlayStrokes') await runP3fNoOverlayStrokes();
+    if (act === 'runP3fNoOverlayCore') await runP3fNoOverlayCore();
+    if (act === 'runP3fParticleProfile') await runP3fParticleProfile();
     if (act === 'runP3fFlatLayers') await runP3fFlatLayers();
     if (act === 'buildP4') buildP4();
     if (act === 'buildP4h') buildP4h();
@@ -398,13 +411,22 @@ function ensureUI() {
     const t = e.target;
     if (!t) return;
     const key = t.getAttribute && t.getAttribute('data-tog');
-    if (!key) return;
-    try {
-      const st = (window.__PERF_PARTICLES = window.__PERF_PARTICLES || {});
-      if (t.tagName === 'INPUT' && t.type === 'checkbox') st[key] = !!t.checked;
-      else if (t.tagName === 'SELECT') st[key] = Math.max(0, Number(t.value) || 1);
-      console.log('[PerfLab] particle toggles', { ...st });
-    } catch {}
+    const perfKey = t.getAttribute && t.getAttribute('data-perf');
+    if (!key && !perfKey) return;
+    if (key) {
+      try {
+        const st = (window.__PERF_PARTICLES = window.__PERF_PARTICLES || {});
+        if (t.tagName === 'INPUT' && t.type === 'checkbox') st[key] = !!t.checked;
+        else if (t.tagName === 'SELECT') st[key] = Math.max(0, Number(t.value) || 1);
+        console.log('[PerfLab] particle toggles', { ...st });
+      } catch {}
+    }
+    if (perfKey === 'traceMarks') {
+      try {
+        window.__PERF_TRACE_MARKS = !!t.checked;
+        console.log('[PerfLab] trace marks', { enabled: !!window.__PERF_TRACE_MARKS });
+      } catch {}
+    }
   });
 
   document.body.appendChild(ov);
@@ -886,14 +908,40 @@ async function runAuto(config = {}) {
   setStatus('Auto-run: ' + queue.length + ' tests');
   const __prevCtx = window.__PERF_LAB_RUN_CONTEXT;
   const __prevRunTag = window.__PERF_RUN_TAG;
+  const __prevTraceMarks = window.__PERF_TRACE_MARKS;
+  const __prevTraceLongMs = window.__PERF_TRACE_LONG_MS;
+  let __prevParticles = null;
+  const __prevGestureAutoLock = window.__PERF_GESTURE_AUTO_LOCK;
   window.__PERF_LAB_RUN_CONTEXT = 'auto';
   if (cfg.runTag != null) window.__PERF_RUN_TAG = String(cfg.runTag);
+  if (cfg.traceMarks != null) window.__PERF_TRACE_MARKS = !!cfg.traceMarks;
+  if (Number.isFinite(cfg.traceLongMs)) window.__PERF_TRACE_LONG_MS = Number(cfg.traceLongMs);
+  if (cfg.particleToggles && typeof cfg.particleToggles === 'object') {
+    try {
+      const st = (window.__PERF_PARTICLES = window.__PERF_PARTICLES || {});
+      __prevParticles = { ...st };
+      Object.assign(st, cfg.particleToggles);
+    } catch {}
+  }
+  const wantsGestureLock = cfg.gestureAutoLock === true
+    || (cfg.particleToggles
+      && (cfg.particleToggles.gestureDrawModulo === 1 || cfg.particleToggles.gestureFieldModulo === 1));
+  if (wantsGestureLock) window.__PERF_GESTURE_AUTO_LOCK = true;
   let results;
   try {
     results = await runQueue(queue);
   } finally {
     window.__PERF_LAB_RUN_CONTEXT = __prevCtx;
     window.__PERF_RUN_TAG = __prevRunTag;
+    window.__PERF_TRACE_MARKS = __prevTraceMarks;
+    window.__PERF_TRACE_LONG_MS = __prevTraceLongMs;
+    if (__prevParticles) {
+      try {
+        const st = (window.__PERF_PARTICLES = window.__PERF_PARTICLES || {});
+        Object.assign(st, __prevParticles);
+      } catch {}
+    }
+    window.__PERF_GESTURE_AUTO_LOCK = __prevGestureAutoLock;
   }
   const bundle = buildResultsBundle(results, {
     queue,
@@ -1194,6 +1242,9 @@ async function runVariantPlaying(label, step, statusText) {
   const slowMs = (typeof window !== 'undefined' && Number.isFinite(window.__PERF_FRAME_PROF_SLOW_MS))
     ? window.__PERF_FRAME_PROF_SLOW_MS
     : 50;
+  const traceLongMs = (typeof window !== 'undefined' && Number.isFinite(window.__PERF_TRACE_LONG_MS))
+    ? window.__PERF_TRACE_LONG_MS
+    : slowMs;
   const maxSamples = (typeof window !== 'undefined' && Number.isFinite(window.__PERF_FRAME_PROF_MAX))
     ? window.__PERF_FRAME_PROF_MAX
     : 120;
@@ -1218,6 +1269,12 @@ async function runVariantPlaying(label, step, statusText) {
   lastResult = null;
 
   try { window.__PERF_CAM_BOUNDS = null; } catch {}
+  const traceMarksEnabled = () => !!window.__PERF_TRACE_MARKS
+    && typeof performance !== 'undefined'
+    && typeof performance.measure === 'function';
+  if (traceMarksEnabled() && typeof performance.clearMeasures === 'function') {
+    try { performance.clearMeasures('mt:frame.long'); } catch {}
+  }
 
   // Lock particle quality so FPS-driven LOD does not save us during the test.
   setParticleQualityLock('ultra');
@@ -1260,6 +1317,17 @@ async function runVariantPlaying(label, step, statusText) {
   const result = await new Promise((resolve) => {
     const finalizePendingFrame = () => {
       if (!pendingFrame) return;
+      if (traceMarksEnabled()
+        && pendingFrame.frameDt >= traceLongMs
+        && Number.isFinite(pendingFrame.meta?.traceStart)
+        && Number.isFinite(pendingFrame.meta?.traceEnd)) {
+        try {
+          performance.measure('mt:frame.long', {
+            start: pendingFrame.meta.traceStart,
+            end: pendingFrame.meta.traceEnd,
+          });
+        } catch {}
+      }
       prof.endFrame(pendingFrame.frameDt, pendingFrame.meta);
       pendingFrame = null;
       pendingFrameTimer = 0;
@@ -1292,8 +1360,13 @@ async function runVariantPlaying(label, step, statusText) {
       const workMs = Math.max(0, nowMs() - t0);
       const frameDt = Number.isFinite(dtMs) ? dtMs : (nowMs() - t0);
       const idleMs = Math.max(0, frameDt - workMs);
-      pendingFrame = { frameDt, meta: { workMs, idleMs, forceSample, warmupTag } };
-      if (!pendingFrameTimer) pendingFrameTimer = defer(finalizePendingFrame);
+        const frameStart = Number.isFinite(dtMs) ? (ts - dtMs) : ts;
+        const frameEnd = ts;
+        pendingFrame = {
+          frameDt,
+          meta: { workMs, idleMs, forceSample, warmupTag, traceStart: frameStart, traceEnd: frameEnd },
+        };
+        if (!pendingFrameTimer) pendingFrameTimer = defer(finalizePendingFrame);
 
       if (t > warmupMs) frameMs.push(frameDt);
 
@@ -1350,25 +1423,28 @@ async function runVariantPlaying(label, step, statusText) {
 
   setParticleQualityLock(null);
 
-  try {
-    result.particleToggles = { ...(window.__PERF_PARTICLES || {}) };
-    result.particleTempPatch = window.__PERF_PARTICLES__TEMP_PATCH || null;
-    result.playing = true;
-    result.flags = {
-      disableLoopgridRender: !!window.__PERF_DISABLE_LOOPGRID_RENDER,
-      disableChains: !!window.__PERF_DISABLE_CHAINS,
-      disableTapDots: !!window.__PERF_DISABLE_TAP_DOTS,
-      disableOverlays: !!window.__PERF_DISABLE_OVERLAYS,
-      disablePulses: !!window.__PERF_DISABLE_PULSES,
-      freezeAllUnfocused: !!window.__PERF_FREEZE_ALL_UNFOCUSED,
-      loopgridGestureRenderMod: Number(window.__PERF_LOOPGRID_GESTURE_RENDER_MOD) || 1,
-      loopgridChainCache: !!window.__PERF_LOOPGRID_CHAIN_CACHE,
-      noPaint: !!window.__PERF_NO_PAINT,
-      noPaintActive: !!window.__PERF_NO_PAINT_ACTIVE,
-      paintOnlyActive: !!window.__PERF_PAINT_ONLY_ACTIVE,
-      noDomUpdates: !!window.__PERF_NO_DOM_UPDATES,
-      runTag: String(window.__PERF_RUN_TAG || ''),
-    };
+    try {
+      result.particleToggles = { ...(window.__PERF_PARTICLES || {}) };
+      result.particleTempPatch = window.__PERF_PARTICLES__TEMP_PATCH || null;
+      result.playing = true;
+      result.flags = {
+        disableLoopgridRender: !!window.__PERF_DISABLE_LOOPGRID_RENDER,
+        disableChains: !!window.__PERF_DISABLE_CHAINS,
+        disableTapDots: !!window.__PERF_DISABLE_TAP_DOTS,
+        disableOverlays: !!window.__PERF_DISABLE_OVERLAYS,
+        disableOverlayStrokes: !!window.__PERF_DG_OVERLAY_STROKES_OFF,
+        disableOverlayCore: !!window.__PERF_DG_OVERLAY_CORE_OFF,
+        disablePulses: !!window.__PERF_DISABLE_PULSES,
+        freezeAllUnfocused: !!window.__PERF_FREEZE_ALL_UNFOCUSED,
+        loopgridGestureRenderMod: Number(window.__PERF_LOOPGRID_GESTURE_RENDER_MOD) || 1,
+        loopgridChainCache: !!window.__PERF_LOOPGRID_CHAIN_CACHE,
+        noPaint: !!window.__PERF_NO_PAINT,
+        noPaintActive: !!window.__PERF_NO_PAINT_ACTIVE,
+        paintOnlyActive: !!window.__PERF_PAINT_ONLY_ACTIVE,
+        noDomUpdates: !!window.__PERF_NO_DOM_UPDATES,
+        traceMarks: !!window.__PERF_TRACE_MARKS,
+        runTag: String(window.__PERF_RUN_TAG || ''),
+      };
     result.gestureSkipCount = window.__PERF_LOOPGRID_GESTURE_SKIP || 0;
   } catch {}
 
@@ -1755,7 +1831,18 @@ async function runP3e2() {
 }
 
 async function runP3f() {
-  try { window.__PERF_DISABLE_CHAIN_WORK = true; } catch {}
+  const prevDisableOverlays = window.__PERF_DISABLE_OVERLAYS;
+  const prevOverlayCore = window.__PERF_DG_OVERLAY_CORE_OFF;
+  const prevOverlayStrokes = window.__PERF_DG_OVERLAY_STROKES_OFF;
+  const prevForceSequencerAll = window.__PERF_FORCE_SEQUENCER_ALL;
+  const prevDisableChainWork = window.__PERF_DISABLE_CHAIN_WORK;
+  try {
+    window.__PERF_DISABLE_CHAIN_WORK = false;
+    window.__PERF_DISABLE_OVERLAYS = false;
+    window.__PERF_DG_OVERLAY_CORE_OFF = false;
+    window.__PERF_DG_OVERLAY_STROKES_OFF = false;
+    window.__PERF_FORCE_SEQUENCER_ALL = true;
+  } catch {}
   const panZoom = makePanZoomScript({
     panPx: 2400,
     zoomMin: 0.40,
@@ -1768,15 +1855,21 @@ async function runP3f() {
   });
   const randOnce = makeDrawgridRandomiseOnceScript({ atMs: 250, seed: 1337, useSeededRandom: true });
   const step = composeSteps(panZoom, randOnce);
-  await withTempAnchorDisabled(false, async () => {
-    await runVariantPlaying(
-      'P3f_drawgrid_playing_panzoom_rand_once_anchor_on',
-      step,
-      'Running P3f (playing pan/zoom + randomise once, anchor ON)...'
-    );
-  });
-  try { window.__PERF_DISABLE_CHAIN_WORK = false; } catch {}
-}
+    await withTempAnchorDisabled(false, async () => {
+      await runVariantPlaying(
+        'P3f_drawgrid_playing_panzoom_rand_once_anchor_on',
+        step,
+        'Running P3f (playing pan/zoom + randomise once, anchor ON)...'
+      );
+    });
+    try { window.__PERF_DISABLE_CHAIN_WORK = prevDisableChainWork; } catch {}
+    try {
+      window.__PERF_DISABLE_OVERLAYS = prevDisableOverlays;
+      window.__PERF_DG_OVERLAY_CORE_OFF = prevOverlayCore;
+      window.__PERF_DG_OVERLAY_STROKES_OFF = prevOverlayStrokes;
+      window.__PERF_FORCE_SEQUENCER_ALL = prevForceSequencerAll;
+    } catch {}
+  }
 
 async function runP3f2() {
   try { window.__PERF_DISABLE_CHAIN_WORK = true; } catch {}
@@ -1839,19 +1932,58 @@ async function runP3fNoParticles() {
   }
 }
 
-async function runP3fNoOverlays() {
-  const prevTag = window.__PERF_RUN_TAG;
-  window.__PERF_RUN_TAG = 'P3fNoOverlays';
-  window.__PERF_DISABLE_OVERLAYS = true;
-  try {
-    await runP3f();
-  } finally {
-    window.__PERF_RUN_TAG = prevTag;
-    window.__PERF_DISABLE_OVERLAYS = false;
+  async function runP3fNoOverlays() {
+    const prevTag = window.__PERF_RUN_TAG;
+    window.__PERF_RUN_TAG = 'P3fNoOverlays';
+    window.__PERF_DISABLE_OVERLAYS = true;
+    try {
+      await runP3f();
+    } finally {
+      window.__PERF_RUN_TAG = prevTag;
+      window.__PERF_DISABLE_OVERLAYS = false;
+    }
   }
-}
 
-async function runP3fFlatLayers() {
+  async function runP3fNoOverlayStrokes() {
+    const prevTag = window.__PERF_RUN_TAG;
+    const prevNoOverlayStrokes = window.__PERF_DG_OVERLAY_STROKES_OFF;
+    window.__PERF_RUN_TAG = 'P3fNoOverlayStrokes';
+    window.__PERF_DG_OVERLAY_STROKES_OFF = true;
+    try {
+      await runP3f();
+    } finally {
+      window.__PERF_RUN_TAG = prevTag;
+      window.__PERF_DG_OVERLAY_STROKES_OFF = prevNoOverlayStrokes;
+    }
+  }
+
+  async function runP3fNoOverlayCore() {
+    const prevTag = window.__PERF_RUN_TAG;
+    const prevNoOverlayCore = window.__PERF_DG_OVERLAY_CORE_OFF;
+    window.__PERF_RUN_TAG = 'P3fNoOverlayCore';
+    window.__PERF_DG_OVERLAY_CORE_OFF = true;
+    try {
+      await runP3f();
+    } finally {
+      window.__PERF_RUN_TAG = prevTag;
+      window.__PERF_DG_OVERLAY_CORE_OFF = prevNoOverlayCore;
+    }
+  }
+
+  async function runP3fParticleProfile() {
+    const prevTag = window.__PERF_RUN_TAG;
+    const prevProfile = window.__PERF_PARTICLE_FIELD_PROFILE;
+    window.__PERF_RUN_TAG = 'P3fParticleProfile';
+    window.__PERF_PARTICLE_FIELD_PROFILE = true;
+    try {
+      await runP3f();
+    } finally {
+      window.__PERF_RUN_TAG = prevTag;
+      window.__PERF_PARTICLE_FIELD_PROFILE = prevProfile;
+    }
+  }
+
+  async function runP3fFlatLayers() {
   const prevTag = window.__PERF_RUN_TAG;
   const prevFlat = window.__PERF_DRAWGRID_FLAT_LAYERS;
   window.__PERF_RUN_TAG = 'P3fFlatLayers';
@@ -3132,7 +3264,7 @@ window.addEventListener('keydown', (e) => {
 });
 
 // Expose for manual console use
-try { window.__PerfLab = { show, hide, toggle, buildP2, buildP3, buildP4, buildP4h, buildP5, buildP6, runP2a, runP2b, runP2c, runP3a, runP3b, runP3c, runP3d, runP3e, runP3e2, runP3f, runP3f2, runP3fNoPaint, runP3fNoDom, runP3fNoParticles, runP3fNoOverlays, runP3fFlatLayers, runP3g, runP3g2, runP3h, runP3h2, runP3i, runP3i2, runP3j, runP3j2, runP3k, runP3k2, runP3l, runP3l2, runP3l3, runP3l4, runP3l5, runP3l6, runP3m, runP3m2, runQueue, runAuto, runP4a, runP4b, runP4o, runP4p, runP4q, runP4r, runP4s, runP4t, runP4u, runP4v, runP4w, runP4x, runP4e, runP4c, runP4d, runP4f, runP4g, runP4h2, runP4i, runP4j, runP4k, runP4m, runP4n, runP5a, runP5b, runP5c, runP6a, runP6b, runP6c, runP6d, runP6e, runP6eNoPaint, runP6ePaintOnly, runP6eNoDom, readAutoConfig, readAutoConfigFromFile, saveResultsBundle, postResultsBundle, downloadResultsBundle, getResults: () => lastResults, getBundle: () => lastBundle, clearResults: () => { lastResults = []; } }; } catch {}
+try { window.__PerfLab = { show, hide, toggle, buildP2, buildP3, buildP4, buildP4h, buildP5, buildP6, runP2a, runP2b, runP2c, runP3a, runP3b, runP3c, runP3d, runP3e, runP3e2, runP3f, runP3f2, runP3fNoPaint, runP3fNoDom, runP3fNoParticles, runP3fNoOverlays, runP3fNoOverlayStrokes, runP3fNoOverlayCore, runP3fParticleProfile, runP3fFlatLayers, runP3g, runP3g2, runP3h, runP3h2, runP3i, runP3i2, runP3j, runP3j2, runP3k, runP3k2, runP3l, runP3l2, runP3l3, runP3l4, runP3l5, runP3l6, runP3m, runP3m2, runQueue, runAuto, runP4a, runP4b, runP4o, runP4p, runP4q, runP4r, runP4s, runP4t, runP4u, runP4v, runP4w, runP4x, runP4e, runP4c, runP4d, runP4f, runP4g, runP4h2, runP4i, runP4j, runP4k, runP4m, runP4n, runP5a, runP5b, runP5c, runP6a, runP6b, runP6c, runP6d, runP6e, runP6eNoPaint, runP6ePaintOnly, runP6eNoDom, readAutoConfig, readAutoConfigFromFile, saveResultsBundle, postResultsBundle, downloadResultsBundle, getResults: () => lastResults, getBundle: () => lastBundle, clearResults: () => { lastResults = []; } }; } catch {}
 
 
 

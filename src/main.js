@@ -3108,7 +3108,10 @@ function scheduler(){
 
       // --- Phase A: chain-active flags ---
       const tActiveStart = __perfOn ? performance.now() : 0;
-      const activeToyIds = new Set(g_chainState.values());
+      const forceSequencerAll = !!window.__PERF_FORCE_SEQUENCER_ALL;
+      const activeToyIds = forceSequencerAll
+        ? new Set(getSequencedToys().map(p => p.id).filter(Boolean))
+        : new Set(g_chainState.values());
       const hasActiveToys = activeToyIds.size > 0;
 
       const activeChanged = (() => {

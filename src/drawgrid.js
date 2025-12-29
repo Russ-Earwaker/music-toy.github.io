@@ -3134,9 +3134,22 @@ function ensureSizeReady({ force = false } = {}) {
     __dgPrevStrokeLen = len;
   }
   let eraseStrokes = []; // Store all completed erase strokes
-  let cellFlashes = []; // For flashing grid squares on note play
-  let noteToggleEffects = []; // For tap feedback ring animations
-  let noteBurstEffects = [];  // For short-range radial particle bursts on note hits
+    let cellFlashes = []; // For flashing grid squares on note play
+    let noteToggleEffects = []; // For tap feedback ring animations
+    let noteBurstEffects = [];  // For short-range radial particle bursts on note hits
+    let __dgPaintRev = 0;
+    let __dgOverlayMaskCanvas = null;
+    let __dgOverlayMaskCtx = null;
+    let __dgOverlayMaskRev = -1;
+    let __dgOverlayMaskRebuilds = 0;
+    let __dgOverlayMaskLastLog = 0;
+    let __dgOverlayMaskScale = 1;
+    let __dgOverlayMaskScaleLastTs = 0;
+    let __dgOverlayMaskW = 0;
+    let __dgOverlayMaskH = 0;
+    function markPaintDirty() {
+      __dgPaintRev = (__dgPaintRev + 1) | 0;
+    }
 
   function spawnNoteRingEffect(cx, cy, baseRadius) {
     const r =
@@ -3882,39 +3895,41 @@ function ensureSizeReady({ force = false } = {}) {
       if (DG_SINGLE_CANVAS) {
         try { compositeSingleCanvas(); } catch {}
       }
-      if (!DG_SINGLE_CANVAS && usingBackBuffers) {
-        pendingPaintSwap = true;
-        requestFrontSwap();
-      }
-      dgPaintTrace('clearAndRedrawFromStrokes:exit');
-    });
-  }
+        if (!DG_SINGLE_CANVAS && usingBackBuffers) {
+          pendingPaintSwap = true;
+          requestFrontSwap();
+        }
+        markPaintDirty();
+        dgPaintTrace('clearAndRedrawFromStrokes:exit');
+      });
+    }
 
   function drawEraseStroke(ctx, stroke) {
     if (!stroke || !stroke.pts || stroke.pts.length < 1) return;
     if (DG_SINGLE_CANVAS && ctx?.canvas?.getAttribute?.('data-role') === 'drawgrid-paint' && backCtx && ctx !== backCtx) {
       ctx = backCtx;
     }
-    withLogicalSpace(ctx, () => {
-      ctx.save();
-      ctx.globalCompositeOperation = 'destination-out';
+      withLogicalSpace(ctx, () => {
+        ctx.save();
+        ctx.globalCompositeOperation = 'destination-out';
       ctx.strokeStyle = '#000'; // color doesn't matter
       ctx.lineWidth = getLineWidth() * 2; // diameter of erase circle
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
 
-      ctx.beginPath();
-      ctx.moveTo(stroke.pts[0].x, stroke.pts[0].y);
-      if (stroke.pts.length === 1) {
-          ctx.lineTo(stroke.pts[0].x + 0.1, stroke.pts[0].y);
-      } else {
+        ctx.beginPath();
+        ctx.moveTo(stroke.pts[0].x, stroke.pts[0].y);
+        if (stroke.pts.length === 1) {
+            ctx.lineTo(stroke.pts[0].x + 0.1, stroke.pts[0].y);
+        } else {
           for (let i = 1; i < stroke.pts.length; i++) {
               ctx.lineTo(stroke.pts[i].x, stroke.pts[i].y);
           }
       }
-      ctx.stroke();
-      ctx.restore();
-    });
+        ctx.stroke();
+        ctx.restore();
+      });
+    markPaintDirty();
   }
 
   function drawIntoBackOnly(includeCurrentStroke = false) {
@@ -4159,6 +4174,7 @@ function regenerateMapFromStrokes() {
       resetCtx(pctx);
       withLogicalSpace(pctx, () => {
         pctx.drawImage(snap, 0, 0, snap.width, snap.height, 0, 0, cssW, cssH);
+        markPaintDirty();
       });
     } catch {}
   }
@@ -5536,6 +5552,7 @@ function syncBackBufferSizes() {
       ctx = backCtx;
     }
     const color = stroke.color || STROKE_COLORS[0];
+    const wasOverlay = (ctx === fctx);
 
     resetCtx(ctx);
     withLogicalSpace(ctx, () => {
@@ -5652,8 +5669,9 @@ function syncBackBufferSizes() {
         ctx.stroke();
       }
 
-      ctx.restore();
-    });
+        ctx.restore();
+      });
+    if (!wasOverlay) markPaintDirty();
   }
   function eraseAtPoint(p) {
     const R = getLineWidth(); // This is the radius
@@ -5667,6 +5685,7 @@ function syncBackBufferSizes() {
       pctx.fill();
       pctx.restore();
     });
+    markPaintDirty();
   }
 
   function animateErasedNode(node) {
@@ -7262,11 +7281,14 @@ function syncBackBufferSizes() {
       const gesturing = __dgIsGesturing();
       const isFocused = panel.classList?.contains('toy-focused') || panel.classList?.contains('focused');
       const hasAnyNotes = !!(currentMap && currentMap.active && currentMap.active.some(Boolean));
+      const disableOverlayCore = !!(typeof window !== 'undefined' && window.__PERF_DG_OVERLAY_CORE_OFF);
+      const zoomForOverlay = Number.isFinite(boardScale) ? boardScale : 1;
+      const overlayFlashesEnabled = !disableOverlayCore;
+      const overlayBurstsEnabled = !disableOverlayCore && zoomForOverlay > 0.45 && !__dgLowFpsMode;
       const hasOverlayFx =
-        (noteToggleEffects?.length || 0) > 0 ||
-        (noteBurstEffects?.length || 0) > 0 ||
-        (cellFlashes?.length || 0) > 0;
-      const transportRunning = (typeof isRunning === 'function') && isRunning();
+        (overlayFlashesEnabled && ((noteToggleEffects?.length || 0) > 0 || (cellFlashes?.length || 0) > 0)) ||
+        (overlayBurstsEnabled && (noteBurstEffects?.length || 0) > 0);
+    const transportRunning = (typeof isRunning === 'function') && isRunning();
 
       const isTrulyIdle =
         !hasAnyNotes &&
@@ -7286,12 +7308,14 @@ function syncBackBufferSizes() {
       // Overlays (notes, playhead, flashes) respect visibility & hydrations guard,
       // but are otherwise always on - they're core UX.
       const __overlayGateStart = __perfOn ? performance.now() : 0;
-      const allowOverlayDraw = canDrawAnything;
-      let hasOverlayStrokes = false;
-      if (allowOverlayDraw) {
-        hasOverlayStrokes = hasOverlayStrokesCached();
-      }
-      const overlayActive = allowOverlayDraw && (hasOverlayFx || transportRunning || hasOverlayStrokes || (cur && previewGid));
+        const allowOverlayDraw = canDrawAnything;
+        const disableOverlayStrokes = !!(typeof window !== 'undefined' && window.__PERF_DG_OVERLAY_STROKES_OFF);
+        let hasOverlayStrokes = false;
+        if (allowOverlayDraw && !disableOverlayStrokes) {
+          hasOverlayStrokes = hasOverlayStrokesCached();
+        }
+        const overlayTransport = disableOverlayCore ? false : transportRunning;
+        const overlayActive = allowOverlayDraw && (hasOverlayFx || overlayTransport || hasOverlayStrokes || (cur && previewGid));
       let overlayEvery = 1;
       if (gesturing && visiblePanels >= 6 && !isFocused) {
         overlayEvery = (visiblePanels >= 18) ? 4 : (visiblePanels >= 12) ? 3 : 2;
@@ -7672,30 +7696,60 @@ function syncBackBufferSizes() {
     const __domPulseStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
       ? performance.now()
       : 0;
-    if (!skipDomUpdates) {
-      let pulseClassOn = !!panel.__dgPulseClassOn;
-      if (panel.__pulseRearm) {
-        if (pulseClassOn) {
+      if (!skipDomUpdates) {
+        let pulseClassOn = !!panel.__dgPulseClassOn;
+        if (panel.__pulseRearm) {
+          if (pulseClassOn) {
+            const __pulseRemoveStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+              ? performance.now()
+              : 0;
+            panel.classList.remove('toy-playing-pulse');
+            if (__pulseRemoveStart) {
+              try { window.__PerfFrameProf?.mark?.('drawgrid.dom.pulse.remove', performance.now() - __pulseRemoveStart); } catch {}
+            }
+            pulseClassOn = false;
+          }
+          panel.__pulseRearm = false;
+          panel.__dgPulseSkipAdd = true;
+        }
+
+        const pulseActive = !!(panel.__pulseHighlight && panel.__pulseHighlight > 0);
+        if (pulseActive) {
+          if (!pulseClassOn && !panel.__dgPulseSkipAdd) {
+            const __pulseAddStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+              ? performance.now()
+              : 0;
+            panel.classList.add('toy-playing-pulse');
+            if (__pulseAddStart) {
+              try { window.__PerfFrameProf?.mark?.('drawgrid.dom.pulse.add', performance.now() - __pulseAddStart); } catch {}
+            }
+            pulseClassOn = true;
+          }
+          panel.__pulseHighlight = Math.max(0, panel.__pulseHighlight - 0.05);
+        } else if (pulseClassOn) {
+          const __pulseOffStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+            ? performance.now()
+            : 0;
           panel.classList.remove('toy-playing-pulse');
-          try { panel.offsetWidth; } catch {}
+          if (__pulseOffStart) {
+            try { window.__PerfFrameProf?.mark?.('drawgrid.dom.pulse.remove', performance.now() - __pulseOffStart); } catch {}
+          }
           pulseClassOn = false;
         }
-        panel.__pulseRearm = false;
-      }
-
-      const pulseActive = !!(panel.__pulseHighlight && panel.__pulseHighlight > 0);
-      if (pulseActive) {
-        if (!pulseClassOn) {
-          panel.classList.add('toy-playing-pulse');
-          pulseClassOn = true;
+        panel.__dgPulseClassOn = pulseClassOn;
+        if (panel.__dgPulseSkipAdd) {
+          panel.__dgPulseSkipAdd = false;
+          requestAnimationFrame(() => {
+            try {
+              if (!panel.isConnected) return;
+              if (!(panel.__pulseHighlight > 0)) return;
+              if (!panel.classList.contains('toy-playing-pulse')) {
+                panel.classList.add('toy-playing-pulse');
+              }
+            } catch {}
+          });
         }
-        panel.__pulseHighlight = Math.max(0, panel.__pulseHighlight - 0.05);
-      } else if (pulseClassOn) {
-        panel.classList.remove('toy-playing-pulse');
-        pulseClassOn = false;
       }
-      panel.__dgPulseClassOn = pulseClassOn;
-    }
     if (__domPulseStart) {
       const __domPulseDt = performance.now() - __domPulseStart;
       try { window.__PerfFrameProf?.mark?.('drawgrid.dom.pulse', __domPulseDt); } catch {}
@@ -7756,7 +7810,7 @@ function syncBackBufferSizes() {
 
       // Animate special stroke paint (hue cycling) without resurrecting erased areas:
       // Draw animated special strokes into flashCanvas, then mask with current paint alpha.
-      if (hasOverlayStrokes || (cur && previewGid)) {
+        if (!disableOverlayStrokes && (hasOverlayStrokes || (cur && previewGid))) {
         const __overlayStrokeStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
           ? performance.now()
           : 0;
@@ -7770,51 +7824,141 @@ function syncBackBufferSizes() {
             if (s.overlayColorize) colorized.push(s);
           }
         }
-        if (specialStrokes.length > 0 || colorized.length > 0 || (cur && previewGid)) {
-          __dgLayerDebugLog('overlay-strokes', {
-            panelId: panel?.id || null,
-            singleCanvas: !!DG_SINGLE_CANVAS,
-            zoomed: panel?.classList?.contains('toy-zoomed') || false,
-            specialCount: specialStrokes.length,
-            colorizedCount: colorized.length,
-            hasPreview: !!(cur && previewGid),
-            flashVisible: flashCanvas?.style?.display || null,
-          });
-          fctx.save();
-          // Draw animated strokes with device transform
-          // Draw demoted colorized strokes as static overlay tints
-          try {
-            for (const s of colorized) drawFullStroke(fctx, s);
-          } catch {}
-          // Then draw animated special lines on top of normal lines
-          for (const s of specialStrokes) drawFullStroke(fctx, s);
-          // Draw current special preview before masking so it also respects the paint mask
-          if (cur && previewGid && cur.pts && cur.pts.length) {
-            fctx.setTransform(1, 0, 0, 1, 0, 0);
-            fctx.globalCompositeOperation = 'source-over';
-            const preview = { pts: cur.pts, isSpecial: true, generatorId: previewGid };
-            drawFullStroke(fctx, preview);
-          }
-          // Mask the overlay with the current paint alpha, scaled to the flash surface size.
-          // IMPORTANT: If a live preview is active, skip masking so the preview remains visible.
-          if (!(cur && previewGid && cur.pts && cur.pts.length)) {
-            withDeviceSpace(fctx, () => {
-              const flashSurface = getActiveFlashCanvas();
-              const maskW = flashSurface?.width || fctx.canvas?.width || paint?.width || 0;
-              const maskH = flashSurface?.height || fctx.canvas?.height || paint?.height || 0;
-              fctx.globalCompositeOperation = 'destination-in';
-              fctx.globalAlpha = 1;
-              fctx.drawImage(
-                paint,
-                0, 0, paint.width, paint.height,
-                0, 0, maskW, maskH
-              );
-              fctx.globalCompositeOperation = 'source-over';
-              fctx.globalAlpha = 1;
+          if (specialStrokes.length > 0 || colorized.length > 0 || (cur && previewGid)) {
+            __dgLayerDebugLog('overlay-strokes', {
+              panelId: panel?.id || null,
+              singleCanvas: !!DG_SINGLE_CANVAS,
+              zoomed: panel?.classList?.contains('toy-zoomed') || false,
+              specialCount: specialStrokes.length,
+              colorizedCount: colorized.length,
+              hasPreview: !!(cur && previewGid),
+              flashVisible: flashCanvas?.style?.display || null,
             });
+            fctx.save();
+            // Draw animated strokes with device transform
+            // Draw demoted colorized strokes as static overlay tints
+            try {
+              const __colorStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+                ? performance.now()
+                : 0;
+              for (const s of colorized) drawFullStroke(fctx, s);
+              if (__colorStart) {
+                try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.strokes.colorized', performance.now() - __colorStart); } catch {}
+              }
+            } catch {}
+            // Then draw animated special lines on top of normal lines
+            const __specialStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+              ? performance.now()
+              : 0;
+            for (const s of specialStrokes) drawFullStroke(fctx, s);
+            if (__specialStart) {
+              try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.strokes.special', performance.now() - __specialStart); } catch {}
+            }
+            // Draw current special preview before masking so it also respects the paint mask
+            if (cur && previewGid && cur.pts && cur.pts.length) {
+              const __previewStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+                ? performance.now()
+                : 0;
+              fctx.setTransform(1, 0, 0, 1, 0, 0);
+              fctx.globalCompositeOperation = 'source-over';
+              const preview = { pts: cur.pts, isSpecial: true, generatorId: previewGid };
+              drawFullStroke(fctx, preview);
+              if (__previewStart) {
+                try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.strokes.preview', performance.now() - __previewStart); } catch {}
+              }
+            }
+            // Mask the overlay with the current paint alpha, scaled to the flash surface size.
+            // IMPORTANT: If a live preview is active, skip masking so the preview remains visible.
+            if (!(cur && previewGid && cur.pts && cur.pts.length)) {
+              const __maskStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+                ? performance.now()
+                : 0;
+              withDeviceSpace(fctx, () => {
+                const flashSurface = getActiveFlashCanvas();
+                const baseW = flashSurface?.width || fctx.canvas?.width || paint?.width || 0;
+                const baseH = flashSurface?.height || fctx.canvas?.height || paint?.height || 0;
+                const zoom = Number.isFinite(boardScale) ? boardScale : 1;
+                const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+                let maskScale = __dgOverlayMaskScale || 1;
+                if (!__dgOverlayMaskScaleLastTs || (now - __dgOverlayMaskScaleLastTs) > 200) {
+                  let nextScale = 1;
+                  if (maskScale <= 0.7) {
+                    if (zoom > 0.6) nextScale = 0.85;
+                    else nextScale = 0.7;
+                  } else if (maskScale <= 0.85) {
+                    if (zoom < 0.52) nextScale = 0.7;
+                    else if (zoom > 0.74) nextScale = 1;
+                    else nextScale = 0.85;
+                  } else {
+                    if (zoom < 0.55) nextScale = 0.7;
+                    else if (zoom < 0.68) nextScale = 0.85;
+                  }
+                  if (nextScale !== maskScale) {
+                    maskScale = nextScale;
+                    __dgOverlayMaskScale = nextScale;
+                    __dgOverlayMaskScaleLastTs = now;
+                  }
+                }
+                const maskW = Math.max(1, Math.round(baseW * maskScale));
+                const maskH = Math.max(1, Math.round(baseH * maskScale));
+                if (baseW > 0 && baseH > 0 && paint?.width && paint?.height) {
+                  if (!__dgOverlayMaskCanvas || __dgOverlayMaskW !== maskW || __dgOverlayMaskH !== maskH) {
+                    __dgOverlayMaskCanvas = document.createElement('canvas');
+                    __dgOverlayMaskCanvas.width = maskW;
+                    __dgOverlayMaskCanvas.height = maskH;
+                    __dgOverlayMaskCtx = __dgOverlayMaskCanvas.getContext('2d');
+                    __dgOverlayMaskW = maskW;
+                    __dgOverlayMaskH = maskH;
+                    __dgOverlayMaskRev = -1;
+                  }
+                  if (__dgOverlayMaskCtx && __dgOverlayMaskRev !== __dgPaintRev) {
+                    const mctx = __dgOverlayMaskCtx;
+                    mctx.setTransform(1, 0, 0, 1, 0, 0);
+                    mctx.globalCompositeOperation = 'source-over';
+                    mctx.globalAlpha = 1;
+                    mctx.clearRect(0, 0, maskW, maskH);
+                    mctx.drawImage(
+                      paint,
+                      0, 0, paint.width, paint.height,
+                      0, 0, maskW, maskH
+                    );
+                    __dgOverlayMaskRev = __dgPaintRev;
+                    __dgOverlayMaskRebuilds += 1;
+                    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+                      if (now - __dgOverlayMaskLastLog > 1000) {
+                        __dgOverlayMaskLastLog = now;
+                        try {
+                          console.debug(
+                            `[drawgrid][overlay-mask] rebuilds=${__dgOverlayMaskRebuilds} paintRev=${__dgPaintRev} size=${maskW}x${maskH}`
+                          );
+                          console.debug('[drawgrid][overlay-mask] details', {
+                            rebuilds: __dgOverlayMaskRebuilds,
+                            paintRev: __dgPaintRev,
+                            maskW,
+                            maskH,
+                          });
+                        } catch {}
+                      }
+                  }
+                  fctx.globalCompositeOperation = 'destination-in';
+                  fctx.globalAlpha = 1;
+                  if (__dgOverlayMaskCanvas) {
+                    fctx.drawImage(
+                      __dgOverlayMaskCanvas,
+                      0, 0, maskW, maskH,
+                      0, 0, baseW, baseH
+                    );
+                  }
+                }
+                fctx.globalCompositeOperation = 'source-over';
+                fctx.globalAlpha = 1;
+              });
+              if (__maskStart) {
+                try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.strokes.mask', performance.now() - __maskStart); } catch {}
+              }
+            }
+            fctx.restore();
           }
-          fctx.restore();
-        }
         if (__overlayStrokeStart) {
           const __overlayStrokeDt = performance.now() - __overlayStrokeStart;
           try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.strokes', __overlayStrokeDt); } catch {}
@@ -7833,14 +7977,21 @@ function syncBackBufferSizes() {
     }
 
     if (cellFlashes.length > 0) {
-      const __dgOverlayStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
-        ? performance.now()
-        : 0;
-      try {
-        if (allowOverlayDrawHeavy) {
-          overlayCompositeNeeded = true;
-          // Draw cell flashes
-          fctx.save();
+      if (disableOverlayCore) {
+        for (let i = cellFlashes.length - 1; i >= 0; i--) {
+          const flash = cellFlashes[i];
+          flash.age -= 0.05;
+          if (flash.age <= 0) cellFlashes.splice(i, 1);
+        }
+      } else {
+        const __dgOverlayStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+          ? performance.now()
+          : 0;
+          try {
+            if (allowOverlayDraw) {
+              overlayCompositeNeeded = true;
+              // Draw cell flashes
+              fctx.save();
           for (let i = cellFlashes.length - 1; i >= 0; i--) {
             const flash = cellFlashes[i];
             const x = gridArea.x + flash.col * cw;
@@ -7864,11 +8015,12 @@ function syncBackBufferSizes() {
               cellFlashes.splice(i, 1);
             }
           }
+          }
+        } catch (e) { /* fail silently */ }
+        if (__dgOverlayStart && allowOverlayDrawHeavy) {
+          const __dgOverlayDt = performance.now() - __dgOverlayStart;
+          try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.cellFlashes', __dgOverlayDt); } catch {}
         }
-      } catch (e) { /* fail silently */ }
-      if (__dgOverlayStart && allowOverlayDrawHeavy) {
-        const __dgOverlayDt = performance.now() - __dgOverlayStart;
-        try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.cellFlashes', __dgOverlayDt); } catch {}
       }
     }
 
@@ -7879,7 +8031,7 @@ function syncBackBufferSizes() {
 
     if (noteToggleEffects.length > 0) {
       try {
-        if (allowOverlayDrawHeavy) {
+        if (!disableOverlayCore && allowOverlayDraw) {
           overlayCompositeNeeded = true;
           const __dgOverlayStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
             ? performance.now()
@@ -7924,14 +8076,30 @@ function syncBackBufferSizes() {
     // Pink radial bursts for active notes
     if (noteBurstEffects.length > 0) {
       try {
-        if (__dgLowFpsMode) {
+        if (__dgLowFpsMode || !overlayBurstsEnabled) {
           noteBurstEffects.length = 0;
           // Skip burst draw work, but keep the rest of the overlay rendering.
+        } else if (disableOverlayCore) {
+          const dtMs = Number.isFinite(frameCam?.dt) ? frameCam.dt : 16.6;
+          const dt = Number.isFinite(dtMs) ? dtMs / 1000 : (1 / 60);
+          for (let i = noteBurstEffects.length - 1; i >= 0; i--) {
+            const burst = noteBurstEffects[i];
+            for (let j = burst.particles.length - 1; j >= 0; j--) {
+              const p = burst.particles[j];
+              p.life -= dt * 2.8;
+              if (p.life <= 0) {
+                burst.particles.splice(j, 1);
+              }
+            }
+            if (!burst.particles.length) {
+              noteBurstEffects.splice(i, 1);
+            }
+          }
         } else {
           const dtMs = Number.isFinite(frameCam?.dt) ? frameCam.dt : 16.6;
           const dt = Number.isFinite(dtMs) ? dtMs / 1000 : (1 / 60);
 
-          if (allowOverlayDrawHeavy) {
+          if (allowOverlayDrawHeavy || __dgLowFpsMode) {
             overlayCompositeNeeded = true;
             const __dgOverlayStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
               ? performance.now()
@@ -8001,9 +8169,12 @@ function syncBackBufferSizes() {
     }
 
     // Draw scrolling playhead
-    if (allowOverlayDrawHeavy) {
+    if (!disableOverlayCore && allowOverlayDrawHeavy) {
       overlayCompositeNeeded = true;
       const __dgOverlayStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+        ? performance.now()
+        : 0;
+      const __playheadStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
         ? performance.now()
         : 0;
       try {
@@ -8114,8 +8285,12 @@ function syncBackBufferSizes() {
 
         fctx.restore();
       }
-      } catch (e) { /* fail silently */ }
-    } else {
+        } catch (e) { /* fail silently */ }
+        if (__playheadStart) {
+          const __playheadDt = performance.now() - __playheadStart;
+          try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.playhead', __playheadDt); } catch {}
+        }
+      } else {
       const info = getLoopInfo();
       if (info) {
         localLastPhase = info.phase01;
@@ -9078,6 +9253,12 @@ function startGhostGuide({
         const band = __dgGetDrawLabelYRange?.();
         if (band) drawGhostDebugBand(ghostCtx, band);
         drawGhostDebugPath(ghostCtx, __gpathStatic);
+      } catch {}
+    } else if (typeof window !== 'undefined' && window.__PERF_DG_OVERLAY_CORE_OFF) {
+      try {
+        const info = getLoopInfo();
+        const currentPhase = Number.isFinite(info?.phase01) ? info.phase01 : null;
+        if (currentPhase != null) localLastPhase = currentPhase;
       } catch {}
     }
     const camSnapshot = getOverlayZoomSnapshot();

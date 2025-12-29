@@ -4298,7 +4298,7 @@ body.intro-open .topbar-menu-wrap {
   display: none;
   align-items: center;
   justify-content: center;
-  background: rgba(0,0,0,0.68);
+  background: transparent;
   z-index: 5400;
 }
 .perf-lab-panel{

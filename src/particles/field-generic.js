@@ -49,6 +49,18 @@ const ZOOM_DENSITY_SMOOTH = 0.2;
 const ZOOM_DENSITY_REBUILD_DELTA = 0.08;
 const ZOOM_DENSITY_REBUILD_MS = 180;
 
+function perfSection(name, fn) {
+  if (!(window.__PERF_PARTICLE_FIELD_PROFILE && window.__PerfFrameProf && typeof performance !== 'undefined' && performance.now)) {
+    return fn();
+  }
+  const t0 = performance.now();
+  try {
+    return fn();
+  } finally {
+    try { window.__PerfFrameProf.mark(name, performance.now() - t0); } catch {}
+  }
+}
+
 function isZoomGesturing() {
   try {
     return !!(typeof window !== 'undefined' && window.__mtZoomGesturing);
@@ -145,13 +157,21 @@ function rgbToRgbaString(rgb, alpha = 1) {
   return `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${a})`;
 }
 
+const __zoomCache = { value: 1, ts: 0 };
 function readZoom(viewport) {
+  const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  if (__zoomCache.ts && (now - __zoomCache.ts) < 120) return __zoomCache.value;
+  let z = 1;
   if (viewport && typeof viewport.getZoom === 'function') {
-    const z = Number(viewport.getZoom());
-    if (Number.isFinite(z) && z > 0) return z;
+    const v = Number(viewport.getZoom());
+    if (Number.isFinite(v) && v > 0) z = v;
+  } else {
+    const fallback = Number(window.__boardScale);
+    if (Number.isFinite(fallback) && fallback > 0) z = fallback;
   }
-  const fallback = Number(window.__boardScale);
-  return Number.isFinite(fallback) && fallback > 0 ? fallback : 1;
+  __zoomCache.value = z;
+  __zoomCache.ts = now;
+  return z;
 }
 
 function clampZoomForDensity(zoom) {
@@ -159,15 +179,23 @@ function clampZoomForDensity(zoom) {
   return Math.max(ZOOM_DENSITY_MIN, Math.min(ZOOM_DENSITY_MAX, z));
 }
 
+const __overviewCache = { value: false, ts: 0 };
 function readOverview(viewport) {
+  const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  if (__overviewCache.ts && (now - __overviewCache.ts) < 160) return __overviewCache.value;
+  let isOn = false;
   if (viewport && typeof viewport.isOverview === 'function') {
-    try { return !!viewport.isOverview(); } catch { /* noop */ }
+    try { isOn = !!viewport.isOverview(); } catch { /* noop */ }
+  } else {
+    try {
+      isOn = document.documentElement.classList.contains('overview-outline');
+    } catch {
+      isOn = false;
+    }
   }
-  try {
-    return document.documentElement.classList.contains('overview-outline');
-  } catch {
-    return false;
-  }
+  __overviewCache.value = isOn;
+  __overviewCache.ts = now;
+  return isOn;
 }
 
 const __toyCountCache = { value: 0, ts: 0 };
@@ -534,22 +562,44 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     return visible;
   }
 
+  let __lodLastTs = 0;
+  let __lodLastZoom = 1;
+  let __lodLastOverview = false;
+  let __lodLastPaused = false;
+  let __lodLastPerf = 1;
   function setLODFromView() {
+    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
     const zoom = readZoom(viewport || pv);
     const inOverview = readOverview(viewport);
     const paused = pausedRef?.() ?? false;
+    const perfMul = readPerfBudgetMul();
+
+    if (
+      __lodLastTs &&
+      (now - __lodLastTs) < 140 &&
+      Math.abs(zoom - __lodLastZoom) < 0.01 &&
+      inOverview === __lodLastOverview &&
+      paused === __lodLastPaused &&
+      Math.abs(perfMul - __lodLastPerf) < 0.01
+    ) {
+      return;
+    }
+
+    __lodLastTs = now;
+    __lodLastZoom = zoom;
+    __lodLastOverview = inOverview;
+    __lodLastPaused = paused;
+    __lodLastPerf = perfMul;
 
     const zoomFactor = zoom < 0.6 ? 0.85 : 1.0;
     const overviewFactor = inOverview ? 0.85 : 1.0;
     const pauseFactor = paused ? 0.85 : 1.0;
-    const perfMul = readPerfBudgetMul();
     state.lodScale = overviewFactor * zoomFactor * pauseFactor * Math.max(0.05, perfMul);
 
     const densityZoom = clampZoomForDensity(zoom);
     const prevZoomForDensity = Number.isFinite(state.zoomForDensity) ? state.zoomForDensity : densityZoom;
     const diff = Math.abs(densityZoom - prevZoomForDensity);
     if (!isZoomGesturing() && diff > ZOOM_DENSITY_REBUILD_DELTA) {
-      const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
       if (!state.lastZoomRebuildTs || (now - state.lastZoomRebuildTs) > ZOOM_DENSITY_REBUILD_MS) {
         state.lastZoomRebuildTs = now;
         rebuild();
@@ -739,21 +789,23 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     ctx.globalAlpha = 1;
   }
 
-  function tick(dt = 1 / 60) {
-    const __perfOn = !!window.__PERF_PARTICLE_FIELD_PROFILE;
-    const __perfStart = __perfOn && typeof performance !== 'undefined' ? performance.now() : 0;
-    try {
-      const visible = isFieldVisible();
-      if (!visible) {
-        state.wasHidden = true;
-        return;
-      }
-      if (state.wasHidden) {
-        state.wasHidden = false;
-        try { snapToBudget(); } catch {}
-      }
-      maybeResizeFromLayout();
-      setLODFromView();
+    function tick(dt = 1 / 60) {
+      const __perfOn = !!window.__PERF_PARTICLE_FIELD_PROFILE;
+      const __perfStart = __perfOn && typeof performance !== 'undefined' ? performance.now() : 0;
+      try {
+        const visible = isFieldVisible();
+        if (!visible) {
+          state.wasHidden = true;
+          return;
+        }
+        if (state.wasHidden) {
+          state.wasHidden = false;
+          try { snapToBudget(); } catch {}
+        }
+        perfSection('particle.field.layout', () => {
+          maybeResizeFromLayout();
+          setLODFromView();
+        });
     const gestureActive = isZoomGesturing();
     const allowGestureThrottle = canGestureThrottle();
     const gestureThrottlingActive = gestureActive && allowGestureThrottle && (() => {
@@ -841,28 +893,28 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
       skipUpdate = !!perf?.skipUpdate;
       skipDraw = !!perf?.skipDraw;
     } catch {}
-    if (skipUpdate) {
-      if (!skipDraw) draw();
-      return;
-    }
+      if (skipUpdate) {
+        if (!skipDraw) perfSection('particle.field.draw', () => draw());
+        return;
+      }
     let effectiveDt = dt;
     if (state.tickModulo > 1) {
       state.tickModuloCounter = (state.tickModuloCounter + 1) % state.tickModulo;
       state.tickAccumDt += dt;
       if (state.tickModuloCounter !== 0) {
-        updateFades(dt);
-        twinkle(dt);
-        if (!skipDraw) {
-          // If we're in a throttled tickModulo phase, also avoid drawing every frame.
-          const dm = gestureThrottlingActive ? readPerfGestureDrawModulo() : 2;
-          state.drawCounter = (state.drawCounter + 1) % Math.max(1, dm);
-          if (state.drawCounter === 0) draw();
+          perfSection('particle.field.fades', () => updateFades(dt));
+          perfSection('particle.field.twinkle', () => twinkle(dt));
+          if (!skipDraw) {
+            // If we're in a throttled tickModulo phase, also avoid drawing every frame.
+            const dm = gestureThrottlingActive ? readPerfGestureDrawModulo() : 2;
+            state.drawCounter = (state.drawCounter + 1) % Math.max(1, dm);
+            if (state.drawCounter === 0) perfSection('particle.field.draw', () => draw());
+          }
+          perfSection('particle.field.cleanup', () => cleanupFaded());
+          return;
         }
-        cleanupFaded();
-        return;
-      }
-      effectiveDt = state.tickAccumDt;
-      state.tickAccumDt = 0;
+        effectiveDt = state.tickAccumDt;
+        state.tickAccumDt = 0;
     }
     effectiveDt = Math.min(0.12, effectiveDt); // avoid huge leaps when heavily throttled
 
@@ -874,41 +926,41 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
         const dm = readPerfGestureDrawModulo();
         state.gestureDrawCounter = (state.gestureDrawCounter + 1) % dm;
         const shouldDrawThisFrame = (!skipDraw && state.gestureDrawCounter === 0);
-        if (shouldDrawThisFrame) {
-          updateFades(effectiveDt);
-          twinkle(effectiveDt);
-          draw();
-          cleanupFaded();
+          if (shouldDrawThisFrame) {
+            perfSection('particle.field.fades', () => updateFades(effectiveDt));
+            perfSection('particle.field.twinkle', () => twinkle(effectiveDt));
+            perfSection('particle.field.draw', () => draw());
+            perfSection('particle.field.cleanup', () => cleanupFaded());
+          }
+          return;
         }
-        return;
-      }
-      effectiveDt = Math.min(effectiveDt, 1 / 45); // slower integration during drag
-    } else {
-      state.gestureSkip = 0;
-      state.gestureDrawCounter = 0;
-    }
-
-    reconcileParticleCount(effectiveDt);
-    if (state.emergencyFade) {
-      try {
-        const dbg = state.emergencyDbg || (state.emergencyDbg = { ticks: 0, fades: 0, lastTs: 0 });
-        dbg.fades += 1;
-      } catch {}
-    }
-    updateFades(effectiveDt);
-    step(effectiveDt);
-    twinkle(effectiveDt);
-    if (!skipDraw) {
-      if (gestureThrottlingActive && !state.emergencyFade) {
-        const dm = readPerfGestureDrawModulo();
-        state.drawCounter = (state.drawCounter + 1) % dm;
-        if (state.drawCounter === 0) draw();
+        effectiveDt = Math.min(effectiveDt, 1 / 45); // slower integration during drag
       } else {
-        draw();
+        state.gestureSkip = 0;
+        state.gestureDrawCounter = 0;
       }
-    }
-    cleanupFaded();
-  } finally {
+
+      perfSection('particle.field.reconcile', () => reconcileParticleCount(effectiveDt));
+      if (state.emergencyFade) {
+        try {
+          const dbg = state.emergencyDbg || (state.emergencyDbg = { ticks: 0, fades: 0, lastTs: 0 });
+          dbg.fades += 1;
+        } catch {}
+      }
+      perfSection('particle.field.fades', () => updateFades(effectiveDt));
+      perfSection('particle.field.step', () => step(effectiveDt));
+      perfSection('particle.field.twinkle', () => twinkle(effectiveDt));
+      if (!skipDraw) {
+        if (gestureThrottlingActive && !state.emergencyFade) {
+          const dm = readPerfGestureDrawModulo();
+          state.drawCounter = (state.drawCounter + 1) % dm;
+          if (state.drawCounter === 0) perfSection('particle.field.draw', () => draw());
+        } else {
+          perfSection('particle.field.draw', () => draw());
+        }
+      }
+      perfSection('particle.field.cleanup', () => cleanupFaded());
+    } finally {
     if (__perfOn && __perfStart) {
       const __perfEnd = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
       if (__perfEnd) {
