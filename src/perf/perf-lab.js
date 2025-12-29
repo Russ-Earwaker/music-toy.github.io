@@ -90,6 +90,9 @@ function ensureUI() {
       { act: 'runP3e2', label: 'Run P3e2: Playing + Random Notes (Anchor OFF)' },
       { act: 'runP3f',  label: 'Run P3f: Playing Pan/Zoom + Random Notes (Anchor ON)' },
       { act: 'runP3f2', label: 'Run P3f2: Playing Pan/Zoom + Random Notes (Anchor OFF)' },
+      { act: 'runP3fEmptyNoNotes', label: 'Run P3f: Playing Pan/Zoom (No Notes, No Chains)' },
+      { act: 'runP3fEmptyChainNoNotes', label: 'Run P3f: Playing Pan/Zoom (Chained, No Notes)' },
+      { act: 'runP3fMixedSomeEmpty', label: 'Run P3f: Playing Pan/Zoom (Mostly Full + Some Empty)' },
       { act: 'runP3fNoPaint', label: 'Run P3f: Playing Pan/Zoom + Random Notes (No Paint)' },
       { act: 'runP3fNoDom', label: 'Run P3f: Playing Pan/Zoom + Random Notes (No DOM Updates)' },
       { act: 'runP3fNoParticles', label: 'Run P3f: Playing Pan/Zoom + Random Notes (No Particles)' },
@@ -348,6 +351,9 @@ function ensureUI() {
     if (act === 'runP3e2') await runP3e2();
     if (act === 'runP3f') await runP3f();
     if (act === 'runP3f2') await runP3f2();
+    if (act === 'runP3fEmptyNoNotes') await runP3fEmptyNoNotes();
+    if (act === 'runP3fEmptyChainNoNotes') await runP3fEmptyChainNoNotes();
+    if (act === 'runP3fMixedSomeEmpty') await runP3fMixedSomeEmpty();
     if (act === 'runP3fNoPaint') await runP3fNoPaint();
     if (act === 'runP3fNoDom') await runP3fNoDom();
     if (act === 'runP3fNoParticles') await runP3fNoParticles();
@@ -1731,6 +1737,221 @@ function makeToyRandomiseOnceScript({
   };
 }
 
+function makeToyClearOnceScript({
+  selector,
+  atMs = 250,
+  readyCheck = null,
+  retryMs = 250,
+  timeoutMs = 4000,
+  repeatCount = 1,
+  repeatEveryMs = 400,
+} = {}) {
+  return makeToyRandomiseOnceScript({
+    selector,
+    atMs,
+    useSeededRandom: false,
+    eventName: 'toy-clear',
+    readyCheck,
+    retryMs,
+    timeoutMs,
+    repeatCount,
+    repeatEveryMs,
+  });
+}
+
+function silenceDrawgridPanels(panelIds) {
+  const P = window.Persistence;
+  if (!P || typeof P.getSnapshot !== 'function' || typeof P.applySnapshot !== 'function') return false;
+  const ids = new Set(panelIds || []);
+  if (ids.size === 0) return false;
+
+  let changed = 0;
+  try {
+    const snap = P.getSnapshot();
+    const toys = Array.isArray(snap?.toys) ? snap.toys : [];
+    for (const t of toys) {
+      const id = t?.id || t?.toyId;
+      if (!id || !ids.has(id)) continue;
+      t.state = t.state || {};
+      const nodes = t.state.nodes || {};
+      const list = Array.isArray(nodes.list) ? nodes.list : [];
+      const steps = Number.isFinite(t.state.steps) ? t.state.steps : (list.length || 8);
+      const nextList = (list.length > 0) ? list : Array.from({ length: steps }, () => []);
+      nodes.list = nextList;
+      nodes.active = Array.from({ length: nextList.length }, () => false);
+      nodes.disabled = nextList.map((arr) => Array.isArray(arr) ? arr.slice() : []);
+      t.state.nodes = nodes;
+      changed++;
+    }
+    if (!changed) return false;
+    const ok = !!P.applySnapshot(snap);
+    if (!ok) return false;
+    try {
+      try {
+        if (typeof isRunning === 'function' && typeof startTransport === 'function') {
+          if (!isRunning()) startTransport();
+        }
+      } catch {}
+      window.updateAllToys?.();
+      window.scheduleAllToysRedraw?.();
+      window.requestAnimationFrame?.(() => {
+        window.updateAllToys?.();
+        window.scheduleAllToysRedraw?.();
+      });
+    } catch {}
+    try { window.Persistence?.markDirty?.(); } catch {}
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function makeDrawgridSilenceOnceScript({
+  selector,
+  atMs = 250,
+  clearEvery = null,
+  readyCheck = null,
+  retryMs = 250,
+  timeoutMs = 4000,
+} = {}) {
+  const fireAt = Math.max(0, Number(atMs) || 0);
+  const sel = selector || '.toy-panel[data-toy="drawgrid"]';
+  const every = Number.isFinite(clearEvery) ? Math.max(1, Math.floor(clearEvery)) : null;
+  const retryEvery = Math.max(50, Number(retryMs) || 250);
+  const timeout = Math.max(0, Number(timeoutMs) || 0);
+
+  return function step(tMs) {
+    if (step.__didFire) return;
+    if (tMs < fireAt) return;
+    if (!step.__firstTryMs) step.__firstTryMs = tMs;
+    if (timeout > 0 && (tMs - step.__firstTryMs) > timeout) {
+      step.__didFire = true;
+      return;
+    }
+
+    const panels = document.querySelectorAll(sel);
+    if (!panels || panels.length === 0) return;
+    if (typeof readyCheck === 'function') {
+      let allReady = true;
+      panels.forEach((panel) => {
+        try { if (!readyCheck(panel)) allReady = false; } catch { allReady = false; }
+      });
+      if (!allReady) {
+        const k = Math.floor((tMs - fireAt) / retryEvery);
+        if (k !== step.__lastRetryK) step.__lastRetryK = k;
+        return;
+      }
+    }
+
+    const ids = [];
+    panels.forEach((panel, idx) => {
+      if (every && (idx % every !== 0)) return;
+      if (panel?.id) ids.push(panel.id);
+    });
+    if (ids.length > 0) silenceDrawgridPanels(ids);
+    step.__didFire = true;
+  };
+}
+
+function makeToyClearSubsetOnceScript({
+  selector,
+  atMs = 250,
+  clearEvery = 4,
+  readyCheck = null,
+  retryMs = 250,
+  timeoutMs = 4000,
+} = {}) {
+  const fireAt = Math.max(0, Number(atMs) || 0);
+  const sel = selector || '.toy-panel';
+  const every = Math.max(1, Math.floor(clearEvery) || 1);
+  const retryEvery = Math.max(50, Number(retryMs) || 250);
+  const timeout = Math.max(0, Number(timeoutMs) || 0);
+
+  return function step(tMs) {
+    if (step.__didFire) return;
+    if (tMs < fireAt) return;
+    if (!step.__firstTryMs) step.__firstTryMs = tMs;
+    if (timeout > 0 && (tMs - step.__firstTryMs) > timeout) {
+      step.__didFire = true;
+      return;
+    }
+
+    const panels = document.querySelectorAll(sel);
+    if (!panels || panels.length === 0) return;
+    if (typeof readyCheck === 'function') {
+      let allReady = true;
+      panels.forEach((panel) => {
+        try { if (!readyCheck(panel)) allReady = false; } catch { allReady = false; }
+      });
+      if (!allReady) {
+        const k = Math.floor((tMs - fireAt) / retryEvery);
+        if (k !== step.__lastRetryK) step.__lastRetryK = k;
+        return;
+      }
+    }
+
+    panels.forEach((panel, idx) => {
+      if (idx % every !== 0) return;
+      try { panel.dispatchEvent(new CustomEvent('toy-clear', { bubbles: true })); } catch {}
+    });
+    step.__didFire = true;
+  };
+}
+
+function clearPanelChainData(panel) {
+  if (!panel || !panel.dataset) return;
+  try {
+    delete panel.dataset.nextToyId;
+    delete panel.dataset.prevToyId;
+    delete panel.dataset.chainHasChild;
+    delete panel.dataset.chainParent;
+    delete panel.dataset.chainActive;
+  } catch {}
+}
+
+function linkPanelsIntoChains(panels, { chainLength = 4 } = {}) {
+  const list = Array.from(panels || []).filter((panel) => panel && panel.id);
+  if (list.length < 2) return;
+  list.forEach(clearPanelChainData);
+
+  const size = Math.max(2, Math.floor(chainLength) || 2);
+  for (let i = 0; i < list.length; i += size) {
+    const chunk = list.slice(i, i + size);
+    for (let k = 0; k < chunk.length - 1; k++) {
+      const a = chunk[k];
+      const b = chunk[k + 1];
+      if (!a?.id || !b?.id) continue;
+      a.dataset.nextToyId = b.id;
+      a.dataset.chainHasChild = '1';
+      b.dataset.prevToyId = a.id;
+      b.dataset.chainParent = a.id;
+    }
+  }
+
+  try {
+    window.updateChains?.();
+    window.updateAllChainUIs?.();
+    window.scheduleChainRedraw?.();
+  } catch {}
+}
+
+function makeChainOnceScript({
+  selector,
+  chainLength = 4,
+  atMs = 350,
+} = {}) {
+  const fireAt = Math.max(0, Number(atMs) || 0);
+  const sel = selector || '.toy-panel';
+  return function step(tMs) {
+    if (step.__didFire) return;
+    if (tMs < fireAt) return;
+    const panels = document.querySelectorAll(sel);
+    if (!panels || panels.length < 2) return;
+    linkPanelsIntoChains(panels, { chainLength });
+    step.__didFire = true;
+  };
+}
+
 function makeEnsureTransportScript({ atMs = 400 } = {}) {
   const fireAt = Math.max(0, Number(atMs) || 0);
   return function step(tMs) {
@@ -1900,6 +2121,187 @@ async function runP3f2() {
     );
   });
   try { window.__PERF_DISABLE_CHAIN_WORK = false; } catch {}
+}
+
+async function runP3fEmptyNoNotes() {
+  const prevTag = window.__PERF_RUN_TAG;
+  const prevDisableOverlays = window.__PERF_DISABLE_OVERLAYS;
+  const prevOverlayCore = window.__PERF_DG_OVERLAY_CORE_OFF;
+  const prevOverlayStrokes = window.__PERF_DG_OVERLAY_STROKES_OFF;
+  const prevForceSequencerAll = window.__PERF_FORCE_SEQUENCER_ALL;
+  const prevDisableChainWork = window.__PERF_DISABLE_CHAIN_WORK;
+  const forceOverlays =
+    !window.__PERF_DISABLE_OVERLAYS &&
+    !window.__PERF_DG_OVERLAY_CORE_OFF &&
+    !window.__PERF_DG_OVERLAY_STROKES_OFF;
+  window.__PERF_RUN_TAG = 'P3fEmptyNoNotes';
+  try {
+    window.__PERF_DISABLE_CHAIN_WORK = false;
+    if (forceOverlays) {
+      window.__PERF_DISABLE_OVERLAYS = false;
+      window.__PERF_DG_OVERLAY_CORE_OFF = false;
+      window.__PERF_DG_OVERLAY_STROKES_OFF = false;
+    }
+    window.__PERF_FORCE_SEQUENCER_ALL = true;
+  } catch {}
+  const panZoom = makePanZoomScript({
+    panPx: 2400,
+    zoomMin: 0.40,
+    zoomMax: 1.20,
+    idleMs: 2500,
+    panMs: 13500,
+    zoomMs: 13500,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+  });
+  const silenceNotes = makeDrawgridSilenceOnceScript({
+    selector: '.toy-panel[data-toy="drawgrid"]',
+    atMs: 200,
+  });
+  const step = composeSteps(silenceNotes, panZoom);
+  try {
+    await withTempAnchorDisabled(false, async () => {
+      await runVariantPlaying(
+        'P3f_drawgrid_playing_panzoom_no_notes_anchor_on',
+        step,
+        'Running P3f (playing pan/zoom, no notes, no chains, anchor ON)...'
+      );
+    });
+  } finally {
+    window.__PERF_RUN_TAG = prevTag;
+    try { window.__PERF_DISABLE_CHAIN_WORK = prevDisableChainWork; } catch {}
+    try {
+      window.__PERF_DISABLE_OVERLAYS = prevDisableOverlays;
+      window.__PERF_DG_OVERLAY_CORE_OFF = prevOverlayCore;
+      window.__PERF_DG_OVERLAY_STROKES_OFF = prevOverlayStrokes;
+      window.__PERF_FORCE_SEQUENCER_ALL = prevForceSequencerAll;
+    } catch {}
+  }
+}
+
+async function runP3fEmptyChainNoNotes() {
+  const prevTag = window.__PERF_RUN_TAG;
+  const prevDisableOverlays = window.__PERF_DISABLE_OVERLAYS;
+  const prevOverlayCore = window.__PERF_DG_OVERLAY_CORE_OFF;
+  const prevOverlayStrokes = window.__PERF_DG_OVERLAY_STROKES_OFF;
+  const prevForceSequencerAll = window.__PERF_FORCE_SEQUENCER_ALL;
+  const prevDisableChainWork = window.__PERF_DISABLE_CHAIN_WORK;
+  const forceOverlays =
+    !window.__PERF_DISABLE_OVERLAYS &&
+    !window.__PERF_DG_OVERLAY_CORE_OFF &&
+    !window.__PERF_DG_OVERLAY_STROKES_OFF;
+  window.__PERF_RUN_TAG = 'P3fEmptyChainNoNotes';
+  try {
+    window.__PERF_DISABLE_CHAIN_WORK = false;
+    if (forceOverlays) {
+      window.__PERF_DISABLE_OVERLAYS = false;
+      window.__PERF_DG_OVERLAY_CORE_OFF = false;
+      window.__PERF_DG_OVERLAY_STROKES_OFF = false;
+    }
+    window.__PERF_FORCE_SEQUENCER_ALL = true;
+  } catch {}
+  const panZoom = makePanZoomScript({
+    panPx: 2400,
+    zoomMin: 0.40,
+    zoomMax: 1.20,
+    idleMs: 2500,
+    panMs: 13500,
+    zoomMs: 13500,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+  });
+  const silenceNotes = makeDrawgridSilenceOnceScript({
+    selector: '.toy-panel[data-toy="drawgrid"]',
+    atMs: 200,
+  });
+  const linkChains = makeChainOnceScript({
+    selector: '.toy-panel[data-toy="drawgrid"]',
+    chainLength: 4,
+    atMs: 500,
+  });
+  const step = composeSteps(silenceNotes, linkChains, panZoom);
+  try {
+    await withTempAnchorDisabled(false, async () => {
+      await runVariantPlaying(
+        'P3f_drawgrid_playing_panzoom_chain_no_notes_anchor_on',
+        step,
+        'Running P3f (playing pan/zoom, chained no notes, anchor ON)...'
+      );
+    });
+  } finally {
+    window.__PERF_RUN_TAG = prevTag;
+    try { window.__PERF_DISABLE_CHAIN_WORK = prevDisableChainWork; } catch {}
+    try {
+      window.__PERF_DISABLE_OVERLAYS = prevDisableOverlays;
+      window.__PERF_DG_OVERLAY_CORE_OFF = prevOverlayCore;
+      window.__PERF_DG_OVERLAY_STROKES_OFF = prevOverlayStrokes;
+      window.__PERF_FORCE_SEQUENCER_ALL = prevForceSequencerAll;
+    } catch {}
+  }
+}
+
+async function runP3fMixedSomeEmpty() {
+  const prevTag = window.__PERF_RUN_TAG;
+  const prevDisableOverlays = window.__PERF_DISABLE_OVERLAYS;
+  const prevOverlayCore = window.__PERF_DG_OVERLAY_CORE_OFF;
+  const prevOverlayStrokes = window.__PERF_DG_OVERLAY_STROKES_OFF;
+  const prevForceSequencerAll = window.__PERF_FORCE_SEQUENCER_ALL;
+  const prevDisableChainWork = window.__PERF_DISABLE_CHAIN_WORK;
+  const forceOverlays =
+    !window.__PERF_DISABLE_OVERLAYS &&
+    !window.__PERF_DG_OVERLAY_CORE_OFF &&
+    !window.__PERF_DG_OVERLAY_STROKES_OFF;
+  window.__PERF_RUN_TAG = 'P3fMixedSomeEmpty';
+  try {
+    window.__PERF_DISABLE_CHAIN_WORK = false;
+    if (forceOverlays) {
+      window.__PERF_DISABLE_OVERLAYS = false;
+      window.__PERF_DG_OVERLAY_CORE_OFF = false;
+      window.__PERF_DG_OVERLAY_STROKES_OFF = false;
+    }
+    window.__PERF_FORCE_SEQUENCER_ALL = true;
+  } catch {}
+  const panZoom = makePanZoomScript({
+    panPx: 2400,
+    zoomMin: 0.40,
+    zoomMax: 1.20,
+    idleMs: 2500,
+    panMs: 13500,
+    zoomMs: 13500,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+  });
+  const randOnce = makeToyRandomiseOnceScript({
+    selector: '.toy-panel[data-toy="drawgrid"]',
+    atMs: 160,
+    seed: 1337,
+    useSeededRandom: true,
+    eventNames: ['toy-random', 'toy-random-notes'],
+  });
+  const silenceSomeNotes = makeDrawgridSilenceOnceScript({
+    selector: '.toy-panel[data-toy="drawgrid"]',
+    atMs: 260,
+    clearEvery: 4,
+  });
+  const step = composeSteps(randOnce, silenceSomeNotes, panZoom);
+  try {
+    await withTempAnchorDisabled(false, async () => {
+      await runVariantPlaying(
+        'P3f_drawgrid_playing_panzoom_some_empty_anchor_on',
+        step,
+        'Running P3f (playing pan/zoom, mostly full + some empty, anchor ON)...'
+      );
+    });
+  } finally {
+    window.__PERF_RUN_TAG = prevTag;
+    try { window.__PERF_DISABLE_CHAIN_WORK = prevDisableChainWork; } catch {}
+    try {
+      window.__PERF_DISABLE_OVERLAYS = prevDisableOverlays;
+      window.__PERF_DG_OVERLAY_CORE_OFF = prevOverlayCore;
+      window.__PERF_DG_OVERLAY_STROKES_OFF = prevOverlayStrokes;
+      window.__PERF_FORCE_SEQUENCER_ALL = prevForceSequencerAll;
+    } catch {}
+  }
 }
 
 async function runP3fNoPaint() {
@@ -3271,7 +3673,7 @@ window.addEventListener('keydown', (e) => {
 });
 
 // Expose for manual console use
-try { window.__PerfLab = { show, hide, toggle, buildP2, buildP3, buildP4, buildP4h, buildP5, buildP6, runP2a, runP2b, runP2c, runP3a, runP3b, runP3c, runP3d, runP3e, runP3e2, runP3f, runP3f2, runP3fNoPaint, runP3fNoDom, runP3fNoParticles, runP3fNoOverlays, runP3fNoOverlayStrokes, runP3fNoOverlayCore, runP3fParticleProfile, runP3fFlatLayers, runP3g, runP3g2, runP3h, runP3h2, runP3i, runP3i2, runP3j, runP3j2, runP3k, runP3k2, runP3l, runP3l2, runP3l3, runP3l4, runP3l5, runP3l6, runP3m, runP3m2, runQueue, runAuto, runP4a, runP4b, runP4o, runP4p, runP4q, runP4r, runP4s, runP4t, runP4u, runP4v, runP4w, runP4x, runP4e, runP4c, runP4d, runP4f, runP4g, runP4h2, runP4i, runP4j, runP4k, runP4m, runP4n, runP5a, runP5b, runP5c, runP6a, runP6b, runP6c, runP6d, runP6e, runP6eNoPaint, runP6ePaintOnly, runP6eNoDom, readAutoConfig, readAutoConfigFromFile, saveResultsBundle, postResultsBundle, downloadResultsBundle, getResults: () => lastResults, getBundle: () => lastBundle, clearResults: () => { lastResults = []; } }; } catch {}
+try { window.__PerfLab = { show, hide, toggle, buildP2, buildP3, buildP4, buildP4h, buildP5, buildP6, runP2a, runP2b, runP2c, runP3a, runP3b, runP3c, runP3d, runP3e, runP3e2, runP3f, runP3f2, runP3fEmptyNoNotes, runP3fEmptyChainNoNotes, runP3fMixedSomeEmpty, runP3fNoPaint, runP3fNoDom, runP3fNoParticles, runP3fNoOverlays, runP3fNoOverlayStrokes, runP3fNoOverlayCore, runP3fParticleProfile, runP3fFlatLayers, runP3g, runP3g2, runP3h, runP3h2, runP3i, runP3i2, runP3j, runP3j2, runP3k, runP3k2, runP3l, runP3l2, runP3l3, runP3l4, runP3l5, runP3l6, runP3m, runP3m2, runQueue, runAuto, runP4a, runP4b, runP4o, runP4p, runP4q, runP4r, runP4s, runP4t, runP4u, runP4v, runP4w, runP4x, runP4e, runP4c, runP4d, runP4f, runP4g, runP4h2, runP4i, runP4j, runP4k, runP4m, runP4n, runP5a, runP5b, runP5c, runP6a, runP6b, runP6c, runP6d, runP6e, runP6eNoPaint, runP6ePaintOnly, runP6eNoDom, readAutoConfig, readAutoConfigFromFile, saveResultsBundle, postResultsBundle, downloadResultsBundle, getResults: () => lastResults, getBundle: () => lastBundle, clearResults: () => { lastResults = []; } }; } catch {}
 
 
 

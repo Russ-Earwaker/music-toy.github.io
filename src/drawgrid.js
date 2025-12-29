@@ -7288,7 +7288,13 @@ function syncBackBufferSizes() {
       const hasOverlayFx =
         (overlayFlashesEnabled && ((noteToggleEffects?.length || 0) > 0 || (cellFlashes?.length || 0) > 0)) ||
         (overlayBurstsEnabled && (noteBurstEffects?.length || 0) > 0);
-    const transportRunning = (typeof isRunning === 'function') && isRunning();
+      const transportRunning = (typeof isRunning === 'function') && isRunning();
+      const hasChainLink = panel.dataset.nextToyId || panel.dataset.prevToyId;
+      const isChained = !!hasChainLink;
+      const isActiveInChain = isChained ? (panel.dataset.chainActive === 'true') : true;
+      const hasActiveNotes = currentMap && currentMap.active && currentMap.active.some(a => a);
+      const head = isChained ? findChainHead(panel) : panel;
+      const chainHasNotes = head ? chainHasSequencedNotes(head) : hasActiveNotes;
 
       const isTrulyIdle =
         !hasAnyNotes &&
@@ -7308,14 +7314,16 @@ function syncBackBufferSizes() {
       // Overlays (notes, playhead, flashes) respect visibility & hydrations guard,
       // but are otherwise always on - they're core UX.
       const __overlayGateStart = __perfOn ? performance.now() : 0;
-        const allowOverlayDraw = canDrawAnything;
-        const disableOverlayStrokes = !!(typeof window !== 'undefined' && window.__PERF_DG_OVERLAY_STROKES_OFF);
-        let hasOverlayStrokes = false;
-        if (allowOverlayDraw && !disableOverlayStrokes) {
-          hasOverlayStrokes = hasOverlayStrokesCached();
-        }
-        const overlayTransport = disableOverlayCore ? false : transportRunning;
-        const overlayActive = allowOverlayDraw && (hasOverlayFx || overlayTransport || hasOverlayStrokes || (cur && previewGid));
+      const allowOverlayDraw = canDrawAnything;
+      const disableOverlayStrokes = !!(typeof window !== 'undefined' && window.__PERF_DG_OVERLAY_STROKES_OFF);
+      let hasOverlayStrokes = false;
+      if (allowOverlayDraw && !disableOverlayStrokes) {
+        hasOverlayStrokes = hasOverlayStrokesCached();
+      }
+      const overlayTransport = disableOverlayCore
+        ? false
+        : (transportRunning && (isChained ? (isActiveInChain && chainHasNotes) : hasActiveNotes));
+      const overlayActive = allowOverlayDraw && (hasOverlayFx || overlayTransport || hasOverlayStrokes || (cur && previewGid));
       let overlayEvery = 1;
       if (gesturing && visiblePanels >= 6 && !isFocused) {
         overlayEvery = (visiblePanels >= 18) ? 4 : (visiblePanels >= 12) ? 3 : 2;
@@ -7585,16 +7593,19 @@ function syncBackBufferSizes() {
       }
     }
 
-    if (DG_SINGLE_CANVAS && canDrawAnything) {
-      const __compositeStart = (__perfOn && typeof performance !== 'undefined' && performance.now)
-        ? performance.now()
-        : 0;
-      compositeSingleCanvas();
-      __dgSingleCompositeDirty = false;
-      if (__perfOn && __compositeStart) {
-        try { window.__PerfFrameProf?.mark?.('drawgrid.draw.composite', performance.now() - __compositeStart); } catch {}
+      if (DG_SINGLE_CANVAS && overlayCompositeNeeded) {
+        __dgSingleCompositeDirty = true;
       }
-    }
+      if (DG_SINGLE_CANVAS && canDrawAnything && __dgSingleCompositeDirty) {
+        const __compositeStart = (__perfOn && typeof performance !== 'undefined' && performance.now)
+          ? performance.now()
+          : 0;
+        compositeSingleCanvas();
+        __dgSingleCompositeDirty = false;
+        if (__perfOn && __compositeStart) {
+          try { window.__PerfFrameProf?.mark?.('drawgrid.draw.composite', performance.now() - __compositeStart); } catch {}
+        }
+      }
 
     perfMark(__dgUpdateDt, __dgDrawDt);
     if (__perfZoomOn && __perfRenderStart) {
@@ -7756,14 +7767,6 @@ function syncBackBufferSizes() {
     }
 
     // Set playing class for border highlight
-    const hasChainLink = panel.dataset.nextToyId || panel.dataset.prevToyId;
-    const isChained = !!hasChainLink;
-    const isActiveInChain = isChained ? (panel.dataset.chainActive === 'true') : true;
-    const hasActiveNotes = currentMap && currentMap.active && currentMap.active.some(a => a);
-
-    const head = isChained ? findChainHead(panel) : panel;
-    const chainHasNotes = head ? chainHasSequencedNotes(head) : hasActiveNotes;
-
     // Only show the steady highlight while the transport is running.
     // Chained toys require both an active chain link and notes somewhere in the chain.
     const showPlaying = transportRunning

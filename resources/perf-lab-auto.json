@@ -3,9 +3,12 @@
     "buildP3",
     "runP3fParticleProfile",
     "runP3fNoOverlayStrokes",
-    "runP3fNoOverlayCore"
+    "runP3fNoOverlayCore",
+    "runP3fEmptyNoNotes",
+    "runP3fEmptyChainNoNotes",
+    "runP3fMixedSomeEmpty"
   ],
-  "notes": "Avg mix: 4 draw toys + 4 loopgrid chains (len 4) extreme zoom. P3f drawgrid pan/zoom + random once.",
+  "notes": "Avg mix: 4 draw toys + 4 loopgrid chains (len 4) extreme zoom. P3f drawgrid pan/zoom + random once, plus no-notes, chained-no-notes, and mostly-full mixed runs.",
   "runTag": "loopgrid-sprites",
   "traceMarks": true,
   "particleToggles": {
