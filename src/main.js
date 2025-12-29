@@ -502,6 +502,7 @@ function installChainPositionObserver() {
       g_chainPosDirtyToyIds.clear();
     }
   };
+  flush.__perfRafTag = 'perf.raf.chainPosFlush';
 
   g_chainPosObserver = new MutationObserver((mutations) => {
     // Only care when focus editing or overview — basically anytime connectors might be visible.
@@ -1173,6 +1174,19 @@ function __elHidden(el){
 }
 function syncBodyOutline(panel){
     if (!panel || !panel.isConnected) return;
+    const overviewActive = !!(
+      window.__overviewMode?.isActive?.() ||
+      document.body?.classList?.contains('overview-mode') ||
+      document.getElementById('board')?.classList?.contains('board-overview')
+    );
+    if (!overviewActive) {
+      if (panel.classList.contains('overview-outline')) {
+        panel.classList.remove('overview-outline');
+        const overlay = panel.querySelector(':scope > .toy-body-outline');
+        if (overlay) overlay.style.opacity = '0';
+      }
+      return;
+    }
     let overlay = panel.querySelector(':scope > .toy-body-outline');
     if (!overlay) {
       overlay = document.createElement('div');
@@ -1690,13 +1704,15 @@ function queueBodyOutlineSync(panel) {
   if (!panel || !panel.isConnected) return;
   g_outlineSyncQueue.add(panel);
   if (g_outlineSyncRaf) return;
-  g_outlineSyncRaf = requestAnimationFrame(() => {
+  const rafCb = () => {
     g_outlineSyncRaf = 0;
     for (const p of g_outlineSyncQueue) {
       try { syncBodyOutline(p); } catch {}
     }
     g_outlineSyncQueue.clear();
-  });
+  };
+  rafCb.__perfRafTag = 'perf.raf.outlineSync';
+  g_outlineSyncRaf = requestAnimationFrame(rafCb);
 }
 
 function pulseToyBorder(panel, durationMs = 320) {
@@ -3301,6 +3317,7 @@ async function boot(){
           }
         });
     }
+    animateConnectors.__perfRafTag = 'perf.raf.connectors';
     requestAnimationFrame(animateConnectors);
   });
 

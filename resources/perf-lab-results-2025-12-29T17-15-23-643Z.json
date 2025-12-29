@@ -1,0 +1,2138 @@
+{
+  "createdAt": "2025-12-29T17:15:23.632Z",
+  "href": "http://192.168.0.62:5500/index.html",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+  "meta": {
+    "queue": [
+      "buildP3",
+      "runP3fParticleProfile",
+      "runP3fNoOverlayStrokes",
+      "runP3fNoOverlayCore",
+      "runP3fEmptyNoNotes",
+      "runP3fEmptyChainNoNotes",
+      "runP3fMixedSomeEmpty"
+    ],
+    "notes": "Avg mix: 4 draw toys + 4 loopgrid chains (len 4) extreme zoom. P3f drawgrid pan/zoom + random once, plus no-notes, chained-no-notes, and mostly-full mixed runs.",
+    "runId": ""
+  },
+  "results": [
+    {
+      "label": "P3f_drawgrid_playing_panzoom_rand_once_anchor_on",
+      "durationMs": 30000,
+      "warmupMs": 1200,
+      "createdAt": "2025-12-29T17:12:53.254Z",
+      "samples": 278,
+      "frameMs": {
+        "avg": 104.70323741007194,
+        "p50": 83.5,
+        "p95": 183.59999999999854,
+        "p99": 367,
+        "worst": 934
+      },
+      "counts": {
+        "over16ms": 278,
+        "over33ms": 278,
+        "over50ms": 269
+      },
+      "pulseCount": 3670,
+      "outlineSyncCount": 3670,
+      "warmupCount": 1,
+      "warmupTs": 1767028344321,
+      "frameProfile": {
+        "samples": 120,
+        "parts": {
+          "perf.raf.other": {
+            "totalMs": 126.00000309944153,
+            "avgMs": 1.0500000258286795
+          },
+          "perf.raf.outlineSync": {
+            "totalMs": 62.19999957084656,
+            "avgMs": 0.5183333297570546
+          },
+          "pulse.service": {
+            "totalMs": 3.299999952316284,
+            "avgMs": 0.027499999602635702
+          },
+          "zoom.reflow": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "anchor": {
+            "totalMs": 112.19999980926514,
+            "avgMs": 0.9349999984105428
+          },
+          "chain.markActive": {
+            "totalMs": 34.29999923706055,
+            "avgMs": 0.28583332697550456
+          },
+          "chain.sequencer": {
+            "totalMs": 313.19999980926514,
+            "avgMs": 2.609999998410543
+          },
+          "perf.raf.scheduler": {
+            "totalMs": 475.59999990463257,
+            "avgMs": 3.9633333325386046
+          },
+          "perf.raf.main": {
+            "totalMs": 476.7000000476837,
+            "avgMs": 3.9725000003973645
+          },
+          "chain.draw": {
+            "totalMs": 26.20000147819519,
+            "avgMs": 0.2183333456516266
+          },
+          "perf.raf.zoomProgress": {
+            "totalMs": 26.099998950958252,
+            "avgMs": 0.21749999125798544
+          },
+          "perf.raf.zoomTick": {
+            "totalMs": 27.399998903274536,
+            "avgMs": 0.22833332419395447
+          },
+          "perf.worldToTranslate": {
+            "totalMs": 0.10000014305114746,
+            "avgMs": 0.0008333345254262288
+          },
+          "perf.gesture.zoom": {
+            "totalMs": 0.7999999523162842,
+            "avgMs": 0.0066666662693023685
+          },
+          "script": {
+            "totalMs": 1.6999998092651367,
+            "avgMs": 0.014166665077209473
+          },
+          "perf.raf.benchmark": {
+            "totalMs": 3.5000007152557373,
+            "avgMs": 0.029166672627131143
+          },
+          "drawgrid.prep.visibility": {
+            "totalMs": 1.1999998092651367,
+            "avgMs": 0.009999998410542806
+          },
+          "perf.raf.drawgrid": {
+            "totalMs": 6781.699992418289,
+            "avgMs": 56.51416660348574
+          },
+          "drawgrid.prep.camera": {
+            "totalMs": 1.5,
+            "avgMs": 0.0125
+          },
+          "drawgrid.prep.adaptive": {
+            "totalMs": 14.499999284744263,
+            "avgMs": 0.12083332737286885
+          },
+          "drawgrid.prep.overlayGate": {
+            "totalMs": 2.1000006198883057,
+            "avgMs": 0.01750000516573588
+          },
+          "drawgrid.render.prep": {
+            "totalMs": 38.500001192092896,
+            "avgMs": 0.3208333432674408
+          },
+          "drawgrid.render.particles": {
+            "totalMs": 2.6999993324279785,
+            "avgMs": 0.02249999443689982
+          },
+          "drawgrid.ensureSize": {
+            "totalMs": 8.20000147819519,
+            "avgMs": 0.06833334565162659
+          },
+          "drawgrid.grid.blit": {
+            "totalMs": 16.6999990940094,
+            "avgMs": 0.139166659116745
+          },
+          "drawgrid.draw.grid": {
+            "totalMs": 35.09999752044678,
+            "avgMs": 0.29249997933705646
+          },
+          "drawgrid.nodes.layout": {
+            "totalMs": 26.399996519088745,
+            "avgMs": 0.2199999709924062
+          },
+          "drawgrid.nodes.cacheBlit": {
+            "totalMs": 7.1999993324279785,
+            "avgMs": 0.05999999443689982
+          },
+          "drawgrid.nodes.blocks.blit": {
+            "totalMs": 4.700000047683716,
+            "avgMs": 0.03916666706403096
+          },
+          "drawgrid.nodes.flash": {
+            "totalMs": 48.200000524520874,
+            "avgMs": 0.40166667103767395
+          },
+          "drawgrid.nodes.tutorial": {
+            "totalMs": 5.999999761581421,
+            "avgMs": 0.04999999801317851
+          },
+          "drawgrid.draw.nodes": {
+            "totalMs": 104.69999670982361,
+            "avgMs": 0.8724999725818634
+          },
+          "drawgrid.draw.composite": {
+            "totalMs": 314.5000042915344,
+            "avgMs": 2.62083336909612
+          },
+          "drawgrid.update": {
+            "totalMs": 0.3000001907348633,
+            "avgMs": 0.002500001589457194
+          },
+          "drawgrid.draw": {
+            "totalMs": 141.9999942779541,
+            "avgMs": 1.1833332856496175
+          },
+          "drawgrid.ui.refresh": {
+            "totalMs": 0.8999998569488525,
+            "avgMs": 0.007499998807907105
+          },
+          "drawgrid.dom.pulse.add": {
+            "totalMs": 1.1999998092651367,
+            "avgMs": 0.009999998410542806
+          },
+          "drawgrid.dom.pulse": {
+            "totalMs": 9.300000190734863,
+            "avgMs": 0.07750000158945719
+          },
+          "drawgrid.dom.playing": {
+            "totalMs": 0.6000001430511475,
+            "avgMs": 0.005000001192092896
+          },
+          "drawgrid.overlay.clear": {
+            "totalMs": 2.500000238418579,
+            "avgMs": 0.020833335320154824
+          },
+          "drawgrid.overlay.strokes.colorized": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.overlay.strokes.special": {
+            "totalMs": 39.899999141693115,
+            "avgMs": 0.33249999284744264
+          },
+          "drawgrid.overlay.strokes": {
+            "totalMs": 42.69999885559082,
+            "avgMs": 0.35583332379659016
+          },
+          "drawgrid.overlay.core": {
+            "totalMs": 45.79999876022339,
+            "avgMs": 0.3816666563351949
+          },
+          "drawgrid.overlay.cellFlashes": {
+            "totalMs": 2.500000238418579,
+            "avgMs": 0.020833335320154824
+          },
+          "drawgrid.frame.total": {
+            "totalMs": 593.7000012397766,
+            "avgMs": 4.9475000103314715
+          },
+          "drawgrid.overlay.toggles": {
+            "totalMs": 5.600000381469727,
+            "avgMs": 0.04666666984558106
+          },
+          "drawgrid.overlay.playhead": {
+            "totalMs": 8.599998950958252,
+            "avgMs": 0.0716666579246521
+          },
+          "frame.nonScript": {
+            "totalMs": 11224.200000190729,
+            "avgMs": 93.53500000158941
+          },
+          "unattributed": {
+            "totalMs": 2885.2000093937095,
+            "avgMs": 24.043333411614245
+          },
+          "drawgrid.dom.pulse.remove": {
+            "totalMs": 3.5999996662139893,
+            "avgMs": 0.02999999721844991
+          },
+          "chain.advance": {
+            "totalMs": 8.599999904632568,
+            "avgMs": 0.07166666587193807
+          },
+          "drawgrid.frontSwap": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.ui.backSync": {
+            "totalMs": 0.2999997138977051,
+            "avgMs": 0.002499997615814209
+          },
+          "drawgrid.ui.clear": {
+            "totalMs": 0.20000028610229492,
+            "avgMs": 0.0016666690508524576
+          }
+        },
+        "work": {
+          "totalMs": 1.9000000953674316,
+          "avgMs": 0.01583333412806193
+        },
+        "idle": {
+          "totalMs": 11223.999999904627,
+          "avgMs": 93.53333333253856
+        }
+      },
+      "warmupProfile": {
+        "t": 21358,
+        "frameDt": 433.6000000000022,
+        "parts": {
+          "drawgrid.resize": 23.000000476837158,
+          "drawgrid.grid.cache": 4.899999618530273,
+          "drawgrid.grid.blit": 3.5,
+          "drawgrid.layout": 30.399999856948853,
+          "drawgrid.nodes.layout": 0.8000001907348633,
+          "drawgrid.nodes.connections": 0.5999999046325684,
+          "drawgrid.nodes.circles": 0.700000524520874,
+          "drawgrid.nodes.draw": 10.600000143051147,
+          "drawgrid.nodes.blocks.build": 2.200000286102295,
+          "drawgrid.nodes.blocks.blit": 1.7999999523162842,
+          "drawgrid.nodes.flash": 0,
+          "drawgrid.nodes.tutorial": 0.20000004768371582,
+          "drawgrid.paint.redraw": 37.600000619888306,
+          "perf.warmup": 0.001,
+          "script": 66.5,
+          "perf.raf.benchmark": 66.80000019073486,
+          "chain.draw": 0,
+          "perf.raf.other": 55.80000042915344,
+          "perf.raf.connectors": 1.2000007629394531,
+          "drawgrid.prep.visibility": 0.09999990463256836,
+          "drawgrid.prep.camera": 0,
+          "drawgrid.prep.adaptive": 1.499999761581421,
+          "drawgrid.prep.overlayGate": 0.09999990463256836,
+          "drawgrid.render.prep": 1.8999993801116943,
+          "drawgrid.render.particles": 0.19999980926513672,
+          "drawgrid.ensureSize": 3.799999713897705,
+          "drawgrid.draw.grid": 1.200000286102295,
+          "drawgrid.nodes.cacheBlit": 2.8999996185302734,
+          "drawgrid.draw.nodes": 3.8999998569488525,
+          "drawgrid.draw.composite": 11.299999713897705,
+          "drawgrid.update": 0,
+          "drawgrid.draw": 5.1000001430511475,
+          "drawgrid.frontSwap": 0.10000014305114746,
+          "drawgrid.ui.backSync": 0.5000002384185791,
+          "drawgrid.ui.clear": 0.09999990463256836,
+          "drawgrid.ui.refresh": 0.6000001430511475,
+          "drawgrid.dom.pulse": 0.10000014305114746,
+          "drawgrid.dom.playing": 0,
+          "drawgrid.overlay.clear": 0.09999990463256836,
+          "drawgrid.overlay.strokes.colorized": 0.09999990463256836,
+          "drawgrid.overlay.strokes.special": 1.0999996662139893,
+          "drawgrid.overlay.strokes": 1.6999995708465576,
+          "drawgrid.overlay.core": 1.799999475479126,
+          "drawgrid.frame.total": 25.799998998641968,
+          "drawgrid.overlay.playhead": 4.100000381469727,
+          "perf.raf.drawgrid": 215.79999923706055,
+          "chain.ui.query": 0.9999997615814209,
+          "chain.ui.parents": 19.799999952316284,
+          "chain.ui": 25.09999990463257,
+          "pulse.service": 0,
+          "zoom.reflow": 0,
+          "anchor": 1.5999999046325684,
+          "chain.markActive.dom": 0.10000014305114746,
+          "chain.markActive": 0.40000009536743164,
+          "chain.sequencer": 0.7999999523162842,
+          "perf.raf.scheduler": 3,
+          "perf.raf.main": 3,
+          "perf.raf.zoomProgress": 0.20000004768371582,
+          "frame.nonScript": 367.1000000000022
+        },
+        "workMs": 66.5,
+        "idleMs": 367.1000000000022
+      },
+      "sceneMeta": {
+        "toys": 48,
+        "chainMarkers": 0,
+        "cam": null,
+        "toyTypes": {
+          "drawgrid": 48
+        },
+        "camBounds": {
+          "selector": ".toy-panel",
+          "minX": -3868.52,
+          "minY": -2757.5,
+          "maxX": 3868.48,
+          "maxY": 2479.5,
+          "centerX": -0.01999999999998181,
+          "centerY": -139,
+          "startX": 1280.006991204111,
+          "startY": 718.89723594393,
+          "panRadius": 2225.725
+        }
+      },
+      "particleToggles": {
+        "skipUpdate": false,
+        "skipDraw": false,
+        "budgetMul": 1,
+        "gestureDrawModulo": 1,
+        "gestureFieldModulo": 1,
+        "freezeUnfocusedDuringGesture": true,
+        "logFreeze": false
+      },
+      "particleTempPatch": null,
+      "playing": true,
+      "flags": {
+        "disableLoopgridRender": false,
+        "disableChains": false,
+        "disableTapDots": false,
+        "disableOverlays": false,
+        "disableOverlayStrokes": false,
+        "disableOverlayCore": false,
+        "disablePulses": false,
+        "freezeAllUnfocused": false,
+        "loopgridGestureRenderMod": 1,
+        "loopgridChainCache": false,
+        "noPaint": false,
+        "noPaintActive": false,
+        "paintOnlyActive": false,
+        "noDomUpdates": false,
+        "traceMarks": true,
+        "runTag": "P3fParticleProfile"
+      },
+      "gestureSkipCount": 0
+    },
+    {
+      "label": "P3f_drawgrid_playing_panzoom_rand_once_anchor_on",
+      "durationMs": 30000,
+      "warmupMs": 1200,
+      "createdAt": "2025-12-29T17:13:23.297Z",
+      "samples": 457,
+      "frameMs": {
+        "avg": 63.108096280087516,
+        "p50": 66.69999999999709,
+        "p95": 100.10000000000582,
+        "p99": 133.5,
+        "worst": 247.1999999999971
+      },
+      "counts": {
+        "over16ms": 428,
+        "over33ms": 411,
+        "over50ms": 340
+      },
+      "pulseCount": 4140,
+      "outlineSyncCount": 4140,
+      "warmupCount": 1,
+      "warmupTs": 1767028374032,
+      "frameProfile": {
+        "samples": 120,
+        "parts": {
+          "perf.raf.other": {
+            "totalMs": 92.40000009536743,
+            "avgMs": 0.7700000007947286
+          },
+          "pulse.service": {
+            "totalMs": 2.6999995708465576,
+            "avgMs": 0.022499996423721313
+          },
+          "zoom.reflow": {
+            "totalMs": 0.20000004768371582,
+            "avgMs": 0.0016666670640309651
+          },
+          "anchor": {
+            "totalMs": 112,
+            "avgMs": 0.9333333333333333
+          },
+          "chain.markActive": {
+            "totalMs": 33.799999713897705,
+            "avgMs": 0.2816666642824809
+          },
+          "chain.sequencer": {
+            "totalMs": 283.6999990940094,
+            "avgMs": 2.364166659116745
+          },
+          "perf.raf.scheduler": {
+            "totalMs": 444.7999978065491,
+            "avgMs": 3.706666648387909
+          },
+          "perf.raf.main": {
+            "totalMs": 446.1999979019165,
+            "avgMs": 3.7183333158493044
+          },
+          "perf.raf.zoomProgress": {
+            "totalMs": 24.099998950958252,
+            "avgMs": 0.20083332459131878
+          },
+          "chain.draw": {
+            "totalMs": 22.700000524520874,
+            "avgMs": 0.18916667103767396
+          },
+          "perf.raf.zoomTick": {
+            "totalMs": 31.699998378753662,
+            "avgMs": 0.2641666531562805
+          },
+          "perf.worldToTranslate": {
+            "totalMs": 0.799999475479126,
+            "avgMs": 0.0066666622956593835
+          },
+          "perf.gesture.zoom": {
+            "totalMs": 1.9999995231628418,
+            "avgMs": 0.016666662693023682
+          },
+          "script": {
+            "totalMs": 3.3999991416931152,
+            "avgMs": 0.02833332618077596
+          },
+          "perf.raf.benchmark": {
+            "totalMs": 4.6999993324279785,
+            "avgMs": 0.03916666110356649
+          },
+          "drawgrid.prep.visibility": {
+            "totalMs": 1.8999991416931152,
+            "avgMs": 0.015833326180775962
+          },
+          "perf.raf.drawgrid": {
+            "totalMs": 1926.100003004074,
+            "avgMs": 16.050833358367285
+          },
+          "drawgrid.prep.camera": {
+            "totalMs": 1.6999995708465576,
+            "avgMs": 0.01416666309038798
+          },
+          "drawgrid.prep.adaptive": {
+            "totalMs": 84.49999976158142,
+            "avgMs": 0.7041666646798451
+          },
+          "drawgrid.prep.overlayGate": {
+            "totalMs": 1.0999996662139893,
+            "avgMs": 0.009166663885116577
+          },
+          "drawgrid.render.prep": {
+            "totalMs": 102.79999804496765,
+            "avgMs": 0.8566666503747304
+          },
+          "drawgrid.render.particles": {
+            "totalMs": 1.7000000476837158,
+            "avgMs": 0.014166667064030965
+          },
+          "drawgrid.ensureSize": {
+            "totalMs": 7.1000001430511475,
+            "avgMs": 0.05916666785875956
+          },
+          "drawgrid.grid.blit": {
+            "totalMs": 15.300001382827759,
+            "avgMs": 0.12750001152356466
+          },
+          "drawgrid.draw.grid": {
+            "totalMs": 28.700002193450928,
+            "avgMs": 0.2391666849454244
+          },
+          "drawgrid.nodes.layout": {
+            "totalMs": 23.199998378753662,
+            "avgMs": 0.19333331982294719
+          },
+          "drawgrid.nodes.cacheBlit": {
+            "totalMs": 5.499999046325684,
+            "avgMs": 0.04583332538604736
+          },
+          "drawgrid.nodes.blocks.blit": {
+            "totalMs": 4.599999189376831,
+            "avgMs": 0.03833332657814026
+          },
+          "drawgrid.nodes.flash": {
+            "totalMs": 34.20000076293945,
+            "avgMs": 0.2850000063578288
+          },
+          "drawgrid.nodes.tutorial": {
+            "totalMs": 3.700000524520874,
+            "avgMs": 0.030833337704340616
+          },
+          "drawgrid.draw.nodes": {
+            "totalMs": 81.19999742507935,
+            "avgMs": 0.6766666452089946
+          },
+          "drawgrid.draw.composite": {
+            "totalMs": 273.00000405311584,
+            "avgMs": 2.2750000337759655
+          },
+          "drawgrid.update": {
+            "totalMs": 0.20000004768371582,
+            "avgMs": 0.0016666670640309651
+          },
+          "drawgrid.draw": {
+            "totalMs": 112.09999942779541,
+            "avgMs": 0.9341666618982951
+          },
+          "drawgrid.ui.refresh": {
+            "totalMs": 0.2999999523162842,
+            "avgMs": 0.0024999996026357015
+          },
+          "drawgrid.dom.pulse": {
+            "totalMs": 7.700001239776611,
+            "avgMs": 0.06416667699813842
+          },
+          "drawgrid.dom.playing": {
+            "totalMs": 0.8000001907348633,
+            "avgMs": 0.0066666682561238606
+          },
+          "drawgrid.overlay.clear": {
+            "totalMs": 2.200000047683716,
+            "avgMs": 0.01833333373069763
+          },
+          "drawgrid.overlay.core": {
+            "totalMs": 2.5,
+            "avgMs": 0.020833333333333332
+          },
+          "drawgrid.overlay.cellFlashes": {
+            "totalMs": 3.0999996662139893,
+            "avgMs": 0.025833330551783242
+          },
+          "drawgrid.frame.total": {
+            "totalMs": 536.7000029087067,
+            "avgMs": 4.472500024239222
+          },
+          "drawgrid.overlay.toggles": {
+            "totalMs": 4.199999809265137,
+            "avgMs": 0.034999998410542806
+          },
+          "drawgrid.overlay.playhead": {
+            "totalMs": 8.299999475479126,
+            "avgMs": 0.06916666229565939
+          },
+          "unattributed": {
+            "totalMs": 4987.700005865117,
+            "avgMs": 41.56416671554265
+          },
+          "frame.nonScript": {
+            "totalMs": 9537.800000858319,
+            "avgMs": 79.48166667381932
+          },
+          "drawgrid.dom.pulse.remove": {
+            "totalMs": 2.5000007152557373,
+            "avgMs": 0.020833339293797812
+          },
+          "perf.raf.outlineSync": {
+            "totalMs": 55.600000619888306,
+            "avgMs": 0.4633333384990692
+          },
+          "drawgrid.dom.pulse.add": {
+            "totalMs": 1.1999995708465576,
+            "avgMs": 0.009999996423721314
+          },
+          "chain.advance": {
+            "totalMs": 7.700000047683716,
+            "avgMs": 0.06416666706403097
+          }
+        },
+        "work": {
+          "totalMs": 3.599999189376831,
+          "avgMs": 0.029999993244806924
+        },
+        "idle": {
+          "totalMs": 9537.600000810635,
+          "avgMs": 79.48000000675529
+        }
+      },
+      "warmupProfile": {
+        "t": 50995.200000047684,
+        "frameDt": 350.09999999999854,
+        "parts": {
+          "perf.raf.other": 6.799999952316284,
+          "pulse.service": 0.10000014305114746,
+          "zoom.reflow": 0,
+          "anchor": 2.5999999046325684,
+          "chain.markActive": 0.20000004768371582,
+          "chain.sequencer": 6.799999952316284,
+          "perf.raf.scheduler": 9.700000047683716,
+          "perf.raf.main": 9.700000047683716,
+          "chain.draw": 0,
+          "perf.raf.zoomProgress": 0.19999980926513672,
+          "drawgrid.resize": 2.8999993801116943,
+          "drawgrid.grid.cache": 2,
+          "drawgrid.grid.blit": 2.000000476837158,
+          "drawgrid.layout": 32.90000033378601,
+          "drawgrid.nodes.layout": 1.5999994277954102,
+          "drawgrid.nodes.connections": 1.0999996662139893,
+          "drawgrid.nodes.circles": 1.3000001907348633,
+          "drawgrid.nodes.draw": 17.90000033378601,
+          "drawgrid.nodes.blocks.build": 12.800000190734863,
+          "drawgrid.nodes.blocks.blit": 1.4999995231628418,
+          "drawgrid.nodes.flash": 2.200000047683716,
+          "drawgrid.nodes.tutorial": 0,
+          "drawgrid.paint.redraw": 93.7000002861023,
+          "perf.warmup": 0.001,
+          "script": 127.40000009536743,
+          "perf.raf.benchmark": 127.40000009536743,
+          "drawgrid.prep.visibility": 0,
+          "perf.raf.drawgrid": 14.400000095367432,
+          "drawgrid.prep.camera": 0,
+          "drawgrid.prep.adaptive": 0,
+          "drawgrid.prep.overlayGate": 0,
+          "drawgrid.render.prep": 0.2999999523162842,
+          "drawgrid.render.particles": 0,
+          "drawgrid.ensureSize": 0.20000004768371582,
+          "drawgrid.draw.grid": 0.09999990463256836,
+          "drawgrid.nodes.cacheBlit": 0,
+          "drawgrid.draw.nodes": 0.40000009536743164,
+          "drawgrid.draw.composite": 3.700000047683716,
+          "drawgrid.update": 0,
+          "drawgrid.draw": 0.5,
+          "drawgrid.ui.refresh": 0,
+          "drawgrid.dom.pulse.remove": 0.20000028610229492,
+          "drawgrid.dom.pulse": 0.20000028610229492,
+          "drawgrid.dom.playing": 0,
+          "drawgrid.overlay.clear": 0,
+          "drawgrid.overlay.core": 0,
+          "drawgrid.overlay.cellFlashes": 0.09999990463256836,
+          "drawgrid.frame.total": 5.299999952316284,
+          "drawgrid.overlay.toggles": 0.09999990463256836,
+          "drawgrid.overlay.playhead": 0,
+          "drawgrid.frontSwap": 0,
+          "drawgrid.ui.backSync": 0,
+          "drawgrid.ui.clear": 0,
+          "frame.nonScript": 222.6999999046311
+        },
+        "workMs": 127.40000009536743,
+        "idleMs": 222.6999999046311
+      },
+      "sceneMeta": {
+        "toys": 48,
+        "chainMarkers": 0,
+        "cam": null,
+        "toyTypes": {
+          "drawgrid": 48
+        },
+        "camBounds": {
+          "selector": ".toy-panel",
+          "minX": -3868.52,
+          "minY": -2757.5,
+          "maxX": 3868.48,
+          "maxY": 3244.5,
+          "centerX": -0.01999999999998181,
+          "centerY": 243.5,
+          "startX": 1280.0174600408902,
+          "startY": 442.6169706709636,
+          "panRadius": 2400
+        }
+      },
+      "particleToggles": {
+        "skipUpdate": false,
+        "skipDraw": false,
+        "budgetMul": 1,
+        "gestureDrawModulo": 1,
+        "gestureFieldModulo": 1,
+        "freezeUnfocusedDuringGesture": true,
+        "logFreeze": false
+      },
+      "particleTempPatch": null,
+      "playing": true,
+      "flags": {
+        "disableLoopgridRender": false,
+        "disableChains": false,
+        "disableTapDots": false,
+        "disableOverlays": false,
+        "disableOverlayStrokes": true,
+        "disableOverlayCore": false,
+        "disablePulses": false,
+        "freezeAllUnfocused": false,
+        "loopgridGestureRenderMod": 1,
+        "loopgridChainCache": false,
+        "noPaint": false,
+        "noPaintActive": false,
+        "paintOnlyActive": false,
+        "noDomUpdates": false,
+        "traceMarks": true,
+        "runTag": "P3fNoOverlayStrokes"
+      },
+      "gestureSkipCount": 0
+    },
+    {
+      "label": "P3f_drawgrid_playing_panzoom_rand_once_anchor_on",
+      "durationMs": 30000,
+      "warmupMs": 1200,
+      "createdAt": "2025-12-29T17:13:53.391Z",
+      "samples": 367,
+      "frameMs": {
+        "avg": 78.67547683923704,
+        "p50": 83.30000000000291,
+        "p95": 116.79999999998836,
+        "p99": 133.5,
+        "worst": 150.10000000000582
+      },
+      "counts": {
+        "over16ms": 367,
+        "over33ms": 367,
+        "over50ms": 349
+      },
+      "pulseCount": 4140,
+      "outlineSyncCount": 4140,
+      "warmupCount": 1,
+      "warmupTs": 1767028404082,
+      "frameProfile": {
+        "samples": 120,
+        "parts": {
+          "perf.raf.other": {
+            "totalMs": 117.50000166893005,
+            "avgMs": 0.9791666805744171
+          },
+          "pulse.service": {
+            "totalMs": 3.099999189376831,
+            "avgMs": 0.025833326578140258
+          },
+          "anchor": {
+            "totalMs": 117.70000195503235,
+            "avgMs": 0.9808333496252696
+          },
+          "chain.markActive": {
+            "totalMs": 31.999998569488525,
+            "avgMs": 0.2666666547457377
+          },
+          "chain.sequencer": {
+            "totalMs": 293.70000076293945,
+            "avgMs": 2.4475000063578287
+          },
+          "perf.raf.scheduler": {
+            "totalMs": 460.10000014305115,
+            "avgMs": 3.8341666678587596
+          },
+          "perf.raf.main": {
+            "totalMs": 461.10000014305115,
+            "avgMs": 3.842500001192093
+          },
+          "chain.draw": {
+            "totalMs": 30.69999933242798,
+            "avgMs": 0.25583332777023315
+          },
+          "perf.raf.zoomProgress": {
+            "totalMs": 23.200000047683716,
+            "avgMs": 0.19333333373069764
+          },
+          "perf.raf.zoomTick": {
+            "totalMs": 25.700000524520874,
+            "avgMs": 0.21416667103767395
+          },
+          "perf.worldToTranslate": {
+            "totalMs": 0.39999985694885254,
+            "avgMs": 0.003333332141240438
+          },
+          "perf.gesture.zoom": {
+            "totalMs": 1.5999996662139893,
+            "avgMs": 0.013333330551783243
+          },
+          "script": {
+            "totalMs": 3,
+            "avgMs": 0.025
+          },
+          "perf.raf.benchmark": {
+            "totalMs": 4.300000429153442,
+            "avgMs": 0.03583333690961202
+          },
+          "drawgrid.prep.visibility": {
+            "totalMs": 1.5999994277954102,
+            "avgMs": 0.013333328564961751
+          },
+          "perf.raf.drawgrid": {
+            "totalMs": 6238.899993658066,
+            "avgMs": 51.99083328048388
+          },
+          "drawgrid.prep.camera": {
+            "totalMs": 2.1000001430511475,
+            "avgMs": 0.017500001192092895
+          },
+          "drawgrid.prep.adaptive": {
+            "totalMs": 120.69999933242798,
+            "avgMs": 1.0058333277702332
+          },
+          "drawgrid.prep.overlayGate": {
+            "totalMs": 1.9000003337860107,
+            "avgMs": 0.015833336114883422
+          },
+          "drawgrid.render.prep": {
+            "totalMs": 140.3999993801117,
+            "avgMs": 1.169999994834264
+          },
+          "drawgrid.render.particles": {
+            "totalMs": 0.8999993801116943,
+            "avgMs": 0.00749999483426412
+          },
+          "drawgrid.ensureSize": {
+            "totalMs": 7.200000762939453,
+            "avgMs": 0.060000006357828775
+          },
+          "drawgrid.grid.blit": {
+            "totalMs": 20.899999141693115,
+            "avgMs": 0.17416665951410928
+          },
+          "drawgrid.draw.grid": {
+            "totalMs": 35.19999718666077,
+            "avgMs": 0.2933333098888397
+          },
+          "drawgrid.nodes.layout": {
+            "totalMs": 25.799999713897705,
+            "avgMs": 0.2149999976158142
+          },
+          "drawgrid.nodes.cacheBlit": {
+            "totalMs": 7.299998998641968,
+            "avgMs": 0.06083332498868307
+          },
+          "drawgrid.nodes.blocks.blit": {
+            "totalMs": 3.6999998092651367,
+            "avgMs": 0.03083333174387614
+          },
+          "drawgrid.nodes.flash": {
+            "totalMs": 42.699997901916504,
+            "avgMs": 0.3558333158493042
+          },
+          "drawgrid.nodes.tutorial": {
+            "totalMs": 4.3999998569488525,
+            "avgMs": 0.03666666547457377
+          },
+          "drawgrid.draw.nodes": {
+            "totalMs": 97.49999475479126,
+            "avgMs": 0.8124999562899272
+          },
+          "drawgrid.draw.composite": {
+            "totalMs": 282.60000586509705,
+            "avgMs": 2.3550000488758087
+          },
+          "drawgrid.update": {
+            "totalMs": 0.40000033378601074,
+            "avgMs": 0.0033333361148834228
+          },
+          "drawgrid.draw": {
+            "totalMs": 134.29999136924744,
+            "avgMs": 1.1191665947437286
+          },
+          "drawgrid.ui.refresh": {
+            "totalMs": 0.40000057220458984,
+            "avgMs": 0.0033333381017049152
+          },
+          "drawgrid.dom.pulse": {
+            "totalMs": 8.799998998641968,
+            "avgMs": 0.07333332498868307
+          },
+          "drawgrid.dom.playing": {
+            "totalMs": 0.40000009536743164,
+            "avgMs": 0.0033333341280619303
+          },
+          "drawgrid.overlay.clear": {
+            "totalMs": 2.8999991416931152,
+            "avgMs": 0.024166659514109293
+          },
+          "drawgrid.overlay.strokes.colorized": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.overlay.strokes.special": {
+            "totalMs": 34.20000195503235,
+            "avgMs": 0.2850000162919362
+          },
+          "drawgrid.overlay.strokes": {
+            "totalMs": 37.000000953674316,
+            "avgMs": 0.3083333412806193
+          },
+          "drawgrid.overlay.core": {
+            "totalMs": 40.89999985694885,
+            "avgMs": 0.34083333214124045
+          },
+          "drawgrid.frame.total": {
+            "totalMs": 643.099996805191,
+            "avgMs": 5.3591666400432585
+          },
+          "unattributed": {
+            "totalMs": 2352.6000144005084,
+            "avgMs": 19.605000120004238
+          },
+          "frame.nonScript": {
+            "totalMs": 10505.699999999997,
+            "avgMs": 87.54749999999997
+          },
+          "zoom.reflow": {
+            "totalMs": 0.09999990463256836,
+            "avgMs": 0.0008333325386047363
+          },
+          "drawgrid.dom.pulse.remove": {
+            "totalMs": 3.700000047683716,
+            "avgMs": 0.030833333730697632
+          },
+          "perf.raf.outlineSync": {
+            "totalMs": 77.20000100135803,
+            "avgMs": 0.6433333416779836
+          },
+          "drawgrid.dom.pulse.add": {
+            "totalMs": 0.9999995231628418,
+            "avgMs": 0.008333329359690349
+          },
+          "chain.advance": {
+            "totalMs": 9.200000047683716,
+            "avgMs": 0.07666666706403097
+          },
+          "drawgrid.frontSwap": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.ui.backSync": {
+            "totalMs": 0.20000028610229492,
+            "avgMs": 0.0016666690508524576
+          },
+          "drawgrid.ui.clear": {
+            "totalMs": 0,
+            "avgMs": 0
+          }
+        },
+        "work": {
+          "totalMs": 3.200000286102295,
+          "avgMs": 0.026666669050852458
+        },
+        "idle": {
+          "totalMs": 10505.499999713895,
+          "avgMs": 87.54583333094912
+        }
+      },
+      "warmupProfile": {
+        "t": 81048.90000009537,
+        "frameDt": 350.1999999999971,
+        "parts": {
+          "perf.raf.other": 6.8999998569488525,
+          "pulse.service": 0.09999990463256836,
+          "zoom.reflow": 0,
+          "anchor": 2.1000001430511475,
+          "chain.markActive": 0.20000004768371582,
+          "chain.sequencer": 6.5,
+          "perf.raf.scheduler": 8.900000095367432,
+          "perf.raf.main": 8.900000095367432,
+          "chain.draw": 0.10000014305114746,
+          "perf.raf.zoomProgress": 0.09999990463256836,
+          "drawgrid.resize": 3.4000003337860107,
+          "drawgrid.grid.cache": 1.1000003814697266,
+          "drawgrid.grid.blit": 1.799999713897705,
+          "drawgrid.layout": 37.10000038146973,
+          "drawgrid.nodes.layout": 1.299999713897705,
+          "drawgrid.nodes.connections": 0.8000001907348633,
+          "drawgrid.nodes.circles": 1.7000000476837158,
+          "drawgrid.nodes.draw": 16.100000143051147,
+          "drawgrid.nodes.blocks.build": 3.099999189376831,
+          "drawgrid.nodes.blocks.blit": 1.400000810623169,
+          "drawgrid.nodes.flash": 2.200000047683716,
+          "drawgrid.nodes.tutorial": 0.2999999523162842,
+          "drawgrid.paint.redraw": 86.89999914169312,
+          "perf.warmup": 0.001,
+          "script": 124.59999990463257,
+          "perf.raf.benchmark": 124.59999990463257,
+          "drawgrid.prep.visibility": 0,
+          "perf.raf.drawgrid": 82.60000038146973,
+          "drawgrid.prep.camera": 0,
+          "drawgrid.prep.adaptive": 0.09999990463256836,
+          "drawgrid.prep.overlayGate": 0,
+          "drawgrid.render.prep": 0.5,
+          "drawgrid.render.particles": 0,
+          "drawgrid.ensureSize": 0.09999990463256836,
+          "drawgrid.draw.grid": 0,
+          "drawgrid.nodes.cacheBlit": 0,
+          "drawgrid.draw.nodes": 0.8000001907348633,
+          "drawgrid.draw.composite": 4.299999952316284,
+          "drawgrid.update": 0,
+          "drawgrid.draw": 0.8000001907348633,
+          "drawgrid.ui.refresh": 0,
+          "drawgrid.dom.pulse.remove": 0,
+          "drawgrid.dom.pulse": 0,
+          "drawgrid.dom.playing": 0.10000014305114746,
+          "drawgrid.overlay.clear": 0,
+          "drawgrid.overlay.strokes.colorized": 0,
+          "drawgrid.overlay.strokes.special": 0.7000000476837158,
+          "drawgrid.overlay.strokes": 0.8000001907348633,
+          "drawgrid.overlay.core": 0.8000001907348633,
+          "drawgrid.frame.total": 7.100000381469727,
+          "drawgrid.frontSwap": 0.09999990463256836,
+          "drawgrid.ui.backSync": 0,
+          "drawgrid.ui.clear": 0,
+          "frame.nonScript": 225.60000009536452
+        },
+        "workMs": 124.59999990463257,
+        "idleMs": 225.60000009536452
+      },
+      "sceneMeta": {
+        "toys": 48,
+        "chainMarkers": 0,
+        "cam": null,
+        "toyTypes": {
+          "drawgrid": 48
+        },
+        "camBounds": {
+          "selector": ".toy-panel",
+          "minX": -3868.52,
+          "minY": -2757.5,
+          "maxX": 3868.48,
+          "maxY": 3244.5,
+          "centerX": -0.01999999999998181,
+          "centerY": 243.5,
+          "startX": 1280.020102346801,
+          "startY": 441.8665152790975,
+          "panRadius": 2400
+        }
+      },
+      "particleToggles": {
+        "skipUpdate": false,
+        "skipDraw": false,
+        "budgetMul": 1,
+        "gestureDrawModulo": 1,
+        "gestureFieldModulo": 1,
+        "freezeUnfocusedDuringGesture": true,
+        "logFreeze": false
+      },
+      "particleTempPatch": null,
+      "playing": true,
+      "flags": {
+        "disableLoopgridRender": false,
+        "disableChains": false,
+        "disableTapDots": false,
+        "disableOverlays": false,
+        "disableOverlayStrokes": false,
+        "disableOverlayCore": true,
+        "disablePulses": false,
+        "freezeAllUnfocused": false,
+        "loopgridGestureRenderMod": 1,
+        "loopgridChainCache": false,
+        "noPaint": false,
+        "noPaintActive": false,
+        "paintOnlyActive": false,
+        "noDomUpdates": false,
+        "traceMarks": true,
+        "runTag": "P3fNoOverlayCore"
+      },
+      "gestureSkipCount": 0
+    },
+    {
+      "label": "P3f_drawgrid_playing_panzoom_no_notes_anchor_on",
+      "durationMs": 30000,
+      "warmupMs": 1200,
+      "createdAt": "2025-12-29T17:14:23.505Z",
+      "samples": 377,
+      "frameMs": {
+        "avg": 77.51777188328916,
+        "p50": 66.80000000000291,
+        "p95": 116.70000000001164,
+        "p99": 133.5,
+        "worst": 550.5
+      },
+      "counts": {
+        "over16ms": 377,
+        "over33ms": 377,
+        "over50ms": 358
+      },
+      "pulseCount": 49,
+      "outlineSyncCount": 49,
+      "warmupCount": 1,
+      "warmupTs": 1767028434752,
+      "frameProfile": {
+        "samples": 120,
+        "parts": {
+          "perf.raf.other": {
+            "totalMs": 96.90000200271606,
+            "avgMs": 0.8075000166893005
+          },
+          "pulse.service": {
+            "totalMs": 0.09999990463256836,
+            "avgMs": 0.0008333325386047363
+          },
+          "anchor": {
+            "totalMs": 57.1999990940094,
+            "avgMs": 0.476666659116745
+          },
+          "chain.markActive": {
+            "totalMs": 37.20000100135803,
+            "avgMs": 0.31000000834465025
+          },
+          "chain.sequencer": {
+            "totalMs": 66.10000014305115,
+            "avgMs": 0.5508333345254263
+          },
+          "perf.raf.scheduler": {
+            "totalMs": 172.99999809265137,
+            "avgMs": 1.4416666507720948
+          },
+          "perf.raf.main": {
+            "totalMs": 174.29999828338623,
+            "avgMs": 1.4524999856948853
+          },
+          "chain.draw": {
+            "totalMs": 68.60000085830688,
+            "avgMs": 0.5716666738192241
+          },
+          "perf.raf.zoomProgress": {
+            "totalMs": 25.799999713897705,
+            "avgMs": 0.2149999976158142
+          },
+          "perf.raf.zoomTick": {
+            "totalMs": 29.700001001358032,
+            "avgMs": 0.24750000834465027
+          },
+          "perf.worldToTranslate": {
+            "totalMs": 0.5000002384185791,
+            "avgMs": 0.0041666686534881595
+          },
+          "perf.gesture.zoom": {
+            "totalMs": 1.3999998569488525,
+            "avgMs": 0.01166666547457377
+          },
+          "script": {
+            "totalMs": 2.8999993801116943,
+            "avgMs": 0.024166661500930785
+          },
+          "perf.raf.benchmark": {
+            "totalMs": 4.599998950958252,
+            "avgMs": 0.03833332459131877
+          },
+          "drawgrid.prep.visibility": {
+            "totalMs": 2.299999952316284,
+            "avgMs": 0.019166666269302367
+          },
+          "perf.raf.drawgrid": {
+            "totalMs": 6383.6000056266785,
+            "avgMs": 53.19666671355565
+          },
+          "drawgrid.prep.camera": {
+            "totalMs": 1.4000000953674316,
+            "avgMs": 0.011666667461395264
+          },
+          "drawgrid.prep.adaptive": {
+            "totalMs": 81.5,
+            "avgMs": 0.6791666666666667
+          },
+          "drawgrid.prep.overlayGate": {
+            "totalMs": 3.1000003814697266,
+            "avgMs": 0.025833336512247722
+          },
+          "drawgrid.render.prep": {
+            "totalMs": 103.79999995231628,
+            "avgMs": 0.8649999996026357
+          },
+          "drawgrid.render.particles": {
+            "totalMs": 1.8999993801116943,
+            "avgMs": 0.015833328167597454
+          },
+          "drawgrid.ensureSize": {
+            "totalMs": 6.299999713897705,
+            "avgMs": 0.05249999761581421
+          },
+          "drawgrid.grid.blit": {
+            "totalMs": 22.400001287460327,
+            "avgMs": 0.18666667739550272
+          },
+          "drawgrid.draw.grid": {
+            "totalMs": 39.10000157356262,
+            "avgMs": 0.3258333464463552
+          },
+          "drawgrid.nodes.layout": {
+            "totalMs": 33.60000133514404,
+            "avgMs": 0.2800000111262004
+          },
+          "drawgrid.nodes.cacheBlit": {
+            "totalMs": 7.100000381469727,
+            "avgMs": 0.059166669845581055
+          },
+          "drawgrid.nodes.blocks.blit": {
+            "totalMs": 3.900000810623169,
+            "avgMs": 0.03250000675519307
+          },
+          "drawgrid.nodes.flash": {
+            "totalMs": 2.799999475479126,
+            "avgMs": 0.02333332896232605
+          },
+          "drawgrid.nodes.tutorial": {
+            "totalMs": 6.200000047683716,
+            "avgMs": 0.05166666706403097
+          },
+          "drawgrid.draw.nodes": {
+            "totalMs": 66.20000171661377,
+            "avgMs": 0.5516666809717814
+          },
+          "drawgrid.draw.composite": {
+            "totalMs": 298.8000011444092,
+            "avgMs": 2.490000009536743
+          },
+          "drawgrid.update": {
+            "totalMs": 0.40000009536743164,
+            "avgMs": 0.0033333341280619303
+          },
+          "drawgrid.draw": {
+            "totalMs": 108.40000247955322,
+            "avgMs": 0.9033333539962769
+          },
+          "drawgrid.ui.refresh": {
+            "totalMs": 0.7999997138977051,
+            "avgMs": 0.006666664282480876
+          },
+          "drawgrid.dom.pulse": {
+            "totalMs": 2.1999998092651367,
+            "avgMs": 0.01833333174387614
+          },
+          "drawgrid.dom.playing": {
+            "totalMs": 0.40000009536743164,
+            "avgMs": 0.0033333341280619303
+          },
+          "drawgrid.overlay.clear": {
+            "totalMs": 2.9999992847442627,
+            "avgMs": 0.024999994039535522
+          },
+          "drawgrid.overlay.strokes.colorized": {
+            "totalMs": 0.39999961853027344,
+            "avgMs": 0.0033333301544189453
+          },
+          "drawgrid.overlay.strokes.special": {
+            "totalMs": 43.599997997283936,
+            "avgMs": 0.3633333166440328
+          },
+          "drawgrid.overlay.strokes": {
+            "totalMs": 47.09999704360962,
+            "avgMs": 0.39249997536341347
+          },
+          "drawgrid.overlay.core": {
+            "totalMs": 50.79999613761902,
+            "avgMs": 0.42333330114682516
+          },
+          "drawgrid.frame.total": {
+            "totalMs": 598.0000004768372,
+            "avgMs": 4.983333337306976
+          },
+          "drawgrid.overlay.playhead": {
+            "totalMs": 11.100001096725464,
+            "avgMs": 0.09250000913937886
+          },
+          "unattributed": {
+            "totalMs": 2246.4999966621544,
+            "avgMs": 18.720833305517953
+          },
+          "frame.nonScript": {
+            "totalMs": 9871.900000619906,
+            "avgMs": 82.26583333849922
+          },
+          "chain.advance": {
+            "totalMs": 7.499999761581421,
+            "avgMs": 0.06249999801317851
+          },
+          "zoom.reflow": {
+            "totalMs": 0.09999990463256836,
+            "avgMs": 0.0008333325386047363
+          },
+          "drawgrid.overlay.cellFlashes": {
+            "totalMs": 0.19999980926513672,
+            "avgMs": 0.0016666650772094727
+          },
+          "drawgrid.dom.pulse.remove": {
+            "totalMs": 0.10000014305114746,
+            "avgMs": 0.0008333345254262288
+          },
+          "drawgrid.frontSwap": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.ui.backSync": {
+            "totalMs": 0.09999990463256836,
+            "avgMs": 0.0008333325386047363
+          },
+          "drawgrid.ui.clear": {
+            "totalMs": 0,
+            "avgMs": 0
+          }
+        },
+        "work": {
+          "totalMs": 3.1999993324279785,
+          "avgMs": 0.026666661103566486
+        },
+        "idle": {
+          "totalMs": 9871.60000066759,
+          "avgMs": 82.26333333889657
+        }
+      },
+      "warmupProfile": {
+        "t": 111702.10000014305,
+        "frameDt": 500.3999999999942,
+        "parts": {
+          "drawgrid.resize": 2.9000000953674316,
+          "drawgrid.nodes.layout": 2.999999761581421,
+          "drawgrid.nodes.connections": 0.700000524520874,
+          "drawgrid.nodes.circles": 1.1000003814697266,
+          "drawgrid.nodes.draw": 15.90000057220459,
+          "drawgrid.nodes.blocks.build": 2.09999942779541,
+          "drawgrid.nodes.blocks.blit": 0.9999997615814209,
+          "drawgrid.nodes.flash": 3.1999995708465576,
+          "drawgrid.nodes.tutorial": 0.5,
+          "drawgrid.grid.cache": 1.0000004768371582,
+          "drawgrid.grid.blit": 1.8999993801116943,
+          "drawgrid.paint.redraw": 126.29999947547913,
+          "drawgrid.layout": 98.2999997138977,
+          "drawgrid.nodes.cacheBlit": 0.7000002861022949,
+          "perf.warmup": 0.001,
+          "script": 154.59999990463257,
+          "perf.raf.benchmark": 154.59999990463257,
+          "drawgrid.prep.visibility": 0,
+          "drawgrid.prep.camera": 0,
+          "drawgrid.prep.adaptive": 0,
+          "drawgrid.prep.overlayGate": 0.10000014305114746,
+          "drawgrid.render.prep": 0.8000001907348633,
+          "drawgrid.render.particles": 0.09999990463256836,
+          "drawgrid.ensureSize": 0,
+          "drawgrid.draw.grid": 0.5,
+          "drawgrid.draw.nodes": 1.799999713897705,
+          "drawgrid.update": 0,
+          "drawgrid.draw": 2.3999996185302734,
+          "drawgrid.frontSwap": 0.20000028610229492,
+          "drawgrid.ui.refresh": 0,
+          "drawgrid.dom.pulse": 0,
+          "drawgrid.dom.playing": 0.4999995231628418,
+          "drawgrid.frame.total": 6.299999952316284,
+          "perf.raf.drawgrid": 89,
+          "drawgrid.dom.pulse.remove": 0,
+          "drawgrid.draw.composite": 0.2999999523162842,
+          "drawgrid.overlay.clear": 0,
+          "drawgrid.overlay.strokes.colorized": 0,
+          "drawgrid.overlay.strokes.special": 0.2999999523162842,
+          "drawgrid.overlay.strokes": 0.5999999046325684,
+          "drawgrid.overlay.core": 0.5999999046325684,
+          "drawgrid.overlay.cellFlashes": 0.10000014305114746,
+          "drawgrid.overlay.toggles": 0,
+          "drawgrid.overlay.playhead": 4.899999618530273,
+          "perf.raf.other": 0.09999990463256836,
+          "frame.nonScript": 345.8000000953616
+        },
+        "workMs": 154.59999990463257,
+        "idleMs": 345.8000000953616
+      },
+      "sceneMeta": {
+        "toys": 48,
+        "chainMarkers": 0,
+        "cam": null,
+        "toyTypes": {
+          "drawgrid": 48
+        },
+        "camBounds": {
+          "selector": ".toy-panel",
+          "minX": -3868.52,
+          "minY": -2757.5,
+          "maxX": 3868.48,
+          "maxY": 3244.5,
+          "centerX": -0.01999999999998181,
+          "centerY": 243.5,
+          "startX": 1280.0136934408706,
+          "startY": 441.1025769175827,
+          "panRadius": 2400
+        }
+      },
+      "particleToggles": {
+        "skipUpdate": false,
+        "skipDraw": false,
+        "budgetMul": 1,
+        "gestureDrawModulo": 1,
+        "gestureFieldModulo": 1,
+        "freezeUnfocusedDuringGesture": true,
+        "logFreeze": false
+      },
+      "particleTempPatch": null,
+      "playing": true,
+      "flags": {
+        "disableLoopgridRender": false,
+        "disableChains": false,
+        "disableTapDots": false,
+        "disableOverlays": false,
+        "disableOverlayStrokes": false,
+        "disableOverlayCore": false,
+        "disablePulses": false,
+        "freezeAllUnfocused": false,
+        "loopgridGestureRenderMod": 1,
+        "loopgridChainCache": false,
+        "noPaint": false,
+        "noPaintActive": false,
+        "paintOnlyActive": false,
+        "noDomUpdates": false,
+        "traceMarks": true,
+        "runTag": "P3fEmptyNoNotes"
+      },
+      "gestureSkipCount": 0
+    },
+    {
+      "label": "P3f_drawgrid_playing_panzoom_chain_no_notes_anchor_on",
+      "durationMs": 30000,
+      "warmupMs": 1200,
+      "createdAt": "2025-12-29T17:14:53.560Z",
+      "samples": 413,
+      "frameMs": {
+        "avg": 70.72009685230023,
+        "p50": 66.70000000001164,
+        "p95": 100.10000000000582,
+        "p99": 116.79999999998836,
+        "worst": 533.7000000000116
+      },
+      "counts": {
+        "over16ms": 413,
+        "over33ms": 413,
+        "over50ms": 370
+      },
+      "pulseCount": 0,
+      "outlineSyncCount": 0,
+      "warmupCount": 1,
+      "warmupTs": 1767028464816,
+      "frameProfile": {
+        "samples": 120,
+        "parts": {
+          "perf.raf.other": {
+            "totalMs": 72.39999747276306,
+            "avgMs": 0.6033333122730256
+          },
+          "pulse.service": {
+            "totalMs": 0.19999980926513672,
+            "avgMs": 0.0016666650772094727
+          },
+          "anchor": {
+            "totalMs": 53.799999475479126,
+            "avgMs": 0.448333328962326
+          },
+          "chain.markActive": {
+            "totalMs": 32.09999990463257,
+            "avgMs": 0.2674999992052714
+          },
+          "chain.sequencer": {
+            "totalMs": 42.50000023841858,
+            "avgMs": 0.35416666865348817
+          },
+          "perf.raf.scheduler": {
+            "totalMs": 141.099999666214,
+            "avgMs": 1.1758333305517832
+          },
+          "perf.raf.main": {
+            "totalMs": 142,
+            "avgMs": 1.1833333333333333
+          },
+          "chain.draw": {
+            "totalMs": 49.799999713897705,
+            "avgMs": 0.4149999976158142
+          },
+          "perf.raf.zoomProgress": {
+            "totalMs": 24.19999933242798,
+            "avgMs": 0.20166666110356649
+          },
+          "perf.raf.zoomTick": {
+            "totalMs": 28.600000858306885,
+            "avgMs": 0.2383333404858907
+          },
+          "perf.worldToTranslate": {
+            "totalMs": 0.19999980926513672,
+            "avgMs": 0.0016666650772094727
+          },
+          "perf.gesture.zoom": {
+            "totalMs": 1.3000001907348633,
+            "avgMs": 0.010833334922790528
+          },
+          "script": {
+            "totalMs": 3.200000286102295,
+            "avgMs": 0.026666669050852458
+          },
+          "perf.raf.benchmark": {
+            "totalMs": 5.000000238418579,
+            "avgMs": 0.041666668653488156
+          },
+          "drawgrid.prep.visibility": {
+            "totalMs": 2.200000524520874,
+            "avgMs": 0.018333337704340615
+          },
+          "perf.raf.drawgrid": {
+            "totalMs": 6334.300002336502,
+            "avgMs": 52.78583335280418
+          },
+          "drawgrid.prep.camera": {
+            "totalMs": 1.1000006198883057,
+            "avgMs": 0.009166671832402547
+          },
+          "drawgrid.prep.adaptive": {
+            "totalMs": 40.59999990463257,
+            "avgMs": 0.33833333253860476
+          },
+          "drawgrid.prep.overlayGate": {
+            "totalMs": 2.8999993801116943,
+            "avgMs": 0.024166661500930785
+          },
+          "drawgrid.render.prep": {
+            "totalMs": 77.60000014305115,
+            "avgMs": 0.6466666678587596
+          },
+          "drawgrid.render.particles": {
+            "totalMs": 1.5999996662139893,
+            "avgMs": 0.013333330551783243
+          },
+          "drawgrid.ensureSize": {
+            "totalMs": 7.200000524520874,
+            "avgMs": 0.06000000437100728
+          },
+          "drawgrid.grid.blit": {
+            "totalMs": 21.799999475479126,
+            "avgMs": 0.1816666622956594
+          },
+          "drawgrid.draw.grid": {
+            "totalMs": 38.79999828338623,
+            "avgMs": 0.3233333190282186
+          },
+          "drawgrid.nodes.layout": {
+            "totalMs": 21.499998807907104,
+            "avgMs": 0.17916665673255922
+          },
+          "drawgrid.nodes.cacheBlit": {
+            "totalMs": 5.000000238418579,
+            "avgMs": 0.041666668653488156
+          },
+          "drawgrid.nodes.blocks.blit": {
+            "totalMs": 3.599998712539673,
+            "avgMs": 0.02999998927116394
+          },
+          "drawgrid.nodes.flash": {
+            "totalMs": 2.0999999046325684,
+            "avgMs": 0.017499999205271403
+          },
+          "drawgrid.nodes.tutorial": {
+            "totalMs": 4.80000114440918,
+            "avgMs": 0.04000000953674317
+          },
+          "drawgrid.draw.nodes": {
+            "totalMs": 49.69999861717224,
+            "avgMs": 0.414166655143102
+          },
+          "drawgrid.draw.composite": {
+            "totalMs": 307.49999809265137,
+            "avgMs": 2.562499984105428
+          },
+          "drawgrid.update": {
+            "totalMs": 0.6000006198883057,
+            "avgMs": 0.005000005165735881
+          },
+          "drawgrid.draw": {
+            "totalMs": 90.59999656677246,
+            "avgMs": 0.7549999713897705
+          },
+          "drawgrid.ui.refresh": {
+            "totalMs": 0.8000001907348633,
+            "avgMs": 0.0066666682561238606
+          },
+          "drawgrid.dom.pulse": {
+            "totalMs": 1.8000001907348633,
+            "avgMs": 0.015000001589457194
+          },
+          "drawgrid.dom.playing": {
+            "totalMs": 0.3000001907348633,
+            "avgMs": 0.002500001589457194
+          },
+          "drawgrid.frame.total": {
+            "totalMs": 548.3999991416931,
+            "avgMs": 4.569999992847443
+          },
+          "drawgrid.overlay.clear": {
+            "totalMs": 2.6999988555908203,
+            "avgMs": 0.022499990463256837
+          },
+          "drawgrid.overlay.strokes.colorized": {
+            "totalMs": 0.19999980926513672,
+            "avgMs": 0.0016666650772094727
+          },
+          "drawgrid.overlay.strokes.special": {
+            "totalMs": 31.200002431869507,
+            "avgMs": 0.2600000202655792
+          },
+          "drawgrid.overlay.strokes": {
+            "totalMs": 34.50000190734863,
+            "avgMs": 0.2875000158945719
+          },
+          "drawgrid.overlay.core": {
+            "totalMs": 38.100001096725464,
+            "avgMs": 0.31750000913937887
+          },
+          "drawgrid.overlay.playhead": {
+            "totalMs": 1.000000238418579,
+            "avgMs": 0.008333335320154825
+          },
+          "unattributed": {
+            "totalMs": 2047.8000076292374,
+            "avgMs": 17.065000063576978
+          },
+          "frame.nonScript": {
+            "totalMs": 9254.49999971388,
+            "avgMs": 77.120833330949
+          },
+          "zoom.reflow": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "chain.advance": {
+            "totalMs": 8.40000033378601,
+            "avgMs": 0.0700000027815501
+          },
+          "drawgrid.frontSwap": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.ui.backSync": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.ui.clear": {
+            "totalMs": 0,
+            "avgMs": 0
+          }
+        },
+        "work": {
+          "totalMs": 3.700000286102295,
+          "avgMs": 0.030833335717519124
+        },
+        "idle": {
+          "totalMs": 9253.99999971388,
+          "avgMs": 77.11666666428233
+        }
+      },
+      "warmupProfile": {
+        "t": 141760,
+        "frameDt": 500.3999999999942,
+        "parts": {
+          "chain.ui.query": 0.2999999523162842,
+          "chain.ui.parents": 0.8000001907348633,
+          "chain.ui": 2.0999999046325684,
+          "drawgrid.resize": 2.1999995708465576,
+          "drawgrid.nodes.layout": 3.400000810623169,
+          "drawgrid.nodes.connections": 0.5,
+          "drawgrid.nodes.circles": 1.1000001430511475,
+          "drawgrid.nodes.draw": 15.30000114440918,
+          "drawgrid.nodes.blocks.build": 2.0999999046325684,
+          "drawgrid.nodes.blocks.blit": 1.4999992847442627,
+          "drawgrid.nodes.flash": 0.6000001430511475,
+          "drawgrid.nodes.tutorial": 0.39999985694885254,
+          "drawgrid.grid.cache": 1.1000001430511475,
+          "drawgrid.grid.blit": 2.3999993801116943,
+          "drawgrid.paint.redraw": 124.80000066757202,
+          "drawgrid.layout": 114.39999961853027,
+          "drawgrid.nodes.cacheBlit": 1.1999998092651367,
+          "perf.warmup": 0.001,
+          "script": 169,
+          "perf.raf.benchmark": 169.09999990463257,
+          "drawgrid.prep.visibility": 0,
+          "drawgrid.prep.camera": 0,
+          "drawgrid.prep.adaptive": 0.09999990463256836,
+          "drawgrid.prep.overlayGate": 0,
+          "drawgrid.render.prep": 0.6999998092651367,
+          "drawgrid.render.particles": 0.09999990463256836,
+          "drawgrid.ensureSize": 0.20000004768371582,
+          "drawgrid.draw.grid": 0.6999995708465576,
+          "drawgrid.draw.nodes": 1.700000286102295,
+          "drawgrid.update": 0,
+          "drawgrid.draw": 2.3999998569488525,
+          "drawgrid.frontSwap": 0.09999990463256836,
+          "drawgrid.ui.refresh": 0.09999990463256836,
+          "drawgrid.dom.pulse.add": 0.09999990463256836,
+          "drawgrid.dom.pulse": 0.19999980926513672,
+          "drawgrid.dom.playing": 0,
+          "drawgrid.frame.total": 5.6999993324279785,
+          "perf.raf.drawgrid": 75.59999942779541,
+          "drawgrid.draw.composite": 0.3000001907348633,
+          "drawgrid.overlay.clear": 0.10000014305114746,
+          "drawgrid.overlay.strokes.colorized": 0,
+          "drawgrid.overlay.strokes.special": 0.6999998092651367,
+          "drawgrid.overlay.strokes": 0.7999999523162842,
+          "drawgrid.overlay.core": 0.9000000953674316,
+          "drawgrid.overlay.playhead": 0,
+          "perf.raf.other": 0.09999990463256836,
+          "frame.nonScript": 331.3999999999942
+        },
+        "workMs": 169,
+        "idleMs": 331.3999999999942
+      },
+      "sceneMeta": {
+        "toys": 48,
+        "chainMarkers": 48,
+        "cam": null,
+        "toyTypes": {
+          "drawgrid": 48
+        },
+        "camBounds": {
+          "selector": ".toy-panel",
+          "minX": -3868.52,
+          "minY": -2757.5,
+          "maxX": 3868.48,
+          "maxY": 3244.5,
+          "centerX": -0.01999999999998181,
+          "centerY": 243.5,
+          "startX": 1280.0180584242094,
+          "startY": 443.36501652057063,
+          "panRadius": 2400
+        }
+      },
+      "particleToggles": {
+        "skipUpdate": false,
+        "skipDraw": false,
+        "budgetMul": 1,
+        "gestureDrawModulo": 1,
+        "gestureFieldModulo": 1,
+        "freezeUnfocusedDuringGesture": true,
+        "logFreeze": false
+      },
+      "particleTempPatch": null,
+      "playing": true,
+      "flags": {
+        "disableLoopgridRender": false,
+        "disableChains": false,
+        "disableTapDots": false,
+        "disableOverlays": false,
+        "disableOverlayStrokes": false,
+        "disableOverlayCore": false,
+        "disablePulses": false,
+        "freezeAllUnfocused": false,
+        "loopgridGestureRenderMod": 1,
+        "loopgridChainCache": false,
+        "noPaint": false,
+        "noPaintActive": false,
+        "paintOnlyActive": false,
+        "noDomUpdates": false,
+        "traceMarks": true,
+        "runTag": "P3fEmptyChainNoNotes"
+      },
+      "gestureSkipCount": 0
+    },
+    {
+      "label": "P3f_drawgrid_playing_panzoom_some_empty_anchor_on",
+      "durationMs": 30000,
+      "warmupMs": 1200,
+      "createdAt": "2025-12-29T17:15:23.629Z",
+      "samples": 343,
+      "frameMs": {
+        "avg": 84.22886297376094,
+        "p50": 83.30000000001746,
+        "p95": 116.80000000001746,
+        "p99": 166.79999999998836,
+        "worst": 483.5999999999767
+      },
+      "counts": {
+        "over16ms": 343,
+        "over33ms": 343,
+        "over50ms": 335
+      },
+      "pulseCount": 3443,
+      "outlineSyncCount": 3443,
+      "warmupCount": 1,
+      "warmupTs": 1767028494697,
+      "frameProfile": {
+        "samples": 120,
+        "parts": {
+          "perf.raf.other": {
+            "totalMs": 99.79999923706055,
+            "avgMs": 0.8316666603088378
+          },
+          "perf.raf.outlineSync": {
+            "totalMs": 59.50000023841858,
+            "avgMs": 0.49583333532015483
+          },
+          "pulse.service": {
+            "totalMs": 2.5,
+            "avgMs": 0.020833333333333332
+          },
+          "zoom.reflow": {
+            "totalMs": 1.0999999046325684,
+            "avgMs": 0.00916666587193807
+          },
+          "anchor": {
+            "totalMs": 101.49999785423279,
+            "avgMs": 0.8458333154519398
+          },
+          "chain.markActive": {
+            "totalMs": 37.60000205039978,
+            "avgMs": 0.31333335041999816
+          },
+          "chain.sequencer": {
+            "totalMs": 284.800000667572,
+            "avgMs": 2.3733333388964337
+          },
+          "perf.raf.scheduler": {
+            "totalMs": 440.09999990463257,
+            "avgMs": 3.6674999992052713
+          },
+          "perf.raf.main": {
+            "totalMs": 441,
+            "avgMs": 3.675
+          },
+          "chain.draw": {
+            "totalMs": 26.399999380111694,
+            "avgMs": 0.2199999948342641
+          },
+          "perf.raf.zoomProgress": {
+            "totalMs": 27.49999976158142,
+            "avgMs": 0.22916666467984517
+          },
+          "perf.raf.zoomTick": {
+            "totalMs": 29.59999990463257,
+            "avgMs": 0.24666666587193806
+          },
+          "perf.worldToTranslate": {
+            "totalMs": 0.3000001907348633,
+            "avgMs": 0.002500001589457194
+          },
+          "perf.gesture.zoom": {
+            "totalMs": 1.5000004768371582,
+            "avgMs": 0.012500003973642985
+          },
+          "script": {
+            "totalMs": 2.8000001907348633,
+            "avgMs": 0.02333333492279053
+          },
+          "perf.raf.benchmark": {
+            "totalMs": 3.5999999046325684,
+            "avgMs": 0.029999999205271403
+          },
+          "drawgrid.prep.visibility": {
+            "totalMs": 0.9000000953674316,
+            "avgMs": 0.007500000794728597
+          },
+          "perf.raf.drawgrid": {
+            "totalMs": 6916.000001192093,
+            "avgMs": 57.63333334326744
+          },
+          "drawgrid.prep.camera": {
+            "totalMs": 1.3000004291534424,
+            "avgMs": 0.01083333690961202
+          },
+          "drawgrid.prep.adaptive": {
+            "totalMs": 111.19999957084656,
+            "avgMs": 0.926666663090388
+          },
+          "drawgrid.prep.overlayGate": {
+            "totalMs": 2.9999992847442627,
+            "avgMs": 0.024999994039535522
+          },
+          "drawgrid.render.prep": {
+            "totalMs": 140.99999976158142,
+            "avgMs": 1.1749999980131784
+          },
+          "drawgrid.render.particles": {
+            "totalMs": 1.6999998092651367,
+            "avgMs": 0.014166665077209473
+          },
+          "drawgrid.ensureSize": {
+            "totalMs": 7.499999523162842,
+            "avgMs": 0.062499996026357016
+          },
+          "drawgrid.grid.blit": {
+            "totalMs": 21.400001525878906,
+            "avgMs": 0.1783333460489909
+          },
+          "drawgrid.draw.grid": {
+            "totalMs": 33.600000619888306,
+            "avgMs": 0.28000000516573587
+          },
+          "drawgrid.nodes.layout": {
+            "totalMs": 28.80000066757202,
+            "avgMs": 0.24000000556310017
+          },
+          "drawgrid.nodes.cacheBlit": {
+            "totalMs": 5.199999809265137,
+            "avgMs": 0.04333333174387614
+          },
+          "drawgrid.nodes.blocks.blit": {
+            "totalMs": 3.599999189376831,
+            "avgMs": 0.029999993244806924
+          },
+          "drawgrid.nodes.flash": {
+            "totalMs": 39.00000071525574,
+            "avgMs": 0.32500000596046447
+          },
+          "drawgrid.nodes.tutorial": {
+            "totalMs": 6.300000190734863,
+            "avgMs": 0.052500001589457196
+          },
+          "drawgrid.draw.nodes": {
+            "totalMs": 96.4000015258789,
+            "avgMs": 0.8033333460489909
+          },
+          "drawgrid.draw.composite": {
+            "totalMs": 300.8000068664551,
+            "avgMs": 2.506666723887126
+          },
+          "drawgrid.update": {
+            "totalMs": 0.20000004768371582,
+            "avgMs": 0.0016666670640309651
+          },
+          "drawgrid.draw": {
+            "totalMs": 131.80000185966492,
+            "avgMs": 1.098333348830541
+          },
+          "drawgrid.ui.refresh": {
+            "totalMs": 0.5999996662139893,
+            "avgMs": 0.004999997218449911
+          },
+          "drawgrid.dom.pulse.add": {
+            "totalMs": 1.2999992370605469,
+            "avgMs": 0.010833326975504558
+          },
+          "drawgrid.dom.pulse": {
+            "totalMs": 7.999997615814209,
+            "avgMs": 0.06666664679845175
+          },
+          "drawgrid.dom.playing": {
+            "totalMs": 0.6999998092651367,
+            "avgMs": 0.005833331743876139
+          },
+          "drawgrid.overlay.clear": {
+            "totalMs": 2.1999995708465576,
+            "avgMs": 0.018333329757054647
+          },
+          "drawgrid.overlay.strokes.colorized": {
+            "totalMs": 0.10000014305114746,
+            "avgMs": 0.0008333345254262288
+          },
+          "drawgrid.overlay.strokes.special": {
+            "totalMs": 40.59999918937683,
+            "avgMs": 0.33833332657814025
+          },
+          "drawgrid.overlay.strokes": {
+            "totalMs": 43.89999961853027,
+            "avgMs": 0.36583333015441893
+          },
+          "drawgrid.overlay.core": {
+            "totalMs": 46.69999933242798,
+            "avgMs": 0.3891666611035665
+          },
+          "drawgrid.overlay.cellFlashes": {
+            "totalMs": 2.6999998092651367,
+            "avgMs": 0.022499998410542805
+          },
+          "drawgrid.frame.total": {
+            "totalMs": 669.6000008583069,
+            "avgMs": 5.580000007152558
+          },
+          "drawgrid.overlay.toggles": {
+            "totalMs": 4.800000905990601,
+            "avgMs": 0.040000007549921675
+          },
+          "drawgrid.overlay.playhead": {
+            "totalMs": 0.6999995708465576,
+            "avgMs": 0.005833329757054647
+          },
+          "unattributed": {
+            "totalMs": 1854.0999932766426,
+            "avgMs": 15.450833277305355
+          },
+          "frame.nonScript": {
+            "totalMs": 10539.099999809288,
+            "avgMs": 87.82583333174406
+          },
+          "drawgrid.dom.pulse.remove": {
+            "totalMs": 2.0999996662139893,
+            "avgMs": 0.01749999721844991
+          },
+          "chain.advance": {
+            "totalMs": 9,
+            "avgMs": 0.075
+          },
+          "drawgrid.frontSwap": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.ui.backSync": {
+            "totalMs": 0.20000004768371582,
+            "avgMs": 0.0016666670640309651
+          },
+          "drawgrid.ui.clear": {
+            "totalMs": 0,
+            "avgMs": 0
+          }
+        },
+        "work": {
+          "totalMs": 3.000000238418579,
+          "avgMs": 0.025000001986821493
+        },
+        "idle": {
+          "totalMs": 10538.899999761605,
+          "avgMs": 87.82416666468004
+        }
+      },
+      "warmupProfile": {
+        "t": 171608.30000019073,
+        "frameDt": 700.6000000000058,
+        "parts": {
+          "perf.raf.other": 4.600000619888306,
+          "pulse.service": 0,
+          "zoom.reflow": 0,
+          "anchor": 0.39999985694885254,
+          "chain.markActive": 0.2999999523162842,
+          "chain.sequencer": 6.6000001430511475,
+          "perf.raf.scheduler": 7.299999952316284,
+          "perf.raf.main": 7.299999952316284,
+          "chain.draw": 0.10000014305114746,
+          "perf.raf.zoomProgress": 0.19999980926513672,
+          "chain.ui.query": 0,
+          "chain.ui.parents": 0.2999999523162842,
+          "chain.ui": 0.8999998569488525,
+          "drawgrid.resize": 2.500000476837158,
+          "drawgrid.grid.cache": 5.499999284744263,
+          "drawgrid.grid.blit": 1.6000001430511475,
+          "drawgrid.layout": 28.199999570846558,
+          "drawgrid.nodes.layout": 1.2999999523162842,
+          "drawgrid.nodes.connections": 0.7000000476837158,
+          "drawgrid.nodes.circles": 1.299999713897705,
+          "drawgrid.nodes.draw": 20.09999990463257,
+          "drawgrid.nodes.blocks.build": 5.599999904632568,
+          "drawgrid.nodes.blocks.blit": 2.200000047683716,
+          "drawgrid.nodes.flash": 0.9000000953674316,
+          "drawgrid.nodes.tutorial": 0.20000004768371582,
+          "drawgrid.paint.redraw": 112.40000057220459,
+          "perf.warmup": 0.001,
+          "script": 182.10000014305115,
+          "perf.raf.benchmark": 182.20000004768372,
+          "drawgrid.prep.visibility": 0,
+          "perf.raf.drawgrid": 0.9000000953674316,
+          "drawgrid.prep.camera": 0,
+          "drawgrid.prep.adaptive": 0,
+          "drawgrid.prep.overlayGate": 0,
+          "drawgrid.render.prep": 0.10000014305114746,
+          "drawgrid.render.particles": 0.09999990463256836,
+          "drawgrid.ensureSize": 0,
+          "drawgrid.update": 0,
+          "drawgrid.draw": 0,
+          "drawgrid.nodes.cacheBlit": 0,
+          "unattributed": 124.69899966621983,
+          "frame.nonScript": 518.4999998569547
+        },
+        "workMs": 182.10000014305115,
+        "idleMs": 518.4999998569547
+      },
+      "sceneMeta": {
+        "toys": 48,
+        "chainMarkers": 48,
+        "cam": null,
+        "toyTypes": {
+          "drawgrid": 48
+        },
+        "camBounds": {
+          "selector": ".toy-panel",
+          "minX": -3868.52,
+          "minY": -2757.5,
+          "maxX": 3868.48,
+          "maxY": 3244.5,
+          "centerX": -0.01999999999998181,
+          "centerY": 243.5,
+          "startX": 1280.0190618921847,
+          "startY": 443.37195109029074,
+          "panRadius": 2400
+        }
+      },
+      "particleToggles": {
+        "skipUpdate": false,
+        "skipDraw": false,
+        "budgetMul": 1,
+        "gestureDrawModulo": 1,
+        "gestureFieldModulo": 1,
+        "freezeUnfocusedDuringGesture": true,
+        "logFreeze": false
+      },
+      "particleTempPatch": null,
+      "playing": true,
+      "flags": {
+        "disableLoopgridRender": false,
+        "disableChains": false,
+        "disableTapDots": false,
+        "disableOverlays": false,
+        "disableOverlayStrokes": false,
+        "disableOverlayCore": false,
+        "disablePulses": false,
+        "freezeAllUnfocused": false,
+        "loopgridGestureRenderMod": 1,
+        "loopgridChainCache": false,
+        "noPaint": false,
+        "noPaintActive": false,
+        "paintOnlyActive": false,
+        "noDomUpdates": false,
+        "traceMarks": true,
+        "runTag": "P3fMixedSomeEmpty"
+      },
+      "gestureSkipCount": 0
+    }
+  ]
+}

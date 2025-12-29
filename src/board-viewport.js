@@ -1143,6 +1143,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     } catch {}
     crosshairState.raf = requestAnimationFrame(updateCrosshair);
   }
+  updateCrosshair.__perfRafTag = 'perf.raf.crosshair';
 
   const initial = getZoomState();
   if (

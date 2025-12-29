@@ -341,6 +341,17 @@ const DG_SWAP_DEBUG = __dgFlag('swap');      // swap spam;
 
 // Alpha debug (default OFF; toggle via localStorage('DG_ALPHA_DEBUG'='1') or DG_DEBUG_SET)
 const DG_ALPHA_DEBUG = __dgFlag('alpha');
+try {
+  if (typeof window !== 'undefined' && window.__DG_GRID_ALPHA_DEBUG === undefined) {
+    window.__DG_GRID_ALPHA_DEBUG = true;
+  }
+} catch {}
+try {
+  if (typeof window !== 'undefined' && window.__DG_GRID_ALPHA_BOOT_LOG === undefined) {
+    window.__DG_GRID_ALPHA_BOOT_LOG = true;
+    console.warn('[DG][grid-alpha] boot');
+  }
+} catch {}
 
 // Ghost debug (off by default). Enable via ?dgghost=1 or localStorage('DG_GHOST_DEBUG'='1')
 let DG_GHOST_DEBUG = false;
@@ -353,6 +364,33 @@ if (DG_DEBUG) { try { console.info('[DG][alpha:boot]', { DG_ALPHA_DEBUG }); } ca
 
 let __ALPHA_PATH_LAST_TS = 0;
 const DG_ALPHA_SPAM_MS = 300;
+let __DG_GRID_ALPHA_LAST_TS = 0;
+
+function dgGridAlphaLog(tag, ctx, extra = {}) {
+  try {
+    if (!window?.__DG_GRID_ALPHA_DEBUG) return;
+  } catch {
+    return;
+  }
+  if (!ctx) return;
+  const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  if ((now - __DG_GRID_ALPHA_LAST_TS) < 180) return;
+  __DG_GRID_ALPHA_LAST_TS = now;
+  try {
+    console.warn('[DG][grid-alpha]', {
+      tag,
+      role: ctx?.canvas?.getAttribute?.('data-role') || null,
+      alpha: ctx.globalAlpha,
+      composite: ctx.globalCompositeOperation,
+      shadowBlur: ctx.shadowBlur,
+      shadowColor: ctx.shadowColor,
+      usingBackBuffers,
+      dgSingleCanvas: !!(typeof DG_SINGLE_CANVAS !== 'undefined' && DG_SINGLE_CANVAS),
+      gridReady: !!panel?.__dgGridHasPainted,
+      ...extra,
+    });
+  } catch {}
+}
 
 const dglog = (...a) => { if (DG_DEBUG) console.log('[DG]', ...a); };
 const dgf = (...a) => { if (DG_FRAME_DEBUG) console.log('[DG] frame', ...a); };
@@ -825,6 +863,13 @@ function withDeviceSpace(ctx, fn) {
 function resetCtx(ctx) {
   if (!ctx) return;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.shadowBlur = 0;
+  ctx.shadowColor = 'transparent';
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
+  if (typeof ctx.setLineDash === 'function') ctx.setLineDash([]);
 }
 
 function clearCanvas(ctx) {
@@ -3070,6 +3115,7 @@ function ensureSizeReady({ force = false } = {}) {
   let curErase = null;
   let strokes = []; // Store all completed stroke objects
   let __dgOverlayStrokeCache = { value: false, len: 0, ts: 0 };
+  let __dgOverlayStrokeListCache = { paintRev: -1, len: 0, special: [], colorized: [] };
 
   function hasOverlayStrokesCached() {
     const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
@@ -4769,6 +4815,7 @@ function syncBackBufferSizes() {
     if (!__dgGridReady()) return;
     const surface = frontCtx.canvas;
     if (!surface || !surface.width || !surface.height) return;
+    dgGridAlphaLog('composite:begin', frontCtx);
     __dgLayerTrace('composite:enter', {
       panelId: panel?.id || null,
       usingBackBuffers,
@@ -4814,6 +4861,14 @@ function syncBackBufferSizes() {
           0, 0, width, height
         );
       }
+      const tutorialSource = getActiveTutorialCanvas();
+      if (tutorialSource && tutorialSource.width && tutorialSource.height) {
+        frontCtx.drawImage(
+          tutorialSource,
+          0, 0, tutorialSource.width, tutorialSource.height,
+          0, 0, width, height
+        );
+      }
       const nodesFrontCanvas = nodesFrontCtx?.canvas;
       const nodeSources = [];
       if (nodesBackCanvas && nodesBackCanvas.width && nodesBackCanvas.height) {
@@ -4835,6 +4890,7 @@ function syncBackBufferSizes() {
         );
       }
     });
+    dgGridAlphaLog('composite:end', frontCtx);
     __dgLayerTrace('composite:exit', {
       panelId: panel?.id || null,
       usingBackBuffers,
@@ -5425,9 +5481,30 @@ function syncBackBufferSizes() {
 
   function drawGrid(){
     if (!__dgGridReady()) {
+      dgGridAlphaLog('drawGrid:skip-not-ready', gctx, {
+        gridArea: gridArea ? { ...gridArea } : null,
+        cw,
+        ch,
+        cssW,
+        cssH,
+      });
       panel.__dgGridHasPainted = false;
       return;
     }
+    if (!panel.__dgGridDebugLogged) {
+      panel.__dgGridDebugLogged = true;
+      try {
+        console.warn('[DG][grid-alpha] drawGrid first call', {
+          panelId: panel?.id || null,
+          role: gctx?.canvas?.getAttribute?.('data-role') || null,
+          alpha: gctx?.globalAlpha,
+          composite: gctx?.globalCompositeOperation,
+        });
+      } catch {}
+    }
+    dgGridAlphaLog('drawGrid:begin', gctx, {
+      cacheKey: __dgGridCache?.key || null,
+    });
     __dgLayerTrace('drawGrid:enter', {
       panelId: panel?.id || null,
       usingBackBuffers,
@@ -5516,6 +5593,10 @@ function syncBackBufferSizes() {
       gctx.clearRect(0, 0, surfacePxW, surfacePxH);
       if (cache.canvas) gctx.drawImage(cache.canvas, 0, 0, surfacePxW, surfacePxH);
     });
+    dgGridAlphaLog('drawGrid:blit', gctx, {
+      cacheKey,
+      cacheHit: cache.key === cacheKey,
+    });
     if (DG_SINGLE_CANVAS && gridFrontCtx?.canvas) {
       const frontSurface = gridFrontCtx.canvas;
       withDeviceSpace(gridFrontCtx, () => {
@@ -5533,6 +5614,7 @@ function syncBackBufferSizes() {
     panel.__dgGridReadyForNodes = true;
     panel.__dgGridHasPainted = true;
     markSingleCanvasDirty();
+    dgGridAlphaLog('drawGrid:end', gctx);
     __dgLayerTrace('drawGrid:exit', {
       panelId: panel?.id || null,
       usingBackBuffers,
@@ -5542,6 +5624,32 @@ function syncBackBufferSizes() {
 
   function crisp(v) {
     return Math.round(v) + 0.5;
+  }
+
+  function getStrokePath(stroke) {
+    if (!stroke || !stroke.pts || stroke.pts.length < 2) return null;
+    if (typeof Path2D === 'undefined') return null;
+    const pts = stroke.pts;
+    const last = pts[pts.length - 1];
+    const needsRebuild =
+      !stroke.__overlayPath ||
+      stroke.__overlayPathPts !== pts ||
+      stroke.__overlayPathLen !== pts.length ||
+      stroke.__overlayPathLastX !== last.x ||
+      stroke.__overlayPathLastY !== last.y;
+    if (needsRebuild) {
+      const path = new Path2D();
+      path.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) {
+        path.lineTo(pts[i].x, pts[i].y);
+      }
+      stroke.__overlayPath = path;
+      stroke.__overlayPathPts = pts;
+      stroke.__overlayPathLen = pts.length;
+      stroke.__overlayPathLastX = last.x;
+      stroke.__overlayPathLastY = last.y;
+    }
+    return stroke.__overlayPath;
   }
 
   // A helper to draw a complete stroke from a point array.
@@ -5639,10 +5747,6 @@ function syncBackBufferSizes() {
         ctx.arc(p.x, p.y, lineWidth / 2, 0, Math.PI * 2);
         ctx.fill();
       } else {
-        ctx.moveTo(stroke.pts[0].x, stroke.pts[0].y);
-        for (let i = 1; i < stroke.pts.length; i++) {
-          ctx.lineTo(stroke.pts[i].x, stroke.pts[i].y);
-        }
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         const lw = getLineWidth() + (isOverlay ? 1.25 : 0);
@@ -5666,7 +5770,16 @@ function syncBackBufferSizes() {
           }
           ctx.strokeStyle = grad;
         }
-        ctx.stroke();
+        const path = getStrokePath(stroke);
+        if (path) {
+          ctx.stroke(path);
+        } else {
+          ctx.moveTo(stroke.pts[0].x, stroke.pts[0].y);
+          for (let i = 1; i < stroke.pts.length; i++) {
+            ctx.lineTo(stroke.pts[i].x, stroke.pts[i].y);
+          }
+          ctx.stroke();
+        }
       }
 
         ctx.restore();
@@ -7192,6 +7305,10 @@ function syncBackBufferSizes() {
     try {
       if (!panel.__dgFrame) panel.__dgFrame = 0;
       panel.__dgFrame++;
+      if (!panel.__dgGridAlphaSeen) {
+        panel.__dgGridAlphaSeen = true;
+        try { console.warn('[DG][grid-alpha] renderLoop active', { panelId: panel?.id || null }); } catch {}
+      }
       const __dgFrameProfileStart = (DG_FRAME_PROFILE && typeof performance !== 'undefined' && typeof performance.now === 'function')
         ? performance.now()
         : null;
@@ -7333,7 +7450,10 @@ function syncBackBufferSizes() {
       }
       const skipOverlayHeavy = overlayEvery > 1 && ((panel.__dgOverlayFrame % overlayEvery) !== 0);
       const allowOverlayDrawHeavy = allowOverlayDraw && (!skipOverlayHeavy || __dgNeedsUIRefresh);
+      const overlayCoreWanted = (hasOverlayFx || hasOverlayStrokes || (cur && previewGid));
+      const overlayCoreActive = allowOverlayDrawHeavy && overlayCoreWanted;
       let overlayCompositeNeeded = false;
+      let overlayClearedThisFrame = false;
       if (__perfOn && __overlayGateStart) {
         try { window.__PerfFrameProf?.mark?.('drawgrid.prep.overlayGate', performance.now() - __overlayGateStart); } catch {}
       }
@@ -7431,6 +7551,19 @@ function syncBackBufferSizes() {
         !__dgNeedsUIRefresh &&
         !__hydrationJustApplied &&
         !singleCompositeNeeded;
+      if (!panel.__dgRenderLoopDebugLogged) {
+        panel.__dgRenderLoopDebugLogged = true;
+        try {
+          console.warn('[DG][grid-alpha] renderLoop flags', {
+            panelId: panel?.id || null,
+            canDrawAnything,
+            skipFrame,
+            throttleFrame,
+            effectiveRenderEvery,
+            visible: isPanelVisible,
+          });
+        } catch {}
+      }
 
       maybeReleaseStalledZoom();
       dgf('start', { f: panel.__dgFrame|0, cssW, cssH, allowOverlayDraw, allowParticleDraw });
@@ -7469,19 +7602,41 @@ function syncBackBufferSizes() {
       if (gesturing && !isFocused && visiblePanels >= 12) drawModulo = Math.max(drawModulo, 3);
       if (gesturing && !isFocused && visiblePanels >= 18) drawModulo = Math.max(drawModulo, 4);
       let doFullDraw = (!gesturing) || drawModulo <= 1 || ((__dgFrameIdx % drawModulo) === 0);
+      let forceFullDraw = false;
       if (__dgForceFullDrawNext) {
         __dgForceFullDrawNext = false;
         doFullDraw = true;
+        forceFullDraw = true;
       }
       if (__dgForceFullDrawFrames > 0) {
         __dgForceFullDrawFrames -= 1;
         doFullDraw = true;
+        forceFullDraw = true;
+      }
+      if (Number.isFinite(__dgForceFullDrawUntil) && nowTs < __dgForceFullDrawUntil) {
+        doFullDraw = true;
+        forceFullDraw = true;
       }
       if (!panel.__dgGridHasPainted && __dgGridReady()) {
         doFullDraw = true;
       }
+      const hasNodeFlash = (() => {
+        for (let i = 0; i < flashes.length; i++) {
+          if (flashes[i] > 0) return true;
+        }
+        return false;
+      })();
       if (DG_SINGLE_CANVAS && canDrawAnything) {
-        doFullDraw = true;
+        const needsFullDraw =
+          __dgSingleCompositeDirty ||
+          __dgNeedsUIRefresh ||
+          __dgFrontSwapNextDraw ||
+          __hydrationJustApplied ||
+          forceFullDraw ||
+          !panel.__dgGridHasPainted ||
+          hasNodeFlash ||
+          tutorialHighlightMode !== 'none';
+        if (!needsFullDraw) doFullDraw = false;
       }
       if (doFullDraw && isTrulyIdle && canDrawAnything && !__dgNeedsUIRefresh && !__dgFrontSwapNextDraw && !__hydrationJustApplied && !(Number.isFinite(__dgForceFullDrawUntil) && nowTs < __dgForceFullDrawUntil)) {
         doFullDraw = false;
@@ -7537,6 +7692,12 @@ function syncBackBufferSizes() {
           const __gridDrawStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
             ? performance.now()
             : 0;
+          dgGridAlphaLog('renderLoop:drawGrid', gctx, {
+            doFullDraw,
+            canDrawAnything,
+            gridHasPainted: !!panel.__dgGridHasPainted,
+            gridReady: __dgGridReady(),
+          });
           drawGrid();
           if (__gridDrawStart) {
             const __gridDrawDt = performance.now() - __gridDrawStart;
@@ -7788,7 +7949,7 @@ function syncBackBufferSizes() {
     }
 
     // --- other overlay layers still respect allowOverlayDraw ---
-    if (allowOverlayDrawHeavy && (overlayActive || __dgNeedsUIRefresh)) {
+    if (allowOverlayDrawHeavy && (overlayCoreActive || __dgNeedsUIRefresh)) {
       overlayCompositeNeeded = true;
       const __dgOverlayStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
         ? performance.now()
@@ -7806,6 +7967,7 @@ function syncBackBufferSizes() {
         fctx.clearRect(0, 0, width, height);
         emitDG('overlay-clear', { reason: 'pre-redraw' });
       });
+      overlayClearedThisFrame = true;
       if (__overlayClearStart) {
         const __overlayClearDt = performance.now() - __overlayClearStart;
         try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.clear', __overlayClearDt); } catch {}
@@ -7817,15 +7979,28 @@ function syncBackBufferSizes() {
         const __overlayStrokeStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
           ? performance.now()
           : 0;
-        const specialStrokes = [];
-        const colorized = [];
-        if (hasOverlayStrokes) {
-          for (let i = 0; i < strokes.length; i++) {
-            const s = strokes[i];
-            if (!s) continue;
-            if (s.isSpecial) specialStrokes.push(s);
-            if (s.overlayColorize) colorized.push(s);
+        let specialStrokes = __dgOverlayStrokeListCache.special;
+        let colorized = __dgOverlayStrokeListCache.colorized;
+        if (
+          __dgOverlayStrokeListCache.paintRev !== __dgPaintRev ||
+          __dgOverlayStrokeListCache.len !== (strokes?.length || 0)
+        ) {
+          specialStrokes = [];
+          colorized = [];
+          if (hasOverlayStrokes) {
+            for (let i = 0; i < strokes.length; i++) {
+              const s = strokes[i];
+              if (!s) continue;
+              if (s.isSpecial) specialStrokes.push(s);
+              if (s.overlayColorize) colorized.push(s);
+            }
           }
+          __dgOverlayStrokeListCache = {
+            paintRev: __dgPaintRev,
+            len: strokes?.length || 0,
+            special: specialStrokes,
+            colorized,
+          };
         }
           if (specialStrokes.length > 0 || colorized.length > 0 || (cur && previewGid)) {
             __dgLayerDebugLog('overlay-strokes', {
@@ -8174,8 +8349,7 @@ function syncBackBufferSizes() {
     }
 
     // Draw scrolling playhead
-    if (!disableOverlayCore && allowOverlayDrawHeavy) {
-      overlayCompositeNeeded = true;
+    if (!disableOverlayCore && allowOverlayDraw) {
       const __dgOverlayStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
         ? performance.now()
         : 0;
@@ -8198,11 +8372,56 @@ function syncBackBufferSizes() {
       const probablyStale = isActiveInChain && phaseJustWrapped;
 
       if (info && isRunning() && isActiveInChain && !probablyStale) {
+        const playheadSimpleOnly = !allowOverlayDrawHeavy || __dgPlayheadSimpleMode;
+        const canUseTutorialLayer = tutorialHighlightMode === 'none' && !!tutorialCtx?.canvas;
+        const playheadCtx = (playheadSimpleOnly && canUseTutorialLayer) ? tutorialCtx : fctx;
+        if (!overlayClearedThisFrame) {
+          const __overlayClearStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+            ? performance.now()
+            : 0;
+          try {
+            if (playheadCtx === tutorialCtx) {
+              resetCtx(tutorialCtx);
+              withLogicalSpace(tutorialCtx, () => {
+                const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+                const active = getActiveTutorialCanvas();
+                const width = cssW || (active?.width ?? tutorialCtx.canvas.width ?? 0) / scale;
+                const height = cssH || (active?.height ?? tutorialCtx.canvas.height ?? 0) / scale;
+                tutorialCtx.clearRect(0, 0, width, height);
+              });
+            } else {
+              const flashSurface = getActiveFlashCanvas();
+              resetCtx(fctx);
+              withLogicalSpace(fctx, () => {
+                const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+                const width = cssW || (flashSurface?.width ?? 0) / scale;
+                const height = cssH || (flashSurface?.height ?? 0) / scale;
+                if (overlayCoreWanted) {
+                  const lastX = Number.isFinite(panel.__dgPlayheadLastX) ? panel.__dgPlayheadLastX : null;
+                  if (lastX != null) {
+                    const band = Math.max(6, Math.round(Math.max(0.8 * cw, Math.min(gridArea.w * 0.08, 2.2 * cw))));
+                    fctx.clearRect(lastX - band, gridArea.y - 2, band * 2, gridArea.h + 4);
+                    emitDG('overlay-clear', { reason: 'playhead-band' });
+                  }
+                } else {
+                  fctx.clearRect(0, 0, width, height);
+                  emitDG('overlay-clear', { reason: 'playhead' });
+                }
+              });
+              overlayClearedThisFrame = true;
+            }
+          } catch {}
+          if (__perfOn && __overlayClearStart) {
+            try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.clear', performance.now() - __overlayClearStart); } catch {}
+          }
+        }
+        overlayCompositeNeeded = true;
         // Calculate playhead X position based on loop phase
         const playheadX = gridArea.x + info.phase01 * gridArea.w;
+        panel.__dgPlayheadLastX = playheadX;
 
-        // Use the flash canvas (fctx) for the playhead. It's cleared each frame.
-        fctx.save();
+        // Use a dedicated overlay context for the playhead to avoid wiping strokes.
+        playheadCtx.save();
 
         // Width of the soft highlight band scales with a column, clamped
         const gradientWidth = Math.round(
@@ -8211,84 +8430,86 @@ function syncBackBufferSizes() {
 
         // Repulse particles along the full header segment
         try {
-          let sweepDir = headerSweepDirX || 1;
-          if (currentPhase != null && prevPhase != null) {
-            if (phaseJustWrapped) {
-              sweepDir = 1;
-            } else if (Math.abs(currentPhase - prevPhase) > 1e-4) {
-              sweepDir = (currentPhase - prevPhase) >= 0 ? 1 : -1;
+          if (!playheadSimpleOnly) {
+            let sweepDir = headerSweepDirX || 1;
+            if (currentPhase != null && prevPhase != null) {
+              if (phaseJustWrapped) {
+                sweepDir = 1;
+              } else if (Math.abs(currentPhase - prevPhase) > 1e-4) {
+                sweepDir = (currentPhase - prevPhase) >= 0 ? 1 : -1;
+              }
             }
+            headerSweepDirX = sweepDir;
+            pushHeaderSweepAt(playheadX, { lineWidthPx: gradientWidth });
+            dbgPoke('header');
           }
-          headerSweepDirX = sweepDir;
-          pushHeaderSweepAt(playheadX, { lineWidthPx: gradientWidth });
-          dbgPoke('header');
         } catch (e) { /* fail silently */ }
 
         const t = performance.now();
         const hue = 200 + 20 * Math.sin((t / 800) * Math.PI * 2);
         const midColor = `hsla(${(hue + 45).toFixed(0)}, 100%, 70%, 0.25)`;
 
-        if (__dgPlayheadSimpleMode) {
-          fctx.globalAlpha = 0.9;
-          fctx.strokeStyle = `hsl(${(hue + 45).toFixed(0)}, 100%, 70%)`;
-          fctx.lineWidth = Math.max(2, cw * 0.08);
-          fctx.shadowColor = 'transparent';
-          fctx.shadowBlur = 0;
-          fctx.beginPath();
-          fctx.moveTo(playheadX, gridArea.y);
-          fctx.lineTo(playheadX, gridArea.y + gridArea.h);
-          fctx.stroke();
-          fctx.globalAlpha = 1.0;
+        if (playheadSimpleOnly) {
+          playheadCtx.globalAlpha = 0.9;
+          playheadCtx.strokeStyle = `hsl(${(hue + 45).toFixed(0)}, 100%, 70%)`;
+          playheadCtx.lineWidth = Math.max(2, cw * 0.08);
+          playheadCtx.shadowColor = 'transparent';
+          playheadCtx.shadowBlur = 0;
+          playheadCtx.beginPath();
+          playheadCtx.moveTo(playheadX, gridArea.y);
+          playheadCtx.lineTo(playheadX, gridArea.y + gridArea.h);
+          playheadCtx.stroke();
+          playheadCtx.globalAlpha = 1.0;
         } else {
 
-          const bgGrad = fctx.createLinearGradient(playheadX - gradientWidth / 2, 0, playheadX + gradientWidth / 2, 0);
+          const bgGrad = playheadCtx.createLinearGradient(playheadX - gradientWidth / 2, 0, playheadX + gradientWidth / 2, 0);
           bgGrad.addColorStop(0, 'rgba(0,0,0,0)');
           bgGrad.addColorStop(0.5, midColor);
           bgGrad.addColorStop(1, 'rgba(0,0,0,0)');
 
-          fctx.fillStyle = bgGrad;
-          fctx.fillRect(playheadX - gradientWidth / 2, gridArea.y, gradientWidth, gridArea.h);
+          playheadCtx.fillStyle = bgGrad;
+          playheadCtx.fillRect(playheadX - gradientWidth / 2, gridArea.y, gradientWidth, gridArea.h);
 
           // Optional: scale shadow/line widths a bit with cw
           const trailLineWidth = Math.max(1.5, cw * 0.08);
-          fctx.lineWidth = trailLineWidth;
+          playheadCtx.lineWidth = trailLineWidth;
 
           // Create a vertical gradient that mimics the "Line 1" animated gradient.
-          const grad = fctx.createLinearGradient(playheadX, gridArea.y, playheadX, gridArea.y + gridArea.h);
+          const grad = playheadCtx.createLinearGradient(playheadX, gridArea.y, playheadX, gridArea.y + gridArea.h);
           grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 70%)`);
           grad.addColorStop(0.5, `hsl(${(hue + 45).toFixed(0)}, 100%, 70%)`);
           grad.addColorStop(1,  `hsl(${(hue + 90).toFixed(0)}, 100%, 68%)`);
 
           // --- Trailing lines ---
-          fctx.strokeStyle = grad; // Use same gradient for all
-          fctx.shadowColor = 'transparent'; // No shadow for trails
-          fctx.shadowBlur = 0;
+          playheadCtx.strokeStyle = grad; // Use same gradient for all
+          playheadCtx.shadowColor = 'transparent'; // No shadow for trails
+          playheadCtx.shadowBlur = 0;
 
           const trailLineCount = 3;
           const gap = 28; // A constant, larger gap
           for (let i = 0; i < trailLineCount; i++) {
               const trailX = playheadX - (i + 1) * gap;
-              fctx.globalAlpha = 0.6 - i * 0.18;
-              fctx.lineWidth = Math.max(1.0, 2.5 - i * 0.6);
-              fctx.beginPath();
-              fctx.moveTo(trailX, gridArea.y);
-              fctx.lineTo(trailX, gridArea.y + gridArea.h);
-              fctx.stroke();
+              playheadCtx.globalAlpha = 0.6 - i * 0.18;
+              playheadCtx.lineWidth = Math.max(1.0, 2.5 - i * 0.6);
+              playheadCtx.beginPath();
+              playheadCtx.moveTo(trailX, gridArea.y);
+              playheadCtx.lineTo(trailX, gridArea.y + gridArea.h);
+              playheadCtx.stroke();
           }
-          fctx.globalAlpha = 1.0; // Reset for main line
+          playheadCtx.globalAlpha = 1.0; // Reset for main line
 
-          fctx.strokeStyle = grad;
-          fctx.lineWidth = 3;
-          fctx.shadowColor = 'rgba(255, 255, 255, 0.7)';
-          fctx.shadowBlur = 8;
+          playheadCtx.strokeStyle = grad;
+          playheadCtx.lineWidth = 3;
+          playheadCtx.shadowColor = 'rgba(255, 255, 255, 0.7)';
+          playheadCtx.shadowBlur = 8;
 
-          fctx.beginPath();
-          fctx.moveTo(playheadX, gridArea.y);
-          fctx.lineTo(playheadX, gridArea.y + gridArea.h);
-          fctx.stroke();
+          playheadCtx.beginPath();
+          playheadCtx.moveTo(playheadX, gridArea.y);
+          playheadCtx.lineTo(playheadX, gridArea.y + gridArea.h);
+          playheadCtx.stroke();
         }
 
-        fctx.restore();
+        playheadCtx.restore();
       }
         } catch (e) { /* fail silently */ }
         if (__playheadStart) {

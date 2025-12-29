@@ -591,6 +591,8 @@ import { getViewportTransform, screenToWorld, getViewportElement } from './board
     ctx.restore();
   }
 
+  drawWaveFrame.__perfRafTag = 'perf.raf.tapDots';
+
   function startWave(x, y) {
     if (rafId) {
       cancelAnimationFrame(rafId);
