@@ -343,13 +343,7 @@ const DG_SWAP_DEBUG = __dgFlag('swap');      // swap spam;
 const DG_ALPHA_DEBUG = __dgFlag('alpha');
 try {
   if (typeof window !== 'undefined' && window.__DG_GRID_ALPHA_DEBUG === undefined) {
-    window.__DG_GRID_ALPHA_DEBUG = true;
-  }
-} catch {}
-try {
-  if (typeof window !== 'undefined' && window.__DG_GRID_ALPHA_BOOT_LOG === undefined) {
-    window.__DG_GRID_ALPHA_BOOT_LOG = true;
-    console.warn('[DG][grid-alpha] boot');
+    window.__DG_GRID_ALPHA_DEBUG = false;
   }
 } catch {}
 
@@ -377,7 +371,7 @@ function dgGridAlphaLog(tag, ctx, extra = {}) {
   if ((now - __DG_GRID_ALPHA_LAST_TS) < 180) return;
   __DG_GRID_ALPHA_LAST_TS = now;
   try {
-    console.warn('[DG][grid-alpha]', {
+    console.log('[DG][grid-alpha]', {
       tag,
       role: ctx?.canvas?.getAttribute?.('data-role') || null,
       alpha: ctx.globalAlpha,
@@ -974,6 +968,8 @@ let __hydrationJustApplied = false;
 let __dgLayoutStableFrames = 0;
 let __dgLastLayoutKey = '';
 let __dgHydrationPendingRedraw = false;
+let __dgAdaptivePaintDpr = null;
+let __dgAdaptivePaintLastTs = 0;
 let markSingleCanvasDirty = () => {};
 let __dgProbeDidFirstDraw = false;
 try {
@@ -1040,6 +1036,19 @@ function __dgInCommitWindow(nowTs) {
   const deferUntil = __dgDeferUntilTs || 0;
   const guardUntil = Math.max(gestureSettle || 0, deferUntil);
   return guardUntil > 0 && nowTs < guardUntil;
+}
+
+function __dgComputeAdaptivePaintDpr({ boardScale = 1, visiblePanels = 0, isFocused = false, isZoomed = false }) {
+  if (isFocused || isZoomed) return null;
+  let cap = null;
+  if (boardScale <= 0.35 && visiblePanels >= 16) {
+    cap = 1.0;
+  } else if (boardScale <= 0.45 && visiblePanels >= 12) {
+    cap = 1.25;
+  } else if (boardScale <= 0.6 && visiblePanels >= 8) {
+    cap = 1.5;
+  }
+  return cap;
 }
 
 /**
@@ -2168,6 +2177,16 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const ghostBackCanvas = document.createElement('canvas');
   const ghostBackCtx = ghostBackCanvas.getContext('2d');
   let ghostCtx = ghostFrontCtx;
+  panel.__dgFlashLayerEmpty = true;
+  panel.__dgGhostLayerEmpty = true;
+  panel.__dgTutorialLayerEmpty = true;
+
+  const markFlashLayerActive = () => { panel.__dgFlashLayerEmpty = false; };
+  const markFlashLayerCleared = () => { panel.__dgFlashLayerEmpty = true; };
+  const markGhostLayerActive = () => { panel.__dgGhostLayerEmpty = false; };
+  const markGhostLayerCleared = () => { panel.__dgGhostLayerEmpty = true; };
+  const markTutorialLayerActive = () => { panel.__dgTutorialLayerEmpty = false; };
+  const markTutorialLayerCleared = () => { panel.__dgTutorialLayerEmpty = true; };
 
   function updateFlatLayerVisibility() {
     const flat = !!(typeof window !== 'undefined' && window.__PERF_DRAWGRID_FLAT_LAYERS);
@@ -3486,6 +3505,7 @@ function ensureSizeReady({ force = false } = {}) {
             const height = cssH || (flashTarget?.height ?? 0) / scale;
             fctx.clearRect(0, 0, width, height);
           });
+          markFlashLayerCleared();
 
           const ghostTarget = getActiveGhostCanvas();
           resetCtx(ghostCtx);
@@ -3495,6 +3515,7 @@ function ensureSizeReady({ force = false } = {}) {
             const height = cssH || (ghostTarget?.height ?? 0) / scale;
             ghostCtx.clearRect(0, 0, width, height);
           });
+          markGhostLayerCleared();
         } catch {}
         // Don't re-home during overview toggles -- avoids visible lerp.
         // refreshHomes({ resetPositions: false });
@@ -3562,6 +3583,8 @@ function ensureSizeReady({ force = false } = {}) {
       const height = cssH || (tutorialSurface.height ?? 0) / scale;
       tutorialCtx.clearRect(0, 0, width, height);
     });
+    markTutorialLayerCleared();
+    markSingleCanvasDirty();
   };
 
   const renderTutorialHighlight = () => {
@@ -3573,7 +3596,12 @@ function ensureSizeReady({ force = false } = {}) {
       const width = cssW || (tutorialSurface?.width ?? 0) / scale;
       const height = cssH || (tutorialSurface?.height ?? 0) / scale;
       tutorialCtx.clearRect(0, 0, width, height);
-      if (tutorialHighlightMode === 'none' || !nodeCoordsForHitTest?.length) return;
+      if (tutorialHighlightMode === 'none' || !nodeCoordsForHitTest?.length) {
+        markTutorialLayerCleared();
+        markSingleCanvasDirty();
+        return;
+      }
+      markTutorialLayerActive();
       const baseRadius = Math.max(6, Math.min(cw || 0, ch || 0) * 0.55);
       tutorialCtx.save();
       tutorialCtx.shadowColor = 'rgba(0, 0, 0, 0.35)';
@@ -3640,6 +3668,7 @@ function ensureSizeReady({ force = false } = {}) {
       tutorialCtx.shadowBlur = 0;
       tutorialCtx.globalAlpha = 1;
     });
+    markSingleCanvasDirty();
   };
 
   const startTutorialHighlightLoop = () => {
@@ -4846,7 +4875,7 @@ function syncBackBufferSizes() {
         );
       }
       const ghostSource = getActiveGhostCanvas();
-      if (ghostSource && ghostSource.width && ghostSource.height) {
+      if (!panel.__dgGhostLayerEmpty && ghostSource && ghostSource.width && ghostSource.height) {
         frontCtx.drawImage(
           ghostSource,
           0, 0, ghostSource.width, ghostSource.height,
@@ -4854,7 +4883,7 @@ function syncBackBufferSizes() {
         );
       }
       const flashSource = getActiveFlashCanvas();
-      if (flashSource && flashSource.width && flashSource.height) {
+      if (!panel.__dgFlashLayerEmpty && flashSource && flashSource.width && flashSource.height) {
         frontCtx.drawImage(
           flashSource,
           0, 0, flashSource.width, flashSource.height,
@@ -4862,7 +4891,7 @@ function syncBackBufferSizes() {
         );
       }
       const tutorialSource = getActiveTutorialCanvas();
-      if (tutorialSource && tutorialSource.width && tutorialSource.height) {
+      if (!panel.__dgTutorialLayerEmpty && tutorialSource && tutorialSource.width && tutorialSource.height) {
         frontCtx.drawImage(
           tutorialSource,
           0, 0, tutorialSource.width, tutorialSource.height,
@@ -5328,6 +5357,7 @@ function syncBackBufferSizes() {
           const height = cssH || (flashTarget?.height ?? 0) / scale;
           fctx.clearRect(0, 0, width, height);
         });
+        markFlashLayerCleared();
         const ghostTarget = getActiveGhostCanvas();
         resetCtx(ghostCtx);
         withLogicalSpace(ghostCtx, () => {
@@ -5336,6 +5366,7 @@ function syncBackBufferSizes() {
           const height = cssH || (ghostTarget?.height ?? 0) / scale;
           ghostCtx.clearRect(0, 0, width, height);
         });
+        markGhostLayerCleared();
       }
     }
   });
@@ -5490,17 +5521,6 @@ function syncBackBufferSizes() {
       });
       panel.__dgGridHasPainted = false;
       return;
-    }
-    if (!panel.__dgGridDebugLogged) {
-      panel.__dgGridDebugLogged = true;
-      try {
-        console.warn('[DG][grid-alpha] drawGrid first call', {
-          panelId: panel?.id || null,
-          role: gctx?.canvas?.getAttribute?.('data-role') || null,
-          alpha: gctx?.globalAlpha,
-          composite: gctx?.globalCompositeOperation,
-        });
-      } catch {}
     }
     dgGridAlphaLog('drawGrid:begin', gctx, {
       cacheKey: __dgGridCache?.key || null,
@@ -7397,6 +7417,7 @@ function syncBackBufferSizes() {
       const visiblePanels = Math.max(0, Number(globalDrawgridState?.visibleCount) || 0);
       const gesturing = __dgIsGesturing();
       const isFocused = panel.classList?.contains('toy-focused') || panel.classList?.contains('focused');
+      const isZoomed = panel.classList?.contains('toy-zoomed');
       const hasAnyNotes = !!(currentMap && currentMap.active && currentMap.active.some(Boolean));
       const disableOverlayCore = !!(typeof window !== 'undefined' && window.__PERF_DG_OVERLAY_CORE_OFF);
       const zoomForOverlay = Number.isFinite(boardScale) ? boardScale : 1;
@@ -7420,6 +7441,32 @@ function syncBackBufferSizes() {
         !__dgFrontSwapNextDraw &&
         !__dgNeedsUIRefresh &&
         !__hydrationJustApplied;
+
+      const adaptiveCap = __dgComputeAdaptivePaintDpr({
+        boardScale: Number.isFinite(boardScale) ? boardScale : 1,
+        visiblePanels,
+        isFocused,
+        isZoomed,
+      });
+      const deviceDpr = Math.max(1, Number.isFinite(window?.devicePixelRatio) ? window.devicePixelRatio : 1);
+      const desiredDpr = adaptiveCap ? Math.min(deviceDpr, adaptiveCap) : deviceDpr;
+      const nowAdaptiveTs = nowTs || (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
+      const canAdjustDpr =
+        !gesturing &&
+        !__dgInCommitWindow(nowAdaptiveTs) &&
+        __dgStableFramesAfterCommit >= 2 &&
+        cssW > 0 &&
+        cssH > 0;
+      if (
+        canAdjustDpr &&
+        Number.isFinite(desiredDpr) &&
+        Math.abs(desiredDpr - paintDpr) >= 0.15 &&
+        (nowAdaptiveTs - __dgAdaptivePaintLastTs) > 240
+      ) {
+        __dgAdaptivePaintLastTs = nowAdaptiveTs;
+        __dgAdaptivePaintDpr = desiredDpr;
+        try { resizeSurfacesFor(cssW, cssH, desiredDpr); } catch {}
+      }
 
       let effectiveRenderEvery = renderEvery;
       if (isTrulyIdle && canDrawAnything && visiblePanels >= 4) {
@@ -7474,6 +7521,7 @@ function syncBackBufferSizes() {
               const height = cssH || (flashSurface?.height ?? 0) / scale;
               fctx.clearRect(0, 0, width, height);
             });
+            markFlashLayerCleared();
             overlayCompositeNeeded = true;
           } catch {}
           if (__perfOn && __overlayClearStart) {
@@ -7551,20 +7599,6 @@ function syncBackBufferSizes() {
         !__dgNeedsUIRefresh &&
         !__hydrationJustApplied &&
         !singleCompositeNeeded;
-      if (!panel.__dgRenderLoopDebugLogged) {
-        panel.__dgRenderLoopDebugLogged = true;
-        try {
-          console.warn('[DG][grid-alpha] renderLoop flags', {
-            panelId: panel?.id || null,
-            canDrawAnything,
-            skipFrame,
-            throttleFrame,
-            effectiveRenderEvery,
-            visible: isPanelVisible,
-          });
-        } catch {}
-      }
-
       maybeReleaseStalledZoom();
       dgf('start', { f: panel.__dgFrame|0, cssW, cssH, allowOverlayDraw, allowParticleDraw });
       const __ensureSizeStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
@@ -7822,6 +7856,7 @@ function syncBackBufferSizes() {
               const height = cssH || (ghostSurface?.height ?? ghostCtx.canvas.height ?? 0) / scale;
               ghostCtx.clearRect(0, 0, width, height);
             });
+            markGhostLayerCleared();
           }
           if (fctx?.canvas) {
             const flashSurface = getActiveFlashCanvas();
@@ -7832,6 +7867,7 @@ function syncBackBufferSizes() {
               const height = cssH || (flashSurface?.height ?? fctx.canvas.height ?? 0) / scale;
               fctx.clearRect(0, 0, width, height);
             });
+            markFlashLayerCleared();
           }
           if (tutorialCtx?.canvas) {
             resetCtx(tutorialCtx);
@@ -7842,6 +7878,7 @@ function syncBackBufferSizes() {
               const th = cssH || (active?.height ?? tutorialCtx.canvas.height ?? 0) / scale;
               tutorialCtx.clearRect(0, 0, tw, th);
             });
+            markTutorialLayerCleared();
           }
           if (__uiClearStart) {
             const __uiClearDt = performance.now() - __uiClearStart;
@@ -7967,6 +8004,7 @@ function syncBackBufferSizes() {
         fctx.clearRect(0, 0, width, height);
         emitDG('overlay-clear', { reason: 'pre-redraw' });
       });
+      markFlashLayerCleared();
       overlayClearedThisFrame = true;
       if (__overlayClearStart) {
         const __overlayClearDt = performance.now() - __overlayClearStart;
@@ -8012,6 +8050,7 @@ function syncBackBufferSizes() {
               hasPreview: !!(cur && previewGid),
               flashVisible: flashCanvas?.style?.display || null,
             });
+            markFlashLayerActive();
             fctx.save();
             // Draw animated strokes with device transform
             // Draw demoted colorized strokes as static overlay tints
@@ -8170,6 +8209,7 @@ function syncBackBufferSizes() {
           try {
             if (allowOverlayDraw) {
               overlayCompositeNeeded = true;
+              markFlashLayerActive();
               // Draw cell flashes
               fctx.save();
           for (let i = cellFlashes.length - 1; i >= 0; i--) {
@@ -8213,6 +8253,7 @@ function syncBackBufferSizes() {
       try {
         if (!disableOverlayCore && allowOverlayDraw) {
           overlayCompositeNeeded = true;
+          markFlashLayerActive();
           const __dgOverlayStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
             ? performance.now()
             : 0;
@@ -8285,6 +8326,7 @@ function syncBackBufferSizes() {
               ? performance.now()
               : 0;
             fctx.save();
+            markFlashLayerActive();
             fctx.globalCompositeOperation = 'lighter';
             for (let i = noteBurstEffects.length - 1; i >= 0; i--) {
               const burst = noteBurstEffects[i];
@@ -8371,10 +8413,10 @@ function syncBackBufferSizes() {
       // to wait for the scheduler to update the `data-chain-active` attribute.
       const probablyStale = isActiveInChain && phaseJustWrapped;
 
-      if (info && isRunning() && isActiveInChain && !probablyStale) {
-        const playheadSimpleOnly = !allowOverlayDrawHeavy || __dgPlayheadSimpleMode;
-        const canUseTutorialLayer = tutorialHighlightMode === 'none' && !!tutorialCtx?.canvas;
-        const playheadCtx = (playheadSimpleOnly && canUseTutorialLayer) ? tutorialCtx : fctx;
+        if (info && isRunning() && isActiveInChain && !probablyStale) {
+          const playheadSimpleOnly = !allowOverlayDrawHeavy || __dgPlayheadSimpleMode;
+          const canUseTutorialLayer = tutorialHighlightMode === 'none' && !!tutorialCtx?.canvas;
+          const playheadCtx = (playheadSimpleOnly && canUseTutorialLayer) ? tutorialCtx : fctx;
         if (!overlayClearedThisFrame) {
           const __overlayClearStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
             ? performance.now()
@@ -8389,6 +8431,7 @@ function syncBackBufferSizes() {
                 const height = cssH || (active?.height ?? tutorialCtx.canvas.height ?? 0) / scale;
                 tutorialCtx.clearRect(0, 0, width, height);
               });
+              markTutorialLayerCleared();
             } else {
               const flashSurface = getActiveFlashCanvas();
               resetCtx(fctx);
@@ -8406,6 +8449,7 @@ function syncBackBufferSizes() {
                 } else {
                   fctx.clearRect(0, 0, width, height);
                   emitDG('overlay-clear', { reason: 'playhead' });
+                  markFlashLayerCleared();
                 }
               });
               overlayClearedThisFrame = true;
@@ -8416,6 +8460,11 @@ function syncBackBufferSizes() {
           }
         }
         overlayCompositeNeeded = true;
+        if (playheadCtx === tutorialCtx) {
+          markTutorialLayerActive();
+        } else {
+          markFlashLayerActive();
+        }
         // Calculate playhead X position based on loop phase
         const playheadX = gridArea.x + info.phase01 * gridArea.w;
         panel.__dgPlayheadLastX = playheadX;
@@ -8526,6 +8575,7 @@ function syncBackBufferSizes() {
     // Debug overlay
     if (allowOverlayDrawHeavy && window.DEBUG_DRAWGRID === 1) {
       overlayCompositeNeeded = true;
+      markFlashLayerActive();
       fctx.save();
       fctx.strokeStyle = 'red';
       fctx.lineWidth = 1;
@@ -9319,6 +9369,8 @@ function syncBackBufferSizes() {
         const height = cssH || (ghostSurface?.height ?? 0) / scale;
         ghostCtx.clearRect(0, 0, width, height);
       });
+      markGhostLayerCleared();
+      markSingleCanvasDirty();
     } else {
       ghostFadeRAF = requestAnimationFrame(() => fadeOutGhostTrail(0));
     }
@@ -9342,6 +9394,8 @@ function syncBackBufferSizes() {
     });
     ghostCtx.globalCompositeOperation = 'source-over';
     ghostCtx.globalAlpha = 1.0;
+    markGhostLayerActive();
+    markSingleCanvasDirty();
     if (DG_GHOST_DEBUG && typeof startY === 'number' && typeof endY === 'number') {
       try {
         const from = { x: gridArea.x - 24, y: startY };
@@ -9535,6 +9589,8 @@ function startGhostGuide({
         ghostCtx.fillStyle = 'rgba(68,112,255,0.85)';
         ghostCtx.fill();
       });
+      markGhostLayerActive();
+      markSingleCanvasDirty();
     }
     last = { x, y };
 
@@ -9576,6 +9632,8 @@ function startGhostGuide({
           radius: disturbanceRadius,
           lettersRadius,
         });
+        markGhostLayerActive();
+        markSingleCanvasDirty();
       } catch {}
     }
     if (window.DG_ZOOM_AUDIT && (now - lastGhostAudit) >= 500) {
