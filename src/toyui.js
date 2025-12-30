@@ -70,6 +70,7 @@ function btn(label){ const b=document.createElement('button'); b.type='button'; 
 function wireScopedRandom(button, panel) {
     if (!button || !panel || button.__wiredScopedRandom) return;
     button.__wiredScopedRandom = true;
+    try { button.dataset.skipHeaderDelegate = '1'; } catch {}
     button.addEventListener('click', (e) => {
         e.stopPropagation(); // Prevent any document-level delegate from firing.
         panel.dispatchEvent(new CustomEvent('toy-random', { bubbles: true }));

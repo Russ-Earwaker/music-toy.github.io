@@ -782,6 +782,12 @@ function animateFocusScale(panel, fromScale, toScale) {
 }
 
 window.clearToyFocus = () => setToyFocus(null);
+window.requestToyFocus = (panel, opts = {}) => {
+  if (!panel || !panel.classList) return false;
+  const safeOpts = (opts && typeof opts === 'object') ? opts : {};
+  setToyFocus(panel, { center: false, ...safeOpts });
+  return true;
+};
 function setToyFocus(panel, { center = true, unfocusAll } = {}) { // default center=true
   const effectiveUnfocusAll = (typeof unfocusAll === 'boolean')
     ? unfocusAll
@@ -847,11 +853,13 @@ function setToyFocus(panel, { center = true, unfocusAll } = {}) { // default cen
     }
 
     const body = p.querySelector('.toy-body');
-    if (!isFocus && desiredUnfocus) {
+    const blockEditing = isFocusEditingEnabled() && isActivelyEditingToy();
+    if (!isFocus && desiredUnfocus && blockEditing) {
       p.style.pointerEvents = 'auto'; // allow dragging via panel
       if (body) body.style.pointerEvents = 'none';
     } else {
-      // Keep controls clickable while focused; dragging is already blocked by the global focus guard.
+      // In normal mode, keep unfocused toys editable.
+      // In focus edit mode, only block when actively editing.
       p.style.pointerEvents = 'auto';
       if (body) body.style.pointerEvents = '';
     }
@@ -1133,13 +1141,13 @@ function bootTopbar(){
     try {
       const panels = Array.from(document.querySelectorAll('.toy-panel[id]'));
       const roots = panels.filter(el => !el.dataset.chainParent);
-      console.log('[chain] play → roots', roots.map(r => r.id));
+      if (window.__CHAIN_DEBUG) console.log('[chain] play → roots', roots.map(r => r.id));
       const visited = new Set();
       for (const root of roots) {
         startToyAndDescendants(root, visited);
       }
     } catch (err) {
-      console.warn('[chain] play cascade failed', err);
+        if (window.__CHAIN_DEBUG) console.warn('[chain] play cascade failed', err);
     }
   });
   stopBtn?.addEventListener('click', ()=>{
@@ -1399,9 +1407,9 @@ function startToy(panelEl) {
         } else {
             panelEl.dispatchEvent(new CustomEvent('toy:start', { bubbles: false }));
         }
-        console.log('[chain] startToy', panelEl.id);
+      if (window.__CHAIN_DEBUG) console.log('[chain] startToy', panelEl.id);
     } catch (e) {
-        console.warn('[chain] startToy failed', panelEl?.id, e);
+        if (window.__CHAIN_DEBUG) console.warn('[chain] startToy failed', panelEl?.id, e);
     }
 }
 
@@ -1497,7 +1505,7 @@ function lockChainButton(panel, { hasChild = true } = {}) {
     if (!panel) return;
     const btn = panel.querySelector('.toy-chain-btn');
     const core = btn?.querySelector('.c-btn-core');
-    if (CHAIN_DEBUG) {
+    if (CHAIN_DEBUG && window.__CHAIN_DEBUG) {
         console.log('[chain][btn] lockChainButton', {
             panel: panel.id,
             hasChild,
@@ -1804,7 +1812,7 @@ function initToyChaining(panel) {
     window.addEventListener('resize', updateChainBtnPos, { passive: true });
     requestAnimationFrame(updateChainBtnPos);
 
-    if (CHAIN_DEBUG) {
+    if (CHAIN_DEBUG && window.__CHAIN_DEBUG) {
       console.log('[chain][initToyChaining] attach', {
         panel: panel.id,
         hasExisting: !!panel.querySelector(':scope > .toy-chain-btn'),
@@ -1942,7 +1950,9 @@ function initToyChaining(panel) {
         newPanel.dataset.chainParent = sourcePanel.id;
         try {
             document.dispatchEvent(new CustomEvent('chain:linked', { detail: { parent: sourcePanel.id, child: newPanel.id, phase: 'create' } }));
-            console.log('[chain] new child', { parent: panel.id, child: newPanel.id });
+            if (window.__CHAIN_DEBUG) {
+                console.log('[chain] new child', { parent: panel.id, child: newPanel.id });
+            }
         } catch {}
         // Hint the focus animator to scale in on first focus.
         newPanel.dataset.spawnScaleHint = '0.75';
@@ -2039,7 +2049,9 @@ function initToyChaining(panel) {
                     });
                 }
             } catch (err) {
-                console.warn('[chain][overview] failed to register new panel in overview positions', err);
+                if (window.__CHAIN_DEBUG) {
+                    console.warn('[chain][overview] failed to register new panel in overview positions', err);
+                }
             }
 
             // Add an immediate input shield so the new toy can't be interacted with in overview
@@ -2063,7 +2075,9 @@ function initToyChaining(panel) {
         });
         syncOverviewPosition(newPanel);
         if (!overviewActiveAtCreate && initialPlacement?.changed) {
-            try { persistToyPosition(newPanel); } catch (err) { console.warn('[chain] persistToyPosition failed', err); }
+            try { persistToyPosition(newPanel); } catch (err) {
+                if (window.__CHAIN_DEBUG) console.warn('[chain] persistToyPosition failed', err);
+            }
         }
         delete newPanel.dataset.spawnAutoManaged;
         delete newPanel.dataset.spawnAutoLeft;
@@ -2088,7 +2102,9 @@ function initToyChaining(panel) {
                     window.__overviewMode.refreshDecorations?.();
                 }
             } catch (err) {
-                console.warn('[chain][overview] refreshDecorations failed', err);
+                if (window.__CHAIN_DEBUG) {
+                    console.warn('[chain][overview] refreshDecorations failed', err);
+                }
             }
             const enqueueClear = (typeof queueMicrotask === 'function')
                 ? queueMicrotask
@@ -2120,15 +2136,17 @@ function initToyChaining(panel) {
             // Always log detailed state for debugging when creating chain links.
             const btn = sourcePanel.querySelector('.toy-chain-btn');
             const core = btn?.querySelector('.c-btn-core');
-            console.log('[chain][new-child]', {
-              parent: sourcePanel.id,
-              child: newPanel.id,
-              oldNextId: oldNextId || null,
-              chainHasChild: sourcePanel.dataset.chainHasChild || null,
-              btnDisabledAttr: btn?.getAttribute('data-chaindisabled') || null,
-              btnHasDisabledClass: btn?.classList?.contains?.('toy-chain-btn-disabled') || false,
-              btnComputedIcon: core ? getComputedStyle(core).getPropertyValue('--c-btn-icon-url') : null,
-            });
+            if (window.__CHAIN_DEBUG) {
+              console.log('[chain][new-child]', {
+                parent: sourcePanel.id,
+                child: newPanel.id,
+                oldNextId: oldNextId || null,
+                chainHasChild: sourcePanel.dataset.chainHasChild || null,
+                btnDisabledAttr: btn?.getAttribute('data-chaindisabled') || null,
+                btnHasDisabledClass: btn?.classList?.contains?.('toy-chain-btn-disabled') || false,
+                btnComputedIcon: core ? getComputedStyle(core).getPropertyValue('--c-btn-icon-url') : null,
+              });
+            }
 
             // Immediately swap the source "+" texture to the empty state now that it has an outgoing link.
             const sourceChainCore = sourcePanel.querySelector('.toy-chain-btn .c-btn-core');
@@ -2163,7 +2181,7 @@ function initToyChaining(panel) {
                     try {
                         persistToyPosition(newPanel);
                     } catch (err) {
-                        console.warn('[chain] persistToyPosition failed', err);
+                        if (window.__CHAIN_DEBUG) console.warn('[chain] persistToyPosition failed', err);
                     }
                     syncOverviewPosition(newPanel);
                     updateChains();
@@ -2183,7 +2201,7 @@ function initToyChaining(panel) {
                 try {
                     persistToyPosition(newPanel);
                 } catch (err) {
-                    console.warn('[chain] persistToyPosition failed', err);
+                    if (window.__CHAIN_DEBUG) console.warn('[chain] persistToyPosition failed', err);
                 }
 
                 updateChains();
@@ -2207,7 +2225,9 @@ function initToyChaining(panel) {
         }, 0);
         try {
             const dt = performance.now() - tStart;
-            console.log('[CHAIN][perf] chained toy created in', dt.toFixed(1), 'ms');
+            if (window.__CHAIN_DEBUG) {
+                console.log('[CHAIN][perf] chained toy created in', dt.toFixed(1), 'ms');
+            }
         } catch {}
     }, true);
 }
@@ -3499,7 +3519,7 @@ async function boot(){
       if (!parent) return;
       lockChainButton(parent, { hasChild: true });
       // Log the state right when the event fires to diagnose refresh issues
-      if (CHAIN_DEBUG) {
+      if (CHAIN_DEBUG && window.__CHAIN_DEBUG) {
         try {
           const btn = parent.querySelector('.toy-chain-btn');
           const core = btn?.querySelector('.c-btn-core');

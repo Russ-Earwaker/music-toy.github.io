@@ -9,6 +9,7 @@
   function handle(e){
     const btn = e.target?.closest('button[data-action]');
     if (!btn) return;
+    if (btn.dataset.skipHeaderDelegate === '1') return;
 
     const action = btn.dataset.action;
     const panel = nearestPanel(btn); if (!panel) return;
