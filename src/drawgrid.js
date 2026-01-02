@@ -35,10 +35,7 @@ const DG_PROFILE = false;
 const DG_FRAME_PROFILE = false;
 const DG_FRAME_SLOW_THRESHOLD_MS = 10;
 
-let __dgFrameIdx = 0;
-let __dgLastResizeTargetW = 0;
-let __dgLastResizeTargetH = 0;
-let __dgLastResizeDpr = 0;
+// (moved into createDrawGrid - per-instance)
 
 function perfMark(dtUpdate, dtDraw) {
   try {
@@ -94,7 +91,7 @@ const DG_PLAYHEAD_FPS_SIMPLE_EXIT = 34;
 
 // IntersectionObserver visibility threshold – panels with <2% on-screen area
 // are treated as "offscreen" and have their heavy work culled.
-const DG_VISIBILITY_THRESHOLD = 0.06;
+const DG_VISIBILITY_THRESHOLD = 0.001;
 
 let dgProfileFrames = 0;
 let dgProfileSumMs = 0;
@@ -889,7 +886,7 @@ function clearCanvas(ctx) {
   resetCtx(ctx);
   withLogicalSpace(ctx, () => ctx.clearRect(0, 0, width, height));
   if (isPaintSurface) {
-    markSingleCanvasDirty();
+    __dgMarkSingleCanvasDirty(ctx?.canvas?.__dgPanel);
   }
   __dbgPaintClears++;
   if (DG_CLEAR_DEBUG) {
@@ -949,7 +946,7 @@ function drawLiveStrokePoint(ctx, pt, prevPt, strokeOrColor) {
     ctx.lineTo(pt.x, pt.y);
     ctx.stroke();
   });
-  markSingleCanvasDirty();
+  __dgMarkSingleCanvasDirty(ctx?.canvas?.__dgPanel);
 }
 
 // --- Commit/settle gating for overlay clears ---
@@ -961,7 +958,6 @@ let __dgForceFullDrawNext = false;
 let __dgForceFullDrawFrames = 0;
 let __dgForceOverlayClearNext = false;
 let __dgForceSwapNext = false;
-let __dgSingleCompositeDirty = false;
 let __dgPostReleaseRaf = 0;
 let __dgPostReleaseRaf2 = 0;
 let __hydrationJustApplied = false;
@@ -970,9 +966,24 @@ let __dgLastLayoutKey = '';
 let __dgHydrationPendingRedraw = false;
 let __dgAdaptivePaintDpr = null;
 let __dgAdaptivePaintLastTs = 0;
-let markSingleCanvasDirty = () => {};
-let markSingleCanvasOverlayDirty = () => {};
-let markSingleCanvasCompositeDirty = () => {};
+// Per-panel (multi-instance safe) dirty helpers.
+// We store the actual dirty flags on the panel object so multiple draw toys don't fight.
+function __dgMarkSingleCanvasDirty(panel) {
+  if (!panel) return;
+  panel.__dgCompositeBaseDirty = true;
+  panel.__dgSingleCompositeDirty = true;
+  __dgMaybeLogStall(panel, 'markDirty');
+}
+function __dgMarkSingleCanvasOverlayDirty(panel) {
+  if (!panel) return;
+  panel.__dgCompositeOverlayDirty = true;
+  panel.__dgSingleCompositeDirty = true;
+  __dgMaybeLogStall(panel, 'markDirty');
+}
+function __dgMarkSingleCanvasCompositeDirty(panel) {
+  if (!panel) return;
+  panel.__dgSingleCompositeDirty = true;
+}
 let __dgProbeDidFirstDraw = false;
 try {
   if (typeof window !== 'undefined' && window.__DG_PROBE_ON === undefined) {
@@ -980,6 +991,27 @@ try {
   }
 } catch {}
 let __dgLayerDebugLastTs = 0;
+function __dgMaybeLogStall(panel, tag) {
+  try {
+    if (typeof window !== 'undefined' && window.__DG_DEBUG_STALL === undefined) {
+      window.__DG_DEBUG_STALL = false;
+    }
+    if (!window.__DG_DEBUG_STALL) return;
+
+    const now = (performance?.now ? performance.now() : Date.now());
+    const last = panel.__dgLastCompositeTs || 0;
+    // Only log if it's been a while (non-spammy)
+    if (last && (now - last) < 750) return;
+
+    console.log('[DG][stall?]', tag, {
+      panelId: panel?.id || null,
+      visible: !!panel.__dgIsVisible,
+      compositeDirty: !!panel.__dgSingleCompositeDirty,
+      baseDirty: !!panel.__dgCompositeBaseDirty,
+      overlayDirty: !!panel.__dgCompositeOverlayDirty,
+    });
+  } catch {}
+}
 let __dgRegenSource = '';
 let __dgLayerTraceLastTs = 0;
 function __dgLayerDebugLog(tag, payload = {}) {
@@ -1086,7 +1118,7 @@ function __dgCollectFlowState(ctx = {}) {
     flashOutOfGrid: panelRef ? !!panelRef.__dgFlashOverlayOutOfGrid : null,
     baseDirty: panelRef ? !!panelRef.__dgCompositeBaseDirty : null,
     overlayDirty: panelRef ? !!panelRef.__dgCompositeOverlayDirty : null,
-    compositeDirty: ctx.compositeDirty ?? ((typeof __dgSingleCompositeDirty !== 'undefined') ? !!__dgSingleCompositeDirty : null),
+    compositeDirty: ctx.compositeDirty ?? (panelRef ? !!panelRef.__dgSingleCompositeDirty : null),
     usingBackBuffers: ctx.usingBackBuffers ?? ((typeof usingBackBuffers !== 'undefined') ? usingBackBuffers : null),
     paintSize: paintEl ? { w: paintEl.width, h: paintEl.height } : null,
     backSize: backEl ? { w: backEl.width, h: backEl.height } : null,
@@ -1283,12 +1315,21 @@ function normalizeMapColumns(map, cols) {
 export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId, bpm = 120 } = {}) {
   // Per-instance state (WAS module-level; moving fixes cross-toy leakage)
   let currentMap = null;                // { active:boolean[], nodes:Set[], disabled:Set[] }
+  // Per-instance (was module-level; caused cross-toy size/throttle leakage)
+  let __dgFrameIdx = 0;
+  let __dgLastResizeTargetW = 0;
+  let __dgLastResizeTargetH = 0;
+  let __dgLastResizeDpr = 0;
+  let __dgCommitResizeCount = 0;
   let currentCols = 0;
   let nodeCoordsForHitTest = [];        // For draggable nodes (hit tests, drags)
   let dgViewport = null;
   let dgMap = null;
   let dgField = null;
   let headerSweepDirX = 1;
+  if (DG_DEBUG) console.log('[DG] instance sizing locals init', panel.id, {
+    __dgLastResizeTargetW, __dgLastResizeTargetH, __dgLastResizeDpr
+  });
   // Visibility + LOD state
   let isPanelVisible = true;          // IntersectionObserver will keep this updated
   let particleFieldEnabled = true;    // driven by FPS + zoom with hysteresis
@@ -1593,6 +1634,16 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const flashCanvas = document.createElement('canvas'); flashCanvas.setAttribute('data-role', 'drawgrid-flash');
   const ghostCanvas = document.createElement('canvas'); ghostCanvas.setAttribute('data-role','drawgrid-ghost');
   const tutorialCanvas = document.createElement('canvas'); tutorialCanvas.setAttribute('data-role', 'drawgrid-tutorial-highlight');
+  // Tag canvases so shared helper code can locate the owning panel.
+  try {
+    particleCanvas.__dgPanel = panel;
+    grid.__dgPanel = panel;
+    paint.__dgPanel = panel;
+    nodesCanvas.__dgPanel = panel;
+    flashCanvas.__dgPanel = panel;
+    ghostCanvas.__dgPanel = panel;
+    tutorialCanvas.__dgPanel = panel;
+  } catch {}
   if (DG_COMBINE_GRID_NODES) {
     try { panel.classList.add('drawgrid-combined'); } catch {}
   } else {
@@ -1609,21 +1660,10 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     panel.__dgCompositeBaseCanvas = null;
     panel.__dgCompositeBaseCtx = null;
   }
-
-  markSingleCanvasDirty = () => {
-    if (!DG_SINGLE_CANVAS) return;
-    panel.__dgCompositeBaseDirty = true;
-    __dgSingleCompositeDirty = true;
-  };
-  markSingleCanvasOverlayDirty = () => {
-    if (!DG_SINGLE_CANVAS) return;
-    panel.__dgCompositeOverlayDirty = true;
-    __dgSingleCompositeDirty = true;
-  };
-  markSingleCanvasCompositeDirty = () => {
-    if (!DG_SINGLE_CANVAS) return;
-    __dgSingleCompositeDirty = true;
-  };
+  // Init per-panel dirty flags used by compositeSingleCanvas().
+  panel.__dgSingleCompositeDirty = true;
+  panel.__dgCompositeBaseDirty = true;
+  panel.__dgCompositeOverlayDirty = true;
 
   function __dgProbeDump(tag = 'probe') {
     try {
@@ -2305,12 +2345,12 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   panel.__dgGhostLayerEmpty = true;
   panel.__dgTutorialLayerEmpty = true;
 
-  const markFlashLayerActive = () => { panel.__dgFlashLayerEmpty = false; markSingleCanvasOverlayDirty(); };
-  const markFlashLayerCleared = () => { panel.__dgFlashLayerEmpty = true; markSingleCanvasOverlayDirty(); };
-  const markGhostLayerActive = () => { panel.__dgGhostLayerEmpty = false; markSingleCanvasOverlayDirty(); };
-  const markGhostLayerCleared = () => { panel.__dgGhostLayerEmpty = true; markSingleCanvasOverlayDirty(); };
-  const markTutorialLayerActive = () => { panel.__dgTutorialLayerEmpty = false; markSingleCanvasOverlayDirty(); };
-  const markTutorialLayerCleared = () => { panel.__dgTutorialLayerEmpty = true; markSingleCanvasOverlayDirty(); };
+  const markFlashLayerActive = () => { panel.__dgFlashLayerEmpty = false; __dgMarkSingleCanvasOverlayDirty(panel); };
+  const markFlashLayerCleared = () => { panel.__dgFlashLayerEmpty = true; __dgMarkSingleCanvasOverlayDirty(panel); };
+  const markGhostLayerActive = () => { panel.__dgGhostLayerEmpty = false; __dgMarkSingleCanvasOverlayDirty(panel); };
+  const markGhostLayerCleared = () => { panel.__dgGhostLayerEmpty = true; __dgMarkSingleCanvasOverlayDirty(panel); };
+  const markTutorialLayerActive = () => { panel.__dgTutorialLayerEmpty = false; __dgMarkSingleCanvasOverlayDirty(panel); };
+  const markTutorialLayerCleared = () => { panel.__dgTutorialLayerEmpty = true; __dgMarkSingleCanvasOverlayDirty(panel); };
 
   function updateFlatLayerVisibility() {
     const flat = !!(typeof window !== 'undefined' && window.__PERF_DRAWGRID_FLAT_LAYERS);
@@ -2746,8 +2786,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
   function resizeSurfacesFor(nextCssW, nextCssH, nextDpr) {
     return perfMarkSection('drawgrid.resize', () => {
-      if (!resizeSurfacesFor.__commitResizeCount && (() => { try { return !!window.__ZOOM_COMMIT_PHASE; } catch {} return false; })()) {
-        resizeSurfacesFor.__commitResizeCount = 1;
+      if (!__dgCommitResizeCount && (() => { try { return !!window.__ZOOM_COMMIT_PHASE; } catch {} return false; })()) {
+        __dgCommitResizeCount = 1;
         if (DG_DEBUG) { try { console.warn('[DG] resizeSurfacesFor during commit'); } catch {} }
       }
       const dpr = Math.max(1, Number.isFinite(nextDpr) ? nextDpr : (window.devicePixelRatio || 1));
@@ -4088,7 +4128,7 @@ function ensureSizeReady({ force = false } = {}) {
       regenerateMapFromStrokes();
       try { (panel.__dgUpdateButtons || updateGeneratorButtons || function(){})() } catch(e) { }
       syncLetterFade();
-      markSingleCanvasDirty();
+      __dgMarkSingleCanvasDirty(panel);
       if (DG_SINGLE_CANVAS) {
         try { compositeSingleCanvas(); } catch {}
       }
@@ -4135,7 +4175,7 @@ function ensureSizeReady({ force = false } = {}) {
     if (includeCurrentStroke && cur && Array.isArray(cur.pts) && cur.pts.length > 0) {
       drawFullStroke(backCtx, cur);
     }
-    markSingleCanvasDirty();
+    __dgMarkSingleCanvasDirty(panel);
     if (!DG_SINGLE_CANVAS) {
       pendingPaintSwap = true;
     }
@@ -4340,7 +4380,7 @@ function regenerateMapFromStrokes() {
       drawNodes(currentMap.nodes);
       drawGrid();
       if (DG_SINGLE_CANVAS) {
-        markSingleCanvasDirty();
+        __dgMarkSingleCanvasDirty(panel);
         try { compositeSingleCanvas(); } catch {}
       }
   }
@@ -4542,9 +4582,9 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
           }
         });
         if (DG_SINGLE_CANVAS) {
-          markSingleCanvasDirty();
+          __dgMarkSingleCanvasDirty(panel);
           try { compositeSingleCanvas(); } catch {}
-          __dgSingleCompositeDirty = false;
+          panel.__dgSingleCompositeDirty = false;
         }
         updateGeneratorButtons();
         return;
@@ -4554,9 +4594,9 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
         drawGrid();
         drawNodes(currentMap.nodes);
         if (DG_SINGLE_CANVAS) {
-          markSingleCanvasDirty();
+          __dgMarkSingleCanvasDirty(panel);
           try { compositeSingleCanvas(); } catch {}
-          __dgSingleCompositeDirty = false;
+          panel.__dgSingleCompositeDirty = false;
         }
         emitDrawgridUpdate({ activityOnly: false });
         updateGeneratorButtons();
@@ -4648,6 +4688,10 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
   if (typeof window !== 'undefined' && 'IntersectionObserver' in window) {
     try {
       let lastVisibleState = isPanelVisible;
+      let visRoot = null;
+      try {
+        visRoot = panel?.closest?.('.board-viewport') || null;
+      } catch {}
       const visObserver = new IntersectionObserver(
         (entries) => {
           for (const entry of entries) {
@@ -4656,6 +4700,40 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
               entry.isIntersecting &&
               entry.intersectionRatio > DG_VISIBILITY_THRESHOLD;
             isPanelVisible = !!visible;
+            try {
+              if (isPanelVisible !== lastVisibleState) {
+                console.log('[DG][cull] VIS', {
+                  panelId: panel?.id || null,
+                  from: lastVisibleState,
+                  to: isPanelVisible,
+                  ratio: entry?.intersectionRatio,
+                  isIntersecting: entry?.isIntersecting,
+                });
+              }
+            } catch {}
+            const becameVisible = (isPanelVisible && !lastVisibleState);
+            if (becameVisible) {
+              // Force a real redraw/composite the moment we come back on-screen.
+              try {
+                __dgMarkSingleCanvasDirty(panel);
+                panel.__dgSingleCompositeDirty = true;
+                panel.__dgCompositeBaseDirty = true;
+                panel.__dgCompositeOverlayDirty = true;
+              } catch {}
+
+              try { __dgForceFullDrawNext = true; } catch {}
+              try { __dgForceFullDrawUntil = nowMs() + 200; } catch {}
+
+              // If we're using the single-canvas path, actually run it once immediately.
+              try {
+                if (DG_SINGLE_CANVAS) {
+                  requestAnimationFrame(() => {
+                    try { compositeSingleCanvas(); } catch {}
+                    try { panel.__dgSingleCompositeDirty = false; } catch {}
+                  });
+                }
+              } catch {}
+            }
             if (isPanelVisible && pendingResnapOnVisible) {
               pendingResnapOnVisible = false;
               resnapAndRedraw(true);
@@ -4679,7 +4757,7 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
           }
         },
         {
-          root: null,
+          root: visRoot,
           threshold: [0, DG_VISIBILITY_THRESHOLD],
         }
       );
@@ -5136,6 +5214,7 @@ function syncBackBufferSizes() {
     if (__perfOn && __finalStart) {
       try { window.__PerfFrameProf?.mark?.('drawgrid.composite.final', performance.now() - __finalStart); } catch {}
     }
+    try { panel.__dgLastCompositeTs = (performance?.now ? performance.now() : Date.now()); } catch {}
     dgGridAlphaLog('composite:end', frontCtx);
     __dgLayerTrace('composite:exit', {
       panelId: panel?.id || null,
@@ -5555,7 +5634,7 @@ function syncBackBufferSizes() {
         } catch {}
       }
       if (DG_SINGLE_CANVAS) {
-        markSingleCanvasDirty();
+        __dgMarkSingleCanvasDirty(panel);
         try { compositeSingleCanvas(); } catch {}
       }
       // Clear other content canvases. The caller is responsible for redrawing nodes/overlay.
@@ -5850,7 +5929,7 @@ function syncBackBufferSizes() {
     }
     panel.__dgGridReadyForNodes = true;
     panel.__dgGridHasPainted = true;
-    markSingleCanvasDirty();
+    __dgMarkSingleCanvasDirty(panel);
     dgGridAlphaLog('drawGrid:end', gctx);
     __dgLayerTrace('drawGrid:exit', {
       panelId: panel?.id || null,
@@ -6450,7 +6529,7 @@ function syncBackBufferSizes() {
 
       nodeCoordsForHitTest = nodeCoords;
     });
-    markSingleCanvasCompositeDirty();
+    __dgMarkSingleCanvasCompositeDirty(panel);
     __dgLayerTrace('drawNodes:exit', {
       panelId: panel?.id || null,
       usingBackBuffers,
@@ -6874,10 +6953,10 @@ function syncBackBufferSizes() {
           // Redraw only the nodes canvas; the blue line on the paint canvas is untouched.
           drawNodes(currentMap.nodes);
           drawGrid();
-          markSingleCanvasDirty();
+          __dgMarkSingleCanvasDirty(panel);
           if (DG_SINGLE_CANVAS && isPanelVisible) {
             try { compositeSingleCanvas(); } catch {}
-            __dgSingleCompositeDirty = false;
+            panel.__dgSingleCompositeDirty = false;
           }
       } else if (dragScaleHighlightCol === null) {
           setDragScaleHighlight(draggedNode.col);
@@ -7193,7 +7272,7 @@ function syncBackBufferSizes() {
               swapBackToFront();
               pendingPaintSwap = false;
             } else {
-              markSingleCanvasDirty();
+              __dgMarkSingleCanvasDirty(panel);
             }
           });
         }
@@ -7314,14 +7393,14 @@ function syncBackBufferSizes() {
     if (usingBackBuffers && typeof ensureBackVisualsFreshFromFront === 'function') {
       try { ensureBackVisualsFreshFromFront(); } catch {}
     }
-    markSingleCanvasDirty();
+    __dgMarkSingleCanvasDirty(panel);
     if (DG_SINGLE_CANVAS && isPanelVisible) {
       try {
         drawGrid();
         if (currentMap) drawNodes(currentMap.nodes);
         compositeSingleCanvas();
       } catch {}
-      __dgSingleCompositeDirty = false;
+      panel.__dgSingleCompositeDirty = false;
     }
     // No swap needed
     __dgNeedsUIRefresh = true;
@@ -7928,7 +8007,7 @@ function syncBackBufferSizes() {
       })();
       if (DG_SINGLE_CANVAS && canDrawAnything) {
         const needsFullDraw =
-          __dgSingleCompositeDirty ||
+          panel.__dgSingleCompositeDirty ||
           __dgNeedsUIRefresh ||
           __dgFrontSwapNextDraw ||
           __hydrationJustApplied ||
@@ -8060,7 +8139,7 @@ function syncBackBufferSizes() {
       __dgHadNodeFlash = hasNodeFlash;
 
       if (DG_SINGLE_CANVAS && overlayCompositeNeeded) {
-        markSingleCanvasOverlayDirty();
+        __dgMarkSingleCanvasOverlayDirty(panel);
       }
     perfMark(__dgUpdateDt, __dgDrawDt);
     if (__perfZoomOn && __perfRenderStart) {
@@ -8982,12 +9061,12 @@ function syncBackBufferSizes() {
       fctx.restore();
     }
 
-    if (DG_SINGLE_CANVAS && canDrawAnything && __dgSingleCompositeDirty) {
+    if (DG_SINGLE_CANVAS && canDrawAnything && panel.__dgSingleCompositeDirty) {
       const __compositeStart = (__perfOn && typeof performance !== 'undefined' && performance.now)
         ? performance.now()
         : 0;
       compositeSingleCanvas();
-      __dgSingleCompositeDirty = false;
+      panel.__dgSingleCompositeDirty = false;
       if (__perfOn && __compositeStart) {
         try { window.__PerfFrameProf?.mark?.('drawgrid.draw.composite', performance.now() - __compositeStart); } catch {}
       }
@@ -9247,7 +9326,7 @@ function syncBackBufferSizes() {
         usingBackBuffers,
         paintRev: __dgPaintRev,
         overlayMaskRev: __dgOverlayMaskRev,
-        compositeDirty: __dgSingleCompositeDirty,
+        compositeDirty: panel.__dgSingleCompositeDirty,
         hasOverlayStrokesCached,
       });
       __dgFlowState('clear:start', makeFlowCtx());
@@ -9302,10 +9381,10 @@ function syncBackBufferSizes() {
       hasDrawnFirstLine = false;
       updateDrawLabel(true);
       noteToggleEffects = [];
-      markSingleCanvasDirty();
+      __dgMarkSingleCanvasDirty(panel);
       if (DG_SINGLE_CANVAS && isPanelVisible) {
         try { compositeSingleCanvas(); } catch {}
-        __dgSingleCompositeDirty = false;
+        panel.__dgSingleCompositeDirty = false;
       }
       __dgFlowState('clear:end', makeFlowCtx());
       return true;
@@ -9642,7 +9721,7 @@ function syncBackBufferSizes() {
       usingBackBuffers,
       paintRev: __dgPaintRev,
       overlayMaskRev: __dgOverlayMaskRev,
-      compositeDirty: __dgSingleCompositeDirty,
+      compositeDirty: panel.__dgSingleCompositeDirty,
       hasOverlayStrokesCached,
     });
     __dgFlowLog('randomize:start', { panelId: panel?.id || null, usingBackBuffers });
@@ -9711,7 +9790,7 @@ function syncBackBufferSizes() {
       __dgOverlayStrokeListCache = { paintRev: -1, len: 0, special: [], colorized: [], outOfGrid: false };
       __dgOverlayStrokeCache = { value: false, len: 0, ts: 0 };
       __dgOverlayMaskRev = -1;
-      markSingleCanvasOverlayDirty();
+      __dgMarkSingleCanvasOverlayDirty(panel);
     } catch {}
     try { previewGid = null; } catch {}
     try { nextDrawTarget = null; } catch {}
@@ -9743,10 +9822,10 @@ function syncBackBufferSizes() {
     emitDrawgridUpdate({ activityOnly: false });
     stopAutoGhostGuide({ immediate: true });
     updateDrawLabel(false);
-    markSingleCanvasDirty();
+    __dgMarkSingleCanvasDirty(panel);
     if (DG_SINGLE_CANVAS && isPanelVisible) {
       try { compositeSingleCanvas(); } catch {}
-      __dgSingleCompositeDirty = false;
+      panel.__dgSingleCompositeDirty = false;
     }
     __dgFlowLog('randomize:end', {
       panelId: panel?.id || null,
@@ -9786,10 +9865,10 @@ function syncBackBufferSizes() {
     emitDrawgridUpdate({ activityOnly: false });
     stopAutoGhostGuide({ immediate: true });
     updateDrawLabel(false);
-    markSingleCanvasDirty();
+    __dgMarkSingleCanvasDirty(panel);
     if (DG_SINGLE_CANVAS && isPanelVisible) {
       try { compositeSingleCanvas(); } catch {}
-      __dgSingleCompositeDirty = false;
+      panel.__dgSingleCompositeDirty = false;
     }
     __dgFlowLog('randomize-blocks:end');
   }
@@ -9839,10 +9918,10 @@ function syncBackBufferSizes() {
     }
     stopAutoGhostGuide({ immediate: true });
     updateDrawLabel(false);
-    markSingleCanvasDirty();
+    __dgMarkSingleCanvasDirty(panel);
     if (DG_SINGLE_CANVAS && isPanelVisible) {
       try { compositeSingleCanvas(); } catch {}
-      __dgSingleCompositeDirty = false;
+      panel.__dgSingleCompositeDirty = false;
     }
     __dgFlowLog('randomize-notes:end');
   }
