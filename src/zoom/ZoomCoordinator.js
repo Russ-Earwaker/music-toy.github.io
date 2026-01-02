@@ -376,12 +376,27 @@ function stopProgressLoop() {
 export function setGestureTransform({ scale, x, y }) {
   state.mode = 'gesturing';
   publishGestureFlag('setGestureTransform');
-  state.targetScale = scale;
-  state.targetX = x;
-  state.targetY = y;
-  state.isDirty = true;
-  cameraDirty = true;
-  schedule();
+  const nextScale = Number.isFinite(scale) ? scale : state.targetScale;
+  const nextX = Number.isFinite(x) ? x : state.targetX;
+  const nextY = Number.isFinite(y) ? y : state.targetY;
+  const prevScale = state.targetScale;
+  const prevX = state.targetX;
+  const prevY = state.targetY;
+  const changed =
+    !Number.isFinite(prevScale) ||
+    !Number.isFinite(prevX) ||
+    !Number.isFinite(prevY) ||
+    Math.abs(nextScale - prevScale) > 1e-4 ||
+    Math.abs(nextX - prevX) > 0.25 ||
+    Math.abs(nextY - prevY) > 0.25;
+  state.targetScale = nextScale;
+  state.targetX = nextX;
+  state.targetY = nextY;
+  if (changed) {
+    state.isDirty = true;
+    cameraDirty = true;
+    schedule();
+  }
 }
 
 // Atomic commit: freeze visual transform, let toys recompute offscreen, then unfreeze.

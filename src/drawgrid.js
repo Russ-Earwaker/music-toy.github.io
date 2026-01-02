@@ -830,6 +830,11 @@ function withLogicalSpace(ctx, fn) {
 
 const __dgPlayheadBandSpriteCache = new Map();
 const __dgPlayheadLineSpriteCache = new Map();
+function quantizeHue(hue, step = 6) {
+  const h = Number.isFinite(hue) ? hue : 0;
+  const s = Number.isFinite(step) && step > 0 ? step : 1;
+  return Math.round(h / s) * s;
+}
 function __dgCachePlayheadSprite(map, key, build) {
   let sprite = map.get(key);
   if (sprite) return sprite;
@@ -843,7 +848,7 @@ function __dgCachePlayheadSprite(map, key, build) {
 function getPlayheadBandSprite(width, height, hue) {
   const w = Math.max(1, Math.round(width || 0));
   const h = Math.max(1, Math.round(height || 0));
-  const hueKey = Math.round(Number.isFinite(hue) ? hue : 0);
+  const hueKey = quantizeHue(hue, 6);
   const key = `${w}x${h}|${hueKey}`;
   return __dgCachePlayheadSprite(__dgPlayheadBandSpriteCache, key, () => {
     const canvas = document.createElement('canvas');
@@ -862,7 +867,7 @@ function getPlayheadBandSprite(width, height, hue) {
 }
 function getPlayheadLineSprite(height, hue) {
   const h = Math.max(1, Math.round(height || 0));
-  const hueKey = Math.round(Number.isFinite(hue) ? hue : 0);
+  const hueKey = quantizeHue(hue, 6);
   const key = `${h}|${hueKey}`;
   return __dgCachePlayheadSprite(__dgPlayheadLineSpriteCache, key, () => {
     const canvas = document.createElement('canvas');
@@ -6236,16 +6241,10 @@ function syncBackBufferSizes() {
         }
       }
 
-      if (useMultiColour) {
-        ctx.shadowColor = 'rgba(255, 255, 255, 0.7)';
-        ctx.shadowBlur = 18;
-        ctx.shadowOffsetX = 0;
-        ctx.shadowOffsetY = 0;
-      } else {
-        ctx.shadowBlur = 0;
-        ctx.shadowOffsetX = 0;
-        ctx.shadowOffsetY = 0;
-      }
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
 
       ctx.beginPath();
       if (stroke.pts.length === 1) {
@@ -6257,12 +6256,12 @@ function syncBackBufferSizes() {
           const t = (performance.now ? performance.now() : Date.now());
           const gid = stroke.generatorId ?? 1;
           if (gid === 1) {
-            const hue = 200 + 20 * Math.sin((t / 800) * Math.PI * 2);
+            const hue = 200 + 20 * Math.sin((t / 1600) * Math.PI * 2);
             grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 75%)`);
             grad.addColorStop(0.7, `hsl(${(hue + 60).toFixed(0)}, 100%, 68%)`);
             grad.addColorStop(1, `hsla(${(hue + 120).toFixed(0)}, 100%, 60%, 0.35)`);
           } else {
-            const hue = 20 + 20 * Math.sin((t / 900) * Math.PI * 2);
+            const hue = 20 + 20 * Math.sin((t / 1800) * Math.PI * 2);
             grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 70%)`);
             grad.addColorStop(0.7, `hsl(${(hue - 25).toFixed(0)}, 100%, 65%)`);
             grad.addColorStop(1, `hsla(${(hue - 45).toFixed(0)}, 100%, 55%, 0.35)`);
@@ -6283,12 +6282,12 @@ function syncBackBufferSizes() {
           const t = (performance.now ? performance.now() : Date.now());
           const gid = stroke.generatorId ?? 1;
           if (gid === 1) {
-            const hue = 200 + 20 * Math.sin((t / 800) * Math.PI * 2);
+            const hue = 200 + 20 * Math.sin((t / 1600) * Math.PI * 2);
             grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 70%)`);
             grad.addColorStop(0.5, `hsl(${(hue + 45).toFixed(0)}, 100%, 70%)`);
             grad.addColorStop(1, `hsl(${(hue + 90).toFixed(0)}, 100%, 68%)`);
           } else {
-            const hue = 20 + 20 * Math.sin((t / 900) * Math.PI * 2);
+            const hue = 20 + 20 * Math.sin((t / 1800) * Math.PI * 2);
             grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 68%)`);
             grad.addColorStop(0.5, `hsl(${(hue - 25).toFixed(0)}, 100%, 66%)`);
             grad.addColorStop(1, `hsl(${(hue - 50).toFixed(0)}, 100%, 64%)`);
@@ -9309,7 +9308,7 @@ function syncBackBufferSizes() {
         } catch (e) { /* fail silently */ }
 
         const t = performance.now();
-        const hue = 200 + 20 * Math.sin((t / 800) * Math.PI * 2);
+        const hue = quantizeHue(200 + 20 * Math.sin((t / 1400) * Math.PI * 2), 6);
 
         if (playheadDrawSimple) {
           playheadCtx.globalAlpha = 0.9;
