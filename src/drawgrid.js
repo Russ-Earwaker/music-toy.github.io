@@ -35,6 +35,9 @@ const DG_PROFILE = false;
 // Turn on to log slow drawgrid frames (full rAF body).
 const DG_FRAME_PROFILE = false;
 const DG_FRAME_SLOW_THRESHOLD_MS = 10;
+const DG_ADAPTIVE_SHARED_MIN_MS = 900;
+const DG_ADAPTIVE_SHARED_GESTURE_MS = 260;
+const DG_ADAPTIVE_FPS_DELTA_MIN = 2;
 
 // (moved into createDrawGrid - per-instance)
 // Overlay compositor mode (module-scope so helper functions can read it safely).
@@ -71,6 +74,39 @@ function perfMarkSection(name, fn) {
 function __dgIsGesturing() {
   try { return !!window.__GESTURE_ACTIVE; } catch {}
   return false;
+}
+
+function getGlobalAdaptiveState() {
+  const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+    ? performance.now()
+    : Date.now();
+  const shared = globalDrawgridState.__adaptiveShared || { ts: 0, value: null };
+  const minMs = __dgIsGesturing() ? DG_ADAPTIVE_SHARED_GESTURE_MS : DG_ADAPTIVE_SHARED_MIN_MS;
+  if (shared.value && (now - shared.ts) < minMs) {
+    return shared.value;
+  }
+  if (
+    shared.value &&
+    Number.isFinite(shared.value.smoothedFps) &&
+    Number.isFinite(shared.lastFps) &&
+    Math.abs(shared.value.smoothedFps - shared.lastFps) < DG_ADAPTIVE_FPS_DELTA_MIN &&
+    (now - shared.ts) < (minMs * 2)
+  ) {
+    return shared.value;
+  }
+  let value = null;
+  try {
+    value = getAdaptiveFrameBudget();
+  } catch {}
+  if (value) {
+    shared.value = value;
+    if (Number.isFinite(value.smoothedFps)) {
+      shared.lastFps = value.smoothedFps;
+    }
+  }
+  shared.ts = now;
+  globalDrawgridState.__adaptiveShared = shared;
+  return shared.value || value;
 }
 
 function __dgGestureDrawModulo() {
@@ -7631,22 +7667,7 @@ function syncBackBufferSizes() {
     ) {
       return __dgParticleStateCache.value;
     }
-    const adaptive = (() => {
-      try {
-        const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
-          ? performance.now()
-          : Date.now();
-        const cache = globalDrawgridState?.__adaptiveCache;
-        if (cache && cache.value && (now - cache.ts) < 80) return cache.value;
-        const value = getAdaptiveFrameBudget();
-        if (globalDrawgridState && value) {
-          globalDrawgridState.__adaptiveCache = { value, ts: now };
-        }
-        return value;
-      } catch {
-        return null;
-      }
-    })();
+    const adaptive = getGlobalAdaptiveState();
     const particleBudget = adaptive?.particleBudget;
     const threshold = Number.isFinite(overviewState?.state?.zoomThreshold) ? overviewState.state.zoomThreshold : 0.36;
     const zoomTooWide = Number.isFinite(boardScaleValue) && boardScaleValue < threshold;
