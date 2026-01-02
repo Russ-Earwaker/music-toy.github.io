@@ -338,7 +338,10 @@ function tick() {
 
   if (ZC_PERF_DEBUG && typeof console !== 'undefined' && console.time) console.time('[ZC] listeners');
   // notify listeners AFTER transform
-  emitZoom({ ...state });
+  const payload = (state.mode === 'gesturing')
+    ? { ...state, phase: 'progress', gesturing: true }
+    : { ...state };
+  emitZoom(payload);
   if (ZC_PERF_DEBUG && typeof console !== 'undefined' && console.timeEnd) console.timeEnd('[ZC] listeners');
   if (ZC_PERF_DEBUG && typeof console !== 'undefined' && console.timeEnd) console.timeEnd('[ZC] tick');
 }
@@ -379,7 +382,6 @@ export function setGestureTransform({ scale, x, y }) {
   state.isDirty = true;
   cameraDirty = true;
   schedule();
-  startProgressLoop();
 }
 
 // Atomic commit: freeze visual transform, let toys recompute offscreen, then unfreeze.

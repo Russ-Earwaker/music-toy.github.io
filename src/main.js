@@ -1731,7 +1731,15 @@ function pulseToyBorder(panel, durationMs = 320) {
 
   window.__PERF_PULSE_COUNT = (window.__PERF_PULSE_COUNT || 0) + 1;
   panel.classList.add('toy-playing');
-  panel.classList.add('toy-playing-pulse');
+  if (panel.classList.contains('toy-playing-pulse')) {
+    panel.classList.remove('toy-playing-pulse');
+    requestAnimationFrame(() => {
+      if (!panel.isConnected) return;
+      panel.classList.add('toy-playing-pulse');
+    });
+  } else {
+    panel.classList.add('toy-playing-pulse');
+  }
 
   const until = performance.now() + durationMs;
   g_pulseUntil.set(panel.id, until);
@@ -2572,6 +2580,23 @@ function getConnectorAnchorPoints(fromPanel, toPanel) {
   return { a1, a2 };
 }
 
+function updateChainEdgeControls(edge) {
+  if (!edge) return;
+  const { p1x, p1y, p2x, p2y } = edge;
+  if (!Number.isFinite(p1x) || !Number.isFinite(p1y) || !Number.isFinite(p2x) || !Number.isFinite(p2y)) {
+    edge.c1x = edge.c1y = edge.c2x = edge.c2y = NaN;
+    return;
+  }
+  const dx = p2x - p1x;
+  const dy = p2y - p1y;
+  const dist = Math.hypot(dx, dy) || 1;
+  const handleLength = Math.max(28, dist * 0.25); // horizontal-only handles
+  edge.c1x = p1x + handleLength;
+  edge.c1y = p1y;
+  edge.c2x = p2x - handleLength;
+  edge.c2y = p2y;
+}
+
 function rebuildChainSegments() {
   // New edge model + adjacency index.
   g_chainEdges.clear();
@@ -2613,6 +2638,7 @@ function rebuildChainSegments() {
         p2x: a2.x,
         p2y: a2.y
       };
+      updateChainEdgeControls(edge);
 
       g_chainEdges.set(edgeId, edge);
 
@@ -2735,39 +2761,46 @@ function drawChains(forceFull = false) {
   let connectorCount = 0;
   const tEdgesStart = performance.now();
 
+  chainCtx.lineCap = 'round';
+  const baseStroke = 'hsl(222, 100%, 80%)';
+  const pulseStroke = 'hsl(222, 100%, 95%)';
+
+  chainCtx.lineWidth = (baseWidth * 3);
+  chainCtx.strokeStyle = baseStroke;
+  chainCtx.beginPath();
+  let hasBasePath = false;
+
   for (const edge of g_chainEdges.values()) {
-    const { fromToyId, toToyId, p1x, p1y, p2x, p2y } = edge;
+    const { fromToyId, toToyId, p1x, p1y, p2x, p2y, c1x, c1y, c2x, c2y } = edge;
 
     if (!Number.isFinite(p1x) || !Number.isFinite(p1y) ||
-        !Number.isFinite(p2x) || !Number.isFinite(p2y)) {
+        !Number.isFinite(p2x) || !Number.isFinite(p2y) ||
+        !Number.isFinite(c1x) || !Number.isFinite(c1y) ||
+        !Number.isFinite(c2x) || !Number.isFinite(c2y)) {
       continue;
     }
 
     const pulseInfo = g_pulsingConnectors.get(fromToyId);
     const isPulsing = !!(pulseInfo && pulseInfo.toId === toToyId && pulseInfo.until > now);
-    const lineWidth = baseWidth + (isPulsing ? pulseExtraWidth : 0);
 
-    const dx = p2x - p1x;
-    const dy = p2y - p1y;
-    const dist = Math.hypot(dx, dy) || 1;
-    const handleLength = Math.max(28, dist * 0.25); // horizontal-only handles
-
-    const c1x = p1x + handleLength;
-    const c1y = p1y;
-    const c2x = p2x - handleLength;
-    const c2y = p2y;
-
-    chainCtx.lineWidth = (lineWidth * 3);
-    chainCtx.beginPath();
-    chainCtx.moveTo(p1x, p1y);
-    chainCtx.bezierCurveTo(c1x, c1y, c2x, c2y, p2x, p2y);
-    chainCtx.lineCap = 'round';
-    chainCtx.strokeStyle = isPulsing
-      ? 'hsl(222, 100%, 95%)'
-      : 'hsl(222, 100%, 80%)';
-    chainCtx.stroke();
+    if (isPulsing) {
+      chainCtx.lineWidth = ((baseWidth + pulseExtraWidth) * 3);
+      chainCtx.strokeStyle = pulseStroke;
+      chainCtx.beginPath();
+      chainCtx.moveTo(p1x, p1y);
+      chainCtx.bezierCurveTo(c1x, c1y, c2x, c2y, p2x, p2y);
+      chainCtx.stroke();
+    } else {
+      chainCtx.moveTo(p1x, p1y);
+      chainCtx.bezierCurveTo(c1x, c1y, c2x, c2y, p2x, p2y);
+      hasBasePath = true;
+    }
 
     connectorCount++;
+  }
+
+  if (hasBasePath) {
+    chainCtx.stroke();
   }
 
   const tAfterEdges = performance.now();
@@ -2874,11 +2907,13 @@ function updateChainSegmentsForToy(toyId) {
       if (edge.fromToyId === toyId) {
         edge.p1x += dx;
         edge.p1y += dy;
+        updateChainEdgeControls(edge);
         touchedEdges++;
       }
       if (edge.toToyId === toyId) {
         edge.p2x += dx;
         edge.p2y += dy;
+        updateChainEdgeControls(edge);
         touchedEdges++;
       }
     }
