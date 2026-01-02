@@ -223,6 +223,7 @@ let minProgressGapMs = 1000 / progressHz;
 let frameStartState = null;
 let cameraDirty = false;
 const ZC_MATRIX_DEBUG = false; // only read back CSS transform matrix when actively debugging
+let lastApplied = { s: null, x: null, y: null };
 
 export function attachWorldElement(el) {
   worldEl = el;
@@ -284,6 +285,8 @@ function applyTransform() {
   const s = Math.fround(state.currentScale);
   const x = roundPx(state.currentX);
   const y = roundPx(state.currentY);
+  if (s === lastApplied.s && x === lastApplied.x && y === lastApplied.y) return;
+  lastApplied = { s, x, y };
   worldEl.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${s})`;
 
   // Publish CSS vars for any follower layers (runs in the same RAF)

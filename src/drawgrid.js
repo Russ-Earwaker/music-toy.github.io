@@ -768,6 +768,33 @@ function withLogicalSpace(ctx, fn) {
   }
 }
 
+function getOverlayClearPad() {
+  try {
+    const lw = (typeof getLineWidth === 'function') ? getLineWidth() : 0;
+    const safe = Number.isFinite(lw) ? lw : 0;
+    return Math.min(24, Math.max(4, safe * 0.6));
+  } catch {}
+  return 6;
+}
+
+function getOverlayClearRect({ canvas, pad = 0, allowFull = false, gridArea: gridAreaOverride } = {}) {
+  const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+  const maxW = cssW || ((canvas?.width || 0) / scale);
+  const maxH = cssH || ((canvas?.height || 0) / scale);
+  const grid = gridAreaOverride;
+  const hasGrid = !!(grid && grid.w > 0 && grid.h > 0);
+  if (allowFull || !hasGrid || !maxW || !maxH) {
+    return { x: 0, y: 0, w: maxW, h: maxH };
+  }
+  const x = Math.max(0, grid.x - pad);
+  const y = Math.max(0, grid.y - pad);
+  let w = grid.w + pad * 2;
+  let h = grid.h + pad * 2;
+  if (Number.isFinite(maxW) && maxW > 0 && (x + w) > maxW) w = Math.max(0, maxW - x);
+  if (Number.isFinite(maxH) && maxH > 0 && (y + h) > maxH) h = Math.max(0, maxH - y);
+  return { x, y, w, h };
+}
+
 function drawGhostDebugBand(ctx, band) {
   if (!DG_GHOST_DEBUG || !ctx || !band || !gridArea) return;
   withLogicalSpace(ctx, () => {
@@ -3699,20 +3726,25 @@ function ensureSizeReady({ force = false } = {}) {
           const flashTarget = getActiveFlashCanvas();
           resetCtx(fctx);
           withLogicalSpace(fctx, () => {
-            const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
-            const width = cssW || (flashTarget?.width ?? 0) / scale;
-            const height = cssH || (flashTarget?.height ?? 0) / scale;
-            fctx.clearRect(0, 0, width, height);
+            const { x, y, w, h } = getOverlayClearRect({
+              canvas: flashTarget,
+              pad: getOverlayClearPad(),
+              allowFull: !!panel.__dgFlashOverlayOutOfGrid,
+              gridArea,
+            });
+            fctx.clearRect(x, y, w, h);
           });
           markFlashLayerCleared();
 
           const ghostTarget = getActiveGhostCanvas();
           resetCtx(ghostCtx);
           withLogicalSpace(ghostCtx, () => {
-            const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
-            const width = cssW || (ghostTarget?.width ?? 0) / scale;
-            const height = cssH || (ghostTarget?.height ?? 0) / scale;
-            ghostCtx.clearRect(0, 0, width, height);
+            const { x, y, w, h } = getOverlayClearRect({
+              canvas: ghostTarget,
+              pad: getOverlayClearPad() * 1.2,
+              gridArea,
+            });
+            ghostCtx.clearRect(x, y, w, h);
           });
           markGhostLayerCleared();
         } catch {}
@@ -4735,7 +4767,8 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
               entry.intersectionRatio > DG_VISIBILITY_THRESHOLD;
             isPanelVisible = !!visible;
             try {
-              if (isPanelVisible !== lastVisibleState) {
+              const debugCull = (typeof window !== 'undefined' && window.__DG_DEBUG_CULL);
+              if (debugCull && isPanelVisible !== lastVisibleState) {
                 console.log('[DG][cull] VIS', {
                   panelId: panel?.id || null,
                   from: lastVisibleState,
@@ -5687,19 +5720,24 @@ function syncBackBufferSizes() {
         const flashTarget = getActiveFlashCanvas();
         resetCtx(fctx);
         withLogicalSpace(fctx, () => {
-          const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
-          const width = cssW || (flashTarget?.width ?? 0) / scale;
-          const height = cssH || (flashTarget?.height ?? 0) / scale;
-          fctx.clearRect(0, 0, width, height);
+          const { x, y, w, h } = getOverlayClearRect({
+            canvas: flashTarget,
+            pad: getOverlayClearPad(),
+            allowFull: !!panel.__dgFlashOverlayOutOfGrid,
+            gridArea,
+          });
+          fctx.clearRect(x, y, w, h);
         });
         markFlashLayerCleared();
         const ghostTarget = getActiveGhostCanvas();
         resetCtx(ghostCtx);
         withLogicalSpace(ghostCtx, () => {
-          const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
-          const width = cssW || (ghostTarget?.width ?? 0) / scale;
-          const height = cssH || (ghostTarget?.height ?? 0) / scale;
-          ghostCtx.clearRect(0, 0, width, height);
+          const { x, y, w, h } = getOverlayClearRect({
+            canvas: ghostTarget,
+            pad: getOverlayClearPad() * 1.2,
+            gridArea,
+          });
+          ghostCtx.clearRect(x, y, w, h);
         });
         markGhostLayerCleared();
       }
@@ -7575,6 +7613,7 @@ function syncBackBufferSizes() {
   let __dgFrameProfileMaxMs = 0;
   let __dgFrameProfileLastLogTs = 0;
 
+  let __dgParticleStateCache = { key: '', ts: 0, value: null, hadField: false };
   function updatePanelParticleState(boardScaleValue) {
     const adaptive = (() => {
       try {
@@ -7601,6 +7640,34 @@ function syncBackBufferSizes() {
     const zoomTooWide = Number.isFinite(boardScaleValue) && boardScaleValue < threshold;
     const visiblePanels = Math.max(0, Number(globalDrawgridState?.visibleCount) || 0);
     const allowField = particleBudget?.allowField !== false;
+    const fpsSample = Number.isFinite(adaptive?.smoothedFps)
+      ? adaptive.smoothedFps
+      : (Number.isFinite(adaptive?.fps) ? adaptive.fps : null);
+    const emergencyMode = !!adaptive?.emergencyMode;
+    const nowTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+      ? performance.now()
+      : Date.now();
+    const roundKey = (v, mul = 10000) => Math.round((Number.isFinite(v) ? v : 0) * mul) / mul;
+    const adaptiveKey = [
+      roundKey(particleBudget?.maxCountScale ?? 0),
+      roundKey(particleBudget?.capScale ?? 0),
+      roundKey(particleBudget?.sizeScale ?? 0),
+      roundKey(particleBudget?.spawnScale ?? 0),
+      allowField ? 1 : 0,
+      emergencyMode ? 1 : 0,
+    ].join('|');
+    const boardKey = Math.round((Number.isFinite(boardScaleValue) ? boardScaleValue : 0) * 200);
+    const fpsBucket = Math.round(Number.isFinite(fpsSample) ? fpsSample : 0);
+    const key = `${boardKey}|${visiblePanels}|${inOverview ? 1 : 0}|${zoomTooWide ? 1 : 0}|${fpsBucket}|${adaptiveKey}`;
+    const hasField = !!dgField;
+    if (
+      __dgParticleStateCache &&
+      __dgParticleStateCache.key === key &&
+      __dgParticleStateCache.hadField === hasField &&
+      (nowTs - __dgParticleStateCache.ts) < 250
+    ) {
+      return __dgParticleStateCache.value;
+    }
     // Keep fields on, but thin them out when many panels are visible.
     // Do not vary by focus state so particles feel consistent across panels.
     particleFieldEnabled = !!allowField && !inOverview && !zoomTooWide;
@@ -7619,10 +7686,6 @@ function syncBackBufferSizes() {
           0.16;
         return Math.max(minScale, base);
       })();
-      const fpsSample = Number.isFinite(adaptive?.smoothedFps)
-        ? adaptive.smoothedFps
-        : (Number.isFinite(adaptive?.fps) ? adaptive.fps : null);
-      const emergencyMode = !!adaptive?.emergencyMode;
       // If we're cruising near 60fps with few panels, allow a modest boost above nominal.
       const fpsBoost = (Number.isFinite(fpsSample) && fpsSample >= 58 && visiblePanels <= 2)
         ? Math.min(1.3, 1 + 0.02 * (fpsSample - 58))
@@ -7661,6 +7724,7 @@ function syncBackBufferSizes() {
       }
     }
 
+    __dgParticleStateCache = { key, ts: nowTs, value: adaptive, hadField: hasField };
     return adaptive;
   }
 
@@ -7672,6 +7736,35 @@ function syncBackBufferSizes() {
   let __dgLowFpsMode = false;
   const DG_PARTICLE_ZOOM_THROTTLE_WARN_MS = 250;
   const DG_PARTICLE_POKE_GRACE_MS = 220;
+
+  function getChainHasNotesCached(panel, hasActiveNotes) {
+    if (!panel) return hasActiveNotes;
+    const prevId = panel.dataset?.prevToyId || null;
+    const nextId = panel.dataset?.nextToyId || null;
+    if (!prevId && !nextId) return hasActiveNotes;
+    const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+      ? performance.now()
+      : Date.now();
+    const cache = panel.__dgChainCache;
+    if (
+      cache &&
+      cache.prevId === prevId &&
+      cache.nextId === nextId &&
+      (now - cache.ts) < 250
+    ) {
+      return cache.hasNotes;
+    }
+    const head = findChainHead(panel);
+    const hasNotes = head ? chainHasSequencedNotes(head) : hasActiveNotes;
+    panel.__dgChainCache = {
+      ts: now,
+      prevId,
+      nextId,
+      headId: head?.id || null,
+      hasNotes,
+    };
+    return hasNotes;
+  }
 
   function renderLoop() {
     const endPerf = startSection('drawgrid:render');
@@ -7805,8 +7898,7 @@ function syncBackBufferSizes() {
       const isChained = !!hasChainLink;
       const isActiveInChain = isChained ? (panel.dataset.chainActive === 'true') : true;
       const hasActiveNotes = currentMap && currentMap.active && currentMap.active.some(a => a);
-      const head = isChained ? findChainHead(panel) : panel;
-      const chainHasNotes = head ? chainHasSequencedNotes(head) : hasActiveNotes;
+      const chainHasNotes = isChained ? getChainHasNotesCached(panel, hasActiveNotes) : hasActiveNotes;
 
       const isTrulyIdle =
         !hasAnyNotes &&
@@ -7898,13 +7990,16 @@ function syncBackBufferSizes() {
         if ((allowOverlayDrawHeavy || (lastTransportRunning && !transportRunning)) && !transportRunning && !overlayActive) {
           const __overlayClearStart = __perfOn ? performance.now() : 0;
           try {
-            const flashSurface = getActiveFlashCanvas();
-            resetCtx(fctx);
-            withLogicalSpace(fctx, () => {
-              const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
-              const width = cssW || (flashSurface?.width ?? 0) / scale;
-              const height = cssH || (flashSurface?.height ?? 0) / scale;
-              fctx.clearRect(0, 0, width, height);
+          const flashSurface = getActiveFlashCanvas();
+          resetCtx(fctx);
+          withLogicalSpace(fctx, () => {
+              const { x, y, w, h } = getOverlayClearRect({
+                canvas: flashSurface,
+                pad: getOverlayClearPad(),
+                allowFull: !!panel.__dgFlashOverlayOutOfGrid,
+                gridArea,
+              });
+              fctx.clearRect(x, y, w, h);
             });
             markFlashLayerCleared();
             overlayCompositeNeeded = true;
@@ -8230,10 +8325,12 @@ function syncBackBufferSizes() {
             const ghostSurface = getActiveGhostCanvas();
             resetCtx(ghostCtx);
             withLogicalSpace(ghostCtx, () => {
-              const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
-              const width = cssW || (ghostSurface?.width ?? ghostCtx.canvas.width ?? 0) / scale;
-              const height = cssH || (ghostSurface?.height ?? ghostCtx.canvas.height ?? 0) / scale;
-              ghostCtx.clearRect(0, 0, width, height);
+              const { x, y, w, h } = getOverlayClearRect({
+                canvas: ghostSurface || ghostCtx.canvas,
+                pad: getOverlayClearPad() * 1.2,
+                gridArea,
+              });
+              ghostCtx.clearRect(x, y, w, h);
             });
             markGhostLayerCleared();
           }
@@ -8241,10 +8338,13 @@ function syncBackBufferSizes() {
             const flashSurface = getActiveFlashCanvas();
             resetCtx(fctx);
             withLogicalSpace(fctx, () => {
-              const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
-              const width = cssW || (flashSurface?.width ?? fctx.canvas.width ?? 0) / scale;
-              const height = cssH || (flashSurface?.height ?? fctx.canvas.height ?? 0) / scale;
-              fctx.clearRect(0, 0, width, height);
+              const { x, y, w, h } = getOverlayClearRect({
+                canvas: flashSurface || fctx.canvas,
+                pad: getOverlayClearPad(),
+                allowFull: !!panel.__dgFlashOverlayOutOfGrid,
+                gridArea,
+              });
+              fctx.clearRect(x, y, w, h);
             });
             markFlashLayerCleared();
           }
@@ -8380,10 +8480,13 @@ function syncBackBufferSizes() {
       const flashSurface = getActiveFlashCanvas();
       resetCtx(fctx);
       withLogicalSpace(fctx, () => {
-        const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
-        const width = cssW || (flashSurface?.width ?? 0) / scale;
-        const height = cssH || (flashSurface?.height ?? 0) / scale;
-        fctx.clearRect(0, 0, width, height);
+        const { x, y, w, h } = getOverlayClearRect({
+          canvas: flashSurface,
+          pad: getOverlayClearPad(),
+          allowFull: !!panel.__dgFlashOverlayOutOfGrid,
+          gridArea,
+        });
+        fctx.clearRect(x, y, w, h);
         emitDG('overlay-clear', { reason: 'pre-redraw' });
       });
       markFlashLayerCleared();
@@ -8902,7 +9005,13 @@ function syncBackBufferSizes() {
                   const band = Math.max(6, Math.round(Math.max(0.8 * cw, Math.min(gridArea.w * 0.08, 2.2 * cw))));
                   fctx.clearRect(lastX - band, gridArea.y - 2, band * 2, gridArea.h + 4);
                 } else {
-                  fctx.clearRect(0, 0, width, height);
+                  const { x, y, w, h } = getOverlayClearRect({
+                    canvas: flashSurface || fctx.canvas,
+                    pad: getOverlayClearPad(),
+                    allowFull: !!panel.__dgFlashOverlayOutOfGrid,
+                    gridArea,
+                  });
+                  fctx.clearRect(x, y, w, h);
                 }
               });
               if (overlayCoreWanted) {
@@ -8952,7 +9061,13 @@ function syncBackBufferSizes() {
                     emitDG('overlay-clear', { reason: 'playhead-band' });
                   }
                 } else {
-                  fctx.clearRect(0, 0, width, height);
+                  const { x, y, w, h } = getOverlayClearRect({
+                    canvas: flashSurface,
+                    pad: getOverlayClearPad(),
+                    allowFull: !!panel.__dgFlashOverlayOutOfGrid,
+                    gridArea,
+                  });
+                  fctx.clearRect(x, y, w, h);
                   emitDG('overlay-clear', { reason: 'playhead' });
                   markFlashLayerCleared();
                 }
@@ -9222,10 +9337,13 @@ function syncBackBufferSizes() {
       clearCanvas(nctx);
       const flashSurface = getActiveFlashCanvas();
       withLogicalSpace(fctx, () => {
-        const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
-        const width = cssW || (flashSurface?.width ?? 0) / scale;
-        const height = cssH || (flashSurface?.height ?? 0) / scale;
-        fctx.clearRect(0, 0, width, height);
+        const { x, y, w, h } = getOverlayClearRect({
+          canvas: flashSurface,
+          pad: getOverlayClearPad(),
+          allowFull: !!panel.__dgFlashOverlayOutOfGrid,
+          gridArea,
+        });
+        fctx.clearRect(x, y, w, h);
         emitDG('overlay-clear', { reason: 'restore-state' });
       });
 
@@ -9378,26 +9496,39 @@ function syncBackBufferSizes() {
       clearCanvas(nctx);
       const flashSurface = getActiveFlashCanvas();
       withLogicalSpace(fctx, () => {
-        const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
-        const width = cssW || (flashSurface?.width ?? 0) / scale;
-        const height = cssH || (flashSurface?.height ?? 0) / scale;
-        fctx.clearRect(0, 0, width, height);
+        const { x, y, w, h } = getOverlayClearRect({
+          canvas: flashSurface,
+          pad: getOverlayClearPad(),
+          allowFull: !!panel.__dgFlashOverlayOutOfGrid,
+          gridArea,
+        });
+        fctx.clearRect(x, y, w, h);
         emitDG('overlay-clear', { reason: 'pre-redraw' });
       });
       try {
         if (flashBackCtx && flashBackCtx !== fctx) {
-          const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
-          const width = cssW || (flashBackCtx.canvas?.width ?? 0) / scale;
-          const height = cssH || (flashBackCtx.canvas?.height ?? 0) / scale;
           resetCtx(flashBackCtx);
-          withLogicalSpace(flashBackCtx, () => flashBackCtx.clearRect(0, 0, width, height));
+          withLogicalSpace(flashBackCtx, () => {
+            const { x, y, w, h } = getOverlayClearRect({
+              canvas: flashBackCtx.canvas,
+              pad: getOverlayClearPad(),
+              allowFull: !!panel.__dgFlashOverlayOutOfGrid,
+              gridArea,
+            });
+            flashBackCtx.clearRect(x, y, w, h);
+          });
         }
         if (flashFrontCtx && flashFrontCtx !== fctx) {
-          const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
-          const width = cssW || (flashFrontCtx.canvas?.width ?? 0) / scale;
-          const height = cssH || (flashFrontCtx.canvas?.height ?? 0) / scale;
           resetCtx(flashFrontCtx);
-          withLogicalSpace(flashFrontCtx, () => flashFrontCtx.clearRect(0, 0, width, height));
+          withLogicalSpace(flashFrontCtx, () => {
+            const { x, y, w, h } = getOverlayClearRect({
+              canvas: flashFrontCtx.canvas,
+              pad: getOverlayClearPad(),
+              allowFull: !!panel.__dgFlashOverlayOutOfGrid,
+              gridArea,
+            });
+            flashFrontCtx.clearRect(x, y, w, h);
+          });
         }
       } catch {}
       try { markFlashLayerCleared(); } catch {}
@@ -9799,29 +9930,38 @@ function syncBackBufferSizes() {
       const flashSurface = getActiveFlashCanvas();
       resetCtx(fctx);
       withLogicalSpace(fctx, () => {
-        const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
-        const width = cssW || (flashSurface?.width ?? fctx.canvas.width ?? 0) / scale;
-        const height = cssH || (flashSurface?.height ?? fctx.canvas.height ?? 0) / scale;
-        fctx.clearRect(0, 0, width, height);
+        const { x, y, w, h } = getOverlayClearRect({
+          canvas: flashSurface || fctx.canvas,
+          pad: getOverlayClearPad(),
+          allowFull: !!panel.__dgFlashOverlayOutOfGrid,
+          gridArea,
+        });
+        fctx.clearRect(x, y, w, h);
       });
       // Clear both flash buffers so no stale overlay survives buffer toggles.
       try {
         if (flashBackCtx && flashBackCtx !== fctx) {
           resetCtx(flashBackCtx);
           withLogicalSpace(flashBackCtx, () => {
-            const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
-            const width = cssW || (flashBackCtx.canvas?.width ?? 0) / scale;
-            const height = cssH || (flashBackCtx.canvas?.height ?? 0) / scale;
-            flashBackCtx.clearRect(0, 0, width, height);
+            const { x, y, w, h } = getOverlayClearRect({
+              canvas: flashBackCtx.canvas,
+              pad: getOverlayClearPad(),
+              allowFull: !!panel.__dgFlashOverlayOutOfGrid,
+              gridArea,
+            });
+            flashBackCtx.clearRect(x, y, w, h);
           });
         }
         if (flashFrontCtx && flashFrontCtx !== fctx) {
           resetCtx(flashFrontCtx);
           withLogicalSpace(flashFrontCtx, () => {
-            const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
-            const width = cssW || (flashFrontCtx.canvas?.width ?? 0) / scale;
-            const height = cssH || (flashFrontCtx.canvas?.height ?? 0) / scale;
-            flashFrontCtx.clearRect(0, 0, width, height);
+            const { x, y, w, h } = getOverlayClearRect({
+              canvas: flashFrontCtx.canvas,
+              pad: getOverlayClearPad(),
+              allowFull: !!panel.__dgFlashOverlayOutOfGrid,
+              gridArea,
+            });
+            flashFrontCtx.clearRect(x, y, w, h);
           });
         }
       } catch {}
@@ -10053,11 +10193,14 @@ function syncBackBufferSizes() {
       resetCtx(ghostCtx);
       resetCtx(ghostCtx);
       withLogicalSpace(ghostCtx, () => {
-        const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
-        const width = cssW || (ghostSurface?.width ?? 0) / scale;
-        const height = cssH || (ghostSurface?.height ?? 0) / scale;
-        ghostCtx.clearRect(0, 0, width, height);
+      const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+      const { x, y, w, h } = getOverlayClearRect({
+        canvas: ghostSurface,
+        pad: getOverlayClearPad() * 1.2,
+        gridArea,
       });
+      ghostCtx.clearRect(x, y, w, h);
+    });
       markGhostLayerCleared();
     } else {
       ghostFadeRAF = requestAnimationFrame(() => fadeOutGhostTrail(0));
@@ -10073,12 +10216,14 @@ function syncBackBufferSizes() {
     resetCtx(ghostCtx);
     resetCtx(ghostCtx);
     withLogicalSpace(ghostCtx, () => {
-      const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
-      const width = cssW || (ghostSurface?.width ?? 0) / scale;
-      const height = cssH || (ghostSurface?.height ?? 0) / scale;
+      const { x, y, w, h } = getOverlayClearRect({
+        canvas: ghostSurface,
+        pad: getOverlayClearPad(),
+        gridArea,
+      });
       ghostCtx.globalCompositeOperation = 'destination-out';
       ghostCtx.globalAlpha = 0.18;
-      ghostCtx.fillRect(0, 0, width, height);
+      ghostCtx.fillRect(x, y, w, h);
     });
     ghostCtx.globalCompositeOperation = 'source-over';
     ghostCtx.globalAlpha = 1.0;
