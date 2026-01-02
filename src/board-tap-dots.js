@@ -39,6 +39,34 @@ import { getViewportTransform, screenToWorld, getViewportElement } from './board
   const FORCE_DEBUG_VIS = false;
   const PROFILE = false; // set true temporarily to log profiling info
 
+  const DOT_SPRITE_CACHE_MAX = 256;
+  const dotSpriteCache = new Map();
+  function getDotSprite(radius, r, g, b, a) {
+    const radiusQ = Math.max(0.2, Math.round(radius * 10) / 10);
+    const rQ = Math.max(0, Math.min(255, Math.round(r / 4) * 4));
+    const gQ = Math.max(0, Math.min(255, Math.round(g / 4) * 4));
+    const bQ = Math.max(0, Math.min(255, Math.round(b / 4) * 4));
+    const aQ = Math.max(0, Math.min(1, Math.round(a * 32) / 32));
+    const key = `${radiusQ}|${rQ},${gQ},${bQ},${aQ}`;
+    let sprite = dotSpriteCache.get(key);
+    if (sprite) return sprite;
+    const size = Math.max(2, Math.ceil(radiusQ * 2 + 2));
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const sctx = canvas.getContext('2d');
+    sctx.fillStyle = `rgba(${rQ}, ${gQ}, ${bQ}, ${aQ})`;
+    sctx.beginPath();
+    sctx.arc(size / 2, size / 2, radiusQ, 0, Math.PI * 2);
+    sctx.fill();
+    sprite = { canvas, radius: radiusQ };
+    dotSpriteCache.set(key, sprite);
+    if (dotSpriteCache.size > DOT_SPRITE_CACHE_MAX) {
+      dotSpriteCache.clear();
+    }
+    return sprite;
+  }
+
   // delay before full reset once everything is faded out
   const HANG_MS = 0;
 
@@ -328,6 +356,7 @@ import { getViewportTransform, screenToWorld, getViewportElement } from './board
 
     currentTapSpacing = tapSpacing;
 
+    const invRadius = radiusScreen > 0 ? (1 / radiusScreen) : 0;
     for (let yy = startY; yy <= maxY; yy += tapSpacing) {
       for (let xx = startX; xx <= maxX; xx += tapSpacing) {
         const dx = xx - x;
@@ -338,6 +367,15 @@ import { getViewportTransform, screenToWorld, getViewportElement } from './board
 
         // When does the wave front reach this dot?
         const impactT = (dist / radiusScreen) * WAVE_DURATION_MS;
+        const distRatio = Math.min(dist * invRadius, 1);
+        const edgeFade = lerp(
+          EDGE_FADE_FAR,
+          EDGE_FADE_NEAR,
+          1 - Math.pow(distRatio, EDGE_FADE_POWER)
+        );
+        const centreInfluence = Math.pow(1 - distRatio, DRAG_CENTER_POWER);
+        const edgeFactor = 1 - distRatio;
+        const baseAlpha = lerp(0.25, 0.95, edgeFactor) * edgeFade;
 
         const dirX = dist > 0.0001 ? dx / dist : 0;
         const dirY = dist > 0.0001 ? dy / dist : 0;
@@ -347,6 +385,10 @@ import { getViewportTransform, screenToWorld, getViewportElement } from './board
           x: xx,
           y: yy,
           dist,
+          distRatio,
+          edgeFade,
+          centreInfluence,
+          baseAlpha,
           impactTime: impactT,
           dirX,
           dirY,
@@ -451,11 +493,14 @@ import { getViewportTransform, screenToWorld, getViewportElement } from './board
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.restore();
 
-  const zoomScale = getCurrentZoomScale();
-  const invZoom = 1 / Math.max(zoomScale, 0.0001);
+    const zoomScale = getCurrentZoomScale();
+    const invZoom = 1 / Math.max(zoomScale, 0.0001);
+    const dragMag = Math.sqrt(dragOffsetX * dragOffsetX + dragOffsetY * dragOffsetY);
+    const maxDisp = (tapRadiusScreen * DRAG_MAX_OFFSET_FACTOR || 1);
+    const dispDen = maxDisp * 0.4;
+    const dragMagScaled = dragMag * DRAG_BLOB_MULT;
 
     // If we're fully faded and the blob is basically at rest, clean up.
-    const dragMag = Math.sqrt(dragOffsetX * dragOffsetX + dragOffsetY * dragOffsetY);
     if (!isPointerDown && fadeFactor <= 0.001 && dragMag <= 0.1) {
       if (PROFILE && profileFrameCount > 0) {
         const avgDt = profileSumDt / profileFrameCount;
@@ -494,30 +539,21 @@ import { getViewportTransform, screenToWorld, getViewportElement } from './board
       }
 
       // Distance from the tap centre for centre-weighting + edge fade.
-      const distRatio = Math.min(dot.dist / tapRadiusScreen, 1);
-      const centreInfluence = Math.pow(1 - distRatio, DRAG_CENTER_POWER);
-      const edgeFade = lerp(
-        EDGE_FADE_FAR,
-        EDGE_FADE_NEAR,
-        1 - Math.pow(distRatio, EDGE_FADE_POWER)
-      );
+      const distRatio = dot.distRatio;
+      const centreInfluence = dot.centreInfluence;
+      const edgeFade = dot.edgeFade;
 
       // 2) Wave has passed and the dot has finished its flash -> calm blue dot,
       //    but displaced as part of a single "blob" moved by dragOffset.
       if (localT > DOT_WAVE_WIDTH_MS) {
         // Base settled alpha: fade based on distance (center = strong, edge = faint).
-        const edgeFactor = 1 - distRatio;
-        const baseAlpha = lerp(0.25, 0.95, edgeFactor) * edgeFade;
-
         // Apply smooth global drag offset scaled by centre influence and exaggeration.
         const offsetX = dragOffsetX * centreInfluence * DRAG_BLOB_MULT;
         const offsetY = dragOffsetY * centreInfluence * DRAG_BLOB_MULT;
-
-        const dispMag = Math.sqrt(offsetX * offsetX + offsetY * offsetY);
-        const maxDisp = (tapRadiusScreen * DRAG_MAX_OFFSET_FACTOR || 1);
+        const dispMag = dragMagScaled * centreInfluence;
 
         // Reach "full effect" sooner: 0.4 * maxDisp already gives full ratio.
-        const dispRatioRaw = Math.min(dispMag / (maxDisp * 0.4), 1);
+        const dispRatioRaw = Math.min(dispMag / (dispDen || 1), 1);
         // Ease it a bit so it ramps up quickly but still feels smooth.
         const dispRatio = Math.sqrt(dispRatioRaw);
 
@@ -530,7 +566,7 @@ import { getViewportTransform, screenToWorld, getViewportElement } from './board
 
         // Brightness also increases with dragIntensity (on top of baseAlpha).
         const brightFactor = lerp(1, DRAG_BRIGHTEN_MULT, dragIntensity);
-        const alpha = baseAlpha * brightFactor;
+        const alpha = dot.baseAlpha * brightFactor;
 
         const r = Math.round(lerp(BASE_COLOR.r, WHITE.r, mixToWhite));
         const g = Math.round(lerp(BASE_COLOR.g, WHITE.g, mixToWhite));
@@ -540,10 +576,11 @@ import { getViewportTransform, screenToWorld, getViewportElement } from './board
         const drawY = viewOriginY + (dot.y + offsetY) * viewScaleY;
         const radius = (BASE_DOT_RADIUS * scale) * invZoom; // keep screen size constant regardless of zoom
 
-        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
-        ctx.beginPath();
-        ctx.arc(drawX, drawY, radius, 0, Math.PI * 2);
-        ctx.fill();
+        const sprite = getDotSprite(radius, r, g, b, alpha);
+        if (sprite) {
+          const sz = sprite.radius * 2;
+          ctx.drawImage(sprite.canvas, drawX - sprite.radius, drawY - sprite.radius, sz, sz);
+        }
         continue;
       }
 
@@ -582,10 +619,11 @@ import { getViewportTransform, screenToWorld, getViewportElement } from './board
       // Keep screen size roughly constant regardless of zoom (use view scales)
       const radius = (BASE_DOT_RADIUS * scale) * invZoom;
 
-      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
-      ctx.beginPath();
-      ctx.arc(drawX, drawY, radius, 0, Math.PI * 2);
-      ctx.fill();
+      const sprite = getDotSprite(radius, r, g, b, alpha);
+      if (sprite) {
+        const sz = sprite.radius * 2;
+        ctx.drawImage(sprite.canvas, drawX - sprite.radius, drawY - sprite.radius, sz, sz);
+      }
     }
 
     ctx.restore();
