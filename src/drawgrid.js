@@ -835,6 +835,14 @@ function quantizeHue(hue, step = 6) {
   const s = Number.isFinite(step) && step > 0 ? step : 1;
   return Math.round(h / s) * s;
 }
+const PLAYHEAD_HUES_LINE1 = [200, 245, 290];
+const PLAYHEAD_HUES_LINE2 = [20, 355, 330];
+function pickPlayheadHue(strokes) {
+  const hasLine2 = Array.isArray(strokes) && strokes.some(s => s && s.generatorId === 2);
+  const pool = hasLine2 ? PLAYHEAD_HUES_LINE1.concat(PLAYHEAD_HUES_LINE2) : PLAYHEAD_HUES_LINE1;
+  const idx = Math.floor(Math.random() * pool.length);
+  return pool[idx] ?? PLAYHEAD_HUES_LINE1[0];
+}
 function __dgCachePlayheadSprite(map, key, build) {
   let sprite = map.get(key);
   if (sprite) return sprite;
@@ -9151,6 +9159,9 @@ function syncBackBufferSizes() {
         if (phaseJustWrapped || panel.__dgPlayheadFancyLocked == null) {
           panel.__dgPlayheadFancyLocked = playheadFancyDesired;
         }
+        if (phaseJustWrapped || panel.__dgPlayheadHue == null) {
+          panel.__dgPlayheadHue = pickPlayheadHue(strokes);
+        }
         const playheadFancy = !!panel.__dgPlayheadFancyLocked;
         const playheadDrawSimple = playheadSimpleOnly || !playheadFancy;
         const canUseTutorialLayer = tutorialHighlightMode === 'none' && !!tutorialCtx?.canvas;
@@ -9189,8 +9200,10 @@ function syncBackBufferSizes() {
                 const width = cssW || (flashSurface?.width ?? fctx.canvas.width ?? 0) / scale;
                 const height = cssH || (flashSurface?.height ?? fctx.canvas.height ?? 0) / scale;
                 if (overlayCoreWanted) {
-                  const band = Math.max(6, Math.round(Math.max(0.8 * cw, Math.min(gridArea.w * 0.08, 2.2 * cw))));
-                  fctx.clearRect(lastX - band, gridArea.y - 2, band * 2, gridArea.h + 4);
+                  // Avoid clearing the overlay band here; it can expose the base (white) line
+                  // for a frame if overlay redraw is throttled.
+                  __dgNeedsUIRefresh = true;
+                  overlayCompositeNeeded = true;
                 } else {
                   const { x, y, w, h } = getOverlayClearRect({
                     canvas: flashSurface || fctx.canvas,
@@ -9307,8 +9320,9 @@ function syncBackBufferSizes() {
           dbgPoke('header');
         } catch (e) { /* fail silently */ }
 
-        const t = performance.now();
-        const hue = quantizeHue(200 + 20 * Math.sin((t / 1400) * Math.PI * 2), 6);
+        const hue = Number.isFinite(panel.__dgPlayheadHue)
+          ? panel.__dgPlayheadHue
+          : pickPlayheadHue(strokes);
 
         if (playheadDrawSimple) {
           playheadCtx.globalAlpha = 0.9;
