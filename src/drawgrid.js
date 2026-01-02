@@ -7650,10 +7650,15 @@ function syncBackBufferSizes() {
   let __dgFrameProfileLastLogTs = 0;
 
   let __dgParticleStateCache = { key: '', ts: 0, value: null, hadField: false };
-  function updatePanelParticleState(boardScaleValue) {
+  function updatePanelParticleState(boardScaleValue, panelVisible) {
     const nowTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
       ? performance.now()
       : Date.now();
+    const recentPoke = Number.isFinite(__dgParticlePokeTs) && (nowTs - __dgParticlePokeTs) <= DG_PARTICLE_POKE_GRACE_MS;
+    if (!panelVisible && !recentPoke) {
+      particleFieldEnabled = false;
+      return __dgParticleStateCache?.value || null;
+    }
     const overviewState = (typeof window !== 'undefined' && window.__overviewMode) ? window.__overviewMode : { isActive: () => false, state: { zoomThreshold: 0.36 } };
     const inOverview = !!overviewState?.isActive?.();
     const visiblePanels = Math.max(0, Number(globalDrawgridState?.visibleCount) || 0);
@@ -7856,7 +7861,7 @@ function syncBackBufferSizes() {
 
       // Update per-panel LOD state from global FPS + zoom.
       const __adaptiveStart = __perfOn ? performance.now() : 0;
-      const adaptiveState = updatePanelParticleState(boardScaleValue);
+      const adaptiveState = updatePanelParticleState(boardScaleValue, isPanelVisible);
       __dgLowFpsMode = !!adaptiveState?.emergencyMode;
       const fpsSample = Number.isFinite(adaptiveState?.smoothedFps)
         ? adaptiveState.smoothedFps
