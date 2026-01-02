@@ -7615,6 +7615,22 @@ function syncBackBufferSizes() {
 
   let __dgParticleStateCache = { key: '', ts: 0, value: null, hadField: false };
   function updatePanelParticleState(boardScaleValue) {
+    const nowTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+      ? performance.now()
+      : Date.now();
+    const overviewState = (typeof window !== 'undefined' && window.__overviewMode) ? window.__overviewMode : { isActive: () => false, state: { zoomThreshold: 0.36 } };
+    const inOverview = !!overviewState?.isActive?.();
+    const visiblePanels = Math.max(0, Number(globalDrawgridState?.visibleCount) || 0);
+    const hasField = !!dgField;
+    const cacheKey = `${visiblePanels}|${inOverview ? 1 : 0}|${hasField ? 1 : 0}`;
+    if (
+      __dgParticleStateCache &&
+      __dgParticleStateCache.key === cacheKey &&
+      __dgParticleStateCache.hadField === hasField &&
+      (nowTs - __dgParticleStateCache.ts) < 350
+    ) {
+      return __dgParticleStateCache.value;
+    }
     const adaptive = (() => {
       try {
         const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
@@ -7632,42 +7648,13 @@ function syncBackBufferSizes() {
       }
     })();
     const particleBudget = adaptive?.particleBudget;
-
-    // If we're in overview or super zoomed out, skip the background field entirely.
-    const overviewState = (typeof window !== 'undefined' && window.__overviewMode) ? window.__overviewMode : { isActive: () => false, state: { zoomThreshold: 0.36 } };
-    const inOverview = !!overviewState?.isActive?.();
     const threshold = Number.isFinite(overviewState?.state?.zoomThreshold) ? overviewState.state.zoomThreshold : 0.36;
     const zoomTooWide = Number.isFinite(boardScaleValue) && boardScaleValue < threshold;
-    const visiblePanels = Math.max(0, Number(globalDrawgridState?.visibleCount) || 0);
     const allowField = particleBudget?.allowField !== false;
     const fpsSample = Number.isFinite(adaptive?.smoothedFps)
       ? adaptive.smoothedFps
       : (Number.isFinite(adaptive?.fps) ? adaptive.fps : null);
     const emergencyMode = !!adaptive?.emergencyMode;
-    const nowTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
-      ? performance.now()
-      : Date.now();
-    const roundKey = (v, mul = 10000) => Math.round((Number.isFinite(v) ? v : 0) * mul) / mul;
-    const adaptiveKey = [
-      roundKey(particleBudget?.maxCountScale ?? 0),
-      roundKey(particleBudget?.capScale ?? 0),
-      roundKey(particleBudget?.sizeScale ?? 0),
-      roundKey(particleBudget?.spawnScale ?? 0),
-      allowField ? 1 : 0,
-      emergencyMode ? 1 : 0,
-    ].join('|');
-    const boardKey = Math.round((Number.isFinite(boardScaleValue) ? boardScaleValue : 0) * 200);
-    const fpsBucket = Math.round(Number.isFinite(fpsSample) ? fpsSample : 0);
-    const key = `${boardKey}|${visiblePanels}|${inOverview ? 1 : 0}|${zoomTooWide ? 1 : 0}|${fpsBucket}|${adaptiveKey}`;
-    const hasField = !!dgField;
-    if (
-      __dgParticleStateCache &&
-      __dgParticleStateCache.key === key &&
-      __dgParticleStateCache.hadField === hasField &&
-      (nowTs - __dgParticleStateCache.ts) < 250
-    ) {
-      return __dgParticleStateCache.value;
-    }
     // Keep fields on, but thin them out when many panels are visible.
     // Do not vary by focus state so particles feel consistent across panels.
     particleFieldEnabled = !!allowField && !inOverview && !zoomTooWide;
@@ -7724,7 +7711,7 @@ function syncBackBufferSizes() {
       }
     }
 
-    __dgParticleStateCache = { key, ts: nowTs, value: adaptive, hadField: hasField };
+    __dgParticleStateCache = { key: cacheKey, ts: nowTs, value: adaptive, hadField: hasField };
     return adaptive;
   }
 
