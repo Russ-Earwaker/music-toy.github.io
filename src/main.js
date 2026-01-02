@@ -22,6 +22,7 @@ import { createChordWheel } from './chordwheel.js';
 import { createRippleSynth } from './ripplesynth.js';
 import { applyStackingOrder } from './stacking-manager.js';
 import { getViewportTransform, getViewportElement, screenToWorld } from './board-viewport.js';
+import { getRect } from './layout-cache.js';
 
 import './toy-audio.js';
 import './toy-layout-manager.js';
@@ -221,7 +222,7 @@ function getPanelLocalExtents(panel, { fallbackWidth, fallbackHeight } = {}) {
     } catch {
         extents = null;
     }
-    const rect = panel.getBoundingClientRect?.();
+    const rect = getRect(panel);
 
     const fallbackWidthValue = pickPositive(
         fallbackWidth,
@@ -263,8 +264,8 @@ function getPanelPosition(panel) {
     if (Number.isFinite(fallbackLeft) && Number.isFinite(fallbackTop)) {
         return { left: fallbackLeft, top: fallbackTop };
     }
-    const panelRect = panel.getBoundingClientRect?.();
-    const parentRect = panel.parentElement?.getBoundingClientRect?.();
+    const panelRect = getRect(panel);
+    const parentRect = getRect(panel.parentElement);
     if (panelRect && parentRect) {
         return {
             left: panelRect.left - parentRect.left,
@@ -324,7 +325,7 @@ function ensurePanelSpawnPlacement(panel, {
     }
 
     const localExtents = getPanelLocalExtents(panel, { fallbackWidth, fallbackHeight });
-    const boardRect = board.getBoundingClientRect?.();
+    const boardRect = getRect(board);
     const maxX = Math.max(board.scrollWidth || 0, board.offsetWidth || 0, boardRect?.width || 0) + 2000;
     const maxY = Math.max(board.scrollHeight || 0, board.offsetHeight || 0, boardRect?.height || 0) + 2000;
 
@@ -586,7 +587,7 @@ function dbgOvEv(tag, e, panelId) {
 function dbgPanelRect(panel, tag) {
   try {
     if (!panel) return;
-    const r = panel.getBoundingClientRect();
+    const r = getRect(panel);
     const cs = getComputedStyle(panel);
     console.log('[OVDBG][panelRect]', tag, {
       id: panel.id,
@@ -869,8 +870,8 @@ function setToyFocus(panel, { center = true, unfocusAll } = {}) { // default cen
     requestAnimationFrame(() => {
       const guide = document.querySelector('.guide-launcher');
       const spawner = document.querySelector('.toy-spawner-dock');
-      const guideRight = guide ? guide.getBoundingClientRect().right : 0;
-      const spawnerLeft = spawner ? spawner.getBoundingClientRect().left : window.innerWidth;
+      const guideRight = guide ? getRect(guide).right : 0;
+      const spawnerLeft = spawner ? getRect(spawner).left : window.innerWidth;
       const centerX = (guideRight + spawnerLeft) / 2;
       const centerFracX = centerX / window.innerWidth;
       try {
@@ -1966,8 +1967,8 @@ function initToyChaining(panel) {
 
         const board = document.getElementById('board');
         const boardScale = window.__boardScale || 1;
-        let sourceWidth = sourcePanel.offsetWidth || (sourcePanel.getBoundingClientRect().width / boardScale);
-        let sourceHeight = sourcePanel.offsetHeight || (sourcePanel.getBoundingClientRect().height / boardScale);
+        let sourceWidth = sourcePanel.offsetWidth || (getRect(sourcePanel).width / boardScale);
+        let sourceHeight = sourcePanel.offsetHeight || (getRect(sourcePanel).height / boardScale);
 
         newPanel.style.width = `${sourceWidth}px`;
         // Height is only needed during the initial placement. Drop it after boot
@@ -1998,8 +1999,8 @@ function initToyChaining(panel) {
 
         if (!Number.isFinite(srcLeft) || !Number.isFinite(srcTop)) {
             // Fallback: derive from rects (best-effort)
-            const sourceRect = sourcePanel.getBoundingClientRect();
-            const boardRect = board?.getBoundingClientRect?.();
+            const sourceRect = getRect(sourcePanel);
+            const boardRect = getRect(board);
             const boardScale = window.__boardScale || 1;
             if (boardRect) {
               srcLeft = (sourceRect.left - boardRect.left) / boardScale;
@@ -2164,7 +2165,7 @@ function initToyChaining(panel) {
                 sourceChainBtn.style.pointerEvents = 'none';
                 sourceChainBtn.classList.add('toy-chain-btn-disabled');
                 // Nudge a repaint to avoid blank icons when chaining immediately after refresh
-                sourceChainBtn.getBoundingClientRect();
+                getRect(sourceChainBtn);
             }
 
             if (oldNextId) {
@@ -2256,8 +2257,8 @@ function isPanelCenterOffscreen(panel) {
     if (!panel || typeof panel.getBoundingClientRect !== 'function') return false;
     const viewport = panel.closest?.('.board-viewport') || document.querySelector('.board-viewport') || document.documentElement;
     if (!viewport) return false;
-    const rect = panel.getBoundingClientRect();
-    const viewRect = viewport.getBoundingClientRect();
+    const rect = getRect(panel);
+    const viewRect = getRect(viewport);
     const cx = rect.left + rect.width * 0.5;
     const cy = rect.top + rect.height * 0.5;
     return cx < viewRect.left || cx > viewRect.right || cy < viewRect.top || cy > viewRect.bottom;

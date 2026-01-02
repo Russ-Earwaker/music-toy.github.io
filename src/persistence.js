@@ -1045,6 +1045,46 @@ function saveToKey(key, data){
     return false;
   }
 }
+
+const __scheduledSaves = new Map();
+let __saveFlushTimer = 0;
+
+function clearScheduledSave(key) {
+  if (!key) return;
+  __scheduledSaves.delete(key);
+  if (__scheduledSaves.size === 0 && __saveFlushTimer) {
+    clearTimeout(__saveFlushTimer);
+    __saveFlushTimer = 0;
+  }
+}
+
+function flushScheduledSaves() {
+  __saveFlushTimer = 0;
+  const now = Date.now();
+  let nextDelay = Infinity;
+  for (const [key, entry] of __scheduledSaves) {
+    const dueIn = entry.delayMs - (now - entry.ts);
+    if (dueIn <= 0) {
+      __scheduledSaves.delete(key);
+      saveToKey(key, entry.data);
+    } else {
+      nextDelay = Math.min(nextDelay, dueIn);
+    }
+  }
+  if (__scheduledSaves.size && Number.isFinite(nextDelay)) {
+    __saveFlushTimer = setTimeout(flushScheduledSaves, Math.max(0, Math.ceil(nextDelay)));
+  }
+}
+
+function scheduleSaveToKey(key, data, { delayMs = 350 } = {}) {
+  if (!key) return false;
+  const safeDelay = Math.max(0, delayMs | 0);
+  __scheduledSaves.set(key, { data, ts: Date.now(), delayMs: safeDelay });
+  if (!__saveFlushTimer) {
+    __saveFlushTimer = setTimeout(flushScheduledSaves, safeDelay);
+  }
+  return true;
+}
 function loadFromKey(key){
   try{
     const s = localStorage.getItem(key);
@@ -1065,7 +1105,9 @@ function loadFromKey(key){
 export function saveScene(name){
   const snap = getSnapshot();
   snap.updatedAt = nowIso();
-  const ok = saveToKey(`scene:${name||'default'}`, snap);
+  const storageKey = `scene:${name||'default'}`;
+  clearScheduledSave(storageKey);
+  const ok = saveToKey(storageKey, snap);
   if (ok){ try{ localStorage.setItem(LAST_SCENE_KEY, name||'default'); }catch{} }
   return ok;
 }
@@ -1104,7 +1146,7 @@ function scheduleAutosave(){
     try{
       const snap = getSnapshot();
       const lc = (snap.toys||[]).filter(t=>t.type==='loopgrid' || t.type==='loopgrid-drum').length;
-      saveToKey(AUTOSAVE_KEY, snap);
+      scheduleSaveToKey(AUTOSAVE_KEY, snap, { delayMs: 350 });
       // try{ console.log(`[persistence] autosaved (${lc} loopgrid variants, bpm=${snap.transport?.bpm}, theme=${snap.themeId})`); }catch{}
     }catch{}
   }, __interval);
@@ -1121,7 +1163,7 @@ export function startAutosave(intervalMs){
   const toyEvents = ['grid:notechange','toy-random','toy-random-notes','toy-clear','toy-reset','toy-speed','bouncer:quant','toy-random-cubes','toy-random-blocks'];
   toyEvents.forEach(evt => document.addEventListener(evt, markDirty, true));
   // Save when page is being hidden/unloaded
-  const flush = ()=>{ try{ const s = getSnapshot(); saveToKey(AUTOSAVE_KEY, s); persistTraceLog('[persistence] autosave flush on hide/unload'); }catch{} };
+  const flush = ()=>{ try{ const s = getSnapshot(); clearScheduledSave(AUTOSAVE_KEY); saveToKey(AUTOSAVE_KEY, s); persistTraceLog('[persistence] autosave flush on hide/unload'); }catch{} };
   window.addEventListener('beforeunload', flush, true);
   document.addEventListener('visibilitychange', ()=>{ if (document.hidden) flush(); }, true);
   // Mark initial state dirty to ensure a snapshot is captured shortly after boot
@@ -1131,6 +1173,7 @@ export function startAutosave(intervalMs){
 export function flushAutosaveNow(){
   try{
     const snap = getSnapshot();
+    clearScheduledSave(AUTOSAVE_KEY);
     saveToKey(AUTOSAVE_KEY, snap);
   }catch{}
 }

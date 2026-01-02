@@ -1,6 +1,7 @@
 // src/board-viewport.js — pan & zoom coordinator bridge (clean, <=300 lines)
 import { overviewMode } from './overview-mode.js';
 import { makeDebugLogger } from './debug-flags.js';
+import { getRect } from './layout-cache.js';
 import {
   attachWorldElement,
   setGestureTransform,
@@ -76,7 +77,7 @@ export function screenToWorld(point = { x: 0, y: 0 }) {
   // Subtract stage layout offset so world coords line up with what you see.
   const stage = document.querySelector('main#board, #board, #world, .world, .canvas-world');
   if (stage?.getBoundingClientRect) {
-    const rect = stage.getBoundingClientRect();
+    const rect = getRect(stage);
     // IMPORTANT: rect.left/top already includes the current CSS transform translate.
     // So DO NOT also apply tx/ty here, or the mapping will invert / offset.
     const sx = screenX - rect.left;
@@ -102,7 +103,7 @@ export function worldToScreen(point = { x: 0, y: 0 }) {
   // Apply scale/translate then add stage layout offset so screen coords match DOM position.
   const stage = document.querySelector('main#board, #board, #world, .world, .canvas-world');
   if (stage?.getBoundingClientRect) {
-    const rect = stage.getBoundingClientRect();
+    const rect = getRect(stage);
     // rect.left/top already includes the current translate, so only apply scale here.
     return { x: worldX * safeScale + rect.left, y: worldY * safeScale + rect.top };
   }
@@ -308,7 +309,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
       if (window.__ZOOM_COMMIT_PHASE && stageRectCache) return stageRectCache;
     } catch {}
     if (zooming && fresh) return stageRectCache;
-    const rect = profileReflow('layoutOffset:getBoundingClientRect', () => stage.getBoundingClientRect());
+    const rect = profileReflow('layoutOffset:getBoundingClientRect', () => getRect(stage));
     stageRectCache = rect;
     stageRectCacheTs = now;
     return rect;
@@ -631,7 +632,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
 
   function zoomAt(clientX, clientY, factor, { commit = true, delayMs = 0 } = {}) {
     if (!Number.isFinite(factor) || factor === 0) return scale;
-    const rect = window.__mtZoomGesturing ? getStageRectCached() : profileReflow('zoomAt:getBoundingClientRect', () => stage.getBoundingClientRect());
+    const rect = window.__mtZoomGesturing ? getStageRectCached() : profileReflow('zoomAt:getBoundingClientRect', () => getRect(stage));
     const { scale: baseScale, x: baseX, y: baseY } = getActiveTransform();
     const targetScale = clampScale(baseScale * factor);
     if (!Number.isFinite(targetScale) || targetScale === baseScale) {
@@ -672,7 +673,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
       }));
     } catch {}
 
-    const rect = profileReflow('wheel:getBoundingClientRect', () => stage.getBoundingClientRect());
+    const rect = profileReflow('wheel:getBoundingClientRect', () => getRect(stage));
     const { x: baseX, y: baseY } = getActiveTransform();
     const layoutLeft = rect.left - baseX;
     const layoutTop = rect.top - baseY;
@@ -737,7 +738,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
   window.setBoardScale = (sc) => {
     cancelWheelCommit();
     const scaleValue = clampScale(Number(sc) || 1);
-    const rect = stage.getBoundingClientRect();
+    const rect = getRect(stage);
     const { scale: baseScale, x: baseX, y: baseY } = getActiveTransform();
     const centerX = rect.left + rect.width / 2;
     const centerY = rect.top + rect.height / 2;
@@ -822,8 +823,8 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
       Number.isFinite(z?.targetY) ? z.targetY :
       y;
     if (!Number.isFinite(s) || !Number.isFinite(tx) || !Number.isFinite(ty)) return null;
-    const boardRect = window.__mtZoomGesturing ? getStageRectCached() : profileReflow('worldCenter:boardRect', () => stage.getBoundingClientRect());
-    const elRect = window.__mtZoomGesturing ? targetEl.getBoundingClientRect?.() : profileReflow('worldCenter:elRect', () => targetEl.getBoundingClientRect());
+    const boardRect = window.__mtZoomGesturing ? getStageRectCached() : profileReflow('worldCenter:boardRect', () => getRect(stage));
+    const elRect = window.__mtZoomGesturing ? getRect(targetEl) : profileReflow('worldCenter:elRect', () => getRect(targetEl));
     if (!boardRect || !elRect || !Number.isFinite(elRect.width) || !Number.isFinite(elRect.height)) {
       try {
         if (window.__focusDebug || localStorage.getItem('FOCUS_DBG') === '1') {
@@ -938,7 +939,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     // This MUST be done only ONCE before the animation starts.
     // getLayoutOffset depends on getActiveTransform, which changes during animation.
     // By capturing the layout relative to the START of the animation, we get a stable target.
-    const rect = profileReflow('zoomPanToFinal:getBoundingClientRect', () => stage.getBoundingClientRect());
+    const rect = profileReflow('zoomPanToFinal:getBoundingClientRect', () => getRect(stage));
     const layoutLeft = rect.left - x0;
     const layoutTop = rect.top - y0;
 

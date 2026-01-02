@@ -10,6 +10,7 @@ import { createField } from './particles/field-generic.js';
 import { getParticleBudget, getAdaptiveFrameBudget } from './particles/ParticleQuality.js';
 import { overviewMode } from './overview-mode.js';
 import { boardScale as boardScaleHelper } from './board-scale-helpers.js';
+import { beginFrameLayoutCache, getRect } from './layout-cache.js';
 import { makeDebugLogger } from './debug-flags.js';
 import { startSection } from './perf-meter.js';
 
@@ -36,6 +37,16 @@ const DG_FRAME_PROFILE = false;
 const DG_FRAME_SLOW_THRESHOLD_MS = 10;
 
 // (moved into createDrawGrid - per-instance)
+// Overlay compositor mode (module-scope so helper functions can read it safely).
+const DG_SINGLE_CANVAS_OVERLAYS = (() => {
+  try {
+    if (typeof window !== 'undefined' && window.__DG_SINGLE_CANVAS_OVERLAYS !== undefined) {
+      return !!window.__DG_SINGLE_CANVAS_OVERLAYS;
+    }
+  } catch {}
+  return true;
+})();
+try { if (typeof window !== 'undefined') window.__DG_SINGLE_CANVAS_OVERLAYS = DG_SINGLE_CANVAS_OVERLAYS; } catch {}
 
 function perfMark(dtUpdate, dtDraw) {
   try {
@@ -977,7 +988,9 @@ function __dgMarkSingleCanvasDirty(panel) {
 function __dgMarkSingleCanvasOverlayDirty(panel) {
   if (!panel) return;
   panel.__dgCompositeOverlayDirty = true;
-  panel.__dgSingleCompositeDirty = true;
+  if (!DG_SINGLE_CANVAS_OVERLAYS) {
+    panel.__dgSingleCompositeDirty = true;
+  }
   __dgMaybeLogStall(panel, 'markDirty');
 }
 function __dgMarkSingleCanvasCompositeDirty(panel) {
@@ -1621,6 +1634,15 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
   // Layers (z-index order) — particles behind the art layers
   const DG_SINGLE_CANVAS = true;
+  const DG_SINGLE_CANVAS_OVERLAYS = (() => {
+    try {
+      if (typeof window !== 'undefined' && window.__DG_SINGLE_CANVAS_OVERLAYS !== undefined) {
+        return !!window.__DG_SINGLE_CANVAS_OVERLAYS;
+      }
+    } catch {}
+    return true;
+  })();
+  try { if (typeof window !== 'undefined') window.__DG_SINGLE_CANVAS_OVERLAYS = DG_SINGLE_CANVAS_OVERLAYS; } catch {}
   try { if (typeof window !== 'undefined') window.__DG_SINGLE_CANVAS = DG_SINGLE_CANVAS; } catch {}
   const DG_COMBINE_GRID_NODES = false;
   // TODO: consider single-canvas draw order (grid/nodes/overlays) after merge validation.
@@ -2330,7 +2352,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const nodesFrontCtx = nodesCanvas.getContext('2d', { willReadFrequently: true });
   const nodesBackCanvas = document.createElement('canvas');
   const nodesBackCtx = nodesBackCanvas.getContext('2d', { willReadFrequently: true });
-  let nctx = DG_SINGLE_CANVAS ? nodesBackCtx : nodesFrontCtx;
+  let nctx = (DG_SINGLE_CANVAS && DG_SINGLE_CANVAS_OVERLAYS && nodesCanvas !== grid)
+    ? nodesFrontCtx
+    : (DG_SINGLE_CANVAS ? nodesBackCtx : nodesFrontCtx);
 
   const flashFrontCtx = flashCanvas.getContext('2d', { willReadFrequently: true });
   const flashBackCanvas = document.createElement('canvas');
@@ -2363,7 +2387,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       if (!visible) el.style.opacity = '0';
     };
     const showGrid = !flat && !DG_SINGLE_CANVAS;
-    const showOverlay = !flat && !DG_SINGLE_CANVAS;
+    const showOverlay = !flat && (!DG_SINGLE_CANVAS || DG_SINGLE_CANVAS_OVERLAYS);
     // Keep the main paint canvas visible; hide auxiliary layers in flat mode.
     toggle(paint, true);
     toggle(grid, showGrid);
@@ -2374,9 +2398,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     toggle(particleCanvas, !flat);
     if (DG_SINGLE_CANVAS) {
       toggle(grid, false);
-      if (nodesCanvas !== grid) toggle(nodesCanvas, false);
-      toggle(ghostCanvas, false);
-      toggle(flashCanvas, false);
+      if (nodesCanvas !== grid) toggle(nodesCanvas, DG_SINGLE_CANVAS_OVERLAYS);
+      toggle(ghostCanvas, DG_SINGLE_CANVAS_OVERLAYS);
+      toggle(flashCanvas, DG_SINGLE_CANVAS_OVERLAYS);
     }
   }
   updateFlatLayerVisibility();
@@ -2604,6 +2628,15 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const tutorialBackCanvas = document.createElement('canvas');
   const tutorialBackCtx = tutorialBackCanvas.getContext('2d');
   let tutorialCtx = tutorialFrontCtx;
+  // Tag back-buffer canvases so helpers can resolve the owning panel.
+  try {
+    gridBackCanvas.__dgPanel = panel;
+    backCanvas.__dgPanel = panel;
+    nodesBackCanvas.__dgPanel = panel;
+    flashBackCanvas.__dgPanel = panel;
+    ghostBackCanvas.__dgPanel = panel;
+    tutorialBackCanvas.__dgPanel = panel;
+  } catch {}
 
   // ===== Paint lifecycle tracing (enable from console) =====
   // window.__DG_PAINT_TRACE = true
@@ -2865,8 +2898,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         const expW = (__dgLastResizeTargetW || (cssW ? Math.max(1, Math.round(cssW * paintDpr)) : 0));
         const expH = (__dgLastResizeTargetH || (cssH ? Math.max(1, Math.round(cssH * paintDpr)) : 0));
         if (frontCanvas && expW && expH) {
-          const rectW = Math.max(1, Math.round(frontCanvas.getBoundingClientRect().width));
-          const rectH = Math.max(1, Math.round(frontCanvas.getBoundingClientRect().height));
+          const rect = getRect(frontCanvas);
+          const rectW = Math.max(1, Math.round(rect?.width || 0));
+          const rectH = Math.max(1, Math.round(rect?.height || 0));
           const looksLikeScaledRect = (frontCanvas.width === rectW && frontCanvas.height === rectH && (rectW !== expW || rectH !== expH));
           const wrongBackingStore = (frontCanvas.width !== expW || frontCanvas.height !== expH);
           if (wrongBackingStore && looksLikeScaledRect) {
@@ -5044,6 +5078,9 @@ function syncBackBufferSizes() {
     if (!__dgGridReady()) return;
     const surface = frontCtx.canvas;
     if (!surface || !surface.width || !surface.height) return;
+    if (!panel.__dgSingleCompositeDirty && !panel.__dgCompositeBaseDirty && !panel.__dgCompositeOverlayDirty) {
+      return;
+    }
     const __perfOn = !!(window.__PerfFrameProf && typeof performance !== 'undefined' && performance.now);
     dgGridAlphaLog('composite:begin', frontCtx);
     __dgLayerTrace('composite:enter', {
@@ -5121,7 +5158,7 @@ function syncBackBufferSizes() {
         }
       }
       const flashSource = getActiveFlashCanvas();
-      if (!panel.__dgFlashLayerEmpty && flashSource && flashSource.width && flashSource.height) {
+      if (!DG_SINGLE_CANVAS_OVERLAYS && !panel.__dgFlashLayerEmpty && flashSource && flashSource.width && flashSource.height) {
         const __flashStart = __perfOn ? performance.now() : 0;
         const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
         const allowFullFlash = !!panel.__dgFlashOverlayOutOfGrid;
@@ -5161,32 +5198,34 @@ function syncBackBufferSizes() {
           try { window.__PerfFrameProf?.mark?.('drawgrid.composite.flash', performance.now() - __flashStart); } catch {}
         }
       }
-      const nodesFrontCanvas = nodesFrontCtx?.canvas;
-      const nodeSources = [];
-      if (nodesBackCanvas && nodesBackCanvas.width && nodesBackCanvas.height) {
-        nodeSources.push(nodesBackCanvas);
-      }
-      if (
-        nodesFrontCanvas &&
-        nodesFrontCanvas !== nodesBackCanvas &&
-        nodesFrontCanvas.width &&
-        nodesFrontCanvas.height
-      ) {
-        nodeSources.push(nodesFrontCanvas);
-      }
-      for (const nodeCanvas of nodeSources) {
-        const __nodesStart = __perfOn ? performance.now() : 0;
-        frontCtx.drawImage(
-          nodeCanvas,
-          0, 0, nodeCanvas.width, nodeCanvas.height,
-          0, 0, width, height
-        );
-        if (__perfOn && __nodesStart) {
-          try { window.__PerfFrameProf?.mark?.('drawgrid.composite.nodes', performance.now() - __nodesStart); } catch {}
+      if (!DG_SINGLE_CANVAS_OVERLAYS) {
+        const nodesFrontCanvas = nodesFrontCtx?.canvas;
+        const nodeSources = [];
+        if (nodesBackCanvas && nodesBackCanvas.width && nodesBackCanvas.height) {
+          nodeSources.push(nodesBackCanvas);
+        }
+        if (
+          nodesFrontCanvas &&
+          nodesFrontCanvas !== nodesBackCanvas &&
+          nodesFrontCanvas.width &&
+          nodesFrontCanvas.height
+        ) {
+          nodeSources.push(nodesFrontCanvas);
+        }
+        for (const nodeCanvas of nodeSources) {
+          const __nodesStart = __perfOn ? performance.now() : 0;
+          frontCtx.drawImage(
+            nodeCanvas,
+            0, 0, nodeCanvas.width, nodeCanvas.height,
+            0, 0, width, height
+          );
+          if (__perfOn && __nodesStart) {
+            try { window.__PerfFrameProf?.mark?.('drawgrid.composite.nodes', performance.now() - __nodesStart); } catch {}
+          }
         }
       }
       const ghostSource = getActiveGhostCanvas();
-      if (!panel.__dgGhostLayerEmpty && ghostSource && ghostSource.width && ghostSource.height) {
+      if (!DG_SINGLE_CANVAS_OVERLAYS && !panel.__dgGhostLayerEmpty && ghostSource && ghostSource.width && ghostSource.height) {
         const __ghostStart = __perfOn ? performance.now() : 0;
         frontCtx.drawImage(
           ghostSource,
@@ -5198,7 +5237,7 @@ function syncBackBufferSizes() {
         }
       }
       const tutorialSource = getActiveTutorialCanvas();
-      if (!panel.__dgTutorialLayerEmpty && tutorialSource && tutorialSource.width && tutorialSource.height) {
+      if (!DG_SINGLE_CANVAS_OVERLAYS && !panel.__dgTutorialLayerEmpty && tutorialSource && tutorialSource.width && tutorialSource.height) {
         const __tutorialStart = __perfOn ? performance.now() : 0;
         frontCtx.drawImage(
           tutorialSource,
@@ -7644,6 +7683,7 @@ function syncBackBufferSizes() {
     try {
       if (!panel.__dgFrame) panel.__dgFrame = 0;
       panel.__dgFrame++;
+      beginFrameLayoutCache(panel.__dgFrame);
       if (!panel.__dgGridAlphaSeen) {
         panel.__dgGridAlphaSeen = true;
         try {
@@ -7953,7 +7993,7 @@ function syncBackBufferSizes() {
         rafId = requestAnimationFrame(renderLoop);
         return;
       }
-      if (DG_SINGLE_CANVAS) {
+      if (DG_SINGLE_CANVAS && !DG_SINGLE_CANVAS_OVERLAYS) {
         if (flashCanvas?.style?.display !== 'none') flashCanvas.style.display = 'none';
         if (ghostCanvas?.style?.display !== 'none') ghostCanvas.style.display = 'none';
       }
