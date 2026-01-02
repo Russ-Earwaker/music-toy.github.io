@@ -371,6 +371,8 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     zoomForDensity: 1,
     lastZoomRebuildTs: 0,
     wasHidden: false,
+    clipRect: null,
+    clipDirty: false,
   };
   const baseSizePx = config.sizePx;
   const PARTICLE_HIGHLIGHT_DURATION = 900; // ms
@@ -684,7 +686,20 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
   }
 
   function draw() {
-    ctx.clearRect(0, 0, state.w, state.h);
+    const clip = state.clipRect;
+    if (clip && clip.w > 0 && clip.h > 0) {
+      if (state.clipDirty) {
+        ctx.clearRect(0, 0, state.w, state.h);
+        state.clipDirty = false;
+      }
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(clip.x, clip.y, clip.w, clip.h);
+      ctx.clip();
+      ctx.clearRect(clip.x, clip.y, clip.w, clip.h);
+    } else {
+      ctx.clearRect(0, 0, state.w, state.h);
+    }
 
     // Canvas is sized from getBoundingClientRect (CSS space), so use screen-px radius directly.
     const fallbackRadiusPx = config.sizePx ?? BASE_RADIUS_PX;
@@ -787,6 +802,9 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
       }
     }
     ctx.globalAlpha = 1;
+    if (clip && clip.w > 0 && clip.h > 0) {
+      ctx.restore();
+    }
   }
 
     function tick(dt = 1 / 60) {
@@ -807,14 +825,7 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
           setLODFromView();
         });
     const gestureActive = isZoomGesturing();
-    const allowGestureThrottle = canGestureThrottle();
-    const gestureThrottlingActive = gestureActive && allowGestureThrottle && (() => {
-      try {
-        if (typeof opts.gestureThrottle === 'boolean') return opts.gestureThrottle;
-        if (typeof opts.gestureThrottleRef === 'function') return !!opts.gestureThrottleRef();
-      } catch {}
-      return true;
-    })();
+    const gestureThrottlingActive = false;
     if (state.emergencyFade) {
       // Allow emergency fades to progress even during heavy gestures.
       state.gestureSkip = 0;
@@ -834,58 +845,7 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
       } catch {}
     }
 
-    // Real policy: during pan/zoom, freeze particle fields for unfocused toys.
-    // (Diagnostic modulo can still run below if enabled.)
-    const shouldFreezeUnfocusedDuringGesture = (() => {
-      try {
-        if (typeof opts.freezeUnfocusedDuringGesture === 'boolean') return opts.freezeUnfocusedDuringGesture;
-        if (typeof opts.freezeUnfocusedDuringGestureRef === 'function') return !!opts.freezeUnfocusedDuringGestureRef();
-        return readPerfFreezeUnfocused();
-      } catch {
-        return readPerfFreezeUnfocused();
-      }
-    })();
-
-    if (gestureThrottlingActive && shouldFreezeUnfocusedDuringGesture && !state.emergencyFade) {
-      try {
-        const focusRef = (typeof opts.isFocusedRef === 'function')
-          ? opts.isFocusedRef
-          : (typeof isFocusedRef === 'function' ? isFocusedRef : null);
-        const focused = focusRef ? !!focusRef() : false;
-        if (!focused) {
-          if (shouldLogFreeze()) {
-            const now = performance?.now?.() ?? Date.now();
-            if (!state.lastFreezeLog || (now - state.lastFreezeLog) > 800) {
-              state.lastFreezeLog = now;
-              try { fieldLog('[Field][freeze] skipping unfocused during gesture', { label: fieldLabel }); } catch {}
-            }
-          }
-          return;
-        }
-      } catch {}
-    }
-
-    // PerfLab diagnostic: during gesture, only allow 1/N fields to tick fully.
-    // This tests whether "too many canvases updating at once" is the main pan/zoom multiplier.
-    if (gestureThrottlingActive && !state.emergencyFade) {
-      const fm = readPerfGestureFieldModulo();
-      if (fm > 1) {
-        const k = ((fieldId % fm) | 0);
-        // Use a global frame counter so the "active bucket" rotates over time.
-        const g = (window.__PERF_GESTURE_FIELD_FRAME = ((window.__PERF_GESTURE_FIELD_FRAME || 0) + 1) | 0);
-        const activeBucket = (g % fm) | 0;
-        if (k !== activeBucket) {
-          // Do nothing: no fades, no cleanup, no draw.
-          return;
-        }
-      }
-    }
-
-    // During active pan/zoom, clamp LOD BEFORE reconcile so particle count actually drops.
-    if (gestureThrottlingActive) {
-      state.lodScale = Math.min(state.lodScale || 1, 0.35);
-      state.capScale = Math.min(state.capScale || 1, 0.6);
-    }
+    // Gestures no longer freeze particle fields; LOD + fade handles perf instead.
     let skipUpdate = false;
     let skipDraw = false;
     try {
@@ -1363,6 +1323,27 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     config,
   });
 
+  function setClipRect(rect) {
+    if (!rect || !Number.isFinite(rect.x) || !Number.isFinite(rect.y) || !Number.isFinite(rect.w) || !Number.isFinite(rect.h) || rect.w <= 0 || rect.h <= 0) {
+      if (state.clipRect) {
+        state.clipRect = null;
+        state.clipDirty = true;
+      }
+      return;
+    }
+    const next = {
+      x: Math.max(0, Math.round(rect.x)),
+      y: Math.max(0, Math.round(rect.y)),
+      w: Math.max(0, Math.round(rect.w)),
+      h: Math.max(0, Math.round(rect.h)),
+    };
+    const prev = state.clipRect;
+    if (!prev || prev.x !== next.x || prev.y !== next.y || prev.w !== next.w || prev.h !== next.h) {
+      state.clipRect = next;
+      state.clipDirty = true;
+    }
+  }
+
   return {
     tick,
     pulse,
@@ -1372,6 +1353,7 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     pushDirectional,
     setStyle,
     applyBudget,
+    setClipRect,
     resetHome,
     canvas,
     _state: state,

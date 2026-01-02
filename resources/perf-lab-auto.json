@@ -2,6 +2,9 @@
   "queue": [
     "buildP3",
     "runP3fParticleProfile",
+    "runP3fNoGrid",
+    "runP3fNoParticles",
+    "runP3fNoOverlays",
     "runP3fMixedSomeEmpty"
   ],
   "notes": "P3f drawgrid pan/zoom baseline plus mixed run (mostly full + some empty).",

@@ -77,12 +77,20 @@ function __dgIsGesturing() {
 }
 
 function getGlobalAdaptiveState() {
+  return globalDrawgridState?.__adaptiveShared?.value || null;
+}
+
+function __dgAdaptiveTickMs() {
+  return __dgIsGesturing() ? DG_ADAPTIVE_SHARED_GESTURE_MS : DG_ADAPTIVE_SHARED_MIN_MS;
+}
+
+function updateAdaptiveShared(force = false) {
   const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
     ? performance.now()
     : Date.now();
   const shared = globalDrawgridState.__adaptiveShared || { ts: 0, value: null };
-  const minMs = __dgIsGesturing() ? DG_ADAPTIVE_SHARED_GESTURE_MS : DG_ADAPTIVE_SHARED_MIN_MS;
-  if (shared.value && (now - shared.ts) < minMs) {
+  const minMs = __dgAdaptiveTickMs();
+  if (!force && shared.value && (now - shared.ts) < minMs) {
     return shared.value;
   }
   if (
@@ -92,6 +100,8 @@ function getGlobalAdaptiveState() {
     Math.abs(shared.value.smoothedFps - shared.lastFps) < DG_ADAPTIVE_FPS_DELTA_MIN &&
     (now - shared.ts) < (minMs * 2)
   ) {
+    shared.ts = now;
+    globalDrawgridState.__adaptiveShared = shared;
     return shared.value;
   }
   let value = null;
@@ -108,6 +118,20 @@ function getGlobalAdaptiveState() {
   globalDrawgridState.__adaptiveShared = shared;
   return shared.value || value;
 }
+
+function startAdaptiveSharedTicker() {
+  if (typeof window === 'undefined') return;
+  if (globalDrawgridState.__adaptiveTimer) return;
+  const tick = () => {
+    updateAdaptiveShared(false);
+    const delay = __dgAdaptiveTickMs();
+    globalDrawgridState.__adaptiveTimer = setTimeout(tick, delay);
+  };
+  globalDrawgridState.__adaptiveTimer = setTimeout(tick, __dgAdaptiveTickMs());
+  updateAdaptiveShared(true);
+}
+
+try { startAdaptiveSharedTicker(); } catch {}
 
 function __dgGestureDrawModulo() {
   // Base modulo from perf toggles (stress harness)
@@ -804,6 +828,57 @@ function withLogicalSpace(ctx, fn) {
   }
 }
 
+const __dgPlayheadBandSpriteCache = new Map();
+const __dgPlayheadLineSpriteCache = new Map();
+function __dgCachePlayheadSprite(map, key, build) {
+  let sprite = map.get(key);
+  if (sprite) return sprite;
+  sprite = build();
+  map.set(key, sprite);
+  if (map.size > 24) {
+    map.clear();
+  }
+  return sprite;
+}
+function getPlayheadBandSprite(width, height, hue) {
+  const w = Math.max(1, Math.round(width || 0));
+  const h = Math.max(1, Math.round(height || 0));
+  const hueKey = Math.round(Number.isFinite(hue) ? hue : 0);
+  const key = `${w}x${h}|${hueKey}`;
+  return __dgCachePlayheadSprite(__dgPlayheadBandSpriteCache, key, () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    const midColor = `hsla(${(hueKey + 45)}, 100%, 70%, 0.25)`;
+    const grad = ctx.createLinearGradient(0, 0, w, 0);
+    grad.addColorStop(0, 'rgba(0,0,0,0)');
+    grad.addColorStop(0.5, midColor);
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+    return canvas;
+  });
+}
+function getPlayheadLineSprite(height, hue) {
+  const h = Math.max(1, Math.round(height || 0));
+  const hueKey = Math.round(Number.isFinite(hue) ? hue : 0);
+  const key = `${h}|${hueKey}`;
+  return __dgCachePlayheadSprite(__dgPlayheadLineSpriteCache, key, () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, `hsl(${hueKey}, 100%, 70%)`);
+    grad.addColorStop(0.5, `hsl(${(hueKey + 45) % 360}, 100%, 70%)`);
+    grad.addColorStop(1, `hsl(${(hueKey + 90) % 360}, 100%, 68%)`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 1, h);
+    return canvas;
+  });
+}
+
 function getOverlayClearPad() {
   try {
     const lw = (typeof getLineWidth === 'function') ? getLineWidth() : 0;
@@ -829,6 +904,23 @@ function getOverlayClearRect({ canvas, pad = 0, allowFull = false, gridArea: gri
   if (Number.isFinite(maxW) && maxW > 0 && (x + w) > maxW) w = Math.max(0, maxW - x);
   if (Number.isFinite(maxH) && maxH > 0 && (y + h) > maxH) h = Math.max(0, maxH - y);
   return { x, y, w, h };
+}
+
+function withOverlayClip(ctx, gridArea, allowFull, fn) {
+  if (!ctx || typeof fn !== 'function') return;
+  const hasGrid = !!(gridArea && gridArea.w > 0 && gridArea.h > 0);
+  if (allowFull || !hasGrid) {
+    return fn();
+  }
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(gridArea.x, gridArea.y, gridArea.w, gridArea.h);
+  ctx.clip();
+  try {
+    return fn();
+  } finally {
+    ctx.restore();
+  }
 }
 
 function drawGhostDebugBand(ctx, band) {
@@ -2346,12 +2438,13 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
           // We only freeze unfocused panels during gestures when the scene is busy.
           isFocusedRef: () => !!panel?.classList?.contains('toy-focused'),
           freezeUnfocusedDuringGestureRef: () => {
-            const visiblePanels = Math.max(0, Number(globalDrawgridState?.visibleCount) || 0);
-            return visiblePanels >= 4;
+            return false;
           },
           gestureThrottleRef: () => {
             const visiblePanels = Math.max(0, Number(globalDrawgridState?.visibleCount) || 0);
-            return visiblePanels >= 4;
+            const now = performance?.now?.() ?? Date.now();
+            const moving = !!(__lastZoomMotionTs && (now - __lastZoomMotionTs) < ZOOM_STALL_MS);
+            return moving && visiblePanels >= 4;
           },
         }
       );
@@ -2367,7 +2460,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
           dgField.applyBudget({
             maxCountScale,
             capScale: pb.capScale ?? 1,
-            tickModulo: pb.tickModulo ?? 1,
+            tickModulo: 1,
             sizeScale: pb.sizeScale ?? 1,
           });
         }
@@ -3132,11 +3225,10 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     return false;
   }
   function headerPushSuppressed() {
-    const now = nowMs();
-    if (allowHeaderPushDuringGesture()) return false;
-    const midGesture = zoomGestureActive;
-    const inMotionCooldown = __lastZoomMotionTs && (now - __lastZoomMotionTs) < HEADER_PUSH_SUPPRESS_MS;
-    return midGesture || inMotionCooldown || (now < suppressHeaderPushUntil);
+    try {
+      if (window.__PERF_FORCE_HEADER_SUPPRESS) return true;
+    } catch {}
+    return false;
   }
   let __lastZoomEventTs = 0;
   let __lastZoomSnapshot = extractZoomSnapshot(initialZoomState);
@@ -4953,7 +5045,7 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
     nctx = nodesBackCtx;
     if (DG_SINGLE_CANVAS) {
       gctx = gridBackCtx;
-      nctx = nodesBackCtx;
+      nctx = (DG_SINGLE_CANVAS_OVERLAYS && nodesCanvas !== grid) ? nodesFrontCtx : nodesBackCtx;
     }
     fctx = flashBackCtx;
     ghostCtx = ghostBackCtx;
@@ -4968,7 +5060,7 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
     nctx = nodesFrontCtx;
     if (DG_SINGLE_CANVAS) {
       gctx = gridBackCtx;
-      nctx = nodesBackCtx;
+      nctx = (DG_SINGLE_CANVAS_OVERLAYS && nodesCanvas !== grid) ? nodesFrontCtx : nodesBackCtx;
     }
     fctx = flashFrontCtx;
     ghostCtx = ghostFrontCtx;
@@ -5920,6 +6012,10 @@ function syncBackBufferSizes() {
   }
 
   function drawGrid(){
+    if (typeof window !== 'undefined' && window.__PERF_DG_DISABLE_GRID) {
+      panel.__dgGridHasPainted = false;
+      return;
+    }
     if (!__dgGridReady()) {
       dgGridAlphaLog('drawGrid:skip-not-ready', gctx, {
         gridArea: gridArea ? { ...gridArea } : null,
@@ -7672,7 +7768,8 @@ function syncBackBufferSizes() {
     ) {
       return __dgParticleStateCache.value;
     }
-    const adaptive = getGlobalAdaptiveState();
+    let adaptive = getGlobalAdaptiveState();
+    if (!adaptive) adaptive = updateAdaptiveShared(true);
     const particleBudget = adaptive?.particleBudget;
     const threshold = Number.isFinite(overviewState?.state?.zoomThreshold) ? overviewState.state.zoomThreshold : 0.36;
     const zoomTooWide = Number.isFinite(boardScaleValue) && boardScaleValue < threshold;
@@ -7684,6 +7781,7 @@ function syncBackBufferSizes() {
     // Keep fields on, but thin them out when many panels are visible.
     // Do not vary by focus state so particles feel consistent across panels.
     particleFieldEnabled = !!allowField && !inOverview && !zoomTooWide;
+    panel.__dgParticleStateFlags = { inOverview, zoomTooWide };
 
     if (dgField && typeof dgField.applyBudget === 'function' && particleBudget) {
       const round = (v) => Math.round((Number.isFinite(v) ? v : 0) * 10000) / 10000;
@@ -7732,7 +7830,7 @@ function syncBackBufferSizes() {
           spawnScale,
           minCount: __dgLowFpsMode ? 0 : undefined,
           emergencyFade: __dgLowFpsMode,
-          emergencyFadeSeconds: 5,
+          emergencyFadeSeconds: 2.2,
         });
       }
     }
@@ -7746,9 +7844,12 @@ function syncBackBufferSizes() {
   let __dgParticleZoomThrottleWarned = false;
   let __dgParticlePokeTs = 0;
   let __dgPlayheadSimpleMode = false;
+  let __dgPlayheadModeWanted = null;
+  let __dgPlayheadModeWantedSince = 0;
   let __dgLowFpsMode = false;
   const DG_PARTICLE_ZOOM_THROTTLE_WARN_MS = 250;
   const DG_PARTICLE_POKE_GRACE_MS = 220;
+  const DG_PLAYHEAD_MODE_MIN_MS = 650;
 
   function getChainHasNotesCached(panel, hasActiveNotes) {
     if (!panel) return hasActiveNotes;
@@ -7861,16 +7962,42 @@ function syncBackBufferSizes() {
 
       // Update per-panel LOD state from global FPS + zoom.
       const __adaptiveStart = __perfOn ? performance.now() : 0;
-      const adaptiveState = updatePanelParticleState(boardScaleValue, isPanelVisible);
+      const overviewState = (typeof window !== 'undefined' && window.__overviewMode) ? window.__overviewMode : { isActive: () => false, state: { zoomThreshold: 0.36 } };
+      const inOverview = !!overviewState?.isActive?.();
+      const threshold = Number.isFinite(overviewState?.state?.zoomThreshold) ? overviewState.state.zoomThreshold : 0.36;
+      const zoomTooWide = Number.isFinite(boardScaleValue) && boardScaleValue < threshold;
+      const flags = panel.__dgParticleStateFlags || {};
+      const flagsChanged = (flags.inOverview !== inOverview) || (flags.zoomTooWide !== zoomTooWide);
+      const sharedTs = globalDrawgridState?.__adaptiveShared?.ts || 0;
+      let adaptiveState = null;
+      if (!flagsChanged && panel.__dgLastAdaptiveSharedTs === sharedTs) {
+        adaptiveState = panel.__dgParticleStateCache?.value || getGlobalAdaptiveState();
+      } else {
+        panel.__dgLastAdaptiveSharedTs = sharedTs;
+        adaptiveState = updatePanelParticleState(boardScaleValue, isPanelVisible);
+      }
       __dgLowFpsMode = !!adaptiveState?.emergencyMode;
       const fpsSample = Number.isFinite(adaptiveState?.smoothedFps)
         ? adaptiveState.smoothedFps
         : (Number.isFinite(adaptiveState?.fps) ? adaptiveState.fps : null);
-      if (Number.isFinite(fpsSample)) {
-        if (__dgPlayheadSimpleMode) {
-          if (fpsSample >= DG_PLAYHEAD_FPS_SIMPLE_EXIT) __dgPlayheadSimpleMode = false;
-        } else if (fpsSample <= DG_PLAYHEAD_FPS_SIMPLE_ENTER) {
-          __dgPlayheadSimpleMode = true;
+      const fpsLive = Number.isFinite(fpsSample)
+        ? fpsSample
+        : (Number.isFinite(__dgFpsValue) ? __dgFpsValue : null);
+      if (Number.isFinite(fpsLive)) {
+        let desiredSimple = null;
+        if (fpsLive <= DG_PLAYHEAD_FPS_SIMPLE_ENTER) {
+          desiredSimple = true;
+        } else if (fpsLive >= DG_PLAYHEAD_FPS_SIMPLE_EXIT) {
+          desiredSimple = false;
+        }
+        if (desiredSimple !== null && desiredSimple !== __dgPlayheadSimpleMode) {
+          if (__dgPlayheadModeWanted !== desiredSimple) {
+            __dgPlayheadModeWanted = desiredSimple;
+            __dgPlayheadModeWantedSince = nowTs;
+          }
+        } else if (desiredSimple === null) {
+          __dgPlayheadModeWanted = null;
+          __dgPlayheadModeWantedSince = 0;
         }
       }
       if (__perfOn && __adaptiveStart) {
@@ -7896,6 +8023,7 @@ function syncBackBufferSizes() {
       // Extra throttling for "idle" panels when lots of toys are visible.
       const visiblePanels = Math.max(0, Number(globalDrawgridState?.visibleCount) || 0);
       const gesturing = __dgIsGesturing();
+      const gestureMoving = !!(gesturing && __lastZoomMotionTs && (nowTs - __lastZoomMotionTs) < ZOOM_STALL_MS);
       const isFocused = panel.classList?.contains('toy-focused') || panel.classList?.contains('focused');
       const isZoomed = panel.classList?.contains('toy-zoomed');
       const hasAnyNotes = !!(currentMap && currentMap.active && currentMap.active.some(Boolean));
@@ -7954,10 +8082,11 @@ function syncBackBufferSizes() {
         effectiveRenderEvery = Math.max(effectiveRenderEvery, 3);
       }
 
+      const disableOverlays = !!(typeof window !== 'undefined' && window.__PERF_DG_DISABLE_OVERLAYS);
       // Overlays (notes, playhead, flashes) respect visibility & hydrations guard,
       // but are otherwise always on - they're core UX.
       const __overlayGateStart = __perfOn ? performance.now() : 0;
-      const allowOverlayDraw = canDrawAnything;
+      const allowOverlayDraw = canDrawAnything && !disableOverlays;
       const disableOverlayStrokes = !!(typeof window !== 'undefined' && window.__PERF_DG_OVERLAY_STROKES_OFF);
       let hasOverlayStrokes = false;
       if (allowOverlayDraw && !disableOverlayStrokes) {
@@ -7976,7 +8105,7 @@ function syncBackBufferSizes() {
         : (transportRunning && (isChained ? (isActiveInChain && chainHasNotes) : hasActiveNotes));
       const overlayActive = allowOverlayDraw && (hasOverlayFx || overlayTransport || hasOverlayStrokesLive || (cur && previewGid));
       let overlayEvery = 1;
-      if (gesturing && visiblePanels >= 6 && !isFocused) {
+      if (gestureMoving && visiblePanels >= 6 && !isFocused) {
         overlayEvery = (visiblePanels >= 18) ? 4 : (visiblePanels >= 12) ? 3 : 2;
       }
       if (overlayEvery > 1) {
@@ -8027,15 +8156,17 @@ function syncBackBufferSizes() {
       // Particle field visibility is driven by global allow/overview/zoom state.
       // Do NOT toggle visibility just because we're in a brief commit window; that caused resets on pan/zoom release.
       const __particlePrepStart = __perfOn ? performance.now() : 0;
+      const disableParticles = !!(typeof window !== 'undefined' && window.__PERF_DG_DISABLE_PARTICLES);
       const particleStateAllowed =
         DRAWGRID_ENABLE_PARTICLE_FIELD &&
         !zoomDebugFreeze &&
         particleFieldEnabled;
 
       const zoomGesturing = (typeof window !== 'undefined' && window.__mtZoomGesturing === true);
+      const zoomGestureMoving = !!(zoomGesturing && __lastZoomMotionTs && (nowTs - __lastZoomMotionTs) < ZOOM_STALL_MS);
       // Only throttle particles during zoom if the scene is busy.
       // With 1-2 toys, keep particles running for responsiveness.
-      const shouldThrottleForZoom = zoomGesturing && (visiblePanels >= 4);
+      const shouldThrottleForZoom = zoomGestureMoving && (visiblePanels >= 4);
       if (shouldThrottleForZoom) {
         if (!__dgParticleZoomThrottleSince) __dgParticleZoomThrottleSince = nowTs;
         if (!__dgParticleZoomThrottleWarned && (nowTs - __dgParticleZoomThrottleSince) > DG_PARTICLE_ZOOM_THROTTLE_WARN_MS) {
@@ -8050,13 +8181,14 @@ function syncBackBufferSizes() {
       const recentPoke = Number.isFinite(__dgParticlePokeTs) && (nowTs - __dgParticlePokeTs) <= DG_PARTICLE_POKE_GRACE_MS;
       const emergencyMode = !!adaptiveState?.emergencyMode;
       const allowParticleDraw =
+        !disableParticles &&
         particleStateAllowed &&
-        canDrawAnything &&
+        isPanelVisible &&
         (!shouldThrottleForZoom || recentPoke || emergencyMode);
       const skipDomUpdates =
         !!(typeof window !== 'undefined' && window.__PERF_NO_DOM_UPDATES) &&
         (typeof window !== 'undefined' && window.__mtZoomGesturing === true);
-      const nextParticleVisible = !!particleStateAllowed;
+      const nextParticleVisible = !!particleStateAllowed && !disableParticles;
       if (!skipDomUpdates && particleCanvas && particleCanvasVisible !== nextParticleVisible) {
         const __particleToggleStart = __perfOn ? performance.now() : 0;
         particleCanvasVisible = nextParticleVisible;
@@ -8073,6 +8205,24 @@ function syncBackBufferSizes() {
       }
       if (__perfOn && __particlePrepStart) {
         try { window.__PerfFrameProf?.mark?.('drawgrid.render.particles', performance.now() - __particlePrepStart); } catch {}
+      }
+
+      if (dgField) {
+        if (!disableParticles && gridArea && gridArea.w > 0 && gridArea.h > 0 && cssW > 0 && cssH > 0) {
+          const pad = 6;
+          const x = Math.max(0, gridArea.x - pad);
+          const y = Math.max(0, gridArea.y - pad);
+          const w = Math.max(0, Math.min(cssW - x, gridArea.w + pad * 2));
+          const h = Math.max(0, Math.min(cssH - y, gridArea.h + pad * 2));
+          const key = `${Math.round(x)}|${Math.round(y)}|${Math.round(w)}|${Math.round(h)}`;
+          if (panel.__dgParticleClipKey !== key) {
+            panel.__dgParticleClipKey = key;
+            try { dgField.setClipRect({ x, y, w, h }); } catch {}
+          }
+        } else if (panel.__dgParticleClipKey) {
+          panel.__dgParticleClipKey = '';
+          try { dgField.setClipRect(null); } catch {}
+        }
       }
 
       // If we're offscreen and nothing is pending (no swaps or deferred clears),
@@ -8125,9 +8275,9 @@ function syncBackBufferSizes() {
       __dgFrameIdx++;
       const mod = __dgGestureDrawModulo();
       let drawModulo = mod;
-      if (gesturing && !isFocused && visiblePanels >= 6) drawModulo = Math.max(drawModulo, 2);
-      if (gesturing && !isFocused && visiblePanels >= 12) drawModulo = Math.max(drawModulo, 3);
-      if (gesturing && !isFocused && visiblePanels >= 18) drawModulo = Math.max(drawModulo, 4);
+      if (gestureMoving && !isFocused && visiblePanels >= 6) drawModulo = Math.max(drawModulo, 2);
+      if (gestureMoving && !isFocused && visiblePanels >= 12) drawModulo = Math.max(drawModulo, 3);
+      if (gestureMoving && !isFocused && visiblePanels >= 18) drawModulo = Math.max(drawModulo, 4);
       let doFullDraw = (!gesturing) || drawModulo <= 1 || ((__dgFrameIdx % drawModulo) === 0);
       let forceFullDraw = false;
       if (__dgForceFullDrawNext) {
@@ -8572,6 +8722,7 @@ function syncBackBufferSizes() {
               flashVisible: flashCanvas?.style?.display || null,
             });
             markFlashLayerActive();
+            withOverlayClip(fctx, gridArea, !!panel.__dgFlashOverlayOutOfGrid, () => {
             fctx.save();
             // Draw animated strokes with device transform
             // Draw demoted colorized strokes as static overlay tints
@@ -8698,6 +8849,7 @@ function syncBackBufferSizes() {
               }
             }
             fctx.restore();
+            });
           }
         if (__overlayStrokeStart) {
           const __overlayStrokeDt = performance.now() - __overlayStrokeStart;
@@ -8769,6 +8921,7 @@ function syncBackBufferSizes() {
               overlayCompositeNeeded = true;
               markFlashLayerActive();
               // Draw cell flashes
+              withOverlayClip(fctx, gridArea, false, () => {
               fctx.save();
           for (let i = cellFlashes.length - 1; i >= 0; i--) {
             const flash = cellFlashes[i];
@@ -8785,6 +8938,7 @@ function syncBackBufferSizes() {
             }
           }
           fctx.restore();
+              });
         } else {
           for (let i = cellFlashes.length - 1; i >= 0; i--) {
             const flash = cellFlashes[i];
@@ -8818,6 +8972,7 @@ function syncBackBufferSizes() {
           const __noteToggleStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
             ? performance.now()
             : 0;
+          withOverlayClip(fctx, gridArea, false, () => {
           fctx.save();
           for (let i = noteToggleEffects.length - 1; i >= 0; i--) {
             const effect = noteToggleEffects[i];
@@ -8837,6 +8992,7 @@ function syncBackBufferSizes() {
             fctx.stroke();
           }
           fctx.restore();
+          });
           if (__dgOverlayStart) {
             const __dgOverlayDt = performance.now() - __dgOverlayStart;
             try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.toggles', __dgOverlayDt); } catch {}
@@ -8890,6 +9046,7 @@ function syncBackBufferSizes() {
             const __dgOverlayStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
               ? performance.now()
               : 0;
+            withOverlayClip(fctx, gridArea, false, () => {
             fctx.save();
             markFlashLayerActive();
             fctx.globalCompositeOperation = 'lighter';
@@ -8932,6 +9089,7 @@ function syncBackBufferSizes() {
               }
             }
             fctx.restore();
+            });
             if (__dgOverlayStart) {
               const __dgOverlayDt = performance.now() - __dgOverlayStart;
               try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.bursts', __dgOverlayDt); } catch {}
@@ -8971,6 +9129,14 @@ function syncBackBufferSizes() {
         if (currentPhase != null) {
           localLastPhase = currentPhase;
         }
+        if (__dgPlayheadModeWanted !== null && phaseJustWrapped) {
+          const modeNow = performance?.now?.() ?? Date.now();
+          if ((modeNow - __dgPlayheadModeWantedSince) >= DG_PLAYHEAD_MODE_MIN_MS) {
+            __dgPlayheadSimpleMode = __dgPlayheadModeWanted;
+            __dgPlayheadModeWanted = null;
+            __dgPlayheadModeWantedSince = 0;
+          }
+        }
 
       // Only draw and repulse particles if transport is running and this toy is the active one in its chain.
       // If this toy thinks it's active, but the global transport phase just wrapped,
@@ -8978,9 +9144,18 @@ function syncBackBufferSizes() {
       // to wait for the scheduler to update the `data-chain-active` attribute.
       const probablyStale = isActiveInChain && phaseJustWrapped;
 
-        const playheadSimpleOnly = !allowOverlayDrawHeavy || __dgPlayheadSimpleMode;
+        const playheadSimpleOnly = __dgPlayheadSimpleMode;
+        const playheadFpsHint = readHeaderFpsHint();
+        const allowPlayheadLowZoom = Number.isFinite(playheadFpsHint) && playheadFpsHint >= 55;
+        const playheadFancyDesired = !playheadSimpleOnly &&
+          (zoomForOverlay > 0.75 || allowPlayheadLowZoom);
+        if (phaseJustWrapped || panel.__dgPlayheadFancyLocked == null) {
+          panel.__dgPlayheadFancyLocked = playheadFancyDesired;
+        }
+        const playheadFancy = !!panel.__dgPlayheadFancyLocked;
+        const playheadDrawSimple = playheadSimpleOnly || !playheadFancy;
         const canUseTutorialLayer = tutorialHighlightMode === 'none' && !!tutorialCtx?.canvas;
-        const playheadLayer = (playheadSimpleOnly && canUseTutorialLayer) ? 'tutorial' : 'flash';
+        const playheadLayer = (playheadDrawSimple && canUseTutorialLayer) ? 'tutorial' : 'flash';
         const shouldRenderPlayhead = !!(info && isRunning() && isActiveInChain && !probablyStale);
 
         if (!shouldRenderPlayhead) {
@@ -9044,6 +9219,19 @@ function syncBackBufferSizes() {
 
         if (shouldRenderPlayhead) {
           const playheadCtx = (playheadLayer === 'tutorial') ? tutorialCtx : fctx;
+          const lastX = Number.isFinite(panel.__dgPlayheadLastX) ? panel.__dgPlayheadLastX : null;
+          const lastLayer = panel.__dgPlayheadLayer || playheadLayer;
+          if ((playheadCtx === tutorialCtx || !overlayClearedThisFrame) && lastX != null) {
+            const clearCtx = (lastLayer === 'tutorial') ? tutorialCtx : fctx;
+            if (clearCtx?.canvas && gridArea) {
+              const band = Math.max(6, Math.round(Math.max(0.8 * cw, Math.min(gridArea.w * 0.08, 2.2 * cw))));
+              resetCtx(clearCtx);
+              withOverlayClip(clearCtx, gridArea, false, () => {
+                clearCtx.clearRect(lastX - band, gridArea.y - 2, band * 2, gridArea.h + 4);
+              });
+              emitDG('overlay-clear', { reason: 'playhead-band' });
+            }
+          }
         if (!overlayClearedThisFrame) {
           const __overlayClearStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
             ? performance.now()
@@ -9066,14 +9254,7 @@ function syncBackBufferSizes() {
                 const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
                 const width = cssW || (flashSurface?.width ?? 0) / scale;
                 const height = cssH || (flashSurface?.height ?? 0) / scale;
-                if (overlayCoreWanted) {
-                  const lastX = Number.isFinite(panel.__dgPlayheadLastX) ? panel.__dgPlayheadLastX : null;
-                  if (lastX != null) {
-                    const band = Math.max(6, Math.round(Math.max(0.8 * cw, Math.min(gridArea.w * 0.08, 2.2 * cw))));
-                    fctx.clearRect(lastX - band, gridArea.y - 2, band * 2, gridArea.h + 4);
-                    emitDG('overlay-clear', { reason: 'playhead-band' });
-                  }
-                } else {
+                if (!overlayCoreWanted) {
                   const { x, y, w, h } = getOverlayClearRect({
                     canvas: flashSurface,
                     pad: getOverlayClearPad(),
@@ -9104,6 +9285,7 @@ function syncBackBufferSizes() {
         panel.__dgPlayheadLayer = playheadLayer;
 
         // Use a dedicated overlay context for the playhead to avoid wiping strokes.
+        withOverlayClip(playheadCtx, gridArea, false, () => {
         playheadCtx.save();
 
         // Width of the soft highlight band scales with a column, clamped
@@ -9113,26 +9295,23 @@ function syncBackBufferSizes() {
 
         // Repulse particles along the full header segment
         try {
-          if (!playheadSimpleOnly) {
-            let sweepDir = headerSweepDirX || 1;
-            if (currentPhase != null && prevPhase != null) {
-              if (phaseJustWrapped) {
-                sweepDir = 1;
-              } else if (Math.abs(currentPhase - prevPhase) > 1e-4) {
-                sweepDir = (currentPhase - prevPhase) >= 0 ? 1 : -1;
-              }
+          let sweepDir = headerSweepDirX || 1;
+          if (currentPhase != null && prevPhase != null) {
+            if (phaseJustWrapped) {
+              sweepDir = 1;
+            } else if (Math.abs(currentPhase - prevPhase) > 1e-4) {
+              sweepDir = (currentPhase - prevPhase) >= 0 ? 1 : -1;
             }
-            headerSweepDirX = sweepDir;
-            pushHeaderSweepAt(playheadX, { lineWidthPx: gradientWidth });
-            dbgPoke('header');
           }
+          headerSweepDirX = sweepDir;
+          pushHeaderSweepAt(playheadX, { lineWidthPx: gradientWidth });
+          dbgPoke('header');
         } catch (e) { /* fail silently */ }
 
         const t = performance.now();
         const hue = 200 + 20 * Math.sin((t / 800) * Math.PI * 2);
-        const midColor = `hsla(${(hue + 45).toFixed(0)}, 100%, 70%, 0.25)`;
 
-        if (playheadSimpleOnly) {
+        if (playheadDrawSimple) {
           playheadCtx.globalAlpha = 0.9;
           playheadCtx.strokeStyle = `hsl(${(hue + 45).toFixed(0)}, 100%, 70%)`;
           playheadCtx.lineWidth = Math.max(2, cw * 0.08);
@@ -9145,54 +9324,50 @@ function syncBackBufferSizes() {
           playheadCtx.globalAlpha = 1.0;
         } else {
 
-          const bgGrad = playheadCtx.createLinearGradient(playheadX - gradientWidth / 2, 0, playheadX + gradientWidth / 2, 0);
-          bgGrad.addColorStop(0, 'rgba(0,0,0,0)');
-          bgGrad.addColorStop(0.5, midColor);
-          bgGrad.addColorStop(1, 'rgba(0,0,0,0)');
+          const bandSprite = getPlayheadBandSprite(gradientWidth, gridArea.h, hue);
+          if (bandSprite) {
+            playheadCtx.drawImage(
+              bandSprite,
+              playheadX - gradientWidth / 2,
+              gridArea.y,
+              gradientWidth,
+              gridArea.h
+            );
+          }
 
-          playheadCtx.fillStyle = bgGrad;
-          playheadCtx.fillRect(playheadX - gradientWidth / 2, gridArea.y, gradientWidth, gridArea.h);
-
-          // Optional: scale shadow/line widths a bit with cw
-          const trailLineWidth = Math.max(1.5, cw * 0.08);
-          playheadCtx.lineWidth = trailLineWidth;
-
-          // Create a vertical gradient that mimics the "Line 1" animated gradient.
-          const grad = playheadCtx.createLinearGradient(playheadX, gridArea.y, playheadX, gridArea.y + gridArea.h);
-          grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 70%)`);
-          grad.addColorStop(0.5, `hsl(${(hue + 45).toFixed(0)}, 100%, 70%)`);
-          grad.addColorStop(1,  `hsl(${(hue + 90).toFixed(0)}, 100%, 68%)`);
-
-          // --- Trailing lines ---
-          playheadCtx.strokeStyle = grad; // Use same gradient for all
-          playheadCtx.shadowColor = 'transparent'; // No shadow for trails
-          playheadCtx.shadowBlur = 0;
-
+          const lineSprite = getPlayheadLineSprite(gridArea.h, hue);
           const trailLineCount = 3;
           const gap = 28; // A constant, larger gap
           for (let i = 0; i < trailLineCount; i++) {
-              const trailX = playheadX - (i + 1) * gap;
-              playheadCtx.globalAlpha = 0.6 - i * 0.18;
-              playheadCtx.lineWidth = Math.max(1.0, 2.5 - i * 0.6);
-              playheadCtx.beginPath();
-              playheadCtx.moveTo(trailX, gridArea.y);
-              playheadCtx.lineTo(trailX, gridArea.y + gridArea.h);
-              playheadCtx.stroke();
+            const trailX = playheadX - (i + 1) * gap;
+            const trailW = Math.max(1.0, 2.5 - i * 0.6);
+            playheadCtx.globalAlpha = 0.6 - i * 0.18;
+            if (lineSprite) {
+              playheadCtx.drawImage(
+                lineSprite,
+                trailX - trailW / 2,
+                gridArea.y,
+                trailW,
+                gridArea.h
+              );
+            }
           }
-          playheadCtx.globalAlpha = 1.0; // Reset for main line
+          playheadCtx.globalAlpha = 1.0;
 
-          playheadCtx.strokeStyle = grad;
-          playheadCtx.lineWidth = 3;
-          playheadCtx.shadowColor = 'rgba(255, 255, 255, 0.7)';
-          playheadCtx.shadowBlur = 8;
-
-          playheadCtx.beginPath();
-          playheadCtx.moveTo(playheadX, gridArea.y);
-          playheadCtx.lineTo(playheadX, gridArea.y + gridArea.h);
-          playheadCtx.stroke();
+          const mainLineW = 3;
+          if (lineSprite) {
+            playheadCtx.drawImage(
+              lineSprite,
+              playheadX - mainLineW / 2,
+              gridArea.y,
+              mainLineW,
+              gridArea.h
+            );
+          }
         }
 
         playheadCtx.restore();
+        });
       }
         } catch (e) { /* fail silently */ }
         if (__playheadStart) {

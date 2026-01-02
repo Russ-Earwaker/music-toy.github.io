@@ -95,6 +95,7 @@ function ensureUI() {
       { act: 'runP3fMixedSomeEmpty', label: 'Run P3f: Playing Pan/Zoom (Mostly Full + Some Empty)' },
       { act: 'runP3fNoPaint', label: 'Run P3f: Playing Pan/Zoom + Random Notes (No Paint)' },
       { act: 'runP3fNoDom', label: 'Run P3f: Playing Pan/Zoom + Random Notes (No DOM Updates)' },
+      { act: 'runP3fNoGrid', label: 'Run P3f: Playing Pan/Zoom + Random Notes (No Grid)' },
       { act: 'runP3fNoParticles', label: 'Run P3f: Playing Pan/Zoom + Random Notes (No Particles)' },
       { act: 'runP3fNoOverlays', label: 'Run P3f: Playing Pan/Zoom + Random Notes (No Overlays)' },
       { act: 'runP3fNoOverlayStrokes', label: 'Run P3f: Playing Pan/Zoom + Random Notes (No Overlay Strokes)' },
@@ -356,6 +357,7 @@ function ensureUI() {
     if (act === 'runP3fMixedSomeEmpty') await runP3fMixedSomeEmpty();
     if (act === 'runP3fNoPaint') await runP3fNoPaint();
     if (act === 'runP3fNoDom') await runP3fNoDom();
+    if (act === 'runP3fNoGrid') await runP3fNoGrid();
     if (act === 'runP3fNoParticles') await runP3fNoParticles();
     if (act === 'runP3fNoOverlays') await runP3fNoOverlays();
     if (act === 'runP3fNoOverlayStrokes') await runP3fNoOverlayStrokes();
@@ -2329,27 +2331,42 @@ async function runP3fNoDom() {
   }
 }
 
-async function runP3fNoParticles() {
+async function runP3fNoGrid() {
   const prevTag = window.__PERF_RUN_TAG;
-  window.__PERF_RUN_TAG = 'P3fNoParticles';
+  const prevNoGrid = window.__PERF_DG_DISABLE_GRID;
+  window.__PERF_RUN_TAG = 'P3fNoGrid';
+  window.__PERF_DG_DISABLE_GRID = true;
   try {
-    await withTempPerfParticles({ skipUpdate: true, skipDraw: true }, async () => {
-      await runP3f();
-    });
+    await runP3f();
   } finally {
     window.__PERF_RUN_TAG = prevTag;
+    window.__PERF_DG_DISABLE_GRID = prevNoGrid;
+  }
+}
+
+async function runP3fNoParticles() {
+  const prevTag = window.__PERF_RUN_TAG;
+  const prevNoParticles = window.__PERF_DG_DISABLE_PARTICLES;
+  window.__PERF_RUN_TAG = 'P3fNoParticles';
+  try {
+    window.__PERF_DG_DISABLE_PARTICLES = true;
+    await runP3f();
+  } finally {
+    window.__PERF_RUN_TAG = prevTag;
+    window.__PERF_DG_DISABLE_PARTICLES = prevNoParticles;
   }
 }
 
   async function runP3fNoOverlays() {
     const prevTag = window.__PERF_RUN_TAG;
+    const prevNoOverlays = window.__PERF_DG_DISABLE_OVERLAYS;
     window.__PERF_RUN_TAG = 'P3fNoOverlays';
-    window.__PERF_DISABLE_OVERLAYS = true;
+    window.__PERF_DG_DISABLE_OVERLAYS = true;
     try {
       await runP3f();
     } finally {
       window.__PERF_RUN_TAG = prevTag;
-      window.__PERF_DISABLE_OVERLAYS = false;
+      window.__PERF_DG_DISABLE_OVERLAYS = prevNoOverlays;
     }
   }
 
@@ -3673,7 +3690,7 @@ window.addEventListener('keydown', (e) => {
 });
 
 // Expose for manual console use
-try { window.__PerfLab = { show, hide, toggle, buildP2, buildP3, buildP4, buildP4h, buildP5, buildP6, runP2a, runP2b, runP2c, runP3a, runP3b, runP3c, runP3d, runP3e, runP3e2, runP3f, runP3f2, runP3fEmptyNoNotes, runP3fEmptyChainNoNotes, runP3fMixedSomeEmpty, runP3fNoPaint, runP3fNoDom, runP3fNoParticles, runP3fNoOverlays, runP3fNoOverlayStrokes, runP3fNoOverlayCore, runP3fParticleProfile, runP3fFlatLayers, runP3g, runP3g2, runP3h, runP3h2, runP3i, runP3i2, runP3j, runP3j2, runP3k, runP3k2, runP3l, runP3l2, runP3l3, runP3l4, runP3l5, runP3l6, runP3m, runP3m2, runQueue, runAuto, runP4a, runP4b, runP4o, runP4p, runP4q, runP4r, runP4s, runP4t, runP4u, runP4v, runP4w, runP4x, runP4e, runP4c, runP4d, runP4f, runP4g, runP4h2, runP4i, runP4j, runP4k, runP4m, runP4n, runP5a, runP5b, runP5c, runP6a, runP6b, runP6c, runP6d, runP6e, runP6eNoPaint, runP6ePaintOnly, runP6eNoDom, readAutoConfig, readAutoConfigFromFile, saveResultsBundle, postResultsBundle, downloadResultsBundle, getResults: () => lastResults, getBundle: () => lastBundle, clearResults: () => { lastResults = []; } }; } catch {}
+try { window.__PerfLab = { show, hide, toggle, buildP2, buildP3, buildP4, buildP4h, buildP5, buildP6, runP2a, runP2b, runP2c, runP3a, runP3b, runP3c, runP3d, runP3e, runP3e2, runP3f, runP3f2, runP3fEmptyNoNotes, runP3fEmptyChainNoNotes, runP3fMixedSomeEmpty, runP3fNoPaint, runP3fNoDom, runP3fNoGrid, runP3fNoParticles, runP3fNoOverlays, runP3fNoOverlayStrokes, runP3fNoOverlayCore, runP3fParticleProfile, runP3fFlatLayers, runP3g, runP3g2, runP3h, runP3h2, runP3i, runP3i2, runP3j, runP3j2, runP3k, runP3k2, runP3l, runP3l2, runP3l3, runP3l4, runP3l5, runP3l6, runP3m, runP3m2, runQueue, runAuto, runP4a, runP4b, runP4o, runP4p, runP4q, runP4r, runP4s, runP4t, runP4u, runP4v, runP4w, runP4x, runP4e, runP4c, runP4d, runP4f, runP4g, runP4h2, runP4i, runP4j, runP4k, runP4m, runP4n, runP5a, runP5b, runP5c, runP6a, runP6b, runP6c, runP6d, runP6e, runP6eNoPaint, runP6ePaintOnly, runP6eNoDom, readAutoConfig, readAutoConfigFromFile, saveResultsBundle, postResultsBundle, downloadResultsBundle, getResults: () => lastResults, getBundle: () => lastBundle, clearResults: () => { lastResults = []; } }; } catch {}
 
 
 
