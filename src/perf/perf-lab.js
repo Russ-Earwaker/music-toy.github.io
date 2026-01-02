@@ -922,12 +922,14 @@ async function runAuto(config = {}) {
   const __prevRunTag = window.__PERF_RUN_TAG;
   const __prevTraceMarks = window.__PERF_TRACE_MARKS;
   const __prevTraceLongMs = window.__PERF_TRACE_LONG_MS;
+  const __prevTapDotsSim = window.__PERF_TAP_DOTS_SIM;
   let __prevParticles = null;
   const __prevGestureAutoLock = window.__PERF_GESTURE_AUTO_LOCK;
   window.__PERF_LAB_RUN_CONTEXT = 'auto';
   if (cfg.runTag != null) window.__PERF_RUN_TAG = String(cfg.runTag);
   if (cfg.traceMarks != null) window.__PERF_TRACE_MARKS = !!cfg.traceMarks;
   if (Number.isFinite(cfg.traceLongMs)) window.__PERF_TRACE_LONG_MS = Number(cfg.traceLongMs);
+  if (cfg.tapDotsSim != null) window.__PERF_TAP_DOTS_SIM = !!cfg.tapDotsSim;
   if (cfg.particleToggles && typeof cfg.particleToggles === 'object') {
     try {
       const st = (window.__PERF_PARTICLES = window.__PERF_PARTICLES || {});
@@ -947,6 +949,11 @@ async function runAuto(config = {}) {
     window.__PERF_RUN_TAG = __prevRunTag;
     window.__PERF_TRACE_MARKS = __prevTraceMarks;
     window.__PERF_TRACE_LONG_MS = __prevTraceLongMs;
+    if (typeof __prevTapDotsSim === 'undefined') {
+      try { delete window.__PERF_TAP_DOTS_SIM; } catch {}
+    } else {
+      window.__PERF_TAP_DOTS_SIM = __prevTapDotsSim;
+    }
     if (__prevParticles) {
       try {
         const st = (window.__PERF_PARTICLES = window.__PERF_PARTICLES || {});
@@ -1456,6 +1463,7 @@ async function runVariantPlaying(label, step, statusText) {
         paintOnlyActive: !!window.__PERF_PAINT_ONLY_ACTIVE,
         noDomUpdates: !!window.__PERF_NO_DOM_UPDATES,
         traceMarks: !!window.__PERF_TRACE_MARKS,
+        tapDotsSim: !!window.__PERF_TAP_DOTS_SIM,
         playheadSeparateCanvas: !!window.__DG_PLAYHEAD_SEPARATE_CANVAS,
         runTag: String(window.__PERF_RUN_TAG || ''),
       };

@@ -830,6 +830,7 @@ function withLogicalSpace(ctx, fn) {
 
 const __dgPlayheadBandSpriteCache = new Map();
 const __dgPlayheadLineSpriteCache = new Map();
+const __dgPlayheadCompositeSpriteCache = new Map();
 function quantizeHue(hue, step = 6) {
   const h = Number.isFinite(hue) ? hue : 0;
   const s = Number.isFinite(step) && step > 0 ? step : 1;
@@ -888,6 +889,48 @@ function getPlayheadLineSprite(height, hue) {
     grad.addColorStop(1, `hsl(${(hueKey + 90) % 360}, 100%, 68%)`);
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 1, h);
+    return canvas;
+  });
+}
+function getPlayheadCompositeSprite({
+  gradientWidth,
+  height,
+  hue,
+  trailLineCount,
+  gap,
+  mainLineW,
+  trailW0,
+  trailWStep,
+} = {}) {
+  const w = Math.max(1, Math.round(gradientWidth || 0));
+  const h = Math.max(1, Math.round(height || 0));
+  const hueKey = quantizeHue(hue, 6);
+  const key = `${w}x${h}|${hueKey}|t${trailLineCount}|g${gap}|m${mainLineW}|tw${trailW0}|ts${trailWStep}`;
+  return __dgCachePlayheadSprite(__dgPlayheadCompositeSpriteCache, key, () => {
+    const canvas = document.createElement('canvas');
+    const leftPad = (trailLineCount > 0)
+      ? (trailLineCount * gap + (trailW0 / 2) + 2)
+      : 2;
+    const rightPad = (w / 2) + 2;
+    canvas.width = Math.max(1, Math.ceil(leftPad + rightPad));
+    canvas.height = h;
+    canvas.__dgOriginX = leftPad;
+    const ctx = canvas.getContext('2d');
+    const bandSprite = getPlayheadBandSprite(w, h, hueKey);
+    if (bandSprite) {
+      ctx.drawImage(bandSprite, leftPad - w / 2, 0, w, h);
+    }
+    const lineSprite = getPlayheadLineSprite(h, hueKey);
+    if (lineSprite) {
+      for (let i = 0; i < trailLineCount; i++) {
+        const trailX = leftPad - (i + 1) * gap;
+        const trailW = Math.max(1.0, trailW0 - i * trailWStep);
+        ctx.globalAlpha = 0.6 - i * 0.18;
+        ctx.drawImage(lineSprite, trailX - trailW / 2, 0, trailW, h);
+      }
+      ctx.globalAlpha = 1.0;
+      ctx.drawImage(lineSprite, leftPad - mainLineW / 2, 0, mainLineW, h);
+    }
     return canvas;
   });
 }
@@ -3946,6 +3989,13 @@ function ensureSizeReady({ force = false } = {}) {
       overlayCamState = camState; // keep for HUD/other use
       try {
         if (!isRunning?.()) return;
+        if (!isActiveInChain) return;
+        const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+          ? performance.now()
+          : Date.now();
+        if (panel.__dgPlayheadLastRenderTs && (now - panel.__dgPlayheadLastRenderTs) < 24) {
+          return;
+        }
         const prog = headerProgress();
         if (!Number.isFinite(prog)) return;
         const clampedProgress = Math.max(0, Math.min(1, prog));
@@ -9229,7 +9279,8 @@ function syncBackBufferSizes() {
                 : 0;
               resetCtx(playheadFrontCtx);
               withOverlayClip(playheadFrontCtx, gridArea, false, () => {
-                const band = Math.max(6, Math.round(Math.max(0.8 * cw, Math.min(gridArea.w * 0.08, 2.2 * cw))));
+                const defaultBand = Math.max(6, Math.round(Math.max(0.8 * cw, Math.min(gridArea.w * 0.08, 2.2 * cw))));
+                const band = Number.isFinite(panel.__dgPlayheadClearBand) ? panel.__dgPlayheadClearBand : defaultBand;
                 playheadFrontCtx.clearRect(lastX - band, gridArea.y - 2, band * 2, gridArea.h + 4);
               });
               markPlayheadLayerCleared();
@@ -9281,14 +9332,18 @@ function syncBackBufferSizes() {
           const playheadCtx = (playheadLayer === 'tutorial')
             ? tutorialCtx
             : (playheadLayer === 'playhead') ? playheadFrontCtx : fctx;
+          panel.__dgPlayheadLastRenderTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+            ? performance.now()
+            : Date.now();
           const lastX = Number.isFinite(panel.__dgPlayheadLastX) ? panel.__dgPlayheadLastX : null;
           const lastLayer = panel.__dgPlayheadLayer || playheadLayer;
-          if ((playheadCtx === tutorialCtx || !overlayClearedThisFrame) && lastX != null) {
+          if ((playheadCtx === tutorialCtx || playheadCtx === playheadFrontCtx || !overlayClearedThisFrame) && lastX != null) {
             const clearCtx = (lastLayer === 'tutorial')
               ? tutorialCtx
               : (lastLayer === 'playhead') ? playheadFrontCtx : fctx;
             if (clearCtx?.canvas && gridArea) {
-              const band = Math.max(6, Math.round(Math.max(0.8 * cw, Math.min(gridArea.w * 0.08, 2.2 * cw))));
+              const defaultBand = Math.max(6, Math.round(Math.max(0.8 * cw, Math.min(gridArea.w * 0.08, 2.2 * cw))));
+              const band = Number.isFinite(panel.__dgPlayheadClearBand) ? panel.__dgPlayheadClearBand : defaultBand;
               resetCtx(clearCtx);
               withOverlayClip(clearCtx, gridArea, false, () => {
                 clearCtx.clearRect(lastX - band, gridArea.y - 2, band * 2, gridArea.h + 4);
@@ -9358,6 +9413,14 @@ function syncBackBufferSizes() {
         const gradientWidth = Math.round(
           Math.max(0.8 * cw, Math.min(gridArea.w * 0.08, 2.2 * cw))
         );
+        const playheadLineW = playheadDrawSimple ? Math.max(2, cw * 0.08) : 3;
+        const trailLineCount = playheadDrawSimple ? 0 : 3;
+        const gap = playheadDrawSimple ? 0 : 28; // A constant, larger gap
+        const trailW0 = 2.5;
+        const trailWStep = 0.6;
+        const extraTrail = playheadDrawSimple ? 0 : (trailLineCount * gap + 6);
+        const baseBand = Math.max(gradientWidth / 2, playheadLineW / 2);
+        panel.__dgPlayheadClearBand = Math.max(6, Math.ceil(baseBand + extraTrail));
 
         // Repulse particles along the full header segment
         try {
@@ -9381,7 +9444,7 @@ function syncBackBufferSizes() {
         if (playheadDrawSimple) {
           playheadCtx.globalAlpha = 0.9;
           playheadCtx.strokeStyle = `hsl(${(hue + 45).toFixed(0)}, 100%, 70%)`;
-          playheadCtx.lineWidth = Math.max(2, cw * 0.08);
+          playheadCtx.lineWidth = playheadLineW;
           playheadCtx.shadowColor = 'transparent';
           playheadCtx.shadowBlur = 0;
           playheadCtx.beginPath();
@@ -9391,43 +9454,25 @@ function syncBackBufferSizes() {
           playheadCtx.globalAlpha = 1.0;
         } else {
 
-          const bandSprite = getPlayheadBandSprite(gradientWidth, gridArea.h, hue);
-          if (bandSprite) {
+          const composite = getPlayheadCompositeSprite({
+            gradientWidth,
+            height: gridArea.h,
+            hue,
+            trailLineCount,
+            gap,
+            mainLineW: playheadLineW,
+            trailW0,
+            trailWStep,
+          });
+          if (composite) {
+            const originX = Number.isFinite(composite.__dgOriginX)
+              ? composite.__dgOriginX
+              : (composite.width / 2);
             playheadCtx.drawImage(
-              bandSprite,
-              playheadX - gradientWidth / 2,
+              composite,
+              playheadX - originX,
               gridArea.y,
-              gradientWidth,
-              gridArea.h
-            );
-          }
-
-          const lineSprite = getPlayheadLineSprite(gridArea.h, hue);
-          const trailLineCount = 3;
-          const gap = 28; // A constant, larger gap
-          for (let i = 0; i < trailLineCount; i++) {
-            const trailX = playheadX - (i + 1) * gap;
-            const trailW = Math.max(1.0, 2.5 - i * 0.6);
-            playheadCtx.globalAlpha = 0.6 - i * 0.18;
-            if (lineSprite) {
-              playheadCtx.drawImage(
-                lineSprite,
-                trailX - trailW / 2,
-                gridArea.y,
-                trailW,
-                gridArea.h
-              );
-            }
-          }
-          playheadCtx.globalAlpha = 1.0;
-
-          const mainLineW = 3;
-          if (lineSprite) {
-            playheadCtx.drawImage(
-              lineSprite,
-              playheadX - mainLineW / 2,
-              gridArea.y,
-              mainLineW,
+              composite.width,
               gridArea.h
             );
           }

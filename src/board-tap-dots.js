@@ -149,6 +149,14 @@ import { getViewportTransform, screenToWorld, getViewportElement } from './board
   let profileMaxDt = 0;
   let profileSumDt = 0;
 
+  // Perf-lab tap-dot simulator (keeps dots moving during automated runs)
+  let simActive = false;
+  let simStartTs = 0;
+  let simNextTapTs = 0;
+  const SIM_HOLD_MS = 1200;
+  const SIM_GAP_MS = 500;
+  const SIM_DRAG_SCALE = 0.6;
+
   function resetProfile() {
     profileLastNow = 0;
     profileFrameCount = 0;
@@ -430,11 +438,35 @@ import { getViewportTransform, screenToWorld, getViewportElement } from './board
     return 1 - u * u;
   }
 
+  function simEnabled() {
+    try { return !!window.__PERF_TAP_DOTS_SIM; } catch { return false; }
+  }
+
+  function startSimTap(now) {
+    const rect = getOverlayRect();
+    const cx = rect.left + rect.width * 0.5;
+    const cy = rect.top + rect.height * 0.5;
+    const wobbleX = Math.sin(now * 0.0011) * rect.width * 0.08;
+    const wobbleY = Math.cos(now * 0.0013) * rect.height * 0.08;
+    const world = screenToWorld({ x: cx + wobbleX, y: cy + wobbleY });
+    simActive = true;
+    simStartTs = now;
+    simNextTapTs = now + SIM_HOLD_MS + SIM_GAP_MS;
+    isPointerDown = true;
+    fadeOutActive = false;
+    dragTargetOffsetX = 0;
+    dragTargetOffsetY = 0;
+    startWave(world.x, world.y);
+  }
+
   function drawWaveFrame(now) {
     if (window.__PERF_DISABLE_TAP_DOTS) return;
+    if (simEnabled() && !hasActiveDots) {
+      startSimTap(now);
+    }
     if (!hasActiveDots) return;
     const isGesturing = !!(window.__ZoomCoordinator?.isGesturing?.() || document.body?.classList?.contains?.('is-gesturing'));
-    if (isGesturing) {
+    if (isGesturing && !simEnabled()) {
       rafId = requestAnimationFrame(drawWaveFrame);
       return;
     }
@@ -471,6 +503,24 @@ import { getViewportTransform, screenToWorld, getViewportElement } from './board
         fadeFactor = 0;
       } else {
         fadeFactor = 1 - t;
+      }
+    }
+
+    // Perf sim: drive a drag loop so dots move during automated runs.
+    if (simEnabled()) {
+      if (!simActive && now >= simNextTapTs && !isPointerDown) {
+        startSimTap(now);
+      }
+      if (simActive) {
+        const amp = tapRadiusScreen * SIM_DRAG_SCALE;
+        dragTargetOffsetX = Math.cos(now * 0.0015) * amp;
+        dragTargetOffsetY = Math.sin(now * 0.0019) * amp;
+        if ((now - simStartTs) >= SIM_HOLD_MS) {
+          simActive = false;
+          isPointerDown = false;
+          fadeOutActive = true;
+          fadeOutStartTime = now;
+        }
       }
     }
 

@@ -3,6 +3,8 @@
     "buildP3",
     "runP3fParticleProfile",
     "runP3fPlayheadSeparateOn",
+    "runP3fNoOverlayCore",
+    "runP3fNoOverlayStrokes",
     "runP3fNoGrid",
     "runP3fNoParticles",
     "runP3fNoOverlays",
@@ -11,6 +13,7 @@
   "notes": "P3f drawgrid pan/zoom baseline plus mixed run (mostly full + some empty).",
   "runTag": "loopgrid-sprites",
   "traceMarks": true,
+  "tapDotsSim": true,
   "particleToggles": {
     "gestureDrawModulo": 1,
     "gestureFieldModulo": 1
