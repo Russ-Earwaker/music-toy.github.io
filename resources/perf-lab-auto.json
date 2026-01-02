@@ -2,6 +2,7 @@
   "queue": [
     "buildP3",
     "runP3fParticleProfile",
+    "runP3fPlayheadSeparateOn",
     "runP3fNoGrid",
     "runP3fNoParticles",
     "runP3fNoOverlays",

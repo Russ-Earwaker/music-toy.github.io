@@ -14,6 +14,8 @@ const ZC_PERF_DEBUG = (typeof window !== 'undefined') ? !!window.__PERF_DEBUG : 
 const ZC_LISTENER_DEBUG = false;
 const ZC_LISTENER_LOG_THRESHOLD_MS = 1.0; // log listeners slower than this
 const ZC_GESTURE_LOG = false; // suppress zoom-gesture-flag console spam by default
+const ZC_NOOP_EPS_SCALE = 1e-4;
+const ZC_NOOP_EPS_XY = 0.25;
 
 let zcFrameCount = 0;
 let zcAccumMs = 0;
@@ -102,8 +104,50 @@ function zcPerfMark(name, dt) {
   try { window.__PerfFrameProf?.mark?.(name, dt); } catch {}
 }
 
+let zcLastEmitSnapshot = null;
+function zcPayloadSnapshot(payload) {
+  if (!payload) return null;
+  const scale = Number.isFinite(payload.currentScale) ? payload.currentScale : payload.targetScale;
+  const x = Number.isFinite(payload.currentX) ? payload.currentX : payload.targetX;
+  const y = Number.isFinite(payload.currentY) ? payload.currentY : payload.targetY;
+  return {
+    scale,
+    x,
+    y,
+    mode: payload.mode,
+    phase: payload.phase,
+    committing: !!payload.committing,
+    gesturing: !!payload.gesturing,
+  };
+}
+function zcHasMeaningfulChange(next, prev) {
+  if (!next || !prev) return true;
+  if (next.phase !== prev.phase) return true;
+  if (next.mode !== prev.mode) return true;
+  if (next.committing !== prev.committing) return true;
+  if (next.gesturing !== prev.gesturing) return true;
+  const s0 = Number.isFinite(prev.scale) ? prev.scale : null;
+  const s1 = Number.isFinite(next.scale) ? next.scale : null;
+  const x0 = Number.isFinite(prev.x) ? prev.x : null;
+  const x1 = Number.isFinite(next.x) ? next.x : null;
+  const y0 = Number.isFinite(prev.y) ? prev.y : null;
+  const y1 = Number.isFinite(next.y) ? next.y : null;
+  if (s0 != null && s1 != null && Math.abs(s1 - s0) > ZC_NOOP_EPS_SCALE) return true;
+  if (x0 != null && x1 != null && Math.abs(x1 - x0) > ZC_NOOP_EPS_XY) return true;
+  if (y0 != null && y1 != null && Math.abs(y1 - y0) > ZC_NOOP_EPS_XY) return true;
+  return false;
+}
+
 function emitZoom(payload) {
   if (!payload) return;
+  const isProgressLike = !payload.phase || payload.phase === 'progress';
+  if (isProgressLike) {
+    const next = zcPayloadSnapshot(payload);
+    if (!zcHasMeaningfulChange(next, zcLastEmitSnapshot)) return;
+    zcLastEmitSnapshot = next;
+  } else {
+    zcLastEmitSnapshot = zcPayloadSnapshot(payload);
+  }
   const __perfOn = zcPerfEnabled();
   const __perfStart = __perfOn && typeof performance !== 'undefined' ? performance.now() : 0;
   const __perfPhase = payload?.phase || (payload?.committing ? 'commit' : 'progress');

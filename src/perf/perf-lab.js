@@ -89,6 +89,8 @@ function ensureUI() {
       { act: 'runP3e',  label: 'Run P3e: Playing + Random Notes (Anchor ON)' },
       { act: 'runP3e2', label: 'Run P3e2: Playing + Random Notes (Anchor OFF)' },
       { act: 'runP3f',  label: 'Run P3f: Playing Pan/Zoom + Random Notes (Anchor ON)' },
+      { act: 'runP3fPlayheadSeparateOff', label: 'Run P3f: Playhead Separate OFF' },
+      { act: 'runP3fPlayheadSeparateOn', label: 'Run P3f: Playhead Separate ON' },
       { act: 'runP3f2', label: 'Run P3f2: Playing Pan/Zoom + Random Notes (Anchor OFF)' },
       { act: 'runP3fEmptyNoNotes', label: 'Run P3f: Playing Pan/Zoom (No Notes, No Chains)' },
       { act: 'runP3fEmptyChainNoNotes', label: 'Run P3f: Playing Pan/Zoom (Chained, No Notes)' },
@@ -351,6 +353,8 @@ function ensureUI() {
     if (act === 'runP3e') await runP3e();
     if (act === 'runP3e2') await runP3e2();
     if (act === 'runP3f') await runP3f();
+    if (act === 'runP3fPlayheadSeparateOff') await runP3fPlayheadSeparateOff();
+    if (act === 'runP3fPlayheadSeparateOn') await runP3fPlayheadSeparateOn();
     if (act === 'runP3f2') await runP3f2();
     if (act === 'runP3fEmptyNoNotes') await runP3fEmptyNoNotes();
     if (act === 'runP3fEmptyChainNoNotes') await runP3fEmptyChainNoNotes();
@@ -1452,6 +1456,7 @@ async function runVariantPlaying(label, step, statusText) {
         paintOnlyActive: !!window.__PERF_PAINT_ONLY_ACTIVE,
         noDomUpdates: !!window.__PERF_NO_DOM_UPDATES,
         traceMarks: !!window.__PERF_TRACE_MARKS,
+        playheadSeparateCanvas: !!window.__DG_PLAYHEAD_SEPARATE_CANVAS,
         runTag: String(window.__PERF_RUN_TAG || ''),
       };
     result.gestureSkipCount = window.__PERF_LOOPGRID_GESTURE_SKIP || 0;
@@ -2100,6 +2105,26 @@ async function runP3e2() {
       window.__PERF_FORCE_SEQUENCER_ALL = prevForceSequencerAll;
     } catch {}
   }
+
+async function runP3fPlayheadSeparateOff() {
+  const prev = window.__DG_PLAYHEAD_SEPARATE_CANVAS;
+  const prevTag = window.__PERF_RUN_TAG;
+  try { window.__DG_PLAYHEAD_SEPARATE_CANVAS = false; } catch {}
+  try { window.__PERF_RUN_TAG = 'P3fPlayheadSeparateOff'; } catch {}
+  await runP3f();
+  try { window.__DG_PLAYHEAD_SEPARATE_CANVAS = prev; } catch {}
+  try { window.__PERF_RUN_TAG = prevTag; } catch {}
+}
+
+async function runP3fPlayheadSeparateOn() {
+  const prev = window.__DG_PLAYHEAD_SEPARATE_CANVAS;
+  const prevTag = window.__PERF_RUN_TAG;
+  try { window.__DG_PLAYHEAD_SEPARATE_CANVAS = true; } catch {}
+  try { window.__PERF_RUN_TAG = 'P3fPlayheadSeparateOn'; } catch {}
+  await runP3f();
+  try { window.__DG_PLAYHEAD_SEPARATE_CANVAS = prev; } catch {}
+  try { window.__PERF_RUN_TAG = prevTag; } catch {}
+}
 
 async function runP3f2() {
   try { window.__PERF_DISABLE_CHAIN_WORK = true; } catch {}
@@ -3690,7 +3715,7 @@ window.addEventListener('keydown', (e) => {
 });
 
 // Expose for manual console use
-try { window.__PerfLab = { show, hide, toggle, buildP2, buildP3, buildP4, buildP4h, buildP5, buildP6, runP2a, runP2b, runP2c, runP3a, runP3b, runP3c, runP3d, runP3e, runP3e2, runP3f, runP3f2, runP3fEmptyNoNotes, runP3fEmptyChainNoNotes, runP3fMixedSomeEmpty, runP3fNoPaint, runP3fNoDom, runP3fNoGrid, runP3fNoParticles, runP3fNoOverlays, runP3fNoOverlayStrokes, runP3fNoOverlayCore, runP3fParticleProfile, runP3fFlatLayers, runP3g, runP3g2, runP3h, runP3h2, runP3i, runP3i2, runP3j, runP3j2, runP3k, runP3k2, runP3l, runP3l2, runP3l3, runP3l4, runP3l5, runP3l6, runP3m, runP3m2, runQueue, runAuto, runP4a, runP4b, runP4o, runP4p, runP4q, runP4r, runP4s, runP4t, runP4u, runP4v, runP4w, runP4x, runP4e, runP4c, runP4d, runP4f, runP4g, runP4h2, runP4i, runP4j, runP4k, runP4m, runP4n, runP5a, runP5b, runP5c, runP6a, runP6b, runP6c, runP6d, runP6e, runP6eNoPaint, runP6ePaintOnly, runP6eNoDom, readAutoConfig, readAutoConfigFromFile, saveResultsBundle, postResultsBundle, downloadResultsBundle, getResults: () => lastResults, getBundle: () => lastBundle, clearResults: () => { lastResults = []; } }; } catch {}
+try { window.__PerfLab = { show, hide, toggle, buildP2, buildP3, buildP4, buildP4h, buildP5, buildP6, runP2a, runP2b, runP2c, runP3a, runP3b, runP3c, runP3d, runP3e, runP3e2, runP3f, runP3fPlayheadSeparateOff, runP3fPlayheadSeparateOn, runP3f2, runP3fEmptyNoNotes, runP3fEmptyChainNoNotes, runP3fMixedSomeEmpty, runP3fNoPaint, runP3fNoDom, runP3fNoGrid, runP3fNoParticles, runP3fNoOverlays, runP3fNoOverlayStrokes, runP3fNoOverlayCore, runP3fParticleProfile, runP3fFlatLayers, runP3g, runP3g2, runP3h, runP3h2, runP3i, runP3i2, runP3j, runP3j2, runP3k, runP3k2, runP3l, runP3l2, runP3l3, runP3l4, runP3l5, runP3l6, runP3m, runP3m2, runQueue, runAuto, runP4a, runP4b, runP4o, runP4p, runP4q, runP4r, runP4s, runP4t, runP4u, runP4v, runP4w, runP4x, runP4e, runP4c, runP4d, runP4f, runP4g, runP4h2, runP4i, runP4j, runP4k, runP4m, runP4n, runP5a, runP5b, runP5c, runP6a, runP6b, runP6c, runP6d, runP6e, runP6eNoPaint, runP6ePaintOnly, runP6eNoDom, readAutoConfig, readAutoConfigFromFile, saveResultsBundle, postResultsBundle, downloadResultsBundle, getResults: () => lastResults, getBundle: () => lastBundle, clearResults: () => { lastResults = []; } }; } catch {}
 
 
 

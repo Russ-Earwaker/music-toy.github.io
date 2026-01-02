@@ -1812,6 +1812,11 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   })();
   try { if (typeof window !== 'undefined') window.__DG_SINGLE_CANVAS_OVERLAYS = DG_SINGLE_CANVAS_OVERLAYS; } catch {}
   try { if (typeof window !== 'undefined') window.__DG_SINGLE_CANVAS = DG_SINGLE_CANVAS; } catch {}
+  try {
+    if (typeof window !== 'undefined' && window.__DG_PLAYHEAD_SEPARATE_CANVAS === undefined) {
+      window.__DG_PLAYHEAD_SEPARATE_CANVAS = true;
+    }
+  } catch {}
   const DG_COMBINE_GRID_NODES = false;
   // TODO: consider single-canvas draw order (grid/nodes/overlays) after merge validation.
   const particleCanvas = document.createElement('canvas');
@@ -1824,6 +1829,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const flashCanvas = document.createElement('canvas'); flashCanvas.setAttribute('data-role', 'drawgrid-flash');
   const ghostCanvas = document.createElement('canvas'); ghostCanvas.setAttribute('data-role','drawgrid-ghost');
   const tutorialCanvas = document.createElement('canvas'); tutorialCanvas.setAttribute('data-role', 'drawgrid-tutorial-highlight');
+  const playheadCanvas = document.createElement('canvas'); playheadCanvas.setAttribute('data-role', 'drawgrid-playhead');
   // Tag canvases so shared helper code can locate the owning panel.
   try {
     particleCanvas.__dgPanel = panel;
@@ -1833,6 +1839,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     flashCanvas.__dgPanel = panel;
     ghostCanvas.__dgPanel = panel;
     tutorialCanvas.__dgPanel = panel;
+    playheadCanvas.__dgPanel = panel;
   } catch {}
   if (DG_COMBINE_GRID_NODES) {
     try { panel.classList.add('drawgrid-combined'); } catch {}
@@ -1936,6 +1943,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   }
   Object.assign(tutorialCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 6, pointerEvents: 'none' });
   tutorialCanvas.style.background = 'transparent';
+  Object.assign(playheadCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 7, pointerEvents: 'none' });
+  playheadCanvas.style.background = 'transparent';
   body.appendChild(particleCanvas);
   body.appendChild(grid);
   body.appendChild(paint);
@@ -1943,11 +1952,13 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   body.appendChild(flashCanvas);
   if (!DG_COMBINE_GRID_NODES) body.appendChild(nodesCanvas);
   body.appendChild(tutorialCanvas);
+  body.appendChild(playheadCanvas);
   if (DG_SINGLE_CANVAS) {
     grid.style.display = 'none';
     if (nodesCanvas !== grid) nodesCanvas.style.display = 'none';
     ghostCanvas.style.display = 'none';
     flashCanvas.style.display = 'none';
+    playheadCanvas.style.display = 'none';
   }
 
   
@@ -2534,9 +2545,11 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const ghostBackCanvas = document.createElement('canvas');
   const ghostBackCtx = ghostBackCanvas.getContext('2d');
   let ghostCtx = ghostFrontCtx;
+  const playheadFrontCtx = playheadCanvas.getContext('2d');
   panel.__dgFlashLayerEmpty = true;
   panel.__dgGhostLayerEmpty = true;
   panel.__dgTutorialLayerEmpty = true;
+  panel.__dgPlayheadLayerEmpty = true;
 
   const markFlashLayerActive = () => { panel.__dgFlashLayerEmpty = false; __dgMarkSingleCanvasOverlayDirty(panel); };
   const markFlashLayerCleared = () => { panel.__dgFlashLayerEmpty = true; __dgMarkSingleCanvasOverlayDirty(panel); };
@@ -2544,10 +2557,13 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const markGhostLayerCleared = () => { panel.__dgGhostLayerEmpty = true; __dgMarkSingleCanvasOverlayDirty(panel); };
   const markTutorialLayerActive = () => { panel.__dgTutorialLayerEmpty = false; __dgMarkSingleCanvasOverlayDirty(panel); };
   const markTutorialLayerCleared = () => { panel.__dgTutorialLayerEmpty = true; __dgMarkSingleCanvasOverlayDirty(panel); };
+  const markPlayheadLayerActive = () => { panel.__dgPlayheadLayerEmpty = false; __dgMarkSingleCanvasOverlayDirty(panel); };
+  const markPlayheadLayerCleared = () => { panel.__dgPlayheadLayerEmpty = true; __dgMarkSingleCanvasOverlayDirty(panel); };
 
   function updateFlatLayerVisibility() {
     const flat = !!(typeof window !== 'undefined' && window.__PERF_DRAWGRID_FLAT_LAYERS);
-    const modeKey = `${flat ? 1 : 0}-${DG_SINGLE_CANVAS ? 1 : 0}`;
+    const separatePlayhead = !!(typeof window !== 'undefined' && window.__DG_PLAYHEAD_SEPARATE_CANVAS);
+    const modeKey = `${flat ? 1 : 0}-${DG_SINGLE_CANVAS ? 1 : 0}-${separatePlayhead ? 1 : 0}`;
     if (panel.__dgFlatLayerMode === modeKey) return;
     panel.__dgFlatLayerMode = modeKey;
     const toggle = (el, visible) => {
@@ -2565,11 +2581,13 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     toggle(flashCanvas, showOverlay);
     toggle(tutorialCanvas, !flat);
     toggle(particleCanvas, !flat);
+    toggle(playheadCanvas, !flat && separatePlayhead && (!DG_SINGLE_CANVAS || DG_SINGLE_CANVAS_OVERLAYS));
     if (DG_SINGLE_CANVAS) {
       toggle(grid, false);
       if (nodesCanvas !== grid) toggle(nodesCanvas, DG_SINGLE_CANVAS_OVERLAYS);
       toggle(ghostCanvas, DG_SINGLE_CANVAS_OVERLAYS);
       toggle(flashCanvas, DG_SINGLE_CANVAS_OVERLAYS);
+      toggle(playheadCanvas, DG_SINGLE_CANVAS_OVERLAYS && separatePlayhead);
     }
   }
   updateFlatLayerVisibility();
@@ -5422,6 +5440,17 @@ function syncBackBufferSizes() {
           try { window.__PerfFrameProf?.mark?.('drawgrid.composite.tutorial', performance.now() - __tutorialStart); } catch {}
         }
       }
+      if (!DG_SINGLE_CANVAS_OVERLAYS && !panel.__dgPlayheadLayerEmpty && playheadCanvas && playheadCanvas.width && playheadCanvas.height) {
+        const __playheadStart = __perfOn ? performance.now() : 0;
+        frontCtx.drawImage(
+          playheadCanvas,
+          0, 0, playheadCanvas.width, playheadCanvas.height,
+          0, 0, width, height
+        );
+        if (__perfOn && __playheadStart) {
+          try { window.__PerfFrameProf?.mark?.('drawgrid.composite.playhead', performance.now() - __playheadStart); } catch {}
+        }
+      }
     });
     panel.__dgCompositeOverlayDirty = false;
     if (__perfOn && __finalStart) {
@@ -5450,7 +5479,8 @@ function syncBackBufferSizes() {
         flashFrontCtx?.canvas,
         ghostFrontCtx?.canvas,
         tutorialFrontCtx?.canvas,
-        particleCanvas
+        particleCanvas,
+        playheadCanvas
       ].filter(Boolean);
 
       for (const canvas of styleCanvases) {
@@ -5471,6 +5501,7 @@ function syncBackBufferSizes() {
         ghostBackCanvas,
         tutorialFrontCtx?.canvas,
         tutorialBackCanvas,
+        playheadCanvas,
       ].filter(Boolean);
 
       for (const canvas of allCanvases) {
@@ -9152,6 +9183,7 @@ function syncBackBufferSizes() {
       const probablyStale = isActiveInChain && phaseJustWrapped;
 
         const playheadSimpleOnly = __dgPlayheadSimpleMode;
+        const useSeparatePlayhead = !!(typeof window !== 'undefined' && window.__DG_PLAYHEAD_SEPARATE_CANVAS);
         const playheadFpsHint = readHeaderFpsHint();
         const allowPlayheadLowZoom = Number.isFinite(playheadFpsHint) && playheadFpsHint >= 55;
         const playheadFancyDesired = !playheadSimpleOnly &&
@@ -9165,7 +9197,9 @@ function syncBackBufferSizes() {
         const playheadFancy = !!panel.__dgPlayheadFancyLocked;
         const playheadDrawSimple = playheadSimpleOnly || !playheadFancy;
         const canUseTutorialLayer = tutorialHighlightMode === 'none' && !!tutorialCtx?.canvas;
-        const playheadLayer = (playheadDrawSimple && canUseTutorialLayer) ? 'tutorial' : 'flash';
+        const playheadLayer = useSeparatePlayhead
+          ? 'playhead'
+          : (playheadDrawSimple && canUseTutorialLayer) ? 'tutorial' : 'flash';
         const shouldRenderPlayhead = !!(info && isRunning() && isActiveInChain && !probablyStale);
 
         if (!shouldRenderPlayhead) {
@@ -9185,6 +9219,20 @@ function syncBackBufferSizes() {
                 tutorialCtx.clearRect(0, 0, tw, th);
               });
               markTutorialLayerCleared();
+              overlayCompositeNeeded = true;
+              if (__overlayClearStart) {
+                try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.clear', performance.now() - __overlayClearStart); } catch {}
+              }
+            } else if (lastLayer === 'playhead' && playheadFrontCtx?.canvas) {
+              const __overlayClearStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+                ? performance.now()
+                : 0;
+              resetCtx(playheadFrontCtx);
+              withOverlayClip(playheadFrontCtx, gridArea, false, () => {
+                const band = Math.max(6, Math.round(Math.max(0.8 * cw, Math.min(gridArea.w * 0.08, 2.2 * cw))));
+                playheadFrontCtx.clearRect(lastX - band, gridArea.y - 2, band * 2, gridArea.h + 4);
+              });
+              markPlayheadLayerCleared();
               overlayCompositeNeeded = true;
               if (__overlayClearStart) {
                 try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.clear', performance.now() - __overlayClearStart); } catch {}
@@ -9230,11 +9278,15 @@ function syncBackBufferSizes() {
         }
 
         if (shouldRenderPlayhead) {
-          const playheadCtx = (playheadLayer === 'tutorial') ? tutorialCtx : fctx;
+          const playheadCtx = (playheadLayer === 'tutorial')
+            ? tutorialCtx
+            : (playheadLayer === 'playhead') ? playheadFrontCtx : fctx;
           const lastX = Number.isFinite(panel.__dgPlayheadLastX) ? panel.__dgPlayheadLastX : null;
           const lastLayer = panel.__dgPlayheadLayer || playheadLayer;
           if ((playheadCtx === tutorialCtx || !overlayClearedThisFrame) && lastX != null) {
-            const clearCtx = (lastLayer === 'tutorial') ? tutorialCtx : fctx;
+            const clearCtx = (lastLayer === 'tutorial')
+              ? tutorialCtx
+              : (lastLayer === 'playhead') ? playheadFrontCtx : fctx;
             if (clearCtx?.canvas && gridArea) {
               const band = Math.max(6, Math.round(Math.max(0.8 * cw, Math.min(gridArea.w * 0.08, 2.2 * cw))));
               resetCtx(clearCtx);
@@ -9244,7 +9296,7 @@ function syncBackBufferSizes() {
               emitDG('overlay-clear', { reason: 'playhead-band' });
             }
           }
-        if (!overlayClearedThisFrame) {
+        if (!useSeparatePlayhead && !overlayClearedThisFrame) {
           const __overlayClearStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
             ? performance.now()
             : 0;
@@ -9288,6 +9340,8 @@ function syncBackBufferSizes() {
         overlayCompositeNeeded = true;
         if (playheadCtx === tutorialCtx) {
           markTutorialLayerActive();
+        } else if (playheadCtx === playheadFrontCtx) {
+          markPlayheadLayerActive();
         } else {
           markFlashLayerActive();
         }
