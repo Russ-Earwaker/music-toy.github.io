@@ -491,7 +491,35 @@ function ensureHoverListeners() {
   if (hoverBound) return;
   const host = pickHost();
   if (!host) return;
+  const isPointerOverToyChrome = (evt) => {
+    try {
+      const t = evt?.target;
+      if (!t) return false;
+      if (t.closest && t.closest('.toy-panel, .toy-header, .toy-footer')) return true;
+      const path = evt.composedPath?.();
+      if (Array.isArray(path)) {
+        for (const node of path) {
+          if (
+            node?.classList?.contains('toy-panel') ||
+            node?.classList?.contains('toy-header') ||
+            node?.classList?.contains('toy-footer')
+          ) {
+            return true;
+          }
+        }
+      }
+    } catch {}
+    return false;
+  };
   const onMove = (evt) => {
+    if (isPointerOverToyChrome(evt)) {
+      hoverPointer = null;
+      if (hoverActive) {
+        hoverActive = false;
+        try { stopParticleStream({ immediate: true, owner: 'anchor' }); } catch {}
+      }
+      return;
+    }
     const rect = host.getBoundingClientRect();
     hoverPointer = {
       x: evt.clientX - rect.left,
@@ -508,6 +536,7 @@ function ensureHoverListeners() {
     }
   };
   const onDown = (evt) => {
+    if (isPointerOverToyChrome(evt)) return;
     const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
     const anchorWorld = getAnchorWorld();
     const local = getViewportLocalPointFromWorld(anchorWorld);
