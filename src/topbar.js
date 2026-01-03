@@ -2163,10 +2163,10 @@ if (document.readyState === 'loading') {
 
       if (tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.isContentEditable)){
         try{
-          const isBpmRange = (tgt.tagName === 'INPUT'
-            && String(tgt.type || '').toLowerCase() === 'range'
-            && !!tgt.closest?.('#topbar-bpm-panel'));
-          if (!isBpmRange) return;
+          const isRange = (tgt.tagName === 'INPUT' && String(tgt.type || '').toLowerCase() === 'range');
+          const isBpmRange = isRange && !!tgt.closest?.('#topbar-bpm-panel');
+          const isToyVolumeRange = isRange && !!tgt.closest?.('.toy-volwrap');
+          if (!isBpmRange && !isToyVolumeRange) return;
         }catch{
           return;
         }

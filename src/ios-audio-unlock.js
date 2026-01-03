@@ -48,7 +48,15 @@ export function installIOSAudioUnlock() {
   const tryOnce = async (e) => {
     // Keep the gesture "active"; prevent page zoom/scroll on the very first tap.
     userGestureSeen = true;
-    try { e.preventDefault(); } catch {}
+    try {
+      const tgt = e?.target;
+      const tag = tgt?.tagName ? String(tgt.tagName).toUpperCase() : '';
+      const type = (tag === 'INPUT') ? String(tgt.type || '').toLowerCase() : '';
+      const isFormControl = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON';
+      const isEditable = !!tgt?.isContentEditable;
+      const allowDefault = isFormControl || isEditable || type === 'range';
+      if (!allowDefault) e.preventDefault();
+    } catch {}
     await tryResume('gesture');
     // Remove all listeners after first success attempt
     remove();

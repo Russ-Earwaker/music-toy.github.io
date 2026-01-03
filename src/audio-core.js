@@ -179,6 +179,7 @@ export function isRunning(){ return __started; }
 
 export function getToyVolume(id='master'){ const key=String(id||'master').toLowerCase(); return (__mute.get(key)?0:(__vol.get(key)??1)); }
 export function isToyMuted(id='master'){ const key=String(id||'master').toLowerCase(); return !!__mute.get(key); }
+export function getToyVolumeRaw(id='master'){ const key=String(id||'master').toLowerCase(); return (__vol.get(key) ?? 1); }
 
 export function resumeAudioContextIfNeeded() {
   const ctx = ensureAudioContext();

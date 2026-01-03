@@ -1,9 +1,10 @@
 // src/persistence.js
 // Lightweight scene save/load with versioning and localStorage backend.
 
-import { bpm, setBpm, stop as stopTransport } from './audio-core.js';
+import { bpm, setBpm, stop as stopTransport, setToyVolume, setToyMuted, getToyVolumeRaw, isToyMuted } from './audio-core.js';
 import { setGestureTransform as zcSetGestureTransform, commitGesture as zcCommitGesture, getZoomState as zcGetZoomState } from './zoom/ZoomCoordinator.js';
 import { getActiveThemeKey, setActiveThemeKey } from './theme-manager.js';
+import { syncVolumeUI } from './volume-ui.js';
 
 // ---- Persistence diagnostics ----
 const PERSIST_DIAG = (typeof window !== 'undefined') ? (window.__PERSIST_DIAG = window.__PERSIST_DIAG || {}) : {};
@@ -291,6 +292,41 @@ function nowIso(){ try{ return new Date().toISOString(); }catch{ return '';} }
 function readNumber(v, def){ const n = Number(v); return Number.isFinite(n) ? n : def; }
 
 function panelId(panel){ return panel.id || panel.dataset.toyid || panel.dataset.toy || `panel-${Math.random().toString(36).slice(2)}`; }
+
+function clamp01(v){ return Math.max(0, Math.min(1, Number(v))); }
+
+function resolveToyAudioId(panel, fallbackId){
+  return String(panel?.dataset?.toyid || panel?.id || fallbackId || 'master');
+}
+
+function snapToyAudio(panel, fallbackId){
+  const id = resolveToyAudioId(panel, fallbackId);
+  return {
+    volume: clamp01(getToyVolumeRaw(id)),
+    muted: !!isToyMuted(id),
+  };
+}
+
+function applyToyAudio(panel, toySnap, fallbackId){
+  if (!panel || !toySnap) return;
+  const id = resolveToyAudioId(panel, fallbackId);
+  const hasVolume = Number.isFinite(toySnap.volume);
+  const hasMuted = typeof toySnap.muted === 'boolean';
+  const volume = hasVolume ? clamp01(toySnap.volume) : null;
+  const muted = hasMuted ? !!toySnap.muted : null;
+
+  if (hasVolume) {
+    try { setToyVolume(id, volume); } catch {}
+    try { panel.dataset.toyVolume = String(volume); } catch {}
+  }
+  if (hasMuted) {
+    try { setToyMuted(id, muted); } catch {}
+    try { panel.dataset.toyMuted = muted ? '1' : '0'; } catch {}
+  }
+  if (hasVolume || hasMuted) {
+    try { syncVolumeUI(panel, { volume: hasVolume ? volume : undefined, muted: hasMuted ? muted : undefined }); } catch {}
+  }
+}
 
 function readUI(panel){
   const cs = getComputedStyle(panel);
@@ -692,11 +728,13 @@ export function getSnapshot(){
     const type = String(panel.dataset.toy||'').toLowerCase();
     const id = panelId(panel);
     const snapper = ToySnapshotters[type]?.snap || (()=>({}));
+    const audio = snapToyAudio(panel, id);
     return {
       id, type,
       ui: readUI(panel),
       state: snapper(panel) || {},
-      muted: undefined,
+      volume: audio.volume,
+      muted: audio.muted,
       solo: undefined,
     };
   });
@@ -848,6 +886,7 @@ export function applySceneSnapshot(snap){
           try{ panel.__pendingBouncerState = t.state || {}; }catch{}
         }
       }
+      try { applyToyAudio(panel, t, t.id); } catch {}
       appliedCount++;
     }
     // --- Re-link chain edges AFTER all toys exist ---
