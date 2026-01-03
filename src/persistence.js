@@ -457,10 +457,9 @@ function applyDrawGrid(panel, state) {
   // Summarize state for logs
   const sum = (st = {}) => {
     const strokes = Array.isArray(st.strokes) ? st.strokes.length : 0;
-    const er = Array.isArray(st.eraseStrokes) ? st.eraseStrokes.length : 0;
     const act = Array.isArray(st?.nodes?.active) ? st.nodes.active.filter(Boolean).length : 0;
     const steps = (typeof st.steps === 'number') ? st.steps : undefined;
-    return { strokes, erases: er, activeCols: act, steps };
+    return { strokes, activeCols: act, steps };
   };
 
   // If toy isn't initialized yet, stash full state for init-time apply.
@@ -491,10 +490,8 @@ function applyDrawGrid(panel, state) {
         }
       }
       const hasStrokes = Array.isArray(state?.strokes) && state.strokes.length > 0;
-      const hasErase = Array.isArray(state?.eraseStrokes) && state.eraseStrokes.length > 0;
       const hasActiveNodes = Array.isArray(state?.nodes?.active) && state.nodes.active.some(Boolean);
       const hasExplicitStrokes = !!state && Object.prototype.hasOwnProperty.call(state, 'strokes');
-      const hasExplicitErase = !!state && Object.prototype.hasOwnProperty.call(state, 'eraseStrokes');
       const hasExplicitNodes = !!state && Object.prototype.hasOwnProperty.call(state, 'nodes');
       const hasExplicitSteps = typeof state?.steps === 'number';
       const hasExplicitMeta =
@@ -504,10 +501,8 @@ function applyDrawGrid(panel, state) {
           Object.prototype.hasOwnProperty.call(state, 'manualOverrides'));
       const meaningful =
         hasStrokes ||
-        hasErase ||
         hasActiveNodes ||
         hasExplicitStrokes ||
-        hasExplicitErase ||
         hasExplicitNodes ||
         hasExplicitSteps ||
         hasExplicitMeta;
@@ -840,7 +835,6 @@ export function applySceneSnapshot(snap){
             } catch {}
             const summary = {
               strokes: Array.isArray(s.strokes) ? s.strokes.length : 0,
-              erases: Array.isArray(s.eraseStrokes) ? s.eraseStrokes.length : 0,
               activeCols: Array.isArray(s?.nodes?.active) ? s.nodes.active.filter(Boolean).length : 0,
               steps: typeof s.steps === 'number' ? s.steps : undefined,
             };

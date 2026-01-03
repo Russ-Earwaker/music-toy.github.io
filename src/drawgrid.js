@@ -1328,16 +1328,13 @@ function __dgCollectFlowState(ctx = {}) {
   const flashBackEl = ctx.flashBackCanvas ?? ((typeof flashBackCanvas !== 'undefined') ? flashBackCanvas : null);
   const activeFlashEl = ctx.activeFlashCanvas ?? ((typeof getActiveFlashCanvas === 'function') ? getActiveFlashCanvas() : null);
   const strokeList = ctx.strokes ?? ((typeof strokes !== 'undefined') ? strokes : null);
-  const eraseList = ctx.eraseStrokes ?? ((typeof eraseStrokes !== 'undefined') ? eraseStrokes : null);
   const panelRef = ctx.panel ?? ((typeof panel !== 'undefined') ? panel : null);
   const hasOverlayFn = ctx.hasOverlayStrokesCached ?? ((typeof hasOverlayStrokesCached === 'function') ? hasOverlayStrokesCached : null);
   return {
     panelId: panelRef?.id || null,
     strokes: Array.isArray(strokeList) ? strokeList.length : 0,
-    eraseStrokes: Array.isArray(eraseList) ? eraseList.length : 0,
     hasOverlayStrokes: hasOverlayFn ? hasOverlayFn() : null,
     paintRev: ctx.paintRev ?? ((typeof __dgPaintRev !== 'undefined') ? __dgPaintRev : null),
-    overlayMaskRev: ctx.overlayMaskRev ?? ((typeof __dgOverlayMaskRev !== 'undefined') ? __dgOverlayMaskRev : null),
     flashEmpty: panelRef ? !!panelRef.__dgFlashLayerEmpty : null,
     flashOutOfGrid: panelRef ? !!panelRef.__dgFlashOverlayOutOfGrid : null,
     baseDirty: panelRef ? !!panelRef.__dgCompositeBaseDirty : null,
@@ -1837,11 +1834,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       y: (isFinite(clampedY) ? clampedY : 1)
     };
   }
-
-  // Eraser cursor
-  const eraserCursor = document.createElement('div');
-  eraserCursor.className = 'drawgrid-eraser-cursor';
-  body.appendChild(eraserCursor);
 
   // Layers (z-index order) — particles behind the art layers
   const DG_SINGLE_CANVAS = true;
@@ -2967,7 +2959,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let __dgPostCommitTries = 0;
   function __dgReprojectNormalizedStrokesIfNeeded(tag = 'reproject') {
     try {
-      if ((!strokes || strokes.length === 0) && (!eraseStrokes || eraseStrokes.length === 0)) return false;
+      if (!strokes || strokes.length === 0) return false;
       if (!gridArea || !Number.isFinite(gridArea.x) || !Number.isFinite(gridArea.w) || !Number.isFinite(gridArea.h)) return false;
 
       const gh = Math.max(1, (gridArea.h - (topPad || 0)));
@@ -2988,8 +2980,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       };
 
       reprojectList(strokes);
-      reprojectList(eraseStrokes);
-
       if (changed && DG_LAYOUT_DEBUG) {
         try {
           dgLogLine?.('reproject-normalized-strokes', {
@@ -2997,7 +2987,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
             tag,
             changed,
             strokes: Array.isArray(strokes) ? strokes.length : 0,
-            eraseStrokes: Array.isArray(eraseStrokes) ? eraseStrokes.length : 0,
           });
         } catch {}
       }
@@ -3586,7 +3575,7 @@ function ensureSizeReady({ force = false } = {}) {
 
   // Zoom signal hygiene
   let lastCommittedScale = boardScale;
-  let drawing=false, erasing=false;
+  let drawing = false;
   const setDrawingState = (state) => {
     drawing = !!state;
     __dgDrawingActive = !!state;
@@ -3594,7 +3583,6 @@ function ensureSizeReady({ force = false } = {}) {
   setDrawingState(false);
   // The `strokes` array is removed. The paint canvas is now the source of truth.
   let cur = null;
-  let curErase = null;
   let strokes = []; // Store all completed stroke objects
   let __dgOverlayStrokeCache = { value: false, len: 0, ts: 0 };
   let __dgOverlayStrokeListCache = { paintRev: -1, len: 0, special: [], colorized: [] };
@@ -3661,23 +3649,13 @@ function ensureSizeReady({ force = false } = {}) {
     }
     __dgPrevStrokeLen = len;
   }
-  let eraseStrokes = []; // Store all completed erase strokes
-    let cellFlashes = []; // For flashing grid squares on note play
-    let noteToggleEffects = []; // For tap feedback ring animations
-    let noteBurstEffects = [];  // For short-range radial particle bursts on note hits
-    let __dgPaintRev = 0;
-    let __dgOverlayMaskCanvas = null;
-    let __dgOverlayMaskCtx = null;
-    let __dgOverlayMaskRev = -1;
-    let __dgOverlayMaskRebuilds = 0;
-    let __dgOverlayMaskLastLog = 0;
-    let __dgOverlayMaskScale = 1;
-    let __dgOverlayMaskScaleLastTs = 0;
-    let __dgOverlayMaskW = 0;
-    let __dgOverlayMaskH = 0;
-    function markPaintDirty() {
-      __dgPaintRev = (__dgPaintRev + 1) | 0;
-    }
+  let cellFlashes = []; // For flashing grid squares on note play
+  let noteToggleEffects = []; // For tap feedback ring animations
+  let noteBurstEffects = [];  // For short-range radial particle bursts on note hits
+  let __dgPaintRev = 0;
+  function markPaintDirty() {
+    __dgPaintRev = (__dgPaintRev + 1) | 0;
+  }
 
   function spawnNoteRingEffect(cx, cy, baseRadius) {
     const r =
@@ -3759,13 +3737,11 @@ function ensureSizeReady({ force = false } = {}) {
   let __dgHadNodeFlash = false;
   let playheadCol = -1;
   let localLastPhase = 0; // For chain-active race condition
-  let erasedTargetsThisDrag = new Set(); // For eraser hit-testing of specific nodes (currently unused)
   let manualOverrides = Array.from({ length: initialCols }, () => new Set()); // per-column node rows overridden by drags
   let draggedNode = null; // { col, row, group? }
   let pendingNodeTap = null; // potential tap for toggle
   let pendingActiveMask = null; // preserve active columns across resolution changes
   let dragScaleHighlightCol = null; // column index currently showing pentatonic hints
-  let eraseButton = null; // Reference to header erase button
   let previewGid = null; // 1 or 2 while drawing a special line preview
   let persistentDisabled = Array.from({ length: initialCols }, () => new Set()); // survives view changes
   let btnLine1, btnLine2;
@@ -3783,7 +3759,6 @@ function ensureSizeReady({ force = false } = {}) {
   const isPanelCulled = () => !isPanelVisible;
   let pendingSwap = false;
   let pendingWrapSize = null;
-  let pendingEraserSize = null;
   let progressMeasureW = 0;
   let progressMeasureH = 0;
   const PROGRESS_SIZE_THRESHOLD = 4;
@@ -4187,21 +4162,9 @@ function ensureSizeReady({ force = false } = {}) {
 
   panel.dataset.steps = String(cols);
 
-  // UI: ensure Eraser button exists in header
   const header = panel.querySelector('.toy-header');
   if (header){
     const right = header.querySelector('.toy-controls-right') || header;
-    eraseButton = header.querySelector('[data-erase]');
-    // The button is now created by toyui.js. We just need to find it and wire it up.
-    eraseButton?.addEventListener('click', ()=>{
-      if (eraseButton?.disabled) return;
-      erasing = !erasing;
-      eraseButton.setAttribute('aria-pressed', String(erasing));
-      eraseButton.classList.toggle('active', erasing);
-      if (!erasing) eraserCursor.style.display = 'none';
-      else erasedTargetsThisDrag.clear(); // Clear on tool toggle
-    });
-
     // --- Generator Line Buttons (Advanced Mode Only) ---
     const generatorButtonsWrap = document.createElement('div');
     generatorButtonsWrap.className = 'drawgrid-generator-buttons';
@@ -4240,7 +4203,6 @@ function ensureSizeReady({ force = false } = {}) {
     btnLine1.addEventListener('click', handleGeneratorButtonClick);
     btnLine2.addEventListener('click', handleGeneratorButtonClick);
 
-    updateEraseButtonState();
     // Auto-tune toggle
     let autoTuneBtn = right.querySelector('.drawgrid-autotune');
     if (!autoTuneBtn) {
@@ -4353,22 +4315,6 @@ function ensureSizeReady({ force = false } = {}) {
     }
   }
 
-  function updateEraseButtonState() {
-    if (!eraseButton) return;
-    const isZoomed = panel.classList.contains('toy-zoomed');
-    if (!isZoomed && erasing) {
-      erasing = false;
-      erasedTargetsThisDrag.clear();
-    }
-    eraseButton.disabled = !isZoomed;
-    eraseButton.classList.toggle('is-disabled', !isZoomed);
-    eraseButton.setAttribute('aria-pressed', String(erasing));
-    eraseButton.classList.toggle('active', !!erasing && isZoomed);
-    if (!erasing) {
-      eraserCursor.style.display = 'none';
-    }
-  }
-
   function updateGeneratorButtons() {
       if (!btnLine1 || !btnLine2) return; // Guard in case header/buttons don't exist
       const hasLine1 = strokes.some(s => s.generatorId === 1);
@@ -4426,11 +4372,7 @@ function ensureSizeReady({ force = false } = {}) {
         for (const s of normalStrokes) {
           drawFullStroke(ctx, s);
         }
-        // 2. Apply the global erase mask to the existing strokes.
-        for (const s of eraseStrokes) {
-          drawEraseStroke(ctx, s);
-        }
-        // 3. Draw the brand new strokes on top, so they are not affected by old erasures.
+        // 2. Draw the brand new strokes on top.
         for (const s of newStrokes) {
           drawFullStroke(ctx, s);
         }
@@ -4451,34 +4393,6 @@ function ensureSizeReady({ force = false } = {}) {
         dgPaintTrace('clearAndRedrawFromStrokes:exit');
       });
     }
-
-  function drawEraseStroke(ctx, stroke) {
-    if (!stroke || !stroke.pts || stroke.pts.length < 1) return;
-    if (DG_SINGLE_CANVAS && ctx?.canvas?.getAttribute?.('data-role') === 'drawgrid-paint' && backCtx && ctx !== backCtx) {
-      ctx = backCtx;
-    }
-      withLogicalSpace(ctx, () => {
-        ctx.save();
-        ctx.globalCompositeOperation = 'destination-out';
-      ctx.strokeStyle = '#000'; // color doesn't matter
-      ctx.lineWidth = getLineWidth() * 2; // diameter of erase circle
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-
-        ctx.beginPath();
-        ctx.moveTo(stroke.pts[0].x, stroke.pts[0].y);
-        if (stroke.pts.length === 1) {
-            ctx.lineTo(stroke.pts[0].x + 0.1, stroke.pts[0].y);
-        } else {
-          for (let i = 1; i < stroke.pts.length; i++) {
-              ctx.lineTo(stroke.pts[i].x, stroke.pts[i].y);
-          }
-      }
-        ctx.stroke();
-        ctx.restore();
-      });
-    markPaintDirty();
-  }
 
   function drawIntoBackOnly(includeCurrentStroke = false) {
     if (!backCtx || !cssW || !cssH) return;
@@ -5633,13 +5547,6 @@ function syncBackBufferSizes() {
       wrap.style.height = `${pendingWrapSize.height}px`;
       pendingWrapSize = null;
     }
-    if (pendingEraserSize != null) {
-      const sizePx = `${pendingEraserSize}px`;
-      eraserCursor.style.width = sizePx;
-      eraserCursor.style.height = sizePx;
-      pendingEraserSize = null;
-    }
-
     grid.width = w; grid.height = h;
     nodesCanvas.width = w; nodesCanvas.height = h;
     flashCanvas.width = w; flashCanvas.height = h;
@@ -5738,7 +5645,7 @@ function syncBackBufferSizes() {
       if ((!zoomGestureActive && (force || Math.abs(newW - cssW) > 1 || Math.abs(newH - cssH) > 1)) || (force && zoomGestureActive)) {
         const oldW = cssW;
         const oldH = cssH;
-        // Snapshot current paint to preserve erased/drawn content across resize.
+        // Snapshot current paint to preserve drawn content across resize.
       // IMPORTANT: snapshot the ACTIVE paint surface (front/back), not just `paint`,
       // otherwise wheel-zoom / overview can wipe the user's line.
       let paintSnapshot = null;
@@ -5782,10 +5689,6 @@ function syncBackBufferSizes() {
         const scaleY = cssH / oldH;
         if (scaleX !== 1 || scaleY !== 1) {
           for (const s of strokes) {
-            if (Array.isArray(s?.__ptsN)) continue;
-            s.pts = s.pts.map(p => ({ x: p.x * scaleX, y: p.y * scaleY }));
-          }
-          for (const s of eraseStrokes || []) {
             if (Array.isArray(s?.__ptsN)) continue;
             s.pts = s.pts.map(p => ({ x: p.x * scaleX, y: p.y * scaleY }));
           }
@@ -5853,18 +5756,10 @@ function syncBackBufferSizes() {
         }
       }
       // Reproject strokes from normalized coords once layout is stable.
-      if ((strokes.length > 0 || (eraseStrokes || []).length > 0)) {
+      if (strokes.length > 0) {
         const gh = Math.max(1, gridArea.h - topPad);
         let reprojected = false;
         for (const s of strokes) {
-          if (!Array.isArray(s?.__ptsN)) continue;
-          reprojected = true;
-          s.pts = s.__ptsN.map(np => ({
-            x: gridArea.x + (Number(np?.nx) || 0) * gridArea.w,
-            y: (gridArea.y + topPad) + (Number(np?.ny) || 0) * gh,
-          }));
-        }
-        for (const s of eraseStrokes || []) {
           if (!Array.isArray(s?.__ptsN)) continue;
           reprojected = true;
           s.pts = s.__ptsN.map(np => ({
@@ -5914,20 +5809,10 @@ function syncBackBufferSizes() {
       }
 
 
-      // Update eraser cursor size
-      const eraserWidth = getLineWidth() * 2;
-      if (usingBackBuffers) {
-        pendingEraserSize = eraserWidth;
-      } else {
-        eraserCursor.style.width = `${eraserWidth}px`;
-        eraserCursor.style.height = `${eraserWidth}px`;
-      }
-
       drawGrid();
       // Restore paint snapshot scaled to new size (preserves erasures) — but never during an active stroke
       // Skip snapshot restore when hydrated strokes are present; redraw from data instead.
-      const hasHydratedStroke = strokes.some(s => Array.isArray(s?.__ptsN)) ||
-        (eraseStrokes || []).some(s => Array.isArray(s?.__ptsN));
+      const hasHydratedStroke = strokes.some(s => Array.isArray(s?.__ptsN));
       if (paintSnapshot && !hasHydratedStroke && zoomCommitPhase !== 'recompute') {
         try {
           if (!drawing) {
@@ -6459,62 +6344,6 @@ function syncBackBufferSizes() {
     }
     if (!wasOverlay) markPaintDirty();
   }
-  function eraseAtPoint(p) {
-    const R = getLineWidth(); // This is the radius
-    resetCtx(pctx);
-    withLogicalSpace(pctx, () => {
-      pctx.save();
-      pctx.globalCompositeOperation = 'destination-out';
-      pctx.beginPath();
-      pctx.arc(p.x, p.y, R, 0, Math.PI * 2, false);
-      pctx.fillStyle = '#000';
-      pctx.fill();
-      pctx.restore();
-    });
-    markPaintDirty();
-  }
-
-  function animateErasedNode(node) {
-    const duration = 250; // 0.25 seconds
-    const startTime = performance.now();
-    const initialRadius = Math.max(3, Math.min(cw, ch) * 0.15);
-
-    function frame(now) {
-        if (!panel.isConnected) return;
-        const elapsed = now - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-        const easeOutQuad = t => t * (2 - t);
-        const easedProgress = easeOutQuad(progress);
-
-        // Redraw the static nodes first (the map is already updated)
-        drawNodes(currentMap.nodes);
-
-        // Then draw the animating "ghost" node on top
-        if (progress < 1) {
-            const scale = 1 + 2.5 * easedProgress; // Scale up to 3.5x
-            const opacity = 1 - progress; // Fade out
-
-            resetCtx(nctx);
-            withLogicalSpace(nctx, () => {
-              nctx.save();
-              nctx.globalAlpha = opacity;
-              nctx.fillStyle = 'rgba(255, 255, 255, 1)'; // Bright white
-
-              // Add a bright glow that fades
-              nctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
-              nctx.shadowBlur = 20 * (1 - progress);
-
-              nctx.beginPath();
-              nctx.arc(node.x, node.y, initialRadius * scale, 0, Math.PI * 2);
-              nctx.fill();
-              nctx.restore();
-            });
-            requestAnimationFrame(frame);
-        }
-    }
-    requestAnimationFrame(frame);
-  }
-
   let __dgNodesCache = { canvas: null, ctx: null, key: '' };
   let __dgBlocksCache = { canvas: null, ctx: null, key: '' };
 
@@ -7064,34 +6893,6 @@ function syncBackBufferSizes() {
     return {active, nodes, disabled};
   }
 
-  function eraseNodeAtPoint(p) {
-    const eraserRadius = getLineWidth();
-    for (const node of [...nodeCoordsForHitTest]) { // Iterate on a copy
-        const key = `${node.col}:${node.row}:${node.group ?? 'n'}`;
-        if (erasedTargetsThisDrag.has(key)) continue;
-
-        if (Math.hypot(p.x - node.x, p.y - node.y) < eraserRadius) {
-            const col = node.col;
-            const row = node.row;
-            erasedTargetsThisDrag.add(key);
-
-            if (currentMap && currentMap.nodes[col]) {
-                // Do not remove groups or nodes; mark it disabled instead so connections persist (but gray)
-                if (!persistentDisabled[col]) persistentDisabled[col] = new Set();
-                persistentDisabled[col].add(row);
-                // If no enabled nodes remain, mark column inactive
-                const anyOn = Array.from(currentMap.nodes[col] || []).some(r => !persistentDisabled[col].has(r));
-                currentMap.active[col] = anyOn;
-            }
-
-            // Start the animation of the erased node only
-            animateErasedNode(node);
-            // Notify the player of the change
-            emitDrawgridUpdate({ activityOnly: false });
-        }
-    }
-  }
-
   function onPointerDown(e){
     e.stopPropagation();
     __dgFlowLog('pointer:down:entry', {
@@ -7105,7 +6906,7 @@ function syncBackBufferSizes() {
     }
     stopAutoGhostGuide({ immediate: false });
     markUserChange('pointerdown');
-    __dgFlowLog('pointer:down', { erasing: !!erasing });
+    __dgFlowLog('pointer:down', {});
     const p = pointerToPaintLogical(e);
 
     // (Top cubes removed)
@@ -7115,13 +6916,6 @@ function syncBackBufferSizes() {
       const cellX = gridArea.x + node.col * cw;
       const cellY = gridArea.y + topPad + node.row * ch;
       if (p.x >= cellX && p.x <= cellX + cw && p.y >= cellY && p.y <= cellY + ch) {
-        // With eraser active: erase paint and disable this node + attached lines coloration
-        if (erasing) {
-          erasedTargetsThisDrag.clear();
-          eraseNodeAtPoint(p);
-          eraseAtPoint(pointerToPaintLogical(e));
-          return;
-        }
         pendingNodeTap = { col: node.col, row: node.row, x: p.x, y: p.y, group: node.group ?? null };
         setDrawingState(true); // capture move/up
         try { paint.setPointerCapture?.(e.pointerId); } catch {}
@@ -7153,10 +6947,6 @@ function syncBackBufferSizes() {
     }
     resetPaintBlend(pctx);
 
-    if (erasing) {
-      erasedTargetsThisDrag.clear();
-      curErase = { pts: [pointerToPaintLogical(e)] };
-    } else {
       // When starting a new line, don't clear the canvas. This makes drawing additive.
       // If we are about to draw a special line (previewGid decided), demote any existing line of that kind.
       try {
@@ -7207,7 +6997,6 @@ function syncBackBufferSizes() {
         );
       } catch {}
       // The full stroke will be drawn on pointermove.
-    }
   }
   let __dgMoveRAF = 0;
   let __dgPendingMoveEvt = null;
@@ -7319,30 +7108,6 @@ function syncBackBufferSizes() {
           setDragScaleHighlight(draggedNode.col);
       }
       return;
-    }
-
-    if (erasing) {
-      const eraserRadius = getLineWidth();
-      eraserCursor.style.transform = `translate(${p.x - eraserRadius}px, ${p.y - eraserRadius}px)`;
-      if (drawing && curErase) {
-        const paintErasePt = p;
-        const lastPt = curErase.pts[curErase.pts.length - 1] || paintErasePt;
-        // Draw a line segment for erasing
-        pctx.save();
-        pctx.globalCompositeOperation = 'destination-out';
-        pctx.lineCap = 'round';
-        pctx.lineJoin = 'round';
-        pctx.lineWidth = getLineWidth() * 2;
-        pctx.strokeStyle = '#000';
-        pctx.beginPath();
-        pctx.moveTo(lastPt.x, lastPt.y);
-        pctx.lineTo(paintErasePt.x, paintErasePt.y);
-        pctx.stroke();
-        pctx.restore();
-        curErase.pts.push(paintErasePt);
-        eraseNodeAtPoint(p);
-      }
-      return; // Don't do drawing logic if erasing
     }
 
     if (!drawing) return; // Guard for drawing logic below
@@ -7589,7 +7354,6 @@ function syncBackBufferSizes() {
     const strokeToProcess = cur;
     cur = null;
     __dgFlowLog('pointer:up', {
-      erasing: !!erasing,
       strokePts: strokeToProcess?.pts?.length || 0,
       hadPreview: !!previewGid,
     });
@@ -7602,39 +7366,6 @@ function syncBackBufferSizes() {
         }
       } catch {}
       try { previewGid = null; } catch {}
-    }
-
-    if (erasing) {
-      if (curErase) {
-        // If it was just a tap (one point), erase a circle at that point.
-        if (curErase.pts.length === 1) {
-          eraseAtPoint(curErase.pts[0]);
-          eraseNodeAtPoint(curErase.pts[0]);
-        }
-        eraseStrokes.push(curErase);
-        curErase = null;
-      }
-      erasedTargetsThisDrag.clear();
-      clearAndRedrawFromStrokes(null, 'erase-commit'); // Redraw to bake in the erase
-      markUserChange('erase-commit');
-      schedulePersistState({ source: 'erase-stroke' });
-      try { window.Persistence?.flushAutosaveNow?.(); } catch {}
-      pendingPaintSwap = true;
-      __dgNeedsUIRefresh = true;
-      if (!zoomGestureActive) {
-        if (!__swapRAF) {
-          __swapRAF = requestAnimationFrame(() => {
-            __swapRAF = null;
-            if (!DG_SINGLE_CANVAS) {
-              swapBackToFront();
-              pendingPaintSwap = false;
-            } else {
-              __dgMarkSingleCanvasDirty(panel);
-            }
-          });
-        }
-      }
-      return;
     }
 
     if (!strokeToProcess) {
@@ -7817,11 +7548,7 @@ function syncBackBufferSizes() {
 
   paint.addEventListener('pointerdown', onPointerDown);
   paint.addEventListener('pointermove', onPointerMove);
-  paint.addEventListener('pointerenter', () => {
-    if (erasing) eraserCursor.style.display = 'block';
-  });
   paint.addEventListener('pointerleave', () => {
-    eraserCursor.style.display = 'none';
     paint.style.cursor = 'default';
   });
   window.addEventListener('pointerup', onPointerUp);
@@ -8807,7 +8534,7 @@ function syncBackBufferSizes() {
         try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.clear', __overlayClearDt); } catch {}
       }
 
-      // Animate special stroke paint (hue cycling) without resurrecting erased areas:
+      // Animate special stroke paint (hue cycling).
       // Draw animated special strokes into flashCanvas, then mask with current paint alpha.
         if (!disableOverlayStrokes && (hasOverlayStrokesLive || (cur && previewGid))) {
         const __overlayStrokeStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
@@ -8944,7 +8671,7 @@ function syncBackBufferSizes() {
               if (__specialStart) {
                 try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.strokes.special', performance.now() - __specialStart); } catch {}
               }
-              // Draw current special preview before masking so it also respects the paint mask
+              // Draw current special preview on top.
               if (cur && previewGid && cur.pts && cur.pts.length) {
                 const __previewStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
                   ? performance.now()
@@ -8956,115 +8683,6 @@ function syncBackBufferSizes() {
                 }
               }
             });
-            // Mask the overlay with the current paint alpha, scaled to the flash surface size.
-            // IMPORTANT: If a live preview is active, skip masking so the preview remains visible.
-            const skipMaskBecausePreview = !!(cur && previewGid && cur.pts && cur.pts.length);
-            const skipMaskBecauseNoErase = !eraseStrokes || eraseStrokes.length === 0;
-              if (!skipMaskBecausePreview && !skipMaskBecauseNoErase) {
-                const __maskStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
-                  ? performance.now()
-                  : 0;
-                withDeviceSpace(fctx, () => {
-                const flashSurface = getActiveFlashCanvas();
-                const baseW = flashSurface?.width || fctx.canvas?.width || paint?.width || 0;
-                const baseH = flashSurface?.height || fctx.canvas?.height || paint?.height || 0;
-                const zoom = Number.isFinite(boardScale) ? boardScale : 1;
-                const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-                let maskScale = __dgOverlayMaskScale || 1;
-                if (!__dgOverlayMaskScaleLastTs || (now - __dgOverlayMaskScaleLastTs) > 200) {
-                  let nextScale = 1;
-                  if (maskScale <= 0.7) {
-                    if (zoom > 0.6) nextScale = 0.85;
-                    else nextScale = 0.7;
-                  } else if (maskScale <= 0.85) {
-                    if (zoom < 0.52) nextScale = 0.7;
-                    else if (zoom > 0.74) nextScale = 1;
-                    else nextScale = 0.85;
-                  } else {
-                    if (zoom < 0.55) nextScale = 0.7;
-                    else if (zoom < 0.68) nextScale = 0.85;
-                  }
-                  if (nextScale !== maskScale) {
-                    maskScale = nextScale;
-                    __dgOverlayMaskScale = nextScale;
-                    __dgOverlayMaskScaleLastTs = now;
-                  }
-                }
-                const maskW = Math.max(1, Math.round(baseW * maskScale));
-                const maskH = Math.max(1, Math.round(baseH * maskScale));
-                if (baseW > 0 && baseH > 0 && paint?.width && paint?.height) {
-                  if (!__dgOverlayMaskCanvas || __dgOverlayMaskW !== maskW || __dgOverlayMaskH !== maskH) {
-                    __dgOverlayMaskCanvas = document.createElement('canvas');
-                    __dgOverlayMaskCanvas.width = maskW;
-                    __dgOverlayMaskCanvas.height = maskH;
-                    __dgOverlayMaskCtx = __dgOverlayMaskCanvas.getContext('2d');
-                    __dgOverlayMaskW = maskW;
-                    __dgOverlayMaskH = maskH;
-                    __dgOverlayMaskRev = -1;
-                  }
-                  if (__dgOverlayMaskCtx && __dgOverlayMaskRev !== __dgPaintRev) {
-                    const mctx = __dgOverlayMaskCtx;
-                    mctx.setTransform(1, 0, 0, 1, 0, 0);
-                    mctx.globalCompositeOperation = 'source-over';
-                    mctx.globalAlpha = 1;
-                    mctx.clearRect(0, 0, maskW, maskH);
-                    mctx.drawImage(
-                      paint,
-                      0, 0, paint.width, paint.height,
-                      0, 0, maskW, maskH
-                    );
-                    __dgOverlayMaskRev = __dgPaintRev;
-                    __dgOverlayMaskRebuilds += 1;
-                    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-                      if (now - __dgOverlayMaskLastLog > 1000) {
-                        __dgOverlayMaskLastLog = now;
-                        try {
-                          console.debug(
-                            `[drawgrid][overlay-mask] rebuilds=${__dgOverlayMaskRebuilds} paintRev=${__dgPaintRev} size=${maskW}x${maskH}`
-                          );
-                          console.debug('[drawgrid][overlay-mask] details', {
-                            rebuilds: __dgOverlayMaskRebuilds,
-                            paintRev: __dgPaintRev,
-                            maskW,
-                            maskH,
-                          });
-                        } catch {}
-                      }
-                  }
-                  fctx.globalCompositeOperation = 'destination-in';
-                  fctx.globalAlpha = 1;
-                  let didClip = false;
-                  const bounds = __dgOverlayStrokeListCache?.bounds;
-                  if (bounds && Number.isFinite(bounds.minX) && Number.isFinite(bounds.minY) && Number.isFinite(bounds.maxX) && Number.isFinite(bounds.maxY)) {
-                    const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
-                    const bx = Math.max(0, Math.floor(bounds.minX * scale));
-                    const by = Math.max(0, Math.floor(bounds.minY * scale));
-                    const bw = Math.min(baseW - bx, Math.ceil(bounds.maxX * scale) - bx);
-                    const bh = Math.min(baseH - by, Math.ceil(bounds.maxY * scale) - by);
-                    if (bw > 0 && bh > 0) {
-                      fctx.save();
-                      fctx.beginPath();
-                      fctx.rect(bx, by, bw, bh);
-                      fctx.clip();
-                      didClip = true;
-                    }
-                  }
-                  if (__dgOverlayMaskCanvas) {
-                    fctx.drawImage(
-                      __dgOverlayMaskCanvas,
-                      0, 0, maskW, maskH,
-                      0, 0, baseW, baseH
-                    );
-                  }
-                  if (didClip) fctx.restore();
-                }
-                fctx.globalCompositeOperation = 'source-over';
-                fctx.globalAlpha = 1;
-              });
-              if (__maskStart) {
-                try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.strokes.mask', performance.now() - __maskStart); } catch {}
-              }
-            }
             fctx.restore();
             });
           }
@@ -9719,9 +9337,6 @@ function syncBackBufferSizes() {
           generatorId: (typeof s.generatorId === 'number') ? s.generatorId : undefined,
           overlayColorize: !!s.overlayColorize,
         })),
-        eraseStrokes: (eraseStrokes || []).map(s => ({
-          ptsN: Array.isArray(s.pts) ? s.pts.map(normPt) : [],
-        })),
         nodes: {
           active: (currentMap?.active && Array.isArray(currentMap.active)) ? currentMap.active.slice() : Array(cols).fill(false),
           disabled: serializeSetArr(persistentDisabled || []),
@@ -9742,13 +9357,11 @@ function syncBackBufferSizes() {
       applyInstrumentFromState(state.instrument, { emitEvents: true });
     }
     const hasStrokes = Array.isArray(state?.strokes) && state.strokes.length > 0;
-    const hasErase = Array.isArray(state?.eraseStrokes) && state.eraseStrokes.length > 0;
     const hasActiveNodes = Array.isArray(state?.nodes?.active) && state.nodes.active.some(Boolean);
     const hasNodeList = Array.isArray(state?.nodes?.list) && state.nodes.list.some(arr => Array.isArray(arr) && arr.length > 0);
     try {
       const stats = {
         strokes: Array.isArray(state?.strokes) ? state.strokes.length : 0,
-        erase: Array.isArray(state?.eraseStrokes) ? state.eraseStrokes.length : 0,
         nodeCount: computeSerializedNodeStats(state?.nodes?.list, state?.nodes?.disabled).nodeCount,
         activeCols: Array.isArray(state?.nodes?.active) ? state.nodes.active.filter(Boolean).length : 0,
       };
@@ -9756,7 +9369,7 @@ function syncBackBufferSizes() {
       dgTraceLog('[drawgrid][RESTORE] requested', { panelId: panel.id, stats, stack });
     } catch {}
     updateHydrateInboundFromState(state, { reason: 'restoreFromState', panelId: panel?.id });
-    if (!hasStrokes && !hasErase && !hasActiveNodes && !hasNodeList) {
+    if (!hasStrokes && !hasActiveNodes && !hasNodeList) {
       isRestoring = prevRestoring;
       return;
     }
@@ -9799,17 +9412,6 @@ function syncBackBufferSizes() {
         };
       });
 
-      eraseStrokes = (state?.eraseStrokes || []).map(s => {
-        const ptsN = Array.isArray(s.ptsN) ? s.ptsN.map(p => ({
-          nx: Math.max(0, Math.min(1, Number(p?.nx) || 0)),
-          ny: Math.max(0, Math.min(1, Number(p?.ny) || 0)),
-        })) : null;
-        return {
-          pts: (s.ptsN || []).map(p => denormPt(p.nx || 0, p.ny || 0)),
-          __ptsN: ptsN,
-        };
-      });
-
       __dgMarkRegenSource('restore-state');
       __dgMarkRegenSource('randomize');
       regenerateMapFromStrokes();
@@ -9836,7 +9438,6 @@ function syncBackBufferSizes() {
       __dgStableFramesAfterCommit = 0;
       try {
         const hasStrokes = Array.isArray(strokes) && strokes.length > 0;
-        const hasErase = Array.isArray(eraseStrokes) && eraseStrokes.length > 0;
         const hasNodes = Array.isArray(currentMap?.nodes)
           ? currentMap.nodes.some(set => set && set.size > 0)
           : false;
@@ -9844,7 +9445,7 @@ function syncBackBufferSizes() {
           updateHydrateInboundFromState(captureState(), { reason: 'restore-from-state-applied', panelId: panel?.id });
         } catch {}
 
-        if (hasStrokes || hasErase || hasNodes) {
+        if (hasStrokes || hasNodes) {
           schedulePersistState({ source: 'restore-from-state' });
         }
       } catch {
@@ -9909,10 +9510,8 @@ function syncBackBufferSizes() {
         flashBackCanvas,
         activeFlashCanvas: (typeof getActiveFlashCanvas === 'function') ? getActiveFlashCanvas() : null,
         strokes,
-        eraseStrokes,
         usingBackBuffers,
         paintRev: __dgPaintRev,
-        overlayMaskRev: __dgOverlayMaskRev,
         compositeDirty: panel.__dgSingleCompositeDirty,
         hasOverlayStrokesCached,
       });
@@ -9964,10 +9563,8 @@ function syncBackBufferSizes() {
       panel.__dgFlashOverlayOutOfGrid = false;
       __dgOverlayStrokeListCache = { paintRev: -1, len: 0, special: [], colorized: [], outOfGrid: false };
       __dgOverlayStrokeCache = { value: false, len: 0, ts: 0 };
-      __dgOverlayMaskRev = -1;
       strokes = [];
       prevStrokeCount = 0;
-      eraseStrokes = [];
       manualOverrides = Array.from({ length: cols }, () => new Set());
       persistentDisabled = Array.from({ length: cols }, () => new Set());
       const emptyMap = {active:Array(cols).fill(false),nodes:Array.from({length:cols},()=>new Set()), disabled:Array.from({length:cols},()=>new Set())};
@@ -9989,7 +9586,6 @@ function syncBackBufferSizes() {
       __dgFlowState('clear:end', makeFlowCtx());
       return true;
     },
-    setErase:(v)=>{ erasing=!!v; },
     getState: captureState,
     hasActiveNotes: () => {
       try {
@@ -10005,7 +9601,6 @@ function syncBackBufferSizes() {
           try {
             const stats = {
               strokes: Array.isArray(st?.strokes) ? st.strokes.length : 0,
-              erase: Array.isArray(st?.eraseStrokes) ? st.eraseStrokes.length : 0,
               nodeCount: computeSerializedNodeStats(st?.nodes?.list, st?.nodes?.disabled).nodeCount,
               activeCols: Array.isArray(st?.nodes?.active) ? st.nodes.active.filter(Boolean).length : 0,
             };
@@ -10103,38 +9698,6 @@ function syncBackBufferSizes() {
               }
             }
 
-            const hasIncomingErase = Object.prototype.hasOwnProperty.call(st, 'eraseStrokes');
-            const incomingEraseStrokes = Array.isArray(st.eraseStrokes) ? st.eraseStrokes : null;
-            const fallbackEraseStrokes = (!hasIncomingErase && Array.isArray(fallbackHydrationState?.eraseStrokes) && fallbackHydrationState.eraseStrokes.length > 0)
-              ? fallbackHydrationState.eraseStrokes
-              : null;
-            const eraseSource = (incomingEraseStrokes && incomingEraseStrokes.length > 0) ? incomingEraseStrokes : fallbackEraseStrokes;
-            if (eraseSource) {
-              eraseStrokes = [];
-              for (const s of eraseSource) {
-                let pts = [];
-                if (Array.isArray(s?.ptsN)) {
-                  const gh = Math.max(1, gridArea.h - topPad);
-                  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-                  pts = s.ptsN.map(np=>({
-                    x: gridArea.x + clamp(Number(np?.nx)||0, 0, 1) * gridArea.w,
-                    y: (gridArea.y + topPad) + clamp(Number(np?.ny)||0, 0, 1) * gh
-                  }));
-                }
-                const ptsN = Array.isArray(s?.ptsN) ? s.ptsN.map(np => ({
-                  nx: Math.max(0, Math.min(1, Number(np?.nx) || 0)),
-                  ny: Math.max(0, Math.min(1, Number(np?.ny) || 0)),
-                })) : null;
-                eraseStrokes.push({ pts, __ptsN: ptsN });
-              }
-              clearAndRedrawFromStrokes(null, 'setState-erase');
-            } else if (hasIncomingErase && Array.isArray(st.eraseStrokes)) {
-              const hasFallbackErase = Array.isArray(fallbackHydrationState?.eraseStrokes) && fallbackHydrationState.eraseStrokes.length > 0;
-              if (!hasFallbackErase) {
-                eraseStrokes = [];
-                clearAndRedrawFromStrokes(null, 'setState-erase-empty');
-              }
-            }
             // Restore node masks if provided
             if (st.nodes && typeof st.nodes==='object'){
               try{
@@ -10317,10 +9880,8 @@ function syncBackBufferSizes() {
       flashBackCanvas,
       activeFlashCanvas: (typeof getActiveFlashCanvas === 'function') ? getActiveFlashCanvas() : null,
       strokes,
-      eraseStrokes,
       usingBackBuffers,
       paintRev: __dgPaintRev,
-      overlayMaskRev: __dgOverlayMaskRev,
       compositeDirty: panel.__dgSingleCompositeDirty,
       hasOverlayStrokesCached,
     });
@@ -10345,7 +9906,6 @@ function syncBackBufferSizes() {
     resetPaintBlend(pctx);
     // Clear all existing lines and nodes
     strokes = [];
-    eraseStrokes = [];
     nodeGroupMap = Array.from({ length: cols }, () => new Map());
     manualOverrides = Array.from({ length: cols }, () => new Set());
     persistentDisabled = Array.from({ length: cols }, () => new Set());
@@ -10398,7 +9958,6 @@ function syncBackBufferSizes() {
       panel.__dgFlashOverlayOutOfGrid = false;
       __dgOverlayStrokeListCache = { paintRev: -1, len: 0, special: [], colorized: [], outOfGrid: false };
       __dgOverlayStrokeCache = { value: false, len: 0, ts: 0 };
-      __dgOverlayMaskRev = -1;
       __dgMarkSingleCanvasOverlayDirty(panel);
     } catch {}
     try { previewGid = null; } catch {}
@@ -11113,3 +10672,4 @@ function runAutoGhostGuideSweep() {
   try { panel.dispatchEvent(new CustomEvent('drawgrid:ready', { bubbles: true })); } catch {}
   return api;
 }
+

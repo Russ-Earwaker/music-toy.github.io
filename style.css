@@ -1040,17 +1040,6 @@ select.toy-instrument {
   padding: 10px 10px 1 10px;
 }
 
-/* Drawgrid eraser cursor */
-.drawgrid-eraser-cursor {
-  position: absolute;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  background: rgba(255, 255, 255, 0.1);
-  pointer-events: none;
-  display: none; /* Hidden by default, shown via JS */
-  will-change: transform;
-}
-
 /* Prevent transient easing on drawgrid overlay canvases */
 .toy-panel[data-toy="drawgrid"] [data-role^="drawgrid-"],
 .toy-panel[data-toy="drawgrid"] [data-role^="drawgrid-"] * {

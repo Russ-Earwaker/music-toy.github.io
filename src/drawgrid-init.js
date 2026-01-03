@@ -28,7 +28,6 @@ export function initDrawGrid(panel){
       if (DRAWGRID_INIT_DEBUG) {
         console.log('[drawgrid-init] HYDRATE (pending)', panel.id, {
           hasStrokes: !!(pending?.strokes?.length),
-          hasErase: !!(pending?.eraseStrokes?.length),
           activeCols: Array.isArray(pending?.nodes?.active) ? pending.nodes.active.filter(Boolean).length : 0,
           steps: typeof pending?.steps === 'number' ? pending.steps : undefined,
         });
@@ -42,7 +41,6 @@ export function initDrawGrid(panel){
         if (DRAWGRID_INIT_DEBUG) {
           console.log('[drawgrid-init] HYDRATE (localStorage)', panel.id, {
             hasStrokes: !!(local?.strokes?.length),
-            hasErase: !!(local?.eraseStrokes?.length),
             activeCols: Array.isArray(local?.nodes?.active) ? local.nodes.active.filter(Boolean).length : 0,
             steps: typeof local?.steps === 'number' ? local.steps : undefined,
           });
