@@ -524,6 +524,12 @@ html, body {
   100% { opacity: 0; background: rgba(255, 72, 72, 0.0); }
 }
 
+@keyframes chain-btn-flash {
+  0% { filter: brightness(1) saturate(1); }
+  55% { filter: brightness(2.2) saturate(1.6); }
+  100% { filter: brightness(1) saturate(1); }
+}
+
 /* Focus/unfocus states (logic enforced in JS) */
 .toy-panel.toy-focused {
   outline: 3px solid rgba(255, 255, 255, 0.35);
@@ -615,6 +621,15 @@ html, body {
 .toy-chain-btn.is-hover .c-btn-core::after {
   transform: translate(-50%, -50%) scale(1.08);
   filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.55)) brightness(1.02);
+}
+.toy-chain-btn.chain-btn-flash {
+  animation: chain-btn-flash 160ms ease-out;
+}
+.toy-chain-btn.chain-btn-flash .c-btn-glow {
+  opacity: 0.95;
+}
+.toy-chain-btn.chain-btn-flash .c-btn-core::after {
+  filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.55)) brightness(1.12);
 }
 /* Panel sections */
 .toy-header {

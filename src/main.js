@@ -1711,6 +1711,20 @@ function triggerConnectorPulse(fromId, toId) {
     const durationMs = 150;
     g_pulsingConnectors.set(fromId, { toId, until: now + durationMs });
 
+    const chainBtn = panel?.querySelector?.('.toy-chain-btn');
+    if (chainBtn) {
+        const flashUntil = now + durationMs;
+        chainBtn.__chainFlashUntil = flashUntil;
+        chainBtn.classList.remove('chain-btn-flash');
+        void chainBtn.offsetWidth;
+        chainBtn.classList.add('chain-btn-flash');
+        setTimeout(() => {
+            if (chainBtn.__chainFlashUntil <= performance.now()) {
+                chainBtn.classList.remove('chain-btn-flash');
+            }
+        }, durationMs);
+    }
+
     // Mark matching edges as "flashing" using the Edge model.
     const edgeIdSet = g_edgesByToyId.get(fromId);
     if (edgeIdSet && edgeIdSet.size > 0) {
@@ -2825,6 +2839,7 @@ function drawChains(forceFull = false) {
   chainCtx.strokeStyle = baseStroke;
   chainCtx.beginPath();
   let hasBasePath = false;
+  const pulsingEdges = [];
 
   for (const edge of g_chainEdges.values()) {
     const { fromToyId, toToyId, p1x, p1y, p2x, p2y, c1x, c1y, c2x, c2y } = edge;
@@ -2840,12 +2855,7 @@ function drawChains(forceFull = false) {
     const isPulsing = !!(pulseInfo && pulseInfo.toId === toToyId && pulseInfo.until > now);
 
     if (isPulsing) {
-      chainCtx.lineWidth = ((baseWidth + pulseExtraWidth) * 3);
-      chainCtx.strokeStyle = pulseStroke;
-      chainCtx.beginPath();
-      chainCtx.moveTo(p1x, p1y);
-      chainCtx.bezierCurveTo(c1x, c1y, c2x, c2y, p2x, p2y);
-      chainCtx.stroke();
+      pulsingEdges.push(edge);
     } else {
       chainCtx.moveTo(p1x, p1y);
       chainCtx.bezierCurveTo(c1x, c1y, c2x, c2y, p2x, p2y);
@@ -2857,6 +2867,16 @@ function drawChains(forceFull = false) {
 
   if (hasBasePath) {
     chainCtx.stroke();
+  }
+  if (pulsingEdges.length) {
+    chainCtx.lineWidth = ((baseWidth + pulseExtraWidth) * 3);
+    chainCtx.strokeStyle = pulseStroke;
+    for (const edge of pulsingEdges) {
+      chainCtx.beginPath();
+      chainCtx.moveTo(edge.p1x, edge.p1y);
+      chainCtx.bezierCurveTo(edge.c1x, edge.c1y, edge.c2x, edge.c2y, edge.p2x, edge.p2y);
+      chainCtx.stroke();
+    }
   }
 
   const tAfterEdges = performance.now();
