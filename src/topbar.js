@@ -1,6 +1,7 @@
 // src/topbar.js - wires page header buttons to board helpers
 import * as Core from './audio-core.js';
 import { resumeAudioContextIfNeeded } from './audio-core.js';
+import { syncVolumeUI } from './volume-ui.js';
 import {
   applySoundThemeToScene,
   getSoundThemeKey,
@@ -392,6 +393,13 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
     return chains.filter(chain => chain && chain.panels && chain.panels.length);
   }
 
+  function findToyPanelById(toyId) {
+    if (!toyId || typeof document === 'undefined') return null;
+    const byId = document.getElementById(toyId);
+    if (byId) return byId;
+    return document.querySelector(`.toy-panel[data-toyid="${toyId}"], .toy-panel[data-toy="${toyId}"]`);
+  }
+
   function cancelLeadInSequence(bar, { restore = true } = {}) {
     const state = getLeadInState(bar);
     state.token++;
@@ -399,7 +407,12 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
     state.timers = [];
     if (restore && state.prevMuted && typeof Core?.setToyMuted === 'function') {
       state.prevMuted.forEach((wasMuted, toyId) => {
-        try { Core.setToyMuted(toyId, !!wasMuted); } catch {}
+        const nextMuted = !!wasMuted;
+        try { Core.setToyMuted(toyId, nextMuted); } catch {}
+        try {
+          const panel = findToyPanelById(toyId);
+          if (panel) syncVolumeUI(panel, { muted: nextMuted });
+        } catch {}
       });
     }
     state.prevMuted = new Map();
@@ -433,16 +446,17 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
           state.togglePrevMuted.set(toyId, wasMuted);
         }
         try { Core?.setToyMuted?.(toyId, true); } catch {}
-        try { panel.classList.add('toy-muted-auto'); } catch {}
+        try { syncVolumeUI(panel, { muted: true }); } catch {}
       } else {
         const wasMuted = state.togglePrevMuted.get(toyId);
+        const nextMuted = wasMuted != null ? !!wasMuted : false;
         if (wasMuted != null) {
-          try { Core?.setToyMuted?.(toyId, !!wasMuted); } catch {}
+          try { Core?.setToyMuted?.(toyId, nextMuted); } catch {}
         } else {
           try { Core?.setToyMuted?.(toyId, false); } catch {}
         }
         state.togglePrevMuted.delete(toyId);
-        try { panel.classList.remove('toy-muted-auto'); } catch {}
+        try { syncVolumeUI(panel, { muted: nextMuted }); } catch {}
       }
     });
   }
@@ -503,7 +517,7 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
   function setChainMutedVisual(chain, muted) {
     if (!chain || !chain.panels) return;
     chain.panels.forEach((panel) => {
-      try { panel.classList.toggle('toy-muted-auto', !!muted); } catch {}
+      void muted;
     });
   }
 
@@ -679,6 +693,7 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
           const wasMuted = !!Core.isToyMuted(toyId);
           state.prevMuted.set(toyId, wasMuted);
           try { Core.setToyMuted(toyId, true); } catch {}
+          try { syncVolumeUI(panel, { muted: true }); } catch {}
         });
       });
     }
@@ -693,13 +708,16 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
       const t = setTimeout(() => {
         if (state.token !== token) return;
         state.leadInOffChains.delete(chain.id);
-        setChainMutedVisual(chain, false);
         chain.panels.forEach((panel) => {
           const toyId = panel?.dataset?.toyid || panel?.id;
           if (!toyId) return;
           const wasMuted = state.prevMuted.get(toyId);
-          if (wasMuted) return;
+          if (wasMuted) {
+            try { syncVolumeUI(panel, { muted: true }); } catch {}
+            return;
+          }
           try { Core?.setToyMuted?.(toyId, false); } catch {}
+          try { syncVolumeUI(panel, { muted: false }); } catch {}
         });
       }, delayMs);
       state.timers.push(t);
@@ -1307,7 +1325,7 @@ function ensureTopbar(){
           <div class="options-leadin-row">
             <div class="options-leadin-count">
               <button class="options-step-btn" type="button" data-action="lead-in-toggle-minus" aria-label="Decrease toggle bars">-</button>
-              <div class="options-leadin-value options-toggle-value">Toggle every 4 bars</div>
+              <div class="options-leadin-value options-toggle-value">Toggle mute every 4 bars</div>
               <button class="options-step-btn" type="button" data-action="lead-in-toggle-plus" aria-label="Increase toggle bars">+</button>
             </div>
             <button class="menu-inline-btn options-toggle-btn" type="button" data-action="lead-in-toggle-toggle" aria-pressed="false">Off</button>
@@ -1564,7 +1582,7 @@ function ensureTopbar(){
       const toggleVal = optionsState.toggleValue;
       if (toggleVal) {
         const bars = Math.max(1, Number(state.toggleBars) || 1);
-        toggleVal.textContent = `Toggle every ${bars} ${bars === 1 ? 'bar' : 'bars'}`;
+        toggleVal.textContent = `Toggle mute every ${bars} ${bars === 1 ? 'bar' : 'bars'}`;
       }
     };
 

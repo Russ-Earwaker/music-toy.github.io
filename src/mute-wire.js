@@ -27,6 +27,7 @@
         const nextMuted = !isMuted;
 
         btn.setAttribute('aria-pressed', String(nextMuted));
+        try { panel.classList.toggle('toy-muted-auto', nextMuted); } catch {}
         if (nextMuted) {
           rng.dataset._preMute = String(last); // Save current volume
           rng.value = '0';

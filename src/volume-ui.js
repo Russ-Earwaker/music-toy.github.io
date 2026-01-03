@@ -37,6 +37,10 @@ function setMuteVisualState(muteBtn, muted) {
   }
 }
 
+function setPanelMutedVisual(panel, muted) {
+  try { panel?.classList?.toggle?.('toy-muted-auto', !!muted); } catch {}
+}
+
 function dispatchToyVolume(toyId, value) {
   try { window.dispatchEvent(new CustomEvent('toy-volume', { detail: { toyId, value } })); } catch {}
 }
@@ -65,14 +69,25 @@ export function syncVolumeUI(panel, { volume, muted } = {}) {
         range.dataset.preMute = String(pct);
       }
       updateRangeFill(range);
-    } else if (hasMuted && muted) {
-      range.value = '0';
+    } else if (hasMuted) {
+      if (muted) {
+        if (range.value && range.value !== '0') range.dataset.preMute = range.value;
+        range.value = '0';
+      } else {
+        const persisted = readPersistedVolume(panel);
+        const fallbackPct = Number.isFinite(persisted) ? String(Math.round(clamp01(persisted) * 100)) : null;
+        const restore = range.dataset.preMute || fallbackPct;
+        if (restore != null) range.value = restore;
+      }
       updateRangeFill(range);
     }
   }
 
   if (muteBtn && hasMuted) {
     setMuteVisualState(muteBtn, muted);
+  }
+  if (hasMuted) {
+    setPanelMutedVisual(panel, muted);
   }
 }
 
@@ -138,6 +153,7 @@ export function installVolumeUI(footer) {
 
   range.value = String(Math.round((initialMuted ? 0 : initialVolume) * 100));
   setMuteVisualState(muteBtn, initialMuted);
+  setPanelMutedVisual(panel, initialMuted);
   
   // Store a sensible default pre-mute value if the toy starts as muted.
   if (initialMuted) {
@@ -157,6 +173,7 @@ export function installVolumeUI(footer) {
       dispatchToyMute(toyId, false);
       setToyMuted(toyId, false);
       setMuteVisualState(muteBtn, false);
+      setPanelMutedVisual(panel, false);
     }
   });
 
@@ -165,6 +182,7 @@ export function installVolumeUI(footer) {
     dispatchToyMute(toyId, shouldMute);
     setToyMuted(toyId, shouldMute);
     setMuteVisualState(muteBtn, shouldMute);
+    setPanelMutedVisual(panel, shouldMute);
 
     if (shouldMute) {
       // Before muting, save the current slider value.
