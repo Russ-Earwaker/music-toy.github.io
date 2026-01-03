@@ -1562,11 +1562,33 @@ function removeChainEdgesForToy(toyId) {
     scheduleChainRedraw();
 }
 
-function updateAllChainUIs() {
+let g_chainUiStateKey = '';
+function updateAllChainUIs({ force = false } = {}) {
+    if (typeof window !== 'undefined' && window.__PERF_DISABLE_CHAIN_UI) return;
     const __perfOn = !!(window.__PerfFrameProf && typeof performance !== 'undefined' && performance.now);
     const __perfStart = __perfOn ? performance.now() : 0;
     // Normalize child flags from DOM links so refresh/restore can't lose them.
     const panels = Array.from(document.querySelectorAll('.toy-panel[id]'));
+    if (!force) {
+        const edgeCount = g_chainEdges ? g_chainEdges.size : 0;
+        let edgeKey = '';
+        if (g_chainEdges && g_chainEdges.size) {
+            try {
+                for (const edge of g_chainEdges.values()) {
+                    edgeKey += `${edge.fromToyId}->${edge.toToyId}|`;
+                }
+            } catch {}
+        }
+        const nextKey = `${edgeCount}|${edgeKey}|` + panels.map(p => [
+            p.id,
+            p.dataset.prevToyId || '',
+            p.dataset.nextToyId || '',
+            p.dataset.chainParent || '',
+            p.dataset.chainHasChild || '',
+        ].join(':')).join('|');
+        if (nextKey === g_chainUiStateKey) return;
+        g_chainUiStateKey = nextKey;
+    }
     if (__perfOn) {
         window.__PerfFrameProf.mark('chain.ui.query', performance.now() - __perfStart);
     }

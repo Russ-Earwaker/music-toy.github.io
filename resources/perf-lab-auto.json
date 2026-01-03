@@ -2,7 +2,7 @@
   "queue": [
     "buildP3",
     "buildP7",
-    "runP3fParticleProfile",
+    "runP3f",
     "runP3fPlayheadSeparateOn",
     "runP3fNoOverlayCore",
     "runP3fNoOverlayStrokes",
@@ -20,5 +20,6 @@
     "gestureFieldModulo": 1
   },
   "gestureAutoLock": true,
+  "freezeChainUi": true,
   "postUrl": "http://localhost:5174/perf-lab-results"
 }

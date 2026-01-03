@@ -106,6 +106,8 @@ const TAP_LETTER_VIS = Object.freeze({
   flashShadow: '',
 });
 const TAP_LABEL_OPACITY_BASE = 1;
+const CHAIN_NOTES_CACHE_MS = 200;
+const chainNotesCache = new Map();
 
 // Simple Rhythm cubes: size purely from the local canvas, not boardScale.
 // This keeps them stable across zoom levels and lets the global board zoom
@@ -280,6 +282,33 @@ function findChainHead(toy) {
     return current;
 }
 
+function markChainNotesDirty(panel) {
+  const head = findChainHead(panel);
+  if (!head) return;
+  const key = head.dataset?.toyid || head.id || head;
+  const cached = chainNotesCache.get(key);
+  if (cached) {
+    cached.dirty = true;
+  } else {
+    chainNotesCache.set(key, { value: false, ts: 0, dirty: true });
+  }
+}
+
+function readChainNotesCached(head) {
+  if (!head) return false;
+  const key = head.dataset?.toyid || head.id || head;
+  const now = (typeof performance !== 'undefined' && performance.now)
+    ? performance.now()
+    : Date.now();
+  const cached = chainNotesCache.get(key);
+  if (cached && !cached.dirty && (now - cached.ts) < CHAIN_NOTES_CACHE_MS) {
+    return cached.value;
+  }
+  const value = chainHasSequencedNotes(head);
+  chainNotesCache.set(key, { value, ts: now, dirty: false });
+  return value;
+}
+
 function chainHasSequencedNotes(head) {
   let current = head;
   let sanity = 100;
@@ -287,7 +316,13 @@ function chainHasSequencedNotes(head) {
     const toyType = current.dataset?.toy;
     if (toyType === 'loopgrid' || toyType === 'loopgrid-drum') {
       const state = current.__gridState;
-      if (state?.steps && state.steps.some(Boolean)) return true;
+      if (typeof current.__loopgridHasNotes === 'boolean') {
+        if (current.__loopgridHasNotes) return true;
+      } else if (state?.steps) {
+        const hasNotes = state.steps.some(Boolean);
+        current.__loopgridHasNotes = hasNotes;
+        if (hasNotes) return true;
+      }
     } else if (toyType === 'drawgrid') {
       const toy = current.__drawToy;
       if (toy) {
@@ -916,6 +951,16 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     __LG.panels.add(panel);
     __LG.start();
   }
+
+  panel.addEventListener('loopgrid:update', () => {
+    try { st._gridDirty = true; } catch {}
+    try { panel.__loopgridNeedsRedraw = true; } catch {}
+    try { markChainNotesDirty(panel); } catch {}
+    try {
+      const state = panel.__gridState;
+      if (state?.steps) panel.__loopgridHasNotes = state.steps.some(Boolean);
+    } catch {}
+  });
 }
 
 function render(panel, opts = {}) {
@@ -1023,32 +1068,38 @@ function render(panel, opts = {}) {
 
   // Set playing class for border highlight
   const state = panel.__gridState || {};
-  const hasActiveNotes = state.steps && state.steps.some(s => s);
+  let hasActiveNotes = (typeof panel.__loopgridHasNotes === 'boolean')
+    ? panel.__loopgridHasNotes
+    : (state.steps && state.steps.some(s => s));
+  if (typeof panel.__loopgridHasNotes !== 'boolean' && typeof hasActiveNotes === 'boolean') {
+    panel.__loopgridHasNotes = hasActiveNotes;
+  }
 
-  const head = isChained ? findChainHead(panel) : panel;
-  const chainHasNotes = (() => {
-    if (!isChained) return hasActiveNotes;
+  let chainHasNotes = false;
+  if (transportRunning && isChained && isActiveInChain) {
+    const head = findChainHead(panel);
     const cache = window.__PERF_LOOPGRID_CHAIN_CACHE ? opts.chainNotesCache : null;
-    let anyNotes = hasActiveNotes;
     if (cache && head) {
       if (cache.has(head)) {
-        anyNotes = cache.get(head);
+        chainHasNotes = cache.get(head);
       } else {
-        anyNotes = chainHasSequencedNotes(head);
-        cache.set(head, anyNotes);
+        chainHasNotes = chainHasSequencedNotes(head);
+        cache.set(head, chainHasNotes);
       }
     } else {
-      anyNotes = head ? chainHasSequencedNotes(head) : hasActiveNotes;
+      chainHasNotes = head ? readChainNotesCached(head) : hasActiveNotes;
     }
-    return anyNotes;
-  })();
+  }
 
   // Only show the steady outline while transport is running.
   // Chained toys require both an active link and notes somewhere in the chain.
   const showPlaying = transportRunning
     ? (isChained ? (isActiveInChain && chainHasNotes) : hasActiveNotes)
     : false;
-  panel.classList.toggle('toy-playing', showPlaying);
+  if (st._lastShowPlaying !== showPlaying) {
+    panel.classList.toggle('toy-playing', showPlaying);
+    st._lastShowPlaying = showPlaying;
+  }
 
   // Gesture-only render throttle for unfocused toys: skip heavy draw, still update classes.
   let gestureRenderMod = Math.max(1, Number(window.__PERF_LOOPGRID_GESTURE_RENDER_MOD) || 1);
@@ -1172,10 +1223,12 @@ function render(panel, opts = {}) {
   const cubePixelSize = Math.round(st._cubeSize * scaleX);
 
   const fieldHost = sequencerWrap || particleCanvas || canvas;
-  if (fieldHost) {
-    const rect = cssRect(fieldHost);
-    st.fieldWidth = rect.width || cssW;
-    st.fieldHeight = rect.height || cssH;
+  if (st._particleFieldBox) {
+    st.fieldWidth = st._particleFieldBox.width || cssW;
+    st.fieldHeight = st._particleFieldBox.height || cssH;
+  } else if (fieldHost) {
+    st.fieldWidth = fieldHost.clientWidth || cssW;
+    st.fieldHeight = fieldHost.clientHeight || cssH;
   } else {
     st.fieldWidth = cssW;
     st.fieldHeight = cssH;
@@ -1222,24 +1275,26 @@ function render(panel, opts = {}) {
     }
 
     if (!showTapPrompt) {
-      tapLabel.style.opacity = '0';
-      st.tapLetterBounds = null;
-      st.tapFieldRect = null;
-      st.tapPromptVisible = false;
-      st.tapLoopIndex = 0;
-      st.tapPromptAnimating = false;
-      if (Array.isArray(st.tapLetterLastLoop)) st.tapLetterLastLoop.fill(-1);
-      for (let i = 0; i < letterCount; i++) {
-        if (st.tapLetterHitTs) st.tapLetterHitTs[i] = 0;
-        if (st.tapLetterOffsetX) st.tapLetterOffsetX[i] = 0;
-        if (st.tapLetterOffsetY) st.tapLetterOffsetY[i] = 0;
-        if (st.tapLetterVelocityX) st.tapLetterVelocityX[i] = 0;
-        if (st.tapLetterVelocityY) st.tapLetterVelocityY[i] = 0;
-        tapLetters[i].style.opacity = '0';
-        tapLetters[i].style.color = '';
-        tapLetters[i].style.textShadow = '';
-        tapLetters[i].style.filter = 'none';
-        tapLetters[i].style.transform = 'none';
+      if (promptWasVisible) {
+        tapLabel.style.opacity = '0';
+        st.tapLetterBounds = null;
+        st.tapFieldRect = null;
+        st.tapPromptVisible = false;
+        st.tapLoopIndex = 0;
+        st.tapPromptAnimating = false;
+        if (Array.isArray(st.tapLetterLastLoop)) st.tapLetterLastLoop.fill(-1);
+        for (let i = 0; i < letterCount; i++) {
+          if (st.tapLetterHitTs) st.tapLetterHitTs[i] = 0;
+          if (st.tapLetterOffsetX) st.tapLetterOffsetX[i] = 0;
+          if (st.tapLetterOffsetY) st.tapLetterOffsetY[i] = 0;
+          if (st.tapLetterVelocityX) st.tapLetterVelocityX[i] = 0;
+          if (st.tapLetterVelocityY) st.tapLetterVelocityY[i] = 0;
+          tapLetters[i].style.opacity = '0';
+          tapLetters[i].style.color = '';
+          tapLetters[i].style.textShadow = '';
+          tapLetters[i].style.filter = 'none';
+          tapLetters[i].style.transform = 'none';
+        }
       }
     } else {
       st.tapPromptVisible = true;
@@ -1372,7 +1427,6 @@ function render(panel, opts = {}) {
     }
   }
 
-  const gridRect = st.canvas.getBoundingClientRect();
   const fieldRectData = st.tapFieldRect;
 
   // Use pre-computed layout values from st
@@ -1408,13 +1462,32 @@ function render(panel, opts = {}) {
   }
 
   const gridCache = (st._gridCache ||= { canvas: null, ctx: null, key: '' });
-  const stepsKey = Array.isArray(steps) ? steps.map(v => v ? '1' : '0').join('') : '';
-  const noteKey = isZoomed
-    ? `${(noteIndices || []).join(',')}|${(notePalette || []).join(',')}`
-    : '';
-  const cacheKey = [
-    w, h, blockSizePx, rowY, xOffset, yOffset, blockWidthWithGap, localGap, isZoomed, stepsKey, noteKey,
+  const layoutKey = [
+    w, h, blockSizePx, rowY, xOffset, yOffset, blockWidthWithGap, localGap, isZoomed,
   ].join('|');
+  let stepsKey = st._stepsKey || '';
+  let noteKey = st._noteKey || '';
+  const stepsDirty = !!(
+    st._gridDirty ||
+    st._lastStepsRef !== steps ||
+    st._lastNoteIndicesRef !== noteIndices ||
+    st._lastNotePaletteRef !== notePalette ||
+    st._lastZoomed !== isZoomed
+  );
+  if (stepsDirty) {
+    stepsKey = Array.isArray(steps) ? steps.map(v => v ? '1' : '0').join('') : '';
+    noteKey = isZoomed
+      ? `${(noteIndices || []).join(',')}|${(notePalette || []).join(',')}`
+      : '';
+    st._stepsKey = stepsKey;
+    st._noteKey = noteKey;
+    st._lastStepsRef = steps;
+    st._lastNoteIndicesRef = noteIndices;
+    st._lastNotePaletteRef = notePalette;
+    st._lastZoomed = isZoomed;
+    st._gridDirty = false;
+  }
+  const cacheKey = `${layoutKey}|${stepsKey}|${noteKey}`;
   const gridCacheDirty = (!gridCache.canvas || gridCache.key !== cacheKey);
   if (gridCacheDirty) {
     const cacheCanvas = gridCache.canvas || document.createElement('canvas');
@@ -1592,7 +1665,9 @@ function render(panel, opts = {}) {
         cubeRect.h + borderSize * 2
       );
     }
-    if (showTapPrompt && fieldRectData && Number.isFinite(fieldRectData.left) && fieldRectData.width > 0 && gridRect.width > 0 && Array.isArray(st.tapLetterBounds)) {
+    if (showTapPrompt && fieldRectData && Number.isFinite(fieldRectData.left) && fieldRectData.width > 0 && Array.isArray(st.tapLetterBounds)) {
+      const gridRect = st.canvas.getBoundingClientRect();
+      if (gridRect.width > 0) {
       const cubeCenterCssX = cubeRectCss.x + cubeRectCss.w / 2;
       const cubeCenterCssY = cubeRectCss.y + cubeRectCss.h / 2;
       const columnCenterPx = gridRect.left + (cubeCenterCssX / cssW) * gridRect.width;
@@ -1601,6 +1676,7 @@ function render(panel, opts = {}) {
       if (Number.isFinite(centerNorm)) {
         const clamped = Math.max(0, Math.min(1, centerNorm));
         triggerTapLettersForColumn(st, i, clamped, columnCenterPx, columnCenterPy);
+      }
       }
     }
   }

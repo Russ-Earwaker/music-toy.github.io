@@ -2764,7 +2764,11 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     const segLen = Math.hypot(dx, dy);
     const radius = Math.max(1, Number.isFinite(opts.radius) ? opts.radius : 32);
     const spacing = Math.max(4, Number.isFinite(opts.spacing) ? opts.spacing : Math.round(radius * 0.6));
-    const steps = segLen > 0 ? Math.max(1, Math.ceil(segLen / spacing)) : 0;
+    let steps = segLen > 0 ? Math.max(1, Math.ceil(segLen / spacing)) : 0;
+    const maxSteps = Number.isFinite(opts.maxSteps) ? Math.max(1, Math.floor(opts.maxSteps)) : null;
+    if (maxSteps && steps > maxSteps) {
+      steps = maxSteps;
+    }
     let dirX;
     let dirY;
     if (Number.isFinite(opts.dirX) || Number.isFinite(opts.dirY)) {
@@ -2791,7 +2795,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     }
   }
 
-  function pushHeaderSweepAt(xToy, { lineWidthPx } = {}) {
+  function pushHeaderSweepAt(xToy, { lineWidthPx, maxSteps } = {}) {
     try {
       // Do not inject forces while camera is in motion / settling.
       if (headerPushSuppressed()) return;
@@ -2830,6 +2834,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
           falloff: HeaderSweepForce.falloff || 'gaussian',
           dirX: headerSweepDirX || 1,
           dirY: 0,
+          maxSteps,
         },
       );
       const lettersRadius = Math.max(40, radius * 1.6);
@@ -7661,6 +7666,17 @@ function syncBackBufferSizes() {
     if (dgField && typeof dgField.applyBudget === 'function' && particleBudget) {
       const round = (v) => Math.round((Number.isFinite(v) ? v : 0) * 10000) / 10000;
       const maxCountScaleBase = (particleBudget.maxCountScale ?? 1) * (particleBudget.capScale ?? 1);
+      const zoomGesturing = (typeof window !== 'undefined' && window.__mtZoomGesturing === true);
+      const zoomGestureMoving = !!(zoomGesturing && __lastZoomMotionTs && (nowTs - __lastZoomMotionTs) < ZOOM_STALL_MS);
+      const fpsDamp = (() => {
+        if (!Number.isFinite(fpsSample)) return 1;
+        if (fpsSample >= 55) return 1;
+        if (fpsSample <= 35) return 0.45;
+        return 0.45 + ((fpsSample - 35) / 20) * 0.55;
+      })();
+      const gestureDamp = zoomGestureMoving
+        ? (visiblePanels >= 12 ? 0.5 : (visiblePanels >= 6 ? 0.62 : 0.72))
+        : 1;
       // Crowd-based attenuation: more visible panels -> fewer particles per panel.
       const crowdScale = (() => {
         const base = 1 / Math.max(1, visiblePanels);
@@ -7679,10 +7695,11 @@ function syncBackBufferSizes() {
 
       const emergencyScale = emergencyMode ? 0.45 : 1;
       const emergencySize = emergencyMode ? 1.1 : 1;
-      const maxCountScale = Math.max(0.12, maxCountScaleBase * crowdScale * fpsBoost * emergencyScale);
-      const capScale = Math.max(0.2, (particleBudget.capScale ?? 1) * crowdScale * fpsBoost * emergencyScale);
-      const sizeScale = (particleBudget.sizeScale ?? 1) * emergencySize;
-      const spawnScale = Math.max(0.1, (particleBudget.spawnScale ?? 1) * crowdScale * fpsBoost * emergencyScale);
+      const perfDamp = Math.min(fpsDamp, gestureDamp);
+      const maxCountScale = Math.max(0.1, maxCountScaleBase * crowdScale * fpsBoost * emergencyScale * perfDamp);
+      const capScale = Math.max(0.18, (particleBudget.capScale ?? 1) * crowdScale * fpsBoost * emergencyScale * perfDamp);
+      const sizeScale = (particleBudget.sizeScale ?? 1) * emergencySize * (perfDamp < 0.8 ? 1.05 : 1);
+      const spawnScale = Math.max(0.08, (particleBudget.spawnScale ?? 1) * crowdScale * fpsBoost * emergencyScale * perfDamp);
       // Keep tick cadence steady for smooth lerps; rely on lower counts for performance.
       const tickModulo = 1;
       const budgetKey = [
@@ -9169,7 +9186,7 @@ function syncBackBufferSizes() {
         const baseBand = Math.max(gradientWidth / 2, playheadLineW / 2);
         panel.__dgPlayheadClearBand = Math.max(6, Math.ceil(baseBand + extraTrail));
 
-        // Repulse particles along the full header segment
+        // Repulse particles along the full header segment (throttle under load).
         try {
           let sweepDir = headerSweepDirX || 1;
           if (currentPhase != null && prevPhase != null) {
@@ -9180,8 +9197,18 @@ function syncBackBufferSizes() {
             }
           }
           headerSweepDirX = sweepDir;
-          pushHeaderSweepAt(playheadX, { lineWidthPx: gradientWidth });
-          dbgPoke('header');
+          const fpsHint = Number.isFinite(fpsLive) ? fpsLive : null;
+          let sweepEvery = 1;
+          if (gestureMoving || visiblePanels >= 12 || (fpsHint != null && fpsHint < 50)) sweepEvery = 2;
+          if (visiblePanels >= 18 || (fpsHint != null && fpsHint < 40)) sweepEvery = 3;
+          let sweepMaxSteps = 36;
+          if (gestureMoving || visiblePanels >= 12 || (fpsHint != null && fpsHint < 55)) sweepMaxSteps = 24;
+          if (visiblePanels >= 18 || (fpsHint != null && fpsHint < 45)) sweepMaxSteps = 16;
+          panel.__dgPlayheadSweepFrame = (panel.__dgPlayheadSweepFrame || 0) + 1;
+          if ((panel.__dgPlayheadSweepFrame % sweepEvery) === 0) {
+            pushHeaderSweepAt(playheadX, { lineWidthPx: gradientWidth, maxSteps: sweepMaxSteps });
+            dbgPoke('header');
+          }
         } catch (e) { /* fail silently */ }
 
         const hue = Number.isFinite(panel.__dgPlayheadHue)
