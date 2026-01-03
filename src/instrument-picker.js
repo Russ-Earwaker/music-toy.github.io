@@ -191,9 +191,30 @@ export async function openInstrumentPicker({ panel, toyId }){
     pitchToggle.classList.toggle('is-off', !pitchShiftEnabled);
     octaveControls.style.display = pitchShiftEnabled ? 'inline-flex' : 'none';
   };
+  const playPreview = (id, noteOverride)=>{
+    if (!id) return;
+    try{
+      const resume = resumeAudioContextIfNeeded();
+      const noteForPreview = noteOverride || previewNoteForInstrument(id);
+      const previewOptions = { octave: selectedOctave, pitchShift: pitchShiftEnabled };
+      if (resume && typeof resume.then === 'function') {
+        resume.then(()=>{ try{ triggerInstrument(id, noteForPreview, undefined, tgtId, previewOptions); }catch{}; }).catch(()=>{});
+      } else {
+        triggerInstrument(id, noteForPreview, undefined, tgtId, previewOptions);
+      }
+    }catch{}
+  };
   updateOctaveUI();
-  octDown.onclick = ()=>{ selectedOctave = clampOctave(selectedOctave - 1); updateOctaveUI(); };
-  octUp.onclick = ()=>{ selectedOctave = clampOctave(selectedOctave + 1); updateOctaveUI(); };
+  octDown.onclick = ()=>{
+    selectedOctave = clampOctave(selectedOctave - 1);
+    updateOctaveUI();
+    if (pitchShiftEnabled) playPreview(selected || current || '', noteForOctave());
+  };
+  octUp.onclick = ()=>{
+    selectedOctave = clampOctave(selectedOctave + 1);
+    updateOctaveUI();
+    if (pitchShiftEnabled) playPreview(selected || current || '', noteForOctave());
+  };
   pitchToggle.onclick = ()=>{
     const next = !pitchShiftEnabled;
     pitchShiftEnabled = next;
@@ -303,16 +324,7 @@ export async function openInstrumentPicker({ panel, toyId }){
         ev.stopPropagation();
         b.classList.add('tapping'); setTimeout(()=> b.classList.remove('tapping'), 120);
         b.classList.add('flash'); setTimeout(()=> b.classList.remove('flash'), 180);
-        try{
-          const resume = resumeAudioContextIfNeeded();
-          const noteForPreview = previewNoteForInstrument(b.dataset.value);
-          const previewOptions = { octave: selectedOctave, pitchShift: pitchShiftEnabled };
-          if (resume && typeof resume.then === 'function') {
-            resume.then(()=>{ try{ triggerInstrument(b.dataset.value, noteForPreview, undefined, tgtId, previewOptions); }catch{}; }).catch(()=>{});
-          } else {
-            triggerInstrument(b.dataset.value, noteForPreview, undefined, tgtId, previewOptions);
-          }
-        }catch{}
+        playPreview(b.dataset.value);
         selected = b.dataset.value; highlight(b);
       });
       grid.appendChild(b);
