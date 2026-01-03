@@ -3028,6 +3028,43 @@ function scheduleChainRedraw() {
   });
 }
 
+function beginChainPanelMove(panelOrId, pos = {}) {
+  if (!CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) return;
+  const toyId = (typeof panelOrId === 'string') ? panelOrId : panelOrId?.id;
+  if (!toyId) return;
+  if (!g_edgesByToyId || !g_edgesByToyId.has(toyId)) return;
+  let left = Number.isFinite(pos.left) ? pos.left : NaN;
+  let top = Number.isFinite(pos.top) ? pos.top : NaN;
+  if (!Number.isFinite(left) || !Number.isFinite(top)) {
+    const panel = (typeof panelOrId === 'string') ? document.getElementById(toyId) : panelOrId;
+    if (panel) {
+      left = parseFloat(panel.style.left);
+      top = parseFloat(panel.style.top);
+    }
+  }
+  if (!Number.isFinite(left) || !Number.isFinite(top)) return;
+  g_chainToyLastPos.set(toyId, { left, top });
+}
+
+function notifyChainPanelMoved(panelOrId) {
+  if (!CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) return;
+  const toyId = (typeof panelOrId === 'string') ? panelOrId : panelOrId?.id;
+  if (!toyId) return;
+  if (!g_edgesByToyId || !g_edgesByToyId.has(toyId)) return;
+  if (!g_chainToyLastPos.has(toyId)) {
+    rebuildChainSegments();
+    scheduleChainRedraw();
+    return;
+  }
+  updateChainSegmentsForToy(toyId);
+  scheduleChainRedraw();
+}
+
+try {
+  window.__chainBeginPanelMove = beginChainPanelMove;
+  window.__chainNotifyPanelMoved = notifyChainPanelMoved;
+} catch {}
+
 // Keep chain connectors in sync with camera pans/zooms by redrawing on viewport changes.
 (function setupChainViewportSync(){
   try {

@@ -46,6 +46,16 @@ export function initDragBoard(boardSel = '#board') {
   const SAFE_SEARCH_STEP = 16;
   const SAFE_SEARCH_MAX = 360;
 
+  function isChainPanel(panel) {
+    if (!panel?.dataset) return false;
+    return !!(
+      panel.dataset.chainParent ||
+      panel.dataset.prevToyId ||
+      panel.dataset.nextToyId ||
+      panel.dataset.chainHasChild === '1'
+    );
+  }
+
   function getPanelRect(panel, overrideX, overrideY){
     const cs = getComputedStyle(panel);
     const w = Math.max(1, panel.offsetWidth || parseFloat(cs.width) || 1);
@@ -128,6 +138,16 @@ export function initDragBoard(boardSel = '#board') {
   function lerpPanelTo(panel, from, to, durationMs, onDone){
     const start = performance?.now?.() ?? Date.now();
     const dur = Math.max(60, durationMs || DRAG_LERP_MS);
+    const notifyChainMove = (typeof window !== 'undefined' && typeof window.__chainNotifyPanelMoved === 'function')
+      ? window.__chainNotifyPanelMoved
+      : null;
+    const beginChainMove = (typeof window !== 'undefined' && typeof window.__chainBeginPanelMove === 'function')
+      ? window.__chainBeginPanelMove
+      : null;
+    const shouldNotifyChain = !!notifyChainMove && isChainPanel(panel);
+    if (shouldNotifyChain && beginChainMove) {
+      beginChainMove(panel, { left: from?.x, top: from?.y });
+    }
     const tick = (now) => {
       const t = Math.min(1, (now - start) / dur);
       const eased = 1 - Math.pow(1 - t, 3);
@@ -135,6 +155,7 @@ export function initDragBoard(boardSel = '#board') {
       const y = from.y + (to.y - from.y) * eased;
       panel.style.left = x + 'px';
       panel.style.top = y + 'px';
+      if (shouldNotifyChain) notifyChainMove(panel);
       if (t < 1) {
         requestAnimationFrame(tick);
       } else if (typeof onDone === 'function') {
