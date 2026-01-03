@@ -299,9 +299,11 @@ function ensureUI() {
     const act = btn.getAttribute('data-act');
     if (act === 'close') hide();
     if (act === 'buildP2') buildP2();
+    if (act === 'buildP2d') await buildP2d();
     if (act === 'runP2a') await runP2a();
     if (act === 'runP2b') await runP2b();
     if (act === 'runP2c') await runP2c();
+    if (act === 'runP2d') await runP2d();
     if (act === 'buildP3') await buildP3();
     if (act === 'runP3a') await runP3a();
     if (act === 'runP3b') await runP3b();
@@ -1014,6 +1016,25 @@ function buildP2() {
   // Particles worst-case: lots of loopgrids (heavy particle fields).
   buildParticleWorstCase({ toyType: 'loopgrid', rows: 8, cols: 10, spacing: 400 });
   setStatus('P2 built');
+}
+
+async function buildP2d() {
+  try { clearSceneViaSnapshot(); } catch {}
+  setStatus('Building P2D...');
+  await ensureMeasuredFootprint('loopgrid-drum');
+  const spacing = estimateGridSpacing('loopgrid-drum', 400);
+  logPerfFootprintDebug('loopgrid-drum', 400);
+  buildParticleWorstCase({ toyType: 'loopgrid-drum', rows: 8, cols: 10, spacing });
+  try {
+    setTimeout(() => {
+      document.querySelectorAll('.toy-panel[data-toy="loopgrid-drum"]')
+        .forEach(p => {
+          try { p.dispatchEvent(new CustomEvent('toy-random', { bubbles: true })); } catch {}
+          try { p.dispatchEvent(new CustomEvent('toy-random-notes', { bubbles: true })); } catch {}
+        });
+    }, 0);
+  } catch {}
+  setStatus('P2D built');
 }
 
 async function buildP3() {
@@ -2392,6 +2413,20 @@ async function runP2c() {
     spanMs: 26000,
   });
   await runVariant('P2c_particles_overview', step, 'Running P2c (overview spam)?O');
+}
+
+async function runP2d() {
+  const step = makePanZoomScript({
+    panPx: 2400,
+    zoomMin: 0.40,
+    zoomMax: 1.20,
+    idleMs: 3000,
+    panMs: 13500,
+    zoomMs: 13500,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+  });
+  await runVariantPlaying('P2d_drums_panzoom', step, 'Running P2d (drums pan/zoom)...');
 }
 
 async function runP3a() {
@@ -4111,7 +4146,7 @@ window.addEventListener('keydown', (e) => {
 });
 
 // Expose for manual console use
-try { window.__PerfLab = { show, hide, toggle, buildP2, buildP3, buildP4, buildP4h, buildP5, buildP6, buildP7, runP2a, runP2b, runP2c, runP3a, runP3b, runP3c, runP3d, runP3e, runP3e2, runP3f, runP3fPlayheadSeparateOff, runP3fPlayheadSeparateOn, runP3f2, runP3fEmptyNoNotes, runP3fEmptyChainNoNotes, runP3fMixedSomeEmpty, runP3fNoPaint, runP3fNoDom, runP3fNoGrid, runP3fNoParticles, runP3fNoOverlays, runP3fNoOverlayStrokes, runP3fNoOverlayCore, runP3fParticleProfile, runP3fFlatLayers, runP3g, runP3g2, runP3h, runP3h2, runP3i, runP3i2, runP3j, runP3j2, runP3k, runP3k2, runP3l, runP3l2, runP3l3, runP3l4, runP3l5, runP3l6, runP3m, runP3m2, runQueue, runAuto, runP4a, runP4b, runP4o, runP4p, runP4q, runP4r, runP4s, runP4t, runP4u, runP4v, runP4w, runP4x, runP4e, runP4c, runP4d, runP4f, runP4g, runP4h2, runP4i, runP4j, runP4k, runP4m, runP4n, runP5a, runP5b, runP5c, runP6a, runP6b, runP6c, runP6d, runP6e, runP6eNoPaint, runP6ePaintOnly, runP6eNoDom, readAutoConfig, readAutoConfigFromFile, saveResultsBundle, postResultsBundle, downloadResultsBundle, getResults: () => lastResults, getBundle: () => lastBundle, clearResults: () => { lastResults = []; } }; } catch {}
+try { window.__PerfLab = { show, hide, toggle, buildP2, buildP2d, buildP3, buildP4, buildP4h, buildP5, buildP6, buildP7, runP2a, runP2b, runP2c, runP2d, runP3a, runP3b, runP3c, runP3d, runP3e, runP3e2, runP3f, runP3fPlayheadSeparateOff, runP3fPlayheadSeparateOn, runP3f2, runP3fEmptyNoNotes, runP3fEmptyChainNoNotes, runP3fMixedSomeEmpty, runP3fNoPaint, runP3fNoDom, runP3fNoGrid, runP3fNoParticles, runP3fNoOverlays, runP3fNoOverlayStrokes, runP3fNoOverlayCore, runP3fParticleProfile, runP3fFlatLayers, runP3g, runP3g2, runP3h, runP3h2, runP3i, runP3i2, runP3j, runP3j2, runP3k, runP3k2, runP3l, runP3l2, runP3l3, runP3l4, runP3l5, runP3l6, runP3m, runP3m2, runQueue, runAuto, runP4a, runP4b, runP4o, runP4p, runP4q, runP4r, runP4s, runP4t, runP4u, runP4v, runP4w, runP4x, runP4e, runP4c, runP4d, runP4f, runP4g, runP4h2, runP4i, runP4j, runP4k, runP4m, runP4n, runP5a, runP5b, runP5c, runP6a, runP6b, runP6c, runP6d, runP6e, runP6eNoPaint, runP6ePaintOnly, runP6eNoDom, readAutoConfig, readAutoConfigFromFile, saveResultsBundle, postResultsBundle, downloadResultsBundle, getResults: () => lastResults, getBundle: () => lastBundle, clearResults: () => { lastResults = []; } }; } catch {}
 
 
 

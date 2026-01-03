@@ -1399,6 +1399,39 @@ function panelHasNotesAtColumn(panel, col){
   return false;
 }
 
+function panelHasAnyNotes(panel) {
+  if (!panel) return false;
+  const type = panel.dataset?.toy;
+
+  if (type === 'loopgrid' || type === 'loopgrid-drum') {
+    const steps = panel.__gridState?.steps;
+    const hasNotes = Array.isArray(steps) ? steps.some(Boolean) : false;
+    panel.__loopgridHasNotes = hasNotes;
+    return hasNotes;
+  }
+
+  if (type === 'drawgrid') {
+    try {
+      if (typeof panel.__drawToy?.hasActiveNotes === 'function') {
+        return !!panel.__drawToy.hasActiveNotes();
+      }
+    } catch {}
+    try {
+      const st = panel.__drawToy?.getState?.();
+      const active = st?.nodes?.active;
+      return Array.isArray(active) && active.some(Boolean);
+    } catch {}
+    return false;
+  }
+
+  if (type === 'chordwheel') {
+    const s = panel.__chordwheelStepStates;
+    return Array.isArray(s) && s.some(v => v !== -1);
+  }
+
+  return false;
+}
+
 function startToy(panelEl) {
     if (!panelEl) return;
     try {
@@ -1453,6 +1486,7 @@ function advanceChain(headId) {
         if (shouldPulse) triggerConnectorPulse(activeToyId, headId);
         g_chainState.set(headId, headId); // Loop back to head
     }
+    try { g_sequencerScheduler?.clearToy?.(activeToyId); } catch {}
 }
 
 const DRAWGRID_BOOT_DEBUG = false;
@@ -2991,6 +3025,7 @@ function scheduleChainRedraw() {
   }
 })();
 const g_chainState = new Map();
+let g_sequencerScheduler = null;
 
 function resetChainState({ clearDom = true } = {}) {
   try {
@@ -3145,7 +3180,13 @@ function scheduler(){
   let lastPerfLog = 0;
   const prevActiveToyIds = new Set();
   let prevHadActiveToys = false;
-  const sequencerScheduler = createSequencerScheduler({ lookaheadSec: 0.2, leadSec: 0.01 });
+  let prevRunning = false;
+  let chainPreAdvanced = false;
+  const CHAIN_PRE_ADVANCE_PHASE = 0.97;
+  const CHAIN_PRE_ADVANCE_ENABLED = false;
+  const debugFirstStep = () => !!window.__CHAIN_DEBUG_FIRST_STEP;
+  const sequencerScheduler = createSequencerScheduler({ lookaheadSec: 0.25, leadSec: 0.05 });
+  g_sequencerScheduler = sequencerScheduler;
   try { window.__NOTE_SCHEDULER_ENABLED = true; } catch {}
 
   function step(){
@@ -3172,6 +3213,20 @@ function scheduler(){
     const info = getLoopInfo();
 
     const running = isRunning();
+    if (running && !prevRunning) {
+      lastCol.clear();
+      try {
+        document.querySelectorAll('.toy-panel').forEach((toy) => {
+          if (typeof toy.__sequencerSchedule === 'function') {
+            toy.__chainJustActivated = true;
+          }
+        });
+      } catch {}
+      if (debugFirstStep()) {
+        console.log('[chain][debug] transport start', { phase01: info?.phase01 });
+      }
+    }
+    prevRunning = running;
 
     // Screen-space "home" anchor: gradient + particle landmark.
     // Keep this cheap and frame-synced by piggybacking on the main scheduler rAF.
@@ -3181,26 +3236,40 @@ function scheduler(){
 
     if (CHAIN_FEATURE_ENABLE_SCHEDULER && running && hasChains && allowChainWork){
       // --- Phase: advance chains on bar wrap ---
-      const phaseJustWrapped = info.phase01 < lastPhase && lastPhase > 0.9;
-      lastPhase = info.phase01;
+      const phase = info.phase01;
+      const prevPhase = lastPhase;
+      const phaseJustWrapped = phase < prevPhase && prevPhase > 0.9;
+      lastPhase = phase;
 
       if (phaseJustWrapped) {
         const tAdvanceStart = __perfOn ? performance.now() : 0;
+        if (chainPreAdvanced) {
+          chainPreAdvanced = false;
+        } else {
+          for (const [headId] of g_chainState.entries()) {
+            const activeToy = document.getElementById(g_chainState.get(headId));
+            // Bouncers and Ripplers manage their own advancement via the 'chain:next' event.
+            // All other toys (like loopgrid) advance on the global bar clock.
+            if (activeToy && activeToy.dataset.toy !== 'bouncer' && activeToy.dataset.toy !== 'rippler') {
+              advanceChain(headId);
+            }
+          }
+          const tAdvanceEnd = __perfOn ? performance.now() : 0;
+          if (__perfOn) {
+            window.__PerfFrameProf.mark('chain.advance', tAdvanceEnd - tAdvanceStart);
+          }
+          if (CHAIN_DEBUG && (tAdvanceEnd - tAdvanceStart) > CHAIN_DEBUG_LOG_THRESHOLD_MS) {
+            console.log('[CHAIN][perf] advanceChain batch', (tAdvanceEnd - tAdvanceStart).toFixed(2), 'ms', 'heads=', g_chainState.size);
+          }
+        }
+      } else if (CHAIN_PRE_ADVANCE_ENABLED && !chainPreAdvanced && phase >= CHAIN_PRE_ADVANCE_PHASE && prevPhase < CHAIN_PRE_ADVANCE_PHASE) {
         for (const [headId] of g_chainState.entries()) {
           const activeToy = document.getElementById(g_chainState.get(headId));
-          // Bouncers and Ripplers manage their own advancement via the 'chain:next' event.
-          // All other toys (like loopgrid) advance on the global bar clock.
           if (activeToy && activeToy.dataset.toy !== 'bouncer' && activeToy.dataset.toy !== 'rippler') {
             advanceChain(headId);
           }
         }
-        const tAdvanceEnd = __perfOn ? performance.now() : 0;
-        if (__perfOn) {
-          window.__PerfFrameProf.mark('chain.advance', tAdvanceEnd - tAdvanceStart);
-        }
-        if (CHAIN_DEBUG && (tAdvanceEnd - tAdvanceStart) > CHAIN_DEBUG_LOG_THRESHOLD_MS) {
-          console.log('[CHAIN][perf] advanceChain batch', (tAdvanceEnd - tAdvanceStart).toFixed(2), 'ms', 'heads=', g_chainState.size);
-        }
+        chainPreAdvanced = true;
       }
 
       // --- Phase A: chain-active flags ---
@@ -3210,6 +3279,12 @@ function scheduler(){
         ? new Set(getSequencedToys().map(p => p.id).filter(Boolean))
         : new Set(g_chainState.values());
       const hasActiveToys = activeToyIds.size > 0;
+      if (debugFirstStep()) {
+        console.log('[chain][debug] activeToyIds', {
+          active: Array.from(activeToyIds),
+          chainState: Array.from(g_chainState.entries()),
+        });
+      }
 
       const activeChanged = (() => {
         if (hasActiveToys !== prevHadActiveToys) return true;
@@ -3240,6 +3315,13 @@ function scheduler(){
           if (current !== isActive) {
             toy.dataset.chainActive = isActive ? 'true' : 'false';
             try { toy.__loopgridNeedsRedraw = true; } catch {}
+            if (isActive) {
+              lastCol.delete(toy.id);
+              toy.__chainJustActivated = true;
+              if (debugFirstStep()) {
+                console.log('[chain][debug] active', { id: toy.id, toy: toy.dataset?.toy });
+              }
+            }
           }
         });
 
@@ -3263,8 +3345,21 @@ function scheduler(){
         const ctx = ensureAudioContext();
         const nowAt = ctx?.currentTime ?? 0;
         try {
+          const activeAudioToyIds = new Set();
+          for (const toyId of activeToyIds) {
+            const toy = document.getElementById(toyId);
+            if (!toy) continue;
+            if (panelHasAnyNotes(toy)) {
+              activeAudioToyIds.add(toyId);
+            } else {
+              try { toy.__chainJustActivated = false; } catch {}
+            }
+          }
+          if (debugFirstStep()) {
+            console.log('[chain][debug] activeAudioToyIds', Array.from(activeAudioToyIds));
+          }
           sequencerScheduler.tick({
-            activeToyIds,
+            activeToyIds: activeAudioToyIds,
             getToy: (id) => document.getElementById(id),
             loopInfo: info,
             nowAt,
@@ -3281,7 +3376,11 @@ function scheduler(){
             const steps = parseInt(toy.dataset.steps, 10) || NUM_STEPS;
             const col = Math.floor(info.phase01 * steps) % steps;
             if (col !== lastCol.get(toy.id)) {
+              const isFirstStep = !lastCol.has(toy.id);
               lastCol.set(toy.id, col);
+              if (isFirstStep && debugFirstStep()) {
+                console.log('[chain][debug] first step', { id: toy.id, toy: toy.dataset?.toy, col, phase01: info.phase01 });
+              }
               try {
                 toy.__sequencerStep(col);
               } catch (e) {

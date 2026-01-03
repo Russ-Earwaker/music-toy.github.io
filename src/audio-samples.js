@@ -1,5 +1,5 @@
 // src/audio-samples.js — samples + tone fallback (<=300 lines)
-import { ensureAudioContext, getToyGain, registerActiveNode } from './audio-core.js';
+import { ensureAudioContext, getToyGain, registerActiveNode, getLoopInfo } from './audio-core.js';
 import { playById, noteToFreq, TONE_NAMES } from './audio-tones.js';
 
 // id -> { url, synth }
@@ -17,6 +17,11 @@ function safeStartTime(ctx, when){
 const entries = new Map();
 // id -> AudioBuffer
 const buffers = new Map();
+const timingProbeState = {
+  lastBar: null,
+  lastTs: 0,
+  lastWarnBar: null,
+};
 
 // Normalize various user/CSV names to canonical lookup ids
 function normId(s){
@@ -330,6 +335,45 @@ export function triggerInstrument(instrument, noteName='C4', when, toyId, option
     }catch{}
 
   // exact or alias match first
+  if (window.__AUDIO_TIMING_PROBE) {
+    try {
+      const info = getLoopInfo?.();
+      const barLen = Number(info?.barLen) || 0;
+      const loopStart = Number(info?.loopStartTime) || 0;
+      const now = ctx.currentTime;
+      const leadMs = Math.round((t - now) * 1000);
+      let shouldLog = false;
+      let barIndex = null;
+      if (Number.isFinite(barLen) && barLen > 0 && Number.isFinite(loopStart)) {
+        barIndex = Math.floor((t - loopStart) / barLen);
+        if (barIndex !== timingProbeState.lastBar) {
+          timingProbeState.lastBar = barIndex;
+          shouldLog = true;
+        }
+      } else {
+        const ts = performance?.now?.() ?? Date.now();
+        if (!timingProbeState.lastTs || (ts - timingProbeState.lastTs) > 1000) {
+          timingProbeState.lastTs = ts;
+          shouldLog = true;
+        }
+      }
+      if (shouldLog) {
+        console.log('[audio][timing]', { toyId, barIndex, leadMs });
+        const delayMs = Math.max(0, (t - now) * 1000);
+        setTimeout(() => {
+          const driftMs = Math.round((ctx.currentTime - t) * 1000);
+          console.log('[audio][timing][start]', { toyId, barIndex, driftMs });
+          const warnMs = Number(window?.__AUDIO_TIMING_DRIFT_WARN_MS);
+          const threshold = Number.isFinite(warnMs) ? warnMs : 15;
+          if (barIndex != null && driftMs > threshold && timingProbeState.lastWarnBar !== barIndex) {
+            timingProbeState.lastWarnBar = barIndex;
+            console.warn('[audio][timing][warn]', { toyId, barIndex, driftMs, thresholdMs: threshold });
+          }
+        }, delayMs);
+      }
+    } catch {}
+  }
+
   if (playSampleAt(id, t, vel, toyId, resolvedNote, options)) { try{ window.__toyActivityAt = ensureAudioContext().currentTime; }catch{}; return; }
 
   // try family (e.g., djembe_bass -> djembe)

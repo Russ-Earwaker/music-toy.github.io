@@ -144,11 +144,12 @@ const __LG = (() => {
             if (!panel || !panel.isConnected) { this.panels.delete(panel); continue; }
             if (window.__PERF_DISABLE_LOOPGRID_RENDER) continue;
             const st = panel.__simpleRhythmVisualState;
-            if (st && isPanelVisible(panel, st)) visibleCount++;
+            const visible = !!(st && isPanelVisible(panel, st));
+            if (visible) visibleCount++;
             const mod = panel.__loopgridFrameModulo | 0;
             if (mod > 1 && (this.frame % mod) !== 0) continue;
             const isGesture = !!(window.__ZoomCoordinator?.isGesturing?.() || document.body?.classList?.contains?.('is-gesturing'));
-            render(panel, { forceNudge: false, isGesture, chainNotesCache });
+            render(panel, { forceNudge: false, isGesture, chainNotesCache, visible });
           } catch {}
         }
         globalState.visibleCount = visibleCount;
@@ -1064,7 +1065,8 @@ function render(panel, opts = {}) {
       return;
     }
   }
-  if (!isPanelVisible(panel, st)) return;
+  if (opts.visible === false) return;
+  if (opts.visible == null && !isPanelVisible(panel, st)) return;
 
   // Set playing class for border highlight
   const state = panel.__gridState || {};

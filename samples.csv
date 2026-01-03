@@ -51,9 +51,9 @@ BellRing.wav,percussion,bell,short note,Bell,,BELL,,5,World; Toybox,drawgrid
 DogBark.wav,effects,natural,short note,Dog Bark,,DOG BARK,,4,Toybox,drawgrid
 GamingNote.wav,synth,synth,short note,Gaming Note,,GAMING NOTE,,5,Gaming,drawgrid
 SynthReverse.wav,synth,synth,short note,Synth Reverse,,SYNTH REVERSE,,5,Pop; Dance; ,drawgrid
-SynthHighBack.wav,synth,synth,short note,Synth Highback,,SYNTH HIGHBACK,,5,Pop; Dance; ,drawgrid
+SynthHighBack.wav,synth,synth,short note,Synth Highback,,SYNTH HIGHBACK,,5,Pop; ,
 SynthFunk.wav,synth,synth,short note,Synth Funk,,SYNTH FUNK,,5,Pop; Dance; ,drawgrid
-SynthShimmer.wav,synth,synth,short note,Synth Shimmer,,SYNTH SHIMMER,,5,Pop; Dance; ,drawgrid
+SynthShimmer.wav,synth,synth,short note,Synth Shimmer,,SYNTH SHIMMER,,5,Pop; ,
 SynthOrgan.wav,synth,synth,short note,Synth Organ,,SYNTH ORGAN,,5,Pop; Dance; ,drawgrid
 SynthStrike.wav,synth,synth,short note,Synth Strike,,SYNTH STRIKE,,5,Pop; Dance; ,drawgrid
 RubberBand.wav,synth,natural,short note,Rubber Band,,RUBBER BAND,,5,Toybox,drawgrid

@@ -273,7 +273,7 @@ const DG_KNOCK = {
   pointerDown: { radiusToy: ghostRadiusToy, strength: ghostStrength },
   pointerMove: { radiusToy: ghostRadiusToy, strength: ghostStrength },
   lettersMove: { radius:  120, strength: 24 },
-  headerLine:  { radiusToy: headerRadiusToy, strength: 2200 },
+  headerLine:  { radiusToy: headerRadiusToy, strength: 30 },
   nodePulse:   {
     strengthMul: 1800.0, // stronger per-note particle kick on playback
   },
@@ -1262,6 +1262,22 @@ function __dgLayerTrace(tag, payload = {}) {
     console.log('[DG][layer-trace]', tag, payload);
   } catch {}
 }
+function __dgLayerEvent(tag, payload = {}) {
+  try {
+    if (typeof window !== 'undefined' && window.__DG_LAYER_EVENTS === undefined) {
+      window.__DG_LAYER_EVENTS = false;
+    }
+    if (!window.__DG_LAYER_EVENTS) return;
+    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    const panelRef = payload.panelRef || null;
+    const last = panelRef?.__dgLayerEventLastTs || 0;
+    if ((now - last) < 250) return;
+    if (panelRef) panelRef.__dgLayerEventLastTs = now;
+    const out = { ...payload };
+    delete out.panelRef;
+    console.log('[DG][layer-event]', tag, out);
+  } catch {}
+}
 
 function __dgFlowLog(tag, payload = {}) {
   try {
@@ -1536,6 +1552,7 @@ function normalizeMapColumns(map, cols) {
 export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId, bpm = 120 } = {}) {
   // Per-instance state (WAS module-level; moving fixes cross-toy leakage)
   let currentMap = null;                // { active:boolean[], nodes:Set[], disabled:Set[] }
+  let usingBackBuffers = false;
   // Per-instance (was module-level; caused cross-toy size/throttle leakage)
   let __dgFrameIdx = 0;
   let __dgLastResizeTargetW = 0;
@@ -2481,10 +2498,11 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
           seed: panelSeed,
           cap,
           returnSeconds: 2.4,   // slower settle time so brightness/offsets linger
-          // Give pokes some visible impact
-          forceMul: 2.5,
-          noise: 0,
-          kick: 0.25,
+            // Give pokes some visible impact
+            forceMul: 2.5,
+            vmaxMul: 6.0,
+            noise: 0,
+            kick: 0.25,
           kickDecay: 800.0,
 
           // Restore normal idle particle look (same as Simple Rhythm)
@@ -2795,7 +2813,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     }
   }
 
-  function pushHeaderSweepAt(xToy, { lineWidthPx, maxSteps } = {}) {
+  function pushHeaderSweepAt(xToy, { lineWidthPx, maxSteps, forceMul } = {}) {
     try {
       // Do not inject forces while camera is in motion / settling.
       if (headerPushSuppressed()) return;
@@ -2818,13 +2836,33 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         ? fallbackRadius
         : Math.max(8, lineWidthWorld * (HeaderSweepForce.radiusMul || 2));
       const spacing = Math.max(4, radius * (HeaderSweepForce.spacingMul || 0.6));
-      const strength = Number.isFinite(HeaderSweepForce.strength)
-        ? HeaderSweepForce.strength
-        : (DG_KNOCK?.headerLine?.strength || 1600);
-      pushAlongSegment(
-        dgField,
-        xToy,
-        area.y,
+        const headerStrength = Number.isFinite(DG_KNOCK?.headerLine?.strength)
+          ? DG_KNOCK.headerLine.strength
+          : null;
+        const baseStrength = (headerStrength != null)
+          ? headerStrength
+          : (Number.isFinite(HeaderSweepForce.strength) ? HeaderSweepForce.strength : 1600);
+        const fieldState = dgField?._state;
+        let baseCount = panel.__dgParticleBaseCount;
+        if (
+          (!Number.isFinite(baseCount) || baseCount <= 0) &&
+          Number.isFinite(fieldState?.targetDesired) &&
+          fieldState.targetDesired > 0
+        ) {
+          baseCount = Math.max(1, Math.round(fieldState.targetDesired));
+          panel.__dgParticleBaseCount = baseCount;
+        }
+        const currentCount = Math.max(1, Number(fieldState?.particles?.length) || 0);
+        const countComp = baseCount ? Math.min(8, baseCount / currentCount) : 1;
+        const strengthMul = Number.isFinite(forceMul) && forceMul > 0 ? forceMul : 1;
+        const knockbackMul = Number.isFinite(panel.__dgParticleKnockbackMul)
+          ? panel.__dgParticleKnockbackMul
+          : 1;
+        const strength = baseStrength * strengthMul * countComp * knockbackMul;
+        pushAlongSegment(
+          dgField,
+          xToy,
+          area.y,
         xToy,
         area.y + area.h,
         {
@@ -3148,6 +3186,15 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     if (DG_SWAP_DEBUG) dgs('request', { usingBackBuffers, pendingPaintSwap, pendingSwap, zoomCommitPhase, zoomGestureActive });
     __swapRAF = requestAnimationFrame(() => {
       __swapRAF = null;
+      __dgLayerEvent('frontSwap:raf', {
+        panelId: panel?.id || null,
+        panelRef: panel,
+        usingBackBuffers,
+        pendingPaintSwap,
+        pendingSwap,
+        singleCanvas: !!DG_SINGLE_CANVAS,
+        overlays: !!DG_SINGLE_CANVAS_OVERLAYS,
+      });
       dgPaintTrace('requestFrontSwap:raf-begin', { pendingPaintSwap, pendingSwap, zoomCommitPhase, zoomGestureActive });
       if (DG_SWAP_DEBUG) console.time(mark);
       // SWAP GUARD:
@@ -3183,6 +3230,12 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
       if (DG_SINGLE_CANVAS) {
         pendingPaintSwap = false;
+        __dgLayerEvent('frontSwap:composite', {
+          panelId: panel?.id || null,
+          panelRef: panel,
+          singleCanvas: !!DG_SINGLE_CANVAS,
+          overlays: !!DG_SINGLE_CANVAS_OVERLAYS,
+        });
         compositeSingleCanvas();
       } else if (pendingPaintSwap) {
         swapBackToFront(); if (DG_SWAP_DEBUG) dgs('swapBackToFront()'); if (DG_DEBUG) drawDebugHUD(['swapBackToFront()']); pendingPaintSwap = false;
@@ -5013,6 +5066,16 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
       }
     }
   });
+  const onGlobalDrawgridRefresh = (e) => {
+    if (e?.detail?.sourcePanelId === panel?.id) return;
+    panel.__dgForceNodesRefresh = true;
+  };
+  try {
+    window.addEventListener('drawgrid:refresh-all', onGlobalDrawgridRefresh);
+    panel.addEventListener('toy:remove', () => {
+      try { window.removeEventListener('drawgrid:refresh-all', onGlobalDrawgridRefresh); } catch {}
+    }, { once: true });
+  } catch {}
 
   const onGlobalPointerUp = () => {
     const now = nowMs();
@@ -5278,6 +5341,15 @@ function syncBackBufferSizes() {
     if (!panel.__dgSingleCompositeDirty && !panel.__dgCompositeBaseDirty && !panel.__dgCompositeOverlayDirty) {
       return;
     }
+    __dgLayerEvent('composite:begin', {
+      panelId: panel?.id || null,
+      panelRef: panel,
+      singleCanvas: !!DG_SINGLE_CANVAS,
+      overlays: !!DG_SINGLE_CANVAS_OVERLAYS,
+      baseDirty: !!panel.__dgCompositeBaseDirty,
+      overlayDirty: !!panel.__dgCompositeOverlayDirty,
+      singleDirty: !!panel.__dgSingleCompositeDirty,
+    });
     const __perfOn = !!(window.__PerfFrameProf && typeof performance !== 'undefined' && performance.now);
     dgGridAlphaLog('composite:begin', frontCtx);
     __dgLayerTrace('composite:enter', {
@@ -5402,6 +5474,7 @@ function syncBackBufferSizes() {
           nodeSources.push(nodesBackCanvas);
         }
         if (
+          !DG_SINGLE_CANVAS &&
           nodesFrontCanvas &&
           nodesFrontCanvas !== nodesBackCanvas &&
           nodesFrontCanvas.width &&
@@ -5546,6 +5619,13 @@ function syncBackBufferSizes() {
   function flushVisualBackBuffersToFront() {
     const w = Math.max(1, Math.round(cssW));
     const h = Math.max(1, Math.round(cssH));
+    __dgLayerEvent('flushVisualBackBuffersToFront', {
+      panelId: panel?.id || null,
+      panelRef: panel,
+      singleCanvas: !!DG_SINGLE_CANVAS,
+      overlays: !!DG_SINGLE_CANVAS_OVERLAYS,
+      usingBackBuffers,
+    });
 
     if (pendingWrapSize) {
       wrap.style.width = `${pendingWrapSize.width}px`;
@@ -6720,7 +6800,9 @@ function syncBackBufferSizes() {
 
       nodeCoordsForHitTest = nodeCoords;
     });
-    __dgMarkSingleCanvasCompositeDirty(panel);
+    if (DG_SINGLE_CANVAS && !DG_SINGLE_CANVAS_OVERLAYS) {
+      __dgMarkSingleCanvasCompositeDirty(panel);
+    }
     __dgLayerTrace('drawNodes:exit', {
       panelId: panel?.id || null,
       usingBackBuffers,
@@ -7307,6 +7389,13 @@ function syncBackBufferSizes() {
       requestFrontSwap(useFrontBuffers);
       emitDrawgridUpdate({ activityOnly: false });
       panel.dispatchEvent(new CustomEvent('drawgrid:node-toggle', { detail: { col, row, disabled: dis.has(row) } }));
+      try {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('drawgrid:refresh-all', {
+            detail: { sourcePanelId: panel?.id || null }
+          }));
+        }
+      } catch {}
 
       const cx = gridArea.x + col * cw + cw * 0.5;
       const cy = gridArea.y + topPad + row * ch + ch * 0.5;
@@ -7653,14 +7742,14 @@ function syncBackBufferSizes() {
     const particleBudget = adaptive?.particleBudget;
     const threshold = Number.isFinite(overviewState?.state?.zoomThreshold) ? overviewState.state.zoomThreshold : 0.36;
     const zoomTooWide = Number.isFinite(boardScaleValue) && boardScaleValue < threshold;
-    const allowField = particleBudget?.allowField !== false;
-    const fpsSample = Number.isFinite(adaptive?.smoothedFps)
-      ? adaptive.smoothedFps
-      : (Number.isFinite(adaptive?.fps) ? adaptive.fps : null);
-    const emergencyMode = !!adaptive?.emergencyMode;
-    // Keep fields on, but thin them out when many panels are visible.
-    // Do not vary by focus state so particles feel consistent across panels.
-    particleFieldEnabled = !!allowField && !inOverview && !zoomTooWide;
+      const allowField = !inOverview && !zoomTooWide;
+      const fpsSample = Number.isFinite(adaptive?.smoothedFps)
+        ? adaptive.smoothedFps
+        : (Number.isFinite(adaptive?.fps) ? adaptive.fps : null);
+      const emergencyMode = !!adaptive?.emergencyMode;
+      // Keep fields on, but thin them out when many panels are visible.
+      // Do not vary by focus state so particles feel consistent across panels.
+      particleFieldEnabled = !!allowField;
     panel.__dgParticleStateFlags = { inOverview, zoomTooWide };
 
     if (dgField && typeof dgField.applyBudget === 'function' && particleBudget) {
@@ -7696,6 +7785,20 @@ function syncBackBufferSizes() {
       const emergencyScale = emergencyMode ? 0.45 : 1;
       const emergencySize = emergencyMode ? 1.1 : 1;
       const perfDamp = Math.min(fpsDamp, gestureDamp);
+      panel.__dgParticleKnockbackMul = Math.min(8, 1 / Math.max(0.2, perfDamp));
+      if (dgField?._config) {
+        if (!Number.isFinite(panel.__dgFieldBaseReturnSeconds)) {
+          panel.__dgFieldBaseReturnSeconds = Number(dgField._config.returnSeconds) || 2.4;
+        }
+        if (!Number.isFinite(panel.__dgFieldBaseForceMul)) {
+          panel.__dgFieldBaseForceMul = Number(dgField._config.forceMul) || 2.5;
+        }
+        const baseReturn = panel.__dgFieldBaseReturnSeconds;
+        const returnMul = Math.min(3, panel.__dgParticleKnockbackMul || 1);
+        dgField._config.returnSeconds = Math.max(0.35, baseReturn / returnMul);
+        const baseForce = panel.__dgFieldBaseForceMul;
+        dgField._config.forceMul = Math.min(10, baseForce * (panel.__dgParticleKnockbackMul || 1));
+      }
       const maxCountScale = Math.max(0.1, maxCountScaleBase * crowdScale * fpsBoost * emergencyScale * perfDamp);
       const capScale = Math.max(0.18, (particleBudget.capScale ?? 1) * crowdScale * fpsBoost * emergencyScale * perfDamp);
       const sizeScale = (particleBudget.sizeScale ?? 1) * emergencySize * (perfDamp < 0.8 ? 1.05 : 1);
@@ -7720,8 +7823,8 @@ function syncBackBufferSizes() {
           tickModulo,
           sizeScale,
           spawnScale,
-          minCount: __dgLowFpsMode ? 0 : undefined,
-          emergencyFade: __dgLowFpsMode,
+            minCount: __dgLowFpsMode ? 120 : undefined,
+          emergencyFade: false,
           emergencyFadeSeconds: 2.2,
         });
       }
@@ -7872,10 +7975,11 @@ function syncBackBufferSizes() {
       const fpsSample = Number.isFinite(adaptiveState?.smoothedFps)
         ? adaptiveState.smoothedFps
         : (Number.isFinite(adaptiveState?.fps) ? adaptiveState.fps : null);
-      const fpsLive = Number.isFinite(fpsSample)
-        ? fpsSample
-        : (Number.isFinite(__dgFpsValue) ? __dgFpsValue : null);
-      if (Number.isFinite(fpsLive)) {
+        const fpsLiveRaw = Number.isFinite(fpsSample)
+          ? fpsSample
+          : (Number.isFinite(__dgFpsValue) ? __dgFpsValue : null);
+        const fpsLive = (Number.isFinite(fpsLiveRaw) && fpsLiveRaw >= 5) ? fpsLiveRaw : null;
+        if (Number.isFinite(fpsLive)) {
         let desiredSimple = null;
         if (fpsLive <= DG_PLAYHEAD_FPS_SIMPLE_ENTER) {
           desiredSimple = true;
@@ -8323,8 +8427,10 @@ function syncBackBufferSizes() {
       }
     }
 
-      if (!doFullDraw && canDrawAnything && currentMap && (hasNodeFlash || __dgHadNodeFlash)) {
+      const forceNodesRefresh = !!panel.__dgForceNodesRefresh;
+      if (!doFullDraw && canDrawAnything && currentMap && (hasNodeFlash || __dgHadNodeFlash || forceNodesRefresh)) {
         try { drawNodes(currentMap.nodes); } catch {}
+        if (forceNodesRefresh) panel.__dgForceNodesRefresh = false;
       }
       __dgHadNodeFlash = hasNodeFlash;
 
@@ -8977,18 +9083,21 @@ function syncBackBufferSizes() {
         const info = getLoopInfo();
         const prevPhase = Number.isFinite(localLastPhase) ? localLastPhase : null;
         const currentPhase = Number.isFinite(info?.phase01) ? info.phase01 : null;
-        const phaseJustWrapped = currentPhase != null && prevPhase != null && currentPhase < prevPhase && prevPhase > 0.9;
-        if (currentPhase != null) {
-          localLastPhase = currentPhase;
-        }
-        if (__dgPlayheadModeWanted !== null && phaseJustWrapped) {
-          const modeNow = performance?.now?.() ?? Date.now();
-          if ((modeNow - __dgPlayheadModeWantedSince) >= DG_PLAYHEAD_MODE_MIN_MS) {
-            __dgPlayheadSimpleMode = __dgPlayheadModeWanted;
-            __dgPlayheadModeWanted = null;
-            __dgPlayheadModeWantedSince = 0;
+          const phaseJustWrapped = currentPhase != null && prevPhase != null && currentPhase < prevPhase && prevPhase > 0.9;
+          if (currentPhase != null) {
+            localLastPhase = currentPhase;
           }
-        }
+          if (panel.__dgPlayheadWrapCount == null) panel.__dgPlayheadWrapCount = 0;
+          if (phaseJustWrapped) panel.__dgPlayheadWrapCount++;
+          if (__dgPlayheadModeWanted !== null && phaseJustWrapped) {
+            const modeNow = performance?.now?.() ?? Date.now();
+            if ((modeNow - __dgPlayheadModeWantedSince) >= DG_PLAYHEAD_MODE_MIN_MS &&
+                (panel.__dgPlayheadWrapCount || 0) >= 2) {
+              __dgPlayheadSimpleMode = __dgPlayheadModeWanted;
+              __dgPlayheadModeWanted = null;
+              __dgPlayheadModeWantedSince = 0;
+            }
+          }
 
       // Only draw and repulse particles if transport is running and this toy is the active one in its chain.
       // If this toy thinks it's active, but the global transport phase just wrapped,
@@ -9001,7 +9110,7 @@ function syncBackBufferSizes() {
         const playheadFpsHint = readHeaderFpsHint();
         const allowPlayheadLowZoom = Number.isFinite(playheadFpsHint) && playheadFpsHint >= 55;
         const playheadFancyDesired = !playheadSimpleOnly &&
-          (zoomForOverlay > 0.75 || allowPlayheadLowZoom);
+          (zoomForOverlay > 0.75 || allowPlayheadLowZoom || visiblePanels <= 1);
         if (phaseJustWrapped || panel.__dgPlayheadFancyLocked == null) {
           panel.__dgPlayheadFancyLocked = playheadFancyDesired;
         }
@@ -9042,11 +9151,12 @@ function syncBackBufferSizes() {
                 ? performance.now()
                 : 0;
               resetCtx(playheadFrontCtx);
-              withOverlayClip(playheadFrontCtx, gridArea, false, () => {
+              const clearPlayheadBand = () => {
                 const defaultBand = Math.max(6, Math.round(Math.max(0.8 * cw, Math.min(gridArea.w * 0.08, 2.2 * cw))));
                 const band = Number.isFinite(panel.__dgPlayheadClearBand) ? panel.__dgPlayheadClearBand : defaultBand;
                 playheadFrontCtx.clearRect(lastX - band, gridArea.y - 2, band * 2, gridArea.h + 4);
-              });
+              };
+              clearPlayheadBand();
               markPlayheadLayerCleared();
               overlayCompositeNeeded = true;
               if (__overlayClearStart) {
@@ -9109,9 +9219,14 @@ function syncBackBufferSizes() {
               const defaultBand = Math.max(6, Math.round(Math.max(0.8 * cw, Math.min(gridArea.w * 0.08, 2.2 * cw))));
               const band = Number.isFinite(panel.__dgPlayheadClearBand) ? panel.__dgPlayheadClearBand : defaultBand;
               resetCtx(clearCtx);
-              withOverlayClip(clearCtx, gridArea, false, () => {
+              const clearPlayheadBand = () => {
                 clearCtx.clearRect(lastX - band, gridArea.y - 2, band * 2, gridArea.h + 4);
-              });
+              };
+              if (clearCtx === playheadFrontCtx) {
+                clearPlayheadBand();
+              } else {
+                withOverlayClip(clearCtx, gridArea, false, clearPlayheadBand);
+              }
               emitDG('overlay-clear', { reason: 'playhead-band' });
             }
           }
@@ -9170,7 +9285,7 @@ function syncBackBufferSizes() {
         panel.__dgPlayheadLayer = playheadLayer;
 
         // Use a dedicated overlay context for the playhead to avoid wiping strokes.
-        withOverlayClip(playheadCtx, gridArea, false, () => {
+        const drawPlayhead = () => {
         playheadCtx.save();
 
         // Width of the soft highlight band scales with a column, clamped
@@ -9198,15 +9313,16 @@ function syncBackBufferSizes() {
           }
           headerSweepDirX = sweepDir;
           const fpsHint = Number.isFinite(fpsLive) ? fpsLive : null;
-          let sweepEvery = 1;
-          if (gestureMoving || visiblePanels >= 12 || (fpsHint != null && fpsHint < 50)) sweepEvery = 2;
-          if (visiblePanels >= 18 || (fpsHint != null && fpsHint < 40)) sweepEvery = 3;
-          let sweepMaxSteps = 36;
-          if (gestureMoving || visiblePanels >= 12 || (fpsHint != null && fpsHint < 55)) sweepMaxSteps = 24;
-          if (visiblePanels >= 18 || (fpsHint != null && fpsHint < 45)) sweepMaxSteps = 16;
+          const sweepEvery = 1;
+          const baseSweepMaxSteps = 36;
+          const sweepMaxSteps = baseSweepMaxSteps;
           panel.__dgPlayheadSweepFrame = (panel.__dgPlayheadSweepFrame || 0) + 1;
           if ((panel.__dgPlayheadSweepFrame % sweepEvery) === 0) {
-            pushHeaderSweepAt(playheadX, { lineWidthPx: gradientWidth, maxSteps: sweepMaxSteps });
+            const forceMul = Math.max(
+              1,
+              sweepEvery * (baseSweepMaxSteps / Math.max(1, sweepMaxSteps)) * 1.35
+            );
+            pushHeaderSweepAt(playheadX, { lineWidthPx: gradientWidth, maxSteps: sweepMaxSteps, forceMul });
             dbgPoke('header');
           }
         } catch (e) { /* fail silently */ }
@@ -9253,7 +9369,12 @@ function syncBackBufferSizes() {
         }
 
         playheadCtx.restore();
-        });
+        };
+        if (playheadCtx === playheadFrontCtx) {
+          drawPlayhead();
+        } else {
+          withOverlayClip(playheadCtx, gridArea, false, drawPlayhead);
+        }
       }
         } catch (e) { /* fail silently */ }
         if (__playheadStart) {

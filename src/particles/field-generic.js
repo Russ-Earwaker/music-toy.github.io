@@ -321,14 +321,15 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     ? viewport
     : createParticleViewport(() => measure());
 
-  const config = {
-    density: opts.density ?? 0.0002,
-    layoutOverrides: opts.layout && typeof opts.layout === 'object' ? opts.layout : null,
-    seed: opts.seed ?? 'particle-field',
-    cap: opts.cap ?? 2200,
-    noise: STATIC_MODE ? 0.0 : (opts.noise ?? 0.0),
-    kick: STATIC_MODE ? 0.0 : (opts.kick ?? 0.0),
-    kickDecay: opts.kickDecay ?? 6.0,
+    const config = {
+      density: opts.density ?? 0.0002,
+      layoutOverrides: opts.layout && typeof opts.layout === 'object' ? opts.layout : null,
+      seed: opts.seed ?? 'particle-field',
+      cap: opts.cap ?? 2200,
+      noise: STATIC_MODE ? 0.0 : (opts.noise ?? 0.0),
+      kick: STATIC_MODE ? 0.0 : (opts.kick ?? 0.0),
+      kickDecay: opts.kickDecay ?? 6.0,
+      vmaxMul: Number.isFinite(opts.vmaxMul) ? opts.vmaxMul : 1,
     /**
      * Target return time (seconds) for particles to settle ~critically damped.
      * 2.0 gives a nice "float back in" feel.
@@ -658,7 +659,9 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
       // vmax is expressed in px/sec; dt already scales movement when applied.
       const defaultVmax = Math.max(60, spacing * 18);
       const staticVmax = Math.max(90, spacing * 28);
-      const vmax = STATIC_MODE ? staticVmax : defaultVmax;
+        const vmaxMul = Number.isFinite(config.vmaxMul) ? config.vmaxMul : 1;
+        const vmaxBase = STATIC_MODE ? staticVmax : defaultVmax;
+        const vmax = vmaxBase * vmaxMul;
       const speed = Math.hypot(p.vx, p.vy);
       if (speed > vmax && speed > 0) {
         const scale = vmax / speed;

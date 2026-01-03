@@ -1,17 +1,14 @@
 {
   "queue": [
     "buildP3",
-    "buildP7",
     "runP3f",
-    "runP3fPlayheadSeparateOn",
-    "runP3fNoOverlayCore",
-    "runP3fNoOverlayStrokes",
-    "runP3fNoGrid",
-    "runP3fNoParticles",
-    "runP3fNoOverlays",
+    "runP3b",
+    "buildP2d",
+    "runP2d",
+    "buildP7",
     "runP3fMixedSomeEmpty"
   ],
-  "notes": "P3f drawgrid pan/zoom baseline plus mixed run (mostly full + some empty).",
+  "notes": "Auto run: drawgrid baseline + pan/zoom stress, drum stress, mixed chains.",
   "runTag": "loopgrid-sprites",
   "traceMarks": true,
   "tapDotsSim": true,
