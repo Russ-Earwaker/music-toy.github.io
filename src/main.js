@@ -3083,6 +3083,64 @@ try {
 })();
 const g_chainState = new Map();
 let g_sequencerScheduler = null;
+let audioSchedIntervalId = null;
+
+function ensureSequencerScheduler() {
+  if (!g_sequencerScheduler) {
+    g_sequencerScheduler = createSequencerScheduler({ lookaheadSec: 0.25, leadSec: 0.05 });
+    try { window.__NOTE_SCHEDULER_ENABLED = true; } catch {}
+  }
+  return g_sequencerScheduler;
+}
+
+function tickAudioScheduler() {
+  if (!CHAIN_FEATURE_ENABLE_SCHEDULER || !CHAIN_FEATURE_ENABLE_SEQUENCER) return;
+  if (!isRunning()) return;
+  if (!g_chainState || g_chainState.size < 1) return;
+  if (window.__PERF_DISABLE_CHAIN_WORK) return;
+
+  const info = getLoopInfo();
+  const ctx = ensureAudioContext();
+  const nowAt = ctx?.currentTime ?? 0;
+  const forceSequencerAll = !!window.__PERF_FORCE_SEQUENCER_ALL;
+  const activeToyIds = forceSequencerAll
+    ? new Set(getSequencedToys().map(p => p.id).filter(Boolean))
+    : new Set(g_chainState.values());
+
+  if (activeToyIds.size < 1) return;
+
+  const sequencerScheduler = ensureSequencerScheduler();
+  try {
+    const activeAudioToyIds = new Set();
+    for (const toyId of activeToyIds) {
+      const toy = document.getElementById(toyId);
+      if (!toy) continue;
+      if (panelHasAnyNotes(toy)) {
+        activeAudioToyIds.add(toyId);
+      } else {
+        try { toy.__chainJustActivated = false; } catch {}
+      }
+    }
+    sequencerScheduler.tick({
+      activeToyIds: activeAudioToyIds,
+      getToy: (id) => document.getElementById(id),
+      loopInfo: info,
+      nowAt,
+    });
+  } catch {}
+}
+
+function startAudioScheduler() {
+  if (audioSchedIntervalId) return;
+  ensureSequencerScheduler();
+  audioSchedIntervalId = setInterval(tickAudioScheduler, 25);
+}
+
+function stopAudioScheduler() {
+  if (!audioSchedIntervalId) return;
+  clearInterval(audioSchedIntervalId);
+  audioSchedIntervalId = null;
+}
 
 function resetChainState({ clearDom = true } = {}) {
   try {
@@ -3242,9 +3300,6 @@ function scheduler(){
   const CHAIN_PRE_ADVANCE_PHASE = 0.97;
   const CHAIN_PRE_ADVANCE_ENABLED = false;
   const debugFirstStep = () => !!window.__CHAIN_DEBUG_FIRST_STEP;
-  const sequencerScheduler = createSequencerScheduler({ lookaheadSec: 0.25, leadSec: 0.05 });
-  g_sequencerScheduler = sequencerScheduler;
-  try { window.__NOTE_SCHEDULER_ENABLED = true; } catch {}
 
   function step(){
     const frameStart = performance.now();
@@ -3395,33 +3450,6 @@ function scheduler(){
       }
       if (CHAIN_DEBUG && (tActiveEnd - tActiveStart) > CHAIN_DEBUG_LOG_THRESHOLD_MS) {
         console.log('[CHAIN][perf] mark-active', (tActiveEnd - tActiveStart).toFixed(2), 'ms', 'activeToyCount=', activeToyIds.size);
-      }
-
-      // --- Phase B: schedule audio ahead for active chain links ---
-      if (CHAIN_FEATURE_ENABLE_SEQUENCER && hasActiveToys) {
-        const ctx = ensureAudioContext();
-        const nowAt = ctx?.currentTime ?? 0;
-        try {
-          const activeAudioToyIds = new Set();
-          for (const toyId of activeToyIds) {
-            const toy = document.getElementById(toyId);
-            if (!toy) continue;
-            if (panelHasAnyNotes(toy)) {
-              activeAudioToyIds.add(toyId);
-            } else {
-              try { toy.__chainJustActivated = false; } catch {}
-            }
-          }
-          if (debugFirstStep()) {
-            console.log('[chain][debug] activeAudioToyIds', Array.from(activeAudioToyIds));
-          }
-          sequencerScheduler.tick({
-            activeToyIds: activeAudioToyIds,
-            getToy: (id) => document.getElementById(id),
-            loopInfo: info,
-            nowAt,
-          });
-        } catch {}
       }
 
       // --- Phase C: per-toy sequencer stepping for active chain links ---
@@ -4233,6 +4261,14 @@ async function boot(){
     try{ window.ThemeBoot && window.ThemeBoot.wireAll && window.ThemeBoot.wireAll(); }catch{}
     try{ tryRestoreOnBoot(); }catch{}
     scheduler();
+    startAudioScheduler();
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        stopAudioScheduler();
+      } else {
+        startAudioScheduler();
+      }
+    });
     let hasSavedPositions = false; try { hasSavedPositions = !!localStorage.getItem('toyPositions'); } catch {}
     if (!restored && !hasSavedPositions){
       try{ window.organizeBoard && window.organizeBoard(); }catch{}
