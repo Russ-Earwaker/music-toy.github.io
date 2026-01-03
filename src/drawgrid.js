@@ -6309,16 +6309,17 @@ function syncBackBufferSizes() {
 
   // A helper to draw a complete stroke from a point array.
   // This is used to create a clean image for snapping.
-  function drawFullStroke(ctx, stroke) {
+  function drawFullStroke(ctx, stroke, opts = {}) {
     if (!stroke || !stroke.pts || stroke.pts.length < 1) return;
     if (DG_SINGLE_CANVAS && ctx?.canvas?.getAttribute?.('data-role') === 'drawgrid-paint' && backCtx && ctx !== backCtx) {
       ctx = backCtx;
     }
     const color = stroke.color || STROKE_COLORS[0];
     const wasOverlay = (ctx === fctx) || !!ctx.__dgIsOverlay;
+    const skipReset = !!opts.skipReset;
+    const skipTransform = !!opts.skipTransform;
 
-    resetCtx(ctx);
-    withLogicalSpace(ctx, () => {
+    const drawCore = () => {
       ctx.save();
       const isOverlay = (ctx === fctx) || !!ctx.__dgIsOverlay;
       const wantsSpecial = !!stroke.isSpecial;
@@ -6377,19 +6378,27 @@ function syncBackBufferSizes() {
         const p = stroke.pts[0];
         if (useMultiColour) {
           const r = lineWidth / 2;
-          const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
           const t = (performance.now ? performance.now() : Date.now());
           const gid = stroke.generatorId ?? 1;
-          if (gid === 1) {
-            const hue = 200 + 20 * Math.sin((t / 1600) * Math.PI * 2);
-            grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 75%)`);
-            grad.addColorStop(0.7, `hsl(${(hue + 60).toFixed(0)}, 100%, 68%)`);
-            grad.addColorStop(1, `hsla(${(hue + 120).toFixed(0)}, 100%, 60%, 0.35)`);
-          } else {
-            const hue = 20 + 20 * Math.sin((t / 1800) * Math.PI * 2);
-            grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 70%)`);
-            grad.addColorStop(0.7, `hsl(${(hue - 25).toFixed(0)}, 100%, 65%)`);
-            grad.addColorStop(1, `hsla(${(hue - 45).toFixed(0)}, 100%, 55%, 0.35)`);
+          const hue = gid === 1
+            ? (200 + 20 * Math.sin((t / 1600) * Math.PI * 2))
+            : (20 + 20 * Math.sin((t / 1800) * Math.PI * 2));
+          const hueKey = Math.round(hue * 0.5) * 2;
+          const gradKey = `${hueKey}|${p.x.toFixed(1)}|${p.y.toFixed(1)}|${r.toFixed(2)}`;
+          let grad = stroke.__overlayRadialGrad;
+          if (!grad || stroke.__overlayRadialGradKey !== gradKey) {
+            grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+            if (gid === 1) {
+              grad.addColorStop(0, `hsl(${hueKey}, 100%, 75%)`);
+              grad.addColorStop(0.7, `hsl(${(hueKey + 60) % 360}, 100%, 68%)`);
+              grad.addColorStop(1, `hsla(${(hueKey + 120) % 360}, 100%, 60%, 0.35)`);
+            } else {
+              grad.addColorStop(0, `hsl(${hueKey}, 100%, 70%)`);
+              grad.addColorStop(0.7, `hsl(${(hueKey - 25 + 360) % 360}, 100%, 65%)`);
+              grad.addColorStop(1, `hsla(${(hueKey - 45 + 360) % 360}, 100%, 55%, 0.35)`);
+            }
+            stroke.__overlayRadialGrad = grad;
+            stroke.__overlayRadialGradKey = gradKey;
           }
           ctx.fillStyle = grad;
         }
@@ -6403,19 +6412,27 @@ function syncBackBufferSizes() {
         if (useMultiColour) {
           const p1 = stroke.pts[0];
           const pLast = stroke.pts[stroke.pts.length - 1];
-          const grad = ctx.createLinearGradient(p1.x, p1.y, pLast.x, pLast.y);
           const t = (performance.now ? performance.now() : Date.now());
           const gid = stroke.generatorId ?? 1;
-          if (gid === 1) {
-            const hue = 200 + 20 * Math.sin((t / 1600) * Math.PI * 2);
-            grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 70%)`);
-            grad.addColorStop(0.5, `hsl(${(hue + 45).toFixed(0)}, 100%, 70%)`);
-            grad.addColorStop(1, `hsl(${(hue + 90).toFixed(0)}, 100%, 68%)`);
-          } else {
-            const hue = 20 + 20 * Math.sin((t / 1800) * Math.PI * 2);
-            grad.addColorStop(0, `hsl(${hue.toFixed(0)}, 100%, 68%)`);
-            grad.addColorStop(0.5, `hsl(${(hue - 25).toFixed(0)}, 100%, 66%)`);
-            grad.addColorStop(1, `hsl(${(hue - 50).toFixed(0)}, 100%, 64%)`);
+          const hue = gid === 1
+            ? (200 + 20 * Math.sin((t / 1600) * Math.PI * 2))
+            : (20 + 20 * Math.sin((t / 1800) * Math.PI * 2));
+          const hueKey = Math.round(hue * 0.5) * 2;
+          const gradKey = `${hueKey}|${p1.x.toFixed(1)}|${p1.y.toFixed(1)}|${pLast.x.toFixed(1)}|${pLast.y.toFixed(1)}`;
+          let grad = stroke.__overlayLinearGrad;
+          if (!grad || stroke.__overlayLinearGradKey !== gradKey) {
+            grad = ctx.createLinearGradient(p1.x, p1.y, pLast.x, pLast.y);
+            if (gid === 1) {
+              grad.addColorStop(0, `hsl(${hueKey}, 100%, 70%)`);
+              grad.addColorStop(0.5, `hsl(${(hueKey + 45) % 360}, 100%, 70%)`);
+              grad.addColorStop(1, `hsl(${(hueKey + 90) % 360}, 100%, 68%)`);
+            } else {
+              grad.addColorStop(0, `hsl(${hueKey}, 100%, 68%)`);
+              grad.addColorStop(0.5, `hsl(${(hueKey - 25 + 360) % 360}, 100%, 66%)`);
+              grad.addColorStop(1, `hsl(${(hueKey - 50 + 360) % 360}, 100%, 64%)`);
+            }
+            stroke.__overlayLinearGrad = grad;
+            stroke.__overlayLinearGradKey = gradKey;
           }
           ctx.strokeStyle = grad;
         }
@@ -6431,8 +6448,15 @@ function syncBackBufferSizes() {
         }
       }
 
-        ctx.restore();
-      });
+      ctx.restore();
+    };
+
+    if (!skipReset) resetCtx(ctx);
+    if (skipTransform) {
+      drawCore();
+    } else {
+      withLogicalSpace(ctx, drawCore);
+    }
     if (!wasOverlay) markPaintDirty();
   }
   function eraseAtPoint(p) {
@@ -8871,71 +8895,71 @@ function syncBackBufferSizes() {
             markFlashLayerActive();
             withOverlayClip(fctx, gridArea, !!panel.__dgFlashOverlayOutOfGrid, () => {
             fctx.save();
-            // Draw animated strokes with device transform
-            // Draw demoted colorized strokes as static overlay tints
-            try {
-              const __colorStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
-                ? performance.now()
-                : 0;
-              if (colorized.length) {
-                const flashSurface = getActiveFlashCanvas();
-                const baseW = flashSurface?.width || fctx.canvas?.width || 0;
-                const baseH = flashSurface?.height || fctx.canvas?.height || 0;
-                const cacheKey = `${__dgOverlayStrokeListCache.paintRev}|${__dgOverlayStrokeListCache.len}|${colorized.length}|${baseW}x${baseH}|${paintDpr}`;
-                let cache = panel.__dgOverlayColorizedCache;
-                if (!cache || cache.key !== cacheKey || cache.width !== baseW || cache.height !== baseH) {
-                  const canvas = document.createElement('canvas');
-                  canvas.width = Math.max(1, Math.round(baseW || 0));
-                  canvas.height = Math.max(1, Math.round(baseH || 0));
-                  const cctx = canvas.getContext('2d');
-                  if (cctx) {
-                    cctx.__dgIsOverlay = true;
-                    resetCtx(cctx);
-                    cctx.setTransform(1, 0, 0, 1, 0, 0);
-                    cctx.clearRect(0, 0, canvas.width, canvas.height);
-                    for (const s of colorized) drawFullStroke(cctx, s);
+            // Draw animated strokes in logical space once (avoid per-stroke reset/transform).
+            withLogicalSpace(fctx, () => {
+              // Draw demoted colorized strokes as static overlay tints
+              try {
+                const __colorStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+                  ? performance.now()
+                  : 0;
+                if (colorized.length) {
+                  const flashSurface = getActiveFlashCanvas();
+                  const baseW = flashSurface?.width || fctx.canvas?.width || 0;
+                  const baseH = flashSurface?.height || fctx.canvas?.height || 0;
+                  const cacheKey = `${__dgOverlayStrokeListCache.paintRev}|${__dgOverlayStrokeListCache.len}|${colorized.length}|${baseW}x${baseH}|${paintDpr}`;
+                  let cache = panel.__dgOverlayColorizedCache;
+                  if (!cache || cache.key !== cacheKey || cache.width !== baseW || cache.height !== baseH) {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = Math.max(1, Math.round(baseW || 0));
+                    canvas.height = Math.max(1, Math.round(baseH || 0));
+                    const cctx = canvas.getContext('2d');
+                    if (cctx) {
+                      cctx.__dgIsOverlay = true;
+                      resetCtx(cctx);
+                      cctx.setTransform(1, 0, 0, 1, 0, 0);
+                      cctx.clearRect(0, 0, canvas.width, canvas.height);
+                      for (const s of colorized) drawFullStroke(cctx, s);
+                    }
+                    cache = {
+                      key: cacheKey,
+                      width: canvas.width,
+                      height: canvas.height,
+                      canvas,
+                    };
+                    panel.__dgOverlayColorizedCache = cache;
                   }
-                  cache = {
-                    key: cacheKey,
-                    width: canvas.width,
-                    height: canvas.height,
-                    canvas,
-                  };
-                  panel.__dgOverlayColorizedCache = cache;
+                  if (cache?.canvas) {
+                    fctx.drawImage(cache.canvas, 0, 0, baseW, baseH);
+                  }
                 }
-                if (cache?.canvas) {
-                  fctx.drawImage(cache.canvas, 0, 0, baseW, baseH);
+                if (__colorStart) {
+                  try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.strokes.colorized', performance.now() - __colorStart); } catch {}
                 }
-              }
-              if (__colorStart) {
-                try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.strokes.colorized', performance.now() - __colorStart); } catch {}
-              }
-            } catch {}
-            // Then draw animated special lines on top of normal lines
-            const __specialStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
-              ? performance.now()
-              : 0;
-            for (const s of specialStrokes) drawFullStroke(fctx, s);
-            if (__specialStart) {
-              try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.strokes.special', performance.now() - __specialStart); } catch {}
-            }
-            // Draw current special preview before masking so it also respects the paint mask
-            if (cur && previewGid && cur.pts && cur.pts.length) {
-              const __previewStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+              } catch {}
+              // Then draw animated special lines on top of normal lines
+              const __specialStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
                 ? performance.now()
                 : 0;
-              fctx.setTransform(1, 0, 0, 1, 0, 0);
-              fctx.globalCompositeOperation = 'source-over';
-              const preview = { pts: cur.pts, isSpecial: true, generatorId: previewGid };
-              drawFullStroke(fctx, preview);
-              if (__previewStart) {
-                try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.strokes.preview', performance.now() - __previewStart); } catch {}
+              for (const s of specialStrokes) drawFullStroke(fctx, s, { skipReset: true, skipTransform: true });
+              if (__specialStart) {
+                try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.strokes.special', performance.now() - __specialStart); } catch {}
               }
-            }
-              // Mask the overlay with the current paint alpha, scaled to the flash surface size.
-              // IMPORTANT: If a live preview is active, skip masking so the preview remains visible.
-              const skipMaskBecausePreview = !!(cur && previewGid && cur.pts && cur.pts.length);
-              const skipMaskBecauseNoErase = !eraseStrokes || eraseStrokes.length === 0;
+              // Draw current special preview before masking so it also respects the paint mask
+              if (cur && previewGid && cur.pts && cur.pts.length) {
+                const __previewStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
+                  ? performance.now()
+                  : 0;
+                const preview = { pts: cur.pts, isSpecial: true, generatorId: previewGid };
+                drawFullStroke(fctx, preview, { skipReset: true, skipTransform: true });
+                if (__previewStart) {
+                  try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.strokes.preview', performance.now() - __previewStart); } catch {}
+                }
+              }
+            });
+            // Mask the overlay with the current paint alpha, scaled to the flash surface size.
+            // IMPORTANT: If a live preview is active, skip masking so the preview remains visible.
+            const skipMaskBecausePreview = !!(cur && previewGid && cur.pts && cur.pts.length);
+            const skipMaskBecauseNoErase = !eraseStrokes || eraseStrokes.length === 0;
               if (!skipMaskBecausePreview && !skipMaskBecauseNoErase) {
                 const __maskStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
                   ? performance.now()
