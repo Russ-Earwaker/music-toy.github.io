@@ -1,6 +1,7 @@
 {
   "queue": [
     "buildP3",
+    "buildP7",
     "runP3fParticleProfile",
     "runP3fPlayheadSeparateOn",
     "runP3fNoOverlayCore",

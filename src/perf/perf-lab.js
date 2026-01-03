@@ -152,7 +152,7 @@ function ensureUI() {
     ]),
   };
 
-    const P6 = {
+  const P6 = {
     title: 'P6 - Avg Mix (4 SR Chains + 4 Draw)',
     build: btn('buildP6', 'Build P6: Avg Mix', 'primary'),
     runs: sortByLabel([
@@ -167,7 +167,13 @@ function ensureUI() {
     ]),
   };
 
-  const tests = [...P2.runs, ...P3.runs, ...P4.runs, ...P5.runs, ...P6.runs];
+  const P7 = {
+    title: 'P7 - Mixed Chains (4x Draw + 4x SR)',
+    build: btn('buildP7', 'Build P7: Mixed Chains', 'primary'),
+    runs: [],
+  };
+
+  const tests = [...P2.runs, ...P3.runs, ...P4.runs, ...P5.runs, ...P6.runs, ...P7.runs];
   if (!window.__PERF_LAB_TESTS_LOGGED) {
     window.__PERF_LAB_TESTS_LOGGED = true;
     try { console.log('[perf-lab] tests:', tests.map(t => t.label)); } catch {}
@@ -179,6 +185,7 @@ function ensureUI() {
     section(P4.title, `${P4.build}${P4.runs.map(r => btn(r.act, r.label)).join('')}`),
     section(P5.title, `${P5.build}${P5.runs.map(r => btn(r.act, r.label)).join('')}`),
     section(P6.title, `${P6.build}${P6.runs.map(r => btn(r.act, r.label)).join('')}`),
+    section(P7.title, `${P7.build}`),
   ].join('');
 
   ov.innerHTML = `
@@ -406,6 +413,7 @@ function ensureUI() {
     if (act === 'runP6eNoPaint') await runP6eNoPaint();
     if (act === 'runP6ePaintOnly') await runP6ePaintOnly();
     if (act === 'runP6eNoDom') await runP6eNoDom();
+    if (act === 'buildP7') await buildP7();
     if (act === 'auto') {
       const cfgFile = await readAutoConfigFromFile();
       const cfg = cfgFile || readAutoConfig();
@@ -1143,6 +1151,196 @@ async function buildP6() {
   setStatus('P6 built');
 }
 
+async function buildP7() {
+  try { clearSceneViaSnapshot(); } catch {}
+  setStatus('Building P7...');
+  await ensureMeasuredFootprint('drawgrid');
+  await ensureMeasuredFootprint('loopgrid');
+  const cam = getCommittedState();
+  const chainLength = 4;
+  const chainCount = 4;
+  const drawFootprint = estimateToyFootprint('drawgrid');
+  const loopFootprint = estimateToyFootprint('loopgrid');
+  const headSpacingY = Math.max(420, drawFootprint.height, loopFootprint.height);
+  const drawLinkSpacingX = Math.max(420, drawFootprint.width);
+  const loopLinkSpacingX = Math.max(420, loopFootprint.width);
+  const drawBlockW = (chainLength - 1) * drawLinkSpacingX + drawFootprint.width;
+  const loopBlockW = (chainLength - 1) * loopLinkSpacingX + loopFootprint.width;
+  const gap = Math.max(320, PERF_SPAWN_PADDING * 2);
+  const totalW = drawBlockW + loopBlockW + gap;
+  const leftX = cam.x - totalW / 2;
+  const drawHeadX = leftX + drawFootprint.width / 2;
+  const loopHeadX = leftX + drawBlockW + gap + loopFootprint.width / 2;
+  const drawChains = createChainedToys({
+    toyType: 'drawgrid',
+    chains: chainCount,
+    chainLength,
+    headX: drawHeadX,
+    headSpacingY,
+    linkSpacingX: drawLinkSpacingX,
+    centerY: cam.y,
+  });
+  const loopChains = createChainedToys({
+    toyType: 'loopgrid',
+    chains: chainCount,
+    chainLength,
+    headX: loopHeadX,
+    headSpacingY,
+    linkSpacingX: loopLinkSpacingX,
+    centerY: cam.y,
+  });
+  const drawPanels = collectPanelsFromChains(drawChains);
+  const loopPanels = collectPanelsFromChains(loopChains);
+  const finalize = (tries = 0) => {
+    const readyDraw = drawPanels.every(p => p?.id && typeof p.__sequencerStep === 'function');
+    const readyLoop = loopPanels.every(p => p?.id && p.__gridState && typeof p.__sequencerStep === 'function');
+    if ((!readyDraw || !readyLoop) && tries < 20) {
+      setTimeout(() => finalize(tries + 1), 120);
+      return;
+    }
+    try {
+      try {
+        window.__PERF_FORCE_SEQUENCER_ALL = false;
+        window.__PERF_FORCE_SEQUENCER_ALL_LOCK = true;
+      } catch {}
+      linkToyChains(drawChains);
+      linkToyChains(loopChains);
+      try {
+        window.resetChainState?.({ clearDom: false });
+      } catch {}
+      const initChainActive = (chains) => {
+        if (!Array.isArray(chains)) return;
+        for (const panels of chains) {
+          if (!Array.isArray(panels) || panels.length === 0) continue;
+          panels.forEach(p => { if (p?.dataset) p.dataset.chainActive = 'false'; });
+          const head = panels[0];
+          if (head?.dataset) {
+            head.dataset.chainActive = 'true';
+            try { head.dispatchEvent(new CustomEvent('chain:set-active', { bubbles: true })); } catch {}
+          }
+        }
+      };
+      initChainActive(drawChains);
+      initChainActive(loopChains);
+      drawPanels.forEach(p => {
+        if (p?.dataset && (p.dataset.prevToyId || p.dataset.nextToyId)) {
+          p.dataset.autoplay = 'chain';
+        }
+      });
+      window.updateChains?.();
+      window.updateAllChainUIs?.();
+      window.scheduleChainRedraw?.();
+      window.resolveToyPanelOverlaps?.();
+    } catch {}
+    try {
+      drawPanels.forEach(p => { try { p.dispatchEvent(new CustomEvent('toy-random', { bubbles: true })); } catch {} });
+      drawPanels.forEach(p => { try { p.dispatchEvent(new CustomEvent('toy-random-notes', { bubbles: true })); } catch {} });
+      seedLoopgridPanels(loopPanels, { density: 0.35, seed: 1337 });
+      syncChainInstruments(drawChains);
+      syncChainInstruments(loopChains);
+    } catch {}
+    try {
+      const rows = [];
+      const panels = [...drawPanels, ...loopPanels];
+      panels.forEach((panel) => {
+        const toy = panel?.dataset?.toy || '';
+        const headId = panel ? getChainHeadId(panel) : '';
+        rows.push({
+          id: panel?.id || '',
+          toy,
+          headId,
+          chainActive: panel?.dataset?.chainActive || '',
+          prev: panel?.dataset?.prevToyId || '',
+          next: panel?.dataset?.nextToyId || '',
+          instrument: panel?.dataset?.instrument || '',
+        });
+      });
+      console.table(rows);
+    } catch {}
+    setTimeout(() => {
+      try {
+        const initChainActive = (chains) => {
+          if (!Array.isArray(chains)) return;
+          for (const panels of chains) {
+            if (!Array.isArray(panels) || panels.length === 0) continue;
+            panels.forEach(p => { if (p?.dataset) p.dataset.chainActive = 'false'; });
+            const head = panels[0];
+            if (head?.dataset) {
+              head.dataset.chainActive = 'true';
+              try { head.dispatchEvent(new CustomEvent('chain:set-active', { bubbles: true })); } catch {}
+            }
+          }
+        };
+        initChainActive(drawChains);
+        initChainActive(loopChains);
+        const activeDraw = drawPanels.filter(p => p?.dataset?.chainActive === 'true');
+        const activeLoop = loopPanels.filter(p => p?.dataset?.chainActive === 'true');
+        console.log('[PerfLab][P7] active counts', {
+          draw: activeDraw.length,
+          loop: activeLoop.length,
+          forceSequencerAll: !!window.__PERF_FORCE_SEQUENCER_ALL,
+          noteScheduler: !!window.__NOTE_SCHEDULER_ENABLED,
+        });
+        console.log('[PerfLab][P7] active draw IDs', activeDraw.map(p => p.id));
+      } catch {}
+    }, 900);
+    setTimeout(() => {
+      try {
+        const rows = [];
+        for (const panel of drawPanels) {
+          const headId = panel ? getChainHeadId(panel) : '';
+          rows.push({
+            id: panel?.id || '',
+            headId,
+            chainActive: panel?.dataset?.chainActive || '',
+            showPlaying: panel?.__dgShowPlaying ? 'true' : 'false',
+            hasNotes: panel?.__dgHasNotes ? 'true' : 'false',
+          });
+        }
+        console.table(rows);
+      } catch {}
+    }, 1800);
+    setTimeout(() => {
+      try {
+        const byHead = new Map();
+        drawPanels.forEach((panel) => {
+          const headId = getChainHeadId(panel);
+          if (!headId) return;
+          const entry = byHead.get(headId) || { total: 0, active: [] };
+          entry.total += 1;
+          if (panel?.dataset?.chainActive === 'true') entry.active.push(panel.id);
+          byHead.set(headId, entry);
+        });
+        for (const [headId, entry] of byHead.entries()) {
+          if (entry.active.length !== 1) {
+            console.warn('[PerfLab][P7] chainActive mismatch', { headId, total: entry.total, active: entry.active });
+          }
+        }
+      } catch {}
+    }, 2200);
+    try {
+      const observer = new MutationObserver((mutations) => {
+        for (const m of mutations) {
+          if (m.type !== 'attributes' || m.attributeName !== 'data-chain-active') continue;
+          const panel = m.target;
+          console.log('[PerfLab][P7] chainActive change', {
+            id: panel?.id,
+            toy: panel?.dataset?.toy,
+            chainActive: panel?.dataset?.chainActive,
+          });
+        }
+      });
+      drawPanels.forEach((panel) => {
+        if (panel && panel.nodeType === 1) observer.observe(panel, { attributes: true });
+      });
+      setTimeout(() => { try { observer.disconnect(); } catch {} }, 6000);
+    } catch {}
+    try { window.Persistence?.markDirty?.(); } catch {}
+  };
+  setTimeout(() => finalize(0), 0);
+  setStatus('P7 built');
+}
+
 function collectToyTypeCounts() {
   const counts = {};
   try {
@@ -1651,6 +1849,151 @@ function createToyGrid({ toyType, rows, cols, spacing, centerX, centerY }) {
   return true;
 }
 
+function createChainedToys({
+  toyType,
+  chains = 4,
+  chainLength = 4,
+  headX,
+  headSpacingY,
+  linkSpacingX,
+  centerY,
+  jitterY = 0,
+} = {}) {
+  const factory = window.MusicToyFactory;
+  if (!factory || typeof factory.create !== 'function') {
+    console.warn('[PerfLab] MusicToyFactory.create not ready');
+    return [];
+  }
+  const rows = Math.max(1, chains | 0);
+  const totalH = (rows - 1) * headSpacingY;
+  const out = [];
+  for (let r = 0; r < rows; r++) {
+    const baseY = centerY + (r * headSpacingY - totalH / 2);
+    const panels = [];
+    for (let k = 0; k < chainLength; k++) {
+      const x = headX + k * linkSpacingX;
+      const jitter = Math.max(0, Number.isFinite(jitterY) ? jitterY : 0);
+      const y = baseY + (jitter ? Math.round((Math.random() * 2 - 1) * jitter) : 0);
+      try {
+        const panel = factory.create(toyType, {
+          centerX: x,
+          centerY: y,
+          autoCenter: false,
+          allowOffscreen: true,
+          skipSpawnPlacement: true,
+        });
+        if (panel) panels.push(panel);
+      } catch (err) {
+        console.warn('[PerfLab] create failed', { toyType, r, k }, err);
+      }
+    }
+    out.push(panels);
+  }
+  return out;
+}
+
+function linkToyChains(chains) {
+  if (!Array.isArray(chains)) return;
+  for (const panels of chains) {
+    for (let k = 0; k < (panels?.length || 0) - 1; k++) {
+      const a = panels[k];
+      const b = panels[k + 1];
+      if (!a?.id || !b?.id) continue;
+      a.dataset.nextToyId = b.id;
+      a.dataset.chainHasChild = '1';
+      b.dataset.prevToyId = a.id;
+      b.dataset.chainParent = a.id;
+    }
+  }
+}
+
+function collectPanelsFromChains(chains) {
+  const out = [];
+  if (!Array.isArray(chains)) return out;
+  for (const chain of chains) {
+    if (!Array.isArray(chain)) continue;
+    for (const panel of chain) {
+      if (panel) out.push(panel);
+    }
+  }
+  return out;
+}
+
+function mulberry32(seed) {
+  let a = (seed >>> 0) || 1;
+  return function rand() {
+    a |= 0;
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function seedLoopgridPanels(panels, { density = 0.35, seed = 1337 } = {}) {
+  const rand = mulberry32(seed);
+  let seeded = 0;
+  for (const panel of panels) {
+    const st = panel?.__gridState;
+    if (!st || !Array.isArray(st.steps) || !Array.isArray(st.noteIndices)) continue;
+    let anyOn = false;
+    for (let i = 0; i < st.steps.length; i++) {
+      const on = rand() < density;
+      st.steps[i] = on;
+      if (on) anyOn = true;
+    }
+    if (!anyOn && st.steps.length) {
+      st.steps[Math.floor(rand() * st.steps.length)] = true;
+    }
+    const palette = Array.isArray(st.notePalette) && st.notePalette.length ? st.notePalette : null;
+    for (let i = 0; i < st.noteIndices.length; i++) {
+      if (palette) {
+        const pick = Math.floor(rand() * palette.length);
+        st.noteIndices[i] = pick;
+      }
+    }
+    try {
+      panel.dispatchEvent(new CustomEvent('loopgrid:update', {
+        detail: {
+          reason: 'perf-seed',
+          steps: Array.from(st.steps),
+          noteIndices: Array.from(st.noteIndices),
+        },
+      }));
+    } catch {}
+    seeded += 1;
+  }
+  return seeded;
+}
+
+function getChainHeadId(panel) {
+  let current = panel;
+  let sanity = 50;
+  while (current && current.dataset?.prevToyId && sanity-- > 0) {
+    const prev = document.getElementById(current.dataset.prevToyId);
+    if (!prev || prev === current) break;
+    current = prev;
+  }
+  return current?.id || '';
+}
+
+function syncChainInstruments(chains) {
+  if (!Array.isArray(chains)) return;
+  for (const panels of chains) {
+    if (!Array.isArray(panels) || panels.length === 0) continue;
+    const head = panels[0];
+    const instrument = head?.dataset?.instrument;
+    if (!instrument) continue;
+    panels.forEach((panel) => {
+      if (!panel?.dataset) return;
+      panel.dataset.instrument = instrument;
+      panel.dataset.instrumentPersisted = '1';
+      try { panel.dispatchEvent(new CustomEvent('toy-instrument', { detail: { value: instrument }, bubbles: true })); } catch {}
+      try { panel.dispatchEvent(new CustomEvent('toy:instrument', { detail: { name: instrument, value: instrument }, bubbles: true })); } catch {}
+    });
+  }
+}
+
 function buildMixedScene({
   drawRows = 3,
   drawCols = 4,
@@ -2071,7 +2414,6 @@ async function runP3e2() {
     const prevDisableOverlays = window.__PERF_DISABLE_OVERLAYS;
     const prevOverlayCore = window.__PERF_DG_OVERLAY_CORE_OFF;
     const prevOverlayStrokes = window.__PERF_DG_OVERLAY_STROKES_OFF;
-    const prevForceSequencerAll = window.__PERF_FORCE_SEQUENCER_ALL;
     const prevDisableChainWork = window.__PERF_DISABLE_CHAIN_WORK;
     const forceOverlays =
       !window.__PERF_DISABLE_OVERLAYS &&
@@ -2084,7 +2426,6 @@ async function runP3e2() {
         window.__PERF_DG_OVERLAY_CORE_OFF = false;
         window.__PERF_DG_OVERLAY_STROKES_OFF = false;
       }
-      window.__PERF_FORCE_SEQUENCER_ALL = true;
     } catch {}
   const panZoom = makePanZoomScript({
     panPx: 2400,
@@ -2110,7 +2451,6 @@ async function runP3e2() {
       window.__PERF_DISABLE_OVERLAYS = prevDisableOverlays;
       window.__PERF_DG_OVERLAY_CORE_OFF = prevOverlayCore;
       window.__PERF_DG_OVERLAY_STROKES_OFF = prevOverlayStrokes;
-      window.__PERF_FORCE_SEQUENCER_ALL = prevForceSequencerAll;
     } catch {}
   }
 
@@ -3723,7 +4063,7 @@ window.addEventListener('keydown', (e) => {
 });
 
 // Expose for manual console use
-try { window.__PerfLab = { show, hide, toggle, buildP2, buildP3, buildP4, buildP4h, buildP5, buildP6, runP2a, runP2b, runP2c, runP3a, runP3b, runP3c, runP3d, runP3e, runP3e2, runP3f, runP3fPlayheadSeparateOff, runP3fPlayheadSeparateOn, runP3f2, runP3fEmptyNoNotes, runP3fEmptyChainNoNotes, runP3fMixedSomeEmpty, runP3fNoPaint, runP3fNoDom, runP3fNoGrid, runP3fNoParticles, runP3fNoOverlays, runP3fNoOverlayStrokes, runP3fNoOverlayCore, runP3fParticleProfile, runP3fFlatLayers, runP3g, runP3g2, runP3h, runP3h2, runP3i, runP3i2, runP3j, runP3j2, runP3k, runP3k2, runP3l, runP3l2, runP3l3, runP3l4, runP3l5, runP3l6, runP3m, runP3m2, runQueue, runAuto, runP4a, runP4b, runP4o, runP4p, runP4q, runP4r, runP4s, runP4t, runP4u, runP4v, runP4w, runP4x, runP4e, runP4c, runP4d, runP4f, runP4g, runP4h2, runP4i, runP4j, runP4k, runP4m, runP4n, runP5a, runP5b, runP5c, runP6a, runP6b, runP6c, runP6d, runP6e, runP6eNoPaint, runP6ePaintOnly, runP6eNoDom, readAutoConfig, readAutoConfigFromFile, saveResultsBundle, postResultsBundle, downloadResultsBundle, getResults: () => lastResults, getBundle: () => lastBundle, clearResults: () => { lastResults = []; } }; } catch {}
+try { window.__PerfLab = { show, hide, toggle, buildP2, buildP3, buildP4, buildP4h, buildP5, buildP6, buildP7, runP2a, runP2b, runP2c, runP3a, runP3b, runP3c, runP3d, runP3e, runP3e2, runP3f, runP3fPlayheadSeparateOff, runP3fPlayheadSeparateOn, runP3f2, runP3fEmptyNoNotes, runP3fEmptyChainNoNotes, runP3fMixedSomeEmpty, runP3fNoPaint, runP3fNoDom, runP3fNoGrid, runP3fNoParticles, runP3fNoOverlays, runP3fNoOverlayStrokes, runP3fNoOverlayCore, runP3fParticleProfile, runP3fFlatLayers, runP3g, runP3g2, runP3h, runP3h2, runP3i, runP3i2, runP3j, runP3j2, runP3k, runP3k2, runP3l, runP3l2, runP3l3, runP3l4, runP3l5, runP3l6, runP3m, runP3m2, runQueue, runAuto, runP4a, runP4b, runP4o, runP4p, runP4q, runP4r, runP4s, runP4t, runP4u, runP4v, runP4w, runP4x, runP4e, runP4c, runP4d, runP4f, runP4g, runP4h2, runP4i, runP4j, runP4k, runP4m, runP4n, runP5a, runP5b, runP5c, runP6a, runP6b, runP6c, runP6d, runP6e, runP6eNoPaint, runP6ePaintOnly, runP6eNoDom, readAutoConfig, readAutoConfigFromFile, saveResultsBundle, postResultsBundle, downloadResultsBundle, getResults: () => lastResults, getBundle: () => lastBundle, clearResults: () => { lastResults = []; } }; } catch {}
 
 
 
