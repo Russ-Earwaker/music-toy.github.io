@@ -136,21 +136,39 @@ const __LG = (() => {
       const tick = () => {
         if (!this.running) return;
         this.frame++;
-        const chainNotesCache = (window.__PERF_LOOPGRID_CHAIN_CACHE ? new Map() : null);
-        const arr = Array.from(this.panels);
+        let chainNotesCache = null;
+        if (window.__PERF_LOOPGRID_CHAIN_CACHE) {
+          this._chainNotesCache ||= new Map();
+          this._chainNotesCache.clear();
+          chainNotesCache = this._chainNotesCache;
+        }
+        let toDelete = null;
         let visibleCount = 0;
-        for (const panel of arr) {
+        const isGesture = !!(window.__ZoomCoordinator?.isGesturing?.() || document.body?.classList?.contains?.('is-gesturing'));
+        for (const panel of this.panels) {
           try {
-            if (!panel || !panel.isConnected) { this.panels.delete(panel); continue; }
+            if (!panel || !panel.isConnected) {
+              if (!toDelete) toDelete = [];
+              toDelete.push(panel);
+              continue;
+            }
             if (window.__PERF_DISABLE_LOOPGRID_RENDER) continue;
             const st = panel.__simpleRhythmVisualState;
             const visible = !!(st && isPanelVisible(panel, st));
-            if (visible) visibleCount++;
+            if (visible) {
+              visibleCount++;
+            } else if (!panel.__loopgridNeedsRedraw && !(panel.__pulseHighlight > 0)) {
+              continue;
+            }
             const mod = panel.__loopgridFrameModulo | 0;
             if (mod > 1 && (this.frame % mod) !== 0) continue;
-            const isGesture = !!(window.__ZoomCoordinator?.isGesturing?.() || document.body?.classList?.contains?.('is-gesturing'));
             render(panel, { forceNudge: false, isGesture, chainNotesCache, visible });
           } catch {}
+        }
+        if (toDelete) {
+          for (const panel of toDelete) {
+            this.panels.delete(panel);
+          }
         }
         globalState.visibleCount = visibleCount;
         globalState.lastVisTs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
@@ -179,14 +197,20 @@ const BORDER_MARGIN = 4;
 
 // The canvas covers the whole field; CSS defines the geometry via custom properties.
 // We read those so JS and CSS share a single source of truth.
-function getLoopgridLayout(cssW, cssH, isZoomed, hostEl) {
+function getLoopgridLayout(cssW, cssH, isZoomed, hostEl, st) {
   const NUM_CUBES = NUM_CUBES_GLOBAL || 8;
 
-  const styles = hostEl ? getComputedStyle(hostEl) : null;
-  const cubeSizeCss      = styles ? parseFloat(styles.getPropertyValue('--loopgrid-cube-size'))      : NaN;
-  const gapCss           = styles ? parseFloat(styles.getPropertyValue('--loopgrid-gap'))            : NaN;
-  const borderUnitsCss   = styles ? parseFloat(styles.getPropertyValue('--loopgrid-border-units'))   : NaN;
-  const verticalFactorCss= styles ? parseFloat(styles.getPropertyValue('--loopgrid-vertical-factor')): NaN;
+  if (!st._layoutCssCache) {
+    const styles = hostEl ? getComputedStyle(hostEl) : null;
+    st._layoutCssCache = {
+      cubeSizeCss      : styles ? parseFloat(styles.getPropertyValue('--loopgrid-cube-size'))      : NaN,
+      gapCss           : styles ? parseFloat(styles.getPropertyValue('--loopgrid-gap'))            : NaN,
+      borderUnitsCss   : styles ? parseFloat(styles.getPropertyValue('--loopgrid-border-units'))   : NaN,
+      verticalFactorCss: styles ? parseFloat(styles.getPropertyValue('--loopgrid-vertical-factor')): NaN,
+    };
+  }
+
+  const { cubeSizeCss, gapCss, borderUnitsCss, verticalFactorCss } = st._layoutCssCache;
 
   const baseCubeSize   = Number.isFinite(cubeSizeCss)      ? cubeSizeCss      : 44;
   const baseGap        = Number.isFinite(gapCss)           ? gapCss           : 4;
@@ -424,6 +448,8 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     tapFieldRect: null,
     tapPromptVisible: false,
     tapLoopIndex: 0,
+    _lastOverviewParticlesHidden: null,
+    _layoutCssCache: null,
     _resizer: null,
     _debugBurstSettings: null,
     _debugBurstLine: null,
@@ -450,7 +476,7 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
 
       // Cube size is derived purely from the local canvas size.
       // Zoom is applied globally via board-viewport, not here.
-      const layout = getLoopgridLayout(cssW, cssH, isZoomed, sequencerWrap || panel);
+      const layout = getLoopgridLayout(cssW, cssH, isZoomed, sequencerWrap || panel, st);
       const { cubeSize, xOffset, yOffset, blockWidthWithGap, localGap } = layout;
 
       st._cubeSize = cubeSize;
@@ -506,6 +532,7 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
 
   // 2) Re-layout on container size changes
   st._resizer = new ResizeObserver((entries) => {
+    st._layoutCssCache = null;
     for (const entry of entries) {
       const cr = entry.contentRect;
       const w = Math.round(cr.width), h = Math.round(cr.height);
@@ -520,6 +547,7 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
 
   // 3) Re-layout on zoom settle (hook whatever you already have)
   panel.zoom?.on?.('end', async () => {
+    st._layoutCssCache = null;
     // Wait a frame so layout settles, then compute once if changed.
     await raf();
     const rect = targetEl.getBoundingClientRect();
@@ -965,6 +993,21 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
 }
 
 function render(panel, opts = {}) {
+  const __perfOn = !!window.__PERF_ZOOM_PROFILE;
+  const p = __perfOn ? {
+    _start: performance.now(),
+    _timings: {},
+    mark(name) {
+      this._timings[name] = performance.now();
+    },
+    measure(name, startMark, endMark) {
+        const duration = (this._timings[endMark] || 0) - (this._timings[startMark] || 0);
+        if (duration > 0) window.__PerfFrameProf?.mark?.(name, duration);
+    }
+  } : null;
+
+  if (__perfOn) p.mark('start');
+
   const st = panel.__simpleRhythmVisualState;
   if (!st) return;
   const forceNudge = !!(opts.forceNudge || panel.__loopgridNeedsRedraw);
@@ -988,10 +1031,17 @@ function render(panel, opts = {}) {
     document.body?.classList?.contains?.('is-gesturing')
   );
   const visibleCount = Number(window.__LOOPGRID_GLOBAL?.visibleCount) || 0;
-  if (window.__PERF_LOOPGRID_UNFOCUSED_MOD) {
-    panel.__loopgridFrameModulo = isFocused ? 1 : (window.__PERF_LOOPGRID_UNFOCUSED_MOD | 0);
-  } else {
-    panel.__loopgridFrameModulo = isFocused ? 1 : 2;
+
+  // Gesture-only render throttle for unfocused toys: skip heavy draw, still update classes.
+  let gestureRenderMod = Math.max(1, Number(window.__PERF_LOOPGRID_GESTURE_RENDER_MOD) || 1);
+  if (isGesturing && visibleCount >= 12) gestureRenderMod = Math.max(gestureRenderMod, 2);
+
+  let skipHeavy = false;
+  if (isGesturing && !isFocused && gestureRenderMod > 1) {
+    st.__gestureRenderFrame = (st.__gestureRenderFrame || 0) + 1;
+    if ((st.__gestureRenderFrame % gestureRenderMod) !== 0) {
+      skipHeavy = true;
+    }
   }
 
   // Handle the highlight pulse animation on note hits.
@@ -1045,7 +1095,7 @@ function render(panel, opts = {}) {
   }
   if (stepOnly && isUnfocused && !isFocused) {
     const hasPulse = !!(panel.__pulseHighlight && panel.__pulseHighlight > 0);
-    const wantsRedraw = !!forceNudge || needsClear || chainActiveChanged; // includes __loopgridNeedsRedraw
+    const wantsRedraw = !!forceNudge || needsClear || chainActiveChanged; // includes __loopgridNeedsRedraw path
 
     const last = (panel.__loopgridLastPlayheadCol ?? -999);
     const changed = (playheadCol !== last);
@@ -1067,6 +1117,8 @@ function render(panel, opts = {}) {
   }
   if (opts.visible === false) return;
   if (opts.visible == null && !isPanelVisible(panel, st)) return;
+
+  if (__perfOn) p._mark('loopgrid.visibility+classes');
 
   // Set playing class for border highlight
   const state = panel.__gridState || {};
@@ -1103,28 +1155,26 @@ function render(panel, opts = {}) {
     st._lastShowPlaying = showPlaying;
   }
 
-  // Gesture-only render throttle for unfocused toys: skip heavy draw, still update classes.
-  let gestureRenderMod = Math.max(1, Number(window.__PERF_LOOPGRID_GESTURE_RENDER_MOD) || 1);
-  if (isGesturing && visibleCount >= 12) gestureRenderMod = Math.max(gestureRenderMod, 2);
-
-  let skipHeavy = false;
-  if (isGesturing && !isFocused && gestureRenderMod > 1) {
-    st.__gestureRenderFrame = (st.__gestureRenderFrame || 0) + 1;
-    if ((st.__gestureRenderFrame % gestureRenderMod) !== 0) {
-      skipHeavy = true;
-      if (window.__PERF_LAB_VERBOSE) {
-        window.__PERF_LOOPGRID_GESTURE_SKIP = (window.__PERF_LOOPGRID_GESTURE_SKIP || 0) + 1;
-        if ((window.__PERF_LOOPGRID_GESTURE_SKIP % 120) === 0) {
-          console.debug('[loopgrid][perf] gesture skipHeavy', { skips: window.__PERF_LOOPGRID_GESTURE_SKIP, mod: gestureRenderMod });
-        }
+  if (skipHeavy) {
+    if (window.__PERF_LAB_VERBOSE) {
+      window.__PERF_LOOPGRID_GESTURE_SKIP = (window.__PERF_LOOPGRID_GESTURE_SKIP || 0) + 1;
+      if ((window.__PERF_LOOPGRID_GESTURE_SKIP % 120) === 0) {
+        console.debug('[loopgrid][perf] gesture skipHeavy', { skips: window.__PERF_LOOPGRID_GESTURE_SKIP, mod: gestureRenderMod });
       }
     }
+    return;
+  }
+  if (window.__PERF_LOOPGRID_UNFOCUSED_MOD) {
+    panel.__loopgridFrameModulo = isFocused ? 1 : (window.__PERF_LOOPGRID_UNFOCUSED_MOD | 0);
+  } else {
+    panel.__loopgridFrameModulo = isFocused ? 1 : 2;
   }
 
+  if (__perfOn) p.mark('vis_end');
+
   const { ctx, canvas, tapLabel, particleCanvas, sequencerWrap, particleField } = st;
-  if (skipHeavy) return;
-  const __perfOn = !!window.__PERF_ZOOM_PROFILE;
-  const __perfStart = __perfOn && typeof performance !== 'undefined' ? performance.now() : 0;
+  if (__perfOn) p.mark('layout_start');
+
   const w = canvas.width;
   const h = canvas.height;
   const cssW = st._cssW || canvas.clientWidth;
@@ -1133,7 +1183,10 @@ function render(panel, opts = {}) {
   if (forceNudge) {
     st.lastParticleTick = renderTime;
   }
-
+  if (__perfOn) p.mark('layout_end');
+  if (__perfOn) p._mark('loopgrid.layout+rects');
+  
+  if (__perfOn) p._mark('loopgrid.domStyleWrites');
   const adaptiveBudget = (() => {
     try { return getAdaptiveFrameBudget(); } catch { return null; }
   })();
@@ -1143,74 +1196,78 @@ function render(panel, opts = {}) {
     try { return !!overviewMode?.isActive?.(); } catch { return false; }
   })();
   const allowField = particleBudget?.allowField !== false && !isOverview;
+  if (__perfOn) p.mark('dom_start');
   if (particleCanvas) {
     try {
-      if (isOverview) {
-        particleCanvas.style.opacity = '0';
-        particleCanvas.style.visibility = 'hidden';
-      } else {
-        particleCanvas.style.opacity = '';
-        particleCanvas.style.visibility = '';
+      const shouldHide = isOverview;
+      if (st._lastOverviewParticlesHidden !== shouldHide) {
+        particleCanvas.style.opacity = shouldHide ? '0' : '';
+        particleCanvas.style.visibility = shouldHide ? 'hidden' : '';
+        st._lastOverviewParticlesHidden = shouldHide;
       }
     } catch {}
   }
-    if (particleField) {
-      try {
-        if (particleBudget && typeof particleField.applyBudget === 'function') {
-          const crowdScale = (() => {
-            const base = 1 / Math.max(1, visibleCount);
-            if (visibleCount <= 6) return Math.max(0.18, base);
-            const minScale =
-              visibleCount >= 36 ? 0.08 :
-              visibleCount >= 24 ? 0.1 :
-              visibleCount >= 16 ? 0.12 :
-              0.16;
-            return Math.max(minScale, base);
-          })();
-          const emergencyScale = emergencyMode ? 0.45 : 1;
-          const maxCountScaleBase = (particleBudget.maxCountScale ?? 1) * (particleBudget.capScale ?? 1);
-          const maxCountScale = Math.max(0.08, maxCountScaleBase * crowdScale * emergencyScale);
-          const capScale = Math.max(0.08, (particleBudget.capScale ?? 1) * crowdScale * emergencyScale);
-          particleField.applyBudget({
-            maxCountScale,
-            capScale,
-            tickModulo: particleBudget.tickModulo ?? 1,
-            sizeScale: (particleBudget.sizeScale ?? 1) * (emergencyMode ? 1.1 : 1),
-            minCount: emergencyMode ? 0 : undefined,
-            emergencyFade: emergencyMode,
-            emergencyFadeSeconds: 5,
-          });
+    if (__perfOn) p.mark('dom_end');
+      if (__perfOn) p.mark('particles_start');
+        if (particleField) {
+          if (window.__PERF_DISABLE_LOOPGRID_PARTICLES) {
+            if (st._lastOverviewParticlesHidden !== true) {
+              particleCanvas.style.opacity = '0';
+              particleCanvas.style.visibility = 'hidden';
+              st._lastOverviewParticlesHidden = true;
+            }
+          } else {
+            try {
+              if (particleBudget && typeof particleField.applyBudget === 'function') {
+                const crowdScale = (() => {
+                  const base = 1 / Math.max(1, visibleCount);
+                  if (visibleCount <= 6) return Math.max(0.18, base);
+                  const minScale =
+                    visibleCount >= 36 ? 0.08 :
+                    visibleCount >= 24 ? 0.1 :
+                    visibleCount >= 16 ? 0.12 :
+                    0.16;
+                  return Math.max(minScale, base);
+                })();
+                const emergencyScale = emergencyMode ? 0.45 : 1;
+                const maxCountScaleBase = (particleBudget.maxCountScale ?? 1) * (particleBudget.capScale ?? 1);
+                const maxCountScale = Math.max(0.08, maxCountScaleBase * crowdScale * emergencyScale);
+                const capScale = Math.max(0.08, (particleBudget.capScale ?? 1) * crowdScale * emergencyScale);
+                particleField.applyBudget({
+                  maxCountScale,
+                  capScale,
+                  tickModulo: particleBudget.tickModulo ?? 1,
+                  sizeScale: (particleBudget.sizeScale ?? 1) * (emergencyMode ? 1.1 : 1),
+                  minCount: emergencyMode ? 0 : undefined,
+                  emergencyFade: emergencyMode,
+                  emergencyFadeSeconds: 5,
+                });
+              }
+            } catch {}
+          if (allowField) {
+            if (!Number.isFinite(st.lastParticleTick)) st.lastParticleTick = renderTime;
+            const dt = Math.min(0.05, Math.max(0, (renderTime - st.lastParticleTick) / 1000));
+            st.lastParticleTick = renderTime;
+            try { particleField.tick(dt || (1 / 60)); } catch {}
+          } else {
+            st.lastParticleTick = renderTime;
+          }
         }
-      } catch {}
-    if (allowField) {
-      if (!Number.isFinite(st.lastParticleTick)) st.lastParticleTick = renderTime;
-      const dt = Math.min(0.05, Math.max(0, (renderTime - st.lastParticleTick) / 1000));
-      st.lastParticleTick = renderTime;
-      const __pfStart = (__perfOn && !window.__PERF_PARTICLE_FIELD_PROFILE) ? performance.now() : 0;
-      try { particleField.tick(dt || (1 / 60)); } catch {}
-      if (__perfOn && __pfStart) {
-        const __pfEnd = performance.now();
-        try { window.__PerfFrameProf?.mark?.('loopgrid.particle', __pfEnd - __pfStart); } catch {}
       }
-    } else {
-      st.lastParticleTick = renderTime;
-    }
-  }
-
   if (!Number.isFinite(st._burstLastTime)) st._burstLastTime = renderTime;
   const burstDt = Math.min(0.05, Math.max(0, (renderTime - st._burstLastTime) / 1000));
   st._burstLastTime = renderTime;
+  if (__perfOn) p.mark('particles_end');
 
   if (!cssW || !cssH || !w || !h) {
-    if (__perfOn && __perfStart) {
-      const __perfEnd = performance.now();
-      try { window.__PerfFrameProf?.mark?.('loopgrid.render', __perfEnd - __perfStart); } catch {}
+    if (__perfOn) {
+        p.measure('loopgrid.visibility+classes', 'start', 'vis_end');
+        p.measure('loopgrid.render', 'start', 'vis_end');
     }
     return;
   }
-
-  const __drawStart = __perfOn ? performance.now() : 0;
-
+  
+  if (__perfOn) p.mark('layout_update_start');
   const scaleX = cssW ? (w / cssW) : 1;
   const scaleY = cssH ? (h / cssH) : 1;
   const pxX = (value) => value * scaleX;
@@ -1250,7 +1307,13 @@ function render(panel, opts = {}) {
 
   const particleFieldW = st.fieldWidth || cssW;
   const particleFieldH = st.fieldHeight || cssH;
+  if (__perfOn) p.mark('layout_update_end');
 
+  if (__perfOn) p.mark('dom_update_start');
+  if (__perfOn) p._mark('loopgrid.layout+rects');
+
+  if (__perfOn) p._mark('loopgrid.domStyleWrites');
+  if (__perfOn) p.mark('dom_update_start');
   const showTapPrompt = !hasActiveNotes;
   if (tapLabel && st.tapLetters?.length) {
     const tapLetters = st.tapLetters;
@@ -1428,9 +1491,15 @@ function render(panel, opts = {}) {
       }
     }
   }
+  if (__perfOn) p._mark('loopgrid.domStyleWrites');
+  if (__perfOn) p.mark('dom_update_end');
 
   const fieldRectData = st.tapFieldRect;
 
+  if (__perfOn) p._mark('loopgrid.layout+rects');
+  if (__perfOn) p.mark('dom_update_end');
+
+  if (__perfOn) p.mark('layout_update_start_2');
   // Use pre-computed layout values from st
   const cubeSize = st._cubeSize;
   const xOffset = st._xOffset;
@@ -1457,12 +1526,15 @@ function render(panel, opts = {}) {
 
   // Vertical position: use the CSS-space yOffset (1 cube of buffer) in pixels.
   const rowY = Math.round(pxY(yOffset));
+  if (__perfOn) p.mark('layout_update_end_2');
+  if (__perfOn) p._mark('loopgrid.layout+rects');
 
   if (phaseJustWrapped) {
     st.tapLoopIndex = (typeof st.tapLoopIndex === 'number' ? st.tapLoopIndex : 0) + 1;
     if (Array.isArray(st.tapLetterLastLoop)) st.tapLetterLastLoop.fill(-1);
   }
 
+  if (__perfOn) p.mark('draw_base_start');
   const gridCache = (st._gridCache ||= { canvas: null, ctx: null, key: '' });
   const layoutKey = [
     w, h, blockSizePx, rowY, xOffset, yOffset, blockWidthWithGap, localGap, isZoomed,
@@ -1559,31 +1631,79 @@ function render(panel, opts = {}) {
     || chainActiveChanged
     || !hasDrawn;
   if (!needsCanvasUpdate) {
-    if (__perfOn && __perfStart) {
-      const __perfEnd = performance.now();
-      try { window.__PerfFrameProf?.mark?.('loopgrid.render', __perfEnd - __perfStart); } catch {}
+    if (__perfOn) {
+      try { window.__PerfFrameProf?.mark?.('loopgrid.render', performance.now() - p._start); } catch {}
     }
     return;
   }
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, w, h);
 
-  if (debugActive && debugLine && ctx) {
-    const rectX = debugLine.x * scaleX;
-    const rectY = debugLine.y * scaleY;
-    const rectW = debugLine.size * scaleX;
-    const rectH = debugLine.size * scaleY;
-    ctx.save();
-    ctx.strokeStyle = debugSettings.lineColor;
-    ctx.lineWidth = Math.max(1, debugSettings.lineWidth);
-    if (ctx.setLineDash) ctx.setLineDash(debugSettings.lineDash || []);
-    ctx.strokeRect(rectX, rectY, rectW, rectH);
-    ctx.restore();
+  // Fast path: overwrite the whole canvas with the cached grid in one blit.
+  // This avoids a large clearRect + normal draw, which can be expensive.
+  if (gridCache.canvas) {
+    const prevComp = ctx.globalCompositeOperation;
+    ctx.globalCompositeOperation = 'copy';
+    ctx.drawImage(gridCache.canvas, 0, 0);
+    ctx.globalCompositeOperation = prevComp;
+  } else {
+    // No cache yet: fall back to clearing
+    ctx.clearRect(0, 0, w, h);
+  }
+  if (__perfOn) p.mark('draw_base_end');
+
+  if (__perfOn) p.mark('draw_overlays_start');
+  // Draw playhead highlight
+  if (playheadActive) {
+    const i = playheadCol;
+    const cubeRectCss = {
+      x: xOffset + i * blockWidthWithGap,
+      y: yOffset,
+      w: cubeSize,
+      h: cubeSize,
+    };
+    const cubeRect = {
+      x: Math.round(pxX(cubeRectCss.x)),
+      y: rowY,
+      w: blockSizePx,
+      h: blockSizePx,
+    };
+    const borderSize = 4;
+    const playheadSprite = getPlayheadSprite(st, blockSizePx, borderSize, 'rgba(255, 255, 255, 0.4)');
+    if (playheadSprite?.canvas) {
+      ctx.drawImage(
+        playheadSprite.canvas,
+        cubeRect.x - borderSize,
+        cubeRect.y - borderSize
+      );
+    } else {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.fillRect(
+        cubeRect.x - borderSize,
+        cubeRect.y - borderSize,
+        cubeRect.w + borderSize * 2,
+        cubeRect.h + borderSize * 2
+      );
+    }
+
+    if (showTapPrompt && fieldRectData && Number.isFinite(fieldRectData.left) && fieldRectData.width > 0 && Array.isArray(st.tapLetterBounds)) {
+      const gridRect = st.canvas.getBoundingClientRect();
+      if (gridRect.width > 0) {
+      const cubeCenterCssX = cubeRectCss.x + cubeRectCss.w / 2;
+      const cubeCenterCssY = cubeRectCss.y + cubeRectCss.h / 2;
+      const columnCenterPx = gridRect.left + (cubeCenterCssX / cssW) * gridRect.width;
+      const columnCenterPy = gridRect.top + (cubeCenterCssY / cssH) * gridRect.height;
+      const centerNorm = (columnCenterPx - fieldRectData.left) / fieldRectData.width;
+      if (Number.isFinite(centerNorm)) {
+        const clamped = Math.max(0, Math.min(1, centerNorm));
+        triggerTapLettersForColumn(st, i, clamped, columnCenterPx, columnCenterPy);
+      }
+      }
+    }
   }
 
   // --- Note burst particles: vertical scale from cube center (no movement) ---
-  if (Array.isArray(st.burstParticles) && st.burstParticles.length && ctx) {
+  if (Array.isArray(st.burstParticles) && st.burstParticles.length > 0 && ctx) {
     const particles = st.burstParticles;
     const remaining = [];
     for (let i = 0; i < particles.length; i++) {
@@ -1635,58 +1755,6 @@ function render(panel, opts = {}) {
     }
   }
 
-  // Draw playhead highlight under the cached grid
-  if (playheadActive) {
-    const i = playheadCol;
-    const cubeRectCss = {
-      x: xOffset + i * blockWidthWithGap,
-      y: yOffset,
-      w: cubeSize,
-      h: cubeSize,
-    };
-    const cubeRect = {
-      x: Math.round(pxX(cubeRectCss.x)),
-      y: rowY,
-      w: blockSizePx,
-      h: blockSizePx,
-    };
-    const borderSize = 4;
-    const playheadSprite = getPlayheadSprite(st, blockSizePx, borderSize, 'rgba(255, 255, 255, 0.4)');
-    if (playheadSprite?.canvas) {
-      ctx.drawImage(
-        playheadSprite.canvas,
-        cubeRect.x - borderSize,
-        cubeRect.y - borderSize
-      );
-    } else {
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-      ctx.fillRect(
-        cubeRect.x - borderSize,
-        cubeRect.y - borderSize,
-        cubeRect.w + borderSize * 2,
-        cubeRect.h + borderSize * 2
-      );
-    }
-    if (showTapPrompt && fieldRectData && Number.isFinite(fieldRectData.left) && fieldRectData.width > 0 && Array.isArray(st.tapLetterBounds)) {
-      const gridRect = st.canvas.getBoundingClientRect();
-      if (gridRect.width > 0) {
-      const cubeCenterCssX = cubeRectCss.x + cubeRectCss.w / 2;
-      const cubeCenterCssY = cubeRectCss.y + cubeRectCss.h / 2;
-      const columnCenterPx = gridRect.left + (cubeCenterCssX / cssW) * gridRect.width;
-      const columnCenterPy = gridRect.top + (cubeCenterCssY / cssH) * gridRect.height;
-      const centerNorm = (columnCenterPx - fieldRectData.left) / fieldRectData.width;
-      if (Number.isFinite(centerNorm)) {
-        const clamped = Math.max(0, Math.min(1, centerNorm));
-        triggerTapLettersForColumn(st, i, clamped, columnCenterPx, columnCenterPy);
-      }
-      }
-    }
-  }
-
-  if (gridCache.canvas) {
-    ctx.drawImage(gridCache.canvas, 0, 0);
-  }
-
   // Flash overlays (only for active flashes)
   for (let i = 0; i < NUM_CUBES; i++) {
     const flash = st.flash[i] || 0;
@@ -1718,14 +1786,34 @@ function render(panel, opts = {}) {
     });
     ctx.restore();
   }
+
+  if (debugActive && debugLine && ctx) {
+    const rectX = debugLine.x * scaleX;
+    const rectY = debugLine.y * scaleY;
+    const rectW = debugLine.size * scaleX;
+    const rectH = debugLine.size * scaleY;
+    ctx.save();
+    ctx.strokeStyle = debugSettings.lineColor;
+    ctx.lineWidth = Math.max(1, debugSettings.lineWidth);
+    if (ctx.setLineDash) ctx.setLineDash(debugSettings.lineDash || []);
+    ctx.strokeRect(rectX, rectY, rectW, rectH);
+    ctx.restore();
+  }
+  if (__perfOn) p._mark('loopgrid.draw.overlays');
+
   panel.__loopgridHasDrawn = true;
   panel.__loopgridLastDrawPlayheadCol = playheadActive ? playheadCol : -999;
-  if (__perfOn && __drawStart) {
-    const __drawEnd = performance.now();
-    try { window.__PerfFrameProf?.mark?.('loopgrid.draw', __drawEnd - __drawStart); } catch {}
-  }
-  if (__perfOn && __perfStart) {
-    const __perfEnd = performance.now();
-    try { window.__PerfFrameProf?.mark?.('loopgrid.render', __perfEnd - __perfStart); } catch {}
+  
+  if (__perfOn) {
+    p.mark('end');
+    p.measure('loopgrid.visibility+classes', 'start', 'vis_end');
+    p.measure('loopgrid.layout+rects', 'layout_start', 'layout_end');
+    p.measure('loopgrid.layout+rects', 'layout_update_start', 'layout_update_end');
+    p.measure('loopgrid.domStyleWrites', 'dom_start', 'dom_end');
+    p.measure('loopgrid.domStyleWrites', 'dom_update_start', 'dom_update_end');
+    p.measure('loopgrid.particles', 'particles_start', 'particles_end');
+    p.measure('loopgrid.draw.base', 'draw_base_start', 'draw_base_end');
+    p.measure('loopgrid.draw.overlays', 'draw_overlays_start', 'draw_overlays_end');
+    p.measure('loopgrid.render', 'start', 'end');
   }
 }
