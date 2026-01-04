@@ -3084,50 +3084,96 @@ try {
 const g_chainState = new Map();
 let g_sequencerScheduler = null;
 let audioSchedIntervalId = null;
+let g_noteSchedCfg = null;
+let g_noteSchedRebuildPending = null;
+let g_lastCfgCheckAt = 0;
+let g_audioTickBusy = false;
+
+function computeNoteSchedTiming() {
+  const info = getLoopInfo();
+  const steps = Number.isFinite(NUM_STEPS) ? NUM_STEPS : 8;
+  const barSec = Math.max(0.25, Number(info?.barSec ?? info?.barLenSec ?? 0) || 0);
+  const stepSec = barSec / Math.max(1, steps);
+  const lookaheadSec = Math.max(0.5, stepSec * 2.5);
+  const leadSec = Math.max(0.02, Math.min(0.06, stepSec * 0.25));
+  return { lookaheadSec, leadSec, stepSec, barSec, steps };
+}
 
 function ensureSequencerScheduler() {
   if (!g_sequencerScheduler) {
-    g_sequencerScheduler = createSequencerScheduler({ lookaheadSec: 0.25, leadSec: 0.05 });
+    const cfg = computeNoteSchedTiming();
+    const lateGraceSec = Math.min(0.08, cfg.stepSec * 0.5);
+    g_noteSchedCfg = cfg;
+    g_sequencerScheduler = createSequencerScheduler({
+      lookaheadSec: cfg.lookaheadSec,
+      leadSec: cfg.leadSec,
+      lateGraceSec,
+    });
+    window.__mtNoteSchedConfig = cfg;
     try { window.__NOTE_SCHEDULER_ENABLED = true; } catch {}
   }
   return g_sequencerScheduler;
 }
 
 function tickAudioScheduler() {
-  if (!CHAIN_FEATURE_ENABLE_SCHEDULER || !CHAIN_FEATURE_ENABLE_SEQUENCER) return;
-  if (!isRunning()) return;
-  if (!g_chainState || g_chainState.size < 1) return;
-  if (window.__PERF_DISABLE_CHAIN_WORK) return;
-
-  const info = getLoopInfo();
-  const ctx = ensureAudioContext();
-  const nowAt = ctx?.currentTime ?? 0;
-  const forceSequencerAll = !!window.__PERF_FORCE_SEQUENCER_ALL;
-  const activeToyIds = forceSequencerAll
-    ? new Set(getSequencedToys().map(p => p.id).filter(Boolean))
-    : new Set(g_chainState.values());
-
-  if (activeToyIds.size < 1) return;
-
-  const sequencerScheduler = ensureSequencerScheduler();
+  if (g_audioTickBusy) return;
+  g_audioTickBusy = true;
   try {
-    const activeAudioToyIds = new Set();
-    for (const toyId of activeToyIds) {
-      const toy = document.getElementById(toyId);
-      if (!toy) continue;
-      if (panelHasAnyNotes(toy)) {
-        activeAudioToyIds.add(toyId);
-      } else {
-        try { toy.__chainJustActivated = false; } catch {}
+    if (!CHAIN_FEATURE_ENABLE_SCHEDULER || !CHAIN_FEATURE_ENABLE_SEQUENCER) return;
+    if (!isRunning()) return;
+    if (!g_chainState || g_chainState.size < 1) return;
+    if (window.__PERF_DISABLE_CHAIN_WORK) return;
+
+    const info = getLoopInfo();
+    if (!info) return;
+    const nowMs = performance?.now?.() ?? Date.now();
+    if (!g_lastCfgCheckAt || (nowMs - g_lastCfgCheckAt) > 500) {
+      g_lastCfgCheckAt = nowMs;
+      const nextCfg = computeNoteSchedTiming();
+      const curCfg = g_noteSchedCfg;
+      if (curCfg?.stepSec && nextCfg?.stepSec) {
+        const delta = Math.abs(nextCfg.stepSec - curCfg.stepSec) / curCfg.stepSec;
+        if (delta > 0.15) g_noteSchedRebuildPending = nextCfg;
       }
     }
-    sequencerScheduler.tick({
-      activeToyIds: activeAudioToyIds,
-      getToy: (id) => document.getElementById(id),
-      loopInfo: info,
-      nowAt,
-    });
-  } catch {}
+
+    if (g_noteSchedRebuildPending && info.col === 0) {
+      g_sequencerScheduler = null;
+      g_noteSchedRebuildPending = null;
+      ensureSequencerScheduler();
+    }
+
+    const ctx = ensureAudioContext();
+    const nowAt = ctx?.currentTime ?? 0;
+    const forceSequencerAll = !!window.__PERF_FORCE_SEQUENCER_ALL;
+    const activeToyIds = forceSequencerAll
+      ? new Set(getSequencedToys().map(p => p.id).filter(Boolean))
+      : new Set(g_chainState.values());
+
+    if (activeToyIds.size < 1) return;
+
+    const sequencerScheduler = ensureSequencerScheduler();
+    try {
+      const activeAudioToyIds = new Set();
+      for (const toyId of activeToyIds) {
+        const toy = document.getElementById(toyId);
+        if (!toy) continue;
+        if (panelHasAnyNotes(toy)) {
+          activeAudioToyIds.add(toyId);
+        } else {
+          try { toy.__chainJustActivated = false; } catch {}
+        }
+      }
+      sequencerScheduler.tick({
+        activeToyIds: activeAudioToyIds,
+        getToy: (id) => document.getElementById(id),
+        loopInfo: info,
+        nowAt,
+      });
+    } catch {}
+  } finally {
+    g_audioTickBusy = false;
+  }
 }
 
 function startAudioScheduler() {

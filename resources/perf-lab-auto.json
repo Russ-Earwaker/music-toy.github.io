@@ -1,14 +1,14 @@
 {
   "queue": [
+    "buildP7",
+    "runP7a",
+    "runP7b",
     "buildP3",
     "runP3f",
-    "runP3b",
-    "buildP2d",
-    "runP2d",
-    "buildP7",
-    "runP3fMixedSomeEmpty"
+    "buildP4",
+    "runP4b"
   ],
-  "notes": "Auto run: drawgrid baseline + pan/zoom stress, drum stress, mixed chains.",
+  "notes": "Auto run: mixed chains (all + some empty), drawgrid stress, loopgrid stress.",
   "runTag": "loopgrid-sprites",
   "traceMarks": true,
   "tapDotsSim": true,

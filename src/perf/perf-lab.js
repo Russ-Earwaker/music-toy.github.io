@@ -139,7 +139,10 @@ function ensureUI() {
   const P7 = {
     title: 'P7 - Mixed Chains (4x Draw + 4x SR)',
     build: btn('buildP7', 'Build P7: Mixed Chains', 'primary'),
-    runs: [],
+    runs: sortByLabel([
+      { act: 'runP7a', label: 'Run P7a: Playing Pan/Zoom (All Toys Active)' },
+      { act: 'runP7b', label: 'Run P7b: Playing Pan/Zoom (Some Toys Empty)' },
+    ]),
   };
 
   const tests = [...P3.runs, ...P7.runs];
@@ -384,6 +387,8 @@ function ensureUI() {
     if (act === 'runP6ePaintOnly') await runP6ePaintOnly();
     if (act === 'runP6eNoDom') await runP6eNoDom();
     if (act === 'buildP7') await buildP7();
+    if (act === 'runP7a') await runP7a();
+    if (act === 'runP7b') await runP7b();
     if (act === 'auto') {
       const cfgFile = await readAutoConfigFromFile();
       const cfg = cfgFile || readAutoConfig();
@@ -1064,23 +1069,31 @@ async function buildP3() {
   setStatus('P3 built');
 }
 
-function buildP4() {
+async function buildP4() {
   try { clearSceneViaSnapshot(); } catch {}
   setStatus('Building P4...');
-  // Chained Simple Rhythm === loopgrid
-  buildChainedLoopgridStress({
-    toyType: 'loopgrid',
-    chains: 6,          // tweak up/down for stress
-    chainLength: 10,    // tweak up/down for stress
-    gridCols: 3,
-    seed: 1337,
-    density: 0.33,
-    noteMin: 0,
-    noteMax: 35,
-    headSpacingX: 560,
-    headSpacingY: 420,
-    linkSpacingX: 420,
-  });
+  await ensureMeasuredFootprint('loopgrid');
+  const spacing = estimateGridSpacing('loopgrid', 420);
+  logPerfFootprintDebug('loopgrid', 420);
+  const cam = getCommittedState();
+  createToyGrid({ toyType: 'loopgrid', rows: 6, cols: 10, spacing, centerX: cam.x, centerY: cam.y });
+  const finalize = (tries = 0) => {
+    try {
+      const panels = Array.from(document.querySelectorAll('.toy-panel[data-toy="loopgrid"]'));
+      const ready = panels.length > 0 && panels.every(p => typeof p.__sequencerStep === 'function');
+      if (!ready && tries < 20) {
+        setTimeout(() => finalize(tries + 1), 120);
+        return;
+      }
+      panels.forEach(clearPanelChainData);
+      seedLoopgridPanels(panels, { density: 0.33, seed: 1337, randomizeNotes: true });
+      window.updateChains?.();
+      window.updateAllChainUIs?.();
+      window.scheduleChainRedraw?.();
+      window.resolveToyPanelOverlaps?.();
+    } catch {}
+  };
+  setTimeout(() => finalize(0), 0);
   setStatus('P4 built');
 }
 
@@ -1220,11 +1233,16 @@ async function buildP7() {
       };
       initChainActive(drawChains);
       initChainActive(loopChains);
-      drawPanels.forEach(p => {
-        if (p?.dataset && (p.dataset.prevToyId || p.dataset.nextToyId)) {
-          p.dataset.autoplay = 'chain';
-        }
-      });
+        drawPanels.forEach(p => {
+          if (p?.dataset && (p.dataset.prevToyId || p.dataset.nextToyId)) {
+            p.dataset.autoplay = 'chain';
+          }
+        });
+        loopPanels.forEach(p => {
+          if (p?.dataset && (p.dataset.prevToyId || p.dataset.nextToyId)) {
+            p.dataset.autoplay = 'chain';
+          }
+        });
       window.updateChains?.();
       window.updateAllChainUIs?.();
       window.scheduleChainRedraw?.();
@@ -1233,7 +1251,7 @@ async function buildP7() {
     try {
       drawPanels.forEach(p => { try { p.dispatchEvent(new CustomEvent('toy-random', { bubbles: true })); } catch {} });
       drawPanels.forEach(p => { try { p.dispatchEvent(new CustomEvent('toy-random-notes', { bubbles: true })); } catch {} });
-      seedLoopgridPanels(loopPanels, { density: 0.35, seed: 1337 });
+        seedLoopgridPanels(loopPanels, { density: 0.35, seed: 1337, randomizeNotes: false });
       syncChainInstruments(drawChains);
       syncChainInstruments(loopChains);
     } catch {}
@@ -1337,6 +1355,60 @@ async function buildP7() {
   };
   setTimeout(() => finalize(0), 0);
   setStatus('P7 built');
+}
+
+async function runP7a() {
+  const panZoom = makePanZoomScript({
+    panPx: 2400,
+    zoomMin: 0.40,
+    zoomMax: 1.20,
+    idleMs: 2500,
+    panMs: 13500,
+    zoomMs: 13500,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+  });
+  const prevForce = window.__PERF_FORCE_SEQUENCER_ALL;
+  try {
+    window.__PERF_FORCE_SEQUENCER_ALL = false;
+    await runVariantPlaying(
+      'P7a_mixed_chains_playing_panzoom_all',
+      panZoom,
+      'Running P7a (mixed chains, all toys active)...'
+    );
+  } finally {
+    window.__PERF_FORCE_SEQUENCER_ALL = prevForce;
+  }
+}
+
+async function runP7b() {
+  const drawPanels = Array.from(document.querySelectorAll('.toy-panel[data-toy="drawgrid"]'));
+  const loopPanels = Array.from(document.querySelectorAll('.toy-panel[data-toy="loopgrid"]'));
+  const pickSome = (arr) => arr.filter((_, i) => (i % 3) === 0);
+  const drawSilenceIds = pickSome(drawPanels).map(p => p?.id).filter(Boolean);
+  if (drawSilenceIds.length) silenceDrawgridPanels(drawSilenceIds);
+  if (loopPanels.length) silenceLoopgridPanels(pickSome(loopPanels));
+  const panZoom = makePanZoomScript({
+    panPx: 2400,
+    zoomMin: 0.40,
+    zoomMax: 1.20,
+    idleMs: 2500,
+    panMs: 13500,
+    zoomMs: 13500,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+  });
+  const prevForce = window.__PERF_FORCE_SEQUENCER_ALL;
+  try {
+    window.__PERF_FORCE_SEQUENCER_ALL = false;
+    await runVariantPlaying(
+      'P7b_mixed_chains_playing_panzoom_some_empty',
+      panZoom,
+      'Running P7b (mixed chains, some toys empty)...'
+    );
+  } finally {
+    window.__PERF_FORCE_SEQUENCER_ALL = prevForce;
+  }
 }
 
 function collectToyTypeCounts() {
@@ -1983,7 +2055,7 @@ function mulberry32(seed) {
   };
 }
 
-function seedLoopgridPanels(panels, { density = 0.35, seed = 1337 } = {}) {
+function seedLoopgridPanels(panels, { density = 0.35, seed = 1337, randomizeNotes = true } = {}) {
   const rand = mulberry32(seed);
   let seeded = 0;
   for (const panel of panels) {
@@ -1998,13 +2070,15 @@ function seedLoopgridPanels(panels, { density = 0.35, seed = 1337 } = {}) {
     if (!anyOn && st.steps.length) {
       st.steps[Math.floor(rand() * st.steps.length)] = true;
     }
-    const palette = Array.isArray(st.notePalette) && st.notePalette.length ? st.notePalette : null;
-    for (let i = 0; i < st.noteIndices.length; i++) {
-      if (palette) {
-        const pick = Math.floor(rand() * palette.length);
-        st.noteIndices[i] = pick;
+      if (randomizeNotes) {
+        const palette = Array.isArray(st.notePalette) && st.notePalette.length ? st.notePalette : null;
+        for (let i = 0; i < st.noteIndices.length; i++) {
+          if (palette) {
+            const pick = Math.floor(rand() * palette.length);
+            st.noteIndices[i] = pick;
+          }
+        }
       }
-    }
     try {
       panel.dispatchEvent(new CustomEvent('loopgrid:update', {
         detail: {
@@ -2017,6 +2091,28 @@ function seedLoopgridPanels(panels, { density = 0.35, seed = 1337 } = {}) {
     seeded += 1;
   }
   return seeded;
+}
+
+function silenceLoopgridPanels(panels = []) {
+  let changed = 0;
+  for (const panel of panels) {
+    const st = panel?.__gridState;
+    if (!st || !Array.isArray(st.steps) || !Array.isArray(st.noteIndices)) continue;
+    for (let i = 0; i < st.steps.length; i++) {
+      st.steps[i] = false;
+    }
+    try {
+      panel.dispatchEvent(new CustomEvent('loopgrid:update', {
+        detail: {
+          reason: 'perf-silence',
+          steps: Array.from(st.steps),
+          noteIndices: Array.from(st.noteIndices),
+        },
+      }));
+      changed += 1;
+    } catch {}
+  }
+  return changed;
 }
 
 function getChainHeadId(panel) {
@@ -2184,33 +2280,43 @@ function silenceDrawgridPanels(panelIds) {
       const id = t?.id || t?.toyId;
       if (!id || !ids.has(id)) continue;
       t.state = t.state || {};
+      t.state.strokes = [];
+      t.state.manualOverrides = [];
       const nodes = t.state.nodes || {};
-      const list = Array.isArray(nodes.list) ? nodes.list : [];
-      const steps = Number.isFinite(t.state.steps) ? t.state.steps : (list.length || 8);
-      const nextList = (list.length > 0) ? list : Array.from({ length: steps }, () => []);
-      nodes.list = nextList;
-      nodes.active = Array.from({ length: nextList.length }, () => false);
-      nodes.disabled = nextList.map((arr) => Array.isArray(arr) ? arr.slice() : []);
+      nodes.list = [];
+      nodes.active = [];
+      nodes.disabled = [];
+      nodes.groups = [];
       t.state.nodes = nodes;
       changed++;
-    }
+      }
     if (!changed) return false;
     const ok = !!P.applySnapshot(snap);
     if (!ok) return false;
-    try {
       try {
-        if (typeof isRunning === 'function' && typeof startTransport === 'function') {
-          if (!isRunning()) startTransport();
-        }
-      } catch {}
-      window.updateAllToys?.();
-      window.scheduleAllToysRedraw?.();
-      window.requestAnimationFrame?.(() => {
+        try {
+          if (typeof isRunning === 'function' && typeof startTransport === 'function') {
+            if (!isRunning()) startTransport();
+          }
+        } catch {}
         window.updateAllToys?.();
         window.scheduleAllToysRedraw?.();
-      });
-    } catch {}
-    try { window.Persistence?.markDirty?.(); } catch {}
+        window.requestAnimationFrame?.(() => {
+          window.updateAllToys?.();
+          window.scheduleAllToysRedraw?.();
+        });
+      } catch {}
+      try {
+        ids.forEach((id) => {
+          const panel = document.getElementById(id);
+          if (!panel) return;
+          panel.dispatchEvent(new CustomEvent('toy-clear', {
+            detail: { user: true, reason: 'perf-empty' },
+            bubbles: true,
+          }));
+        });
+      } catch {}
+      try { window.Persistence?.markDirty?.(); } catch {}
     return true;
   } catch {
     return false;
@@ -3306,7 +3412,13 @@ async function runP4b() {
     overviewToggles: 0,
     overviewSpanMs: 0,
   });
-  await runVariantPlaying('P4b_chain_loopgrid_playing_panzoom', step, 'Running P4b (playing pan/zoom)...');
+  const prevForce = window.__PERF_FORCE_SEQUENCER_ALL;
+  try {
+    window.__PERF_FORCE_SEQUENCER_ALL = true;
+    await runVariantPlaying('P4b_loopgrid_playing_panzoom', step, 'Running P4b (playing pan/zoom)...');
+  } finally {
+    window.__PERF_FORCE_SEQUENCER_ALL = prevForce;
+  }
 }
 
 async function runP4o() {
@@ -4146,7 +4258,7 @@ window.addEventListener('keydown', (e) => {
 });
 
 // Expose for manual console use
-try { window.__PerfLab = { show, hide, toggle, buildP2, buildP2d, buildP3, buildP4, buildP4h, buildP5, buildP6, buildP7, runP2a, runP2b, runP2c, runP2d, runP3a, runP3b, runP3c, runP3d, runP3e, runP3e2, runP3f, runP3fPlayheadSeparateOff, runP3fPlayheadSeparateOn, runP3f2, runP3fEmptyNoNotes, runP3fEmptyChainNoNotes, runP3fMixedSomeEmpty, runP3fNoPaint, runP3fNoDom, runP3fNoGrid, runP3fNoParticles, runP3fNoOverlays, runP3fNoOverlayStrokes, runP3fNoOverlayCore, runP3fParticleProfile, runP3fFlatLayers, runP3g, runP3g2, runP3h, runP3h2, runP3i, runP3i2, runP3j, runP3j2, runP3k, runP3k2, runP3l, runP3l2, runP3l3, runP3l4, runP3l5, runP3l6, runP3m, runP3m2, runQueue, runAuto, runP4a, runP4b, runP4o, runP4p, runP4q, runP4r, runP4s, runP4t, runP4u, runP4v, runP4w, runP4x, runP4e, runP4c, runP4d, runP4f, runP4g, runP4h2, runP4i, runP4j, runP4k, runP4m, runP4n, runP5a, runP5b, runP5c, runP6a, runP6b, runP6c, runP6d, runP6e, runP6eNoPaint, runP6ePaintOnly, runP6eNoDom, readAutoConfig, readAutoConfigFromFile, saveResultsBundle, postResultsBundle, downloadResultsBundle, getResults: () => lastResults, getBundle: () => lastBundle, clearResults: () => { lastResults = []; } }; } catch {}
+try { window.__PerfLab = { show, hide, toggle, buildP2, buildP2d, buildP3, buildP4, buildP4h, buildP5, buildP6, buildP7, runP2a, runP2b, runP2c, runP2d, runP3a, runP3b, runP3c, runP3d, runP3e, runP3e2, runP3f, runP3fPlayheadSeparateOff, runP3fPlayheadSeparateOn, runP3f2, runP3fEmptyNoNotes, runP3fEmptyChainNoNotes, runP3fMixedSomeEmpty, runP3fNoPaint, runP3fNoDom, runP3fNoGrid, runP3fNoParticles, runP3fNoOverlays, runP3fNoOverlayStrokes, runP3fNoOverlayCore, runP3fParticleProfile, runP3fFlatLayers, runP3g, runP3g2, runP3h, runP3h2, runP3i, runP3i2, runP3j, runP3j2, runP3k, runP3k2, runP3l, runP3l2, runP3l3, runP3l4, runP3l5, runP3l6, runP3m, runP3m2, runP7a, runP7b, runQueue, runAuto, runP4a, runP4b, runP4o, runP4p, runP4q, runP4r, runP4s, runP4t, runP4u, runP4v, runP4w, runP4x, runP4e, runP4c, runP4d, runP4f, runP4g, runP4h2, runP4i, runP4j, runP4k, runP4m, runP4n, runP5a, runP5b, runP5c, runP6a, runP6b, runP6c, runP6d, runP6e, runP6eNoPaint, runP6ePaintOnly, runP6eNoDom, readAutoConfig, readAutoConfigFromFile, saveResultsBundle, postResultsBundle, downloadResultsBundle, getResults: () => lastResults, getBundle: () => lastBundle, clearResults: () => { lastResults = []; } }; } catch {}
 
 
 

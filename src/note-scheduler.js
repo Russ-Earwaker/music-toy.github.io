@@ -3,13 +3,22 @@
 
 import { ensureAudioContext } from './audio-core.js';
 
-export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01 } = {}) {
-  const state = new Map(); // toyId -> { lastBarStart, scheduled:Set, preScheduledCol0At, lastProbeBarIndex }
+export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, lateGraceSec = 0.04 } = {}) {
+  const state = new Map(); // toyId -> { lastBarStart, scheduled:Set, preScheduledCol0At, lastProbeBarIndex, lastScheduledByCol:Map }
   const col0GraceSec = Math.min(0.06, Math.max(0.01, leadSec));
   let probeLastTs = 0;
+  const effectiveLateGraceSec = Number.isFinite(lateGraceSec) ? lateGraceSec : 0.04;
 
   function getState(key) {
-    if (!state.has(key)) state.set(key, { lastBarStart: -1, scheduled: new Set(), preScheduledCol0At: null, lastProbeBarIndex: null });
+    if (!state.has(key)) {
+      state.set(key, {
+        lastBarStart: -1,
+        scheduled: new Set(),
+        preScheduledCol0At: null,
+        lastProbeBarIndex: null,
+        lastScheduledByCol: new Map(),
+      });
+    }
     return state.get(key);
   }
 
@@ -21,7 +30,8 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01 } 
     const now = Number.isFinite(nowAt) ? nowAt : (ensureAudioContext()?.currentTime ?? 0);
     if (!Number.isFinite(now)) return;
 
-    const baseWindowStart = now + Math.max(0, leadSec);
+    const baseWindowStart = (now + Math.max(0, leadSec)) - Math.max(0, effectiveLateGraceSec);
+    const windowStart = Math.max(now - 0.1, baseWindowStart);
     const windowEnd = now + Math.max(0.05, lookaheadSec);
     const phase = Number(loopInfo.phase01);
     const barStartDebug = loopStart + Math.floor((now - loopStart) / barLen) * barLen;
@@ -35,7 +45,7 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01 } 
         console.log('[note-scheduler][probe]', {
           active: activeToyIds.size,
           now,
-          windowStart: baseWindowStart,
+          windowStart,
           windowEnd,
           barStart: barStartDebug,
           phase,
@@ -55,22 +65,33 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01 } 
       const toyState = getState(toyId);
       if (toyState.lastBarStart !== barStart) {
         toyState.lastBarStart = barStart;
-        toyState.scheduled.clear();
         if (toyState.preScheduledCol0At === barStart) {
-          const key = `${Math.round(barStart * 1000)}:0`;
+          const key = Math.round(barStart * 1000);
           toyState.scheduled.add(key);
+          toyState.lastScheduledByCol.set(0, barStart);
           toyState.preScheduledCol0At = null;
         }
+      }
+
+      const pruneBeforeMs = Math.round((now - 0.25) * 1000);
+      if (Number.isFinite(pruneBeforeMs)) {
+        for (const key of toyState.scheduled) {
+          if (key < pruneBeforeMs) toyState.scheduled.delete(key);
+        }
+      }
+      if (Number.isFinite(toyState.preScheduledCol0At) && toyState.preScheduledCol0At < (now - 0.25)) {
+        toyState.preScheduledCol0At = null;
       }
       let scheduledAny = false;
       const isChained = !!(toy.dataset?.prevToyId || toy.dataset?.nextToyId || toy.dataset?.chainParent);
       const justActivated = !!toy.__chainJustActivated;
-      const windowStartToy = baseWindowStart;
+      const windowStartToy = windowStart;
       const windowEndToy = (justActivated && isChained)
         ? Math.max(windowEnd, barStart + barLen)
         : windowEnd;
 
       const barsToSchedule = isChained ? 1 : 2;
+      const minColGapSec = Math.max(0.05, stepLen * 0.5);
       for (let b = 0; b < barsToSchedule; b++) {
         const base = barStart + b * barLen;
         for (let col = 0; col < steps; col++) {
@@ -89,9 +110,14 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01 } 
             }
             continue;
           }
-          const key = `${Math.round(base * 1000)}:${col}`;
+          const key = Math.round(when * 1000);
           if (toyState.scheduled.has(key)) continue;
+          const lastColTime = toyState.lastScheduledByCol.get(col);
+          if (Number.isFinite(lastColTime) && Math.abs(when - lastColTime) < minColGapSec) {
+            continue;
+          }
           toyState.scheduled.add(key);
+          toyState.lastScheduledByCol.set(col, when);
           scheduledAny = true;
           try {
             if (window.__AUDIO_TIMING_PROBE && col === 0) {
@@ -137,10 +163,11 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01 } 
       if (scheduleNextBarCol0) {
         const when = barStart + barLen;
         if (when >= windowStartToy && when <= windowEndToy) {
-          const key = `${Math.round((barStart + barLen) * 1000)}:0`;
+          const key = Math.round(when * 1000);
           if (!toyState.scheduled.has(key)) {
             toyState.scheduled.add(key);
             toyState.preScheduledCol0At = barStart + barLen;
+            toyState.lastScheduledByCol.set(0, when);
             scheduledAny = true;
             try {
               if (window.__AUDIO_TIMING_PROBE) {
