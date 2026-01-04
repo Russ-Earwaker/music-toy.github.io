@@ -1384,10 +1384,17 @@ async function runP7a() {
 async function runP7b() {
   const drawPanels = Array.from(document.querySelectorAll('.toy-panel[data-toy="drawgrid"]'));
   const loopPanels = Array.from(document.querySelectorAll('.toy-panel[data-toy="loopgrid"]'));
+
   const pickSome = (arr) => arr.filter((_, i) => (i % 3) === 0);
-  const drawSilenceIds = pickSome(drawPanels).map(p => p?.id).filter(Boolean);
-  if (drawSilenceIds.length) silenceDrawgridPanels(drawSilenceIds);
-  if (loopPanels.length) silenceLoopgridPanels(pickSome(loopPanels));
+
+  // Drawgrid: truly empty (no strokes, no nodes)
+  const drawEmptyIds = pickSome(drawPanels).map(panelIdSafe).filter(Boolean);
+  if (drawEmptyIds.length) silenceDrawgridPanels(drawEmptyIds);
+
+  // Loopgrid: truly empty (no rendered nodes)
+  const loopEmptyPanels = pickSome(loopPanels);
+  if (loopEmptyPanels.length) emptyLoopgridPanels(loopEmptyPanels);
+
   const panZoom = makePanZoomScript({
     panPx: 2400,
     zoomMin: 0.40,
@@ -2113,6 +2120,68 @@ function silenceLoopgridPanels(panels = []) {
     } catch {}
   }
   return changed;
+}
+
+function panelIdSafe(panel) {
+  return panel?.id || panel?.dataset?.toyid || panel?.dataset?.toyId || '';
+}
+
+function emptyLoopgridPanels(panels = []) {
+  const P = window.Persistence;
+  if (!P || typeof P.getSnapshot !== 'function' || typeof P.applySnapshot !== 'function') return false;
+
+  const ids = new Set((panels || []).map(panelIdSafe).filter(Boolean));
+  if (ids.size === 0) return false;
+
+  let changed = 0;
+  try {
+    const snap = P.getSnapshot();
+    const toys = Array.isArray(snap?.toys) ? snap.toys : [];
+
+    for (const t of toys) {
+      const id = t?.id;
+      if (!id || !ids.has(id)) continue;
+
+      t.state = t.state || {};
+      // Make it truly “empty” (no rendered nodes)
+      t.state.steps = [];
+      t.state.noteIndices = [];
+      t.state.notes = [];
+      changed++;
+    }
+
+    if (!changed) return false;
+
+    const ok = !!P.applySnapshot(snap);
+    if (!ok) return false;
+
+    // Nudge visuals
+    try {
+      window.updateAllToys?.();
+      window.scheduleAllToysRedraw?.();
+      window.requestAnimationFrame?.(() => {
+        window.updateAllToys?.();
+        window.scheduleAllToysRedraw?.();
+      });
+    } catch {}
+
+    // Nudge loopgrid panels directly too (safe, best-effort)
+    try {
+      ids.forEach((id) => {
+        const panel = document.getElementById(id);
+        if (!panel) return;
+        panel.dispatchEvent(new CustomEvent('loopgrid:update', {
+          detail: { reason: 'perf-empty', steps: [], noteIndices: [] },
+          bubbles: true,
+        }));
+      });
+    } catch {}
+
+    try { window.Persistence?.markDirty?.(); } catch {}
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function getChainHeadId(panel) {
@@ -4274,6 +4343,3 @@ try { window.__PerfLab = { show, hide, toggle, buildP2, buildP2d, buildP3, build
 
 
 try { scheduleAutoRun(); } catch {}
-
-
-
