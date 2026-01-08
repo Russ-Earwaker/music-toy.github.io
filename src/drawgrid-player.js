@@ -72,7 +72,7 @@ export function connectDrawGridToPlayer(panel) {
     const map = gridState;
     const nodesArr = (map && Array.isArray(map.nodes)) ? map.nodes : [];
     const currentSteps = Number.isFinite(steps) ? steps : nodesArr.length;
-
+ 
     if (!currentSteps || !nodesArr.length) {
       //console.log('[PLAYER] skip: empty map', { currentSteps, nodesLen: nodesArr.length });
       return;
@@ -81,11 +81,11 @@ export function connectDrawGridToPlayer(panel) {
       //console.log('[PLAYER] skip: out of range col', { col, currentSteps });
       return;
     }
-
+ 
     const activeCol = !!(map.active && map.active[col]);
     const colSet = nodesArr[col] instanceof Set ? nodesArr[col] : new Set();
     const disabledInCol = map.disabled?.[col] || new Set();
-
+ 
     /*console.log('[PLAYER] step', {
       col,
       activeCol,
@@ -93,39 +93,41 @@ export function connectDrawGridToPlayer(panel) {
       nodesInCol: colSet.size,
       disabledCount: disabledInCol.size
     });*/
-
+ 
     if (!activeCol || colSet.size === 0) return;
-
+ 
     let columnTriggered = false;
     for (const row of colSet) {
       if (typeof row !== 'number' || Number.isNaN(row)) continue;
       if (disabledInCol.has(row)) continue;
-
+ 
       if (!columnTriggered) {
         panel.__pulseHighlight = 1.0;
         panel.__pulseRearm = true;
         columnTriggered = true;
       }
-
+ 
       const midiNote = notePalette[row];
       if (midiNote === undefined) {
         console.warn('[PLAYER] row -> midi undefined', { row });
         continue;
       }
-
-      // Log the exact note we’re about to play.
+ 
+      // Log the exact note we're about to play.
       //console.log('[PLAYER] trigger', { instrument, row, midiNote });
-
+ 
       if (audio) playNote(instrument, midiToName(midiNote), when);
     }
   }
 
   panel.__sequencerStep = (col) => {
     const useScheduler = !!window.__NOTE_SCHEDULER_ENABLED;
-    playColumn(col, undefined, { visual: true, audio: !useScheduler });
+    // Guard: if scheduler is enabled, __sequencerSchedule handles audio.
+    // Prevent __sequencerStep from also triggering audio to avoid double-play.
+    const shouldPlayAudio = !useScheduler;
+    playColumn(col, undefined, { visual: true, audio: shouldPlayAudio });
   };
   panel.__sequencerSchedule = (col, when) => {
     if (col >= 0 && col < steps) playColumn(col, when, { visual: false });
   };
 }
-

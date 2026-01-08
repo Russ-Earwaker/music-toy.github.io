@@ -17,6 +17,7 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, l
         preScheduledCol0At: null,
         lastProbeBarIndex: null,
         lastScheduledByCol: new Map(),
+        scheduledCol0InCurrentBar: false,
       });
     }
     return state.get(key);
@@ -65,6 +66,7 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, l
       const toyState = getState(toyId);
       if (toyState.lastBarStart !== barStart) {
         toyState.lastBarStart = barStart;
+        toyState.scheduledCol0InCurrentBar = false; // Reset at bar boundary
         if (toyState.preScheduledCol0At === barStart) {
           const key = Math.round(barStart * 1000);
           toyState.scheduled.add(key);
@@ -98,6 +100,10 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, l
           const when = base + col * stepLen;
           const windowStart = windowStartToy;
           const allowLateCol0 = (col === 0 && when < windowStart && when >= (now - col0GraceSec));
+          // Skip column 0 if already scheduled in this bar (prevents double-scheduling on first activation)
+          if (col === 0 && toyState.scheduledCol0InCurrentBar) {
+            continue;
+          }
           if (!allowLateCol0 && (when < windowStart || when > windowEndToy)) {
             if (window.__AUDIO_TIMING_PROBE && window.__AUDIO_TIMING_VERBOSE && col === 0) {
               console.log('[note-scheduler][probe] skip', {
@@ -119,6 +125,10 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, l
           toyState.scheduled.add(key);
           toyState.lastScheduledByCol.set(col, when);
           scheduledAny = true;
+          // Mark that column 0 was scheduled in this bar
+          if (col === 0) {
+            toyState.scheduledCol0InCurrentBar = true;
+          }
           try {
             if (window.__AUDIO_TIMING_PROBE && col === 0) {
               const probeBarIndex = Math.floor((when - loopStart) / barLen);
@@ -159,7 +169,8 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, l
           } catch {}
         }
       }
-      const scheduleNextBarCol0 = justActivated && isChained && Number.isFinite(phase) && phase > 0.9;
+      // Only pre-schedule if still marked as just activated (hasn't been reset yet)
+      const scheduleNextBarCol0 = justActivated && isChained && Number.isFinite(phase) && phase > 0.9 && toy.__chainJustActivated;
       if (scheduleNextBarCol0) {
         const when = barStart + barLen;
         if (when >= windowStartToy && when <= windowEndToy) {
