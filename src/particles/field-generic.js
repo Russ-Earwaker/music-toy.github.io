@@ -352,6 +352,7 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     h: 1,
     dpr: 1,
     particles: [],
+    particlePool: [],    // Object pool for reusing particle objects
     targetDesired: 0,
     pulseEnergy: 0,
     lodScale: 1,
@@ -381,6 +382,26 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
   const PARTICLE_HIGHLIGHT_SIZE_BUMP = 0.25; // relative radius increase at peak highlight
   const highlightEvents = [];
   // evt: {x,y,radius,t,amp,dur}
+
+  // Object pool helpers for particle recycling (reduces GC pressure)
+  function acquireParticle(x, y, hx, hy, a, rPx, fade = 1, fadeTarget = 1, fadeRate = FADE_IN_RATE) {
+    let p;
+    if (state.particlePool.length > 0) {
+      p = state.particlePool.pop();
+    } else {
+      p = {};
+    }
+    p.x = x; p.y = y; p.hx = hx; p.hy = hy; p.vx = 0; p.vy = 0; p.a = a; p.rPx = rPx;
+    p.fade = fade; p.fadeTarget = fadeTarget; p.fadeRate = fadeRate; p._fadeReturn = false;
+    return p;
+  }
+
+  function releaseParticle(p) {
+    // Reset and return to pool for reuse
+    p.x = 0; p.y = 0; p.hx = 0; p.hy = 0; p.vx = 0; p.vy = 0; p.a = 0; p.rPx = 0;
+    p.fade = 0; p.fadeTarget = 1; p.fadeRate = FADE_IN_RATE; p._fadeReturn = false;
+    state.particlePool.push(p);
+  }
 
   function hashSeed(value) {
     const key = String(value ?? '');
@@ -505,12 +526,8 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
         const y = rng() * state.h;
         const a = rng();
         const rPx = particleRadiusPx(rng);
-        state.particles.push({
-          x, y, hx: x, hy: y, vx: 0, vy: 0, a, rPx,
-          fade: smoothRecover ? 0 : 1,
-          fadeTarget: 1,
-          fadeRate: smoothRecover ? FADE_IN_RATE * 0.6 : FADE_IN_RATE,
-        });
+        const fade = smoothRecover ? 0 : 1;
+        state.particles.push(acquireParticle(x, y, x, y, a, rPx, fade, 1, smoothRecover ? FADE_IN_RATE * 0.6 : FADE_IN_RATE));
       }
     }
     reconcileParticleCount(0, !smoothRecover);
@@ -1013,12 +1030,7 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
         const y = rng() * state.h;
         const a = rng();
         const rPx = particleRadiusPx(rng);
-        state.particles.push({
-          x, y, hx: x, hy: y, vx: 0, vy: 0, a, rPx,
-          fade: 1,
-          fadeTarget: 1,
-          fadeRate: FADE_IN_RATE,
-        });
+        state.particles.push(acquireParticle(x, y, x, y, a, rPx, 1, 1, FADE_IN_RATE));
       }
     }
   }
@@ -1050,12 +1062,7 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
         const y = rng() * state.h;
         const a = rng();
         const rPx = particleRadiusPx(rng);
-        state.particles.push({
-          x, y, hx: x, hy: y, vx: 0, vy: 0, a, rPx,
-          fade: 1,
-          fadeTarget: 1,
-          fadeRate: FADE_IN_RATE,
-        });
+        state.particles.push(acquireParticle(x, y, x, y, a, rPx, 1, 1, FADE_IN_RATE));
       }
       return;
     }
@@ -1076,12 +1083,7 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
         const y = rng() * state.h;
         const a = rng();
         const rPx = particleRadiusPx(rng);
-        state.particles.push({
-          x, y, hx: x, hy: y, vx: 0, vy: 0, a, rPx,
-          fade: 0,
-          fadeTarget: 1,
-          fadeRate: FADE_IN_RATE,
-        });
+        state.particles.push(acquireParticle(x, y, x, y, a, rPx, 0, 1, FADE_IN_RATE));
       }
     } else if (active > desired) {
       const maxTrim = Math.max(MIN_FADE_STEP, Math.round(active * (state.emergencyFade ? 0.2 : MAX_FADE_OUT_FRACTION)));
@@ -1144,18 +1146,23 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
 
   function cleanupFaded() {
     if (!state.particles.length) return;
-    const keep = [];
+    // Compact array in-place to avoid GC from creating new arrays
+    let writeIdx = 0;
     for (let i = 0; i < state.particles.length; i++) {
       const p = state.particles[i];
       if (!p) continue;
       if ((p.fadeTarget ?? 1) === 0 && (p.fade ?? 0) <= 0.01) {
+        // Release particle to pool before skipping
+        releaseParticle(p);
         continue;
       }
-      keep.push(p);
+      if (writeIdx !== i) {
+        state.particles[writeIdx] = p;
+      }
+      writeIdx++;
     }
-    if (keep.length !== state.particles.length) {
-      state.particles.length = 0;
-      Array.prototype.push.apply(state.particles, keep);
+    if (writeIdx < state.particles.length) {
+      state.particles.length = writeIdx;
     }
   }
 
@@ -1296,7 +1303,13 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
   }
 
   function destroy() {
+    // Release all particles back to pool before clearing
+    for (let i = 0; i < state.particles.length; i++) {
+      releaseParticle(state.particles[i]);
+    }
     state.particles.length = 0;
+    // Also clear the pool
+    state.particlePool.length = 0;
     ctx.clearRect(0, 0, state.w, state.h);
   }
 
