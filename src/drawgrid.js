@@ -7,7 +7,7 @@ import { getLoopInfo, isRunning } from './audio-core.js';
 import { onZoomChange, getZoomState, getFrameStartState, onFrameStart, namedZoomListener } from './zoom/ZoomCoordinator.js';
 import { createParticleViewport } from './particles/particle-viewport.js';
 import { createField } from './particles/field-generic.js';
-import { getParticleBudget, getAdaptiveFrameBudget } from './particles/ParticleQuality.js';
+import { getParticleBudget, getAdaptiveFrameBudget, getParticleCap } from './particles/ParticleQuality.js';
 import { overviewMode } from './overview-mode.js';
 import { boardScale as boardScaleHelper } from './board-scale-helpers.js';
 import { beginFrameLayoutCache, getRect } from './layout-cache.js';
@@ -828,9 +828,98 @@ function withLogicalSpace(ctx, fn) {
   }
 }
 
+// Playhead sprite caching - improved with warming
 const __dgPlayheadBandSpriteCache = new Map();
 const __dgPlayheadLineSpriteCache = new Map();
 const __dgPlayheadCompositeSpriteCache = new Map();
+const PLAYHEAD_CACHE_MAX_SIZE = 192; // Increased from 96 for better hit rate with many toys
+
+// Cache warming configuration
+const PLAYHEAD_CACHE_WARMING_ENABLED = true;
+const PLAYHEAD_COMMON_SIZES = [50, 100, 150, 200, 250, 300, 400, 500];
+const PLAYHEAD_COMMON_HEIGHTS = [100, 150, 200, 250, 300, 400];
+
+// Idle detection for cache warming
+let __dgLastFrameTime = 0;
+let __dgIdleFrameCount = 0;
+const __DG_IDLE_FRAMES_THRESHOLD = 30; // Consider idle after 30 consecutive fast frames
+const __DG_IDLE_TIME_BUDGET_MS = 2; // Max 2ms per frame for warming
+
+// Check if we're in a low-activity period suitable for cache warming
+function __dgIsLowActivity() {
+  try {
+    // Skip if gestures are active
+    if (typeof __dgIsGesturing === 'function' && __dgIsGesturing()) return false;
+    
+    // Skip if FPS is too low
+    const fps = Number.isFinite(window.__MT_FPS) ? window.__MT_FPS : 
+                (Number.isFinite(window.__MT_SM_FPS) ? window.__MT_SM_FPS : 60);
+    if (fps < 45) return false;
+    
+    // Check visible toy count - warming only useful when not overwhelmed
+    const visibleCount = Number.isFinite(globalDrawgridState?.visibleCount) 
+      ? globalDrawgridState.visibleCount : 0;
+    if (visibleCount > 32) return false;
+    
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Warm playhead cache during idle periods
+function __dgWarmPlayheadCache() {
+  if (!PLAYHEAD_CACHE_WARMING_ENABLED) return;
+  if (!__dgIsLowActivity()) return;
+  
+  const startTime = typeof performance !== 'undefined' && performance.now 
+    ? performance.now() : Date.now();
+  
+  // Warm line sprites for common heights
+  for (const height of PLAYHEAD_COMMON_HEIGHTS) {
+    const elapsed = (typeof performance !== 'undefined' && performance.now 
+      ? performance.now() : Date.now()) - startTime;
+    if (elapsed >= __DG_IDLE_TIME_BUDGET_MS) break;
+    
+    for (const hue of PLAYHEAD_HUES_LINE1) {
+      getPlayheadLineSprite(height, hue);
+    }
+  }
+  
+  // Warm band sprites for common sizes
+  for (const width of PLAYHEAD_COMMON_SIZES) {
+    const elapsed = (typeof performance !== 'undefined' && performance.now 
+      ? performance.now() : Date.now()) - startTime;
+    if (elapsed >= __DG_IDLE_TIME_BUDGET_MS) break;
+    
+    for (const height of [100, 150, 200]) {
+      for (const hue of PLAYHEAD_HUES_LINE1) {
+        getPlayheadBandSprite(width, height, hue);
+      }
+    }
+  }
+}
+
+// Idle callback for cache warming - call this from the main animation loop
+function __dgIdleCallback() {
+  const now = typeof performance !== 'undefined' && performance.now 
+    ? performance.now() : Date.now();
+  const frameDelta = now - __dgLastFrameTime;
+  
+  // Reset idle counter if frame took too long
+  if (frameDelta > 32) { // More than ~30fps frame time
+    __dgIdleFrameCount = 0;
+  } else {
+    __dgIdleFrameCount++;
+  }
+  
+  __dgLastFrameTime = now;
+  
+  // Only warm cache when we've been idle for a while
+  if (__dgIdleFrameCount >= __DG_IDLE_FRAMES_THRESHOLD) {
+    __dgWarmPlayheadCache();
+  }
+}
 function quantizeHue(hue, step = 6) {
   const h = Number.isFinite(hue) ? hue : 0;
   const s = Number.isFinite(step) && step > 0 ? step : 1;
@@ -849,8 +938,15 @@ function __dgCachePlayheadSprite(map, key, build) {
   if (sprite) return sprite;
   sprite = build();
   map.set(key, sprite);
-  if (map.size > 24) {
+  if (map.size > PLAYHEAD_CACHE_MAX_SIZE) {
+    // Use LRU-like eviction: clear oldest entries by recreating the map
+    const entries = Array.from(map.entries());
+    // Keep the most recent PLAYHEAD_CACHE_MAX_SIZE entries
+    const toKeep = entries.slice(-PLAYHEAD_CACHE_MAX_SIZE);
     map.clear();
+    for (const [k, v] of toKeep) {
+      map.set(k, v);
+    }
   }
   return sprite;
 }
@@ -2480,8 +2576,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       })();
 
       // Base config values for a "nice" look on fast machines.
-      const BASE_CAP = 2200;
-      const cap = Math.max(200, Math.floor(BASE_CAP * (budget.maxCountScale ?? 1)));
+      // Use the new getParticleCap() function for toy-count aware scaling.
+      const cap = getParticleCap(2200);
 
       // Nudge size slightly with quality so low tiers feel less dense and noisy.
       const baseSize = 1.4;

@@ -24,6 +24,7 @@ import {
   screenRadiusToWorld,
   seededRandomFactory,
 } from './particle-density.js';
+import { getParticleCap } from './ParticleQuality.js';
 import { makeDebugLogger } from '../debug-flags.js';
 
 const fieldLog = makeDebugLogger('mt_debug_logs', 'log');
@@ -70,6 +71,13 @@ function isZoomGesturing() {
 }
 
 function readPerfBudgetMul() {
+  // Prefer new ParticleQuality API if available
+  try {
+    if (window.__ParticleQuality && typeof window.__ParticleQuality.budgetMul === 'number' && Number.isFinite(window.__ParticleQuality.budgetMul)) {
+      return Math.max(0, window.__ParticleQuality.budgetMul);
+    }
+  } catch {}
+  // Fallback to legacy window.__PERF_PARTICLES
   try {
     const v = window.__PERF_PARTICLES?.budgetMul;
     return (typeof v === 'number' && Number.isFinite(v)) ? Math.max(0, v) : 1;
@@ -231,6 +239,13 @@ function getVisibleToyCountCached() {
 }
 
 function readPerfFpsHint() {
+  // Try new ParticleQuality API first
+  try {
+    if (window.__ParticleQuality && typeof window.__ParticleQuality.fpsValue === 'number' && Number.isFinite(window.__ParticleQuality.fpsValue)) {
+      return window.__ParticleQuality.fpsValue;
+    }
+  } catch {}
+  // Fallback to legacy APIs
   try {
     const auto = window.__PERF_PARTICLES?.__gestureAuto;
     if (auto && Number.isFinite(auto.fps)) return auto.fps;
@@ -238,6 +253,36 @@ function readPerfFpsHint() {
   try {
     const v = window.__dgFpsValue;
     if (Number.isFinite(v)) return v;
+  } catch {}
+  return null;
+}
+
+function readMemoryPressureLevel() {
+  // Read from new ParticleQuality API
+  try {
+    if (window.__ParticleQuality && typeof window.__ParticleQuality.memoryPressureLevel === 'number') {
+      return Math.max(0, Math.min(3, window.__ParticleQuality.memoryPressureLevel));
+    }
+  } catch {}
+  // Fallback: compute from performance.memory if available
+  try {
+    if (performance?.memory?.usedJSHeapSize && performance?.memory?.jsHeapSizeLimit) {
+      const ratio = performance.memory.usedJSHeapSize / performance.memory.jsHeapSizeLimit;
+      if (ratio > 0.85) return 3;
+      if (ratio > 0.70) return 2;
+      if (ratio > 0.55) return 1;
+      return 0;
+    }
+  } catch {}
+  return 0;
+}
+
+function readPerfFpsBuckets() {
+  // Get FPS bucket info from ParticleQuality API
+  try {
+    if (window.__ParticleQuality && typeof window.__ParticleQuality.getFpsBuckets === 'function') {
+      return window.__ParticleQuality.getFpsBuckets();
+    }
   } catch {}
   return null;
 }
@@ -325,7 +370,7 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
       density: opts.density ?? 0.0002,
       layoutOverrides: opts.layout && typeof opts.layout === 'object' ? opts.layout : null,
       seed: opts.seed ?? 'particle-field',
-      cap: opts.cap ?? 2200,
+      cap: opts.cap ?? getParticleCap(),
       noise: STATIC_MODE ? 0.0 : (opts.noise ?? 0.0),
       kick: STATIC_MODE ? 0.0 : (opts.kick ?? 0.0),
       kickDecay: opts.kickDecay ?? 6.0,
@@ -846,6 +891,21 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
         });
     const gestureActive = isZoomGesturing();
     const gestureThrottlingActive = false;
+    
+    // Get memory pressure level and FPS buckets for adaptive behavior
+    const memoryPressureLevel = readMemoryPressureLevel();
+    const fpsBuckets = readPerfFpsBuckets();
+    
+    // Adjust emergency fade behavior based on memory pressure
+    let memoryAdjustedFadeSeconds = state.emergencyFadeSeconds;
+    if (state.emergencyFade && memoryPressureLevel >= 2) {
+      // Critical memory pressure: reduce fade time for faster recovery
+      memoryAdjustedFadeSeconds = Math.max(1.5, state.emergencyFadeSeconds * 0.5);
+    } else if (state.emergencyFade && memoryPressureLevel >= 1) {
+      // Moderate memory pressure: slightly reduce fade time
+      memoryAdjustedFadeSeconds = Math.max(2.0, state.emergencyFadeSeconds * 0.75);
+    }
+    
     if (state.emergencyFade) {
       // Allow emergency fades to progress even during heavy gestures.
       state.gestureSkip = 0;
@@ -899,7 +959,11 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     effectiveDt = Math.min(0.12, effectiveDt); // avoid huge leaps when heavily throttled
 
     // During active zoom gestures, throttle particle physics to cut CPU while keeping visuals.
-    if (gestureThrottlingActive && !state.emergencyFade) {
+    // Memory pressure increases throttling aggressiveness
+    const shouldThrottle = gestureThrottlingActive && !state.emergencyFade;
+    const memoryThrottleBoost = memoryPressureLevel >= 2 ? 1 : (memoryPressureLevel >= 1 ? 0 : 0);
+    
+    if (shouldThrottle) {
       state.gestureSkip = (state.gestureSkip + 1) % 2; // run physics every other frame
       if (state.gestureSkip !== 0) {
         // On non-physics frames, do minimal work; only do the heavier loops when we're going to draw.

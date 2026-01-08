@@ -14,7 +14,7 @@ import './rippler-init.js';
 import './tutorial.js';
 import { startParticleStream } from './tutorial-fx.js';
 import './ui-highlights.js';
-import { updateParticleQualityFromFps } from './particles/ParticleQuality.js';
+import { updateParticleQualityFromFps, setActiveToyCount } from './particles/ParticleQuality.js';
 // import { createBouncer } from './bouncer.main.js'; // This is now handled by bouncer-init.js
 import './debug-reflow.js';
 import { initDrawGrid } from './drawgrid-init.js';
@@ -1119,9 +1119,10 @@ function initFpsHud() {
         // ignore
       }
 
-      // Feed the shared particle quality system.
+      // Feed the shared particle quality system with FPS and toy count.
       try {
-        updateParticleQualityFromFps(__fpsValue);
+        const toyCount = document.querySelectorAll('.toy-panel').length || 1;
+        updateParticleQualityFromFps(__fpsValue, { toyCount });
       } catch (err) {
         // ignore – debug-only feature should never crash the app
       }
