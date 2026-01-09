@@ -55,6 +55,7 @@ import { createDgFlowDebug } from './drawgrid/dg-flow-debug.js';
 import { createDgHydrationHelpers } from './drawgrid/dg-hydration-helpers.js';
 import { createDgParticles } from './drawgrid/dg-particles.js';
 import { createDgFieldForces } from './drawgrid/dg-field-forces.js';
+import { createDgRandomizers } from './drawgrid/dg-randomizers.js';
 import {
   DRAWGRID_ENABLE_PARTICLE_FIELD,
   DG_ALPHA_DEBUG,
@@ -864,6 +865,93 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     ZOOM_STALL_MS,
   });
   const P = createDgParticles(getParticleState);
+
+  function makeFlowCtx() {
+    return {
+      panel,
+      paint,
+      backCanvas,
+      flashCanvas,
+      flashBackCanvas,
+      activeFlashCanvas: (typeof getActiveFlashCanvas === 'function') ? getActiveFlashCanvas() : null,
+      strokes,
+      usingBackBuffers,
+      paintRev: __dgPaintRev,
+      compositeDirty: panel.__dgSingleCompositeDirty,
+      hasOverlayStrokesCached,
+    };
+  }
+
+  const getRandomizerState = () => ({
+    get panel() { return panel; },
+    get DG_SINGLE_CANVAS() { return DG_SINGLE_CANVAS; },
+    get isPanelVisible() { return isPanelVisible; },
+    get cols() { return cols; },
+    get strokes() { return strokes; },
+    set strokes(value) { strokes = value; },
+    get currentMap() { return currentMap; },
+    set currentMap(value) { currentMap = value; },
+    get persistentDisabled() { return persistentDisabled; },
+    set persistentDisabled(value) { persistentDisabled = value; },
+    get pctx() { return pctx; },
+    set pctx(value) { pctx = value; },
+    get drawFullStroke() { return drawFullStroke; },
+    get regenerateMapFromStrokes() { return regenerateMapFromStrokes; },
+    get drawGrid() { return drawGrid; },
+    get drawNodes() { return drawNodes; },
+    get emitDrawgridUpdate() { return emitDrawgridUpdate; },
+    get stopAutoGhostGuide() { return stopAutoGhostGuide; },
+    get updateDrawLabel() { return updateDrawLabel; },
+    get updateGeneratorButtons() { return updateGeneratorButtons; },
+    get __dgMarkSingleCanvasDirty() { return __dgMarkSingleCanvasDirty; },
+    get compositeSingleCanvas() { return compositeSingleCanvas; },
+    get markUserChange() { return markUserChange; },
+    get FD() { return FD; },
+    get makeFlowCtx() { return makeFlowCtx; },
+    get dgTraceWarn() { return dgTraceWarn; },
+    get dgTraceLog() { return dgTraceLog; },
+    get gridArea() { return gridArea; },
+    get topPad() { return topPad; },
+    get ch() { return ch; },
+    get rows() { return rows; },
+    get cw() { return cw; },
+    get getActivePaintCtx() { return getActivePaintCtx; },
+    get resetPaintBlend() { return resetPaintBlend; },
+    get setDrawingState() { return setDrawingState; },
+    get R() { return R; },
+    get emitDG() { return emitDG; },
+    get nctx() { return nctx; },
+    get fctx() { return fctx; },
+    get getActiveFlashCanvas() { return getActiveFlashCanvas; },
+    get flashBackCtx() { return flashBackCtx; },
+    get flashFrontCtx() { return flashFrontCtx; },
+    get backCtx() { return backCtx; },
+    get frontCtx() { return frontCtx; },
+    get markFlashLayerCleared() { return markFlashLayerCleared; },
+    get __dgMarkSingleCanvasOverlayDirty() { return __dgMarkSingleCanvasOverlayDirty; },
+    get __dgOverlayStrokeListCache() { return __dgOverlayStrokeListCache; },
+    set __dgOverlayStrokeListCache(value) { __dgOverlayStrokeListCache = value; },
+    get __dgOverlayStrokeCache() { return __dgOverlayStrokeCache; },
+    set __dgOverlayStrokeCache(value) { __dgOverlayStrokeCache = value; },
+    get __dgSkipSwapsDuringDrag() { return __dgSkipSwapsDuringDrag; },
+    set __dgSkipSwapsDuringDrag(value) { __dgSkipSwapsDuringDrag = value; },
+    get cur() { return cur; },
+    set cur(value) { cur = value; },
+    get pendingNodeTap() { return pendingNodeTap; },
+    set pendingNodeTap(value) { pendingNodeTap = value; },
+    get nodeGroupMap() { return nodeGroupMap; },
+    set nodeGroupMap(value) { nodeGroupMap = value; },
+    get manualOverrides() { return manualOverrides; },
+    set manualOverrides(value) { manualOverrides = value; },
+    get previewGid() { return previewGid; },
+    set previewGid(value) { previewGid = value; },
+    get nextDrawTarget() { return nextDrawTarget; },
+    set nextDrawTarget(value) { nextDrawTarget = value; },
+    get clearAndRedrawFromStrokes() { return clearAndRedrawFromStrokes; },
+    get usingBackBuffers() { return usingBackBuffers; },
+  });
+
+  const RNG = createDgRandomizers(getRandomizerState);
 
   function __dgGridReady() {
     return !!(gridArea && gridArea.w > 0 && gridArea.h > 0 && cw > 0 && ch > 0);
@@ -2211,7 +2299,6 @@ function ensureSizeReady({ force = false } = {}) {
         const startX = area?.x || 0;
         const xToy = startX + clampedProgress * usableWidth;
         FF.pushHeaderSweepAt(xToy);
-        dbgPoke('header');
       } catch {}
     });
   }
@@ -3812,7 +3899,6 @@ function copyCanvas(backCtx, frontCtx) {
     try {
       const xToy = x + w * 0.5;
       FF.pushHeaderSweepAt(xToy, { lineWidthPx: w });
-      dbgPoke('header');
     } catch {}
     gctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
     gctx.fillRect(x, gridArea.y, w, gridArea.h);
@@ -4899,7 +4985,6 @@ function copyCanvas(backCtx, frontCtx) {
         FF.pokeAlongStrokeBand(x0, y0, x0, y0, lw, DG_KNOCK.ghostTrail);
         const pushRadius = baseRadius * 1.5;
         FF.pokeFieldToy('pointerDown', x0, y0, pushRadius, DG_KNOCK.ghostTrail.strength, { mode: 'plow' });
-        dbgPoke('pointerDown');
       } catch {}
       cur = {
         pts:[paintStart],
@@ -7152,7 +7237,6 @@ function copyCanvas(backCtx, frontCtx) {
               sweepEvery * (baseSweepMaxSteps / Math.max(1, sweepMaxSteps)) * 1.35
             );
             FF.pushHeaderSweepAt(playheadX, { lineWidthPx: gradientWidth, maxSteps: sweepMaxSteps, forceMul });
-            dbgPoke('header');
           }
         } catch (e) { /* fail silently */ }
 
@@ -7799,35 +7883,6 @@ function copyCanvas(backCtx, frontCtx) {
   `;
   panel.appendChild(style);
 
-  function createRandomLineStroke() {
-    const leftX = gridArea.x;
-    const rightX = gridArea.x + gridArea.w;
-    const minY = gridArea.y + topPad + ch; // Inset by one full row from the top
-    const maxY = gridArea.y + topPad + (rows - 1) * ch; // Inset by one full row from the bottom
-    const K = Math.max(6, Math.round(gridArea.w / Math.max(1, cw*0.9))); // control points
-    const cps = [];
-    for (let i=0;i<K;i++){
-      const t = i/(K-1);
-      const x = leftX + (rightX-leftX)*t;
-      const y = minY + Math.random() * (maxY - minY);
-      cps.push({ x, y });
-    }
-    function cr(p0,p1,p2,p3,t){ const t2=t*t, t3=t2*t; const a = (-t3+2*t2-t)/2, b = (3*t3-5*t2+2)/2, c = (-3*t3+4*t2+t)/2, d = (t3-t2)/2; return a*p0 + b*p1 + c*p2 + d*p3; }
-    const pts = [];
-    const samplesPerSeg = Math.max(8, Math.round(cw/3));
-    for (let i=0;i<cps.length-1;i++){
-      const p0 = cps[Math.max(0,i-1)], p1=cps[i], p2=cps[i+1], p3=cps[Math.min(cps.length-1,i+2)];
-      for (let s=0;s<=samplesPerSeg;s++){
-        const t = s/samplesPerSeg;
-        const x = cr(p0.x, p1.x, p2.x, p3.x, t);
-        let y = cr(p0.y, p1.y, p2.y, p3.y, t);
-        y = Math.max(minY, Math.min(maxY, y)); // Clamp to the padded area
-        pts.push({ x, y });
-      }
-    }
-    return { pts, color: '#fff', isSpecial: true, generatorId: 1 };
-  }
-
   panel.addEventListener('toy-clear', (event) => {
     // Ignore clears that were dispatched on other panels (defensive guard)
     if (event?.target !== panel) return;
@@ -7840,237 +7895,6 @@ function copyCanvas(backCtx, frontCtx) {
     api.clear({ user, reason });
   });
 
-  function handleRandomize() {
-    if (typeof window !== 'undefined' && window.__DG_DEBUG_DRAWFLOW) {
-      console.log('[DG][flow] handleRandomize:enter', { panelId: panel?.id || null });
-    }
-    try {
-      const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-      panel.__dgDebugOverlayUntil = now + 1200;
-      panel.__dgDebugOverlayLastLog = 0;
-      panel.__dgDebugOverlayLogged = false;
-    } catch {}
-    const makeFlowCtx = () => ({
-      panel,
-      paint,
-      backCanvas,
-      flashCanvas,
-      flashBackCanvas,
-      activeFlashCanvas: (typeof getActiveFlashCanvas === 'function') ? getActiveFlashCanvas() : null,
-      strokes,
-      usingBackBuffers,
-      paintRev: __dgPaintRev,
-      compositeDirty: panel.__dgSingleCompositeDirty,
-      hasOverlayStrokesCached,
-    });
-    FD.flowLog('randomize:start', { panelId: panel?.id || null, usingBackBuffers });
-    FD.flowState('randomize:start', makeFlowCtx());
-    try { markUserChange('randomize'); } catch (err) {
-      if (typeof window !== 'undefined' && window.__DG_DEBUG_DRAWFLOW) {
-        console.warn('[DG][flow] randomize:markUserChange failed', err);
-      }
-    }
-    // Ensure no active draw state blocks clears or future drawing.
-    try { setDrawingState(false); } catch {}
-    __dgSkipSwapsDuringDrag = false;
-    cur = null;
-    pendingNodeTap = null;
-    // Ensure data structures exist
-    if (!currentMap) {
-      currentMap = { active: Array(cols).fill(false), nodes: Array.from({length:cols},()=>new Set()), disabled: Array.from({length:cols},()=>new Set()) };
-    }
-
-    pctx = getActivePaintCtx();
-    resetPaintBlend(pctx);
-    // Clear all existing lines and nodes
-    strokes = [];
-    nodeGroupMap = Array.from({ length: cols }, () => new Map());
-    manualOverrides = Array.from({ length: cols }, () => new Set());
-    persistentDisabled = Array.from({ length: cols }, () => new Set());
-    R.clearCanvas(pctx);
-    // Clear both paint buffers to avoid stale composites across buffer flips.
-    try { if (backCtx && pctx !== backCtx) R.clearCanvas(backCtx); } catch {}
-    try { if (frontCtx && pctx !== frontCtx) R.clearCanvas(frontCtx); } catch {}
-    emitDG('paint-clear', { reason: 'randomize' });
-    R.clearCanvas(nctx);
-    try {
-      const flashSurface = getActiveFlashCanvas();
-      R.resetCtx(fctx);
-      R.withLogicalSpace(fctx, () => {
-        const { x, y, w, h } = R.getOverlayClearRect({
-          canvas: flashSurface || fctx.canvas,
-          pad: R.getOverlayClearPad(),
-          allowFull: !!panel.__dgFlashOverlayOutOfGrid,
-          gridArea,
-        });
-        fctx.clearRect(x, y, w, h);
-      });
-      // Clear both flash buffers so no stale overlay survives buffer toggles.
-      try {
-        if (flashBackCtx && flashBackCtx !== fctx) {
-          R.resetCtx(flashBackCtx);
-          R.withLogicalSpace(flashBackCtx, () => {
-            const { x, y, w, h } = R.getOverlayClearRect({
-              canvas: flashBackCtx.canvas,
-              pad: R.getOverlayClearPad(),
-              allowFull: !!panel.__dgFlashOverlayOutOfGrid,
-              gridArea,
-            });
-            flashBackCtx.clearRect(x, y, w, h);
-          });
-        }
-        if (flashFrontCtx && flashFrontCtx !== fctx) {
-          R.resetCtx(flashFrontCtx);
-          R.withLogicalSpace(flashFrontCtx, () => {
-            const { x, y, w, h } = R.getOverlayClearRect({
-              canvas: flashFrontCtx.canvas,
-              pad: R.getOverlayClearPad(),
-              allowFull: !!panel.__dgFlashOverlayOutOfGrid,
-              gridArea,
-            });
-            flashFrontCtx.clearRect(x, y, w, h);
-          });
-        }
-      } catch {}
-      markFlashLayerCleared();
-      panel.__dgFlashOverlayOutOfGrid = false;
-      __dgOverlayStrokeListCache = { paintRev: -1, len: 0, special: [], colorized: [], outOfGrid: false };
-      __dgOverlayStrokeCache = { value: false, len: 0, ts: 0 };
-      __dgMarkSingleCanvasOverlayDirty(panel);
-    } catch {}
-    try { previewGid = null; } catch {}
-    try { nextDrawTarget = null; } catch {}
-
-    // Build a smooth, dramatic wiggly line across the full grid height using Catmull-Rom interpolation
-    try {
-      const stroke = createRandomLineStroke();
-      strokes.push(stroke);
-      drawFullStroke(pctx, stroke);
-      regenerateMapFromStrokes();
- 
-      // After generating the line, randomly deactivate some columns to create rests.
-      // This addresses the user's feedback that "Random" no longer turns notes off.
-      if (currentMap && currentMap.nodes) {
-        for (let c = 0; c < cols; c++) {
-          if (Math.random() < 0.35) {
-            // Deactivate the column by disabling all of its nodes. This state
-            // is preserved by the `persistentDisabled` mechanism.
-            if (currentMap.nodes[c]?.size > 0) {
-              for (const r of currentMap.nodes[c]) persistentDisabled[c].add(r);
-              currentMap.active[c] = false;
-            }
-          }
-        }
-      }
-    } catch(e){}
-    drawGrid();
-    drawNodes(currentMap.nodes);
-    emitDrawgridUpdate({ activityOnly: false });
-    stopAutoGhostGuide({ immediate: true });
-    updateDrawLabel(false);
-    __dgMarkSingleCanvasDirty(panel);
-    if (DG_SINGLE_CANVAS && isPanelVisible) {
-      try { compositeSingleCanvas(); } catch {}
-      panel.__dgSingleCompositeDirty = false;
-    }
-    FD.flowLog('randomize:end', {
-      panelId: panel?.id || null,
-      usingBackBuffers,
-      gridHasPainted: !!panel.__dgGridHasPainted,
-      flashEmpty: !!panel.__dgFlashLayerEmpty,
-    });
-    FD.flowState('randomize:end', makeFlowCtx());
-  }
-
-  function handleRandomizeBlocks() {
-    FD.flowLog('randomize-blocks:start');
-    markUserChange('randomize-blocks');
-    if (!currentMap || !currentMap.nodes) return;
-
-    for (let c = 0; c < cols; c++) {
-        if (currentMap.nodes[c]?.size > 0) {
-            // For each node (which is a row `r` in a column `c`) that exists...
-            currentMap.nodes[c].forEach(r => {
-                // ...randomly decide whether to disable it or not.
-                if (Math.random() < 0.5) {
-                    persistentDisabled[c].add(r); // Disable the node at (c, r)
-                } else {
-                    persistentDisabled[c].delete(r); // Enable the node at (c, r)
-                }
-            });
-
-            // Recompute active state for the column
-            const anyOn = Array.from(currentMap.nodes[c]).some(r => !persistentDisabled[c].has(r));
-            currentMap.active[c] = anyOn;
-            currentMap.disabled[c] = persistentDisabled[c];
-        }
-    }
-
-    drawGrid();
-    drawNodes(currentMap.nodes);
-    emitDrawgridUpdate({ activityOnly: false });
-    stopAutoGhostGuide({ immediate: true });
-    updateDrawLabel(false);
-    __dgMarkSingleCanvasDirty(panel);
-    if (DG_SINGLE_CANVAS && isPanelVisible) {
-      try { compositeSingleCanvas(); } catch {}
-      panel.__dgSingleCompositeDirty = false;
-    }
-    FD.flowLog('randomize-blocks:end');
-  }
-
-  function handleRandomizeNotes() {
-    FD.flowLog('randomize-notes:start');
-    markUserChange('randomize-notes');
-    // Save the current active state before regenerating lines
-    const oldActive = currentMap?.active ? [...currentMap.active] : null;
-
-    const existingGenIds = new Set();
-    strokes.forEach(s => {
-      if (s.generatorId === 1 || s.generatorId === 2) { existingGenIds.add(s.generatorId); }
-    });
-    // If no generator lines exist, create Line 1. Don't call handleRandomize()
-    // as that would clear decorative strokes and their disabled states.
-    if (existingGenIds.size === 0) {
-      existingGenIds.add(1);
-    }
-    strokes = strokes.filter(s => s.generatorId !== 1 && s.generatorId !== 2);
-    const newGenStrokes = [];
-    existingGenIds.forEach(gid => {
-      const newStroke = createRandomLineStroke();
-      newStroke.generatorId = gid;
-      newStroke.justCreated = true; // Mark as new to avoid old erasures
-      strokes.push(newStroke);
-      newGenStrokes.push(newStroke);
-    });
-    clearAndRedrawFromStrokes(null, 'randomize-notes');
-    // After drawing, unmark the new strokes so they behave normally.
-    newGenStrokes.forEach(s => delete s.justCreated);
-
-    // After regenerating, restore the old active state and update disabled nodes to match.
-    if (currentMap && oldActive) {
-        currentMap.active = oldActive;
-        // Rebuild the disabled sets based on the restored active state.
-        for (let c = 0; c < cols; c++) {
-            if (oldActive[c]) {
-                currentMap.disabled[c].clear(); // If column was active, ensure all its new nodes are enabled.
-            } else {
-                currentMap.nodes[c].forEach(r => currentMap.disabled[c].add(r)); // If column was inactive, disable all its new nodes.
-            }
-        }
-        drawGrid();
-        drawNodes(currentMap.nodes);
-        emitDrawgridUpdate({ activityOnly: false });
-    }
-    stopAutoGhostGuide({ immediate: true });
-    updateDrawLabel(false);
-    __dgMarkSingleCanvasDirty(panel);
-    if (DG_SINGLE_CANVAS && isPanelVisible) {
-      try { compositeSingleCanvas(); } catch {}
-      panel.__dgSingleCompositeDirty = false;
-    }
-    FD.flowLog('randomize-notes:end');
-  }
   function handleToyRandomEvent(e, kind) {
     try {
       if (e && e.__dgHandled) return;
@@ -8097,15 +7921,15 @@ function copyCanvas(backCtx, frontCtx) {
       console.log('[DG][flow] handleToyRandomEvent:call', {
         kind,
         panelId: panel?.id || null,
-        hasRandomize: typeof handleRandomize === 'function',
-        hasBlocks: typeof handleRandomizeBlocks === 'function',
-        hasNotes: typeof handleRandomizeNotes === 'function',
+        hasRandomize: typeof RNG?.handleRandomizeLine === 'function',
+        hasBlocks: typeof RNG?.handleRandomizeBlocks === 'function',
+        hasNotes: typeof RNG?.handleRandomizeNotes === 'function',
       });
     }
     try {
-      if (kind === 'toy-random') handleRandomize();
-      else if (kind === 'toy-random-blocks') handleRandomizeBlocks();
-      else if (kind === 'toy-random-notes') handleRandomizeNotes();
+      if (kind === 'toy-random') RNG.handleRandomizeLine();
+      else if (kind === 'toy-random-blocks') RNG.handleRandomizeBlocks();
+      else if (kind === 'toy-random-notes') RNG.handleRandomizeNotes();
       if (typeof window !== 'undefined' && window.__DG_DEBUG_DRAWFLOW) {
         console.log('[DG][flow] handleToyRandomEvent:done', {
           kind,
