@@ -54,6 +54,7 @@ import { createDgFlowTrace } from './drawgrid/dg-flow-trace.js';
 import { createDgFlowDebug } from './drawgrid/dg-flow-debug.js';
 import { createDgHydrationHelpers } from './drawgrid/dg-hydration-helpers.js';
 import { createDgParticles } from './drawgrid/dg-particles.js';
+import { createDgFieldForces } from './drawgrid/dg-field-forces.js';
 import {
   DRAWGRID_ENABLE_PARTICLE_FIELD,
   DG_ALPHA_DEBUG,
@@ -815,6 +816,33 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     __dgDeferUntilTs,
   });
   const HY = createDgHydrationHelpers(getHydrationState);
+  const getFieldForceState = () => ({
+    panel,
+    R,
+    dgField,
+    dgMap,
+    gridArea,
+    gridAreaLogical,
+    cssW,
+    cssH,
+    DG_KNOCK,
+    DG_DEBUG,
+    HeaderSweepForce,
+    headerSweepDirX,
+    ghostCtx,
+    getOverlayZoomSnapshot,
+    headerPushSuppressed,
+    dbgPoke,
+    knockLettersAt,
+    __auditZoomSizes,
+    drawgridLog,
+    __dgLogFirstPoke,
+    cw,
+    cols,
+    get __dgParticlePokeTs() { return __dgParticlePokeTs; },
+    set __dgParticlePokeTs(v) { __dgParticlePokeTs = v; },
+  });
+  const FF = createDgFieldForces(getFieldForceState);
   const getParticleState = () => ({
     panel,
     wrap,
@@ -951,250 +979,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     }
   }
   updateFlatLayerVisibility();
-
-  function pokeFieldToy(source, xToy, yToy, radiusToy, strength, extra = {}) {
-    try {
-      const config = DG_KNOCK[source] || {};
-
-      const zoomSnapshot = typeof getOverlayZoomSnapshot === 'function'
-        ? getOverlayZoomSnapshot()
-        : null;
-      const zoomScale = zoomSnapshot?.scale || 1;
-
-      // radiusToy already defined in toy/world space; the field converts to CSS when needed.
-      const radius = radiusToy;
-
-      const strengthToy = strength * (config.strengthMul ?? 1);
-
-      if (!Number.isFinite(radius) || radius <= 0) {
-        console.warn('[DG][pokeFieldToy] skipping invalid radius', {
-          source,
-          radiusToy,
-          radius,
-          xToy,
-          yToy,
-        });
-        return;
-      }
-
-      if (DG_DEBUG && DG_DEBUG.poke) {
-        console.log('[DG][POKE][DEBUG]', {
-          source,
-          zoomScale,
-          xToy,
-          yToy,
-          radiusToy,
-          radiusWorld: radius,
-          radiusPx: radius * zoomScale,
-          strength,
-          strengthToy,
-          extra,
-        });
-      }
-
-      __dgParticlePokeTs = (typeof performance !== 'undefined' && performance.now)
-        ? performance.now()
-        : Date.now();
-
-      if (typeof window !== 'undefined' && window.DG_ZOOM_AUDIT) {
-        try {
-          // Visual crosshair at the toy coordinate we’re poking
-          R.withLogicalSpace(ghostCtx, () => {
-            if (!ghostCtx) return;
-            ghostCtx.save();
-            ghostCtx.strokeStyle = 'rgba(255,80,80,0.9)';
-            ghostCtx.lineWidth = 1;
-            ghostCtx.beginPath();
-            ghostCtx.moveTo(xToy - 6, yToy);
-            ghostCtx.lineTo(xToy + 6, yToy);
-            ghostCtx.moveTo(xToy, yToy - 6);
-            ghostCtx.lineTo(xToy, yToy + 6);
-            ghostCtx.stroke();
-            ghostCtx.restore();
-          });
-        } catch {}
-
-        const camSnapshot = getOverlayZoomSnapshot();
-        const auditZoom = camSnapshot?.scale || 1;
-        const view = dgMap?.size ? dgMap.size() : null;
-        /*console.log('[DG][POKE]', {
-          source,
-          zoomScale: auditZoom,
-          xToy,
-          yToy,
-          radiusToy,
-          radiusWorld: radius,
-          radiusPx: radius * auditZoom,
-          strength,
-          strengthToy,
-          gridArea: gridArea && { ...gridArea },
-          gridAreaLogical: { ...gridAreaLogical },
-          viewportSize: view,
-        });*/
-      }
-
-      dgField?.poke?.(xToy, yToy, {
-        radius,
-        strength: strengthToy,
-        ...extra,
-      });
-      dbgPoke(source || 'poke');
-    } catch (err) {
-      console.warn('[DG][pokeFieldToy] failed', { source, err });
-    }
-  }
-
-  function pushAlongSegment(field, ax, ay, bx, by, opts = {}) {
-    if (!field?.pushDirectional) return;
-    const coords = [ax, ay, bx, by];
-    if (coords.some((v) => !Number.isFinite(v))) return;
-    const dx = bx - ax;
-    const dy = by - ay;
-    const segLen = Math.hypot(dx, dy);
-    const radius = Math.max(1, Number.isFinite(opts.radius) ? opts.radius : 32);
-    const spacing = Math.max(4, Number.isFinite(opts.spacing) ? opts.spacing : Math.round(radius * 0.6));
-    let steps = segLen > 0 ? Math.max(1, Math.ceil(segLen / spacing)) : 0;
-    const maxSteps = Number.isFinite(opts.maxSteps) ? Math.max(1, Math.floor(opts.maxSteps)) : null;
-    if (maxSteps && steps > maxSteps) {
-      steps = maxSteps;
-    }
-    let dirX;
-    let dirY;
-    if (Number.isFinite(opts.dirX) || Number.isFinite(opts.dirY)) {
-      dirX = Number.isFinite(opts.dirX) ? opts.dirX : 0;
-      dirY = Number.isFinite(opts.dirY) ? opts.dirY : 0;
-    } else if (segLen > 0) {
-      dirX = dx / segLen;
-      dirY = dy / segLen;
-    } else {
-      dirX = 1;
-      dirY = 0;
-    }
-    const payload = {
-      radius,
-      strength: Number.isFinite(opts.strength) ? opts.strength : 1200,
-      falloff: typeof opts.falloff === 'string' ? opts.falloff : 'gaussian',
-      forceMul: opts.forceMul,
-    };
-    for (let i = 0; i <= steps; i++) {
-      const t = steps === 0 ? 0 : i / steps;
-      const sx = ax + dx * t;
-      const sy = ay + dy * t;
-      field.pushDirectional(sx, sy, dirX, dirY, payload);
-    }
-  }
-
-  function pushHeaderSweepAt(xToy, { lineWidthPx, maxSteps, forceMul } = {}) {
-    try {
-      // Do not inject forces while camera is in motion / settling.
-      if (headerPushSuppressed()) return;
-
-      if (!dgField?.pushDirectional || !Number.isFinite(xToy)) return;
-      const area = (gridArea && gridArea.w > 0 && gridArea.h > 0)
-        ? gridArea
-        : null;
-      if (!area || area.h <= 0) return;
-      const zoomScale = getOverlayZoomSnapshot()?.scale || 1;
-      const columnWidth = (Number.isFinite(cw) && cw > 0)
-        ? cw
-        : Math.max(6, (area.w || 0) / Math.max(1, cols || 1));
-      const headerLineWidthPx = Number.isFinite(lineWidthPx) ? lineWidthPx : columnWidth;
-      const lineWidthWorld = headerLineWidthPx / Math.max(zoomScale, 1e-3);
-      const fallbackRadius = typeof DG_KNOCK?.headerLine?.radiusToy === 'function'
-        ? DG_KNOCK.headerLine.radiusToy(area)
-        : null;
-      const radius = Number.isFinite(fallbackRadius) && fallbackRadius > 0
-        ? fallbackRadius
-        : Math.max(8, lineWidthWorld * (HeaderSweepForce.radiusMul || 2));
-      const spacing = Math.max(4, radius * (HeaderSweepForce.spacingMul || 0.6));
-        const headerStrength = Number.isFinite(DG_KNOCK?.headerLine?.strength)
-          ? DG_KNOCK.headerLine.strength
-          : null;
-        const baseStrength = (headerStrength != null)
-          ? headerStrength
-          : (Number.isFinite(HeaderSweepForce.strength) ? HeaderSweepForce.strength : 1600);
-        const fieldState = dgField?._state;
-        let baseCount = panel.__dgParticleBaseCount;
-        if (
-          (!Number.isFinite(baseCount) || baseCount <= 0) &&
-          Number.isFinite(fieldState?.targetDesired) &&
-          fieldState.targetDesired > 0
-        ) {
-          baseCount = Math.max(1, Math.round(fieldState.targetDesired));
-          panel.__dgParticleBaseCount = baseCount;
-        }
-        const currentCount = Math.max(1, Number(fieldState?.particles?.length) || 0);
-        const countComp = baseCount ? Math.min(8, baseCount / currentCount) : 1;
-        const strengthMul = Number.isFinite(forceMul) && forceMul > 0 ? forceMul : 1;
-        const knockbackMul = Number.isFinite(panel.__dgParticleKnockbackMul)
-          ? panel.__dgParticleKnockbackMul
-          : 1;
-        const strength = baseStrength * strengthMul * countComp * knockbackMul;
-        pushAlongSegment(
-          dgField,
-          xToy,
-          area.y,
-        xToy,
-        area.y + area.h,
-        {
-          radius,
-          strength,
-          spacing,
-          falloff: HeaderSweepForce.falloff || 'gaussian',
-          dirX: headerSweepDirX || 1,
-          dirY: 0,
-          maxSteps,
-        },
-      );
-      const lettersRadius = Math.max(40, radius * 1.6);
-      const localX = xToy - (area.x || 0);
-      const localY = (area.h || 0) * 0.5;
-      knockLettersAt(localX, localY, {
-        radius: lettersRadius,
-        strength: DG_KNOCK.lettersMove.strength,
-        source: 'header',
-      });
-    } catch (err) {
-      if (DG_DEBUG) console.warn('[DG][pushHeaderSweepAt] failed', err);
-    }
-  }
-
-  // Poke a thick band along a stroke from (x0,y0)->(x1,y1), sampling along the path and across its width.
-  function pokeAlongStrokeBand(x0, y0, x1, y1, widthPx, preset = {}) {
-    try {
-      const { radiusToy, strength } = preset || {};
-      const area = (gridArea && gridArea.w > 0 && gridArea.h > 0)
-        ? gridArea
-        : { x: 0, y: 0, w: cssW || 0, h: cssH || 0 };
-      const r = typeof radiusToy === 'function' ? radiusToy(area) : radiusToy;
-      const s = strength;
-      if (!Number.isFinite(r) || r <= 0 || !Number.isFinite(s) || s <= 0) return;
-      const dx = (x1 ?? 0) - (x0 ?? 0);
-      const dy = (y1 ?? 0) - (y0 ?? 0);
-      const len = Math.hypot(dx, dy) || 0;
-      const ux = len > 0 ? (dx / len) : 1;
-      const uy = len > 0 ? (dy / len) : 0;
-      const nx = -uy;
-      const ny = ux;
-      const stepAlong = Math.max(4, r * 0.6);
-      const stepAcross = Math.max(4, r * 0.6);
-      const baseWidth = Number.isFinite(widthPx) ? widthPx : r;
-      const halfW = Math.max(r, baseWidth * 0.5);
-      const samplesAlong = Math.max(1, Math.ceil(len / stepAlong));
-      const samplesAcross = Math.max(1, Math.ceil((halfW * 2) / stepAcross));
-      for (let i = 0; i <= samplesAlong; i++) {
-        const t = samplesAlong === 0 ? 0 : (i / samplesAlong);
-        const cx = x0 + dx * t;
-        const cy = y0 + dy * t;
-        for (let j = -samplesAcross; j <= samplesAcross; j++) {
-          const off = j * stepAcross * 0.5;
-          const sx = cx + nx * off;
-          const sy = cy + ny * off;
-          pokeFieldToy('drag-band', sx, sy, r, s, { mode: 'plow' });
-        }
-      }
-    } catch {}
-  }
 
   const tutorialFrontCtx = tutorialCanvas.getContext('2d');
   const tutorialBackCanvas = document.createElement('canvas');
@@ -2426,7 +2210,7 @@ function ensureSizeReady({ force = false } = {}) {
         if (!Number.isFinite(usableWidth) || usableWidth <= 0) return;
         const startX = area?.x || 0;
         const xToy = startX + clampedProgress * usableWidth;
-        pushHeaderSweepAt(xToy);
+        FF.pushHeaderSweepAt(xToy);
         dbgPoke('header');
       } catch {}
     });
@@ -4027,7 +3811,7 @@ function copyCanvas(backCtx, frontCtx) {
     const w = cw;
     try {
       const xToy = x + w * 0.5;
-      pushHeaderSweepAt(xToy, { lineWidthPx: w });
+      FF.pushHeaderSweepAt(xToy, { lineWidthPx: w });
       dbgPoke('header');
     } catch {}
     gctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
@@ -5112,9 +4896,9 @@ function copyCanvas(backCtx, frontCtx) {
           : { w: cssW || 0, h: cssH || 0 };
         const baseRadius = DG_KNOCK.ghostTrail.radiusToy(area);
         const lw = (typeof R.getLineWidth === 'function') ? R.getLineWidth() : 12;
-        pokeAlongStrokeBand(x0, y0, x0, y0, lw, DG_KNOCK.ghostTrail);
+        FF.pokeAlongStrokeBand(x0, y0, x0, y0, lw, DG_KNOCK.ghostTrail);
         const pushRadius = baseRadius * 1.5;
-        pokeFieldToy('pointerDown', x0, y0, pushRadius, DG_KNOCK.ghostTrail.strength, { mode: 'plow' });
+        FF.pokeFieldToy('pointerDown', x0, y0, pushRadius, DG_KNOCK.ghostTrail.strength, { mode: 'plow' });
         dbgPoke('pointerDown');
       } catch {}
       cur = {
@@ -5345,7 +5129,7 @@ function copyCanvas(backCtx, frontCtx) {
           );
           const capR = Math.max(8, logicalMin > 0 ? logicalMin * 0.25 : pointerR * 1.25);
           const disturbanceRadius = Math.min(pointerR, capR);
-          pokeFieldToy('ghostTrail', lastPt.x, lastPt.y, disturbanceRadius, DG_KNOCK.ghostTrail.strength, {
+          FF.pokeFieldToy('ghostTrail', lastPt.x, lastPt.y, disturbanceRadius, DG_KNOCK.ghostTrail.strength, {
             mode: 'plow',
             highlightMs: 900,
           });
@@ -7367,7 +7151,7 @@ function copyCanvas(backCtx, frontCtx) {
               1,
               sweepEvery * (baseSweepMaxSteps / Math.max(1, sweepMaxSteps)) * 1.35
             );
-            pushHeaderSweepAt(playheadX, { lineWidthPx: gradientWidth, maxSteps: sweepMaxSteps, forceMul });
+            FF.pushHeaderSweepAt(playheadX, { lineWidthPx: gradientWidth, maxSteps: sweepMaxSteps, forceMul });
             dbgPoke('header');
           }
         } catch (e) { /* fail silently */ }
@@ -8608,7 +8392,7 @@ function startGhostGuide({
     last = { x, y };
 
     // Physics still uses the larger radius so particles "feel" a fat snowplow.
-    pokeFieldToy('ghostTrail', x, y, disturbanceRadius, DG_KNOCK.ghostTrail.strength, {
+    FF.pokeFieldToy('ghostTrail', x, y, disturbanceRadius, DG_KNOCK.ghostTrail.strength, {
       mode: 'plow',
       highlightMs: 900,
     });
@@ -8867,6 +8651,7 @@ function runAutoGhostGuideSweep() {
   try { panel.dispatchEvent(new CustomEvent('drawgrid:ready', { bubbles: true })); } catch {}
   return api;
 }
+
 
 
 
