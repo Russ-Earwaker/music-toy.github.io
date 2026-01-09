@@ -8,6 +8,8 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, l
   const col0GraceSec = Math.min(0.06, Math.max(0.01, leadSec));
   let probeLastTs = 0;
   const effectiveLateGraceSec = Number.isFinite(lateGraceSec) ? lateGraceSec : 0.04;
+  let lastPhase = null;
+  let lastWrapAt = 0;
 
   function getState(key) {
     if (!state.has(key)) {
@@ -35,6 +37,12 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, l
     const windowStart = Math.max(now - 0.1, baseWindowStart);
     const windowEnd = now + Math.max(0.05, lookaheadSec);
     const phase = Number(loopInfo.phase01);
+    if (Number.isFinite(phase)) {
+      if (Number.isFinite(lastPhase) && phase < lastPhase) {
+        lastWrapAt = now;
+      }
+      lastPhase = phase;
+    }
     const barStartDebug = loopStart + Math.floor((now - loopStart) / barLen) * barLen;
     const barIndex = Math.floor((now - loopStart) / barLen);
     const barStart = loopStart + barIndex * barLen;
@@ -86,6 +94,10 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, l
       }
       let scheduledAny = false;
       const isChained = !!(toy.dataset?.prevToyId || toy.dataset?.nextToyId || toy.dataset?.chainParent);
+      const justWrapped = Number.isFinite(lastWrapAt) && (now - lastWrapAt) < 0.08;
+      if (isChained && justWrapped) {
+        return;
+      }
       const justActivated = !!toy.__chainJustActivated;
       const windowStartToy = windowStart;
       const windowEndToy = (justActivated && isChained)
@@ -99,7 +111,8 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, l
         for (let col = 0; col < steps; col++) {
           const when = base + col * stepLen;
           const windowStart = windowStartToy;
-          const allowLateCol0 = (col === 0 && when < windowStart && when >= (now - col0GraceSec));
+          const lateCol0Window = Math.max(col0GraceSec, 0.2);
+          const allowLateCol0 = (col === 0 && when < windowStart && when >= (now - lateCol0Window));
           // Skip column 0 if already scheduled in this bar (prevents double-scheduling on first activation)
           if (col === 0 && toyState.scheduledCol0InCurrentBar) {
             continue;

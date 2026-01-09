@@ -1430,7 +1430,7 @@ function panelHasAnyNotes(panel) {
     return Array.isArray(s) && s.some(v => v !== -1);
   }
 
-  return false;
+    return false;
 }
 
 function startToy(panelEl) {
