@@ -1,5 +1,6 @@
 // src/drum-core.js — drum grid core + instrument sync (<=300 lines)
 import { triggerInstrument } from './audio-samples.js';
+import { ensureAudioContext, resumeAudioContextIfNeeded } from './audio-core.js';
 import { setToyInstrument } from './instrument-map.js';
 import { initToyUI } from './toyui.js';
 import { attachSimpleRhythmVisual } from './simple-rhythm-visual.js';
@@ -247,9 +248,22 @@ export function buildDrumGrid(panel, numSteps = 8){
   };
 
   panel.__playCurrent = (step = -1, when) => {
+    // Manual clicks need to wake audio on some browsers/devices.
+    try { resumeAudioContextIfNeeded(); } catch {}
+
     const instrument = panel.dataset.instrument || 'tone';
     const note = step >= 0 ? getNoteForStep(step) : 'C4';
-    playNote(instrument, note, when);
+
+    // Manual audition calls often omit `when`. Normalise to "now" so audio always fires.
+    let w = when;
+    if (!Number.isFinite(w)) {
+      try {
+        const ctx = ensureAudioContext();
+        w = (ctx?.currentTime ?? 0) + 0.002;
+      } catch {}
+    }
+
+    playNote(instrument, note, w);
   };
  
   // Listen for note changes from the visual module to provide audio feedback.

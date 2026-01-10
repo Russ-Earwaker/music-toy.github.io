@@ -6,6 +6,13 @@
 import { ensureAudioContext } from './audio-core.js';
 import { bumpToyAudioGen } from './toy-audio.js';
 
+// --- GLOBAL scheduler state ---
+// If we accidentally create multiple scheduler instances (rebuilds / double-start),
+// local state won't de-dupe across them, causing doubled notes.
+// We intentionally share state across instances to hard-prevent duplicate scheduling.
+const __GLOBAL_SCHED_STATE = new Map(); // toyId -> per-toy state
+let __SCHED_INSTANCE_SEQ = 1;
+
 // Default scheduler debug OFF (enable in DevTools: window.__CHAIN_NOTE_SCHEDULER_DEBUG = true)
 try {
   if (window.__CHAIN_NOTE_SCHEDULER_DEBUG === undefined) window.__CHAIN_NOTE_SCHEDULER_DEBUG = false;
@@ -19,7 +26,8 @@ function isDebugEnabled() {
 }
 
 export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, lateGraceSec = 0.04 } = {}) {
-  const state = new Map(); // toyId -> { lastBarStart, scheduled:Set, preScheduledCol0At, lastProbeBarIndex, lastScheduledByCol:Map }
+  const __schedId = __SCHED_INSTANCE_SEQ++;
+  const state = __GLOBAL_SCHED_STATE; // shared across instances on purpose
   const col0GraceSec = Math.min(0.06, Math.max(0.01, leadSec));
   let probeLastTs = 0;
   const effectiveLateGraceSec = Number.isFinite(lateGraceSec) ? lateGraceSec : 0.04;
@@ -101,6 +109,7 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, l
         if (!probeLastTs || (ts - probeLastTs) > 1000) {
           probeLastTs = ts;
           console.log('[note-scheduler][probe]', {
+            schedId: __schedId,
             active: activeToyIds.size,
             now,
             windowStart,
@@ -155,9 +164,15 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, l
 
         // Prune old scheduled entries
         let scheduledAny = false;
+
+        // IMPORTANT:
+        // We must not early-return for chained toys immediately after wrap.
+        // That creates a silent gap at bar start, then col0 gets scheduled late,
+        // bunching it closer to col1 ("fast first 2 notes").
+        // We rely on per-column guards (justWrappedByScheduler + minColGapSec) instead.
         const justWrapped = Number.isFinite(lastWrapAt) && (now - lastWrapAt) < 0.08;
-        if (isChained && justWrapped) {
-          return;
+        if (isChained && justWrapped && isDebugEnabled()) {
+          console.log('[note-scheduler] wrap tick (chained) — no skip', { toyId, now, barStart });
         }
         const justActivated = !!toy.__chainJustActivated;
         if (justActivated && isChained) {
@@ -182,19 +197,20 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, l
 
         const barsToSchedule = isChained ? 1 : 2;
         const minColGapSec = Math.max(0.05, stepLen * 0.5);
-        // Detect if we just wrapped to a new bar. This prevents the last column
-        // (column 7) from being double-scheduled: once by the audio scheduler just
-        // before wrap, and again by RAF just after wrap (when phase 0.99 → 0.01).
-        const lastColTime = toyState.lastScheduledByCol.get(steps - 1);
-        const justWrappedByScheduler = Number.isFinite(lastColTime) && lastColTime < barStart;
+        // Prune old scheduled keys so the per-toy set stays bounded.
+        // Keys are numeric: key = whenMs*32 + col. Drop anything older than ~2 bars.
+        try {
+          const pruneBeforeMs = Math.round((now - Math.max(0.001, barLen * 2)) * 1000);
+          if (Number.isFinite(pruneBeforeMs) && toyState.scheduled && toyState.scheduled.size) {
+            for (const k of Array.from(toyState.scheduled)) {
+              const tMs = Math.floor(Number(k) / 32);
+              if (Number.isFinite(tMs) && tMs < pruneBeforeMs) toyState.scheduled.delete(k);
+            }
+          }
+        } catch {}
         for (let b = 0; b < barsToSchedule; b++) {
           const base = barStart + b * barLen;
           for (let col = 0; col < steps; col++) {
-            // Skip the last column if we just wrapped (prev lastColTime was in previous bar)
-            // This prevents double-scheduling at bar boundaries
-            if (justWrappedByScheduler && col === steps - 1) {
-              continue;
-            }
             const when = base + col * stepLen;
             const windowStart = windowStartToy;
             const lateCol0Window = Math.max(col0GraceSec, 0.2);
@@ -203,7 +219,8 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, l
             if (col === 0 && toyState.scheduledCol0InCurrentBar) {
               continue;
             }
-            const key = Math.round(when * 1000);
+            const whenMs = Math.round(when * 1000);
+            const key = (whenMs * 32) + col; // numeric key: time+col
             const lastColTime = toyState.lastScheduledByCol.get(col);
             // Calculate bar indices first
             const currentColBarIndex = Math.floor((when - loopStart) / barLen);
@@ -217,6 +234,13 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, l
             const isInWindow = when >= windowStartToy && when <= windowEndToy;
             const isAllowedLateCol0 = col === 0 && allowLateCol0;
             if (!isInWindow && !isAllowedLateCol0) {
+              continue;
+            }
+            // De-dupe: tick() runs repeatedly inside lookahead; without this we double-schedule.
+            if (toyState.scheduled.has(key)) {
+              if (isDebugEnabled()) {
+                try { console.log('[note-scheduler][skip dup]', { schedId: __schedId, toyId, col, whenMs, key }); } catch {}
+              }
               continue;
             }
             // Schedule the note
@@ -235,6 +259,11 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, l
               // Provide deterministic snapshot to toy implementation
               try { toy.__seqPatternActive = toyState.seqPattern; } catch {}
               try { toy.__seqRevActive = toyState.seqRevSeen; } catch {}
+              if (isDebugEnabled()) {
+                try {
+                  console.log('[note-scheduler][schedule]', { schedId: __schedId, toyId, col, whenMs, key });
+                } catch {}
+              }
               toy.__sequencerSchedule(col, when);
             } catch {}
           }

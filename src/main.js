@@ -24,7 +24,7 @@ import { applyStackingOrder } from './stacking-manager.js';
 import { getViewportTransform, getViewportElement, screenToWorld } from './board-viewport.js';
 import { getRect } from './layout-cache.js';
 
-import './toy-audio.js';
+import { bumpAllToyAudioGen } from './toy-audio.js';
 import './toy-layout-manager.js';
 import './zoom-overlay.js';
 import './toy-spawner.js';
@@ -1480,14 +1480,24 @@ function advanceChain(headId) {
     const nextToyId = activeToy.dataset.nextToyId;
     const nextToy = nextToyId ? document.getElementById(nextToyId) : null;
 
+    let nextActiveId = null;
+
     if (nextToy) {
+        nextActiveId = nextToyId;
         if (shouldPulse) triggerConnectorPulse(activeToyId, nextToyId);
         g_chainState.set(headId, nextToyId);
     } else {
+        nextActiveId = headId; // Loop back to head
         if (shouldPulse) triggerConnectorPulse(activeToyId, headId);
-        g_chainState.set(headId, headId); // Loop back to head
+        g_chainState.set(headId, headId);
     }
-    try { g_sequencerScheduler?.clearToy?.(activeToyId); } catch {}
+
+    // Only clear scheduler state if we actually moved to a DIFFERENT toy.
+    // In a 1-toy chain, activeToyId === headId every bar; clearing here wipes de-dupe state
+    // and causes the scheduler to re-schedule the same notes -> doubled playback.
+    if (nextActiveId && nextActiveId !== activeToyId) {
+      try { g_sequencerScheduler?.clearToy?.(activeToyId); } catch {}
+    }
 }
 
 const DRAWGRID_BOOT_DEBUG = false;
@@ -3139,6 +3149,12 @@ function tickAudioScheduler() {
     }
 
     if (g_noteSchedRebuildPending && info.col === 0) {
+      // IMPORTANT:
+      // We are about to rebuild the scheduler at bar start. The old scheduler may have already
+      // scheduled future AudioBufferSourceNodes (lookahead). If we rebuild without cancelling,
+      // we will schedule the same notes again -> doubled notes starting on bar 2.
+      try { bumpAllToyAudioGen(); } catch {}
+
       g_sequencerScheduler = null;
       g_noteSchedRebuildPending = null;
       ensureSequencerScheduler();

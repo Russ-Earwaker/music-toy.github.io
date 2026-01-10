@@ -17,6 +17,64 @@ function safeStartTime(ctx, when){
 const entries = new Map();
 // id -> AudioBuffer
 const buffers = new Map();
+
+// Track scheduled sample sources so we can cancel pending notes on pause/resume.
+// Note: this only covers AudioBufferSourceNode-based samples (not tone synth fallbacks).
+const __scheduledSampleByToy = new Map(); // toyId -> Set<{ src: AudioBufferSourceNode, tStart: number }>
+
+function __trackScheduledSample(toyId, src, tStart){
+  if (!toyId || !src) return;
+  const id = String(toyId);
+  let set = __scheduledSampleByToy.get(id);
+  if (!set) { set = new Set(); __scheduledSampleByToy.set(id, set); }
+
+  const rec = { src, tStart: Number(tStart) || 0 };
+  set.add(rec);
+
+  // Best-effort cleanup when the node ends
+  try {
+    const prev = src.onended;
+    src.onended = (ev) => {
+      try { set.delete(rec); } catch {}
+      try { if (typeof prev === 'function') prev(ev); } catch {}
+    };
+  } catch {}
+}
+
+/** Stop and forget any scheduled (future) sample sources for a toy (or all toys if toyId is falsy). */
+export function cancelScheduledToySources(toyId){
+  try{
+    const ctx = ensureAudioContext();
+    const now = ctx?.currentTime ?? 0;
+    const epsilon = 0.002;
+
+    const stopSet = (set) => {
+      if (!set) return;
+      for (const rec of Array.from(set)) {
+        try {
+          const tStart = Number(rec?.tStart) || 0;
+          // Only stop notes that haven't started yet (or are barely starting)
+          if (tStart > (now + epsilon)) {
+            rec.src?.stop?.();
+          }
+        } catch {}
+        try { set.delete(rec); } catch {}
+      }
+    };
+
+    if (!toyId) {
+      for (const set of __scheduledSampleByToy.values()) stopSet(set);
+      __scheduledSampleByToy.clear();
+      return;
+    }
+
+    const key = String(toyId);
+    const set = __scheduledSampleByToy.get(key);
+    stopSet(set);
+    if (set && set.size === 0) __scheduledSampleByToy.delete(key);
+  } catch {}
+}
+
 const timingProbeState = {
   lastBar: null,
   lastTs: 0,
@@ -291,6 +349,7 @@ function playSampleAt(id, when, gain=1, toyId, noteName, options = {}){
       try { console.log('[audio-samples] start', id, noteName||'C4', 'in', (__startAt - ctx.currentTime).toFixed(3)); } catch (e) {}
     }
     src.start(__startAt);
+    try{ __trackScheduledSample(toyId||'master', src, __startAt); }catch{}
     // If envelope provided, schedule stop a bit after decay to avoid truncation clicks
     try{
       if (env && typeof env.decaySec === 'number' && env.decaySec > 0){

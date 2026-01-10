@@ -1,5 +1,6 @@
 // src/toy-audio.js — shared per-toy mute/volume policy (<=300 lines)
 import { ensureAudioContext, setToyVolume, setToyMuted } from './audio-core.js';
+import { cancelScheduledToySources } from './audio-samples.js';
 import { syncVolumeUI } from './volume-ui.js';
 
 /** In-memory mirror so UI can query without hitting AudioParams */
@@ -14,10 +15,20 @@ const __TOY_AUDIO_GEN = (typeof window !== 'undefined')
 export function bumpToyAudioGen(toyId) {
   if (!toyId) return;
   __TOY_AUDIO_GEN[toyId] = (__TOY_AUDIO_GEN[toyId] || 0) + 1;
+  // Best-effort: stop any already-scheduled future sample notes for this toy.
+  try { cancelScheduledToySources(toyId); } catch {}
 }
 
 export function getToyAudioGen(toyId) {
   return __TOY_AUDIO_GEN[toyId] || 0;
+}
+
+export function bumpAllToyAudioGen() {
+  try{
+    for (const k in __TOY_AUDIO_GEN) __TOY_AUDIO_GEN[k] = (__TOY_AUDIO_GEN[k] || 0) + 1;
+  } catch {}
+  // Best-effort: stop any already-scheduled future sample notes across all toys.
+  try { cancelScheduledToySources(null); } catch {}
 }
 
 function keyOf(id){ return String(id || 'master').toLowerCase(); }
@@ -122,6 +133,17 @@ try {
       if (panel && isChainHead(panel) && id !== 'master') {
         applyChainVolumeMute(getPanelToyId(panel), { volume: st.volume });
       }
+    }
+  });
+} catch {}
+
+// On transport pause, invalidate any already-scheduled future notes.
+// Otherwise they remain pending while AudioContext is suspended and will double-play after resume.
+try {
+  document.addEventListener('transport:pause', () => {
+    bumpAllToyAudioGen();
+    if (window.__AUDIO_GATE_DEBUG) {
+      console.log('[audio-gate] transport:pause -> bumpAllToyAudioGen');
     }
   });
 } catch {}
