@@ -2,7 +2,7 @@
 import { triggerInstrument } from './audio-samples.js';
 import { gateTriggerForToy } from './toy-audio.js';
 import { buildPalette, midiToName } from './note-helpers.js';
-import { resumeAudioContextIfNeeded, isRunning as isTransportRunning } from './audio-core.js';
+import { resumeAudioContextIfNeeded, isRunning as isTransportRunning, ensureAudioContext } from './audio-core.js';
 
 function getCanonicalToyId(panel) {
   return panel?.dataset?.toyid || panel?.id || panel?.dataset?.toy || '';
@@ -15,6 +15,9 @@ function isNoteSchedulerEnabled() {
 function markPlayingColumn(panel, colIndex){
   try{ panel.dispatchEvent(new CustomEvent('drawgrid:playcol', { detail:{ col: colIndex }, bubbles:true }));}catch{}
 }
+
+// Default drawgrid-player debug OFF (enable in DevTools: window.__DRAWGRID_PLAYER_DEBUG = true)
+try { if (window.__DRAWGRID_PLAYER_DEBUG === undefined) window.__DRAWGRID_PLAYER_DEBUG = false; } catch {}
 
 export function connectDrawGridToPlayer(panel) {
   if (!panel || panel.__drawGridPlayer) return;
@@ -77,11 +80,50 @@ export function connectDrawGridToPlayer(panel) {
     try {
       if (typeof playColumn === 'function') {
         playColumn(col, when, { visual: true, audio: false, fromScheduler: true, snapshot });
-        console.log('[drawgrid effects]', { col, when });
+        if (window.__DRAWGRID_PLAYER_DEBUG) console.log('[drawgrid effects]', { col, when });
         return true;
       }
     } catch {}
     return false;
+  }
+
+  // Schedule drawgrid effects (flash/particles/etc) at the actual play time.
+  function scheduleDrawgridEffects(panel, col, when) {
+    try {
+      const ctx = ensureAudioContext?.() || null;
+      const now = ctx?.currentTime;
+      if (!Number.isFinite(now) || !Number.isFinite(when)) {
+        // Fallback: fire immediately
+        markPlayingColumn(panel, col);
+        panel.__pulseHighlight = 1.0;
+        panel.__pulseRearm = true;
+        return;
+      }
+
+      // Avoid duplicate effect triggers for the same (col, when)
+      panel.__dgFxKeys = panel.__dgFxKeys || new Set();
+      const k = `${col}@${Math.round(when * 1000)}`;
+      if (panel.__dgFxKeys.has(k)) return;
+      panel.__dgFxKeys.add(k);
+
+      const delayMs = Math.max(0, (when - now) * 1000 - 2);
+      setTimeout(() => {
+        try {
+          markPlayingColumn(panel, col);
+          panel.__pulseHighlight = 1.0;
+          panel.__pulseRearm = true;
+        } catch {}
+        // let keys expire
+        try { setTimeout(() => panel.__dgFxKeys?.delete?.(k), 1000); } catch {}
+      }, delayMs);
+    } catch {
+      // fallback immediate
+      try {
+        markPlayingColumn(panel, col);
+        panel.__pulseHighlight = 1.0;
+        panel.__pulseRearm = true;
+      } catch {}
+    }
   }
 
   panel.addEventListener('drawgrid:update', (e) => {
@@ -133,7 +175,15 @@ export function connectDrawGridToPlayer(panel) {
   // Seed an initial snapshot (so deterministic works immediately)
   if (!panel.__seqPattern) {
     panel.__seqPattern = cloneDrawgridPattern(gridState, steps, instrument);
+    console.log('[drawgrid-player] seeded initial pattern', { steps, nodesPerCol: gridState.nodes.map(n => n.size) });
   }
+
+  // Debug: log when pattern is updated
+  const originalSeqTouch = panel.__seqTouch;
+  panel.__seqTouch = (reason = 'user') => {
+    console.log('[drawgrid-player] __seqTouch called', { reason, steps, nodesPerCol: gridState.nodes.map(n => n.size) });
+    originalSeqTouch?.(reason);
+  };
 
   panel.__sequencerStep = (col) => {
     // Visual-only. Audio is handled exclusively by __sequencerSchedule when scheduler is enabled.
@@ -151,15 +201,34 @@ export function connectDrawGridToPlayer(panel) {
     // Debug tripwire: if step is also firing audio, you'll still hear doubles even though scheduler calls once.
     // Keep this for now.
     // console.log('[drawgrid schedule]', panel.id, col, when);
-    const pat = panel.__seqPatternActive || panel.__seqPattern;
-    if (!pat || !pat.cols || col < 0 || col >= pat.steps) return;
+    
+    // Always use panel's current pattern (set by drawgrid:update events or initial seed).
+    // This ensures we pick up the latest state even if scheduler's copy is stale.
+    let pat = panel.__seqPatternActive;
+    if (!pat) {
+      pat = panel.__seqPattern || null;
+    }
+    
+    // If still no pattern, create a fresh snapshot from current gridState
+    // This handles the case where the pattern hasn't been initialized yet
+    if (!pat) {
+      pat = cloneDrawgridPattern(gridState, steps, instrument);
+      console.log('[drawgrid-player] created fresh pattern on schedule', { steps, col, when, nodesPerCol: pat.cols.map(c => c.nodes.length) });
+    }
+    
+    if (!pat || !pat.cols || col < 0 || col >= pat.steps) {
+      console.log('[drawgrid-player] schedule early return', { hasPat: !!pat, patCols: pat?.cols?.length, patSteps: pat?.steps, col, steps });
+      return;
+    }
 
-    // Trigger visual effects (column pulse, particles, etc.) through the legacy pipeline.
-    // IMPORTANT: audio must stay off here; we only want effects.
-    triggerEffectsForScheduledColumn(col, when, pat);
+    // Schedule drawgrid effects (flash/particles/etc) at the actual play time.
+    scheduleDrawgridEffects(panel, col, when);
 
     const c = pat.cols[col];
-    if (!c || !c.active || !c.nodes || c.nodes.length === 0) return;
+    if (!c || !c.active || !c.nodes || c.nodes.length === 0) {
+      if (window.__DRAWGRID_PLAYER_DEBUG) console.log('[drawgrid-player] column not active/empty', { col, hasC: !!c, active: c?.active, nodesCount: c?.nodes?.length });
+      return;
+    }
 
     // Use snapshot data only (deterministic).
     let columnTriggered = false;

@@ -6,9 +6,9 @@
 import { ensureAudioContext } from './audio-core.js';
 import { bumpToyAudioGen } from './toy-audio.js';
 
-// Default scheduler debug ON (can be disabled in DevTools by setting false)
+// Default scheduler debug OFF (enable in DevTools: window.__CHAIN_NOTE_SCHEDULER_DEBUG = true)
 try {
-  if (window.__CHAIN_NOTE_SCHEDULER_DEBUG === undefined) window.__CHAIN_NOTE_SCHEDULER_DEBUG = true;
+  if (window.__CHAIN_NOTE_SCHEDULER_DEBUG === undefined) window.__CHAIN_NOTE_SCHEDULER_DEBUG = false;
 } catch {}
 
 // Debug helper that can be enabled at runtime
@@ -16,20 +16,6 @@ function isDebugEnabled() {
   try {
     return !!(window.__CHAIN_NOTE_SCHEDULER_DEBUG || window.__CHAIN_DEBUG_FIRST_STEP);
   } catch { return false; }
-}
-
-// Rate-limited event logger
-function dbgEvent(key, payload) {
-  if (!isDebugEnabled()) return;
-  try {
-    window.__NOTE_SCHED_DBG = window.__NOTE_SCHED_DBG || { last: new Map() };
-    const now = performance?.now?.() ?? Date.now();
-    const last = window.__NOTE_SCHED_DBG.last.get(key) || 0;
-    // rate limit each key to once per ~250ms
-    if ((now - last) < 250) return;
-    window.__NOTE_SCHED_DBG.last.set(key, now);
-    console.log('[note-scheduler][dbg]', key, payload);
-  } catch {}
 }
 
 export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, lateGraceSec = 0.04 } = {}) {
@@ -110,18 +96,6 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, l
         break;
       }
 
-      if (isDebugEnabled()) {
-        dbgEvent('tick', {
-          now,
-          barIndex,
-          barStart,
-          phase,
-          activeCount: activeToyIds.size,
-          chainActivatedToyId,
-          chainActivatedParent,
-        });
-      }
-
       if (window.__AUDIO_TIMING_PROBE) {
         const ts = performance?.now?.() ?? Date.now();
         if (!probeLastTs || (ts - probeLastTs) > 1000) {
@@ -156,14 +130,6 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, l
         if (toyState.seqRevSeen !== seqRev || !toyState.seqPattern) {
           toyState.seqRevSeen = seqRev;
           toyState.seqPattern = getToySeqPattern(toy);
-
-          if (isDebugEnabled()) {
-            dbgEvent('deterministic-pattern-refresh', {
-              toyId,
-              seqRev,
-              hasPattern: !!toyState.seqPattern,
-            });
-          }
         }
 
         // If some chained toy just activated, do not allow adjacent toys
@@ -175,18 +141,6 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, l
             toy.dataset?.prevToyId === chainActivatedToyId;
 
           if (sameParent || directlyAdjacent) {
-            if (isDebugEnabled()) {
-              dbgEvent('suppress-other-toy', {
-                suppressedToyId: toyId,
-                activatedToyId: chainActivatedToyId,
-                sameParent,
-                directlyAdjacent,
-                chainActivatedParent,
-                thisChainParent,
-                prevToyId: toy.dataset?.prevToyId,
-                nextToyId: toy.dataset?.nextToyId,
-              });
-            }
             toyState.scheduledCol0InCurrentBar = false;
             return;
           }
@@ -273,19 +227,6 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, l
             if (col === 0) {
               toyState.scheduledCol0InCurrentBar = true;
             }
-            if (isDebugEnabled() && col === 0) {
-              dbgEvent('schedule-col0-main', {
-                toyId,
-                when,
-                barStart,
-                windowStartToy,
-                windowEndToy,
-                justActivated,
-                isChained,
-                scheduledCol0InCurrentBar: toyState.scheduledCol0InCurrentBar,
-                audioId: (toy.__audioToyId || toy.dataset?.toyid || toyId),
-              });
-            }
             // Mark that column 7 was scheduled in this bar (for chaining pre-schedule)
             if (col === steps - 1) {
               toyState.scheduledCol7InCurrentBar = true;
@@ -294,13 +235,6 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, l
               // Provide deterministic snapshot to toy implementation
               try { toy.__seqPatternActive = toyState.seqPattern; } catch {}
               try { toy.__seqRevActive = toyState.seqRevSeen; } catch {}
-
-              if (isDebugEnabled() && col === 0) {
-                window.__SEQ_SCHED_COUNTS = window.__SEQ_SCHED_COUNTS || {};
-                const k = `${toyId}@${Math.round(when * 1000)}`;
-                window.__SEQ_SCHED_COUNTS[k] = (window.__SEQ_SCHED_COUNTS[k] || 0) + 1;
-                console.log('[seqSchedule call]', { toyId, col, when, count: window.__SEQ_SCHED_COUNTS[k] });
-              }
               toy.__sequencerSchedule(col, when);
             } catch {}
           }

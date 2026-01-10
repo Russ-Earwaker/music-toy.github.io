@@ -138,9 +138,9 @@ export function toyVolume(id){ return getState(id).volume; }
 export function gateTriggerForToy(toyId, triggerFn){
   const id = keyOf(toyId);
 
-  // Debug defaults ON (can disable in DevTools)
+  // Debug defaults OFF (enable in DevTools: window.__AUDIO_GATE_DEBUG = true)
   try {
-    if (window.__AUDIO_GATE_DEBUG === undefined) window.__AUDIO_GATE_DEBUG = true;
+    if (window.__AUDIO_GATE_DEBUG === undefined) window.__AUDIO_GATE_DEBUG = false;
   } catch {}
 
   function gateDbg(ev, payload) {
