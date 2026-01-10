@@ -1,0 +1,49 @@
+main.js:669 [focus] normalize DOM
+main.js:669 [focus] normalize DOM
+note-scheduler.js:31 [note-scheduler][dbg] tick {now: 2.010666666666667, barIndex: 0, barStart: 2, phase: 0.005333333333333412, activeCount: 1, …}
+note-scheduler.js:31 [note-scheduler][dbg] deterministic-pattern-refresh {toyId: 'drawgrid-1768002096624-jqsca3', seqRev: 11, hasPattern: true}
+note-scheduler.js:31 [note-scheduler][dbg] schedule-col0-main {toyId: 'drawgrid-1768002096624-jqsca3', when: 2, barStart: 2, windowStartToy: 2.015041666666667, windowEndToy: 4, …}
+note-scheduler.js:399 [seqSchedule call] {toyId: 'drawgrid-1768002096624-jqsca3', col: 0, when: 2, count: 1}
+toy-audio.js:155 [audio-gate] defer {id: 'drawgrid-1768002096624-jqsca3', noteName: 'G3', when: 2.25, now: 2.010666666666667, delayMs: 237.33333333333317, …}
+note-scheduler.js:451 [note-scheduler][debug] skip pre-schedule next bar col0 {toyId: 'drawgrid-1768002096624-jqsca3', reason: 'phase <= 0.9', phase: 0.005333333333333412, toyJustActivated: true}
+note-scheduler.js:31 [note-scheduler][dbg] tick {now: 2.28, barIndex: 0, barStart: 2, phase: 0.1399999999999999, activeCount: 1, …}
+note-scheduler.js:31 [note-scheduler][dbg] tick {now: 2.530666666666667, barIndex: 0, barStart: 2, phase: 0.2653333333333334, activeCount: 1, …}
+note-scheduler.js:31 [note-scheduler][dbg] tick {now: 2.7813333333333334, barIndex: 0, barStart: 2, phase: 0.3906666666666667, activeCount: 1, …}
+note-scheduler.js:31 [note-scheduler][dbg] tick {now: 3.0613333333333332, barIndex: 0, barStart: 2, phase: 0.5306666666666666, activeCount: 1, …}
+note-scheduler.js:31 [note-scheduler][dbg] tick {now: 3.3306666666666667, barIndex: 0, barStart: 2, phase: 0.6653333333333333, activeCount: 1, …}
+note-scheduler.js:31 [note-scheduler][dbg] tick {now: 3.5813333333333333, barIndex: 0, barStart: 2, phase: 0.7906666666666666, activeCount: 1, …}
+note-scheduler.js:31 [note-scheduler][dbg] preSchedule-nextbar-col0 {toyId: 'drawgrid-1768002096624-jqsca3', when: 4, barStart: 2, barLen: 2, phase: 0.9053333333333333, …}
+note-scheduler.js:439 [seqSchedule call] {toyId: 'drawgrid-1768002096624-jqsca3', col: 0, when: 4, count: 1}
+toy-audio.js:155 [audio-gate] defer {id: 'drawgrid-1768002096624-jqsca3', noteName: 'A#3', when: 4, now: 3.8106666666666666, delayMs: 187.33333333333334, …}
+note-scheduler.js:444 [note-scheduler][debug] skip pre-schedule (already scheduled) {toyId: 'drawgrid-1768002096624-jqsca3', key: 4000}
+note-scheduler.js:31 [note-scheduler][dbg] tick {now: 3.8613333333333335, barIndex: 0, barStart: 2, phase: 0.9306666666666668, activeCount: 1, …}
+note-scheduler.js:444 [note-scheduler][debug] skip pre-schedule (already scheduled) {toyId: 'drawgrid-1768002096624-jqsca3', key: 4000}
+note-scheduler.js:444 [note-scheduler][debug] skip pre-schedule (already scheduled) {toyId: 'drawgrid-1768002096624-jqsca3', key: 4000}
+note-scheduler.js:444 [note-scheduler][debug] skip pre-schedule (already scheduled) {toyId: 'drawgrid-1768002096624-jqsca3', key: 4000}
+note-scheduler.js:444 [note-scheduler][debug] skip pre-schedule (already scheduled) {toyId: 'drawgrid-1768002096624-jqsca3', key: 4000}
+note-scheduler.js:444 [note-scheduler][debug] skip pre-schedule (already scheduled) {toyId: 'drawgrid-1768002096624-jqsca3', key: 4000}
+note-scheduler.js:444 [note-scheduler][debug] skip pre-schedule (already scheduled) {toyId: 'drawgrid-1768002096624-jqsca3', key: 4000}
+note-scheduler.js:31 [note-scheduler][dbg] deterministic-pattern-refresh {toyId: 'toy-1768002100453-vn3grw', seqRev: 11, hasPattern: true}
+note-scheduler.js:31 [note-scheduler][dbg] tick {now: 4.112, barIndex: 1, barStart: 4, phase: 0.05600000000000005, activeCount: 1, …}
+note-scheduler.js:31 [note-scheduler][dbg] schedule-col0-main {toyId: 'toy-1768002100453-vn3grw', when: 4, barStart: 4, windowStartToy: 4.116375, windowEndToy: 6, …}
+note-scheduler.js:399 [seqSchedule call] {toyId: 'toy-1768002100453-vn3grw', col: 0, when: 4, count: 1}
+toy-audio.js:155 [audio-gate] defer {id: 'toy-1768002100453-vn3grw', noteName: 'F3', when: 4.25, now: 4.112, delayMs: 135.9999999999999, …}
+note-scheduler.js:451 [note-scheduler][debug] skip pre-schedule next bar col0 {toyId: 'toy-1768002100453-vn3grw', reason: 'phase <= 0.9', phase: 0.05600000000000005, toyJustActivated: true}
+note-scheduler.js:31 [note-scheduler][dbg] tick {now: 4.381333333333333, barIndex: 1, barStart: 4, phase: 0.19066666666666654, activeCount: 1, …}
+note-scheduler.js:31 [note-scheduler][dbg] tick {now: 4.632, barIndex: 1, barStart: 4, phase: 0.31599999999999984, activeCount: 1, …}
+note-scheduler.js:31 [note-scheduler][dbg] tick {now: 4.88, barIndex: 1, barStart: 4, phase: 0.43999999999999995, activeCount: 1, …}
+note-scheduler.js:31 [note-scheduler][dbg] tick {now: 5.1306666666666665, barIndex: 1, barStart: 4, phase: 0.5653333333333332, activeCount: 1, …}
+note-scheduler.js:31 [note-scheduler][dbg] tick {now: 5.410666666666667, barIndex: 1, barStart: 4, phase: 0.7053333333333334, activeCount: 1, …}
+note-scheduler.js:31 [note-scheduler][dbg] tick {now: 5.661333333333333, barIndex: 1, barStart: 4, phase: 0.8306666666666667, activeCount: 1, …}
+note-scheduler.js:31 [note-scheduler][dbg] preSchedule-nextbar-col0 {toyId: 'toy-1768002100453-vn3grw', when: 6, barStart: 4, barLen: 2, phase: 0.9159999999999999, …}
+note-scheduler.js:439 [seqSchedule call] {toyId: 'toy-1768002100453-vn3grw', col: 0, when: 6, count: 1}
+toy-audio.js:155 [audio-gate] defer {id: 'toy-1768002100453-vn3grw', noteName: 'D#3', when: 6, now: 5.832, delayMs: 166.00000000000014, …}
+note-scheduler.js:444 [note-scheduler][debug] skip pre-schedule (already scheduled) {toyId: 'toy-1768002100453-vn3grw', key: 6000}
+note-scheduler.js:444 [note-scheduler][debug] skip pre-schedule (already scheduled) {toyId: 'toy-1768002100453-vn3grw', key: 6000}
+note-scheduler.js:31 [note-scheduler][dbg] tick {now: 5.912, barIndex: 1, barStart: 4, phase: 0.956, activeCount: 1, …}
+note-scheduler.js:444 [note-scheduler][debug] skip pre-schedule (already scheduled) {toyId: 'toy-1768002100453-vn3grw', key: 6000}
+note-scheduler.js:444 [note-scheduler][debug] skip pre-schedule (already scheduled) {toyId: 'toy-1768002100453-vn3grw', key: 6000}
+note-scheduler.js:444 [note-scheduler][debug] skip pre-schedule (already scheduled) {toyId: 'toy-1768002100453-vn3grw', key: 6000}
+note-scheduler.js:444 [note-scheduler][debug] skip pre-schedule (already scheduled) {toyId: 'toy-1768002100453-vn3grw', key: 6000}
+note-scheduler.js:31 [note-scheduler][dbg] transfer-preScheduled-col0 {toyId: 'toy-1768002100453-vn3grw', barStart: 6, preScheduledCol0At: 6, phase: 0}
+note-scheduler.js:31 [note-scheduler][dbg] deterministic-pattern-refresh {toyId: 'drawgrid-1768002096624-jqsca3', seqRev: 11, hasPattern: true}

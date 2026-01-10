@@ -5,6 +5,21 @@ import { syncVolumeUI } from './volume-ui.js';
 /** In-memory mirror so UI can query without hitting AudioParams */
 const __toyState = new Map(); // id -> { muted:boolean, volume:number }
 
+// Audio generation guard: lets us invalidate already-scheduled notes when a toy changes "ownership"
+// (e.g. chain switches) without needing to cancel AudioContext events.
+const __TOY_AUDIO_GEN = (typeof window !== 'undefined')
+  ? (window.__TOY_AUDIO_GEN = window.__TOY_AUDIO_GEN || Object.create(null))
+  : Object.create(null);
+
+export function bumpToyAudioGen(toyId) {
+  if (!toyId) return;
+  __TOY_AUDIO_GEN[toyId] = (__TOY_AUDIO_GEN[toyId] || 0) + 1;
+}
+
+export function getToyAudioGen(toyId) {
+  return __TOY_AUDIO_GEN[toyId] || 0;
+}
+
 function keyOf(id){ return String(id || 'master').toLowerCase(); }
 function getState(id){
   const k = keyOf(id);
@@ -122,7 +137,29 @@ export function toyVolume(id){ return getState(id).volume; }
  */
 export function gateTriggerForToy(toyId, triggerFn){
   const id = keyOf(toyId);
-  return function(inst, noteName, when){
+
+  // Debug defaults ON (can disable in DevTools)
+  try {
+    if (window.__AUDIO_GATE_DEBUG === undefined) window.__AUDIO_GATE_DEBUG = true;
+  } catch {}
+
+  function gateDbg(ev, payload) {
+    try {
+      if (!window.__AUDIO_GATE_DEBUG) return;
+      window.__AUDIO_GATE_DBG = window.__AUDIO_GATE_DBG || { last: new Map() };
+      const nowMs = performance?.now?.() ?? Date.now();
+      const key = `${ev}:${payload?.id || ''}`;
+      const last = window.__AUDIO_GATE_DBG.last.get(key) || 0;
+      if ((nowMs - last) < 250) return; // rate limit per toy+event
+      window.__AUDIO_GATE_DBG.last.set(key, nowMs);
+      console.log('[audio-gate]', ev, payload);
+    } catch {}
+  }
+
+  return function(inst, noteName, when, ...rest){
+    // Capture generation at schedule time for future-play checks
+    const genAtSchedule = getToyAudioGen(id);
+
     const muted = isToyMuted(id);
     if (muted) {
       let shouldAllow = false;
@@ -130,13 +167,48 @@ export function gateTriggerForToy(toyId, triggerFn){
         try {
           const ctx = ensureAudioContext();
           const now = ctx?.currentTime ?? 0;
-          if (when > (now + 0.001)) shouldAllow = true;
+          if (Number.isFinite(now) && when > (now + 0.001)) shouldAllow = true;
         } catch {}
       }
       if (!shouldAllow) return; // swallow immediate hits when muted
     } else {
       try { window.dispatchEvent(new CustomEvent('toy-hit', { detail: { id, note: noteName, when } })); } catch {}
     }
-    try { return triggerFn(inst, noteName, when, id); } catch (err) { /* noop */ }
+
+    // If scheduled for the future, ALWAYS defer the actual trigger until near play time,
+    // then re-check generation. This is what prevents "old chain toy col0" from firing.
+    if (Number.isFinite(when) && when > 0) {
+      let now = null;
+      try {
+        const ctx = ensureAudioContext();
+        now = ctx?.currentTime;
+      } catch {}
+
+      if (Number.isFinite(now) && when > now + 0.001) {
+        const delayMs = Math.max(0, (when - now) * 1000 - 2);
+
+        gateDbg('defer', { id, noteName, when, now, delayMs, genAtSchedule });
+
+        setTimeout(() => {
+          const genNow = getToyAudioGen(id);
+          if (genNow !== genAtSchedule) {
+            gateDbg('drop-gen-mismatch', { id, noteName, when, genAtSchedule, genNow });
+            return;
+          }
+          try { return triggerFn(inst, noteName, when, id, ...rest); } catch (err) { /* noop */ }
+        }, delayMs);
+
+        return;
+      }
+    }
+
+    // Immediate path: check gen right now (still useful for safety)
+    const genNow = getToyAudioGen(id);
+    if (genNow !== genAtSchedule) {
+      gateDbg('drop-immediate-gen-mismatch', { id, noteName, when, genAtSchedule, genNow });
+      return;
+    }
+
+    try { return triggerFn(inst, noteName, when, id, ...rest); } catch (err) { /* noop */ }
   };
 }

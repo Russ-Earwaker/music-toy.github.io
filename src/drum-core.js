@@ -5,6 +5,7 @@ import { initToyUI } from './toyui.js';
 import { attachSimpleRhythmVisual } from './simple-rhythm-visual.js';
 import { attachGridSquareAndDrum } from './grid-square-drum.js';
 import { midiToName, buildPalette } from './note-helpers.js';
+import { gateTriggerForToy } from './toy-audio.js';
 
 /**
  * A self-contained particle system for the drum pad.
@@ -141,6 +142,20 @@ export function buildDrumGrid(panel, numSteps = 8){
     noteIndices: Array(numSteps).fill(12), // Default to C4 (MIDI 60)
   };
 
+  // Deterministic sequencing state
+  panel.__seqRev = panel.__seqRev || 0;
+  panel.__seqPattern = panel.__seqPattern || null;
+
+  function rebuildSeqPattern() {
+    const st = panel.__gridState || {};
+    panel.__seqPattern = {
+      steps: Array.isArray(st.steps) ? Array.from(st.steps) : [],
+      instrument: panel.dataset.instrument || 'Djimbe',
+    };
+  }
+
+  rebuildSeqPattern();
+
   const emitLoopgridUpdate = (extraDetail = {}) => {
     const state = panel.__gridState || {};
     const detail = Object.assign({}, extraDetail);
@@ -163,11 +178,13 @@ export function buildDrumGrid(panel, numSteps = 8){
         try{ panel.dispatchEvent(new CustomEvent('toy:instrument', { detail:{ name: pending.instrument, value: pending.instrument }, bubbles:true })); }catch{}
       }
       delete panel.__pendingLoopGridState;
+      panel.__seqRev++;
+      rebuildSeqPattern();
     }
   }catch{}
 
   const body = panel.querySelector('.toy-body');
-  
+   
   // --- Create all DOM elements first, in a predictable order ---
   if (body && !body.querySelector('.sequencer-wrap')) {
     const sequencerWrap = document.createElement('div');
@@ -177,7 +194,7 @@ export function buildDrumGrid(panel, numSteps = 8){
     sequencerWrap.appendChild(canvas);
     body.appendChild(sequencerWrap);
   }
-  
+   
   const sequencerWrap = body.querySelector('.sequencer-wrap');
 
   let padWrap = body.querySelector('.drum-pad-wrap');
@@ -202,9 +219,13 @@ export function buildDrumGrid(panel, numSteps = 8){
   attachSimpleRhythmVisual(panel);
   attachGridSquareAndDrum(panel);
   const toyId = panel.dataset.toyid || panel.id || 'loopgrid-drum';
+  panel.__audioToyId = toyId;
+
+  // Create gated trigger for audio generation guard
+  const playNote = gateTriggerForToy(panel.__audioToyId, triggerInstrument);
 
   try {
-    if (panel.dataset.instrument) setToyInstrument(toyId, panel.dataset.instrument);
+    if (panel.dataset.instrument) setToyInstrument(panel.__audioToyId, panel.dataset.instrument);
   } catch {}
 
   function setInstrument(name){
@@ -212,7 +233,9 @@ export function buildDrumGrid(panel, numSteps = 8){
     // The instrument ID is now case-sensitive and should not be lowercased.
     panel.dataset.instrument = name;
     panel.dataset.instrumentPersisted = '1';
-    try{ setToyInstrument(toyId, name); }catch{}
+    try{ setToyInstrument(panel.__audioToyId, name); }catch{}
+    panel.__seqRev++;
+    rebuildSeqPattern();
   }
   panel.addEventListener('toy-instrument', (e)=> setInstrument(e && e.detail && e.detail.value));
   panel.addEventListener('toy:instrument', (e)=> setInstrument((e && e.detail && (e.detail.name || e.detail.value))));
@@ -226,14 +249,16 @@ export function buildDrumGrid(panel, numSteps = 8){
   panel.__playCurrent = (step = -1, when) => {
     const instrument = panel.dataset.instrument || 'tone';
     const note = step >= 0 ? getNoteForStep(step) : 'C4';
-    triggerInstrument(instrument, note, when, toyId);
+    playNote(instrument, note, when);
   };
-
+ 
   // Listen for note changes from the visual module to provide audio feedback.
   panel.addEventListener('grid:notechange', (e) => {
     const col = e?.detail?.col;
     if (col >= 0 && panel.__playCurrent) {
       panel.__playCurrent(col);
+      panel.__seqRev++;
+      rebuildSeqPattern();
     }
   });
 
@@ -243,6 +268,8 @@ export function buildDrumGrid(panel, numSteps = 8){
       panel.__gridState.steps[i] = Math.random() < 0.5;
     }
     emitLoopgridUpdate({ reason: 'random' });
+    panel.__seqRev++;
+    rebuildSeqPattern();
   });
   panel.addEventListener('toy-clear', () => {
     if (!panel.__gridState?.steps) return;
@@ -250,6 +277,8 @@ export function buildDrumGrid(panel, numSteps = 8){
     // Also reset the notes for each step back to the default (C4).
     if (panel.__gridState.noteIndices) panel.__gridState.noteIndices.fill(12);
     emitLoopgridUpdate({ reason: 'clear' });
+    panel.__seqRev++;
+    rebuildSeqPattern();
   });
   panel.addEventListener('toy-random-notes', () => {
     if (!panel.__gridState?.noteIndices || !panel.__gridState?.notePalette) return;
@@ -265,13 +294,15 @@ export function buildDrumGrid(panel, numSteps = 8){
 
       // Find the index in our main palette that corresponds to this MIDI value.
       const newIndex = notePalette.indexOf(targetMidi);
-      
+       
       // If found, assign it.
       if (newIndex !== -1) {
         noteIndices[i] = newIndex;
       }
     }
     emitLoopgridUpdate({ reason: 'random-notes' });
+    panel.__seqRev++;
+    rebuildSeqPattern();
   });
 
   // --- Particle System ---
@@ -327,6 +358,8 @@ export function buildDrumGrid(panel, numSteps = 8){
     if (panel.__gridState.steps[col]) {
       if (!window.__NOTE_SCHEDULER_ENABLED) {
         panel.__playCurrent(col);
+      } else {
+        // Scheduler owns audio; step is visual-only.
       }
       if (panel.__particles) panel.__particles.disturb();
       // Trigger visual flashes.
@@ -340,11 +373,12 @@ export function buildDrumGrid(panel, numSteps = 8){
   };
 
   panel.__sequencerSchedule = (col, when) => {
-    if (panel.__gridState.steps[col]) {
-      panel.__playCurrent(col, when);
-    }
+    const pat = panel.__seqPatternActive || panel.__seqPattern;
+    if (!pat || !pat.steps) return;
+    if (!pat.steps[col]) return;
+    panel.__playCurrent(col, when);
   };
   panel.dataset.steps = numSteps;
-
+ 
   return panel;
 }

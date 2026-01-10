@@ -4,9 +4,9 @@ import { setToyInstrument } from './instrument-map.js';
 import { initToyUI } from './toyui.js';
 import { attachSimpleRhythmVisual } from './simple-rhythm-visual.js';
 import { midiToName, buildPalette } from './note-helpers.js';
+import { gateTriggerForToy } from './toy-audio.js';
 
 const NUM_CUBES = 8;
-
 
 
 export function markPlayingColumn(panel, colIndex){
@@ -30,6 +30,22 @@ export function buildGrid(panel, numSteps = 8){
     noteIndices: Array(numSteps).fill(12), // Default to C4 (MIDI 60)
   };
 
+  // Deterministic sequencing state
+  panel.__seqRev = panel.__seqRev || 0;
+  panel.__seqPattern = panel.__seqPattern || null;
+
+  function rebuildSeqPattern() {
+    const st = panel.__gridState || {};
+    panel.__seqPattern = {
+      steps: Array.isArray(st.steps) ? Array.from(st.steps) : [],
+      noteIndices: Array.isArray(st.noteIndices) ? Array.from(st.noteIndices) : [],
+      instrument: panel.dataset.instrument || 'Bass Tone 4',
+    };
+  }
+
+  // Initial snapshot
+  rebuildSeqPattern();
+
   const emitLoopgridUpdate = (extraDetail = {}) => {
     const state = panel.__gridState || {};
     const detail = Object.assign({}, extraDetail);
@@ -40,7 +56,7 @@ export function buildGrid(panel, numSteps = 8){
   };
 
   const body = panel.querySelector('.toy-body');
-  
+   
   // --- Create all DOM elements first, in a predictable order ---
   if (body && !body.querySelector('.sequencer-wrap')) {
     const sequencerWrap = document.createElement('div');
@@ -56,52 +72,58 @@ export function buildGrid(panel, numSteps = 8){
     particleCanvas.className = 'toy-particles';
     sequencerWrap.insertBefore(particleCanvas, sequencerWrap.firstChild || null);
   }
-  
+   
   // --- DOM scaffolding ready ---
 
   // Attach visual renderer for the 8-step grid.
   attachSimpleRhythmVisual(panel);
 
-// --- Apply any pending restored state (set by persistence.applyLoopGrid before grid init) ---
-try {
-  const pending = panel.__pendingLoopGridState;
-  if (pending && panel.__gridState) {
-    if (Array.isArray(pending.steps)) {
-      panel.__gridState.steps = Array.from(pending.steps).map(v => !!v);
-    }
-    if (Array.isArray(pending.notes)) {
-      panel.__gridState.notes = Array.from(pending.notes).map(x => x | 0);
-    }
-    if (Array.isArray(pending.noteIndices)) {
-      panel.__gridState.noteIndices = Array.from(pending.noteIndices).map(x => x | 0);
-    }
-    if (pending.instrument) {
-      // Keep dataset updated; grid-core already wires instrument changes
-      panel.dataset.instrument = pending.instrument;
-      panel.dataset.instrumentPersisted = '1';
-      try { panel.dispatchEvent(new CustomEvent('toy:instrument', { detail: { name: pending.instrument, value: pending.instrument } })); } catch {}
-    }
-    // Notify listeners/visuals that state changed due to restore
-    try {
-      panel.dispatchEvent(new CustomEvent('loopgrid:update', {
-        detail: {
-          reason: 'restore',
-          steps: Array.from(panel.__gridState.steps),
-          noteIndices: Array.from(panel.__gridState.noteIndices),
-        }
-      }));
-    } catch {}
+  // --- Apply any pending restored state (set by persistence.applyLoopGrid before grid init) ---
+  try {
+    const pending = panel.__pendingLoopGridState;
+    if (pending && panel.__gridState) {
+      if (Array.isArray(pending.steps)) {
+        panel.__gridState.steps = Array.from(pending.steps).map(v => !!v);
+      }
+      if (Array.isArray(pending.notes)) {
+        panel.__gridState.notes = Array.from(pending.notes).map(x => x | 0);
+      }
+      if (Array.isArray(pending.noteIndices)) {
+        panel.__gridState.noteIndices = Array.from(pending.noteIndices).map(x => x | 0);
+      }
+      if (pending.instrument) {
+        // Keep dataset updated; grid-core already wires instrument changes
+        panel.dataset.instrument = pending.instrument;
+        panel.dataset.instrumentPersisted = '1';
+        try { panel.dispatchEvent(new CustomEvent('toy:instrument', { detail: { name: pending.instrument, value: pending.instrument } })); } catch {}
+      }
+      // Notify listeners/visuals that state changed due to restore
+      try {
+        panel.dispatchEvent(new CustomEvent('loopgrid:update', {
+          detail: {
+            reason: 'restore',
+            steps: Array.from(panel.__gridState.steps),
+            noteIndices: Array.from(panel.__gridState.noteIndices),
+          }
+        }));
+      } catch {}
 
-    delete panel.__pendingLoopGridState;
+      delete panel.__pendingLoopGridState;
+      panel.__seqRev++;
+      rebuildSeqPattern();
+    }
+  } catch (e) {
+    console.warn('[loopgrid] pending state apply failed', e);
   }
-} catch (e) {
-  console.warn('[loopgrid] pending state apply failed', e);
-}
 
   const toyId = panel.dataset.toyid || panel.id || 'loopgrid';
+  panel.__audioToyId = toyId;
+
+  // Create gated trigger for audio generation guard
+  const playNote = gateTriggerForToy(panel.__audioToyId, triggerInstrument);
 
   try {
-    if (panel.dataset.instrument) setToyInstrument(toyId, panel.dataset.instrument);
+    if (panel.dataset.instrument) setToyInstrument(panel.__audioToyId, panel.dataset.instrument);
   } catch {}
 
   function setInstrument(name){
@@ -109,7 +131,9 @@ try {
     // The instrument ID is case-sensitive and should not be lowercased.
     panel.dataset.instrument = name;
     panel.dataset.instrumentPersisted = '1';
-    try{ setToyInstrument(toyId, name); }catch{}
+    try{ setToyInstrument(panel.__audioToyId, name); }catch{}
+    panel.__seqRev++;
+    rebuildSeqPattern();
   }
   panel.addEventListener('toy-instrument', (e)=> setInstrument(e && e.detail && e.detail.value));
   panel.addEventListener('toy:instrument', (e)=> setInstrument((e && e.detail && (e.detail.name || e.detail.value))));
@@ -123,7 +147,7 @@ try {
   panel.__playCurrent = (step = -1, when) => {
     const instrument = panel.dataset.instrument || 'tone';
     const note = step >= 0 ? getNoteForStep(step) : 'C4';
-    triggerInstrument(instrument, note, when, toyId);
+    playNote(instrument, note, when);
   };
 
   // Listen for note changes from the visual module to provide audio feedback.
@@ -131,6 +155,8 @@ try {
     const col = e?.detail?.col;
     if (col >= 0 && panel.__playCurrent) {
       panel.__playCurrent(col);
+      panel.__seqRev++;
+      rebuildSeqPattern();
     }
   });
 
@@ -140,6 +166,8 @@ try {
       panel.__gridState.steps[i] = Math.random() < 0.5;
     }
     emitLoopgridUpdate({ reason: 'random' });
+    panel.__seqRev++;
+    rebuildSeqPattern();
   });
   panel.addEventListener('toy-clear', () => {
     if (!panel.__gridState?.steps) return;
@@ -147,6 +175,8 @@ try {
     // Also reset the notes for each step back to the default (C4).
     if (panel.__gridState.noteIndices) panel.__gridState.noteIndices.fill(12);
     emitLoopgridUpdate({ reason: 'clear' });
+    panel.__seqRev++;
+    rebuildSeqPattern();
   });
   panel.addEventListener('toy-random-notes', () => {
     if (!panel.__gridState?.noteIndices || !panel.__gridState?.notePalette) return;
@@ -169,6 +199,8 @@ try {
       }
     }
     emitLoopgridUpdate({ reason: 'random-notes' });
+    panel.__seqRev++;
+    rebuildSeqPattern();
   });
 
   panel.__beat = () => {};
@@ -178,6 +210,8 @@ try {
     if (panel.__gridState.steps[col]) {
       if (!window.__NOTE_SCHEDULER_ENABLED) {
         panel.__playCurrent(col);
+      } else {
+        // Scheduler owns audio; step is visual-only.
       }
       panel.__pulseHighlight = 1.0; // For border pulse animation
       panel.__pulseRearm = true;
@@ -197,10 +231,16 @@ try {
   };
 
   panel.__sequencerSchedule = (col, when) => {
-    if (panel.__gridState.steps[col]) {
-      panel.__playCurrent(col, when);
-    }
-  };
+    const pat = panel.__seqPatternActive || panel.__seqPattern;
+    if (!pat || !pat.steps || !pat.noteIndices) return;
+    if (!pat.steps[col]) return;
 
+    const instrument = pat.instrument || (panel.dataset.instrument || 'tone');
+    const noteIndex = pat.noteIndices[col];
+    const midi = panel.__gridState.notePalette[noteIndex];
+    const note = midiToName(midi);
+    playNote(instrument, note, when);
+  };
+ 
   return panel;
 }
