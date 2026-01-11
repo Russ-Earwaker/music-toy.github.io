@@ -125,7 +125,7 @@ function resolveOctaveForToy(noteName, toyId, options = {}, instrumentId = ''){
     return null;
   };
   let octave = null;
-  const panel = document.querySelector(`.toy-panel[data-toyid="${toyId}"], .toy-panel[data-toy="${toyId}"], #${toyId}`);
+  const panel = document.querySelector(`.toy-panel[data-audiotoyid="${toyId}"], .toy-panel[data-toyid="${toyId}"], .toy-panel[data-toy="${toyId}"], #${toyId}`);
   const headPanel = panel ? findChainHeadPanel(panel) : panel;
   let pitchShiftEnabled = null;
   if (typeof options.pitchShift === 'boolean') {

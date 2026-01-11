@@ -32,6 +32,7 @@ export async function loadInstrumentEntries(){
       const recoIdx = header.findIndex(h=>/^recommended[_-]?toys$/i.test(h));
       const baseNoteIdx = header.findIndex(h=>/^(base\s*_?note|baseNote|note_base)$/i.test(h));
       const baseOctIdx = header.findIndex(h=>/^(base\s*_?oct(ave)?|baseOct(ave)?|octave)$/i.test(h));
+      const priIdx  = header.findIndex(h=>/^(priority|is_priority|ispriority|first_pick|firstpick)$/i.test(h));
       ID_TO_DISPLAY_NAME.clear(); DISPLAY_NAME_TO_ID.clear(); ID_TO_THEMES.clear(); ALL_THEMES.clear();
       const out = [];
       for (const line of lines){
@@ -47,8 +48,10 @@ export async function loadInstrumentEntries(){
         const themes = themesRaw.split(/[;|]/).map(t=>t.trim()).filter(Boolean);
         const recoRaw = recoIdx >= 0 ? String(cells[recoIdx] || '') : '';
         const recommendedToys = recoRaw.split(/[;|]/).map(t=>t.trim().toLowerCase()).filter(Boolean);
+        const priRaw = priIdx >= 0 ? String(cells[priIdx] || '') : '';
+        const priority = /^(1|true|yes|y|prio|priority)$/i.test(priRaw.trim());
         if (!id || !display) continue;
-        out.push({ id, display, type, synth, themes, recommendedToys, baseNote: baseNote || undefined });
+        out.push({ id, display, type, synth, themes, recommendedToys, priority, baseNote: baseNote || undefined });
         ID_TO_DISPLAY_NAME.set(id, display);
         DISPLAY_NAME_TO_ID.set(display, id);
         if (themes.length){

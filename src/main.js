@@ -2481,7 +2481,8 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument, autoCenter, a
     if (!chosenInstrument) {
         const theme = getSoundThemeKey?.() || '';
         const used = collectUsedInstruments();
-        const picked = pickInstrumentForToy(type, { theme, usedIds: used });
+        const preferPriority = (used && typeof used.size === 'number') ? (used.size === 0) : false;
+        const picked = pickInstrumentForToy(type, { theme, usedIds: used, preferPriority });
         if (picked) chosenInstrument = picked;
     }
 
