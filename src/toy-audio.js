@@ -54,13 +54,24 @@ function __clearGateTimeouts(toyKey /* optional */) {
   if (set && set.size === 0) __DEFERRED_GATE_TIMEOUTS.delete(toyKey);
 }
 
-export function bumpToyAudioGen(toyId) {
+export function bumpToyAudioGen(toyId, reason = '') {
   if (!toyId) return;
   __TOY_AUDIO_GEN[toyId] = (__TOY_AUDIO_GEN[toyId] || 0) + 1;
   // Best-effort: stop any already-scheduled future sample notes for this toy.
   try { cancelScheduledToySources(toyId); } catch {}
   // HARD RESET: cancel any deferred gate timeouts for this toy (setTimeout continues across suspend()).
   try { __clearGateTimeouts(String(toyId)); } catch {}
+
+  try {
+    if (window.__SCHED_MISMATCH_DEBUG) {
+      const lastResumeAt = Number(window.__NOTE_SCHED_LAST_RESUME_AT);
+      const now = ensureAudioContext()?.currentTime ?? 0;
+      if (Number.isFinite(lastResumeAt) && (now - lastResumeAt) < 0.5) {
+        const payload = { id: String(toyId), reason: reason || 'unknown', now, lastResumeAt };
+        console.warn('[audio-gate][resume-bump] ' + JSON.stringify(payload));
+      }
+    }
+  } catch {}
 }
 
 export function getToyAudioGen(toyId) {
@@ -295,6 +306,14 @@ export function gateTriggerForToy(toyId, triggerFn){
                 if (window.__AUDIO_GATE_DROP_DEBUG) {
                   console.warn('[audio-gate][drop-gen-mismatch]', { id, inst, noteName, when, genAtSchedule, genNow });
                 }
+                if (window.__SCHED_MISMATCH_DEBUG) {
+                  const lastResumeAt = Number(window.__NOTE_SCHED_LAST_RESUME_AT);
+                  const now = ensureAudioContext()?.currentTime ?? 0;
+                  if (Number.isFinite(lastResumeAt) && (now - lastResumeAt) < 0.5) {
+                    const payload = { id, inst, noteName, when, genAtSchedule, genNow, now };
+                    console.warn('[audio-gate][resume-drop] ' + JSON.stringify(payload));
+                  }
+                }
               } catch {}
 
               return;
@@ -315,6 +334,14 @@ export function gateTriggerForToy(toyId, triggerFn){
         try {
           if (window.__AUDIO_GATE_DROP_DEBUG) {
             console.warn('[audio-gate][drop-immediate-gen-mismatch]', { id, inst, noteName, when, genAtSchedule, genNow });
+          }
+          if (window.__SCHED_MISMATCH_DEBUG) {
+            const lastResumeAt = Number(window.__NOTE_SCHED_LAST_RESUME_AT);
+            const now = ensureAudioContext()?.currentTime ?? 0;
+            if (Number.isFinite(lastResumeAt) && (now - lastResumeAt) < 0.5) {
+              const payload = { id, inst, noteName, when, genAtSchedule, genNow, now };
+              console.warn('[audio-gate][resume-drop-immediate] ' + JSON.stringify(payload));
+            }
           }
         } catch {}
         return;

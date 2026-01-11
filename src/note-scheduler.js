@@ -12,6 +12,7 @@ import { bumpToyAudioGen } from './toy-audio.js';
 // We intentionally share state across instances to hard-prevent duplicate scheduling.
 const __GLOBAL_SCHED_STATE = new Map(); // toyId -> per-toy state
 let __SCHED_INSTANCE_SEQ = 1;
+const __RESUME_LOG_STATE = new Map(); // toyId -> lastResumeAt logged
 
 // When the transport pauses, wipe scheduler de-dupe state so a new run starts clean.
 // (Prevents leftover scheduled keys from affecting the first couple beats after resume.)
@@ -214,7 +215,12 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, l
         const justActivated = !!toy.__chainJustActivated;
         if (justActivated && isChained) {
           const audioId = toy.__audioToyId || toy.dataset?.toyid || toyId;
-          try { bumpToyAudioGen(audioId); } catch {}
+          // On resume, avoid bumping gen repeatedly; it can drop the just-scheduled notes.
+          if (!justResumed) {
+            try { bumpToyAudioGen(audioId, 'chain-activate'); } catch {}
+          } else {
+            try { toy.__chainJustActivated = false; } catch {}
+          }
           if (isDebugEnabled()) {
             console.log('[note-scheduler] chain activate -> bumped new toy only', { toyId, audioId });
           }
@@ -329,6 +335,32 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, l
         if (justActivated && scheduledAny) {
           try { toy.__chainJustActivated = false; } catch {}
         }
+
+        // Debug: log resume scheduling summary once per toy per resume.
+        try {
+          if (window.__SCHED_MISMATCH_DEBUG && justResumed) {
+            const prev = __RESUME_LOG_STATE.get(toyId);
+            if (prev !== lastResumeAt) {
+              __RESUME_LOG_STATE.set(toyId, lastResumeAt);
+              const payload = {
+                toyId,
+                scheduledAny,
+                steps,
+                stepLen,
+                barStart,
+                toyLoopStart,
+                windowStart: windowStartToy,
+                windowEnd: windowEndToy,
+                now,
+                isChained,
+                justActivated,
+                scheduledCol0InCurrentBar: toyState.scheduledCol0InCurrentBar,
+                justResumed,
+              };
+              console.log('[note-scheduler][resume] ' + JSON.stringify(payload));
+            }
+          }
+        } catch {}
       });
     } catch (e) {
       try {

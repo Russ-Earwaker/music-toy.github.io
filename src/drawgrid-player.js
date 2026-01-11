@@ -130,9 +130,42 @@ export function connectDrawGridToPlayer(panel) {
       const tid = setTimeout(() => {
         try {
           // If paused/stopped OR the toy has been invalidated (pause/delete/chain switch), do nothing.
-          if (!isTransportRunning()) return;
-          if (getToyAudioGen(panel.__audioToyId) !== genAtSchedule) return;
-          if (!document.body.contains(panel)) return;
+          if (!isTransportRunning()) {
+            try {
+              if (window.__SCHED_MISMATCH_DEBUG) {
+                const lastResumeAt = Number(window.__NOTE_SCHED_LAST_RESUME_AT);
+                const nowDbg = ensureAudioContext()?.currentTime ?? 0;
+                if (Number.isFinite(lastResumeAt) && (nowDbg - lastResumeAt) < 0.5) {
+                  console.log('[drawgrid-player][resume-fx-skip] ' + JSON.stringify({ panelId: panel?.id, col, when, reason: 'transport', now: nowDbg }));
+                }
+              }
+            } catch {}
+            return;
+          }
+          if (getToyAudioGen(panel.__audioToyId) !== genAtSchedule) {
+            try {
+              if (window.__SCHED_MISMATCH_DEBUG) {
+                const lastResumeAt = Number(window.__NOTE_SCHED_LAST_RESUME_AT);
+                const nowDbg = ensureAudioContext()?.currentTime ?? 0;
+                if (Number.isFinite(lastResumeAt) && (nowDbg - lastResumeAt) < 0.5) {
+                  console.log('[drawgrid-player][resume-fx-skip] ' + JSON.stringify({ panelId: panel?.id, col, when, reason: 'gen-mismatch', now: nowDbg }));
+                }
+              }
+            } catch {}
+            return;
+          }
+          if (!document.body.contains(panel)) {
+            try {
+              if (window.__SCHED_MISMATCH_DEBUG) {
+                const lastResumeAt = Number(window.__NOTE_SCHED_LAST_RESUME_AT);
+                const nowDbg = ensureAudioContext()?.currentTime ?? 0;
+                if (Number.isFinite(lastResumeAt) && (nowDbg - lastResumeAt) < 0.5) {
+                  console.log('[drawgrid-player][resume-fx-skip] ' + JSON.stringify({ panelId: panel?.id, col, when, reason: 'disconnected', now: nowDbg }));
+                }
+              }
+            } catch {}
+            return;
+          }
 
           markPlayingColumn(panel, col);
           panel.__pulseHighlight = 1.0;
@@ -260,7 +293,36 @@ export function connectDrawGridToPlayer(panel) {
       console.log('[drawgrid-player] created fresh pattern on schedule', { steps, col, when, nodesPerCol: pat.cols.map(c => c.nodes.length) });
     }
     
+    try {
+      if (window.__SCHED_MISMATCH_DEBUG) {
+        const lastResumeAt = Number(window.__NOTE_SCHED_LAST_RESUME_AT);
+        const now = ensureAudioContext()?.currentTime ?? 0;
+        if (Number.isFinite(lastResumeAt) && (now - lastResumeAt) < 0.5) {
+          const payload = {
+            panelId: panel?.id,
+            col,
+            when,
+            now,
+            hasPat: !!pat,
+            patSteps: pat?.steps,
+            patCols: Array.isArray(pat?.cols) ? pat.cols.length : 0,
+          };
+          console.log('[drawgrid-player][resume-schedule] ' + JSON.stringify(payload));
+        }
+      }
+    } catch {}
+
     if (!pat || !pat.cols || col < 0 || col >= pat.steps) {
+      try {
+        if (window.__SCHED_MISMATCH_DEBUG) {
+          const lastResumeAt = Number(window.__NOTE_SCHED_LAST_RESUME_AT);
+          const now = ensureAudioContext()?.currentTime ?? 0;
+          if (Number.isFinite(lastResumeAt) && (now - lastResumeAt) < 0.5) {
+            const payload = { panelId: panel?.id, col, when, hasPat: !!pat, patSteps: pat?.steps, patCols: pat?.cols?.length };
+            console.log('[drawgrid-player][resume-skip][no-pattern] ' + JSON.stringify(payload));
+          }
+        }
+      } catch {}
       console.log('[drawgrid-player] schedule early return', { hasPat: !!pat, patCols: pat?.cols?.length, patSteps: pat?.steps, col, steps });
       return;
     }
@@ -268,21 +330,49 @@ export function connectDrawGridToPlayer(panel) {
     // Schedule drawgrid effects (flash/particles/etc) at the actual play time.
     scheduleDrawgridEffects(panel, col, when);
 
-    // DEBUG: Scheduling a drawgrid while it is not chain-active is a strong indicator
-    // that the scheduler is calling the wrong toy (or active set is stale).
+    // Authoritative guard: NEVER schedule audio if this toy isn't in the active set.
+    // (Chain DOM flags can be stale during transitions.)
     try {
-      if (window.__SCHED_MISMATCH_DEBUG) {
-        const isActive = (panel?.dataset?.chainActive === 'true');
-        if (!isActive) {
-          console.warn('[sched][MISMATCH][drawgrid] scheduled while inactive', {
-            panelId: panel?.id,
+      const activeList = Array.isArray(window.__mtActiveToyIds) ? window.__mtActiveToyIds : null;
+      const panelId = panel?.id || '';
+      if (activeList && panelId && !activeList.includes(panelId)) {
+        if (window.__SCHED_MISMATCH_DEBUG) {
+          console.warn('[sched][MISMATCH][drawgrid] blocked schedule (not active)', {
+            panelId,
             dataToyId: panel?.dataset?.toyid,
             audioToyId: panel?.__audioToyId,
             chainActive: panel?.dataset?.chainActive,
             col,
             when,
             tick: window.__mtSchedTick,
-            activeToyIds: window.__mtActiveToyIds,
+            activeToyIds: activeList,
+            chainState: window.__mtChainState,
+            nowAt: window.__mtNowAt,
+          });
+        }
+        return;
+      }
+    } catch {}
+
+    // DEBUG (authoritative): the scheduler should only schedule toys that are in the
+    // active set computed inside tickAudioScheduler (window.__mtActiveToyIds).
+    // dataset.chainActive is a DOM flag and can be stale / unset during transitions.
+    try {
+      if (window.__SCHED_MISMATCH_DEBUG) {
+        const activeList = Array.isArray(window.__mtActiveToyIds) ? window.__mtActiveToyIds : [];
+        const panelId = panel?.id || '';
+        const inActiveSet = !!panelId && activeList.includes(panelId);
+        if (!inActiveSet) {
+          console.warn('[sched][MISMATCH][drawgrid] scheduled while NOT in active set', {
+            panelId,
+            dataToyId: panel?.dataset?.toyid,
+            audioToyId: panel?.__audioToyId,
+            chainActive: panel?.dataset?.chainActive,
+            col,
+            when,
+            tick: window.__mtSchedTick,
+            activeToyIds: activeList,
+            activeCount: activeList.length,
             chainState: window.__mtChainState,
             nowAt: window.__mtNowAt,
           });
@@ -293,13 +383,43 @@ export function connectDrawGridToPlayer(panel) {
     const c = pat.cols[col];
     if (!c || !c.active || !c.nodes || c.nodes.length === 0) {
       if (window.__DRAWGRID_PLAYER_DEBUG) console.log('[drawgrid-player] column not active/empty', { col, hasC: !!c, active: c?.active, nodesCount: c?.nodes?.length });
+      try {
+        if (window.__SCHED_MISMATCH_DEBUG) {
+          const lastResumeAt = Number(window.__NOTE_SCHED_LAST_RESUME_AT);
+          const now = ensureAudioContext()?.currentTime ?? 0;
+          if (Number.isFinite(lastResumeAt) && (now - lastResumeAt) < 0.5) {
+            const payload = { panelId: panel?.id, col, when, active: c?.active, nodesCount: c?.nodes?.length };
+            console.log('[drawgrid-player][resume-skip][empty-col] ' + JSON.stringify(payload));
+          }
+        }
+      } catch {}
       return;
     }
+
+    try {
+      if (window.__SCHED_MISMATCH_DEBUG) {
+        const lastResumeAt = Number(window.__NOTE_SCHED_LAST_RESUME_AT);
+        const now = ensureAudioContext()?.currentTime ?? 0;
+        if (Number.isFinite(lastResumeAt) && (now - lastResumeAt) < 0.5) {
+          const payload = {
+            panelId: panel?.id,
+            col,
+            when,
+            now,
+            nodes: Array.isArray(c.nodes) ? c.nodes.slice(0, 16) : [],
+            nodesCount: Array.isArray(c.nodes) ? c.nodes.length : 0,
+            disabledCount: Array.isArray(c.disabled) ? c.disabled.length : 0,
+          };
+          console.log('[drawgrid-player][resume-col] ' + JSON.stringify(payload));
+        }
+      }
+    } catch {}
 
     // Use snapshot data only (deterministic).
     let columnTriggered = false;
     const disabledSet = new Set(c.disabled || []);
 
+    let loggedResumePlay = false;
     for (const row of c.nodes) {
       if (typeof row !== 'number' || Number.isNaN(row)) continue;
       if (disabledSet.has(row)) continue;
@@ -319,6 +439,18 @@ export function connectDrawGridToPlayer(panel) {
 
       const midiNote = notePalette[row];
       if (midiNote === undefined) continue;
+
+      try {
+        if (!loggedResumePlay && window.__SCHED_MISMATCH_DEBUG) {
+          const lastResumeAt = Number(window.__NOTE_SCHED_LAST_RESUME_AT);
+          const now = ensureAudioContext()?.currentTime ?? 0;
+          if (Number.isFinite(lastResumeAt) && (now - lastResumeAt) < 0.5) {
+            const payload = { panelId: panel?.id, col, when, row, midiNote, instrument: pat.instrument || instrument };
+            console.log('[drawgrid-player][resume-play] ' + JSON.stringify(payload));
+            loggedResumePlay = true;
+          }
+        }
+      } catch {}
 
       playNote(pat.instrument || instrument, midiToName(midiNote), when);
     }

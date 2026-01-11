@@ -365,14 +365,15 @@ export function buildGrid(panel, numSteps = 8){
     const midi = panel.__gridState.notePalette[noteIndex];
     const note = midiToName(midi);
 
-    // DEBUG: If we are scheduling this panel while it's not chain-active,
-    // that's a smoking gun for the "swap/bleed" bug.
+    // Authoritative guard: NEVER schedule audio if this toy isn't in the active set.
+    // (Chain DOM flags can be stale during transitions.)
     try {
-      if (window.__SCHED_MISMATCH_DEBUG) {
-        const isActive = (panel?.dataset?.chainActive === 'true');
-        if (!isActive) {
-          console.warn('[sched][MISMATCH][loopgrid] scheduled while inactive', {
-            panelId: panel?.id,
+      const activeList = Array.isArray(window.__mtActiveToyIds) ? window.__mtActiveToyIds : null;
+      const panelId = panel?.id || '';
+      if (activeList && panelId && !activeList.includes(panelId)) {
+        if (window.__SCHED_MISMATCH_DEBUG) {
+          console.warn('[sched][MISMATCH][loopgrid] blocked schedule (not active)', {
+            panelId,
             dataToyId: panel?.dataset?.toyid,
             audioToyId: panel?.__audioToyId,
             chainActive: panel?.dataset?.chainActive,
@@ -381,7 +382,35 @@ export function buildGrid(panel, numSteps = 8){
             instrument,
             note,
             tick: window.__mtSchedTick,
-            activeToyIds: window.__mtActiveToyIds,
+            activeToyIds: activeList,
+            chainState: window.__mtChainState,
+            nowAt: window.__mtNowAt,
+          });
+        }
+        return;
+      }
+    } catch {}
+
+    // DEBUG (authoritative): scheduler should only schedule toys present in the active set
+    // computed inside tickAudioScheduler (window.__mtActiveToyIds). DOM flags can be stale.
+    try {
+      if (window.__SCHED_MISMATCH_DEBUG) {
+        const activeList = Array.isArray(window.__mtActiveToyIds) ? window.__mtActiveToyIds : [];
+        const panelId = panel?.id || '';
+        const inActiveSet = !!panelId && activeList.includes(panelId);
+        if (!inActiveSet) {
+          console.warn('[sched][MISMATCH][loopgrid] scheduled while NOT in active set', {
+            panelId,
+            dataToyId: panel?.dataset?.toyid,
+            audioToyId: panel?.__audioToyId,
+            chainActive: panel?.dataset?.chainActive,
+            col,
+            when,
+            instrument,
+            note,
+            tick: window.__mtSchedTick,
+            activeToyIds: activeList,
+            activeCount: activeList.length,
             chainState: window.__mtChainState,
             nowAt: window.__mtNowAt,
           });

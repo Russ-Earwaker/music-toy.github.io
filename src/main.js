@@ -1434,6 +1434,11 @@ function panelHasAnyNotes(panel) {
       const active = st?.nodes?.active;
       return Array.isArray(active) && active.some(Boolean);
     } catch {}
+    try {
+      const pat = panel.__seqPatternActive || panel.__seqPattern;
+      const cols = Array.isArray(pat?.cols) ? pat.cols : [];
+      return cols.some(c => c && c.active && Array.isArray(c.nodes) && c.nodes.length > 0);
+    } catch {}
     return false;
   }
 
@@ -1514,30 +1519,47 @@ function advanceChain(headId) {
         g_chainState.set(headId, headId);
     }
 
-    // Only clear scheduler state if we actually moved to a DIFFERENT toy.
-    // In a 1-toy chain, activeToyId === headId every bar; clearing here wipes de-dupe state
+    // Only reset/cancel scheduling if we actually moved to a DIFFERENT toy.
+    // In a 1-toy chain, activeToyId === headId every bar; resetting here wipes de-dupe state
     // and causes the scheduler to re-schedule the same notes -> doubled playback.
     if (nextActiveId && nextActiveId !== activeToyId) {
-      // CRITICAL:
-      // We schedule audio ahead (lookahead). When the chain advances, the outgoing toy may
-      // already have future AudioBufferSourceNodes scheduled. If we don't cancel them here,
-      // they'll play into the next bar while the new active toy also schedules -> overlap/cross-play.
+      // Mark newly active toy before the scheduler runs so it can safely bump once
+      // without invalidating already-scheduled notes mid-bar.
       try {
-        const outgoingAudioToyId =
+        if (nextToy) {
+          nextToy.__chainJustActivated = true;
+        } else {
+          const headEl = document.getElementById(headId);
+          if (headEl) headEl.__chainJustActivated = true;
+        }
+      } catch {}
+
+      // IMPORTANT:
+      // Chain handoff can happen *before* the bar ends (pre-advance). In that case, the outgoing toy
+      // may already have future AudioBufferSourceNodes scheduled for later columns in the current bar.
+      // Those will otherwise keep playing "over" the newly-active toy.
+      //
+      // We cancel any remaining scheduled audio for BOTH the outgoing and the newly-active toy,
+      // and request a scheduler reset so the next tick re-schedules cleanly from the active set.
+      try {
+        const outAudioId =
           activeToy?.dataset?.audiotoyid ||
           activeToy?.__audioToyId ||
           activeToyId;
-        try {
-          if (window.__SCHED_MISMATCH_DEBUG) {
-            console.log('[chain] cancel outgoing', { activeToyId, outgoingAudioToyId, nextActiveId });
-          }
-        } catch {}
-        // Cancel anything scheduled for the outgoing toy (audio-id and panel-id safety).
-        try { cancelScheduledToySources(outgoingAudioToyId); } catch {}
-        try { if (outgoingAudioToyId !== activeToyId) cancelScheduledToySources(activeToyId); } catch {}
-        // Invalidate any gated triggers / visual timeouts tied to this toy.
-        try { bumpToyAudioGen(outgoingAudioToyId); } catch {}
-        try { if (outgoingAudioToyId !== activeToyId) bumpToyAudioGen(activeToyId); } catch {}
+        try { cancelScheduledToySources(outAudioId); } catch {}
+        try { if (outAudioId !== activeToyId) cancelScheduledToySources(activeToyId); } catch {}
+        bumpToyAudioGen(outAudioId, 'chain-advance-out');
+        activeToy.__forceSchedulerReset = true;
+      } catch {}
+      try {
+        const inAudioId =
+          nextToy?.dataset?.audiotoyid ||
+          nextToy?.__audioToyId ||
+          nextActiveId;
+        try { cancelScheduledToySources(inAudioId); } catch {}
+        try { if (inAudioId !== nextActiveId) cancelScheduledToySources(nextActiveId); } catch {}
+        bumpToyAudioGen(inAudioId, 'chain-advance-in');
+        if (nextToy) nextToy.__forceSchedulerReset = true;
       } catch {}
 
       try { g_sequencerScheduler?.clearToy?.(activeToyId); } catch {}
@@ -3176,6 +3198,7 @@ function snapshotChainStateForPause(){
     const snap = new Map();
     g_chainState.forEach((v,k)=> snap.set(k,v));
     g_chainPausedSnapshot = snap;
+    g_lastAudioPhase01 = null;
     if (window.__CHAIN_DEBUG) console.log('[chain] snapshot pause', { size: snap.size });
   }catch(e){
     g_chainPausedSnapshot = null;
@@ -3185,14 +3208,25 @@ function snapshotChainStateForPause(){
 
 function restoreChainStateAfterResume(){
   try{
-    if (!g_chainPausedSnapshot) return;
-
-    // g_chainState is const, so clear + repopulate.
-    g_chainState.clear();
-    for (const [k,v] of g_chainPausedSnapshot.entries()){
-      g_chainState.set(k,v);
+    // On resume, always restart chains from their heads.
+    // This avoids mid-chain resumes that can skip early notes.
+    updateChains();
+    const now = ensureAudioContext()?.currentTime;
+    for (const headId of g_chainState.keys()) {
+      g_chainState.set(headId, headId);
+      const headEl = document.getElementById(headId);
+      if (headEl) {
+        if (Number.isFinite(now)) headEl.__loopStartOverrideSec = now;
+        try {
+          // Refresh deterministic pattern snapshots on resume (drawgrid relies on these).
+          if (typeof headEl.__seqTouch === 'function') headEl.__seqTouch('resume');
+        } catch {}
+        headEl.__chainJustActivated = true;
+        headEl.__forceSchedulerReset = true;
+      }
     }
-    if (window.__CHAIN_DEBUG) console.log('[chain] restore resume', { size: g_chainPausedSnapshot.size });
+    g_chainPausedSnapshot = null;
+    if (window.__CHAIN_DEBUG) console.log('[chain] resume -> reset to heads', { size: g_chainState.size });
   }catch(e){
     if (window.__CHAIN_DEBUG) console.warn('[chain] restore resume failed', e);
   }
@@ -3216,6 +3250,8 @@ let g_noteSchedCfg = null;
 let g_noteSchedRebuildPending = null;
 let g_lastCfgCheckAt = 0;
 let g_audioTickBusy = false;
+let g_lastAudioPhase01 = null;
+let g_audioPostResumeLogUntil = 0;
 
 function computeNoteSchedTiming() {
   const info = getLoopInfo();
@@ -3295,7 +3331,26 @@ function tickAudioScheduler() {
 
     const ctx = ensureAudioContext();
     const nowAt = ctx?.currentTime ?? 0;
+    try {
+      const lastResumeAt = Number(window.__NOTE_SCHED_LAST_RESUME_AT);
+      const justResumed = Number.isFinite(lastResumeAt) && (nowAt - lastResumeAt) < 0.25;
+      if (justResumed) g_audioPostResumeLogUntil = Math.max(g_audioPostResumeLogUntil, nowAt + 0.5);
+    } catch {}
     const forceSequencerAll = !!window.__PERF_FORCE_SEQUENCER_ALL;
+
+    // Advance chains on bar wrap inside the audio tick to avoid scheduling col0 for the outgoing toy.
+    try {
+      const phase01 = Number(info?.phase01);
+      if (Number.isFinite(phase01)) {
+        const wrapped = Number.isFinite(g_lastAudioPhase01) && phase01 < g_lastAudioPhase01 && g_lastAudioPhase01 > 0.9;
+        g_lastAudioPhase01 = phase01;
+        if (wrapped && g_chainState && g_chainState.size) {
+          for (const headId of g_chainState.keys()) {
+            try { advanceChain(headId); } catch {}
+          }
+        }
+      }
+    } catch {}
     // Active toys are the currently-active toy per chain head.
     // If we still have no chain state (or it got cleared), fall back to all sequenced toys.
     let activeToyIds = null;
@@ -3320,29 +3375,60 @@ function tickAudioScheduler() {
       for (const toyId of activeToyIds) {
         const toy = document.getElementById(toyId);
         if (!toy) continue;
-        if (panelHasAnyNotes(toy)) {
+        const hasNotes = panelHasAnyNotes(toy);
+        try {
+          if (window.__SCHED_MISMATCH_DEBUG && nowAt < g_audioPostResumeLogUntil) {
+            const payload = {
+              toyId,
+              toyType: toy?.dataset?.toy,
+              hasNotes,
+              hasSeqPattern: !!(toy.__seqPatternActive || toy.__seqPattern),
+              chainActive: toy?.dataset?.chainActive,
+              loopStartOverride: toy?.__loopStartOverrideSec,
+              loopStart: info?.loopStartTime,
+              barLen: info?.barLen,
+              windowStart: (nowAt + Math.max(0, g_noteSchedCfg?.leadSec ?? 0)) - Math.max(0, g_noteSchedCfg?.lateGraceSec ?? 0),
+              windowEnd: nowAt + Math.max(0.05, g_noteSchedCfg?.lookaheadSec ?? 0),
+              nowAt,
+            };
+            console.log('[sched][resume-check] ' + JSON.stringify(payload));
+          }
+        } catch {}
+        if (hasNotes) {
           activeAudioToyIds.add(toyId);
         } else {
           try { toy.__chainJustActivated = false; } catch {}
         }
       }
 
+      // Publish authoritative active set every tick (used as a hard guard in toy schedulers).
+      // This prevents "inactive toy schedules anyway" bleed/repeats during chain transitions.
+      try {
+        window.__mtSchedTick = (window.__mtSchedTick | 0) + 1;
+        window.__mtActiveToyIds = Array.from(activeAudioToyIds);
+        window.__mtChainState = Array.from(g_chainState.entries());
+        window.__mtNowAt = nowAt;
+      } catch {}
+
       // --- DEBUG: publish active sets for mismatch investigations ---
       try {
         if (window.__SCHED_MISMATCH_DEBUG) {
-          window.__mtSchedTick = (window.__mtSchedTick | 0) + 1;
-          window.__mtActiveToyIds = Array.from(activeAudioToyIds);
-          window.__mtChainState = Array.from(g_chainState.entries());
-          window.__mtNowAt = nowAt;
-          // Throttle console spam: log only on bar start or when active set changes.
-          if (info?.col === 0) {
-            console.log('[sched][tick]', {
+          // Throttle spam, but DON'T miss transitions:
+          // log on bar start OR whenever active set changes.
+          const key = window.__mtActiveToyIds.join('|');
+          const prevKey = window.__mtActiveToyIdsKey || '';
+          const changed = key !== prevKey;
+          window.__mtActiveToyIdsKey = key;
+          if (info?.col === 0 || changed) {
+            console.log(changed ? '[sched][tick][active-changed]' : '[sched][tick]', {
               tick: window.__mtSchedTick,
               col: info?.col,
               phase01: info?.phase01,
               nowAt,
               activeToyIds: window.__mtActiveToyIds,
               chainState: window.__mtChainState,
+              changed,
+              prevActiveToyIds: prevKey ? prevKey.split('|').filter(Boolean) : [],
             });
           }
         }
@@ -3618,6 +3704,11 @@ function scheduler(){
     const allowChainWork = !window.__PERF_DISABLE_CHAIN_WORK;
 
     if (CHAIN_FEATURE_ENABLE_SCHEDULER && running && hasChains && allowChainWork){
+      // When the note scheduler is enabled, chain advance is driven by the audio tick
+      // to align with AudioContext timing and avoid duplicate advances.
+      if (window.__NOTE_SCHEDULER_ENABLED) {
+        lastPhase = info.phase01;
+      } else {
       // --- Phase: advance chains on bar wrap ---
       const phase = info.phase01;
       const prevPhase = lastPhase;
@@ -3657,6 +3748,7 @@ function scheduler(){
           }
         }
         chainPreAdvanced = true;
+      }
       }
 
       // --- Phase A: chain-active flags ---
@@ -3704,7 +3796,10 @@ function scheduler(){
             try { toy.__loopgridNeedsRedraw = true; } catch {}
             if (isActive) {
               lastCol.delete(toy.id);
-              toy.__chainJustActivated = true;
+              try {
+                // Avoid mid-bar gen bumps when note scheduler is active.
+                if (!window.__NOTE_SCHEDULER_ENABLED) toy.__chainJustActivated = true;
+              } catch {}
               if (debugFirstStep()) {
                 console.log('[chain][debug] active', { id: toy.id, toy: toy.dataset?.toy });
               }
