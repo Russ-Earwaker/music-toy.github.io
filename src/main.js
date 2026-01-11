@@ -29,13 +29,13 @@ import './toy-layout-manager.js';
 import './zoom-overlay.js';
 import './toy-spawner.js';
 import './board-tap-dots.js';
-import { initAudioAssets } from './audio-samples.js';
+import { initAudioAssets, cancelScheduledToySources } from './audio-samples.js';
 import { loadInstrumentEntries as loadInstrumentCatalog } from './instrument-catalog.js';
 import { collectUsedInstruments, getSoundThemeKey, pickInstrumentForToy } from './sound-theme.js';
 import { installIOSAudioUnlock } from './ios-audio-unlock.js';
 import { installAudioDiagnostics } from './audio-diagnostics.js';
 import { makeDebugLogger } from './debug-flags.js';
-import { DEFAULT_BPM, NUM_STEPS, ensureAudioContext, getLoopInfo, setBpm, start, stop, isRunning } from './audio-core.js';
+import { DEFAULT_BPM, NUM_STEPS, ensureAudioContext, getLoopInfo, setBpm, start, stop, isRunning, getToyGain } from './audio-core.js';
 import { createSequencerScheduler } from './note-scheduler.js';
 import { buildGrid } from './grid-core.js';
 import { buildDrumGrid } from './drum-core.js';
@@ -2559,6 +2559,19 @@ function destroyToyPanel(panelOrId) {
     const panelId = panel.id;
     const prevId = panel.dataset.prevToyId || '';
     const nextId = panel.dataset.nextToyId || '';
+
+    // --- AUDIO: stop immediately on delete ---
+    // Notes are scheduled ahead (lookahead). If we don't cancel/mute, the deleted toy
+    // will keep playing already-scheduled events for a few beats.
+    try { cancelScheduledToySources(panelId); } catch {}
+    try {
+        const ctx = ensureAudioContext();
+        const g = getToyGain(panelId);
+        const t = ctx?.currentTime ?? 0;
+        // Hard-mute immediately (also silences tone-synth fallbacks that route via toy gain).
+        try { g.gain.cancelScheduledValues(t); } catch {}
+        try { g.gain.setValueAtTime(0, t); } catch { try { g.gain.value = 0; } catch {} }
+    } catch {}
 
     try { panel.dispatchEvent(new CustomEvent('toy-remove', { bubbles: true })); } catch (err) { console.warn('[destroyToyPanel] dispatch toy-remove failed', err); }
     try { panel.dispatchEvent(new CustomEvent('toy:remove', { detail: { panel }, bubbles: true })); } catch (err) { console.warn('[destroyToyPanel] dispatch toy:remove failed', err); }

@@ -672,18 +672,15 @@ export function getParticleCap(baseCap = 2200) {
   const toyCount = getActiveToyCount();
   const budget = getParticleBudget();
   
-  // Aggressive per-toy minimum + global cap approach
-  // 32 toys = 1600 min (50 * 32)
-  // 48 toys = 2400 min, capped at 2200
-  // 60 toys = 3000 min, capped at 2200
-  const BASE_CAP_PER_TOY = 50;
-  const MAX_CAP_SCALED = 2200;
-  
-  const minCap = toyCount * BASE_CAP_PER_TOY;
-  let cap = Math.min(MAX_CAP_SCALED, minCap);
-  
+  // Cap should be HIGH for small toy counts and scale DOWN as toy count grows.
+  // (Previous logic inverted this and gave ~50 particles for a 1-toy scene.)
+  const safeToyCount = Math.max(1, toyCount | 0);
+  const toyFactor = Math.sqrt(REFERENCE_TOY_COUNT / safeToyCount); // >1 for small scenes, <1 for large scenes
+  // Don't exceed baseCap on tiny scenes; just allow full detail.
+  const scaledByToys = Math.min(1, toyFactor);
+  let cap = Math.floor(baseCap * scaledByToys);
   // Apply quality scaling
-  cap = Math.floor(cap * budget.maxCountScale);
+  cap = Math.floor(cap * (budget.maxCountScale ?? 1));
   
   // Additional memory pressure reduction (more aggressive than before)
   const memLevel = getMemoryPressureLevel();
