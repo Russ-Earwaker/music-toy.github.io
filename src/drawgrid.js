@@ -5260,6 +5260,19 @@ function copyCanvas(backCtx, frontCtx) {
       emitDrawgridUpdate({ activityOnly: false });
       if (didMove) {
         try { panel.dispatchEvent(new CustomEvent('drawgrid:node-drag-end', { detail: finalDetail })); } catch {}
+        try {
+          const cx = gridArea.x + draggedNode.col * cw + cw * 0.5;
+          const cy = gridArea.y + topPad + draggedNode.row * ch + ch * 0.5;
+          const baseRadius = Math.max(6, Math.min(cw, ch) * 0.5);
+          spawnNoteRingEffect(cx, cy, baseRadius);
+          dgField?.pulse?.(0.25);
+          const wrapRect = wrap?.getBoundingClientRect?.();
+          if (wrapRect && wrapRect.width && wrapRect.height) {
+            const localX = (wrapRect.width * 0.5) - (gridArea?.x || 0);
+            const localY = (wrapRect.height * 0.5) - (gridArea?.y || 0);
+            knockLettersAt(localX, localY, { radius: 80, strength: 10 });
+          }
+        } catch {}
       }
       draggedNode = null;
       setDragScaleHighlight(null);

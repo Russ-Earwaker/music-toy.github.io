@@ -221,6 +221,20 @@ export function connectDrawGridToPlayer(panel) {
     }
   });
 
+  // When a user clicks a node to unmute (re-enable) it, audition that note once.
+  panel.addEventListener('drawgrid:node-toggle', (e) => {
+    const col = e?.detail?.col;
+    const row = e?.detail?.row;
+    const disabled = e?.detail?.disabled;
+    if (!Number.isInteger(col) || !Number.isInteger(row)) return;
+    if (disabled !== false) return;
+    const midiNote = notePalette[row];
+    if (midiNote === undefined) return;
+    try { resumeAudioContextIfNeeded?.().catch?.(() => {}); } catch {}
+    const when = (ensureAudioContext()?.currentTime ?? 0) + 0.01;
+    playNote(instrument, midiToName(midiNote), when);
+  });
+
   panel.addEventListener('toy-instrument', (e) => {
     instrument = e.detail?.value || instrument;
     // Instrument change is a user edit -> deterministic snapshot must update.
