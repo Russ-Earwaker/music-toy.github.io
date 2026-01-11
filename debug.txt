@@ -1,30 +1,27 @@
-note-scheduler.js:31 [note-scheduler][dbg] tick {now: 13.701333333333332, barIndex: 0, barStart: 13.661333333333333, phase: 0.019999999999999574, activeCount: 1, …}
-note-scheduler.js:31 [note-scheduler][dbg] deterministic-pattern-refresh {toyId: 'drawgrid-1768004178655-y235wk', seqRev: 15, hasPattern: true}
-note-scheduler.js:31 [note-scheduler][dbg] schedule-col0-main {toyId: 'drawgrid-1768004178655-y235wk', when: 13.661333333333333, barStart: 13.661333333333333, windowStartToy: 13.705708333333332, windowEndToy: 15.661333333333333, …}
-note-scheduler.js:302 [seqSchedule call] {toyId: 'drawgrid-1768004178655-y235wk', col: 0, when: 13.661333333333333, count: 1}
-toy-audio.js:155 [audio-gate] defer {id: 'drawgrid-1768004178655-y235wk', noteName: 'F3', when: 13.911333333333333, now: 13.712, delayMs: 197.3333333333336, …}
-drawgrid-player.js:188 [drawgrid-player] column not active/empty {col: 2, hasC: true, active: false, nodesCount: 1}
-drawgrid-player.js:188 [drawgrid-player] column not active/empty {col: 3, hasC: true, active: false, nodesCount: 1}
-drawgrid-player.js:188 [drawgrid-player] column not active/empty {col: 4, hasC: true, active: false, nodesCount: 1}
-drawgrid-player.js:188 [drawgrid-player] column not active/empty {col: 6, hasC: true, active: false, nodesCount: 1}
-note-scheduler.js:31 [note-scheduler][dbg] tick {now: 13.96, barIndex: 0, barStart: 13.661333333333333, phase: 0.14933333333333376, activeCount: 1, …}
-note-scheduler.js:31 [note-scheduler][dbg] tick {now: 14.232, barIndex: 0, barStart: 13.661333333333333, phase: 0.285333333333333, activeCount: 1, …}
-note-scheduler.js:31 [note-scheduler][dbg] tick {now: 14.512, barIndex: 0, barStart: 13.661333333333333, phase: 0.42533333333333356, activeCount: 1, …}
-note-scheduler.js:31 [note-scheduler][dbg] tick {now: 14.76, barIndex: 0, barStart: 13.661333333333333, phase: 0.5493333333333332, activeCount: 1, …}
-note-scheduler.js:31 [note-scheduler][dbg] tick {now: 15.032, barIndex: 0, barStart: 13.661333333333333, phase: 0.6853333333333333, activeCount: 1, …}
-note-scheduler.js:31 [note-scheduler][dbg] tick {now: 15.28, barIndex: 0, barStart: 13.661333333333333, phase: 0.809333333333333, activeCount: 1, …}
-note-scheduler.js:31 [note-scheduler][dbg] tick {now: 15.56, barIndex: 0, barStart: 13.661333333333333, phase: 0.9493333333333336, activeCount: 1, …}
-note-scheduler.js:31 [note-scheduler][dbg] deterministic-pattern-refresh {toyId: 'toy-1768004181535-fw63yz', seqRev: 15, hasPattern: true}
-note-scheduler.js:31 [note-scheduler][dbg] schedule-col0-main {toyId: 'toy-1768004181535-fw63yz', when: 15.661333333333333, barStart: 15.661333333333333, windowStartToy: 15.764375, windowEndToy: 17.66133333333333, …}
-note-scheduler.js:302 [seqSchedule call] {toyId: 'toy-1768004181535-fw63yz', col: 0, when: 15.661333333333333, count: 1}
-toy-audio.js:155 [audio-gate] defer {id: 'toy-1768004181535-fw63yz', noteName: 'G3', when: 15.911333333333333, now: 15.76, delayMs: 149.33333333333354, …}
-drawgrid-player.js:188 [drawgrid-player] column not active/empty {col: 5, hasC: true, active: false, nodesCount: 1}
-drawgrid-player.js:188 [drawgrid-player] column not active/empty {col: 6, hasC: true, active: false, nodesCount: 1}
-note-scheduler.js:31 [note-scheduler][dbg] tick {now: 15.810666666666666, barIndex: 1, barStart: 15.661333333333333, phase: 0.07466666666666644, activeCount: 1, …}
-note-scheduler.js:31 [note-scheduler][dbg] tick {now: 16.061333333333334, barIndex: 1, barStart: 15.661333333333333, phase: 0.20000000000000018, activeCount: 1, …}
-note-scheduler.js:31 [note-scheduler][dbg] tick {now: 16.330666666666666, barIndex: 1, barStart: 15.661333333333333, phase: 0.3346666666666662, activeCount: 1, …}
-note-scheduler.js:31 [note-scheduler][dbg] tick {now: 16.581333333333333, barIndex: 1, barStart: 15.661333333333333, phase: 0.45999999999999996, activeCount: 1, …}
-note-scheduler.js:31 [note-scheduler][dbg] tick {now: 16.861333333333334, barIndex: 1, barStart: 15.661333333333333, phase: 0.6000000000000005, activeCount: 1, …}
-note-scheduler.js:31 [note-scheduler][dbg] tick {now: 17.130666666666666, barIndex: 1, barStart: 15.661333333333333, phase: 0.7346666666666666, activeCount: 1, …}
-note-scheduler.js:31 [note-scheduler][dbg] tick {now: 17.381333333333334, barIndex: 1, barStart: 15.661333333333333, phase: 0.8600000000000003, activeCount: 1, …}
-note-scheduler.js:31 [note-scheduler][dbg] tick {now: 17.632, barIndex: 1, barStart: 15.661333333333333, phase: 0.9853333333333341, activeCount: 1, …}
+main.js:669 [focus] normalize DOM
+main.js:669 [focus] normalize DOM
+window.__AUDIO_GATE_DEBUG = true;
+window.__AUDIO_GATE_DROP_DEBUG = true;
+window.__LOOPGRID_CLICK_DEBUG = true;
+window.__LOOPGRID_AUDIO_DEBUG = true;
+
+true
+simple-rhythm-visual.js:952 [loopgrid][ui-click] {panelId: 'loopgrid-1768067555193-jxu72y', toyId: undefined, toyType: 'loopgrid', clickedIndex: 0, reason: 'step-toggle'}
+toy-audio.js:240 [audio-gate][call] {id: 'loopgrid-1768067555193-jxu72y', inst: 'TAMBORINE', noteName: 'C4', when: 2.8419999999999996, now: 2.84, …}
+toy-audio.js:228 [audio-gate] defer {id: 'loopgrid-1768067555193-jxu72y', noteName: 'C4', when: 2.8419999999999996, now: 2.84, delayMs: 0, …}
+grid-core.js:351 [loopgrid][schedule->play] {panelId: 'loopgrid-1768067555193-jxu72y', dataToyId: undefined, audioToyId: 'loopgrid-1768067555193-jxu72y', col: 0, when: 4.832, …}
+toy-audio.js:240 [audio-gate][call] {id: 'loopgrid-1768067555193-jxu72y', inst: 'TAMBORINE', noteName: 'C4', when: 4.832, now: 4.850666666666666, …}
+toy-audio.js:313 [audio-gate][pass] {id: 'loopgrid-1768067555193-jxu72y', inst: 'TAMBORINE', noteName: 'C4', when: 4.832, genNow: 0}
+toy-audio.js:196 [audio-gate] transport:pause -> bumpAllToyAudioGen
+toy-audio.js:196 [audio-gate] transport:pause -> bumpAllToyAudioGen
+simple-rhythm-visual.js:952 [loopgrid][ui-click] {panelId: 'loopgrid-1768067561588-nj37of', toyId: undefined, toyType: 'loopgrid', clickedIndex: 0, reason: 'step-toggle'}
+toy-audio.js:240 [audio-gate][call] {id: 'loopgrid-1768067561588-nj37of', inst: 'FINGER SNAP', noteName: 'C4', when: 5.463333333333333, now: 5.461333333333333, …}
+toy-audio.js:228 [audio-gate] defer {id: 'loopgrid-1768067561588-nj37of', noteName: 'C4', when: 5.463333333333333, now: 5.461333333333333, delayMs: 0, …}
+grid-core.js:351 [loopgrid][schedule->play] {panelId: 'loopgrid-1768067555193-jxu72y', dataToyId: undefined, audioToyId: 'loopgrid-1768067555193-jxu72y', col: 0, when: 7.072, …}
+toy-audio.js:240 [audio-gate][call] {id: 'loopgrid-1768067555193-jxu72y', inst: 'TAMBORINE', noteName: 'C4', when: 7.072, now: 7.0906666666666665, …}
+toy-audio.js:313 [audio-gate][pass] {id: 'loopgrid-1768067555193-jxu72y', inst: 'TAMBORINE', noteName: 'C4', when: 7.072, genNow: 0}
+grid-core.js:351 [loopgrid][schedule->play] {panelId: 'loopgrid-1768067555193-jxu72y', dataToyId: undefined, audioToyId: 'loopgrid-1768067555193-jxu72y', col: 0, when: 9.072, …}
+toy-audio.js:240 [audio-gate][call] {id: 'loopgrid-1768067555193-jxu72y', inst: 'TAMBORINE', noteName: 'C4', when: 9.072, now: 9.090666666666667, …}
+toy-audio.js:313 [audio-gate][pass] {id: 'loopgrid-1768067555193-jxu72y', inst: 'TAMBORINE', noteName: 'C4', when: 9.072, genNow: 0}
+toy-audio.js:196 [audio-gate] transport:pause -> bumpAllToyAudioGen
+toy-audio.js:196 [audio-gate] transport:pause -> bumpAllToyAudioGen

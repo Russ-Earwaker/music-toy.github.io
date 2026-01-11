@@ -13,6 +13,17 @@ import { bumpToyAudioGen } from './toy-audio.js';
 const __GLOBAL_SCHED_STATE = new Map(); // toyId -> per-toy state
 let __SCHED_INSTANCE_SEQ = 1;
 
+// When the transport pauses, wipe scheduler de-dupe state so a new run starts clean.
+// (Prevents leftover scheduled keys from affecting the first couple beats after resume.)
+try {
+  if (!window.__NOTE_SCHED_PAUSE_CLEAR_INSTALLED) {
+    window.__NOTE_SCHED_PAUSE_CLEAR_INSTALLED = true;
+    document.addEventListener('transport:pause', () => {
+      try { __GLOBAL_SCHED_STATE.clear(); } catch {}
+    });
+  }
+} catch {}
+
 // Default scheduler debug OFF (enable in DevTools: window.__CHAIN_NOTE_SCHEDULER_DEBUG = true)
 try {
   if (window.__CHAIN_NOTE_SCHEDULER_DEBUG === undefined) window.__CHAIN_NOTE_SCHEDULER_DEBUG = false;
@@ -76,6 +87,8 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, l
       const loopStart = Number(loopInfo.loopStartTime) || 0;
       const now = Number.isFinite(nowAt) ? nowAt : (ensureAudioContext()?.currentTime ?? 0);
       if (!Number.isFinite(now)) return;
+      const lastResumeAt = Number(window.__NOTE_SCHED_LAST_RESUME_AT);
+      const justResumed = Number.isFinite(lastResumeAt) && (now - lastResumeAt) < 0.25;
 
       const baseWindowStart = (now + Math.max(0, leadSec)) - Math.max(0, effectiveLateGraceSec);
       const windowStart = Math.max(now - 0.1, baseWindowStart);
@@ -87,6 +100,7 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, l
         }
         lastPhase = phase;
       }
+      // NOTE: barStart is computed per-toy below (to support per-toy restarts).
       const barStartDebug = loopStart + Math.floor((now - loopStart) / barLen) * barLen;
       const barIndex = Math.floor((now - loopStart) / barLen);
       const barStart = loopStart + barIndex * barLen;
@@ -130,6 +144,27 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, l
         if (!Number.isFinite(stepLen) || stepLen <= 0) return;
 
         const toyState = getState(toyId);
+
+        // If the host code requested a hard reset, clear any pending scheduled state.
+        if (toy.__forceSchedulerReset) {
+          try {
+            toyState.lastBarStart = -1;
+            toyState.scheduled?.clear?.();
+            toyState.preScheduledCol0At = null;
+            toyState.lastScheduledByCol?.clear?.();
+          } catch {}
+          try { toy.__forceSchedulerReset = false; } catch {}
+        }
+
+        // Support per-toy restarts: override the loopStart for this toy only.
+        let toyLoopStart = loopStart;
+        try {
+          const ovr = Number(toy.__loopStartOverrideSec);
+          if (Number.isFinite(ovr)) toyLoopStart = ovr;
+        } catch {}
+
+        const toyBarIndex = Math.floor((now - toyLoopStart) / barLen);
+        const toyBarStart = toyLoopStart + toyBarIndex * barLen;
         // Check if this toy is part of a chain
         const isChained = !!(toy.dataset?.prevToyId || toy.dataset?.nextToyId || toy.dataset?.chainParent);
         const thisChainParent = toy.dataset?.chainParent || null;
@@ -155,6 +190,8 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, l
           }
         }
 
+        // Use per-toy bar start from override (if any)
+        const barStart = toyBarStart;
         if (toyState.lastBarStart !== barStart) {
           toyState.lastBarStart = barStart;
           toyState.scheduledCol7InCurrentBar = false;
@@ -178,13 +215,14 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, l
         if (justActivated && isChained) {
           const audioId = toy.__audioToyId || toy.dataset?.toyid || toyId;
           try { bumpToyAudioGen(audioId); } catch {}
-
-          const prevId = toy.dataset?.prevToyId;
-          if (prevId) {
-            const prevToy = getToy ? getToy(prevId) : document.getElementById(prevId);
-            const prevAudioId = prevToy?.__audioToyId || prevId;
-            try { bumpToyAudioGen(prevAudioId); } catch {}
+          if (isDebugEnabled()) {
+            console.log('[note-scheduler] chain activate -> bumped new toy only', { toyId, audioId });
           }
+
+          // IMPORTANT: do NOT bump prev toy here.
+          // The previous toy may already have valid notes scheduled for this bar.
+          // Bumping its gen causes the audio gate to drop those scheduled notes (gen mismatch),
+          // which looks like "notes skipping" immediately after adding a chained toy.
         }
         const windowStartToy = windowStart;
         const isFirstScheduleForChainedToy = justActivated && isChained;
@@ -212,9 +250,26 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, l
           const base = barStart + b * barLen;
           for (let col = 0; col < steps; col++) {
             const when = base + col * stepLen;
-            const windowStart = windowStartToy;
-            const lateCol0Window = Math.max(col0GraceSec, 0.2);
-            const allowLateCol0 = (col === 0 && when < windowStart && when >= (now - lateCol0Window));
+            // Late scheduling grace: chain activation can cause a small hitch at bar start.
+            // Allow late scheduling for the first few columns *only* on the first schedule cycle
+            // after a chained toy activation.
+            const lateBaseWindow = Math.max(col0GraceSec, 0.2);
+            const lateWindow = isFirstScheduleForChainedToy ? Math.max(lateBaseWindow, stepLen * 1.25) : lateBaseWindow;
+
+            // Allow late schedule for col0 always (existing behavior), and for col1/col2 only
+            // right after chain activation (prevents "skipped" early notes due to DOM hitch).
+            const allowLateEarlyCols =
+              (col === 0) ||
+              (isFirstScheduleForChainedToy && (col === 1 || col === 2));
+
+            const isAllowedLateRaw = allowLateEarlyCols && (when < windowStartToy) && (when >= (now - lateWindow));
+
+            // After a pause/resume, do NOT "backfill" early-bar notes.
+            // Only allow late scheduling for chain activation hitch, not for transport resume.
+            // After a pause/resume, do NOT backfill early-bar notes.
+            // BUT: always allow col0 to be late-scheduled within the grace window,
+            // otherwise the very first downbeat can be lost on the first playthrough.
+            const isAllowedLate = isAllowedLateRaw && (!justResumed || isFirstScheduleForChainedToy || col === 0);
             // Skip column 0 if already scheduled in this bar
             if (col === 0 && toyState.scheduledCol0InCurrentBar) {
               continue;
@@ -232,9 +287,11 @@ export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, l
             }
             // Check if this column is within the scheduling window
             const isInWindow = when >= windowStartToy && when <= windowEndToy;
-            const isAllowedLateCol0 = col === 0 && allowLateCol0;
-            if (!isInWindow && !isAllowedLateCol0) {
+            if (!isInWindow && !isAllowedLate) {
               continue;
+            }
+            if (isDebugEnabled() && isAllowedLate) {
+              console.log('[note-scheduler] late-allowed', { toyId, col, now, when });
             }
             // De-dupe: tick() runs repeatedly inside lookahead; without this we double-schedule.
             if (toyState.scheduled.has(key)) {

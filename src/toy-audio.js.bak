@@ -1,5 +1,5 @@
 // src/toy-audio.js — shared per-toy mute/volume policy (<=300 lines)
-import { ensureAudioContext, resumeAudioContextIfNeeded, setToyVolume, setToyMuted } from './audio-core.js';
+import { ensureAudioContext, setToyVolume, setToyMuted } from './audio-core.js';
 import { cancelScheduledToySources } from './audio-samples.js';
 import { syncVolumeUI } from './volume-ui.js';
 
@@ -230,113 +230,93 @@ export function gateTriggerForToy(toyId, triggerFn){
   }
 
   return function(inst, noteName, when, ...rest){
-    // If the transport paused, AudioContext may be suspended.
-    // UI clicks should still audition notes, so resume before any timing/gate logic.
-    const ctx = ensureAudioContext();
-    const wasSuspended = (ctx && ctx.state === 'suspended');
-
     // Capture generation at schedule time for future-play checks
     const genAtSchedule = getToyAudioGen(id);
 
-    const run = ()=>{
-      // If we just resumed, scheduling “at a past time” can be dropped or be effectively silent.
-      // Nudge any provided 'when' to a safe time in the near future.
-      if (wasSuspended && Number.isFinite(when)) {
-        const now = ensureAudioContext()?.currentTime ?? 0;
-        when = Math.max(when, now + 0.001);
+    const muted = isToyMuted(id);
+    try {
+      if (window.__AUDIO_GATE_DEBUG) {
+        const now = (() => { try { return ensureAudioContext()?.currentTime; } catch {} return undefined; })();
+        console.log('[audio-gate][call]', { id, inst, noteName, when, now, muted, genAtSchedule });
       }
+    } catch {}
 
-      const muted = isToyMuted(id);
-      try {
-        if (window.__AUDIO_GATE_DEBUG) {
-          const now = (() => { try { return ensureAudioContext()?.currentTime; } catch {} return undefined; })();
-          console.log('[audio-gate][call]', { id, inst, noteName, when, now, muted, genAtSchedule });
-        }
-      } catch {}
-
-      if (muted) {
-        let shouldAllow = false;
-        if (Number.isFinite(when)) {
-          try {
-            const ctx = ensureAudioContext();
-            const now = ctx?.currentTime ?? 0;
-            if (Number.isFinite(now) && when > (now + 0.001)) shouldAllow = true;
-          } catch {}
-        }
-        if (!shouldAllow) return; // swallow immediate hits when muted
-      } else {
-        try { window.dispatchEvent(new CustomEvent('toy-hit', { detail: { id, note: noteName, when } })); } catch {}
-      }
-
-      // If scheduled for the future, ALWAYS defer the actual trigger until near play time,
-      // then re-check generation. This is what prevents "old chain toy col0" from firing.
-      if (Number.isFinite(when) && when > 0) {
-        let now = null;
+    if (muted) {
+      let shouldAllow = false;
+      if (Number.isFinite(when)) {
         try {
           const ctx = ensureAudioContext();
-          now = ctx?.currentTime;
+          const now = ctx?.currentTime ?? 0;
+          if (Number.isFinite(now) && when > (now + 0.001)) shouldAllow = true;
         } catch {}
-
-        if (Number.isFinite(now) && when > now + 0.001) {
-          const delayMs = Math.max(0, (when - now) * 1000 - 2);
-
-          gateDbg('defer', { id, noteName, when, now, delayMs, genAtSchedule });
-
-          const tid = setTimeout(() => {
-            // Untrack immediately
-            try { __untrackGateTimeout(id, tid); } catch {}
-
-            const genNow = getToyAudioGen(id);
-            if (genNow !== genAtSchedule) {
-              gateDbg('drop-gen-mismatch', { id, noteName, when, genAtSchedule, genNow });
-
-              // Extra debug (only when enabled)
-              try {
-                if (window.__AUDIO_GATE_DROP_DEBUG) {
-                  console.warn('[audio-gate][drop-gen-mismatch]', { id, inst, noteName, when, genAtSchedule, genNow });
-                }
-              } catch {}
-
-              return;
-            }
-            try { return triggerFn(inst, noteName, when, id, ...rest); } catch (err) { /* noop */ }
-          }, delayMs);
-
-          try { __trackGateTimeout(id, tid); } catch {}
-
-          return;
-        }
       }
+      if (!shouldAllow) return; // swallow immediate hits when muted
+    } else {
+      try { window.dispatchEvent(new CustomEvent('toy-hit', { detail: { id, note: noteName, when } })); } catch {}
+    }
 
-      // Immediate path: check gen right now (still useful for safety)
-      const genNow = getToyAudioGen(id);
-      if (genNow !== genAtSchedule) {
-        gateDbg('drop-immediate-gen-mismatch', { id, noteName, when, genAtSchedule, genNow });
-        try {
-          if (window.__AUDIO_GATE_DROP_DEBUG) {
-            console.warn('[audio-gate][drop-immediate-gen-mismatch]', { id, inst, noteName, when, genAtSchedule, genNow });
+    // If scheduled for the future, ALWAYS defer the actual trigger until near play time,
+    // then re-check generation. This is what prevents "old chain toy col0" from firing.
+    if (Number.isFinite(when) && when > 0) {
+      let now = null;
+      try {
+        const ctx = ensureAudioContext();
+        now = ctx?.currentTime;
+      } catch {}
+
+      if (Number.isFinite(now) && when > now + 0.001) {
+        const delayMs = Math.max(0, (when - now) * 1000 - 2);
+
+        gateDbg('defer', { id, noteName, when, now, delayMs, genAtSchedule });
+
+        const tid = setTimeout(() => {
+          // Untrack immediately
+          try { __untrackGateTimeout(id, tid); } catch {}
+
+          const genNow = getToyAudioGen(id);
+          if (genNow !== genAtSchedule) {
+            gateDbg('drop-gen-mismatch', { id, noteName, when, genAtSchedule, genNow });
+
+            // Extra debug (only when enabled)
+            try {
+              if (window.__AUDIO_GATE_DROP_DEBUG) {
+                console.warn('[audio-gate][drop-gen-mismatch]', { id, inst, noteName, when, genAtSchedule, genNow });
+              }
+            } catch {}
+
+            return;
           }
-        } catch {}
+          try { return triggerFn(inst, noteName, when, id, ...rest); } catch (err) { /* noop */ }
+        }, delayMs);
+
+        try { __trackGateTimeout(id, tid); } catch {}
+
         return;
       }
-
-      try {
-        const r = triggerFn(inst, noteName, when, id, ...rest);
-        try {
-          if (window.__AUDIO_GATE_DEBUG) console.log('[audio-gate][pass]', { id, inst, noteName, when, genNow });
-        } catch {}
-        return r;
-      } catch (err) {
-        try {
-          if (window.__AUDIO_GATE_DROP_DEBUG) console.warn('[audio-gate][trigger-error]', { id, inst, noteName, when, err });
-        } catch {}
-      }
-    };
-
-    // Resume first if needed, then run gate logic.
-    if (wasSuspended) {
-      try { return resumeAudioContextIfNeeded().then(run).catch(run); } catch { return run(); }
     }
-    return run();
+
+    // Immediate path: check gen right now (still useful for safety)
+    const genNow = getToyAudioGen(id);
+    if (genNow !== genAtSchedule) {
+      gateDbg('drop-immediate-gen-mismatch', { id, noteName, when, genAtSchedule, genNow });
+      try {
+        if (window.__AUDIO_GATE_DROP_DEBUG) {
+          console.warn('[audio-gate][drop-immediate-gen-mismatch]', { id, inst, noteName, when, genAtSchedule, genNow });
+        }
+      } catch {}
+      return;
+    }
+
+    try {
+      const r = triggerFn(inst, noteName, when, id, ...rest);
+      try {
+        if (window.__AUDIO_GATE_DEBUG) console.log('[audio-gate][pass]', { id, inst, noteName, when, genNow });
+      } catch {}
+      return r;
+    } catch (err) {
+      try {
+        if (window.__AUDIO_GATE_DROP_DEBUG) console.warn('[audio-gate][trigger-error]', { id, inst, noteName, when, err });
+      } catch {}
+    }
   };
 }

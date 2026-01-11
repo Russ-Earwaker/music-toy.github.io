@@ -154,34 +154,34 @@ let __started = false;
 export function start(){
   const ctx = ensureAudioContext();
   const resumePromise = (ctx.state === 'suspended') ? ctx.resume() : Promise.resolve();
+  __started = true;
 
-  // IMPORTANT (new behavior):
-  // “Play” is treated as “restart from bar start”, even after a pause.
-  // So we always reset the epoch to *now* once the AudioContext is actually running.
+  // IMPORTANT:
+  // We want pause/resume to restart from the beginning of the bar/sequence.
+  // So always reset epoch + barIndex on start().
+  __epochStart = ctx.currentTime;
+  __barIndex = 0;
+  try{ window.__ripplerUserArmed = true; }catch{}
+  try{
+    if (localStorage.getItem('mt_audio_dbg')==='1') console.log('[audio] transport:resume');
+    document.dispatchEvent(new CustomEvent('transport:resume', { detail:{ now: ctx.currentTime }}));
+  }catch{}
   resumePromise.then(() => {
-    __started = true;
-    __epochStart = ctx.currentTime;
-    __barIndex = 0;
-    try{ window.__ripplerUserArmed = true; }catch{}
-
-    // Let schedulers know a fresh run started “now”.
-    try { window.__NOTE_SCHED_LAST_RESUME_AT = ctx.currentTime; } catch {}
-    try{
-      if (localStorage.getItem('mt_audio_dbg')==='1') console.log('[audio] transport:restart');
-      document.dispatchEvent(new CustomEvent('transport:resume', { detail:{ now: ctx.currentTime }}));
-    }catch{}
+    // Mark transport resume moment for scheduler (prevents late backfill on resume)
+    try { window.__NOTE_SCHED_LAST_RESUME_AT = (ensureAudioContext()?.currentTime ?? 0); } catch {}
     try { document.dispatchEvent(new Event('transport:play')); } catch {}
   }).catch(() => {});
 }
 export function stop(){
   __started = false;
 
-  // IMPORTANT (new behavior):
-  // “Pause” stops audio and also clears epoch so the next Play restarts at bar start.
-  try{ stopAllActiveNodes(); }catch{}
-  try{ const ctx = ensureAudioContext(); ctx && ctx.suspend && ctx.suspend(); }catch{}
+  // IMPORTANT:
+  // stop() is used as pause in the UI.
+  // Reset epoch so the next start() begins at bar start (phase 0).
   __epochStart = 0;
   __barIndex = 0;
+  try{ stopAllActiveNodes(); }catch{}
+  try{ const ctx = ensureAudioContext(); ctx && ctx.suspend && ctx.suspend(); }catch{}
   try { window.__NOTE_SCHED_LAST_RESUME_AT = NaN; } catch {}
   try{
     if (localStorage.getItem('mt_audio_dbg')==='1') console.log('[audio] transport:pause');

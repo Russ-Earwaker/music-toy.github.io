@@ -947,6 +947,17 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
 
     if (mutated) {
       try {
+        try {
+          if (window.__LOOPGRID_CLICK_DEBUG) {
+            console.log('[loopgrid][ui-click]', {
+              panelId: panel?.id,
+              toyId: panel?.dataset?.toyid,
+              toyType: panel?.dataset?.toy,
+              clickedIndex,
+              reason: (isZoomed ? 'note-change' : 'step-toggle')
+            });
+          }
+        } catch {}
         panel.dispatchEvent(new CustomEvent('loopgrid:update', {
           detail: {
             reason: isZoomed ? 'note-change' : 'step-toggle',

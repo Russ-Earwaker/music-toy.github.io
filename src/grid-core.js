@@ -346,6 +346,19 @@ export function buildGrid(panel, numSteps = 8){
     const noteIndex = pat.noteIndices[col];
     const midi = panel.__gridState.notePalette[noteIndex];
     const note = midiToName(midi);
+    try {
+      if (window.__LOOPGRID_AUDIO_DEBUG) {
+        console.log('[loopgrid][schedule->play]', {
+          panelId: panel?.id,
+          dataToyId: panel?.dataset?.toyid,
+          audioToyId: panel.__audioToyId,
+          col,
+          when,
+          instrument,
+          note
+        });
+      }
+    } catch {}
     lgTrackPlay({
       kind: 'scheduled',
       toyId: panel.__audioToyId,

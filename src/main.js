@@ -35,7 +35,7 @@ import { collectUsedInstruments, getSoundThemeKey, pickInstrumentForToy } from '
 import { installIOSAudioUnlock } from './ios-audio-unlock.js';
 import { installAudioDiagnostics } from './audio-diagnostics.js';
 import { makeDebugLogger } from './debug-flags.js';
-import { DEFAULT_BPM, NUM_STEPS, ensureAudioContext, getLoopInfo, setBpm, start, isRunning } from './audio-core.js';
+import { DEFAULT_BPM, NUM_STEPS, ensureAudioContext, getLoopInfo, setBpm, start, stop, isRunning } from './audio-core.js';
 import { createSequencerScheduler } from './note-scheduler.js';
 import { buildGrid } from './grid-core.js';
 import { buildDrumGrid } from './drum-core.js';
@@ -1139,7 +1139,11 @@ function bootTopbar(){
   const playBtn = $('#play'), stopBtn = $('#stop'), bpmInput = $('#bpm');
   playBtn?.addEventListener('click', ()=>{
     ensureAudioContext();
+    // Cancel anything pending from a prior run (deferred setTimeout gates + scheduled sources)
+    try { bumpAllToyAudioGen(); } catch {}
+
     start();
+    try { document.dispatchEvent(new Event('transport:play')); } catch {}
     try {
       const panels = Array.from(document.querySelectorAll('.toy-panel[id]'));
       const roots = panels.filter(el => !el.dataset.chainParent);
@@ -1153,7 +1157,14 @@ function bootTopbar(){
     }
   });
   stopBtn?.addEventListener('click', ()=>{
-    try { ensureAudioContext().suspend(); } catch {}
+    try { document.dispatchEvent(new Event('transport:pause')); } catch {}
+
+    // Invalidate any deferred scheduled triggers + pending sources first
+    try { bumpAllToyAudioGen(); } catch {}
+
+    // IMPORTANT: actually stop the transport (resets epoch/bar state + stops active nodes + suspends ctx)
+    try { stop(); } catch {}
+
     // Clear all highlight state when paused
     try {
       document.querySelectorAll('.toy-panel').forEach(p => {
@@ -1436,6 +1447,16 @@ function panelHasAnyNotes(panel) {
 function startToy(panelEl) {
     if (!panelEl) return;
     try {
+        // Always restart toys from their start when (re)started.
+        // This keeps pause/resume deterministic and prevents mid-bar resumes.
+        try {
+            const ctx = ensureAudioContext?.();
+            const now = ctx?.currentTime;
+            if (Number.isFinite(now)) {
+                panelEl.__loopStartOverrideSec = now;
+                panelEl.__forceSchedulerReset = true;
+            }
+        } catch {}
         const api = panelEl.__toyApi || panelEl.__drawToy || panelEl.__toy || panelEl.__toyInstance || null;
         if (api && typeof api.start === 'function') {
             api.start();
@@ -2461,6 +2482,10 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument, autoCenter, a
     panel.style.top = `${top}px`;
 
     board.appendChild(panel);
+    // Creating a toy changes chain structure. Ensure the scheduler will resync.
+    g_chainStructureVersion++;
+    g_lastSequencedToyCount = -1;
+    try { updateChains(); } catch {}
     // Hint the focus animator to scale in like a focus transition on first render.
     panel.dataset.spawnScaleHint = '0.75';
 
@@ -2563,6 +2588,11 @@ function destroyToyPanel(panelOrId) {
     delete panel.dataset.nextToyId;
 
     panel.remove();
+    // Deleting a toy changes chain structure. Ensure the scheduler will resync even
+    // if the toy-count returns to the same value after a subsequent create.
+    g_chainStructureVersion++;
+    g_lastSequencedToyCount = -1;
+    try { updateChains(); } catch {}
 
     // Remove any chain connectors involving this toy
     try {
@@ -3093,6 +3123,53 @@ try {
   }
 })();
 const g_chainState = new Map();
+let g_chainPausedSnapshot = null;
+// Bump this whenever toys are created/destroyed so the scheduler can resync chain state
+// even if toy counts happen to return to the same value (delete then create).
+let g_chainStructureVersion = 0;
+let g_lastSeenChainStructureVersion = -1;
+let g_lastChainSyncAt = 0;
+let g_lastSequencedToyCount = -1;
+
+function snapshotChainStateForPause(){
+  try{
+    const snap = new Map();
+    g_chainState.forEach((v,k)=> snap.set(k,v));
+    g_chainPausedSnapshot = snap;
+    if (window.__CHAIN_DEBUG) console.log('[chain] snapshot pause', { size: snap.size });
+  }catch(e){
+    g_chainPausedSnapshot = null;
+    if (window.__CHAIN_DEBUG) console.warn('[chain] snapshot pause failed', e);
+  }
+}
+
+function restoreChainStateAfterResume(){
+  try{
+    if (!g_chainPausedSnapshot) return;
+
+    // g_chainState is const, so clear + repopulate.
+    g_chainState.clear();
+    for (const [k,v] of g_chainPausedSnapshot.entries()){
+      g_chainState.set(k,v);
+    }
+    if (window.__CHAIN_DEBUG) console.log('[chain] restore resume', { size: g_chainPausedSnapshot.size });
+  }catch(e){
+    if (window.__CHAIN_DEBUG) console.warn('[chain] restore resume failed', e);
+  }
+}
+
+// Install listeners once
+try{
+  if (!window.__CHAIN_PAUSE_SNAPSHOT_INSTALLED){
+    window.__CHAIN_PAUSE_SNAPSHOT_INSTALLED = true;
+
+    // Snapshot before anything else reacts to pause
+    document.addEventListener('transport:pause', snapshotChainStateForPause, true);
+
+    // Restore as soon as transport is running again (audio-core dispatches transport:play)
+    document.addEventListener('transport:play', restoreChainStateAfterResume, true);
+  }
+}catch{}
 let g_sequencerScheduler = null;
 let audioSchedIntervalId = null;
 let g_noteSchedCfg = null;
@@ -3132,7 +3209,23 @@ function tickAudioScheduler() {
   try {
     if (!CHAIN_FEATURE_ENABLE_SCHEDULER || !CHAIN_FEATURE_ENABLE_SEQUENCER) return;
     if (!isRunning()) return;
-    if (!g_chainState || g_chainState.size < 1) return;
+    // Keep chain state in sync with DOM changes (new toys / deleted toys).
+    // Critical: delete+create can produce the same toy-count, so we also use a structure version.
+    try {
+      const nowMs = performance?.now?.() ?? Date.now();
+      const throttled = !g_lastChainSyncAt || (nowMs - g_lastChainSyncAt) > 150;
+      if (throttled) {
+        g_lastChainSyncAt = nowMs;
+        const curCount = getSequencedToys?.()?.length ?? 0;
+        const structureChanged = (g_lastSeenChainStructureVersion !== g_chainStructureVersion);
+        const countChanged = (curCount !== g_lastSequencedToyCount);
+        if (structureChanged || countChanged || !g_chainState || g_chainState.size < 1) {
+          g_lastSeenChainStructureVersion = g_chainStructureVersion;
+          g_lastSequencedToyCount = curCount;
+          updateChains();
+        }
+      }
+    } catch {}
     if (window.__PERF_DISABLE_CHAIN_WORK) return;
 
     const info = getLoopInfo();
@@ -3163,11 +3256,23 @@ function tickAudioScheduler() {
     const ctx = ensureAudioContext();
     const nowAt = ctx?.currentTime ?? 0;
     const forceSequencerAll = !!window.__PERF_FORCE_SEQUENCER_ALL;
-    const activeToyIds = forceSequencerAll
-      ? new Set(getSequencedToys().map(p => p.id).filter(Boolean))
-      : new Set(g_chainState.values());
+    // Active toys are the currently-active toy per chain head.
+    // If we still have no chain state (or it got cleared), fall back to all sequenced toys.
+    let activeToyIds = null;
+    try {
+      if (forceSequencerAll) {
+        activeToyIds = new Set(getSequencedToys().map(p => p.id).filter(Boolean));
+      } else if (g_chainState && g_chainState.size) {
+        activeToyIds = new Set(g_chainState.values());
+      } else {
+        const all = getSequencedToys();
+        activeToyIds = new Set(all.map(t => t.id));
+      }
+    } catch {
+      activeToyIds = new Set();
+    }
 
-    if (activeToyIds.size < 1) return;
+    if (!activeToyIds || !activeToyIds.size) return;
 
     const sequencerScheduler = ensureSequencerScheduler();
     try {
@@ -3251,6 +3356,20 @@ function updateChains() {
     const seenHeads = new Set();
 
     allToys.forEach(toy => {
+        // --- Normalize chain linkage fields ---
+        // We historically used prevToyId/nextToyId, but some newer paths set chainParent.
+        // Keep them in sync so chain traversal, UI, and scheduling can't drift.
+        try {
+            const parentId = toy?.dataset?.chainParent || toy?.dataset?.prevToyId || null;
+            if (parentId && !toy.dataset.prevToyId) toy.dataset.prevToyId = parentId;
+            if (toy.dataset.prevToyId && !toy.dataset.chainParent) toy.dataset.chainParent = toy.dataset.prevToyId;
+
+            if (toy.dataset.prevToyId) {
+                const parent = document.getElementById(toy.dataset.prevToyId);
+                if (parent && !parent.dataset.nextToyId) parent.dataset.nextToyId = toy.id;
+            }
+        } catch {}
+
         const head = findChainHead(toy);
         if (head && !seenHeads.has(head.id)) {
             seenHeads.add(head.id);
@@ -3416,27 +3535,31 @@ function scheduler(){
       const phaseJustWrapped = phase < prevPhase && prevPhase > 0.9;
       lastPhase = phase;
 
-      if (phaseJustWrapped) {
+      // Reset the "already advanced this wrap" guard shortly after we enter the new bar.
+      // (If we don't reset it, we'll suppress the NEXT bar-wrap advance and schedule
+      // the old toy's early notes into the new bar -> audible repeats at chain boundaries.)
+      if (!phaseJustWrapped && chainPreAdvanced && Number.isFinite(phase) && phase > 0.1) {
+        chainPreAdvanced = false;
+      }
+
+      if (phaseJustWrapped && !chainPreAdvanced) {
         const tAdvanceStart = __perfOn ? performance.now() : 0;
-        if (chainPreAdvanced) {
-          chainPreAdvanced = false;
-        } else {
-          for (const [headId] of g_chainState.entries()) {
-            const activeToy = document.getElementById(g_chainState.get(headId));
-            // Bouncers and Ripplers manage their own advancement via the 'chain:next' event.
-            // All other toys (like loopgrid) advance on the global bar clock.
-            if (activeToy && activeToy.dataset.toy !== 'bouncer' && activeToy.dataset.toy !== 'rippler') {
-              advanceChain(headId);
-            }
-          }
-          const tAdvanceEnd = __perfOn ? performance.now() : 0;
-          if (__perfOn) {
-            window.__PerfFrameProf.mark('chain.advance', tAdvanceEnd - tAdvanceStart);
-          }
-          if (CHAIN_DEBUG && (tAdvanceEnd - tAdvanceStart) > CHAIN_DEBUG_LOG_THRESHOLD_MS) {
-            console.log('[CHAIN][perf] advanceChain batch', (tAdvanceEnd - tAdvanceStart).toFixed(2), 'ms', 'heads=', g_chainState.size);
+        for (const [headId] of g_chainState.entries()) {
+          const activeToy = document.getElementById(g_chainState.get(headId));
+          // Bouncers and Ripplers manage their own advancement via the 'chain:next' event.
+          // All other toys (like loopgrid) advance on the global bar clock.
+          if (activeToy && activeToy.dataset.toy !== 'bouncer' && activeToy.dataset.toy !== 'rippler') {
+            advanceChain(headId);
           }
         }
+        const tAdvanceEnd = __perfOn ? performance.now() : 0;
+        if (__perfOn) {
+          window.__PerfFrameProf.mark('chain.advance', tAdvanceEnd - tAdvanceStart);
+        }
+        if (CHAIN_DEBUG && (tAdvanceEnd - tAdvanceStart) > CHAIN_DEBUG_LOG_THRESHOLD_MS) {
+          console.log('[CHAIN][perf] advanceChain batch', (tAdvanceEnd - tAdvanceStart).toFixed(2), 'ms', 'heads=', g_chainState.size);
+        }
+        chainPreAdvanced = true;
       } else if (CHAIN_PRE_ADVANCE_ENABLED && !chainPreAdvanced && phase >= CHAIN_PRE_ADVANCE_PHASE && prevPhase < CHAIN_PRE_ADVANCE_PHASE) {
         for (const [headId] of g_chainState.entries()) {
           const activeToy = document.getElementById(g_chainState.get(headId));
