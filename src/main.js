@@ -24,7 +24,7 @@ import { applyStackingOrder } from './stacking-manager.js';
 import { getViewportTransform, getViewportElement, screenToWorld } from './board-viewport.js';
 import { getRect } from './layout-cache.js';
 
-import { bumpAllToyAudioGen } from './toy-audio.js';
+import { bumpAllToyAudioGen, bumpToyAudioGen } from './toy-audio.js';
 import './toy-layout-manager.js';
 import './zoom-overlay.js';
 import './toy-spawner.js';
@@ -36,6 +36,7 @@ import { installIOSAudioUnlock } from './ios-audio-unlock.js';
 import { installAudioDiagnostics } from './audio-diagnostics.js';
 import { makeDebugLogger } from './debug-flags.js';
 import { DEFAULT_BPM, NUM_STEPS, ensureAudioContext, getLoopInfo, setBpm, start, stop, isRunning, getToyGain } from './audio-core.js';
+import { autoQualityOnFrame } from './perf/AutoQualityController.js';
 import { createSequencerScheduler } from './note-scheduler.js';
 import { buildGrid } from './grid-core.js';
 import { buildDrumGrid } from './drum-core.js';
@@ -1517,6 +1518,28 @@ function advanceChain(headId) {
     // In a 1-toy chain, activeToyId === headId every bar; clearing here wipes de-dupe state
     // and causes the scheduler to re-schedule the same notes -> doubled playback.
     if (nextActiveId && nextActiveId !== activeToyId) {
+      // CRITICAL:
+      // We schedule audio ahead (lookahead). When the chain advances, the outgoing toy may
+      // already have future AudioBufferSourceNodes scheduled. If we don't cancel them here,
+      // they'll play into the next bar while the new active toy also schedules -> overlap/cross-play.
+      try {
+        const outgoingAudioToyId =
+          activeToy?.dataset?.audiotoyid ||
+          activeToy?.__audioToyId ||
+          activeToyId;
+        try {
+          if (window.__SCHED_MISMATCH_DEBUG) {
+            console.log('[chain] cancel outgoing', { activeToyId, outgoingAudioToyId, nextActiveId });
+          }
+        } catch {}
+        // Cancel anything scheduled for the outgoing toy (audio-id and panel-id safety).
+        try { cancelScheduledToySources(outgoingAudioToyId); } catch {}
+        try { if (outgoingAudioToyId !== activeToyId) cancelScheduledToySources(activeToyId); } catch {}
+        // Invalidate any gated triggers / visual timeouts tied to this toy.
+        try { bumpToyAudioGen(outgoingAudioToyId); } catch {}
+        try { if (outgoingAudioToyId !== activeToyId) bumpToyAudioGen(activeToyId); } catch {}
+      } catch {}
+
       try { g_sequencerScheduler?.clearToy?.(activeToyId); } catch {}
     }
 }
@@ -2565,6 +2588,10 @@ function destroyToyPanel(panelOrId) {
     // will keep playing already-scheduled events for a few beats.
     try { cancelScheduledToySources(panelId); } catch {}
     try {
+        const audioToyId = panel?.dataset?.audiotoyid;
+        if (audioToyId && audioToyId !== panelId) cancelScheduledToySources(audioToyId);
+    } catch {}
+    try {
         const ctx = ensureAudioContext();
         const g = getToyGain(panelId);
         const t = ctx?.currentTime ?? 0;
@@ -3299,6 +3326,28 @@ function tickAudioScheduler() {
           try { toy.__chainJustActivated = false; } catch {}
         }
       }
+
+      // --- DEBUG: publish active sets for mismatch investigations ---
+      try {
+        if (window.__SCHED_MISMATCH_DEBUG) {
+          window.__mtSchedTick = (window.__mtSchedTick | 0) + 1;
+          window.__mtActiveToyIds = Array.from(activeAudioToyIds);
+          window.__mtChainState = Array.from(g_chainState.entries());
+          window.__mtNowAt = nowAt;
+          // Throttle console spam: log only on bar start or when active set changes.
+          if (info?.col === 0) {
+            console.log('[sched][tick]', {
+              tick: window.__mtSchedTick,
+              col: info?.col,
+              phase01: info?.phase01,
+              nowAt,
+              activeToyIds: window.__mtActiveToyIds,
+              chainState: window.__mtChainState,
+            });
+          }
+        }
+      } catch {}
+
       sequencerScheduler.tick({
         activeToyIds: activeAudioToyIds,
         getToy: (id) => document.getElementById(id),
@@ -3365,50 +3414,75 @@ function findChainHead(toy) {
 }
 
 function updateChains() {
-    const allToys = getSequencedToys();
-    const seenHeads = new Set();
+  const allToys = getSequencedToys();
 
-    allToys.forEach(toy => {
-        // --- Normalize chain linkage fields ---
-        // We historically used prevToyId/nextToyId, but some newer paths set chainParent.
-        // Keep them in sync so chain traversal, UI, and scheduling can't drift.
-        try {
-            const parentId = toy?.dataset?.chainParent || toy?.dataset?.prevToyId || null;
-            if (parentId && !toy.dataset.prevToyId) toy.dataset.prevToyId = parentId;
-            if (toy.dataset.prevToyId && !toy.dataset.chainParent) toy.dataset.chainParent = toy.dataset.prevToyId;
+  // --- Normalize linkage + compute true chain heads ---
+  const seenHeads = new Set();
+  for (const toy of allToys) {
+    try {
+      // Keep chainParent / prevToyId in sync
+      const parentId = toy?.dataset?.chainParent || toy?.dataset?.prevToyId || '';
+      if (parentId && !toy.dataset.prevToyId) toy.dataset.prevToyId = parentId;
+      if (toy.dataset.prevToyId && !toy.dataset.chainParent) toy.dataset.chainParent = toy.dataset.prevToyId;
 
-            if (toy.dataset.prevToyId) {
-                const parent = document.getElementById(toy.dataset.prevToyId);
-                if (parent && !parent.dataset.nextToyId) parent.dataset.nextToyId = toy.id;
-            }
-        } catch {}
+      // Ensure parent.nextToyId points at child
+      if (toy.dataset.prevToyId) {
+        const parent = document.getElementById(toy.dataset.prevToyId);
+        if (parent && !parent.dataset.nextToyId) parent.dataset.nextToyId = toy.id;
+      }
+    } catch {}
 
-        const head = findChainHead(toy);
-        if (head && !seenHeads.has(head.id)) {
-            seenHeads.add(head.id);
-            if (!g_chainState.has(head.id)) {
-                g_chainState.set(head.id, head.id);
-            }
+    try {
+      const head = findChainHead(toy);
+      if (head && head.id) seenHeads.add(head.id);
+    } catch {}
+  }
+
+  // --- Rebuild g_chainState from scratch ---
+  // This prevents "phantom heads" when a toy transitions from head -> child.
+  // Phantom heads = extra active toys = cross-play/bleed between chained toys.
+  try {
+    const prevState = new Map(g_chainState);
+    g_chainState.clear();
+
+    for (const headId of seenHeads) {
+      const headEl = document.getElementById(headId);
+      if (!headEl) continue;
+
+      // Preserve previously active toy IF it is still within this chain.
+      let activeId = prevState.get(headId) || headId;
+      let activeEl = document.getElementById(activeId);
+      if (!activeEl) {
+        activeId = headId;
+        activeEl = headEl;
+      } else {
+        const activeHead = findChainHead(activeEl);
+        if (!activeHead || activeHead.id !== headId) {
+          activeId = headId;
+          activeEl = headEl;
         }
-    });
+      }
 
-    for (const headId of g_chainState.keys()) {
-        if (!document.getElementById(headId)) {
-            g_chainState.delete(headId);
-        }
+      g_chainState.set(headId, activeId);
     }
+  } catch (err) {
+    // If anything goes wrong, fall back to safe 1-toy state per head
+    try {
+      g_chainState.clear();
+      for (const headId of seenHeads) g_chainState.set(headId, headId);
+    } catch {}
+    if (CHAIN_DEBUG) console.warn('[CHAIN] updateChains rebuild failed', err);
+  }
 
   // Rebuild cached connector geometry whenever chain heads change and redraw once.
   try {
-      rebuildChainSegments();
-      if (CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) {
-          g_chainRedrawPendingFull = true;
-          scheduleChainRedraw();
-      }
+    rebuildChainSegments();
+    if (CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) {
+      g_chainRedrawPendingFull = true;
+      scheduleChainRedraw();
+    }
   } catch (err) {
-      if (CHAIN_DEBUG) {
-          console.warn('[CHAIN][perf] rebuildChainSegments/draw failed', err);
-      }
+    if (CHAIN_DEBUG) console.warn('[CHAIN][perf] rebuildChainSegments/draw failed', err);
   }
   try { updateAllChainUIs(); } catch {}
 }
@@ -3500,6 +3574,8 @@ function scheduler(){
     const frameStart = performance.now();
     const __perfOn = !!(window.__PerfFrameProf && typeof performance !== 'undefined' && performance.now);
     const __rafStart = __perfOn ? performance.now() : 0;
+    // Update global quality signal (FPS + memory pressure with hysteresis)
+    try { autoQualityOnFrame(); } catch {}
     // Clear expired pulse classes without timers
     try {
       if (__perfOn) {

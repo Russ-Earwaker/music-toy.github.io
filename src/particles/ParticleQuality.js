@@ -669,19 +669,13 @@ export function getEffectiveBudget(toyId = null, options = {}) {
  * @returns {number} Scaled particle cap
  */
 export function getParticleCap(baseCap = 2200) {
-  const toyCount = getActiveToyCount();
   const budget = getParticleBudget();
-  
-  // Cap should be HIGH for small toy counts and scale DOWN as toy count grows.
-  // (Previous logic inverted this and gave ~50 particles for a 1-toy scene.)
-  const safeToyCount = Math.max(1, toyCount | 0);
-  const toyFactor = Math.sqrt(REFERENCE_TOY_COUNT / safeToyCount); // >1 for small scenes, <1 for large scenes
-  // Don't exceed baseCap on tiny scenes; just allow full detail.
-  const scaledByToys = Math.min(1, toyFactor);
-  let cap = Math.floor(baseCap * scaledByToys);
-  // Apply quality scaling
+
+  // Start at full quality. Scale down based on global performance signal.
+  const autoScale = (getAutoQualityScale?.() ?? 1);
+  let cap = Math.floor(baseCap * autoScale);
   cap = Math.floor(cap * (budget.maxCountScale ?? 1));
-  
+
   // Additional memory pressure reduction (more aggressive than before)
   const memLevel = getMemoryPressureLevel();
   if (memLevel >= 2) {
@@ -694,3 +688,4 @@ export function getParticleCap(baseCap = 2200) {
   const globalMinCap = Math.max(150, Math.floor(baseCap * 0.1));
   return Math.max(globalMinCap, cap);
 }
+import { getAutoQualityScale } from '../perf/AutoQualityController.js';

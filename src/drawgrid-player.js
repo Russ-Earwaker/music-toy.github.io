@@ -1,11 +1,26 @@
 // src/drawgrid-player.js
 import { triggerInstrument } from './audio-samples.js';
-import { gateTriggerForToy } from './toy-audio.js';
+import { gateTriggerForToy, getToyAudioGen } from './toy-audio.js';
 import { buildPalette, midiToName } from './note-helpers.js';
 import { resumeAudioContextIfNeeded, isRunning as isTransportRunning, ensureAudioContext } from './audio-core.js';
 
-function getCanonicalToyId(panel) {
-  return panel?.dataset?.toyid || panel?.id || panel?.dataset?.toy || '';
+// IMPORTANT:
+// data-toyid may represent chain/group identity and can be shared across panels.
+// For audio routing + generation gating we need a UNIQUE id per panel instance.
+function getAudioToyId(panel) {
+  if (!panel) return '';
+  try {
+    const existing = panel.dataset?.audiotoyid;
+    if (existing) return existing;
+  } catch {}
+
+  // Always generate a dedicated id. Do NOT reuse panel.id:
+  // during chain-create / cloning, DOM ids can be duplicated briefly or accidentally,
+  // which causes cross-toy audio routing and scheduling collisions.
+  const base = panel.id ? `${panel.id}_` : '';
+  const gen = `audiotoy_${base}${Math.random().toString(36).slice(2, 10)}`;
+  try { panel.dataset.audiotoyid = gen; } catch {}
+  return gen;
 }
 
 function isNoteSchedulerEnabled() {
@@ -23,7 +38,7 @@ export function connectDrawGridToPlayer(panel) {
   if (!panel || panel.__drawGridPlayer) return;
   panel.__drawGridPlayer = true;
 
-  const toyId = getCanonicalToyId(panel) || 'drawgrid';
+  const toyId = getAudioToyId(panel) || 'drawgrid';
   panel.__audioToyId = toyId;
   let instrument = panel.dataset.instrument || 'acoustic_guitar';
 
@@ -102,20 +117,32 @@ export function connectDrawGridToPlayer(panel) {
 
       // Avoid duplicate effect triggers for the same (col, when)
       panel.__dgFxKeys = panel.__dgFxKeys || new Set();
+      panel.__dgFxTimeouts = panel.__dgFxTimeouts || new Set();
       const k = `${col}@${Math.round(when * 1000)}`;
       if (panel.__dgFxKeys.has(k)) return;
       panel.__dgFxKeys.add(k);
 
       const delayMs = Math.max(0, (when - now) * 1000 - 2);
-      setTimeout(() => {
+
+      // Capture generation at schedule time. Pause/delete bumps gen, invalidating these.
+      const genAtSchedule = getToyAudioGen(panel.__audioToyId);
+
+      const tid = setTimeout(() => {
         try {
+          // If paused/stopped OR the toy has been invalidated (pause/delete/chain switch), do nothing.
+          if (!isTransportRunning()) return;
+          if (getToyAudioGen(panel.__audioToyId) !== genAtSchedule) return;
+          if (!document.body.contains(panel)) return;
+
           markPlayingColumn(panel, col);
           panel.__pulseHighlight = 1.0;
           panel.__pulseRearm = true;
         } catch {}
         // let keys expire
         try { setTimeout(() => panel.__dgFxKeys?.delete?.(k), 1000); } catch {}
+        try { panel.__dgFxTimeouts?.delete?.(tid); } catch {}
       }, delayMs);
+      try { panel.__dgFxTimeouts.add(tid); } catch {}
     } catch {
       // fallback immediate
       try {
@@ -125,6 +152,23 @@ export function connectDrawGridToPlayer(panel) {
       } catch {}
     }
   }
+
+  // Best-effort cleanup: if transport pauses, clear pending fx timeouts so nothing "ticks" visually.
+  // (Even without this, the gen gate above prevents post-pause triggers.)
+  try {
+    panel.__dgOnTransportPause = panel.__dgOnTransportPause || (() => {
+      try {
+        if (panel.__dgFxTimeouts) {
+          for (const tid of Array.from(panel.__dgFxTimeouts)) {
+            try { clearTimeout(tid); } catch {}
+          }
+          panel.__dgFxTimeouts.clear();
+        }
+        if (panel.__dgFxKeys) panel.__dgFxKeys.clear();
+      } catch {}
+    });
+    document.addEventListener('transport:pause', panel.__dgOnTransportPause);
+  } catch {}
 
   panel.addEventListener('drawgrid:update', (e) => {
     const map = e?.detail?.map || (e?.detail && e.detail.nodes ? { nodes: e.detail.nodes } : null);
@@ -223,6 +267,28 @@ export function connectDrawGridToPlayer(panel) {
 
     // Schedule drawgrid effects (flash/particles/etc) at the actual play time.
     scheduleDrawgridEffects(panel, col, when);
+
+    // DEBUG: Scheduling a drawgrid while it is not chain-active is a strong indicator
+    // that the scheduler is calling the wrong toy (or active set is stale).
+    try {
+      if (window.__SCHED_MISMATCH_DEBUG) {
+        const isActive = (panel?.dataset?.chainActive === 'true');
+        if (!isActive) {
+          console.warn('[sched][MISMATCH][drawgrid] scheduled while inactive', {
+            panelId: panel?.id,
+            dataToyId: panel?.dataset?.toyid,
+            audioToyId: panel?.__audioToyId,
+            chainActive: panel?.dataset?.chainActive,
+            col,
+            when,
+            tick: window.__mtSchedTick,
+            activeToyIds: window.__mtActiveToyIds,
+            chainState: window.__mtChainState,
+            nowAt: window.__mtNowAt,
+          });
+        }
+      }
+    } catch {}
 
     const c = pat.cols[col];
     if (!c || !c.active || !c.nodes || c.nodes.length === 0) {

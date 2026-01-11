@@ -9,6 +9,24 @@ import { gateTriggerForToy } from './toy-audio.js';
 
 const NUM_CUBES = 8;
 
+// IMPORTANT:
+// data-toyid may represent chain/group identity and can be shared across panels.
+// For audio routing + generation gating we need a UNIQUE id per panel instance.
+function getAudioToyId(panel) {
+  if (!panel) return '';
+  try {
+    const existing = panel.dataset?.audiotoyid;
+    if (existing) return existing;
+  } catch {}
+
+  // Always generate a dedicated id. Do NOT reuse panel.id or data-toyid:
+  // chain-create / cloning can temporarily duplicate ids or intentionally share data-toyid.
+  const base = panel.id ? `${panel.id}_` : '';
+  const gen = `audiotoy_${base}${Math.random().toString(36).slice(2, 10)}`;
+  try { panel.dataset.audiotoyid = gen; } catch {}
+  return gen;
+}
+
 // LoopGrid debug controls:
 //   window.__LOOPGRID_DEBUG = 0 (off), 1 (important), 2 (verbose)
 //   window.__LOOPGRID_DUP_DEBUG = true/false (duplicate play detector)
@@ -198,7 +216,7 @@ export function buildGrid(panel, numSteps = 8){
     console.warn('[loopgrid] pending state apply failed', e);
   }
 
-  const toyId = panel.dataset.toyid || panel.id || 'loopgrid';
+  const toyId = getAudioToyId(panel) || 'loopgrid';
   panel.__audioToyId = toyId;
 
   // Create gated trigger for audio generation guard
@@ -346,6 +364,30 @@ export function buildGrid(panel, numSteps = 8){
     const noteIndex = pat.noteIndices[col];
     const midi = panel.__gridState.notePalette[noteIndex];
     const note = midiToName(midi);
+
+    // DEBUG: If we are scheduling this panel while it's not chain-active,
+    // that's a smoking gun for the "swap/bleed" bug.
+    try {
+      if (window.__SCHED_MISMATCH_DEBUG) {
+        const isActive = (panel?.dataset?.chainActive === 'true');
+        if (!isActive) {
+          console.warn('[sched][MISMATCH][loopgrid] scheduled while inactive', {
+            panelId: panel?.id,
+            dataToyId: panel?.dataset?.toyid,
+            audioToyId: panel?.__audioToyId,
+            chainActive: panel?.dataset?.chainActive,
+            col,
+            when,
+            instrument,
+            note,
+            tick: window.__mtSchedTick,
+            activeToyIds: window.__mtActiveToyIds,
+            chainState: window.__mtChainState,
+            nowAt: window.__mtNowAt,
+          });
+        }
+      }
+    } catch {}
     try {
       if (window.__LOOPGRID_AUDIO_DEBUG) {
         console.log('[loopgrid][schedule->play]', {

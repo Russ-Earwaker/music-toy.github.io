@@ -1,0 +1,32 @@
+drawgrid-player.js:222 [drawgrid-player] seeded initial pattern {steps: 8, nodesPerCol: Array(8)}
+drawgrid-player.js:222 [drawgrid-player] seeded initial pattern {steps: 8, nodesPerCol: Array(8)}
+main.js:670 [focus] normalize DOM
+main.js:670 [focus] normalize DOM
+window.__SCHED_MISMATCH_DEBUG = true
+window.__LOOPGRID_AUDIO_DEBUG = true   // optional
+window.__DRAWGRID_PLAYER_DEBUG = true  // optional
+
+true
+main.js:1532 [chain] cancel outgoing {activeToyId: 'drawgrid-1768141568638-bnljdh', outgoingAudioToyId: 'audiotoy_drawgrid-1768141568638-bnljdh_ke2q0xd2', nextActiveId: 'toy-1768141570896-oqf4b0'}
+drawgrid-player.js:295 [drawgrid-player] column not active/empty {col: 0, hasC: true, active: false, nodesCount: 1}
+main.js:1532 [chain] cancel outgoing {activeToyId: 'toy-1768141570896-oqf4b0', outgoingAudioToyId: 'audiotoy_toy-1768141570896-oqf4b0_jz4rhv1j', nextActiveId: 'drawgrid-1768141568638-bnljdh'}
+drawgrid-player.js:295 [drawgrid-player] column not active/empty {col: 4, hasC: true, active: false, nodesCount: 1}
+drawgrid-player.js:295 [drawgrid-player] column not active/empty {col: 5, hasC: true, active: false, nodesCount: 1}
+drawgrid-player.js:295 [drawgrid-player] column not active/empty {col: 6, hasC: true, active: false, nodesCount: 1}
+main.js:1532 [chain] cancel outgoing {activeToyId: 'drawgrid-1768141568638-bnljdh', outgoingAudioToyId: 'audiotoy_drawgrid-1768141568638-bnljdh_ke2q0xd2', nextActiveId: 'toy-1768141570896-oqf4b0'}
+drawgrid-player.js:295 [drawgrid-player] column not active/empty {col: 0, hasC: true, active: false, nodesCount: 1}
+drawgrid-player.js:295 [drawgrid-player] column not active/empty {col: 2, hasC: true, active: false, nodesCount: 1}
+drawgrid-player.js:295 [drawgrid-player] column not active/empty {col: 7, hasC: true, active: false, nodesCount: 1}
+main.js:1532 [chain] cancel outgoing {activeToyId: 'toy-1768141570896-oqf4b0', outgoingAudioToyId: 'audiotoy_toy-1768141570896-oqf4b0_jz4rhv1j', nextActiveId: 'drawgrid-1768141568638-bnljdh'}
+drawgrid-player.js:295 [drawgrid-player] column not active/empty {col: 4, hasC: true, active: false, nodesCount: 1}
+drawgrid-player.js:295 [drawgrid-player] column not active/empty {col: 5, hasC: true, active: false, nodesCount: 1}
+drawgrid-player.js:295 [drawgrid-player] column not active/empty {col: 6, hasC: true, active: false, nodesCount: 1}
+main.js:1532 [chain] cancel outgoing {activeToyId: 'drawgrid-1768141568638-bnljdh', outgoingAudioToyId: 'audiotoy_drawgrid-1768141568638-bnljdh_ke2q0xd2', nextActiveId: 'toy-1768141570896-oqf4b0'}
+drawgrid-player.js:295 [drawgrid-player] column not active/empty {col: 0, hasC: true, active: false, nodesCount: 1}
+drawgrid-player.js:295 [drawgrid-player] column not active/empty {col: 2, hasC: true, active: false, nodesCount: 1}
+drawgrid-player.js:295 [drawgrid-player] column not active/empty {col: 7, hasC: true, active: false, nodesCount: 1}
+drawgrid-player.js:295 [drawgrid-player] column not active/empty {col: 0, hasC: true, active: false, nodesCount: 1}
+main.js:1532 [chain] cancel outgoing {activeToyId: 'toy-1768141570896-oqf4b0', outgoingAudioToyId: 'audiotoy_toy-1768141570896-oqf4b0_jz4rhv1j', nextActiveId: 'drawgrid-1768141568638-bnljdh'}
+drawgrid-player.js:295 [drawgrid-player] column not active/empty {col: 4, hasC: true, active: false, nodesCount: 1}
+drawgrid-player.js:295 [drawgrid-player] column not active/empty {col: 5, hasC: true, active: false, nodesCount: 1}
+drawgrid-player.js:295 [drawgrid-player] column not active/empty {col: 6, hasC: true, active: false, nodesCount: 1}
