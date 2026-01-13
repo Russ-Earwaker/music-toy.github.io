@@ -449,7 +449,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   try { if (typeof window !== 'undefined') window.__DG_SINGLE_CANVAS = DG_SINGLE_CANVAS; } catch {}
   try {
     if (typeof window !== 'undefined' && window.__DG_PLAYHEAD_SEPARATE_CANVAS === undefined) {
-      window.__DG_PLAYHEAD_SEPARATE_CANVAS = true;
+      window.__DG_PLAYHEAD_SEPARATE_CANVAS = false;
     }
   } catch {}
   const DG_COMBINE_GRID_NODES = false;
@@ -1055,22 +1055,29 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       if (!visible) el.style.opacity = '0';
     };
     const showGrid = !flat && !DG_SINGLE_CANVAS;
-    const showOverlay = !flat && (!DG_SINGLE_CANVAS || DG_SINGLE_CANVAS_OVERLAYS);
+    const showOverlayBase = !flat && (!DG_SINGLE_CANVAS || DG_SINGLE_CANVAS_OVERLAYS);
+    // Hide overlay canvases when they're empty to reduce compositor/layer work.
+    // (These flags are maintained by mark*LayerActive/Cleared.)
+    const showGhost = showOverlayBase && !panel.__dgGhostLayerEmpty;
+    const showFlash = showOverlayBase && !panel.__dgFlashLayerEmpty;
+    const showTutorial = !flat && !panel.__dgTutorialLayerEmpty;
+    const chainActive = (panel?.dataset?.chainActive === 'true') || panel?.classList?.contains?.('toy-playing');
+    const showPlayhead = !flat && separatePlayhead && chainActive && !panel.__dgPlayheadLayerEmpty && (!DG_SINGLE_CANVAS || DG_SINGLE_CANVAS_OVERLAYS);
     // Keep the main paint canvas visible; hide auxiliary layers in flat mode.
     toggle(paint, true);
     toggle(grid, showGrid);
     if (nodesCanvas !== grid) toggle(nodesCanvas, showGrid);
-    toggle(ghostCanvas, showOverlay);
-    toggle(flashCanvas, showOverlay);
-    toggle(tutorialCanvas, !flat);
+    toggle(ghostCanvas, showGhost);
+    toggle(flashCanvas, showFlash);
+    toggle(tutorialCanvas, showTutorial);
     toggle(particleCanvas, !flat);
-    toggle(playheadCanvas, !flat && separatePlayhead && (!DG_SINGLE_CANVAS || DG_SINGLE_CANVAS_OVERLAYS));
+    toggle(playheadCanvas, showPlayhead);
     if (DG_SINGLE_CANVAS) {
       toggle(grid, false);
       if (nodesCanvas !== grid) toggle(nodesCanvas, DG_SINGLE_CANVAS_OVERLAYS);
-      toggle(ghostCanvas, DG_SINGLE_CANVAS_OVERLAYS);
-      toggle(flashCanvas, DG_SINGLE_CANVAS_OVERLAYS);
-      toggle(playheadCanvas, DG_SINGLE_CANVAS_OVERLAYS && separatePlayhead);
+      toggle(ghostCanvas, DG_SINGLE_CANVAS_OVERLAYS && !panel.__dgGhostLayerEmpty);
+      toggle(flashCanvas, DG_SINGLE_CANVAS_OVERLAYS && !panel.__dgFlashLayerEmpty);
+      toggle(playheadCanvas, DG_SINGLE_CANVAS_OVERLAYS && separatePlayhead && chainActive && !panel.__dgPlayheadLayerEmpty);
     }
   }
   updateFlatLayerVisibility();
@@ -1673,7 +1680,11 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         progressMeasureW = cssW;
         progressMeasureH = cssH;
         try { dgViewport?.refreshSize?.({ snap: true }); } catch {}
-        resizeSurfacesFor(cssW, cssH, window.devicePixelRatio || paintDpr || 1);
+        const __dprFallback =
+          (typeof __dgAdaptivePaintDpr !== 'undefined' && Number.isFinite(__dgAdaptivePaintDpr) && __dgAdaptivePaintDpr > 0)
+            ? __dgAdaptivePaintDpr
+            : (Number.isFinite(paintDpr) && paintDpr > 0 ? paintDpr : (Number.isFinite(window?.devicePixelRatio) ? window.devicePixelRatio : 1));
+        resizeSurfacesFor(cssW, cssH, __dprFallback);
       }
       layout(true);
       const commitScale = Number.isFinite(zoomPayload?.currentScale)
@@ -1783,7 +1794,12 @@ function ensureSizeReady({ force = false } = {}) {
     }
   }
 
-  changed = force || (w !== cssW) || (h !== cssH);
+  // IMPORTANT: "force" should bypass cooldown/hysteresis, but must NOT cause a resize
+  // when the size is already correct. Otherwise we churn backing stores and spam
+  // [perf][canvas-resize] even at stable dimensions.
+  const sizeDiff = (w !== cssW) || (h !== cssH);
+  const forceResize = !!force && (cssW === 0 || cssH === 0);
+  changed = sizeDiff || forceResize;
   if (changed) {
     __dgLastEnsureSizeAtMs = nowTs;
     // Snapshot current paint to preserve drawn lines across resize.
@@ -1807,7 +1823,11 @@ function ensureSizeReady({ force = false } = {}) {
 
     // If ensureSize changes canvas dimensions frequently, this can cause huge nonScript stalls.
     traceCanvasResize(frontCanvas || paint || backCanvas, 'drawgrid.ensureSize');
-    resizeSurfacesFor(cssW, cssH, window.devicePixelRatio || paintDpr || 1);
+    const __dprFallback =
+      (typeof __dgAdaptivePaintDpr !== 'undefined' && Number.isFinite(__dgAdaptivePaintDpr) && __dgAdaptivePaintDpr > 0)
+        ? __dgAdaptivePaintDpr
+        : (Number.isFinite(paintDpr) && paintDpr > 0 ? paintDpr : (Number.isFinite(window?.devicePixelRatio) ? window.devicePixelRatio : 1));
+    resizeSurfacesFor(cssW, cssH, __dprFallback);
     if (paintSnapshot) {
       try {
         const ctx = (DG_SINGLE_CANVAS && backCtx)
@@ -3628,14 +3648,28 @@ function copyCanvas(backCtx, frontCtx) {
         playheadCanvas,
       ].filter(Boolean);
 
+      // NOTE: avoid per-canvas getContext() calls here (can be surprisingly costly).
+      // We only reset contexts we already hold references to.
       for (const canvas of allCanvases) {
         if (canvas.width !== pixelW) canvas.width = pixelW;
         if (canvas.height !== pixelH) canvas.height = pixelH;
-        if (canvas.style.width !== cssWpx) canvas.style.width = cssWpx;
-        if (canvas.style.height !== cssHpx) canvas.style.height = cssHpx;
-        const ctx = canvas.getContext && canvas.getContext('2d');
-        R.resetCtx(ctx);
+        // style width/height is already set via styleCanvases above
       }
+
+      // Reset known contexts after resize
+      try { R.resetCtx(frontCtx); } catch {}
+      try { R.resetCtx(backCtx); } catch {}
+      try { R.resetCtx(gridFrontCtx); } catch {}
+      try { R.resetCtx(gridBackCtx); } catch {}
+      try { R.resetCtx(nodesFrontCtx); } catch {}
+      try { R.resetCtx(nodesBackCtx); } catch {}
+      try { R.resetCtx(flashFrontCtx); } catch {}
+      try { R.resetCtx(flashBackCtx); } catch {}
+      try { R.resetCtx(ghostFrontCtx); } catch {}
+      try { R.resetCtx(ghostBackCtx); } catch {}
+      try { R.resetCtx(tutorialFrontCtx); } catch {}
+      try { R.resetCtx(tutorialBackCtx); } catch {}
+      try { R.resetCtx(playheadFrontCtx); } catch {}
 
       const copyCtx = (srcCtx, dstCtx) => {
         if (!srcCtx || !dstCtx) return;
@@ -3795,7 +3829,11 @@ function copyCanvas(backCtx, frontCtx) {
       progressMeasureW = cssW;
       progressMeasureH = cssH;
       if (dgViewport?.refreshSize) dgViewport.refreshSize({ snap: true });
-      resizeSurfacesFor(cssW, cssH, window.devicePixelRatio || paintDpr || 1);
+      const __dprFallback =
+        (typeof __dgAdaptivePaintDpr !== 'undefined' && Number.isFinite(__dgAdaptivePaintDpr) && __dgAdaptivePaintDpr > 0)
+          ? __dgAdaptivePaintDpr
+          : (Number.isFinite(paintDpr) && paintDpr > 0 ? paintDpr : (Number.isFinite(window?.devicePixelRatio) ? window.devicePixelRatio : 1));
+      resizeSurfacesFor(cssW, cssH, __dprFallback);
       if (tutorialHighlightMode !== 'none') renderTutorialHighlight();
 
 
@@ -6425,9 +6463,20 @@ function copyCanvas(backCtx, frontCtx) {
           const __pfUpdateStart = (__perfOn && typeof performance !== 'undefined' && performance.now)
             ? performance.now()
             : 0;
+          // Hard emergency gate (renderLoop-local): ensure we can skip dgField.tick(dt) immediately
+          // even if the adaptive budget pass is cached/skipped for this frame.
+          const __dgCurFpsNow =
+            (typeof window !== 'undefined' && Number.isFinite(window.__MT_SM_FPS)) ? window.__MT_SM_FPS :
+            ((typeof window !== 'undefined' && Number.isFinite(window.__MT_FPS)) ? window.__MT_FPS : 60);
+          const __dgVisibleNow = Number.isFinite(globalDrawgridState?.visibleCount) ? globalDrawgridState.visibleCount : 0;
+          const __dgHardEmergencyOffNow =
+            (__dgCurFpsNow < 14) || // catastrophic FPS regardless of count
+            (__dgVisibleNow >= 12 && __dgCurFpsNow < 22) ||
+            (__dgVisibleNow >= 20 && __dgCurFpsNow < 28);
           const __dgParticlesEffectivelyOff =
             (!particleFieldEnabled) ||
             (panel.__dgParticlesOff === true) ||
+            (__dgHardEmergencyOffNow === true) ||
             (
               panel.__dgParticleBudgetMaxCountScale != null &&
               panel.__dgParticleBudgetCapScale != null &&
@@ -6440,6 +6489,23 @@ function copyCanvas(backCtx, frontCtx) {
           // Only tick the particle sim when it's actually doing meaningful work.
           if (!__dgParticlesEffectivelyOff) {
             dgField?.tick?.(dt);
+          } else if (__dgHardEmergencyOffNow && !panel.__dgParticlesOff) {
+            // Flip off immediately (don't wait for adaptive), and force a quick fade-out budget.
+            panel.__dgParticlesOff = true;
+            panel.__dgParticleBudgetMaxCountScale = 0;
+            panel.__dgParticleBudgetCapScale = 0;
+            panel.__dgParticleBudgetSpawnScale = 0;
+            panel.__dgParticleBudgetKey = '';
+            try {
+              dgField?.applyBudget?.({
+                maxCountScale: 0,
+                capScale: 0,
+                sizeScale: 1,
+                spawnScale: 0,
+                tickModulo: 1,
+                emergencyFade: true,
+              });
+            } catch {}
           }
           if (__perfOn && __pfUpdateStart) {
             try { window.__PerfFrameProf?.mark?.('drawgrid.update.particles', performance.now() - __pfUpdateStart); } catch {}

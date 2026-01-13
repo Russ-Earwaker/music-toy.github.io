@@ -1877,6 +1877,41 @@ const g_pulseUntil = new Map(); // panelEl -> untilMs
 const g_pulseLastRequestAt = new WeakMap(); // panelEl -> last request timestamp (ms)
 const PULSE_MIN_REQUEUE_MS = 120; // coalesce rapid pulses into one visible pulse
 
+// Pulse cleanup timers (ensure we do *one* DOM remove per pulse window, not per frame).
+const g_pulseCleanupTimer = new WeakMap(); // panelEl -> timeoutId
+
+function schedulePulseCleanup(panel) {
+  if (!panel || !panel.isConnected) return;
+  // Clear any existing cleanup timer for this panel.
+  const prev = g_pulseCleanupTimer.get(panel);
+  if (prev) {
+    try { clearTimeout(prev); } catch {}
+    try { g_pulseCleanupTimer.delete(panel); } catch {}
+  }
+  const until = g_pulseUntil.get(panel) || 0;
+  if (!until) return;
+  const now = performance.now();
+  const delay = Math.max(0, Math.ceil(until - now) + 8);
+  const id = window.setTimeout(() => {
+    // Only remove if we've truly expired (pulses can extend the until time).
+    try {
+      const u = g_pulseUntil.get(panel) || 0;
+      if (!panel.isConnected) return;
+      if (u && performance.now() < u) {
+        // Still active; reschedule based on the new expiry.
+        schedulePulseCleanup(panel);
+        return;
+      }
+      g_pulseUntil.delete(panel);
+      if (panel.classList.contains('toy-playing-pulse')) {
+        if (window.__PERF_TRACE_DOM_WRITES) traceDomWrite('pulseToyBorder: classList.remove toy-playing-pulse');
+        panel.classList.remove('toy-playing-pulse');
+      }
+    } catch {}
+  }, delay);
+  g_pulseCleanupTimer.set(panel, id);
+}
+
 // Pulse class removals are intentionally executed outside rAF to avoid triggering
 // style/layout work in the animation callback.
 const g_pulseRemoveQueue = new Set(); // panelEl
@@ -1890,7 +1925,7 @@ function queuePulseClassRemoval(panel) {
     for (const p of g_pulseRemoveQueue) {
       try {
         if (p && p.isConnected && p.classList.contains('toy-playing-pulse')) {
-          traceDomWrite('pulseToyBorder: classList.remove toy-playing-pulse');
+          if (window.__PERF_TRACE_DOM_WRITES) traceDomWrite('pulseToyBorder: classList.remove toy-playing-pulse');
           p.classList.remove('toy-playing-pulse');
         }
       } catch {}
@@ -1913,11 +1948,11 @@ function queuePulseClassAdd(panel) {
       try {
         if (!p || !p.isConnected) continue;
         if (!p.classList.contains('toy-playing')) {
-          traceDomWrite('pulseToyBorder: classList.add toy-playing');
+          if (window.__PERF_TRACE_DOM_WRITES) traceDomWrite('pulseToyBorder: classList.add toy-playing');
           p.classList.add('toy-playing');
         }
         if (!p.classList.contains('toy-playing-pulse')) {
-          traceDomWrite('pulseToyBorder: classList.add toy-playing-pulse');
+          if (window.__PERF_TRACE_DOM_WRITES) traceDomWrite('pulseToyBorder: classList.add toy-playing-pulse');
           p.classList.add('toy-playing-pulse');
           // Only queue outline sync when the pulse actually begins (not every pulse request).
           window.__PERF_OUTLINE_SYNC_COUNT = (window.__PERF_OUTLINE_SYNC_COUNT || 0) + 1;
@@ -1961,6 +1996,7 @@ function pulseToyBorder(panel, durationMs = 320) {
   // Always extend the expiry (even if we skip DOM writes).
   const prevUntil = g_pulseUntil.get(panel) || 0;
   if (until > prevUntil) g_pulseUntil.set(panel, until);
+  schedulePulseCleanup(panel);
 
   // If already pulsing and requests are coming in hot, don't touch the DOM again.
   if (hadPulseClass && (now - lastReq) < PULSE_MIN_REQUEUE_MS) {
