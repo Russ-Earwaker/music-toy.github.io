@@ -5,6 +5,7 @@ import './debug.js';
 import './scene-manager.js';
 import './perf/perf-lab.js';
 import './perf/perf-gesture-autotune.js';
+import { installRafBoundaryFlag, traceDomWrite } from './perf/PerfTrace.js';
 import './advanced-controls-toggle.js';
 import './toy-visibility.js';
 import { onZoomChange, namedZoomListener } from './zoom/ZoomCoordinator.js';
@@ -44,6 +45,9 @@ import { tryRestoreOnBoot, startAutosave } from './persistence.js';
 import { initBoardAnchor, tickBoardAnchor } from './board-anchor.js';
 
 const mainLog = makeDebugLogger('mt_debug_logs', 'log');
+
+// Perf trace support (demon hunting). Safe/no-op unless toggled in perf-lab.
+installRafBoundaryFlag();
 
 installIOSAudioUnlock();
 if (document.readyState === 'loading') {
@@ -1790,16 +1794,30 @@ function triggerConnectorPulse(fromId, toId) {
 
     const chainBtn = panel?.querySelector?.('.toy-chain-btn');
     if (chainBtn) {
-        const flashUntil = now + durationMs;
-        chainBtn.__chainFlashUntil = flashUntil;
-        chainBtn.classList.remove('chain-btn-flash');
-        void chainBtn.offsetWidth;
-        chainBtn.classList.add('chain-btn-flash');
-        setTimeout(() => {
-            if (chainBtn.__chainFlashUntil <= performance.now()) {
-                chainBtn.classList.remove('chain-btn-flash');
+        // PERF: Avoid forced reflow from `offsetWidth` animation restart.
+        // Use Web Animations API instead (no layout flush required).
+        try {
+            // Cancel any in-flight flash so repeated pulses don't stack.
+            if (chainBtn.__chainFlashAnim) {
+                try { chainBtn.__chainFlashAnim.cancel(); } catch {}
+                chainBtn.__chainFlashAnim = null;
             }
-        }, durationMs);
+            const anim = chainBtn.animate(
+                [
+                    { transform: 'scale(1)', filter: 'brightness(1)' },
+                    { transform: 'scale(1.08)', filter: 'brightness(1.35)' },
+                    { transform: 'scale(1)', filter: 'brightness(1)' },
+                ],
+                { duration: durationMs, iterations: 1, easing: 'ease-out' }
+            );
+            chainBtn.__chainFlashAnim = anim;
+            anim.onfinish = () => { chainBtn.__chainFlashAnim = null; };
+            anim.oncancel = () => { chainBtn.__chainFlashAnim = null; };
+        } catch {
+            // Fallback to class-based flash (but without offsetWidth reflow).
+            chainBtn.classList.add('chain-btn-flash');
+            setTimeout(() => chainBtn.classList.remove('chain-btn-flash'), durationMs + 25);
+        }
     }
 
     // Mark matching edges as "flashing" using the Edge model.
@@ -1855,7 +1873,61 @@ function triggerConnectorPulse(fromId, toId) {
 const g_outlineSyncQueue = new Set();
 let g_outlineSyncRaf = 0;
 // Pulse bookkeeping (avoid per-pulse timeouts)
-const g_pulseUntil = new Map(); // panelId -> untilMs
+const g_pulseUntil = new Map(); // panelEl -> untilMs
+const g_pulseLastRequestAt = new WeakMap(); // panelEl -> last request timestamp (ms)
+const PULSE_MIN_REQUEUE_MS = 120; // coalesce rapid pulses into one visible pulse
+
+// Pulse class removals are intentionally executed outside rAF to avoid triggering
+// style/layout work in the animation callback.
+const g_pulseRemoveQueue = new Set(); // panelEl
+let g_pulseRemoveTimer = 0;
+function queuePulseClassRemoval(panel) {
+  if (!panel || !panel.isConnected) return;
+  g_pulseRemoveQueue.add(panel);
+  if (g_pulseRemoveTimer) return;
+  g_pulseRemoveTimer = window.setTimeout(() => {
+    g_pulseRemoveTimer = 0;
+    for (const p of g_pulseRemoveQueue) {
+      try {
+        if (p && p.isConnected && p.classList.contains('toy-playing-pulse')) {
+          traceDomWrite('pulseToyBorder: classList.remove toy-playing-pulse');
+          p.classList.remove('toy-playing-pulse');
+        }
+      } catch {}
+    }
+    g_pulseRemoveQueue.clear();
+  }, 0);
+}
+
+// Pulse class adds are also executed outside rAF to avoid triggering style/layout work
+// in the animation callback. (PerfTrace tags these as dom-in-raf otherwise.)
+const g_pulseAddQueue = new Set(); // panelEl
+let g_pulseAddTimer = 0;
+function queuePulseClassAdd(panel) {
+  if (!panel || !panel.isConnected) return;
+  g_pulseAddQueue.add(panel);
+  if (g_pulseAddTimer) return;
+  g_pulseAddTimer = window.setTimeout(() => {
+    g_pulseAddTimer = 0;
+    for (const p of g_pulseAddQueue) {
+      try {
+        if (!p || !p.isConnected) continue;
+        if (!p.classList.contains('toy-playing')) {
+          traceDomWrite('pulseToyBorder: classList.add toy-playing');
+          p.classList.add('toy-playing');
+        }
+        if (!p.classList.contains('toy-playing-pulse')) {
+          traceDomWrite('pulseToyBorder: classList.add toy-playing-pulse');
+          p.classList.add('toy-playing-pulse');
+          // Only queue outline sync when the pulse actually begins (not every pulse request).
+          window.__PERF_OUTLINE_SYNC_COUNT = (window.__PERF_OUTLINE_SYNC_COUNT || 0) + 1;
+          try { queueBodyOutlineSync(p); } catch {}
+        }
+      } catch {}
+    }
+    g_pulseAddQueue.clear();
+  }, 0);
+}
 
 function queueBodyOutlineSync(panel) {
   if (!panel || !panel.isConnected) return;
@@ -1877,32 +1949,41 @@ function pulseToyBorder(panel, durationMs = 320) {
   if (window.__PERF_DISABLE_PULSES) return;
 
   window.__PERF_PULSE_COUNT = (window.__PERF_PULSE_COUNT || 0) + 1;
-  panel.classList.add('toy-playing');
-  if (panel.classList.contains('toy-playing-pulse')) {
-    panel.classList.remove('toy-playing-pulse');
-    requestAnimationFrame(() => {
-      if (!panel.isConnected) return;
-      panel.classList.add('toy-playing-pulse');
-    });
-  } else {
-    panel.classList.add('toy-playing-pulse');
+  const now = performance.now();
+
+  // Coalesce ultra-rapid pulse requests (common when notes are dense).
+  const lastReq = g_pulseLastRequestAt.get(panel) || 0;
+  g_pulseLastRequestAt.set(panel, now);
+
+  const hadPulseClass = panel.classList.contains('toy-playing-pulse');
+  const until = now + durationMs;
+
+  // Always extend the expiry (even if we skip DOM writes).
+  const prevUntil = g_pulseUntil.get(panel) || 0;
+  if (until > prevUntil) g_pulseUntil.set(panel, until);
+
+  // If already pulsing and requests are coming in hot, don't touch the DOM again.
+  if (hadPulseClass && (now - lastReq) < PULSE_MIN_REQUEUE_MS) {
+    return;
   }
 
-  const until = performance.now() + durationMs;
-  g_pulseUntil.set(panel.id, until);
-
-  // Keep overlay geometry aligned, but do it batched.
-  window.__PERF_OUTLINE_SYNC_COUNT = (window.__PERF_OUTLINE_SYNC_COUNT || 0) + 1;
-  try { queueBodyOutlineSync(panel); } catch {}
+  // Add pulse classes outside rAF (avoid dom-in-raf).
+  if (!hadPulseClass || !panel.classList.contains('toy-playing')) {
+    queuePulseClassAdd(panel);
+  }
 }
 
 function serviceToyPulses(nowMs) {
   if (g_pulseUntil.size === 0) return;
-  for (const [id, until] of g_pulseUntil.entries()) {
+  for (const [panel, until] of g_pulseUntil.entries()) {
     if (until > nowMs) continue;
-    const panel = document.getElementById(id);
-    if (panel) panel.classList.remove('toy-playing-pulse');
-    g_pulseUntil.delete(id);
+    if (!panel || !panel.isConnected) {
+      g_pulseUntil.delete(panel);
+      continue;
+    }
+    // Remove the pulse class outside rAF to avoid style/layout flushes in-frame.
+    if (panel.classList.contains('toy-playing-pulse')) queuePulseClassRemoval(panel);
+    g_pulseUntil.delete(panel);
   }
 }
 
@@ -2437,6 +2518,7 @@ function hintOffscreenSpawn(panel) {
 
 function persistToyPosition(panel) {
     try {
+        if (typeof window !== 'undefined' && window.__PERF_LAB_RUN_CONTEXT === 'auto') return;
         const key = 'toyPositions';
         const map = JSON.parse(localStorage.getItem(key) || '{}');
         map[panel.id] = { left: panel.style.left, top: panel.style.top };
@@ -4657,3 +4739,7 @@ async function boot(){
 }
 if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
 else boot();
+import { PERF_FLAGS } from "./perf-flags.js";
+
+// Expose for live debugging / perf-lab runs
+window.PERF_FLAGS = PERF_FLAGS;

@@ -13,6 +13,7 @@ import { boardScale as boardScaleHelper } from './board-scale-helpers.js';
 import { beginFrameLayoutCache, getRect } from './layout-cache.js';
 import { makeDebugLogger } from './debug-flags.js';
 import { startSection } from './perf-meter.js';
+import { traceCanvasResize } from './perf/PerfTrace.js';
 import {
   fillGapsInNodeArray,
   findChainHead,
@@ -85,9 +86,6 @@ import {
 const drawgridLog = makeDebugLogger('mt_debug_logs', 'log');
 
 const gridAreaLogical = { w: 0, h: 0 };
-
-// If more than this many drawgrids are on-screen, disable expensive particle fields per-panel.
-const DG_MAX_PARTICLE_PANELS = 2;
 
 // Lightweight profiling for drawGrid; flip to true when testing.
 const DG_PROFILE = false;
@@ -295,6 +293,11 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   // Per-instance state (WAS module-level; moving fixes cross-toy leakage)
   let currentMap = null;                // { active:boolean[], nodes:Set[], disabled:Set[] }
   let usingBackBuffers = false;
+  // Cached layout size to avoid forced reflow from offsetWidth/clientWidth during rAF.
+  // Updated by ResizeObserver; used by measureCSSSize(wrap).
+  let __dgLayoutW = 0;
+  let __dgLayoutH = 0;
+  let __dgLayoutObs = null;
   // Per-instance (was module-level; caused cross-toy size/throttle leakage)
   let __dgFrameIdx = 0;
   let __dgLastResizeTargetW = 0;
@@ -658,11 +661,15 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   }
 
   function getToyCssSizeForParticles() {
-    const host = wrap || panel;
-    const rect = host?.getBoundingClientRect?.();
-    const width = Math.max(1, Math.round(rect?.width || 1));
-    const height = Math.max(1, Math.round(rect?.height || 1));
-    return { w: width, h: height };
+    // IMPORTANT: avoid getBoundingClientRect() in hot paths (can trigger forced layout).
+    // Prefer cached ResizeObserver measurements (wrap) or cheap clientWidth/clientHeight.
+    const w = (wrap && __dgLayoutW > 0)
+      ? __dgLayoutW
+      : Math.max(1, Math.round(wrap?.clientWidth || panel?.clientWidth || 1));
+    const h = (wrap && __dgLayoutH > 0)
+      ? __dgLayoutH
+      : Math.max(1, Math.round(wrap?.clientHeight || panel?.clientHeight || 1));
+    return { w, h };
   }
 
   function __auditZoomSizes(tag = 'audit') {
@@ -1703,6 +1710,13 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const DG_CORNER_PROBE = !!(location.search.includes('dgprobe=1') || localStorage.getItem('DG_CORNER_PROBE') === '1');
 
   let __dgLastEnsureSizeChanged = false;
+  let __dgLastEnsureSizeAtMs = 0;
+  const DG_ENSURE_SIZE_COOLDOWN_MS = 250;
+  // Hysteresis: avoid 1-frame resize churn from transient/oscillating CSS measurements.
+  let __dgEnsureSizeCandW = 0;
+  let __dgEnsureSizeCandH = 0;
+  let __dgEnsureSizeCandSinceMs = 0;
+  const DG_ENSURE_SIZE_HYSTERESIS_MS = 120;
 
 function ensureSizeReady({ force = false } = {}) {
   let changed = false;
@@ -1725,11 +1739,53 @@ function ensureSizeReady({ force = false } = {}) {
   let { w, h } = measured;
   if (!w || !h) return false;
   layoutSizeDirty = false;
-  w = Math.max(1, w);
-  h = Math.max(1, h);
+  // Prevent resize jitter from fractional CSS pixels (and downstream DPR rounding).
+  w = Math.max(1, Math.round(w));
+  h = Math.max(1, Math.round(h));
 
-  changed = force || Math.abs(w - cssW) > 0.5 || Math.abs(h - cssH) > 0.5;
+  if (!force) {
+    // If the measured size flips briefly (e.g. during gesture/zoom settle), wait for it to
+    // remain stable for a short window before committing an expensive backing-store resize.
+    const wouldChange = (w !== cssW) || (h !== cssH);
+    if (wouldChange) {
+      const bigDelta = (Math.abs(w - cssW) >= 8) || (Math.abs(h - cssH) >= 8);
+      if (!bigDelta) {
+        if (__dgEnsureSizeCandW !== w || __dgEnsureSizeCandH !== h) {
+          __dgEnsureSizeCandW = w;
+          __dgEnsureSizeCandH = h;
+          __dgEnsureSizeCandSinceMs = nowTs;
+          layoutSizeDirty = true;
+          return true;
+        }
+        if ((nowTs - (__dgEnsureSizeCandSinceMs || 0)) < DG_ENSURE_SIZE_HYSTERESIS_MS) {
+          layoutSizeDirty = true;
+          return true;
+        }
+      }
+    } else {
+      __dgEnsureSizeCandW = 0;
+      __dgEnsureSizeCandH = 0;
+      __dgEnsureSizeCandSinceMs = 0;
+    }
+  }
+
+  // Cooldown: avoid repeated backing-store churn during camera/overview turbulence.
+  // If we *do* see a size change during cooldown, keep dirty=true so we try again soon.
+  if (!force) {
+    const dt = nowTs - (__dgLastEnsureSizeAtMs || 0);
+    if (dt >= 0 && dt < DG_ENSURE_SIZE_COOLDOWN_MS) {
+      // If size would change, defer it to the next window.
+      const wouldChange = (w !== cssW) || (h !== cssH);
+      if (wouldChange) {
+        layoutSizeDirty = true;
+      }
+      return true;
+    }
+  }
+
+  changed = force || (w !== cssW) || (h !== cssH);
   if (changed) {
+    __dgLastEnsureSizeAtMs = nowTs;
     // Snapshot current paint to preserve drawn lines across resize.
     let paintSnapshot = null;
     try {
@@ -1749,6 +1805,8 @@ function ensureSizeReady({ force = false } = {}) {
 
     try { dgViewport?.refreshSize?.({ snap: true }); } catch {}
 
+    // If ensureSize changes canvas dimensions frequently, this can cause huge nonScript stalls.
+    traceCanvasResize(frontCanvas || paint || backCanvas, 'drawgrid.ensureSize');
     resizeSurfacesFor(cssW, cssH, window.devicePixelRatio || paintDpr || 1);
     if (paintSnapshot) {
       try {
@@ -3022,7 +3080,23 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
     }
   });
 
+  // PERF: ResizeObserver can fire repeatedly even when the effective layout size didn't change
+  // (or when changes are sub-pixel / shadow-only). Treating every callback as "dirty" can
+  // create a feedback loop: markLayoutSizeDirty -> ensureSizeReady -> resizeSurfacesFor -> RO.
+  let __dgLastObservedBodyW = 0;
+  let __dgLastObservedBodyH = 0;
   const observer = new ResizeObserver(() => {
+    // Prefer cheap size reads; avoid getBoundingClientRect here.
+    const w = body?.clientWidth || body?.offsetWidth || 0;
+    const h = body?.clientHeight || body?.offsetHeight || 0;
+    if (w > 0 && h > 0) {
+      if (w === __dgLastObservedBodyW && h === __dgLastObservedBodyH) {
+        return; // ignore spurious callback
+      }
+      __dgLastObservedBodyW = w;
+      __dgLastObservedBodyH = h;
+    }
+
     markLayoutSizeDirty();
     if (zoomMode === 'gesturing') {
       pendingZoomResnap = true;
@@ -3181,8 +3255,40 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
     layoutSizeDirty = true;
   }
 
+  function __installLayoutObserver() {
+    try {
+      if (!wrap) return;
+      if (typeof ResizeObserver === 'undefined') return;
+      __dgLayoutObs = new ResizeObserver((entries) => {
+        const e = entries && entries[0];
+        const cr = e && e.contentRect;
+        if (!cr) return;
+        const w = Math.max(1, Math.round(cr.width || 0));
+        const h = Math.max(1, Math.round(cr.height || 0));
+        if (!w || !h) return;
+        if (w === __dgLayoutW && h === __dgLayoutH) return;
+        __dgLayoutW = w;
+        __dgLayoutH = h;
+        layoutSizeDirty = true;
+      });
+      __dgLayoutObs.observe(wrap);
+      panel?.addEventListener?.('toy:remove', () => {
+        try { __dgLayoutObs?.disconnect?.(); } catch {}
+        __dgLayoutObs = null;
+      }, { once: true });
+    } catch {}
+  }
+
+  __installLayoutObserver();
+
   function measureCSSSize(el) {
     if (!el) return { w: 0, h: 0 };
+
+    // If we're measuring the drawgrid wrap, prefer cached RO size (no layout read).
+    if (el === wrap && __dgLayoutW > 0 && __dgLayoutH > 0) {
+      return { w: __dgLayoutW, h: __dgLayoutH };
+    }
+
     const w = el.offsetWidth || el.clientWidth || 0;
     const h = el.offsetHeight || el.clientHeight || 0;
     if (w > 0 && h > 0) return { w, h };
@@ -3499,9 +3605,11 @@ function copyCanvas(backCtx, frontCtx) {
         playheadCanvas
       ].filter(Boolean);
 
+      const cssWpx = `${logicalWidth}px`;
+      const cssHpx = `${logicalHeight}px`;
       for (const canvas of styleCanvases) {
-        canvas.style.width = `${logicalWidth}px`;
-        canvas.style.height = `${logicalHeight}px`;
+        if (canvas.style.width !== cssWpx) canvas.style.width = cssWpx;
+        if (canvas.style.height !== cssHpx) canvas.style.height = cssHpx;
       }
 
       const allCanvases = [
@@ -3523,8 +3631,8 @@ function copyCanvas(backCtx, frontCtx) {
       for (const canvas of allCanvases) {
         if (canvas.width !== pixelW) canvas.width = pixelW;
         if (canvas.height !== pixelH) canvas.height = pixelH;
-        canvas.style.width = `${logicalWidth}px`;
-        canvas.style.height = `${logicalHeight}px`;
+        if (canvas.style.width !== cssWpx) canvas.style.width = cssWpx;
+        if (canvas.style.height !== cssHpx) canvas.style.height = cssHpx;
         const ctx = canvas.getContext && canvas.getContext('2d');
         R.resetCtx(ctx);
       }
@@ -5726,12 +5834,65 @@ function copyCanvas(backCtx, frontCtx) {
         const baseForce = panel.__dgFieldBaseForceMul;
         dgField._config.forceMul = Math.min(10, baseForce * (panel.__dgParticleKnockbackMul || 1));
       }
-      const maxCountScale = Math.max(0.1, maxCountScaleBase * crowdScale * fpsBoost * emergencyScale * perfDamp);
-      const capScale = Math.max(0.18, (particleBudget.capScale ?? 1) * crowdScale * fpsBoost * emergencyScale * perfDamp);
+      const maxCountScale = Math.max(0.0, maxCountScaleBase * crowdScale * fpsBoost * emergencyScale * perfDamp);
+      const capScale = Math.max(0.0, (particleBudget.capScale ?? 1) * crowdScale * fpsBoost * emergencyScale * perfDamp);
       const sizeScale = (particleBudget.sizeScale ?? 1) * emergencySize * (perfDamp < 0.8 ? 1.05 : 1);
-      const spawnScale = Math.max(0.08, (particleBudget.spawnScale ?? 1) * crowdScale * fpsBoost * emergencyScale * perfDamp);
+      const spawnScale = Math.max(0.0, (particleBudget.spawnScale ?? 1) * crowdScale * fpsBoost * emergencyScale * perfDamp);
+
+      // Persist resolved scalars for the tick gate (avoids expensive tick when effectively off).
+      panel.__dgParticleBudgetMaxCountScale = maxCountScale;
+      panel.__dgParticleBudgetCapScale = capScale;
+      panel.__dgParticleBudgetSpawnScale = spawnScale;
       // Keep tick cadence steady for smooth lerps; rely on lower counts for performance.
       const tickModulo = 1;
+      // If budgets drop to ~0, fully disable particle SIM for this panel (draw stays smooth).
+      // We allow counts to ramp down to zero, then stop ticking the field to avoid per-frame cost.
+      //
+      // IMPORTANT: In worst-case scenes, the adaptive scalars may not naturally reach ~0,
+      // so add a "hard emergency" off-ramp that triggers only when we are clearly overwhelmed
+      // (very low FPS + many visible drawgrids). This preserves smoothness (no cadence stepping)
+      // while eliminating the expensive dgField.tick() work.
+      const __dgCurFps =
+        (typeof window !== 'undefined' && Number.isFinite(window.__MT_SM_FPS)) ? window.__MT_SM_FPS :
+        ((typeof window !== 'undefined' && Number.isFinite(window.__MT_FPS)) ? window.__MT_FPS : 60);
+      const __dgVisible = Number.isFinite(globalDrawgridState?.visibleCount) ? globalDrawgridState.visibleCount : 0;
+      // "Hard emergency" off-ramp: only used when we are clearly overwhelmed.
+      // This should trigger in the perf-lab worst-case scenes so we can fully skip dgField.tick().
+      const __dgHardEmergencyOff =
+        (__dgCurFps < 14) || // catastrophic FPS, regardless of count
+        (__dgVisible >= 12 && __dgCurFps < 22) ||
+        (__dgVisible >= 20 && __dgCurFps < 28);
+
+      const particlesOffWanted =
+        __dgHardEmergencyOff ||
+        (maxCountScale < 0.02 && capScale < 0.02 && spawnScale < 0.02) ||
+        !particleFieldEnabled;
+
+      if (particlesOffWanted && !panel.__dgParticlesOff) {
+        panel.__dgParticlesOff = true;
+        // Ensure the tick gate sees "effectively off" immediately, even before the next adaptive pass.
+        panel.__dgParticleBudgetMaxCountScale = 0;
+        panel.__dgParticleBudgetCapScale = 0;
+        panel.__dgParticleBudgetSpawnScale = 0;
+        // Force a final budget apply so any existing particles can fade out quickly.
+        panel.__dgParticleBudgetKey = '';
+        dgField.applyBudget({
+          maxCountScale: 0,
+          capScale: 0,
+          sizeScale,
+          spawnScale: 0,
+          tickModulo,
+          emergencyFade: true,
+        });
+      } else if (!particlesOffWanted && panel.__dgParticlesOff) {
+        // Re-enable; normal budget application below will regen naturally.
+        panel.__dgParticlesOff = false;
+        // Clear persisted scalars; they will be repopulated by the normal adaptive budget path.
+        panel.__dgParticleBudgetMaxCountScale = null;
+        panel.__dgParticleBudgetCapScale = null;
+        panel.__dgParticleBudgetSpawnScale = null;
+        panel.__dgParticleBudgetKey = '';
+      }
       const budgetKey = [
         round(maxCountScale),
         round(capScale),
@@ -5742,7 +5903,7 @@ function copyCanvas(backCtx, frontCtx) {
         emergencyMode ? 1 : 0,
         particleFieldEnabled ? 1 : 0,
       ].join('|');
-      if (panel.__dgParticleBudgetKey !== budgetKey) {
+      if (!panel.__dgParticlesOff && panel.__dgParticleBudgetKey !== budgetKey) {
         panel.__dgParticleBudgetKey = budgetKey;
         dgField.applyBudget({
           maxCountScale,
@@ -5750,7 +5911,6 @@ function copyCanvas(backCtx, frontCtx) {
           tickModulo,
           sizeScale,
           spawnScale,
-            minCount: __dgLowFpsMode ? 120 : undefined,
           emergencyFade: false,
           emergencyFadeSeconds: 2.2,
         });
@@ -6006,10 +6166,22 @@ function copyCanvas(backCtx, frontCtx) {
       }
 
       const disableOverlays = !!(typeof window !== 'undefined' && window.__PERF_DG_DISABLE_OVERLAYS);
+      // Auto overlay suppression (unfocused only) during heavy gesture situations.
+      // We *don't* clear overlays when suppressed, so the toy stays visually stable.
+      const __autoOverlayOff = (typeof window !== 'undefined')
+        ? (window.__DG_AUTO_DISABLE_OVERLAYS_DURING_GESTURE ?? true)
+        : true;
+      const __autoOverlayThreshold = (typeof window !== 'undefined' && Number.isFinite(window.__DG_AUTO_DISABLE_OVERLAYS_THRESHOLD))
+        ? window.__DG_AUTO_DISABLE_OVERLAYS_THRESHOLD
+        : 12;
+      const disableOverlaysEffective =
+        disableOverlays ||
+        (__autoOverlayOff && gestureMoving && !isFocused && visiblePanels >= __autoOverlayThreshold);
+
       // Overlays (notes, playhead, flashes) respect visibility & hydrations guard,
       // but are otherwise always on - they're core UX.
       const __overlayGateStart = __perfOn ? performance.now() : 0;
-      const allowOverlayDraw = canDrawAnything && !disableOverlays;
+      const allowOverlayDraw = canDrawAnything && !disableOverlaysEffective;
       const disableOverlayStrokes = !!(typeof window !== 'undefined' && window.__PERF_DG_OVERLAY_STROKES_OFF);
       let hasOverlayStrokes = false;
       if (allowOverlayDraw && !disableOverlayStrokes) {
@@ -6253,7 +6425,22 @@ function copyCanvas(backCtx, frontCtx) {
           const __pfUpdateStart = (__perfOn && typeof performance !== 'undefined' && performance.now)
             ? performance.now()
             : 0;
-          dgField?.tick?.(dt);
+          const __dgParticlesEffectivelyOff =
+            (!particleFieldEnabled) ||
+            (panel.__dgParticlesOff === true) ||
+            (
+              panel.__dgParticleBudgetMaxCountScale != null &&
+              panel.__dgParticleBudgetCapScale != null &&
+              panel.__dgParticleBudgetSpawnScale != null &&
+              panel.__dgParticleBudgetMaxCountScale < 0.02 &&
+              panel.__dgParticleBudgetCapScale < 0.02 &&
+              panel.__dgParticleBudgetSpawnScale < 0.02
+            );
+
+          // Only tick the particle sim when it's actually doing meaningful work.
+          if (!__dgParticlesEffectivelyOff) {
+            dgField?.tick?.(dt);
+          }
           if (__perfOn && __pfUpdateStart) {
             try { window.__PerfFrameProf?.mark?.('drawgrid.update.particles', performance.now() - __pfUpdateStart); } catch {}
           }
@@ -7050,9 +7237,34 @@ function copyCanvas(backCtx, frontCtx) {
         const playheadLayer = useSeparatePlayhead
           ? 'playhead'
           : (playheadDrawSimple && canUseTutorialLayer) ? 'tutorial' : 'flash';
-        const shouldRenderPlayhead = !!(info && isRunning() && isActiveInChain && !probablyStale);
+        const wantsPlayhead = !!(info && isRunning() && isActiveInChain && !probablyStale);
 
-        if (!shouldRenderPlayhead) {
+        // Throttle playhead draws during heavy pan/zoom (especially with many panels),
+        // but DO NOT clear the existing playhead unless it genuinely shouldn't exist.
+        // Otherwise we'd flicker because the "!shouldRenderPlayhead" clear-path also
+        // resets __dgPlayheadLastX.
+        let allowPlayheadThisFrame = wantsPlayhead;
+        try {
+          const overrideEvery = Number(window.__PERF_DG_PLAYHEAD_EVERY);
+          let playheadEvery = 1;
+          if (Number.isFinite(overrideEvery) && overrideEvery >= 1) {
+            playheadEvery = Math.floor(overrideEvery);
+          } else if (gestureMoving && !isFocused) {
+            // Conservative defaults: only throttle when gestureMoving (and not focused),
+            // because this is when we most need "feel smooth" over perfect fidelity.
+            if (visiblePanels >= 18) playheadEvery = 6;
+            else if (visiblePanels >= 12) playheadEvery = 4;
+            else if (visiblePanels >= 6) playheadEvery = 3;
+          }
+          if (playheadEvery > 1) {
+            panel.__dgPlayheadFrame = (panel.__dgPlayheadFrame | 0) + 1;
+            allowPlayheadThisFrame = ((panel.__dgPlayheadFrame % playheadEvery) === 0);
+          }
+        } catch {}
+
+        const shouldRenderPlayhead = wantsPlayhead && allowPlayheadThisFrame;
+
+        if (!wantsPlayhead) {
           const lastX = Number.isFinite(panel.__dgPlayheadLastX) ? panel.__dgPlayheadLastX : null;
           const lastLayer = panel.__dgPlayheadLayer || playheadLayer;
           if (lastX != null) {

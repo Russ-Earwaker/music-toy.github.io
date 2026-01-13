@@ -405,6 +405,8 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     minParticles: MIN_PARTICLES,
     emergencyFade: false,
     emergencyFadeSeconds: 5,
+    __fullyOffWanted: false,
+    __fullyOff: false,
     smoothRecoverUntil: 0,
     emergencyDbg: { ticks: 0, fades: 0, lastTs: 0 },
     tickModulo: 1,
@@ -872,7 +874,7 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     }
   }
 
-    function tick(dt = 1 / 60) {
+function tick(dt = 1 / 60) {
       const __perfOn = !!window.__PERF_PARTICLE_FIELD_PROFILE;
       const __perfStart = __perfOn && typeof performance !== 'undefined' ? performance.now() : 0;
       try {
@@ -881,6 +883,9 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
           state.wasHidden = true;
           return;
         }
+        // Ultra-cheap hard off: once a field has fully collapsed to 0 particles,
+        // skip all per-frame work until budgets rise again.
+        if (state.__fullyOff) return;
         if (state.wasHidden) {
           state.wasHidden = false;
           try { snapToBudget(); } catch {}
@@ -889,6 +894,27 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
           maybeResizeFromLayout();
           setLODFromView();
         });
+
+        // If budgets have ramped the field down to "effectively off", avoid *all* per-frame
+        // simulation cost once there are no live particles. This keeps toys smooth (no cadence
+        // stepping) while eliminating the expensive physics/reconcile loops for empty fields.
+        //
+        // We only do this when:
+        // - minParticles is 0 (so we are allowed to fully disable),
+        // - emergencyFade is active (we're intentionally collapsing),
+        // - there are no particles left,
+        // - there are no transient effects that need ticking (pulse/highlights).
+        const __minP = Number.isFinite(state.minParticles) ? state.minParticles : MIN_PARTICLES;
+        if (
+          state.emergencyFade &&
+          __minP <= 0 &&
+          (!state.particles || state.particles.length === 0) &&
+          (!Array.isArray(highlightEvents) || highlightEvents.length === 0) &&
+          (!Number.isFinite(state.pulseEnergy) || state.pulseEnergy <= 0.0001)
+        ) {
+          return;
+        }
+
     const gestureActive = isZoomGesturing();
     const gestureThrottlingActive = false;
     
@@ -985,6 +1011,11 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
       }
 
       perfSection('particle.field.reconcile', () => reconcileParticleCount(effectiveDt));
+      // If we're trying to fully collapse and have reached 0, lock into hard-off.
+      if (state.__fullyOffWanted && (!state.particles || state.particles.length === 0)) {
+        state.__fullyOff = true;
+        return;
+      }
       if (state.emergencyFade) {
         try {
           const dbg = state.emergencyDbg || (state.emergencyDbg = { ticks: 0, fades: 0, lastTs: 0 });
@@ -1015,7 +1046,46 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
   }
 
   function applyBudget(budget = {}) {
-    const { maxCountScale, capScale, tickModulo, sizeScale, minCount, emergencyFade, emergencyFadeSeconds } = budget;
+    let { maxCountScale, capScale, tickModulo, sizeScale, minCount, emergencyFade, emergencyFadeSeconds } = budget;
+
+    // If Perf-Lab (or ParticleQuality) exposes FPS buckets, use them to shed particles
+    // more aggressively at very low FPS. This keeps animation smooth by reducing detail,
+    // rather than freezing or lowering tick rates.
+    try {
+      const b = readPerfFpsBuckets();
+      let fps = null;
+      if (Number.isFinite(b)) {
+        fps = b;
+      } else if (b && typeof b === 'object') {
+        // Be robust to different bucket shapes
+        fps =
+          (Number.isFinite(b.p50) ? b.p50 : null) ??
+          (Number.isFinite(b.p50Fps) ? b.p50Fps : null) ??
+          (Number.isFinite(b.avg) ? b.avg : null) ??
+          (Number.isFinite(b.avgFps) ? b.avgFps : null) ??
+          (Number.isFinite(b.fps) ? b.fps : null) ??
+          (Number.isFinite(b.recentFps) ? b.recentFps : null);
+      }
+
+      if (Number.isFinite(fps)) {
+        // Clamp budgets harder the worse FPS is.
+        // - <=15fps: "panic" — dump particles fast
+        // - <=24fps: strong shedding
+        // - <=30fps: mild shedding
+        if (fps <= 15) {
+          if (Number.isFinite(maxCountScale)) maxCountScale = Math.min(maxCountScale, 0.25);
+          if (Number.isFinite(capScale)) capScale = Math.min(capScale, 0.25);
+          if (Number.isFinite(emergencyFadeSeconds)) emergencyFadeSeconds = Math.min(emergencyFadeSeconds, 1.2);
+        } else if (fps <= 24) {
+          if (Number.isFinite(maxCountScale)) maxCountScale = Math.min(maxCountScale, 0.5);
+          if (Number.isFinite(capScale)) capScale = Math.min(capScale, 0.5);
+          if (Number.isFinite(emergencyFadeSeconds)) emergencyFadeSeconds = Math.min(emergencyFadeSeconds, 2.0);
+        } else if (fps <= 30) {
+          if (Number.isFinite(maxCountScale)) maxCountScale = Math.min(maxCountScale, 0.75);
+          if (Number.isFinite(capScale)) capScale = Math.min(capScale, 0.75);
+        }
+      }
+    } catch {}
     let changed = false;
     if (Number.isFinite(minCount) || (emergencyFade === true && !Number.isFinite(minCount))) {
       const nextMin = Math.max(0, Math.round(Number.isFinite(minCount) ? minCount : 0));
@@ -1036,6 +1106,26 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
         try { if (window.__PERF_LAB_VERBOSE) console.log('[Particles][emergency] field', { label: fieldLabel, active: emergencyFade }); } catch {}
         changed = true;
       }
+    }
+
+    // If budgets are explicitly driving this field to "zero", mark a fully-off intent.
+    // Once all particles are gone we can skip the entire tick() path cheaply.
+    const bMax = Number(budget.maxCountScale ?? 1);
+    const bCap = Number(budget.capScale ?? 1);
+    const bSpawn = Number(budget.spawnScale ?? 1);
+    const wantZero =
+      state.emergencyFade &&
+      bMax <= 0.0001 &&
+      bCap <= 0.0001 &&
+      bSpawn <= 0.0001;
+
+    state.__fullyOffWanted = wantZero;
+    if (wantZero) {
+      // Allow full collapse (no minimum particle floor).
+      state.minParticles = 0;
+    } else {
+      // Budgets came back up; allow tick again.
+      state.__fullyOff = false;
     }
     if (Number.isFinite(emergencyFadeSeconds)) {
       const nextSeconds = Math.max(0.2, emergencyFadeSeconds);
@@ -1115,8 +1205,17 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     // unless we're in emergency fade and need to drop counts quickly.
     if (gestureThrottlingActive && !immediate && !state.emergencyFade) return;
 
-    const activeParticles = state.particles.filter(p => (p.fadeTarget ?? 1) > 0 || (p.fade ?? 0) > 0.05);
-    const active = activeParticles.length;
+    // Avoid per-tick allocations (filter/splice) in worst-case scenes.
+    // "Active" means: either still targeted to be visible, or still visibly fading out.
+    let active = 0;
+    const parts = state.particles;
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      if (!p) continue;
+      const ft = (p.fadeTarget ?? 1);
+      const f = (p.fade ?? 0);
+      if (ft > 0 || f > 0.05) active++;
+    }
 
     if (immediate && !state.particles.length) {
       const seedKey = `${config.seed}:${state.w}x${state.h}:init:${desired}`;
@@ -1153,13 +1252,22 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
       const maxTrim = Math.max(MIN_FADE_STEP, Math.round(active * (state.emergencyFade ? 0.2 : MAX_FADE_OUT_FRACTION)));
       const maxStep = state.emergencyFade ? (MAX_FADE_OUT_STEP * 4) : MAX_FADE_OUT_STEP;
       const trimBudget = Math.min(adjustStep, maxStep, maxTrim, active - minParticles);
-      const candidates = activeParticles.filter(p => (p.fadeTarget ?? 1) > 0);
-      const budget = Math.min(trimBudget, candidates.length);
-      for (let i = 0; i < budget && candidates.length; i++) {
-        const idx = Math.floor(Math.random() * candidates.length);
-        const p = candidates.splice(idx, 1)[0];
+      const budget = Math.max(0, Math.min(trimBudget, parts.length));
+      // Randomly sample particles to fade out without building candidate arrays.
+      // We cap attempts to avoid pathological looping when most are already fading.
+      let faded = 0;
+      let attempts = 0;
+      const maxAttempts = Math.max(12, Math.min(parts.length * 2, 6000));
+      while (faded < budget && attempts < maxAttempts) {
+        attempts++;
+        const idx = (Math.random() * parts.length) | 0;
+        const p = parts[idx];
+        if (!p) continue;
+        const ft = (p.fadeTarget ?? 1);
+        if (ft <= 0) continue; // already fading / off
         p.fadeTarget = 0;
         p.fadeRate = state.emergencyFade ? (FADE_OUT_RATE * 2.2) : FADE_OUT_RATE;
+        faded++;
       }
     }
   }

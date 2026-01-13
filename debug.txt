@@ -1,155 +1,2481 @@
-drawgrid-player.js:261 [drawgrid-player] __seqTouch called {reason: 'resume', steps: 8, nodesPerCol: Array(8)}
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":4.3,"windowEnd":4.78,"nowAt":4.28}
-toy-audio.js:71 [audio-gate][resume-bump] {"id":"audiotoy_drawgrid-1768153677941-k3hwg4_xj3g8atw","reason":"chain-activate","now":4.28,"lastResumeAt":4.28}
-bumpToyAudioGen @ toy-audio.js:71
-(anonymous) @ note-scheduler.js:218
-tick @ note-scheduler.js:138
-tickAudioScheduler @ main.js:3437
-drawgrid-player.js:310 [drawgrid-player][resume-schedule] {"panelId":"drawgrid-1768153677941-k3hwg4","col":0,"when":4.28,"now":4.28,"hasPat":true,"patSteps":8,"patCols":8}
-drawgrid-player.js:392 [drawgrid-player][resume-skip][empty-col] {"panelId":"drawgrid-1768153677941-k3hwg4","col":0,"when":4.28,"active":false,"nodesCount":1}
-drawgrid-player.js:310 [drawgrid-player][resume-schedule] {"panelId":"drawgrid-1768153677941-k3hwg4","col":1,"when":4.53,"now":4.28,"hasPat":true,"patSteps":8,"patCols":8}
-drawgrid-player.js:413 [drawgrid-player][resume-col] {"panelId":"drawgrid-1768153677941-k3hwg4","col":1,"when":4.53,"now":4.28,"nodes":[6],"nodesCount":1,"disabledCount":0}
-drawgrid-player.js:449 [drawgrid-player][resume-play] {"panelId":"drawgrid-1768153677941-k3hwg4","col":1,"when":4.53,"row":6,"midiNote":53,"instrument":"XYLOPHONE 2"}
-drawgrid-player.js:310 [drawgrid-player][resume-schedule] {"panelId":"drawgrid-1768153677941-k3hwg4","col":2,"when":4.78,"now":4.28,"hasPat":true,"patSteps":8,"patCols":8}
-drawgrid-player.js:413 [drawgrid-player][resume-col] {"panelId":"drawgrid-1768153677941-k3hwg4","col":2,"when":4.78,"now":4.28,"nodes":[4],"nodesCount":1,"disabledCount":0}
-drawgrid-player.js:449 [drawgrid-player][resume-play] {"panelId":"drawgrid-1768153677941-k3hwg4","col":2,"when":4.78,"row":4,"midiNote":55,"instrument":"XYLOPHONE 2"}
-drawgrid-player.js:310 [drawgrid-player][resume-schedule] {"panelId":"drawgrid-1768153677941-k3hwg4","col":3,"when":5.03,"now":4.28,"hasPat":true,"patSteps":8,"patCols":8}
-drawgrid-player.js:413 [drawgrid-player][resume-col] {"panelId":"drawgrid-1768153677941-k3hwg4","col":3,"when":5.03,"now":4.28,"nodes":[6],"nodesCount":1,"disabledCount":0}
-drawgrid-player.js:449 [drawgrid-player][resume-play] {"panelId":"drawgrid-1768153677941-k3hwg4","col":3,"when":5.03,"row":6,"midiNote":53,"instrument":"XYLOPHONE 2"}
-drawgrid-player.js:310 [drawgrid-player][resume-schedule] {"panelId":"drawgrid-1768153677941-k3hwg4","col":4,"when":5.28,"now":4.28,"hasPat":true,"patSteps":8,"patCols":8}
-drawgrid-player.js:392 [drawgrid-player][resume-skip][empty-col] {"panelId":"drawgrid-1768153677941-k3hwg4","col":4,"when":5.28,"active":false,"nodesCount":1}
-drawgrid-player.js:310 [drawgrid-player][resume-schedule] {"panelId":"drawgrid-1768153677941-k3hwg4","col":5,"when":5.53,"now":4.28,"hasPat":true,"patSteps":8,"patCols":8}
-drawgrid-player.js:413 [drawgrid-player][resume-col] {"panelId":"drawgrid-1768153677941-k3hwg4","col":5,"when":5.53,"now":4.28,"nodes":[4],"nodesCount":1,"disabledCount":0}
-drawgrid-player.js:449 [drawgrid-player][resume-play] {"panelId":"drawgrid-1768153677941-k3hwg4","col":5,"when":5.53,"row":4,"midiNote":55,"instrument":"XYLOPHONE 2"}
-drawgrid-player.js:310 [drawgrid-player][resume-schedule] {"panelId":"drawgrid-1768153677941-k3hwg4","col":6,"when":5.78,"now":4.28,"hasPat":true,"patSteps":8,"patCols":8}
-drawgrid-player.js:413 [drawgrid-player][resume-col] {"panelId":"drawgrid-1768153677941-k3hwg4","col":6,"when":5.78,"now":4.28,"nodes":[6],"nodesCount":1,"disabledCount":0}
-drawgrid-player.js:449 [drawgrid-player][resume-play] {"panelId":"drawgrid-1768153677941-k3hwg4","col":6,"when":5.78,"row":6,"midiNote":53,"instrument":"XYLOPHONE 2"}
-drawgrid-player.js:310 [drawgrid-player][resume-schedule] {"panelId":"drawgrid-1768153677941-k3hwg4","col":7,"when":6.03,"now":4.28,"hasPat":true,"patSteps":8,"patCols":8}
-drawgrid-player.js:413 [drawgrid-player][resume-col] {"panelId":"drawgrid-1768153677941-k3hwg4","col":7,"when":6.03,"now":4.28,"nodes":[4],"nodesCount":1,"disabledCount":0}
-drawgrid-player.js:449 [drawgrid-player][resume-play] {"panelId":"drawgrid-1768153677941-k3hwg4","col":7,"when":6.03,"row":4,"midiNote":55,"instrument":"XYLOPHONE 2"}
-note-scheduler.js:355 [note-scheduler][resume] {"toyId":"drawgrid-1768153677941-k3hwg4","scheduledAny":true,"steps":8,"stepLen":0.25,"barStart":4.28,"toyLoopStart":4.28,"windowStart":4.284375,"windowEnd":6.28,"now":4.28,"isChained":true,"justActivated":true,"scheduledCol0InCurrentBar":true,"justResumed":true}
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":4.310666666666666,"windowEnd":4.790666666666667,"nowAt":4.290666666666667}
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":4.34,"windowEnd":4.82,"nowAt":4.32}
-toy-audio.js:71 [audio-gate][resume-bump] {"id":"audiotoy_drawgrid-1768153677941-k3hwg4_xj3g8atw","reason":"chain-activate","now":4.32,"lastResumeAt":4.28}
-bumpToyAudioGen @ toy-audio.js:71
-(anonymous) @ note-scheduler.js:218
-tick @ note-scheduler.js:138
-tickAudioScheduler @ main.js:3437
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":4.361333333333333,"windowEnd":4.841333333333333,"nowAt":4.341333333333333}
-toy-audio.js:71 [audio-gate][resume-bump] {"id":"audiotoy_drawgrid-1768153677941-k3hwg4_xj3g8atw","reason":"chain-activate","now":4.341333333333333,"lastResumeAt":4.28}
-bumpToyAudioGen @ toy-audio.js:71
-(anonymous) @ note-scheduler.js:218
-tick @ note-scheduler.js:138
-tickAudioScheduler @ main.js:3437
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":4.390666666666666,"windowEnd":4.870666666666667,"nowAt":4.370666666666667}
-toy-audio.js:71 [audio-gate][resume-bump] {"id":"audiotoy_drawgrid-1768153677941-k3hwg4_xj3g8atw","reason":"chain-activate","now":4.370666666666667,"lastResumeAt":4.28}
-bumpToyAudioGen @ toy-audio.js:71
-(anonymous) @ note-scheduler.js:218
-tick @ note-scheduler.js:138
-tickAudioScheduler @ main.js:3437
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":4.412,"windowEnd":4.892,"nowAt":4.392}
-toy-audio.js:71 [audio-gate][resume-bump] {"id":"audiotoy_drawgrid-1768153677941-k3hwg4_xj3g8atw","reason":"chain-activate","now":4.392,"lastResumeAt":4.28}
-bumpToyAudioGen @ toy-audio.js:71
-(anonymous) @ note-scheduler.js:218
-tick @ note-scheduler.js:138
-tickAudioScheduler @ main.js:3437
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":4.430666666666666,"windowEnd":4.910666666666667,"nowAt":4.410666666666667}
-toy-audio.js:71 [audio-gate][resume-bump] {"id":"audiotoy_drawgrid-1768153677941-k3hwg4_xj3g8atw","reason":"chain-activate","now":4.410666666666667,"lastResumeAt":4.28}
-bumpToyAudioGen @ toy-audio.js:71
-(anonymous) @ note-scheduler.js:218
-tick @ note-scheduler.js:138
-tickAudioScheduler @ main.js:3437
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":4.46,"windowEnd":4.94,"nowAt":4.44}
-toy-audio.js:71 [audio-gate][resume-bump] {"id":"audiotoy_drawgrid-1768153677941-k3hwg4_xj3g8atw","reason":"chain-activate","now":4.44,"lastResumeAt":4.28}
-bumpToyAudioGen @ toy-audio.js:71
-(anonymous) @ note-scheduler.js:218
-tick @ note-scheduler.js:138
-tickAudioScheduler @ main.js:3437
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":4.492,"windowEnd":4.972,"nowAt":4.472}
-toy-audio.js:71 [audio-gate][resume-bump] {"id":"audiotoy_drawgrid-1768153677941-k3hwg4_xj3g8atw","reason":"chain-activate","now":4.472,"lastResumeAt":4.28}
-bumpToyAudioGen @ toy-audio.js:71
-(anonymous) @ note-scheduler.js:218
-tick @ note-scheduler.js:138
-tickAudioScheduler @ main.js:3437
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":4.510666666666666,"windowEnd":4.990666666666667,"nowAt":4.490666666666667}
-toy-audio.js:71 [audio-gate][resume-bump] {"id":"audiotoy_drawgrid-1768153677941-k3hwg4_xj3g8atw","reason":"chain-activate","now":4.490666666666667,"lastResumeAt":4.28}
-bumpToyAudioGen @ toy-audio.js:71
-(anonymous) @ note-scheduler.js:218
-tick @ note-scheduler.js:138
-tickAudioScheduler @ main.js:3437
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":4.539999999999999,"windowEnd":5.02,"nowAt":4.52}
-toy-audio.js:71 [audio-gate][resume-bump] {"id":"audiotoy_drawgrid-1768153677941-k3hwg4_xj3g8atw","reason":"chain-activate","now":4.52,"lastResumeAt":4.28}
-bumpToyAudioGen @ toy-audio.js:71
-(anonymous) @ note-scheduler.js:218
-tick @ note-scheduler.js:138
-tickAudioScheduler @ main.js:3437
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":4.561333333333333,"windowEnd":5.041333333333333,"nowAt":4.541333333333333}
-toy-audio.js:71 [audio-gate][resume-bump] {"id":"audiotoy_drawgrid-1768153677941-k3hwg4_xj3g8atw","reason":"chain-activate","now":4.541333333333333,"lastResumeAt":4.28}
-bumpToyAudioGen @ toy-audio.js:71
-(anonymous) @ note-scheduler.js:218
-tick @ note-scheduler.js:138
-tickAudioScheduler @ main.js:3437
-drawgrid-player.js:151 [drawgrid-player][resume-fx-skip] {"panelId":"drawgrid-1768153677941-k3hwg4","col":1,"when":4.53,"reason":"gen-mismatch","now":4.541333333333333}
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":4.5906666666666665,"windowEnd":5.070666666666667,"nowAt":4.570666666666667}
-toy-audio.js:71 [audio-gate][resume-bump] {"id":"audiotoy_drawgrid-1768153677941-k3hwg4_xj3g8atw","reason":"chain-activate","now":4.570666666666667,"lastResumeAt":4.28}
-bumpToyAudioGen @ toy-audio.js:71
-(anonymous) @ note-scheduler.js:218
-tick @ note-scheduler.js:138
-tickAudioScheduler @ main.js:3437
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":4.611999999999999,"windowEnd":5.092,"nowAt":4.592}
-toy-audio.js:71 [audio-gate][resume-bump] {"id":"audiotoy_drawgrid-1768153677941-k3hwg4_xj3g8atw","reason":"chain-activate","now":4.592,"lastResumeAt":4.28}
-bumpToyAudioGen @ toy-audio.js:71
-(anonymous) @ note-scheduler.js:218
-tick @ note-scheduler.js:138
-tickAudioScheduler @ main.js:3437
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":4.641333333333333,"windowEnd":5.121333333333333,"nowAt":4.621333333333333}
-toy-audio.js:71 [audio-gate][resume-bump] {"id":"audiotoy_drawgrid-1768153677941-k3hwg4_xj3g8atw","reason":"chain-activate","now":4.621333333333333,"lastResumeAt":4.28}
-bumpToyAudioGen @ toy-audio.js:71
-(anonymous) @ note-scheduler.js:218
-tick @ note-scheduler.js:138
-tickAudioScheduler @ main.js:3437
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":4.659999999999999,"windowEnd":5.14,"nowAt":4.64}
-toy-audio.js:71 [audio-gate][resume-bump] {"id":"audiotoy_drawgrid-1768153677941-k3hwg4_xj3g8atw","reason":"chain-activate","now":4.64,"lastResumeAt":4.28}
-bumpToyAudioGen @ toy-audio.js:71
-(anonymous) @ note-scheduler.js:218
-tick @ note-scheduler.js:138
-tickAudioScheduler @ main.js:3437
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":4.691999999999999,"windowEnd":5.172,"nowAt":4.672}
-toy-audio.js:71 [audio-gate][resume-bump] {"id":"audiotoy_drawgrid-1768153677941-k3hwg4_xj3g8atw","reason":"chain-activate","now":4.672,"lastResumeAt":4.28}
-bumpToyAudioGen @ toy-audio.js:71
-(anonymous) @ note-scheduler.js:218
-tick @ note-scheduler.js:138
-tickAudioScheduler @ main.js:3437
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":4.710666666666667,"windowEnd":5.190666666666667,"nowAt":4.690666666666667}
-toy-audio.js:71 [audio-gate][resume-bump] {"id":"audiotoy_drawgrid-1768153677941-k3hwg4_xj3g8atw","reason":"chain-activate","now":4.690666666666667,"lastResumeAt":4.28}
-bumpToyAudioGen @ toy-audio.js:71
-(anonymous) @ note-scheduler.js:218
-tick @ note-scheduler.js:138
-tickAudioScheduler @ main.js:3437
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":4.739999999999999,"windowEnd":5.22,"nowAt":4.72}
-toy-audio.js:71 [audio-gate][resume-bump] {"id":"audiotoy_drawgrid-1768153677941-k3hwg4_xj3g8atw","reason":"chain-activate","now":4.72,"lastResumeAt":4.28}
-bumpToyAudioGen @ toy-audio.js:71
-(anonymous) @ note-scheduler.js:218
-tick @ note-scheduler.js:138
-tickAudioScheduler @ main.js:3437
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":4.761333333333333,"windowEnd":5.241333333333333,"nowAt":4.741333333333333}
-toy-audio.js:71 [audio-gate][resume-bump] {"id":"audiotoy_drawgrid-1768153677941-k3hwg4_xj3g8atw","reason":"chain-activate","now":4.741333333333333,"lastResumeAt":4.28}
-bumpToyAudioGen @ toy-audio.js:71
-(anonymous) @ note-scheduler.js:218
-tick @ note-scheduler.js:138
-tickAudioScheduler @ main.js:3437
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":4.790666666666667,"windowEnd":5.270666666666667,"nowAt":4.770666666666667}
-toy-audio.js:71 [audio-gate][resume-bump] {"id":"audiotoy_drawgrid-1768153677941-k3hwg4_xj3g8atw","reason":"chain-activate","now":4.770666666666667,"lastResumeAt":4.28}
-bumpToyAudioGen @ toy-audio.js:71
-(anonymous) @ note-scheduler.js:218
-tick @ note-scheduler.js:138
-tickAudioScheduler @ main.js:3437
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":4.811999999999999,"windowEnd":5.292,"nowAt":4.792}
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":4.841333333333333,"windowEnd":5.3213333333333335,"nowAt":4.8213333333333335}
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":4.859999999999999,"windowEnd":5.34,"nowAt":4.84}
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":4.8919999999999995,"windowEnd":5.372,"nowAt":4.872}
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":4.910666666666666,"windowEnd":5.390666666666666,"nowAt":4.890666666666666}
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":4.9399999999999995,"windowEnd":5.42,"nowAt":4.92}
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":4.961333333333333,"windowEnd":5.441333333333334,"nowAt":4.941333333333334}
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":4.990666666666666,"windowEnd":5.470666666666666,"nowAt":4.970666666666666}
-main.js:3394 [sched][resume-check] {"toyId":"drawgrid-1768153677941-k3hwg4","toyType":"drawgrid","hasNotes":true,"hasSeqPattern":true,"chainActive":"true","loopStartOverride":4.28,"loopStart":4.28,"barLen":2,"windowStart":5.012,"windowEnd":5.492,"nowAt":4.992}
+main.js:674 [focus] normalize DOM
+main.js:674 [focus] normalize DOM
+perf-lab.js:151 [perf-lab] tests: Array(11)
+perf-lab.js:4620 [PerfLab] demon trace DISABLED Object
+perf-lab.js:766 [PerfLab][footprint] Object
+perf-lab.js:853 [PerfLab][overlap] Object
+perf-lab.js:1983 [P3f_drawgrid_playing_panzoom_rand_once_anchor_on] samples=120 Array(120)
+perf-lab.js:1914 [PerfLab] result Object
+perf-lab.js:766 [PerfLab][footprint] Object
+perf-lab.js:853 [PerfLab][overlap] Object
+perf-lab.js:1983 [P3f_drawgrid_playing_panzoom_rand_once_anchor_on] samples=120 Array(120)
+perf-lab.js:1914 [PerfLab] result Object
+perf-lab.js:766 [PerfLab][footprint] Object
+board-viewport.js:36 [BV][reflow] layoutOffset:getBoundingClientRect 5.00ms
+profileReflow @ board-viewport.js:36
+getStageRectCached @ board-viewport.js:312
+getLayoutOffset @ board-viewport.js:319
+getViewportCenterWorld @ board-viewport.js:326
+getDistanceWorldFromCenter @ board-anchor.js:770
+tickBoardAnchor @ board-anchor.js:1209
+step @ main.js:3762
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+perf-lab.js:853 [PerfLab][overlap] Object
+perf-lab.js:1983 [P3f_drawgrid_playing_panzoom_rand_once_anchor_on] samples=120 Array(120)
+perf-lab.js:1914 [PerfLab] result Object
+perf-lab.js:766 [PerfLab][footprint] Object
+perf-lab.js:853 [PerfLab][overlap] Object
+perf-lab.js:1983 [P3f_drawgrid_playing_panzoom_rand_once_anchor_on] samples=120 Array(120)
+perf-lab.js:1914 [PerfLab] result Object
+perf-lab.js:766 [PerfLab][footprint] Object
+perf-lab.js:853 [PerfLab][overlap] Object
+perf-lab.js:1983 [P3f_drawgrid_playing_panzoom_rand_once_anchor_on] samples=120 Array(120)
+perf-lab.js:1914 [PerfLab] result Object
+perf-lab.js:766 [PerfLab][footprint] Object
+perf-lab.js:1983 [P4b_loopgrid_playing_panzoom] samples=120 Array(120)
+perf-lab.js:1914 [PerfLab] result Object
+perf-lab.js:4614 [PerfLab] demon trace ENABLED Object
+perf-lab.js:766 [PerfLab][footprint] Object
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:50 [perf][canvas-resize] drawgrid.ensureSize 798x599
+traceCanvasResize @ PerfTrace.js:50
+ensureSizeReady @ drawgrid.js:1812
+createDrawGrid @ drawgrid.js:2134
+initDrawGrid @ drawgrid-init.js:14
+initializeNewToy @ main.js:1580
+(anonymous) @ main.js:2613
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1941
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+perf-lab.js:853 [PerfLab][overlap] Object
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+pulseToyBorder @ main.js:1945
+step @ main.js:3906
+(anonymous) @ perf-lab.js:1739
+wrapped @ PerfTrace.js:31
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+perf-lab.js:1983 [P3f_drawgrid_playing_panzoom_rand_once_anchor_on] samples=120 Array(120)
+perf-lab.js:1914 [PerfLab] result Object
+perf-lab.js:766 [PerfLab][footprint] Object
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+PerfTrace.js:62 [perf][dom-in-raf] pulseToyBorder: classList.add toy-playing-pulse
+traceDomWrite @ PerfTrace.js:62
+perf-lab.js:1983 [P4b_loopgrid_playing_panzoom] samples=120 Array(120)
+perf-lab.js:1914 [PerfLab] result Object
+perf-lab.js:4479 [PerfLab] queue results Array(9)
+index.html:1 The file at 'blob:http://192.168.0.62:5500/28399892-a345-4250-92a5-a1839d14673b' was loaded over an insecure connection. This file should be served over HTTPS.

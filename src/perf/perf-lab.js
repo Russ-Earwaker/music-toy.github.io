@@ -19,7 +19,7 @@ try {
     budgetMul: 1,
     gestureDrawModulo: 4,
     gestureFieldModulo: 1,
-    freezeUnfocusedDuringGesture: true,
+    freezeUnfocusedDuringGesture: false,
     logFreeze: false,
   };
 } catch {}
@@ -65,6 +65,7 @@ function ensureUI() {
     build: btn('buildP3', 'Build P3: DrawGrid Worst-Case', 'primary'),
     runs: sortByLabel([
       { act: 'runP3f',  label: 'Run P3f: Playing Pan/Zoom + Random Notes (Anchor ON)' },
+      { act: 'runP3fPlayheadSeparateOff', label: 'Run P3f: Playhead Separate OFF' },
       { act: 'runP3fPlayheadSeparateOn', label: 'Run P3f: Playhead Separate ON' },
       { act: 'runP3fMixedSomeEmpty', label: 'Run P3f: Playing Pan/Zoom (Mostly Full + Some Empty)' },
       { act: 'runP3fNoGrid', label: 'Run P3f: Playing Pan/Zoom + Random Notes (No Grid)' },
@@ -190,6 +191,8 @@ function ensureUI() {
               <label class="perf-lab-toggle"><input type="checkbox" data-tog="freezeUnfocusedDuringGesture" checked /> Freeze unfocused</label>
               <label class="perf-lab-toggle"><input type="checkbox" data-perf="freezeChainUi" /> Freeze chain UI</label>
               <label class="perf-lab-toggle"><input type="checkbox" data-perf="traceMarks" /> Trace marks</label>
+              <label class="perf-lab-toggle"><input type="checkbox" data-perf="traceCanvasResize" /> Trace canvas resize</label>
+              <label class="perf-lab-toggle"><input type="checkbox" data-perf="traceDomInRaf" /> Trace DOM-in-RAF</label>
             </div>
           </div>
 
@@ -199,7 +202,7 @@ function ensureUI() {
 
           <div class="perf-lab-row perf-lab-footer">
             <button class="perf-lab-btn" data-act="auto">Run Auto (Saved)</button>
-            <button class="perf-lab-btn" data-act="copy">Copy Last Results</button>
+            <button class="perf-lab-btn" data-act="autoFast">Auto: Fast P3f + PlayheadSep A/B + NoParticles + P4b</button>
             <div class="perf-lab-status" id="perf-lab-status">Idle</div>
           </div>
         </div>
@@ -289,12 +292,47 @@ function ensureUI() {
     ov.querySelectorAll('[data-perf]').forEach((el) => {
       const key = el.getAttribute('data-perf');
       if (!key) return;
-      const v = (key === 'traceMarks')
-        ? window.__PERF_TRACE_MARKS
-        : (key === 'freezeChainUi') ? window.__PERF_DISABLE_CHAIN_UI : null;
+      const trace = (window.__PERF_TRACE || {});
+      const v =
+        (key === 'traceMarks') ? window.__PERF_TRACE_MARKS :
+        (key === 'freezeChainUi') ? window.__PERF_DISABLE_CHAIN_UI :
+        (key === 'traceCanvasResize') ? !!trace.traceCanvasResize :
+        (key === 'traceDomInRaf') ? !!trace.traceDomInRaf :
+        null;
       if (el.tagName === 'INPUT' && el.type === 'checkbox') el.checked = !!v;
     });
   } catch {}
+
+  // Keep UI checkboxes/selects in sync with global perf state.
+  // (Used by Trace Demon buttons and safe to call anytime.)
+  function syncUiFromState() {
+    try {
+      const st = (window.__PERF_PARTICLES = window.__PERF_PARTICLES || {});
+      ov.querySelectorAll('[data-tog]').forEach((el) => {
+        const key = el.getAttribute('data-tog');
+        if (!key) return;
+        const v = st[key];
+        if (el.tagName === 'INPUT' && el.type === 'checkbox') el.checked = !!v;
+        if (el.tagName === 'SELECT') {
+          const val = Number.isFinite(v) ? v : el.value;
+          el.value = String(Number(val));
+        }
+      });
+
+      const trace = (window.__PERF_TRACE || {});
+      ov.querySelectorAll('[data-perf]').forEach((el) => {
+        const key = el.getAttribute('data-perf');
+        if (!key) return;
+        const v =
+          (key === 'traceMarks') ? window.__PERF_TRACE_MARKS :
+          (key === 'freezeChainUi') ? window.__PERF_DISABLE_CHAIN_UI :
+          (key === 'traceCanvasResize') ? !!trace.traceCanvasResize :
+          (key === 'traceDomInRaf') ? !!trace.traceDomInRaf :
+          null;
+        if (el.tagName === 'INPUT' && el.type === 'checkbox') el.checked = !!v;
+      });
+    } catch {}
+  }
 
   ov.addEventListener('click', async (e) => {
     const btn = e.target && e.target.closest ? e.target.closest('button[data-act]') : null;
@@ -333,8 +371,10 @@ function ensureUI() {
     if (act === 'runP3e') await runP3e();
     if (act === 'runP3e2') await runP3e2();
     if (act === 'runP3f') await runP3f();
+    if (act === 'runP3fShort') await runP3fShort();
     if (act === 'runP3fPlayheadSeparateOff') await runP3fPlayheadSeparateOff();
     if (act === 'runP3fPlayheadSeparateOn') await runP3fPlayheadSeparateOn();
+    if (act === 'runP3fPlayheadEvery4') await runP3fPlayheadEvery4();
     if (act === 'runP3f2') await runP3f2();
     if (act === 'runP3fEmptyNoNotes') await runP3fEmptyNoNotes();
     if (act === 'runP3fEmptyChainNoNotes') await runP3fEmptyChainNoNotes();
@@ -390,15 +430,119 @@ function ensureUI() {
     if (act === 'runP7a') await runP7a();
     if (act === 'runP7b') await runP7b();
     if (act === 'auto') {
-      const cfgFile = await readAutoConfigFromFile();
-      const cfg = cfgFile || readAutoConfig();
-      if (!cfg || !cfg.queue || !cfg.queue.length) {
-        setStatus('Auto-run: no saved config');
-        return;
-      }
+      // Canonical demon-hunt sequence:
+      // 1) trace OFF baseline runs
+      // 2) trace ON runs (same tests)
+      // Always downloads a single bundle JSON.
+      const cfgBase = (await readAutoConfigFromFile()) || readAutoConfig() || {};
+      const ts = new Date().toISOString().replace(/[:.]/g, '-');
+      const cfg = {
+        clear: true,
+        save: false,
+        download: true,
+        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
+        downloadName: `perf-lab-demon-hunt-${ts}.json`,
+        notes: 'Demon Hunt v1: baseline (traceOff) then traceOn; P3f + P4b',
+        queue: [
+          'traceOff',
+          'buildP3',
+          'runP3f',
+          // --- A/B isolate drawgrid costs (traceOff only) -------------------
+          'buildP3',
+          'runP3fNoParticles',
+          'buildP3',
+          'runP3fNoOverlays',
+          'buildP3',
+          'runP3fNoOverlayCore',
+          'buildP3',
+          'runP3fNoOverlayStrokes',
+          'buildP4',
+          'runP4b',
+
+          'traceOn',
+          'buildP3',
+          'runP3f',
+          'buildP4',
+          'runP4b',
+        ],
+      };
+      await runAuto(cfg);
+    }
+    if (act === 'autoFast') {
+      // Fast iteration loop:
+      // - trace OFF only
+      // - baseline P3f, A/B playhead separate OFF vs ON, compare to NoParticles, plus P4b sanity
+      // Always downloads a single bundle JSON.
+      const cfgBase = (await readAutoConfigFromFile()) || readAutoConfig() || {};
+      const ts = new Date().toISOString().replace(/[:.]/g, '-');
+      const cfg = {
+        clear: true,
+        save: false,
+        download: true,
+        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
+        downloadName: `perf-lab-fast-${ts}.json`,
+        notes: 'Fast loop: traceOff only; P3f + PlayheadSeparateOff/On + P3fNoParticles + P4b',
+        queue: [
+          'traceOff',
+          'buildP3',
+          'runP3f',
+          'buildP3',
+          'runP3fPlayheadSeparateOff',
+          'buildP3',
+          'runP3fPlayheadSeparateOn',
+          'buildP3',
+          'runP3fNoParticles',
+          'buildP4',
+          'runP4b',
+        ],
+      };
+      await runAuto(cfg);
+    }
+    if (act === 'autoQuickTraceP3f') {
+      const cfgBase = (await readAutoConfigFromFile()) || readAutoConfig() || {};
+      const ts = new Date().toISOString().replace(/[:.]/g, '-');
+      const cfg = {
+        clear: true,
+        save: false,
+        download: true,
+        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
+        downloadName: `perf-lab-quick-trace-p3f-${ts}.json`,
+        notes: 'Quick Trace P3f: traceOn + buildP3 + runP3fShort',
+        queue: [
+          'traceOn',
+          'buildP3',
+          'runP3fShort',
+        ],
+      };
       await runAuto(cfg);
     }
     if (act === 'copy') copyLast();
+
+    // Demon trace helpers (opt-in)
+    if (act === 'traceOn') {
+      window.__PERF_TRACE = window.__PERF_TRACE || {};
+      window.__PERF_TRACE.traceCanvasResize = true;
+      window.__PERF_TRACE.traceDomInRaf = true;
+      console.log('[PerfLab] demon trace ENABLED', { ...window.__PERF_TRACE });
+      try { syncUiFromState(); } catch {}
+    }
+    if (act === 'traceOff') {
+      window.__PERF_TRACE = window.__PERF_TRACE || {};
+      window.__PERF_TRACE.traceCanvasResize = false;
+      window.__PERF_TRACE.traceDomInRaf = false;
+      console.log('[PerfLab] demon trace DISABLED', { ...window.__PERF_TRACE });
+      try { syncUiFromState(); } catch {}
+    }
+    if (act === 'traceHelp') {
+      console.log('[PerfLab] Trace commands:\n' +
+        'window.__PERF_TRACE = window.__PERF_TRACE || {};\n' +
+        'window.__PERF_TRACE.traceCanvasResize = true;\n' +
+        'window.__PERF_TRACE.traceDomInRaf = true;\n' +
+        '// (Optional) disable:\n' +
+        'window.__PERF_TRACE.traceCanvasResize = false;\n' +
+        'window.__PERF_TRACE.traceDomInRaf = false;\n'
+      );
+    }
   });
 
   // Toggle wiring (checkboxes/select)
@@ -426,6 +570,14 @@ function ensureUI() {
       try {
         window.__PERF_DISABLE_CHAIN_UI = !!t.checked;
         console.log('[PerfLab] chain UI freeze', { enabled: !!window.__PERF_DISABLE_CHAIN_UI });
+      } catch {}
+    }
+    if (perfKey === 'traceCanvasResize' || perfKey === 'traceDomInRaf') {
+      try {
+        const st = (window.__PERF_TRACE = window.__PERF_TRACE || {});
+        if (perfKey === 'traceCanvasResize') st.traceCanvasResize = !!t.checked;
+        if (perfKey === 'traceDomInRaf') st.traceDomInRaf = !!t.checked;
+        console.log('[PerfLab] trace toggles', { ...st });
       } catch {}
     }
   });
@@ -869,6 +1021,14 @@ async function readAutoConfigFromFile(filePath = 'resources/perf-lab-auto.json')
 async function resolveResultsConfig() {
   const cfgFile = await readAutoConfigFromFile();
   const cfg = cfgFile || readAutoConfig() || {};
+
+  // Default: manual runs should download a results file unless explicitly disabled.
+  // Auto runs still control download via their own config object.
+  try {
+    const isAuto = window.__PERF_LAB_RUN_CONTEXT === 'auto';
+    if (!isAuto && typeof cfg.download === 'undefined') cfg.download = true;
+  } catch {}
+
   return cfg;
 }
 
@@ -888,7 +1048,16 @@ async function publishResultBundle(result, meta = {}) {
   const postUrl = cfg.postUrl || window.__PERF_LAB_RESULTS_URL;
   if (postUrl) await postResultsBundle(bundle, postUrl);
 
-  if (cfg.download) downloadResultsBundle(bundle, cfg.downloadName || 'perf-lab-results.json');
+  if (cfg.download) {
+    let name = cfg.downloadName || 'perf-lab-results.json';
+    if (!cfg.downloadName) {
+      try {
+        const ts = new Date().toISOString().replace(/[:.]/g, '-');
+        name = `perf-lab-${ts}.json`;
+      } catch {}
+    }
+    downloadResultsBundle(bundle, name);
+  }
   return bundle;
 }
 
@@ -956,6 +1125,7 @@ async function runAuto(config = {}) {
   }
   const bundle = buildResultsBundle(results, {
     queue,
+    executedQueue: Array.isArray(window.__PERF_LAB_EXECUTED_QUEUE) ? window.__PERF_LAB_EXECUTED_QUEUE : [],
     notes: cfg.notes || '',
     runId: cfg.runId || '',
   });
@@ -1493,9 +1663,12 @@ async function runVariant(label, step, statusText) {
   // Lock particle quality so FPS-driven LOD doesn???t ??save us??? during the test.
   setParticleQualityLock('ultra');
 
+  const durationMs = (typeof window !== 'undefined' && Number.isFinite(window.__PERF_LAB_DURATION_MS))
+    ? Math.max(1000, Number(window.__PERF_LAB_DURATION_MS))
+    : 30000;
   const result = await runBenchmark({
     label,
-    durationMs: 30000,
+    durationMs,
     warmupMs: 1200,
     step,
     warmupAction: forcePerfWarmup,
@@ -1544,7 +1717,9 @@ async function runVariantPlaying(label, step, statusText) {
     : 120;
   const prof = makeFrameProfiler({ slowMs, maxSamples });
   window.__PerfFrameProf = prof; // so you can dump it from console
-  const durationMs = 30000;
+  const durationMs = (typeof window !== 'undefined' && Number.isFinite(window.__PERF_LAB_DURATION_MS))
+    ? Math.max(1000, Number(window.__PERF_LAB_DURATION_MS))
+    : 30000;
   const scriptStep = step;
   const nowMs = () => (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
   const raf = (fn) => (window.requestAnimationFrame ? window.requestAnimationFrame(fn) : setTimeout(() => fn(nowMs()), 16));
@@ -1730,6 +1905,10 @@ async function runVariantPlaying(label, step, statusText) {
       result.particleTempPatch = window.__PERF_PARTICLES__TEMP_PATCH || null;
       result.playing = true;
       result.flags = {
+        // Perf trace toggles (demon hunting)
+        traceCanvasResize: !!(window.__PERF_TRACE && window.__PERF_TRACE.traceCanvasResize),
+        traceDomInRaf: !!(window.__PERF_TRACE && window.__PERF_TRACE.traceDomInRaf),
+
         disableLoopgridRender: !!window.__PERF_DISABLE_LOOPGRID_RENDER,
         disableChains: !!window.__PERF_DISABLE_CHAINS,
         disableTapDots: !!window.__PERF_DISABLE_TAP_DOTS,
@@ -2693,8 +2872,18 @@ async function runP3e2() {
   const randOnce = makeDrawgridRandomiseOnceScript({ atMs: 250, seed: 1337, useSeededRandom: true });
   const step = composeSteps(panZoom, randOnce);
     await withTempAnchorDisabled(false, async () => {
+      // IMPORTANT: variants like runP3fNoParticles/runP3fNoOverlays wrap runP3f()
+      // and set window.__PERF_RUN_TAG. If we don't bake that into the label,
+      // perf-lab-results.json ends up with duplicate labels that are hard to compare.
+      const __runTag = (() => {
+        try { return window.__PERF_RUN_TAG; } catch { return null; }
+      })();
+      const __baseLabel = 'P3f_drawgrid_playing_panzoom_rand_once_anchor_on';
+      const __label = (__runTag && typeof __runTag === 'string' && __runTag.trim())
+        ? `${__baseLabel}__${__runTag.trim()}`
+        : __baseLabel;
       await runVariantPlaying(
-        'P3f_drawgrid_playing_panzoom_rand_once_anchor_on',
+        __label,
         step,
         'Running P3f (playing pan/zoom + randomise once, anchor ON)...'
       );
@@ -2706,6 +2895,17 @@ async function runP3e2() {
       window.__PERF_DG_OVERLAY_STROKES_OFF = prevOverlayStrokes;
     } catch {}
   }
+
+async function runP3fShort() {
+  // Short probe run: useful for trace-on console correlation.
+  const prev = window.__PERF_LAB_DURATION_MS;
+  const prevTag = window.__PERF_RUN_TAG;
+  try { window.__PERF_LAB_DURATION_MS = 12000; } catch {}
+  try { window.__PERF_RUN_TAG = 'P3fShort'; } catch {}
+  await runP3f();
+  try { window.__PERF_LAB_DURATION_MS = prev; } catch {}
+  try { window.__PERF_RUN_TAG = prevTag; } catch {}
+}
 
 async function runP3fPlayheadSeparateOff() {
   const prev = window.__DG_PLAYHEAD_SEPARATE_CANVAS;
@@ -2724,6 +2924,16 @@ async function runP3fPlayheadSeparateOn() {
   try { window.__PERF_RUN_TAG = 'P3fPlayheadSeparateOn'; } catch {}
   await runP3f();
   try { window.__DG_PLAYHEAD_SEPARATE_CANVAS = prev; } catch {}
+  try { window.__PERF_RUN_TAG = prevTag; } catch {}
+}
+
+async function runP3fPlayheadEvery4() {
+  const prev = window.__PERF_DG_PLAYHEAD_EVERY;
+  const prevTag = window.__PERF_RUN_TAG;
+  try { window.__PERF_DG_PLAYHEAD_EVERY = 4; } catch {}
+  try { window.__PERF_RUN_TAG = 'P3fPlayheadEvery4'; } catch {}
+  await runP3f();
+  try { window.__PERF_DG_PLAYHEAD_EVERY = prev; } catch {}
   try { window.__PERF_RUN_TAG = prevTag; } catch {}
 }
 
@@ -4284,12 +4494,14 @@ async function runP6eNoDom() {
 async function runQueue(list = []) {
   const items = Array.isArray(list) ? list : [list];
   const results = [];
+  const executed = [];
   for (const item of items) {
     const fn = (typeof item === 'function') ? item : window.__PerfLab?.[item];
     if (typeof fn !== 'function') {
       console.warn('[PerfLab] missing test', item);
       continue;
     }
+    executed.push((typeof item === 'string') ? item : (item.name || '<fn>'));
     const isBuild = (typeof item === 'string' && item.startsWith('build'));
     if (isBuild) {
       try { clearSceneViaSnapshot(); } catch {}
@@ -4298,6 +4510,8 @@ async function runQueue(list = []) {
     try { await fn(); } catch (err) { console.warn('[PerfLab] test failed', item, err); }
     if (!isBuild && lastResult) results.push(lastResult);
   }
+  // Capture what actually ran (not just what the config said).
+  window.__PERF_LAB_EXECUTED_QUEUE = executed;
   lastResults = results;
   try { console.log('[PerfLab] queue results', results); } catch {}
   return results;
@@ -4327,7 +4541,126 @@ window.addEventListener('keydown', (e) => {
 });
 
 // Expose for manual console use
-try { window.__PerfLab = { show, hide, toggle, buildP2, buildP2d, buildP3, buildP4, buildP4h, buildP5, buildP6, buildP7, runP2a, runP2b, runP2c, runP2d, runP3a, runP3b, runP3c, runP3d, runP3e, runP3e2, runP3f, runP3fPlayheadSeparateOff, runP3fPlayheadSeparateOn, runP3f2, runP3fEmptyNoNotes, runP3fEmptyChainNoNotes, runP3fMixedSomeEmpty, runP3fNoPaint, runP3fNoDom, runP3fNoGrid, runP3fNoParticles, runP3fNoOverlays, runP3fNoOverlayStrokes, runP3fNoOverlayCore, runP3fParticleProfile, runP3fFlatLayers, runP3g, runP3g2, runP3h, runP3h2, runP3i, runP3i2, runP3j, runP3j2, runP3k, runP3k2, runP3l, runP3l2, runP3l3, runP3l4, runP3l5, runP3l6, runP3m, runP3m2, runP7a, runP7b, runQueue, runAuto, runP4a, runP4b, runP4o, runP4p, runP4q, runP4r, runP4s, runP4t, runP4u, runP4v, runP4w, runP4x, runP4e, runP4c, runP4d, runP4f, runP4g, runP4h2, runP4i, runP4j, runP4k, runP4m, runP4n, runP5a, runP5b, runP5c, runP6a, runP6b, runP6c, runP6d, runP6e, runP6eNoPaint, runP6ePaintOnly, runP6eNoDom, readAutoConfig, readAutoConfigFromFile, saveResultsBundle, postResultsBundle, downloadResultsBundle, getResults: () => lastResults, getBundle: () => lastBundle, clearResults: () => { lastResults = []; } }; } catch {}
+try {
+  window.__PerfLab = {
+    show,
+    hide,
+    toggle,
+    buildP2,
+    buildP2d,
+    buildP3,
+    buildP4,
+    buildP4h,
+    buildP5,
+    buildP6,
+    buildP7,
+    runP2a,
+    runP2b,
+    runP2c,
+    runP2d,
+    runP3a,
+    runP3b,
+    runP3c,
+    runP3d,
+    runP3e,
+    runP3e2,
+    runP3f,
+    runP3fShort,
+    runP3fPlayheadSeparateOff,
+    runP3fPlayheadSeparateOn,
+    runP3fPlayheadEvery4,
+    runP3f2,
+    runP3fEmptyNoNotes,
+    runP3fEmptyChainNoNotes,
+    runP3fMixedSomeEmpty,
+    runP3fNoPaint,
+    runP3fNoDom,
+    runP3fNoGrid,
+    runP3fNoParticles,
+    runP3fNoOverlays,
+    runP3fNoOverlayStrokes,
+    runP3fNoOverlayCore,
+    runP3fParticleProfile,
+    runP3fFlatLayers,
+    runP3g,
+    runP3g2,
+    runP3h,
+    runP3h2,
+    runP3i,
+    runP3i2,
+    runP3j,
+    runP3j2,
+    runP3k,
+    runP3k2,
+    runP3l,
+    runP3l2,
+    runP3l3,
+    runP3l4,
+    runP3l5,
+    runP3l6,
+    runP3m,
+    runP3m2,
+    runP7a,
+    runP7b,
+    runQueue,
+    runAuto,
+    runP4a,
+    runP4b,
+    runP4o,
+    runP4p,
+    runP4q,
+    runP4r,
+    runP4s,
+    runP4t,
+    runP4u,
+    runP4v,
+    runP4w,
+    runP4x,
+    runP4e,
+    runP4c,
+    runP4d,
+    runP4f,
+    runP4g,
+    runP4h2,
+    runP4i,
+    runP4j,
+    runP4k,
+    runP4m,
+    runP4n,
+    runP5a,
+    runP5b,
+    runP5c,
+    runP6a,
+    runP6b,
+    runP6c,
+    runP6d,
+    runP6e,
+    runP6eNoPaint,
+    runP6ePaintOnly,
+    runP6eNoDom,
+    readAutoConfig,
+    readAutoConfigFromFile,
+    saveResultsBundle,
+    postResultsBundle,
+    downloadResultsBundle,
+    // Demon trace toggles (so auto-queue can flip them deterministically)
+    traceOn: async function traceOn() {
+      window.__PERF_TRACE = window.__PERF_TRACE || {};
+      window.__PERF_TRACE.traceCanvasResize = true;
+      window.__PERF_TRACE.traceDomInRaf = true;
+      try { console.log('[PerfLab] demon trace ENABLED', { ...window.__PERF_TRACE }); } catch {}
+    },
+    traceOff: async function traceOff() {
+      window.__PERF_TRACE = window.__PERF_TRACE || {};
+      window.__PERF_TRACE.traceCanvasResize = false;
+      window.__PERF_TRACE.traceDomInRaf = false;
+      try { console.log('[PerfLab] demon trace DISABLED', { ...window.__PERF_TRACE }); } catch {}
+    },
+    getResults: () => lastResults,
+    getBundle: () => lastBundle,
+    clearResults: () => { lastResults = []; },
+  };
+} catch {}
 
 
 

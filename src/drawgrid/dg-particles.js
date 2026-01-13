@@ -79,12 +79,15 @@ export function createDgParticles(getState) {
         const adaptive = S.getAdaptiveFrameBudget?.();
         const pb = adaptive?.particleBudget;
         if (pb && typeof S.particleState.field.applyBudget === 'function') {
-          const maxCountScale = Math.max(0.15, (pb.maxCountScale ?? 1) * (pb.capScale ?? 1));
+          // IMPORTANT: allow budgets to reach 0 so the main drawgrid loop can
+          // ramp particles down smoothly and then fully bypass dgField.tick().
+          const maxCountScale = Math.max(0.0, (pb.maxCountScale ?? 1) * (pb.capScale ?? 1));
           S.particleState.field.applyBudget({
             maxCountScale,
             capScale: pb.capScale ?? 1,
             tickModulo: 1,
             sizeScale: pb.sizeScale ?? 1,
+            spawnScale: pb.spawnScale ?? 1,
           });
         }
       } catch {}

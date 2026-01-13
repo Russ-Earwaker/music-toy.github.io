@@ -266,13 +266,17 @@ export function connectDrawGridToPlayer(panel) {
   // Seed an initial snapshot (so deterministic works immediately)
   if (!panel.__seqPattern) {
     panel.__seqPattern = cloneDrawgridPattern(gridState, steps, instrument);
-    console.log('[drawgrid-player] seeded initial pattern', { steps, nodesPerCol: gridState.nodes.map(n => n.size) });
+    if (window.__DRAWGRID_PLAYER_DEBUG) {
+      console.log('[drawgrid-player] seeded initial pattern', { steps, nodesPerCol: gridState.nodes.map(n => n.size) });
+    }
   }
 
   // Debug: log when pattern is updated
   const originalSeqTouch = panel.__seqTouch;
   panel.__seqTouch = (reason = 'user') => {
-    console.log('[drawgrid-player] __seqTouch called', { reason, steps, nodesPerCol: gridState.nodes.map(n => n.size) });
+    if (window.__DRAWGRID_PLAYER_DEBUG) {
+      console.log('[drawgrid-player] __seqTouch called', { reason, steps, nodesPerCol: gridState.nodes.map(n => n.size) });
+    }
     originalSeqTouch?.(reason);
   };
 
