@@ -31,7 +31,7 @@ const fieldLog = makeDebugLogger('mt_debug_logs', 'log');
 
 // Fade tuning
 const FADE_IN_RATE = 1.6;   // per second
-const FADE_OUT_RATE = 0.9;  // per second (slower so reductions are gentler)
+const FADE_OUT_RATE = 0.9;  // per second (base)
 const TWINKLE_PER_SEC = 5;  // always fade this many in/out per second (soft twinkle)
 const TWINKLE_MIN = 0.25;
 const TWINKLE_MAX = 0.75;
@@ -1249,8 +1249,11 @@ function tick(dt = 1 / 60) {
         state.particles.push(acquireParticle(x, y, x, y, a, rPx, 0, 1, FADE_IN_RATE));
       }
     } else if (active > desired) {
-      const maxTrim = Math.max(MIN_FADE_STEP, Math.round(active * (state.emergencyFade ? 0.2 : MAX_FADE_OUT_FRACTION)));
-      const maxStep = state.emergencyFade ? (MAX_FADE_OUT_STEP * 4) : MAX_FADE_OUT_STEP;
+      // In emergencyFade we want to shed particle count quickly (without lowering tick cadence).
+      // Allow much larger fade-out batches when emergencyFade is active.
+      const maxTrimFrac = state.emergencyFade ? 0.55 : MAX_FADE_OUT_FRACTION;
+      const maxTrim = Math.max(MIN_FADE_STEP, Math.round(active * maxTrimFrac));
+      const maxStep = state.emergencyFade ? 320 : MAX_FADE_OUT_STEP;
       const trimBudget = Math.min(adjustStep, maxStep, maxTrim, active - minParticles);
       const budget = Math.max(0, Math.min(trimBudget, parts.length));
       // Randomly sample particles to fade out without building candidate arrays.
@@ -1266,7 +1269,18 @@ function tick(dt = 1 / 60) {
         const ft = (p.fadeTarget ?? 1);
         if (ft <= 0) continue; // already fading / off
         p.fadeTarget = 0;
-        p.fadeRate = state.emergencyFade ? (FADE_OUT_RATE * 2.2) : FADE_OUT_RATE;
+        if (state.emergencyFade) {
+          const secs = Number.isFinite(state.emergencyFadeSeconds) ? state.emergencyFadeSeconds : 2.2;
+          // Shorter emergency seconds => faster dissolve.
+          const mul =
+            secs <= 1.0 ? 7.0 :
+            secs <= 1.3 ? 5.5 :
+            secs <= 2.0 ? 3.5 :
+            2.4;
+          p.fadeRate = FADE_OUT_RATE * mul;
+        } else {
+          p.fadeRate = FADE_OUT_RATE;
+        }
         faded++;
       }
     }

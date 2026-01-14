@@ -58,6 +58,7 @@ import { createDgParticles } from './drawgrid/dg-particles.js';
 import { createDgFieldForces } from './drawgrid/dg-field-forces.js';
 import { createDgRandomizers } from './drawgrid/dg-randomizers.js';
 import { requestPanelPulse } from './pulse-border.js';
+import { queueClassToggle, markPanelForDomCommit } from './dom-commit.js';
 import {
   DRAWGRID_ENABLE_PARTICLE_FIELD,
   DG_ALPHA_DEBUG,
@@ -116,9 +117,9 @@ const DG_FPS_PARTICLE_HYSTERESIS_UP = 38;  // re-enable once we're above this
 const DG_PLAYHEAD_FPS_SIMPLE_ENTER = 28;
 const DG_PLAYHEAD_FPS_SIMPLE_EXIT = 34;
 
-// IntersectionObserver visibility threshold – panels with <2% on-screen area
+// IntersectionObserver visibility threshold - panels with <5% on-screen area
 // are treated as "offscreen" and have their heavy work culled.
-const DG_VISIBILITY_THRESHOLD = 0.001;
+const DG_VISIBILITY_THRESHOLD = 0.05;
 
 let dgProfileFrames = 0;
 let dgProfileSumMs = 0;
@@ -281,6 +282,49 @@ function __dgComputeAdaptivePaintDpr({ boardScale = 1, visiblePanels = 0, isFocu
     cap = 1.5;
   }
   return cap;
+}
+
+// Size-based DPR cap:
+// Prevents massive backing stores when a panel is physically large on screen.
+// This stacks *on top of* adaptive DPR and device DPR.
+//
+// Tunables (optional):
+//   window.__DG_MAX_PANEL_BACKING_PX  (default 2.2M pixels)
+//   window.__DG_MAX_PANEL_SIDE_PX    (default 2600 px)
+function __dgComputeSizeCappedPaintDpr({ cssW = 0, cssH = 0, desiredDpr = 1, prevDpr = null }) {
+  const w = Number.isFinite(cssW) ? cssW : 0;
+  const h = Number.isFinite(cssH) ? cssH : 0;
+  let dpr = Number.isFinite(desiredDpr) ? desiredDpr : 1;
+  if (w <= 0 || h <= 0) return Math.max(1, dpr);
+
+  // Pixel budget cap (area-based).
+  let maxPx = 2_200_000; // ~1483x1483 backing store at 1.0 DPR
+  try {
+    const v = (typeof window !== 'undefined') ? Number(window.__DG_MAX_PANEL_BACKING_PX) : NaN;
+    if (Number.isFinite(v) && v > 200_000) maxPx = v;
+  } catch {}
+  const capFromPx = Math.sqrt(maxPx / (w * h));
+
+  // Side cap (dimension-based) to avoid huge single-axis backing stores.
+  let maxSide = 2600;
+  try {
+    const v = (typeof window !== 'undefined') ? Number(window.__DG_MAX_PANEL_SIDE_PX) : NaN;
+    if (Number.isFinite(v) && v > 600) maxSide = v;
+  } catch {}
+  const capFromSide = Math.min(maxSide / w, maxSide / h);
+
+  let capped = Math.min(dpr, capFromPx, capFromSide);
+  capped = Math.max(1, Math.min(dpr, capped));
+
+  // Hysteresis to avoid DPR thrash around thresholds.
+  const prev = (Number.isFinite(prevDpr) && prevDpr > 0) ? prevDpr : null;
+  if (prev !== null) {
+    // Ramp UP slowly (prevents oscillation when hovering near a threshold).
+    if (capped > prev && (capped - prev) < 0.12) return prev;
+    // Don't flap DOWN on tiny deltas either.
+    if (capped < prev && (prev - capped) < 0.06) return prev;
+  }
+  return capped;
 }
 
 /**
@@ -1008,6 +1052,25 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const markPlayheadLayerActive = () => { panel.__dgPlayheadLayerEmpty = false; __dgMarkSingleCanvasOverlayDirty(panel); };
   const markPlayheadLayerCleared = () => { panel.__dgPlayheadLayerEmpty = true; __dgMarkSingleCanvasOverlayDirty(panel); };
 
+  function drawColumnFlashesOverlay(ctx) {
+    if (!ctx) return;
+    if (!gridArea || gridArea.w <= 0 || gridArea.h <= 0) return;
+    if (!flashes || flashes.length === 0) return;
+    const height = rows * ch;
+    if (!Number.isFinite(height) || height <= 0) return;
+    const y = gridArea.y + topPad;
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    for (let i = 0; i < flashes.length; i++) {
+      const alpha = flashes[i];
+      if (alpha <= 0) continue;
+      ctx.globalAlpha = alpha * 0.25;
+      const x = gridArea.x + i * cw;
+      ctx.fillRect(x, y, cw, height);
+    }
+    ctx.restore();
+  }
+
   const handleChainActiveChange = (isActive) => {
     try {
       panel.__dgShowPlaying = null;
@@ -1650,8 +1713,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         if (!panel?.isConnected) return;
         if (!isPanelVisible) return;
         try {
-          drawGrid();
-          if (currentMap) drawNodes(currentMap.nodes);
+          markStaticDirty('external-state-change');
           __dgNeedsUIRefresh = true;
           __dgFrontSwapNextDraw = true;
           if (typeof requestFrontSwap === 'function') requestFrontSwap(useFrontBuffers);
@@ -1681,11 +1743,29 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         progressMeasureW = cssW;
         progressMeasureH = cssH;
         try { dgViewport?.refreshSize?.({ snap: true }); } catch {}
-        const __dprFallback =
-          (typeof __dgAdaptivePaintDpr !== 'undefined' && Number.isFinite(__dgAdaptivePaintDpr) && __dgAdaptivePaintDpr > 0)
+        // IMPORTANT: zoom-commit refreshLayout must also respect size-based DPR caps.
+        // Otherwise a commit can allocate huge backing stores and spike compositor time.
+        const deviceDpr = Math.max(
+          1,
+          Number.isFinite(window?.devicePixelRatio) ? window.devicePixelRatio : 1
+        );
+        let desiredDpr =
+          (typeof __dgAdaptivePaintDpr !== 'undefined' &&
+            Number.isFinite(__dgAdaptivePaintDpr) &&
+            __dgAdaptivePaintDpr > 0)
             ? __dgAdaptivePaintDpr
-            : (Number.isFinite(paintDpr) && paintDpr > 0 ? paintDpr : (Number.isFinite(window?.devicePixelRatio) ? window.devicePixelRatio : 1));
-        resizeSurfacesFor(cssW, cssH, __dprFallback);
+            : (Number.isFinite(paintDpr) && paintDpr > 0)
+              ? paintDpr
+              : Math.max(1, Math.min(deviceDpr, 3));
+        desiredDpr = Math.min(deviceDpr, desiredDpr);
+        const cappedDpr = __dgComputeSizeCappedPaintDpr({
+          cssW,
+          cssH,
+          desiredDpr,
+          prevDpr: paintDpr,
+        });
+        paintDpr = cappedDpr;
+        resizeSurfacesFor(cssW, cssH, cappedDpr);
       }
       layout(true);
       const commitScale = Number.isFinite(zoomPayload?.currentScale)
@@ -2179,8 +2259,7 @@ function ensureSizeReady({ force = false } = {}) {
     __dgNeedsUIRefresh = true;
     __dgStableFramesAfterCommit = 0;
     try {
-      drawGrid();
-      if (currentMap) drawNodes(currentMap.nodes);
+      markStaticDirty('external-state-change');
     } catch {}
     __dgNeedsUIRefresh = true;
     __dgStableFramesAfterCommit = 0;
@@ -2849,7 +2928,22 @@ function regenerateMapFromStrokes() {
       try {
         if (window.__ZOOM_COMMIT_PHASE) return;
       } catch {}
-      paintDpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
+      {
+        const deviceDpr = Math.max(1, Number.isFinite(window?.devicePixelRatio) ? window.devicePixelRatio : 1);
+        // Prefer the most recent adaptive DPR (already includes non-gesture caps),
+        // then apply size-based capping to avoid huge backing stores.
+        let desiredDpr =
+          (Number.isFinite(__dgAdaptivePaintDpr) && __dgAdaptivePaintDpr > 0)
+            ? __dgAdaptivePaintDpr
+            : Math.max(1, Math.min(deviceDpr, 3));
+        desiredDpr = Math.min(deviceDpr, desiredDpr);
+        paintDpr = __dgComputeSizeCappedPaintDpr({
+          cssW,
+          cssH,
+          desiredDpr,
+          prevDpr: paintDpr,
+        });
+      }
       pendingZoomResnap = false;
 
       // IMPORTANT:
@@ -3127,6 +3221,8 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
   });
 
   // Visibility culling: turn off heavy work when the panel is completely offscreen.
+  // Hard-cull should treat "barely intersecting" as not visible, otherwise
+  // toys keep their rAF loop alive while only a tiny sliver is on-screen.
   if (typeof window !== 'undefined' && 'IntersectionObserver' in window) {
     try {
       let lastVisibleState = isPanelVisible;
@@ -3138,9 +3234,12 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
         (entries) => {
           for (const entry of entries) {
             if (entry.target !== panel) continue;
+            // Require a minimum intersection ratio to count as visible.
             const visible =
               entry.isIntersecting &&
-              entry.intersectionRatio > DG_VISIBILITY_THRESHOLD;
+              (typeof entry.intersectionRatio !== 'number'
+                ? true
+                : entry.intersectionRatio >= DG_VISIBILITY_THRESHOLD);
             isPanelVisible = !!visible;
             try {
               const debugCull = (typeof window !== 'undefined' && window.__DG_DEBUG_CULL);
@@ -3163,6 +3262,9 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
                 panel.__dgCompositeBaseDirty = true;
                 panel.__dgCompositeOverlayDirty = true;
               } catch {}
+
+              // Restart the per-panel render loop if it was hard-culled while offscreen.
+              ensureRenderLoopRunning();
 
               try { __dgForceFullDrawNext = true; } catch {}
               try { __dgForceFullDrawUntil = nowMs() + 200; } catch {}
@@ -3211,6 +3313,11 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
       isPanelVisible = true;
     }
   }
+
+  // IMPORTANT: ensure there is NOT a second/duplicate IntersectionObserver visibility block
+  // elsewhere in this file. If one exists (often using `entry.intersectionRatio > DG_VISIBILITY_THRESHOLD`
+  // without the "minimum ratio" comment), delete it. Having two observers causes conflicting
+  // isPanelVisible updates and makes panels become "visible" at ~1-2%.
   // Also respond to generic toy visibility events (shared culler)
   panel.addEventListener('toy:visibility', (e) => {
     if (typeof e?.detail?.visible === 'boolean') {
@@ -3836,6 +3943,10 @@ function copyCanvas(backCtx, frontCtx) {
           : (Number.isFinite(paintDpr) && paintDpr > 0 ? paintDpr : (Number.isFinite(window?.devicePixelRatio) ? window.devicePixelRatio : 1));
       resizeSurfacesFor(cssW, cssH, __dprFallback);
       if (tutorialHighlightMode !== 'none') renderTutorialHighlight();
+
+      // Layout changes invalidate static layers (grid geometry / node positions).
+      try { markStaticDirty('layout'); } catch {}
+      __dgForceFullDrawNext = true;
 
 
       lastZoomX = zoomX;
@@ -5247,6 +5358,8 @@ function copyCanvas(backCtx, frontCtx) {
           // Redraw only the nodes canvas; the blue line on the paint canvas is untouched.
           drawNodes(currentMap.nodes);
           drawGrid();
+          // We just redrew static layers, so treat them as clean.
+          panel.__dgStaticDirty = false;
           __dgMarkSingleCanvasDirty(panel);
           if (DG_SINGLE_CANVAS && isPanelVisible) {
             try { compositeSingleCanvas(); } catch {}
@@ -5453,6 +5566,8 @@ function copyCanvas(backCtx, frontCtx) {
       useBackBuffers();
       drawGrid();
       drawNodes(currentMap.nodes);
+      // We just redrew static layers, so treat them as clean.
+      panel.__dgStaticDirty = false;
       __dgNeedsUIRefresh = true;
       FD.flowLog('node-toggle', {
         col,
@@ -5652,8 +5767,7 @@ function copyCanvas(backCtx, frontCtx) {
     __dgMarkSingleCanvasDirty(panel);
     if (DG_SINGLE_CANVAS && isPanelVisible) {
       try {
-        drawGrid();
-        if (currentMap) drawNodes(currentMap.nodes);
+        markStaticDirty('external-state-change');
         compositeSingleCanvas();
       } catch {}
       panel.__dgSingleCompositeDirty = false;
@@ -5772,6 +5886,28 @@ function copyCanvas(backCtx, frontCtx) {
 
   let rafId = 0;
 
+  // Hard offscreen culling:
+  // Stop the per-panel rAF loop entirely when the panel is offscreen and nothing is pending.
+  // Resume when the panel becomes visible again (IntersectionObserver) or when work is requested.
+  function ensureRenderLoopRunning() {
+    if (rafId) return;
+    rafId = requestAnimationFrame(renderLoop);
+  }
+
+  // Static layer caching:
+  // "Static" = grid + nodes (and anything that doesn't animate every frame).
+  // We redraw static layers only when marked dirty, never because of gestures.
+  panel.__dgStaticDirty = true;
+  function markStaticDirty(reason) {
+    panel.__dgStaticDirty = true;
+    // Composite base depends on static layers.
+    try { panel.__dgCompositeBaseDirty = true; } catch {}
+    try { panel.__dgSingleCompositeDirty = true; } catch {}
+    // If you later add any other "base" caches, mark them here too.
+    try { panel.__dgLastStaticDirtyReason = reason || 'unknown'; } catch {}
+    ensureRenderLoopRunning();
+  }
+
   // Debug FPS (per-panel)
   // Only used when DG_DEBUG && window.DEBUG_DRAWGRID === 1.
   let __dgFpsLastTs = 0;
@@ -5842,12 +5978,12 @@ function copyCanvas(backCtx, frontCtx) {
       // Crowd-based attenuation: more visible panels -> fewer particles per panel.
       const crowdScale = (() => {
         const base = 1 / Math.max(1, visiblePanels);
-        if (visiblePanels <= 6) return Math.max(0.18, base);
+        if (visiblePanels <= 6) return Math.max(0.14, base);
         const minScale =
-          visiblePanels >= 36 ? 0.08 :
-          visiblePanels >= 24 ? 0.1 :
-          visiblePanels >= 16 ? 0.12 :
-          0.16;
+          visiblePanels >= 36 ? 0.03 :
+          visiblePanels >= 24 ? 0.04 :
+          visiblePanels >= 16 ? 0.055 :
+          0.075;
         return Math.max(minScale, base);
       })();
       // If we're cruising near 60fps with few panels, allow a modest boost above nominal.
@@ -5872,10 +6008,22 @@ function copyCanvas(backCtx, frontCtx) {
         const baseForce = panel.__dgFieldBaseForceMul;
         dgField._config.forceMul = Math.min(10, baseForce * (panel.__dgParticleKnockbackMul || 1));
       }
-      const maxCountScale = Math.max(0.0, maxCountScaleBase * crowdScale * fpsBoost * emergencyScale * perfDamp);
-      const capScale = Math.max(0.0, (particleBudget.capScale ?? 1) * crowdScale * fpsBoost * emergencyScale * perfDamp);
+      // "Perf panic" = we're overloaded but not necessarily at catastrophic FPS.
+      // We respond by shedding particle count quickly (not throttling cadence).
+      const __dgCurFpsSample =
+        Number.isFinite(fpsSample) ? fpsSample :
+        ((typeof window !== 'undefined' && Number.isFinite(window.__MT_SM_FPS)) ? window.__MT_SM_FPS :
+        ((typeof window !== 'undefined' && Number.isFinite(window.__MT_FPS)) ? window.__MT_FPS : 60));
+      const perfPanic =
+        (visiblePanels >= 12 && __dgCurFpsSample < 45) ||
+        (visiblePanels >= 18 && __dgCurFpsSample < 50) ||
+        (__dgCurFpsSample < 35);
+
+      const panicScale = perfPanic ? 0.22 : 1;
+      const maxCountScale = Math.max(0.0, maxCountScaleBase * crowdScale * fpsBoost * emergencyScale * perfDamp * panicScale);
+      const capScale = Math.max(0.0, (particleBudget.capScale ?? 1) * crowdScale * fpsBoost * emergencyScale * perfDamp * panicScale);
       const sizeScale = (particleBudget.sizeScale ?? 1) * emergencySize * (perfDamp < 0.8 ? 1.05 : 1);
-      const spawnScale = Math.max(0.0, (particleBudget.spawnScale ?? 1) * crowdScale * fpsBoost * emergencyScale * perfDamp);
+      const spawnScale = Math.max(0.0, (particleBudget.spawnScale ?? 1) * crowdScale * fpsBoost * emergencyScale * perfDamp * (perfPanic ? 0.0 : 1));
 
       // Persist resolved scalars for the tick gate (avoids expensive tick when effectively off).
       panel.__dgParticleBudgetMaxCountScale = maxCountScale;
@@ -5920,7 +6068,9 @@ function copyCanvas(backCtx, frontCtx) {
           sizeScale,
           spawnScale: 0,
           tickModulo,
+          minCount: 0,
           emergencyFade: true,
+          emergencyFadeSeconds: 1.0,
         });
       } else if (!particlesOffWanted && panel.__dgParticlesOff) {
         // Re-enable; normal budget application below will regen naturally.
@@ -5949,8 +6099,11 @@ function copyCanvas(backCtx, frontCtx) {
           tickModulo,
           sizeScale,
           spawnScale,
-          emergencyFade: false,
-          emergencyFadeSeconds: 2.2,
+          // When overloaded, shed particle count quickly (still ticking every frame).
+          emergencyFade: !!perfPanic,
+          emergencyFadeSeconds: perfPanic ? 1.1 : 2.2,
+          // Make sure the field can recover its normal minimum when not panicking.
+          minCount: perfPanic ? 0 : 50,
         });
       }
     }
@@ -6001,6 +6154,8 @@ function copyCanvas(backCtx, frontCtx) {
   }
 
   function renderLoop() {
+    // Clear scheduled id at start so we can safely re-schedule via ensureRenderLoopRunning().
+    rafId = 0;
     const endPerf = startSection('drawgrid:render');
     const __perfOn = !!(window.__PerfFrameProf && typeof performance !== 'undefined' && performance.now);
     const __rafStart = __perfOn ? performance.now() : 0;
@@ -6062,7 +6217,9 @@ function copyCanvas(backCtx, frontCtx) {
         try { window.__PerfFrameProf?.mark?.('drawgrid.prep.visibility', performance.now() - __visibilityStart); } catch {}
       }
       if (shouldSkipOffscreen) {
-        rafId = requestAnimationFrame(renderLoop);
+        // Hard cull: do not schedule another frame while fully offscreen with no pending work.
+        // IntersectionObserver (or explicit work requests) will restart the loop.
+        rafId = 0;
         return;
       }
 
@@ -6155,6 +6312,12 @@ function copyCanvas(backCtx, frontCtx) {
       const hasOverlayFx =
         (overlayFlashesEnabled && ((noteToggleEffects?.length || 0) > 0 || (cellFlashes?.length || 0) > 0)) ||
         (overlayBurstsEnabled && (noteBurstEffects?.length || 0) > 0);
+      const hasNodeFlash = (() => {
+        for (let i = 0; i < flashes.length; i++) {
+          if (flashes[i] > 0) return true;
+        }
+        return false;
+      })();
       const transportRunning = (typeof isRunning === 'function') && isRunning();
       const hasChainLink = panel.dataset.nextToyId || panel.dataset.prevToyId;
       const isChained = !!hasChainLink;
@@ -6165,6 +6328,7 @@ function copyCanvas(backCtx, frontCtx) {
       const isTrulyIdle =
         !hasAnyNotes &&
         !hasOverlayFx &&
+        !hasNodeFlash &&
         !transportRunning &&
         !__dgFrontSwapNextDraw &&
         !__dgNeedsUIRefresh &&
@@ -6177,7 +6341,13 @@ function copyCanvas(backCtx, frontCtx) {
         isZoomed,
       });
       const deviceDpr = Math.max(1, Number.isFinite(window?.devicePixelRatio) ? window.devicePixelRatio : 1);
-      const desiredDpr = adaptiveCap ? Math.min(deviceDpr, adaptiveCap) : deviceDpr;
+      const desiredDprRaw = adaptiveCap ? Math.min(deviceDpr, adaptiveCap) : deviceDpr;
+      const desiredDpr = __dgComputeSizeCappedPaintDpr({
+        cssW,
+        cssH,
+        desiredDpr: desiredDprRaw,
+        prevDpr: __dgAdaptivePaintDpr,
+      });
       const nowAdaptiveTs = nowTs || (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
       const canAdjustDpr =
         !gesturing &&
@@ -6236,7 +6406,7 @@ function copyCanvas(backCtx, frontCtx) {
       const overlayTransport = disableOverlayCore
         ? false
         : (transportRunning && (isChained ? (isActiveInChain && chainHasNotes) : hasActiveNotes));
-      const overlayActive = allowOverlayDraw && (hasOverlayFx || overlayTransport || hasOverlayStrokesLive || (cur && previewGid));
+      let overlayActive = allowOverlayDraw && (hasOverlayFx || overlayTransport || hasOverlayStrokesLive || (cur && previewGid));
       let overlayEvery = 1;
       if (gestureMoving && visiblePanels >= 6 && !isFocused) {
         overlayEvery = (visiblePanels >= 18) ? 4 : (visiblePanels >= 12) ? 3 : 2;
@@ -6245,9 +6415,9 @@ function copyCanvas(backCtx, frontCtx) {
         panel.__dgOverlayFrame = (panel.__dgOverlayFrame || 0) + 1;
       }
       const skipOverlayHeavy = overlayEvery > 1 && ((panel.__dgOverlayFrame % overlayEvery) !== 0);
-      const allowOverlayDrawHeavy = allowOverlayDraw && (!skipOverlayHeavy || __dgNeedsUIRefresh);
-      const overlayCoreWanted = (hasOverlayFx || hasOverlayStrokesLive || (cur && previewGid));
-      const overlayCoreActive = allowOverlayDrawHeavy && overlayCoreWanted;
+      let allowOverlayDrawHeavy = allowOverlayDraw && (!skipOverlayHeavy || __dgNeedsUIRefresh);
+      let overlayCoreWanted = (hasOverlayFx || hasOverlayStrokesLive || (cur && previewGid));
+      let overlayCoreActive = allowOverlayDrawHeavy && overlayCoreWanted;
       let overlayCompositeNeeded = false;
       let overlayClearedThisFrame = false;
       let __dbgOverlaySpecialCount = null;
@@ -6374,7 +6544,8 @@ function copyCanvas(backCtx, frontCtx) {
         !__dgFrontSwapNextDraw &&
         !__dgNeedsUIRefresh &&
         !__hydrationJustApplied &&
-        !singleCompositeNeeded;
+        !singleCompositeNeeded &&
+        !hasNodeFlash;
       maybeReleaseStalledZoom();
       dgf('start', { f: panel.__dgFrame|0, cssW, cssH, allowOverlayDraw, allowParticleDraw });
       const __ensureSizeStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
@@ -6406,12 +6577,10 @@ function copyCanvas(backCtx, frontCtx) {
         panel.__dgFrameCamLogged = true;
       }
       __dgFrameIdx++;
-      const mod = __dgGestureDrawModulo();
-      let drawModulo = mod;
-      if (gestureMoving && !isFocused && visiblePanels >= 6) drawModulo = Math.max(drawModulo, 2);
-      if (gestureMoving && !isFocused && visiblePanels >= 12) drawModulo = Math.max(drawModulo, 3);
-      if (gestureMoving && !isFocused && visiblePanels >= 18) drawModulo = Math.max(drawModulo, 4);
-      let doFullDraw = (!gesturing) || drawModulo <= 1 || ((__dgFrameIdx % drawModulo) === 0);
+      // Static redraw cadence must NOT change during gestures.
+      // Static layers (grid + nodes) should redraw only when dirty or explicitly forced.
+      // If we need perf headroom, we reduce detail (particles / playhead detail), not frames.
+      let doFullDraw = !!panel.__dgStaticDirty;
       let forceFullDraw = false;
       if (__dgForceFullDrawNext) {
         __dgForceFullDrawNext = false;
@@ -6430,12 +6599,19 @@ function copyCanvas(backCtx, frontCtx) {
       if (!panel.__dgGridHasPainted && __dgGridReady()) {
         doFullDraw = true;
       }
-      const hasNodeFlash = (() => {
-        for (let i = 0; i < flashes.length; i++) {
-          if (flashes[i] > 0) return true;
-        }
-        return false;
-      })();
+      // IMPORTANT:
+      // Node flashes are an overlay effect and must NOT force a full static redraw.
+      // (Static = grid + nodes). Only tutorial highlight can still require static redraw.
+      // Tutorial highlight needs redraw even if static isn't dirty.
+      if (tutorialHighlightMode !== 'none') {
+        doFullDraw = true;
+      }
+      const overlayFxWanted = hasOverlayFx || (overlayFlashesEnabled && hasNodeFlash);
+      overlayActive = allowOverlayDraw && (overlayFxWanted || overlayTransport || hasOverlayStrokesLive || (cur && previewGid));
+      allowOverlayDrawHeavy = allowOverlayDraw && (!skipOverlayHeavy || __dgNeedsUIRefresh || hasNodeFlash);
+      overlayCoreWanted = (overlayFxWanted || hasOverlayStrokesLive || (cur && previewGid));
+      overlayCoreActive = allowOverlayDrawHeavy && overlayCoreWanted;
+      const needsFx = overlayCoreActive || __dgNeedsUIRefresh || hasNodeFlash;
       if (DG_SINGLE_CANVAS && canDrawAnything) {
         const needsFullDraw =
           panel.__dgSingleCompositeDirty ||
@@ -6444,7 +6620,6 @@ function copyCanvas(backCtx, frontCtx) {
           __hydrationJustApplied ||
           forceFullDraw ||
           !panel.__dgGridHasPainted ||
-          hasNodeFlash ||
           tutorialHighlightMode !== 'none';
         if (!needsFullDraw) doFullDraw = false;
       }
@@ -6460,6 +6635,9 @@ function copyCanvas(backCtx, frontCtx) {
           const dtMs = Number.isFinite(frameCam?.dt) ? frameCam.dt : 16.6;
           const dt = Number.isFinite(dtMs) ? dtMs / 1000 : (1 / 60);
           const __pfStart = __perfZoomOn && typeof performance !== 'undefined' ? performance.now() : 0;
+          const __pfDbgOn = !!(typeof window !== 'undefined' && window.__PERF_PARTICLE_DBG);
+          const __pfDbgState = __pfDbgOn ? (dgField?._state || null) : null;
+          const __pfDbgConfig = __pfDbgOn ? (dgField?._config || null) : null;
           const __pfUpdateStart = (__perfOn && typeof performance !== 'undefined' && performance.now)
             ? performance.now()
             : 0;
@@ -6514,6 +6692,44 @@ function copyCanvas(backCtx, frontCtx) {
             const __pfEnd = performance.now();
             try { window.__PerfFrameProf?.mark?.('drawgrid.particle', __pfEnd - __pfStart); } catch {}
           }
+
+          // Debug snapshot (only when enabled via __PERF_PARTICLE_DBG).
+          if (__pfDbgOn) {
+            try {
+              window.__DG_PARTICLE_DBG_LAST = {
+                t: nowTs,
+                allowParticleDraw: true,
+                disableParticles: false,
+                isPanelVisible: !!isPanelVisible,
+                particles: Array.isArray(__pfDbgState?.particles) ? __pfDbgState.particles.length : null,
+                targetDesired: Number.isFinite(__pfDbgState?.targetDesired) ? __pfDbgState.targetDesired : null,
+                capScale: Number.isFinite(__pfDbgState?.capScale) ? __pfDbgState.capScale : null,
+                lodScale: Number.isFinite(__pfDbgState?.lodScale) ? __pfDbgState.lodScale : null,
+                tickModulo: Number.isFinite(__pfDbgConfig?.tickModulo) ? __pfDbgConfig.tickModulo : null,
+              };
+            } catch {}
+          }
+        }
+        else {
+          // Particles skipped this frame. Mark it so we can verify NoParticles truly disables work.
+          const __pfDbgOn = !!(typeof window !== 'undefined' && window.__PERF_PARTICLE_DBG);
+          if (__perfOn) {
+            try {
+              window.__PerfFrameProf?.mark?.('drawgrid.update.particles.skipped', 0);
+            } catch {}
+          }
+          if (__pfDbgOn) {
+            try {
+              window.__DG_PARTICLE_DBG_LAST = {
+                t: nowTs,
+                allowParticleDraw: false,
+                disableParticles: !!disableParticles,
+                isPanelVisible: !!isPanelVisible,
+                particleStateAllowed: !!particleStateAllowed,
+                zoomGestureMoving: !!zoomGestureMoving,
+              };
+            } catch {}
+          }
         }
       } catch (e) {
         dglog('particle-field.tick:error', String((e && e.message) || e));
@@ -6567,6 +6783,10 @@ function copyCanvas(backCtx, frontCtx) {
               try { window.__PerfFrameProf?.mark?.('drawgrid.draw.nodes', __nodesDrawDt); } catch {}
             }
           }
+
+          // Static layers are now up to date.
+          // (Even after force draws, treat as clean unless something marks it dirty again.)
+          panel.__dgStaticDirty = false;
 
           if (__dgDrawStart !== null) {
           const now = performance.now();
@@ -6734,7 +6954,9 @@ function copyCanvas(backCtx, frontCtx) {
     if (!skipDomUpdates) {
       const lastPlaying = !!panel.__dgShowPlaying;
       if (showPlaying !== lastPlaying) {
-        panel.classList.toggle('toy-playing', showPlaying);
+        // Avoid DOM writes in rAF: queue for deferred commit.
+        markPanelForDomCommit(panel);
+        queueClassToggle(panel, 'toy-playing', showPlaying);
         panel.__dgShowPlaying = showPlaying;
       }
     }
@@ -6744,7 +6966,7 @@ function copyCanvas(backCtx, frontCtx) {
     }
 
     // --- other overlay layers still respect allowOverlayDraw ---
-    if (allowOverlayDrawHeavy && (overlayCoreActive || __dgNeedsUIRefresh)) {
+    if (allowOverlayDrawHeavy && needsFx) {
       overlayCompositeNeeded = true;
       const __flashPassStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
         ? performance.now()
@@ -6773,6 +6995,15 @@ function copyCanvas(backCtx, frontCtx) {
       if (__overlayClearStart) {
         const __overlayClearDt = performance.now() - __overlayClearStart;
         try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.clear', __overlayClearDt); } catch {}
+      }
+
+      if (hasNodeFlash && overlayFlashesEnabled) {
+        markFlashLayerActive();
+        R.withOverlayClip(fctx, gridArea, false, () => {
+          R.withLogicalSpace(fctx, () => {
+            drawColumnFlashesOverlay(fctx);
+          });
+        });
       }
 
       // Animate special stroke paint (hue cycling).
@@ -7250,15 +7481,19 @@ function copyCanvas(backCtx, frontCtx) {
         let allowPlayheadThisFrame = wantsPlayhead;
         try {
           const overrideEvery = Number(window.__PERF_DG_PLAYHEAD_EVERY);
+          // Quality should NOT change just because the user is gesturing.
+          // All visible toys are treated equally (unless in small-screen focus edit mode).
+          const __dgFps =
+            (typeof window !== 'undefined' && Number.isFinite(window.__MT_SM_FPS)) ? window.__MT_SM_FPS :
+            ((typeof window !== 'undefined' && Number.isFinite(window.__MT_FPS)) ? window.__MT_FPS : 60);
+          const __dgVisiblePanels = Number.isFinite(globalDrawgridState?.visibleCount) ? globalDrawgridState.visibleCount : visiblePanels;
+          const __dgGlobalLowQuality = (__dgVisiblePanels >= 18 && __dgFps < 50) || (__dgFps < 40);
+
+          // Global quality knob (not gesture-based). When low, we may reduce *detail*, not cadence.
+          // Leave playhead cadence at full rate; later we can swap to low-detail visual instead of skipping frames.
           let playheadEvery = 1;
           if (Number.isFinite(overrideEvery) && overrideEvery >= 1) {
             playheadEvery = Math.floor(overrideEvery);
-          } else if (gestureMoving && !isFocused) {
-            // Conservative defaults: only throttle when gestureMoving (and not focused),
-            // because this is when we most need "feel smooth" over perfect fidelity.
-            if (visiblePanels >= 18) playheadEvery = 6;
-            else if (visiblePanels >= 12) playheadEvery = 4;
-            else if (visiblePanels >= 6) playheadEvery = 3;
           }
           if (playheadEvery > 1) {
             panel.__dgPlayheadFrame = (panel.__dgPlayheadFrame | 0) + 1;
@@ -7579,7 +7814,8 @@ function copyCanvas(backCtx, frontCtx) {
     }
 
     dgf('end', { f: panel.__dgFrame|0 });
-    rafId = requestAnimationFrame(renderLoop);
+    // Continue while visible / active.
+    ensureRenderLoopRunning();
     } finally {
       endPerf();
       if (__perfOn && __rafStart) {
@@ -7718,8 +7954,7 @@ function copyCanvas(backCtx, frontCtx) {
       setTimeout(() => { __hydrationJustApplied = false; }, 32);
       ensurePostCommitRedraw('restoreFromState');
       emitDrawgridUpdate({ activityOnly: false });
-      drawGrid();
-      if (currentMap) drawNodes(currentMap.nodes);
+      markStaticDirty('external-state-change');
   } catch (e) {
       emitDrawgridUpdate({ activityOnly: false });
     } finally {
@@ -8704,6 +8939,7 @@ function runAutoGhostGuideSweep() {
   try { panel.dispatchEvent(new CustomEvent('drawgrid:ready', { bubbles: true })); } catch {}
   return api;
 }
+
 
 
 

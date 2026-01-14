@@ -439,7 +439,7 @@ function ensureUI() {
       const cfg = {
         clear: true,
         save: false,
-        download: true,
+        download: false,
         postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
         downloadName: `perf-lab-demon-hunt-${ts}.json`,
         notes: 'Demon Hunt v1: baseline (traceOff) then traceOn; P3f + P4b',
@@ -478,7 +478,7 @@ function ensureUI() {
       const cfg = {
         clear: true,
         save: false,
-        download: true,
+        download: false,
         postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
         downloadName: `perf-lab-fast-${ts}.json`,
         notes: 'Fast loop: traceOff only; P3f + PlayheadSeparateOff/On + P3fNoParticles + P4b',
@@ -504,7 +504,7 @@ function ensureUI() {
       const cfg = {
         clear: true,
         save: false,
-        download: true,
+        download: false,
         postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
         downloadName: `perf-lab-quick-trace-p3f-${ts}.json`,
         notes: 'Quick Trace P3f: traceOn + buildP3 + runP3fShort',
@@ -1022,11 +1022,11 @@ async function resolveResultsConfig() {
   const cfgFile = await readAutoConfigFromFile();
   const cfg = cfgFile || readAutoConfig() || {};
 
-  // Default: manual runs should download a results file unless explicitly disabled.
+  // Default: never download results unless explicitly enabled.
   // Auto runs still control download via their own config object.
   try {
     const isAuto = window.__PERF_LAB_RUN_CONTEXT === 'auto';
-    if (!isAuto && typeof cfg.download === 'undefined') cfg.download = true;
+    if (!isAuto && typeof cfg.download === 'undefined') cfg.download = false;
   } catch {}
 
   return cfg;
@@ -3188,13 +3188,16 @@ async function runP3fNoGrid() {
 async function runP3fNoParticles() {
   const prevTag = window.__PERF_RUN_TAG;
   const prevNoParticles = window.__PERF_DG_DISABLE_PARTICLES;
+  const prevParticleDbg = window.__PERF_PARTICLE_DBG;
   window.__PERF_RUN_TAG = 'P3fNoParticles';
   try {
     window.__PERF_DG_DISABLE_PARTICLES = true;
+    window.__PERF_PARTICLE_DBG = true;
     await runP3f();
   } finally {
     window.__PERF_RUN_TAG = prevTag;
     window.__PERF_DG_DISABLE_PARTICLES = prevNoParticles;
+    window.__PERF_PARTICLE_DBG = prevParticleDbg;
   }
 }
 

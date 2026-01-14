@@ -526,11 +526,39 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
 
   st._resizer?.disconnect?.(); // in case of re-init
 
-  // 1) Defer the first layout until the box is real & stable
-  const box = await waitForStableBox(targetEl);
-  st.computeLayout(box.width, box.height);
-  st._lastLayoutW = box.width;
-  st._lastLayoutH = box.height;
+  // 1) Initial layout: do NOT block visuals behind a "stable box" await.
+  // In practice, the element can report 0x0 during init (CSS/class toggles, lazy DOM),
+  // which would prevent any drawing. We do a best-effort layout immediately, then
+  // re-layout on the next RAF and via observers.
+  {
+    const rect0 = targetEl.getBoundingClientRect();
+    const w0 = Math.round(rect0.width);
+    const h0 = Math.round(rect0.height);
+    if (w0 > 0 && h0 > 0) {
+      st.computeLayout(w0, h0);
+      st._lastLayoutW = w0;
+      st._lastLayoutH = h0;
+      panel.__loopgridNeedsRedraw = true;
+    } else {
+      st._lastLayoutW = 0;
+      st._lastLayoutH = 0;
+    }
+
+    // Next-frame retry (covers the common "first frame is 0x0" case).
+    raf().then(() => {
+      if (!panel || !panel.isConnected) return;
+      st._layoutCssCache = null;
+      const rect1 = targetEl.getBoundingClientRect();
+      const w1 = Math.round(rect1.width);
+      const h1 = Math.round(rect1.height);
+      if (w1 > 0 && h1 > 0 && (w1 !== st._lastLayoutW || h1 !== st._lastLayoutH)) {
+        st.computeLayout(w1, h1);
+        st._lastLayoutW = w1;
+        st._lastLayoutH = h1;
+        panel.__loopgridNeedsRedraw = true;
+      }
+    }).catch(() => {});
+  }
 
   // 2) Re-layout on container size changes
   st._resizer = new ResizeObserver((entries) => {
@@ -548,18 +576,21 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
   st._resizer.observe(targetEl);
 
   // 3) Re-layout on zoom settle (hook whatever you already have)
-  panel.zoom?.on?.('end', async () => {
+  panel.zoom?.on?.('end', () => {
     st._layoutCssCache = null;
     // Wait a frame so layout settles, then compute once if changed.
-    await raf();
-    const rect = targetEl.getBoundingClientRect();
-    const w = Math.round(rect.width);
-    const h = Math.round(rect.height);
-    if (w === st._lastLayoutW && h === st._lastLayoutH) return;
-    st._lastLayoutW = w;
-    st._lastLayoutH = h;
-    st.computeLayout(w, h);
-    panel.__loopgridNeedsRedraw = true;
+    raf().then(() => {
+      if (!panel || !panel.isConnected) return;
+      const rect = targetEl.getBoundingClientRect();
+      const w = Math.round(rect.width);
+      const h = Math.round(rect.height);
+      if (w <= 0 || h <= 0) return;
+      if (w === st._lastLayoutW && h === st._lastLayoutH) return;
+      st._lastLayoutW = w;
+      st._lastLayoutH = h;
+      st.computeLayout(w, h);
+      panel.__loopgridNeedsRedraw = true;
+    }).catch(() => {});
   });
 
   // --- Particle Canvas Setup (moved after st definition) ---
@@ -1034,28 +1065,19 @@ function render(panel, opts = {}) {
     } catch {}
   }
 
-  // Cheap default culling: unfocused loopgrids render at lower cadence during gestures.
-  // Scheduler reads panel.__loopgridFrameModulo.
+  // Do not change quality based on gesturing; treat all visible toys equally (unless in focus-edit mode).
   const isFocused = panel.classList?.contains('toy-focused') || panel.classList?.contains('focused');
   const isUnfocused = panel.classList?.contains('toy-unfocused');
-  const isGesturing = !!(
-    opts.isGesture ||
-    window.__ZoomCoordinator?.isGesturing?.() ||
-    document.body?.classList?.contains?.('is-gesturing')
-  );
-  const visibleCount = Number(window.__LOOPGRID_GLOBAL?.visibleCount) || 0;
+  const __srFps =
+    (typeof window !== 'undefined' && Number.isFinite(window.__MT_SM_FPS)) ? window.__MT_SM_FPS :
+    ((typeof window !== 'undefined' && Number.isFinite(window.__MT_FPS)) ? window.__MT_FPS : 60);
+  const __srVisiblePanels = Number.isFinite(window.__MT_VISIBLE_PANELS)
+    ? window.__MT_VISIBLE_PANELS
+    : (Number.isFinite(window.__LOOPGRID_GLOBAL?.visibleCount) ? window.__LOOPGRID_GLOBAL.visibleCount : 0);
+  const __srGlobalLowQuality = (__srVisiblePanels >= 18 && __srFps < 50) || (__srFps < 40);
 
-  // Gesture-only render throttle for unfocused toys: skip heavy draw, still update classes.
-  let gestureRenderMod = Math.max(1, Number(window.__PERF_LOOPGRID_GESTURE_RENDER_MOD) || 1);
-  if (isGesturing && visibleCount >= 12) gestureRenderMod = Math.max(gestureRenderMod, 2);
-
+  // Keep cadence; later switch to lower-detail visuals when __srGlobalLowQuality is true.
   let skipHeavy = false;
-  if (isGesturing && !isFocused && gestureRenderMod > 1) {
-    st.__gestureRenderFrame = (st.__gestureRenderFrame || 0) + 1;
-    if ((st.__gestureRenderFrame % gestureRenderMod) !== 0) {
-      skipHeavy = true;
-    }
-  }
 
   // Handle the highlight pulse animation on note hits.
   if (panel.__pulseRearm) {
