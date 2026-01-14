@@ -10,6 +10,8 @@ import { getParticleBudget, getAdaptiveFrameBudget } from './particles/ParticleQ
 import { resizeCanvasForDPR } from './utils.js';
 import { overviewMode } from './overview-mode.js';
 import { onZoomChange, namedZoomListener } from './zoom/ZoomCoordinator.js';
+import { requestPanelPulse } from './pulse-border.js';
+import { queueClassToggle, markPanelForDomCommit } from './dom-commit.js';
 
 // --- sizing helpers ---------------------------------------------------------
 function raf() {
@@ -1057,17 +1059,20 @@ function render(panel, opts = {}) {
 
   // Handle the highlight pulse animation on note hits.
   if (panel.__pulseRearm) {
-    panel.classList.remove('toy-playing-pulse');
-    try { panel.offsetWidth; } catch {}
+    requestPanelPulse(panel, { rearm: true });
     panel.__pulseRearm = false;
+    panel.__pulseHighlightFired = true;
   }
 
   if (panel.__pulseHighlight && panel.__pulseHighlight > 0) {
-    panel.classList.add('toy-playing-pulse');
+    if (!panel.__pulseHighlightFired) {
+      requestPanelPulse(panel);
+      panel.__pulseHighlightFired = true;
+    }
     panel.__loopgridNeedsRedraw = true;
     panel.__pulseHighlight = Math.max(0, panel.__pulseHighlight - 0.05); // Decay over ~20 frames
-  } else if (panel.classList.contains('toy-playing-pulse')) {
-    panel.classList.remove('toy-playing-pulse');
+  } else if (panel.__pulseHighlightFired) {
+    panel.__pulseHighlightFired = false;
   }
 
   const transportRunning = (typeof isRunning === 'function') && isRunning();
@@ -1162,7 +1167,9 @@ function render(panel, opts = {}) {
     ? (isChained ? (isActiveInChain && chainHasNotes) : hasActiveNotes)
     : false;
   if (st._lastShowPlaying !== showPlaying) {
-    panel.classList.toggle('toy-playing', showPlaying);
+    // Avoid DOM writes in rAF: queue for deferred commit.
+    markPanelForDomCommit(panel);
+    queueClassToggle(panel, 'toy-playing', showPlaying);
     st._lastShowPlaying = showPlaying;
   }
 

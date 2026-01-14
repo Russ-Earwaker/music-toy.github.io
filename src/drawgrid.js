@@ -57,6 +57,7 @@ import { createDgHydrationHelpers } from './drawgrid/dg-hydration-helpers.js';
 import { createDgParticles } from './drawgrid/dg-particles.js';
 import { createDgFieldForces } from './drawgrid/dg-field-forces.js';
 import { createDgRandomizers } from './drawgrid/dg-randomizers.js';
+import { requestPanelPulse } from './pulse-border.js';
 import {
   DRAWGRID_ENABLE_PARTICLE_FIELD,
   DG_ALPHA_DEBUG,
@@ -5741,8 +5742,7 @@ function copyCanvas(backCtx, frontCtx) {
                     const isDisabled = currentMap.disabled?.[col]?.has(row);
                     if (!isDisabled) {
                         if (!pulseTriggered) {
-                            panel.__pulseHighlight = 1.0;
-                            panel.__pulseRearm = true;
+                            requestPanelPulse(panel, { rearm: true });
                             pulseTriggered = true;
                         }
                           cellFlashes.push({ col, row, age: 1.0 });
@@ -6720,68 +6720,6 @@ function copyCanvas(backCtx, frontCtx) {
       }
       cancelAnimationFrame(rafId);
       return;
-    }
-
-    const __domPulseStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
-      ? performance.now()
-      : 0;
-      if (!skipDomUpdates) {
-        let pulseClassOn = !!panel.__dgPulseClassOn;
-        if (panel.__pulseRearm) {
-          if (pulseClassOn) {
-            const __pulseRemoveStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
-              ? performance.now()
-              : 0;
-            panel.classList.remove('toy-playing-pulse');
-            if (__pulseRemoveStart) {
-              try { window.__PerfFrameProf?.mark?.('drawgrid.dom.pulse.remove', performance.now() - __pulseRemoveStart); } catch {}
-            }
-            pulseClassOn = false;
-          }
-          panel.__pulseRearm = false;
-          panel.__dgPulseSkipAdd = true;
-        }
-
-        const pulseActive = !!(panel.__pulseHighlight && panel.__pulseHighlight > 0);
-        if (pulseActive) {
-          if (!pulseClassOn && !panel.__dgPulseSkipAdd) {
-            const __pulseAddStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
-              ? performance.now()
-              : 0;
-            panel.classList.add('toy-playing-pulse');
-            if (__pulseAddStart) {
-              try { window.__PerfFrameProf?.mark?.('drawgrid.dom.pulse.add', performance.now() - __pulseAddStart); } catch {}
-            }
-            pulseClassOn = true;
-          }
-          panel.__pulseHighlight = Math.max(0, panel.__pulseHighlight - 0.05);
-        } else if (pulseClassOn) {
-          const __pulseOffStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
-            ? performance.now()
-            : 0;
-          panel.classList.remove('toy-playing-pulse');
-          if (__pulseOffStart) {
-            try { window.__PerfFrameProf?.mark?.('drawgrid.dom.pulse.remove', performance.now() - __pulseOffStart); } catch {}
-          }
-          pulseClassOn = false;
-        }
-        panel.__dgPulseClassOn = pulseClassOn;
-        if (panel.__dgPulseSkipAdd) {
-          panel.__dgPulseSkipAdd = false;
-          requestAnimationFrame(() => {
-            try {
-              if (!panel.isConnected) return;
-              if (!(panel.__pulseHighlight > 0)) return;
-              if (!panel.classList.contains('toy-playing-pulse')) {
-                panel.classList.add('toy-playing-pulse');
-              }
-            } catch {}
-          });
-        }
-      }
-    if (__domPulseStart) {
-      const __domPulseDt = performance.now() - __domPulseStart;
-      try { window.__PerfFrameProf?.mark?.('drawgrid.dom.pulse', __domPulseDt); } catch {}
     }
 
     // Set playing class for border highlight

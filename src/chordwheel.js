@@ -4,6 +4,8 @@ import { NUM_STEPS, getLoopInfo, ensureAudioContext, getToyGain, isRunning, regi
 import { createBouncerParticles } from './bouncer-particles.js';
 import { triggerNoteForToy } from './audio-trigger.js';
 import { drawBlock, whichThirdRect } from './toyhelpers.js';
+import { requestPanelPulse } from './pulse-border.js';
+import { queueClassToggle, markPanelForDomCommit } from './dom-commit.js';
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 function degreeToChordName(deg) {
@@ -595,16 +597,19 @@ export function createChordWheel(panel){
     const shouldRun = (isActiveInChain || !isChained) && running;
 
     if (panel.__pulseRearm) {
-      panel.classList.remove('toy-playing-pulse');
-      try { panel.offsetWidth; } catch {}
+      requestPanelPulse(panel, { rearm: true });
       panel.__pulseRearm = false;
+      panel.__pulseHighlightFired = true;
     }
 
     if (panel.__pulseHighlight && panel.__pulseHighlight > 0) {
-      panel.classList.add('toy-playing-pulse');
+      if (!panel.__pulseHighlightFired) {
+        requestPanelPulse(panel);
+        panel.__pulseHighlightFired = true;
+      }
       panel.__pulseHighlight = Math.max(0, panel.__pulseHighlight - 0.05);
-    } else if (panel.classList.contains('toy-playing-pulse')) {
-      panel.classList.remove('toy-playing-pulse');
+    } else if (panel.__pulseHighlightFired) {
+      panel.__pulseHighlightFired = false;
     }
 
     const head = isChained ? findChainHead(panel) : panel;
@@ -617,7 +622,9 @@ export function createChordWheel(panel){
     } else {
       showPlaying = false;
     }
-    panel.classList.toggle('toy-playing', showPlaying);
+    // Avoid DOM writes in rAF: queue for deferred commit.
+    markPanelForDomCommit(panel);
+    queueClassToggle(panel, 'toy-playing', showPlaying);
 
     // Background pulse on global beat
     // This was changed to `shouldRun` to disable the pulse when inactive.
@@ -1349,4 +1356,3 @@ function randomPentatonicProgression16(){
 
   return [...loopA, ...loopB];
 }
-

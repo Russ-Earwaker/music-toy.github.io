@@ -3,6 +3,7 @@ import { triggerInstrument } from './audio-samples.js';
 import { gateTriggerForToy, getToyAudioGen } from './toy-audio.js';
 import { buildPalette, midiToName } from './note-helpers.js';
 import { resumeAudioContextIfNeeded, isRunning as isTransportRunning, ensureAudioContext } from './audio-core.js';
+import { requestPanelPulse } from './pulse-border.js';
 
 // IMPORTANT:
 // data-toyid may represent chain/group identity and can be shared across panels.
@@ -110,8 +111,7 @@ export function connectDrawGridToPlayer(panel) {
       if (!Number.isFinite(now) || !Number.isFinite(when)) {
         // Fallback: fire immediately
         markPlayingColumn(panel, col);
-        panel.__pulseHighlight = 1.0;
-        panel.__pulseRearm = true;
+        requestPanelPulse(panel, { rearm: true });
         return;
       }
 
@@ -168,8 +168,7 @@ export function connectDrawGridToPlayer(panel) {
           }
 
           markPlayingColumn(panel, col);
-          panel.__pulseHighlight = 1.0;
-          panel.__pulseRearm = true;
+          requestPanelPulse(panel, { rearm: true });
         } catch {}
         // let keys expire
         try { setTimeout(() => panel.__dgFxKeys?.delete?.(k), 1000); } catch {}
@@ -180,8 +179,7 @@ export function connectDrawGridToPlayer(panel) {
       // fallback immediate
       try {
         markPlayingColumn(panel, col);
-        panel.__pulseHighlight = 1.0;
-        panel.__pulseRearm = true;
+        requestPanelPulse(panel, { rearm: true });
       } catch {}
     }
   }
@@ -450,8 +448,7 @@ export function connectDrawGridToPlayer(panel) {
       } catch {}
 
       if (!columnTriggered) {
-        panel.__pulseHighlight = 1.0;
-        panel.__pulseRearm = true;
+        requestPanelPulse(panel, { rearm: true });
         columnTriggered = true;
       }
 

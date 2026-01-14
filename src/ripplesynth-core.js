@@ -22,6 +22,8 @@ import { startSection } from './perf-meter.js';
 import { createScheduler } from './ripplesynth-scheduler.js';
 import { circleRectHit } from './bouncer-helpers.js';
 import { drawBlock } from './toyhelpers.js';
+import { requestPanelPulse } from './pulse-border.js';
+import { queueClassToggle, queueDatasetSet, markPanelForDomCommit } from './dom-commit.js';
 
 export function createRippleSynth(selector){
   const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector;
@@ -736,21 +738,26 @@ export function createRippleSynth(selector){
       // A toy is "playing" if it has active ripples, or if it's an empty
       // toy in a chain running its "ghost" timer (lifeline).
       const isPlaying = transportRunning && isActiveInChain && ((ripples.length > 0 && generator.placed) || !!__schedState.ghostSpawnTime);
-      panel.classList.toggle('toy-playing', isPlaying);
-      try { panel.dataset.ripplerIsPlaying = String(isPlaying); } catch(e){}
+      // Avoid DOM writes in rAF: queue for deferred commit.
+      markPanelForDomCommit(panel);
+      queueClassToggle(panel, 'toy-playing', isPlaying);
+      queueDatasetSet(panel, 'ripplerIsPlaying', isPlaying);
 
       // Handle the highlight pulse animation on note hits.
       if (panel.__pulseRearm) {
-        panel.classList.remove('toy-playing-pulse');
-        try { panel.offsetWidth; } catch {}
+        requestPanelPulse(panel, { rearm: true });
         panel.__pulseRearm = false;
+        panel.__pulseHighlightFired = true;
       }
 
       if (panel.__pulseHighlight && panel.__pulseHighlight > 0) {
-        panel.classList.add('toy-playing-pulse');
+        if (!panel.__pulseHighlightFired) {
+          requestPanelPulse(panel);
+          panel.__pulseHighlightFired = true;
+        }
         panel.__pulseHighlight = Math.max(0, panel.__pulseHighlight - 0.05); // Decay over ~20 frames
-      } else if (panel.classList.contains('toy-playing-pulse')) {
-        panel.classList.remove('toy-playing-pulse');
+      } else if (panel.__pulseHighlightFired) {
+        panel.__pulseHighlightFired = false;
       }
       resizeCanvasForDPR(canvas, ctx);
       if (!didLayout) layoutBlocks();

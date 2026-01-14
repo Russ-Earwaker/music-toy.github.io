@@ -4,6 +4,8 @@ const __DBG = (globalThis.BOUNCER_DBG_LEVEL|0)||0; const __d=(lvl,...a)=>{ if(__
 import { drawBlock } from './toyhelpers.js';
 import { isRunning } from './audio-core.js';
 import { startSection } from './perf-meter.js';
+import { requestPanelPulse } from './pulse-border.js';
+import { queueClassToggle, markPanelForDomCommit } from './dom-commit.js';
 
 export function createBouncerDraw(env){
   const {
@@ -67,13 +69,24 @@ export function createBouncerDraw(env){
       // A ghost ball on the head of a chain shouldn't trigger the "playing" highlight.
       const hasBallForHighlight = !!currentBall && !(currentBall.isGhost && isChainHead);
       const showPlaying = transportRunning && isActiveInChain && hasBallForHighlight;
-      panel.classList.toggle('toy-playing', showPlaying);
+      // Avoid DOM writes in rAF: queue for deferred commit.
+      markPanelForDomCommit(panel);
+      queueClassToggle(panel, 'toy-playing', showPlaying);
+
+    if (panel.__pulseRearm) {
+      requestPanelPulse(panel, { rearm: true });
+      panel.__pulseRearm = false;
+      panel.__pulseHighlightFired = true;
+    }
 
     if (panel.__pulseHighlight && panel.__pulseHighlight > 0) {
-      panel.classList.add('toy-playing-pulse');
+      if (!panel.__pulseHighlightFired) {
+        requestPanelPulse(panel);
+        panel.__pulseHighlightFired = true;
+      }
       panel.__pulseHighlight = Math.max(0, panel.__pulseHighlight - 0.05); // Decay over ~20 frames
-    } else if (panel.classList.contains('toy-playing-pulse')) {
-      panel.classList.remove('toy-playing-pulse');
+    } else if (panel.__pulseHighlightFired) {
+      panel.__pulseHighlightFired = false;
     }
 
     const rs = renderScale();
@@ -583,8 +596,6 @@ export function createBouncerDraw(env){
 
   return draw;
 }
-
-
 
 
 
