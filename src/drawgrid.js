@@ -220,7 +220,12 @@ function createViewportBridgeDG(hostEl) {
 
 let usingBackBuffers = false;
 let __dgDrawingActive = false;
-let paintDpr = Math.max(1, Math.min((typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1, 3));
+let paintDpr = __dgCapDprForBackingStore(
+  0,
+  0,
+  Math.max(1, Math.min((typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1, 3)),
+  null
+);
 
 let cssW = 0, cssH = 0, cw = 0, ch = 0, topPad = 0;
 let layoutSizeDirty = true;
@@ -291,7 +296,7 @@ function __dgComputeAdaptivePaintDpr({ boardScale = 1, visiblePanels = 0, isFocu
 // Tunables (optional):
 //   window.__DG_MAX_PANEL_BACKING_PX  (default 2.2M pixels)
 //   window.__DG_MAX_PANEL_SIDE_PX    (default 2600 px)
-function __dgComputeSizeCappedPaintDpr({ cssW = 0, cssH = 0, desiredDpr = 1, prevDpr = null }) {
+function __dgCapDprForBackingStore(cssW = 0, cssH = 0, desiredDpr = 1, prevDpr = null) {
   const w = Number.isFinite(cssW) ? cssW : 0;
   const h = Number.isFinite(cssH) ? cssH : 0;
   let dpr = Number.isFinite(desiredDpr) ? desiredDpr : 1;
@@ -1378,7 +1383,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         if (DG_DEBUG) { try { console.warn('[DG] resizeSurfacesFor during commit'); } catch {} }
       }
       const dpr = Math.max(1, Number.isFinite(nextDpr) ? nextDpr : (window.devicePixelRatio || 1));
-      paintDpr = Math.max(1, Math.min(dpr, 3));
+      paintDpr = __dgCapDprForBackingStore(nextCssW, nextCssH, Math.min(dpr, 3), paintDpr);
       const targetW = Math.max(1, Math.round(nextCssW * paintDpr));
       const targetH = Math.max(1, Math.round(nextCssH * paintDpr));
       if (frontCanvas) {
@@ -1518,7 +1523,11 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
   // Double-buffer + DPR tracking
   let pendingPaintSwap = false;
-    paintDpr = Math.max(1, Math.min((typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1, 3));
+  const __dgDeviceDpr = Math.max(
+    1,
+    Math.min(((typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1), 3)
+  );
+  paintDpr = __dgCapDprForBackingStore(cssW, cssH, __dgDeviceDpr, paintDpr);
   let zoomCommitPhase = 'idle';
 
   // State
@@ -1758,12 +1767,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
               ? paintDpr
               : Math.max(1, Math.min(deviceDpr, 3));
         desiredDpr = Math.min(deviceDpr, desiredDpr);
-        const cappedDpr = __dgComputeSizeCappedPaintDpr({
-          cssW,
-          cssH,
-          desiredDpr,
-          prevDpr: paintDpr,
-        });
+        const cappedDpr = __dgCapDprForBackingStore(cssW, cssH, desiredDpr, paintDpr);
         paintDpr = cappedDpr;
         resizeSurfacesFor(cssW, cssH, cappedDpr);
       }
@@ -2937,12 +2941,7 @@ function regenerateMapFromStrokes() {
             ? __dgAdaptivePaintDpr
             : Math.max(1, Math.min(deviceDpr, 3));
         desiredDpr = Math.min(deviceDpr, desiredDpr);
-        paintDpr = __dgComputeSizeCappedPaintDpr({
-          cssW,
-          cssH,
-          desiredDpr,
-          prevDpr: paintDpr,
-        });
+        paintDpr = __dgCapDprForBackingStore(cssW, cssH, desiredDpr, paintDpr);
       }
       pendingZoomResnap = false;
 
@@ -6342,12 +6341,7 @@ function copyCanvas(backCtx, frontCtx) {
       });
       const deviceDpr = Math.max(1, Number.isFinite(window?.devicePixelRatio) ? window.devicePixelRatio : 1);
       const desiredDprRaw = adaptiveCap ? Math.min(deviceDpr, adaptiveCap) : deviceDpr;
-      const desiredDpr = __dgComputeSizeCappedPaintDpr({
-        cssW,
-        cssH,
-        desiredDpr: desiredDprRaw,
-        prevDpr: __dgAdaptivePaintDpr,
-      });
+      const desiredDpr = __dgCapDprForBackingStore(cssW, cssH, desiredDprRaw, __dgAdaptivePaintDpr);
       const nowAdaptiveTs = nowTs || (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
       const canAdjustDpr =
         !gesturing &&

@@ -29,6 +29,50 @@ import { makeDebugLogger } from '../debug-flags.js';
 
 const fieldLog = makeDebugLogger('mt_debug_logs', 'log');
 
+// Backing-store DPR cap (area + max-side), with hysteresis to avoid thrash.
+// Mirrors DrawGrid's strategy so particle fields don't explode pixel cost on high-DPR screens.
+function capDprForBackingStore(cssW = 0, cssH = 0, desiredDpr = 1, prevDpr = null, opts = null) {
+  const w = Number.isFinite(cssW) ? cssW : 0;
+  const h = Number.isFinite(cssH) ? cssH : 0;
+  let dpr = Number.isFinite(desiredDpr) ? desiredDpr : 1;
+  if (w <= 0 || h <= 0) return Math.max(1, dpr);
+
+  // Pixel budget cap (area-based).
+  let maxPx = Number.isFinite(opts?.maxBackingPx) ? opts.maxBackingPx : 2_200_000;
+  try {
+    const v = (typeof window !== 'undefined') ? Number(window.__FIELD_MAX_BACKING_PX) : NaN;
+    if (Number.isFinite(v) && v > 200_000) maxPx = v;
+  } catch {}
+  try {
+    const v = (typeof window !== 'undefined') ? Number(window.__DG_MAX_PANEL_BACKING_PX) : NaN;
+    if (Number.isFinite(v) && v > 200_000) maxPx = v;
+  } catch {}
+  const capFromPx = Math.sqrt(maxPx / (w * h));
+
+  // Side cap (dimension-based) to avoid huge single-axis backing stores.
+  let maxSide = Number.isFinite(opts?.maxBackingSidePx) ? opts.maxBackingSidePx : 2600;
+  try {
+    const v = (typeof window !== 'undefined') ? Number(window.__FIELD_MAX_SIDE_PX) : NaN;
+    if (Number.isFinite(v) && v > 600) maxSide = v;
+  } catch {}
+  try {
+    const v = (typeof window !== 'undefined') ? Number(window.__DG_MAX_PANEL_SIDE_PX) : NaN;
+    if (Number.isFinite(v) && v > 600) maxSide = v;
+  } catch {}
+  const capFromSide = Math.min(maxSide / w, maxSide / h);
+
+  let capped = Math.min(dpr, capFromPx, capFromSide);
+  capped = Math.max(1, Math.min(dpr, capped));
+
+  // Hysteresis to avoid DPR thrash around thresholds.
+  const prev = (Number.isFinite(prevDpr) && prevDpr > 0) ? prevDpr : null;
+  if (prev !== null) {
+    if (capped > prev && (capped - prev) < 0.12) return prev;
+    if (capped < prev && (prev - capped) < 0.06) return prev;
+  }
+  return capped;
+}
+
 // Fade tuning
 const FADE_IN_RATE = 1.6;   // per second
 const FADE_OUT_RATE = 0.9;  // per second (base)
@@ -483,7 +527,11 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     const prevH = state.h;
     state.w = Math.max(1, Math.round(size.w || 1));
     state.h = Math.max(1, Math.round(size.h || 1));
-    state.dpr = window.devicePixelRatio && window.devicePixelRatio > 0 ? window.devicePixelRatio : 1;
+    const desiredDpr = Math.max(1, Math.min(((typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1), 3));
+    state.dpr = capDprForBackingStore(state.w, state.h, desiredDpr, state.dpr, {
+      maxBackingPx: opts?.maxBackingPx,
+      maxBackingSidePx: opts?.maxBackingSidePx,
+    });
 
     const pxW = Math.max(1, Math.round(state.w * state.dpr));
     const pxH = Math.max(1, Math.round(state.h * state.dpr));
