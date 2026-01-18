@@ -1,4 +1,4 @@
-ï»¿import './mobile-viewport.js';
+import './mobile-viewport.js';
 import './fullscreen.js';
 // --- Module Imports ---
 import './debug.js';
@@ -490,7 +490,7 @@ function installChainPositionObserver() {
 
     const now = performance.now();
     if (now - g_chainPosLastFlushMs < CHAIN_POS_OBS_MIN_INTERVAL_MS) {
-      // Re-schedule if weâ€™re being spammed.
+      // Re-schedule if we’re being spammed.
       g_chainPosFlushRaf = requestAnimationFrame(flush);
       return;
     }
@@ -511,7 +511,7 @@ function installChainPositionObserver() {
   flush.__perfRafTag = 'perf.raf.chainPosFlush';
 
   g_chainPosObserver = new MutationObserver((mutations) => {
-    // Only care when focus editing or overview â€” basically anytime connectors might be visible.
+    // Only care when focus editing or overview — basically anytime connectors might be visible.
     // (This keeps us from doing work in totally irrelevant states.)
     const boardEl = document.getElementById('board');
     const overviewActive =
@@ -951,7 +951,7 @@ mainLog('[MAIN] module start');
         --toy-outline-pulse-w: 8px;    /* pulse peak pre-zoom width */
         --toy-outline-color: hsl(222, 100%, 80%);
       }
-      /* NORMAL MODE â€” full-frame outline visible */
+      /* NORMAL MODE — full-frame outline visible */
       .toy-panel.toy-playing{
         outline: none;
         box-shadow:
@@ -983,7 +983,7 @@ mainLog('[MAIN] module start');
       .toy-panel:not(.overview-outline).toy-playing-pulse{
         animation: playingPulseAdaptive 0.3s ease-out;
       }
-      /* OVERVIEW â€” suppress full-frame outline so only body overlay shows */
+      /* OVERVIEW — suppress full-frame outline so only body overlay shows */
       .toy-panel.overview-outline.toy-playing{
         box-shadow: var(--toy-panel-shadow, 0 8px 24px rgba(0, 0, 0, 0.35));
       }
@@ -1128,7 +1128,7 @@ function initFpsHud() {
         const toyCount = document.querySelectorAll('.toy-panel').length || 1;
         updateParticleQualityFromFps(__fpsValue, { toyCount });
       } catch (err) {
-        // ignore â€“ debug-only feature should never crash the app
+        // ignore – debug-only feature should never crash the app
       }
     }
 
@@ -1151,7 +1151,7 @@ function bootTopbar(){
     try {
       const panels = Array.from(document.querySelectorAll('.toy-panel[id]'));
       const roots = panels.filter(el => !el.dataset.chainParent);
-      if (window.__CHAIN_DEBUG) console.log('[chain] play â†’ roots', roots.map(r => r.id));
+      if (window.__CHAIN_DEBUG) console.log('[chain] play ? roots', roots.map(r => r.id));
       const visited = new Set();
       for (const root of roots) {
         startToyAndDescendants(root, visited);
@@ -1233,7 +1233,7 @@ function syncBodyOutline(panel){
 
     panel.classList.toggle('overview-outline', isOverviewLike);
 
-    // Defensive: if either header or footer is visible, make sure weâ€™re not suppressing the outer outline
+    // Defensive: if either header or footer is visible, make sure we’re not suppressing the outer outline
     if (!isOverviewLike && panel.classList.contains('overview-outline')) {
       panel.classList.remove('overview-outline');
     }
@@ -1641,7 +1641,7 @@ function lockChainButton(panel, { hasChild = true } = {}) {
         btn?.classList?.add?.('toy-chain-btn-disabled');
         if (btn) btn.style.pointerEvents = 'none';
         if (core) {
-            core.style.setProperty('--c-btn-icon-url', `url('/assets/UI/T_ButtonEmpty.png')`);
+            core.style.setProperty('--c-btn-icon-url', `url('./assets/UI/T_ButtonEmpty.png')`);
         }
     } else {
         delete panel.dataset.chainHasChild;
@@ -1649,7 +1649,7 @@ function lockChainButton(panel, { hasChild = true } = {}) {
         btn?.classList?.remove?.('toy-chain-btn-disabled');
         if (btn) btn.style.pointerEvents = 'auto';
         if (core) {
-            core.style.setProperty('--c-btn-icon-url', `url('/assets/UI/T_ButtonExtend.png')`);
+            core.style.setProperty('--c-btn-icon-url', `url('./assets/UI/T_ButtonExtend.png')`);
         }
     }
 }
@@ -1758,7 +1758,7 @@ function updateAllChainUIs({ force = false } = {}) {
             const core = chainBtn.querySelector('.c-btn-core');
             if (core) {
             const icon = hasOutgoing ? 'T_ButtonEmpty.png' : 'T_ButtonExtend.png';
-            core.style.setProperty('--c-btn-icon-url', `url('/assets/UI/${icon}')`);
+            core.style.setProperty('--c-btn-icon-url', `url('./assets/UI/${icon}')`);
             }
             if (hasOutgoing) {
                 chainBtn.setAttribute('data-chaindisabled', '1');
@@ -2063,7 +2063,7 @@ function initToyChaining(panel) {
     
     const core = extendBtn.querySelector('.c-btn-core');
     if (core) {
-        core.style.setProperty('--c-btn-icon-url', `url('/assets/UI/T_ButtonExtend.png')`);
+        core.style.setProperty('--c-btn-icon-url', `url('./assets/UI/T_ButtonExtend.png')`);
     }
     // Ensure the button is vertically centered on the toy body, not the whole panel
     const updateChainBtnPos = () => {
@@ -2128,7 +2128,7 @@ function initToyChaining(panel) {
         const coreEl = btn.querySelector('.c-btn-core');
         if (coreEl) {
             const icon = hasChild ? 'T_ButtonEmpty.png' : 'T_ButtonExtend.png';
-            coreEl.style.setProperty('--c-btn-icon-url', `url('../assets/UI/${icon}')`);
+            coreEl.style.setProperty('--c-btn-icon-url', `url('./assets/UI/${icon}')`);
         }
         if (hasChild) {
             btn.setAttribute('data-chaindisabled', '1');
@@ -2424,10 +2424,10 @@ function initToyChaining(panel) {
             // Immediately swap the source "+" texture to the empty state now that it has an outgoing link.
             const sourceChainCore = sourcePanel.querySelector('.toy-chain-btn .c-btn-core');
             if (sourceChainCore) {
-                sourceChainCore.style.setProperty('--c-btn-icon-url', `url('/assets/UI/T_ButtonEmpty.png')`);
+                sourceChainCore.style.setProperty('--c-btn-icon-url', `url('./assets/UI/T_ButtonEmpty.png')`);
                 // Force the pseudo-element to update after styles apply
                 requestAnimationFrame(() => {
-                    sourceChainCore.style.setProperty('--c-btn-icon-url', `url('/assets/UI/T_ButtonEmpty.png')`);
+                    sourceChainCore.style.setProperty('--c-btn-icon-url', `url('./assets/UI/T_ButtonEmpty.png')`);
                 });
             }
             // Lock the source button right away so the user sees it disable without waiting
@@ -2934,7 +2934,7 @@ function rebuildChainSegments() {
 
       g_chainEdges.set(edgeId, edge);
 
-      // Adjacency index â€“ useful for future detach/reattach UX.
+      // Adjacency index – useful for future detach/reattach UX.
       let fromSet = g_edgesByToyId.get(current.id);
       if (!fromSet) {
         fromSet = new Set();
@@ -3171,7 +3171,7 @@ function updateChainSegmentsForToy(toyId) {
     });
   }
 
-  // No movement since last update â†’ nothing to do.
+  // No movement since last update ? nothing to do.
   if (dx === 0 && dy === 0) return;
 
   // Legacy geometry (for any remaining users of g_chainSegments).
@@ -3978,7 +3978,7 @@ function scheduler(){
       }
 
     } else if (!running && wasRunning) {
-      // Transport just paused â€” clear steady highlight ONCE (avoid DOM writes inside every rAF frame)
+      // Transport just paused — clear steady highlight ONCE (avoid DOM writes inside every rAF frame)
       try {
         document.querySelectorAll('.toy-panel').forEach(p => {
           p.classList.remove('toy-playing', 'toy-playing-pulse');
@@ -4136,13 +4136,18 @@ async function boot(){
     }
   }, { passive: true });
   try {
-    try {
-      await initAudioAssets(CSV_PATH);
-      await loadInstrumentCatalog();
-      mainLog('[AUDIO] samples loaded');
-    } catch(e) {
-      console.warn('[AUDIO] init failed', e);
-    }
+    // IMPORTANT (itch.io): don't block first paint / UI boot on sample decoding.
+    // initAudioAssets() can take seconds on slower CPUs/networks (many decodeAudioData calls).
+    // We kick audio loading off in the background so UI elements (e.g. board anchor + button) appear instantly.
+    (async () => {
+      try {
+        await initAudioAssets(CSV_PATH);
+        await loadInstrumentCatalog();
+        mainLog('[AUDIO] samples loaded');
+      } catch (e) {
+        console.warn('[AUDIO] init failed', e);
+      }
+    })();
 
     if (board && !document.getElementById('chain-canvas')) {
         chainCanvas = document.createElement('canvas');
@@ -4782,3 +4787,4 @@ import { PERF_FLAGS } from "./perf-flags.js";
 
 // Expose for live debugging / perf-lab runs
 window.PERF_FLAGS = PERF_FLAGS;
+

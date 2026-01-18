@@ -576,19 +576,19 @@ html, body {
 .toy-chain-btn.toy-chain-btn-disabled .c-btn-core,
 .toy-chain-btn[data-chaindisabled="1"] .c-btn-core,
 .toy-panel[data-chain-has-child="1"] .toy-chain-btn .c-btn-core {
-  --c-btn-icon-url: url('/assets/UI/T_ButtonEmpty.png');
+  --c-btn-icon-url: url('./assets/UI/T_ButtonEmpty.png');
 }
 .toy-chain-btn.toy-chain-btn-disabled .c-btn-core::after,
 .toy-chain-btn[data-chaindisabled="1"] .c-btn-core::after,
 .toy-panel[data-chain-has-child="1"] .toy-chain-btn .c-btn-core::after {
-  background-image: url('/assets/UI/T_ButtonEmpty.png') !important;
+  background-image: url('./assets/UI/T_ButtonEmpty.png') !important;
 }
 .toy-panel[data-chain-has-child="1"] .toy-chain-btn {
   pointer-events: none !important;
   filter: none;
 }
 .toy-panel[data-chain-has-child="1"] .toy-chain-btn .c-btn-core {
-  --c-btn-icon-url: url('/assets/UI/T_ButtonEmpty.png');
+  --c-btn-icon-url: url('./assets/UI/T_ButtonEmpty.png');
 }
 
 /* Keep chain button interactive/hoverable in focus-editing mode */
@@ -2002,14 +2002,14 @@ body.tutorial-active #topbar #theme-switcher-wrap {
   flex-shrink: 0;
 }
 
-.goal-task-icon--play { background-image: url('/assets/UI/T_ButtonPlay.png'); }
-.goal-task-icon--help { background-image: url('/assets/UI/T_ButtonHelp.png'); }
-.goal-task-icon--trash { background-image: url('/assets/UI/T_ButtonTrash.png'); }
-.goal-task-icon--add { background-image: url('/assets/UI/T_ButtonAddMusic.png'); }
-.goal-task-icon--random { background-image: url('/assets/UI/T_ButtonRandom.png'); }
-.goal-task-icon--clear { background-image: url('/assets/UI/T_ButtonClear.png'); }
-.goal-task-icon--instruments { background-image: url('/assets/UI/T_ButtonInstruments.png'); }
-.goal-task-icon--more { background-image: url('/assets/UI/T_3Dots.png'); }
+.goal-task-icon--play { background-image: url('./assets/UI/T_ButtonPlay.png'); }
+.goal-task-icon--help { background-image: url('./assets/UI/T_ButtonHelp.png'); }
+.goal-task-icon--trash { background-image: url('./assets/UI/T_ButtonTrash.png'); }
+.goal-task-icon--add { background-image: url('./assets/UI/T_ButtonAddMusic.png'); }
+.goal-task-icon--random { background-image: url('./assets/UI/T_ButtonRandom.png'); }
+.goal-task-icon--clear { background-image: url('./assets/UI/T_ButtonClear.png'); }
+.goal-task-icon--instruments { background-image: url('./assets/UI/T_ButtonInstruments.png'); }
+.goal-task-icon--more { background-image: url('./assets/UI/T_3Dots.png'); }
 
 .guide-launcher {
   position: fixed;
@@ -4391,7 +4391,7 @@ body.intro-open .topbar-menu-wrap {
   content: '';
   width: min(240px, 60%);
   aspect-ratio: 1 / 1;
-  background: url('/assets/UI/T_ButtonRandom.png') no-repeat center / contain;
+  background: url('./assets/UI/T_ButtonRandom.png') no-repeat center / contain;
   opacity: 0.95;
   filter: drop-shadow(0 10px 26px rgba(0, 0, 0, 0.45));
 }
@@ -4400,3 +4400,4 @@ body.intro-open .topbar-menu-wrap {
   35% { opacity: 1; transform: scale(1); }
   100% { opacity: 0; transform: scale(1.2); }
 }
+

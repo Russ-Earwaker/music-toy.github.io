@@ -45,7 +45,7 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
 
     const core = btn.querySelector('.c-btn-core');
 
-    const url = playing ? "url('/assets/UI/T_ButtonPause.png')" : "url('/assets/UI/T_ButtonPlay.png')";
+    const url = playing ? "url('./assets/UI/T_ButtonPause.png')" : "url('./assets/UI/T_ButtonPlay.png')";
 
     if (core){ core.style.setProperty('--c-btn-icon-url', url); }
 
@@ -97,7 +97,7 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
         try{
           const ctx = Core?.ensureAudioContext?.();
           if (!ctx) return null;
-          const resp = await fetch('/assets/samples/FingerSnap.wav', { cache: 'force-cache' });
+          const resp = await fetch('./assets/samples/FingerSnap.wav', { cache: 'force-cache' });
           const arr = await resp.arrayBuffer();
           const buf = await new Promise((resolve, reject)=>{
             try{
@@ -896,8 +896,8 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
     const prompt = overlay.querySelector('.sound-theme-prompt');
     const okCore = confirmBtn?.querySelector?.('.c-btn-core');
     const cancelCore = cancelBtn?.querySelector?.('.c-btn-core');
-    if (okCore) okCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonTick.png')");
-    if (cancelCore) cancelCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonClose.png')");
+    if (okCore) okCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonTick.png')");
+    if (cancelCore) cancelCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonClose.png')");
 
     const hide = () => { overlay.style.display = 'none'; };
     const show = (promptOverride) => {
@@ -960,8 +960,8 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
     const prompt = overlay.querySelector('.sound-theme-prompt');
     const okCore = applyBtn?.querySelector?.('.c-btn-core');
     const cancelCore = skipBtn?.querySelector?.('.c-btn-core');
-    if (okCore) okCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonTick.png')");
-    if (cancelCore) cancelCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonClose.png')");
+    if (okCore) okCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonTick.png')");
+    if (cancelCore) cancelCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonClose.png')");
 
     const hide = () => { overlay.style.display = 'none'; };
     const show = (themeLabel, promptOverride) => {
@@ -1034,8 +1034,8 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
     const prompt = overlay.querySelector('.sound-theme-prompt');
     const okCore = okBtn?.querySelector?.('.c-btn-core');
     const cancelCore = cancelBtn?.querySelector?.('.c-btn-core');
-    if (okCore) okCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonTick.png')");
-    if (cancelCore) cancelCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonClose.png')");
+    if (okCore) okCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonTick.png')");
+    if (cancelCore) cancelCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonClose.png')");
 
     const hide = () => { overlay.style.display = 'none'; };
     const resolve = (value) => {
@@ -1121,7 +1121,7 @@ function ensureTopbar(){
     }
     const menuBtnCore = menuBtn.querySelector('.c-btn-core');
     if (menuBtnCore){
-      menuBtnCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_MainMenu.png')");
+      menuBtnCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_MainMenu.png')");
     }
 
     let menuPanel = bar.querySelector('#topbar-menu');
@@ -1260,7 +1260,7 @@ function ensureTopbar(){
         '<div class="c-btn-core"></div>',
       ].join('');
       const themeCore = soundThemeBtn.querySelector('.c-btn-core');
-      if (themeCore) themeCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonPlayOptions.png')");
+      if (themeCore) themeCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonPlayOptions.png')");
       playBtn?.insertAdjacentElement('afterend', soundThemeBtn);
     } else {
       soundThemeBtn.classList.add('c-btn', 'sound-theme-btn');
@@ -1269,7 +1269,7 @@ function ensureTopbar(){
       if (!soundThemeBtn.dataset.helpLabel) soundThemeBtn.dataset.helpLabel = 'Play options';
       if (!soundThemeBtn.title) soundThemeBtn.title = 'Play options';
       const themeCore = soundThemeBtn.querySelector('.c-btn-core');
-      if (themeCore) themeCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonPlayOptions.png')");
+      if (themeCore) themeCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonPlayOptions.png')");
       playBtn?.insertAdjacentElement('afterend', soundThemeBtn);
     }
 
@@ -1512,7 +1512,7 @@ function ensureTopbar(){
       btn.setAttribute('aria-label', title);
       const core = btn.querySelector('.c-btn-core');
       if (core) {
-        const iconUrl = muted ? "/assets/UI/T_Mute.png" : "/assets/UI/T_Unmute.png";
+        const iconUrl = muted ? "./assets/UI/T_Mute.png" : "./assets/UI/T_Unmute.png";
         core.style.setProperty('--c-btn-icon-url', `url('${iconUrl}')`);
       }
     };
@@ -2205,3 +2205,4 @@ if (document.readyState === 'loading') {
   tryInitToggle();
 
 })();
+

@@ -457,7 +457,7 @@ function ensureHost() {
   toggleRef.setAttribute('aria-label', 'Guide');
   const toggleCore = toggleRef.querySelector('.c-btn-core');
   if (toggleCore) {
-    toggleCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_Guide.png')");
+    toggleCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_Guide.png')");
   }
 
   if (!moreGoalsButtonRef || !moreGoalsButtonRef.isConnected) {
@@ -474,7 +474,7 @@ function ensureHost() {
   }
   const moreCore = moreGoalsButtonRef?.querySelector('.c-btn-core');
   if (moreCore) {
-    moreCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_3Dots.png')");
+    moreCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_3Dots.png')");
   }
   if (moreGoalsButtonRef && !moreGoalsButtonRef.dataset.helpLabel) {
     moreGoalsButtonRef.dataset.helpLabel = 'Goal select menu';
@@ -586,7 +586,7 @@ function buildGuideProgressSummary(collectedRewards, totalRewards) {
   summary.className = 'guide-progress-summary';
   summary.innerHTML = `
     <span class="guide-progress-summary__stars">
-      <img src="/assets/UI/T_Star.png" alt="Stars" />
+      <img src="./assets/UI/T_Star.png" alt="Stars" />
       ${collectedRewards}/${totalRewards}
     </span>
   `;
@@ -1261,6 +1261,7 @@ window.addEventListener('drawgrid:activity', (e) => {
   // no pulse; optional: a very lightweight guide refresh without glow
   // renderGuide(lastApi, { source: 'drawgrid-activity', pulse:false });
 });
+
 
 
 

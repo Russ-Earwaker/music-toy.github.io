@@ -184,3 +184,4 @@ export function createLoopIndicator(targetSelector = '#topbar'){
   animate();
   return { element: el, frame };
 }
+

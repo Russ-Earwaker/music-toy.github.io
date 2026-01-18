@@ -25,7 +25,7 @@ const GOAL_FLOW = [
     reward: {
       description: 'You made progress. Have a star.',
       icons: [
-        { type: 'asset', label: 'Star Reward', icon: '../assets/Ui/T_Star.png' },
+        { type: 'asset', label: 'Star Reward', icon: './assets/UI/T_Star.png' },
       ],
     },
     tasks: [
@@ -52,7 +52,7 @@ const GOAL_FLOW = [
     reward: {
       description: 'You made progress. Have a star.',
       icons: [
-        { type: 'asset', label: 'Star Reward', icon: '../assets/Ui/T_Star.png' },
+        { type: 'asset', label: 'Star Reward', icon: './assets/UI/T_Star.png' },
       ],
     },
     tasks: [
@@ -79,7 +79,7 @@ const GOAL_FLOW = [
     reward: {
       description: 'You made progress. Have a star.',
       icons: [
-        { type: 'asset', label: 'Star Reward', icon: '../assets/Ui/T_Star.png' },
+        { type: 'asset', label: 'Star Reward', icon: './assets/UI/T_Star.png' },
       ],
     },
     tasks: [
@@ -112,7 +112,7 @@ const GOAL_FLOW = [
     reward: {
       description: 'You made progress. Have a star.',
       icons: [
-        { type: 'asset', label: 'Star Reward', icon: '../assets/Ui/T_Star.png' },
+        { type: 'asset', label: 'Star Reward', icon: './assets/UI/T_Star.png' },
       ],
     },
     tasks: [
@@ -135,7 +135,7 @@ const GOAL_FLOW = [
     reward: {
       description: 'You made progress. Have a star.',
       icons: [
-        { type: 'asset', label: 'Star Reward', icon: '../assets/Ui/T_Star.png' }
+        { type: 'asset', label: 'Star Reward', icon: './assets/UI/T_Star.png' }
       ],
     },
     tasks: [
@@ -172,7 +172,7 @@ const GOAL_FLOW = [
     reward: {
       description: 'You made progress. Have a star.',
       icons: [
-        { type: 'asset', label: 'Star Reward', icon: '../assets/Ui/T_Star.png' },
+        { type: 'asset', label: 'Star Reward', icon: './assets/UI/T_Star.png' },
       ],
     },
     tasks: [
@@ -195,7 +195,7 @@ const GOAL_FLOW = [
     reward: {
       description: 'You made progress. Have a star.',
       icons: [
-        { type: 'asset', label: 'Star Reward', icon: '../assets/Ui/T_Star.png' },
+        { type: 'asset', label: 'Star Reward', icon: './assets/UI/T_Star.png' },
       ],
     },
     tasks: [
@@ -1398,7 +1398,7 @@ let hasDetectedLine = false;
   function updatePlayButtonVisual(btn, playing) {
     if (!btn) return;
     const core = btn.querySelector('.c-btn-core');
-    const url = playing ? "url('../assets/UI/T_ButtonPause.png')" : "url('../assets/UI/T_ButtonPlay.png')";
+    const url = playing ? "url('./assets/UI/T_ButtonPause.png')" : "url('./assets/UI/T_ButtonPlay.png')";
     if (core) core.style.setProperty('--c-btn-icon-url', url);
     else btn.textContent = playing ? 'Pause' : 'Play';
     btn.title = playing ? 'Pause' : 'Play';
@@ -2334,7 +2334,7 @@ let hasDetectedLine = false;
             btn.setAttribute('aria-label', icon.label || 'Add Toy');
             btn.innerHTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
             const core = btn.querySelector('.c-btn-core');
-            if (core) core.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonAddMusic.png')");
+            if (core) core.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonAddMusic.png')");
             btn.style.pointerEvents = 'none';
             wrapper.appendChild(btn);
             rewardIcons.appendChild(wrapper);
@@ -4785,5 +4785,6 @@ try {
   ['toy-clear', 'toy-reset'].forEach(evt => document.addEventListener(evt, () => maybeCompleteTask('press-clear'), { capture: true }));
 
 })();
+
 
 

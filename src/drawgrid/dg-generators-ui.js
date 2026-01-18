@@ -51,11 +51,11 @@ export function installGeneratorButtons(panel, apiHooks = {}) {
     const hasLine2 = strokes.some(s => s.generatorId === 2);
 
     const core1 = btnLine1.querySelector('.c-btn-core');
-    if (core1) core1.style.setProperty('--c-btn-icon-url', `url('../assets/UI/${hasLine1 ? 'T_ButtonLine1R.png' : 'T_ButtonLine1.png'}')`);
+    if (core1) core1.style.setProperty('--c-btn-icon-url', `url('./assets/UI/${hasLine1 ? 'T_ButtonLine1R.png' : 'T_ButtonLine1.png'}')`);
     btnLine1.title = hasLine1 ? 'Redraw Line 1' : 'Draw Line 1';
 
     const core2 = btnLine2.querySelector('.c-btn-core');
-    if (core2) core2.style.setProperty('--c-btn-icon-url', `url('../assets/UI/${hasLine2 ? 'T_ButtonLine2R.png' : 'T_ButtonLine2.png'}')`);
+    if (core2) core2.style.setProperty('--c-btn-icon-url', `url('./assets/UI/${hasLine2 ? 'T_ButtonLine2R.png' : 'T_ButtonLine2.png'}')`);
     btnLine2.title = hasLine2 ? 'Redraw Line 2' : 'Draw Line 2';
 
     const nextDrawTarget = getNextDrawTarget?.();
@@ -143,7 +143,7 @@ export function installGeneratorButtons(panel, apiHooks = {}) {
     instBtn.className = 'c-btn toy-inst-btn';
     instBtn.title = 'Choose Instrument';
     instBtn.dataset.action = 'instrument';
-    instBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonInstruments.png');"></div>`;
+    instBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonInstruments.png');"></div>`;
     instBtn.style.setProperty('--c-btn-size', '65px');
     right.appendChild(instBtn);
 
@@ -200,3 +200,4 @@ export function installGeneratorButtons(panel, apiHooks = {}) {
   try { panel.__dgUpdateButtons = updateGeneratorButtons; } catch {}
   return { updateGeneratorButtons };
 }
+

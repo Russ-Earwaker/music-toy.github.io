@@ -789,14 +789,19 @@ function serviceFlashes(dt) {
 
 function getChainHeadId(toyId) {
   if (!toyId) return null;
-  const start = document.getElementById(toyId);
+  const start = document.getElementById(toyId)
+    || document.querySelector(`.toy-panel[data-audiotoyid="${toyId}"]`)
+    || document.querySelector(`.toy-panel[data-toyid="${toyId}"]`)
+    || document.querySelector(`.toy-panel[data-toy="${toyId}"]`);
   if (!start) return null;
   let node = start;
   let safety = 0;
   while (node && safety < 40) {
     const parentId = node.dataset.chainParent || node.dataset.prevToyId;
     if (!parentId) break;
-    const parent = document.getElementById(parentId);
+    const parent = document.getElementById(parentId)
+      || document.querySelector(`.toy-panel[data-toyid="${parentId}"]`)
+      || document.querySelector(`.toy-panel[data-toy="${parentId}"]`);
     if (!parent || parent === node) break;
     node = parent;
     safety++;

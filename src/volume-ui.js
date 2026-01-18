@@ -1,4 +1,4 @@
-﻿// src/volume-ui.js
+// src/volume-ui.js
 import { getToyGain, setToyVolume, setToyMuted, isToyMuted, getToyVolumeRaw } from './audio-core.js';
 import { refreshHelpOverlay } from './help-overlay.js';
 
@@ -32,7 +32,7 @@ function setMuteVisualState(muteBtn, muted) {
   muteBtn.setAttribute('aria-label', title);
   const core = muteBtn.querySelector('.c-btn-core');
   if (core) {
-    const iconUrl = muted ? "../assets/UI/T_Mute.png" : "../assets/UI/T_Unmute.png";
+    const iconUrl = muted ? "./assets/UI/T_Mute.png" : "./assets/UI/T_Unmute.png";
     core.style.setProperty('--c-btn-icon-url', `url('${iconUrl}')`);
   }
 }
@@ -206,3 +206,4 @@ export function installVolumeUI(footer) {
   refreshHelpOverlay();
   return { gain: getToyGain(toyId) };
 }
+

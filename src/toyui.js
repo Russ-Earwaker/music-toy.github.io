@@ -147,7 +147,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
         editBtn.style.left = '-48px';
         editBtn.style.zIndex = '51';
         editBtn.style.setProperty('--c-btn-size', `${btnSize}px`);
-        editBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonEdit.png');"></div>`;
+        editBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonEdit.png');"></div>`;
         panel.appendChild(editBtn);
     }
     if (!panel.querySelector(':scope > .toy-mode-btn[data-action="close-advanced"]')) {
@@ -159,7 +159,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
         closeBtn.style.left = '-48px';
         closeBtn.style.zIndex = '51';
         closeBtn.style.setProperty('--c-btn-size', `${btnSize}px`);
-        closeBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow" style="--accent: #f87171;"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonClose.png');"></div>`;
+        closeBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow" style="--accent: #f87171;"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonClose.png');"></div>`;
         panel.appendChild(closeBtn);
     }
   } else {
@@ -190,7 +190,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       randomBtn.dataset.action = 'random';
       // Title and icon are set dynamically based on view mode.
       randomBtn.style.setProperty('--c-btn-size', '65px');
-      randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandom.png');"></div>`;
+      randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonRandom.png');"></div>`;
       left.appendChild(randomBtn);
       wireScopedRandom(randomBtn, panel);
     }
@@ -204,7 +204,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
         randomNotesBtn.title = 'Random Notes';
         randomNotesBtn.style.setProperty('--c-btn-size', '65px');
         randomNotesBtn.style.marginLeft = '10px';
-        randomNotesBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandomNotes.png');"></div>`;
+        randomNotesBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonRandomNotes.png');"></div>`;
         left.appendChild(randomNotesBtn);
     }
 
@@ -217,7 +217,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       clearBtn.style.setProperty('--c-btn-size', '65px');
       clearBtn.style.setProperty('--accent', '#f87171');
       clearBtn.style.marginLeft = '10px'; // Add a small margin to nudge it to the right.
-      clearBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonClear.png');"></div>`;
+      clearBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonClear.png');"></div>`;
       left.appendChild(clearBtn);
     }
 
@@ -235,10 +235,10 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
             const iconEl = randomBtn.querySelector('.c-btn-core');
             if (isAdvanced) {
                 randomBtn.title = 'Random Blocks';
-                if (iconEl) iconEl.style.setProperty('--c-btn-icon-url', `url('../assets/UI/T_ButtonRandomBlocks.png')`);
+                if (iconEl) iconEl.style.setProperty('--c-btn-icon-url', `url('./assets/UI/T_ButtonRandomBlocks.png')`);
             } else {
                 randomBtn.title = 'Random';
-                if (iconEl) iconEl.style.setProperty('--c-btn-icon-url', `url('../assets/UI/T_ButtonRandom.png')`);
+                if (iconEl) iconEl.style.setProperty('--c-btn-icon-url', `url('./assets/UI/T_ButtonRandom.png')`);
             }
         }
     };
@@ -262,7 +262,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
         clearBtn.title = 'Clear';
         clearBtn.style.setProperty('--c-btn-size', '38px');
         clearBtn.style.setProperty('--accent', '#f87171'); // Red accent for a destructive action
-        clearBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonClear.png');"></div>`;
+        clearBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonClear.png');"></div>`;
         right.appendChild(clearBtn);
       }
     }
@@ -289,7 +289,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       randomBtn.dataset.action = 'random';
       randomBtn.title = 'Random';
       randomBtn.style.setProperty('--c-btn-size', BTN_SIZE);
-      randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandom.png');"></div>`;
+      randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonRandom.png');"></div>`;
       left.appendChild(randomBtn);
       wireScopedRandom(randomBtn, panel);
     }
@@ -302,7 +302,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       randomBlocksBtn.dataset.action = 'random-blocks';
       randomBlocksBtn.title = 'Random Blocks';
       randomBlocksBtn.style.setProperty('--c-btn-size', BTN_SIZE);
-      randomBlocksBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandomBlocks.png');"></div>`;
+      randomBlocksBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonRandomBlocks.png');"></div>`;
       left.appendChild(randomBlocksBtn);
     }
 
@@ -314,7 +314,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       randomNotesBtn.dataset.action = 'random-notes';
       randomNotesBtn.title = 'Random Notes';
       randomNotesBtn.style.setProperty('--c-btn-size', BTN_SIZE);
-      randomNotesBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandomNotes.png');"></div>`;
+      randomNotesBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonRandomNotes.png');"></div>`;
       left.appendChild(randomNotesBtn);
     }
 
@@ -328,7 +328,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       clearBtn.style.setProperty('--c-btn-size', BTN_SIZE);
       clearBtn.style.setProperty('--accent', '#f87171');
       clearBtn.style.marginLeft = '10px';
-      clearBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonClear.png');"></div>`;
+      clearBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonClear.png');"></div>`;
       left.appendChild(clearBtn);
     }
 
@@ -404,7 +404,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       randomBtn.className = 'c-btn';
       randomBtn.dataset.action = 'random';
       randomBtn.style.setProperty('--c-btn-size', BTN_SIZE);
-      randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandom.png');"></div>`;
+      randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonRandom.png');"></div>`;
       left.appendChild(randomBtn);
       wireScopedRandom(randomBtn, panel);
     }
@@ -419,7 +419,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       clearBtn.style.setProperty('--c-btn-size', BTN_SIZE);
       clearBtn.style.setProperty('--accent', '#f87171');
       clearBtn.style.marginLeft = '10px';
-      clearBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonClear.png');"></div>`;
+      clearBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonClear.png');"></div>`;
       left.appendChild(clearBtn);
     }
 
@@ -430,10 +430,10 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
           const iconEl = randomBtn.querySelector('.c-btn-core');
           if (isAdvanced) {
               randomBtn.title = 'Randomize';
-              if (iconEl) iconEl.style.setProperty('--c-btn-icon-url', `url('../assets/UI/T_ButtonRandomBlocks.png')`);
+              if (iconEl) iconEl.style.setProperty('--c-btn-icon-url', `url('./assets/UI/T_ButtonRandomBlocks.png')`);
           } else {
               randomBtn.title = 'Randomize';
-              if (iconEl) iconEl.style.setProperty('--c-btn-icon-url', `url('../assets/UI/T_ButtonRandom.png')`);
+              if (iconEl) iconEl.style.setProperty('--c-btn-icon-url', `url('./assets/UI/T_ButtonRandom.png')`);
           }
       }
       if (editBtn) editBtn.style.display = isAdvanced ? 'none' : 'block';
@@ -465,7 +465,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       randomBtn.title = 'Randomize';
       randomBtn.dataset.action = 'random';
       randomBtn.style.setProperty('--c-btn-size', BTN_SIZE);
-      randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandom.png');"></div>`;
+      randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonRandom.png');"></div>`;
       left.appendChild(randomBtn);
       wireScopedRandom(randomBtn, panel);
     }
@@ -478,7 +478,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
         randomBlocksBtn.dataset.action = 'random-blocks';
         randomBlocksBtn.title = 'Random Blocks';
         randomBlocksBtn.style.setProperty('--c-btn-size', BTN_SIZE);
-        randomBlocksBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandomBlocks.png');"></div>`;
+        randomBlocksBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonRandomBlocks.png');"></div>`;
         left.appendChild(randomBlocksBtn);
     }
 
@@ -491,7 +491,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
         randomNotesBtn.title = 'Random Notes';
         randomNotesBtn.style.setProperty('--c-btn-size', BTN_SIZE);
         randomNotesBtn.style.marginLeft = '10px';
-        randomNotesBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandomNotes.png');"></div>`;
+        randomNotesBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonRandomNotes.png');"></div>`;
         left.appendChild(randomNotesBtn);
     }
 
@@ -505,7 +505,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       clearBtn.style.setProperty('--c-btn-size', BTN_SIZE);
       clearBtn.style.setProperty('--accent', '#f87171');
       clearBtn.style.marginLeft = '10px';
-      clearBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonClear.png');"></div>`;
+      clearBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonClear.png');"></div>`;
       left.appendChild(clearBtn);
     }
 
@@ -581,7 +581,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       randomBtn.dataset.action = 'random';
       randomBtn.title = 'New Ball';
       randomBtn.style.setProperty('--c-btn-size', BTN_SIZE);
-      randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandom.png');"></div>`;
+      randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonRandom.png');"></div>`;
       left.appendChild(randomBtn);
       wireScopedRandom(randomBtn, panel);
     }
@@ -594,7 +594,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       randomCubesBtn.dataset.action = 'random-cubes';
       randomCubesBtn.title = 'Random Blocks';
       randomCubesBtn.style.setProperty('--c-btn-size', BTN_SIZE);
-      randomCubesBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandomBlocks.png');"></div>`;
+      randomCubesBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonRandomBlocks.png');"></div>`;
       left.appendChild(randomCubesBtn);
     }
 
@@ -606,7 +606,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       randomNotesBtn.dataset.action = 'random-notes';
       randomNotesBtn.title = 'Random Notes';
       randomNotesBtn.style.setProperty('--c-btn-size', BTN_SIZE);
-      randomNotesBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonRandomNotes.png');"></div>`;
+      randomNotesBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonRandomNotes.png');"></div>`;
       left.appendChild(randomNotesBtn);
     }
 
@@ -620,7 +620,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       clearBtn.style.setProperty('--c-btn-size', BTN_SIZE);
       clearBtn.style.setProperty('--accent', '#f87171');
       clearBtn.style.marginLeft = '10px';
-      clearBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonClear.png');"></div>`;
+      clearBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonClear.png');"></div>`;
       left.appendChild(clearBtn);
     }
 
@@ -705,7 +705,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
     instBtn.className = 'c-btn toy-inst-btn';
     instBtn.title = 'Choose Instrument';
     instBtn.dataset.action = 'instrument';
-    instBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('../assets/UI/T_ButtonInstruments.png');"></div>`;
+    instBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonInstruments.png');"></div>`;
     markHelp(instBtn, 'Choose instrument', 'bottom');
 
     if (toyKind === 'loopgrid' || toyKind === 'loopgrid-drum' || toyKind === 'bouncer' || toyKind === 'rippler' || toyKind === 'chordwheel' || toyKind === 'drawgrid') {
@@ -805,8 +805,8 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
         }
         return btn;
       };
-      ensureTutorialButton('random', '../assets/UI/T_ButtonRandom.png', { title: 'Randomize' });
-      ensureTutorialButton('clear', '../assets/UI/T_ButtonClear.png', { title: 'Clear', accent: '#f87171' });
+      ensureTutorialButton('random', './assets/UI/T_ButtonRandom.png', { title: 'Randomize' });
+      ensureTutorialButton('clear', './assets/UI/T_ButtonClear.png', { title: 'Clear', accent: '#f87171' });
     }
   }
 
@@ -887,3 +887,4 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
 
   return { header, footer, body: panel.querySelector('.toy-body'), instrument: panel.dataset.instrument || initialInstrument || 'tone' };
 }
+

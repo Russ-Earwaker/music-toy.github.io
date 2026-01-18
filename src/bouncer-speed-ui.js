@@ -105,3 +105,4 @@ export function installSpeedUI(panel, sizing, initial=1.00){
 
   return ()=> speedFactor; // getter for main
 }
+

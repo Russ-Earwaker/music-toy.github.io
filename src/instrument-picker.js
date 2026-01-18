@@ -25,13 +25,13 @@ function buildOverlay(){
   okBtn.title = 'Apply instrument';
   okBtn.innerHTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
   const okCore = okBtn.querySelector('.c-btn-core');
-  if (okCore) okCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonTick.png')");
+  if (okCore) okCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonTick.png')");
   const cancelBtn = el('button','c-btn inst-cancel');
   cancelBtn.type = 'button';
   cancelBtn.title = 'Close';
   cancelBtn.innerHTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
   const cancelCore = cancelBtn.querySelector('.c-btn-core');
-  if (cancelCore) cancelCore.style.setProperty('--c-btn-icon-url', "url('/assets/UI/T_ButtonClose.png')");
+  if (cancelCore) cancelCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonClose.png')");
   right.append(okBtn, cancelBtn);
   header.append(title, right);
   const body = el('div','toy-body');
@@ -455,3 +455,4 @@ export async function openInstrumentPicker({ panel, toyId }){
   requestAnimationFrame(()=> ov.classList.add('open'));
   return p;
 }
+
