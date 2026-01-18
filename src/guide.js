@@ -1098,7 +1098,6 @@ window.addEventListener('guide:clear-active-task', () => {
       taskEl.classList.remove('is-active-guide-task');
     });
   }
-  if (highlighterRef) highlighterRef.classList.remove('is-visible');
 });
 
 window.addEventListener('scene:new', () => {
