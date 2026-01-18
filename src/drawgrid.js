@@ -6990,14 +6990,13 @@ function copyCanvas(backCtx, frontCtx) {
         try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.clear', __overlayClearDt); } catch {}
       }
 
-      if (hasNodeFlash && overlayFlashesEnabled) {
-        markFlashLayerActive();
-        R.withOverlayClip(fctx, gridArea, false, () => {
-          R.withLogicalSpace(fctx, () => {
-            drawColumnFlashesOverlay(fctx);
+        if (hasNodeFlash && overlayFlashesEnabled) {
+          markFlashLayerActive();
+          R.withOverlayClip(fctx, gridArea, false, () => {
+            R.withLogicalSpace(fctx, () => {
+            });
           });
-        });
-      }
+        }
 
       // Animate special stroke paint (hue cycling).
       // Draw animated special strokes into flashCanvas, then mask with current paint alpha.
