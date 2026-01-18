@@ -1500,12 +1500,13 @@ function advanceChain(headId) {
         return;
     }
 
-    let shouldPulse = true;
-    const toyType = activeToy.dataset.toy;
-    if (toyType === 'loopgrid' || toyType === 'loopgrid-drum' || toyType === 'drawgrid' || toyType === 'chordwheel') {
-        // For step-driven toys, only pulse the connector if the chain has active notes.
-        shouldPulse = doesChainHaveActiveNotes(headId);
-    }
+      let shouldPulse = true;
+      const toyType = activeToy.dataset.toy;
+      if (toyType === 'loopgrid' || toyType === 'loopgrid-drum' || toyType === 'drawgrid' || toyType === 'chordwheel') {
+        // For step-driven toys, only pulse if the chain has notes or this toy is connected.
+        const isChained = !!(activeToy.dataset.prevToyId || activeToy.dataset.nextToyId || activeToy.dataset.chainHasChild === '1');
+        shouldPulse = isChained || doesChainHaveActiveNotes(headId);
+      }
 
     const nextToyId = activeToy.dataset.nextToyId;
     const nextToy = nextToyId ? document.getElementById(nextToyId) : null;
