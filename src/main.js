@@ -1801,14 +1801,14 @@ function triggerConnectorPulse(fromId, toId) {
                 try { chainBtn.__chainFlashAnim.cancel(); } catch {}
                 chainBtn.__chainFlashAnim = null;
             }
-            const anim = chainBtn.animate(
-                [
-                    { transform: 'scale(1)', filter: 'brightness(1)' },
-                    { transform: 'scale(1.08)', filter: 'brightness(1.35)' },
-                    { transform: 'scale(1)', filter: 'brightness(1)' },
-                ],
-                { duration: durationMs, iterations: 1, easing: 'ease-out' }
-            );
+          const anim = chainBtn.animate(
+              [
+                  { transform: 'translateY(-50%) scale(1)', filter: 'brightness(1)' },
+                  { transform: 'translateY(-50%) scale(1.08)', filter: 'brightness(1.35)' },
+                  { transform: 'translateY(-50%) scale(1)', filter: 'brightness(1)' },
+              ],
+              { duration: durationMs, iterations: 1, easing: 'ease-out' }
+          );
             chainBtn.__chainFlashAnim = anim;
             anim.onfinish = () => { chainBtn.__chainFlashAnim = null; };
             anim.oncancel = () => { chainBtn.__chainFlashAnim = null; };
