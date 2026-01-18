@@ -1,5 +1,6 @@
 // src/intro-overlay.js - first-run intro overlay with persistence
 const INTRO_SEEN_KEY = 'intro:seen';
+const INTRO_ENABLED = false;
 
 const state = {
   overlay: null,
@@ -63,10 +64,15 @@ function dismiss() {
 }
 
 function show() {
+  if (!INTRO_ENABLED) return;
   setOpen(true);
 }
 
 function showIfNeeded() {
+  if (!INTRO_ENABLED) {
+    markSeen();
+    return;
+  }
   if (readSeen()) return;
   show();
 }
