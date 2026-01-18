@@ -4,6 +4,8 @@ const guideInfoLog = makeDebugLogger('mt_debug_logs', 'info');
 
 const GUIDE_TOGGLE_CLASS = 'guide-launcher';
 const GUIDE_OPEN_CLASS = 'is-open';
+const GUIDE_BUTTON_LABEL = 'GUIDE';
+const GUIDE_TASK_LABEL = 'TAP ME';
 
 let hostRef = null;
 let toggleRef = null;
@@ -244,6 +246,7 @@ function showHighlighterForElement(el) {
   highlighterRef.style.left = `${rect.right}px`;
   highlighterRef.style.top = `${rect.top + rect.height / 2}px`;
   highlighterRef.classList.add('is-visible');
+  highlighterTarget = el;
   return true;
 }
 
@@ -292,11 +295,30 @@ function shouldShowTaskTapHighlighter() {
   }
 }
 
+function setHighlighterLabel(text) {
+  if (!highlighterRef) return;
+  const label = highlighterRef.querySelector('.guide-task-highlighter-text');
+  if (!label) return;
+  if (label.textContent !== text) label.textContent = text;
+}
+
 function showHighlighterForGuide() {
   ensureHost();
   if (!toggleRef || !toggleRef.isConnected) return false;
   if (!shouldShowGuideTapHighlighter()) return false;
+  setHighlighterLabel(GUIDE_BUTTON_LABEL);
   return showHighlighterForElement(toggleRef);
+}
+
+function showHighlighterForFirstTask() {
+  if (!panelsRef) return false;
+  if (!shouldShowTaskTapHighlighter()) return false;
+  const firstTaskId = getFirstGoalFirstTaskId();
+  if (!firstTaskId) return false;
+  const firstTaskEl = panelsRef.querySelector(`.goal-task[data-task-id="${firstTaskId}"]`);
+  if (!firstTaskEl) return false;
+  setHighlighterLabel(GUIDE_TASK_LABEL);
+  return showHighlighterForElement(firstTaskEl);
 }
 
 function attachHighlighter() {
@@ -319,7 +341,7 @@ function ensureHighlighter() {
     highlighterRef.className = 'guide-task-highlighter';
     highlighterRef.innerHTML = `
       <div class="guide-task-highlighter-arrow"></div>
-      <div class="guide-task-highlighter-text">TAP</div>
+      <div class="guide-task-highlighter-text">${GUIDE_BUTTON_LABEL}</div>
     `;
   }
   attachHighlighter();
@@ -492,20 +514,13 @@ function ensureHost() {
       if (moreGoalsButtonRef) {
         moreGoalsButtonRef.style.display = willOpen ? '' : 'none';
       }
-      if (willOpen && highlightNextTask) {
-        setTimeout(() => {
-          let firstTaskEl = null;
-          if (shouldShowTaskTapHighlighter()) {
-            const firstTaskId = getFirstGoalFirstTaskId();
-            if (firstTaskId && panelsRef) {
-              firstTaskEl = panelsRef.querySelector(`.goal-task[data-task-id="${firstTaskId}"]`);
-            }
-          }
-          if (!firstTaskEl || !showHighlighterForElement(firstTaskEl)) {
-            if (highlighterRef) highlighterRef.classList.remove('is-visible');
-          }
-        }, 100);
+      if (willOpen) {
         highlightNextTask = false;
+        setTimeout(() => {
+          if (!showHighlighterForFirstTask() && highlighterRef) {
+            highlighterRef.classList.remove('is-visible');
+          }
+        }, 120);
       }
       if (!willOpen) {
         closeGoalPicker();
@@ -1127,14 +1142,7 @@ window.addEventListener('guide:highlight-next-task', () => {
   highlightNextTask = true;
   const guideOpen = hostRef && hostRef.classList.contains(GUIDE_OPEN_CLASS);
   if (guideOpen && panelsRef) {
-    let target = null;
-    if (shouldShowTaskTapHighlighter()) {
-      const firstTaskId = getFirstGoalFirstTaskId();
-      if (firstTaskId) {
-        target = panelsRef.querySelector(`.goal-task[data-task-id="${firstTaskId}"]`);
-      }
-    }
-    if (target && showHighlighterForElement(target)) {
+    if (showHighlighterForFirstTask()) {
       highlightNextTask = false;
     } else if (highlighterRef) {
       highlighterRef.classList.remove('is-visible');

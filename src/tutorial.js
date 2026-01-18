@@ -946,60 +946,6 @@ let hasDetectedLine = false;
       document.querySelector('.guide-launcher .guide-toggle') ||
       document.querySelector('.guide-toggle') ||
       document.querySelector('.guide-launcher');
-
-    const playing = typeof isRunning === 'function' ? !!isRunning() : false;
-    const hasActiveNotesToy = (() => {
-      for (const [panel, hasSound] of placeToyTriggerState.entries()) {
-        if (hasSound && panel?.isConnected) return true;
-      }
-      return false;
-    })();
-    if (playing && hasActiveNotesToy && guideBtn) {
-      return { target: guideBtn, highlight: 'guide' };
-    }
-
-    const hasAnyToy = placeToyPanels.size > 0 || (() => {
-      try { return !!document.querySelector('.toy-panel'); } catch { return false; }
-    })();
-    if (!hasAnyToy) {
-      return { target: getAddToyToggle(), highlight: 'add-toy' };
-    }
-
-    const activeTask = (() => {
-      try { return getCurrentTask?.() || null; } catch { return null; }
-    })();
-    if (activeTask?.id === 'sequence-interact') {
-      const sequenceToy = (() => {
-        if (lastPlacedToy && lastPlacedToy.isConnected && lastPlacedToy.dataset?.chainParent) {
-          return lastPlacedToy;
-        }
-        for (const panel of placeToyPanels) {
-          if (panel && panel.isConnected && panel.dataset?.chainParent) return panel;
-        }
-        try {
-          return document.querySelector('.toy-panel[data-chain-parent]');
-        } catch {
-          return null;
-        }
-      })();
-      if (sequenceToy) return { target: sequenceToy, highlight: 'toy' };
-    }
-
-    const pickUninteractedToy = () => {
-      const primary = (lastPlacedToy && lastPlacedToy.isConnected) ? lastPlacedToy : null;
-      if (primary && !placeToyTriggerState.get(primary)) return primary;
-      for (const panel of placeToyPanels) {
-        if (panel && panel.isConnected && !placeToyTriggerState.get(panel)) return panel;
-      }
-      return null;
-    };
-    const toy = pickUninteractedToy();
-    if (toy) return { target: toy, highlight: 'toy' };
-
-    if (!playing) {
-      const playBtn = document.querySelector('#topbar [data-action="toggle-play"]');
-      if (playBtn) return { target: playBtn, highlight: 'play' };
-    }
     if (guideBtn) return { target: guideBtn, highlight: 'guide' };
 
     return null;
@@ -1011,18 +957,67 @@ let hasDetectedLine = false;
   } catch {}
 
   function getGuideTaskTargetInfo() {
+    const guideOpen = !!document.querySelector('.guide-launcher.is-open');
     const activeTaskEl = document.querySelector('.goal-task.is-active-guide-task')
       || document.querySelector('.guide-goals-panel .goal-task.is-active')
       || document.querySelector('.tutorial-goals-panel .goal-task.is-active');
-    if (!activeTaskEl) return null;
-    const taskId = activeTaskEl.dataset?.taskId || null;
+    let taskId = null;
+    if (guideOpen && activeTaskEl?.dataset?.taskId) {
+      taskId = activeTaskEl.dataset.taskId;
+    } else {
+      try {
+        taskId = getCurrentTask?.()?.id || null;
+      } catch {
+        taskId = null;
+      }
+      if (!taskId) {
+        taskId = activeTaskEl?.dataset?.taskId || null;
+      }
+    }
     if (!taskId) return null;
+
+    const addToyTasks = new Set([
+      'add-draw-toy',
+      'add-rhythm-toy',
+      'add-any-toy',
+      'place-any-toy',
+      'sequence-add-toy',
+      'change-instrument-add-toy',
+    ]);
 
     const helpTasks = new Set(['press-help', 'pan-camera', 'zoom-camera']);
     let rawTarget = null;
+    let highlightOverride = null;
     if (helpTasks.has(taskId)) {
       rawTarget = getPanZoomHelpTarget();
       if (!rawTarget || !rawTarget.isConnected) return null;
+    } else if (addToyTasks.has(taskId)) {
+      const toggle = getAddToyToggle();
+      const visible = toggle && (toggle.offsetParent !== null || toggle.getClientRects().length > 0);
+      if (!visible) return null;
+      rawTarget = toggle;
+    } else if (taskId === 'interact-new-toy' || taskId === 'sequence-interact') {
+      const pickSequenceToy = () => {
+        if (lastPlacedToy && lastPlacedToy.isConnected && lastPlacedToy.dataset?.chainParent) {
+          return lastPlacedToy;
+        }
+        for (const panel of placeToyPanels) {
+          if (panel && panel.isConnected && panel.dataset?.chainParent) return panel;
+        }
+        try {
+          return document.querySelector('.toy-panel[data-chain-parent]');
+        } catch {
+          return null;
+        }
+      };
+      const pickNewToy = () => (lastPlacedToy && lastPlacedToy.isConnected ? lastPlacedToy : null);
+      rawTarget = taskId === 'sequence-interact' ? pickSequenceToy() : pickNewToy();
+      if (!rawTarget || !rawTarget.isConnected) return null;
+    } else if (taskId === 'add-rhythm-note') {
+      const panel = getNearestSimpleRhythmPanel?.();
+      if (!panel || !panel.isConnected) return null;
+      rawTarget = panel.querySelector('.sequencer-wrap') || panel;
+      highlightOverride = 'toy';
     } else {
       const selectors = {
         'recycle-toy': '.toy-spawner-trash',
@@ -1059,15 +1054,9 @@ let hasDetectedLine = false;
       ? (rawTarget.closest('.toy-panel') || rawTarget)
       : null;
 
-    const addToyTasks = new Set([
-      'add-draw-toy',
-      'add-rhythm-toy',
-      'add-any-toy',
-      'place-any-toy',
-      'sequence-add-toy',
-      'change-instrument-add-toy',
-    ]);
-    const highlight = addToyTasks.has(taskId) ? 'add-toy' : null;
+    const highlight = highlightOverride || (addToyTasks.has(taskId)
+      ? 'add-toy'
+      : (taskId === 'interact-new-toy' || taskId === 'sequence-interact' ? 'toy' : null));
 
     const highlightEvent = taskId === 'drag-note'
       ? 'tutorial:highlight-drag'
