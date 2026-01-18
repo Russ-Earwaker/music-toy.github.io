@@ -74,23 +74,6 @@ function startAdaptiveSharedTicker() {
   updateAdaptiveShared(true);
 }
 
-function __dgGestureDrawModulo() {
-  // Base modulo from perf toggles (stress harness)
-  let base = 1;
-  try {
-    const m = window?.__PERF_PARTICLES?.gestureDrawModulo;
-    if (Number.isFinite(m) && m >= 1) base = Math.floor(m);
-  } catch {}
-
-  // If we only have a couple of drawgrids visible, DO NOT throttle draw frequency.
-  // This preserves "smooth" feel for single-toy pan/zoom.
-  try {
-    const vc = window?.__DRAWGRID_GLOBAL?.visibleCount;
-    if (Number.isFinite(vc) && vc <= 2) return 1;
-  } catch {}
-
-  return base;
-}
 
 function __dgZoomScale() {
   if (typeof window === 'undefined') return 1;
@@ -104,7 +87,6 @@ export {
   __dgAdaptiveTickMs,
   updateAdaptiveShared,
   startAdaptiveSharedTicker,
-  __dgGestureDrawModulo,
   __dgZoomScale,
   globalDrawgridState,
 };

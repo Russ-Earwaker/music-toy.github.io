@@ -130,26 +130,6 @@ function readPerfBudgetMul() {
   }
 }
 
-function readPerfGestureDrawModulo() {
-  try {
-    const v = window.__PERF_PARTICLES?.gestureDrawModulo;
-    const n = (typeof v === 'number' && Number.isFinite(v)) ? Math.round(v) : 1;
-    return Math.max(1, Math.min(8, n));
-  } catch {
-    return 1;
-  }
-}
-
-function readPerfGestureFieldModulo() {
-  try {
-    const v = window.__PERF_PARTICLES?.gestureFieldModulo;
-    const n = (typeof v === 'number' && Number.isFinite(v)) ? Math.round(v) : 1;
-    return Math.max(1, Math.min(64, n));
-  } catch {
-    return 1;
-  }
-}
-
 function readPerfFreezeUnfocused() {
   try {
     return !!window.__PERF_PARTICLES?.freezeUnfocusedDuringGesture;
@@ -964,7 +944,7 @@ function tick(dt = 1 / 60) {
         }
 
     const gestureActive = isZoomGesturing();
-    const gestureThrottlingActive = false;
+    // Gesture-based throttling removed: we do not change cadence/updates during pan/zoom.
     
     // Get memory pressure level and FPS buckets for adaptive behavior
     const memoryPressureLevel = readMemoryPressureLevel();
@@ -1032,32 +1012,6 @@ function tick(dt = 1 / 60) {
     }
     effectiveDt = Math.min(0.12, effectiveDt); // avoid huge leaps when heavily throttled
 
-    // During active zoom gestures, throttle particle physics to cut CPU while keeping visuals.
-    // Memory pressure increases throttling aggressiveness
-    const shouldThrottle = gestureThrottlingActive && !state.emergencyFade;
-    const memoryThrottleBoost = memoryPressureLevel >= 2 ? 1 : (memoryPressureLevel >= 1 ? 0 : 0);
-    
-    if (shouldThrottle) {
-      state.gestureSkip = (state.gestureSkip + 1) % 2; // run physics every other frame
-      if (state.gestureSkip !== 0) {
-        // On non-physics frames, do minimal work; only do the heavier loops when we're going to draw.
-        const dm = readPerfGestureDrawModulo();
-        state.gestureDrawCounter = (state.gestureDrawCounter + 1) % dm;
-        const shouldDrawThisFrame = (!skipDraw && state.gestureDrawCounter === 0);
-          if (shouldDrawThisFrame) {
-            perfSection('particle.field.fades', () => updateFades(effectiveDt));
-            perfSection('particle.field.twinkle', () => twinkle(effectiveDt));
-            perfSection('particle.field.draw', () => draw());
-            perfSection('particle.field.cleanup', () => cleanupFaded());
-          }
-          return;
-        }
-        effectiveDt = Math.min(effectiveDt, 1 / 45); // slower integration during drag
-      } else {
-        state.gestureSkip = 0;
-        state.gestureDrawCounter = 0;
-      }
-
       perfSection('particle.field.reconcile', () => reconcileParticleCount(effectiveDt));
       // If we're trying to fully collapse and have reached 0, lock into hard-off.
       if (state.__fullyOffWanted && (!state.particles || state.particles.length === 0)) {
@@ -1074,13 +1028,7 @@ function tick(dt = 1 / 60) {
       perfSection('particle.field.step', () => step(effectiveDt));
       perfSection('particle.field.twinkle', () => twinkle(effectiveDt));
       if (!skipDraw) {
-        if (gestureThrottlingActive && !state.emergencyFade) {
-          const dm = readPerfGestureDrawModulo();
-          state.drawCounter = (state.drawCounter + 1) % dm;
-          if (state.drawCounter === 0) perfSection('particle.field.draw', () => draw());
-        } else {
-          perfSection('particle.field.draw', () => draw());
-        }
+        perfSection('particle.field.draw', () => draw());
       }
       perfSection('particle.field.cleanup', () => cleanupFaded());
     } finally {
@@ -1237,21 +1185,11 @@ function tick(dt = 1 / 60) {
     }
   }
 
-  function reconcileParticleCount(dt = 1 / 60, immediate = false) {
-    const minParticles = Number.isFinite(state.minParticles) ? Math.max(0, Math.round(state.minParticles)) : MIN_PARTICLES;
-    let desired = Math.max(minParticles, Math.round(state.targetDesired || 0));
-    if (state.emergencyFade && minParticles === 0) desired = 0;
-    const gestureActive = isZoomGesturing();
-    const gestureThrottlingActive = gestureActive && canGestureThrottle() && (() => {
-      try {
-        if (typeof opts.gestureThrottle === 'boolean') return opts.gestureThrottle;
-        if (typeof opts.gestureThrottleRef === 'function') return !!opts.gestureThrottleRef();
-      } catch {}
-      return true;
-    })();
-    // During active drag/zoom, avoid heavy filtering + count churn,
-    // unless we're in emergency fade and need to drop counts quickly.
-    if (gestureThrottlingActive && !immediate && !state.emergencyFade) return;
+function reconcileParticleCount(dt = 1 / 60, immediate = false) {
+   const minParticles = Number.isFinite(state.minParticles) ? Math.max(0, Math.round(state.minParticles)) : MIN_PARTICLES;
+   let desired = Math.max(minParticles, Math.round(state.targetDesired || 0));
+   if (state.emergencyFade && minParticles === 0) desired = 0;
+    // Gesture-based throttling removed (keeps updates consistent during pan/zoom).
 
     // Avoid per-tick allocations (filter/splice) in worst-case scenes.
     // "Active" means: either still targeted to be visible, or still visibly fading out.

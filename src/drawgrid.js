@@ -26,7 +26,6 @@ import {
   __dgAdaptiveTickMs,
   updateAdaptiveShared,
   startAdaptiveSharedTicker,
-  __dgGestureDrawModulo,
   __dgZoomScale,
   globalDrawgridState,
 } from './drawgrid/dg-adaptive.js';

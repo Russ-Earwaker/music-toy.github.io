@@ -17,8 +17,6 @@ try {
     skipUpdate: false,
     skipDraw: false,
     budgetMul: 1,
-    gestureDrawModulo: 4,
-    gestureFieldModulo: 1,
     freezeUnfocusedDuringGesture: false,
     logFreeze: false,
   };
@@ -178,16 +176,6 @@ function ensureUI() {
                   <option value="1">100%</option><option value="0.5">50%</option><option value="0.25">25%</option><option value="0.1">10%</option>
                 </select>
               </label>
-              <label class="perf-lab-toggle">Gesture draw
-                <select class="perf-lab-select" data-tog="gestureDrawModulo">
-                  <option value="1">Every frame</option><option value="2">Every 2nd</option><option value="3">Every 3rd</option><option value="4">Every 4th</option>
-                </select>
-              </label>
-              <label class="perf-lab-toggle">Gesture fields
-                <select class="perf-lab-select" data-tog="gestureFieldModulo">
-                  <option value="1">All</option><option value="2">1/2</option><option value="4">1/4</option><option value="8">1/8</option><option value="16">1/16</option>
-                </select>
-              </label>
               <label class="perf-lab-toggle"><input type="checkbox" data-tog="freezeUnfocusedDuringGesture" checked /> Freeze unfocused</label>
               <label class="perf-lab-toggle"><input type="checkbox" data-perf="freezeChainUi" /> Freeze chain UI</label>
               <label class="perf-lab-toggle"><input type="checkbox" data-perf="traceMarks" /> Trace marks</label>
@@ -203,6 +191,7 @@ function ensureUI() {
           <div class="perf-lab-row perf-lab-footer">
             <button class="perf-lab-btn" data-act="auto">Run Auto (Saved)</button>
             <button class="perf-lab-btn" data-act="autoFast">Auto: Fast P3f + PlayheadSep A/B + NoParticles + P4b</button>
+            <button class="perf-lab-btn" data-act="autoPauseDom">Auto: Pause DOM-in-RAF Probe (Play → Pause → Wait)</button>
             <div class="perf-lab-status" id="perf-lab-status">Idle</div>
           </div>
         </div>
@@ -372,6 +361,7 @@ function ensureUI() {
     if (act === 'runP3e2') await runP3e2();
     if (act === 'runP3f') await runP3f();
     if (act === 'runP3fShort') await runP3fShort();
+    if (act === 'runP3PauseDomProbe') await runP3PauseDomProbe();
     if (act === 'runP3fPlayheadSeparateOff') await runP3fPlayheadSeparateOff();
     if (act === 'runP3fPlayheadSeparateOn') await runP3fPlayheadSeparateOn();
     if (act === 'runP3fPlayheadEvery4') await runP3fPlayheadEvery4();
@@ -497,6 +487,9 @@ function ensureUI() {
         ],
       };
       await runAuto(cfg);
+    }
+    if (act === 'autoPauseDom') {
+      await autoPauseDom();
     }
     if (act === 'autoQuickTraceP3f') {
       const cfgBase = (await readAutoConfigFromFile()) || readAutoConfig() || {};
@@ -1082,6 +1075,7 @@ async function runAuto(config = {}) {
   const __prevTraceLongMs = window.__PERF_TRACE_LONG_MS;
   const __prevTapDotsSim = window.__PERF_TAP_DOTS_SIM;
   const __prevChainUiFreeze = window.__PERF_DISABLE_CHAIN_UI;
+  const __prevTrace = (window.__PERF_TRACE && typeof window.__PERF_TRACE === 'object') ? { ...window.__PERF_TRACE } : null;
   let __prevParticles = null;
   const __prevGestureAutoLock = window.__PERF_GESTURE_AUTO_LOCK;
   window.__PERF_LAB_RUN_CONTEXT = 'auto';
@@ -1090,6 +1084,15 @@ async function runAuto(config = {}) {
   if (Number.isFinite(cfg.traceLongMs)) window.__PERF_TRACE_LONG_MS = Number(cfg.traceLongMs);
   if (cfg.tapDotsSim != null) window.__PERF_TAP_DOTS_SIM = !!cfg.tapDotsSim;
   if (cfg.freezeChainUi != null) window.__PERF_DISABLE_CHAIN_UI = !!cfg.freezeChainUi;
+  if (cfg.traceCanvasResize != null || cfg.traceDomInRaf != null) {
+    try {
+      const st = (window.__PERF_TRACE = window.__PERF_TRACE || {});
+      if (cfg.traceCanvasResize != null) st.traceCanvasResize = !!cfg.traceCanvasResize;
+      if (cfg.traceDomInRaf != null) st.traceDomInRaf = !!cfg.traceDomInRaf;
+      // Keep UI in sync (helpful when someone watches the run)
+      try { syncUiFromState(); } catch {}
+    } catch {}
+  }
   if (cfg.particleToggles && typeof cfg.particleToggles === 'object') {
     try {
       const st = (window.__PERF_PARTICLES = window.__PERF_PARTICLES || {});
@@ -1122,6 +1125,9 @@ async function runAuto(config = {}) {
     }
     window.__PERF_DISABLE_CHAIN_UI = __prevChainUiFreeze;
     window.__PERF_GESTURE_AUTO_LOCK = __prevGestureAutoLock;
+    if (__prevTrace) {
+      try { window.__PERF_TRACE = { ...__prevTrace }; } catch {}
+    }
   }
   const bundle = buildResultsBundle(results, {
     queue,
@@ -1694,6 +1700,33 @@ async function runVariant(label, step, statusText) {
     result.particleToggles = {
       ...(window.__PERF_PARTICLES || {}),
       logFreeze: !!(window.__PERF_PARTICLES && window.__PERF_PARTICLES.logFreeze),
+    };
+  } catch {}
+
+  // Mirror runVariantPlaying(): capture perf flags so bundles self-verify trace state.
+  try {
+    result.flags = {
+      traceCanvasResize: !!(window.__PERF_TRACE && window.__PERF_TRACE.traceCanvasResize),
+      traceDomInRaf: !!(window.__PERF_TRACE && window.__PERF_TRACE.traceDomInRaf),
+      disableLoopgridRender: !!window.__PERF_DISABLE_LOOPGRID_RENDER,
+      disableChains: !!window.__PERF_DISABLE_CHAINS,
+      disableTapDots: !!window.__PERF_DISABLE_TAP_DOTS,
+      disableOverlays: !!window.__PERF_DISABLE_OVERLAYS,
+      disableOverlayStrokes: !!window.__PERF_DG_OVERLAY_STROKES_OFF,
+      disableOverlayCore: !!window.__PERF_DG_OVERLAY_CORE_OFF,
+      disablePulses: !!window.__PERF_DISABLE_PULSES,
+      freezeAllUnfocused: !!window.__PERF_FREEZE_ALL_UNFOCUSED,
+      loopgridGestureRenderMod: Number(window.__PERF_LOOPGRID_GESTURE_RENDER_MOD) || 1,
+      loopgridChainCache: !!window.__PERF_LOOPGRID_CHAIN_CACHE,
+      noPaint: !!window.__PERF_NO_PAINT,
+      noPaintActive: !!window.__PERF_NO_PAINT_ACTIVE,
+      paintOnlyActive: !!window.__PERF_PAINT_ONLY_ACTIVE,
+      noDomUpdates: !!window.__PERF_NO_DOM_UPDATES,
+      disableChainUi: !!window.__PERF_DISABLE_CHAIN_UI,
+      traceMarks: !!window.__PERF_TRACE_MARKS,
+      tapDotsSim: !!window.__PERF_TAP_DOTS_SIM,
+      playheadSeparateCanvas: !!window.__DG_PLAYHEAD_SEPARATE_CANVAS,
+      runTag: String(window.__PERF_RUN_TAG || ''),
     };
   } catch {}
   lastResult = result;
@@ -2905,6 +2938,71 @@ async function runP3fShort() {
   await runP3f();
   try { window.__PERF_LAB_DURATION_MS = prev; } catch {}
   try { window.__PERF_RUN_TAG = prevTag; } catch {}
+}
+
+async function runP3PauseDomProbe() {
+  // Goal: deterministically test "Play → Pause → Wait" to catch DOM-in-RAF spam while paused.
+  // Best used with traceDomInRaf enabled.
+  const prev = window.__PERF_LAB_DURATION_MS;
+  try { window.__PERF_LAB_DURATION_MS = 12000; } catch {}
+
+  // Ensure starting from stopped for determinism.
+  try { stopTransport(); } catch {}
+
+  let didStart = false;
+  let didStop = false;
+
+  const step = (t) => {
+    // Start immediately
+    if (!didStart) {
+      didStart = true;
+      try { startTransport(); } catch {}
+    }
+    // Pause after ~2s
+    if (!didStop && t >= 2000) {
+      didStop = true;
+      try { stopTransport(); } catch {}
+    }
+    // After this we just sit paused until the benchmark ends.
+  };
+
+  try {
+    await runVariant(
+      'P3_pause_dom_probe_play_pause_wait',
+      step,
+      'Running Pause DOM-in-RAF Probe (Play → Pause → Wait)…'
+    );
+  } finally {
+    try { stopTransport(); } catch {}
+    try {
+      if (prev == null) delete window.__PERF_LAB_DURATION_MS;
+      else window.__PERF_LAB_DURATION_MS = prev;
+    } catch {}
+  }
+}
+
+async function autoPauseDom() {
+  const ts = new Date().toISOString().replace(/[:.]/g, '-');
+  await runAuto({
+    clear: true,
+    save: true,
+    download: true,
+    traceDomInRaf: true,
+    traceCanvasResize: false,
+    // Make the probe deterministic: no auto gesture/quality modulation.
+    // Also enforces your "no frame skipping" preference for the probe itself.
+    gestureAutoLock: true,
+    particleToggles: {
+      gestureDrawModulo: 1,
+      gestureFieldModulo: 1,
+    },
+    downloadName: `perf-lab-pause-dom-probe-${ts}.json`,
+    notes: 'Auto probe: enable Trace DOM-in-RAF; build P3; run play→pause→wait benchmark to catch DOM-in-RAF spam while paused.',
+    queue: [
+      'buildP3',
+      'runP3PauseDomProbe',
+    ],
+  });
 }
 
 async function runP3fPlayheadSeparateOff() {
@@ -4569,6 +4667,7 @@ try {
     runP3e2,
     runP3f,
     runP3fShort,
+    runP3PauseDomProbe,
     runP3fPlayheadSeparateOff,
     runP3fPlayheadSeparateOn,
     runP3fPlayheadEvery4,

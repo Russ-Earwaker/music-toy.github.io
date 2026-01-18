@@ -4,7 +4,6 @@ import './fullscreen.js';
 import './debug.js';
 import './scene-manager.js';
 import './perf/perf-lab.js';
-import './perf/perf-gesture-autotune.js';
 import { installRafBoundaryFlag, traceDomWrite } from './perf/PerfTrace.js';
 import './advanced-controls-toggle.js';
 import './toy-visibility.js';
@@ -3801,7 +3800,8 @@ function scheduler(){
     const info = getLoopInfo();
 
     const running = isRunning();
-    if (running && !prevRunning) {
+    const wasRunning = prevRunning;
+    if (running && !wasRunning) {
       lastCol.clear();
       try {
         document.querySelectorAll('.toy-panel').forEach((toy) => {
@@ -3976,13 +3976,15 @@ function scheduler(){
         console.log('[CHAIN][perf] sequencerStep batch', (tStepEnd - tStepStart).toFixed(2), 'ms', 'activeToyCount=', activeToyIds.size);
       }
 
-    } else if (!running) {
-      // Transport paused — ensure no steady highlight is shown
+    } else if (!running && wasRunning) {
+      // Transport just paused — clear steady highlight ONCE (avoid DOM writes inside every rAF frame)
       try {
         document.querySelectorAll('.toy-panel').forEach(p => {
           p.classList.remove('toy-playing', 'toy-playing-pulse');
         });
       } catch {}
+      // Also clear any pending pulse bookkeeping so we don't re-add visuals while paused.
+      try { g_pulseUntil && g_pulseUntil.clear && g_pulseUntil.clear(); } catch {}
     }
     // --- Whole-frame cost ---
     const now = performance.now();

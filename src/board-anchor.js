@@ -40,35 +40,6 @@ function __anchIsGesturing() {
   return false;
 }
 
-function __anchGestureDrawModulo() {
-  let base = 1;
-  let hasAnchorOverride = false;
-  try {
-    const m = window?.__PERF_ANCHOR?.gestureModulo;
-    if (Number.isFinite(m) && m >= 1) {
-      base = Math.floor(m);
-      hasAnchorOverride = true;
-    }
-  } catch {}
-
-  if (!hasAnchorOverride) {
-    try {
-      const m = window?.__PERF_PARTICLES?.gestureDrawModulo;
-      if (Number.isFinite(m) && m >= 1) base = Math.floor(m);
-    } catch {}
-  }
-
-  // Keep anchor smooth when scene load is light (<=2 drawgrids visible).
-  try {
-    const vc = window?.__DRAWGRID_GLOBAL?.visibleCount;
-    if (Number.isFinite(vc) && vc <= 2) return 1;
-  } catch {}
-
-  return base;
-}
-
-let __anchFrameIdx = 0;
-
 // Gradient (requested: bigger + more opaque, min opacity never hits 0)
 const GRAD_ONSCREEN_R_PX = 240;
 const GRAD_OFFSCREEN_R_PX = 740;
@@ -1188,12 +1159,8 @@ export function tickBoardAnchor({ nowMs, loopInfo, running } = {}) {
 
   const anchorWorld = getAnchorWorld();
   updateMarkerPos(anchorWorld);
-  const gesturing = __anchIsGesturing();
-  const mod = __anchGestureDrawModulo();
-  __anchFrameIdx++;
-  const frameIndex = __anchFrameIdx;
-  // Keep position smooth; only throttle the heavier grid flashes while gesturing.
-  const doFull = (!gesturing) || mod <= 1 || ((frameIndex % mod) === 0);
+  // No gesture throttling: keep anchor feedback consistent during pan/zoom.
+  const doFull = true;
   const local = getViewportLocalPointFromWorld(anchorWorld);
   if (!local) return;
 
