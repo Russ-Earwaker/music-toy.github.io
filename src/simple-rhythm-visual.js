@@ -265,6 +265,30 @@ function ensureTapLetters(label) {
   return spans;
 }
 
+function sizeTapLabel(tapLabel, panel, fieldRect, fallbackRect) {
+  if (!tapLabel) return;
+  const rect = fieldRect || fallbackRect;
+  if (!rect || !(rect.width > 0)) return;
+  const s = Math.max(0.001, Number(boardScale(panel)) || 1);
+  const rawH = (rect.height || rect.width) / s;
+  const rawW = (rect.width) / s;
+  const heightBased = rawH / 3.0;
+  const widthBased = rawW / 2.4;
+  const labelSize = Math.max(24, Math.min(heightBased, widthBased) * 2.5);
+  tapLabel.style.fontSize = `${Math.round(labelSize)}px`;
+}
+
+function scheduleTapLabelSize(tapLabel, panel, targetEl) {
+  if (!tapLabel || !targetEl) return;
+  (async () => {
+    try {
+      const stable = await waitForStableBox(targetEl, { maxFrames: 10 });
+      if (!tapLabel.isConnected) return;
+      sizeTapLabel(tapLabel, panel, { width: stable.width, height: stable.height }, null);
+    } catch {}
+  })();
+}
+
 function triggerTapLettersForColumn(state, columnIndex, centerNorm, cubeCenterX, cubeCenterY) {
   const bounds = state.tapLetterBounds;
   const lastLoop = state.tapLetterLastLoop;
@@ -870,6 +894,7 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
       textShadow: 'var(--tap-label-shadow, 0 2px 10px rgba(40,60,120,0.55))',
     });
     sequencerWrap.appendChild(tapLabel);
+    scheduleTapLabelSize(tapLabel, panel, sequencerWrap);
   }
   st.tapLabel = tapLabel; // Assign to st
   st.tapLetters = ensureTapLetters(tapLabel); // Assign to st
@@ -1405,23 +1430,21 @@ function render(panel, opts = {}) {
       st.tapPromptVisible = true;
       tapLabel.style.opacity = `${TAP_LABEL_OPACITY_BASE}`;
       const needsTapLayout = promptJustEnabled || forceNudge || !st.tapFieldRect || !st.tapLetterBounds;
-      const fieldElement = particleCanvas || tapLabel;
+      const fieldElement = particleCanvas || sequencerWrap || tapLabel;
       if (needsTapLayout) {
         let fieldRect = null;
         try { fieldRect = fieldElement.getBoundingClientRect(); } catch {}
         if (fieldRect && fieldRect.width > 0) {
-          const s = Math.max(0.001, Number(boardScale(panel)) || 1);
+          const rectTooSmall = fieldRect.width < 80 || fieldRect.height < 40;
+          if (rectTooSmall) fieldRect = null;
+        }
+        if (fieldRect && fieldRect.width > 0) {
           // Use the unscaled field size so the label stays a constant
           // fraction of its frame regardless of zoom.
-          const rawH = (fieldRect.height || fieldRect.width) / s;
-          const rawW = (fieldRect.width) / s;
-          const heightBased = rawH / 3.0;
-          const widthBased  = rawW / 2.4;
-          const labelSize = Math.max(24, Math.min(heightBased, widthBased) * 2.5);
-          tapLabel.style.fontSize = `${Math.round(labelSize)}px`;
+          sizeTapLabel(tapLabel, panel, fieldRect, null);
           st.tapFieldRect = { left: fieldRect.left, width: fieldRect.width, top: fieldRect.top, height: fieldRect.height };
           st.tapLetterBounds = tapLetters.map(letter => {
-            const rect = letter.getBoundingClientRect();
+              const rect = letter.getBoundingClientRect();
             const start = (rect.left - fieldRect.left) / fieldRect.width;
             const end = (rect.right - fieldRect.left) / fieldRect.width;
             return {
@@ -1436,10 +1459,9 @@ function render(panel, opts = {}) {
           const s = Math.max(0.001, Number(boardScale(panel)) || 1);
           const particleFieldW = (st.fieldWidth  || 320) / s;
           const particleFieldH = (st.fieldHeight || 180) / s;
-          const heightBased = particleFieldH / 3.0;
-          const widthBased  = particleFieldW / 2.4;
-          const fallbackSize = Math.max(24, Math.min(heightBased, widthBased));
-          tapLabel.style.fontSize = `${Math.round(fallbackSize)}px`;
+          sizeTapLabel(tapLabel, panel, null, { width: particleFieldW, height: particleFieldH });
+          st.tapFieldRect = null;
+          st.tapLetterBounds = null;
         }
       }
 
