@@ -126,7 +126,7 @@ let dgProfileMinMs = Infinity;
 let dgProfileMaxMs = 0;
 
 if (typeof window !== 'undefined' && typeof window.DG_ZOOM_AUDIT === 'undefined') {
-  window.DG_ZOOM_AUDIT = false; // flip true in console to overlay crosshairs/logs
+  window.DG_ZOOM_AUDIT = false;
 }
 
 // === DRAWGRID TUNING (single source of truth) ===
@@ -1175,9 +1175,14 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     tutorialBackCanvas.__dgPanel = panel;
   } catch {}
 
-  // ===== Paint lifecycle tracing (enable from console) =====
-  // window.__DG_PAINT_TRACE = true
-  try { if (typeof window !== 'undefined') window.__DG_PAINT_TRACE = false; } catch {}
+// ===== Paint lifecycle tracing (disabled by default) =====
+// Flip manually in console if needed:
+//   window.__DG_PAINT_TRACE = true
+try {
+  if (typeof window !== 'undefined' && window.__DG_PAINT_TRACE === undefined) {
+    window.__DG_PAINT_TRACE = false;
+  }
+} catch {}
   function dgPaintTrace(event, data = null) {
     try {
       const on = __dgFlag('paintTrace') || !!(window && window.__DG_PAINT_TRACE);
@@ -1203,9 +1208,17 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     } catch {}
   }
 
-  // Size/scale trace for refresh flicker debugging (disable in console if needed).
-  try { if (typeof window !== 'undefined' && window.__DG_REFRESH_SIZE_TRACE === undefined) window.__DG_REFRESH_SIZE_TRACE = true; } catch {}
-  try { if (typeof window !== 'undefined' && window.__DG_REFRESH_SIZE_TRACE_LIMIT === undefined) window.__DG_REFRESH_SIZE_TRACE_LIMIT = 200; } catch {}
+// Size/scale trace for refresh flicker debugging (disabled by default).
+// Enable manually if required:
+//   window.__DG_REFRESH_SIZE_TRACE = true
+try {
+  if (typeof window !== 'undefined' && window.__DG_REFRESH_SIZE_TRACE === undefined) {
+    window.__DG_REFRESH_SIZE_TRACE = false;
+  }
+  if (typeof window !== 'undefined' && window.__DG_REFRESH_SIZE_TRACE_LIMIT === undefined) {
+    window.__DG_REFRESH_SIZE_TRACE_LIMIT = 200;
+  }
+} catch {}
   let __dgSizeTraceCount = 0;
   function dgSizeTrace(event, data = null) {
     try {
@@ -8583,7 +8596,29 @@ function copyCanvas(backCtx, frontCtx) {
             __dgHydrationPendingRedraw = true;
             HY.scheduleHydrationLayoutRetry(panel, () => layout(true));
             setTimeout(() => { __hydrationJustApplied = false; }, 32);
+
+            // IMPORTANT:
+            // Chained toys typically apply their saved content via setState() (not restoreFromState()).
+            // During refresh/boot, zoom/overview settling can briefly report a scaled DOM rect.
+            // If we miss a guaranteed composite+swap after applying state, the user can see an
+            // empty body (no grid) and/or strokes appear incorrectly scaled until interaction.
+            // Mirror the restoreFromState post-hydration forcing here.
+            try {
+              markStaticDirty('set-state');
+            } catch {}
+            try {
+              panel.__dgSingleCompositeDirty = true;
+            } catch {}
+            __dgNeedsUIRefresh = true;
+            __dgFrontSwapNextDraw = true;
+            __dgForceFullDrawNext = true;
+            __dgForceFullDrawFrames = Math.max(__dgForceFullDrawFrames || 0, 8);
             ensurePostCommitRedraw('setState');
+            try {
+              if (typeof requestFrontSwap === 'function') {
+                requestFrontSwap(useFrontBuffers);
+              }
+            } catch {}
           }catch(e){ }
           isRestoring = false;
           // Re-check after hydration completes

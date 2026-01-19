@@ -6,6 +6,16 @@ import { startParticleStream, stopParticleStream } from './tutorial-fx.js';
 const TUTORIAL_BOOT_DEBUG = false;
 const tutorialBootLog = (...args) => { if (TUTORIAL_BOOT_DEBUG) console.log(...args); };
 
+// Tutorial guide debug (NOISY) - keep opt-in.
+// Enable in console when needed:
+//   window.__TUTORIAL_STREAM_DEBUG = true
+const tutorialStreamLog = (...args) => {
+  try {
+    if (typeof window === 'undefined' || !window.__TUTORIAL_STREAM_DEBUG) return;
+    (console.debug || console.log).call(console, ...args);
+  } catch {}
+};
+
 function whenSwipeAPIReady(panel, fn, tries=30){
   if (!panel) return;
   if (typeof panel.setSwipeVisible === 'function' && typeof panel.startGhostGuide === 'function'){
@@ -3827,10 +3837,10 @@ try {
     updateButtonVisual();
   }
 
-  window.addEventListener('guide:task-click', (e) => {
-    const { taskId, taskElement } = (e && e.detail) || {};
-    console.log('[tutorial] guide:task-click', { taskId, taskElementExists: !!taskElement });
-    if (!taskId || !taskElement) return;
+window.addEventListener('guide:task-click', (e) => {
+  const { taskId, taskElement } = (e && e.detail) || {};
+  tutorialStreamLog('[tutorial] guide:task-click', { taskId, taskElementExists: !!taskElement });
+  if (!taskId || !taskElement) return;
     activeGuideRequirement = (() => {
       const info = TASK_INFO_BY_ID.get(taskId);
       return info?.requirement || null;
@@ -3877,31 +3887,31 @@ try {
 
     stopParticleStream();
 
-    const highlightAddToy = (toggle) => {
-      if (!toggle) return null;
-      let disposed = false;
-      const runParticles = () => {
-        if (disposed) return;
-        if (!taskElement.isConnected || !toggle.isConnected) return;
-        stopParticleStream();
-        console.log('[tutorial] highlightAddToy runParticles', {
-          taskId,
-          taskClasses: taskElement.className,
-          toggleClasses: toggle.className,
-        });
-        startParticleStream(taskElement, toggle, { layer: 'behind-target' });
-      };
-      const scheduleParticles = () => {
-        console.log('[tutorial] highlightAddToy scheduleParticles', { taskId });
-        requestAnimationFrame(() => requestAnimationFrame(runParticles));
-      };
-      const onResize = () => scheduleParticles();
-      console.log('[tutorial] highlightAddToy start', {
+  const highlightAddToy = (toggle) => {
+    if (!toggle) return null;
+    let disposed = false;
+    const runParticles = () => {
+      if (disposed) return;
+      if (!taskElement.isConnected || !toggle.isConnected) return;
+      stopParticleStream();
+      tutorialStreamLog('[tutorial] highlightAddToy runParticles', {
         taskId,
+        taskClasses: taskElement.className,
         toggleClasses: toggle.className,
-        isConnected: toggle.isConnected,
-        isVisible: toggle.offsetParent !== null || toggle.getClientRects().length > 0,
       });
+      startParticleStream(taskElement, toggle, { layer: 'behind-target' });
+    };
+    const scheduleParticles = () => {
+      tutorialStreamLog('[tutorial] highlightAddToy scheduleParticles', { taskId });
+      requestAnimationFrame(() => requestAnimationFrame(runParticles));
+    };
+    const onResize = () => scheduleParticles();
+    tutorialStreamLog('[tutorial] highlightAddToy start', {
+      taskId,
+      toggleClasses: toggle.className,
+      isConnected: toggle.isConnected,
+      isVisible: toggle.offsetParent !== null || toggle.getClientRects().length > 0,
+    });
       toggle.classList.add('tutorial-pulse-target', 'tutorial-active-pulse', 'tutorial-addtoy-pulse', 'tutorial-flash');
       scheduleParticles();
       window.addEventListener('resize', onResize, { passive: true });
@@ -3923,24 +3933,24 @@ try {
     let retryTimer = 0;
     let didStart = false;
 
-    const attach = () => {
-      if (disposed || cleanupInner) return;
-      const toggle = getAddToyToggle();
-      console.log('[tutorial] attach toggle lookup', {
-          taskId,
-          toggleFound: !!toggle,
-          toggleClasses: toggle ? toggle.className : null,
-        });
-      const visible = toggle && (toggle.offsetParent !== null || toggle.getClientRects().length > 0);
-      if (!visible) {
-        console.log('[tutorial] attach toggle not visible yet', { taskId });
-        retryTimer = window.setTimeout(attach, 120);
-        return;
-      }
-      console.log('[tutorial] attach toggle ready', { taskId });
-      cleanupInner = highlightAddToy(toggle);
-      didStart = true;
-    };
+  const attach = () => {
+    if (disposed || cleanupInner) return;
+    const toggle = getAddToyToggle();
+    tutorialStreamLog('[tutorial] attach toggle lookup', {
+      taskId,
+      toggleFound: !!toggle,
+      toggleClasses: toggle ? toggle.className : null,
+    });
+    const visible = toggle && (toggle.offsetParent !== null || toggle.getClientRects().length > 0);
+    if (!visible) {
+      tutorialStreamLog('[tutorial] attach toggle not visible yet', { taskId });
+      retryTimer = window.setTimeout(attach, 120);
+      return;
+    }
+    tutorialStreamLog('[tutorial] attach toggle ready', { taskId });
+    cleanupInner = highlightAddToy(toggle);
+    didStart = true;
+  };
 
     attach();
 

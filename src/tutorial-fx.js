@@ -3,6 +3,16 @@ import { makeDebugLogger } from './debug-flags.js';
 
 const fxDebug = makeDebugLogger('mt_debug_logs');
 
+// Tutorial stream debug is intentionally opt-in (very noisy).
+// Enable in console when needed:
+//   window.__TUTORIAL_STREAM_DEBUG = true
+const tutorialStreamLog = (...args) => {
+  try {
+    if (typeof window === 'undefined' || !window.__TUTORIAL_STREAM_DEBUG) return;
+    (console.debug || console.log).call(console, ...args);
+  } catch {}
+};
+
 let behindCanvas, frontCanvas;
 let behindCtx, frontCtx;
 let animationFrameId = null;
@@ -796,7 +806,7 @@ export function startParticleStream(originEl, targetEl, options = {}) {
   });
 
   if (!originEl || !targetEl || !originValid || !targetValid) {
-    console.log('[tutorial-fx] startParticleStream skipped: origin or target invalid', {
+    tutorialStreamLog('[tutorial-fx] startParticleStream skipped: origin or target invalid', {
       originElExists: !!originEl,
       targetElExists: !!targetEl,
       originValid,
@@ -811,7 +821,7 @@ export function startParticleStream(originEl, targetEl, options = {}) {
     return;
   }
   if (originEl.closest && originEl.closest('.goal-task.is-disabled')) {
-    console.log('[tutorial-fx] startParticleStream skipped: origin task is disabled');
+    tutorialStreamLog('[tutorial-fx] startParticleStream skipped: origin task is disabled');
     removeHighlight(targetEl);
     return;
   }
@@ -889,7 +899,7 @@ export function startParticleStream(originEl, targetEl, options = {}) {
 
   const { panel, behind, front } = resolveParticleSurfaces(originEl);
   if (!behind || !front) {
-    console.log('[tutorial-fx] startParticleStream skipped: canvas missing', { hasPanel: !!panel, hasBehind: !!behind, hasFront: !!front });
+    tutorialStreamLog('[tutorial-fx] startParticleStream skipped: canvas missing', { hasPanel: !!panel, hasBehind: !!behind, hasFront: !!front });
     activeTaskMaskRect = null;
     activeOriginEl = null;
     return;
@@ -921,7 +931,7 @@ export function startParticleStream(originEl, targetEl, options = {}) {
 
   const startRect = originEl.getBoundingClientRect();
   const endRect = targetEl.getBoundingClientRect();
-  console.log('[tutorial-fx] startParticleStream kicking off', {
+  tutorialStreamLog('[tutorial-fx] startParticleStream kicking off', {
     originClass: originEl.className,
     targetClass: targetEl.className,
     startRect: { left: startRect.left, top: startRect.top, width: startRect.width, height: startRect.height },
@@ -931,7 +941,7 @@ export function startParticleStream(originEl, targetEl, options = {}) {
   const drawCtx = frontCtx;
   const drawCanvas = frontCanvas;
   if (!drawCtx || !drawCanvas) {
-    console.log('[tutorial-fx] startParticleStream skipped: no drawing context for layer', { layer });
+    tutorialStreamLog('[tutorial-fx] startParticleStream skipped: no drawing context for layer', { layer });
     activeTaskMaskRect = null;
     activeOriginEl = null;
     return;
