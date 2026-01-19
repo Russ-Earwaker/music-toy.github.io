@@ -704,9 +704,20 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   } = drawLabelState;
 
   function getToyLogicalSize() {
-    const width = Math.max(1, Math.round(wrap?.clientWidth || 1));
-    const height = Math.max(1, Math.round(wrap?.clientHeight || 1));
-    return { w: width, h: height };
+    let width = Math.max(1, Math.round(wrap?.clientWidth || 0));
+    let height = Math.max(1, Math.round(wrap?.clientHeight || 0));
+    if (width <= 1 || height <= 1) {
+      const fallback = measureCSSSize(wrap || body);
+      width = Math.max(width, Math.round(fallback?.w || 0));
+      height = Math.max(height, Math.round(fallback?.h || 0));
+      dgSizeTrace('getToyLogicalSize:fallback', {
+        wrapClientW: wrap?.clientWidth || 0,
+        wrapClientH: wrap?.clientHeight || 0,
+        fallbackW: fallback?.w || 0,
+        fallbackH: fallback?.h || 0,
+      });
+    }
+    return { w: Math.max(1, width), h: Math.max(1, height) };
   }
 
   function getToyCssSizeForParticles() {
@@ -1192,6 +1203,78 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     } catch {}
   }
 
+  // Size/scale trace for refresh flicker debugging (disable in console if needed).
+  try { if (typeof window !== 'undefined' && window.__DG_REFRESH_SIZE_TRACE === undefined) window.__DG_REFRESH_SIZE_TRACE = true; } catch {}
+  try { if (typeof window !== 'undefined' && window.__DG_REFRESH_SIZE_TRACE_LIMIT === undefined) window.__DG_REFRESH_SIZE_TRACE_LIMIT = 200; } catch {}
+  let __dgSizeTraceCount = 0;
+  function dgSizeTrace(event, data = null) {
+    try {
+      const on = (typeof window !== 'undefined' && window.__DG_REFRESH_SIZE_TRACE);
+      if (!on) return;
+    } catch { return; }
+    try {
+      const limit = (typeof window !== 'undefined') ? window.__DG_REFRESH_SIZE_TRACE_LIMIT : null;
+      if (Number.isFinite(limit) && limit >= 0 && __dgSizeTraceCount >= limit) return;
+      __dgSizeTraceCount++;
+    } catch {}
+    try {
+      const payload = data && typeof data === 'object' ? data : {};
+      payload.panelId = panel?.id || null;
+      const text = (() => {
+        try { return JSON.stringify(payload); } catch { return null; }
+      })();
+      if (text) console.log('[DG][size-trace]', event, text);
+      else console.log('[DG][size-trace]', event, payload);
+    } catch {}
+  }
+
+  function dgSizeTraceCanvas(tag, extra = null) {
+    try {
+      const on = (typeof window !== 'undefined' && window.__DG_REFRESH_SIZE_TRACE);
+      if (!on) return;
+    } catch { return; }
+    try {
+      const rect = frontCanvas?.getBoundingClientRect?.();
+      const panelRect = panel?.getBoundingClientRect?.();
+      const payload = {
+        tag,
+        cssW,
+        cssH,
+        paintDpr,
+        frontCanvas: {
+          w: frontCanvas?.width || 0,
+          h: frontCanvas?.height || 0,
+          rectW: rect?.width || 0,
+          rectH: rect?.height || 0,
+        },
+        gridBack: {
+          w: gridBackCanvas?.width || 0,
+          h: gridBackCanvas?.height || 0,
+        },
+        panelRect: {
+          w: panelRect?.width || 0,
+          h: panelRect?.height || 0,
+        },
+        toyScale: (() => {
+          try {
+            const raw = panel ? getComputedStyle(panel).getPropertyValue('--toy-scale') : '';
+            const n = parseFloat(raw);
+            return Number.isFinite(n) ? n : null;
+          } catch { return null; }
+        })(),
+        boardScale: (() => {
+          try {
+            const host = panel?.closest?.('.board-viewport') || document.querySelector('.board-viewport');
+            const raw = host ? boardScaleHelper(host) : (Number.isFinite(window?.__boardScale) ? window.__boardScale : 1);
+            return Number.isFinite(raw) ? raw : null;
+          } catch { return null; }
+        })(),
+        extra: extra || null,
+      };
+      dgSizeTrace('canvas-sizes', payload);
+    } catch {}
+  }
+
   function debugPaintSizes(tag, extra = null) {
     if (!DG_LAYOUT_DEBUG) return;
     try {
@@ -1414,10 +1497,25 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       resize(backCanvas);
       const dprChanged = Math.abs(paintDpr - __dgLastResizeDpr) > 0.001;
       const sizeChanged = targetW !== __dgLastResizeTargetW || targetH !== __dgLastResizeTargetH;
+      dgSizeTrace('resizeSurfacesFor', {
+        nextCssW,
+        nextCssH,
+        nextDpr,
+        paintDpr,
+        targetW,
+        targetH,
+        sizeChanged,
+        dprChanged,
+      });
+      dgSizeTraceCanvas('after-resizeSurfacesFor', {
+        targetW,
+        targetH,
+      });
       __dgLastResizeTargetW = targetW;
       __dgLastResizeTargetH = targetH;
       __dgLastResizeDpr = paintDpr;
       if (dprChanged || sizeChanged) {
+        try { markStaticDirty('resize-surfaces'); } catch {}
         updatePaintBackingStores({ force: true, target: 'both' });
         if (Array.isArray(strokes) && strokes.length > 0) {
           try { useFrontBuffers(); } catch {}
@@ -1885,6 +1983,15 @@ function ensureSizeReady({ force = false } = {}) {
   const forceResize = !!force && (cssW === 0 || cssH === 0);
   changed = sizeDiff || forceResize;
   if (changed) {
+    dgSizeTrace('ensureSizeReady:apply', {
+      force,
+      prevCssW: cssW,
+      prevCssH: cssH,
+      nextCssW: w,
+      nextCssH: h,
+      sizeDiff,
+      forceResize,
+    });
     __dgLastEnsureSizeAtMs = nowTs;
     // Snapshot current paint to preserve drawn lines across resize.
     let paintSnapshot = null;
@@ -1912,6 +2019,7 @@ function ensureSizeReady({ force = false } = {}) {
         ? __dgAdaptivePaintDpr
         : (Number.isFinite(paintDpr) && paintDpr > 0 ? paintDpr : (Number.isFinite(window?.devicePixelRatio) ? window.devicePixelRatio : 1));
     resizeSurfacesFor(cssW, cssH, __dprFallback);
+    try { markStaticDirty('ensure-size'); } catch {}
     if (paintSnapshot) {
       try {
         const ctx = (DG_SINGLE_CANVAS && backCtx)
@@ -3039,6 +3147,8 @@ function regenerateMapFromStrokes() {
         if (scaleChanged && Array.isArray(strokes) && strokes.length > 0) {
           try { clearAndRedrawFromStrokes(DG_SINGLE_CANVAS ? backCtx : frontCtx, 'zoom-done'); } catch {}
           try { ensureBackVisualsFreshFromFront?.(); } catch {}
+          try { markStaticDirty('zoom-done'); } catch {}
+          __dgForceFullDrawNext = true;
         }
       }
 
@@ -3186,6 +3296,8 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
 
       resnapAndRedraw(true);
       try { clearAndRedrawFromStrokes(pctx, 'zoom-commit'); } catch {}
+      try { markStaticDirty('zoom-commit'); } catch {}
+      __dgForceFullDrawNext = true;
       zoomGestureActive = false;
       zoomMode = 'idle'; // ensure we fully exit zoom mode 
       lastCommittedScale = boardScale;
@@ -3424,7 +3536,17 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
       try {
         const host = el.closest?.('.board-viewport') || document.querySelector('.board-viewport');
         const raw = host ? boardScaleHelper(host) : (Number.isFinite(window?.__boardScale) ? window.__boardScale : 1);
-        if (Number.isFinite(raw) && raw > 0) scale = raw;
+        if (Number.isFinite(raw) && raw > 0) scale *= raw;
+      } catch {}
+      try {
+        const panelEl = (el.classList?.contains?.('toy-panel'))
+          ? el
+          : el.closest?.('.toy-panel');
+        if (panelEl) {
+          const toyScaleRaw = getComputedStyle(panelEl).getPropertyValue('--toy-scale');
+          const toyScale = parseFloat(toyScaleRaw);
+          if (Number.isFinite(toyScale) && toyScale > 0) scale *= toyScale;
+        }
       } catch {}
       const inv = scale !== 0 ? (1 / scale) : 1;
       return { w: rect.width * inv, h: rect.height * inv };
@@ -3502,12 +3624,73 @@ function copyCanvas(backCtx, frontCtx) {
     return usingBackBuffers ? tutorialBackCanvas : tutorialCanvas;
   }
 
+  function __dgSampleAlpha(ctx, xCss, yCss) {
+    if (!ctx || !ctx.canvas) return null;
+    const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+    const px = Math.max(0, Math.min(ctx.canvas.width - 1, Math.round(xCss * scale)));
+    const py = Math.max(0, Math.min(ctx.canvas.height - 1, Math.round(yCss * scale)));
+    try {
+      const data = ctx.getImageData(px, py, 1, 1).data;
+      return { r: data[0], g: data[1], b: data[2], a: data[3], px, py };
+    } catch {
+      return { error: true, px, py };
+    }
+  }
+
+  function __dgSampleCanvasStyles(canvas) {
+    if (!canvas) return null;
+    try {
+      const cs = getComputedStyle(canvas);
+      return {
+        display: cs?.display || null,
+        visibility: cs?.visibility || null,
+        opacity: cs?.opacity || null,
+        transform: cs?.transform || null,
+      };
+    } catch {
+      return null;
+    }
+  }
+
 
   function compositeSingleCanvas() {
     if (!DG_SINGLE_CANVAS || !frontCtx) return;
     if (!__dgGridReady()) return;
     const surface = frontCtx.canvas;
     if (!surface || !surface.width || !surface.height) return;
+    const sampleX = gridArea ? (gridArea.x + 2) : null;
+    const sampleY = gridArea ? (gridArea.y + topPad + 2) : null;
+    // Guard: if the front backing store was resized to the scaled DOM rect,
+    // fix sizes before compositing to avoid "scaled up" strokes.
+    try {
+      const expW = (__dgLastResizeTargetW || (cssW ? Math.max(1, Math.round(cssW * paintDpr)) : 0));
+      const expH = (__dgLastResizeTargetH || (cssH ? Math.max(1, Math.round(cssH * paintDpr)) : 0));
+      if (expW && expH) {
+        const rect = getRect(surface);
+        const rectW = Math.max(1, Math.round(rect?.width || 0));
+        const rectH = Math.max(1, Math.round(rect?.height || 0));
+        const looksLikeScaledRect =
+          (surface.width === rectW && surface.height === rectH && (rectW !== expW || rectH !== expH));
+        const wrongBackingStore = (surface.width !== expW || surface.height !== expH);
+        if (wrongBackingStore && looksLikeScaledRect) {
+          dgSizeTrace('composite:front-guard', {
+            cssW,
+            cssH,
+            paintDpr,
+            expW,
+            expH,
+            rectW,
+            rectH,
+            frontW: surface.width,
+            frontH: surface.height,
+          });
+          resizeSurfacesFor(cssW, cssH, paintDpr);
+          markStaticDirty('front-size-guard');
+          __dgForceFullDrawNext = true;
+          return;
+        }
+      }
+    } catch {}
     if (!panel.__dgSingleCompositeDirty && !panel.__dgCompositeBaseDirty && !panel.__dgCompositeOverlayDirty) {
       return;
     }
@@ -3531,6 +3714,22 @@ function copyCanvas(backCtx, frontCtx) {
     if (!panel.__dgGridHasPainted) {
       try { drawGrid(); } catch {}
     }
+    if (typeof window !== 'undefined' && window.__DG_REFRESH_SIZE_TRACE && gridBackCtx && gridArea) {
+      const sample = (sampleX !== null && sampleY !== null)
+        ? __dgSampleAlpha(gridBackCtx, sampleX, sampleY)
+        : null;
+      dgSizeTrace('gridBack-sample', {
+        cssW,
+        cssH,
+        gridHasPainted: !!panel.__dgGridHasPainted,
+        baseDirty: !!panel.__dgCompositeBaseDirty,
+        sample,
+        sampleX,
+        sampleY,
+        gridArea: gridArea ? { ...gridArea } : null,
+      });
+    }
+    dgSizeTraceCanvas('before-composite');
     const width = surface.width;
     const height = surface.height;
     const baseCanvas = panel.__dgCompositeBaseCanvas;
@@ -3552,9 +3751,9 @@ function copyCanvas(backCtx, frontCtx) {
       panel.__dgCompositeBaseDirty = true;
     }
 
-    if (panel.__dgCompositeBaseDirty && compositeBaseCtx) {
-      const __baseStart = __perfOn ? performance.now() : 0;
-      const baseCtx = compositeBaseCtx;
+      if (panel.__dgCompositeBaseDirty && compositeBaseCtx) {
+        const __baseStart = __perfOn ? performance.now() : 0;
+        const baseCtx = compositeBaseCtx;
       R.withDeviceSpace(baseCtx, () => {
         baseCtx.globalCompositeOperation = 'source-over';
         baseCtx.globalAlpha = 1;
@@ -3578,6 +3777,14 @@ function copyCanvas(backCtx, frontCtx) {
       if (__perfOn && __baseStart) {
         try { window.__PerfFrameProf?.mark?.('drawgrid.composite.base', performance.now() - __baseStart); } catch {}
       }
+      dgSizeTrace('composite:base-rebuild', {
+        cssW,
+        cssH,
+        paintDpr,
+        surfaceW: width,
+        surfaceH: height,
+        gridArea: gridArea ? { ...gridArea } : null,
+      });
     }
 
     const __finalStart = __perfOn ? performance.now() : 0;
@@ -3595,6 +3802,19 @@ function copyCanvas(backCtx, frontCtx) {
         if (__perfOn && __baseBlitStart) {
           try { window.__PerfFrameProf?.mark?.('drawgrid.composite.base.blit', performance.now() - __baseBlitStart); } catch {}
         }
+      }
+      if (typeof window !== 'undefined' && window.__DG_REFRESH_SIZE_TRACE && sampleX !== null && sampleY !== null) {
+        const frontSample = __dgSampleAlpha(frontCtx, sampleX, sampleY);
+        dgSizeTrace('front-sample', {
+          cssW,
+          cssH,
+          gridHasPainted: !!panel.__dgGridHasPainted,
+          baseDirty: !!panel.__dgCompositeBaseDirty,
+          sample: frontSample,
+          sampleX,
+          sampleY,
+          frontStyle: __dgSampleCanvasStyles(surface),
+        });
       }
       const flashSource = getActiveFlashCanvas();
       if (!DG_SINGLE_CANVAS_OVERLAYS && !panel.__dgFlashLayerEmpty && flashSource && flashSource.width && flashSource.height) {
@@ -3756,10 +3976,17 @@ function copyCanvas(backCtx, frontCtx) {
 
       // NOTE: avoid per-canvas getContext() calls here (can be surprisingly costly).
       // We only reset contexts we already hold references to.
+      let resizedAny = false;
       for (const canvas of allCanvases) {
-        if (canvas.width !== pixelW) canvas.width = pixelW;
-        if (canvas.height !== pixelH) canvas.height = pixelH;
+        if (canvas.width !== pixelW) { canvas.width = pixelW; resizedAny = true; }
+        if (canvas.height !== pixelH) { canvas.height = pixelH; resizedAny = true; }
         // style width/height is already set via styleCanvases above
+      }
+      if (resizedAny) {
+        // Resizing clears grid/nodes backing stores; force a static redraw.
+        panel.__dgGridHasPainted = false;
+        try { markStaticDirty('sync-back-resize'); } catch {}
+        __dgForceFullDrawNext = true;
       }
 
       // Reset known contexts after resize
@@ -3907,6 +4134,28 @@ function copyCanvas(backCtx, frontCtx) {
     const { x: zoomX, y: zoomY } = getZoomScale(panel); // tracking only for logs/debug
     const newW = Math.max(1, Math.round(baseW));
     const newH = Math.max(1, Math.round(baseH));
+    try {
+      const rect = panel?.getBoundingClientRect?.();
+      const toyScaleRaw = panel ? getComputedStyle(panel).getPropertyValue('--toy-scale') : '';
+      const toyScale = parseFloat(toyScaleRaw);
+      dgSizeTrace('layout:measure', {
+        force,
+        bodyW,
+        bodyH,
+        baseW,
+        baseH,
+        newW,
+        newH,
+        wrapClientW: wrap?.clientWidth || 0,
+        wrapClientH: wrap?.clientHeight || 0,
+        panelRectW: rect?.width || 0,
+        panelRectH: rect?.height || 0,
+        toyScale: Number.isFinite(toyScale) ? toyScale : null,
+        zoomMode,
+        zoomGestureActive,
+        overview: !!__overviewActive,
+      });
+    } catch {}
 
     if (newW === 0 || newH === 0) {
       requestAnimationFrame(() => resnapAndRedraw(force));
@@ -3916,6 +4165,16 @@ function copyCanvas(backCtx, frontCtx) {
       if ((!zoomGestureActive && (force || Math.abs(newW - cssW) > 1 || Math.abs(newH - cssH) > 1)) || (force && zoomGestureActive)) {
         const oldW = cssW;
         const oldH = cssH;
+        dgSizeTrace('layout:apply', {
+          force,
+          oldW,
+          oldH,
+          newW,
+          newH,
+          zoomMode,
+          zoomGestureActive,
+          overview: !!__overviewActive,
+        });
         // Snapshot current paint to preserve drawn content across resize.
       // IMPORTANT: snapshot the ACTIVE paint surface (front/back), not just `paint`,
       // otherwise wheel-zoom / overview can wipe the user's line.
@@ -3984,8 +4243,11 @@ function copyCanvas(backCtx, frontCtx) {
       gridAreaLogical.h = logicalH;
 
       const minGridArea = 20; // px floor so it never fully collapses
-      // Compute proportional margin in CSS px (already in the visible, transformed space)
-      const safeScale = typeof dgMap?.scale === 'function' ? dgMap.scale() : Math.min(cssW, cssH);
+      // Compute proportional margin in *logical* CSS px.
+      // IMPORTANT: this must NOT depend on board zoom / transforms. If we use any
+      // zoom-derived value here (e.g. a map scale), the gridArea changes during
+      // zoom/refresh boot and strokes will appear to “re-scale” incorrectly.
+      const safeScale = Math.min(logicalW, logicalH);
       const dynamicSafeArea = Math.max(
         12,                               // lower bound so lines don't hug edges on tiny panels
         Math.round(SAFE_AREA_FRACTION * safeScale)
@@ -4011,6 +4273,9 @@ function copyCanvas(backCtx, frontCtx) {
           if (gridBackCtx?.canvas) R.withDeviceSpace(gridBackCtx, () => gridBackCtx.clearRect(0, 0, gridBackCtx.canvas.width, gridBackCtx.canvas.height));
           if (nodesBackCtx?.canvas) R.withDeviceSpace(nodesBackCtx, () => nodesBackCtx.clearRect(0, 0, nodesBackCtx.canvas.width, nodesBackCtx.canvas.height));
         } catch {}
+        panel.__dgGridHasPainted = false;
+        try { markStaticDirty('layout-clear'); } catch {}
+        __dgForceFullDrawNext = true;
       }
       const layoutKey = `${Math.round(cssW)}x${Math.round(cssH)}:${Math.round(gridArea.w)}x${Math.round(gridArea.h)}`;
       if (layoutKey === __dgLastLayoutKey) __dgLayoutStableFrames++;
@@ -4295,10 +4560,25 @@ function copyCanvas(backCtx, frontCtx) {
         cssW,
         cssH,
       });
+      dgSizeTrace('drawGrid:skip-not-ready', {
+        cssW,
+        cssH,
+        gridArea: gridArea ? { ...gridArea } : null,
+        cw,
+        ch,
+      });
       panel.__dgGridHasPainted = false;
       return;
     }
     dgGridAlphaLog('drawGrid:begin', gctx, {
+      cacheKey: __dgGridCache?.key || null,
+    });
+    dgSizeTrace('drawGrid:begin', {
+      cssW,
+      cssH,
+      gridArea: gridArea ? { ...gridArea } : null,
+      cw,
+      ch,
       cacheKey: __dgGridCache?.key || null,
     });
     FD.layerTrace('drawGrid:enter', {
@@ -4411,6 +4691,14 @@ function copyCanvas(backCtx, frontCtx) {
     panel.__dgGridHasPainted = true;
     __dgMarkSingleCanvasDirty(panel);
     dgGridAlphaLog('drawGrid:end', gctx);
+    dgSizeTrace('drawGrid:end', {
+      cssW,
+      cssH,
+      gridArea: gridArea ? { ...gridArea } : null,
+      cw,
+      ch,
+      cacheKey: cache.key || null,
+    });
     FD.layerTrace('drawGrid:exit', {
       panelId: panel?.id || null,
       usingBackBuffers,
@@ -7944,7 +8232,31 @@ function copyCanvas(backCtx, frontCtx) {
       __dgHydrationPendingRedraw = true;
       HY.scheduleHydrationLayoutRetry(panel, () => layout(true));
       setTimeout(() => { __hydrationJustApplied = false; }, 32);
+
+      // IMPORTANT:
+      // On refresh, zoom/overview boot can briefly report a *scaled* DOM rect (see debug: rectW/rectH)
+      // while cssW/cssH are already correct. In that window, the single-canvas composite can miss a
+      // guaranteed "final" swap, leaving the user seeing an empty body (grid hidden / stroke scale wrong)
+      // until an interaction triggers a redraw.
+      //
+      // So: after hydration/restore, force a full draw + composite and a front swap deterministically.
+      try {
+        markStaticDirty('restore-from-state');
+      } catch {}
+      try {
+        panel.__dgSingleCompositeDirty = true;
+      } catch {}
+      __dgNeedsUIRefresh = true;
+      __dgFrontSwapNextDraw = true;
+      __dgForceFullDrawNext = true;
+      __dgForceFullDrawFrames = Math.max(__dgForceFullDrawFrames || 0, 8);
+
       ensurePostCommitRedraw('restoreFromState');
+      try {
+        if (typeof requestFrontSwap === 'function') {
+          requestFrontSwap(useFrontBuffers);
+        }
+      } catch {}
       emitDrawgridUpdate({ activityOnly: false });
       markStaticDirty('external-state-change');
   } catch (e) {
