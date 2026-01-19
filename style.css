@@ -852,6 +852,13 @@ select.toy-instrument {
   padding: 8px 10px;
 }
 
+/* Slight brighter outline for the master volume slider panel (and any future topbar master panel). */
+.toy-volwrap.options-volwrap,
+.toy-volwrap.topbar-master-volwrap {
+  border-color: #2b3647;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.06);
+}
+
 .toy-volwrap .toy-mute-btn {
   --c-btn-size: 42px;
   flex: 0 0 auto;
@@ -3004,7 +3011,7 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
 .topbar-master-volwrap {
   padding: 6px 8px;
   border-radius: 10px;
-  min-width: 160px;
+  min-width: 320px; /* 2x width for clearer master control */
 }
 
 .topbar-master-volwrap input[type="range"] {

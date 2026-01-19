@@ -35,7 +35,7 @@
         <div class="scene-manager-panel">
           <div class="scene-manager-header">
             <div class="scene-manager-title">
-              <span>Your Creations</span>
+              <span>Save / Load / Share</span>
               <span class="scene-manager-mode-label"></span>
             </div>
             <button class="scene-manager-close" type="button" aria-label="Close">&times;</button>

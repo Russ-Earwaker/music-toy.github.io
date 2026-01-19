@@ -221,6 +221,9 @@ export function connectDrawGridToPlayer(panel) {
 
   // When a user clicks a node to unmute (re-enable) it, audition that note once.
   panel.addEventListener('drawgrid:node-toggle', (e) => {
+    // Do not audition while the scene/transport is playing.
+    if (typeof isTransportRunning === 'function' && isTransportRunning()) return;
+
     const col = e?.detail?.col;
     const row = e?.detail?.row;
     const disabled = e?.detail?.disabled;

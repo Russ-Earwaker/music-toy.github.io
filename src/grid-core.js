@@ -1,6 +1,6 @@
 // src/grid-core.js — grid core + instrument sync (<=300 lines)
 import { triggerInstrument } from './audio-samples.js';
-import { ensureAudioContext, resumeAudioContextIfNeeded } from './audio-core.js';
+import { ensureAudioContext, resumeAudioContextIfNeeded, isRunning } from './audio-core.js';
 import { setToyInstrument } from './instrument-map.js';
 import { initToyUI } from './toyui.js';
 import { attachSimpleRhythmVisual } from './simple-rhythm-visual.js';
@@ -132,6 +132,12 @@ export function buildGrid(panel, numSteps = 8){
     const d = e?.detail || {};
     lgDbg(1, 'loopgrid:update', { reason: d.reason, col: d.col, hasSteps: !!d.steps, hasNoteIndices: !!d.noteIndices });
 
+    // Track whether this update activated a step (for auditioning).
+    const col = (d.col ?? d.step ?? d.index);
+    const prevStep = (Number.isFinite(col) && col >= 0 && panel.__gridState?.steps)
+      ? !!panel.__gridState.steps[col]
+      : null;
+
     // If visuals supply steps/noteIndices, sync them into our model.
     if (Array.isArray(d.steps) && panel.__gridState?.steps) {
       panel.__gridState.steps = Array.from(d.steps).map(v => !!v);
@@ -146,12 +152,20 @@ export function buildGrid(panel, numSteps = 8){
       rebuildSeqPattern();
     }
 
-    // Optional: if update tells us which column was interacted with, audition it.
-    // (Only for user-ish reasons; adjust list if needed once we see logs.)
-    const col = (d.col ?? d.step ?? d.index);
-    if (Number.isFinite(col) && col >= 0 && d.reason && /tap|click|toggle|edit|user/i.test(String(d.reason))) {
-      lgDbg(2, 'audition-from-update', { col });
-      panel.__playCurrent?.(col, undefined, 'audition:loopgrid:update');
+    // Audition rules:
+    // 1) Only audition when a step is ACTIVATED (not deactivated).
+    // 2) Only audition when the scene is paused (not running).
+    const nowStep = (Number.isFinite(col) && col >= 0 && panel.__gridState?.steps)
+      ? !!panel.__gridState.steps[col]
+      : null;
+
+    const reason = String(d.reason || '');
+    const isUserish = /tap|click|edit|user|step-(activate|deactivate)/i.test(reason);
+    const activated = (prevStep === false && nowStep === true) || /step-activate/i.test(reason);
+
+    if (Number.isFinite(col) && col >= 0 && isUserish && activated && !isRunning?.()) {
+      lgDbg(2, 'audition-from-update', { col, reason });
+      panel.__playCurrent?.(col, undefined, 'audition:loopgrid:activate');
     }
   });
 

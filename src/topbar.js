@@ -1193,7 +1193,7 @@ function ensureTopbar(){
     };
 
     ensureMenuButton('new-scene', 'New Creation');
-    ensureMenuButton('open-creations', 'Your Creations');
+    ensureMenuButton('open-creations', 'Save / Load / Share');
     ensureMenuButton('open-preferences', 'Preferences');
 
     let controls = bar.querySelector('.topbar-controls');

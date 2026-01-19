@@ -80,7 +80,15 @@ function __readMasterPersistedVolume(){
   try{
     const raw = window?.localStorage?.getItem?.(LS_MASTER_VOL_KEY);
     const n = Number(raw);
-    return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : null;
+    if (!Number.isFinite(n)) return null;
+    const clamped = Math.max(0, Math.min(1, n));
+
+    // IMPORTANT:
+    // If master volume is persisted as 0, we treat that as an invalid "silent boot"
+    // state and reset to default. (Mute is the supported "silent" state.)
+    if (clamped <= 0) return null;
+
+    return clamped;
   }catch{ return null; }
 }
 
@@ -96,7 +104,10 @@ function __readMasterPersistedMute(){
 }
 
 function __writeMasterPersistedVolume(v){
-  try{ window?.localStorage?.setItem?.(LS_MASTER_VOL_KEY, String(Math.max(0, Math.min(1, Number(v)||0)))); }catch{}
+  try{
+    const vv = Math.max(0, Math.min(1, Number(v)||0));
+    window?.localStorage?.setItem?.(LS_MASTER_VOL_KEY, String(vv));
+  }catch{}
 }
 
 function __writeMasterPersistedMute(m){
@@ -106,7 +117,10 @@ function __writeMasterPersistedMute(m){
 // Initialise master state once per page load (so refreshes persist).
 {
   const pv = __readMasterPersistedVolume();
-  __vol.set('master', pv != null ? pv : DEFAULT_MASTER_VOLUME);
+  const initVol = (pv != null) ? pv : DEFAULT_MASTER_VOLUME;
+  __vol.set('master', initVol);
+  // If we had to reset away from 0/invalid, write back the default so itch embeds don't stay silent.
+  if (pv == null) __writeMasterPersistedVolume(initVol);
   const pm = __readMasterPersistedMute();
   if (pm != null) __mute.set('master', !!pm);
 }
@@ -251,13 +265,13 @@ export function isRunning(){ return __started; }
 
 export function getToyVolume(id='master'){
   const key = String(id||'master').toLowerCase();
-  const fallback = (key === 'master') ? DEFAULT_MASTER_VOLUME : 1;
+  const fallback = (key === 'master') ? DEFAULT_MASTER_VOLUME : 1.0;
   return (__mute.get(key) ? 0 : (__vol.get(key) ?? fallback));
 }
 export function isToyMuted(id='master'){ const key=String(id||'master').toLowerCase(); return !!__mute.get(key); }
 export function getToyVolumeRaw(id='master'){
   const key = String(id||'master').toLowerCase();
-  const fallback = (key === 'master') ? DEFAULT_MASTER_VOLUME : 1;
+  const fallback = (key === 'master') ? DEFAULT_MASTER_VOLUME : 1.0;
   return (__vol.get(key) ?? fallback);
 }
 

@@ -981,6 +981,7 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
 
     const isZoomed = panel.classList.contains('toy-zoomed');
     let mutated = false;
+    let updateReason = null;
 
     if (isZoomed && third === 'up') {
       const curIx = (state.noteIndices[clickedIndex] | 0);
@@ -989,6 +990,7 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
       panel.dispatchEvent(new CustomEvent('grid:notechange', {
         detail: { col: clickedIndex },
       }));
+      updateReason = 'note-change';
       mutated = true;
     } else if (isZoomed && third === 'down') {
       const curIx = (state.noteIndices[clickedIndex] | 0);
@@ -997,9 +999,12 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
       panel.dispatchEvent(new CustomEvent('grid:notechange', {
         detail: { col: clickedIndex },
       }));
+      updateReason = 'note-change';
       mutated = true;
     } else {
-      state.steps[clickedIndex] = !state.steps[clickedIndex];
+      const next = !state.steps[clickedIndex];
+      state.steps[clickedIndex] = next;
+      updateReason = next ? 'step-activate' : 'step-deactivate';
       mutated = true;
     }
 
@@ -1012,13 +1017,13 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
               toyId: panel?.dataset?.toyid,
               toyType: panel?.dataset?.toy,
               clickedIndex,
-              reason: (isZoomed ? 'note-change' : 'step-toggle')
+              reason: updateReason || (isZoomed ? 'note-change' : 'step-toggle')
             });
           }
         } catch {}
         panel.dispatchEvent(new CustomEvent('loopgrid:update', {
           detail: {
-            reason: isZoomed ? 'note-change' : 'step-toggle',
+            reason: updateReason || (isZoomed ? 'note-change' : 'step-toggle'),
             col: clickedIndex,
             steps: Array.isArray(state.steps) ? Array.from(state.steps) : undefined,
             noteIndices: Array.isArray(state.noteIndices) ? Array.from(state.noteIndices) : undefined,
