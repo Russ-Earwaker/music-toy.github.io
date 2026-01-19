@@ -301,6 +301,10 @@ function resolveToyAudioId(panel, fallbackId){
 
 function snapToyAudio(panel, fallbackId){
   const id = resolveToyAudioId(panel, fallbackId);
+  // Master volume is persisted globally (localStorage) and must NOT be saved with scenes.
+  if (String(id).toLowerCase() === 'master') {
+    return { volume: undefined, muted: undefined };
+  }
   return {
     volume: clamp01(getToyVolumeRaw(id)),
     muted: !!isToyMuted(id),
@@ -310,6 +314,8 @@ function snapToyAudio(panel, fallbackId){
 function applyToyAudio(panel, toySnap, fallbackId){
   if (!panel || !toySnap) return;
   const id = resolveToyAudioId(panel, fallbackId);
+  // Master volume is persisted globally (localStorage) and must NOT be loaded from scenes.
+  if (String(id).toLowerCase() === 'master') return;
   const hasVolume = Number.isFinite(toySnap.volume);
   const hasMuted = typeof toySnap.muted === 'boolean';
   const volume = hasVolume ? clamp01(toySnap.volume) : null;

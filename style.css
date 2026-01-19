@@ -2972,6 +2972,52 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
   pointer-events: auto !important;
 }
 
+/* Master volume (moved out of Play options menu) */
+#topbar-master-volume {
+  position: fixed;
+  top: var(--top-btn-offset);
+  /* Place the LEFT edge just to the right of the Play Options button, with a gap. */
+  left: calc(
+    50% + (var(--top-btn-size) / 2) + var(--ui-float-gap-sm) + var(--topbar-side-btn-size) + var(--ui-float-gap-sm)
+  );
+  transform: none;
+  z-index: 1450;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  pointer-events: auto;
+}
+
+.topbar-master-title {
+  font: 700 10px/1.1 system-ui, -apple-system, Segoe UI, sans-serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(226, 232, 240, 0.9);
+}
+
+.topbar-master-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topbar-master-volwrap {
+  padding: 6px 8px;
+  border-radius: 10px;
+  min-width: 160px;
+}
+
+.topbar-master-volwrap input[type="range"] {
+  height: 18px;
+}
+
+.topbar-master-value {
+  min-width: 44px;
+  text-align: right;
+  font: 700 12px/1 system-ui, -apple-system, Segoe UI, sans-serif;
+  color: rgba(226, 232, 240, 0.9);
+}
+
 #topbar [data-action="sound-theme"] .c-btn-core {
   display: flex;
   align-items: center;

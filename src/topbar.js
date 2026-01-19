@@ -1273,6 +1273,29 @@ function ensureTopbar(){
       playBtn?.insertAdjacentElement('afterend', soundThemeBtn);
     }
 
+    // Master Volume control (moved out of Play Options menu)
+    let masterWrap = bar.querySelector('#topbar-master-volume');
+    if (!masterWrap) {
+      masterWrap = document.createElement('div');
+      masterWrap.id = 'topbar-master-volume';
+      masterWrap.className = 'topbar-master-volume';
+      masterWrap.innerHTML = `
+        <div class="topbar-master-title">Master Volume</div>
+        <div class="topbar-master-row">
+          <div class="toy-volwrap topbar-master-volwrap">
+            <input class="topbar-master-slider" type="range" min="0" max="100" step="1" value="20" aria-label="Master volume" />
+            <button class="c-btn toy-mute-btn topbar-master-mute" type="button" aria-label="Mute">
+              <div class="c-btn-outer"></div>
+              <div class="c-btn-glow"></div>
+              <div class="c-btn-core"></div>
+            </button>
+          </div>
+          <div class="topbar-master-value">20%</div>
+        </div>
+      `;
+      bar.appendChild(masterWrap);
+    }
+
     let soundThemePanel = bar.querySelector('#topbar-sound-theme-panel');
     if (!soundThemePanel) {
       soundThemePanel = document.createElement('div');
@@ -1280,21 +1303,6 @@ function ensureTopbar(){
       soundThemePanel.className = 'topbar-sound-theme-panel options-panel';
       soundThemePanel.setAttribute('hidden', '');
       soundThemePanel.innerHTML = `
-        <div class="options-section">
-          <div class="options-section-title">Master Volume</div>
-          <div class="options-volume-row">
-            <div class="toy-volwrap options-volwrap">
-              <input class="options-volume-slider" type="range" min="0" max="100" step="1" value="100" aria-label="Master volume" />
-              <button class="c-btn toy-mute-btn options-mute-btn" type="button" aria-label="Mute">
-                <div class="c-btn-outer"></div>
-                <div class="c-btn-glow"></div>
-                <div class="c-btn-core"></div>
-              </button>
-            </div>
-            <div class="options-volume-value">100%</div>
-          </div>
-        </div>
-        <div class="options-divider"></div>
         <div class="options-section">
           <div class="sound-theme-title">Sound theme for new toys</div>
           <div class="options-theme-row">
@@ -1463,11 +1471,14 @@ function ensureTopbar(){
     soundThemeState.label = soundThemeLabel;
     soundThemeState.open = !!soundThemeState.open;
 
+    const masterState = bar.__masterState || (bar.__masterState = {});
+    masterState.wrap = masterWrap;
+    masterState.slider = masterWrap?.querySelector?.('.topbar-master-slider') || null;
+    masterState.valueEl = masterWrap?.querySelector?.('.topbar-master-value') || null;
+    masterState.muteBtn = masterWrap?.querySelector?.('.topbar-master-mute') || null;
+
     const optionsState = bar.__optionsState || (bar.__optionsState = {});
     optionsState.panel = soundThemePanel;
-    optionsState.masterSlider = soundThemePanel?.querySelector?.('.options-volume-slider') || null;
-    optionsState.masterValue = soundThemePanel?.querySelector?.('.options-volume-value') || null;
-    optionsState.masterMuteBtn = soundThemePanel?.querySelector?.('.options-mute-btn') || null;
     optionsState.soundThemeSelect = soundThemePanel?.querySelector?.('#sound-theme-select') || null;
     optionsState.leadInToggleBtn = soundThemePanel?.querySelector?.('[data-action="lead-in-toggle"]') || null;
     optionsState.leadInValue = soundThemePanel?.querySelector?.('.options-leadin-value') || null;
@@ -1492,11 +1503,11 @@ function ensureTopbar(){
     };
 
     const syncMasterVolume = () => {
-      const slider = optionsState.masterSlider;
-      const valueEl = optionsState.masterValue;
+      const slider = masterState.slider;
+      const valueEl = masterState.valueEl;
       if (!slider) return;
-      const current = typeof Core?.getToyVolume === 'function' ? Core.getToyVolume('master') : 1;
-      const safe = Number.isFinite(current) ? current : 1;
+      const current = typeof Core?.getToyVolume === 'function' ? Core.getToyVolume('master') : 0.2;
+      const safe = Number.isFinite(current) ? current : 0.2;
       const pct = Math.round(Math.max(0, Math.min(1, safe)) * 100);
       slider.value = String(pct);
       if (valueEl) valueEl.textContent = `${pct}%`;
@@ -1504,7 +1515,7 @@ function ensureTopbar(){
     };
 
     const setMasterMuteVisual = (muted) => {
-      const btn = optionsState.masterMuteBtn;
+      const btn = masterState.muteBtn;
       if (!btn) return;
       btn.setAttribute('aria-pressed', String(!!muted));
       const title = muted ? 'Unmute' : 'Mute';
@@ -1687,40 +1698,47 @@ function ensureTopbar(){
       optionsState.resetLeadInOptions = resetLeadInOptions;
     }
 
-    if (!optionsState.wired && optionsState.masterSlider) {
-      optionsState.wired = true;
-      optionsState.masterSlider.addEventListener('input', () => {
-        const pct = Number(optionsState.masterSlider.value);
+    if (!masterState.wired && masterState.slider) {
+      masterState.wired = true;
+      const slider = masterState.slider;
+      const valueEl = masterState.valueEl;
+
+      slider.addEventListener('input', () => {
+        const pct = Number(slider.value);
         const next = Math.max(0, Math.min(100, Number.isFinite(pct) ? pct : 0)) / 100;
         try { Core?.setToyVolume?.('master', next); } catch {}
-        if (optionsState.masterValue) optionsState.masterValue.textContent = `${Math.round(next * 100)}%`;
-        updateVolumeFill(optionsState.masterSlider);
+        if (valueEl) valueEl.textContent = `${Math.round(next * 100)}%`;
+        updateVolumeFill(slider);
         if (next > 0 && typeof Core?.isToyMuted === 'function' && Core.isToyMuted('master')) {
           try { Core?.setToyMuted?.('master', false); } catch {}
           setMasterMuteVisual(false);
         }
       }, { passive: true });
-      optionsState.masterMuteBtn?.addEventListener('click', () => {
+
+      masterState.muteBtn?.addEventListener('click', () => {
         const muted = typeof Core?.isToyMuted === 'function' ? Core.isToyMuted('master') : false;
         const shouldMute = !muted;
         try { Core?.setToyMuted?.('master', shouldMute); } catch {}
         setMasterMuteVisual(shouldMute);
-        const slider = optionsState.masterSlider;
-        if (!slider) return;
+
         if (shouldMute) {
           slider.dataset.preMute = slider.value;
           slider.value = '0';
           updateVolumeFill(slider);
-          if (optionsState.masterValue) optionsState.masterValue.textContent = '0%';
+          if (valueEl) valueEl.textContent = '0%';
         } else {
-          slider.value = slider.dataset.preMute || '80';
+          slider.value = slider.dataset.preMute || '20';
           const pct = Number(slider.value);
           const next = Math.max(0, Math.min(100, Number.isFinite(pct) ? pct : 0)) / 100;
           try { Core?.setToyVolume?.('master', next); } catch {}
-          if (optionsState.masterValue) optionsState.masterValue.textContent = `${Math.round(next * 100)}%`;
+          if (valueEl) valueEl.textContent = `${Math.round(next * 100)}%`;
           updateVolumeFill(slider);
         }
       });
+    }
+
+    if (!optionsState.wired) {
+      optionsState.wired = true;
       optionsState.soundThemeSelect?.addEventListener('change', () => {
         const nextTheme = optionsState.soundThemeSelect?.value || '';
         try { setSoundThemeKey(nextTheme); } catch {}
@@ -1806,6 +1824,8 @@ function ensureTopbar(){
         if (Core?.isRunning?.()) scheduleRandomization(bar, getLeadInDelayMs(bar));
       });
       syncMasterVolume();
+      const isMuted = typeof Core?.isToyMuted === 'function' ? Core.isToyMuted('master') : false;
+      setMasterMuteVisual(!!isMuted);
       updateLeadInUI();
       updateRandomUI();
     }

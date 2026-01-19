@@ -5,6 +5,11 @@ export const BEATS_PER_BAR = 4;
 export const MIN_BPM = 30;
 export const MAX_BPM = 200;
 
+// Master output volume defaults + persistence (NOT part of scene save/load).
+export const DEFAULT_MASTER_VOLUME = 0.2; // 20%
+const LS_MASTER_VOL_KEY  = 'rhythmake_master_volume_v1';
+const LS_MASTER_MUTE_KEY = 'rhythmake_master_mute_v1';
+
 let __ctx;
 export let bpm = DEFAULT_BPM;
 const __activeNodes = new Set();
@@ -71,11 +76,46 @@ const __vol = new Map();         // id -> volume [0..1]
 const __mute = new Map();        // id -> bool
 let __masterGain = null;
 
+function __readMasterPersistedVolume(){
+  try{
+    const raw = window?.localStorage?.getItem?.(LS_MASTER_VOL_KEY);
+    const n = Number(raw);
+    return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : null;
+  }catch{ return null; }
+}
+
+function __readMasterPersistedMute(){
+  try{
+    const raw = window?.localStorage?.getItem?.(LS_MASTER_MUTE_KEY);
+    if (raw == null) return null;
+    const s = String(raw).toLowerCase();
+    if (s === '1' || s === 'true') return true;
+    if (s === '0' || s === 'false') return false;
+    return null;
+  }catch{ return null; }
+}
+
+function __writeMasterPersistedVolume(v){
+  try{ window?.localStorage?.setItem?.(LS_MASTER_VOL_KEY, String(Math.max(0, Math.min(1, Number(v)||0)))); }catch{}
+}
+
+function __writeMasterPersistedMute(m){
+  try{ window?.localStorage?.setItem?.(LS_MASTER_MUTE_KEY, m ? '1' : '0'); }catch{}
+}
+
+// Initialise master state once per page load (so refreshes persist).
+{
+  const pv = __readMasterPersistedVolume();
+  __vol.set('master', pv != null ? pv : DEFAULT_MASTER_VOLUME);
+  const pm = __readMasterPersistedMute();
+  if (pm != null) __mute.set('master', !!pm);
+}
+
 function ensureMasterGain() {
   if (__masterGain) return __masterGain;
   const ctx = ensureAudioContext();
   const g = ctx.createGain();
-  const masterVol = __vol.get('master') ?? 1.0;
+  const masterVol = __vol.get('master') ?? DEFAULT_MASTER_VOLUME;
   g.gain.value = __mute.get('master') ? 0 : masterVol;
   g.connect(ctx.destination);
   __masterGain = g;
@@ -109,6 +149,7 @@ export function setToyVolume(id='master', v=1){
   const g = getToyGain(key);
   const vv = Math.max(0, Math.min(1, Number(v)||0));
   __vol.set(key, vv);
+  if (key === 'master') __writeMasterPersistedVolume(vv);
   g.gain.setValueAtTime(__mute.get(key) ? 0 : vv, ctx.currentTime);
 }
 
@@ -117,7 +158,8 @@ export function setToyMuted(id='master', muted=false, rampTime = 0){
   const ctx = ensureAudioContext();
   const g = getToyGain(key);
   __mute.set(key, !!muted);
-  const vv = __vol.get(key) ?? 1.0;
+  if (key === 'master') __writeMasterPersistedMute(!!muted);
+  const vv = __vol.get(key) ?? (key === 'master' ? DEFAULT_MASTER_VOLUME : 1.0);
   const targetVol = muted ? 0 : vv;
   g.gain.cancelScheduledValues(ctx.currentTime);
   if (rampTime > 0.001) {
@@ -207,9 +249,17 @@ export function hardStop(){
 
 export function isRunning(){ return __started; }
 
-export function getToyVolume(id='master'){ const key=String(id||'master').toLowerCase(); return (__mute.get(key)?0:(__vol.get(key)??1)); }
+export function getToyVolume(id='master'){
+  const key = String(id||'master').toLowerCase();
+  const fallback = (key === 'master') ? DEFAULT_MASTER_VOLUME : 1;
+  return (__mute.get(key) ? 0 : (__vol.get(key) ?? fallback));
+}
 export function isToyMuted(id='master'){ const key=String(id||'master').toLowerCase(); return !!__mute.get(key); }
-export function getToyVolumeRaw(id='master'){ const key=String(id||'master').toLowerCase(); return (__vol.get(key) ?? 1); }
+export function getToyVolumeRaw(id='master'){
+  const key = String(id||'master').toLowerCase();
+  const fallback = (key === 'master') ? DEFAULT_MASTER_VOLUME : 1;
+  return (__vol.get(key) ?? fallback);
+}
 
 export function resumeAudioContextIfNeeded() {
   const ctx = ensureAudioContext();
