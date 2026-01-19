@@ -2536,20 +2536,56 @@ function isPanelCenterOffscreen(panel) {
     return cx < viewRect.left || cx > viewRect.right || cy < viewRect.top || cy > viewRect.bottom;
 }
 
+function isPanelNearViewportEdge(panel, marginPx = 96) {
+    if (!panel || typeof panel.getBoundingClientRect !== 'function') return false;
+    const viewport = panel.closest?.('.board-viewport') || document.querySelector('.board-viewport') || document.documentElement;
+    if (!viewport) return false;
+    const rect = getRect(panel);
+    const viewRect = getRect(viewport);
+    const m = Math.max(0, Number(marginPx) || 0);
+    // "Near edge" means any part of the panel is inside the margin band.
+    // Also treat fully offscreen as near-edge so we pan in both cases.
+    if (rect.right < viewRect.left || rect.left > viewRect.right || rect.bottom < viewRect.top || rect.top > viewRect.bottom) {
+        return true;
+    }
+    return (
+        rect.left < (viewRect.left + m) ||
+        rect.right > (viewRect.right - m) ||
+        rect.top < (viewRect.top + m) ||
+        rect.bottom > (viewRect.bottom - m)
+    );
+}
+
+function getSpawnSafeCenterFracX() {
+    // Keep toys away from the left guide button + right spawner dock, like focus centering.
+    const guide = document.querySelector('.guide-launcher');
+    const spawner = document.querySelector('.toy-spawner-dock');
+    const guideRight = guide ? getRect(guide).right : 0;
+    const spawnerLeft = spawner ? getRect(spawner).left : window.innerWidth;
+    const centerX = (guideRight + spawnerLeft) / 2;
+    const frac = centerX / Math.max(1, window.innerWidth || 1);
+    return Math.max(0.2, Math.min(0.8, frac));
+}
+
+function maybePanToSpawnedPanel(panel, { marginPx = 96, duration = 650 } = {}) {
+    if (!panel || !panel.isConnected) return false;
+    // We now pan for *all* spawned toys (not just offscreen / near-edge).
+    // `marginPx` is kept for backwards compatibility with callers but is no longer used here.
+    const desiredScale = (typeof window !== 'undefined' && Number.isFinite(window.__boardScale)) ? window.__boardScale : 1.0;
+    const centerFracX = getSpawnSafeCenterFracX();
+    try {
+        // Uses the board-viewport camera tween (lerped).
+        window.centerBoardOnElementSlow?.(panel, desiredScale, { duration, centerFracX, centerFracY: 0.5 });
+        return true;
+    } catch {}
+    return false;
+}
+
 function hintOffscreenSpawn(panel) {
     if (!panel || !panel.isConnected) return;
-    const origin = document.querySelector('.toy-spawner-toggle') || document.querySelector('.toy-spawner-dock');
-    if (!origin || !origin.isConnected) return;
-    try {
-        startParticleStream(origin, panel, {
-            layer: 'front',
-            skipBurst: true,
-            durationMs: 1000,
-            suppressGuideTapAck: true, // Visual hint only; don't mark guide as tapped
-        });
-    } catch (err) {
-        console.warn('[createToyPanelAt] offscreen hint failed', err);
-    }
+    // Disabled: we no longer spawn particles from the create-toy button when a toy
+    // spawns offscreen/near-edge. (It was visually noisy and misleading.)
+    return;
 }
 
 function persistToyPosition(panel) {
@@ -2695,6 +2731,9 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument, autoCenter, a
                 document.body?.classList?.contains('overview-mode'));
             if (panel.isConnected && !overviewActive) {
                 setToyFocus(panel, { center: true });
+                // If the spawn ended up offscreen or hugging the edge, lerp the camera to it.
+                // This is global behaviour and is NOT tied to scene save/load.
+                maybePanToSpawnedPanel(panel, { marginPx: 96, duration: 650 });
             }
             if (shouldHintOffscreen) {
                 const rafCheck = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));
