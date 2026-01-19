@@ -105,6 +105,12 @@ function getPanelToyId(panel){
   return panel?.dataset?.toyid || panel?.id || panel?.dataset?.toy || '';
 }
 
+function getPanelAudioId(panel){
+  // Many toys use a unique per-instance audio id (data-audiotoyid / __audioToyId).
+  // This is the id that must be used for setToyVolume / setToyMuted.
+  return panel?.__audioToyId || panel?.dataset?.audiotoyid || getPanelToyId(panel);
+}
+
 function findToyPanel(id){
   if (!id || typeof document === 'undefined') return null;
   const byId = document.getElementById(id);
@@ -149,15 +155,16 @@ function applyChainVolumeMute(rootId, { volume, muted } = {}){
   if (!hasVolume && !hasMuted) return;
   const targets = collectChainDescendants(rootId);
   for (const { id, panel } of targets) {
-    const st = getState(id);
+    const audioId = getPanelAudioId(panel) || id;
+    const st = getState(audioId);
     if (hasVolume) {
       st.volume = clamp01(volume);
-      try { setToyVolume(id, st.volume); } catch {}
+      try { setToyVolume(audioId, st.volume); } catch {}
       try { panel.dataset.toyVolume = String(st.volume); } catch {}
     }
     if (hasMuted) {
       st.muted = !!muted;
-      try { setToyMuted(id, st.muted); } catch {}
+      try { setToyMuted(audioId, st.muted); } catch {}
       try { panel.dataset.toyMuted = st.muted ? '1' : '0'; } catch {}
     }
     try { syncVolumeUI(panel, { volume: hasVolume ? st.volume : undefined, muted: hasMuted ? st.muted : undefined }); } catch {}
@@ -169,11 +176,12 @@ try {
   window.addEventListener('toy-mute', (e)=>{
     const d = (e && e.detail) || {};
     const rawId = String(d.toyId || '');
-    const id = keyOf(rawId);
+    const panel = findToyPanel(rawId) || findToyPanel(keyOf(rawId));
+    const audioIdRaw = getPanelAudioId(panel) || rawId;
+    const id = keyOf(audioIdRaw);
     const st = getState(id);
     st.muted = !!d.muted;
     try { setToyMuted(id, st.muted); } catch {}
-    const panel = findToyPanel(rawId) || findToyPanel(id);
     if (panel && isChainHead(panel) && id !== 'master') {
       applyChainVolumeMute(getPanelToyId(panel), { muted: st.muted });
     }
@@ -184,13 +192,14 @@ try {
   window.addEventListener('toy-volume', (e)=>{
     const d = (e && e.detail) || {};
     const rawId = String(d.toyId || '');
-    const id = keyOf(rawId);
+    const panel = findToyPanel(rawId) || findToyPanel(keyOf(rawId));
+    const audioIdRaw = getPanelAudioId(panel) || rawId;
+    const id = keyOf(audioIdRaw);
     const v = Number(d.value);
     if (!Number.isNaN(v)){
       const st = getState(id);
       st.volume = clamp01(v);
       try { setToyVolume(id, st.volume); } catch {}
-      const panel = findToyPanel(rawId) || findToyPanel(id);
       if (panel && isChainHead(panel) && id !== 'master') {
         applyChainVolumeMute(getPanelToyId(panel), { volume: st.volume });
       }

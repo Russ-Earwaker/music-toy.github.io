@@ -1,6 +1,6 @@
 ﻿filename,instrument_type,instrument,function,display_name,synth_id,instrument_id,base_note,base_oct,theme,recommended_toys,priority
 # --- Samples ---,,,,,,,,,,,
-Punch1.wav,effects,effects,short note,Punch 1,,PUNCH 1,,5,Gaming; ,loopgrid,
+Punch1.wav,effects,effects,short note,Punch 1,,PUNCH 1,,5,,,
 Punch2.wav,effects,effects,short note,Punch 2,,PUNCH 2,,5,,,
 Punch3.wav,effects,effects,short note,Punch 3,,PUNCH 3,,5,,,
 Punch4.wav,effects,effects,short note,Punch 4,,PUNCH 4,,5,,,

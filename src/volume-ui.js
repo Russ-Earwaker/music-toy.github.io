@@ -49,6 +49,17 @@ function dispatchToyMute(toyId, muted) {
   try { window.dispatchEvent(new CustomEvent('toy-mute', { detail: { toyId, muted } })); } catch {}
 }
 
+function getEventToyId(panel) {
+  // The “panel identity” used by UI/chain systems.
+  return panel?.dataset?.toyid || panel?.id || panel?.dataset?.toy || 'master';
+}
+
+function getAudioToyId(panel) {
+  // The “audio bus identity” used by schedulers and audio routing.
+  // Many toys now generate a unique per-instance id here.
+  return panel?.__audioToyId || panel?.dataset?.audiotoyid || getEventToyId(panel);
+}
+
 export function syncVolumeUI(panel, { volume, muted } = {}) {
   if (!panel) return;
   const wrap = panel.querySelector('.toy-volwrap');
@@ -103,7 +114,8 @@ export function installVolumeUI(footer) {
   }
 
   const panel = footer.closest('.toy-panel');
-  const toyId = panel?.dataset?.toyid || panel?.id || 'master';
+  const toyId = getEventToyId(panel);
+  const audioToyId = getAudioToyId(panel);
 
   // --- 1. Create DOM Elements ---
   let volWrap = footer.querySelector('.toy-volwrap');
@@ -141,14 +153,14 @@ export function installVolumeUI(footer) {
   // --- 2. Initialize State ---
   const persistedMuted = readPersistedMuted(panel);
   const persistedVolume = readPersistedVolume(panel);
-  const initialMuted = (persistedMuted !== null) ? persistedMuted : isToyMuted(toyId);
-  const initialVolume = (persistedVolume !== null) ? persistedVolume : clamp01(getToyVolumeRaw(toyId));
+  const initialMuted = (persistedMuted !== null) ? persistedMuted : isToyMuted(audioToyId);
+  const initialVolume = (persistedVolume !== null) ? persistedVolume : clamp01(getToyVolumeRaw(audioToyId));
 
   if (persistedVolume !== null) {
-    setToyVolume(toyId, initialVolume);
+    setToyVolume(audioToyId, initialVolume);
   }
   if (persistedMuted !== null) {
-    setToyMuted(toyId, initialMuted);
+    setToyMuted(audioToyId, initialMuted);
   }
 
   range.value = String(Math.round((initialMuted ? 0 : initialVolume) * 100));
@@ -165,22 +177,22 @@ export function installVolumeUI(footer) {
     const newVolPercent = parseInt(range.value, 10);
     const newVol = newVolPercent / 100;
     dispatchToyVolume(toyId, newVol);
-    setToyVolume(toyId, newVol);
+    setToyVolume(audioToyId, newVol);
     updateRangeFill(range);
     
     // If user slides volume up, automatically unmute.
-    if (newVolPercent > 0 && isToyMuted(toyId)) {
+    if (newVolPercent > 0 && isToyMuted(audioToyId)) {
       dispatchToyMute(toyId, false);
-      setToyMuted(toyId, false);
+      setToyMuted(audioToyId, false);
       setMuteVisualState(muteBtn, false);
       setPanelMutedVisual(panel, false);
     }
   });
 
   muteBtn.addEventListener('click', () => {
-    const shouldMute = !isToyMuted(toyId);
+    const shouldMute = !isToyMuted(audioToyId);
     dispatchToyMute(toyId, shouldMute);
-    setToyMuted(toyId, shouldMute);
+    setToyMuted(audioToyId, shouldMute);
     setMuteVisualState(muteBtn, shouldMute);
     setPanelMutedVisual(panel, shouldMute);
 
@@ -194,7 +206,7 @@ export function installVolumeUI(footer) {
       range.value = range.dataset.preMute || '80';
       const restoreVol = parseInt(range.value, 10) / 100;
       dispatchToyVolume(toyId, restoreVol);
-      setToyVolume(toyId, restoreVol);
+      setToyVolume(audioToyId, restoreVol);
       updateRangeFill(range);
     }
   });
@@ -204,6 +216,6 @@ export function installVolumeUI(footer) {
 
   // --- 4. Return the gain node ---
   refreshHelpOverlay();
-  return { gain: getToyGain(toyId) };
+  return { gain: getToyGain(audioToyId) };
 }
 
