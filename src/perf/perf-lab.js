@@ -4514,7 +4514,11 @@ async function runP6a() {
     repeatCount: 3,
     repeatEveryMs: 500,
   });
-  const step = composeSteps(panZoom, randDraw, randLoop);
+  // IMPORTANT: start the *scene* playing (not just the audio transport).
+  // Some stress scenes only animate/step once the UI play state is active.
+  // Without this, P6a can look "not playing" even though the transport is running.
+  const ensurePlay = makeEnsureTransportScript({ atMs: 600 });
+  const step = composeSteps(panZoom, randDraw, randLoop, ensurePlay);
   await runVariantPlaying(
     'P6a_avg_mix_playing_panzoom_rand',
     step,
