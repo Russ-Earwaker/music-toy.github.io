@@ -148,6 +148,77 @@ function __dgComputeVisualBackingMul(boardScale) {
   return minMul + (1 - minMul) * t;
 }
 
+// -----------------------------------------------------------------------------
+// Pressure-based backing-store DPR reduction (generic, not “gesture mode”)
+// -----------------------------------------------------------------------------
+//
+// Goal: when overall framerate is low (for any reason), reduce backing-store DPR
+// smoothly to cut raster/compositor cost. This applies regardless of gesture.
+//
+// Tunables:
+//   window.__DG_PRESSURE_DPR_ENABLED     (default true)
+//   window.__DG_PRESSURE_DPR_START_MS    (default 20)  // start reducing above this
+//   window.__DG_PRESSURE_DPR_END_MS      (default 34)  // hit min at/above this
+//   window.__DG_PRESSURE_DPR_MIN_MUL     (default 0.6) // lowest multiplier from pressure
+//   window.__DG_PRESSURE_DPR_EWMA_ALPHA  (default 0.12)
+//   window.__DG_PRESSURE_DPR_COOLDOWN_MS (default 350) // delay recover to avoid thrash
+//
+window.__DG_PRESSURE_DPR_ENABLED     ??= true;
+window.__DG_PRESSURE_DPR_START_MS    ??= 20;
+window.__DG_PRESSURE_DPR_END_MS      ??= 34;
+window.__DG_PRESSURE_DPR_MIN_MUL     ??= 0.6;
+window.__DG_PRESSURE_DPR_EWMA_ALPHA  ??= 0.12;
+window.__DG_PRESSURE_DPR_COOLDOWN_MS ??= 350;
+
+let __dgPressureFrameMsEwma = null;
+let __dgPressureDprMul = 1;
+let __dgPressureMulLastChangeTs = 0;
+
+function __dgComputePressureDprMul(frameMs) {
+  const startMs = Number.isFinite(window.__DG_PRESSURE_DPR_START_MS) ? window.__DG_PRESSURE_DPR_START_MS : 20;
+  const endMs   = Number.isFinite(window.__DG_PRESSURE_DPR_END_MS) ? window.__DG_PRESSURE_DPR_END_MS : 34;
+  const minMul  = Number.isFinite(window.__DG_PRESSURE_DPR_MIN_MUL) ? window.__DG_PRESSURE_DPR_MIN_MUL : 0.6;
+
+  if (!Number.isFinite(frameMs) || frameMs <= startMs) return 1;
+  if (frameMs >= endMs) return minMul;
+
+  // Smooth linear ramp from 1.0 → minMul between startMs and endMs.
+  const t = Math.max(0, Math.min(1, (frameMs - startMs) / Math.max(1e-6, (endMs - startMs))));
+  return 1 - (1 - minMul) * t;
+}
+
+function __dgUpdatePressureDprMulFromFps(fps, nowTs) {
+  if (!(window.__DG_PRESSURE_DPR_ENABLED ?? true)) {
+    __dgPressureFrameMsEwma = null;
+    __dgPressureDprMul = 1;
+    return;
+  }
+  if (!Number.isFinite(fps) || fps <= 0) return;
+
+  const frameMs = 1000 / fps;
+  const alpha = Number.isFinite(window.__DG_PRESSURE_DPR_EWMA_ALPHA) ? window.__DG_PRESSURE_DPR_EWMA_ALPHA : 0.12;
+  __dgPressureFrameMsEwma = (__dgPressureFrameMsEwma == null)
+    ? frameMs
+    : (__dgPressureFrameMsEwma * (1 - alpha) + frameMs * alpha);
+
+  const targetMul = __dgComputePressureDprMul(__dgPressureFrameMsEwma);
+  const cooldown = Number.isFinite(window.__DG_PRESSURE_DPR_COOLDOWN_MS) ? window.__DG_PRESSURE_DPR_COOLDOWN_MS : 350;
+
+  // Hysteresis:
+  // - degrade quickly when things get worse
+  // - recover slowly (cooldown) to avoid DPR thrash
+  const cur = __dgPressureDprMul;
+  if (targetMul < (cur - 0.02)) {
+    __dgPressureDprMul = targetMul;
+    __dgPressureMulLastChangeTs = nowTs;
+  } else if (targetMul > (cur + 0.02)) {
+    if (!__dgPressureMulLastChangeTs || (nowTs - __dgPressureMulLastChangeTs) >= cooldown) {
+      __dgPressureDprMul = targetMul;
+      __dgPressureMulLastChangeTs = nowTs;
+    }
+  }
+}
+
 // === DRAWGRID TUNING (single source of truth) ===
 const {
   ghostRadiusToy,
@@ -1883,6 +1954,7 @@ try {
           ? zoomPayload.targetScale
           : (Number.isFinite(boardScale) ? boardScale : 1));
       const visualMul = __dgComputeVisualBackingMul(commitScale);
+      const pressureMul = (Number.isFinite(__dgPressureDprMul) && __dgPressureDprMul > 0) ? __dgPressureDprMul : 1;
       const layoutSize = getLayoutSize();
       if (layoutSize.w && layoutSize.h) {
         cssW = Math.max(1, layoutSize.w);
@@ -1904,7 +1976,7 @@ try {
             : (Number.isFinite(paintDpr) && paintDpr > 0)
               ? paintDpr
               : Math.max(1, Math.min(deviceDpr, 3));
-        desiredDpr = Math.min(deviceDpr, desiredDpr * visualMul);
+        desiredDpr = Math.min(deviceDpr, desiredDpr * visualMul * pressureMul);
         const cappedDpr = __dgCapDprForBackingStore(cssW, cssH, desiredDpr, paintDpr);
         paintDpr = cappedDpr;
         resizeSurfacesFor(cssW, cssH, cappedDpr);
@@ -3080,13 +3152,14 @@ function regenerateMapFromStrokes() {
       {
         const deviceDpr = Math.max(1, Number.isFinite(window?.devicePixelRatio) ? window.devicePixelRatio : 1);
         const visualMul = __dgComputeVisualBackingMul(Number.isFinite(boardScale) ? boardScale : 1);
+        const pressureMul = (Number.isFinite(__dgPressureDprMul) && __dgPressureDprMul > 0) ? __dgPressureDprMul : 1;
         // Prefer the most recent adaptive DPR (already includes non-gesture caps),
         // then apply size-based capping to avoid huge backing stores.
         let desiredDpr =
           (Number.isFinite(__dgAdaptivePaintDpr) && __dgAdaptivePaintDpr > 0)
             ? __dgAdaptivePaintDpr
             : Math.max(1, Math.min(deviceDpr, 3));
-        desiredDpr = Math.min(deviceDpr, desiredDpr * visualMul);
+        desiredDpr = Math.min(deviceDpr, desiredDpr * visualMul * pressureMul);
         paintDpr = __dgCapDprForBackingStore(cssW, cssH, desiredDpr, paintDpr);
       }
       pendingZoomResnap = false;
@@ -6585,8 +6658,12 @@ function copyCanvas(backCtx, frontCtx) {
         const fpsLiveRaw = Number.isFinite(fpsSample)
           ? fpsSample
           : (Number.isFinite(__dgFpsValue) ? __dgFpsValue : null);
-        const fpsLive = (Number.isFinite(fpsLiveRaw) && fpsLiveRaw >= 5) ? fpsLiveRaw : null;
-        if (Number.isFinite(fpsLive)) {
+      const fpsLive = (Number.isFinite(fpsLiveRaw) && fpsLiveRaw >= 5) ? fpsLiveRaw : null;
+      // Update global pressure DPR multiplier (generic: keys off low FPS, not gestures).
+      if (Number.isFinite(fpsLive)) {
+        __dgUpdatePressureDprMulFromFps(fpsLive, nowTs);
+      }
+      if (Number.isFinite(fpsLive)) {
         let desiredSimple = null;
         if (fpsLive <= DG_PLAYHEAD_FPS_SIMPLE_ENTER) {
           desiredSimple = true;
@@ -6667,7 +6744,8 @@ function copyCanvas(backCtx, frontCtx) {
       });
       const deviceDpr = Math.max(1, Number.isFinite(window?.devicePixelRatio) ? window.devicePixelRatio : 1);
       const visualMul = __dgComputeVisualBackingMul(Number.isFinite(boardScale) ? boardScale : 1);
-      const desiredDprRaw = (adaptiveCap ? Math.min(deviceDpr, adaptiveCap) : deviceDpr) * visualMul;
+      const pressureMul = (Number.isFinite(__dgPressureDprMul) && __dgPressureDprMul > 0) ? __dgPressureDprMul : 1;
+      const desiredDprRaw = (adaptiveCap ? Math.min(deviceDpr, adaptiveCap) : deviceDpr) * visualMul * pressureMul;
       const desiredDpr = __dgCapDprForBackingStore(cssW, cssH, desiredDprRaw, __dgAdaptivePaintDpr);
       const nowAdaptiveTs = nowTs || (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
       const canAdjustDpr =
