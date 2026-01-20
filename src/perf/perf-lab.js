@@ -22,6 +22,47 @@ try {
   };
 } catch {}
 
+// ---------------------------------------------------------------------------
+// Auto-run queues
+//
+// Goal: keep the footer workflow stable:
+//   1) Generic baseline (mixed → lots of DrawGrid → lots of Simple Rhythm)
+//   2) Current Focus (changes as we iterate)
+//   3) Focus Micro (short, high-signal, usually trace-enabled)
+//
+// Edit these arrays to change what the footer buttons run.
+
+const AUTO_GENERIC_QUEUE = [
+  'traceOff',
+  // Mixed
+  'buildP6',
+  'runP6a',
+  // Lots of DrawGrid
+  'buildP3',
+  'runP3f',
+  // Lots of Simple Rhythm
+  'buildP4',
+  'runP4b',
+];
+
+// Current focus for this cycle: gesture cost / compositor pressure.
+// Keep this short and targeted; avoid “wide” coverage.
+const AUTO_FOCUS_QUEUE = [
+  'traceOff',
+  'buildP3',
+  'runP3f',
+  'buildP4',
+  'runP4b',
+];
+
+// Most diagnostic micro-run for the current focus.
+// Usually trace ON + shortest script we have.
+const AUTO_FOCUS_MICRO_QUEUE = [
+  'traceOn',
+  'buildP3',
+  'runP3fShort',
+];
+
 function ensureUI() {
   let ov = document.getElementById('perf-lab-overlay');
   if (ov) return ov;
@@ -150,9 +191,20 @@ function ensureUI() {
     try { console.log('[perf-lab] tests:', tests.map(t => t.label)); } catch {}
   }
 
+  const toolsHtml = section(
+    'Tools',
+    [
+      btn('auto', 'Run Auto (Demon Hunt: traceOff → traceOn)'),
+      btn('autoFast', 'Auto: Fast Loop (P3f A/B + NoParticles + P4b)'),
+      btn('autoPauseDom', 'Auto: Pause DOM-in-RAF Probe'),
+      btn('autoQuickTraceP3f', 'Auto: Quick Trace P3f (Short)'),
+    ].join('')
+  );
+
   const sectionsHtml = [
     section(P3.title, `${P3.build}${P3.runs.map(r => btn(r.act, r.label)).join('')}`),
     section(P7.title, `${P7.build}`),
+    toolsHtml,
   ].join('');
 
   ov.innerHTML = `
@@ -189,9 +241,9 @@ function ensureUI() {
           </div>
 
           <div class="perf-lab-row perf-lab-footer">
-            <button class="perf-lab-btn" data-act="auto">Run Auto (Saved)</button>
-            <button class="perf-lab-btn" data-act="autoFast">Auto: Fast P3f + PlayheadSep A/B + NoParticles + P4b</button>
-            <button class="perf-lab-btn" data-act="autoPauseDom">Auto: Pause DOM-in-RAF Probe (Play → Pause → Wait)</button>
+            <button class="perf-lab-btn" data-act="autoGeneric">Run-Auto (Generic)</button>
+            <button class="perf-lab-btn" data-act="autoFocus">Auto: Current Focus</button>
+            <button class="perf-lab-btn" data-act="autoMicro">Auto: Focus Micro (Best)</button>
             <div class="perf-lab-status" id="perf-lab-status">Idle</div>
           </div>
         </div>
@@ -419,6 +471,51 @@ function ensureUI() {
     if (act === 'buildP7') await buildP7();
     if (act === 'runP7a') await runP7a();
     if (act === 'runP7b') await runP7b();
+
+    if (act === 'autoGeneric') {
+      const cfgBase = (await readAutoConfigFromFile()) || readAutoConfig() || {};
+      const ts = new Date().toISOString().replace(/[:.]/g, '-');
+      const cfg = {
+        clear: true,
+        save: false,
+        download: false,
+        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
+        downloadName: `perf-lab-generic-${ts}.json`,
+        notes: 'Generic baseline: Mixed (P6a) → Lots of DrawGrid (P3f) → Lots of Simple Rhythm (P4b)',
+        queue: AUTO_GENERIC_QUEUE,
+      };
+      await runAuto(cfg);
+    }
+
+    if (act === 'autoFocus') {
+      const cfgBase = (await readAutoConfigFromFile()) || readAutoConfig() || {};
+      const ts = new Date().toISOString().replace(/[:.]/g, '-');
+      const cfg = {
+        clear: true,
+        save: false,
+        download: false,
+        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
+        downloadName: `perf-lab-focus-${ts}.json`,
+        notes: 'Current Focus: gesture cost / compositor pressure (edit AUTO_FOCUS_QUEUE in perf-lab.js)',
+        queue: AUTO_FOCUS_QUEUE,
+      };
+      await runAuto(cfg);
+    }
+
+    if (act === 'autoMicro') {
+      const cfgBase = (await readAutoConfigFromFile()) || readAutoConfig() || {};
+      const ts = new Date().toISOString().replace(/[:.]/g, '-');
+      const cfg = {
+        clear: true,
+        save: false,
+        download: false,
+        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
+        downloadName: `perf-lab-micro-${ts}.json`,
+        notes: 'Focus Micro: short, high-signal, typically trace-enabled (edit AUTO_FOCUS_MICRO_QUEUE in perf-lab.js)',
+        queue: AUTO_FOCUS_MICRO_QUEUE,
+      };
+      await runAuto(cfg);
+    }
     if (act === 'auto') {
       // Canonical demon-hunt sequence:
       // 1) trace OFF baseline runs
