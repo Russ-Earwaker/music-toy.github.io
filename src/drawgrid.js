@@ -129,6 +129,25 @@ if (typeof window !== 'undefined' && typeof window.DG_ZOOM_AUDIT === 'undefined'
   window.DG_ZOOM_AUDIT = false;
 }
 
+// -----------------------------------------------------------------------------
+// Visual backing-store DPR reduction when visually small (generic, not gesture)
+// -----------------------------------------------------------------------------
+
+window.__DG_VISUAL_DPR_ZOOM_THRESHOLD ??= 0.9;   // below this, start reducing DPR
+window.__DG_VISUAL_DPR_MIN_MUL        ??= 0.6;   // lowest visual multiplier
+window.__DG_MIN_PANEL_DPR             ??= 0.6;   // absolute floor for backing DPR
+
+function __dgComputeVisualBackingMul(boardScale) {
+  const threshold = window.__DG_VISUAL_DPR_ZOOM_THRESHOLD;
+  const minMul    = window.__DG_VISUAL_DPR_MIN_MUL;
+
+  if (!boardScale || boardScale >= threshold) return 1;
+
+  // Smooth linear falloff from threshold → 0
+  const t = Math.max(0, Math.min(1, boardScale / threshold));
+  return minMul + (1 - minMul) * t;
+}
+
 // === DRAWGRID TUNING (single source of truth) ===
 const {
   ghostRadiusToy,
@@ -299,7 +318,10 @@ function __dgCapDprForBackingStore(cssW = 0, cssH = 0, desiredDpr = 1, prevDpr =
   const w = Number.isFinite(cssW) ? cssW : 0;
   const h = Number.isFinite(cssH) ? cssH : 0;
   let dpr = Number.isFinite(desiredDpr) ? desiredDpr : 1;
-  if (w <= 0 || h <= 0) return Math.max(1, dpr);
+  const minDpr = (typeof window !== 'undefined' && window.__DG_MIN_PANEL_DPR !== undefined)
+    ? window.__DG_MIN_PANEL_DPR
+    : 0.6;
+  if (w <= 0 || h <= 0) return Math.max(minDpr, dpr);
 
   // Pixel budget cap (area-based).
   let maxPx = 2_200_000; // ~1483x1483 backing store at 1.0 DPR
@@ -318,7 +340,7 @@ function __dgCapDprForBackingStore(cssW = 0, cssH = 0, desiredDpr = 1, prevDpr =
   const capFromSide = Math.min(maxSide / w, maxSide / h);
 
   let capped = Math.min(dpr, capFromPx, capFromSide);
-  capped = Math.max(1, Math.min(dpr, capped));
+  capped = Math.max(minDpr, Math.min(dpr, capped));
 
   // Hysteresis to avoid DPR thrash around thresholds.
   const prev = (Number.isFinite(prevDpr) && prevDpr > 0) ? prevDpr : null;
@@ -1855,6 +1877,12 @@ try {
       __dgDeferUntilTs = Math.max(__dgDeferUntilTs || 0, deferUntil);
       __dgStableFramesAfterCommit = 0;
       __dgNeedsUIRefresh = true;
+      const commitScale = Number.isFinite(zoomPayload?.currentScale)
+        ? zoomPayload.currentScale
+        : (Number.isFinite(zoomPayload?.targetScale)
+          ? zoomPayload.targetScale
+          : (Number.isFinite(boardScale) ? boardScale : 1));
+      const visualMul = __dgComputeVisualBackingMul(commitScale);
       const layoutSize = getLayoutSize();
       if (layoutSize.w && layoutSize.h) {
         cssW = Math.max(1, layoutSize.w);
@@ -1876,15 +1904,12 @@ try {
             : (Number.isFinite(paintDpr) && paintDpr > 0)
               ? paintDpr
               : Math.max(1, Math.min(deviceDpr, 3));
-        desiredDpr = Math.min(deviceDpr, desiredDpr);
+        desiredDpr = Math.min(deviceDpr, desiredDpr * visualMul);
         const cappedDpr = __dgCapDprForBackingStore(cssW, cssH, desiredDpr, paintDpr);
         paintDpr = cappedDpr;
         resizeSurfacesFor(cssW, cssH, cappedDpr);
       }
       layout(true);
-      const commitScale = Number.isFinite(zoomPayload?.currentScale)
-        ? zoomPayload.currentScale
-        : (Number.isFinite(zoomPayload?.targetScale) ? zoomPayload.targetScale : null);
       dglog('zoom:commit', { scale: commitScale, reason });
     }
   }
@@ -3054,13 +3079,14 @@ function regenerateMapFromStrokes() {
       } catch {}
       {
         const deviceDpr = Math.max(1, Number.isFinite(window?.devicePixelRatio) ? window.devicePixelRatio : 1);
+        const visualMul = __dgComputeVisualBackingMul(Number.isFinite(boardScale) ? boardScale : 1);
         // Prefer the most recent adaptive DPR (already includes non-gesture caps),
         // then apply size-based capping to avoid huge backing stores.
         let desiredDpr =
           (Number.isFinite(__dgAdaptivePaintDpr) && __dgAdaptivePaintDpr > 0)
             ? __dgAdaptivePaintDpr
             : Math.max(1, Math.min(deviceDpr, 3));
-        desiredDpr = Math.min(deviceDpr, desiredDpr);
+        desiredDpr = Math.min(deviceDpr, desiredDpr * visualMul);
         paintDpr = __dgCapDprForBackingStore(cssW, cssH, desiredDpr, paintDpr);
       }
       pendingZoomResnap = false;
@@ -6640,7 +6666,8 @@ function copyCanvas(backCtx, frontCtx) {
         isZoomed,
       });
       const deviceDpr = Math.max(1, Number.isFinite(window?.devicePixelRatio) ? window.devicePixelRatio : 1);
-      const desiredDprRaw = adaptiveCap ? Math.min(deviceDpr, adaptiveCap) : deviceDpr;
+      const visualMul = __dgComputeVisualBackingMul(Number.isFinite(boardScale) ? boardScale : 1);
+      const desiredDprRaw = (adaptiveCap ? Math.min(deviceDpr, adaptiveCap) : deviceDpr) * visualMul;
       const desiredDpr = __dgCapDprForBackingStore(cssW, cssH, desiredDprRaw, __dgAdaptivePaintDpr);
       const nowAdaptiveTs = nowTs || (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
       const canAdjustDpr =

@@ -29,7 +29,7 @@ export function createDgPaintBuffers(getHost) {
     // Preserve the original behaviour: don't resize mid-gesture unless forced.
     if (!force && h?.zoomGestureActive) return;
 
-    const paintDpr = Math.max(1, Number.isFinite(h?.paintDpr) ? h.paintDpr : 1);
+    const paintDpr = Math.max(0.1, Number.isFinite(h?.paintDpr) ? h.paintDpr : 1);
     const targetW = Math.max(1, Math.round(cssW * paintDpr));
     const targetH = Math.max(1, Math.round(cssH * paintDpr));
 
