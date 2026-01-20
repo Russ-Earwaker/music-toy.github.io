@@ -914,6 +914,10 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
       confirmBtn?.addEventListener('click', () => {
         try { window.resetGuideProgress?.(); } catch {}
         try { window.IntroOverlay?.reset?.(); } catch {}
+        // Also reset first-run Volume Setup so it shows again after the user refreshes.
+        // (This is a boot-time overlay, not part of scene save/load.)
+        try { window.localStorage?.removeItem?.('rhythmake_volume_setup_done_v1'); } catch {}
+        try { window.localStorage?.setItem?.('rhythmake_volume_setup_done_v1', '0'); } catch {}
         hide();
       });
       overlay.__wired = true;

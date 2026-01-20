@@ -13,20 +13,44 @@ export function drawBlocksSection(ctx, rect, { active=[], onCol=-1, pad=6, label
     const h = Math.max(2, rect.h - pad*2);
     const color = active[i] ? '#f4932f' : '#293042';
 
-    // base fill (plain square)
+    // Flash/pulse (match Simple Rhythm feel: scale pulse + full white flash fill).
+    // NOTE: `onCol` is treated as a "hit" column, not a selection ring.
+    const flash = (i === onCol) ? 1 : 0;
+
+    let dx = x, dy = y, dw = w, dh = h;
+    if (flash > 0){
+      const f = Math.max(0, Math.min(1, flash));
+      const p = 1 - f;
+      const scale = 1.0 + Math.sin(p * Math.PI) * 0.1;
+      const shrinkW = dw * (1 - scale);
+      const shrinkH = dh * (1 - scale);
+      ctx.save();
+      ctx.translate(dx + shrinkW / 2, dy + shrinkH / 2);
+      ctx.scale(scale, scale);
+      dx = 0; dy = 0;
+    }
+
+    // base fill (plain square, no bevel/rounding)
     ctx.fillStyle = color;
-    ctx.fillRect(x|0, y|0, w|0, h|0);
+    ctx.fillRect(dx|0, dy|0, dw|0, dh|0);
+
+    // Full flash overlay (fill, not edge ring)
+    if (flash > 0){
+      const f = Math.max(0, Math.min(1, flash));
+      ctx.save();
+      ctx.globalAlpha = 0.25 + 0.55 * f;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(dx|0, dy|0, dw|0, dh|0);
+      ctx.restore();
+    }
 
     // outline
     ctx.strokeStyle = 'rgba(0,0,0,0.45)';
     ctx.lineWidth = 1;
-    ctx.strokeRect((x+0.5)|0, (y+0.5)|0, (w-1)|0, (h-1)|0);
+    ctx.strokeRect((dx+0.5)|0, (dy+0.5)|0, (dw-1)|0, (dh-1)|0);
 
-    // active ring highlight
-    if (i === onCol){
-      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-      ctx.lineWidth = 3;
-      ctx.strokeRect((x+1.5)|0, (y+1.5)|0, (w-3)|0, (h-3)|0);
+    if (flash > 0){
+      ctx.restore(); // paired with ctx.save() above for pulse transform
     }
   }
 }

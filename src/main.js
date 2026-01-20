@@ -29,15 +29,16 @@ import './toy-layout-manager.js';
 import './zoom-overlay.js';
 import './toy-spawner.js';
 import './board-tap-dots.js';
-import { initAudioAssets, cancelScheduledToySources } from './audio-samples.js';
-import { loadInstrumentEntries as loadInstrumentCatalog } from './instrument-catalog.js';
+import { initAudioAssets, cancelScheduledToySources, triggerInstrument } from './audio-samples.js';
+import { loadInstrumentEntries as loadInstrumentCatalog, getInstrumentEntries as getInstrumentCatalogEntries } from './instrument-catalog.js';
 import { collectUsedInstruments, getSoundThemeKey, pickInstrumentForToy } from './sound-theme.js';
 import { installIOSAudioUnlock } from './ios-audio-unlock.js';
 import { installAudioDiagnostics } from './audio-diagnostics.js';
 import { makeDebugLogger } from './debug-flags.js';
-import { DEFAULT_BPM, NUM_STEPS, ensureAudioContext, getLoopInfo, setBpm, start, stop, isRunning, getToyGain } from './audio-core.js';
+import { DEFAULT_BPM, NUM_STEPS, ensureAudioContext, resumeAudioContextIfNeeded, getLoopInfo, setBpm, start, stop, isRunning, getToyGain } from './audio-core.js';
 import { autoQualityOnFrame } from './perf/AutoQualityController.js';
 import { createSequencerScheduler } from './note-scheduler.js';
+import { drawBlocksSection as drawOrangeTiles } from './ui-tiles.js';
 import { buildGrid } from './grid-core.js';
 import { buildDrumGrid } from './drum-core.js';
 import { tryRestoreOnBoot, startAutosave } from './persistence.js';
@@ -1178,6 +1179,263 @@ function bootTopbar(){
   });
   bpmInput?.addEventListener('change', (e)=> setBpm(Number(e.target.value)||DEFAULT_BPM));
 }
+
+// --- First-run Volume Setup overlay ---
+// Shows the *actual* master volume control in an overlay panel, then animates it back to the topbar.
+const LS_VOLUME_SETUP_DONE_KEY = 'rhythmake_volume_setup_done_v1';
+
+function showVolumeSetupIfFirstRun(){
+  if (document.getElementById('volume-setup-overlay')) return true;
+  try {
+    if (window?.localStorage?.getItem?.(LS_VOLUME_SETUP_DONE_KEY) === '1') return false;
+  } catch {}
+
+  const topbar = document.getElementById('topbar');
+  const master = document.getElementById('topbar-master-volume');
+  if (!topbar || !master) {
+    if (!window.__volumeSetupRetryPending) {
+      window.__volumeSetupRetryPending = true;
+      const attempt = () => {
+        window.__volumeSetupRetryPending = false;
+        const tries = Number(window.__volumeSetupRetryCount || 0);
+        if (tries < 8) {
+          window.__volumeSetupRetryCount = tries + 1;
+          showVolumeSetupIfFirstRun();
+        }
+      };
+      requestAnimationFrame(() => setTimeout(attempt, 0));
+    }
+    return false;
+  }
+
+  // Build overlay
+  const overlay = document.createElement('div');
+  overlay.id = 'volume-setup-overlay';
+  overlay.className = 'volume-setup-overlay';
+  overlay.innerHTML = `
+    <div class="volume-setup-backdrop"></div>
+    <div class="volume-setup-panel" role="dialog" aria-modal="true" aria-label="Volume setup">
+      <div class="volume-setup-title">Volume setup</div>
+      <div class="volume-setup-body">
+        <div class="volume-setup-slot"></div>
+      </div>
+      <div class="volume-setup-pads" aria-label="Tap pads">
+        <canvas class="volume-setup-pad-canvas" width="540" height="120"></canvas>
+      </div>
+      <div class="volume-setup-actions">
+        <div class="volume-setup-done">Done</div>
+        <button class="c-btn volume-setup-ok" type="button" aria-label="Done">
+          <div class="c-btn-outer"></div>
+          <div class="c-btn-glow"></div>
+          <div class="c-btn-core"></div>
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const slot = overlay.querySelector('.volume-setup-slot');
+  const okBtn = overlay.querySelector('.volume-setup-ok');
+  const padCanvas = overlay.querySelector('.volume-setup-pad-canvas');
+  if (!slot || !okBtn) {
+    try { overlay.remove(); } catch {}
+    return false;
+  }
+
+  // Tick-circle OK button (match Instrument menu "OK" style)
+  try {
+    okBtn.classList.add('inst-ok');
+    const okCore = okBtn.querySelector('.c-btn-core');
+    if (okCore) okCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonTick.png')");
+    okBtn.title = 'Done';
+  } catch {}
+
+  // Insert a placeholder where the master control normally lives.
+  const placeholder = document.createElement('div');
+  placeholder.className = 'topbar-master-volume-placeholder';
+  placeholder.style.width = `${master.offsetWidth || 0}px`;
+  placeholder.style.height = `${master.offsetHeight || 0}px`;
+  topbar.insertBefore(placeholder, master.nextSibling);
+
+  // Move the real master control into the setup panel (override its fixed positioning while in setup).
+  master.classList.add('is-in-setup');
+  slot.appendChild(master);
+
+  // --- Tap pads (4 orange squares like Simple Rhythm) ---
+  // One-shot only: play sound + flash animation (no toggle).
+  const padState = {
+    sounds: [],
+    hitIndex: -1,
+    hitUntilMs: 0,
+    raf: 0,
+  };
+
+  async function pickPadSounds(){
+    let entries = [];
+    try { entries = getInstrumentCatalogEntries ? getInstrumentCatalogEntries() : []; } catch {}
+    if (!entries || !entries.length) {
+      try { await loadInstrumentCatalog(); } catch {}
+      try { entries = getInstrumentCatalogEntries ? getInstrumentCatalogEntries() : []; } catch {}
+    }
+    const isDrawgridReco = (e) => Array.isArray(e?.recommendedToys) && e.recommendedToys.some(t => String(t).toLowerCase() === 'drawgrid');
+    let pool = (entries || []).filter(e => e && e.id && e.priority === true && isDrawgridReco(e));
+    if (!pool.length) pool = (entries || []).filter(e => e && e.id && isDrawgridReco(e));
+    if (!pool.length) pool = (entries || []).filter(e => e && e.id);
+    // shuffle
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+    }
+    const out = [];
+    const used = new Set();
+    for (const e of pool) {
+      const id = String(e.id || '').trim();
+      if (!id || used.has(id)) continue;
+      used.add(id);
+      out.push(id);
+      if (out.length >= 4) break;
+    }
+    return out;
+  }
+
+  function drawPadCanvas(){
+    if (!padCanvas) return;
+    const ctx = padCanvas.getContext('2d');
+    if (!ctx) return;
+    const W = padCanvas.width|0, H = padCanvas.height|0;
+    ctx.clearRect(0, 0, W, H);
+
+    const nowMs = performance.now();
+    let flashing = -1;
+    let flashAmt = 0;
+    if (padState.hitIndex >= 0 && nowMs < padState.hitUntilMs) {
+      flashing = padState.hitIndex;
+      const dur = Math.max(1, padState.hitUntilMs - padState.hitStartMs);
+      const t = (nowMs - padState.hitStartMs) / dur;
+      const up = 0.22;
+      if (t <= up) {
+        flashAmt = t / up;
+      } else {
+        flashAmt = 1 - (t - up) / Math.max(0.001, (1 - up));
+      }
+      flashAmt = Math.max(0, Math.min(1, flashAmt));
+    }
+
+    // Draw the 4 orange tiles (plain squares, no bevel), like Simple Rhythm.
+    const rect = { x: 0, y: 0, w: W, h: H };
+    drawOrangeTiles(ctx, rect, { active: [true,true,true,true], onCol: flashing, pad: 18 });
+
+    // Extra flash overlay (matches the "pop" feel of Simple Rhythm)
+    if (flashing >= 0 && flashAmt > 0){
+      const N = 4;
+      const cw = W / N;
+      const pad = 14;
+      const x = flashing*cw + pad;
+      const y = pad;
+      const w = cw - pad*2;
+      const h = H - pad*2;
+      ctx.save();
+      ctx.globalAlpha = 0.55 * flashAmt;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(x|0, y|0, w|0, h|0);
+      ctx.restore();
+    }
+
+    // Labels: "tap"
+    ctx.save();
+    ctx.font = '800 14px/1 ui-sans-serif, system-ui';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(0,0,0,0.80)';
+    const N = 4;
+    const cw = W / N;
+    for (let i=0;i<N;i++){
+      const cx = i*cw + cw*0.5;
+      const cy = H*0.5;
+      ctx.fillText('TAP', cx, cy);
+    }
+    ctx.restore();
+
+    if (padState.hitIndex >= 0 && nowMs < padState.hitUntilMs){
+      padState.raf = requestAnimationFrame(drawPadCanvas);
+    } else {
+      padState.hitIndex = -1;
+      padState.raf = 0;
+    }
+  }
+
+  async function initPadCanvas(){
+    if (!padCanvas) return;
+    padState.sounds = await pickPadSounds();
+    drawPadCanvas();
+    padCanvas.addEventListener('click', (e) => {
+      const r = padCanvas.getBoundingClientRect();
+      const x = (e.clientX - r.left) / Math.max(1, r.width);
+      const idx = Math.max(0, Math.min(3, Math.floor(x * 4)));
+      const instrumentId = padState.sounds[idx] || padState.sounds[0] || 'tone';
+      try { resumeAudioContextIfNeeded?.(); } catch {}
+      try { triggerInstrument(instrumentId, 'C4', undefined, 'master'); } catch {}
+
+      padState.hitIndex = idx;
+      padState.hitUntilMs = performance.now() + 260;
+      if (!padState.raf) padState.raf = requestAnimationFrame(drawPadCanvas);
+    }, { passive: true });
+  }
+
+  initPadCanvas();
+
+  // Focus the tick button for fast onboarding.
+  try { okBtn.focus(); } catch {}
+
+  okBtn.addEventListener('click', () => {
+    try { window?.localStorage?.setItem?.(LS_VOLUME_SETUP_DONE_KEY, '1'); } catch {}
+
+    // FLIP animation back to topbar placement.
+    const before = master.getBoundingClientRect();
+
+    // Put it back where it belongs.
+    try {
+      placeholder.parentNode?.insertBefore(master, placeholder.nextSibling);
+    } catch {}
+    master.classList.remove('is-in-setup');
+
+    // Force layout so the new rect is correct.
+    void master.offsetWidth;
+    const after = master.getBoundingClientRect();
+
+    const dx = before.left - after.left;
+    const dy = before.top - after.top;
+    master.style.transition = 'none';
+    master.style.transform = `translate(${dx}px, ${dy}px)`;
+    void master.offsetWidth;
+    master.style.transition = 'transform 520ms cubic-bezier(0.2, 0.8, 0.2, 1)';
+    master.style.transform = 'translate(0px, 0px)';
+
+    const cleanup = () => {
+      master.style.transition = '';
+      master.style.transform = '';
+      master.removeEventListener('transitionend', cleanup);
+    };
+    master.addEventListener('transitionend', cleanup);
+    setTimeout(cleanup, 580);
+
+    try { placeholder.remove(); } catch {}
+    try { overlay.remove(); } catch {}
+  }, { once: true });
+
+  // Prevent clicks on backdrop from closing (explicit OK only).
+  overlay.addEventListener('click', (e) => {
+    const panel = overlay.querySelector('.volume-setup-panel');
+    if (!panel) return;
+    if (!panel.contains(e.target)) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+  }, true);
+
+  return true;
+}
+
 function bootGrids(){
   const simplePanels = Array.from(document.querySelectorAll('.toy-panel[data-toy="loopgrid"]'));
   simplePanels.forEach(p => buildGrid(p, 8));
@@ -4222,6 +4480,10 @@ async function boot(){
     try { initBoardAnchor(); } catch (err) { console.warn('[ANCHOR] init failed', err); }
 
     bootTopbar();
+    // First-run "Volume setup" overlay (uses the real master slider; not part of scene save/load).
+    requestAnimationFrame(() => {
+      try { showVolumeSetupIfFirstRun(); } catch {}
+    });
     let restored = false;
     try{
       g_isRestoringSnapshot = true;
