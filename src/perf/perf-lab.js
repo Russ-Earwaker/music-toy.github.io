@@ -51,7 +51,7 @@ const AUTO_FOCUS_QUEUE = [
   // Goal: isolate DrawGrid gesture jank drivers (overlays, playhead strategy, layer flattening).
   // Keep each run independent: rebuild the stress scene before every variant.
 
-  // 1) Baseline micro run with canvas-resize trace enabled (detect resize churn during gesture).
+  // 1) Baseline micro run with canvas-resize-only trace enabled (detect resize churn during gesture).
   'traceCanvasOnlyOn',
   'buildP3',
   'runP3fShort',
@@ -68,14 +68,11 @@ const AUTO_FOCUS_QUEUE = [
   'runP3fPlayheadSeparateOn',
 
   // 4) Split overlays to find which overlay family drives cost.
-  'buildP3',
-  'runP3fNoOverlayCoreShort',
-  'buildP3',
-  'runP3fNoOverlayStrokesShort',
-
-  // 5) Layer flattening experiment (tests whether fewer composited layers helps gesture FPS).
-  'buildP3',
-  // 'runP3fFlatLayers', // Rejected: catastrophic in latest focus run
+  // NOTE: The following variants were catastrophically slow in the latest focus run
+  // (and swamp the signal). Keep them as manual buttons instead:
+  // - runP3fNoOverlayCoreShort
+  // - runP3fNoOverlayStrokesShort
+  // - runP3fFlatLayers
 ];
 
 // Most diagnostic micro-run for the current focus.
@@ -640,6 +637,13 @@ function ensureUI() {
       window.__PERF_TRACE.traceCanvasResize = true;
       window.__PERF_TRACE.traceDomInRaf = true;
       console.log('[PerfLab] demon trace ENABLED', { ...window.__PERF_TRACE });
+      try { syncUiFromState(); } catch {}
+    }
+    if (act === 'traceCanvasOnlyOn') {
+      window.__PERF_TRACE = window.__PERF_TRACE || {};
+      window.__PERF_TRACE.traceCanvasResize = true;
+      window.__PERF_TRACE.traceDomInRaf = false;
+      console.log('[PerfLab] demon trace ENABLED (canvas resize only)', { ...window.__PERF_TRACE });
       try { syncUiFromState(); } catch {}
     }
     if (act === 'traceOff') {
