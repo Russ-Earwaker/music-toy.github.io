@@ -365,14 +365,17 @@ let __dgSampleCanvas = null;
 let __dgSampleCtx = null;
 let __dgStableFramesAfterCommit = 0;
 
-function __dgComputeAdaptivePaintDpr({ boardScale = 1, visiblePanels = 0, isFocused = false, isZoomed = false }) {
+function __dgComputeAdaptivePaintDpr({ boardScale = 1, isFocused = false, isZoomed = false }) {
   if (isFocused || isZoomed) return null;
   let cap = null;
-  if (boardScale <= 0.35 && visiblePanels >= 16) {
+  // IMPORTANT: do not key DPR caps off visible panel count (device-dependent).
+  // We can still cap when visually small (zoomed out), and rely on pressure-DPR (FPS-based)
+  // for machine-specific scaling.
+  if (boardScale <= 0.35) {
     cap = 1.0;
-  } else if (boardScale <= 0.45 && visiblePanels >= 12) {
+  } else if (boardScale <= 0.45) {
     cap = 1.25;
-  } else if (boardScale <= 0.6 && visiblePanels >= 8) {
+  } else if (boardScale <= 0.6) {
     cap = 1.5;
   }
   return cap;
@@ -6736,7 +6739,6 @@ function copyCanvas(backCtx, frontCtx) {
 
       const adaptiveCap = __dgComputeAdaptivePaintDpr({
         boardScale: Number.isFinite(boardScale) ? boardScale : 1,
-        visiblePanels,
         isFocused,
         isZoomed,
       });
@@ -6771,17 +6773,9 @@ function copyCanvas(backCtx, frontCtx) {
       }
 
       const disableOverlays = !!(typeof window !== 'undefined' && window.__PERF_DG_DISABLE_OVERLAYS);
-      // Auto overlay suppression (unfocused only) during heavy gesture situations.
-      // We *don't* clear overlays when suppressed, so the toy stays visually stable.
-      const __autoOverlayOff = (typeof window !== 'undefined')
-        ? (window.__DG_AUTO_DISABLE_OVERLAYS_DURING_GESTURE ?? true)
-        : true;
-      const __autoOverlayThreshold = (typeof window !== 'undefined' && Number.isFinite(window.__DG_AUTO_DISABLE_OVERLAYS_THRESHOLD))
-        ? window.__DG_AUTO_DISABLE_OVERLAYS_THRESHOLD
-        : 12;
-      const disableOverlaysEffective =
-        disableOverlays ||
-        (__autoOverlayOff && gestureMoving && !isFocused && visiblePanels >= __autoOverlayThreshold);
+      // IMPORTANT: do not disable overlays based on gesture state.
+      // If overlays need to scale back, that should be driven by generic pressure (FPS-based) systems.
+      const disableOverlaysEffective = disableOverlays;
 
       // Overlays (notes, playhead, flashes) respect visibility & hydrations guard,
       // but are otherwise always on - they're core UX.
@@ -6805,9 +6799,7 @@ function copyCanvas(backCtx, frontCtx) {
         : (transportRunning && (isChained ? (isActiveInChain && chainHasNotes) : hasActiveNotes));
       let overlayActive = allowOverlayDraw && (hasOverlayFx || overlayTransport || hasOverlayStrokesLive || (cur && previewGid));
       let overlayEvery = 1;
-      if (gestureMoving && visiblePanels >= 6 && !isFocused) {
-        overlayEvery = (visiblePanels >= 18) ? 4 : (visiblePanels >= 12) ? 3 : 2;
-      }
+      // IMPORTANT: do not change overlay cadence based on gestures or visible count.
       if (overlayEvery > 1) {
         panel.__dgOverlayFrame = (panel.__dgOverlayFrame || 0) + 1;
       }
@@ -7859,6 +7851,12 @@ function copyCanvas(backCtx, frontCtx) {
         // (b) measured FPS indicates headroom, or we're zoomed in enough to justify detail.
         const playheadFancyDesired = !playheadSimpleOnly &&
           (zoomForOverlay > 0.75 || allowPlayheadLowZoom);
+        // If global FPS pressure has switched us into "simple playhead" mode,
+        // drop fancy immediately (do NOT wait for a phase wrap to re-lock).
+        // This is generic (FPS-based), not gesture-based, and not device-count-based.
+        if (playheadSimpleOnly) {
+          panel.__dgPlayheadFancyLocked = false;
+        }
         if (phaseJustWrapped || panel.__dgPlayheadFancyLocked == null) {
           panel.__dgPlayheadFancyLocked = playheadFancyDesired;
         }
@@ -7885,8 +7883,6 @@ function copyCanvas(backCtx, frontCtx) {
           const __dgFps =
             (typeof window !== 'undefined' && Number.isFinite(window.__MT_SM_FPS)) ? window.__MT_SM_FPS :
             ((typeof window !== 'undefined' && Number.isFinite(window.__MT_FPS)) ? window.__MT_FPS : 60);
-          const __dgVisiblePanels = Number.isFinite(globalDrawgridState?.visibleCount) ? globalDrawgridState.visibleCount : visiblePanels;
-          const __dgGlobalLowQuality = (__dgVisiblePanels >= 18 && __dgFps < 50) || (__dgFps < 40);
 
           // Global quality knob (not gesture-based). When low, we may reduce *detail*, not cadence.
           // Leave playhead cadence at full rate; later we can swap to low-detail visual instead of skipping frames.
