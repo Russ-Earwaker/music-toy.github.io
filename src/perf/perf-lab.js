@@ -48,11 +48,21 @@ const AUTO_GENERIC_QUEUE = [
 // Current focus for this cycle: gesture cost / compositor pressure.
 // Keep this short and targeted; avoid “wide” coverage.
 const AUTO_FOCUS_QUEUE = [
-  'traceOff',
+  // 1) High-signal micro run with canvas-resize trace enabled.
+  //    (Purpose: prove whether resize churn is still happening during gesture/compositor stress.)
+  'traceCanvasOnlyOn',
   'buildP3',
-  'runP3f',
-  'buildP4',
-  'runP4b',
+  'runP3fShort',
+  'traceOff',
+
+  // 2) Same micro run with overlays disabled to measure compositor/layer pressure.
+  'runP3fNoOverlaysShort',
+
+  // 3) Split overlays: find the main culprit (core vs strokes).
+  'buildP3',
+  'runP3fNoOverlayCoreShort',
+  'buildP3',
+  'runP3fNoOverlayStrokesShort',
 ];
 
 // Most diagnostic micro-run for the current focus.
@@ -413,6 +423,9 @@ function ensureUI() {
     if (act === 'runP3e2') await runP3e2();
     if (act === 'runP3f') await runP3f();
     if (act === 'runP3fShort') await runP3fShort();
+    if (act === 'runP3fNoOverlaysShort') await runP3fNoOverlaysShort();
+    if (act === 'runP3fNoOverlayCoreShort') await runP3fNoOverlayCoreShort();
+    if (act === 'runP3fNoOverlayStrokesShort') await runP3fNoOverlayStrokesShort();
     if (act === 'runP3PauseDomProbe') await runP3PauseDomProbe();
     if (act === 'runP3fPlayheadSeparateOff') await runP3fPlayheadSeparateOff();
     if (act === 'runP3fPlayheadSeparateOn') await runP3fPlayheadSeparateOn();
@@ -2973,18 +2986,18 @@ async function runP3e2() {
 }
 
   async function runP3f() {
-    const prevDisableOverlays = window.__PERF_DISABLE_OVERLAYS;
+    const prevDisableOverlays = window.__PERF_DG_DISABLE_OVERLAYS;
     const prevOverlayCore = window.__PERF_DG_OVERLAY_CORE_OFF;
     const prevOverlayStrokes = window.__PERF_DG_OVERLAY_STROKES_OFF;
     const prevDisableChainWork = window.__PERF_DISABLE_CHAIN_WORK;
     const forceOverlays =
-      !window.__PERF_DISABLE_OVERLAYS &&
+      !window.__PERF_DG_DISABLE_OVERLAYS &&
       !window.__PERF_DG_OVERLAY_CORE_OFF &&
       !window.__PERF_DG_OVERLAY_STROKES_OFF;
     try {
       window.__PERF_DISABLE_CHAIN_WORK = false;
       if (forceOverlays) {
-        window.__PERF_DISABLE_OVERLAYS = false;
+        window.__PERF_DG_DISABLE_OVERLAYS = false;
         window.__PERF_DG_OVERLAY_CORE_OFF = false;
         window.__PERF_DG_OVERLAY_STROKES_OFF = false;
       }
@@ -3020,7 +3033,7 @@ async function runP3e2() {
     });
     try { window.__PERF_DISABLE_CHAIN_WORK = prevDisableChainWork; } catch {}
     try {
-      window.__PERF_DISABLE_OVERLAYS = prevDisableOverlays;
+      window.__PERF_DG_DISABLE_OVERLAYS = prevDisableOverlays;
       window.__PERF_DG_OVERLAY_CORE_OFF = prevOverlayCore;
       window.__PERF_DG_OVERLAY_STROKES_OFF = prevOverlayStrokes;
     } catch {}
@@ -3035,6 +3048,57 @@ async function runP3fShort() {
   await runP3f();
   try { window.__PERF_LAB_DURATION_MS = prev; } catch {}
   try { window.__PERF_RUN_TAG = prevTag; } catch {}
+}
+
+async function runP3fNoOverlaysShort() {
+  // Short probe run with DrawGrid overlays disabled.
+  const prevDur = window.__PERF_LAB_DURATION_MS;
+  const prevTag = window.__PERF_RUN_TAG;
+  const prevNoOverlays = window.__PERF_DG_DISABLE_OVERLAYS;
+  try { window.__PERF_LAB_DURATION_MS = 12000; } catch {}
+  try { window.__PERF_RUN_TAG = 'P3fNoOverlaysShort'; } catch {}
+  window.__PERF_DG_DISABLE_OVERLAYS = true;
+  try {
+    await runP3f();
+  } finally {
+    window.__PERF_DG_DISABLE_OVERLAYS = prevNoOverlays;
+    try { window.__PERF_LAB_DURATION_MS = prevDur; } catch {}
+    try { window.__PERF_RUN_TAG = prevTag; } catch {}
+  }
+}
+
+async function runP3fNoOverlayCoreShort() {
+  // Short probe run with DrawGrid overlay CORE disabled.
+  const prevDur = window.__PERF_LAB_DURATION_MS;
+  const prevTag = window.__PERF_RUN_TAG;
+  const prev = window.__PERF_DG_OVERLAY_CORE_OFF;
+  try { window.__PERF_LAB_DURATION_MS = 12000; } catch {}
+  try { window.__PERF_RUN_TAG = 'P3fNoOverlayCoreShort'; } catch {}
+  window.__PERF_DG_OVERLAY_CORE_OFF = true;
+  try {
+    await runP3f();
+  } finally {
+    window.__PERF_DG_OVERLAY_CORE_OFF = prev;
+    try { window.__PERF_LAB_DURATION_MS = prevDur; } catch {}
+    try { window.__PERF_RUN_TAG = prevTag; } catch {}
+  }
+}
+
+async function runP3fNoOverlayStrokesShort() {
+  // Short probe run with DrawGrid overlay STROKES disabled.
+  const prevDur = window.__PERF_LAB_DURATION_MS;
+  const prevTag = window.__PERF_RUN_TAG;
+  const prev = window.__PERF_DG_OVERLAY_STROKES_OFF;
+  try { window.__PERF_LAB_DURATION_MS = 12000; } catch {}
+  try { window.__PERF_RUN_TAG = 'P3fNoOverlayStrokesShort'; } catch {}
+  window.__PERF_DG_OVERLAY_STROKES_OFF = true;
+  try {
+    await runP3f();
+  } finally {
+    window.__PERF_DG_OVERLAY_STROKES_OFF = prev;
+    try { window.__PERF_LAB_DURATION_MS = prevDur; } catch {}
+    try { window.__PERF_RUN_TAG = prevTag; } catch {}
+  }
 }
 
 async function runP3PauseDomProbe() {
@@ -3158,20 +3222,20 @@ async function runP3f2() {
 
 async function runP3fEmptyNoNotes() {
   const prevTag = window.__PERF_RUN_TAG;
-  const prevDisableOverlays = window.__PERF_DISABLE_OVERLAYS;
+  const prevDisableOverlays = window.__PERF_DG_DISABLE_OVERLAYS;
   const prevOverlayCore = window.__PERF_DG_OVERLAY_CORE_OFF;
   const prevOverlayStrokes = window.__PERF_DG_OVERLAY_STROKES_OFF;
   const prevForceSequencerAll = window.__PERF_FORCE_SEQUENCER_ALL;
   const prevDisableChainWork = window.__PERF_DISABLE_CHAIN_WORK;
   const forceOverlays =
-    !window.__PERF_DISABLE_OVERLAYS &&
+    !window.__PERF_DG_DISABLE_OVERLAYS &&
     !window.__PERF_DG_OVERLAY_CORE_OFF &&
     !window.__PERF_DG_OVERLAY_STROKES_OFF;
   window.__PERF_RUN_TAG = 'P3fEmptyNoNotes';
   try {
     window.__PERF_DISABLE_CHAIN_WORK = false;
     if (forceOverlays) {
-      window.__PERF_DISABLE_OVERLAYS = false;
+      window.__PERF_DG_DISABLE_OVERLAYS = false;
       window.__PERF_DG_OVERLAY_CORE_OFF = false;
       window.__PERF_DG_OVERLAY_STROKES_OFF = false;
     }
@@ -3204,7 +3268,7 @@ async function runP3fEmptyNoNotes() {
     window.__PERF_RUN_TAG = prevTag;
     try { window.__PERF_DISABLE_CHAIN_WORK = prevDisableChainWork; } catch {}
     try {
-      window.__PERF_DISABLE_OVERLAYS = prevDisableOverlays;
+      window.__PERF_DG_DISABLE_OVERLAYS = prevDisableOverlays;
       window.__PERF_DG_OVERLAY_CORE_OFF = prevOverlayCore;
       window.__PERF_DG_OVERLAY_STROKES_OFF = prevOverlayStrokes;
       window.__PERF_FORCE_SEQUENCER_ALL = prevForceSequencerAll;
@@ -3214,20 +3278,20 @@ async function runP3fEmptyNoNotes() {
 
 async function runP3fEmptyChainNoNotes() {
   const prevTag = window.__PERF_RUN_TAG;
-  const prevDisableOverlays = window.__PERF_DISABLE_OVERLAYS;
+  const prevDisableOverlays = window.__PERF_DG_DISABLE_OVERLAYS;
   const prevOverlayCore = window.__PERF_DG_OVERLAY_CORE_OFF;
   const prevOverlayStrokes = window.__PERF_DG_OVERLAY_STROKES_OFF;
   const prevForceSequencerAll = window.__PERF_FORCE_SEQUENCER_ALL;
   const prevDisableChainWork = window.__PERF_DISABLE_CHAIN_WORK;
   const forceOverlays =
-    !window.__PERF_DISABLE_OVERLAYS &&
+    !window.__PERF_DG_DISABLE_OVERLAYS &&
     !window.__PERF_DG_OVERLAY_CORE_OFF &&
     !window.__PERF_DG_OVERLAY_STROKES_OFF;
   window.__PERF_RUN_TAG = 'P3fEmptyChainNoNotes';
   try {
     window.__PERF_DISABLE_CHAIN_WORK = false;
     if (forceOverlays) {
-      window.__PERF_DISABLE_OVERLAYS = false;
+      window.__PERF_DG_DISABLE_OVERLAYS = false;
       window.__PERF_DG_OVERLAY_CORE_OFF = false;
       window.__PERF_DG_OVERLAY_STROKES_OFF = false;
     }
@@ -3265,7 +3329,7 @@ async function runP3fEmptyChainNoNotes() {
     window.__PERF_RUN_TAG = prevTag;
     try { window.__PERF_DISABLE_CHAIN_WORK = prevDisableChainWork; } catch {}
     try {
-      window.__PERF_DISABLE_OVERLAYS = prevDisableOverlays;
+      window.__PERF_DG_DISABLE_OVERLAYS = prevDisableOverlays;
       window.__PERF_DG_OVERLAY_CORE_OFF = prevOverlayCore;
       window.__PERF_DG_OVERLAY_STROKES_OFF = prevOverlayStrokes;
       window.__PERF_FORCE_SEQUENCER_ALL = prevForceSequencerAll;
@@ -3275,20 +3339,20 @@ async function runP3fEmptyChainNoNotes() {
 
 async function runP3fMixedSomeEmpty() {
   const prevTag = window.__PERF_RUN_TAG;
-  const prevDisableOverlays = window.__PERF_DISABLE_OVERLAYS;
+  const prevDisableOverlays = window.__PERF_DG_DISABLE_OVERLAYS;
   const prevOverlayCore = window.__PERF_DG_OVERLAY_CORE_OFF;
   const prevOverlayStrokes = window.__PERF_DG_OVERLAY_STROKES_OFF;
   const prevForceSequencerAll = window.__PERF_FORCE_SEQUENCER_ALL;
   const prevDisableChainWork = window.__PERF_DISABLE_CHAIN_WORK;
   const forceOverlays =
-    !window.__PERF_DISABLE_OVERLAYS &&
+    !window.__PERF_DG_DISABLE_OVERLAYS &&
     !window.__PERF_DG_OVERLAY_CORE_OFF &&
     !window.__PERF_DG_OVERLAY_STROKES_OFF;
   window.__PERF_RUN_TAG = 'P3fMixedSomeEmpty';
   try {
     window.__PERF_DISABLE_CHAIN_WORK = false;
     if (forceOverlays) {
-      window.__PERF_DISABLE_OVERLAYS = false;
+      window.__PERF_DG_DISABLE_OVERLAYS = false;
       window.__PERF_DG_OVERLAY_CORE_OFF = false;
       window.__PERF_DG_OVERLAY_STROKES_OFF = false;
     }
@@ -3334,7 +3398,7 @@ async function runP3fMixedSomeEmpty() {
     window.__PERF_RUN_TAG = prevTag;
     try { window.__PERF_DISABLE_CHAIN_WORK = prevDisableChainWork; } catch {}
     try {
-      window.__PERF_DISABLE_OVERLAYS = prevDisableOverlays;
+      window.__PERF_DG_DISABLE_OVERLAYS = prevDisableOverlays;
       window.__PERF_DG_OVERLAY_CORE_OFF = prevOverlayCore;
       window.__PERF_DG_OVERLAY_STROKES_OFF = prevOverlayStrokes;
       window.__PERF_FORCE_SEQUENCER_ALL = prevForceSequencerAll;
@@ -3396,18 +3460,18 @@ async function runP3fNoParticles() {
   }
 }
 
-  async function runP3fNoOverlays() {
-    const prevTag = window.__PERF_RUN_TAG;
-    const prevNoOverlays = window.__PERF_DG_DISABLE_OVERLAYS;
-    window.__PERF_RUN_TAG = 'P3fNoOverlays';
-    window.__PERF_DG_DISABLE_OVERLAYS = true;
-    try {
-      await runP3f();
-    } finally {
-      window.__PERF_RUN_TAG = prevTag;
-      window.__PERF_DG_DISABLE_OVERLAYS = prevNoOverlays;
-    }
+async function runP3fNoOverlays() {
+  const prevTag = window.__PERF_RUN_TAG;
+  const prevNoOverlays = window.__PERF_DG_DISABLE_OVERLAYS;
+  window.__PERF_RUN_TAG = 'P3fNoOverlays';
+  window.__PERF_DG_DISABLE_OVERLAYS = true;
+  try {
+    await runP3f();
+  } finally {
+    window.__PERF_RUN_TAG = prevTag;
+    window.__PERF_DG_DISABLE_OVERLAYS = prevNoOverlays;
   }
+}
 
   async function runP3fNoOverlayStrokes() {
     const prevTag = window.__PERF_RUN_TAG;
@@ -4698,19 +4762,56 @@ async function runQueue(list = []) {
   const results = [];
   const executed = [];
   for (const item of items) {
-    const fn = (typeof item === 'function') ? item : window.__PerfLab?.[item];
+    // Resolve by name, with defensive aliases so Auto-runs don't become no-ops
+    // if someone loses an export during merges or a stale bundle is served.
+    let name = (typeof item === 'string') ? item : null;
+    let fn = (typeof item === 'function') ? item : (name ? window.__PerfLab?.[name] : null);
+
+    if (typeof fn !== 'function' && name) {
+      const ALIASES = {
+        // Historical / merge-safe aliases:
+        traceCanvasOnlyOn: 'traceOn',              // then force domInRaf OFF below
+        runP3fShort: 'runP3f',
+        runP3fNoOverlaysShort: 'runP3fNoOverlays',
+      };
+      const alt = ALIASES[name];
+      if (alt && typeof window.__PerfLab?.[alt] === 'function') {
+        console.warn('[PerfLab] missing test', name, '-> using alias', alt);
+        fn = window.__PerfLab[alt];
+        name = alt;
+      }
+    }
+
     if (typeof fn !== 'function') {
-      console.warn('[PerfLab] missing test', item);
+      const known = (() => {
+        try { return Object.keys(window.__PerfLab || {}).sort(); } catch { return []; }
+      })();
+      console.warn('[PerfLab] missing test', item, { knownCount: known.length, known });
       continue;
     }
+
     executed.push((typeof item === 'string') ? item : (item.name || '<fn>'));
     const isBuild = (typeof item === 'string' && item.startsWith('build'));
     if (isBuild) {
       try { clearSceneViaSnapshot(); } catch {}
       lastResult = null;
     }
+
+    // Special-case: if we fell back from traceCanvasOnlyOn -> traceOn,
+    // enforce "canvas resize trace only" by disabling dom-in-raf trace.
+    if (typeof item === 'string' && item === 'traceCanvasOnlyOn') {
+      try {
+        window.__PERF_TRACE = window.__PERF_TRACE || {};
+        window.__PERF_TRACE.traceCanvasResize = true;
+        window.__PERF_TRACE.traceDomInRaf = false;
+      } catch {}
+    }
+
+    // Only push a result if this step actually produced a *new* one.
+    // (Otherwise “toggle” steps like traceOff would duplicate the prior benchmark result.)
+    const prevResult = lastResult;
     try { await fn(); } catch (err) { console.warn('[PerfLab] test failed', item, err); }
-    if (!isBuild && lastResult) results.push(lastResult);
+    if (!isBuild && lastResult && lastResult !== prevResult) results.push(lastResult);
   }
   // Capture what actually ran (not just what the config said).
   window.__PERF_LAB_EXECUTED_QUEUE = executed;
@@ -4768,6 +4869,9 @@ try {
     runP3e2,
     runP3f,
     runP3fShort,
+    runP3fNoOverlaysShort,
+    runP3fNoOverlayCoreShort,
+    runP3fNoOverlayStrokesShort,
     runP3PauseDomProbe,
     runP3fPlayheadSeparateOff,
     runP3fPlayheadSeparateOn,
@@ -4847,6 +4951,12 @@ try {
     postResultsBundle,
     downloadResultsBundle,
     // Demon trace toggles (so auto-queue can flip them deterministically)
+    traceCanvasOnlyOn: async function traceCanvasOnlyOn() {
+      window.__PERF_TRACE = window.__PERF_TRACE || {};
+      window.__PERF_TRACE.traceCanvasResize = true;
+      window.__PERF_TRACE.traceDomInRaf = false;
+      try { console.log('[PerfLab] traceCanvasResize ENABLED (domInRaf OFF)', { ...window.__PERF_TRACE }); } catch {}
+    },
     traceOn: async function traceOn() {
       window.__PERF_TRACE = window.__PERF_TRACE || {};
       window.__PERF_TRACE.traceCanvasResize = true;

@@ -2987,7 +2987,11 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument, autoCenter, a
             const overviewActive = !!(window.__overviewMode?.isActive?.() ||
                 document.querySelector('#board')?.classList?.contains('board-overview') ||
                 document.body?.classList?.contains('overview-mode'));
-            if (panel.isConnected && !overviewActive) {
+            const allowAutoCenter =
+                !!autoCenter &&
+                !panel.__restoringFromSnapshot &&
+                window.__PERF_LAB_RUN_CONTEXT !== 'auto';
+            if (panel.isConnected && !overviewActive && allowAutoCenter) {
                 setToyFocus(panel, { center: true });
                 // If the spawn ended up offscreen or hugging the edge, lerp the camera to it.
                 // This is global behaviour and is NOT tied to scene save/load.
