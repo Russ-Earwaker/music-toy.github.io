@@ -1845,8 +1845,6 @@ try {
   function allowHeaderPushDuringGesture() {
     try {
       if (window.__PERF_FORCE_HEADER_SUPPRESS) return false;
-      const visible = Number(globalDrawgridState?.visibleCount) || 0;
-      if (visible > 1) return false;
       const fps = readHeaderFpsHint();
       return Number.isFinite(fps) && fps >= 52;
     } catch {}
@@ -7856,8 +7854,11 @@ function copyCanvas(backCtx, frontCtx) {
         const useSeparatePlayhead = !!(typeof window !== 'undefined' && window.__DG_PLAYHEAD_SEPARATE_CANVAS);
         const playheadFpsHint = readHeaderFpsHint();
         const allowPlayheadLowZoom = Number.isFinite(playheadFpsHint) && playheadFpsHint >= 55;
+        // IMPORTANT: do not key visual detail off visible panel count (device-dependent).
+        // Fancy playhead is allowed only when (a) we're not in simple mode and
+        // (b) measured FPS indicates headroom, or we're zoomed in enough to justify detail.
         const playheadFancyDesired = !playheadSimpleOnly &&
-          (zoomForOverlay > 0.75 || allowPlayheadLowZoom || visiblePanels <= 1);
+          (zoomForOverlay > 0.75 || allowPlayheadLowZoom);
         if (phaseJustWrapped || panel.__dgPlayheadFancyLocked == null) {
           panel.__dgPlayheadFancyLocked = playheadFancyDesired;
         }
