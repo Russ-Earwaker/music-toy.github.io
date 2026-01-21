@@ -48,21 +48,34 @@ const AUTO_GENERIC_QUEUE = [
 // Current focus for this cycle: gesture cost / compositor pressure.
 // Keep this short and targeted; avoid “wide” coverage.
 const AUTO_FOCUS_QUEUE = [
-  // 1) High-signal micro run with canvas-resize trace enabled.
-  //    (Purpose: prove whether resize churn is still happening during gesture/compositor stress.)
+  // Goal: isolate DrawGrid gesture jank drivers (overlays, playhead strategy, layer flattening).
+  // Keep each run independent: rebuild the stress scene before every variant.
+
+  // 1) Baseline micro run with canvas-resize trace enabled (detect resize churn during gesture).
   'traceCanvasOnlyOn',
   'buildP3',
   'runP3fShort',
   'traceOff',
 
-  // 2) Same micro run with overlays disabled to measure compositor/layer pressure.
+  // 2) Big hammer: overlays OFF (measures compositor/layer pressure from overlay stack).
+  'buildP3',
   'runP3fNoOverlaysShort',
 
-  // 3) Split overlays: find the main culprit (core vs strokes).
+  // 3) Playhead strategy A/B (visual-equivalent lever; often affects compositor cost).
+  'buildP3',
+  'runP3fPlayheadSeparateOff',
+  'buildP3',
+  'runP3fPlayheadSeparateOn',
+
+  // 4) Split overlays to find which overlay family drives cost.
   'buildP3',
   'runP3fNoOverlayCoreShort',
   'buildP3',
   'runP3fNoOverlayStrokesShort',
+
+  // 5) Layer flattening experiment (tests whether fewer composited layers helps gesture FPS).
+  'buildP3',
+  // 'runP3fFlatLayers', // Rejected: catastrophic in latest focus run
 ];
 
 // Most diagnostic micro-run for the current focus.
@@ -3055,13 +3068,17 @@ async function runP3fNoOverlaysShort() {
   const prevDur = window.__PERF_LAB_DURATION_MS;
   const prevTag = window.__PERF_RUN_TAG;
   const prevNoOverlays = window.__PERF_DG_DISABLE_OVERLAYS;
+  const prevNoOverlaysGeneric = window.__PERF_DISABLE_OVERLAYS;
   try { window.__PERF_LAB_DURATION_MS = 12000; } catch {}
   try { window.__PERF_RUN_TAG = 'P3fNoOverlaysShort'; } catch {}
   window.__PERF_DG_DISABLE_OVERLAYS = true;
+  // Keep result flags honest (PerfHarness often reads the generic flag).
+  window.__PERF_DISABLE_OVERLAYS = true;
   try {
     await runP3f();
   } finally {
     window.__PERF_DG_DISABLE_OVERLAYS = prevNoOverlays;
+    window.__PERF_DISABLE_OVERLAYS = prevNoOverlaysGeneric;
     try { window.__PERF_LAB_DURATION_MS = prevDur; } catch {}
     try { window.__PERF_RUN_TAG = prevTag; } catch {}
   }
@@ -3072,13 +3089,17 @@ async function runP3fNoOverlayCoreShort() {
   const prevDur = window.__PERF_LAB_DURATION_MS;
   const prevTag = window.__PERF_RUN_TAG;
   const prev = window.__PERF_DG_OVERLAY_CORE_OFF;
+  const prevGeneric = window.__PERF_DISABLE_OVERLAY_CORE;
   try { window.__PERF_LAB_DURATION_MS = 12000; } catch {}
   try { window.__PERF_RUN_TAG = 'P3fNoOverlayCoreShort'; } catch {}
   window.__PERF_DG_OVERLAY_CORE_OFF = true;
+  // Keep result flags honest (PerfHarness often reads the generic flag).
+  window.__PERF_DISABLE_OVERLAY_CORE = true;
   try {
     await runP3f();
   } finally {
     window.__PERF_DG_OVERLAY_CORE_OFF = prev;
+    window.__PERF_DISABLE_OVERLAY_CORE = prevGeneric;
     try { window.__PERF_LAB_DURATION_MS = prevDur; } catch {}
     try { window.__PERF_RUN_TAG = prevTag; } catch {}
   }
@@ -3089,13 +3110,17 @@ async function runP3fNoOverlayStrokesShort() {
   const prevDur = window.__PERF_LAB_DURATION_MS;
   const prevTag = window.__PERF_RUN_TAG;
   const prev = window.__PERF_DG_OVERLAY_STROKES_OFF;
+  const prevGeneric = window.__PERF_DISABLE_OVERLAY_STROKES;
   try { window.__PERF_LAB_DURATION_MS = 12000; } catch {}
   try { window.__PERF_RUN_TAG = 'P3fNoOverlayStrokesShort'; } catch {}
   window.__PERF_DG_OVERLAY_STROKES_OFF = true;
+  // Keep result flags honest (PerfHarness often reads the generic flag).
+  window.__PERF_DISABLE_OVERLAY_STROKES = true;
   try {
     await runP3f();
   } finally {
     window.__PERF_DG_OVERLAY_STROKES_OFF = prev;
+    window.__PERF_DISABLE_OVERLAY_STROKES = prevGeneric;
     try { window.__PERF_LAB_DURATION_MS = prevDur; } catch {}
     try { window.__PERF_RUN_TAG = prevTag; } catch {}
   }
