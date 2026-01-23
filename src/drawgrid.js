@@ -7816,6 +7816,9 @@ function copyCanvas(backCtx, frontCtx) {
       const __playheadStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
         ? performance.now()
         : 0;
+      const __phMark = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf?.mark)
+        ? window.__PerfFrameProf.mark.bind(window.__PerfFrameProf)
+        : null;
       try {
         const info = getLoopInfo();
         const prevPhase = Number.isFinite(localLastPhase) ? localLastPhase : null;
@@ -7845,12 +7848,17 @@ function copyCanvas(backCtx, frontCtx) {
         const playheadSimpleOnly = __dgPlayheadSimpleMode;
         const useSeparatePlayhead = !!(typeof window !== 'undefined' && window.__DG_PLAYHEAD_SEPARATE_CANVAS);
         const playheadFpsHint = readHeaderFpsHint();
-        const allowPlayheadLowZoom = Number.isFinite(playheadFpsHint) && playheadFpsHint >= 55;
-        // IMPORTANT: do not key visual detail off visible panel count (device-dependent).
-        // Fancy playhead is allowed only when (a) we're not in simple mode and
-        // (b) measured FPS indicates headroom, or we're zoomed in enough to justify detail.
-        const playheadFancyDesired = !playheadSimpleOnly &&
-          (zoomForOverlay > 0.75 || allowPlayheadLowZoom);
+        const playheadFps = Number.isFinite(playheadFpsHint) ? playheadFpsHint : 60;
+
+        // IMPORTANT: playhead quality is *generic* (FPS-based), not gesture-based and not panel-count-based.
+        // We only drop to the simple playhead when the frame rate suggests we need to.
+        const fancyMinFps = Number.isFinite(window.__DG_PLAYHEAD_FANCY_MIN_FPS) ? Number(window.__DG_PLAYHEAD_FANCY_MIN_FPS) : 55;
+        const fancyMinFpsZoomedIn = Number.isFinite(window.__DG_PLAYHEAD_FANCY_MIN_FPS_ZOOMED_IN) ? Number(window.__DG_PLAYHEAD_FANCY_MIN_FPS_ZOOMED_IN) : 50;
+
+        const playheadFancyDesired = !playheadSimpleOnly && (
+          (playheadFps >= fancyMinFps) ||
+          ((zoomForOverlay > 0.9) && (playheadFps >= fancyMinFpsZoomedIn))
+        );
         // If global FPS pressure has switched us into "simple playhead" mode,
         // drop fancy immediately (do NOT wait for a phase wrap to re-lock).
         // This is generic (FPS-based), not gesture-based, and not device-count-based.
@@ -8065,6 +8073,18 @@ function copyCanvas(backCtx, frontCtx) {
         const gradientWidth = Math.round(
           Math.max(0.8 * cw, Math.min(gridArea.w * 0.08, 2.2 * cw))
         );
+
+        // IMPORTANT: the fancy playhead uses cached glow sprites.
+        // During zoom, cw/gridArea.h change continuously -> cache misses -> expensive sprite rebuilds.
+        // Quantize dimensions so the cache actually hits while gesturing.
+        const __dgQuant = (v, step, min = step) => {
+          const n = Number(v);
+          if (!Number.isFinite(n)) return min;
+          const s = Math.max(1, Number(step) || 1);
+          return Math.max(min, Math.round(n / s) * s);
+        };
+        const spriteGradientWidth = __dgQuant(gradientWidth, 8, 32);
+        const spriteHeight = __dgQuant(gridArea.h, 16, 96);
         const playheadLineW = playheadDrawSimple ? Math.max(2, cw * 0.08) : 3;
         const trailLineCount = playheadDrawSimple ? 0 : 3;
         const gap = playheadDrawSimple ? 0 : 28; // A constant, larger gap
@@ -8074,7 +8094,16 @@ function copyCanvas(backCtx, frontCtx) {
         const baseBand = Math.max(gradientWidth / 2, playheadLineW / 2);
         panel.__dgPlayheadClearBand = Math.max(6, Math.ceil(baseBand + extraTrail));
 
-        // Repulse particles along the full header segment (throttle under load).
+        const hue = Number.isFinite(panel.__dgPlayheadHue)
+          ? panel.__dgPlayheadHue
+          : pickPlayheadHue(strokes);
+
+        // Header sweep: decouple VISUAL from FORCE.
+        //
+        // - Visual sweep is a cheap translucent band drawn on the playhead overlay (always "looks right").
+        // - Force sweep is the expensive field push along the segment (particle simulation).
+        //
+        // Both degrade by FPS (generic "framerate is low, fix it"), not gesture or panel count.
         try {
           let sweepDir = headerSweepDirX || 1;
           if (currentPhase != null && prevPhase != null) {
@@ -8085,23 +8114,66 @@ function copyCanvas(backCtx, frontCtx) {
             }
           }
           headerSweepDirX = sweepDir;
+
           const fpsHint = Number.isFinite(fpsLive) ? fpsLive : null;
-          const sweepEvery = 1;
-          const baseSweepMaxSteps = 36;
-          const sweepMaxSteps = baseSweepMaxSteps;
+          const __disableForceFps =
+            (typeof window !== 'undefined' && Number.isFinite(window.__DG_HEADER_SWEEP_FORCE_DISABLE_FPS))
+              ? Number(window.__DG_HEADER_SWEEP_FORCE_DISABLE_FPS)
+              : 50; // default: disable forces below ~50fps
+          const __disableVisualFps =
+            (typeof window !== 'undefined' && Number.isFinite(window.__DG_HEADER_SWEEP_VISUAL_DISABLE_FPS))
+              ? Number(window.__DG_HEADER_SWEEP_VISUAL_DISABLE_FPS)
+              : 28; // visual can survive lower; off only when things are dire
+
+          const allowVisual = (fpsHint == null) ? true : (fpsHint >= __disableVisualFps);
+          const allowForce  = (fpsHint == null) ? true : (fpsHint >= __disableForceFps);
+
+          // VISUAL-ONLY sweep (cheap): translucent band behind/with playhead.
+          if (allowVisual) {
+            const bandW = Math.max(18, Math.round(gradientWidth * 0.9));
+            const x0 = playheadX - bandW * 0.5;
+            const x1 = playheadX + bandW * 0.5;
+            const g = playheadCtx.createLinearGradient(x0, 0, x1, 0);
+            g.addColorStop(0.00, 'rgba(255,255,255,0)');
+            g.addColorStop(0.45, `hsla(${(hue + 45).toFixed(0)}, 100%, 70%, 0.035)`);
+            g.addColorStop(0.55, `hsla(${(hue + 45).toFixed(0)}, 100%, 70%, 0.035)`);
+            g.addColorStop(1.00, 'rgba(255,255,255,0)');
+            const __vStart = (__phMark ? performance.now() : 0);
+            playheadCtx.save();
+            playheadCtx.globalCompositeOperation = 'source-over';
+            playheadCtx.fillStyle = g;
+            playheadCtx.fillRect(x0, gridArea.y, bandW, gridArea.h);
+            playheadCtx.restore();
+            if (__vStart) {
+              try { __phMark('drawgrid.playhead.headerSweepVisual', performance.now() - __vStart); } catch {}
+            }
+          }
+
+          // FORCE sweep (expensive): push along the full segment.
+          // Degrade aggressively by FPS: run less often + fewer steps, and OFF entirely when needed.
+          let sweepEvery = 1;
+          let sweepMaxSteps = 36;
+          if (fpsHint != null) {
+            if (fpsHint < (__disableForceFps + 3)) { sweepEvery = 10; sweepMaxSteps = 6; }
+            else if (fpsHint < 55) { sweepEvery = 6; sweepMaxSteps = 10; }
+            else if (fpsHint < 60) { sweepEvery = 3; sweepMaxSteps = 18; }
+            else { sweepEvery = 2; sweepMaxSteps = 24; }
+          }
+
           panel.__dgPlayheadSweepFrame = (panel.__dgPlayheadSweepFrame || 0) + 1;
-          if ((panel.__dgPlayheadSweepFrame % sweepEvery) === 0) {
+          if (allowForce && sweepEvery > 0 && (panel.__dgPlayheadSweepFrame % sweepEvery) === 0) {
+            const baseSweepMaxSteps = 36;
             const forceMul = Math.max(
               1,
               sweepEvery * (baseSweepMaxSteps / Math.max(1, sweepMaxSteps)) * 1.35
             );
+            const __hsStart = (__phMark ? performance.now() : 0);
             FF.pushHeaderSweepAt(playheadX, { lineWidthPx: gradientWidth, maxSteps: sweepMaxSteps, forceMul });
+            if (__hsStart) {
+              try { __phMark('drawgrid.playhead.headerSweep', performance.now() - __hsStart); } catch {}
+            }
           }
         } catch (e) { /* fail silently */ }
-
-        const hue = Number.isFinite(panel.__dgPlayheadHue)
-          ? panel.__dgPlayheadHue
-          : pickPlayheadHue(strokes);
 
         if (playheadDrawSimple) {
           playheadCtx.globalAlpha = 0.9;
@@ -8116,9 +8188,10 @@ function copyCanvas(backCtx, frontCtx) {
           playheadCtx.globalAlpha = 1.0;
         } else {
 
+          const __spriteGetStart = __phMark ? performance.now() : 0;
           const composite = getPlayheadCompositeSprite({
-            gradientWidth,
-            height: gridArea.h,
+            gradientWidth: spriteGradientWidth,
+            height: spriteHeight,
             hue,
             trailLineCount,
             gap,
@@ -8126,17 +8199,28 @@ function copyCanvas(backCtx, frontCtx) {
             trailW0,
             trailWStep,
           });
+          if (__spriteGetStart) {
+            try { __phMark('drawgrid.playhead.spriteGet', performance.now() - __spriteGetStart); } catch {}
+          }
           if (composite) {
             const originX = Number.isFinite(composite.__dgOriginX)
               ? composite.__dgOriginX
               : (composite.width / 2);
+            // If our cached sprite dims are already "close enough", avoid per-frame scaling.
+            // Scaling a tall glow sprite is surprisingly expensive during pan/zoom.
+            const dstH = (Math.abs(gridArea.h - spriteHeight) <= 8) ? spriteHeight : gridArea.h;
+            const dstY = gridArea.y + (gridArea.h - dstH) * 0.5;
+            const __imgStart = __phMark ? performance.now() : 0;
             playheadCtx.drawImage(
               composite,
               playheadX - originX,
-              gridArea.y,
+              dstY,
               composite.width,
-              gridArea.h
+              dstH
             );
+            if (__imgStart) {
+              try { __phMark('drawgrid.playhead.drawImage', performance.now() - __imgStart); } catch {}
+            }
           }
         }
 
