@@ -9,6 +9,7 @@ import { runBenchmark } from './PerfHarness.js';
 import { makePanZoomScript, makePanZoomCommitSpamScript, makeOverviewSpamScript, makeOverviewOnceScript, makeDrawgridRandomiseOnceScript } from './PerfScripts.js';
 import { buildParticleWorstCase } from './StressSceneParticles.js';
 import { buildChainedLoopgridStress } from './StressSceneChains.js';
+import { overviewMode } from '../overview-mode.js';
 
 // Global perf toggles consumed by shared particle code.
 // Keep it simple: one object, easy to inspect in console.
@@ -54,17 +55,23 @@ const AUTO_FOCUS_QUEUE = [
   // 1) Baseline micro run with canvas-resize-only trace enabled (detect resize churn during gesture).
   'traceCanvasOnlyOn',
   'buildP3',
+  // Warmup: reduce variance from "first time on screen" (canvas alloc / decode / first raster).
+  'warmupFirstAppearance',
+  'warmupSettle',
   'runP3fShort',
   'traceOff',
 
   // 2) Big hammer: overlays OFF (measures compositor/layer pressure from overlay stack).
   'buildP3',
+  'warmupFirstAppearance',
   'runP3fNoOverlaysShort',
 
   // 3) Playhead strategy A/B (visual-equivalent lever; often affects compositor cost).
   'buildP3',
+  'warmupFirstAppearance',
   'runP3fPlayheadSeparateOff',
   'buildP3',
+  'warmupFirstAppearance',
   'runP3fPlayheadSeparateOn',
 
   // 4) Split overlays to find which overlay family drives cost.
@@ -78,9 +85,29 @@ const AUTO_FOCUS_QUEUE = [
 // Most diagnostic micro-run for the current focus.
 // Usually trace ON + shortest script we have.
 const AUTO_FOCUS_MICRO_QUEUE = [
-  'traceOn',
+  // IMPORTANT: micro should be apples-to-apples (trace adds overhead and noise).
+  'traceOff',
   'buildP3',
+  // Warmup: reduce variance from "first time on screen" (canvas alloc / decode / first raster).
+  'warmupFirstAppearance',
+  'warmupSettle',
+  // Baseline x2 (stability check)
   'runP3fShort',
+  'runP3fShort2',
+
+  // Overlays isolated x2
+  'buildP3',
+  'warmupFirstAppearance',
+  'warmupSettle',
+  'runP3fNoOverlaysShort',
+  'runP3fNoOverlaysShort2',
+
+  // Particles isolated x2
+  'buildP3',
+  'warmupFirstAppearance',
+  'warmupSettle',
+  'runP3fNoParticlesShort',
+  'runP3fNoParticlesShort2',
 ];
 
 function ensureUI() {
@@ -434,6 +461,9 @@ function ensureUI() {
     if (act === 'runP3f') await runP3f();
     if (act === 'runP3fShort') await runP3fShort();
     if (act === 'runP3fNoOverlaysShort') await runP3fNoOverlaysShort();
+    if (act === 'runP3fNoOverlaysShort2') await runP3fNoOverlaysShort2();
+    if (act === 'runP3fNoParticlesShort') await runP3fNoParticlesShort();
+    if (act === 'runP3fNoParticlesShort2') await runP3fNoParticlesShort2();
     if (act === 'runP3fNoOverlayCoreShort') await runP3fNoOverlayCoreShort();
     if (act === 'runP3fNoOverlayStrokesShort') await runP3fNoOverlayStrokesShort();
     if (act === 'runP3PauseDomProbe') await runP3PauseDomProbe();
@@ -494,6 +524,8 @@ function ensureUI() {
     if (act === 'buildP7') await buildP7();
     if (act === 'runP7a') await runP7a();
     if (act === 'runP7b') await runP7b();
+    if (act === 'warmupFirstAppearance') await warmupFirstAppearance();
+    if (act === 'warmupSettle') await warmupSettle();
 
     if (act === 'autoGeneric') {
       const cfgBase = (await readAutoConfigFromFile()) || readAutoConfig() || {};
@@ -1841,6 +1873,7 @@ async function runVariant(label, step, statusText) {
       disableOverlays: !!window.__PERF_DISABLE_OVERLAYS,
       disableOverlayStrokes: !!window.__PERF_DG_OVERLAY_STROKES_OFF,
       disableOverlayCore: !!window.__PERF_DG_OVERLAY_CORE_OFF,
+      dgDisableParticles: !!window.__PERF_DG_DISABLE_PARTICLES,
       disablePulses: !!window.__PERF_DISABLE_PULSES,
       freezeAllUnfocused: !!window.__PERF_FREEZE_ALL_UNFOCUSED,
       loopgridGestureRenderMod: Number(window.__PERF_LOOPGRID_GESTURE_RENDER_MOD) || 1,
@@ -2075,6 +2108,7 @@ async function runVariantPlaying(label, step, statusText) {
         disableOverlays: !!window.__PERF_DISABLE_OVERLAYS,
         disableOverlayStrokes: !!window.__PERF_DG_OVERLAY_STROKES_OFF,
         disableOverlayCore: !!window.__PERF_DG_OVERLAY_CORE_OFF,
+        dgDisableParticles: !!window.__PERF_DG_DISABLE_PARTICLES,
         disablePulses: !!window.__PERF_DISABLE_PULSES,
         freezeAllUnfocused: !!window.__PERF_FREEZE_ALL_UNFOCUSED,
         loopgridGestureRenderMod: Number(window.__PERF_LOOPGRID_GESTURE_RENDER_MOD) || 1,
@@ -3067,6 +3101,79 @@ async function runP3fShort() {
   try { window.__PERF_RUN_TAG = prevTag; } catch {}
 }
 
+async function runP3fShort2() {
+  // Same as P3fShort but with a different tag so we can compare run-to-run noise.
+  const prev = window.__PERF_LAB_DURATION_MS;
+  const prevTag = window.__PERF_RUN_TAG;
+  try { window.__PERF_LAB_DURATION_MS = 12000; } catch {}
+  try { window.__PERF_RUN_TAG = 'P3fShort2'; } catch {}
+  await runP3f();
+  try { window.__PERF_LAB_DURATION_MS = prev; } catch {}
+  try { window.__PERF_RUN_TAG = prevTag; } catch {}
+}
+
+async function warmupFirstAppearance() {
+  // Reduce variance from first-time paints:
+  // - forces initial canvas allocations
+  // - triggers first raster/composite passes
+  // - surfaces anything that only happens when toys first appear
+  setStatus('Warmup: first appearance');
+  const raf = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(() => fn((performance?.now?.() ?? Date.now())), 16));
+  const waitRafs = (n) => new Promise((resolve) => {
+    let left = Math.max(0, n|0);
+    const step = () => {
+      left--;
+      if (left <= 0) return resolve();
+      raf(step);
+    };
+    raf(step);
+  });
+  const waitMs = (ms) => new Promise((r) => setTimeout(r, Math.max(0, ms|0)));
+
+  try { overviewMode(true); } catch {}
+  await waitRafs(6);
+  // Small settle to allow async decode/compositor catches to land outside sampling.
+  await waitMs(120);
+  try { overviewMode(false); } catch {}
+  await waitRafs(6);
+  await waitMs(120);
+  setStatus('Warmup: done');
+}
+
+async function warmupSettle() {
+  // Purpose: reduce run-to-run variance that comes from async decode, compositor catch-up,
+  // and late style/layout work landing immediately after first-appearance warmup.
+  //
+  // IMPORTANT: This is NOT trying to "improve" perf, only to make measurements stable.
+  // Keep it short and tunable.
+  const raf = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(() => fn((performance?.now?.() ?? Date.now())), 16));
+  const waitRafs = (n) => new Promise((resolve) => {
+    let left = Math.max(0, n|0);
+    const step = () => {
+      left--;
+      if (left <= 0) return resolve();
+      raf(step);
+    };
+    raf(step);
+  });
+  const waitMs = (ms) => new Promise((r) => setTimeout(r, Math.max(0, ms|0)));
+
+  const settleMs = (() => {
+    const v = window.__PERF_WARMUP_SETTLE_MS;
+    return (typeof v === 'number' && isFinite(v) && v >= 0) ? v : 700;
+  })();
+  const settleRafs = (() => {
+    const v = window.__PERF_WARMUP_SETTLE_RAFS;
+    return (typeof v === 'number' && isFinite(v) && v >= 0) ? (v|0) : 12;
+  })();
+
+  setStatus(`Warmup: settle (${settleMs}ms, ${settleRafs}rafs)`);
+  // Give the browser a small idle window, then a few RAFs to flush any pending visual work.
+  await waitMs(settleMs);
+  await waitRafs(settleRafs);
+  setStatus('Warmup: settle done');
+}
+
 async function runP3fNoOverlaysShort() {
   // Short probe run with DrawGrid overlays disabled.
   const prevDur = window.__PERF_LAB_DURATION_MS;
@@ -3083,6 +3190,68 @@ async function runP3fNoOverlaysShort() {
   } finally {
     window.__PERF_DG_DISABLE_OVERLAYS = prevNoOverlays;
     window.__PERF_DISABLE_OVERLAYS = prevNoOverlaysGeneric;
+    try { window.__PERF_LAB_DURATION_MS = prevDur; } catch {}
+    try { window.__PERF_RUN_TAG = prevTag; } catch {}
+  }
+}
+
+async function runP3fNoOverlaysShort2() {
+  // Same as P3fNoOverlaysShort but with a different tag for run-to-run variance checks.
+  const prevDur = window.__PERF_LAB_DURATION_MS;
+  const prevTag = window.__PERF_RUN_TAG;
+  const prevNoOverlays = window.__PERF_DG_DISABLE_OVERLAYS;
+  const prevNoOverlaysGeneric = window.__PERF_DISABLE_OVERLAYS;
+  try { window.__PERF_LAB_DURATION_MS = 12000; } catch {}
+  try { window.__PERF_RUN_TAG = 'P3fNoOverlaysShort2'; } catch {}
+  window.__PERF_DG_DISABLE_OVERLAYS = true;
+  // Keep result flags honest (PerfHarness often reads the generic flag).
+  window.__PERF_DISABLE_OVERLAYS = true;
+  try {
+    await runP3f();
+  } finally {
+    window.__PERF_DG_DISABLE_OVERLAYS = prevNoOverlays;
+    window.__PERF_DISABLE_OVERLAYS = prevNoOverlaysGeneric;
+    try { window.__PERF_LAB_DURATION_MS = prevDur; } catch {}
+    try { window.__PERF_RUN_TAG = prevTag; } catch {}
+  }
+}
+
+async function runP3fNoParticlesShort() {
+  // Short probe run with particle fields disabled (aimed at frame.nonScript / raster pressure).
+  const prevDur = window.__PERF_LAB_DURATION_MS;
+  const prevTag = window.__PERF_RUN_TAG;
+  const prevNoParticles = window.__PERF_DG_DISABLE_PARTICLES;
+  const prevParticleDbg = window.__PERF_PARTICLE_DBG;
+  try { window.__PERF_LAB_DURATION_MS = 12000; } catch {}
+  try { window.__PERF_RUN_TAG = 'P3fNoParticlesShort'; } catch {}
+  try {
+    window.__PERF_DG_DISABLE_PARTICLES = true;
+    // Keep true for consistency with existing perf scripts (some paths gate on this).
+    window.__PERF_PARTICLE_DBG = true;
+    await runP3f();
+  } finally {
+    window.__PERF_DG_DISABLE_PARTICLES = prevNoParticles;
+    window.__PERF_PARTICLE_DBG = prevParticleDbg;
+    try { window.__PERF_LAB_DURATION_MS = prevDur; } catch {}
+    try { window.__PERF_RUN_TAG = prevTag; } catch {}
+  }
+}
+
+async function runP3fNoParticlesShort2() {
+  // Same as P3fNoParticlesShort but with a different tag for run-to-run variance checks.
+  const prevDur = window.__PERF_LAB_DURATION_MS;
+  const prevTag = window.__PERF_RUN_TAG;
+  const prevNoParticles = window.__PERF_DG_DISABLE_PARTICLES;
+  const prevParticleDbg = window.__PERF_PARTICLE_DBG;
+  try { window.__PERF_LAB_DURATION_MS = 12000; } catch {}
+  try { window.__PERF_RUN_TAG = 'P3fNoParticlesShort2'; } catch {}
+  try {
+    window.__PERF_DG_DISABLE_PARTICLES = true;
+    window.__PERF_PARTICLE_DBG = true;
+    await runP3f();
+  } finally {
+    window.__PERF_DG_DISABLE_PARTICLES = prevNoParticles;
+    window.__PERF_PARTICLE_DBG = prevParticleDbg;
     try { window.__PERF_LAB_DURATION_MS = prevDur; } catch {}
     try { window.__PERF_RUN_TAG = prevTag; } catch {}
   }
@@ -4878,6 +5047,8 @@ try {
     show,
     hide,
     toggle,
+    warmupFirstAppearance,
+    warmupSettle,
     buildP2,
     buildP2d,
     buildP3,
@@ -4898,7 +5069,11 @@ try {
     runP3e2,
     runP3f,
     runP3fShort,
+    runP3fShort2,
     runP3fNoOverlaysShort,
+    runP3fNoOverlaysShort2,
+    runP3fNoParticlesShort,
+    runP3fNoParticlesShort2,
     runP3fNoOverlayCoreShort,
     runP3fNoOverlayStrokesShort,
     runP3PauseDomProbe,

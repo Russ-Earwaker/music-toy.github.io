@@ -1,6 +1,17 @@
 // src/drawgrid/dg-randomizers.js
 
 export function createDgRandomizers(getState) {
+  // Keep this palette in sync with drawgrid.js STROKE_COLORS.
+  // (We keep it local here so randomizers don't depend on drawgrid module internals.)
+  const STROKE_COLORS = [
+    'rgba(95,179,255,0.95)',  // Blue
+    'rgba(255,95,179,0.95)',  // Pink
+    'rgba(95,255,179,0.95)',  // Green
+    'rgba(255,220,95,0.95)',  // Yellow
+  ];
+
+  let __dgRandomColorIndex = 0;
+
   function createRandomLineStroke(S) {
     const leftX = S.gridArea.x;
     const rightX = S.gridArea.x + S.gridArea.w;
@@ -34,7 +45,8 @@ export function createDgRandomizers(getState) {
         pts.push({ x, y });
       }
     }
-    return { pts, color: '#fff', isSpecial: true, generatorId: 1 };
+    const color = STROKE_COLORS[(__dgRandomColorIndex++) % STROKE_COLORS.length];
+    return { pts, color, isSpecial: true, generatorId: 1 };
   }
 
   function handleRandomizeLine() {

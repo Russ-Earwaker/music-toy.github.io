@@ -35,7 +35,18 @@ function capDprForBackingStore(cssW = 0, cssH = 0, desiredDpr = 1, prevDpr = nul
   const w = Number.isFinite(cssW) ? cssW : 0;
   const h = Number.isFinite(cssH) ? cssH : 0;
   let dpr = Number.isFinite(desiredDpr) ? desiredDpr : 1;
-  if (w <= 0 || h <= 0) return Math.max(1, dpr);
+  const minDpr = (() => {
+    try {
+      const vField = (typeof window !== 'undefined') ? Number(window.__FIELD_MIN_DPR) : NaN;
+      if (Number.isFinite(vField) && vField > 0) return vField;
+    } catch {}
+    try {
+      const vDg = (typeof window !== 'undefined') ? Number(window.__DG_MIN_PANEL_DPR) : NaN;
+      if (Number.isFinite(vDg) && vDg > 0) return vDg;
+    } catch {}
+    return 0.6;
+  })();
+  if (w <= 0 || h <= 0) return Math.max(minDpr, dpr);
 
   // Pixel budget cap (area-based).
   let maxPx = Number.isFinite(opts?.maxBackingPx) ? opts.maxBackingPx : 2_200_000;
@@ -62,7 +73,7 @@ function capDprForBackingStore(cssW = 0, cssH = 0, desiredDpr = 1, prevDpr = nul
   const capFromSide = Math.min(maxSide / w, maxSide / h);
 
   let capped = Math.min(dpr, capFromPx, capFromSide);
-  capped = Math.max(1, Math.min(dpr, capped));
+  capped = Math.max(minDpr, Math.min(dpr, capped));
 
   // Hysteresis to avoid DPR thrash around thresholds.
   const prev = (Number.isFinite(prevDpr) && prevDpr > 0) ? prevDpr : null;
@@ -71,6 +82,84 @@ function capDprForBackingStore(cssW = 0, cssH = 0, desiredDpr = 1, prevDpr = nul
     if (capped < prev && (prev - capped) < 0.06) return prev;
   }
   return capped;
+}
+
+// -----------------------------------------------------------------------------
+// Visual + pressure DPR multipliers (mirrors DrawGrid so fields scale consistently)
+// -----------------------------------------------------------------------------
+
+// Visual backing-store DPR reduction when visually small (generic, not gesture)
+window.__FIELD_VISUAL_DPR_ZOOM_THRESHOLD ??= 0.9;
+window.__FIELD_VISUAL_DPR_MIN_MUL ??= 0.6;
+
+function __fieldComputeVisualBackingMul(boardScale) {
+  const threshold = window.__FIELD_VISUAL_DPR_ZOOM_THRESHOLD;
+  const minMul = window.__FIELD_VISUAL_DPR_MIN_MUL;
+  if (!boardScale || boardScale >= threshold) return 1;
+  const t = Math.max(0, Math.min(1, boardScale / threshold));
+  return minMul + (1 - minMul) * t;
+}
+
+// Pressure-based backing-store DPR reduction (generic, keys off FPS)
+window.__FIELD_PRESSURE_DPR_ENABLED ??= true;
+window.__FIELD_PRESSURE_DPR_START_MS ??= 20;
+window.__FIELD_PRESSURE_DPR_END_MS ??= 34;
+window.__FIELD_PRESSURE_DPR_MIN_MUL ??= 0.6;
+window.__FIELD_PRESSURE_DPR_EWMA_ALPHA ??= 0.12;
+window.__FIELD_PRESSURE_DPR_COOLDOWN_MS ??= 350;
+
+let __fieldPressureFrameMsEwma = null;
+let __fieldPressureDprMul = 1;
+let __fieldPressureMulLastChangeTs = 0;
+
+function __fieldComputePressureMul(frameMs) {
+  const startMs = Number.isFinite(window.__FIELD_PRESSURE_DPR_START_MS)
+    ? window.__FIELD_PRESSURE_DPR_START_MS
+    : (Number.isFinite(window.__DG_PRESSURE_DPR_START_MS) ? window.__DG_PRESSURE_DPR_START_MS : 20);
+  const endMs = Number.isFinite(window.__FIELD_PRESSURE_DPR_END_MS)
+    ? window.__FIELD_PRESSURE_DPR_END_MS
+    : (Number.isFinite(window.__DG_PRESSURE_DPR_END_MS) ? window.__DG_PRESSURE_DPR_END_MS : 34);
+  const minMul = Number.isFinite(window.__FIELD_PRESSURE_DPR_MIN_MUL)
+    ? window.__FIELD_PRESSURE_DPR_MIN_MUL
+    : (Number.isFinite(window.__DG_PRESSURE_DPR_MIN_MUL) ? window.__DG_PRESSURE_DPR_MIN_MUL : 0.6);
+
+  if (!Number.isFinite(frameMs) || frameMs <= startMs) return 1;
+  if (frameMs >= endMs) return minMul;
+  const t = Math.max(0, Math.min(1, (frameMs - startMs) / Math.max(1e-6, (endMs - startMs))));
+  return 1 - (1 - minMul) * t;
+}
+
+function __fieldUpdatePressureMulFromFps(fps, nowTs) {
+  if (!(window.__FIELD_PRESSURE_DPR_ENABLED ?? true)) {
+    __fieldPressureFrameMsEwma = null;
+    __fieldPressureDprMul = 1;
+    return;
+  }
+  if (!Number.isFinite(fps) || fps <= 0) return;
+
+  const frameMs = 1000 / fps;
+  const alpha = Number.isFinite(window.__FIELD_PRESSURE_DPR_EWMA_ALPHA)
+    ? window.__FIELD_PRESSURE_DPR_EWMA_ALPHA
+    : (Number.isFinite(window.__DG_PRESSURE_DPR_EWMA_ALPHA) ? window.__DG_PRESSURE_DPR_EWMA_ALPHA : 0.12);
+  __fieldPressureFrameMsEwma = (__fieldPressureFrameMsEwma == null)
+    ? frameMs
+    : (__fieldPressureFrameMsEwma * (1 - alpha) + frameMs * alpha);
+
+  const targetMul = __fieldComputePressureMul(__fieldPressureFrameMsEwma);
+  const cooldown = Number.isFinite(window.__FIELD_PRESSURE_DPR_COOLDOWN_MS)
+    ? window.__FIELD_PRESSURE_DPR_COOLDOWN_MS
+    : (Number.isFinite(window.__DG_PRESSURE_DPR_COOLDOWN_MS) ? window.__DG_PRESSURE_DPR_COOLDOWN_MS : 350);
+
+  const cur = __fieldPressureDprMul;
+  if (targetMul < (cur - 0.02)) {
+    __fieldPressureDprMul = targetMul;
+    __fieldPressureMulLastChangeTs = nowTs;
+  } else if (targetMul > (cur + 0.02)) {
+    if (!__fieldPressureMulLastChangeTs || (nowTs - __fieldPressureMulLastChangeTs) >= cooldown) {
+      __fieldPressureDprMul = targetMul;
+      __fieldPressureMulLastChangeTs = nowTs;
+    }
+  }
 }
 
 // Fade tuning
@@ -507,7 +596,17 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     const prevH = state.h;
     state.w = Math.max(1, Math.round(size.w || 1));
     state.h = Math.max(1, Math.round(size.h || 1));
-    const desiredDpr = Math.max(1, Math.min(((typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1), 3));
+    const deviceDpr = Math.max(1, Math.min(((typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1), 3));
+    const zoomNow = readZoom(viewport || pv);
+    const visualMul = __fieldComputeVisualBackingMul(zoomNow);
+    const fpsSample =
+      (Number.isFinite(window.__MT_SM_FPS) ? window.__MT_SM_FPS :
+        (Number.isFinite(window.__MT_FPS) ? window.__MT_FPS : null));
+    const nowTs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    if (Number.isFinite(fpsSample)) __fieldUpdatePressureMulFromFps(fpsSample, nowTs);
+    const pressureMul = (Number.isFinite(__fieldPressureDprMul) && __fieldPressureDprMul > 0) ? __fieldPressureDprMul : 1;
+    const desiredDprRaw = deviceDpr * visualMul * pressureMul;
+    const desiredDpr = Math.min(deviceDpr, desiredDprRaw);
     state.dpr = capDprForBackingStore(state.w, state.h, desiredDpr, state.dpr, {
       maxBackingPx: opts?.maxBackingPx,
       maxBackingSidePx: opts?.maxBackingSidePx,
@@ -586,10 +685,10 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
       }
     }
 
-    const nowTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+    const nowTs2 = (typeof performance !== 'undefined' && typeof performance.now === 'function')
       ? performance.now()
       : Date.now();
-    const smoothRecover = !state.emergencyFade && state.smoothRecoverUntil && nowTs < state.smoothRecoverUntil;
+    const smoothRecover = !state.emergencyFade && state.smoothRecoverUntil && nowTs2 < state.smoothRecoverUntil;
 
     // Initial fill: if empty, seed to the target immediately so we don't draw blanks.
     if (!state.particles.length && target > 0) {

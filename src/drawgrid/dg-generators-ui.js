@@ -1,4 +1,4 @@
-export function installGeneratorButtons(panel, apiHooks = {}) {
+export function installGeneratorButtons(panel, apiHooks = {}, opts = {}) {
   const {
     getNextDrawTarget,
     setNextDrawTarget,
@@ -20,11 +20,16 @@ export function installGeneratorButtons(panel, apiHooks = {}) {
   if (!header) return { updateGeneratorButtons: () => {} };
 
   const right = header.querySelector('.toy-controls-right') || header;
+  const mountRoot = opts?.mountRoot || right;
 
   // --- Generator Line Buttons (Advanced Mode Only) ---
   const generatorButtonsWrap = document.createElement('div');
   generatorButtonsWrap.className = 'drawgrid-generator-buttons';
-  panel.appendChild(generatorButtonsWrap);
+  // IMPORTANT:
+  // These are header controls; never append to `panel` (it causes them to drift into
+  // the body/footer depending on layout/reparenting during refresh).
+  generatorButtonsWrap.style.pointerEvents = 'auto';
+  mountRoot.appendChild(generatorButtonsWrap);
 
   const btnLine1 = document.createElement('button');
   btnLine1.type = 'button';

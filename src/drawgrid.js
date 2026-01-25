@@ -134,8 +134,8 @@ if (typeof window !== 'undefined' && typeof window.DG_ZOOM_AUDIT === 'undefined'
 // -----------------------------------------------------------------------------
 
 window.__DG_VISUAL_DPR_ZOOM_THRESHOLD ??= 0.9;   // below this, start reducing DPR
-window.__DG_VISUAL_DPR_MIN_MUL        ??= 0.6;   // lowest visual multiplier
-window.__DG_MIN_PANEL_DPR             ??= 0.6;   // absolute floor for backing DPR
+window.__DG_VISUAL_DPR_MIN_MUL        ??= 0.5;   // lowest visual multiplier
+window.__DG_MIN_PANEL_DPR             ??= 0.5;   // absolute floor for backing DPR
 
 function __dgComputeVisualBackingMul(boardScale) {
   const threshold = window.__DG_VISUAL_DPR_ZOOM_THRESHOLD;
@@ -145,6 +145,39 @@ function __dgComputeVisualBackingMul(boardScale) {
 
   // Smooth linear falloff from threshold → 0
   const t = Math.max(0, Math.min(1, boardScale / threshold));
+  return minMul + (1 - minMul) * t;
+}
+
+
+// -----------------------------------------------------------------------------
+// Size-based backing-store DPR reduction for very small panels
+// -----------------------------------------------------------------------------
+// When a toy is physically small on screen, backing-store resolution can be
+// reduced without visible quality loss. This targets raster/compositor cost.
+//
+// Tunables (optional):
+//   window.__DG_SMALL_PANEL_PX_THRESHOLD  (default 260k CSS px)
+//   window.__DG_SMALL_PANEL_MIN_MUL       (default 0.6)
+//
+// Example:
+//   threshold=260k: a 400x400 panel (160k px) gets a multiplier ~0.846.
+window.__DG_SMALL_PANEL_PX_THRESHOLD ??= 260_000;
+window.__DG_SMALL_PANEL_MIN_MUL      ??= 0.5;
+
+function __dgComputeSmallPanelBackingMul(cssW, cssH) {
+  const w = Number.isFinite(cssW) ? cssW : 0;
+  const h = Number.isFinite(cssH) ? cssH : 0;
+  if (w <= 0 || h <= 0) return 1;
+
+  const area = w * h;
+  const threshold = Number(window.__DG_SMALL_PANEL_PX_THRESHOLD) || 260_000;
+  const minMul = Number(window.__DG_SMALL_PANEL_MIN_MUL) || 0.6;
+
+  if (!Number.isFinite(threshold) || threshold <= 10_000) return 1;
+  if (!Number.isFinite(minMul) || minMul <= 0 || minMul > 1) return 1;
+
+  if (area >= threshold) return 1;
+  const t = Math.max(0, Math.min(1, area / threshold));
   return minMul + (1 - minMul) * t;
 }
 
@@ -166,7 +199,7 @@ function __dgComputeVisualBackingMul(boardScale) {
 window.__DG_PRESSURE_DPR_ENABLED     ??= true;
 window.__DG_PRESSURE_DPR_START_MS    ??= 20;
 window.__DG_PRESSURE_DPR_END_MS      ??= 34;
-window.__DG_PRESSURE_DPR_MIN_MUL     ??= 0.6;
+window.__DG_PRESSURE_DPR_MIN_MUL     ??= 0.5;
 window.__DG_PRESSURE_DPR_EWMA_ALPHA  ??= 0.12;
 window.__DG_PRESSURE_DPR_COOLDOWN_MS ??= 350;
 
@@ -442,12 +475,18 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   // Updated by ResizeObserver; used by measureCSSSize(wrap).
   let __dgLayoutW = 0;
   let __dgLayoutH = 0;
+  // Last known-good non-zero size (used to avoid transient 0s during refresh/boot).
+  let __dgLayoutGoodW = 0;
+  let __dgLayoutGoodH = 0;
   let __dgLayoutObs = null;
+  let __dgLayoutObserverInstalled = false;
   // Per-instance (was module-level; caused cross-toy size/throttle leakage)
   let __dgFrameIdx = 0;
   let __dgLastResizeTargetW = 0;
   let __dgLastResizeTargetH = 0;
   let __dgLastResizeDpr = 0;
+  let __dgLastResizeCssW = 0;
+  let __dgLastResizeCssH = 0;
   let __dgCommitResizeCount = 0;
   let currentCols = 0;
   let nodeCoordsForHitTest = [];        // For draggable nodes (hit tests, drags)
@@ -594,7 +633,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   try { if (typeof window !== 'undefined') window.__DG_SINGLE_CANVAS = DG_SINGLE_CANVAS; } catch {}
   try {
     if (typeof window !== 'undefined' && window.__DG_PLAYHEAD_SEPARATE_CANVAS === undefined) {
-      window.__DG_PLAYHEAD_SEPARATE_CANVAS = false;
+      // Perf default: keep playhead on its own canvas to reduce full-panel invalidation during pan/zoom.
+      window.__DG_PLAYHEAD_SEPARATE_CANVAS = true;
     }
   } catch {}
   const DG_COMBINE_GRID_NODES = false;
@@ -602,14 +642,29 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const particleCanvas = document.createElement('canvas');
   particleCanvas.className = 'toy-particles';
   particleCanvas.setAttribute('data-role', 'drawgrid-particles');
-  const grid = document.createElement('canvas'); grid.setAttribute('data-role','drawgrid-grid');
-  const paint = document.createElement('canvas'); paint.setAttribute('data-role','drawgrid-paint');
+  const grid = document.createElement('canvas');
+  grid.classList.add('toy-canvas');
+  grid.setAttribute('data-role','drawgrid-grid');
+  const paint = document.createElement('canvas');
+  paint.classList.add('toy-canvas');
+  paint.setAttribute('data-role','drawgrid-paint');
   const nodesCanvas = DG_COMBINE_GRID_NODES ? grid : document.createElement('canvas');
-  if (!DG_COMBINE_GRID_NODES) nodesCanvas.setAttribute('data-role', 'drawgrid-nodes');
-  const flashCanvas = document.createElement('canvas'); flashCanvas.setAttribute('data-role', 'drawgrid-flash');
-  const ghostCanvas = document.createElement('canvas'); ghostCanvas.setAttribute('data-role','drawgrid-ghost');
-  const tutorialCanvas = document.createElement('canvas'); tutorialCanvas.setAttribute('data-role', 'drawgrid-tutorial-highlight');
-  const playheadCanvas = document.createElement('canvas'); playheadCanvas.setAttribute('data-role', 'drawgrid-playhead');
+  if (!DG_COMBINE_GRID_NODES) {
+    nodesCanvas.classList.add('toy-canvas');
+    nodesCanvas.setAttribute('data-role', 'drawgrid-nodes');
+  }
+  const flashCanvas = document.createElement('canvas');
+  flashCanvas.classList.add('toy-canvas');
+  flashCanvas.setAttribute('data-role', 'drawgrid-flash');
+  const ghostCanvas = document.createElement('canvas');
+  ghostCanvas.classList.add('toy-canvas');
+  ghostCanvas.setAttribute('data-role','drawgrid-ghost');
+  const tutorialCanvas = document.createElement('canvas');
+  tutorialCanvas.classList.add('toy-canvas');
+  tutorialCanvas.setAttribute('data-role', 'drawgrid-tutorial-highlight');
+  const playheadCanvas = document.createElement('canvas');
+  playheadCanvas.classList.add('toy-canvas');
+  playheadCanvas.setAttribute('data-role', 'drawgrid-playhead');
   // Tag canvases so shared helper code can locate the owning panel.
   try {
     particleCanvas.__dgPanel = panel;
@@ -723,16 +778,23 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   }
   Object.assign(tutorialCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 6, pointerEvents: 'none' });
   tutorialCanvas.style.background = 'transparent';
-  Object.assign(playheadCanvas.style, { position:'absolute', inset:'0', width:'100%', height:'100%', display:'block', zIndex: 7, pointerEvents: 'none' });
+  Object.assign(playheadCanvas.style, {
+    position: 'absolute',
+    inset: '0',
+    width: '100%',
+    height: '100%',
+    display: 'block',
+    zIndex: 7,
+    pointerEvents: 'none',
+    willChange: 'transform, opacity',
+    contain: 'paint',
+  });
   playheadCanvas.style.background = 'transparent';
-  body.appendChild(particleCanvas);
-  body.appendChild(grid);
-  body.appendChild(paint);
-  body.appendChild(ghostCanvas);
-  body.appendChild(flashCanvas);
-  if (!DG_COMBINE_GRID_NODES) body.appendChild(nodesCanvas);
-  body.appendChild(tutorialCanvas);
-  body.appendChild(playheadCanvas);
+
+  // IMPORTANT:
+  // Do NOT append canvases directly to `body` here.
+  // We mount canvases ONLY after `wrap` + `layersRoot` exist (stable DOM hierarchy),
+  // using the deterministic ordered list below.
   if (DG_SINGLE_CANVAS) {
     grid.style.display = 'none';
     if (nodesCanvas !== grid) nodesCanvas.style.display = 'none';
@@ -758,6 +820,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
   function drawDebugHUD(extraLines = []) { /* no-op */ }
 
+  // --- Stable body layout ----------------------------------------------------
+  // We want .toy-body to contain ONE stable wrapper, and all canvases to live
+  // under a dedicated layers root inside that wrapper.
   const wrap = document.createElement('div');
   wrap.className = 'drawgrid-size-wrap';
   wrap.style.position = 'relative';
@@ -767,9 +832,68 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   wrap.style.background = drawToyBg;
 
   // Move all existing elements from body into the new wrapper
-  [...body.childNodes].forEach(node => wrap.appendChild(node));
-  
+  [...body.childNodes].forEach((node) => wrap.appendChild(node));
+
   body.appendChild(wrap);
+
+  // Dedicated root for canvas layers (paint/grid/ghost/flash/tutorial/playhead/particles).
+  // Keeping canvases isolated makes refresh + scaling + future optimisations much safer.
+  const layersRoot = document.createElement('div');
+  layersRoot.className = 'drawgrid-layers-root';
+  // IMPORTANT: make the canvas stack fill the wrapper deterministically.
+  // Using absolute+inset avoids percentage-height pitfalls during init/refresh/zoom.
+  layersRoot.style.position = 'absolute';
+  layersRoot.style.inset = '0';
+  // IMPORTANT: do NOT set pointerEvents:none on the container; it disables children too.
+  // Individual canvases manage their own pointer events (paint needs to receive input).
+  layersRoot.style.pointerEvents = 'auto';
+  // Ensure layers root sits at the bottom of wrap (DOM overlays can be appended after it)
+  wrap.insertBefore(layersRoot, wrap.firstChild);
+
+  // Dedicated root for DOM overlays (labels/ghost UI/etc) that must sit ABOVE canvases.
+  // This keeps overlay DOM from accidentally becoming part of sizing/layout reads.
+  const overlaysRoot = document.createElement('div');
+  overlaysRoot.className = 'drawgrid-overlays-root';
+  overlaysRoot.style.position = 'absolute';
+  overlaysRoot.style.inset = '0';
+  overlaysRoot.style.width = '100%';
+  overlaysRoot.style.height = '100%';
+  overlaysRoot.style.zIndex = '50';
+  // Allow overlay subtrees to decide interactivity; most overlays will be `none`,
+  // but some UI (generator buttons, instrument, etc.) needs clicks.
+  overlaysRoot.style.pointerEvents = 'auto';
+  wrap.appendChild(overlaysRoot);
+
+  // --- Deterministic canvas mount (single source of truth) ------------------
+  // We mount EXACTLY ONCE into layersRoot, in a known order.
+  // If a canvas was already in the DOM for any reason, appendChild() will move it here.
+  const __dgOrderedCanvases = [
+    particleCanvas,
+    grid,
+    ...(DG_COMBINE_GRID_NODES ? [] : [nodesCanvas]),
+    paint,
+    ghostCanvas,
+    flashCanvas,
+    tutorialCanvas,
+    playheadCanvas,
+  ];
+
+  for (const c of __dgOrderedCanvases) {
+    try { layersRoot.appendChild(c); } catch {}
+  }
+
+  // NOTE: We intentionally do NOT sweep-migrate canvases here anymore.
+  // The only valid mount path is the ordered list above.
+
+  // Optional: expose for debugging/inspection (harmless if unused)
+  try {
+    panel.__dgWrap = wrap;
+    panel.__dgLayersRoot = layersRoot;
+    panel.__dgOverlaysRoot = overlaysRoot;
+  } catch {}
+
+  // Install RO only once the stable wrapper exists (safe if already installed).
+  __installLayoutObserver();
 
   const drawLabelState = createDrawLabelOverlay(
     panel,
@@ -800,32 +924,16 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   } = drawLabelState;
 
   function getToyLogicalSize() {
-    let width = Math.max(1, Math.round(wrap?.clientWidth || 0));
-    let height = Math.max(1, Math.round(wrap?.clientHeight || 0));
-    if (width <= 1 || height <= 1) {
-      const fallback = measureCSSSize(wrap || body);
-      width = Math.max(width, Math.round(fallback?.w || 0));
-      height = Math.max(height, Math.round(fallback?.h || 0));
-      dgSizeTrace('getToyLogicalSize:fallback', {
-        wrapClientW: wrap?.clientWidth || 0,
-        wrapClientH: wrap?.clientHeight || 0,
-        fallbackW: fallback?.w || 0,
-        fallbackH: fallback?.h || 0,
-      });
-    }
-    return { w: Math.max(1, width), h: Math.max(1, height) };
+    // IMPORTANT: avoid clientWidth/clientHeight reads in hot/boot paths; they can
+    // reflect transient zoom/transform states right after refresh.
+    const s = __dgGetStableWrapSize();
+    return { w: s.w, h: s.h };
   }
 
   function getToyCssSizeForParticles() {
-    // IMPORTANT: avoid getBoundingClientRect() in hot paths (can trigger forced layout).
-    // Prefer cached ResizeObserver measurements (wrap) or cheap clientWidth/clientHeight.
-    const w = (wrap && __dgLayoutW > 0)
-      ? __dgLayoutW
-      : Math.max(1, Math.round(wrap?.clientWidth || panel?.clientWidth || 1));
-    const h = (wrap && __dgLayoutH > 0)
-      ? __dgLayoutH
-      : Math.max(1, Math.round(wrap?.clientHeight || panel?.clientHeight || 1));
-    return { w, h };
+    // Keep particles on the same size basis as everything else.
+    const s = __dgGetStableWrapSize();
+    return { w: s.w, h: s.h };
   }
 
   function __auditZoomSizes(tag = 'audit') {
@@ -1220,14 +1328,26 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
   function updateFlatLayerVisibility() {
     const flat = !!(typeof window !== 'undefined' && window.__PERF_DRAWGRID_FLAT_LAYERS);
-    const separatePlayhead = !!(typeof window !== 'undefined' && window.__DG_PLAYHEAD_SEPARATE_CANVAS);
-    const modeKey = `${flat ? 1 : 0}-${DG_SINGLE_CANVAS ? 1 : 0}-${separatePlayhead ? 1 : 0}`;
+    // Default to separating the playhead canvas (perf lever), but allow explicit override.
+    // - If user sets window.__DG_PLAYHEAD_SEPARATE_CANVAS = true/false, respect it.
+    // - Otherwise default to true.
+    const separatePlayhead = (typeof window !== 'undefined' && (window.__DG_PLAYHEAD_SEPARATE_CANVAS === true || window.__DG_PLAYHEAD_SEPARATE_CANVAS === false))
+      ? !!window.__DG_PLAYHEAD_SEPARATE_CANVAS
+      : true;
+    const transportRunning = (typeof isRunning === 'function') && isRunning();
+    const ghostEmpty = !!panel.__dgGhostLayerEmpty;
+    const flashEmpty = !!panel.__dgFlashLayerEmpty;
+    const tutorialEmpty = !!panel.__dgTutorialLayerEmpty;
+    const modeKey = `${flat ? 1 : 0}-${DG_SINGLE_CANVAS ? 1 : 0}-${DG_SINGLE_CANVAS_OVERLAYS ? 1 : 0}-${separatePlayhead ? 1 : 0}-${transportRunning ? 1 : 0}-${ghostEmpty ? 1 : 0}-${flashEmpty ? 1 : 0}-${tutorialEmpty ? 1 : 0}`;
     if (panel.__dgFlatLayerMode === modeKey) return;
     panel.__dgFlatLayerMode = modeKey;
     const toggle = (el, visible) => {
       if (!el || !el.style) return;
       el.style.display = visible ? 'block' : 'none';
+      // IMPORTANT: if we hide via opacity, we must restore it when showing,
+      // otherwise canvases can get stuck invisible.
       if (!visible) el.style.opacity = '0';
+      else el.style.opacity = '';
     };
     const showGrid = !flat && !DG_SINGLE_CANVAS;
     const showOverlayBase = !flat && (!DG_SINGLE_CANVAS || DG_SINGLE_CANVAS_OVERLAYS);
@@ -1236,8 +1356,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     const showGhost = showOverlayBase && !panel.__dgGhostLayerEmpty;
     const showFlash = showOverlayBase && !panel.__dgFlashLayerEmpty;
     const showTutorial = !flat && !panel.__dgTutorialLayerEmpty;
-    const chainActive = (panel?.dataset?.chainActive === 'true') || panel?.classList?.contains?.('toy-playing');
-    const showPlayhead = !flat && separatePlayhead && chainActive && !panel.__dgPlayheadLayerEmpty && (!DG_SINGLE_CANVAS || DG_SINGLE_CANVAS_OVERLAYS);
+    // Playhead should follow transport running state, not note/chain flags.
+    // (If we gate this, it's easy to end up with a permanently hidden playhead.)
+    const showPlayhead = !flat && separatePlayhead && transportRunning && (!DG_SINGLE_CANVAS || DG_SINGLE_CANVAS_OVERLAYS);
     // Keep the main paint canvas visible; hide auxiliary layers in flat mode.
     toggle(paint, true);
     toggle(grid, showGrid);
@@ -1252,7 +1373,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       if (nodesCanvas !== grid) toggle(nodesCanvas, DG_SINGLE_CANVAS_OVERLAYS);
       toggle(ghostCanvas, DG_SINGLE_CANVAS_OVERLAYS && !panel.__dgGhostLayerEmpty);
       toggle(flashCanvas, DG_SINGLE_CANVAS_OVERLAYS && !panel.__dgFlashLayerEmpty);
-      toggle(playheadCanvas, DG_SINGLE_CANVAS_OVERLAYS && separatePlayhead && chainActive && !panel.__dgPlayheadLayerEmpty);
+      toggle(playheadCanvas, DG_SINGLE_CANVAS_OVERLAYS && separatePlayhead && transportRunning);
     }
   }
   updateFlatLayerVisibility();
@@ -1516,7 +1637,6 @@ try {
 
   function ensurePostCommitRedraw(reason = 'post-commit') {
     if (__dgPostCommitRaf) return;
-    if (!Array.isArray(strokes) || strokes.length === 0) return;
     const tick = () => {
       __dgPostCommitRaf = 0;
       dgPaintTrace('postCommit:tick', { tries: __dgPostCommitTries, inCommit: (() => { try { return !!window.__ZOOM_COMMIT_PHASE; } catch {} return false; })() });
@@ -1534,14 +1654,47 @@ try {
       } catch {} finally {
         __dgSuppressPostCommitOnPaintResize = false;
       }
-      // IMPORTANT: if we're about to redraw from strokes, make sure normalized strokes
-      // have been reprojected into live `pts` first. Otherwise this path can clear
-      // the paint canvas and draw nothing (line "vanishes" until next interaction).
-      try { __dgReprojectNormalizedStrokesIfNeeded(`post-commit:${reason}`); } catch {}
-      dgPaintTrace('postCommit:redraw-from-strokes:begin', { strokes: strokes?.length || 0 });
-      try { clearAndRedrawFromStrokes(DG_SINGLE_CANVAS ? backCtx : frontCtx, `post-commit:${reason}`); } catch {}
-      dgPaintTrace('postCommit:redraw-from-strokes:end', { strokes: strokes?.length || 0 });
-      try { ensureBackVisualsFreshFromFront?.(); } catch {}
+
+      const hasStrokes = Array.isArray(strokes) && strokes.length > 0;
+      if (hasStrokes) {
+        // IMPORTANT: if we're about to redraw from strokes, make sure normalized strokes
+        // have been reprojected into live `pts` first. Otherwise this path can clear
+        // the paint canvas and draw nothing (line "vanishes" until next interaction).
+        try { __dgReprojectNormalizedStrokesIfNeeded(`post-commit:${reason}`); } catch {}
+        dgPaintTrace('postCommit:redraw-from-strokes:begin', { strokes: strokes?.length || 0 });
+        try { clearAndRedrawFromStrokes(DG_SINGLE_CANVAS ? backCtx : frontCtx, `post-commit:${reason}`); } catch {}
+        dgPaintTrace('postCommit:redraw-from-strokes:end', { strokes: strokes?.length || 0 });
+        try { ensureBackVisualsFreshFromFront?.(); } catch {}
+
+        // IMPORTANT:
+        // In DG_SINGLE_CANVAS mode, redrawing the paint surface is not sufficient.
+        // We must also guarantee a composite + front swap, otherwise the user can
+        // see an empty body (grid hidden) / incorrect scale until an interaction.
+        try { markStaticDirty(`post-commit:${reason}`); } catch {}
+        try { panel.__dgSingleCompositeDirty = true; } catch {}
+        __dgNeedsUIRefresh = true;
+        __dgFrontSwapNextDraw = true;
+        __dgForceFullDrawNext = true;
+        __dgForceFullDrawFrames = Math.max(__dgForceFullDrawFrames || 0, 4);
+        try {
+          if (typeof requestFrontSwap === 'function') {
+            requestFrontSwap(useFrontBuffers);
+          }
+        } catch {}
+      } else {
+        // No strokes: we still need a deterministic post-commit refresh on refresh/boot.
+        // Otherwise a transient scaled DOM rect during zoom settle can leave the user
+        // seeing an empty body (grid hidden) until the next interaction.
+        try { markLayoutSizeDirty(); } catch {}
+        try { ensureSizeReady({ force: false }); } catch {}
+        try { panel.__dgSingleCompositeDirty = true; } catch {}
+        try { resnapAndRedraw(false, { preservePaintIfNoStrokes: true, skipLayout: true }); } catch {}
+        try {
+          if (typeof requestFrontSwap === 'function') {
+            requestFrontSwap(useFrontBuffers);
+          }
+        } catch {}
+      }
       if (DG_LAYOUT_DEBUG) {
         dgLogLine('post-commit-redraw', { panelId: panel?.id || null, reason });
       }
@@ -1575,15 +1728,39 @@ try {
       }
       const dpr = Math.max(1, Number.isFinite(nextDpr) ? nextDpr : (window.devicePixelRatio || 1));
       paintDpr = __dgCapDprForBackingStore(nextCssW, nextCssH, Math.min(dpr, 3), paintDpr);
-      const targetW = Math.max(1, Math.round(nextCssW * paintDpr));
-      const targetH = Math.max(1, Math.round(nextCssH * paintDpr));
+      const __quant2 = (v) => Math.max(1, Math.round(v / 2) * 2); // reduce 1px resize churn
+      const targetW = __quant2(nextCssW * paintDpr);
+      const targetH = __quant2(nextCssH * paintDpr);
+      const dprChanged = Math.abs(paintDpr - __dgLastResizeDpr) > 0.001;
+      const sizeChanged = targetW !== __dgLastResizeTargetW || targetH !== __dgLastResizeTargetH;
+      const cssChanged = nextCssW !== __dgLastResizeCssW || nextCssH !== __dgLastResizeCssH;
+      // Fast no-op exit: avoids DOM writes + potential compositor churn when we only differ by float jitter.
+      if (!dprChanged && !sizeChanged && !cssChanged) {
+        dgSizeTrace('resizeSurfacesFor(no-op)', { nextCssW, nextCssH, nextDpr, paintDpr, targetW, targetH, sizeChanged: false, dprChanged: false });
+        return;
+      }
+      __dgLastResizeCssW = nextCssW;
+      __dgLastResizeCssH = nextCssH;
+      const setCssSize = (canvasEl) => {
+        if (!canvasEl || !canvasEl.style) return;
+        // Avoid repeated style writes inside RAF; these can be surprisingly expensive at scale.
+        if (canvasEl.__dgCssW === nextCssW && canvasEl.__dgCssH === nextCssH) return;
+        canvasEl.__dgCssW = nextCssW;
+        canvasEl.__dgCssH = nextCssH;
+        canvasEl.style.width = `${nextCssW}px`;
+        canvasEl.style.height = `${nextCssH}px`;
+      };
       if (frontCanvas) {
-        frontCanvas.style.width = `${nextCssW}px`;
-        frontCanvas.style.height = `${nextCssH}px`;
+        setCssSize(frontCanvas);
       }
       if (backCanvas) {
-        backCanvas.style.width = `${nextCssW}px`;
-        backCanvas.style.height = `${nextCssH}px`;
+        setCssSize(backCanvas);
+      }
+      // IMPORTANT: playheadCanvas is a separate surface in some modes (perf lever).
+      // It must track the same CSS/backing-store sizing as the other overlay canvases
+      // or it can end up scaled incorrectly and trigger extra compositor work.
+      if (playheadCanvas) {
+        setCssSize(playheadCanvas);
       }
       const resize = (canvas) => {
         if (!canvas) return;
@@ -1602,10 +1779,9 @@ try {
       resize(ghostBackCanvas);
       resize(tutorialFrontCtx?.canvas);
       resize(tutorialBackCanvas);
+      resize(playheadCanvas);
       resize(frontCanvas);
       resize(backCanvas);
-      const dprChanged = Math.abs(paintDpr - __dgLastResizeDpr) > 0.001;
-      const sizeChanged = targetW !== __dgLastResizeTargetW || targetH !== __dgLastResizeTargetH;
       dgSizeTrace('resizeSurfacesFor', {
         nextCssW,
         nextCssH,
@@ -1977,7 +2153,8 @@ try {
             : (Number.isFinite(paintDpr) && paintDpr > 0)
               ? paintDpr
               : Math.max(1, Math.min(deviceDpr, 3));
-        desiredDpr = Math.min(deviceDpr, desiredDpr * visualMul * pressureMul);
+        const smallMul = __dgComputeSmallPanelBackingMul(cssW, cssH);
+        desiredDpr = Math.min(deviceDpr, desiredDpr * visualMul * pressureMul * smallMul);
         const cappedDpr = __dgCapDprForBackingStore(cssW, cssH, desiredDpr, paintDpr);
         paintDpr = cappedDpr;
         resizeSurfacesFor(cssW, cssH, cappedDpr);
@@ -2823,20 +3000,18 @@ function ensureSizeReady({ force = false } = {}) {
   panel.dataset.steps = String(cols);
 
   const { updateGeneratorButtons } = installGeneratorButtons(panel, {
-    getNextDrawTarget: () => nextDrawTarget,
-    setNextDrawTarget: (value) => { nextDrawTarget = value; },
-    getStrokes: () => strokes,
-    getAutoTune: () => autoTune,
-    setAutoTune: (value) => { autoTune = !!value; },
-    resnapAndRedraw,
-    getCols: () => cols,
-    setCols: (value) => { cols = value; },
-    setCurrentCols: (value) => { currentCols = value; },
-    setFlashes: (value) => { flashes = value; },
-    setPendingActiveMask: (value) => { pendingActiveMask = value; },
-    setManualOverrides: (value) => { manualOverrides = value; },
-    setPersistentDisabled: (value) => { persistentDisabled = value; },
-    getCurrentMapActive: () => (currentMap?.active ? [...currentMap.active] : null),
+    get cols() { return cols; },
+    get rows() { return rows; },
+    get gridArea() { return gridArea; },
+    get gridAreaLogical() { return gridAreaLogical; },
+    get cw() { return cw; },
+    get ch() { return ch; },
+    get topPad() { return topPad; },
+    get updateDrawLabel() { return updateDrawLabel; },
+    get markUserChange() { return markUserChange; },
+    get emitDG() { return emitDG; },
+    get isPanelVisible() { return isPanelVisible; },
+    get __dgMarkSingleCanvasDirty() { return __dgMarkSingleCanvasDirty; },
   });
 
   // New central helper to redraw the paint canvas and regenerate the node map from the `strokes` array.
@@ -3160,7 +3335,8 @@ function regenerateMapFromStrokes() {
           (Number.isFinite(__dgAdaptivePaintDpr) && __dgAdaptivePaintDpr > 0)
             ? __dgAdaptivePaintDpr
             : Math.max(1, Math.min(deviceDpr, 3));
-        desiredDpr = Math.min(deviceDpr, desiredDpr * visualMul * pressureMul);
+        const smallMul = __dgComputeSmallPanelBackingMul(cssW, cssH);
+        desiredDpr = Math.min(deviceDpr, desiredDpr * visualMul * pressureMul * smallMul);
         paintDpr = __dgCapDprForBackingStore(cssW, cssH, desiredDpr, paintDpr);
       }
       pendingZoomResnap = false;
@@ -3257,11 +3433,26 @@ function regenerateMapFromStrokes() {
         if (Number.isFinite(doneScale)) {
           __dgLastZoomDoneScale = doneScale;
         }
-        if (scaleChanged && Array.isArray(strokes) && strokes.length > 0) {
-          try { clearAndRedrawFromStrokes(DG_SINGLE_CANVAS ? backCtx : frontCtx, 'zoom-done'); } catch {}
+        const hasStrokes = Array.isArray(strokes) && strokes.length > 0;
+        const hasNodes = !!(currentMap && Array.isArray(currentMap.nodes) && currentMap.nodes.some(s => s && s.size > 0));
+        if (scaleChanged && (hasStrokes || hasNodes)) {
+          if (hasStrokes) {
+            try { clearAndRedrawFromStrokes(DG_SINGLE_CANVAS ? backCtx : frontCtx, 'zoom-done'); } catch {}
+          } else {
+            // No strokes, but we still need static layers to match the new zoom basis.
+            try { drawNodes(currentMap.nodes); } catch {}
+            try { drawGrid(); } catch {}
+          }
           try { ensureBackVisualsFreshFromFront?.(); } catch {}
           try { markStaticDirty('zoom-done'); } catch {}
           __dgForceFullDrawNext = true;
+          // In single-canvas mode, ensure we composite immediately so the
+          // toy doesn't appear blank/mis-scaled
+          // until the next camera move triggers a redraw.
+          if (DG_SINGLE_CANVAS && isPanelVisible) {
+            try { compositeSingleCanvas(); } catch {}
+            try { panel.__dgSingleCompositeDirty = false; } catch {}
+          }
         }
       }
 
@@ -3354,7 +3545,7 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
         return;
       }
       if (!inboundNonEmpty && !DG_HYDRATE.guardActive) {
-        api.clear({ reason: 'resnap-empty' });
+        clearDrawgridInternal({ reason: 'resnap-empty' });
       } else {
         dgTraceWarn('[drawgrid][boot] skip clear', {
           reason: 'resnap-empty',
@@ -3418,30 +3609,10 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
     }
   });
 
-  // PERF: ResizeObserver can fire repeatedly even when the effective layout size didn't change
-  // (or when changes are sub-pixel / shadow-only). Treating every callback as "dirty" can
-  // create a feedback loop: markLayoutSizeDirty -> ensureSizeReady -> resizeSurfacesFor -> RO.
-  let __dgLastObservedBodyW = 0;
-  let __dgLastObservedBodyH = 0;
-  const observer = new ResizeObserver(() => {
-    // Prefer cheap size reads; avoid getBoundingClientRect here.
-    const w = body?.clientWidth || body?.offsetWidth || 0;
-    const h = body?.clientHeight || body?.offsetHeight || 0;
-    if (w > 0 && h > 0) {
-      if (w === __dgLastObservedBodyW && h === __dgLastObservedBodyH) {
-        return; // ignore spurious callback
-      }
-      __dgLastObservedBodyW = w;
-      __dgLastObservedBodyH = h;
-    }
-
-    markLayoutSizeDirty();
-    if (zoomMode === 'gesturing') {
-      pendingZoomResnap = true;
-      return;
-    }
-    resnapAndRedraw(false);
-  });
+  // NOTE:
+  // We intentionally DO NOT install a second legacy ResizeObserver here.
+  // The stable wrap observer (installed via __installLayoutObserver()) is the
+  // single source of truth for size changes + resnap scheduling.
 
   // Visibility culling: turn off heavy work when the panel is completely offscreen.
   // Hard-cull should treat "barely intersecting" as not visible, otherwise
@@ -3609,7 +3780,9 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
   function __installLayoutObserver() {
     try {
       if (!wrap) return;
+      if (__dgLayoutObserverInstalled) return;
       if (typeof ResizeObserver === 'undefined') return;
+      if (__dgLayoutObs) return;
       __dgLayoutObs = new ResizeObserver((entries) => {
         const e = entries && entries[0];
         const cr = e && e.contentRect;
@@ -3620,22 +3793,47 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
         if (w === __dgLayoutW && h === __dgLayoutH) return;
         __dgLayoutW = w;
         __dgLayoutH = h;
+        // Remember a stable non-zero size for callers that need continuity on refresh.
+        __dgLayoutGoodW = w;
+        __dgLayoutGoodH = h;
         layoutSizeDirty = true;
+
+        // Match old observer behavior, but driven by RO contentRect (stable, zoom-safe).
+        if (zoomMode === 'gesturing') {
+          pendingZoomResnap = true;
+          return;
+        }
+        resnapAndRedraw(false);
       });
       __dgLayoutObs.observe(wrap);
+      __dgLayoutObserverInstalled = true;
       panel?.addEventListener?.('toy:remove', () => {
         try { __dgLayoutObs?.disconnect?.(); } catch {}
         __dgLayoutObs = null;
+        __dgLayoutObserverInstalled = false;
       }, { once: true });
     } catch {}
   }
 
-  __installLayoutObserver();
+  function __dgGetStableWrapSize() {
+    // Single source of truth for "toy logical size".
+    // Prefer RO cache; if RO hasn't reported yet (common just after refresh),
+    // fall back to last known-good non-zero size; otherwise return 0 to force retry.
+    if (__dgLayoutW > 0 && __dgLayoutH > 0) return { w: __dgLayoutW, h: __dgLayoutH };
+    if (__dgLayoutGoodW > 0 && __dgLayoutGoodH > 0) return { w: __dgLayoutGoodW, h: __dgLayoutGoodH };
+    return { w: 0, h: 0 };
+  }
 
   function measureCSSSize(el) {
     if (!el) return { w: 0, h: 0 };
 
     // If we're measuring the drawgrid wrap, prefer cached RO size (no layout read).
+    // IMPORTANT: If a ResizeObserver is installed but hasn't reported yet (common on refresh/boot),
+    // do NOT fall back to offset/client/getBoundingClientRect() because those can reflect transient
+    // zoom/transform states. Returning 0 forces callers to retry on the next frame.
+    if (el === wrap && __dgLayoutObs && (__dgLayoutW <= 0 || __dgLayoutH <= 0)) {
+      return { w: 0, h: 0 };
+    }
     if (el === wrap && __dgLayoutW > 0 && __dgLayoutH > 0) {
       return { w: __dgLayoutW, h: __dgLayoutH };
     }
@@ -3807,6 +4005,19 @@ function copyCanvas(backCtx, frontCtx) {
     if (!panel.__dgSingleCompositeDirty && !panel.__dgCompositeBaseDirty && !panel.__dgCompositeOverlayDirty) {
       return;
     }
+
+    // Perf: when overlays are separate DOM canvases (DG_SINGLE_CANVAS_OVERLAYS),
+    // we should NOT re-composite the base just because an overlay got marked dirty.
+    // In that mode, only base-ish dirtiness should trigger an expensive composite pass.
+    // (Overlay canvases will render independently on top.)
+    if (DG_SINGLE_CANVAS_OVERLAYS) {
+      const needBaseComposite = !!panel.__dgSingleCompositeDirty || !!panel.__dgCompositeBaseDirty;
+      if (!needBaseComposite) {
+        panel.__dgCompositeOverlayDirty = false;
+        return;
+      }
+    }
+
     FD.layerEvent('composite:begin', {
       panelId: panel?.id || null,
       panelRef: panel,
@@ -3845,6 +4056,38 @@ function copyCanvas(backCtx, frontCtx) {
     dgSizeTraceCanvas('before-composite');
     const width = surface.width;
     const height = surface.height;
+
+    // Perf: many "overlay-like" surfaces are visually confined to the grid area.
+    // When possible, clip blits to the grid rect (device px) to reduce raster work.
+    const __compDpr = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+    const __gridBoundsPx = (gridArea && gridArea.w > 0 && gridArea.h > 0)
+      ? (() => {
+          // NOTE: gridArea.y is typically relative to the grid region; include topPad.
+          const gx = gridArea.x || 0;
+          const gy = (gridArea.y || 0) + (topPad || 0);
+          const x = Math.max(0, Math.min(width, Math.round(gx * __compDpr)));
+          const y = Math.max(0, Math.min(height, Math.round(gy * __compDpr)));
+          const w = Math.max(0, Math.min(width - x, Math.round(gridArea.w * __compDpr)));
+          const h = Math.max(0, Math.min(height - y, Math.round(gridArea.h * __compDpr)));
+          return (w > 0 && h > 0) ? { x, y, w, h } : null;
+        })()
+      : null;
+
+    function __dgBlitTo(ctx, srcCanvas) {
+      if (!ctx || !srcCanvas || !srcCanvas.width || !srcCanvas.height) return;
+      const b = __gridBoundsPx;
+      // Fast path: same backing store size -> direct clipped blit.
+      if (b && srcCanvas.width === width && srcCanvas.height === height) {
+        ctx.drawImage(srcCanvas, b.x, b.y, b.w, b.h, b.x, b.y, b.w, b.h);
+        return;
+      }
+      // Fallback: scale full canvas (previous behavior).
+      ctx.drawImage(
+        srcCanvas,
+        0, 0, srcCanvas.width, srcCanvas.height,
+        0, 0, width, height
+      );
+    }
     const baseCanvas = panel.__dgCompositeBaseCanvas;
     let compositeBaseCanvas = baseCanvas;
     if (!compositeBaseCanvas) {
@@ -3868,16 +4111,19 @@ function copyCanvas(backCtx, frontCtx) {
         const __baseStart = __perfOn ? performance.now() : 0;
         const baseCtx = compositeBaseCtx;
       R.withDeviceSpace(baseCtx, () => {
-        baseCtx.globalCompositeOperation = 'source-over';
+        // Use 'copy' to overwrite the backing store without a separate clearRect.
         baseCtx.globalAlpha = 1;
-        baseCtx.clearRect(0, 0, width, height);
+        baseCtx.globalCompositeOperation = 'copy';
         if (gridBackCanvas && gridBackCanvas.width && gridBackCanvas.height) {
           baseCtx.drawImage(
             gridBackCanvas,
             0, 0, gridBackCanvas.width, gridBackCanvas.height,
             0, 0, width, height
           );
+        } else {
+          baseCtx.clearRect(0, 0, width, height);
         }
+        baseCtx.globalCompositeOperation = 'source-over';
         if (backCanvas && backCanvas.width && backCanvas.height) {
           baseCtx.drawImage(
             backCanvas,
@@ -3902,10 +4148,10 @@ function copyCanvas(backCtx, frontCtx) {
 
     const __finalStart = __perfOn ? performance.now() : 0;
     R.withDeviceSpace(frontCtx, () => {
-      frontCtx.globalCompositeOperation = 'source-over';
-      frontCtx.globalAlpha = 1;
-      frontCtx.clearRect(0, 0, width, height);
       if (compositeBaseCanvas && compositeBaseCanvas.width && compositeBaseCanvas.height) {
+        // Use 'copy' to overwrite the destination in a single draw (no separate clearRect).
+        frontCtx.globalAlpha = 1;
+        frontCtx.globalCompositeOperation = 'copy';
         const __baseBlitStart = __perfOn ? performance.now() : 0;
         frontCtx.drawImage(
           compositeBaseCanvas,
@@ -3915,6 +4161,11 @@ function copyCanvas(backCtx, frontCtx) {
         if (__perfOn && __baseBlitStart) {
           try { window.__PerfFrameProf?.mark?.('drawgrid.composite.base.blit', performance.now() - __baseBlitStart); } catch {}
         }
+        frontCtx.globalCompositeOperation = 'source-over';
+      } else {
+        frontCtx.globalAlpha = 1;
+        frontCtx.globalCompositeOperation = 'source-over';
+        frontCtx.clearRect(0, 0, width, height);
       }
       if (typeof window !== 'undefined' && window.__DG_REFRESH_SIZE_TRACE && sampleX !== null && sampleY !== null) {
         const frontSample = __dgSampleAlpha(frontCtx, sampleX, sampleY);
@@ -3971,69 +4222,99 @@ function copyCanvas(backCtx, frontCtx) {
         }
       }
       if (!DG_SINGLE_CANVAS_OVERLAYS) {
-        const nodesFrontCanvas = nodesFrontCtx?.canvas;
-        const nodeSources = [];
-        if (nodesBackCanvas && nodesBackCanvas.width && nodesBackCanvas.height) {
-          nodeSources.push(nodesBackCanvas);
+        // Compose overlays into a single overlay canvas, then blit once to the main surface.
+        // This tends to reduce raster/compositor pressure vs multiple drawImage calls to the
+        // full composite surface (especially at high DPR).
+        let overlayCanvas = panel.__dgCompositeOverlayCanvas;
+        if (!overlayCanvas) {
+          overlayCanvas = document.createElement('canvas');
+          panel.__dgCompositeOverlayCanvas = overlayCanvas;
+          panel.__dgCompositeOverlayDirty = true;
         }
-        if (
-          !DG_SINGLE_CANVAS &&
-          nodesFrontCanvas &&
-          nodesFrontCanvas !== nodesBackCanvas &&
-          nodesFrontCanvas.width &&
-          nodesFrontCanvas.height
-        ) {
-          nodeSources.push(nodesFrontCanvas);
+        if (overlayCanvas.width !== width || overlayCanvas.height !== height) {
+          overlayCanvas.width = width;
+          overlayCanvas.height = height;
+          panel.__dgCompositeOverlayDirty = true;
         }
-        for (const nodeCanvas of nodeSources) {
-          const __nodesStart = __perfOn ? performance.now() : 0;
-          frontCtx.drawImage(
-            nodeCanvas,
-            0, 0, nodeCanvas.width, nodeCanvas.height,
-            0, 0, width, height
-          );
-          if (__perfOn && __nodesStart) {
-            try { window.__PerfFrameProf?.mark?.('drawgrid.composite.nodes', performance.now() - __nodesStart); } catch {}
+        let overlayCtx = panel.__dgCompositeOverlayCtx;
+        if (!overlayCtx) {
+          overlayCtx = overlayCanvas.getContext('2d');
+          panel.__dgCompositeOverlayCtx = overlayCtx;
+          panel.__dgCompositeOverlayDirty = true;
+        }
+
+        if (panel.__dgCompositeOverlayDirty && overlayCtx) {
+          const __ovBuildStart = __perfOn ? performance.now() : 0;
+          R.withDeviceSpace(overlayCtx, () => {
+            // Clear to transparent without a separate clearRect.
+            overlayCtx.globalAlpha = 1;
+            overlayCtx.globalCompositeOperation = 'copy';
+            overlayCtx.fillStyle = 'rgba(0,0,0,0)';
+            overlayCtx.fillRect(0, 0, width, height);
+            overlayCtx.globalCompositeOperation = 'source-over';
+
+            // Nodes (back then front if distinct)
+            const nodesFrontCanvas = nodesFrontCtx?.canvas;
+            const nodeSources = [];
+            if (nodesBackCanvas && nodesBackCanvas.width && nodesBackCanvas.height) nodeSources.push(nodesBackCanvas);
+            if (
+              !DG_SINGLE_CANVAS &&
+              nodesFrontCanvas &&
+              nodesFrontCanvas !== nodesBackCanvas &&
+              nodesFrontCanvas.width &&
+              nodesFrontCanvas.height
+            ) nodeSources.push(nodesFrontCanvas);
+
+            for (const nodeCanvas of nodeSources) {
+              const __nodesStart = __perfOn ? performance.now() : 0;
+              __dgBlitTo(overlayCtx, nodeCanvas);
+              if (__perfOn && __nodesStart) {
+                try { window.__PerfFrameProf?.mark?.('drawgrid.composite.nodes', performance.now() - __nodesStart); } catch {}
+              }
+            }
+
+            const ghostSource = getActiveGhostCanvas();
+            if (!panel.__dgGhostLayerEmpty && ghostSource && ghostSource.width && ghostSource.height) {
+              const __ghostStart = __perfOn ? performance.now() : 0;
+              __dgBlitTo(overlayCtx, ghostSource);
+              if (__perfOn && __ghostStart) {
+                try { window.__PerfFrameProf?.mark?.('drawgrid.composite.ghost', performance.now() - __ghostStart); } catch {}
+              }
+            }
+
+            const tutorialSource = getActiveTutorialCanvas();
+            if (!panel.__dgTutorialLayerEmpty && tutorialSource && tutorialSource.width && tutorialSource.height) {
+              const __tutorialStart = __perfOn ? performance.now() : 0;
+              __dgBlitTo(overlayCtx, tutorialSource);
+              if (__perfOn && __tutorialStart) {
+                try { window.__PerfFrameProf?.mark?.('drawgrid.composite.tutorial', performance.now() - __tutorialStart); } catch {}
+              }
+            }
+
+            if (!panel.__dgPlayheadLayerEmpty && playheadCanvas && playheadCanvas.width && playheadCanvas.height) {
+              const __playheadStart = __perfOn ? performance.now() : 0;
+              __dgBlitTo(overlayCtx, playheadCanvas);
+              if (__perfOn && __playheadStart) {
+                try { window.__PerfFrameProf?.mark?.('drawgrid.composite.playhead', performance.now() - __playheadStart); } catch {}
+              }
+            }
+          });
+          panel.__dgCompositeOverlayDirty = false;
+          if (__perfOn && __ovBuildStart) {
+            try { window.__PerfFrameProf?.mark?.('drawgrid.composite.overlayBuild', performance.now() - __ovBuildStart); } catch {}
+          }
+        }
+
+        // Finally, blit the composed overlay to the main surface (clipped if possible).
+        if (overlayCanvas && overlayCanvas.width && overlayCanvas.height) {
+          const __ovBlitStart = __perfOn ? performance.now() : 0;
+          __dgBlitTo(frontCtx, overlayCanvas);
+          if (__perfOn && __ovBlitStart) {
+            try { window.__PerfFrameProf?.mark?.('drawgrid.composite.overlayBlit', performance.now() - __ovBlitStart); } catch {}
           }
         }
       }
-      const ghostSource = getActiveGhostCanvas();
-      if (!DG_SINGLE_CANVAS_OVERLAYS && !panel.__dgGhostLayerEmpty && ghostSource && ghostSource.width && ghostSource.height) {
-        const __ghostStart = __perfOn ? performance.now() : 0;
-        frontCtx.drawImage(
-          ghostSource,
-          0, 0, ghostSource.width, ghostSource.height,
-          0, 0, width, height
-        );
-        if (__perfOn && __ghostStart) {
-          try { window.__PerfFrameProf?.mark?.('drawgrid.composite.ghost', performance.now() - __ghostStart); } catch {}
-        }
-      }
-      const tutorialSource = getActiveTutorialCanvas();
-      if (!DG_SINGLE_CANVAS_OVERLAYS && !panel.__dgTutorialLayerEmpty && tutorialSource && tutorialSource.width && tutorialSource.height) {
-        const __tutorialStart = __perfOn ? performance.now() : 0;
-        frontCtx.drawImage(
-          tutorialSource,
-          0, 0, tutorialSource.width, tutorialSource.height,
-          0, 0, width, height
-        );
-        if (__perfOn && __tutorialStart) {
-          try { window.__PerfFrameProf?.mark?.('drawgrid.composite.tutorial', performance.now() - __tutorialStart); } catch {}
-        }
-      }
-      if (!DG_SINGLE_CANVAS_OVERLAYS && !panel.__dgPlayheadLayerEmpty && playheadCanvas && playheadCanvas.width && playheadCanvas.height) {
-        const __playheadStart = __perfOn ? performance.now() : 0;
-        frontCtx.drawImage(
-          playheadCanvas,
-          0, 0, playheadCanvas.width, playheadCanvas.height,
-          0, 0, width, height
-        );
-        if (__perfOn && __playheadStart) {
-          try { window.__PerfFrameProf?.mark?.('drawgrid.composite.playhead', performance.now() - __playheadStart); } catch {}
-        }
-      }
     });
-    panel.__dgCompositeOverlayDirty = false;
     if (__perfOn && __finalStart) {
       try { window.__PerfFrameProf?.mark?.('drawgrid.composite.final', performance.now() - __finalStart); } catch {}
     }
@@ -4228,7 +4509,10 @@ function copyCanvas(backCtx, frontCtx) {
 
   function layout(force = false){
     return F.perfMarkSection('drawgrid.layout', () => {
-    const bodySize = measureCSSSize(body);
+    // Prefer wrap size: it's RO-backed and stable across zoom/transform settle.
+    // body can be subject to transient zoom/transform states during refresh/boot.
+    // Measure BODY size (not wrap): wrap may be 0 during boot and would self-lock.
+    const bodySize = body ? measureCSSSize(body) : measureCSSSize(wrap);
     const bodyW = bodySize.w;
     const bodyH = bodySize.h;
     // Always keep wrap sized in CSS so measurement is stable during zoom.
@@ -4245,8 +4529,18 @@ function copyCanvas(backCtx, frontCtx) {
     // Measure transform-immune base...
     const { w: baseW, h: baseH } = getLayoutSize();
     const { x: zoomX, y: zoomY } = getZoomScale(panel); // tracking only for logs/debug
-    const newW = Math.max(1, Math.round(baseW));
-    const newH = Math.max(1, Math.round(baseH));
+    // IMPORTANT: During refresh/boot the RO-backed size can legitimately be 0 for a frame.
+    // Do NOT clamp to 1 before checking; that would force a 1px backing-store resize and
+    // effectively "lock in" a broken layout until something else triggers a resnap.
+    const rawW = Math.round(baseW || 0);
+    const rawH = Math.round(baseH || 0);
+    if (rawW <= 0 || rawH <= 0) {
+      requestAnimationFrame(() => resnapAndRedraw(force));
+      return;
+    }
+
+    const newW = Math.max(1, rawW);
+    const newH = Math.max(1, rawH);
     try {
       const rect = panel?.getBoundingClientRect?.();
       const toyScaleRaw = panel ? getComputedStyle(panel).getPropertyValue('--toy-scale') : '';
@@ -4269,11 +4563,6 @@ function copyCanvas(backCtx, frontCtx) {
         overview: !!__overviewActive,
       });
     } catch {}
-
-    if (newW === 0 || newH === 0) {
-      requestAnimationFrame(() => resnapAndRedraw(force));
-      return;
-    }
 
       if ((!zoomGestureActive && (force || Math.abs(newW - cssW) > 1 || Math.abs(newH - cssH) > 1)) || (force && zoomGestureActive)) {
         const oldW = cssW;
@@ -6233,14 +6522,6 @@ function copyCanvas(backCtx, frontCtx) {
     paint.style.cursor = 'default';
   });
   window.addEventListener('pointerup', onPointerUp);
-  // Coalesce relayouts on wheel/resize to keep pointer math in sync with zoom changes
-  let relayoutScheduled = false;
-  function scheduleRelayout(force = true){
-    if (relayoutScheduled) return; relayoutScheduled = true;
-    requestAnimationFrame(() => { relayoutScheduled = false; layout(force); });
-  }
-  observer.observe(body);
-
   panel.addEventListener('drawgrid:playcol', (e) => {
     const col = e?.detail?.col;
     playheadCol = col;
@@ -6745,7 +7026,8 @@ function copyCanvas(backCtx, frontCtx) {
       const deviceDpr = Math.max(1, Number.isFinite(window?.devicePixelRatio) ? window.devicePixelRatio : 1);
       const visualMul = __dgComputeVisualBackingMul(Number.isFinite(boardScale) ? boardScale : 1);
       const pressureMul = (Number.isFinite(__dgPressureDprMul) && __dgPressureDprMul > 0) ? __dgPressureDprMul : 1;
-      const desiredDprRaw = (adaptiveCap ? Math.min(deviceDpr, adaptiveCap) : deviceDpr) * visualMul * pressureMul;
+      const smallMul = __dgComputeSmallPanelBackingMul(cssW, cssH);
+      const desiredDprRaw = (adaptiveCap ? Math.min(deviceDpr, adaptiveCap) : deviceDpr) * visualMul * pressureMul * smallMul;
       const desiredDpr = __dgCapDprForBackingStore(cssW, cssH, desiredDprRaw, __dgAdaptivePaintDpr);
       const nowAdaptiveTs = nowTs || (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
       const canAdjustDpr =
@@ -7935,7 +8217,10 @@ function copyCanvas(backCtx, frontCtx) {
               const clearPlayheadBand = () => {
                 const defaultBand = Math.max(6, Math.round(Math.max(0.8 * cw, Math.min(gridArea.w * 0.08, 2.2 * cw))));
                 const band = Number.isFinite(panel.__dgPlayheadClearBand) ? panel.__dgPlayheadClearBand : defaultBand;
-                playheadFrontCtx.clearRect(lastX - band, gridArea.y - 2, band * 2, gridArea.h + 4);
+                const y0 = Math.floor(gridArea.y) - 4;
+                const y1 = Math.ceil(gridArea.y + gridArea.h) + 4;
+                const h = Math.max(0, y1 - y0);
+                playheadFrontCtx.clearRect(lastX - band - 1, y0, band * 2 + 2, h);
               };
               clearPlayheadBand();
               markPlayheadLayerCleared();
@@ -8001,12 +8286,16 @@ function copyCanvas(backCtx, frontCtx) {
               const band = Number.isFinite(panel.__dgPlayheadClearBand) ? panel.__dgPlayheadClearBand : defaultBand;
               R.resetCtx(clearCtx);
               const clearPlayheadBand = () => {
-                clearCtx.clearRect(lastX - band, gridArea.y - 2, band * 2, gridArea.h + 4);
+                const y0 = Math.floor(gridArea.y) - 4;
+                const y1 = Math.ceil(gridArea.y + gridArea.h) + 4;
+                const h = Math.max(0, y1 - y0);
+                clearCtx.clearRect(lastX - band - 1, y0, band * 2 + 2, h);
               };
               if (clearCtx === playheadFrontCtx) {
                 clearPlayheadBand();
               } else {
-                R.withOverlayClip(clearCtx, gridArea, false, clearPlayheadBand);
+                const clipArea = { x: gridArea.x, y: Math.floor(gridArea.y) - 2, w: gridArea.w, h: Math.ceil(gridArea.h) + 4 };
+                R.withOverlayClip(clearCtx, clipArea, false, clearPlayheadBand);
               }
               emitDG('overlay-clear', { reason: 'playhead-band' });
             }
@@ -8456,6 +8745,9 @@ function copyCanvas(backCtx, frontCtx) {
           requestFrontSwap(useFrontBuffers);
         }
       } catch {}
+
+      // Deterministically stabilize restore across the "overview settling" window.
+      try { schedulePostRestoreStabilize('restoreFromState'); } catch {}
       emitDrawgridUpdate({ activityOnly: false });
       markStaticDirty('external-state-change');
   } catch (e) {
@@ -8482,138 +8774,179 @@ function copyCanvas(backCtx, frontCtx) {
     }
   }
 
+  // After hydration/restore, the app can spend a few frames "settling" overview/zoom/layout.
+  // If we only resnap once, we can lock in a wrong basis (grid hidden / stroke scale wrong)
+  // until the next interaction (camera move) forces a resnap. So: stabilize deterministically.
+  let __dgPostRestoreStabilizeRAF = 0;
+  function cancelPostRestoreStabilize() {
+    if (__dgPostRestoreStabilizeRAF) {
+      try { cancelAnimationFrame(__dgPostRestoreStabilizeRAF); } catch {}
+      __dgPostRestoreStabilizeRAF = 0;
+    }
+  }
+  function schedulePostRestoreStabilize(tag = 'post-restore') {
+    cancelPostRestoreStabilize();
+    let framesLeft = 12;     // hard cap: don't loop forever
+    let stable = 0;          // need 2 stable frames in a row
+    let lastKey = null;
+    const step = () => {
+      __dgPostRestoreStabilizeRAF = 0;
+      if (!panel?.isConnected) return;
+      try {
+        // Force layout + redraw even if culling currently thinks we're not visible.
+        // (This mirrors the "camera move fixes it" behavior, but deterministically.)
+        try { layout(true); } catch {}
+        try { resnapAndRedraw(true, { preservePaintIfNoStrokes: true }); } catch {}
+      } catch {}
+
+      const key = `${Math.round(cssW)}x${Math.round(cssH)}:${Math.round(gridArea.w)}x${Math.round(gridArea.h)}`;
+      if (key === lastKey) stable++;
+      else { stable = 0; lastKey = key; }
+
+      framesLeft--;
+      if (stable >= 2) return;
+      if (framesLeft <= 0) return;
+      __dgPostRestoreStabilizeRAF = requestAnimationFrame(step);
+    };
+
+    // Give the DOM at least one frame to apply any pending transforms before we start stabilizing.
+    __dgPostRestoreStabilizeRAF = requestAnimationFrame(step);
+  }
+
+  function clearDrawgridInternal(options = {}) {
+    const opts = (options && typeof options === 'object') ? options : {};
+    const user = !!opts.user;
+    const reason = typeof opts.reason === 'string' ? opts.reason : 'api.clear';
+    const guardActive = !!DG_HYDRATE.guardActive;
+    const inboundNonEmpty = inboundWasNonEmpty();
+    // If a programmatic clear lands on a toy that already has strokes/nodes,
+    // veto it unless detail.user === true. This prevents unintended wipes.
+    if (!opts.user) {
+      const hasStrokes = Array.isArray(strokes) && strokes.length > 0;
+      const hasActiveCols = currentMap?.active?.some(Boolean);
+      if (hasStrokes || hasActiveCols) {
+        dgTraceWarn?.('[drawgrid][CLEAR][VETO] programmatic clear blocked on non-empty toy', {
+          reason,
+          hasStrokes,
+          hasActiveCols
+        });
+        return false;
+      }
+    }
+    let stackSnippet = null;
+    try {
+      stackSnippet = (new Error('clear-call')).stack?.split('\n').slice(0, 6).join('\n');
+    } catch {}
+    const clearLog = {
+      reason,
+      user,
+      guardActive,
+      pendingUserClear: DG_HYDRATE.pendingUserClear,
+      inboundNonEmpty,
+      stack: stackSnippet,
+    };
+    if (!user && (guardActive || inboundNonEmpty)) {
+      dgTraceWarn('[drawgrid][CLEAR][VETO] blocked programmatic clear', clearLog);
+      return false;
+    }
+    if (user) {
+      dgTraceLog('[drawgrid][CLEAR] user', clearLog);
+      DG_HYDRATE.pendingUserClear = true;
+      markUserChange('user-clear', { reason });
+    } else {
+      dgTraceWarn('[drawgrid][CLEAR] programmatic', clearLog);
+    }
+    const makeFlowCtx = () => ({
+      panel,
+      paint,
+      backCanvas,
+      flashCanvas,
+      flashBackCanvas,
+      activeFlashCanvas: (typeof getActiveFlashCanvas === 'function') ? getActiveFlashCanvas() : null,
+      strokes,
+      usingBackBuffers,
+      paintRev: __dgPaintRev,
+      compositeDirty: panel.__dgSingleCompositeDirty,
+      hasOverlayStrokesCached,
+    });
+    FD.flowState('clear:start', makeFlowCtx());
+    R.clearCanvas(pctx);
+    // Clear both paint buffers to prevent stale composites.
+    try { if (backCtx && pctx !== backCtx) R.clearCanvas(backCtx); } catch {}
+    try { if (frontCtx && pctx !== frontCtx) R.clearCanvas(frontCtx); } catch {}
+    emitDG('paint-clear', { reason: 'pre-redraw' });
+    R.clearCanvas(nctx);
+    const flashSurface = getActiveFlashCanvas();
+    R.withLogicalSpace(fctx, () => {
+      const { x, y, w, h } = R.getOverlayClearRect({
+        canvas: flashSurface,
+        pad: R.getOverlayClearPad(),
+        allowFull: !!panel.__dgFlashOverlayOutOfGrid,
+        gridArea,
+      });
+      fctx.clearRect(x, y, w, h);
+      emitDG('overlay-clear', { reason: 'pre-redraw' });
+    });
+    try {
+      if (flashBackCtx && flashBackCtx !== fctx) {
+        R.resetCtx(flashBackCtx);
+        R.withLogicalSpace(flashBackCtx, () => {
+          const { x, y, w, h } = R.getOverlayClearRect({
+            canvas: flashBackCtx.canvas,
+            pad: R.getOverlayClearPad(),
+            allowFull: !!panel.__dgFlashOverlayOutOfGrid,
+            gridArea,
+          });
+          flashBackCtx.clearRect(x, y, w, h);
+        });
+      }
+      if (flashFrontCtx && flashFrontCtx !== fctx) {
+        R.resetCtx(flashFrontCtx);
+        R.withLogicalSpace(flashFrontCtx, () => {
+          const { x, y, w, h } = R.getOverlayClearRect({
+            canvas: flashFrontCtx.canvas,
+            pad: R.getOverlayClearPad(),
+            allowFull: !!panel.__dgFlashOverlayOutOfGrid,
+            gridArea,
+          });
+          flashFrontCtx.clearRect(x, y, w, h);
+        });
+      }
+    } catch {}
+    try { markFlashLayerCleared(); } catch {}
+    panel.__dgFlashOverlayOutOfGrid = false;
+    __dgOverlayStrokeListCache = { paintRev: -1, len: 0, special: [], colorized: [], outOfGrid: false };
+    __dgOverlayStrokeCache = { value: false, len: 0, ts: 0 };
+    strokes = [];
+    prevStrokeCount = 0;
+    manualOverrides = Array.from({ length: cols }, () => new Set());
+    persistentDisabled = Array.from({ length: cols }, () => new Set());
+    const emptyMap = {active:Array(cols).fill(false),nodes:Array.from({length:cols},()=>new Set()), disabled:Array.from({length:cols},()=>new Set())};
+    currentMap = emptyMap;
+    emitDrawgridUpdate({ activityOnly: false });
+    drawGrid();
+    nextDrawTarget = null; // Disarm any pending line draw
+    updateGeneratorButtons(); // Refresh button state to "Draw"
+    stopAutoGhostGuide({ immediate: true });
+    startAutoGhostGuide({ immediate: true });
+    drawLabelState.hasDrawnFirstLine = false;
+    updateDrawLabel(true);
+    noteToggleEffects = [];
+    __dgMarkSingleCanvasDirty(panel);
+    if (DG_SINGLE_CANVAS && isPanelVisible) {
+      try { compositeSingleCanvas(); } catch {}
+      panel.__dgSingleCompositeDirty = false;
+    }
+    FD.flowState('clear:end', makeFlowCtx());
+    return true;
+  }
+
   const api = {
     panel,
     startGhostGuide,
     stopGhostGuide,
     __inboundNonEmpty: () => inboundWasNonEmpty(),
-    clear: (options = {})=>{
-      const opts = (options && typeof options === 'object') ? options : {};
-      const user = !!opts.user;
-      const reason = typeof opts.reason === 'string' ? opts.reason : 'api.clear';
-      const guardActive = !!DG_HYDRATE.guardActive;
-      const inboundNonEmpty = inboundWasNonEmpty();
-      // If a programmatic clear lands on a toy that already has strokes/nodes,
-      // veto it unless detail.user === true. This prevents unintended wipes.
-      if (!opts.user) {
-        const hasStrokes = Array.isArray(strokes) && strokes.length > 0;
-        const hasActiveCols = currentMap?.active?.some(Boolean);
-        if (hasStrokes || hasActiveCols) {
-          dgTraceWarn?.('[drawgrid][CLEAR][VETO] programmatic clear blocked on non-empty toy', {
-            reason,
-            hasStrokes,
-            hasActiveCols
-          });
-          return false;
-        }
-      }
-      let stackSnippet = null;
-      try {
-        stackSnippet = (new Error('clear-call')).stack?.split('\n').slice(0, 6).join('\n');
-      } catch {}
-      const clearLog = {
-        reason,
-        user,
-        guardActive,
-        pendingUserClear: DG_HYDRATE.pendingUserClear,
-        inboundNonEmpty,
-        stack: stackSnippet,
-      };
-      if (!user && (guardActive || inboundNonEmpty)) {
-        dgTraceWarn('[drawgrid][CLEAR][VETO] blocked programmatic clear', clearLog);
-        return false;
-      }
-      if (user) {
-        dgTraceLog('[drawgrid][CLEAR] user', clearLog);
-        DG_HYDRATE.pendingUserClear = true;
-        markUserChange('user-clear', { reason });
-      } else {
-        dgTraceWarn('[drawgrid][CLEAR] programmatic', clearLog);
-      }
-      const makeFlowCtx = () => ({
-        panel,
-        paint,
-        backCanvas,
-        flashCanvas,
-        flashBackCanvas,
-        activeFlashCanvas: (typeof getActiveFlashCanvas === 'function') ? getActiveFlashCanvas() : null,
-        strokes,
-        usingBackBuffers,
-        paintRev: __dgPaintRev,
-        compositeDirty: panel.__dgSingleCompositeDirty,
-        hasOverlayStrokesCached,
-      });
-      FD.flowState('clear:start', makeFlowCtx());
-      R.clearCanvas(pctx);
-      // Clear both paint buffers to prevent stale composites.
-      try { if (backCtx && pctx !== backCtx) R.clearCanvas(backCtx); } catch {}
-      try { if (frontCtx && pctx !== frontCtx) R.clearCanvas(frontCtx); } catch {}
-      emitDG('paint-clear', { reason: 'pre-redraw' });
-      R.clearCanvas(nctx);
-      const flashSurface = getActiveFlashCanvas();
-      R.withLogicalSpace(fctx, () => {
-        const { x, y, w, h } = R.getOverlayClearRect({
-          canvas: flashSurface,
-          pad: R.getOverlayClearPad(),
-          allowFull: !!panel.__dgFlashOverlayOutOfGrid,
-          gridArea,
-        });
-        fctx.clearRect(x, y, w, h);
-        emitDG('overlay-clear', { reason: 'pre-redraw' });
-      });
-      try {
-        if (flashBackCtx && flashBackCtx !== fctx) {
-          R.resetCtx(flashBackCtx);
-          R.withLogicalSpace(flashBackCtx, () => {
-            const { x, y, w, h } = R.getOverlayClearRect({
-              canvas: flashBackCtx.canvas,
-              pad: R.getOverlayClearPad(),
-              allowFull: !!panel.__dgFlashOverlayOutOfGrid,
-              gridArea,
-            });
-            flashBackCtx.clearRect(x, y, w, h);
-          });
-        }
-        if (flashFrontCtx && flashFrontCtx !== fctx) {
-          R.resetCtx(flashFrontCtx);
-          R.withLogicalSpace(flashFrontCtx, () => {
-            const { x, y, w, h } = R.getOverlayClearRect({
-              canvas: flashFrontCtx.canvas,
-              pad: R.getOverlayClearPad(),
-              allowFull: !!panel.__dgFlashOverlayOutOfGrid,
-              gridArea,
-            });
-            flashFrontCtx.clearRect(x, y, w, h);
-          });
-        }
-      } catch {}
-      try { markFlashLayerCleared(); } catch {}
-      panel.__dgFlashOverlayOutOfGrid = false;
-      __dgOverlayStrokeListCache = { paintRev: -1, len: 0, special: [], colorized: [], outOfGrid: false };
-      __dgOverlayStrokeCache = { value: false, len: 0, ts: 0 };
-      strokes = [];
-      prevStrokeCount = 0;
-      manualOverrides = Array.from({ length: cols }, () => new Set());
-      persistentDisabled = Array.from({ length: cols }, () => new Set());
-      const emptyMap = {active:Array(cols).fill(false),nodes:Array.from({length:cols},()=>new Set()), disabled:Array.from({length:cols},()=>new Set())};
-      currentMap = emptyMap;
-      emitDrawgridUpdate({ activityOnly: false });
-      drawGrid();
-      nextDrawTarget = null; // Disarm any pending line draw
-      updateGeneratorButtons(); // Refresh button state to "Draw"
-      stopAutoGhostGuide({ immediate: true });
-      startAutoGhostGuide({ immediate: true });
-      drawLabelState.hasDrawnFirstLine = false;
-      updateDrawLabel(true);
-      noteToggleEffects = [];
-      __dgMarkSingleCanvasDirty(panel);
-      if (DG_SINGLE_CANVAS && isPanelVisible) {
-        try { compositeSingleCanvas(); } catch {}
-        panel.__dgSingleCompositeDirty = false;
-      }
-      FD.flowState('clear:end', makeFlowCtx());
-      return true;
-    },
+    clear: clearDrawgridInternal,
     getState: captureState,
     hasActiveNotes: () => {
       try {
@@ -8805,6 +9138,8 @@ function copyCanvas(backCtx, frontCtx) {
                 requestFrontSwap(useFrontBuffers);
               }
             } catch {}
+            // Chained toys restore via setState() -- stabilize the same way as restoreFromState().
+            try { schedulePostRestoreStabilize('setState'); } catch {}
           }catch(e){ }
           isRestoring = false;
           // Re-check after hydration completes
@@ -8884,6 +9219,22 @@ function copyCanvas(backCtx, frontCtx) {
     api.clear({ user, reason });
   });
 
+  // When we change strokes programmatically (eg Random) we must invalidate overlay caches
+  // and force a redraw; otherwise (especially while playing / with front buffers) we can
+  // show only the backing line until another event (eg Play toggle) triggers a full refresh.
+  function __dgAfterProgrammaticVisualChange(reason) {
+    try { markPaintDirty(); } catch {}
+    try { __dgOverlayStrokeListCache.paintRev = -1; __dgOverlayStrokeListCache.len = -1; } catch {}
+    try { panel.__dgSingleCompositeDirty = true; } catch {}
+    try { __dgNeedsUIRefresh = true; } catch {}
+    try { __dgFrontSwapNextDraw = true; } catch {}
+    try { __dgForceFullDrawNext = true; } catch {}
+    try { __dgForceFullDrawFrames = Math.max(__dgForceFullDrawFrames || 0, 2); } catch {}
+    try { markStaticDirty(reason || 'programmatic-visual'); } catch {}
+    try { ensurePostCommitRedraw(reason || 'programmatic-visual'); } catch {}
+    try { if (typeof requestFrontSwap === 'function') requestFrontSwap(useFrontBuffers); } catch {}
+  }
+
   function handleToyRandomEvent(e, kind) {
     try {
       if (e && e.__dgHandled) return;
@@ -8919,6 +9270,7 @@ function copyCanvas(backCtx, frontCtx) {
       if (kind === 'toy-random') RNG.handleRandomizeLine();
       else if (kind === 'toy-random-blocks') RNG.handleRandomizeBlocks();
       else if (kind === 'toy-random-notes') RNG.handleRandomizeNotes();
+      __dgAfterProgrammaticVisualChange(kind);
       if (typeof window !== 'undefined' && window.__DG_DEBUG_DRAWFLOW) {
         console.log('[DG][flow] handleToyRandomEvent:done', {
           kind,
@@ -9394,7 +9746,6 @@ function runAutoGhostGuideSweep() {
       try { panel.__dgVisibilityObserver.disconnect(); } catch {}
       try { delete panel.__dgVisibilityObserver; } catch {}
     }
-    observer.disconnect();
   }, { once: true });
 
   panel.addEventListener('tutorial:highlight-notes', (event) => {
@@ -9447,6 +9798,23 @@ function runAutoGhostGuideSweep() {
       startAutoGhostGuide({ immediate: true });
       __dgNeedsUIRefresh = true;
       __dgStableFramesAfterCommit = 0;
+
+      // IMPORTANT:
+      // On refresh/boot, zoom/overview settling can briefly report a scaled DOM rect.
+      // If we miss a guaranteed composite+swap after first layout, the user can see an
+      // empty body (grid hidden) and/or strokes appear incorrectly scaled until interaction.
+      // Force a deterministic full draw + composite + front swap once on boot.
+      try { markStaticDirty('boot'); } catch {}
+      try { panel.__dgSingleCompositeDirty = true; } catch {}
+      __dgFrontSwapNextDraw = true;
+      __dgForceFullDrawNext = true;
+      __dgForceFullDrawFrames = Math.max(__dgForceFullDrawFrames || 0, 4);
+      ensurePostCommitRedraw('boot');
+      try {
+        if (typeof requestFrontSwap === 'function') {
+          requestFrontSwap(useFrontBuffers);
+        }
+      } catch {}
     } catch {}
   });
 
