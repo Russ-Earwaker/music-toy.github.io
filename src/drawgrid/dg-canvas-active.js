@@ -19,23 +19,30 @@ export function createActiveCanvasHelpers(getState) {
     ctx.globalAlpha = 1;
   }
 
-  // Map pointer coordinates into the active paint canvas's logical space.
+  // Map pointer coordinates into the paint canvas's logical space.
+  //
+  // IMPORTANT:
+  // - The "active" drawing surface may be an offscreen/back buffer (display:none).
+  // - Pointer events should be mapped using a stable on-screen element (layersRoot/wrap/frontCanvas),
+  //   otherwise rect.width/height can be 0 and all pointer coords collapse to (0,0) after refresh.
   function pointerToPaintLogical(ev = {}) {
     const state = getState?.() || {};
-    const canvas = state.DG_SINGLE_CANVAS
-      ? state.frontCanvas
-      : ((typeof getActivePaintCanvas === 'function' ? getActivePaintCanvas() : null) || state.frontCanvas);
-    if (!canvas) return { x: 0, y: 0 };
-    const rect = canvas.getBoundingClientRect?.();
-    const rw = Math.max(1, rect?.width || canvas.clientWidth || state.cssW || canvas.width || 1);
-    const rh = Math.max(1, rect?.height || canvas.clientHeight || state.cssH || canvas.height || 1);
+    const front = state.frontCanvas || null; // the on-screen paint canvas element
+    const basis = state.layersRoot || state.wrap || front || null;
+
+    const rect = basis?.getBoundingClientRect?.();
+    const rw = Math.max(1, rect?.width || basis?.clientWidth || state.cssW || front?.clientWidth || 1);
+    const rh = Math.max(1, rect?.height || basis?.clientHeight || state.cssH || front?.clientHeight || 1);
+
     const dpr = (Number.isFinite(state.paintDpr) && state.paintDpr > 0) ? state.paintDpr : 1;
-    const lw = state.cssW || (canvas.width / dpr) || rw;
-    const lh = state.cssH || (canvas.height / dpr) || rh;
+    const lw = state.cssW || ((front?.width ?? 0) / dpr) || rw;
+    const lh = state.cssH || ((front?.height ?? 0) / dpr) || rh;
+
     const clientX = ev?.clientX ?? ev?.x ?? 0;
     const clientY = ev?.clientY ?? ev?.y ?? 0;
     const left = rect?.left ?? 0;
     const top = rect?.top ?? 0;
+
     const lx = (clientX - left) * (lw / rw);
     const ly = (clientY - top) * (lh / rh);
     return {

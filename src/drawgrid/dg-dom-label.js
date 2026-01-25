@@ -9,9 +9,14 @@ function clamp01(value) {
 }
 
 export function createDrawLabelOverlay(panel, getState, opts = {}) {
-  const { wrap, grid } = opts;
+  const { wrap, grid, mountRoot } = opts;
+  const root = mountRoot || wrap || panel;
 
-  let drawLabel = panel.querySelector('.drawgrid-tap-label');
+  // Prefer the provided mount root so the label stays with the overlay layer
+  // and never becomes a layout participant (which can cause zoom/refresh drift).
+  let drawLabel =
+    root?.querySelector?.('.drawgrid-tap-label') ||
+    panel.querySelector('.drawgrid-tap-label');
   if (!drawLabel) {
     drawLabel = document.createElement('div');
     drawLabel.className = 'drawgrid-tap-label';
@@ -35,7 +40,7 @@ export function createDrawLabelOverlay(panel, getState, opts = {}) {
       userSelect: 'none',
       opacity: `${DRAW_LABEL_OPACITY_BASE}`,
     });
-    wrap.appendChild(drawLabel);
+    root.appendChild(drawLabel);
     drawLabel.style.pointerEvents = 'none';
   }
 
@@ -43,6 +48,7 @@ export function createDrawLabelOverlay(panel, getState, opts = {}) {
     panel,
     wrap,
     grid,
+    mountRoot: root,
     getState,
     drawLabel,
     drawLabelLetters: [],
