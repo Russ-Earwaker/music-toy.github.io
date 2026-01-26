@@ -1,48 +1,11 @@
-drawgrid.js:1570 [DG][refresh] size:wrap zero (RO pending) {w: 0, h: 0}
-drawgrid.js:1570 [DG][refresh] size:wrap zero (RO pending) {w: 0, h: 0}
-drawgrid.js:1570 [DG][refresh] resnap {forceLayout: false, skipLayout: false, preservePaintIfNoStrokes: false, zoomMode: 'committing', isPanelVisible: true}
-drawgrid.js:1570 [DG][refresh] size:wrap zero (RO pending) {w: 0, h: 0}
-drawgrid.js:1570 [DG][refresh] ro:size {w: 798, h: 599, prevW: 0, prevH: 0}
-drawgrid.js:1570 [DG][refresh] resnap {forceLayout: false, skipLayout: false, preservePaintIfNoStrokes: false, zoomMode: 'committing', isPanelVisible: true}
-drawgrid.js:115 [DG][ghost] TRACE ARMED
-drawgrid.js:117 [DG][ghost] auto:sweep {startX: -99, startY: 451, endX: 897, endY: 451, crossY: 300, …}
-drawgrid.js:117 [DG][ghost] start {startX: -99, startY: 451, endX: 897, endY: 451, crossY: 300, …}
-drawgrid.js:117 [DG][ghost] auto:sweep {startX: -99, startY: 244, endX: 897, endY: 244, crossY: 300, …}
-drawgrid.js:117 [DG][ghost] start {startX: -99, startY: 244, endX: 897, endY: 244, crossY: 300, …}
-drawgrid.js:117 [DG][ghost] auto:sweep {startX: -99, startY: 326, endX: 897, endY: 326, crossY: 300, …}
-drawgrid.js:117 [DG][ghost] start {startX: -99, startY: 326, endX: 897, endY: 326, crossY: 300, …}
-drawgrid.js:117 [DG][ghost] auto:sweep {startX: -99, startY: 147, endX: 897, endY: 147, crossY: 300, …}
-drawgrid.js:117 [DG][ghost] start {startX: -99, startY: 147, endX: 897, endY: 147, crossY: 300, …}
-drawgrid.js:117 [DG][ghost] auto:sweep {startX: -99, startY: 105, endX: 897, endY: 105, crossY: 300, …}
-drawgrid.js:117 [DG][ghost] start {startX: -99, startY: 105, endX: 897, endY: 105, crossY: 300, …}
-drawgrid.js:117 [DG][ghost] auto:sweep {startX: -99, startY: 474, endX: 897, endY: 474, crossY: 300, …}
-drawgrid.js:117 [DG][ghost] start {startX: -99, startY: 474, endX: 897, endY: 474, crossY: 300, …}
-drawgrid.js:117 [DG][ghost] auto:sweep {startX: -99, startY: 71, endX: 897, endY: 71, crossY: 300, …}
-drawgrid.js:117 [DG][ghost] start {startX: -99, startY: 71, endX: 897, endY: 71, crossY: 300, …}
-drawgrid.js:1570 [DG][refresh] resnap {forceLayout: true, skipLayout: false, preservePaintIfNoStrokes: false, zoomMode: 'committing', isPanelVisible: true}
-drawgrid.js:117 [DG][ghost] auto:sweep {startX: -99, startY: 206, endX: 897, endY: 206, crossY: 300, …}
-drawgrid.js:117 [DG][ghost] start {startX: -99, startY: 206, endX: 897, endY: 206, crossY: 300, …}
-drawgrid.js:117 [DG][ghost] auto:sweep {startX: -99, startY: 432, endX: 897, endY: 432, crossY: 300, …}
-drawgrid.js:117 [DG][ghost] start {startX: -99, startY: 432, endX: 897, endY: 432, crossY: 300, …}
-drawgrid.js:1570 [DG][refresh] resnap {forceLayout: false, skipLayout: true, preservePaintIfNoStrokes: true, zoomMode: 'idle', isPanelVisible: true}
-drawgrid.js:1570 [DG][refresh] resnap {forceLayout: true, skipLayout: false, preservePaintIfNoStrokes: true, zoomMode: 'idle', isPanelVisible: true}
-drawgrid.js:117 [DG][ghost] auto:sweep {startX: -99, startY: 382, endX: 897, endY: 382, crossY: 300, …}
-drawgrid.js:117 [DG][ghost] start {startX: -99, startY: 382, endX: 897, endY: 382, crossY: 300, …}
-drawgrid.js:117 [DG][ghost] auto:sweep {startX: -99, startY: 191, endX: 897, endY: 191, crossY: 300, …}
-drawgrid.js:117 [DG][ghost] start {startX: -99, startY: 191, endX: 897, endY: 191, crossY: 300, …}
-drawgrid.js:117 [DG][ghost] auto:sweep {startX: -99, startY: 345, endX: 897, endY: 345, crossY: 300, …}
-drawgrid.js:117 [DG][ghost] start {startX: -99, startY: 345, endX: 897, endY: 345, crossY: 300, …}
-drawgrid.js:1570 [DG][refresh] resnap {forceLayout: true, skipLayout: false, preservePaintIfNoStrokes: true, zoomMode: 'idle', isPanelVisible: true}
-drawgrid.js:117 [DG][ghost] auto:sweep {startX: -99, startY: 80, endX: 897, endY: 80, crossY: 300, …}
-drawgrid.js:117 [DG][ghost] start {startX: -99, startY: 80, endX: 897, endY: 80, crossY: 300, …}
-drawgrid.js:1570 [DG][refresh] resnap {forceLayout: true, skipLayout: false, preservePaintIfNoStrokes: true, zoomMode: 'idle', isPanelVisible: true}
 main.js:674 [focus] normalize DOM
-drawgrid.js:117 [DG][ghost] auto:sweep {startX: -99, startY: 154, endX: 897, endY: 154, crossY: 300, …}
-drawgrid.js:117 [DG][ghost] start {startX: -99, startY: 154, endX: 897, endY: 154, crossY: 300, …}
-drawgrid.js:117 [DG][ghost] auto:sweep {startX: -99, startY: 255, endX: 897, endY: 255, crossY: 300, …}
-drawgrid.js:117 [DG][ghost] start {startX: -99, startY: 255, endX: 897, endY: 255, crossY: 300, …}
 main.js:674 [focus] normalize DOM
-drawgrid.js:117 [DG][ghost] auto:sweep {startX: -99, startY: 267, endX: 897, endY: 267, crossY: 300, …}
-drawgrid.js:117 [DG][ghost] start {startX: -99, startY: 267, endX: 897, endY: 267, crossY: 300, …}
-drawgrid.js:117 [DG][ghost] auto:sweep {startX: -99, startY: 244, endX: 897, endY: 244, crossY: 300, …}
-drawgrid.js:117 [DG][ghost] start {startX: -99, startY: 244, endX: 897, endY: 244, crossY: 300, …}
+window.__DG_RESIZE_TRACE = true;
+window.__DG_RESIZE_TRACE_STACK = true;
+
+true
+drawgrid.js:2022 [DG][resize] zoom-commit:phase-done {nextCssW: 798, nextCssH: 599, nextDpr: 0.8575463933316664, paintDpr: 0.8575463933316664, targetW: 684, …}cssChanged: falsedprChanged: truenextCssH: 599nextCssW: 798nextDpr: 0.8575463933316664paintDpr: 0.8575463933316664sizeChanged: truestack: "    at http://192.168.0.62:5500/src/drawgrid.js:2018:25\n    at Object.perfMarkSection (http://192.168.0.62:5500/src/drawgrid/dg-flow-trace.js:13:14)\n    at resizeSurfacesFor (http://192.168.0.62:5500/src/drawgrid.js:1966:14)\n    at releaseZoomFreeze (http://192.168.0.62:5500/src/drawgrid.js:2467:9)\n    at handleZoom (http://192.168.0.62:5500/src/drawgrid.js:3760:7)\n    at emitZoom (http://192.168.0.62:5500/src/zoom/ZoomCoordinator.js:170:7)"targetH: 514targetW: 684zoomMode: "idle"[[Prototype]]: Object
+drawgrid.js:2022 [DG][resize] zoom-commit:phase-done {nextCssW: 798, nextCssH: 599, nextDpr: 0.7537239482864483, paintDpr: 0.7537239482864483, targetW: 602, …}cssChanged: falsedprChanged: truenextCssH: 599nextCssW: 798nextDpr: 0.7537239482864483paintDpr: 0.7537239482864483sizeChanged: truestack: "    at http://192.168.0.62:5500/src/drawgrid.js:2018:25\n    at Object.perfMarkSection (http://192.168.0.62:5500/src/drawgrid/dg-flow-trace.js:13:14)\n    at resizeSurfacesFor (http://192.168.0.62:5500/src/drawgrid.js:1966:14)\n    at releaseZoomFreeze (http://192.168.0.62:5500/src/drawgrid.js:2467:9)\n    at handleZoom (http://192.168.0.62:5500/src/drawgrid.js:3760:7)\n    at emitZoom (http://192.168.0.62:5500/src/zoom/ZoomCoordinator.js:170:7)"targetH: 452targetW: 602zoomMode: "idle"[[Prototype]]: Object
+drawgrid.js:2022 [DG][resize] zoom-commit:phase-done {nextCssW: 798, nextCssH: 599, nextDpr: 0.6468073108594076, paintDpr: 0.6468073108594076, targetW: 516, …}cssChanged: falsedprChanged: truenextCssH: 599nextCssW: 798nextDpr: 0.6468073108594076paintDpr: 0.6468073108594076sizeChanged: truestack: "    at http://192.168.0.62:5500/src/drawgrid.js:2018:25\n    at Object.perfMarkSection (http://192.168.0.62:5500/src/drawgrid/dg-flow-trace.js:13:14)\n    at resizeSurfacesFor (http://192.168.0.62:5500/src/drawgrid.js:1966:14)\n    at releaseZoomFreeze (http://192.168.0.62:5500/src/drawgrid.js:2467:9)\n    at handleZoom (http://192.168.0.62:5500/src/drawgrid.js:3760:7)\n    at emitZoom (http://192.168.0.62:5500/src/zoom/ZoomCoordinator.js:170:7)"targetH: 388targetW: 516zoomMode: "idle"[[Prototype]]: Object
+drawgrid.js:2022 [DG][resize] zoom-commit:phase-done {nextCssW: 798, nextCssH: 599, nextDpr: 0.5702251085919947, paintDpr: 0.5702251085919947, targetW: 456, …}cssChanged: falsedprChanged: truenextCssH: 599nextCssW: 798nextDpr: 0.5702251085919947paintDpr: 0.5702251085919947sizeChanged: truestack: "    at http://192.168.0.62:5500/src/drawgrid.js:2018:25\n    at Object.perfMarkSection (http://192.168.0.62:5500/src/drawgrid/dg-flow-trace.js:13:14)\n    at resizeSurfacesFor (http://192.168.0.62:5500/src/drawgrid.js:1966:14)\n    at releaseZoomFreeze (http://192.168.0.62:5500/src/drawgrid.js:2467:9)\n    at handleZoom (http://192.168.0.62:5500/src/drawgrid.js:3760:7)\n    at emitZoom (http://192.168.0.62:5500/src/zoom/ZoomCoordinator.js:170:7)"targetH: 342targetW: 456zoomMode: "idle"[[Prototype]]: Object
+drawgrid.js:2022 [DG][resize] zoom-commit:phase-done {nextCssW: 798, nextCssH: 599, nextDpr: 0.5, paintDpr: 0.5, targetW: 400, …}cssChanged: falsedprChanged: truenextCssH: 599nextCssW: 798nextDpr: 0.5paintDpr: 0.5sizeChanged: truestack: "    at http://192.168.0.62:5500/src/drawgrid.js:2018:25\n    at Object.perfMarkSection (http://192.168.0.62:5500/src/drawgrid/dg-flow-trace.js:13:14)\n    at resizeSurfacesFor (http://192.168.0.62:5500/src/drawgrid.js:1966:14)\n    at releaseZoomFreeze (http://192.168.0.62:5500/src/drawgrid.js:2467:9)\n    at handleZoom (http://192.168.0.62:5500/src/drawgrid.js:3760:7)\n    at emitZoom (http://192.168.0.62:5500/src/zoom/ZoomCoordinator.js:170:7)"targetH: 300targetW: 400zoomMode: "idle"[[Prototype]]: Object

@@ -431,6 +431,7 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
   const fieldId = hashSeed(fieldLabel + ':' + (opts.seed ?? '') + ':' + (opts.debugLabel ?? '')) >>> 0;
 
   const sizeCache = { w: Math.max(1, canvas.clientWidth || canvas.width || 1), h: Math.max(1, canvas.clientHeight || canvas.height || 1), ts: 0 };
+  let __fgLastDprTraceSig = '';
   let __resizeDeferred = false;
   let __lastVisible = true;
   let __lastVisCheck = 0;
@@ -612,11 +613,49 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
       maxBackingSidePx: opts?.maxBackingSidePx,
     });
 
-    const pxW = Math.max(1, Math.round(state.w * state.dpr));
-    const pxH = Math.max(1, Math.round(state.h * state.dpr));
+    const __quant2 = (v) => Math.max(1, Math.round(v / 2) * 2); // reduce 1px resize churn
+    const pxW = __quant2(state.w * state.dpr);
+    const pxH = __quant2(state.h * state.dpr);
     if (canvas.width !== pxW) canvas.width = pxW;
     if (canvas.height !== pxH) canvas.height = pxH;
     ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+
+    // Effective DPR / backing-store trace (debug-only; driven by PerfLab 'traceDprOn').
+    try {
+      if (typeof window !== 'undefined' && window.__FG_EFFECTIVE_DPR_TRACE) {
+        const effDprW = (state.w > 0 && pxW > 0) ? (pxW / state.w) : null;
+        const effDprH = (state.h > 0 && pxH > 0) ? (pxH / state.h) : null;
+        const payload = {
+          tag: 'field-generic',
+          id: fieldLabel,
+          cssW: state.w,
+          cssH: state.h,
+          dpr: state.dpr,
+          backingW: pxW,
+          backingH: pxH,
+          effDprW,
+          effDprH,
+          pressureMul: state.pressureMul,
+          visualMul: state.visualMul,
+          deviceDpr: state.deviceDpr,
+        };
+        const sig = JSON.stringify(payload);
+        if (sig !== __fgLastDprTraceSig) {
+          __fgLastDprTraceSig = sig;
+          // Prefer buffered trace (PerfLab) to avoid console stalls during perf runs.
+          try {
+            const push = (typeof window !== 'undefined') ? window.__PERF_TRACE_PUSH : null;
+            if (typeof push === 'function') push('FG.dpr', payload);
+          } catch {}
+
+          // Console is opt-in only (debugging, not perf).
+          try {
+            const toConsole = (typeof window !== 'undefined') ? !!window.__PERF_TRACE_TO_CONSOLE : true;
+            if (toConsole) console.log('[FG][dpr]', payload);
+          } catch {}
+        }
+      }
+    } catch {}
 
     const layoutOpts = config.layoutOverrides || {};
     const rawZoom = readZoom(viewport || pv);

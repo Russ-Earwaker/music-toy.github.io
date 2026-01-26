@@ -195,6 +195,22 @@ window.__DG_VISUAL_DPR_ZOOM_THRESHOLD ??= 0.9;   // below this, start reducing D
 window.__DG_VISUAL_DPR_MIN_MUL        ??= 0.5;   // lowest visual multiplier
 window.__DG_MIN_PANEL_DPR             ??= 0.5;   // absolute floor for backing DPR
 
+// Zoom-commit DPR policy (Option C):
+// Avoid visible "snap" at the end of zoom/pan by only changing backing-store DPR
+// when it's a meaningful change OR when zoomed far enough out to justify it.
+window.__DG_ZOOM_COMMIT_DPR_MIN_DELTA     ??= 0.18; // minimum DPR change to apply at commit
+window.__DG_ZOOM_COMMIT_SCALE_THRESHOLD  ??= 0.8;  // if commitScale <= this, always allow DPR change
+
+// Adaptive DPR (idle-time backing-store DPR changes)
+// This can cause visible "late snaps" (layers appear to jump after zoom/pan settles),
+// because it changes paintDpr while the camera is idle.
+// Default OFF; we can re-enable later once it's hysteresis-stable and visually safe.
+window.__DG_ADAPTIVE_DPR_ENABLED      ??= false;
+
+// Size-trace logging (DPR / canvas resize churn). Keep console OFF by default.
+// PerfLab can enable __DG_REFRESH_SIZE_TRACE to collect to the perf buffer without spamming devtools.
+window.__DG_REFRESH_SIZE_TRACE_TO_CONSOLE ??= false;
+
 function __dgComputeVisualBackingMul(boardScale) {
   const threshold = window.__DG_VISUAL_DPR_ZOOM_THRESHOLD;
   const minMul    = window.__DG_VISUAL_DPR_MIN_MUL;
@@ -441,6 +457,7 @@ let __dgLastLayoutKey = '';
 let __dgHydrationPendingRedraw = false;
 let __dgAdaptivePaintDpr = null;
 let __dgAdaptivePaintLastTs = 0;
+let __dgLastZoomCommitTs = 0;
 // Per-panel (multi-instance safe) dirty helpers.
 // We store the actual dirty flags on the panel object so multiple draw toys don't fight.
 let __dgProbeDidFirstDraw = false;
@@ -1531,7 +1548,7 @@ try {
 //   window.__DG_REFRESH_SIZE_TRACE = true
 try {
   if (typeof window !== 'undefined' && window.__DG_REFRESH_DEBUG === undefined) {
-    window.__DG_REFRESH_DEBUG = true;
+    window.__DG_REFRESH_DEBUG = false;
   }
   if (typeof window !== 'undefined' && window.__DG_REFRESH_SIZE_TRACE === undefined) {
     window.__DG_REFRESH_SIZE_TRACE = false;
@@ -1539,13 +1556,29 @@ try {
   if (typeof window !== 'undefined' && window.__DG_REFRESH_SIZE_TRACE_LIMIT === undefined) {
     window.__DG_REFRESH_SIZE_TRACE_LIMIT = 200;
   }
+  // Throttle noisy size-trace logs (per panel instance).
+  // Default is intentionally conservative; bump lower only when actively diagnosing.
+  //   window.__DG_REFRESH_SIZE_TRACE_THROTTLE_MS = 0   // disables throttling
+  if (typeof window !== 'undefined' && window.__DG_REFRESH_SIZE_TRACE_THROTTLE_MS === undefined) {
+    window.__DG_REFRESH_SIZE_TRACE_THROTTLE_MS = 800;
+  }
 } catch {}
   let __dgSizeTraceCount = 0;
+  let __dgSizeTraceLastTs = 0;
   function dgSizeTrace(event, data = null) {
     try {
       const on = (typeof window !== 'undefined' && window.__DG_REFRESH_SIZE_TRACE);
       if (!on) return;
     } catch { return; }
+    // Throttle: this trace can spam hard during resize/commit churn.
+    try {
+      const throttleMs = (typeof window !== 'undefined') ? Number(window.__DG_REFRESH_SIZE_TRACE_THROTTLE_MS) : 0;
+      const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      if (Number.isFinite(throttleMs) && throttleMs > 0) {
+        if (__dgSizeTraceLastTs && (now - __dgSizeTraceLastTs) < throttleMs) return;
+      }
+      __dgSizeTraceLastTs = now;
+    } catch {}
     try {
       const limit = (typeof window !== 'undefined') ? window.__DG_REFRESH_SIZE_TRACE_LIMIT : null;
       if (Number.isFinite(limit) && limit >= 0 && __dgSizeTraceCount >= limit) return;
@@ -1554,6 +1587,18 @@ try {
     try {
       const payload = data && typeof data === 'object' ? data : {};
       payload.panelId = panel?.id || null;
+
+      // Prefer the perf trace buffer (cheap + bounded). Console logging is opt-in.
+      try {
+        if (typeof window !== 'undefined' && typeof window.__PERF_TRACE_PUSH === 'function') {
+          window.__PERF_TRACE_PUSH('DG.size-trace', { event, ...payload });
+        }
+      } catch {}
+
+      // Console logging is *explicit* opt-in (no dependency on DG_DEBUG).
+      const toConsole = (typeof window !== 'undefined' && window.__DG_REFRESH_SIZE_TRACE_TO_CONSOLE === true);
+      if (!toConsole) return;
+
       const text = (() => {
         try { return JSON.stringify(payload); } catch { return null; }
       })();
@@ -1568,6 +1613,9 @@ try {
     try {
       const on = (typeof window !== 'undefined' && window.__DG_REFRESH_DEBUG);
       if (!on) return;
+      // ro:size can be noisy during initial mount/overview settling.
+      // Keep it opt-in so refresh debug stays usable.
+      if (event === 'ro:size' && !window.__DG_REFRESH_DEBUG_RO_SIZE) return;
     } catch { return; }
     try {
       if (data !== null && data !== undefined) console.log('[DG][refresh]', event, data);
@@ -1582,6 +1630,14 @@ try {
       if (!on) return;
     } catch { return; }
     try {
+      const describeCanvas = (c) => {
+        if (!c) return null;
+        const w = c.width || 0;
+        const h = c.height || 0;
+        const effDprW = (cssW > 0 && w > 0) ? (w / cssW) : null;
+        const effDprH = (cssH > 0 && h > 0) ? (h / cssH) : null;
+        return { w, h, effDprW, effDprH };
+      };
       const rect = frontCanvas?.getBoundingClientRect?.();
       const panelRect = panel?.getBoundingClientRect?.();
       const payload = {
@@ -1594,6 +1650,18 @@ try {
           h: frontCanvas?.height || 0,
           rectW: rect?.width || 0,
           rectH: rect?.height || 0,
+        },
+        // Snapshot all major composited surfaces so we can see effective DPR + backing-store sizes.
+        // NOTE: particles are owned by field-generic; see __FG_EFFECTIVE_DPR_TRACE for that.
+        surfaces: {
+          front: describeCanvas(frontCanvas),
+          back: describeCanvas(backCanvas),
+          playhead: describeCanvas(playheadCanvas),
+          gridBack: describeCanvas(gridBackCanvas),
+          nodesBack: describeCanvas(nodesBackCanvas),
+          flashBack: describeCanvas(flashBackCanvas),
+          ghostBack: describeCanvas(ghostBackCanvas),
+          tutorialBack: describeCanvas(tutorialBackCanvas),
         },
         gridBack: {
           w: gridBackCanvas?.width || 0,
@@ -1620,6 +1688,62 @@ try {
         extra: extra || null,
       };
       dgSizeTrace('canvas-sizes', payload);
+    } catch {}
+  }
+
+  // Effective DPR tracer (per surface).
+  // Purpose: prove that pressure-DPR is *actually* applying to every heavy canvas, and
+  // catch backing-store churn (e.g. oscillating 1px resizes) after refactors.
+  let __dgLastEffectiveDprSig = '';
+  function dgEffectiveDprTrace(tag, extra = null) {
+    try {
+      const on = (typeof window !== 'undefined' && window.__DG_EFFECTIVE_DPR_TRACE);
+      if (!on) return;
+    } catch { return; }
+
+    try {
+      const describe = (c) => {
+        if (!c) return null;
+        const w = c.width || 0;
+        const h = c.height || 0;
+        const effDprW = (cssW > 0 && w > 0) ? (w / cssW) : null;
+        const effDprH = (cssH > 0 && h > 0) ? (h / cssH) : null;
+        return { w, h, effDprW, effDprH };
+      };
+
+      const payload = {
+        tag,
+        cssW,
+        cssH,
+        paintDpr,
+        surfaces: {
+          front: describe(frontCanvas),
+          back: describe(backCanvas),
+          playhead: describe(playheadCanvas),
+          gridBack: describe(gridBackCanvas),
+          nodesBack: describe(nodesBackCanvas),
+          flashBack: describe(flashBackCanvas),
+          ghostBack: describe(ghostBackCanvas),
+          tutorialBack: describe(tutorialBackCanvas),
+        },
+        extra: extra || null,
+      };
+
+      const sig = JSON.stringify(payload);
+      if (sig === __dgLastEffectiveDprSig) return;
+      __dgLastEffectiveDprSig = sig;
+
+      // Prefer buffered trace (PerfLab) to avoid console stalls during perf runs.
+      try {
+        const push = (typeof window !== 'undefined') ? window.__PERF_TRACE_PUSH : null;
+        if (typeof push === 'function') push('DG.dpr', payload);
+      } catch {}
+
+      // Console is opt-in only (debugging, not perf).
+      try {
+        const toConsole = (typeof window !== 'undefined') ? !!window.__PERF_TRACE_TO_CONSOLE : true;
+        if (toConsole) console.log('[DG][dpr]', payload);
+      } catch {}
     } catch {}
   }
 
@@ -1844,14 +1968,41 @@ try {
     mount: panel.__dgMount,
   }));
 
-  function resizeSurfacesFor(nextCssW, nextCssH, nextDpr) {
+  function resizeSurfacesFor(nextCssW, nextCssH, nextDpr, reason) {
     return F.perfMarkSection('drawgrid.resize', () => {
       if (!__dgCommitResizeCount && (() => { try { return !!window.__ZOOM_COMMIT_PHASE; } catch {} return false; })()) {
         __dgCommitResizeCount = 1;
         if (DG_DEBUG) { try { console.warn('[DG] resizeSurfacesFor during commit'); } catch {} }
       }
-      const dpr = Math.max(1, Number.isFinite(nextDpr) ? nextDpr : (window.devicePixelRatio || 1));
-      paintDpr = __dgCapDprForBackingStore(nextCssW, nextCssH, Math.min(dpr, 3), paintDpr);
+      // Allow backing-store DPR < 1 (critical for perf when zoomed out / under pressure).
+      const dpr = Math.max(0.25, Number.isFinite(nextDpr) ? nextDpr : (window.devicePixelRatio || 1));
+
+      const __prevCssW = cssW, __prevCssH = cssH, __prevPaintDpr = paintDpr;
+      const __reason = (typeof reason === 'string' && reason) ? reason : 'unknown';
+      // IMPORTANT:
+      // __dgCapDprForBackingStore includes hysteresis to prevent thrash (good),
+      // but during explicit zoom commits it can cause "only shrinks over time"
+      // because small ramp-ups are blocked while ramp-downs are allowed.
+      // So: disable hysteresis on zoom-commit paths.
+      const __prevForCap = (__reason.indexOf('zoom-commit') === 0) ? null : paintDpr;
+      if (__reason.indexOf('zoom-commit') !== -1) {
+        __dgLastZoomCommitTs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      }
+      const __nextPaintDpr = __dgCapDprForBackingStore(nextCssW, nextCssH, Math.min(dpr, 3), __prevForCap);
+      paintDpr = __nextPaintDpr;
+      if (typeof window !== 'undefined' && window.__DG_REFRESH_DEBUG) {
+        const __changed = (__prevCssW !== nextCssW) || (__prevCssH !== nextCssH) || (Math.abs(__prevPaintDpr - __nextPaintDpr) > 1e-6);
+        if (__changed) {
+          try {
+            dgRefreshTrace('resizeSurfacesFor', {
+              reason: __reason,
+              prev: { cssW: __prevCssW, cssH: __prevCssH, paintDpr: __prevPaintDpr },
+              next: { cssW: nextCssW, cssH: nextCssH, paintDpr: __nextPaintDpr },
+              zoomMode: __dgIsGesturing() ? 'gesturing' : 'idle',
+            });
+          } catch {}
+        }
+      }
       const __quant2 = (v) => Math.max(1, Math.round(v / 2) * 2); // reduce 1px resize churn
       const targetW = __quant2(nextCssW * paintDpr);
       const targetH = __quant2(nextCssH * paintDpr);
@@ -1860,9 +2011,29 @@ try {
       const cssChanged = nextCssW !== __dgLastResizeCssW || nextCssH !== __dgLastResizeCssH;
       // Fast no-op exit: avoids DOM writes + potential compositor churn when we only differ by float jitter.
       if (!dprChanged && !sizeChanged && !cssChanged) {
-        dgSizeTrace('resizeSurfacesFor(no-op)', { nextCssW, nextCssH, nextDpr, paintDpr, targetW, targetH, sizeChanged: false, dprChanged: false });
+        dgSizeTrace('resizeSurfacesFor(no-op)', { reason, nextCssW, nextCssH, nextDpr, paintDpr, targetW, targetH, sizeChanged: false, dprChanged: false });
         return;
       }
+      // Optional: when hunting "mystery scale jumps", capture who triggered a real resize.
+      // Enable with: window.__DG_RESIZE_TRACE = true; window.__DG_RESIZE_TRACE_STACK = true;
+      try {
+        if (typeof window !== 'undefined' && window.__DG_RESIZE_TRACE) {
+          let stack = null;
+          try {
+            if (window.__DG_RESIZE_TRACE_STACK) {
+              const e = new Error('DG resizeSurfacesFor');
+              stack = (e && e.stack) ? String(e.stack).split('\n').slice(1, 7).join('\n') : null;
+            }
+          } catch {}
+          console.log('[DG][resize]', reason, {
+            nextCssW, nextCssH, nextDpr, paintDpr,
+            targetW, targetH,
+            cssChanged, sizeChanged, dprChanged,
+            zoomMode,
+            stack,
+          });
+        }
+      } catch {}
       __dgLastResizeCssW = nextCssW;
       __dgLastResizeCssH = nextCssH;
       const setCssSize = (canvasEl) => {
@@ -1907,6 +2078,7 @@ try {
       resize(frontCanvas);
       resize(backCanvas);
       dgSizeTrace('resizeSurfacesFor', {
+        reason,
         nextCssW,
         nextCssH,
         nextDpr,
@@ -1920,16 +2092,33 @@ try {
         targetW,
         targetH,
       });
+      dgEffectiveDprTrace('resizeSurfacesFor', { reason, nextCssW, nextCssH, nextDpr, paintDpr, targetW, targetH, sizeChanged, dprChanged });
       __dgLastResizeTargetW = targetW;
       __dgLastResizeTargetH = targetH;
       __dgLastResizeDpr = paintDpr;
       if (dprChanged || sizeChanged) {
         try { markStaticDirty('resize-surfaces'); } catch {}
+        // BUGFIX: overlay caches must not survive a DPR/size change.
+        // If caches persist, nodes/connectors/labels can redraw later using stale
+        // assumptions and “jump” or appear scaled from the top-left.
+        try {
+          if (__dgGridCache) __dgGridCache.key = '';
+          if (__dgNodesCache) __dgNodesCache.key = '';
+          if (__dgBlocksCache) __dgBlocksCache.key = '';
+          panel.__dgGridHasPainted = false;
+          __dgForceFullDrawNext = true;
+        } catch {}
         updatePaintBackingStores({ force: true, target: 'both' });
         if (Array.isArray(strokes) && strokes.length > 0) {
           try { useFrontBuffers(); } catch {}
           try { clearAndRedrawFromStrokes(DG_SINGLE_CANVAS ? backCtx : frontCtx, 'resize-surfaces'); } catch {}
           try { ensureBackVisualsFreshFromFront?.(); } catch {}
+        }
+        // In single-canvas mode, composite immediately so the user doesn’t see a
+        // temporarily stale overlay stack until another camera move.
+        if (DG_SINGLE_CANVAS && isPanelVisible) {
+          try { compositeSingleCanvas(); } catch {}
+          try { panel.__dgSingleCompositeDirty = false; } catch {}
         }
       } else {
         updatePaintBackingStores({ force: false, target: 'both' });
@@ -2215,7 +2404,18 @@ try {
     __dgBypassCommitUntil = nowMs() + 220;
     __dgForceFullDrawNext = true;
     __dgForceFullDrawFrames = 8;
-    __dgForceOverlayClearNext = true;
+    // Avoid a 1-frame flash on overlay strokes (animated/gradient) when releasing a zoom.
+    let __dgPreserveOverlaysOnZoomRelease = false;
+    try {
+      __dgPreserveOverlaysOnZoomRelease = !!(typeof hasOverlayStrokesCached === 'function' && hasOverlayStrokesCached());
+      if (!__dgPreserveOverlaysOnZoomRelease && Array.isArray(strokes) && strokes.length) {
+        for (let i = 0; i < strokes.length; i++) {
+          const s = strokes[i];
+          if (s && (s.isSpecial || s.overlayColorize)) { __dgPreserveOverlaysOnZoomRelease = true; break; }
+        }
+      }
+    } catch {}
+    __dgForceOverlayClearNext = !__dgPreserveOverlaysOnZoomRelease;
     __dgForceSwapNext = true;
     __dgStableFramesAfterCommit = 2;
     __dgDeferUntilTs = 0;
@@ -2274,14 +2474,42 @@ try {
             Number.isFinite(__dgAdaptivePaintDpr) &&
             __dgAdaptivePaintDpr > 0)
             ? __dgAdaptivePaintDpr
-            : (Number.isFinite(paintDpr) && paintDpr > 0)
-              ? paintDpr
-              : Math.max(1, Math.min(deviceDpr, 3));
+            : Math.max(1, Math.min(deviceDpr, 3));
         const smallMul = __dgComputeSmallPanelBackingMul(cssW, cssH);
         desiredDpr = Math.min(deviceDpr, desiredDpr * visualMul * pressureMul * smallMul);
-        const cappedDpr = __dgCapDprForBackingStore(cssW, cssH, desiredDpr, paintDpr);
-        paintDpr = cappedDpr;
-        resizeSurfacesFor(cssW, cssH, cappedDpr);
+        // Option C:
+        // During the gesture we look great because we're mostly seeing transform scaling.
+        // The "snap" happens at zoom end when we re-rasterize at a new backing-store DPR.
+        // So only apply commit DPR changes when it's worth it.
+        const prevDpr = paintDpr;
+        const targetDpr = __dgCapDprForBackingStore(cssW, cssH, desiredDpr, null); // no hysteresis for commit target
+        const minDelta = (typeof window !== 'undefined' && Number.isFinite(window.__DG_ZOOM_COMMIT_DPR_MIN_DELTA))
+          ? window.__DG_ZOOM_COMMIT_DPR_MIN_DELTA
+          : 0.18;
+        const scaleThreshold = (typeof window !== 'undefined' && Number.isFinite(window.__DG_ZOOM_COMMIT_SCALE_THRESHOLD))
+          ? window.__DG_ZOOM_COMMIT_SCALE_THRESHOLD
+          : 0.8;
+        const delta = Math.abs(targetDpr - prevDpr);
+        const allow = (delta >= minDelta) && (!Number.isFinite(commitScale) || commitScale <= scaleThreshold);
+
+        if (allow) {
+          paintDpr = targetDpr;
+          resizeSurfacesFor(cssW, cssH, targetDpr, `zoom-commit:${reason || 'unknown'}`);
+        } else {
+          // Keep backing-store DPR stable (prevents end-of-gesture snap).
+          paintDpr = prevDpr;
+          if (typeof window !== 'undefined' && window.__DG_REFRESH_DEBUG) {
+            dgRefreshTrace('zoom-commit:dpr-skip', {
+              commitScale,
+              prevDpr,
+              targetDpr,
+              delta,
+              minDelta,
+              scaleThreshold,
+              reason: reason || 'unknown',
+            });
+          }
+        }
       }
       layout(true);
       dglog('zoom:commit', { scale: commitScale, reason });
@@ -2426,11 +2654,14 @@ function ensureSizeReady({ force = false } = {}) {
 
     // If ensureSize changes canvas dimensions frequently, this can cause huge nonScript stalls.
     traceCanvasResize(frontCanvas || paint || backCanvas, 'drawgrid.ensureSize');
-    const __dprFallback =
-      (typeof __dgAdaptivePaintDpr !== 'undefined' && Number.isFinite(__dgAdaptivePaintDpr) && __dgAdaptivePaintDpr > 0)
-        ? __dgAdaptivePaintDpr
-        : (Number.isFinite(paintDpr) && paintDpr > 0 ? paintDpr : (Number.isFinite(window?.devicePixelRatio) ? window.devicePixelRatio : 1));
-    resizeSurfacesFor(cssW, cssH, __dprFallback);
+    // IMPORTANT:
+    // ensureSizeReady must not "accidentally" apply adaptive DPR, otherwise you get
+    // delayed snapping after RO settles / cooldown expires.
+    const __ensureDpr =
+      (Number.isFinite(paintDpr) && paintDpr > 0)
+        ? paintDpr
+        : (Number.isFinite(window?.devicePixelRatio) ? window.devicePixelRatio : 1);
+    resizeSurfacesFor(cssW, cssH, __ensureDpr, 'ensureSizeReady:paintDpr');
     try { markStaticDirty('ensure-size'); } catch {}
     if (paintSnapshot) {
       try {
@@ -2738,6 +2969,22 @@ function ensureSizeReady({ force = false } = {}) {
   const isPanelCulled = () => !isPanelVisible;
   let pendingSwap = false;
   let pendingWrapSize = null;
+
+  // Wrap-size "flush" (legacy)
+  //
+  // We previously pinned `wrap` to a fixed pixel size during certain refresh/commit
+  // paths (primarily when back-buffers were enabled) and then restored it to 100% on
+  // the next rAF. After the draw-toy restructure, that pin→restore manifests as
+  // delayed, staggered scale jumps (notably: notes/connectors/column text suddenly
+  // rescale *after* a zoom/pan gesture has ended).
+  //
+  // Default OFF: leave wrap at its normal (percentage) sizing and avoid visual jumps.
+  // You can re-enable for experimentation via:
+  //   window.__DG_WRAP_SIZE_FLUSH = true
+  const DG_WRAP_SIZE_FLUSH = (() => {
+    try { return !!window.__DG_WRAP_SIZE_FLUSH; } catch {}
+    return false;
+  })();
   let progressMeasureW = 0;
   let progressMeasureH = 0;
   const PROGRESS_SIZE_THRESHOLD = 4;
@@ -2749,7 +2996,7 @@ function ensureSizeReady({ force = false } = {}) {
     cssH = Math.max(1, initialSize.h);
     progressMeasureW = cssW;
     progressMeasureH = cssH;
-    resizeSurfacesFor(cssW, cssH, paintDpr);
+    resizeSurfacesFor(cssW, cssH, paintDpr, 'refreshLayout');
   }
 
   ensureSizeReady({ force: true });
@@ -3464,6 +3711,10 @@ function regenerateMapFromStrokes() {
       try {
         if (window.__ZOOM_COMMIT_PHASE) return;
       } catch {}
+      // IMPORTANT:
+      // If zoom recompute changes paintDpr but we do not resize the overlay backing stores,
+      // the next draw will apply a different logical transform and nodes/connectors/text
+      // can "jump" sometime after the zoom ends.
       {
         const deviceDpr = Math.max(1, Number.isFinite(window?.devicePixelRatio) ? window.devicePixelRatio : 1);
         const visualMul = __dgComputeVisualBackingMul(Number.isFinite(boardScale) ? boardScale : 1);
@@ -3476,7 +3727,9 @@ function regenerateMapFromStrokes() {
             : Math.max(1, Math.min(deviceDpr, 3));
         const smallMul = __dgComputeSmallPanelBackingMul(cssW, cssH);
         desiredDpr = Math.min(deviceDpr, desiredDpr * visualMul * pressureMul * smallMul);
-        paintDpr = __dgCapDprForBackingStore(cssW, cssH, desiredDpr, paintDpr);
+        // Keep ALL overlay surfaces in sync with the computed backing-store DPR.
+        resizeSurfacesFor(cssW, cssH, desiredDpr, 'zoom-recompute');
+        dgRefreshTrace('zoom-recompute', { cssW, cssH, desiredDpr, paintDpr, zoomMode });
       }
       pendingZoomResnap = false;
 
@@ -3593,6 +3846,23 @@ function regenerateMapFromStrokes() {
             try { panel.__dgSingleCompositeDirty = false; } catch {}
           }
         }
+
+        // BUGFIX: prevent delayed “snap later” jumps after zoom/pan.
+        // resnapAndRedraw() can defer while zoomMode==='gesturing' and set pendingZoomResnap.
+        // If we leave that flag set, it will apply later (RO/layout timer/etc.) and the
+        // nodes/connectors/text appear to “jump” after the zoom ends.
+        try {
+          const hadPending = pendingZoomResnap || pendingResnapOnVisible;
+          if (hadPending) {
+            dgRefreshTrace('zoom-done:apply-pending-resnap', { pendingZoomResnap, pendingResnapOnVisible });
+            pendingZoomResnap = false;
+            pendingResnapOnVisible = false;
+            // Ensure resnap executes immediately and is not blocked by gesturing state.
+            zoomMode = 'idle';
+            zoomGestureActive = false;
+            resnapAndRedraw(true, { preservePaintIfNoStrokes: false });
+          }
+        } catch {}
       }
 
       return;
@@ -3926,7 +4196,19 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
     __dgForceFullDrawUntil = now + 240;
     __dgForceFullDrawNext = true;
     __dgForceFullDrawFrames = Math.max(__dgForceFullDrawFrames || 0, 8);
-    __dgForceOverlayClearNext = true;
+    // Avoid a 1-frame "flash" where overlay strokes disappear on gesture release.
+    // If we have overlay-colorized/special strokes, preserve overlays through the release.
+    let __dgPreserveOverlaysOnRelease = false;
+    try {
+      __dgPreserveOverlaysOnRelease = !!(typeof hasOverlayStrokesCached === 'function' && hasOverlayStrokesCached());
+      if (!__dgPreserveOverlaysOnRelease && Array.isArray(strokes) && strokes.length) {
+        for (let i = 0; i < strokes.length; i++) {
+          const s = strokes[i];
+          if (s && (s.isSpecial || s.overlayColorize)) { __dgPreserveOverlaysOnRelease = true; break; }
+        }
+      }
+    } catch {}
+    __dgForceOverlayClearNext = !__dgPreserveOverlaysOnRelease;
     __dgForceSwapNext = true;
     __dgNeedsUIRefresh = true;
     __dgStableFramesAfterCommit = 2;
@@ -3972,11 +4254,10 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
         __dgLayoutGoodH = h;
         layoutSizeDirty = true;
 
-        // Match old observer behavior, but driven by RO contentRect (stable, zoom-safe).
-        if (zoomMode === 'gesturing') {
-          pendingZoomResnap = true;
-          return;
-        }
+        // IMPORTANT:
+        // We do NOT defer resnaps during gesture/zoom.
+        // Deferring causes “fine → later scales down/up” desync as pending resnaps apply after the fact.
+        // RO contentRect is our stable, zoom-safe basis, so apply immediately.
         resnapAndRedraw(false);
       });
       __dgLayoutObs.observe(wrap);
@@ -4016,27 +4297,11 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
     const w = el.offsetWidth || el.clientWidth || 0;
     const h = el.offsetHeight || el.clientHeight || 0;
     if (w > 0 && h > 0) return { w, h };
-    const rect = el.getBoundingClientRect?.();
-    if (rect && rect.width > 0 && rect.height > 0) {
-      let scale = 1;
-      try {
-        const host = el.closest?.('.board-viewport') || document.querySelector('.board-viewport');
-        const raw = host ? boardScaleHelper(host) : (Number.isFinite(window?.__boardScale) ? window.__boardScale : 1);
-        if (Number.isFinite(raw) && raw > 0) scale *= raw;
-      } catch {}
-      try {
-        const panelEl = (el.classList?.contains?.('toy-panel'))
-          ? el
-          : el.closest?.('.toy-panel');
-        if (panelEl) {
-          const toyScaleRaw = getComputedStyle(panelEl).getPropertyValue('--toy-scale');
-          const toyScale = parseFloat(toyScaleRaw);
-          if (Number.isFinite(toyScale) && toyScale > 0) scale *= toyScale;
-        }
-      } catch {}
-      const inv = scale !== 0 ? (1 / scale) : 1;
-      return { w: rect.width * inv, h: rect.height * inv };
-    }
+    // IMPORTANT:
+    // Do NOT fall back to getBoundingClientRect() for sizing. During zoom/pan (CSS transforms),
+    // it reflects transformed geometry and causes mixed-scale layers (steppy zoom + extra scaling).
+    // If we can't read stable layout size yet, return 0 and let RO / next frame provide it.
+    dgRefreshTrace('size:zero (no layout size yet)', { role: el?.getAttribute?.('data-role') || null });
     return { w: 0, h: 0 };
   }
 
@@ -4191,7 +4456,7 @@ function copyCanvas(backCtx, frontCtx) {
             frontW: surface.width,
             frontH: surface.height,
           });
-          resizeSurfacesFor(cssW, cssH, paintDpr);
+          resizeSurfacesFor(cssW, cssH, paintDpr, 'front-size-guard');
           markStaticDirty('front-size-guard');
           __dgForceFullDrawNext = true;
           return;
@@ -4620,20 +4885,38 @@ function copyCanvas(backCtx, frontCtx) {
   }
 
   function flushVisualBackBuffersToFront() {
-    const w = Math.max(1, Math.round(cssW));
-    const h = Math.max(1, Math.round(cssH));
+    // IMPORTANT: These visual overlay canvases must match the paint backing-store DPR.
+    // If we size them to raw cssW/cssH, they render in a different coordinate space
+    // than the paint/particle surfaces, causing post-mount scale/offset glitches.
+    const wCss = Math.max(1, Math.round(cssW));
+    const hCss = Math.max(1, Math.round(cssH));
+    const w = Math.max(1, Math.round(cssW * paintDpr));
+    const h = Math.max(1, Math.round(cssH * paintDpr));
     FD.layerEvent('flushVisualBackBuffersToFront', {
       panelId: panel?.id || null,
       panelRef: panel,
+      cssW: wCss,
+      cssH: hCss,
+      pxW: w,
+      pxH: h,
       singleCanvas: !!DG_SINGLE_CANVAS,
       overlays: !!DG_SINGLE_CANVAS_OVERLAYS,
       usingBackBuffers,
     });
 
-    if (pendingWrapSize) {
-      wrap.style.width = `${pendingWrapSize.width}px`;
-      wrap.style.height = `${pendingWrapSize.height}px`;
+    // Legacy pin→restore flush (disabled by default; see DG_WRAP_SIZE_FLUSH).
+    if (DG_WRAP_SIZE_FLUSH && pendingWrapSize) {
+      try {
+        wrap.style.width = `${pendingWrapSize.width}px`;
+        wrap.style.height = `${pendingWrapSize.height}px`;
+      } catch {}
       pendingWrapSize = null;
+      requestAnimationFrame(() => {
+        try {
+          wrap.style.width = '100%';
+          wrap.style.height = '100%';
+        } catch {}
+      });
     }
     grid.width = w; grid.height = h;
     nodesCanvas.width = w; nodesCanvas.height = h;
@@ -4711,25 +4994,24 @@ function copyCanvas(backCtx, frontCtx) {
         0, 0, width, height
       );
     });
+
   }
 
   function layout(force = false){
     return F.perfMarkSection('drawgrid.layout', () => {
-    // Prefer wrap size: it's RO-backed and stable across zoom/transform settle.
-    // body can be subject to transient zoom/transform states during refresh/boot.
-    // Measure BODY size (not wrap): wrap may be 0 during boot and would self-lock.
+    // IMPORTANT:
+    // Do NOT force-wrap to a measured pixel size here.
+    // The wrap must remain `100%` so it tracks the toy body without being "locked"
+    // to a transient scaled value during zoom/drag settle (which causes RO:size resnaps
+    // and mixed-scale layers).
     const bodySize = body ? measureCSSSize(body) : measureCSSSize(wrap);
     const bodyW = bodySize.w;
     const bodyH = bodySize.h;
-    // Always keep wrap sized in CSS so measurement is stable during zoom.
-    // pendingWrapSize is still useful as a fallback for the commit flush path.
-    wrap.style.width  = bodyW + 'px';
-    wrap.style.height = bodyH + 'px';
-    if (usingBackBuffers) {
-      pendingWrapSize = { width: bodyW, height: bodyH };
-    } else {
-      pendingWrapSize = null;
-    }
+    // Keep the wrap responsive (CSS %) so it tracks the toy body through drag/zoom settle.
+    // If we pin it to pixels here, later transforms can leave different internal canvases
+    // rendering at different effective scales.
+    wrap.style.width  = '100%';
+    wrap.style.height = '100%';
 
 
     // Measure transform-immune base...
@@ -4740,6 +5022,13 @@ function copyCanvas(backCtx, frontCtx) {
     if ((baseW <= 0 || baseH <= 0) && bodyW > 0 && bodyH > 0) {
       baseW = bodyW;
       baseH = bodyH;
+    }
+    // Back-buffer paths sometimes need a stable "last known" size for a commit flush.
+    // Use the transform-immune base size (RO/body fallback), not a forced wrap px size.
+    if (DG_WRAP_SIZE_FLUSH && usingBackBuffers) {
+      pendingWrapSize = { width: baseW, height: baseH };
+    } else {
+      pendingWrapSize = null;
     }
     const { x: zoomX, y: zoomY } = getZoomScale(panel); // tracking only for logs/debug
     // IMPORTANT: During refresh/boot the RO-backed size can legitimately be 0 for a frame.
@@ -4810,12 +5099,19 @@ function copyCanvas(backCtx, frontCtx) {
       progressMeasureW = cssW;
       progressMeasureH = cssH;
       if (dgViewport?.refreshSize) dgViewport.refreshSize({ snap: true });
-      const __dprFallback =
-        (typeof __dgAdaptivePaintDpr !== 'undefined' && Number.isFinite(__dgAdaptivePaintDpr) && __dgAdaptivePaintDpr > 0)
-          ? __dgAdaptivePaintDpr
-          : (Number.isFinite(paintDpr) && paintDpr > 0 ? paintDpr : (Number.isFinite(window?.devicePixelRatio) ? window.devicePixelRatio : 1));
-      resizeSurfacesFor(cssW, cssH, __dprFallback);
-      if (tutorialHighlightMode !== 'none') renderTutorialHighlight();
+      // IMPORTANT:
+      // Do NOT use __dgAdaptivePaintDpr as a "fallback" during generic layout sizing.
+      // That causes delayed backing-store DPR changes (RO/ensureSize/layout) which show up
+      // as staggered "scale jumps" after zoom/pan settles.
+      const __layoutDpr =
+        (Number.isFinite(paintDpr) && paintDpr > 0)
+          ? paintDpr
+          : (Number.isFinite(window?.devicePixelRatio) ? window.devicePixelRatio : 1);
+      resizeSurfacesFor(cssW, cssH, __layoutDpr, 'layout:paintDpr');
+      if (tutorialHighlightMode !== 'none') {
+        // Only render highlight when actually enabled; no hidden DPR "fallback" resizes.
+        renderTutorialHighlight();
+      }
 
       // Layout changes invalidate static layers (grid geometry / node positions).
       try { markStaticDirty('layout'); } catch {}
@@ -5509,6 +5805,21 @@ function copyCanvas(backCtx, frontCtx) {
   let __dgNodesCache = { canvas: null, ctx: null, key: '' };
   let __dgBlocksCache = { canvas: null, ctx: null, key: '' };
 
+  // Draw helpers -----------------------------------------------------------
+  // We sometimes run with paintDpr < 1 (pressure/adaptive DPR). In that mode,
+  // canvases are allocated at cssW*paintDpr but MUST still be drawn in CSS-pixel
+  // logical space. If we draw assuming device DPR, overlays will appear shrunk
+  // and offset toward the top-left (repro: notes/connectors/column text drift).
+  function __dgWithLogicalSpace(ctx, fn) {
+    const dpr = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+    ctx.save();
+    // Reset to a known transform; callers typically called R.resetCtx(ctx) already.
+    // setTransform avoids compounding transforms if something slipped through.
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    fn();
+    ctx.restore();
+  }
+
   function drawNodes(nodes) {
     if (!__dgGridReady()) {
       return;
@@ -5552,7 +5863,7 @@ function copyCanvas(backCtx, frontCtx) {
       __dgProbeDidFirstDraw = true;
       try { __dgProbeDump('first-draw:nodes'); } catch {}
     }
-    R.withLogicalSpace(nctx, () => {
+    __dgWithLogicalSpace(nctx, () => {
       if (!nodes) {
         return;
       }
@@ -5889,7 +6200,7 @@ function copyCanvas(backCtx, frontCtx) {
 
   function drawNoteLabelsTo(ctx, nodes) {
     if (!ctx) return;
-    R.withLogicalSpace(ctx, () => {
+    __dgWithLogicalSpace(ctx, () => {
       ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
       ctx.font = '600 12px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
       ctx.textAlign = 'center';
@@ -7305,17 +7616,32 @@ function copyCanvas(backCtx, frontCtx) {
         !gesturing &&
         !HY.inCommitWindow(nowAdaptiveTs) &&
         __dgStableFramesAfterCommit >= 2 &&
+        (nowAdaptiveTs - (__dgLastZoomCommitTs || 0)) > 800 &&
         cssW > 0 &&
         cssH > 0;
-      if (
-        canAdjustDpr &&
-        Number.isFinite(desiredDpr) &&
-        Math.abs(desiredDpr - paintDpr) >= 0.15 &&
-        (nowAdaptiveTs - __dgAdaptivePaintLastTs) > 240
-      ) {
-        __dgAdaptivePaintLastTs = nowAdaptiveTs;
-        __dgAdaptivePaintDpr = desiredDpr;
-        try { resizeSurfacesFor(cssW, cssH, desiredDpr); } catch {}
+      if (typeof window !== 'undefined' && (window.__DG_ADAPTIVE_DPR_ENABLED ?? false)) {
+        if (
+          canAdjustDpr &&
+          (visiblePanels >= 4 || __dgLowFpsMode || (typeof window !== 'undefined' && window.__DG_ADAPTIVE_DPR_ALLOW_SINGLE)) &&
+          Number.isFinite(desiredDpr) &&
+          Math.abs(desiredDpr - paintDpr) >= 0.15 &&
+          (nowAdaptiveTs - __dgAdaptivePaintLastTs) > 240
+        ) {
+          __dgAdaptivePaintLastTs = nowAdaptiveTs;
+          __dgAdaptivePaintDpr = desiredDpr;
+          try {
+            resizeSurfacesFor(cssW, cssH, desiredDpr, 'adaptivePaintDpr');
+          } catch {}
+
+          // If we ever re-enable this, keep the "no delayed redraw" behaviour.
+          try {
+            if (typeof window !== 'undefined' && window.__DG_REFRESH_DEBUG) {
+              dgRefreshTrace('adaptivePaintDpr', { cssW, cssH, desiredDpr, paintDpr, zoomMode });
+            }
+          } catch {}
+          try { markStaticDirty('adaptivePaintDpr'); } catch {}
+          __dgForceFullDrawNext = true;
+        }
       }
 
       let effectiveRenderEvery = renderEvery;
@@ -9082,7 +9408,15 @@ function copyCanvas(backCtx, frontCtx) {
         // Force layout + redraw even if culling currently thinks we're not visible.
         // (This mirrors the "camera move fixes it" behavior, but deterministically.)
         try { layout(true); } catch {}
-        try { resnapAndRedraw(true, { preservePaintIfNoStrokes: true }); } catch {}
+        try {
+          const hasStrokes = Array.isArray(strokes) && strokes.length > 0;
+          const hasNodes = Array.isArray(currentMap?.nodes)
+            ? currentMap.nodes.some(set => set && set.size > 0)
+            : false;
+          const hasAnyPaint = (__dgPaintRev | 0) > 0;
+          const preservePaintIfNoStrokes = (!hasStrokes && !hasNodes && !hasAnyPaint && !hasOverlayStrokesCached());
+          resnapAndRedraw(true, { preservePaintIfNoStrokes });
+        } catch {}
       } catch {}
 
       const key = `${Math.round(cssW)}x${Math.round(cssH)}:${Math.round(gridArea.w)}x${Math.round(gridArea.h)}`;

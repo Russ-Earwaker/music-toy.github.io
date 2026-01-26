@@ -24,6 +24,49 @@ try {
 } catch {}
 
 // ---------------------------------------------------------------------------
+// Perf trace buffering (avoid console.log during perf runs)
+//
+// Some debug traces (DG/FG DPR + canvas size snapshots) are extremely expensive if they
+// hit console.log during heavy RAF. Instead, we buffer them in memory and attach a
+// small snapshot to each perf result bundle.
+try {
+  const MAX = 3000;
+  window.__PERF_TRACE_BUFFER = window.__PERF_TRACE_BUFFER || { events: [], max: MAX };
+  window.__PERF_TRACE_TO_CONSOLE = window.__PERF_TRACE_TO_CONSOLE || false; // opt-in
+  window.__PERF_TRACE_CLEAR = function __PERF_TRACE_CLEAR() {
+    try {
+      const b = window.__PERF_TRACE_BUFFER;
+      if (b && Array.isArray(b.events)) b.events.length = 0;
+    } catch {}
+  };
+  window.__PERF_TRACE_PUSH = function __PERF_TRACE_PUSH(kind, payload) {
+    try {
+      const b = window.__PERF_TRACE_BUFFER;
+      if (!b || !Array.isArray(b.events)) return;
+      const evt = {
+        t: (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(),
+        kind: String(kind || ''),
+        payload: payload || null,
+      };
+      b.events.push(evt);
+      const max = Number.isFinite(b.max) ? b.max : MAX;
+      if (b.events.length > max) b.events.splice(0, b.events.length - max);
+    } catch {}
+  };
+  window.__PERF_TRACE_SNAPSHOT = function __PERF_TRACE_SNAPSHOT(limit = 200) {
+    try {
+      const b = window.__PERF_TRACE_BUFFER;
+      const ev = (b && Array.isArray(b.events)) ? b.events : [];
+      const n = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 200;
+      const slice = n > 0 ? ev.slice(Math.max(0, ev.length - n)) : [];
+      return { total: ev.length, tail: slice };
+    } catch {
+      return { total: 0, tail: [] };
+    }
+  };
+} catch {}
+
+// ---------------------------------------------------------------------------
 // Auto-run queues
 //
 // Goal: keep the footer workflow stable:
@@ -46,40 +89,31 @@ const AUTO_GENERIC_QUEUE = [
   'runP4b',
 ];
 
-// Current focus for this cycle: gesture cost / compositor pressure.
-// Keep this short and targeted; avoid “wide” coverage.
+// Current focus for this cycle:
+//   - prove pressure-DPR is applying
+//   - catch resize churn
+//
+// IMPORTANT: After the DrawGrid restructure, building P3 (48 drawgrids + randomise)
+// can dominate time and starve the actual pan/zoom script. For focus diagnosis, we
+// build ONCE and run variants back-to-back on the same scene.
 const AUTO_FOCUS_QUEUE = [
-  // Goal: isolate DrawGrid gesture jank drivers (overlays, playhead strategy, layer flattening).
-  // Keep each run independent: rebuild the stress scene before every variant.
-
-  // 1) Baseline micro run with canvas-resize-only trace enabled (detect resize churn during gesture).
+  'traceDprOn',
   'traceCanvasOnlyOn',
-  'buildP3',
-  // Warmup: reduce variance from "first time on screen" (canvas alloc / decode / first raster).
+
+  // Build once
+  'buildP3Focus',
   'warmupFirstAppearance',
   'warmupSettle',
-  'runP3fShort',
+
+  // Focus runs (longer duration, shorter idle so we actually get motion)
+  'runP3fFocusShort',
+  'warmupSettle',
+  'runP3fNoOverlaysFocusShort',
+  'warmupSettle',
+  'runP3fNoParticlesFocusShort',
+
+  'traceDprOff',
   'traceOff',
-
-  // 2) Big hammer: overlays OFF (measures compositor/layer pressure from overlay stack).
-  'buildP3',
-  'warmupFirstAppearance',
-  'runP3fNoOverlaysShort',
-
-  // 3) Playhead strategy A/B (visual-equivalent lever; often affects compositor cost).
-  'buildP3',
-  'warmupFirstAppearance',
-  'runP3fPlayheadSeparateOff',
-  'buildP3',
-  'warmupFirstAppearance',
-  'runP3fPlayheadSeparateOn',
-
-  // 4) Split overlays to find which overlay family drives cost.
-  // NOTE: The following variants were catastrophically slow in the latest focus run
-  // (and swamp the signal). Keep them as manual buttons instead:
-  // - runP3fNoOverlayCoreShort
-  // - runP3fNoOverlayStrokesShort
-  // - runP3fFlatLayers
 ];
 
 // Most diagnostic micro-run for the current focus.
@@ -87,7 +121,7 @@ const AUTO_FOCUS_QUEUE = [
 const AUTO_FOCUS_MICRO_QUEUE = [
   // IMPORTANT: micro should be apples-to-apples (trace adds overhead and noise).
   'traceOff',
-  'buildP3',
+  'buildP3Lite',
   // Warmup: reduce variance from "first time on screen" (canvas alloc / decode / first raster).
   'warmupFirstAppearance',
   'warmupSettle',
@@ -96,14 +130,14 @@ const AUTO_FOCUS_MICRO_QUEUE = [
   'runP3fShort2',
 
   // Overlays isolated x2
-  'buildP3',
+  'buildP3Lite',
   'warmupFirstAppearance',
   'warmupSettle',
   'runP3fNoOverlaysShort',
   'runP3fNoOverlaysShort2',
 
   // Particles isolated x2
-  'buildP3',
+  'buildP3Lite',
   'warmupFirstAppearance',
   'warmupSettle',
   'runP3fNoParticlesShort',
@@ -148,7 +182,10 @@ function ensureUI() {
 
   const P3 = {
     title: 'P3 ? DrawGrid',
-    build: btn('buildP3', 'Build P3: DrawGrid Worst-Case', 'primary'),
+    build:
+      btn('buildP3Focus', 'Build P3Focus: DrawGrid (Tiny)', 'primary') +
+      btn('buildP3Lite',  'Build P3Lite: DrawGrid (Fast)') +
+      btn('buildP3',      'Build P3: DrawGrid Worst-Case'),
     runs: sortByLabel([
       { act: 'runP3f',  label: 'Run P3f: Playing Pan/Zoom + Random Notes (Anchor ON)' },
       { act: 'runP3fPlayheadSeparateOff', label: 'Run P3f: Playhead Separate OFF' },
@@ -434,6 +471,8 @@ function ensureUI() {
     if (act === 'runP2c') await runP2c();
     if (act === 'runP2d') await runP2d();
     if (act === 'buildP3') await buildP3();
+    if (act === 'buildP3Lite') await buildP3Lite();
+    if (act === 'buildP3Focus') await buildP3Focus();
     if (act === 'runP3a') await runP3a();
     if (act === 'runP3b') await runP3b();
     if (act === 'runP3c') await runP3c();
@@ -460,10 +499,13 @@ function ensureUI() {
     if (act === 'runP3e2') await runP3e2();
     if (act === 'runP3f') await runP3f();
     if (act === 'runP3fShort') await runP3fShort();
+    if (act === 'runP3fFocusShort') await runP3fFocusShort();
     if (act === 'runP3fNoOverlaysShort') await runP3fNoOverlaysShort();
     if (act === 'runP3fNoOverlaysShort2') await runP3fNoOverlaysShort2();
     if (act === 'runP3fNoParticlesShort') await runP3fNoParticlesShort();
     if (act === 'runP3fNoParticlesShort2') await runP3fNoParticlesShort2();
+    if (act === 'runP3fNoOverlaysFocusShort') await runP3fNoOverlaysFocusShort();
+    if (act === 'runP3fNoParticlesFocusShort') await runP3fNoParticlesFocusShort();
     if (act === 'runP3fNoOverlayCoreShort') await runP3fNoOverlayCoreShort();
     if (act === 'runP3fNoOverlayStrokesShort') await runP3fNoOverlayStrokesShort();
     if (act === 'runP3PauseDomProbe') await runP3PauseDomProbe();
@@ -551,7 +593,7 @@ function ensureUI() {
         download: false,
         postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
         downloadName: `perf-lab-focus-${ts}.json`,
-        notes: 'Current Focus: gesture cost / compositor pressure (edit AUTO_FOCUS_QUEUE in perf-lab.js)',
+        notes: 'Current Focus: prove pressure-DPR is applying + eliminate resize churn (edit AUTO_FOCUS_QUEUE in perf-lab.js)',
         queue: AUTO_FOCUS_QUEUE,
       };
       await runAuto(cfg);
@@ -671,7 +713,27 @@ function ensureUI() {
       console.log('[PerfLab] demon trace ENABLED', { ...window.__PERF_TRACE });
       try { syncUiFromState(); } catch {}
     }
-    if (act === 'traceCanvasOnlyOn') {
+      if (act === 'traceDprOn') {
+        // DrawGrid + FieldGeneric effective DPR / backing-store tracing.
+        // These are deliberately separate from __PERF_TRACE to keep logs scoped and readable.
+        try { window.__DG_REFRESH_SIZE_TRACE = true; } catch {}
+        try { window.__DG_EFFECTIVE_DPR_TRACE = true; } catch {}
+        try { window.__FG_EFFECTIVE_DPR_TRACE = true; } catch {}
+        console.log('[PerfLab] DPR trace ENABLED', {
+          __DG_REFRESH_SIZE_TRACE: !!window.__DG_REFRESH_SIZE_TRACE,
+          __DG_EFFECTIVE_DPR_TRACE: !!window.__DG_EFFECTIVE_DPR_TRACE,
+          __FG_EFFECTIVE_DPR_TRACE: !!window.__FG_EFFECTIVE_DPR_TRACE,
+        });
+        try { syncUiFromState(); } catch {}
+      }
+      if (act === 'traceDprOff') {
+        try { window.__DG_REFRESH_SIZE_TRACE = false; } catch {}
+        try { window.__DG_EFFECTIVE_DPR_TRACE = false; } catch {}
+        try { window.__FG_EFFECTIVE_DPR_TRACE = false; } catch {}
+        console.log('[PerfLab] DPR trace DISABLED');
+        try { syncUiFromState(); } catch {}
+      }
+      if (act === 'traceCanvasOnlyOn') {
       window.__PERF_TRACE = window.__PERF_TRACE || {};
       window.__PERF_TRACE.traceCanvasResize = true;
       window.__PERF_TRACE.traceDomInRaf = false;
@@ -1404,6 +1466,72 @@ async function buildP3() {
   setStatus('P3 built');
 }
 
+async function buildP3Lite() {
+  try { clearSceneViaSnapshot(); } catch {}
+  setStatus('Building P3Lite...');
+  // Fast diagnostic variant: fewer drawgrids so build/seed doesn't dominate the run.
+  await ensureMeasuredFootprint('drawgrid');
+  const spacing = estimateGridSpacing('drawgrid', 420);
+  logPerfFootprintDebug('drawgrid', 420);
+  buildParticleWorstCase({ toyType: 'drawgrid', rows: 3, cols: 4, spacing });
+  try {
+    const raf = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));
+    raf(() => raf(() => window.resolveToyPanelOverlaps?.()));
+  } catch {}
+  // Seed drawgrid notes for comparable visuals.
+  try {
+    const raf = window.requestAnimationFrame?.bind(window) ?? ((fn) =>
+      setTimeout(() => fn((performance?.now?.() ?? Date.now())), 16));
+    const panels = Array.from(document.querySelectorAll('.toy-panel[data-toy=drawgrid]'));
+    const dispatchBatched = async (evtName, batch = 2) => {
+      for (let i = 0; i < panels.length; i += batch) {
+        for (const p of panels.slice(i, i + batch)) {
+          try { p.dispatchEvent(new CustomEvent(evtName, { bubbles: true })); } catch {}
+        }
+        // Yield between batches so toy init/seed doesn't block the main thread for seconds.
+        await new Promise((r) => raf(() => r()));
+      }
+    };
+    await dispatchBatched('toy-random', 2);
+    await dispatchBatched('toy-random-notes', 2);
+  } catch {}
+  try {
+    setTimeout(() => logOverlapReport('.toy-panel[data-toy="drawgrid"]'), 800);
+  } catch {}
+  setStatus('P3Lite built');
+}
+
+async function buildP3Focus() {
+  try { clearSceneViaSnapshot(); } catch {}
+  setStatus('Building P3Focus...');
+  // Tiny build for Current Focus auto-runs: ensures we actually get pan/zoom motion.
+  await ensureMeasuredFootprint('drawgrid');
+  const spacing = estimateGridSpacing('drawgrid', 520);
+  logPerfFootprintDebug('drawgrid', 520);
+  buildParticleWorstCase({ toyType: 'drawgrid', rows: 2, cols: 3, spacing });
+  try {
+    const raf = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));
+    raf(() => raf(() => window.resolveToyPanelOverlaps?.()));
+  } catch {}
+  // Seed drawgrid notes for comparable visuals (batched + yielding).
+  try {
+    const raf = window.requestAnimationFrame?.bind(window) ?? ((fn) =>
+      setTimeout(() => fn((performance?.now?.() ?? Date.now())), 16));
+    const panels = Array.from(document.querySelectorAll('.toy-panel[data-toy=drawgrid]'));
+    const dispatchBatched = async (evtName, batch = 1) => {
+      for (let i = 0; i < panels.length; i += batch) {
+        for (const p of panels.slice(i, i + batch)) {
+          try { p.dispatchEvent(new CustomEvent(evtName, { bubbles: true })); } catch {}
+        }
+        await new Promise((r) => raf(() => r()));
+      }
+    };
+    await dispatchBatched('toy-random', 1);
+    await dispatchBatched('toy-random-notes', 1);
+  } catch {}
+  setStatus('P3Focus built');
+}
+
 async function buildP4() {
   try { clearSceneViaSnapshot(); } catch {}
   setStatus('Building P4...');
@@ -1889,6 +2017,12 @@ async function runVariant(label, step, statusText) {
       runTag: String(window.__PERF_RUN_TAG || ''),
     };
   } catch {}
+
+  // Attach buffered trace (tail only) to avoid console overhead during perf.
+  try {
+    result.trace = window.__PERF_TRACE_SNAPSHOT ? window.__PERF_TRACE_SNAPSHOT(220) : null;
+  } catch {}
+  try { if (window.__PERF_TRACE_CLEAR) window.__PERF_TRACE_CLEAR(); } catch {}
   lastResult = result;
   lastResults.push(result);
   setOutput(result);
@@ -2125,6 +2259,12 @@ async function runVariantPlaying(label, step, statusText) {
       };
     result.gestureSkipCount = window.__PERF_LOOPGRID_GESTURE_SKIP || 0;
   } catch {}
+
+  // Attach buffered trace (tail only) to avoid console overhead during perf.
+  try {
+    result.trace = window.__PERF_TRACE_SNAPSHOT ? window.__PERF_TRACE_SNAPSHOT(220) : null;
+  } catch {}
+  try { if (window.__PERF_TRACE_CLEAR) window.__PERF_TRACE_CLEAR(); } catch {}
 
   try { window.__PerfFrameProf?.dump?.(label); } catch {}
 
@@ -3098,6 +3238,90 @@ async function runP3fShort() {
   try { window.__PERF_RUN_TAG = 'P3fShort'; } catch {}
   await runP3f();
   try { window.__PERF_LAB_DURATION_MS = prev; } catch {}
+  try { window.__PERF_RUN_TAG = prevTag; } catch {}
+}
+
+// Focus P3f: tuned for "we need motion NOW" and longer sampling time.
+// This avoids the problem where warmup + idle consume most of the short run.
+async function runP3fFocus() {
+  const prevDisableOverlays = window.__PERF_DG_DISABLE_OVERLAYS;
+  const prevOverlayCore = window.__PERF_DG_OVERLAY_CORE_OFF;
+  const prevOverlayStrokes = window.__PERF_DG_OVERLAY_STROKES_OFF;
+  const prevDisableChainWork = window.__PERF_DISABLE_CHAIN_WORK;
+  const forceOverlays =
+    !window.__PERF_DG_DISABLE_OVERLAYS &&
+    !window.__PERF_DG_OVERLAY_CORE_OFF &&
+    !window.__PERF_DG_OVERLAY_STROKES_OFF;
+  try {
+    window.__PERF_DISABLE_CHAIN_WORK = false;
+    if (forceOverlays) {
+      window.__PERF_DG_DISABLE_OVERLAYS = false;
+      window.__PERF_DG_OVERLAY_CORE_OFF = false;
+      window.__PERF_DG_OVERLAY_STROKES_OFF = false;
+    }
+  } catch {}
+
+  const panZoom = makePanZoomScript({
+    panPx: 2400,
+    zoomMin: 0.40,
+    zoomMax: 1.20,
+    idleMs: 500,
+    panMs: 9000,
+    zoomMs: 9000,
+    overviewToggles: 0,
+    overviewSpanMs: 0,
+  });
+  const randOnce = makeDrawgridRandomiseOnceScript({ atMs: 250, seed: 1337, useSeededRandom: true });
+  const step = composeSteps(panZoom, randOnce);
+
+  await withTempAnchorDisabled(false, async () => {
+    const __runTag = (() => { try { return window.__PERF_RUN_TAG; } catch { return null; } })();
+    const __baseLabel = 'P3f_focus_drawgrid_playing_panzoom_rand_once_anchor_on';
+    const __label = (__runTag && typeof __runTag === 'string' && __runTag.trim())
+      ? `${__baseLabel}__${__runTag.trim()}`
+      : __baseLabel;
+    await runVariantPlaying(
+      __label,
+      step,
+      'Running P3f Focus (playing pan/zoom + randomise once, anchor ON)...'
+    );
+  });
+
+  try { window.__PERF_DISABLE_CHAIN_WORK = prevDisableChainWork; } catch {}
+  try {
+    window.__PERF_DG_DISABLE_OVERLAYS = prevDisableOverlays;
+    window.__PERF_DG_OVERLAY_CORE_OFF = prevOverlayCore;
+    window.__PERF_DG_OVERLAY_STROKES_OFF = prevOverlayStrokes;
+  } catch {}
+}
+
+async function runP3fFocusShort() {
+  // Focus probe: long enough to meaningfully pan/zoom, but still fast-ish.
+  const prev = window.__PERF_LAB_DURATION_MS;
+  const prevTag = window.__PERF_RUN_TAG;
+  try { window.__PERF_LAB_DURATION_MS = 26000; } catch {}
+  try { window.__PERF_RUN_TAG = 'P3fFocus'; } catch {}
+  await runP3fFocus();
+  try { window.__PERF_LAB_DURATION_MS = prev; } catch {}
+  try { window.__PERF_RUN_TAG = prevTag; } catch {}
+}
+
+async function runP3fNoOverlaysFocusShort() {
+  const prevTag = window.__PERF_RUN_TAG;
+  try { window.__PERF_DG_DISABLE_OVERLAYS = true; } catch {}
+  try { window.__PERF_RUN_TAG = 'P3fFocus_NoOverlays'; } catch {}
+  await runP3fFocusShort();
+  try { window.__PERF_DG_DISABLE_OVERLAYS = false; } catch {}
+  try { window.__PERF_RUN_TAG = prevTag; } catch {}
+}
+
+async function runP3fNoParticlesFocusShort() {
+  const prevTag = window.__PERF_RUN_TAG;
+  const prev = window.__PERF_DG_DISABLE_PARTICLES;
+  try { window.__PERF_DG_DISABLE_PARTICLES = true; } catch {}
+  try { window.__PERF_RUN_TAG = 'P3fFocus_NoParticles'; } catch {}
+  await runP3fFocusShort();
+  try { window.__PERF_DG_DISABLE_PARTICLES = prev; } catch {}
   try { window.__PERF_RUN_TAG = prevTag; } catch {}
 }
 
@@ -5052,6 +5276,8 @@ try {
     buildP2,
     buildP2d,
     buildP3,
+    buildP3Focus,
+    buildP3Lite,
     buildP4,
     buildP4h,
     buildP5,
@@ -5065,14 +5291,18 @@ try {
     runP3b,
     runP3c,
     runP3d,
-    runP3e,
-    runP3e2,
-    runP3f,
-    runP3fShort,
-    runP3fShort2,
-    runP3fNoOverlaysShort,
-    runP3fNoOverlaysShort2,
-    runP3fNoParticlesShort,
+      runP3e,
+      runP3e2,
+      runP3f,
+      runP3fShort,
+      runP3fShort2,
+      runP3fFocus,
+      runP3fFocusShort,
+      runP3fNoOverlaysFocusShort,
+      runP3fNoParticlesFocusShort,
+      runP3fNoOverlaysShort,
+      runP3fNoOverlaysShort2,
+      runP3fNoParticlesShort,
     runP3fNoParticlesShort2,
     runP3fNoOverlayCoreShort,
     runP3fNoOverlayStrokesShort,
@@ -5154,11 +5384,35 @@ try {
     saveResultsBundle,
     postResultsBundle,
     downloadResultsBundle,
-    // Demon trace toggles (so auto-queue can flip them deterministically)
-    traceCanvasOnlyOn: async function traceCanvasOnlyOn() {
-      window.__PERF_TRACE = window.__PERF_TRACE || {};
-      window.__PERF_TRACE.traceCanvasResize = true;
-      window.__PERF_TRACE.traceDomInRaf = false;
+      // Demon trace toggles (so auto-queue can flip them deterministically)
+      traceDprOn: async function traceDprOn() {
+        try { window.__DG_REFRESH_SIZE_TRACE = true; } catch {}
+        try { window.__DG_EFFECTIVE_DPR_TRACE = true; } catch {}
+        try { window.__FG_EFFECTIVE_DPR_TRACE = true; } catch {}
+        // IMPORTANT: do not spam console during perf runs; buffer instead.
+        try { window.__PERF_TRACE_TO_CONSOLE = false; } catch {}
+        try { if (window.__PERF_TRACE_CLEAR) window.__PERF_TRACE_CLEAR(); } catch {}
+        // Quiet size-trace by default (still captured in buffer via DG/FG hooks).
+        try { window.__DG_REFRESH_SIZE_TRACE_THROTTLE_MS = 250; } catch {}
+        try { window.__DG_REFRESH_SIZE_TRACE_LIMIT = 200; } catch {}
+        try {
+          console.log('[PerfLab] DPR trace ENABLED', {
+            __DG_REFRESH_SIZE_TRACE: !!window.__DG_REFRESH_SIZE_TRACE,
+            __DG_EFFECTIVE_DPR_TRACE: !!window.__DG_EFFECTIVE_DPR_TRACE,
+            __FG_EFFECTIVE_DPR_TRACE: !!window.__FG_EFFECTIVE_DPR_TRACE,
+          });
+        } catch {}
+      },
+      traceDprOff: async function traceDprOff() {
+        try { window.__DG_REFRESH_SIZE_TRACE = false; } catch {}
+        try { window.__DG_EFFECTIVE_DPR_TRACE = false; } catch {}
+        try { window.__FG_EFFECTIVE_DPR_TRACE = false; } catch {}
+        try { console.log('[PerfLab] DPR trace DISABLED'); } catch {}
+      },
+      traceCanvasOnlyOn: async function traceCanvasOnlyOn() {
+        window.__PERF_TRACE = window.__PERF_TRACE || {};
+        window.__PERF_TRACE.traceCanvasResize = true;
+        window.__PERF_TRACE.traceDomInRaf = false;
       try { console.log('[PerfLab] traceCanvasResize ENABLED (domInRaf OFF)', { ...window.__PERF_TRACE }); } catch {}
     },
     traceOn: async function traceOn() {
