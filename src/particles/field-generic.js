@@ -129,15 +129,14 @@ function __fieldComputePressureMul(frameMs) {
   return 1 - (1 - minMul) * t;
 }
 
-function __fieldUpdatePressureMulFromFps(fps, nowTs) {
+function __fieldUpdatePressureMulFromFrameMs(frameMs, nowTs) {
   if (!(window.__FIELD_PRESSURE_DPR_ENABLED ?? true)) {
     __fieldPressureFrameMsEwma = null;
     __fieldPressureDprMul = 1;
     return;
   }
-  if (!Number.isFinite(fps) || fps <= 0) return;
+  if (!Number.isFinite(frameMs) || frameMs <= 0) return;
 
-  const frameMs = 1000 / fps;
   const alpha = Number.isFinite(window.__FIELD_PRESSURE_DPR_EWMA_ALPHA)
     ? window.__FIELD_PRESSURE_DPR_EWMA_ALPHA
     : (Number.isFinite(window.__DG_PRESSURE_DPR_EWMA_ALPHA) ? window.__DG_PRESSURE_DPR_EWMA_ALPHA : 0.12);
@@ -160,6 +159,12 @@ function __fieldUpdatePressureMulFromFps(fps, nowTs) {
       __fieldPressureMulLastChangeTs = nowTs;
     }
   }
+}
+
+// Back-compat: some callers may still pass FPS.
+function __fieldUpdatePressureMulFromFps(fps, nowTs) {
+  if (!Number.isFinite(fps) || fps <= 0) return;
+  __fieldUpdatePressureMulFromFrameMs(1000 / fps, nowTs);
 }
 
 // Fade tuning
@@ -443,10 +448,21 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
   const updateSizeCache = () => {
     try {
       // Avoid forced layout: read from style + attrs first; fall back to client sizes if needed.
+      // NOTE: During zoom commits / DOM normalization, some canvases briefly report 0–1px.
+      // We MUST NOT let that collapse our backing store (it nukes particles + causes churn).
+      const prevW = sizeCache.w;
+      const prevH = sizeCache.h;
       const styleW = parseFloat(getComputedStyle(canvas).width) || 0;
       const styleH = parseFloat(getComputedStyle(canvas).height) || 0;
       const w = Math.max(1, Math.round(styleW || canvas.width || canvas.clientWidth || 1));
       const h = Math.max(1, Math.round(styleH || canvas.height || canvas.clientHeight || 1));
+
+      // Treat tiny sizes as transient/invalid if we previously had a real size.
+      // (We still allow initial startup to populate from tiny → real.)
+      if ((w <= 2 || h <= 2) && (prevW > 2 && prevH > 2)) {
+        return;
+      }
+
       sizeCache.w = w;
       sizeCache.h = h;
       sizeCache.ts = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
@@ -510,6 +526,8 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     w: 1,
     h: 1,
     dpr: 1,
+    __lastXformDpr: 0,
+    lastDt: 1 / 60,
     particles: [],
     particlePool: [],    // Object pool for reusing particle objects
     targetDesired: 0,
@@ -595,17 +613,38 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     const size = pv?.map?.size?.() || measure();
     const prevW = state.w;
     const prevH = state.h;
-    state.w = Math.max(1, Math.round(size.w || 1));
-    state.h = Math.max(1, Math.round(size.h || 1));
+
+    // NOTE: During boot/refresh/DOM churn we can transiently read 0/1px sizes.
+    // Resizing backing stores to 1x1 then back up creates compositor churn and
+    // can amplify `frame.nonScript` spikes. Treat tiny measurements as "not ready"
+    // and keep the last known-good size.
+    const nextCssWRaw = Math.max(1, Math.round(size.w || 1));
+    const nextCssHRaw = Math.max(1, Math.round(size.h || 1));
+    const nextCssW = (nextCssWRaw <= 2 && prevW > 2) ? prevW : nextCssWRaw;
+    const nextCssH = (nextCssHRaw <= 2 && prevH > 2) ? prevH : nextCssHRaw;
+    state.w = nextCssW;
+    state.h = nextCssH;
+
     const deviceDpr = Math.max(1, Math.min(((typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1), 3));
     const zoomNow = readZoom(viewport || pv);
     const visualMul = __fieldComputeVisualBackingMul(zoomNow);
-    const fpsSample =
-      (Number.isFinite(window.__MT_SM_FPS) ? window.__MT_SM_FPS :
-        (Number.isFinite(window.__MT_FPS) ? window.__MT_FPS : null));
+    const fallbackDt =
+      (Number.isFinite(window.__MT_SM_FPS) && window.__MT_SM_FPS > 0) ? (1 / window.__MT_SM_FPS) :
+        ((Number.isFinite(window.__MT_FPS) && window.__MT_FPS > 0) ? (1 / window.__MT_FPS) : (1 / 60));
     const nowTs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-    if (Number.isFinite(fpsSample)) __fieldUpdatePressureMulFromFps(fpsSample, nowTs);
+    const dtMsFallback = (Number.isFinite(state.lastDt) ? state.lastDt : fallbackDt) * 1000;
+
+    // Prefer wall-clock deltas so "pressure DPR" can see real frame stalls even if dt is clamped elsewhere.
+    const rawWallMs = Number.isFinite(state.__lastPressureNowTs) ? (nowTs - state.__lastPressureNowTs) : dtMsFallback;
+    state.__lastPressureNowTs = nowTs;
+
+    const frameMsSample = Math.max(0, Math.min(250, rawWallMs));
+    __fieldUpdatePressureMulFromFrameMs(frameMsSample, nowTs);
     const pressureMul = (Number.isFinite(__fieldPressureDprMul) && __fieldPressureDprMul > 0) ? __fieldPressureDprMul : 1;
+    // Store for debug traces (no perf impact when tracing is off).
+    state.deviceDpr = deviceDpr;
+    state.visualMul = visualMul;
+    state.pressureMul = pressureMul;
     const desiredDprRaw = deviceDpr * visualMul * pressureMul;
     const desiredDpr = Math.min(deviceDpr, desiredDprRaw);
     state.dpr = capDprForBackingStore(state.w, state.h, desiredDpr, state.dpr, {
@@ -613,12 +652,22 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
       maxBackingSidePx: opts?.maxBackingSidePx,
     });
 
+    // Quantize DPR to avoid tiny float jitter causing 1–2px backing-store oscillation.
+    const __quantizeDpr = (v) => {
+      const n = Number.isFinite(v) ? v : 1;
+      return Math.max(0.25, Math.round(n * 64) / 64);
+    };
+    state.dpr = __quantizeDpr(state.dpr);
+
     const __quant2 = (v) => Math.max(1, Math.round(v / 2) * 2); // reduce 1px resize churn
     const pxW = __quant2(state.w * state.dpr);
     const pxH = __quant2(state.h * state.dpr);
     if (canvas.width !== pxW) canvas.width = pxW;
     if (canvas.height !== pxH) canvas.height = pxH;
-    ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+    if (state.__lastXformDpr !== state.dpr) {
+      ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+      state.__lastXformDpr = state.dpr;
+    }
 
     // Effective DPR / backing-store trace (debug-only; driven by PerfLab 'traceDprOn').
     try {
@@ -1041,6 +1090,8 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
   }
 
 function tick(dt = 1 / 60) {
+  if (!Number.isFinite(dt) || dt <= 0) dt = 1 / 60;
+  state.lastDt = dt;
       const __perfOn = !!window.__PERF_PARTICLE_FIELD_PROFILE;
       const __perfStart = __perfOn && typeof performance !== 'undefined' ? performance.now() : 0;
       try {
@@ -1648,6 +1699,42 @@ function reconcileParticleCount(dt = 1 / 60, immediate = false) {
     heightPx: state.h,
     config,
   });
+
+  // Bootstrap: on a brand-new scene/panel the canvas can report a tiny/zero CSS size
+  // for a frame (layout not settled yet). If we lock in that size, desired particle
+  // count can compute to ~0 and the field appears "empty" until a manual refresh or
+  // later interaction forces a resize.
+  //
+  // We schedule a couple of deferred resizes and then snap to budget so visuals
+  // start at the best quality the machine can afford.
+  try {
+    const bootstrapTries = Number.isFinite(window.__FG_BOOTSTRAP_TRIES)
+      ? Math.max(0, Math.round(window.__FG_BOOTSTRAP_TRIES))
+      : 2;
+    let triesLeft = bootstrapTries;
+    const bootstrapOnce = () => {
+      try {
+        if (!canvas || !canvas.isConnected) return;
+        // Pull the latest CSS size into the cache, then run our normal resize path.
+        updateSizeCache();
+        resize();
+        // If we were initialized before layout settled, ensure we actually populate.
+        if ((state.w > 2 && state.h > 2) && (!state.particles || state.particles.length === 0)) {
+          try { snapToBudget(); } catch {}
+          try { draw(); } catch {}
+        }
+      } catch {}
+    };
+    const raf = (fn) => (typeof requestAnimationFrame === 'function')
+      ? requestAnimationFrame(fn)
+      : setTimeout(fn, 16);
+    const run = () => {
+      bootstrapOnce();
+      triesLeft -= 1;
+      if (triesLeft > 0) raf(run);
+    };
+    if (bootstrapTries > 0) raf(run);
+  } catch {}
 
   function setClipRect(rect) {
     if (!rect || !Number.isFinite(rect.x) || !Number.isFinite(rect.y) || !Number.isFinite(rect.w) || !Number.isFinite(rect.h) || rect.w <= 0 || rect.h <= 0) {

@@ -1989,7 +1989,12 @@ try {
         __dgLastZoomCommitTs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
       }
       const __nextPaintDpr = __dgCapDprForBackingStore(nextCssW, nextCssH, Math.min(dpr, 3), __prevForCap);
-      paintDpr = __nextPaintDpr;
+      // Quantize DPR to avoid tiny float jitter causing 1–2px backing-store oscillation.
+      const __quantizeDpr = (v) => {
+        const n = Number.isFinite(v) ? v : 1;
+        return Math.max(0.25, Math.round(n * 64) / 64);
+      };
+      paintDpr = __quantizeDpr(__nextPaintDpr);
       if (typeof window !== 'undefined' && window.__DG_REFRESH_DEBUG) {
         const __changed = (__prevCssW !== nextCssW) || (__prevCssH !== nextCssH) || (Math.abs(__prevPaintDpr - __nextPaintDpr) > 1e-6);
         if (__changed) {

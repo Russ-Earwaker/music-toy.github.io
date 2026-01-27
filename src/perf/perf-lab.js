@@ -32,6 +32,7 @@ try {
 try {
   const MAX = 3000;
   window.__PERF_TRACE_BUFFER = window.__PERF_TRACE_BUFFER || { events: [], max: MAX };
+  window.__PERF_TRACE_KEEP_BUFFER = window.__PERF_TRACE_KEEP_BUFFER || false;
   window.__PERF_TRACE_TO_CONSOLE = window.__PERF_TRACE_TO_CONSOLE || false; // opt-in
   window.__PERF_TRACE_CLEAR = function __PERF_TRACE_CLEAR() {
     try {
@@ -65,6 +66,53 @@ try {
     }
   };
 } catch {}
+
+// ---------------------------------------------------------------------------
+// Trace summary helpers (PASS/FAIL signals for current focus)
+//
+// We intentionally avoid console logging during perf. Instead, we scan the buffered trace at the end
+// of an auto-run and attach a compact summary to the bundle meta.
+function computePerfTraceSummary() {
+  try {
+    const b = window.__PERF_TRACE_BUFFER;
+    const ev = (b && Array.isArray(b.events)) ? b.events : [];
+    let fgMinPressure = 1;
+    let fgSawPressure = false;
+    let fgSamples = 0;
+
+    // Resize churn signals (if enabled)
+    let dgSkipNotReady = 0;
+
+    for (const e of ev) {
+      if (!e || !e.kind) continue;
+      if (e.kind === 'FG.dpr' && e.payload) {
+        fgSamples++;
+        const pm = Number(e.payload.pressureMul);
+        if (Number.isFinite(pm)) {
+          fgMinPressure = Math.min(fgMinPressure, pm);
+          if (pm < 0.999) fgSawPressure = true;
+        }
+      }
+      if (e.kind === 'DG.size-trace' && e.payload && e.payload.event === 'drawGrid:skip-not-ready') {
+        dgSkipNotReady++;
+      }
+    }
+
+    return {
+      fg: {
+        samples: fgSamples,
+        minPressureMul: Number.isFinite(fgMinPressure) ? fgMinPressure : 1,
+        sawPressure: !!fgSawPressure,
+      },
+      dg: {
+        skipNotReadyCount: dgSkipNotReady,
+      },
+      traceEventCount: ev.length,
+    };
+  } catch {
+    return null;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Auto-run queues
@@ -106,6 +154,28 @@ const AUTO_FOCUS_QUEUE = [
   'warmupSettle',
 
   // Focus runs (longer duration, shorter idle so we actually get motion)
+  'runP3fFocusShort',
+  'warmupSettle',
+  'runP3fNoOverlaysFocusShort',
+  'warmupSettle',
+  'runP3fNoParticlesFocusShort',
+
+  'traceDprOff',
+  'traceOff',
+];
+
+// Validation focus: same intent as AUTO_FOCUS_QUEUE but with more toys (stronger pressure signal).
+// Use this to confirm pressure-DPR actually engages on stronger machines.
+const AUTO_FOCUS_HEAVY_QUEUE = [
+  'traceDprOn',
+  'traceCanvasOnlyOn',
+
+  // Build once (heavier than P3Focus)
+  'buildP3FocusHeavy',
+  'warmupFirstAppearance',
+  'warmupSettle',
+
+  // Same focus variants back-to-back on the same scene
   'runP3fFocusShort',
   'warmupSettle',
   'runP3fNoOverlaysFocusShort',
@@ -183,9 +253,10 @@ function ensureUI() {
   const P3 = {
     title: 'P3 ? DrawGrid',
     build:
-      btn('buildP3Focus', 'Build P3Focus: DrawGrid (Tiny)', 'primary') +
-      btn('buildP3Lite',  'Build P3Lite: DrawGrid (Fast)') +
-      btn('buildP3',      'Build P3: DrawGrid Worst-Case'),
+      btn('buildP3Focus',      'Build P3Focus: DrawGrid (Tiny)', 'primary') +
+      btn('buildP3FocusHeavy', 'Build P3FocusHeavy: DrawGrid (Heavy)', 'primary') +
+      btn('buildP3Lite',       'Build P3Lite: DrawGrid (Fast)') +
+      btn('buildP3',           'Build P3: DrawGrid Worst-Case'),
     runs: sortByLabel([
       { act: 'runP3f',  label: 'Run P3f: Playing Pan/Zoom + Random Notes (Anchor ON)' },
       { act: 'runP3fPlayheadSeparateOff', label: 'Run P3f: Playhead Separate OFF' },
@@ -327,6 +398,7 @@ function ensureUI() {
           <div class="perf-lab-row perf-lab-footer">
             <button class="perf-lab-btn" data-act="autoGeneric">Run-Auto (Generic)</button>
             <button class="perf-lab-btn" data-act="autoFocus">Auto: Current Focus</button>
+            <button class="perf-lab-btn" data-act="autoFocusHeavy">Auto: Focus Validation (Heavy)</button>
             <button class="perf-lab-btn" data-act="autoMicro">Auto: Focus Micro (Best)</button>
             <div class="perf-lab-status" id="perf-lab-status">Idle</div>
           </div>
@@ -473,6 +545,7 @@ function ensureUI() {
     if (act === 'buildP3') await buildP3();
     if (act === 'buildP3Lite') await buildP3Lite();
     if (act === 'buildP3Focus') await buildP3Focus();
+    if (act === 'buildP3FocusHeavy') await buildP3FocusHeavy();
     if (act === 'runP3a') await runP3a();
     if (act === 'runP3b') await runP3b();
     if (act === 'runP3c') await runP3c();
@@ -595,6 +668,21 @@ function ensureUI() {
         downloadName: `perf-lab-focus-${ts}.json`,
         notes: 'Current Focus: prove pressure-DPR is applying + eliminate resize churn (edit AUTO_FOCUS_QUEUE in perf-lab.js)',
         queue: AUTO_FOCUS_QUEUE,
+      };
+      await runAuto(cfg);
+    }
+
+    if (act === 'autoFocusHeavy') {
+      const cfgBase = (await readAutoConfigFromFile()) || readAutoConfig() || {};
+      const ts = new Date().toISOString().replace(/[:.]/g, '-');
+      const cfg = {
+        clear: true,
+        save: false,
+        download: false,
+        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
+        downloadName: `perf-lab-focus-heavy-${ts}.json`,
+        notes: 'Focus Validation (Heavy): force pressure-DPR engagement + catch resize churn (edit AUTO_FOCUS_HEAVY_QUEUE in perf-lab.js)',
+        queue: AUTO_FOCUS_HEAVY_QUEUE,
       };
       await runAuto(cfg);
     }
@@ -1350,8 +1438,10 @@ async function runAuto(config = {}) {
       try { window.__PERF_TRACE = { ...__prevTrace }; } catch {}
     }
   }
+  const traceSummary = computePerfTraceSummary();
   const bundle = buildResultsBundle(results, {
     queue,
+    traceSummary,
     executedQueue: Array.isArray(window.__PERF_LAB_EXECUTED_QUEUE) ? window.__PERF_LAB_EXECUTED_QUEUE : [],
     notes: cfg.notes || '',
     runId: cfg.runId || '',
@@ -1530,6 +1620,39 @@ async function buildP3Focus() {
     await dispatchBatched('toy-random-notes', 1);
   } catch {}
   setStatus('P3Focus built');
+}
+
+async function buildP3FocusHeavy() {
+  try { clearSceneViaSnapshot(); } catch {}
+  setStatus('Building P3FocusHeavy...');
+  // Heavy validation build: enough drawgrids to reliably engage pressure-DPR on stronger machines,
+  // but still small enough that build/seed doesn't starve the pan/zoom scripts.
+  await ensureMeasuredFootprint('drawgrid');
+  const spacing = estimateGridSpacing('drawgrid', 520);
+  logPerfFootprintDebug('drawgrid', 520);
+  // 12 toys (3x4)
+  buildParticleWorstCase({ toyType: 'drawgrid', rows: 3, cols: 4, spacing });
+  try {
+    const raf = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));
+    raf(() => raf(() => window.resolveToyPanelOverlaps?.()));
+  } catch {}
+  // Seed drawgrid notes for comparable visuals (batched + yielding).
+  try {
+    const raf = window.requestAnimationFrame?.bind(window) ?? ((fn) =>
+      setTimeout(() => fn((performance?.now?.() ?? Date.now())), 16));
+    const panels = Array.from(document.querySelectorAll('.toy-panel[data-toy=drawgrid]'));
+    const dispatchBatched = async (evtName, batch = 2) => {
+      for (let i = 0; i < panels.length; i += batch) {
+        for (const p of panels.slice(i, i + batch)) {
+          try { p.dispatchEvent(new CustomEvent(evtName, { bubbles: true })); } catch {}
+        }
+        await new Promise((r) => raf(() => r()));
+      }
+    };
+    await dispatchBatched('toy-random', 2);
+    await dispatchBatched('toy-random-notes', 2);
+  } catch {}
+  setStatus('P3FocusHeavy built');
 }
 
 async function buildP4() {
@@ -2022,7 +2145,10 @@ async function runVariant(label, step, statusText) {
   try {
     result.trace = window.__PERF_TRACE_SNAPSHOT ? window.__PERF_TRACE_SNAPSHOT(220) : null;
   } catch {}
-  try { if (window.__PERF_TRACE_CLEAR) window.__PERF_TRACE_CLEAR(); } catch {}
+  try {
+    const keep = (typeof window !== 'undefined') ? !!window.__PERF_TRACE_KEEP_BUFFER : false;
+    if (!keep && window.__PERF_TRACE_CLEAR) window.__PERF_TRACE_CLEAR();
+  } catch {}
   lastResult = result;
   lastResults.push(result);
   setOutput(result);
@@ -2264,7 +2390,10 @@ async function runVariantPlaying(label, step, statusText) {
   try {
     result.trace = window.__PERF_TRACE_SNAPSHOT ? window.__PERF_TRACE_SNAPSHOT(220) : null;
   } catch {}
-  try { if (window.__PERF_TRACE_CLEAR) window.__PERF_TRACE_CLEAR(); } catch {}
+  try {
+    const keep = (typeof window !== 'undefined') ? !!window.__PERF_TRACE_KEEP_BUFFER : false;
+    if (!keep && window.__PERF_TRACE_CLEAR) window.__PERF_TRACE_CLEAR();
+  } catch {}
 
   try { window.__PerfFrameProf?.dump?.(label); } catch {}
 
@@ -5277,6 +5406,7 @@ try {
     buildP2d,
     buildP3,
     buildP3Focus,
+    buildP3FocusHeavy,
     buildP3Lite,
     buildP4,
     buildP4h,
@@ -5391,6 +5521,7 @@ try {
         try { window.__FG_EFFECTIVE_DPR_TRACE = true; } catch {}
         // IMPORTANT: do not spam console during perf runs; buffer instead.
         try { window.__PERF_TRACE_TO_CONSOLE = false; } catch {}
+        try { window.__PERF_TRACE_KEEP_BUFFER = true; } catch {}
         try { if (window.__PERF_TRACE_CLEAR) window.__PERF_TRACE_CLEAR(); } catch {}
         // Quiet size-trace by default (still captured in buffer via DG/FG hooks).
         try { window.__DG_REFRESH_SIZE_TRACE_THROTTLE_MS = 250; } catch {}
@@ -5408,6 +5539,7 @@ try {
         try { window.__DG_EFFECTIVE_DPR_TRACE = false; } catch {}
         try { window.__FG_EFFECTIVE_DPR_TRACE = false; } catch {}
         try { console.log('[PerfLab] DPR trace DISABLED'); } catch {}
+        try { window.__PERF_TRACE_KEEP_BUFFER = false; } catch {}
       },
       traceCanvasOnlyOn: async function traceCanvasOnlyOn() {
         window.__PERF_TRACE = window.__PERF_TRACE || {};
