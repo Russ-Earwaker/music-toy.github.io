@@ -1,0 +1,6070 @@
+{
+  "createdAt": "2026-01-27T10:29:40.180Z",
+  "href": "http://192.168.0.62:5500/index.html",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+  "meta": {
+    "queue": [
+      "traceDprOn",
+      "traceCanvasOnlyOn",
+      "buildP3Focus",
+      "warmupFirstAppearance",
+      "warmupSettle",
+      "runP3fFocusShort",
+      "warmupSettle",
+      "runP3fNoOverlaysFocusShort",
+      "warmupSettle",
+      "runP3fNoParticlesFocusShort",
+      "traceDprOff",
+      "traceOff"
+    ],
+    "executedQueue": [
+      "traceDprOn",
+      "traceCanvasOnlyOn",
+      "buildP3Focus",
+      "warmupFirstAppearance",
+      "warmupSettle",
+      "runP3fFocusShort",
+      "warmupSettle",
+      "runP3fNoOverlaysFocusShort",
+      "warmupSettle",
+      "runP3fNoParticlesFocusShort",
+      "traceDprOff",
+      "traceOff"
+    ],
+    "notes": "Current Focus: prove pressure-DPR is applying + eliminate resize churn (edit AUTO_FOCUS_QUEUE in perf-lab.js)",
+    "runId": ""
+  },
+  "results": [
+    {
+      "label": "P3f_focus_drawgrid_playing_panzoom_rand_once_anchor_on__P3fFocus",
+      "durationMs": 26000,
+      "warmupMs": 1200,
+      "createdAt": "2026-01-27T10:28:46.334Z",
+      "samples": 1103,
+      "frameMs": {
+        "avg": 22.669084315503174,
+        "p50": 16.70000000001164,
+        "p95": 33.40000000002328,
+        "p99": 50.10000000000582,
+        "worst": 1668
+      },
+      "counts": {
+        "over16ms": 621,
+        "over33ms": 167,
+        "over50ms": 20
+      },
+      "pulseCount": 317,
+      "outlineSyncCount": 111,
+      "warmupCount": 1,
+      "warmupTs": 1769509702983,
+      "frameProfile": {
+        "samples": 46,
+        "parts": {
+          "perf.raf.other": {
+            "totalMs": 701.5999982357025,
+            "avgMs": 15.252173874689186
+          },
+          "pulse.service": {
+            "totalMs": 0.09999990463256836,
+            "avgMs": 0.0021739109702732253
+          },
+          "zoom.reflow": {
+            "totalMs": 0.2999999523162842,
+            "avgMs": 0.006521738093832265
+          },
+          "anchor": {
+            "totalMs": 18.100000143051147,
+            "avgMs": 0.39347826397937274
+          },
+          "chain.markActive": {
+            "totalMs": 0.09999990463256836,
+            "avgMs": 0.0021739109702732253
+          },
+          "chain.sequencer": {
+            "totalMs": 3.5999999046325684,
+            "avgMs": 0.07826086749201236
+          },
+          "perf.raf.scheduler": {
+            "totalMs": 25.199999570846558,
+            "avgMs": 0.5478260776270991
+          },
+          "perf.raf.main": {
+            "totalMs": 25.799999713897705,
+            "avgMs": 0.5608695589977762
+          },
+          "perf.raf.loopgrid": {
+            "totalMs": 0.3000001907348633,
+            "avgMs": 0.006521743276844854
+          },
+          "drawgrid.prep.visibility": {
+            "totalMs": 0.09999990463256836,
+            "avgMs": 0.0021739109702732253
+          },
+          "drawgrid.prep.camera": {
+            "totalMs": 0.09999990463256836,
+            "avgMs": 0.0021739109702732253
+          },
+          "drawgrid.prep.adaptive": {
+            "totalMs": 0.6999995708465576,
+            "avgMs": 0.015217381974925165
+          },
+          "drawgrid.prep.overlayGate": {
+            "totalMs": 0.900000810623169,
+            "avgMs": 0.01956523501354715
+          },
+          "drawgrid.render.prep": {
+            "totalMs": 4.3000006675720215,
+            "avgMs": 0.09347827538200047
+          },
+          "drawgrid.render.particles": {
+            "totalMs": 0.2999999523162842,
+            "avgMs": 0.006521738093832265
+          },
+          "drawgrid.ensureSize": {
+            "totalMs": 0.20000004768371582,
+            "avgMs": 0.004347827123559039
+          },
+          "drawgrid.update.particles": {
+            "totalMs": 0.20000004768371582,
+            "avgMs": 0.004347827123559039
+          },
+          "drawgrid.grid.blit": {
+            "totalMs": 1.3999993801116943,
+            "avgMs": 0.03043476913286292
+          },
+          "drawgrid.draw.grid": {
+            "totalMs": 2.200000047683716,
+            "avgMs": 0.04782608799312426
+          },
+          "drawgrid.nodes.layout": {
+            "totalMs": 3.8999996185302734,
+            "avgMs": 0.08478260040283203
+          },
+          "drawgrid.nodes.cacheBlit": {
+            "totalMs": 1.500000238418579,
+            "avgMs": 0.0326087008351865
+          },
+          "drawgrid.nodes.blocks.blit": {
+            "totalMs": 1.000000238418579,
+            "avgMs": 0.021739135617795197
+          },
+          "drawgrid.nodes.flash": {
+            "totalMs": 3.000000238418579,
+            "avgMs": 0.06521739648736041
+          },
+          "drawgrid.nodes.tutorial": {
+            "totalMs": 1.500000238418579,
+            "avgMs": 0.0326087008351865
+          },
+          "drawgrid.draw.nodes": {
+            "totalMs": 2.1999998092651367,
+            "avgMs": 0.04782608281011167
+          },
+          "drawgrid.update": {
+            "totalMs": 0.2999999523162842,
+            "avgMs": 0.006521738093832265
+          },
+          "drawgrid.draw": {
+            "totalMs": 4.499999761581421,
+            "avgMs": 0.09782608177350915
+          },
+          "drawgrid.frontSwap": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.ui.backSync": {
+            "totalMs": 0.39999985694885254,
+            "avgMs": 0.00869564906410549
+          },
+          "drawgrid.ui.clear": {
+            "totalMs": 0.10000014305114746,
+            "avgMs": 0.0021739161532858143
+          },
+          "drawgrid.ui.refresh": {
+            "totalMs": 0.5,
+            "avgMs": 0.010869565217391304
+          },
+          "drawgrid.dom.playing": {
+            "totalMs": 0.19999980926513672,
+            "avgMs": 0.004347821940546451
+          },
+          "drawgrid.overlay.clear": {
+            "totalMs": 2.199998617172241,
+            "avgMs": 0.04782605689504872
+          },
+          "drawgrid.overlay.strokes.colorized": {
+            "totalMs": 0.10000014305114746,
+            "avgMs": 0.0021739161532858143
+          },
+          "drawgrid.overlay.strokes.special": {
+            "totalMs": 3.6999993324279785,
+            "avgMs": 0.0804347680962604
+          },
+          "drawgrid.overlay.strokes": {
+            "totalMs": 6.6000001430511475,
+            "avgMs": 0.14347826397937277
+          },
+          "drawgrid.overlay.core": {
+            "totalMs": 9.699998140335083,
+            "avgMs": 0.2108695247898931
+          },
+          "drawgrid.overlay.flash.pass": {
+            "totalMs": 9.89999794960022,
+            "avgMs": 0.21521734673043955
+          },
+          "drawgrid.frame.total": {
+            "totalMs": 36.19999957084656,
+            "avgMs": 0.7869565124097078
+          },
+          "drawgrid.playhead.headerSweepVisual": {
+            "totalMs": 1.0000004768371582,
+            "avgMs": 0.02173914080080779
+          },
+          "drawgrid.overlay.playhead": {
+            "totalMs": 12.200000047683716,
+            "avgMs": 0.2652173923409503
+          },
+          "drawgrid.composite.base": {
+            "totalMs": 2.1000006198883057,
+            "avgMs": 0.04565218738887621
+          },
+          "drawgrid.composite.base.blit": {
+            "totalMs": 1.2999999523162842,
+            "avgMs": 0.028260868528614872
+          },
+          "drawgrid.composite.final": {
+            "totalMs": 908.9999997615814,
+            "avgMs": 19.76086956003438
+          },
+          "drawgrid.draw.composite": {
+            "totalMs": 693.5000004768372,
+            "avgMs": 15.076086966887765
+          },
+          "perf.raf.drawgrid": {
+            "totalMs": 1489.699999332428,
+            "avgMs": 32.384782594183214
+          },
+          "drawgrid.overlay.cellFlashes": {
+            "totalMs": 1.2000000476837158,
+            "avgMs": 0.026086957558341648
+          },
+          "drawgrid.overlay.toggles": {
+            "totalMs": 0.39999985694885254,
+            "avgMs": 0.00869564906410549
+          },
+          "drawgrid.overlay.noteToggles": {
+            "totalMs": 0.40000009536743164,
+            "avgMs": 0.008695654247118078
+          },
+          "drawgrid.paint.redraw": {
+            "totalMs": 978.5999999046326,
+            "avgMs": 21.273913041405056
+          },
+          "perf.worldToTranslate": {
+            "totalMs": 0.09999990463256836,
+            "avgMs": 0.0021739109702732253
+          },
+          "perf.gesture.pan": {
+            "totalMs": 0.09999990463256836,
+            "avgMs": 0.0021739109702732253
+          },
+          "drawgrid.resize": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.grid.cache": {
+            "totalMs": 0.20000004768371582,
+            "avgMs": 0.004347827123559039
+          },
+          "drawgrid.layout": {
+            "totalMs": 220.00000023841858,
+            "avgMs": 4.782608700835186
+          },
+          "drawgrid.nodes.connections": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.nodes.circles": {
+            "totalMs": 0.5000002384185791,
+            "avgMs": 0.010869570400403894
+          },
+          "drawgrid.nodes.draw": {
+            "totalMs": 3.6000003814697266,
+            "avgMs": 0.07826087785803754
+          },
+          "drawgrid.nodes.blocks.build": {
+            "totalMs": 0.4999995231628418,
+            "avgMs": 0.010869554851366125
+          },
+          "perf.warmup": {
+            "totalMs": 0.001,
+            "avgMs": 0.00002173913043478261
+          },
+          "script": {
+            "totalMs": 719,
+            "avgMs": 15.630434782608695
+          },
+          "perf.raf.benchmark": {
+            "totalMs": 719.2000000476837,
+            "avgMs": 15.634782609732255
+          },
+          "frame.nonScript": {
+            "totalMs": 4534.799999999959,
+            "avgMs": 98.58260869565129
+          },
+          "perf.raf.zoomTick": {
+            "totalMs": 6.799999952316284,
+            "avgMs": 0.14782608591991922
+          },
+          "perf.raf.outlineSync": {
+            "totalMs": 0.10000014305114746,
+            "avgMs": 0.0021739161532858143
+          },
+          "unattributed": {
+            "totalMs": 2898.200005435938,
+            "avgMs": 63.004347944259514
+          },
+          "chain.draw": {
+            "totalMs": 4.699999809265137,
+            "avgMs": 0.10217390889706819
+          },
+          "drawgrid.playhead.spriteGet": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.playhead.drawImage": {
+            "totalMs": 0.10000014305114746,
+            "avgMs": 0.0021739161532858143
+          },
+          "perf.gesture.zoom": {
+            "totalMs": 0.2999999523162842,
+            "avgMs": 0.006521738093832265
+          }
+        },
+        "work": {
+          "totalMs": 719,
+          "avgMs": 15.630434782608695
+        },
+        "idle": {
+          "totalMs": 4534.799999999959,
+          "avgMs": 98.58260869565129
+        }
+      },
+      "warmupProfile": {
+        "t": 143285.79999995232,
+        "frameDt": 750.5999999999767,
+        "parts": {
+          "perf.raf.other": 683.8999996185303,
+          "pulse.service": 0.09999990463256836,
+          "zoom.reflow": 0,
+          "anchor": 0.6000001430511475,
+          "chain.markActive": 0,
+          "chain.sequencer": 0.19999980926513672,
+          "perf.raf.scheduler": 0.8999998569488525,
+          "perf.raf.main": 1,
+          "perf.raf.loopgrid": 0,
+          "drawgrid.prep.visibility": 0,
+          "drawgrid.prep.camera": 0,
+          "drawgrid.prep.adaptive": 0,
+          "drawgrid.prep.overlayGate": 0.09999990463256836,
+          "drawgrid.render.prep": 0.09999990463256836,
+          "drawgrid.render.particles": 0,
+          "drawgrid.ensureSize": 0,
+          "drawgrid.update.particles": 0,
+          "drawgrid.grid.blit": 0.7000000476837158,
+          "drawgrid.draw.grid": 0.40000009536743164,
+          "drawgrid.nodes.layout": 0.2999997138977051,
+          "drawgrid.nodes.cacheBlit": 0,
+          "drawgrid.nodes.blocks.blit": 0.40000033378601074,
+          "drawgrid.nodes.flash": 0.40000033378601074,
+          "drawgrid.nodes.tutorial": 0.10000014305114746,
+          "drawgrid.draw.nodes": 0.2999999523162842,
+          "drawgrid.update": 0,
+          "drawgrid.draw": 0.7000000476837158,
+          "drawgrid.frontSwap": 0,
+          "drawgrid.ui.backSync": 0.19999980926513672,
+          "drawgrid.ui.clear": 0,
+          "drawgrid.ui.refresh": 0.19999980926513672,
+          "drawgrid.dom.playing": 0,
+          "drawgrid.overlay.clear": 0,
+          "drawgrid.overlay.strokes.colorized": 0,
+          "drawgrid.overlay.strokes.special": 0,
+          "drawgrid.overlay.strokes": 0.40000009536743164,
+          "drawgrid.overlay.core": 0.40000009536743164,
+          "drawgrid.overlay.flash.pass": 0.40000009536743164,
+          "drawgrid.frame.total": 1.9999995231628418,
+          "drawgrid.playhead.headerSweepVisual": 0,
+          "drawgrid.overlay.playhead": 0.3000001907348633,
+          "drawgrid.composite.base": 1.3000006675720215,
+          "drawgrid.composite.base.blit": 0.7999999523162842,
+          "drawgrid.composite.final": 716.599999666214,
+          "drawgrid.draw.composite": 247.50000047683716,
+          "perf.raf.drawgrid": 499.80000019073486,
+          "drawgrid.overlay.cellFlashes": 0.09999990463256836,
+          "drawgrid.overlay.toggles": 0,
+          "drawgrid.overlay.noteToggles": 0,
+          "drawgrid.paint.redraw": 978.5999999046326,
+          "perf.worldToTranslate": 0,
+          "perf.gesture.pan": 0,
+          "drawgrid.resize": 0,
+          "drawgrid.grid.cache": 0.20000004768371582,
+          "drawgrid.layout": 220.00000023841858,
+          "drawgrid.nodes.connections": 0,
+          "drawgrid.nodes.circles": 0.5000002384185791,
+          "drawgrid.nodes.draw": 3.6000003814697266,
+          "drawgrid.nodes.blocks.build": 0.4999995231628418,
+          "perf.warmup": 0.001,
+          "script": 718.4000000953674,
+          "perf.raf.benchmark": 718.4000000953674,
+          "frame.nonScript": 32.199999904609285
+        },
+        "workMs": 718.4000000953674,
+        "idleMs": 32.199999904609285
+      },
+      "frameProfileWorst": {
+        "frameDt": 1668,
+        "workMs": 0,
+        "idleMs": 1668,
+        "memory": {
+          "used": 26552256,
+          "total": 35214992,
+          "limit": 4294967296
+        },
+        "parts": [
+          {
+            "name": "frame.nonScript",
+            "ms": 1668
+          },
+          {
+            "name": "unattributed",
+            "ms": 912.0999991893768
+          },
+          {
+            "name": "perf.raf.drawgrid",
+            "ms": 435.00000047683716
+          },
+          {
+            "name": "drawgrid.draw.composite",
+            "ms": 209.90000009536743
+          },
+          {
+            "name": "drawgrid.composite.final",
+            "ms": 96
+          },
+          {
+            "name": "drawgrid.overlay.playhead",
+            "ms": 5.299999952316284
+          },
+          {
+            "name": "drawgrid.frame.total",
+            "ms": 2.1000001430511475
+          },
+          {
+            "name": "perf.raf.main",
+            "ms": 1.1000001430511475
+          }
+        ]
+      },
+      "sceneMeta": {
+        "toys": 6,
+        "chainMarkers": 0,
+        "cam": null,
+        "toyTypes": {
+          "drawgrid": 6
+        },
+        "camBounds": {
+          "selector": ".toy-panel",
+          "minX": -1914.82,
+          "minY": -779.859,
+          "maxX": 867.1767,
+          "maxY": 1258.141,
+          "centerX": -523.82165,
+          "centerY": 239.14100000000002,
+          "startX": 1698.2150111220885,
+          "startY": 444.57308920232526,
+          "panRadius": 866.15
+        }
+      },
+      "particleToggles": {
+        "skipUpdate": false,
+        "skipDraw": false,
+        "budgetMul": 1,
+        "freezeUnfocusedDuringGesture": false,
+        "logFreeze": false
+      },
+      "particleTempPatch": null,
+      "playing": true,
+      "flags": {
+        "traceCanvasResize": true,
+        "traceDomInRaf": false,
+        "disableLoopgridRender": false,
+        "disableChains": false,
+        "disableTapDots": false,
+        "disableOverlays": false,
+        "disableOverlayStrokes": false,
+        "disableOverlayCore": false,
+        "dgDisableParticles": false,
+        "disablePulses": false,
+        "freezeAllUnfocused": false,
+        "loopgridGestureRenderMod": 1,
+        "loopgridChainCache": false,
+        "noPaint": false,
+        "noPaintActive": false,
+        "paintOnlyActive": false,
+        "noDomUpdates": false,
+        "disableChainUi": false,
+        "traceMarks": false,
+        "tapDotsSim": false,
+        "playheadSeparateCanvas": true,
+        "runTag": "P3fFocus"
+      },
+      "gestureSkipCount": 0,
+      "trace": {
+        "total": 109,
+        "tail": [
+          {
+            "t": 139846.19999980927,
+            "kind": "FG.dpr",
+            "payload": {
+              "tag": "field-generic",
+              "id": "drawgrid-particles",
+              "cssW": 1,
+              "cssH": 1,
+              "dpr": 1,
+              "backingW": 2,
+              "backingH": 2,
+              "effDprW": 2,
+              "effDprH": 2
+            }
+          },
+          {
+            "t": 139847.89999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:skip-not-ready",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 0,
+                "y": 0,
+                "w": 0,
+                "h": 0
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "panelId": "drawgrid-1769509697884-iigq7w"
+            }
+          },
+          {
+            "t": 139852.39999985695,
+            "kind": "FG.dpr",
+            "payload": {
+              "tag": "field-generic",
+              "id": "drawgrid-particles",
+              "cssW": 1,
+              "cssH": 1,
+              "dpr": 1,
+              "backingW": 2,
+              "backingH": 2,
+              "effDprW": 2,
+              "effDprH": 2
+            }
+          },
+          {
+            "t": 139853.69999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:skip-not-ready",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 0,
+                "y": 0,
+                "w": 0,
+                "h": 0
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 139857.29999995232,
+            "kind": "FG.dpr",
+            "payload": {
+              "tag": "field-generic",
+              "id": "drawgrid-particles",
+              "cssW": 1,
+              "cssH": 1,
+              "dpr": 1,
+              "backingW": 2,
+              "backingH": 2,
+              "effDprW": 2,
+              "effDprH": 2
+            }
+          },
+          {
+            "t": 139858.5,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:skip-not-ready",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 0,
+                "y": 0,
+                "w": 0,
+                "h": 0
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 139861.29999995232,
+            "kind": "FG.dpr",
+            "payload": {
+              "tag": "field-generic",
+              "id": "drawgrid-particles",
+              "cssW": 1,
+              "cssH": 1,
+              "dpr": 1,
+              "backingW": 2,
+              "backingH": 2,
+              "effDprW": 2,
+              "effDprH": 2
+            }
+          },
+          {
+            "t": 139862.5,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:skip-not-ready",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 0,
+                "y": 0,
+                "w": 0,
+                "h": 0
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 139865.5,
+            "kind": "FG.dpr",
+            "payload": {
+              "tag": "field-generic",
+              "id": "drawgrid-particles",
+              "cssW": 1,
+              "cssH": 1,
+              "dpr": 1,
+              "backingW": 2,
+              "backingH": 2,
+              "effDprW": 2,
+              "effDprH": 2
+            }
+          },
+          {
+            "t": 139866.79999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:skip-not-ready",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 0,
+                "y": 0,
+                "w": 0,
+                "h": 0
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 139871.09999990463,
+            "kind": "FG.dpr",
+            "payload": {
+              "tag": "field-generic",
+              "id": "drawgrid-particles",
+              "cssW": 1,
+              "cssH": 1,
+              "dpr": 1,
+              "backingW": 2,
+              "backingH": 2,
+              "effDprW": 2,
+              "effDprH": 2
+            }
+          },
+          {
+            "t": 139872.29999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:skip-not-ready",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 0,
+                "y": 0,
+                "w": 0,
+                "h": 0
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 139944.39999985695,
+            "kind": "DG.dpr",
+            "payload": {
+              "tag": "resizeSurfacesFor",
+              "cssW": 798,
+              "cssH": 599,
+              "paintDpr": 1,
+              "surfaces": {
+                "front": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "back": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "playhead": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "gridBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "nodesBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "flashBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "ghostBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "tutorialBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                }
+              },
+              "extra": {
+                "reason": "layout:paintDpr",
+                "nextCssW": 798,
+                "nextCssH": 599,
+                "nextDpr": 1,
+                "paintDpr": 1,
+                "targetW": 798,
+                "targetH": 600,
+                "sizeChanged": true,
+                "dprChanged": true
+              }
+            }
+          },
+          {
+            "t": 140085.69999980927,
+            "kind": "DG.dpr",
+            "payload": {
+              "tag": "resizeSurfacesFor",
+              "cssW": 798,
+              "cssH": 599,
+              "paintDpr": 1,
+              "surfaces": {
+                "front": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "back": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "playhead": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "gridBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "nodesBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "flashBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "ghostBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "tutorialBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                }
+              },
+              "extra": {
+                "reason": "layout:paintDpr",
+                "nextCssW": 798,
+                "nextCssH": 599,
+                "nextDpr": 1,
+                "paintDpr": 1,
+                "targetW": 798,
+                "targetH": 600,
+                "sizeChanged": true,
+                "dprChanged": true
+              }
+            }
+          },
+          {
+            "t": 140101.59999990463,
+            "kind": "DG.dpr",
+            "payload": {
+              "tag": "resizeSurfacesFor",
+              "cssW": 798,
+              "cssH": 599,
+              "paintDpr": 1,
+              "surfaces": {
+                "front": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "back": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "playhead": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "gridBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "nodesBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "flashBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "ghostBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "tutorialBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                }
+              },
+              "extra": {
+                "reason": "layout:paintDpr",
+                "nextCssW": 798,
+                "nextCssH": 599,
+                "nextDpr": 1,
+                "paintDpr": 1,
+                "targetW": 798,
+                "targetH": 600,
+                "sizeChanged": true,
+                "dprChanged": true
+              }
+            }
+          },
+          {
+            "t": 140111.09999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "gridBack-sample",
+              "cssW": 798,
+              "cssH": 599,
+              "gridHasPainted": true,
+              "baseDirty": true,
+              "sample": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 51,
+                "px": 32,
+                "py": 32
+              },
+              "sampleX": 32,
+              "sampleY": 32,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 140118.19999980927,
+            "kind": "DG.dpr",
+            "payload": {
+              "tag": "resizeSurfacesFor",
+              "cssW": 798,
+              "cssH": 599,
+              "paintDpr": 1,
+              "surfaces": {
+                "front": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "back": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "playhead": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "gridBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "nodesBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "flashBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "ghostBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "tutorialBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                }
+              },
+              "extra": {
+                "reason": "layout:paintDpr",
+                "nextCssW": 798,
+                "nextCssH": 599,
+                "nextDpr": 1,
+                "paintDpr": 1,
+                "targetW": 798,
+                "targetH": 600,
+                "sizeChanged": true,
+                "dprChanged": true
+              }
+            }
+          },
+          {
+            "t": 140127.89999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "gridBack-sample",
+              "cssW": 798,
+              "cssH": 599,
+              "gridHasPainted": true,
+              "baseDirty": true,
+              "sample": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 51,
+                "px": 32,
+                "py": 32
+              },
+              "sampleX": 32,
+              "sampleY": 32,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 140132.79999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "layout:measure",
+              "force": true,
+              "bodyW": 798,
+              "bodyH": 599,
+              "baseW": 798,
+              "baseH": 599,
+              "newW": 798,
+              "newH": 599,
+              "wrapClientW": 798,
+              "wrapClientH": 599,
+              "panelRectW": 638.7191162109375,
+              "panelRectH": 611.9728393554688,
+              "toyScale": 1,
+              "zoomMode": "committing",
+              "zoomGestureActive": false,
+              "overview": false,
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 140134.39999985695,
+            "kind": "DG.dpr",
+            "payload": {
+              "tag": "resizeSurfacesFor",
+              "cssW": 798,
+              "cssH": 599,
+              "paintDpr": 1,
+              "surfaces": {
+                "front": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "back": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "playhead": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "gridBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "nodesBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "flashBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "ghostBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "tutorialBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                }
+              },
+              "extra": {
+                "reason": "layout:paintDpr",
+                "nextCssW": 798,
+                "nextCssH": 599,
+                "nextDpr": 1,
+                "paintDpr": 1,
+                "targetW": 798,
+                "targetH": 600,
+                "sizeChanged": true,
+                "dprChanged": true
+              }
+            }
+          },
+          {
+            "t": 140147.59999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "layout:measure",
+              "force": true,
+              "bodyW": 798,
+              "bodyH": 599,
+              "baseW": 798,
+              "baseH": 599,
+              "newW": 798,
+              "newH": 599,
+              "wrapClientW": 798,
+              "wrapClientH": 599,
+              "panelRectW": 638.7191162109375,
+              "panelRectH": 611.9727783203125,
+              "toyScale": 1,
+              "zoomMode": "committing",
+              "zoomGestureActive": false,
+              "overview": false,
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 140148.69999980927,
+            "kind": "DG.dpr",
+            "payload": {
+              "tag": "resizeSurfacesFor",
+              "cssW": 798,
+              "cssH": 599,
+              "paintDpr": 1,
+              "surfaces": {
+                "front": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "back": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "playhead": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "gridBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "nodesBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "flashBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "ghostBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                },
+                "tutorialBack": {
+                  "w": 798,
+                  "h": 600,
+                  "effDprW": 1,
+                  "effDprH": 1.001669449081803
+                }
+              },
+              "extra": {
+                "reason": "layout:paintDpr",
+                "nextCssW": 798,
+                "nextCssH": 599,
+                "nextDpr": 1,
+                "paintDpr": 1,
+                "targetW": 798,
+                "targetH": 600,
+                "sizeChanged": true,
+                "dprChanged": true
+              }
+            }
+          },
+          {
+            "t": 140201.29999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2208972132|798x599",
+              "panelId": "drawgrid-1769509697884-iigq7w"
+            }
+          },
+          {
+            "t": 140232.19999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2208972132|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 140318.09999990463,
+            "kind": "FG.dpr",
+            "payload": {
+              "tag": "field-generic",
+              "id": "drawgrid-particles",
+              "cssW": 798,
+              "cssH": 599,
+              "dpr": 1,
+              "backingW": 798,
+              "backingH": 600,
+              "effDprW": 1,
+              "effDprH": 1.001669449081803
+            }
+          },
+          {
+            "t": 140322.29999995232,
+            "kind": "FG.dpr",
+            "payload": {
+              "tag": "field-generic",
+              "id": "drawgrid-particles",
+              "cssW": 798,
+              "cssH": 599,
+              "dpr": 1,
+              "backingW": 798,
+              "backingH": 600,
+              "effDprW": 1,
+              "effDprH": 1.001669449081803
+            }
+          },
+          {
+            "t": 140326.5,
+            "kind": "FG.dpr",
+            "payload": {
+              "tag": "field-generic",
+              "id": "drawgrid-particles",
+              "cssW": 798,
+              "cssH": 599,
+              "dpr": 1,
+              "backingW": 798,
+              "backingH": 600,
+              "effDprW": 1,
+              "effDprH": 1.001669449081803
+            }
+          },
+          {
+            "t": 140335.09999990463,
+            "kind": "FG.dpr",
+            "payload": {
+              "tag": "field-generic",
+              "id": "drawgrid-particles",
+              "cssW": 798,
+              "cssH": 599,
+              "dpr": 1,
+              "backingW": 798,
+              "backingH": 600,
+              "effDprW": 1,
+              "effDprH": 1.001669449081803
+            }
+          },
+          {
+            "t": 140340.79999995232,
+            "kind": "FG.dpr",
+            "payload": {
+              "tag": "field-generic",
+              "id": "drawgrid-particles",
+              "cssW": 798,
+              "cssH": 599,
+              "dpr": 1,
+              "backingW": 798,
+              "backingH": 600,
+              "effDprW": 1,
+              "effDprH": 1.001669449081803
+            }
+          },
+          {
+            "t": 140345.39999985695,
+            "kind": "FG.dpr",
+            "payload": {
+              "tag": "field-generic",
+              "id": "drawgrid-particles",
+              "cssW": 798,
+              "cssH": 599,
+              "dpr": 1,
+              "backingW": 798,
+              "backingH": 600,
+              "effDprW": 1,
+              "effDprH": 1.001669449081803
+            }
+          },
+          {
+            "t": 140368.5,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3435385100|798x599",
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 140401.29999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 140417.59999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2208972132|798x599",
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 140423.69999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2208972132|798x599",
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 140495.59999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2208972132|798x599",
+              "panelId": "drawgrid-1769509697884-iigq7w"
+            }
+          },
+          {
+            "t": 140521.79999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3564932968|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 140666,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 140668.29999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3435385100|798x599",
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 140673.69999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "gridBack-sample",
+              "cssW": 798,
+              "cssH": 599,
+              "gridHasPainted": true,
+              "baseDirty": true,
+              "sample": {
+                "r": 53,
+                "g": 60,
+                "b": 92,
+                "a": 72,
+                "px": 32,
+                "py": 32
+              },
+              "sampleX": 32,
+              "sampleY": 32,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 140753.79999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2850425076|798x599",
+              "panelId": "drawgrid-1769509697884-iigq7w"
+            }
+          },
+          {
+            "t": 140788.09999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3564932968|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 140840,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2309646656|798x599",
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 140923.69999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "1978915447|798x599",
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 140941.29999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 140943.59999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3435385100|798x599",
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 142541.19999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2850425076|798x599",
+              "panelId": "drawgrid-1769509697884-iigq7w"
+            }
+          },
+          {
+            "t": 142658.69999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 142776.59999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3435385100|798x599",
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 142910,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3564932968|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 143047.79999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2309646656|798x599",
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 143158.09999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "1978915447|798x599",
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 143287.09999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2850425076|798x599",
+              "panelId": "drawgrid-1769509697884-iigq7w"
+            }
+          },
+          {
+            "t": 143337.19999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 143370.19999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3435385100|798x599",
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 143420.09999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3564932968|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 143453.59999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2309646656|798x599",
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 143487,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "1978915447|798x599",
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 143537.69999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2850425076|798x599",
+              "panelId": "drawgrid-1769509697884-iigq7w"
+            }
+          },
+          {
+            "t": 143638.29999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 143754.89999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3435385100|798x599",
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 143871.79999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3564932968|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 143988.59999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2309646656|798x599",
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 144105.29999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "1978915447|798x599",
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 144221.39999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "layout:measure",
+              "force": true,
+              "bodyW": 798,
+              "bodyH": 599,
+              "baseW": 798,
+              "baseH": 599,
+              "newW": 798,
+              "newH": 599,
+              "wrapClientW": 798,
+              "wrapClientH": 599,
+              "panelRectW": 638.7191772460938,
+              "panelRectH": 611.9728393554688,
+              "toyScale": 1,
+              "zoomMode": "idle",
+              "zoomGestureActive": false,
+              "overview": false,
+              "panelId": "drawgrid-1769509697884-iigq7w"
+            }
+          },
+          {
+            "t": 144356,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "layout:measure",
+              "force": true,
+              "bodyW": 798,
+              "bodyH": 599,
+              "baseW": 798,
+              "baseH": 599,
+              "newW": 798,
+              "newH": 599,
+              "wrapClientW": 798,
+              "wrapClientH": 599,
+              "panelRectW": 638.7191162109375,
+              "panelRectH": 611.9727783203125,
+              "toyScale": 1,
+              "zoomMode": "idle",
+              "zoomGestureActive": false,
+              "overview": false,
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 144472.79999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "layout:measure",
+              "force": true,
+              "bodyW": 798,
+              "bodyH": 599,
+              "baseW": 798,
+              "baseH": 599,
+              "newW": 798,
+              "newH": 599,
+              "wrapClientW": 798,
+              "wrapClientH": 599,
+              "panelRectW": 638.7191162109375,
+              "panelRectH": 611.9727783203125,
+              "toyScale": 1,
+              "zoomMode": "idle",
+              "zoomGestureActive": false,
+              "overview": false,
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 144589.29999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "layout:measure",
+              "force": true,
+              "bodyW": 798,
+              "bodyH": 599,
+              "baseW": 798,
+              "baseH": 599,
+              "newW": 798,
+              "newH": 599,
+              "wrapClientW": 798,
+              "wrapClientH": 599,
+              "panelRectW": 638.7191772460938,
+              "panelRectH": 611.9727783203125,
+              "toyScale": 1,
+              "zoomMode": "idle",
+              "zoomGestureActive": false,
+              "overview": false,
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 144706.19999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "layout:measure",
+              "force": true,
+              "bodyW": 798,
+              "bodyH": 599,
+              "baseW": 798,
+              "baseH": 599,
+              "newW": 798,
+              "newH": 599,
+              "wrapClientW": 798,
+              "wrapClientH": 599,
+              "panelRectW": 638.7191162109375,
+              "panelRectH": 611.9727783203125,
+              "toyScale": 1,
+              "zoomMode": "idle",
+              "zoomGestureActive": false,
+              "overview": false,
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 144823,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "layout:measure",
+              "force": true,
+              "bodyW": 798,
+              "bodyH": 599,
+              "baseW": 798,
+              "baseH": 599,
+              "newW": 798,
+              "newH": 599,
+              "wrapClientW": 798,
+              "wrapClientH": 599,
+              "panelRectW": 638.7191162109375,
+              "panelRectH": 611.9727783203125,
+              "toyScale": 1,
+              "zoomMode": "idle",
+              "zoomGestureActive": false,
+              "overview": false,
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 144956.29999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2850425076|798x599",
+              "panelId": "drawgrid-1769509697884-iigq7w"
+            }
+          },
+          {
+            "t": 145008,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 145040.89999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3435385100|798x599",
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 145073.89999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3564932968|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 145107.19999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2309646656|798x599",
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 145140.39999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "1978915447|798x599",
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 145226.09999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "gridBack-sample",
+              "cssW": 798,
+              "cssH": 599,
+              "gridHasPainted": true,
+              "baseDirty": true,
+              "sample": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 51,
+                "px": 32,
+                "py": 32
+              },
+              "sampleX": 32,
+              "sampleY": 32,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "panelId": "drawgrid-1769509697884-iigq7w"
+            }
+          },
+          {
+            "t": 146021.19999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3564932968|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 146053,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2309646656|798x599",
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 146058.5,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "1978915447|798x599",
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 146061.09999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 146252.09999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3435385100|798x599",
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 146303.59999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3564932968|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 146318,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2309646656|798x599",
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 146321.29999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "1978915447|798x599",
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 146323.39999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 146838.69999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3564932968|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 146871.89999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2309646656|798x599",
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 146905.39999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "1978915447|798x599",
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 146907.79999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 146914.5,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3435385100|798x599",
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 146916.39999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2850425076|798x599",
+              "panelId": "drawgrid-1769509697884-iigq7w"
+            }
+          },
+          {
+            "t": 151827.19999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 151887.5,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3435385100|798x599",
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 151897.39999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2850425076|798x599",
+              "panelId": "drawgrid-1769509697884-iigq7w"
+            }
+          },
+          {
+            "t": 151899.39999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3564932968|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 151901.5,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "1978915447|798x599",
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 151903.5,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2309646656|798x599",
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 154206.29999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 154263.29999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3435385100|798x599",
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 154295.19999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3564932968|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 154329.19999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "1978915447|798x599",
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 154362.09999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2309646656|798x599",
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 154411.89999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "gridBack-sample",
+              "cssW": 798,
+              "cssH": 599,
+              "gridHasPainted": true,
+              "baseDirty": true,
+              "sample": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 51,
+                "px": 32,
+                "py": 32
+              },
+              "sampleX": 32,
+              "sampleY": 32,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "panelId": "drawgrid-1769509697884-iigq7w"
+            }
+          },
+          {
+            "t": 161233.79999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 161252,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3435385100|798x599",
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 161254.59999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3564932968|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 161256.89999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "1978915447|798x599",
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 161259.19999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2309646656|798x599",
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 161261.5,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2850425076|798x599",
+              "panelId": "drawgrid-1769509697884-iigq7w"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "label": "P3f_focus_drawgrid_playing_panzoom_rand_once_anchor_on__P3fFocus",
+      "durationMs": 26000,
+      "warmupMs": 1200,
+      "createdAt": "2026-01-27T10:29:13.256Z",
+      "samples": 1254,
+      "frameMs": {
+        "avg": 19.79314194577353,
+        "p50": 16.70000000001164,
+        "p95": 33.39999999999418,
+        "p99": 66.70000000001164,
+        "worst": 250.39999999999418
+      },
+      "counts": {
+        "over16ms": 670,
+        "over33ms": 105,
+        "over50ms": 28
+      },
+      "pulseCount": 342,
+      "outlineSyncCount": 101,
+      "warmupCount": 1,
+      "warmupTs": 1769509728186,
+      "frameProfile": {
+        "samples": 51,
+        "parts": {
+          "perf.raf.other": {
+            "totalMs": 78.50000095367432,
+            "avgMs": 1.5392157049740063
+          },
+          "pulse.service": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "zoom.reflow": {
+            "totalMs": 0.10000014305114746,
+            "avgMs": 0.0019607871186499504
+          },
+          "anchor": {
+            "totalMs": 23.09999990463257,
+            "avgMs": 0.4529411746006386
+          },
+          "chain.markActive": {
+            "totalMs": 0.2999999523162842,
+            "avgMs": 0.005882352006201651
+          },
+          "chain.sequencer": {
+            "totalMs": 4.59999942779541,
+            "avgMs": 0.09019606721167471
+          },
+          "perf.raf.scheduler": {
+            "totalMs": 31.200000286102295,
+            "avgMs": 0.6117647114922019
+          },
+          "perf.raf.main": {
+            "totalMs": 31.50000023841858,
+            "avgMs": 0.6176470634984035
+          },
+          "perf.raf.loopgrid": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.prep.visibility": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.prep.camera": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.prep.adaptive": {
+            "totalMs": 8.100000143051147,
+            "avgMs": 0.15882353221668916
+          },
+          "drawgrid.prep.overlayGate": {
+            "totalMs": 0.5999999046325684,
+            "avgMs": 0.011764704012403301
+          },
+          "drawgrid.render.prep": {
+            "totalMs": 17.600000858306885,
+            "avgMs": 0.345098056045233
+          },
+          "drawgrid.render.particles": {
+            "totalMs": 0.3000004291534424,
+            "avgMs": 0.00588236135594985
+          },
+          "drawgrid.ensureSize": {
+            "totalMs": 0.40000009536743164,
+            "avgMs": 0.0078431391248516
+          },
+          "drawgrid.update.particles": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.grid.blit": {
+            "totalMs": 1.3999996185302734,
+            "avgMs": 0.027450972912358304
+          },
+          "drawgrid.draw.grid": {
+            "totalMs": 2.499999761581421,
+            "avgMs": 0.049019603168263155
+          },
+          "drawgrid.nodes.layout": {
+            "totalMs": 2.499999523162842,
+            "avgMs": 0.049019598493389056
+          },
+          "drawgrid.nodes.cacheBlit": {
+            "totalMs": 2.1999990940093994,
+            "avgMs": 0.0431372371374392
+          },
+          "drawgrid.nodes.blocks.blit": {
+            "totalMs": 0.4999997615814209,
+            "avgMs": 0.00980391689375335
+          },
+          "drawgrid.nodes.flash": {
+            "totalMs": 2.1999998092651367,
+            "avgMs": 0.043137251162061505
+          },
+          "drawgrid.nodes.tutorial": {
+            "totalMs": 1.500000238418579,
+            "avgMs": 0.02941176938075645
+          },
+          "drawgrid.draw.nodes": {
+            "totalMs": 2.1999998092651367,
+            "avgMs": 0.043137251162061505
+          },
+          "drawgrid.update": {
+            "totalMs": 0.2999999523162842,
+            "avgMs": 0.005882352006201651
+          },
+          "drawgrid.draw": {
+            "totalMs": 4.699999570846558,
+            "avgMs": 0.09215685433032465
+          },
+          "drawgrid.frontSwap": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.ui.backSync": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.ui.clear": {
+            "totalMs": 0.2999997138977051,
+            "avgMs": 0.005882347331327551
+          },
+          "drawgrid.ui.refresh": {
+            "totalMs": 0.39999985694885254,
+            "avgMs": 0.007843134449977501
+          },
+          "drawgrid.dom.playing": {
+            "totalMs": 0.09999990463256836,
+            "avgMs": 0.00196078244377585
+          },
+          "drawgrid.frame.total": {
+            "totalMs": 35.79999852180481,
+            "avgMs": 0.7019607553295061
+          },
+          "drawgrid.composite.base": {
+            "totalMs": 1.9000000953674316,
+            "avgMs": 0.03725490383073395
+          },
+          "drawgrid.composite.base.blit": {
+            "totalMs": 1.3999998569488525,
+            "avgMs": 0.027450977587232403
+          },
+          "drawgrid.composite.final": {
+            "totalMs": 298.60000014305115,
+            "avgMs": 5.8549019635892385
+          },
+          "drawgrid.draw.composite": {
+            "totalMs": 244.29999995231628,
+            "avgMs": 4.790196077496398
+          },
+          "perf.raf.drawgrid": {
+            "totalMs": 565.2999975681305,
+            "avgMs": 11.084313677806481
+          },
+          "drawgrid.paint.redraw": {
+            "totalMs": 232.70000004768372,
+            "avgMs": 4.56274509897419
+          },
+          "script": {
+            "totalMs": 283.39999985694885,
+            "avgMs": 5.556862742293115
+          },
+          "perf.raf.benchmark": {
+            "totalMs": 284.2999997138977,
+            "avgMs": 5.57450979831172
+          },
+          "frame.nonScript": {
+            "totalMs": 3735.400000047637,
+            "avgMs": 73.24313725583602
+          },
+          "unattributed": {
+            "totalMs": 3013.699999809207,
+            "avgMs": 59.09215685900406
+          },
+          "perf.raf.zoomTick": {
+            "totalMs": 7.199999570846558,
+            "avgMs": 0.14117646217346191
+          },
+          "perf.worldToTranslate": {
+            "totalMs": 0.10000014305114746,
+            "avgMs": 0.0019607871186499504
+          },
+          "perf.gesture.pan": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "chain.draw": {
+            "totalMs": 4.800000905990601,
+            "avgMs": 0.0941176648233451
+          },
+          "drawgrid.resize": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.grid.cache": {
+            "totalMs": 0.3000001907348633,
+            "avgMs": 0.0058823566810757505
+          },
+          "drawgrid.layout": {
+            "totalMs": 90.60000014305115,
+            "avgMs": 1.7764705910402185
+          },
+          "drawgrid.nodes.connections": {
+            "totalMs": 0.10000014305114746,
+            "avgMs": 0.0019607871186499504
+          },
+          "drawgrid.nodes.circles": {
+            "totalMs": 0.09999990463256836,
+            "avgMs": 0.00196078244377585
+          },
+          "drawgrid.nodes.draw": {
+            "totalMs": 2.5,
+            "avgMs": 0.049019607843137254
+          },
+          "drawgrid.nodes.blocks.build": {
+            "totalMs": 0.5000002384185791,
+            "avgMs": 0.009803926243501552
+          },
+          "perf.warmup": {
+            "totalMs": 0.001,
+            "avgMs": 0.000019607843137254903
+          },
+          "drawgrid.update.particles.skipped": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "perf.raf.outlineSync": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "perf.gesture.zoom": {
+            "totalMs": 0.40000033378601074,
+            "avgMs": 0.007843143799725701
+          }
+        },
+        "work": {
+          "totalMs": 283.4999997615814,
+          "avgMs": 5.558823524736891
+        },
+        "idle": {
+          "totalMs": 3735.3000001430046,
+          "avgMs": 73.24117647339224
+        }
+      },
+      "warmupProfile": {
+        "t": 169810.89999985695,
+        "frameDt": 50.10000000000582,
+        "parts": {
+          "perf.raf.other": 0.5999999046325684,
+          "pulse.service": 0,
+          "zoom.reflow": 0,
+          "anchor": 0.40000009536743164,
+          "chain.markActive": 0,
+          "chain.sequencer": 0,
+          "perf.raf.scheduler": 0.40000009536743164,
+          "perf.raf.main": 0.40000009536743164,
+          "perf.raf.loopgrid": 0,
+          "drawgrid.prep.visibility": 0,
+          "drawgrid.prep.camera": 0,
+          "drawgrid.prep.adaptive": 0,
+          "drawgrid.prep.overlayGate": 0.09999990463256836,
+          "drawgrid.render.prep": 0.19999980926513672,
+          "drawgrid.render.particles": 0.10000014305114746,
+          "drawgrid.ensureSize": 0,
+          "drawgrid.update.particles": 0,
+          "drawgrid.grid.blit": 0.10000014305114746,
+          "drawgrid.draw.grid": 0.40000009536743164,
+          "drawgrid.nodes.layout": 0,
+          "drawgrid.nodes.cacheBlit": 0.10000014305114746,
+          "drawgrid.nodes.blocks.blit": 0,
+          "drawgrid.nodes.flash": 0.20000004768371582,
+          "drawgrid.nodes.tutorial": 0.19999980926513672,
+          "drawgrid.draw.nodes": 0.40000033378601074,
+          "drawgrid.update": 0,
+          "drawgrid.draw": 0.8000004291534424,
+          "drawgrid.ui.refresh": 0,
+          "drawgrid.dom.playing": 0,
+          "drawgrid.frame.total": 1.200000286102295,
+          "drawgrid.composite.base": 0.7000002861022949,
+          "drawgrid.composite.base.blit": 0.40000009536743164,
+          "drawgrid.composite.final": 172.40000009536743,
+          "drawgrid.draw.composite": 46.69999980926514,
+          "perf.raf.drawgrid": 95.90000009536743,
+          "chain.draw": 0,
+          "perf.raf.zoomTick": 0.20000004768371582,
+          "perf.worldToTranslate": 0,
+          "perf.gesture.pan": 0,
+          "drawgrid.resize": 0,
+          "drawgrid.grid.cache": 0.3000001907348633,
+          "drawgrid.layout": 90.60000014305115,
+          "drawgrid.nodes.connections": 0.10000014305114746,
+          "drawgrid.nodes.circles": 0.09999990463256836,
+          "drawgrid.nodes.draw": 2.5,
+          "drawgrid.nodes.blocks.build": 0.5000002384185791,
+          "drawgrid.paint.redraw": 191.39999985694885,
+          "perf.warmup": 0.001,
+          "script": 282.09999990463257,
+          "perf.raf.benchmark": 282.2000000476837
+        },
+        "workMs": 282.09999990463257,
+        "idleMs": 0
+      },
+      "frameProfileWorst": {
+        "frameDt": 350.29999999998836,
+        "workMs": 0,
+        "idleMs": 350.29999999998836,
+        "memory": {
+          "used": 26249825,
+          "total": 42292717,
+          "limit": 4294967296
+        },
+        "parts": [
+          {
+            "name": "frame.nonScript",
+            "ms": 350.29999999998836
+          },
+          {
+            "name": "unattributed",
+            "ms": 203.49999814032344
+          },
+          {
+            "name": "perf.raf.drawgrid",
+            "ms": 80.50000047683716
+          },
+          {
+            "name": "drawgrid.draw.composite",
+            "ms": 31.90000033378601
+          },
+          {
+            "name": "drawgrid.composite.final",
+            "ms": 12.300000429153442
+          },
+          {
+            "name": "drawgrid.frame.total",
+            "ms": 8.299999952316284
+          },
+          {
+            "name": "drawgrid.render.prep",
+            "ms": 6.799999952316284
+          },
+          {
+            "name": "drawgrid.prep.adaptive",
+            "ms": 1.5
+          }
+        ]
+      },
+      "sceneMeta": {
+        "toys": 6,
+        "chainMarkers": 0,
+        "cam": null,
+        "toyTypes": {
+          "drawgrid": 6
+        },
+        "camBounds": {
+          "selector": ".toy-panel",
+          "minX": -1914.82,
+          "minY": -779.859,
+          "maxX": 867.1767,
+          "maxY": 1258.141,
+          "centerX": -523.82165,
+          "centerY": 239.14100000000002,
+          "startX": 1698.8373328363593,
+          "startY": 444.2890658904315,
+          "panRadius": 866.15
+        }
+      },
+      "particleToggles": {
+        "skipUpdate": false,
+        "skipDraw": false,
+        "budgetMul": 1,
+        "freezeUnfocusedDuringGesture": false,
+        "logFreeze": false
+      },
+      "particleTempPatch": null,
+      "playing": true,
+      "flags": {
+        "traceCanvasResize": true,
+        "traceDomInRaf": false,
+        "disableLoopgridRender": false,
+        "disableChains": false,
+        "disableTapDots": false,
+        "disableOverlays": false,
+        "disableOverlayStrokes": false,
+        "disableOverlayCore": false,
+        "dgDisableParticles": false,
+        "disablePulses": false,
+        "freezeAllUnfocused": false,
+        "loopgridGestureRenderMod": 1,
+        "loopgridChainCache": false,
+        "noPaint": false,
+        "noPaintActive": false,
+        "paintOnlyActive": false,
+        "noDomUpdates": false,
+        "disableChainUi": false,
+        "traceMarks": false,
+        "tapDotsSim": false,
+        "playheadSeparateCanvas": true,
+        "runTag": "P3fFocus"
+      },
+      "gestureSkipCount": 0,
+      "trace": {
+        "total": 52,
+        "tail": [
+          {
+            "t": 169462.59999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2850425076|798x599",
+              "panelId": "drawgrid-1769509697884-iigq7w"
+            }
+          },
+          {
+            "t": 169495.5,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 169509.5,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3435385100|798x599",
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 169524.5,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3564932968|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 169542.59999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2309646656|798x599",
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 169563.79999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "1978915447|798x599",
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 169712.79999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2850425076|798x599",
+              "panelId": "drawgrid-1769509697884-iigq7w"
+            }
+          },
+          {
+            "t": 169774.19999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 169781,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3435385100|798x599",
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 169784.39999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3564932968|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 169793.59999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "gridBack-sample",
+              "cssW": 798,
+              "cssH": 599,
+              "gridHasPainted": true,
+              "baseDirty": true,
+              "sample": {
+                "r": 53,
+                "g": 60,
+                "b": 92,
+                "a": 72,
+                "px": 32,
+                "py": 32
+              },
+              "sampleX": 32,
+              "sampleY": 32,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 169848.19999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "1978915447|798x599",
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 170109.19999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "front-sample",
+              "cssW": 798,
+              "cssH": 599,
+              "gridHasPainted": true,
+              "baseDirty": false,
+              "sample": {
+                "r": 53,
+                "g": 60,
+                "b": 92,
+                "a": 72,
+                "px": 32,
+                "py": 32
+              },
+              "sampleX": 32,
+              "sampleY": 32,
+              "frontStyle": {
+                "display": "block",
+                "visibility": "visible",
+                "opacity": "1",
+                "transform": "matrix(1, 0, 0, 1, 0, 0)"
+              },
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 170166.69999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 170182.89999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3435385100|798x599",
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 170186.29999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3564932968|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 170195,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2309646656|798x599",
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 170202.89999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2850425076|798x599",
+              "panelId": "drawgrid-1769509697884-iigq7w"
+            }
+          },
+          {
+            "t": 172943.59999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3564932968|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 172967.89999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "1978915447|798x599",
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 172970.09999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2309646656|798x599",
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 172972.19999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 173171.5,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3435385100|798x599",
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 173215.5,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3564932968|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 173235.79999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "1978915447|798x599",
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 173238.19999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2309646656|798x599",
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 173240.79999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 173761.19999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3564932968|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 173794.29999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "1978915447|798x599",
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 173827.69999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2309646656|798x599",
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 173861.29999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 173910.89999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3435385100|798x599",
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 173944.29999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2850425076|798x599",
+              "panelId": "drawgrid-1769509697884-iigq7w"
+            }
+          },
+          {
+            "t": 178748.79999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 178787.39999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3435385100|798x599",
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 178798.19999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2850425076|798x599",
+              "panelId": "drawgrid-1769509697884-iigq7w"
+            }
+          },
+          {
+            "t": 178816.19999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3564932968|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 178818.29999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "1978915447|798x599",
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 178820.19999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2309646656|798x599",
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 181126.09999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 181189.69999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3435385100|798x599",
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 181219.19999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3564932968|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 181256.69999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "1978915447|798x599",
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 181284.59999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2309646656|798x599",
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 181333.89999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "gridBack-sample",
+              "cssW": 798,
+              "cssH": 599,
+              "gridHasPainted": true,
+              "baseDirty": true,
+              "sample": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 51,
+                "px": 32,
+                "py": 32
+              },
+              "sampleX": 32,
+              "sampleY": 32,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "panelId": "drawgrid-1769509697884-iigq7w"
+            }
+          },
+          {
+            "t": 188190.09999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 188215.79999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3435385100|798x599",
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 188218.59999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3564932968|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 188221.29999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "1978915447|798x599",
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 188226.69999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2309646656|798x599",
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 188229.5,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2850425076|798x599",
+              "panelId": "drawgrid-1769509697884-iigq7w"
+            }
+          },
+          {
+            "t": 188445.69999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "label": "P3f_focus_drawgrid_playing_panzoom_rand_once_anchor_on__P3fFocus",
+      "durationMs": 26000,
+      "warmupMs": 1200,
+      "createdAt": "2026-01-27T10:29:40.178Z",
+      "samples": 1163,
+      "frameMs": {
+        "avg": 21.499656061908837,
+        "p50": 16.70000000001164,
+        "p95": 33.40000000002328,
+        "p99": 50.20000000001164,
+        "worst": 767.1999999999825
+      },
+      "counts": {
+        "over16ms": 666,
+        "over33ms": 177,
+        "over50ms": 27
+      },
+      "pulseCount": 323,
+      "outlineSyncCount": 110,
+      "warmupCount": 1,
+      "warmupTs": 1769509755925,
+      "frameProfile": {
+        "samples": 42,
+        "parts": {
+          "perf.raf.other": {
+            "totalMs": 314.099999666214,
+            "avgMs": 7.478571420624142
+          },
+          "pulse.service": {
+            "totalMs": 0.09999990463256836,
+            "avgMs": 0.0023809501102992465
+          },
+          "zoom.reflow": {
+            "totalMs": 0.20000004768371582,
+            "avgMs": 0.0047619058972313295
+          },
+          "anchor": {
+            "totalMs": 18,
+            "avgMs": 0.42857142857142855
+          },
+          "chain.markActive": {
+            "totalMs": 0.7999997138977051,
+            "avgMs": 0.019047612235659643
+          },
+          "chain.sequencer": {
+            "totalMs": 2.5000007152557373,
+            "avgMs": 0.05952382655370803
+          },
+          "perf.raf.scheduler": {
+            "totalMs": 23.799999952316284,
+            "avgMs": 0.5666666655313402
+          },
+          "perf.raf.main": {
+            "totalMs": 23.90000009536743,
+            "avgMs": 0.5690476213182721
+          },
+          "perf.raf.loopgrid": {
+            "totalMs": 0.40000033378601074,
+            "avgMs": 0.009523817471095495
+          },
+          "drawgrid.prep.visibility": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.prep.camera": {
+            "totalMs": 0.09999990463256836,
+            "avgMs": 0.0023809501102992465
+          },
+          "drawgrid.prep.adaptive": {
+            "totalMs": 1.1000008583068848,
+            "avgMs": 0.0261904966263544
+          },
+          "drawgrid.prep.overlayGate": {
+            "totalMs": 0.20000028610229492,
+            "avgMs": 0.004761911573864165
+          },
+          "drawgrid.render.prep": {
+            "totalMs": 4.200001239776611,
+            "avgMs": 0.10000002951849074
+          },
+          "drawgrid.render.particles": {
+            "totalMs": 0.09999990463256836,
+            "avgMs": 0.0023809501102992465
+          },
+          "drawgrid.ensureSize": {
+            "totalMs": 0.19999980926513672,
+            "avgMs": 0.004761900220598493
+          },
+          "drawgrid.update.particles.skipped": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.grid.blit": {
+            "totalMs": 1.4999995231628418,
+            "avgMs": 0.035714274361020044
+          },
+          "drawgrid.draw.grid": {
+            "totalMs": 2.3000001907348633,
+            "avgMs": 0.05476190930321103
+          },
+          "drawgrid.nodes.layout": {
+            "totalMs": 3.6999990940093994,
+            "avgMs": 0.08809521652403332
+          },
+          "drawgrid.nodes.cacheBlit": {
+            "totalMs": 1.8000009059906006,
+            "avgMs": 0.04285716442834763
+          },
+          "drawgrid.nodes.blocks.blit": {
+            "totalMs": 0.4999997615814209,
+            "avgMs": 0.011904756228129068
+          },
+          "drawgrid.nodes.flash": {
+            "totalMs": 2.1999998092651367,
+            "avgMs": 0.052380947839646114
+          },
+          "drawgrid.nodes.tutorial": {
+            "totalMs": 1.4000003337860107,
+            "avgMs": 0.0333333412806193
+          },
+          "drawgrid.draw.nodes": {
+            "totalMs": 3.799999475479126,
+            "avgMs": 0.09047617798759824
+          },
+          "drawgrid.update": {
+            "totalMs": 0.40000033378601074,
+            "avgMs": 0.009523817471095495
+          },
+          "drawgrid.draw": {
+            "totalMs": 6.099999666213989,
+            "avgMs": 0.14523808729080928
+          },
+          "drawgrid.frontSwap": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.ui.backSync": {
+            "totalMs": 0.20000004768371582,
+            "avgMs": 0.0047619058972313295
+          },
+          "drawgrid.ui.clear": {
+            "totalMs": 0.3000001907348633,
+            "avgMs": 0.007142861684163411
+          },
+          "drawgrid.ui.refresh": {
+            "totalMs": 0.7000002861022949,
+            "avgMs": 0.01666667347862607
+          },
+          "drawgrid.dom.playing": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.overlay.clear": {
+            "totalMs": 2.0999996662139893,
+            "avgMs": 0.04999999205271403
+          },
+          "drawgrid.overlay.strokes.colorized": {
+            "totalMs": 0.09999990463256836,
+            "avgMs": 0.0023809501102992465
+          },
+          "drawgrid.overlay.strokes.special": {
+            "totalMs": 4.199999094009399,
+            "avgMs": 0.09999997842879522
+          },
+          "drawgrid.overlay.strokes": {
+            "totalMs": 5.599998712539673,
+            "avgMs": 0.133333302679516
+          },
+          "drawgrid.overlay.core": {
+            "totalMs": 8.699998140335083,
+            "avgMs": 0.207142812865121
+          },
+          "drawgrid.overlay.flash.pass": {
+            "totalMs": 9.199997663497925,
+            "avgMs": 0.21904756341661727
+          },
+          "drawgrid.frame.total": {
+            "totalMs": 32.50000023841858,
+            "avgMs": 0.7738095294861567
+          },
+          "drawgrid.playhead.headerSweepVisual": {
+            "totalMs": 0.39999961853027344,
+            "avgMs": 0.009523800441196986
+          },
+          "drawgrid.playhead.spriteGet": {
+            "totalMs": 0.19999980926513672,
+            "avgMs": 0.004761900220598493
+          },
+          "drawgrid.playhead.drawImage": {
+            "totalMs": 0.09999990463256836,
+            "avgMs": 0.0023809501102992465
+          },
+          "drawgrid.overlay.playhead": {
+            "totalMs": 6.400000095367432,
+            "avgMs": 0.1523809546516055
+          },
+          "drawgrid.composite.base": {
+            "totalMs": 2.9000000953674316,
+            "avgMs": 0.06904762131827218
+          },
+          "drawgrid.composite.base.blit": {
+            "totalMs": 2.5,
+            "avgMs": 0.05952380952380952
+          },
+          "drawgrid.composite.final": {
+            "totalMs": 249.8000009059906,
+            "avgMs": 5.947619069190252
+          },
+          "drawgrid.draw.composite": {
+            "totalMs": 529.9999997615814,
+            "avgMs": 12.619047613370986
+          },
+          "perf.raf.drawgrid": {
+            "totalMs": 1154.5000007152557,
+            "avgMs": 27.48809525512514
+          },
+          "drawgrid.overlay.cellFlashes": {
+            "totalMs": 0.9000003337860107,
+            "avgMs": 0.021428579375857397
+          },
+          "drawgrid.overlay.toggles": {
+            "totalMs": 0.20000004768371582,
+            "avgMs": 0.0047619058972313295
+          },
+          "drawgrid.overlay.noteToggles": {
+            "totalMs": 0.3000001907348633,
+            "avgMs": 0.007142861684163411
+          },
+          "drawgrid.overlay.bursts": {
+            "totalMs": 6.1000001430511475,
+            "avgMs": 0.14523809864407494
+          },
+          "drawgrid.paint.redraw": {
+            "totalMs": 392.7999999523163,
+            "avgMs": 9.352380951245626
+          },
+          "perf.worldToTranslate": {
+            "totalMs": 0.09999990463256836,
+            "avgMs": 0.0023809501102992465
+          },
+          "perf.gesture.pan": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "drawgrid.resize": {
+            "totalMs": 0.09999990463256836,
+            "avgMs": 0.0023809501102992465
+          },
+          "drawgrid.grid.cache": {
+            "totalMs": 0.09999990463256836,
+            "avgMs": 0.0023809501102992465
+          },
+          "drawgrid.layout": {
+            "totalMs": 103.89999985694885,
+            "avgMs": 2.473809520403544
+          },
+          "drawgrid.nodes.connections": {
+            "totalMs": 0.20000028610229492,
+            "avgMs": 0.004761911573864165
+          },
+          "drawgrid.nodes.circles": {
+            "totalMs": 0.10000014305114746,
+            "avgMs": 0.0023809557869320826
+          },
+          "drawgrid.nodes.draw": {
+            "totalMs": 2.700000524520874,
+            "avgMs": 0.06428572677430652
+          },
+          "drawgrid.nodes.blocks.build": {
+            "totalMs": 0.20000004768371582,
+            "avgMs": 0.0047619058972313295
+          },
+          "perf.warmup": {
+            "totalMs": 0.001,
+            "avgMs": 0.00002380952380952381
+          },
+          "script": {
+            "totalMs": 300.5000002384186,
+            "avgMs": 7.154761910438538
+          },
+          "perf.raf.benchmark": {
+            "totalMs": 300.90000009536743,
+            "avgMs": 7.164285716556368
+          },
+          "frame.nonScript": {
+            "totalMs": 3569.899999761692,
+            "avgMs": 84.99761904194504
+          },
+          "perf.raf.zoomTick": {
+            "totalMs": 4.700000047683716,
+            "avgMs": 0.11190476304008848
+          },
+          "perf.raf.outlineSync": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "unattributed": {
+            "totalMs": 2142.2000065327447,
+            "avgMs": 51.00476206030345
+          },
+          "drawgrid.playhead.headerSweep": {
+            "totalMs": 0.09999990463256836,
+            "avgMs": 0.0023809501102992465
+          },
+          "chain.draw": {
+            "totalMs": 2.6000003814697266,
+            "avgMs": 0.061904770987374444
+          },
+          "perf.gesture.zoom": {
+            "totalMs": 0.39999985694885254,
+            "avgMs": 0.009523806117829822
+          }
+        },
+        "work": {
+          "totalMs": 300.60000014305115,
+          "avgMs": 7.157142860548837
+        },
+        "idle": {
+          "totalMs": 3569.7999998570594,
+          "avgMs": 84.99523809183475
+        }
+      },
+      "warmupProfile": {
+        "t": 197134.09999990463,
+        "frameDt": 750.6000000000058,
+        "parts": {
+          "perf.raf.other": 300.39999985694885,
+          "pulse.service": 0,
+          "zoom.reflow": 0.10000014305114746,
+          "anchor": 0.8000001907348633,
+          "chain.markActive": 0,
+          "chain.sequencer": 0.20000004768371582,
+          "perf.raf.scheduler": 1.2000000476837158,
+          "perf.raf.main": 1.2000000476837158,
+          "perf.raf.loopgrid": 0,
+          "drawgrid.prep.visibility": 0,
+          "drawgrid.prep.camera": 0,
+          "drawgrid.prep.adaptive": 0.20000028610229492,
+          "drawgrid.prep.overlayGate": 0,
+          "drawgrid.render.prep": 0.40000009536743164,
+          "drawgrid.render.particles": 0,
+          "drawgrid.ensureSize": 0,
+          "drawgrid.update.particles.skipped": 0,
+          "drawgrid.grid.blit": 0.4999995231628418,
+          "drawgrid.draw.grid": 0.4999997615814209,
+          "drawgrid.nodes.layout": 0.09999990463256836,
+          "drawgrid.nodes.cacheBlit": 0.09999990463256836,
+          "drawgrid.nodes.blocks.blit": 0,
+          "drawgrid.nodes.flash": 0.19999980926513672,
+          "drawgrid.nodes.tutorial": 0,
+          "drawgrid.draw.nodes": 0.09999990463256836,
+          "drawgrid.update": 0.10000014305114746,
+          "drawgrid.draw": 0.5999996662139893,
+          "drawgrid.frontSwap": 0,
+          "drawgrid.ui.backSync": 0.20000004768371582,
+          "drawgrid.ui.clear": 0.20000028610229492,
+          "drawgrid.ui.refresh": 0.5000004768371582,
+          "drawgrid.dom.playing": 0,
+          "drawgrid.overlay.clear": 0,
+          "drawgrid.overlay.strokes.colorized": 0,
+          "drawgrid.overlay.strokes.special": 0.20000004768371582,
+          "drawgrid.overlay.strokes": 0.20000004768371582,
+          "drawgrid.overlay.core": 0.20000004768371582,
+          "drawgrid.overlay.flash.pass": 0.20000004768371582,
+          "drawgrid.frame.total": 2.000000238418579,
+          "drawgrid.playhead.headerSweepVisual": 0,
+          "drawgrid.playhead.spriteGet": 0,
+          "drawgrid.playhead.drawImage": 0,
+          "drawgrid.overlay.playhead": 0.10000014305114746,
+          "drawgrid.composite.base": 1.6999998092651367,
+          "drawgrid.composite.base.blit": 0.8999993801116943,
+          "drawgrid.composite.final": 102.90000033378601,
+          "drawgrid.draw.composite": 143.7999997138977,
+          "perf.raf.drawgrid": 292.59999990463257,
+          "drawgrid.overlay.cellFlashes": 0.09999990463256836,
+          "drawgrid.overlay.toggles": 0,
+          "drawgrid.overlay.noteToggles": 0,
+          "drawgrid.overlay.bursts": 0.2999997138977051,
+          "drawgrid.paint.redraw": 392.7999999523163,
+          "perf.worldToTranslate": 0,
+          "perf.gesture.pan": 0,
+          "drawgrid.resize": 0.09999990463256836,
+          "drawgrid.grid.cache": 0.09999990463256836,
+          "drawgrid.layout": 103.89999985694885,
+          "drawgrid.nodes.connections": 0.20000028610229492,
+          "drawgrid.nodes.circles": 0.10000014305114746,
+          "drawgrid.nodes.draw": 2.700000524520874,
+          "drawgrid.nodes.blocks.build": 0.20000004768371582,
+          "perf.warmup": 0.001,
+          "script": 299.7000000476837,
+          "perf.raf.benchmark": 299.7000000476837,
+          "frame.nonScript": 450.8999999523221
+        },
+        "workMs": 299.7000000476837,
+        "idleMs": 450.8999999523221
+      },
+      "frameProfileWorst": {
+        "frameDt": 767.1999999999825,
+        "workMs": 0,
+        "idleMs": 767.1999999999825,
+        "memory": {
+          "used": 31287005,
+          "total": 45779581,
+          "limit": 4294967296
+        },
+        "parts": [
+          {
+            "name": "frame.nonScript",
+            "ms": 767.1999999999825
+          },
+          {
+            "name": "unattributed",
+            "ms": 671.8000001430337
+          },
+          {
+            "name": "perf.raf.drawgrid",
+            "ms": 55.80000019073486
+          },
+          {
+            "name": "drawgrid.draw.composite",
+            "ms": 25.399999856948853
+          },
+          {
+            "name": "drawgrid.composite.final",
+            "ms": 6.5
+          },
+          {
+            "name": "drawgrid.frame.total",
+            "ms": 1.4000003337860107
+          },
+          {
+            "name": "drawgrid.draw",
+            "ms": 0.7999997138977051
+          },
+          {
+            "name": "perf.raf.scheduler",
+            "ms": 0.5999999046325684
+          }
+        ]
+      },
+      "sceneMeta": {
+        "toys": 6,
+        "chainMarkers": 0,
+        "cam": null,
+        "toyTypes": {
+          "drawgrid": 6
+        },
+        "camBounds": {
+          "selector": ".toy-panel",
+          "minX": -1914.82,
+          "minY": -779.859,
+          "maxX": 867.1767,
+          "maxY": 1258.141,
+          "centerX": -523.82165,
+          "centerY": 239.14100000000002,
+          "startX": 1698.8511738800762,
+          "startY": 444.2822981945413,
+          "panRadius": 866.15
+        }
+      },
+      "particleToggles": {
+        "skipUpdate": false,
+        "skipDraw": false,
+        "budgetMul": 1,
+        "freezeUnfocusedDuringGesture": false,
+        "logFreeze": false
+      },
+      "particleTempPatch": null,
+      "playing": true,
+      "flags": {
+        "traceCanvasResize": true,
+        "traceDomInRaf": false,
+        "disableLoopgridRender": false,
+        "disableChains": false,
+        "disableTapDots": false,
+        "disableOverlays": false,
+        "disableOverlayStrokes": false,
+        "disableOverlayCore": false,
+        "dgDisableParticles": true,
+        "disablePulses": false,
+        "freezeAllUnfocused": false,
+        "loopgridGestureRenderMod": 1,
+        "loopgridChainCache": false,
+        "noPaint": false,
+        "noPaintActive": false,
+        "paintOnlyActive": false,
+        "noDomUpdates": false,
+        "disableChainUi": false,
+        "traceMarks": false,
+        "tapDotsSim": false,
+        "playheadSeparateCanvas": true,
+        "runTag": "P3fFocus"
+      },
+      "gestureSkipCount": 0,
+      "trace": {
+        "total": 59,
+        "tail": [
+          {
+            "t": 196386.09999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2850425076|798x599",
+              "panelId": "drawgrid-1769509697884-iigq7w"
+            }
+          },
+          {
+            "t": 196500.89999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 196617.59999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3435385100|798x599",
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 196734,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3564932968|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 196851.69999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2309646656|798x599",
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 196990.29999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "1978915447|798x599",
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 197135.5,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 197179.89999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3435385100|798x599",
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 197213.29999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3564932968|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 197246.69999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "gridBack-sample",
+              "cssW": 798,
+              "cssH": 599,
+              "gridHasPainted": true,
+              "baseDirty": true,
+              "sample": {
+                "r": 53,
+                "g": 60,
+                "b": 92,
+                "a": 72,
+                "px": 32,
+                "py": 32
+              },
+              "sampleX": 32,
+              "sampleY": 32,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 197248.29999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2309646656|798x599",
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 197265.09999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2850425076|798x599",
+              "panelId": "drawgrid-1769509697884-iigq7w"
+            }
+          },
+          {
+            "t": 197430,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "gridBack-sample",
+              "cssW": 798,
+              "cssH": 599,
+              "gridHasPainted": true,
+              "baseDirty": true,
+              "sample": {
+                "r": 53,
+                "g": 60,
+                "b": 92,
+                "a": 72,
+                "px": 32,
+                "py": 32
+              },
+              "sampleX": 32,
+              "sampleY": 32,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 197463.29999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "gridBack-sample",
+              "cssW": 798,
+              "cssH": 599,
+              "gridHasPainted": true,
+              "baseDirty": true,
+              "sample": {
+                "r": 53,
+                "g": 60,
+                "b": 92,
+                "a": 72,
+                "px": 32,
+                "py": 32
+              },
+              "sampleX": 32,
+              "sampleY": 32,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 197498.89999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "front-sample",
+              "cssW": 798,
+              "cssH": 599,
+              "gridHasPainted": true,
+              "baseDirty": false,
+              "sample": {
+                "r": 53,
+                "g": 60,
+                "b": 92,
+                "a": 72,
+                "px": 32,
+                "py": 32
+              },
+              "sampleX": 32,
+              "sampleY": 32,
+              "frontStyle": {
+                "display": "block",
+                "visibility": "visible",
+                "opacity": "1",
+                "transform": "matrix(1, 0, 0, 1, 0, 0)"
+              },
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 197532.79999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "1978915447|798x599",
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 197582.39999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "layout:measure",
+              "force": true,
+              "bodyW": 798,
+              "bodyH": 599,
+              "baseW": 798,
+              "baseH": 599,
+              "newW": 798,
+              "newH": 599,
+              "wrapClientW": 798,
+              "wrapClientH": 599,
+              "panelRectW": 639.687255859375,
+              "panelRectH": 612.900390625,
+              "toyScale": 1,
+              "zoomMode": "idle",
+              "zoomGestureActive": false,
+              "overview": false,
+              "panelId": "drawgrid-1769509697884-iigq7w"
+            }
+          },
+          {
+            "t": 197631.79999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "layout:measure",
+              "force": true,
+              "bodyW": 798,
+              "bodyH": 599,
+              "baseW": 798,
+              "baseH": 599,
+              "newW": 798,
+              "newH": 599,
+              "wrapClientW": 798,
+              "wrapClientH": 599,
+              "panelRectW": 639.687255859375,
+              "panelRectH": 612.9003295898438,
+              "toyScale": 1,
+              "zoomMode": "idle",
+              "zoomGestureActive": false,
+              "overview": false,
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 197681.89999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "layout:measure",
+              "force": true,
+              "bodyW": 798,
+              "bodyH": 599,
+              "baseW": 798,
+              "baseH": 599,
+              "newW": 798,
+              "newH": 599,
+              "wrapClientW": 798,
+              "wrapClientH": 599,
+              "panelRectW": 639.6873779296875,
+              "panelRectH": 612.9003295898438,
+              "toyScale": 1,
+              "zoomMode": "idle",
+              "zoomGestureActive": false,
+              "overview": false,
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 197731.79999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "layout:measure",
+              "force": true,
+              "bodyW": 798,
+              "bodyH": 599,
+              "baseW": 798,
+              "baseH": 599,
+              "newW": 798,
+              "newH": 599,
+              "wrapClientW": 798,
+              "wrapClientH": 599,
+              "panelRectW": 639.687255859375,
+              "panelRectH": 612.900390625,
+              "toyScale": 1,
+              "zoomMode": "idle",
+              "zoomGestureActive": false,
+              "overview": false,
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 197781.89999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "layout:measure",
+              "force": true,
+              "bodyW": 798,
+              "bodyH": 599,
+              "baseW": 798,
+              "baseH": 599,
+              "newW": 798,
+              "newH": 599,
+              "wrapClientW": 798,
+              "wrapClientH": 599,
+              "panelRectW": 639.687255859375,
+              "panelRectH": 612.900390625,
+              "toyScale": 1,
+              "zoomMode": "idle",
+              "zoomGestureActive": false,
+              "overview": false,
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 197831.39999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "layout:measure",
+              "force": true,
+              "bodyW": 798,
+              "bodyH": 599,
+              "baseW": 798,
+              "baseH": 599,
+              "newW": 798,
+              "newH": 599,
+              "wrapClientW": 798,
+              "wrapClientH": 599,
+              "panelRectW": 639.6873779296875,
+              "panelRectH": 612.900390625,
+              "toyScale": 1,
+              "zoomMode": "idle",
+              "zoomGestureActive": false,
+              "overview": false,
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 197899.29999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 197925,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2850425076|798x599",
+              "panelId": "drawgrid-1769509697884-iigq7w"
+            }
+          },
+          {
+            "t": 199865.79999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3564932968|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 199901.39999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "1978915447|798x599",
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 199907.39999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2309646656|798x599",
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 199909.79999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 200114.19999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3435385100|798x599",
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 200127.79999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3564932968|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 200182.79999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "1978915447|798x599",
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 200194.79999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2309646656|798x599",
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 200197.19999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 200685.29999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3564932968|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 200721.5,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "1978915447|798x599",
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 200737.19999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2309646656|798x599",
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 200740.29999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 200748.19999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3435385100|798x599",
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 200753.19999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2850425076|798x599",
+              "panelId": "drawgrid-1769509697884-iigq7w"
+            }
+          },
+          {
+            "t": 205688.19999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 205710.69999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3435385100|798x599",
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 205713.89999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2850425076|798x599",
+              "panelId": "drawgrid-1769509697884-iigq7w"
+            }
+          },
+          {
+            "t": 205741.59999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3564932968|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 205747.09999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "1978915447|798x599",
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 205753.89999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2309646656|798x599",
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 208039.5,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 208066.79999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3435385100|798x599",
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 208103.39999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3564932968|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 208124.59999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "1978915447|798x599",
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 208156.79999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2309646656|798x599",
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 208190,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2850425076|798x599",
+              "panelId": "drawgrid-1769509697884-iigq7w"
+            }
+          },
+          {
+            "t": 215095,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3751048696|798x599",
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 215129,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3435385100|798x599",
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          },
+          {
+            "t": 215161.69999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3564932968|798x599",
+              "panelId": "drawgrid-1769509697884-l482tp"
+            }
+          },
+          {
+            "t": 215164.19999980927,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "1978915447|798x599",
+              "panelId": "drawgrid-1769509697885-3ydftx"
+            }
+          },
+          {
+            "t": 215166.39999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2309646656|798x599",
+              "panelId": "drawgrid-1769509697885-tskd3s"
+            }
+          },
+          {
+            "t": 215168.59999990463,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "2850425076|798x599",
+              "panelId": "drawgrid-1769509697884-iigq7w"
+            }
+          },
+          {
+            "t": 215345.29999995232,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "gridBack-sample",
+              "cssW": 798,
+              "cssH": 599,
+              "gridHasPainted": true,
+              "baseDirty": true,
+              "sample": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 51,
+                "px": 32,
+                "py": 32
+              },
+              "sampleX": 32,
+              "sampleY": 32,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "panelId": "drawgrid-1769509697884-p1n39y"
+            }
+          },
+          {
+            "t": 215386.39999985695,
+            "kind": "DG.size-trace",
+            "payload": {
+              "event": "drawGrid:begin",
+              "cssW": 798,
+              "cssH": 599,
+              "gridArea": {
+                "x": 30,
+                "y": 30,
+                "w": 738,
+                "h": 539
+              },
+              "cw": 92.25,
+              "ch": 44.916666666666664,
+              "cacheKey": "3435385100|798x599",
+              "panelId": "drawgrid-1769509697884-o0uy4s"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
