@@ -105,8 +105,8 @@ window.__FIELD_PRESSURE_DPR_ENABLED ??= true;
 window.__FIELD_PRESSURE_DPR_START_MS ??= 20;
 window.__FIELD_PRESSURE_DPR_END_MS ??= 34;
 window.__FIELD_PRESSURE_DPR_MIN_MUL ??= 0.6;
-window.__FIELD_PRESSURE_DPR_EWMA_ALPHA ??= 0.12;
-window.__FIELD_PRESSURE_DPR_COOLDOWN_MS ??= 350;
+window.__FIELD_PRESSURE_DPR_EWMA_ALPHA ??= 0.07;
+window.__FIELD_PRESSURE_DPR_COOLDOWN_MS ??= 800;
 
 let __fieldPressureFrameMsEwma = null;
 let __fieldPressureDprMul = 1;
@@ -139,7 +139,7 @@ function __fieldUpdatePressureMulFromFrameMs(frameMs, nowTs) {
 
   const alpha = Number.isFinite(window.__FIELD_PRESSURE_DPR_EWMA_ALPHA)
     ? window.__FIELD_PRESSURE_DPR_EWMA_ALPHA
-    : (Number.isFinite(window.__DG_PRESSURE_DPR_EWMA_ALPHA) ? window.__DG_PRESSURE_DPR_EWMA_ALPHA : 0.12);
+    : (Number.isFinite(window.__DG_PRESSURE_DPR_EWMA_ALPHA) ? window.__DG_PRESSURE_DPR_EWMA_ALPHA : 0.07);
   __fieldPressureFrameMsEwma = (__fieldPressureFrameMsEwma == null)
     ? frameMs
     : (__fieldPressureFrameMsEwma * (1 - alpha) + frameMs * alpha);
@@ -147,7 +147,7 @@ function __fieldUpdatePressureMulFromFrameMs(frameMs, nowTs) {
   const targetMul = __fieldComputePressureMul(__fieldPressureFrameMsEwma);
   const cooldown = Number.isFinite(window.__FIELD_PRESSURE_DPR_COOLDOWN_MS)
     ? window.__FIELD_PRESSURE_DPR_COOLDOWN_MS
-    : (Number.isFinite(window.__DG_PRESSURE_DPR_COOLDOWN_MS) ? window.__DG_PRESSURE_DPR_COOLDOWN_MS : 350);
+    : (Number.isFinite(window.__DG_PRESSURE_DPR_COOLDOWN_MS) ? window.__DG_PRESSURE_DPR_COOLDOWN_MS : 800);
 
   const cur = __fieldPressureDprMul;
   if (targetMul < (cur - 0.02)) {
@@ -438,6 +438,7 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
   const sizeCache = { w: Math.max(1, canvas.clientWidth || canvas.width || 1), h: Math.max(1, canvas.clientHeight || canvas.height || 1), ts: 0 };
   let __fgLastDprTraceSig = '';
   let __resizeDeferred = false;
+  let __rebuildRetryRaf = 0;
   let __lastVisible = true;
   let __lastVisCheck = 0;
 
@@ -616,10 +617,27 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
 
     // NOTE: During boot/refresh/DOM churn we can transiently read 0/1px sizes.
     // Resizing backing stores to 1x1 then back up creates compositor churn and
-    // can amplify `frame.nonScript` spikes. Treat tiny measurements as "not ready"
-    // and keep the last known-good size.
-    const nextCssWRaw = Math.max(1, Math.round(size.w || 1));
-    const nextCssHRaw = Math.max(1, Math.round(size.h || 1));
+    // can amplify `frame.nonScript` spikes.
+    //
+    // Strategy:
+    // - If we already had a real size (>2px), keep it when we read tiny sizes.
+    // - If we're still in boot (no real size yet) and we read tiny sizes, DON'T commit 1x1;
+    //   schedule a retry next frame and bail.
+    const rawW = Math.round(size.w || 0);
+    const rawH = Math.round(size.h || 0);
+
+    if ((rawW <= 2 || rawH <= 2) && prevW <= 2 && prevH <= 2) {
+      if (!__rebuildRetryRaf && typeof requestAnimationFrame === 'function') {
+        __rebuildRetryRaf = requestAnimationFrame(() => {
+          __rebuildRetryRaf = 0;
+          try { rebuild(); } catch {}
+        });
+      }
+      return;
+    }
+
+    const nextCssWRaw = Math.max(1, (rawW || 1));
+    const nextCssHRaw = Math.max(1, (rawH || 1));
     const nextCssW = (nextCssWRaw <= 2 && prevW > 2) ? prevW : nextCssWRaw;
     const nextCssH = (nextCssHRaw <= 2 && prevH > 2) ? prevH : nextCssHRaw;
     state.w = nextCssW;

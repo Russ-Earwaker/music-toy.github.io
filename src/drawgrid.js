@@ -1145,6 +1145,12 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   dgMap = dgViewport.map;
   const panelSeed = panel?.dataset?.toyid || panel?.id || 'drawgrid';
   let gridArea = { x: 0, y: 0, w: 0, h: 0 };
+  // Last-known-good grid sizing. Used to avoid "not ready" churn during transient layout hiccups.
+  // This is NOT a startup hack; it only kicks in when we previously had a valid grid and then
+  // briefly measure invalid sizes (0/1px, etc.) mid-run.
+  let __dgLastGoodGridArea = null;
+  let __dgLastGoodCw = 0;
+  let __dgLastGoodCh = 0;
   const getRenderState = () => ({
     paintDpr,
     cssW,
@@ -2009,11 +2015,33 @@ try {
         }
       }
       const __quant2 = (v) => Math.max(1, Math.round(v / 2) * 2); // reduce 1px resize churn
-      const targetW = __quant2(nextCssW * paintDpr);
-      const targetH = __quant2(nextCssH * paintDpr);
+      let prevCssW = cssW;
+      let prevCssH = cssH;
+      let prevTargetW = frontCanvas?.width;
+      let prevTargetH = frontCanvas?.height;
+      // IMPORTANT:
+      // If CSS size has not changed, do NOT allow backing-store dimensions
+      // to drift due to rounding (e.g. 599 -> 600).
+      // This prevents resize churn that causes compositor stalls.
+      let targetW = __quant2(nextCssW * paintDpr);
+      let targetH = __quant2(nextCssH * paintDpr);
       const dprChanged = Math.abs(paintDpr - __dgLastResizeDpr) > 0.001;
-      const sizeChanged = targetW !== __dgLastResizeTargetW || targetH !== __dgLastResizeTargetH;
+      let sizeChanged = targetW !== __dgLastResizeTargetW || targetH !== __dgLastResizeTargetH;
       const cssChanged = nextCssW !== __dgLastResizeCssW || nextCssH !== __dgLastResizeCssH;
+      // Drift-lock:
+      // If CSS size is stable, treat tiny target changes as noise and keep the previous backing-store.
+      // This avoids 1-2px oscillation (e.g. 599 <-> 600) causing expensive resizes.
+      if (prevCssW === nextCssW && prevCssH === nextCssH) {
+        if (Number.isFinite(prevTargetW) && Number.isFinite(prevTargetH)) {
+          const dw = Math.abs(targetW - prevTargetW);
+          const dh = Math.abs(targetH - prevTargetH);
+          if (dw <= 2 && dh <= 2) {
+            targetW = prevTargetW;
+            targetH = prevTargetH;
+          }
+        }
+        sizeChanged = targetW !== __dgLastResizeTargetW || targetH !== __dgLastResizeTargetH;
+      }
       // Fast no-op exit: avoids DOM writes + potential compositor churn when we only differ by float jitter.
       if (!dprChanged && !sizeChanged && !cssChanged) {
         dgSizeTrace('resizeSurfacesFor(no-op)', { reason, nextCssW, nextCssH, nextDpr, paintDpr, targetW, targetH, sizeChanged: false, dprChanged: false });
@@ -2041,6 +2069,11 @@ try {
       } catch {}
       __dgLastResizeCssW = nextCssW;
       __dgLastResizeCssH = nextCssH;
+      // Track the last committed backing-store target so we can no-op out next frame.
+      // Without these assignments, every tick looks like a 'sizeChanged/dprChanged' and we thrash canvases.
+      __dgLastResizeTargetW = targetW;
+      __dgLastResizeTargetH = targetH;
+      __dgLastResizeDpr = paintDpr;
       const setCssSize = (canvasEl) => {
         if (!canvasEl || !canvasEl.style) return;
         // Avoid repeated style writes inside RAF; these can be surprisingly expensive at scale.
@@ -2098,9 +2131,6 @@ try {
         targetH,
       });
       dgEffectiveDprTrace('resizeSurfacesFor', { reason, nextCssW, nextCssH, nextDpr, paintDpr, targetW, targetH, sizeChanged, dprChanged });
-      __dgLastResizeTargetW = targetW;
-      __dgLastResizeTargetH = targetH;
-      __dgLastResizeDpr = paintDpr;
       if (dprChanged || sizeChanged) {
         try { markStaticDirty('resize-surfaces'); } catch {}
         // BUGFIX: overlay caches must not survive a DPR/size change.
@@ -2554,6 +2584,7 @@ try {
   let __dgEnsureSizeCandW = 0;
   let __dgEnsureSizeCandH = 0;
   let __dgEnsureSizeCandSinceMs = 0;
+  let __dgLastSizeCommitMs = 0;
   const DG_ENSURE_SIZE_HYSTERESIS_MS = 120;
 
 function ensureSizeReady({ force = false } = {}) {
@@ -2580,6 +2611,14 @@ function ensureSizeReady({ force = false } = {}) {
   // Prevent resize jitter from fractional CSS pixels (and downstream DPR rounding).
   w = Math.max(1, Math.round(w));
   h = Math.max(1, Math.round(h));
+
+  if (!force) {
+    // Kill 1px oscillation (e.g. 599 <-> 600) which can repeatedly trigger expensive
+    // backing-store resizes and compositor churn. We treat +/-1px changes as noise
+    // unless the caller explicitly forces a resize.
+    if (cssW > 0 && Math.abs(w - cssW) === 1) w = cssW;
+    if (cssH > 0 && Math.abs(h - cssH) === 1) h = cssH;
+  }
 
   if (!force) {
     // If the measured size flips briefly (e.g. during gesture/zoom settle), wait for it to
@@ -2653,6 +2692,7 @@ function ensureSizeReady({ force = false } = {}) {
     } catch {}
 
     cssW = w; cssH = h;
+    __dgLastSizeCommitMs = nowTs;
     progressMeasureW = cssW; progressMeasureH = cssH;
 
     try { dgViewport?.refreshSize?.({ snap: true }); } catch {}
@@ -5182,6 +5222,12 @@ function copyCanvas(backCtx, frontCtx) {
       topPad = 0;
       cw = gridArea.w / cols;
       ch = (gridArea.h - topPad) / rows;
+      // Record last-known-good sizing so transient "not ready" moments don't nuke the grid.
+      if (__dgGridReady()) {
+        __dgLastGoodGridArea = { ...gridArea };
+        __dgLastGoodCw = cw;
+        __dgLastGoodCh = ch;
+      }
       if (__dgGridReady()) {
         if (__dgGridCache) __dgGridCache.key = '';
         if (__dgNodesCache) __dgNodesCache.key = '';
@@ -5472,22 +5518,38 @@ function copyCanvas(backCtx, frontCtx) {
       return;
     }
     if (!__dgGridReady()) {
-      dgGridAlphaLog('drawGrid:skip-not-ready', gctx, {
-        gridArea: gridArea ? { ...gridArea } : null,
-        cw,
-        ch,
-        cssW,
-        cssH,
-      });
-      dgSizeTrace('drawGrid:skip-not-ready', {
-        cssW,
-        cssH,
-        gridArea: gridArea ? { ...gridArea } : null,
-        cw,
-        ch,
-      });
-      panel.__dgGridHasPainted = false;
-      return;
+      // Transient layout hiccup protection:
+      // If we had a valid grid recently, reuse it for this frame instead of bailing.
+      // This prevents repeated "skip-not-ready" churn which can correlate with large nonScript spikes.
+      if (__dgLastGoodGridArea && __dgLastGoodCw > 0 && __dgLastGoodCh > 0) {
+        gridArea = { ...__dgLastGoodGridArea };
+        cw = __dgLastGoodCw;
+        ch = __dgLastGoodCh;
+        dgSizeTrace('drawGrid:use-last-good', {
+          cssW,
+          cssH,
+          gridArea: gridArea ? { ...gridArea } : null,
+          cw,
+          ch,
+        });
+      } else {
+        dgGridAlphaLog('drawGrid:skip-not-ready', gctx, {
+          gridArea: gridArea ? { ...gridArea } : null,
+          cw,
+          ch,
+          cssW,
+          cssH,
+        });
+        dgSizeTrace('drawGrid:skip-not-ready', {
+          cssW,
+          cssH,
+          gridArea: gridArea ? { ...gridArea } : null,
+          cw,
+          ch,
+        });
+        panel.__dgGridHasPainted = false;
+        return;
+      }
     }
     dgGridAlphaLog('drawGrid:begin', gctx, {
       cacheKey: __dgGridCache?.key || null,

@@ -3428,8 +3428,10 @@ async function runP3fFocusShort() {
   // Focus probe: long enough to meaningfully pan/zoom, but still fast-ish.
   const prev = window.__PERF_LAB_DURATION_MS;
   const prevTag = window.__PERF_RUN_TAG;
+  const hadTag = (prevTag && typeof prevTag === 'string' && prevTag.trim());
   try { window.__PERF_LAB_DURATION_MS = 26000; } catch {}
-  try { window.__PERF_RUN_TAG = 'P3fFocus'; } catch {}
+  // IMPORTANT: allow wrapper runs (NoOverlays/NoParticles/etc.) to set their own tag.
+  try { if (!hadTag) window.__PERF_RUN_TAG = 'P3fFocus'; } catch {}
   await runP3fFocus();
   try { window.__PERF_LAB_DURATION_MS = prev; } catch {}
   try { window.__PERF_RUN_TAG = prevTag; } catch {}
@@ -3437,10 +3439,16 @@ async function runP3fFocusShort() {
 
 async function runP3fNoOverlaysFocusShort() {
   const prevTag = window.__PERF_RUN_TAG;
+  const prevDisableOverlaysDG = window.__PERF_DG_DISABLE_OVERLAYS;
+  const prevDisableOverlaysGeneric = window.__PERF_DISABLE_OVERLAYS;
+  // IMPORTANT: some paths read the generic toggle, others read the DG-specific one.
+  // Set both so the run truly isolates overlays.
   try { window.__PERF_DG_DISABLE_OVERLAYS = true; } catch {}
+  try { window.__PERF_DISABLE_OVERLAYS = true; } catch {}
   try { window.__PERF_RUN_TAG = 'P3fFocus_NoOverlays'; } catch {}
   await runP3fFocusShort();
-  try { window.__PERF_DG_DISABLE_OVERLAYS = false; } catch {}
+  try { window.__PERF_DG_DISABLE_OVERLAYS = prevDisableOverlaysDG; } catch {}
+  try { window.__PERF_DISABLE_OVERLAYS = prevDisableOverlaysGeneric; } catch {}
   try { window.__PERF_RUN_TAG = prevTag; } catch {}
 }
 
