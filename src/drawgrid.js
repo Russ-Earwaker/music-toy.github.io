@@ -95,6 +95,11 @@ if (typeof window !== 'undefined' && window.__DG_INPUT_TRACE == null) {
 if (typeof window !== 'undefined' && window.__DG_GHOST_TRACE == null) {
   window.__DG_GHOST_TRACE = false;
 }
+// Optional: include stacks for key ghost-guide start/stop events.
+//   window.__DG_GHOST_TRACE_STACK = true
+if (typeof window !== 'undefined' && window.__DG_GHOST_TRACE_STACK == null) {
+  window.__DG_GHOST_TRACE_STACK = false;
+}
 let __dgInputTraceArmed = false;
 let __dgGhostTraceArmed = false;
 function dgInputTrace(tag, data = null) {
@@ -121,6 +126,17 @@ function dgGhostTrace(tag, data = null) {
       try { drawgridLog(`[DG][ghost] ${tag}`, data || {}); } catch {}
     }
   } catch {}
+}
+
+function __dgGhostMaybeStack(label = 'DG ghost trace') {
+  try {
+    if (typeof window === 'undefined') return null;
+    if (!window.__DG_GHOST_TRACE_STACK) return null;
+    const e = new Error(label);
+    return e?.stack || null;
+  } catch {
+    return null;
+  }
 }
 
 // --- Canvas DPR helpers ------------------------------------------------------
@@ -506,7 +522,7 @@ function __dgCapDprForBackingStore(cssW = 0, cssH = 0, desiredDpr = 1, prevDpr =
   if (w <= 0 || h <= 0) return Math.max(minDpr, dpr);
 
   // Pixel budget cap (area-based).
-  let maxPx = 2_200_000; // ~1483x1483 backing store at 1.0 DPR
+  let maxPx = 3_000_000; // ~1732x1732 backing store at 1.0 DPR
   try {
     const v = (typeof window !== 'undefined') ? Number(window.__DG_MAX_PANEL_BACKING_PX) : NaN;
     if (Number.isFinite(v) && v > 200_000) maxPx = v;
@@ -514,7 +530,7 @@ function __dgCapDprForBackingStore(cssW = 0, cssH = 0, desiredDpr = 1, prevDpr =
   const capFromPx = Math.sqrt(maxPx / (w * h));
 
   // Side cap (dimension-based) to avoid huge single-axis backing stores.
-  let maxSide = 2600;
+  let maxSide = 3200;
   try {
     const v = (typeof window !== 'undefined') ? Number(window.__DG_MAX_PANEL_SIDE_PX) : NaN;
     if (Number.isFinite(v) && v > 600) maxSide = v;
@@ -1386,10 +1402,68 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   panel.__dgTutorialLayerEmpty = true;
   panel.__dgPlayheadLayerEmpty = true;
 
-  const markFlashLayerActive = () => { panel.__dgFlashLayerEmpty = false; __dgMarkSingleCanvasOverlayDirty(panel); };
-  const markFlashLayerCleared = () => { panel.__dgFlashLayerEmpty = true; __dgMarkSingleCanvasOverlayDirty(panel); };
-  const markGhostLayerActive = () => { panel.__dgGhostLayerEmpty = false; __dgMarkSingleCanvasOverlayDirty(panel); };
-  const markGhostLayerCleared = () => { panel.__dgGhostLayerEmpty = true; __dgMarkSingleCanvasOverlayDirty(panel); };
+  // Keep flash overlay alive briefly after the last write.
+  // Without this, the generic overlay-clear path will wipe transient trails
+  // (e.g. draw/ghost trails) immediately on pointer-up or shortly after boot.
+  const __DG_FLASH_KEEPALIVE_MS = (typeof window !== 'undefined' && Number.isFinite(window.__DG_FLASH_KEEPALIVE_MS))
+    ? window.__DG_FLASH_KEEPALIVE_MS
+    : 650;
+
+  const markFlashLayerActive = () => {
+    panel.__dgFlashLayerEmpty = false;
+    try {
+      const nowTs = (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now();
+      panel.__dgFlashActiveUntil = nowTs + __DG_FLASH_KEEPALIVE_MS;
+    } catch {}
+    __dgMarkSingleCanvasOverlayDirty(panel);
+  };
+  const markFlashLayerCleared = () => {
+    panel.__dgFlashLayerEmpty = true;
+    try { panel.__dgFlashActiveUntil = 0; } catch {}
+    __dgMarkSingleCanvasOverlayDirty(panel);
+  };
+  const markGhostLayerActive = () => {
+    // This is called frequently during the ghost sweep; only log on the
+    // empty -> non-empty transition to avoid spamming the console.
+    const __wasEmpty = panel.__dgGhostLayerEmpty !== false;
+    panel.__dgGhostLayerEmpty = false;
+    __dgMarkSingleCanvasOverlayDirty(panel);
+    try {
+      if (
+        __wasEmpty &&
+        typeof window !== 'undefined' &&
+        window.__DG_GHOST_TRACE &&
+        !window.__DG_GHOST_TRACE_CLEAR_ONLY
+      ) {
+        const stack = __dgGhostMaybeStack('DG markGhostLayerActive');
+        dgGhostTrace('layer:ghost-active', {
+          id: panel?.id || null,
+          usingBackBuffers,
+          stack,
+        });
+      }
+    } catch {}
+  };
+  const markGhostLayerCleared = () => {
+    const __wasEmpty = panel.__dgGhostLayerEmpty !== true;
+    panel.__dgGhostLayerEmpty = true;
+    __dgMarkSingleCanvasOverlayDirty(panel);
+    try {
+      if (
+        __wasEmpty &&
+        typeof window !== 'undefined' &&
+        window.__DG_GHOST_TRACE &&
+        !window.__DG_GHOST_TRACE_CLEAR_ONLY
+      ) {
+        const stack = __dgGhostMaybeStack('DG markGhostLayerCleared');
+        dgGhostTrace('layer:ghost-cleared', {
+          id: panel?.id || null,
+          usingBackBuffers,
+          stack,
+        });
+      }
+    } catch {}
+  };
   const markTutorialLayerActive = () => { panel.__dgTutorialLayerEmpty = false; __dgMarkSingleCanvasOverlayDirty(panel); };
   const markTutorialLayerCleared = () => { panel.__dgTutorialLayerEmpty = true; __dgMarkSingleCanvasOverlayDirty(panel); };
   const markPlayheadLayerActive = () => { panel.__dgPlayheadLayerEmpty = false; __dgMarkSingleCanvasOverlayDirty(panel); };
@@ -2015,6 +2089,13 @@ try {
         }
       }
       const __quant2 = (v) => Math.max(1, Math.round(v / 2) * 2); // reduce 1px resize churn
+      const __quantTarget = (v) => {
+        const n = Number.isFinite(v) ? v : 1;
+        const r = Math.round(n);
+        // If already (very nearly) an integer, keep it exact to avoid 599->600 drift.
+        if (Math.abs(n - r) < 1e-6) return Math.max(1, r);
+        return __quant2(n);
+      };
       let prevCssW = cssW;
       let prevCssH = cssH;
       let prevTargetW = frontCanvas?.width;
@@ -2023,8 +2104,8 @@ try {
       // If CSS size has not changed, do NOT allow backing-store dimensions
       // to drift due to rounding (e.g. 599 -> 600).
       // This prevents resize churn that causes compositor stalls.
-      let targetW = __quant2(nextCssW * paintDpr);
-      let targetH = __quant2(nextCssH * paintDpr);
+      let targetW = __quantTarget(nextCssW * paintDpr);
+      let targetH = __quantTarget(nextCssH * paintDpr);
       const dprChanged = Math.abs(paintDpr - __dgLastResizeDpr) > 0.001;
       let sizeChanged = targetW !== __dgLastResizeTargetW || targetH !== __dgLastResizeTargetH;
       const cssChanged = nextCssW !== __dgLastResizeCssW || nextCssH !== __dgLastResizeCssH;
@@ -3204,18 +3285,54 @@ function ensureSizeReady({ force = false } = {}) {
           });
           markFlashLayerCleared();
 
-          const ghostTarget = getActiveGhostCanvas();
-          const __ghostDpr = __dgGetCanvasDprFromCss(ghostTarget, cssW, paintDpr);
-          R.resetCtx(ghostCtx);
-          __dgWithLogicalSpaceDpr(R, ghostCtx, __ghostDpr, () => {
-            const { x, y, w, h } = R.getOverlayClearRect({
-              canvas: ghostTarget,
-              pad: R.getOverlayClearPad() * 1.2,
-              gridArea,
-            });
-            ghostCtx.clearRect(x, y, w, h);
-          });
-          markGhostLayerCleared();
+          // Ghost trail should NEVER be cleared by gesture settle / re-snap.
+          // Only clear it when the ghost backing store has actually changed (resize / DPR change)
+          // or when explicitly stopped via stopGhostGuide({ immediate: true }).
+          {
+            const ghostTarget = getActiveGhostCanvas();
+            const __ghostDpr = __dgGetCanvasDprFromCss(ghostTarget, cssW, paintDpr);
+            const __ghostKey = `${cssW}x${cssH}@${__ghostDpr}`;
+            const __prevGhostKey = panel.__dgGhostClearKey || null;
+            const __shouldClearGhost = (__prevGhostKey !== __ghostKey);
+            if (__shouldClearGhost) {
+              panel.__dgGhostClearKey = __ghostKey;
+              R.resetCtx(ghostCtx);
+              __dgWithLogicalSpaceDpr(R, ghostCtx, __ghostDpr, () => {
+                const { x, y, w, h } = R.getOverlayClearRect({
+                  canvas: ghostTarget,
+                  pad: R.getOverlayClearPad() * 1.2,
+                  gridArea,
+                });
+                ghostCtx.clearRect(x, y, w, h);
+              });
+              markGhostLayerCleared();
+              try {
+                if (typeof window !== 'undefined' && window.__DG_GHOST_TRACE) {
+                  dgGhostTrace('clear:do', {
+                    id: panel?.id || null,
+                    reason: 'overview:transition:overlay-clear',
+                    key: __ghostKey,
+                    prevKey: __prevGhostKey,
+                  });
+                }
+              } catch {}
+            } else {
+              // Preserve existing trail.
+              try {
+                if (
+                  typeof window !== 'undefined' &&
+                  window.__DG_GHOST_TRACE &&
+                  !window.__DG_GHOST_TRACE_CLEAR_ONLY
+                ) {
+                  dgGhostTrace('clear:skip (preserve-trail)', {
+                    id: panel?.id || null,
+                    reason: 'overview:transition:overlay-clear',
+                    key: __ghostKey,
+                  });
+                }
+              } catch {}
+            }
+          }
         } catch {}
         // Don't re-home during overview toggles -- avoids visible lerp.
         // refreshHomes({ resetPositions: false });
@@ -3794,7 +3911,26 @@ function regenerateMapFromStrokes() {
       updatePaintBackingStores({ force: true, target: 'back' });
 
       // If paint is non-empty but there are no reconstructible sources, never clear it here.
-      resnapAndRedraw(true, { preservePaintIfNoStrokes: hadInk && !hadStrokes && !hadNodes });
+      // ALSO: during gesture zoom/pan, a blank toy may still have a live ghost trail. Preserving avoids
+      // the "resnap-empty -> clear" path, which would cut the trail.
+      const __ghostNonEmpty = panel && panel.__dgGhostLayerEmpty === false;
+      const __preserveBlankDuringZoom =
+        (hadInk && !hadStrokes && !hadNodes) ||
+        (!hadStrokes && !hadNodes && (ghostGuideAutoActive || __ghostNonEmpty));
+
+      if (typeof window !== 'undefined' && window.__DG_GHOST_TRACE) {
+        dgGhostTrace('zoom:recompute:resnap', {
+          preserveBlankDuringZoom: __preserveBlankDuringZoom,
+          hadInk,
+          hadStrokes,
+          hadNodes,
+          ghostNonEmpty: __ghostNonEmpty,
+          ghostAutoActive: ghostGuideAutoActive,
+          zoomMode,
+        });
+      }
+
+      resnapAndRedraw(true, { preservePaintIfNoStrokes: __preserveBlankDuringZoom });
 
       // After backing-store churn, restore paint if it was our only source of truth.
       if (hadInk && !hadStrokes && !hadNodes) {
@@ -3905,7 +4041,28 @@ function regenerateMapFromStrokes() {
             // Ensure resnap executes immediately and is not blocked by gesturing state.
             zoomMode = 'idle';
             zoomGestureActive = false;
-            resnapAndRedraw(true, { preservePaintIfNoStrokes: false });
+            // IMPORTANT:
+            // After a gesture ends, a blank toy can still have a live ghost trail (auto guide).
+            // If we run the "resnap-empty -> clearDrawgridInternal" path here, it will cut the trail.
+            const __hasStrokes = Array.isArray(strokes) && strokes.length > 0;
+            const __hasNodes =
+              !!(currentMap && Array.isArray(currentMap.nodes) && currentMap.nodes.some(s => s && s.size > 0));
+            const __hasAnyPaint = ((__dgPaintRev | 0) > 0) || hasOverlayStrokesCached();
+            const __ghostNonEmpty = panel && panel.__dgGhostLayerEmpty === false;
+            const __preserveBlankDuringDoneResnap =
+              (!__hasStrokes && !__hasNodes) && (ghostGuideAutoActive || __ghostNonEmpty || !__hasAnyPaint);
+            if (typeof window !== 'undefined' && window.__DG_GHOST_TRACE) {
+              dgGhostTrace('zoom:done:pending-resnap', {
+                preserveBlankDuringDoneResnap: __preserveBlankDuringDoneResnap,
+                hasStrokes: __hasStrokes,
+                hasNodes: __hasNodes,
+                hasAnyPaint: __hasAnyPaint,
+                ghostNonEmpty: __ghostNonEmpty,
+                ghostAutoActive: ghostGuideAutoActive,
+                zoomMode,
+              });
+            }
+            resnapAndRedraw(true, { preservePaintIfNoStrokes: __preserveBlankDuringDoneResnap });
           }
         } catch {}
       }
@@ -4086,7 +4243,25 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
       copyCanvas(tutorialBackCtx,  tutorialFrontCtx);
       emitDG('blit', { from: 'back', to: 'front', layer: 'tutorial' });
 
-      resnapAndRedraw(true);
+      const __hasStrokes = Array.isArray(strokes) && strokes.length > 0;
+      const __hasNodes = !!(currentMap && Array.isArray(currentMap.nodes) && currentMap.nodes.some(s => s && s.size > 0));
+      const __hasAnyPaint = ((__dgPaintRev | 0) > 0) || hasOverlayStrokesCached();
+      const __ghostNonEmpty = panel && panel.__dgGhostLayerEmpty === false;
+      // IMPORTANT: During gesture pan/zoom commit, a blank toy may still have a live ghost trail.
+      // Never run the "resnap-empty -> clearDrawgridInternal" path in that case, because it cuts the trail.
+      const __preserveBlankDuringCommit = (!__hasStrokes && !__hasNodes) && (ghostGuideAutoActive || __ghostNonEmpty || !__hasAnyPaint);
+      if (typeof window !== 'undefined' && window.__DG_GHOST_TRACE) {
+        dgGhostTrace('zoom:commit:resnap', {
+          preserveBlankDuringCommit: __preserveBlankDuringCommit,
+          hasStrokes: __hasStrokes,
+          hasNodes: __hasNodes,
+          hasAnyPaint: __hasAnyPaint,
+          ghostNonEmpty: __ghostNonEmpty,
+          ghostAutoActive: ghostGuideAutoActive,
+          zoomMode,
+        });
+      }
+      resnapAndRedraw(true, { preservePaintIfNoStrokes: __preserveBlankDuringCommit });
       try { clearAndRedrawFromStrokes(pctx, 'zoom-commit'); } catch {}
       try { markStaticDirty('zoom-commit'); } catch {}
       __dgForceFullDrawNext = true;
@@ -4963,82 +5138,150 @@ function copyCanvas(backCtx, frontCtx) {
         } catch {}
       });
     }
-    grid.width = w; grid.height = h;
-    nodesCanvas.width = w; nodesCanvas.height = h;
-    flashCanvas.width = w; flashCanvas.height = h;
-    ghostCanvas.width = w; ghostCanvas.height = h;
-    tutorialCanvas.width = w; tutorialCanvas.height = h;
+    // IMPORTANT:
+    // Setting canvas.width/height clears its backing store. During gesture settle / commit we
+    // may call this even when the size hasn't changed, which would incorrectly wipe overlays
+    // like the ghost trail. Only resize when needed.
+    //
+    // Additionally, if the ghost layer is non-empty and we *must* resize, preserve pixels
+    // across the resize so the trail does not "cut out".
+    const __ghostNonEmpty = !!(panel && panel.__dgGhostLayerEmpty === false);
+    const __dgResizeCanvasIfNeeded = (c, ww, hh, label, preservePixels = false) => {
+      if (!c) return false;
+      const curW = c.width || 0;
+      const curH = c.height || 0;
+      if (curW === ww && curH === hh) return false;
+
+      let snap = null;
+      if (preservePixels && curW > 0 && curH > 0) {
+        try {
+          snap = document.createElement('canvas');
+          snap.width = curW;
+          snap.height = curH;
+          const sctx = snap.getContext('2d');
+          if (sctx) sctx.drawImage(c, 0, 0);
+        } catch {
+          snap = null;
+        }
+      }
+
+      // Resize (this clears).
+      c.width = ww;
+      c.height = hh;
+
+      // Restore snapshot scaled into the new backing store.
+      if (snap) {
+        try {
+          const ctx = c.getContext('2d');
+          if (ctx) ctx.drawImage(snap, 0, 0, snap.width, snap.height, 0, 0, ww, hh);
+        } catch {}
+      }
+
+      if (typeof window !== 'undefined' && window.__DG_GHOST_TRACE) {
+        try {
+          dgGhostTrace('canvas:resize', {
+            label,
+            fromW: curW, fromH: curH,
+            toW: ww, toH: hh,
+            ghostNonEmpty: __ghostNonEmpty,
+            preserved: !!snap,
+          });
+        } catch {}
+      }
+      return true;
+    };
+
+    __dgResizeCanvasIfNeeded(grid,           w, h, 'grid:front',      false);
+    __dgResizeCanvasIfNeeded(nodesCanvas,    w, h, 'nodes:front',     false);
+    __dgResizeCanvasIfNeeded(flashCanvas,    w, h, 'flash:front',     false);
+    __dgResizeCanvasIfNeeded(ghostCanvas,    w, h, 'ghost:front',     __ghostNonEmpty);
+    __dgResizeCanvasIfNeeded(tutorialCanvas, w, h, 'tutorial:front',  false);
 
     // Keep back-buffer backing stores in sync too.
     // If back canvases keep stale backing sizes after refresh, overlays can appear
     // to "scale wrong" on subsequent sweeps (e.g. ghost second pass).
-    if (gridBackCanvas) { gridBackCanvas.width = w; gridBackCanvas.height = h; }
-    if (nodesBackCanvas) { nodesBackCanvas.width = w; nodesBackCanvas.height = h; }
-    if (flashBackCanvas) { flashBackCanvas.width = w; flashBackCanvas.height = h; }
-    if (ghostBackCanvas) { ghostBackCanvas.width = w; ghostBackCanvas.height = h; }
-    if (tutorialBackCanvas) { tutorialBackCanvas.width = w; tutorialBackCanvas.height = h; }
+    if (gridBackCanvas) { __dgResizeCanvasIfNeeded(gridBackCanvas, w, h, 'grid:back', false); }
+    if (nodesBackCanvas) { __dgResizeCanvasIfNeeded(nodesBackCanvas, w, h, 'nodes:back', false); }
+    if (flashBackCanvas) { __dgResizeCanvasIfNeeded(flashBackCanvas, w, h, 'flash:back', false); }
+    if (ghostBackCanvas) { __dgResizeCanvasIfNeeded(ghostBackCanvas, w, h, 'ghost:back', __ghostNonEmpty); }
+    if (tutorialBackCanvas) { __dgResizeCanvasIfNeeded(tutorialBackCanvas, w, h, 'tutorial:back', false); }
 
-    if (debugCanvas) { debugCanvas.width = w; debugCanvas.height = h; }
+    if (debugCanvas) { __dgResizeCanvasIfNeeded(debugCanvas, w, h, 'debug', false); }
 
-    R.withDeviceSpace(gridFrontCtx, () => {
-      const surface = gridFrontCtx.canvas;
-      const width = surface?.width ?? w;
-      const height = surface?.height ?? h;
-      gridFrontCtx.clearRect(0, 0, width, height);
-      gridFrontCtx.drawImage(
-        gridBackCanvas,
-        0, 0, gridBackCanvas.width, gridBackCanvas.height,
-        0, 0, width, height
-      );
-    });
+    // Only flush back→front when back buffers are active.
+    // When usingBackBuffers is false, the front canvases are the source of truth; flushing would
+    // clear overlays (like the ghost trail) by copying from an empty/stale back buffer.
+    if (!usingBackBuffers) return;
 
-    R.withDeviceSpace(nodesFrontCtx, () => {
-      const surface = nodesFrontCtx.canvas;
-      const width = surface?.width ?? w;
-      const height = surface?.height ?? h;
-      nodesFrontCtx.clearRect(0, 0, width, height);
-      nodesFrontCtx.drawImage(
-        nodesBackCanvas,
-        0, 0, nodesBackCanvas.width, nodesBackCanvas.height,
-        0, 0, width, height
-      );
-    });
+    if (gridFrontCtx && gridBackCanvas) {
+      R.withDeviceSpace(gridFrontCtx, () => {
+        const surface = gridFrontCtx.canvas;
+        const width = surface?.width ?? w;
+        const height = surface?.height ?? h;
+        gridFrontCtx.clearRect(0, 0, width, height);
+        gridFrontCtx.drawImage(
+          gridBackCanvas,
+          0, 0, gridBackCanvas.width, gridBackCanvas.height,
+          0, 0, width, height
+        );
+      });
+    }
 
-    R.withDeviceSpace(flashFrontCtx, () => {
-      const surface = flashFrontCtx.canvas;
-      const width = surface?.width ?? w;
-      const height = surface?.height ?? h;
-      flashFrontCtx.clearRect(0, 0, width, height);
-      flashFrontCtx.drawImage(
-        flashBackCanvas,
-        0, 0, flashBackCanvas.width, flashBackCanvas.height,
-        0, 0, width, height
-      );
-    });
+    if (nodesFrontCtx && nodesBackCanvas) {
+      R.withDeviceSpace(nodesFrontCtx, () => {
+        const surface = nodesFrontCtx.canvas;
+        const width = surface?.width ?? w;
+        const height = surface?.height ?? h;
+        nodesFrontCtx.clearRect(0, 0, width, height);
+        nodesFrontCtx.drawImage(
+          nodesBackCanvas,
+          0, 0, nodesBackCanvas.width, nodesBackCanvas.height,
+          0, 0, width, height
+        );
+      });
+    }
 
-    R.withDeviceSpace(ghostFrontCtx, () => {
-      const surface = ghostFrontCtx.canvas;
-      const width = surface?.width ?? w;
-      const height = surface?.height ?? h;
-      ghostFrontCtx.clearRect(0, 0, width, height);
-      ghostFrontCtx.drawImage(
-        ghostBackCanvas,
-        0, 0, ghostBackCanvas.width, ghostBackCanvas.height,
-        0, 0, width, height
-      );
-    });
+    if (flashFrontCtx && flashBackCanvas) {
+      R.withDeviceSpace(flashFrontCtx, () => {
+        const surface = flashFrontCtx.canvas;
+        const width = surface?.width ?? w;
+        const height = surface?.height ?? h;
+        flashFrontCtx.clearRect(0, 0, width, height);
+        flashFrontCtx.drawImage(
+          flashBackCanvas,
+          0, 0, flashBackCanvas.width, flashBackCanvas.height,
+          0, 0, width, height
+        );
+      });
+    }
 
-    R.withDeviceSpace(tutorialFrontCtx, () => {
-      const surface = tutorialFrontCtx.canvas;
-      const width = surface?.width ?? w;
-      const height = surface?.height ?? h;
-      tutorialFrontCtx.clearRect(0, 0, width, height);
-      tutorialFrontCtx.drawImage(
-        tutorialBackCanvas,
-        0, 0, tutorialBackCanvas.width, tutorialBackCanvas.height,
-        0, 0, width, height
-      );
-    });
+    if (ghostFrontCtx && ghostBackCanvas) {
+      R.withDeviceSpace(ghostFrontCtx, () => {
+        const surface = ghostFrontCtx.canvas;
+        const width = surface?.width ?? w;
+        const height = surface?.height ?? h;
+        ghostFrontCtx.clearRect(0, 0, width, height);
+        ghostFrontCtx.drawImage(
+          ghostBackCanvas,
+          0, 0, ghostBackCanvas.width, ghostBackCanvas.height,
+          0, 0, width, height
+        );
+      });
+    }
+
+    if (tutorialFrontCtx && tutorialBackCanvas) {
+      R.withDeviceSpace(tutorialFrontCtx, () => {
+        const surface = tutorialFrontCtx.canvas;
+        const width = surface?.width ?? w;
+        const height = surface?.height ?? h;
+        tutorialFrontCtx.clearRect(0, 0, width, height);
+        tutorialFrontCtx.drawImage(
+          tutorialBackCanvas,
+          0, 0, tutorialBackCanvas.width, tutorialBackCanvas.height,
+          0, 0, width, height
+        );
+      });
+    }
 
   }
 
@@ -5358,18 +5601,36 @@ function copyCanvas(backCtx, frontCtx) {
           fctx.clearRect(x, y, w, h);
         });
         markFlashLayerCleared();
+        // Ghost trail should NEVER be cleared by gesture settle / re-snap.
+        // Only clear it when the ghost backing store has actually changed (resize / DPR change)
+        // or when explicitly stopped via stopGhostGuide({ immediate: true }).
         const ghostTarget = getActiveGhostCanvas();
         const __ghostDpr = __dgGetCanvasDprFromCss(ghostTarget, cssW, paintDpr);
-        R.resetCtx(ghostCtx);
-        __dgWithLogicalSpaceDpr(R, ghostCtx, __ghostDpr, () => {
-          const { x, y, w, h } = R.getOverlayClearRect({
-            canvas: ghostTarget,
-            pad: R.getOverlayClearPad() * 1.2,
-            gridArea,
+        const __ghostKey = `${cssW}x${cssH}@${__ghostDpr}`;
+        const __prevGhostKey = panel.__dgGhostClearKey || null;
+        const __shouldClearGhost = (__prevGhostKey !== __ghostKey);
+        if (__shouldClearGhost) {
+          panel.__dgGhostClearKey = __ghostKey;
+          R.resetCtx(ghostCtx);
+          __dgWithLogicalSpaceDpr(R, ghostCtx, __ghostDpr, () => {
+            const { x, y, w, h } = R.getOverlayClearRect({
+              canvas: ghostTarget,
+              pad: R.getOverlayClearPad() * 1.2,
+              gridArea,
+            });
+            ghostCtx.clearRect(x, y, w, h);
           });
-          ghostCtx.clearRect(x, y, w, h);
-        });
-        markGhostLayerCleared();
+          markGhostLayerCleared();
+        } else {
+          // Preserve existing trail.
+          if (typeof window !== 'undefined' && window.__DG_GHOST_TRACE) {
+            dgGhostTrace('clear:skip (preserve-trail)', {
+              id: panel?.id || null,
+              reason: 'layout:overlay-clear',
+              key: __ghostKey,
+            });
+          }
+        }
       }
     }
   });
@@ -5533,22 +5794,37 @@ function copyCanvas(backCtx, frontCtx) {
           ch,
         });
       } else {
-        dgGridAlphaLog('drawGrid:skip-not-ready', gctx, {
-          gridArea: gridArea ? { ...gridArea } : null,
-          cw,
-          ch,
-          cssW,
-          cssH,
-        });
-        dgSizeTrace('drawGrid:skip-not-ready', {
-          cssW,
-          cssH,
-          gridArea: gridArea ? { ...gridArea } : null,
-          cw,
-          ch,
-        });
-        panel.__dgGridHasPainted = false;
-        return;
+        // If we don't have a last-known-good grid yet (e.g. brand new panel), still try a safe fallback
+        // based on CSS size so we avoid repeated "skip-not-ready" churn.
+        if (cssW >= 2 && cssH >= 2) {
+          gridArea = { x: 0, y: 0, w: cssW, h: cssH };
+          cw = gridArea.w / cols;
+          ch = (gridArea.h - topPad) / rows;
+          dgSizeTrace('drawGrid:fallback-not-ready', {
+            cssW,
+            cssH,
+            gridArea: { ...gridArea },
+            cw,
+            ch,
+          });
+        } else {
+          dgGridAlphaLog('drawGrid:skip-not-ready', gctx, {
+            gridArea: gridArea ? { ...gridArea } : null,
+            cw,
+            ch,
+            cssW,
+            cssH,
+          });
+          dgSizeTrace('drawGrid:skip-not-ready', {
+            cssW,
+            cssH,
+            gridArea: gridArea ? { ...gridArea } : null,
+            cw,
+            ch,
+          });
+          panel.__dgGridHasPainted = false;
+          return;
+        }
       }
     }
     dgGridAlphaLog('drawGrid:begin', gctx, {
@@ -6462,7 +6738,7 @@ function copyCanvas(backCtx, frontCtx) {
       // If another toy is focused, request focus here but still allow drawing.
       try { window.requestToyFocus?.(panel, { center: false }); } catch {}
     }
-    stopAutoGhostGuide({ immediate: false });
+    stopAutoGhostGuide({ immediate: false, reason: 'pointerdown' });
     markUserChange('pointerdown');
     FD.flowLog('pointer:down', {});
     const p = pointerToPaintLogical(e);
@@ -7642,9 +7918,14 @@ function copyCanvas(backCtx, frontCtx) {
       const zoomForOverlay = Number.isFinite(boardScale) ? boardScale : 1;
       const overlayFlashesEnabled = !disableOverlayCore;
       const overlayBurstsEnabled = !disableOverlayCore && zoomForOverlay > 0.45 && !__dgLowFpsMode;
+      const flashRecentlyActive = (() => {
+        const until = panel.__dgFlashActiveUntil;
+        return Number.isFinite(until) && until > 0 && nowTs < until;
+      })();
       const hasOverlayFx =
         (overlayFlashesEnabled && ((noteToggleEffects?.length || 0) > 0 || (cellFlashes?.length || 0) > 0)) ||
-        (overlayBurstsEnabled && (noteBurstEffects?.length || 0) > 0);
+        (overlayBurstsEnabled && (noteBurstEffects?.length || 0) > 0) ||
+        flashRecentlyActive;
       const hasNodeFlash = (() => {
         for (let i = 0; i < flashes.length; i++) {
           if (flashes[i] > 0) return true;
@@ -8218,23 +8499,57 @@ function copyCanvas(backCtx, frontCtx) {
           const __uiClearStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
             ? performance.now()
             : 0;
+          // Ghost trail should NEVER be cleared by gesture settle / re-snap.
+          // Only clear it when the ghost backing store has actually changed (resize / DPR change)
+          // or when explicitly stopped via stopGhostGuide({ immediate: true }).
           if (ghostCtx?.canvas) {
             const ghostSurface = getActiveGhostCanvas();
             // IMPORTANT: use the context that matches the currently-active ghost surface.
             // During buffer swaps, the global ghostCtx can point at the other buffer which causes
             // ghost visuals to scale incorrectly on subsequent passes.
             const __ghostCtx = (usingBackBuffers ? ghostBackCtx : ghostFrontCtx) || ghostCtx;
-            R.resetCtx(__ghostCtx);
-            const ghostDpr = __dgGetCanvasDprFromCss(__ghostCtx?.canvas, cssW, paintDpr);
-            __dgWithLogicalSpaceDpr(R, __ghostCtx, ghostDpr, () => {
-              const { x, y, w, h } = R.getOverlayClearRect({
-                canvas: ghostSurface || __ghostCtx.canvas,
-                pad: R.getOverlayClearPad() * 1.2,
-                gridArea,
+            const ghostDpr = __dgGetCanvasDprFromCss(ghostSurface || __ghostCtx?.canvas, cssW, paintDpr);
+            const __ghostKey = `${cssW}x${cssH}@${ghostDpr}`;
+            const __prevGhostKey = panel.__dgGhostClearKey || null;
+            const __shouldClearGhost = (__prevGhostKey !== __ghostKey);
+            if (__shouldClearGhost) {
+              panel.__dgGhostClearKey = __ghostKey;
+              R.resetCtx(__ghostCtx);
+              __dgWithLogicalSpaceDpr(R, __ghostCtx, ghostDpr, () => {
+                const { x, y, w, h } = R.getOverlayClearRect({
+                  canvas: ghostSurface || __ghostCtx.canvas,
+                  pad: R.getOverlayClearPad() * 1.2,
+                  gridArea,
+                });
+                __ghostCtx.clearRect(x, y, w, h);
               });
-              __ghostCtx.clearRect(x, y, w, h);
-            });
-            markGhostLayerCleared();
+              markGhostLayerCleared();
+              try {
+                if (typeof window !== 'undefined' && window.__DG_GHOST_TRACE) {
+                  dgGhostTrace('clear:do', {
+                    id: panel?.id || null,
+                    reason: 'ui:refresh:overlay-clear',
+                    key: __ghostKey,
+                    prevKey: __prevGhostKey,
+                  });
+                }
+              } catch {}
+            } else {
+              // Preserve existing trail.
+              try {
+                if (
+                  typeof window !== 'undefined' &&
+                  window.__DG_GHOST_TRACE &&
+                  !window.__DG_GHOST_TRACE_CLEAR_ONLY
+                ) {
+                  dgGhostTrace('clear:skip (preserve-trail)', {
+                    id: panel?.id || null,
+                    reason: 'ui:refresh:overlay-clear',
+                    key: __ghostKey,
+                  });
+                }
+              } catch {}
+            }
           }
           if (fctx?.canvas) {
             const flashSurface = getActiveFlashCanvas();
@@ -9480,8 +9795,22 @@ function copyCanvas(backCtx, frontCtx) {
           const hasNodes = Array.isArray(currentMap?.nodes)
             ? currentMap.nodes.some(set => set && set.size > 0)
             : false;
-          const hasAnyPaint = (__dgPaintRev | 0) > 0;
-          const preservePaintIfNoStrokes = (!hasStrokes && !hasNodes && !hasAnyPaint && !hasOverlayStrokesCached());
+          const hasAnyPaint = ((__dgPaintRev | 0) > 0) || hasOverlayStrokesCached();
+          const ghostNonEmpty = panel && panel.__dgGhostLayerEmpty === false;
+          // IMPORTANT: stabilize pass can run right after a gesture (pan/zoom) ends.
+          // A blank toy may still have a live ghost trail; never let a resnap trigger the
+          // "resnap-empty -> clearDrawgridInternal" path in that case.
+          const preservePaintIfNoStrokes = (!hasStrokes && !hasNodes) && (ghostGuideAutoActive || ghostNonEmpty || !hasAnyPaint);
+          if (typeof window !== 'undefined' && window.__DG_GHOST_TRACE) {
+            dgGhostTrace('post-restore:stabilize-resnap', {
+              preservePaintIfNoStrokes,
+              hasStrokes,
+              hasNodes,
+              hasAnyPaint,
+              ghostNonEmpty,
+              ghostAutoActive: ghostGuideAutoActive,
+            });
+          }
           resnapAndRedraw(true, { preservePaintIfNoStrokes });
         } catch {}
       } catch {}
@@ -9518,6 +9847,25 @@ function copyCanvas(backCtx, frontCtx) {
           hasActiveCols
         });
         return false;
+      }
+    }
+    // If we're already empty and the ghost guide is currently sweeping, avoid a redundant
+    // clear that would stop/restart the guide and cut its trail mid-path.
+    if (!user) {
+      const alreadyEmpty = !(Array.isArray(strokes) && strokes.length > 0) && !(currentMap?.active?.some(Boolean));
+      if (alreadyEmpty && ghostGuideRunning) {
+        dgGhostTrace('clear:no-op', {
+          id: panel?.id || null,
+          reason,
+          running: ghostGuideRunning,
+          autoActive: ghostGuideAutoActive,
+          stack: __dgGhostMaybeStack('DG clearDrawgridInternal:no-op'),
+        });
+        // Still ensure the empty-state guide is active.
+        if (!ghostGuideAutoActive) {
+          startAutoGhostGuide({ immediate: true, reason: 'clear:no-op:ensure-empty' });
+        }
+        return true;
       }
     }
     let stackSnippet = null;
@@ -9616,8 +9964,13 @@ function copyCanvas(backCtx, frontCtx) {
     drawGrid();
     nextDrawTarget = null; // Disarm any pending line draw
     updateGeneratorButtons(); // Refresh button state to "Draw"
-    stopAutoGhostGuide({ immediate: true });
-    startAutoGhostGuide({ immediate: true });
+    // IMPORTANT: if a transient programmatic clear lands while the guide is sweeping,
+    // preserve its trail to avoid visible cut-outs.
+    stopAutoGhostGuide({ immediate: false, reason: 'clear:end', preserveTrail: true });
+    // Restart/ensure the empty-state guide.
+    if (!ghostGuideAutoActive) {
+      startAutoGhostGuide({ immediate: true, reason: 'clear:empty' });
+    }
     drawLabelState.hasDrawnFirstLine = false;
     updateDrawLabel(true);
     noteToggleEffects = [];
@@ -9832,7 +10185,6 @@ function copyCanvas(backCtx, frontCtx) {
           }catch(e){ }
           isRestoring = false;
           // Re-check after hydration completes
-          stopAutoGhostGuide({ immediate: false });
           scheduleGhostIfEmpty({ initialDelay: 0 });
           try {
             updateHydrateInboundFromState(captureState(), { reason: 'setState-applied', panelId: panel?.id });
@@ -9997,8 +10349,14 @@ function copyCanvas(backCtx, frontCtx) {
   let ghostFadeRAF = 0;
   const GHOST_SWEEP_DURATION = 2000;
   const GHOST_SWEEP_PAUSE = 1000;
+  // Extra tracing to diagnose "restart mid-path" / unexpected clears.
+  let __dgGhostAutoSeq = 0;
+  let __dgGhostSweepSeq = 0;
+  let __dgGhostLastAutoReason = null;
+  let __dgGhostLastStopReason = null;
+  let __dgGhostLastSweepReason = null;
 
-  function stopGhostGuide({ immediate = false } = {}) {
+  function stopGhostGuide({ immediate = false, preserveTrail = false, reason = null } = {}) {
     const __ghostCtx = (usingBackBuffers ? ghostBackCtx : ghostFrontCtx) || ghostCtx;
     if (ghostGuideAnimFrame) {
       cancelAnimationFrame(ghostGuideAnimFrame);
@@ -10008,6 +10366,37 @@ function copyCanvas(backCtx, frontCtx) {
     if (ghostFadeRAF) {
       cancelAnimationFrame(ghostFadeRAF);
       ghostFadeRAF = 0;
+    }
+    // Record explicit caller reason (best-effort) for debug.
+    if (reason) {
+      __dgGhostLastStopReason = String(reason);
+    }
+    try {
+      if (typeof window !== 'undefined' && window.__DG_GHOST_TRACE) {
+        const stack = __dgGhostMaybeStack('DG stopGhostGuide');
+        dgGhostTrace('stop:enter', {
+          id: panel?.id || null,
+          immediate,
+          preserveTrail,
+          ghostGuideRunning,
+          usingBackBuffers,
+          ghostLayerEmpty: panel?.__dgGhostLayerEmpty ?? null,
+          autoActive: ghostGuideAutoActive,
+          loopId: !!ghostGuideLoopId,
+          animFrame: !!ghostGuideAnimFrame,
+          lastAutoReason: __dgGhostLastAutoReason,
+          stopReason: reason || null,
+          lastStopReason: __dgGhostLastStopReason,
+          lastSweepReason: __dgGhostLastSweepReason,
+          stack,
+        });
+      }
+    } catch {}
+
+    // If we're about to start a new sweep, we want to stop the animation without clearing
+    // or fading the existing trail (otherwise the trail appears to "cut out" mid-path).
+    if (preserveTrail) {
+      return;
     }
     if (immediate) {
       const ghostSurface = getActiveGhostCanvas();
@@ -10021,17 +10410,47 @@ function copyCanvas(backCtx, frontCtx) {
           pad: R.getOverlayClearPad() * 1.2,
           gridArea,
         });
+        try {
+          if (typeof window !== 'undefined' && window.__DG_GHOST_TRACE) {
+            dgGhostTrace('stop:immediate-clear', {
+              id: panel?.id || null,
+              usingBackBuffers,
+              ghostSurface: __dgElSummary(ghostSurface),
+              ghostCtxCanvas: __ghostCtx?.canvas ? __dgElSummary(__ghostCtx.canvas) : null,
+              clearRect: { x, y, w, h },
+              cssW,
+              cssH,
+              paintDpr,
+              ghostAutoActive: ghostGuideAutoActive,
+              ghostRunning: ghostGuideRunning,
+              sweepSeq: __dgGhostSweepSeq,
+            });
+          }
+        } catch {}
         __ghostCtx.clearRect(x, y, w, h);
       });
       markGhostLayerCleared();
-    } else {
-      ghostFadeRAF = requestAnimationFrame(() => fadeOutGhostTrail(0));
     }
   }
 
+  // NOTE: We intentionally do not fade/clear the ghost trail over time.
+  // The guide line should remain continuous and never "cut out" mid-path.
+  // It will be cleared explicitly via stopGhostGuide({ immediate: true }) when needed.
   function fadeOutGhostTrail(step = 0) {
     const __ghostCtx = (usingBackBuffers ? ghostBackCtx : ghostFrontCtx) || ghostCtx;
     const ghostSurface = getActiveGhostCanvas();
+    try {
+      if (typeof window !== 'undefined' && window.__DG_GHOST_TRACE) {
+        dgGhostTrace('fade:enter', {
+          id: panel?.id || null,
+          step,
+          usingBackBuffers,
+          ghostGuideRunning,
+          ghostAutoActive: ghostGuideAutoActive,
+          stack: __dgGhostMaybeStack('DG fadeOutGhostTrail'),
+        });
+      }
+    } catch {}
     if (!ghostSurface) {
       ghostFadeRAF = 0;
       return;
@@ -10083,7 +10502,25 @@ function startGhostGuide({
   trailCount = 3,
   trailSpeed = 1.2,
 } = {}) {
-  stopGhostGuide({ immediate: true });
+    try {
+      if (typeof window !== 'undefined' && window.__DG_GHOST_TRACE) {
+        const stack = __dgGhostMaybeStack('DG startGhostGuide');
+        dgGhostTrace('start:enter', {
+          id: panel?.id || null,
+          usingBackBuffers,
+          params: {
+            startX, endX, startY, endY, crossY,
+            duration, wiggle, trail, trailEveryMs, trailCount, trailSpeed,
+          },
+          ghostLayerEmpty: panel?.__dgGhostLayerEmpty ?? null,
+          ghostGuideRunning,
+          stack,
+        });
+      }
+    } catch {}
+  // IMPORTANT: when starting a new sweep, do NOT hard-clear the ghost surface.
+  // We want the trail to remain continuous across layout/viewport churn.
+  stopGhostGuide({ immediate: false, preserveTrail: true, reason: 'start:new-sweep' });
   if (ghostFadeRAF) {
     cancelAnimationFrame(ghostFadeRAF);
     ghostFadeRAF = 0;
@@ -10150,6 +10587,10 @@ function startGhostGuide({
   let last = null;
   let lastTrail = 0;
   let lastGhostAudit = 0;
+  // Cull can flicker briefly during first pan / viewport settle.
+  // If we hard-stop immediately, the ghost sweep "restarts" and the trail looks like it cuts out.
+  // Debounce cull before stopping the sweep.
+  let culledSince = 0;
   const noiseSeed = Math.random() * 100;
   ghostGuideRunning = true;
 
@@ -10157,9 +10598,15 @@ function startGhostGuide({
     if (!panel.isConnected) return;
     if (!ghostGuideRunning) return;
     if (isPanelCulled()) {
-      ghostGuideRunning = false;
-      ghostGuideAnimFrame = null;
-      return;
+      if (!culledSince) culledSince = now;
+      // Only stop if we're culled continuously for a while.
+      if ((now - culledSince) > 800) {
+        ghostGuideRunning = false;
+        ghostGuideAnimFrame = null;
+        return;
+      }
+    } else {
+      culledSince = 0;
     }
     const ghostSurface = getActiveGhostCanvas();
     const elapsed = now - startTime;
@@ -10324,7 +10771,6 @@ function startGhostGuide({
       if (ghostFadeRAF) {
         cancelAnimationFrame(ghostFadeRAF);
       }
-      ghostFadeRAF = requestAnimationFrame(() => fadeOutGhostTrail(0));
       ghostGuideAnimFrame = null;
     }
   }
@@ -10336,7 +10782,7 @@ function scheduleGhostIfEmpty({ initialDelay = 150 } = {}) {
   const check = () => {
     if (!panel.isConnected) return;
     if (isPanelCulled()) {
-      stopAutoGhostGuide({ immediate: true });
+      stopAutoGhostGuide({ immediate: true, reason: 'schedule-empty:culled' });
       return;
     }
     if (isRestoring) {                 // Wait until setState() finishes
@@ -10348,13 +10794,25 @@ function scheduleGhostIfEmpty({ initialDelay = 150 } = {}) {
       ? currentMap.nodes.some(set => set && set.size > 0)
       : false;
 
+    dgGhostTrace('auto:empty-check', {
+      id: panel?.id || null,
+      hasStrokes,
+      hasNodes,
+      autoActive: ghostGuideAutoActive,
+      running: ghostGuideRunning,
+      animFrame: !!ghostGuideAnimFrame,
+      sweepSeq: __dgGhostSweepSeq,
+    });
     if (!hasStrokes && !hasNodes) {
-      stopAutoGhostGuide({ immediate: true });
-      startAutoGhostGuide({ immediate: true });
+      // IMPORTANT: do not restart while already active; restarting hard-clears the trail
+      // and causes the ghost sweep to "jump back" mid-path.
+      if (!ghostGuideAutoActive) {
+        startAutoGhostGuide({ immediate: true, reason: 'schedule-empty:empty' });
+      }
       updateDrawLabel(true);
     } else {
       // If content exists, ensure the ghost is fully stopped/cleared.
-      stopAutoGhostGuide({ immediate: true });
+      stopAutoGhostGuide({ immediate: true, reason: 'schedule-empty:has-content' });
       updateDrawLabel(false);
     }
   };
@@ -10363,12 +10821,35 @@ function scheduleGhostIfEmpty({ initialDelay = 150 } = {}) {
 
 function runAutoGhostGuideSweep() {
   if (!ghostGuideAutoActive) return;
+  // IMPORTANT: never start a new sweep while one is already running.
+  // Starting a new sweep calls startGhostGuide(), which stops the current one with
+  // immediate:true (hard clear) and cuts the trail mid-path.
+  if (ghostGuideAnimFrame || ghostGuideRunning) {
+    dgGhostTrace('auto:sweep:skip-active', {
+      ghostGuideAutoActive,
+      ghostGuideRunning,
+      ghostGuideAnimFrame: !!ghostGuideAnimFrame,
+      sweepSeq: __dgGhostSweepSeq,
+      lastSweepReason: __dgGhostLastSweepReason,
+    });
+    return;
+  }
   const ghostDpr = __dgGetCanvasDprFromCss(ghostCtx?.canvas, cssW, paintDpr);
 
   const w = gridArea?.w ?? 0;
   const h = gridArea?.h ?? 0;
   // Guard against tiny layouts
   if (!w || !h || w <= 48 || h <= 48) {
+    dgGhostTrace('auto:sweep:skip-tiny', {
+      id: panel?.id || null,
+      w,
+      h,
+      cssW,
+      cssH,
+      paintDpr,
+      ghostDpr,
+      sweepSeq: __dgGhostSweepSeq,
+    });
     return;
   }
 
@@ -10384,6 +10865,8 @@ function runAutoGhostGuideSweep() {
   const endX = gpath.to.x;
   const endY = clampY(gpath.to.y);
 
+  __dgGhostSweepSeq++;
+  __dgGhostLastSweepReason = __dgGhostLastAutoReason || __dgGhostLastSweepReason;
   if (DG_GHOST_DEBUG) {
     try {
       const labelBand = __dgGetDrawLabelYRange?.();
@@ -10393,6 +10876,7 @@ function runAutoGhostGuideSweep() {
   }
 
   dgGhostTrace('auto:sweep', {
+    sweepSeq: __dgGhostSweepSeq,
     startX, startY, endX, endY, crossY: gpath.crossY,
     cssW,
     cssH,
@@ -10405,6 +10889,9 @@ function runAutoGhostGuideSweep() {
     ghostDpr,
     gridArea: gridArea ? { x: gridArea.x, y: gridArea.y, w: gridArea.w, h: gridArea.h } : null,
     ghostCanvas: ghostCtx?.canvas ? { w: ghostCtx.canvas.width, h: ghostCtx.canvas.height, cssW: ghostCtx.canvas.style?.width || null, cssH: ghostCtx.canvas.style?.height || null } : null,
+    autoActive: ghostGuideAutoActive,
+    running: ghostGuideRunning,
+    stack: __dgGhostMaybeStack('DG runAutoGhostGuideSweep'),
   });
 
   startGhostGuide({
@@ -10418,8 +10905,19 @@ function runAutoGhostGuideSweep() {
   });
 }
 
-  function startAutoGhostGuide({ immediate = false } = {}) {
+  function startAutoGhostGuide({ immediate = false, reason = 'unknown' } = {}) {
     if (ghostGuideAutoActive) return;
+    __dgGhostAutoSeq++;
+    __dgGhostLastAutoReason = reason;
+    dgGhostTrace('auto:start', {
+      id: panel?.id || null,
+      seq: __dgGhostAutoSeq,
+      immediate,
+      reason,
+      hasStrokes: Array.isArray(strokes) ? strokes.length : null,
+      hasNodes: Array.isArray(currentMap?.nodes) ? currentMap.nodes.some(set => set && set.size > 0) : null,
+      stack: __dgGhostMaybeStack('DG startAutoGhostGuide'),
+    });
     ghostGuideAutoActive = true;
     syncLetterFade({ immediate });
     runAutoGhostGuideSweep();
@@ -10430,14 +10928,28 @@ function runAutoGhostGuideSweep() {
     }, interval);
   }
 
-  function stopAutoGhostGuide({ immediate = false } = {}) {
+  function stopAutoGhostGuide({ immediate = false, preserveTrail = false, reason = 'unknown' } = {}) {
     const wasActive = ghostGuideAutoActive || ghostGuideLoopId !== null || !!ghostGuideAnimFrame;
+    __dgGhostLastStopReason = reason;
+    dgGhostTrace('auto:stop', {
+      id: panel?.id || null,
+      immediate,
+      preserveTrail,
+      reason,
+      wasActive,
+      autoActive: ghostGuideAutoActive,
+      loopId: !!ghostGuideLoopId,
+      animFrame: !!ghostGuideAnimFrame,
+      running: ghostGuideRunning,
+      sweepSeq: __dgGhostSweepSeq,
+      stack: __dgGhostMaybeStack('DG stopAutoGhostGuide'),
+    });
     ghostGuideAutoActive = false;
     if (ghostGuideLoopId) {
       clearInterval(ghostGuideLoopId);
       ghostGuideLoopId = null;
     }
-    stopGhostGuide({ immediate });
+    stopGhostGuide({ immediate, preserveTrail, reason: 'api.stopGhostGuide' });
     if (wasActive) {
       syncLetterFade({ immediate });
     }
@@ -10453,7 +10965,7 @@ function runAutoGhostGuideSweep() {
     noteToggleEffects = [];
     nextDrawTarget = null;
     previewGid = null;
-    stopAutoGhostGuide({ immediate: true });
+    stopAutoGhostGuide({ immediate: true, reason: 'toy-remove' });
     try { dgField?.destroy?.(); } catch {}
     panel.__drawParticles = null;
     try { panel.removeEventListener('toy-instrument', handleInstrumentPersist); } catch {}
@@ -10504,11 +11016,28 @@ function runAutoGhostGuideSweep() {
   panel.addEventListener('drawgrid:update', (e) => {
     const nodes = e?.detail?.map?.nodes;
     const hasAny = Array.isArray(nodes) && nodes.some(set => set && set.size > 0);
+    dgGhostTrace('update:event', {
+      id: panel?.id || null,
+      hasAny,
+      autoActive: ghostGuideAutoActive,
+      running: ghostGuideRunning,
+      animFrame: !!ghostGuideAnimFrame,
+      sweepSeq: __dgGhostSweepSeq,
+    });
+    // IMPORTANT:
+    // drawgrid:update can fire very frequently (layout commits, viewport settles, etc).
+    // We must NOT stop+clear the ghost layer every time we see an "empty" update, or the
+    // ghost trail will look like it "cuts out" / restarts mid-sweep (especially during first pan).
     if (hasAny) {
-      stopAutoGhostGuide({ immediate: false });
+      // Content exists -> ensure auto-ghost is stopped, but don't spam-stop on every update.
+      if (ghostGuideAutoActive || ghostGuideRunning) {
+        stopAutoGhostGuide({ immediate: false, reason: 'drawgrid:update:hasAny' });
+      }
     } else {
-      stopAutoGhostGuide({ immediate: true });
-      startAutoGhostGuide({ immediate: true });
+      // IMPORTANT: do not thrash stop/start while empty; that restarts the sweep and hard-clears trails.
+      if (!ghostGuideAutoActive) {
+        startAutoGhostGuide({ immediate: true, reason: 'drawgrid:update:empty' });
+      }
     }
   });
 
@@ -10532,8 +11061,10 @@ function runAutoGhostGuideSweep() {
         }
 
         // Start ghost guide only once we've drawn at the correct basis.
-        stopAutoGhostGuide({ immediate: true });
-        startAutoGhostGuide({ immediate: true });
+        // Don't hard-clear the trail here; boot/layout can call this after the guide has already started.
+        if (!ghostGuideAutoActive) {
+          startAutoGhostGuide({ immediate: true, reason: 'boot:sized' });
+        }
         __dgNeedsUIRefresh = true;
         __dgStableFramesAfterCommit = 0;
 

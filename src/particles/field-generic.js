@@ -49,7 +49,7 @@ function capDprForBackingStore(cssW = 0, cssH = 0, desiredDpr = 1, prevDpr = nul
   if (w <= 0 || h <= 0) return Math.max(minDpr, dpr);
 
   // Pixel budget cap (area-based).
-  let maxPx = Number.isFinite(opts?.maxBackingPx) ? opts.maxBackingPx : 2_200_000;
+  let maxPx = Number.isFinite(opts?.maxBackingPx) ? opts.maxBackingPx : 3_000_000;
   try {
     const v = (typeof window !== 'undefined') ? Number(window.__FIELD_MAX_BACKING_PX) : NaN;
     if (Number.isFinite(v) && v > 200_000) maxPx = v;
@@ -61,7 +61,7 @@ function capDprForBackingStore(cssW = 0, cssH = 0, desiredDpr = 1, prevDpr = nul
   const capFromPx = Math.sqrt(maxPx / (w * h));
 
   // Side cap (dimension-based) to avoid huge single-axis backing stores.
-  let maxSide = Number.isFinite(opts?.maxBackingSidePx) ? opts.maxBackingSidePx : 2600;
+  let maxSide = Number.isFinite(opts?.maxBackingSidePx) ? opts.maxBackingSidePx : 3200;
   try {
     const v = (typeof window !== 'undefined') ? Number(window.__FIELD_MAX_SIDE_PX) : NaN;
     if (Number.isFinite(v) && v > 600) maxSide = v;
@@ -677,9 +677,12 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     };
     state.dpr = __quantizeDpr(state.dpr);
 
-    const __quant2 = (v) => Math.max(1, Math.round(v / 2) * 2); // reduce 1px resize churn
-    const pxW = __quant2(state.w * state.dpr);
-    const pxH = __quant2(state.h * state.dpr);
+    // Quantize backing-store pixel sizes to integers (NOT even numbers).
+    // Even-quantization can introduce a 1px mismatch vs CSS size (e.g. 599 -> 600),
+    // which creates resize churn and a subtle effective-DPR distortion.
+    const __quantPx = (v) => Math.max(1, Math.round(v));
+    const pxW = __quantPx(state.w * state.dpr);
+    const pxH = __quantPx(state.h * state.dpr);
     if (canvas.width !== pxW) canvas.width = pxW;
     if (canvas.height !== pxH) canvas.height = pxH;
     if (state.__lastXformDpr !== state.dpr) {
