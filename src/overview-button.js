@@ -1,4 +1,5 @@
 import { overviewMode } from './overview-mode.js';
+import { makeDebugLogger } from './debug-flags.js';
 
 const ICON_OVERVIEW_IN = "url('./assets/UI/T_ButtonOverviewZoomIn.png')";
 const ICON_OVERVIEW_OUT = "url('./assets/UI/T_ButtonOverviewZoomOut.png')";
@@ -6,6 +7,9 @@ const ICON_FOCUS_CLOSE = "url('./assets/UI/T_ButtonClose.png')";
 const SCALE_MIN = 0.3; // Keep in sync with board-viewport.js clamp
 const SCALE_MAX = 1.0; // Max zoom-in level
 const SETTLE_EPS = 0.002;
+
+// Verbose console logs are hidden by default; enable via localStorage.setItem('mt_debug_logs','1')
+const obInfo = makeDebugLogger('mt_debug_logs', 'info');
 
 document.addEventListener('DOMContentLoaded', () => {
   const topbar = document.getElementById('topbar');
@@ -123,7 +127,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Ignore clicks while camera/overview is animating or a previous click is pending.
       if (clickLocked || pendingZoomTarget !== null || window.__overviewButtonPending || isCamLocked() || isOverviewTransitioning()) return;
       clickLocked = true;
-      try { console.info('[overview-button] click', { currentMode, locked: clickLocked, camLocked: isCamLocked(), transitioning: isOverviewTransitioning() }); } catch {}
+      obInfo('[overview-button] click', { currentMode, locked: clickLocked, camLocked: isCamLocked(), transitioning: isOverviewTransitioning() });
       const release = () => {
         const poll = () => {
           if (isCamLocked() || isOverviewTransitioning()) {
@@ -155,7 +159,7 @@ document.addEventListener('DOMContentLoaded', () => {
         : clampScale(lastNormalScale || state.buttonNormalScale || SCALE_MAX);
       pendingZoomTarget = target;
       window.__overviewButtonPending = true;
-      try { console.info('[overview-button] zoom target', { currentScale, target, dir: zoomingOut ? 'toOverview' : 'fromOverview' }); } catch {}
+      obInfo('[overview-button] zoom target', { currentScale, target, dir: zoomingOut ? 'toOverview' : 'fromOverview' });
       try {
         window.__setOverviewButtonGate?.({
           start: currentScale,
@@ -202,7 +206,7 @@ document.addEventListener('DOMContentLoaded', () => {
         pendingZoomTarget = null;
         window.__overviewButtonPending = false;
         clickLocked = false;
-        try { console.info('[overview-button] settled', { scale: nextScale }); } catch {}
+        obInfo('[overview-button] settled', { scale: nextScale });
         syncUI(true);
         return;
       }

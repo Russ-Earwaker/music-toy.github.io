@@ -7845,17 +7845,32 @@ function copyCanvas(backCtx, frontCtx) {
     const w = paint.width;
     const h = paint.height;
     if (!w || !h) return { active, nodes, disabled }; // Abort if canvas is not ready
+    
+    // IMPORTANT: gridArea/cw/ch/topPad are in CSS/logical space, but getImageData is in backing-store pixels.
+    // When we run with reduced DPR while zoomed out, we must scale + clamp the scan rects, otherwise we can
+    // read pixels from the wrong rows/cols (which shows up as phantom "last column" notes).
+    const dpr = (typeof paintDpr === 'number' && paintDpr > 0) ? paintDpr : (w / Math.max(1, Math.round(gridArea?.w || w)));
+    const defaultRow = Math.max(0, Math.min(rows - 1, Math.floor(rows * 0.5)));
     const data = sourceCtx.getImageData(0, 0, w, h).data;
 
     for (let c=0;c<cols;c++){
       // Define the scan area strictly to the visible grid column to avoid phantom nodes
       const xStart_css = gridArea.x + c * cw;
       const xEnd_css = gridArea.x + (c + 1) * cw;
-      const xStart = Math.round(xStart_css);
-      const xEnd = Math.round(xEnd_css);
-      
+
+      // Convert to backing-store pixels and clamp into [0, w]
+      const xStart = Math.max(0, Math.min(w, Math.floor(xStart_css * dpr)));
+      const xEnd = Math.max(0, Math.min(w, Math.ceil(xEnd_css * dpr)));
+
       let ySum = 0;
       let inkCount = 0;
+
+      if (xEnd <= xStart) {
+        // Column has no drawable width at this DPR; keep a stable "empty" node.
+        nodes[c].add(defaultRow);
+        disabled[c].add(defaultRow);
+        continue;
+      }
 
       // Scan the column for all "ink" pixels to find the average Y position
       // We scan the full canvas height because the user can draw above or below the visual grid.
@@ -7871,7 +7886,7 @@ function copyCanvas(backCtx, frontCtx) {
 
       if (inkCount > 0) {
         const avgY_dpr = ySum / inkCount;
-        const avgY_css = avgY_dpr;
+        const avgY_css = avgY_dpr / dpr;
 
         const noteGridTop = gridArea.y + topPad;
         const noteGridBottom = noteGridTop + rows * ch;
@@ -7880,7 +7895,7 @@ function copyCanvas(backCtx, frontCtx) {
         if (isOutside) {
             // Find a default "in-key" row for out-of-bounds drawing.
             // This ensures disabled notes are still harmonically related.
-            let safeRow = 7; // Fallback to a middle-ish row
+            let safeRow = defaultRow; // Fallback to the vertical middle cell
             try {
                 const visiblePentatonicNotes = pentatonicPalette.filter(p => chromaticPalette.includes(p));
                 if (visiblePentatonicNotes.length > 0) {
@@ -7926,11 +7941,16 @@ function copyCanvas(backCtx, frontCtx) {
             nodes[c].add(r_final);
             active[c] = true;
         }
+      } else {
+        // No ink in this column: keep a stable "empty" node at the vertical middle.
+        nodes[c].add(defaultRow);
+        disabled[c].add(defaultRow);
+        active[c] = false;
       }
     }
     if (typeof window !== 'undefined' && window.DG_DRAW_DEBUG) {
       const totalNodes = nodes.reduce((n, set) => n + ((set && set.size) || 0), 0);
-      console.debug('[DG][SNAP] summary', { w, h, totalNodes, anyInk: totalNodes > 0 });
+      console.debug('[DG][SNAP] summary', { w, h, dpr, totalNodes, anyInk: totalNodes > 0 });
     }
     return {active, nodes, disabled};
   }

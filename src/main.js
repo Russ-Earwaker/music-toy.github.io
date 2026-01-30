@@ -34,7 +34,7 @@ import { loadInstrumentEntries as loadInstrumentCatalog, getInstrumentEntries as
 import { collectUsedInstruments, getSoundThemeKey, pickInstrumentForToy } from './sound-theme.js';
 import { installIOSAudioUnlock } from './ios-audio-unlock.js';
 import { installAudioDiagnostics } from './audio-diagnostics.js';
-import { makeDebugLogger } from './debug-flags.js';
+import { debugEnabled, makeDebugLogger } from './debug-flags.js';
 import { DEFAULT_BPM, NUM_STEPS, ensureAudioContext, resumeAudioContextIfNeeded, getLoopInfo, setBpm, start, stop, isRunning, getToyGain } from './audio-core.js';
 import { autoQualityOnFrame } from './perf/AutoQualityController.js';
 import { createSequencerScheduler } from './note-scheduler.js';
@@ -634,12 +634,25 @@ const readStoredFocusEditingEnabled = () => {
   return false; // default off
 };
 
+const focusDebugEnabled = () => {
+  try {
+    if (debugEnabled('mt_focus_debug')) return true;
+  } catch {}
+  try {
+    if (typeof window !== 'undefined' && window.__focusDebug) return true;
+  } catch {}
+  try {
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('FOCUS_DBG') === '1') return true;
+  } catch {}
+  return false;
+};
+
 try {
-  // Default ON so focus centering issues are visible; set localStorage.FOCUS_DBG='0' to silence.
+  // Default OFF; enable via window.MT_DEBUG_FLAGS.mt_focus_debug or localStorage 'mt_focus_debug'.
   if (localStorage.getItem('FOCUS_DBG') === null) {
-    localStorage.setItem('FOCUS_DBG', '1');
+    localStorage.setItem('FOCUS_DBG', '0');
   }
-  window.__focusDebug = localStorage.getItem('FOCUS_DBG') === '1';
+  window.__focusDebug = focusDebugEnabled();
 } catch {}
 
 const readStoredLastFocusedId = () => {
@@ -670,7 +683,7 @@ function resetFocusClasses() {
 
 function normalizeFocusDom() {
   try {
-    const dbg = (window.__focusDebug || localStorage.getItem('FOCUS_DBG') === '1');
+    const dbg = focusDebugEnabled();
     if (dbg) console.log('[focus] normalize DOM');
   } catch {}
   document.querySelectorAll('.toy-panel').forEach((p) => {
@@ -802,7 +815,7 @@ function setToyFocus(panel, { center = true, unfocusAll } = {}) { // default cen
   const allowRestoreFocus = panel && g_restoringFocusId && panel.id === g_restoringFocusId;
   if (panel && (g_suppressBootFocus || g_isRestoringSnapshot) && !allowRestoreFocus) {
     try {
-      const dbg = (window.__focusDebug || localStorage.getItem('FOCUS_DBG') === '1');
+      const dbg = focusDebugEnabled();
       if (dbg) console.log('[focus] setToyFocus suppressed due to boot/restoring guard', panel.id);
     } catch {}
     return;
@@ -833,7 +846,7 @@ function setToyFocus(panel, { center = true, unfocusAll } = {}) { // default cen
     } else {
       localStorage.setItem(FOCUS_LAST_ID_KEY, 'none');
     }
-    const dbg = (window.__focusDebug || localStorage.getItem('FOCUS_DBG') === '1');
+    const dbg = focusDebugEnabled();
     if (dbg) console.log('[focus] setToyFocus', { id: g_focusedToyId, center, unfocusAll: effectiveUnfocusAll });
   } catch {}
 
@@ -880,7 +893,7 @@ function setToyFocus(panel, { center = true, unfocusAll } = {}) { // default cen
       const centerX = (guideRight + spawnerLeft) / 2;
       const centerFracX = centerX / window.innerWidth;
       try {
-        if (window.__focusDebug || localStorage.getItem('FOCUS_DBG') === '1') {
+        if (focusDebugEnabled()) {
           console.log('[focus] center request', {
             id: panel.id,
             centerFracX,

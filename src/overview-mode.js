@@ -1,4 +1,5 @@
-﻿import { publishFrameStart } from './zoom/ZoomCoordinator.js';
+﻿import { makeDebugLogger } from './debug-flags.js';
+import { publishFrameStart } from './zoom/ZoomCoordinator.js';
 
 const DEFAULT_OVERVIEW_SCALE = 0.3;
 const DEFAULT_NORMAL_SCALE = 1;
@@ -47,6 +48,8 @@ let boardObserver = null;
 
 // ---- Overview logging gate ----
 const OV_DEBUG = false;
+// Verbose logs hidden by default; enable via localStorage.setItem('mt_debug_logs','1')
+const ovDebugLog = makeDebugLogger('mt_debug_logs', 'debug');
 const ovdbg = (...args) => { if (OV_DEBUG) console.debug(...args); };
 const ovlog = (...args) => { if (OV_DEBUG) console.log(...args); };
 
@@ -571,7 +574,7 @@ function enterOverviewMode(isButton) {
     panels.forEach(panel => {
         try { panel.dispatchEvent(new CustomEvent('overview:commit', { bubbles: true })); } catch {}
     });
-    try { console.debug('[overview] enter: classes', { body: document.body.className, board: document.querySelector('#board')?.className }); } catch {}
+    ovDebugLog('[overview] enter: classes', { body: document.body.className, board: document.querySelector('#board')?.className });
     try {
         window.dispatchEvent(new CustomEvent('overview:change', { detail: { active: true } }));
     } catch {}

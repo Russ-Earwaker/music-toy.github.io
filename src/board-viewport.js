@@ -1,6 +1,6 @@
 // src/board-viewport.js — pan & zoom coordinator bridge (clean, <=300 lines)
 import { overviewMode } from './overview-mode.js';
-import { makeDebugLogger } from './debug-flags.js';
+import { debugEnabled, makeDebugLogger } from './debug-flags.js';
 import { getRect } from './layout-cache.js';
 import {
   attachWorldElement,
@@ -16,6 +16,20 @@ import { WheelZoomLerper } from './zoom/WheelZoomLerper.js';
 const viewportLog = makeDebugLogger('mt_debug_logs');
 const OV_LOG = (typeof window !== 'undefined' && window.__BV_OV_DBG === true);
 const ovDbg = (...args) => { if (!OV_LOG) return; try { console.debug('[BV][overview]', ...args); } catch {} };
+const focusDebugEnabled = () => {
+  try {
+    if (debugEnabled('mt_focus_debug')) return true;
+  } catch {}
+  try {
+    if (typeof window !== 'undefined' && window.__focusDebug) return true;
+  } catch {}
+  try {
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('FOCUS_DBG') === '1') return true;
+  } catch {}
+  return false;
+};
+const focusLog = (...args) => { if (!focusDebugEnabled()) return; try { console.log(...args); } catch {} };
+const focusWarn = (...args) => { if (!focusDebugEnabled()) return; try { console.warn(...args); } catch {} };
 const RELOW_PROFILE = (() => {
   if (typeof window === 'undefined') return true;
   try {
@@ -781,11 +795,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
       ? window.isFocusEditingEnabled()
       : false;
     if (window.__mtZoomGesturing && !focusEnabled) return null;
-    try {
-      if (window.__focusDebug || localStorage.getItem('FOCUS_DBG') === '1') {
-        console.log('[focus][getWorldCenter:enter]', { id: el.id, cls: el.className });
-      }
-    } catch {}
+    focusLog('[focus][getWorldCenter:enter]', { id: el.id, cls: el.className });
 
     const panel = getPanel(el) || el;
     const computed = panel ? getComputedStyle(panel) : null;
@@ -802,11 +812,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
 
     const targetEl = getTargetElementForPanel(panel) || panel;
     if (!targetEl) {
-      try {
-        if (window.__focusDebug || localStorage.getItem('FOCUS_DBG') === '1') {
-          console.warn('[focus][getWorldCenter] no targetEl', { id: panel?.id });
-        }
-      } catch {}
+      focusWarn('[focus][getWorldCenter] no targetEl', { id: panel?.id });
       return null;
     }
     const z = getZoomState();
@@ -826,11 +832,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     const boardRect = window.__mtZoomGesturing ? getStageRectCached() : profileReflow('worldCenter:boardRect', () => getRect(stage));
     const elRect = window.__mtZoomGesturing ? getRect(targetEl) : profileReflow('worldCenter:elRect', () => getRect(targetEl));
     if (!boardRect || !elRect || !Number.isFinite(elRect.width) || !Number.isFinite(elRect.height)) {
-      try {
-        if (window.__focusDebug || localStorage.getItem('FOCUS_DBG') === '1') {
-          console.warn('[focus][getWorldCenter] invalid rect', { id: panel?.id, boardRect, elRect });
-        }
-      } catch {}
+      focusWarn('[focus][getWorldCenter] invalid rect', { id: panel?.id, boardRect, elRect });
       // Fallback: derive from stored spawn positions or offsets.
       const dsLeft = parsePx(panel?.dataset?.spawnAutoLeft);
       const dsTop = parsePx(panel?.dataset?.spawnAutoTop);
@@ -841,11 +843,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
       if (Number.isFinite(fbLeft) && Number.isFinite(fbTop) && fbW > 0 && fbH > 0) {
         const wx = fbLeft + fbW * 0.5;
         const wy = fbTop + fbH * 0.5;
-        try {
-          if (window.__focusDebug || localStorage.getItem('FOCUS_DBG') === '1') {
-            console.log('[focus][getWorldCenter:fallback]', { id: panel?.id, fbLeft, fbTop, fbW, fbH, wx, wy });
-          }
-        } catch {}
+        focusLog('[focus][getWorldCenter:fallback]', { id: panel?.id, fbLeft, fbTop, fbW, fbH, wx, wy });
         return { x: wx, y: wy };
       }
       return null;
@@ -856,11 +854,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     const wx = worldVec.x;
     const wy = worldVec.y;
     if (!Number.isFinite(wx) || !Number.isFinite(wy)) {
-      try {
-        if (window.__focusDebug || localStorage.getItem('FOCUS_DBG') === '1') {
-          console.warn('[focus][getWorldCenter] non-finite world coords', { id: panel?.id, screenCx, screenCy, s, tx, ty, wx, wy });
-        }
-      } catch {}
+      focusWarn('[focus][getWorldCenter] non-finite world coords', { id: panel?.id, screenCx, screenCy, s, tx, ty, wx, wy });
       const dsLeft = parsePx(panel?.dataset?.spawnAutoLeft);
       const dsTop = parsePx(panel?.dataset?.spawnAutoTop);
       const fbLeft = Number.isFinite(dsLeft) ? dsLeft : parsePx(panel?.style?.left);
@@ -1033,13 +1027,9 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
       }
     }
     if (!worldCenter) {
-      try {
-        if (window.__focusDebug || localStorage.getItem('FOCUS_DBG') === '1') {
-          console.warn('[focus][center] missing world center', { id: el?.id });
-        }
-      } catch {}
-      return;
-    }
+    focusWarn('[focus][center] missing world center', { id: el?.id });
+    return;
+  }
     const elCxWorld = worldCenter.x ?? 0;
     const elCyWorld = worldCenter.y ?? 0;
 
@@ -1071,24 +1061,16 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     ? window.isFocusEditingEnabled()
     : false;
   if (camTweenLock && !focusEnabled) return;
-  try {
-    if (window.__focusDebug || localStorage.getItem('FOCUS_DBG') === '1') {
-      console.log('[focus][centerSlow]', {
-        id: el?.id,
-        focusEnabled,
-        camTweenLock,
-        desiredScale,
-        duration,
-      });
-    }
-  } catch {}
+  focusLog('[focus][centerSlow]', {
+    id: el?.id,
+    focusEnabled,
+    camTweenLock,
+    desiredScale,
+    duration,
+  });
   const wc = getWorldCenter(el);
   if (!wc) {
-    try {
-      if (window.__focusDebug || localStorage.getItem('FOCUS_DBG') === '1') {
-        console.warn('[focus][centerSlow] missing world center', { id: el?.id });
-      }
-    } catch {}
+    focusWarn('[focus][centerSlow] missing world center', { id: el?.id });
     const left = parsePx(el?.style?.left);
     const top = parsePx(el?.style?.top);
     const w = el?.offsetWidth || 0;
