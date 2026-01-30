@@ -28,6 +28,15 @@
     return panel.querySelector('.wheel-canvas, .grid-canvas, .rippler-canvas, .bouncer-canvas, canvas, svg');
   }
   function manageCanvasDpr(canvas, container){
+    // Toys with their own surface managers (e.g. DrawGrid) must opt out,
+    // otherwise this will override their DPR/backing-store policy.
+    try {
+      if (canvas?.dataset?.skipAutoDpr === '1') return;
+      const panel = canvas?.closest?.('.toy-panel');
+      if (panel?.dataset?.toySurfaceManaged === '1') return;
+      const role = canvas?.dataset?.role;
+      if (role && String(role).startsWith('drawgrid-')) return;
+    } catch {}
     if (!canvas || canvas.__wrapResize) return;
     const target = container || canvas.parentElement || canvas;
     if (!target) return;

@@ -2,14 +2,21 @@ export function createActiveCanvasHelpers(getState) {
   function getActivePaintCanvas() {
     const state = getState?.() || {};
     // draw into back when using back-buffers, otherwise front (paint)
-    if (state.DG_SINGLE_CANVAS) return state.backCanvas;
+    if (state.DG_SINGLE_CANVAS) {
+      // Prefer the visible front canvas when not using back buffers.
+      if (!state.usingBackBuffers && state.frontCanvas) return state.frontCanvas;
+      return state.backCanvas;
+    }
     return state.usingBackBuffers ? state.backCanvas : state.frontCanvas; // frontCanvas === paint
   }
 
   function getActivePaintCtx() {
     const state = getState?.() || {};
     // return the already-created 2D contexts; do not create a fresh context
-    if (state.DG_SINGLE_CANVAS) return state.backCtx;
+    if (state.DG_SINGLE_CANVAS) {
+      if (!state.usingBackBuffers && state.frontCtx) return state.frontCtx;
+      return state.backCtx;
+    }
     return state.usingBackBuffers ? state.backCtx : state.frontCtx;
   }
 
@@ -28,7 +35,9 @@ export function createActiveCanvasHelpers(getState) {
   function pointerToPaintLogical(ev = {}) {
     const state = getState?.() || {};
     const front = state.frontCanvas || null; // the on-screen paint canvas element
-    const basis = state.layersRoot || state.wrap || front || null;
+    // Prefer the visible canvas (front) or wrap, which reflect board zoom transforms.
+    // layersRoot can be untransformed in some layouts and will mis-map pointers when zoomed.
+    const basis = front || state.wrap || state.layersRoot || null;
 
     const rect = basis?.getBoundingClientRect?.();
     const rw = Math.max(1, rect?.width || basis?.clientWidth || state.cssW || front?.clientWidth || 1);
@@ -45,10 +54,27 @@ export function createActiveCanvasHelpers(getState) {
 
     const lx = (clientX - left) * (lw / rw);
     const ly = (clientY - top) * (lh / rh);
-    return {
+    const out = {
       x: Number.isFinite(lx) ? lx : 0,
       y: Number.isFinite(ly) ? ly : 0,
     };
+    try {
+      if (typeof window !== 'undefined' && window.__DG_POINTER_TRACE) {
+        out.__dbg = {
+          basisTag: basis?.tagName ? String(basis.tagName).toLowerCase() : null,
+          basisRole: basis?.getAttribute?.('data-role') || null,
+          basisClass: (basis?.className && typeof basis.className === 'string') ? basis.className : null,
+          rect: rect ? { x: rect.x, y: rect.y, w: rect.width, h: rect.height } : null,
+          rw,
+          rh,
+          lw,
+          lh,
+          left,
+          top,
+        };
+      }
+    } catch {}
+    return out;
   }
 
   return {

@@ -58,6 +58,7 @@ import { createDgFieldForces } from './drawgrid/dg-field-forces.js';
 import { createDgRandomizers } from './drawgrid/dg-randomizers.js';
 import { requestPanelPulse } from './pulse-border.js';
 import { queueClassToggle, markPanelForDomCommit } from './dom-commit.js';
+import { createToySurfaceManager } from './toy-surface-manager.js';
 import {
   DRAWGRID_ENABLE_PARTICLE_FIELD,
   DG_ALPHA_DEBUG,
@@ -89,11 +90,38 @@ const drawgridLog = makeDebugLogger('mt_debug_logs', 'log');
 // Lightweight trace helpers (opt-in via console):
 //   window.__DG_INPUT_TRACE = true   // pointer event flow + drawing state
 //   window.__DG_GHOST_TRACE = true   // ghost guide sweeps + sizing/scale
+//   window.__DG_CANVAS_SCALE_TRACE = true // logs only when canvas scale signature changes
+//   window.__DG_NODE_SCALE_TRACE = true   // logs only when node scale inputs change
+//   window.__DG_RENDER_SCALE_TRACE = true // logs only when key render-basis inputs change
 if (typeof window !== 'undefined' && window.__DG_INPUT_TRACE == null) {
   window.__DG_INPUT_TRACE = false;
 }
 if (typeof window !== 'undefined' && window.__DG_GHOST_TRACE == null) {
   window.__DG_GHOST_TRACE = false;
+}
+if (typeof window !== 'undefined' && window.__DG_CANVAS_SCALE_TRACE == null) {
+  window.__DG_CANVAS_SCALE_TRACE = false;
+}
+if (typeof window !== 'undefined' && window.__DG_NODE_SCALE_TRACE == null) {
+  window.__DG_NODE_SCALE_TRACE = false;
+}
+if (typeof window !== 'undefined' && window.__DG_RENDER_SCALE_TRACE == null) {
+  window.__DG_RENDER_SCALE_TRACE = false;
+}
+// Optional: include stacks for scale-change logs.
+//   window.__DG_CANVAS_SCALE_TRACE_STACK = true
+if (typeof window !== 'undefined' && window.__DG_CANVAS_SCALE_TRACE_STACK == null) {
+  window.__DG_CANVAS_SCALE_TRACE_STACK = false;
+}
+// Optional: include stacks for node-scale logs.
+//   window.__DG_NODE_SCALE_TRACE_STACK = true
+if (typeof window !== 'undefined' && window.__DG_NODE_SCALE_TRACE_STACK == null) {
+  window.__DG_NODE_SCALE_TRACE_STACK = false;
+}
+// Optional: include stacks for render-scale logs.
+//   window.__DG_RENDER_SCALE_TRACE_STACK = true
+if (typeof window !== 'undefined' && window.__DG_RENDER_SCALE_TRACE_STACK == null) {
+  window.__DG_RENDER_SCALE_TRACE_STACK = false;
 }
 // Optional: include stacks for key ghost-guide start/stop events.
 //   window.__DG_GHOST_TRACE_STACK = true
@@ -128,6 +156,330 @@ function dgGhostTrace(tag, data = null) {
   } catch {}
 }
 
+// --- Non-spammy canvas scale trace -------------------------------------------
+let __dgScaleTraceArmed = false;
+let __dgScaleTraceLastSig = '';
+let __dgScaleTraceLastMismatchSig = '';
+let __dgScaleSigMap = null;
+let __dgNodeScaleSigLast = '';
+let __dgRenderScaleSigLast = '';
+let __dgPointerSigLast = '';
+function dgScaleTrace(tag, data = null) {
+  try {
+    if (typeof window === 'undefined' || !window.__DG_CANVAS_SCALE_TRACE) return;
+    if (!__dgScaleTraceArmed) {
+      __dgScaleTraceArmed = true;
+      try { console.log('[DG][scale] TRACE ARMED'); } catch {}
+    }
+
+    const payload = data || {};
+    // Only log when the "signature" changes (rounded ratios to avoid float jitter spam).
+    const sig = (() => {
+      try {
+        return JSON.stringify(payload);
+      } catch {
+        return String(tag);
+      }
+    })();
+    if (sig === __dgScaleTraceLastSig) return;
+    __dgScaleTraceLastSig = sig;
+
+    let stack = null;
+    try {
+      if (window.__DG_CANVAS_SCALE_TRACE_STACK) {
+        const e = new Error(`DG scale trace: ${tag}`);
+        stack = e?.stack || null;
+      }
+    } catch {}
+
+    try { console.log(`[DG][scale] ${tag}`, payload, stack ? { stack } : ''); } catch {}
+    try { drawgridLog(`[DG][scale] ${tag}`, payload); } catch {}
+  } catch {}
+}
+
+function __dgStableStringify(obj) {
+  try {
+    const seen = new WeakSet();
+    return JSON.stringify(obj, (k, v) => {
+      if (v && typeof v === 'object') {
+        if (seen.has(v)) return '[Circular]';
+        seen.add(v);
+      }
+      return v;
+    });
+  } catch {
+    try { return String(obj); } catch { return '[unstringifiable]'; }
+  }
+}
+
+function __dgMaybeTraceStack(flagName, label) {
+  try {
+    if (typeof window === 'undefined' || !window[flagName]) return null;
+    const e = new Error(label);
+    return { stack: String(e.stack || '') };
+  } catch {
+    return null;
+  }
+}
+
+function dgNodeScaleTrace(tag, payload) {
+  try {
+    if (typeof window === 'undefined' || !window.__DG_NODE_SCALE_TRACE) return;
+    const sig = __dgStableStringify(payload);
+    if (sig === __dgNodeScaleSigLast) return;
+    __dgNodeScaleSigLast = sig;
+    const stack = __dgMaybeTraceStack('__DG_NODE_SCALE_TRACE_STACK', `DG node scale trace: ${tag}`);
+    if (stack) console.log(`[DG][nodeScale] ${tag}`, payload, stack);
+    else console.log(`[DG][nodeScale] ${tag}`, payload);
+    if (window.__DG_NODE_SCALE_TRACE_VERBOSE) {
+      try { console.log(`[DG][nodeScale] ${tag} verbose`, sig); } catch {}
+    }
+  } catch {}
+}
+
+function dgRenderScaleTrace(tag, payload) {
+  try {
+    if (typeof window === 'undefined' || !window.__DG_RENDER_SCALE_TRACE) return;
+    const sig = __dgStableStringify(payload);
+    if (sig === __dgRenderScaleSigLast) return;
+    __dgRenderScaleSigLast = sig;
+    const stack = __dgMaybeTraceStack('__DG_RENDER_SCALE_TRACE_STACK', `DG render scale trace: ${tag}`);
+    if (stack) console.log(`[DG][renderScale] ${tag}`, payload, stack);
+    else console.log(`[DG][renderScale] ${tag}`, payload);
+  } catch {}
+}
+
+function __dgQuantRatio(n, step = 0.01) {
+  const v = Number(n);
+  const s = Number(step) || 0.01;
+  if (!Number.isFinite(v)) return null;
+  return Math.round(v / s) * s;
+}
+
+function __dgDescribeCanvasScale(el, wrapRect) {
+  try {
+    if (!el || !el.getBoundingClientRect) return null;
+    const r = el.getBoundingClientRect();
+    const ww = wrapRect?.width || 0;
+    const wh = wrapRect?.height || 0;
+    const rectW = r?.width || 0;
+    const rectH = r?.height || 0;
+    const ratioW = (ww > 0 && rectW > 0) ? rectW / ww : null;
+    const ratioH = (wh > 0 && rectH > 0) ? rectH / wh : null;
+    // "effective DPR" based on rect, not cssW (catches “rect drift” bugs).
+    const effDprW = (rectW > 0 && el.width > 0) ? el.width / rectW : null;
+    const effDprH = (rectH > 0 && el.height > 0) ? el.height / rectH : null;
+    return {
+      rectW: Math.round(rectW),
+      rectH: Math.round(rectH),
+      ratioW: __dgQuantRatio(ratioW, 0.01),
+      ratioH: __dgQuantRatio(ratioH, 0.01),
+      effDprW: __dgQuantRatio(effDprW, 0.01),
+      effDprH: __dgQuantRatio(effDprH, 0.01),
+      pxW: el.width || 0,
+      pxH: el.height || 0,
+      clientW: el.clientWidth || 0,
+      clientH: el.clientHeight || 0,
+      tsmCssW: Number.isFinite(el.__tsmCssW) ? el.__tsmCssW : null,
+      tsmCssH: Number.isFinite(el.__tsmCssH) ? el.__tsmCssH : null,
+      dgCssW: Number.isFinite(el.__dgCssW) ? el.__dgCssW : null,
+      dgCssH: Number.isFinite(el.__dgCssH) ? el.__dgCssH : null,
+      cssW: el.style?.width || null,
+      cssH: el.style?.height || null,
+      // Inline styles are often empty; include computed styles too (catches clobbers).
+      csW: (() => { try { return (typeof getComputedStyle === 'function') ? (getComputedStyle(el)?.width || null) : null; } catch { return null; } })(),
+      csH: (() => { try { return (typeof getComputedStyle === 'function') ? (getComputedStyle(el)?.height || null) : null; } catch { return null; } })(),
+      csTransform: (() => { try { return (typeof getComputedStyle === 'function') ? (getComputedStyle(el)?.transform || null) : null; } catch { return null; } })(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function __dgDescribeDomPath(el, stopEl, maxDepth = 8) {
+  try {
+    const out = [];
+    let cur = el;
+    let depth = 0;
+    while (cur && depth < maxDepth) {
+      const role = cur?.getAttribute?.('data-role') || null;
+      const cls = (cur?.className && typeof cur.className === 'string') ? cur.className : null;
+      const tag = cur?.tagName ? String(cur.tagName).toLowerCase() : null;
+      let t = null, w = null, h = null;
+      try {
+        if (typeof getComputedStyle === 'function') {
+          const cs = getComputedStyle(cur);
+          t = cs?.transform || null;
+          w = cs?.width || null;
+          h = cs?.height || null;
+        }
+      } catch {}
+      out.push({ tag, role, cls, w, h, t });
+      if (stopEl && cur === stopEl) break;
+      cur = cur.parentElement;
+      depth++;
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+function __dgGetCanvasSizingSnapshot(canvas) {
+  try {
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect?.();
+    const cssW = canvas.style?.width || null;
+    const cssH = canvas.style?.height || null;
+    const cssWNum = cssW ? (parseFloat(cssW) || 0) : 0;
+    const cssHNum = cssH ? (parseFloat(cssH) || 0) : 0;
+    const clientW = canvas.clientWidth || 0;
+    const clientH = canvas.clientHeight || 0;
+    const rectW = rect?.width || 0;
+    const rectH = rect?.height || 0;
+    const pxW = canvas.width || 0;
+    const pxH = canvas.height || 0;
+    const basisW = cssWNum || clientW || rectW || 0;
+    const basisH = cssHNum || clientH || rectH || 0;
+    return {
+      role: canvas?.getAttribute?.('data-role') || null,
+      pxW,
+      pxH,
+      rectW: Math.round(rectW),
+      rectH: Math.round(rectH),
+      cssW,
+      cssH,
+      clientW,
+      clientH,
+      tsmCssW: Number.isFinite(canvas.__tsmCssW) ? canvas.__tsmCssW : null,
+      tsmCssH: Number.isFinite(canvas.__tsmCssH) ? canvas.__tsmCssH : null,
+      dgCssW: Number.isFinite(canvas.__dgCssW) ? canvas.__dgCssW : null,
+      dgCssH: Number.isFinite(canvas.__dgCssH) ? canvas.__dgCssH : null,
+      effDprW: (basisW > 0 && pxW > 0) ? +(pxW / basisW).toFixed(3) : null,
+      effDprH: (basisH > 0 && pxH > 0) ? +(pxH / basisH).toFixed(3) : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function __dgPaintDebugLog(tag, extra = null) {
+  try {
+    if (typeof window === 'undefined' || !window.__DG_PAINT_DEBUG) return;
+    const active = (typeof getActivePaintCanvas === 'function') ? getActivePaintCanvas() : null;
+    let pctxTransform = null;
+    try {
+      if (pctx && typeof pctx.getTransform === 'function') {
+        const t = pctx.getTransform();
+        pctxTransform = { a: t.a, b: t.b, c: t.c, d: t.d, e: t.e, f: t.f };
+      }
+    } catch {}
+    const payload = {
+      panelId: panel?.id || null,
+      tag,
+      usingBackBuffers,
+      paintDpr,
+      cssW,
+      cssH,
+      pctxRole: pctx?.canvas?.getAttribute?.('data-role') || null,
+      activeRole: active?.getAttribute?.('data-role') || null,
+      frontW: frontCanvas?.width || 0,
+      frontH: frontCanvas?.height || 0,
+      backW: backCanvas?.width || 0,
+      backH: backCanvas?.height || 0,
+      frontClientW: frontCanvas?.clientWidth || 0,
+      frontClientH: frontCanvas?.clientHeight || 0,
+      frontEffDpr: (cssW && frontCanvas?.width) ? +(frontCanvas.width / cssW).toFixed(3) : null,
+      backEffDpr: (cssW && backCanvas?.width) ? +(backCanvas.width / cssW).toFixed(3) : null,
+      pctxTransform,
+    };
+    if (extra && typeof extra === 'object') {
+      Object.assign(payload, extra);
+    }
+    if (window.__DG_PAINT_SAMPLE && gridArea && gridArea.w > 0 && gridArea.h > 0) {
+      const sx = Math.round(gridArea.x + gridArea.w * 0.5);
+      const sy = Math.round(gridArea.y + topPad + (gridArea.h - topPad) * 0.5);
+      payload.sample = {
+        x: sx,
+        y: sy,
+        front: __dgSampleAlpha(frontCtx, sx, sy),
+        back: __dgSampleAlpha(backCtx, sx, sy),
+      };
+    }
+    console.log('[DG][paintDBG]', JSON.stringify(payload));
+  } catch {}
+}
+
+
+function __dgScaleMismatchSummary(sigPayload) {
+  try {
+    const paint = sigPayload?.paint || null;
+    const nodes = sigPayload?.nodes || null;
+    const playhead = sigPayload?.playhead || null;
+    const wrap = sigPayload?.wrap || null;
+
+    const pw = paint?.ratioW;
+    const ph = paint?.ratioH;
+    const nw = nodes?.ratioW;
+    const nh = nodes?.ratioH;
+
+    // If we can’t compute ratios, don’t report mismatch.
+    if (!Number.isFinite(pw) || !Number.isFinite(ph) || !Number.isFinite(nw) || !Number.isFinite(nh)) {
+      return null;
+    }
+
+    // A “scaled smaller” bug should show up as nodes ratio < paint ratio (or generally ratios diverging).
+    const dW = Math.abs(pw - nw);
+    const dH = Math.abs(ph - nh);
+    const mismatch = (dW >= 0.02) || (dH >= 0.02);
+
+    if (!mismatch) return null;
+
+    // Keep this intentionally tiny + actionable.
+    return {
+      panelId: sigPayload?.panelId || null,
+      reason: sigPayload?.reason || null,
+      zoomMode: sigPayload?.zoomMode || null,
+      paintDpr: sigPayload?.paintDpr || null,
+      wrap,
+      paint: { rectW: paint?.rectW, rectH: paint?.rectH, ratioW: pw, ratioH: ph, effDprW: paint?.effDprW, effDprH: paint?.effDprH },
+      nodes: { rectW: nodes?.rectW, rectH: nodes?.rectH, ratioW: nw, ratioH: nh, effDprW: nodes?.effDprW, effDprH: nodes?.effDprH },
+      // Playhead is a frequent “got out of sync” canary; include if present.
+      playhead: playhead ? { rectW: playhead?.rectW, rectH: playhead?.rectH, ratioW: playhead?.ratioW, ratioH: playhead?.ratioH } : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function __dgEmitScaleMismatchIfChanged(sigPayload) {
+  try {
+    if (typeof window === 'undefined' || !window.__DG_CANVAS_SCALE_TRACE) return;
+    const summary = __dgScaleMismatchSummary(sigPayload);
+    const sig = (() => {
+      try { return JSON.stringify(summary || { ok: true }); } catch { return String(!!summary); }
+    })();
+    if (sig === __dgScaleTraceLastMismatchSig) return;
+    __dgScaleTraceLastMismatchSig = sig;
+    if (!summary) return;
+    // Add path info only at the point we log (still non-spammy; only on mismatch signature change).
+    let extra = null;
+    try {
+      const panelId = sigPayload?.panelId || null;
+      const panel = panelId ? document.getElementById(panelId) : null;
+      const wrap = panel?.__dgWrap || panel?.querySelector?.('.drawgrid-size-wrap') || null;
+      const paintEl = panel?.querySelector?.('canvas[data-role="drawgrid-paint"]') || null;
+      const nodesEl = panel?.querySelector?.('canvas[data-role="drawgrid-nodes"]') || null;
+      extra = {
+        paintPath: paintEl ? __dgDescribeDomPath(paintEl, wrap) : null,
+        nodesPath: nodesEl ? __dgDescribeDomPath(nodesEl, wrap) : null,
+      };
+    } catch {}
+    try { console.warn('[DG][scale] MISMATCH', summary, extra || ''); } catch {}
+    try { drawgridLog('[DG][scale] MISMATCH', summary); } catch {}
+  } catch {}
+}
+
 function __dgGhostMaybeStack(label = 'DG ghost trace') {
   try {
     if (typeof window === 'undefined') return null;
@@ -139,6 +491,96 @@ function __dgGhostMaybeStack(label = 'DG ghost trace') {
   }
 }
 
+// Lightweight canvas scale trace helpers (opt-in via console):
+//   window.__DG_CANVAS_SCALE_TRACE = true        // logs only when a layer's effective scale changes
+//   window.__DG_CANVAS_SCALE_TRACE_STACK = true  // include a short stack for the change event
+if (typeof window !== 'undefined' && window.__DG_CANVAS_SCALE_TRACE == null) {
+  window.__DG_CANVAS_SCALE_TRACE = false;
+}
+if (typeof window !== 'undefined' && window.__DG_CANVAS_SCALE_TRACE_STACK == null) {
+  window.__DG_CANVAS_SCALE_TRACE_STACK = false;
+}
+
+let __dgCanvasScaleTraceArmed = false;
+let __dgCanvasScaleSigMap = null;
+
+function dgCanvasScaleTrace(tag, data = null) {
+  try {
+    if (typeof window !== 'undefined' && window.__DG_CANVAS_SCALE_TRACE) {
+      if (!__dgCanvasScaleTraceArmed) {
+        __dgCanvasScaleTraceArmed = true;
+        try { console.log('[DG][scale] TRACE ARMED'); } catch {}
+      }
+      try { console.log(`[DG][scale] ${tag}`, data || {}); } catch {}
+      try { drawgridLog(`[DG][scale] ${tag}`, data || {}); } catch {}
+    }
+  } catch {}
+}
+
+function __dgScaleMaybeStack(label = 'DG scale trace') {
+  try {
+    if (typeof window === 'undefined') return null;
+    if (!window.__DG_CANVAS_SCALE_TRACE_STACK) return null;
+    const e = new Error(label);
+    return e?.stack || null;
+  } catch {
+    return null;
+  }
+}
+
+function __dgReadElemScaleSig(el) {
+  try {
+    if (!el) return null;
+    const rect = el.getBoundingClientRect?.();
+    const rectW = Math.max(0, Math.round((rect?.width || 0) * 10) / 10);
+    const rectH = Math.max(0, Math.round((rect?.height || 0) * 10) / 10);
+    const clientW = Math.max(0, Math.round(((el.clientWidth ?? 0) || 0) * 10) / 10);
+    const clientH = Math.max(0, Math.round(((el.clientHeight ?? 0) || 0) * 10) / 10);
+    const styleW = (el.style && el.style.width) ? String(el.style.width) : '';
+    const styleH = (el.style && el.style.height) ? String(el.style.height) : '';
+    let transform = '';
+    try {
+      const cs = (typeof getComputedStyle === 'function') ? getComputedStyle(el) : null;
+      transform = cs ? String(cs.transform || '') : '';
+    } catch {}
+    const sx = (clientW > 0) ? Math.round((rectW / clientW) * 1000) / 1000 : null;
+    const sy = (clientH > 0) ? Math.round((rectH / clientH) * 1000) / 1000 : null;
+    return {
+      rectW, rectH, clientW, clientH,
+      sx, sy,
+      styleW, styleH,
+      transform,
+      sig: `${clientW}x${clientH}|${rectW}x${rectH}|${styleW}|${styleH}|${transform}`,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Non-spammy: only logs when a layer's effective CSS/rect scale signature changes.
+function __dgTraceCanvasScaleSnapshot(reason, panelId, roles) {
+  try {
+    if (typeof window === 'undefined' || !window.__DG_CANVAS_SCALE_TRACE) return;
+    if (!__dgCanvasScaleSigMap) __dgCanvasScaleSigMap = new Map();
+    const changed = [];
+    for (const entry of (roles || [])) {
+      const role = entry?.role || 'unknown';
+      const el = entry?.el;
+      const snap = __dgReadElemScaleSig(el);
+      if (!snap) continue;
+      const key = `${panelId || 'panel'}|${role}`;
+      const prev = __dgCanvasScaleSigMap.get(key);
+      if (prev !== snap.sig) {
+        __dgCanvasScaleSigMap.set(key, snap.sig);
+        changed.push({ role, ...snap });
+      }
+    }
+    if (changed.length) {
+      dgCanvasScaleTrace('snapshot', { panelId, reason, changed, stack: __dgScaleMaybeStack(`DG scale trace: ${reason}`) });
+    }
+  } catch {}
+}
+
 // --- Canvas DPR helpers ------------------------------------------------------
 // Some panels reduce backing-store DPR (visual/pressure/small-panel multipliers).
 // If we draw in logical space assuming paintDpr=1 but a canvas backing store is
@@ -146,19 +588,112 @@ function __dgGhostMaybeStack(label = 'DG ghost trace') {
 function __dgGetCanvasDprFromCss(canvas, cssW, fallback = 1) {
   try {
     const cw = canvas?.width || 0;
-    const w = Number.isFinite(cssW) ? cssW : 0;
-    if (cw > 0 && w > 0) return cw / w;
+    const ch = canvas?.height || 0;
+
+    // IMPORTANT (zoom-safe):
+    // Do NOT use getBoundingClientRect() here. During zoom/pan, it reflects transformed
+    // geometry and will make DPR estimates change with camera zoom (causing nodes/lines/text
+    // to shrink/grow relative to other layers).
+    //
+    // Prefer the caller's CSS size (derived from stable layout), then our cached size,
+    // then computedStyle as a last resort.
+    //
+    // IMPORTANT:
+    // We have seen cases where per-canvas cached CSS sizes (canvas.__dgCssW/H) drift
+    // across refresh/gesture transitions (especially when canvases get swapped or
+    // styles are rewritten). If we trust a stale cached width, DPR estimation becomes
+    // wrong and you get exactly the reported symptoms:
+    //   - nodes/labels/connectors not filling the available space when zoomed out
+    //   - the solid paint stroke rendering larger/smaller than the overlay stroke
+    //
+    // So: if the caller provides a numeric cssW, treat that as authoritative.
+    const hasAuthoritativeW = Number.isFinite(cssW) && cssW > 0;
+    let w = (hasAuthoritativeW ? cssW : 0);
+    const cachedW = (canvas && Number.isFinite(canvas.__tsmCssW)) ? canvas.__tsmCssW
+      : (canvas && Number.isFinite(canvas.__dgCssW)) ? canvas.__dgCssW : 0;
+    const cachedH = (canvas && Number.isFinite(canvas.__tsmCssH)) ? canvas.__tsmCssH
+      : (canvas && Number.isFinite(canvas.__dgCssH)) ? canvas.__dgCssH : 0;
+    let h = cachedH || 0;
+    if (!w && cachedW) w = cachedW;
+
+    // If we *do* have an authoritative cssW, keep the canvas cache aligned so
+    // future DPR estimates don't accidentally pick up an old value.
+    if (canvas && w && (!cachedW || Math.abs(cachedW - w) > 1)) {
+      try { canvas.__dgCssW = w; } catch {}
+    }
+    if ((!w || !h) && typeof getComputedStyle === 'function' && canvas) {
+      try {
+        const cs = getComputedStyle(canvas);
+        const sw = parseFloat(cs?.width || '0') || 0;
+        const sh = parseFloat(cs?.height || '0') || 0;
+        if (!w && sw > 0) w = sw;
+        if (!h && sh > 0) h = sh;
+      } catch {}
+    }
+
+    // If both cached + computedStyle exist and disagree a lot, prefer computedStyle.
+    // (This handles cases where a canvas was moved/swapped and the cache lags.)
+    try {
+      if (canvas && typeof getComputedStyle === 'function') {
+        const cs = getComputedStyle(canvas);
+        const sw = parseFloat(cs?.width || '0') || 0;
+        if (sw > 0 && cachedW > 0 && Math.abs(sw - cachedW) > 2 && (!Number.isFinite(cssW) || !cssW)) {
+          w = sw;
+          try { canvas.__dgCssW = sw; } catch {}
+        }
+      }
+    } catch {}
+
+    if (cw > 0 && w > 0) {
+      // If the caller supplies cssW, treat width as authoritative and avoid
+      // averaging with a potentially stale cached height.
+      if (hasAuthoritativeW) return cw / w;
+      // If we have both axes, average them to reduce weirdness if one axis is rounded differently.
+      if (ch > 0 && h > 0) {
+        const dprX = cw / w;
+        const dprY = ch / h;
+        return (dprX + dprY) * 0.5;
+      }
+      return cw / w;
+    }
   } catch {}
   return fallback;
 }
 function __dgWithLogicalSpaceDpr(R, ctx, dpr, fn) {
-  // R.withLogicalSpace uses the module's paintDpr; temporarily override locally.
-  // Safe because ghost drawing is synchronous and we restore immediately.
-  const prev = paintDpr;
-  paintDpr = (Number.isFinite(dpr) && dpr > 0) ? dpr : prev;
-  try { return R.withLogicalSpace(ctx, fn); }
-  finally { paintDpr = prev; }
+  // IMPORTANT:
+  // Do NOT temporarily mutate the module-scoped paintDpr.
+  // That global is shared across all drawgrid instances + layers, and mutating it
+  // (even briefly) can cause exactly the "some overlays are scaled differently"
+  // bug we're chasing (nodes/animated line/ghost trail drawn too small/large).
+  //
+  // Instead, apply the DPR as a local transform directly on this context.
+  if (!ctx) return fn();
+
+  // Guard against accidental nesting.
+  if (ctx.__dgLogicalSpaceActive) {
+    return fn();
+  }
+
+  const s = (Number.isFinite(dpr) && dpr > 0) ? dpr : 1;
+  try { ctx.__dgLogicalSpaceActive = true; } catch {}
+  ctx.save();
+  ctx.setTransform(s, 0, 0, s, 0, 0);
+  try {
+    return fn();
+  } finally {
+    ctx.restore();
+    try { ctx.__dgLogicalSpaceActive = false; } catch {}
+  }
 }
+
+// One-shot dumper (manual, not spammy):
+//   window.__DG_DUMP_CANVAS_SCALES?.('drawgrid-xyz')
+// If panelId is omitted, dumps the most recent panel we saw in resizeSurfacesFor.
+try {
+  if (typeof window !== 'undefined' && window.__DG_DUMP_CANVAS_SCALES == null) {
+    window.__DG_DUMP_CANVAS_SCALES = null;
+  }
+} catch {}
 
 const gridAreaLogical = { w: 0, h: 0 };
 
@@ -430,17 +965,8 @@ function createViewportBridgeDG(hostEl) {
   };
 }
 
-let usingBackBuffers = false;
-let __dgDrawingActive = false;
-let paintDpr = __dgCapDprForBackingStore(
-  0,
-  0,
-  Math.max(1, Math.min((typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1, 3)),
-  null
-);
-
-let cssW = 0, cssH = 0, cw = 0, ch = 0, topPad = 0;
-let layoutSizeDirty = true;
+// NOTE: DrawGrid has to be multi-instance safe. Do NOT store per-toy sizing state at module scope.
+// These are now declared per-instance inside createDrawGrid().
 
 // Playhead sprite caching + idle warming (extracted)
 const __dgPlayhead = createDgPlayheadSprites({
@@ -562,6 +1088,15 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   // Per-instance state (WAS module-level; moving fixes cross-toy leakage)
   let currentMap = null;                // { active:boolean[], nodes:Set[], disabled:Set[] }
   let usingBackBuffers = false;
+  let __dgDrawingActive = false;
+  let paintDpr = __dgCapDprForBackingStore(
+    0,
+    0,
+    Math.max(1, Math.min((typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1, 3)),
+    null
+  );
+  let cssW = 0, cssH = 0, cw = 0, ch = 0, topPad = 0;
+  let layoutSizeDirty = true;
   // Cached layout size to avoid forced reflow from offsetWidth/clientWidth during rAF.
   // Updated by ResizeObserver; used by measureCSSSize(wrap).
   let __dgLayoutW = 0;
@@ -616,6 +1151,27 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   // The .toy-body is now guaranteed to exist by initToyUI, which runs first.
   const body = panel.querySelector('.toy-body');
   const drawToyBg = '#000413ff';
+
+  // IMPORTANT: DrawGrid manages multiple canvases with a custom backing-store DPR policy.
+  // Opt this panel (and its canvases) out of the generic auto-DPR managers.
+  try { panel.dataset.toySurfaceManaged = '1'; } catch {}
+
+  // === Generic surface manager (DrawGrid is the first adopter) ===
+  const dgSurfaces = (() => {
+    try {
+      return createToySurfaceManager({
+        panel,
+        body,
+        getBoardScale: () => {
+          try { return boardScaleHelper(panel) || 1; } catch { return 1; }
+        },
+        tag: 'drawgrid',
+      });
+    } catch (e) {
+      try { console.warn('[DG] createToySurfaceManager failed', e); } catch {}
+      return null;
+    }
+  })();
 
   if (!body) {
     return;
@@ -733,29 +1289,45 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const particleCanvas = document.createElement('canvas');
   particleCanvas.className = 'toy-particles';
   particleCanvas.setAttribute('data-role', 'drawgrid-particles');
+  try { particleCanvas.dataset.skipAutoDpr = '1'; } catch {}
+  try { dgSurfaces?.registerCanvas?.('particles', particleCanvas, { policy: 'css' }); } catch {}
   const grid = document.createElement('canvas');
   grid.classList.add('toy-canvas');
   grid.setAttribute('data-role','drawgrid-grid');
+  try { grid.dataset.skipAutoDpr = '1'; } catch {}
+  try { dgSurfaces?.registerCanvas?.('grid', grid, { policy: 'managed' }); } catch {}
   const paint = document.createElement('canvas');
   paint.classList.add('toy-canvas');
   paint.setAttribute('data-role','drawgrid-paint');
+  try { paint.dataset.skipAutoDpr = '1'; } catch {}
+  try { dgSurfaces?.registerCanvas?.('paint', paint, { policy: 'managed' }); } catch {}
   const nodesCanvas = DG_COMBINE_GRID_NODES ? grid : document.createElement('canvas');
   if (!DG_COMBINE_GRID_NODES) {
     nodesCanvas.classList.add('toy-canvas');
     nodesCanvas.setAttribute('data-role', 'drawgrid-nodes');
+    try { nodesCanvas.dataset.skipAutoDpr = '1'; } catch {}
+    try { dgSurfaces?.registerCanvas?.('nodes', nodesCanvas, { policy: 'managed' }); } catch {}
   }
   const flashCanvas = document.createElement('canvas');
   flashCanvas.classList.add('toy-canvas');
   flashCanvas.setAttribute('data-role', 'drawgrid-flash');
+  try { flashCanvas.dataset.skipAutoDpr = '1'; } catch {}
+  try { dgSurfaces?.registerCanvas?.('flash', flashCanvas, { policy: 'managed' }); } catch {}
   const ghostCanvas = document.createElement('canvas');
   ghostCanvas.classList.add('toy-canvas');
   ghostCanvas.setAttribute('data-role','drawgrid-ghost');
+  try { ghostCanvas.dataset.skipAutoDpr = '1'; } catch {}
+  try { dgSurfaces?.registerCanvas?.('ghost', ghostCanvas, { policy: 'managed' }); } catch {}
   const tutorialCanvas = document.createElement('canvas');
   tutorialCanvas.classList.add('toy-canvas');
   tutorialCanvas.setAttribute('data-role', 'drawgrid-tutorial-highlight');
+  try { tutorialCanvas.dataset.skipAutoDpr = '1'; } catch {}
+  try { dgSurfaces?.registerCanvas?.('tutorial', tutorialCanvas, { policy: 'managed' }); } catch {}
   const playheadCanvas = document.createElement('canvas');
   playheadCanvas.classList.add('toy-canvas');
   playheadCanvas.setAttribute('data-role', 'drawgrid-playhead');
+  try { playheadCanvas.dataset.skipAutoDpr = '1'; } catch {}
+  try { dgSurfaces?.registerCanvas?.('playhead', playheadCanvas, { policy: 'managed' }); } catch {}
   // Tag canvases so shared helper code can locate the owning panel.
   try {
     particleCanvas.__dgPanel = panel;
@@ -2155,6 +2727,78 @@ try {
       __dgLastResizeTargetW = targetW;
       __dgLastResizeTargetH = targetH;
       __dgLastResizeDpr = paintDpr;
+      __dgPaintDebugLog('resizeSurfacesFor', {
+        reason,
+        nextCssW,
+        nextCssH,
+        nextDpr,
+        paintDpr,
+        targetW,
+        targetH,
+        sizeChanged,
+        dprChanged,
+      });
+
+      // === NEW: single applier for managed canvases ===
+      // If the generic surface manager is present, let it apply:
+      // - CSS sizes
+      // - backing-store sizes for managed canvases
+      // - ctx.setTransform(dpr,0,0,dpr,0,0) for managed canvases
+      //
+      // Particles are registered as policy:'css' (field-generic owns backing store),
+      // so they'll only get CSS sizing here.
+      try {
+        if (dgSurfaces && typeof dgSurfaces.applyExplicit === 'function') {
+          // Keep local state in sync with the manager-applied state.
+          cssW = nextCssW;
+          cssH = nextCssH;
+          dgSurfaces.applyExplicit(nextCssW, nextCssH, paintDpr);
+          // Still keep DrawGrid's local CSS-size cache aligned (used in DPR estimation)
+          // and resize any back buffers not registered with the surface manager.
+          const setCssSize = (canvasEl) => {
+            if (!canvasEl || !canvasEl.style) return;
+            if (canvasEl.__dgCssW === nextCssW && canvasEl.__dgCssH === nextCssH) return;
+            canvasEl.__dgCssW = nextCssW;
+            canvasEl.__dgCssH = nextCssH;
+            canvasEl.style.width = `${nextCssW}px`;
+            canvasEl.style.height = `${nextCssH}px`;
+          };
+          [
+            frontCanvas,
+            backCanvas,
+            grid,
+            paint,
+            nodesCanvas,
+            flashCanvas,
+            ghostCanvas,
+            tutorialCanvas,
+            playheadCanvas,
+            particleCanvas,
+            gridBackCanvas,
+            nodesBackCanvas,
+            flashBackCanvas,
+            ghostBackCanvas,
+            tutorialBackCanvas,
+          ].forEach(setCssSize);
+          const resizeBack = (canvas) => {
+            if (!canvas) return;
+            if (canvas.width === targetW && canvas.height === targetH) return;
+            canvas.width = targetW;
+            canvas.height = targetH;
+          };
+          resizeBack(gridBackCanvas);
+          resizeBack(nodesBackCanvas);
+          resizeBack(flashBackCanvas);
+          resizeBack(ghostBackCanvas);
+          resizeBack(tutorialBackCanvas);
+          resizeBack(backCanvas);
+          dgSizeTrace('resizeSurfacesFor(surfaceMgr)', { reason, nextCssW, nextCssH, paintDpr, targetW, targetH });
+          return;
+        }
+      } catch (e) {
+        try { console.warn('[DG] surfaceMgr applyExplicit failed, falling back', e); } catch {}
+      }
+
       const setCssSize = (canvasEl) => {
         if (!canvasEl || !canvasEl.style) return;
         // Avoid repeated style writes inside RAF; these can be surprisingly expensive at scale.
@@ -2176,6 +2820,10 @@ try {
       if (playheadCanvas) {
         setCssSize(playheadCanvas);
       }
+      // Keep *all* overlay canvases pinned to the same CSS size as the panel.
+      // Otherwise, when paintDpr/backing-store sizes are reduced (< 1) for perf while zoomed out,
+      // some overlays (nodes/connectors/labels) can end up with a smaller intrinsic CSS size and appear scaled down.
+      [grid, paint, nodesCanvas, flashCanvas, ghostCanvas, tutorialCanvas, particleCanvas].forEach(setCssSize);
       const resize = (canvas) => {
         if (!canvas) return;
         if (canvas.width === targetW && canvas.height === targetH) return;
@@ -2196,6 +2844,58 @@ try {
       resize(playheadCanvas);
       resize(frontCanvas);
       resize(backCanvas);
+
+      // Non-spammy: only logs when a meaningful scale signature changes.
+      // This should catch cases where nodes/lines/text appear “smaller” than other layers.
+      try {
+        const wrapRect = wrap?.getBoundingClientRect?.();
+        const sigPayload = {
+          panelId: panel?.id || null,
+          reason,
+          zoomMode,
+          cssW: nextCssW,
+          cssH: nextCssH,
+          paintDpr,
+          wrap: wrapRect ? { w: Math.round(wrapRect.width), h: Math.round(wrapRect.height) } : null,
+          paint: __dgDescribeCanvasScale(paint, wrapRect),
+          nodes: __dgDescribeCanvasScale(nodesCanvas, wrapRect),
+          grid: __dgDescribeCanvasScale(grid, wrapRect),
+          ghost: __dgDescribeCanvasScale(ghostCanvas, wrapRect),
+          flash: __dgDescribeCanvasScale(flashCanvas, wrapRect),
+          tutorial: __dgDescribeCanvasScale(tutorialCanvas, wrapRect),
+          playhead: __dgDescribeCanvasScale(playheadCanvas, wrapRect),
+        };
+        dgScaleTrace('resizeSurfacesFor', sigPayload);
+        // Emit a single WARN line when nodes (note nodes + connecting lines + note text)
+        // are physically scaled differently than paint. Logs only on state change.
+        __dgEmitScaleMismatchIfChanged(sigPayload);
+
+        // Install (or refresh) a manual dumper tied to the most recent panel/wrap.
+        // This is safe to overwrite; it’s a small closure for convenience.
+        try {
+          if (typeof window !== 'undefined') {
+            const lastPanelId = panel?.id || null;
+            window.__DG_DUMP_CANVAS_SCALES = (panelId = null) => {
+              if (panelId && lastPanelId && panelId !== lastPanelId) return;
+              const wr = wrap?.getBoundingClientRect?.();
+              const payload = {
+                panelId: lastPanelId,
+                wrap: wr ? { w: Math.round(wr.width), h: Math.round(wr.height) } : null,
+                paint: __dgDescribeCanvasScale(paint, wr),
+                nodes: __dgDescribeCanvasScale(nodesCanvas, wr),
+                grid: __dgDescribeCanvasScale(grid, wr),
+                ghost: __dgDescribeCanvasScale(ghostCanvas, wr),
+                flash: __dgDescribeCanvasScale(flashCanvas, wr),
+                tutorial: __dgDescribeCanvasScale(tutorialCanvas, wr),
+                playhead: __dgDescribeCanvasScale(playheadCanvas, wr),
+              };
+              console.log('[DG][scale] DUMP', payload);
+              return payload;
+            };
+          }
+        } catch {}
+      } catch {}
+
       dgSizeTrace('resizeSurfacesFor', {
         reason,
         nextCssW,
@@ -2212,6 +2912,19 @@ try {
         targetH,
       });
       dgEffectiveDprTrace('resizeSurfacesFor', { reason, nextCssW, nextCssH, nextDpr, paintDpr, targetW, targetH, sizeChanged, dprChanged });
+      // Optional, non-spammy: trace when any layer's CSS/rect scale signature changes.
+      __dgTraceCanvasScaleSnapshot(__reason, panel?.id || null, [
+        { role: 'wrap', el: wrap },
+        { role: 'front', el: frontCanvas },
+        { role: 'grid', el: grid },
+        { role: 'paint', el: paint },
+        { role: 'nodes', el: nodesCanvas },
+        { role: 'ghost', el: ghostCanvas },
+        { role: 'flash', el: flashCanvas },
+        { role: 'tutorial', el: tutorialCanvas },
+        { role: 'particles', el: particleCanvas },
+        { role: 'playhead', el: playheadCanvas },
+      ]);
       if (dprChanged || sizeChanged) {
         try { markStaticDirty('resize-surfaces'); } catch {}
         // BUGFIX: overlay caches must not survive a DPR/size change.
@@ -2432,6 +3145,11 @@ try {
   let __zoomActive = false; // true while pinch/wheel gesture is in progress
   let __zoomActiveSince = 0;
   let __dgLastZoomDoneScale = null;
+  // Track backing-store DPR at the moment a zoom commit settles.
+  // If paintDpr changes (common when zooming out due to the visual/pressure multipliers),
+  // we must force a stroke redraw. Otherwise the solid (paint) stroke will be drawn in
+  // the wrong logical space and appear to "scale up" relative to the animated overlay.
+  let __dgLastZoomDonePaintDpr = null;
   let __lastZoomMotionTs = 0;
   P.initDrawgridParticles();
   dgField = particleState.field;
@@ -2760,8 +3478,12 @@ function ensureSizeReady({ force = false } = {}) {
     __dgLastEnsureSizeAtMs = nowTs;
     // Snapshot current paint to preserve drawn lines across resize.
     let paintSnapshot = null;
+    let paintSnapshotDpr = null;
     try {
-      const snapSrc = (DG_SINGLE_CANVAS && backCanvas)
+      // IMPORTANT: only use back buffers when they are actually enabled.
+      // Using backCanvas/backCtx while usingBackBuffers===false causes the paint layer
+      // (flat colour line) to desync scale vs the animated overlay line after zoom.
+      const snapSrc = (usingBackBuffers && backCanvas)
         ? backCanvas
         : ((typeof getActivePaintCanvas === 'function' ? getActivePaintCanvas() : paint) || paint);
       if (snapSrc && snapSrc.width > 0 && snapSrc.height > 0) {
@@ -2769,6 +3491,7 @@ function ensureSizeReady({ force = false } = {}) {
         paintSnapshot.width = snapSrc.width;
         paintSnapshot.height = snapSrc.height;
         paintSnapshot.getContext('2d')?.drawImage(snapSrc, 0, 0);
+        paintSnapshotDpr = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : null;
       }
     } catch {}
 
@@ -2791,17 +3514,67 @@ function ensureSizeReady({ force = false } = {}) {
     try { markStaticDirty('ensure-size'); } catch {}
     if (paintSnapshot) {
       try {
-        const ctx = (DG_SINGLE_CANVAS && backCtx)
+        const ctx = (usingBackBuffers && backCtx)
           ? backCtx
           : ((typeof getActivePaintCtx === 'function' ? getActivePaintCtx() : pctx) || pctx);
         if (ctx) {
-          resetPaintBlend?.(ctx);
-          ctx.clearRect(0, 0, cssW, cssH);
-          ctx.drawImage(
-            paintSnapshot,
-            0, 0, paintSnapshot.width, paintSnapshot.height,
-            0, 0, cssW, cssH
-          );
+          const dprMismatch =
+            Number.isFinite(paintSnapshotDpr) &&
+            Number.isFinite(paintDpr) &&
+            Math.abs(paintSnapshotDpr - paintDpr) > 1e-3;
+          const hasStrokeData = Array.isArray(strokes) && strokes.length > 0;
+          const skipByCount = __dgSkipPaintSnapshotCount > 0 && hasStrokeData;
+          const skipSnapshot = skipByCount || (dprMismatch && hasStrokeData);
+          if (skipByCount) __dgSkipPaintSnapshotCount = Math.max(0, (__dgSkipPaintSnapshotCount || 0) - 1);
+          if (skipSnapshot) {
+            // Avoid scaling old pixels across DPR changes; redraw from strokes for correct scale.
+            try {
+              if (typeof window !== 'undefined' && window.__DG_ZOOM_COMMIT_TRACE) {
+                const payload = {
+                  panelId: panel?.id || null,
+                  source: 'ensureSizeReady',
+                  skipByCount,
+                  dprMismatch,
+                  paintSnapshotDpr,
+                  paintDpr,
+                };
+                console.log('[DG][paint] snapshot-skip', JSON.stringify(payload));
+              }
+            } catch {}
+            __dgPaintDebugLog('snapshot-skip', {
+              source: 'ensureSizeReady',
+              skipByCount,
+              dprMismatch,
+              paintSnapshotDpr,
+            });
+            try { clearAndRedrawFromStrokes(null, 'paintSnapshot-skip:dpr'); } catch {}
+          } else {
+            resetPaintBlend?.(ctx);
+            R.resetCtx(ctx);
+            R.withLogicalSpace(ctx, () => {
+              ctx.clearRect(0, 0, cssW, cssH);
+              ctx.drawImage(
+                paintSnapshot,
+                0, 0, paintSnapshot.width, paintSnapshot.height,
+                0, 0, cssW, cssH
+              );
+            });
+            try {
+              if (typeof window !== 'undefined' && window.__DG_ZOOM_COMMIT_TRACE) {
+                const payload = {
+                  panelId: panel?.id || null,
+                  source: 'ensureSizeReady',
+                  paintSnapshotDpr,
+                  paintDpr,
+                };
+                console.log('[DG][paint] snapshot-restore', JSON.stringify(payload));
+              }
+            } catch {}
+            __dgPaintDebugLog('snapshot-restore', {
+              source: 'ensureSizeReady',
+              paintSnapshotDpr,
+            });
+          }
         }
       } catch {}
     }
@@ -3088,13 +3861,43 @@ function ensureSizeReady({ force = false } = {}) {
   let tutorialHighlightMode = 'none'; // 'none' | 'notes' | 'drag'
   let tutorialHighlightRaf = null;
   let tutorialHighlightOverride = false;
+  let tutorialHighlightPausedByDraw = false;
+  const dgTutorialTrace = (tag, data) => {
+    if (typeof window === 'undefined' || !window.__DG_TUTORIAL_TRACE) return;
+    try { console.log(`[DG][tutorial] ${tag}`, data || {}); } catch {}
+  };
   const isTutorialActive = () => {
     return typeof document !== 'undefined' && !!document.body?.classList?.contains('tutorial-active');
   };
   const isHighlightActive = () => isTutorialActive() || tutorialHighlightOverride;
+  const pauseTutorialHighlightForDraw = () => {
+    if (tutorialHighlightPausedByDraw) return;
+    tutorialHighlightPausedByDraw = true;
+    dgTutorialTrace('pause:draw', {
+      mode: tutorialHighlightMode,
+      active: isHighlightActive(),
+      culled: isPanelCulled(),
+      raf: !!tutorialHighlightRaf,
+    });
+    stopTutorialHighlightLoop();
+  };
+  const resumeTutorialHighlightAfterDraw = () => {
+    if (!tutorialHighlightPausedByDraw) return;
+    tutorialHighlightPausedByDraw = false;
+    dgTutorialTrace('resume:draw', {
+      mode: tutorialHighlightMode,
+      active: isHighlightActive(),
+      culled: isPanelCulled(),
+      raf: !!tutorialHighlightRaf,
+    });
+    if (tutorialHighlightMode === 'none') return;
+    if (!isHighlightActive() || isPanelCulled()) return;
+    startTutorialHighlightLoop();
+  };
   const isPanelCulled = () => !isPanelVisible;
   let pendingSwap = false;
   let pendingWrapSize = null;
+  let __dgSkipPaintSnapshotCount = 0;
 
   // Wrap-size "flush" (legacy)
   //
@@ -3397,6 +4200,11 @@ function ensureSizeReady({ force = false } = {}) {
 
   const clearTutorialHighlight = () => {
     if (!tutorialCtx) return;
+    dgTutorialTrace('clear', {
+      mode: tutorialHighlightMode,
+      active: isHighlightActive(),
+      culled: isPanelCulled(),
+    });
     R.resetCtx(tutorialCtx);
     R.withLogicalSpace(tutorialCtx, () => {
       const tutorialSurface = getActiveTutorialCanvas();
@@ -3412,6 +4220,12 @@ function ensureSizeReady({ force = false } = {}) {
   const renderTutorialHighlight = () => {
     if (!tutorialCtx) return;
     const tutorialSurface = getActiveTutorialCanvas();
+    dgTutorialTrace('render', {
+      mode: tutorialHighlightMode,
+      active: isHighlightActive(),
+      culled: isPanelCulled(),
+      hasNodes: !!nodeCoordsForHitTest?.length,
+    });
     R.resetCtx(tutorialCtx);
     R.withLogicalSpace(tutorialCtx, () => {
       const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
@@ -3495,9 +4309,24 @@ function ensureSizeReady({ force = false } = {}) {
     if (tutorialHighlightMode === 'none') return;
     if (!isHighlightActive() || isPanelCulled()) return;
     if (tutorialHighlightRaf !== null) return;
+    dgTutorialTrace('loop:start', {
+      mode: tutorialHighlightMode,
+      active: isHighlightActive(),
+      culled: isPanelCulled(),
+    });
     const tick = () => {
-      if (tutorialHighlightMode === 'none' || !isTutorialActive() || isPanelCulled()) {
+      // IMPORTANT:
+      // If we stop the loop without clearing, the last rendered highlight frame
+      // (ghost-finger particles) can appear "frozen" on the tutorial canvas.
+      // Use isHighlightActive() (respects allowGuide override), and always clear on exit.
+      if (tutorialHighlightMode === 'none' || !isHighlightActive() || isPanelCulled()) {
         tutorialHighlightRaf = null;
+        clearTutorialHighlight();
+        dgTutorialTrace('loop:stop', {
+          mode: tutorialHighlightMode,
+          active: isHighlightActive(),
+          culled: isPanelCulled(),
+        });
         return;
       }
       renderTutorialHighlight();
@@ -3513,6 +4342,11 @@ function ensureSizeReady({ force = false } = {}) {
       tutorialHighlightRaf = null;
     }
     clearTutorialHighlight();
+    dgTutorialTrace('loop:stop:manual', {
+      mode: tutorialHighlightMode,
+      active: isHighlightActive(),
+      culled: isPanelCulled(),
+    });
   };
 
   panel.setSwipeVisible = (show, { immediate = false } = {}) => {
@@ -3551,8 +4385,24 @@ function ensureSizeReady({ force = false } = {}) {
   function clearAndRedrawFromStrokes(targetCtx, reason) {
     return F.perfMarkSection('drawgrid.paint.redraw', () => {
       if (reason) FD.markRegenSource(reason);
-      const resolvedTarget = (DG_SINGLE_CANVAS && targetCtx === frontCtx) ? backCtx : targetCtx;
-      const ctx = resolvedTarget || (typeof getActivePaintCtx === 'function' ? getActivePaintCtx() : null) || backCtx || pctx;
+      // IMPORTANT:
+      // Do NOT remap frontCtx->backCtx in single-canvas mode.
+      // In DG_SINGLE_CANVAS, callers intentionally pass the *currently visible* paint ctx
+      // (often frontCtx). Redirecting to backCtx causes the redraw to land in a hidden /
+      // stale-sized buffer when paintDpr changes during zoom-out, which produces the
+      // "flat colour line scales up" bug while the animated overlay remains correct.
+      const resolvedTarget = targetCtx;
+      // IMPORTANT:
+      // The paint stroke must be redrawn into the *currently visible* paint buffer.
+      // When `usingBackBuffers` is false we should never fall back to `backCtx`,
+      // otherwise the redraw can land in a hidden backing store that has stale CSS sizing,
+      // producing the "solid line scales up" bug when zoomed out.
+      const activePaintCtx = (typeof getActivePaintCtx === 'function') ? getActivePaintCtx() : null;
+      const ctx =
+        resolvedTarget ||
+        activePaintCtx ||
+        (usingBackBuffers ? backCtx : frontCtx) ||
+        pctx;
       if (!ctx) return;
       dgPaintTrace('clearAndRedrawFromStrokes:enter', {
         ctxIsFront: ctx === frontCtx,
@@ -3600,6 +4450,12 @@ function ensureSizeReady({ force = false } = {}) {
           requestFrontSwap();
         }
         markPaintDirty();
+        __dgPaintDebugLog('clearAndRedrawFromStrokes', {
+          reason: reason || null,
+          ctxRole: ctx?.canvas?.getAttribute?.('data-role') || null,
+          ctxW: ctx?.canvas?.width || 0,
+          ctxH: ctx?.canvas?.height || 0,
+        });
         dgPaintTrace('clearAndRedrawFromStrokes:exit');
       });
     }
@@ -3828,7 +4684,10 @@ function regenerateMapFromStrokes() {
         snap.width = snapSrc.width;
         snap.height = snapSrc.height;
         snap.getContext('2d')?.drawImage(snapSrc, 0, 0);
-        return snap;
+        return {
+          canvas: snap,
+          dpr: (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : null,
+        };
       }
     } catch {}
     return null;
@@ -3854,13 +4713,25 @@ function regenerateMapFromStrokes() {
         } catch {}
       }
 
+      const snapCanvas = snap?.canvas || snap;
+      const snapDpr = (snap && typeof snap === 'object' && 'dpr' in snap) ? snap.dpr : null;
+      const dprMismatch =
+        Number.isFinite(snapDpr) &&
+        Number.isFinite(paintDpr) &&
+        Math.abs(snapDpr - paintDpr) > 1e-3;
+      if (dprMismatch && Array.isArray(strokes) && strokes.length > 0) {
+        // Avoid scaling old pixels across DPR changes; redraw from strokes for correct scale.
+        try { clearAndRedrawFromStrokes(null, 'paintSnapshot-skip:dpr:zoom-recompute'); } catch {}
+        return;
+      }
+      if (!snapCanvas) return;
       resetPaintBlend(pctx);
       R.clearCanvas(pctx);
       emitDG('paint-clear', { reason: 'restore-snapshot' });
       R.resetCtx(pctx);
       R.resetCtx(pctx);
       R.withLogicalSpace(pctx, () => {
-        pctx.drawImage(snap, 0, 0, snap.width, snap.height, 0, 0, cssW, cssH);
+        pctx.drawImage(snapCanvas, 0, 0, snapCanvas.width, snapCanvas.height, 0, 0, cssW, cssH);
         markPaintDirty();
       });
     } catch {}
@@ -3947,6 +4818,51 @@ function regenerateMapFromStrokes() {
     __auditZoomSizes('zoom-change');
     const phase = z?.phase;
     const mode = z?.mode;
+    // Keep pctx aligned with current buffer choice to avoid drawing into stale back buffers.
+    try {
+      if (usingBackBuffers && pctx !== backCtx) pctx = backCtx;
+      if (!usingBackBuffers && pctx !== frontCtx) pctx = frontCtx;
+    } catch {}
+    __dgPaintDebugLog('zoom-phase', {
+      phase: phase || null,
+      mode: mode || zoomMode || null,
+      currentScale: z?.currentScale ?? null,
+      targetScale: z?.targetScale ?? null,
+    });
+    try {
+      if (typeof window !== 'undefined' && window.__DG_ZOOM_COMMIT_TRACE) {
+        const isCommitLike =
+          phase === 'freeze' ||
+          phase === 'recompute' ||
+          phase === 'swap' ||
+          phase === 'done' ||
+          phase === 'commit' ||
+          phase === 'idle';
+        if (isCommitLike) {
+          const active = (typeof getActivePaintCanvas === 'function') ? getActivePaintCanvas() : null;
+          const ctx = (typeof getActivePaintCtx === 'function') ? getActivePaintCtx() : null;
+          const payload = {
+            panelId: panel?.id || null,
+            phase: phase || null,
+            mode: mode || zoomMode || null,
+            currentScale: z?.currentScale ?? null,
+            targetScale: z?.targetScale ?? null,
+            usingBackBuffers,
+            paintDpr,
+            cssW,
+            cssH,
+            pctxRole: pctx?.canvas?.getAttribute?.('data-role') || null,
+            ctxRole: ctx?.canvas?.getAttribute?.('data-role') || null,
+            activeRole: active?.getAttribute?.('data-role') || null,
+            frontW: frontCanvas?.width || 0,
+            frontH: frontCanvas?.height || 0,
+            backW: backCanvas?.width || 0,
+            backH: backCanvas?.height || 0,
+          };
+          console.log('[DG][zoom] phase', JSON.stringify(payload));
+        }
+      }
+    } catch {}
     if (mode) {
       zoomMode = mode;
     }
@@ -3990,6 +4906,9 @@ function regenerateMapFromStrokes() {
       });
 
       if (phase === 'done') {
+        // Avoid restoring paint snapshots after zoom settle; redraw from strokes instead.
+        // Set count > 1 because both ensureSizeReady and layout can attempt a restore.
+        __dgSkipPaintSnapshotCount = Math.max(__dgSkipPaintSnapshotCount || 0, 2);
         // Ensure we end commit on front buffers so paint isn't stuck scaled in back buffers.
         try { useFrontBuffers(); } catch {}
         // Only do heavy layout + field resize once commit fully settles.
@@ -4006,11 +4925,54 @@ function regenerateMapFromStrokes() {
         if (Number.isFinite(doneScale)) {
           __dgLastZoomDoneScale = doneScale;
         }
+        const dprChanged =
+          Number.isFinite(paintDpr) && paintDpr > 0 &&
+          (!Number.isFinite(__dgLastZoomDonePaintDpr) || Math.abs(paintDpr - __dgLastZoomDonePaintDpr) > 1e-6);
+        if (Number.isFinite(paintDpr) && paintDpr > 0) {
+          __dgLastZoomDonePaintDpr = paintDpr;
+        }
         const hasStrokes = Array.isArray(strokes) && strokes.length > 0;
         const hasNodes = !!(currentMap && Array.isArray(currentMap.nodes) && currentMap.nodes.some(s => s && s.size > 0));
-        if (scaleChanged && (hasStrokes || hasNodes)) {
+        // IMPORTANT:
+        // Our "scaleChanged" heuristic looks at the camera scale, but the paint backing-store DPR can
+        // still change independently (visual/pressure/small multipliers). When that happens, we MUST
+        // redraw the paint stroke layer into the new logical space, otherwise the solid (paint) line
+        // can appear to "scale up" while the animated overlay remains correct.
+        if ((scaleChanged || dprChanged) && (hasStrokes || hasNodes)) {
+          try {
+            if (typeof window !== 'undefined' && window.__DG_ZOOM_COMMIT_TRACE) {
+              const payload = {
+                panelId: panel?.id || null,
+                hasStrokes,
+                hasNodes,
+                dprChanged,
+                usingBackBuffers,
+                paintDpr,
+                cssW,
+                cssH,
+                pctxRole: pctx?.canvas?.getAttribute?.('data-role') || null,
+                frontW: frontCanvas?.width || 0,
+                frontH: frontCanvas?.height || 0,
+                backW: backCanvas?.width || 0,
+                backH: backCanvas?.height || 0,
+              };
+              console.log('[DG][zoom] done:redraw', JSON.stringify(payload));
+            }
+          } catch {}
           if (hasStrokes) {
-            try { clearAndRedrawFromStrokes(DG_SINGLE_CANVAS ? backCtx : frontCtx, 'zoom-done'); } catch {}
+            // IMPORTANT: redraw into the currently visible paint buffer.
+            // (Don't force backCtx in single-canvas mode unless back buffers are enabled.)
+            try { clearAndRedrawFromStrokes(usingBackBuffers ? backCtx : frontCtx, 'zoom-done'); } catch {}
+            // If we're in a zoom commit and render onto back, force a front swap so paint is visible.
+            try {
+              if (usingBackBuffers && typeof requestFrontSwap === 'function') {
+                requestFrontSwap(useFrontBuffers);
+              }
+            } catch {}
+            __dgPaintDebugLog('zoom-done:redraw', {
+              hasStrokes,
+              hasNodes,
+            });
           } else {
             // No strokes, but we still need static layers to match the new zoom basis.
             try { drawNodes(currentMap.nodes); } catch {}
@@ -4208,6 +5170,17 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
   panel.addEventListener('toy-zoom', (e)=>{
     const z = e?.detail;
     if (!z) return;
+    try {
+      if (typeof window !== 'undefined' && window.__DG_ZOOM_COMMIT_TRACE) {
+        console.log('[DG][zoom] event', {
+          panelId: panel?.id || null,
+          phase: z?.phase || null,
+          mode: z?.mode || null,
+          currentScale: z?.currentScale ?? null,
+          targetScale: z?.targetScale ?? null,
+        });
+      }
+    } catch {}
 
     if (z.phase === 'prepare') {
       zoomGestureActive = true;
@@ -4262,6 +5235,27 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
         });
       }
       resnapAndRedraw(true, { preservePaintIfNoStrokes: __preserveBlankDuringCommit });
+      try {
+        if (typeof window !== 'undefined' && window.__DG_ZOOM_COMMIT_TRACE) {
+          const active = (typeof getActivePaintCanvas === 'function') ? getActivePaintCanvas() : null;
+          const ctx = (typeof getActivePaintCtx === 'function') ? getActivePaintCtx() : null;
+          const payload = {
+            panelId: panel?.id || null,
+            usingBackBuffers,
+            paintDpr,
+            cssW,
+            cssH,
+            pctxRole: pctx?.canvas?.getAttribute?.('data-role') || null,
+            activeRole: active?.getAttribute?.('data-role') || null,
+            ctxRole: ctx?.canvas?.getAttribute?.('data-role') || null,
+            frontW: frontCanvas?.width || 0,
+            frontH: frontCanvas?.height || 0,
+            backW: backCanvas?.width || 0,
+            backH: backCanvas?.height || 0,
+          };
+          console.log('[DG][zoom-commit] pre-redraw', payload);
+        }
+      } catch {}
       try { clearAndRedrawFromStrokes(pctx, 'zoom-commit'); } catch {}
       try { markStaticDirty('zoom-commit'); } catch {}
       __dgForceFullDrawNext = true;
@@ -4538,6 +5532,8 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
     fctx = flashBackCtx;
     ghostCtx = ghostBackCtx;
     tutorialCtx = tutorialBackCtx;
+    // Keep paint context aligned to active buffer.
+    try { pctx = (typeof getActivePaintCtx === 'function') ? getActivePaintCtx() : backCtx; } catch { pctx = backCtx; }
     emitDG('buffers', { action: 'useBackBuffers', usingBackBuffers });
   }
 
@@ -4553,6 +5549,8 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
     fctx = flashFrontCtx;
     ghostCtx = ghostFrontCtx;
     tutorialCtx = tutorialFrontCtx;
+    // Keep paint context aligned to active buffer.
+    try { pctx = (typeof getActivePaintCtx === 'function') ? getActivePaintCtx() : frontCtx; } catch { pctx = frontCtx; }
     emitDG('buffers', { action: 'useFrontBuffers', usingBackBuffers });
   }
 
@@ -5369,18 +6367,20 @@ function copyCanvas(backCtx, frontCtx) {
           overview: !!__overviewActive,
         });
         // Snapshot current paint to preserve drawn content across resize.
-      // IMPORTANT: snapshot the ACTIVE paint surface (front/back), not just `paint`,
-      // otherwise wheel-zoom / overview can wipe the user's line.
-      let paintSnapshot = null;
-      try {
-        const snapSrc = (typeof getActivePaintCanvas === 'function' ? getActivePaintCanvas() : null) || paint;
-        if (snapSrc && snapSrc.width > 0 && snapSrc.height > 0) {
-          paintSnapshot = document.createElement('canvas');
-          paintSnapshot.width = snapSrc.width;
-          paintSnapshot.height = snapSrc.height;
-          paintSnapshot.getContext('2d')?.drawImage(snapSrc, 0, 0);
-        }
-      } catch {}
+        // IMPORTANT: snapshot the ACTIVE paint surface (front/back), not just `paint`,
+        // otherwise wheel-zoom / overview can wipe the user's line.
+        let paintSnapshot = null;
+        let paintSnapshotDpr = null;
+        try {
+          const snapSrc = (typeof getActivePaintCanvas === 'function' ? getActivePaintCanvas() : null) || paint;
+          if (snapSrc && snapSrc.width > 0 && snapSrc.height > 0) {
+            paintSnapshot = document.createElement('canvas');
+            paintSnapshot.width = snapSrc.width;
+            paintSnapshot.height = snapSrc.height;
+            paintSnapshot.getContext('2d')?.drawImage(snapSrc, 0, 0);
+            paintSnapshotDpr = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : null;
+          }
+        } catch {}
 
       cssW = newW;
       cssH = newH;
@@ -5436,9 +6436,7 @@ function copyCanvas(backCtx, frontCtx) {
         // dgTraceLog?.('[DG][layout] skip stroke scaling (zoom/overview)', { zoomGestureActive, zoomMode, __zoomActive, __overviewActive, oldW, oldH, cssW, cssH });
       }
 
-      const logicalSize = getToyLogicalSize();
-      const logicalW = logicalSize.w;
-      const logicalH = logicalSize.h;
+      const { w: logicalW, h: logicalH } = __dgGetStableWrapSize();
       gridAreaLogical.w = logicalW;
       gridAreaLogical.h = logicalH;
 
@@ -5546,15 +6544,65 @@ function copyCanvas(backCtx, frontCtx) {
           if (!drawing) {
             // When using back buffers, keep BOTH in sync so front/back swaps don't "lose" the line.
             updatePaintBackingStores({ target: usingBackBuffers ? 'both' : 'both' });
-            const ctx = (typeof getActivePaintCtx === 'function' ? getActivePaintCtx() : null) || pctx;
-            if (ctx) {
-              resetPaintBlend?.(ctx);
-              ctx.clearRect(0, 0, cssW, cssH);
-              ctx.drawImage(
-                paintSnapshot,
-                0, 0, paintSnapshot.width, paintSnapshot.height,
-                0, 0, cssW, cssH
-              );
+            const dprMismatch =
+              Number.isFinite(paintSnapshotDpr) &&
+              Number.isFinite(paintDpr) &&
+              Math.abs(paintSnapshotDpr - paintDpr) > 1e-3;
+            const hasStrokeData = Array.isArray(strokes) && strokes.length > 0;
+            const skipByCount = __dgSkipPaintSnapshotCount > 0 && hasStrokeData;
+            const skipSnapshot = skipByCount || (dprMismatch && hasStrokeData);
+            if (skipByCount) __dgSkipPaintSnapshotCount = Math.max(0, (__dgSkipPaintSnapshotCount || 0) - 1);
+            if (skipSnapshot) {
+              // Avoid scaling old pixels across DPR changes; redraw from strokes for correct scale.
+              try {
+              if (typeof window !== 'undefined' && window.__DG_ZOOM_COMMIT_TRACE) {
+                const payload = {
+                  panelId: panel?.id || null,
+                  source: 'layout',
+                  skipByCount,
+                  dprMismatch,
+                  paintSnapshotDpr,
+                  paintDpr,
+                };
+                console.log('[DG][paint] snapshot-skip', JSON.stringify(payload));
+              }
+            } catch {}
+            __dgPaintDebugLog('snapshot-skip', {
+              source: 'layout',
+              skipByCount,
+              dprMismatch,
+              paintSnapshotDpr,
+            });
+              try { clearAndRedrawFromStrokes(null, 'paintSnapshot-skip:dpr'); } catch {}
+            } else {
+              const ctx = (typeof getActivePaintCtx === 'function' ? getActivePaintCtx() : null) || pctx;
+              if (ctx) {
+                resetPaintBlend?.(ctx);
+                R.resetCtx(ctx);
+                R.withLogicalSpace(ctx, () => {
+                  ctx.clearRect(0, 0, cssW, cssH);
+                  ctx.drawImage(
+                    paintSnapshot,
+                    0, 0, paintSnapshot.width, paintSnapshot.height,
+                    0, 0, cssW, cssH
+                  );
+                });
+                try {
+                  if (typeof window !== 'undefined' && window.__DG_ZOOM_COMMIT_TRACE) {
+                    const payload = {
+                      panelId: panel?.id || null,
+                      source: 'layout',
+                      paintSnapshotDpr,
+                      paintDpr,
+                    };
+                    console.log('[DG][paint] snapshot-restore', JSON.stringify(payload));
+                  }
+                } catch {}
+                __dgPaintDebugLog('snapshot-restore', {
+                  source: 'layout',
+                  paintSnapshotDpr,
+                });
+              }
             }
             // If we have explicit front/back contexts, mirror the snapshot into both.
             try {
@@ -5563,13 +6611,17 @@ function copyCanvas(backCtx, frontCtx) {
                 const b = getPaintCtxBack();
                 for (const c of [f, b]) {
                   if (!c) continue;
+                  if (skipSnapshot) continue;
                   resetPaintBlend?.(c);
-                  c.clearRect(0, 0, cssW, cssH);
-                  c.drawImage(
-                    paintSnapshot,
-                    0, 0, paintSnapshot.width, paintSnapshot.height,
-                    0, 0, cssW, cssH
-                  );
+                  R.resetCtx(c);
+                  R.withLogicalSpace(c, () => {
+                    c.clearRect(0, 0, cssW, cssH);
+                    c.drawImage(
+                      paintSnapshot,
+                      0, 0, paintSnapshot.width, paintSnapshot.height,
+                      0, 0, cssW, cssH
+                    );
+                  });
                 }
               }
             } catch {}
@@ -6141,7 +7193,13 @@ function copyCanvas(backCtx, frontCtx) {
     if (skipTransform) {
       drawCore();
     } else {
-      R.withLogicalSpace(ctx, drawCore);
+      // IMPORTANT:
+      // Many call paths are already wrapped in logical-space (e.g. nodes/overlays).
+      // Using R.withLogicalSpace here can double-apply the DPR scale when paintDpr < 1
+      // (common after zoom-out), causing nodes/connectors/text to shrink or grow incorrectly.
+      // __dgWithLogicalSpace has a nesting guard (ctx.__dgLogicalSpaceActive) and uses the
+      // canvas's actual backing-store DPR (canvas.width / CSS width) to stay in sync.
+      __dgWithLogicalSpace(ctx, drawCore);
     }
     if (!wasOverlay) markPaintDirty();
   }
@@ -6154,13 +7212,83 @@ function copyCanvas(backCtx, frontCtx) {
   // logical space. If we draw assuming device DPR, overlays will appear shrunk
   // and offset toward the top-left (repro: notes/connectors/column text drift).
   function __dgWithLogicalSpace(ctx, fn) {
-    const dpr = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+    // Guard against accidental nesting.
+    // Some call paths already wrap in logical-space (R.withLogicalSpace or another
+    // __dgWithLogicalSpace). A second scale application will make overlays appear
+    // too small/large, especially when paintDpr < 1 under zoom/pressure.
+    if (ctx && ctx.__dgLogicalSpaceActive) {
+      fn();
+      return;
+    }
+
+    // IMPORTANT:
+    // Use the *canvas's actual* backing-store DPR (canvas.width / CSS width), not just paintDpr.
+    // During zoom/refresh, some layers (notably nodes/connectors/labels) can temporarily drift out
+    // of sync and appear scaled smaller/larger than other layers. This keeps logical space correct
+    // per-layer.
+    const fallback = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+    const dpr = __dgGetCanvasDprFromCss(ctx?.canvas, cssW, fallback);
+
+    // Non-spammy: log only when the logical-space DPR for a given role changes.
+    try {
+      if (typeof window !== 'undefined' && window.__DG_CANVAS_SCALE_TRACE) {
+        const role = ctx?.canvas?.getAttribute?.('data-role') || 'unknown';
+        const key = `LS:${role}`;
+        const cw = ctx?.canvas?.width || 0;
+        const sig = `${Math.round(dpr * 1000)}|${Math.round(fallback * 1000)}|${Math.round((cssW || 0) * 10)}|${cw}`;
+        if (!__dgScaleSigMap) __dgScaleSigMap = new Map();
+        const prev = __dgScaleSigMap.get(key);
+        if (prev !== sig) {
+          __dgScaleSigMap.set(key, sig);
+          let debugSizing = null;
+          try {
+            if (window.__DG_CANVAS_SCALE_TRACE_VERBOSE) {
+              const canvas = ctx?.canvas;
+              const rect = canvas?.getBoundingClientRect?.();
+              const styleW = canvas?.style?.width ? parseFloat(canvas.style.width) : null;
+              const styleH = canvas?.style?.height ? parseFloat(canvas.style.height) : null;
+              const clientW = canvas?.clientWidth || null;
+              const clientH = canvas?.clientHeight || null;
+              const rectW = rect ? rect.width : null;
+              const rectH = rect ? rect.height : null;
+              debugSizing = {
+                cssWState: Number.isFinite(cssW) ? cssW : null,
+                cssHState: Number.isFinite(cssH) ? cssH : null,
+                tsmCssW: Number.isFinite(canvas?.__tsmCssW) ? canvas.__tsmCssW : null,
+                tsmCssH: Number.isFinite(canvas?.__tsmCssH) ? canvas.__tsmCssH : null,
+                dgCssW: Number.isFinite(canvas?.__dgCssW) ? canvas.__dgCssW : null,
+                dgCssH: Number.isFinite(canvas?.__dgCssH) ? canvas.__dgCssH : null,
+                styleW,
+                styleH,
+                clientW,
+                clientH,
+                rectW,
+                rectH,
+                boardScale: Number.isFinite(boardScale) ? +boardScale.toFixed(3) : null,
+                panelId: panel?.id || null,
+              };
+            }
+          } catch {}
+          try {
+            dgCanvasScaleTrace('logicalSpaceDpr', { role, dpr, paintDpr: fallback, cssW, canvasW: cw, debugSizing });
+          } catch {
+            console.log('[DG][scale] logicalSpaceDpr', { role, dpr, paintDpr: fallback, cssW, canvasW: cw, debugSizing });
+          }
+        }
+      }
+    } catch {}
+
+    try { if (ctx) ctx.__dgLogicalSpaceActive = true; } catch {}
     ctx.save();
     // Reset to a known transform; callers typically called R.resetCtx(ctx) already.
     // setTransform avoids compounding transforms if something slipped through.
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    fn();
-    ctx.restore();
+    try {
+      fn();
+    } finally {
+      ctx.restore();
+      try { if (ctx) ctx.__dgLogicalSpaceActive = false; } catch {}
+    }
   }
 
   function drawNodes(nodes) {
@@ -6228,6 +7356,96 @@ function copyCanvas(backCtx, frontCtx) {
       __dgHash = __dgHashStep(__dgHash, Math.round((gridArea?.w || 0) * 1000));
       __dgHash = __dgHashStep(__dgHash, Math.round((gridArea?.h || 0) * 1000));
       __dgHash = __dgHashStep(__dgHash, isZoomed ? 1 : 0);
+
+      // Non-spammy node/canvas scale tracing (logs only when the relevant scale inputs change).
+      // Repro: zoomed-out scene -> create draw toy -> draw line; notes/connectors/text appear smaller and shrink further on zoom.
+      if (typeof window !== 'undefined' && window.__DG_NODE_SCALE_TRACE) {
+        let __dgScaleHash = 2166136261;
+        __dgScaleHash = __dgHashStep(__dgScaleHash, rows);
+        __dgScaleHash = __dgHashStep(__dgScaleHash, cols);
+        __dgScaleHash = __dgHashStep(__dgScaleHash, Math.round(cw * 1000));
+        __dgScaleHash = __dgHashStep(__dgScaleHash, Math.round(ch * 1000));
+        __dgScaleHash = __dgHashStep(__dgScaleHash, Math.round(topPad * 1000));
+        __dgScaleHash = __dgHashStep(__dgScaleHash, Math.round((gridArea?.x || 0) * 1000));
+        __dgScaleHash = __dgHashStep(__dgScaleHash, Math.round((gridArea?.y || 0) * 1000));
+        __dgScaleHash = __dgHashStep(__dgScaleHash, Math.round((gridArea?.w || 0) * 1000));
+        __dgScaleHash = __dgHashStep(__dgScaleHash, Math.round((gridArea?.h || 0) * 1000));
+        __dgScaleHash = __dgHashStep(__dgScaleHash, isZoomed ? 1 : 0);
+        __dgScaleHash = __dgHashStep(__dgScaleHash, Math.round((cssW || 0) * 10));
+        __dgScaleHash = __dgHashStep(__dgScaleHash, Math.round((cssH || 0) * 10));
+        __dgScaleHash = __dgHashStep(__dgScaleHash, Math.round(((Number.isFinite(paintDpr) ? paintDpr : 1) || 1) * 1000));
+
+        const __last = panel.__dgLastNodeScaleHash;
+        if (__last !== __dgScaleHash) {
+          panel.__dgLastNodeScaleHash = __dgScaleHash;
+
+          const panelRect = panel?.getBoundingClientRect?.();
+          const wrapRect = wrap?.getBoundingClientRect?.();
+          const nodesRect = nctx?.canvas?.getBoundingClientRect?.();
+          const nodesPx = nctx?.canvas ? { w: nctx.canvas.width, h: nctx.canvas.height } : null;
+          const paintCanvas = (typeof getActivePaintCanvas === 'function')
+            ? getActivePaintCanvas()
+            : (frontCanvas || paint || null);
+          const nodesScale = __dgDescribeCanvasScale(nctx?.canvas, wrapRect);
+          const paintScale = __dgDescribeCanvasScale(paintCanvas, wrapRect);
+          const frontScale = __dgDescribeCanvasScale(frontCanvas, wrapRect);
+          const backScale = __dgDescribeCanvasScale(backCanvas, wrapRect);
+          const paintSnap = __dgGetCanvasSizingSnapshot(paintCanvas);
+          const frontSnap = __dgGetCanvasSizingSnapshot(frontCanvas);
+          const backSnap = __dgGetCanvasSizingSnapshot(backCanvas);
+          const wrapScaleW = (wrapRect && wrapRect.width && wrap?.clientWidth)
+            ? +(wrapRect.width / wrap.clientWidth).toFixed(3)
+            : null;
+          const wrapScaleH = (wrapRect && wrapRect.height && wrap?.clientHeight)
+            ? +(wrapRect.height / wrap.clientHeight).toFixed(3)
+            : null;
+
+          const payload = {
+            panelId: panel?.id || null,
+            paintDpr,
+            deviceDpr: (typeof devicePixelRatio === 'number' ? devicePixelRatio : null),
+            cssW, cssH,
+            panelRect: panelRect ? { w: Math.round(panelRect.width), h: Math.round(panelRect.height) } : null,
+            wrapRect: wrapRect ? { w: Math.round(wrapRect.width), h: Math.round(wrapRect.height) } : null,
+            wrapClient: wrap ? { w: wrap.clientWidth || 0, h: wrap.clientHeight || 0 } : null,
+            wrapScaleW,
+            wrapScaleH,
+            boardScale: (Number.isFinite(boardScale) ? +boardScale.toFixed(3) : null),
+            layoutCache: { w: __dgLayoutW || 0, h: __dgLayoutH || 0, goodW: __dgLayoutGoodW || 0, goodH: __dgLayoutGoodH || 0 },
+            nodesRect: nodesRect ? { w: Math.round(nodesRect.width), h: Math.round(nodesRect.height) } : null,
+            nodesPx,
+            nodesScale,
+            paintScale,
+            frontScale,
+            backScale,
+            activePaintRole: paintCanvas?.getAttribute?.('data-role') || null,
+            usingBackBuffers,
+            paintSizes: { active: paintSnap, front: frontSnap, back: backSnap },
+            paintActivePxW: paintSnap?.pxW ?? null,
+            paintActivePxH: paintSnap?.pxH ?? null,
+            paintActiveRectW: paintSnap?.rectW ?? null,
+            paintActiveRectH: paintSnap?.rectH ?? null,
+            paintActiveClientW: paintSnap?.clientW ?? null,
+            paintActiveClientH: paintSnap?.clientH ?? null,
+            paintActiveCssW: paintSnap?.cssW ?? null,
+            paintActiveCssH: paintSnap?.cssH ?? null,
+            paintActiveTsmCssW: paintSnap?.tsmCssW ?? null,
+            paintActiveTsmCssH: paintSnap?.tsmCssH ?? null,
+            paintActiveDgCssW: paintSnap?.dgCssW ?? null,
+            paintActiveDgCssH: paintSnap?.dgCssH ?? null,
+            paintActiveEffDprW: paintSnap?.effDprW ?? null,
+            paintActiveEffDprH: paintSnap?.effDprH ?? null,
+            gridArea: gridArea ? { x: Math.round(gridArea.x), y: Math.round(gridArea.y), w: Math.round(gridArea.w), h: Math.round(gridArea.h) } : null,
+            cw: Number.isFinite(cw) ? +cw.toFixed(3) : cw,
+            ch: Number.isFinite(ch) ? +ch.toFixed(3) : ch,
+            topPad: Number.isFinite(topPad) ? +topPad.toFixed(3) : topPad,
+            // sanity: if these drift, notes/connectors can visually "shrink" within the canvas
+            gridColsW: Number.isFinite(cw) ? +(cw * cols).toFixed(2) : null,
+            gridRowsH: Number.isFinite(ch) ? +(ch * rows).toFixed(2) : null,
+          };
+          dgNodeScaleTrace('drawNodes:basis', payload);
+        }
+      }
 
       const activeCols = currentMap?.active || [];
       for (let c = 0; c < cols; c++) {
@@ -6446,7 +7664,10 @@ function copyCanvas(backCtx, frontCtx) {
       }
       } else if (cache.canvas) {
         const __cacheBlitStart = __perfOn ? performance.now() : 0;
-        nctx.drawImage(cache.canvas, 0, 0);
+        // Cache is stored in device pixels; blit in device space to avoid double-scaling.
+        R.withDeviceSpace(nctx, () => {
+          nctx.drawImage(cache.canvas, 0, 0);
+        });
         if (__perfOn && __cacheBlitStart) {
           try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.cacheBlit', performance.now() - __cacheBlitStart); } catch {}
         }
@@ -6486,7 +7707,10 @@ function copyCanvas(backCtx, frontCtx) {
 
       if (blockCache.canvas) {
         const __blocksBlitStart = __perfOn ? performance.now() : 0;
-        nctx.drawImage(blockCache.canvas, 0, 0);
+        // Block cache is device-pixel content; blit without logical scaling.
+        R.withDeviceSpace(nctx, () => {
+          nctx.drawImage(blockCache.canvas, 0, 0);
+        });
         if (__perfOn && __blocksBlitStart) {
           try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.blocks.blit', performance.now() - __blocksBlitStart); } catch {}
         }
@@ -6738,10 +7962,17 @@ function copyCanvas(backCtx, frontCtx) {
       // If another toy is focused, request focus here but still allow drawing.
       try { window.requestToyFocus?.(panel, { center: false }); } catch {}
     }
-    stopAutoGhostGuide({ immediate: false, reason: 'pointerdown' });
+    // When the user starts manual drawing, the ghost guide particles must disappear (not freeze).
+    // immediate:true forces a visual clear so we don't leave a "stuck" ghost frame on screen.
+    stopAutoGhostGuide({ immediate: true, reason: 'pointerdown:manual-draw' });
     markUserChange('pointerdown');
     FD.flowLog('pointer:down', {});
     const p = pointerToPaintLogical(e);
+    if (typeof window !== 'undefined' && window.__DG_POINTER_TRACE) {
+      __dgPointerTraceId = e.pointerId;
+      __dgPointerTraceMoveLogged = false;
+      __dgPointerTraceLocal('down', e, p);
+    }
 
     // (Top cubes removed)
 
@@ -6757,6 +7988,9 @@ function copyCanvas(backCtx, frontCtx) {
         return; // Defer deciding until move/up
       }
     }
+
+    // Manual drawing should temporarily hide tutorial highlights (ghost finger particles).
+    pauseTutorialHighlightForDraw();
 
     setDrawingState(true);
     try { paint.setPointerCapture?.(e.pointerId); } catch {}
@@ -6833,6 +8067,58 @@ function copyCanvas(backCtx, frontCtx) {
   }
   let __dgMoveRAF = 0;
   let __dgPendingMoveEvt = null;
+  let __dgPointerTraceId = null;
+  let __dgPointerTraceMoveLogged = false;
+  function __dgPointerTraceLocal(tag, e, p) {
+    try {
+      if (typeof window === 'undefined' || !window.__DG_POINTER_TRACE) return;
+      const paintCanvas = (typeof getActivePaintCanvas === 'function')
+        ? getActivePaintCanvas()
+        : (frontCanvas || paint || null);
+      const paintRect = paintCanvas?.getBoundingClientRect?.();
+      const wrapRect = wrap?.getBoundingClientRect?.();
+      const layerRect = layersRoot?.getBoundingClientRect?.();
+      const payload = {
+        tag,
+        panelId: panel?.id || null,
+        pointerId: e?.pointerId ?? null,
+        buttons: e?.buttons ?? null,
+        client: { x: e?.clientX ?? null, y: e?.clientY ?? null },
+        logical: { x: p?.x ?? null, y: p?.y ?? null },
+        basis: p?.__dbg || null,
+        cssW,
+        cssH,
+        paintDpr,
+        usingBackBuffers,
+        DG_SINGLE_CANVAS,
+        wrapRect: wrapRect ? { w: Math.round(wrapRect.width), h: Math.round(wrapRect.height) } : null,
+        wrapClient: wrap ? { w: wrap.clientWidth || 0, h: wrap.clientHeight || 0 } : null,
+        layerRect: layerRect ? { w: Math.round(layerRect.width), h: Math.round(layerRect.height) } : null,
+        paintRole: paintCanvas?.getAttribute?.('data-role') || null,
+        paintRect: paintRect ? { w: Math.round(paintRect.width), h: Math.round(paintRect.height) } : null,
+        paintSize: paintCanvas ? {
+          pxW: paintCanvas.width || 0,
+          pxH: paintCanvas.height || 0,
+          cssW: paintCanvas.style?.width || null,
+          cssH: paintCanvas.style?.height || null,
+          clientW: paintCanvas.clientWidth || 0,
+          clientH: paintCanvas.clientHeight || 0,
+          tsmCssW: Number.isFinite(paintCanvas.__tsmCssW) ? paintCanvas.__tsmCssW : null,
+          tsmCssH: Number.isFinite(paintCanvas.__tsmCssH) ? paintCanvas.__tsmCssH : null,
+          dgCssW: Number.isFinite(paintCanvas.__dgCssW) ? paintCanvas.__dgCssW : null,
+          dgCssH: Number.isFinite(paintCanvas.__dgCssH) ? paintCanvas.__dgCssH : null,
+        } : null,
+        frontScale: __dgDescribeCanvasScale(frontCanvas, wrapRect),
+        backScale: __dgDescribeCanvasScale(backCanvas, wrapRect),
+      };
+      const sig = __dgStableStringify(payload);
+      if (__dgPointerSigLast === sig) return;
+      __dgPointerSigLast = sig;
+      const stack = __dgMaybeTraceStack('__DG_POINTER_TRACE_STACK', `DG pointer trace: ${tag}`);
+      if (stack) console.log(`[DG][pointer] ${tag}`, payload, stack);
+      else console.log(`[DG][pointer] ${tag}`, payload);
+    } catch {}
+  }
   function onPointerMove(e){
     dgInputTrace('paint:move:enqueue', { pointerId: e.pointerId, buttons: e.buttons, drawing, pendingNodeTap: !!pendingNodeTap, draggedNode: !!draggedNode });
     __dgPendingMoveEvt = e;
@@ -6847,6 +8133,12 @@ function copyCanvas(backCtx, frontCtx) {
 
   function handlePointerMove(e){
     const p = pointerToPaintLogical(e);
+    if (typeof window !== 'undefined' && window.__DG_POINTER_TRACE) {
+      if (__dgPointerTraceId === e.pointerId && !__dgPointerTraceMoveLogged) {
+        __dgPointerTraceMoveLogged = true;
+        __dgPointerTraceLocal('move', e, p);
+      }
+    }
     dgInputTrace('paint:move:handle', {
       pointerId: e.pointerId,
       buttons: e.buttons,
@@ -7084,7 +8376,17 @@ function copyCanvas(backCtx, frontCtx) {
   }
   function onPointerUp(e){
     dgInputTrace('paint:up', { pointerId: e.pointerId, buttons: e.buttons, drawing, pendingNodeTap: !!pendingNodeTap, draggedNode: !!draggedNode, hasCur: !!cur, usingBackBuffers, pendingPaintSwap });
+    if (typeof window !== 'undefined' && window.__DG_POINTER_TRACE) {
+      if (__dgPointerTraceId === e.pointerId) {
+        __dgPointerTraceLocal('up', e, pointerToPaintLogical(e));
+        __dgPointerTraceId = null;
+        __dgPointerTraceMoveLogged = false;
+      }
+    }
     dgPaintTrace('pointer:up', { pointerId: e.pointerId, buttons: e.buttons, isPrimary: e.isPrimary, zoomMode, zoomGestureActive });
+
+    // Resume tutorial highlights after manual drawing completes.
+    resumeTutorialHighlightAfterDraw();
 
     __dgSkipSwapsDuringDrag = false;
     // Only defer/blank if a *zoom commit* is actually settling.
@@ -9549,6 +10851,11 @@ function copyCanvas(backCtx, frontCtx) {
     }
 
     if (DG_SINGLE_CANVAS && canDrawAnything && panel.__dgSingleCompositeDirty) {
+      if (drawing || __dgSkipSwapsDuringDrag) {
+        // Defer composite while the user is actively drawing; otherwise it can
+        // overwrite the live front-buffer stroke with stale back content.
+        __dgNeedsUIRefresh = true;
+      } else {
       const __compositeStart = (__perfOn && typeof performance !== 'undefined' && performance.now)
         ? performance.now()
         : 0;
@@ -9556,6 +10863,7 @@ function copyCanvas(backCtx, frontCtx) {
       panel.__dgSingleCompositeDirty = false;
       if (__perfOn && __compositeStart) {
         try { window.__PerfFrameProf?.mark?.('drawgrid.draw.composite', performance.now() - __compositeStart); } catch {}
+      }
       }
     }
 
@@ -10638,6 +11946,20 @@ function startGhostGuide({
     else if (y < topBound) y = topBound + (topBound - y);
 
     const __ghostDpr = __dgGetCanvasDprFromCss(ghostCtx?.canvas, cssW, paintDpr);
+    try {
+      const wr = wrap?.getBoundingClientRect?.();
+      dgRenderScaleTrace('ghost:auto:sweep', {
+        panelId: panel?.id || null,
+        cssW,
+        cssH,
+        paintDpr,
+        ghostDpr: __ghostDpr,
+        gridArea: gridArea ? { x: gridArea.x, y: gridArea.y, w: gridArea.w, h: gridArea.h } : null,
+        gridAreaLogical: gridAreaLogical ? { w: gridAreaLogical.w, h: gridAreaLogical.h } : null,
+        wrap: wr ? { w: Math.round(wr.width), h: Math.round(wr.height) } : null,
+        ghost: __dgDescribeCanvasScale(ghostCtx?.canvas, wr),
+      });
+    } catch {}
     R.resetCtx(ghostCtx);
     __dgWithLogicalSpaceDpr(R, ghostCtx, __ghostDpr, () => {
       const scale = (Number.isFinite(__ghostDpr) && __ghostDpr > 0) ? __ghostDpr : 1;

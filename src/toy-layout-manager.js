@@ -8,6 +8,15 @@
   const DPR = () => window.devicePixelRatio || 1;
 
   function manageCanvas(canvas) {
+    // Toys with their own surface managers (e.g. DrawGrid) must opt out.
+    // Otherwise this global manager will fight their custom DPR policy.
+    try {
+      if (canvas?.dataset?.skipAutoDpr === '1') return;
+      const panel = canvas?.closest?.('.toy-panel');
+      if (panel?.dataset?.toySurfaceManaged === '1') return;
+      const role = canvas?.dataset?.role;
+      if (role && String(role).startsWith('drawgrid-')) return;
+    } catch {}
     if (!canvas || canvas.__layoutManaged) return;
     canvas.__layoutManaged = true;
     let retryRaf = 0;

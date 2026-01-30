@@ -1,18 +1,18 @@
 main.js:674 [focus] normalize DOM
 main.js:674 [focus] normalize DOM
-window.__DG_GHOST_TRACE = true
-window.__DG_GHOST_TRACE_CLEAR_ONLY = true
+ window.__DG_TUTORIAL_TRACE = true
+     
 true
-drawgrid.js:123 [DG][ghost] TRACE ARMED
-drawgrid.js:125 [DG][ghost] auto:sweep {sweepSeq: 2, startX: -99, startY: 392, endX: 897, endY: 392, …}
-drawgrid.js:125 [DG][ghost] start:enter {id: 'drawgrid-1769600510834-4mqyfi', usingBackBuffers: false, params: {…}, ghostLayerEmpty: false, ghostGuideRunning: false, …}
-drawgrid.js:125 [DG][ghost] stop:enter {id: 'drawgrid-1769600510834-4mqyfi', immediate: false, preserveTrail: true, ghostGuideRunning: false, usingBackBuffers: false, …}
-drawgrid.js:125 [DG][ghost] start {startX: -99, startY: 392, endX: 897, endY: 392, crossY: 300, …}
-drawgrid.js:125 [DG][ghost] clear:skip (preserve-trail) {id: 'drawgrid-1769600510834-4mqyfi', reason: 'layout:overlay-clear', key: '798x599@1'}
-drawgrid.js:125 [DG][ghost] zoom:done:pending-resnap {preserveBlankDuringDoneResnap: true, hasStrokes: false, hasNodes: false, hasAnyPaint: true, ghostNonEmpty: true, …}
-drawgrid.js:125 [DG][ghost] auto:sweep:skip-active {ghostGuideAutoActive: true, ghostGuideRunning: true, ghostGuideAnimFrame: true, sweepSeq: 2, lastSweepReason: 'clear:empty'}
-drawgrid.js:125 [DG][ghost] clear:skip (preserve-trail) {id: 'drawgrid-1769600510834-4mqyfi', reason: 'layout:overlay-clear', key: '798x599@1'}
-drawgrid.js:125 [DG][ghost] auto:sweep {sweepSeq: 3, startX: -99, startY: 161, endX: 897, endY: 161, …}
-drawgrid.js:125 [DG][ghost] start:enter {id: 'drawgrid-1769600510834-4mqyfi', usingBackBuffers: false, params: {…}, ghostLayerEmpty: false, ghostGuideRunning: false, …}
-drawgrid.js:125 [DG][ghost] stop:enter {id: 'drawgrid-1769600510834-4mqyfi', immediate: false, preserveTrail: true, ghostGuideRunning: false, usingBackBuffers: false, …}
-drawgrid.js:125 [DG][ghost] start {startX: -99, startY: 161, endX: 897, endY: 161, crossY: 300, …}
+drawgrid.js:3867 [DG][tutorial] clear {mode: 'none', active: false, culled: false}
+drawgrid.js:3867 [DG][tutorial] clear {mode: 'none', active: false, culled: false}
+board-viewport.js:1076 [focus][centerSlow] {id: 'drawgrid-1769774323756-hy49ye', focusEnabled: false, camTweenLock: false, desiredScale: 0.45151540205356333, duration: 650}
+board-viewport.js:786 [focus][getWorldCenter:enter] {id: 'drawgrid-1769774323756-hy49ye', cls: 'toy-panel drawgrid-single'}
+drawgrid.js:3867 [DG][tutorial] clear {mode: 'none', active: false, culled: false}
+drawgrid.js:3867 [DG][tutorial] clear {mode: 'none', active: false, culled: false}
+drawgrid.js:3867 [DG][tutorial] clear {mode: 'none', active: false, culled: false}
+drawgrid.js:3867 [DG][tutorial] pause:draw {mode: 'none', active: false, culled: false, raf: false}
+drawgrid.js:3867 [DG][tutorial] clear {mode: 'none', active: false, culled: false}
+drawgrid.js:3867 [DG][tutorial] loop:stop:manual {mode: 'none', active: false, culled: false}
+drawgrid.js:3867 [DG][tutorial] resume:draw {mode: 'none', active: false, culled: false, raf: false}
+drawgrid.js:3867 [DG][tutorial] clear {mode: 'none', active: false, culled: false}
+drawgrid.js:3867 [DG][tutorial] clear {mode: 'none', active: false, culled: false}

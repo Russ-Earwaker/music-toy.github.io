@@ -13,17 +13,37 @@ export function createDgRenderUtils(getState) {
     }
   }
 
-  // Draw in logical (CSS) space scaled by current paintDpr; use for stroke/path operations.
+  function getCanvasDpr(ctx) {
+    if (!ctx) return 1;
+    const S = getState();
+    const fallback = (Number.isFinite(S.paintDpr) && S.paintDpr > 0) ? S.paintDpr : 1;
+    const canvas = ctx.canvas;
+    if (!canvas) return fallback;
+    let cssW = (Number.isFinite(S.cssW) && S.cssW > 0) ? S.cssW : 0;
+    if (!cssW && Number.isFinite(canvas.__tsmCssW)) cssW = canvas.__tsmCssW;
+    if (!cssW && Number.isFinite(canvas.__dgCssW)) cssW = canvas.__dgCssW;
+    if (!cssW && canvas.style?.width) {
+      const sw = parseFloat(canvas.style.width) || 0;
+      if (sw > 0) cssW = sw;
+    }
+    if (!cssW) cssW = canvas.clientWidth || 0;
+    if (cssW > 0 && canvas.width > 0) return canvas.width / cssW;
+    return fallback;
+  }
+
+  // Draw in logical (CSS) space; use for stroke/path operations.
   function withLogicalSpace(ctx, fn) {
     if (!ctx || typeof fn !== 'function') return;
-    const S = getState();
+    if (ctx.__dgLogicalSpaceActive) return fn();
+    const scale = getCanvasDpr(ctx);
+    try { ctx.__dgLogicalSpaceActive = true; } catch {}
     ctx.save();
-    const scale = (Number.isFinite(S.paintDpr) && S.paintDpr > 0) ? S.paintDpr : 1;
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
     try {
       fn();
     } finally {
       ctx.restore();
+      try { ctx.__dgLogicalSpaceActive = false; } catch {}
     }
   }
 
