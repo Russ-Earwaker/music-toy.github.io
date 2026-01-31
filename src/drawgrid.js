@@ -1275,7 +1275,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   }
 
   // Layers (z-index order) — particles behind the art layers
-  const DG_SINGLE_CANVAS = true;
+  // Allow runtime/perf-lab toggling. Default ON, but can be set to 0 to compare.
+  try { if (typeof window !== 'undefined') window.__DG_SINGLE_CANVAS ??= true; } catch {}
+  const DG_SINGLE_CANVAS = !!(typeof window !== 'undefined' && window.__DG_SINGLE_CANVAS);
   try { if (typeof window !== 'undefined') window.__DG_SINGLE_CANVAS = DG_SINGLE_CANVAS; } catch {}
   try {
     if (typeof window !== 'undefined' && window.__DG_PLAYHEAD_SEPARATE_CANVAS === undefined) {
@@ -2418,6 +2420,13 @@ try {
   }
   if (typeof window !== 'undefined' && window.__DG_REFRESH_SIZE_TRACE === undefined) {
     window.__DG_REFRESH_SIZE_TRACE = false;
+  }
+  // IMPORTANT:
+  // Size trace is safe to enable during perf runs (buffered, throttled),
+  // but pixel sampling can trigger expensive GPU readbacks (e.g. getImageData).
+  // Keep sampling OFF by default; only enable it when actively debugging a visual.
+  if (typeof window !== 'undefined' && window.__DG_REFRESH_SIZE_TRACE_SAMPLE === undefined) {
+    window.__DG_REFRESH_SIZE_TRACE_SAMPLE = false;
   }
   if (typeof window !== 'undefined' && window.__DG_REFRESH_SIZE_TRACE_LIMIT === undefined) {
     window.__DG_REFRESH_SIZE_TRACE_LIMIT = 200;
@@ -6074,7 +6083,12 @@ function copyCanvas(backCtx, frontCtx) {
         frontCtx.globalCompositeOperation = 'source-over';
         frontCtx.clearRect(0, 0, width, height);
       }
-      if (typeof window !== 'undefined' && window.__DG_REFRESH_SIZE_TRACE && sampleX !== null && sampleY !== null) {
+      const __doSample =
+        (typeof window !== 'undefined') &&
+        !!window.__DG_REFRESH_SIZE_TRACE &&
+        window.__DG_REFRESH_SIZE_TRACE_SAMPLE === true &&
+        sampleX !== null && sampleY !== null;
+      if (__doSample) {
         const frontSample = __dgSampleAlpha(frontCtx, sampleX, sampleY);
         dgSizeTrace('front-sample', {
           cssW,

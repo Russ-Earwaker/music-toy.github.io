@@ -156,6 +156,8 @@ const AUTO_FOCUS_QUEUE = [
   // Focus runs (longer duration, shorter idle so we actually get motion)
   'runP3fFocusShort',
   'warmupSettle',
+  'runP3fMultiCanvasFocusShort',
+  'warmupSettle',
   'runP3fNoOverlaysFocusShort',
   'warmupSettle',
   'runP3fNoParticlesFocusShort',
@@ -573,6 +575,7 @@ function ensureUI() {
     if (act === 'runP3f') await runP3f();
     if (act === 'runP3fShort') await runP3fShort();
     if (act === 'runP3fFocusShort') await runP3fFocusShort();
+    if (act === 'runP3fMultiCanvasFocusShort') await runP3fMultiCanvasFocusShort();
     if (act === 'runP3fNoOverlaysShort') await runP3fNoOverlaysShort();
     if (act === 'runP3fNoOverlaysShort2') await runP3fNoOverlaysShort2();
     if (act === 'runP3fNoParticlesShort') await runP3fNoParticlesShort();
@@ -2137,6 +2140,7 @@ async function runVariant(label, step, statusText) {
       traceMarks: !!window.__PERF_TRACE_MARKS,
       tapDotsSim: !!window.__PERF_TAP_DOTS_SIM,
       playheadSeparateCanvas: !!window.__DG_PLAYHEAD_SEPARATE_CANVAS,
+      dgSingleCanvas: !!window.__DG_SINGLE_CANVAS,
       runTag: String(window.__PERF_RUN_TAG || ''),
     };
   } catch {}
@@ -2381,6 +2385,7 @@ async function runVariantPlaying(label, step, statusText) {
         traceMarks: !!window.__PERF_TRACE_MARKS,
         tapDotsSim: !!window.__PERF_TAP_DOTS_SIM,
         playheadSeparateCanvas: !!window.__DG_PLAYHEAD_SEPARATE_CANVAS,
+        dgSingleCanvas: !!window.__DG_SINGLE_CANVAS,
         runTag: String(window.__PERF_RUN_TAG || ''),
       };
     result.gestureSkipCount = window.__PERF_LOOPGRID_GESTURE_SKIP || 0;
@@ -3435,6 +3440,32 @@ async function runP3fFocusShort() {
   await runP3fFocus();
   try { window.__PERF_LAB_DURATION_MS = prev; } catch {}
   try { window.__PERF_RUN_TAG = prevTag; } catch {}
+}
+
+async function runP3fMultiCanvasFocusShort() {
+  // Focus A/B:
+  // - rebuild P3Focus with multi-canvas (single-canvas OFF)
+  // - run the same focus script
+  // - rebuild back to baseline (single-canvas ON) so subsequent focus runs are comparable
+  const prevTag = window.__PERF_RUN_TAG;
+  const prevSingle = (typeof window !== 'undefined') ? window.__DG_SINGLE_CANVAS : undefined;
+
+  try { if (typeof window !== 'undefined') window.__DG_SINGLE_CANVAS = false; } catch {}
+  try { window.__PERF_RUN_TAG = 'P3fFocus_MultiCanvas'; } catch {}
+
+  // IMPORTANT: DrawGrid reads canvas topology at creation time.
+  // So to actually A/B, we must rebuild the focus scene when toggling.
+  await buildP3Focus();
+  await warmupFirstAppearance();
+  await warmupSettle();
+  await runP3fFocusShort();
+
+  // Restore baseline for later variants in AUTO_FOCUS_QUEUE.
+  try { if (typeof window !== 'undefined') window.__DG_SINGLE_CANVAS = (prevSingle !== undefined) ? prevSingle : true; } catch {}
+  try { window.__PERF_RUN_TAG = prevTag; } catch {}
+  await buildP3Focus();
+  await warmupFirstAppearance();
+  await warmupSettle();
 }
 
 async function runP3fNoOverlaysFocusShort() {
@@ -5332,6 +5363,8 @@ async function runQueue(list = []) {
         traceCanvasOnlyOn: 'traceOn',              // then force domInRaf OFF below
         runP3fShort: 'runP3f',
         runP3fNoOverlaysShort: 'runP3fNoOverlays',
+        // Focus queue merge-safety (avoid silently skipping intended focus tests)
+        runP3fMultiCanvasFocusShort: 'runP3fFocusShort',
       };
       const alt = ALIASES[name];
       if (alt && typeof window.__PerfLab?.[alt] === 'function') {
@@ -5436,6 +5469,7 @@ try {
       runP3fShort2,
       runP3fFocus,
       runP3fFocusShort,
+      runP3fMultiCanvasFocusShort,
       runP3fNoOverlaysFocusShort,
       runP3fNoParticlesFocusShort,
       runP3fNoOverlaysShort,
@@ -5525,6 +5559,7 @@ try {
       // Demon trace toggles (so auto-queue can flip them deterministically)
       traceDprOn: async function traceDprOn() {
         try { window.__DG_REFRESH_SIZE_TRACE = true; } catch {}
+        try { window.__DG_REFRESH_SIZE_TRACE_SAMPLE = false; } catch {}
         try { window.__DG_EFFECTIVE_DPR_TRACE = true; } catch {}
         try { window.__FG_EFFECTIVE_DPR_TRACE = true; } catch {}
         // IMPORTANT: do not spam console during perf runs; buffer instead.
