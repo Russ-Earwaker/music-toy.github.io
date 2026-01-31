@@ -686,14 +686,8 @@ function __dgWithLogicalSpaceDpr(R, ctx, dpr, fn) {
   }
 }
 
-// One-shot dumper (manual, not spammy):
-//   window.__DG_DUMP_CANVAS_SCALES?.('drawgrid-xyz')
-// If panelId is omitted, dumps the most recent panel we saw in resizeSurfacesFor.
-try {
-  if (typeof window !== 'undefined' && window.__DG_DUMP_CANVAS_SCALES == null) {
-    window.__DG_DUMP_CANVAS_SCALES = null;
-  }
-} catch {}
+// One-shot dumper (manual, not spammy) is installed per-instance inside createDrawGrid()
+// so it can see the actual canvases. (Module-scope can't see per-instance locals.)
 
 const gridAreaLogical = { w: 0, h: 0 };
 
@@ -1328,6 +1322,78 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   playheadCanvas.setAttribute('data-role', 'drawgrid-playhead');
   try { playheadCanvas.dataset.skipAutoDpr = '1'; } catch {}
   try { dgSurfaces?.registerCanvas?.('playhead', playheadCanvas, { policy: 'managed' }); } catch {}
+  // ------------------------------------------------------------
+  // DEBUG: dump canvas scale / DPR state for this DrawGrid instance
+  // Usage:
+  //   window.__DG_DUMP_CANVAS_SCALES()             // dumps this instance (most recent)
+  //   window.__DG_DUMP_CANVAS_SCALES(panel.id)    // dumps only if id matches
+  // ------------------------------------------------------------
+  try {
+    if (typeof window !== 'undefined') {
+      window.__DG_DUMP_CANVAS_SCALES = (wantPanelId) => {
+        try {
+          if (wantPanelId && wantPanelId !== panel?.id) return;
+          const dump = (name, canvas) => {
+            if (!canvas) return { name, missing: true };
+            const rect = canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : null;
+            const styleW = canvas.style?.width || null;
+            const styleH = canvas.style?.height || null;
+            const cachedW = Number.isFinite(canvas.__dgCssW) ? canvas.__dgCssW : null;
+            const cachedH = Number.isFinite(canvas.__dgCssH) ? canvas.__dgCssH : null;
+            const cssW = rect ? rect.width : null;
+            const cssH = rect ? rect.height : null;
+            const bw = canvas.width || 0;
+            const bh = canvas.height || 0;
+            return {
+              name,
+              cssW: cssW != null ? Math.round(cssW) : null,
+              cssH: cssH != null ? Math.round(cssH) : null,
+              styleW,
+              styleH,
+              cachedW,
+              cachedH,
+              display: canvas.style?.display || null,
+              backingW: bw || null,
+              backingH: bh || null,
+              dprX: (cssW && cssW > 0) ? +(bw / cssW).toFixed(3) : null,
+              dprY: (cssH && cssH > 0) ? +(bh / cssH).toFixed(3) : null,
+            };
+          };
+
+          console.group('[DG][DUMP][CANVAS_SCALES]', panel?.id || '');
+          // Be defensive: different refactors have used different local names.
+          // Never reference an undeclared identifier directly (would throw ReferenceError).
+          const __paintCanvasForDump =
+            (typeof paint !== 'undefined' && paint) ? paint :
+            (typeof paintCanvas !== 'undefined' && paintCanvas) ? paintCanvas :
+            (typeof paintEl !== 'undefined' && paintEl) ? paintEl :
+            null;
+          console.table([
+            dump('paint', __paintCanvasForDump),
+            dump('grid', grid),
+            dump('nodes', nodesCanvas),
+            dump('ghost', ghostCanvas),
+            dump('flash', flashCanvas),
+            dump('playhead', playheadCanvas),
+            dump('tutorial', tutorialCanvas),
+          ]);
+          try { console.log('paintDpr', paintDpr, 'usingBackBuffers', usingBackBuffers); } catch {}
+          try { console.log('gridArea', gridArea); } catch {}
+          console.groupEnd();
+        } catch (e) {
+          console.warn('[DG][DUMP] failed', e);
+        }
+      };
+      window.__DG_CHECK_LAYER_SIZES = (wantPanelId, opts = {}) => {
+        if (wantPanelId && wantPanelId !== panel?.id) return null;
+        return __dgGetLayerSizingSnapshot();
+      };
+      window.__DG_ENSURE_LAYER_SIZES = (wantPanelId, opts = {}) => {
+        if (wantPanelId && wantPanelId !== panel?.id) return null;
+        return __dgEnsureLayerSizes('manual', { force: true, log: true, ...opts });
+      };
+    }
+  } catch {}
   // Tag canvases so shared helper code can locate the owning panel.
   try {
     particleCanvas.__dgPanel = panel;
@@ -2145,12 +2211,152 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       toggle(flashCanvas, DG_SINGLE_CANVAS_OVERLAYS && !panel.__dgFlashLayerEmpty);
       toggle(playheadCanvas, DG_SINGLE_CANVAS_OVERLAYS && separatePlayhead && transportRunning);
     }
+    try { __dgEnsureLayerSizes('flat-layer-visibility'); } catch {}
   }
-  updateFlatLayerVisibility();
 
   const tutorialFrontCtx = tutorialCanvas.getContext('2d');
   const tutorialBackCanvas = document.createElement('canvas');
   const tutorialBackCtx = tutorialBackCanvas.getContext('2d');
+
+  const __dgGetCanvasEl = (item) => (item && item.canvas) ? item.canvas : item;
+  const __dgListAllLayerRefs = () => ([
+    frontCanvas,
+    backCanvas,
+    grid,
+    gridFrontCtx,
+    gridBackCanvas,
+    paint,
+    nodesFrontCtx,
+    nodesCanvas,
+    nodesBackCanvas,
+    flashFrontCtx,
+    flashCanvas,
+    flashBackCanvas,
+    ghostFrontCtx,
+    ghostCanvas,
+    ghostBackCanvas,
+    tutorialFrontCtx,
+    tutorialCanvas,
+    tutorialBackCanvas,
+    playheadCanvas,
+    particleCanvas,
+  ].filter(Boolean));
+  const __dgListAllLayerEls = () => {
+    const out = [];
+    const seen = new Set();
+    for (const ref of __dgListAllLayerRefs()) {
+      const el = __dgGetCanvasEl(ref);
+      if (!el || !el.style) continue;
+      if (seen.has(el)) continue;
+      seen.add(el);
+      out.push(el);
+    }
+    return out;
+  };
+  const __dgListManagedBackingEls = () => {
+    const out = [];
+    const seen = new Set();
+    for (const ref of __dgListAllLayerRefs()) {
+      const el = __dgGetCanvasEl(ref);
+      if (!el || !el.style) continue;
+      if (el === particleCanvas) continue; // field-generic owns its backing store
+      if (seen.has(el)) continue;
+      seen.add(el);
+      out.push(el);
+    }
+    return out;
+  };
+  const __dgExpectedLayerSizing = () => {
+    const w = Number.isFinite(cssW) ? cssW : null;
+    const h = Number.isFinite(cssH) ? cssH : null;
+    const dpr = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+    if (!w || !h) return null;
+    return {
+      cssW: w,
+      cssH: h,
+      pxW: Math.max(1, Math.round(w * dpr)),
+      pxH: Math.max(1, Math.round(h * dpr)),
+      dpr,
+    };
+  };
+  const __dgGetLayerSizingSnapshot = () => {
+    const expected = __dgExpectedLayerSizing();
+    if (!expected) return null;
+    const rows = [];
+    for (const el of __dgListAllLayerEls()) {
+      const role = el.getAttribute?.('data-role') || el.className || 'canvas';
+      const styleW = (el.style && el.style.width) ? String(el.style.width) : '';
+      const styleH = (el.style && el.style.height) ? String(el.style.height) : '';
+      const styleWpx = styleW.endsWith('px') ? parseFloat(styleW) : null;
+      const styleHpx = styleH.endsWith('px') ? parseFloat(styleH) : null;
+      const cachedW = Number.isFinite(el.__dgCssW) ? el.__dgCssW : null;
+      const cachedH = Number.isFinite(el.__dgCssH) ? el.__dgCssH : null;
+      const wantsBacking = (el !== particleCanvas);
+      const bw = Number.isFinite(el.width) ? el.width : null;
+      const bh = Number.isFinite(el.height) ? el.height : null;
+      const cssWNow = cachedW ?? styleWpx;
+      const cssHNow = cachedH ?? styleHpx;
+      const cssMismatch = (cssWNow != null && Math.abs(cssWNow - expected.cssW) > 1) ||
+        (cssHNow != null && Math.abs(cssHNow - expected.cssH) > 1);
+      const backingMismatch = wantsBacking && (
+        (bw != null && bw !== expected.pxW) || (bh != null && bh !== expected.pxH)
+      );
+      rows.push({
+        role,
+        display: el.style?.display || '',
+        cssW: cssWNow,
+        cssH: cssHNow,
+        styleW,
+        styleH,
+        backingW: bw,
+        backingH: bh,
+        wantsBacking,
+        cssMismatch,
+        backingMismatch,
+      });
+    }
+    return { expected, rows };
+  };
+  const __dgEnsureLayerSizes = (reason, { force = false, log = false } = {}) => {
+    const snap = __dgGetLayerSizingSnapshot();
+    if (!snap) return null;
+    const { expected, rows } = snap;
+    let changed = false;
+    const cssWpx = `${expected.cssW}px`;
+    const cssHpx = `${expected.cssH}px`;
+    for (const el of __dgListAllLayerEls()) {
+      if (!el.style) continue;
+      if (force || el.__dgCssW !== expected.cssW || el.__dgCssH !== expected.cssH ||
+          el.style.width !== cssWpx || el.style.height !== cssHpx) {
+        el.__dgCssW = expected.cssW;
+        el.__dgCssH = expected.cssH;
+        el.style.width = cssWpx;
+        el.style.height = cssHpx;
+        changed = true;
+      }
+    }
+    for (const el of __dgListManagedBackingEls()) {
+      if (!el) continue;
+      if (force || el.width !== expected.pxW || el.height !== expected.pxH) {
+        el.width = expected.pxW;
+        el.height = expected.pxH;
+        changed = true;
+      }
+    }
+    if (log || (typeof window !== 'undefined' && window.__DG_LAYER_SIZE_TRACE)) {
+      const mismatches = rows.filter(r => r.cssMismatch || r.backingMismatch);
+      if (mismatches.length || log) {
+        try {
+          console.group('[DG][layer-size]', reason || 'sync');
+          console.log('expected', expected, 'changed', changed);
+          console.table(mismatches.length ? mismatches : rows);
+          console.groupEnd();
+        } catch {}
+      }
+    }
+    return { expected, rows, changed };
+  };
+  updateFlatLayerVisibility();
   let tutorialCtx = tutorialFrontCtx;
   // Tag back-buffer canvases so helpers can resolve the owning panel.
   try {
@@ -2747,39 +2953,26 @@ try {
       //
       // Particles are registered as policy:'css' (field-generic owns backing store),
       // so they'll only get CSS sizing here.
+      const setCssSize = (canvasEl) => {
+        if (!canvasEl) return;
+        // Accept either a canvas element or a 2D context (ctx.canvas).
+        const el = (canvasEl && canvasEl.canvas) ? canvasEl.canvas : canvasEl;
+        if (!el || !el.style) return;
+        // Avoid repeated style writes inside RAF; these can be surprisingly expensive at scale.
+        if (el.__dgCssW === nextCssW && el.__dgCssH === nextCssH) return;
+        el.__dgCssW = nextCssW;
+        el.__dgCssH = nextCssH;
+        el.style.width = `${nextCssW}px`;
+        el.style.height = `${nextCssH}px`;
+      };
+
       try {
         if (dgSurfaces && typeof dgSurfaces.applyExplicit === 'function') {
           // Keep local state in sync with the manager-applied state.
           cssW = nextCssW;
           cssH = nextCssH;
           dgSurfaces.applyExplicit(nextCssW, nextCssH, paintDpr);
-          // Still keep DrawGrid's local CSS-size cache aligned (used in DPR estimation)
-          // and resize any back buffers not registered with the surface manager.
-          const setCssSize = (canvasEl) => {
-            if (!canvasEl || !canvasEl.style) return;
-            if (canvasEl.__dgCssW === nextCssW && canvasEl.__dgCssH === nextCssH) return;
-            canvasEl.__dgCssW = nextCssW;
-            canvasEl.__dgCssH = nextCssH;
-            canvasEl.style.width = `${nextCssW}px`;
-            canvasEl.style.height = `${nextCssH}px`;
-          };
-          [
-            frontCanvas,
-            backCanvas,
-            grid,
-            paint,
-            nodesCanvas,
-            flashCanvas,
-            ghostCanvas,
-            tutorialCanvas,
-            playheadCanvas,
-            particleCanvas,
-            gridBackCanvas,
-            nodesBackCanvas,
-            flashBackCanvas,
-            ghostBackCanvas,
-            tutorialBackCanvas,
-          ].forEach(setCssSize);
+          __dgListAllLayerRefs().forEach(setCssSize);
           const resizeBack = (canvas) => {
             if (!canvas) return;
             if (canvas.width === targetW && canvas.height === targetH) return;
@@ -2793,37 +2986,16 @@ try {
           resizeBack(tutorialBackCanvas);
           resizeBack(backCanvas);
           dgSizeTrace('resizeSurfacesFor(surfaceMgr)', { reason, nextCssW, nextCssH, paintDpr, targetW, targetH });
+          try { __dgEnsureLayerSizes('resizeSurfacesFor(surfaceMgr)'); } catch {}
           return;
         }
       } catch (e) {
         try { console.warn('[DG] surfaceMgr applyExplicit failed, falling back', e); } catch {}
       }
-
-      const setCssSize = (canvasEl) => {
-        if (!canvasEl || !canvasEl.style) return;
-        // Avoid repeated style writes inside RAF; these can be surprisingly expensive at scale.
-        if (canvasEl.__dgCssW === nextCssW && canvasEl.__dgCssH === nextCssH) return;
-        canvasEl.__dgCssW = nextCssW;
-        canvasEl.__dgCssH = nextCssH;
-        canvasEl.style.width = `${nextCssW}px`;
-        canvasEl.style.height = `${nextCssH}px`;
-      };
-      if (frontCanvas) {
-        setCssSize(frontCanvas);
-      }
-      if (backCanvas) {
-        setCssSize(backCanvas);
-      }
-      // IMPORTANT: playheadCanvas is a separate surface in some modes (perf lever).
-      // It must track the same CSS/backing-store sizing as the other overlay canvases
-      // or it can end up scaled incorrectly and trigger extra compositor work.
-      if (playheadCanvas) {
-        setCssSize(playheadCanvas);
-      }
-      // Keep *all* overlay canvases pinned to the same CSS size as the panel.
+      // Keep *all* drawgrid canvases pinned to the same CSS size as the panel.
       // Otherwise, when paintDpr/backing-store sizes are reduced (< 1) for perf while zoomed out,
       // some overlays (nodes/connectors/labels) can end up with a smaller intrinsic CSS size and appear scaled down.
-      [grid, paint, nodesCanvas, flashCanvas, ghostCanvas, tutorialCanvas, particleCanvas].forEach(setCssSize);
+      __dgListAllLayerRefs().forEach(setCssSize);
       const resize = (canvas) => {
         if (!canvas) return;
         if (canvas.width === targetW && canvas.height === targetH) return;
@@ -2844,6 +3016,19 @@ try {
       resize(playheadCanvas);
       resize(frontCanvas);
       resize(backCanvas);
+      try { __dgEnsureLayerSizes('resizeSurfacesFor'); } catch {}
+      try {
+        if (playheadFrontCtx?.canvas) {
+          R.resetCtx(playheadFrontCtx);
+          __dgWithLogicalSpace(playheadFrontCtx, () => {
+            const surface = playheadFrontCtx.canvas;
+            const w = surface?.width || 0;
+            const h = surface?.height || 0;
+            playheadFrontCtx.clearRect(0, 0, w, h);
+          });
+          markPlayheadLayerCleared();
+        }
+      } catch {}
 
       // Non-spammy: only logs when a meaningful scale signature changes.
       // This should catch cases where nodes/lines/text appear “smaller” than other layers.
@@ -2869,31 +3054,6 @@ try {
         // Emit a single WARN line when nodes (note nodes + connecting lines + note text)
         // are physically scaled differently than paint. Logs only on state change.
         __dgEmitScaleMismatchIfChanged(sigPayload);
-
-        // Install (or refresh) a manual dumper tied to the most recent panel/wrap.
-        // This is safe to overwrite; it’s a small closure for convenience.
-        try {
-          if (typeof window !== 'undefined') {
-            const lastPanelId = panel?.id || null;
-            window.__DG_DUMP_CANVAS_SCALES = (panelId = null) => {
-              if (panelId && lastPanelId && panelId !== lastPanelId) return;
-              const wr = wrap?.getBoundingClientRect?.();
-              const payload = {
-                panelId: lastPanelId,
-                wrap: wr ? { w: Math.round(wr.width), h: Math.round(wr.height) } : null,
-                paint: __dgDescribeCanvasScale(paint, wr),
-                nodes: __dgDescribeCanvasScale(nodesCanvas, wr),
-                grid: __dgDescribeCanvasScale(grid, wr),
-                ghost: __dgDescribeCanvasScale(ghostCanvas, wr),
-                flash: __dgDescribeCanvasScale(flashCanvas, wr),
-                tutorial: __dgDescribeCanvasScale(tutorialCanvas, wr),
-                playhead: __dgDescribeCanvasScale(playheadCanvas, wr),
-              };
-              console.log('[DG][scale] DUMP', payload);
-              return payload;
-            };
-          }
-        } catch {}
       } catch {}
 
       dgSizeTrace('resizeSurfacesFor', {
@@ -3402,8 +3562,9 @@ function ensureSizeReady({ force = false } = {}) {
   if (!force && HY.inCommitWindow(nowTs)) {
     return true;
   }
-  const host = wrap || body || frontCanvas?.parentElement;
-  const measured = host ? measureCSSSize(host) : { w: 0, h: 0 };
+  // IMPORTANT: Single source of truth for sizing is the wrap RO cache (or last known-good).
+  // Do not fall back to body/parent measurements, which can be transient during boot/refresh/zoom.
+  const measured = __dgGetStableWrapSize();
   let { w, h } = measured;
   if (!w || !h) return false;
   layoutSizeDirty = false;
@@ -3727,10 +3888,18 @@ function ensureSizeReady({ force = false } = {}) {
 
   function spawnNoteBurst(cx, cy, baseRadius) {
     // We want small particles that travel about half a grid cell
-    const cell =
-      (Number.isFinite(cw) && cw > 0)
-        ? cw
-        : (Number.isFinite(ch) && ch > 0 ? ch : 24);
+    // IMPORTANT: `cw/ch` are *canvas* dimensions in logical space, NOT a grid-cell size.
+    // Using them here makes bursts travel/offset by hundreds of pixels (especially after zoom).
+    const cell = (() => {
+      const w = Number.isFinite(gridArea?.w) ? gridArea.w : null;
+      const h = Number.isFinite(gridArea?.h) ? gridArea.h : null;
+      const c = Number.isFinite(cols) && cols > 0 ? cols : null;
+      const r = Number.isFinite(rows) && rows > 0 ? rows : null;
+      const cellW = (w != null && c != null) ? (w / c) : null;
+      const cellH = (h != null && r != null) ? (h / r) : null;
+      const cellPx = (cellW != null && cellH != null) ? Math.min(cellW, cellH) : (cellW != null ? cellW : (cellH != null ? cellH : null));
+      return (cellPx != null && cellPx > 0) ? cellPx : 24;
+    })();
     const lowFps = __dgLowFpsMode || (() => {
       const fpsSample = Number.isFinite(window.__MT_SM_FPS)
         ? window.__MT_SM_FPS
@@ -5452,6 +5621,27 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
       if (__dgLayoutObserverInstalled) { dgRefreshTrace('ro:skip already exists'); return; }
       if (typeof ResizeObserver === 'undefined') { dgRefreshTrace('ro:skip no ResizeObserver'); return; }
       if (__dgLayoutObs) { dgRefreshTrace('ro:skip already exists'); return; }
+
+      // Coalesce RO-triggered resnaps to at most once per frame per instance.
+      // IMPORTANT:
+      // - RO callbacks can fire multiple times per frame (and across many toys).
+      // - Doing real work inside RO increases churn and can line up expensive redraws badly.
+      // - We still do NOT "defer until gesture end" here; resnapAndRedraw itself controls that policy.
+      let __dgROResnapRAF = 0;
+      const scheduleROResnap = () => {
+        if (__dgROResnapRAF) return;
+        __dgROResnapRAF = requestAnimationFrame(() => {
+          __dgROResnapRAF = 0;
+          try { if (!panel?.isConnected) return; } catch { return; }
+          try { resnapAndRedraw(false); } catch {}
+        });
+      };
+      try {
+        panel?.addEventListener?.('toy:remove', () => {
+          try { if (__dgROResnapRAF) cancelAnimationFrame(__dgROResnapRAF); } catch {}
+          __dgROResnapRAF = 0;
+        }, { once: true });
+      } catch {}
       __dgLayoutObs = new ResizeObserver((entries) => {
         const e = entries && entries[0];
         const cr = e && e.contentRect;
@@ -5469,10 +5659,9 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
         layoutSizeDirty = true;
 
         // IMPORTANT:
-        // We do NOT defer resnaps during gesture/zoom.
-        // Deferring causes “fine → later scales down/up” desync as pending resnaps apply after the fact.
-        // RO contentRect is our stable, zoom-safe basis, so apply immediately.
-        resnapAndRedraw(false);
+        // Keep RO callback lightweight; schedule resnap for next frame (coalesced).
+        // Policy about gesturing/visibility is handled inside resnapAndRedraw().
+        scheduleROResnap();
       });
       __dgLayoutObs.observe(wrap);
       __dgLayoutObserverInstalled = true;
@@ -6013,39 +6202,25 @@ function copyCanvas(backCtx, frontCtx) {
       const pixelW = Math.max(1, Math.round(logicalWidth * scale));
       const pixelH = Math.max(1, Math.round(logicalHeight * scale));
 
-      const styleCanvases = [
-        frontCanvas,
-        gridFrontCtx?.canvas,
-        nodesFrontCtx?.canvas,
-        flashFrontCtx?.canvas,
-        ghostFrontCtx?.canvas,
-        tutorialFrontCtx?.canvas,
-        particleCanvas,
-        playheadCanvas
-      ].filter(Boolean);
+      const styleCanvases = __dgListAllLayerEls();
 
       const cssWpx = `${logicalWidth}px`;
       const cssHpx = `${logicalHeight}px`;
       for (const canvas of styleCanvases) {
         if (canvas.style.width !== cssWpx) canvas.style.width = cssWpx;
         if (canvas.style.height !== cssHpx) canvas.style.height = cssHpx;
+        // Keep authoritative CSS size cached for DPR math.
+        canvas.__dgCssW = logicalWidth;
+        canvas.__dgCssH = logicalHeight;
       }
 
-      const allCanvases = [
-        frontCanvas,
-        backCanvas,
-        gridFrontCtx?.canvas,
-        gridBackCanvas,
-        nodesFrontCtx?.canvas,
-        nodesBackCanvas,
-        flashFrontCtx?.canvas,
-        flashBackCanvas,
-        ghostFrontCtx?.canvas,
-        ghostBackCanvas,
-        tutorialFrontCtx?.canvas,
-        tutorialBackCanvas,
-        playheadCanvas,
-      ].filter(Boolean);
+      const allCanvases = __dgListManagedBackingEls();
+      for (const canvas of allCanvases) {
+        try {
+          canvas.__dgCssW = logicalWidth;
+          canvas.__dgCssH = logicalHeight;
+        } catch {}
+      }
 
       // NOTE: avoid per-canvas getContext() calls here (can be surprisingly costly).
       // We only reset contexts we already hold references to.
@@ -6829,6 +7004,9 @@ function copyCanvas(backCtx, frontCtx) {
     if (typeof window !== 'undefined' && window.__PERF_DG_DISABLE_GRID) {
       panel.__dgGridHasPainted = false;
       return;
+    }
+    if (typeof window !== 'undefined' && window.__DG_LAYER_SIZE_ENFORCE) {
+      try { __dgEnsureLayerSizes('drawGrid'); } catch {}
     }
     if (!__dgGridReady()) {
       // Transient layout hiccup protection:
@@ -8795,6 +8973,21 @@ function copyCanvas(backCtx, frontCtx) {
                               const nodeRadiusToy = Math.max(10, Math.min(cw, ch) * 0.55);
 
                               // New local pink burst (no knockback, just visuals)
+                              try {
+                                if (typeof window !== 'undefined' && window.__DG_NOTE_BURST_TRACE) {
+                                  console.log('[DG][burst][spawn]', {
+                                    panelId: panel?.id || null,
+                                    col, row,
+                                    x, y,
+                                    cw, ch,
+                                    topPad,
+                                    gridArea: gridArea ? { x: gridArea.x, y: gridArea.y, w: gridArea.w, h: gridArea.h } : null,
+                                    paintDpr,
+                                    flash: fctx?.canvas ? { w: fctx.canvas.width, h: fctx.canvas.height } : null,
+                                    playhead: playheadFrontCtx?.canvas ? { w: playheadFrontCtx.canvas.width, h: playheadFrontCtx.canvas.height } : null,
+                                  });
+                                }
+                              } catch {}
                               spawnNoteBurst(x, y, nodeRadiusToy);
 
                               // Existing ring effect
@@ -10211,7 +10404,11 @@ function copyCanvas(backCtx, frontCtx) {
               overlayCompositeNeeded = true;
               markFlashLayerActive();
               // Draw cell flashes
-              R.withOverlayClip(fctx, gridArea, false, () => {
+              // IMPORTANT:
+              // Draw in the flash canvas' logical space so bursts stay aligned after zoom/DPR shifts.
+              R.resetCtx(fctx);
+              __dgWithLogicalSpace(fctx, () => {
+                R.withOverlayClip(fctx, gridArea, false, () => {
               fctx.save();
           for (let i = cellFlashes.length - 1; i >= 0; i--) {
             const flash = cellFlashes[i];
@@ -10228,6 +10425,7 @@ function copyCanvas(backCtx, frontCtx) {
             }
           }
           fctx.restore();
+                });
               });
         } else {
           for (let i = cellFlashes.length - 1; i >= 0; i--) {
@@ -10262,26 +10460,29 @@ function copyCanvas(backCtx, frontCtx) {
           const __noteToggleStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
             ? performance.now()
             : 0;
-          R.withOverlayClip(fctx, gridArea, false, () => {
-          fctx.save();
-          for (let i = noteToggleEffects.length - 1; i >= 0; i--) {
-            const effect = noteToggleEffects[i];
-            effect.progress += 0.12;
-            const alpha = Math.max(0, 1 - effect.progress);
-            if (alpha <= 0) {
-              noteToggleEffects.splice(i, 1);
-              continue;
+          R.resetCtx(fctx);
+          __dgWithLogicalSpace(fctx, () => {
+            R.withOverlayClip(fctx, gridArea, false, () => {
+            fctx.save();
+            for (let i = noteToggleEffects.length - 1; i >= 0; i--) {
+              const effect = noteToggleEffects[i];
+              effect.progress += 0.12;
+              const alpha = Math.max(0, 1 - effect.progress);
+              if (alpha <= 0) {
+                noteToggleEffects.splice(i, 1);
+                continue;
+              }
+              const radius = effect.radius * (1 + effect.progress * 1.6);
+              const lineWidth = Math.max(1.2, effect.radius * 0.28 * (1 - effect.progress * 0.5));
+              fctx.globalAlpha = alpha;
+              fctx.lineWidth = lineWidth;
+              fctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+              fctx.beginPath();
+              fctx.arc(effect.x, effect.y, radius, 0, Math.PI * 2);
+              fctx.stroke();
             }
-            const radius = effect.radius * (1 + effect.progress * 1.6);
-            const lineWidth = Math.max(1.2, effect.radius * 0.28 * (1 - effect.progress * 0.5));
-            fctx.globalAlpha = alpha;
-            fctx.lineWidth = lineWidth;
-            fctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
-            fctx.beginPath();
-            fctx.arc(effect.x, effect.y, radius, 0, Math.PI * 2);
-            fctx.stroke();
-          }
-          fctx.restore();
+            fctx.restore();
+            });
           });
           if (__dgOverlayStart) {
             const __dgOverlayDt = performance.now() - __dgOverlayStart;
@@ -10306,6 +10507,17 @@ function copyCanvas(backCtx, frontCtx) {
     }
 
     // Pink radial bursts for active notes
+    if (typeof window !== 'undefined' && window.__DG_NOTE_BURST_TRACE) {
+      try {
+        console.log('[DG][burst][draw]', {
+          panelId: panel?.id || null,
+          burstCount: noteBurstEffects.length,
+          gridArea: gridArea ? { x: gridArea.x, y: gridArea.y, w: gridArea.w, h: gridArea.h } : null,
+          paintDpr,
+          flash: fctx?.canvas ? { w: fctx.canvas.width, h: fctx.canvas.height } : null,
+        });
+      } catch {}
+    }
     if (noteBurstEffects.length > 0) {
       try {
         if (__dgLowFpsMode || !overlayBurstsEnabled) {
@@ -10336,49 +10548,52 @@ function copyCanvas(backCtx, frontCtx) {
             const __dgOverlayStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
               ? performance.now()
               : 0;
-            R.withOverlayClip(fctx, gridArea, false, () => {
-            fctx.save();
-            markFlashLayerActive();
-            fctx.globalCompositeOperation = 'lighter';
-            for (let i = noteBurstEffects.length - 1; i >= 0; i--) {
-              const burst = noteBurstEffects[i];
-              let anyAlive = false;
+            R.resetCtx(fctx);
+            __dgWithLogicalSpace(fctx, () => {
+              R.withOverlayClip(fctx, gridArea, false, () => {
+              fctx.save();
+              markFlashLayerActive();
+              fctx.globalCompositeOperation = 'lighter';
+              for (let i = noteBurstEffects.length - 1; i >= 0; i--) {
+                const burst = noteBurstEffects[i];
+                let anyAlive = false;
 
-              for (let j = burst.particles.length - 1; j >= 0; j--) {
-                const p = burst.particles[j];
+                for (let j = burst.particles.length - 1; j >= 0; j--) {
+                  const p = burst.particles[j];
 
-                // Fade out – faster fade so the burst clears quickly
-                p.life -= dt * 2.0;
-                if (p.life <= 0) {
-                  burst.particles.splice(j, 1);
-                  continue;
+                  // Fade out – faster fade so the burst clears quickly
+                  p.life -= dt * 2.0;
+                  if (p.life <= 0) {
+                    burst.particles.splice(j, 1);
+                    continue;
+                  }
+
+                  anyAlive = true;
+
+                  // Integrate
+                  p.x += p.vx * dt;
+                  p.y += p.vy * dt;
+
+                  // Gentle damping so they slow as they fade
+                  p.vx *= 0.9;
+                  p.vy *= 0.9;
+
+                  const alpha = p.life;
+                  const radius = p.size;
+
+                  fctx.globalAlpha = alpha;
+                  fctx.fillStyle = 'rgba(255, 180, 210, 1)';
+                  fctx.beginPath();
+                  fctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+                  fctx.fill();
                 }
 
-                anyAlive = true;
-
-                // Integrate
-                p.x += p.vx * dt;
-                p.y += p.vy * dt;
-
-                // Gentle damping so they slow as they fade
-                p.vx *= 0.9;
-                p.vy *= 0.9;
-
-                const alpha = p.life;
-                const radius = p.size;
-
-                fctx.globalAlpha = alpha;
-                fctx.fillStyle = 'rgba(255, 180, 210, 1)';
-                fctx.beginPath();
-                fctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
-                fctx.fill();
+                if (!anyAlive) {
+                  noteBurstEffects.splice(i, 1);
+                }
               }
-
-              if (!anyAlive) {
-                noteBurstEffects.splice(i, 1);
-              }
-            }
-            fctx.restore();
+              fctx.restore();
+              });
             });
             if (__dgOverlayStart) {
               const __dgOverlayDt = performance.now() - __dgOverlayStart;
@@ -10500,10 +10715,44 @@ function copyCanvas(backCtx, frontCtx) {
         } catch {}
 
         const shouldRenderPlayhead = wantsPlayhead && allowPlayheadThisFrame;
+        const lastX = Number.isFinite(panel.__dgPlayheadLastX) ? panel.__dgPlayheadLastX : null;
+        const lastLayer = panel.__dgPlayheadLayer || playheadLayer;
+        const lastGridArea = panel.__dgPlayheadLastGridArea || gridArea;
+        const clearPlayheadBandAt = (clearX, layer) => {
+          if (!Number.isFinite(clearX) || !gridArea) return;
+          const clearArea = (lastGridArea && lastGridArea.w > 0) ? lastGridArea : gridArea;
+          const clearCtx = (layer === 'tutorial')
+            ? tutorialCtx
+            : (layer === 'playhead') ? playheadFrontCtx : fctx;
+          if (!clearCtx?.canvas) return;
+          const defaultBand = Math.max(6, Math.round(Math.max(0.8 * cw, Math.min(clearArea.w * 0.08, 2.2 * cw))));
+          const band = Number.isFinite(panel.__dgPlayheadClearBand) ? panel.__dgPlayheadClearBand : defaultBand;
+          const clearBandAt = () => {
+            const y0 = Math.floor(clearArea.y) - 4;
+            const y1 = Math.ceil(clearArea.y + clearArea.h) + 4;
+            const h = Math.max(0, y1 - y0);
+            clearCtx.clearRect(clearX - band - 1, y0, band * 2 + 2, h);
+          };
+          if (clearCtx === playheadFrontCtx) {
+            R.resetCtx(clearCtx);
+            __dgWithLogicalSpace(clearCtx, clearBandAt);
+          } else {
+            const clipArea = { x: clearArea.x, y: Math.floor(clearArea.y) - 2, w: clearArea.w, h: Math.ceil(clearArea.h) + 4 };
+            R.resetCtx(clearCtx);
+            __dgWithLogicalSpace(clearCtx, () => {
+              R.withOverlayClip(clearCtx, clipArea, false, clearBandAt);
+            });
+          }
+        };
+
+        // If the phase wrapped but we skip rendering this frame (e.g. zoom/throttle),
+        // clear the previous end-band so the playhead doesn't "stick".
+        if (phaseJustWrapped && lastX != null) {
+          try { clearPlayheadBandAt(lastX, lastLayer); } catch {}
+        }
 
         if (!wantsPlayhead) {
-          const lastX = Number.isFinite(panel.__dgPlayheadLastX) ? panel.__dgPlayheadLastX : null;
-          const lastLayer = panel.__dgPlayheadLayer || playheadLayer;
+          const lastGridArea = panel.__dgPlayheadLastGridArea || gridArea;
           if (lastX != null) {
             if (lastLayer === 'tutorial' && tutorialHighlightMode === 'none' && tutorialCtx?.canvas) {
               const __overlayClearStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
@@ -10528,10 +10777,11 @@ function copyCanvas(backCtx, frontCtx) {
                 : 0;
               R.resetCtx(playheadFrontCtx);
               const clearPlayheadBand = () => {
-                const defaultBand = Math.max(6, Math.round(Math.max(0.8 * cw, Math.min(gridArea.w * 0.08, 2.2 * cw))));
+                const clearArea = (lastGridArea && lastGridArea.w > 0) ? lastGridArea : gridArea;
+                const defaultBand = Math.max(6, Math.round(Math.max(0.8 * cw, Math.min(clearArea.w * 0.08, 2.2 * cw))));
                 const band = Number.isFinite(panel.__dgPlayheadClearBand) ? panel.__dgPlayheadClearBand : defaultBand;
-                const y0 = Math.floor(gridArea.y) - 4;
-                const y1 = Math.ceil(gridArea.y + gridArea.h) + 4;
+                const y0 = Math.floor(clearArea.y) - 4;
+                const y1 = Math.ceil(clearArea.y + clearArea.h) + 4;
                 const h = Math.max(0, y1 - y0);
                 playheadFrontCtx.clearRect(lastX - band - 1, y0, band * 2 + 2, h);
               };
@@ -10553,8 +10803,19 @@ function copyCanvas(backCtx, frontCtx) {
                 const width = cssW || (flashSurface?.width ?? fctx.canvas.width ?? 0) / scale;
                 const height = cssH || (flashSurface?.height ?? fctx.canvas.height ?? 0) / scale;
                 if (overlayCoreWanted) {
-                  // Avoid clearing the overlay band here; it can expose the base (white) line
-                  // for a frame if overlay redraw is throttled.
+                  // We can't clear the full overlay here without risking a 1-frame expose
+                  // of the base (white) line if overlay redraw is throttled.
+                  // BUT: if the playhead is no longer wanted (e.g. chain-active race at wrap),
+                  // we *must* clear the playhead itself, otherwise it can get "stuck" at the
+                  // end of the path until a later playhead overlaps it.
+                  const clearArea = (lastGridArea && lastGridArea.w > 0) ? lastGridArea : gridArea;
+                  const defaultBand = Math.max(6, Math.round(Math.max(0.8 * cw, Math.min(clearArea.w * 0.08, 2.2 * cw))));
+                  const band = Number.isFinite(panel.__dgPlayheadClearBand) ? panel.__dgPlayheadClearBand : defaultBand;
+                  const y0 = Math.floor(clearArea.y) - 4;
+                  const y1 = Math.ceil(clearArea.y + clearArea.h) + 4;
+                  const h = Math.max(0, y1 - y0);
+                  fctx.clearRect(lastX - band - 1, y0, band * 2 + 2, h);
+
                   __dgNeedsUIRefresh = true;
                   overlayCompositeNeeded = true;
                 } else {
@@ -10580,6 +10841,7 @@ function copyCanvas(backCtx, frontCtx) {
           }
           panel.__dgPlayheadLastX = null;
           panel.__dgPlayheadLayer = null;
+          panel.__dgPlayheadLastGridArea = null;
         }
 
         if (shouldRenderPlayhead) {
@@ -10589,27 +10851,30 @@ function copyCanvas(backCtx, frontCtx) {
           panel.__dgPlayheadLastRenderTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
             ? performance.now()
             : Date.now();
-          const lastX = Number.isFinite(panel.__dgPlayheadLastX) ? panel.__dgPlayheadLastX : null;
-          const lastLayer = panel.__dgPlayheadLayer || playheadLayer;
           if ((playheadCtx === tutorialCtx || playheadCtx === playheadFrontCtx || !overlayClearedThisFrame) && lastX != null) {
             const clearCtx = (lastLayer === 'tutorial')
               ? tutorialCtx
               : (lastLayer === 'playhead') ? playheadFrontCtx : fctx;
             if (clearCtx?.canvas && gridArea) {
-              const defaultBand = Math.max(6, Math.round(Math.max(0.8 * cw, Math.min(gridArea.w * 0.08, 2.2 * cw))));
+              const clearArea = (lastGridArea && lastGridArea.w > 0) ? lastGridArea : gridArea;
+              const defaultBand = Math.max(6, Math.round(Math.max(0.8 * cw, Math.min(clearArea.w * 0.08, 2.2 * cw))));
               const band = Number.isFinite(panel.__dgPlayheadClearBand) ? panel.__dgPlayheadClearBand : defaultBand;
               R.resetCtx(clearCtx);
               const clearPlayheadBand = () => {
-                const y0 = Math.floor(gridArea.y) - 4;
-                const y1 = Math.ceil(gridArea.y + gridArea.h) + 4;
+                const y0 = Math.floor(clearArea.y) - 4;
+                const y1 = Math.ceil(clearArea.y + clearArea.h) + 4;
                 const h = Math.max(0, y1 - y0);
                 clearCtx.clearRect(lastX - band - 1, y0, band * 2 + 2, h);
               };
               if (clearCtx === playheadFrontCtx) {
-                clearPlayheadBand();
+                R.resetCtx(clearCtx);
+                __dgWithLogicalSpace(clearCtx, clearPlayheadBand);
               } else {
-                const clipArea = { x: gridArea.x, y: Math.floor(gridArea.y) - 2, w: gridArea.w, h: Math.ceil(gridArea.h) + 4 };
-                R.withOverlayClip(clearCtx, clipArea, false, clearPlayheadBand);
+                const clipArea = { x: clearArea.x, y: Math.floor(clearArea.y) - 2, w: clearArea.w, h: Math.ceil(clearArea.h) + 4 };
+                R.resetCtx(clearCtx);
+                __dgWithLogicalSpace(clearCtx, () => {
+                  R.withOverlayClip(clearCtx, clipArea, false, clearPlayheadBand);
+                });
               }
               emitDG('overlay-clear', { reason: 'playhead-band' });
             }
@@ -10665,11 +10930,45 @@ function copyCanvas(backCtx, frontCtx) {
         }
         // Calculate playhead X position based on loop phase
         const playheadX = gridArea.x + info.phase01 * gridArea.w;
+        // If the playhead wrapped (end -> start), ensure we clear the "stuck" end segment.
+        // This can happen if playback briefly stops rendering at the end-of-loop boundary.
+        try {
+          const prevX = Number.isFinite(lastX) ? lastX : null;
+          if (prevX != null && gridArea && Number.isFinite(gridArea.w) && gridArea.w > 0) {
+            const wrapped = (playheadX < (gridArea.x + gridArea.w * 0.25)) && (prevX > (gridArea.x + gridArea.w * 0.75));
+            if (wrapped) {
+              const clearCtx = (lastLayer === 'tutorial')
+                ? tutorialCtx
+                : (lastLayer === 'playhead') ? playheadFrontCtx : fctx;
+              if (clearCtx?.canvas) {
+                const defaultBand = Math.max(6, Math.round(Math.max(0.8 * cw, Math.min(gridArea.w * 0.08, 2.2 * cw))));
+                const band = Number.isFinite(panel.__dgPlayheadClearBand) ? panel.__dgPlayheadClearBand : defaultBand;
+                const clearBandAt = () => {
+                  const y0 = Math.floor(gridArea.y) - 4;
+                  const y1 = Math.ceil(gridArea.y + gridArea.h) + 4;
+                  const h = Math.max(0, y1 - y0);
+                  clearCtx.clearRect(prevX - band - 1, y0, band * 2 + 2, h);
+                };
+                if (clearCtx === playheadFrontCtx) {
+                  R.resetCtx(clearCtx);
+                  __dgWithLogicalSpace(clearCtx, clearBandAt);
+                } else {
+                  const clipArea = { x: gridArea.x, y: Math.floor(gridArea.y) - 2, w: gridArea.w, h: Math.ceil(gridArea.h) + 4 };
+                  R.resetCtx(clearCtx);
+                  __dgWithLogicalSpace(clearCtx, () => {
+                    R.withOverlayClip(clearCtx, clipArea, false, clearBandAt);
+                  });
+                }
+              }
+            }
+          }
+        } catch {}
         panel.__dgPlayheadLastX = playheadX;
         panel.__dgPlayheadLayer = playheadLayer;
+        panel.__dgPlayheadLastGridArea = gridArea ? { x: gridArea.x, y: gridArea.y, w: gridArea.w, h: gridArea.h } : null;
 
         // Use a dedicated overlay context for the playhead to avoid wiping strokes.
-        const drawPlayhead = () => {
+        const __drawPlayheadInner = () => {
         playheadCtx.save();
 
         // Width of the soft highlight band scales with a column, clamped
@@ -10828,6 +11127,10 @@ function copyCanvas(backCtx, frontCtx) {
         }
 
         playheadCtx.restore();
+        };
+        const drawPlayhead = () => {
+          R.resetCtx(playheadCtx);
+          __dgWithLogicalSpace(playheadCtx, __drawPlayheadInner);
         };
         if (playheadCtx === playheadFrontCtx) {
           drawPlayhead();
@@ -12444,6 +12747,8 @@ function runAutoGhostGuideSweep() {
   try { panel.dispatchEvent(new CustomEvent('drawgrid:ready', { bubbles: true })); } catch {}
   return api;
 }
+
+
 
 
 
