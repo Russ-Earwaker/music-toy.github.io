@@ -143,8 +143,24 @@ export function createDgRandomizers(getState) {
     try {
       const stroke = createRandomLineStroke(S);
       S.strokes.push(stroke);
-      S.drawFullStroke(pctx, stroke);
-      S.regenerateMapFromStrokes();
+      if (typeof window !== 'undefined' && window.__DG_RANDOM_TRACE_VERBOSE) {
+        try {
+          const c = S.getActivePaintCtx?.();
+          const canvas = c?.canvas || null;
+          const payload = {
+            panelId: S.panel?.id || null,
+            paintDpr: S.paintDpr,
+            cssW: S.cssW,
+            cssH: S.cssH,
+            usingBackBuffers: S.usingBackBuffers,
+            canvasRole: canvas?.getAttribute?.('data-role') || null,
+            canvasSize: canvas ? { w: canvas.width, h: canvas.height, cssW: canvas.style?.width || null, cssH: canvas.style?.height || null } : null,
+          };
+          console.log('[DG][random][redraw]', JSON.stringify(payload));
+        } catch {}
+      }
+      // Use the centralized redraw pipeline to avoid stale back-buffer scale.
+      S.clearAndRedrawFromStrokes(null, 'randomize-line');
 
       // After generating the line, randomly deactivate some columns to create rests.
       // This addresses the user's feedback that "Random" no longer turns notes off.

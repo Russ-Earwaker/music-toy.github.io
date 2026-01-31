@@ -108,6 +108,11 @@ if (typeof window !== 'undefined' && window.__DG_NODE_SCALE_TRACE == null) {
 if (typeof window !== 'undefined' && window.__DG_RENDER_SCALE_TRACE == null) {
   window.__DG_RENDER_SCALE_TRACE = false;
 }
+// Optional: more verbose random-trace logging.
+//   window.__DG_RANDOM_TRACE_VERBOSE = true
+if (typeof window !== 'undefined' && window.__DG_RANDOM_TRACE_VERBOSE == null) {
+  window.__DG_RANDOM_TRACE_VERBOSE = false;
+}
 // Optional: include stacks for scale-change logs.
 //   window.__DG_CANVAS_SCALE_TRACE_STACK = true
 if (typeof window !== 'undefined' && window.__DG_CANVAS_SCALE_TRACE_STACK == null) {
@@ -1959,6 +1964,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     get dgTraceWarn() { return dgTraceWarn; },
     get dgTraceLog() { return dgTraceLog; },
     get gridArea() { return gridArea; },
+    get cssW() { return cssW; },
+    get cssH() { return cssH; },
+    get paintDpr() { return paintDpr; },
     get topPad() { return topPad; },
     get ch() { return ch; },
     get rows() { return rows; },
@@ -4555,11 +4563,10 @@ function ensureSizeReady({ force = false } = {}) {
     return F.perfMarkSection('drawgrid.paint.redraw', () => {
       if (reason) FD.markRegenSource(reason);
       // IMPORTANT:
-      // Do NOT remap frontCtx->backCtx in single-canvas mode.
-      // In DG_SINGLE_CANVAS, callers intentionally pass the *currently visible* paint ctx
-      // (often frontCtx). Redirecting to backCtx causes the redraw to land in a hidden /
-      // stale-sized buffer when paintDpr changes during zoom-out, which produces the
-      // "flat colour line scales up" bug while the animated overlay remains correct.
+      // Keep the caller's target ctx, but ensure the composite back buffer stays in sync.
+      // In DG_SINGLE_CANVAS, some call paths draw into frontCtx (visible) while composite
+      // uses backCtx as the base. If backCtx isn't updated, the solid line can appear
+      // scaled incorrectly after zoom-out.
       const resolvedTarget = targetCtx;
       // IMPORTANT:
       // The paint stroke must be redrawn into the *currently visible* paint buffer.
@@ -4589,7 +4596,7 @@ function ensureSizeReady({ force = false } = {}) {
       const normalStrokes = strokes.filter(s => !s.justCreated);
       const newStrokes = strokes.filter(s => s.justCreated);
       R.resetCtx(ctx);
-      R.withLogicalSpace(ctx, () => {
+      __dgWithLogicalSpace(ctx, () => {
         const surface = ctx.canvas;
         const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
         const width = cssW || (surface?.width ?? 0) / scale;
@@ -4599,13 +4606,45 @@ function ensureSizeReady({ force = false } = {}) {
 
         // 1. Draw all existing, non-new strokes first.
         for (const s of normalStrokes) {
-          drawFullStroke(ctx, s);
+          drawFullStroke(ctx, s, { skipReset: true, skipTransform: true });
         }
         // 2. Draw the brand new strokes on top.
         for (const s of newStrokes) {
-          drawFullStroke(ctx, s);
+          drawFullStroke(ctx, s, { skipReset: true, skipTransform: true });
         }
       });
+
+      // If we drew into the front buffer in single-canvas mode, mirror it into the
+      // back buffer before composite so the base isn't stale or mismatched.
+      if (DG_SINGLE_CANVAS && ctx === frontCtx && backCtx && backCtx !== frontCtx) {
+        try {
+          const src = frontCtx?.canvas;
+          const dst = backCtx?.canvas;
+          if (src && dst && src.width > 0 && src.height > 0 && dst.width > 0 && dst.height > 0) {
+            R.resetCtx(backCtx);
+            R.withDeviceSpace(backCtx, () => {
+              backCtx.clearRect(0, 0, dst.width, dst.height);
+              backCtx.drawImage(
+                src,
+                0, 0, src.width, src.height,
+                0, 0, dst.width, dst.height
+              );
+            });
+            if (typeof window !== 'undefined' && window.__DG_RANDOM_TRACE_VERBOSE && reason && String(reason).includes('random')) {
+              const payload = {
+                panelId: panel?.id || null,
+                reason,
+                copied: true,
+                srcRole: src.getAttribute?.('data-role') || null,
+                dstRole: dst.getAttribute?.('data-role') || null,
+                srcSize: { w: src.width, h: src.height, cssW: src.style?.width || null, cssH: src.style?.height || null },
+                dstSize: { w: dst.width, h: dst.height, cssW: dst.style?.width || null, cssH: dst.style?.height || null },
+              };
+              console.log('[DG][random][sync]', JSON.stringify(payload));
+            }
+          }
+        } catch {}
+      }
 
       regenerateMapFromStrokes();
       try { (panel.__dgUpdateButtons || updateGeneratorButtons || function(){})() } catch(e) { }
@@ -5267,11 +5306,11 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
         FD.markRegenSource('resnap');
         regenerateMapFromStrokes();
         R.resetCtx(pctx);
-        R.withLogicalSpace(pctx, () => {
+        __dgWithLogicalSpace(pctx, () => {
           R.clearCanvas(pctx);
           emitDG('paint-clear', { reason: 'resnap-redraw' });
           for (const s of strokes) {
-            drawFullStroke(pctx, s);
+            drawFullStroke(pctx, s, { skipReset: true, skipTransform: true });
           }
         });
         if (DG_SINGLE_CANVAS) {
@@ -6255,7 +6294,7 @@ function copyCanvas(backCtx, frontCtx) {
       const copyCtx = (srcCtx, dstCtx) => {
         if (!srcCtx || !dstCtx) return;
         if (srcCtx === dstCtx || srcCtx.canvas === dstCtx.canvas) return;
-        if (DG_SINGLE_CANVAS && (srcCtx === gridFrontCtx || srcCtx === nodesFrontCtx)) return;
+        if (DG_SINGLE_CANVAS && usingBackBuffers && (srcCtx === gridFrontCtx || srcCtx === nodesFrontCtx)) return;
         R.withDeviceSpace(dstCtx, () => {
           dstCtx.clearRect(0, 0, pixelW, pixelH);
           dstCtx.drawImage(
@@ -6273,6 +6312,16 @@ function copyCanvas(backCtx, frontCtx) {
         copyCtx(flashFrontCtx, flashBackCtx);
         copyCtx(ghostFrontCtx, ghostBackCtx);
         copyCtx(tutorialFrontCtx, tutorialBackCtx);
+      } else if (!usingBackBuffers) {
+        // In single-canvas mode, backCtx must remain *paint-only*.
+        // Copying from frontCtx (which includes grid/overlays) makes the grid
+        // get composited twice, causing the "grid gets darker when zooming/panning".
+        // Keep back updated via stroke redraws instead.
+        try {
+          if (backCtx && Array.isArray(strokes) && strokes.length > 0) {
+            clearAndRedrawFromStrokes(backCtx, 'sync-back-from-strokes');
+          }
+        } catch {}
       }
     } catch {}
   }
@@ -7227,9 +7276,41 @@ function copyCanvas(backCtx, frontCtx) {
   // This is used to create a clean image for snapping.
   function drawFullStroke(ctx, stroke, opts = {}) {
     if (!stroke || !stroke.pts || stroke.pts.length < 1) return;
-    if (DG_SINGLE_CANVAS && ctx?.canvas?.getAttribute?.('data-role') === 'drawgrid-paint' && backCtx && ctx !== backCtx) {
+    if (DG_SINGLE_CANVAS && usingBackBuffers && ctx?.canvas?.getAttribute?.('data-role') === 'drawgrid-paint' && backCtx && ctx !== backCtx) {
       ctx = backCtx;
     }
+    try {
+      if (typeof window !== 'undefined' && window.__DG_RANDOM_TRACE_VERBOSE && stroke?.generatorId != null) {
+        const isOverlay = (ctx === fctx) || !!ctx.__dgIsOverlay;
+        const flag = isOverlay ? '__dgRandomOverlayLogged' : '__dgRandomPaintLogged';
+        if (!stroke[flag]) {
+          stroke[flag] = true;
+          const canvas = ctx?.canvas || null;
+          const dpr = __dgGetCanvasDprFromCss(canvas, cssW, paintDpr);
+          const payload = {
+            panelId: panel?.id || null,
+            layer: isOverlay ? 'overlay' : 'paint',
+            generatorId: stroke.generatorId,
+            cssW,
+            cssH,
+            paintDpr,
+            dpr,
+            canvasRole: canvas?.getAttribute?.('data-role') || null,
+            canvasSize: canvas ? { w: canvas.width, h: canvas.height, cssW: canvas.style?.width || null, cssH: canvas.style?.height || null } : null,
+            logicalActive: !!ctx.__dgLogicalSpaceActive,
+            transform: (() => {
+              try {
+                const t = (typeof ctx.getTransform === 'function') ? ctx.getTransform() : null;
+                return t ? { a: t.a, d: t.d, e: t.e, f: t.f } : null;
+              } catch {
+                return null;
+              }
+            })(),
+          };
+          console.log('[DG][random][stroke]', JSON.stringify(payload));
+        }
+      }
+    } catch {}
     const color = stroke.color || STROKE_COLORS[0];
     const wasOverlay = (ctx === fctx) || !!ctx.__dgIsOverlay;
     const skipReset = !!opts.skipReset;
@@ -11336,9 +11417,9 @@ function copyCanvas(backCtx, frontCtx) {
       regenerateMapFromStrokes();
       currentMap = normalizeMapColumns(currentMap, cols);
 
-      R.withLogicalSpace(pctx, () => {
+      __dgWithLogicalSpace(pctx, () => {
         R.clearCanvas(pctx);
-        for (const s of strokes) drawFullStroke(pctx, s);
+        for (const s of strokes) drawFullStroke(pctx, s, { skipReset: true, skipTransform: true });
       });
 
       __hydrationJustApplied = true;
@@ -11895,6 +11976,13 @@ function copyCanvas(backCtx, frontCtx) {
   // and force a redraw; otherwise (especially while playing / with front buffers) we can
   // show only the backing line until another event (eg Play toggle) triggers a full refresh.
   function __dgAfterProgrammaticVisualChange(reason) {
+    try {
+      const snap = __dgEnsureLayerSizes('programmatic-visual');
+      if (!snap) {
+        try { layout(true); } catch {}
+        try { __dgEnsureLayerSizes('programmatic-visual:layout'); } catch {}
+      }
+    } catch {}
     try { markPaintDirty(); } catch {}
     try { __dgOverlayStrokeListCache.paintRev = -1; __dgOverlayStrokeListCache.len = -1; } catch {}
     try { panel.__dgSingleCompositeDirty = true; } catch {}
@@ -11939,10 +12027,98 @@ function copyCanvas(backCtx, frontCtx) {
       });
     }
     try {
+      try { ensureSizeReady({ force: true }); } catch {}
+      try { layout(true); } catch {}
+      try { __dgEnsureLayerSizes('random:pre', { force: true }); } catch {}
+      try { pctx = (typeof getActivePaintCtx === 'function') ? getActivePaintCtx() : pctx; } catch {}
+      try { if (!usingBackBuffers) ensureBackVisualsFreshFromFront?.(); } catch {}
+      if (typeof window !== 'undefined' && window.__DG_RANDOM_TRACE) {
+        try {
+          const pCanvas = pctx?.canvas || null;
+          const payload = {
+            panelId: panel?.id || null,
+            kind,
+            cssW,
+            cssH,
+            paintDpr,
+            usingBackBuffers,
+            pctxRole: pCanvas?.getAttribute?.('data-role') || null,
+            pctxSize: pCanvas ? { w: pCanvas.width, h: pCanvas.height } : null,
+            frontCtx: frontCtx?.canvas ? { role: frontCtx.canvas.getAttribute?.('data-role') || null, w: frontCtx.canvas.width, h: frontCtx.canvas.height } : null,
+            backCtx: backCtx?.canvas ? { role: backCtx.canvas.getAttribute?.('data-role') || null, w: backCtx.canvas.width, h: backCtx.canvas.height } : null,
+          };
+          if (window.__DG_RANDOM_TRACE_VERBOSE) {
+            const snap = __dgGetLayerSizingSnapshot?.();
+            const flashCanvasNow = fctx?.canvas || null;
+            const paintRect = pCanvas?.getBoundingClientRect?.();
+            const flashRect = flashCanvasNow?.getBoundingClientRect?.();
+            const wrapRect = wrap?.getBoundingClientRect?.();
+            const layersRect = layersRoot?.getBoundingClientRect?.();
+            payload.DG_SINGLE_CANVAS = DG_SINGLE_CANVAS;
+            payload.DG_SINGLE_CANVAS_OVERLAYS = DG_SINGLE_CANVAS_OVERLAYS;
+            payload.gridArea = gridArea ? { x: gridArea.x, y: gridArea.y, w: gridArea.w, h: gridArea.h } : null;
+            payload.cw = cw;
+            payload.ch = ch;
+            payload.paintRect = paintRect ? { w: paintRect.width, h: paintRect.height } : null;
+            payload.flashRect = flashRect ? { w: flashRect.width, h: flashRect.height } : null;
+            payload.wrapRect = wrapRect ? { w: wrapRect.width, h: wrapRect.height } : null;
+            payload.layersRect = layersRect ? { w: layersRect.width, h: layersRect.height } : null;
+            payload.flashDisplay = flashCanvasNow?.style?.display || null;
+            payload.paintDisplay = pCanvas?.style?.display || null;
+            payload.pctxSize = pCanvas ? { w: pCanvas.width, h: pCanvas.height, cssW: pCanvas.style?.width || null, cssH: pCanvas.style?.height || null } : null;
+            payload.frontCtx = frontCtx?.canvas ? { role: frontCtx.canvas.getAttribute?.('data-role') || null, w: frontCtx.canvas.width, h: frontCtx.canvas.height, cssW: frontCtx.canvas.style?.width || null, cssH: frontCtx.canvas.style?.height || null } : null;
+            payload.backCtx = backCtx?.canvas ? { role: backCtx.canvas.getAttribute?.('data-role') || null, w: backCtx.canvas.width, h: backCtx.canvas.height, cssW: backCtx.canvas.style?.width || null, cssH: backCtx.canvas.style?.height || null } : null;
+            payload.snap = snap;
+          }
+          console.log('[DG][random][pre]', JSON.stringify(payload));
+        } catch {}
+      }
+      try { __dgEnsureLayerSizes('random'); } catch {}
       if (kind === 'toy-random') RNG.handleRandomizeLine();
       else if (kind === 'toy-random-blocks') RNG.handleRandomizeBlocks();
       else if (kind === 'toy-random-notes') RNG.handleRandomizeNotes();
       __dgAfterProgrammaticVisualChange(kind);
+      if (typeof window !== 'undefined' && window.__DG_RANDOM_TRACE) {
+        try {
+          const pCanvas = pctx?.canvas || null;
+          const payload = {
+            panelId: panel?.id || null,
+            kind,
+            cssW,
+            cssH,
+            paintDpr,
+            usingBackBuffers,
+            pctxRole: pCanvas?.getAttribute?.('data-role') || null,
+            pctxSize: pCanvas ? { w: pCanvas.width, h: pCanvas.height } : null,
+            frontCtx: frontCtx?.canvas ? { role: frontCtx.canvas.getAttribute?.('data-role') || null, w: frontCtx.canvas.width, h: frontCtx.canvas.height } : null,
+            backCtx: backCtx?.canvas ? { role: backCtx.canvas.getAttribute?.('data-role') || null, w: backCtx.canvas.width, h: backCtx.canvas.height } : null,
+          };
+          if (window.__DG_RANDOM_TRACE_VERBOSE) {
+            const snap = __dgGetLayerSizingSnapshot?.();
+            const flashCanvasNow = fctx?.canvas || null;
+            const paintRect = pCanvas?.getBoundingClientRect?.();
+            const flashRect = flashCanvasNow?.getBoundingClientRect?.();
+            const wrapRect = wrap?.getBoundingClientRect?.();
+            const layersRect = layersRoot?.getBoundingClientRect?.();
+            payload.DG_SINGLE_CANVAS = DG_SINGLE_CANVAS;
+            payload.DG_SINGLE_CANVAS_OVERLAYS = DG_SINGLE_CANVAS_OVERLAYS;
+            payload.gridArea = gridArea ? { x: gridArea.x, y: gridArea.y, w: gridArea.w, h: gridArea.h } : null;
+            payload.cw = cw;
+            payload.ch = ch;
+            payload.paintRect = paintRect ? { w: paintRect.width, h: paintRect.height } : null;
+            payload.flashRect = flashRect ? { w: flashRect.width, h: flashRect.height } : null;
+            payload.wrapRect = wrapRect ? { w: wrapRect.width, h: wrapRect.height } : null;
+            payload.layersRect = layersRect ? { w: layersRect.width, h: layersRect.height } : null;
+            payload.flashDisplay = flashCanvasNow?.style?.display || null;
+            payload.paintDisplay = pCanvas?.style?.display || null;
+            payload.pctxSize = pCanvas ? { w: pCanvas.width, h: pCanvas.height, cssW: pCanvas.style?.width || null, cssH: pCanvas.style?.height || null } : null;
+            payload.frontCtx = frontCtx?.canvas ? { role: frontCtx.canvas.getAttribute?.('data-role') || null, w: frontCtx.canvas.width, h: frontCtx.canvas.height, cssW: frontCtx.canvas.style?.width || null, cssH: frontCtx.canvas.style?.height || null } : null;
+            payload.backCtx = backCtx?.canvas ? { role: backCtx.canvas.getAttribute?.('data-role') || null, w: backCtx.canvas.width, h: backCtx.canvas.height, cssW: backCtx.canvas.style?.width || null, cssH: backCtx.canvas.style?.height || null } : null;
+            payload.snap = snap;
+          }
+          console.log('[DG][random][post]', JSON.stringify(payload));
+        } catch {}
+      }
       if (typeof window !== 'undefined' && window.__DG_DEBUG_DRAWFLOW) {
         console.log('[DG][flow] handleToyRandomEvent:done', {
           kind,
@@ -12690,6 +12866,8 @@ function runAutoGhostGuideSweep() {
   // If we attempt layout/draw while size is 0 (common on refresh), the grid can end up
   // permanently missing and the ghost guide will bake in the wrong scale.
   (function __dgBootDrawOnceWhenSized() {
+    try { __dgEnsureLayerSizes('resnap'); } catch {}
+
     requestAnimationFrame(() => {
       try {
         if (!panel.isConnected) return;
