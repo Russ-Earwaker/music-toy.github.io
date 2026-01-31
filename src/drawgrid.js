@@ -754,8 +754,12 @@ window.__DG_ZOOM_COMMIT_SCALE_THRESHOLD  ??= 0.8;  // if commitScale <= this, al
 // Adaptive DPR (idle-time backing-store DPR changes)
 // This can cause visible "late snaps" (layers appear to jump after zoom/pan settles),
 // because it changes paintDpr while the camera is idle.
-// Default OFF; we can re-enable later once it's hysteresis-stable and visually safe.
-window.__DG_ADAPTIVE_DPR_ENABLED      ??= false;
+// Default ON (we now rely on hysteresis + zoom-commit rules to prevent visible snaps).
+// Opt-out at runtime via: window.__DG_ADAPTIVE_DPR_ENABLED = false;
+window.__DG_ADAPTIVE_DPR_ENABLED      ??= true;
+// Allow adaptive DPR to run even with only one visible DrawGrid (PerfLab focus runs).
+// Opt-out via: window.__DG_ADAPTIVE_DPR_ALLOW_SINGLE = false;
+window.__DG_ADAPTIVE_DPR_ALLOW_SINGLE ??= true;
 
 // Size-trace logging (DPR / canvas resize churn). Keep console OFF by default.
 // PerfLab can enable __DG_REFRESH_SIZE_TRACE to collect to the perf buffer without spamming devtools.
@@ -1275,7 +1279,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   }
 
   // Layers (z-index order) — particles behind the art layers
-  // Allow runtime/perf-lab toggling. Default ON, but can be set to 0 to compare.
+  // IMPORTANT: do not overwrite runtime perf toggles.
+  // PerfLab (and manual console tests) need to be able to set this BEFORE a toy is created.
   try { if (typeof window !== 'undefined') window.__DG_SINGLE_CANVAS ??= true; } catch {}
   const DG_SINGLE_CANVAS = !!(typeof window !== 'undefined' && window.__DG_SINGLE_CANVAS);
   try { if (typeof window !== 'undefined') window.__DG_SINGLE_CANVAS = DG_SINGLE_CANVAS; } catch {}
@@ -3598,6 +3603,23 @@ function ensureSizeReady({ force = false } = {}) {
   }
 
   if (!force) {
+    // Debounce frequent size commits during camera/focus/zoom animations.
+    // During motion, wrap size can change every frame by a few pixels; resizing backing stores
+    // each frame triggers expensive snapshot/restore and (in some cases) stroke redraws.
+    const minMs = (typeof window !== 'undefined' && Number.isFinite(window.__DG_RESIZE_COMMIT_MIN_MS))
+      ? window.__DG_RESIZE_COMMIT_MIN_MS
+      : 120;
+    const minPx = (typeof window !== 'undefined' && Number.isFinite(window.__DG_RESIZE_COMMIT_MIN_PX))
+      ? window.__DG_RESIZE_COMMIT_MIN_PX
+      : 4;
+    if (__dgLastSizeCommitMs && (nowTs - __dgLastSizeCommitMs) < minMs) {
+      if (cssW > 0 && cssH > 0 && Math.abs(w - cssW) < minPx && Math.abs(h - cssH) < minPx) {
+        return true;
+      }
+    }
+  }
+
+  if (!force) {
     // If the measured size flips briefly (e.g. during gesture/zoom settle), wait for it to
     // remain stable for a short window before committing an expensive backing-store resize.
     const wouldChange = (w !== cssW) || (h !== cssH);
@@ -5730,6 +5752,12 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
     return { w: 0, h: 0 };
   }
 
+  function __dgGetLayoutGoodSize() {
+    // Return last known-good RO size only (no current RO size).
+    if (__dgLayoutGoodW > 0 && __dgLayoutGoodH > 0) return { w: __dgLayoutGoodW, h: __dgLayoutGoodH };
+    return { w: 0, h: 0 };
+  }
+
   function measureCSSSize(el) {
     if (!el) return { w: 0, h: 0 };
 
@@ -5738,6 +5766,13 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
     // do NOT fall back to offset/client/getBoundingClientRect() (can reflect transient zoom/transform).
     // Returning 0 forces callers to retry next frame.
     if (el === wrap && __dgLayoutObs && (__dgLayoutW <= 0 || __dgLayoutH <= 0)) {
+      // RO is installed but hasn't reported yet (common on refresh/boot).
+      // Prefer last-known-good RO size if we have it; otherwise return 0 to force callers to retry.
+      const good = __dgGetLayoutGoodSize();
+      if (good.w > 0 && good.h > 0) {
+        dgRefreshTrace('size:wrap zero (RO pending) -> use good', { w: __dgLayoutW, h: __dgLayoutH, goodW: good.w, goodH: good.h });
+        return good;
+      }
       dgRefreshTrace('size:wrap zero (RO pending)', { w: __dgLayoutW, h: __dgLayoutH });
       return { w: 0, h: 0 };
     }
@@ -5955,7 +5990,9 @@ function copyCanvas(backCtx, frontCtx) {
       try { drawGrid(); } catch {}
     }
     if (typeof window !== 'undefined' && window.__DG_REFRESH_SIZE_TRACE && gridBackCtx && gridArea) {
-      const sample = (sampleX !== null && sampleY !== null)
+      const doSample =
+        !!(typeof window !== 'undefined' && (window.__DG_REFRESH_SIZE_TRACE_SAMPLE || window.__DG_RESIZE_TRACE_SAMPLE));
+      const sample = (doSample && sampleX !== null && sampleY !== null)
         ? __dgSampleAlpha(gridBackCtx, sampleX, sampleY)
         : null;
       dgSizeTrace('gridBack-sample', {
@@ -7071,6 +7108,33 @@ function copyCanvas(backCtx, frontCtx) {
     if (typeof window !== 'undefined' && window.__DG_LAYER_SIZE_ENFORCE) {
       try { __dgEnsureLayerSizes('drawGrid'); } catch {}
     }
+
+    // ------------------------------------------------------------
+    // Bootstrap sizing:
+    // In perf runs we still see drawGrid:skip-not-ready with cssW/cssH=0.
+    // That means we're drawing before we have any stable layout size.
+    // Try *once* per panel to recover a stable size before taking the "not ready" path.
+    // ------------------------------------------------------------
+    if ((cssW <= 1 || cssH <= 1) && !panel.__dgBootstrapSizeTried) {
+      panel.__dgBootstrapSizeTried = true;
+      try {
+        // Prefer RO-derived stable size (zoom-safe).
+        const stable = (typeof __dgGetStableWrapSize === 'function') ? __dgGetStableWrapSize() : { w: 0, h: 0 };
+        if (stable && stable.w > 1 && stable.h > 1) {
+          cssW = stable.w;
+          cssH = stable.h;
+        } else {
+          // Force one layout pass. This is guarded so it can't hammer every frame.
+          try { layout(true); } catch {}
+          const stable2 = (typeof __dgGetStableWrapSize === 'function') ? __dgGetStableWrapSize() : { w: 0, h: 0 };
+          if (stable2 && stable2.w > 1 && stable2.h > 1) {
+            cssW = stable2.w;
+            cssH = stable2.h;
+          }
+        }
+      } catch {}
+    }
+
     if (!__dgGridReady()) {
       // Transient layout hiccup protection:
       // If we had a valid grid recently, reuse it for this frame instead of bailing.
@@ -7101,21 +7165,38 @@ function copyCanvas(backCtx, frontCtx) {
             ch,
           });
         } else {
-          dgGridAlphaLog('drawGrid:skip-not-ready', gctx, {
-            gridArea: gridArea ? { ...gridArea } : null,
-            cw,
-            ch,
-            cssW,
-            cssH,
-          });
-          dgSizeTrace('drawGrid:skip-not-ready', {
-            cssW,
-            cssH,
-            gridArea: gridArea ? { ...gridArea } : null,
-            cw,
-            ch,
-          });
+          // De-spam: only log skip-not-ready once per panel instance.
+          if (!panel.__dgLoggedSkipNotReady) {
+            panel.__dgLoggedSkipNotReady = true;
+            dgGridAlphaLog('drawGrid:skip-not-ready', gctx, {
+              gridArea: gridArea ? { ...gridArea } : null,
+              cw,
+              ch,
+              cssW,
+              cssH,
+            });
+            dgSizeTrace('drawGrid:skip-not-ready', {
+              cssW,
+              cssH,
+              gridArea: gridArea ? { ...gridArea } : null,
+              cw,
+              ch,
+            });
+          }
           panel.__dgGridHasPainted = false;
+
+          // If we hit this state, we want to *promptly* recover as soon as RO reports / layout stabilizes,
+          // but without hammering resnap every frame.
+          if (!panel.__dgResnapQueuedNotReady) {
+            panel.__dgResnapQueuedNotReady = true;
+            requestAnimationFrame(() => {
+              if (!panel.isConnected) return;
+              panel.__dgResnapQueuedNotReady = false;
+              // Force layout here because RO may be pending and we want to rebuild canvases ASAP.
+              try { resnapAndRedraw(true, { preservePaintIfNoStrokes: true }); } catch {}
+            });
+          }
+
           return;
         }
       }
@@ -9659,25 +9740,33 @@ function copyCanvas(backCtx, frontCtx) {
       if (allowOverlayDraw) {
         const lastTransportRunning = !!panel.__dgLastTransportRunning;
         if ((allowOverlayDrawHeavy || (lastTransportRunning && !transportRunning)) && !transportRunning && !overlayActive) {
-          const __overlayClearStart = __perfOn ? performance.now() : 0;
-          try {
-          const flashSurface = getActiveFlashCanvas();
-          const __flashDpr = __dgGetCanvasDprFromCss(flashSurface, cssW, paintDpr);
-          R.resetCtx(fctx);
-          __dgWithLogicalSpaceDpr(R, fctx, __flashDpr, () => {
-              const { x, y, w, h } = R.getOverlayClearRect({
-                canvas: flashSurface,
-                pad: R.getOverlayClearPad(),
-                allowFull: !!panel.__dgFlashOverlayOutOfGrid,
-                gridArea,
+          const __nowTs = (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now();
+          const __flashAliveUntil = panel.__dgFlashActiveUntil || 0;
+          const __flashIsEmpty = !!panel.__dgFlashLayerEmpty;
+
+          // Only clear the flash overlay once it has actually been drawn *and* its keepalive has expired.
+          // (Avoid per-frame clears when idle; they show up as costly GPU/raster work.)
+          if (!__flashIsEmpty && __nowTs >= __flashAliveUntil) {
+            const __overlayClearStart = __perfOn ? performance.now() : 0;
+            try {
+            const flashSurface = getActiveFlashCanvas();
+            const __flashDpr = __dgGetCanvasDprFromCss(flashSurface, cssW, paintDpr);
+            R.resetCtx(fctx);
+            __dgWithLogicalSpaceDpr(R, fctx, __flashDpr, () => {
+                const { x, y, w, h } = R.getOverlayClearRect({
+                  canvas: flashSurface,
+                  pad: R.getOverlayClearPad(),
+                  allowFull: !!panel.__dgFlashOverlayOutOfGrid,
+                  gridArea,
+                });
+                fctx.clearRect(x, y, w, h);
               });
-              fctx.clearRect(x, y, w, h);
-            });
-            markFlashLayerCleared();
-            overlayCompositeNeeded = true;
-          } catch {}
-          if (__perfOn && __overlayClearStart) {
-            try { window.__PerfFrameProf?.mark?.('drawgrid.prep.overlayClear', performance.now() - __overlayClearStart); } catch {}
+              markFlashLayerCleared();
+              overlayCompositeNeeded = true;
+            } catch {}
+            if (__perfOn && __overlayClearStart) {
+              try { window.__PerfFrameProf?.mark?.('drawgrid.prep.overlayClear', performance.now() - __overlayClearStart); } catch {}
+            }
           }
         }
         panel.__dgLastTransportRunning = transportRunning;
@@ -10096,7 +10185,11 @@ function copyCanvas(backCtx, frontCtx) {
       __dgDeferUntilTs = 0;
       try {
         if (!__hydrationJustApplied) {
-          if (typeof ensureBackVisualsFreshFromFront === 'function') {
+          // PERF: don't back-sync (front -> back) during generic UI refresh by default.
+          // Back-sync is only *required* right before we actually swap buffers (handled elsewhere),
+          // and doing it here is extremely expensive (copies multiple canvases).
+          const __uiRefreshBackSync = (typeof window !== 'undefined') ? !!window.__DG_UI_REFRESH_BACKSYNC : false;
+          if (__uiRefreshBackSync && !usingBackBuffers && typeof ensureBackVisualsFreshFromFront === 'function') {
             const __backSyncStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
               ? performance.now()
               : 0;

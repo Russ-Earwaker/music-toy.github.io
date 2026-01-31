@@ -810,10 +810,15 @@ function ensureUI() {
         try { window.__DG_REFRESH_SIZE_TRACE = true; } catch {}
         try { window.__DG_EFFECTIVE_DPR_TRACE = true; } catch {}
         try { window.__FG_EFFECTIVE_DPR_TRACE = true; } catch {}
+        // Make DPR-related perf runs deterministic: ensure adaptive DPR is actually enabled.
+        try { window.__DG_ADAPTIVE_DPR_ENABLED = true; } catch {}
+        try { window.__DG_ADAPTIVE_DPR_ALLOW_SINGLE = true; } catch {}
         console.log('[PerfLab] DPR trace ENABLED', {
           __DG_REFRESH_SIZE_TRACE: !!window.__DG_REFRESH_SIZE_TRACE,
           __DG_EFFECTIVE_DPR_TRACE: !!window.__DG_EFFECTIVE_DPR_TRACE,
           __FG_EFFECTIVE_DPR_TRACE: !!window.__FG_EFFECTIVE_DPR_TRACE,
+          __DG_ADAPTIVE_DPR_ENABLED: !!window.__DG_ADAPTIVE_DPR_ENABLED,
+          __DG_ADAPTIVE_DPR_ALLOW_SINGLE: !!window.__DG_ADAPTIVE_DPR_ALLOW_SINGLE,
         });
         try { syncUiFromState(); } catch {}
       }
@@ -5560,8 +5565,12 @@ try {
       traceDprOn: async function traceDprOn() {
         try { window.__DG_REFRESH_SIZE_TRACE = true; } catch {}
         try { window.__DG_REFRESH_SIZE_TRACE_SAMPLE = false; } catch {}
+        try { window.__DG_RESIZE_TRACE_SAMPLE = false; } catch {}
         try { window.__DG_EFFECTIVE_DPR_TRACE = true; } catch {}
         try { window.__FG_EFFECTIVE_DPR_TRACE = true; } catch {}
+        // Ensure adaptive DPR is enabled during perf automation runs.
+        try { window.__DG_ADAPTIVE_DPR_ENABLED = true; } catch {}
+        try { window.__DG_ADAPTIVE_DPR_ALLOW_SINGLE = true; } catch {}
         // IMPORTANT: do not spam console during perf runs; buffer instead.
         try { window.__PERF_TRACE_TO_CONSOLE = false; } catch {}
         try { window.__PERF_TRACE_KEEP_BUFFER = true; } catch {}
@@ -5574,6 +5583,8 @@ try {
             __DG_REFRESH_SIZE_TRACE: !!window.__DG_REFRESH_SIZE_TRACE,
             __DG_EFFECTIVE_DPR_TRACE: !!window.__DG_EFFECTIVE_DPR_TRACE,
             __FG_EFFECTIVE_DPR_TRACE: !!window.__FG_EFFECTIVE_DPR_TRACE,
+            __DG_ADAPTIVE_DPR_ENABLED: !!window.__DG_ADAPTIVE_DPR_ENABLED,
+            __DG_ADAPTIVE_DPR_ALLOW_SINGLE: !!window.__DG_ADAPTIVE_DPR_ALLOW_SINGLE,
           });
         } catch {}
       },
@@ -5588,6 +5599,7 @@ try {
         window.__PERF_TRACE = window.__PERF_TRACE || {};
         window.__PERF_TRACE.traceCanvasResize = true;
         window.__PERF_TRACE.traceDomInRaf = false;
+        try { window.__DG_RESIZE_TRACE_SAMPLE = false; } catch {}
       try { console.log('[PerfLab] traceCanvasResize ENABLED (domInRaf OFF)', { ...window.__PERF_TRACE }); } catch {}
     },
     traceOn: async function traceOn() {
