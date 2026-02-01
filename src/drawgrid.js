@@ -59,6 +59,7 @@ import { createDgRandomizers } from './drawgrid/dg-randomizers.js';
 import { requestPanelPulse } from './pulse-border.js';
 import { queueClassToggle, markPanelForDomCommit } from './dom-commit.js';
 import { createToySurfaceManager } from './toy-surface-manager.js';
+import { getAutoQualityScale } from './perf/AutoQualityController.js';
 import {
   DRAWGRID_ENABLE_PARTICLE_FIELD,
   DG_ALPHA_DEBUG,
@@ -734,6 +735,17 @@ const DG_FPS_PARTICLE_HYSTERESIS_UP = 38;  // re-enable once we're above this
 const DG_PLAYHEAD_FPS_SIMPLE_ENTER = 28;
 const DG_PLAYHEAD_FPS_SIMPLE_EXIT = 34;
 
+// Test harness: allow Perf Lab to drive DrawGrid LOD using a forced FPS value.
+// Perf Lab sets: window.__DG_FPS_TEST_OVERRIDE = 5/10/15/...
+function __dgGetFpsDriveOverride() {
+  try {
+    const v = (typeof window !== 'undefined') ? Number(window.__DG_FPS_TEST_OVERRIDE || 0) : 0;
+    return (Number.isFinite(v) && v > 0) ? v : 0;
+  } catch {
+    return 0;
+  }
+}
+
 // IntersectionObserver visibility threshold - panels with <5% on-screen area
 // are treated as "offscreen" and have their heavy work culled.
 const DG_VISIBILITY_THRESHOLD = 0.05;
@@ -875,6 +887,25 @@ window.__DG_PRESSURE_DPR_END_MS      ??= 34;
 window.__DG_PRESSURE_DPR_MIN_MUL     ??= 0.5;
 window.__DG_PRESSURE_DPR_EWMA_ALPHA  ??= 0.12;
 window.__DG_PRESSURE_DPR_COOLDOWN_MS ??= 350;
+
+// -----------------------------------------------------------------------------
+// AutoQualityController integration (Quality Lab + adaptive quality scale)
+// -----------------------------------------------------------------------------
+// When enabled, DrawGrid's backing-store DPR participates in the global
+// auto-quality signal (window.__AUTO_QUALITY_EFFECTIVE) driven by
+// AutoQualityController + Quality Lab.
+window.__DG_USE_AUTO_QUALITY ??= true;
+
+function __dgGetAutoQualityMul() {
+  try {
+    if (!(window.__DG_USE_AUTO_QUALITY ?? true)) return 1;
+    const v = getAutoQualityScale?.();
+    if (!Number.isFinite(v) || v <= 0) return 1;
+    return Math.max(0.25, Math.min(1.0, v));
+  } catch {
+    return 1;
+  }
+}
 
 // -----------------------------------------------------------------------------
 // Overlay-first pressure DPR (aggressive on transient layers)
@@ -1488,6 +1519,95 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   } else {
     try { panel.classList.remove('drawgrid-single'); } catch {}
   }
+
+  // ---------------------------------------------------------------------------
+  // Debug readout: show which FPS/quality degradations are currently active.
+  // Toggle with: window.__DG_STATE_READOUT = true/false
+  // ---------------------------------------------------------------------------
+  function __dgEnsureStateReadoutEl() {
+    try {
+      if (!panel) return null;
+      if (panel.__dgStateReadoutEl && panel.__dgStateReadoutEl.isConnected) return panel.__dgStateReadoutEl;
+      const el = document.createElement('div');
+      el.className = 'dg-state-readout';
+      el.style.position = 'absolute';
+      el.style.left = '8px';
+      el.style.bottom = '8px';
+      el.style.zIndex = '9999';
+      el.style.pointerEvents = 'none';
+      el.style.whiteSpace = 'pre';
+      el.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace';
+      el.style.fontSize = '11px';
+      el.style.lineHeight = '1.25';
+      el.style.padding = '6px 8px';
+      el.style.borderRadius = '8px';
+      el.style.background = 'rgba(0,0,0,0.55)';
+      el.style.color = 'rgba(255,255,255,0.92)';
+      el.style.textShadow = '0 1px 0 rgba(0,0,0,0.6)';
+      panel.appendChild(el);
+      panel.__dgStateReadoutEl = el;
+      return el;
+    } catch {
+      return null;
+    }
+  }
+
+  // Expose a safe, low-noise state snapshot for Perf Lab / debugging.
+  // - Collect: window.__DG_COLLECT_DRAWGRID_STATES()
+  // - Print  : window.__DG_PRINT_STATE()
+  try {
+    if (typeof window !== 'undefined' && !window.__DG_COLLECT_DRAWGRID_STATES) {
+      window.__DG_COLLECT_DRAWGRID_STATES = () => {
+        try {
+          const panels = Array.from(document.querySelectorAll('.toy-panel'));
+          return panels
+            .filter((p) => p && (p.__dgStateSnapshot || (p.classList && p.classList.contains('drawgrid'))))
+            .map((p) => ({
+              panelId: p.id || null,
+              ...((p.__dgStateSnapshot && typeof p.__dgStateSnapshot === 'object') ? p.__dgStateSnapshot : {}),
+              text: p.__dgStateSnapshotText || null,
+            }));
+        } catch {
+          return [];
+        }
+      };
+    }
+    if (typeof window !== 'undefined' && !window.__DG_PRINT_STATE) {
+      window.__DG_PRINT_STATE = () => {
+        const states = (typeof window.__DG_COLLECT_DRAWGRID_STATES === 'function')
+          ? window.__DG_COLLECT_DRAWGRID_STATES()
+          : [];
+        try {
+          console.group('[DG][STATE] snapshot');
+          console.table(states.map((s) => ({
+            panelId: s.panelId,
+            fps: s.fpsLive != null ? Number(s.fpsLive).toFixed(1) : '--',
+            emergency: !!s.lowFpsEmergency,
+            playhead: s.playheadSimple ? 'SIMPLE' : 'FULL',
+            particles: s.particleFieldEnabled ? 'ON' : 'off',
+            particleCount: s.particleCount ?? '--',
+            maxScale: s.particleBudgetMaxScale != null ? Number(s.particleBudgetMaxScale).toFixed(3) : '--',
+            capScale: s.particleBudgetCapScale != null ? Number(s.particleBudgetCapScale).toFixed(3) : '--',
+            spawnScale: s.particleBudgetSpawnScale != null ? Number(s.particleBudgetSpawnScale).toFixed(3) : '--',
+            tickMod: s.particleTickModulo ?? '--',
+            qlabFps: s.qlabTargetFps ?? 0,
+            qlabBurnMs: s.qlabCpuBurnMs ?? 0,
+            autoQEff: s.autoQualityEffective != null ? Number(s.autoQualityEffective).toFixed(3) : '--',
+            autoQScale: s.autoQualityScale != null ? Number(s.autoQualityScale).toFixed(3) : '--',
+            pressureMul: s.pressureDprMul != null ? Number(s.pressureDprMul).toFixed(3) : '--',
+          })));
+          // Also print the full text blocks (useful when comparing sessions).
+          for (const s of states) {
+            if (!s || !s.panelId) continue;
+            if (!s.text) continue;
+            console.log(`\n[DG][STATE][${s.panelId}]\n${s.text}`);
+          }
+          console.groupEnd();
+        } catch {}
+        return states;
+      };
+    }
+  } catch {}
   if (DG_SINGLE_CANVAS) {
     panel.__dgCompositeBaseDirty = true;
     panel.__dgCompositeOverlayDirty = true;
@@ -6421,9 +6541,10 @@ function copyCanvas(backCtx, frontCtx) {
       const toyScale = (Number.isFinite(panel?.__dgLastToyScale) && panel.__dgLastToyScale > 0) ? panel.__dgLastToyScale : 1;
       const visualMul = __dgComputeVisualBackingMul(toyScale);
       const pressureMul = (Number.isFinite(__dgPressureDprMul) && __dgPressureDprMul > 0) ? __dgPressureDprMul : 1;
+      const autoMul = __dgGetAutoQualityMul();
 
       // Aux layer DPR: never exceed paintScale, but can drop below it smoothly.
-      const auxDprRaw = deviceDpr * visualMul * pressureMul;
+      const auxDprRaw = deviceDpr * visualMul * pressureMul * autoMul;
       const auxScale = Math.min(
         paintScale,
         __dgCapDprForBackingStore(logicalWidth, logicalHeight, auxDprRaw, __dgAdaptivePaintDpr)
@@ -6441,7 +6562,7 @@ function copyCanvas(backCtx, frontCtx) {
       const overlayPressureMul = (pressureMul < 0.999)
         ? Math.max(overlayMinMul, Math.min(1, pressureMul * overlayBias))
         : 1;
-      const overlayDprRaw = deviceDpr * visualMul * overlayPressureMul;
+      const overlayDprRaw = deviceDpr * visualMul * overlayPressureMul * autoMul;
       const overlayScale = Math.min(
         paintScale,
         __dgCapDprForBackingStore(logicalWidth, logicalHeight, overlayDprRaw, __dgAdaptivePaintDpr)
@@ -9907,14 +10028,19 @@ let __dgNodesCache = { canvas: null, ctx: null, key: '', nodeCoords: null };
           : (Number.isFinite(__dgFpsValue) ? __dgFpsValue : null);
       const fpsLive = (Number.isFinite(fpsLiveRaw) && fpsLiveRaw >= 5) ? fpsLiveRaw : null;
       // Update global pressure DPR multiplier (generic: keys off low FPS, not gestures).
-      if (Number.isFinite(fpsLive)) {
-        __dgUpdatePressureDprMulFromFps(fpsLive, nowTs);
+      const fpsOverride = __dgGetFpsDriveOverride();
+      const fpsDrive = fpsOverride > 0 ? fpsOverride : fpsLive;
+
+      // Pressure DPR should follow the drive signal in test mode (so you can
+      // verify pressure behavior deterministically).
+      if (Number.isFinite(fpsDrive)) {
+        __dgUpdatePressureDprMulFromFps(fpsDrive, nowTs);
       }
-      if (Number.isFinite(fpsLive)) {
+      if (Number.isFinite(fpsDrive)) {
         let desiredSimple = null;
-        if (fpsLive <= DG_PLAYHEAD_FPS_SIMPLE_ENTER) {
+        if (fpsDrive <= DG_PLAYHEAD_FPS_SIMPLE_ENTER) {
           desiredSimple = true;
-        } else if (fpsLive >= DG_PLAYHEAD_FPS_SIMPLE_EXIT) {
+        } else if (fpsDrive >= DG_PLAYHEAD_FPS_SIMPLE_EXIT) {
           desiredSimple = false;
         }
         if (desiredSimple !== null && desiredSimple !== __dgPlayheadSimpleMode) {
@@ -9927,6 +10053,103 @@ let __dgNodesCache = { canvas: null, ctx: null, key: '', nodeCoords: null };
           __dgPlayheadModeWantedSince = 0;
         }
       }
+
+      // --- Debug state readout (throttled, DOM safe) --------------------------
+      try {
+        const enabled = !!(typeof window !== 'undefined' && window.__DG_STATE_READOUT);
+        // Cleanup quickly when disabled (and avoid any DOM work).
+        if (!enabled) {
+          try {
+            const oldEl = panel.__dgStateReadoutEl || null;
+            if (oldEl && oldEl.isConnected) oldEl.remove();
+            panel.__dgStateReadoutEl = null;
+          } catch {}
+        }
+
+        const last = Number.isFinite(panel.__dgStateReadoutTs) ? panel.__dgStateReadoutTs : 0;
+        if (!last || (nowTs - last) > 250) {
+          panel.__dgStateReadoutTs = nowTs;
+
+          const qlab = (typeof window !== 'undefined') ? (window.__QUALITY_LAB || null) : null;
+          const aqEff = (typeof window !== 'undefined' && Number.isFinite(window.__AUTO_QUALITY_EFFECTIVE))
+            ? window.__AUTO_QUALITY_EFFECTIVE
+            : null;
+          // IMPORTANT: DrawGrid uses the imported getAutoQualityScale(), not a window-global.
+          const aqScale = (() => {
+            try { return getAutoQualityScale?.(); } catch { return null; }
+          })();
+
+          const pressureMul = (typeof window !== 'undefined' && Number.isFinite(window.__DG_PRESSURE_DPR_MUL))
+            ? window.__DG_PRESSURE_DPR_MUL
+            : (Number.isFinite(__dgPressureDprMul) ? __dgPressureDprMul : null);
+
+          const pfState = dgField?._state || null;
+          const pfCfg = dgField?._config || null;
+          const pfCount = Array.isArray(pfState?.particles) ? pfState.particles.length : null;
+
+          const maxCountScale = Number.isFinite(panel.__dgParticleBudgetMaxCountScale) ? panel.__dgParticleBudgetMaxCountScale : null;
+          const capScale = Number.isFinite(panel.__dgParticleBudgetCapScale) ? panel.__dgParticleBudgetCapScale : null;
+          const spawnScale = Number.isFinite(panel.__dgParticleBudgetSpawnScale) ? panel.__dgParticleBudgetSpawnScale : null;
+
+          const lines = [];
+          lines.push(
+            `DG  measuredFps=${Number.isFinite(fpsLive) ? fpsLive.toFixed(1) : '--'}  ` +
+            `driveFps=${Number.isFinite(fpsDrive) ? fpsDrive.toFixed(1) : '--'}  ` +
+            `override=${fpsOverride > 0 ? String(fpsOverride) : 'off'}  ` +
+            `emergency=${__dgLowFpsMode ? 'YES' : 'no '}`
+          );
+          lines.push(`playhead=${__dgPlayheadSimpleMode ? 'SIMPLE' : 'FULL  '} (enter<=${DG_PLAYHEAD_FPS_SIMPLE_ENTER}, exit>=${DG_PLAYHEAD_FPS_SIMPLE_EXIT})`);
+
+          // Particle field
+          lines.push(`particles: enabled=${particleFieldEnabled ? 'YES' : 'no '}  count=${pfCount ?? '--'}`);
+          lines.push(`  budget: max=${maxCountScale?.toFixed?.(3) ?? '--'} cap=${capScale?.toFixed?.(3) ?? '--'} spawn=${spawnScale?.toFixed?.(3) ?? '--'}`);
+          lines.push(`  state: target=${Number.isFinite(pfState?.targetDesired) ? pfState.targetDesired.toFixed(0) : '--'} lod=${Number.isFinite(pfState?.lodScale) ? pfState.lodScale.toFixed(3) : '--'} tickMod=${Number.isFinite(pfCfg?.tickModulo) ? pfCfg.tickModulo : '--'}`);
+
+          // Quality lab + auto quality (single-source-of-truth)
+          const qFps = (qlab && Number.isFinite(qlab.targetFps)) ? qlab.targetFps : 0;
+          const qBurn = (qlab && Number.isFinite(qlab.cpuBurnMs)) ? qlab.cpuBurnMs : 0;
+          const qForce = (qlab && Number.isFinite(qlab.forceScale)) ? qlab.forceScale : null;
+          const forcedActive = qFps > 0;
+          lines.push(`QualityLab: forcedFps=${qFps} (${forcedActive ? 'ON' : 'off'}) burn=${qBurn}ms force=${qForce ?? 'auto'}`);
+          lines.push(`Measured: fps=${Number.isFinite(fpsLive) ? fpsLive.toFixed(1) : '--'}  (note: may not reflect throttle if FPS is sampled elsewhere)`);
+          lines.push(`AutoQ: eff=${aqEff != null ? aqEff.toFixed(3) : '--'} scale=${Number.isFinite(aqScale) ? aqScale.toFixed(3) : '--'} pressureMul=${pressureMul != null ? Number(pressureMul).toFixed(3) : '--'}`);
+
+          const txt = lines.join('\n');
+
+          // Always store a snapshot (Perf Lab can print this even when readout is hidden).
+          try {
+            panel.__dgStateSnapshot = {
+              fpsLive: Number.isFinite(fpsLive) ? fpsLive : null,
+              fpsDrive: Number.isFinite(fpsDrive) ? fpsDrive : null,
+              fpsOverride: fpsOverride > 0 ? fpsOverride : 0,
+              lowFpsEmergency: !!__dgLowFpsMode,
+              playheadSimple: !!__dgPlayheadSimpleMode,
+              particleFieldEnabled: !!particleFieldEnabled,
+              particleCount: (pfCount == null ? null : pfCount),
+              particleBudgetMaxScale: (maxCountScale == null ? null : maxCountScale),
+              particleBudgetCapScale: (capScale == null ? null : capScale),
+              particleBudgetSpawnScale: (spawnScale == null ? null : spawnScale),
+              particleTargetDesired: Number.isFinite(pfState?.targetDesired) ? pfState.targetDesired : null,
+              particleLodScale: Number.isFinite(pfState?.lodScale) ? pfState.lodScale : null,
+              particleTickModulo: Number.isFinite(pfCfg?.tickModulo) ? pfCfg.tickModulo : null,
+              qlabTargetFps: qFps,
+              qlabCpuBurnMs: qBurn,
+              qlabForceScale: (qForce == null ? null : qForce),
+              autoQualityEffective: (aqEff == null ? null : aqEff),
+              autoQualityScale: Number.isFinite(aqScale) ? aqScale : null,
+              pressureDprMul: (pressureMul == null ? null : pressureMul),
+            };
+            panel.__dgStateSnapshotText = txt;
+          } catch {}
+
+          // Only touch the DOM when enabled.
+          if (enabled) {
+            const el = __dgEnsureStateReadoutEl();
+            if (el) el.textContent = txt;
+          }
+        }
+      } catch {}
+      // -----------------------------------------------------------------------
       if (__perfOn && __adaptiveStart) {
         try { window.__PerfFrameProf?.mark?.('drawgrid.prep.adaptive', performance.now() - __adaptiveStart); } catch {}
       }
@@ -10000,7 +10223,8 @@ let __dgNodesCache = { canvas: null, ctx: null, key: '', nodeCoords: null };
       const visualMul = __dgComputeVisualBackingMul(Number.isFinite(boardScale) ? boardScale : 1) * gestureMul;
       const pressureMul = (Number.isFinite(__dgPressureDprMul) && __dgPressureDprMul > 0) ? __dgPressureDprMul : 1;
       const smallMul = __dgComputeSmallPanelBackingMul(cssW, cssH);
-      const desiredDprRaw = (adaptiveCap ? Math.min(deviceDpr, adaptiveCap) : deviceDpr) * visualMul * pressureMul * smallMul;
+      const autoMul = __dgGetAutoQualityMul();
+      const desiredDprRaw = (adaptiveCap ? Math.min(deviceDpr, adaptiveCap) : deviceDpr) * visualMul * pressureMul * smallMul * autoMul;
       const desiredDpr = __dgCapDprForBackingStore(cssW, cssH, desiredDprRaw, __dgAdaptivePaintDpr);
       const nowAdaptiveTs = nowTs || (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
       const canAdjustDpr =
