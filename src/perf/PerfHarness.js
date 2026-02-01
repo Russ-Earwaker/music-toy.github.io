@@ -39,6 +39,8 @@ export async function runBenchmark({
   label = 'benchmark',
   step = null, // (tMs, dtMs, progress01) => void
   warmupAction = null, // () => void, invoked once during warmup
+  requireVisible = true, // abort (mark invalid) if tab not visible
+  skipDtAboveMs = 1000, // skip absurd dt spikes (e.g. tab suspended); set 0 to disable
 }) {
   const now = () => (performance && performance.now) ? performance.now() : Date.now();
   const raf = (fn) => (window.requestAnimationFrame ? window.requestAnimationFrame(fn) : setTimeout(() => fn(now()), 16));
@@ -50,6 +52,7 @@ export async function runBenchmark({
   const warmupTriggerMs = Math.max(0, Math.min(warmupMs - 50, warmupMs * 0.5));
 
   const frameMs = [];
+  let skippedDtCount = 0;
 
   return await new Promise((resolve) => {
     function onFrame(ts) {
@@ -57,6 +60,24 @@ export async function runBenchmark({
       const t = ts - startMs;
       const dt = ts - lastMs;
       lastMs = ts;
+
+      // Abort if the tab/window isn't visible. Background throttling makes results meaningless.
+      if (requireVisible && typeof document !== 'undefined') {
+        const vis = document.visibilityState || (document.hidden ? 'hidden' : 'visible');
+        if (vis !== 'visible') {
+          ended = true;
+          resolve({
+            label,
+            durationMs,
+            warmupMs,
+            createdAt: new Date().toISOString(),
+            invalid: true,
+            invalidReason: `visibility:${vis}`,
+            skippedDtCount,
+          });
+          return;
+        }
+      }
 
       // run scripted actions
       try {
@@ -73,7 +94,13 @@ export async function runBenchmark({
       }
 
       // warmup skip (avoid first-frame noise)
-      if (t > warmupMs) frameMs.push(dt);
+      if (t > warmupMs) {
+        if (skipDtAboveMs && dt > skipDtAboveMs) {
+          skippedDtCount++;
+        } else {
+          frameMs.push(dt);
+        }
+      }
 
       if (t >= durationMs) {
         ended = true;
@@ -83,6 +110,7 @@ export async function runBenchmark({
           durationMs,
           warmupMs,
           createdAt: new Date().toISOString(),
+          skippedDtCount,
           ...s,
         };
         resolve(result);

@@ -765,7 +765,7 @@ window.__DG_ZOOM_COMMIT_SCALE_THRESHOLD  ??= 0.8;  // if commitScale <= this, al
 // This can cause visible "late snaps" (layers appear to jump after zoom/pan settles),
 // because it changes paintDpr while the camera is idle.
 // Default OFF; we can re-enable later once it's hysteresis-stable and visually safe.
-window.__DG_ADAPTIVE_DPR_ENABLED      ??= false;
+window.__DG_ADAPTIVE_DPR_ENABLED      ??= true;
 // If adaptive DPR is enabled, do we allow it to run even when only a single DrawGrid is visible?
 // (Useful for PerfLab focus runs, but usually want OFF for normal play.)
 window.__DG_ADAPTIVE_DPR_ALLOW_SINGLE ??= false;
@@ -1112,7 +1112,7 @@ function __dgCapDprForBackingStore(cssW = 0, cssH = 0, desiredDpr = 1, prevDpr =
   if (w <= 0 || h <= 0) return Math.max(minDpr, dpr);
 
   // Pixel budget cap (area-based).
-  let maxPx = 3_000_000; // ~1732x1732 backing store at 1.0 DPR
+  let maxPx = 2_200_000; // default pixel budget for backing store
   try {
     const v = (typeof window !== 'undefined') ? Number(window.__DG_MAX_PANEL_BACKING_PX) : NaN;
     if (Number.isFinite(v) && v > 200_000) maxPx = v;
@@ -1120,7 +1120,7 @@ function __dgCapDprForBackingStore(cssW = 0, cssH = 0, desiredDpr = 1, prevDpr =
   const capFromPx = Math.sqrt(maxPx / (w * h));
 
   // Side cap (dimension-based) to avoid huge single-axis backing stores.
-  let maxSide = 3200;
+  let maxSide = 2600;
   try {
     const v = (typeof window !== 'undefined') ? Number(window.__DG_MAX_PANEL_SIDE_PX) : NaN;
     if (Number.isFinite(v) && v > 600) maxSide = v;
@@ -2510,25 +2510,44 @@ try {
 } catch {}
   let __dgSizeTraceCount = 0;
   let __dgSizeTraceLastTs = 0;
-  function dgSizeTrace(event, data = null) {
+
+  function __dgSizeTraceGate(consume = false) {
     try {
       const on = (typeof window !== 'undefined' && window.__DG_REFRESH_SIZE_TRACE);
-      if (!on) return;
-    } catch { return; }
+      if (!on) return false;
+    } catch { return false; }
+
     // Throttle: this trace can spam hard during resize/commit churn.
+    let now = 0;
     try {
       const throttleMs = (typeof window !== 'undefined') ? Number(window.__DG_REFRESH_SIZE_TRACE_THROTTLE_MS) : 0;
-      const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
       if (Number.isFinite(throttleMs) && throttleMs > 0) {
-        if (__dgSizeTraceLastTs && (now - __dgSizeTraceLastTs) < throttleMs) return;
+        if (__dgSizeTraceLastTs && (now - __dgSizeTraceLastTs) < throttleMs) return false;
       }
-      __dgSizeTraceLastTs = now;
     } catch {}
+
+    // Hard cap (per panel instance).
     try {
       const limit = (typeof window !== 'undefined') ? window.__DG_REFRESH_SIZE_TRACE_LIMIT : null;
-      if (Number.isFinite(limit) && limit >= 0 && __dgSizeTraceCount >= limit) return;
-      __dgSizeTraceCount++;
+      if (Number.isFinite(limit) && limit >= 0 && __dgSizeTraceCount >= limit) return false;
     } catch {}
+
+    // Consume gate (advance counters) only when we're actually going to log.
+    if (consume) {
+      try { __dgSizeTraceLastTs = now || __dgSizeTraceLastTs; } catch {}
+      try { __dgSizeTraceCount++; } catch {}
+    }
+    return true;
+  }
+
+  // Cheap predicate so size-trace callers can avoid expensive DOM reads unless a log will actually be recorded.
+  function dgSizeTraceCanLog() {
+    return __dgSizeTraceGate(false);
+  }
+
+  function dgSizeTrace(event, data = null) {
+    if (!__dgSizeTraceGate(true)) return;
     try {
       const payload = data && typeof data === 'object' ? data : {};
       payload.panelId = panel?.id || null;
@@ -6251,15 +6270,30 @@ function copyCanvas(backCtx, frontCtx) {
         // Compose overlays into a single overlay canvas, then blit once to the main surface.
         // This tends to reduce raster/compositor pressure vs multiple drawImage calls to the
         // full composite surface (especially at high DPR).
+        
+        // Perf: most overlay-like surfaces are visually confined to the grid area.
+        // When possible, build the overlay canvas only for the grid bounds (device px),
+        // and then blit it back into place. This reduces the pixel work involved in:
+        //   - clearing the overlay
+        //   - blitting multiple overlay sources into the overlay
+        //   - blitting the overlay back to the main surface
+        const __ovBounds = __gridBoundsPx;
+        const __ovBoundsKey = __ovBounds ? `${__ovBounds.x},${__ovBounds.y},${__ovBounds.w},${__ovBounds.h}` : 'full';
+        if (panel.__dgCompositeOverlayBoundsKey !== __ovBoundsKey) {
+          panel.__dgCompositeOverlayBoundsKey = __ovBoundsKey;
+          panel.__dgCompositeOverlayDirty = true;
+        }
+        const __ovW = (__ovBounds && __ovBounds.w > 0) ? __ovBounds.w : width;
+        const __ovH = (__ovBounds && __ovBounds.h > 0) ? __ovBounds.h : height;
         let overlayCanvas = panel.__dgCompositeOverlayCanvas;
         if (!overlayCanvas) {
           overlayCanvas = document.createElement('canvas');
           panel.__dgCompositeOverlayCanvas = overlayCanvas;
           panel.__dgCompositeOverlayDirty = true;
         }
-        if (overlayCanvas.width !== width || overlayCanvas.height !== height) {
-          overlayCanvas.width = width;
-          overlayCanvas.height = height;
+        if (overlayCanvas.width !== __ovW || overlayCanvas.height !== __ovH) {
+          overlayCanvas.width = __ovW;
+          overlayCanvas.height = __ovH;
           panel.__dgCompositeOverlayDirty = true;
         }
         let overlayCtx = panel.__dgCompositeOverlayCtx;
@@ -6276,8 +6310,22 @@ function copyCanvas(backCtx, frontCtx) {
             overlayCtx.globalAlpha = 1;
             overlayCtx.globalCompositeOperation = 'copy';
             overlayCtx.fillStyle = 'rgba(0,0,0,0)';
-            overlayCtx.fillRect(0, 0, width, height);
+            overlayCtx.fillRect(0, 0, __ovW, __ovH);
             overlayCtx.globalCompositeOperation = 'source-over';
+
+            function __dgBlitOverlaySource(srcCanvas) {
+              if (!srcCanvas || !srcCanvas.width || !srcCanvas.height) return;
+              if (__ovBounds) {
+                // Copy only the grid bounds into the overlay canvas.
+                overlayCtx.drawImage(
+                  srcCanvas,
+                  __ovBounds.x, __ovBounds.y, __ovBounds.w, __ovBounds.h,
+                  0, 0, __ovW, __ovH
+                );
+              } else {
+                __dgBlitTo(overlayCtx, srcCanvas);
+              }
+            }
 
             // Nodes (back then front if distinct)
             const nodesFrontCanvas = nodesFrontCtx?.canvas;
@@ -6293,7 +6341,7 @@ function copyCanvas(backCtx, frontCtx) {
 
             for (const nodeCanvas of nodeSources) {
               const __nodesStart = __perfOn ? performance.now() : 0;
-              __dgBlitTo(overlayCtx, nodeCanvas);
+              __dgBlitOverlaySource(nodeCanvas);
               if (__perfOn && __nodesStart) {
                 try { window.__PerfFrameProf?.mark?.('drawgrid.composite.nodes', performance.now() - __nodesStart); } catch {}
               }
@@ -6302,7 +6350,7 @@ function copyCanvas(backCtx, frontCtx) {
             const ghostSource = getActiveGhostCanvas();
             if (!panel.__dgGhostLayerEmpty && ghostSource && ghostSource.width && ghostSource.height) {
               const __ghostStart = __perfOn ? performance.now() : 0;
-              __dgBlitTo(overlayCtx, ghostSource);
+              __dgBlitOverlaySource(ghostSource);
               if (__perfOn && __ghostStart) {
                 try { window.__PerfFrameProf?.mark?.('drawgrid.composite.ghost', performance.now() - __ghostStart); } catch {}
               }
@@ -6311,7 +6359,7 @@ function copyCanvas(backCtx, frontCtx) {
             const tutorialSource = getActiveTutorialCanvas();
             if (!panel.__dgTutorialLayerEmpty && tutorialSource && tutorialSource.width && tutorialSource.height) {
               const __tutorialStart = __perfOn ? performance.now() : 0;
-              __dgBlitTo(overlayCtx, tutorialSource);
+              __dgBlitOverlaySource(tutorialSource);
               if (__perfOn && __tutorialStart) {
                 try { window.__PerfFrameProf?.mark?.('drawgrid.composite.tutorial', performance.now() - __tutorialStart); } catch {}
               }
@@ -6319,7 +6367,7 @@ function copyCanvas(backCtx, frontCtx) {
 
             if (!panel.__dgPlayheadLayerEmpty && playheadCanvas && playheadCanvas.width && playheadCanvas.height) {
               const __playheadStart = __perfOn ? performance.now() : 0;
-              __dgBlitTo(overlayCtx, playheadCanvas);
+              __dgBlitOverlaySource(playheadCanvas);
               if (__perfOn && __playheadStart) {
                 try { window.__PerfFrameProf?.mark?.('drawgrid.composite.playhead', performance.now() - __playheadStart); } catch {}
               }
@@ -6334,7 +6382,15 @@ function copyCanvas(backCtx, frontCtx) {
         // Finally, blit the composed overlay to the main surface (clipped if possible).
         if (overlayCanvas && overlayCanvas.width && overlayCanvas.height) {
           const __ovBlitStart = __perfOn ? performance.now() : 0;
-          __dgBlitTo(frontCtx, overlayCanvas);
+          if (__ovBounds) {
+            frontCtx.drawImage(
+              overlayCanvas,
+              0, 0, __ovW, __ovH,
+              __ovBounds.x, __ovBounds.y, __ovBounds.w, __ovBounds.h
+            );
+          } else {
+            __dgBlitTo(frontCtx, overlayCanvas);
+          }
           if (__perfOn && __ovBlitStart) {
             try { window.__PerfFrameProf?.mark?.('drawgrid.composite.overlayBlit', performance.now() - __ovBlitStart); } catch {}
           }
@@ -6400,6 +6456,10 @@ function copyCanvas(backCtx, frontCtx) {
         return Math.max(step, Math.round(v / step) * step);
       };
 
+      const overlayStableFrames = (Number.isFinite(window.__DG_OVERLAY_RESIZE_STABLE_FRAMES) && window.__DG_OVERLAY_RESIZE_STABLE_FRAMES >= 1)
+        ? (window.__DG_OVERLAY_RESIZE_STABLE_FRAMES|0)
+        : 6;
+
       const isOverlayLayer = (c) => (c === flashCanvas) || (c === flashBackCanvas) || (c === ghostCanvas) || (c === ghostBackCanvas) || (c === tutorialCanvas) || (c === tutorialBackCanvas) || (c === playheadCanvas);
       const isOverlayDormant = (c) => {
         try {
@@ -6464,8 +6524,50 @@ function copyCanvas(backCtx, frontCtx) {
         // Cache DPR used for this backing store (useful for debug and for ctx reset helpers).
         try { canvas.__dgBackingDpr = dpr; } catch {}
 
-        if (canvas.width !== pxW) { canvas.width = pxW; resizedAny = true; }
-        if (canvas.height !== pxH) { canvas.height = pxH; resizedAny = true; }
+        // Overlay DPR can oscillate under pressure; avoid resize thrash by requiring a few
+        // consecutive frames requesting the same backing size before we actually resize.
+        // (Large jumps apply immediately.)
+        if (isOverlayLayer(canvas)) {
+          const wantW = pxW;
+          const wantH = pxH;
+          const curW = canvas.width|0;
+          const curH = canvas.height|0;
+          const dw = Math.abs(curW - wantW);
+          const dh = Math.abs(curH - wantH);
+          const bigJump = (dw >= (overlayQuantPx * 2)) || (dh >= (overlayQuantPx * 2));
+          if (!bigJump && (curW !== wantW || curH !== wantH)) {
+            const pw = canvas.__dgPendingW|0;
+            const ph = canvas.__dgPendingH|0;
+            if (pw === wantW && ph === wantH) {
+              canvas.__dgPendingN = (canvas.__dgPendingN|0) + 1;
+            } else {
+              canvas.__dgPendingW = wantW;
+              canvas.__dgPendingH = wantH;
+              canvas.__dgPendingN = 1;
+            }
+            if ((canvas.__dgPendingN|0) < overlayStableFrames) {
+              continue;
+            }
+          }
+          // Applying: clear pending so the next oscillation must restabilize.
+          canvas.__dgPendingN = 0;
+        } else {
+          // Non-overlay layers: don't accumulate pending state.
+          try { canvas.__dgPendingN = 0; } catch {}
+        }
+
+        if (canvas.width !== pxW) {
+          canvas.width = pxW;
+          resizedAny = true;
+          try { window.__PERF_DG_BACKING_RESIZE_COUNT = (window.__PERF_DG_BACKING_RESIZE_COUNT || 0) + 1; } catch {}
+          if (isOverlayLayer(canvas)) { try { window.__PERF_DG_OVERLAY_RESIZE_COUNT = (window.__PERF_DG_OVERLAY_RESIZE_COUNT || 0) + 1; } catch {} }
+        }
+        if (canvas.height !== pxH) {
+          canvas.height = pxH;
+          resizedAny = true;
+          try { window.__PERF_DG_BACKING_RESIZE_COUNT = (window.__PERF_DG_BACKING_RESIZE_COUNT || 0) + 1; } catch {}
+          if (isOverlayLayer(canvas)) { try { window.__PERF_DG_OVERLAY_RESIZE_COUNT = (window.__PERF_DG_OVERLAY_RESIZE_COUNT || 0) + 1; } catch {} }
+        }
         // style width/height is already set via styleCanvases above
       }
       if (resizedAny) {
@@ -6776,7 +6878,9 @@ function copyCanvas(backCtx, frontCtx) {
       // Avoid forced-layout DOM reads unless we're tracing size or actively zooming.
       // (getBoundingClientRect + getComputedStyle can trigger synchronous layout.)
       const wantLayoutTrace = (() => { try { return !!window.__DG_REFRESH_SIZE_TRACE; } catch {} return false; })();
-      const shouldReadDom = wantLayoutTrace || force || zoomGestureActive;
+      // Only read DOM synchronously when we truly need it (gesture/forced paths).
+      // Size trace should not force expensive reads every frame; it is throttled + gated.
+      const shouldReadDom = force || zoomGestureActive;
 
       let rect = null;
       let toyScale = null;
@@ -6793,7 +6897,15 @@ function copyCanvas(backCtx, frontCtx) {
         toyScale = Number.isFinite(ts) ? ts : null;
       }
 
-      if (wantLayoutTrace) {
+      if (wantLayoutTrace && dgSizeTraceCanLog()) {
+        // Only gather DOM/layout reads when a trace sample will actually be recorded.
+        if (!rect) rect = panel?.getBoundingClientRect?.();
+        if (toyScale === null || toyScale === undefined) {
+          const toyScaleRaw = panel ? getComputedStyle(panel).getPropertyValue('--toy-scale') : '';
+          const ts = parseFloat(toyScaleRaw);
+          toyScale = Number.isFinite(ts) ? ts : null;
+          try { panel.__dgLastToyScale = toyScale ?? (panel.__dgLastToyScale ?? 1); } catch {}
+        }
         dgSizeTrace('layout:measure', {
           force,
           bodyW,

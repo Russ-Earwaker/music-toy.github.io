@@ -151,33 +151,37 @@ const AUTO_GENERIC_QUEUE = [
 ];
 
 // Current focus for this cycle:
-//   - prove pressure-DPR is applying
-//   - catch resize churn
+//   - validate DrawGrid adaptive DPR impact (A/B: OFF then ON)
+//   - keep pressure-DPR + size-churn signals available via trace summary
 //
 // IMPORTANT: After the DrawGrid restructure, building P3 (48 drawgrids + randomise)
 // can dominate time and starve the actual pan/zoom script. For focus diagnosis, we
 // build ONCE and run variants back-to-back on the same scene.
 const AUTO_FOCUS_QUEUE = [
-  'traceDprOn',
+  // Mixed baseline + A/B isolation for the current spike we're chasing:
+  //   - baseline P6a (mixed chains, playing + pan/zoom + randomise)
+  //   - LoopGrid render OFF (should nuke nonScript/compositor if LoopGrid is the culprit)
+  //   - Chains OFF (should reduce chain DOM + edge compositor work)
 
-  // Build once
-  'buildP3Focus',
+  'traceOff',
+  'buildP6',
   'warmupFirstAppearance',
   'warmupSettle',
-
-  // Focus runs (longer duration, shorter idle so we actually get motion)
-  'runP3fFocusShort',
-  // Repeat baseline immediately to spot run-to-run noise.
-  'runP3fFocusShort2',
+  'runP6a',
   'warmupSettle',
-  // NOTE: MultiCanvas focus run is currently disabled in auto because it can stall/hang.
-  // Use runP3fMultiCanvasFocusShort manually once stabilized.
-  'runP3fNoOverlaysFocusShort',
-  'warmupSettle',
-  'runP3fNoParticlesFocusShort',
 
-  'traceDprOff',
-  'traceOff',
+  // A/B: LoopGrid render
+  'loopRenderOff',
+  'warmupSettle',
+  'runP6a',
+  'loopRenderOn',
+  'warmupSettle',
+
+  // A/B: Chains (edges + chain transforms)
+  'chainsOff',
+  'warmupSettle',
+  'runP6a',
+  'chainsOn',
 ];
 
 // Validation focus: same intent as AUTO_FOCUS_QUEUE but with more toys (stronger pressure signal).
@@ -371,6 +375,7 @@ function ensureUI() {
       btn('autoFast', 'Auto: Fast Loop (P3f A/B + NoParticles + P4b)'),
       btn('autoPauseDom', 'Auto: Pause DOM-in-RAF Probe'),
       btn('autoQuickTraceP3f', 'Auto: Quick Trace P3f (Short)'),
+      btn('autoGenericAdaptiveCompare', 'Auto: Generic (Compare DG Adaptive DPR)'),
     ].join('')
   );
 
@@ -677,6 +682,27 @@ function ensureUI() {
       await runAuto(cfg);
     }
 
+    if (act === 'autoGenericAdaptiveCompare') {
+      const cfgBase = (await readAutoConfigFromFile()) || readAutoConfig() || {};
+      const ts = new Date().toISOString().replace(/[:.]/g, '-');
+      const cfg = {
+        clear: true,
+        save: false,
+        download: false,
+        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
+        downloadName: `perf-lab-generic-adaptive-compare-${ts}.json`,
+        notes: 'Generic A/B: compares DrawGrid adaptive DPR OFF vs ON (does not change Auto: Generic).',
+        queue: [
+          'traceOff',
+          'dgAdaptiveOff',
+          ...AUTO_GENERIC_QUEUE,
+          'dgAdaptiveOn',
+          ...AUTO_GENERIC_QUEUE,
+        ],
+      };
+      await runAuto(cfg);
+    }
+
     if (act === 'autoFocus') {
       const cfgBase = (await readAutoConfigFromFile()) || readAutoConfig() || {};
       const ts = new Date().toISOString().replace(/[:.]/g, '-');
@@ -686,7 +712,7 @@ function ensureUI() {
         download: false,
         postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
         downloadName: `perf-lab-focus-${ts}.json`,
-        notes: 'Current Focus: prove pressure-DPR is applying + eliminate resize churn (edit AUTO_FOCUS_QUEUE in perf-lab.js)',
+        notes: 'Current Focus: Mixed (P6a) isolate LoopGrid render + chain overhead (edit AUTO_FOCUS_QUEUE in perf-lab.js)',
         queue: AUTO_FOCUS_QUEUE,
       };
       await runAuto(cfg);
@@ -844,6 +870,37 @@ function ensureUI() {
         try { window.__DG_EFFECTIVE_DPR_TRACE = false; } catch {}
         try { window.__FG_EFFECTIVE_DPR_TRACE = false; } catch {}
         console.log('[PerfLab] DPR trace DISABLED');
+        try { syncUiFromState(); } catch {}
+      }
+
+      if (act === 'dgAdaptiveOn') {
+        try { window.__DG_ADAPTIVE_DPR_ENABLED = true; } catch {}
+        console.log('[PerfLab] DG adaptive DPR: ON');
+        try { syncUiFromState(); } catch {}
+      }
+      if (act === 'dgAdaptiveOff') {
+        try { window.__DG_ADAPTIVE_DPR_ENABLED = false; } catch {}
+        console.log('[PerfLab] DG adaptive DPR: OFF');
+        try { syncUiFromState(); } catch {}
+      }
+      if (act === 'loopRenderOff') {
+        try { window.__PERF_DISABLE_LOOPGRID_RENDER = true; } catch {}
+        console.log('[PerfLab] LoopGrid render: OFF');
+        try { syncUiFromState(); } catch {}
+      }
+      if (act === 'loopRenderOn') {
+        try { window.__PERF_DISABLE_LOOPGRID_RENDER = false; } catch {}
+        console.log('[PerfLab] LoopGrid render: ON');
+        try { syncUiFromState(); } catch {}
+      }
+      if (act === 'chainsOff') {
+        try { window.__PERF_DISABLE_CHAINS = true; } catch {}
+        console.log('[PerfLab] Chains: OFF');
+        try { syncUiFromState(); } catch {}
+      }
+      if (act === 'chainsOn') {
+        try { window.__PERF_DISABLE_CHAINS = false; } catch {}
+        console.log('[PerfLab] Chains: ON');
         try { syncUiFromState(); } catch {}
       }
     if (act === 'traceCanvasOnlyOn') {
@@ -2265,6 +2322,8 @@ async function runVariantPlaying(label, step, statusText) {
     window.__PERF_PULSE_COUNT = 0;
     window.__PERF_OUTLINE_SYNC_COUNT = 0;
     window.__PERF_WARMUP_COUNT = 0;
+    window.__PERF_DG_BACKING_RESIZE_COUNT = 0;
+    window.__PERF_DG_OVERLAY_RESIZE_COUNT = 0;
   } catch {}
 
   const result = await new Promise((resolve) => {
@@ -2346,6 +2405,8 @@ async function runVariantPlaying(label, step, statusText) {
     result.outlineSyncCount = window.__PERF_OUTLINE_SYNC_COUNT || 0;
     result.warmupCount = window.__PERF_WARMUP_COUNT || 0;
     result.warmupTs = window.__PERF_WARMUP_TS || null;
+    result.dgBackingResizeCount = window.__PERF_DG_BACKING_RESIZE_COUNT || 0;
+    result.dgOverlayResizeCount = window.__PERF_DG_OVERLAY_RESIZE_COUNT || 0;
   } catch {}
 
   try {
@@ -5610,7 +5671,7 @@ try {
         try { window.__PERF_TRACE_KEEP_BUFFER = true; } catch {}
         try { if (window.__PERF_TRACE_CLEAR) window.__PERF_TRACE_CLEAR(); } catch {}
         // Quiet size-trace by default (still captured in buffer via DG/FG hooks).
-        try { window.__DG_REFRESH_SIZE_TRACE_THROTTLE_MS = 250; } catch {}
+        try { window.__DG_REFRESH_SIZE_TRACE_THROTTLE_MS = 800; } catch {}
         try { window.__DG_REFRESH_SIZE_TRACE_LIMIT = 200; } catch {}
         // For focus runs where only one DrawGrid is visible, allow adaptive DPR to engage (if enabled).
         try { window.__DG_ADAPTIVE_DPR_ALLOW_SINGLE = true; } catch {}
@@ -5631,29 +5692,64 @@ try {
         try { console.log('[PerfLab] DPR trace DISABLED'); } catch {}
         try { window.__PERF_TRACE_KEEP_BUFFER = false; } catch {}
       },
+      dgAdaptiveOff: async function dgAdaptiveOff() {
+        // Force DrawGrid adaptive DPR OFF (for A/B comparisons).
+        try { window.__DG_ADAPTIVE_DPR_ENABLED = false; } catch {}
+        try { console.log('[PerfLab] DrawGrid adaptive DPR OFF'); } catch {}
+        try { syncUiFromState(); } catch {}
+      },
+      dgAdaptiveOn: async function dgAdaptiveOn() {
+        // Force DrawGrid adaptive DPR ON (for A/B comparisons).
+        try { window.__DG_ADAPTIVE_DPR_ENABLED = true; } catch {}
+        // Allow engagement even with a single visible DrawGrid (focus runs).
+        try { window.__DG_ADAPTIVE_DPR_ALLOW_SINGLE = true; } catch {}
+        try { console.log('[PerfLab] DrawGrid adaptive DPR ON'); } catch {}
+        try { syncUiFromState(); } catch {}
+      },
       traceCanvasOnlyOn: async function traceCanvasOnlyOn() {
         window.__PERF_TRACE = window.__PERF_TRACE || {};
         window.__PERF_TRACE.traceCanvasResize = true;
         window.__PERF_TRACE.traceDomInRaf = false;
         try { window.__DG_RESIZE_TRACE_SAMPLE = false; } catch {}
-      try { console.log('[PerfLab] traceCanvasResize ENABLED (domInRaf OFF)', { ...window.__PERF_TRACE }); } catch {}
-    },
-    traceOn: async function traceOn() {
-      window.__PERF_TRACE = window.__PERF_TRACE || {};
-      window.__PERF_TRACE.traceCanvasResize = true;
-      window.__PERF_TRACE.traceDomInRaf = true;
-      try { console.log('[PerfLab] demon trace ENABLED', { ...window.__PERF_TRACE }); } catch {}
-    },
-    traceOff: async function traceOff() {
-      window.__PERF_TRACE = window.__PERF_TRACE || {};
-      window.__PERF_TRACE.traceCanvasResize = false;
-      window.__PERF_TRACE.traceDomInRaf = false;
-      try { console.log('[PerfLab] demon trace DISABLED', { ...window.__PERF_TRACE }); } catch {}
-    },
-    getResults: () => lastResults,
-    getBundle: () => lastBundle,
-    clearResults: () => { lastResults = []; },
-  };
+        try { console.log('[PerfLab] traceCanvasResize ENABLED (domInRaf OFF)', { ...window.__PERF_TRACE }); } catch {}
+      },
+      traceOn: async function traceOn() {
+        window.__PERF_TRACE = window.__PERF_TRACE || {};
+        window.__PERF_TRACE.traceCanvasResize = true;
+        window.__PERF_TRACE.traceDomInRaf = true;
+        try { console.log('[PerfLab] demon trace ENABLED', { ...window.__PERF_TRACE }); } catch {}
+      },
+      traceOff: async function traceOff() {
+        window.__PERF_TRACE = window.__PERF_TRACE || {};
+        window.__PERF_TRACE.traceCanvasResize = false;
+        window.__PERF_TRACE.traceDomInRaf = false;
+        try { console.log('[PerfLab] demon trace DISABLED', { ...window.__PERF_TRACE }); } catch {}
+      },
+      // Focus toggles: these MUST be exported so runQueue(AUTO_FOCUS_QUEUE) can resolve them by name.
+      loopRenderOff: async function loopRenderOff() {
+        try { window.__PERF_DISABLE_LOOPGRID_RENDER = true; } catch {}
+        try { console.log('[PerfLab] LoopGrid render: OFF'); } catch {}
+        try { syncUiFromState(); } catch {}
+      },
+      loopRenderOn: async function loopRenderOn() {
+        try { window.__PERF_DISABLE_LOOPGRID_RENDER = false; } catch {}
+        try { console.log('[PerfLab] LoopGrid render: ON'); } catch {}
+        try { syncUiFromState(); } catch {}
+      },
+      chainsOff: async function chainsOff() {
+        try { window.__PERF_DISABLE_CHAINS = true; } catch {}
+        try { console.log('[PerfLab] Chains: OFF'); } catch {}
+        try { syncUiFromState(); } catch {}
+      },
+      chainsOn: async function chainsOn() {
+        try { window.__PERF_DISABLE_CHAINS = false; } catch {}
+        try { console.log('[PerfLab] Chains: ON'); } catch {}
+        try { syncUiFromState(); } catch {}
+      },
+      getResults: () => lastResults,
+      getBundle: () => lastBundle,
+      clearResults: () => { lastResults = []; },
+    };
 } catch {}
 
 
