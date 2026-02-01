@@ -24,6 +24,19 @@ try {
 } catch {}
 
 // ---------------------------------------------------------------------------
+// Disable noisy debug traces during perf runs
+//
+// Perf Lab measures frame cost; verbose DG/FG traces distort results.
+// You can re-enable any of these from the console for targeted debugging.
+try {
+  window.__DG_REFRESH_SIZE_TRACE = false;
+  window.__DG_REFRESH_TRACE = false;
+  window.__DG_GHOST_TRACE = false;
+  window.__DG_LAYER_DEBUG = false;
+  window.__TUTORIAL_STREAM_DEBUG = false;
+} catch {}
+
+// ---------------------------------------------------------------------------
 // Perf trace buffering (avoid console.log during perf runs)
 //
 // Some debug traces (DG/FG DPR + canvas size snapshots) are extremely expensive if they
@@ -146,7 +159,6 @@ const AUTO_GENERIC_QUEUE = [
 // build ONCE and run variants back-to-back on the same scene.
 const AUTO_FOCUS_QUEUE = [
   'traceDprOn',
-  'traceCanvasOnlyOn',
 
   // Build once
   'buildP3Focus',
@@ -155,9 +167,11 @@ const AUTO_FOCUS_QUEUE = [
 
   // Focus runs (longer duration, shorter idle so we actually get motion)
   'runP3fFocusShort',
+  // Repeat baseline immediately to spot run-to-run noise.
+  'runP3fFocusShort2',
   'warmupSettle',
-  'runP3fMultiCanvasFocusShort',
-  'warmupSettle',
+  // NOTE: MultiCanvas focus run is currently disabled in auto because it can stall/hang.
+  // Use runP3fMultiCanvasFocusShort manually once stabilized.
   'runP3fNoOverlaysFocusShort',
   'warmupSettle',
   'runP3fNoParticlesFocusShort',
@@ -170,7 +184,6 @@ const AUTO_FOCUS_QUEUE = [
 // Use this to confirm pressure-DPR actually engages on stronger machines.
 const AUTO_FOCUS_HEAVY_QUEUE = [
   'traceDprOn',
-  'traceCanvasOnlyOn',
 
   // Build once (heavier than P3Focus)
   'buildP3FocusHeavy',
@@ -179,6 +192,9 @@ const AUTO_FOCUS_HEAVY_QUEUE = [
 
   // Same focus variants back-to-back on the same scene
   'runP3fFocusShort',
+  'warmupSettle',
+  // Repeat baseline once to spot run-to-run noise.
+  'runP3fFocusShort2',
   'warmupSettle',
   'runP3fNoOverlaysFocusShort',
   'warmupSettle',
@@ -575,6 +591,7 @@ function ensureUI() {
     if (act === 'runP3f') await runP3f();
     if (act === 'runP3fShort') await runP3fShort();
     if (act === 'runP3fFocusShort') await runP3fFocusShort();
+    if (act === 'runP3fFocusShort2') await runP3fFocusShort2();
     if (act === 'runP3fMultiCanvasFocusShort') await runP3fMultiCanvasFocusShort();
     if (act === 'runP3fNoOverlaysShort') await runP3fNoOverlaysShort();
     if (act === 'runP3fNoOverlaysShort2') await runP3fNoOverlaysShort2();
@@ -829,10 +846,13 @@ function ensureUI() {
         console.log('[PerfLab] DPR trace DISABLED');
         try { syncUiFromState(); } catch {}
       }
-      if (act === 'traceCanvasOnlyOn') {
+    if (act === 'traceCanvasOnlyOn') {
       window.__PERF_TRACE = window.__PERF_TRACE || {};
       window.__PERF_TRACE.traceCanvasResize = true;
       window.__PERF_TRACE.traceDomInRaf = false;
+      // Reduce trace overhead: avoid spamming layout reads every frame.
+      try { window.__DG_REFRESH_SIZE_TRACE_THROTTLE_MS = 50; } catch {}
+      try { window.__DG_REFRESH_SIZE_TRACE_TO_CONSOLE = false; } catch {}
       console.log('[PerfLab] demon trace ENABLED (canvas resize only)', { ...window.__PERF_TRACE });
       try { syncUiFromState(); } catch {}
     }
@@ -840,6 +860,8 @@ function ensureUI() {
       window.__PERF_TRACE = window.__PERF_TRACE || {};
       window.__PERF_TRACE.traceCanvasResize = false;
       window.__PERF_TRACE.traceDomInRaf = false;
+      try { window.__DG_REFRESH_SIZE_TRACE_THROTTLE_MS = 0; } catch {}
+      try { window.__DG_REFRESH_SIZE_TRACE_TO_CONSOLE = false; } catch {}
       console.log('[PerfLab] demon trace DISABLED', { ...window.__PERF_TRACE });
       try { syncUiFromState(); } catch {}
     }
@@ -3447,6 +3469,17 @@ async function runP3fFocusShort() {
   try { window.__PERF_RUN_TAG = prevTag; } catch {}
 }
 
+async function runP3fFocusShort2() {
+  // Same as runP3fFocusShort but with a different tag so we can compare run-to-run noise.
+  const prevTag = window.__PERF_RUN_TAG;
+  const prev = window.__PERF_LAB_DURATION_MS;
+  try { window.__PERF_LAB_DURATION_MS = 26000; } catch {}
+  try { window.__PERF_RUN_TAG = 'P3fFocus2'; } catch {}
+  await runP3fFocus();
+  try { window.__PERF_LAB_DURATION_MS = prev; } catch {}
+  try { window.__PERF_RUN_TAG = prevTag; } catch {}
+}
+
 async function runP3fMultiCanvasFocusShort() {
   // Focus A/B:
   // - rebuild P3Focus with multi-canvas (single-canvas OFF)
@@ -5469,16 +5502,17 @@ try {
     runP3d,
       runP3e,
       runP3e2,
-      runP3f,
-      runP3fShort,
-      runP3fShort2,
-      runP3fFocus,
-      runP3fFocusShort,
-      runP3fMultiCanvasFocusShort,
-      runP3fNoOverlaysFocusShort,
-      runP3fNoParticlesFocusShort,
-      runP3fNoOverlaysShort,
-      runP3fNoOverlaysShort2,
+    runP3f,
+    runP3fShort,
+    runP3fShort2,
+    runP3fFocus,
+    runP3fFocusShort,
+    runP3fFocusShort2,
+    runP3fMultiCanvasFocusShort,
+    runP3fNoOverlaysFocusShort,
+    runP3fNoParticlesFocusShort,
+    runP3fNoOverlaysShort,
+    runP3fNoOverlaysShort2,
       runP3fNoParticlesShort,
     runP3fNoParticlesShort2,
     runP3fNoOverlayCoreShort,
@@ -5578,6 +5612,8 @@ try {
         // Quiet size-trace by default (still captured in buffer via DG/FG hooks).
         try { window.__DG_REFRESH_SIZE_TRACE_THROTTLE_MS = 250; } catch {}
         try { window.__DG_REFRESH_SIZE_TRACE_LIMIT = 200; } catch {}
+        // For focus runs where only one DrawGrid is visible, allow adaptive DPR to engage (if enabled).
+        try { window.__DG_ADAPTIVE_DPR_ALLOW_SINGLE = true; } catch {}
         try {
           console.log('[PerfLab] DPR trace ENABLED', {
             __DG_REFRESH_SIZE_TRACE: !!window.__DG_REFRESH_SIZE_TRACE,

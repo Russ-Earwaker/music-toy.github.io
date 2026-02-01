@@ -18,6 +18,7 @@ These are **non‑negotiable** and must guide all future optimisation work:
 
 * **No intentional frame skipping**
   No modulo updates, no “every N frames” logic that affects perceived motion.
+
 * **No gesture-specific visual degradation**
   Panning / zooming must not change visual quality or cadence.
   *Exception:* **load/FPS-based** quality reduction is allowed (device-agnostic), with hysteresis.
@@ -44,6 +45,22 @@ These are **non‑negotiable** and must guide all future optimisation work:
   * `drawgrid.playhead.spriteGet`
   * `drawgrid.playhead.drawImage`
 
+* **Perf Lab now defaults to “clean” perf** (debug traces OFF during runs)
+  * Disable noisy DG/FG debug flags by default in perf runs (avoids distorting results).
+  * Trace output is buffered (not console-spammed) and summarized into each bundle meta.
+  * Verified in latest focus bundle: trace summary included without “skip-not-ready” events.
+
+* **Auto: Current Focus queue is now stable and repeatable**
+  * Build once, run variants back-to-back:
+    * Baseline focus
+    * NoOverlays focus
+    * NoParticles focus
+  * MultiCanvas focus run is currently treated as “manual only” (was causing stalls / swamping signal).
+
+* **Pressure-DPR verified as “actually engaging”**
+  * Latest focus bundle shows pressure seen with min pressure multiplier ≈ 0.608 (sawPressure: true).
+  * This confirms pressure-based DPR is a viable lever (we’re not chasing a phantom).
+
 ### 2.2 Particle system refactor
 
 * Particle fields centralised around `field-generic.js`.
@@ -59,6 +76,19 @@ These are **non‑negotiable** and must guide all future optimisation work:
 * Static redraw only happens when explicitly marked dirty.
 * Node/column flashes moved to overlays.
 * Gesture-based redraw cadence removed.
+
+### 2.6 Current focus results (Jan 31 2026)
+
+From the latest **Auto: Current Focus** bundle:
+
+* Baseline focus (P3fFocus):
+  * avg ≈ 23.39ms, p95 ≈ 33.4ms, p99 ≈ 50.1ms
+* NoOverlays focus:
+  * avg ≈ 19.98ms, p95 ≈ 33.4ms, p99 ≈ 33.5ms
+* NoParticles focus:
+  * avg ≈ 21.75ms, p95 ≈ 33.4ms, p99 ≈ 50.1ms
+
+Interpretation: **Overlays strongly affect p99 spikes** and overall average; particles are secondary in this focus setup.
 
 ### 2.4 Adaptive DPR & backing-store caps
 
@@ -128,6 +158,8 @@ plus large worst-frame spikes. This implies we must prioritise:
 * canvas resize churn
 * alpha-heavy blits / scaling
 
+Latest focus bundle confirms this again: baseline `frame.nonScript` avg is ~49.5ms.
+
 ### 4.2 Micro-marks change the game
 
 “Playhead is expensive” was too vague. Micro-marks revealed:
@@ -143,6 +175,21 @@ We must treat playhead rendering as a **compositor-cost lever** (without reducin
 
 Particle simulation time is usually not the main budget consumer in worst scenes.
 But particle *drawing* and field canvases can still contribute to `nonScript` via raster load.
+
+### 4.5 Overlays are the clearest lever for p99 spikes (in current focus)
+
+In the latest focus A/B:
+* Disabling overlays reduced **p99** from ~50ms → ~33.5ms while keeping p95 about the same.
+* Disabling particles did **not** improve p99 in this focus setup.
+
+This strongly suggests we’re paying for:
+* full-canvas overlay clears / composites, and/or
+* “overlay always active” gating even when overlays are logically empty.
+
+### 4.6 Pressure-DPR is confirmed real (so use it strategically)
+
+Trace summary shows pressure engaged with min pressure multiplier ≈ 0.608.
+This is enough to justify building “pressure-first” solutions rather than scene heuristics.
 
 ---
 
@@ -166,22 +213,29 @@ But particle *drawing* and field canvases can still contribute to `nonScript` vi
 **Goal:** lower `frame.nonScript` in P3f focus scenes.
 
 Actions (in order):
-1. **Verify pressure-DPR is actually applying** to the heaviest canvases during gesture/zoom.
-   * Add debug/profiling output for “effective DPR” per canvas (paint / overlay / particles).
-2. **Kill canvas resize churn**
+1. **Lock in and exploit confirmed pressure-DPR**
+   * Pressure-DPR is confirmed engaging (min pressure mul ~0.608). Use this as a first-class lever.
+   * Ensure “effective DPR” decisions apply to the *heaviest* raster surfaces (especially overlays).
+2. **Stop paying overlay cost when overlays are logically empty**
+   * Target: eliminate “always-on” overlay clear/core/flash passes during playback when nothing is flashing/previewing.
+   * Use existing focus variants (NoOverlays / NoOverlayCore / NoOverlayStrokes) as isolation tools.
+3. **Kill canvas resize churn**
    * Ensure we never resize to the same dimensions; stabilise rounding to avoid 1px oscillation.
-3. **Offscreen render culling**
+4. **Offscreen render culling**
    * If a toy is fully offscreen: skip render + overlays + particles (audio unaffected).
 
 Success criteria:
 * `frame.nonScript` avg and p95 drop materially in focus runs.
 * Worst-frame spikes reduce.
+* p99 should follow the “NoOverlays” direction (goal: p99 closer to ~33ms than ~50ms in focus runs).
 
 ### Step 2 — Overlay/layer minimisation (only after Step 1)
 
 * Detach / avoid compositing empty overlay canvases.
 * Reduce number of simultaneously composited surfaces.
 * Prefer “single overlay surface” approaches where viable.
+
+NOTE: Step 2 only makes sense once Step 1 confirms overlays are not doing redundant per-frame work.
 
 ### Step 3 — Particle “ladder” under pressure
 

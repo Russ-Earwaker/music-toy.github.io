@@ -713,6 +713,16 @@ const DG_SINGLE_CANVAS_OVERLAYS = (() => {
 })();
 try { if (typeof window !== 'undefined') window.__DG_SINGLE_CANVAS_OVERLAYS = DG_SINGLE_CANVAS_OVERLAYS; } catch {}
 
+// ---------------------------------------------------------------------------
+// Overlay dirty gating
+// ---------------------------------------------------------------------------
+// Overlays are alpha-heavy. If we clear + redraw them every frame, they can
+// dominate nonScript (raster/composite). We only want to redraw overlays when
+// something actually changed.
+function __dgMarkOverlayDirty(panel) {
+  try { panel.__dgOverlayDirty = true; } catch {}
+}
+
 try { startAdaptiveSharedTicker(); } catch {}
 
 // --- Performance / LOD tuning ----------------------------------------
@@ -754,16 +764,21 @@ window.__DG_ZOOM_COMMIT_SCALE_THRESHOLD  ??= 0.8;  // if commitScale <= this, al
 // Adaptive DPR (idle-time backing-store DPR changes)
 // This can cause visible "late snaps" (layers appear to jump after zoom/pan settles),
 // because it changes paintDpr while the camera is idle.
-// Default ON (we now rely on hysteresis + zoom-commit rules to prevent visible snaps).
-// Opt-out at runtime via: window.__DG_ADAPTIVE_DPR_ENABLED = false;
-window.__DG_ADAPTIVE_DPR_ENABLED      ??= true;
-// Allow adaptive DPR to run even with only one visible DrawGrid (PerfLab focus runs).
-// Opt-out via: window.__DG_ADAPTIVE_DPR_ALLOW_SINGLE = false;
-window.__DG_ADAPTIVE_DPR_ALLOW_SINGLE ??= true;
+// Default OFF; we can re-enable later once it's hysteresis-stable and visually safe.
+window.__DG_ADAPTIVE_DPR_ENABLED      ??= false;
+// If adaptive DPR is enabled, do we allow it to run even when only a single DrawGrid is visible?
+// (Useful for PerfLab focus runs, but usually want OFF for normal play.)
+window.__DG_ADAPTIVE_DPR_ALLOW_SINGLE ??= false;
 
 // Size-trace logging (DPR / canvas resize churn). Keep console OFF by default.
 // PerfLab can enable __DG_REFRESH_SIZE_TRACE to collect to the perf buffer without spamming devtools.
 window.__DG_REFRESH_SIZE_TRACE_TO_CONSOLE ??= false;
+window.__DG_GESTURE_VISUAL_DPR_MUL ??= 0.85;
+// Static layers (grid/nodes/base) can be reduced further during active gesture.
+// These are visually stable and safe to blur temporarily.
+// Tunable:
+//   window.__DG_GESTURE_STATIC_DPR_MUL (default 0.7)
+window.__DG_GESTURE_STATIC_DPR_MUL ??= 0.7;
 
 function __dgComputeVisualBackingMul(boardScale) {
   const threshold = window.__DG_VISUAL_DPR_ZOOM_THRESHOLD;
@@ -774,6 +789,36 @@ function __dgComputeVisualBackingMul(boardScale) {
   // Smooth linear falloff from threshold → 0
   const t = Math.max(0, Math.min(1, boardScale / threshold));
   return minMul + (1 - minMul) * t;
+}
+
+// During active zoom/pan gestures, we can temporarily reduce backing-store DPR
+// to lower raster/compositor pressure without affecting layout.
+// This is intentionally subtle and only applies while gesture motion is active.
+//
+// Tunable (defaults are conservative):
+//   window.__DG_GESTURE_VISUAL_DPR_MUL = 0.85
+function __dgComputeGestureBackingMul(isGestureMoving) {
+  try {
+    if (!isGestureMoving) return 1;
+    const mul = (typeof window !== 'undefined' && Number.isFinite(window.__DG_GESTURE_VISUAL_DPR_MUL))
+      ? window.__DG_GESTURE_VISUAL_DPR_MUL
+      : 0.85;
+    return Math.max(0.35, Math.min(1, mul));
+  } catch {
+    return 1;
+  }
+}
+
+function __dgComputeGestureStaticMul(isGestureMoving) {
+  try {
+    if (!isGestureMoving) return 1;
+    const mul = (typeof window !== 'undefined' && Number.isFinite(window.__DG_GESTURE_STATIC_DPR_MUL))
+      ? window.__DG_GESTURE_STATIC_DPR_MUL
+      : 0.7;
+    return Math.max(0.35, Math.min(1, mul));
+  } catch {
+    return 1;
+  }
 }
 
 
@@ -830,6 +875,22 @@ window.__DG_PRESSURE_DPR_END_MS      ??= 34;
 window.__DG_PRESSURE_DPR_MIN_MUL     ??= 0.5;
 window.__DG_PRESSURE_DPR_EWMA_ALPHA  ??= 0.12;
 window.__DG_PRESSURE_DPR_COOLDOWN_MS ??= 350;
+
+// -----------------------------------------------------------------------------
+// Overlay-first pressure DPR (aggressive on transient layers)
+// -----------------------------------------------------------------------------
+// Overlays (flash/ghost/tutorial/playhead) are alpha-heavy and the biggest
+// compositor/raster cost in focus runs. We bias pressure-DPR to reduce their
+// backing-store resolution earlier and more aggressively than static layers.
+//
+// Tunables:
+//   window.__DG_OVERLAY_PRESSURE_DPR_MIN_MUL   (default 0.45)
+//   window.__DG_OVERLAY_PRESSURE_DPR_BIAS      (default 0.85)
+//   window.__DG_OVERLAY_DPR_QUANT_PX           (default 32)   // backing-size bucketing
+//
+window.__DG_OVERLAY_PRESSURE_DPR_MIN_MUL ??= 0.45;
+window.__DG_OVERLAY_PRESSURE_DPR_BIAS    ??= 0.85;
+window.__DG_OVERLAY_DPR_QUANT_PX         ??= 32;
 
 let __dgPressureFrameMsEwma = null;
 let __dgPressureDprMul = 1;
@@ -2068,11 +2129,13 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       const nowTs = (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now();
       panel.__dgFlashActiveUntil = nowTs + __DG_FLASH_KEEPALIVE_MS;
     } catch {}
+    __dgMarkOverlayDirty(panel);
     __dgMarkSingleCanvasOverlayDirty(panel);
   };
   const markFlashLayerCleared = () => {
     panel.__dgFlashLayerEmpty = true;
     try { panel.__dgFlashActiveUntil = 0; } catch {}
+    __dgMarkOverlayDirty(panel);
     __dgMarkSingleCanvasOverlayDirty(panel);
   };
   const markGhostLayerActive = () => {
@@ -2080,6 +2143,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     // empty -> non-empty transition to avoid spamming the console.
     const __wasEmpty = panel.__dgGhostLayerEmpty !== false;
     panel.__dgGhostLayerEmpty = false;
+    __dgMarkOverlayDirty(panel);
     __dgMarkSingleCanvasOverlayDirty(panel);
     try {
       if (
@@ -2100,6 +2164,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const markGhostLayerCleared = () => {
     const __wasEmpty = panel.__dgGhostLayerEmpty !== true;
     panel.__dgGhostLayerEmpty = true;
+    __dgMarkOverlayDirty(panel);
     __dgMarkSingleCanvasOverlayDirty(panel);
     try {
       if (
@@ -2117,10 +2182,10 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       }
     } catch {}
   };
-  const markTutorialLayerActive = () => { panel.__dgTutorialLayerEmpty = false; __dgMarkSingleCanvasOverlayDirty(panel); };
-  const markTutorialLayerCleared = () => { panel.__dgTutorialLayerEmpty = true; __dgMarkSingleCanvasOverlayDirty(panel); };
-  const markPlayheadLayerActive = () => { panel.__dgPlayheadLayerEmpty = false; __dgMarkSingleCanvasOverlayDirty(panel); };
-  const markPlayheadLayerCleared = () => { panel.__dgPlayheadLayerEmpty = true; __dgMarkSingleCanvasOverlayDirty(panel); };
+  const markTutorialLayerActive = () => { panel.__dgTutorialLayerEmpty = false; __dgMarkOverlayDirty(panel); __dgMarkSingleCanvasOverlayDirty(panel); };
+  const markTutorialLayerCleared = () => { panel.__dgTutorialLayerEmpty = true; __dgMarkOverlayDirty(panel); __dgMarkSingleCanvasOverlayDirty(panel); };
+  const markPlayheadLayerActive = () => { panel.__dgPlayheadLayerEmpty = false; __dgMarkOverlayDirty(panel); __dgMarkSingleCanvasOverlayDirty(panel); };
+  const markPlayheadLayerCleared = () => { panel.__dgPlayheadLayerEmpty = true; __dgMarkOverlayDirty(panel); __dgMarkSingleCanvasOverlayDirty(panel); };
 
   function drawColumnFlashesOverlay(ctx) {
     if (!ctx) return;
@@ -2928,6 +2993,8 @@ try {
         dgSizeTrace('resizeSurfacesFor(no-op)', { reason, nextCssW, nextCssH, nextDpr, paintDpr, targetW, targetH, sizeChanged: false, dprChanged: false });
         return;
       }
+      // Any size/DPR change should force overlays dirty.
+      try { __dgMarkOverlayDirty(panel); } catch {}
       // Optional: when hunting "mystery scale jumps", capture who triggered a real resize.
       // Enable with: window.__DG_RESIZE_TRACE = true; window.__DG_RESIZE_TRACE_STACK = true;
       try {
@@ -3983,6 +4050,7 @@ function ensureSizeReady({ force = false } = {}) {
     }
 
     noteBurstEffects.push({ particles });
+    __dgMarkOverlayDirty(panel);
 
     // Cap the number of active bursts so we don't leak
     const maxBursts = emergency ? 16 : (lowFps ? 24 : 32);
@@ -6286,11 +6354,64 @@ function copyCanvas(backCtx, frontCtx) {
 
   function ensureBackVisualsFreshFromFront() {
     try {
-      const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
-      const logicalWidth = Math.max(1, cssW || ((frontCanvas?.width ?? 1) / scale));
-      const logicalHeight = Math.max(1, cssH || ((frontCanvas?.height ?? 1) / scale));
-      const pixelW = Math.max(1, Math.round(logicalWidth * scale));
-      const pixelH = Math.max(1, Math.round(logicalHeight * scale));
+      const paintScale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
+      const logicalWidth = Math.max(1, cssW || ((frontCanvas?.width ?? 1) / paintScale));
+      const logicalHeight = Math.max(1, cssH || ((frontCanvas?.height ?? 1) / paintScale));
+
+      // Default all DOM-backed layers to paintScale, but allow "aux" layers (grid/nodes/ghost/tutorial/playhead/etc)
+      // to reduce backing resolution when zoomed out or under frame-time pressure. This targets **raster/compositor**
+      // cost ("frame.nonScript") without changing CSS size/layout.
+      const deviceDpr = (Number.isFinite(window?.devicePixelRatio) && window.devicePixelRatio > 0) ? window.devicePixelRatio : 1;
+      const toyScale = (Number.isFinite(panel?.__dgLastToyScale) && panel.__dgLastToyScale > 0) ? panel.__dgLastToyScale : 1;
+      const visualMul = __dgComputeVisualBackingMul(toyScale);
+      const pressureMul = (Number.isFinite(__dgPressureDprMul) && __dgPressureDprMul > 0) ? __dgPressureDprMul : 1;
+
+      // Aux layer DPR: never exceed paintScale, but can drop below it smoothly.
+      const auxDprRaw = deviceDpr * visualMul * pressureMul;
+      const auxScale = Math.min(
+        paintScale,
+        __dgCapDprForBackingStore(logicalWidth, logicalHeight, auxDprRaw, __dgAdaptivePaintDpr)
+      );
+
+
+      // Overlay layer DPR: drop earlier/more aggressively under pressure.
+      // IMPORTANT: do NOT reduce overlay DPR based on gesture state; only generic pressure.
+      const overlayMinMul = (Number.isFinite(window.__DG_OVERLAY_PRESSURE_DPR_MIN_MUL) && window.__DG_OVERLAY_PRESSURE_DPR_MIN_MUL > 0)
+        ? window.__DG_OVERLAY_PRESSURE_DPR_MIN_MUL
+        : 0.45;
+      const overlayBias = (Number.isFinite(window.__DG_OVERLAY_PRESSURE_DPR_BIAS) && window.__DG_OVERLAY_PRESSURE_DPR_BIAS > 0)
+        ? window.__DG_OVERLAY_PRESSURE_DPR_BIAS
+        : 0.85;
+      const overlayPressureMul = (pressureMul < 0.999)
+        ? Math.max(overlayMinMul, Math.min(1, pressureMul * overlayBias))
+        : 1;
+      const overlayDprRaw = deviceDpr * visualMul * overlayPressureMul;
+      const overlayScale = Math.min(
+        paintScale,
+        __dgCapDprForBackingStore(logicalWidth, logicalHeight, overlayDprRaw, __dgAdaptivePaintDpr)
+      );
+
+      const overlayQuantPx = (Number.isFinite(window.__DG_OVERLAY_DPR_QUANT_PX) && window.__DG_OVERLAY_DPR_QUANT_PX >= 8)
+        ? (window.__DG_OVERLAY_DPR_QUANT_PX|0)
+        : 32;
+      const quantPx = (n) => {
+        const v = Math.max(1, (n|0));
+        const step = overlayQuantPx;
+        return Math.max(step, Math.round(v / step) * step);
+      };
+
+      const isOverlayLayer = (c) => (c === flashCanvas) || (c === flashBackCanvas) || (c === ghostCanvas) || (c === ghostBackCanvas) || (c === tutorialCanvas) || (c === tutorialBackCanvas) || (c === playheadCanvas);
+      const isOverlayDormant = (c) => {
+        try {
+          if (!c || !c.style) return false;
+          if (c.style.display !== 'none') return false;
+          if (c === flashCanvas || c === flashBackCanvas) return !!panel.__dgFlashLayerEmpty;
+          if (c === ghostCanvas || c === ghostBackCanvas) return !!panel.__dgGhostLayerEmpty;
+          if (c === tutorialCanvas || c === tutorialBackCanvas) return !!panel.__dgTutorialLayerEmpty;
+          if (c === playheadCanvas) return !!panel.__dgPlayheadLayerEmpty;
+        } catch {}
+        return false;
+      };
 
       const styleCanvases = __dgListAllLayerEls();
 
@@ -6315,9 +6436,36 @@ function copyCanvas(backCtx, frontCtx) {
       // NOTE: avoid per-canvas getContext() calls here (can be surprisingly costly).
       // We only reset contexts we already hold references to.
       let resizedAny = false;
+
+      const isPaintLayer = (c) => (c === frontCanvas) || (c === backCanvas) || (c === paint);
+
       for (const canvas of allCanvases) {
-        if (canvas.width !== pixelW) { canvas.width = pixelW; resizedAny = true; }
-        if (canvas.height !== pixelH) { canvas.height = pixelH; resizedAny = true; }
+        // If an overlay layer is dormant (display:none + marked empty), do not resize it.
+        // Resizing dormant overlays during pressure changes can create big realloc spikes
+        // even though the layer isn't contributing any pixels this frame.
+        if (isOverlayLayer(canvas) && isOverlayDormant(canvas)) {
+          continue;
+        }
+
+        const dpr = isPaintLayer(canvas)
+          ? paintScale
+          : isOverlayLayer(canvas)
+            ? overlayScale
+            : (auxScale * __dgComputeGestureStaticMul(zoomGestureMoving));
+        let pxW = Math.max(1, Math.round(logicalWidth * dpr));
+        let pxH = Math.max(1, Math.round(logicalHeight * dpr));
+
+        // Backing-store bucketing for overlays: reduces resize thrash when DPR oscillates.
+        if (isOverlayLayer(canvas)) {
+          pxW = quantPx(pxW);
+          pxH = quantPx(pxH);
+        }
+
+        // Cache DPR used for this backing store (useful for debug and for ctx reset helpers).
+        try { canvas.__dgBackingDpr = dpr; } catch {}
+
+        if (canvas.width !== pxW) { canvas.width = pxW; resizedAny = true; }
+        if (canvas.height !== pxH) { canvas.height = pxH; resizedAny = true; }
         // style width/height is already set via styleCanvases above
       }
       if (resizedAny) {
@@ -6346,12 +6494,15 @@ function copyCanvas(backCtx, frontCtx) {
         if (!srcCtx || !dstCtx) return;
         if (srcCtx === dstCtx || srcCtx.canvas === dstCtx.canvas) return;
         if (DG_SINGLE_CANVAS && usingBackBuffers && (srcCtx === gridFrontCtx || srcCtx === nodesFrontCtx)) return;
+        const dw = dstCtx.canvas?.width || 0;
+        const dh = dstCtx.canvas?.height || 0;
+        if (!dw || !dh) return;
         R.withDeviceSpace(dstCtx, () => {
-          dstCtx.clearRect(0, 0, pixelW, pixelH);
+          dstCtx.clearRect(0, 0, dw, dh);
           dstCtx.drawImage(
             srcCtx.canvas,
             0, 0, srcCtx.canvas.width, srcCtx.canvas.height,
-            0, 0, pixelW, pixelH
+            0, 0, dw, dh
           );
         });
       };
@@ -6565,14 +6716,30 @@ function copyCanvas(backCtx, frontCtx) {
     // The wrap must remain `100%` so it tracks the toy body without being "locked"
     // to a transient scaled value during zoom/drag settle (which causes RO:size resnaps
     // and mixed-scale layers).
-    const bodySize = body ? measureCSSSize(body) : measureCSSSize(wrap);
-    const bodyW = bodySize.w;
-    const bodyH = bodySize.h;
+    // Fast-path: if RO has already given us a stable size that matches our current
+    // cssW/cssH, and layout isn't dirty, avoid *all* DOM reads in this frame.
+    // This reduces forced style/layout work (often shows up as "nonScript" time).
+    if (!force && !layoutSizeDirty) {
+      const roW = __dgLayoutW || 0;
+      const roH = __dgLayoutH || 0;
+      if (roW > 0 && roH > 0 && Math.abs(roW - cssW) <= 1 && Math.abs(roH - cssH) <= 1) {
+        return;
+      }
+    }
     // Keep the wrap responsive (CSS %) so it tracks the toy body through drag/zoom settle.
     // If we pin it to pixels here, later transforms can leave different internal canvases
     // rendering at different effective scales.
     wrap.style.width  = '100%';
     wrap.style.height = '100%';
+
+    // Only measure BODY as a fallback when RO hasn't reported yet (or when forced).
+    let bodyW = 0;
+    let bodyH = 0;
+    if (force || (__dgLayoutW <= 0 || __dgLayoutH <= 0)) {
+      const bodySize = body ? measureCSSSize(body) : measureCSSSize(wrap);
+      bodyW = bodySize.w;
+      bodyH = bodySize.h;
+    }
 
 
     // Measure transform-immune base...
@@ -6606,26 +6773,45 @@ function copyCanvas(backCtx, frontCtx) {
     const newW = Math.max(1, rawW);
     const newH = Math.max(1, rawH);
     try {
-      const rect = panel?.getBoundingClientRect?.();
-      const toyScaleRaw = panel ? getComputedStyle(panel).getPropertyValue('--toy-scale') : '';
-      const toyScale = parseFloat(toyScaleRaw);
-      dgSizeTrace('layout:measure', {
-        force,
-        bodyW,
-        bodyH,
-        baseW,
-        baseH,
-        newW,
-        newH,
-        wrapClientW: wrap?.clientWidth || 0,
-        wrapClientH: wrap?.clientHeight || 0,
-        panelRectW: rect?.width || 0,
-        panelRectH: rect?.height || 0,
-        toyScale: Number.isFinite(toyScale) ? toyScale : null,
-        zoomMode,
-        zoomGestureActive,
-        overview: !!__overviewActive,
-      });
+      // Avoid forced-layout DOM reads unless we're tracing size or actively zooming.
+      // (getBoundingClientRect + getComputedStyle can trigger synchronous layout.)
+      const wantLayoutTrace = (() => { try { return !!window.__DG_REFRESH_SIZE_TRACE; } catch {} return false; })();
+      const shouldReadDom = wantLayoutTrace || force || zoomGestureActive;
+
+      let rect = null;
+      let toyScale = null;
+
+      if (shouldReadDom) {
+        rect = panel?.getBoundingClientRect?.();
+        const toyScaleRaw = panel ? getComputedStyle(panel).getPropertyValue('--toy-scale') : '';
+        const ts = parseFloat(toyScaleRaw);
+        toyScale = Number.isFinite(ts) ? ts : null;
+        // Cache last known toyScale for fast paths (used by backing DPR decisions).
+        try { panel.__dgLastToyScale = toyScale ?? (panel.__dgLastToyScale ?? 1); } catch {}
+      } else {
+        const ts = panel?.__dgLastToyScale;
+        toyScale = Number.isFinite(ts) ? ts : null;
+      }
+
+      if (wantLayoutTrace) {
+        dgSizeTrace('layout:measure', {
+          force,
+          bodyW,
+          bodyH,
+          baseW,
+          baseH,
+          newW,
+          newH,
+          wrapClientW: wrap?.clientWidth || 0,
+          wrapClientH: wrap?.clientHeight || 0,
+          panelRectW: rect?.width || 0,
+          panelRectH: rect?.height || 0,
+          toyScale,
+          zoomMode,
+          zoomGestureActive,
+          overview: !!__overviewActive,
+        });
+      }
     } catch {}
 
       if ((!zoomGestureActive && (force || Math.abs(newW - cssW) > 1 || Math.abs(newH - cssH) > 1)) || (force && zoomGestureActive)) {
@@ -9141,6 +9327,7 @@ function copyCanvas(backCtx, frontCtx) {
                             pulseTriggered = true;
                         }
                           cellFlashes.push({ col, row, age: 1.0 });
+                          __dgMarkOverlayDirty(panel);
                           try {
                               const x = gridArea.x + col * cw + cw * 0.5;
                               const y = gridArea.y + topPad + row * ch + ch * 0.5;
@@ -9644,8 +9831,11 @@ function copyCanvas(backCtx, frontCtx) {
         isFocused,
         isZoomed,
       });
+      const zoomGesturing = (typeof window !== 'undefined' && window.__mtZoomGesturing === true);
+      const zoomGestureMoving = !!(zoomGesturing && __lastZoomMotionTs && (nowTs - __lastZoomMotionTs) < ZOOM_STALL_MS);
       const deviceDpr = Math.max(1, Number.isFinite(window?.devicePixelRatio) ? window.devicePixelRatio : 1);
-      const visualMul = __dgComputeVisualBackingMul(Number.isFinite(boardScale) ? boardScale : 1);
+      const gestureMul = __dgComputeGestureBackingMul(zoomGestureMoving);
+      const visualMul = __dgComputeVisualBackingMul(Number.isFinite(boardScale) ? boardScale : 1) * gestureMul;
       const pressureMul = (Number.isFinite(__dgPressureDprMul) && __dgPressureDprMul > 0) ? __dgPressureDprMul : 1;
       const smallMul = __dgComputeSmallPanelBackingMul(cssW, cssH);
       const desiredDprRaw = (adaptiveCap ? Math.min(deviceDpr, adaptiveCap) : deviceDpr) * visualMul * pressureMul * smallMul;
@@ -9705,17 +9895,29 @@ function copyCanvas(backCtx, frontCtx) {
         hasOverlayStrokes = hasOverlayStrokesCached();
       }
       // Safety: if cache says no overlay but we have special strokes, don't clear overlays.
-      let hasOverlayStrokesLive = hasOverlayStrokes;
-      if (!hasOverlayStrokesLive && Array.isArray(strokes) && strokes.length) {
-        for (let i = 0; i < strokes.length; i++) {
-          const s = strokes[i];
-          if (s && (s.isSpecial || s.overlayColorize)) { hasOverlayStrokesLive = true; break; }
+      // BUT: treating *committed* special/colorize strokes as "live overlay" forces a full-canvas
+      // clear + composite every frame (very expensive). We only treat overlay strokes as "live"
+      // when we're actively previewing a stroke (cur+previewGid) or when the cache explicitly says
+      // there are live overlay strokes (e.g. a transient effect).
+      let hasOverlayStrokesLive = !!(cur && previewGid);
+      if (!hasOverlayStrokesLive) {
+        hasOverlayStrokesLive = hasOverlayStrokes;
+      }
+      // Escape hatch: if you discover a visual regression (special strokes that truly must animate
+      // as an overlay every frame), enable this and we will fall back to the old behavior.
+      if (!hasOverlayStrokesLive && typeof window !== 'undefined' && window.__DG_OVERLAY_SPECIAL_ALWAYS_LIVE) {
+        if (Array.isArray(strokes) && strokes.length) {
+          for (let i = 0; i < strokes.length; i++) {
+            const s = strokes[i];
+            if (s && (s.isSpecial || s.overlayColorize)) { hasOverlayStrokesLive = true; break; }
+          }
         }
       }
-      const overlayTransport = disableOverlayCore
-        ? false
-        : (transportRunning && (isChained ? (isActiveInChain && chainHasNotes) : hasActiveNotes));
-      let overlayActive = allowOverlayDraw && (hasOverlayFx || overlayTransport || hasOverlayStrokesLive || (cur && previewGid));
+      // NOTE: "overlayTransport" is meant to keep *existing* overlay visuals animating while the
+      // transport is running. It should NOT force overlay passes when there is no overlay content.
+      // Otherwise we pay a big full-canvas clear + composite cost every frame during playback.
+      let overlayTransport = false;
+      let overlayActive = false;
       let overlayEvery = 1;
       // IMPORTANT: do not change overlay cadence based on gestures or visible count.
       if (overlayEvery > 1) {
@@ -9724,52 +9926,87 @@ function copyCanvas(backCtx, frontCtx) {
       const skipOverlayHeavy = overlayEvery > 1 && ((panel.__dgOverlayFrame % overlayEvery) !== 0);
       let allowOverlayDrawHeavy = allowOverlayDraw && (!skipOverlayHeavy || __dgNeedsUIRefresh);
       let overlayCoreWanted = (hasOverlayFx || hasOverlayStrokesLive || (cur && previewGid));
+      if (!disableOverlayCore) {
+        // Only keep overlay passes alive while the transport is running *and* there is overlay work to do.
+        // (If flashes are active, panel.__dgFlashLayerEmpty will be false, so the gate won't skip.)
+        overlayTransport = !!(transportRunning && overlayCoreWanted);
+      }
+      // overlayActive is used as a general "is there overlay content?" signal.
+      // Do not include overlayTransport here, otherwise transport forces overlays even when empty.
+      overlayActive = !!(allowOverlayDraw && (overlayCoreWanted || hasNodeFlash));
+
       let overlayCoreActive = allowOverlayDrawHeavy && overlayCoreWanted;
       let overlayCompositeNeeded = false;
       let overlayClearedThisFrame = false;
       let __dbgOverlaySpecialCount = null;
       let __dbgOverlayColorizedCount = null;
       let __dbgOverlayHasPreview = null;
-      if (__perfOn && __overlayGateStart) {
-        try { window.__PerfFrameProf?.mark?.('drawgrid.prep.overlayGate', performance.now() - __overlayGateStart); } catch {}
-      }
-      if (__perfOn && __prepStart) {
-        try { window.__PerfFrameProf?.mark?.('drawgrid.render.prep', performance.now() - __prepStart); } catch {}
+      let gotoOverlayEnd = false;
+
+      // PERF: if the flash overlay is known to be empty and there is no active
+      // overlay content, skip all overlay passes entirely.
+      // This avoids running overlay.core / overlay.flash.pass when idle.
+      //
+      // NOTE: This gate must account for things that can "wake" overlays later in the frame
+      // (eg node flashes, UI refresh). Otherwise we can incorrectly skip overlay work.
+      if (
+        panel.__dgFlashLayerEmpty &&
+        !overlayActive &&
+        !overlayTransport &&
+        !hasNodeFlash &&
+        !__dgNeedsUIRefresh &&
+        !panel.__dgFlashOverlayOutOfGrid
+      ) {
+        panel.__dgLastTransportRunning = transportRunning;
+        // No overlay work needed this frame.
+        gotoOverlayEnd = true;
+        allowOverlayDrawHeavy = false;
+        overlayCoreWanted = false;
+        overlayCoreActive = false;
       }
 
-      if (allowOverlayDraw) {
-        const lastTransportRunning = !!panel.__dgLastTransportRunning;
-        if ((allowOverlayDrawHeavy || (lastTransportRunning && !transportRunning)) && !transportRunning && !overlayActive) {
-          const __nowTs = (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now();
-          const __flashAliveUntil = panel.__dgFlashActiveUntil || 0;
-          const __flashIsEmpty = !!panel.__dgFlashLayerEmpty;
+      if (!gotoOverlayEnd) {
+        if (__perfOn && __overlayGateStart) {
+          try { window.__PerfFrameProf?.mark?.('drawgrid.prep.overlayGate', performance.now() - __overlayGateStart); } catch {}
+        }
+        if (__perfOn && __prepStart) {
+          try { window.__PerfFrameProf?.mark?.('drawgrid.render.prep', performance.now() - __prepStart); } catch {}
+        }
 
-          // Only clear the flash overlay once it has actually been drawn *and* its keepalive has expired.
-          // (Avoid per-frame clears when idle; they show up as costly GPU/raster work.)
-          if (!__flashIsEmpty && __nowTs >= __flashAliveUntil) {
-            const __overlayClearStart = __perfOn ? performance.now() : 0;
-            try {
-            const flashSurface = getActiveFlashCanvas();
-            const __flashDpr = __dgGetCanvasDprFromCss(flashSurface, cssW, paintDpr);
-            R.resetCtx(fctx);
-            __dgWithLogicalSpaceDpr(R, fctx, __flashDpr, () => {
-                const { x, y, w, h } = R.getOverlayClearRect({
-                  canvas: flashSurface,
-                  pad: R.getOverlayClearPad(),
-                  allowFull: !!panel.__dgFlashOverlayOutOfGrid,
-                  gridArea,
+        if (allowOverlayDraw) {
+          const lastTransportRunning = !!panel.__dgLastTransportRunning;
+          if ((allowOverlayDrawHeavy || (lastTransportRunning && !transportRunning)) && !transportRunning && !overlayActive) {
+            const __nowTs = (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now();
+            const __flashAliveUntil = panel.__dgFlashActiveUntil || 0;
+            const __flashIsEmpty = !!panel.__dgFlashLayerEmpty;
+
+            // Only clear the flash overlay once it has actually been drawn *and* its keepalive has expired.
+            // (Avoid per-frame clears when idle; they show up as costly GPU/raster work.)
+            if (!__flashIsEmpty && __nowTs >= __flashAliveUntil) {
+              const __overlayClearStart = __perfOn ? performance.now() : 0;
+              try {
+              const flashSurface = getActiveFlashCanvas();
+              const __flashDpr = __dgGetCanvasDprFromCss(flashSurface, cssW, paintDpr);
+              R.resetCtx(fctx);
+              __dgWithLogicalSpaceDpr(R, fctx, __flashDpr, () => {
+                  const { x, y, w, h } = R.getOverlayClearRect({
+                    canvas: flashSurface,
+                    pad: R.getOverlayClearPad(),
+                    allowFull: !!panel.__dgFlashOverlayOutOfGrid,
+                    gridArea,
+                  });
+                  fctx.clearRect(x, y, w, h);
                 });
-                fctx.clearRect(x, y, w, h);
-              });
-              markFlashLayerCleared();
-              overlayCompositeNeeded = true;
-            } catch {}
-            if (__perfOn && __overlayClearStart) {
-              try { window.__PerfFrameProf?.mark?.('drawgrid.prep.overlayClear', performance.now() - __overlayClearStart); } catch {}
+                markFlashLayerCleared();
+                overlayCompositeNeeded = true;
+              } catch {}
+              if (__perfOn && __overlayClearStart) {
+                try { window.__PerfFrameProf?.mark?.('drawgrid.prep.overlayClear', performance.now() - __overlayClearStart); } catch {}
+              }
             }
           }
+          panel.__dgLastTransportRunning = transportRunning;
         }
-        panel.__dgLastTransportRunning = transportRunning;
       }
 
       // Particle field visibility is driven by global allow/overview/zoom state.
@@ -9781,8 +10018,6 @@ function copyCanvas(backCtx, frontCtx) {
         !zoomDebugFreeze &&
         particleFieldEnabled;
 
-      const zoomGesturing = (typeof window !== 'undefined' && window.__mtZoomGesturing === true);
-      const zoomGestureMoving = !!(zoomGesturing && __lastZoomMotionTs && (nowTs - __lastZoomMotionTs) < ZOOM_STALL_MS);
       // Only throttle particles during zoom if the scene is busy.
       // With 1-2 toys, keep particles running for responsiveness.
       const shouldThrottleForZoom = zoomGestureMoving && (visiblePanels >= 4);
@@ -9922,12 +10157,47 @@ function copyCanvas(backCtx, frontCtx) {
       if (tutorialHighlightMode !== 'none') {
         doFullDraw = true;
       }
+
+      // Perf gate:
+      // During active camera gesture motion, avoid repainting static layers (grid/nodes)
+      // unless explicitly forced. This targets the "nonScript" cost (raster/composite)
+      // that dominates in focus runs, while keeping correctness because:
+      // - panel.__dgStaticDirty remains true
+      // - a redraw will happen naturally once motion stops or when we forceFullDraw
+      //
+      // Override for debugging/verification:
+      //   window.__DG_FREEZE_STATIC_DURING_GESTURE = false
+      try {
+        const freezeStaticDuringGesture =
+          (typeof window === 'undefined') ? true : (window.__DG_FREEZE_STATIC_DURING_GESTURE !== false);
+        if (freezeStaticDuringGesture && doFullDraw && !forceFullDraw && zoomGestureMoving) {
+          doFullDraw = false;
+        }
+      } catch {}
+
       const overlayFxWanted = hasOverlayFx || (overlayFlashesEnabled && hasNodeFlash);
       overlayActive = allowOverlayDraw && (overlayFxWanted || overlayTransport || hasOverlayStrokesLive || (cur && previewGid));
       allowOverlayDrawHeavy = allowOverlayDraw && (!skipOverlayHeavy || __dgNeedsUIRefresh || hasNodeFlash);
       overlayCoreWanted = (overlayFxWanted || hasOverlayStrokesLive || (cur && previewGid));
       overlayCoreActive = allowOverlayDrawHeavy && overlayCoreWanted;
+      if (gotoOverlayEnd) {
+        overlayActive = false;
+        allowOverlayDrawHeavy = false;
+        overlayCoreWanted = false;
+        overlayCoreActive = false;
+      }
       const needsFx = overlayCoreActive || __dgNeedsUIRefresh || hasNodeFlash;
+      const overlayDirty =
+        !!panel.__dgOverlayDirty ||
+        (panel.__dgFlashLayerEmpty === false) ||
+        (panel.__dgGhostLayerEmpty === false) ||
+        (panel.__dgTutorialLayerEmpty === false) ||
+        (panel.__dgPlayheadLayerEmpty === false) ||
+        __dgNeedsUIRefresh ||
+        hasNodeFlash;
+      if (overlayDirty) {
+        try { panel.__dgOverlayDirty = false; } catch {}
+      }
       if (DG_SINGLE_CANVAS && canDrawAnything) {
         const needsFullDraw =
           panel.__dgSingleCompositeDirty ||
@@ -10326,7 +10596,7 @@ function copyCanvas(backCtx, frontCtx) {
     }
 
     // --- other overlay layers still respect allowOverlayDraw ---
-    if (allowOverlayDrawHeavy && needsFx) {
+    if (allowOverlayDrawHeavy && needsFx && overlayDirty) {
       overlayCompositeNeeded = true;
       const __flashPassStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
         ? performance.now()
@@ -10955,7 +11225,7 @@ function copyCanvas(backCtx, frontCtx) {
                 tutorialCtx.clearRect(0, 0, tw, th);
               });
               markTutorialLayerCleared();
-              overlayCompositeNeeded = true;
+              if (DG_SINGLE_CANVAS) overlayCompositeNeeded = true;
               if (__overlayClearStart) {
                 try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.clear', performance.now() - __overlayClearStart); } catch {}
               }
@@ -10975,7 +11245,7 @@ function copyCanvas(backCtx, frontCtx) {
               };
               clearPlayheadBand();
               markPlayheadLayerCleared();
-              overlayCompositeNeeded = true;
+              if (DG_SINGLE_CANVAS) overlayCompositeNeeded = true;
               if (__overlayClearStart) {
                 try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.clear', performance.now() - __overlayClearStart); } catch {}
               }
@@ -11021,7 +11291,7 @@ function copyCanvas(backCtx, frontCtx) {
               } else {
                 markFlashLayerCleared();
               }
-              overlayCompositeNeeded = true;
+              if (DG_SINGLE_CANVAS) overlayCompositeNeeded = true;
               if (__overlayClearStart) {
                 try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.clear', performance.now() - __overlayClearStart); } catch {}
               }
