@@ -151,37 +151,33 @@ const AUTO_GENERIC_QUEUE = [
 ];
 
 // Current focus for this cycle:
-//   - validate DrawGrid adaptive DPR impact (A/B: OFF then ON)
-//   - keep pressure-DPR + size-churn signals available via trace summary
+//   - reduce DrawGrid "nodes" script time (layout/cache-hit)
+//   - reduce particle update cost where possible
 //
 // IMPORTANT: After the DrawGrid restructure, building P3 (48 drawgrids + randomise)
 // can dominate time and starve the actual pan/zoom script. For focus diagnosis, we
 // build ONCE and run variants back-to-back on the same scene.
 const AUTO_FOCUS_QUEUE = [
-  // Mixed baseline + A/B isolation for the current spike we're chasing:
-  //   - baseline P6a (mixed chains, playing + pan/zoom + randomise)
-  //   - LoopGrid render OFF (should nuke nonScript/compositor if LoopGrid is the culprit)
-  //   - Chains OFF (should reduce chain DOM + edge compositor work)
+  'traceDprOn',
 
-  'traceOff',
-  'buildP6',
+  // Build once
+  'buildP3Focus',
   'warmupFirstAppearance',
   'warmupSettle',
-  'runP6a',
-  'warmupSettle',
 
-  // A/B: LoopGrid render
-  'loopRenderOff',
+  // Focus runs (high-signal isolates for overlay churn)
+  'runP3fFocusShort',
   'warmupSettle',
-  'runP6a',
-  'loopRenderOn',
+  'runP3fNoOverlaysFocusShort',
   'warmupSettle',
+  'runP3fNoOverlayCoreShort',
+  'warmupSettle',
+  'runP3fNoOverlayStrokesShort',
+  'warmupSettle',
+  'runP3fNoParticlesFocusShort',
 
-  // A/B: Chains (edges + chain transforms)
-  'chainsOff',
-  'warmupSettle',
-  'runP6a',
-  'chainsOn',
+  'traceDprOff',
+  'traceOff',
 ];
 
 // Validation focus: same intent as AUTO_FOCUS_QUEUE but with more toys (stronger pressure signal).
@@ -712,7 +708,7 @@ function ensureUI() {
         download: false,
         postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
         downloadName: `perf-lab-focus-${ts}.json`,
-        notes: 'Current Focus: Mixed (P6a) isolate LoopGrid render + chain overhead (edit AUTO_FOCUS_QUEUE in perf-lab.js)',
+        notes: 'Current Focus: reduce DrawGrid overlay churn (overlayDirty gating / cached overlay core) (edit AUTO_FOCUS_QUEUE in perf-lab.js)',
         queue: AUTO_FOCUS_QUEUE,
       };
       await runAuto(cfg);

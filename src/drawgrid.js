@@ -3200,7 +3200,7 @@ try {
         // assumptions and “jump” or appear scaled from the top-left.
         try {
           if (__dgGridCache) __dgGridCache.key = '';
-          if (__dgNodesCache) __dgNodesCache.key = '';
+        if (__dgNodesCache) { __dgNodesCache.key = ''; __dgNodesCache.nodeCoords = null; }
           if (__dgBlocksCache) __dgBlocksCache.key = '';
           panel.__dgGridHasPainted = false;
           __dgForceFullDrawNext = true;
@@ -7044,7 +7044,7 @@ function copyCanvas(backCtx, frontCtx) {
       }
       if (__dgGridReady()) {
         if (__dgGridCache) __dgGridCache.key = '';
-        if (__dgNodesCache) __dgNodesCache.key = '';
+        if (__dgNodesCache) { __dgNodesCache.key = ''; __dgNodesCache.nodeCoords = null; }
         if (__dgBlocksCache) __dgBlocksCache.key = '';
         try {
           if (gridBackCtx?.canvas) R.withDeviceSpace(gridBackCtx, () => gridBackCtx.clearRect(0, 0, gridBackCtx.canvas.width, gridBackCtx.canvas.height));
@@ -7855,7 +7855,7 @@ function copyCanvas(backCtx, frontCtx) {
     }
     if (!wasOverlay) markPaintDirty();
   }
-  let __dgNodesCache = { canvas: null, ctx: null, key: '' };
+let __dgNodesCache = { canvas: null, ctx: null, key: '', nodeCoords: null };
   let __dgBlocksCache = { canvas: null, ctx: null, key: '' };
 
   // Draw helpers -----------------------------------------------------------
@@ -7953,7 +7953,7 @@ function copyCanvas(backCtx, frontCtx) {
       nctxRole: nctx?.canvas?.getAttribute?.('data-role') || null,
       nctxSize: nctx?.canvas ? { w: nctx.canvas.width, h: nctx.canvas.height } : null,
     });
-    const nodeCoords = [];
+    let nodeCoords = null;
     nodeCoordsForHitTest = [];
     const __perfOn = !!(window.__PerfFrameProf && typeof performance !== 'undefined' && performance.now);
     const __layoutStart = __perfOn ? performance.now() : 0;
@@ -7993,21 +7993,103 @@ function copyCanvas(backCtx, frontCtx) {
 
       const radius = Math.max(4, Math.min(cw, ch) * 0.20);
       const isZoomed = panel.classList.contains('toy-zoomed');
-      let __dgHash = 2166136261;
+      const hasTwoLines = Array.isArray(strokes) && strokes.some(s => s && s.generatorId === 2);
+      let mapKey = 2166136261;
       const __dgHashStep = (h, v) => {
         const n = (Number.isFinite(v) ? v : 0) | 0;
         return ((h ^ n) * 16777619) >>> 0;
       };
-      __dgHash = __dgHashStep(__dgHash, rows);
-      __dgHash = __dgHashStep(__dgHash, cols);
-      __dgHash = __dgHashStep(__dgHash, Math.round(cw * 1000));
-      __dgHash = __dgHashStep(__dgHash, Math.round(ch * 1000));
-      __dgHash = __dgHashStep(__dgHash, Math.round(topPad * 1000));
-      __dgHash = __dgHashStep(__dgHash, Math.round((gridArea?.x || 0) * 1000));
-      __dgHash = __dgHashStep(__dgHash, Math.round((gridArea?.y || 0) * 1000));
-      __dgHash = __dgHashStep(__dgHash, Math.round((gridArea?.w || 0) * 1000));
-      __dgHash = __dgHashStep(__dgHash, Math.round((gridArea?.h || 0) * 1000));
-      __dgHash = __dgHashStep(__dgHash, isZoomed ? 1 : 0);
+
+      // Build a *sparse* key for nodes layout + render caching.
+      // Important: do NOT iterate every row/col cell here (that's what we're trying to avoid).
+      mapKey = __dgHashStep(mapKey, rows);
+      mapKey = __dgHashStep(mapKey, cols);
+      mapKey = __dgHashStep(mapKey, Math.round(cw * 1000));
+      mapKey = __dgHashStep(mapKey, Math.round(ch * 1000));
+      mapKey = __dgHashStep(mapKey, Math.round(topPad * 1000));
+      mapKey = __dgHashStep(mapKey, Math.round((gridArea?.x || 0) * 1000));
+      mapKey = __dgHashStep(mapKey, Math.round((gridArea?.y || 0) * 1000));
+      mapKey = __dgHashStep(mapKey, Math.round((gridArea?.w || 0) * 1000));
+      mapKey = __dgHashStep(mapKey, Math.round((gridArea?.h || 0) * 1000));
+      mapKey = __dgHashStep(mapKey, hasTwoLines ? 1 : 0);
+      mapKey = __dgHashStep(mapKey, isZoomed ? 1 : 0);
+
+      if (currentMap) {
+        for (let c = 0; c < cols; c++) {
+          mapKey = __dgHashStep(mapKey, currentMap.active?.[c] ? 1 : 0);
+
+          const nodes = currentMap.nodes?.[c];
+          if (nodes && nodes.size) {
+            mapKey = __dgHashStep(mapKey, nodes.size);
+            for (const r of nodes) {
+              mapKey = __dgHashStep(mapKey, r);
+              const groupEntry = nodeGroupMap?.[c]?.get(r) ?? null;
+              const disabledSet = currentMap.disabled?.[c];
+              const isDisabled = !!(disabledSet && disabledSet.has(r));
+              if (Array.isArray(groupEntry) && groupEntry.length > 0) {
+                for (let i = groupEntry.length - 1; i >= 0; i--) {
+                  const gid = groupEntry[i];
+                  mapKey = __dgHashStep(mapKey, c);
+                  mapKey = __dgHashStep(mapKey, r);
+                  mapKey = __dgHashStep(mapKey, isDisabled ? 1 : 0);
+                  mapKey = __dgHashStep(mapKey, (gid == null ? -1 : gid));
+                }
+              } else {
+                const groupId = typeof groupEntry === 'number' ? groupEntry : null;
+                mapKey = __dgHashStep(mapKey, c);
+                mapKey = __dgHashStep(mapKey, r);
+                mapKey = __dgHashStep(mapKey, isDisabled ? 1 : 0);
+                mapKey = __dgHashStep(mapKey, (groupId == null ? -1 : groupId));
+              }
+            }
+          } else {
+            mapKey = __dgHashStep(mapKey, 0);
+          }
+
+          const disabled = currentMap.disabled?.[c];
+          if (disabled && disabled.size) {
+            mapKey = __dgHashStep(mapKey, disabled.size);
+            for (const r of disabled) mapKey = __dgHashStep(mapKey, r);
+          } else {
+            mapKey = __dgHashStep(mapKey, 0);
+          }
+        }
+      }
+
+      const dragCol = (typeof dragScaleHighlightCol === 'number') ? dragScaleHighlightCol : -1;
+      const dragRow = (draggedNode && typeof draggedNode.row === 'number') ? draggedNode.row : -1;
+      mapKey = __dgHashStep(mapKey, dragCol);
+      mapKey = __dgHashStep(mapKey, dragRow);
+
+      const cache = __dgNodesCache;
+      const surfacePxW = surface?.width ?? nctx.canvas?.width ?? 0;
+      const surfacePxH = surface?.height ?? nctx.canvas?.height ?? 0;
+      if (!cache.canvas) cache.canvas = document.createElement('canvas');
+      if (cache.canvas.width !== surfacePxW) cache.canvas.width = surfacePxW;
+      if (cache.canvas.height !== surfacePxH) cache.canvas.height = surfacePxH;
+      if (!cache.ctx) cache.ctx = cache.canvas.getContext('2d');
+      const cacheKey = `${mapKey}|${Math.round(radius * 1000)}|${surfacePxW}x${surfacePxH}`;
+      const cacheMiss = cache.key !== cacheKey;
+
+      const cacheHit = !cacheMiss && cache.canvas && Array.isArray(cache.nodeCoords);
+      if (cacheHit) {
+        // Reuse last layout for hit-testing; avoid O(cols*rows) rebuilds.
+        nodeCoords = cache.nodeCoords;
+        nodeCoordsForHitTest = nodeCoords;
+
+        if (__perfOn && __layoutStart) {
+          try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.layout', performance.now() - __layoutStart); } catch {}
+        }
+
+        const __cacheBlitStart = __perfOn ? performance.now() : 0;
+        // Cache is stored in device pixels; blit in device space to avoid double-scaling.
+        R.withDeviceSpace(nctx, () => {
+          nctx.drawImage(cache.canvas, 0, 0);
+        });
+        if (__perfOn && __cacheBlitStart) {
+          try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.cacheBlit', performance.now() - __cacheBlitStart); } catch {}
+        }
+      }
 
       // Non-spammy node/canvas scale tracing (logs only when the relevant scale inputs change).
       // Repro: zoomed-out scene -> create draw toy -> draw line; notes/connectors/text appear smaller and shrink further on zoom.
@@ -8099,62 +8181,38 @@ function copyCanvas(backCtx, frontCtx) {
         }
       }
 
-      const activeCols = currentMap?.active || [];
-      for (let c = 0; c < cols; c++) {
-        __dgHash = __dgHashStep(__dgHash, activeCols[c] ? 1 : 0);
-      }
-      const dragCol = (typeof dragScaleHighlightCol === 'number') ? dragScaleHighlightCol : -1;
-      const dragRow = (draggedNode && typeof draggedNode.row === 'number') ? draggedNode.row : -1;
-      __dgHash = __dgHashStep(__dgHash, dragCol);
-      __dgHash = __dgHashStep(__dgHash, dragRow);
-
-      for (let c = 0; c < cols; c++) {
-        if (!nodes[c] || nodes[c].size === 0) continue;
-        for (const r of nodes[c]) {
-          const x = gridArea.x + c * cw + cw * 0.5;
-          const y = gridArea.y + topPad + r * ch + ch * 0.5;
-          const groupEntry = nodeGroupMap?.[c]?.get(r) ?? null;
-          const disabledSet = currentMap?.disabled?.[c];
-          const isDisabled = !!(disabledSet && disabledSet.has(r));
-          if (Array.isArray(groupEntry) && groupEntry.length > 0) {
-            for (let i = groupEntry.length - 1; i >= 0; i--) {
-              const gid = groupEntry[i];
-              __dgHash = __dgHashStep(__dgHash, c);
-              __dgHash = __dgHashStep(__dgHash, r);
-              __dgHash = __dgHashStep(__dgHash, isDisabled ? 1 : 0);
-              __dgHash = __dgHashStep(__dgHash, (gid == null ? -1 : gid));
-            const nodeData = { x, y, col: c, row: r, radius: radius * 1.5, group: gid, disabled: isDisabled };
-            nodeCoords.push(nodeData);
-            nodeCoordsForHitTest.push(nodeData);
+      if (!cacheHit) {
+        nodeCoords = [];
+        nodeCoordsForHitTest = nodeCoords;
+        for (let c = 0; c < cols; c++) {
+          if (!nodes[c] || nodes[c].size === 0) continue;
+          for (const r of nodes[c]) {
+            const x = gridArea.x + c * cw + cw * 0.5;
+            const y = gridArea.y + topPad + r * ch + ch * 0.5;
+            const groupEntry = nodeGroupMap?.[c]?.get(r) ?? null;
+            const disabledSet = currentMap?.disabled?.[c];
+            const isDisabled = !!(disabledSet && disabledSet.has(r));
+            if (Array.isArray(groupEntry) && groupEntry.length > 0) {
+              for (let i = groupEntry.length - 1; i >= 0; i--) {
+                const gid = groupEntry[i];
+                const nodeData = { x, y, col: c, row: r, radius: radius * 1.5, group: gid, disabled: isDisabled };
+                nodeCoords.push(nodeData);
+              }
+            } else {
+              const groupId = typeof groupEntry === 'number' ? groupEntry : null;
+              const nodeData = { x, y, col: c, row: r, radius: radius * 1.5, group: groupId, disabled: isDisabled };
+              nodeCoords.push(nodeData);
+            }
           }
-        } else {
-          const groupId = typeof groupEntry === 'number' ? groupEntry : null;
-          __dgHash = __dgHashStep(__dgHash, c);
-          __dgHash = __dgHashStep(__dgHash, r);
-          __dgHash = __dgHashStep(__dgHash, isDisabled ? 1 : 0);
-          __dgHash = __dgHashStep(__dgHash, (groupId == null ? -1 : groupId));
-          const nodeData = { x, y, col: c, row: r, radius: radius * 1.5, group: groupId, disabled: isDisabled };
-          nodeCoords.push(nodeData);
-          nodeCoordsForHitTest.push(nodeData);
+        }
+
+        cache.nodeCoords = nodeCoords;
+        if (__perfOn && __layoutStart) {
+          try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.layout', performance.now() - __layoutStart); } catch {}
         }
       }
-      }
 
-      if (__perfOn && __layoutStart) {
-        try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.layout', performance.now() - __layoutStart); } catch {}
-      }
-
-    const cache = __dgNodesCache;
-      const surfacePxW = surface?.width ?? nctx.canvas?.width ?? 0;
-      const surfacePxH = surface?.height ?? nctx.canvas?.height ?? 0;
-      if (!cache.canvas) cache.canvas = document.createElement('canvas');
-      if (cache.canvas.width !== surfacePxW) cache.canvas.width = surfacePxW;
-      if (cache.canvas.height !== surfacePxH) cache.canvas.height = surfacePxH;
-      if (!cache.ctx) cache.ctx = cache.canvas.getContext('2d');
-    const cacheKey = `${__dgHash}|${Math.round(radius * 1000)}|${surfacePxW}x${surfacePxH}`;
-    const cacheMiss = cache.key !== cacheKey;
-
-    if (cacheMiss) {
+    if (!cacheHit && cacheMiss) {
       FD.layerDebugLog('nodes-cache-miss', {
         panelId: panel?.id || null,
         cacheKey,
@@ -8311,18 +8369,10 @@ function copyCanvas(backCtx, frontCtx) {
         cache.ctx.drawImage(nctx.canvas, 0, 0);
       }
       cache.key = cacheKey;
+      cache.nodeCoords = nodeCoords;
       if (__perfOn && __drawStart) {
         try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.draw', performance.now() - __drawStart); } catch {}
       }
-      } else if (cache.canvas) {
-        const __cacheBlitStart = __perfOn ? performance.now() : 0;
-        // Cache is stored in device pixels; blit in device space to avoid double-scaling.
-        R.withDeviceSpace(nctx, () => {
-          nctx.drawImage(cache.canvas, 0, 0);
-        });
-        if (__perfOn && __cacheBlitStart) {
-          try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.cacheBlit', performance.now() - __cacheBlitStart); } catch {}
-        }
       }
 
       const blockCache = __dgBlocksCache;
@@ -8330,7 +8380,7 @@ function copyCanvas(backCtx, frontCtx) {
       if (blockCache.canvas.width !== surfacePxW) blockCache.canvas.width = surfacePxW;
       if (blockCache.canvas.height !== surfacePxH) blockCache.canvas.height = surfacePxH;
       if (!blockCache.ctx) blockCache.ctx = blockCache.canvas.getContext('2d');
-      const blockKey = `${__dgHash}|${Math.round(radius * 1000)}|${surfacePxW}x${surfacePxH}|blocks`;
+      const blockKey = `${mapKey}|${Math.round(radius * 1000)}|${surfacePxW}x${surfacePxH}|blocks`;
       if (blockCache.key !== blockKey && blockCache.ctx) {
         const __blocksBuildStart = __perfOn ? performance.now() : 0;
         blockCache.key = blockKey;
@@ -10298,16 +10348,39 @@ function copyCanvas(backCtx, frontCtx) {
         overlayCoreWanted = false;
         overlayCoreActive = false;
       }
+
+      // Perf gate:
+      // During active camera gesture motion, avoid repainting *heavy* overlay core every frame
+      // unless it is required for correctness (live strokes / preview / transport / forced UI refresh).
+      //
+      // Override for debugging/verification:
+      //   window.__DG_FREEZE_OVERLAY_DURING_GESTURE = false
+      try {
+        const freezeOverlayDuringGesture =
+          (typeof window === 'undefined') ? true : (window.__DG_FREEZE_OVERLAY_DURING_GESTURE !== false);
+        const overlayNeedsRealtime =
+          overlayTransport || hasOverlayStrokesLive || (cur && previewGid) || __dgNeedsUIRefresh || hasNodeFlash;
+        if (freezeOverlayDuringGesture && zoomGestureMoving && !forceFullDraw && !overlayNeedsRealtime) {
+          allowOverlayDrawHeavy = false;
+          overlayCoreActive = false;
+        }
+      } catch {}
+
       const needsFx = overlayCoreActive || __dgNeedsUIRefresh || hasNodeFlash;
-      const overlayDirty =
+      // IMPORTANT: overlayDirty must mean “we need to re-render overlay core”.
+      // A layer being *non-empty* is NOT “dirty” — cached layers should be allowed to persist
+      // without forcing expensive overlay redraw every frame.
+      try {
+        if (!overlayCoreWanted) panel.__dgOverlayCorePainted = false;
+      } catch {}
+      const overlayDirtyBase =
         !!panel.__dgOverlayDirty ||
-        (panel.__dgFlashLayerEmpty === false) ||
-        (panel.__dgGhostLayerEmpty === false) ||
-        (panel.__dgTutorialLayerEmpty === false) ||
-        (panel.__dgPlayheadLayerEmpty === false) ||
         __dgNeedsUIRefresh ||
         hasNodeFlash;
-      if (overlayDirty) {
+      const overlayNeedsFirstPaint =
+        !!overlayCoreWanted && !panel.__dgOverlayCorePainted;
+      const overlayDirty = overlayDirtyBase || overlayNeedsFirstPaint;
+      if (overlayDirtyBase) {
         try { panel.__dgOverlayDirty = false; } catch {}
       }
       if (DG_SINGLE_CANVAS && canDrawAnything) {
@@ -10917,6 +10990,7 @@ function copyCanvas(backCtx, frontCtx) {
         const __flashPassDt = performance.now() - __flashPassStart;
         try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.flash.pass', __flashPassDt); } catch {}
       }
+      try { panel.__dgOverlayCorePainted = true; } catch {}
       if (typeof window !== 'undefined' && window.__DG_DEBUG_DRAWFLOW) {
         const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
         const until = panel.__dgDebugOverlayUntil || 0;

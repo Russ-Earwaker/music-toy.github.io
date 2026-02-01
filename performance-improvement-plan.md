@@ -273,11 +273,23 @@ This is enough to justify building â€œpressure-firstâ€ solutions rather than sc
 
 ### 4.8 Bounded cost beats zero cost
 
-* Overlays still cost *something* â€” but:
+* Overlays still cost *something* — but:
 
   * they no longer explode
   * they no longer dominate p99
-* A known, bounded cost is preferable to fragile â€œcleverâ€ elimination.
+* A known, bounded cost is preferable to fragile “clever” elimination.
+
+### 4.9 Overlay presence must not imply overlay work
+
+* “Layer is non-empty” must not be used as a proxy for “needs redraw”.
+* `overlayDirty` must mean: **overlay core must be repainted**.
+* Caching + invalidation is the correct model for overlay performance.
+
+### 4.10 Freeze heavy overlay core redraw during gesture motion
+
+* Pan/zoom gesture motion amplifies compositor cost.
+* Freezing **heavy overlay core redraw** during gesture (unless correctness requires it) is safe and effective.
+* This is consistent with our rule: **never change cadence; only reduce work**.
 
 ---
 
@@ -302,6 +314,9 @@ This is enough to justify building â€œpressure-firstâ€ solutions rather than sc
 * **Treat alpha-heavy tall sprites as risky**
   Avoid per-frame rescaling; make caches stable (quantization / reuse).
 
+* **Overlay redraw must be event-driven**
+  Overlay core redraw should only occur on true invalidation (flash/state change/UI refresh), not “layer exists”.
+
 ---
 
 ## 6. Next Steps ðŸŽ¯
@@ -315,7 +330,7 @@ Remove DrawGrid Focus from the active optimisation list.
 1. **Multi-toy scenes**
 
    * Validate compositor behaviour with many simultaneous toys.
-   * Look for cross-toy overlay or particle interactions.
+   * Add/maintain A/B isolates in PerfLab for: LoopGrid render, chains, and overview mode.
 2. **Particle field under extreme load**
 
    * Mobile GPU limits
@@ -343,3 +358,5 @@ If not, itâ€™s rejected.
 ## 8. One-Paragraph Handoff Summary (Updated)
 
 > DrawGrid Focus performance is now stable and bounded. Resize churn has been eliminated, pressure-DPR is verified to engage, and gesture-time backing-store DPR reduction removes compositor stalls without affecting perceived smoothness. Long-tail p99 spikes (>100ms) are gone; p99 now aligns with p95. Overlays incur a known, bounded cost and are no longer a structural risk. Further DrawGrid Focus micro-optimisation was intentionally stopped to avoid regression risk. The performance effort now moves outward to multi-toy scenes, particle load under pressure, and mobile GPU limits.
+
+
