@@ -30,6 +30,19 @@ const STEP_UP = 0.04;
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 1.0;
 
+function readForcedQualityScale() {
+  // Accept either the newer Quality Lab container or the legacy global.
+  // - window.__QUALITY_LAB.forceScale: null | number
+  // - window.__QUALITY_FORCE_SCALE: null | number
+  const lab = window.__QUALITY_LAB;
+  const v =
+    (lab && typeof lab.forceScale === 'number') ? lab.forceScale :
+    (typeof window.__QUALITY_FORCE_SCALE === 'number') ? window.__QUALITY_FORCE_SCALE :
+    null;
+  if (typeof v !== 'number' || !isFinite(v)) return null;
+  return v;
+}
+
 let _samples = []; // {t, dt}
 let _lastT = 0;
 
@@ -65,6 +78,16 @@ export function autoQualityOnFrame() {
     pruneSamples(t);
   }
   _lastT = t;
+
+  // --- Quality Lab override -----------------------------------------------
+  // When forced, we still collect dt samples so the controller can resume
+  // smoothly when the override is cleared, but we do NOT modify internal _scale.
+  const forced = readForcedQualityScale();
+  if (typeof forced === 'number') {
+    const effective = Math.max(MIN_SCALE, Math.min(MAX_SCALE, forced));
+    window.__AUTO_QUALITY_EFFECTIVE = effective;
+    return;
+  }
 
   if (_samples.length < MIN_SAMPLES) return;
 
@@ -128,4 +151,3 @@ export function getAutoQualityScale() {
   if (typeof v === 'number' && isFinite(v)) return v;
   return 1.0;
 }
-

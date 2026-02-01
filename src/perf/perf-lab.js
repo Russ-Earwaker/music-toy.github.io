@@ -388,32 +388,95 @@ function ensureUI() {
           <div class="perf-lab-title">Perf Lab</div>
           <div class="perf-lab-sub">Repeatable stress tests</div>
         </div>
-        <button class="perf-lab-btn" data-act="close">?</button>
+        <div class="perf-lab-header-right">
+          <button class="perf-lab-btn" data-act="close">?</button>
+        </div>
       </div>
 
       <div class="perf-lab-body perf-lab-split">
         <div class="perf-lab-left">
-          <div class="perf-lab-controls">
-            <div class="perf-lab-row perf-lab-toggles">
-              <label class="perf-lab-toggle"><input type="checkbox" data-tog="skipUpdate" /> Skip particle update</label>
-              <label class="perf-lab-toggle"><input type="checkbox" data-tog="skipDraw" /> Skip particle draw</label>
-              <label class="perf-lab-toggle">Budget
-                <select class="perf-lab-select" data-tog="budgetMul">
-                  <option value="1">100%</option><option value="0.5">50%</option><option value="0.25">25%</option><option value="0.1">10%</option>
-                </select>
-              </label>
-              <label class="perf-lab-toggle"><input type="checkbox" data-tog="freezeUnfocusedDuringGesture" checked /> Freeze unfocused</label>
-              <label class="perf-lab-toggle"><input type="checkbox" data-perf="freezeChainUi" /> Freeze chain UI</label>
-              <label class="perf-lab-toggle"><input type="checkbox" data-perf="traceMarks" /> Trace marks</label>
-              <label class="perf-lab-toggle"><input type="checkbox" data-perf="traceCanvasResize" /> Trace canvas resize</label>
-              <label class="perf-lab-toggle"><input type="checkbox" data-perf="traceDomInRaf" /> Trace DOM-in-RAF</label>
+          <div class="perf-lab-tabs">
+            <button class="perf-lab-tab is-active" data-tab="controls">Controls</button>
+            <button class="perf-lab-tab" data-tab="tests">Tests</button>
+          </div>
+
+          <div class="perf-lab-tabpage is-active" data-tabpage="controls">
+            <div class="perf-lab-controlsPanel">
+              <div class="perf-lab-controlsGroup">
+                <div class="perf-lab-controlsTitle">Quality Lab</div>
+                <label class="perf-lab-toggle">Target FPS
+                  <select class="perf-lab-select" data-qlab="targetFps">
+                    <option value="0">Off</option>
+                    <option value="60">60</option>
+                    <option value="30">30</option>
+                    <option value="20">20</option>
+                    <option value="15">15</option>
+                    <option value="10">10</option>
+                    <option value="5">5</option>
+                  </select>
+                </label>
+                <label class="perf-lab-toggle">CPU burn
+                  <select class="perf-lab-select" data-qlab="cpuBurnMs">
+                    <option value="0">0ms</option>
+                    <option value="2">2ms</option>
+                    <option value="5">5ms</option>
+                    <option value="10">10ms</option>
+                    <option value="15">15ms</option>
+                    <option value="20">20ms</option>
+                  </select>
+                </label>
+                <label class="perf-lab-toggle">Quality
+                  <select class="perf-lab-select" data-qlab="forceScale">
+                    <option value="">Auto</option>
+                    <option value="1">High (1.0)</option>
+                    <option value="0.7">Med (0.7)</option>
+                    <option value="0.45">Low (0.45)</option>
+                  </select>
+                </label>
+                <div class="perf-lab-row perf-lab-qlab-buttons">
+                  <button class="perf-lab-btn perf-lab-btn-mini" data-act="qualityCycle">Cycle</button>
+                  <button class="perf-lab-btn perf-lab-btn-mini" data-act="qualityReset">Reset</button>
+                  <button class="perf-lab-btn perf-lab-btn-mini" data-act="qualityApply">Apply</button>
+                  <button class="perf-lab-btn perf-lab-btn-mini" data-act="qualityShowState">Show state</button>
+                  <button class="perf-lab-btn perf-lab-btn-mini" data-act="qualityPrintState">Print state</button>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div class="perf-lab-tests" id="perf-lab-tests">
-            ${sectionsHtml}
+          <div class="perf-lab-tabpage" data-tabpage="tests">
+            <div class="perf-lab-tests" id="perf-lab-tests">
+              <div class="perf-lab-controlsPanel" style="margin-bottom:10px;">
+                <div class="perf-lab-controlsGroup">
+                  <div class="perf-lab-controlsTitle">Perf toggles</div>
+                  <div class="perf-lab-row perf-lab-toggles">
+                    <label class="perf-lab-toggle"><input type="checkbox" data-tog="skipUpdate" /> Skip particle update</label>
+                    <label class="perf-lab-toggle"><input type="checkbox" data-tog="skipDraw" /> Skip particle draw</label>
+                    <label class="perf-lab-toggle">Budget
+                      <select class="perf-lab-select" data-tog="budgetMul">
+                        <option value="1">100%</option><option value="0.5">50%</option><option value="0.25">25%</option><option value="0.1">10%</option>
+                      </select>
+                    </label>
+                    <label class="perf-lab-toggle"><input type="checkbox" data-tog="freezeUnfocusedDuringGesture" checked /> Freeze unfocused</label>
+                    <label class="perf-lab-toggle"><input type="checkbox" data-perf="freezeChainUi" /> Freeze chain UI</label>
+                    <label class="perf-lab-toggle"><input type="checkbox" data-perf="traceMarks" /> Trace marks</label>
+                    <label class="perf-lab-toggle"><input type="checkbox" data-perf="traceCanvasResize" /> Trace canvas resize</label>
+                    <label class="perf-lab-toggle"><input type="checkbox" data-perf="traceDomInRaf" /> Trace DOM-in-RAF</label>
+                    <div class="perf-lab-row" style="margin-top:8px;">
+                      <button class="perf-lab-btn perf-lab-btn-mini" data-act="qualityApply">Apply</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              ${sectionsHtml}
+            </div>
           </div>
 
+
+          <div class="perf-lab-lastresult">
+            <div class="perf-lab-output-title">Last Result</div>
+            <pre class="perf-lab-output perf-lab-output-small" id="perf-lab-output"></pre>
+          </div>
           <div class="perf-lab-row perf-lab-footer">
             <button class="perf-lab-btn" data-act="autoGeneric">Run-Auto (Generic)</button>
             <button class="perf-lab-btn" data-act="autoFocus">Auto: Current Focus</button>
@@ -422,9 +485,6 @@ function ensureUI() {
             <div class="perf-lab-status" id="perf-lab-status">Idle</div>
           </div>
         </div>
-
-        <div class="perf-lab-right">
-          <div class="perf-lab-output-title">Last Result</div>
           <pre class="perf-lab-output" id="perf-lab-output"></pre>
         </div>
       </div>
@@ -436,10 +496,22 @@ function ensureUI() {
     const style = document.createElement('style');
     style.id = 'perf-lab-style';
     style.textContent = `
-      .perf-lab-split{
-        display:grid;
-        grid-template-columns: minmax(420px, 1fr) minmax(320px, 520px);
-        gap: 12px;
+      .perf-lab-overlay{
+        position:fixed;
+        right:12px;
+        bottom:12px;
+        left:auto;
+        top:auto;
+        transform:none;
+        z-index:99999;
+        max-width:calc(100vw - 24px);
+        max-height:calc(100vh - 24px);
+      }
+      .perf-lab-panel{
+        width:min(490px, calc(100vw - 24px));
+      }
+            .perf-lab-split{
+        display:block;
         height: min(78vh, 720px);
       }
       .perf-lab-left{
@@ -447,19 +519,40 @@ function ensureUI() {
         flex-direction:column;
         min-height:0;
       }
-      .perf-lab-tests{
+      .perf-lab-tabs{
+        display:flex;
+        gap:8px;
+        margin:0 0 8px;
+      }
+      .perf-lab-tab{
+        appearance:none;
+        border:1px solid rgba(255,255,255,0.14);
+        background:rgba(255,255,255,0.06);
+        color:inherit;
+        border-radius:10px;
+        padding:7px 10px;
+        font-size:12px;
+        line-height:1;
+        cursor:pointer;
+        user-select:none;
+      }
+      .perf-lab-tab.is-active{
+        background:rgba(255,255,255,0.14);
+        border-color:rgba(255,255,255,0.24);
+      }
+      .perf-lab-tabpage{
+        display:none;
+        min-height:0;
+      }
+      .perf-lab-tabpage.is-active{
+        display:block;
+        min-height:0;
+      }      .perf-lab-tests{
         flex:1;
         min-height:0;
         overflow:auto;
         padding-right:6px;
         border-top:1px solid rgba(255,255,255,0.08);
-      }
-      .perf-lab-right{
-        display:flex;
-        flex-direction:column;
-        min-height:0;
-        border-left:1px solid rgba(255,255,255,0.10);
-        padding-left:10px;
       }
       .perf-lab-output-title{
         font-size:12px;
@@ -472,7 +565,15 @@ function ensureUI() {
         overflow:auto;
         max-height:100%;
       }
-      .perf-lab-section{ padding:10px 0; }
+      .perf-lab-lastresult{
+        border-top:1px solid rgba(255,255,255,0.08);
+        margin-top:10px;
+        padding-top:10px;
+        min-height:0;
+      }
+      .perf-lab-output-small{
+        max-height:120px;
+      }      .perf-lab-section{ padding:10px 0; }
       .perf-lab-section-title{
         font-weight:600;
         font-size:12px;
@@ -488,6 +589,44 @@ function ensureUI() {
         margin-top:10px;
         border-top:1px solid rgba(255,255,255,0.08);
         padding-top:10px;
+      }
+      .perf-lab-header-right{
+        display:flex;
+        align-items:flex-start;
+        gap:10px;
+      }
+      .perf-lab-btn-mini{
+        padding:6px 10px;
+        font-size:12px;
+        line-height:1;
+      }
+      button.perf-lab-btn.is-active{
+        background:rgba(255,255,255,0.16);
+        border-color:rgba(255,255,255,0.28);
+      }
+      .perf-lab-controlsPanel{
+        background:rgba(20,20,20,0.85);
+        border:1px solid rgba(255,255,255,0.12);
+        border-radius:10px;
+        padding:10px;
+        box-shadow:0 10px 40px rgba(0,0,0,0.35);
+      }      .perf-lab-controlsGroup{
+        padding:6px 0;
+      }
+      .perf-lab-controlsGroup + .perf-lab-controlsGroup{
+        border-top:1px solid rgba(255,255,255,0.08);
+        margin-top:8px;
+        padding-top:10px;
+      }
+      .perf-lab-controlsTitle{
+        font-size:12px;
+        font-weight:600;
+        opacity:0.85;
+        margin:0 0 8px;
+      }
+      .perf-lab-qlab-buttons{
+        gap:8px;
+        margin-top:8px;
       }
     `;
     document.head.appendChild(style);
@@ -518,7 +657,124 @@ function ensureUI() {
       if (el.tagName === 'INPUT' && el.type === 'checkbox') el.checked = !!v;
     });
   } catch {}
+  // Quality Lab defaults
+  try {
+    const qlab = (window.__QUALITY_LAB = window.__QUALITY_LAB || {});
+    if (!('targetFps' in qlab)) qlab.targetFps = 0;
+    if (!('cpuBurnMs' in qlab)) qlab.cpuBurnMs = 0;
+    if (!('forceScale' in qlab)) qlab.forceScale = null;
+    if (!('_cycleToken' in qlab)) qlab._cycleToken = 0;
+    if (!('_cycleActiveToken' in qlab)) qlab._cycleActiveToken = 0;
+    // Legacy mirror (handy for console poking)
+    if (typeof window.__QUALITY_FORCE_SCALE !== 'number') window.__QUALITY_FORCE_SCALE = null;
+  } catch {}
 
+
+  // Pending settings (only committed on Apply)
+  const __pending = {
+    qlab: null,
+    particles: null,
+    perf: null,
+  };
+  try {
+    __pending.qlab = { ...(window.__QUALITY_LAB || {}) };
+    __pending.particles = { ...(window.__PERF_PARTICLES || {}) };
+    __pending.perf = {
+      traceMarks: !!window.__PERF_TRACE_MARKS,
+      freezeChainUi: !!window.__PERF_DISABLE_CHAIN_UI,
+      traceCanvasResize: !!(window.__PERF_TRACE && window.__PERF_TRACE.traceCanvasResize),
+      traceDomInRaf: !!(window.__PERF_TRACE && window.__PERF_TRACE.traceDomInRaf),
+    };
+  } catch {
+    __pending.qlab = { targetFps: 0, cpuBurnMs: 0, forceScale: null, _cycleToken: 0, _cycleActiveToken: 0 };
+    __pending.particles = {};
+    __pending.perf = { traceMarks: false, freezeChainUi: false, traceCanvasResize: false, traceDomInRaf: false };
+  }
+
+  function setCycleBtnVisual() {
+    try {
+      const qlab = window.__QUALITY_LAB || {};
+      const active = !!(qlab && qlab._cycleActiveToken && qlab._cycleActiveToken === qlab._cycleToken);
+      ov.querySelectorAll('button[data-act="qualityCycle"]').forEach((b) => b.classList.toggle('is-active', active));
+    } catch {}
+  }
+
+  function setShowStateBtnVisual() {
+    try {
+      const on = !!(typeof window !== 'undefined' && window.__DG_STATE_READOUT);
+      ov.querySelectorAll('button[data-act="qualityShowState"]').forEach((b) => b.classList.toggle('is-active', on));
+    } catch {}
+  }
+
+  function syncUiFromPending() {
+    try {
+      // Quality Lab controls
+      ov.querySelectorAll('[data-qlab]').forEach((el) => {
+        const k = el.getAttribute('data-qlab');
+        if (!k) return;
+        if (k === 'forceScale') {
+          const v = (typeof __pending.qlab.forceScale === 'number' && isFinite(__pending.qlab.forceScale))
+            ? String(__pending.qlab.forceScale) : '';
+          if (el.tagName === 'SELECT') el.value = v;
+          return;
+        }
+        const v = __pending.qlab[k];
+        if (el.tagName === 'SELECT') el.value = String(Number(v) || 0);
+      });
+
+      // Particle toggles
+      ov.querySelectorAll('[data-tog]').forEach((el) => {
+        const key = el.getAttribute('data-tog');
+        if (!key) return;
+        const v = __pending.particles[key];
+        if (el.tagName === 'INPUT' && el.type === 'checkbox') el.checked = !!v;
+        if (el.tagName === 'SELECT') {
+          const val = Number.isFinite(v) ? v : el.value;
+          el.value = String(Number(val));
+        }
+      });
+
+      // Perf toggles
+      ov.querySelectorAll('[data-perf]').forEach((el) => {
+        const key = el.getAttribute('data-perf');
+        if (!key) return;
+        const v =
+          (key === 'traceMarks') ? __pending.perf.traceMarks :
+          (key === 'freezeChainUi') ? __pending.perf.freezeChainUi :
+          (key === 'traceCanvasResize') ? __pending.perf.traceCanvasResize :
+          (key === 'traceDomInRaf') ? __pending.perf.traceDomInRaf :
+          null;
+        if (el.tagName === 'INPUT' && el.type === 'checkbox') el.checked = !!v;
+      });
+    } catch {}
+  }
+
+  function applyPendingToGlobals() {
+    try {
+      window.__QUALITY_LAB = window.__QUALITY_LAB || {};
+      const qlab = window.__QUALITY_LAB;
+      qlab.targetFps = Math.max(0, Number(__pending.qlab.targetFps) || 0);
+      qlab.cpuBurnMs = Math.max(0, Number(__pending.qlab.cpuBurnMs) || 0);
+      qlab.forceScale = (typeof __pending.qlab.forceScale === 'number' && isFinite(__pending.qlab.forceScale)) ? __pending.qlab.forceScale : null;
+      window.__QUALITY_FORCE_SCALE = (typeof qlab.forceScale === 'number') ? qlab.forceScale : null;
+
+      window.__PERF_PARTICLES = window.__PERF_PARTICLES || {};
+      Object.assign(window.__PERF_PARTICLES, __pending.particles || {});
+
+      window.__PERF_TRACE = window.__PERF_TRACE || {};
+      window.__PERF_TRACE_MARKS = !!__pending.perf.traceMarks;
+      window.__PERF_DISABLE_CHAIN_UI = !!__pending.perf.freezeChainUi;
+      window.__PERF_TRACE.traceCanvasResize = !!__pending.perf.traceCanvasResize;
+      window.__PERF_TRACE.traceDomInRaf = !!__pending.perf.traceDomInRaf;
+
+      console.log('[PerfLab] APPLY', { qlab: { ...qlab }, particles: { ...window.__PERF_PARTICLES }, perf: { ...__pending.perf } });
+    } catch {}
+  }
+
+  // Start UI by reflecting the pending state (not necessarily the globals)
+  try { syncUiFromPending(); } catch {}
+  try { setCycleBtnVisual(); } catch {}
+  try { setShowStateBtnVisual(); } catch {}
   // Keep UI checkboxes/selects in sync with global perf state.
   // (Used by Trace Demon buttons and safe to call anytime.)
   function syncUiFromState() {
@@ -547,422 +803,241 @@ function ensureUI() {
           null;
         if (el.tagName === 'INPUT' && el.type === 'checkbox') el.checked = !!v;
       });
+      // Quality Lab controls (FPS throttle + forced quality scale)
+      const qlab = (window.__QUALITY_LAB = window.__QUALITY_LAB || {});
+      ov.querySelectorAll('[data-qlab]').forEach((el) => {
+        const k = el.getAttribute('data-qlab');
+        if (!k) return;
+        if (k === 'forceScale') {
+          // forceScale: null | number (empty string => auto)
+          const v = (typeof qlab.forceScale === 'number' && isFinite(qlab.forceScale)) ? String(qlab.forceScale) : '';
+          if (el.tagName === 'SELECT') el.value = v;
+          return;
+        }
+        const v = qlab[k];
+        if (el.tagName === 'SELECT') el.value = String(Number(v) || 0);
+      });
     } catch {}
   }
 
   ov.addEventListener('click', async (e) => {
+    // Tabs (Controls / Tests)
+    const tabBtn = e.target && e.target.closest ? e.target.closest('button[data-tab]') : null;
+    if (tabBtn) {
+      try {
+        const tab = String(tabBtn.getAttribute('data-tab') || 'controls');
+        ov.querySelectorAll('.perf-lab-tab').forEach((b) => b.classList.toggle('is-active', b === tabBtn));
+        ov.querySelectorAll('.perf-lab-tabpage').forEach((p) => {
+          const key = String(p.getAttribute('data-tabpage') || '');
+          p.classList.toggle('is-active', key === tab);
+        });
+      } catch {}
+      return;
+    }
+
     const btn = e.target && e.target.closest ? e.target.closest('button[data-act]') : null;
     if (!btn) return;
     const act = btn.getAttribute('data-act');
     if (act === 'close') hide();
+
+    if (act === 'qualityApply') {
+      try {
+        applyPendingToGlobals();
+        // After apply, mirror pending from globals again (keeps us deterministic if other code changed them).
+        __pending.qlab = { ...(window.__QUALITY_LAB || {}) };
+        __pending.particles = { ...(window.__PERF_PARTICLES || {}) };
+        __pending.perf = {
+          traceMarks: !!window.__PERF_TRACE_MARKS,
+          freezeChainUi: !!window.__PERF_DISABLE_CHAIN_UI,
+          traceCanvasResize: !!(window.__PERF_TRACE && window.__PERF_TRACE.traceCanvasResize),
+          traceDomInRaf: !!(window.__PERF_TRACE && window.__PERF_TRACE.traceDomInRaf),
+        };
+        syncUiFromPending();
+        setCycleBtnVisual();
+        setShowStateBtnVisual();
+      } catch {}
+
+      // --------------------------------------------------------------
+      // DrawGrid test harness:
+      // If user sets a target FPS, we also provide an override signal
+      // that DrawGrid can use for LOD decisions (playhead/particles/etc).
+      // This avoids relying on the app's measured FPS (often rAF-based).
+      // --------------------------------------------------------------
+      try {
+        const tf = Number(window.__QUALITY_LAB?.targetFps || 0);
+        window.__DG_FPS_TEST_OVERRIDE = (tf > 0) ? tf : 0;
+      } catch {}
+    }
+    if (act === 'qualityReset') {
+      try {
+        // Reset pending (does NOT apply until Apply is pressed)
+        __pending.qlab.targetFps = 0;
+        __pending.qlab.cpuBurnMs = 0;
+        __pending.qlab.forceScale = null;
+        // Also cancel any running cycle in globals immediately (safety)
+        try {
+          const qlab = (window.__QUALITY_LAB = window.__QUALITY_LAB || {});
+          qlab._cycleToken = (qlab._cycleToken || 0) + 1;
+          qlab._cycleActiveToken = 0;
+          window.__QUALITY_FORCE_SCALE = null;
+        } catch {}
+        syncUiFromPending();
+        setCycleBtnVisual();
+        console.log('[PerfLab] quality lab reset (pending)');
+      } catch {}
+    }
+
+    if (act === 'qualityShowState') {
+      try {
+        const next = !(typeof window !== 'undefined' && window.__DG_STATE_READOUT);
+        window.__DG_STATE_READOUT = next;
+        setShowStateBtnVisual();
+        appendOutputLine(`[quality] drawgrid state readout: ${next ? 'ON' : 'off'}`);
+      } catch {}
+    }
+    if (act === 'qualityPrintState') {
+      try {
+        let txt = null;
+        if (typeof window !== 'undefined' && typeof window.__DG_PRINT_STATE === 'function') {
+          const states = window.__DG_PRINT_STATE();
+          try {
+            if (Array.isArray(states) && states.length) {
+              const blocks = [];
+              for (const s of states) {
+                const id = s?.panelId || '(no id)';
+                const t = s?.text || '';
+                blocks.push(`=== ${id} ===\n${t}`);
+              }
+              txt = blocks.join('\n\n');
+            } else {
+              txt = '[DG] no drawgrid state snapshots found';
+            }
+          } catch {}
+        } else {
+          txt = '[DG] window.__DG_PRINT_STATE() not available (drawgrid.js not patched?)';
+        }
+        if (txt) appendOutputLine(txt);
+      } catch {}
+    }
+    if (act === 'qualityCycle') {
+      try {
+        const qlab = (window.__QUALITY_LAB = window.__QUALITY_LAB || {});
+        // Toggle: if already active, stop; else start
+        const alreadyActive = !!(qlab._cycleActiveToken && qlab._cycleActiveToken === qlab._cycleToken);
+        qlab._cycleToken = (qlab._cycleToken || 0) + 1;
+        const token = qlab._cycleToken;
+        qlab._cycleActiveToken = alreadyActive ? 0 : token;
+        setCycleBtnVisual();
+        // Start a repeating cycle: low->high->med->auto (with FPS changes) until cancelled.
+        const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+        (async () => {
+          console.log('[PerfLab] quality cycle start');
+          while ((window.__QUALITY_LAB || {})._cycleActiveToken === token) {
+            // Low detail + low FPS
+            qlab.targetFps = 15;
+            qlab.forceScale = 0.45;
+            window.__QUALITY_FORCE_SCALE = 0.45;
+            await delay(3000);
+
+            if ((window.__QUALITY_LAB || {})._cycleActiveToken !== token) break;
+
+            // High detail + high FPS
+            qlab.targetFps = 60;
+            qlab.forceScale = 1.0;
+            window.__QUALITY_FORCE_SCALE = 1.0;
+            await delay(3000);
+
+            if ((window.__QUALITY_LAB || {})._cycleActiveToken !== token) break;
+
+            // Medium detail + mid FPS
+            qlab.targetFps = 30;
+            qlab.forceScale = 0.7;
+            window.__QUALITY_FORCE_SCALE = 0.7;
+            await delay(3000);
+
+            if ((window.__QUALITY_LAB || {})._cycleActiveToken !== token) break;
+
+            // Back to Auto (no throttle)
+            qlab.targetFps = 0;
+            qlab.forceScale = null;
+            window.__QUALITY_FORCE_SCALE = null;
+            await delay(5000);
+          }
+          console.log('[PerfLab] quality cycle stop');
+          try { setCycleBtnVisual(); } catch {}
+        })();
+      } catch {}
+    }
     if (act === 'buildP2') buildP2();
     if (act === 'buildP2d') await buildP2d();
     if (act === 'runP2a') await runP2a();
     if (act === 'runP2b') await runP2b();
     if (act === 'runP2c') await runP2c();
     if (act === 'runP2d') await runP2d();
-    if (act === 'buildP3') await buildP3();
-    if (act === 'buildP3Lite') await buildP3Lite();
-    if (act === 'buildP3Focus') await buildP3Focus();
-    if (act === 'buildP3FocusHeavy') await buildP3FocusHeavy();
-    if (act === 'runP3a') await runP3a();
-    if (act === 'runP3b') await runP3b();
-    if (act === 'runP3c') await runP3c();
-    if (act === 'runP3d') await runP3d();
-    if (act === 'runP3g') await runP3g();
-    if (act === 'runP3g2') await runP3g2();
-    if (act === 'runP3h') await runP3h();
-    if (act === 'runP3h2') await runP3h2();
-    if (act === 'runP3i') await runP3i();
-    if (act === 'runP3i2') await runP3i2();
-    if (act === 'runP3j') await runP3j();
-    if (act === 'runP3j2') await runP3j2();
-    if (act === 'runP3k') await runP3k();
-    if (act === 'runP3k2') await runP3k2();
-    if (act === 'runP3l') await runP3l();
-    if (act === 'runP3l2') await runP3l2();
-    if (act === 'runP3l3') await runP3l3();
-    if (act === 'runP3l4') await runP3l4();
-    if (act === 'runP3l5') await runP3l5();
-    if (act === 'runP3l6') await runP3l6();
-    if (act === 'runP3m') await runP3m();
-    if (act === 'runP3m2') await runP3m2();
-    if (act === 'runP3e') await runP3e();
-    if (act === 'runP3e2') await runP3e2();
-    if (act === 'runP3f') await runP3f();
-    if (act === 'runP3fShort') await runP3fShort();
-    if (act === 'runP3fFocusShort') await runP3fFocusShort();
-    if (act === 'runP3fFocusShort2') await runP3fFocusShort2();
-    if (act === 'runP3fMultiCanvasFocusShort') await runP3fMultiCanvasFocusShort();
-    if (act === 'runP3fNoOverlaysShort') await runP3fNoOverlaysShort();
-    if (act === 'runP3fNoOverlaysShort2') await runP3fNoOverlaysShort2();
-    if (act === 'runP3fNoParticlesShort') await runP3fNoParticlesShort();
-    if (act === 'runP3fNoParticlesShort2') await runP3fNoParticlesShort2();
-    if (act === 'runP3fNoOverlaysFocusShort') await runP3fNoOverlaysFocusShort();
-    if (act === 'runP3fNoParticlesFocusShort') await runP3fNoParticlesFocusShort();
-    if (act === 'runP3fNoOverlayCoreShort') await runP3fNoOverlayCoreShort();
-    if (act === 'runP3fNoOverlayStrokesShort') await runP3fNoOverlayStrokesShort();
-    if (act === 'runP3PauseDomProbe') await runP3PauseDomProbe();
-    if (act === 'runP3fPlayheadSeparateOff') await runP3fPlayheadSeparateOff();
-    if (act === 'runP3fPlayheadSeparateOn') await runP3fPlayheadSeparateOn();
-    if (act === 'runP3fPlayheadEvery4') await runP3fPlayheadEvery4();
-    if (act === 'runP3f2') await runP3f2();
-    if (act === 'runP3fEmptyNoNotes') await runP3fEmptyNoNotes();
-    if (act === 'runP3fEmptyChainNoNotes') await runP3fEmptyChainNoNotes();
-    if (act === 'runP3fMixedSomeEmpty') await runP3fMixedSomeEmpty();
-    if (act === 'runP3fNoPaint') await runP3fNoPaint();
-    if (act === 'runP3fNoDom') await runP3fNoDom();
-    if (act === 'runP3fNoGrid') await runP3fNoGrid();
-    if (act === 'runP3fNoParticles') await runP3fNoParticles();
-    if (act === 'runP3fNoOverlays') await runP3fNoOverlays();
-    if (act === 'runP3fNoOverlayStrokes') await runP3fNoOverlayStrokes();
-    if (act === 'runP3fNoOverlayCore') await runP3fNoOverlayCore();
-    if (act === 'runP3fParticleProfile') await runP3fParticleProfile();
-    if (act === 'runP3fFlatLayers') await runP3fFlatLayers();
-    if (act === 'buildP4') buildP4();
-    if (act === 'buildP4h') buildP4h();
-    if (act === 'runP4a') await runP4a();
-    if (act === 'runP4b') await runP4b();
-    if (act === 'runP4o') await runP4o();
-    if (act === 'runP4p') await runP4p();
-    if (act === 'runP4q') await runP4q();
-    if (act === 'runP4r') await runP4r();
-    if (act === 'runP4s') await runP4s();
-    if (act === 'runP4t') await runP4t();
-    if (act === 'runP4u') await runP4u();
-    if (act === 'runP4v') await runP4v();
-    if (act === 'runP4w') await runP4w();
-    if (act === 'runP4x') await runP4x();
-    if (act === 'runP4e') await runP4e();
-    if (act === 'runP4c') await runP4c();
-    if (act === 'runP4d') await runP4d();
-    if (act === 'runP4f') await runP4f();
-    if (act === 'runP4g') await runP4g();
-    if (act === 'runP4h2') await runP4h2();
-    if (act === 'runP4i') await runP4i();
-    if (act === 'runP4j') await runP4j();
-    if (act === 'runP4k') await runP4k();
-    if (act === 'runP4m') await runP4m();
-    if (act === 'runP4n') await runP4n();
-    if (act === 'buildP5') buildP5();
-    if (act === 'runP5a') await runP5a();
-    if (act === 'runP5b') await runP5b();
-    if (act === 'runP5c') await runP5c();
-    if (act === 'buildP6') await buildP6();
-    if (act === 'runP6a') await runP6a();
-    if (act === 'runP6b') await runP6b();
-    if (act === 'runP6c') await runP6c();
-    if (act === 'runP6d') await runP6d();
-    if (act === 'runP6e') await runP6e();
-    if (act === 'runP6eNoPaint') await runP6eNoPaint();
-    if (act === 'runP6ePaintOnly') await runP6ePaintOnly();
-    if (act === 'runP6eNoDom') await runP6eNoDom();
-    if (act === 'buildP7') await buildP7();
-    if (act === 'runP7a') await runP7a();
-    if (act === 'runP7b') await runP7b();
-    if (act === 'warmupFirstAppearance') await warmupFirstAppearance();
-    if (act === 'warmupSettle') await warmupSettle();
-
-    if (act === 'autoGeneric') {
-      const cfgBase = (await readAutoConfigFromFile()) || readAutoConfig() || {};
-      const ts = new Date().toISOString().replace(/[:.]/g, '-');
-      const cfg = {
-        clear: true,
-        save: false,
-        download: false,
-        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
-        downloadName: `perf-lab-generic-${ts}.json`,
-        notes: 'Generic baseline: Mixed (P6a) → Lots of DrawGrid (P3f) → Lots of Simple Rhythm (P4b)',
-        queue: AUTO_GENERIC_QUEUE,
-      };
-      await runAuto(cfg);
-    }
-
-    if (act === 'autoGenericAdaptiveCompare') {
-      const cfgBase = (await readAutoConfigFromFile()) || readAutoConfig() || {};
-      const ts = new Date().toISOString().replace(/[:.]/g, '-');
-      const cfg = {
-        clear: true,
-        save: false,
-        download: false,
-        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
-        downloadName: `perf-lab-generic-adaptive-compare-${ts}.json`,
-        notes: 'Generic A/B: compares DrawGrid adaptive DPR OFF vs ON (does not change Auto: Generic).',
-        queue: [
-          'traceOff',
-          'dgAdaptiveOff',
-          ...AUTO_GENERIC_QUEUE,
-          'dgAdaptiveOn',
-          ...AUTO_GENERIC_QUEUE,
-        ],
-      };
-      await runAuto(cfg);
-    }
-
-    if (act === 'autoFocus') {
-      const cfgBase = (await readAutoConfigFromFile()) || readAutoConfig() || {};
-      const ts = new Date().toISOString().replace(/[:.]/g, '-');
-      const cfg = {
-        clear: true,
-        save: false,
-        download: false,
-        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
-        downloadName: `perf-lab-focus-${ts}.json`,
-        notes: 'Current Focus: reduce DrawGrid overlay churn (overlayDirty gating / cached overlay core) (edit AUTO_FOCUS_QUEUE in perf-lab.js)',
-        queue: AUTO_FOCUS_QUEUE,
-      };
-      await runAuto(cfg);
-    }
-
-    if (act === 'autoFocusHeavy') {
-      const cfgBase = (await readAutoConfigFromFile()) || readAutoConfig() || {};
-      const ts = new Date().toISOString().replace(/[:.]/g, '-');
-      const cfg = {
-        clear: true,
-        save: false,
-        download: false,
-        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
-        downloadName: `perf-lab-focus-heavy-${ts}.json`,
-        notes: 'Focus Validation (Heavy): force pressure-DPR engagement + catch resize churn (edit AUTO_FOCUS_HEAVY_QUEUE in perf-lab.js)',
-        queue: AUTO_FOCUS_HEAVY_QUEUE,
-      };
-      await runAuto(cfg);
-    }
-
-    if (act === 'autoMicro') {
-      const cfgBase = (await readAutoConfigFromFile()) || readAutoConfig() || {};
-      const ts = new Date().toISOString().replace(/[:.]/g, '-');
-      const cfg = {
-        clear: true,
-        save: false,
-        download: false,
-        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
-        downloadName: `perf-lab-micro-${ts}.json`,
-        notes: 'Focus Micro: short, high-signal, typically trace-enabled (edit AUTO_FOCUS_MICRO_QUEUE in perf-lab.js)',
-        queue: AUTO_FOCUS_MICRO_QUEUE,
-      };
-      await runAuto(cfg);
-    }
-    if (act === 'auto') {
-      // Canonical demon-hunt sequence:
-      // 1) trace OFF baseline runs
-      // 2) trace ON runs (same tests)
-      // Always downloads a single bundle JSON.
-      const cfgBase = (await readAutoConfigFromFile()) || readAutoConfig() || {};
-      const ts = new Date().toISOString().replace(/[:.]/g, '-');
-      const cfg = {
-        clear: true,
-        save: false,
-        download: false,
-        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
-        downloadName: `perf-lab-demon-hunt-${ts}.json`,
-        notes: 'Demon Hunt v1: baseline (traceOff) then traceOn; P3f + P4b',
-        queue: [
-          'traceOff',
-          'buildP3',
-          'runP3f',
-          // --- A/B isolate drawgrid costs (traceOff only) -------------------
-          'buildP3',
-          'runP3fNoParticles',
-          'buildP3',
-          'runP3fNoOverlays',
-          'buildP3',
-          'runP3fNoOverlayCore',
-          'buildP3',
-          'runP3fNoOverlayStrokes',
-          'buildP4',
-          'runP4b',
-
-          'traceOn',
-          'buildP3',
-          'runP3f',
-          'buildP4',
-          'runP4b',
-        ],
-      };
-      await runAuto(cfg);
-    }
-    if (act === 'autoFast') {
-      // Fast iteration loop:
-      // - trace OFF only
-      // - baseline P3f, A/B playhead separate OFF vs ON, compare to NoParticles, plus P4b sanity
-      // Always downloads a single bundle JSON.
-      const cfgBase = (await readAutoConfigFromFile()) || readAutoConfig() || {};
-      const ts = new Date().toISOString().replace(/[:.]/g, '-');
-      const cfg = {
-        clear: true,
-        save: false,
-        download: false,
-        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
-        downloadName: `perf-lab-fast-${ts}.json`,
-        notes: 'Fast loop: traceOff only; P3f + PlayheadSeparateOff/On + P3fNoParticles + P4b',
-        queue: [
-          'traceOff',
-          'buildP3',
-          'runP3f',
-          'buildP3',
-          'runP3fPlayheadSeparateOff',
-          'buildP3',
-          'runP3fPlayheadSeparateOn',
-          'buildP3',
-          'runP3fNoParticles',
-          'buildP4',
-          'runP4b',
-        ],
-      };
-      await runAuto(cfg);
-    }
-    if (act === 'autoPauseDom') {
-      await autoPauseDom();
-    }
-    if (act === 'autoQuickTraceP3f') {
-      const cfgBase = (await readAutoConfigFromFile()) || readAutoConfig() || {};
-      const ts = new Date().toISOString().replace(/[:.]/g, '-');
-      const cfg = {
-        clear: true,
-        save: false,
-        download: false,
-        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
-        downloadName: `perf-lab-quick-trace-p3f-${ts}.json`,
-        notes: 'Quick Trace P3f: traceOn + buildP3 + runP3fShort',
-        queue: [
-          'traceOn',
-          'buildP3',
-          'runP3fShort',
-        ],
-      };
-      await runAuto(cfg);
-    }
-    if (act === 'copy') copyLast();
-
-    // Demon trace helpers (opt-in)
-    if (act === 'traceOn') {
-      window.__PERF_TRACE = window.__PERF_TRACE || {};
-      window.__PERF_TRACE.traceCanvasResize = true;
-      window.__PERF_TRACE.traceDomInRaf = true;
-      console.log('[PerfLab] demon trace ENABLED', { ...window.__PERF_TRACE });
-      try { syncUiFromState(); } catch {}
-    }
-      if (act === 'traceDprOn') {
-        // DrawGrid + FieldGeneric effective DPR / backing-store tracing.
-        // These are deliberately separate from __PERF_TRACE to keep logs scoped and readable.
-        try { window.__DG_REFRESH_SIZE_TRACE = true; } catch {}
-        try { window.__DG_EFFECTIVE_DPR_TRACE = true; } catch {}
-        try { window.__FG_EFFECTIVE_DPR_TRACE = true; } catch {}
-        // Make DPR-related perf runs deterministic: ensure adaptive DPR is actually enabled.
-        try { window.__DG_ADAPTIVE_DPR_ENABLED = true; } catch {}
-        try { window.__DG_ADAPTIVE_DPR_ALLOW_SINGLE = true; } catch {}
-        console.log('[PerfLab] DPR trace ENABLED', {
-          __DG_REFRESH_SIZE_TRACE: !!window.__DG_REFRESH_SIZE_TRACE,
-          __DG_EFFECTIVE_DPR_TRACE: !!window.__DG_EFFECTIVE_DPR_TRACE,
-          __FG_EFFECTIVE_DPR_TRACE: !!window.__FG_EFFECTIVE_DPR_TRACE,
-          __DG_ADAPTIVE_DPR_ENABLED: !!window.__DG_ADAPTIVE_DPR_ENABLED,
-          __DG_ADAPTIVE_DPR_ALLOW_SINGLE: !!window.__DG_ADAPTIVE_DPR_ALLOW_SINGLE,
-        });
-        try { syncUiFromState(); } catch {}
-      }
-      if (act === 'traceDprOff') {
-        try { window.__DG_REFRESH_SIZE_TRACE = false; } catch {}
-        try { window.__DG_EFFECTIVE_DPR_TRACE = false; } catch {}
-        try { window.__FG_EFFECTIVE_DPR_TRACE = false; } catch {}
-        console.log('[PerfLab] DPR trace DISABLED');
-        try { syncUiFromState(); } catch {}
-      }
-
-      if (act === 'dgAdaptiveOn') {
-        try { window.__DG_ADAPTIVE_DPR_ENABLED = true; } catch {}
-        console.log('[PerfLab] DG adaptive DPR: ON');
-        try { syncUiFromState(); } catch {}
-      }
-      if (act === 'dgAdaptiveOff') {
-        try { window.__DG_ADAPTIVE_DPR_ENABLED = false; } catch {}
-        console.log('[PerfLab] DG adaptive DPR: OFF');
-        try { syncUiFromState(); } catch {}
-      }
-      if (act === 'loopRenderOff') {
-        try { window.__PERF_DISABLE_LOOPGRID_RENDER = true; } catch {}
-        console.log('[PerfLab] LoopGrid render: OFF');
-        try { syncUiFromState(); } catch {}
-      }
-      if (act === 'loopRenderOn') {
-        try { window.__PERF_DISABLE_LOOPGRID_RENDER = false; } catch {}
-        console.log('[PerfLab] LoopGrid render: ON');
-        try { syncUiFromState(); } catch {}
-      }
-      if (act === 'chainsOff') {
-        try { window.__PERF_DISABLE_CHAINS = true; } catch {}
-        console.log('[PerfLab] Chains: OFF');
-        try { syncUiFromState(); } catch {}
-      }
-      if (act === 'chainsOn') {
-        try { window.__PERF_DISABLE_CHAINS = false; } catch {}
-        console.log('[PerfLab] Chains: ON');
-        try { syncUiFromState(); } catch {}
-      }
-    if (act === 'traceCanvasOnlyOn') {
-      window.__PERF_TRACE = window.__PERF_TRACE || {};
-      window.__PERF_TRACE.traceCanvasResize = true;
-      window.__PERF_TRACE.traceDomInRaf = false;
-      // Reduce trace overhead: avoid spamming layout reads every frame.
-      try { window.__DG_REFRESH_SIZE_TRACE_THROTTLE_MS = 50; } catch {}
-      try { window.__DG_REFRESH_SIZE_TRACE_TO_CONSOLE = false; } catch {}
-      console.log('[PerfLab] demon trace ENABLED (canvas resize only)', { ...window.__PERF_TRACE });
-      try { syncUiFromState(); } catch {}
-    }
-    if (act === 'traceOff') {
-      window.__PERF_TRACE = window.__PERF_TRACE || {};
-      window.__PERF_TRACE.traceCanvasResize = false;
-      window.__PERF_TRACE.traceDomInRaf = false;
-      try { window.__DG_REFRESH_SIZE_TRACE_THROTTLE_MS = 0; } catch {}
-      try { window.__DG_REFRESH_SIZE_TRACE_TO_CONSOLE = false; } catch {}
-      console.log('[PerfLab] demon trace DISABLED', { ...window.__PERF_TRACE });
-      try { syncUiFromState(); } catch {}
-    }
-    if (act === 'traceHelp') {
-      console.log('[PerfLab] Trace commands:\n' +
-        'window.__PERF_TRACE = window.__PERF_TRACE || {};\n' +
-        'window.__PERF_TRACE.traceCanvasResize = true;\n' +
-        'window.__PERF_TRACE.traceDomInRaf = true;\n' +
-        '// (Optional) disable:\n' +
-        'window.__PERF_TRACE.traceCanvasResize = false;\n' +
-        'window.__PERF_TRACE.traceDomInRaf = false;\n'
-      );
-    }
-  });
-
-  // Toggle wiring (checkboxes/select)
-  ov.addEventListener('change', (e) => {
+    if (act === 'runP2e') await runP2e();
+    if (act === 'runP2f') await runP2f();
+    if (act === 'runP2g') await runP2g();
+    if (act === 'runP2h') await runP2h();
+    if (act === 'runP2i') await runP2i();
+    if (act === 'runP2j') await runP2j();
+    if (act === 'runP2k') await runP2k();
+    if (act === 'runP2l') await runP2l();
+    if (act === 'runP2m') await runP2m();
+    if (act === 'runP2n') await runP2n();
+    if (act === 'runP2o') await runP2o();
+    if (act === 'runP2p') await runP2p();
+    if (act === 'runP2q') await runP2q();
+    if (act === 'runP2r') await runP2r();
+    if (act === 'runP2s') await runP2s();
+    if (act === 'runP2t') await runP2t();
+    if (act === 'runP2u') await runP2u();
+    if (act === 'runP2v') await runP2v();
+    if (act === 'runP2w') await runP2w();
+    if (act === 'runP2x') await runP2x();
+    if (act === 'runP2y') await runP2y();
+    if (act === 'runP2z') await runP2z();
+  });ov.addEventListener('change', (e) => {
     const t = e.target;
     if (!t) return;
     const key = t.getAttribute && t.getAttribute('data-tog');
     const perfKey = t.getAttribute && t.getAttribute('data-perf');
-    if (!key && !perfKey) return;
+    const qKey = t.getAttribute && t.getAttribute('data-qlab');
+    if (!key && !perfKey && !qKey) return;
+    if (qKey) {
+      try {
+        if (qKey === 'forceScale') {
+          const raw = String(t.value || '');
+          __pending.qlab.forceScale = raw ? (Number(raw) || null) : null;
+        } else {
+          __pending.qlab[qKey] = Math.max(0, Number(t.value) || 0);
+        }
+        console.log('[PerfLab] quality lab (pending)', { ...__pending.qlab });
+      } catch {}
+    }
     if (key) {
       try {
-        const st = (window.__PERF_PARTICLES = window.__PERF_PARTICLES || {});
-        if (t.tagName === 'INPUT' && t.type === 'checkbox') st[key] = !!t.checked;
-        else if (t.tagName === 'SELECT') st[key] = Math.max(0, Number(t.value) || 1);
-        console.log('[PerfLab] particle toggles', { ...st });
+        if (t.tagName === 'INPUT' && t.type === 'checkbox') __pending.particles[key] = !!t.checked;
+        else if (t.tagName === 'SELECT') __pending.particles[key] = Math.max(0, Number(t.value) || 1);
+        console.log('[PerfLab] particle toggles (pending)', { ...__pending.particles });
       } catch {}
     }
     if (perfKey === 'traceMarks') {
       try {
-        window.__PERF_TRACE_MARKS = !!t.checked;
-        console.log('[PerfLab] trace marks', { enabled: !!window.__PERF_TRACE_MARKS });
+        __pending.perf.traceMarks = !!t.checked;
+        console.log('[PerfLab] trace marks (pending)', { enabled: !!__pending.perf.traceMarks });
       } catch {}
     }
     if (perfKey === 'freezeChainUi') {
       try {
-        window.__PERF_DISABLE_CHAIN_UI = !!t.checked;
-        console.log('[PerfLab] chain UI freeze', { enabled: !!window.__PERF_DISABLE_CHAIN_UI });
+        __pending.perf.freezeChainUi = !!t.checked;
+        console.log('[PerfLab] chain UI freeze (pending)', { enabled: !!__pending.perf.freezeChainUi });
       } catch {}
     }
     if (perfKey === 'traceCanvasResize' || perfKey === 'traceDomInRaf') {
       try {
-        const st = (window.__PERF_TRACE = window.__PERF_TRACE || {});
-        if (perfKey === 'traceCanvasResize') st.traceCanvasResize = !!t.checked;
-        if (perfKey === 'traceDomInRaf') st.traceDomInRaf = !!t.checked;
-        console.log('[PerfLab] trace toggles', { ...st });
+        if (perfKey === 'traceCanvasResize') __pending.perf.traceCanvasResize = !!t.checked;
+        if (perfKey === 'traceDomInRaf') __pending.perf.traceDomInRaf = !!t.checked;
+        console.log('[PerfLab] trace toggles (pending)', { ...__pending.perf });
       } catch {}
     }
   });
@@ -1568,6 +1643,16 @@ function setOutput(obj) {
   const el = document.getElementById('perf-lab-output');
   if (!el) return;
   el.textContent = obj ? JSON.stringify(obj, null, 2) : '';
+}
+
+function appendOutputLine(line) {
+  try {
+    const el = document.getElementById('perf-lab-output');
+    if (!el) return;
+    const prev = String(el.textContent || '');
+    const next = prev ? (prev.replace(/\s+$/,'') + '\n' + String(line)) : String(line);
+    el.textContent = next;
+  } catch {}
 }
 
 function show() {
@@ -3556,7 +3641,9 @@ async function runP3fMultiCanvasFocusShort() {
   await runP3fFocusShort();
 
   // Restore baseline for later variants in AUTO_FOCUS_QUEUE.
-  try { if (typeof window !== 'undefined') window.__DG_SINGLE_CANVAS = (prevSingle !== undefined) ? prevSingle : true; } catch {}
+  // IMPORTANT: default to multi-canvas if we don't have a previous value.
+  // Single-canvas is a topology change and can blank visuals if DrawGrid's composite path regresses.
+  try { if (typeof window !== 'undefined') window.__DG_SINGLE_CANVAS = (prevSingle !== undefined) ? prevSingle : false; } catch {}
   try { window.__PERF_RUN_TAG = prevTag; } catch {}
   await buildP3Focus();
   await warmupFirstAppearance();

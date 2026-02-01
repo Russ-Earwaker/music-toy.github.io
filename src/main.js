@@ -4090,7 +4090,35 @@ function scheduler(){
   const debugFirstStep = () => !!window.__CHAIN_DEBUG_FIRST_STEP;
 
   function step(){
-    const frameStart = performance.now();
+    // --- Quality Lab frame pacing controls ---------------------------------
+    // Used to stress visual LOD + dt-sensitive code paths without needing a slow machine.
+    // Configure via Perf Lab UI (Quality Lab section) or by setting window.__QUALITY_LAB manually.
+    const __qlab = window.__QUALITY_LAB || null;
+    const __targetFps = __qlab ? (Number(__qlab.targetFps) || 0) : 0;
+    const __cpuBurnMs = __qlab ? (Number(__qlab.cpuBurnMs) || 0) : 0;
+
+    const __now0 = performance.now();
+
+    // Throttle scheduler execution to emulate low FPS (logic + render).
+    if (__targetFps > 0) {
+      const __minDt = Math.max(1, 1000 / Math.max(1, __targetFps));
+      const __last = step.__qlabLastExecT || 0;
+      if (__last && (__now0 - __last) < __minDt) {
+        requestAnimationFrame(step);
+        return;
+      }
+      step.__qlabLastExecT = __now0;
+    } else {
+      step.__qlabLastExecT = __now0;
+    }
+
+    const frameStart = __now0;
+
+    // Optional CPU burn to simulate expensive JS work.
+    if (__cpuBurnMs > 0) {
+      const __burnStart = performance.now();
+      while ((performance.now() - __burnStart) < __cpuBurnMs) { /* busy */ }
+    }
     const __perfOn = !!(window.__PerfFrameProf && typeof performance !== 'undefined' && performance.now);
     const __rafStart = __perfOn ? performance.now() : 0;
     // Update global quality signal (FPS + memory pressure with hysteresis)

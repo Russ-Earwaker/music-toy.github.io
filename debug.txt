@@ -1,0 +1,13 @@
+perf-lab.js:1003 [PerfLab] quality lab (pending) {targetFps: 5, cpuBurnMs: 0, forceScale: null, _cycleToken: 0, _cycleActiveToken: 0}cpuBurnMs: 0forceScale: nulltargetFps: 5_cycleActiveToken: 0_cycleToken: 0[[Prototype]]: Object
+perf-lab.js:770 [PerfLab] APPLY {qlab: {…}, particles: {…}, perf: {…}}particles: {skipUpdate: false, skipDraw: false, budgetMul: 1, freezeUnfocusedDuringGesture: false, logFreeze: false}perf: {traceMarks: false, freezeChainUi: false, traceCanvasResize: false, traceDomInRaf: false}qlab: {targetFps: 5, cpuBurnMs: 0, forceScale: null, _cycleToken: 0, _cycleActiveToken: 0}[[Prototype]]: Object
+drawgrid.js:1570 [DG][STATE] snapshot
+drawgrid.js:1571 (index)panelIdfpsemergencyplayheadparticlesparticleCountmaxScalecapScalespawnScaletickModqlabFpsqlabBurnMsautoQEffautoQScalepressureMul(index)panelIdfpsemergencyplayheadparticlesparticleCountmaxScalecapScalespawnScaletickModqlabFpsqlabBurnMsautoQEffautoQScalepressureMul0'drawgrid-1769972056707-v82tkr''59.9'false'FULL''ON'1200'2.078''1.039''2.078''--'50'0.250''--''1.000'Array(1)
+drawgrid.js:1592 
+[DG][STATE][drawgrid-1769972056707-v82tkr]
+DG  fps=59.9  emergency=no 
+playhead=FULL   (enter<=28, exit>=34)
+particles: enabled=YES  count=1200
+  budget: max=2.078 cap=1.039 spawn=2.078
+  state: target=1200 lod=1.000 tickMod=--
+QualityLab: fps=5 burn=0ms force=auto
+AutoQ: eff=0.250 scale=-- pressureMul=1.000
