@@ -1014,10 +1014,105 @@ function ensureUI() {
     // --------------------------------------------------------------
     // Footer auto-tests (these are the big buttons in the footer)
     // --------------------------------------------------------------
-    if (act === 'autoGeneric') { await runAuto({ queue: AUTO_GENERIC_QUEUE, runId: 'autoGeneric' }); return; }
-    if (act === 'autoFocus') { await runAuto({ queue: AUTO_FOCUS_QUEUE, runId: 'autoFocus' }); return; }
-    if (act === 'autoFocusHeavy') { await runAuto({ queue: AUTO_FOCUS_HEAVY_QUEUE, runId: 'autoFocusHeavy' }); return; }
-    if (act === 'autoMicro') { await runAuto({ queue: AUTO_MICRO_QUEUE, runId: 'autoMicro' }); return; }
+    if (act === 'autoGeneric') {
+      const cfgBase = (await readAutoConfigFromFile()) || readAutoConfig() || {};
+      const ts = new Date().toISOString().replace(/[:.]/g, '-');
+      await runAuto({
+        clear: true,
+        save: false,
+        download: true,
+        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
+        downloadName: `perf-lab-generic-${ts}.json`,
+        notes: 'Generic baseline: Mixed (P6a) -> Lots of DrawGrid (P3f) -> Lots of Simple Rhythm (P4b)',
+        queue: AUTO_GENERIC_QUEUE,
+        runId: 'autoGeneric',
+      });
+      return;
+    }
+    if (act === 'autoGenericAdaptiveCompare') {
+      const cfgBase = (await readAutoConfigFromFile()) || readAutoConfig() || {};
+      const ts = new Date().toISOString().replace(/[:.]/g, '-');
+      await runAuto({
+        clear: true,
+        save: false,
+        download: true,
+        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
+        downloadName: `perf-lab-generic-adaptive-compare-${ts}.json`,
+        notes: 'Generic A/B: compares DrawGrid adaptive DPR OFF vs ON (does not change Auto: Generic).',
+        queue: [
+          'traceOff',
+          'dgAdaptiveOff',
+          ...AUTO_GENERIC_QUEUE,
+          'dgAdaptiveOn',
+          ...AUTO_GENERIC_QUEUE,
+        ],
+        runId: 'autoGenericAdaptiveCompare',
+      });
+      return;
+    }
+    if (act === 'autoFocus') {
+      const cfgBase = (await readAutoConfigFromFile()) || readAutoConfig() || {};
+      const ts = new Date().toISOString().replace(/[:.]/g, '-');
+      await runAuto({
+        clear: true,
+        save: false,
+        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
+        notes: 'Current Focus: reduce DrawGrid overlay churn (overlayDirty gating / cached overlay core) (edit AUTO_FOCUS_QUEUE in perf-lab.js)',
+        queue: AUTO_FOCUS_QUEUE,
+        runId: 'autoFocus',
+      });
+      return;
+    }
+    if (act === 'autoFocusHeavy') {
+      const cfgBase = (await readAutoConfigFromFile()) || readAutoConfig() || {};
+      const ts = new Date().toISOString().replace(/[:.]/g, '-');
+      await runAuto({
+        clear: true,
+        save: false,
+        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
+        notes: 'Focus Validation (Heavy): force pressure-DPR engagement + catch resize churn (edit AUTO_FOCUS_HEAVY_QUEUE in perf-lab.js)',
+        queue: AUTO_FOCUS_HEAVY_QUEUE,
+        runId: 'autoFocusHeavy',
+      });
+      return;
+    }
+    if (act === 'autoMicro') {
+      const cfgBase = (await readAutoConfigFromFile()) || readAutoConfig() || {};
+      const ts = new Date().toISOString().replace(/[:.]/g, '-');
+      await runAuto({
+        clear: true,
+        save: false,
+        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
+        notes: 'Focus Micro: short, high-signal, typically trace-enabled (edit AUTO_MICRO_QUEUE in perf-lab.js)',
+        queue: AUTO_MICRO_QUEUE,
+        runId: 'autoMicro',
+      });
+      return;
+    }
+    if (act === 'auto') {
+      const cfgBase = (await readAutoConfigFromFile()) || readAutoConfig() || {};
+      const ts = new Date().toISOString().replace(/[:.]/g, '-');
+      await runAuto({
+        clear: true,
+        save: false,
+        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
+        notes: 'Demon Hunt v1: baseline (traceOff) then traceOn; P3f + P4b',
+        queue: [
+          'traceOff',
+          'buildP3',
+          'runP3f',
+          'buildP4',
+          'runP4b',
+          'traceOn',
+          'buildP3',
+          'runP3f',
+          'buildP4',
+          'runP4b',
+        ],
+        runId: 'auto',
+      });
+      return;
+    }
   });ov.addEventListener('change', (e) => {
     const t = e.target;
     if (!t) return;
@@ -1426,26 +1521,6 @@ async function postResultsBundle(bundle, url) {
   }
 }
 
-function downloadResultsBundle(bundle, filename = 'perf-lab-results.json') {
-  if (!bundle) return false;
-  try {
-    const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.rel = 'noopener';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    return true;
-  } catch (err) {
-    console.warn('[PerfLab] downloadResults failed', err);
-    return false;
-  }
-}
-
 function readAutoConfig() {
   let cfg = null;
   try {
@@ -1461,10 +1536,8 @@ function readAutoConfig() {
       if (postUrl) cfg.postUrl = postUrl;
       const saveKey = params.get('perfSaveKey');
       if (saveKey) cfg.saveKey = saveKey;
-      const download = params.get('perfDownload');
       const autoStart = params.get('perfAutoStart');
       if (autoStart === '1' || autoStart === 'true') cfg.autoStart = true;
-      if (download === '1' || download === 'true') cfg.download = true;
     }
   } catch {}
 
@@ -1503,14 +1576,6 @@ async function readAutoConfigFromFile(filePath = 'resources/perf-lab-auto.json')
 async function resolveResultsConfig() {
   const cfgFile = await readAutoConfigFromFile();
   const cfg = cfgFile || readAutoConfig() || {};
-
-  // Default: never download results unless explicitly enabled.
-  // Auto runs still control download via their own config object.
-  try {
-    const isAuto = window.__PERF_LAB_RUN_CONTEXT === 'auto';
-    if (!isAuto && typeof cfg.download === 'undefined') cfg.download = false;
-  } catch {}
-
   return cfg;
 }
 
@@ -1529,17 +1594,6 @@ async function publishResultBundle(result, meta = {}) {
 
   const postUrl = cfg.postUrl || window.__PERF_LAB_RESULTS_URL;
   if (postUrl) await postResultsBundle(bundle, postUrl);
-
-  if (cfg.download) {
-    let name = cfg.downloadName || 'perf-lab-results.json';
-    if (!cfg.downloadName) {
-      try {
-        const ts = new Date().toISOString().replace(/[:.]/g, '-');
-        name = `perf-lab-${ts}.json`;
-      } catch {}
-    }
-    downloadResultsBundle(bundle, name);
-  }
   return bundle;
 }
 
@@ -1633,8 +1687,6 @@ async function runAuto(config = {}) {
 
   const postUrl = cfg.postUrl || window.__PERF_LAB_RESULTS_URL;
   if (postUrl) await postResultsBundle(bundle, postUrl);
-
-  if (cfg.download) downloadResultsBundle(bundle, cfg.downloadName || 'perf-lab-results.json');
 
   if (cfg.clearAfter !== false) {
     try { clearSceneViaSnapshot(); } catch {}
@@ -5760,7 +5812,6 @@ try {
     readAutoConfigFromFile,
     saveResultsBundle,
     postResultsBundle,
-    downloadResultsBundle,
       // Demon trace toggles (so auto-queue can flip them deterministically)
       traceDprOn: async function traceDprOn() {
         try { window.__DG_REFRESH_SIZE_TRACE = true; } catch {}
