@@ -175,6 +175,8 @@ const AUTO_FOCUS_QUEUE = [
   'runP3fNoOverlayStrokesShort',
   'warmupSettle',
   'runP3fNoParticlesFocusShort',
+  'warmupSettle',
+  'runP3fTapDotsFocusShort',
 
   'traceDprOff',
   'traceOff',
@@ -3749,6 +3751,22 @@ async function runP3fNoParticlesFocusShort() {
   try { window.__PERF_RUN_TAG = prevTag; } catch {}
 }
 
+async function runP3fTapDotsFocusShort() {
+  // Focus variant: simulate the board "tap dots" ripple while running the DrawGrid focus script.
+  // This makes tap-dots cost visible in frame profiles (otherwise it often doesn't trigger during auto runs).
+  const prevTag = window.__PERF_RUN_TAG;
+  const prevSim = window.__PERF_TAP_DOTS_SIM;
+  const prevDisable = window.__PERF_DISABLE_TAP_DOTS;
+  try { window.__PERF_TAP_DOTS_SIM = true; } catch {}
+  // Ensure tap dots aren't disabled by an earlier variant.
+  try { window.__PERF_DISABLE_TAP_DOTS = false; } catch {}
+  try { window.__PERF_RUN_TAG = 'P3fFocus_TapDotsSim'; } catch {}
+  await runP3fFocusShort();
+  try { window.__PERF_TAP_DOTS_SIM = prevSim; } catch {}
+  try { window.__PERF_DISABLE_TAP_DOTS = prevDisable; } catch {}
+  try { window.__PERF_RUN_TAG = prevTag; } catch {}
+}
+
 async function runP3fShort2() {
   // Same as P3fShort but with a different tag so we can compare run-to-run noise.
   const prev = window.__PERF_LAB_DURATION_MS;
@@ -5729,6 +5747,7 @@ try {
     runP3fMultiCanvasFocusShort,
     runP3fNoOverlaysFocusShort,
     runP3fNoParticlesFocusShort,
+    runP3fTapDotsFocusShort,
     runP3fNoOverlaysShort,
     runP3fNoOverlaysShort2,
       runP3fNoParticlesShort,

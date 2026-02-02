@@ -5080,10 +5080,17 @@ function regenerateMapFromStrokes() {
         activeCount: newMap.active.filter(Boolean).length
       });
 
+      const prevRev = (currentMap && Number.isFinite(currentMap.__dgRev)) ? currentMap.__dgRev : 0;
+
       const prevActive = currentMap?.active ? currentMap.active.slice() : null;
       const prevNodes = currentMap?.nodes ? currentMap.nodes.map(s => s ? new Set(s) : new Set()) : null;
 
       currentMap = newMap;
+      // Bump a simple revision counter so drawNodes() can cheaply know whether the node layout/render cache is still valid.
+      currentMap.__dgRev = ((prevRev | 0) + 1) | 0;
+      try { panel.__dgNodesRev = currentMap.__dgRev; } catch {}
+      // Any regen implies nodes layer is dirty.
+      try { if (__dgNodesCache) { __dgNodesCache.key = ''; __dgNodesCache.nodeCoords = null; } } catch {}
       nodeGroupMap = newGroups;
       persistentDisabled = currentMap.disabled; // Update persistent set
       try { (panel.__dgUpdateButtons || function(){})() } catch {}
@@ -7977,6 +7984,23 @@ function copyCanvas(backCtx, frontCtx) {
     if (!wasOverlay) markPaintDirty();
   }
 let __dgNodesCache = { canvas: null, ctx: null, key: '', nodeCoords: null };
+
+function __dgBumpNodesRev(reason = '') {
+  try {
+    if (!currentMap) return;
+    const prev = (Number.isFinite(currentMap.__dgRev) ? currentMap.__dgRev : 0) | 0;
+    currentMap.__dgRev = (prev + 1) | 0;
+
+    // Any change that affects nodes / active / disabled must invalidate the cached nodes layer.
+    if (__dgNodesCache) {
+      __dgNodesCache.key = '';
+      __dgNodesCache.nodeCoords = null;
+    }
+    // Optional: make it easy to see rev churn while debugging.
+    panel.__dgNodesRev = currentMap.__dgRev;
+    if (reason) panel.__dgNodesRevReason = String(reason);
+  } catch {}
+}
   let __dgBlocksCache = { canvas: null, ctx: null, key: '' };
 
   // Draw helpers -----------------------------------------------------------
@@ -8136,43 +8160,16 @@ let __dgNodesCache = { canvas: null, ctx: null, key: '', nodeCoords: null };
       mapKey = __dgHashStep(mapKey, isZoomed ? 1 : 0);
 
       if (currentMap) {
-        for (let c = 0; c < cols; c++) {
-          mapKey = __dgHashStep(mapKey, currentMap.active?.[c] ? 1 : 0);
+        // IMPORTANT PERF: avoid iterating over every node just to build a cache key.
+        // Node sets can be large (and this was dominating drawgrid.nodes.layout in perf).
+        // Instead, rely on a simple revision counter that we bump whenever nodes/active/disabled change.
+        const __rev = (Number.isFinite(currentMap.__dgRev) ? currentMap.__dgRev : 0) | 0;
+        mapKey = __dgHashStep(mapKey, __rev);
 
-          const nodes = currentMap.nodes?.[c];
-          if (nodes && nodes.size) {
-            mapKey = __dgHashStep(mapKey, nodes.size);
-            for (const r of nodes) {
-              mapKey = __dgHashStep(mapKey, r);
-              const groupEntry = nodeGroupMap?.[c]?.get(r) ?? null;
-              const disabledSet = currentMap.disabled?.[c];
-              const isDisabled = !!(disabledSet && disabledSet.has(r));
-              if (Array.isArray(groupEntry) && groupEntry.length > 0) {
-                for (let i = groupEntry.length - 1; i >= 0; i--) {
-                  const gid = groupEntry[i];
-                  mapKey = __dgHashStep(mapKey, c);
-                  mapKey = __dgHashStep(mapKey, r);
-                  mapKey = __dgHashStep(mapKey, isDisabled ? 1 : 0);
-                  mapKey = __dgHashStep(mapKey, (gid == null ? -1 : gid));
-                }
-              } else {
-                const groupId = typeof groupEntry === 'number' ? groupEntry : null;
-                mapKey = __dgHashStep(mapKey, c);
-                mapKey = __dgHashStep(mapKey, r);
-                mapKey = __dgHashStep(mapKey, isDisabled ? 1 : 0);
-                mapKey = __dgHashStep(mapKey, (groupId == null ? -1 : groupId));
-              }
-            }
-          } else {
-            mapKey = __dgHashStep(mapKey, 0);
-          }
-
-          const disabled = currentMap.disabled?.[c];
-          if (disabled && disabled.size) {
-            mapKey = __dgHashStep(mapKey, disabled.size);
-            for (const r of disabled) mapKey = __dgHashStep(mapKey, r);
-          } else {
-            mapKey = __dgHashStep(mapKey, 0);
+        // Also hash the active mask (cheap, cols is small) so toggles are reflected even if a caller forgets to bump rev.
+        if (Array.isArray(currentMap.active)) {
+          for (let c = 0; c < cols; c++) {
+            mapKey = __dgHashStep(mapKey, currentMap.active[c] ? 1 : 0);
           }
         }
       }
@@ -9293,6 +9290,8 @@ let __dgNodesCache = { canvas: null, ctx: null, key: '', nodeCoords: null };
       // Recompute column active: any node present and not disabled
       const anyOn = Array.from(currentMap.nodes[col] || []).some(r => !dis.has(r));
       currentMap.active[col] = anyOn;
+
+      __dgBumpNodesRev('node-toggle');
 
       // Flash feedback on toggle
       flashes[col] = 1.0;
@@ -12629,6 +12628,7 @@ let __dgNodesCache = { canvas: null, ctx: null, key: '', nodeCoords: null };
                 }
 
                   persistentDisabled = currentMap.disabled;
+                  __dgBumpNodesRev('setState-nodes');
 
                   drawGrid();
                   drawNodes(currentMap.nodes);

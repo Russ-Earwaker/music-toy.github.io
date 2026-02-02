@@ -1,4 +1,6 @@
 import { getViewportTransform, screenToWorld, getViewportElement } from './board-viewport.js';
+import { startSection } from './perf-meter.js';
+import { getAutoQualityScale } from './perf/AutoQualityController.js';
 
 // Tap dots overlay: canvas-based ripple where each dot wakes up as the wave hits it.
 (() => {
@@ -39,6 +41,9 @@ import { getViewportTransform, screenToWorld, getViewportElement } from './board
   const FORCE_DEBUG_VIS = false;
   const PROFILE = false; // set true temporarily to log profiling info
 
+  // Sprite cache: used to avoid per-dot arc() costs.
+  // IMPORTANT PERF: don't clear the whole cache when full (that causes churn spikes).
+  // Instead, delete the oldest entries one-by-one.
   const DOT_SPRITE_CACHE_MAX = 256;
   const dotSpriteCache = new Map();
   function getDotSprite(radius, r, g, b, a) {
@@ -61,8 +66,11 @@ import { getViewportTransform, screenToWorld, getViewportElement } from './board
     sctx.fill();
     sprite = { canvas, radius: radiusQ };
     dotSpriteCache.set(key, sprite);
-    if (dotSpriteCache.size > DOT_SPRITE_CACHE_MAX) {
-      dotSpriteCache.clear();
+    // Evict oldest entries rather than clearing all (avoids bursty churn).
+    while (dotSpriteCache.size > DOT_SPRITE_CACHE_MAX) {
+      const oldest = dotSpriteCache.keys().next().value;
+      if (!oldest) break;
+      dotSpriteCache.delete(oldest);
     }
     return sprite;
   }
@@ -170,6 +178,11 @@ import { getViewportTransform, screenToWorld, getViewportElement } from './board
   let viewScaleY = 1;
   let viewOriginX = 0;
   let viewOriginY = 0;
+  // Last resize snapshot for cheap world->device conversions (used for partial clears)
+  let __tapDotsWorldLeft = 0;
+  let __tapDotsWorldTop = 0;
+  let __tapDotsSafeScale = 1;
+  let __tapDotsEffectiveDpr = 1;
   let __tapDotsResizeDeferred = false;
   let __tapDotsResizeRaf = 0;
 
@@ -237,10 +250,17 @@ import { getViewportTransform, screenToWorld, getViewportElement } from './board
     // Anchor the overlay to the viewport in WORLD space (same trick as chain canvas)
     const { scale = 1, tx = 0, ty = 0 } = getViewportTransform() || {};
     const safeScale = (Number.isFinite(scale) && Math.abs(scale) > 1e-6) ? scale : 1;
+    __tapDotsSafeScale = safeScale;
+    // Blend in auto quality scale (defaults to 1). This lets Perf/Quality tools downscale the overlay.
+    const __aq = (typeof getAutoQualityScale === 'function') ? (getAutoQualityScale() || 1) : 1;
+    effectiveDpr = Math.max(0.5, Math.min(effectiveDpr, (dpr || 1) * __aq));
+    __tapDotsEffectiveDpr = effectiveDpr;
     const tl = screenToWorld({ x: 0, y: 0 });
     const br = screenToWorld({ x: cssSize.width || 1, y: cssSize.height || 1 });
     const worldLeft = tl.x;
     const worldTop  = tl.y;
+    __tapDotsWorldLeft = worldLeft;
+    __tapDotsWorldTop = worldTop;
     const worldW = (br.x - tl.x) || ((cssSize.width || 1) / safeScale);
     const worldH = (br.y - tl.y) || ((cssSize.height || 1) / safeScale);
 
@@ -421,6 +441,15 @@ import { getViewportTransform, screenToWorld, getViewportElement } from './board
     return a + (b - a) * t;
   }
 
+  // Clamp + quantize [0..1] to reduce the number of distinct sprite variants per frame.
+  // IMPORTANT PERF: the sprite cache key is colour/alpha/radius dependent; without quantization,
+  // drag-intensity can generate a huge variety of keys and churn the cache.
+  function quantize01(t, step) {
+    const s = (Number.isFinite(step) && step > 0) ? step : 0.125;
+    const u = Math.min(Math.max(t, 0), 1);
+    return Math.round(u / s) * s;
+  }
+
   // Simple up-then-down envelope: 0 -> 1 -> 0 over [0, 1]
   function envelope01(t) {
     if (t <= 0 || t >= 1) return 0;
@@ -472,6 +501,9 @@ import { getViewportTransform, screenToWorld, getViewportElement } from './board
     }
     // Always schedule the next frame up front; resetOverlay() cancels when done.
     rafId = requestAnimationFrame(drawWaveFrame);
+
+    const __endPerf = startSection('tapDots:frame');
+    try {
 
     // We might still be fading even if the tap wave has finished.
     if (!waveActive && !fadeOutActive && !isPointerDown) return;
@@ -537,10 +569,63 @@ import { getViewportTransform, screenToWorld, getViewportElement } from './board
 
   updateBoardToViewTransform();
 
-  // Clear in device pixels; reset transform so clearRect covers full backing store.
+  // Clear only the region we actually draw into. Clearing the full backing store each frame
+  // is surprisingly expensive on high-DPR displays (shows up as frame.nonScript / unattributed).
+  //
+  // IMPORTANT VISUAL: if the clear rect is too tight, some dots won't be cleared every frame,
+  // leading to inconsistent/darker/smaller-looking dots due to stale pixels / overdraw.
+  // So: compute a properly worst-case WORLD-space bounds and add a generous safety margin.
+  const __invZoomForClear = 1 / Math.max(0.0001, (getCurrentZoomScale() || 1));
+  const maxDragMag = tapRadiusScreen * DRAG_MAX_OFFSET_FACTOR;
+  const maxDragDisp = maxDragMag * DRAG_BLOB_MULT;
+  const maxWavePush = (currentTapSpacing || baseTapSpacing || 1) * 2.75; // tap-wave "poke" + safety
+  const maxSpritePad =
+    (BASE_DOT_RADIUS * MAX_SCALE * 10) * __invZoomForClear + (14 * __invZoomForClear);
+
+  // During the travelling wave, dots are in their most "energetic" state -> enlarge further.
+  const wavePad = (!waveFinished ? (currentTapSpacing || baseTapSpacing || 1) * 3.0 : 0) * __invZoomForClear;
+
+  // Extra conservative expansion factor (prevents edge cases from leaking).
+  const CLEAR_EXPAND = 1.35;
+
+  const rWorld = Math.max(
+    1,
+    (tapRadiusScreen + maxDragDisp + maxWavePush + maxSpritePad + wavePad) * CLEAR_EXPAND
+  );
+
+  // world -> device px (overlay backing store is viewport-sized; element positioned in world units)
+  const s = __tapDotsSafeScale || 1;
+  const d = __tapDotsEffectiveDpr || 1;
+  let x0 = (tapX - rWorld - __tapDotsWorldLeft) * s * d;
+  let y0 = (tapY - rWorld - __tapDotsWorldTop) * s * d;
+  let x1 = (tapX + rWorld - __tapDotsWorldLeft) * s * d;
+  let y1 = (tapY + rWorld - __tapDotsWorldTop) * s * d;
+
+  // Clamp and pad in device pixels.
+  // Use a larger pad than before because sprite edges can sit outside our math by a few pixels.
+  const padPx = 6;
+  x0 = Math.floor(Math.max(0, Math.min(canvas.width, x0 - padPx)));
+  y0 = Math.floor(Math.max(0, Math.min(canvas.height, y0 - padPx)));
+  x1 = Math.ceil(Math.max(0, Math.min(canvas.width, x1 + padPx)));
+  y1 = Math.ceil(Math.max(0, Math.min(canvas.height, y1 + padPx)));
+
+  const w = Math.max(0, x1 - x0);
+  const h = Math.max(0, y1 - y0);
+
+  // If our "partial" clear is basically the whole canvas anyway, just full-clear.
+  // This avoids weird edge cases and is often faster than clearing a near-full rect.
+  const fullArea = canvas.width * canvas.height;
+  const partArea = w * h;
+  const shouldFullClear = (partArea >= fullArea * 0.85) || (w <= 0) || (h <= 0);
+
+  // Clear in device pixels; reset transform so clearRect hits backing-store pixels directly.
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (shouldFullClear) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  } else {
+    ctx.clearRect(x0, y0, w, h);
+  }
   ctx.restore();
 
     const zoomScale = getCurrentZoomScale();
@@ -609,13 +694,16 @@ import { getViewportTransform, screenToWorld, getViewportElement } from './board
 
         // Combine "how far from center" and "how far we've dragged" into one intensity.
         const dragIntensity = Math.min(dispRatio * centreInfluence, 1);
+        // IMPORTANT PERF: quantize the intensity to reduce sprite-key diversity.
+        // Visual impact is tiny, perf impact can be large (fewer unique sprite variants per frame).
+        const dragQ = quantize01(dragIntensity, 0.125);
 
-        // Inner dots scale up and brighten more based on dragIntensity.
-        const scale = lerp(1, MAX_SCALE, dragIntensity);
-        const mixToWhite = dragIntensity;
+        // Inner dots scale up and brighten more based on dragQ.
+        const scale = lerp(1, MAX_SCALE, dragQ);
+        const mixToWhite = dragQ;
 
-        // Brightness also increases with dragIntensity (on top of baseAlpha).
-        const brightFactor = lerp(1, DRAG_BRIGHTEN_MULT, dragIntensity);
+        // Brightness also increases with dragQ (on top of baseAlpha).
+        const brightFactor = lerp(1, DRAG_BRIGHTEN_MULT, dragQ);
         const alpha = dot.baseAlpha * brightFactor;
 
         const r = Math.round(lerp(BASE_COLOR.r, WHITE.r, mixToWhite));
@@ -677,6 +765,9 @@ import { getViewportTransform, screenToWorld, getViewportElement } from './board
     }
 
     ctx.restore();
+    } finally {
+      try { __endPerf && __endPerf(); } catch {}
+    }
   }
 
   drawWaveFrame.__perfRafTag = 'perf.raf.tapDots';
