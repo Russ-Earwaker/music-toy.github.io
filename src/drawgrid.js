@@ -1218,6 +1218,16 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let headerSweepDirX = 1;
   const hydrationState = { retryRaf: 0, retryCount: 0 };
   const particleState = { field: null };
+  // Warm-start particles for both restored + newly created toys.
+  // This avoids the "restored toys start empty" vs "new toys start full" mismatch,
+  // and makes quality-level transitions easier to visually verify.
+  try {
+    const nowTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+      ? performance.now()
+      : Date.now();
+    // Unconditionally re-arm on boot (a refresh is effectively a new session).
+    panel.__dgParticlesWarmStartUntil = nowTs + 1200;
+  } catch {}
   if (DG_DEBUG) console.log('[DG] instance sizing locals init', panel.id, {
     __dgLastResizeTargetW, __dgLastResizeTargetH, __dgLastResizeDpr
   });
@@ -1527,13 +1537,18 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   function __dgEnsureStateReadoutEl() {
     try {
       if (!panel) return null;
+      // Ensure absolute children position correctly inside the toy.
+      try {
+        const cs = window.getComputedStyle(panel);
+        if (cs && cs.position === 'static') panel.style.position = 'relative';
+      } catch {}
       if (panel.__dgStateReadoutEl && panel.__dgStateReadoutEl.isConnected) return panel.__dgStateReadoutEl;
       const el = document.createElement('div');
       el.className = 'dg-state-readout';
       el.style.position = 'absolute';
       el.style.left = '8px';
       el.style.bottom = '8px';
-      el.style.zIndex = '9999';
+      el.style.zIndex = '2147483647';
       el.style.pointerEvents = 'none';
       el.style.whiteSpace = 'pre';
       el.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace';
@@ -1543,6 +1558,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       el.style.borderRadius = '8px';
       el.style.background = 'rgba(0,0,0,0.55)';
       el.style.color = 'rgba(255,255,255,0.92)';
+      el.style.border = '1px solid rgba(255,255,255,0.18)';
+      el.style.backdropFilter = 'blur(2px)';
       el.style.textShadow = '0 1px 0 rgba(0,0,0,0.6)';
       panel.appendChild(el);
       panel.__dgStateReadoutEl = el;
@@ -9693,7 +9710,17 @@ function __dgBumpNodesRev(reason = '') {
     const nowTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
       ? performance.now()
       : Date.now();
-    const recentPoke = Number.isFinite(__dgParticlePokeTs) && (nowTs - __dgParticlePokeTs) <= DG_PARTICLE_POKE_GRACE_MS;
+    // Boot grace: on fresh load / restore, allow the particle field to spin up even
+    // before any interaction (prevents "no particles until poke").
+    try {
+      if (!Number.isFinite(panel.__dgParticlesWarmBootUntil)) {
+        panel.__dgParticlesWarmBootUntil = nowTs + 1200;
+        // Count as a "poke" too so offscreen culling doesn't block the warm start.
+        __dgParticlePokeTs = nowTs;
+      }
+    } catch {}
+    const warmBoot = (Number.isFinite(panel.__dgParticlesWarmBootUntil) && nowTs < panel.__dgParticlesWarmBootUntil);
+    const recentPoke = warmBoot || (Number.isFinite(__dgParticlePokeTs) && (nowTs - __dgParticlePokeTs) <= DG_PARTICLE_POKE_GRACE_MS);
     if (!panelVisible && !recentPoke) {
       particleFieldEnabled = false;
       return __dgParticleStateCache?.value || null;
@@ -9779,16 +9806,65 @@ function __dgBumpNodesRev(reason = '') {
         Number.isFinite(fpsSample) ? fpsSample :
         ((typeof window !== 'undefined' && Number.isFinite(window.__MT_SM_FPS)) ? window.__MT_SM_FPS :
         ((typeof window !== 'undefined' && Number.isFinite(window.__MT_FPS)) ? window.__MT_FPS : 60));
-      const perfPanic =
-        (visiblePanels >= 12 && __dgCurFpsSample < 45) ||
-        (visiblePanels >= 18 && __dgCurFpsSample < 50) ||
-        (__dgCurFpsSample < 35);
+
+      // Perf Lab test harness: drive particle LOD using the forced FPS override
+      // (otherwise rAF-based FPS sampling can stay ~60 even when Target FPS is set).
+      const __dgFpsOverride =
+        (typeof window !== 'undefined' && Number.isFinite(window.__DG_FPS_TEST_OVERRIDE) && window.__DG_FPS_TEST_OVERRIDE > 0)
+          ? window.__DG_FPS_TEST_OVERRIDE
+          : 0;
+      const __dgFpsDriveSample = (__dgFpsOverride > 0) ? __dgFpsOverride : __dgCurFpsSample;
+
+      // Auto quality scale (used by the DPR hook) should also influence particles.
+      const __dgAutoQ = (() => { try { return getAutoQualityScale?.(); } catch { return 1; } })();
+      const __dgAutoQClamped = (Number.isFinite(__dgAutoQ) && __dgAutoQ > 0) ? Math.max(0.05, Math.min(1.0, __dgAutoQ)) : 1;
+      // Quality multiplier
+      // We want particles to respond like they would in real perf pressure:
+      // take the *strongest* reduction signal (i.e. the minimum).
+      // - FPS: 30fps => 1, 5fps => ~0.166
+      // - AutoQ: global quality scaler (0..1)
+      const __dgFpsMul = Math.max(0.05, Math.min(1.0, (__dgFpsDriveSample || 60) / 30));
+      const __dgParticleQualityMul = Math.min(__dgAutoQClamped, __dgFpsMul);
+      // Persist for renderLoop readout + debug (avoid scope issues).
+      try { panel.__dgParticleQualityMul = __dgParticleQualityMul; } catch {}
+      const perfPanicBase =
+        (visiblePanels >= 12 && __dgFpsDriveSample < 45) ||
+        (visiblePanels >= 18 && __dgFpsDriveSample < 50) ||
+        (__dgFpsDriveSample < 35);
+      // When the Quality Lab is forcing a low FPS *for testing*, do NOT treat that as a "panic".
+      // We still want to shed particle density, but we should keep the field alive so we can observe behaviour.
+      const perfPanic = (!(__dgFpsOverride > 0)) && perfPanicBase;
 
       const panicScale = perfPanic ? 0.22 : 1;
-      const maxCountScale = Math.max(0.0, maxCountScaleBase * crowdScale * fpsBoost * emergencyScale * perfDamp * panicScale);
-      const capScale = Math.max(0.0, (particleBudget.capScale ?? 1) * crowdScale * fpsBoost * emergencyScale * perfDamp * panicScale);
+      let maxCountScale = Math.max(0.0, maxCountScaleBase * crowdScale * fpsBoost * emergencyScale * perfDamp * panicScale * __dgParticleQualityMul);
+      let capScale = Math.max(0.0, (particleBudget.capScale ?? 1) * crowdScale * fpsBoost * emergencyScale * perfDamp * panicScale * __dgParticleQualityMul);
       const sizeScale = (particleBudget.sizeScale ?? 1) * emergencySize * (perfDamp < 0.8 ? 1.05 : 1);
-      const spawnScale = Math.max(0.0, (particleBudget.spawnScale ?? 1) * crowdScale * fpsBoost * emergencyScale * perfDamp * (perfPanic ? 0.0 : 1));
+      let spawnScale = Math.max(0.0, (particleBudget.spawnScale ?? 1) * crowdScale * fpsBoost * emergencyScale * perfDamp * (perfPanic ? 0.0 : 1) * __dgParticleQualityMul);
+
+      // ---------------------------------------------------------------------
+      // Perf Lab test harness behaviour:
+      // When Target FPS is forced (e.g. 5fps), we want the field to shed
+      // particles rapidly but NOT "freeze" immediately. So keep a small,
+      // non-zero minCount and avoid letting cap/max collapse to ~0.
+      // ---------------------------------------------------------------------
+      const __dgTestFps = (typeof window !== 'undefined' && Number.isFinite(window.__DG_FPS_TEST_OVERRIDE) && window.__DG_FPS_TEST_OVERRIDE > 0)
+        ? window.__DG_FPS_TEST_OVERRIDE
+        : 0;
+      const __dgTestMode = (__dgTestFps > 0) || (__dgFpsOverride > 0);
+      if (__dgTestMode) {
+        // Keep simulation alive while it fades down.
+        maxCountScale = Math.max(maxCountScale, 0.08);
+        capScale = Math.max(capScale, 0.08);
+        // If we are forcing *very* low FPS for testing, shed density aggressively.
+        // (This is about visual verification, not performance rescue.)
+        if (__dgFpsDriveSample <= 10) {
+          maxCountScale = Math.min(maxCountScale, 0.10);
+          capScale = Math.min(capScale, 0.10);
+          spawnScale = 0.0;
+        }
+        // Spawn can still be zero in test mode; we just want existing particles to animate while fading.
+        spawnScale = Math.max(0.0, spawnScale);
+      }
 
       // Persist resolved scalars for the tick gate (avoids expensive tick when effectively off).
       panel.__dgParticleBudgetMaxCountScale = maxCountScale;
@@ -9804,19 +9880,58 @@ function __dgBumpNodesRev(reason = '') {
       // (very low FPS + many visible drawgrids). This preserves smoothness (no cadence stepping)
       // while eliminating the expensive dgField.tick() work.
       const __dgCurFps =
-        (typeof window !== 'undefined' && Number.isFinite(window.__MT_SM_FPS)) ? window.__MT_SM_FPS :
-        ((typeof window !== 'undefined' && Number.isFinite(window.__MT_FPS)) ? window.__MT_FPS : 60);
+        // If the perf lab is forcing a low FPS for testing, don't trip "hard emergency" based on that.
+        (__dgFpsOverride > 0 && Number.isFinite(fpsSample)) ? fpsSample :
+        ((typeof window !== 'undefined' && Number.isFinite(window.__MT_SM_FPS)) ? window.__MT_SM_FPS :
+        ((typeof window !== 'undefined' && Number.isFinite(window.__MT_FPS)) ? window.__MT_FPS : 60));
+      const __dgCurFpsDrive = (__dgFpsOverride > 0) ? __dgFpsOverride : __dgCurFps;
       const __dgVisible = Number.isFinite(globalDrawgridState?.visibleCount) ? globalDrawgridState.visibleCount : 0;
       // "Hard emergency" off-ramp: only used when we are clearly overwhelmed.
       // This should trigger in the perf-lab worst-case scenes so we can fully skip dgField.tick().
       const __dgHardEmergencyOff =
-        (__dgCurFps < 14) || // catastrophic FPS, regardless of count
-        (__dgVisible >= 12 && __dgCurFps < 22) ||
-        (__dgVisible >= 20 && __dgCurFps < 28);
+        (__dgCurFpsDrive < 14) || // catastrophic FPS, regardless of count
+        (__dgVisible >= 12 && __dgCurFpsDrive < 22) ||
+        (__dgVisible >= 20 && __dgCurFpsDrive < 28);
 
+      // -----------------------------------------------------------------------
+      // Debug: color the toy by quality (red=low, green=high), throttled
+      // Toggle with: window.__DG_STATE_COLOR = true/false
+      // -----------------------------------------------------------------------
+      try {
+        const on = (typeof window !== 'undefined') ? !!window.__DG_STATE_COLOR : false;
+        if (!on) {
+          if (panel.__dgQualColorApplied) {
+            panel.__dgQualColorApplied = false;
+            panel.style.outline = '';
+            panel.style.outlineOffset = '';
+          }
+        } else {
+          const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+          const lastTs = Number.isFinite(panel.__dgQualColorTs) ? panel.__dgQualColorTs : 0;
+          if (!lastTs || (now - lastTs) > 250) {
+            panel.__dgQualColorTs = now;
+            const q = __dgParticleQualityMul; // same “testable” quality signal particles now use
+            const tier = (q <= 0.40) ? 'low' : (q >= 0.85 ? 'high' : 'med');
+            if (tier !== panel.__dgQualColorTier) {
+              panel.__dgQualColorTier = tier;
+              panel.__dgQualColorApplied = true;
+              const col =
+                (tier === 'low') ? 'rgba(255, 70, 70, 0.95)' :
+                (tier === 'high') ? 'rgba(70, 255, 110, 0.95)' :
+                'rgba(255, 190, 70, 0.95)';
+              panel.style.outline = `3px solid ${col}`;
+              panel.style.outlineOffset = '-3px';
+            }
+          }
+        }
+      } catch {}
+
+      // In test mode, we want "shed density" rather than "freeze/off".
+      // Only allow a full off-ramp in true hard emergency (real catastrophic).
       const particlesOffWanted =
-        __dgHardEmergencyOff ||
-        (maxCountScale < 0.02 && capScale < 0.02 && spawnScale < 0.02) ||
+        // Never fully turn the field off in Quality Lab test mode; we want to observe behaviour.
+        (!__dgTestMode && __dgHardEmergencyOff) ||
+        (!__dgTestMode && (maxCountScale < 0.02 && capScale < 0.02 && spawnScale < 0.02)) ||
         !particleFieldEnabled;
 
       if (particlesOffWanted && !panel.__dgParticlesOff) {
@@ -9856,6 +9971,14 @@ function __dgBumpNodesRev(reason = '') {
         emergencyMode ? 1 : 0,
         particleFieldEnabled ? 1 : 0,
       ].join('|');
+      // Warm-start: ensure restored and newly created toys start at a medium density,
+      // then quickly converge to the correct density for current FPS.
+      try {
+        if (!Number.isFinite(panel.__dgParticlesWarmStartUntil)) {
+          panel.__dgParticlesWarmStartUntil = nowTs + 1200;
+        }
+      } catch {}
+      const __dgWarm = (Number.isFinite(panel.__dgParticlesWarmStartUntil) && nowTs < panel.__dgParticlesWarmStartUntil);
       if (!panel.__dgParticlesOff && panel.__dgParticleBudgetKey !== budgetKey) {
         panel.__dgParticleBudgetKey = budgetKey;
         dgField.applyBudget({
@@ -9863,13 +9986,39 @@ function __dgBumpNodesRev(reason = '') {
           capScale,
           tickModulo,
           sizeScale,
-          spawnScale,
+          spawnScale: __dgWarm ? Math.max(spawnScale, 1.0) : spawnScale,
           // When overloaded, shed particle count quickly (still ticking every frame).
-          emergencyFade: !!perfPanic,
-          emergencyFadeSeconds: perfPanic ? 1.1 : 2.2,
-          // Make sure the field can recover its normal minimum when not panicking.
-          minCount: perfPanic ? 0 : 50,
+          emergencyFade: !!perfPanic || __dgTestMode,
+          // In test mode, fade down faster so you see it respond immediately.
+          emergencyFadeSeconds: __dgTestMode ? 0.85 : (perfPanic ? 1.1 : 2.2),
+          // In test mode, keep a visible floor so the field continues to animate.
+          minCount: __dgWarm ? 600 : (__dgTestMode ? 120 : (perfPanic ? 0 : 50)),
         });
+
+        // -------------------------------------------------------------------
+        // IMPORTANT: Some particle-field builds may ignore applyBudget() fields
+        // like maxCountScale/tickModulo. To keep the Quality Lab reliable,
+        // clamp the internal desired count/config directly as a backstop.
+        // (This should preserve the same "fade toward target" behaviour as
+        // natural FPS pressure, but ensures the target actually changes.)
+        // -------------------------------------------------------------------
+        try {
+          const st = dgField?._state || null;
+          const cfg = dgField?._config || null;
+          // Capture a stable "base" count once, so scaling is consistent.
+          if (!Number.isFinite(panel.__dgParticlesBaseCount) || panel.__dgParticlesBaseCount <= 0) {
+            const curCount = Array.isArray(st?.particles) ? st.particles.length : 0;
+            const cfgMax =
+              Number.isFinite(cfg?.maxCount) ? cfg.maxCount :
+              (Number.isFinite(cfg?.maxParticles) ? cfg.maxParticles : 0);
+            panel.__dgParticlesBaseCount = Math.max(600, cfgMax || curCount || 1200);
+          }
+          const base = Number(panel.__dgParticlesBaseCount) || 1200;
+          const minCount = __dgWarm ? 600 : (__dgTestMode ? 120 : (perfPanic ? 0 : 50));
+          const desired = Math.max(0, Math.round(Math.max(minCount, base * Math.max(0, maxCountScale))));
+          if (st && Number.isFinite(desired)) st.targetDesired = desired;
+          if (cfg && Number.isFinite(tickModulo)) cfg.tickModulo = tickModulo;
+        } catch {}
       }
     }
 
@@ -10055,7 +10204,7 @@ function __dgBumpNodesRev(reason = '') {
 
       // --- Debug state readout (throttled, DOM safe) --------------------------
       try {
-        const enabled = !!(typeof window !== 'undefined' && window.__DG_STATE_READOUT);
+        const enabled = !!(typeof window !== 'undefined' && (window.__DG_STATE_READOUT || ((window.__QUALITY_LAB || {}).targetFps > 0)));
         // Cleanup quickly when disabled (and avoid any DOM work).
         if (!enabled) {
           try {
@@ -10144,7 +10293,18 @@ function __dgBumpNodesRev(reason = '') {
           // Only touch the DOM when enabled.
           if (enabled) {
             const el = __dgEnsureStateReadoutEl();
-            if (el) el.textContent = txt;
+            if (el) {
+              // Colour the readout by quality tier: red (low) / amber (med) / green (high)
+              const q = Number.isFinite(panel.__dgParticleQualityMul) ? panel.__dgParticleQualityMul : 1;
+              const tier = (q <= 0.40) ? 'low' : (q >= 0.85 ? 'high' : 'med');
+              const col =
+                (tier === 'low') ? 'rgba(255, 90, 90, 0.98)' :
+                (tier === 'high') ? 'rgba(90, 255, 140, 0.98)' :
+                'rgba(255, 200, 90, 0.98)';
+              el.style.color = col;
+              el.style.borderColor = col;
+              el.textContent = txt;
+            }
           }
         }
       } catch {}

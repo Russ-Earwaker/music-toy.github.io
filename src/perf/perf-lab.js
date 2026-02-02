@@ -907,6 +907,7 @@ function ensureUI() {
       try {
         const next = !(typeof window !== 'undefined' && window.__DG_STATE_READOUT);
         window.__DG_STATE_READOUT = next;
+        window.__DG_STATE_COLOR = next;
         setShowStateBtnVisual();
         appendOutputLine(`[quality] drawgrid state readout: ${next ? 'ON' : 'off'}`);
       } catch {}
