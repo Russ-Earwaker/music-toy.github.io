@@ -204,6 +204,20 @@ const AUTO_FOCUS_HEAVY_QUEUE = [
   'traceOff',
 ];
 
+// Focus Micro: short, high-signal runs (quickly verifies LOD, overlays, etc).
+// Intended to be run frequently while iterating.
+const AUTO_MICRO_QUEUE = [
+  'traceDprOn',
+  'buildP3Focus',
+  'warmupFirstAppearance',
+  'warmupSettle',
+  'runP3fFocusShort',
+  'warmupSettle',
+  'runP3fNoParticlesFocusShort',
+  'traceDprOff',
+  'traceOff',
+];
+
 // Most diagnostic micro-run for the current focus.
 // Usually trace ON + shortest script we have.
 const AUTO_FOCUS_MICRO_QUEUE = [
@@ -996,6 +1010,14 @@ function ensureUI() {
     if (act === 'runP2x') await runP2x();
     if (act === 'runP2y') await runP2y();
     if (act === 'runP2z') await runP2z();
+
+    // --------------------------------------------------------------
+    // Footer auto-tests (these are the big buttons in the footer)
+    // --------------------------------------------------------------
+    if (act === 'autoGeneric') { await runAuto({ queue: AUTO_GENERIC_QUEUE, runId: 'autoGeneric' }); return; }
+    if (act === 'autoFocus') { await runAuto({ queue: AUTO_FOCUS_QUEUE, runId: 'autoFocus' }); return; }
+    if (act === 'autoFocusHeavy') { await runAuto({ queue: AUTO_FOCUS_HEAVY_QUEUE, runId: 'autoFocusHeavy' }); return; }
+    if (act === 'autoMicro') { await runAuto({ queue: AUTO_MICRO_QUEUE, runId: 'autoMicro' }); return; }
   });ov.addEventListener('change', (e) => {
     const t = e.target;
     if (!t) return;
