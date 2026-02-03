@@ -125,6 +125,10 @@ export function createDgFieldForces(getState) {
       strength: Number.isFinite(opts.strength) ? opts.strength : 1200,
       falloff: typeof opts.falloff === 'string' ? opts.falloff : 'gaussian',
       forceMul: opts.forceMul,
+      highlight: opts.highlight,
+      highlightMs: opts.highlightMs,
+      highlightDur: opts.highlightDur,
+      highlightAmp: opts.highlightAmp,
     };
     for (let i = 0; i <= steps; i++) {
       const t = steps === 0 ? 0 : i / steps;
@@ -195,6 +199,8 @@ export function createDgFieldForces(getState) {
           dirX: S.headerSweepDirX || 1,
           dirY: 0,
           maxSteps,
+          highlight: true,
+          highlightMs: 900,
         },
       );
       const lettersRadius = Math.max(40, radius * 1.6);

@@ -129,6 +129,9 @@ if (typeof window !== 'undefined' && window.__DG_NODE_SCALE_TRACE_STACK == null)
 if (typeof window !== 'undefined' && window.__DG_RENDER_SCALE_TRACE_STACK == null) {
   window.__DG_RENDER_SCALE_TRACE_STACK = false;
 }
+if (typeof window !== 'undefined' && window.__DG_PARTICLE_BOOT_DEBUG == null) {
+  window.__DG_PARTICLE_BOOT_DEBUG = true;
+}
 // Optional: include stacks for key ghost-guide start/stop events.
 //   window.__DG_GHOST_TRACE_STACK = true
 if (typeof window !== 'undefined' && window.__DG_GHOST_TRACE_STACK == null) {
@@ -159,6 +162,14 @@ function dgGhostTrace(tag, data = null) {
       try { console.log(`[DG][ghost] ${tag}`, data || {}); } catch {}
       try { drawgridLog(`[DG][ghost] ${tag}`, data || {}); } catch {}
     }
+  } catch {}
+}
+
+function dgParticleBootLog(tag, data = null) {
+  try {
+    if (typeof window === 'undefined' || !window.__DG_PARTICLE_BOOT_DEBUG) return;
+    const payload = data || {};
+    console.log(`[DG][particles] ${tag}`, JSON.stringify(payload));
   } catch {}
 }
 
@@ -1221,13 +1232,17 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   // Warm-start particles for both restored + newly created toys.
   // This avoids the "restored toys start empty" vs "new toys start full" mismatch,
   // and makes quality-level transitions easier to visually verify.
-  try {
-    const nowTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
-      ? performance.now()
-      : Date.now();
+    try {
+      const nowTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+        ? performance.now()
+        : Date.now();
     // Unconditionally re-arm on boot (a refresh is effectively a new session).
     panel.__dgParticlesWarmStartUntil = nowTs + 1200;
-  } catch {}
+    dgParticleBootLog('warm-start:arm', {
+      panelId: panel?.id || null,
+      until: panel.__dgParticlesWarmStartUntil,
+    });
+    } catch {}
   if (DG_DEBUG) console.log('[DG] instance sizing locals init', panel.id, {
     __dgLastResizeTargetW, __dgLastResizeTargetH, __dgLastResizeDpr
   });
@@ -9722,6 +9737,12 @@ function __dgBumpNodesRev(reason = '') {
     const warmBoot = (Number.isFinite(panel.__dgParticlesWarmBootUntil) && nowTs < panel.__dgParticlesWarmBootUntil);
     const recentPoke = warmBoot || (Number.isFinite(__dgParticlePokeTs) && (nowTs - __dgParticlePokeTs) <= DG_PARTICLE_POKE_GRACE_MS);
     if (!panelVisible && !recentPoke) {
+      dgParticleBootLog('visibility:skip-offscreen', {
+        panelId: panel?.id || null,
+        panelVisible,
+        warmBoot,
+        recentPoke,
+      });
       particleFieldEnabled = false;
       return __dgParticleStateCache?.value || null;
     }
@@ -9744,13 +9765,26 @@ function __dgBumpNodesRev(reason = '') {
     const threshold = Number.isFinite(overviewState?.state?.zoomThreshold) ? overviewState.state.zoomThreshold : 0.36;
     const zoomTooWide = Number.isFinite(boardScaleValue) && boardScaleValue < threshold;
       const allowField = !inOverview && !zoomTooWide;
+      // Warm boot: ensure particles come up at full density on refresh/creation,
+      // even if global adaptive signals are temporarily pessimistic.
+      const allowFieldWarm = warmBoot ? true : allowField;
       const fpsSample = Number.isFinite(adaptive?.smoothedFps)
         ? adaptive.smoothedFps
         : (Number.isFinite(adaptive?.fps) ? adaptive.fps : null);
       const emergencyMode = !!adaptive?.emergencyMode;
       // Keep fields on, but thin them out when many panels are visible.
       // Do not vary by focus state so particles feel consistent across panels.
-      particleFieldEnabled = !!allowField;
+      particleFieldEnabled = !!allowFieldWarm;
+      dgParticleBootLog('state:allow', {
+        panelId: panel?.id || null,
+        inOverview,
+        zoomTooWide,
+        allowField,
+        warmBoot,
+        allowFieldWarm,
+        particleFieldEnabled,
+        visiblePanels,
+      });
     panel.__dgParticleStateFlags = { inOverview, zoomTooWide };
 
     if (dgField && typeof dgField.applyBudget === 'function' && particleBudget) {
@@ -9961,6 +9995,41 @@ function __dgBumpNodesRev(reason = '') {
         panel.__dgParticleBudgetSpawnScale = null;
         panel.__dgParticleBudgetKey = '';
       }
+      // Warm-start: ensure restored and newly created toys start at full density,
+      // then quickly converge to the correct density for current FPS.
+      try {
+        if (!Number.isFinite(panel.__dgParticlesWarmStartUntil)) {
+          panel.__dgParticlesWarmStartUntil = nowTs + 1200;
+        }
+      } catch {}
+      const __dgWarm = (Number.isFinite(panel.__dgParticlesWarmStartUntil) && nowTs < panel.__dgParticlesWarmStartUntil);
+      if (panel.__dgParticlesWarmStartActive !== __dgWarm) {
+        panel.__dgParticlesWarmStartActive = __dgWarm;
+        dgParticleBootLog('warm-start:state', {
+          panelId: panel?.id || null,
+          warmStart: __dgWarm,
+          nowTs,
+          until: panel.__dgParticlesWarmStartUntil,
+        });
+      }
+      if (__dgWarm) {
+        // Force full density during warm start (refresh/create) so particles
+        // never boot at "empty" even if adaptive signals are pessimistic.
+        maxCountScale = Math.max(1.0, maxCountScale);
+        capScale = Math.max(1.0, capScale);
+        spawnScale = Math.max(1.0, spawnScale);
+      }
+      dgParticleBootLog('budget:pre-apply', {
+        panelId: panel?.id || null,
+        warmStart: __dgWarm,
+        maxCountScale,
+        capScale,
+        sizeScale,
+        spawnScale,
+        tickModulo,
+        emergencyMode,
+        particleFieldEnabled,
+      });
       const budgetKey = [
         round(maxCountScale),
         round(capScale),
@@ -9971,14 +10040,6 @@ function __dgBumpNodesRev(reason = '') {
         emergencyMode ? 1 : 0,
         particleFieldEnabled ? 1 : 0,
       ].join('|');
-      // Warm-start: ensure restored and newly created toys start at a medium density,
-      // then quickly converge to the correct density for current FPS.
-      try {
-        if (!Number.isFinite(panel.__dgParticlesWarmStartUntil)) {
-          panel.__dgParticlesWarmStartUntil = nowTs + 1200;
-        }
-      } catch {}
-      const __dgWarm = (Number.isFinite(panel.__dgParticlesWarmStartUntil) && nowTs < panel.__dgParticlesWarmStartUntil);
       if (!panel.__dgParticlesOff && panel.__dgParticleBudgetKey !== budgetKey) {
         panel.__dgParticleBudgetKey = budgetKey;
         dgField.applyBudget({
@@ -9993,6 +10054,34 @@ function __dgBumpNodesRev(reason = '') {
           emergencyFadeSeconds: __dgTestMode ? 0.85 : (perfPanic ? 1.1 : 2.2),
           // In test mode, keep a visible floor so the field continues to animate.
           minCount: __dgWarm ? 600 : (__dgTestMode ? 120 : (perfPanic ? 0 : 50)),
+        });
+        try {
+          const st = dgField?._state || null;
+          dgParticleBootLog('budget:state', {
+            panelId: panel?.id || null,
+            particles: Array.isArray(st?.particles) ? st.particles.length : null,
+            targetDesired: Number.isFinite(st?.targetDesired) ? st.targetDesired : null,
+            minParticles: Number.isFinite(st?.minParticles) ? st.minParticles : null,
+            lodScale: Number.isFinite(st?.lodScale) ? st.lodScale : null,
+          });
+        } catch {}
+        try {
+          if (__dgWarm) {
+            const st = dgField?._state || null;
+            const needsSeed = !st || !Array.isArray(st.particles) || st.particles.length === 0;
+            if (needsSeed && typeof dgField?.forceSeed === 'function') {
+              const seeded = dgField.forceSeed();
+              dgParticleBootLog('budget:seed', {
+                panelId: panel?.id || null,
+                seeded,
+              });
+            }
+          }
+        } catch {}
+        dgParticleBootLog('budget:applied', {
+          panelId: panel?.id || null,
+          budgetKey,
+          warmStart: __dgWarm,
         });
 
         // -------------------------------------------------------------------
@@ -10592,6 +10681,13 @@ function __dgBumpNodesRev(reason = '') {
         const __particleToggleStart = __perfOn ? performance.now() : 0;
         particleCanvasVisible = nextParticleVisible;
         particleCanvas.style.opacity = nextParticleVisible ? '1' : '0';
+        dgParticleBootLog('visibility:toggle', {
+          panelId: panel?.id || null,
+          visible: nextParticleVisible,
+          particleFieldEnabled,
+          disableParticles,
+          isPanelVisible,
+        });
         if (!nextParticleVisible) {
           const ctx = particleCanvas.getContext('2d');
           if (ctx) ctx.clearRect(0, 0, particleCanvas.width || 0, particleCanvas.height || 0);

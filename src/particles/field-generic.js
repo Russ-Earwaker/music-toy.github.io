@@ -1395,6 +1395,15 @@ function tick(dt = 1 / 60) {
     }
   }
 
+  function forceSeed() {
+    try {
+      pv?.refreshSize?.({ snap: true });
+    } catch {}
+    rebuild();
+    snapToBudget();
+    return state.particles.length;
+  }
+
 function reconcileParticleCount(dt = 1 / 60, immediate = false) {
    const minParticles = Number.isFinite(state.minParticles) ? Math.max(0, Math.round(state.minParticles)) : MIN_PARTICLES;
    let desired = Math.max(minParticles, Math.round(state.targetDesired || 0));
@@ -1639,6 +1648,34 @@ function reconcileParticleCount(dt = 1 / 60, immediate = false) {
     const radius = Math.max(1, Number.isFinite(opts.radius) ? opts.radius : 40);
     const strength = Number.isFinite(opts.strength) ? opts.strength : 1200;
     const falloffMode = opts.falloff === 'linear' ? 'linear' : 'gaussian';
+    const highlightOn = !!opts.highlight;
+    if (highlightOn) {
+      const highlightRadius = Math.max(8, radius * 1.15);
+      const highlightAmp = Math.max(
+        0,
+        Math.min(
+          1,
+          Number.isFinite(opts.highlightAmp) ? opts.highlightAmp : 0.8
+        )
+      );
+      const highlightDur = Number.isFinite(opts.highlightDur)
+        ? opts.highlightDur
+        : Number.isFinite(opts.highlightMs)
+        ? opts.highlightMs
+        : PARTICLE_HIGHLIGHT_DURATION;
+      const highlightTime = performance?.now?.() ?? Date.now();
+      highlightEvents.push({
+        x,
+        y,
+        radius: highlightRadius,
+        t: highlightTime,
+        dur: highlightDur,
+        amp: highlightAmp,
+      });
+      if (highlightEvents.length > 32) {
+        highlightEvents.shift();
+      }
+    }
     let ux = Number.isFinite(dirX) ? dirX : 0;
     let uy = Number.isFinite(dirY) ? dirY : 0;
     const len = Math.hypot(ux, uy);
@@ -1789,6 +1826,7 @@ function reconcileParticleCount(dt = 1 / 60, immediate = false) {
     applyBudget,
     setClipRect,
     resetHome,
+    forceSeed,
     canvas,
     _state: state,
     _config: config,

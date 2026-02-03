@@ -3,6 +3,14 @@
 export function createDgParticles(getState) {
   function initDrawgridParticles() {
     const S = getState();
+    const bootLog = (tag, data = null) => {
+      try {
+        if (typeof window === 'undefined' || !window.__DG_PARTICLE_BOOT_DEBUG) return;
+        const payload = data || {};
+        console.log(`[DG][particles] ${tag}`, JSON.stringify(payload));
+      } catch {}
+    };
+    bootLog('init:start', { panelId: S.panel?.id || null });
     // Hard guard: if a previous field exists, nuke it & clear the surface
     if (S.panel.__drawParticles && typeof S.panel.__drawParticles.destroy === 'function') {
       try { S.panel.__drawParticles.destroy(); } catch {}
@@ -73,8 +81,17 @@ export function createDgParticles(getState) {
       );
       window.__dgField = S.particleState.field;
       S.drawgridLog('[DG] field config', S.particleState.field?._config);
+      bootLog('init:field-ready', {
+        panelId: S.panel?.id || null,
+        cap,
+        sizePx,
+      });
       S.dgViewport?.refreshSize?.({ snap: true });
       S.particleState.field?.resize?.();
+      try {
+        const seeded = S.particleState.field?.forceSeed?.();
+        bootLog('init:seed', { panelId: S.panel?.id || null, seeded });
+      } catch {}
       try {
         const adaptive = S.getAdaptiveFrameBudget?.();
         const pb = adaptive?.particleBudget;
@@ -95,6 +112,8 @@ export function createDgParticles(getState) {
         try {
           S.dgViewport?.refreshSize?.({ snap: true });
           S.particleState.field?.resize?.();
+          const seeded = S.particleState.field?.forceSeed?.();
+          bootLog('init:seed-raf', { panelId: S.panel?.id || null, seeded });
         } catch {}
       }));
       const logicalSize = S.getToyLogicalSize();
@@ -102,6 +121,7 @@ export function createDgParticles(getState) {
       S.gridAreaLogical.h = logicalSize.h;
       S.__auditZoomSizes('init-field');
       S.panel.__drawParticles = S.particleState.field;
+      bootLog('init:done', { panelId: S.panel?.id || null });
     } catch (err) {
       console.warn('[drawgrid] particle field init failed', err);
       S.particleState.field = null;

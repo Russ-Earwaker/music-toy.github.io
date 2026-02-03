@@ -1,14 +1,20 @@
-perf-lab.js:1003 [PerfLab] quality lab (pending) {targetFps: 5, cpuBurnMs: 0, forceScale: null, _cycleToken: 0, _cycleActiveToken: 0}cpuBurnMs: 0forceScale: nulltargetFps: 5_cycleActiveToken: 0_cycleToken: 0[[Prototype]]: Object
-perf-lab.js:770 [PerfLab] APPLY {qlab: {…}, particles: {…}, perf: {…}}particles: {skipUpdate: false, skipDraw: false, budgetMul: 1, freezeUnfocusedDuringGesture: false, logFreeze: false}perf: {traceMarks: false, freezeChainUi: false, traceCanvasResize: false, traceDomInRaf: false}qlab: {targetFps: 5, cpuBurnMs: 0, forceScale: null, _cycleToken: 0, _cycleActiveToken: 0}[[Prototype]]: Object
-drawgrid.js:1570 [DG][STATE] snapshot
-drawgrid.js:1571 (index)panelIdfpsemergencyplayheadparticlesparticleCountmaxScalecapScalespawnScaletickModqlabFpsqlabBurnMsautoQEffautoQScalepressureMul(index)panelIdfpsemergencyplayheadparticlesparticleCountmaxScalecapScalespawnScaletickModqlabFpsqlabBurnMsautoQEffautoQScalepressureMul0'drawgrid-1769972056707-v82tkr''60.0'false'FULL''ON'1200'1.040''1.040''1.040''--'50'0.250''--''1.000'Array(1)
-drawgrid.js:1592 
-[DG][STATE][drawgrid-1769972056707-v82tkr]
-DG  fps=60.0  emergency=no 
-playhead=FULL   (enter<=28, exit>=34)
-particles: enabled=YES  count=1200
-  budget: max=1.040 cap=1.040 spawn=1.040
-  state: target=1200 lod=1.000 tickMod=--
-QualityLab: forcedFps=5 (ON) burn=0ms force=auto
-Measured: fps=60.0  (note: may not reflect throttle if FPS is sampled elsewhere)
-AutoQ: eff=0.250 scale=-- pressureMul=1.000
+drawgrid.js:172 [DG][particles] warm-start:arm {"panelId":"drawgrid-1770152111334-qzpx4m","until":1849.0999999046326}
+dg-particles.js:10 [DG][particles] init:start {"panelId":"drawgrid-1770152111334-qzpx4m"}
+dg-particles.js:10 [DG][particles] init:field-ready {"panelId":"drawgrid-1770152111334-qzpx4m","cap":2200,"sizePx":1.6800000000000002}
+dg-particles.js:10 [DG][particles] init:done {"panelId":"drawgrid-1770152111334-qzpx4m"}
+drawgrid.js:172 [DG][particles] state:allow {"panelId":"drawgrid-1770152111334-qzpx4m","inOverview":false,"zoomTooWide":false,"allowField":true,"warmBoot":true,"allowFieldWarm":true,"particleFieldEnabled":true,"visiblePanels":1}
+drawgrid.js:172 [DG][particles] warm-start:state {"panelId":"drawgrid-1770152111334-qzpx4m","warmStart":true,"nowTs":705.6999998092651,"until":1849.0999999046326}
+drawgrid.js:172 [DG][particles] budget:pre-apply {"panelId":"drawgrid-1770152111334-qzpx4m","warmStart":true,"maxCountScale":1.04,"capScale":1.04,"sizeScale":1,"spawnScale":1.04,"tickModulo":1,"emergencyMode":false,"particleFieldEnabled":true}
+drawgrid.js:172 [DG][particles] budget:state {"panelId":"drawgrid-1770152111334-qzpx4m","particles":0,"targetDesired":0,"minParticles":600,"lodScale":1}
+drawgrid.js:172 [DG][particles] budget:applied {"panelId":"drawgrid-1770152111334-qzpx4m","budgetKey":"1.04|1.04|1|1.04|1|0|0|1","warmStart":true}
+drawgrid.js:172 [DG][particles] state:allow {"panelId":"drawgrid-1770152111334-qzpx4m","inOverview":false,"zoomTooWide":false,"allowField":true,"warmBoot":true,"allowFieldWarm":true,"particleFieldEnabled":true,"visiblePanels":1}
+drawgrid.js:172 [DG][particles] budget:pre-apply {"panelId":"drawgrid-1770152111334-qzpx4m","warmStart":true,"maxCountScale":1.04,"capScale":1.04,"sizeScale":1,"spawnScale":1.04,"tickModulo":1,"emergencyMode":false,"particleFieldEnabled":true}
+drawgrid.js:172 [DG][particles] state:allow {"panelId":"drawgrid-1770152111334-qzpx4m","inOverview":false,"zoomTooWide":false,"allowField":true,"warmBoot":false,"allowFieldWarm":true,"particleFieldEnabled":true,"visiblePanels":1}
+drawgrid.js:172 [DG][particles] warm-start:state {"panelId":"drawgrid-1770152111334-qzpx4m","warmStart":false,"nowTs":2722.699999809265,"until":1849.0999999046326}
+drawgrid.js:172 [DG][particles] budget:pre-apply {"panelId":"drawgrid-1770152111334-qzpx4m","warmStart":false,"maxCountScale":0.52,"capScale":0.52,"sizeScale":1,"spawnScale":0.52,"tickModulo":1,"emergencyMode":false,"particleFieldEnabled":true}
+drawgrid.js:172 [DG][particles] budget:state {"panelId":"drawgrid-1770152111334-qzpx4m","particles":122,"targetDesired":1171,"minParticles":50,"lodScale":0.976}
+drawgrid.js:172 [DG][particles] budget:applied {"panelId":"drawgrid-1770152111334-qzpx4m","budgetKey":"0.52|0.52|1|0.52|1|0|0|1","warmStart":false}
+drawgrid.js:172 [DG][particles] state:allow {"panelId":"drawgrid-1770152111334-qzpx4m","inOverview":false,"zoomTooWide":false,"allowField":true,"warmBoot":false,"allowFieldWarm":true,"particleFieldEnabled":true,"visiblePanels":1}
+drawgrid.js:172 [DG][particles] budget:pre-apply {"panelId":"drawgrid-1770152111334-qzpx4m","warmStart":false,"maxCountScale":0.52,"capScale":0.52,"sizeScale":1,"spawnScale":0.52,"tickModulo":1,"emergencyMode":false,"particleFieldEnabled":true}
+drawgrid.js:172 [DG][particles] state:allow {"panelId":"drawgrid-1770152111334-qzpx4m","inOverview":false,"zoomTooWide":false,"allowField":true,"warmBoot":false,"allowFieldWarm":true,"particleFieldEnabled":true,"visiblePanels":1}
+drawgrid.js:172 [DG][particles] budget:pre-apply {"panelId":"drawgrid-1770152111334-qzpx4m","warmStart":false,"maxCountScale":0.52,"capScale":0.52,"sizeScale":1,"spawnScale":0.52,"tickModulo":1,"emergencyMode":false,"particleFieldEnabled":true}
