@@ -17,7 +17,7 @@ import './ui-highlights.js';
 import { updateParticleQualityFromFps, setActiveToyCount } from './particles/ParticleQuality.js';
 // import { createBouncer } from './bouncer.main.js'; // This is now handled by bouncer-init.js
 import './debug-reflow.js';
-import { initDrawGrid } from './drawgrid-init.js';
+import { initDrawGrid } from './drawgrid/drawgrid-init.js';
 import { createChordWheel } from './chordwheel.js';
 import { createRippleSynth } from './ripplesynth.js';
 import { applyStackingOrder } from './stacking-manager.js';
@@ -5133,4 +5133,5 @@ import { PERF_FLAGS } from "./perf-flags.js";
 
 // Expose for live debugging / perf-lab runs
 window.PERF_FLAGS = PERF_FLAGS;
+
 

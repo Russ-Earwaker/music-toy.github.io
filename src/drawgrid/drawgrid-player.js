@@ -1,9 +1,9 @@
 // src/drawgrid-player.js
-import { triggerInstrument } from './audio-samples.js';
-import { gateTriggerForToy, getToyAudioGen } from './toy-audio.js';
-import { buildPalette, midiToName } from './note-helpers.js';
-import { resumeAudioContextIfNeeded, isRunning as isTransportRunning, ensureAudioContext } from './audio-core.js';
-import { requestPanelPulse } from './pulse-border.js';
+import { triggerInstrument } from '../audio-samples.js';
+import { gateTriggerForToy, getToyAudioGen } from '../toy-audio.js';
+import { buildPalette, midiToName } from '../note-helpers.js';
+import { resumeAudioContextIfNeeded, isRunning as isTransportRunning, ensureAudioContext } from '../audio-core.js';
+import { requestPanelPulse } from '../pulse-border.js';
 
 // IMPORTANT:
 // data-toyid may represent chain/group identity and can be shared across panels.
@@ -474,3 +474,4 @@ export function connectDrawGridToPlayer(panel) {
     }
   };
 }
+

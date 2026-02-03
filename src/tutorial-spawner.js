@@ -1,6 +1,6 @@
 import { initToyUI } from './toyui.js';
-import { createDrawGrid } from './drawgrid.js';
-import { connectDrawGridToPlayer } from './drawgrid-player.js';
+import { createDrawGrid } from './drawgrid/drawgrid.js';
+import { connectDrawGridToPlayer } from './drawgrid/drawgrid-player.js';
 
 export function spawnTutorialToy(lockTutorialControls, setupPanelListeners) {
     /* << REFACTORED_VIEWPORT_RESET START >> */
@@ -60,3 +60,4 @@ export function spawnTutorialToy(lockTutorialControls, setupPanelListeners) {
         setupPanelListeners(panel);
         return { panel, tutorialFromFactory };
 }
+

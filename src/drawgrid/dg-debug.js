@@ -82,7 +82,7 @@ window.DG_DEBUG_SET = function DG_DEBUG_SET(patch) {
   }
 };
 
-function __dgFlag(name) {
+export function __dgFlag(name) {
   try { return !!(window.__DG_DEBUG && window.__DG_DEBUG[name]); } catch { return false; }
 }
 

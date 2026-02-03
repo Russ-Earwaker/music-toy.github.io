@@ -2,7 +2,7 @@
 // Boot drawing grid only for panels with data-toy="drawgrid".
 import { createDrawGrid } from './drawgrid.js';
 import { connectDrawGridToPlayer } from './drawgrid-player.js';
-import { initToyUI } from './toyui.js';
+import { initToyUI } from '../toyui.js';
 
 const DRAWGRID_INIT_DEBUG = false;
 
@@ -65,3 +65,4 @@ export function initDrawGrid(panel){
   panel.__drawToy = toy;
   return toy;
 }
+
