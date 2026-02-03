@@ -10854,13 +10854,12 @@ function __dgBumpNodesRev(reason = '') {
       }
 
       if (dgField) {
-        if (!disableParticles && gridArea && gridArea.w > 0 && gridArea.h > 0 && cssW > 0 && cssH > 0) {
-          const pad = 6;
-          const x = Math.max(0, gridArea.x - pad);
-          const y = Math.max(0, gridArea.y - pad);
-          const w = Math.max(0, Math.min(cssW - x, gridArea.w + pad * 2));
-          const h = Math.max(0, Math.min(cssH - y, gridArea.h + pad * 2));
-          const key = `${Math.round(x)}|${Math.round(y)}|${Math.round(w)}|${Math.round(h)}`;
+        if (!disableParticles && cssW > 0 && cssH > 0) {
+          const x = 0;
+          const y = 0;
+          const w = Math.max(0, cssW);
+          const h = Math.max(0, cssH);
+          const key = `${Math.round(w)}|${Math.round(h)}`;
           if (panel.__dgParticleClipKey !== key) {
             panel.__dgParticleClipKey = key;
             try { dgField.setClipRect({ x, y, w, h }); } catch {}
