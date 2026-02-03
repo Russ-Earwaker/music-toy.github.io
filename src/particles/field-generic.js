@@ -560,6 +560,7 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
   const PARTICLE_HIGHLIGHT_DURATION = 1800; // ms
   const PARTICLE_HIGHLIGHT_INTENSITY = 0.6; // base cap
   const PARTICLE_HIGHLIGHT_SIZE_BUMP = 0.25; // relative radius increase at peak highlight
+  const MAX_HIGHLIGHT_EVENTS = 128;
   const highlightEvents = [];
   // evt: {x,y,radius,t,amp,dur}
 
@@ -1070,7 +1071,7 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
           const candidate = radial * life;
           if (candidate > highlight) {
             highlight = candidate;
-            highlightAmp = Math.max(0, Math.min(1, evt.amp ?? 0.6));
+            highlightAmp = Math.max(0, Math.min(2, evt.amp ?? 0.6));
             // Track how far through the highlight we are to drive color fade.
             highlightProgress = 1 - life;
           }
@@ -1597,7 +1598,7 @@ function reconcileParticleCount(dt = 1 / 60, immediate = false) {
     const highlightAmp = Math.max(
       0,
       Math.min(
-        1,
+        2,
         Number.isFinite(opts.highlightAmp) ? opts.highlightAmp : 0.8
       )
     );
@@ -1671,7 +1672,7 @@ function reconcileParticleCount(dt = 1 / 60, immediate = false) {
       const highlightAmp = Math.max(
         0,
         Math.min(
-          1,
+          2,
           Number.isFinite(opts.highlightAmp) ? opts.highlightAmp : 0.8
         )
       );
@@ -1689,7 +1690,7 @@ function reconcileParticleCount(dt = 1 / 60, immediate = false) {
         dur: highlightDur,
         amp: highlightAmp,
       });
-      if (highlightEvents.length > 32) {
+      if (highlightEvents.length > MAX_HIGHLIGHT_EVENTS) {
         highlightEvents.shift();
       }
     }
