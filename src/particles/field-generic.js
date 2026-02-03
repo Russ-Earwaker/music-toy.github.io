@@ -557,7 +557,7 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     clipDirty: false,
   };
   const baseSizePx = config.sizePx;
-  const PARTICLE_HIGHLIGHT_DURATION = 900; // ms
+  const PARTICLE_HIGHLIGHT_DURATION = 1800; // ms
   const PARTICLE_HIGHLIGHT_INTENSITY = 0.6; // base cap
   const PARTICLE_HIGHLIGHT_SIZE_BUMP = 0.25; // relative radius increase at peak highlight
   const highlightEvents = [];
@@ -1113,6 +1113,23 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
 function tick(dt = 1 / 60) {
   if (!Number.isFinite(dt) || dt <= 0) dt = 1 / 60;
   state.lastDt = dt;
+    const nowTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+      ? performance.now()
+      : Date.now();
+    const frameMs = Number.isFinite(state.__lastPressureNowTs)
+      ? (nowTs - state.__lastPressureNowTs)
+      : (dt * 1000);
+    state.__lastPressureNowTs = nowTs;
+    const prevPressureMul = Number.isFinite(state.pressureMul) ? state.pressureMul : __fieldPressureDprMul;
+    __fieldUpdatePressureMulFromFrameMs(Math.max(0, Math.min(250, frameMs)), nowTs);
+    state.pressureMul = __fieldPressureDprMul;
+    // If pressure DPR meaningfully recovers or drops, rebuild backing store.
+    const diff = Math.abs(__fieldPressureDprMul - prevPressureMul);
+    const lastResizeTs = Number.isFinite(state.__lastPressureResizeTs) ? state.__lastPressureResizeTs : 0;
+    if (diff >= 0.08 && (!lastResizeTs || (nowTs - lastResizeTs) > 600) && !isZoomGesturing()) {
+      state.__lastPressureResizeTs = nowTs;
+      try { resize(); } catch {}
+    }
       const __perfOn = !!window.__PERF_PARTICLE_FIELD_PROFILE;
       const __perfStart = __perfOn && typeof performance !== 'undefined' ? performance.now() : 0;
       try {

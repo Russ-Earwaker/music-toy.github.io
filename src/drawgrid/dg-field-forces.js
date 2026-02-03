@@ -200,7 +200,7 @@ export function createDgFieldForces(getState) {
           dirY: 0,
           maxSteps,
           highlight: true,
-          highlightMs: 900,
+          highlightMs: 1800,
         },
       );
       const lettersRadius = Math.max(40, radius * 1.6);

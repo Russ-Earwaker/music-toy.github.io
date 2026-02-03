@@ -130,7 +130,7 @@ if (typeof window !== 'undefined' && window.__DG_RENDER_SCALE_TRACE_STACK == nul
   window.__DG_RENDER_SCALE_TRACE_STACK = false;
 }
 if (typeof window !== 'undefined' && window.__DG_PARTICLE_BOOT_DEBUG == null) {
-  window.__DG_PARTICLE_BOOT_DEBUG = true;
+  window.__DG_PARTICLE_BOOT_DEBUG = false;
 }
 // Optional: include stacks for key ghost-guide start/stop events.
 //   window.__DG_GHOST_TRACE_STACK = true
@@ -1567,8 +1567,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       el.style.pointerEvents = 'none';
       el.style.whiteSpace = 'pre';
       el.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace';
-      el.style.fontSize = '11px';
-      el.style.lineHeight = '1.25';
+      el.style.fontSize = '13px';
+      el.style.lineHeight = '1.35';
       el.style.padding = '6px 8px';
       el.style.borderRadius = '8px';
       el.style.background = 'rgba(0,0,0,0.55)';
@@ -1582,6 +1582,25 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     } catch {
       return null;
     }
+  }
+
+  function __dgEscapeHtml(value) {
+    try {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    } catch {
+      return '';
+    }
+  }
+
+  function __dgReadoutTierToColor(tier) {
+    if (tier === 'low') return 'rgba(255, 90, 90, 0.98)';
+    if (tier === 'high') return 'rgba(90, 255, 140, 0.98)';
+    return 'rgba(255, 200, 90, 0.98)';
   }
 
   // Expose a safe, low-noise state snapshot for Perf Lab / debugging.
@@ -10315,10 +10334,32 @@ function __dgBumpNodesRev(reason = '') {
           const aqScale = (() => {
             try { return getAutoQualityScale?.(); } catch { return null; }
           })();
+          const aqDbg = (typeof window !== 'undefined' && window.__AUTO_QUALITY_DEBUG && typeof window.__AUTO_QUALITY_DEBUG === 'object')
+            ? window.__AUTO_QUALITY_DEBUG
+            : null;
 
           const pressureMul = (typeof window !== 'undefined' && Number.isFinite(window.__DG_PRESSURE_DPR_MUL))
             ? window.__DG_PRESSURE_DPR_MUL
             : (Number.isFinite(__dgPressureDprMul) ? __dgPressureDprMul : null);
+
+          const __dgReadoutDeviceDpr = Math.max(1, Number.isFinite(window?.devicePixelRatio) ? window.devicePixelRatio : 1);
+          const __dgReadoutZoomGesturing = (typeof window !== 'undefined' && window.__mtZoomGesturing === true);
+          const __dgReadoutZoomGestureMoving = !!(__dgReadoutZoomGesturing && __lastZoomMotionTs && (nowTs - __lastZoomMotionTs) < ZOOM_STALL_MS);
+          const __dgReadoutIsFocused = panel.classList?.contains('toy-focused') || panel.classList?.contains('focused');
+          const __dgReadoutIsZoomed = panel.classList?.contains('toy-zoomed');
+          const __dgReadoutAdaptiveCap = __dgComputeAdaptivePaintDpr({
+            boardScale: Number.isFinite(boardScale) ? boardScale : 1,
+            isFocused: __dgReadoutIsFocused,
+            isZoomed: __dgReadoutIsZoomed,
+          });
+          const __dgReadoutGestureMul = __dgComputeGestureBackingMul(__dgReadoutZoomGestureMoving);
+          const __dgReadoutVisualMul = __dgComputeVisualBackingMul(Number.isFinite(boardScale) ? boardScale : 1) * __dgReadoutGestureMul;
+          const __dgReadoutPressureMul = (Number.isFinite(pressureMul) && pressureMul > 0) ? Number(pressureMul) : 1;
+          const __dgReadoutSmallMul = __dgComputeSmallPanelBackingMul(cssW, cssH);
+          const __dgReadoutAutoMul = __dgGetAutoQualityMul();
+          const __dgReadoutDesiredDprRaw = (__dgReadoutAdaptiveCap ? Math.min(__dgReadoutDeviceDpr, __dgReadoutAdaptiveCap) : __dgReadoutDeviceDpr)
+            * __dgReadoutVisualMul * __dgReadoutPressureMul * __dgReadoutSmallMul * __dgReadoutAutoMul;
+          const __dgReadoutDesiredDpr = __dgCapDprForBackingStore(cssW, cssH, __dgReadoutDesiredDprRaw, __dgAdaptivePaintDpr);
 
           const pfState = dgField?._state || null;
           const pfCfg = dgField?._config || null;
@@ -10328,30 +10369,141 @@ function __dgBumpNodesRev(reason = '') {
           const capScale = Number.isFinite(panel.__dgParticleBudgetCapScale) ? panel.__dgParticleBudgetCapScale : null;
           const spawnScale = Number.isFinite(panel.__dgParticleBudgetSpawnScale) ? panel.__dgParticleBudgetSpawnScale : null;
 
-          const lines = [];
-          lines.push(
-            `DG  measuredFps=${Number.isFinite(fpsLive) ? fpsLive.toFixed(1) : '--'}  ` +
-            `driveFps=${Number.isFinite(fpsDrive) ? fpsDrive.toFixed(1) : '--'}  ` +
-            `override=${fpsOverride > 0 ? String(fpsOverride) : 'off'}  ` +
-            `emergency=${__dgLowFpsMode ? 'YES' : 'no '}`
-          );
-          lines.push(`playhead=${__dgPlayheadSimpleMode ? 'SIMPLE' : 'FULL  '} (enter<=${DG_PLAYHEAD_FPS_SIMPLE_ENTER}, exit>=${DG_PLAYHEAD_FPS_SIMPLE_EXIT})`);
+          const entries = [];
+          const tierFromFps = (fpsValue, emergency) => {
+            if (emergency) return 'low';
+            if (!Number.isFinite(fpsValue)) return 'med';
+            if (fpsValue < 30) return 'low';
+            if (fpsValue < 50) return 'med';
+            return 'high';
+          };
+          const tierFromScale = (value) => {
+            if (!Number.isFinite(value)) return 'med';
+            if (value < 0.45) return 'low';
+            if (value < 0.75) return 'med';
+            return 'high';
+          };
+          const tierFromRatio = (value, ref) => {
+            if (!Number.isFinite(value) || !Number.isFinite(ref) || ref <= 0) return 'med';
+            const ratio = value / ref;
+            if (ratio < 0.65) return 'low';
+            if (ratio < 0.85) return 'med';
+            return 'high';
+          };
+          const tierFromBool = (value) => (value ? 'high' : 'low');
+
+          entries.push({
+            text:
+              `DG  measuredFps=${Number.isFinite(fpsLive) ? fpsLive.toFixed(1) : '--'}  ` +
+              `driveFps=${Number.isFinite(fpsDrive) ? fpsDrive.toFixed(1) : '--'}  ` +
+              `override=${fpsOverride > 0 ? String(fpsOverride) : 'off'}  ` +
+              `emergency=${__dgLowFpsMode ? 'YES' : 'no '}`,
+            tier: tierFromFps(fpsDrive, __dgLowFpsMode),
+          });
+          entries.push({
+            text: `playhead=${__dgPlayheadSimpleMode ? 'SIMPLE' : 'FULL  '} (enter<=${DG_PLAYHEAD_FPS_SIMPLE_ENTER}, exit>=${DG_PLAYHEAD_FPS_SIMPLE_EXIT})`,
+            tier: __dgPlayheadSimpleMode ? 'med' : 'high',
+          });
+
+          entries.push({
+            text:
+              `view: scale=${Number.isFinite(boardScale) ? boardScale.toFixed(3) : '--'}  ` +
+              `overview=${inOverview ? 'ON' : 'off'}  ` +
+              `zoomGesture=${__dgReadoutZoomGesturing ? (__dgReadoutZoomGestureMoving ? 'MOVING' : 'idle') : 'off'}`,
+            tier: tierFromBool(!inOverview),
+          });
+
+          entries.push({
+            text:
+              `DPR inputs: device=${Number.isFinite(__dgReadoutDeviceDpr) ? __dgReadoutDeviceDpr.toFixed(2) : '--'}  ` +
+              `cap=${Number.isFinite(__dgReadoutAdaptiveCap) ? __dgReadoutAdaptiveCap.toFixed(2) : '--'}  ` +
+              `visualMul=${Number.isFinite(__dgReadoutVisualMul) ? __dgReadoutVisualMul.toFixed(3) : '--'}  ` +
+              `pressureMul=${Number.isFinite(__dgReadoutPressureMul) ? Number(__dgReadoutPressureMul).toFixed(3) : '--'}  ` +
+              `smallMul=${Number.isFinite(__dgReadoutSmallMul) ? __dgReadoutSmallMul.toFixed(3) : '--'}  ` +
+              `autoMul=${Number.isFinite(__dgReadoutAutoMul) ? __dgReadoutAutoMul.toFixed(3) : '--'}`,
+            tier: tierFromScale(__dgReadoutVisualMul) === 'low' || tierFromScale(__dgReadoutPressureMul) === 'low' ? 'low' :
+              (tierFromScale(__dgReadoutVisualMul) === 'med' || tierFromScale(__dgReadoutPressureMul) === 'med') ? 'med' : 'high',
+          });
+          entries.push({
+            text:
+              `DPR result: desiredRaw=${Number.isFinite(__dgReadoutDesiredDprRaw) ? __dgReadoutDesiredDprRaw.toFixed(2) : '--'}  ` +
+              `desired=${Number.isFinite(__dgReadoutDesiredDpr) ? __dgReadoutDesiredDpr.toFixed(2) : '--'}  ` +
+              `paintDpr=${Number.isFinite(paintDpr) ? paintDpr.toFixed(2) : '--'}  ` +
+              `adaptivePaint=${Number.isFinite(__dgAdaptivePaintDpr) ? __dgAdaptivePaintDpr.toFixed(2) : '--'}`,
+            tier: tierFromRatio(paintDpr, __dgReadoutDeviceDpr),
+          });
 
           // Particle field
-          lines.push(`particles: enabled=${particleFieldEnabled ? 'YES' : 'no '}  count=${pfCount ?? '--'}`);
-          lines.push(`  budget: max=${maxCountScale?.toFixed?.(3) ?? '--'} cap=${capScale?.toFixed?.(3) ?? '--'} spawn=${spawnScale?.toFixed?.(3) ?? '--'}`);
-          lines.push(`  state: target=${Number.isFinite(pfState?.targetDesired) ? pfState.targetDesired.toFixed(0) : '--'} lod=${Number.isFinite(pfState?.lodScale) ? pfState.lodScale.toFixed(3) : '--'} tickMod=${Number.isFinite(pfCfg?.tickModulo) ? pfCfg.tickModulo : '--'}`);
+          const particleTier = !particleFieldEnabled
+            ? 'low'
+            : ([
+              tierFromScale(maxCountScale),
+              tierFromScale(capScale),
+              tierFromScale(spawnScale),
+            ].includes('low') ? 'low' : ([
+              tierFromScale(maxCountScale),
+              tierFromScale(capScale),
+              tierFromScale(spawnScale),
+            ].includes('med') ? 'med' : 'high'));
+          entries.push({
+            text: `particles: enabled=${particleFieldEnabled ? 'YES' : 'no '}  count=${pfCount ?? '--'}`,
+            tier: particleTier,
+          });
+          entries.push({
+            text: `  budget: max=${maxCountScale?.toFixed?.(3) ?? '--'} cap=${capScale?.toFixed?.(3) ?? '--'} spawn=${spawnScale?.toFixed?.(3) ?? '--'}`,
+            tier: particleTier,
+          });
+          const targetTier = Number.isFinite(pfState?.targetDesired) && pfState.targetDesired > 0
+            ? (Number.isFinite(pfState?.lodScale) && pfState.lodScale < 0.75 ? 'med' : 'high')
+            : 'low';
+          entries.push({
+            text: `  state: target=${Number.isFinite(pfState?.targetDesired) ? pfState.targetDesired.toFixed(0) : '--'} lod=${Number.isFinite(pfState?.lodScale) ? pfState.lodScale.toFixed(3) : '--'} tickMod=${Number.isFinite(pfCfg?.tickModulo) ? pfCfg.tickModulo : '--'}`,
+            tier: targetTier,
+          });
+          if (pfState) {
+            entries.push({
+              text:
+                `  fieldDpr=${Number.isFinite(pfState.dpr) ? pfState.dpr.toFixed(2) : '--'}  ` +
+                `device=${Number.isFinite(pfState.deviceDpr) ? pfState.deviceDpr.toFixed(2) : '--'}  ` +
+                `visualMul=${Number.isFinite(pfState.visualMul) ? pfState.visualMul.toFixed(3) : '--'}  ` +
+                `pressureMul=${Number.isFinite(pfState.pressureMul) ? pfState.pressureMul.toFixed(3) : '--'}`,
+              tier: tierFromRatio(pfState.dpr, pfState.deviceDpr),
+            });
+          }
 
           // Quality lab + auto quality (single-source-of-truth)
           const qFps = (qlab && Number.isFinite(qlab.targetFps)) ? qlab.targetFps : 0;
           const qBurn = (qlab && Number.isFinite(qlab.cpuBurnMs)) ? qlab.cpuBurnMs : 0;
           const qForce = (qlab && Number.isFinite(qlab.forceScale)) ? qlab.forceScale : null;
           const forcedActive = qFps > 0;
-          lines.push(`QualityLab: forcedFps=${qFps} (${forcedActive ? 'ON' : 'off'}) burn=${qBurn}ms force=${qForce ?? 'auto'}`);
-          lines.push(`Measured: fps=${Number.isFinite(fpsLive) ? fpsLive.toFixed(1) : '--'}  (note: may not reflect throttle if FPS is sampled elsewhere)`);
-          lines.push(`AutoQ: eff=${aqEff != null ? aqEff.toFixed(3) : '--'} scale=${Number.isFinite(aqScale) ? aqScale.toFixed(3) : '--'} pressureMul=${pressureMul != null ? Number(pressureMul).toFixed(3) : '--'}`);
+          const forcedTier = forcedActive ? (qFps > 0 && qFps < 30 ? 'low' : 'med') : 'high';
+          entries.push({
+            text: `QualityLab: forcedFps=${qFps} (${forcedActive ? 'ON' : 'off'}) burn=${qBurn}ms force=${qForce ?? 'auto'}`,
+            tier: forcedTier,
+          });
+          entries.push({
+            text: `Measured: fps=${Number.isFinite(fpsLive) ? fpsLive.toFixed(1) : '--'}  (note: may not reflect throttle if FPS is sampled elsewhere)`,
+            tier: tierFromFps(fpsLive, false),
+          });
+          const autoTier = (Number.isFinite(aqScale) ? tierFromScale(aqScale) : 'med');
+          entries.push({
+            text: `AutoQ: eff=${aqEff != null ? aqEff.toFixed(3) : '--'} scale=${Number.isFinite(aqScale) ? aqScale.toFixed(3) : '--'} pressureMul=${pressureMul != null ? Number(pressureMul).toFixed(3) : '--'}`,
+            tier: autoTier,
+          });
+          if (aqDbg) {
+            entries.push({
+              text:
+                `AutoQ dbg: enabled=${aqDbg.enabled ? 'YES' : 'no '} forced=${aqDbg.forced ? (aqDbg.forcedValue != null ? aqDbg.forcedValue.toFixed(2) : 'YES') : 'no '} ` +
+                `p95=${Number.isFinite(aqDbg.p95) ? aqDbg.p95.toFixed(1) : '--'}ms mem=${Number.isFinite(aqDbg.memLevel) ? aqDbg.memLevel : '--'} ` +
+                `clamp=${Number.isFinite(aqDbg.memClamp) ? aqDbg.memClamp.toFixed(2) : '--'} ` +
+                `samples=${Number.isFinite(aqDbg.samples) ? aqDbg.samples : '--'}`,
+              tier: (aqDbg.forced || (Number.isFinite(aqDbg.scale) && aqDbg.scale < 0.45)) ? 'low'
+                : (Number.isFinite(aqDbg.scale) && aqDbg.scale < 0.75) ? 'med'
+                : 'high',
+            });
+          }
 
-          const txt = lines.join('\n');
+          const txt = entries.map((e) => e.text).join('\n');
 
           // Always store a snapshot (Perf Lab can print this even when readout is hidden).
           try {
@@ -10383,16 +10535,15 @@ function __dgBumpNodesRev(reason = '') {
           if (enabled) {
             const el = __dgEnsureStateReadoutEl();
             if (el) {
-              // Colour the readout by quality tier: red (low) / amber (med) / green (high)
-              const q = Number.isFinite(panel.__dgParticleQualityMul) ? panel.__dgParticleQualityMul : 1;
-              const tier = (q <= 0.40) ? 'low' : (q >= 0.85 ? 'high' : 'med');
-              const col =
-                (tier === 'low') ? 'rgba(255, 90, 90, 0.98)' :
-                (tier === 'high') ? 'rgba(90, 255, 140, 0.98)' :
-                'rgba(255, 200, 90, 0.98)';
-              el.style.color = col;
-              el.style.borderColor = col;
-              el.textContent = txt;
+              // Per-line colouring (red/amber/green) for quick scanning.
+              const html = entries
+                .map((entry) => {
+                  const col = __dgReadoutTierToColor(entry.tier);
+                  return `<div style="color:${col}">${__dgEscapeHtml(entry.text)}</div>`;
+                })
+                .join('');
+              el.style.borderColor = 'rgba(255,255,255,0.18)';
+              el.innerHTML = html;
             }
           }
         }
@@ -13581,7 +13732,7 @@ function startGhostGuide({
     // Physics still uses the larger radius so particles "feel" a fat snowplow.
     FF.pokeFieldToy('ghostTrail', x, y, disturbanceRadius, DG_KNOCK.ghostTrail.strength, {
       mode: 'plow',
-      highlightMs: 900,
+      highlightMs: 1800,
     });
     if (!window.__DG_FIRST_GHOST_LOGGED__) {
       window.__DG_FIRST_GHOST_LOGGED__ = true;
