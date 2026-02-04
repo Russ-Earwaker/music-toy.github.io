@@ -76,6 +76,7 @@ import { createDgResnap } from './dg-resnap.js';
 import { createDgClear } from './dg-clear.js';
 import { createDgStateIo } from './dg-state-io.js';
 import { createDgSetState } from './dg-set-state.js';
+import { createDgPaintRedraw } from './dg-paint-redraw.js';
 import { createDgPlayheadSweep } from './dg-playhead-sweep.js';
 import { createDgPlayheadRender } from './dg-playhead-render.js';
 import { createDgOverlayFlush } from './dg-overlay-flush.js';
@@ -547,6 +548,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let cancelPostRestoreStabilize = () => {};
   let schedulePostRestoreStabilize = () => {};
   let setState = () => {};
+  let clearAndRedrawFromStrokes = () => {};
+  let drawIntoBackOnly = () => {};
+  let drawFullStroke = () => {};
   let ensureSizeReady = () => false;
   let resizeSurfacesFor = () => {};
   let getLayoutSize = () => measureCSSSize(wrap);
@@ -2542,6 +2546,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   // State
   let cols = initialCols;
   currentCols = cols;
+  flashes = new Float32Array(cols);
   function emitDrawgridUpdate({ activityOnly = false, steps } = {}) {
     const stepCount = Number.isFinite(steps)
       ? steps | 0
@@ -3172,126 +3177,42 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   });
 
   // New central helper to redraw the paint canvas and regenerate the node map from the `strokes` array.
-  function clearAndRedrawFromStrokes(targetCtx, reason) {
-    return F.perfMarkSection('drawgrid.paint.redraw', () => {
-      if (reason) FD.markRegenSource(reason);
-      // IMPORTANT:
-      // Keep the caller's target ctx, but ensure the composite back buffer stays in sync.
-      // In DG_SINGLE_CANVAS, some call paths draw into frontCtx (visible) while composite
-      // uses backCtx as the base. If backCtx isn't updated, the solid line can appear
-      // scaled incorrectly after zoom-out.
-      const resolvedTarget = targetCtx;
-      // IMPORTANT:
-      // The paint stroke must be redrawn into the *currently visible* paint buffer.
-      // When `usingBackBuffers` is false we should never fall back to `backCtx`,
-      // otherwise the redraw can land in a hidden backing store that has stale CSS sizing,
-      // producing the "solid line scales up" bug when zoomed out.
-      const activePaintCtx = (typeof getActivePaintCtx === 'function') ? getActivePaintCtx() : null;
-      const ctx =
-        resolvedTarget ||
-        activePaintCtx ||
-        (usingBackBuffers ? backCtx : frontCtx) ||
-        pctx;
-      if (!ctx) return;
-      dgPaintTrace('clearAndRedrawFromStrokes:enter', {
-        ctxIsFront: ctx === frontCtx,
-        ctxIsBack: ctx === backCtx,
-        canvasW: ctx?.canvas?.width || 0,
-        canvasH: ctx?.canvas?.height || 0
-      });
-      if (DG_LAYOUT_DEBUG) {
-        const expectedW = Math.max(1, Math.round(cssW * paintDpr));
-        const expectedH = Math.max(1, Math.round(cssH * paintDpr));
-        if (ctx.canvas?.width !== expectedW || ctx.canvas?.height !== expectedH) {
-          debugPaintSizes('clearAndRedrawFromStrokes:canvas-mismatch', { ctxW: ctx.canvas?.width, ctxH: ctx.canvas?.height });
-        }
-      }
-      const normalStrokes = strokes.filter(s => !s.justCreated);
-      const newStrokes = strokes.filter(s => s.justCreated);
-      R.resetCtx(ctx);
-      __dgWithLogicalSpace(ctx, () => {
-        const surface = ctx.canvas;
-        const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
-        const width = cssW || (surface?.width ?? 0) / scale;
-        const height = cssH || (surface?.height ?? 0) / scale;
-        ctx.clearRect(0, 0, width, height);
-        dgPaintTrace('clearAndRedrawFromStrokes:about-to-draw', { paintDpr, cssW, cssH });
-
-        // 1. Draw all existing, non-new strokes first.
-        for (const s of normalStrokes) {
-          drawFullStroke(ctx, s, { skipReset: true, skipTransform: true });
-        }
-        // 2. Draw the brand new strokes on top.
-        for (const s of newStrokes) {
-          drawFullStroke(ctx, s, { skipReset: true, skipTransform: true });
-        }
-      });
-
-      // If we drew into the front buffer in single-canvas mode, mirror it into the
-      // back buffer before composite so the base isn't stale or mismatched.
-      if (DG_SINGLE_CANVAS && ctx === frontCtx && backCtx && backCtx !== frontCtx) {
-        try {
-          const src = frontCtx?.canvas;
-          const dst = backCtx?.canvas;
-          if (src && dst && src.width > 0 && src.height > 0 && dst.width > 0 && dst.height > 0) {
-            R.resetCtx(backCtx);
-            R.withDeviceSpace(backCtx, () => {
-              backCtx.clearRect(0, 0, dst.width, dst.height);
-              backCtx.drawImage(
-                src,
-                0, 0, src.width, src.height,
-                0, 0, dst.width, dst.height
-              );
-            });
-            if (typeof window !== 'undefined' && window.__DG_RANDOM_TRACE_VERBOSE && reason && String(reason).includes('random')) {
-              const payload = {
-                panelId: panel?.id || null,
-                reason,
-                copied: true,
-                srcRole: src.getAttribute?.('data-role') || null,
-                dstRole: dst.getAttribute?.('data-role') || null,
-                srcSize: { w: src.width, h: src.height, cssW: src.style?.width || null, cssH: src.style?.height || null },
-                dstSize: { w: dst.width, h: dst.height, cssW: dst.style?.width || null, cssH: dst.style?.height || null },
-              };
-              console.log('[DG][random][sync]', JSON.stringify(payload));
-            }
-          }
-        } catch {}
-      }
-
-      regenerateMapFromStrokes();
-      try { (panel.__dgUpdateButtons || updateGeneratorButtons || function(){})() } catch(e) { }
-      syncLetterFade();
-      __dgMarkSingleCanvasDirty(panel);
-      if (DG_SINGLE_CANVAS) {
-        try { compositeSingleCanvas(); } catch {}
-      }
-        if (!DG_SINGLE_CANVAS && usingBackBuffers) {
-          pendingPaintSwap = true;
-          requestFrontSwap();
-        }
-        markPaintDirty();
-        __dgPaintDebugLog('clearAndRedrawFromStrokes', {
-          reason: reason || null,
-          ctxRole: ctx?.canvas?.getAttribute?.('data-role') || null,
-          ctxW: ctx?.canvas?.width || 0,
-          ctxH: ctx?.canvas?.height || 0,
-        });
-        dgPaintTrace('clearAndRedrawFromStrokes:exit');
-      });
-    }
-
-  function drawIntoBackOnly(includeCurrentStroke = false) {
-    if (!backCtx || !cssW || !cssH) return;
-    clearAndRedrawFromStrokes(backCtx, 'zoom-recompute-back');
-    if (includeCurrentStroke && cur && Array.isArray(cur.pts) && cur.pts.length > 0) {
-      drawFullStroke(backCtx, cur);
-    }
-    __dgMarkSingleCanvasDirty(panel);
-    if (!DG_SINGLE_CANVAS) {
-      pendingPaintSwap = true;
-    }
-  }
+  ({ clearAndRedrawFromStrokes, drawIntoBackOnly } = createDgPaintRedraw({
+    state: {
+      get panel() { return panel; },
+      get strokes() { return strokes; },
+      get cur() { return cur; },
+      get backCtx() { return backCtx; },
+      get frontCtx() { return frontCtx; },
+      get pctx() { return pctx; },
+      get usingBackBuffers() { return usingBackBuffers; },
+      get paintDpr() { return paintDpr; },
+      get cssW() { return cssW; },
+      get cssH() { return cssH; },
+      get DG_SINGLE_CANVAS() { return DG_SINGLE_CANVAS; },
+      get DG_LAYOUT_DEBUG() { return DG_LAYOUT_DEBUG; },
+      get pendingPaintSwap() { return pendingPaintSwap; },
+      set pendingPaintSwap(v) { pendingPaintSwap = v; },
+    },
+    deps: {
+      F,
+      FD,
+      R,
+      getActivePaintCtx,
+      __dgWithLogicalSpace,
+      drawFullStroke: (...args) => drawFullStroke(...args),
+      regenerateMapFromStrokes: () => regenerateMapFromStrokes(),
+      updateGeneratorButtons,
+      syncLetterFade,
+      __dgMarkSingleCanvasDirty,
+      compositeSingleCanvas,
+      requestFrontSwap,
+      markPaintDirty,
+      __dgPaintDebugLog,
+      dgPaintTrace,
+      debugPaintSizes,
+    },
+  }));
 
   const dgPaintSnapshotState = {
     get panel() { return panel; },
@@ -4390,7 +4311,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     deps: dgStrokeRenderDeps,
   });
   const getStrokePath = strokeRender.getStrokePath;
-  const drawFullStroke = strokeRender.drawFullStroke;
+  drawFullStroke = strokeRender.drawFullStroke;
 
   // Note grid helpers (assigned after createDgNoteGrid; wrappers avoid TDZ).
   let chromaticPalette = [];
@@ -6875,6 +6796,10 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       set strokes(v) { strokes = v; },
       get currentMap() { return currentMap; },
       set currentMap(v) { currentMap = v; },
+      get nodeCoordsForHitTest() { return nodeCoordsForHitTest; },
+      set nodeCoordsForHitTest(v) { nodeCoordsForHitTest = v; },
+      get draggedNode() { return draggedNode; },
+      set draggedNode(v) { draggedNode = v; },
       get cols() { return cols; },
       get __dgOverlayStrokeListCache() { return __dgOverlayStrokeListCache; },
       set __dgOverlayStrokeListCache(v) { __dgOverlayStrokeListCache = v; },
@@ -7258,6 +7183,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   try { panel.dispatchEvent(new CustomEvent('drawgrid:ready', { bubbles: true })); } catch {}
   return api;
 }
+
 
 
 

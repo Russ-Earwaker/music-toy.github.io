@@ -136,6 +136,12 @@ export function createDgClear({ state, deps } = {}) {
     s.persistentDisabled = Array.from({ length: s.cols }, () => new Set());
     const emptyMap = { active: Array(s.cols).fill(false), nodes: Array.from({ length: s.cols }, () => new Set()), disabled: Array.from({ length: s.cols }, () => new Set()) };
     s.currentMap = emptyMap;
+    if (Array.isArray(s.nodeCoordsForHitTest)) {
+      s.nodeCoordsForHitTest = [];
+    }
+    if ('draggedNode' in s) {
+      s.draggedNode = null;
+    }
     d.emitDrawgridUpdate?.({ activityOnly: false });
     d.drawGrid?.();
     s.nextDrawTarget = null; // Disarm any pending line draw
