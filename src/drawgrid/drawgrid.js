@@ -78,6 +78,7 @@ import { createDgStateIo } from './dg-state-io.js';
 import { createDgSetState } from './dg-set-state.js';
 import { createDgPaintRedraw } from './dg-paint-redraw.js';
 import { createDgZoomRecompute } from './dg-zoom-recompute.js';
+import { createDgZoomHandler } from './dg-zoom-handler.js';
 import { createDgPlayheadSweep } from './dg-playhead-sweep.js';
 import { createDgPlayheadRender } from './dg-playhead-render.js';
 import { createDgOverlayFlush } from './dg-overlay-flush.js';
@@ -553,6 +554,11 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let drawIntoBackOnly = () => {};
   let drawFullStroke = () => {};
   let scheduleZoomRecompute = () => {};
+  let handleZoom = () => {};
+  let drawNodes = () => {};
+  let drawGrid = () => {};
+  let resetGridCache = () => {};
+  let bumpNodesRev = () => {};
   let ensureSizeReady = () => false;
   let resizeSurfacesFor = () => {};
   let getLayoutSize = () => measureCSSSize(wrap);
@@ -3298,227 +3304,83 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       drawIntoBackOnly,
     },
   }));
-  const handleZoom = (z = {}) => {
-    __lastZoomEventTs = nowMs();
-    noteZoomMotion(z);
-    __auditZoomSizes('zoom-change');
-    const phase = z?.phase;
-    const mode = z?.mode;
-    // Keep pctx aligned with current buffer choice to avoid drawing into stale back buffers.
-    try {
-      if (usingBackBuffers && pctx !== backCtx) pctx = backCtx;
-      if (!usingBackBuffers && pctx !== frontCtx) pctx = frontCtx;
-    } catch {}
-    __dgPaintDebugLog('zoom-phase', {
-      phase: phase || null,
-      mode: mode || zoomMode || null,
-      currentScale: z?.currentScale ?? null,
-      targetScale: z?.targetScale ?? null,
-    });
-    try {
-      if (typeof window !== 'undefined' && window.__DG_ZOOM_COMMIT_TRACE) {
-        const isCommitLike =
-          phase === 'freeze' ||
-          phase === 'recompute' ||
-          phase === 'swap' ||
-          phase === 'done' ||
-          phase === 'commit' ||
-          phase === 'idle';
-        if (isCommitLike) {
-          const active = (typeof getActivePaintCanvas === 'function') ? getActivePaintCanvas() : null;
-          const ctx = (typeof getActivePaintCtx === 'function') ? getActivePaintCtx() : null;
-          const payload = {
-            panelId: panel?.id || null,
-            phase: phase || null,
-            mode: mode || zoomMode || null,
-            currentScale: z?.currentScale ?? null,
-            targetScale: z?.targetScale ?? null,
-            usingBackBuffers,
-            paintDpr,
-            cssW,
-            cssH,
-            pctxRole: pctx?.canvas?.getAttribute?.('data-role') || null,
-            ctxRole: ctx?.canvas?.getAttribute?.('data-role') || null,
-            activeRole: active?.getAttribute?.('data-role') || null,
-            frontW: frontCanvas?.width || 0,
-            frontH: frontCanvas?.height || 0,
-            backW: backCanvas?.width || 0,
-            backH: backCanvas?.height || 0,
-          };
-          console.log('[DG][zoom] phase', JSON.stringify(payload));
-        }
-      }
-    } catch {}
-    if (mode) {
-      zoomMode = mode;
-    }
-    const currentlyGesturing = zoomMode === 'gesturing';
-    if (currentlyGesturing && !__zoomActive) {
-      __zoomActive = true;
-      markZoomActive();
-      zoomGestureActive = true;
-      try { dgViewport?.setNonReactive?.(true); } catch {}
-    } else if (!currentlyGesturing && !phase && __zoomActive && zoomMode === 'idle') {
-      suppressHeaderPushUntil = nowMs() + HEADER_PUSH_SUPPRESS_MS;
-      releaseZoomFreeze({ reason: 'mode-idle', zoomPayload: z });
-    } else {
-      zoomGestureActive = currentlyGesturing;
-    }
-
-    if (phase === 'begin') {
-      if (!__zoomActive) {
-        __zoomActive = true;
-        zoomGestureActive = true;
-        markZoomActive();
-      }
-      try { dgViewport?.setNonReactive?.(true); } catch {}
-      const beginScale = Number.isFinite(z?.currentScale) ? z.currentScale : (Number.isFinite(z?.targetScale) ? z.targetScale : null);
-      dglog('zoom:begin', { scale: beginScale });
-      suppressHeaderPushUntil = nowMs() + HEADER_PUSH_SUPPRESS_MS;
-      return;
-    }
-
-    if (phase === 'commit' || phase === 'idle' || phase === 'done') {
-      markLayoutSizeDirty();
-      try { particles?.snapAllToHomes?.(); } catch {}
-      suppressHeaderPushUntil = nowMs() + HEADER_PUSH_SUPPRESS_MS;
-
-      // Let ZoomCoordinator know we're done with the freeze,
-      // but only request a heavy layout on 'done'.
-      releaseZoomFreeze({
-        reason: `phase-${phase}`,
-        refreshLayout: phase === 'done',
-        zoomPayload: z
-      });
-
-      if (phase === 'done') {
-        // Avoid restoring paint snapshots after zoom settle; redraw from strokes instead.
-        // Set count > 1 because both ensureSizeReady and layout can attempt a restore.
-        __dgSkipPaintSnapshotCount = Math.max(__dgSkipPaintSnapshotCount || 0, 2);
-        // Ensure we end commit on front buffers so paint isn't stuck scaled in back buffers.
-        try { useFrontBuffers(); } catch {}
-        // Only do heavy layout + field resize once commit fully settles.
-        try { layout(true); } catch {}
-        try { dgField?.resize?.(); } catch {}
-        layoutSizeDirty = true;
-        ensureSizeReady({ force: true });
-        const zoomSnapshot = extractZoomSnapshot(z);
-        const doneScale = Number.isFinite(zoomSnapshot?.scale) ? zoomSnapshot.scale : null;
-        const scaleChanged =
-          Number.isFinite(doneScale) &&
-          (!Number.isFinite(__dgLastZoomDoneScale) || Math.abs(doneScale - __dgLastZoomDoneScale) > 1e-4) &&
-          (Number.isFinite(lastCommittedScale) ? Math.abs(doneScale - lastCommittedScale) > 1e-4 : true);
-        if (Number.isFinite(doneScale)) {
-          __dgLastZoomDoneScale = doneScale;
-        }
-        const dprChanged =
-          Number.isFinite(paintDpr) && paintDpr > 0 &&
-          (!Number.isFinite(__dgLastZoomDonePaintDpr) || Math.abs(paintDpr - __dgLastZoomDonePaintDpr) > 1e-6);
-        if (Number.isFinite(paintDpr) && paintDpr > 0) {
-          __dgLastZoomDonePaintDpr = paintDpr;
-        }
-        const hasStrokes = Array.isArray(strokes) && strokes.length > 0;
-        const hasNodes = !!(currentMap && Array.isArray(currentMap.nodes) && currentMap.nodes.some(s => s && s.size > 0));
-        // IMPORTANT:
-        // Our "scaleChanged" heuristic looks at the camera scale, but the paint backing-store DPR can
-        // still change independently (visual/pressure/small multipliers). When that happens, we MUST
-        // redraw the paint stroke layer into the new logical space, otherwise the solid (paint) line
-        // can appear to "scale up" while the animated overlay remains correct.
-        if ((scaleChanged || dprChanged) && (hasStrokes || hasNodes)) {
-          try {
-            if (typeof window !== 'undefined' && window.__DG_ZOOM_COMMIT_TRACE) {
-              const payload = {
-                panelId: panel?.id || null,
-                hasStrokes,
-                hasNodes,
-                dprChanged,
-                usingBackBuffers,
-                paintDpr,
-                cssW,
-                cssH,
-                pctxRole: pctx?.canvas?.getAttribute?.('data-role') || null,
-                frontW: frontCanvas?.width || 0,
-                frontH: frontCanvas?.height || 0,
-                backW: backCanvas?.width || 0,
-                backH: backCanvas?.height || 0,
-              };
-              console.log('[DG][zoom] done:redraw', JSON.stringify(payload));
-            }
-          } catch {}
-          if (hasStrokes) {
-            // IMPORTANT: redraw into the currently visible paint buffer.
-            // (Don't force backCtx in single-canvas mode unless back buffers are enabled.)
-            try { clearAndRedrawFromStrokes(usingBackBuffers ? backCtx : frontCtx, 'zoom-done'); } catch {}
-            // If we're in a zoom commit and render onto back, force a front swap so paint is visible.
-            try {
-              if (usingBackBuffers && typeof requestFrontSwap === 'function') {
-                requestFrontSwap(useFrontBuffers);
-              }
-            } catch {}
-            __dgPaintDebugLog('zoom-done:redraw', {
-              hasStrokes,
-              hasNodes,
-            });
-          } else {
-            // No strokes, but we still need static layers to match the new zoom basis.
-            try { drawNodes(currentMap.nodes); } catch {}
-            try { drawGrid(); } catch {}
-          }
-          try { ensureBackVisualsFreshFromFront?.(); } catch {}
-          try { markStaticDirty('zoom-done'); } catch {}
-          __dgForceFullDrawNext = true;
-          // In single-canvas mode, ensure we composite immediately so the
-          // toy doesn't appear blank/mis-scaled
-          // until the next camera move triggers a redraw.
-          if (DG_SINGLE_CANVAS && isPanelVisible) {
-            try { compositeSingleCanvas(); } catch {}
-            try { panel.__dgSingleCompositeDirty = false; } catch {}
-          }
-        }
-
-        // BUGFIX: prevent delayed “snap later” jumps after zoom/pan.
-        // resnapAndRedraw() can defer while zoomMode==='gesturing' and set pendingZoomResnap.
-        // If we leave that flag set, it will apply later (RO/layout timer/etc.) and the
-        // nodes/connectors/text appear to “jump” after the zoom ends.
-        try {
-          const hadPending = pendingZoomResnap || pendingResnapOnVisible;
-          if (hadPending) {
-            dgRefreshTrace('zoom-done:apply-pending-resnap', { pendingZoomResnap, pendingResnapOnVisible });
-            pendingZoomResnap = false;
-            pendingResnapOnVisible = false;
-            // Ensure resnap executes immediately and is not blocked by gesturing state.
-            zoomMode = 'idle';
-            zoomGestureActive = false;
-            // IMPORTANT:
-            // After a gesture ends, a blank toy can still have a live ghost trail (auto guide).
-            // If we run the "resnap-empty -> clearDrawgridInternal" path here, it will cut the trail.
-            const __hasStrokes = Array.isArray(strokes) && strokes.length > 0;
-            const __hasNodes =
-              !!(currentMap && Array.isArray(currentMap.nodes) && currentMap.nodes.some(s => s && s.size > 0));
-            const __hasAnyPaint = ((__dgPaintRev | 0) > 0) || hasOverlayStrokesCached();
-            const __ghostNonEmpty = panel && panel.__dgGhostLayerEmpty === false;
-            const __preserveBlankDuringDoneResnap =
-              (!__hasStrokes && !__hasNodes) && (getGhostGuideAutoActive() || __ghostNonEmpty || !__hasAnyPaint);
-            if (typeof window !== 'undefined' && window.__DG_GHOST_TRACE) {
-              dgGhostTrace('zoom:done:pending-resnap', {
-                preserveBlankDuringDoneResnap: __preserveBlankDuringDoneResnap,
-                hasStrokes: __hasStrokes,
-                hasNodes: __hasNodes,
-                hasAnyPaint: __hasAnyPaint,
-                ghostNonEmpty: __ghostNonEmpty,
-                ghostAutoActive: getGhostGuideAutoActive(),
-                zoomMode,
-              });
-            }
-            resnapAndRedraw(true, { preservePaintIfNoStrokes: __preserveBlankDuringDoneResnap });
-          }
-        } catch {}
-      }
-
-      return;
-    }
-  };
-
+  ({ handleZoom } = createDgZoomHandler({
+    state: {
+      get __lastZoomEventTs() { return __lastZoomEventTs; },
+      set __lastZoomEventTs(v) { __lastZoomEventTs = v; },
+      get zoomMode() { return zoomMode; },
+      set zoomMode(v) { zoomMode = v; },
+      get usingBackBuffers() { return usingBackBuffers; },
+      get pctx() { return pctx; },
+      set pctx(v) { pctx = v; },
+      get backCtx() { return backCtx; },
+      get frontCtx() { return frontCtx; },
+      get paintDpr() { return paintDpr; },
+      get cssW() { return cssW; },
+      get cssH() { return cssH; },
+      get panel() { return panel; },
+      get frontCanvas() { return frontCanvas; },
+      get backCanvas() { return backCanvas; },
+      get __zoomActive() { return __zoomActive; },
+      set __zoomActive(v) { __zoomActive = v; },
+      get zoomGestureActive() { return zoomGestureActive; },
+      set zoomGestureActive(v) { zoomGestureActive = v; },
+      get dgViewport() { return dgViewport; },
+      get suppressHeaderPushUntil() { return suppressHeaderPushUntil; },
+      set suppressHeaderPushUntil(v) { suppressHeaderPushUntil = v; },
+      get HEADER_PUSH_SUPPRESS_MS() { return HEADER_PUSH_SUPPRESS_MS; },
+      get particles() { return particles; },
+      get __dgSkipPaintSnapshotCount() { return __dgSkipPaintSnapshotCount; },
+      set __dgSkipPaintSnapshotCount(v) { __dgSkipPaintSnapshotCount = v; },
+      get dgField() { return dgField; },
+      get layoutSizeDirty() { return layoutSizeDirty; },
+      set layoutSizeDirty(v) { layoutSizeDirty = v; },
+      get __dgLastZoomDoneScale() { return __dgLastZoomDoneScale; },
+      set __dgLastZoomDoneScale(v) { __dgLastZoomDoneScale = v; },
+      get __dgLastZoomDonePaintDpr() { return __dgLastZoomDonePaintDpr; },
+      set __dgLastZoomDonePaintDpr(v) { __dgLastZoomDonePaintDpr = v; },
+      get lastCommittedScale() { return lastCommittedScale; },
+      get strokes() { return strokes; },
+      get currentMap() { return currentMap; },
+      get __dgPaintRev() { return __dgPaintRev; },
+      get pendingZoomResnap() { return pendingZoomResnap; },
+      set pendingZoomResnap(v) { pendingZoomResnap = v; },
+      get pendingResnapOnVisible() { return pendingResnapOnVisible; },
+      set pendingResnapOnVisible(v) { pendingResnapOnVisible = v; },
+      get DG_SINGLE_CANVAS() { return DG_SINGLE_CANVAS; },
+      get isPanelVisible() { return isPanelVisible; },
+      get __dgForceFullDrawNext() { return __dgForceFullDrawNext; },
+      set __dgForceFullDrawNext(v) { __dgForceFullDrawNext = v; },
+    },
+    deps: {
+      nowMs,
+      noteZoomMotion,
+      __auditZoomSizes,
+      __dgPaintDebugLog,
+      getActivePaintCanvas,
+      getActivePaintCtx,
+      markZoomActive,
+      releaseZoomFreeze,
+      dglog,
+      markLayoutSizeDirty,
+      useFrontBuffers,
+      layout,
+      ensureSizeReady,
+      extractZoomSnapshot,
+      clearAndRedrawFromStrokes,
+      requestFrontSwap,
+      drawNodes: (...args) => drawNodes(...args),
+      drawGrid: (...args) => drawGrid(...args),
+      ensureBackVisualsFreshFromFront,
+      markStaticDirty,
+      compositeSingleCanvas,
+      hasOverlayStrokesCached,
+      getGhostGuideAutoActive,
+      dgGhostTrace,
+      resnapAndRedraw,
+      dgRefreshTrace,
+    },
+  }));
   // Tag for zoom profiling readability
   handleZoom.__zcName = `drawgrid:${panel.id || 'unknown'}`;
   const unsubscribeZoom = onZoomChange(namedZoomListener('drawgrid:zoom', handleZoom));
@@ -4255,10 +4117,10 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     DG_SINGLE_CANVAS,
   };
 
-  const { drawGrid, resetGridCache } = createDgGridRender({
+  ({ drawGrid, resetGridCache } = createDgGridRender({
     state: dgGridRenderState,
     deps: dgGridRenderDeps,
-  });
+  }));
   const dgStrokeRenderState = {
     get panel() { return panel; },
     get cssW() { return cssW; },
@@ -4424,7 +4286,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     deps: dgNodesRenderDeps,
   });
 
-  const { drawNodes, bumpNodesRev } = dgNodesRender;
+  ({ drawNodes, bumpNodesRev } = dgNodesRender);
   resetNodesCache = dgNodesRender.resetNodesCache;
   resetBlocksCache = dgNodesRender.resetBlocksCache;
 
@@ -7162,6 +7024,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   try { panel.dispatchEvent(new CustomEvent('drawgrid:ready', { bubbles: true })); } catch {}
   return api;
 }
+
 
 
 
