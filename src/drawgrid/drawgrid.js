@@ -75,6 +75,7 @@ import { createDgTutorialHighlight } from './dg-tutorial-highlight.js';
 import { createDgResnap } from './dg-resnap.js';
 import { createDgClear } from './dg-clear.js';
 import { createDgStateIo } from './dg-state-io.js';
+import { createDgSetState } from './dg-set-state.js';
 import { createDgPlayheadSweep } from './dg-playhead-sweep.js';
 import { createDgPlayheadRender } from './dg-playhead-render.js';
 import { createDgOverlayFlush } from './dg-overlay-flush.js';
@@ -545,6 +546,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let restoreFromState = () => {};
   let cancelPostRestoreStabilize = () => {};
   let schedulePostRestoreStabilize = () => {};
+  let setState = () => {};
   let ensureSizeReady = () => false;
   let resizeSurfacesFor = () => {};
   let getLayoutSize = () => measureCSSSize(wrap);
@@ -6934,6 +6936,73 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       stopAutoGhostGuide,
     },
   }));
+  ({ setState } = createDgSetState({
+    state: {
+      get panel() { return panel; },
+      get cols() { return cols; },
+      set cols(v) { cols = v; },
+      get currentCols() { return currentCols; },
+      set currentCols(v) { currentCols = v; },
+      get flashes() { return flashes; },
+      set flashes(v) { flashes = v; },
+      get gridArea() { return gridArea; },
+      get topPad() { return topPad; },
+      get strokes() { return strokes; },
+      set strokes(v) { strokes = v; },
+      get currentMap() { return currentMap; },
+      set currentMap(v) { currentMap = v; },
+      get nodeGroupMap() { return nodeGroupMap; },
+      set nodeGroupMap(v) { nodeGroupMap = v; },
+      get manualOverrides() { return manualOverrides; },
+      set manualOverrides(v) { manualOverrides = v; },
+      get persistentDisabled() { return persistentDisabled; },
+      set persistentDisabled(v) { persistentDisabled = v; },
+      get autoTune() { return autoTune; },
+      set autoTune(v) { autoTune = v; },
+      get isRestoring() { return isRestoring; },
+      set isRestoring(v) { isRestoring = v; },
+      get __hydrationJustApplied() { return __hydrationJustApplied; },
+      set __hydrationJustApplied(v) { __hydrationJustApplied = v; },
+      get __dgHydrationPendingRedraw() { return __dgHydrationPendingRedraw; },
+      set __dgHydrationPendingRedraw(v) { __dgHydrationPendingRedraw = v; },
+      get __dgNeedsUIRefresh() { return __dgNeedsUIRefresh; },
+      set __dgNeedsUIRefresh(v) { __dgNeedsUIRefresh = v; },
+      get __dgFrontSwapNextDraw() { return __dgFrontSwapNextDraw; },
+      set __dgFrontSwapNextDraw(v) { __dgFrontSwapNextDraw = v; },
+      get __dgForceFullDrawNext() { return __dgForceFullDrawNext; },
+      set __dgForceFullDrawNext(v) { __dgForceFullDrawNext = v; },
+      get __dgForceFullDrawFrames() { return __dgForceFullDrawFrames; },
+      set __dgForceFullDrawFrames(v) { __dgForceFullDrawFrames = v; },
+      get DG_HYDRATE() { return DG_HYDRATE; },
+      get STROKE_COLORS() { return STROKE_COLORS; },
+    },
+    deps: {
+      getFallbackHydrationState,
+      computeSerializedNodeStats,
+      dgTraceLog,
+      updateHydrateInboundFromState,
+      applyInstrumentFromState,
+      resnapAndRedraw,
+      layout,
+      clearAndRedrawFromStrokes,
+      drawGrid,
+      drawNodes,
+      emitDrawgridUpdate,
+      __dgBumpNodesRev,
+      updateGeneratorButtons,
+      markStaticDirty,
+      ensurePostCommitRedraw,
+      requestFrontSwap,
+      useFrontBuffers,
+      schedulePostRestoreStabilize,
+      scheduleGhostIfEmpty,
+      captureState,
+      inboundWasNonEmpty,
+      computeCurrentMapNodeStats,
+      schedulePersistState,
+      HY,
+    },
+  }));
   const api = {
     panel,
     startGhostGuide,
@@ -6947,223 +7016,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       } catch { return false; }
     },
     restoreState: restoreFromState,
-    setState: (st={})=>{
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          if (!panel.isConnected) return;
-          isRestoring = true;
-          const fallbackHydrationState = getFallbackHydrationState();
-          try {
-            const stats = {
-              strokes: Array.isArray(st?.strokes) ? st.strokes.length : 0,
-              nodeCount: computeSerializedNodeStats(st?.nodes?.list, st?.nodes?.disabled).nodeCount,
-              activeCols: Array.isArray(st?.nodes?.active) ? st.nodes.active.filter(Boolean).length : 0,
-            };
-            const stack = (new Error('set-state')).stack?.split('\n').slice(0, 6).join('\n');
-            dgTraceLog('[drawgrid][SETSTATE] requested', { panelId: panel.id, stats, stack });
-          } catch {}
-          const guardStrokesCandidate = Array.isArray(st?.strokes) && st.strokes.length > 0
-            ? st.strokes
-            : (Array.isArray(fallbackHydrationState?.strokes) ? fallbackHydrationState.strokes : []);
-          const guardNodesListCandidate = Array.isArray(st?.nodes?.list) && st.nodes.list.length > 0
-            ? st.nodes.list
-            : (fallbackHydrationState?.nodes?.list || []);
-          const guardNodesActiveCandidate = Array.isArray(st?.nodes?.active) && st.nodes.active.length > 0
-            ? st.nodes.active
-            : (fallbackHydrationState?.nodes?.active || []);
-          const guardNodesDisabledCandidate = Array.isArray(st?.nodes?.disabled) && st.nodes.disabled.length > 0
-            ? st.nodes.disabled
-            : (fallbackHydrationState?.nodes?.disabled || []);
-          updateHydrateInboundFromState({
-            strokes: guardStrokesCandidate,
-            nodes: {
-              list: guardNodesListCandidate,
-              active: guardNodesActiveCandidate,
-              disabled: guardNodesDisabledCandidate,
-            },
-          }, { reason: 'setState-pre', panelId: panel?.id });
-          if (typeof st?.instrument === 'string') {
-            applyInstrumentFromState(st.instrument, { emitEvents: true });
-          }
-          try{
-            // Steps first
-            if (typeof st.steps === 'number' && (st.steps===8 || st.steps===16)){
-              if ((st.steps|0) !== cols){
-                cols = st.steps|0;
-                currentCols = cols;
-                panel.dataset.steps = String(cols);
-                flashes = new Float32Array(cols);
-                persistentDisabled = Array.from({ length: cols }, () => new Set());
-                manualOverrides = Array.from({ length: cols }, () => new Set());
-                // Force layout for new resolution
-                resnapAndRedraw(true);
-              }
-            }
-            // Ensure geometry is current before de-normalizing
-            try{ layout(true); }catch{}
-            if (typeof st.autotune !== 'undefined') {
-              autoTune = !!st.autotune;
-              try{
-                const btn = panel.querySelector('.drawgrid-autotune');
-                if (btn){ btn.textContent = `Auto-tune: ${autoTune ? 'On' : 'Off'}`; btn.setAttribute('aria-pressed', String(autoTune)); }
-              }catch{}
-            }
-            // Restore strokes (fallback to persisted paint data if external state omits it)
-            const hasIncomingStrokes = Object.prototype.hasOwnProperty.call(st, 'strokes');
-            const incomingStrokes = Array.isArray(st.strokes) ? st.strokes : null;
-            const fallbackStrokes = (!hasIncomingStrokes && Array.isArray(fallbackHydrationState?.strokes) && fallbackHydrationState.strokes.length > 0)
-              ? fallbackHydrationState.strokes
-              : null;
-            const strokeSource = (incomingStrokes && incomingStrokes.length > 0) ? incomingStrokes : fallbackStrokes;
-            if (strokeSource) {
-              strokes = [];
-              for (const s of strokeSource){
-                let pts = [];
-                if (Array.isArray(s?.ptsN)){
-                  const gh = Math.max(1, gridArea.h - topPad);
-                  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-                  pts = s.ptsN.map(np=>({
-                    x: gridArea.x + clamp(Number(np?.nx)||0, 0, 1) * gridArea.w,
-                    y: (gridArea.y + topPad) + clamp(Number(np?.ny)||0, 0, 1) * gh
-                  }));
-                } else if (Array.isArray(s?.pts)) {
-                  // Legacy raw points fallback
-                  pts = s.pts.map(p=>({ x: Number(p.x)||0, y: Number(p.y)||0 }));
-                }
-                const ptsN = Array.isArray(s?.ptsN) ? s.ptsN.map(np => ({
-                  nx: Math.max(0, Math.min(1, Number(np?.nx) || 0)),
-                  ny: Math.max(0, Math.min(1, Number(np?.ny) || 0)),
-                })) : null;
-                const stroke = {
-                  pts,
-                  __ptsN: ptsN,
-                  color: s?.color || STROKE_COLORS[0],
-                  isSpecial: !!s?.isSpecial,
-                  generatorId: (typeof s?.generatorId==='number') ? s.generatorId : undefined,
-                  overlayColorize: !!s?.overlayColorize,
-                };
-                strokes.push(stroke);
-              }
-              clearAndRedrawFromStrokes(null, 'setState-strokes');
-            } else if (hasIncomingStrokes && Array.isArray(st.strokes)) {
-              const hasFallback = Array.isArray(fallbackHydrationState?.strokes) && fallbackHydrationState.strokes.length > 0;
-              if (!hasFallback) {
-                strokes = [];
-                clearAndRedrawFromStrokes(null, 'setState-strokes-empty');
-              }
-            }
-
-            // Restore node masks if provided
-            if (st.nodes && typeof st.nodes==='object'){
-              try{
-                const act = Array.isArray(st.nodes.active) ? st.nodes.active.slice(0, cols) : null;
-                const dis = Array.isArray(st.nodes.disabled) ? st.nodes.disabled.slice(0, cols).map(a => new Set(a || [])) : null;
-                const list = Array.isArray(st.nodes.list) ? st.nodes.list.slice(0, cols).map(a => new Set(a || [])) : null;
-                const groups = Array.isArray(st.nodes.groups) ? st.nodes.groups.map(g => new Map(g || [])) : null;
-
-                // If a node list is present in the saved state, it is the source of truth.
-                if (list) {
-                    if (!currentMap) {
-                        // If strokes were not restored, currentMap is null. Build it from saved node list.
-                        currentMap = { active: Array(cols).fill(false), nodes: list, disabled: Array.from({length:cols},()=>new Set()) };
-                    } else {
-                        // If strokes were restored, currentMap exists. Overwrite its nodes with the saved list.
-                        currentMap.nodes = list;
-                    }
-                }
-
-                if (currentMap && (act || dis || groups)) {
-                    if (groups) nodeGroupMap = groups;
-                    for (let c = 0; c < cols; c++) {
-                        if (act && act[c] !== undefined) currentMap.active[c] = !!act[c];
-                        if (dis && dis[c] !== undefined) currentMap.disabled[c] = dis[c];
-                    }
-                }
-
-                  persistentDisabled = currentMap.disabled;
-                  __dgBumpNodesRev('setState-nodes');
-
-                  drawGrid();
-                  drawNodes(currentMap.nodes);
-                  try{ 
-                    emitDrawgridUpdate({ activityOnly: false });
-                  }catch{}
-              } catch(e){ }
-            }
-            if (Array.isArray(st.manualOverrides)){
-              try{ manualOverrides = st.manualOverrides.slice(0, cols).map(a=> new Set(a||[])); }catch{}
-            }
-            // Refresh UI affordances
-            try { (panel.__dgUpdateButtons || updateGeneratorButtons)(); } catch{}
-            // After all state is applied and layout is stable, sync the dropdown.
-            try {
-              const stepsSel = panel.querySelector('.drawgrid-steps');
-              if (stepsSel) stepsSel.value = String(cols);
-            } catch {}
-            if (currentMap){ 
-              try{
-                emitDrawgridUpdate({ activityOnly: false });
-              }catch{}
-            }
-            __hydrationJustApplied = true;
-            __dgHydrationPendingRedraw = true;
-            HY.scheduleHydrationLayoutRetry(panel, () => layout(true));
-            setTimeout(() => { __hydrationJustApplied = false; }, 32);
-
-            // IMPORTANT:
-            // Chained toys typically apply their saved content via setState() (not restoreFromState()).
-            // During refresh/boot, zoom/overview settling can briefly report a scaled DOM rect.
-            // If we miss a guaranteed composite+swap after applying state, the user can see an
-            // empty body (no grid) and/or strokes appear incorrectly scaled until interaction.
-            // Mirror the restoreFromState post-hydration forcing here.
-            try {
-              markStaticDirty('set-state');
-            } catch {}
-            try {
-              panel.__dgSingleCompositeDirty = true;
-            } catch {}
-            __dgNeedsUIRefresh = true;
-            __dgFrontSwapNextDraw = true;
-            __dgForceFullDrawNext = true;
-            __dgForceFullDrawFrames = Math.max(__dgForceFullDrawFrames || 0, 8);
-            ensurePostCommitRedraw('setState');
-            try {
-              if (typeof requestFrontSwap === 'function') {
-                requestFrontSwap(useFrontBuffers);
-              }
-            } catch {}
-            // Chained toys restore via setState() -- stabilize the same way as restoreFromState().
-            try { schedulePostRestoreStabilize('setState'); } catch {}
-          }catch(e){ }
-          isRestoring = false;
-          // Re-check after hydration completes
-          scheduleGhostIfEmpty({ initialDelay: 0 });
-          try {
-            updateHydrateInboundFromState(captureState(), { reason: 'setState-applied', panelId: panel?.id });
-          } catch {}
-          const strokeCount = Array.isArray(strokes) ? strokes.length : 0;
-          const { nodeCount: postNodeCount } = computeCurrentMapNodeStats(currentMap?.nodes, currentMap?.disabled);
-          const guardBlocksPostSetState =
-            DG_HYDRATE.guardActive &&
-            !DG_HYDRATE.seenUserChange &&
-            inboundWasNonEmpty() &&
-            strokeCount === 0 &&
-            postNodeCount === 0;
-          if (guardBlocksPostSetState) {
-            dgTraceLog('[drawgrid][persist-guard] skip post-setState persist (guard active & snapshot empty)', {
-              inbound: { ...DG_HYDRATE.inbound },
-              strokeCount,
-              nodeCount: postNodeCount,
-              seenUserChange: DG_HYDRATE.seenUserChange,
-              lastPersistNonEmpty: DG_HYDRATE.lastPersistNonEmpty,
-            });
-          } else {
-            schedulePersistState({ source: 'setState-complete' });
-          }
-          try { dgTraceLog('[drawgrid] SETSTATE complete', panel.id); } catch {}
-        });
-      });
-    }
+    setState,
   };
 
   try {
@@ -7405,6 +7258,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   try { panel.dispatchEvent(new CustomEvent('drawgrid:ready', { bubbles: true })); } catch {}
   return api;
 }
+
 
 
 
