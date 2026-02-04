@@ -701,83 +701,9 @@ export function createDgNodesRender({ state, deps } = {}) {
         s.nctx.shadowColor = 'transparent';
         s.nctx.shadowBlur = 0;
 
-        const gradientCache = new Map();
-        const getGradient = (ctx, x, y, r, color) => {
-          const key = `${color}-${r}`;
-          if (!gradientCache.has(key)) {
-            const grad = ctx.createRadialGradient(x, y, r * 0.1, x, y, r);
-            grad.addColorStop(0, color);
-            grad.addColorStop(0.92, 'rgba(143, 168, 255, 0)');
-            grad.addColorStop(1, 'rgba(143, 168, 255, 0)');
-            gradientCache.set(key, grad);
-          }
-          return gradientCache.get(key);
-        };
-
-        const __circleStart = __perfOn ? performance.now() : 0;
-        for (const node of nodeCoords) {
-          const disabled = node.disabled || s.currentMap?.disabled?.[node.col]?.has(node.row);
-          const group = node.group ?? null;
-          const advanced = s.panel.classList.contains('toy-zoomed');
-          const isSpecialLine1 = group === 1;
-          const isSpecialLine2 = group === 2;
-          const mainColor = disabled
-            ? 'rgba(143, 168, 255, 0.4)'
-            : isSpecialLine1
-              ? 'rgba(125, 180, 255, 0.92)'
-              : isSpecialLine2
-                ? 'rgba(255, 160, 120, 0.92)'
-                : 'rgba(255, 255, 255, 0.92)';
-
-          if (advanced && (isSpecialLine1 || isSpecialLine2) && !disabled) {
-            const glowRadius = node.radius * 1.6;
-            const glowColor = isSpecialLine1 ? 'rgba(125, 180, 255, 0.4)' : 'rgba(255, 160, 120, 0.4)';
-            s.nctx.fillStyle = glowColor;
-            s.nctx.beginPath();
-            s.nctx.arc(node.x, node.y, glowRadius, 0, Math.PI * 2);
-            s.nctx.fill();
-          }
-
-          s.nctx.fillStyle = getGradient(s.nctx, node.x, node.y, node.radius, mainColor);
-          s.nctx.beginPath();
-          s.nctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
-          s.nctx.fill();
-
-          s.nctx.beginPath();
-          s.nctx.fillStyle = disabled ? 'rgba(90, 110, 150, 0.65)' : 'rgba(255, 255, 255, 0.9)';
-          s.nctx.arc(node.x, node.y, node.radius * 0.55, 0, Math.PI * 2);
-          s.nctx.fill();
-
-          s.nctx.fillStyle = disabled ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.5)';
-          s.nctx.beginPath();
-          s.nctx.arc(node.x, node.y - node.radius * 0.3, node.radius * 0.3, 0, Math.PI * 2);
-          s.nctx.fill();
-        }
-        if (__perfOn && __circleStart) {
-          try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.circles', performance.now() - __circleStart); } catch {}
-        }
-
-        if (s.panel.classList.contains('toy-zoomed')) {
-          const __outlineStart = __perfOn ? performance.now() : 0;
-          for (const node of nodeCoords) {
-            if (!node.group) continue;
-            const disabled = node.disabled || s.currentMap?.disabled?.[node.col]?.has(node.row);
-            const outlineColor = node.group === 1
-              ? 'rgba(125, 180, 255, 0.95)'
-              : node.group === 2
-                ? 'rgba(255, 160, 120, 0.95)'
-                : 'rgba(255, 255, 255, 0.85)';
-            const strokeAlpha = disabled ? 0.65 : 1;
-            s.nctx.lineWidth = disabled ? 2 : 3.5;
-            s.nctx.strokeStyle = outlineColor.replace(/0\.[0-9]+\)$/, `${strokeAlpha})`);
-            s.nctx.beginPath();
-            s.nctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
-            s.nctx.stroke();
-          }
-          if (__perfOn && __outlineStart) {
-            try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.outlines', performance.now() - __outlineStart); } catch {}
-          }
-        }
+        // NOTE: We intentionally do NOT draw the old "node glow circles" here.
+        // They sit behind the orange square blocks and are never visible, so they
+        // were wasted draw work on the hot path.
 
         if (cache.ctx) {
           cache.ctx.setTransform(1, 0, 0, 1, 0, 0);
