@@ -63,11 +63,14 @@ import { createDgPointerTrace } from './dg-pointer-trace.js';
 import { createDgPaintDebug } from './dg-paint-debug.js';
 import { createDgInputHandlers } from './dg-input-handlers.js';
 import { createDgGridRender } from './dg-grid-render.js';
+import { createDgNodesRender } from './dg-nodes-render.js';
 import { createDgNoteGrid } from './dg-note-grid.js';
 import { createDgSnap } from './dg-snap.js';
+import { createDgMapRegen } from './dg-map-regen.js';
 import { computeGhostSweepLR } from './dg-ghost-path.js';
 import { createDgGhostLayer } from './dg-ghost-layer.js';
 import { createDgGhostGuide } from './dg-ghost-guide.js';
+import { createDgPaintSnapshot } from './dg-paint-snapshot.js';
 import {
   dgScaleTrace,
   dgNodeScaleTrace,
@@ -2052,6 +2055,10 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     mount: panel.__dgMount,
   }));
 
+  // Node render cache resetters (wired after createDgNodesRender).
+  let resetNodesCache = () => {};
+  let resetBlocksCache = () => {};
+
   function resizeSurfacesFor(nextCssW, nextCssH, nextDpr, reason) {
     return F.perfMarkSection('drawgrid.resize', () => {
       if (!__dgCommitResizeCount && (() => { try { return !!window.__ZOOM_COMMIT_PHASE; } catch {} return false; })()) {
@@ -2320,8 +2327,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         // assumptions and “jump” or appear scaled from the top-left.
         try {
           resetGridCache?.();
-          if (__dgNodesCache) { __dgNodesCache.key = ''; __dgNodesCache.nodeCoords = null; }
-          if (__dgBlocksCache) __dgBlocksCache.key = '';
+          resetNodesCache();
+          resetBlocksCache();
           panel.__dgGridHasPainted = false;
           __dgForceFullDrawNext = true;
         } catch {}
@@ -3041,6 +3048,7 @@ function ensureSizeReady({ force = false } = {}) {
   // The `strokes` array is removed. The paint canvas is now the source of truth.
   let cur = null;
   let strokes = []; // Store all completed stroke objects
+  let regenerateMapFromStrokes = () => {};
   let __dgOverlayStrokeCache = { value: false, len: 0, ts: 0 };
   let __dgOverlayStrokeListCache = { paintRev: -1, len: 0, special: [], colorized: [] };
 
@@ -3938,277 +3946,35 @@ function ensureSizeReady({ force = false } = {}) {
     }
   }
 
-  /**
-   * Processes a single generator stroke, fills in gaps to create a full line,
-   * and marks the interpolated nodes as disabled.
-   */
-  function processGeneratorStroke(stroke, newMap, newGroups) {
-    const partial = snapToGridFromStroke(stroke);
-    const filledNodes = fillGapsInNodeArray(partial.nodes, cols);
+  const dgPaintSnapshotState = {
+    get panel() { return panel; },
+    get DG_SINGLE_CANVAS() { return DG_SINGLE_CANVAS; },
+    get backCanvas() { return backCanvas; },
+    get paint() { return paint; },
+    get paintDpr() { return paintDpr; },
+    get usingBackBuffers() { return usingBackBuffers; },
+    get cssW() { return cssW; },
+    get cssH() { return cssH; },
+    get strokes() { return strokes; },
+    get pctx() { return pctx; },
+    set pctx(value) { pctx = value; },
+  };
 
-    for (let c = 0; c < cols; c++) {
-        if (filledNodes[c]?.size > 0) {
-            filledNodes[c].forEach(row => {
-                newMap.nodes[c].add(row);
-                if (stroke.generatorId) {
-                    const stack = newGroups[c].get(row) || [];
-                    if (!stack.includes(stroke.generatorId)) stack.push(stroke.generatorId);
-                    newGroups[c].set(row, stack);
-                }
-            });
+  const dgPaintSnapshotDeps = {
+    updatePaintBackingStores,
+    getActivePaintCtx,
+    getActivePaintCanvas,
+    resetPaintBlend,
+    R,
+    emitDG,
+    markPaintDirty,
+    clearAndRedrawFromStrokes,
+  };
 
-            if (partial.nodes[c]?.size === 0) {
-                if (!newMap.disabled[c]) newMap.disabled[c] = new Set();
-                filledNodes[c].forEach(row => newMap.disabled[c].add(row));
-            }
-            // Add any nodes that were explicitly marked as disabled by the snapping logic (e.g., out of bounds)
-            if (partial.disabled && partial.disabled[c]?.size > 0) {
-                if (!newMap.disabled[c]) newMap.disabled[c] = new Set();
-                partial.disabled[c].forEach(row => newMap.disabled[c].add(row));
-            }
-        }
-    }
-  }
-
-  // Regenerates the node map by snapping all generator strokes.
-function regenerateMapFromStrokes() {
-      const isZoomed = panel.classList.contains('toy-zoomed');
-      const newMap = { active: Array(cols).fill(false), nodes: Array.from({ length: cols }, () => new Set()), disabled: Array.from({ length: cols }, () => new Set()) };
-      const newGroups = Array.from({ length: cols }, () => new Map());
-
-      if (isZoomed) {
-        // Advanced view: snap each generator line separately and union nodes.
-        const gens = strokes.filter(s => s.generatorId);
-        gens.forEach(s => processGeneratorStroke(s, newMap, newGroups));
-      } else {
-        // Standard view: keep a single generator line to avoid double nodes.
-        const gens = strokes.filter(s => s.generatorId);
-        if (gens.length > 0){
-          const specialGen = gens.find(s => s.isSpecial) || gens[gens.length - 1];
-          if (specialGen) processGeneratorStroke(specialGen, newMap, newGroups);
-        } else {
-          // Prefer a special stroke, otherwise use the latest stroke.
-          const specialStroke = strokes.find(s => s.isSpecial) || (strokes.length ? strokes[strokes.length - 1] : null);
-          if (specialStroke) processGeneratorStroke(specialStroke, newMap, newGroups);
-        }
-        // ...manual overrides (unchanged)...
-        try {
-          if (manualOverrides && Array.isArray(manualOverrides)) {
-            for (let c = 0; c < cols; c++) {
-              const ov = manualOverrides[c];
-              if (ov && ov.size > 0) {
-                newMap.nodes[c] = new Set(ov);
-                // recompute active based on disabled set
-                const dis = newMap.disabled?.[c] || new Set();
-                const anyOn = Array.from(newMap.nodes[c]).some(r => !dis.has(r));
-                newMap.active[c] = anyOn;
-                // carry over groups from nodeGroupMap so we still avoid cross-line connections
-                if (nodeGroupMap && nodeGroupMap[c] instanceof Map) {
-                  for (const r of newMap.nodes[c]) {
-                    const g = nodeGroupMap[c].get(r);
-                    if (g != null) {
-                      const stack = Array.isArray(g) ? g.slice() : [g];
-                      newGroups[c].set(r, stack);
-                    }
-                  }
-                }
-              }
-            }
-          }
-        } catch {}
-      }
-
-      // Finalize active mask: a column is active if it has at least one non-disabled node
-      for (let c = 0; c < cols; c++) {
-        const nodes = newMap.nodes?.[c] || new Set();
-        const dis = newMap.disabled?.[c] || new Set();
-        let anyOn = false;
-        if (nodes.size > 0) {
-          for (const r of nodes) { if (!dis.has(r)) { anyOn = true; break; } }
-        }
-        newMap.active[c] = anyOn;
-      }
-
-      // If NOTHING is active but there are nodes, default to active for columns that have nodes.
-      if (!newMap.active.some(Boolean)) {
-        for (let c = 0; c < cols; c++) {
-          if ((newMap.nodes?.[c] || new Set()).size > 0) newMap.active[c] = true;
-        }
-      }
-
-      // If a pending active mask exists (e.g., after steps change), map it to new cols
-      if (pendingActiveMask && Array.isArray(pendingActiveMask.prevActive)) {
-        const prevCols = pendingActiveMask.prevCols || newMap.active.length;
-        const prevActive = pendingActiveMask.prevActive;
-        const newCols = cols;
-        const mapped = Array(newCols).fill(false);
-        if (prevCols === newCols) {
-          for (let i = 0; i < newCols; i++) mapped[i] = !!prevActive[i];
-        } else if (newCols > prevCols && newCols % prevCols === 0) { // Upscaling (e.g., 8 -> 16)
-          const factor = newCols / prevCols;
-          for (let i = 0; i < prevCols; i++) {
-            for (let j = 0; j < factor; j++) mapped[i * factor + j] = !!prevActive[i];
-          }
-        } else if (prevCols > newCols && prevCols % newCols === 0) { // Downscaling (e.g., 16 -> 8)
-          const factor = prevCols / newCols;
-          for (let i = 0; i < newCols; i++) {
-            let any = false;
-            for (let j = 0; j < factor; j++) any = any || !!prevActive[i * factor + j];
-            mapped[i] = any;
-          }
-        } else {
-          // fallback proportional map
-          for (let i = 0; i < newCols; i++) {
-            const src = Math.floor(i * prevCols / newCols);
-            mapped[i] = !!prevActive[src];
-          }
-        }
-        newMap.active = mapped;
-        // Rebuild the disabled sets based on the new active state
-        for (let c = 0; c < newCols; c++) {
-            if (newMap.active[c]) {
-                newMap.disabled[c].clear();
-            } else if (newMap.nodes[c]) {
-                newMap.nodes[c].forEach(r => newMap.disabled[c].add(r));
-            }
-        }
-        pendingActiveMask = null; // consume
-      } else {
-          // Preserve disabled nodes from the persistent set where positions still exist
-          for (let c = 0; c < cols; c++) {
-            const prevDis = persistentDisabled[c] || new Set();
-            for (const r of prevDis) {
-              if (newMap.nodes[c]?.has(r)) newMap.disabled[c].add(r);
-            }
-          }
-      }
-
-      const regenSource = __dgRegenSource || 'unknown';
-      __dgRegenSource = '';
-      if (DG_DEBUG) {
-        console.log('[DG][regen]', {
-          panelId: panel?.id || null,
-          source: regenSource,
-          strokes: Array.isArray(strokes) ? strokes.length : 0,
-          generators: Array.isArray(strokes) ? strokes.filter(s => s && s.generatorId).length : 0,
-          cols: cols,
-          nodeCount: newMap.nodes.reduce((n, s) => n + (s?.size || 0), 0),
-        });
-      }
-      DG.log('rebuild map', {
-        cols: newMap.nodes.length,
-        activeCount: newMap.active.filter(Boolean).length
-      });
-
-      const prevRev = (currentMap && Number.isFinite(currentMap.__dgRev)) ? currentMap.__dgRev : 0;
-
-      const prevActive = currentMap?.active ? currentMap.active.slice() : null;
-      const prevNodes = currentMap?.nodes ? currentMap.nodes.map(s => s ? new Set(s) : new Set()) : null;
-
-      currentMap = newMap;
-      // Bump a simple revision counter so drawNodes() can cheaply know whether the node layout/render cache is still valid.
-      currentMap.__dgRev = ((prevRev | 0) + 1) | 0;
-      try { panel.__dgNodesRev = currentMap.__dgRev; } catch {}
-      // Any regen implies nodes layer is dirty.
-      try { if (__dgNodesCache) { __dgNodesCache.key = ''; __dgNodesCache.nodeCoords = null; } } catch {}
-      nodeGroupMap = newGroups;
-      persistentDisabled = currentMap.disabled; // Update persistent set
-      try { (panel.__dgUpdateButtons || function(){})() } catch {}
-
-      let didChange = true;
-      if (prevActive && Array.isArray(currentMap.active) && prevActive.length === currentMap.active.length){
-        didChange = currentMap.active.some((v,i)=> v !== prevActive[i]);
-        if (!didChange && prevNodes && Array.isArray(currentMap.nodes) && prevNodes.length === currentMap.nodes.length){
-          didChange = currentMap.nodes.some((set,i)=>{
-            const a = prevNodes[i], b = set || new Set();
-            if (a.size !== b.size) return true;
-            for (const v of a) if (!b.has(v)) return true;
-            return false;
-          });
-        }
-      }
-
-      if (didChange){
-        emitDrawgridUpdate({ activityOnly: false });
-      } else {
-        // noise-free activity: do not notify the guide as a progress update
-        emitDrawgridUpdate({ activityOnly: true });
-      }
-
-      try {
-        dgTraceLog('[drawgrid] drawNodes', panel.id, {
-          cols: currentCols,
-          nodesCols: currentMap?.nodes?.length ?? 0,
-        });
-      } catch {}
-      drawNodes(currentMap.nodes);
-      drawGrid();
-      if (DG_SINGLE_CANVAS) {
-        __dgMarkSingleCanvasDirty(panel);
-        try { compositeSingleCanvas(); } catch {}
-      }
-  }
-
-  function capturePaintSnapshot() {
-    try {
-      const snapSrc = (DG_SINGLE_CANVAS && backCanvas) ? backCanvas : paint;
-      if (snapSrc && snapSrc.width > 0 && snapSrc.height > 0) {
-        const snap = document.createElement('canvas');
-        snap.width = snapSrc.width;
-        snap.height = snapSrc.height;
-        snap.getContext('2d')?.drawImage(snapSrc, 0, 0);
-        return {
-          canvas: snap,
-          dpr: (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : null,
-        };
-      }
-    } catch {}
-    return null;
-  }
-
-  function restorePaintSnapshot(snap) {
-    if (!snap) return;
-    try {
-      updatePaintBackingStores({ target: usingBackBuffers ? 'back' : 'both' });
-      pctx = getActivePaintCtx();
-      if (!pctx) {
-        try {
-          const active = getActivePaintCanvas?.();
-          console.warn('[DG][ink] NO paint ctx', {
-            id: panel.id,
-            usingBackBuffers,
-            cssW, cssH,
-            paintDpr,
-            activeRole: active?.getAttribute?.('data-role') || active?.id || null,
-            activeW: active?.width || null,
-            activeH: active?.height || null,
-          });
-        } catch {}
-      }
-
-      const snapCanvas = snap?.canvas || snap;
-      const snapDpr = (snap && typeof snap === 'object' && 'dpr' in snap) ? snap.dpr : null;
-      const dprMismatch =
-        Number.isFinite(snapDpr) &&
-        Number.isFinite(paintDpr) &&
-        Math.abs(snapDpr - paintDpr) > 1e-3;
-      if (dprMismatch && Array.isArray(strokes) && strokes.length > 0) {
-        // Avoid scaling old pixels across DPR changes; redraw from strokes for correct scale.
-        try { clearAndRedrawFromStrokes(null, 'paintSnapshot-skip:dpr:zoom-recompute'); } catch {}
-        return;
-      }
-      if (!snapCanvas) return;
-      resetPaintBlend(pctx);
-      R.clearCanvas(pctx);
-      emitDG('paint-clear', { reason: 'restore-snapshot' });
-      R.resetCtx(pctx);
-      R.resetCtx(pctx);
-      R.withLogicalSpace(pctx, () => {
-        pctx.drawImage(snapCanvas, 0, 0, snapCanvas.width, snapCanvas.height, 0, 0, cssW, cssH);
-        markPaintDirty();
-      });
-    } catch {}
-  }
+  const { capturePaintSnapshot, restorePaintSnapshot } = createDgPaintSnapshot({
+    state: dgPaintSnapshotState,
+    deps: dgPaintSnapshotDeps,
+  });
 
   function scheduleZoomRecompute() {
     if (zoomRAF) return;
@@ -6171,8 +5937,8 @@ function copyCanvas(backCtx, frontCtx) {
       }
       if (__dgGridReady()) {
         resetGridCache?.();
-        if (__dgNodesCache) { __dgNodesCache.key = ''; __dgNodesCache.nodeCoords = null; }
-        if (__dgBlocksCache) __dgBlocksCache.key = '';
+        resetNodesCache();
+        resetBlocksCache();
         try {
           if (gridBackCtx?.canvas) R.withDeviceSpace(gridBackCtx, () => gridBackCtx.clearRect(0, 0, gridBackCtx.canvas.width, gridBackCtx.canvas.height));
           if (nodesBackCtx?.canvas) R.withDeviceSpace(nodesBackCtx, () => nodesBackCtx.clearRect(0, 0, nodesBackCtx.canvas.width, nodesBackCtx.canvas.height));
@@ -6685,8 +6451,6 @@ function copyCanvas(backCtx, frontCtx) {
     }
     if (!wasOverlay) markPaintDirty();
   }
-  let __dgBlocksCache = { canvas: null, ctx: null, key: '' };
-
   // Draw helpers -----------------------------------------------------------
   // We sometimes run with paintDpr < 1 (pressure/adaptive DPR). In that mode,
   // canvases are allocated at cssW*paintDpr but MUST still be drawn in CSS-pixel
@@ -6772,521 +6536,88 @@ function copyCanvas(backCtx, frontCtx) {
     }
   }
 
-  let __dgNodesCache = { canvas: null, ctx: null, key: '', nodeCoords: null };
+  // Note grid helpers (assigned after createDgNoteGrid; wrappers avoid TDZ).
+  let chromaticPalette = [];
+  let pentatonicPalette = [];
+  let pentatonicPitchClasses = new Set();
+  let drawNoteLabelsToImpl = () => {};
+  let drawNoteLabelsImpl = () => {};
+  let renderDragScaleBlueHintsImpl = () => {};
+  let setDragScaleHighlightImpl = () => {};
+  const drawNoteLabelsTo = (...args) => drawNoteLabelsToImpl(...args);
+  const drawNoteLabels = (...args) => drawNoteLabelsImpl(...args);
+  const renderDragScaleBlueHints = (...args) => renderDragScaleBlueHintsImpl(...args);
+  const setDragScaleHighlight = (...args) => setDragScaleHighlightImpl(...args);
 
-  function __dgBumpNodesRev(reason = '') {
-    try {
-      if (!currentMap) return;
-      const prev = (Number.isFinite(currentMap.__dgRev) ? currentMap.__dgRev : 0) | 0;
-      currentMap.__dgRev = (prev + 1) | 0;
+  const dgNodesRenderState = {
+    get panel() { return panel; },
+    get usingBackBuffers() { return usingBackBuffers; },
+    get nctx() { return nctx; },
+    get nodesFrontCtx() { return nodesFrontCtx; },
+    get DG_COMBINE_GRID_NODES() { return DG_COMBINE_GRID_NODES; },
+    get DG_SINGLE_CANVAS() { return DG_SINGLE_CANVAS; },
+    get DG_SINGLE_CANVAS_OVERLAYS() { return DG_SINGLE_CANVAS_OVERLAYS; },
+    get paintDpr() { return paintDpr; },
+    get cssW() { return cssW; },
+    get cssH() { return cssH; },
+    get cw() { return cw; },
+    get ch() { return ch; },
+    get topPad() { return topPad; },
+    get gridArea() { return gridArea; },
+    get rows() { return rows; },
+    get cols() { return cols; },
+    get currentMap() { return currentMap; },
+    get nodeGroupMap() { return nodeGroupMap; },
+    get strokes() { return strokes; },
+    get dragScaleHighlightCol() { return dragScaleHighlightCol; },
+    get draggedNode() { return draggedNode; },
+    get flashes() { return flashes; },
+    get tutorialHighlightMode() { return tutorialHighlightMode; },
+    get wrap() { return wrap; },
+    get boardScale() { return boardScale; },
+    get frontCanvas() { return frontCanvas; },
+    get paint() { return paint; },
+    get backCanvas() { return backCanvas; },
+    get __dgProbeDidFirstDraw() { return __dgProbeDidFirstDraw; },
+    set __dgProbeDidFirstDraw(v) { __dgProbeDidFirstDraw = v; },
+  };
 
-      // Any change that affects nodes / active / disabled must invalidate the cached nodes layer.
-      if (__dgNodesCache) {
-        __dgNodesCache.key = '';
-        __dgNodesCache.nodeCoords = null;
-      }
-      // Optional: make it easy to see rev churn while debugging.
-      panel.__dgNodesRev = currentMap.__dgRev;
-      if (reason) panel.__dgNodesRevReason = String(reason);
-    } catch {}
-  }
+  const dgNodesRenderDeps = {
+    isGridReady: __dgGridReady,
+    FD,
+    R,
+    drawGrid,
+    renderDragScaleBlueHints,
+    drawBlock,
+    drawNoteLabelsTo,
+    renderTutorialHighlight,
+    clearTutorialHighlight,
+    __dgWithLogicalSpace,
+    __dgDescribeCanvasScale,
+    __dgGetCanvasSizingSnapshot,
+    dgNodeScaleTrace,
+    getActivePaintCanvas,
+    __dgMarkSingleCanvasCompositeDirty,
+    __dgProbeDump,
+    getLayoutCache: () => ({
+      w: __dgLayoutW || 0,
+      h: __dgLayoutH || 0,
+      goodW: __dgLayoutGoodW || 0,
+      goodH: __dgLayoutGoodH || 0,
+    }),
+    setNodeCoordsForHitTest: (value) => { nodeCoordsForHitTest = value; },
+  };
 
-  function drawNodes(nodes) {
-    if (!__dgGridReady()) {
-      return;
-    }
-    FD.layerTrace('drawNodes:enter', {
-      panelId: panel?.id || null,
-      usingBackBuffers,
-      nctxRole: nctx?.canvas?.getAttribute?.('data-role') || null,
-      nctxSize: nctx?.canvas ? { w: nctx.canvas.width, h: nctx.canvas.height } : null,
-    });
-    let nodeCoords = null;
-    nodeCoordsForHitTest = [];
-    const __perfOn = !!(window.__PerfFrameProf && typeof performance !== 'undefined' && performance.now);
-    const __layoutStart = __perfOn ? performance.now() : 0;
-    R.resetCtx(nctx);
-    R.resetCtx(nctx);
-    if (DG_COMBINE_GRID_NODES) {
-      if (!panel.__dgGridReadyForNodes) {
-        drawGrid();
-      }
-      panel.__dgGridReadyForNodes = false;
-    }
-    const surface = nctx.canvas;
-    const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
-    const width = cssW || (surface?.width ?? 0) / scale;
-    const height = cssH || (surface?.height ?? 0) / scale;
-    if (!DG_COMBINE_GRID_NODES) {
-      const surfacePxW = surface?.width ?? 0;
-      const surfacePxH = surface?.height ?? 0;
-      R.withDeviceSpace(nctx, () => {
-        nctx.clearRect(0, 0, surfacePxW, surfacePxH);
-      });
-    }
-    if (DG_SINGLE_CANVAS && nodesFrontCtx?.canvas) {
-      const frontSurface = nodesFrontCtx.canvas;
-      R.withDeviceSpace(nodesFrontCtx, () => {
-        nodesFrontCtx.clearRect(0, 0, frontSurface.width, frontSurface.height);
-      });
-    }
-    if (!__dgProbeDidFirstDraw && typeof window !== 'undefined' && window.__DG_PROBE_ON !== false) {
-      __dgProbeDidFirstDraw = true;
-      try { __dgProbeDump('first-draw:nodes'); } catch {}
-    }
-    __dgWithLogicalSpace(nctx, () => {
-      if (!nodes) {
-        return;
-      }
+  const dgNodesRender = createDgNodesRender({
+    state: dgNodesRenderState,
+    deps: dgNodesRenderDeps,
+  });
 
-      const radius = Math.max(4, Math.min(cw, ch) * 0.20);
-      const isZoomed = panel.classList.contains('toy-zoomed');
-      const hasTwoLines = Array.isArray(strokes) && strokes.some(s => s && s.generatorId === 2);
-      let mapKey = 2166136261;
-      const __dgHashStep = (h, v) => {
-        const n = (Number.isFinite(v) ? v : 0) | 0;
-        return ((h ^ n) * 16777619) >>> 0;
-      };
+  const { drawNodes, bumpNodesRev } = dgNodesRender;
+  resetNodesCache = dgNodesRender.resetNodesCache;
+  resetBlocksCache = dgNodesRender.resetBlocksCache;
 
-      // Build a *sparse* key for nodes layout + render caching.
-      // Important: do NOT iterate every row/col cell here (that's what we're trying to avoid).
-      mapKey = __dgHashStep(mapKey, rows);
-      mapKey = __dgHashStep(mapKey, cols);
-      mapKey = __dgHashStep(mapKey, Math.round(cw * 1000));
-      mapKey = __dgHashStep(mapKey, Math.round(ch * 1000));
-      mapKey = __dgHashStep(mapKey, Math.round(topPad * 1000));
-      mapKey = __dgHashStep(mapKey, Math.round((gridArea?.x || 0) * 1000));
-      mapKey = __dgHashStep(mapKey, Math.round((gridArea?.y || 0) * 1000));
-      mapKey = __dgHashStep(mapKey, Math.round((gridArea?.w || 0) * 1000));
-      mapKey = __dgHashStep(mapKey, Math.round((gridArea?.h || 0) * 1000));
-      mapKey = __dgHashStep(mapKey, hasTwoLines ? 1 : 0);
-      mapKey = __dgHashStep(mapKey, isZoomed ? 1 : 0);
-
-      if (currentMap) {
-        // IMPORTANT PERF: avoid iterating over every node just to build a cache key.
-        // Node sets can be large (and this was dominating drawgrid.nodes.layout in perf).
-        // Instead, rely on a simple revision counter that we bump whenever nodes/active/disabled change.
-        const __rev = (Number.isFinite(currentMap.__dgRev) ? currentMap.__dgRev : 0) | 0;
-        mapKey = __dgHashStep(mapKey, __rev);
-
-        // Also hash the active mask (cheap, cols is small) so toggles are reflected even if a caller forgets to bump rev.
-        if (Array.isArray(currentMap.active)) {
-          for (let c = 0; c < cols; c++) {
-            mapKey = __dgHashStep(mapKey, currentMap.active[c] ? 1 : 0);
-          }
-        }
-      }
-
-      const dragCol = (typeof dragScaleHighlightCol === 'number') ? dragScaleHighlightCol : -1;
-      const dragRow = (draggedNode && typeof draggedNode.row === 'number') ? draggedNode.row : -1;
-      mapKey = __dgHashStep(mapKey, dragCol);
-      mapKey = __dgHashStep(mapKey, dragRow);
-
-      const cache = __dgNodesCache;
-      const surfacePxW = surface?.width ?? nctx.canvas?.width ?? 0;
-      const surfacePxH = surface?.height ?? nctx.canvas?.height ?? 0;
-      if (!cache.canvas) cache.canvas = document.createElement('canvas');
-      if (cache.canvas.width !== surfacePxW) cache.canvas.width = surfacePxW;
-      if (cache.canvas.height !== surfacePxH) cache.canvas.height = surfacePxH;
-      if (!cache.ctx) cache.ctx = cache.canvas.getContext('2d');
-      const cacheKey = `${mapKey}|${Math.round(radius * 1000)}|${surfacePxW}x${surfacePxH}`;
-      const cacheMiss = cache.key !== cacheKey;
-
-      const cacheHit = !cacheMiss && cache.canvas && Array.isArray(cache.nodeCoords);
-      if (cacheHit) {
-        // Reuse last layout for hit-testing; avoid O(cols*rows) rebuilds.
-        nodeCoords = cache.nodeCoords;
-        nodeCoordsForHitTest = nodeCoords;
-
-        if (__perfOn && __layoutStart) {
-          try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.layout', performance.now() - __layoutStart); } catch {}
-        }
-
-        const __cacheBlitStart = __perfOn ? performance.now() : 0;
-        // Cache is stored in device pixels; blit in device space to avoid double-scaling.
-        R.withDeviceSpace(nctx, () => {
-          nctx.drawImage(cache.canvas, 0, 0);
-        });
-        if (__perfOn && __cacheBlitStart) {
-          try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.cacheBlit', performance.now() - __cacheBlitStart); } catch {}
-        }
-      }
-
-      // Non-spammy node/canvas scale tracing (logs only when the relevant scale inputs change).
-      // Repro: zoomed-out scene -> create draw toy -> draw line; notes/connectors/text appear smaller and shrink further on zoom.
-      if (typeof window !== 'undefined' && window.__DG_NODE_SCALE_TRACE) {
-        let __dgScaleHash = 2166136261;
-        __dgScaleHash = __dgHashStep(__dgScaleHash, rows);
-        __dgScaleHash = __dgHashStep(__dgScaleHash, cols);
-        __dgScaleHash = __dgHashStep(__dgScaleHash, Math.round(cw * 1000));
-        __dgScaleHash = __dgHashStep(__dgScaleHash, Math.round(ch * 1000));
-        __dgScaleHash = __dgHashStep(__dgScaleHash, Math.round(topPad * 1000));
-        __dgScaleHash = __dgHashStep(__dgScaleHash, Math.round((gridArea?.x || 0) * 1000));
-        __dgScaleHash = __dgHashStep(__dgScaleHash, Math.round((gridArea?.y || 0) * 1000));
-        __dgScaleHash = __dgHashStep(__dgScaleHash, Math.round((gridArea?.w || 0) * 1000));
-        __dgScaleHash = __dgHashStep(__dgScaleHash, Math.round((gridArea?.h || 0) * 1000));
-        __dgScaleHash = __dgHashStep(__dgScaleHash, isZoomed ? 1 : 0);
-        __dgScaleHash = __dgHashStep(__dgScaleHash, Math.round((cssW || 0) * 10));
-        __dgScaleHash = __dgHashStep(__dgScaleHash, Math.round((cssH || 0) * 10));
-        __dgScaleHash = __dgHashStep(__dgScaleHash, Math.round(((Number.isFinite(paintDpr) ? paintDpr : 1) || 1) * 1000));
-
-        const __last = panel.__dgLastNodeScaleHash;
-        if (__last !== __dgScaleHash) {
-          panel.__dgLastNodeScaleHash = __dgScaleHash;
-
-          const panelRect = panel?.getBoundingClientRect?.();
-          const wrapRect = wrap?.getBoundingClientRect?.();
-          const nodesRect = nctx?.canvas?.getBoundingClientRect?.();
-          const nodesPx = nctx?.canvas ? { w: nctx.canvas.width, h: nctx.canvas.height } : null;
-          const paintCanvas = (typeof getActivePaintCanvas === 'function')
-            ? getActivePaintCanvas()
-            : (frontCanvas || paint || null);
-          const nodesScale = __dgDescribeCanvasScale(nctx?.canvas, wrapRect);
-          const paintScale = __dgDescribeCanvasScale(paintCanvas, wrapRect);
-          const frontScale = __dgDescribeCanvasScale(frontCanvas, wrapRect);
-          const backScale = __dgDescribeCanvasScale(backCanvas, wrapRect);
-          const paintSnap = __dgGetCanvasSizingSnapshot(paintCanvas);
-          const frontSnap = __dgGetCanvasSizingSnapshot(frontCanvas);
-          const backSnap = __dgGetCanvasSizingSnapshot(backCanvas);
-          const wrapScaleW = (wrapRect && wrapRect.width && wrap?.clientWidth)
-            ? +(wrapRect.width / wrap.clientWidth).toFixed(3)
-            : null;
-          const wrapScaleH = (wrapRect && wrapRect.height && wrap?.clientHeight)
-            ? +(wrapRect.height / wrap.clientHeight).toFixed(3)
-            : null;
-
-          const payload = {
-            panelId: panel?.id || null,
-            paintDpr,
-            deviceDpr: (typeof devicePixelRatio === 'number' ? devicePixelRatio : null),
-            cssW, cssH,
-            panelRect: panelRect ? { w: Math.round(panelRect.width), h: Math.round(panelRect.height) } : null,
-            wrapRect: wrapRect ? { w: Math.round(wrapRect.width), h: Math.round(wrapRect.height) } : null,
-            wrapClient: wrap ? { w: wrap.clientWidth || 0, h: wrap.clientHeight || 0 } : null,
-            wrapScaleW,
-            wrapScaleH,
-            boardScale: (Number.isFinite(boardScale) ? +boardScale.toFixed(3) : null),
-            layoutCache: { w: __dgLayoutW || 0, h: __dgLayoutH || 0, goodW: __dgLayoutGoodW || 0, goodH: __dgLayoutGoodH || 0 },
-            nodesRect: nodesRect ? { w: Math.round(nodesRect.width), h: Math.round(nodesRect.height) } : null,
-            nodesPx,
-            nodesScale,
-            paintScale,
-            frontScale,
-            backScale,
-            activePaintRole: paintCanvas?.getAttribute?.('data-role') || null,
-            usingBackBuffers,
-            paintSizes: { active: paintSnap, front: frontSnap, back: backSnap },
-            paintActivePxW: paintSnap?.pxW ?? null,
-            paintActivePxH: paintSnap?.pxH ?? null,
-            paintActiveRectW: paintSnap?.rectW ?? null,
-            paintActiveRectH: paintSnap?.rectH ?? null,
-            paintActiveClientW: paintSnap?.clientW ?? null,
-            paintActiveClientH: paintSnap?.clientH ?? null,
-            paintActiveCssW: paintSnap?.cssW ?? null,
-            paintActiveCssH: paintSnap?.cssH ?? null,
-            paintActiveTsmCssW: paintSnap?.tsmCssW ?? null,
-            paintActiveTsmCssH: paintSnap?.tsmCssH ?? null,
-            paintActiveDgCssW: paintSnap?.dgCssW ?? null,
-            paintActiveDgCssH: paintSnap?.dgCssH ?? null,
-            paintActiveEffDprW: paintSnap?.effDprW ?? null,
-            paintActiveEffDprH: paintSnap?.effDprH ?? null,
-            gridArea: gridArea ? { x: Math.round(gridArea.x), y: Math.round(gridArea.y), w: Math.round(gridArea.w), h: Math.round(gridArea.h) } : null,
-            cw: Number.isFinite(cw) ? +cw.toFixed(3) : cw,
-            ch: Number.isFinite(ch) ? +ch.toFixed(3) : ch,
-            topPad: Number.isFinite(topPad) ? +topPad.toFixed(3) : topPad,
-            // sanity: if these drift, notes/connectors can visually "shrink" within the canvas
-            gridColsW: Number.isFinite(cw) ? +(cw * cols).toFixed(2) : null,
-            gridRowsH: Number.isFinite(ch) ? +(ch * rows).toFixed(2) : null,
-          };
-          dgNodeScaleTrace('drawNodes:basis', payload);
-        }
-      }
-
-      if (!cacheHit) {
-        nodeCoords = [];
-        nodeCoordsForHitTest = nodeCoords;
-        for (let c = 0; c < cols; c++) {
-          if (!nodes[c] || nodes[c].size === 0) continue;
-          for (const r of nodes[c]) {
-            const x = gridArea.x + c * cw + cw * 0.5;
-            const y = gridArea.y + topPad + r * ch + ch * 0.5;
-            const groupEntry = nodeGroupMap?.[c]?.get(r) ?? null;
-            const disabledSet = currentMap?.disabled?.[c];
-            const isDisabled = !!(disabledSet && disabledSet.has(r));
-            if (Array.isArray(groupEntry) && groupEntry.length > 0) {
-              for (let i = groupEntry.length - 1; i >= 0; i--) {
-                const gid = groupEntry[i];
-                const nodeData = { x, y, col: c, row: r, radius: radius * 1.5, group: gid, disabled: isDisabled };
-                nodeCoords.push(nodeData);
-              }
-            } else {
-              const groupId = typeof groupEntry === 'number' ? groupEntry : null;
-              const nodeData = { x, y, col: c, row: r, radius: radius * 1.5, group: groupId, disabled: isDisabled };
-              nodeCoords.push(nodeData);
-            }
-          }
-        }
-
-        cache.nodeCoords = nodeCoords;
-        if (__perfOn && __layoutStart) {
-          try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.layout', performance.now() - __layoutStart); } catch {}
-        }
-      }
-
-    if (!cacheHit && cacheMiss) {
-      FD.layerDebugLog('nodes-cache-miss', {
-        panelId: panel?.id || null,
-        cacheKey,
-        surfacePxW,
-        surfacePxH,
-        cssW,
-        cssH,
-        nodeCount: nodeCoords.length,
-      });
-      const __drawStart = __perfOn ? performance.now() : 0;
-      renderDragScaleBlueHints(nctx);
-      nctx.lineWidth = 3;
-      const colsMap = new Map();
-      for (const node of nodeCoords) {
-        if (!colsMap.has(node.col)) colsMap.set(node.col, []);
-        colsMap.get(node.col).push(node);
-      }
-
-      const colorFor = (gid, active = true) => {
-        if (!active) return 'rgba(80, 100, 160, 0.6)';
-        if (gid === 1) return 'rgba(125, 180, 255, 0.9)';
-        if (gid === 2) return 'rgba(255, 160, 120, 0.9)';
-        return 'rgba(255, 255, 255, 0.85)';
-      };
-
-      const matchGroup = (value, gid) => {
-        if (gid == null) return value == null;
-        return value === gid;
-      };
-
-      const __connStart = __perfOn ? performance.now() : 0;
-      for (let c = 0; c < cols - 1; c++) {
-        const currentColNodes = colsMap.get(c);
-        const nextColNodes = colsMap.get(c + 1);
-        if (!currentColNodes || !nextColNodes) continue;
-        const currentIsActive = currentMap?.active?.[c] ?? false;
-        const nextIsActive = currentMap?.active?.[c + 1] ?? true;
-        const advanced = panel.classList.contains('toy-zoomed');
-
-        const drawGroupConnections = (gid) => {
-          for (const nodeA of currentColNodes) {
-            if (!matchGroup(nodeA.group ?? null, gid)) continue;
-            for (const nodeB of nextColNodes) {
-              if (!matchGroup(nodeB.group ?? null, gid)) continue;
-              const eitherDisabled = nodeA.disabled || nodeB.disabled;
-              nctx.strokeStyle = colorFor(gid, currentIsActive && nextIsActive && !eitherDisabled);
-              if (gid && advanced && !eitherDisabled) {
-                nctx.shadowColor = nctx.strokeStyle;
-                nctx.shadowBlur = 12;
-              } else {
-                nctx.shadowColor = 'transparent';
-                nctx.shadowBlur = 0;
-              }
-              nctx.beginPath();
-              nctx.moveTo(nodeA.x, nodeA.y);
-              nctx.lineTo(nodeB.x, nodeB.y);
-              nctx.stroke();
-            }
-          }
-        };
-
-        drawGroupConnections(1);
-        drawGroupConnections(2);
-        drawGroupConnections(null);
-      }
-      if (__perfOn && __connStart) {
-        try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.connections', performance.now() - __connStart); } catch {}
-      }
-
-      nctx.shadowColor = 'transparent';
-      nctx.shadowBlur = 0;
-
-      const gradientCache = new Map();
-      const getGradient = (ctx, x, y, r, color) => {
-        const key = `${color}-${r}`;
-        if (!gradientCache.has(key)) {
-          const grad = ctx.createRadialGradient(x, y, r * 0.1, x, y, r);
-          grad.addColorStop(0, color);
-          grad.addColorStop(0.92, 'rgba(143, 168, 255, 0)');
-          grad.addColorStop(1, 'rgba(143, 168, 255, 0)');
-          gradientCache.set(key, grad);
-        }
-        return gradientCache.get(key);
-      };
-
-      const __circleStart = __perfOn ? performance.now() : 0;
-      for (const node of nodeCoords) {
-        const disabled = node.disabled || currentMap?.disabled?.[node.col]?.has(node.row);
-        const group = node.group ?? null;
-        const advanced = panel.classList.contains('toy-zoomed');
-        const isSpecialLine1 = group === 1;
-        const isSpecialLine2 = group === 2;
-        const mainColor = disabled
-          ? 'rgba(143, 168, 255, 0.4)'
-          : isSpecialLine1
-            ? 'rgba(125, 180, 255, 0.92)'
-            : isSpecialLine2
-              ? 'rgba(255, 160, 120, 0.92)'
-              : 'rgba(255, 255, 255, 0.92)';
-
-        if (advanced && (isSpecialLine1 || isSpecialLine2) && !disabled) {
-          const glowRadius = node.radius * 1.6;
-          const glowColor = isSpecialLine1 ? 'rgba(125, 180, 255, 0.4)' : 'rgba(255, 160, 120, 0.4)';
-          nctx.fillStyle = glowColor;
-          nctx.beginPath();
-          nctx.arc(node.x, node.y, glowRadius, 0, Math.PI * 2);
-          nctx.fill();
-        }
-
-        nctx.fillStyle = getGradient(nctx, node.x, node.y, node.radius, mainColor);
-        nctx.beginPath();
-        nctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
-        nctx.fill();
-
-        nctx.beginPath();
-        nctx.fillStyle = disabled ? 'rgba(90, 110, 150, 0.65)' : 'rgba(255, 255, 255, 0.9)';
-        nctx.arc(node.x, node.y, node.radius * 0.55, 0, Math.PI * 2);
-        nctx.fill();
-
-        nctx.fillStyle = disabled ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.5)';
-        nctx.beginPath();
-        nctx.arc(node.x, node.y - node.radius * 0.3, node.radius * 0.3, 0, Math.PI * 2);
-        nctx.fill();
-      }
-      if (__perfOn && __circleStart) {
-        try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.circles', performance.now() - __circleStart); } catch {}
-      }
-
-      if (panel.classList.contains('toy-zoomed')) {
-        const __outlineStart = __perfOn ? performance.now() : 0;
-        for (const node of nodeCoords) {
-          if (!node.group) continue;
-          const disabled = node.disabled || currentMap?.disabled?.[node.col]?.has(node.row);
-          const outlineColor = node.group === 1
-            ? 'rgba(125, 180, 255, 0.95)'
-            : node.group === 2
-              ? 'rgba(255, 160, 120, 0.95)'
-              : 'rgba(255, 255, 255, 0.85)';
-          const strokeAlpha = disabled ? 0.65 : 1;
-          nctx.lineWidth = disabled ? 2 : 3.5;
-          nctx.strokeStyle = outlineColor.replace(/0\.[0-9]+\)$/, `${strokeAlpha})`);
-          nctx.beginPath();
-          nctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
-          nctx.stroke();
-        }
-        if (__perfOn && __outlineStart) {
-          try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.outlines', performance.now() - __outlineStart); } catch {}
-        }
-      }
-
-      if (cache.ctx) {
-        cache.ctx.setTransform(1, 0, 0, 1, 0, 0);
-        cache.ctx.clearRect(0, 0, cache.canvas.width, cache.canvas.height);
-        cache.ctx.drawImage(nctx.canvas, 0, 0);
-      }
-      cache.key = cacheKey;
-      cache.nodeCoords = nodeCoords;
-      if (__perfOn && __drawStart) {
-        try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.draw', performance.now() - __drawStart); } catch {}
-      }
-      }
-
-      const blockCache = __dgBlocksCache;
-      if (!blockCache.canvas) blockCache.canvas = document.createElement('canvas');
-      if (blockCache.canvas.width !== surfacePxW) blockCache.canvas.width = surfacePxW;
-      if (blockCache.canvas.height !== surfacePxH) blockCache.canvas.height = surfacePxH;
-      if (!blockCache.ctx) blockCache.ctx = blockCache.canvas.getContext('2d');
-      const blockKey = `${mapKey}|${Math.round(radius * 1000)}|${surfacePxW}x${surfacePxH}|blocks`;
-      if (blockCache.key !== blockKey && blockCache.ctx) {
-        const __blocksBuildStart = __perfOn ? performance.now() : 0;
-        blockCache.key = blockKey;
-        R.resetCtx(blockCache.ctx);
-        R.withLogicalSpace(blockCache.ctx, () => {
-          blockCache.ctx.clearRect(0, 0, width, height);
-          for (const node of nodeCoords) {
-            const colActive = currentMap?.active?.[node.col] ?? true;
-            const nodeOn = colActive && !node.disabled;
-            const size = radius * 2;
-            const cubeRect = { x: node.x - size / 2, y: node.y - size / 2, w: size, h: size };
-            drawBlock(blockCache.ctx, cubeRect, {
-              baseColor: nodeOn ? '#ff8c00' : '#333',
-              active: nodeOn,
-              variant: 'button',
-              noteLabel: null,
-              showArrows: false,
-            });
-          }
-          drawNoteLabelsTo(blockCache.ctx, nodes);
-        });
-        if (__perfOn && __blocksBuildStart) {
-          try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.blocks.build', performance.now() - __blocksBuildStart); } catch {}
-        }
-      }
-
-      if (blockCache.canvas) {
-        const __blocksBlitStart = __perfOn ? performance.now() : 0;
-        // Block cache is device-pixel content; blit without logical scaling.
-        R.withDeviceSpace(nctx, () => {
-          nctx.drawImage(blockCache.canvas, 0, 0);
-        });
-        if (__perfOn && __blocksBlitStart) {
-          try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.blocks.blit', performance.now() - __blocksBlitStart); } catch {}
-        }
-      }
-
-      const __flashStart = __perfOn ? performance.now() : 0;
-      for (const node of nodeCoords) {
-        const flash = flashes[node.col] || 0;
-        if (flash <= 0) continue;
-        const size = radius * 2;
-        const cubeRect = { x: node.x - size / 2, y: node.y - size / 2, w: size, h: size };
-        nctx.save();
-        const scale = 1 + 0.15 * Math.sin(flash * Math.PI);
-        nctx.translate(node.x, node.y);
-        nctx.scale(scale, scale);
-        nctx.translate(-node.x, -node.y);
-        drawBlock(nctx, cubeRect, {
-          baseColor: '#FFFFFF',
-          active: true,
-          variant: 'button',
-          noteLabel: null,
-          showArrows: false,
-        });
-        nctx.restore();
-      }
-      if (__perfOn && __flashStart) {
-        try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.flash', performance.now() - __flashStart); } catch {}
-      }
-      if (tutorialHighlightMode !== 'none') {
-        const __tutorialStart = __perfOn ? performance.now() : 0;
-        renderTutorialHighlight();
-        if (__perfOn && __tutorialStart) {
-          try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.tutorial', performance.now() - __tutorialStart); } catch {}
-        }
-      } else {
-        const __tutorialStart = __perfOn ? performance.now() : 0;
-        clearTutorialHighlight();
-        if (__perfOn && __tutorialStart) {
-          try { window.__PerfFrameProf?.mark?.('drawgrid.nodes.tutorial', performance.now() - __tutorialStart); } catch {}
-        }
-      }
-
-      nodeCoordsForHitTest = nodeCoords;
-    });
-    if (DG_SINGLE_CANVAS && !DG_SINGLE_CANVAS_OVERLAYS) {
-      __dgMarkSingleCanvasCompositeDirty(panel);
-    }
-    FD.layerTrace('drawNodes:exit', {
-      panelId: panel?.id || null,
-      usingBackBuffers,
-      nctxRole: nctx?.canvas?.getAttribute?.('data-role') || null,
-    });
-  }
+  const __dgBumpNodesRev = bumpNodesRev;
 
   const dgNoteGridState = {
     get cssH() { return cssH; },
@@ -7311,18 +6642,17 @@ function copyCanvas(backCtx, frontCtx) {
     drawNodes,
   };
 
-  const {
-    chromaticPalette,
-    pentatonicPalette,
-    pentatonicPitchClasses,
-    drawNoteLabelsTo,
-    drawNoteLabels,
-    renderDragScaleBlueHints,
-    setDragScaleHighlight,
-  } = createDgNoteGrid({
+  const noteGrid = createDgNoteGrid({
     state: dgNoteGridState,
     deps: dgNoteGridDeps,
   });
+  chromaticPalette = noteGrid.chromaticPalette;
+  pentatonicPalette = noteGrid.pentatonicPalette;
+  pentatonicPitchClasses = noteGrid.pentatonicPitchClasses;
+  drawNoteLabelsToImpl = noteGrid.drawNoteLabelsTo;
+  drawNoteLabelsImpl = noteGrid.drawNoteLabels;
+  renderDragScaleBlueHintsImpl = noteGrid.renderDragScaleBlueHints;
+  setDragScaleHighlightImpl = noteGrid.setDragScaleHighlight;
 
   const dgSnapState = {
     get cols() { return cols; },
@@ -7347,6 +6677,50 @@ function copyCanvas(backCtx, frontCtx) {
     state: dgSnapState,
     deps: dgSnapDeps,
   });
+
+  /**
+   * Processes a single generator stroke, fills in gaps to create a full line,
+   * and marks the interpolated nodes as disabled.
+   */
+  const dgMapRegenState = {
+    get panel() { return panel; },
+    get cols() { return cols; },
+    get currentCols() { return currentCols; },
+    get strokes() { return strokes; },
+    get currentMap() { return currentMap; },
+    set currentMap(v) { currentMap = v; },
+    get nodeGroupMap() { return nodeGroupMap; },
+    set nodeGroupMap(v) { nodeGroupMap = v; },
+    get manualOverrides() { return manualOverrides; },
+    get pendingActiveMask() { return pendingActiveMask; },
+    set pendingActiveMask(v) { pendingActiveMask = v; },
+    get persistentDisabled() { return persistentDisabled; },
+    set persistentDisabled(v) { persistentDisabled = v; },
+    get __dgRegenSource() { return __dgRegenSource; },
+    set __dgRegenSource(v) { __dgRegenSource = v; },
+  };
+
+  const dgMapRegenDeps = {
+    fillGapsInNodeArray,
+    snapToGridFromStroke,
+    emitDrawgridUpdate,
+    drawNodes,
+    drawGrid,
+    __dgMarkSingleCanvasDirty,
+    compositeSingleCanvas,
+    updateGeneratorButtons,
+    dgTraceLog,
+    resetNodesCache: () => resetNodesCache(),
+    DG,
+    DG_DEBUG,
+    DG_SINGLE_CANVAS,
+  };
+
+  const mapRegen = createDgMapRegen({
+    state: dgMapRegenState,
+    deps: dgMapRegenDeps,
+  });
+  regenerateMapFromStrokes = mapRegen.regenerateMapFromStrokes;
 
   const dgPointerTrace = createDgPointerTrace({
     getPanel: () => panel,
