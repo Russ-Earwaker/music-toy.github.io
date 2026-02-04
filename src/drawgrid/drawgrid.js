@@ -77,6 +77,7 @@ import { createDgClear } from './dg-clear.js';
 import { createDgStateIo } from './dg-state-io.js';
 import { createDgSetState } from './dg-set-state.js';
 import { createDgPaintRedraw } from './dg-paint-redraw.js';
+import { createDgZoomRecompute } from './dg-zoom-recompute.js';
 import { createDgPlayheadSweep } from './dg-playhead-sweep.js';
 import { createDgPlayheadRender } from './dg-playhead-render.js';
 import { createDgOverlayFlush } from './dg-overlay-flush.js';
@@ -551,6 +552,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let clearAndRedrawFromStrokes = () => {};
   let drawIntoBackOnly = () => {};
   let drawFullStroke = () => {};
+  let scheduleZoomRecompute = () => {};
   let ensureSizeReady = () => false;
   let resizeSurfacesFor = () => {};
   let getLayoutSize = () => measureCSSSize(wrap);
@@ -1957,12 +1959,30 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       ? !!window.__DG_PLAYHEAD_SEPARATE_CANVAS
       : true;
     const transportRunning = (typeof isRunning === 'function') && isRunning();
+    const lastTransportRunning = !!panel.__dgLastTransportRunning;
     const ghostEmpty = !!panel.__dgGhostLayerEmpty;
     const flashEmpty = !!panel.__dgFlashLayerEmpty;
     const tutorialEmpty = !!panel.__dgTutorialLayerEmpty;
     const modeKey = `${flat ? 1 : 0}-${DG_SINGLE_CANVAS ? 1 : 0}-${DG_SINGLE_CANVAS_OVERLAYS ? 1 : 0}-${separatePlayhead ? 1 : 0}-${transportRunning ? 1 : 0}-${ghostEmpty ? 1 : 0}-${flashEmpty ? 1 : 0}-${tutorialEmpty ? 1 : 0}`;
     if (panel.__dgFlatLayerMode === modeKey) return;
     panel.__dgFlatLayerMode = modeKey;
+    // If transport just stopped, clear any lingering playhead so it doesn't "stick"
+    // when resuming (especially after zoom/throttle skips).
+    if (!transportRunning && lastTransportRunning) {
+      try {
+        panel.__dgPlayheadLastX = null;
+        panel.__dgPlayheadLayer = null;
+        panel.__dgPlayheadLastGridArea = null;
+        if (playheadFrontCtx?.canvas && playheadCanvas?.width && playheadCanvas?.height) {
+          R.resetCtx(playheadFrontCtx);
+          R.withDeviceSpace(playheadFrontCtx, () => {
+            playheadFrontCtx.clearRect(0, 0, playheadCanvas.width, playheadCanvas.height);
+          });
+          markPlayheadLayerCleared();
+        }
+      } catch {}
+    }
+    panel.__dgLastTransportRunning = transportRunning;
     const toggle = (el, visible) => {
       if (!el || !el.style) return;
       el.style.display = visible ? 'block' : 'none';
@@ -3244,81 +3264,40 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     deps: dgPaintSnapshotDeps,
   });
 
-  function scheduleZoomRecompute() {
-    if (zoomRAF) return;
-    zoomRAF = requestAnimationFrame(() => {
-      zoomRAF = 0;
-      try {
-        if (window.__ZOOM_COMMIT_PHASE) return;
-      } catch {}
-      // IMPORTANT:
-      // If zoom recompute changes paintDpr but we do not resize the overlay backing stores,
-      // the next draw will apply a different logical transform and nodes/connectors/text
-      // can "jump" sometime after the zoom ends.
-      {
-        const deviceDpr = Math.max(1, Number.isFinite(window?.devicePixelRatio) ? window.devicePixelRatio : 1);
-        const visualMul = __dgComputeVisualBackingMul(Number.isFinite(boardScale) ? boardScale : 1);
-        const pressureMul = __dgGetPressureDprMul();
-        // Prefer the most recent adaptive DPR (already includes non-gesture caps),
-        // then apply size-based capping to avoid huge backing stores.
-        let desiredDpr =
-          (Number.isFinite(__dgAdaptivePaintDpr) && __dgAdaptivePaintDpr > 0)
-            ? __dgAdaptivePaintDpr
-            : Math.max(1, Math.min(deviceDpr, 3));
-        const smallMul = __dgComputeSmallPanelBackingMul(cssW, cssH);
-        desiredDpr = Math.min(deviceDpr, desiredDpr * visualMul * pressureMul * smallMul);
-        // Keep ALL overlay surfaces in sync with the computed backing-store DPR.
-        resizeSurfacesFor(cssW, cssH, desiredDpr, 'zoom-recompute');
-        dgRefreshTrace('zoom-recompute', { cssW, cssH, desiredDpr, paintDpr, zoomMode });
-      }
-      pendingZoomResnap = false;
-
-      // IMPORTANT:
-      // Zoom recompute can rebuild/resize backing stores (and resnap can clear paint if it
-      // thinks there's "no content"). In DrawGrid, the paint canvas may be the source of truth,
-      // so we must preserve it across this path.
-      const snap = capturePaintSnapshot();
-      const hadInk = !!snap;
-      const hadStrokes = Array.isArray(strokes) && strokes.length > 0;
-      const hadNodes =
-        currentMap &&
-        Array.isArray(currentMap.nodes) &&
-        currentMap.nodes.some(set => set && set.size > 0);
-
-      useBackBuffers();
-      updatePaintBackingStores({ force: true, target: 'back' });
-
-      // If paint is non-empty but there are no reconstructible sources, never clear it here.
-      // ALSO: during gesture zoom/pan, a blank toy may still have a live ghost trail. Preserving avoids
-      // the "resnap-empty -> clear" path, which would cut the trail.
-      const __ghostNonEmpty = panel && panel.__dgGhostLayerEmpty === false;
-      const __preserveBlankDuringZoom =
-        (hadInk && !hadStrokes && !hadNodes) ||
-        (!hadStrokes && !hadNodes && (getGhostGuideAutoActive() || __ghostNonEmpty));
-
-      if (typeof window !== 'undefined' && window.__DG_GHOST_TRACE) {
-        dgGhostTrace('zoom:recompute:resnap', {
-          preserveBlankDuringZoom: __preserveBlankDuringZoom,
-          hadInk,
-          hadStrokes,
-          hadNodes,
-          ghostNonEmpty: __ghostNonEmpty,
-          ghostAutoActive: getGhostGuideAutoActive(),
-          zoomMode,
-        });
-      }
-
-      resnapAndRedraw(true, { preservePaintIfNoStrokes: __preserveBlankDuringZoom });
-
-      // After backing-store churn, restore paint if it was our only source of truth.
-      if (hadInk && !hadStrokes && !hadNodes) {
-        restorePaintSnapshot(snap);
-      }
-      drawIntoBackOnly();
-      pendingSwap = true;
-    });
-  }
-
+  ({ scheduleZoomRecompute } = createDgZoomRecompute({
+    state: {
+      get zoomRAF() { return zoomRAF; },
+      set zoomRAF(v) { zoomRAF = v; },
+      get pendingZoomResnap() { return pendingZoomResnap; },
+      set pendingZoomResnap(v) { pendingZoomResnap = v; },
+      get pendingSwap() { return pendingSwap; },
+      set pendingSwap(v) { pendingSwap = v; },
+      get cssW() { return cssW; },
+      get cssH() { return cssH; },
+      get paintDpr() { return paintDpr; },
+      get zoomMode() { return zoomMode; },
+      get boardScale() { return boardScale; },
+      get __dgAdaptivePaintDpr() { return __dgAdaptivePaintDpr; },
+      get strokes() { return strokes; },
+      get currentMap() { return currentMap; },
+      get panel() { return panel; },
+    },
+    deps: {
+      __dgComputeVisualBackingMul,
+      __dgGetPressureDprMul,
+      __dgComputeSmallPanelBackingMul,
+      resizeSurfacesFor,
+      dgRefreshTrace,
+      capturePaintSnapshot,
+      restorePaintSnapshot,
+      useBackBuffers,
+      updatePaintBackingStores,
+      getGhostGuideAutoActive,
+      dgGhostTrace,
+      resnapAndRedraw,
+      drawIntoBackOnly,
+    },
+  }));
   const handleZoom = (z = {}) => {
     __lastZoomEventTs = nowMs();
     noteZoomMotion(z);
@@ -7183,6 +7162,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   try { panel.dispatchEvent(new CustomEvent('drawgrid:ready', { bubbles: true })); } catch {}
   return api;
 }
+
 
 
 
