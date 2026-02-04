@@ -494,11 +494,33 @@ import { getAutoQualityScale } from './perf/AutoQualityController.js';
       startSimTap(now);
     }
     if (!hasActiveDots) return;
-    const isGesturing = !!(window.__ZoomCoordinator?.isGesturing?.() || document.body?.classList?.contains?.('is-gesturing'));
-    if (isGesturing && !simEnabled()) {
-      rafId = requestAnimationFrame(drawWaveFrame);
-      return;
+
+    // --- Toy performance contract (scene-level gating) ------------------
+    // Tap-dots is a global overlay; still gate it using the arbiter cadence.
+    // We pass the overlay canvas (or its wrapper) as the "panel" for visibility.
+    try { window.__tapDotsFrame = (window.__tapDotsFrame | 0) + 1; } catch {}
+    const __arb = (typeof window !== 'undefined') ? window.__ToyUpdateArbiter : null;
+    const __hostEl =
+      (typeof overlayCanvas !== 'undefined' && overlayCanvas) ? overlayCanvas :
+      (typeof canvas !== 'undefined' && canvas) ? canvas :
+      (typeof overlay !== 'undefined' && overlay) ? overlay :
+      null;
+    const __dec = (__arb && __hostEl && typeof __arb.getDecision === 'function')
+      ? __arb.getDecision(__hostEl, 'tap-dots', now)
+      : null;
+    const __mod = (__dec && Number.isFinite(__dec.frameModulo)) ? (__dec.frameModulo | 0) : 1;
+
+    if (!simEnabled()) {
+      if (__dec && __dec.mode === 'frozen' && !__dec.focused && !__dec.visible) {
+        rafId = requestAnimationFrame(drawWaveFrame);
+        return;
+      }
+      if (__mod > 1 && ((window.__tapDotsFrame | 0) % __mod) !== 0) {
+        rafId = requestAnimationFrame(drawWaveFrame);
+        return;
+      }
     }
+
     // Always schedule the next frame up front; resetOverlay() cancels when done.
     rafId = requestAnimationFrame(drawWaveFrame);
 

@@ -4799,7 +4799,12 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
     nctx = nodesBackCtx;
     if (DG_SINGLE_CANVAS) {
       gctx = gridBackCtx;
-      nctx = (DG_SINGLE_CANVAS_OVERLAYS && nodesCanvas !== grid) ? nodesFrontCtx : nodesBackCtx;
+      // IMPORTANT: when using back buffers we must draw nodes into the BACK ctx.
+      nctx = (DG_SINGLE_CANVAS_OVERLAYS && nodesCanvas !== grid) ? nodesBackCtx : nodesBackCtx;
+      // Keep the back overlay seeded from what is currently visible.
+      if (DG_SINGLE_CANVAS_OVERLAYS && nodesCanvas !== grid) {
+        try { copyCanvas(nodesFrontCtx, nodesBackCtx); } catch {}
+      }
     }
     fctx = flashBackCtx;
     ghostCtx = ghostBackCtx;
@@ -4816,7 +4821,12 @@ function resnapAndRedraw(forceLayout = false, opts = {}) {
     nctx = nodesFrontCtx;
     if (DG_SINGLE_CANVAS) {
       gctx = gridBackCtx;
+      // In single-canvas + overlay mode, the visible nodes layer is the FRONT ctx.
       nctx = (DG_SINGLE_CANVAS_OVERLAYS && nodesCanvas !== grid) ? nodesFrontCtx : nodesBackCtx;
+      // Commit any overlay work drawn while using back buffers.
+      if (DG_SINGLE_CANVAS_OVERLAYS && nodesCanvas !== grid) {
+        try { copyCanvas(nodesBackCtx, nodesFrontCtx); } catch {}
+      }
     }
     fctx = flashFrontCtx;
     ghostCtx = ghostFrontCtx;
@@ -5224,7 +5234,6 @@ function copyCanvas(backCtx, frontCtx) {
             const nodeSources = [];
             if (nodesBackCanvas && nodesBackCanvas.width && nodesBackCanvas.height) nodeSources.push(nodesBackCanvas);
             if (
-              !DG_SINGLE_CANVAS &&
               nodesFrontCanvas &&
               nodesFrontCanvas !== nodesBackCanvas &&
               nodesFrontCanvas.width &&
@@ -7619,6 +7628,44 @@ function copyCanvas(backCtx, frontCtx) {
         ? performance.now()
         : null;
       const nowTs = performance?.now?.() ?? Date.now();
+
+      // --- Toy performance contract (scene-level gating) ------------------
+      // Keep this early so we can skip expensive work when the panel is
+      // offscreen / not important. We always allow pending UI work through.
+      const __arb = (typeof window !== 'undefined') ? window.__ToyUpdateArbiter : null;
+      const __dec = (__arb && typeof __arb.getDecision === 'function')
+        ? __arb.getDecision(panel, 'drawgrid', nowTs)
+        : null;
+      if (__dec && Number.isFinite(__dec.frameModulo) && __dec.frameModulo > 1) {
+        panel.__dgFrameModulo = __dec.frameModulo | 0;
+      } else {
+        panel.__dgFrameModulo = 1;
+      }
+      // If we're allowed to run only every N frames, early-out unless there's
+      // pending work that must land deterministically.
+      const __mustDraw = !!(
+        __dgFrontSwapNextDraw ||
+        __dgNeedsUIRefresh ||
+        __hydrationJustApplied ||
+        __dgForceFullDrawNext ||
+        (__dgForceFullDrawFrames > 0) ||
+        __dgForceOverlayClearNext ||
+        __dgForceSwapNext
+      );
+      if (!__mustDraw) {
+        const mod = panel.__dgFrameModulo | 0;
+        if (mod > 1 && ((panel.__dgFrame | 0) % mod) !== 0) {
+          ensureRenderLoopRunning();
+          return;
+        }
+        if (__dec && __dec.mode === 'frozen' && !__dec.focused) {
+          // Frozen: skip almost everything; keep the loop alive so it can wake
+          // quickly on visibility / interaction.
+          ensureRenderLoopRunning();
+          return;
+        }
+      }
+
       updateFlatLayerVisibility();
 
     // --- FPS accumulation (per panel, debug only) ---
@@ -10689,6 +10736,9 @@ function copyCanvas(backCtx, frontCtx) {
       if (kind === 'toy-random') RNG.handleRandomizeLine();
       else if (kind === 'toy-random-blocks') RNG.handleRandomizeBlocks();
       else if (kind === 'toy-random-notes') RNG.handleRandomizeNotes();
+      // Random changes can drastically alter nodes/connectors. Ensure we don't reuse stale cached bitmaps.
+      try { nodesRender?.resetNodesCache?.(); } catch {}
+      try { nodesRender?.resetBlocksCache?.(); } catch {}
       __dgAfterProgrammaticVisualChange(kind);
       if (typeof window !== 'undefined' && window.__DG_RANDOM_TRACE) {
         try {

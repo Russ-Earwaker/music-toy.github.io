@@ -157,6 +157,24 @@ const __LG = (() => {
             if (window.__PERF_DISABLE_LOOPGRID_RENDER) continue;
             const st = panel.__simpleRhythmVisualState;
             const visible = !!(st && isPanelVisible(panel, st));
+
+            // --- Toy performance contract (scene-level gating) ------------
+            // Loopgrid already uses a shared scheduler; we only need to
+            // adjust cadence / early-out.
+            const __arb = (typeof window !== 'undefined') ? window.__ToyUpdateArbiter : null;
+            const __dec = (__arb && typeof __arb.getDecision === 'function')
+              ? __arb.getDecision(panel, 'loopgrid')
+              : null;
+            if (__dec && Number.isFinite(__dec.frameModulo) && (__dec.frameModulo | 0) > 1) {
+              panel.__loopgridFrameModulo = __dec.frameModulo | 0;
+            } else {
+              panel.__loopgridFrameModulo = 1;
+            }
+            if (__dec && __dec.mode === 'frozen' && !__dec.focused && !visible) {
+              // Frozen + offscreen: only render if there's explicit pending work.
+              if (!panel.__loopgridNeedsRedraw && !(panel.__pulseHighlight > 0)) continue;
+            }
+
             if (visible) {
               visibleCount++;
             } else if (!panel.__loopgridNeedsRedraw && !(panel.__pulseHighlight > 0)) {

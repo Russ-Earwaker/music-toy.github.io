@@ -4,6 +4,7 @@ import './fullscreen.js';
 import './debug.js';
 import './scene-manager.js';
 import './perf/perf-lab.js';
+import './perf/toy-update-arbiter.js';
 import { installRafBoundaryFlag, traceDomWrite } from './perf/PerfTrace.js';
 import './advanced-controls-toggle.js';
 import './toy-visibility.js';
@@ -491,7 +492,7 @@ function installChainPositionObserver() {
 
     const now = performance.now();
     if (now - g_chainPosLastFlushMs < CHAIN_POS_OBS_MIN_INTERVAL_MS) {
-      // Re-schedule if we’re being spammed.
+      // Re-schedule if weï¿½re being spammed.
       g_chainPosFlushRaf = requestAnimationFrame(flush);
       return;
     }
@@ -512,7 +513,7 @@ function installChainPositionObserver() {
   flush.__perfRafTag = 'perf.raf.chainPosFlush';
 
   g_chainPosObserver = new MutationObserver((mutations) => {
-    // Only care when focus editing or overview — basically anytime connectors might be visible.
+    // Only care when focus editing or overview ï¿½ basically anytime connectors might be visible.
     // (This keeps us from doing work in totally irrelevant states.)
     const boardEl = document.getElementById('board');
     const overviewActive =
@@ -965,7 +966,7 @@ mainLog('[MAIN] module start');
         --toy-outline-pulse-w: 8px;    /* pulse peak pre-zoom width */
         --toy-outline-color: hsl(222, 100%, 80%);
       }
-      /* NORMAL MODE — full-frame outline visible */
+      /* NORMAL MODE ï¿½ full-frame outline visible */
       .toy-panel.toy-playing{
         outline: none;
         box-shadow:
@@ -997,7 +998,7 @@ mainLog('[MAIN] module start');
       .toy-panel:not(.overview-outline).toy-playing-pulse{
         animation: playingPulseAdaptive 0.3s ease-out;
       }
-      /* OVERVIEW — suppress full-frame outline so only body overlay shows */
+      /* OVERVIEW ï¿½ suppress full-frame outline so only body overlay shows */
       .toy-panel.overview-outline.toy-playing{
         box-shadow: var(--toy-panel-shadow, 0 8px 24px rgba(0, 0, 0, 0.35));
       }
@@ -1142,7 +1143,7 @@ function initFpsHud() {
         const toyCount = document.querySelectorAll('.toy-panel').length || 1;
         updateParticleQualityFromFps(__fpsValue, { toyCount });
       } catch (err) {
-        // ignore – debug-only feature should never crash the app
+        // ignore ï¿½ debug-only feature should never crash the app
       }
     }
 
@@ -1504,7 +1505,7 @@ function syncBodyOutline(panel){
 
     panel.classList.toggle('overview-outline', isOverviewLike);
 
-    // Defensive: if either header or footer is visible, make sure we’re not suppressing the outer outline
+    // Defensive: if either header or footer is visible, make sure weï¿½re not suppressing the outer outline
     if (!isOverviewLike && panel.classList.contains('overview-outline')) {
       panel.classList.remove('overview-outline');
     }
@@ -3248,7 +3249,7 @@ function rebuildChainSegments() {
 
       g_chainEdges.set(edgeId, edge);
 
-      // Adjacency index – useful for future detach/reattach UX.
+      // Adjacency index ï¿½ useful for future detach/reattach UX.
       let fromSet = g_edgesByToyId.get(current.id);
       if (!fromSet) {
         fromSet = new Set();
@@ -4320,7 +4321,7 @@ function scheduler(){
       }
 
     } else if (!running && wasRunning) {
-      // Transport just paused — clear steady highlight ONCE (avoid DOM writes inside every rAF frame)
+      // Transport just paused ï¿½ clear steady highlight ONCE (avoid DOM writes inside every rAF frame)
       try {
         document.querySelectorAll('.toy-panel').forEach(p => {
           p.classList.remove('toy-playing', 'toy-playing-pulse');

@@ -33,8 +33,39 @@ export function createBouncerDraw(env){
   let lastBeat = -1; let lastBar = -1;
   let didInit = false;
   let _loggedCubeOnce = false;
+  let __bouncerFrame = 0;
 
   function draw(){
+    __bouncerFrame = (__bouncerFrame | 0) + 1;
+
+    // --- Toy performance contract (scene-level gating) ------------------
+    // Keep this extremely early so we can skip expensive drawing/physics work.
+    try {
+      const __arb = (typeof window !== 'undefined') ? window.__ToyUpdateArbiter : null;
+      const __dec = (__arb && typeof __arb.getDecision === 'function')
+        ? __arb.getDecision(panel, 'bouncer')
+        : null;
+      const __mod = (__dec && Number.isFinite(__dec.frameModulo)) ? (__dec.frameModulo | 0) : 1;
+
+      // Don’t starve important UI signals.
+      const __mustDraw = !!(
+        panel.__pulseRearm ||
+        (panel.__pulseHighlight && panel.__pulseHighlight > 0) ||
+        panel.__bouncerNeedsRedraw
+      );
+
+      if (!__mustDraw) {
+        if (__dec && __dec.mode === 'frozen' && !__dec.focused && !__dec.visible) {
+          requestAnimationFrame(draw);
+          return;
+        }
+        if (__mod > 1 && ((__bouncerFrame | 0) % __mod) !== 0) {
+          requestAnimationFrame(draw);
+          return;
+        }
+      }
+    } catch {}
+
     const endPerf = startSection('bouncer:draw');
     try {
       // Always ensure backing store matches CSS size for crisp rendering
@@ -596,7 +627,6 @@ export function createBouncerDraw(env){
 
   return draw;
 }
-
 
 
 
