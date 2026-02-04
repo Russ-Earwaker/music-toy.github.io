@@ -74,6 +74,7 @@ import { createDgPaintSnapshot } from './dg-paint-snapshot.js';
 import { createDgTutorialHighlight } from './dg-tutorial-highlight.js';
 import { createDgResnap } from './dg-resnap.js';
 import { createDgClear } from './dg-clear.js';
+import { createDgStateIo } from './dg-state-io.js';
 import { createDgPlayheadSweep } from './dg-playhead-sweep.js';
 import { createDgPlayheadRender } from './dg-playhead-render.js';
 import { createDgOverlayFlush } from './dg-overlay-flush.js';
@@ -539,6 +540,11 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let updatePanelParticleState = () => null;
   let __dgParticleStateCache = { key: '', ts: 0, value: null, hadField: false };
   let clearDrawgridInternal = () => false;
+  let applyInstrumentFromState = () => false;
+  let captureState = () => ({ steps: cols | 0, autotune: !!autoTune });
+  let restoreFromState = () => {};
+  let cancelPostRestoreStabilize = () => {};
+  let schedulePostRestoreStabilize = () => {};
   let ensureSizeReady = () => false;
   let resizeSurfacesFor = () => {};
   let getLayoutSize = () => measureCSSSize(wrap);
@@ -2515,6 +2521,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     });
   }
   let isRestoring = false;
+  let __dgPostRestoreStabilizeRAF = 0;
   const handleInstrumentPersist = () => {
     if (isRestoring) return;
     schedulePersistState({ source: 'instrument-change', bypassGuard: true });
@@ -6781,249 +6788,83 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   renderLoop.__perfRafTag = 'perf.raf.drawgrid';
   rafId = requestAnimationFrame(renderLoop);
 
-  function applyInstrumentFromState(value, { emitEvents = true } = {}) {
-    const resolved = (typeof value === 'string') ? value.trim() : '';
-    if (!resolved) return false;
-    const prev = panel.dataset.instrument || '';
-    const changed = prev !== resolved;
-    panel.dataset.instrument = resolved;
-    panel.dataset.instrumentPersisted = '1';
-    if (changed && emitEvents) {
-      try { panel.dispatchEvent(new CustomEvent('toy-instrument', { detail: { value: resolved }, bubbles: true })); } catch {}
-      try { panel.dispatchEvent(new CustomEvent('toy:instrument', { detail: { name: resolved, value: resolved }, bubbles: true })); } catch {}
-    }
-    return changed;
-  }
-
-  function captureState() {
-    try {
-      const serializeSetArr = (arr) => Array.isArray(arr) ? arr.map(s => Array.from(s || [])) : [];
-      const serializeNodes = (arr) => Array.isArray(arr) ? arr.map(s => Array.from(s || [])) : [];
-      const normPt = (p) => {
-        try {
-          const nx = (gridArea.w > 0) ? (p.x - gridArea.x) / gridArea.w : 0;
-          const gh = Math.max(1, gridArea.h - topPad);
-          const ny = gh > 0 ? (p.y - (gridArea.y + topPad)) / gh : 0;
-          return { nx, ny };
-        } catch { return { nx: 0, ny: 0 }; }
-      };
-      return {
-        steps: cols | 0,
-        autotune: !!autoTune,
-        instrument: panel.dataset.instrument || undefined,
-        strokes: (strokes || []).map(s => ({
-          ptsN: Array.isArray(s.pts) ? s.pts.map(normPt) : [],
-          color: s.color,
-          isSpecial: !!s.isSpecial,
-          generatorId: (typeof s.generatorId === 'number') ? s.generatorId : undefined,
-          overlayColorize: !!s.overlayColorize,
-        })),
-        nodes: {
-          active: (currentMap?.active && Array.isArray(currentMap.active)) ? currentMap.active.slice() : Array(cols).fill(false),
-          disabled: serializeSetArr(persistentDisabled || []),
-          list: serializeNodes(currentMap?.nodes || []),
-          groups: (nodeGroupMap || []).map(m => m instanceof Map ? Array.from(m.entries()) : []),
-        },
-        manualOverrides: Array.isArray(manualOverrides) ? manualOverrides.map(s => Array.from(s || [])) : [],
-      };
-    } catch (e) {
-      return { steps: cols | 0, autotune: !!autoTune };
-    }
-  }
-
-  function restoreFromState(state) {
-    const prevRestoring = isRestoring;
-    isRestoring = true;
-    if (state && typeof state.instrument === 'string') {
-      applyInstrumentFromState(state.instrument, { emitEvents: true });
-    }
-    const hasStrokes = Array.isArray(state?.strokes) && state.strokes.length > 0;
-    const hasActiveNodes = Array.isArray(state?.nodes?.active) && state.nodes.active.some(Boolean);
-    const hasNodeList = Array.isArray(state?.nodes?.list) && state.nodes.list.some(arr => Array.isArray(arr) && arr.length > 0);
-    try {
-      const stats = {
-        strokes: Array.isArray(state?.strokes) ? state.strokes.length : 0,
-        nodeCount: computeSerializedNodeStats(state?.nodes?.list, state?.nodes?.disabled).nodeCount,
-        activeCols: Array.isArray(state?.nodes?.active) ? state.nodes.active.filter(Boolean).length : 0,
-      };
-      const stack = (new Error('restore-state')).stack?.split('\n').slice(0, 6).join('\n');
-      dgTraceLog('[drawgrid][RESTORE] requested', { panelId: panel.id, stats, stack });
-    } catch {}
-    updateHydrateInboundFromState(state, { reason: 'restoreFromState', panelId: panel?.id });
-    if (!hasStrokes && !hasActiveNodes && !hasNodeList) {
-      isRestoring = prevRestoring;
-      return;
-    }
-    try {
-      R.clearCanvas(pctx);
-      emitDG('paint-clear', { reason: 'restore-state' });
-      R.clearCanvas(nctx);
-      const flashSurface = getActiveFlashCanvas();
-      const __flashDpr = __dgGetCanvasDprFromCss(flashSurface, cssW, paintDpr);
-      R.resetCtx(fctx);
-      __dgWithLogicalSpaceDpr(R, fctx, __flashDpr, () => {
-        const { x, y, w, h } = R.getOverlayClearRect({
-          canvas: flashSurface,
-          pad: R.getOverlayClearPad(),
-          allowFull: !!panel.__dgFlashOverlayOutOfGrid,
-          gridArea,
-        });
-        fctx.clearRect(x, y, w, h);
-        emitDG('overlay-clear', { reason: 'restore-state' });
-      });
-
-      const denormPt = (nx, ny) => {
-        const gh = Math.max(1, gridArea.h - topPad);
-        return {
-          x: gridArea.x + nx * gridArea.w,
-          y: gridArea.y + topPad + ny * gh,
-        };
-      };
-
-      strokes = (state?.strokes || []).map(s => {
-        const ptsN = Array.isArray(s.ptsN) ? s.ptsN.map(p => ({
-          nx: Math.max(0, Math.min(1, Number(p?.nx) || 0)),
-          ny: Math.max(0, Math.min(1, Number(p?.ny) || 0)),
-        })) : null;
-        return {
-          pts: (s.ptsN || []).map(p => denormPt(p.nx || 0, p.ny || 0)),
-          __ptsN: ptsN,
-          color: s.color,
-          isSpecial: !!s.isSpecial,
-          generatorId: (typeof s.generatorId === 'number') ? s.generatorId : undefined,
-          overlayColorize: !!s.overlayColorize,
-        };
-      });
-
-      FD.markRegenSource('restore-state');
-      FD.markRegenSource('randomize');
-      regenerateMapFromStrokes();
-      currentMap = normalizeMapColumns(currentMap, cols);
-
-      __dgWithLogicalSpace(pctx, () => {
-        R.clearCanvas(pctx);
-        for (const s of strokes) drawFullStroke(pctx, s, { skipReset: true, skipTransform: true });
-      });
-
-      __hydrationJustApplied = true;
-      __dgHydrationPendingRedraw = true;
-      HY.scheduleHydrationLayoutRetry(panel, () => layout(true));
-      setTimeout(() => { __hydrationJustApplied = false; }, 32);
-
-      // IMPORTANT:
-      // On refresh, zoom/overview boot can briefly report a *scaled* DOM rect (see debug: rectW/rectH)
-      // while cssW/cssH are already correct. In that window, the single-canvas composite can miss a
-      // guaranteed "final" swap, leaving the user seeing an empty body (grid hidden / stroke scale wrong)
-      // until an interaction triggers a redraw.
-      //
-      // So: after hydration/restore, force a full draw + composite and a front swap deterministically.
-      try {
-        markStaticDirty('restore-from-state');
-      } catch {}
-      try {
-        panel.__dgSingleCompositeDirty = true;
-      } catch {}
-      __dgNeedsUIRefresh = true;
-      __dgFrontSwapNextDraw = true;
-      __dgForceFullDrawNext = true;
-      __dgForceFullDrawFrames = Math.max(__dgForceFullDrawFrames || 0, 8);
-
-      ensurePostCommitRedraw('restoreFromState');
-      try {
-        if (typeof requestFrontSwap === 'function') {
-          requestFrontSwap(useFrontBuffers);
-        }
-      } catch {}
-
-      // Deterministically stabilize restore across the "overview settling" window.
-      try { schedulePostRestoreStabilize('restoreFromState'); } catch {}
-      emitDrawgridUpdate({ activityOnly: false });
-      markStaticDirty('external-state-change');
-  } catch (e) {
-      emitDrawgridUpdate({ activityOnly: false });
-    } finally {
-      isRestoring = prevRestoring;
-      __dgNeedsUIRefresh = true;
-      __dgStableFramesAfterCommit = 0;
-      try {
-        const hasStrokes = Array.isArray(strokes) && strokes.length > 0;
-        const hasNodes = Array.isArray(currentMap?.nodes)
-          ? currentMap.nodes.some(set => set && set.size > 0)
-          : false;
-        try {
-          updateHydrateInboundFromState(captureState(), { reason: 'restore-from-state-applied', panelId: panel?.id });
-        } catch {}
-
-        if (hasStrokes || hasNodes) {
-          schedulePersistState({ source: 'restore-from-state' });
-        }
-      } catch {
-        // Ignore persist errors during hydration; keep prior local save intact.
-      }
-    }
-  }
-
-  // After hydration/restore, the app can spend a few frames "settling" overview/zoom/layout.
-  // If we only resnap once, we can lock in a wrong basis (grid hidden / stroke scale wrong)
-  // until the next interaction (camera move) forces a resnap. So: stabilize deterministically.
-  let __dgPostRestoreStabilizeRAF = 0;
-  function cancelPostRestoreStabilize() {
-    if (__dgPostRestoreStabilizeRAF) {
-      try { cancelAnimationFrame(__dgPostRestoreStabilizeRAF); } catch {}
-      __dgPostRestoreStabilizeRAF = 0;
-    }
-  }
-  function schedulePostRestoreStabilize(tag = 'post-restore') {
-    cancelPostRestoreStabilize();
-    let framesLeft = 12;     // hard cap: don't loop forever
-    let stable = 0;          // need 2 stable frames in a row
-    let lastKey = null;
-    const step = () => {
-      __dgPostRestoreStabilizeRAF = 0;
-      if (!panel?.isConnected) return;
-      try {
-        // Force layout + redraw even if culling currently thinks we're not visible.
-        // (This mirrors the "camera move fixes it" behavior, but deterministically.)
-        try { layout(true); } catch {}
-        try {
-          const hasStrokes = Array.isArray(strokes) && strokes.length > 0;
-          const hasNodes = Array.isArray(currentMap?.nodes)
-            ? currentMap.nodes.some(set => set && set.size > 0)
-            : false;
-          const hasAnyPaint = ((__dgPaintRev | 0) > 0) || hasOverlayStrokesCached();
-          const ghostNonEmpty = panel && panel.__dgGhostLayerEmpty === false;
-          // IMPORTANT: stabilize pass can run right after a gesture (pan/zoom) ends.
-          // A blank toy may still have a live ghost trail; never let a resnap trigger the
-          // "resnap-empty -> clearDrawgridInternal" path in that case.
-          const preservePaintIfNoStrokes = (!hasStrokes && !hasNodes) && (getGhostGuideAutoActive() || ghostNonEmpty || !hasAnyPaint);
-          if (typeof window !== 'undefined' && window.__DG_GHOST_TRACE) {
-            dgGhostTrace('post-restore:stabilize-resnap', {
-              preservePaintIfNoStrokes,
-              hasStrokes,
-              hasNodes,
-              hasAnyPaint,
-              ghostNonEmpty,
-              ghostAutoActive: getGhostGuideAutoActive(),
-            });
-          }
-          resnapAndRedraw(true, { preservePaintIfNoStrokes });
-        } catch {}
-      } catch {}
-
-      const key = `${Math.round(cssW)}x${Math.round(cssH)}:${Math.round(gridArea.w)}x${Math.round(gridArea.h)}`;
-      if (key === lastKey) stable++;
-      else { stable = 0; lastKey = key; }
-
-      framesLeft--;
-      if (stable >= 2) return;
-      if (framesLeft <= 0) return;
-      __dgPostRestoreStabilizeRAF = requestAnimationFrame(step);
-    };
-
-    // Give the DOM at least one frame to apply any pending transforms before we start stabilizing.
-    __dgPostRestoreStabilizeRAF = requestAnimationFrame(step);
-  }
-
+  ({
+    applyInstrumentFromState,
+    captureState,
+    restoreFromState,
+    cancelPostRestoreStabilize,
+    schedulePostRestoreStabilize,
+  } = createDgStateIo({
+    state: {
+      get panel() { return panel; },
+      get cols() { return cols; },
+      get autoTune() { return autoTune; },
+      get gridArea() { return gridArea; },
+      get topPad() { return topPad; },
+      get strokes() { return strokes; },
+      set strokes(v) { strokes = v; },
+      get currentMap() { return currentMap; },
+      set currentMap(v) { currentMap = v; },
+      get nodeGroupMap() { return nodeGroupMap; },
+      set nodeGroupMap(v) { nodeGroupMap = v; },
+      get manualOverrides() { return manualOverrides; },
+      set manualOverrides(v) { manualOverrides = v; },
+      get persistentDisabled() { return persistentDisabled; },
+      set persistentDisabled(v) { persistentDisabled = v; },
+      get isRestoring() { return isRestoring; },
+      set isRestoring(v) { isRestoring = v; },
+      get __hydrationJustApplied() { return __hydrationJustApplied; },
+      set __hydrationJustApplied(v) { __hydrationJustApplied = v; },
+      get __dgHydrationPendingRedraw() { return __dgHydrationPendingRedraw; },
+      set __dgHydrationPendingRedraw(v) { __dgHydrationPendingRedraw = v; },
+      get __dgNeedsUIRefresh() { return __dgNeedsUIRefresh; },
+      set __dgNeedsUIRefresh(v) { __dgNeedsUIRefresh = v; },
+      get __dgFrontSwapNextDraw() { return __dgFrontSwapNextDraw; },
+      set __dgFrontSwapNextDraw(v) { __dgFrontSwapNextDraw = v; },
+      get __dgForceFullDrawNext() { return __dgForceFullDrawNext; },
+      set __dgForceFullDrawNext(v) { __dgForceFullDrawNext = v; },
+      get __dgForceFullDrawFrames() { return __dgForceFullDrawFrames; },
+      set __dgForceFullDrawFrames(v) { __dgForceFullDrawFrames = v; },
+      get __dgStableFramesAfterCommit() { return __dgStableFramesAfterCommit; },
+      set __dgStableFramesAfterCommit(v) { __dgStableFramesAfterCommit = v; },
+      get __dgPaintRev() { return __dgPaintRev; },
+      get cssW() { return cssW; },
+      get cssH() { return cssH; },
+      get paintDpr() { return paintDpr; },
+      get pctx() { return pctx; },
+      get nctx() { return nctx; },
+      get fctx() { return fctx; },
+      get __dgPostRestoreStabilizeRAF() { return __dgPostRestoreStabilizeRAF; },
+      set __dgPostRestoreStabilizeRAF(v) { __dgPostRestoreStabilizeRAF = v; },
+    },
+    deps: {
+      computeSerializedNodeStats,
+      updateHydrateInboundFromState,
+      schedulePersistState,
+      markStaticDirty,
+      ensurePostCommitRedraw,
+      requestFrontSwap,
+      useFrontBuffers,
+      HY,
+      layout,
+      drawFullStroke,
+      regenerateMapFromStrokes: () => regenerateMapFromStrokes(),
+      normalizeMapColumns,
+      R,
+      __dgGetCanvasDprFromCss,
+      __dgWithLogicalSpaceDpr,
+      __dgWithLogicalSpace,
+      dgTraceLog,
+      emitDG,
+      emitDrawgridUpdate,
+      getActiveFlashCanvas,
+      FD,
+      resnapAndRedraw,
+      getGhostGuideAutoActive,
+      hasOverlayStrokesCached,
+      dgGhostTrace,
+    },
+  }));
   ({ clearDrawgridInternal } = createDgClear({
     state: {
       get panel() { return panel; },
@@ -7564,6 +7405,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   try { panel.dispatchEvent(new CustomEvent('drawgrid:ready', { bubbles: true })); } catch {}
   return api;
 }
+
 
 
 
