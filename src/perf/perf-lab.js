@@ -151,32 +151,47 @@ const AUTO_GENERIC_QUEUE = [
 ];
 
 // Current focus for this cycle:
-//   - reduce DrawGrid "nodes" script time (layout/cache-hit)
-//   - reduce particle update cost where possible
-//
-// IMPORTANT: After the DrawGrid restructure, building P3 (48 drawgrids + randomise)
-// can dominate time and starve the actual pan/zoom script. For focus diagnosis, we
-// build ONCE and run variants back-to-back on the same scene.
+//   - multi-toy performance (P6)
+//   - isolate loopgrid render, chains, and overview compositing
 const AUTO_FOCUS_QUEUE = [
   'traceDprOn',
 
-  // Build once
-  'buildP3Focus',
+  // Multi-toy focus (P6): LoopGrid render + chains + overview/compositor pressure
+  // Goal: find the biggest levers in real mixed scenes.
+  'buildP6',
   'warmupFirstAppearance',
   'warmupSettle',
 
-  // Focus runs (high-signal isolates for overlay churn)
-  'runP3fFocusShort',
+  // Baseline
+  'runP6e',
   'warmupSettle',
-  'runP3fNoOverlaysFocusShort',
+
+  // A/B: chains (connectors + chain UI + chain traversal)
+  'chainsOff',
+  'runP6e',
+  'chainsOn',
   'warmupSettle',
-  'runP3fNoOverlayCoreShort',
+
+  // A/B: chain UI only (DOM work, outline sync, etc)
+  'chainUiOff',
+  'runP6e',
+  'chainUiOn',
   'warmupSettle',
-  'runP3fNoOverlayStrokesShort',
+
+  // A/B: connector canvas draw only
+  'connectorsOff',
+  'runP6e',
+  'connectorsOn',
   'warmupSettle',
-  'runP3fNoParticlesFocusShort',
+
+  // A/B: LoopGrid render cost (keep sim, drop paint)
+  'loopRenderOff',
+  'runP6e',
+  'loopRenderOn',
   'warmupSettle',
-  'runP3fTapDotsFocusShort',
+
+  // Overview/compositor check (same scene, but with overview toggles)
+  'runP6eOverview',
 
   'traceDprOff',
   'traceOff',
@@ -1060,7 +1075,7 @@ function ensureUI() {
         clear: true,
         save: false,
         postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
-        notes: 'Current Focus: reduce DrawGrid overlay churn (overlayDirty gating / cached overlay core) (edit AUTO_FOCUS_QUEUE in perf-lab.js)',
+        notes: 'Current Focus: Multi-toy scenes (P6) — isolate LoopGrid render + chains + overview compositing (edit AUTO_FOCUS_QUEUE in perf-lab.js)',
         queue: AUTO_FOCUS_QUEUE,
         runId: 'autoFocus',
       });
@@ -2365,6 +2380,7 @@ async function runVariant(label, step, statusText) {
       traceDomInRaf: !!(window.__PERF_TRACE && window.__PERF_TRACE.traceDomInRaf),
       disableLoopgridRender: !!window.__PERF_DISABLE_LOOPGRID_RENDER,
       disableChains: !!window.__PERF_DISABLE_CHAINS,
+      disableChainConnectors: !!window.__PERF_DISABLE_CHAIN_CONNECTORS,
       disableTapDots: !!window.__PERF_DISABLE_TAP_DOTS,
       disableOverlays: !!window.__PERF_DISABLE_OVERLAYS,
       disableOverlayStrokes: !!window.__PERF_DG_OVERLAY_STROKES_OFF,
@@ -2614,6 +2630,7 @@ async function runVariantPlaying(label, step, statusText) {
 
         disableLoopgridRender: !!window.__PERF_DISABLE_LOOPGRID_RENDER,
         disableChains: !!window.__PERF_DISABLE_CHAINS,
+        disableChainConnectors: !!window.__PERF_DISABLE_CHAIN_CONNECTORS,
         disableTapDots: !!window.__PERF_DISABLE_TAP_DOTS,
         disableOverlays: !!window.__PERF_DISABLE_OVERLAYS,
         disableOverlayStrokes: !!window.__PERF_DG_OVERLAY_STROKES_OFF,
@@ -5513,6 +5530,40 @@ async function runP6c() {
   );
 }
 
+async function runP6cOverview() {
+  const panZoom = makePanZoomScript({
+    panPx: 2600,
+    zoomMin: 0.2,
+    zoomMax: 2.2,
+    idleMs: 2000,
+    panMs: 12000,
+    zoomMs: 15000,
+    overviewToggles: 2,
+    overviewSpanMs: 9000,
+  });
+  const randDraw = makeToyRandomiseOnceScript({
+    selector: '.toy-panel[data-toy="drawgrid"]',
+    atMs: 300,
+    seed: 1337,
+    useSeededRandom: true,
+    eventNames: ['toy-random', 'toy-random-notes'],
+  });
+  const randLoop = makeToyRandomiseOnceScript({
+    selector: '.toy-panel[data-toy="loopgrid"], .toy-panel[data-toy="loopgrid-drum"]',
+    atMs: 300,
+    seed: 1337,
+    useSeededRandom: true,
+    eventNames: ['toy-random', 'toy-random-notes'],
+  });
+  const ensurePlay = makeEnsureTransportScript({ atMs: 600 });
+  const step = composeSteps(panZoom, randDraw, randLoop, ensurePlay);
+  await runVariantPlaying(
+    'P6c_avg_mix_playing_extreme_zoom_overview',
+    step,
+    'Running P6c (avg mix, extreme zoom + overview)...'
+  );
+}
+
 async function runP6d() {
   await withTempPerfParticles({ gestureDrawModulo: 4, gestureFieldModulo: 4 }, async () => {
     await runP6c();
@@ -5530,6 +5581,27 @@ async function runP6e() {
   window.__PERF_PARTICLE_FIELD_PROFILE = true;
   try {
     await runP6d();
+  } finally {
+    window.__PERF_ZOOM_PROFILE = prev;
+    window.__PERF_FRAME_PROF_SLOW_MS = prevSlow;
+    window.__PERF_FRAME_PROF_MAX = prevMax;
+    window.__PERF_PARTICLE_FIELD_PROFILE = prevField;
+  }
+}
+
+async function runP6eOverview() {
+  const prev = window.__PERF_ZOOM_PROFILE;
+  const prevField = window.__PERF_PARTICLE_FIELD_PROFILE;
+  const prevSlow = window.__PERF_FRAME_PROF_SLOW_MS;
+  const prevMax = window.__PERF_FRAME_PROF_MAX;
+  window.__PERF_ZOOM_PROFILE = true;
+  window.__PERF_FRAME_PROF_SLOW_MS = 0;
+  window.__PERF_FRAME_PROF_MAX = 240;
+  window.__PERF_PARTICLE_FIELD_PROFILE = true;
+  try {
+    await withTempPerfParticles({ gestureDrawModulo: 4, gestureFieldModulo: 4 }, async () => {
+      await runP6cOverview();
+    });
   } finally {
     window.__PERF_ZOOM_PROFILE = prev;
     window.__PERF_FRAME_PROF_SLOW_MS = prevSlow;
@@ -5825,6 +5897,8 @@ try {
     runP6c,
     runP6d,
     runP6e,
+    runP6cOverview,
+    runP6eOverview,
     runP6eNoPaint,
     runP6ePaintOnly,
     runP6eNoDom,
@@ -5920,6 +5994,26 @@ try {
       chainsOn: async function chainsOn() {
         try { window.__PERF_DISABLE_CHAINS = false; } catch {}
         try { console.log('[PerfLab] Chains: ON'); } catch {}
+        try { syncUiFromState(); } catch {}
+      },
+      chainUiOff: async function chainUiOff() {
+        try { window.__PERF_DISABLE_CHAIN_UI = true; } catch {}
+        try { console.log('[PerfLab] Chain UI: OFF'); } catch {}
+        try { syncUiFromState(); } catch {}
+      },
+      chainUiOn: async function chainUiOn() {
+        try { window.__PERF_DISABLE_CHAIN_UI = false; } catch {}
+        try { console.log('[PerfLab] Chain UI: ON'); } catch {}
+        try { syncUiFromState(); } catch {}
+      },
+      connectorsOff: async function connectorsOff() {
+        try { window.__PERF_DISABLE_CHAIN_CONNECTORS = true; } catch {}
+        try { console.log('[PerfLab] Chain connectors: OFF'); } catch {}
+        try { syncUiFromState(); } catch {}
+      },
+      connectorsOn: async function connectorsOn() {
+        try { window.__PERF_DISABLE_CHAIN_CONNECTORS = false; } catch {}
+        try { console.log('[PerfLab] Chain connectors: ON'); } catch {}
         try { syncUiFromState(); } catch {}
       },
       getResults: () => lastResults,

@@ -58,7 +58,7 @@ These are **nonâ€‘negotiable** and must guide all future optimisation work:
   * MultiCanvas focus run is currently treated as â€œmanual onlyâ€ (was causing stalls / swamping signal).
 
 * **Pressure-DPR verified as â€œactually engagingâ€**
-  * Latest focus bundle shows pressure seen with min pressure multiplier â‰ˆ 0.608 (sawPressure: true).
+  * Latest focus bundle shows pressure seen with min pressure multiplier ˜ 0.608 (sawPressure: true).
   * This confirms pressure-based DPR is a viable lever (weâ€™re not chasing a phantom).
 
 ### 2.2 Particle system refactor
@@ -156,13 +156,19 @@ From latest **Auto: Current Focus** bundle:
 From the latest **Auto: Current Focus** bundle:
 
 * Baseline focus (P3fFocus):
-  * avg â‰ˆ 23.39ms, p95 â‰ˆ 33.4ms, p99 â‰ˆ 50.1ms
+  * avg ˜ 23.39ms, p95 ˜ 33.4ms, p99 ˜ 50.1ms
 * NoOverlays focus:
-  * avg â‰ˆ 19.98ms, p95 â‰ˆ 33.4ms, p99 â‰ˆ 33.5ms
+  * avg ˜ 19.98ms, p95 ˜ 33.4ms, p99 ˜ 33.5ms
 * NoParticles focus:
-  * avg â‰ˆ 21.75ms, p95 â‰ˆ 33.4ms, p99 â‰ˆ 50.1ms
+  * avg ˜ 21.75ms, p95 ˜ 33.4ms, p99 ˜ 50.1ms
 
 Interpretation: **Overlays strongly affect p99 spikes** and overall average; particles are secondary in this focus setup.
+### 2.8 DrawGrid connector-line bugfix + cleanup (Feb 4 2026)
+
+* Fixed a DrawGrid regression where connector lines could disappear or render offset after camera pan/zoom or when randomising.
+* Removed hidden connector-layer gradient circles (they were always behind the orange square nodes).
+* Verified via manual repro (new toy ? random; pan/zoom; warm refresh) + Perf Lab run perf-lab-results-2026-02-04T13-12-38-553Z.json.
+
 
 ---
 
@@ -255,7 +261,7 @@ This strongly suggests weâ€™re paying for:
 
 ### 4.6 Pressure-DPR is confirmed real (so use it strategically)
 
-Trace summary shows pressure engaged with min pressure multiplier â‰ˆ 0.608.
+Trace summary shows pressure engaged with min pressure multiplier ˜ 0.608.
 This is enough to justify building â€œpressure-firstâ€ solutions rather than scene heuristics.
 
 ### 4.7 Gesture-time DPR reduction is safe and effective
@@ -299,7 +305,7 @@ This is enough to justify building â€œpressure-firstâ€ solutions rather than sc
 
   * Only affects raster resolution, not cadence.
   * Must restore cleanly on gesture commit.
-* **If p99 â‰ˆ p95, stop**
+* **If p99 ˜ p95, stop**
 
   * Further optimisation is optional and must justify regression risk.
 * **Stability > cleverness**
@@ -330,7 +336,8 @@ Remove DrawGrid Focus from the active optimisation list.
 1. **Multi-toy scenes**
 
    * Validate compositor behaviour with many simultaneous toys.
-   * Add/maintain A/B isolates in PerfLab for: LoopGrid render, chains, and overview mode.
+   * Update **Auto: Current Focus** to be P6-based A/B isolates (baseline ? chains off ? LoopGrid render off ? overview toggles).
+   * Keep **Run-Auto (Generic)** unchanged; it remains the broad regression check.
 2. **Particle field under extreme load**
 
    * Mobile GPU limits

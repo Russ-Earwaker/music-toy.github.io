@@ -485,7 +485,7 @@ function installChainPositionObserver() {
 
   const flush = () => {
     g_chainPosFlushRaf = 0;
-    if (!CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) {
+    if (!chainConnectorsEnabled()) {
       g_chainPosDirtyToyIds.clear();
       return;
     }
@@ -569,6 +569,10 @@ const CHAIN_FEATURE_ENABLE_SCHEDULER      = true;  // master toggle for chain wo
 const CHAIN_FEATURE_ENABLE_MARK_ACTIVE    = true;  // DOM scan + data-chain-active flags
 const CHAIN_FEATURE_ENABLE_SEQUENCER      = true;  // __sequencerStep + border pulses
 const CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW = true; // drawChains() canvas connectors
+
+function chainConnectorsEnabled() {
+  return !!CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW && !(typeof window !== 'undefined' && window.__PERF_DISABLE_CHAIN_CONNECTORS);
+}
 // Rendering resolution multiplier for the chain canvas.
 // 1.0 = full resolution (heaviest)
 // 0.5 = half resolution in each dimension (~4x fewer pixels)
