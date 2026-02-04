@@ -74,8 +74,10 @@ import { createDgPaintSnapshot } from './dg-paint-snapshot.js';
 import { createDgTutorialHighlight } from './dg-tutorial-highlight.js';
 import { createDgResnap } from './dg-resnap.js';
 import { createDgPlayheadSweep } from './dg-playhead-sweep.js';
+import { createDgPlayheadRender } from './dg-playhead-render.js';
 import { createDgOverlayFlush } from './dg-overlay-flush.js';
 import { createDgStrokeRender } from './dg-stroke-render.js';
+import { createDgNoteEffects } from './dg-note-effects.js';
 import {
   dgScaleTrace,
   dgNodeScaleTrace,
@@ -3209,96 +3211,45 @@ function ensureSizeReady({ force = false } = {}) {
     }
     __dgPrevStrokeLen = len;
   }
-  let cellFlashes = []; // For flashing grid squares on note play
-  let noteToggleEffects = []; // For tap feedback ring animations
-  let noteBurstEffects = [];  // For short-range radial particle bursts on note hits
+  // Note overlays (cell flashes / tap rings / bursts)
+  const noteEffects = createDgNoteEffects({
+    state: {
+      get panel() { return panel; },
+      get gridArea() { return gridArea; },
+      get cw() { return cw; },
+      get ch() { return ch; },
+      get topPad() { return topPad; },
+      get cols() { return cols; },
+      get rows() { return rows; },
+      get fctx() { return fctx; },
+      get paintDpr() { return paintDpr; },
+      get cssW() { return cssW; },
+      get cssH() { return cssH; },
+      get __dgLowFpsMode() { return __dgLowFpsMode; },
+      get DG_PLAYHEAD_FPS_SIMPLE_ENTER() { return DG_PLAYHEAD_FPS_SIMPLE_ENTER; },
+    },
+    deps: {
+      R,
+      __dgWithLogicalSpace,
+      __dgWithLogicalSpaceDpr,
+      __dgGetCanvasDprFromCss,
+      getActiveFlashCanvas,
+      markFlashLayerActive,
+      markFlashLayerCleared,
+      markOverlayDirty: () => { __dgMarkOverlayDirty(panel); },
+    },
+  });
   let __dgPaintRev = 0;
   function markPaintDirty() {
     __dgPaintRev = (__dgPaintRev + 1) | 0;
   }
 
   function spawnNoteRingEffect(cx, cy, baseRadius) {
-    const r =
-      Math.max(
-        6,
-        baseRadius ||
-          (Number.isFinite(cw) && Number.isFinite(ch)
-            ? Math.min(cw, ch) * 0.5
-            : 12),
-      );
-    noteToggleEffects.push({ x: cx, y: cy, radius: r, progress: 0 });
-
-    // Keep a reasonable cap so we don't leak
-    if (noteToggleEffects.length > 48) {
-      noteToggleEffects.splice(0, noteToggleEffects.length - 48);
-    }
+    noteEffects.spawnNoteRingEffect(cx, cy, baseRadius);
   }
 
   function spawnNoteBurst(cx, cy, baseRadius) {
-    // We want small particles that travel about half a grid cell
-    // IMPORTANT: `cw/ch` are *canvas* dimensions in logical space, NOT a grid-cell size.
-    // Using them here makes bursts travel/offset by hundreds of pixels (especially after zoom).
-    const cell = (() => {
-      const w = Number.isFinite(gridArea?.w) ? gridArea.w : null;
-      const h = Number.isFinite(gridArea?.h) ? gridArea.h : null;
-      const c = Number.isFinite(cols) && cols > 0 ? cols : null;
-      const r = Number.isFinite(rows) && rows > 0 ? rows : null;
-      const cellW = (w != null && c != null) ? (w / c) : null;
-      const cellH = (h != null && r != null) ? (h / r) : null;
-      const cellPx = (cellW != null && cellH != null) ? Math.min(cellW, cellH) : (cellW != null ? cellW : (cellH != null ? cellH : null));
-      return (cellPx != null && cellPx > 0) ? cellPx : 24;
-    })();
-    const lowFps = __dgLowFpsMode || (() => {
-      const fpsSample = Number.isFinite(window.__MT_SM_FPS)
-        ? window.__MT_SM_FPS
-        : (Number.isFinite(window.__MT_FPS) ? window.__MT_FPS : null);
-      return Number.isFinite(fpsSample) && fpsSample <= DG_PLAYHEAD_FPS_SIMPLE_ENTER;
-    })();
-    const emergency = __dgLowFpsMode;
-    const count = emergency ? 20 : (lowFps ? 28 : 48);
-    const sizeBoost = emergency ? 2.0 : (lowFps ? 1.7 : 1);
-    const lifeBase = emergency ? 0.42 : (lowFps ? 0.55 : 0.8);
-
-    // Travel radius target: ~0.5 of a grid square
-    const travelRadius =
-      Math.max(
-        6,
-        baseRadius && baseRadius > 0
-          ? baseRadius * 0.5
-          : cell * 0.5
-      );
-
-    const particles = [];
-
-    for (let i = 0; i < count; i++) {
-      const angle = (Math.PI * 2 * i) / count + Math.random() * 0.4;
-
-      // Speed tuned so, over the particle lifetime, they move visibly across the cell
-      const speed = travelRadius * (10.0 + Math.random() * 10.0);
-
-      // Bigger jitter so motion is obvious from the start
-      const jitter = travelRadius * 0.3 * Math.random();
-
-      particles.push({
-        x: cx + Math.cos(angle) * jitter,
-        y: cy + Math.sin(angle) * jitter,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        // Enough life so the faster particles can travel visibly
-        life: lifeBase,
-        // Larger, more obvious dots
-        size: (0.25 + Math.random() * 2) * sizeBoost,
-      });
-    }
-
-    noteBurstEffects.push({ particles });
-    __dgMarkOverlayDirty(panel);
-
-    // Cap the number of active bursts so we don't leak
-    const maxBursts = emergency ? 16 : (lowFps ? 24 : 32);
-    if (noteBurstEffects.length > maxBursts) {
-      noteBurstEffects.splice(0, noteBurstEffects.length - maxBursts);
-    }
+    noteEffects.spawnNoteBurst(cx, cy, baseRadius);
   }
   let nodeGroupMap = []; // Per-column Map(row -> groupId or [groupIds]) to avoid cross-line connections and track z-order
   let nextDrawTarget = null; // Per-instance arming for generator buttons (1 or 2).
@@ -3721,6 +3672,60 @@ function ensureSizeReady({ force = false } = {}) {
   if (typeof onFrameStart === 'function') {
     unsubscribeFrameStart = playheadSweep.install();
   }
+
+  const playheadRenderState = {
+    get panel() { return panel; },
+    get gridArea() { return gridArea; },
+    get cw() { return cw; },
+    get cssW() { return cssW; },
+    get cssH() { return cssH; },
+    get paintDpr() { return paintDpr; },
+    get strokes() { return strokes; },
+    get tutorialCtx() { return tutorialCtx; },
+    get playheadFrontCtx() { return playheadFrontCtx; },
+    get fctx() { return fctx; },
+    get localLastPhase() { return localLastPhase; },
+    set localLastPhase(v) { localLastPhase = v; },
+    get headerSweepDirX() { return headerSweepDirX; },
+    set headerSweepDirX(v) { headerSweepDirX = v; },
+    get __dgPlayheadSimpleMode() { return __dgPlayheadSimpleMode; },
+    set __dgPlayheadSimpleMode(v) { __dgPlayheadSimpleMode = v; },
+    get __dgPlayheadModeWanted() { return __dgPlayheadModeWanted; },
+    set __dgPlayheadModeWanted(v) { __dgPlayheadModeWanted = v; },
+    get __dgPlayheadModeWantedSince() { return __dgPlayheadModeWantedSince; },
+    set __dgPlayheadModeWantedSince(v) { __dgPlayheadModeWantedSince = v; },
+    get DG_PLAYHEAD_MODE_MIN_MS() { return DG_PLAYHEAD_MODE_MIN_MS; },
+  };
+
+  const playheadRenderDeps = {
+    getLoopInfo,
+    isRunning,
+    readHeaderFpsHint,
+    getTutorialHighlightMode: () => getTutorialHighlightMode(),
+    pickPlayheadHue,
+    getPlayheadCompositeSprite,
+    __dgWithLogicalSpace,
+    __dgWithLogicalSpaceDpr,
+    __dgGetCanvasDprFromCss,
+    R,
+    FF,
+    emitDG,
+    markTutorialLayerActive,
+    markTutorialLayerCleared,
+    markPlayheadLayerActive,
+    markPlayheadLayerCleared,
+    markFlashLayerActive,
+    markFlashLayerCleared,
+    getActiveFlashCanvas,
+    getActiveTutorialCanvas,
+    setNeedsUIRefresh: () => { __dgNeedsUIRefresh = true; },
+    DG_SINGLE_CANVAS,
+  };
+
+  const playheadRender = createDgPlayheadRender({
+    state: playheadRenderState,
+    deps: playheadRenderDeps,
+  });
 
   panel.setSwipeVisible = (show, { immediate = false } = {}) => {
   __forceSwipeVisible = !!show;
@@ -6539,7 +6544,7 @@ function copyCanvas(backCtx, frontCtx) {
                             requestPanelPulse(panel, { rearm: true });
                             pulseTriggered = true;
                         }
-                          cellFlashes.push({ col, row, age: 1.0 });
+                          noteEffects.addCellFlash(col, row);
                           __dgMarkOverlayDirty(panel);
                           try {
                               const x = gridArea.x + col * cw + cw * 0.5;
@@ -7498,13 +7503,14 @@ function copyCanvas(backCtx, frontCtx) {
       const zoomForOverlay = Number.isFinite(boardScale) ? boardScale : 1;
       const overlayFlashesEnabled = !disableOverlayCore;
       const overlayBurstsEnabled = !disableOverlayCore && zoomForOverlay > 0.45 && !__dgLowFpsMode;
+      const noteEffectCounts = noteEffects.getCounts();
       const flashRecentlyActive = (() => {
         const until = panel.__dgFlashActiveUntil;
         return Number.isFinite(until) && until > 0 && nowTs < until;
       })();
       const hasOverlayFx =
-        (overlayFlashesEnabled && ((noteToggleEffects?.length || 0) > 0 || (cellFlashes?.length || 0) > 0)) ||
-        (overlayBurstsEnabled && (noteBurstEffects?.length || 0) > 0) ||
+        (overlayFlashesEnabled && ((noteEffectCounts.noteToggleEffects || 0) > 0 || (noteEffectCounts.cellFlashes || 0) > 0)) ||
+        (overlayBurstsEnabled && (noteEffectCounts.noteBurstEffects || 0) > 0) ||
         flashRecentlyActive;
       const hasNodeFlash = (() => {
         for (let i = 0; i < flashes.length; i++) {
@@ -8579,766 +8585,40 @@ function copyCanvas(backCtx, frontCtx) {
         }
     }
 
-    if (cellFlashes.length > 0) {
-      if (disableOverlayCore) {
-        for (let i = cellFlashes.length - 1; i >= 0; i--) {
-          const flash = cellFlashes[i];
-          flash.age -= 0.05;
-          if (flash.age <= 0) cellFlashes.splice(i, 1);
-        }
-      } else {
-        const __dgOverlayStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
-          ? performance.now()
-          : 0;
-          try {
-            if (allowOverlayDraw) {
-              overlayCompositeNeeded = true;
-              markFlashLayerActive();
-              // Draw cell flashes
-              // IMPORTANT:
-              // Draw in the flash canvas' logical space so bursts stay aligned after zoom/DPR shifts.
-              R.resetCtx(fctx);
-              __dgWithLogicalSpace(fctx, () => {
-                R.withOverlayClip(fctx, gridArea, false, () => {
-              fctx.save();
-          for (let i = cellFlashes.length - 1; i >= 0; i--) {
-            const flash = cellFlashes[i];
-            const x = gridArea.x + flash.col * cw;
-            const y = gridArea.y + topPad + flash.row * ch;
-
-            fctx.globalAlpha = flash.age * 0.6; // Match grid line color
-            fctx.fillStyle = 'rgb(143, 168, 255)';
-            fctx.fillRect(x, y, cw, ch);
-
-            flash.age -= 0.05; // Decay rate
-            if (flash.age <= 0) {
-              cellFlashes.splice(i, 1);
-            }
-          }
-          fctx.restore();
-                });
-              });
-        } else {
-          for (let i = cellFlashes.length - 1; i >= 0; i--) {
-            const flash = cellFlashes[i];
-            flash.age -= 0.05;
-            if (flash.age <= 0) {
-              cellFlashes.splice(i, 1);
-            }
-          }
-          }
-        } catch (e) { /* fail silently */ }
-        if (__dgOverlayStart && allowOverlayDrawHeavy) {
-          const __dgOverlayDt = performance.now() - __dgOverlayStart;
-          try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.cellFlashes', __dgOverlayDt); } catch {}
-        }
-      }
+    {
+      const noteResult = noteEffects.renderNoteEffects({
+        allowOverlayDraw,
+        allowOverlayDrawHeavy,
+        disableOverlayCore,
+        overlayFlashesEnabled,
+        overlayBurstsEnabled,
+        overlayCompositeNeeded,
+        frameCam,
+        perfOn: __perfOn,
+      });
+      overlayCompositeNeeded = noteResult.overlayCompositeNeeded;
     }
 
     if (__frameStart) {
       const __frameDt = performance.now() - __frameStart;
       try { window.__PerfFrameProf?.mark?.('drawgrid.frame.total', __frameDt); } catch {}
     }
-
-    if (noteToggleEffects.length > 0) {
-      try {
-        if (!disableOverlayCore && allowOverlayDraw) {
-          overlayCompositeNeeded = true;
-          markFlashLayerActive();
-          const __dgOverlayStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
-            ? performance.now()
-            : 0;
-          const __noteToggleStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
-            ? performance.now()
-            : 0;
-          R.resetCtx(fctx);
-          __dgWithLogicalSpace(fctx, () => {
-            R.withOverlayClip(fctx, gridArea, false, () => {
-            fctx.save();
-            for (let i = noteToggleEffects.length - 1; i >= 0; i--) {
-              const effect = noteToggleEffects[i];
-              effect.progress += 0.12;
-              const alpha = Math.max(0, 1 - effect.progress);
-              if (alpha <= 0) {
-                noteToggleEffects.splice(i, 1);
-                continue;
-              }
-              const radius = effect.radius * (1 + effect.progress * 1.6);
-              const lineWidth = Math.max(1.2, effect.radius * 0.28 * (1 - effect.progress * 0.5));
-              fctx.globalAlpha = alpha;
-              fctx.lineWidth = lineWidth;
-              fctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
-              fctx.beginPath();
-              fctx.arc(effect.x, effect.y, radius, 0, Math.PI * 2);
-              fctx.stroke();
-            }
-            fctx.restore();
-            });
-          });
-          if (__dgOverlayStart) {
-            const __dgOverlayDt = performance.now() - __dgOverlayStart;
-            try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.toggles', __dgOverlayDt); } catch {}
-          }
-          if (__noteToggleStart) {
-            const __noteToggleDt = performance.now() - __noteToggleStart;
-            try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.noteToggles', __noteToggleDt); } catch {}
-          }
-        } else {
-          // Even if we skip drawing, continue advancing animations so they stay in sync.
-          for (let i = noteToggleEffects.length - 1; i >= 0; i--) {
-            const effect = noteToggleEffects[i];
-            effect.progress += 0.12;
-            const alpha = Math.max(0, 1 - effect.progress);
-            if (alpha <= 0) {
-              noteToggleEffects.splice(i, 1);
-            }
-          }
-        }
-      } catch {}
-    }
-
-    // Pink radial bursts for active notes
-    if (typeof window !== 'undefined' && window.__DG_NOTE_BURST_TRACE) {
-      try {
-        console.log('[DG][burst][draw]', {
-          panelId: panel?.id || null,
-          burstCount: noteBurstEffects.length,
-          gridArea: gridArea ? { x: gridArea.x, y: gridArea.y, w: gridArea.w, h: gridArea.h } : null,
-          paintDpr,
-          flash: fctx?.canvas ? { w: fctx.canvas.width, h: fctx.canvas.height } : null,
-        });
-      } catch {}
-    }
-    if (noteBurstEffects.length > 0) {
-      try {
-        if (__dgLowFpsMode || !overlayBurstsEnabled) {
-          noteBurstEffects.length = 0;
-          // Skip burst draw work, but keep the rest of the overlay rendering.
-        } else if (disableOverlayCore) {
-          const dtMs = Number.isFinite(frameCam?.dt) ? frameCam.dt : 16.6;
-          const dt = Number.isFinite(dtMs) ? dtMs / 1000 : (1 / 60);
-          for (let i = noteBurstEffects.length - 1; i >= 0; i--) {
-            const burst = noteBurstEffects[i];
-            for (let j = burst.particles.length - 1; j >= 0; j--) {
-              const p = burst.particles[j];
-              p.life -= dt * 2.8;
-              if (p.life <= 0) {
-                burst.particles.splice(j, 1);
-              }
-            }
-            if (!burst.particles.length) {
-              noteBurstEffects.splice(i, 1);
-            }
-          }
-        } else {
-          const dtMs = Number.isFinite(frameCam?.dt) ? frameCam.dt : 16.6;
-          const dt = Number.isFinite(dtMs) ? dtMs / 1000 : (1 / 60);
-
-          if (allowOverlayDrawHeavy || __dgLowFpsMode) {
-            overlayCompositeNeeded = true;
-            const __dgOverlayStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
-              ? performance.now()
-              : 0;
-            R.resetCtx(fctx);
-            __dgWithLogicalSpace(fctx, () => {
-              R.withOverlayClip(fctx, gridArea, false, () => {
-              fctx.save();
-              markFlashLayerActive();
-              fctx.globalCompositeOperation = 'lighter';
-              for (let i = noteBurstEffects.length - 1; i >= 0; i--) {
-                const burst = noteBurstEffects[i];
-                let anyAlive = false;
-
-                for (let j = burst.particles.length - 1; j >= 0; j--) {
-                  const p = burst.particles[j];
-
-                  // Fade out – faster fade so the burst clears quickly
-                  p.life -= dt * 2.0;
-                  if (p.life <= 0) {
-                    burst.particles.splice(j, 1);
-                    continue;
-                  }
-
-                  anyAlive = true;
-
-                  // Integrate
-                  p.x += p.vx * dt;
-                  p.y += p.vy * dt;
-
-                  // Gentle damping so they slow as they fade
-                  p.vx *= 0.9;
-                  p.vy *= 0.9;
-
-                  const alpha = p.life;
-                  const radius = p.size;
-
-                  fctx.globalAlpha = alpha;
-                  fctx.fillStyle = 'rgba(255, 180, 210, 1)';
-                  fctx.beginPath();
-                  fctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
-                  fctx.fill();
-                }
-
-                if (!anyAlive) {
-                  noteBurstEffects.splice(i, 1);
-                }
-              }
-              fctx.restore();
-              });
-            });
-            if (__dgOverlayStart) {
-              const __dgOverlayDt = performance.now() - __dgOverlayStart;
-              try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.bursts', __dgOverlayDt); } catch {}
-            }
-          } else {
-            for (let i = noteBurstEffects.length - 1; i >= 0; i--) {
-              const burst = noteBurstEffects[i];
-              for (let j = burst.particles.length - 1; j >= 0; j--) {
-                const p = burst.particles[j];
-                p.life -= dt * 2.8;
-                if (p.life <= 0) {
-                  burst.particles.splice(j, 1);
-                }
-              }
-              if (!burst.particles.length) {
-                noteBurstEffects.splice(i, 1);
-              }
-            }
-          }
-        }
-      } catch {}
-    }
-
-    // Draw scrolling playhead
-    if (!disableOverlayCore && allowOverlayDraw) {
-      const __dgOverlayStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
-        ? performance.now()
-        : 0;
-      const __playheadStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
-        ? performance.now()
-        : 0;
-      const __phMark = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf?.mark)
-        ? window.__PerfFrameProf.mark.bind(window.__PerfFrameProf)
-        : null;
-      try {
-        const info = getLoopInfo();
-        const prevPhase = Number.isFinite(localLastPhase) ? localLastPhase : null;
-        const currentPhase = Number.isFinite(info?.phase01) ? info.phase01 : null;
-          const phaseJustWrapped = currentPhase != null && prevPhase != null && currentPhase < prevPhase && prevPhase > 0.9;
-          if (currentPhase != null) {
-            localLastPhase = currentPhase;
-          }
-          if (panel.__dgPlayheadWrapCount == null) panel.__dgPlayheadWrapCount = 0;
-          if (phaseJustWrapped) panel.__dgPlayheadWrapCount++;
-          if (__dgPlayheadModeWanted !== null && phaseJustWrapped) {
-            const modeNow = performance?.now?.() ?? Date.now();
-            if ((modeNow - __dgPlayheadModeWantedSince) >= DG_PLAYHEAD_MODE_MIN_MS &&
-                (panel.__dgPlayheadWrapCount || 0) >= 2) {
-              __dgPlayheadSimpleMode = __dgPlayheadModeWanted;
-              __dgPlayheadModeWanted = null;
-              __dgPlayheadModeWantedSince = 0;
-            }
-          }
-
-      // Only draw and repulse particles if transport is running and this toy is the active one in its chain.
-      // If this toy thinks it's active, but the global transport phase just wrapped,
-      // it's possible its active status is stale. Skip one frame of playhead drawing
-      // to wait for the scheduler to update the `data-chain-active` attribute.
-      const probablyStale = isActiveInChain && phaseJustWrapped;
-
-        const playheadSimpleOnly = __dgPlayheadSimpleMode;
-        const useSeparatePlayhead = !!(typeof window !== 'undefined' && window.__DG_PLAYHEAD_SEPARATE_CANVAS);
-        const playheadFpsHint = readHeaderFpsHint();
-        const playheadFps = Number.isFinite(playheadFpsHint) ? playheadFpsHint : 60;
-
-        // IMPORTANT: playhead quality is *generic* (FPS-based), not gesture-based and not panel-count-based.
-        // We only drop to the simple playhead when the frame rate suggests we need to.
-        const fancyMinFps = Number.isFinite(window.__DG_PLAYHEAD_FANCY_MIN_FPS) ? Number(window.__DG_PLAYHEAD_FANCY_MIN_FPS) : 55;
-        const fancyMinFpsZoomedIn = Number.isFinite(window.__DG_PLAYHEAD_FANCY_MIN_FPS_ZOOMED_IN) ? Number(window.__DG_PLAYHEAD_FANCY_MIN_FPS_ZOOMED_IN) : 50;
-
-        const playheadFancyDesired = !playheadSimpleOnly && (
-          (playheadFps >= fancyMinFps) ||
-          ((zoomForOverlay > 0.9) && (playheadFps >= fancyMinFpsZoomedIn))
-        );
-        // If global FPS pressure has switched us into "simple playhead" mode,
-        // drop fancy immediately (do NOT wait for a phase wrap to re-lock).
-        // This is generic (FPS-based), not gesture-based, and not device-count-based.
-        if (playheadSimpleOnly) {
-          panel.__dgPlayheadFancyLocked = false;
-        }
-        if (phaseJustWrapped || panel.__dgPlayheadFancyLocked == null) {
-          panel.__dgPlayheadFancyLocked = playheadFancyDesired;
-        }
-        if (phaseJustWrapped || panel.__dgPlayheadHue == null) {
-          panel.__dgPlayheadHue = pickPlayheadHue(strokes);
-        }
-        const playheadFancy = !!panel.__dgPlayheadFancyLocked;
-        const playheadDrawSimple = playheadSimpleOnly || !playheadFancy;
-        const canUseTutorialLayer = getTutorialHighlightMode() === 'none' && !!tutorialCtx?.canvas;
-        const playheadLayer = useSeparatePlayhead
-          ? 'playhead'
-          : (playheadDrawSimple && canUseTutorialLayer) ? 'tutorial' : 'flash';
-        const wantsPlayhead = !!(info && isRunning() && isActiveInChain && !probablyStale);
-
-        // Throttle playhead draws during heavy pan/zoom (especially with many panels),
-        // but DO NOT clear the existing playhead unless it genuinely shouldn't exist.
-        // Otherwise we'd flicker because the "!shouldRenderPlayhead" clear-path also
-        // resets __dgPlayheadLastX.
-        let allowPlayheadThisFrame = wantsPlayhead;
-        try {
-          const overrideEvery = Number(window.__PERF_DG_PLAYHEAD_EVERY);
-          // Quality should NOT change just because the user is gesturing.
-          // All visible toys are treated equally (unless in small-screen focus edit mode).
-          const __dgFps =
-            (typeof window !== 'undefined' && Number.isFinite(window.__MT_SM_FPS)) ? window.__MT_SM_FPS :
-            ((typeof window !== 'undefined' && Number.isFinite(window.__MT_FPS)) ? window.__MT_FPS : 60);
-
-          // Global quality knob (not gesture-based). When low, we may reduce *detail*, not cadence.
-          // Leave playhead cadence at full rate; later we can swap to low-detail visual instead of skipping frames.
-          let playheadEvery = 1;
-          if (Number.isFinite(overrideEvery) && overrideEvery >= 1) {
-            playheadEvery = Math.floor(overrideEvery);
-          }
-          if (playheadEvery > 1) {
-            panel.__dgPlayheadFrame = (panel.__dgPlayheadFrame | 0) + 1;
-            allowPlayheadThisFrame = ((panel.__dgPlayheadFrame % playheadEvery) === 0);
-          }
-        } catch {}
-
-        const shouldRenderPlayhead = wantsPlayhead && allowPlayheadThisFrame;
-        const lastX = Number.isFinite(panel.__dgPlayheadLastX) ? panel.__dgPlayheadLastX : null;
-        const lastLayer = panel.__dgPlayheadLayer || playheadLayer;
-        const lastGridArea = panel.__dgPlayheadLastGridArea || gridArea;
-        const clearPlayheadBandAt = (clearX, layer) => {
-          if (!Number.isFinite(clearX) || !gridArea) return;
-          const clearArea = (lastGridArea && lastGridArea.w > 0) ? lastGridArea : gridArea;
-          const clearCtx = (layer === 'tutorial')
-            ? tutorialCtx
-            : (layer === 'playhead') ? playheadFrontCtx : fctx;
-          if (!clearCtx?.canvas) return;
-          const defaultBand = Math.max(6, Math.round(Math.max(0.8 * cw, Math.min(clearArea.w * 0.08, 2.2 * cw))));
-          const band = Number.isFinite(panel.__dgPlayheadClearBand) ? panel.__dgPlayheadClearBand : defaultBand;
-          const clearBandAt = () => {
-            const y0 = Math.floor(clearArea.y) - 4;
-            const y1 = Math.ceil(clearArea.y + clearArea.h) + 4;
-            const h = Math.max(0, y1 - y0);
-            clearCtx.clearRect(clearX - band - 1, y0, band * 2 + 2, h);
-          };
-          if (clearCtx === playheadFrontCtx) {
-            R.resetCtx(clearCtx);
-            __dgWithLogicalSpace(clearCtx, clearBandAt);
-          } else {
-            const clipArea = { x: clearArea.x, y: Math.floor(clearArea.y) - 2, w: clearArea.w, h: Math.ceil(clearArea.h) + 4 };
-            R.resetCtx(clearCtx);
-            __dgWithLogicalSpace(clearCtx, () => {
-              R.withOverlayClip(clearCtx, clipArea, false, clearBandAt);
-            });
-          }
-        };
-
-        // If the phase wrapped but we skip rendering this frame (e.g. zoom/throttle),
-        // clear the previous end-band so the playhead doesn't "stick".
-        if (phaseJustWrapped && lastX != null) {
-          try { clearPlayheadBandAt(lastX, lastLayer); } catch {}
-        }
-
-        if (!wantsPlayhead) {
-          const lastGridArea = panel.__dgPlayheadLastGridArea || gridArea;
-          if (lastX != null) {
-            if (lastLayer === 'tutorial' && getTutorialHighlightMode() === 'none' && tutorialCtx?.canvas) {
-              const __overlayClearStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
-                ? performance.now()
-                : 0;
-              R.resetCtx(tutorialCtx);
-              R.withLogicalSpace(tutorialCtx, () => {
-                const active = getActiveTutorialCanvas();
-                const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
-                const tw = cssW || (active?.width ?? tutorialCtx.canvas.width ?? 0) / scale;
-                const th = cssH || (active?.height ?? tutorialCtx.canvas.height ?? 0) / scale;
-                tutorialCtx.clearRect(0, 0, tw, th);
-              });
-              markTutorialLayerCleared();
-              if (DG_SINGLE_CANVAS) overlayCompositeNeeded = true;
-              if (__overlayClearStart) {
-                try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.clear', performance.now() - __overlayClearStart); } catch {}
-              }
-            } else if (lastLayer === 'playhead' && playheadFrontCtx?.canvas) {
-              const __overlayClearStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
-                ? performance.now()
-                : 0;
-              R.resetCtx(playheadFrontCtx);
-              const clearPlayheadBand = () => {
-                const clearArea = (lastGridArea && lastGridArea.w > 0) ? lastGridArea : gridArea;
-                const defaultBand = Math.max(6, Math.round(Math.max(0.8 * cw, Math.min(clearArea.w * 0.08, 2.2 * cw))));
-                const band = Number.isFinite(panel.__dgPlayheadClearBand) ? panel.__dgPlayheadClearBand : defaultBand;
-                const y0 = Math.floor(clearArea.y) - 4;
-                const y1 = Math.ceil(clearArea.y + clearArea.h) + 4;
-                const h = Math.max(0, y1 - y0);
-                playheadFrontCtx.clearRect(lastX - band - 1, y0, band * 2 + 2, h);
-              };
-              clearPlayheadBand();
-              markPlayheadLayerCleared();
-              if (DG_SINGLE_CANVAS) overlayCompositeNeeded = true;
-              if (__overlayClearStart) {
-                try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.clear', performance.now() - __overlayClearStart); } catch {}
-              }
-            } else if (fctx?.canvas) {
-              const __overlayClearStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
-                ? performance.now()
-                : 0;
-              const flashSurface = getActiveFlashCanvas();
-              const __flashDpr = __dgGetCanvasDprFromCss(flashSurface, cssW, paintDpr);
-              R.resetCtx(fctx);
-              __dgWithLogicalSpaceDpr(R, fctx, __flashDpr, () => {
-                const scale = (Number.isFinite(__flashDpr) && __flashDpr > 0) ? __flashDpr : 1;
-                const width = cssW || (flashSurface?.width ?? fctx.canvas.width ?? 0) / scale;
-                const height = cssH || (flashSurface?.height ?? fctx.canvas.height ?? 0) / scale;
-                if (overlayCoreWanted) {
-                  // We can't clear the full overlay here without risking a 1-frame expose
-                  // of the base (white) line if overlay redraw is throttled.
-                  // BUT: if the playhead is no longer wanted (e.g. chain-active race at wrap),
-                  // we *must* clear the playhead itself, otherwise it can get "stuck" at the
-                  // end of the path until a later playhead overlaps it.
-                  const clearArea = (lastGridArea && lastGridArea.w > 0) ? lastGridArea : gridArea;
-                  const defaultBand = Math.max(6, Math.round(Math.max(0.8 * cw, Math.min(clearArea.w * 0.08, 2.2 * cw))));
-                  const band = Number.isFinite(panel.__dgPlayheadClearBand) ? panel.__dgPlayheadClearBand : defaultBand;
-                  const y0 = Math.floor(clearArea.y) - 4;
-                  const y1 = Math.ceil(clearArea.y + clearArea.h) + 4;
-                  const h = Math.max(0, y1 - y0);
-                  fctx.clearRect(lastX - band - 1, y0, band * 2 + 2, h);
-
-                  __dgNeedsUIRefresh = true;
-                  overlayCompositeNeeded = true;
-                } else {
-                  const { x, y, w, h } = R.getOverlayClearRect({
-                    canvas: flashSurface || fctx.canvas,
-                    pad: R.getOverlayClearPad(),
-                    allowFull: !!panel.__dgFlashOverlayOutOfGrid,
-                    gridArea,
-                  });
-                  fctx.clearRect(x, y, w, h);
-                }
-              });
-              if (overlayCoreWanted) {
-                markFlashLayerActive();
-              } else {
-                markFlashLayerCleared();
-              }
-              if (DG_SINGLE_CANVAS) overlayCompositeNeeded = true;
-              if (__overlayClearStart) {
-                try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.clear', performance.now() - __overlayClearStart); } catch {}
-              }
-            }
-          }
-          panel.__dgPlayheadLastX = null;
-          panel.__dgPlayheadLayer = null;
-          panel.__dgPlayheadLastGridArea = null;
-        }
-
-        if (shouldRenderPlayhead) {
-          const playheadCtx = (playheadLayer === 'tutorial')
-            ? tutorialCtx
-            : (playheadLayer === 'playhead') ? playheadFrontCtx : fctx;
-          panel.__dgPlayheadLastRenderTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
-            ? performance.now()
-            : Date.now();
-          if ((playheadCtx === tutorialCtx || playheadCtx === playheadFrontCtx || !overlayClearedThisFrame) && lastX != null) {
-            const clearCtx = (lastLayer === 'tutorial')
-              ? tutorialCtx
-              : (lastLayer === 'playhead') ? playheadFrontCtx : fctx;
-            if (clearCtx?.canvas && gridArea) {
-              const clearArea = (lastGridArea && lastGridArea.w > 0) ? lastGridArea : gridArea;
-              const defaultBand = Math.max(6, Math.round(Math.max(0.8 * cw, Math.min(clearArea.w * 0.08, 2.2 * cw))));
-              const band = Number.isFinite(panel.__dgPlayheadClearBand) ? panel.__dgPlayheadClearBand : defaultBand;
-              R.resetCtx(clearCtx);
-              const clearPlayheadBand = () => {
-                const y0 = Math.floor(clearArea.y) - 4;
-                const y1 = Math.ceil(clearArea.y + clearArea.h) + 4;
-                const h = Math.max(0, y1 - y0);
-                clearCtx.clearRect(lastX - band - 1, y0, band * 2 + 2, h);
-              };
-              if (clearCtx === playheadFrontCtx) {
-                R.resetCtx(clearCtx);
-                __dgWithLogicalSpace(clearCtx, clearPlayheadBand);
-              } else {
-                const clipArea = { x: clearArea.x, y: Math.floor(clearArea.y) - 2, w: clearArea.w, h: Math.ceil(clearArea.h) + 4 };
-                R.resetCtx(clearCtx);
-                __dgWithLogicalSpace(clearCtx, () => {
-                  R.withOverlayClip(clearCtx, clipArea, false, clearPlayheadBand);
-                });
-              }
-              emitDG('overlay-clear', { reason: 'playhead-band' });
-            }
-          }
-        if (!useSeparatePlayhead && !overlayClearedThisFrame) {
-          const __overlayClearStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
-            ? performance.now()
-            : 0;
-          try {
-            if (playheadCtx === tutorialCtx) {
-              R.resetCtx(tutorialCtx);
-              R.withLogicalSpace(tutorialCtx, () => {
-                const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
-                const active = getActiveTutorialCanvas();
-                const width = cssW || (active?.width ?? tutorialCtx.canvas.width ?? 0) / scale;
-                const height = cssH || (active?.height ?? tutorialCtx.canvas.height ?? 0) / scale;
-                tutorialCtx.clearRect(0, 0, width, height);
-              });
-              markTutorialLayerCleared();
-            } else {
-              const flashSurface = getActiveFlashCanvas();
-              R.resetCtx(fctx);
-              R.withLogicalSpace(fctx, () => {
-                const scale = (Number.isFinite(paintDpr) && paintDpr > 0) ? paintDpr : 1;
-                const width = cssW || (flashSurface?.width ?? 0) / scale;
-                const height = cssH || (flashSurface?.height ?? 0) / scale;
-                if (!overlayCoreWanted) {
-                  const { x, y, w, h } = R.getOverlayClearRect({
-                    canvas: flashSurface,
-                    pad: R.getOverlayClearPad(),
-                    allowFull: !!panel.__dgFlashOverlayOutOfGrid,
-                    gridArea,
-                  });
-                  fctx.clearRect(x, y, w, h);
-                  emitDG('overlay-clear', { reason: 'playhead' });
-                  markFlashLayerCleared();
-                }
-              });
-              overlayClearedThisFrame = true;
-            }
-          } catch {}
-          if (__perfOn && __overlayClearStart) {
-            try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.clear', performance.now() - __overlayClearStart); } catch {}
-          }
-        }
-        overlayCompositeNeeded = true;
-        if (playheadCtx === tutorialCtx) {
-          markTutorialLayerActive();
-        } else if (playheadCtx === playheadFrontCtx) {
-          markPlayheadLayerActive();
-        } else {
-          markFlashLayerActive();
-        }
-        // Calculate playhead X position based on loop phase
-        const playheadX = gridArea.x + info.phase01 * gridArea.w;
-        // If the playhead wrapped (end -> start), ensure we clear the "stuck" end segment.
-        // This can happen if playback briefly stops rendering at the end-of-loop boundary.
-        try {
-          const prevX = Number.isFinite(lastX) ? lastX : null;
-          if (prevX != null && gridArea && Number.isFinite(gridArea.w) && gridArea.w > 0) {
-            const wrapped = (playheadX < (gridArea.x + gridArea.w * 0.25)) && (prevX > (gridArea.x + gridArea.w * 0.75));
-            if (wrapped) {
-              const clearCtx = (lastLayer === 'tutorial')
-                ? tutorialCtx
-                : (lastLayer === 'playhead') ? playheadFrontCtx : fctx;
-              if (clearCtx?.canvas) {
-                const defaultBand = Math.max(6, Math.round(Math.max(0.8 * cw, Math.min(gridArea.w * 0.08, 2.2 * cw))));
-                const band = Number.isFinite(panel.__dgPlayheadClearBand) ? panel.__dgPlayheadClearBand : defaultBand;
-                const clearBandAt = () => {
-                  const y0 = Math.floor(gridArea.y) - 4;
-                  const y1 = Math.ceil(gridArea.y + gridArea.h) + 4;
-                  const h = Math.max(0, y1 - y0);
-                  clearCtx.clearRect(prevX - band - 1, y0, band * 2 + 2, h);
-                };
-                if (clearCtx === playheadFrontCtx) {
-                  R.resetCtx(clearCtx);
-                  __dgWithLogicalSpace(clearCtx, clearBandAt);
-                } else {
-                  const clipArea = { x: gridArea.x, y: Math.floor(gridArea.y) - 2, w: gridArea.w, h: Math.ceil(gridArea.h) + 4 };
-                  R.resetCtx(clearCtx);
-                  __dgWithLogicalSpace(clearCtx, () => {
-                    R.withOverlayClip(clearCtx, clipArea, false, clearBandAt);
-                  });
-                }
-              }
-            }
-          }
-        } catch {}
-        panel.__dgPlayheadLastX = playheadX;
-        panel.__dgPlayheadLayer = playheadLayer;
-        panel.__dgPlayheadLastGridArea = gridArea ? { x: gridArea.x, y: gridArea.y, w: gridArea.w, h: gridArea.h } : null;
-
-        // Use a dedicated overlay context for the playhead to avoid wiping strokes.
-        const __drawPlayheadInner = () => {
-        playheadCtx.save();
-
-        // Width of the soft highlight band scales with a column, clamped
-        const gradientWidth = Math.round(
-          Math.max(0.8 * cw, Math.min(gridArea.w * 0.08, 2.2 * cw))
-        );
-
-        // IMPORTANT: the fancy playhead uses cached glow sprites.
-        // During zoom, cw/gridArea.h change continuously -> cache misses -> expensive sprite rebuilds.
-        // Quantize dimensions so the cache actually hits while gesturing.
-        const __dgQuant = (v, step, min = step) => {
-          const n = Number(v);
-          if (!Number.isFinite(n)) return min;
-          const s = Math.max(1, Number(step) || 1);
-          return Math.max(min, Math.round(n / s) * s);
-        };
-        const spriteGradientWidth = __dgQuant(gradientWidth, 8, 32);
-        const spriteHeight = __dgQuant(gridArea.h, 16, 96);
-        const playheadLineW = playheadDrawSimple ? Math.max(2, cw * 0.08) : 3;
-        const trailLineCount = playheadDrawSimple ? 0 : 3;
-        const gap = playheadDrawSimple ? 0 : 28; // A constant, larger gap
-        const trailW0 = 2.5;
-        const trailWStep = 0.6;
-        const extraTrail = playheadDrawSimple ? 0 : (trailLineCount * gap + 6);
-        const baseBand = Math.max(gradientWidth / 2, playheadLineW / 2);
-        panel.__dgPlayheadClearBand = Math.max(6, Math.ceil(baseBand + extraTrail));
-
-        const hue = Number.isFinite(panel.__dgPlayheadHue)
-          ? panel.__dgPlayheadHue
-          : pickPlayheadHue(strokes);
-
-        // Header sweep: decouple VISUAL from FORCE.
-        //
-        // - Visual sweep is a cheap translucent band drawn on the playhead overlay (always "looks right").
-        // - Force sweep is the expensive field push along the segment (particle simulation).
-        //
-        // Both degrade by FPS (generic "framerate is low, fix it"), not gesture or panel count.
-        try {
-          let sweepDir = headerSweepDirX || 1;
-          if (currentPhase != null && prevPhase != null) {
-            if (phaseJustWrapped) {
-              sweepDir = 1;
-            } else if (Math.abs(currentPhase - prevPhase) > 1e-4) {
-              sweepDir = (currentPhase - prevPhase) >= 0 ? 1 : -1;
-            }
-          }
-          headerSweepDirX = sweepDir;
-
-          const fpsHint = Number.isFinite(fpsLive) ? fpsLive : null;
-          const __disableForceFps =
-            (typeof window !== 'undefined' && Number.isFinite(window.__DG_HEADER_SWEEP_FORCE_DISABLE_FPS))
-              ? Number(window.__DG_HEADER_SWEEP_FORCE_DISABLE_FPS)
-              : 50; // default: disable forces below ~50fps
-          const __disableVisualFps =
-            (typeof window !== 'undefined' && Number.isFinite(window.__DG_HEADER_SWEEP_VISUAL_DISABLE_FPS))
-              ? Number(window.__DG_HEADER_SWEEP_VISUAL_DISABLE_FPS)
-              : 28; // visual can survive lower; off only when things are dire
-
-          const allowVisual = (fpsHint == null) ? true : (fpsHint >= __disableVisualFps);
-          const allowForce  = (fpsHint == null) ? true : (fpsHint >= __disableForceFps);
-
-          // VISUAL-ONLY sweep (cheap): translucent band behind/with playhead.
-          if (allowVisual) {
-            const bandW = Math.max(18, Math.round(gradientWidth * 0.9));
-            const x0 = playheadX - bandW * 0.5;
-            const x1 = playheadX + bandW * 0.5;
-            const g = playheadCtx.createLinearGradient(x0, 0, x1, 0);
-            g.addColorStop(0.00, 'rgba(255,255,255,0)');
-            g.addColorStop(0.45, `hsla(${(hue + 45).toFixed(0)}, 100%, 70%, 0.035)`);
-            g.addColorStop(0.55, `hsla(${(hue + 45).toFixed(0)}, 100%, 70%, 0.035)`);
-            g.addColorStop(1.00, 'rgba(255,255,255,0)');
-            const __vStart = (__phMark ? performance.now() : 0);
-            playheadCtx.save();
-            playheadCtx.globalCompositeOperation = 'source-over';
-            playheadCtx.fillStyle = g;
-            playheadCtx.fillRect(x0, gridArea.y, bandW, gridArea.h);
-            playheadCtx.restore();
-            if (__vStart) {
-              try { __phMark('drawgrid.playhead.headerSweepVisual', performance.now() - __vStart); } catch {}
-            }
-          }
-
-          // FORCE sweep (expensive): push along the full segment.
-          // Degrade aggressively by FPS: run less often + fewer steps, and OFF entirely when needed.
-          let sweepEvery = 1;
-          let sweepMaxSteps = 36;
-          if (fpsHint != null) {
-            if (fpsHint < (__disableForceFps + 3)) { sweepEvery = 10; sweepMaxSteps = 6; }
-            else if (fpsHint < 55) { sweepEvery = 6; sweepMaxSteps = 10; }
-            else if (fpsHint < 60) { sweepEvery = 3; sweepMaxSteps = 18; }
-            else { sweepEvery = 2; sweepMaxSteps = 24; }
-          }
-
-          panel.__dgPlayheadSweepFrame = (panel.__dgPlayheadSweepFrame || 0) + 1;
-          if (allowForce && sweepEvery > 0 && (panel.__dgPlayheadSweepFrame % sweepEvery) === 0) {
-            const baseSweepMaxSteps = 36;
-            const forceMul = Math.max(
-              1,
-              sweepEvery * (baseSweepMaxSteps / Math.max(1, sweepMaxSteps)) * 1.35
-            );
-            const __hsStart = (__phMark ? performance.now() : 0);
-            FF.pushHeaderSweepAt(playheadX, { lineWidthPx: gradientWidth, maxSteps: sweepMaxSteps, forceMul });
-            if (__hsStart) {
-              try { __phMark('drawgrid.playhead.headerSweep', performance.now() - __hsStart); } catch {}
-            }
-          }
-        } catch (e) { /* fail silently */ }
-
-        if (playheadDrawSimple) {
-          playheadCtx.globalAlpha = 0.9;
-          playheadCtx.strokeStyle = `hsl(${(hue + 45).toFixed(0)}, 100%, 70%)`;
-          playheadCtx.lineWidth = playheadLineW;
-          playheadCtx.shadowColor = 'transparent';
-          playheadCtx.shadowBlur = 0;
-          playheadCtx.beginPath();
-          playheadCtx.moveTo(playheadX, gridArea.y);
-          playheadCtx.lineTo(playheadX, gridArea.y + gridArea.h);
-          playheadCtx.stroke();
-          playheadCtx.globalAlpha = 1.0;
-        } else {
-
-          const __spriteGetStart = __phMark ? performance.now() : 0;
-          const composite = getPlayheadCompositeSprite({
-            gradientWidth: spriteGradientWidth,
-            height: spriteHeight,
-            hue,
-            trailLineCount,
-            gap,
-            mainLineW: playheadLineW,
-            trailW0,
-            trailWStep,
-          });
-          if (__spriteGetStart) {
-            try { __phMark('drawgrid.playhead.spriteGet', performance.now() - __spriteGetStart); } catch {}
-          }
-          if (composite) {
-            const originX = Number.isFinite(composite.__dgOriginX)
-              ? composite.__dgOriginX
-              : (composite.width / 2);
-            // If our cached sprite dims are already "close enough", avoid per-frame scaling.
-            // Scaling a tall glow sprite is surprisingly expensive during pan/zoom.
-            const dstH = (Math.abs(gridArea.h - spriteHeight) <= 8) ? spriteHeight : gridArea.h;
-            const dstY = gridArea.y + (gridArea.h - dstH) * 0.5;
-            const __imgStart = __phMark ? performance.now() : 0;
-            playheadCtx.drawImage(
-              composite,
-              playheadX - originX,
-              dstY,
-              composite.width,
-              dstH
-            );
-            if (__imgStart) {
-              try { __phMark('drawgrid.playhead.drawImage', performance.now() - __imgStart); } catch {}
-            }
-          }
-        }
-
-        playheadCtx.restore();
-        };
-        const drawPlayhead = () => {
-          R.resetCtx(playheadCtx);
-          __dgWithLogicalSpace(playheadCtx, __drawPlayheadInner);
-        };
-        if (playheadCtx === playheadFrontCtx) {
-          drawPlayhead();
-        } else {
-          R.withOverlayClip(playheadCtx, gridArea, false, drawPlayhead);
-        }
-      }
-        } catch (e) { /* fail silently */ }
-        if (__playheadStart) {
-          const __playheadDt = performance.now() - __playheadStart;
-          try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.playhead', __playheadDt); } catch {}
-        }
-      } else {
-      const info = getLoopInfo();
-      if (info) {
-        localLastPhase = info.phase01;
-      }
+    // Draw scrolling playhead (extracted)
+    {
+      const playheadResult = playheadRender.renderPlayhead({
+        allowOverlayDraw,
+        disableOverlayCore,
+        allowOverlayDrawHeavy,
+        overlayCoreWanted,
+        overlayClearedThisFrame,
+        overlayCompositeNeeded,
+        zoomForOverlay,
+        fpsLive,
+        perfOn: __perfOn,
+        isActiveInChain,
+      });
+      overlayCompositeNeeded = playheadResult.overlayCompositeNeeded;
+      overlayClearedThisFrame = playheadResult.overlayClearedThisFrame;
     }
 
     // Debug overlay
@@ -9795,7 +9075,7 @@ function copyCanvas(backCtx, frontCtx) {
     }
     drawLabelState.hasDrawnFirstLine = false;
     updateDrawLabel(true);
-    noteToggleEffects = [];
+    noteEffects.reset();
     __dgMarkSingleCanvasDirty(panel);
     if (DG_SINGLE_CANVAS && isPanelVisible) {
       try { compositeSingleCanvas(); } catch {}
@@ -10276,5 +9556,6 @@ function copyCanvas(backCtx, frontCtx) {
   try { panel.dispatchEvent(new CustomEvent('drawgrid:ready', { bubbles: true })); } catch {}
   return api;
 }
+
 
 
