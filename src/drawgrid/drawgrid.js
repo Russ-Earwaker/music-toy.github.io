@@ -73,6 +73,7 @@ import { createDgGhostGuide } from './dg-ghost-guide.js';
 import { createDgPaintSnapshot } from './dg-paint-snapshot.js';
 import { createDgTutorialHighlight } from './dg-tutorial-highlight.js';
 import { createDgResnap } from './dg-resnap.js';
+import { createDgClear } from './dg-clear.js';
 import { createDgPlayheadSweep } from './dg-playhead-sweep.js';
 import { createDgPlayheadRender } from './dg-playhead-render.js';
 import { createDgOverlayFlush } from './dg-overlay-flush.js';
@@ -84,6 +85,7 @@ import { createDgComposite } from './dg-composite.js';
 import { createDgBackSync } from './dg-back-sync.js';
 import { createDgBufferSwitch } from './dg-buffer-switch.js';
 import { createDgLayout } from './dg-layout.js';
+import { createDgParticleState } from './dg-particle-state.js';
 import {
   dgScaleTrace,
   dgNodeScaleTrace,
@@ -534,6 +536,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let layout = () => {};
   let renderTutorialHighlight = () => {};
   let getTutorialHighlightMode = () => 'none';
+  let updatePanelParticleState = () => null;
+  let __dgParticleStateCache = { key: '', ts: 0, value: null, hadField: false };
+  let clearDrawgridInternal = () => false;
   let ensureSizeReady = () => false;
   let resizeSurfacesFor = () => {};
   let getLayoutSize = () => measureCSSSize(wrap);
@@ -4197,6 +4202,33 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     },
   }));
 
+  ({ updatePanelParticleState } = createDgParticleState({
+    state: {
+      get panel() { return panel; },
+      get dgField() { return dgField; },
+      get particleFieldEnabled() { return particleFieldEnabled; },
+      set particleFieldEnabled(v) { particleFieldEnabled = v; },
+      get __dgParticlePokeTs() { return __dgParticlePokeTs; },
+      set __dgParticlePokeTs(v) { __dgParticlePokeTs = v; },
+      get __dgParticleStateCache() { return panel?.__dgParticleStateCache || __dgParticleStateCache; },
+      set __dgParticleStateCache(v) {
+        __dgParticleStateCache = v;
+        try { panel.__dgParticleStateCache = v; } catch {}
+      },
+      get __lastZoomMotionTs() { return __lastZoomMotionTs; },
+      get ZOOM_STALL_MS() { return ZOOM_STALL_MS; },
+      get DG_PARTICLE_POKE_GRACE_MS() { return DG_PARTICLE_POKE_GRACE_MS; },
+      get __dgLowFpsMode() { return __dgLowFpsMode; },
+    },
+    deps: {
+      getGlobalAdaptiveState,
+      updateAdaptiveShared,
+      getAutoQualityScale: () => (typeof getAutoQualityScale === 'function' ? getAutoQualityScale() : null),
+      dgParticleBootLog,
+      globalDrawgridState,
+    },
+  }));
+
   const overlayFlushState = {
     get panel() { return panel; },
     get cssW() { return cssW; },
@@ -4590,7 +4622,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     inboundWasNonEmpty,
     DG_HYDRATE,
     dgTraceWarn,
-    clearDrawgridInternal,
+    clearDrawgridInternal: (...args) => clearDrawgridInternal(...args),
     getGhostGuideAutoActive,
     runAutoGhostGuideSweep,
   };
@@ -5079,401 +5111,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let __dgFrameProfileMinMs = Infinity;
   let __dgFrameProfileMaxMs = 0;
   let __dgFrameProfileLastLogTs = 0;
-
-  let __dgParticleStateCache = { key: '', ts: 0, value: null, hadField: false };
-  function updatePanelParticleState(boardScaleValue, panelVisible) {
-    const nowTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
-      ? performance.now()
-      : Date.now();
-    // Boot grace: on fresh load / restore, allow the particle field to spin up even
-    // before any interaction (prevents "no particles until poke").
-    try {
-      if (!Number.isFinite(panel.__dgParticlesWarmBootUntil)) {
-        panel.__dgParticlesWarmBootUntil = nowTs + 1200;
-        // Count as a "poke" too so offscreen culling doesn't block the warm start.
-        __dgParticlePokeTs = nowTs;
-      }
-    } catch {}
-    const warmBoot = (Number.isFinite(panel.__dgParticlesWarmBootUntil) && nowTs < panel.__dgParticlesWarmBootUntil);
-    const recentPoke = warmBoot || (Number.isFinite(__dgParticlePokeTs) && (nowTs - __dgParticlePokeTs) <= DG_PARTICLE_POKE_GRACE_MS);
-    if (!panelVisible && !recentPoke) {
-      dgParticleBootLog('visibility:skip-offscreen', {
-        panelId: panel?.id || null,
-        panelVisible,
-        warmBoot,
-        recentPoke,
-      });
-      particleFieldEnabled = false;
-      return __dgParticleStateCache?.value || null;
-    }
-    const overviewState = (typeof window !== 'undefined' && window.__overviewMode) ? window.__overviewMode : { isActive: () => false, state: { zoomThreshold: 0.36 } };
-    const inOverview = !!overviewState?.isActive?.();
-    const visiblePanels = Math.max(0, Number(globalDrawgridState?.visibleCount) || 0);
-    const hasField = !!dgField;
-    const cacheKey = `${visiblePanels}|${inOverview ? 1 : 0}|${hasField ? 1 : 0}`;
-    if (
-      __dgParticleStateCache &&
-      __dgParticleStateCache.key === cacheKey &&
-      __dgParticleStateCache.hadField === hasField &&
-      (nowTs - __dgParticleStateCache.ts) < 350
-    ) {
-      return __dgParticleStateCache.value;
-    }
-    let adaptive = getGlobalAdaptiveState();
-    if (!adaptive) adaptive = updateAdaptiveShared(true);
-    const particleBudget = adaptive?.particleBudget;
-    const threshold = Number.isFinite(overviewState?.state?.zoomThreshold) ? overviewState.state.zoomThreshold : 0.36;
-    const zoomTooWide = Number.isFinite(boardScaleValue) && boardScaleValue < threshold;
-      const allowField = !inOverview && !zoomTooWide;
-      // Warm boot: ensure particles come up at full density on refresh/creation,
-      // even if global adaptive signals are temporarily pessimistic.
-      const allowFieldWarm = warmBoot ? true : allowField;
-      const fpsSample = Number.isFinite(adaptive?.smoothedFps)
-        ? adaptive.smoothedFps
-        : (Number.isFinite(adaptive?.fps) ? adaptive.fps : null);
-      const emergencyMode = !!adaptive?.emergencyMode;
-      // Keep fields on, but thin them out when many panels are visible.
-      // Do not vary by focus state so particles feel consistent across panels.
-      particleFieldEnabled = !!allowFieldWarm;
-      dgParticleBootLog('state:allow', {
-        panelId: panel?.id || null,
-        inOverview,
-        zoomTooWide,
-        allowField,
-        warmBoot,
-        allowFieldWarm,
-        particleFieldEnabled,
-        visiblePanels,
-      });
-    panel.__dgParticleStateFlags = { inOverview, zoomTooWide };
-
-    if (dgField && typeof dgField.applyBudget === 'function' && particleBudget) {
-      const round = (v) => Math.round((Number.isFinite(v) ? v : 0) * 10000) / 10000;
-      const maxCountScaleBase = (particleBudget.maxCountScale ?? 1) * (particleBudget.capScale ?? 1);
-      const zoomGesturing = (typeof window !== 'undefined' && window.__mtZoomGesturing === true);
-      const zoomGestureMoving = !!(zoomGesturing && __lastZoomMotionTs && (nowTs - __lastZoomMotionTs) < ZOOM_STALL_MS);
-      const fpsDamp = (() => {
-        if (!Number.isFinite(fpsSample)) return 1;
-        if (fpsSample >= 55) return 1;
-        if (fpsSample <= 35) return 0.45;
-        return 0.45 + ((fpsSample - 35) / 20) * 0.55;
-      })();
-      const gestureDamp = zoomGestureMoving
-        ? (visiblePanels >= 12 ? 0.5 : (visiblePanels >= 6 ? 0.62 : 0.72))
-        : 1;
-      // Crowd-based attenuation: more visible panels -> fewer particles per panel.
-      const crowdScale = (() => {
-        const base = 1 / Math.max(1, visiblePanels);
-        if (visiblePanels <= 6) return Math.max(0.14, base);
-        const minScale =
-          visiblePanels >= 36 ? 0.03 :
-          visiblePanels >= 24 ? 0.04 :
-          visiblePanels >= 16 ? 0.055 :
-          0.075;
-        return Math.max(minScale, base);
-      })();
-      // If we're cruising near 60fps with few panels, allow a modest boost above nominal.
-      const fpsBoost = (Number.isFinite(fpsSample) && fpsSample >= 58 && visiblePanels <= 2)
-        ? Math.min(1.3, 1 + 0.02 * (fpsSample - 58))
-        : 1;
-
-      const emergencyScale = emergencyMode ? 0.45 : 1;
-      const emergencySize = emergencyMode ? 1.1 : 1;
-      const perfDamp = Math.min(fpsDamp, gestureDamp);
-      panel.__dgParticleKnockbackMul = Math.min(8, 1 / Math.max(0.2, perfDamp));
-      if (dgField?._config) {
-        if (!Number.isFinite(panel.__dgFieldBaseReturnSeconds)) {
-          panel.__dgFieldBaseReturnSeconds = Number(dgField._config.returnSeconds) || 2.4;
-        }
-        if (!Number.isFinite(panel.__dgFieldBaseForceMul)) {
-          panel.__dgFieldBaseForceMul = Number(dgField._config.forceMul) || 2.5;
-        }
-        const baseReturn = panel.__dgFieldBaseReturnSeconds;
-        const returnMul = Math.min(3, panel.__dgParticleKnockbackMul || 1);
-        dgField._config.returnSeconds = Math.max(0.35, baseReturn / returnMul);
-        const baseForce = panel.__dgFieldBaseForceMul;
-        dgField._config.forceMul = Math.min(10, baseForce * (panel.__dgParticleKnockbackMul || 1));
-      }
-      // "Perf panic" = we're overloaded but not necessarily at catastrophic FPS.
-      // We respond by shedding particle count quickly (not throttling cadence).
-      const __dgCurFpsSample =
-        Number.isFinite(fpsSample) ? fpsSample :
-        ((typeof window !== 'undefined' && Number.isFinite(window.__MT_SM_FPS)) ? window.__MT_SM_FPS :
-        ((typeof window !== 'undefined' && Number.isFinite(window.__MT_FPS)) ? window.__MT_FPS : 60));
-
-      // Perf Lab test harness: drive particle LOD using the forced FPS override
-      // (otherwise rAF-based FPS sampling can stay ~60 even when Target FPS is set).
-      const __dgFpsOverride =
-        (typeof window !== 'undefined' && Number.isFinite(window.__DG_FPS_TEST_OVERRIDE) && window.__DG_FPS_TEST_OVERRIDE > 0)
-          ? window.__DG_FPS_TEST_OVERRIDE
-          : 0;
-      const __dgFpsDriveSample = (__dgFpsOverride > 0) ? __dgFpsOverride : __dgCurFpsSample;
-
-      // Auto quality scale (used by the DPR hook) should also influence particles.
-      const __dgAutoQ = (() => { try { return getAutoQualityScale?.(); } catch { return 1; } })();
-      const __dgAutoQClamped = (Number.isFinite(__dgAutoQ) && __dgAutoQ > 0) ? Math.max(0.05, Math.min(1.0, __dgAutoQ)) : 1;
-      // Quality multiplier
-      // We want particles to respond like they would in real perf pressure:
-      // take the *strongest* reduction signal (i.e. the minimum).
-      // - FPS: 30fps => 1, 5fps => ~0.166
-      // - AutoQ: global quality scaler (0..1)
-      const __dgFpsMul = Math.max(0.05, Math.min(1.0, (__dgFpsDriveSample || 60) / 30));
-      const __dgParticleQualityMul = Math.min(__dgAutoQClamped, __dgFpsMul);
-      // Persist for renderLoop readout + debug (avoid scope issues).
-      try { panel.__dgParticleQualityMul = __dgParticleQualityMul; } catch {}
-      const perfPanicBase =
-        (visiblePanels >= 12 && __dgFpsDriveSample < 45) ||
-        (visiblePanels >= 18 && __dgFpsDriveSample < 50) ||
-        (__dgFpsDriveSample < 35);
-      // When the Quality Lab is forcing a low FPS *for testing*, do NOT treat that as a "panic".
-      // We still want to shed particle density, but we should keep the field alive so we can observe behaviour.
-      const perfPanic = (!(__dgFpsOverride > 0)) && perfPanicBase;
-
-      const panicScale = perfPanic ? 0.22 : 1;
-      let maxCountScale = Math.max(0.0, maxCountScaleBase * crowdScale * fpsBoost * emergencyScale * perfDamp * panicScale * __dgParticleQualityMul);
-      let capScale = Math.max(0.0, (particleBudget.capScale ?? 1) * crowdScale * fpsBoost * emergencyScale * perfDamp * panicScale * __dgParticleQualityMul);
-      const sizeScale = (particleBudget.sizeScale ?? 1) * emergencySize * (perfDamp < 0.8 ? 1.05 : 1);
-      let spawnScale = Math.max(0.0, (particleBudget.spawnScale ?? 1) * crowdScale * fpsBoost * emergencyScale * perfDamp * (perfPanic ? 0.0 : 1) * __dgParticleQualityMul);
-
-      // ---------------------------------------------------------------------
-      // Perf Lab test harness behaviour:
-      // When Target FPS is forced (e.g. 5fps), we want the field to shed
-      // particles rapidly but NOT "freeze" immediately. So keep a small,
-      // non-zero minCount and avoid letting cap/max collapse to ~0.
-      // ---------------------------------------------------------------------
-      const __dgTestFps = (typeof window !== 'undefined' && Number.isFinite(window.__DG_FPS_TEST_OVERRIDE) && window.__DG_FPS_TEST_OVERRIDE > 0)
-        ? window.__DG_FPS_TEST_OVERRIDE
-        : 0;
-      const __dgTestMode = (__dgTestFps > 0) || (__dgFpsOverride > 0);
-      if (__dgTestMode) {
-        // Keep simulation alive while it fades down.
-        maxCountScale = Math.max(maxCountScale, 0.08);
-        capScale = Math.max(capScale, 0.08);
-        // If we are forcing *very* low FPS for testing, shed density aggressively.
-        // (This is about visual verification, not performance rescue.)
-        if (__dgFpsDriveSample <= 10) {
-          maxCountScale = Math.min(maxCountScale, 0.10);
-          capScale = Math.min(capScale, 0.10);
-          spawnScale = 0.0;
-        }
-        // Spawn can still be zero in test mode; we just want existing particles to animate while fading.
-        spawnScale = Math.max(0.0, spawnScale);
-      }
-
-      // Persist resolved scalars for the tick gate (avoids expensive tick when effectively off).
-      panel.__dgParticleBudgetMaxCountScale = maxCountScale;
-      panel.__dgParticleBudgetCapScale = capScale;
-      panel.__dgParticleBudgetSpawnScale = spawnScale;
-      // Keep tick cadence steady for smooth lerps; rely on lower counts for performance.
-      const tickModulo = 1;
-      // If budgets drop to ~0, fully disable particle SIM for this panel (draw stays smooth).
-      // We allow counts to ramp down to zero, then stop ticking the field to avoid per-frame cost.
-      //
-      // IMPORTANT: In worst-case scenes, the adaptive scalars may not naturally reach ~0,
-      // so add a "hard emergency" off-ramp that triggers only when we are clearly overwhelmed
-      // (very low FPS + many visible drawgrids). This preserves smoothness (no cadence stepping)
-      // while eliminating the expensive dgField.tick() work.
-      const __dgCurFps =
-        // If the perf lab is forcing a low FPS for testing, don't trip "hard emergency" based on that.
-        (__dgFpsOverride > 0 && Number.isFinite(fpsSample)) ? fpsSample :
-        ((typeof window !== 'undefined' && Number.isFinite(window.__MT_SM_FPS)) ? window.__MT_SM_FPS :
-        ((typeof window !== 'undefined' && Number.isFinite(window.__MT_FPS)) ? window.__MT_FPS : 60));
-      const __dgCurFpsDrive = (__dgFpsOverride > 0) ? __dgFpsOverride : __dgCurFps;
-      const __dgVisible = Number.isFinite(globalDrawgridState?.visibleCount) ? globalDrawgridState.visibleCount : 0;
-      // "Hard emergency" off-ramp: only used when we are clearly overwhelmed.
-      // This should trigger in the perf-lab worst-case scenes so we can fully skip dgField.tick().
-      const __dgHardEmergencyOff =
-        (__dgCurFpsDrive < 14) || // catastrophic FPS, regardless of count
-        (__dgVisible >= 12 && __dgCurFpsDrive < 22) ||
-        (__dgVisible >= 20 && __dgCurFpsDrive < 28);
-
-      // -----------------------------------------------------------------------
-      // Debug: color the toy by quality (red=low, green=high), throttled
-      // Toggle with: window.__DG_STATE_COLOR = true/false
-      // -----------------------------------------------------------------------
-      try {
-        const on = (typeof window !== 'undefined') ? !!window.__DG_STATE_COLOR : false;
-        if (!on) {
-          if (panel.__dgQualColorApplied) {
-            panel.__dgQualColorApplied = false;
-            panel.style.outline = '';
-            panel.style.outlineOffset = '';
-          }
-        } else {
-          const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-          const lastTs = Number.isFinite(panel.__dgQualColorTs) ? panel.__dgQualColorTs : 0;
-          if (!lastTs || (now - lastTs) > 250) {
-            panel.__dgQualColorTs = now;
-            const q = __dgParticleQualityMul; // same “testable” quality signal particles now use
-            const tier = (q <= 0.40) ? 'low' : (q >= 0.85 ? 'high' : 'med');
-            if (tier !== panel.__dgQualColorTier) {
-              panel.__dgQualColorTier = tier;
-              panel.__dgQualColorApplied = true;
-              const col =
-                (tier === 'low') ? 'rgba(255, 70, 70, 0.95)' :
-                (tier === 'high') ? 'rgba(70, 255, 110, 0.95)' :
-                'rgba(255, 190, 70, 0.95)';
-              panel.style.outline = `3px solid ${col}`;
-              panel.style.outlineOffset = '-3px';
-            }
-          }
-        }
-      } catch {}
-
-      // In test mode, we want "shed density" rather than "freeze/off".
-      // Only allow a full off-ramp in true hard emergency (real catastrophic).
-      const particlesOffWanted =
-        // Never fully turn the field off in Quality Lab test mode; we want to observe behaviour.
-        (!__dgTestMode && __dgHardEmergencyOff) ||
-        (!__dgTestMode && (maxCountScale < 0.02 && capScale < 0.02 && spawnScale < 0.02)) ||
-        !particleFieldEnabled;
-
-      if (particlesOffWanted && !panel.__dgParticlesOff) {
-        panel.__dgParticlesOff = true;
-        // Ensure the tick gate sees "effectively off" immediately, even before the next adaptive pass.
-        panel.__dgParticleBudgetMaxCountScale = 0;
-        panel.__dgParticleBudgetCapScale = 0;
-        panel.__dgParticleBudgetSpawnScale = 0;
-        // Force a final budget apply so any existing particles can fade out quickly.
-        panel.__dgParticleBudgetKey = '';
-        dgField.applyBudget({
-          maxCountScale: 0,
-          capScale: 0,
-          sizeScale,
-          spawnScale: 0,
-          tickModulo,
-          minCount: 0,
-          emergencyFade: true,
-          emergencyFadeSeconds: 1.0,
-        });
-      } else if (!particlesOffWanted && panel.__dgParticlesOff) {
-        // Re-enable; normal budget application below will regen naturally.
-        panel.__dgParticlesOff = false;
-        // Clear persisted scalars; they will be repopulated by the normal adaptive budget path.
-        panel.__dgParticleBudgetMaxCountScale = null;
-        panel.__dgParticleBudgetCapScale = null;
-        panel.__dgParticleBudgetSpawnScale = null;
-        panel.__dgParticleBudgetKey = '';
-      }
-      // Warm-start: ensure restored and newly created toys start at full density,
-      // then quickly converge to the correct density for current FPS.
-      try {
-        if (!Number.isFinite(panel.__dgParticlesWarmStartUntil)) {
-          panel.__dgParticlesWarmStartUntil = nowTs + 1200;
-        }
-      } catch {}
-      const __dgWarm = (Number.isFinite(panel.__dgParticlesWarmStartUntil) && nowTs < panel.__dgParticlesWarmStartUntil);
-      if (panel.__dgParticlesWarmStartActive !== __dgWarm) {
-        panel.__dgParticlesWarmStartActive = __dgWarm;
-        dgParticleBootLog('warm-start:state', {
-          panelId: panel?.id || null,
-          warmStart: __dgWarm,
-          nowTs,
-          until: panel.__dgParticlesWarmStartUntil,
-        });
-      }
-      if (__dgWarm) {
-        // Force full density during warm start (refresh/create) so particles
-        // never boot at "empty" even if adaptive signals are pessimistic.
-        maxCountScale = Math.max(1.0, maxCountScale);
-        capScale = Math.max(1.0, capScale);
-        spawnScale = Math.max(1.0, spawnScale);
-      }
-      dgParticleBootLog('budget:pre-apply', {
-        panelId: panel?.id || null,
-        warmStart: __dgWarm,
-        maxCountScale,
-        capScale,
-        sizeScale,
-        spawnScale,
-        tickModulo,
-        emergencyMode,
-        particleFieldEnabled,
-      });
-      const budgetKey = [
-        round(maxCountScale),
-        round(capScale),
-        round(sizeScale),
-        round(spawnScale),
-        tickModulo,
-        __dgLowFpsMode ? 1 : 0,
-        emergencyMode ? 1 : 0,
-        particleFieldEnabled ? 1 : 0,
-      ].join('|');
-      if (!panel.__dgParticlesOff && panel.__dgParticleBudgetKey !== budgetKey) {
-        panel.__dgParticleBudgetKey = budgetKey;
-        dgField.applyBudget({
-          maxCountScale,
-          capScale,
-          tickModulo,
-          sizeScale,
-          spawnScale: __dgWarm ? Math.max(spawnScale, 1.0) : spawnScale,
-          // When overloaded, shed particle count quickly (still ticking every frame).
-          emergencyFade: !!perfPanic || __dgTestMode,
-          // In test mode, fade down faster so you see it respond immediately.
-          emergencyFadeSeconds: __dgTestMode ? 0.85 : (perfPanic ? 1.1 : 2.2),
-          // In test mode, keep a visible floor so the field continues to animate.
-          minCount: __dgWarm ? 600 : (__dgTestMode ? 120 : (perfPanic ? 0 : 50)),
-        });
-        try {
-          const st = dgField?._state || null;
-          dgParticleBootLog('budget:state', {
-            panelId: panel?.id || null,
-            particles: Array.isArray(st?.particles) ? st.particles.length : null,
-            targetDesired: Number.isFinite(st?.targetDesired) ? st.targetDesired : null,
-            minParticles: Number.isFinite(st?.minParticles) ? st.minParticles : null,
-            lodScale: Number.isFinite(st?.lodScale) ? st.lodScale : null,
-          });
-        } catch {}
-        try {
-          if (__dgWarm) {
-            const st = dgField?._state || null;
-            const needsSeed = !st || !Array.isArray(st.particles) || st.particles.length === 0;
-            if (needsSeed && typeof dgField?.forceSeed === 'function') {
-              const seeded = dgField.forceSeed();
-              dgParticleBootLog('budget:seed', {
-                panelId: panel?.id || null,
-                seeded,
-              });
-            }
-          }
-        } catch {}
-        dgParticleBootLog('budget:applied', {
-          panelId: panel?.id || null,
-          budgetKey,
-          warmStart: __dgWarm,
-        });
-
-        // -------------------------------------------------------------------
-        // IMPORTANT: Some particle-field builds may ignore applyBudget() fields
-        // like maxCountScale/tickModulo. To keep the Quality Lab reliable,
-        // clamp the internal desired count/config directly as a backstop.
-        // (This should preserve the same "fade toward target" behaviour as
-        // natural FPS pressure, but ensures the target actually changes.)
-        // -------------------------------------------------------------------
-        try {
-          const st = dgField?._state || null;
-          const cfg = dgField?._config || null;
-          // Capture a stable "base" count once, so scaling is consistent.
-          if (!Number.isFinite(panel.__dgParticlesBaseCount) || panel.__dgParticlesBaseCount <= 0) {
-            const curCount = Array.isArray(st?.particles) ? st.particles.length : 0;
-            const cfgMax =
-              Number.isFinite(cfg?.maxCount) ? cfg.maxCount :
-              (Number.isFinite(cfg?.maxParticles) ? cfg.maxParticles : 0);
-            panel.__dgParticlesBaseCount = Math.max(600, cfgMax || curCount || 1200);
-          }
-          const base = Number(panel.__dgParticlesBaseCount) || 1200;
-          const minCount = __dgWarm ? 600 : (__dgTestMode ? 120 : (perfPanic ? 0 : 50));
-          const desired = Math.max(0, Math.round(Math.max(minCount, base * Math.max(0, maxCountScale))));
-          if (st && Number.isFinite(desired)) st.targetDesired = desired;
-          if (cfg && Number.isFinite(tickModulo)) cfg.tickModulo = tickModulo;
-        } catch {}
-      }
-    }
-
-    __dgParticleStateCache = { key: cacheKey, ts: nowTs, value: adaptive, hadField: hasField };
-    return adaptive;
-  }
 
   // Warn (debug only) if we end up throttling particles for too long during a zoom gesture.
   let __dgParticleZoomThrottleSince = 0;
@@ -7387,160 +7024,75 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     __dgPostRestoreStabilizeRAF = requestAnimationFrame(step);
   }
 
-  function clearDrawgridInternal(options = {}) {
-    const opts = (options && typeof options === 'object') ? options : {};
-    const user = !!opts.user;
-    const reason = typeof opts.reason === 'string' ? opts.reason : 'api.clear';
-    const guardActive = !!DG_HYDRATE.guardActive;
-    const inboundNonEmpty = inboundWasNonEmpty();
-    // If a programmatic clear lands on a toy that already has strokes/nodes,
-    // veto it unless detail.user === true. This prevents unintended wipes.
-    if (!opts.user) {
-      const hasStrokes = Array.isArray(strokes) && strokes.length > 0;
-      const hasActiveCols = currentMap?.active?.some(Boolean);
-      if (hasStrokes || hasActiveCols) {
-        dgTraceWarn?.('[drawgrid][CLEAR][VETO] programmatic clear blocked on non-empty toy', {
-          reason,
-          hasStrokes,
-          hasActiveCols
-        });
-        return false;
-      }
-    }
-    // If we're already empty and the ghost guide is currently sweeping, avoid a redundant
-    // clear that would stop/restart the guide and cut its trail mid-path.
-    if (!user) {
-      const alreadyEmpty = !(Array.isArray(strokes) && strokes.length > 0) && !(currentMap?.active?.some(Boolean));
-      if (alreadyEmpty && getGhostGuideRunning()) {
-        dgGhostTrace('clear:no-op', {
-          id: panel?.id || null,
-          reason,
-          running: getGhostGuideRunning(),
-          autoActive: getGhostGuideAutoActive(),
-          stack: __dgGhostMaybeStack('DG clearDrawgridInternal:no-op'),
-        });
-        // Still ensure the empty-state guide is active.
-        if (!getGhostGuideAutoActive()) {
-          startAutoGhostGuide({ immediate: true, reason: 'clear:no-op:ensure-empty' });
-        }
-        return true;
-      }
-    }
-    let stackSnippet = null;
-    try {
-      stackSnippet = (new Error('clear-call')).stack?.split('\n').slice(0, 6).join('\n');
-    } catch {}
-    const clearLog = {
-      reason,
-      user,
-      guardActive,
-      pendingUserClear: DG_HYDRATE.pendingUserClear,
-      inboundNonEmpty,
-      stack: stackSnippet,
-    };
-    if (!user && (guardActive || inboundNonEmpty)) {
-      dgTraceWarn('[drawgrid][CLEAR][VETO] blocked programmatic clear', clearLog);
-      return false;
-    }
-    if (user) {
-      dgTraceLog('[drawgrid][CLEAR] user', clearLog);
-      DG_HYDRATE.pendingUserClear = true;
-      markUserChange('user-clear', { reason });
-    } else {
-      dgTraceWarn('[drawgrid][CLEAR] programmatic', clearLog);
-    }
-    const makeFlowCtx = () => ({
-      panel,
-      paint,
-      backCanvas,
-      flashCanvas,
-      flashBackCanvas,
-      activeFlashCanvas: (typeof getActiveFlashCanvas === 'function') ? getActiveFlashCanvas() : null,
-      strokes,
-      usingBackBuffers,
-      paintRev: __dgPaintRev,
-      compositeDirty: panel.__dgSingleCompositeDirty,
-      hasOverlayStrokesCached,
-    });
-    FD.flowState('clear:start', makeFlowCtx());
-    R.clearCanvas(pctx);
-    // Clear both paint buffers to prevent stale composites.
-    try { if (backCtx && pctx !== backCtx) R.clearCanvas(backCtx); } catch {}
-    try { if (frontCtx && pctx !== frontCtx) R.clearCanvas(frontCtx); } catch {}
-    emitDG('paint-clear', { reason: 'pre-redraw' });
-    R.clearCanvas(nctx);
-    const flashSurface = getActiveFlashCanvas();
-    const __flashDpr = __dgGetCanvasDprFromCss(flashSurface, cssW, paintDpr);
-    R.resetCtx(fctx);
-    __dgWithLogicalSpaceDpr(R, fctx, __flashDpr, () => {
-      const { x, y, w, h } = R.getOverlayClearRect({
-        canvas: flashSurface,
-        pad: R.getOverlayClearPad(),
-        allowFull: !!panel.__dgFlashOverlayOutOfGrid,
-        gridArea,
-      });
-      fctx.clearRect(x, y, w, h);
-      emitDG('overlay-clear', { reason: 'pre-redraw' });
-    });
-    try {
-      if (flashBackCtx && flashBackCtx !== fctx) {
-        R.resetCtx(flashBackCtx);
-        R.withLogicalSpace(flashBackCtx, () => {
-          const { x, y, w, h } = R.getOverlayClearRect({
-            canvas: flashBackCtx.canvas,
-            pad: R.getOverlayClearPad(),
-            allowFull: !!panel.__dgFlashOverlayOutOfGrid,
-            gridArea,
-          });
-          flashBackCtx.clearRect(x, y, w, h);
-        });
-      }
-      if (flashFrontCtx && flashFrontCtx !== fctx) {
-        R.resetCtx(flashFrontCtx);
-        R.withLogicalSpace(flashFrontCtx, () => {
-          const { x, y, w, h } = R.getOverlayClearRect({
-            canvas: flashFrontCtx.canvas,
-            pad: R.getOverlayClearPad(),
-            allowFull: !!panel.__dgFlashOverlayOutOfGrid,
-            gridArea,
-          });
-          flashFrontCtx.clearRect(x, y, w, h);
-        });
-      }
-    } catch {}
-    try { markFlashLayerCleared(); } catch {}
-    panel.__dgFlashOverlayOutOfGrid = false;
-    __dgOverlayStrokeListCache = { paintRev: -1, len: 0, special: [], colorized: [], outOfGrid: false };
-    __dgOverlayStrokeCache = { value: false, len: 0, ts: 0 };
-    strokes = [];
-    prevStrokeCount = 0;
-    manualOverrides = Array.from({ length: cols }, () => new Set());
-    persistentDisabled = Array.from({ length: cols }, () => new Set());
-    const emptyMap = {active:Array(cols).fill(false),nodes:Array.from({length:cols},()=>new Set()), disabled:Array.from({length:cols},()=>new Set())};
-    currentMap = emptyMap;
-    emitDrawgridUpdate({ activityOnly: false });
-    drawGrid();
-    nextDrawTarget = null; // Disarm any pending line draw
-    updateGeneratorButtons(); // Refresh button state to "Draw"
-    // IMPORTANT: if a transient programmatic clear lands while the guide is sweeping,
-    // preserve its trail to avoid visible cut-outs.
-    stopAutoGhostGuide({ immediate: false, reason: 'clear:end', preserveTrail: true });
-    // Restart/ensure the empty-state guide.
-    if (!getGhostGuideAutoActive()) {
-      startAutoGhostGuide({ immediate: true, reason: 'clear:empty' });
-    }
-    drawLabelState.hasDrawnFirstLine = false;
-    updateDrawLabel(true);
-    noteEffects.reset();
-    __dgMarkSingleCanvasDirty(panel);
-    if (DG_SINGLE_CANVAS && isPanelVisible) {
-      try { compositeSingleCanvas(); } catch {}
-      panel.__dgSingleCompositeDirty = false;
-    }
-    FD.flowState('clear:end', makeFlowCtx());
-    return true;
-  }
-
+  ({ clearDrawgridInternal } = createDgClear({
+    state: {
+      get panel() { return panel; },
+      get DG_HYDRATE() { return DG_HYDRATE; },
+      get strokes() { return strokes; },
+      set strokes(v) { strokes = v; },
+      get currentMap() { return currentMap; },
+      set currentMap(v) { currentMap = v; },
+      get cols() { return cols; },
+      get __dgOverlayStrokeListCache() { return __dgOverlayStrokeListCache; },
+      set __dgOverlayStrokeListCache(v) { __dgOverlayStrokeListCache = v; },
+      get __dgOverlayStrokeCache() { return __dgOverlayStrokeCache; },
+      set __dgOverlayStrokeCache(v) { __dgOverlayStrokeCache = v; },
+      get prevStrokeCount() { return prevStrokeCount; },
+      set prevStrokeCount(v) { prevStrokeCount = v; },
+      get manualOverrides() { return manualOverrides; },
+      set manualOverrides(v) { manualOverrides = v; },
+      get persistentDisabled() { return persistentDisabled; },
+      set persistentDisabled(v) { persistentDisabled = v; },
+      get __dgPaintRev() { return __dgPaintRev; },
+      get usingBackBuffers() { return usingBackBuffers; },
+      get paint() { return paint; },
+      get backCanvas() { return backCanvas; },
+      get flashCanvas() { return flashCanvas; },
+      get flashBackCanvas() { return flashBackCanvas; },
+      get paintDpr() { return paintDpr; },
+      get cssW() { return cssW; },
+      get pctx() { return pctx; },
+      get backCtx() { return backCtx; },
+      get frontCtx() { return frontCtx; },
+      get nctx() { return nctx; },
+      get fctx() { return fctx; },
+      get flashBackCtx() { return flashBackCtx; },
+      get flashFrontCtx() { return flashFrontCtx; },
+      get gridArea() { return gridArea; },
+      get drawLabelState() { return drawLabelState; },
+      get noteEffects() { return noteEffects; },
+      get DG_SINGLE_CANVAS() { return DG_SINGLE_CANVAS; },
+      get isPanelVisible() { return isPanelVisible; },
+      get nextDrawTarget() { return nextDrawTarget; },
+      set nextDrawTarget(v) { nextDrawTarget = v; },
+      get hasOverlayStrokesCached() { return hasOverlayStrokesCached; },
+    },
+    deps: {
+      inboundWasNonEmpty,
+      markUserChange,
+      dgTraceWarn,
+      dgTraceLog,
+      dgGhostTrace,
+      __dgGhostMaybeStack,
+      FD,
+      R,
+      emitDG,
+      emitDrawgridUpdate,
+      drawGrid,
+      updateGeneratorButtons,
+      updateDrawLabel,
+      getActiveFlashCanvas,
+      markFlashLayerCleared,
+      __dgGetCanvasDprFromCss,
+      __dgWithLogicalSpaceDpr,
+      __dgMarkSingleCanvasDirty,
+      compositeSingleCanvas,
+      getGhostGuideRunning,
+      getGhostGuideAutoActive,
+      startAutoGhostGuide,
+      stopAutoGhostGuide,
+    },
+  }));
   const api = {
     panel,
     startGhostGuide,
@@ -8012,6 +7564,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   try { panel.dispatchEvent(new CustomEvent('drawgrid:ready', { bubbles: true })); } catch {}
   return api;
 }
+
+
 
 
 
