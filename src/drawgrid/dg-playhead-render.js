@@ -29,6 +29,42 @@ export function createDgPlayheadRender({ state, deps } = {}) {
     const fctx = s.fctx;
     const DG_SINGLE_CANVAS = !!d.DG_SINGLE_CANVAS;
 
+    if (typeof window !== 'undefined' && window.__DG_PLAYHEAD_TRACE) {
+      try {
+        if (!panel.__dgPlayheadTraceLastTs || (performance.now() - panel.__dgPlayheadTraceLastTs) > 500) {
+          panel.__dgPlayheadTraceLastTs = performance.now();
+          const info = d.getLoopInfo();
+          const useSeparatePlayhead = !!(typeof window !== 'undefined' && window.__DG_PLAYHEAD_SEPARATE_CANVAS);
+          const wantsPlayhead = !!(info && d.isRunning() && isActiveInChain);
+          const playheadLayer = useSeparatePlayhead
+            ? 'playhead'
+            : ((s.__dgPlayheadSimpleMode && d.getTutorialHighlightMode() === 'none' && !!tutorialCtx?.canvas) ? 'tutorial' : 'flash');
+          const payload = {
+            id: panel?.id || null,
+            allowOverlayDraw,
+            disableOverlayCore,
+            isActiveInChain,
+            running: !!d.isRunning(),
+            hasLoop: !!info,
+            wantsPlayhead,
+            useSeparatePlayhead,
+            playheadLayer,
+            playheadCanvasVisible: playheadFrontCtx?.canvas?.style?.display || null,
+            dgSingleCanvas: !!d.DG_SINGLE_CANVAS,
+            dgSingleCanvasOverlays: !!(typeof window !== 'undefined' && window.__DG_SINGLE_CANVAS_OVERLAYS),
+            playheadCanvasSize: playheadFrontCtx?.canvas ? {
+              w: playheadFrontCtx.canvas.width || 0,
+              h: playheadFrontCtx.canvas.height || 0,
+              cssW: playheadFrontCtx.canvas.style?.width || null,
+              cssH: playheadFrontCtx.canvas.style?.height || null,
+            } : null,
+            gridArea: gridArea ? { x: gridArea.x, y: gridArea.y, w: gridArea.w, h: gridArea.h } : null,
+          };
+          console.log(`[DG][playhead][trace] ${JSON.stringify(payload)}`);
+        }
+      } catch {}
+    }
+
     if (!disableOverlayCore && allowOverlayDraw) {
       const __playheadStart = (perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
         ? performance.now()
@@ -342,6 +378,19 @@ export function createDgPlayheadRender({ state, deps } = {}) {
           }
           // Calculate playhead X position based on loop phase
           const playheadX = gridArea.x + info.phase01 * gridArea.w;
+          if (typeof window !== 'undefined' && window.__DG_PLAYHEAD_TRACE) {
+            try {
+              const drawPayload = {
+                id: panel?.id || null,
+                playheadLayer,
+                playheadX: Number.isFinite(playheadX) ? +playheadX.toFixed(2) : playheadX,
+                gridArea: gridArea ? { x: gridArea.x, y: gridArea.y, w: gridArea.w, h: gridArea.h } : null,
+                ctxRole: playheadCtx?.canvas?.getAttribute?.('data-role') || null,
+                ctxSize: playheadCtx?.canvas ? { w: playheadCtx.canvas.width || 0, h: playheadCtx.canvas.height || 0 } : null,
+              };
+              console.log(`[DG][playhead][draw] ${JSON.stringify(drawPayload)}`);
+            } catch {}
+          }
           // If the playhead wrapped (end -> start), ensure we clear the "stuck" end segment.
           // This can happen if playback briefly stops rendering at the end-of-loop boundary.
           try {

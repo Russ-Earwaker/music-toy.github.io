@@ -589,8 +589,18 @@ export function createDgGhostGuide({
     }
 
     // Use left->right off-screen randomized Y path
-    const gpath = readComputeGhostSweepLR()?.();
-    const { safeMinY = readGridArea()?.y ?? 0, safeMaxY = (readGridArea()?.y ?? 0) + (readGridArea()?.h ?? 0) } = gpath;
+    const area = readGridArea?.() || { x: 0, y: 0, w: 0, h: 0 };
+    const gpathFn = readComputeGhostSweepLR?.() || null;
+    const gpath = (typeof gpathFn === 'function') ? gpathFn() : null;
+    if (!gpath || !gpath.from || !gpath.to) {
+      dgGhostTrace?.('auto:sweep:skip-no-path', {
+        id: panel?.id || null,
+        hasPath: !!gpath,
+        area,
+      });
+      return;
+    }
+    const { safeMinY = area.y ?? 0, safeMaxY = (area.y ?? 0) + (area.h ?? 0) } = gpath;
     const clampY = (v) => {
       if (!Number.isFinite(v)) return safeMinY;
       return Math.max(safeMinY, Math.min(safeMaxY, v));
