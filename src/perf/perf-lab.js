@@ -162,8 +162,30 @@ const AUTO_FOCUS_QUEUE = [
   'warmupFirstAppearance',
   'warmupSettle',
 
-  // Baseline
+  // Baseline (shipping intent: tiers AUTO ON)
+  'dgTierAutoOn',
+  'dgForceTierAuto',
   'runP6e',
+  'warmupSettle',
+
+  // A/B: tiers auto ON vs OFF (prove impact)
+  'dgTierAutoOff',
+  'dgForceTierAuto',
+  'runP6e',
+  'warmupSettle',
+  'dgTierAutoOn',
+  'dgForceTierAuto',
+  'runP6e',
+  'warmupSettle',
+
+  // Signal test: force tiers (ceiling vs floor)
+  'dgForceTier3',
+  'runP6e',
+  'warmupSettle',
+  'dgForceTier1',
+  'runP6e',
+  'warmupSettle',
+  'dgForceTierAuto',
   'warmupSettle',
 
   // A/B: chains (connectors + chain UI + chain traversal)
@@ -171,11 +193,15 @@ const AUTO_FOCUS_QUEUE = [
   'runP6e',
   'chainsOn',
   'warmupSettle',
+  'runP6e',
+  'warmupSettle',
 
   // A/B: chain UI only (DOM work, outline sync, etc)
   'chainUiOff',
   'runP6e',
   'chainUiOn',
+  'warmupSettle',
+  'runP6e',
   'warmupSettle',
 
   // A/B: connector canvas draw only
@@ -183,11 +209,15 @@ const AUTO_FOCUS_QUEUE = [
   'runP6e',
   'connectorsOn',
   'warmupSettle',
+  'runP6e',
+  'warmupSettle',
 
   // A/B: LoopGrid render cost (keep sim, drop paint)
   'loopRenderOff',
   'runP6e',
   'loopRenderOn',
+  'warmupSettle',
+  'runP6e',
   'warmupSettle',
 
   // Overview/compositor check (same scene, but with overview toggles)
@@ -464,12 +494,18 @@ function ensureUI() {
                     <option value="0.45">Low (0.45)</option>
                   </select>
                 </label>
+                <label class="perf-lab-toggle">DrawGrid tier
+                  <select class="perf-lab-select" data-qlab="dgForceTier">
+                    <option value="">Auto</option>
+                    <option value="3">3 (Full)</option>
+                    <option value="2">2 (Light)</option>
+                    <option value="1">1 (Medium)</option>
+                    <option value="0">0 (Low)</option>
+                    <option value="-1">-1 (Emergency)</option>
+                  </select>
+                </label>
                 <div class="perf-lab-row perf-lab-qlab-buttons">
-                  <button class="perf-lab-btn perf-lab-btn-mini" data-act="qualityCycle">Cycle</button>
-                  <button class="perf-lab-btn perf-lab-btn-mini" data-act="qualityReset">Reset</button>
                   <button class="perf-lab-btn perf-lab-btn-mini" data-act="qualityApply">Apply</button>
-                  <button class="perf-lab-btn perf-lab-btn-mini" data-act="qualityShowState">Show state</button>
-                  <button class="perf-lab-btn perf-lab-btn-mini" data-act="qualityPrintState">Print state</button>
                 </div>
               </div>
             </div>
@@ -493,9 +529,6 @@ function ensureUI() {
                     <label class="perf-lab-toggle"><input type="checkbox" data-perf="traceMarks" /> Trace marks</label>
                     <label class="perf-lab-toggle"><input type="checkbox" data-perf="traceCanvasResize" /> Trace canvas resize</label>
                     <label class="perf-lab-toggle"><input type="checkbox" data-perf="traceDomInRaf" /> Trace DOM-in-RAF</label>
-                    <div class="perf-lab-row" style="margin-top:8px;">
-                      <button class="perf-lab-btn perf-lab-btn-mini" data-act="qualityApply">Apply</button>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -694,8 +727,7 @@ function ensureUI() {
     if (!('targetFps' in qlab)) qlab.targetFps = 0;
     if (!('cpuBurnMs' in qlab)) qlab.cpuBurnMs = 0;
     if (!('forceScale' in qlab)) qlab.forceScale = null;
-    if (!('_cycleToken' in qlab)) qlab._cycleToken = 0;
-    if (!('_cycleActiveToken' in qlab)) qlab._cycleActiveToken = 0;
+    if (!('dgForceTier' in qlab)) qlab.dgForceTier = (typeof window !== 'undefined' ? (window.__DG_FORCE_TIER ?? null) : null);
     // Legacy mirror (handy for console poking)
     if (typeof window.__QUALITY_FORCE_SCALE !== 'number') window.__QUALITY_FORCE_SCALE = null;
   } catch {}
@@ -709,6 +741,7 @@ function ensureUI() {
   };
   try {
     __pending.qlab = { ...(window.__QUALITY_LAB || {}) };
+    if (!('dgForceTier' in __pending.qlab)) __pending.qlab.dgForceTier = (typeof window !== 'undefined' ? (window.__DG_FORCE_TIER ?? null) : null);
     __pending.particles = { ...(window.__PERF_PARTICLES || {}) };
     __pending.perf = {
       traceMarks: !!window.__PERF_TRACE_MARKS,
@@ -717,24 +750,9 @@ function ensureUI() {
       traceDomInRaf: !!(window.__PERF_TRACE && window.__PERF_TRACE.traceDomInRaf),
     };
   } catch {
-    __pending.qlab = { targetFps: 0, cpuBurnMs: 0, forceScale: null, _cycleToken: 0, _cycleActiveToken: 0 };
+    __pending.qlab = { targetFps: 0, cpuBurnMs: 0, forceScale: null, dgForceTier: null };
     __pending.particles = {};
     __pending.perf = { traceMarks: false, freezeChainUi: false, traceCanvasResize: false, traceDomInRaf: false };
-  }
-
-  function setCycleBtnVisual() {
-    try {
-      const qlab = window.__QUALITY_LAB || {};
-      const active = !!(qlab && qlab._cycleActiveToken && qlab._cycleActiveToken === qlab._cycleToken);
-      ov.querySelectorAll('button[data-act="qualityCycle"]').forEach((b) => b.classList.toggle('is-active', active));
-    } catch {}
-  }
-
-  function setShowStateBtnVisual() {
-    try {
-      const on = !!(typeof window !== 'undefined' && window.__DG_STATE_READOUT);
-      ov.querySelectorAll('button[data-act="qualityShowState"]').forEach((b) => b.classList.toggle('is-active', on));
-    } catch {}
   }
 
   function syncUiFromPending() {
@@ -747,6 +765,11 @@ function ensureUI() {
           const v = (typeof __pending.qlab.forceScale === 'number' && isFinite(__pending.qlab.forceScale))
             ? String(__pending.qlab.forceScale) : '';
           if (el.tagName === 'SELECT') el.value = v;
+          return;
+        }
+        if (k === 'dgForceTier') {
+          const v = __pending.qlab.dgForceTier;
+          if (el.tagName === 'SELECT') el.value = (v == null) ? '' : String(v);
           return;
         }
         const v = __pending.qlab[k];
@@ -780,6 +803,27 @@ function ensureUI() {
     } catch {}
   }
 
+  function __applyDrawgridForceTier(forceTier) {
+    try {
+      window.__DG_FORCE_TIER = (forceTier == null) ? null : forceTier;
+    } catch {}
+
+    try {
+      const panels = document.querySelectorAll('.toy-panel');
+      for (const p of panels) {
+        const fn = p && p.__dgSetQualityTier;
+        if (typeof fn !== 'function') continue;
+        if (forceTier == null) {
+          try { delete p.__dgQualityTier; } catch {}
+          try { delete p.__dgQualityTierReason; } catch {}
+          try { delete p.__dgQualityTierSetMs; } catch {}
+        } else {
+          fn(forceTier, 'perflab');
+        }
+      }
+    } catch {}
+  }
+
   function applyPendingToGlobals() {
     try {
       window.__QUALITY_LAB = window.__QUALITY_LAB || {};
@@ -787,7 +831,12 @@ function ensureUI() {
       qlab.targetFps = Math.max(0, Number(__pending.qlab.targetFps) || 0);
       qlab.cpuBurnMs = Math.max(0, Number(__pending.qlab.cpuBurnMs) || 0);
       qlab.forceScale = (typeof __pending.qlab.forceScale === 'number' && isFinite(__pending.qlab.forceScale)) ? __pending.qlab.forceScale : null;
+      qlab.dgForceTier = (__pending.qlab.dgForceTier == null) ? null : (__pending.qlab.dgForceTier | 0);
       window.__QUALITY_FORCE_SCALE = (typeof qlab.forceScale === 'number') ? qlab.forceScale : null;
+      try {
+        const t = (qlab.dgForceTier == null) ? null : (qlab.dgForceTier | 0);
+        __applyDrawgridForceTier(t);
+      } catch {}
 
       window.__PERF_PARTICLES = window.__PERF_PARTICLES || {};
       Object.assign(window.__PERF_PARTICLES, __pending.particles || {});
@@ -845,6 +894,11 @@ function ensureUI() {
           if (el.tagName === 'SELECT') el.value = v;
           return;
         }
+        if (k === 'dgForceTier') {
+          const v = qlab.dgForceTier;
+          if (el.tagName === 'SELECT') el.value = (v == null) ? '' : String(v);
+          return;
+        }
         const v = qlab[k];
         if (el.tagName === 'SELECT') el.value = String(Number(v) || 0);
       });
@@ -897,107 +951,6 @@ function ensureUI() {
       try {
         const tf = Number(window.__QUALITY_LAB?.targetFps || 0);
         window.__DG_FPS_TEST_OVERRIDE = (tf > 0) ? tf : 0;
-      } catch {}
-    }
-    if (act === 'qualityReset') {
-      try {
-        // Reset pending (does NOT apply until Apply is pressed)
-        __pending.qlab.targetFps = 0;
-        __pending.qlab.cpuBurnMs = 0;
-        __pending.qlab.forceScale = null;
-        // Also cancel any running cycle in globals immediately (safety)
-        try {
-          const qlab = (window.__QUALITY_LAB = window.__QUALITY_LAB || {});
-          qlab._cycleToken = (qlab._cycleToken || 0) + 1;
-          qlab._cycleActiveToken = 0;
-          window.__QUALITY_FORCE_SCALE = null;
-        } catch {}
-        syncUiFromPending();
-        setCycleBtnVisual();
-        console.log('[PerfLab] quality lab reset (pending)');
-      } catch {}
-    }
-
-    if (act === 'qualityShowState') {
-      try {
-        const next = !(typeof window !== 'undefined' && window.__DG_STATE_READOUT);
-        window.__DG_STATE_READOUT = next;
-        window.__DG_STATE_COLOR = next;
-        setShowStateBtnVisual();
-        appendOutputLine(`[quality] drawgrid state readout: ${next ? 'ON' : 'off'}`);
-      } catch {}
-    }
-    if (act === 'qualityPrintState') {
-      try {
-        let txt = null;
-        if (typeof window !== 'undefined' && typeof window.__DG_PRINT_STATE === 'function') {
-          const states = window.__DG_PRINT_STATE();
-          try {
-            if (Array.isArray(states) && states.length) {
-              const blocks = [];
-              for (const s of states) {
-                const id = s?.panelId || '(no id)';
-                const t = s?.text || '';
-                blocks.push(`=== ${id} ===\n${t}`);
-              }
-              txt = blocks.join('\n\n');
-            } else {
-              txt = '[DG] no drawgrid state snapshots found';
-            }
-          } catch {}
-        } else {
-          txt = '[DG] window.__DG_PRINT_STATE() not available (drawgrid.js not patched?)';
-        }
-        if (txt) appendOutputLine(txt);
-      } catch {}
-    }
-    if (act === 'qualityCycle') {
-      try {
-        const qlab = (window.__QUALITY_LAB = window.__QUALITY_LAB || {});
-        // Toggle: if already active, stop; else start
-        const alreadyActive = !!(qlab._cycleActiveToken && qlab._cycleActiveToken === qlab._cycleToken);
-        qlab._cycleToken = (qlab._cycleToken || 0) + 1;
-        const token = qlab._cycleToken;
-        qlab._cycleActiveToken = alreadyActive ? 0 : token;
-        setCycleBtnVisual();
-        // Start a repeating cycle: low->high->med->auto (with FPS changes) until cancelled.
-        const delay = (ms) => new Promise((r) => setTimeout(r, ms));
-        (async () => {
-          console.log('[PerfLab] quality cycle start');
-          while ((window.__QUALITY_LAB || {})._cycleActiveToken === token) {
-            // Low detail + low FPS
-            qlab.targetFps = 15;
-            qlab.forceScale = 0.45;
-            window.__QUALITY_FORCE_SCALE = 0.45;
-            await delay(3000);
-
-            if ((window.__QUALITY_LAB || {})._cycleActiveToken !== token) break;
-
-            // High detail + high FPS
-            qlab.targetFps = 60;
-            qlab.forceScale = 1.0;
-            window.__QUALITY_FORCE_SCALE = 1.0;
-            await delay(3000);
-
-            if ((window.__QUALITY_LAB || {})._cycleActiveToken !== token) break;
-
-            // Medium detail + mid FPS
-            qlab.targetFps = 30;
-            qlab.forceScale = 0.7;
-            window.__QUALITY_FORCE_SCALE = 0.7;
-            await delay(3000);
-
-            if ((window.__QUALITY_LAB || {})._cycleActiveToken !== token) break;
-
-            // Back to Auto (no throttle)
-            qlab.targetFps = 0;
-            qlab.forceScale = null;
-            window.__QUALITY_FORCE_SCALE = null;
-            await delay(5000);
-          }
-          console.log('[PerfLab] quality cycle stop');
-          try { setCycleBtnVisual(); } catch {}
-        })();
       } catch {}
     }
     if (act === 'buildP2') buildP2();
@@ -1143,6 +1096,13 @@ function ensureUI() {
         if (qKey === 'forceScale') {
           const raw = String(t.value || '');
           __pending.qlab.forceScale = raw ? (Number(raw) || null) : null;
+        } else if (qKey === 'dgForceTier') {
+          const raw = String(t.value || '').trim();
+          if (!raw) __pending.qlab.dgForceTier = null;
+          else {
+            const v = Number(raw);
+            __pending.qlab.dgForceTier = Number.isFinite(v) ? (v | 0) : null;
+          }
         } else {
           __pending.qlab[qKey] = Math.max(0, Number(t.value) || 0);
         }
@@ -2419,8 +2379,74 @@ async function runVariant(label, step, statusText) {
   try { if (window.__PERF_LAB_RUN_CONTEXT !== 'auto') await publishResultBundle(result, { queue: [label], notes: statusText || '', runId: 'manual' }); } catch {}
 }
 
+// -------------------------------------------------------------------
+// Perf run tag helpers
+// -------------------------------------------------------------------
+function __perfSetRunTagPart(key, tag) {
+  try {
+    if (!window.__PERF_RUN_TAG_PARTS || typeof window.__PERF_RUN_TAG_PARTS !== 'object') {
+      window.__PERF_RUN_TAG_PARTS = {};
+    }
+    if (tag == null || tag === '') {
+      try { delete window.__PERF_RUN_TAG_PARTS[key]; } catch {}
+    } else {
+      window.__PERF_RUN_TAG_PARTS[key] = String(tag);
+    }
+  } catch {}
+}
+
+function __perfGetRunTagSuffix() {
+  try {
+    const tags = [];
+
+    // Back-compat: single string tag
+    const single = String(window.__PERF_RUN_TAG || '').trim();
+    if (single) tags.push(single);
+
+    // New: keyed parts (stable ordering)
+    const parts = window.__PERF_RUN_TAG_PARTS;
+    if (parts && typeof parts === 'object') {
+      const keys = Object.keys(parts).sort();
+      for (const k of keys) {
+        const v = String(parts[k] || '').trim();
+        if (v) tags.push(v);
+      }
+    }
+
+    // New: array of tags (optional)
+    const arr = window.__PERF_RUN_TAGS;
+    if (Array.isArray(arr)) {
+      for (const v of arr) {
+        const s = String(v || '').trim();
+        if (s) tags.push(s);
+      }
+    }
+
+    // Dedupe while preserving order
+    const seen = new Set();
+    const out = [];
+    for (const t of tags) {
+      if (seen.has(t)) continue;
+      seen.add(t);
+      out.push(t);
+    }
+
+    return out.length ? `__${out.join('+')}` : '';
+  } catch {}
+  return '';
+}
+
 async function runVariantPlaying(label, step, statusText) {
   const warmupMs = 1200;
+  // Make variant labels self-describing (tier/AB toggles, etc).
+  // Without this, perf-lab-results.json ends up with many identical labels,
+  // which is painful to compare.
+  const fullLabel = (() => {
+    try {
+      return `${label}${__perfGetRunTagSuffix()}`;
+    } catch {}
+    return label;
+  })();
   const slowMs = (typeof window !== 'undefined' && Number.isFinite(window.__PERF_FRAME_PROF_SLOW_MS))
     ? window.__PERF_FRAME_PROF_SLOW_MS
     : 50;
@@ -2560,7 +2586,7 @@ async function runVariantPlaying(label, step, statusText) {
         if (pendingFrame) finalizePendingFrame();
         const s = statsFromFrameMs(frameMs);
         resolve({
-          label,
+          label: fullLabel,
           durationMs,
           warmupMs,
           createdAt: new Date().toISOString(),
@@ -5590,6 +5616,7 @@ async function runP6e() {
 }
 
 async function runP6eOverview() {
+  try { window.__PERF_RUN_TAG = 'overview'; } catch {}
   const prev = window.__PERF_ZOOM_PROFILE;
   const prevField = window.__PERF_PARTICLE_FIELD_PROFILE;
   const prevSlow = window.__PERF_FRAME_PROF_SLOW_MS;
@@ -5942,6 +5969,66 @@ try {
         try { console.log('[PerfLab] DPR trace DISABLED'); } catch {}
         try { window.__PERF_TRACE_KEEP_BUFFER = false; } catch {}
       },
+
+      // -------------------------------------------------------------------
+      // DrawGrid tier automation helpers (for auto queues)
+      // -------------------------------------------------------------------
+      __applyDgForceTier: async function __applyDgForceTier(forceTier, reason = 'auto') {
+        // Persist global override
+        try { window.__DG_FORCE_TIER = (forceTier == null) ? null : (forceTier | 0); } catch {}
+
+        // Push to all existing DrawGrid panels (use hook added in drawgrid)
+        try {
+          const panels = document.querySelectorAll('.toy-panel');
+          for (const p of panels) {
+            const fn = p && p.__dgSetQualityTier;
+            if (typeof fn !== 'function') continue;
+            if (forceTier == null) {
+              try { delete p.__dgQualityTier; } catch {}
+              try { delete p.__dgQualityTierReason; } catch {}
+              try { delete p.__dgQualityTierSetMs; } catch {}
+            } else {
+              fn(forceTier | 0, reason);
+            }
+          }
+        } catch {}
+      },
+
+      dgTierAutoOn: async function dgTierAutoOn() {
+        try { window.__DG_TIER_AUTO = true; } catch {}
+        try { __perfSetRunTagPart('dgAuto', 'dgAutoOn'); } catch {}
+        try { syncUiFromState(); } catch {}
+      },
+      dgTierAutoOff: async function dgTierAutoOff() {
+        try { window.__DG_TIER_AUTO = false; } catch {}
+        try { __perfSetRunTagPart('dgAuto', 'dgAutoOff'); } catch {}
+        try { syncUiFromState(); } catch {}
+      },
+
+      dgForceTierAuto: async function dgForceTierAuto() {
+        try { await window.__PerfLab.__applyDgForceTier(null, 'auto'); } catch {}
+        try { __perfSetRunTagPart('dgTier', 'dgTierAuto'); } catch {}
+      },
+      dgForceTier3: async function dgForceTier3() {
+        try { await window.__PerfLab.__applyDgForceTier(3, 'auto'); } catch {}
+        try { __perfSetRunTagPart('dgTier', 'dgTier3'); } catch {}
+      },
+      dgForceTier2: async function dgForceTier2() {
+        try { await window.__PerfLab.__applyDgForceTier(2, 'auto'); } catch {}
+        try { __perfSetRunTagPart('dgTier', 'dgTier2'); } catch {}
+      },
+      dgForceTier1: async function dgForceTier1() {
+        try { await window.__PerfLab.__applyDgForceTier(1, 'auto'); } catch {}
+        try { __perfSetRunTagPart('dgTier', 'dgTier1'); } catch {}
+      },
+      dgForceTier0: async function dgForceTier0() {
+        try { await window.__PerfLab.__applyDgForceTier(0, 'auto'); } catch {}
+        try { __perfSetRunTagPart('dgTier', 'dgTier0'); } catch {}
+      },
+      dgForceTierEmergency: async function dgForceTierEmergency() {
+        try { await window.__PerfLab.__applyDgForceTier(-1, 'auto'); } catch {}
+        try { __perfSetRunTagPart('dgTier', 'dgTierEmergency'); } catch {}
+      },
       dgAdaptiveOff: async function dgAdaptiveOff() {
         // Force DrawGrid adaptive DPR OFF (for A/B comparisons).
         try { window.__DG_ADAPTIVE_DPR_ENABLED = false; } catch {}
@@ -5961,58 +6048,66 @@ try {
         window.__PERF_TRACE.traceCanvasResize = true;
         window.__PERF_TRACE.traceDomInRaf = false;
         try { window.__DG_RESIZE_TRACE_SAMPLE = false; } catch {}
-        try { console.log('[PerfLab] traceCanvasResize ENABLED (domInRaf OFF)', { ...window.__PERF_TRACE }); } catch {}
+        try { console.log('[PerfLab] traceCanvasResize ENABLED (domInRaf OFF)', { trace: window.__PERF_TRACE }); } catch {}
       },
       traceOn: async function traceOn() {
         window.__PERF_TRACE = window.__PERF_TRACE || {};
         window.__PERF_TRACE.traceCanvasResize = true;
         window.__PERF_TRACE.traceDomInRaf = true;
-        try { console.log('[PerfLab] demon trace ENABLED', { ...window.__PERF_TRACE }); } catch {}
+        try { console.log('[PerfLab] demon trace ENABLED', { trace: window.__PERF_TRACE }); } catch {}
       },
       traceOff: async function traceOff() {
         window.__PERF_TRACE = window.__PERF_TRACE || {};
         window.__PERF_TRACE.traceCanvasResize = false;
         window.__PERF_TRACE.traceDomInRaf = false;
-        try { console.log('[PerfLab] demon trace DISABLED', { ...window.__PERF_TRACE }); } catch {}
+        try { console.log('[PerfLab] demon trace DISABLED', { trace: window.__PERF_TRACE }); } catch {}
       },
       // Focus toggles: these MUST be exported so runQueue(AUTO_FOCUS_QUEUE) can resolve them by name.
       loopRenderOff: async function loopRenderOff() {
         try { window.__PERF_DISABLE_LOOPGRID_RENDER = true; } catch {}
+        try { __perfSetRunTagPart('loopRender', 'loopRenderOff'); } catch {}
         try { console.log('[PerfLab] LoopGrid render: OFF'); } catch {}
         try { syncUiFromState(); } catch {}
       },
       loopRenderOn: async function loopRenderOn() {
         try { window.__PERF_DISABLE_LOOPGRID_RENDER = false; } catch {}
+        try { __perfSetRunTagPart('loopRender', 'loopRenderOn'); } catch {}
         try { console.log('[PerfLab] LoopGrid render: ON'); } catch {}
         try { syncUiFromState(); } catch {}
       },
       chainsOff: async function chainsOff() {
         try { window.__PERF_DISABLE_CHAINS = true; } catch {}
+        try { __perfSetRunTagPart('chains', 'chainsOff'); } catch {}
         try { console.log('[PerfLab] Chains: OFF'); } catch {}
         try { syncUiFromState(); } catch {}
       },
       chainsOn: async function chainsOn() {
         try { window.__PERF_DISABLE_CHAINS = false; } catch {}
+        try { __perfSetRunTagPart('chains', 'chainsOn'); } catch {}
         try { console.log('[PerfLab] Chains: ON'); } catch {}
         try { syncUiFromState(); } catch {}
       },
       chainUiOff: async function chainUiOff() {
         try { window.__PERF_DISABLE_CHAIN_UI = true; } catch {}
+        try { __perfSetRunTagPart('chainUi', 'chainUiOff'); } catch {}
         try { console.log('[PerfLab] Chain UI: OFF'); } catch {}
         try { syncUiFromState(); } catch {}
       },
       chainUiOn: async function chainUiOn() {
         try { window.__PERF_DISABLE_CHAIN_UI = false; } catch {}
+        try { __perfSetRunTagPart('chainUi', 'chainUiOn'); } catch {}
         try { console.log('[PerfLab] Chain UI: ON'); } catch {}
         try { syncUiFromState(); } catch {}
       },
       connectorsOff: async function connectorsOff() {
         try { window.__PERF_DISABLE_CHAIN_CONNECTORS = true; } catch {}
+        try { __perfSetRunTagPart('connectors', 'connectorsOff'); } catch {}
         try { console.log('[PerfLab] Chain connectors: OFF'); } catch {}
         try { syncUiFromState(); } catch {}
       },
       connectorsOn: async function connectorsOn() {
         try { window.__PERF_DISABLE_CHAIN_CONNECTORS = false; } catch {}
+        try { __perfSetRunTagPart('connectors', 'connectorsOn'); } catch {}
         try { console.log('[PerfLab] Chain connectors: ON'); } catch {}
         try { syncUiFromState(); } catch {}
       },

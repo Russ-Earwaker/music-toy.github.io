@@ -103,6 +103,20 @@ export function createDgPlayheadRender({ state, deps } = {}) {
         const playheadFpsHint = d.readHeaderFpsHint();
         const playheadFps = Number.isFinite(playheadFpsHint) ? playheadFpsHint : 60;
 
+        // Tier-based playhead quality gate:
+        // - Tiers 1/0/-1 set allowPlayheadExtras=false, which should force the simple playhead
+        //   regardless of FPS. This prevents "low detail mode does nothing" confusion.
+        let allowPlayheadExtras = true;
+        try {
+          const qp = (typeof d.getQualityProfile === 'function')
+            ? d.getQualityProfile({
+                isFocused: !!panel?.classList?.contains('toy-focused') || !!panel?.classList?.contains('focused'),
+                isInteracting: false,
+              })
+            : null;
+          if (qp && qp.allowPlayheadExtras === false) allowPlayheadExtras = false;
+        } catch {}
+
         // IMPORTANT: playhead quality is *generic* (FPS-based), not gesture-based and not panel-count-based.
         // We only drop to the simple playhead when the frame rate suggests we need to.
         const fancyMinFps = Number.isFinite(window.__DG_PLAYHEAD_FANCY_MIN_FPS) ? Number(window.__DG_PLAYHEAD_FANCY_MIN_FPS) : 55;
@@ -112,6 +126,8 @@ export function createDgPlayheadRender({ state, deps } = {}) {
           (playheadFps >= fancyMinFps) ||
           ((zoomForOverlay > 0.9) && (playheadFps >= fancyMinFpsZoomedIn))
         );
+
+        if (!allowPlayheadExtras) panel.__dgPlayheadFancyLocked = false;
         // If global FPS pressure has switched us into "simple playhead" mode,
         // drop fancy immediately (do NOT wait for a phase wrap to re-lock).
         // This is generic (FPS-based), not gesture-based, and not device-count-based.
@@ -125,7 +141,7 @@ export function createDgPlayheadRender({ state, deps } = {}) {
           panel.__dgPlayheadHue = d.pickPlayheadHue(strokes);
         }
         const playheadFancy = !!panel.__dgPlayheadFancyLocked;
-        const playheadDrawSimple = playheadSimpleOnly || !playheadFancy;
+        const playheadDrawSimple = !allowPlayheadExtras || playheadSimpleOnly || !playheadFancy;
         const canUseTutorialLayer = d.getTutorialHighlightMode() === 'none' && !!tutorialCtx?.canvas;
         const playheadLayer = useSeparatePlayhead
           ? 'playhead'

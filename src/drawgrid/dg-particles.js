@@ -33,6 +33,16 @@ export function createDgParticles(getState) {
         }
       })();
 
+      // DrawGrid quality profile (tier -> particle budget).
+      const qProfile = (() => {
+        try {
+          const isFocused = !!S.panel?.classList?.contains('toy-focused');
+          return (typeof S.getQualityProfile === 'function')
+            ? S.getQualityProfile({ isFocused, isInteracting: false })
+            : null;
+        } catch { return null; }
+      })();
+
       // Base config values for a "nice" look on fast machines.
       // Use the new getParticleCap() function for toy-count aware scaling.
       const cap = S.getParticleCap(2200);
@@ -98,13 +108,28 @@ export function createDgParticles(getState) {
         if (pb && typeof S.particleState.field.applyBudget === 'function') {
           // IMPORTANT: allow budgets to reach 0 so the main drawgrid loop can
           // ramp particles down smoothly and then fully bypass dgField.tick().
-          const maxCountScale = Math.max(0.0, (pb.maxCountScale ?? 1) * (pb.capScale ?? 1));
+          let maxCountScale = Math.max(0.0, (pb.maxCountScale ?? 1) * (pb.capScale ?? 1));
+          let sizeScale = pb.sizeScale ?? 1;
+          let spawnScale = pb.spawnScale ?? 1;
+
+          // Apply DrawGrid quality tier adjustments.
+          if (qProfile) {
+            const qm = Number.isFinite(qProfile.particleMul) ? qProfile.particleMul : 1;
+            maxCountScale *= qm;
+            spawnScale *= qm;
+            sizeScale *= (0.9 + 0.1 * qm);
+            if (qProfile.allowParticles === false) {
+              maxCountScale = 0;
+              spawnScale = 0;
+            }
+          }
+
           S.particleState.field.applyBudget({
             maxCountScale,
             capScale: pb.capScale ?? 1,
             tickModulo: 1,
-            sizeScale: pb.sizeScale ?? 1,
-            spawnScale: pb.spawnScale ?? 1,
+            sizeScale,
+            spawnScale,
           });
         }
       } catch {}

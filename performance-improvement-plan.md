@@ -4,32 +4,32 @@
 
 When we complete or reject work, update these sections in order:
 
-1. **Completed Work ✅** — add a bullet with *what changed*, *where*, and *how verified* (Perf Lab tag / key metrics).
-2. **Investigated and Rejected ❌** — record *why* it was rejected and what evidence (Perf Lab / visual regression).
-3. **Key Learnings 🧠** — keep this tight: the 5–10 facts that currently drive decisions.
-4. **Guidelines / Constraints (Locked In)** — only edit if we’ve agreed a rule is changing.
-5. **Next Steps 🎯** — keep a short ordered list. Each step must be measurable in Perf Lab.
+1. **Completed Work âœ…** â€” add a bullet with *what changed*, *where*, and *how verified* (Perf Lab tag / key metrics).
+2. **Investigated and Rejected âŒ** â€” record *why* it was rejected and what evidence (Perf Lab / visual regression).
+3. **Key Learnings ðŸ§ ** â€” keep this tight: the 5â€“10 facts that currently drive decisions.
+4. **Guidelines / Constraints (Locked In)** â€” only edit if weâ€™ve agreed a rule is changing.
+5. **Next Steps ðŸŽ¯** â€” keep a short ordered list. Each step must be measurable in Perf Lab.
 
 ---
 
 ## 1. Hard Constraints (Locked In)
 
-These are **non‑negotiable** and must guide all future optimisation work:
+These are **nonâ€‘negotiable** and must guide all future optimisation work:
 
 * **No intentional frame skipping**
-  No modulo updates, no “every N frames” logic that affects perceived motion.
+  No modulo updates, no â€œevery N framesâ€ logic that affects perceived motion.
 
 * **No gesture-specific visual degradation**
   Panning / zooming must not change visual quality or cadence.
   *Exception:* **load/FPS-based** quality reduction is allowed (device-agnostic), with hysteresis.
 * **Smoothness > absolute detail**
   We may reduce *detail* (particle count, resolution, effect richness), but never cadence.
-* **Rendering ≠ Audio**
+* **Rendering â‰  Audio**
   Render culling must not affect audio timing or scheduling (render-only decisions).
 
 ---
 
-## 2. Completed Work ✅
+## 2. Completed Work âœ…
 
 ### 2.1 Perf methodology & tooling
 
@@ -37,7 +37,7 @@ These are **non‑negotiable** and must guide all future optimisation work:
 * Focus shifted from averages to:
   * **p95 / p99**
   * worst-frame spikes
-  * “what changed” A/B variants with identical scene rebuilds.
+  * â€œwhat changedâ€ A/B variants with identical scene rebuilds.
 * **Auto: Current Focus** established for fast iteration on gesture/compositor issues.
 * Added **micro-marks** to isolate costs inside a single perf bucket:
   * `drawgrid.playhead.headerSweep`
@@ -45,21 +45,21 @@ These are **non‑negotiable** and must guide all future optimisation work:
   * `drawgrid.playhead.spriteGet`
   * `drawgrid.playhead.drawImage`
 
-* **Perf Lab now defaults to “clean” perf** (debug traces OFF during runs)
+* **Perf Lab now defaults to â€œcleanâ€ perf** (debug traces OFF during runs)
   * Disable noisy DG/FG debug flags by default in perf runs (avoids distorting results).
   * Trace output is buffered (not console-spammed) and summarized into each bundle meta.
-  * Verified in latest focus bundle: trace summary included without “skip-not-ready” events.
+  * Verified in latest focus bundle: trace summary included without â€œskip-not-readyâ€ events.
 
 * **Auto: Current Focus queue is now stable and repeatable**
   * Build once, run variants back-to-back:
     * Baseline focus
     * NoOverlays focus
     * NoParticles focus
-  * MultiCanvas focus run is currently treated as “manual only” (was causing stalls / swamping signal).
+  * MultiCanvas focus run is currently treated as â€œmanual onlyâ€ (was causing stalls / swamping signal).
 
-* **Pressure-DPR verified as “actually engaging”**
-  * Latest focus bundle shows pressure seen with min pressure multiplier � 0.608 (sawPressure: true).
-  * This confirms pressure-based DPR is a viable lever (we’re not chasing a phantom).
+* **Pressure-DPR verified as â€œactually engagingâ€**
+  * Latest focus bundle shows pressure seen with min pressure multiplier ˜ 0.608 (sawPressure: true).
+  * This confirms pressure-based DPR is a viable lever (weâ€™re not chasing a phantom).
 
 ### 2.2 Particle system refactor
 
@@ -90,7 +90,7 @@ These are **non‑negotiable** and must guide all future optimisation work:
 
 ### 2.5 Header sweep optimisation (DrawGrid playhead)
 
-* Discovered (via micro-marks) that **header sweep was the dominant playhead cost** (not “4 glowy lines”).
+* Discovered (via micro-marks) that **header sweep was the dominant playhead cost** (not â€œ4 glowy linesâ€).
 * **Decoupled** header sweep into:
   * **visual-only sweep band** (cheap)
   * **force sweep** (expensive particle push)
@@ -136,10 +136,10 @@ From latest **Auto: Current Focus** bundle:
 
 * **Baseline focus (P3fFocus)**
 
-  * avg â‰ˆ **21.4ms**
-  * p95 â‰ˆ **33.4ms**
-  * p99 â‰ˆ **33.5ms**
-  * worst â‰ˆ **50.1ms**
+  * avg Ã¢â€°Ë† **21.4ms**
+  * p95 Ã¢â€°Ë† **33.4ms**
+  * p99 Ã¢â€°Ë† **33.5ms**
+  * worst Ã¢â€°Ë† **50.1ms**
 * **Key result**
 
   * p99 collapsed onto p95
@@ -156,11 +156,11 @@ From latest **Auto: Current Focus** bundle:
 From the latest **Auto: Current Focus** bundle:
 
 * Baseline focus (P3fFocus):
-  * avg � 23.39ms, p95 � 33.4ms, p99 � 50.1ms
+  * avg ˜ 23.39ms, p95 ˜ 33.4ms, p99 ˜ 50.1ms
 * NoOverlays focus:
-  * avg � 19.98ms, p95 � 33.4ms, p99 � 33.5ms
+  * avg ˜ 19.98ms, p95 ˜ 33.4ms, p99 ˜ 33.5ms
 * NoParticles focus:
-  * avg � 21.75ms, p95 � 33.4ms, p99 � 50.1ms
+  * avg ˜ 21.75ms, p95 ˜ 33.4ms, p99 ˜ 50.1ms
 
 Interpretation: **Overlays strongly affect p99 spikes** and overall average; particles are secondary in this focus setup.
 ### 2.8 DrawGrid connector-line bugfix + cleanup (Feb 4 2026)
@@ -172,11 +172,11 @@ Interpretation: **Overlays strongly affect p99 spikes** and overall average; par
 
 ---
 
-## 3. Investigated and Rejected ❌
+## 3. Investigated and Rejected âŒ
 
 ### 3.1 Frame-skipping / modulo updates
 
-* Even subtle skipping produces perceptible “swimmy” feel.
+* Even subtle skipping produces perceptible â€œswimmyâ€ feel.
 * Rejected to preserve continuous motion.
 
 ### 3.2 Gesture-based quality changes
@@ -186,12 +186,12 @@ Interpretation: **Overlays strongly affect p99 spikes** and overall average; par
 
 ### 3.3 Freezing toys during viewport movement
 
-* Breaks the “continuous surface” feel.
+* Breaks the â€œcontinuous surfaceâ€ feel.
 * Rejected.
 
-### 3.4 “Visible panel count” as a scaling input
+### 3.4 â€œVisible panel countâ€ as a scaling input
 
-* Rejected because it’s device-dependent and mis-scales across machines (high-end PC vs older mobile).
+* Rejected because itâ€™s device-dependent and mis-scales across machines (high-end PC vs older mobile).
 * We now prefer **FPS/pressure signals**.
 
 ### 3.5 Flat layer experiments
@@ -215,11 +215,11 @@ Interpretation: **Overlays strongly affect p99 spikes** and overall average; par
 
 **Decision**
 
-> DrawGrid Focus is â€œgood enoughâ€. Lock it in and move on.
+> DrawGrid Focus is Ã¢â‚¬Å“good enoughÃ¢â‚¬Â. Lock it in and move on.
 
 ---
 
-## 4. Key Learnings 🧠
+## 4. Key Learnings ðŸ§ 
 
 ### 4.1 The bottleneck is mostly **not JavaScript**
 
@@ -235,7 +235,7 @@ Latest focus bundle confirms this again: baseline `frame.nonScript` avg is ~49.5
 
 ### 4.2 Micro-marks change the game
 
-“Playhead is expensive” was too vague. Micro-marks revealed:
+â€œPlayhead is expensiveâ€ was too vague. Micro-marks revealed:
 * The cost was primarily **header sweep forces**, not line drawing.
 This lets us target the real work without degrading core visuals.
 
@@ -252,17 +252,17 @@ But particle *drawing* and field canvases can still contribute to `nonScript` vi
 ### 4.5 Overlays are the clearest lever for p99 spikes (in current focus)
 
 In the latest focus A/B:
-* Disabling overlays reduced **p99** from ~50ms → ~33.5ms while keeping p95 about the same.
+* Disabling overlays reduced **p99** from ~50ms â†’ ~33.5ms while keeping p95 about the same.
 * Disabling particles did **not** improve p99 in this focus setup.
 
-This strongly suggests we’re paying for:
+This strongly suggests weâ€™re paying for:
 * full-canvas overlay clears / composites, and/or
-* “overlay always active” gating even when overlays are logically empty.
+* â€œoverlay always activeâ€ gating even when overlays are logically empty.
 
 ### 4.6 Pressure-DPR is confirmed real (so use it strategically)
 
-Trace summary shows pressure engaged with min pressure multiplier � 0.608.
-This is enough to justify building “pressure-first” solutions rather than scene heuristics.
+Trace summary shows pressure engaged with min pressure multiplier ˜ 0.608.
+This is enough to justify building â€œpressure-firstâ€ solutions rather than scene heuristics.
 
 ### 4.7 Gesture-time DPR reduction is safe and effective
 
@@ -279,15 +279,15 @@ This is enough to justify building “pressure-first” solutions rather than sc
 
 ### 4.8 Bounded cost beats zero cost
 
-* Overlays still cost *something* � but:
+* Overlays still cost *something* — but:
 
   * they no longer explode
   * they no longer dominate p99
-* A known, bounded cost is preferable to fragile �clever� elimination.
+* A known, bounded cost is preferable to fragile “clever” elimination.
 
 ### 4.9 Overlay presence must not imply overlay work
 
-* �Layer is non-empty� must not be used as a proxy for �needs redraw�.
+* “Layer is non-empty” must not be used as a proxy for “needs redraw”.
 * `overlayDirty` must mean: **overlay core must be repainted**.
 * Caching + invalidation is the correct model for overlay performance.
 
@@ -299,66 +299,118 @@ This is enough to justify building “pressure-first” solutions rather than sc
 
 ---
 
-## 5. Guidelines / Constraints (Locked In) 🔒
+## 5. Guidelines / Constraints (Locked In) ðŸ”’
 
 * **Gesture-time backing-store degradation is allowed**
 
   * Only affects raster resolution, not cadence.
   * Must restore cleanly on gesture commit.
-* **If p99 � p95, stop**
+* **If p99 ˜ p95, stop**
 
   * Further optimisation is optional and must justify regression risk.
 * **Stability > cleverness**
 
   * Prefer simple, bounded systems over intricate micro-optimisations.
 * **Prefer FPS/pressure inputs over scene heuristics**
-  (avoid “visible count”, avoid “gesture mode” switches).
+  (avoid â€œvisible countâ€, avoid â€œgesture modeâ€ switches).
 * **Degrade by detail, not cadence**
   Use hysteresis. If we must disable an effect under pressure, do it as a last resort.
 * **Instrument before rewriting**
-  If something is “surprisingly expensive”, add a micro-mark and verify the culprit.
+  If something is â€œsurprisingly expensiveâ€, add a micro-mark and verify the culprit.
 * **Treat alpha-heavy tall sprites as risky**
   Avoid per-frame rescaling; make caches stable (quantization / reuse).
 
 * **Overlay redraw must be event-driven**
-  Overlay core redraw should only occur on true invalidation (flash/state change/UI refresh), not �layer exists�.
+  Overlay core redraw should only occur on true invalidation (flash/state change/UI refresh), not “layer exists”.
 
 ---
 
-## 6. Next Steps 🎯
+## 6. Next Steps ðŸŽ¯
 
-### ✅ DrawGrid Focus — DONE
+### âœ… DrawGrid Focus â€” DONE
 
 Remove DrawGrid Focus from the active optimisation list.
 
+### DrawGrid Focus/Quality Budget Spec (Feb 6 2026)
+
+**Goal:** keep *all onscreen toys smooth* by dynamically reducing *visual work* (primarily pixel/compositor cost) with gradual, hysteretic quality changes. This is **not** “small-screen editing mode” (single-toy mode); it’s the default multi-toy behaviour.
+
+**DrawGrid model (template for future toys):**
+* **Visibility states:** `OFFSCREEN` (near-free visuals), `NEARSCREEN` (cheap warm-up), `ONSCREEN` (eligible for full render).
+* **Interaction boosts:** `ACTIVE_POINTER`, `ACTIVE_GESTURE_GLOBAL`, `RECENT_INTERACTION`, `AUDIO_IMPORTANT`.
+* **Global budget manager:** uses rolling avg/p95 frame time + motion context to assign per-toy profiles with **hysteresis** (no flapping).
+* **Quality profiles (tiers):**
+  * **Tier 3 (Full):** resScale≈1.0, drawHz=60, all passes.
+  * **Tier 2 (Light):** small resScale drop, keep 60Hz; reduce optional effects (bursts/flash density, particle budget).
+  * **Tier 1 (Medium):** resScale≈0.7–0.8, drawHz≈30 (except `ACTIVE_POINTER`); particles off/heavily throttled; simplify overlay “specials”.
+  * **Tier 0 (Low but alive):** resScale≈0.6–0.7, drawHz≈15 with interaction override; most optional passes off; cached/simplified overlay.
+  * **Tier -1 (Emergency, rare):** resScale≈0.5–0.6, drawHz≈10; auto-recover ASAP.
+* **Audio decoupling contract:** visual tiering must **never** affect audio timing. Offscreen toys can keep contributing audio via the central scheduler/mix graph while visuals are free.
+
+**Implementation hooks (DrawGrid):**
+* `setQualityProfile(profile)` (idempotent)
+* `tick(dt, tNow, ctx)` (no drawing)
+* `draw(ctx)` (cadence-controlled)
+* `onVisibilityChange(state)` / `onInteractionChange(state)`
+
+**Acceptance:** under P6-style multi-toy loads, quality should degrade smoothly (no stutter spikes) and recover cleanly; verify with Perf Lab (avg/p95/p99 + worst-frame).
+---
+
+### DrawGrid Quality Tier → Pass Mapping (Implementation Table)
+
+This table exists to remove ambiguity during implementation. Each tier explicitly lists which DrawGrid passes, effects, and cadences are enabled. Future toys should provide an equivalent table.
+
+| Tier | resScale | drawHz | Grid / Nodes | Overlay Core | Overlay Specials (flashes, bursts) | Particles | Playhead Extras | Notes |
+|-----:|---------:|-------:|--------------|--------------|------------------------------------|-----------|------------------|-------|
+| 3 | ~1.0 | 60 | Full | Full | Full | Full | Full | Target quality for focused or low-load scenes |
+| 2 | 0.85–0.9 | 60 | Full | Full | Reduced density / frequency | Reduced budget | Full | Nearly imperceptible degrade; shave pixel cost |
+| 1 | 0.7–0.8 | 30* | Full | Simplified | OFF | OFF / heavy throttle | Reduced (no glows) | *60Hz temporarily while ACTIVE_POINTER |
+| 0 | 0.6–0.7 | 15* | Full | Cached / minimal | OFF | OFF | Minimal | *Temporary bump to Tier 1 during interaction |
+| -1 | 0.5–0.6 | 10 | Minimal | OFF | OFF | OFF | OFF | Emergency only; auto-recover ASAP |
+
+**Overlay Core** = strokes, toggles, playhead base.  
+**Overlay Specials** = flashes, bursts, sparkle effects.  
+**Playhead Extras** = header sweep visuals, glow, secondary effects.
+
+**Cadence rules:**
+* Update cadence remains high for responsiveness; draw cadence is reduced first.
+* Tier changes are hysteretic (≤1 tier change per second).
+* Interaction (`ACTIVE_POINTER`) temporarily lifts drawHz and/or tier, then decays.
+
 ### Next optimisation targets (ordered)
 
-1. **Multi-toy scenes**
+1. **Project focus/quality budget manager (default multi-toy behaviour)**
+
+   * Implement the DrawGrid tiering system above (profiles + hysteresis) as the reference implementation.
+   * Wire visibility classification (ONSCREEN/NEARSCREEN/OFFSCREEN) and ensure offscreen visuals are near-free.
+   * Add a Perf Lab A/B run that toggles budget manager ON/OFF in the same P6 scene.
+
+2. **Multi-toy scenes**
 
    * Validate compositor behaviour with many simultaneous toys.
    * Update **Auto: Current Focus** to be P6-based A/B isolates (baseline ? chains off ? LoopGrid render off ? overview toggles).
    * Keep **Run-Auto (Generic)** unchanged; it remains the broad regression check.
-2. **Particle field under extreme load**
+3. **Particle field under extreme load**
 
    * Mobile GPU limits
    * Very large boards
-3. **Mobile Safari / low-end GPU validation**
+4. **Mobile Safari / low-end GPU validation**
 
    * Confirm pressure-DPR + gesture-DPR hold up on weaker devices.
 
 ---
 
-## 7. Explicit “Do Not Regress” Rules
+## 7. Explicit â€œDo Not Regressâ€ Rules
 
 Any future optimisation must answer **yes** to all of these:
 
 * Does motion remain continuous?
-* Are quality changes gradual and hysteretic (FPS/pressure based), not gesture-based?
-* Are we reducing *work*, not *cadence*?
+* Are quality changes gradual and hysteretic (FPS/pressure based), with gesture-time reductions allowed **only** when they reduce backing-store resolution and restore on commit?
+* Are we reducing *work* first, and only reducing **draw cadence** as a last resort (with stable caps + hysteresis)?
 * Are offscreen elements truly free?
 * Did we verify with Perf Lab (p95/p99 and worst-frame)?
 
-If not, it’s rejected.
+If not, itâ€™s rejected.
 
 ---
 

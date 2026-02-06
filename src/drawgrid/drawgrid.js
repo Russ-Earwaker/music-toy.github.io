@@ -118,6 +118,7 @@ import {
   __dgUpdatePressureDprMulFromFps,
   __dgGetPressureDprMul,
 } from './dg-dpr.js';
+import { createDgQuality } from './dg-quality.js';
 import {
   __dgEnsureStateReadoutEl,
   __dgEscapeHtml,
@@ -613,6 +614,15 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let headerSweepDirX = 1;
   const hydrationState = { retryRaf: 0, retryCount: 0 };
   const particleState = { field: null };
+  // Quality tier plumbing (budget manager comes later).
+  const dgQuality = createDgQuality({
+    panel,
+    nowMs: () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()),
+  });
+  try {
+    // Debug hook: window.__DG_SET_TIER(panelElOrId, tier)
+    panel.__dgSetQualityTier = (tier, reason = 'manual') => dgQuality.setTier(tier, reason);
+  } catch {}
   // Draw helpers -----------------------------------------------------------
   // We sometimes run with paintDpr < 1 (pressure/adaptive DPR). In that mode,
   // canvases are allocated at cssW*paintDpr but MUST still be drawn in CSS-pixel
@@ -721,6 +731,20 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   });
   // Visibility + LOD state
   let isPanelVisible = true;          // IntersectionObserver will keep this updated
+  // Visibility classification for the Focus/Budget system.
+  // OFFSCREEN: ratio<=0 (or not intersecting)
+  // NEARSCREEN: intersecting but below DG_VISIBILITY_THRESHOLD
+  // ONSCREEN: intersecting and ratio>=DG_VISIBILITY_THRESHOLD
+  let __dgVisibilityState = 'ONSCREEN';
+  let __dgLastIntersectionRatio = 1;
+  // Internal: used to avoid spamming composites on tiny scroll jitter.
+  let __dgNearscreenWarmDone = false;
+  function __dgSetVisibilityState(state, ratio) {
+    __dgVisibilityState = state;
+    __dgLastIntersectionRatio = Number.isFinite(ratio) ? ratio : __dgLastIntersectionRatio;
+    try { panel.__dgVisibilityState = state; } catch {}
+    try { panel.__dgIntersectionRatio = __dgLastIntersectionRatio; } catch {}
+  }
   let particleFieldEnabled = true;    // driven by FPS + zoom with hysteresis
   let particleCanvasVisible = true;
   let pendingResnapOnVisible = false;
@@ -1635,6 +1659,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     getParticleBudget,
     getParticleCap,
     getAdaptiveFrameBudget,
+    getQualityProfile: (opts = {}) => dgQuality.getProfile(opts),
     createField,
     pausedRef,
     __lastZoomMotionTs,
@@ -3144,6 +3169,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     getLoopInfo,
     isRunning,
     readHeaderFpsHint,
+    getQualityProfile: (opts = {}) => dgQuality.getProfile(opts),
     getTutorialHighlightMode: () => getTutorialHighlightMode(),
     pickPlayheadHue,
     getPlayheadCompositeSprite,
@@ -3513,6 +3539,23 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         (entries) => {
           for (const entry of entries) {
             if (entry.target !== panel) continue;
+            const ratio = (typeof entry.intersectionRatio === 'number') ? entry.intersectionRatio : (entry.isIntersecting ? 1 : 0);
+
+            // Classify visibility for the focus/budget system.
+            // Keep the existing `isPanelVisible` boolean semantics: only "ONSCREEN" counts as visible.
+            const nextVisState = (!entry.isIntersecting || ratio <= 0)
+              ? 'OFFSCREEN'
+              : (ratio >= DG_VISIBILITY_THRESHOLD ? 'ONSCREEN' : 'NEARSCREEN');
+
+            // Persist state on panel for debugging / future global manager.
+            if (nextVisState !== __dgVisibilityState || Math.abs((ratio || 0) - (__dgLastIntersectionRatio || 0)) > 0.02) {
+              __dgSetVisibilityState(nextVisState, ratio);
+              try {
+                if (typeof window !== 'undefined' && window.__DG_DEBUG_CULL) {
+                  console.log('[DG][cull] VISSTATE', { panelId: panel?.id || null, state: nextVisState, ratio: +(__dgLastIntersectionRatio || 0).toFixed(3) });
+                }
+              } catch {}
+            }
             // Require a minimum intersection ratio to count as visible.
             const visible =
               entry.isIntersecting &&
@@ -3520,6 +3563,17 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
                 ? true
                 : entry.intersectionRatio >= DG_VISIBILITY_THRESHOLD);
             isPanelVisible = !!visible;
+            // Auto-tier based on visibility state (unless caller has explicitly forced a tier).
+            // - OFFSCREEN: don't force anything (we hard-cull anyway)
+            // - NEARSCREEN: tier 1 (keeps resScale down; particles/specials off)
+            // - ONSCREEN: tier 3
+            try {
+              const forced = (panel.__dgQualityTier != null);
+              if (!forced) {
+                if (__dgVisibilityState === 'NEARSCREEN') dgQuality.setTier(1, 'vis:nearscreen');
+                else if (__dgVisibilityState === 'ONSCREEN') dgQuality.setTier(3, 'vis:onscreen');
+              }
+            } catch {}
             try {
               const debugCull = (typeof window !== 'undefined' && window.__DG_DEBUG_CULL);
               if (debugCull && isPanelVisible !== lastVisibleState) {
@@ -3534,6 +3588,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
             } catch {}
             const becameVisible = (isPanelVisible && !lastVisibleState);
             if (becameVisible) {
+              // Reset nearscreen warm flag when we truly become visible.
+              __dgNearscreenWarmDone = false;
+
               // Force a real redraw/composite the moment we come back on-screen.
               try {
                 __dgMarkSingleCanvasDirty(panel);
@@ -3558,6 +3615,31 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
                 }
               } catch {}
             }
+
+            // NEARSCREEN warm-up:
+            // If we're intersecting but below the "visible" threshold, do a single warm composite
+            // (no loop restart). This keeps the surface "ready" without paying continuous costs.
+            try {
+              if (__dgVisibilityState === 'NEARSCREEN' && !isPanelVisible && !__dgNearscreenWarmDone) {
+                __dgNearscreenWarmDone = true;
+                // Mark dirty so the next composite includes up-to-date content.
+                try {
+                  __dgMarkSingleCanvasDirty(panel);
+                  panel.__dgSingleCompositeDirty = true;
+                  panel.__dgCompositeBaseDirty = true;
+                  panel.__dgCompositeOverlayDirty = true;
+                } catch {}
+                if (DG_SINGLE_CANVAS) {
+                  requestAnimationFrame(() => {
+                    try { compositeSingleCanvas(); } catch {}
+                    try { panel.__dgSingleCompositeDirty = false; } catch {}
+                  });
+                }
+              }
+              if (__dgVisibilityState !== 'NEARSCREEN') {
+                __dgNearscreenWarmDone = false;
+              }
+            } catch {}
             if (isPanelVisible && pendingResnapOnVisible) {
               pendingResnapOnVisible = false;
               resnapAndRedraw(true);
@@ -4951,41 +5033,18 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       const nowTs = performance?.now?.() ?? Date.now();
 
       // --- Toy performance contract (scene-level gating) ------------------
-      // Keep this early so we can skip expensive work when the panel is
-      // offscreen / not important. We always allow pending UI work through.
+      // IMPORTANT: We do NOT use frame-modulo throttling anymore.
+      // Our current goal is: update every RAF tick, and relieve pressure by
+      // reducing visual quality (DPR / particles / playhead detail), not by
+      // introducing stutters or freezes.
+      //
+      // We still query the arbiter so we can adopt it later, but for now we
+      // intentionally ignore any "frozen" / "frameModulo" decisions.
       const __arb = (typeof window !== 'undefined') ? window.__ToyUpdateArbiter : null;
       const __dec = (__arb && typeof __arb.getDecision === 'function')
         ? __arb.getDecision(panel, 'drawgrid', nowTs)
         : null;
-      if (__dec && Number.isFinite(__dec.frameModulo) && __dec.frameModulo > 1) {
-        panel.__dgFrameModulo = __dec.frameModulo | 0;
-      } else {
-        panel.__dgFrameModulo = 1;
-      }
-      // If we're allowed to run only every N frames, early-out unless there's
-      // pending work that must land deterministically.
-      const __mustDraw = !!(
-        __dgFrontSwapNextDraw ||
-        __dgNeedsUIRefresh ||
-        __hydrationJustApplied ||
-        __dgForceFullDrawNext ||
-        (__dgForceFullDrawFrames > 0) ||
-        __dgForceOverlayClearNext ||
-        __dgForceSwapNext
-      );
-      if (!__mustDraw) {
-        const mod = panel.__dgFrameModulo | 0;
-        if (mod > 1 && ((panel.__dgFrame | 0) % mod) !== 0) {
-          ensureRenderLoopRunning();
-          return;
-        }
-        if (__dec && __dec.mode === 'frozen' && !__dec.focused) {
-          // Frozen: skip almost everything; keep the loop alive so it can wake
-          // quickly on visibility / interaction.
-          ensureRenderLoopRunning();
-          return;
-        }
-      }
+      panel.__dgFrameModulo = 1;
 
       updateFlatLayerVisibility();
 
@@ -5362,11 +5421,82 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       const gestureMoving = !!(gesturing && __lastZoomMotionTs && (nowTs - __lastZoomMotionTs) < ZOOM_STALL_MS);
       const isFocused = panel.classList?.contains('toy-focused') || panel.classList?.contains('focused');
       const isZoomed = panel.classList?.contains('toy-zoomed');
+      const isInteracting = !!(__dgDrawingActive || draggedNode || (cur && previewGid));
+
+      // ---------------------------------------------------------------------------
+      // Auto tier bridge (FPS pressure -> tier), with hysteresis.
+      //
+      // Important:
+      // - We do NOT use small-screen/single-toy mode here.
+      // - We do NOT introduce cadence stutter; this only reduces *work* (DPR/features).
+      // - If something else forces a tier (Perf Lab, API), we do NOT override it.
+      //
+      // Enable/disable via:
+      //   window.__DG_TIER_AUTO = true/false
+      // ---------------------------------------------------------------------------
+      let pressureMul = __dgGetPressureDprMul();
+      try {
+        const autoEnabled = (typeof window !== 'undefined') ? (window.__DG_TIER_AUTO ?? true) : false;
+        const forcedReason = panel.__dgQualityTierReason;
+        const isExternallyForced =
+          !!forcedReason && forcedReason !== 'auto' && forcedReason !== 'auto-fps';
+
+        if (autoEnabled && !isExternallyForced) {
+          // Convert pressure (≈ how much DPR we’re allowed) into a tier target.
+          // Higher pressureMul = healthier FPS headroom.
+          const pm = Number.isFinite(pressureMul) ? pressureMul : 1.0;
+          let targetTier = 3;
+          if (pm <= 0.55) targetTier = -1;
+          else if (pm <= 0.64) targetTier = 0;
+          else if (pm <= 0.74) targetTier = 1;
+          else if (pm <= 0.88) targetTier = 2;
+          else targetTier = 3;
+
+          const now = nowTs || (performance?.now?.() ?? Date.now());
+          const curTier = (typeof dgQuality.getTier === 'function') ? dgQuality.getTier() : (panel.__dgQualityTier ?? 3);
+          const lastChange = Number.isFinite(panel.__dgAutoTierLastChangeTs) ? panel.__dgAutoTierLastChangeTs : 0;
+          const minHoldMs = 900; // don’t flap
+
+          // Upgrade hysteresis: require sustained “healthy” pressure before moving up.
+          const candTier = Number.isFinite(panel.__dgAutoTierCandidate) ? panel.__dgAutoTierCandidate : null;
+          const candSince = Number.isFinite(panel.__dgAutoTierCandidateSince) ? panel.__dgAutoTierCandidateSince : 0;
+
+          if (targetTier < curTier) {
+            // Degrade quickly (but still bounded by minHoldMs).
+            if ((now - lastChange) >= minHoldMs) {
+              dgQuality.setTier(targetTier, 'auto-fps');
+              panel.__dgAutoTierLastChangeTs = now;
+              panel.__dgAutoTierCandidate = null;
+              panel.__dgAutoTierCandidateSince = 0;
+            }
+          } else if (targetTier > curTier) {
+            // Recover slowly: require 2s of stability at the better tier.
+            if (candTier !== targetTier) {
+              panel.__dgAutoTierCandidate = targetTier;
+              panel.__dgAutoTierCandidateSince = now;
+            } else if ((now - candSince) >= 2000 && (now - lastChange) >= minHoldMs) {
+              dgQuality.setTier(targetTier, 'auto-fps');
+              panel.__dgAutoTierLastChangeTs = now;
+              panel.__dgAutoTierCandidate = null;
+              panel.__dgAutoTierCandidateSince = 0;
+            }
+          } else {
+            // Same target: clear candidate so we don’t “remember” stale upgrades.
+            panel.__dgAutoTierCandidate = null;
+            panel.__dgAutoTierCandidateSince = 0;
+          }
+
+          // Re-read in case we just changed something.
+          pressureMul = __dgGetPressureDprMul();
+        }
+      } catch {}
+
+      const qProfile = dgQuality.getProfile({ isFocused, isInteracting });
       const hasAnyNotes = !!(currentMap && currentMap.active && currentMap.active.some(Boolean));
       const disableOverlayCore = !!(typeof window !== 'undefined' && window.__PERF_DG_OVERLAY_CORE_OFF);
       const zoomForOverlay = Number.isFinite(boardScale) ? boardScale : 1;
-      const overlayFlashesEnabled = !disableOverlayCore;
-      const overlayBurstsEnabled = !disableOverlayCore && zoomForOverlay > 0.45 && !__dgLowFpsMode;
+      const overlayFlashesEnabled = !disableOverlayCore && (qProfile?.allowOverlaySpecials ?? true);
+      const overlayBurstsEnabled = !disableOverlayCore && (qProfile?.allowOverlaySpecials ?? true) && zoomForOverlay > 0.45 && !__dgLowFpsMode;
       const noteEffectCounts = noteEffects.getCounts();
       const flashRecentlyActive = (() => {
         const until = panel.__dgFlashActiveUntil;
@@ -5408,10 +5538,33 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       const deviceDpr = Math.max(1, Number.isFinite(window?.devicePixelRatio) ? window.devicePixelRatio : 1);
       const gestureMul = __dgComputeGestureBackingMul(zoomGestureMoving);
       const visualMul = __dgComputeVisualBackingMul(Number.isFinite(boardScale) ? boardScale : 1) * gestureMul;
-      const pressureMul = __dgGetPressureDprMul();
+      // pressureMul is computed above (auto-tier bridge) and may have been re-read.
+      pressureMul = Number.isFinite(pressureMul) ? pressureMul : __dgGetPressureDprMul();
       const smallMul = __dgComputeSmallPanelBackingMul(cssW, cssH);
       const autoMul = __dgGetAutoQualityMul();
-      const desiredDprRaw = (adaptiveCap ? Math.min(deviceDpr, adaptiveCap) : deviceDpr) * visualMul * pressureMul * smallMul * autoMul;
+
+      // Base “device DPR” (respect adaptiveCap if present)
+      const baseDeviceDpr = (adaptiveCap ? Math.min(deviceDpr, adaptiveCap) : deviceDpr);
+
+      // Tier-driven pixel cost clamp:
+      // - resScale is a soft multiplier
+      // - maxDprMul is a hard cap on final DPR relative to baseDeviceDpr
+      const tierResMul = (qProfile?.resScale ?? 1.0);
+      const tierMaxMul = (qProfile?.maxDprMul ?? 1.0);
+      const tierMaxDpr = baseDeviceDpr * tierMaxMul;
+
+      let desiredDprRaw =
+        baseDeviceDpr * visualMul * pressureMul * smallMul * autoMul * tierResMul;
+
+      // Hard clamp AFTER all multipliers so tiers can always cut pixels.
+      if (Number.isFinite(tierMaxDpr) && tierMaxDpr > 0) {
+        desiredDprRaw = Math.min(desiredDprRaw, tierMaxDpr);
+      }
+
+      // Persist for debugging / perf trace correlation (cheap)
+      try { panel.__dgTierMaxDpr = tierMaxDpr; } catch {}
+      try { panel.__dgDesiredDprRaw = desiredDprRaw; } catch {}
+
       const desiredDpr = __dgCapDprForBackingStore(cssW, cssH, desiredDprRaw, __dgAdaptivePaintDpr);
       const nowAdaptiveTs = nowTs || (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
       const canAdjustDpr =
@@ -5446,12 +5599,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         }
       }
 
-      let effectiveRenderEvery = renderEvery;
-      if (isTrulyIdle && canDrawAnything && visiblePanels >= 4) {
-        // For many visible idle panels, only do a "heavy" frame every few RAF ticks.
-        // (We still tick RAF every frame, but most frames early-out before heavy work.)
-        effectiveRenderEvery = Math.max(effectiveRenderEvery, 3);
-      }
+      // Legacy: we no longer modulo-throttle heavy work via effectiveRenderEvery.
+      // Pressure is handled via quality tiers + desiredDrawHz gates below.
+      let effectiveRenderEvery = 1;
 
       const disableOverlays = !!(typeof window !== 'undefined' && window.__PERF_DG_DISABLE_OVERLAYS);
       // IMPORTANT: do not disable overlays based on gesture state.
@@ -5491,13 +5641,36 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       // Otherwise we pay a big full-canvas clear + composite cost every frame during playback.
       let overlayTransport = false;
       let overlayActive = false;
-      let overlayEvery = 1;
-      // IMPORTANT: do not change overlay cadence based on gestures or visible count.
-      if (overlayEvery > 1) {
-        panel.__dgOverlayFrame = (panel.__dgOverlayFrame || 0) + 1;
+      // Overlay cadence: keep RAF at full rate, but gate *heavy overlay passes*
+      // by time instead of frame-modulo.
+      //
+      // This avoids rhythmic stutter patterns when multiple toys are visible,
+      // and plays nicely with variable refresh rates.
+      const desiredDrawHz = Number.isFinite(qProfile?.desiredDrawHz) ? qProfile.desiredDrawHz : 60;
+      const minOverlayHeavyMs = (desiredDrawHz > 0) ? (1000 / desiredDrawHz) : 0;
+      const lastOverlayHeavyTs = Number.isFinite(panel.__dgLastOverlayHeavyTs) ? panel.__dgLastOverlayHeavyTs : 0;
+      const forceOverlayHeavy = !!(
+        __dgNeedsUIRefresh ||
+        __dgFrontSwapNextDraw ||
+        __hydrationJustApplied ||
+        __dgForceFullDrawNext ||
+        (__dgForceFullDrawFrames > 0) ||
+        __dgForceOverlayClearNext ||
+        __dgForceSwapNext
+      );
+
+      let allowOverlayDrawHeavy = allowOverlayDraw;
+
+      // Never time-throttle overlays while interacting or focused.
+      if (allowOverlayDrawHeavy && !forceOverlayHeavy && !isInteracting && !isFocused) {
+        if (minOverlayHeavyMs > 0 && (nowTs - lastOverlayHeavyTs) < minOverlayHeavyMs) {
+          allowOverlayDrawHeavy = false;
+        }
       }
-      const skipOverlayHeavy = overlayEvery > 1 && ((panel.__dgOverlayFrame % overlayEvery) !== 0);
-      let allowOverlayDrawHeavy = allowOverlayDraw && (!skipOverlayHeavy || __dgNeedsUIRefresh);
+
+      if (allowOverlayDrawHeavy) {
+        panel.__dgLastOverlayHeavyTs = nowTs;
+      }
       let overlayCoreWanted = (hasOverlayFx || hasOverlayStrokesLive || (cur && previewGid));
       if (!disableOverlayCore) {
         // Only keep overlay passes alive while the transport is running *and* there is overlay work to do.
@@ -5611,6 +5784,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         !disableParticles &&
         particleStateAllowed &&
         isPanelVisible &&
+        (qProfile?.allowParticles ?? true) &&
         (!shouldThrottleForZoom || recentPoke || emergencyMode);
       const skipDomUpdates =
         !!(typeof window !== 'undefined' && window.__PERF_NO_DOM_UPDATES) &&
@@ -5756,7 +5930,14 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
       const overlayFxWanted = hasOverlayFx || (overlayFlashesEnabled && hasNodeFlash);
       overlayActive = allowOverlayDraw && (overlayFxWanted || overlayTransport || hasOverlayStrokesLive || (cur && previewGid));
-      allowOverlayDrawHeavy = allowOverlayDraw && (!skipOverlayHeavy || __dgNeedsUIRefresh || hasNodeFlash);
+      allowOverlayDrawHeavy = allowOverlayDrawHeavy && (
+        overlayFxWanted ||
+        overlayTransport ||
+        hasOverlayStrokesLive ||
+        (cur && previewGid) ||
+        __dgNeedsUIRefresh ||
+        hasNodeFlash
+      );
       overlayCoreWanted = (overlayFxWanted || hasOverlayStrokesLive || (cur && previewGid));
       overlayCoreActive = allowOverlayDrawHeavy && overlayCoreWanted;
       if (gotoOverlayEnd) {
@@ -6418,7 +6599,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
               panelId: panel?.id || null,
               allowOverlayDraw,
               allowOverlayDrawHeavy,
-              skipOverlayHeavy,
               overlayActive,
               overlayCoreWanted,
               overlayCoreActive,
@@ -6427,7 +6607,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
               disableOverlayStrokes,
               hasOverlayFx,
               overlayTransport,
-              overlayEvery,
+              desiredDrawHz,
               strokes: Array.isArray(strokes) ? strokes.length : 0,
               flashEmpty: !!panel.__dgFlashLayerEmpty,
               flashOutOfGrid: !!panel.__dgFlashOverlayOutOfGrid,
@@ -6783,6 +6963,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     },
     restoreState: restoreFromState,
     setState,
+    setQualityTier: (tier, reason = 'api') => dgQuality.setTier(tier, reason),
+    getQualityProfile: (opts = {}) => dgQuality.getProfile(opts),
   };
 
   try {
