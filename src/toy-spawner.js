@@ -7,16 +7,26 @@ import { overviewMode } from './overview-mode.js';
 const state = {
   dock: null,
   toggle: null,
+  artToggle: null,
   menu: null,
   listHost: null,
   trash: null,
   helpButton: null,
   helpActive: false,
-  config: {
+  activePalette: 'music',
+  configMusic: {
     getCatalog: () => [],
     create: () => null,
     remove: () => false,
   },
+  configArt: {
+    getCatalog: () => [],
+    create: () => null,
+    remove: () => false,
+  },
+  // Back-compat: many call sites assume a single active config.
+  // We keep `config` as a pointer to the currently active palette config.
+  config: null,
   overviewButton: null,
   overviewActive: false,
   drag: null,
@@ -32,6 +42,7 @@ const BUTTON_ICON_HTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"
 const OVERVIEW_ICON_OUT = "url('./assets/UI/T_ButtonOverviewZoomOut.png')";
 const OVERVIEW_ICON_IN = "url('./assets/UI/T_ButtonOverviewZoomIn.png')";
 const FOCUS_CLOSE_ICON = "url('./assets/UI/T_ButtonClose.png')";
+const ART_MENU_ICON = "url('./assets/UI/T_ButtonArtMenu.png')";
 
 function updateHelpToggleUI(nextState) {
   if (typeof nextState === 'boolean') {
@@ -56,6 +67,27 @@ function updateOverviewToggleUI(nextState) {
   if (core) {
     core.style.setProperty('--c-btn-icon-url', active ? OVERVIEW_ICON_IN : OVERVIEW_ICON_OUT);
   }
+}
+
+function updatePaletteToggleUI() {
+  const isArt = state.activePalette === 'art';
+  if (state.toggle) {
+    state.toggle.classList.toggle('is-active', !isArt && state.open);
+    state.toggle.setAttribute('aria-pressed', (!isArt && state.open) ? 'true' : 'false');
+  }
+  if (state.artToggle) {
+    state.artToggle.classList.toggle('is-active', isArt && state.open);
+    state.artToggle.setAttribute('aria-pressed', (isArt && state.open) ? 'true' : 'false');
+  }
+}
+
+function setActivePalette(palette) {
+  const next = palette === 'art' ? 'art' : 'music';
+  if (state.activePalette === next && state.config) return;
+  state.activePalette = next;
+  state.config = next === 'art' ? state.configArt : state.configMusic;
+  if (state.open) renderCatalog();
+  updatePaletteToggleUI();
 }
 
 window.addEventListener('focus:change', (event) => {
@@ -96,6 +128,12 @@ window.addEventListener('overview:change', (event) => {
 function ensureDock() {
   if (state.dock) return;
 
+  // Default active palette.
+  if (!state.config) {
+    state.config = state.configMusic;
+    state.activePalette = 'music';
+  }
+
   const dock = document.createElement('div');
   dock.className = 'toy-spawner-dock';
 
@@ -123,6 +161,19 @@ function ensureDock() {
   if (toggleCore) toggleCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonAddMusic.png')");
   toggle.style.setProperty('--c-btn-size', 'var(--toy-spawner-button-size)');
   toggle.style.setProperty('--c-btn-bg', 'rgba(47, 102, 179, 0.85)');
+
+  const artToggle = document.createElement('button');
+  artToggle.type = 'button';
+  artToggle.className = 'toy-spawner-art c-btn';
+  artToggle.setAttribute('aria-label', 'Create Art');
+  artToggle.title = 'Create Art';
+  artToggle.dataset.helpLabel = 'Open the Add Art menu';
+  artToggle.dataset.helpPosition = 'left';
+  artToggle.innerHTML = BUTTON_ICON_HTML;
+  const artCore = artToggle.querySelector('.c-btn-core');
+  if (artCore) artCore.style.setProperty('--c-btn-icon-url', ART_MENU_ICON);
+  artToggle.style.setProperty('--c-btn-size', 'var(--toy-spawner-button-size)');
+  artToggle.style.setProperty('--c-btn-bg', 'rgba(176, 82, 144, 0.88)');
 
   const overview = document.createElement('button');
   overview.type = 'button';
@@ -159,11 +210,12 @@ function ensureDock() {
   list.className = 'toy-spawner-list';
   menu.appendChild(list);
 
-  dock.append(trash, toggle, overview, help, menu);
+  dock.append(trash, toggle, artToggle, overview, help, menu);
   document.body.appendChild(dock);
 
   state.dock = dock;
   state.toggle = toggle;
+  state.artToggle = artToggle;
   state.menu = menu;
   state.listHost = list;
   state.trash = trash;
@@ -171,6 +223,7 @@ function ensureDock() {
   state.overviewButton = overview;
   updateHelpToggleUI(isHelpActive());
   updateOverviewToggleUI(overviewMode?.isActive?.());
+  updatePaletteToggleUI();
 
   help.addEventListener('click', (event) => {
     event.preventDefault();
@@ -182,7 +235,15 @@ function ensureDock() {
     updateHelpToggleUI(!!event?.detail?.active);
   });
 
-  toggle.addEventListener('click', () => setMenuOpen(!state.open));
+  toggle.addEventListener('click', () => {
+    setActivePalette('music');
+    setMenuOpen(!state.open);
+  });
+
+  artToggle.addEventListener('click', () => {
+    setActivePalette('art');
+    setMenuOpen(!state.open);
+  });
 
   trash.addEventListener('click', (event) => {
     if (state.panelDrag) return;
@@ -225,6 +286,7 @@ function setMenuOpen(open) {
   } else {
     cancelDrag();
   }
+  updatePaletteToggleUI();
 }
 
 function renderCatalog() {
@@ -515,8 +577,19 @@ function endPanelDrag({ clientX, clientY, pointerId, canceled } = {}) {
 }
 
 function configure(options) {
-  state.config = Object.assign({}, state.config, options || {});
-  if (state.open) renderCatalog();
+  state.configMusic = Object.assign({}, state.configMusic, options || {});
+  if (state.activePalette === 'music') {
+    state.config = state.configMusic;
+    if (state.open) renderCatalog();
+  }
+}
+
+function configureArt(options) {
+  state.configArt = Object.assign({}, state.configArt, options || {});
+  if (state.activePalette === 'art') {
+    state.config = state.configArt;
+    if (state.open) renderCatalog();
+  }
 }
 
 function triggerTrashErrorFeedback() {
@@ -609,6 +682,7 @@ export const ToySpawner = {
   open: () => setMenuOpen(true),
   close: () => setMenuOpen(false),
   configure,
+  configureArt,
   beginPanelDrag,
   updatePanelDrag,
   endPanelDrag,

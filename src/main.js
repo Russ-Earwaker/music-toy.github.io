@@ -29,6 +29,7 @@ import { bumpAllToyAudioGen, bumpToyAudioGen } from './toy-audio.js';
 import './toy-layout-manager.js';
 import './zoom-overlay.js';
 import './toy-spawner.js';
+import { getArtCatalog, createArtToyAt } from './art/art-toy-factory.js';
 import './board-tap-dots.js';
 import { initAudioAssets, cancelScheduledToySources, triggerInstrument } from './audio-samples.js';
 import { loadInstrumentEntries as loadInstrumentCatalog, getInstrumentEntries as getInstrumentCatalogEntries } from './instrument-catalog.js';
@@ -3148,6 +3149,13 @@ try {
             create: createToyPanelAt,
             remove: destroyToyPanel,
         });
+        if (typeof window.ToySpawner.configureArt === 'function') {
+            window.ToySpawner.configureArt({
+                getCatalog: () => getArtCatalog(),
+                create: createArtToyAt,
+                // remove will be wired once art toys become draggable/deletable like panels.
+            });
+        }
     }
 } catch (err) {
     console.warn('[MusicToyFactory] registration failed', err);
