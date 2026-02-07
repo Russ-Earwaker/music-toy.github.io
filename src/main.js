@@ -64,6 +64,17 @@ const g_artInternal = {
   dragStartTx: 0,
   dragStartTy: 0,
   _wheelRaf: 0,
+  // DOM swap state (so existing board + toy dragging code keeps working)
+  _swap: {
+    didSwap: false,
+    mainBoardEl: null,
+    mainBoardPrevId: null,
+    mainViewportEl: null,
+    mainViewportHadClass: false,
+    internalViewportEl: null,
+    internalWorldEl: null,
+    internalWorldPrevId: null,
+  },
 };
 
 // Perf trace support (demon hunting). Safe/no-op unless toggled in perf-lab.
@@ -1836,22 +1847,20 @@ try {
 // ---------------------------------------------------------------------------
 
 function ensureInternalBoardOverlay() {
-  let overlay = document.getElementById('internal-board-overlay');
-  if (overlay) {
-    return {
-      overlay,
-      viewport: document.getElementById('internal-board-viewport'),
-      world: document.getElementById('internal-board-world'),
-      exitBtn: document.getElementById('internal-board-exit'),
-      title: document.getElementById('internal-board-title'),
-    };
-  }
+  if (g_artInternal._els?.overlay) return g_artInternal._els;
 
-  overlay = document.createElement('div');
+  const overlay = document.createElement('div');
   overlay.id = 'internal-board-overlay';
 
-  const topbar = document.createElement('div');
-  topbar.id = 'internal-board-topbar';
+  const frame = document.createElement('div');
+  frame.id = 'internal-board-frame';
+
+  const viewport = document.createElement('div');
+  viewport.id = 'internal-board-viewport';
+
+  const world = document.createElement('div');
+  world.id = 'internal-board-world';
+  viewport.appendChild(world);
 
   const title = document.createElement('div');
   title.id = 'internal-board-title';
@@ -1862,44 +1871,69 @@ function ensureInternalBoardOverlay() {
   exitBtn.type = 'button';
   exitBtn.textContent = 'Exit';
 
-  topbar.append(title, exitBtn);
-
-  const viewport = document.createElement('div');
-  viewport.id = 'internal-board-viewport';
-
-  const world = document.createElement('div');
-  world.id = 'internal-board-world';
-  viewport.appendChild(world);
-
-  overlay.append(topbar, viewport);
+  frame.appendChild(viewport);
+  overlay.appendChild(frame);
+  overlay.appendChild(exitBtn);
   document.body.appendChild(overlay);
+
+  // -------------------------------------------------------------------------
+  // Internal board camera helpers
+  // -------------------------------------------------------------------------
+  const syncViewportVars = () => {
+    // Keep the board-viewport CSS vars in sync so:
+    // - background dots pan/zoom correctly
+    // - any code reading --bv-* gets sane values
+    try {
+      viewport.style.setProperty('--bv-scale', String(g_artInternal.scale));
+      viewport.style.setProperty('--bv-tx', `${g_artInternal.tx}px`);
+      viewport.style.setProperty('--bv-ty', `${g_artInternal.ty}px`);
+    } catch {}
+  };
 
   // Input: pan/zoom inside internal board.
   // We keep this isolated from the main board-viewport.
   const applyTransform = () => {
-    world.style.transform = `translate(${g_artInternal.tx}px, ${g_artInternal.ty}px) scale(${g_artInternal.scale})`;
+    if (world) {
+      world.style.transform = `translate(${g_artInternal.tx}px, ${g_artInternal.ty}px) scale(${g_artInternal.scale})`;
+    }
+    syncViewportVars();
   };
+
+  // Expose so other helpers (eg setInternalBoardTransform / enterInternalBoard) can force-sync
+  // the CSS vars immediately (fixes "dots wrong until pan/create-toy").
+  try { g_artInternal._applyTransform = applyTransform; } catch {}
+
+  // Initialize vars immediately so the dot background is correct from frame 0.
+  syncViewportVars();
 
   const clampScale = (s) => Math.max(0.2, Math.min(3.0, s));
 
+  // NOTE:
+  // We intentionally DO NOT animate wheel zoom here.
+  // The previous "smooth zoom" target animator was causing camera drift
+  // (toys sliding towards bottom-right) and made drawgrid feel incorrect
+  // during zoom. We keep wheel zoom stable by applying the computed camera
+  // immediately each wheel tick, matching the main board’s “locked” feel.
+
   const onPointerDown = (e) => {
     if (!g_artInternal.active) return;
-    // Only start drag if we clicked background (not a button / toy control).
-    const t = e.target;
-    if (t && (t.closest?.('.toy-panel') || t.closest?.('.toy-mode-btn') || t.closest?.('button') || t.closest?.('input') || t.closest?.('select') || t.closest?.('textarea'))) {
-      return;
-    }
+    // If this started on a toy header, let the internal header-drag handler take it.
+    if (e.target && e.target.closest && e.target.closest('.toy-header')) return;
+    // Don't pan when clicking inside a toy panel.
+    if (e.target && e.target.closest && e.target.closest('.toy-panel')) return;
+
     g_artInternal.dragging = true;
     g_artInternal.dragStartClientX = e.clientX;
     g_artInternal.dragStartClientY = e.clientY;
     g_artInternal.dragStartTx = g_artInternal.tx;
     g_artInternal.dragStartTy = g_artInternal.ty;
-    viewport.setPointerCapture?.(e.pointerId);
+    try { viewport.setPointerCapture?.(e.pointerId); } catch {}
     e.preventDefault();
   };
 
   const onPointerMove = (e) => {
-    if (!g_artInternal.active || !g_artInternal.dragging) return;
+    if (!g_artInternal.active) return;
+    if (!g_artInternal.dragging) return;
     const dx = e.clientX - g_artInternal.dragStartClientX;
     const dy = e.clientY - g_artInternal.dragStartClientY;
     g_artInternal.tx = g_artInternal.dragStartTx + dx;
@@ -1927,16 +1961,24 @@ function ensureInternalBoardOverlay() {
       // Zoom direction: wheel up -> zoom in.
       const delta = -Math.sign(e.deltaY || 0);
       const zoomFactor = delta > 0 ? 1.08 : 1 / 1.08;
-      const prevScale = g_artInternal.scale;
-      const nextScale = clampScale(prevScale * zoomFactor);
-      if (nextScale === prevScale) return;
 
-      // Zoom around the mouse point.
-      const wx = (mx - g_artInternal.tx) / prevScale;
-      const wy = (my - g_artInternal.ty) / prevScale;
+      // Use current camera as the base (stable, no drift).
+      const baseScale = g_artInternal.scale;
+      const baseTx = g_artInternal.tx;
+      const baseTy = g_artInternal.ty;
+
+      const nextScale = clampScale(baseScale * zoomFactor);
+      if (nextScale === baseScale) return;
+
+      // Zoom around the mouse point (in screen space) using the base camera.
+      const wx = (mx - baseTx) / baseScale;
+      const wy = (my - baseTy) / baseScale;
+      const nextTx = mx - wx * nextScale;
+      const nextTy = my - wy * nextScale;
+
       g_artInternal.scale = nextScale;
-      g_artInternal.tx = mx - wx * nextScale;
-      g_artInternal.ty = my - wy * nextScale;
+      g_artInternal.tx = nextTx;
+      g_artInternal.ty = nextTy;
       applyTransform();
     });
     e.preventDefault();
@@ -1948,11 +1990,148 @@ function ensureInternalBoardOverlay() {
   viewport.addEventListener('pointercancel', onPointerUp, { passive: true });
   viewport.addEventListener('wheel', onWheel, { passive: false });
 
+  // -------------------------------------------------------------------------
+  // Internal board: toy header dragging (local fix)
+  // -------------------------------------------------------------------------
+  // Some of the existing header-drag logic can remain bound to the main viewport.
+  // This ensures internal-board toys can be dragged reliably regardless.
+  const dragState = {
+    active: false,
+    pointerId: -1,
+    panel: null,
+    startClientX: 0,
+    startClientY: 0,
+    startLeft: 0,
+    startTop: 0,
+  };
+
+  const onHeaderPointerDown = (e) => {
+    if (!g_artInternal.active) return;
+    const header = e.target?.closest?.('.toy-header');
+    if (!header) return;
+    const panel = header.closest('.toy-panel');
+    if (!panel) return;
+
+    // Only drag toys that are actually inside the current internal board.
+    // (We mark internal toys with data-art-owner-id already.)
+    const owner = panel.dataset?.artOwnerId || panel.getAttribute('data-art-owner-id');
+    if (g_artInternal.artToyId && owner && owner !== g_artInternal.artToyId) return;
+
+    dragState.active = true;
+    dragState.pointerId = e.pointerId;
+    dragState.panel = panel;
+    dragState.startClientX = e.clientX;
+    dragState.startClientY = e.clientY;
+    dragState.startLeft = parseFloat(panel.style.left) || 0;
+    dragState.startTop = parseFloat(panel.style.top) || 0;
+
+    try { header.setPointerCapture?.(e.pointerId); } catch {}
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const onHeaderPointerMove = (e) => {
+    if (!g_artInternal.active) return;
+    if (!dragState.active) return;
+    if (e.pointerId !== dragState.pointerId) return;
+    if (!dragState.panel) return;
+
+    // Convert screen-space delta into world-space delta using current scale.
+    const dxScreen = e.clientX - dragState.startClientX;
+    const dyScreen = e.clientY - dragState.startClientY;
+    const s = Math.max(0.001, g_artInternal.scale || 1);
+    const dxWorld = dxScreen / s;
+    const dyWorld = dyScreen / s;
+
+    dragState.panel.style.left = `${dragState.startLeft + dxWorld}px`;
+    dragState.panel.style.top = `${dragState.startTop + dyWorld}px`;
+
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const endHeaderDrag = (e) => {
+    if (!dragState.active) return;
+    if (e.pointerId !== dragState.pointerId) return;
+    dragState.active = false;
+    dragState.pointerId = -1;
+    dragState.panel = null;
+  };
+
+  viewport.addEventListener('pointerdown', onHeaderPointerDown, { passive: false });
+  viewport.addEventListener('pointermove', onHeaderPointerMove, { passive: false });
+  viewport.addEventListener('pointerup', endHeaderDrag, { passive: true });
+  viewport.addEventListener('pointercancel', endHeaderDrag, { passive: true });
+
+  // Exit is animated now (scale back down to the owning art toy).
   exitBtn.addEventListener('click', () => {
-    try { exitInternalBoard(); } catch {}
+    try { requestExitInternalBoard(); } catch {}
   });
 
-  return { overlay, viewport, world, exitBtn, title };
+  g_artInternal._els = { overlay, frame, viewport, world, exitBtn, title };
+  return g_artInternal._els;
+}
+
+function getArtToyClientCenter(artToyId) {
+  const el = artToyId ? document.getElementById(artToyId) : null;
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  if (!r || !Number.isFinite(r.left)) return null;
+  return { x: r.left + r.width * 0.5, y: r.top + r.height * 0.5 };
+}
+
+function animateInternalBoardIn(artToyId) {
+  const { overlay } = ensureInternalBoardOverlay();
+  if (!overlay) return;
+
+  const c = getArtToyClientCenter(artToyId);
+  // If we can't resolve it (rare), fall back to center screen.
+  const ox = c ? c.x : window.innerWidth * 0.5;
+  const oy = c ? c.y : window.innerHeight * 0.5;
+
+  overlay.style.transformOrigin = `${ox}px ${oy}px`;
+
+  // Force initial state.
+  overlay.classList.add('is-entering');
+  overlay.classList.remove('is-exiting');
+
+  // Next frame, transition to full size.
+  requestAnimationFrame(() => {
+    // If we got closed before the rAF hits, bail.
+    if (!document.body.classList.contains('internal-board-active')) return;
+    overlay.classList.remove('is-entering');
+  });
+}
+
+function animateInternalBoardOut(artToyId, onDone) {
+  const { overlay } = ensureInternalBoardOverlay();
+  if (!overlay) { onDone?.(); return; }
+
+  const c = getArtToyClientCenter(artToyId);
+  const ox = c ? c.x : window.innerWidth * 0.5;
+  const oy = c ? c.y : window.innerHeight * 0.5;
+  overlay.style.transformOrigin = `${ox}px ${oy}px`;
+
+  // Transition to exit state.
+  overlay.classList.add('is-exiting');
+
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    overlay.removeEventListener('transitionend', onEnd, true);
+    onDone?.();
+  };
+  const onEnd = (e) => {
+    // Only finish on the overlay's own transform/opacity transition.
+    if (e.target !== overlay) return;
+    if (e.propertyName !== 'transform' && e.propertyName !== 'opacity') return;
+    finish();
+  };
+  overlay.addEventListener('transitionend', onEnd, true);
+
+  // Safety: in case transitionend doesn't fire.
+  setTimeout(finish, 320);
 }
 
 function getInternalPanelsForArtToy(artToyId) {
@@ -1964,14 +2143,114 @@ function setInternalBoardTransform(scale, tx, ty) {
   g_artInternal.scale = Math.max(0.2, Math.min(3.0, Number.isFinite(scale) ? scale : 1));
   g_artInternal.tx = Number.isFinite(tx) ? tx : 0;
   g_artInternal.ty = Number.isFinite(ty) ? ty : 0;
-  const { world } = ensureInternalBoardOverlay();
-  if (world) world.style.transform = `translate(${g_artInternal.tx}px, ${g_artInternal.ty}px) scale(${g_artInternal.scale})`;
+  // Use the internal board's applyTransform so CSS vars (--bv-*) stay in sync for dot background.
+  ensureInternalBoardOverlay();
+  try { g_artInternal._applyTransform?.(); } catch {}
+}
+
+function readMainBoardCameraSnapshot() {
+  // Pull from the current main board viewport CSS vars used by board-viewport.js
+  // (These should exist even if we later swap IDs/classes.)
+  const mainViewport =
+    document.querySelector('.board-viewport') ||
+    document.querySelector('.main-stage') ||
+    document.body;
+
+  const cs = mainViewport ? getComputedStyle(mainViewport) : null;
+  const scale = cs ? parseFloat(cs.getPropertyValue('--bv-scale')) : NaN;
+  const tx = cs ? parseFloat(cs.getPropertyValue('--bv-tx')) : NaN;
+  const ty = cs ? parseFloat(cs.getPropertyValue('--bv-ty')) : NaN;
+
+  return {
+    scale: Number.isFinite(scale) ? scale : 1,
+    tx: Number.isFinite(tx) ? tx : 0,
+    ty: Number.isFinite(ty) ? ty : 0,
+    viewportEl: mainViewport || null,
+  };
+}
+
+function swapBoardIdentityForInternalMode() {
+  const swap = g_artInternal._swap;
+  if (swap.didSwap) return;
+
+  const mainBoard = document.getElementById('board');
+  const internalViewport = document.getElementById('internal-board-viewport');
+  const internalWorld = document.getElementById('internal-board-world');
+  if (!mainBoard || !internalViewport || !internalWorld) return;
+
+  // Record original state so we can revert.
+  swap.mainBoardEl = mainBoard;
+  swap.mainBoardPrevId = mainBoard.id; // "board"
+  swap.mainViewportEl = document.querySelector('.board-viewport');
+  swap.mainViewportHadClass = !!swap.mainViewportEl;
+  swap.internalViewportEl = internalViewport;
+  swap.internalWorldEl = internalWorld;
+  swap.internalWorldPrevId = internalWorld.id; // "internal-board-world"
+
+  // IMPORTANT: many systems look up the active viewport via `querySelector('.board-viewport')`.
+  // If the main viewport keeps that class, internal mode will still route camera/drag math to it.
+  // So temporarily "move" the board-viewport identity from the main viewport to the internal one.
+  try {
+    if (swap.mainViewportEl) {
+      swap.mainViewportHadBoardViewportClass = swap.mainViewportEl.classList.contains('board-viewport');
+      if (swap.mainViewportHadBoardViewportClass) swap.mainViewportEl.classList.remove('board-viewport');
+      // Keep main-board dots visible while internal mode "owns" .board-viewport
+      swap.mainViewportHadBoardViewportMainClass = swap.mainViewportEl.classList.contains('board-viewport-main');
+      if (!swap.mainViewportHadBoardViewportMainClass) swap.mainViewportEl.classList.add('board-viewport-main');
+    }
+  } catch {}
+
+  // 1) Move main board out of the way (ID swap)
+  try { mainBoard.id = 'board-main'; } catch {}
+
+  // 2) Promote internal world to become #board
+  try { internalWorld.id = 'board'; } catch {}
+
+  // 3) Make internal viewport look like the normal board viewport
+  try { internalViewport.classList.add('board-viewport'); } catch {}
+
+  swap.didSwap = true;
+}
+
+function revertBoardIdentityAfterInternalMode() {
+  const swap = g_artInternal._swap;
+  if (!swap.didSwap) return;
+
+  try {
+    if (swap.internalViewportEl) swap.internalViewportEl.classList.remove('board-viewport');
+  } catch {}
+
+  // Restore board-viewport class back to the main viewport (if it originally had it).
+  try {
+    if (swap.mainViewportEl && swap.mainViewportHadBoardViewportClass) {
+      swap.mainViewportEl.classList.add('board-viewport');
+    }
+    // Remove the temporary backup class (only if we added it).
+    if (swap.mainViewportEl && !swap.mainViewportHadBoardViewportMainClass) {
+      swap.mainViewportEl.classList.remove('board-viewport-main');
+    }
+  } catch {}
+
+  // Restore internal world ID
+  try {
+    if (swap.internalWorldEl) swap.internalWorldEl.id = swap.internalWorldPrevId || 'internal-board-world';
+  } catch {}
+
+  // Restore main board ID
+  try {
+    if (swap.mainBoardEl) swap.mainBoardEl.id = swap.mainBoardPrevId || 'board';
+  } catch {}
+
+  swap.didSwap = false;
 }
 
 function enterInternalBoard(artToyId) {
   if (!artToyId) return;
   const { overlay, world, title } = ensureInternalBoardOverlay();
   const host = ensureArtInternalHost();
+
+  // Snapshot the current main-board camera BEFORE we swap.
+  const snap = readMainBoardCameraSnapshot();
 
   // Move internal panels for this art toy into the internal board world.
   const panels = getInternalPanelsForArtToy(artToyId);
@@ -1992,17 +2271,28 @@ function enterInternalBoard(artToyId) {
 
   document.body.classList.add('internal-board-active');
   overlay.classList.add('is-active');
+  overlay.classList.remove('is-exiting');
 
-  // Default camera: mild center.
-  // (We can refine this when we have reliable layout / stored camera per art toy.)
-  setInternalBoardTransform(1, 40, 40);
+  // Make internal board camera match the current main-board camera on enter.
+  setInternalBoardTransform(snap.scale, snap.tx, snap.ty);
+
+  // Critical: swap board identity so all existing toy dragging / board math works inside internal mode.
+  swapBoardIdentityForInternalMode();
+
+  // Force an additional sync on the next frame so the dot background is correct immediately.
+  try {
+    requestAnimationFrame(() => { try { g_artInternal._applyTransform?.(); } catch {} });
+  } catch {}
+
+  // Animate scale-in from the art toy position.
+  try { animateInternalBoardIn(artToyId); } catch {}
 
   // Ensure the hidden host stays alive (panels for other toys remain stashed there).
   // (No-op read, keeps linter happy.)
   void host;
 }
 
-function exitInternalBoard() {
+function exitInternalBoardImmediate() {
   if (!g_artInternal.active) return;
   const { overlay } = ensureInternalBoardOverlay();
   const host = ensureArtInternalHost();
@@ -2018,18 +2308,33 @@ function exitInternalBoard() {
     } catch {}
   }
 
+  // Revert the #board + .board-viewport identity swap.
+  revertBoardIdentityAfterInternalMode();
+
   g_artInternal.active = false;
   g_artInternal.artToyId = null;
 
   document.body.classList.remove('internal-board-active');
   overlay.classList.remove('is-active');
+  overlay.classList.remove('is-exiting');
+}
+
+function requestExitInternalBoard() {
+  if (!g_artInternal.active) return;
+  const artToyId = g_artInternal.artToyId;
+  const { overlay } = ensureInternalBoardOverlay();
+  if (!overlay) return;
+  // Animate out first, then do the actual exit bookkeeping.
+  animateInternalBoardOut(artToyId, () => {
+    try { exitInternalBoardImmediate(); } catch {}
+  });
 }
 
 // Expose a tiny API for debugging.
 try {
   window.__ArtInternal = Object.assign(window.__ArtInternal || {}, {
     enter: enterInternalBoard,
-    exit: exitInternalBoard,
+    exit: requestExitInternalBoard,
     isActive: () => !!g_artInternal.active,
   });
 } catch {}
@@ -3279,15 +3584,26 @@ function syncOverviewPosition(panel) {
     } catch {}
 }
 
-function createToyPanelAt(toyType, { centerX, centerY, instrument, autoCenter, allowOffscreen = false, skipSpawnPlacement = false } = {}) {
+function createToyPanelAt(toyType, {
+    centerX,
+    centerY,
+    instrument,
+    autoCenter,
+    allowOffscreen = false,
+    shouldHintOffscreen,
+    skipSpawnPlacement = false,
+    // NEW: optional placement container + ownership tag (internal-board spawns)
+    containerEl = null,
+    artOwnerId = null,
+} = {}) {
     const type = String(toyType || '').toLowerCase();
     if (!type || !toyInitializers[type]) {
         console.warn('[createToyPanelAt] unknown toy type', toyType);
         return null;
     }
-    const board = document.getElementById('board');
+    const board = containerEl || document.getElementById('board');
     if (!board) return null;
-    const shouldHintOffscreen = !!autoCenter;
+    const shouldHintOffscreenResolved = (typeof shouldHintOffscreen === 'boolean') ? shouldHintOffscreen : !!autoCenter;
     let chosenInstrument = instrument;
     if (!chosenInstrument) {
         const theme = getSoundThemeKey?.() || '';
@@ -3338,7 +3654,14 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument, autoCenter, a
     panel.style.left = `${left}px`;
     panel.style.top = `${top}px`;
 
+    // If this was spawned inside an Art Toy internal board, tag it for ownership.
+    if (artOwnerId) {
+        panel.dataset.artOwnerId = String(artOwnerId);
+        panel.dataset.internalBoardOwner = String(artOwnerId);
+    }
+
     board.appendChild(panel);
+    const isInternalSpawn = !!panel.dataset.internalBoardOwner && board?.id === 'internal-board-world';
     // Creating a toy changes chain structure. Ensure the scheduler will resync.
     g_chainStructureVersion++;
     g_lastSequencedToyCount = -1;
@@ -3357,8 +3680,10 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument, autoCenter, a
             // The helper already wrote the updated position to the style attributes.
         }
     }
-    syncOverviewPosition(panel);
-    persistToyPosition(panel);
+    if (!isInternalSpawn) {
+        syncOverviewPosition(panel);
+        persistToyPosition(panel);
+    }
 
     setTimeout(() => {
         if (!panel.isConnected) return;
@@ -3373,10 +3698,10 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument, autoCenter, a
                     skipIfMoved: true,
                 });
                 if (followUp?.changed) {
-                    persistToyPosition(panel);
+                    if (!isInternalSpawn) persistToyPosition(panel);
                 }
             }
-            syncOverviewPosition(panel);
+            if (!isInternalSpawn) syncOverviewPosition(panel);
             try { updateChains(); updateAllChainUIs(); } catch (err) { console.warn('[createToyPanelAt] chain update failed', err); }
             try { applyStackingOrder(); } catch (err) { console.warn('[createToyPanelAt] stacking failed', err); }
             try { window.Persistence?.markDirty?.(); } catch (err) { console.warn('[createToyPanelAt] mark dirty failed', err); }
@@ -3396,7 +3721,7 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument, autoCenter, a
                 // This is global behaviour and is NOT tied to scene save/load.
                 maybePanToSpawnedPanel(panel, { marginPx: 96, duration: 650 });
             }
-            if (shouldHintOffscreen) {
+            if (shouldHintOffscreenResolved) {
                 const rafCheck = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));
                 rafCheck(() => {
                     if (panel.isConnected && isPanelCenterOffscreen(panel)) {
@@ -3411,6 +3736,33 @@ function createToyPanelAt(toyType, { centerX, centerY, instrument, autoCenter, a
     }, 0);
 
     return panel;
+}
+
+// --- Internal board helpers for ToySpawner (so Create Toy targets internal-board-world while active) ---
+try {
+    window.__mtInternalBoard = Object.assign(window.__mtInternalBoard || {}, {
+        isActive: () => !!g_artInternal?.active,
+        getActiveArtToyId: () => g_artInternal?.artToyId || null,
+        getWorldEl: () => document.getElementById('internal-board-world'),
+        getViewportEl: () => document.getElementById('internal-board-viewport'),
+        // Convert screen coords into internal world coords using the internal board transform state.
+        clientToWorld: (clientX, clientY) => {
+            const viewport = document.getElementById('internal-board-viewport');
+            if (!viewport) return null;
+            const rect = viewport.getBoundingClientRect();
+            const localX = clientX - rect.left;
+            const localY = clientY - rect.top;
+            const inside = localX >= 0 && localY >= 0 && localX <= rect.width && localY <= rect.height;
+            const scale = Math.max(1e-6, Number(g_artInternal?.scale) || 1);
+            const panX = Number(g_artInternal?.tx) || 0;
+            const panY = Number(g_artInternal?.ty) || 0;
+            const x = (localX - panX) / scale;
+            const y = (localY - panY) / scale;
+            return { inside, x, y, rect, scaleX: scale, scaleY: scale };
+        },
+    });
+} catch (err) {
+    console.warn('[internal-board] global helper registration failed', err);
 }
 
 function destroyToyPanel(panelOrId) {
@@ -5319,6 +5671,89 @@ async function boot(){
   if (!window.__OV_DRAG_INSTALLED__) {
     window.__OV_DRAG_INSTALLED__ = true;
     document.addEventListener('pointerdown', handleOverviewPointerDown, true);
+  }
+
+  // --- Trash/Delete hover + drop tracking for normal header-drags (including internal-board) ---
+  // The toy panels can be dragged by their own header-drag logic, but the trash highlighting/deletion
+  // is handled by ToySpawner.begin/update/endPanelDrag(). In internal-board mode we still want the
+  // global trash button to highlight + delete on release.
+  let g_trashTrackDrag = null;
+
+  function trashTrackMove(e) {
+    const st = g_trashTrackDrag;
+    if (!st) return;
+    if (st.pointerId != null && typeof e.pointerId === 'number' && e.pointerId !== st.pointerId) return;
+    try {
+      window.ToySpawner?.updatePanelDrag?.({ clientX: e.clientX, clientY: e.clientY });
+    } catch (err) {
+      console.warn('[main] ToySpawner.updatePanelDrag failed', err);
+    }
+  }
+
+  function trashTrackEnd(e) {
+    const st = g_trashTrackDrag;
+    if (!st) return;
+    if (st.pointerId != null && typeof e.pointerId === 'number' && e.pointerId !== st.pointerId) return;
+
+    window.removeEventListener('pointermove', trashTrackMove, true);
+    window.removeEventListener('pointerup', trashTrackEnd, true);
+    window.removeEventListener('pointercancel', trashTrackEnd, true);
+
+    try {
+      window.ToySpawner?.endPanelDrag?.({
+        clientX: e.clientX,
+        clientY: e.clientY,
+        pointerId: e.pointerId,
+        canceled: e.type === 'pointercancel'
+      });
+    } catch (err) {
+      console.warn('[main] ToySpawner.endPanelDrag failed', err);
+    }
+
+    g_trashTrackDrag = null;
+  }
+
+  function handleTrashTrackPointerDown(e) {
+    // Only primary button
+    if (typeof e.button === 'number' && e.button !== 0) return;
+    if (isActivelyEditingToy()) return;
+    if (e.target?.closest?.('.toy-chain-btn')) return;
+
+    const panel = e.target?.closest?.('.toy-panel');
+    if (!panel) return;
+
+    const header = panel.querySelector?.('.toy-header');
+    const inHeader = header && (header === e.target || header.contains(e.target));
+    if (!inHeader) return;
+
+    // Overview-mode uses its own drag handler which already wires ToySpawner begin/update/end.
+    const board = document.getElementById('board');
+    const overviewActive =
+      !!(window.__overviewMode?.isActive?.() ||
+         board?.classList?.contains('board-overview') ||
+         document.body?.classList?.contains('overview-mode'));
+    if (overviewActive) return;
+
+    // Arm ToySpawner trash tracking for this header-drag.
+    try {
+      window.ToySpawner?.beginPanelDrag?.({ panel, pointerId: e.pointerId });
+    } catch (err) {
+      console.warn('[main] ToySpawner.beginPanelDrag failed', err);
+    }
+
+    g_trashTrackDrag = {
+      panel,
+      pointerId: typeof e.pointerId === 'number' ? e.pointerId : null
+    };
+
+    window.addEventListener('pointermove', trashTrackMove, true);
+    window.addEventListener('pointerup', trashTrackEnd, true);
+    window.addEventListener('pointercancel', trashTrackEnd, true);
+  }
+
+  if (!window.__TRASH_TRACK_INSTALLED__) {
+    window.__TRASH_TRACK_INSTALLED__ = true;
+    document.addEventListener('pointerdown', handleTrashTrackPointerDown, true);
   }
 
   function handleChainPanelPointerDown(e) {

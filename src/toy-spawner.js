@@ -424,7 +424,16 @@ function spawnAtDefault(entry) {
   const worldCenterX = (targetScreenX - metrics.rect.left) / scaleX;
   const worldCenterY = (targetScreenY - metrics.rect.top) / scaleY;
   try {
-    const panel = state.config.create?.(entry.type, { centerX: worldCenterX, centerY: worldCenterY, autoCenter: true });
+    const internalActive = !!window.__mtInternalBoard?.isActive?.();
+    const internalWorld = internalActive ? window.__mtInternalBoard?.getWorldEl?.() : null;
+    const artOwnerId = internalActive ? window.__mtInternalBoard?.getActiveArtToyId?.() : null;
+    const panel = state.config.create?.(entry.type, {
+      centerX: worldCenterX,
+      centerY: worldCenterY,
+      autoCenter: true,
+      ...(internalActive && internalWorld ? { containerEl: internalWorld } : null),
+      ...(internalActive && artOwnerId ? { artOwnerId } : null),
+    });
     return !!panel;
   } catch (err) {
     console.warn('[ToySpawner] default create failed', err);
@@ -443,9 +452,13 @@ function updateDropPreview(x, y) {
 }
 
 function highlightBoard(active) {
-  const board = document.getElementById('board');
-  if (!board) return;
-  board.classList.toggle('toy-drop-ready', !!active);
+  // If internal-board is active, highlight its viewport instead of the main board.
+  const internalViewport = window.__mtInternalBoard?.isActive?.()
+    ? document.getElementById('internal-board-viewport')
+    : null;
+  const target = internalViewport || document.getElementById('board');
+  if (!target) return;
+  target.classList.toggle('toy-drop-ready', !!active);
 }
 
 function trySpawn(entry, clientX, clientY) {
@@ -456,7 +469,17 @@ function trySpawn(entry, clientX, clientY) {
   }
 
   try {
-    const panel = state.config.create?.(entry.type, { centerX: point.x, centerY: point.y, autoCenter: true });
+    // If internal-board is active, spawn into its world and tag ownership.
+    const internalActive = !!window.__mtInternalBoard?.isActive?.();
+    const internalWorld = internalActive ? window.__mtInternalBoard?.getWorldEl?.() : null;
+    const artOwnerId = internalActive ? window.__mtInternalBoard?.getActiveArtToyId?.() : null;
+    const panel = state.config.create?.(entry.type, {
+      centerX: point.x,
+      centerY: point.y,
+      autoCenter: true,
+      ...(internalActive && internalWorld ? { containerEl: internalWorld } : null),
+      ...(internalActive && artOwnerId ? { artOwnerId } : null),
+    });
     return !!panel;
   } catch (err) {
     console.warn('[ToySpawner] create failed', err);
@@ -488,6 +511,18 @@ function cancelDrag() {
 }
 
 function getBoardMetrics() {
+  // If internal-board is active, treat its viewport as the "board" for hit testing.
+  if (window.__mtInternalBoard?.isActive?.()) {
+    const viewport = window.__mtInternalBoard?.getViewportEl?.() || document.getElementById('internal-board-viewport');
+    const rect = viewport?.getBoundingClientRect?.();
+    if (!viewport || !rect) return null;
+    const scale = Math.max(1e-6, Number(window.__mtInternalBoard?.clientToWorld?.(rect.left, rect.top)?.scaleX) || 1);
+    // For internal we set offset* so that rect/offset ~= scale.
+    const offsetWidth = rect.width / scale || 1;
+    const offsetHeight = rect.height / scale || 1;
+    return { board: viewport, rect, offsetWidth, offsetHeight, scaleX: scale, scaleY: scale };
+  }
+
   const board = document.getElementById('board');
   if (!board) return null;
   const rect = board.getBoundingClientRect();
@@ -499,6 +534,14 @@ function getBoardMetrics() {
 }
 
 function clientPointToBoard(clientX, clientY) {
+  // Internal-board route uses the authoritative transform in main.js
+  if (window.__mtInternalBoard?.isActive?.()) {
+    const w = window.__mtInternalBoard?.clientToWorld?.(clientX, clientY);
+    const metrics = getBoardMetrics();
+    if (!w || !metrics) return null;
+    return { metrics, inside: !!w.inside, x: w.x, y: w.y };
+  }
+
   const metrics = getBoardMetrics();
   if (!metrics) return null;
   const { rect, scaleX, scaleY } = metrics;

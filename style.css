@@ -370,12 +370,14 @@ html, body {
   -webkit-touch-callout: none;
 }
 
-.board-viewport {
+.board-viewport,
+.board-viewport-main {
   position: relative;
   overflow: hidden;
 }
 
-.board-viewport::before {
+.board-viewport::before,
+.board-viewport-main::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -391,7 +393,7 @@ html, body {
   background-color: #000;
   background-image: radial-gradient(
     circle,
-    #131c2a var(--dot-size-screen),
+    var(--board-dot-color, #131c2a) var(--dot-size-screen),
     transparent calc(var(--dot-size-screen) + 0.8px)
   );
 
@@ -402,6 +404,17 @@ html, body {
   background-position:
     calc(var(--bv-tx, 0px) + (var(--board-grid-offset-x, -45px) * var(--bv-scale-safe)))
     calc(var(--bv-ty, 0px) + (var(--board-grid-offset-y, -45px) * var(--bv-scale-safe)));
+}
+
+/* Internal Board: tweak background dot colour (visual separation from main board). */
+body.internal-board-active {
+  --board-dot-color: #24132a;
+}
+
+/* Internal Board: make dots brighter (only affects the internal viewport because it owns .board-viewport in internal mode) */
+body.internal-board-active #internal-board-viewport.board-viewport {
+  /* "reddy blue" / indigo-purple tone (brighter than main board) */
+  --board-dot-color: #3b2f6e;
 }
 
 @property --tap-ripple-scale {
@@ -1449,25 +1462,68 @@ body.advanced-controls-disabled [data-adv] {
 #internal-board-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.70);
-  z-index: 2000;
+  /* Let the main board remain visible around the internal-board frame. */
+  background: rgba(0, 0, 0, 0.18);
+  /* Keep the internal-board overlay ABOVE the main board,
+     but BELOW the existing UI layers (topbar, play controls, toy spawner, etc.). */
+  z-index: 800;
   display: none;
+  /* IMPORTANT: overlay must still intercept pointer events so the main board
+     cannot be interacted with through the safety margin. */
+  pointer-events: auto;
+  /* Animation */
+  transform: scale(1);
+  opacity: 1;
+  transition: transform 220ms cubic-bezier(0.2, 0.9, 0.2, 1), opacity 220ms cubic-bezier(0.2, 0.9, 0.2, 1);
+  will-change: transform, opacity;
+  /* We set transform-origin dynamically in JS to match the source art toy position. */
 }
 #internal-board-overlay.is-active { display: block; }
 
-#internal-board-topbar {
+/* Start state for scale-in */
+#internal-board-overlay.is-entering {
+  transform: scale(0.02);
+  opacity: 0;
+}
+
+/* Exit state for scale-out */
+#internal-board-overlay.is-exiting {
+  transform: scale(0.02);
+  opacity: 0;
+}
+
+/* The framed "window" for the internal board (so it doesn't feel like top-level). */
+#internal-board-frame {
   position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: var(--topbar-height);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 8px 12px;
-  background: rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(6px);
+  /* Safety margin: show the main board around the internal board. */
+  /* Double the margin */
+  --internal-board-margin: clamp(28px, 6.4vw, 88px);
+  /* Top gap should start *below* the app header (fixed topbar). */
+  left: var(--internal-board-margin);
+  right: var(--internal-board-margin);
+  bottom: var(--internal-board-margin);
+  top: calc(var(--topbar-height) + var(--internal-board-margin));
+  border-radius: 18px;
+  /* Thicker + coloured border for stronger "inside a thing" cue */
+  border: 4px solid rgba(120, 90, 255, 0.55);
+  box-shadow:
+    0 18px 70px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(120, 90, 255, 0.22),
+    0 0 32px rgba(120, 90, 255, 0.12);
+  overflow: hidden;
+  /* Ensure it captures input (panning/zooming, toy drags, etc.). */
+  pointer-events: auto;
+  /* The frame itself provides the "window" background. */
+  background: rgba(0, 0, 0, 0.90);
+  /* Animation friendliness */
+  transform-origin: center center;
+  will-change: transform;
+}
+
+#internal-board-topbar {
+  /* Remove the internal-board "header" area entirely for now
+     so dots + toys reach the top edge of the internal board window. */
+  display: none !important;
 }
 
 #internal-board-exit {
@@ -1478,6 +1534,36 @@ body.advanced-controls-disabled [data-adv] {
   padding: 10px 14px;
   font-weight: 800;
   cursor: pointer;
+
+  /* Move Exit to bottom-right (always visible, above everything). */
+  position: fixed;
+  right: calc(12px + var(--safe-right, 0px));
+  bottom: calc(12px + var(--safe-bottom, 0px));
+  z-index: 130000;
+  pointer-events: auto;
+}
+
+/* ---- Internal Board: force Exit + primary UI to remain visible/usable (override older rules) ---- */
+body.internal-board-active #internal-board-exit {
+  position: fixed !important;
+  right: calc(12px + var(--safe-right, 0px)) !important;
+  bottom: calc(12px + var(--safe-bottom, 0px)) !important;
+  z-index: 130000 !important;
+  display: inline-flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+/* Some older internal-board CSS blocks hid the dock; keep it visible while testing. */
+body.internal-board-active .toy-spawner-dock {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+/* In internal-board mode, the active #board is the internal one (via ID swap). */
+body.internal-board-active #board {
+  pointer-events: auto !important;
 }
 
 #internal-board-title {
@@ -1488,7 +1574,8 @@ body.advanced-controls-disabled [data-adv] {
 
 #internal-board-viewport {
   position: absolute;
-  inset: var(--topbar-height) 0 0 0;
+  /* Fill the entire internal board frame */
+  inset: 0;
   overflow: hidden;
   touch-action: none;
 }
@@ -1501,13 +1588,19 @@ body.advanced-controls-disabled [data-adv] {
 }
 
 body.internal-board-active #board {
+  /* NOTE: In internal-board mode we temporarily swap the internal world to id="board"
+     so that existing board + toy drag logic works unchanged.
+     Therefore #board must remain interactive while inside the internal board. */
+  pointer-events: auto;
+}
+
+/* Freeze the REAL main board while inside internal-board mode. */
+body.internal-board-active #board-main {
   pointer-events: none;
 }
 
-body.internal-board-active .toy-spawner-dock {
-  opacity: 0;
-  pointer-events: none;
-}
+/* While inside internal-board mode, keep the main UI visible and usable.
+   (Internal board already blocks main board input via #board pointer-events:none.) */
 
 @keyframes art-toy-flash {
   0% { filter: brightness(1) saturate(1); transform: scale(1); }
@@ -1833,6 +1926,17 @@ body.internal-board-active .toy-spawner-dock {
 }
 
 #board.toy-drop-ready::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2px dashed var(--accent);
+  border-radius: 4px;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+/* Internal board uses a different viewport element, but we want the same drop highlight */
+#internal-board-viewport.toy-drop-ready::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -4725,3 +4829,19 @@ body.intro-open .topbar-menu-wrap {
   100% { opacity: 0; transform: scale(1.2); }
 }
 
+#internal-board-exit {
+  position: fixed !important;
+  right: 18px !important;
+  bottom: 18px !important;
+  z-index: 200000 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  pointer-events: auto !important;
+}
+
+/* Internal board overlay: keep above main board but below UI, and block main-board input. */
+#internal-board-overlay {
+  z-index: 800 !important;          /* below UI (topbar/menu/spawner), above main board */
+  pointer-events: auto !important;
+}
