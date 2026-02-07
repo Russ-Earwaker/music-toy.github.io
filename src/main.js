@@ -1881,6 +1881,7 @@ try {
 function ensureInternalBoardOverlay() {
   if (g_artInternal._els?.overlay) return g_artInternal._els;
 
+  // NOTE: internal board DOM is created once; behaviour is driven by swap identity on enter/exit.
   const overlay = document.createElement('div');
   overlay.id = 'internal-board-overlay';
 
@@ -1909,118 +1910,38 @@ function ensureInternalBoardOverlay() {
   document.body.appendChild(overlay);
 
   // -------------------------------------------------------------------------
-  // Internal board camera helpers
+  // Internal board camera
   // -------------------------------------------------------------------------
-  const syncViewportVars = () => {
-    // Keep the board-viewport CSS vars in sync so:
-    // - background dots pan/zoom correctly
-    // - any code reading --bv-* gets sane values
-    try {
-      viewport.style.setProperty('--bv-scale', String(g_artInternal.scale));
-      viewport.style.setProperty('--bv-tx', `${g_artInternal.tx}px`);
-      viewport.style.setProperty('--bv-ty', `${g_artInternal.ty}px`);
-    } catch {}
+  // We want the internal board to feel *identical* to the main board:
+  // smooth zoom, smooth toy scaling, stable dot grid.
+  //
+  // The main board already has a mature camera system. In internal mode we
+  // "swap identity" so the internal viewport temporarily owns .board-viewport
+  // and the internal world temporarily owns #board. That lets the existing
+  // camera code drive the internal board.
+  //
+  // Therefore: DO NOT install a second camera here (double-updates cause drift/snaps).
+  //
+  // We only keep a tiny helper to read the current camera vars for local math
+  // (eg header-drag pixel->world conversion).
+  const readInternalViewportCamera = () => {
+    const cs = viewport ? getComputedStyle(viewport) : null;
+    const scale = cs ? parseFloat(cs.getPropertyValue('--bv-scale')) : NaN;
+    const tx = cs ? parseFloat(cs.getPropertyValue('--bv-tx')) : NaN;
+    const ty = cs ? parseFloat(cs.getPropertyValue('--bv-ty')) : NaN;
+    return {
+      scale: Number.isFinite(scale) ? scale : 1,
+      tx: Number.isFinite(tx) ? tx : 0,
+      ty: Number.isFinite(ty) ? ty : 0,
+    };
   };
 
-  // Input: pan/zoom inside internal board.
-  // We keep this isolated from the main board-viewport.
-  const applyTransform = () => {
-    if (world) {
-      world.style.transform = `translate(${g_artInternal.tx}px, ${g_artInternal.ty}px) scale(${g_artInternal.scale})`;
-    }
-    syncViewportVars();
-  };
-
-  // Expose so other helpers (eg setInternalBoardTransform / enterInternalBoard) can force-sync
-  // the CSS vars immediately (fixes "dots wrong until pan/create-toy").
-  try { g_artInternal._applyTransform = applyTransform; } catch {}
-
-  // Initialize vars immediately so the dot background is correct from frame 0.
-  syncViewportVars();
-
-  const clampScale = (s) => Math.max(0.2, Math.min(3.0, s));
-
-  // NOTE:
-  // We intentionally DO NOT animate wheel zoom here.
-  // The previous "smooth zoom" target animator was causing camera drift
-  // (toys sliding towards bottom-right) and made drawgrid feel incorrect
-  // during zoom. We keep wheel zoom stable by applying the computed camera
-  // immediately each wheel tick, matching the main board’s “locked” feel.
-
-  const onPointerDown = (e) => {
-    if (!g_artInternal.active) return;
-    // If this started on a toy header, let the internal header-drag handler take it.
-    if (e.target && e.target.closest && e.target.closest('.toy-header')) return;
-    // Don't pan when clicking inside a toy panel.
-    if (e.target && e.target.closest && e.target.closest('.toy-panel')) return;
-
-    g_artInternal.dragging = true;
-    g_artInternal.dragStartClientX = e.clientX;
-    g_artInternal.dragStartClientY = e.clientY;
-    g_artInternal.dragStartTx = g_artInternal.tx;
-    g_artInternal.dragStartTy = g_artInternal.ty;
-    try { viewport.setPointerCapture?.(e.pointerId); } catch {}
-    e.preventDefault();
-  };
-
-  const onPointerMove = (e) => {
-    if (!g_artInternal.active) return;
-    if (!g_artInternal.dragging) return;
-    const dx = e.clientX - g_artInternal.dragStartClientX;
-    const dy = e.clientY - g_artInternal.dragStartClientY;
-    g_artInternal.tx = g_artInternal.dragStartTx + dx;
-    g_artInternal.ty = g_artInternal.dragStartTy + dy;
-    applyTransform();
-    e.preventDefault();
-  };
-
-  const onPointerUp = (e) => {
-    if (!g_artInternal.active) return;
-    g_artInternal.dragging = false;
-    try { viewport.releasePointerCapture?.(e.pointerId); } catch {}
-  };
-
-  const onWheel = (e) => {
-    if (!g_artInternal.active) return;
-    // Trackpad / wheel zoom.
-    if (g_artInternal._wheelRaf) return;
-    g_artInternal._wheelRaf = requestAnimationFrame(() => {
-      g_artInternal._wheelRaf = 0;
-      const rect = viewport.getBoundingClientRect();
-      const mx = e.clientX - rect.left;
-      const my = e.clientY - rect.top;
-
-      // Zoom direction: wheel up -> zoom in.
-      const delta = -Math.sign(e.deltaY || 0);
-      const zoomFactor = delta > 0 ? 1.08 : 1 / 1.08;
-
-      // Use current camera as the base (stable, no drift).
-      const baseScale = g_artInternal.scale;
-      const baseTx = g_artInternal.tx;
-      const baseTy = g_artInternal.ty;
-
-      const nextScale = clampScale(baseScale * zoomFactor);
-      if (nextScale === baseScale) return;
-
-      // Zoom around the mouse point (in screen space) using the base camera.
-      const wx = (mx - baseTx) / baseScale;
-      const wy = (my - baseTy) / baseScale;
-      const nextTx = mx - wx * nextScale;
-      const nextTy = my - wy * nextScale;
-
-      g_artInternal.scale = nextScale;
-      g_artInternal.tx = nextTx;
-      g_artInternal.ty = nextTy;
-      applyTransform();
-    });
-    e.preventDefault();
-  };
-
-  viewport.addEventListener('pointerdown', onPointerDown, { passive: false });
-  viewport.addEventListener('pointermove', onPointerMove, { passive: false });
-  viewport.addEventListener('pointerup', onPointerUp, { passive: true });
-  viewport.addEventListener('pointercancel', onPointerUp, { passive: true });
-  viewport.addEventListener('wheel', onWheel, { passive: false });
+  // Seed vars for frame 0. (Once swapped, board-viewport will keep them updated.)
+  try {
+    if (!viewport.style.getPropertyValue('--bv-scale')) viewport.style.setProperty('--bv-scale', String(g_artInternal.scale || 1));
+    if (!viewport.style.getPropertyValue('--bv-tx')) viewport.style.setProperty('--bv-tx', `${g_artInternal.tx || 0}px`);
+    if (!viewport.style.getPropertyValue('--bv-ty')) viewport.style.setProperty('--bv-ty', `${g_artInternal.ty || 0}px`);
+  } catch {}
 
   // -------------------------------------------------------------------------
   // Internal board: toy header dragging (local fix)
@@ -2079,7 +2000,7 @@ function ensureInternalBoardOverlay() {
     // Convert screen-space delta into world-space delta using current scale.
     const dxScreen = e.clientX - dragState.startClientX;
     const dyScreen = e.clientY - dragState.startClientY;
-    const s = Math.max(0.001, g_artInternal.scale || 1);
+    const s = Math.max(0.001, readInternalViewportCamera().scale || 1);
     const dxWorld = dxScreen / s;
     const dyWorld = dyScreen / s;
 
@@ -2193,9 +2114,27 @@ function setInternalBoardTransform(scale, tx, ty) {
   g_artInternal.scale = Math.max(0.2, Math.min(3.0, Number.isFinite(scale) ? scale : 1));
   g_artInternal.tx = Number.isFinite(tx) ? tx : 0;
   g_artInternal.ty = Number.isFinite(ty) ? ty : 0;
-  // Use the internal board's applyTransform so CSS vars (--bv-*) stay in sync for dot background.
-  ensureInternalBoardOverlay();
-  try { g_artInternal._applyTransform?.(); } catch {}
+
+  // Prefer the internal-board overlay's transform helper (keeps dots + toys in sync).
+  try {
+    if (typeof g_artInternal._applyTransform === 'function') {
+      g_artInternal._applyTransform();
+      return;
+    }
+  } catch {}
+
+  // Fallback: just set the world transform.
+  try {
+    const { world, viewport } = ensureInternalBoardOverlay();
+    if (world) {
+      world.style.transform = `translate(${g_artInternal.tx}px, ${g_artInternal.ty}px) scale(${g_artInternal.scale})`;
+    }
+    if (viewport) {
+      viewport.style.setProperty('--bv-scale', String(g_artInternal.scale));
+      viewport.style.setProperty('--bv-tx', `${g_artInternal.tx}px`);
+      viewport.style.setProperty('--bv-ty', `${g_artInternal.ty}px`);
+    }
+  } catch {}
 }
 
 function readMainBoardCameraSnapshot() {
@@ -2219,9 +2158,64 @@ function readMainBoardCameraSnapshot() {
   };
 }
 
+function forceRevertBoardIdentityAfterInternalMode() {
+  // In failure cases (eg interrupted transition), we can end up with swapped
+  // IDs/classes but swap.didSwap=false. This function detects and fixes that.
+  const swap = g_artInternal._swap;
+
+  const internalViewport = document.getElementById('internal-board-viewport');
+  const mainBoardAlt = document.getElementById('board-main');
+  const maybeInternalBoard = document.getElementById('board');
+
+  const looksSwapped = !!(
+    internalViewport && internalViewport.classList.contains('board-viewport') &&
+    mainBoardAlt && maybeInternalBoard && internalViewport.contains(maybeInternalBoard)
+  );
+
+  if (!looksSwapped) return;
+
+  // Find the main viewport element (the one that owns the main board).
+  const findViewportForBoard = (boardEl) => {
+    let el = boardEl;
+    while (el && el !== document.body) {
+      if (el.classList && (el.classList.contains('board-viewport') || el.classList.contains('board-viewport-main'))) {
+        return el;
+      }
+      el = el.parentElement;
+    }
+    return null;
+  };
+
+  const mainViewport =
+    document.querySelector('.board-viewport-main') ||
+    (mainBoardAlt ? findViewportForBoard(mainBoardAlt) : null) ||
+    swap.mainViewportEl ||
+    null;
+
+  // Remove internal ownership.
+  try { internalViewport.classList.remove('board-viewport'); } catch {}
+
+  // Restore main viewport ownership.
+  try {
+    if (mainViewport && !mainViewport.classList.contains('board-viewport')) {
+      mainViewport.classList.add('board-viewport');
+    }
+  } catch {}
+
+  // Restore IDs.
+  try { maybeInternalBoard.id = 'internal-board-world'; } catch {}
+  try { mainBoardAlt.id = 'board'; } catch {}
+
+  // Reset swap bookkeeping.
+  swap.didSwap = false;
+}
+
 function swapBoardIdentityForInternalMode() {
   const swap = g_artInternal._swap;
   if (swap.didSwap) return;
+
+  // Always start from a clean baseline.
+  try { forceRevertBoardIdentityAfterInternalMode(); } catch {}
 
   const mainBoard = document.getElementById('board');
   const internalViewport = document.getElementById('internal-board-viewport');
@@ -2231,24 +2225,30 @@ function swapBoardIdentityForInternalMode() {
   // Record original state so we can revert.
   swap.mainBoardEl = mainBoard;
   swap.mainBoardPrevId = mainBoard.id; // "board"
+  // IMPORTANT: many systems look up the active viewport via `querySelector('.board-viewport')`.
+  // If the main viewport keeps that class, internal mode will still route camera/drag math to it.
   swap.mainViewportEl = document.querySelector('.board-viewport');
-  swap.mainViewportHadClass = !!swap.mainViewportEl;
+  swap.mainViewportHadBoardViewportClass = !!swap.mainViewportEl && swap.mainViewportEl.classList.contains('board-viewport');
+  swap.mainViewportHadBoardViewportMainClass = !!swap.mainViewportEl && swap.mainViewportEl.classList.contains('board-viewport-main');
+
+  // Mark the main viewport so we can find it later even after .board-viewport moves.
+  try {
+    if (swap.mainViewportEl && !swap.mainViewportHadBoardViewportMainClass) {
+      swap.mainViewportEl.classList.add('board-viewport-main');
+    }
+  } catch {}
+
+  // Move .board-viewport identity from main viewport to internal viewport.
+  try {
+    if (swap.mainViewportEl && swap.mainViewportHadBoardViewportClass) {
+      swap.mainViewportEl.classList.remove('board-viewport');
+    }
+  } catch {}
+  try { internalViewport.classList.add('board-viewport'); } catch {}
+
   swap.internalViewportEl = internalViewport;
   swap.internalWorldEl = internalWorld;
   swap.internalWorldPrevId = internalWorld.id; // "internal-board-world"
-
-  // IMPORTANT: many systems look up the active viewport via `querySelector('.board-viewport')`.
-  // If the main viewport keeps that class, internal mode will still route camera/drag math to it.
-  // So temporarily "move" the board-viewport identity from the main viewport to the internal one.
-  try {
-    if (swap.mainViewportEl) {
-      swap.mainViewportHadBoardViewportClass = swap.mainViewportEl.classList.contains('board-viewport');
-      if (swap.mainViewportHadBoardViewportClass) swap.mainViewportEl.classList.remove('board-viewport');
-      // Keep main-board dots visible while internal mode "owns" .board-viewport
-      swap.mainViewportHadBoardViewportMainClass = swap.mainViewportEl.classList.contains('board-viewport-main');
-      if (!swap.mainViewportHadBoardViewportMainClass) swap.mainViewportEl.classList.add('board-viewport-main');
-    }
-  } catch {}
 
   // 1) Move main board out of the way (ID swap)
   try { mainBoard.id = 'board-main'; } catch {}
@@ -2256,28 +2256,31 @@ function swapBoardIdentityForInternalMode() {
   // 2) Promote internal world to become #board
   try { internalWorld.id = 'board'; } catch {}
 
-  // 3) Make internal viewport look like the normal board viewport
-  try { internalViewport.classList.add('board-viewport'); } catch {}
-
   swap.didSwap = true;
 }
 
 function revertBoardIdentityAfterInternalMode() {
   const swap = g_artInternal._swap;
-  if (!swap.didSwap) return;
+  if (!swap.didSwap) {
+    // Still attempt to recover if we detect a half-swapped state.
+    try { forceRevertBoardIdentityAfterInternalMode(); } catch {}
+    return;
+  }
 
+  // Remove internal viewport ownership.
   try {
     if (swap.internalViewportEl) swap.internalViewportEl.classList.remove('board-viewport');
   } catch {}
 
-  // Restore board-viewport class back to the main viewport (if it originally had it).
+  // Restore .board-viewport class back to the main viewport (if it originally had it).
   try {
-    if (swap.mainViewportEl && swap.mainViewportHadBoardViewportClass) {
-      swap.mainViewportEl.classList.add('board-viewport');
+    const mainViewport = swap.mainViewportEl || document.querySelector('.board-viewport-main');
+    if (mainViewport && swap.mainViewportHadBoardViewportClass) {
+      mainViewport.classList.add('board-viewport');
     }
-    // Remove the temporary backup class (only if we added it).
-    if (swap.mainViewportEl && !swap.mainViewportHadBoardViewportMainClass) {
-      swap.mainViewportEl.classList.remove('board-viewport-main');
+    // Remove the temporary marker class only if we added it.
+    if (mainViewport && !swap.mainViewportHadBoardViewportMainClass) {
+      mainViewport.classList.remove('board-viewport-main');
     }
   } catch {}
 
@@ -2296,6 +2299,9 @@ function revertBoardIdentityAfterInternalMode() {
 
 function enterInternalBoard(artToyId) {
   if (!artToyId) return;
+  // Defensive: if a previous internal session failed to revert cleanly,
+  // we may still have swapped IDs/classes which breaks input + dot background.
+  try { forceRevertBoardIdentityAfterInternalMode(); } catch {}
   const { overlay, world, title } = ensureInternalBoardOverlay();
   const host = ensureArtInternalHost();
 
@@ -2330,11 +2336,6 @@ function enterInternalBoard(artToyId) {
 
   // Critical: swap board identity so all existing toy dragging / board math works inside internal mode.
   swapBoardIdentityForInternalMode();
-
-  // Force an additional sync on the next frame so the dot background is correct immediately.
-  try {
-    requestAnimationFrame(() => { try { g_artInternal._applyTransform?.(); } catch {} });
-  } catch {}
 
   // Animate scale-in from the art toy position.
   try { animateInternalBoardIn(artToyId); } catch {}
@@ -6097,5 +6098,9 @@ import { PERF_FLAGS } from "./perf-flags.js";
 
 // Expose for live debugging / perf-lab runs
 window.PERF_FLAGS = PERF_FLAGS;
+
+
+
+
 
 
