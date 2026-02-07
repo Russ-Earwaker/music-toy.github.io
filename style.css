@@ -843,6 +843,15 @@ select.toy-instrument {
   --vol-bar-track-start: #111827; /* dark grey track */
   --vol-bar-track-end: #111827;
 
+/* Art Toys: internal host for hidden toys (first pass) */
+#art-internal-host {
+  display: none;
+}
+
+.art-internal-toy {
+  display: none;
+}
+
   display: flex;
   gap: 10px;
   align-items: center;
@@ -1394,6 +1403,15 @@ body.advanced-controls-disabled [data-adv] {
   border-radius: 999px;
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
   z-index: 60;
+}
+
+.art-toy-panel.is-drop-target {
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.18), 0 18px 44px rgba(0, 0, 0, 0.55);
+  transform: scale(1.02);
+}
+
+.art-toy-panel.is-drop-target .art-toy-circle {
+  filter: brightness(1.15) saturate(1.15);
 }
 
 .art-toy-circle {

@@ -543,6 +543,7 @@ function beginPanelDrag({ panel, pointerId } = {}) {
   setPanelDragActive(true);
   setTrashArmed(true);
   setTrashHover(false);
+  try { window.__mtArtToys?.clearDropHover?.(); } catch {}
 }
 
 function updatePanelDrag({ clientX, clientY } = {}) {
@@ -554,23 +555,40 @@ function updatePanelDrag({ clientX, clientY } = {}) {
     state.panelDrag.hovering = hovering;
     setTrashHover(hovering);
   }
+  // Update art-toy drop highlight while dragging a music toy.
+  try { window.__mtArtToys?.updateDropHover?.(clientX, clientY); } catch {}
 }
 
 function endPanelDrag({ clientX, clientY, pointerId, canceled } = {}) {
   if (!state.panelDrag) return false;
   ensureDock();
   const panel = state.panelDrag.panel;
-  const shouldRemove = !canceled && panel && typeof clientX === 'number' && typeof clientY === 'number' && isPointOverTrash(clientX, clientY);
+  const hasPoint = panel && !canceled && typeof clientX === 'number' && typeof clientY === 'number';
+
+  const shouldRemove = hasPoint && isPointOverTrash(clientX, clientY);
   setTrashHover(false);
   setPanelDragActive(false);
   setTrashArmed(false);
+  try { window.__mtArtToys?.clearDropHover?.(); } catch {}
   state.panelDrag = null;
 
+  // Priority 1: trash delete
   if (shouldRemove && typeof state.config.remove === 'function') {
     try {
       return !!state.config.remove(panel);
     } catch (err) {
       console.warn('[ToySpawner] remove failed', err);
+    }
+    return false;
+  }
+
+  // Priority 2: drop onto an Art Toy (moves the entire chain into the art toy's internal container)
+  if (hasPoint) {
+    try {
+      const placed = !!window.__mtArtToys?.tryPlaceChainFromPanel?.(panel, clientX, clientY);
+      if (placed) return true;
+    } catch (err) {
+      console.warn('[ToySpawner] art drop failed', err);
     }
   }
   return false;

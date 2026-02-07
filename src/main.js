@@ -1665,6 +1665,147 @@ function getChildrenOf(parentId) {
     return Array.from(document.querySelectorAll('.toy-panel[id]')).filter(el => el.dataset.chainParent === parentId);
 }
 
+// ---------------------------------------------------------------------------
+// Art Toys - Internal Toy Containers (first-pass: drag/drop chain into art toy)
+// ---------------------------------------------------------------------------
+
+function ensureArtInternalHost() {
+    let host = document.getElementById('art-internal-host');
+    if (host) return host;
+    host = document.createElement('div');
+    host.id = 'art-internal-host';
+    host.style.display = 'none'; // hidden by default; Internal Board mode will show this later.
+    document.body.appendChild(host);
+    return host;
+}
+
+function findArtToyAtClientPoint(clientX, clientY) {
+    if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return null;
+    const el = document.elementFromPoint(clientX, clientY);
+    if (!el) return null;
+    return el.closest?.('.art-toy-panel') || null;
+}
+
+function collectChainPanelsForMove(startPanel) {
+    const start = (typeof startPanel === 'string') ? document.getElementById(startPanel) : startPanel;
+    if (!start || !start.classList?.contains('toy-panel')) return [];
+
+    const head = findChainHead(start) || start;
+    const out = [];
+    const visited = new Set();
+
+    const visit = (panel) => {
+        if (!panel || visited.has(panel.id)) return;
+        visited.add(panel.id);
+        out.push(panel);
+
+        // Linear next
+        const nextId = panel.dataset.nextToyId;
+        if (nextId) {
+            const next = document.getElementById(nextId);
+            if (next && next !== panel) visit(next);
+        }
+
+        // Branching children (chainParent)
+        const kids = getChildrenOf(panel.id);
+        for (const child of kids) visit(child);
+    };
+
+    visit(head);
+    return out;
+}
+
+function setPanelInternalToArtToy(panel, artToyId) {
+    if (!panel) return;
+    panel.dataset.artOwnerId = artToyId;
+    panel.dataset.focusSkip = '1'; // don't let focus system try to manage hidden panels
+    panel.classList.add('art-internal-toy');
+    // First pass: hide visuals while keeping the toy in the DOM so audio scheduler still finds it.
+    panel.style.display = 'none';
+}
+
+function moveChainIntoArtToy(startPanel, artPanel) {
+    const art = (typeof artPanel === 'string') ? document.getElementById(artPanel) : artPanel;
+    const start = (typeof startPanel === 'string') ? document.getElementById(startPanel) : startPanel;
+    if (!art || !art.classList?.contains('art-toy-panel')) return false;
+    if (!start || !start.classList?.contains('toy-panel')) return false;
+
+    const host = ensureArtInternalHost();
+    const panels = collectChainPanelsForMove(start);
+    if (!panels.length) return false;
+
+    // If any panels are already owned by a different art toy, don't move them again (for now).
+    const foreignOwner = panels.find(p => p.dataset.artOwnerId && p.dataset.artOwnerId !== art.id);
+    if (foreignOwner) return false;
+
+    for (const p of panels) {
+        setPanelInternalToArtToy(p, art.id);
+        try { host.appendChild(p); } catch {}
+    }
+
+    // Remember membership on the art panel (used later for Internal Board mode + note routing).
+    try {
+        if (!art.__internalToyIds) art.__internalToyIds = new Set();
+        for (const p of panels) art.__internalToyIds.add(p.id);
+    } catch {}
+
+    // Chain visuals should disappear on main board once internal.
+    try { rebuildChainSegments(); } catch {}
+    try { scheduleChainRedraw(true); } catch {}
+    try { updateAllChainUIs(); } catch {}
+    try { window.Persistence?.markDirty?.(); } catch {}
+    return true;
+}
+
+// Drag-hover feedback for Art Toys (used while dragging music toys).
+let g_artDropHoverEl = null;
+function setArtDropHoverEl(nextEl) {
+    const el = nextEl && nextEl.classList?.contains('art-toy-panel') ? nextEl : null;
+    if (el === g_artDropHoverEl) return;
+    try { g_artDropHoverEl?.classList?.remove('is-drop-target'); } catch {}
+    g_artDropHoverEl = el;
+    try { g_artDropHoverEl?.classList?.add('is-drop-target'); } catch {}
+}
+function clearArtDropHoverEl() {
+    setArtDropHoverEl(null);
+}
+
+// First-pass note forwarding:
+// If a panel is owned by an art toy, flash that art toy when the panel hits a note column.
+function flashOwningArtToyForPanel(panel) {
+  if (!panel) return false;
+  const artId = panel?.dataset?.artOwnerId;
+  if (!artId) return false;
+  const art = document.getElementById(artId);
+  if (!art) return false;
+  try { art.flash?.(); return true; } catch {}
+  return false;
+}
+
+try {
+    window.__mtArtToys = Object.assign(window.__mtArtToys || {}, {
+        updateDropHover(clientX, clientY) {
+            const targetArt = findArtToyAtClientPoint(clientX, clientY);
+            setArtDropHoverEl(targetArt);
+            return !!targetArt;
+        },
+        clearDropHover() {
+            clearArtDropHoverEl();
+        },
+        tryPlaceChainFromPanel(panel, clientX, clientY) {
+            const targetArt = findArtToyAtClientPoint(clientX, clientY);
+            if (!targetArt) return false;
+            const placed = moveChainIntoArtToy(panel, targetArt);
+            if (placed) {
+              try { targetArt.flash?.(); } catch {}
+            }
+            return placed;
+        },
+        moveChainIntoArtToy,
+        collectChainPanelsForMove,
+    });
+} catch {}
+
 // Returns true if the given panel has any notes at the specified column.
 function panelHasNotesAtColumn(panel, col){
   if (!panel || !Number.isFinite(col)) return false;
@@ -3236,6 +3377,12 @@ function rebuildChainSegments() {
       const next = document.getElementById(nextId);
       if (!next) break;
 
+      // Art Toy internal chains should NOT draw connectors on the main board.
+      if (current.dataset.artOwnerId || next.dataset.artOwnerId) {
+        current = next;
+        continue;
+      }
+
       const anchors = getConnectorAnchorPoints(current, next);
       if (!anchors) {
         current = next;
@@ -4319,6 +4466,8 @@ function scheduler(){
               // If this toy actually has notes at this column, flash the normal-mode border
               if (panelHasNotesAtColumn(toy, col)) {
                 pulseToyBorder(toy);
+                // First-pass: if this toy lives inside an Art Toy, flash the Art Toy.
+                flashOwningArtToyForPanel(toy);
               }
             }
           }
