@@ -48,6 +48,24 @@ import { initBoardAnchor, tickBoardAnchor } from './board-anchor.js';
 
 const mainLog = makeDebugLogger('mt_debug_logs', 'log');
 
+// ---------------------------------------------------------------------------
+// Art Toy: Internal Board (first pass)
+// ---------------------------------------------------------------------------
+
+const g_artInternal = {
+  active: false,
+  artToyId: null,
+  scale: 1,
+  tx: 0,
+  ty: 0,
+  dragging: false,
+  dragStartClientX: 0,
+  dragStartClientY: 0,
+  dragStartTx: 0,
+  dragStartTy: 0,
+  _wheelRaf: 0,
+};
+
 // Perf trace support (demon hunting). Safe/no-op unless toggled in perf-lab.
 installRafBoundaryFlag();
 
@@ -1675,6 +1693,13 @@ function ensureArtInternalHost() {
     host = document.createElement('div');
     host.id = 'art-internal-host';
     host.style.display = 'none'; // hidden by default; Internal Board mode will show this later.
+    host.style.position = 'absolute';
+    host.style.left = '0px';
+    host.style.top = '0px';
+    host.style.width = '0px';
+    host.style.height = '0px';
+    host.style.overflow = 'hidden';
+    host.style.pointerEvents = 'none';
     document.body.appendChild(host);
     return host;
 }
@@ -1805,6 +1830,220 @@ try {
         collectChainPanelsForMove,
     });
 } catch {}
+
+// ---------------------------------------------------------------------------
+// Art Toy: Internal Board (first pass)
+// ---------------------------------------------------------------------------
+
+function ensureInternalBoardOverlay() {
+  let overlay = document.getElementById('internal-board-overlay');
+  if (overlay) {
+    return {
+      overlay,
+      viewport: document.getElementById('internal-board-viewport'),
+      world: document.getElementById('internal-board-world'),
+      exitBtn: document.getElementById('internal-board-exit'),
+      title: document.getElementById('internal-board-title'),
+    };
+  }
+
+  overlay = document.createElement('div');
+  overlay.id = 'internal-board-overlay';
+
+  const topbar = document.createElement('div');
+  topbar.id = 'internal-board-topbar';
+
+  const title = document.createElement('div');
+  title.id = 'internal-board-title';
+  title.textContent = 'Inside Art Toy';
+
+  const exitBtn = document.createElement('button');
+  exitBtn.id = 'internal-board-exit';
+  exitBtn.type = 'button';
+  exitBtn.textContent = 'Exit';
+
+  topbar.append(title, exitBtn);
+
+  const viewport = document.createElement('div');
+  viewport.id = 'internal-board-viewport';
+
+  const world = document.createElement('div');
+  world.id = 'internal-board-world';
+  viewport.appendChild(world);
+
+  overlay.append(topbar, viewport);
+  document.body.appendChild(overlay);
+
+  // Input: pan/zoom inside internal board.
+  // We keep this isolated from the main board-viewport.
+  const applyTransform = () => {
+    world.style.transform = `translate(${g_artInternal.tx}px, ${g_artInternal.ty}px) scale(${g_artInternal.scale})`;
+  };
+
+  const clampScale = (s) => Math.max(0.2, Math.min(3.0, s));
+
+  const onPointerDown = (e) => {
+    if (!g_artInternal.active) return;
+    // Only start drag if we clicked background (not a button / toy control).
+    const t = e.target;
+    if (t && (t.closest?.('.toy-panel') || t.closest?.('.toy-mode-btn') || t.closest?.('button') || t.closest?.('input') || t.closest?.('select') || t.closest?.('textarea'))) {
+      return;
+    }
+    g_artInternal.dragging = true;
+    g_artInternal.dragStartClientX = e.clientX;
+    g_artInternal.dragStartClientY = e.clientY;
+    g_artInternal.dragStartTx = g_artInternal.tx;
+    g_artInternal.dragStartTy = g_artInternal.ty;
+    viewport.setPointerCapture?.(e.pointerId);
+    e.preventDefault();
+  };
+
+  const onPointerMove = (e) => {
+    if (!g_artInternal.active || !g_artInternal.dragging) return;
+    const dx = e.clientX - g_artInternal.dragStartClientX;
+    const dy = e.clientY - g_artInternal.dragStartClientY;
+    g_artInternal.tx = g_artInternal.dragStartTx + dx;
+    g_artInternal.ty = g_artInternal.dragStartTy + dy;
+    applyTransform();
+    e.preventDefault();
+  };
+
+  const onPointerUp = (e) => {
+    if (!g_artInternal.active) return;
+    g_artInternal.dragging = false;
+    try { viewport.releasePointerCapture?.(e.pointerId); } catch {}
+  };
+
+  const onWheel = (e) => {
+    if (!g_artInternal.active) return;
+    // Trackpad / wheel zoom.
+    if (g_artInternal._wheelRaf) return;
+    g_artInternal._wheelRaf = requestAnimationFrame(() => {
+      g_artInternal._wheelRaf = 0;
+      const rect = viewport.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+
+      // Zoom direction: wheel up -> zoom in.
+      const delta = -Math.sign(e.deltaY || 0);
+      const zoomFactor = delta > 0 ? 1.08 : 1 / 1.08;
+      const prevScale = g_artInternal.scale;
+      const nextScale = clampScale(prevScale * zoomFactor);
+      if (nextScale === prevScale) return;
+
+      // Zoom around the mouse point.
+      const wx = (mx - g_artInternal.tx) / prevScale;
+      const wy = (my - g_artInternal.ty) / prevScale;
+      g_artInternal.scale = nextScale;
+      g_artInternal.tx = mx - wx * nextScale;
+      g_artInternal.ty = my - wy * nextScale;
+      applyTransform();
+    });
+    e.preventDefault();
+  };
+
+  viewport.addEventListener('pointerdown', onPointerDown, { passive: false });
+  viewport.addEventListener('pointermove', onPointerMove, { passive: false });
+  viewport.addEventListener('pointerup', onPointerUp, { passive: true });
+  viewport.addEventListener('pointercancel', onPointerUp, { passive: true });
+  viewport.addEventListener('wheel', onWheel, { passive: false });
+
+  exitBtn.addEventListener('click', () => {
+    try { exitInternalBoard(); } catch {}
+  });
+
+  return { overlay, viewport, world, exitBtn, title };
+}
+
+function getInternalPanelsForArtToy(artToyId) {
+  if (!artToyId) return [];
+  return Array.from(document.querySelectorAll(`.toy-panel[data-art-owner-id="${CSS.escape(artToyId)}"]`));
+}
+
+function setInternalBoardTransform(scale, tx, ty) {
+  g_artInternal.scale = Math.max(0.2, Math.min(3.0, Number.isFinite(scale) ? scale : 1));
+  g_artInternal.tx = Number.isFinite(tx) ? tx : 0;
+  g_artInternal.ty = Number.isFinite(ty) ? ty : 0;
+  const { world } = ensureInternalBoardOverlay();
+  if (world) world.style.transform = `translate(${g_artInternal.tx}px, ${g_artInternal.ty}px) scale(${g_artInternal.scale})`;
+}
+
+function enterInternalBoard(artToyId) {
+  if (!artToyId) return;
+  const { overlay, world, title } = ensureInternalBoardOverlay();
+  const host = ensureArtInternalHost();
+
+  // Move internal panels for this art toy into the internal board world.
+  const panels = getInternalPanelsForArtToy(artToyId);
+  for (const p of panels) {
+    try {
+      p.classList.remove('art-internal-toy');
+      p.style.display = '';
+      p.style.pointerEvents = 'auto';
+      world.appendChild(p);
+    } catch {}
+  }
+
+  // If there are none yet, keep it empty (still useful for debugging the mode).
+  if (title) title.textContent = 'Inside Art Toy';
+
+  g_artInternal.active = true;
+  g_artInternal.artToyId = artToyId;
+
+  document.body.classList.add('internal-board-active');
+  overlay.classList.add('is-active');
+
+  // Default camera: mild center.
+  // (We can refine this when we have reliable layout / stored camera per art toy.)
+  setInternalBoardTransform(1, 40, 40);
+
+  // Ensure the hidden host stays alive (panels for other toys remain stashed there).
+  // (No-op read, keeps linter happy.)
+  void host;
+}
+
+function exitInternalBoard() {
+  if (!g_artInternal.active) return;
+  const { overlay } = ensureInternalBoardOverlay();
+  const host = ensureArtInternalHost();
+
+  const artToyId = g_artInternal.artToyId;
+  const panels = getInternalPanelsForArtToy(artToyId);
+  for (const p of panels) {
+    try {
+      p.classList.add('art-internal-toy');
+      p.style.display = 'none';
+      p.style.pointerEvents = 'none';
+      host.appendChild(p);
+    } catch {}
+  }
+
+  g_artInternal.active = false;
+  g_artInternal.artToyId = null;
+
+  document.body.classList.remove('internal-board-active');
+  overlay.classList.remove('is-active');
+}
+
+// Expose a tiny API for debugging.
+try {
+  window.__ArtInternal = Object.assign(window.__ArtInternal || {}, {
+    enter: enterInternalBoard,
+    exit: exitInternalBoard,
+    isActive: () => !!g_artInternal.active,
+  });
+} catch {}
+
+// Click delegate: Art Toy "Music" button enters internal-board mode.
+document.addEventListener('click', (e) => {
+  const btn = e.target?.closest?.('button[data-action="artToy:music"]');
+  if (!btn) return;
+  const artToyId = btn.dataset.artToyId || btn.closest?.('.art-toy-panel')?.id;
+  if (!artToyId) return;
+  e.preventDefault();
+  e.stopPropagation();
+  enterInternalBoard(artToyId);
+}, true);
 
 // Returns true if the given panel has any notes at the specified column.
 function panelHasNotesAtColumn(panel, col){
@@ -3429,6 +3668,8 @@ function rebuildChainSegments() {
 }
 
 function drawChains(forceFull = false) {
+  // While inside an Art Toy's internal board, the main board should not visually update.
+  if (g_artInternal && g_artInternal.active) return;
   if (window.__PERF_DISABLE_CHAINS) return;
   if (!CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) return;
   if (!chainCanvas || !chainCtx) return;
@@ -4283,22 +4524,27 @@ function scheduler(){
     const __rafStart = __perfOn ? performance.now() : 0;
     // Update global quality signal (FPS + memory pressure with hysteresis)
     try { autoQualityOnFrame(); } catch {}
-    // Clear expired pulse classes without timers
-    try {
-      if (__perfOn) {
-        const t0 = performance.now();
-        serviceToyPulses(frameStart);
-        const dt = performance.now() - t0;
-        window.__PerfFrameProf.mark('pulse.service', dt);
-      } else {
-        serviceToyPulses(frameStart);
-      }
-    } catch {}
+    // While inside an Art Toy's internal board, the main board should not visually update.
+    const __internalActive = !!(g_artInternal && g_artInternal.active);
 
-    // Keep outline-related CSS vars synced with zoom; heavy geometry sync happens on demand.
-    try {
-      window.__updateOutlineScaleIfNeeded && window.__updateOutlineScaleIfNeeded();
-    } catch {}
+    // Clear expired pulse classes without timers (visual-only; skip while inside internal board.)
+    if (!__internalActive) {
+      try {
+        if (__perfOn) {
+          const t0 = performance.now();
+          serviceToyPulses(frameStart);
+          const dt = performance.now() - t0;
+          window.__PerfFrameProf.mark('pulse.service', dt);
+        } else {
+          serviceToyPulses(frameStart);
+        }
+      } catch {}
+
+      // Keep outline-related CSS vars synced with zoom; heavy geometry sync happens on demand.
+      try {
+        window.__updateOutlineScaleIfNeeded && window.__updateOutlineScaleIfNeeded();
+      } catch {}
+    }
 
     const info = getLoopInfo();
 
@@ -4321,7 +4567,10 @@ function scheduler(){
 
     // Screen-space "home" anchor: gradient + particle landmark.
     // Keep this cheap and frame-synced by piggybacking on the main scheduler rAF.
-    try { tickBoardAnchor({ nowMs: frameStart, loopInfo: info, running }); } catch {}
+    // (Visual-only; skip while inside internal board.)
+    if (!__internalActive) {
+      try { tickBoardAnchor({ nowMs: frameStart, loopInfo: info, running }); } catch {}
+    }
     const hasChains = g_chainState && g_chainState.size > 0;
     const allowChainWork = !window.__PERF_DISABLE_CHAIN_WORK;
 

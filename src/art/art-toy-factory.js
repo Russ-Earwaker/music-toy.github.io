@@ -52,6 +52,17 @@ export function createArtToyAt(artType, { centerX, centerY, autoCenter } = {}) {
   circle.className = 'art-toy-circle';
   panel.appendChild(circle);
 
+  // Enter internal-board UI.
+  // First pass: a simple button that asks main.js to open internal mode.
+  const musicBtn = document.createElement('button');
+  musicBtn.className = 'art-toy-music-btn';
+  musicBtn.type = 'button';
+  musicBtn.textContent = 'Music';
+  musicBtn.setAttribute('aria-label', 'Enter this Art Toy');
+  musicBtn.dataset.action = 'artToy:music';
+  musicBtn.dataset.artToyId = panel.id;
+  panel.appendChild(musicBtn);
+
   board.appendChild(panel);
 
   // First pass: placeholder flash API (we'll wire note events later).
@@ -73,4 +84,3 @@ try {
 } catch (err) {
   console.warn('[ArtToyFactory] global registration failed', err);
 }
-
