@@ -160,7 +160,31 @@ export function installGeneratorButtons(panel, apiHooks = {}, opts = {}) {
       right.appendChild(sel);
     }
 
-    instBtn.addEventListener('click', async () => {
+    const DBG = localStorage.getItem('mt_dbg_header') === '1';
+    instBtn.addEventListener('pointerdown', (e) => {
+      if (!DBG) return;
+      try {
+        console.info('[DG][instBtn][DBG] pointerdown', {
+          panelId: panel.id || null,
+          toyId: panel.dataset?.toyid || panel.dataset?.toy || null,
+          defaultPrevented: !!e.defaultPrevented,
+          cancelBubble: !!e.cancelBubble,
+          pointerType: e.pointerType,
+        });
+      } catch {}
+    }, true);
+
+    instBtn.addEventListener('click', async (e) => {
+      if (DBG) {
+        try {
+          console.info('[DG][instBtn][DBG] click', {
+            panelId: panel.id || null,
+            toyId: panel.dataset?.toyid || panel.dataset?.toy || null,
+            defaultPrevented_before: !!e.defaultPrevented,
+            cancelBubble_before: !!e.cancelBubble,
+          });
+        } catch {}
+      }
       try {
         const { openInstrumentPicker } = await import('./instrument-picker.js');
         const { getDisplayNameForId } = await import('./instrument-catalog.js');

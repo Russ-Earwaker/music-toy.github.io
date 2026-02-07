@@ -1474,7 +1474,12 @@ body.advanced-controls-disabled [data-adv] {
   /* Animation */
   transform: scale(1);
   opacity: 1;
-  transition: transform 220ms cubic-bezier(0.2, 0.9, 0.2, 1), opacity 220ms cubic-bezier(0.2, 0.9, 0.2, 1);
+  /* Enter/Exit animation timings (exit intentionally slower) */
+  --internal-board-enter-ms: 260ms;
+  --internal-board-exit-ms: 520ms;
+  transition:
+    transform var(--internal-board-enter-ms) cubic-bezier(0.2, 0.9, 0.2, 1),
+    opacity   var(--internal-board-enter-ms) cubic-bezier(0.2, 0.9, 0.2, 1);
   will-change: transform, opacity;
   /* We set transform-origin dynamically in JS to match the source art toy position. */
 }
@@ -1490,6 +1495,7 @@ body.advanced-controls-disabled [data-adv] {
 #internal-board-overlay.is-exiting {
   transform: scale(0.02);
   opacity: 0;
+  transition-duration: var(--internal-board-exit-ms), var(--internal-board-exit-ms);
 }
 
 /* The framed "window" for the internal board (so it doesn't feel like top-level). */
@@ -1516,8 +1522,12 @@ body.advanced-controls-disabled [data-adv] {
   /* The frame itself provides the "window" background. */
   background: rgba(0, 0, 0, 0.90);
   /* Animation friendliness */
+  transform: scale(1);
+  opacity: 1;
+  transition: transform var(--internal-board-enter-ms, 260ms) cubic-bezier(0.2, 0.9, 0.2, 1),
+              opacity   var(--internal-board-enter-ms, 260ms) cubic-bezier(0.2, 0.9, 0.2, 1);
   transform-origin: center center;
-  will-change: transform;
+  will-change: transform, opacity;
 }
 
 #internal-board-topbar {

@@ -33,6 +33,7 @@ import { getArtCatalog, createArtToyAt } from './art/art-toy-factory.js';
 import './board-tap-dots.js';
 import { initAudioAssets, cancelScheduledToySources, triggerInstrument } from './audio-samples.js';
 import { loadInstrumentEntries as loadInstrumentCatalog, getInstrumentEntries as getInstrumentCatalogEntries } from './instrument-catalog.js';
+import { openInstrumentPicker } from './instrument-picker.js';
 import { collectUsedInstruments, getSoundThemeKey, pickInstrumentForToy } from './sound-theme.js';
 import { installIOSAudioUnlock } from './ios-audio-unlock.js';
 import { installAudioDiagnostics } from './audio-diagnostics.js';
@@ -76,6 +77,37 @@ const g_artInternal = {
     internalWorldPrevId: null,
   },
 };
+
+// ---------------------------------------------------------------------------
+// Internal Board: Animation debug (gated)
+// Enable with: localStorage.INTERNAL_BOARD_ANIM_DBG = "1"
+// ---------------------------------------------------------------------------
+function internalAnimDbgEnabled(){
+  try { return localStorage.getItem('INTERNAL_BOARD_ANIM_DBG') === '1'; } catch {}
+  return false;
+}
+function dbgInternalOverlay(tag, overlay){
+  if (!internalAnimDbgEnabled()) return;
+  try {
+    const cs = overlay ? getComputedStyle(overlay) : null;
+    console.log('[InternalBoard][ANIM]', tag, {
+      hasOverlay: !!overlay,
+      classes: overlay ? Array.from(overlay.classList) : [],
+      display: cs?.display,
+      opacity: cs?.opacity,
+      transform: cs?.transform,
+      transition: cs?.transition,
+      transitionProperty: cs?.transitionProperty,
+      transitionDuration: cs?.transitionDuration,
+      transitionTiming: cs?.transitionTimingFunction,
+      willChange: cs?.willChange,
+      rect: overlay ? overlay.getBoundingClientRect() : null,
+      bodyActive: document.body.classList.contains('internal-board-active'),
+    });
+  } catch (err) {
+    console.warn('[InternalBoard][ANIM] dbg failed', err);
+  }
+}
 
 // Perf trace support (demon hunting). Safe/no-op unless toggled in perf-lab.
 installRafBoundaryFlag();
@@ -2012,6 +2044,14 @@ function ensureInternalBoardOverlay() {
     const panel = header.closest('.toy-panel');
     if (!panel) return;
 
+    // If the pointerdown started on an interactive control, DO NOT start a drag.
+    // Otherwise we suppress the click (which is exactly what you're seeing in internal-board).
+    // This keeps Random/Clear/Instrument/etc working.
+    const interactive = e.target?.closest?.(
+      'button, a, select, input, textarea, [role="button"], [data-action], .c-btn, .toy-inst-btn'
+    );
+    if (interactive) return;
+
     // Only drag toys that are actually inside the current internal board.
     // (We mark internal toys with data-art-owner-id already.)
     const owner = panel.dataset?.artOwnerId || panel.getAttribute('data-art-owner-id');
@@ -2081,25 +2121,35 @@ function getArtToyClientCenter(artToyId) {
 }
 
 function animateInternalBoardIn(artToyId) {
-  const { overlay } = ensureInternalBoardOverlay();
-  if (!overlay) return;
+  const { frame } = ensureInternalBoardOverlay();
+  if (!frame) return;
 
   const c = getArtToyClientCenter(artToyId);
-  // If we can't resolve it (rare), fall back to center screen.
+  // If we can’t resolve it (rare), fall back to center screen.
   const ox = c ? c.x : window.innerWidth * 0.5;
   const oy = c ? c.y : window.innerHeight * 0.5;
 
-  overlay.style.transformOrigin = `${ox}px ${oy}px`;
+  frame.style.transformOrigin = `${ox}px ${oy}px`;
 
-  // Force initial state.
-  overlay.classList.add('is-entering');
-  overlay.classList.remove('is-exiting');
+  // Enter animation: do it with inline styles so we don't depend on any CSS selector winning the cascade.
+  // 1) Set start state with transitions temporarily disabled
+  try {
+    frame.style.transition = 'none';
+    frame.style.transform = 'scale(0.02)';
+    frame.style.opacity = '0';
+    void frame.getBoundingClientRect(); // commit start state
+  } catch {}
 
-  // Next frame, transition to full size.
+  // 2) Re-enable transitions and animate to end state on next frame(s)
   requestAnimationFrame(() => {
-    // If we got closed before the rAF hits, bail.
-    if (!document.body.classList.contains('internal-board-active')) return;
-    overlay.classList.remove('is-entering');
+    requestAnimationFrame(() => {
+      if (!document.body.classList.contains('internal-board-active')) return;
+      try { frame.style.transition = ''; } catch {}
+      try {
+        frame.style.transform = 'scale(1)';
+        frame.style.opacity = '1';
+      } catch {}
+    });
   });
 }
 
@@ -2131,7 +2181,7 @@ function animateInternalBoardOut(artToyId, onDone) {
   overlay.addEventListener('transitionend', onEnd, true);
 
   // Safety: in case transitionend doesn't fire.
-  setTimeout(finish, 320);
+  setTimeout(finish, 900);
 }
 
 function getInternalPanelsForArtToy(artToyId) {
@@ -2272,6 +2322,8 @@ function enterInternalBoard(artToyId) {
   document.body.classList.add('internal-board-active');
   overlay.classList.add('is-active');
   overlay.classList.remove('is-exiting');
+
+  dbgInternalOverlay('enter:after-active-class', overlay);
 
   // Make internal board camera match the current main-board camera on enter.
   setInternalBoardTransform(snap.scale, snap.tx, snap.ty);
@@ -5321,12 +5373,78 @@ async function boot(){
           dg.clear({ user: true, reason: 'user-clear-button' });
         } else {
           panel.dispatchEvent(new CustomEvent('toy-clear', {
-            bubbles: false,
+            bubbles: true,
+            composed: true,
             detail: { user: true, reason: 'user-clear-button' }
           }));
         }
       } catch (err) {
         console.warn('[MAIN] clear dispatch failed', err);
+      }
+    }, true);
+
+    // Internal-board: header buttons need to behave exactly like the main board.
+    // In internal mode we temporarily swap board identity (#board / .board-viewport).
+    // Some toys rely on global delegates; keep this scoped delegate as a safety net.
+    document.addEventListener('click', async (e) => {
+      if (!document.body.classList.contains('internal-board-active')) return;
+
+      const btn = e.target?.closest?.('[data-action]');
+      if (!btn) return;
+      const action = btn.dataset.action;
+      if (!action) return;
+
+      // If the button explicitly opts out of delegates (e.g. scoped random), respect it.
+      if (btn.dataset.skipHeaderDelegate === '1') return;
+
+      const panel = btn.closest?.('.toy-panel');
+      if (!panel) return;
+
+      // Randomize variants
+      if (action === 'random') {
+        try {
+          panel.dispatchEvent(new CustomEvent('toy-random', { bubbles: true, composed: true }));
+        } catch {}
+        return;
+      }
+      if (action === 'random-notes') {
+        try {
+          panel.dispatchEvent(new CustomEvent('toy-random-notes', { bubbles: true, composed: true }));
+        } catch {}
+        return;
+      }
+      if (action === 'random-blocks') {
+        try {
+          panel.dispatchEvent(new CustomEvent('toy-random-blocks', { bubbles: true, composed: true }));
+        } catch {}
+        return;
+      }
+
+      // Instrument picker
+      if (action === 'instrument') {
+        try {
+          const chosen = await openInstrumentPicker({
+            panel,
+            toyId: (panel.dataset.audiotoyid || panel.dataset.toyid || panel.dataset.toy || panel.id || 'master'),
+          });
+          if (!chosen) return;
+          const val = String((typeof chosen === 'string' ? chosen : chosen?.value) || '');
+          if (!val) return;
+          const chosenNote = (typeof chosen === 'object' && chosen) ? chosen.note : null;
+          const chosenOctave = (typeof chosen === 'object' && chosen) ? chosen.octave : null;
+          const chosenPitchShift = (typeof chosen === 'object' && chosen) ? chosen.pitchShift : null;
+
+          panel.dataset.instrument = val;
+          panel.dataset.instrumentPersisted = '1';
+          if (chosenOctave !== null && chosenOctave !== undefined) panel.dataset.instrumentOctave = String(chosenOctave);
+          if (chosenPitchShift !== null && chosenPitchShift !== undefined) panel.dataset.instrumentPitchShift = chosenPitchShift ? '1' : '0';
+          if (chosenNote) panel.dataset.instrumentNote = String(chosenNote);
+          else delete panel.dataset.instrumentNote;
+
+          try { panel.dispatchEvent(new CustomEvent('toy-instrument', { bubbles: true, composed: true, detail:{ value: val, note: chosenNote, octave: chosenOctave, pitchShift: chosenPitchShift } })); } catch {}
+          try { panel.dispatchEvent(new CustomEvent('toy:instrument', { detail:{ name: val, value: val, note: chosenNote, octave: chosenOctave, pitchShift: chosenPitchShift }, bubbles:true })); } catch {}
+        } catch {}
+        return;
       }
     }, true);
     document.querySelectorAll('.toy-panel').forEach(initToyChaining);

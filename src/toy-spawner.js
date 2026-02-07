@@ -1,5 +1,6 @@
 // src/toy-spawner.js
 // Provides the "Create Toy" palette dock and drag-to-spawn affordance.
+import { screenToWorld } from './board-viewport.js';
 
 import { toggleHelp, isHelpActive } from './help-overlay.js';
 import { overviewMode } from './overview-mode.js';
@@ -418,11 +419,11 @@ function spawnAtDefault(entry) {
 
   const targetScreenX = centerX;
   const targetScreenY = viewportRect.top + viewportRect.height * 0.5;
-  const scaleX = Math.max(1e-6, metrics.scaleX || 1);
-  const scaleY = Math.max(1e-6, metrics.scaleY || 1);
-  // Convert viewport screen coords into world/board space, accounting for current zoom.
-  const worldCenterX = (targetScreenX - metrics.rect.left) / scaleX;
-  const worldCenterY = (targetScreenY - metrics.rect.top) / scaleY;
+  // Convert screen coords into world/board space using the same mapping as the main board.
+  // (This correctly accounts for internal-board pan/zoom which may not be a simple CSS scale on #board.)
+  const w = screenToWorld({ x: targetScreenX, y: targetScreenY }) || { x: 0, y: 0 };
+  const worldCenterX = w.x;
+  const worldCenterY = w.y;
   try {
     const internalActive = !!window.__mtInternalBoard?.isActive?.();
     const internalWorld = internalActive ? window.__mtInternalBoard?.getWorldEl?.() : null;
@@ -548,8 +549,11 @@ function clientPointToBoard(clientX, clientY) {
   const localX = clientX - rect.left;
   const localY = clientY - rect.top;
   const inside = localX >= 0 && localY >= 0 && localX <= rect.width && localY <= rect.height;
-  const x = scaleX ? localX / scaleX : localX;
-  const y = scaleY ? localY / scaleY : localY;
+  // Use shared screen->world conversion so internal-board pan/zoom maps correctly.
+  // Keep the "inside" test in screen-space so we still reject drops outside the board rect.
+  const w = screenToWorld({ x: clientX, y: clientY }) || { x: 0, y: 0 };
+  const x = w.x;
+  const y = w.y;
   return { metrics, inside, x, y };
 }
 
