@@ -2,12 +2,27 @@
 import { setGestureTransform, commitGesture, getZoomState } from './zoom/ZoomCoordinator.js';
 import { makeDebugLogger } from './debug-flags.js';
 
-(function () {
+// Board gestures historically bind to the first `.board-viewport` found at boot.
+// Internal boards swap which element owns `.board-viewport`, so we need a safe rebinder.
+let __mtGesturesBoundViewport = null;
+let __mtGesturesOnDown = null;
+
+function __mtGetStageEl() {
+  // IMPORTANT: stage can change when we swap internal board identity (#board).
+  return document.querySelector('main#board, #board, #world, .world, .canvas-world');
+}
+
+function __mtBindBoardGestures() {
   const diagLog = makeDebugLogger('mt_debug_logs');
   const layer = document.getElementById('boardGestureLayer');
   const viewport = document.querySelector('.board-viewport');
-  const stage = document.querySelector('main#board, #board, #world, .world, .canvas-world');
   if (!layer || !viewport) return;
+
+  // Rebind pointerdown to the *current* viewport.
+  if (__mtGesturesBoundViewport && __mtGesturesOnDown) {
+    try { __mtGesturesBoundViewport.removeEventListener('pointerdown', __mtGesturesOnDown); } catch {}
+  }
+  __mtGesturesBoundViewport = viewport;
 
   const SCALE_MIN = 0.3;
   const SCALE_MAX = 4.0;
@@ -71,6 +86,7 @@ import { makeDebugLogger } from './debug-flags.js';
     const baseScale = zoom.targetScale ?? zoom.currentScale ?? 1;
     const baseX = zoom.targetX ?? zoom.currentX ?? 0;
     const baseY = zoom.targetY ?? zoom.currentY ?? 0;
+    const stage = __mtGetStageEl();
     const rect = stage?.getBoundingClientRect();
     const layoutLeft = rect ? rect.left - baseX : 0;
     const layoutTop = rect ? rect.top - baseY : 0;
@@ -244,8 +260,19 @@ import { makeDebugLogger } from './debug-flags.js';
     endGesture(e);
   }
 
+  __mtGesturesOnDown = onDown;
   viewport.addEventListener('pointerdown', onDown, { passive: false });
   window.addEventListener('pointermove', onMove, { passive: false });
   window.addEventListener('pointerup', onUp, { passive: false });
   window.addEventListener('pointercancel', onUp, { passive: false });
+}
+
+// Initial bind at boot.
+(function () {
+  __mtBindBoardGestures();
+  try {
+    window.__rebindBoardGestures = () => {
+      try { __mtBindBoardGestures(); } catch {}
+    };
+  } catch {}
 })();

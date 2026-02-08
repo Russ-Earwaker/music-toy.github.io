@@ -8,6 +8,7 @@ import './perf/toy-update-arbiter.js';
 import { installRafBoundaryFlag, traceDomWrite } from './perf/PerfTrace.js';
 import './advanced-controls-toggle.js';
 import './toy-visibility.js';
+import { attachWorldElement } from './zoom/ZoomCoordinator.js';
 import { onZoomChange, namedZoomListener } from './zoom/ZoomCoordinator.js';
 import { initializeBouncer } from './bouncer-init.js';
 import './header-buttons-delegate.js';
@@ -2256,6 +2257,18 @@ function swapBoardIdentityForInternalMode() {
   // 2) Promote internal world to become #board
   try { internalWorld.id = 'board'; } catch {}
 
+  // 3) Make internal viewport look like the normal board viewport
+  try { internalViewport.classList.add('board-viewport'); } catch {}
+
+  // Re-attach zoom coordinator to the new #board so transforms apply to internal toys.
+  try {
+    const stageNow = document.querySelector('main#board, #board, #world, .world, .canvas-world');
+    if (stageNow) attachWorldElement(stageNow);
+  } catch {}
+
+  // Rebind gesture listeners to the newly promoted `.board-viewport`.
+  try { window.__rebindBoardGestures?.(); } catch {}
+
   swap.didSwap = true;
 }
 
@@ -2293,6 +2306,15 @@ function revertBoardIdentityAfterInternalMode() {
   try {
     if (swap.mainBoardEl) swap.mainBoardEl.id = swap.mainBoardPrevId || 'board';
   } catch {}
+
+  // Re-attach zoom coordinator back to the main board stage.
+  try {
+    const stageNow = document.querySelector('main#board, #board, #world, .world, .canvas-world');
+    if (stageNow) attachWorldElement(stageNow);
+  } catch {}
+
+  // Rebind gesture listeners back to the main `.board-viewport`.
+  try { window.__rebindBoardGestures?.(); } catch {}
 
   swap.didSwap = false;
 }
