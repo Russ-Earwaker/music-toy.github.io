@@ -498,6 +498,248 @@ let g_boardClientHeight = 0;
 let g_chainCanvasWorldLeft = 0;
 let g_chainCanvasWorldTop = 0;
 
+// --- Internal-board transform source of truth ---
+// Internal boards are visually driven by a CSS transform on #internal-board-world.
+// Using g_artInternal.{scale,tx,ty} can drift and causes large chain offsets / wrong scale.
+function getInternalBoardCssTransform(worldEl = null) {
+  try {
+    // During identity swap the internal world is often renamed to #board.
+    // So we accept an explicit worldEl (preferred) and fall back to the best guess.
+    const world =
+      worldEl ||
+      g_artInternal?._swap?.internalWorldEl ||
+      document.getElementById('internal-board-world') ||
+      (g_artInternal?.active ? document.getElementById('board') : null);
+
+    if (!world) return null;
+    const cs = getComputedStyle(world);
+    const tr = cs?.transform;
+    if (!tr || tr === 'none') return { scale: 1, tx: 0, ty: 0, raw: tr || 'none' };
+
+    // DOMMatrixReadOnly is supported in modern browsers; fall back to WebKitCSSMatrix if needed.
+    let m = null;
+    try { m = new DOMMatrixReadOnly(tr); } catch {}
+    if (!m) {
+      try { m = new WebKitCSSMatrix(tr); } catch {}
+    }
+    if (!m) return null;
+
+    // For a 2D matrix:
+    // a/d are scale (when there is no skew), e/f are translation in CSS px.
+    const a = Number(m.a);
+    const d = Number(m.d);
+    const e = Number(m.e);
+    const f = Number(m.f);
+    const scale = (Number.isFinite(a) && Math.abs(a) > 1e-6) ? a : 1;
+    const tx = Number.isFinite(e) ? e : 0;
+    const ty = Number.isFinite(f) ? f : 0;
+    return { scale, tx, ty, raw: tr, a, d, e, f, worldId: world.id || null, worldClass: world.className || null };
+  } catch {
+    return null;
+  }
+}
+
+function chainInternalDbgEnabled(){
+  try { return localStorage.getItem('CHAIN_INTERNAL_DBG') === '1'; } catch {}
+  return false;
+}
+function chainInternalDeepDbgEnabled(){
+  try { return localStorage.getItem('CHAIN_INTERNAL_DEEP_DBG') === '1'; } catch {}
+  return false;
+}
+let g_chainInternalDeepLastLogMs = 0;
+const CHAIN_INTERNAL_DEEP_MIN_INTERVAL_MS = 250; // rate-limit spam
+function dbgChainInternalDeep(tag, extra = null){
+  if (!chainInternalDeepDbgEnabled()) return;
+  const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  // IMPORTANT:
+  // drawChains(pre) fires every frame and can starve more valuable deep logs
+  // (like getChainAnchor) if we apply a single global rate limit.
+  // Allow anchor logs through even when the frame logger is busy.
+  const bypassRateLimit =
+    (typeof tag === 'string') &&
+    (tag.startsWith('getChainAnchor') || tag.startsWith('edgeAnchors') || tag.startsWith('edgeSanity'));
+  if (!bypassRateLimit) {
+    if (now - g_chainInternalDeepLastLogMs < CHAIN_INTERNAL_DEEP_MIN_INTERVAL_MS) return;
+    g_chainInternalDeepLastLogMs = now;
+  }
+  try {
+    const vp = (typeof getViewportElement === 'function') ? getViewportElement() : null;
+    const vpr = vp ? vp.getBoundingClientRect() : null;
+    const board = document.getElementById('board');
+    const cc = chainCanvas;
+    const cs = cc ? getComputedStyle(cc) : null;
+    console.log('[CHAIN][INTERNAL][DEEP]', tag, {
+      internalActive: !!(g_artInternal && g_artInternal.active),
+      artToyId: g_artInternal?.artToyId || null,
+      swapDidSwap: !!g_artInternal?._swap?.didSwap,
+      gArt: { scale: g_artInternal?.scale, tx: g_artInternal?.tx, ty: g_artInternal?.ty },
+      viewportEl: vp ? (vp.id || vp.className) : null,
+      viewportRect: vpr ? { x: vpr.x, y: vpr.y, w: vpr.width, h: vpr.height } : null,
+      boardEl: board ? (board.id || board.className) : null,
+      canvas: cc ? {
+        parent: cc.parentElement ? (cc.parentElement.id || cc.parentElement.className) : null,
+        css: { left: cs?.left, top: cs?.top, width: cs?.width, height: cs?.height, z: cs?.zIndex, display: cs?.display, opacity: cs?.opacity },
+        attr: { w: cc.width, h: cc.height },
+      } : null,
+      extra,
+    });
+  } catch (err) {
+    console.warn('[CHAIN][INTERNAL][DEEP] dbg failed', err);
+  }
+}
+function dbgChainInternal(tag, extra = null){
+  if (!chainInternalDbgEnabled()) return;
+  try {
+    const vp = getViewportElement?.();
+    const board = document.getElementById('board');
+    const cc = chainCanvas;
+    const cs = cc ? getComputedStyle(cc) : null;
+    console.log('[CHAIN][INTERNAL]', tag, {
+      internalActive: !!(g_artInternal && g_artInternal.active),
+      artToyId: g_artInternal?.artToyId || null,
+      heads: g_chainState?.size || 0,
+      edges: g_chainEdges?.size || 0,
+      viewportEl: vp ? (vp.id || vp.className) : null,
+      boardEl: board ? (board.id || board.className) : null,
+      canvas: cc ? {
+        parent: cc.parentElement ? (cc.parentElement.id || cc.parentElement.className) : null,
+        css: { left: cs?.left, top: cs?.top, width: cs?.width, height: cs?.height, z: cs?.zIndex, display: cs?.display, opacity: cs?.opacity },
+        attr: { w: cc.width, h: cc.height },
+      } : null,
+      extra,
+    });
+  } catch (err) {
+    console.warn('[CHAIN][INTERNAL] dbg failed', err);
+  }
+}
+
+// ---------------------------
+// BoardContext (chains only)
+// ---------------------------
+// The main bug-generator so far has been "implicit board identity":
+// different subsystems looking up #board/.board-viewport in different ways (and caching refs),
+// plus internal-mode identity swaps. Chains must not rely on global lookups.
+//
+// We introduce an explicit BoardContext that tells chains:
+// - which viewport element is active
+// - which world element is active
+// - which mode we are in ("main" vs "internal")
+//
+// For now we ONLY migrate chains to this abstraction.
+function getActiveBoardContext() {
+  const internalActive = !!(g_artInternal && g_artInternal.active);
+  if (internalActive) {
+    const viewportEl =
+      (g_artInternal?._els?.viewport) ||
+      document.getElementById('internal-board-viewport') ||
+      (typeof getViewportElement === 'function' ? getViewportElement() : null) ||
+      document.querySelector('.board-viewport');
+
+    const worldEl =
+      document.getElementById('internal-board-world') ||
+      document.getElementById('board');
+
+    return { key: 'internal', viewportEl, worldEl };
+  }
+
+  const viewportEl =
+    (typeof getViewportElement === 'function' ? getViewportElement() : null) ||
+    document.querySelector('.board-viewport');
+
+  const worldEl = document.getElementById('board');
+  return { key: 'main', viewportEl, worldEl };
+}
+
+// Chains need a per-context layer (canvas + wrapper + cached sizing) so that:
+// - main caches can't leak into internal
+// - internal caches can't leak back to main
+// - swapping modes doesn't require fragile global invalidation hacks
+const g_chainLayerByBoardKey = new Map();
+function getOrCreateChainLayer(boardKey) {
+  let layer = g_chainLayerByBoardKey.get(boardKey);
+  if (layer) return layer;
+
+  const canvas = document.createElement('canvas');
+  canvas.className = 'chain-canvas';
+  Object.assign(canvas.style, {
+    position: 'absolute',
+    inset: '0',
+    pointerEvents: 'none',
+    zIndex: '50',
+    display: 'block',
+    opacity: '1',
+    mixBlendMode: 'normal',
+  });
+
+  const ctx = canvas.getContext('2d');
+  layer = {
+    boardKey,
+    canvas,
+    ctx,
+    wrapper: null,
+    // per-context cached sizing & origin bookkeeping
+    cache: {
+      boardClientWidth: 0,
+      boardClientHeight: 0,
+      worldLeft: NaN,
+      worldTop: NaN,
+    },
+  };
+  g_chainLayerByBoardKey.set(boardKey, layer);
+  return layer;
+}
+
+// Ensure the chain canvas is attached to the current active board.
+// In internal-board mode we swap identity so `#board` points at the internal world;
+// without reattaching, connectors will keep drawing onto the *old* board.
+function ensureChainCanvasAttachedToActiveBoard(boardCtx = null) {
+  const ctx = boardCtx || getActiveBoardContext();
+  const viewport = ctx?.viewportEl;
+  if (!viewport) return;
+
+  const layer = getOrCreateChainLayer(ctx.key);
+
+  // Prefer a stable wrapper in the viewport (avoids clipping/stacking-context weirdness).
+  let wrapper = viewport.querySelector?.(':scope > .chain-canvas-wrapper') || null;
+  if (!wrapper) {
+    wrapper = document.createElement('div');
+    wrapper.className = 'chain-canvas-wrapper';
+    Object.assign(wrapper.style, {
+      position: 'absolute',
+      inset: '0',
+      zIndex: '50',
+      pointerEvents: 'none',
+      isolation: 'isolate',
+    });
+    // Appending ensures we're late in DOM order (helps in internal overlay stacks).
+    try { viewport.appendChild(wrapper); } catch {}
+  }
+  try {
+    wrapper.style.zIndex = '50';
+    wrapper.style.pointerEvents = 'none';
+    wrapper.style.isolation = 'isolate';
+  } catch {}
+
+  layer.wrapper = wrapper;
+
+  // Attach canvas into this context's wrapper
+  if (layer.canvas.parentElement !== wrapper) {
+    try { wrapper.appendChild(layer.canvas); } catch {}
+    // Invalidate ONLY this context's cached sizing/origin
+    layer.cache.worldLeft = NaN;
+    layer.cache.worldTop = NaN;
+    layer.cache.boardClientWidth = 0;
+    layer.cache.boardClientHeight = 0;
+  }
+
+  // Point legacy globals at the active layer (so the rest of the chain code keeps working)
+  chainCanvas = layer.canvas;
+  chainCtx = layer.ctx;
+
+  dbgChainInternal('ensureChainCanvasAttachedToActiveBoard', { boardKey: ctx.key, viewportId: viewport.id || null });
+}
+
 /**
  * @typedef {Object} Edge
  * @property {string} id
@@ -555,7 +797,7 @@ function installChainPositionObserver() {
 
     const now = performance.now();
     if (now - g_chainPosLastFlushMs < CHAIN_POS_OBS_MIN_INTERVAL_MS) {
-      // Re-schedule if we�re being spammed.
+      // Re-schedule if we?re being spammed.
       g_chainPosFlushRaf = requestAnimationFrame(flush);
       return;
     }
@@ -576,7 +818,7 @@ function installChainPositionObserver() {
   flush.__perfRafTag = 'perf.raf.chainPosFlush';
 
   g_chainPosObserver = new MutationObserver((mutations) => {
-    // Only care when focus editing or overview � basically anytime connectors might be visible.
+    // Only care when focus editing or overview ? basically anytime connectors might be visible.
     // (This keeps us from doing work in totally irrelevant states.)
     const boardEl = document.getElementById('board');
     const overviewActive =
@@ -1033,7 +1275,7 @@ mainLog('[MAIN] module start');
         --toy-outline-pulse-w: 8px;    /* pulse peak pre-zoom width */
         --toy-outline-color: hsl(222, 100%, 80%);
       }
-      /* NORMAL MODE � full-frame outline visible */
+      /* NORMAL MODE ? full-frame outline visible */
       .toy-panel.toy-playing{
         outline: none;
         box-shadow:
@@ -1065,7 +1307,7 @@ mainLog('[MAIN] module start');
       .toy-panel:not(.overview-outline).toy-playing-pulse{
         animation: playingPulseAdaptive 0.3s ease-out;
       }
-      /* OVERVIEW � suppress full-frame outline so only body overlay shows */
+      /* OVERVIEW ? suppress full-frame outline so only body overlay shows */
       .toy-panel.overview-outline.toy-playing{
         box-shadow: var(--toy-panel-shadow, 0 8px 24px rgba(0, 0, 0, 0.35));
       }
@@ -1210,7 +1452,7 @@ function initFpsHud() {
         const toyCount = document.querySelectorAll('.toy-panel').length || 1;
         updateParticleQualityFromFps(__fpsValue, { toyCount });
       } catch (err) {
-        // ignore � debug-only feature should never crash the app
+        // ignore ? debug-only feature should never crash the app
       }
     }
 
@@ -1572,7 +1814,7 @@ function syncBodyOutline(panel){
 
     panel.classList.toggle('overview-outline', isOverviewLike);
 
-    // Defensive: if either header or footer is visible, make sure we�re not suppressing the outer outline
+    // Defensive: if either header or footer is visible, make sure we?re not suppressing the outer outline
     if (!isOverviewLike && panel.classList.contains('overview-outline')) {
       panel.classList.remove('overview-outline');
     }
@@ -2116,6 +2358,24 @@ function setInternalBoardTransform(scale, tx, ty) {
   g_artInternal.tx = Number.isFinite(tx) ? tx : 0;
   g_artInternal.ty = Number.isFinite(ty) ? ty : 0;
 
+  // If we're currently in internal-board mode and have swapped identity,
+  // the *main* board camera system will transform #board for us.
+  // Writing an inline transform here would double-transform and cause
+  // chains/anchors to be offset / wrong scale.
+  const swapped = !!(g_artInternal?._swap?.didSwap);
+
+  // Always seed the internal viewport vars (used by internal-chain drawing and math).
+  try {
+    const { viewport } = ensureInternalBoardOverlay();
+    if (viewport) {
+      viewport.style.setProperty('--bv-scale', String(g_artInternal.scale));
+      viewport.style.setProperty('--bv-tx', `${g_artInternal.tx}px`);
+      viewport.style.setProperty('--bv-ty', `${g_artInternal.ty}px`);
+    }
+  } catch {}
+
+  if (swapped) return;
+
   // Prefer the internal-board overlay's transform helper (keeps dots + toys in sync).
   try {
     if (typeof g_artInternal._applyTransform === 'function') {
@@ -2124,16 +2384,19 @@ function setInternalBoardTransform(scale, tx, ty) {
     }
   } catch {}
 
-  // Fallback: just set the world transform.
+  // Fallback:
+  // - BEFORE swap: we can apply a direct transform so the internal board looks correct immediately.
+  // - AFTER swap: DO NOT apply a world transform here (board-viewport will drive #board),
+  //   otherwise toys get double-transformed and chains drift/scale incorrectly.
   try {
     const { world, viewport } = ensureInternalBoardOverlay();
     if (world) {
-      world.style.transform = `translate(${g_artInternal.tx}px, ${g_artInternal.ty}px) scale(${g_artInternal.scale})`;
-    }
-    if (viewport) {
-      viewport.style.setProperty('--bv-scale', String(g_artInternal.scale));
-      viewport.style.setProperty('--bv-tx', `${g_artInternal.tx}px`);
-      viewport.style.setProperty('--bv-ty', `${g_artInternal.ty}px`);
+      if (swapped) {
+        // Clear any leftover inline transform so camera math stays consistent.
+        world.style.transform = '';
+      } else {
+        world.style.transform = `translate(${g_artInternal.tx}px, ${g_artInternal.ty}px) scale(${g_artInternal.scale})`;
+      }
     }
   } catch {}
 }
@@ -2257,6 +2520,12 @@ function swapBoardIdentityForInternalMode() {
   // 2) Promote internal world to become #board
   try { internalWorld.id = 'board'; } catch {}
 
+  // IMPORTANT:
+  // After this point, the normal board camera system will transform #board based on viewport vars.
+  // If internalWorld still has an inline transform (from setInternalBoardTransform pre-swap),
+  // we get a *double transform* which makes chains appear offset / wrong scale.
+  try { internalWorld.style.transform = ''; } catch {}
+
   // 3) Make internal viewport look like the normal board viewport
   try { internalViewport.classList.add('board-viewport'); } catch {}
 
@@ -2316,6 +2585,18 @@ function revertBoardIdentityAfterInternalMode() {
   // Rebind gesture listeners back to the main `.board-viewport`.
   try { window.__rebindBoardGestures?.(); } catch {}
 
+  // Restore the main-board camera (entering internal mode can cause subsequent camera
+  // writes to hit the wrong viewport when `.board-viewport` is swapped).
+  try {
+    const snap = swap.mainCamSnapshot;
+    const mainViewport = swap.mainViewportEl || document.querySelector('.board-viewport');
+    if (snap && mainViewport) {
+      if (Number.isFinite(snap.scale)) mainViewport.style.setProperty('--bv-scale', String(snap.scale));
+      if (Number.isFinite(snap.tx)) mainViewport.style.setProperty('--bv-tx', String(snap.tx));
+      if (Number.isFinite(snap.ty)) mainViewport.style.setProperty('--bv-ty', String(snap.ty));
+    }
+  } catch {}
+
   swap.didSwap = false;
 }
 
@@ -2329,6 +2610,12 @@ function enterInternalBoard(artToyId) {
 
   // Snapshot the current main-board camera BEFORE we swap.
   const snap = readMainBoardCameraSnapshot();
+
+  // Remember the main-board camera so we can restore it on exit.
+  try {
+    const swap = g_artInternal._swap || (g_artInternal._swap = {});
+    swap.mainCamSnapshot = { scale: snap.scale, tx: snap.tx, ty: snap.ty };
+  } catch {}
 
   // Move internal panels for this art toy into the internal board world.
   const panels = getInternalPanelsForArtToy(artToyId);
@@ -2359,6 +2646,12 @@ function enterInternalBoard(artToyId) {
   // Critical: swap board identity so all existing toy dragging / board math works inside internal mode.
   swapBoardIdentityForInternalMode();
 
+  // Connectors: switch the chain canvas to the internal #board and rebuild geometry for internal toys.
+  try { ensureChainCanvasAttachedToActiveBoard(); } catch {}
+  try { rebuildChainSegments(); } catch {}
+  try { g_chainRedrawPendingFull = true; } catch {}
+  try { scheduleChainRedraw(true); } catch {}
+
   // Animate scale-in from the art toy position.
   try { animateInternalBoardIn(artToyId); } catch {}
 
@@ -2385,6 +2678,12 @@ function exitInternalBoardImmediate() {
 
   // Revert the #board + .board-viewport identity swap.
   revertBoardIdentityAfterInternalMode();
+
+  // Connectors: move chain canvas back to the main #board and rebuild main-board geometry.
+  try { ensureChainCanvasAttachedToActiveBoard(); } catch {}
+  try { rebuildChainSegments(); } catch {}
+  try { g_chainRedrawPendingFull = true; } catch {}
+  try { scheduleChainRedraw(true); } catch {}
 
   g_artInternal.active = false;
   g_artInternal.artToyId = null;
@@ -3331,6 +3630,30 @@ function initToyChaining(panel) {
         const overviewActiveAtCreate = overviewActive;
         const oldNextId = sourcePanel.dataset.nextToyId || null;
 
+        // -----------------------------------------------------------------
+        // Internal-board ownership propagation
+        // -----------------------------------------------------------------
+        // In internal mode, chain visuals are filtered by art-toy ownership.
+        // The chain button creates new panels directly, so we MUST stamp the
+        // same owner metadata onto the spawned child panel, otherwise the
+        // scheduler will play but connector edges will be filtered out.
+        try {
+            const parentOwner =
+                (sourcePanel && sourcePanel.dataset && sourcePanel.dataset.artOwnerId) ? sourcePanel.dataset.artOwnerId : '';
+            const internalActive = !!(g_artInternal && g_artInternal.active);
+            const internalOwner = internalActive ? (g_artInternal.artToyId || '') : '';
+            const resolvedOwner = internalOwner || parentOwner;
+            if (resolvedOwner) {
+                newPanel.dataset.artOwnerId = resolvedOwner;
+            }
+            // Helpful explicit flag: "this panel belongs to an internal board world"
+            if (internalActive) {
+                newPanel.dataset.internalBoardOwner = '1';
+            } else if (sourcePanel?.dataset?.internalBoardOwner) {
+                newPanel.dataset.internalBoardOwner = sourcePanel.dataset.internalBoardOwner;
+            }
+        } catch {}
+
         // Lock the chain immediately to avoid multi-click races before async init completes.
         sourcePanel.dataset.nextToyId = newPanel.id;
         newPanel.dataset.prevToyId = sourcePanel.id;
@@ -3496,6 +3819,9 @@ function initToyChaining(panel) {
                     syncOverviewPosition(newPanel);
                     updateChains();
                     updateAllChainUIs();
+                    // Ensure connector geometry is rebuilt immediately (important for internal mode).
+                    try { rebuildChainSegments(); } catch {}
+                    try { scheduleChainRedraw(true); } catch {}
                     delete newPanel.dataset.spawnAutoManaged;
                     delete newPanel.dataset.spawnAutoLeft;
                     delete newPanel.dataset.spawnAutoTop;
@@ -3516,6 +3842,9 @@ function initToyChaining(panel) {
 
                 updateChains();
                 updateAllChainUIs();
+                // Ensure connector geometry is rebuilt immediately (important for internal mode).
+                try { rebuildChainSegments(); } catch {}
+                try { scheduleChainRedraw(true); } catch {}
                 delete newPanel.dataset.spawnAutoManaged;
                 delete newPanel.dataset.spawnAutoLeft;
                 delete newPanel.dataset.spawnAutoTop;
@@ -3678,6 +4007,23 @@ function createToyPanelAt(toyType, {
     }
     const board = containerEl || document.getElementById('board');
     if (!board) return null;
+
+    // ---------------------------------------------------------------------
+    // Internal Board: auto-tag spawned toys with the active Art Toy owner.
+    //
+    // Chain connector drawing inside internal boards filters strictly by
+    // panel.dataset.artOwnerId matching g_artInternal.artToyId.
+    // If we spawn toys into the internal board without tagging ownership,
+    // playback can still work, but connector geometry is skipped -> edges: 0.
+    // ---------------------------------------------------------------------
+    let resolvedArtOwnerId = artOwnerId;
+    try {
+        const internalActive = !!(g_artInternal && g_artInternal.active);
+        const spawningIntoInternalWorld = (board && board.id === 'internal-board-world');
+        if (internalActive && spawningIntoInternalWorld && !resolvedArtOwnerId) {
+            resolvedArtOwnerId = g_artInternal.artToyId || null;
+        }
+    } catch {}
     const shouldHintOffscreenResolved = (typeof shouldHintOffscreen === 'boolean') ? shouldHintOffscreen : !!autoCenter;
     let chosenInstrument = instrument;
     if (!chosenInstrument) {
@@ -3730,9 +4076,9 @@ function createToyPanelAt(toyType, {
     panel.style.top = `${top}px`;
 
     // If this was spawned inside an Art Toy internal board, tag it for ownership.
-    if (artOwnerId) {
-        panel.dataset.artOwnerId = String(artOwnerId);
-        panel.dataset.internalBoardOwner = String(artOwnerId);
+    if (resolvedArtOwnerId) {
+        panel.dataset.artOwnerId = String(resolvedArtOwnerId);
+        panel.dataset.internalBoardOwner = String(resolvedArtOwnerId);
     }
 
     board.appendChild(panel);
@@ -3820,20 +4166,39 @@ try {
         getActiveArtToyId: () => g_artInternal?.artToyId || null,
         getWorldEl: () => document.getElementById('internal-board-world'),
         getViewportEl: () => document.getElementById('internal-board-viewport'),
-        // Convert screen coords into internal world coords using the internal board transform state.
+        // Convert screen coords into internal world coords using the *LIVE* internal-board camera.
+        // IMPORTANT: in internal-board mode we drive the camera via the main board camera system
+        // (identity swap). The true current transform lives in CSS vars on the internal viewport:
+        //   --bv-scale, --bv-tx, --bv-ty
+        // Using g_artInternal.{scale,tx,ty} here can be stale and causes huge offsets / wrong scale.
         clientToWorld: (clientX, clientY) => {
             const viewport = document.getElementById('internal-board-viewport');
             if (!viewport) return null;
+
             const rect = viewport.getBoundingClientRect();
             const localX = clientX - rect.left;
             const localY = clientY - rect.top;
             const inside = localX >= 0 && localY >= 0 && localX <= rect.width && localY <= rect.height;
-            const scale = Math.max(1e-6, Number(g_artInternal?.scale) || 1);
-            const panX = Number(g_artInternal?.tx) || 0;
-            const panY = Number(g_artInternal?.ty) || 0;
+
+            // Read the camera vars that the board-viewport system is actually using right now.
+            // (--bv-tx/--bv-ty are px strings; parseFloat handles that.)
+            let scale = 1;
+            let panX = 0;
+            let panY = 0;
+            try {
+                const cs = getComputedStyle(viewport);
+                const s0 = parseFloat(cs.getPropertyValue('--bv-scale'));
+                const tx0 = parseFloat(cs.getPropertyValue('--bv-tx'));
+                const ty0 = parseFloat(cs.getPropertyValue('--bv-ty'));
+                if (Number.isFinite(s0)) scale = s0;
+                if (Number.isFinite(tx0)) panX = tx0;
+                if (Number.isFinite(ty0)) panY = ty0;
+            } catch {}
+
+            scale = Math.max(1e-6, Number(scale) || 1);
             const x = (localX - panX) / scale;
             const y = (localY - panY) / scale;
-            return { inside, x, y, rect, scaleX: scale, scaleY: scale };
+            return { inside, x, y, rect, localX, localY, scaleX: scale, scaleY: scale, panX, panY };
         },
     });
 } catch (err) {
@@ -3975,6 +4340,53 @@ chainBtnStyle.textContent = `
 document.head.appendChild(chainBtnStyle);
 
 function getChainAnchor(panel, side = 'right') {
+  // Internal board: panels live inside a different viewport/world that is transformed
+  // independently. Using style.left/top math here can drift/offset under pan+zoom.
+  // Prefer a rect->world conversion using the internal board's transform when active.
+  try {
+    const internalActive = !!(g_artInternal && g_artInternal.active);
+    const inInternal = internalActive && !!panel?.closest?.('#internal-board-world');
+    if (inInternal) {
+      const pr = panel.getBoundingClientRect();
+
+      // Anchor vertically at the toy body center if available (matches main-board behaviour).
+      let clientY = pr.top + pr.height * 0.5;
+      const body = panel.querySelector?.('.toy-body');
+      if (body) {
+        const br = body.getBoundingClientRect();
+        if (br && Number.isFinite(br.top) && Number.isFinite(br.height)) {
+          clientY = br.top + br.height * 0.5;
+        }
+      }
+
+      const clientX = (side === 'left') ? pr.left : pr.right;
+
+      // Internal board: prefer the internal helper which reads the live CSS camera vars.
+      let wHelper = null;
+      try { wHelper = window.__mtInternalBoard?.clientToWorld?.(clientX, clientY) || null; } catch {}
+
+      dbgChainInternalDeep('getChainAnchor(internal)', {
+        panelId: panel?.id || null,
+        side,
+        client: { x: clientX, y: clientY },
+        panelRect: pr ? { x: pr.x, y: pr.y, w: pr.width, h: pr.height } : null,
+        world_helper: (wHelper && Number.isFinite(wHelper.x) && Number.isFinite(wHelper.y)) ? { x: wHelper.x, y: wHelper.y } : null,
+        helper_meta: (wHelper && wHelper.rect) ? {
+          vp: { x: wHelper.rect.x, y: wHelper.rect.y, w: wHelper.rect.width, h: wHelper.rect.height },
+          local: (Number.isFinite(wHelper.localX) && Number.isFinite(wHelper.localY)) ? { x: wHelper.localX, y: wHelper.localY } : null,
+          scale: Number.isFinite(wHelper.scaleX) ? wHelper.scaleX : null,
+          pan: (Number.isFinite(wHelper.panX) && Number.isFinite(wHelper.panY)) ? { x: wHelper.panX, y: wHelper.panY } : null,
+          inside: !!wHelper.inside,
+        } : null,
+      });
+
+      if (wHelper && Number.isFinite(wHelper.x) && Number.isFinite(wHelper.y)) {
+        return { x: wHelper.x, y: wHelper.y };
+      }
+
+    }
+  } catch {}
+
   // Board-space coordinates of where the connector should start/end, accounting for scale transforms.
   const left = (parseFloat(panel.style.left) || 0);
   const top  = (parseFloat(panel.style.top)  || 0);
@@ -4003,6 +4415,14 @@ function getConnectorAnchorPoints(fromPanel, toPanel) {
   if (!fromPanel || !toPanel) return null;
   const a1 = getChainAnchor(fromPanel, 'right');
   const a2 = getChainAnchor(toPanel, 'left');
+  // Deep debug: capture the raw anchor points we are feeding into the edge.
+  // Enable with: localStorage.CHAIN_INTERNAL_DEEP_DBG="1"
+  dbgChainInternalDeep('edgeAnchors', {
+    fromId: fromPanel?.id || null,
+    toId: toPanel?.id || null,
+    a1: (a1 && Number.isFinite(a1.x) && Number.isFinite(a1.y)) ? { x: a1.x, y: a1.y } : a1,
+    a2: (a2 && Number.isFinite(a2.x) && Number.isFinite(a2.y)) ? { x: a2.x, y: a2.y } : a2,
+  });
   return { a1, a2 };
 }
 
@@ -4031,6 +4451,9 @@ function rebuildChainSegments() {
   const board = document.getElementById('board');
   if (!board || !g_chainState || g_chainState.size === 0) return;
 
+  const internalActive = !!(g_artInternal && g_artInternal.active);
+  const activeArtToyId = internalActive ? (g_artInternal.artToyId || null) : null;
+
   for (const headId of g_chainState.keys()) {
     let current = document.getElementById(headId);
     const visited = new Set();
@@ -4043,10 +4466,20 @@ function rebuildChainSegments() {
       const next = document.getElementById(nextId);
       if (!next) break;
 
-      // Art Toy internal chains should NOT draw connectors on the main board.
-      if (current.dataset.artOwnerId || next.dataset.artOwnerId) {
-        current = next;
-        continue;
+      if (!internalActive) {
+        // Main board: Art Toy internal chains should NOT draw connectors.
+        if (current.dataset.artOwnerId || next.dataset.artOwnerId) {
+          current = next;
+          continue;
+        }
+      } else {
+        // Internal board: ONLY draw connectors for panels owned by the active art toy.
+        const aOwner = current.dataset.artOwnerId;
+        const bOwner = next.dataset.artOwnerId;
+        if (!activeArtToyId || aOwner !== activeArtToyId || bOwner !== activeArtToyId) {
+          current = next;
+          continue;
+        }
       }
 
       const anchors = getConnectorAnchorPoints(current, next);
@@ -4074,7 +4507,7 @@ function rebuildChainSegments() {
 
       g_chainEdges.set(edgeId, edge);
 
-      // Adjacency index � useful for future detach/reattach UX.
+      // Adjacency index ? useful for future detach/reattach UX.
       let fromSet = g_edgesByToyId.get(current.id);
       if (!fromSet) {
         fromSet = new Set();
@@ -4095,32 +4528,87 @@ function rebuildChainSegments() {
 }
 
 function drawChains(forceFull = false) {
-  // While inside an Art Toy's internal board, the main board should not visually update.
-  if (g_artInternal && g_artInternal.active) return;
   if (window.__PERF_DISABLE_CHAINS) return;
   if (!CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) return;
+
+  const boardCtx = getActiveBoardContext();
+  const layer = getOrCreateChainLayer(boardCtx.key);
+
+  // Ensure chain canvas is attached to the active context's viewport.
+  try { ensureChainCanvasAttachedToActiveBoard(boardCtx); } catch {}
   if (!chainCanvas || !chainCtx) return;
+
+  // Per-context sizing cache (prevents main<->internal cache leakage)
+  try {
+    const vp = boardCtx?.viewportEl;
+    layer.cache.boardClientWidth = vp?.clientWidth || 0;
+    layer.cache.boardClientHeight = vp?.clientHeight || 0;
+    // keep legacy globals in sync for debug/compat
+    g_boardClientWidth = layer.cache.boardClientWidth;
+    g_boardClientHeight = layer.cache.boardClientHeight;
+  } catch {}
   const __perfOn = !!(window.__PerfFrameProf && typeof performance !== 'undefined' && performance.now);
 
   const width = g_boardClientWidth || 0;
   const height = g_boardClientHeight || 0;
-  const { scale = 1, tx = 0, ty = 0 } = getViewportTransform() || {};
+  const internalActive = !!(g_artInternal && g_artInternal.active);
+
+  // IMPORTANT:
+  // Chains draw in WORLD coords and we apply a world->screen transform on the 2D ctx.
+  // In internal-board mode, the *source of truth* is the CSS transform on the internal world element
+  // (identity swap can make #board point at internal world, and g_artInternal.{scale,tx,ty} can drift).
+  // So we read the world element’s computed transform instead of using g_artInternal.
+  let scale = 1;
+  let tx = 0;
+  let ty = 0;
+  try {
+    if (internalActive) {
+      // IMPORTANT: during identity swap, internal world may be #board.
+      // Use the active board context’s worldEl so we always read the real element.
+      const cssT = (typeof getInternalBoardCssTransform === 'function')
+        ? getInternalBoardCssTransform(boardCtx?.worldEl || null)
+        : null;
+
+      if (cssT && Number.isFinite(cssT.scale)) {
+        scale = Number(cssT.scale) || 1;
+        tx = Number(cssT.tx) || 0;
+        ty = Number(cssT.ty) || 0;
+        dbgChainInternalDeep?.('internalCssTransform(used)', {
+          css: { scale: cssT.scale, tx: cssT.tx, ty: cssT.ty, raw: cssT.raw, worldId: cssT.worldId, worldClass: cssT.worldClass },
+          gArt: { scale: g_artInternal?.scale, tx: g_artInternal?.tx, ty: g_artInternal?.ty },
+        });
+      } else {
+        // Fallback: should be rare now, but keep it safe.
+        scale = Number(g_artInternal?.scale) || 1;
+        tx = Number(g_artInternal?.tx) || 0;
+        ty = Number(g_artInternal?.ty) || 0;
+        dbgChainInternalDeep?.('internalCssTransformMissing_fallbackToGArt', { boardCtxKey: boardCtx?.key || null });
+      }
+    } else {
+      const t = getViewportTransform() || {};
+      scale = Number(t.scale) || 1;
+      tx = Number(t.tx) || 0;
+      ty = Number(t.ty) || 0;
+    }
+  } catch {}
+
   const safeScale = (Number.isFinite(scale) && Math.abs(scale) > 1e-6) ? scale : 1;
+  if (internalActive) {
+    dbgChainInternalDeep?.('internalCamFinal', { safeScale, tx, ty });
+  }
 
-  // Track the world-space rect covered by the chain canvas so we can reposition it
-  // when the camera pans, even if the viewport size stays the same.
-  const prevWorldLeft = g_chainCanvasWorldLeft;
-  const prevWorldTop  = g_chainCanvasWorldTop;
-
-  // Position the chain canvas in WORLD space so that after board transform
-  // it exactly covers the visible viewport.
-  const tl = screenToWorld({ x: 0, y: 0 });
-  const worldLeft = tl.x;
-  const worldTop  = tl.y;
-
-  // Canvas CSS size in WORLD units so that after scaling it matches viewport pixels.
-  const worldW = width / safeScale;
-  const worldH = height / safeScale;
+  // IMPORTANT:
+  // The chain canvas is a SCREEN-SPACE overlay attached to the active viewport.
+  // Therefore:
+  // - the canvas element is sized/positioned in SCREEN pixels (0,0 .. viewport w/h)
+  // - we draw geometry in WORLD coords and apply the camera transform on the 2D ctx
+  //   (screen = world * scale + translate)
+  //
+  // Previously we attempted to position the canvas in WORLD space (left/top in world
+  // units) while ALSO attaching it as a viewport overlay. That mismatch is what caused
+  // chains to appear ~half-size and massively offset.
+  const worldLeft = 0;
+  const worldTop = 0;
   const edgeCount = g_chainEdges ? g_chainEdges.size : 0;
 
   if (!width || !height) return;
@@ -4134,16 +4622,26 @@ function drawChains(forceFull = false) {
   const canvasW = chainCanvas.width / dpr;
   const canvasH = chainCanvas.height / dpr;
 
+  dbgChainInternalDeep('drawChains(pre)', {
+    width,
+    height,
+    internalActive: internalActive,
+    edgeCount,
+    cam: { scale, tx, ty, safeScale, worldLeft, worldTop },
+    dpr: { device: devicePixelRatioForChains, mul: CHAIN_CANVAS_RESOLUTION_SCALE, effective: dpr },
+    canvasLogical: { w: canvasW, h: canvasH },
+  });
+
   // --- Phase 1: resize canvas if board viewport changed ---
   let tAfterResize = tStart;
-  const sizeChanged = forceFull || canvasW !== worldW || canvasH !== worldH;
-  const positionChanged = worldLeft !== prevWorldLeft || worldTop !== prevWorldTop;
+  const sizeChanged = forceFull || canvasW !== width || canvasH !== height;
 
   if (sizeChanged) {
     const tResizeStart = performance.now();
 
-    chainCanvas.width = worldW * dpr;
-    chainCanvas.height = worldH * dpr;
+    // Screen-sized backing buffer (viewport pixels * dpr)
+    chainCanvas.width = width * dpr;
+    chainCanvas.height = height * dpr;
     tAfterResize = performance.now();
 
     if (CHAIN_DEBUG) {
@@ -4153,14 +4651,15 @@ function drawChains(forceFull = false) {
     tAfterResize = performance.now();
   }
 
-  // Always update the canvas positioning if either the size or world origin changed.
-  if (sizeChanged || positionChanged) {
-    chainCanvas.style.left = `${worldLeft}px`;
-    chainCanvas.style.top = `${worldTop}px`;
-    chainCanvas.style.width = `${worldW}px`;
-    chainCanvas.style.height = `${worldH}px`;
-    g_chainCanvasWorldLeft = worldLeft;
-    g_chainCanvasWorldTop = worldTop;
+  // Keep the overlay canvas pinned to the viewport.
+  if (sizeChanged || forceFull) {
+    chainCanvas.style.left = '0px';
+    chainCanvas.style.top = '0px';
+    chainCanvas.style.width = `${width}px`;
+    chainCanvas.style.height = `${height}px`;
+    // Keep bookkeeping for debug/metrics.
+    g_chainCanvasWorldLeft = 0;
+    g_chainCanvasWorldTop = 0;
   }
 
   // --- Phase 2: clear the canvas ---
@@ -4185,7 +4684,14 @@ function drawChains(forceFull = false) {
   }
 
   // --- Phase 3: draw all edges ---
-  chainCtx.setTransform(dpr, 0, 0, dpr, -worldLeft * dpr, -worldTop * dpr);
+  // Apply camera transform directly: screen = world*scale + translate
+  // Include dpr (and CHAIN_CANVAS_RESOLUTION_SCALE via dpr).
+  chainCtx.setTransform(
+    safeScale * dpr, 0,
+    0, safeScale * dpr,
+    tx * dpr,
+    ty * dpr
+  );
 
   const now = performance.now();
   // You can tweak these to taste. Thicker curves = slightly more GPU work.
@@ -4199,7 +4705,7 @@ function drawChains(forceFull = false) {
   const baseStroke = 'hsl(222, 100%, 80%)';
   const pulseStroke = 'hsl(222, 100%, 95%)';
 
-  chainCtx.lineWidth = (baseWidth * 3);
+  chainCtx.lineWidth = (baseWidth * 3) / safeScale;
   chainCtx.strokeStyle = baseStroke;
   chainCtx.beginPath();
   let hasBasePath = false;
@@ -4233,7 +4739,7 @@ function drawChains(forceFull = false) {
     chainCtx.stroke();
   }
   if (pulsingEdges.length) {
-    chainCtx.lineWidth = ((baseWidth + pulseExtraWidth) * 3);
+    chainCtx.lineWidth = ((baseWidth + pulseExtraWidth) * 3) / safeScale;
     chainCtx.strokeStyle = pulseStroke;
     for (const edge of pulsingEdges) {
       chainCtx.beginPath();
@@ -4278,6 +4784,8 @@ function drawChains(forceFull = false) {
   if (__perfOn) {
     window.__PerfFrameProf.mark('chain.draw', performance.now() - tStart);
   }
+
+  dbgChainInternal('drawChains', { forceFull, width, height, scale, tx, ty });
 }
 
 // Shift connector geometry only for segments touching a specific toy by applying
@@ -4285,6 +4793,16 @@ function drawChains(forceFull = false) {
 function updateChainSegmentsForToy(toyId) {
   if (!toyId) return;
   if (!CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) return;
+
+  // In internal-board mode, connector endpoints are derived from DOM rect->world conversion
+  // (see getChainAnchor). The lightweight "delta" update below assumes endpoints track
+  // style.left/top in world units, which is not reliable under internal pan/zoom.
+  // Rebuild geometry instead (still cheap given typical edge counts).
+  if (g_artInternal && g_artInternal.active) {
+    try { rebuildChainSegments(); } catch (err) { if (CHAIN_DEBUG) console.warn('[CHAIN][drag] rebuildChainSegments(internal) failed', err); }
+    try { scheduleChainRedraw(); } catch {}
+    return;
+  }
 
   const panel = document.getElementById(toyId);
   if (!panel || !panel.isConnected) return;
@@ -5158,7 +5676,7 @@ function scheduler(){
       }
 
     } else if (!running && wasRunning) {
-      // Transport just paused � clear steady highlight ONCE (avoid DOM writes inside every rAF frame)
+      // Transport just paused ? clear steady highlight ONCE (avoid DOM writes inside every rAF frame)
       try {
         document.querySelectorAll('.toy-panel').forEach(p => {
           p.classList.remove('toy-playing', 'toy-playing-pulse');
@@ -5334,12 +5852,12 @@ async function boot(){
         chainCanvas.id = 'chain-canvas';
         Object.assign(chainCanvas.style, {
             position: 'absolute',
-            top: '0', left: '0', // width/height are set dynamically in drawChains
+            inset: '0', // width/height are set dynamically in drawChains
             pointerEvents: 'none',
-            zIndex: '0' // Sit behind toy panels and buttons
+            zIndex: '999'
         });
-        board.prepend(chainCanvas);
         chainCtx = chainCanvas.getContext('2d');
+        try { ensureChainCanvasAttachedToActiveBoard(); } catch {}
 
         // IMPORTANT: initialise viewport size immediately so drawChains() doesn't early-out.
         try {
@@ -6120,6 +6638,8 @@ import { PERF_FLAGS } from "./perf-flags.js";
 
 // Expose for live debugging / perf-lab runs
 window.PERF_FLAGS = PERF_FLAGS;
+
+
 
 
 
