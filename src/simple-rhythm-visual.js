@@ -8,12 +8,10 @@ import { createField } from './particles/field-generic.js';
 import { createParticleViewport } from './particles/particle-viewport.js';
 import { getParticleBudget, getAdaptiveFrameBudget } from './particles/ParticleQuality.js';
 import {
-  readForcedTier,
-  pickTierFromTable,
-  stampTierDebugMeta,
   waitForStableBox,
   createToyCanvasRig,
 } from './baseMusicToy/index.js';
+import { getLoopgridTierParams } from './loopgrid/loopgrid-quality.js';
 import { overviewMode } from './overview-mode.js';
 import { onZoomChange, namedZoomListener } from './zoom/ZoomCoordinator.js';
 import { requestPanelPulse } from './pulse-border.js';
@@ -24,35 +22,7 @@ function raf() {
   return new Promise(r => requestAnimationFrame(r));
 }
 
-// --- LoopGrid quality tiers (INERT for now) ---------------------------------
-// Philosophy (matches perf plan + DrawGrid approach):
-// - resScale is a soft multiplier (helps, but not sufficient alone).
-// - maxDprMul is the hard clamp (this is the real nonScript lever).
-// - We wire tier selection now but do NOT apply it until the next patch.
-const __LG_TIER_TABLE = Object.freeze([
-  // tier:0 is "full fat"
-  { id: 0, name: 'full',   resScale: 1.00, maxDprMul: 10.0 },
-  { id: 1, name: 'high',   resScale: 0.90, maxDprMul: 2.00 },
-  { id: 2, name: 'med',    resScale: 0.78, maxDprMul: 1.50 },
-  { id: 3, name: 'low',    resScale: 0.66, maxDprMul: 1.20 },
-  { id: 4, name: 'ultra',  resScale: 0.55, maxDprMul: 1.00 },
-]);
-
-// Choose a tier.
-function getLoopgridTierParams(panel, st) {
-  const forced = readForcedTier({ qlabKey: 'lgForceTier', legacyGlobalKey: '__LG_FORCE_TIER' });
-  // Default remains tier 0 unless a forced tier is present.
-  const pick = pickTierFromTable({ forcedTier: forced, table: __LG_TIER_TABLE, defaultId: 0 });
-  const tierId = pick.tierId;
-  const out = { ...(pick.params || __LG_TIER_TABLE[0]) };
-
-  const forcedMax = (typeof window !== 'undefined') ? window.__LG_FORCE_MAXDPRMUL : null;
-  if (Number.isFinite(forcedMax) && forcedMax > 0) out.maxDprMul = forcedMax;
-
-  // Store debug/telemetry in a standardized way.
-  stampTierDebugMeta({ panel, state: st, key: 'loopgrid', tierId, params: out });
-  return out;
-}
+// LoopGrid quality tiers live in src/loopgrid/loopgrid-quality.js
 
 function getBurstSprite(st, radiusPx, color) {
   if (!st || !Number.isFinite(radiusPx) || radiusPx <= 0) return null;
@@ -434,19 +404,6 @@ function chainHasSequencedNotes(head) {
   return false;
 }
 
-/**
- * Attaches the visual renderer to a grid toy panel.
- * This is called by grid-core.js after the panel's DOM is created.
- */
-function cssRect(el) {
-  if (!el) return { width: 0, height: 0 };
-  const r = el.getBoundingClientRect();
-  return {
-    width: Math.max(1, Math.round(r.width)),
-    height: Math.max(1, Math.round(r.height)),
-  };
-}
-
 function isPanelVisible(panel, st) {
   if (!panel || !panel.getBoundingClientRect) return true;
   const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
@@ -733,6 +690,18 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
   let overviewHandler = null;
   let zoomUnsubscribe = null;
   pv = createParticleViewport(() => {
+    // Prefer rig-truth sizing if available (avoids clip-box mismatches).
+    const rw = (st && st._particleRig && st._particleRig.st) ? (st._particleRig.st.cssW | 0) : 0;
+    const rh = (st && st._particleRig && st._particleRig.st) ? (st._particleRig.st.cssH | 0) : 0;
+    if (rw > 0 && rh > 0) return { w: rw, h: rh };
+
+    const b = st && st._particleFieldBox;
+    if (b && Number.isFinite(b.width) && Number.isFinite(b.height)) {
+      const w = Math.max(1, Math.round(b.width));
+      const h = Math.max(1, Math.round(b.height));
+      return { w, h };
+    }
+
     const host = st?.particleCanvas || sequencerWrap || panel;
     // Match DrawGrid behavior: use unscaled logical size (client box), not zoomed rect.
     const w = Math.max(1, Math.round(host?.clientWidth || 1));
@@ -813,6 +782,17 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
           maxAlpha: 0.85,
           // IMPORTANT: let particles actually respond to pushes
           staticMode: false,
+
+          // LoopGrid tier -> particle DPR control (live, responds to Quality Lab forcing).
+          // This feeds into field-generic's DPR math (visualMul + hard clamp).
+          visualMulMul: () => {
+            const tier = getLoopgridTierParams(panel, st) || null;
+            return (tier && Number.isFinite(tier.resScale) && tier.resScale > 0) ? tier.resScale : 1;
+          },
+          maxDprMul: () => {
+            const tier = getLoopgridTierParams(panel, st) || null;
+            return (tier && Number.isFinite(tier.maxDprMul) && tier.maxDprMul > 0) ? tier.maxDprMul : 1;
+          },
         }
       );
       particleField.resize();

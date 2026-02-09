@@ -646,7 +646,24 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
 
     const deviceDpr = Math.max(1, Math.min(((typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1), 3));
     const zoomNow = readZoom(viewport || pv);
-    const visualMul = __fieldComputeVisualBackingMul(zoomNow);
+    const baseVisualMul = __fieldComputeVisualBackingMul(zoomNow);
+
+    // Optional quality multipliers (toy-driven).
+    // - visualMulMul: additional multiplier on top of zoom-based visualMul
+    // - maxDprMul: hard cap relative to device DPR (<=1 is meaningful)
+    const __readOpt = (v, fallback) => {
+      try {
+        if (typeof v === 'function') {
+          const out = v();
+          return (Number.isFinite(out) && out > 0) ? out : fallback;
+        }
+        return (Number.isFinite(v) && v > 0) ? v : fallback;
+      } catch {
+        return fallback;
+      }
+    };
+    const visualMulMul = __readOpt(opts?.visualMulMul, 1);
+    const visualMul = baseVisualMul * visualMulMul;
     const fallbackDt =
       (Number.isFinite(window.__MT_SM_FPS) && window.__MT_SM_FPS > 0) ? (1 / window.__MT_SM_FPS) :
         ((Number.isFinite(window.__MT_FPS) && window.__MT_FPS > 0) ? (1 / window.__MT_FPS) : (1 / 60));
@@ -665,7 +682,14 @@ export function createField({ canvas, viewport, pausedRef, isFocusedRef, debugLa
     state.visualMul = visualMul;
     state.pressureMul = pressureMul;
     const desiredDprRaw = deviceDpr * visualMul * pressureMul;
-    const desiredDpr = Math.min(deviceDpr, desiredDprRaw);
+    let desiredDpr = Math.min(deviceDpr, desiredDprRaw);
+
+    // Optional hard clamp (toy tier). Only meaningful when <= 1.
+    const maxDprMul = __readOpt(opts?.maxDprMul, null);
+    if (Number.isFinite(maxDprMul) && maxDprMul > 0) {
+      const hardMax = deviceDpr * maxDprMul;
+      if (Number.isFinite(hardMax) && hardMax > 0) desiredDpr = Math.min(desiredDpr, hardMax);
+    }
     state.dpr = capDprForBackingStore(state.w, state.h, desiredDpr, state.dpr, {
       maxBackingPx: opts?.maxBackingPx,
       maxBackingSidePx: opts?.maxBackingSidePx,
