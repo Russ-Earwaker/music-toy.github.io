@@ -5,7 +5,7 @@ import { buildPalette, midiToName } from '../note-helpers.js';
 import { drawBlock } from '../toyhelpers.js';
 import { getLoopInfo, isRunning } from '../audio-core.js';
 import { onZoomChange, getZoomState, getFrameStartState, onFrameStart, namedZoomListener } from '../zoom/ZoomCoordinator.js';
-import { createParticleViewport, createField, getParticleBudget, getAdaptiveFrameBudget, getParticleCap, createToyVisibilityObserver } from '../baseMusicToy/index.js';
+import { createParticleViewport, createField, getParticleBudget, getAdaptiveFrameBudget, getParticleCap, createToyVisibilityObserver, createToyVisibleCounter } from '../baseMusicToy/index.js';
 import { overviewMode } from '../overview-mode.js';
 import { boardScale as boardScaleHelper } from '../board-scale-helpers.js';
 import { beginFrameLayoutCache, getRect } from '../layout-cache.js';
@@ -747,18 +747,19 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let particleCanvasVisible = true;
   let pendingResnapOnVisible = false;
   let lastResnapTs = 0;
-  let countedVisible = false;
-  const updateGlobalVisibility = (visible) => {
-    const next = !!visible;
-    if (next && !countedVisible) {
-      countedVisible = true;
-      globalDrawgridState.visibleCount = Math.max(0, (globalDrawgridState.visibleCount || 0) + 1);
-    } else if (!next && countedVisible) {
-      countedVisible = false;
-      globalDrawgridState.visibleCount = Math.max(0, (globalDrawgridState.visibleCount || 0) - 1);
-    }
-  };
-  updateGlobalVisibility(isPanelVisible);
+  const dgVisibleCounter = createToyVisibleCounter({
+    getCount: () => (Number.isFinite(globalDrawgridState?.visibleCount) ? globalDrawgridState.visibleCount : 0),
+    setCount: (n) => { globalDrawgridState.visibleCount = n; },
+    // Keep this toy-specific so different toys don't collide on the same panel
+    // if they ever share elements (or for debugging clarity).
+    panelFlag: '__dgCountedVisible',
+  });
+  dgVisibleCounter.setPanelVisible(panel, isPanelVisible);
+  try {
+    panel.addEventListener('toy:remove', () => {
+      try { dgVisibleCounter?.clearPanel?.(panel); } catch {}
+    }, { once: true });
+  } catch {}
 
   // DEBUG: prove these are per-instance
   dgTraceLog('[drawgrid] instance-state', panel.id, { scope: 'per-instance' });
@@ -3539,6 +3540,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       try {
         // Preserve existing local semantics / variables.
         isPanelVisible = !!visible;
+        try { dgVisibleCounter.setPanelVisible(panel, isPanelVisible); } catch {}
         if (state !== __dgVisibilityState || Math.abs((ratio || 0) - (__dgLastIntersectionRatio || 0)) > 0.02) {
           __dgSetVisibilityState(state, ratio);
           try {
@@ -3629,7 +3631,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
           pendingResnapOnVisible = false;
           resnapAndRedraw(true);
         }
-        updateGlobalVisibility(isPanelVisible);
+        try { dgVisibleCounter.setPanelVisible(panel, isPanelVisible); } catch {}
         if (isPanelVisible && drawLabelState.drawLabelVisible) {
           ensureLetterPhysicsLoop();
         }
@@ -3662,7 +3664,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   panel.addEventListener('toy:visibility', (e) => {
     if (typeof e?.detail?.visible === 'boolean') {
       isPanelVisible = !!e.detail.visible;
-      updateGlobalVisibility(isPanelVisible);
+      try { dgVisibleCounter.setPanelVisible(panel, isPanelVisible); } catch {}
       if (isPanelVisible && pendingResnapOnVisible) {
         pendingResnapOnVisible = false;
         resnapAndRedraw(true);

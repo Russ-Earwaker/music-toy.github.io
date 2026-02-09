@@ -13,6 +13,7 @@ export { createToyCanvasRig } from './createToyCanvasRig.js';
 export { createToyRelayoutController } from './toyRelayoutController.js';
 export { createGlobalPanelScheduler } from './toyRenderScheduler.js';
 export { createToyVisibilityObserver } from './toyVisibilityObserver.js';
+export { createToyVisibleCounter } from './toyVisibleCounter.js';
 
 // --- Particles (shared infra; toys should not reach into baseMusicToy/particles/* directly)
 export { createParticleViewport } from './particles/particle-viewport.js';
