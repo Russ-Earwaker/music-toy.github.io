@@ -7,6 +7,7 @@ import {
   clampDprForBackingStore,
   createOverlayResizeGate,
   computeEffectiveDpr,
+  resizeCanvasForDpr,
 } from '../baseMusicToy/index.js';
 
 export function createDgBackSync({ state, deps } = {}) {
@@ -165,22 +166,35 @@ export function createDgBackSync({ state, deps } = {}) {
         {
           const oldW = canvas.width|0;
           const oldH = canvas.height|0;
-          // Apply backing-store size via shared helper (keeps DPR metadata cached too).
-          applyCanvasBackingSize(canvas, pxW, pxH, dpr, { cachePrefix: '__bm', alsoCachePrefixes: ['__dg'] });
+
+          if (isOverlayLayer(canvas)) {
+            // Overlays keep their special quantize+stabilize behaviour; apply directly.
+            applyCanvasBackingSize(canvas, pxW, pxH, dpr, { cachePrefix: '__bm', alsoCachePrefixes: ['__dg'] });
+          } else {
+            // Non-overlay layers: route through the shared baseMusicToy truth-point.
+            // Note: CSS size has already been set/cached above; this call is backing-store focused.
+            resizeCanvasForDpr(canvas, null, logicalWidth, logicalHeight, {
+              rawDpr: dpr,
+              cachePrefix: '__bm',
+              alsoCachePrefixes: ['__dg'],
+              skipCssSync: true,
+            });
+          }
+
           const newW = canvas.width|0;
           const newH = canvas.height|0;
 
           if (oldW !== newW) {
-          resizedAny = true;
-          try { window.__PERF_DG_BACKING_RESIZE_COUNT = (window.__PERF_DG_BACKING_RESIZE_COUNT || 0) + 1; } catch {}
-          if (isOverlayLayer(canvas)) { try { window.__PERF_DG_OVERLAY_RESIZE_COUNT = (window.__PERF_DG_OVERLAY_RESIZE_COUNT || 0) + 1; } catch {} }
-        }
+            resizedAny = true;
+            try { window.__PERF_DG_BACKING_RESIZE_COUNT = (window.__PERF_DG_BACKING_RESIZE_COUNT || 0) + 1; } catch {}
+            if (isOverlayLayer(canvas)) { try { window.__PERF_DG_OVERLAY_RESIZE_COUNT = (window.__PERF_DG_OVERLAY_RESIZE_COUNT || 0) + 1; } catch {} }
+          }
           if (oldH !== newH) {
-          resizedAny = true;
-          try { window.__PERF_DG_BACKING_RESIZE_COUNT = (window.__PERF_DG_BACKING_RESIZE_COUNT || 0) + 1; } catch {}
-          if (isOverlayLayer(canvas)) { try { window.__PERF_DG_OVERLAY_RESIZE_COUNT = (window.__PERF_DG_OVERLAY_RESIZE_COUNT || 0) + 1; } catch {} }
-        }
-        // style width/height is already set via styleCanvases above
+            resizedAny = true;
+            try { window.__PERF_DG_BACKING_RESIZE_COUNT = (window.__PERF_DG_BACKING_RESIZE_COUNT || 0) + 1; } catch {}
+            if (isOverlayLayer(canvas)) { try { window.__PERF_DG_OVERLAY_RESIZE_COUNT = (window.__PERF_DG_OVERLAY_RESIZE_COUNT || 0) + 1; } catch {} }
+          }
+          // style width/height is already set via styleCanvases above
         }
       }
       if (resizedAny) {

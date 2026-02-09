@@ -21,9 +21,12 @@ export function resizeCanvasForDpr(canvas, ctx, cssW, cssH, opts = {}) {
 
   const cachePrefix = opts.cachePrefix || '__bm';
   const alsoCachePrefixes = Array.isArray(opts.alsoCachePrefixes) ? opts.alsoCachePrefixes : null;
+  const skipCssSync = opts && opts.skipCssSync === true;
 
-  // Keep CSS size authoritative + cached (no layout reads here).
-  syncCanvasCssSize(canvas, w, h, { cachePrefix });
+  // Keep CSS size authoritative + cached (no layout reads here) unless caller already did it.
+  if (!skipCssSync) {
+    syncCanvasCssSize(canvas, w, h, { cachePrefix });
+  }
 
   // Compute final DPR (optional override + optional clamp).
   const rawDpr = (opts && Number.isFinite(opts.rawDpr) && opts.rawDpr > 0) ? opts.rawDpr : deviceDpr;
@@ -50,4 +53,3 @@ export function resizeCanvasForDpr(canvas, ctx, cssW, cssH, opts = {}) {
 
   return { resized, width: afterW, height: afterH, dpr, deviceDpr };
 }
-
