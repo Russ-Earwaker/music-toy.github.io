@@ -11,7 +11,6 @@ import {
   readForcedTier,
   pickTierFromTable,
   stampTierDebugMeta,
-  resizeCanvasForDpr,
   waitForStableBox,
   createToyCanvasRig,
 } from './baseMusicToy/index.js';
@@ -518,6 +517,9 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     _burstSpriteCache: null,
     _playheadSpriteCache: null,
     _particleFieldBox: null,
+    _rig: null,
+    _particleRig: null,
+    _relayoutFromRig: null,
     burstConfig: {
       particleCount: 16,
       lifeSeconds: 0.35,
@@ -527,18 +529,7 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     },
     _burstLastTime: performance.now(),
     computeLayout: (w, h) => {
-      // Compute tier params now. Default tier remains behaviour-preserving.
-      // Forced tiers (via Quality Lab / debug) will now flow through the shared helper.
-      const tier = getLoopgridTierParams(panel, st) || null;
-      const resScale = (tier && Number.isFinite(tier.resScale) && tier.resScale > 0) ? tier.resScale : 1;
-      const maxDprMul = (tier && Number.isFinite(tier.maxDprMul) && tier.maxDprMul > 0) ? tier.maxDprMul : null;
-      const deviceDpr = (Number.isFinite(window.devicePixelRatio) && window.devicePixelRatio > 0) ? window.devicePixelRatio : 1;
-      resizeCanvasForDpr(st.canvas, st.ctx, w, h, {
-        // rawDpr: deviceDpr * soft scale (tier0 is resScale=1 so behaviour is unchanged)
-        rawDpr: deviceDpr * resScale,
-        maxDprMul,
-        cachePrefix: '__bm',
-      });
+      // IMPORTANT: sizing is owned by the rig(s). computeLayout is layout-only.
       st._cssW = w;
       st._cssH = h;
       const cssW = w;
@@ -574,8 +565,8 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
         st.particleCanvas.style.bottom = 'auto';
         st.particleCanvas.style.left = `${fieldLeft}px`;
         st.particleCanvas.style.top = `${fieldTop}px`;
-        st.particleCanvas.style.width = `${fieldWidth}px`;
-        st.particleCanvas.style.height = `${clampedHeight}px`;
+        // Particle sizing is owned by the particle rig (sync path).
+        try { st._particleRig?.ensureSizedNow?.(fieldWidth, clampedHeight); } catch {}
         try { pv?.refreshSize?.({ snap: true }); } catch {}
         try { st.particleField?.resize?.(); } catch {}
       }
@@ -592,14 +583,11 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     lineWidth: Number.isFinite(burstDebugEnv?.lineWidth) ? burstDebugEnv.lineWidth : 2,
     lineDash: Array.isArray(burstDebugEnv?.lineDash) ? burstDebugEnv.lineDash : [],
   };
-  // after st.canvas / st.ctx exist and you know the container element
+  // Main canvas rig: use content-box sizing to match the clipped frame (avoids right/bottom cut-off).
   st._rig = createToyCanvasRig({
     canvas: st.canvas,
     ctx: st.ctx,
     getContainerEl: () => targetEl || st.sequencerWrap || panel || null,
-    // IMPORTANT: Use the content-box (clientWidth/Height) for LoopGrid.
-    // getBoundingClientRect() can include borders/padding and produce a larger size
-    // than the clipped frame, causing right/bottom cut-off.
     getSizeOverride: () => {
       const el = targetEl || st.sequencerWrap || panel;
       const w = Math.round(el?.clientWidth || 0);
@@ -620,12 +608,11 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     },
   });
 
-  // Centralized relayout path: one place that sizes the canvas then computes layout.
-  // This is the "base toy rig" pattern we want future toys to follow.
+  // Central relayout entrypoint: size via rig, then layout once.
   st._relayoutFromRig = async ({ waitStable = false } = {}) => {
     try {
       if (!st._rig) return;
-      const rsz = await st._rig.ensureSized({ waitStable });
+      await st._rig.ensureSized({ waitStable });
       const w = (st._rig.st.cssW | 0);
       const h = (st._rig.st.cssH | 0);
       if (w > 0 && h > 0) {
@@ -635,7 +622,6 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
         st._lastLayoutH = h;
         try { panel.__loopgridNeedsRedraw = true; } catch {}
       }
-      return rsz;
     } catch {}
   };
   // Expose state/hooks for PerfLab + Quality Lab forcing.
@@ -644,12 +630,8 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
   try {
     panel.__lgSetQualityTier = (tierId, reason = 'external') => {
       try { window.__LG_FORCE_TIER = (tierId == null) ? null : (tierId | 0); } catch {}
-      // Re-apply sizing immediately at current css size (truth-point).
-      const w = (st._cssW | 0);
-      const h = (st._cssH | 0);
-      if (w > 0 && h > 0) {
-        try { st.computeLayout(w, h); } catch {}
-      }
+      // Re-apply sizing immediately via rig (truth-point).
+      try { st._relayoutFromRig?.({ waitStable: false }); } catch {}
       try { panel.__loopgridNeedsRedraw = true; } catch {}
       try { panel.__lgQualityTierReason = reason; } catch {}
       try { panel.__lgQualityTierSetMs = performance.now(); } catch {}
@@ -663,7 +645,6 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
   // which would prevent any drawing. We do a best-effort layout immediately, then
   // re-layout on the next RAF and via observers.
   {
-    // Best-effort immediate layout (no stable wait).
     st._lastLayoutW = 0;
     st._lastLayoutH = 0;
     st._relayoutFromRig({ waitStable: false });
@@ -710,6 +691,33 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     });
   }
   st.particleCanvas = particleCanvas; // Assign to st
+  if (particleCanvas) {
+    // Particle canvas rig: sized from the layout-computed field box (sync path used in computeLayout).
+    // This keeps particle canvas backing-store consistent with the main toy canvas tier/DPR policy.
+    st._particleRig = createToyCanvasRig({
+      canvas: particleCanvas,
+      ctx: null,
+      getContainerEl: () => particleCanvas,
+      getSizeOverride: () => {
+        const b = st._particleFieldBox;
+        if (b && Number.isFinite(b.width) && Number.isFinite(b.height)) {
+          const w = Math.round(b.width) | 0;
+          const h = Math.round(b.height) | 0;
+          return (w > 0 && h > 0) ? { w, h } : null;
+        }
+        const w = Math.round(particleCanvas?.clientWidth || 0);
+        const h = Math.round(particleCanvas?.clientHeight || 0);
+        return (w > 0 && h > 0) ? { w, h } : null;
+      },
+      computeResizeOpts: () => {
+        const tier = getLoopgridTierParams(panel, st) || null;
+        const maxDprMul = (tier && Number.isFinite(tier.maxDprMul) && tier.maxDprMul > 0) ? tier.maxDprMul : null;
+        const resScale = (tier && Number.isFinite(tier.resScale) && tier.resScale > 0) ? tier.resScale : 1;
+        const deviceDpr = (Number.isFinite(window.devicePixelRatio) && window.devicePixelRatio > 0) ? window.devicePixelRatio : 1;
+        return { rawDpr: deviceDpr * resScale, maxDprMul, cachePrefix: '__bm' };
+      },
+    });
+  }
   if (particleCanvas && st._particleFieldBox) {
     const box = st._particleFieldBox;
     particleCanvas.style.right = 'auto';

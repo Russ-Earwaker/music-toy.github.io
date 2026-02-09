@@ -27,6 +27,26 @@ export function createToyCanvasRig({
     lastResize: null,
   };
 
+  function ensureSizedNow(cssW, cssH) {
+    let w = Math.max(1, (cssW | 0));
+    let h = Math.max(1, (cssH | 0));
+
+    const optsRaw = (typeof computeResizeOpts === 'function') ? computeResizeOpts({ cssW: w, cssH: h }) : {};
+    const opts = {
+      ...(optsRaw || {}),
+      cachePrefix: (optsRaw && optsRaw.cachePrefix) ? optsRaw.cachePrefix : cachePrefix,
+      alsoCachePrefixes: (optsRaw && optsRaw.alsoCachePrefixes) ? optsRaw.alsoCachePrefixes : (alsoCachePrefixes || null),
+    };
+
+    const rsz = resizeCanvasForDpr(canvas, ctx, w, h, opts);
+    st.cssW = w;
+    st.cssH = h;
+    st.dpr = rsz.dpr;
+    st.deviceDpr = rsz.deviceDpr;
+    st.lastResize = rsz;
+    return rsz;
+  }
+
   async function ensureSized({ waitStable = true } = {}) {
     let w = 0, h = 0;
 
@@ -47,25 +67,8 @@ export function createToyCanvasRig({
       }
     }
 
-    w = Math.max(1, w | 0);
-    h = Math.max(1, h | 0);
-
-    const optsRaw = (typeof computeResizeOpts === 'function') ? computeResizeOpts({ cssW: w, cssH: h }) : {};
-    const opts = {
-      ...(optsRaw || {}),
-      cachePrefix: (optsRaw && optsRaw.cachePrefix) ? optsRaw.cachePrefix : cachePrefix,
-      alsoCachePrefixes: (optsRaw && optsRaw.alsoCachePrefixes) ? optsRaw.alsoCachePrefixes : (alsoCachePrefixes || null),
-    };
-
-    const rsz = resizeCanvasForDpr(canvas, ctx, w, h, opts);
-    st.cssW = w;
-    st.cssH = h;
-    st.dpr = rsz.dpr;
-    st.deviceDpr = rsz.deviceDpr;
-    st.lastResize = rsz;
-    return rsz;
+    return ensureSizedNow(w, h);
   }
 
-  return { st, ensureSized };
+  return { st, ensureSized, ensureSizedNow };
 }
-
