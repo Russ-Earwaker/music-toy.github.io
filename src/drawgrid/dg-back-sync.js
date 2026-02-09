@@ -6,6 +6,7 @@ import {
   applyCanvasBackingSize,
   clampDprForBackingStore,
   createOverlayResizeGate,
+  computeEffectiveDpr,
 } from '../baseMusicToy/index.js';
 
 export function createDgBackSync({ state, deps } = {}) {
@@ -27,13 +28,26 @@ export function createDgBackSync({ state, deps } = {}) {
       const pressureMul = d.__dgGetPressureDprMul();
       const autoMul = d.__dgGetAutoQualityMul();
 
+      // Tier hard clamp (pixels-first lever). We keep this deliberately generic:
+      // - if the tier system publishes a maxDprMul, we use it
+      // - otherwise we leave it unclamped (null)
+      const tierMaxDprMul =
+        (Number.isFinite(s.__dgTierMaxDprMul) && s.__dgTierMaxDprMul > 0) ? s.__dgTierMaxDprMul :
+        (s.__dgTierProfile && Number.isFinite(s.__dgTierProfile.maxDprMul) && s.__dgTierProfile.maxDprMul > 0) ? s.__dgTierProfile.maxDprMul :
+        null;
+
       // Aux layer DPR: never exceed paintScale, but can drop below it smoothly.
       const auxDprRaw = deviceDpr * visualMul * pressureMul * autoMul;
+      const auxEd = computeEffectiveDpr({
+        deviceDpr,
+        rawDpr: auxDprRaw,
+        maxDprMul: tierMaxDprMul,
+      });
       const auxScale = clampDprForBackingStore({
         logicalW: logicalWidth,
         logicalH: logicalHeight,
         paintScale,
-        rawDpr: auxDprRaw,
+        rawDpr: auxEd.effectiveDpr,
         capFn: d.__dgCapDprForBackingStore,
         adaptivePaintDpr: s.__dgAdaptivePaintDpr,
       });
@@ -50,11 +64,16 @@ export function createDgBackSync({ state, deps } = {}) {
         ? Math.max(overlayMinMul, Math.min(1, pressureMul * overlayBias))
         : 1;
       const overlayDprRaw = deviceDpr * visualMul * overlayPressureMul * autoMul;
+      const overlayEd = computeEffectiveDpr({
+        deviceDpr,
+        rawDpr: overlayDprRaw,
+        maxDprMul: tierMaxDprMul,
+      });
       const overlayScale = clampDprForBackingStore({
         logicalW: logicalWidth,
         logicalH: logicalHeight,
         paintScale,
-        rawDpr: overlayDprRaw,
+        rawDpr: overlayEd.effectiveDpr,
         capFn: d.__dgCapDprForBackingStore,
         adaptivePaintDpr: s.__dgAdaptivePaintDpr,
       });

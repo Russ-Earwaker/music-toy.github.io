@@ -16,6 +16,8 @@
 // Note: cadence control (drawHz) is part of the spec but is NOT enforced here yet.
 // We expose desired drawHz so the render loop can adopt it in a later patch.
 
+import { readForcedTier, pickTierFromMap, stampTierDebugMeta } from '../baseMusicToy/index.js';
+
 export function createDgQuality({ panel, nowMs }) {
   const state = {
     tier: 3,
@@ -31,6 +33,17 @@ export function createDgQuality({ panel, nowMs }) {
     return (n | 0);
   }
 
+  // Tier -> profile map (DrawGrid-owned meanings).
+  const TIER_MAP = {
+    // maxDprMul = hard cap on final DPR relative to device DPR (after adaptiveCap).
+    // This is the main “reduce pixel cost” lever for nonScript time.
+    3:  { resScale: 1.0, allowParticles: true,  allowOverlaySpecials: true,  allowPlayheadExtras: true,  desiredDrawHz: 60, maxDprMul: 1.00 },
+    2:  { resScale: 0.9, allowParticles: true,  allowOverlaySpecials: true,  allowPlayheadExtras: true,  desiredDrawHz: 60, particleMul: 0.7, overlaySpecialMul: 0.7, maxDprMul: 0.92 },
+    1:  { resScale: 0.8, allowParticles: true,  allowOverlaySpecials: false, allowPlayheadExtras: false, desiredDrawHz: 30, particleMul: 0.22, maxDprMul: 0.75 },
+    0:  { resScale: 0.7, allowParticles: false, allowOverlaySpecials: false, allowPlayheadExtras: false, desiredDrawHz: 15, maxDprMul: 0.62 },
+    '-1': { resScale: 0.6, allowParticles: false, allowOverlaySpecials: false, allowPlayheadExtras: false, desiredDrawHz: 10, maxDprMul: 0.55 },
+  };
+
   function setTier(tier, reason = 'external') {
     const t = clampTier(tier);
     if (t === state.tier) return false;
@@ -45,16 +58,24 @@ export function createDgQuality({ panel, nowMs }) {
     return true;
   }
 
-  function getTier() {
+  function getTierInfo() {
+    // Canonical forced tier (Quality Lab -> legacy global), if present.
+    const forced = readForcedTier({ qlabKey: 'dgForceTier', legacyGlobalKey: '__DG_FORCE_TIER' });
+    if (Number.isFinite(forced)) return { tier: clampTier(forced), isForced: true };
+
+    // Otherwise per-panel explicit tier (set by budget manager / perflab / etc).
     try {
       const pTier = panel?.__dgQualityTier;
-      if (Number.isFinite(pTier)) return clampTier(pTier);
+      if (Number.isFinite(pTier)) return { tier: clampTier(pTier), isForced: false };
     } catch {}
-    return state.tier;
+
+    return { tier: state.tier, isForced: false };
   }
 
   function getProfile({ isFocused = false, isInteracting = false } = {}) {
-    let tier = getTier();
+    const info = getTierInfo();
+    let tier = info.tier;
+    const isForced = !!info.isForced;
 
     // Interaction override: don't let an actively edited panel feel "dead".
     // We still allow reduced resScale, but we keep core overlays alive via tier>=1.
@@ -62,20 +83,18 @@ export function createDgQuality({ panel, nowMs }) {
 
     // Focus override: focused panels should always try for tier 3 unless explicitly forced lower.
     // (Budget manager can still force lower tiers by setting panel.__dgQualityTier explicitly.)
-    if (isFocused && tier < 2 && panel?.__dgQualityTier == null) tier = 3;
+    if (isFocused && tier < 2 && !isForced && panel?.__dgQualityTier == null) tier = 3;
 
-    const map = {
-      // maxDprMul = hard cap on final DPR relative to device DPR (after adaptiveCap).
-      // This is the main “reduce pixel cost” lever for nonScript time.
-      3:  { resScale: 1.0, allowParticles: true,  allowOverlaySpecials: true,  allowPlayheadExtras: true,  desiredDrawHz: 60, maxDprMul: 1.00 },
-      2:  { resScale: 0.9, allowParticles: true,  allowOverlaySpecials: true,  allowPlayheadExtras: true,  desiredDrawHz: 60, particleMul: 0.7, overlaySpecialMul: 0.7, maxDprMul: 0.92 },
-      1:  { resScale: 0.8, allowParticles: true,  allowOverlaySpecials: false, allowPlayheadExtras: false, desiredDrawHz: 30, particleMul: 0.22, maxDprMul: 0.75 },
-      0:  { resScale: 0.7, allowParticles: false, allowOverlaySpecials: false, allowPlayheadExtras: false, desiredDrawHz: 15, maxDprMul: 0.62 },
-      '-1': { resScale: 0.6, allowParticles: false, allowOverlaySpecials: false, allowPlayheadExtras: false, desiredDrawHz: 10, maxDprMul: 0.55 },
-    };
+    const pick = pickTierFromMap({
+      forcedTier: tier,
+      map: TIER_MAP,
+      defaultTier: 3,
+      clampFn: clampTier,
+    });
+    const p = pick.params || TIER_MAP['3'];
 
-    const key = String(tier);
-    const p = map[key] || map['3'];
+    // Standardized debug stamping (no behaviour dependence).
+    stampTierDebugMeta({ panel, state, key: 'drawgrid', tierId: tier, params: p });
     return {
       tier,
       resScale: p.resScale,
@@ -88,6 +107,8 @@ export function createDgQuality({ panel, nowMs }) {
       overlaySpecialMul: Number.isFinite(p.overlaySpecialMul) ? p.overlaySpecialMul : 1.0,
     };
   }
+
+  function getTier() { return getTierInfo().tier; }
 
   return { setTier, getTier, getProfile };
 }

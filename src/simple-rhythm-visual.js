@@ -8,11 +8,11 @@ import { createField } from './particles/field-generic.js';
 import { createParticleViewport } from './particles/particle-viewport.js';
 import { getParticleBudget, getAdaptiveFrameBudget } from './particles/ParticleQuality.js';
 import {
-  syncCanvasCssSize,
-  applyCanvasBackingSize,
   readForcedTier,
   pickTierFromTable,
   stampTierDebugMeta,
+  resizeCanvasForDpr,
+  waitForStableBox,
 } from './baseMusicToy/index.js';
 import { overviewMode } from './overview-mode.js';
 import { onZoomChange, namedZoomListener } from './zoom/ZoomCoordinator.js';
@@ -52,64 +52,6 @@ function getLoopgridTierParams(panel, st) {
   // Store debug/telemetry in a standardized way.
   stampTierDebugMeta({ panel, state: st, key: 'loopgrid', tierId, params: out });
   return out;
-}
-
-// LoopGrid sizing truth-point (behaviour-preserving):
-// - uses devicePixelRatio (same as utils.resizeCanvasForDPR)
-// - uses Math.floor(css * dpr) (same as utils.resizeCanvasForDPR)
-// - resets ctx transform on resize (same as utils.resizeCanvasForDPR when ctx provided)
-function resizeCanvasForDPR_BM(canvas, ctx, cssW, cssH, opts = {}) {
-  const deviceDpr = (Number.isFinite(window.devicePixelRatio) && window.devicePixelRatio > 0) ? window.devicePixelRatio : 1;
-  let dpr = deviceDpr;
-  // Optional override: lets future tier/pressure systems choose the DPR.
-  if (opts && Number.isFinite(opts.rawDpr) && opts.rawDpr > 0) {
-    dpr = opts.rawDpr;
-  }
-  // Optional hard clamp: ensures we can bound pixels even when other multipliers exist.
-  // (No clamp by default to preserve current behaviour.)
-  if (opts && Number.isFinite(opts.maxDprMul) && opts.maxDprMul > 0) {
-    const hardMax = deviceDpr * opts.maxDprMul;
-    if (Number.isFinite(hardMax) && hardMax > 0) dpr = Math.min(dpr, hardMax);
-  }
-  const w = Math.max(1, (cssW | 0));
-  const h = Math.max(1, (cssH | 0));
-
-  // Keep CSS size authoritative + cached (no layout reads here).
-  syncCanvasCssSize(canvas, w, h, { cachePrefix: '__bm' });
-
-  const needW = Math.floor(w * dpr);
-  const needH = Math.floor(h * dpr);
-
-  const beforeW = canvas.width | 0;
-  const beforeH = canvas.height | 0;
-  applyCanvasBackingSize(canvas, needW, needH, dpr, { cachePrefix: '__bm' });
-  const resized = ((beforeW !== (canvas.width|0)) || (beforeH !== (canvas.height|0)));
-
-  if (resized && ctx && ctx.setTransform) {
-    try { ctx.setTransform(1, 0, 0, 1, 0, 0); } catch {}
-  }
-
-  return { width: canvas.width, height: canvas.height, dpr, deviceDpr };
-}
-
-/**
- * Wait until the element has a stable, non-zero size.
- * Tries up to maxFrames; bails early when width/height stop changing.
- */
-async function waitForStableBox(el, { maxFrames = 6 } = {}) {
-  let lastW = -1, lastH = -1;
-  for (let i = 0; i < maxFrames; i++) {
-    await raf(); // let layout/zoom settle this frame
-    const rect = el.getBoundingClientRect();
-    const w = Math.round(rect.width), h = Math.round(rect.height);
-    if (w > 0 && h > 0 && w === lastW && h === lastH) {
-      return { width: w, height: h };
-    }
-    lastW = w; lastH = h;
-  }
-  // final read (whatever it is)
-  const rect = el.getBoundingClientRect();
-  return { width: Math.round(rect.width), height: Math.round(rect.height) };
 }
 
 function getBurstSprite(st, radiusPx, color) {
@@ -584,13 +526,19 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     },
     _burstLastTime: performance.now(),
     computeLayout: (w, h) => {
-      // Apply LoopGrid tier params to backing-store sizing (pixels-first lever).
-      const tier = getLoopgridTierParams(panel, st);
-      const deviceDpr = (Number.isFinite(window.devicePixelRatio) && window.devicePixelRatio > 0) ? window.devicePixelRatio : 1;
+      // Compute tier params now. Default tier remains behaviour-preserving.
+      // Forced tiers (via Quality Lab / debug) will now flow through the shared helper.
+      const tier = getLoopgridTierParams(panel, st) || null;
       const resScale = (tier && Number.isFinite(tier.resScale) && tier.resScale > 0) ? tier.resScale : 1;
-      const rawDpr = deviceDpr * resScale;
       const maxDprMul = (tier && Number.isFinite(tier.maxDprMul) && tier.maxDprMul > 0) ? tier.maxDprMul : null;
-      resizeCanvasForDPR_BM(st.canvas, st.ctx, w, h, { rawDpr, maxDprMul });
+      resizeCanvasForDpr(st.canvas, st.ctx, w, h, {
+        // rawDpr: deviceDpr * soft scale
+        rawDpr: null, // set below
+        maxDprMul,
+        cachePrefix: '__bm',
+      });
+      // NOTE: We intentionally compute rawDpr via device DPR inside the helper when null.
+      // If we want resScale to apply even at tier0 in future, we can pass rawDpr explicitly.
       st._cssW = w;
       st._cssH = h;
       const cssW = w;

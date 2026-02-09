@@ -38,3 +38,22 @@ export function stampTierDebugMeta({
   try { if (state) state[`_${key}TierParams`] = params; } catch {}
 }
 
+// Like pickTierFromTable, but supports arbitrary tier ids (e.g. -1..3) via clampFn.
+// This is useful for DrawGrid's tier scheme without forcing it into 0..N indexing.
+export function pickTierFromMap({
+  forcedTier = null,
+  map,
+  defaultTier = 0,
+  clampFn,
+} = {}) {
+  const m = (map && typeof map === 'object') ? map : {};
+  const clamp = (typeof clampFn === 'function') ? clampFn : ((x) => x);
+
+  let tier = null;
+  if (Number.isFinite(forcedTier)) tier = clamp(forcedTier);
+  if (tier == null) tier = clamp(defaultTier);
+
+  const key = String(tier);
+  const params = (m && Object.prototype.hasOwnProperty.call(m, key)) ? m[key] : null;
+  return { tier, params };
+}

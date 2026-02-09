@@ -151,97 +151,39 @@ const AUTO_GENERIC_QUEUE = [
 ];
 
 // Current focus for this cycle:
-//   - multi-toy performance (P6)
-//   - isolate loopgrid render, chains, and overview compositing
+//   - prove shared “base music toy” plumbing on DrawGrid first
+//   - then validate LoopGrid (Simple Rhythm) with the same quality/tiers hooks
+//
+// IMPORTANT:
+// Keep this queue SHORT so it never *feels* like it’s looping.
+// If you want deep A/B sweeps, add them to AUTO_FOCUS_MICRO_QUEUE instead.
 const AUTO_FOCUS_QUEUE = [
   'traceDprOn',
 
-  // Multi-toy focus (P6): LoopGrid render + chains + overview/compositor pressure
-  // Goal: find the biggest levers in real mixed scenes.
-  'buildP6',
+  // --- DrawGrid: “base toy” proof run (fast, representative) --------------
+  'buildP3Focus',
   'warmupFirstAppearance',
   'warmupSettle',
-
-  // Baseline (shipping intent: tiers AUTO ON)
-  'dgTierAutoOn',
-  'dgForceTierAuto',
-  'lgForceTierAuto',
-  'runP6e',
+  'runP3fShort',
   'warmupSettle',
 
-  // A/B: tiers auto ON vs OFF (prove impact)
-  'dgTierAutoOff',
-  'dgForceTierAuto',
-  'lgForceTierAuto',
-  'runP6e',
+  // --- LoopGrid / Simple Rhythm: validate tiers + DPR plumbing ------------
+  'buildP4',
+  'warmupFirstAppearance',
   'warmupSettle',
-  'dgTierAutoOn',
-  'dgForceTierAuto',
   'lgForceTierAuto',
-  'runP6e',
+  'runP4b',
   'warmupSettle',
 
-  // Signal test: force tiers (ceiling vs floor)
-  'dgForceTier3',
-  'lgForceTierAuto',
-  'runP6e',
-  'warmupSettle',
-  'dgForceTier1',
-  'lgForceTierAuto',
-  'runP6e',
-  'warmupSettle',
-  'dgForceTierAuto',
-  'lgForceTierAuto',
-  'warmupSettle',
-
-  // Signal test: LoopGrid tiers (pixels-first lever)
+  // Signal: tier ceiling vs floor (keep it to ONE pass each)
   // NOTE: LoopGrid tier ids are 0..4 (0 = full-fat).
   'lgForceTier0',
-  'runP6e',
+  'runP4b',
   'warmupSettle',
   'lgForceTier3',
-  'runP6e',
+  'runP4b',
   'warmupSettle',
   'lgForceTierAuto',
-  'warmupSettle',
-
-  // A/B: chains (connectors + chain UI + chain traversal)
-  'chainsOff',
-  'runP6e',
-  'chainsOn',
-  'warmupSettle',
-  'runP6e',
-  'warmupSettle',
-
-  // A/B: chain UI only (DOM work, outline sync, etc)
-  'chainUiOff',
-  'runP6e',
-  'chainUiOn',
-  'warmupSettle',
-  'runP6e',
-  'warmupSettle',
-
-  // A/B: connector canvas draw only
-  'connectorsOff',
-  'runP6e',
-  'connectorsOn',
-  'warmupSettle',
-  'runP6e',
-  'warmupSettle',
-
-  // A/B: LoopGrid render cost (keep sim, drop paint)
-  'loopRenderOff',
-  'runP6e',
-  'loopRenderOn',
-  'warmupSettle',
-  'runP6e',
-  'warmupSettle',
-
-  // Overview/compositor check (same scene, but with overview toggles)
-  'runP6eOverview',
-
-  'traceDprOff',
-  'traceOff',
 ];
 
 // Validation focus: same intent as AUTO_FOCUS_QUEUE but with more toys (stronger pressure signal).
@@ -1095,7 +1037,7 @@ function ensureUI() {
         clear: true,
         save: false,
         postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
-        notes: 'Current Focus: Multi-toy scenes (P6) — isolate LoopGrid render + chains + overview compositing (edit AUTO_FOCUS_QUEUE in perf-lab.js)',
+        notes: 'Current Focus: BaseMusicToy refactor — extract shared toy lifecycle from DrawGrid, then apply to LoopGrid (edit AUTO_FOCUS_QUEUE in perf-lab.js)',
         queue: AUTO_FOCUS_QUEUE,
         runId: 'autoFocus',
       });
@@ -1657,98 +1599,115 @@ async function runAuto(config = {}) {
     return [];
   }
 
-  if (cfg.clear === true) {
-    lastResult = null;
-    lastResults = [];
-    setOutput(null);
+  // Guard against accidental re-entrancy (eg. multiple scheduleAutoRun timers, hot reloads, double-clicks)
+  if (window.__PERF_LAB_AUTO_RUNNING) {
+    setStatus('Auto-run: already running');
+    return [];
   }
+  window.__PERF_LAB_AUTO_RUNNING = true;
 
-  setStatus('Auto-run: ' + queue.length + ' tests');
-  const __prevCtx = window.__PERF_LAB_RUN_CONTEXT;
-  const __prevRunTag = window.__PERF_RUN_TAG;
-  const __prevTraceMarks = window.__PERF_TRACE_MARKS;
-  const __prevTraceLongMs = window.__PERF_TRACE_LONG_MS;
-  const __prevTapDotsSim = window.__PERF_TAP_DOTS_SIM;
-  const __prevChainUiFreeze = window.__PERF_DISABLE_CHAIN_UI;
-  const __prevTrace = (window.__PERF_TRACE && typeof window.__PERF_TRACE === 'object') ? { ...window.__PERF_TRACE } : null;
-  let __prevParticles = null;
-  const __prevGestureAutoLock = window.__PERF_GESTURE_AUTO_LOCK;
-  window.__PERF_LAB_RUN_CONTEXT = 'auto';
-  if (cfg.runTag != null) window.__PERF_RUN_TAG = String(cfg.runTag);
-  if (cfg.traceMarks != null) window.__PERF_TRACE_MARKS = !!cfg.traceMarks;
-  if (Number.isFinite(cfg.traceLongMs)) window.__PERF_TRACE_LONG_MS = Number(cfg.traceLongMs);
-  if (cfg.tapDotsSim != null) window.__PERF_TAP_DOTS_SIM = !!cfg.tapDotsSim;
-  if (cfg.freezeChainUi != null) window.__PERF_DISABLE_CHAIN_UI = !!cfg.freezeChainUi;
-  if (cfg.traceCanvasResize != null || cfg.traceDomInRaf != null) {
-    try {
-      const st = (window.__PERF_TRACE = window.__PERF_TRACE || {});
-      if (cfg.traceCanvasResize != null) st.traceCanvasResize = !!cfg.traceCanvasResize;
-      if (cfg.traceDomInRaf != null) st.traceDomInRaf = !!cfg.traceDomInRaf;
-      // Keep UI in sync (helpful when someone watches the run)
-      try { syncUiFromState(); } catch {}
-    } catch {}
-  }
-  if (cfg.particleToggles && typeof cfg.particleToggles === 'object') {
-    try {
-      const st = (window.__PERF_PARTICLES = window.__PERF_PARTICLES || {});
-      __prevParticles = { ...st };
-      Object.assign(st, cfg.particleToggles);
-    } catch {}
-  }
-  const wantsGestureLock = cfg.gestureAutoLock === true
-    || (cfg.particleToggles
-      && (cfg.particleToggles.gestureDrawModulo === 1 || cfg.particleToggles.gestureFieldModulo === 1));
-  if (wantsGestureLock) window.__PERF_GESTURE_AUTO_LOCK = true;
-  let results;
   try {
-    results = await runQueue(queue);
-  } finally {
-    window.__PERF_LAB_RUN_CONTEXT = __prevCtx;
-    window.__PERF_RUN_TAG = __prevRunTag;
-    window.__PERF_TRACE_MARKS = __prevTraceMarks;
-    window.__PERF_TRACE_LONG_MS = __prevTraceLongMs;
-    if (typeof __prevTapDotsSim === 'undefined') {
-      try { delete window.__PERF_TAP_DOTS_SIM; } catch {}
-    } else {
-      window.__PERF_TAP_DOTS_SIM = __prevTapDotsSim;
+    if (cfg.clear === true) {
+      lastResult = null;
+      lastResults = [];
+      setOutput(null);
     }
-    if (__prevParticles) {
+
+    setStatus('Auto-run: ' + queue.length + ' tests');
+    const __prevCtx = window.__PERF_LAB_RUN_CONTEXT;
+    const __prevRunTag = window.__PERF_RUN_TAG;
+    const __prevTraceMarks = window.__PERF_TRACE_MARKS;
+    const __prevTraceLongMs = window.__PERF_TRACE_LONG_MS;
+    const __prevTapDotsSim = window.__PERF_TAP_DOTS_SIM;
+    const __prevChainUiFreeze = window.__PERF_DISABLE_CHAIN_UI;
+    const __prevTrace = (window.__PERF_TRACE && typeof window.__PERF_TRACE === 'object') ? { ...window.__PERF_TRACE } : null;
+    let __prevParticles = null;
+    const __prevGestureAutoLock = window.__PERF_GESTURE_AUTO_LOCK;
+    window.__PERF_LAB_RUN_CONTEXT = 'auto';
+    if (cfg.runTag != null) window.__PERF_RUN_TAG = String(cfg.runTag);
+    if (cfg.traceMarks != null) window.__PERF_TRACE_MARKS = !!cfg.traceMarks;
+    if (Number.isFinite(cfg.traceLongMs)) window.__PERF_TRACE_LONG_MS = Number(cfg.traceLongMs);
+    if (cfg.tapDotsSim != null) window.__PERF_TAP_DOTS_SIM = !!cfg.tapDotsSim;
+    if (cfg.freezeChainUi != null) window.__PERF_DISABLE_CHAIN_UI = !!cfg.freezeChainUi;
+    if (cfg.traceCanvasResize != null || cfg.traceDomInRaf != null) {
       try {
-        const st = (window.__PERF_PARTICLES = window.__PERF_PARTICLES || {});
-        Object.assign(st, __prevParticles);
+        const st = (window.__PERF_TRACE = window.__PERF_TRACE || {});
+        if (cfg.traceCanvasResize != null) st.traceCanvasResize = !!cfg.traceCanvasResize;
+        if (cfg.traceDomInRaf != null) st.traceDomInRaf = !!cfg.traceDomInRaf;
+        // Keep UI in sync (helpful when someone watches the run)
+        try { syncUiFromState(); } catch {}
       } catch {}
     }
-    window.__PERF_DISABLE_CHAIN_UI = __prevChainUiFreeze;
-    window.__PERF_GESTURE_AUTO_LOCK = __prevGestureAutoLock;
-    if (__prevTrace) {
-      try { window.__PERF_TRACE = { ...__prevTrace }; } catch {}
+    if (cfg.particleToggles && typeof cfg.particleToggles === 'object') {
+      try {
+        const st = (window.__PERF_PARTICLES = window.__PERF_PARTICLES || {});
+        __prevParticles = { ...st };
+        Object.assign(st, cfg.particleToggles);
+      } catch {}
     }
+    const wantsGestureLock = cfg.gestureAutoLock === true
+      || (cfg.particleToggles
+        && (cfg.particleToggles.gestureDrawModulo === 1 || cfg.particleToggles.gestureFieldModulo === 1));
+    if (wantsGestureLock) window.__PERF_GESTURE_AUTO_LOCK = true;
+
+    let results;
+    try {
+      results = await runQueue(queue);
+    } finally {
+      window.__PERF_LAB_RUN_CONTEXT = __prevCtx;
+      window.__PERF_RUN_TAG = __prevRunTag;
+      window.__PERF_TRACE_MARKS = __prevTraceMarks;
+      window.__PERF_TRACE_LONG_MS = __prevTraceLongMs;
+      if (typeof __prevTapDotsSim === 'undefined') {
+        try { delete window.__PERF_TAP_DOTS_SIM; } catch {}
+      } else {
+        window.__PERF_TAP_DOTS_SIM = __prevTapDotsSim;
+      }
+      if (__prevParticles) {
+        try {
+          const st = (window.__PERF_PARTICLES = window.__PERF_PARTICLES || {});
+          Object.assign(st, __prevParticles);
+        } catch {}
+      }
+      window.__PERF_DISABLE_CHAIN_UI = __prevChainUiFreeze;
+      window.__PERF_GESTURE_AUTO_LOCK = __prevGestureAutoLock;
+      if (__prevTrace) {
+        try { window.__PERF_TRACE = { ...__prevTrace }; } catch {}
+      }
+    }
+
+    const traceSummary = computePerfTraceSummary();
+    const bundle = buildResultsBundle(results, {
+      queue,
+      traceSummary,
+      executedQueue: Array.isArray(window.__PERF_LAB_EXECUTED_QUEUE) ? window.__PERF_LAB_EXECUTED_QUEUE : [],
+      notes: cfg.notes || '',
+      runId: cfg.runId || '',
+    });
+    lastBundle = bundle;
+
+    const saveKey = cfg.saveKey || PERF_LAB_STORAGE_KEY;
+    if (cfg.save !== false) saveResultsBundle(bundle, saveKey);
+
+    const postUrl = cfg.postUrl || window.__PERF_LAB_RESULTS_URL;
+    if (postUrl) await postResultsBundle(bundle, postUrl);
+
+    if (cfg.clearAfter !== false) {
+      try { clearSceneViaSnapshot(); } catch {}
+    }
+
+    setStatus('Auto-run: done (' + results.length + ' results)');
+    return results;
+  } finally {
+    window.__PERF_LAB_AUTO_RUNNING = false;
   }
-  const traceSummary = computePerfTraceSummary();
-  const bundle = buildResultsBundle(results, {
-    queue,
-    traceSummary,
-    executedQueue: Array.isArray(window.__PERF_LAB_EXECUTED_QUEUE) ? window.__PERF_LAB_EXECUTED_QUEUE : [],
-    notes: cfg.notes || '',
-    runId: cfg.runId || '',
-  });
-  lastBundle = bundle;
-
-  const saveKey = cfg.saveKey || PERF_LAB_STORAGE_KEY;
-  if (cfg.save !== false) saveResultsBundle(bundle, saveKey);
-
-  const postUrl = cfg.postUrl || window.__PERF_LAB_RESULTS_URL;
-  if (postUrl) await postResultsBundle(bundle, postUrl);
-
-  if (cfg.clearAfter !== false) {
-    try { clearSceneViaSnapshot(); } catch {}
-  }
-
-  setStatus('Auto-run: done (' + results.length + ' results)');
-  return results;
 }
 
 function scheduleAutoRun() {
+  // Guard against multiple injections / hot reload re-evaluations of perf-lab.js
+  if (window.__PERF_LAB_AUTO_SCHEDULED) return;
+  window.__PERF_LAB_AUTO_SCHEDULED = true;
+
   const cfg = readAutoConfig();
   if (!cfg || !cfg.queue || !cfg.queue.length) return;
   const autoStart = (cfg.autoStart === true) || (cfg.runNow === true);
