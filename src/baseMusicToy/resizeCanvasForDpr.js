@@ -22,6 +22,7 @@ export function resizeCanvasForDpr(canvas, ctx, cssW, cssH, opts = {}) {
   const cachePrefix = opts.cachePrefix || '__bm';
   const alsoCachePrefixes = Array.isArray(opts.alsoCachePrefixes) ? opts.alsoCachePrefixes : null;
   const skipCssSync = opts && opts.skipCssSync === true;
+  const gate = (opts && typeof opts.gate === 'function') ? opts.gate : null;
 
   // Keep CSS size authoritative + cached (no layout reads here) unless caller already did it.
   if (!skipCssSync) {
@@ -40,7 +41,20 @@ export function resizeCanvasForDpr(canvas, ctx, cssW, cssH, opts = {}) {
   const beforeW = canvas.width | 0;
   const beforeH = canvas.height | 0;
 
-  applyCanvasBackingSize(canvas, needW, needH, dpr, { cachePrefix, alsoCachePrefixes });
+  let targetW = needW;
+  let targetH = needH;
+  if (gate) {
+    // Allow caller to quantize + stable-gate resizes (e.g. overlays).
+    const g = gate(canvas, needW, needH, beforeW, beforeH);
+    if (g && g.apply === false) {
+      try { window.__PERF_BM_GATED_SKIP_COUNT = (window.__PERF_BM_GATED_SKIP_COUNT || 0) + 1; } catch {}
+      return { resized: false, width: beforeW, height: beforeH, dpr, deviceDpr, gated: true };
+    }
+    if (g && Number.isFinite(g.w) && g.w > 0) targetW = g.w | 0;
+    if (g && Number.isFinite(g.h) && g.h > 0) targetH = g.h | 0;
+  }
+
+  applyCanvasBackingSize(canvas, targetW, targetH, dpr, { cachePrefix, alsoCachePrefixes });
 
   const afterW = canvas.width | 0;
   const afterH = canvas.height | 0;

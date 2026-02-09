@@ -13,6 +13,7 @@ import {
   stampTierDebugMeta,
   resizeCanvasForDpr,
   waitForStableBox,
+  createToyCanvasRig,
 } from './baseMusicToy/index.js';
 import { overviewMode } from './overview-mode.js';
 import { onZoomChange, namedZoomListener } from './zoom/ZoomCoordinator.js';
@@ -531,14 +532,13 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
       const tier = getLoopgridTierParams(panel, st) || null;
       const resScale = (tier && Number.isFinite(tier.resScale) && tier.resScale > 0) ? tier.resScale : 1;
       const maxDprMul = (tier && Number.isFinite(tier.maxDprMul) && tier.maxDprMul > 0) ? tier.maxDprMul : null;
+      const deviceDpr = (Number.isFinite(window.devicePixelRatio) && window.devicePixelRatio > 0) ? window.devicePixelRatio : 1;
       resizeCanvasForDpr(st.canvas, st.ctx, w, h, {
-        // rawDpr: deviceDpr * soft scale
-        rawDpr: null, // set below
+        // rawDpr: deviceDpr * soft scale (tier0 is resScale=1 so behaviour is unchanged)
+        rawDpr: deviceDpr * resScale,
         maxDprMul,
         cachePrefix: '__bm',
       });
-      // NOTE: We intentionally compute rawDpr via device DPR inside the helper when null.
-      // If we want resScale to apply even at tier0 in future, we can pass rawDpr explicitly.
       st._cssW = w;
       st._cssH = h;
       const cssW = w;
@@ -592,6 +592,52 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     lineWidth: Number.isFinite(burstDebugEnv?.lineWidth) ? burstDebugEnv.lineWidth : 2,
     lineDash: Array.isArray(burstDebugEnv?.lineDash) ? burstDebugEnv.lineDash : [],
   };
+  // after st.canvas / st.ctx exist and you know the container element
+  st._rig = createToyCanvasRig({
+    canvas: st.canvas,
+    ctx: st.ctx,
+    getContainerEl: () => targetEl || st.sequencerWrap || panel || null,
+    // IMPORTANT: Use the content-box (clientWidth/Height) for LoopGrid.
+    // getBoundingClientRect() can include borders/padding and produce a larger size
+    // than the clipped frame, causing right/bottom cut-off.
+    getSizeOverride: () => {
+      const el = targetEl || st.sequencerWrap || panel;
+      const w = Math.round(el?.clientWidth || 0);
+      const h = Math.round(el?.clientHeight || 0);
+      if (w > 0 && h > 0) return { w, h };
+      return null;
+    },
+    computeResizeOpts: () => {
+      const tier = getLoopgridTierParams(panel, st) || null;
+      const maxDprMul = (tier && Number.isFinite(tier.maxDprMul) && tier.maxDprMul > 0) ? tier.maxDprMul : null;
+      const resScale = (tier && Number.isFinite(tier.resScale) && tier.resScale > 0) ? tier.resScale : 1;
+      const deviceDpr = (Number.isFinite(window.devicePixelRatio) && window.devicePixelRatio > 0) ? window.devicePixelRatio : 1;
+      return {
+        rawDpr: deviceDpr * resScale,
+        maxDprMul,
+        cachePrefix: '__bm',
+      };
+    },
+  });
+
+  // Centralized relayout path: one place that sizes the canvas then computes layout.
+  // This is the "base toy rig" pattern we want future toys to follow.
+  st._relayoutFromRig = async ({ waitStable = false } = {}) => {
+    try {
+      if (!st._rig) return;
+      const rsz = await st._rig.ensureSized({ waitStable });
+      const w = (st._rig.st.cssW | 0);
+      const h = (st._rig.st.cssH | 0);
+      if (w > 0 && h > 0) {
+        st._layoutCssCache = null;
+        st.computeLayout(w, h);
+        st._lastLayoutW = w;
+        st._lastLayoutH = h;
+        try { panel.__loopgridNeedsRedraw = true; } catch {}
+      }
+      return rsz;
+    } catch {}
+  };
   // Expose state/hooks for PerfLab + Quality Lab forcing.
   // (Safe: purely optional; no callers = no behaviour change.)
   try { panel.__simpleRhythmVisualState = st; } catch {}
@@ -617,65 +663,31 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
   // which would prevent any drawing. We do a best-effort layout immediately, then
   // re-layout on the next RAF and via observers.
   {
-    const rect0 = targetEl.getBoundingClientRect();
-    const w0 = Math.round(rect0.width);
-    const h0 = Math.round(rect0.height);
-    if (w0 > 0 && h0 > 0) {
-      st.computeLayout(w0, h0);
-      st._lastLayoutW = w0;
-      st._lastLayoutH = h0;
-      panel.__loopgridNeedsRedraw = true;
-    } else {
-      st._lastLayoutW = 0;
-      st._lastLayoutH = 0;
-    }
+    // Best-effort immediate layout (no stable wait).
+    st._lastLayoutW = 0;
+    st._lastLayoutH = 0;
+    st._relayoutFromRig({ waitStable: false });
 
     // Next-frame retry (covers the common "first frame is 0x0" case).
     raf().then(() => {
       if (!panel || !panel.isConnected) return;
-      st._layoutCssCache = null;
-      const rect1 = targetEl.getBoundingClientRect();
-      const w1 = Math.round(rect1.width);
-      const h1 = Math.round(rect1.height);
-      if (w1 > 0 && h1 > 0 && (w1 !== st._lastLayoutW || h1 !== st._lastLayoutH)) {
-        st.computeLayout(w1, h1);
-        st._lastLayoutW = w1;
-        st._lastLayoutH = h1;
-        panel.__loopgridNeedsRedraw = true;
-      }
+      st._relayoutFromRig({ waitStable: false });
     }).catch(() => {});
   }
 
   // 2) Re-layout on container size changes
   st._resizer = new ResizeObserver((entries) => {
-    st._layoutCssCache = null;
-    for (const entry of entries) {
-      const cr = entry.contentRect;
-      const w = Math.round(cr.width), h = Math.round(cr.height);
-      if (w > 0 && h > 0) {
-        st.computeLayout(w, h);
-        st._lastLayoutW = w;
-        st._lastLayoutH = h;
-      }
-    }
+    // ResizeObserver can fire during transient layout; we rely on the rig sizing truth-point.
+    st._relayoutFromRig({ waitStable: false });
   });
   st._resizer.observe(targetEl);
 
   // 3) Re-layout on zoom settle (hook whatever you already have)
   panel.zoom?.on?.('end', () => {
-    st._layoutCssCache = null;
-    // Wait a frame so layout settles, then compute once if changed.
+    // Wait a frame so layout settles, then re-measure + re-layout via rig.
     raf().then(() => {
       if (!panel || !panel.isConnected) return;
-      const rect = targetEl.getBoundingClientRect();
-      const w = Math.round(rect.width);
-      const h = Math.round(rect.height);
-      if (w <= 0 || h <= 0) return;
-      if (w === st._lastLayoutW && h === st._lastLayoutH) return;
-      st._lastLayoutW = w;
-      st._lastLayoutH = h;
-      st.computeLayout(w, h);
-      panel.__loopgridNeedsRedraw = true;
+      st._relayoutFromRig({ waitStable: false });
     }).catch(() => {});
   });
 

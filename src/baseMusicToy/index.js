@@ -8,3 +8,5 @@ export { clampInt, pickTierFromTable, stampTierDebugMeta, pickTierFromMap } from
 export { getDeviceDpr, computeEffectiveDpr } from './effectiveDpr.js';
 export { resizeCanvasForDpr } from './resizeCanvasForDpr.js';
 export { waitForStableBox } from './waitForStableBox.js';
+export { syncCanvasesCssSize } from './syncCanvasesCssSize.js';
+export { createToyCanvasRig } from './createToyCanvasRig.js';

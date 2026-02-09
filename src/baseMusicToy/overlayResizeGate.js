@@ -19,14 +19,16 @@ export function createOverlayResizeGate({
   stableFrames = 6,
   bigJumpSteps = 2,
   cachePrefix = '__dg',
+  stateKey = null,
 } = {}) {
   const step = Math.max(8, (quantStepPx | 0));
   const need = Math.max(1, (stableFrames | 0));
   const bigSteps = Math.max(1, (bigJumpSteps | 0));
 
-  const kW = `${cachePrefix}PendingW`;
-  const kH = `${cachePrefix}PendingH`;
-  const kN = `${cachePrefix}PendingN`;
+  const sk = stateKey || cachePrefix || '__bm';
+  const kW = `${sk}PendingW`;
+  const kH = `${sk}PendingH`;
+  const kN = `${sk}PendingN`;
 
   function gate(canvas, wantW, wantH, curW, curH) {
     const w = quantizePx(wantW, step);
@@ -66,4 +68,3 @@ export function createOverlayResizeGate({
 
   return { gate, step, need };
 }
-

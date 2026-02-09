@@ -2,8 +2,7 @@
 // Back-buffer synchronization for DrawGrid.
 
 import {
-  syncCanvasCssSize,
-  applyCanvasBackingSize,
+  syncCanvasesCssSize,
   clampDprForBackingStore,
   createOverlayResizeGate,
   computeEffectiveDpr,
@@ -13,6 +12,9 @@ import {
 export function createDgBackSync({ state, deps } = {}) {
   const s = state || {};
   const d = deps || {};
+  // Cache gate instance (avoid per-frame allocations).
+  let __overlayGate = null;
+  let __overlayGateKey = '';
 
   function ensureBackVisualsFreshFromFront() {
     try {
@@ -87,13 +89,20 @@ export function createDgBackSync({ state, deps } = {}) {
         : 6;
 
       // Shared overlay resize gate: quantize + stable-frame gating + big-jump immediate apply.
-      const overlayGate = createOverlayResizeGate({
-        quantStepPx: overlayQuantPx,
-        stableFrames: overlayStableFrames,
-        bigJumpSteps: 2,
-        // IMPORTANT: keep using DrawGrid's existing pending fields for perfect behaviour parity.
-        cachePrefix: '__dg',
-      });
+      // Cache instance to avoid allocations; behaviour is still per-canvas via pending fields.
+      const gateKey = overlayQuantPx + '|' + overlayStableFrames;
+      if (!__overlayGate || __overlayGateKey !== gateKey) {
+        __overlayGate = createOverlayResizeGate({
+          quantStepPx: overlayQuantPx,
+          stableFrames: overlayStableFrames,
+          bigJumpSteps: 2,
+          // IMPORTANT: keep using DrawGrid's existing pending fields for perfect behaviour parity.
+          cachePrefix: '__dg',
+          stateKey: '__dg',
+        });
+        __overlayGateKey = gateKey;
+      }
+      const overlayGate = __overlayGate;
 
       const isOverlayLayer = (c) => (c === s.flashCanvas) || (c === s.flashBackCanvas) || (c === s.ghostCanvas) || (c === s.ghostBackCanvas) || (c === s.tutorialCanvas) || (c === s.tutorialBackCanvas) || (c === s.playheadCanvas);
       const isOverlayDormant = (c) => {
@@ -111,15 +120,21 @@ export function createDgBackSync({ state, deps } = {}) {
       const styleCanvases = d.__dgListAllLayerEls();
       // Apply logical CSS size to all DOM-backed layers and keep cached CSS size authoritative.
       // This avoids repeated DOM reads and gives all DPR math a single source of truth.
-      for (const canvas of styleCanvases) {
-        syncCanvasCssSize(canvas, logicalWidth, logicalHeight, { cachePrefix: '__bm', alsoCachePrefixes: ['__dg'] });
-      }
+      syncCanvasesCssSize(
+        styleCanvases,
+        logicalWidth,
+        logicalHeight,
+        { cachePrefix: '__bm', alsoCachePrefixes: ['__dg'] }
+      );
 
       const allCanvases = d.__dgListManagedBackingEls();
-      for (const canvas of allCanvases) {
-        // Keep authoritative CSS size cached even for non-DOM canvases (back buffers).
-        syncCanvasCssSize(canvas, logicalWidth, logicalHeight, { cachePrefix: '__bm', alsoCachePrefixes: ['__dg'] });
-      }
+      // Keep authoritative CSS size cached even for non-DOM canvases (back buffers).
+      syncCanvasesCssSize(
+        allCanvases,
+        logicalWidth,
+        logicalHeight,
+        { cachePrefix: '__bm', alsoCachePrefixes: ['__dg'] }
+      );
 
       // NOTE: avoid per-canvas getContext() calls here (can be surprisingly costly).
       // We only reset contexts we already hold references to.
@@ -140,20 +155,6 @@ export function createDgBackSync({ state, deps } = {}) {
           : isOverlayLayer(canvas)
             ? overlayScale
             : (auxScale * d.__dgComputeGestureStaticMul(s.zoomGestureMoving));
-        let pxW = Math.max(1, Math.round(logicalWidth * dpr));
-        let pxH = Math.max(1, Math.round(logicalHeight * dpr));
-
-        // Backing-store bucketing for overlays: quantize first (gate will re-quantize too, but keep parity).
-        if (isOverlayLayer(canvas)) {
-          // gate() returns quantized w/h.
-          const g0 = overlayGate.gate(canvas, pxW, pxH, canvas.width|0, canvas.height|0);
-          pxW = g0.w;
-          pxH = g0.h;
-          // If gate says "not yet", skip applying resize this frame.
-          if (!g0.apply) {
-            continue;
-          }
-        }
 
         // Cache DPR used for this backing store (useful for debug and for ctx reset helpers).
         try { canvas.__dgBackingDpr = dpr; } catch {}
@@ -167,18 +168,19 @@ export function createDgBackSync({ state, deps } = {}) {
           const oldW = canvas.width|0;
           const oldH = canvas.height|0;
 
-          if (isOverlayLayer(canvas)) {
-            // Overlays keep their special quantize+stabilize behaviour; apply directly.
-            applyCanvasBackingSize(canvas, pxW, pxH, dpr, { cachePrefix: '__bm', alsoCachePrefixes: ['__dg'] });
-          } else {
-            // Non-overlay layers: route through the shared baseMusicToy truth-point.
-            // Note: CSS size has already been set/cached above; this call is backing-store focused.
-            resizeCanvasForDpr(canvas, null, logicalWidth, logicalHeight, {
-              rawDpr: dpr,
-              cachePrefix: '__bm',
-              alsoCachePrefixes: ['__dg'],
-              skipCssSync: true,
-            });
+          // Route all layers through the shared baseMusicToy truth-point.
+          // Overlays pass a gate that quantizes + stable-gates resizes exactly as before.
+          const r = resizeCanvasForDpr(canvas, null, logicalWidth, logicalHeight, {
+            rawDpr: dpr,
+            cachePrefix: '__bm',
+            alsoCachePrefixes: ['__dg'],
+            skipCssSync: true,
+            gate: isOverlayLayer(canvas) ? overlayGate.gate : null,
+          });
+
+          // If the overlay gate decided "not yet", skip any post-resize bookkeeping.
+          if (r && r.gated && r.resized === false && isOverlayLayer(canvas)) {
+            continue;
           }
 
           const newW = canvas.width|0;
