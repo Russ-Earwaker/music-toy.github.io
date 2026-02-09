@@ -1,5 +1,5 @@
 // src/drawgrid/dg-adaptive.js
-import { getAdaptiveFrameBudget } from '../particles/ParticleQuality.js';
+import { getAdaptiveFrameBudget } from '../baseMusicToy/index.js';
 
 // Shared global state across all drawgrid instances (keeps counts for LOD decisions).
 const globalDrawgridState = (() => {

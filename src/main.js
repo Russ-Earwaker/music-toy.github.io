@@ -16,7 +16,7 @@ import './rippler-init.js';
 import './tutorial.js';
 import { startParticleStream } from './tutorial-fx.js';
 import './ui-highlights.js';
-import { updateParticleQualityFromFps, setActiveToyCount } from './particles/ParticleQuality.js';
+import { updateParticleQualityFromFps, setActiveToyCount } from './baseMusicToy/index.js';
 // import { createBouncer } from './bouncer.main.js'; // This is now handled by bouncer-init.js
 import './debug-reflow.js';
 import { initDrawGrid } from './drawgrid/drawgrid-init.js';

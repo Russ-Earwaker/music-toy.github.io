@@ -1,7 +1,7 @@
 // src/perf/perf-lab.js
 // Perf Lab: generates stress scenes + runs scripted benchmarks + copies JSON results.
 
-import { setParticleQualityLock } from '../particles/ParticleQuality.js';
+import { setParticleQualityLock } from '../baseMusicToy/index.js';
 import { start as startTransport, stop as stopTransport, isRunning } from '../audio-core.js';
 import { initBoardAnchor } from '../board-anchor.js';
 import { getCommittedState } from '../zoom/ZoomCoordinator.js';

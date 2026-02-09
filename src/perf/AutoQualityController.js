@@ -4,7 +4,7 @@
 // - Memory pressure acts as a hard clamp
 // - Emergency mode (very low FPS) forces aggressive reduction immediately
 
-import { getMemoryPressureLevel } from '../particles/ParticleQuality.js';
+import { getMemoryPressureLevel } from '../baseMusicToy/index.js';
 
 const AUTO_QUALITY_ENABLED = true;
 

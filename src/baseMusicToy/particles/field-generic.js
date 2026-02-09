@@ -25,7 +25,7 @@ import {
   seededRandomFactory,
 } from './particle-density.js';
 import { getParticleCap } from './ParticleQuality.js';
-import { makeDebugLogger } from '../debug-flags.js';
+import { makeDebugLogger } from '../../debug-flags.js';
 
 const fieldLog = makeDebugLogger('mt_debug_logs', 'log');
 

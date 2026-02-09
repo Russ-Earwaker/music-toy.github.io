@@ -688,4 +688,4 @@ export function getParticleCap(baseCap = 2200) {
   const globalMinCap = Math.max(150, Math.floor(baseCap * 0.1));
   return Math.max(globalMinCap, cap);
 }
-import { getAutoQualityScale } from '../perf/AutoQualityController.js';
+import { getAutoQualityScale } from '../../perf/AutoQualityController.js';

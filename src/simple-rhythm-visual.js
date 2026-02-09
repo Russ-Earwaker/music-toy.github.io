@@ -4,12 +4,11 @@ import { drawBlock, whichThirdRect } from './toyhelpers.js';
 import { boardScale } from './board-scale-helpers.js';
 import { midiToName } from './note-helpers.js';
 import { isRunning, getLoopInfo } from './audio-core.js';
-import { createField } from './particles/field-generic.js';
-import { createParticleViewport } from './particles/particle-viewport.js';
-import { getParticleBudget, getAdaptiveFrameBudget } from './particles/ParticleQuality.js';
+import { createField, createParticleViewport, getParticleBudget, getAdaptiveFrameBudget } from './baseMusicToy/index.js';
 import {
   waitForStableBox,
   createToyCanvasRig,
+  createToyRelayoutController,
 } from './baseMusicToy/index.js';
 import { getLoopgridTierParams } from './loopgrid/loopgrid-quality.js';
 import { overviewMode } from './overview-mode.js';
@@ -581,6 +580,15 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
       }
     } catch {}
   };
+
+  // Base relayout plumbing (ResizeObserver -> coalesced RAF -> relayout truth-point)
+  st._relayoutCtl = createToyRelayoutController({
+    panel,
+    getContainerEl: () => targetEl || st.sequencerWrap || panel || null,
+    relayout: () => { try { st._relayoutFromRig?.({ waitStable: false }); } catch {} },
+  });
+  try { st._relayoutCtl.start(); } catch {}
+
   // Expose state/hooks for PerfLab + Quality Lab forcing.
   // (Safe: purely optional; no callers = no behaviour change.)
   try { panel.__simpleRhythmVisualState = st; } catch {}
@@ -595,7 +603,7 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     };
   } catch {}
 
-  st._resizer?.disconnect?.(); // in case of re-init
+  st._relayoutCtl?.stop?.(); // in case of re-init
 
   // 1) Initial layout: do NOT block visuals behind a "stable box" await.
   // In practice, the element can report 0x0 during init (CSS/class toggles, lazy DOM),
@@ -614,11 +622,7 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
   }
 
   // 2) Re-layout on container size changes
-  st._resizer = new ResizeObserver((entries) => {
-    // ResizeObserver can fire during transient layout; we rely on the rig sizing truth-point.
-    st._relayoutFromRig({ waitStable: false });
-  });
-  st._resizer.observe(targetEl);
+  // (was inline ResizeObserver) now handled by st._relayoutCtl
 
   // 3) Re-layout on zoom settle (hook whatever you already have)
   panel.zoom?.on?.('end', () => {
