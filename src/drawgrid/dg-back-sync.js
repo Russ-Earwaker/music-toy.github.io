@@ -1,6 +1,13 @@
 // src/drawgrid/dg-back-sync.js
 // Back-buffer synchronization for DrawGrid.
 
+import {
+  syncCanvasCssSize,
+  applyCanvasBackingSize,
+  clampDprForBackingStore,
+  createOverlayResizeGate,
+} from '../baseMusicToy/index.js';
+
 export function createDgBackSync({ state, deps } = {}) {
   const s = state || {};
   const d = deps || {};
@@ -22,10 +29,14 @@ export function createDgBackSync({ state, deps } = {}) {
 
       // Aux layer DPR: never exceed paintScale, but can drop below it smoothly.
       const auxDprRaw = deviceDpr * visualMul * pressureMul * autoMul;
-      const auxScale = Math.min(
+      const auxScale = clampDprForBackingStore({
+        logicalW: logicalWidth,
+        logicalH: logicalHeight,
         paintScale,
-        d.__dgCapDprForBackingStore(logicalWidth, logicalHeight, auxDprRaw, s.__dgAdaptivePaintDpr)
-      );
+        rawDpr: auxDprRaw,
+        capFn: d.__dgCapDprForBackingStore,
+        adaptivePaintDpr: s.__dgAdaptivePaintDpr,
+      });
 
       // Overlay layer DPR: drop earlier/more aggressively under pressure.
       // IMPORTANT: do NOT reduce overlay DPR based on gesture state; only generic pressure.
@@ -39,23 +50,30 @@ export function createDgBackSync({ state, deps } = {}) {
         ? Math.max(overlayMinMul, Math.min(1, pressureMul * overlayBias))
         : 1;
       const overlayDprRaw = deviceDpr * visualMul * overlayPressureMul * autoMul;
-      const overlayScale = Math.min(
+      const overlayScale = clampDprForBackingStore({
+        logicalW: logicalWidth,
+        logicalH: logicalHeight,
         paintScale,
-        d.__dgCapDprForBackingStore(logicalWidth, logicalHeight, overlayDprRaw, s.__dgAdaptivePaintDpr)
-      );
+        rawDpr: overlayDprRaw,
+        capFn: d.__dgCapDprForBackingStore,
+        adaptivePaintDpr: s.__dgAdaptivePaintDpr,
+      });
 
       const overlayQuantPx = (Number.isFinite(window.__DG_OVERLAY_DPR_QUANT_PX) && window.__DG_OVERLAY_DPR_QUANT_PX >= 8)
         ? (window.__DG_OVERLAY_DPR_QUANT_PX|0)
         : 32;
-      const quantPx = (n) => {
-        const v = Math.max(1, (n|0));
-        const step = overlayQuantPx;
-        return Math.max(step, Math.round(v / step) * step);
-      };
-
       const overlayStableFrames = (Number.isFinite(window.__DG_OVERLAY_RESIZE_STABLE_FRAMES) && window.__DG_OVERLAY_RESIZE_STABLE_FRAMES >= 1)
         ? (window.__DG_OVERLAY_RESIZE_STABLE_FRAMES|0)
         : 6;
+
+      // Shared overlay resize gate: quantize + stable-frame gating + big-jump immediate apply.
+      const overlayGate = createOverlayResizeGate({
+        quantStepPx: overlayQuantPx,
+        stableFrames: overlayStableFrames,
+        bigJumpSteps: 2,
+        // IMPORTANT: keep using DrawGrid's existing pending fields for perfect behaviour parity.
+        cachePrefix: '__dg',
+      });
 
       const isOverlayLayer = (c) => (c === s.flashCanvas) || (c === s.flashBackCanvas) || (c === s.ghostCanvas) || (c === s.ghostBackCanvas) || (c === s.tutorialCanvas) || (c === s.tutorialBackCanvas) || (c === s.playheadCanvas);
       const isOverlayDormant = (c) => {
@@ -71,23 +89,16 @@ export function createDgBackSync({ state, deps } = {}) {
       };
 
       const styleCanvases = d.__dgListAllLayerEls();
-
-      const cssWpx = `${logicalWidth}px`;
-      const cssHpx = `${logicalHeight}px`;
+      // Apply logical CSS size to all DOM-backed layers and keep cached CSS size authoritative.
+      // This avoids repeated DOM reads and gives all DPR math a single source of truth.
       for (const canvas of styleCanvases) {
-        if (canvas.style.width !== cssWpx) canvas.style.width = cssWpx;
-        if (canvas.style.height !== cssHpx) canvas.style.height = cssHpx;
-        // Keep authoritative CSS size cached for DPR math.
-        canvas.__dgCssW = logicalWidth;
-        canvas.__dgCssH = logicalHeight;
+        syncCanvasCssSize(canvas, logicalWidth, logicalHeight, { cachePrefix: '__bm', alsoCachePrefixes: ['__dg'] });
       }
 
       const allCanvases = d.__dgListManagedBackingEls();
       for (const canvas of allCanvases) {
-        try {
-          canvas.__dgCssW = logicalWidth;
-          canvas.__dgCssH = logicalHeight;
-        } catch {}
+        // Keep authoritative CSS size cached even for non-DOM canvases (back buffers).
+        syncCanvasCssSize(canvas, logicalWidth, logicalHeight, { cachePrefix: '__bm', alsoCachePrefixes: ['__dg'] });
       }
 
       // NOTE: avoid per-canvas getContext() calls here (can be surprisingly costly).
@@ -112,60 +123,46 @@ export function createDgBackSync({ state, deps } = {}) {
         let pxW = Math.max(1, Math.round(logicalWidth * dpr));
         let pxH = Math.max(1, Math.round(logicalHeight * dpr));
 
-        // Backing-store bucketing for overlays: reduces resize thrash when DPR oscillates.
+        // Backing-store bucketing for overlays: quantize first (gate will re-quantize too, but keep parity).
         if (isOverlayLayer(canvas)) {
-          pxW = quantPx(pxW);
-          pxH = quantPx(pxH);
+          // gate() returns quantized w/h.
+          const g0 = overlayGate.gate(canvas, pxW, pxH, canvas.width|0, canvas.height|0);
+          pxW = g0.w;
+          pxH = g0.h;
+          // If gate says "not yet", skip applying resize this frame.
+          if (!g0.apply) {
+            continue;
+          }
         }
 
         // Cache DPR used for this backing store (useful for debug and for ctx reset helpers).
         try { canvas.__dgBackingDpr = dpr; } catch {}
 
-        // Overlay DPR can oscillate under pressure; avoid resize thrash by requiring a few
-        // consecutive frames requesting the same backing size before we actually resize.
-        // (Large jumps apply immediately.)
-        if (isOverlayLayer(canvas)) {
-          const wantW = pxW;
-          const wantH = pxH;
-          const curW = canvas.width|0;
-          const curH = canvas.height|0;
-          const dw = Math.abs(curW - wantW);
-          const dh = Math.abs(curH - wantH);
-          const bigJump = (dw >= (overlayQuantPx * 2)) || (dh >= (overlayQuantPx * 2));
-          if (!bigJump && (curW !== wantW || curH !== wantH)) {
-            const pw = canvas.__dgPendingW|0;
-            const ph = canvas.__dgPendingH|0;
-            if (pw === wantW && ph === wantH) {
-              canvas.__dgPendingN = (canvas.__dgPendingN|0) + 1;
-            } else {
-              canvas.__dgPendingW = wantW;
-              canvas.__dgPendingH = wantH;
-              canvas.__dgPendingN = 1;
-            }
-            if ((canvas.__dgPendingN|0) < overlayStableFrames) {
-              continue;
-            }
-          }
-          // Applying: clear pending so the next oscillation must restabilize.
-          canvas.__dgPendingN = 0;
-        } else {
+        if (!isOverlayLayer(canvas)) {
           // Non-overlay layers: don't accumulate pending state.
           try { canvas.__dgPendingN = 0; } catch {}
         }
 
-        if (canvas.width !== pxW) {
-          canvas.width = pxW;
+        {
+          const oldW = canvas.width|0;
+          const oldH = canvas.height|0;
+          // Apply backing-store size via shared helper (keeps DPR metadata cached too).
+          applyCanvasBackingSize(canvas, pxW, pxH, dpr, { cachePrefix: '__bm', alsoCachePrefixes: ['__dg'] });
+          const newW = canvas.width|0;
+          const newH = canvas.height|0;
+
+          if (oldW !== newW) {
           resizedAny = true;
           try { window.__PERF_DG_BACKING_RESIZE_COUNT = (window.__PERF_DG_BACKING_RESIZE_COUNT || 0) + 1; } catch {}
           if (isOverlayLayer(canvas)) { try { window.__PERF_DG_OVERLAY_RESIZE_COUNT = (window.__PERF_DG_OVERLAY_RESIZE_COUNT || 0) + 1; } catch {} }
         }
-        if (canvas.height !== pxH) {
-          canvas.height = pxH;
+          if (oldH !== newH) {
           resizedAny = true;
           try { window.__PERF_DG_BACKING_RESIZE_COUNT = (window.__PERF_DG_BACKING_RESIZE_COUNT || 0) + 1; } catch {}
           if (isOverlayLayer(canvas)) { try { window.__PERF_DG_OVERLAY_RESIZE_COUNT = (window.__PERF_DG_OVERLAY_RESIZE_COUNT || 0) + 1; } catch {} }
         }
         // style width/height is already set via styleCanvases above
+        }
       }
       if (resizedAny) {
         // Resizing clears grid/nodes backing stores; force a static redraw.

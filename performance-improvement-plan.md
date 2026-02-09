@@ -169,6 +169,50 @@ Interpretation: **Overlays strongly affect p99 spikes** and overall average; par
 * Removed hidden connector-layer gradient circles (they were always behind the orange square nodes).
 * Verified via manual repro (new toy ? random; pan/zoom; warm refresh) + Perf Lab run perf-lab-results-2026-02-04T13-12-38-553Z.json.
 
+### 2.9 Multi-toy quality tiers (DrawGrid) + Perf Lab A/B instrumentation (Feb 6 2026)
+
+**Status: IN PROGRESS / NOW MEASURABLE**
+
+**What changed**
+
+* Implemented **DrawGrid quality tiers** as the primary “reduce work, not cadence” lever:
+  * Per-tier gating for:
+    * particles
+    * overlay specials
+    * playhead extras
+    * heavy overlay cadence (time-based, not frame-modulo)
+* Added a **hard tier-based DPR clamp** (`maxDprMul`) so tiers actually reduce **pixel/raster cost** (the `frame.nonScript` wall).
+* Added **Perf Lab → Quality** control:
+  * force DrawGrid tier (`-1..3` / Auto)
+  * A/B queue variants for tier auto on/off and forced tiers.
+* Made **Auto: Current Focus labels composable** (multiple toggles recorded in the run label),
+  so P6 runs are self-describing without manual cross-referencing.
+
+**Where**
+
+* `src/drawgrid/dg-quality.js`
+  * Tier profile table extended with `maxDprMul` (hard cap on final DPR relative to device DPR).
+* `src/drawgrid.js`
+  * Apply `tierMaxDpr = baseDeviceDpr * maxDprMul` as a hard clamp on `desiredDprRaw`.
+* `src/perf/perf-lab.js`
+  * Quality Lab: DrawGrid tier force option
+  * Auto: Current Focus queue expanded to include tier A/B + forced-tier runs
+  * Run label tagging made composable (e.g. `__dgAutoOn+dgTier1+loopRenderOff`)
+
+**How verified**
+
+From latest **Auto: Current Focus** (P6c extreme zoom, multi-toy):
+
+* Forced tiers show a real **nonScript reduction** (pixel work reduced):
+  * Tier 3: `frame.nonScript` avg ~47ms
+  * Tier 1: `frame.nonScript` avg ~43ms
+  * Result: tier clamp is now a real lever (not placebo).
+
+**Conclusion**
+
+> The tier system is now “real” because it measurably reduces `frame.nonScript`.
+> Remaining performance work should move outward to other heavy renderers (LoopGrid) and chain systems.
+
 
 ---
 
@@ -232,6 +276,18 @@ plus large worst-frame spikes. This implies we must prioritise:
 * alpha-heavy blits / scaling
 
 Latest focus bundle confirms this again: baseline `frame.nonScript` avg is ~49.5ms.
+
+### 4.11 Tiers must clamp pixels to move nonScript
+
+* Feature gating alone (particles/playhead/overlay “specials”) is not enough in P6 extreme zoom.
+* The first tier implementation did not meaningfully change P6 `frame.nonScript`.
+* After adding a **hard tier DPR clamp** (`maxDprMul`), forced Tier 1 vs Tier 3 now shows a real `frame.nonScript` reduction.
+* Therefore: tier systems should prioritise **pixel work reduction first**, then optional effects.
+
+### 4.12 LoopGrid render is the next obvious nonScript lever
+
+* In P6 multi-toy runs, disabling LoopGrid render removes its RAF cost and improves averages.
+* Next step is to make LoopGrid participate in the same pixel-budget strategy (tier + DPR clamp).
 
 ### 4.2 Micro-marks change the game
 
@@ -379,22 +435,43 @@ This table exists to remove ambiguity during implementation. Each tier explicitl
 
 ### Next optimisation targets (ordered)
 
-1. **Project focus/quality budget manager (default multi-toy behaviour)**
+1. **LoopGrid: add tier + hard DPR clamp (match DrawGrid’s “pixel cost first” model)**
+
+   * Implement `loopgrid-quality.js` (or equivalent) with:
+     * `resScale` (soft)
+     * `maxDprMul` (hard cap)
+     * optional feature gates (secondary)
+   * Apply the hard cap at LoopGrid’s **canvas backing-size point of truth**.
+   * Verify using **Auto: Current Focus** P6c:
+     * `frame.nonScript` decreases when LoopGrid tier is lowered / clamped.
+     * `loopgrid` RAF bucket decreases or remains stable.
+   * Add Perf Lab controls similar to DrawGrid:
+     * Force LoopGrid tier / Auto
+     * A/B runs for LoopGrid tier impact in P6.
+
+2. **Project focus/quality budget manager (default multi-toy behaviour)**
 
    * Implement the DrawGrid tiering system above (profiles + hysteresis) as the reference implementation.
    * Wire visibility classification (ONSCREEN/NEARSCREEN/OFFSCREEN) and ensure offscreen visuals are near-free.
    * Add a Perf Lab A/B run that toggles budget manager ON/OFF in the same P6 scene.
 
-2. **Multi-toy scenes**
+3. **Multi-toy scenes**
 
    * Validate compositor behaviour with many simultaneous toys.
    * Update **Auto: Current Focus** to be P6-based A/B isolates (baseline ? chains off ? LoopGrid render off ? overview toggles).
    * Keep **Run-Auto (Generic)** unchanged; it remains the broad regression check.
-3. **Particle field under extreme load**
+4. **Chain system spike work (p95/p99 reduction)**
+
+   * Once LoopGrid is tier-aware, re-check the chain A/B deltas.
+   * Target: reduce worst-frame spikes without changing cadence (no modulo, no freezing).
+   * Use the now-tagged A/B results to isolate:
+     * chain UI vs connectors vs traversal
+
+5. **Particle field under extreme load**
 
    * Mobile GPU limits
    * Very large boards
-4. **Mobile Safari / low-end GPU validation**
+6. **Mobile Safari / low-end GPU validation**
 
    * Confirm pressure-DPR + gesture-DPR hold up on weaker devices.
 

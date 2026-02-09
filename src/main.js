@@ -666,7 +666,9 @@ function getOrCreateChainLayer(boardKey) {
     position: 'absolute',
     inset: '0',
     pointerEvents: 'none',
-    zIndex: '50',
+    // IMPORTANT: this canvas is in viewport space. If its z-index is too high,
+    // it will draw *over* toy UI controls (eg the chain extend button). Keep it low.
+    zIndex: '0',
     display: 'block',
     opacity: '1',
     mixBlendMode: 'normal',
@@ -708,15 +710,19 @@ function ensureChainCanvasAttachedToActiveBoard(boardCtx = null) {
     Object.assign(wrapper.style, {
       position: 'absolute',
       inset: '0',
-      zIndex: '50',
+      // Keep the connector layer underneath toy UI (controls live in the transformed world).
+      // A high z-index here forces connectors above everything (because the world transform
+      // creates a new stacking context, so UI controls can't out-z-index it).
+      zIndex: '0',
       pointerEvents: 'none',
       isolation: 'isolate',
     });
-    // Appending ensures we're late in DOM order (helps in internal overlay stacks).
-    try { viewport.appendChild(wrapper); } catch {}
+    // Put the connector layer behind the viewport's main content.
+    // (World/toys come later in DOM order so they render above.)
+    try { viewport.prepend(wrapper); } catch {}
   }
   try {
-    wrapper.style.zIndex = '50';
+    wrapper.style.zIndex = '0';
     wrapper.style.pointerEvents = 'none';
     wrapper.style.isolation = 'isolate';
   } catch {}
@@ -738,6 +744,15 @@ function ensureChainCanvasAttachedToActiveBoard(boardCtx = null) {
   chainCtx = layer.ctx;
 
   dbgChainInternal('ensureChainCanvasAttachedToActiveBoard', { boardKey: ctx.key, viewportId: viewport.id || null });
+}
+
+function clearChainCanvasHard() {
+  try {
+    if (!chainCanvas || !chainCtx) return;
+    // Reset transform just in case; our chain canvas should always be identity.
+    chainCtx.setTransform(1, 0, 0, 1, 0, 0);
+    chainCtx.clearRect(0, 0, chainCanvas.width || 0, chainCanvas.height || 0);
+  } catch {}
 }
 
 /**
@@ -2681,6 +2696,8 @@ function exitInternalBoardImmediate() {
 
   // Connectors: move chain canvas back to the main #board and rebuild main-board geometry.
   try { ensureChainCanvasAttachedToActiveBoard(); } catch {}
+  // Clear any stale internal-board connector frame before we redraw on the main board.
+  try { clearChainCanvasHard(); } catch {}
   try { rebuildChainSegments(); } catch {}
   try { g_chainRedrawPendingFull = true; } catch {}
   try { scheduleChainRedraw(true); } catch {}

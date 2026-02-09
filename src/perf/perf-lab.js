@@ -165,27 +165,44 @@ const AUTO_FOCUS_QUEUE = [
   // Baseline (shipping intent: tiers AUTO ON)
   'dgTierAutoOn',
   'dgForceTierAuto',
+  'lgForceTierAuto',
   'runP6e',
   'warmupSettle',
 
   // A/B: tiers auto ON vs OFF (prove impact)
   'dgTierAutoOff',
   'dgForceTierAuto',
+  'lgForceTierAuto',
   'runP6e',
   'warmupSettle',
   'dgTierAutoOn',
   'dgForceTierAuto',
+  'lgForceTierAuto',
   'runP6e',
   'warmupSettle',
 
   // Signal test: force tiers (ceiling vs floor)
   'dgForceTier3',
+  'lgForceTierAuto',
   'runP6e',
   'warmupSettle',
   'dgForceTier1',
+  'lgForceTierAuto',
   'runP6e',
   'warmupSettle',
   'dgForceTierAuto',
+  'lgForceTierAuto',
+  'warmupSettle',
+
+  // Signal test: LoopGrid tiers (pixels-first lever)
+  // NOTE: LoopGrid tier ids are 0..4 (0 = full-fat).
+  'lgForceTier0',
+  'runP6e',
+  'warmupSettle',
+  'lgForceTier3',
+  'runP6e',
+  'warmupSettle',
+  'lgForceTierAuto',
   'warmupSettle',
 
   // A/B: chains (connectors + chain UI + chain traversal)
@@ -504,6 +521,16 @@ function ensureUI() {
                     <option value="-1">-1 (Emergency)</option>
                   </select>
                 </label>
+                <label class="perf-lab-toggle">LoopGrid tier
+                  <select class="perf-lab-select" data-qlab="lgForceTier">
+                    <option value="">Auto</option>
+                    <option value="0">0 (Full)</option>
+                    <option value="1">1 (High)</option>
+                    <option value="2">2 (Med)</option>
+                    <option value="3">3 (Low)</option>
+                    <option value="4">4 (Ultra)</option>
+                  </select>
+                </label>
                 <div class="perf-lab-row perf-lab-qlab-buttons">
                   <button class="perf-lab-btn perf-lab-btn-mini" data-act="qualityApply">Apply</button>
                 </div>
@@ -728,6 +755,7 @@ function ensureUI() {
     if (!('cpuBurnMs' in qlab)) qlab.cpuBurnMs = 0;
     if (!('forceScale' in qlab)) qlab.forceScale = null;
     if (!('dgForceTier' in qlab)) qlab.dgForceTier = (typeof window !== 'undefined' ? (window.__DG_FORCE_TIER ?? null) : null);
+    if (!('lgForceTier' in qlab)) qlab.lgForceTier = (typeof window !== 'undefined' ? (window.__LG_FORCE_TIER ?? null) : null);
     // Legacy mirror (handy for console poking)
     if (typeof window.__QUALITY_FORCE_SCALE !== 'number') window.__QUALITY_FORCE_SCALE = null;
   } catch {}
@@ -742,6 +770,7 @@ function ensureUI() {
   try {
     __pending.qlab = { ...(window.__QUALITY_LAB || {}) };
     if (!('dgForceTier' in __pending.qlab)) __pending.qlab.dgForceTier = (typeof window !== 'undefined' ? (window.__DG_FORCE_TIER ?? null) : null);
+    if (!('lgForceTier' in __pending.qlab)) __pending.qlab.lgForceTier = (typeof window !== 'undefined' ? (window.__LG_FORCE_TIER ?? null) : null);
     __pending.particles = { ...(window.__PERF_PARTICLES || {}) };
     __pending.perf = {
       traceMarks: !!window.__PERF_TRACE_MARKS,
@@ -750,7 +779,7 @@ function ensureUI() {
       traceDomInRaf: !!(window.__PERF_TRACE && window.__PERF_TRACE.traceDomInRaf),
     };
   } catch {
-    __pending.qlab = { targetFps: 0, cpuBurnMs: 0, forceScale: null, dgForceTier: null };
+    __pending.qlab = { targetFps: 0, cpuBurnMs: 0, forceScale: null, dgForceTier: null, lgForceTier: null };
     __pending.particles = {};
     __pending.perf = { traceMarks: false, freezeChainUi: false, traceCanvasResize: false, traceDomInRaf: false };
   }
@@ -769,6 +798,11 @@ function ensureUI() {
         }
         if (k === 'dgForceTier') {
           const v = __pending.qlab.dgForceTier;
+          if (el.tagName === 'SELECT') el.value = (v == null) ? '' : String(v);
+          return;
+        }
+        if (k === 'lgForceTier') {
+          const v = __pending.qlab.lgForceTier;
           if (el.tagName === 'SELECT') el.value = (v == null) ? '' : String(v);
           return;
         }
@@ -824,6 +858,29 @@ function ensureUI() {
     } catch {}
   }
 
+  function __applyLoopgridForceTier(forceTier) {
+    // LoopGrid currently reads the global override (window.__LG_FORCE_TIER) inside the toy code.
+    // We also *optionally* push to panels if we ever add a panel hook later.
+    try {
+      window.__LG_FORCE_TIER = (forceTier == null) ? null : forceTier;
+    } catch {}
+
+    try {
+      const panels = document.querySelectorAll('.toy-panel');
+      for (const p of panels) {
+        const fn = p && p.__lgSetQualityTier;
+        if (typeof fn !== 'function') continue;
+        if (forceTier == null) {
+          try { delete p.__lgQualityTier; } catch {}
+          try { delete p.__lgQualityTierReason; } catch {}
+          try { delete p.__lgQualityTierSetMs; } catch {}
+        } else {
+          fn(forceTier, 'perflab');
+        }
+      }
+    } catch {}
+  }
+
   function applyPendingToGlobals() {
     try {
       window.__QUALITY_LAB = window.__QUALITY_LAB || {};
@@ -832,10 +889,15 @@ function ensureUI() {
       qlab.cpuBurnMs = Math.max(0, Number(__pending.qlab.cpuBurnMs) || 0);
       qlab.forceScale = (typeof __pending.qlab.forceScale === 'number' && isFinite(__pending.qlab.forceScale)) ? __pending.qlab.forceScale : null;
       qlab.dgForceTier = (__pending.qlab.dgForceTier == null) ? null : (__pending.qlab.dgForceTier | 0);
+      qlab.lgForceTier = (__pending.qlab.lgForceTier == null) ? null : (__pending.qlab.lgForceTier | 0);
       window.__QUALITY_FORCE_SCALE = (typeof qlab.forceScale === 'number') ? qlab.forceScale : null;
       try {
         const t = (qlab.dgForceTier == null) ? null : (qlab.dgForceTier | 0);
         __applyDrawgridForceTier(t);
+      } catch {}
+      try {
+        const t = (qlab.lgForceTier == null) ? null : (qlab.lgForceTier | 0);
+        __applyLoopgridForceTier(t);
       } catch {}
 
       window.__PERF_PARTICLES = window.__PERF_PARTICLES || {};
@@ -896,6 +958,11 @@ function ensureUI() {
         }
         if (k === 'dgForceTier') {
           const v = qlab.dgForceTier;
+          if (el.tagName === 'SELECT') el.value = (v == null) ? '' : String(v);
+          return;
+        }
+        if (k === 'lgForceTier') {
+          const v = qlab.lgForceTier;
           if (el.tagName === 'SELECT') el.value = (v == null) ? '' : String(v);
           return;
         }
@@ -1102,6 +1169,13 @@ function ensureUI() {
           else {
             const v = Number(raw);
             __pending.qlab.dgForceTier = Number.isFinite(v) ? (v | 0) : null;
+          }
+        } else if (qKey === 'lgForceTier') {
+          const raw = String(t.value || '').trim();
+          if (!raw) __pending.qlab.lgForceTier = null;
+          else {
+            const v = Number(raw);
+            __pending.qlab.lgForceTier = Number.isFinite(v) ? (v | 0) : null;
           }
         } else {
           __pending.qlab[qKey] = Math.max(0, Number(t.value) || 0);
@@ -5994,6 +6068,31 @@ try {
         } catch {}
       },
 
+      // -------------------------------------------------------------------
+      // LoopGrid tier automation helpers (for auto queues)
+      // -------------------------------------------------------------------
+      __applyLgForceTier: async function __applyLgForceTier(forceTier, reason = 'auto') {
+        // Persist global override
+        try { window.__LG_FORCE_TIER = (forceTier == null) ? null : (forceTier | 0); } catch {}
+
+        // Push to all existing LoopGrid panels by forcing a layout recompute.
+        // This matters because LoopGrid’s DPR clamp is applied at its sizing truth-point.
+        try {
+          const panels = document.querySelectorAll('.toy-panel');
+          for (const p of panels) {
+            const st = p && p.__simpleRhythmVisualState;
+            if (!st) continue;
+            // Trigger redraw + re-layout (re-applies backing store sizing immediately)
+            try { p.__loopgridNeedsRedraw = true; } catch {}
+            const w = (st._cssW | 0);
+            const h = (st._cssH | 0);
+            if (w > 0 && h > 0 && typeof st.computeLayout === 'function') {
+              try { st.computeLayout(w, h); } catch {}
+            }
+          }
+        } catch {}
+      },
+
       dgTierAutoOn: async function dgTierAutoOn() {
         try { window.__DG_TIER_AUTO = true; } catch {}
         try { __perfSetRunTagPart('dgAuto', 'dgAutoOn'); } catch {}
@@ -6028,6 +6127,36 @@ try {
       dgForceTierEmergency: async function dgForceTierEmergency() {
         try { await window.__PerfLab.__applyDgForceTier(-1, 'auto'); } catch {}
         try { __perfSetRunTagPart('dgTier', 'dgTierEmergency'); } catch {}
+      },
+      lgForceTierAuto: async function lgForceTierAuto() {
+        try { await window.__PerfLab.__applyLgForceTier(null, 'auto'); } catch {}
+        try { __perfSetRunTagPart('lgTier', 'lgTierAuto'); } catch {}
+        try { syncUiFromState(); } catch {}
+      },
+      lgForceTier0: async function lgForceTier0() {
+        try { await window.__PerfLab.__applyLgForceTier(0, 'auto'); } catch {}
+        try { __perfSetRunTagPart('lgTier', 'lgTier0'); } catch {}
+        try { syncUiFromState(); } catch {}
+      },
+      lgForceTier1: async function lgForceTier1() {
+        try { await window.__PerfLab.__applyLgForceTier(1, 'auto'); } catch {}
+        try { __perfSetRunTagPart('lgTier', 'lgTier1'); } catch {}
+        try { syncUiFromState(); } catch {}
+      },
+      lgForceTier2: async function lgForceTier2() {
+        try { await window.__PerfLab.__applyLgForceTier(2, 'auto'); } catch {}
+        try { __perfSetRunTagPart('lgTier', 'lgTier2'); } catch {}
+        try { syncUiFromState(); } catch {}
+      },
+      lgForceTier3: async function lgForceTier3() {
+        try { await window.__PerfLab.__applyLgForceTier(3, 'auto'); } catch {}
+        try { __perfSetRunTagPart('lgTier', 'lgTier3'); } catch {}
+        try { syncUiFromState(); } catch {}
+      },
+      lgForceTier4: async function lgForceTier4() {
+        try { await window.__PerfLab.__applyLgForceTier(4, 'auto'); } catch {}
+        try { __perfSetRunTagPart('lgTier', 'lgTier4'); } catch {}
+        try { syncUiFromState(); } catch {}
       },
       dgAdaptiveOff: async function dgAdaptiveOff() {
         // Force DrawGrid adaptive DPR OFF (for A/B comparisons).

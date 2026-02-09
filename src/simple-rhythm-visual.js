@@ -7,7 +7,13 @@ import { isRunning, getLoopInfo } from './audio-core.js';
 import { createField } from './particles/field-generic.js';
 import { createParticleViewport } from './particles/particle-viewport.js';
 import { getParticleBudget, getAdaptiveFrameBudget } from './particles/ParticleQuality.js';
-import { resizeCanvasForDPR } from './utils.js';
+import {
+  syncCanvasCssSize,
+  applyCanvasBackingSize,
+  readForcedTier,
+  pickTierFromTable,
+  stampTierDebugMeta,
+} from './baseMusicToy/index.js';
 import { overviewMode } from './overview-mode.js';
 import { onZoomChange, namedZoomListener } from './zoom/ZoomCoordinator.js';
 import { requestPanelPulse } from './pulse-border.js';
@@ -16,6 +22,74 @@ import { queueClassToggle, markPanelForDomCommit } from './dom-commit.js';
 // --- sizing helpers ---------------------------------------------------------
 function raf() {
   return new Promise(r => requestAnimationFrame(r));
+}
+
+// --- LoopGrid quality tiers (INERT for now) ---------------------------------
+// Philosophy (matches perf plan + DrawGrid approach):
+// - resScale is a soft multiplier (helps, but not sufficient alone).
+// - maxDprMul is the hard clamp (this is the real nonScript lever).
+// - We wire tier selection now but do NOT apply it until the next patch.
+const __LG_TIER_TABLE = Object.freeze([
+  // tier:0 is "full fat"
+  { id: 0, name: 'full',   resScale: 1.00, maxDprMul: 10.0 },
+  { id: 1, name: 'high',   resScale: 0.90, maxDprMul: 2.00 },
+  { id: 2, name: 'med',    resScale: 0.78, maxDprMul: 1.50 },
+  { id: 3, name: 'low',    resScale: 0.66, maxDprMul: 1.20 },
+  { id: 4, name: 'ultra',  resScale: 0.55, maxDprMul: 1.00 },
+]);
+
+// Choose a tier.
+function getLoopgridTierParams(panel, st) {
+  const forced = readForcedTier({ qlabKey: 'lgForceTier', legacyGlobalKey: '__LG_FORCE_TIER' });
+  // Default remains tier 0 unless a forced tier is present.
+  const pick = pickTierFromTable({ forcedTier: forced, table: __LG_TIER_TABLE, defaultId: 0 });
+  const tierId = pick.tierId;
+  const out = { ...(pick.params || __LG_TIER_TABLE[0]) };
+
+  const forcedMax = (typeof window !== 'undefined') ? window.__LG_FORCE_MAXDPRMUL : null;
+  if (Number.isFinite(forcedMax) && forcedMax > 0) out.maxDprMul = forcedMax;
+
+  // Store debug/telemetry in a standardized way.
+  stampTierDebugMeta({ panel, state: st, key: 'loopgrid', tierId, params: out });
+  return out;
+}
+
+// LoopGrid sizing truth-point (behaviour-preserving):
+// - uses devicePixelRatio (same as utils.resizeCanvasForDPR)
+// - uses Math.floor(css * dpr) (same as utils.resizeCanvasForDPR)
+// - resets ctx transform on resize (same as utils.resizeCanvasForDPR when ctx provided)
+function resizeCanvasForDPR_BM(canvas, ctx, cssW, cssH, opts = {}) {
+  const deviceDpr = (Number.isFinite(window.devicePixelRatio) && window.devicePixelRatio > 0) ? window.devicePixelRatio : 1;
+  let dpr = deviceDpr;
+  // Optional override: lets future tier/pressure systems choose the DPR.
+  if (opts && Number.isFinite(opts.rawDpr) && opts.rawDpr > 0) {
+    dpr = opts.rawDpr;
+  }
+  // Optional hard clamp: ensures we can bound pixels even when other multipliers exist.
+  // (No clamp by default to preserve current behaviour.)
+  if (opts && Number.isFinite(opts.maxDprMul) && opts.maxDprMul > 0) {
+    const hardMax = deviceDpr * opts.maxDprMul;
+    if (Number.isFinite(hardMax) && hardMax > 0) dpr = Math.min(dpr, hardMax);
+  }
+  const w = Math.max(1, (cssW | 0));
+  const h = Math.max(1, (cssH | 0));
+
+  // Keep CSS size authoritative + cached (no layout reads here).
+  syncCanvasCssSize(canvas, w, h, { cachePrefix: '__bm' });
+
+  const needW = Math.floor(w * dpr);
+  const needH = Math.floor(h * dpr);
+
+  const beforeW = canvas.width | 0;
+  const beforeH = canvas.height | 0;
+  applyCanvasBackingSize(canvas, needW, needH, dpr, { cachePrefix: '__bm' });
+  const resized = ((beforeW !== (canvas.width|0)) || (beforeH !== (canvas.height|0)));
+
+  if (resized && ctx && ctx.setTransform) {
+    try { ctx.setTransform(1, 0, 0, 1, 0, 0); } catch {}
+  }
+
+  return { width: canvas.width, height: canvas.height, dpr, deviceDpr };
 }
 
 /**
@@ -510,7 +584,13 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     },
     _burstLastTime: performance.now(),
     computeLayout: (w, h) => {
-      resizeCanvasForDPR(st.canvas, w, h);
+      // Apply LoopGrid tier params to backing-store sizing (pixels-first lever).
+      const tier = getLoopgridTierParams(panel, st);
+      const deviceDpr = (Number.isFinite(window.devicePixelRatio) && window.devicePixelRatio > 0) ? window.devicePixelRatio : 1;
+      const resScale = (tier && Number.isFinite(tier.resScale) && tier.resScale > 0) ? tier.resScale : 1;
+      const rawDpr = deviceDpr * resScale;
+      const maxDprMul = (tier && Number.isFinite(tier.maxDprMul) && tier.maxDprMul > 0) ? tier.maxDprMul : null;
+      resizeCanvasForDPR_BM(st.canvas, st.ctx, w, h, { rawDpr, maxDprMul });
       st._cssW = w;
       st._cssH = h;
       const cssW = w;
@@ -564,7 +644,23 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     lineWidth: Number.isFinite(burstDebugEnv?.lineWidth) ? burstDebugEnv.lineWidth : 2,
     lineDash: Array.isArray(burstDebugEnv?.lineDash) ? burstDebugEnv.lineDash : [],
   };
-  panel.__simpleRhythmVisualState = st; // Assign st to panel here
+  // Expose state/hooks for PerfLab + Quality Lab forcing.
+  // (Safe: purely optional; no callers = no behaviour change.)
+  try { panel.__simpleRhythmVisualState = st; } catch {}
+  try {
+    panel.__lgSetQualityTier = (tierId, reason = 'external') => {
+      try { window.__LG_FORCE_TIER = (tierId == null) ? null : (tierId | 0); } catch {}
+      // Re-apply sizing immediately at current css size (truth-point).
+      const w = (st._cssW | 0);
+      const h = (st._cssH | 0);
+      if (w > 0 && h > 0) {
+        try { st.computeLayout(w, h); } catch {}
+      }
+      try { panel.__loopgridNeedsRedraw = true; } catch {}
+      try { panel.__lgQualityTierReason = reason; } catch {}
+      try { panel.__lgQualityTierSetMs = performance.now(); } catch {}
+    };
+  } catch {}
 
   st._resizer?.disconnect?.(); // in case of re-init
 
