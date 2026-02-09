@@ -5,7 +5,7 @@ import { buildPalette, midiToName } from '../note-helpers.js';
 import { drawBlock } from '../toyhelpers.js';
 import { getLoopInfo, isRunning } from '../audio-core.js';
 import { onZoomChange, getZoomState, getFrameStartState, onFrameStart, namedZoomListener } from '../zoom/ZoomCoordinator.js';
-import { createParticleViewport, createField, getParticleBudget, getAdaptiveFrameBudget, getParticleCap } from '../baseMusicToy/index.js';
+import { createParticleViewport, createField, getParticleBudget, getAdaptiveFrameBudget, getParticleCap, createToyVisibilityObserver } from '../baseMusicToy/index.js';
 import { overviewMode } from '../overview-mode.js';
 import { boardScale as boardScaleHelper } from '../board-scale-helpers.js';
 import { beginFrameLayoutCache, getRect } from '../layout-cache.js';
@@ -3526,152 +3526,133 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   // Visibility culling: turn off heavy work when the panel is completely offscreen.
   // Hard-cull should treat "barely intersecting" as not visible, otherwise
   // toys keep their rAF loop alive while only a tiny sliver is on-screen.
-  if (typeof window !== 'undefined' && 'IntersectionObserver' in window) {
-    try {
-      let lastVisibleState = isPanelVisible;
-      let visRoot = null;
+  // DrawGrid-standard visibility system (extracted to baseMusicToy).
+  // Base owns IO mechanics; DrawGrid owns the policy reactions (tier auto, debug, etc.).
+  let lastVisibleState = isPanelVisible;
+  let visRoot = null;
+  try { visRoot = panel?.closest?.('.board-viewport') || null; } catch {}
+  const visObs = createToyVisibilityObserver({
+    panel,
+    root: visRoot,
+    thresholdRatio: DG_VISIBILITY_THRESHOLD,
+    onChange: ({ visible, state, ratio, entry }) => {
       try {
-        visRoot = panel?.closest?.('.board-viewport') || null;
-      } catch {}
-      const visObserver = new IntersectionObserver(
-        (entries) => {
-          for (const entry of entries) {
-            if (entry.target !== panel) continue;
-            const ratio = (typeof entry.intersectionRatio === 'number') ? entry.intersectionRatio : (entry.isIntersecting ? 1 : 0);
-
-            // Classify visibility for the focus/budget system.
-            // Keep the existing `isPanelVisible` boolean semantics: only "ONSCREEN" counts as visible.
-            const nextVisState = (!entry.isIntersecting || ratio <= 0)
-              ? 'OFFSCREEN'
-              : (ratio >= DG_VISIBILITY_THRESHOLD ? 'ONSCREEN' : 'NEARSCREEN');
-
-            // Persist state on panel for debugging / future global manager.
-            if (nextVisState !== __dgVisibilityState || Math.abs((ratio || 0) - (__dgLastIntersectionRatio || 0)) > 0.02) {
-              __dgSetVisibilityState(nextVisState, ratio);
-              try {
-                if (typeof window !== 'undefined' && window.__DG_DEBUG_CULL) {
-                  console.log('[DG][cull] VISSTATE', { panelId: panel?.id || null, state: nextVisState, ratio: +(__dgLastIntersectionRatio || 0).toFixed(3) });
-                }
-              } catch {}
+        // Preserve existing local semantics / variables.
+        isPanelVisible = !!visible;
+        if (state !== __dgVisibilityState || Math.abs((ratio || 0) - (__dgLastIntersectionRatio || 0)) > 0.02) {
+          __dgSetVisibilityState(state, ratio);
+          try {
+            if (typeof window !== 'undefined' && window.__DG_DEBUG_CULL) {
+              console.log('[DG][cull] VISSTATE', { panelId: panel?.id || null, state, ratio: +(__dgLastIntersectionRatio || 0).toFixed(3) });
             }
-            // Require a minimum intersection ratio to count as visible.
-            const visible =
-              entry.isIntersecting &&
-              (typeof entry.intersectionRatio !== 'number'
-                ? true
-                : entry.intersectionRatio >= DG_VISIBILITY_THRESHOLD);
-            isPanelVisible = !!visible;
-            // Auto-tier based on visibility state (unless caller has explicitly forced a tier).
-            // - OFFSCREEN: don't force anything (we hard-cull anyway)
-            // - NEARSCREEN: tier 1 (keeps resScale down; particles/specials off)
-            // - ONSCREEN: tier 3
+          } catch {}
+        }
+
+        // Auto-tier based on visibility state (unless caller has explicitly forced a tier).
+        // - OFFSCREEN: don't force anything (we hard-cull anyway)
+        // - NEARSCREEN: tier 1 (keeps resScale down; particles/specials off)
+        // - ONSCREEN: tier 3
+        try {
+          const forced = (panel.__dgQualityTier != null);
+          if (!forced) {
+            if (__dgVisibilityState === 'NEARSCREEN') dgQuality.setTier(1, 'vis:nearscreen');
+            else if (__dgVisibilityState === 'ONSCREEN') dgQuality.setTier(3, 'vis:onscreen');
+          }
+        } catch {}
+        try {
+          const debugCull = (typeof window !== 'undefined' && window.__DG_DEBUG_CULL);
+          if (debugCull && isPanelVisible !== lastVisibleState) {
+            console.log('[DG][cull] VIS', {
+              panelId: panel?.id || null,
+              from: lastVisibleState,
+              to: isPanelVisible,
+              ratio: entry?.intersectionRatio,
+              isIntersecting: entry?.isIntersecting,
+            });
+          }
+        } catch {}
+        const becameVisible = (isPanelVisible && !lastVisibleState);
+        if (becameVisible) {
+          // Reset nearscreen warm flag when we truly become visible.
+          __dgNearscreenWarmDone = false;
+
+          // Force a real redraw/composite the moment we come back on-screen.
+          try {
+            __dgMarkSingleCanvasDirty(panel);
+            panel.__dgSingleCompositeDirty = true;
+            panel.__dgCompositeBaseDirty = true;
+            panel.__dgCompositeOverlayDirty = true;
+          } catch {}
+
+          // Restart the per-panel render loop if it was hard-culled while offscreen.
+          ensureRenderLoopRunning();
+
+          try { __dgForceFullDrawNext = true; } catch {}
+          try { __dgForceFullDrawUntil = nowMs() + 200; } catch {}
+
+          // If we're using the single-canvas path, actually run it once immediately.
+          try {
+            if (DG_SINGLE_CANVAS) {
+              requestAnimationFrame(() => {
+                try { compositeSingleCanvas(); } catch {}
+                try { panel.__dgSingleCompositeDirty = false; } catch {}
+              });
+            }
+          } catch {}
+        }
+
+        // NEARSCREEN warm-up:
+        // If we're intersecting but below the "visible" threshold, do a single warm composite
+        // (no loop restart). This keeps the surface "ready" without paying continuous costs.
+        try {
+          if (__dgVisibilityState === 'NEARSCREEN' && !isPanelVisible && !__dgNearscreenWarmDone) {
+            __dgNearscreenWarmDone = true;
+            // Mark dirty so the next composite includes up-to-date content.
             try {
-              const forced = (panel.__dgQualityTier != null);
-              if (!forced) {
-                if (__dgVisibilityState === 'NEARSCREEN') dgQuality.setTier(1, 'vis:nearscreen');
-                else if (__dgVisibilityState === 'ONSCREEN') dgQuality.setTier(3, 'vis:onscreen');
-              }
+              __dgMarkSingleCanvasDirty(panel);
+              panel.__dgSingleCompositeDirty = true;
+              panel.__dgCompositeBaseDirty = true;
+              panel.__dgCompositeOverlayDirty = true;
             } catch {}
-            try {
-              const debugCull = (typeof window !== 'undefined' && window.__DG_DEBUG_CULL);
-              if (debugCull && isPanelVisible !== lastVisibleState) {
-                console.log('[DG][cull] VIS', {
-                  panelId: panel?.id || null,
-                  from: lastVisibleState,
-                  to: isPanelVisible,
-                  ratio: entry?.intersectionRatio,
-                  isIntersecting: entry?.isIntersecting,
-                });
-              }
-            } catch {}
-            const becameVisible = (isPanelVisible && !lastVisibleState);
-            if (becameVisible) {
-              // Reset nearscreen warm flag when we truly become visible.
-              __dgNearscreenWarmDone = false;
-
-              // Force a real redraw/composite the moment we come back on-screen.
-              try {
-                __dgMarkSingleCanvasDirty(panel);
-                panel.__dgSingleCompositeDirty = true;
-                panel.__dgCompositeBaseDirty = true;
-                panel.__dgCompositeOverlayDirty = true;
-              } catch {}
-
-              // Restart the per-panel render loop if it was hard-culled while offscreen.
-              ensureRenderLoopRunning();
-
-              try { __dgForceFullDrawNext = true; } catch {}
-              try { __dgForceFullDrawUntil = nowMs() + 200; } catch {}
-
-              // If we're using the single-canvas path, actually run it once immediately.
-              try {
-                if (DG_SINGLE_CANVAS) {
-                  requestAnimationFrame(() => {
-                    try { compositeSingleCanvas(); } catch {}
-                    try { panel.__dgSingleCompositeDirty = false; } catch {}
-                  });
-                }
-              } catch {}
-            }
-
-            // NEARSCREEN warm-up:
-            // If we're intersecting but below the "visible" threshold, do a single warm composite
-            // (no loop restart). This keeps the surface "ready" without paying continuous costs.
-            try {
-              if (__dgVisibilityState === 'NEARSCREEN' && !isPanelVisible && !__dgNearscreenWarmDone) {
-                __dgNearscreenWarmDone = true;
-                // Mark dirty so the next composite includes up-to-date content.
-                try {
-                  __dgMarkSingleCanvasDirty(panel);
-                  panel.__dgSingleCompositeDirty = true;
-                  panel.__dgCompositeBaseDirty = true;
-                  panel.__dgCompositeOverlayDirty = true;
-                } catch {}
-                if (DG_SINGLE_CANVAS) {
-                  requestAnimationFrame(() => {
-                    try { compositeSingleCanvas(); } catch {}
-                    try { panel.__dgSingleCompositeDirty = false; } catch {}
-                  });
-                }
-              }
-              if (__dgVisibilityState !== 'NEARSCREEN') {
-                __dgNearscreenWarmDone = false;
-              }
-            } catch {}
-            if (isPanelVisible && pendingResnapOnVisible) {
-              pendingResnapOnVisible = false;
-              resnapAndRedraw(true);
-            }
-            updateGlobalVisibility(isPanelVisible);
-            if (isPanelVisible && drawLabelState.drawLabelVisible) {
-              ensureLetterPhysicsLoop();
-            }
-            if (isPanelVisible !== lastVisibleState) {
-              lastVisibleState = isPanelVisible;
-              try {
-                drawgridLog('[DG][cull] visibility change', {
-                  id: panel.id || null,
-                  visible: isPanelVisible,
-                  ratio: Number.isFinite(entry.intersectionRatio)
-                    ? Number(entry.intersectionRatio.toFixed(3))
-                    : null,
-                });
-              } catch {}
+            if (DG_SINGLE_CANVAS) {
+              requestAnimationFrame(() => {
+                try { compositeSingleCanvas(); } catch {}
+                try { panel.__dgSingleCompositeDirty = false; } catch {}
+              });
             }
           }
-        },
-        {
-          root: visRoot,
-          threshold: [0, DG_VISIBILITY_THRESHOLD],
+          if (__dgVisibilityState !== 'NEARSCREEN') {
+            __dgNearscreenWarmDone = false;
+          }
+        } catch {}
+        if (isPanelVisible && pendingResnapOnVisible) {
+          pendingResnapOnVisible = false;
+          resnapAndRedraw(true);
         }
-      );
-      visObserver.observe(panel);
-      panel.__dgVisibilityObserver = visObserver;
-    } catch (e) {
-      // If anything goes wrong, assume visible so we don't break rendering
-      isPanelVisible = true;
-    }
-  }
+        updateGlobalVisibility(isPanelVisible);
+        if (isPanelVisible && drawLabelState.drawLabelVisible) {
+          ensureLetterPhysicsLoop();
+        }
+        if (isPanelVisible !== lastVisibleState) {
+          lastVisibleState = isPanelVisible;
+          try {
+            drawgridLog('[DG][cull] visibility change', {
+              id: panel.id || null,
+              visible: isPanelVisible,
+              ratio: Number.isFinite(ratio)
+                ? Number(ratio.toFixed(3))
+                : null,
+            });
+          } catch {}
+        }
+      } catch {}
+    },
+  });
+  try {
+    panel.addEventListener('toy:remove', () => {
+      try { visObs?.disconnect?.(); } catch {}
+    }, { once: true });
+  } catch {}
 
   // IMPORTANT: ensure there is NOT a second/duplicate IntersectionObserver visibility block
   // elsewhere in this file. If one exists (often using `entry.intersectionRatio > DG_VISIBILITY_THRESHOLD`

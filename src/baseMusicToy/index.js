@@ -11,6 +11,8 @@ export { waitForStableBox } from './waitForStableBox.js';
 export { syncCanvasesCssSize } from './syncCanvasesCssSize.js';
 export { createToyCanvasRig } from './createToyCanvasRig.js';
 export { createToyRelayoutController } from './toyRelayoutController.js';
+export { createGlobalPanelScheduler } from './toyRenderScheduler.js';
+export { createToyVisibilityObserver } from './toyVisibilityObserver.js';
 
 // --- Particles (shared infra; toys should not reach into baseMusicToy/particles/* directly)
 export { createParticleViewport } from './particles/particle-viewport.js';

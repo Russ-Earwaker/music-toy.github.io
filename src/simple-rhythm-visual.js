@@ -9,6 +9,7 @@ import {
   waitForStableBox,
   createToyCanvasRig,
   createToyRelayoutController,
+  createGlobalPanelScheduler,
 } from './baseMusicToy/index.js';
 import { getLoopgridTierParams } from './loopgrid/loopgrid-quality.js';
 import { overviewMode } from './overview-mode.js';
@@ -101,97 +102,54 @@ const chainNotesCache = new Map();
 // handle visual scaling (just like Bouncer).
 
 // --- Global render scheduler (single RAF for all loopgrids) -----------------
-const __LG = (() => {
-  const g = (typeof window !== 'undefined') ? window : null;
-  if (!g) return { panels: new Set(), running: false };
+// Implementation lives in baseMusicToy; LoopGrid supplies the per-panel logic.
+const __LG = createGlobalPanelScheduler({
+  globalKey: '__LOOPGRID_RENDER_SCHED',
+  globalStateKey: '__LOOPGRID_GLOBAL',
+  onPanel: (panel, frameCtx) => {
+    try {
+      if (window.__PERF_DISABLE_LOOPGRID_RENDER) return false;
 
-  if (g.__LOOPGRID_RENDER_SCHED) return g.__LOOPGRID_RENDER_SCHED;
+      const st = panel.__simpleRhythmVisualState;
+      const visible = !!(st && isPanelVisible(panel, st));
 
-  const globalState = g.__LOOPGRID_GLOBAL || (g.__LOOPGRID_GLOBAL = {
-    visibleCount: 0,
-    lastVisTs: 0,
-  });
+      // --- Toy performance contract (scene-level gating) ------------
+      // Loopgrid already uses a shared scheduler; we only need to
+      // adjust cadence / early-out.
+      const __arb = (typeof window !== 'undefined') ? window.__ToyUpdateArbiter : null;
+      const __dec = (__arb && typeof __arb.getDecision === 'function')
+        ? __arb.getDecision(panel, 'loopgrid')
+        : null;
+      if (__dec && Number.isFinite(__dec.frameModulo) && (__dec.frameModulo | 0) > 1) {
+        panel.__loopgridFrameModulo = __dec.frameModulo | 0;
+      } else {
+        panel.__loopgridFrameModulo = 1;
+      }
+      if (__dec && __dec.mode === 'frozen' && !__dec.focused && !visible) {
+        // Frozen + offscreen: only render if there's explicit pending work.
+        if (!panel.__loopgridNeedsRedraw && !(panel.__pulseHighlight > 0)) return visible;
+      }
 
-  const sched = {
-    panels: new Set(),
-    running: false,
-    frame: 0,
-    rafId: 0,
-    start() {
-      if (this.running) return;
-      this.running = true;
-      const tick = () => {
-        if (!this.running) return;
-        this.frame++;
-        let chainNotesCache = null;
-        if (window.__PERF_LOOPGRID_CHAIN_CACHE) {
-          this._chainNotesCache ||= new Map();
-          this._chainNotesCache.clear();
-          chainNotesCache = this._chainNotesCache;
-        }
-        let toDelete = null;
-        let visibleCount = 0;
-        const isGesture = !!(window.__ZoomCoordinator?.isGesturing?.() || document.body?.classList?.contains?.('is-gesturing'));
-        for (const panel of this.panels) {
-          try {
-            if (!panel || !panel.isConnected) {
-              if (!toDelete) toDelete = [];
-              toDelete.push(panel);
-              continue;
-            }
-            if (window.__PERF_DISABLE_LOOPGRID_RENDER) continue;
-            const st = panel.__simpleRhythmVisualState;
-            const visible = !!(st && isPanelVisible(panel, st));
+      if (!visible && !panel.__loopgridNeedsRedraw && !(panel.__pulseHighlight > 0)) {
+        return visible;
+      }
 
-            // --- Toy performance contract (scene-level gating) ------------
-            // Loopgrid already uses a shared scheduler; we only need to
-            // adjust cadence / early-out.
-            const __arb = (typeof window !== 'undefined') ? window.__ToyUpdateArbiter : null;
-            const __dec = (__arb && typeof __arb.getDecision === 'function')
-              ? __arb.getDecision(panel, 'loopgrid')
-              : null;
-            if (__dec && Number.isFinite(__dec.frameModulo) && (__dec.frameModulo | 0) > 1) {
-              panel.__loopgridFrameModulo = __dec.frameModulo | 0;
-            } else {
-              panel.__loopgridFrameModulo = 1;
-            }
-            if (__dec && __dec.mode === 'frozen' && !__dec.focused && !visible) {
-              // Frozen + offscreen: only render if there's explicit pending work.
-              if (!panel.__loopgridNeedsRedraw && !(panel.__pulseHighlight > 0)) continue;
-            }
+      const mod = panel.__loopgridFrameModulo | 0;
+      if (mod > 1 && (frameCtx.frame % mod) !== 0) return visible;
 
-            if (visible) {
-              visibleCount++;
-            } else if (!panel.__loopgridNeedsRedraw && !(panel.__pulseHighlight > 0)) {
-              continue;
-            }
-            const mod = panel.__loopgridFrameModulo | 0;
-            if (mod > 1 && (this.frame % mod) !== 0) continue;
-            render(panel, { forceNudge: false, isGesture, chainNotesCache, visible });
-          } catch {}
-        }
-        if (toDelete) {
-          for (const panel of toDelete) {
-            this.panels.delete(panel);
-          }
-        }
-        globalState.visibleCount = visibleCount;
-        globalState.lastVisTs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-        this.rafId = requestAnimationFrame(tick);
-      };
-      tick.__perfRafTag = 'perf.raf.loopgrid';
-      this.rafId = requestAnimationFrame(tick);
-    },
-    stop() {
-      this.running = false;
-      try { cancelAnimationFrame(this.rafId); } catch {}
-      this.rafId = 0;
-    },
-  };
+      render(panel, {
+        forceNudge: false,
+        isGesture: !!frameCtx.isGesture,
+        chainNotesCache: frameCtx.chainNotesCache || null,
+        visible,
+      });
 
-  g.__LOOPGRID_RENDER_SCHED = sched;
-  return sched;
-})();
+      return visible;
+    } catch {
+      return false;
+    }
+  },
+});
 
 const GAP = 4; // A few pixels of space between each cube
 const BORDER_MARGIN = 4;
