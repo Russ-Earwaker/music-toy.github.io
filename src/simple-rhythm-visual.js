@@ -10,6 +10,7 @@ import {
   createToyCanvasRig,
   createToyRelayoutController,
   createGlobalPanelScheduler,
+  createToyDirtyFlags,
 } from './baseMusicToy/index.js';
 import { getLoopgridTierParams } from './loopgrid/loopgrid-quality.js';
 import { overviewMode } from './overview-mode.js';
@@ -97,6 +98,15 @@ const TAP_LABEL_OPACITY_BASE = 1;
 const CHAIN_NOTES_CACHE_MS = 200;
 const chainNotesCache = new Map();
 
+// Debug toggle (off by default)
+const __LG_DEBUG_DIRTY = () => {
+  try { return !!window.__LG_DEBUG_DIRTY; } catch { return false; }
+};
+const __lgDbg = (label, data) => {
+  if (!__LG_DEBUG_DIRTY()) return;
+  try { console.log(`[LG][DIRTY] ${label}`, data || ''); } catch {}
+};
+
 // Simple Rhythm cubes: size purely from the local canvas, not boardScale.
 // This keeps them stable across zoom levels and lets the global board zoom
 // handle visual scaling (just like Bouncer).
@@ -112,6 +122,43 @@ const __LG = createGlobalPanelScheduler({
 
       const st = panel.__simpleRhythmVisualState;
       const visible = !!(st && isPanelVisible(panel, st));
+      // DEBUG: show scheduler activity + visibility quickly
+      if (__LG_DEBUG_DIRTY()) {
+        try {
+          panel.__lgDbgLastFrame = frameCtx.frame | 0;
+          panel.__lgDbgVisible = !!visible;
+        } catch {}
+      }
+      const dirty = panel.__lgDirty;
+
+      // IMPORTANT: transport-driven redraw must be requested BEFORE consume(),
+      // so the current frame's dirtySnap.redraw is true and render() gets a
+      // "forceNudge" consistently while playing.
+      const transportRunning = (typeof isRunning === 'function') && isRunning();
+      if (transportRunning && dirty && typeof dirty.requestRedraw === 'function') {
+        try { dirty.requestRedraw('loopgrid:transport'); } catch {}
+        if (__LG_DEBUG_DIRTY()) __lgDbg('sched.request(transport)', { frame: frameCtx.frame | 0, visible: !!visible });
+      }
+
+      const dirtySnap = (dirty && typeof dirty.consume === 'function')
+        ? dirty.consume()
+        : { redraw: false };
+      if (__LG_DEBUG_DIRTY()) {
+        try {
+          // Note: dirtySnap is the PRE-consume snapshot.
+          panel.__lgDbgLastConsume = {
+            frame: frameCtx.frame | 0,
+            visible: !!visible,
+            redraw: !!dirtySnap.redraw,
+            layout: !!dirtySnap.layout,
+            static: !!dirtySnap.static,
+            overlay: !!dirtySnap.overlay,
+            composite: !!dirtySnap.composite,
+            reason: dirtySnap.reason || null,
+            pulse: (panel.__pulseHighlight || 0),
+          };
+        } catch {}
+      }
 
       // --- Toy performance contract (scene-level gating) ------------
       // Loopgrid already uses a shared scheduler; we only need to
@@ -127,10 +174,11 @@ const __LG = createGlobalPanelScheduler({
       }
       if (__dec && __dec.mode === 'frozen' && !__dec.focused && !visible) {
         // Frozen + offscreen: only render if there's explicit pending work.
-        if (!panel.__loopgridNeedsRedraw && !(panel.__pulseHighlight > 0)) return visible;
+        if (!dirtySnap.redraw && !(panel.__pulseHighlight > 0)) return visible;
       }
 
-      if (!visible && !panel.__loopgridNeedsRedraw && !(panel.__pulseHighlight > 0)) {
+      if (!visible && !dirtySnap.redraw && !(panel.__pulseHighlight > 0)) {
+        if (__LG_DEBUG_DIRTY()) __lgDbg('skip(offscreen, clean)', { frame: frameCtx.frame | 0, pulse: panel.__pulseHighlight || 0 });
         return visible;
       }
 
@@ -138,14 +186,21 @@ const __LG = createGlobalPanelScheduler({
       if (mod > 1 && (frameCtx.frame % mod) !== 0) return visible;
 
       render(panel, {
-        forceNudge: false,
+        // IMPORTANT: if the dirty system says "redraw", treat it as a force-nudge
+        // for THIS frame, otherwise render() can early-out and appear frozen.
+        forceNudge: !!dirtySnap.redraw,
         isGesture: !!frameCtx.isGesture,
         chainNotesCache: frameCtx.chainNotesCache || null,
         visible,
+        dirty: dirtySnap,
+        __frame: frameCtx.frame | 0,
       });
 
       return visible;
-    } catch {
+    } catch (e) {
+      if (__LG_DEBUG_DIRTY()) {
+        try { console.warn('[LG][DIRTY] onPanel exception', e); } catch {}
+      }
       return false;
     }
   },
@@ -373,7 +428,7 @@ function isPanelVisible(panel, st) {
   const visible = rect.width > 0 && rect.height > 0 &&
     rect.right >= 0 && rect.bottom >= 0 && rect.left <= vw && rect.top <= vh;
   if (!cache.visible && visible) {
-    try { panel.__loopgridNeedsRedraw = true; } catch {}
+    try { dirty.requestRedraw('loopgrid:update'); } catch {}
   }
   cache.visible = visible;
   return visible;
@@ -497,6 +552,20 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     lineWidth: Number.isFinite(burstDebugEnv?.lineWidth) ? burstDebugEnv.lineWidth : 2,
     lineDash: Array.isArray(burstDebugEnv?.lineDash) ? burstDebugEnv.lineDash : [],
   };
+  // Shared dirty / redraw intent (base system)
+  const dirty = createToyDirtyFlags({
+    panel,
+    prefix: '__lgDirty',
+  });
+  try { panel.__lgDirty = dirty; } catch {}
+  // Keep legacy redraw flag in sync until we fully migrate off it.
+  try {
+    const __dirtyRequestRedraw = dirty.requestRedraw;
+    dirty.requestRedraw = (reason) => {
+      try { __dirtyRequestRedraw?.(reason); } catch {}
+      try { panel.__loopgridNeedsRedraw = true; } catch {}
+    };
+  } catch {}
   // Main canvas rig: use content-box sizing to match the clipped frame (avoids right/bottom cut-off).
   st._rig = createToyCanvasRig({
     canvas: st.canvas,
@@ -534,7 +603,7 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
         st.computeLayout(w, h);
         st._lastLayoutW = w;
         st._lastLayoutH = h;
-        try { panel.__loopgridNeedsRedraw = true; } catch {}
+        try { dirty.requestRedraw('loopgrid:update'); } catch {}
       }
     } catch {}
   };
@@ -555,7 +624,7 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
       try { window.__LG_FORCE_TIER = (tierId == null) ? null : (tierId | 0); } catch {}
       // Re-apply sizing immediately via rig (truth-point).
       try { st._relayoutFromRig?.({ waitStable: false }); } catch {}
-      try { panel.__loopgridNeedsRedraw = true; } catch {}
+      try { dirty.requestRedraw('loopgrid:update'); } catch {}
       try { panel.__lgQualityTierReason = reason; } catch {}
       try { panel.__lgQualityTierSetMs = performance.now(); } catch {}
     };
@@ -1063,12 +1132,12 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     panel?.addEventListener?.('overview:precommit', () => {
       try { if (window.__PERF_LAB_VERBOSE) console.debug('[loopgrid][overview] precommit'); } catch {}
       needsRedraw = true;
-      panel.__loopgridNeedsRedraw = true;
+      dirty.requestRedraw('loopgrid:update');
     });
     panel?.addEventListener?.('overview:commit', () => {
       try { if (window.__PERF_LAB_VERBOSE) console.debug('[loopgrid][overview] commit', { active: !!overviewMode?.isActive?.() }); } catch {}
       // Force the next frame to apply visibility/pause logic immediately.
-      try { needsRedraw = true; panel.__loopgridNeedsRedraw = true; } catch {}
+      try { needsRedraw = true; dirty.requestRedraw('loopgrid:update'); } catch {}
     });
   } catch {}
 
@@ -1081,7 +1150,7 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
 
   panel.addEventListener('loopgrid:update', () => {
     try { st._gridDirty = true; } catch {}
-    try { panel.__loopgridNeedsRedraw = true; } catch {}
+    try { dirty.requestRedraw('loopgrid:update'); } catch {}
     try { markChainNotesDirty(panel); } catch {}
     try {
       const state = panel.__gridState;
@@ -1108,7 +1177,11 @@ function render(panel, opts = {}) {
 
   const st = panel.__simpleRhythmVisualState;
   if (!st) return;
-  const forceNudge = !!(opts.forceNudge || panel.__loopgridNeedsRedraw);
+  // Live dirty-flags controller for this panel (not the consumed snapshot).
+  // Needed so render() can request redraws safely (e.g. during pulses).
+  const dirty = panel.__lgDirty || null;
+  // Dirty system is the new source of truth; legacy flag stays as a fallback for now.
+  const forceNudge = !!(opts.forceNudge || opts?.dirty?.redraw || panel.__loopgridNeedsRedraw);
   panel.__loopgridNeedsRedraw = false;
 
   // PerfLab: freeze all unfocused toys during stress tests
@@ -1145,10 +1218,16 @@ function render(panel, opts = {}) {
       requestPanelPulse(panel);
       panel.__pulseHighlightFired = true;
     }
-    panel.__loopgridNeedsRedraw = true;
+    dirty?.requestRedraw?.('loopgrid:update');
     panel.__pulseHighlight = Math.max(0, panel.__pulseHighlight - 0.05); // Decay over ~20 frames
   } else if (panel.__pulseHighlightFired) {
     panel.__pulseHighlightFired = false;
+  }
+
+  // While the transport is running we should keep visuals alive (playhead/decays).
+  // Scheduler already requests, but this makes render() robust if called directly.
+  if ((typeof isRunning === 'function') && isRunning()) {
+    dirty?.requestRedraw?.('loopgrid:transport');
   }
 
   const transportRunning = (typeof isRunning === 'function') && isRunning();
@@ -1183,32 +1262,96 @@ function render(panel, opts = {}) {
     const last = (panel.__loopgridLastPlayheadCol ?? -999);
     const changed = (playheadCol !== last);
     panel.__loopgridLastPlayheadCol = playheadCol;
-    if (!wantsRedraw && !hasPulse && !hasFlash && !(transportRunning && changed)) return;
-  }
-  if (stepOnly && isUnfocused && !isFocused) {
-    const hasPulse = !!(panel.__pulseHighlight && panel.__pulseHighlight > 0);
-    const wantsRedraw = !!forceNudge || needsClear || chainActiveChanged; // includes __loopgridNeedsRedraw path
-
-    const last = (panel.__loopgridLastPlayheadCol ?? -999);
-    const changed = (playheadCol !== last);
-    panel.__loopgridLastPlayheadCol = playheadCol;
-
-    if (!changed && !hasPulse && !wantsRedraw) return;
-  } else {
-    panel.__loopgridLastPlayheadCol = playheadCol;
-  }
-
-  // PerfLab: event-driven redraw for unfocused loopgrids
-  const pulseOnly = (window.__PERF_LOOPGRID_UNFOCUSED_MODE === 'pulseOnly');
-  if (pulseOnly && isUnfocused && !isFocused) {
-    const hasPulse = !!(panel.__pulseHighlight && panel.__pulseHighlight > 0);
-    const wantsRedraw = !!forceNudge || needsClear || chainActiveChanged; // includes __loopgridNeedsRedraw path
-    if (!hasPulse && !wantsRedraw) {
+    if (!wantsRedraw && !hasPulse && !hasFlash && !(transportRunning && changed)) {
+      if (__LG_DEBUG_DIRTY()) {
+        // Throttle: only log occasionally
+        const now = performance.now();
+        if (!panel.__lgDbgLastSkipTs || (now - panel.__lgDbgLastSkipTs) > 500) {
+          panel.__lgDbgLastSkipTs = now;
+          __lgDbg('render.skip(autoGate)', {
+            frame: opts.__frame ?? null,
+            forceNudge,
+            dirtyRedraw: !!opts?.dirty?.redraw,
+            wantsRedraw,
+            hasPulse,
+            hasFlash,
+            transportRunning,
+            changed,
+            playheadCol,
+          });
+        }
+      }
       return;
     }
   }
-  if (opts.visible === false) return;
-  if (opts.visible == null && !isPanelVisible(panel, st)) return;
+    if (stepOnly && isUnfocused && !isFocused) {
+      const hasPulse = !!(panel.__pulseHighlight && panel.__pulseHighlight > 0);
+      // NOTE: loopgrid body uses time-decaying flash/bgFlash; even if playhead
+      // doesn't advance this frame, we still need redraws while flashes decay.
+      let hasFlash = false;
+      if (st) {
+        if ((st.bgFlash || 0) > 0.001) {
+          hasFlash = true;
+        } else if (st.flash && st.flash.length) {
+          // Small array (NUM_CUBES), scan is cheap.
+          for (let i = 0; i < st.flash.length; i++) {
+            if ((st.flash[i] || 0) > 0.001) { hasFlash = true; break; }
+          }
+        }
+      }
+      const wantsRedraw = !!forceNudge || needsClear || chainActiveChanged; // includes __loopgridNeedsRedraw path
+
+      const last = (panel.__loopgridLastPlayheadCol ?? -999);
+      const changed = (playheadCol !== last);
+      panel.__loopgridLastPlayheadCol = playheadCol;
+
+      if (!changed && !hasPulse && !hasFlash && !wantsRedraw) return;
+    } else {
+      panel.__loopgridLastPlayheadCol = playheadCol;
+    }
+
+  // PerfLab: event-driven redraw for unfocused loopgrids
+    const pulseOnly = (window.__PERF_LOOPGRID_UNFOCUSED_MODE === 'pulseOnly');
+    if (pulseOnly && isUnfocused && !isFocused) {
+      const hasPulse = !!(panel.__pulseHighlight && panel.__pulseHighlight > 0);
+      let hasFlash = false;
+      if (st) {
+        if ((st.bgFlash || 0) > 0.001) {
+          hasFlash = true;
+        } else if (st.flash && st.flash.length) {
+          for (let i = 0; i < st.flash.length; i++) {
+            if ((st.flash[i] || 0) > 0.001) { hasFlash = true; break; }
+          }
+        }
+      }
+      const wantsRedraw = !!forceNudge || needsClear || chainActiveChanged; // includes __loopgridNeedsRedraw path
+      if (!hasPulse && !hasFlash && !wantsRedraw) {
+        return;
+      }
+    }
+  if (opts.visible === false) {
+    if (__LG_DEBUG_DIRTY()) __lgDbg('render.skip(visible=false)', { frame: opts.__frame ?? null });
+    return;
+  }
+  if (opts.visible == null && !isPanelVisible(panel, st)) {
+    if (__LG_DEBUG_DIRTY()) __lgDbg('render.skip(notVisible)', { frame: opts.__frame ?? null });
+    return;
+  }
+
+  if (__LG_DEBUG_DIRTY()) {
+    // Throttle: once per ~500ms
+    const now = performance.now();
+    if (!panel.__lgDbgLastDrawTs || (now - panel.__lgDbgLastDrawTs) > 500) {
+      panel.__lgDbgLastDrawTs = now;
+      __lgDbg('render.draw', {
+        frame: opts.__frame ?? null,
+        forceNudge,
+        transportRunning,
+        playheadCol,
+        bgFlash: +(st.bgFlash || 0).toFixed(3),
+      });
+    }
+  }
 
   if (__perfOn) p._mark('loopgrid.visibility+classes');
 

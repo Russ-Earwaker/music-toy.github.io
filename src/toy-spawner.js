@@ -45,6 +45,16 @@ const OVERVIEW_ICON_IN = "url('./assets/UI/T_ButtonOverviewZoomIn.png')";
 const FOCUS_CLOSE_ICON = "url('./assets/UI/T_ButtonClose.png')";
 const ART_MENU_ICON = "url('./assets/UI/T_ButtonArtMenu.png')";
 
+function dbg(...args) {
+  try {
+    if (!window.__MT_DEBUG_TOY_SPAWNER) return;
+    // eslint-disable-next-line no-console
+    console.log('[ToySpawner]', ...args);
+  } catch (err) {
+    // ignore
+  }
+}
+
 function updateHelpToggleUI(nextState) {
   if (typeof nextState === 'boolean') {
     state.helpActive = nextState;
@@ -87,6 +97,7 @@ function setActivePalette(palette) {
   if (state.activePalette === next && state.config) return;
   state.activePalette = next;
   state.config = next === 'art' ? state.configArt : state.configMusic;
+  dbg('setActivePalette', next, { open: state.open });
   if (state.open) renderCatalog();
   updatePaletteToggleUI();
 }
@@ -293,6 +304,7 @@ function setMenuOpen(open) {
 function renderCatalog() {
   if (!state.listHost) return;
   const catalog = safeCatalog();
+  dbg('renderCatalog', state.activePalette, { count: catalog.length });
   state.listHost.innerHTML = '';
   catalog.forEach((entry) => {
     const card = document.createElement('button');
@@ -338,7 +350,11 @@ function safeCatalog() {
   try {
     const items = state.config.getCatalog?.() || [];
     if (!Array.isArray(items)) return [];
-    return items.filter((item) => item && item.type && item.name);
+    const filtered = items.filter((item) => item && item.type && item.name);
+    if (!filtered.length) {
+      dbg('catalog empty', state.activePalette, { rawCount: items.length });
+    }
+    return filtered;
   } catch (err) {
     console.warn('[ToySpawner] catalog failed', err);
     return [];
@@ -428,6 +444,7 @@ function spawnAtDefault(entry) {
     const internalActive = !!window.__mtInternalBoard?.isActive?.();
     const internalWorld = internalActive ? window.__mtInternalBoard?.getWorldEl?.() : null;
     const artOwnerId = internalActive ? window.__mtInternalBoard?.getActiveArtToyId?.() : null;
+    dbg('spawnAtDefault', state.activePalette, entry.type, { x: worldCenterX, y: worldCenterY, internalActive, artOwnerId });
     const panel = state.config.create?.(entry.type, {
       centerX: worldCenterX,
       centerY: worldCenterY,
@@ -474,6 +491,7 @@ function trySpawn(entry, clientX, clientY) {
     const internalActive = !!window.__mtInternalBoard?.isActive?.();
     const internalWorld = internalActive ? window.__mtInternalBoard?.getWorldEl?.() : null;
     const artOwnerId = internalActive ? window.__mtInternalBoard?.getActiveArtToyId?.() : null;
+    dbg('spawn', state.activePalette, entry.type, { x: point.x, y: point.y, internalActive, artOwnerId });
     const panel = state.config.create?.(entry.type, {
       centerX: point.x,
       centerY: point.y,
@@ -643,6 +661,11 @@ function endPanelDrag({ clientX, clientY, pointerId, canceled } = {}) {
 
 function configure(options) {
   state.configMusic = Object.assign({}, state.configMusic, options || {});
+  dbg('configure(music)', {
+    hasCatalog: typeof state.configMusic.getCatalog === 'function',
+    hasCreate: typeof state.configMusic.create === 'function',
+    hasRemove: typeof state.configMusic.remove === 'function',
+  });
   if (state.activePalette === 'music') {
     state.config = state.configMusic;
     if (state.open) renderCatalog();
@@ -651,6 +674,11 @@ function configure(options) {
 
 function configureArt(options) {
   state.configArt = Object.assign({}, state.configArt, options || {});
+  dbg('configure(art)', {
+    hasCatalog: typeof state.configArt.getCatalog === 'function',
+    hasCreate: typeof state.configArt.create === 'function',
+    hasRemove: typeof state.configArt.remove === 'function',
+  });
   if (state.activePalette === 'art') {
     state.config = state.configArt;
     if (state.open) renderCatalog();

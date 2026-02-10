@@ -15,11 +15,19 @@ export function getArtCatalog() {
   ];
 }
 
-export function createArtToyAt(artType, { centerX, centerY, autoCenter } = {}) {
+export function createArtToyAt(artType, opts = {}) {
   const type = String(artType || '');
   if (!type) return null;
 
-  const board = document.getElementById('board');
+  const { containerEl, artOwnerId } = opts;
+  let { centerX, centerY, autoCenter } = opts;
+  // artOwnerId is accepted for compatibility with ToySpawner internal spawning,
+  // but art toys are currently intended to live on the main board.
+  void artOwnerId;
+
+  // Art toys normally live on the main board, but we accept an explicit container
+  // so the spawner can pass it safely without crashing.
+  const board = containerEl || document.getElementById('board');
   if (!board) return null;
 
   // First pass: fixed size.
@@ -64,6 +72,20 @@ export function createArtToyAt(artType, { centerX, centerY, autoCenter } = {}) {
   panel.appendChild(musicBtn);
 
   board.appendChild(panel);
+
+  try {
+    if (window.__MT_DEBUG_ART_SPAWN) {
+      // eslint-disable-next-line no-console
+      console.log('[ArtToyFactory] create', type, {
+        id: panel.id,
+        left,
+        top,
+        container: board.id || board.className || board.tagName,
+      });
+    }
+  } catch (err) {
+    // ignore
+  }
 
   // First pass: placeholder flash API (we'll wire note events later).
   panel.flash = () => {

@@ -1,3 +1,24 @@
-perf-lab.js:425 [perf-lab] tests: (12) ['Run P3f: Playhead Separate OFF', 'Run P3f: Playhead Separate ON', 'Run P3f: Playing Pan/Zoom (Mostly Full + Some Empty)', 'Run P3f: Playing Pan/Zoom + Random Notes (Anchor ON)', 'Run P3f: Playing Pan/Zoom + Random Notes (No Grid)', 'Run P3f: Playing Pan/Zoom + Random Notes (No Overlay Core)', 'Run P3f: Playing Pan/Zoom + Random Notes (No Overlay Strokes)', 'Run P3f: Playing Pan/Zoom + Random Notes (No Overlays)', 'Run P3f: Playing Pan/Zoom + Random Notes (No Particles)', 'Run P3f: Playing Pan/Zoom + Random Notes (Particle Profile)', 'Run P7a: Playing Pan/Zoom (All Toys Active)', 'Run P7b: Playing Pan/Zoom (Some Toys Empty)']
-perf-lab.js:1166 [PerfLab] quality lab (pending) {targetFps: 0, cpuBurnMs: 0, forceScale: null, dgForceTier: null, lgForceTier: 3}cpuBurnMs: 0dgForceTier: nullforceScale: nulllgForceTier: 3targetFps: 0[[Prototype]]: Object
-perf-lab.js:895 [PerfLab] APPLY {qlab: {…}, particles: {…}, perf: {…}}particles: {skipUpdate: false, skipDraw: false, budgetMul: 1, freezeUnfocusedDuringGesture: false, logFreeze: false}perf: {traceMarks: false, freezeChainUi: false, traceCanvasResize: false, traceDomInRaf: false}qlab: {targetFps: 0, cpuBurnMs: 0, forceScale: null, dgForceTier: null, lgForceTier: 3}[[Prototype]]: Object
+window.__LG_DEBUG_DIRTY = true
+true
+simple-rhythm-visual.js:107 [LG][DIRTY] render.draw {frame: 185, forceNudge: false, transportRunning: false, playheadCol: 0, bgFlash: 0}
+simple-rhythm-visual.js:107 [LG][DIRTY] render.draw {frame: 216, forceNudge: false, transportRunning: false, playheadCol: 2, bgFlash: 0}
+simple-rhythm-visual.js:107 [LG][DIRTY] render.draw {frame: 246, forceNudge: false, transportRunning: false, playheadCol: 4, bgFlash: 0}
+simple-rhythm-visual.js:107 [LG][DIRTY] render.draw {frame: 276, forceNudge: false, transportRunning: false, playheadCol: 6, bgFlash: 0}
+simple-rhythm-visual.js:107 [LG][DIRTY] sched.request(transport) {frame: 288, visible: true}
+simple-rhythm-visual.js:107 [LG][DIRTY] sched.request(transport) {frame: 289, visible: true}
+simple-rhythm-visual.js:107 [LG][DIRTY] sched.request(transport) {frame: 290, visible: true}
+simple-rhythm-visual.js:107 [LG][DIRTY] sched.request(transport) {frame: 291, visible: true}
+simple-rhythm-visual.js:107 [LG][DIRTY] sched.request(transport) {frame: 292, visible: true}
+simple-rhythm-visual.js:107 [LG][DIRTY] sched.request(transport) {frame: 293, visible: true}
+simple-rhythm-visual.js:107 [LG][DIRTY] sched.request(transport) {frame: 294, visible: true}
+simple-rhythm-visual.js:107 [LG][DIRTY] sched.request(transport) {frame: 295, visible: true}
+simple-rhythm-visual.js:107 [LG][DIRTY] sched.request(transport) {frame: 296, visible: true}
+simple-rhythm-visual.js:107 [LG][DIRTY] sched.request(transport) {frame: 297, visible: true}
+simple-rhythm-visual.js:107 [LG][DIRTY] sched.request(transport) {frame: 298, visible: true}
+simple-rhythm-visual.js:107 [LG][DIRTY] sched.request(transport) {frame: 299, visible: true}
+simple-rhythm-visual.js:107 [LG][DIRTY] sched.request(transport) {frame: 300, visible: true}
+simple-rhythm-visual.js:107 [LG][DIRTY] sched.request(transport) {frame: 301, visible: true}
+simple-rhythm-visual.js:107 [LG][DIRTY] sched.request(transport) {frame: 302, visible: true}
+simple-rhythm-visual.js:107 [LG][DIRTY] sched.request(transport) {frame: 303, visible: true}
+simple-rhythm-visual.js:107 [LG][DIRTY] sched.request(transport) {frame: 304, visible: true}
+
