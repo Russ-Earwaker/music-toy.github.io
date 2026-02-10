@@ -322,11 +322,9 @@ export function buildGrid(panel, numSteps = 8){
 
     const { noteIndices, notePalette } = panel.__gridState;
 
-    // "Standard single-note pitch randomisation":
-    // pick ONE note and apply it to all steps (no per-step random pitch).
-    const newIndex = Math.floor(Math.random() * Math.max(1, notePalette.length));
+    // Randomise pitch per-step (this is what the separate "Random Notes" button is for).
     for (let i = 0; i < noteIndices.length; i++) {
-      noteIndices[i] = newIndex;
+      noteIndices[i] = Math.floor(Math.random() * Math.max(1, notePalette.length));
     }
     emitLoopgridUpdate({ reason: 'random-notes' });
     panel.__seqRev++;

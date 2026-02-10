@@ -2876,13 +2876,23 @@ function randomizeInternalToysForArtToy(artToyId, mode, opts = {}) {
   for (const p of panels) {
     try {
       if (mode === 'music') {
+        const toyType = p.dataset?.toy;
+
         // IMPORTANT: drawgrid randomisation needs the panel to be laid out (not hidden),
         // otherwise it can corrupt visuals (e.g. tiny dot top-left, blank notes).
-        if (allowDefer && !internalActiveForThis && p.dataset?.toy === 'drawgrid') {
+        if (allowDefer && !internalActiveForThis && toyType === 'drawgrid') {
           markPendingInternalRandom(artToyId, 'music');
           continue;
         }
-        p.dispatchEvent(new CustomEvent('toy-random-notes', { bubbles: true, composed: true }));
+
+        // "Random Music" should behave like the existing Random button for each toy.
+        // - loopgrid: the visible Random button randomises steps/notes-on (NOT pitch)
+        // - drawgrid: randomise notes
+        if (toyType === 'loopgrid' || toyType === 'loopgrid-drum') {
+          p.dispatchEvent(new CustomEvent('toy-random', { bubbles: true, composed: true }));
+        } else {
+          p.dispatchEvent(new CustomEvent('toy-random-notes', { bubbles: true, composed: true }));
+        }
       } else {
         // Full random (toy decides what that means). For loopgrid/drawgrid this should cover notes + blocks.
         if (allowDefer && !internalActiveForThis && p.dataset?.toy === 'drawgrid') {
