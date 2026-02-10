@@ -322,20 +322,11 @@ export function buildGrid(panel, numSteps = 8){
 
     const { noteIndices, notePalette } = panel.__gridState;
 
-    // Define a C-minor pentatonic scale within the 4th octave.
-    const C_MINOR_PENTATONIC_C4 = [60, 63, 65, 67, 70]; // C4, D#4, F4, G4, A#4
-
+    // "Standard single-note pitch randomisation":
+    // pick ONE note and apply it to all steps (no per-step random pitch).
+    const newIndex = Math.floor(Math.random() * Math.max(1, notePalette.length));
     for (let i = 0; i < noteIndices.length; i++) {
-      // Pick a random note directly from our scale.
-      const targetMidi = C_MINOR_PENTATONIC_C4[Math.floor(Math.random() * C_MINOR_PENTATONIC_C4.length)];
-
-      // Find the index in our main palette that corresponds to this MIDI value.
-      const newIndex = notePalette.indexOf(targetMidi);
-      
-      // If found, assign it.
-      if (newIndex !== -1) {
-        noteIndices[i] = newIndex;
-      }
+      noteIndices[i] = newIndex;
     }
     emitLoopgridUpdate({ reason: 'random-notes' });
     panel.__seqRev++;

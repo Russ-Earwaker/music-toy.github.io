@@ -2368,6 +2368,124 @@ function getInternalPanelsForArtToy(artToyId) {
   return Array.from(document.querySelectorAll(`.toy-panel[data-art-owner-id="${CSS.escape(artToyId)}"]`));
 }
 
+function isInternalBoardActiveForArtToy(artToyId) {
+  try {
+    return !!g_artInternal?.active && g_artInternal?.artToyId === artToyId;
+  } catch {}
+  return false;
+}
+
+function randomizeArtToyStateStub(artToyId) {
+  // Hook for future: randomise art-toy configuration (visual/art parameters).
+  // For now, do nothing.
+  void artToyId;
+}
+
+function markPendingInternalRandom(panelOrId, which) {
+  const artToyId = typeof panelOrId === 'string'
+    ? panelOrId
+    : (panelOrId?.id || panelOrId?.dataset?.artToyId || null);
+  if (!artToyId) return;
+  const artPanel = document.getElementById(artToyId);
+  if (!artPanel) return;
+  if (which === 'music') artPanel.dataset.pendingRandMusic = '1';
+  if (which === 'all') artPanel.dataset.pendingRandAll = '1';
+}
+
+function applyPendingInternalRandomIfNeeded(artToyId) {
+  if (!artToyId) return;
+  if (!isInternalBoardActiveForArtToy(artToyId)) return;
+
+  const artPanel = document.getElementById(artToyId);
+  if (!artPanel) return;
+
+  const wantMusic = artPanel.dataset.pendingRandMusic === '1';
+  const wantAll = artPanel.dataset.pendingRandAll === '1';
+  if (!wantMusic && !wantAll) return;
+
+  // Clear flags first to avoid loops if anything throws.
+  artPanel.dataset.pendingRandMusic = '0';
+  artPanel.dataset.pendingRandAll = '0';
+
+  // Wait until after internal mode has swapped board identity + had a frame to lay out.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      try {
+        if (wantAll) randomizeInternalToysForArtToy(artToyId, 'all', { allowDefer: false });
+        else if (wantMusic) randomizeInternalToysForArtToy(artToyId, 'music', { allowDefer: false });
+      } catch {}
+    });
+  });
+}
+
+function getArtToyPanelById(artToyId) {
+  if (!artToyId) return null;
+  try {
+    const el = document.getElementById(artToyId);
+    if (el && el.classList && el.classList.contains('art-toy-panel')) return el;
+  } catch {}
+  return null;
+}
+
+function pickDefaultInternalToyKindForArtToy(artToyId) {
+  // First pass: for now, allow only DrawGrid and Simple Rhythm (LoopGrid).
+  // Default to DrawGrid for Flash Circle.
+  const artPanel = getArtToyPanelById(artToyId);
+  const kind = artPanel?.dataset?.artToy || '';
+  if (kind === 'flashCircle') return 'drawgrid';
+  return 'drawgrid';
+}
+
+function ensureDefaultInternalToyOnFirstEnter(artToyId, worldEl) {
+  if (!artToyId || !worldEl) return null;
+
+  const artPanel = getArtToyPanelById(artToyId);
+  const already = artPanel?.dataset?.internalBootstrapped === '1';
+  if (already) return null;
+
+  // Mark as bootstrapped immediately to avoid accidental double-spawn.
+  try {
+    if (artPanel) artPanel.dataset.internalBootstrapped = '1';
+  } catch {}
+
+  const kind = pickDefaultInternalToyKindForArtToy(artToyId);
+
+  // Spawn near the current camera center of the internal viewport.
+  let centerX = 240;
+  let centerY = 180;
+  try {
+    const viewport = document.getElementById('internal-board-viewport');
+    const r = viewport?.getBoundingClientRect?.();
+    if (r && Number.isFinite(r.left) && Number.isFinite(r.width)) {
+      const cx = r.left + r.width * 0.5;
+      const cy = r.top + r.height * 0.5;
+      const w = window.__mtInternalBoard?.clientToWorld?.(cx, cy);
+      if (w && Number.isFinite(w.x) && Number.isFinite(w.y)) {
+        centerX = w.x;
+        centerY = w.y;
+      }
+    }
+  } catch {}
+
+  // Nudge so it doesn't land directly on the anchor/center.
+  centerX += 90;
+  centerY -= 40;
+
+  try {
+    const p = createToyPanelAt(kind, {
+      centerX,
+      centerY,
+      autoCenter: true,
+      containerEl: worldEl,
+      artOwnerId: artToyId,
+    });
+    return p || null;
+  } catch (err) {
+    console.warn('[InternalBoard] default toy spawn failed', err);
+    return null;
+  }
+}
+
 function setInternalBoardTransform(scale, tx, ty) {
   g_artInternal.scale = Math.max(0.2, Math.min(3.0, Number.isFinite(scale) ? scale : 1));
   g_artInternal.tx = Number.isFinite(tx) ? tx : 0;
@@ -2643,7 +2761,11 @@ function enterInternalBoard(artToyId) {
     } catch {}
   }
 
-  // If there are none yet, keep it empty (still useful for debugging the mode).
+  // If there are none yet, spawn a default internal toy on first entry.
+  if (!panels.length) {
+    try { ensureDefaultInternalToyOnFirstEnter(artToyId, world); } catch {}
+  }
+
   if (title) title.textContent = 'Inside Art Toy';
 
   g_artInternal.active = true;
@@ -2660,6 +2782,9 @@ function enterInternalBoard(artToyId) {
 
   // Critical: swap board identity so all existing toy dragging / board math works inside internal mode.
   swapBoardIdentityForInternalMode();
+
+  // If we deferred any internal randomisation (e.g., drawgrid while hidden), apply it now.
+  try { applyPendingInternalRandomIfNeeded(artToyId); } catch {}
 
   // Connectors: switch the chain canvas to the internal #board and rebuild geometry for internal toys.
   try { ensureChainCanvasAttachedToActiveBoard(); } catch {}
@@ -2739,6 +2864,61 @@ document.addEventListener('click', (e) => {
   e.preventDefault();
   e.stopPropagation();
   enterInternalBoard(artToyId);
+}, true);
+
+function randomizeInternalToysForArtToy(artToyId, mode, opts = {}) {
+  const panels = getInternalPanelsForArtToy(artToyId);
+  if (!panels.length) return;
+
+  const allowDefer = opts.allowDefer !== false;
+  const internalActiveForThis = isInternalBoardActiveForArtToy(artToyId);
+
+  for (const p of panels) {
+    try {
+      if (mode === 'music') {
+        // IMPORTANT: drawgrid randomisation needs the panel to be laid out (not hidden),
+        // otherwise it can corrupt visuals (e.g. tiny dot top-left, blank notes).
+        if (allowDefer && !internalActiveForThis && p.dataset?.toy === 'drawgrid') {
+          markPendingInternalRandom(artToyId, 'music');
+          continue;
+        }
+        p.dispatchEvent(new CustomEvent('toy-random-notes', { bubbles: true, composed: true }));
+      } else {
+        // Full random (toy decides what that means). For loopgrid/drawgrid this should cover notes + blocks.
+        if (allowDefer && !internalActiveForThis && p.dataset?.toy === 'drawgrid') {
+          markPendingInternalRandom(artToyId, 'all');
+          continue;
+        }
+        p.dispatchEvent(new CustomEvent('toy-random', { bubbles: true, composed: true }));
+      }
+    } catch {}
+  }
+
+  try { window.Persistence?.markDirty?.(); } catch {}
+}
+
+// Click delegate: Art Toy "Random All" button.
+document.addEventListener('click', (e) => {
+  const btn = e.target?.closest?.('button[data-action="artToy:randomAll"]');
+  if (!btn) return;
+  const artToyId = btn.dataset.artToyId || btn.closest?.('.art-toy-panel')?.id;
+  if (!artToyId) return;
+  e.preventDefault();
+  e.stopPropagation();
+  // Hook for future: also randomise the art toy's own state.
+  try { randomizeArtToyStateStub(artToyId); } catch {}
+  randomizeInternalToysForArtToy(artToyId, 'all', { allowDefer: true });
+}, true);
+
+// Click delegate: Art Toy "Random Music" button.
+document.addEventListener('click', (e) => {
+  const btn = e.target?.closest?.('button[data-action="artToy:randomMusic"]');
+  if (!btn) return;
+  const artToyId = btn.dataset.artToyId || btn.closest?.('.art-toy-panel')?.id;
+  if (!artToyId) return;
+  e.preventDefault();
+  e.stopPropagation();
+  randomizeInternalToysForArtToy(artToyId, 'music', { allowDefer: true });
 }, true);
 
 // Returns true if the given panel has any notes at the specified column.
