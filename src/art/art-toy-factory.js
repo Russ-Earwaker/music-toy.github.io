@@ -1,9 +1,18 @@
 // src/art/art-toy-factory.js
 // Minimal first-pass Art Toy factory.
 
+import {
+  createBaseArtToyPanel,
+  ensureBaseArtToyUI,
+  getBaseArtToyControlsHost,
+} from './base-art-toy.js';
+
 const ART_TYPES = Object.freeze({
   FLASH_CIRCLE: 'flashCircle',
 });
+
+// Match the custom circular button structure used by music toys / toy spawner.
+const BUTTON_ICON_HTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
 
 export function getArtCatalog() {
   return [
@@ -20,13 +29,11 @@ export function createArtToyAt(artType, opts = {}) {
   if (!type) return null;
 
   const { containerEl, artOwnerId } = opts;
-  let { centerX, centerY, autoCenter } = opts;
+  let { centerX, centerY } = opts;
   // artOwnerId is accepted for compatibility with ToySpawner internal spawning,
-  // but art toys are currently intended to live on the main board.
+  // but art toys currently live on the active board/world.
   void artOwnerId;
 
-  // Art toys normally live on the main board, but we accept an explicit container
-  // so the spawner can pass it safely without crashing.
   const board = containerEl || document.getElementById('board');
   if (!board) return null;
 
@@ -40,36 +47,78 @@ export function createArtToyAt(artType, opts = {}) {
     centerY = rect.height * 0.5;
   }
 
-  const rawLeft = centerX - size * 0.5;
-  const rawTop = centerY - size * 0.5;
-  const left = autoCenter ? rawLeft : Math.max(0, rawLeft);
-  const top = autoCenter ? rawTop : Math.max(0, rawTop);
+  // Avoid spawning right on top of board anchors / glows at the board center.
+  // (This also helps ensure the handle receives pointerdown.)
+  const rect = board.getBoundingClientRect();
+  const jitter = () => (Math.random() - 0.5) * 18;
+  const spawnOffsetX = size * 0.65;
+  const spawnOffsetY = -size * 0.18;
 
-  const panel = document.createElement('section');
-  panel.className = 'art-toy-panel';
-  panel.dataset.artToy = type;
-  const idSuffix = Math.random().toString(36).slice(2, 8);
-  panel.id = `art-${type}-${Date.now()}-${idSuffix}`;
-  panel.style.position = 'absolute';
-  panel.style.left = `${left}px`;
-  panel.style.top = `${top}px`;
-  panel.style.width = `${size}px`;
-  panel.style.height = `${size}px`;
+  const rawLeft = centerX - size * 0.5 + spawnOffsetX + jitter();
+  const rawTop = centerY - size * 0.5 + spawnOffsetY + jitter();
+
+  // Keep the toy fully visible.
+  const maxLeft = Math.max(0, rect.width - size);
+  const maxTop = Math.max(0, rect.height - size);
+  const left = Math.min(maxLeft, Math.max(0, rawLeft));
+  const top = Math.min(maxTop, Math.max(0, rawTop));
+
+  const panel = createBaseArtToyPanel({
+    kind: type,
+    size,
+    left,
+    top,
+    idPrefix: 'art',
+  });
+  ensureBaseArtToyUI(panel, { artToyId: panel.id });
 
   const circle = document.createElement('div');
   circle.className = 'art-toy-circle';
   panel.appendChild(circle);
 
-  // Enter internal-board UI.
-  // First pass: a simple button that asks main.js to open internal mode.
-  const musicBtn = document.createElement('button');
-  musicBtn.className = 'art-toy-music-btn';
-  musicBtn.type = 'button';
-  musicBtn.textContent = 'Music';
-  musicBtn.setAttribute('aria-label', 'Enter this Art Toy');
-  musicBtn.dataset.action = 'artToy:music';
-  musicBtn.dataset.artToyId = panel.id;
-  panel.appendChild(musicBtn);
+  // Controls (hidden until handle tapped)
+  const controlsHost = getBaseArtToyControlsHost(panel);
+  if (controlsHost) {
+    const enterBtn = document.createElement('button');
+    enterBtn.className = 'art-toy-btn art-toy-enter-btn c-btn';
+    enterBtn.type = 'button';
+    enterBtn.setAttribute('aria-label', 'Enter this Art Toy');
+    enterBtn.title = 'Enter';
+    enterBtn.innerHTML = BUTTON_ICON_HTML;
+    const enterCore = enterBtn.querySelector('.c-btn-core');
+    if (enterCore) enterCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonEnter.png')");
+    enterBtn.style.setProperty('--c-btn-size', '62px');
+    // Keep the existing action string so main.js continues to handle entry.
+    enterBtn.dataset.action = 'artToy:music';
+    enterBtn.dataset.artToyId = panel.id;
+    controlsHost.appendChild(enterBtn);
+
+    const randAllBtn = document.createElement('button');
+    randAllBtn.className = 'art-toy-btn art-toy-rand-all-btn c-btn';
+    randAllBtn.type = 'button';
+    randAllBtn.setAttribute('aria-label', 'Randomize this Art Toy');
+    randAllBtn.title = 'Random';
+    randAllBtn.innerHTML = BUTTON_ICON_HTML;
+    const randAllCore = randAllBtn.querySelector('.c-btn-core');
+    if (randAllCore) randAllCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonRandom.png')");
+    randAllBtn.style.setProperty('--c-btn-size', '62px');
+    randAllBtn.dataset.action = 'artToy:randomAll';
+    randAllBtn.dataset.artToyId = panel.id;
+    controlsHost.appendChild(randAllBtn);
+
+    const randMusicBtn = document.createElement('button');
+    randMusicBtn.className = 'art-toy-btn art-toy-rand-music-btn c-btn';
+    randMusicBtn.type = 'button';
+    randMusicBtn.setAttribute('aria-label', 'Randomize Art Toy Music');
+    randMusicBtn.title = 'Random Music';
+    randMusicBtn.innerHTML = BUTTON_ICON_HTML;
+    const randMusicCore = randMusicBtn.querySelector('.c-btn-core');
+    if (randMusicCore) randMusicCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonRandomNotes.png')");
+    randMusicBtn.style.setProperty('--c-btn-size', '62px');
+    randMusicBtn.dataset.action = 'artToy:randomMusic';
+    randMusicBtn.dataset.artToyId = panel.id;
+    controlsHost.appendChild(randMusicBtn);
+  }
 
   board.appendChild(panel);
 

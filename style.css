@@ -1440,6 +1440,146 @@ body.advanced-controls-disabled [data-adv] {
   animation: art-toy-flash 160ms ease-out;
 }
 
+/* Base Art Toy: handle + contextual controls (tap handle to reveal) */
+.art-toy-handle {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 64%;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
+  cursor: grab;
+  pointer-events: auto;
+}
+
+.art-toy-handle::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.5);
+  transform: translate(-50%, -50%);
+  box-shadow:
+    0 -6px 0 rgba(255, 255, 255, 0.4),
+    0 6px 0 rgba(255, 255, 255, 0.4);
+}
+
+.art-toy-handle:hover {
+  filter: brightness(1.18) saturate(1.15);
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.12),
+    0 10px 22px rgba(0, 0, 0, 0.55);
+}
+
+.art-toy-handle:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(95, 179, 255, 0.35),
+    0 10px 22px rgba(0, 0, 0, 0.55);
+}
+
+.art-toy-handle:active {
+  cursor: grabbing;
+}
+
+.art-toy-controls {
+  position: absolute;
+  left: 50%;
+  bottom: -18px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  z-index: 2;
+}
+
+/* Art toy controls should use the same circular buttons as the music toys. */
+.art-toy-controls .c-btn {
+  --c-btn-size: 62px;
+}
+.art-toy-controls .c-btn .c-btn-core {
+  background-size: 62%;
+}
+
+.art-toy-btn {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.55);
+  color: rgba(255, 255, 255, 0.92);
+  padding: 8px 12px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.55);
+  white-space: nowrap;
+}
+.art-toy-btn:hover { filter: brightness(1.1); }
+.art-toy-btn:active { transform: translateY(1px) scale(0.98); }
+
+.art-toy-handle {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 64%;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
+  cursor: grab;
+}
+
+.art-toy-handle::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.5);
+  transform: translate(-50%, -50%);
+  box-shadow:
+    0 -6px 0 rgba(255, 255, 255, 0.4),
+    0 6px 0 rgba(255, 255, 255, 0.4);
+}
+
+.art-toy-handle:active {
+  cursor: grabbing;
+}
+
+.art-toy-controls {
+  position: absolute;
+  left: 50%;
+  bottom: -18px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  z-index: 2;
+}
+
+.art-toy-btn {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.55);
+  color: rgba(255, 255, 255, 0.92);
+  padding: 8px 12px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.55);
+  white-space: nowrap;
+}
+.art-toy-btn:hover { filter: brightness(1.1); }
+.art-toy-btn:active { transform: translateY(1px) scale(0.98); }
+
 .art-toy-music-btn {
   position: absolute;
   left: 50%;
