@@ -57,6 +57,19 @@ As we complete or reject work, update these sections in order:
   * persistence hooks for refresh and save/load (external + internal state)
 * The Flash Circle art toy should be implemented **by composing BaseArtToy**, not as a one-off.
 
+### Base Art Toy goals (shared logic)
+
+* Add a reusable **Base Art Toy** container that future art toys can share.
+* Base art toys have **no always-visible buttons**.
+
+  * User taps the toy’s **handle** to reveal contextual buttons.
+  * User can **drag** the toy by the handle (tap + hold + drag), like music toy headers.
+* Buttons are consistent with music toys (custom circular buttons + icon PNGs).
+
+  * **Enter** (`T_ButtonEnter.png`)
+  * **Random All** (`T_ButtonRandom.png`)
+  * **Random Music** (`T_ButtonRandomNotes.png`)
+
 ---
 
 ## 3. Proposed Architecture (updated)
@@ -159,6 +172,11 @@ These are *not optional* — they prevent the same class of bugs we already foug
 **Outcome**
 * You can spawn a **Flash Circle** art toy onto the main board.
 * It renders a cheap outer circle (no interactions yet beyond drag + tap-to-reveal).
+
+**Notes / Implementation detail**
+
+* Use `src/art/base-art-toy.js` for shared behaviors (handle + contextual controls + drag).
+* Use `src/art/art-toy-factory.js` as the minimal factory hooked to the spawner.
 
 **Implementation sketch**
 * Add/extend `src/art/`:
@@ -283,7 +301,56 @@ These are *not optional* — they prevent the same class of bugs we already foug
 
 ## 6. Completed Work ✅
 
-* (add entries as we implement)
+* **Art palette + spawn pipeline (Flash Circle)**
+
+  * Added an art catalog and factory that can spawn a placeholder **Flash Circle** art toy.
+  * Verified by spawning from the Art palette and seeing `[ToySpawner] spawnAtDefault art flashCircle` and `[ArtToyFactory] create flashCircle` logs.
+  * Files:
+
+    * `src/art/art-toy-factory.js`
+    * `src/toy-spawner.js`
+
+* **Base Art Toy shared container**
+
+  * Implemented shared Base Art Toy UI:
+
+    * Handle element
+    * Contextual controls host (hidden until handle tap)
+    * Drag by handle using pointer capture
+    * Outside click hides controls
+    * Tap-release vs drag behavior: tap shows controls; drag preserves current controls visibility
+  * Verified by dragging the art toy around and tapping the handle to show/hide controls.
+  * File:
+
+    * `src/art/base-art-toy.js`
+
+* **Spawn placement avoids board anchor + handle hit testing**
+
+  * Adjusted default spawn position so art toys do not land on top of the board anchor/glow.
+  * Ensured the handle is reliably clickable (pointer events not eaten by anchor/glow).
+  * Verified by spawning multiple times and confirming the toy appears offset from the anchor area.
+  * File:
+
+    * `src/art/art-toy-factory.js`
+
+* **Handle hover highlight (affordance)**
+
+  * Handle visually “lights up” on hover to show it is the draggable hot-zone.
+  * File:
+
+    * `style.css`
+
+* **Contextual buttons use existing circular button style + icon PNGs**
+
+  * Replaced plain buttons with the same `.c-btn` structure used in music toys.
+  * Wired icon PNGs:
+
+    * Enter: `assets/UI/T_ButtonEnter.png`
+    * Random: `assets/UI/T_ButtonRandom.png`
+    * Random music: `assets/UI/T_ButtonRandomNotes.png`
+  * File:
+
+    * `src/art/art-toy-factory.js`
 
 ---
 
@@ -295,16 +362,32 @@ These are *not optional* — they prevent the same class of bugs we already foug
 
 ## 8. Key Learnings 🧠
 
-* (keep to 5–10 items)
+* Board zoom scale (`--bv-scale`) must be accounted for when converting pointer deltas into world-space drag deltas.
+* Art toys should sit above anchor/glow visuals so the handle remains consistently clickable.
+* Default spawning should avoid the center/anchor zone; “works in the lab” spawns on top of the anchor lead to confusing hit-testing failures.
 
 ---
 
 ## 9. Next Steps 🎯
 
-1. **Step 0**: Recon current Create Art plumbing + persistence modules (refresh + save/load).
-2. **Step 1**: Wire the Art catalog into the existing Create Art palette (populate menu).
-3. **Step 2**: Implement `BaseArtToy` + `FlashCircleArtToy` spawn/render.
-4. **Step 3**: Add handle drag + tap-to-reveal buttons (Enter / Random All / Random Music).
-5. **Step 4**: Implement internal board lifecycle + first-enter default toy spawn (DrawGrid / Simple Rhythm only).
-6. **Step 5**: Add internal anchor + glow + Return Home behavior.
-7. **Step 6**: Wire art-toy persistence into refresh + save/load slots.
+1. **Internal-board “Enter” button wiring**: ensure `data-action="artToy:music"` reliably opens internal-board mode for the clicked art toy (and stores the active `artToyId`).
+2. **First-entry default internal toy**: when entering an art toy for the first time, spawn a default “empty” internal music toy.
+
+   * For now: limit to **DrawGrid** and **Simple Rhythm (LoopGrid)**.
+   * Each art toy kind may later define its own default internal toy.
+3. **Random buttons: real behavior**
+
+   * **Random All** should randomise both art parameters (as that becomes a thing) **and** internal music toy state.
+   * **Random Music** should randomise only internal music toy state.
+4. **Board anchor + “return home” behavior**
+
+   * External view: each art toy has a **board anchor** that represents its internal/art status.
+   * Keep the existing **anchor glow** affordance to point the user to the anchor.
+   * Internal view: the **Return Home** button should take you back to the internal board’s **anchor**.
+5. **Persistence parity with music toys**
+
+   * Art toys persist through refresh.
+   * Art toys persist through Save/Load (including internal board contents + anchor state).
+6. **Note-play event forwarding + outer flash reaction**
+
+   * Forward internal note events to the owning art toy and trigger the placeholder flash effect.
