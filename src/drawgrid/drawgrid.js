@@ -7160,6 +7160,237 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   panel.addEventListener('toy-random-blocks', (e) => handleToyRandomEvent(e, 'toy-random-blocks'), true);
   panel.addEventListener('toy-random-notes', (e) => handleToyRandomEvent(e, 'toy-random-notes'), true);
 
+  // --- Toy Audio API (layout-independent) ---
+  // Some callers (e.g. Art Toy buttons) need "instant randomise" even while the internal board is hidden.
+  // The standard toy-random-notes path runs ensureSize/layout/layer sizing, which can corrupt visuals when hidden.
+  // This headless path ONLY changes model/audio state and defers visuals until the panel is visible.
+
+  function __dgMarkNeedsVisualRefresh() {
+    try { panel.dataset.dgNeedsVisualRefresh = '1'; } catch {}
+  }
+
+  function __dgClearNeedsVisualRefresh() {
+    try { panel.dataset.dgNeedsVisualRefresh = '0'; } catch {}
+  }
+
+  function __dgHasAnyNotesHeadless() {
+    // Headless-safe: just inspect state; do NOT call layout/ensureSizeReady.
+    try {
+      const st = panel?.__drawToy?.getState?.();
+      const pat = st?.sequencePattern || st?.seqPattern || null;
+      const cols = Array.isArray(pat?.cols) ? pat.cols : [];
+      if (cols.length) {
+        return cols.some(c => c && c.active && Array.isArray(c.nodes) && c.nodes.length > 0);
+      }
+    } catch {}
+    return false;
+  }
+
+  function __dgHeadlessFallbackMapIfEmpty() {
+    try {
+      const hasActive = Array.isArray(currentMap?.active) && currentMap.active.some(Boolean);
+      if (hasActive) return false;
+
+      const cCount = Number(cols) || 8;
+      const rCount = Number(rows) || 12;
+
+      const active = Array(cCount).fill(false);
+      const nodes = Array.from({ length: cCount }, () => new Set());
+      const disabled = Array.from({ length: cCount }, () => new Set());
+
+      const density = 0.35;
+      let any = false;
+      for (let c = 0; c < cCount; c++) {
+        const on = Math.random() < density;
+        active[c] = on;
+        if (on) {
+          any = true;
+          const r = Math.max(0, Math.min(rCount - 1, (Math.random() * rCount) | 0));
+          nodes[c].add(r);
+        }
+      }
+      if (!any) {
+        const c = (Math.random() * cCount) | 0;
+        active[c] = true;
+        nodes[c].add((Math.random() * rCount) | 0);
+      }
+
+      currentMap = {
+        active,
+        nodes,
+        disabled,
+      };
+      return true;
+    } catch {}
+    return false;
+  }
+
+  function __dgHeadlessEnsureReasonablePaintCanvases() {
+    // When a DrawGrid panel is stashed (art-internal-host), its canvases can still be 1x1.
+    // The randomize-notes stroke path depends on real pixel area; 1x1 produces "one note",
+    // then later entering/layout produces a *different* full pattern (feels like tune changed).
+    //
+    // Fix: if canvases are tiny, force them to a reasonable persisted size WITHOUT running layout.
+    try {
+      const guessFromState = () => {
+        try {
+          // persistedState is declared later in this module; safe to access at runtime after init.
+          const ps = persistedState?.paintSize;
+          const w = Number(ps?.w);
+          const h = Number(ps?.h);
+          if (Number.isFinite(w) && Number.isFinite(h) && w > 32 && h > 32) return { w, h };
+        } catch {}
+        try {
+          const st = panel.__drawToy?.getState?.();
+          const ps = st?.paintSize;
+          const w = Number(ps?.w);
+          const h = Number(ps?.h);
+          if (Number.isFinite(w) && Number.isFinite(h) && w > 32 && h > 32) return { w, h };
+        } catch {}
+        return { w: 800, h: 600 };
+      };
+
+      const { w, h } = guessFromState();
+
+      const paint = panel.querySelector?.('canvas[data-role="drawgrid-paint"]');
+      const back  = panel.querySelector?.('canvas[data-role="drawgrid-paint-back"]');
+
+      // If roles changed or canvases not found, bail safely.
+      if (!paint || !back) return;
+
+      const tooSmall = (c) => (c.width | 0) < 8 || (c.height | 0) < 8;
+      if (!tooSmall(paint) && !tooSmall(back)) return;
+
+      // Force sane internal pixel sizes.
+      try { paint.width  = w; paint.height = h; } catch {}
+      try { back.width   = w; back.height  = h; } catch {}
+
+      // Remember for future headless calls (optional, harmless).
+      try { panel.__dgHeadlessPaintSize = { w, h }; } catch {}
+    } catch {}
+  }
+
+  function __dgHeadlessRandomizeNotesOnly() {
+    // IMPORTANT: do NOT call ensureSizeReady/layout/__dgEnsureLayerSizes here.
+    // This must be safe even if the panel is hidden/offscreen.
+
+    // When a DrawGrid panel is spawned into a hidden host (art-internal-host), the paint canvases
+    // can still be 1x1. The note-randomiser's stroke path depends on non-trivial pixel area; a
+    // tiny canvas often yields "one note" or an empty model, and then entering internal/layout
+    // produces a different full pattern (feels like the tune changed).
+    //
+    // Fix: if canvases are tiny, force them to a reasonable persisted size WITHOUT running layout.
+    try {
+      const pickSize = () => {
+        // persistedState is declared later in this module; safe to access at runtime.
+        try {
+          const ps = persistedState?.paintSize;
+          const w = Number(ps?.w);
+          const h = Number(ps?.h);
+          if (Number.isFinite(w) && Number.isFinite(h) && w > 32 && h > 32) return { w, h };
+        } catch {}
+        try {
+          const st = panel.__drawToy?.getState?.();
+          const ps = st?.paintSize;
+          const w = Number(ps?.w);
+          const h = Number(ps?.h);
+          if (Number.isFinite(w) && Number.isFinite(h) && w > 32 && h > 32) return { w, h };
+        } catch {}
+        return { w: 800, h: 600 };
+      };
+
+      const ensureCanvasSize = (canvas) => {
+        if (!canvas) return;
+        const cw = Number(canvas.width);
+        const ch = Number(canvas.height);
+        if (Number.isFinite(cw) && Number.isFinite(ch) && cw > 32 && ch > 32) return;
+        const { w, h } = pickSize();
+        try { canvas.width = w; } catch {}
+        try { canvas.height = h; } catch {}
+        // Keep style in sync so any CSS-size reads used by randomizers are stable.
+        try { canvas.style.width = `${w}px`; } catch {}
+        try { canvas.style.height = `${h}px`; } catch {}
+      };
+
+      // Prefer the known drawgrid canvases by role.
+      ensureCanvasSize(panel.querySelector?.('canvas[data-role="drawgrid-paint"]'));
+      ensureCanvasSize(panel.querySelector?.('canvas[data-role="drawgrid-paint-back"]'));
+      ensureCanvasSize(panel.querySelector?.('canvas[data-role="drawgrid-flash"]'));
+      ensureCanvasSize(panel.querySelector?.('canvas[data-role="drawgrid-flash-back"]'));
+    } catch {}
+
+    try { RNG?.handleRandomizeNotes?.(); } catch {}
+
+    // CRITICAL:
+    // In headless mode (hidden/internal host), layout-based map regeneration
+    // does not run automatically. We must explicitly rebuild the playable map
+    // from strokes, otherwise hasActiveNotes() will remain false and the
+    // sequencer has nothing to play.
+    try { regenerateMapFromStrokes?.('headless-random'); } catch {}
+    const didFallback = __dgHeadlessFallbackMapIfEmpty();
+    try { emitDrawgridUpdate({}); } catch {}
+    if (didFallback) {
+      try { emitDrawgridUpdate({ reason: 'headless-fallback-map' }); } catch {}
+    }
+
+    // Visuals will be refreshed later when visible.
+    __dgMarkNeedsVisualRefresh();
+  }
+
+  panel.__toyRandomMusic = () => {
+    // Randomise notes immediately (audio/model).
+    __dgHeadlessRandomizeNotesOnly();
+
+    // If DrawGrid hasn't finished building its internal canvases/state yet (common when hidden),
+    // the first headless random can produce "no notes" / "one note". Retry once next frame.
+    try {
+      if (!__dgHasAnyNotesHeadless()) {
+        const token = String(Date.now()) + ':' + Math.random().toString(16).slice(2);
+        panel.__dgHeadlessRandRetryToken = token;
+        requestAnimationFrame(() => {
+          try {
+            if (panel.__dgHeadlessRandRetryToken !== token) return;
+            __dgHeadlessRandomizeNotesOnly();
+            // If visible, refresh visuals now safely.
+            if (typeof isPanelVisible === 'function' ? isPanelVisible() : !!isPanelVisible) {
+              __dgClearNeedsVisualRefresh();
+              try { ensureSizeReady({ force: true }); } catch {}
+              try { layout(true); } catch {}
+              try { nodesRender?.resetNodesCache?.(); } catch {}
+              try { nodesRender?.resetBlocksCache?.(); } catch {}
+              try { __dgAfterProgrammaticVisualChange('toyRandomMusic:retry1'); } catch {}
+            }
+          } catch {}
+        });
+      }
+    } catch {}
+
+    // If visible, we can refresh visuals now safely.
+    try {
+      if (typeof isPanelVisible === 'function' ? isPanelVisible() : !!isPanelVisible) {
+        __dgClearNeedsVisualRefresh();
+        try { ensureSizeReady({ force: true }); } catch {}
+        try { layout(true); } catch {}
+        try { nodesRender?.resetNodesCache?.(); } catch {}
+        try { nodesRender?.resetBlocksCache?.(); } catch {}
+        try { __dgAfterProgrammaticVisualChange('toyRandomMusic'); } catch {}
+      }
+    } catch {}
+  };
+
+  panel.__toyRefreshVisualsIfNeeded = () => {
+    try {
+      if (typeof isPanelVisible === 'function' ? !isPanelVisible() : !isPanelVisible) return;
+      if (panel?.dataset?.dgNeedsVisualRefresh !== '1') return;
+      __dgClearNeedsVisualRefresh();
+      try { ensureSizeReady({ force: true }); } catch {}
+      try { layout(true); } catch {}
+      try { nodesRender?.resetNodesCache?.(); } catch {}
+      try { nodesRender?.resetBlocksCache?.(); } catch {}
+      try { __dgAfterProgrammaticVisualChange('deferredVisualRefresh'); } catch {}
+    } catch {}
+  };
+
 
   const persistedState = loadPersistedState();
   if (persistedState) {

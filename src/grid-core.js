@@ -331,6 +331,15 @@ export function buildGrid(panel, numSteps = 8){
     rebuildSeqPattern();
   });
 
+  // --- Toy Audio API (used by Art Toy "Random Music") ---
+  // For loopgrid, "Random Music" should behave like the existing Random button:
+  // randomise pattern/steps, NOT pitch.
+  panel.__toyRandomMusic = () => {
+    try {
+      panel.dispatchEvent(new CustomEvent('toy-random', { bubbles: true, composed: true }));
+    } catch {}
+  };
+
   panel.__beat = () => {};
 
   panel.__sequencerStep = (col) => {

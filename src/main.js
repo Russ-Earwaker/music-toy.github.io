@@ -1988,21 +1988,110 @@ function getChildrenOf(parentId) {
 // Art Toys - Internal Toy Containers (first-pass: drag/drop chain into art toy)
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Art Toy Random Debug
+// ---------------------------------------------------------------------------
+function __artRandLog(...args) {
+  try {
+    if (!window.__MT_DEBUG_ART_RANDOM) return;
+    // eslint-disable-next-line no-console
+    console.log('[ArtRand]', ...args);
+  } catch {}
+}
+
+function __dumpDrawgridNotes(panel) {
+  try {
+    if (!panel) return null;
+    const api = panel.__drawToy || panel.__toyApi;
+    if (!api) return { hasApi: false };
+
+    if (typeof api.getState === 'function') {
+      const state = api.getState();
+      // NOTE: DrawGrid state shapes have varied over time.
+      // We support BOTH:
+      //  - state.nodes.active
+      //  - state.currentMap.active
+      const nodesActive = state?.nodes?.active;
+      if (Array.isArray(nodesActive)) {
+        const activeCols = nodesActive
+          .map((v, i) => (v ? i : -1))
+          .filter(i => i >= 0)
+          .slice(0, 10);
+        return {
+          hasApi: true,
+          shape: 'nodes.active',
+          activeCount: activeCols.length,
+          sampleCols: activeCols
+        };
+      }
+
+      const mapActive = state?.currentMap?.active;
+      if (Array.isArray(mapActive)) {
+        const activeCols = mapActive
+          .map((v, i) => (v ? i : -1))
+          .filter(i => i >= 0)
+          .slice(0, 10);
+        return {
+          hasApi: true,
+          shape: 'currentMap.active',
+          activeCount: activeCols.length,
+          sampleCols: activeCols
+        };
+      }
+
+      // Unknown shape, but still useful to see top-level keys.
+      try {
+        const keys = state && typeof state === 'object' ? Object.keys(state).slice(0, 12) : null;
+        return { hasApi: true, unknownStructure: true, keys };
+      } catch {}
+    }
+
+    return { hasApi: true, unknownStructure: true };
+  } catch (e) {
+    return { error: String(e?.message || e) };
+  }
+}
+
 function ensureArtInternalHost() {
     let host = document.getElementById('art-internal-host');
     if (host) return host;
     host = document.createElement('div');
     host.id = 'art-internal-host';
-    host.style.display = 'none'; // hidden by default; Internal Board mode will show this later.
+    // IMPORTANT:
+    // This host must remain *layoutable* even when "hidden" so internal toys (esp drawgrid)
+    // can randomise + start audio from the external view.
+    // `display:none` prevents layout and breaks headless randomisation.
+    host.style.display = 'block';
     host.style.position = 'absolute';
-    host.style.left = '0px';
-    host.style.top = '0px';
-    host.style.width = '0px';
-    host.style.height = '0px';
-    host.style.overflow = 'hidden';
+    host.style.left = '-20000px';
+    host.style.top = '-20000px';
+    host.style.width = '1px';
+    host.style.height = '1px';
+    host.style.overflow = 'visible';
+    host.style.visibility = 'hidden';
     host.style.pointerEvents = 'none';
     document.body.appendChild(host);
     return host;
+}
+
+function makeInternalPanelLayoutableWhileHidden(panel) {
+    if (!panel) return;
+    // Keep it measurable but not visible or interactive.
+    // DO NOT use display:none (drawgrid random/audio relies on layoutable canvases).
+    try {
+        panel.style.display = 'block';
+        panel.style.position = 'absolute';
+        panel.style.left = '-20000px';
+        panel.style.top = '-20000px';
+        // Give it a sane footprint so canvas-based toys get real sizes.
+        // (DrawGrid will then allocate proper paint buffers and randomise fully.)
+        panel.style.width = panel.style.width || '420px';
+        panel.style.height = panel.style.height || '260px';
+        panel.style.visibility = 'hidden';
+        panel.style.pointerEvents = 'none';
+        panel.style.overflow = 'hidden';
+        panel.style.contain = 'layout paint size';
+    } catch {}
 }
 
 function findArtToyAtClientPoint(clientX, clientY) {
@@ -2046,8 +2135,8 @@ function setPanelInternalToArtToy(panel, artToyId) {
     panel.dataset.artOwnerId = artToyId;
     panel.dataset.focusSkip = '1'; // don't let focus system try to manage hidden panels
     panel.classList.add('art-internal-toy');
-    // First pass: hide visuals while keeping the toy in the DOM so audio scheduler still finds it.
-    panel.style.display = 'none';
+    // Keep it layoutable (offscreen/invisible) so external random/play works.
+    makeInternalPanelLayoutableWhileHidden(panel);
 }
 
 function moveChainIntoArtToy(startPanel, artPanel) {
@@ -2381,6 +2470,52 @@ function randomizeArtToyStateStub(artToyId) {
   void artToyId;
 }
 
+function randomizeToyMusic(panel, dbg = null) {
+  if (!panel) return;
+  const toyType = panel?.dataset?.toy;
+  const hasApi = typeof panel.__toyRandomMusic === 'function';
+
+  if (dbg) {
+    __artRandLog('randomizeToyMusic:enter', {
+      ...dbg,
+      toyType,
+      hasApi,
+      isConnected: panel.isConnected,
+      display: getComputedStyle(panel).display
+    });
+  }
+
+  if (hasApi) {
+    try {
+      const t = panel?.dataset?.toy;
+      if (dbg && t === 'drawgrid') {
+        __artRandLog('randomizeToyMusic:before', { ...dbg, toyType: t, dump: __dumpDrawgridNotes(panel) });
+      }
+      panel.__toyRandomMusic();
+      if (dbg && t === 'drawgrid') {
+        __artRandLog('randomizeToyMusic:after', { ...dbg, toyType: t, dump: __dumpDrawgridNotes(panel) });
+      }
+    } catch (e) {
+      if (dbg) __artRandLog('randomizeToyMusic:apiError', { ...dbg, err: String(e?.message || e) });
+    }
+  } else {
+    try {
+      const eventName =
+        (toyType === 'loopgrid' || toyType === 'loopgrid-drum')
+          ? 'toy-random'
+          : 'toy-random-notes';
+
+      __artRandLog('randomizeToyMusic:eventDispatch', { toyType, eventName });
+      panel.dispatchEvent(new CustomEvent(eventName, { bubbles: true, composed: true }));
+      if (dbg && toyType === 'drawgrid') {
+        __artRandLog('randomizeToyMusic:afterEvent', { ...dbg, toyType, dump: __dumpDrawgridNotes(panel) });
+      }
+    } catch (e) {
+      __artRandLog('randomizeToyMusic:eventError', { err: String(e?.message || e) });
+    }
+  }
+}
+
 function markPendingInternalRandom(panelOrId, which) {
   const artToyId = typeof panelOrId === 'string'
     ? panelOrId
@@ -2390,6 +2525,7 @@ function markPendingInternalRandom(panelOrId, which) {
   if (!artPanel) return;
   if (which === 'music') artPanel.dataset.pendingRandMusic = '1';
   if (which === 'all') artPanel.dataset.pendingRandAll = '1';
+  __artRandLog('markPending', { artToyId, which });
 }
 
 function applyPendingInternalRandomIfNeeded(artToyId) {
@@ -2403,6 +2539,8 @@ function applyPendingInternalRandomIfNeeded(artToyId) {
   const wantAll = artPanel.dataset.pendingRandAll === '1';
   if (!wantMusic && !wantAll) return;
 
+  __artRandLog('applyPending:begin', { artToyId, wantMusic, wantAll });
+
   // Clear flags first to avoid loops if anything throws.
   artPanel.dataset.pendingRandMusic = '0';
   artPanel.dataset.pendingRandAll = '0';
@@ -2411,8 +2549,9 @@ function applyPendingInternalRandomIfNeeded(artToyId) {
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       try {
-        if (wantAll) randomizeInternalToysForArtToy(artToyId, 'all', { allowDefer: false });
-        else if (wantMusic) randomizeInternalToysForArtToy(artToyId, 'music', { allowDefer: false });
+        __artRandLog('applyPending:do', { artToyId, mode: wantAll ? 'all' : 'music' });
+        if (wantAll) randomizeInternalToysForArtToy(artToyId, 'all', { allowDefer: false, source: 'applyPending' });
+        else if (wantMusic) randomizeInternalToysForArtToy(artToyId, 'music', { allowDefer: false, source: 'applyPending' });
       } catch {}
     });
   });
@@ -2434,6 +2573,98 @@ function pickDefaultInternalToyKindForArtToy(artToyId) {
   const kind = artPanel?.dataset?.artToy || '';
   if (kind === 'flashCircle') return 'drawgrid';
   return 'drawgrid';
+}
+
+function isPanelLayoutReady(panel) {
+  if (!panel || !panel.isConnected) return false;
+  try {
+    const r = panel.getBoundingClientRect?.();
+    return !!r && r.width > 4 && r.height > 4;
+  } catch {}
+  return false;
+}
+
+function ensureDefaultInternalToyExistsInHost(artToyId) {
+  if (!artToyId) return null;
+  const artPanel = getArtToyPanelById(artToyId);
+  if (!artPanel) return null;
+  if (artPanel.dataset?.internalBootstrapped === '1') return null;
+
+  const host = ensureArtInternalHost();
+
+  // Mark as bootstrapped immediately to avoid accidental double-spawn.
+  try { artPanel.dataset.internalBootstrapped = '1'; } catch {}
+
+  const kind = pickDefaultInternalToyKindForArtToy(artToyId);
+  __artRandLog('ensureDefaultInternalToyExistsInHost:spawn', { artToyId, kind });
+  try {
+    const p = createToyPanelAt(kind, {
+      centerX: 0,
+      centerY: 0,
+      autoCenter: false,
+      allowOffscreen: true,
+      skipSpawnPlacement: true,
+      containerEl: host,
+      artOwnerId: artToyId,
+    });
+    __artRandLog('ensureDefaultInternalToyExistsInHost:done', {
+      artToyId,
+      created: !!p,
+      toyType: p?.dataset?.toy,
+      panelId: p?.id,
+      hostDisplay: host?.style?.display,
+      panelReady: (() => {
+        try {
+          const p = document.getElementById(panelId);
+          if (!p) return { exists: false };
+          return {
+            exists: true,
+            isConnected: p.isConnected,
+            display: (() => { try { return getComputedStyle(p).display; } catch { return '??'; } })(),
+            hasToyRandomMusic: typeof p.__toyRandomMusic === 'function',
+            hasDrawToy: !!p.__drawToy,
+            hasToyApi: !!p.__toyApi
+          };
+        } catch (e) {
+          return { err: String(e?.message || e) };
+        }
+      })()
+    });
+    if (p) {
+      // Keep it stashed until user enters.
+      p.classList.add('art-internal-toy');
+      p.style.pointerEvents = 'none';
+      // NOTE: don't set display:none; we want layout so randomisation works.
+
+      // CRITICAL: initialize immediately so the *first* external Random press can:
+      // - call drawgrid's headless random API
+      // - start playback in the same click
+      // Without this, the first press races the createToyPanelAt setTimeout(0) init.
+      ensureToyPanelInitializedNow(p, 'ensureDefaultInternalToyExistsInHost');
+    }
+    return p || null;
+  } catch (err) {
+    console.warn('[InternalBoard] host default toy spawn failed', err);
+    return null;
+  }
+}
+
+// Force a toy panel to initialize immediately (guarded).
+// Needed for "Random" from the external Art Toy view, where we may spawn a brand new
+// internal toy and then immediately randomize/play it in the same click.
+function ensureToyPanelInitializedNow(panel, reason = 'unknown') {
+  if (!panel) return false;
+  // Guard against double-init (createToyPanelAt also inits on setTimeout(0)).
+  if (panel.__mtToyInitDone) return true;
+  panel.__mtToyInitDone = true;
+
+  try { __artRandLog?.('toyInitNow:begin', { panelId: panel.id, toyType: panel.dataset?.toy, reason }); } catch {}
+
+  try { initializeNewToy(panel); } catch (err) { console.warn('[ensureToyPanelInitializedNow] init failed', err); }
+  try { initToyChaining(panel); } catch (err) { console.warn('[ensureToyPanelInitializedNow] chain init failed', err); }
+
+  try { __artRandLog?.('toyInitNow:done', { panelId: panel.id, toyType: panel.dataset?.toy, reason }); } catch {}
+  return true;
 }
 
 function ensureDefaultInternalToyOnFirstEnter(artToyId, worldEl) {
@@ -2783,6 +3014,12 @@ function enterInternalBoard(artToyId) {
   // Critical: swap board identity so all existing toy dragging / board math works inside internal mode.
   swapBoardIdentityForInternalMode();
 
+  __artRandLog('enterInternalBoard:afterSwap', {
+    artToyId,
+    pendingMusic: document.getElementById(artToyId)?.dataset?.pendingRandMusic,
+    pendingAll: document.getElementById(artToyId)?.dataset?.pendingRandAll,
+  });
+
   // If we deferred any internal randomisation (e.g., drawgrid while hidden), apply it now.
   try { applyPendingInternalRandomIfNeeded(artToyId); } catch {}
 
@@ -2794,6 +3031,24 @@ function enterInternalBoard(artToyId) {
 
   // Animate scale-in from the art toy position.
   try { animateInternalBoardIn(artToyId); } catch {}
+
+  // If any internal toys performed headless model updates while hidden (eg DrawGrid),
+  // refresh their visuals now that we're visible.
+  // Two rAFs = after DOM move + after layout/camera settle.
+  try {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        try {
+          const panelsNow = getInternalPanelsForArtToy(artToyId);
+          for (const p of panelsNow) {
+            if (typeof p.__toyRefreshVisualsIfNeeded === 'function') {
+              try { p.__toyRefreshVisualsIfNeeded(); } catch {}
+            }
+          }
+        } catch {}
+      });
+    });
+  } catch {}
 
   // Ensure the hidden host stays alive (panels for other toys remain stashed there).
   // (No-op read, keeps linter happy.)
@@ -2810,8 +3065,10 @@ function exitInternalBoardImmediate() {
   for (const p of panels) {
     try {
       p.classList.add('art-internal-toy');
-      p.style.display = 'none';
       p.style.pointerEvents = 'none';
+      // Keep layoutable while hidden so external randomise/play continues to work
+      // for canvas toys (DrawGrid) after you’ve entered/exited once.
+      try { makeInternalPanelLayoutableWhileHidden(p); } catch {}
       host.appendChild(p);
     } catch {}
   }
@@ -2867,39 +3124,175 @@ document.addEventListener('click', (e) => {
 }, true);
 
 function randomizeInternalToysForArtToy(artToyId, mode, opts = {}) {
+  const source = opts.source || 'button';
+  __artRandLog('randomizeInternalToysForArtToy:begin', { artToyId, mode, source });
+  // If the user presses random before ever entering the toy, we still want
+  // a default internal toy to exist so randomisation can happen immediately.
+  try { ensureDefaultInternalToyExistsInHost(artToyId); } catch {}
+
   const panels = getInternalPanelsForArtToy(artToyId);
+  __artRandLog('randomizeInternalToysForArtToy:panels', {
+    artToyId,
+    count: panels.length,
+    ids: panels.map(p => p.id),
+  });
   if (!panels.length) return;
+
+  // "Instant randomise" from the external view must be audible on the *first* press.
+  // Ensure the audio context is unlocked and the transport is running before we
+  // mutate patterns and call startToy().
+  try {
+    ensureAudioContext?.();
+    if (typeof isRunning === 'function' && !isRunning()) {
+      // Cancel anything pending from a prior run (deferred setTimeout gates + scheduled sources)
+      try { bumpAllToyAudioGen?.(); } catch {}
+      try { start?.(); } catch {}
+      try { document.dispatchEvent(new Event('transport:play')); } catch {}
+    }
+  } catch {}
 
   const allowDefer = opts.allowDefer !== false;
   const internalActiveForThis = isInternalBoardActiveForArtToy(artToyId);
+  __artRandLog('randomizeInternalToysForArtToy:context', { artToyId, mode, allowDefer, internalActiveForThis });
+
+  // If we actually apply a randomisation, clear any pending flags so we don't
+  // accidentally re-randomise on enter (which feels like "tune changed on enter").
+  const clearPendingFlags = () => {
+    try {
+      const artPanel = document.getElementById(artToyId);
+      if (!artPanel) return;
+      artPanel.dataset.pendingRandMusic = '0';
+      artPanel.dataset.pendingRandAll = '0';
+    } catch {}
+  };
+
+  // DrawGrid's headless random path updates model/audio immediately, but some
+  // parts of playback wiring settle on the next frame. Starting in the same tick
+  // can lead to "silent until second press".
+  const startToyAfterRandom = (panel) => {
+    try {
+      const t = panel?.dataset?.toy;
+      __artRandLog('startToyAfterRandom:enter', {
+        panelId: panel?.id,
+        toyType: t
+      });
+
+      if (t === 'drawgrid') {
+        requestAnimationFrame(() => {
+          __artRandLog('startToyAfterRandom:rafFired', { panelId: panel?.id });
+          try { startToy(panel); } catch (e) {
+            __artRandLog('startToyAfterRandom:error', { err: String(e?.message || e) });
+          }
+        });
+      } else {
+        try { startToy(panel); } catch (e) {
+          __artRandLog('startToyAfterRandom:error', { err: String(e?.message || e) });
+        }
+      }
+    } catch {}
+  };
+
+  function randomizeMusicForPanel(p) {
+    if (!p) return;
+    try {
+      // Preferred path: toy-provided API that is safe while hidden.
+      if (typeof p.__toyRandomMusic === 'function') {
+        p.__toyRandomMusic();
+      } else {
+        // Fallback: event-based randomisation.
+        p.dispatchEvent(new CustomEvent('toy-random-notes', { bubbles: true, composed: true }));
+      }
+    } catch {}
+  }
 
   for (const p of panels) {
     try {
       if (mode === 'music') {
         const toyType = p.dataset?.toy;
+        __artRandLog('panel', { artToyId, panelId: p.id, toyType, mode });
 
-        // IMPORTANT: drawgrid randomisation needs the panel to be laid out (not hidden),
-        // otherwise it can corrupt visuals (e.g. tiny dot top-left, blank notes).
-        if (allowDefer && !internalActiveForThis && toyType === 'drawgrid') {
+        // If DrawGrid doesn't have the headless API and we're outside, defer to avoid
+        // layout-dependent random corrupting visuals. If it DOES have the API, we can
+        // randomise instantly even while hidden.
+        if (
+          allowDefer &&
+          !internalActiveForThis &&
+          toyType === 'drawgrid' &&
+          typeof p.__toyRandomMusic !== 'function'
+        ) {
+          __artRandLog('defer', { artToyId, panelId: p.id, toyType, mode, reason: 'drawgrid-no-api-and-not-internal' });
           markPendingInternalRandom(artToyId, 'music');
           continue;
         }
+        // Use the per-toy "do what the visible Random button does" behavior.
+        // randomizeToyMusic() prefers panel.__toyRandomMusic() when available.
+        randomizeToyMusic(p, { artToyId, panelId: p.id, toyType, mode, source });
+        const hasNotesNow = panelHasAnyNotes(p);
+        __artRandLog('postRandom:notes', { artToyId, panelId: p.id, toyType, hasNotesNow });
 
-        // "Random Music" should behave like the existing Random button for each toy.
-        // - loopgrid: the visible Random button randomises steps/notes-on (NOT pitch)
-        // - drawgrid: randomise notes
-        if (toyType === 'loopgrid' || toyType === 'loopgrid-drum') {
-          p.dispatchEvent(new CustomEvent('toy-random', { bubbles: true, composed: true }));
-        } else {
-          p.dispatchEvent(new CustomEvent('toy-random-notes', { bubbles: true, composed: true }));
+        // The intent of the art-toy buttons is "instant music".
+        try { pulseToyBorder(p, 360); } catch {}
+        __artRandLog('startToy:try', { artToyId, panelId: p.id, toyType });
+        clearPendingFlags();
+        startToyAfterRandom(p);
+
+        // DrawGrid sometimes isn't fully ready the very first frame after being spawned/hidden.
+        // If the random produced no notes, retry once on the next frame (then start again).
+        if (toyType === 'drawgrid' && !hasNotesNow) {
+          __artRandLog('drawgrid:retryScheduled', { artToyId, panelId: p.id, reason: 'no-notes-after-random' });
+          requestAnimationFrame(() => {
+            try {
+              randomizeToyMusic(p, { artToyId, panelId: p.id, toyType, mode, source: source + ':retry1' });
+              const hasNotes2 = panelHasAnyNotes(p);
+              __artRandLog('drawgrid:retryResult', { artToyId, panelId: p.id, hasNotes2 });
+              // Only bother restarting if we actually got notes this time.
+              if (hasNotes2) startToyAfterRandom(p);
+            } catch (e) {
+              __artRandLog('drawgrid:retryError', { artToyId, panelId: p.id, err: String(e?.message || e) });
+            }
+          });
         }
       } else {
-        // Full random (toy decides what that means). For loopgrid/drawgrid this should cover notes + blocks.
-        if (allowDefer && !internalActiveForThis && p.dataset?.toy === 'drawgrid') {
+        // Random All:
+        // 1) Always randomise MUSIC immediately (even externally) so you hear something now.
+        // 2) Then apply the "all" random (toy-random / art-state hooks) if safe;
+        //    for drawgrid while external, defer ONLY the "all" pass until internal is active.
+        const toyType = p.dataset?.toy;
+        __artRandLog('panel', { artToyId, panelId: p.id, toyType, mode });
+
+        // Step 1: music now
+        randomizeToyMusic(p, { artToyId, panelId: p.id, toyType, mode: 'music', source: source + ':preAll' });
+        const hasNotesNow = panelHasAnyNotes(p);
+        __artRandLog('postRandom:notes', { artToyId, panelId: p.id, toyType, hasNotesNow, why: 'preAll-music' });
+        __artRandLog('startToy:try', { artToyId, panelId: p.id, toyType, why: 'preAll-music' });
+        try { startToy?.(p); } catch {}
+
+        if (toyType === 'drawgrid' && !hasNotesNow) {
+          __artRandLog('drawgrid:retryScheduled', { artToyId, panelId: p.id, reason: 'no-notes-after-preAll-music' });
+          requestAnimationFrame(() => {
+            try {
+              randomizeToyMusic(p, { artToyId, panelId: p.id, toyType, mode: 'music', source: source + ':preAll:retry1' });
+              const hasNotes2 = panelHasAnyNotes(p);
+              __artRandLog('drawgrid:retryResult', { artToyId, panelId: p.id, hasNotes2, why: 'preAll-music' });
+              if (hasNotes2) startToyAfterRandom(p);
+            } catch (e) {
+              __artRandLog('drawgrid:retryError', { artToyId, panelId: p.id, err: String(e?.message || e), why: 'preAll-music' });
+            }
+          });
+        }
+
+        // Step 2: "all" pass (defer for drawgrid when not internal)
+        if (allowDefer && !internalActiveForThis && toyType === 'drawgrid') {
+          __artRandLog('defer', { artToyId, panelId: p.id, toyType, mode: 'all', reason: 'drawgrid-all-defer-external' });
           markPendingInternalRandom(artToyId, 'all');
           continue;
         }
+
+        // Safe to do full random now
+        __artRandLog('dispatch', { artToyId, panelId: p.id, toyType, event: 'toy-random' });
         p.dispatchEvent(new CustomEvent('toy-random', { bubbles: true, composed: true }));
+        __artRandLog('startToy:try', { artToyId, panelId: p.id, toyType, why: 'postAll-toyRandom' });
+        try { startToy?.(p); } catch {}
       }
     } catch {}
   }
@@ -2913,11 +3306,12 @@ document.addEventListener('click', (e) => {
   if (!btn) return;
   const artToyId = btn.dataset.artToyId || btn.closest?.('.art-toy-panel')?.id;
   if (!artToyId) return;
+  __artRandLog('click', { action: 'randomAll', artToyId });
   e.preventDefault();
   e.stopPropagation();
   // Hook for future: also randomise the art toy's own state.
   try { randomizeArtToyStateStub(artToyId); } catch {}
-  randomizeInternalToysForArtToy(artToyId, 'all', { allowDefer: true });
+  randomizeInternalToysForArtToy(artToyId, 'all', { allowDefer: true, source: 'randomAll' });
 }, true);
 
 // Click delegate: Art Toy "Random Music" button.
@@ -2926,9 +3320,10 @@ document.addEventListener('click', (e) => {
   if (!btn) return;
   const artToyId = btn.dataset.artToyId || btn.closest?.('.art-toy-panel')?.id;
   if (!artToyId) return;
+  __artRandLog('click', { action: 'randomMusic', artToyId });
   e.preventDefault();
   e.stopPropagation();
-  randomizeInternalToysForArtToy(artToyId, 'music', { allowDefer: true });
+  randomizeInternalToysForArtToy(artToyId, 'music', { allowDefer: true, source: 'randomMusic' });
 }, true);
 
 // Returns true if the given panel has any notes at the specified column.
@@ -2970,20 +3365,47 @@ function panelHasAnyNotes(panel) {
   }
 
   if (type === 'drawgrid') {
+    if (window.__MT_DEBUG_ART_RANDOM) {
+      __artRandLog('drawgrid:hasAnyNotes:probe', {
+        panelId: panel.id,
+        isConnected: panel.isConnected,
+        display: (() => { try { return getComputedStyle(panel).display; } catch { return '??'; } })(),
+        hasToyRandomMusic: typeof panel.__toyRandomMusic === 'function',
+        hasDrawToy: !!panel.__drawToy,
+        hasToyApi: !!panel.__toyApi
+      });
+    }
     try {
       if (typeof panel.__drawToy?.hasActiveNotes === 'function') {
-        return !!panel.__drawToy.hasActiveNotes();
+        const v = !!panel.__drawToy.hasActiveNotes();
+        if (window.__MT_DEBUG_ART_RANDOM) {
+          __artRandLog('drawgrid:hasAnyNotes:hasActiveNotes()', { panelId: panel.id, result: v });
+        }
+        return v;
       }
     } catch {}
     try {
       const st = panel.__drawToy?.getState?.();
       const active = st?.nodes?.active;
-      return Array.isArray(active) && active.some(Boolean);
+      const v = Array.isArray(active) && active.some(Boolean);
+      if (window.__MT_DEBUG_ART_RANDOM) {
+        __artRandLog('drawgrid:hasAnyNotes:state.nodes.active', {
+          panelId: panel.id,
+          isArray: Array.isArray(active),
+          activeCount: Array.isArray(active) ? active.filter(Boolean).length : null,
+          result: v
+        });
+      }
+      return v;
     } catch {}
     try {
       const pat = panel.__seqPatternActive || panel.__seqPattern;
       const cols = Array.isArray(pat?.cols) ? pat.cols : [];
-      return cols.some(c => c && c.active && Array.isArray(c.nodes) && c.nodes.length > 0);
+      const v = cols.some(c => c && c.active && Array.isArray(c.nodes) && c.nodes.length > 0);
+      if (window.__MT_DEBUG_ART_RANDOM) {
+        __artRandLog('drawgrid:hasAnyNotes:seqPattern', { panelId: panel.id, cols: cols.length, result: v });
+      }
+      return v;
     } catch {}
     return false;
   }
@@ -2998,6 +3420,11 @@ function panelHasAnyNotes(panel) {
 
 function startToy(panelEl) {
     if (!panelEl) return;
+    __artRandLog('startToy:begin', {
+      panelId: panelEl?.id,
+      toyType: panelEl?.dataset?.toy,
+      audioState: (window.__audioContext?.state || 'unknown')
+    });
     try {
         // Always restart toys from their start when (re)started.
         // This keeps pause/resume deterministic and prevents mid-bar resumes.
@@ -3010,15 +3437,62 @@ function startToy(panelEl) {
             }
         } catch {}
         const api = panelEl.__toyApi || panelEl.__drawToy || panelEl.__toy || panelEl.__toyInstance || null;
+        const apiName =
+          api === panelEl.__toyApi ? '__toyApi' :
+          api === panelEl.__drawToy ? '__drawToy' :
+          api === panelEl.__toy ? '__toy' :
+          api === panelEl.__toyInstance ? '__toyInstance' :
+          'unknown';
+
+        if (window.__MT_DEBUG_ART_RANDOM) {
+          __artRandLog('startToy:enter', {
+            panelId: panelEl.id,
+            toyType: panelEl.dataset?.toy,
+            apiFound: !!api,
+            apiName,
+            canStart: !!(api && typeof api.start === 'function'),
+            hasNotesNow: (() => { try { return panelHasAnyNotes(panelEl); } catch { return 'err'; } })(),
+            dump: (panelEl.dataset?.toy === 'drawgrid') ? __dumpDrawgridNotes(panelEl) : undefined
+          });
+        }
+
         if (api && typeof api.start === 'function') {
             api.start();
+            if (window.__MT_DEBUG_ART_RANDOM) {
+                __artRandLog('startToy:calledApiStart', { panelId: panelEl.id, apiName });
+            }
         } else {
-            panelEl.dispatchEvent(new CustomEvent('toy:start', { bubbles: false }));
+            const toyType = panelEl.dataset?.toy;
+            if (toyType === 'drawgrid') {
+                try {
+                    if (!isRunning()) {
+                        start();
+                        if (window.__MT_DEBUG_ART_RANDOM) {
+                            __artRandLog('startToy:startedTransportForDrawgrid', { panelId: panelEl.id });
+                        }
+                    }
+                } catch (e) {
+                    if (window.__MT_DEBUG_ART_RANDOM) {
+                        __artRandLog('startToy:drawgridStartError', { err: String(e?.message || e) });
+                    }
+                }
+            } else {
+                panelEl.dispatchEvent(new CustomEvent('toy:start', { bubbles: false }));
+                if (window.__MT_DEBUG_ART_RANDOM) {
+                    __artRandLog('startToy:dispatchedEvent', { panelId: panelEl.id, event: 'toy:start' });
+                }
+            }
         }
       if (window.__CHAIN_DEBUG) console.log('[chain] startToy', panelEl.id);
     } catch (e) {
         if (window.__CHAIN_DEBUG) console.warn('[chain] startToy failed', panelEl?.id, e);
     }
+
+    __artRandLog('startToy:done', {
+      panelId: panelEl?.id,
+      toyType: panelEl?.dataset?.toy,
+      playingClass: panelEl?.classList?.contains('toy-playing')
+    });
 }
 
 function startToyAndDescendants(panelEl, visited = new Set()) {
@@ -4315,6 +4789,10 @@ function createToyPanelAt(toyType, {
 
     setTimeout(() => {
         if (!panel.isConnected) return;
+        // If something (eg Art Toy external random) forced init immediately, skip.
+        if (panel.__mtToyInitDone) return;
+        panel.__mtToyInitDone = true;
+
         try { initializeNewToy(panel); } catch (err) { console.warn('[createToyPanelAt] init failed', err); }
         try { initToyChaining(panel); } catch (err) { console.warn('[createToyPanelAt] chain init failed', err); }
 

@@ -855,16 +855,6 @@ select.toy-instrument {
   --vol-bar-accent: #0141a9; /* mid blue, solid */
   --vol-bar-track-start: #111827; /* dark grey track */
   --vol-bar-track-end: #111827;
-
-/* Art Toys: internal host for hidden toys (first pass) */
-#art-internal-host {
-  display: none;
-}
-
-.art-internal-toy {
-  display: none;
-}
-
   display: flex;
   gap: 10px;
   align-items: center;
@@ -874,6 +864,28 @@ select.toy-instrument {
   padding: 8px 10px;
 }
 
+/* Art Toys: internal host for hidden toys (first pass)
+   IMPORTANT:
+   These must remain *layoutable* even when hidden so canvas toys (especially DrawGrid)
+   can randomise + start audio from the external view.
+
+   DO NOT use display:none here - main.js positions these offscreen and uses
+   visibility/pointer-events to keep them non-interactive.
+*/
+#art-internal-host {
+  position: absolute;
+  left: -20000px;
+  top: -20000px;
+  width: 1px;
+  height: 1px;
+  overflow: visible;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.art-internal-toy {
+  /* Intentionally no display override. */
+}
 /* Slight brighter outline for the master volume slider panel (and any future topbar master panel). */
 .toy-volwrap.options-volwrap,
 .toy-volwrap.topbar-master-volwrap {
@@ -4995,3 +5007,4 @@ body.intro-open .topbar-menu-wrap {
   z-index: 800 !important;          /* below UI (topbar/menu/spawner), above main board */
   pointer-events: auto !important;
 }
+
