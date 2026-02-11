@@ -263,17 +263,50 @@ export function createDgRandomizers(getState) {
     // After drawing, unmark the new strokes so they behave normally.
     newGenStrokes.forEach(s => delete s.justCreated);
 
-    // After regenerating, restore the old active state and update disabled nodes to match.
-    if (S.currentMap && oldActive) {
-      S.currentMap.active = oldActive;
-      // Rebuild the disabled sets based on the restored active state.
-      for (let c = 0; c < S.cols; c++) {
-        if (oldActive[c]) {
-          S.currentMap.disabled[c].clear(); // If column was active, ensure all its new nodes are enabled.
-        } else {
-          S.currentMap.nodes[c].forEach(r => S.currentMap.disabled[c].add(r)); // If column was inactive, disable all its new nodes.
+    // After regenerating, ALSO randomize the "active" pattern so repeated presses
+    // actually change the audible sequence (not just the generator line visuals).
+    if (S.currentMap) {
+      // Ensure containers exist.
+      if (!Array.isArray(S.currentMap.active)) S.currentMap.active = Array(S.cols).fill(true);
+      if (!Array.isArray(S.currentMap.disabled)) S.currentMap.disabled = Array.from({ length: S.cols }, () => new Set());
+      if (!Array.isArray(S.persistentDisabled)) S.persistentDisabled = Array.from({ length: S.cols }, () => new Set());
+
+      // If we had a previous pattern, bias toward keeping a similar density,
+      // but still guarantee change across presses.
+      const prevOnCount = Array.isArray(oldActive) ? oldActive.filter(Boolean).length : null;
+      const targetOn = (Number.isFinite(prevOnCount) ? prevOnCount : Math.round(S.cols * 0.65));
+      const probOn = Math.max(0.15, Math.min(0.9, targetOn / Math.max(1, S.cols)));
+
+      let newActive = Array.from({ length: S.cols }, () => (Math.random() < probOn));
+      // Ensure at least one active column.
+      if (!newActive.some(Boolean)) newActive[Math.floor(Math.random() * S.cols)] = true;
+      // Ensure we don't accidentally recreate exactly the same pattern every time.
+      if (Array.isArray(oldActive) && oldActive.length === newActive.length) {
+        let same = true;
+        for (let i = 0; i < oldActive.length; i++) {
+          if (!!oldActive[i] !== !!newActive[i]) { same = false; break; }
+        }
+        if (same) {
+          const k = Math.floor(Math.random() * S.cols);
+          newActive[k] = !newActive[k];
+          if (!newActive.some(Boolean)) newActive[k] = true;
         }
       }
+
+      S.currentMap.active = newActive;
+
+      // Rebuild disabled sets + persistentDisabled to match the new active pattern.
+      for (let c = 0; c < S.cols; c++) {
+        const on = !!newActive[c];
+        const dis = S.currentMap.disabled[c] || (S.currentMap.disabled[c] = new Set());
+        const pdis = S.persistentDisabled[c] || (S.persistentDisabled[c] = new Set());
+        dis.clear();
+        pdis.clear();
+        if (!on) {
+          S.currentMap.nodes?.[c]?.forEach?.(r => { dis.add(r); pdis.add(r); });
+        }
+      }
+
       S.drawGrid();
       S.drawNodes(S.currentMap.nodes);
       S.emitDrawgridUpdate({ activityOnly: false });

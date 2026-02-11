@@ -7331,6 +7331,14 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       ensureCanvasSize(panel.querySelector?.('canvas[data-role="drawgrid-flash-back"]'));
     } catch {}
 
+    // If a previous headless random persisted manual overrides, clear them so
+    // subsequent random presses can actually change the pattern.
+    try {
+      const cCount = Number(cols) || 8;
+      manualOverrides = Array.from({ length: cCount }, () => new Set());
+      persistentDisabled = Array.from({ length: cCount }, () => new Set());
+    } catch {}
+
     try { RNG?.handleRandomizeNotes?.(); } catch {}
 
     // CRITICAL:

@@ -3267,25 +3267,45 @@ function randomizeInternalToysForArtToy(artToyId, mode, opts = {}) {
   // DrawGrid's headless random path updates model/audio immediately, but some
   // parts of playback wiring settle on the next frame. Starting in the same tick
   // can lead to "silent until second press".
-  const startToyAfterRandom = (panel) => {
+  //
+  // IMPORTANT: After random, we must NOT restart/reset scheduler timing.
+  // Random should behave like the visible DrawGrid random button:
+  // apply changes, then the *next* step plays on beat.
+  const ensureToyPlayingAfterRandomNoReset = (panel) => {
     try {
       const t = panel?.dataset?.toy;
-      __artRandLog('startToyAfterRandom:enter', {
+      __artRandLog('ensureToyPlayingAfterRandomNoReset:enter', {
         panelId: panel?.id,
         toyType: t
       });
 
+      // Always ensure the AudioContext is alive, but do not force scheduler resets.
+      try { ensureAudioContext?.(); } catch {}
+
+      // DrawGrid uses the global transport; only start it if needed.
       if (t === 'drawgrid') {
-        requestAnimationFrame(() => {
-          __artRandLog('startToyAfterRandom:rafFired', { panelId: panel?.id });
-          try { startToy(panel); } catch (e) {
-            __artRandLog('startToyAfterRandom:error', { err: String(e?.message || e) });
+        try {
+          if (!isRunning?.()) {
+            start?.();
+            __artRandLog('ensureToyPlayingAfterRandomNoReset:startedTransport', { panelId: panel?.id });
           }
-        });
-      } else {
-        try { startToy(panel); } catch (e) {
-          __artRandLog('startToyAfterRandom:error', { err: String(e?.message || e) });
+        } catch (e) {
+          __artRandLog('ensureToyPlayingAfterRandomNoReset:drawgridStartError', { err: String(e?.message || e) });
         }
+        return;
+      }
+
+      // Other toys: only start if they appear not to be playing.
+      // (Do NOT force restart semantics.)
+      try {
+        if (!panel?.classList?.contains?.('toy-playing')) {
+          const api = panel.__toyApi || panel.__toy || panel.__toyInstance || panel.__drawToy || null;
+          if (api && typeof api.start === 'function') api.start();
+          else panel.dispatchEvent(new CustomEvent('toy:start', { bubbles: false }));
+          __artRandLog('ensureToyPlayingAfterRandomNoReset:startedToy', { panelId: panel?.id, toyType: t });
+        }
+      } catch (e) {
+        __artRandLog('ensureToyPlayingAfterRandomNoReset:error', { err: String(e?.message || e) });
       }
     } catch {}
   };
@@ -3332,7 +3352,7 @@ function randomizeInternalToysForArtToy(artToyId, mode, opts = {}) {
         try { pulseToyBorder(p, 360); } catch {}
         __artRandLog('startToy:try', { artToyId, panelId: p.id, toyType });
         clearPendingFlags();
-        startToyAfterRandom(p);
+        ensureToyPlayingAfterRandomNoReset(p);
 
         // DrawGrid sometimes isn't fully ready the very first frame after being spawned/hidden.
         // If the random produced no notes, retry once on the next frame (then start again).
@@ -3344,7 +3364,7 @@ function randomizeInternalToysForArtToy(artToyId, mode, opts = {}) {
               const hasNotes2 = panelHasAnyNotes(p);
               __artRandLog('drawgrid:retryResult', { artToyId, panelId: p.id, hasNotes2 });
               // Only bother restarting if we actually got notes this time.
-              if (hasNotes2) startToyAfterRandom(p);
+              if (hasNotes2) ensureToyPlayingAfterRandomNoReset(p);
             } catch (e) {
               __artRandLog('drawgrid:retryError', { artToyId, panelId: p.id, err: String(e?.message || e) });
             }
@@ -3363,7 +3383,7 @@ function randomizeInternalToysForArtToy(artToyId, mode, opts = {}) {
         const hasNotesNow = panelHasAnyNotes(p);
         __artRandLog('postRandom:notes', { artToyId, panelId: p.id, toyType, hasNotesNow, why: 'preAll-music' });
         __artRandLog('startToy:try', { artToyId, panelId: p.id, toyType, why: 'preAll-music' });
-        try { startToy?.(p); } catch {}
+        ensureToyPlayingAfterRandomNoReset(p);
 
         if (toyType === 'drawgrid' && !hasNotesNow) {
           __artRandLog('drawgrid:retryScheduled', { artToyId, panelId: p.id, reason: 'no-notes-after-preAll-music' });
@@ -3372,7 +3392,7 @@ function randomizeInternalToysForArtToy(artToyId, mode, opts = {}) {
               randomizeToyMusic(p, { artToyId, panelId: p.id, toyType, mode: 'music', source: source + ':preAll:retry1' });
               const hasNotes2 = panelHasAnyNotes(p);
               __artRandLog('drawgrid:retryResult', { artToyId, panelId: p.id, hasNotes2, why: 'preAll-music' });
-              if (hasNotes2) startToyAfterRandom(p);
+              if (hasNotes2) ensureToyPlayingAfterRandomNoReset(p);
             } catch (e) {
               __artRandLog('drawgrid:retryError', { artToyId, panelId: p.id, err: String(e?.message || e), why: 'preAll-music' });
             }
@@ -3392,7 +3412,7 @@ function randomizeInternalToysForArtToy(artToyId, mode, opts = {}) {
         __artRandLog('dispatch', { artToyId, panelId: p.id, toyType, event: 'toy-random' });
         p.dispatchEvent(new CustomEvent('toy-random', { bubbles: true, composed: true }));
         __artRandLog('startToy:try', { artToyId, panelId: p.id, toyType, why: 'postAll-toyRandom' });
-        try { startToy?.(p); } catch {}
+        ensureToyPlayingAfterRandomNoReset(p);
       }
     } catch {}
   }
