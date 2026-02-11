@@ -352,11 +352,42 @@ These are *not optional* — they prevent the same class of bugs we already foug
 
     * `src/art/art-toy-factory.js`
 
+* **External “Random Music / Random All” now works for DrawGrid before first enter**
+
+  * Fixed the issue where clicking Random from the **external** art-toy controls produced **no audible pattern** until entering the internal board.
+  * Verified via repro:
+    * spawn new art toy
+    * press Random externally → DrawGrid now generates a pattern and plays (no need to enter first)
+    * entering internal preserves the generated pattern (no “it only appears on enter” behavior)
+  * Key technical changes (high-level):
+    * ensured internal default toy exists before randomising
+    * improved pending/defer logic so we can still produce “instant music” even when internal board is not active
+    * removed/avoided `display:none` for hidden internal toys where it breaks DrawGrid headless operation
+    * DrawGrid start path differs from toys with `__toyApi.start()` — accounted for in the external-random flow
+
+* **Art-random debug instrumentation (gated)**
+
+  * Added a gated debug mode to trace the entire “Random” story end-to-end:
+    * click → internal toy spawn → panels enumerated → defer/pending decisions → applyPending on enter → start attempts
+    * DrawGrid note-dump probes to confirm whether randomisation actually created notes
+  * Enabled with: `window.__MT_DEBUG_ART_RANDOM = true`
+  * This debug was used to isolate:
+    * defer/pending being the reason external random produced no tune
+    * DrawGrid start API differences (no `.start()` on `__drawToy`)
+    * hidden/layout constraints (display:none breaks headless/random)
+
 ---
 
 ## 7. Investigated and Rejected ❌
 
 * (add entries as we reject approaches)
+
+* **“Just retry randomisation N times” as a primary fix**
+
+  * Retrying helped prove timing vs state issues, but did not address the real root causes on its own:
+    * DrawGrid init/start semantics differ from LoopGrid/Simple Rhythm
+    * `display:none` panels cannot behave headlessly
+  * Kept a single-frame retry concept only as a *diagnostic / safety net*, not as the core solution.
 
 ---
 
@@ -366,11 +397,29 @@ These are *not optional* — they prevent the same class of bugs we already foug
 * Art toys should sit above anchor/glow visuals so the handle remains consistently clickable.
 * Default spawning should avoid the center/anchor zone; “works in the lab” spawns on top of the anchor lead to confusing hit-testing failures.
 
+* **Hidden internal toys must remain layoutable if we want “instant random”**
+  * `display:none` breaks headless/random paths for canvas-heavy toys (DrawGrid).
+  * Prefer offscreen + `visibility:hidden` + `pointer-events:none` when we need the toy to exist and respond to programmatic actions.
+
+* **DrawGrid does not start the same way as `__toyApi.start()` toys**
+  * Some toys expose a direct `start()` API; DrawGrid playback is transport-driven and requires the correct start pathway.
+  * Our container-level “Random then Play immediately” needs to handle these differences explicitly.
+
+* **Pending/defer behavior must preserve the UX promise**
+  * If the user presses Random externally, they expect immediate audible feedback.
+  * Defer logic should only delay the parts that truly require internal activation; music randomisation should still happen instantly when possible.
+
 ---
 
 ## 9. Next Steps 🎯
 
-1. **Internal-board “Enter” button wiring**: ensure `data-action="artToy:music"` reliably opens internal-board mode for the clicked art toy (and stores the active `artToyId`).
+1. **Stabilise and lock the external Random behavior**
+   * Confirm both buttons behave consistently:
+     * **Random Music**: randomises internal toy music and plays immediately.
+     * **Random All**: does Random Music immediately + leaves hooks for future art-state random (and any additional “all” random behaviour).
+   * Add a quick sanity test: fresh art toy → press Random x1 → must hear a full pattern without entering.
+
+2. **Internal-board “Enter” button wiring**: ensure `data-action="artToy:music"` reliably opens internal-board mode for the clicked art toy (and stores the active `artToyId`).
 2. **First-entry default internal toy**: when entering an art toy for the first time, spawn a default “empty” internal music toy.
 
    * For now: limit to **DrawGrid** and **Simple Rhythm (LoopGrid)**.
@@ -391,3 +440,7 @@ These are *not optional* — they prevent the same class of bugs we already foug
 6. **Note-play event forwarding + outer flash reaction**
 
    * Forward internal note events to the owning art toy and trigger the placeholder flash effect.
+
+7. **Defer: playhead offset investigation**
+   * Known issue: on enter, DrawGrid playhead can appear offset relative to audible notes.
+   * Park this until after container + random + persistence are stable.

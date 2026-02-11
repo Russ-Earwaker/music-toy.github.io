@@ -2516,6 +2516,62 @@ function randomizeToyMusic(panel, dbg = null) {
   }
 }
 
+// Debug helpers: capture a stable-ish snapshot of DrawGrid note state so we can prove
+// exactly when/where a sequence changes.
+function __artRandDumpDrawgrid(panel) {
+  try {
+    if (!panel || panel?.dataset?.toy !== 'drawgrid') return null;
+    return __dumpDrawgridNotes(panel);
+  } catch {
+    return null;
+  }
+}
+function __artRandLogDrawgrid(tag, info, panel) {
+  if (!window.__MT_DEBUG_ART_RANDOM) return;
+  try {
+    __artRandLog(tag, {
+      ...(info || {}),
+      panelId: panel?.id,
+      dump: __artRandDumpDrawgrid(panel),
+    });
+  } catch {}
+}
+
+// Global capture of random events so we can see if *anything* fires a random that touches music.
+// (This is the "tell the whole story" instrumentation.)
+try {
+  if (window.__MT_DEBUG_ART_RANDOM && !window.__artRandEventCaptureInstalled) {
+    window.__artRandEventCaptureInstalled = true;
+    const handler = (e) => {
+      try {
+        const tgt = e?.target;
+        const panel =
+          (tgt?.closest?.('.toy-panel')) ||
+          (tgt?.classList?.contains?.('toy-panel') ? tgt : null);
+        if (!panel) return;
+        const toyType = panel?.dataset?.toy || null;
+        // Only dump drawgrid state; other toys are noise for this bug.
+        if (toyType !== 'drawgrid') return;
+
+        const info = {
+          eventName: e.type,
+          artOwnerId: panel?.dataset?.artOwnerId || panel?.dataset?.artOwnerID || null,
+          isConnected: !!panel.isConnected,
+          display: (() => { try { return getComputedStyle(panel).display; } catch { return '??'; } })(),
+        };
+
+        __artRandLogDrawgrid('event:capture:before', info, panel);
+        requestAnimationFrame(() => {
+          __artRandLogDrawgrid('event:capture:afterRaf', info, panel);
+        });
+      } catch {}
+    };
+    document.addEventListener('toy-random', handler, true);
+    document.addEventListener('toy-random-notes', handler, true);
+    document.addEventListener('toy-random-blocks', handler, true);
+  }
+} catch {}
+
 function markPendingInternalRandom(panelOrId, which) {
   const artToyId = typeof panelOrId === 'string'
     ? panelOrId
@@ -2523,8 +2579,12 @@ function markPendingInternalRandom(panelOrId, which) {
   if (!artToyId) return;
   const artPanel = document.getElementById(artToyId);
   if (!artPanel) return;
+  // pendingRandAll supports multiple modes:
+  // - '1'          => apply full random-all on enter
+  // - 'blocksOnly' => apply ONLY non-music random on enter (keeps notes stable)
   if (which === 'music') artPanel.dataset.pendingRandMusic = '1';
   if (which === 'all') artPanel.dataset.pendingRandAll = '1';
+  if (which === 'allBlocksOnly') artPanel.dataset.pendingRandAll = 'blocksOnly';
   __artRandLog('markPending', { artToyId, which });
 }
 
@@ -2536,10 +2596,11 @@ function applyPendingInternalRandomIfNeeded(artToyId) {
   if (!artPanel) return;
 
   const wantMusic = artPanel.dataset.pendingRandMusic === '1';
-  const wantAll = artPanel.dataset.pendingRandAll === '1';
+  const pendingAllMode = artPanel.dataset.pendingRandAll || '0';
+  const wantAll = pendingAllMode === '1' || pendingAllMode === 'blocksOnly';
   if (!wantMusic && !wantAll) return;
 
-  __artRandLog('applyPending:begin', { artToyId, wantMusic, wantAll });
+  __artRandLog('applyPending:begin', { artToyId, wantMusic, wantAll, pendingAllMode });
 
   // Clear flags first to avoid loops if anything throws.
   artPanel.dataset.pendingRandMusic = '0';
@@ -2549,9 +2610,46 @@ function applyPendingInternalRandomIfNeeded(artToyId) {
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       try {
-        __artRandLog('applyPending:do', { artToyId, mode: wantAll ? 'all' : 'music' });
-        if (wantAll) randomizeInternalToysForArtToy(artToyId, 'all', { allowDefer: false, source: 'applyPending' });
-        else if (wantMusic) randomizeInternalToysForArtToy(artToyId, 'music', { allowDefer: false, source: 'applyPending' });
+        // IMPORTANT: When the user hit Random All from the *external* view, we already randomized
+        // the music immediately so the first press is audible. If we then "random all" again
+        // on enter, DrawGrid will re-roll its sequence (toy-random => RNG.handleRandomizeLine()),
+        // which feels like the tune changed just by opening the toy.
+        //
+        // So when applying pending "all" on enter, NEVER call randomizeInternalToysForArtToy(...,'all')
+        // because that re-runs music random. Instead:
+        //  - DrawGrid: apply ONLY non-music random (toy-random-blocks)
+        //  - Other toys: apply toy-random
+        __artRandLog('applyPending:do', { artToyId, mode: wantAll ? 'all' : 'music', pendingAllMode });
+
+        if (wantAll) {
+          const panels = getInternalPanelsForArtToy(artToyId);
+          for (const p of panels) {
+            const toyType = p?.dataset?.toy || null;
+            if (toyType === 'drawgrid') {
+              // For DrawGrid, any "all" re-randomization on enter changes the tune.
+              // If this pending flag came from external Random All, skip entirely.
+              if (pendingAllMode === 'blocksOnly') {
+                __artRandLog('applyPending:drawgridSkip', { artToyId, panelId: p.id, pendingAllMode });
+                continue;
+              }
+              __artRandLog('applyPending:drawgridBlocksOnly', { artToyId, panelId: p.id, pendingAllMode });
+              __artRandLogDrawgrid('applyPending:drawgridBlocksOnly:before', { artToyId, pendingAllMode }, p);
+              try { p.dispatchEvent(new CustomEvent('toy-random-blocks', { bubbles: true, composed: true })); } catch {}
+              requestAnimationFrame(() => {
+                __artRandLogDrawgrid('applyPending:drawgridBlocksOnly:afterRaf', { artToyId, pendingAllMode }, p);
+              });
+              continue;
+            }
+            __artRandLog('applyPending:otherAll', { artToyId, panelId: p?.id, toyType, pendingAllMode });
+            try { p.dispatchEvent(new CustomEvent('toy-random', { bubbles: true, composed: true })); } catch {}
+          }
+          try { window.Persistence?.markDirty?.(); } catch {}
+          return;
+        }
+
+        if (wantMusic) {
+          randomizeInternalToysForArtToy(artToyId, 'music', { allowDefer: false, source: 'applyPending' });
+        }
       } catch {}
     });
   });
@@ -3284,7 +3382,9 @@ function randomizeInternalToysForArtToy(artToyId, mode, opts = {}) {
         // Step 2: "all" pass (defer for drawgrid when not internal)
         if (allowDefer && !internalActiveForThis && toyType === 'drawgrid') {
           __artRandLog('defer', { artToyId, panelId: p.id, toyType, mode: 'all', reason: 'drawgrid-all-defer-external' });
-          markPendingInternalRandom(artToyId, 'all');
+          // We already randomized music in Step 1 above.
+          // Defer ONLY the non-music random so entering internal doesn't re-roll the tune.
+          markPendingInternalRandom(artToyId, 'allBlocksOnly');
           continue;
         }
 

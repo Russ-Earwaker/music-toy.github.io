@@ -1,430 +1,691 @@
 window.__MT_DEBUG_ART_RANDOM = true;
 
 true
-main.js:1998 [ArtRand] click {action: 'randomAll', artToyId: 'art-flashCircle-1770818765880-3h7syi'}
-main.js:1998 [ArtRand] randomizeInternalToysForArtToy:begin {artToyId: 'art-flashCircle-1770818765880-3h7syi', mode: 'all', source: 'randomAll'}
-main.js:1998 [ArtRand] ensureDefaultInternalToyExistsInHost:spawn {artToyId: 'art-flashCircle-1770818765880-3h7syi', kind: 'drawgrid'}
-main.js:1998 [ArtRand] ensureDefaultInternalToyExistsInHost:done {artToyId: 'art-flashCircle-1770818765880-3h7syi', created: true, toyType: 'drawgrid', panelId: 'drawgrid-1770818768696-mu63w6', hostDisplay: 'block', …}
-main.js:1998 [ArtRand] toyInitNow:begin {panelId: 'drawgrid-1770818768696-mu63w6', toyType: 'drawgrid', reason: 'ensureDefaultInternalToyExistsInHost'}
-main.js:1998 [ArtRand] toyInitNow:done {panelId: 'drawgrid-1770818768696-mu63w6', toyType: 'drawgrid', reason: 'ensureDefaultInternalToyExistsInHost'}
-main.js:1998 [ArtRand] randomizeInternalToysForArtToy:panels {artToyId: 'art-flashCircle-1770818765880-3h7syi', count: 1, ids: Array(1)}
-main.js:1998 [ArtRand] randomizeInternalToysForArtToy:context {artToyId: 'art-flashCircle-1770818765880-3h7syi', mode: 'all', allowDefer: true, internalActiveForThis: false}
-main.js:1998 [ArtRand] panel {artToyId: 'art-flashCircle-1770818765880-3h7syi', panelId: 'drawgrid-1770818768696-mu63w6', toyType: 'drawgrid', mode: 'all'}
-main.js:1998 [ArtRand] randomizeToyMusic:enter {artToyId: 'art-flashCircle-1770818765880-3h7syi', panelId: 'drawgrid-1770818768696-mu63w6', toyType: 'drawgrid', mode: 'music', source: 'randomAll:preAll', …}
-main.js:1998 [ArtRand] randomizeToyMusic:before {artToyId: 'art-flashCircle-1770818765880-3h7syi', panelId: 'drawgrid-1770818768696-mu63w6', toyType: 'drawgrid', mode: 'music', source: 'randomAll:preAll', …}
-main.js:1998 [ArtRand] randomizeToyMusic:after {artToyId: 'art-flashCircle-1770818765880-3h7syi', panelId: 'drawgrid-1770818768696-mu63w6', toyType: 'drawgrid', mode: 'music', source: 'randomAll:preAll', …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] postRandom:notes {artToyId: 'art-flashCircle-1770818765880-3h7syi', panelId: 'drawgrid-1770818768696-mu63w6', toyType: 'drawgrid', hasNotesNow: false, why: 'preAll-music'}
-main.js:1998 [ArtRand] startToy:try {artToyId: 'art-flashCircle-1770818765880-3h7syi', panelId: 'drawgrid-1770818768696-mu63w6', toyType: 'drawgrid', why: 'preAll-music'}
-main.js:1998 [ArtRand] startToy:begin {panelId: 'drawgrid-1770818768696-mu63w6', toyType: 'drawgrid', audioState: 'unknown'}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] startToy:enter {panelId: 'drawgrid-1770818768696-mu63w6', toyType: 'drawgrid', apiFound: true, apiName: '__drawToy', canStart: false, …}
-main.js:1998 [ArtRand] startToy:startedTransportForDrawgrid {panelId: 'drawgrid-1770818768696-mu63w6'}
-main.js:1998 [ArtRand] startToy:done {panelId: 'drawgrid-1770818768696-mu63w6', toyType: 'drawgrid', playingClass: false}
-main.js:1998 [ArtRand] drawgrid:retryScheduled {artToyId: 'art-flashCircle-1770818765880-3h7syi', panelId: 'drawgrid-1770818768696-mu63w6', reason: 'no-notes-after-preAll-music'}
-main.js:1998 [ArtRand] defer {artToyId: 'art-flashCircle-1770818765880-3h7syi', panelId: 'drawgrid-1770818768696-mu63w6', toyType: 'drawgrid', mode: 'all', reason: 'drawgrid-all-defer-external'}
-main.js:1998 [ArtRand] markPending {artToyId: 'art-flashCircle-1770818765880-3h7syi', which: 'all'}
-main.js:1998 [ArtRand] randomizeToyMusic:enter {artToyId: 'art-flashCircle-1770818765880-3h7syi', panelId: 'drawgrid-1770818768696-mu63w6', toyType: 'drawgrid', mode: 'music', source: 'randomAll:preAll:retry1', …}
-main.js:1998 [ArtRand] randomizeToyMusic:before {artToyId: 'art-flashCircle-1770818765880-3h7syi', panelId: 'drawgrid-1770818768696-mu63w6', toyType: 'drawgrid', mode: 'music', source: 'randomAll:preAll:retry1', …}
-main.js:1998 [ArtRand] randomizeToyMusic:after {artToyId: 'art-flashCircle-1770818765880-3h7syi', panelId: 'drawgrid-1770818768696-mu63w6', toyType: 'drawgrid', mode: 'music', source: 'randomAll:preAll:retry1', …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:retryResult {artToyId: 'art-flashCircle-1770818765880-3h7syi', panelId: 'drawgrid-1770818768696-mu63w6', hasNotes2: false, why: 'preAll-music'}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
-main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
- [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
- [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
- [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
- [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
- [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
- [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
- [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
- [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
- [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
- [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
- [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
- [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
- [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
- [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
- [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
- [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
- [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
- [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
- [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
- [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
- [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
- [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
- [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
- [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
- [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
- [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
- [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
- [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
- [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
- [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
- [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
- [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
- [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
- [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770818768696-mu63w6', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
- [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770818768696-mu63w6', result: false}
+main.js:1998 [ArtRand] click {action: 'randomAll', artToyId: 'art-flashCircle-1770824430321-5bd3kx'}
+main.js:1998 [ArtRand] randomizeInternalToysForArtToy:begin {artToyId: 'art-flashCircle-1770824430321-5bd3kx', mode: 'all', source: 'randomAll'}
+main.js:1998 [ArtRand] ensureDefaultInternalToyExistsInHost:spawn {artToyId: 'art-flashCircle-1770824430321-5bd3kx', kind: 'drawgrid'}
+main.js:1998 [ArtRand] ensureDefaultInternalToyExistsInHost:done {artToyId: 'art-flashCircle-1770824430321-5bd3kx', created: true, toyType: 'drawgrid', panelId: 'drawgrid-1770824433354-87nes7', hostDisplay: 'block', …}
+main.js:1998 [ArtRand] toyInitNow:begin {panelId: 'drawgrid-1770824433354-87nes7', toyType: 'drawgrid', reason: 'ensureDefaultInternalToyExistsInHost'}
+main.js:1998 [ArtRand] toyInitNow:done {panelId: 'drawgrid-1770824433354-87nes7', toyType: 'drawgrid', reason: 'ensureDefaultInternalToyExistsInHost'}
+main.js:1998 [ArtRand] randomizeInternalToysForArtToy:panels {artToyId: 'art-flashCircle-1770824430321-5bd3kx', count: 1, ids: Array(1)}
+main.js:1998 [ArtRand] randomizeInternalToysForArtToy:context {artToyId: 'art-flashCircle-1770824430321-5bd3kx', mode: 'all', allowDefer: true, internalActiveForThis: false}
+main.js:1998 [ArtRand] panel {artToyId: 'art-flashCircle-1770824430321-5bd3kx', panelId: 'drawgrid-1770824433354-87nes7', toyType: 'drawgrid', mode: 'all'}
+main.js:1998 [ArtRand] randomizeToyMusic:enter {artToyId: 'art-flashCircle-1770824430321-5bd3kx', panelId: 'drawgrid-1770824433354-87nes7', toyType: 'drawgrid', mode: 'music', source: 'randomAll:preAll', …}
+main.js:1998 [ArtRand] randomizeToyMusic:before {artToyId: 'art-flashCircle-1770824430321-5bd3kx', panelId: 'drawgrid-1770824433354-87nes7', toyType: 'drawgrid', mode: 'music', source: 'randomAll:preAll', …}
+main.js:1998 [ArtRand] randomizeToyMusic:after {artToyId: 'art-flashCircle-1770824430321-5bd3kx', panelId: 'drawgrid-1770824433354-87nes7', toyType: 'drawgrid', mode: 'music', source: 'randomAll:preAll', …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] postRandom:notes {artToyId: 'art-flashCircle-1770824430321-5bd3kx', panelId: 'drawgrid-1770824433354-87nes7', toyType: 'drawgrid', hasNotesNow: true, why: 'preAll-music'}
+main.js:1998 [ArtRand] startToy:try {artToyId: 'art-flashCircle-1770824430321-5bd3kx', panelId: 'drawgrid-1770824433354-87nes7', toyType: 'drawgrid', why: 'preAll-music'}
+main.js:1998 [ArtRand] startToy:begin {panelId: 'drawgrid-1770824433354-87nes7', toyType: 'drawgrid', audioState: 'unknown'}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] startToy:enter {panelId: 'drawgrid-1770824433354-87nes7', toyType: 'drawgrid', apiFound: true, apiName: '__drawToy', canStart: false, …}
+main.js:1998 [ArtRand] startToy:startedTransportForDrawgrid {panelId: 'drawgrid-1770824433354-87nes7'}
+main.js:1998 [ArtRand] startToy:done {panelId: 'drawgrid-1770824433354-87nes7', toyType: 'drawgrid', playingClass: false}
+main.js:1998 [ArtRand] defer {artToyId: 'art-flashCircle-1770824430321-5bd3kx', panelId: 'drawgrid-1770824433354-87nes7', toyType: 'drawgrid', mode: 'all', reason: 'drawgrid-all-defer-external'}
+main.js:1998 [ArtRand] markPending {artToyId: 'art-flashCircle-1770824430321-5bd3kx', which: 'allBlocksOnly'}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] enterInternalBoard:afterSwap {artToyId: 'art-flashCircle-1770824430321-5bd3kx', pendingMusic: undefined, pendingAll: 'blocksOnly'}
+main.js:1998 [ArtRand] applyPending:begin {artToyId: 'art-flashCircle-1770824430321-5bd3kx', wantMusic: false, wantAll: true, pendingAllMode: 'blocksOnly'}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] applyPending:do {artToyId: 'art-flashCircle-1770824430321-5bd3kx', mode: 'all', pendingAllMode: 'blocksOnly'}
+main.js:1998 [ArtRand] applyPending:drawgridBlocksOnly {artToyId: 'art-flashCircle-1770824430321-5bd3kx', panelId: 'drawgrid-1770824433354-87nes7', pendingAllMode: 'blocksOnly'}
+main.js:1998 [ArtRand] applyPending:drawgridBlocksOnly:before {artToyId: 'art-flashCircle-1770824430321-5bd3kx', pendingAllMode: 'blocksOnly', panelId: 'drawgrid-1770824433354-87nes7', dump: {…}}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] applyPending:drawgridBlocksOnly:afterRaf {artToyId: 'art-flashCircle-1770824430321-5bd3kx', pendingAllMode: 'blocksOnly', panelId: 'drawgrid-1770824433354-87nes7', dump: {…}}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+main.js:1998 [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+ [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+ [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}
+ [ArtRand] drawgrid:hasAnyNotes:probe {panelId: 'drawgrid-1770824433354-87nes7', isConnected: true, display: 'flex', hasToyRandomMusic: true, hasDrawToy: true, …}
+ [ArtRand] drawgrid:hasAnyNotes:hasActiveNotes() {panelId: 'drawgrid-1770824433354-87nes7', result: true}

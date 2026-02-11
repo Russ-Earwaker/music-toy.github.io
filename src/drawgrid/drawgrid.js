@@ -7225,6 +7225,18 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     return false;
   }
 
+  function __dgSyncManualOverridesFromCurrentMap() {
+    try {
+      if (!currentMap || !Array.isArray(currentMap.nodes)) return false;
+      manualOverrides = currentMap.nodes.map((set) => new Set(set || []));
+      if (Array.isArray(currentMap.disabled)) {
+        persistentDisabled = currentMap.disabled.map((set) => new Set(set || []));
+      }
+      return true;
+    } catch {}
+    return false;
+  }
+
   function __dgHeadlessEnsureReasonablePaintCanvases() {
     // When a DrawGrid panel is stashed (art-internal-host), its canvases can still be 1x1.
     // The randomize-notes stroke path depends on real pixel area; 1x1 produces "one note",
@@ -7328,6 +7340,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     // sequencer has nothing to play.
     try { regenerateMapFromStrokes?.('headless-random'); } catch {}
     const didFallback = __dgHeadlessFallbackMapIfEmpty();
+    __dgSyncManualOverridesFromCurrentMap();
     try { emitDrawgridUpdate({}); } catch {}
     if (didFallback) {
       try { emitDrawgridUpdate({ reason: 'headless-fallback-map' }); } catch {}
