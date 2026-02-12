@@ -2363,12 +2363,38 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       const gh = Math.max(1, (gridArea.h - (topPad || 0)));
       let changed = 0;
 
+      const looksCollapsed = (pts) => {
+        try {
+          if (!Array.isArray(pts) || pts.length < 2) return true;
+          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+          for (const p of pts) {
+            const x = Number(p?.x);
+            const y = Number(p?.y);
+            if (!Number.isFinite(x) || !Number.isFinite(y)) return true;
+            if (x < minX) minX = x;
+            if (y < minY) minY = y;
+            if (x > maxX) maxX = x;
+            if (y > maxY) maxY = y;
+          }
+          // If the stroke bbox is ~a point, but the grid is meaningfully sized, it was likely projected during a 0-size layout.
+          const bboxW = maxX - minX;
+          const bboxH = maxY - minY;
+          if ((bboxW < 1 && bboxH < 1) && (gridArea.w > 20 && gridArea.h > 20)) return true;
+          // Also treat "stuck near (0,0)" as collapsed when the grid is not at origin.
+          if (maxX < 2 && maxY < 2 && (gridArea.x > 2 || gridArea.y > 2)) return true;
+          return false;
+        } catch {
+          return true;
+        }
+      };
+
       const reprojectList = (list) => {
         if (!Array.isArray(list) || list.length === 0) return;
         for (const s of list) {
           if (!s || !Array.isArray(s.__ptsN) || s.__ptsN.length === 0) continue;
           const needsPts = (!Array.isArray(s.pts) || s.pts.length === 0);
-          if (!needsPts) continue;
+          const shouldReproject = needsPts || looksCollapsed(s.pts);
+          if (!shouldReproject) continue;
           s.pts = s.__ptsN.map(np => ({
             x: gridArea.x + (Number(np?.nx) || 0) * gridArea.w,
             y: (gridArea.y + (topPad || 0)) + (Number(np?.ny) || 0) * gh,
@@ -7282,7 +7308,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     } catch {}
   }
 
-  function __dgHeadlessRandomizeNotesOnly() {
+  function __dgHeadlessRandomizeLikeMainRandom() {
     // IMPORTANT: do NOT call ensureSizeReady/layout/__dgEnsureLayerSizes here.
     // This must be safe even if the panel is hidden/offscreen.
 
@@ -7331,15 +7357,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       ensureCanvasSize(panel.querySelector?.('canvas[data-role="drawgrid-flash-back"]'));
     } catch {}
 
-    // If a previous headless random persisted manual overrides, clear them so
-    // subsequent random presses can actually change the pattern.
-    try {
-      const cCount = Number(cols) || 8;
-      manualOverrides = Array.from({ length: cCount }, () => new Set());
-      persistentDisabled = Array.from({ length: cCount }, () => new Set());
-    } catch {}
-
-    try { RNG?.handleRandomizeNotes?.(); } catch {}
+    // Match visible DrawGrid "Random" semantics (line + notes + rests).
+    try { RNG?.handleRandomizeLine?.(); } catch {}
 
     // CRITICAL:
     // In headless mode (hidden/internal host), layout-based map regeneration
@@ -7359,8 +7378,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   }
 
   panel.__toyRandomMusic = () => {
-    // Randomise notes immediately (audio/model).
-    __dgHeadlessRandomizeNotesOnly();
+    // For DrawGrid, art-toy "Random Music" should match the normal Random button.
+    // This is headless-safe and defers visual work until visible.
+    __dgHeadlessRandomizeLikeMainRandom();
 
     // If DrawGrid hasn't finished building its internal canvases/state yet (common when hidden),
     // the first headless random can produce "no notes" / "one note". Retry once next frame.
@@ -7371,7 +7391,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         requestAnimationFrame(() => {
           try {
             if (panel.__dgHeadlessRandRetryToken !== token) return;
-            __dgHeadlessRandomizeNotesOnly();
+            __dgHeadlessRandomizeLikeMainRandom();
             // If visible, refresh visuals now safely.
             if (typeof isPanelVisible === 'function' ? isPanelVisible() : !!isPanelVisible) {
               __dgClearNeedsVisualRefresh();

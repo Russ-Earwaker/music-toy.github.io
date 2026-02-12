@@ -3142,6 +3142,17 @@ function enterInternalBoard(artToyId) {
             if (typeof p.__toyRefreshVisualsIfNeeded === 'function') {
               try { p.__toyRefreshVisualsIfNeeded(); } catch {}
             }
+            // DrawGrid: after swapping boards / reparenting into the internal world,
+            // some paint-layer state can be out-of-date (symptom: "drawn" line becomes a dot at 0,0).
+            // Force a full resnap/redraw to rebuild canvas sizes + stroke paths in the new layout context.
+            try {
+              if (p?.dataset?.toy === 'drawgrid') {
+                const dg = p.__drawToy || p.__toyApi || p.__toy || null;
+                if (dg && typeof dg.resnapAndRedraw === 'function') {
+                  dg.resnapAndRedraw(true, { preservePaintIfNoStrokes: true });
+                }
+              }
+            } catch {}
           }
         } catch {}
       });
