@@ -2037,6 +2037,12 @@ if (document.readyState === 'loading') {
           });
 
           if (removePanels){
+            try {
+              if (window.__ArtInternal?.isActive?.()) {
+                window.__ArtInternal.exit?.();
+              }
+            } catch {}
+
             const destroy = window.MusicToyFactory?.destroy;
             panels.forEach(panel=>{
               try{
@@ -2049,6 +2055,17 @@ if (document.readyState === 'loading') {
                 console.warn('[topbar] destroy panel failed', err);
               }
             });
+
+            const artPanels = Array.from(document.querySelectorAll('.art-toy-panel'));
+            artPanels.forEach((panel) => {
+              try { panel.remove(); } catch (err) { console.warn('[topbar] destroy art panel failed', err); }
+            });
+
+            try {
+              const host = document.getElementById('art-internal-host');
+              if (host) host.textContent = '';
+            } catch {}
+
             try{ localStorage.removeItem('toyPositions'); }catch{}
           }
 
