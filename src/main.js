@@ -2429,25 +2429,42 @@ function flashInternalArtGhostForArtId(artId) {
     }
     const circle = ghost.querySelector('.art-toy-circle');
     if (circle) {
-      // Direct animation reset for reliability on repeatedly flashed ghost markers.
-      circle.style.animation = 'none';
-      void circle.offsetWidth;
-      circle.style.animation = '';
-      // Extra reliability: drive a one-shot WAAPI pulse even if CSS class animation is coalesced.
+      // Prefer WAAPI pulse to avoid stale CSS class replay on viewport commit/unfreeze.
       try {
-        circle.animate(
-          [
-            { transform: 'scale(1)', filter: 'brightness(1) saturate(1)' },
-            { transform: 'scale(1.03)', filter: 'brightness(2.2) saturate(1.35)' },
-            { transform: 'scale(1)', filter: 'brightness(1) saturate(1)' },
-          ],
-          { duration: 180, easing: 'ease-out' }
-        );
+        circle.__artGhostFlashAnim?.cancel?.();
       } catch {}
+      if (typeof circle.animate === 'function') {
+        try {
+          const anim = circle.animate(
+            [
+              { transform: 'scale(1)', filter: 'brightness(1) saturate(1)' },
+              { transform: 'scale(1.03)', filter: 'brightness(2.2) saturate(1.35)' },
+              { transform: 'scale(1)', filter: 'brightness(1) saturate(1)' },
+            ],
+            { duration: 180, easing: 'ease-out' }
+          );
+          circle.__artGhostFlashAnim = anim;
+          const clearAnimRef = () => {
+            if (circle.__artGhostFlashAnim === anim) circle.__artGhostFlashAnim = null;
+          };
+          anim.addEventListener('finish', clearAnimRef, { once: true });
+          anim.addEventListener('cancel', clearAnimRef, { once: true });
+        } catch {}
+      }
     }
+    // Keep CSS class clear by default so zoom commit cannot replay old flash state.
     ghost.classList.remove('flash');
-    void ghost.offsetWidth;
-    ghost.classList.add('flash');
+    // CSS fallback path for environments without WAAPI support.
+    if (!circle || typeof circle.animate !== 'function') {
+      ghost.classList.remove('flash');
+      void ghost.offsetWidth;
+      ghost.classList.add('flash');
+      try { clearTimeout(ghost.__artGhostFlashClearTimer); } catch {}
+      ghost.__artGhostFlashClearTimer = setTimeout(() => {
+        try { ghost.classList.remove('flash'); } catch {}
+        ghost.__artGhostFlashClearTimer = 0;
+      }, 240);
+    }
     recordArtFlashIntent('ghost:flashed', { artId });
     artFlashDbg('ghost:flashed', { artId, ghostFound: true });
     return true;
