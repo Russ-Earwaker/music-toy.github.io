@@ -2903,6 +2903,11 @@ function computeInternalBoardDefaultCamera(artToyId) {
   const vr = viewport?.getBoundingClientRect?.();
   const viewW = (Number.isFinite(vr?.width) && vr.width > 0) ? vr.width : 960;
   const viewH = (Number.isFinite(vr?.height) && vr.height > 0) ? vr.height : 640;
+  const homeZoom = (() => {
+    const z = Number(window.__MT_NEW_SCENE_ZOOM);
+    // Match external "new scene / return home" default zoom when available.
+    return (Number.isFinite(z) && z > 0) ? z : 1;
+  })();
   const parsePositive = (v) => {
     const n = parseFloat(v);
     return Number.isFinite(n) && n > 0 ? n : NaN;
@@ -2949,8 +2954,8 @@ function computeInternalBoardDefaultCamera(artToyId) {
     count++;
   }
 
-  // Default zoom for internal board.
-  const scale = 1;
+  // Default zoom for internal board matches main board home/new-scene zoom.
+  const scale = homeZoom;
   const worldX = count > 0 ? (sumX / count) : 240;
   const worldY = count > 0 ? (sumY / count) : 180;
   const tx = viewW * 0.5 - worldX * scale;
@@ -3354,6 +3359,7 @@ document.addEventListener('click', (e) => {
 
 function randomizeInternalToysForArtToy(artToyId, mode, opts = {}) {
   const source = opts.source || 'button';
+  const autoStartTransport = opts.autoStartTransport !== false;
   __artRandLog('randomizeInternalToysForArtToy:begin', { artToyId, mode, source });
   // If the user presses random before ever entering the toy, we still want
   // a default internal toy to exist so randomisation can happen immediately.
@@ -3372,7 +3378,7 @@ function randomizeInternalToysForArtToy(artToyId, mode, opts = {}) {
   // mutate patterns and call startToy().
   try {
     ensureAudioContext?.();
-    if (typeof isRunning === 'function' && !isRunning()) {
+    if (autoStartTransport && typeof isRunning === 'function' && !isRunning()) {
       // Cancel anything pending from a prior run (deferred setTimeout gates + scheduled sources)
       try { bumpAllToyAudioGen?.(); } catch {}
       try { start?.(); } catch {}
@@ -3382,7 +3388,7 @@ function randomizeInternalToysForArtToy(artToyId, mode, opts = {}) {
 
   const allowDefer = opts.allowDefer !== false;
   const internalActiveForThis = isInternalBoardActiveForArtToy(artToyId);
-  __artRandLog('randomizeInternalToysForArtToy:context', { artToyId, mode, allowDefer, internalActiveForThis });
+  __artRandLog('randomizeInternalToysForArtToy:context', { artToyId, mode, allowDefer, internalActiveForThis, autoStartTransport });
 
   // If we actually apply a randomisation, clear any pending flags so we don't
   // accidentally re-randomise on enter (which feels like "tune changed on enter").
@@ -3407,11 +3413,15 @@ function randomizeInternalToysForArtToy(artToyId, mode, opts = {}) {
       const t = panel?.dataset?.toy;
       __artRandLog('ensureToyPlayingAfterRandomNoReset:enter', {
         panelId: panel?.id,
-        toyType: t
+        toyType: t,
+        autoStartTransport
       });
 
       // Always ensure the AudioContext is alive, but do not force scheduler resets.
       try { ensureAudioContext?.(); } catch {}
+      const transportRunning = !!isRunning?.();
+      // External Art Toy random should never auto-play a stopped scene.
+      if (!autoStartTransport && !transportRunning) return;
 
       // DrawGrid uses the global transport; only start it if needed.
       if (t === 'drawgrid') {
@@ -3562,7 +3572,11 @@ document.addEventListener('click', (e) => {
   e.stopPropagation();
   // Hook for future: also randomise the art toy's own state.
   try { randomizeArtToyStateStub(artToyId); } catch {}
-  randomizeInternalToysForArtToy(artToyId, 'all', { allowDefer: true, source: 'randomAll' });
+  randomizeInternalToysForArtToy(artToyId, 'all', {
+    allowDefer: true,
+    source: 'randomAll',
+    autoStartTransport: false,
+  });
 }, true);
 
 // Click delegate: Art Toy "Random Music" button.
@@ -3574,7 +3588,11 @@ document.addEventListener('click', (e) => {
   __artRandLog('click', { action: 'randomMusic', artToyId });
   e.preventDefault();
   e.stopPropagation();
-  randomizeInternalToysForArtToy(artToyId, 'music', { allowDefer: true, source: 'randomMusic' });
+  randomizeInternalToysForArtToy(artToyId, 'music', {
+    allowDefer: true,
+    source: 'randomMusic',
+    autoStartTransport: false,
+  });
 }, true);
 
 // Returns true if the given panel has any notes at the specified column.
