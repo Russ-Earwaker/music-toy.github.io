@@ -2827,32 +2827,19 @@ function ensureDefaultInternalToyOnFirstEnter(artToyId, worldEl) {
 
   const kind = pickDefaultInternalToyKindForArtToy(artToyId);
 
-  // Spawn near the current camera center of the internal viewport.
-  let centerX = 240;
-  let centerY = 180;
-  try {
-    const viewport = document.getElementById('internal-board-viewport');
-    const r = viewport?.getBoundingClientRect?.();
-    if (r && Number.isFinite(r.left) && Number.isFinite(r.width)) {
-      const cx = r.left + r.width * 0.5;
-      const cy = r.top + r.height * 0.5;
-      const w = window.__mtInternalBoard?.clientToWorld?.(cx, cy);
-      if (w && Number.isFinite(w.x) && Number.isFinite(w.y)) {
-        centerX = w.x;
-        centerY = w.y;
-      }
-    }
-  } catch {}
-
-  // Nudge so it doesn't land directly on the anchor/center.
-  centerX += 90;
-  centerY -= 40;
+  // Deterministic seed position. Entry camera logic will center this immediately.
+  const centerX = 240;
+  const centerY = 180;
 
   try {
     const p = createToyPanelAt(kind, {
       centerX,
       centerY,
-      autoCenter: true,
+      // Enter camera is already snapped by internal-board logic; avoid late smooth pan.
+      autoCenter: false,
+      // Do not run global spawn-placement passes for first internal toy:
+      // they can move the panel after we've centered the internal camera.
+      skipSpawnPlacement: true,
       containerEl: worldEl,
       artOwnerId: artToyId,
     });
@@ -2916,6 +2903,16 @@ function computeInternalBoardDefaultCamera(artToyId) {
   const vr = viewport?.getBoundingClientRect?.();
   const viewW = (Number.isFinite(vr?.width) && vr.width > 0) ? vr.width : 960;
   const viewH = (Number.isFinite(vr?.height) && vr.height > 0) ? vr.height : 640;
+  const parsePositive = (v) => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) && n > 0 ? n : NaN;
+  };
+  const pickSize = (...vals) => {
+    for (const v of vals) {
+      if (Number.isFinite(v) && v > 0) return v;
+    }
+    return 0;
+  };
 
   const owned = getInternalPanelsForArtToy(artToyId);
   let sumX = 0;
@@ -2924,10 +2921,26 @@ function computeInternalBoardDefaultCamera(artToyId) {
 
   for (const p of owned) {
     if (!p) continue;
+    const toyType = p?.dataset?.toy || '';
+    const expected = pickToyPanelSize(toyType);
     const left = parseFloat(p.style.left);
     const top = parseFloat(p.style.top);
-    const w = p.offsetWidth || p.getBoundingClientRect?.().width || 0;
-    const h = p.offsetHeight || p.getBoundingClientRect?.().height || 0;
+    const rect = p.getBoundingClientRect?.();
+    const cs = (() => { try { return getComputedStyle(p); } catch { return null; } })();
+    const w = pickSize(
+      p.offsetWidth,
+      rect?.width,
+      parsePositive(p.style.width),
+      parsePositive(cs?.width),
+      Number(expected?.width)
+    );
+    const h = pickSize(
+      p.offsetHeight,
+      rect?.height,
+      parsePositive(p.style.height),
+      parsePositive(cs?.height),
+      Number(expected?.height)
+    );
     if (!Number.isFinite(left) || !Number.isFinite(top)) continue;
     const cx = left + (Number.isFinite(w) ? w * 0.5 : 0);
     const cy = top + (Number.isFinite(h) ? h * 0.5 : 0);
@@ -3182,8 +3195,9 @@ function enterInternalBoard(artToyId) {
   }
 
   // If there are none yet, spawn a default internal toy on first entry.
+  let spawnedDefaultOnEnter = false;
   if (!panels.length) {
-    try { ensureDefaultInternalToyOnFirstEnter(artToyId, world); } catch {}
+    try { spawnedDefaultOnEnter = !!ensureDefaultInternalToyOnFirstEnter(artToyId, world); } catch {}
   }
 
   if (title) title.textContent = 'Inside Art Toy';
@@ -3251,6 +3265,14 @@ function enterInternalBoard(artToyId) {
                 }
               }
             } catch {}
+          }
+        } catch {}
+        try {
+          if (spawnedDefaultOnEnter) {
+            const recenter = computeInternalBoardDefaultCamera(artToyId);
+            setInternalBoardTransform(recenter.scale, recenter.tx, recenter.ty);
+            try { window.__cancelWheelZoomLerp?.(); } catch {}
+            try { window.__setBoardViewportNow?.(recenter.scale, recenter.tx, recenter.ty); } catch {}
           }
         } catch {}
       });
