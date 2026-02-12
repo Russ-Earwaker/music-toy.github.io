@@ -376,6 +376,59 @@ These are *not optional* — they prevent the same class of bugs we already foug
     * DrawGrid start API differences (no `.start()` on `__drawToy`)
     * hidden/layout constraints (display:none breaks headless/random)
 
+* **DrawGrid random semantics parity (external art controls)**
+
+  * External **Random Music / Random All** for art toys now use DrawGrid’s full random-line behavior (8-step sequence + silences), matching in-toy Random behavior.
+  * Verified by repeatedly randomising externally and confirming full multi-step sequences are generated (not single-note output).
+  * Files:
+
+    * `src/drawgrid/drawgrid.js`
+
+* **Internal DrawGrid render/layout stability fixes**
+
+  * Fixed internal-entry cases where DrawGrid rendered as a dot or disappeared after re-entry.
+  * Added robust hide/show style snapshot/restore for internal panels and forced DrawGrid resnap/redraw after board-context swaps.
+  * Updated internal camera centering/zoom defaults for deterministic first-enter positioning.
+  * Verified across flows:
+    * enter without random
+    * enter after random
+    * exit and re-enter (toy remains visible and correctly placed)
+  * Files:
+
+    * `src/main.js`
+    * `src/drawgrid/dg-layout.js`
+    * `src/drawgrid/dg-resnap.js`
+    * `src/drawgrid/dg-randomizers.js`
+
+* **Exit camera drift/jump fixes**
+
+  * Fixed external-board position/scale jump after exiting internal board (including random-triggered path).
+  * Restored viewport CSS vars with px units and synced coordinator live state via immediate + next-frame hard set.
+  * Verified: art toy no longer grows/shifts after exit.
+  * Files:
+
+    * `src/main.js`
+    * `src/board-viewport.js`
+
+* **External random no longer auto-plays the scene**
+
+  * Pressing **Random Music / Random All** on an art toy while transport is stopped no longer auto-starts playback.
+  * Randomisation still applies; playback starts only when user explicitly presses Play.
+  * File:
+
+    * `src/main.js`
+
+* **Internal Return Home now targets internal anchor**
+
+  * Return Home button now respects internal-board context:
+    * in main board: still centers on global board anchor
+    * in internal board: centers on the active art toy’s internal home anchor/zoom
+  * Added internal-home API on `window.__ArtInternal` and wired `board-anchor` to use it when internal mode is active.
+  * Files:
+
+    * `src/main.js`
+    * `src/board-anchor.js`
+
 ---
 
 ## 7. Investigated and Rejected ❌
@@ -409,38 +462,42 @@ These are *not optional* — they prevent the same class of bugs we already foug
   * If the user presses Random externally, they expect immediate audible feedback.
   * Defer logic should only delay the parts that truly require internal activation; music randomisation should still happen instantly when possible.
 
+* **Hidden-host lifecycle must restore full style state**
+  * Stashing internal panels offscreen is fine, but re-entry must restore all layout/visibility styles (not just display/pointer events) or panels remain invisible/off-canvas.
+
+* **Internal camera must be computed after real panel dimensions settle**
+  * First-enter camera can be wrong if computed before async toy init/layout finalizes.
+  * A deterministic spawn + post-settle snap recenter eliminates drift and offscreen placement.
+
+* **External random should be side-effect minimal**
+  * Randomizing from art-toy external controls should not implicitly change global transport state.
+  * Keep randomization and transport control decoupled.
+
+* **Return Home is a context action, not a global constant**
+  * In internal mode, anchor + zoom target should come from active art toy context rather than global `__MT_ANCHOR_WORLD`.
+
 ---
 
 ## 9. Next Steps 🎯
 
-1. **Stabilise and lock the external Random behavior**
-   * Confirm both buttons behave consistently:
-     * **Random Music**: randomises internal toy music and plays immediately.
-     * **Random All**: does Random Music immediately + leaves hooks for future art-state random (and any additional “all” random behaviour).
-   * Add a quick sanity test: fresh art toy → press Random x1 → must hear a full pattern without entering.
+1. **Persistence parity with music toys**
+   * Confirm/finish refresh + save/load round-trip for:
+     * art toy panel transform/state
+     * internal-board toy graph + per-toy state
+     * internal home anchor (`internalHomeX/Y/Scale`)
+   * Add a regression checklist:
+     * random externally, save, reload, enter internal, verify pattern/position/camera.
 
-2. **Internal-board “Enter” button wiring**: ensure `data-action="artToy:music"` reliably opens internal-board mode for the clicked art toy (and stores the active `artToyId`).
-2. **First-entry default internal toy**: when entering an art toy for the first time, spawn a default “empty” internal music toy.
+2. **Formalize internal home-anchor behavior**
+   * Allow explicit user-set internal home anchor (instead of only computed default), then persist it.
+   * Keep Return Home context-aware using that explicit anchor.
 
-   * For now: limit to **DrawGrid** and **Simple Rhythm (LoopGrid)**.
-   * Each art toy kind may later define its own default internal toy.
-3. **Random buttons: real behavior**
+3. **Random All: art-parameter layer**
+   * Implement art-visual state randomization in `randomizeArtToyStateStub` so Random All affects both music and outer art state.
 
-   * **Random All** should randomise both art parameters (as that becomes a thing) **and** internal music toy state.
-   * **Random Music** should randomise only internal music toy state.
-4. **Board anchor + “return home” behavior**
+4. **Note-play event forwarding + outer flash reaction**
+   * Complete/verify event forwarding from internal toys to owning art toy and ensure flash rendering is deterministic under focus/overview/internal states.
 
-   * External view: each art toy has a **board anchor** that represents its internal/art status.
-   * Keep the existing **anchor glow** affordance to point the user to the anchor.
-   * Internal view: the **Return Home** button should take you back to the internal board’s **anchor**.
-5. **Persistence parity with music toys**
-
-   * Art toys persist through refresh.
-   * Art toys persist through Save/Load (including internal board contents + anchor state).
-6. **Note-play event forwarding + outer flash reaction**
-
-   * Forward internal note events to the owning art toy and trigger the placeholder flash effect.
-
-7. **Defer: playhead offset investigation**
+5. **Defer: playhead offset investigation**
    * Known issue: on enter, DrawGrid playhead can appear offset relative to audible notes.
    * Park this until after container + random + persistence are stable.

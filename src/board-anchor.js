@@ -243,6 +243,14 @@ function teardown() {
 
 function getAnchorWorld() {
   try {
+    if (window.__ArtInternal?.isActive?.()) {
+      const home = window.__ArtInternal?.getHomeAnchor?.();
+      if (home && Number.isFinite(home.x) && Number.isFinite(home.y)) {
+        return { x: home.x, y: home.y };
+      }
+    }
+  } catch {}
+  try {
     const w = window.__MT_ANCHOR_WORLD;
     if (w && Number.isFinite(w.x) && Number.isFinite(w.y)) return w;
   } catch {}
@@ -277,9 +285,18 @@ function updateMarkerPos(anchorWorld) {
 
 function centerCameraOnAnchor() {
   try {
+    if (window.__ArtInternal?.isActive?.()) {
+      if (window.__ArtInternal?.centerHome?.()) return;
+    }
+  } catch {}
+  try {
     if (!markerEl || !markerEl.isConnected) ensureMarker();
     if (markerEl && typeof window.centerBoardOnElementSlow === 'function') {
-      const zoom = Number.isFinite(window.__MT_NEW_SCENE_ZOOM) ? window.__MT_NEW_SCENE_ZOOM : 1.0;
+      let zoom = Number.isFinite(window.__MT_NEW_SCENE_ZOOM) ? window.__MT_NEW_SCENE_ZOOM : 1.0;
+      try {
+        const home = window.__ArtInternal?.getHomeAnchor?.();
+        if (home && Number.isFinite(home.scale) && home.scale > 0) zoom = home.scale;
+      } catch {}
       window.centerBoardOnElementSlow(markerEl, zoom, { centerFracX: 0.5 });
       return;
     }

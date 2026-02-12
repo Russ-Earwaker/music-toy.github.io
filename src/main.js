@@ -2826,10 +2826,14 @@ function ensureDefaultInternalToyOnFirstEnter(artToyId, worldEl) {
   } catch {}
 
   const kind = pickDefaultInternalToyKindForArtToy(artToyId);
+  const homeAnchor = getInternalHomeAnchorForArtToy(artToyId);
+  const expectedSize = pickToyPanelSize(kind);
 
-  // Deterministic seed position. Entry camera logic will center this immediately.
-  const centerX = 240;
-  const centerY = 180;
+  // Keep first default toy separate from the internal home anchor so the anchor
+  // remains visible and usable as an explicit destination.
+  const offsetX = Math.max(220, (Number(expectedSize?.width) || 380) * 0.5 + 96);
+  const centerX = (Number.isFinite(homeAnchor?.x) ? homeAnchor.x : 240) + offsetX;
+  const centerY = Number.isFinite(homeAnchor?.y) ? homeAnchor.y : 180;
 
   try {
     const p = createToyPanelAt(kind, {
@@ -2898,11 +2902,182 @@ function setInternalBoardTransform(scale, tx, ty) {
   } catch {}
 }
 
-function computeInternalBoardDefaultCamera(artToyId) {
+function getInternalViewportSize() {
   const viewport = document.getElementById('internal-board-viewport');
   const vr = viewport?.getBoundingClientRect?.();
   const viewW = (Number.isFinite(vr?.width) && vr.width > 0) ? vr.width : 960;
   const viewH = (Number.isFinite(vr?.height) && vr.height > 0) ? vr.height : 640;
+  return { viewW, viewH };
+}
+
+function getInternalHomeGhostSize() {
+  return 180;
+}
+
+function ensureInternalHomeAnchorGhost(artToyId) {
+  if (!artToyId) return null;
+  const { world } = ensureInternalBoardOverlay();
+  if (!world) return null;
+
+  // Keep one active ghost in the internal world.
+  try {
+    world.querySelectorAll('.internal-art-anchor-ghost').forEach((el) => {
+      if (el?.dataset?.artToyId !== String(artToyId)) el.remove();
+    });
+  } catch {}
+
+  let ghost = null;
+  try {
+    ghost = Array.from(world.querySelectorAll('.internal-art-anchor-ghost'))
+      .find(el => el?.dataset?.artToyId === String(artToyId)) || null;
+  } catch {}
+
+  if (!ghost) {
+    ghost = document.createElement('section');
+    ghost.className = 'art-toy-panel internal-art-anchor-ghost';
+    ghost.dataset.artToyId = String(artToyId);
+    ghost.setAttribute('aria-hidden', 'true');
+    ghost.style.width = `${getInternalHomeGhostSize()}px`;
+    ghost.style.height = `${getInternalHomeGhostSize()}px`;
+    ghost.style.position = 'absolute';
+    ghost.style.pointerEvents = 'none';
+    ghost.style.zIndex = '2';
+    const circle = document.createElement('div');
+    circle.className = 'art-toy-circle';
+    ghost.appendChild(circle);
+    world.appendChild(ghost);
+  }
+
+  const anchor = getInternalHomeAnchorForArtToy(artToyId);
+  const size = getInternalHomeGhostSize();
+  ghost.style.left = `${Math.round(anchor.x - size * 0.5)}px`;
+  ghost.style.top = `${Math.round(anchor.y - size * 0.5)}px`;
+  return ghost;
+}
+
+function computeInternalCameraForWorldPoint(worldX, worldY, scale) {
+  const { viewW, viewH } = getInternalViewportSize();
+  const safeScale = (Number.isFinite(scale) && scale > 0) ? scale : 1;
+  const wx = Number.isFinite(worldX) ? worldX : 240;
+  const wy = Number.isFinite(worldY) ? worldY : 180;
+  const tx = viewW * 0.5 - wx * safeScale;
+  const ty = viewH * 0.5 - wy * safeScale;
+  return { scale: safeScale, tx, ty, worldX: wx, worldY: wy };
+}
+
+function readActiveViewportCamera() {
+  const vp = document.querySelector('.board-viewport') || document.getElementById('internal-board-viewport');
+  const cs = vp ? getComputedStyle(vp) : null;
+  const s = cs ? parseFloat(cs.getPropertyValue('--bv-scale')) : NaN;
+  const tx = cs ? parseFloat(cs.getPropertyValue('--bv-tx')) : NaN;
+  const ty = cs ? parseFloat(cs.getPropertyValue('--bv-ty')) : NaN;
+  return {
+    scale: Number.isFinite(s) ? s : 1,
+    tx: Number.isFinite(tx) ? tx : 0,
+    ty: Number.isFinite(ty) ? ty : 0,
+  };
+}
+
+function tweenBoardCameraTo(targetScale, targetTx, targetTy, durationMs = 468) {
+  const start = readActiveViewportCamera();
+  const end = {
+    scale: Number.isFinite(targetScale) ? targetScale : start.scale,
+    tx: Number.isFinite(targetTx) ? targetTx : start.tx,
+    ty: Number.isFinite(targetTy) ? targetTy : start.ty,
+  };
+  const dur = Math.max(80, Number(durationMs) || 468);
+  const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+  const lerp = (a, b, t) => a + (b - a) * t;
+
+  let t0 = 0;
+  const step = (now) => {
+    if (!t0) t0 = now;
+    const k = Math.min(1, (now - t0) / dur);
+    const e = easeOutCubic(k);
+    const s = lerp(start.scale, end.scale, e);
+    const x = lerp(start.tx, end.tx, e);
+    const y = lerp(start.ty, end.ty, e);
+    try { window.__setBoardViewportNow?.(s, x, y); } catch {}
+    if (k < 1) {
+      requestAnimationFrame(step);
+    } else {
+      try { window.__setBoardViewportNow?.(end.scale, end.tx, end.ty); } catch {}
+      try { setInternalBoardTransform(end.scale, end.tx, end.ty); } catch {}
+    }
+  };
+  requestAnimationFrame(step);
+}
+
+function getStoredInternalHomeAnchor(artToyId) {
+  const artPanel = getArtToyPanelById(artToyId);
+  if (!artPanel) return null;
+  const x = Number(artPanel.dataset?.internalHomeX);
+  const y = Number(artPanel.dataset?.internalHomeY);
+  const scale = Number(artPanel.dataset?.internalHomeScale);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return { x, y, scale: (Number.isFinite(scale) && scale > 0) ? scale : null };
+}
+
+function setStoredInternalHomeAnchor(artToyId, anchor) {
+  const artPanel = getArtToyPanelById(artToyId);
+  if (!artPanel || !anchor) return false;
+  const x = Number(anchor.x);
+  const y = Number(anchor.y);
+  const scale = Number(anchor.scale);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+  try {
+    artPanel.dataset.internalHomeX = String(x);
+    artPanel.dataset.internalHomeY = String(y);
+    if (Number.isFinite(scale) && scale > 0) artPanel.dataset.internalHomeScale = String(scale);
+    else delete artPanel.dataset.internalHomeScale;
+    return true;
+  } catch {}
+  return false;
+}
+
+function getInternalHomeAnchorForArtToy(artToyId) {
+  const defaultScale = (Number.isFinite(Number(window.__MT_NEW_SCENE_ZOOM)) && Number(window.__MT_NEW_SCENE_ZOOM) > 0)
+    ? Number(window.__MT_NEW_SCENE_ZOOM)
+    : 1;
+  if (!artToyId) return { x: 240, y: 180, scale: defaultScale };
+  const stored = getStoredInternalHomeAnchor(artToyId);
+  if (stored) {
+    return {
+      x: stored.x,
+      y: stored.y,
+      scale: (Number.isFinite(stored.scale) && stored.scale > 0) ? stored.scale : defaultScale,
+    };
+  }
+  const cam = computeInternalBoardDefaultCamera(artToyId);
+  const anchor = {
+    x: Number.isFinite(cam.worldX) ? cam.worldX : 240,
+    y: Number.isFinite(cam.worldY) ? cam.worldY : 180,
+    scale: Number.isFinite(cam.scale) && cam.scale > 0 ? cam.scale : defaultScale,
+  };
+  try { setStoredInternalHomeAnchor(artToyId, anchor); } catch {}
+  return anchor;
+}
+
+function centerInternalBoardOnHomeAnchor(artToyId) {
+  if (!artToyId) return false;
+  ensureInternalHomeAnchorGhost(artToyId);
+  const anchor = getInternalHomeAnchorForArtToy(artToyId);
+  try { window.__cancelWheelZoomLerp?.(); } catch {}
+
+  const cam = computeInternalCameraForWorldPoint(anchor.x, anchor.y, anchor.scale);
+  // Direct camera tween to exact target avoids conversion drift in swapped-board mode.
+  try { tweenBoardCameraTo(cam.scale, cam.tx, cam.ty, 468); return true; } catch {}
+
+  // Fallback if animated camera helper is unavailable.
+  setInternalBoardTransform(cam.scale, cam.tx, cam.ty);
+  try { window.__setBoardViewportNow?.(cam.scale, cam.tx, cam.ty); } catch {}
+  requestAnimationFrame(() => {
+    try { window.__setBoardViewportNow?.(cam.scale, cam.tx, cam.ty); } catch {}
+  });
+  return true;
+}
+
+function computeInternalBoardDefaultCamera(artToyId) {
   const homeZoom = (() => {
     const z = Number(window.__MT_NEW_SCENE_ZOOM);
     // Match external "new scene / return home" default zoom when available.
@@ -2958,10 +3133,7 @@ function computeInternalBoardDefaultCamera(artToyId) {
   const scale = homeZoom;
   const worldX = count > 0 ? (sumX / count) : 240;
   const worldY = count > 0 ? (sumY / count) : 180;
-  const tx = viewW * 0.5 - worldX * scale;
-  const ty = viewH * 0.5 - worldY * scale;
-
-  return { scale, tx, ty };
+  return computeInternalCameraForWorldPoint(worldX, worldY, scale);
 }
 
 function readMainBoardCameraSnapshot() {
@@ -3204,6 +3376,7 @@ function enterInternalBoard(artToyId) {
   if (!panels.length) {
     try { spawnedDefaultOnEnter = !!ensureDefaultInternalToyOnFirstEnter(artToyId, world); } catch {}
   }
+  try { ensureInternalHomeAnchorGhost(artToyId); } catch {}
 
   if (title) title.textContent = 'Inside Art Toy';
 
@@ -3343,6 +3516,14 @@ try {
     enter: enterInternalBoard,
     exit: requestExitInternalBoard,
     isActive: () => !!g_artInternal.active,
+    getHomeAnchor: () => {
+      if (!g_artInternal.active || !g_artInternal.artToyId) return null;
+      return getInternalHomeAnchorForArtToy(g_artInternal.artToyId);
+    },
+    centerHome: () => {
+      if (!g_artInternal.active || !g_artInternal.artToyId) return false;
+      return centerInternalBoardOnHomeAnchor(g_artInternal.artToyId);
+    },
   });
 } catch {}
 
