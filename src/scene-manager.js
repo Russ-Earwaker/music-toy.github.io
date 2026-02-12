@@ -510,9 +510,16 @@ function formatTimestamp(iso) {
     try {
       const P = getPersistence();
       const snap = P.getSnapshot?.();
-      if (snap && Array.isArray(snap.toys)) return snap.toys.length > 0;
+      if (snap) {
+        const toyCount = Array.isArray(snap.toys) ? snap.toys.length : 0;
+        const artCount = Array.isArray(snap.artToys) ? snap.artToys.length : 0;
+        return (toyCount + artCount) > 0;
+      }
     } catch {}
-    return document.querySelectorAll('#board > .toy-panel').length > 0;
+    return (
+      document.querySelectorAll('#board > .toy-panel').length +
+      document.querySelectorAll('.art-toy-panel:not(.internal-art-anchor-ghost)').length
+    ) > 0;
   }
 
   async function confirmDiscardIfNeeded() {

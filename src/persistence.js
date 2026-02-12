@@ -349,6 +349,35 @@ function readUI(panel){
   };
 }
 
+function readArtToyUI(panel){
+  const cs = getComputedStyle(panel);
+  return {
+    left: cs.left || panel.style.left || '0px',
+    top: cs.top || panel.style.top || '0px',
+    width: cs.width || panel.style.width || '',
+    height: cs.height || panel.style.height || '',
+    z: readNumber(panel.style.zIndex, undefined),
+  };
+}
+
+function readOwnedToyUI(panel){
+  const ui = readUI(panel);
+  // Internal toys may be stashed offscreen while hidden; prefer preserved world-space styles.
+  try {
+    if (panel?.classList?.contains('art-internal-toy')) {
+      const prevLeft = panel.dataset?.__internalPrevLeft;
+      const prevTop = panel.dataset?.__internalPrevTop;
+      const prevWidth = panel.dataset?.__internalPrevWidth;
+      const prevHeight = panel.dataset?.__internalPrevHeight;
+      if (typeof prevLeft === 'string' && prevLeft !== '') ui.left = prevLeft;
+      if (typeof prevTop === 'string' && prevTop !== '') ui.top = prevTop;
+      if (typeof prevWidth === 'string' && prevWidth !== '') ui.width = prevWidth;
+      if (typeof prevHeight === 'string' && prevHeight !== '') ui.height = prevHeight;
+    }
+  } catch {}
+  return ui;
+}
+
 function applyUI(panel, ui){
   if (!ui) return;
    const toy = panel?.dataset?.toy;
@@ -362,6 +391,34 @@ function applyUI(panel, ui){
     panel.style.height = String(ui.height);
   }
   if (ui.z !== undefined) panel.style.zIndex = String(ui.z);
+}
+
+function applyArtToyUI(panel, ui){
+  if (!panel || !ui) return;
+  panel.style.position = 'absolute';
+  if (ui.left) panel.style.left = String(ui.left);
+  if (ui.top) panel.style.top = String(ui.top);
+  if (ui.width) panel.style.width = String(ui.width);
+  if (ui.height) panel.style.height = String(ui.height);
+  if (ui.z !== undefined) panel.style.zIndex = String(ui.z);
+}
+
+function ensureArtInternalHostForRestore() {
+  let host = document.getElementById('art-internal-host');
+  if (host) return host;
+  host = document.createElement('div');
+  host.id = 'art-internal-host';
+  host.style.display = 'block';
+  host.style.position = 'absolute';
+  host.style.left = '-20000px';
+  host.style.top = '-20000px';
+  host.style.width = '1px';
+  host.style.height = '1px';
+  host.style.overflow = 'visible';
+  host.style.visibility = 'hidden';
+  host.style.pointerEvents = 'none';
+  document.body.appendChild(host);
+  return host;
 }
 
 // --- Toy-specific snapshotters ---
@@ -729,21 +786,59 @@ const ToySnapshotters = {
 };
 
 export function getSnapshot(){
-  const panels = Array.from(document.querySelectorAll('#board > .toy-panel'));
+  const board = document.getElementById('board');
+  const boardMain = document.getElementById('board-main');
+  const panels = Array.from(document.querySelectorAll('.toy-panel')).filter((panel) => {
+    if (!panel || !panel.isConnected) return false;
+    if (panel.dataset?.tutorial === 'true' || panel.classList?.contains('tutorial-panel')) return false;
+    if (panel.dataset?.artOwnerId) return true;
+    if (board?.contains(panel)) return true;
+    if (boardMain?.contains(panel)) return true;
+    return false;
+  });
   const toys = panels.map(panel => {
     const type = String(panel.dataset.toy||'').toLowerCase();
     const id = panelId(panel);
     const snapper = ToySnapshotters[type]?.snap || (()=>({}));
     const audio = snapToyAudio(panel, id);
+    const ownerArtToyId = panel.dataset?.artOwnerId || null;
     return {
       id, type,
-      ui: readUI(panel),
+      ui: ownerArtToyId ? readOwnedToyUI(panel) : readUI(panel),
       state: snapper(panel) || {},
       volume: audio.volume,
       muted: audio.muted,
       solo: undefined,
+      ownerArtToyId,
     };
   });
+
+  const artToys = Array.from(document.querySelectorAll('.art-toy-panel'))
+    .filter((panel) => panel && !panel.classList?.contains('internal-art-anchor-ghost'))
+    .map((panel) => {
+      const id = panel.id || null;
+      const artKind = String(panel.dataset?.artToy || '');
+      const internalBootstrapped = panel.dataset?.internalBootstrapped === '1';
+      const homeX = Number(panel.dataset?.internalHomeX);
+      const homeY = Number(panel.dataset?.internalHomeY);
+      const homeScale = Number(panel.dataset?.internalHomeScale);
+      const internalHome = (Number.isFinite(homeX) && Number.isFinite(homeY))
+        ? {
+            x: homeX,
+            y: homeY,
+            scale: (Number.isFinite(homeScale) && homeScale > 0) ? homeScale : undefined,
+          }
+        : null;
+      return {
+        id,
+        artKind,
+        ui: readArtToyUI(panel),
+        state: {
+          internalBootstrapped,
+          internalHome,
+        },
+      };
+    });
 
   // --- Capture chain links (parent -> child) ---
   const chains = [];
@@ -765,6 +860,7 @@ export function getSnapshot(){
     updatedAt: nowIso(),
     transport: { bpm },
     themeId: getActiveThemeKey?.() || undefined,
+    artToys,
     toys,
     chains,
     camera,
@@ -806,12 +902,79 @@ export function applySceneSnapshot(snap){
       }
     }
 
+    // Art toys first (so owned internal toys can resolve to an existing owner).
+    const artFactory = window.ArtToyFactory;
+    const artSnapshots = Array.isArray(snap.artToys) ? snap.artToys : [];
+    const existingArtPanels = Array.from(document.querySelectorAll('.art-toy-panel'))
+      .filter((panel) => panel && !panel.classList?.contains('internal-art-anchor-ghost'));
+    const artById = new Map(existingArtPanels.map((p) => [p.id, p]));
+    const usedArtPanels = new Set();
+    for (const a of artSnapshots) {
+      if (!a || typeof a !== 'object') continue;
+      const kind = String(a.artKind || '');
+      let artPanel = (a.id ? artById.get(a.id) : null) || null;
+      if (!artPanel) {
+        artPanel = existingArtPanels.find((p) =>
+          !usedArtPanels.has(p) && String(p.dataset?.artToy || '') === kind
+        ) || null;
+      }
+      if (!artPanel && artFactory && typeof artFactory.create === 'function' && kind) {
+        try {
+          const ui = a.ui || {};
+          const left = parseFloat(ui.left);
+          const top = parseFloat(ui.top);
+          const width = parseFloat(ui.width);
+          const height = parseFloat(ui.height);
+          const opts = {};
+          if (Number.isFinite(left) && Number.isFinite(width)) opts.centerX = left + width / 2;
+          if (Number.isFinite(top) && Number.isFinite(height)) opts.centerY = top + height / 2;
+          artPanel = artFactory.create(kind, opts) || null;
+          if (artPanel) {
+            existingArtPanels.push(artPanel);
+            if (artPanel.id) artById.set(artPanel.id, artPanel);
+          }
+        } catch (err) {
+          console.warn('[persistence] create art panel failed', err);
+        }
+      }
+      if (!artPanel) continue;
+      if (a.id) {
+        try {
+          const existing = document.getElementById(a.id);
+          if (!existing || existing === artPanel) artPanel.id = a.id;
+        } catch {}
+      }
+      try { applyArtToyUI(artPanel, a.ui || {}); } catch {}
+      try {
+        const st = a.state || {};
+        if (st.internalBootstrapped) artPanel.dataset.internalBootstrapped = '1';
+        else delete artPanel.dataset.internalBootstrapped;
+        const home = st.internalHome || null;
+        if (home && Number.isFinite(Number(home.x)) && Number.isFinite(Number(home.y))) {
+          artPanel.dataset.internalHomeX = String(Number(home.x));
+          artPanel.dataset.internalHomeY = String(Number(home.y));
+          if (Number.isFinite(Number(home.scale)) && Number(home.scale) > 0) {
+            artPanel.dataset.internalHomeScale = String(Number(home.scale));
+          } else {
+            delete artPanel.dataset.internalHomeScale;
+          }
+        }
+      } catch {}
+      usedArtPanels.add(artPanel);
+      if (artPanel.id) artById.set(artPanel.id, artPanel);
+    }
+
     // Toys: match by id first, else by type order.
-    const panels = Array.from(document.querySelectorAll('#board > .toy-panel'));
+    const panels = Array.from(document.querySelectorAll('.toy-panel')).filter((panel) => {
+      if (!panel || !panel.isConnected) return false;
+      if (panel.dataset?.tutorial === 'true' || panel.classList?.contains('tutorial-panel')) return false;
+      return true;
+    });
     const byId = new Map(panels.map(p => [panelId(p), p]));
     const factory = window.MusicToyFactory;
     const usedPanels = new Set();
     const posMap = {};
+    const internalHost = ensureArtInternalHostForRestore();
     let appliedCount = 0;
     for (const t of (snap.toys||[])){
       let createdFromFactory = false;
@@ -831,6 +994,12 @@ export function applySceneSnapshot(snap){
           if (Number.isFinite(left) && Number.isFinite(width)) opts.centerX = left + width / 2;
           if (Number.isFinite(top) && Number.isFinite(height)) opts.centerY = top + height / 2;
           if (t.state && typeof t.state === 'object' && t.state.instrument) opts.instrument = t.state.instrument;
+          if (t.ownerArtToyId) {
+            opts.artOwnerId = String(t.ownerArtToyId);
+            opts.containerEl = internalHost;
+            opts.autoCenter = false;
+            opts.skipSpawnPlacement = true;
+          }
           panel = factory.create(t.type, opts);
           if (panel){
             panels.push(panel);
@@ -863,8 +1032,27 @@ export function applySceneSnapshot(snap){
       try{
         applyUI(panel, t.ui);
         // collect positions for board.js persistence too
-        posMap[panelId(panel)] = { left: panel.style.left, top: panel.style.top };
+        if (!t.ownerArtToyId) {
+          posMap[panelId(panel)] = { left: panel.style.left, top: panel.style.top };
+        }
       }catch{}
+      if (t.ownerArtToyId) {
+        try {
+          panel.dataset.artOwnerId = String(t.ownerArtToyId);
+          panel.dataset.internalBoardOwner = String(t.ownerArtToyId);
+          panel.dataset.focusSkip = '1';
+          panel.classList.add('art-internal-toy');
+          panel.style.pointerEvents = 'none';
+          if (internalHost && panel.parentElement !== internalHost) internalHost.appendChild(panel);
+        } catch {}
+      } else {
+        try {
+          panel.classList.remove('art-internal-toy');
+          delete panel.dataset.artOwnerId;
+          delete panel.dataset.internalBoardOwner;
+          delete panel.dataset.focusSkip;
+        } catch {}
+      }
       const applier = ToySnapshotters[t.type]?.apply;
       if (typeof applier === 'function'){
         try {
@@ -976,6 +1164,12 @@ export function applySceneSnapshot(snap){
         }
       }catch{}
       try{ panel.remove(); }catch{}
+    });
+
+    // Remove art toys not present in the snapshot.
+    existingArtPanels.forEach((panel) => {
+      if (usedArtPanels.has(panel)) return;
+      try { panel.remove(); } catch {}
     });
     // Persist positions for board.js so refresh preserves locations
     try{
