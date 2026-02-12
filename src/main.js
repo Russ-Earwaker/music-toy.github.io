@@ -2076,6 +2076,23 @@ function ensureArtInternalHost() {
 
 function makeInternalPanelLayoutableWhileHidden(panel) {
     if (!panel) return;
+    const saveInline = (key, value) => {
+        try {
+            const dataKey = `__internalPrev${key}`;
+            if (!(dataKey in panel.dataset)) panel.dataset[dataKey] = value ?? '';
+        } catch {}
+    };
+    // Preserve inline styles so re-enter restores exact panel placement/sizing.
+    saveInline('Display', panel.style.display);
+    saveInline('Position', panel.style.position);
+    saveInline('Left', panel.style.left);
+    saveInline('Top', panel.style.top);
+    saveInline('Width', panel.style.width);
+    saveInline('Height', panel.style.height);
+    saveInline('Visibility', panel.style.visibility);
+    saveInline('PointerEvents', panel.style.pointerEvents);
+    saveInline('Overflow', panel.style.overflow);
+    saveInline('Contain', panel.style.contain);
     // Keep it measurable but not visible or interactive.
     // DO NOT use display:none (drawgrid random/audio relies on layoutable canvases).
     try {
@@ -2091,6 +2108,37 @@ function makeInternalPanelLayoutableWhileHidden(panel) {
         panel.style.pointerEvents = 'none';
         panel.style.overflow = 'hidden';
         panel.style.contain = 'layout paint size';
+    } catch {}
+}
+
+function restoreInternalPanelAfterHiddenLayout(panel) {
+    if (!panel) return;
+    const restoreInline = (key, styleProp) => {
+        const dataKey = `__internalPrev${key}`;
+        try {
+            if (dataKey in panel.dataset) {
+                panel.style[styleProp] = panel.dataset[dataKey] || '';
+                delete panel.dataset[dataKey];
+            }
+        } catch {}
+    };
+    restoreInline('Display', 'display');
+    restoreInline('Position', 'position');
+    restoreInline('Left', 'left');
+    restoreInline('Top', 'top');
+    restoreInline('Width', 'width');
+    restoreInline('Height', 'height');
+    restoreInline('Visibility', 'visibility');
+    restoreInline('PointerEvents', 'pointerEvents');
+    restoreInline('Overflow', 'overflow');
+    restoreInline('Contain', 'contain');
+
+    // Backward compatibility for panels hidden before style snapshot support landed.
+    try {
+        if (panel.style.left === '-20000px') panel.style.left = '';
+        if (panel.style.top === '-20000px') panel.style.top = '';
+        if (panel.style.visibility === 'hidden') panel.style.visibility = '';
+        if (panel.style.contain === 'layout paint size') panel.style.contain = '';
     } catch {}
 }
 
@@ -2863,6 +2911,41 @@ function setInternalBoardTransform(scale, tx, ty) {
   } catch {}
 }
 
+function computeInternalBoardDefaultCamera(artToyId) {
+  const viewport = document.getElementById('internal-board-viewport');
+  const vr = viewport?.getBoundingClientRect?.();
+  const viewW = (Number.isFinite(vr?.width) && vr.width > 0) ? vr.width : 960;
+  const viewH = (Number.isFinite(vr?.height) && vr.height > 0) ? vr.height : 640;
+
+  const owned = getInternalPanelsForArtToy(artToyId);
+  let sumX = 0;
+  let sumY = 0;
+  let count = 0;
+
+  for (const p of owned) {
+    if (!p) continue;
+    const left = parseFloat(p.style.left);
+    const top = parseFloat(p.style.top);
+    const w = p.offsetWidth || p.getBoundingClientRect?.().width || 0;
+    const h = p.offsetHeight || p.getBoundingClientRect?.().height || 0;
+    if (!Number.isFinite(left) || !Number.isFinite(top)) continue;
+    const cx = left + (Number.isFinite(w) ? w * 0.5 : 0);
+    const cy = top + (Number.isFinite(h) ? h * 0.5 : 0);
+    sumX += cx;
+    sumY += cy;
+    count++;
+  }
+
+  // Default zoom for internal board.
+  const scale = 1;
+  const worldX = count > 0 ? (sumX / count) : 240;
+  const worldY = count > 0 ? (sumY / count) : 180;
+  const tx = viewW * 0.5 - worldX * scale;
+  const ty = viewH * 0.5 - worldY * scale;
+
+  return { scale, tx, ty };
+}
+
 function readMainBoardCameraSnapshot() {
   // Pull from the current main board viewport CSS vars used by board-viewport.js
   // (These should exist even if we later swap IDs/classes.)
@@ -3054,8 +3137,16 @@ function revertBoardIdentityAfterInternalMode() {
     const mainViewport = swap.mainViewportEl || document.querySelector('.board-viewport');
     if (snap && mainViewport) {
       if (Number.isFinite(snap.scale)) mainViewport.style.setProperty('--bv-scale', String(snap.scale));
-      if (Number.isFinite(snap.tx)) mainViewport.style.setProperty('--bv-tx', String(snap.tx));
-      if (Number.isFinite(snap.ty)) mainViewport.style.setProperty('--bv-ty', String(snap.ty));
+      if (Number.isFinite(snap.tx)) mainViewport.style.setProperty('--bv-tx', `${snap.tx}px`);
+      if (Number.isFinite(snap.ty)) mainViewport.style.setProperty('--bv-ty', `${snap.ty}px`);
+      // Also restore the coordinator's live state so delayed commit/tween writes
+      // cannot re-apply stale internal-board transforms after exit.
+      try { window.__cancelWheelZoomLerp?.(); } catch {}
+      try { window.__setBoardViewportNow?.(snap.scale, snap.tx, snap.ty); } catch {}
+      // One more frame for any queued post-swap writes.
+      requestAnimationFrame(() => {
+        try { window.__setBoardViewportNow?.(snap.scale, snap.tx, snap.ty); } catch {}
+      });
     }
   } catch {}
 
@@ -3084,7 +3175,7 @@ function enterInternalBoard(artToyId) {
   for (const p of panels) {
     try {
       p.classList.remove('art-internal-toy');
-      p.style.display = '';
+      restoreInternalPanelAfterHiddenLayout(p);
       p.style.pointerEvents = 'auto';
       world.appendChild(p);
     } catch {}
@@ -3106,11 +3197,18 @@ function enterInternalBoard(artToyId) {
 
   dbgInternalOverlay('enter:after-active-class', overlay);
 
-  // Make internal board camera match the current main-board camera on enter.
-  setInternalBoardTransform(snap.scale, snap.tx, snap.ty);
-
   // Critical: swap board identity so all existing toy dragging / board math works inside internal mode.
   swapBoardIdentityForInternalMode();
+
+  // Internal-board camera policy:
+  // Always start at default zoom centered on this art toy's internal content.
+  const internalCam = computeInternalBoardDefaultCamera(artToyId);
+  setInternalBoardTransform(internalCam.scale, internalCam.tx, internalCam.ty);
+  try { window.__cancelWheelZoomLerp?.(); } catch {}
+  try { window.__setBoardViewportNow?.(internalCam.scale, internalCam.tx, internalCam.ty); } catch {}
+  requestAnimationFrame(() => {
+    try { window.__setBoardViewportNow?.(internalCam.scale, internalCam.tx, internalCam.ty); } catch {}
+  });
 
   __artRandLog('enterInternalBoard:afterSwap', {
     artToyId,
@@ -7383,8 +7481,12 @@ async function boot(){
   const FOCUS_MOVE_THRESH_SQ = 9; // 3px tolerance
 
   document.addEventListener('pointerdown', (e) => {
-    // If the press originated on a chain "+" button, don't queue focus for the source toy.
-    if (e.target && e.target.closest && e.target.closest('.toy-chain-btn')) return;
+    // If the press originated on an interactive control, don't queue tap-to-focus.
+    // This avoids camera recenters from button taps (e.g. Art Toy Random/Music buttons).
+    if (e.target && e.target.closest) {
+      if (e.target.closest('.toy-chain-btn')) return;
+      if (e.target.closest('button, [role="button"], input, select, textarea, a[href], [data-action], .toy-controls, .toy-header-controls')) return;
+    }
     const panel = e.target && e.target.closest ? e.target.closest('.toy-panel') : null;
     if (!panel || !isFocusManagedPanel(panel)) return;
     if (panel.classList.contains('toy-unfocused')) {

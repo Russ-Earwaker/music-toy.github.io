@@ -767,6 +767,15 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     applyTransform({ scale: 1, x: 0, y: 0 }, { commit: true, delayMs: 0 });
     scheduleNotify({ ...getZoomState(), committed: true });
   };
+  // Force an immediate authoritative viewport state (used by internal-board exit restore).
+  window.__setBoardViewportNow = (nextScale, nextX, nextY) => {
+    cancelWheelCommit();
+    const s = clampScale(Number(nextScale) || scale);
+    const tx = Number.isFinite(nextX) ? Number(nextX) : x;
+    const ty = Number.isFinite(nextY) ? Number(nextY) : y;
+    applyTransform({ scale: s, x: tx, y: ty }, { commit: true, delayMs: 0 });
+    scheduleNotify({ ...getZoomState(), committed: true });
+  };
   window.getViewportCenterWorld = getViewportCenterWorld;
 
   function getTargetElementForPanel(panel) {
