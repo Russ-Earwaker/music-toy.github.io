@@ -78,6 +78,164 @@ const g_artInternal = {
     internalWorldPrevId: null,
   },
 };
+let g_lastViewportGestureTs = 0;
+let g_lastArtFlashIntentTs = 0;
+let g_lastArtFlashIntent = null;
+function artFlashDebugEnabled() {
+  try { if (window.__MT_DEBUG_ART_FLASH === true) return true; } catch {}
+  try { if (localStorage.getItem('MT_DEBUG_ART_FLASH') === '1') return true; } catch {}
+  return false;
+}
+function artFlashNow() {
+  return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+}
+function artFlashDbg(tag, payload = {}) {
+  if (!artFlashDebugEnabled()) return;
+  try { console.log(`[ART][flash] ${tag}`, payload); } catch {}
+}
+function getArtFlashMotionSnapshot() {
+  const now = artFlashNow();
+  const lastGestureAgeMs = Number.isFinite(g_lastViewportGestureTs)
+    ? Math.max(0, now - g_lastViewportGestureTs)
+    : null;
+  return {
+    internal: !!g_artInternal?.active,
+    zoom: !!window.__mtZoomGesturing,
+    gesture: !!window.__GESTURE_ACTIVE,
+    tween: !!window.__camTweenLock,
+    lastGestureAgeMs: Number.isFinite(lastGestureAgeMs) ? Math.round(lastGestureAgeMs * 10) / 10 : null,
+  };
+}
+function recordArtFlashIntent(kind, data = {}) {
+  g_lastArtFlashIntentTs = artFlashNow();
+  g_lastArtFlashIntent = { kind, ...data };
+  try {
+    window.__MT_LAST_ART_FLASH_INTENT = {
+      at: g_lastArtFlashIntentTs,
+      ...g_lastArtFlashIntent,
+    };
+  } catch {}
+}
+function installArtFlashMutationDebug() {
+  try {
+    if (window.__MT_ART_FLASH_OBSERVER_INSTALLED) return;
+    window.__MT_ART_FLASH_OBSERVER_INSTALLED = true;
+    const obs = new MutationObserver((muts) => {
+      for (const m of muts) {
+        if (m.type !== 'attributes' || m.attributeName !== 'class') continue;
+        const el = m.target;
+        if (!(el instanceof HTMLElement)) continue;
+        if (!el.classList?.contains('art-toy-panel')) continue;
+        if (!artFlashDebugEnabled()) continue;
+        const now = artFlashNow();
+        const sinceIntentMs = Number.isFinite(g_lastArtFlashIntentTs)
+          ? Math.max(0, now - g_lastArtFlashIntentTs)
+          : null;
+        artFlashDbg('class-change', {
+          id: el.id || null,
+          className: el.className,
+          ...getArtFlashMotionSnapshot(),
+          sinceIntentMs: Number.isFinite(sinceIntentMs) ? Math.round(sinceIntentMs * 10) / 10 : null,
+          lastIntent: g_lastArtFlashIntent || null,
+        });
+      }
+    });
+    obs.observe(document.body || document.documentElement, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class'],
+    });
+  } catch {}
+}
+try {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', installArtFlashMutationDebug, { once: true });
+  } else {
+    installArtFlashMutationDebug();
+  }
+} catch {}
+function installArtFlashViewportDebug() {
+  try {
+    if (window.__MT_ART_FLASH_VIEWPORT_DEBUG_INSTALLED) return;
+    window.__MT_ART_FLASH_VIEWPORT_DEBUG_INSTALLED = true;
+    window.addEventListener('board:gesture-commit', (e) => {
+      const detail = e?.detail || {};
+      artFlashDbg('viewport:gesture-commit', {
+        ...getArtFlashMotionSnapshot(),
+        positionChanged: !!detail.positionChanged,
+        scaleChanged: !!detail.scaleChanged,
+        gestureId: detail.gestureId ?? null,
+      });
+    });
+  } catch {}
+}
+function installArtFlashAnimationDebug() {
+  try {
+    if (window.__MT_ART_FLASH_ANIM_DEBUG_INSTALLED) return;
+    window.__MT_ART_FLASH_ANIM_DEBUG_INSTALLED = true;
+    const onAnim = (phase, e) => {
+      if (!artFlashDebugEnabled()) return;
+      const target = e?.target;
+      if (!(target instanceof Element)) return;
+      if (!target.classList?.contains('art-toy-circle')) return;
+      const panel = target.closest('.art-toy-panel');
+      const now = artFlashNow();
+      const sinceIntentMs = Number.isFinite(g_lastArtFlashIntentTs)
+        ? Math.max(0, now - g_lastArtFlashIntentTs)
+        : null;
+      artFlashDbg(`anim:${phase}`, {
+        animationName: e?.animationName || null,
+        elapsedTime: Number.isFinite(e?.elapsedTime) ? e.elapsedTime : null,
+        artId: panel?.id || null,
+        panelHasFlashClass: !!panel?.classList?.contains('flash'),
+        docFreeze: !!document.documentElement?.classList?.contains('zoom-commit-freeze'),
+        ...getArtFlashMotionSnapshot(),
+        sinceIntentMs: Number.isFinite(sinceIntentMs) ? Math.round(sinceIntentMs * 10) / 10 : null,
+        lastIntent: g_lastArtFlashIntent || null,
+      });
+    };
+    document.addEventListener('animationstart', (e) => onAnim('start', e), true);
+    document.addEventListener('animationend', (e) => onAnim('end', e), true);
+  } catch {}
+}
+function installArtFlashFreezeClassDebug() {
+  try {
+    if (window.__MT_ART_FLASH_FREEZE_DEBUG_INSTALLED) return;
+    window.__MT_ART_FLASH_FREEZE_DEBUG_INSTALLED = true;
+    const root = document.documentElement;
+    if (!root) return;
+    const obs = new MutationObserver((muts) => {
+      for (const m of muts) {
+        if (m.type !== 'attributes' || m.attributeName !== 'class') continue;
+        if (m.target !== root) continue;
+        if (!artFlashDebugEnabled()) continue;
+        const now = artFlashNow();
+        const sinceIntentMs = Number.isFinite(g_lastArtFlashIntentTs)
+          ? Math.max(0, now - g_lastArtFlashIntentTs)
+          : null;
+        artFlashDbg('viewport:freeze-class', {
+          hasFreeze: !!root.classList?.contains('zoom-commit-freeze'),
+          className: root.className || '',
+          ...getArtFlashMotionSnapshot(),
+          sinceIntentMs: Number.isFinite(sinceIntentMs) ? Math.round(sinceIntentMs * 10) / 10 : null,
+          lastIntent: g_lastArtFlashIntent || null,
+        });
+      }
+    });
+    obs.observe(root, { attributes: true, attributeFilter: ['class'] });
+  } catch {}
+}
+try {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', installArtFlashViewportDebug, { once: true });
+    document.addEventListener('DOMContentLoaded', installArtFlashAnimationDebug, { once: true });
+    document.addEventListener('DOMContentLoaded', installArtFlashFreezeClassDebug, { once: true });
+  } else {
+    installArtFlashViewportDebug();
+    installArtFlashAnimationDebug();
+    installArtFlashFreezeClassDebug();
+  }
+} catch {}
 
 // ---------------------------------------------------------------------------
 // Internal Board: Animation debug (gated)
@@ -136,9 +294,21 @@ window.addEventListener('touchstart', ()=>{}, { capture: true, passive: false })
         phase === 'prepare';
       if (active) {
         window.__mtZoomGesturing = true;
+        g_lastViewportGestureTs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        try { window.__MT_LAST_VIEWPORT_GESTURE_TS = g_lastViewportGestureTs; } catch {}
+        try { clearArtDropHoverEl?.(); } catch {}
       } else if (phase === 'done' || phase === 'commit' || phase === 'swap' || phase === 'idle' || mode === 'idle') {
         window.__mtZoomGesturing = false;
+        g_lastViewportGestureTs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        try { window.__MT_LAST_VIEWPORT_GESTURE_TS = g_lastViewportGestureTs; } catch {}
       }
+      artFlashDbg('viewport:zoom-phase', {
+        phase: phase ?? null,
+        mode: mode ?? null,
+        gesturing: !!gesturing,
+        active,
+        ...getArtFlashMotionSnapshot(),
+      });
     }));
   } catch {}
 })();
@@ -2225,6 +2395,14 @@ let g_artDropHoverEl = null;
 function setArtDropHoverEl(nextEl) {
     const el = nextEl && nextEl.classList?.contains('art-toy-panel') ? nextEl : null;
     if (el === g_artDropHoverEl) return;
+    artFlashDbg('drop-hover:set', {
+      prevId: g_artDropHoverEl?.id || null,
+      nextId: el?.id || null,
+      internal: !!g_artInternal?.active,
+      zoom: !!window.__mtZoomGesturing,
+      gesture: !!window.__GESTURE_ACTIVE,
+      tween: !!window.__camTweenLock,
+    });
     try { g_artDropHoverEl?.classList?.remove('is-drop-target'); } catch {}
     g_artDropHoverEl = el;
     try { g_artDropHoverEl?.classList?.add('is-drop-target'); } catch {}
@@ -2235,13 +2413,99 @@ function clearArtDropHoverEl() {
 
 // First-pass note forwarding:
 // If a panel is owned by an art toy, flash that art toy when the panel hits a note column.
-function flashOwningArtToyForPanel(panel) {
+function flashInternalArtGhostForArtId(artId) {
+  if (!artId) return false;
+  recordArtFlashIntent('ghost:attempt', { artId });
+  if (!g_artInternal?.active) {
+    artFlashDbg('ghost:skip:not-internal', { artId });
+    return false;
+  }
+  try {
+    // Internal board swaps world IDs during active mode, so select by class+owner only.
+    const ghost = document.querySelector(`.internal-art-anchor-ghost[data-art-toy-id="${CSS.escape(String(artId))}"]`);
+    if (!ghost) {
+      artFlashDbg('ghost:skip:not-found', { artId });
+      return false;
+    }
+    const circle = ghost.querySelector('.art-toy-circle');
+    if (circle) {
+      // Direct animation reset for reliability on repeatedly flashed ghost markers.
+      circle.style.animation = 'none';
+      void circle.offsetWidth;
+      circle.style.animation = '';
+      // Extra reliability: drive a one-shot WAAPI pulse even if CSS class animation is coalesced.
+      try {
+        circle.animate(
+          [
+            { transform: 'scale(1)', filter: 'brightness(1) saturate(1)' },
+            { transform: 'scale(1.03)', filter: 'brightness(2.2) saturate(1.35)' },
+            { transform: 'scale(1)', filter: 'brightness(1) saturate(1)' },
+          ],
+          { duration: 180, easing: 'ease-out' }
+        );
+      } catch {}
+    }
+    ghost.classList.remove('flash');
+    void ghost.offsetWidth;
+    ghost.classList.add('flash');
+    recordArtFlashIntent('ghost:flashed', { artId });
+    artFlashDbg('ghost:flashed', { artId, ghostFound: true });
+    return true;
+  } catch {}
+  artFlashDbg('ghost:skip:error', { artId });
+  return false;
+}
+
+function flashOwningArtToyForPanel(panel, source = 'unknown') {
   if (!panel) return false;
   const artId = panel?.dataset?.artOwnerId;
   if (!artId) return false;
+  recordArtFlashIntent('owner:attempt', { source, artId, panelId: panel?.id || null });
+  artFlashDbg('owner:attempt', {
+    source,
+    artId,
+    panelId: panel?.id,
+    ...getArtFlashMotionSnapshot(),
+  });
   const art = document.getElementById(artId);
-  if (!art) return false;
-  try { art.flash?.(); return true; } catch {}
+  let flashed = false;
+  try {
+    if (art) {
+      art.flash?.({ source, panelId: panel?.id || null, artId });
+      flashed = true;
+      recordArtFlashIntent('owner:flash-call', { source, artId, panelId: panel?.id || null });
+    }
+  } catch {}
+  try { if (flashInternalArtGhostForArtId(artId)) flashed = true; } catch {}
+  artFlashDbg('owner:result', { source, artId, panelId: panel?.id, flashed, internal: !!g_artInternal?.active });
+  return flashed;
+}
+
+function flashOwningArtToyForToyId(toyId) {
+  if (!toyId) return false;
+  const id = String(toyId);
+  try {
+    // `toy:note.detail.toyId` may be panel.id OR data-audiotoyid/toyid.
+    let panel = document.getElementById(id);
+    if (!panel) {
+      panel = document.querySelector(`.toy-panel[data-audiotoyid="${CSS.escape(id)}"]`)
+        || document.querySelector(`.toy-panel[data-toyid="${CSS.escape(id)}"]`);
+    }
+    if (panel) return flashOwningArtToyForPanel(panel, 'toyId:dom');
+
+    // Internal-board fallback: if we're inside an art toy, resolve against its owned panels.
+    if (g_artInternal?.active && g_artInternal?.artToyId) {
+      const owned = getInternalPanelsForArtToy(g_artInternal.artToyId);
+      const match = owned.find((p) =>
+        p?.id === id ||
+        p?.dataset?.audiotoyid === id ||
+        p?.dataset?.toyid === id
+      );
+      if (match) return flashOwningArtToyForPanel(match, 'toyId:owned');
+      // As last resort in internal mode, flash current anchor ghost for note activity.
+      return flashInternalArtGhostForArtId(g_artInternal.artToyId);
+    }
+  } catch {}
   return false;
 }
 
@@ -2267,6 +2531,34 @@ try {
         moveChainIntoArtToy,
         collectChainPanelsForMove,
     });
+} catch {}
+
+// Reliability hook:
+// Some toy paths emit `toy:note` without always passing through the chain-step flash path.
+// Mirror external art-toy flash behavior for internal anchor ghosts directly from note events.
+try {
+  if (!window.__MT_ART_NOTE_FLASH_HOOK) {
+    window.__MT_ART_NOTE_FLASH_HOOK = true;
+    window.addEventListener('toy:note', (e) => {
+      const toyId = e?.detail?.toyId;
+      if (!toyId || toyId === 'master') return;
+      artFlashDbg('toy:note', {
+        toyId,
+        internal: !!g_artInternal?.active,
+        artToyId: g_artInternal?.artToyId || null,
+        zoom: !!window.__mtZoomGesturing,
+        gesture: !!window.__GESTURE_ACTIVE,
+        tween: !!window.__camTweenLock,
+      });
+      try {
+        if (g_artInternal?.active && g_artInternal?.artToyId) {
+          flashInternalArtGhostForArtId(g_artInternal.artToyId);
+          return;
+        }
+      } catch {}
+      // External art-toy flash continues to be driven by scheduler/playhead paths.
+    });
+  }
 } catch {}
 
 // ---------------------------------------------------------------------------
@@ -2832,8 +3124,17 @@ function ensureDefaultInternalToyOnFirstEnter(artToyId, worldEl) {
   // Keep first default toy separate from the internal home anchor so the anchor
   // remains visible and usable as an explicit destination.
   const offsetX = Math.max(220, (Number(expectedSize?.width) || 380) * 0.5 + 96);
-  const centerX = (Number.isFinite(homeAnchor?.x) ? homeAnchor.x : 240) + offsetX;
-  const centerY = Number.isFinite(homeAnchor?.y) ? homeAnchor.y : 180;
+  let centerX = (Number.isFinite(homeAnchor?.x) ? homeAnchor.x : 240) + offsetX;
+  let centerY = Number.isFinite(homeAnchor?.y) ? homeAnchor.y : 180;
+  // Enforce a minimum center-to-center separation from the anchor ghost.
+  const minSep = Math.max(260, (Number(expectedSize?.width) || 380) * 0.45 + getInternalHomeGhostSize() * 0.5 + 60);
+  const ax = Number.isFinite(homeAnchor?.x) ? homeAnchor.x : 240;
+  const ay = Number.isFinite(homeAnchor?.y) ? homeAnchor.y : 180;
+  const d = Math.hypot(centerX - ax, centerY - ay);
+  if (!Number.isFinite(d) || d < minSep) {
+    centerX = ax + minSep;
+    centerY = ay;
+  }
 
   try {
     const p = createToyPanelAt(kind, {
@@ -2941,11 +3242,14 @@ function ensureInternalHomeAnchorGhost(artToyId) {
     ghost.style.height = `${getInternalHomeGhostSize()}px`;
     ghost.style.position = 'absolute';
     ghost.style.pointerEvents = 'none';
-    ghost.style.zIndex = '2';
+    ghost.style.zIndex = '0';
     const circle = document.createElement('div');
     circle.className = 'art-toy-circle';
     ghost.appendChild(circle);
-    world.appendChild(ghost);
+    world.prepend(ghost);
+  } else {
+    // Keep the anchor marker behind internal toy panels.
+    try { world.prepend(ghost); } catch {}
   }
 
   const anchor = getInternalHomeAnchorForArtToy(artToyId);
@@ -6647,10 +6951,8 @@ function scheduler(){
 
     // Screen-space "home" anchor: gradient + particle landmark.
     // Keep this cheap and frame-synced by piggybacking on the main scheduler rAF.
-    // (Visual-only; skip while inside internal board.)
-    if (!__internalActive) {
-      try { tickBoardAnchor({ nowMs: frameStart, loopInfo: info, running }); } catch {}
-    }
+    // In internal mode this renders against the internal viewport/anchor context.
+    try { tickBoardAnchor({ nowMs: frameStart, loopInfo: info, running, internalActive: __internalActive }); } catch {}
     const hasChains = g_chainState && g_chainState.size > 0;
     const allowChainWork = !window.__PERF_DISABLE_CHAIN_WORK;
 
@@ -6796,7 +7098,7 @@ function scheduler(){
               if (panelHasNotesAtColumn(toy, col)) {
                 pulseToyBorder(toy);
                 // First-pass: if this toy lives inside an Art Toy, flash the Art Toy.
-                flashOwningArtToyForPanel(toy);
+                flashOwningArtToyForPanel(toy, 'scheduler:step');
               }
             }
           }

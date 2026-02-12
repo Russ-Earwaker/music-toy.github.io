@@ -1,38 +1,35 @@
-window.__DG_REFRESH_SIZE_TRACE = true;
-window.__DG_ZOOM_COMMIT_TRACE = true;
-window.__DG_DEBUG_DRAWFLOW = true;
-window.__DG_RANDOM_TRACE_VERBOSE = true;
-
-true
-dg-flow-debug.js:172 [DG][flow][state] clear:start {"panelId":"drawgrid-1770893218973-yb84t5","strokes":0,"hasOverlayStrokes":false,"paintRev":0,"flashEmpty":true,"flashOutOfGrid":false,"baseDirty":true,"overlayDirty":true,"compositeDirty":true,"usingBackBuffers":false,"paintSize":{"w":300,"h":150},"backSize":{"w":300,"h":150},"paintAlpha":{"sum":0,"nonZero":0,"samplePx":256},"backAlpha":{"sum":0,"nonZero":0,"samplePx":256},"flashAlpha":{"sum":0,"nonZero":0,"samplePx":256},"flashBackAlpha":{"sum":0,"nonZero":0,"samplePx":256},"activeFlashAlpha":{"sum":0,"nonZero":0,"samplePx":256}}
-dg-layout.js:362 [DG][paint] snapshot-restore {"panelId":"drawgrid-1770893218973-yb84t5","source":"layout","paintSnapshotDpr":1,"paintDpr":1}
-dg-flow-debug.js:172 [DG][flow][state] clear:end {"panelId":"drawgrid-1770893218973-yb84t5","strokes":0,"hasOverlayStrokes":false,"paintRev":0,"flashEmpty":true,"flashOutOfGrid":false,"baseDirty":false,"overlayDirty":true,"compositeDirty":false,"usingBackBuffers":false,"paintSize":{"w":798,"h":599},"backSize":{"w":798,"h":599},"paintAlpha":{"sum":91,"nonZero":1,"samplePx":256},"backAlpha":{"sum":0,"nonZero":0,"samplePx":256},"flashAlpha":{"sum":0,"nonZero":0,"samplePx":256},"flashBackAlpha":{"sum":0,"nonZero":0,"samplePx":256},"activeFlashAlpha":{"sum":0,"nonZero":0,"samplePx":256}}
-dg-randomizers.js:55 [DG][flow] handleRandomize:enter {panelId: 'drawgrid-1770893218973-yb84t5'}
-dg-flow-debug.js:78 [DG][flow] randomize:start {panelId: 'drawgrid-1770893218973-yb84t5', usingBackBuffers: false, skipSwapsDuringDrag: false, drawingActive: false, hasCur: false, …}
-dg-flow-debug.js:172 [DG][flow][state] randomize:start {"panelId":"drawgrid-1770893218973-yb84t5","strokes":0,"hasOverlayStrokes":false,"paintRev":0,"flashEmpty":true,"flashOutOfGrid":false,"baseDirty":false,"overlayDirty":true,"compositeDirty":false,"usingBackBuffers":false,"paintSize":{"w":798,"h":599},"backSize":{"w":798,"h":599},"paintAlpha":{"sum":91,"nonZero":1,"samplePx":256},"backAlpha":{"sum":0,"nonZero":0,"samplePx":256},"flashAlpha":{"sum":0,"nonZero":0,"samplePx":256},"flashBackAlpha":{"sum":0,"nonZero":0,"samplePx":256},"activeFlashAlpha":{"sum":0,"nonZero":0,"samplePx":256}}
-dg-randomizers.js:159 [DG][random][redraw] {"panelId":"drawgrid-1770893218973-yb84t5","paintDpr":1,"cssW":798,"cssH":599,"usingBackBuffers":false,"canvasRole":"drawgrid-paint","canvasSize":{"w":798,"h":599,"cssW":"798px","cssH":"599px"}}
-dg-stroke-render.js:69 [DG][random][stroke] {"panelId":"drawgrid-1770893218973-yb84t5","layer":"paint","generatorId":1,"cssW":798,"cssH":599,"paintDpr":1,"dpr":1,"canvasRole":"drawgrid-paint","canvasSize":{"w":798,"h":599,"cssW":"798px","cssH":"599px"},"logicalActive":true,"transform":{"a":1,"d":1,"e":0,"f":0}}
-dg-paint-redraw.js:89 [DG][random][sync] {"panelId":"drawgrid-1770893218973-yb84t5","reason":"randomize-line","copied":true,"srcRole":"drawgrid-paint","dstRole":"drawgrid-paint-back","srcSize":{"w":798,"h":599,"cssW":"798px","cssH":"599px"},"dstSize":{"w":798,"h":599,"cssW":"798px","cssH":"599px"}}
-dg-flow-debug.js:78 [DG][flow] randomize:end {panelId: 'drawgrid-1770893218973-yb84t5', usingBackBuffers: false, skipSwapsDuringDrag: false, drawingActive: false, hasCur: false, …}
-dg-flow-debug.js:172 [DG][flow][state] randomize:end {"panelId":"drawgrid-1770893218973-yb84t5","strokes":1,"hasOverlayStrokes":true,"paintRev":3,"flashEmpty":true,"flashOutOfGrid":false,"baseDirty":false,"overlayDirty":true,"compositeDirty":false,"usingBackBuffers":false,"paintSize":{"w":798,"h":599},"backSize":{"w":798,"h":599},"paintAlpha":{"sum":155,"nonZero":1,"samplePx":256},"backAlpha":{"sum":0,"nonZero":0,"samplePx":256},"flashAlpha":{"sum":0,"nonZero":0,"samplePx":256},"flashBackAlpha":{"sum":0,"nonZero":0,"samplePx":256},"activeFlashAlpha":{"sum":0,"nonZero":0,"samplePx":256}}
-dg-layout.js:362 [DG][paint] snapshot-restore {"panelId":"drawgrid-1770893218973-yb84t5","source":"layout","paintSnapshotDpr":1,"paintDpr":1}
-main.js:3435 [Violation] 'click' handler took 301ms
-drawgrid.js:5416 [DG][flow] boot {panelId: 'drawgrid-1770893218973-yb84t5', visible: true, usingBackBuffers: false, singleCanvas: true}
-dg-randomizers.js:55 [DG][flow] handleRandomize:enter {panelId: 'drawgrid-1770893218973-yb84t5'}
-dg-flow-debug.js:78 [DG][flow] randomize:start {panelId: 'drawgrid-1770893218973-yb84t5', usingBackBuffers: false, skipSwapsDuringDrag: false, drawingActive: false, hasCur: false, …}
-dg-flow-debug.js:172 [DG][flow][state] randomize:start {"panelId":"drawgrid-1770893218973-yb84t5","strokes":1,"hasOverlayStrokes":true,"paintRev":4,"flashEmpty":true,"flashOutOfGrid":false,"baseDirty":true,"overlayDirty":true,"compositeDirty":true,"usingBackBuffers":false,"paintSize":{"w":798,"h":599},"backSize":{"w":798,"h":599},"paintAlpha":{"sum":155,"nonZero":1,"samplePx":256},"backAlpha":{"sum":0,"nonZero":0,"samplePx":256},"flashAlpha":{"sum":0,"nonZero":0,"samplePx":256},"flashBackAlpha":{"sum":0,"nonZero":0,"samplePx":256},"activeFlashAlpha":{"sum":0,"nonZero":0,"samplePx":256}}
-dg-randomizers.js:159 [DG][random][redraw] {"panelId":"drawgrid-1770893218973-yb84t5","paintDpr":1,"cssW":798,"cssH":599,"usingBackBuffers":false,"canvasRole":"drawgrid-paint","canvasSize":{"w":798,"h":599,"cssW":"798px","cssH":"599px"}}
-dg-stroke-render.js:69 [DG][random][stroke] {"panelId":"drawgrid-1770893218973-yb84t5","layer":"paint","generatorId":1,"cssW":798,"cssH":599,"paintDpr":1,"dpr":1,"canvasRole":"drawgrid-paint","canvasSize":{"w":798,"h":599,"cssW":"798px","cssH":"599px"},"logicalActive":true,"transform":{"a":1,"d":1,"e":0,"f":0}}
-dg-paint-redraw.js:89 [DG][random][sync] {"panelId":"drawgrid-1770893218973-yb84t5","reason":"randomize-line","copied":true,"srcRole":"drawgrid-paint","dstRole":"drawgrid-paint-back","srcSize":{"w":798,"h":599,"cssW":"798px","cssH":"599px"},"dstSize":{"w":798,"h":599,"cssW":"798px","cssH":"599px"}}
-dg-flow-debug.js:78 [DG][flow] randomize:end {panelId: 'drawgrid-1770893218973-yb84t5', usingBackBuffers: false, skipSwapsDuringDrag: false, drawingActive: false, hasCur: false, …}
-dg-flow-debug.js:172 [DG][flow][state] randomize:end {"panelId":"drawgrid-1770893218973-yb84t5","strokes":1,"hasOverlayStrokes":true,"paintRev":7,"flashEmpty":true,"flashOutOfGrid":false,"baseDirty":false,"overlayDirty":true,"compositeDirty":false,"usingBackBuffers":false,"paintSize":{"w":798,"h":599},"backSize":{"w":798,"h":599},"paintAlpha":{"sum":155,"nonZero":1,"samplePx":256},"backAlpha":{"sum":0,"nonZero":0,"samplePx":256},"flashAlpha":{"sum":0,"nonZero":0,"samplePx":256},"flashBackAlpha":{"sum":0,"nonZero":0,"samplePx":256},"activeFlashAlpha":{"sum":0,"nonZero":0,"samplePx":256}}
-dg-layout.js:362 [DG][paint] snapshot-restore {"panelId":"drawgrid-1770893218973-yb84t5","source":"layout","paintSnapshotDpr":1,"paintDpr":1}
-PerfTrace.js:27 [Violation] 'requestAnimationFrame' handler took 173ms
-dg-layout.js:362 [DG][paint] snapshot-restore {"panelId":"drawgrid-1770893218973-yb84t5","source":"layout","paintSnapshotDpr":1,"paintDpr":1}
-dg-stroke-render.js:69 [DG][random][stroke] {"panelId":"drawgrid-1770893218973-yb84t5","layer":"overlay","generatorId":1,"cssW":798,"cssH":599,"paintDpr":1,"dpr":1,"canvasRole":"drawgrid-flash","canvasSize":{"w":798,"h":599,"cssW":"798px","cssH":"599px"},"logicalActive":true,"transform":{"a":1,"d":1,"e":0,"f":0}}
-dg-zoom-handler.js:55 [DG][zoom] phase {"panelId":"drawgrid-1770893218973-yb84t5","phase":"freeze","mode":"committing","currentScale":0.6,"targetScale":0.6,"usingBackBuffers":false,"paintDpr":1,"cssW":798,"cssH":599,"pctxRole":"drawgrid-paint","ctxRole":"drawgrid-paint","activeRole":"drawgrid-paint","frontW":798,"frontH":599,"backW":798,"backH":599}
-dg-zoom-handler.js:55 [DG][zoom] phase {"panelId":"drawgrid-1770893218973-yb84t5","phase":"recompute","mode":"committing","currentScale":0.6,"targetScale":0.6,"usingBackBuffers":false,"paintDpr":1,"cssW":798,"cssH":599,"pctxRole":"drawgrid-paint","ctxRole":"drawgrid-paint","activeRole":"drawgrid-paint","frontW":798,"frontH":599,"backW":798,"backH":599}
-dg-zoom-handler.js:55 [DG][zoom] phase {"panelId":"drawgrid-1770893218973-yb84t5","phase":"swap","mode":"committing","currentScale":0.6,"targetScale":0.6,"usingBackBuffers":false,"paintDpr":1,"cssW":798,"cssH":599,"pctxRole":"drawgrid-paint","ctxRole":"drawgrid-paint","activeRole":"drawgrid-paint","frontW":798,"frontH":599,"backW":798,"backH":599}
-dg-zoom-handler.js:55 [DG][zoom] phase {"panelId":"drawgrid-1770893218973-yb84t5","phase":"done","mode":"idle","currentScale":0.6,"targetScale":0.6,"usingBackBuffers":false,"paintDpr":1,"cssW":798,"cssH":599,"pctxRole":"drawgrid-paint","ctxRole":"drawgrid-paint","activeRole":"drawgrid-paint","frontW":798,"frontH":599,"backW":798,"backH":599}
-dg-layout.js:362 [DG][paint] snapshot-restore {"panelId":"drawgrid-1770893218973-yb84t5","source":"layout","paintSnapshotDpr":1,"paintDpr":1}
-dg-zoom-handler.js:152 [DG][zoom] done:redraw {"panelId":"drawgrid-1770893218973-yb84t5","hasStrokes":true,"hasNodes":true,"dprChanged":true,"usingBackBuffers":false,"paintDpr":1,"cssW":798,"cssH":599,"pctxRole":"drawgrid-paint","frontW":798,"frontH":599,"backW":798,"backH":599}
+main.js:94 [ART][flash] toy:note {toyId: 'audiotoy_drawgrid-1770915640116-pwlpka_upics2sa', internal: false, artToyId: null, zoom: false, gesture: false, …}
+main.js:94 [ART][flash] owner:attempt {source: 'scheduler:step', artId: 'art-flashCircle-1770915633533-tk1ysu', panelId: 'drawgrid-1770915640116-pwlpka', internal: false, zoom: false, …}
+art-toy-factory.js:23 [ART][flash] panel.flash:invoke {artId: 'art-flashCircle-1770915633533-tk1ysu', meta: {…}, zoom: false, gesture: false, tween: false, …}
+main.js:94 [ART][flash] ghost:skip:not-internal {artId: 'art-flashCircle-1770915633533-tk1ysu'}
+main.js:94 [ART][flash] owner:result {source: 'scheduler:step', artId: 'art-flashCircle-1770915633533-tk1ysu', panelId: 'drawgrid-1770915640116-pwlpka', flashed: true, internal: false}
+main.js:94 [ART][flash] class-change {id: 'art-flashCircle-1770915633533-tk1ysu', className: 'art-toy-panel flash', internal: false, zoom: false, gesture: false, …}
+main.js:94 [ART][flash] class-change {id: 'art-flashCircle-1770915633533-tk1ysu', className: 'art-toy-panel flash', internal: false, zoom: false, gesture: false, …}
+main.js:94 [ART][flash] anim:start {animationName: 'art-toy-flash', elapsedTime: 0, artId: 'art-flashCircle-1770915633533-tk1ysu', panelHasFlashClass: true, docFreeze: false, …}
+main.js:94 [ART][flash] anim:end {animationName: 'art-toy-flash', elapsedTime: 0.16, artId: 'art-flashCircle-1770915633533-tk1ysu', panelHasFlashClass: true, docFreeze: false, …}
+main.js:94 [ART][flash] viewport:zoom-phase {phase: 'progress', mode: 'gesturing', gesturing: true, active: true, internal: false, …}
+main.js:94 [ART][flash] viewport:zoom-phase {phase: 'progress', mode: 'gesturing', gesturing: true, active: true, internal: false, …}
+main.js:94 [ART][flash] viewport:zoom-phase {phase: 'progress', mode: 'gesturing', gesturing: true, active: true, internal: false, …}
+main.js:94 [ART][flash] viewport:zoom-phase {phase: 'progress', mode: 'gesturing', gesturing: true, active: true, internal: false, …}
+main.js:94 [ART][flash] viewport:zoom-phase {phase: 'progress', mode: 'gesturing', gesturing: true, active: true, internal: false, …}
+main.js:94 [ART][flash] viewport:zoom-phase {phase: 'progress', mode: 'gesturing', gesturing: true, active: true, internal: false, …}
+main.js:94 [ART][flash] viewport:zoom-phase {phase: 'progress', mode: 'gesturing', gesturing: true, active: true, internal: false, …}
+main.js:94 [ART][flash] viewport:zoom-phase {phase: 'progress', mode: 'gesturing', gesturing: true, active: true, internal: false, …}
+main.js:94 [ART][flash] viewport:zoom-phase {phase: 'progress', mode: 'gesturing', gesturing: true, active: true, internal: false, …}
+main.js:94 [ART][flash] viewport:zoom-phase {phase: 'progress', mode: 'gesturing', gesturing: true, active: true, internal: false, …}
+main.js:94 [ART][flash] viewport:zoom-phase {phase: 'progress', mode: 'gesturing', gesturing: true, active: true, internal: false, …}
+main.js:94 [ART][flash] viewport:zoom-phase {phase: 'progress', mode: 'gesturing', gesturing: true, active: true, internal: false, …}
+main.js:94 [ART][flash] viewport:zoom-phase {phase: 'progress', mode: 'gesturing', gesturing: true, active: true, internal: false, …}
+main.js:94 [ART][flash] viewport:zoom-phase {phase: 'progress', mode: 'gesturing', gesturing: true, active: true, internal: false, …}
+main.js:94 [ART][flash] viewport:zoom-phase {phase: 'progress', mode: 'gesturing', gesturing: true, active: true, internal: false, …}
+main.js:94 [ART][flash] viewport:zoom-phase {phase: 'progress', mode: 'gesturing', gesturing: true, active: true, internal: false, …}
+main.js:94 [ART][flash] viewport:zoom-phase {phase: 'freeze', mode: 'committing', gesturing: false, active: true, internal: false, …}
+main.js:94 [ART][flash] viewport:gesture-commit {internal: false, zoom: true, gesture: true, tween: false, lastGestureAgeMs: 0.2, …}
+main.js:94 [ART][flash] viewport:freeze-class {hasFreeze: true, className: 'landscape zoom-commit-freeze', internal: false, zoom: true, gesture: true, …}
+main.js:94 [ART][flash] viewport:zoom-phase {phase: null, mode: 'committing', gesturing: false, active: false, internal: false, …}
+main.js:94 [ART][flash] viewport:zoom-phase {phase: 'recompute', mode: 'committing', gesturing: false, active: true, internal: false, …}
+main.js:94 [ART][flash] viewport:zoom-phase {phase: 'swap', mode: 'committing', gesturing: false, active: false, internal: false, …}
+main.js:94 [ART][flash] viewport:zoom-phase {phase: 'done', mode: 'idle', gesturing: false, active: false, internal: false, …}
+main.js:94 [ART][flash] viewport:freeze-class {hasFreeze: false, className: 'landscape', internal: false, zoom: false, gesture: false, …}
+main.js:94 [ART][flash] anim:start {animationName: 'art-toy-flash', elapsedTime: 0, artId: 'art-flashCircle-1770915633533-tk1ysu', panelHasFlashClass: true, docFreeze: false, …}
+main.js:94 [ART][flash] anim:end {animationName: 'art-toy-flash', elapsedTime: 0.16, artId: 'art-flashCircle-1770915633533-tk1ysu', panelHasFlashClass: true, docFreeze: false, …}

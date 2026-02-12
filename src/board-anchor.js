@@ -40,6 +40,16 @@ function __anchIsGesturing() {
   return false;
 }
 
+function isViewportSettling(cooldownMs = 320) {
+  try {
+    if (window.__mtZoomGesturing || window.__GESTURE_ACTIVE || window.__camTweenLock) return true;
+    const ts = Number(window.__MT_LAST_VIEWPORT_GESTURE_TS);
+    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    if (Number.isFinite(ts) && (now - ts) < cooldownMs) return true;
+  } catch {}
+  return false;
+}
+
 // Gradient (requested: bigger + more opaque, min opacity never hits 0)
 const GRAD_ONSCREEN_R_PX = 240;
 const GRAD_OFFSCREEN_R_PX = 740;
@@ -110,11 +120,59 @@ function readEnabled() {
 }
 
 function pickHost() {
+  try {
+    if (document.body?.classList?.contains('internal-board-active')) {
+      const internalVp = document.getElementById('internal-board-viewport');
+      if (internalVp) return internalVp;
+    }
+  } catch {}
   // Prefer the viewport wrapper so we stay screen-space.
   return getViewportElement();
 }
 
 function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+function parseCssRgb(colorText) {
+  if (!colorText || typeof colorText !== 'string') return null;
+  const nums = colorText.match(/[\d.]+/g);
+  if (!nums || nums.length < 3) return null;
+  const r = Number(nums[0]);
+  const g = Number(nums[1]);
+  const b = Number(nums[2]);
+  if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) return null;
+  return {
+    r: clamp(Math.round(r), 0, 255),
+    g: clamp(Math.round(g), 0, 255),
+    b: clamp(Math.round(b), 0, 255),
+  };
+}
+
+function getGradientPalette() {
+  const defaultPalette = {
+    inner: { r: 90, g: 100, b: 255 },
+    mid: { r: 120, g: 130, b: 255 },
+  };
+  try {
+    if (!document.body?.classList?.contains('internal-board-active')) return defaultPalette;
+    const frame = document.getElementById('internal-board-frame');
+    const cs = frame ? getComputedStyle(frame) : null;
+    const borderRgb = parseCssRgb(cs?.borderTopColor || cs?.borderColor || '');
+    if (!borderRgb) return defaultPalette;
+    return {
+      inner: {
+        r: clamp(borderRgb.r, 0, 255),
+        g: clamp(borderRgb.g + 8, 0, 255),
+        b: clamp(borderRgb.b + 4, 0, 255),
+      },
+      mid: {
+        r: clamp(borderRgb.r + 20, 0, 255),
+        g: clamp(borderRgb.g + 26, 0, 255),
+        b: clamp(borderRgb.b + 6, 0, 255),
+      },
+    };
+  } catch {}
+  return defaultPalette;
+}
 
 function getZoomScale() {
   // Prefer CSS vars already used elsewhere (main.js logs --bv-scale/--zoom-scale)
@@ -146,9 +204,17 @@ function getGridInfo() {
 }
 
 function ensureCanvas() {
-  if (canvas) return canvas;
   const host = pickHost();
   if (!host) return null;
+
+  if (canvas) {
+    // If board context changed (main <-> internal), rehost the same canvas.
+    if (canvas.parentElement !== host) {
+      try { host.prepend(canvas); } catch {}
+      onResize();
+    }
+    return canvas;
+  }
 
   try {
     const cs = getComputedStyle(host);
@@ -983,6 +1049,7 @@ function drawGradient(local, distWorld, running, drawScale = 1) {
 
   const cx = w * 0.5;
   const cy = h * 0.5;
+  const internalMode = !!document.body?.classList?.contains?.('internal-board-active');
 
   const onScreen = (local.x >= 0 && local.x <= w && local.y >= 0 && local.y <= h);
 
@@ -992,11 +1059,12 @@ function drawGradient(local, distWorld, running, drawScale = 1) {
   const base = (running ? 1.0 : 0.78) * travelFade;
   const baseAlpha = clamp(GRAD_MAX_ALPHA * base, GRAD_MIN_ALPHA, GRAD_MAX_ALPHA);
 
+  const palette = getGradientPalette();
   const paint = (gx, gy, r, alpha) => {
     if (!Number.isFinite(alpha) || alpha <= 0.0001) return;
     const grad = ctx.createRadialGradient(gx, gy, 0, gx, gy, r);
-    grad.addColorStop(0.00, `rgba(90, 100, 255, ${alpha})`);
-    grad.addColorStop(0.28, `rgba(120, 130, 255, ${alpha * 0.70})`);
+    grad.addColorStop(0.00, `rgba(${palette.inner.r}, ${palette.inner.g}, ${palette.inner.b}, ${alpha})`);
+    grad.addColorStop(0.28, `rgba(${palette.mid.r}, ${palette.mid.g}, ${palette.mid.b}, ${alpha * 0.70})`);
     grad.addColorStop(1.00, `rgba(0, 0, 0, 0)`);
 
     ctx.save();
@@ -1007,7 +1075,12 @@ function drawGradient(local, distWorld, running, drawScale = 1) {
   };
 
   if (onScreen) {
-    paint(local.x, local.y, GRAD_ONSCREEN_R_PX * drawScale, baseAlpha);
+    if (internalMode) {
+      // Internal board: keep only the broad outer field and avoid the tighter hotspot.
+      paint(local.x, local.y, GRAD_OFFSCREEN_R_PX * drawScale, baseAlpha * 0.75);
+    } else {
+      paint(local.x, local.y, GRAD_ONSCREEN_R_PX * drawScale, baseAlpha);
+    }
   }
 
   // Directional edge hint: when offscreen, fade in; when returning onscreen, fade out smoothly.
@@ -1165,7 +1238,9 @@ export function tickBoardAnchor({ nowMs, loopInfo, running } = {}) {
     if (canvas) teardown();
     return;
   }
-  if (!canvas) ensureCanvas();
+  // Always run host reconciliation (main <-> internal viewport) each tick.
+  // ensureCanvas() is cheap when already correct and rehosts when context changed.
+  ensureCanvas();
   if (!canvas || !ctx) return;
 
   // in case topbar DOM was rebuilt
@@ -1174,15 +1249,22 @@ export function tickBoardAnchor({ nowMs, loopInfo, running } = {}) {
   const now = Number.isFinite(nowMs) ? nowMs : (typeof performance !== 'undefined' ? performance.now() : Date.now());
   const dt = clamp(((now - (lastNowMs || now)) / 1000), 0, MAX_DT);
   lastNowMs = now;
+  const internalMode = !!document.body?.classList?.contains?.('internal-board-active');
 
   serviceLoopTriggers(loopInfo, !!running);
   servicePulses(dt);
   serviceFlashes(dt);
+  const settling = isViewportSettling();
+  if (settling) {
+    // Avoid perceived "flash at pan end" by damping pulse energy during motion settle.
+    pulseBeat = 0;
+    pulseBar = 0;
+  }
 
   const anchorWorld = getAnchorWorld();
   updateMarkerPos(anchorWorld);
   // No gesture throttling: keep anchor feedback consistent during pan/zoom.
-  const doFull = true;
+  const doFull = !internalMode;
   const local = getViewportLocalPointFromWorld(anchorWorld);
   if (!local) return;
 
@@ -1217,7 +1299,17 @@ export function tickBoardAnchor({ nowMs, loopInfo, running } = {}) {
   if (doFull) drawAnchorGrid(local, drawScale);
 
   drawGradient(local, distWorld, !!running, drawScale);
-  drawAnchorParticles(local, nowSec, !!running, drawScale, pulseBeat, pulseBar, anchorGuideActive);
+  // Keep anchor visible during drag/settle, but remove pulse energy so it
+  // doesn't burst at pan end.
+  drawAnchorParticles(
+    local,
+    nowSec,
+    settling ? false : !!running,
+    drawScale,
+    settling ? 0 : pulseBeat,
+    settling ? 0 : pulseBar,
+    settling ? false : anchorGuideActive
+  );
   updateHoverFx(local, drawScale);
   if (tA) perfMark(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - tA);
 }

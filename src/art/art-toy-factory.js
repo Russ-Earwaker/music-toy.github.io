@@ -13,6 +13,15 @@ const ART_TYPES = Object.freeze({
 
 // Match the custom circular button structure used by music toys / toy spawner.
 const BUTTON_ICON_HTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
+function artFlashDebugEnabled() {
+  try { if (window.__MT_DEBUG_ART_FLASH === true) return true; } catch {}
+  try { if (localStorage.getItem('MT_DEBUG_ART_FLASH') === '1') return true; } catch {}
+  return false;
+}
+function artFlashDbg(tag, payload = {}) {
+  if (!artFlashDebugEnabled()) return;
+  try { console.log(`[ART][flash] ${tag}`, payload); } catch {}
+}
 
 export function getArtCatalog() {
   return [
@@ -75,6 +84,15 @@ export function createArtToyAt(artType, opts = {}) {
   const circle = document.createElement('div');
   circle.className = 'art-toy-circle';
   panel.appendChild(circle);
+  let flashClearTimer = 0;
+  const clearFlashClass = () => {
+    try { panel.classList.remove('flash'); } catch {}
+  };
+  // Keep .flash transient so zoom commit freeze/unfreeze cannot replay old flashes.
+  circle.addEventListener('animationend', (e) => {
+    if (e?.animationName !== 'art-toy-flash') return;
+    clearFlashClass();
+  });
 
   // Controls (hidden until handle tapped)
   const controlsHost = getBaseArtToyControlsHost(panel);
@@ -137,11 +155,56 @@ export function createArtToyAt(artType, opts = {}) {
   }
 
   // First pass: placeholder flash API (we'll wire note events later).
-  panel.flash = () => {
+  panel.flash = (meta = null) => {
+    artFlashDbg('panel.flash:invoke', {
+      artId: panel.id || null,
+      meta: meta || null,
+      zoom: !!window.__mtZoomGesturing,
+      gesture: !!window.__GESTURE_ACTIVE,
+      tween: !!window.__camTweenLock,
+      stack: (() => {
+        try {
+          const raw = String(new Error().stack || '');
+          return raw.split('\n').slice(1, 5).join('\n');
+        } catch {
+          return null;
+        }
+      })(),
+    });
+    clearFlashClass();
+    // Prefer WAAPI so viewport freeze/unfreeze cannot replay a stale CSS class animation.
+    if (typeof circle.animate === 'function') {
+      try {
+        circle.__artFlashAnim?.cancel?.();
+      } catch {}
+      try {
+        const anim = circle.animate(
+          [
+            { filter: 'brightness(1) saturate(1)', transform: 'scale(1)' },
+            { filter: 'brightness(2.1) saturate(1.3)', transform: 'scale(1.02)', offset: 0.4 },
+            { filter: 'brightness(1) saturate(1)', transform: 'scale(1)' },
+          ],
+          { duration: 160, easing: 'ease-out' }
+        );
+        circle.__artFlashAnim = anim;
+        const clearAnimRef = () => {
+          if (circle.__artFlashAnim === anim) circle.__artFlashAnim = null;
+        };
+        anim.addEventListener('finish', clearAnimRef, { once: true });
+        anim.addEventListener('cancel', clearAnimRef, { once: true });
+        return;
+      } catch {}
+    }
+
+    // CSS fallback path for environments without WAAPI.
     panel.classList.remove('flash');
-    // Force reflow so animation can replay.
     void panel.offsetWidth;
     panel.classList.add('flash');
+    if (flashClearTimer) clearTimeout(flashClearTimer);
+    flashClearTimer = setTimeout(() => {
+      clearFlashClass();
+      flashClearTimer = 0;
+    }, 240);
   };
 
   return panel;
