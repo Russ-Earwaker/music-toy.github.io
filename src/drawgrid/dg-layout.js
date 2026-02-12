@@ -314,7 +314,10 @@ export function createDgLayout({ state, deps } = {}) {
                 Math.abs(paintSnapshotDpr - s.paintDpr) > 1e-3;
               const hasStrokeData = Array.isArray(s.strokes) && s.strokes.length > 0;
               const skipByCount = s.__dgSkipPaintSnapshotCount > 0 && hasStrokeData;
-              const skipSnapshot = skipByCount || (dprMismatch && hasStrokeData);
+              // If we have stroke data, prefer deterministic redraw from strokes.
+              // Restoring cached pixels here can resurrect stale/collapsed paint (dot-at-origin).
+              const preferStrokeRedraw = hasStrokeData;
+              const skipSnapshot = preferStrokeRedraw || skipByCount || (dprMismatch && hasStrokeData);
               if (skipByCount) s.__dgSkipPaintSnapshotCount = Math.max(0, (s.__dgSkipPaintSnapshotCount || 0) - 1);
               if (skipSnapshot) {
                 // Avoid scaling old pixels across DPR changes; redraw from strokes for correct scale.
@@ -323,6 +326,7 @@ export function createDgLayout({ state, deps } = {}) {
                     const payload = {
                       panelId: s.panel?.id || null,
                       source: 'layout',
+                      preferStrokeRedraw,
                       skipByCount,
                       dprMismatch,
                       paintSnapshotDpr,
@@ -333,6 +337,7 @@ export function createDgLayout({ state, deps } = {}) {
                 } catch {}
                 d.__dgPaintDebugLog('snapshot-skip', {
                   source: 'layout',
+                  preferStrokeRedraw,
                   skipByCount,
                   dprMismatch,
                   paintSnapshotDpr,

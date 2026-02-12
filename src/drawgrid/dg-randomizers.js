@@ -46,7 +46,12 @@ export function createDgRandomizers(getState) {
       }
     }
     const color = STROKE_COLORS[(__dgRandomColorIndex++) % STROKE_COLORS.length];
-    return { pts, color, isSpecial: true, generatorId: 1 };
+    const gh = Math.max(1, (S.gridArea.h - (S.topPad || 0)));
+    const ptsN = pts.map((p) => ({
+      nx: (p.x - S.gridArea.x) / Math.max(1, S.gridArea.w),
+      ny: (p.y - (S.gridArea.y + (S.topPad || 0))) / gh,
+    }));
+    return { pts, __ptsN: ptsN, color, isSpecial: true, generatorId: 1 };
   }
 
   function handleRandomizeLine() {

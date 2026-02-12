@@ -4485,6 +4485,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     clearDrawgridInternal: (...args) => clearDrawgridInternal(...args),
     getGhostGuideAutoActive,
     runAutoGhostGuideSweep,
+    clearAndRedrawFromStrokes,
+    reprojectNormalizedStrokesIfNeeded: (tag) => __dgReprojectNormalizedStrokesIfNeeded(tag),
   };
 
   resnapHelper = createDgResnap({

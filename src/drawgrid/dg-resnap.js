@@ -67,20 +67,25 @@ export function createDgResnap({ state, deps } = {}) {
       s.__dgStableFramesAfterCommit = 0;
 
       if (hasStrokes) {
-        d.FD.markRegenSource('resnap');
-        d.regenerateMapFromStrokes();
-        d.R.resetCtx(s.pctx);
-        d.__dgWithLogicalSpace(s.pctx, () => {
-          d.R.clearCanvas(s.pctx);
-          d.emitDG('paint-clear', { reason: 'resnap-redraw' });
-          for (const stroke of s.strokes) {
-            d.drawFullStroke(s.pctx, stroke, { skipReset: true, skipTransform: true });
+        try { d.reprojectNormalizedStrokesIfNeeded?.('resnap'); } catch {}
+        if (typeof d.clearAndRedrawFromStrokes === 'function') {
+          try { d.clearAndRedrawFromStrokes(null, 'resnap-redraw'); } catch {}
+        } else {
+          d.FD.markRegenSource('resnap');
+          d.regenerateMapFromStrokes();
+          d.R.resetCtx(s.pctx);
+          d.__dgWithLogicalSpace(s.pctx, () => {
+            d.R.clearCanvas(s.pctx);
+            d.emitDG('paint-clear', { reason: 'resnap-redraw' });
+            for (const stroke of s.strokes) {
+              d.drawFullStroke(s.pctx, stroke, { skipReset: true, skipTransform: true });
+            }
+          });
+          if (s.DG_SINGLE_CANVAS) {
+            d.__dgMarkSingleCanvasDirty(s.panel);
+            try { d.compositeSingleCanvas(); } catch {}
+            s.panel.__dgSingleCompositeDirty = false;
           }
-        });
-        if (s.DG_SINGLE_CANVAS) {
-          d.__dgMarkSingleCanvasDirty(s.panel);
-          try { d.compositeSingleCanvas(); } catch {}
-          s.panel.__dgSingleCompositeDirty = false;
         }
         d.updateGeneratorButtons();
         return;
