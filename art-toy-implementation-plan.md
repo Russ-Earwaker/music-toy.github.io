@@ -46,6 +46,15 @@ As we complete or reject work, update these sections in order:
   * Each art toy owns an **internal-board anchor** that acts as the “home” camera target inside its internal board.
   * The existing **board anchor glow** exists and points to this anchor.
   * Clicking **Return Home** inside an internal board returns you to the **internal-board anchor** (not the external toy position).
+* Add two new art toys that react to internal note triggers:
+  * **Fireworks Art Toy**
+    * 8 predefined firework positions.
+    * Each position maps to one note slot/column.
+    * On note trigger, spawn an explosion burst at that position.
+  * **Laser Trails Art Toy**
+    * 8 predefined laser emitters.
+    * Each emitter maps to one note slot/column.
+    * On note trigger, emit a short-lived laser line with limited max length, traveling along a wiggly path.
 
 ### Technical goals
 
@@ -136,6 +145,32 @@ These are *not optional* — they prevent the same class of bugs we already foug
 
 ## 4. Step-by-step Implementation Plan (updated)
 
+### Step 0.5 — Shared data reuse contract for multi-art-toy note routing (NEW, do this first)
+
+**Outcome**
+* New art toys reuse the existing internal-note -> art-owner routing data instead of introducing toy-specific event plumbing.
+* One shared “8-slot trigger model” is defined and reused by Flash/Fireworks/Laser toys.
+
+**Implementation sketch**
+* Reuse existing ownership + routing primitives:
+  * `data-art-owner-id`
+  * internal owner resolution (`getInternalPanelsForArtToy`, owner lookup paths)
+  * existing note-forwarding hooks already used by flash behavior.
+* Define a shared trigger payload contract for art visuals:
+  * stable slot index (`0..7`)
+  * trigger strength/velocity (optional)
+  * timestamp (for animation scheduling)
+* Add a shared helper in `src/art/` for:
+  * mapping note events -> slot index
+  * per-art-toy trigger fanout
+  * no duplicate listeners per toy instance.
+* Explicitly avoid copy/paste listeners inside each new art toy implementation.
+
+**Verify**
+* One trigger path drives all art toy visual reactions.
+* Existing Flash Circle still reacts correctly after refactor.
+* No regression in refresh/save/load ownership resolution.
+
 ### Step 0 — Recon + map the current spawn + persistence flows (confirm what already exists)
 
 **Outcome**
@@ -192,6 +227,49 @@ These are *not optional* — they prevent the same class of bugs we already foug
 * Spawn works.
 * Render works.
 * No perf regressions (Perf Lab sanity run if needed).
+
+---
+
+### Step 7 — Add Fireworks Art Toy (8-slot burst visual)
+
+**Outcome**
+* New art toy type: `fireworks`.
+* 8 fixed burst anchors in panel-local coordinates.
+* Note slot `i` triggers burst at anchor `i`.
+
+**Implementation sketch**
+* Implement as BaseArtToy composition (same controls + internal board behavior).
+* Add firework visual state with pooled particles/sprites (no unbounded allocations).
+* Use shared trigger contract from Step 0.5.
+* Keep animation scheduler-compatible (dirty flags / no private perpetual RAF loop).
+
+**Verify**
+* Manual/internal random patterns produce repeatable bursts at mapped positions.
+* Multiple rapid triggers do not leak particles or frame time.
+
+---
+
+### Step 8 — Add Laser Trails Art Toy (8-slot wiggly beam visual)
+
+**Outcome**
+* New art toy type: `laserTrails`.
+* 8 fixed emitter anchors.
+* Note slot `i` emits a laser from emitter `i` with:
+  * max segment length cap
+  * wiggly path progression
+  * finite lifetime/fade.
+
+**Implementation sketch**
+* Implement as BaseArtToy composition.
+* Reuse shared trigger contract from Step 0.5.
+* Laser update model:
+  * deterministic seed per trigger (stable visual behavior)
+  * bounded per-frame work (cap active beams)
+  * length clamp enforced in world/panel space.
+
+**Verify**
+* Each of 8 slots drives the expected emitter.
+* Laser path is visibly wiggly, remains length-limited, and cleans up correctly.
 
 ---
 
@@ -429,6 +507,16 @@ These are *not optional* — they prevent the same class of bugs we already foug
     * `src/main.js`
     * `src/board-anchor.js`
 
+* **Step 0.5 started: shared art-trigger contract + router**
+
+  * Added a shared art trigger router that normalizes note/step input into a single payload contract (`artToyId`, `toyId`, `panelId`, `slotIndex 0..7`, `note`, `velocity`, `timestamp`).
+  * Refactored existing Flash Circle trigger path to route through this shared contract instead of toy-specific forwarding logic.
+  * Exposed shared routing hooks for future art toys (`emitTriggerFromPanel`, `emitTriggerFromToyId`, `onTrigger`) on `window.__mtArtToys`.
+  * Files:
+
+    * `src/art/art-trigger-router.js`
+    * `src/main.js`
+
 ---
 
 ## 7. Investigated and Rejected ❌
@@ -480,7 +568,22 @@ These are *not optional* — they prevent the same class of bugs we already foug
 
 ## 9. Next Steps 🎯
 
-1. **Persistence parity with music toys**
+1. **Shared data reuse first (required before new art visuals)**
+   * Define and implement one shared 8-slot note-trigger contract in `src/art/`.
+   * Refactor existing flash reaction to use that shared path.
+   * Confirm ownership resolution + routing stay stable across refresh and save/load.
+
+2. **Fireworks Art Toy implementation**
+   * Add `fireworks` catalog entry + factory create path.
+   * Implement 8 mapped burst anchors and pooled burst rendering.
+   * Validate trigger mapping against internal note events.
+
+3. **Laser Trails Art Toy implementation**
+   * Add `laserTrails` catalog entry + factory create path.
+   * Implement 8 mapped emitters, wiggly travel, and strict max-length cap.
+   * Validate cleanup/perf under dense note patterns.
+
+4. **Persistence parity with music toys**
    * Confirm/finish refresh + save/load round-trip for:
      * art toy panel transform/state
      * internal-board toy graph + per-toy state
@@ -488,16 +591,16 @@ These are *not optional* — they prevent the same class of bugs we already foug
    * Add a regression checklist:
      * random externally, save, reload, enter internal, verify pattern/position/camera.
 
-2. **Formalize internal home-anchor behavior**
+5. **Formalize internal home-anchor behavior**
    * Allow explicit user-set internal home anchor (instead of only computed default), then persist it.
    * Keep Return Home context-aware using that explicit anchor.
 
-3. **Random All: art-parameter layer**
+6. **Random All: art-parameter layer**
    * Implement art-visual state randomization in `randomizeArtToyStateStub` so Random All affects both music and outer art state.
 
-4. **Note-play event forwarding + outer flash reaction**
+7. **Note-play event forwarding + outer flash reaction**
    * Complete/verify event forwarding from internal toys to owning art toy and ensure flash rendering is deterministic under focus/overview/internal states.
 
-5. **Defer: playhead offset investigation**
+8. **Defer: playhead offset investigation**
    * Known issue: on enter, DrawGrid playhead can appear offset relative to audible notes.
    * Park this until after container + random + persistence are stable.

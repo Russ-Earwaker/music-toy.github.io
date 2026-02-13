@@ -31,6 +31,7 @@ import './toy-layout-manager.js';
 import './zoom-overlay.js';
 import './toy-spawner.js';
 import { getArtCatalog, createArtToyAt } from './art/art-toy-factory.js';
+import { createArtTriggerRouter } from './art/art-trigger-router.js';
 import './board-tap-dots.js';
 import { initAudioAssets, cancelScheduledToySources, triggerInstrument } from './audio-samples.js';
 import { loadInstrumentEntries as loadInstrumentCatalog, getInstrumentEntries as getInstrumentCatalogEntries } from './instrument-catalog.js';
@@ -2411,8 +2412,8 @@ function clearArtDropHoverEl() {
     setArtDropHoverEl(null);
 }
 
-// First-pass note forwarding:
-// If a panel is owned by an art toy, flash that art toy when the panel hits a note column.
+// Shared art trigger routing:
+// normalize internal note events into one 8-slot payload contract for all art toys.
 function flashInternalArtGhostForArtId(artId) {
   if (!artId) return false;
   recordArtFlashIntent('ghost:attempt', { artId });
@@ -2473,55 +2474,104 @@ function flashInternalArtGhostForArtId(artId) {
   return false;
 }
 
-function flashOwningArtToyForPanel(panel, source = 'unknown') {
-  if (!panel) return false;
-  const artId = panel?.dataset?.artOwnerId;
-  if (!artId) return false;
-  recordArtFlashIntent('owner:attempt', { source, artId, panelId: panel?.id || null });
-  artFlashDbg('owner:attempt', {
-    source,
-    artId,
-    panelId: panel?.id,
-    ...getArtFlashMotionSnapshot(),
-  });
-  const art = document.getElementById(artId);
-  let flashed = false;
-  try {
-    if (art) {
-      art.flash?.({ source, panelId: panel?.id || null, artId });
-      flashed = true;
-      recordArtFlashIntent('owner:flash-call', { source, artId, panelId: panel?.id || null });
-    }
-  } catch {}
-  try { if (flashInternalArtGhostForArtId(artId)) flashed = true; } catch {}
-  artFlashDbg('owner:result', { source, artId, panelId: panel?.id, flashed, internal: !!g_artInternal?.active });
-  return flashed;
-}
-
-function flashOwningArtToyForToyId(toyId) {
-  if (!toyId) return false;
+function resolveToyPanelByToyId(toyId) {
+  if (!toyId) return null;
   const id = String(toyId);
   try {
-    // `toy:note.detail.toyId` may be panel.id OR data-audiotoyid/toyid.
     let panel = document.getElementById(id);
     if (!panel) {
       panel = document.querySelector(`.toy-panel[data-audiotoyid="${CSS.escape(id)}"]`)
         || document.querySelector(`.toy-panel[data-toyid="${CSS.escape(id)}"]`);
     }
-    if (panel) return flashOwningArtToyForPanel(panel, 'toyId:dom');
+    if (panel && panel.classList?.contains('toy-panel')) return panel;
+  } catch {}
+  return null;
+}
 
-    // Internal-board fallback: if we're inside an art toy, resolve against its owned panels.
-    if (g_artInternal?.active && g_artInternal?.artToyId) {
-      const owned = getInternalPanelsForArtToy(g_artInternal.artToyId);
-      const match = owned.find((p) =>
-        p?.id === id ||
-        p?.dataset?.audiotoyid === id ||
-        p?.dataset?.toyid === id
-      );
-      if (match) return flashOwningArtToyForPanel(match, 'toyId:owned');
-      // As last resort in internal mode, flash current anchor ghost for note activity.
-      return flashInternalArtGhostForArtId(g_artInternal.artToyId);
-    }
+let g_artTriggerRouter = null;
+try {
+  g_artTriggerRouter = createArtTriggerRouter({
+    resolvePanelByToyId: resolveToyPanelByToyId,
+    getActiveInternalArtToyId: () => (g_artInternal?.active ? g_artInternal?.artToyId : null),
+  });
+} catch {}
+
+function handleArtTriggerVisuals(trigger) {
+  if (!trigger || !trigger.artToyId) return false;
+  const source = trigger.source || 'unknown';
+  const artId = trigger.artToyId;
+  const panelId = trigger.panelId || null;
+  const internalActive = !!g_artInternal?.active;
+  const sourceIsToyNote = source === 'toy:note';
+
+  recordArtFlashIntent('owner:attempt', { source, artId, panelId });
+  artFlashDbg('owner:attempt', {
+    source,
+    artId,
+    panelId,
+    slotIndex: trigger.slotIndex,
+    ...getArtFlashMotionSnapshot(),
+  });
+
+  const art = document.getElementById(artId);
+  let flashed = false;
+
+  // Keep existing behavior: toy:note is mainly an internal reliability hook.
+  // External flashes continue to come from scheduler/playhead paths.
+  const allowExternalFlash = !(sourceIsToyNote && !internalActive);
+  if (allowExternalFlash) {
+    try {
+      if (art) {
+        art.flash?.({
+          source,
+          panelId,
+          toyId: trigger.toyId || null,
+          artId,
+          slotIndex: trigger.slotIndex,
+          note: trigger.note,
+          velocity: trigger.velocity,
+          timestamp: trigger.timestamp,
+        });
+        flashed = true;
+        recordArtFlashIntent('owner:flash-call', { source, artId, panelId });
+      }
+    } catch {}
+  }
+
+  try { if (flashInternalArtGhostForArtId(artId)) flashed = true; } catch {}
+
+  artFlashDbg('owner:result', {
+    source,
+    artId,
+    panelId,
+    slotIndex: trigger.slotIndex,
+    flashed,
+    internal: internalActive,
+  });
+  return flashed;
+}
+
+try {
+  g_artTriggerRouter?.onTrigger?.((trigger) => {
+    try { handleArtTriggerVisuals(trigger); } catch {}
+  });
+} catch {}
+
+function flashOwningArtToyForPanel(panel, source = 'unknown', opts = {}) {
+  if (!panel) return false;
+  if (!panel?.dataset?.artOwnerId) return false;
+  try {
+    const payload = g_artTriggerRouter?.routeFromPanel?.(panel, { source, ...(opts || {}) });
+    return !!payload;
+  } catch {}
+  return false;
+}
+
+function flashOwningArtToyForToyId(toyId) {
+  if (!toyId) return false;
+  try {
+    const payload = g_artTriggerRouter?.routeFromToyId?.(toyId, { source: 'toyId' });
+    return !!payload;
   } catch {}
   return false;
 }
@@ -2545,19 +2595,29 @@ try {
             }
             return placed;
         },
+        emitTriggerFromPanel(panel, payload = {}) {
+            return g_artTriggerRouter?.routeFromPanel?.(panel, payload) || null;
+        },
+        emitTriggerFromToyId(toyId, payload = {}) {
+            return g_artTriggerRouter?.routeFromToyId?.(toyId, payload) || null;
+        },
+        onTrigger(listener) {
+            return g_artTriggerRouter?.onTrigger?.(listener) || (() => {});
+        },
         moveChainIntoArtToy,
         collectChainPanelsForMove,
     });
 } catch {}
 
 // Reliability hook:
-// Some toy paths emit `toy:note` without always passing through the chain-step flash path.
-// Mirror external art-toy flash behavior for internal anchor ghosts directly from note events.
+// Some toy paths emit `toy:note` without always passing through the scheduler path.
+// Route these into the shared trigger contract.
 try {
   if (!window.__MT_ART_NOTE_FLASH_HOOK) {
     window.__MT_ART_NOTE_FLASH_HOOK = true;
     window.addEventListener('toy:note', (e) => {
-      const toyId = e?.detail?.toyId;
+      const d = e?.detail || {};
+      const toyId = d.toyId;
       if (!toyId || toyId === 'master') return;
       artFlashDbg('toy:note', {
         toyId,
@@ -2568,12 +2628,14 @@ try {
         tween: !!window.__camTweenLock,
       });
       try {
-        if (g_artInternal?.active && g_artInternal?.artToyId) {
-          flashInternalArtGhostForArtId(g_artInternal.artToyId);
-          return;
-        }
+        g_artTriggerRouter?.routeFromToyId?.(toyId, {
+          source: 'toy:note',
+          note: d.note,
+          velocity: d.velocity,
+          timestamp: d.when ?? d.at ?? null,
+          meta: { instrument: d.instrument || null },
+        });
       } catch {}
-      // External art-toy flash continues to be driven by scheduler/playhead paths.
     });
   }
 } catch {}
@@ -7165,7 +7227,7 @@ function scheduler(){
               if (panelHasNotesAtColumn(toy, col)) {
                 pulseToyBorder(toy);
                 // First-pass: if this toy lives inside an Art Toy, flash the Art Toy.
-                flashOwningArtToyForPanel(toy, 'scheduler:step');
+                flashOwningArtToyForPanel(toy, 'scheduler:step', { col, slotIndex: col });
               }
             }
           }
