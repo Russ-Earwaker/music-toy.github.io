@@ -517,6 +517,19 @@ These are *not optional* — they prevent the same class of bugs we already foug
     * `src/art/art-trigger-router.js`
     * `src/main.js`
 
+* **New art toy implementations: Fireworks + Laser Trails (first pass)**
+
+  * Added two new art toy types to the art catalog:
+    * `fireworks` (8 fixed burst anchors, slot-triggered)
+    * `laserTrails` (8 fixed emitters, slot-triggered, limited beam length with wiggly path)
+  * Both toys reuse shared art-trigger routing via `onArtTrigger` and consume normalized `slotIndex`.
+  * Existing flash toy path remains supported; trigger dispatch now prefers `onArtTrigger` and falls back to `flash`.
+  * Files:
+
+    * `src/art/art-toy-factory.js`
+    * `src/main.js`
+    * `style.css`
+
 ---
 
 ## 7. Investigated and Rejected ❌

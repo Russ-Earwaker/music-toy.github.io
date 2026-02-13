@@ -2522,7 +2522,7 @@ function handleArtTriggerVisuals(trigger) {
   if (allowExternalFlash) {
     try {
       if (art) {
-        art.flash?.({
+        const payload = {
           source,
           panelId,
           toyId: trigger.toyId || null,
@@ -2531,7 +2531,14 @@ function handleArtTriggerVisuals(trigger) {
           note: trigger.note,
           velocity: trigger.velocity,
           timestamp: trigger.timestamp,
-        });
+        };
+        let handled = false;
+        try {
+          handled = art.onArtTrigger?.(payload) === true;
+        } catch {}
+        if (!handled) {
+          art.flash?.(payload);
+        }
         flashed = true;
         recordArtFlashIntent('owner:flash-call', { source, artId, panelId });
       }
