@@ -421,6 +421,19 @@ function ensureArtInternalHostForRestore() {
   return host;
 }
 
+function syncArtToyControlBindings(panel) {
+  if (!panel) return;
+  const id = panel.id || '';
+  if (!id) return;
+  try { panel.dataset.artToyId = String(id); } catch {}
+  try {
+    const controls = panel.querySelectorAll('button[data-action^="artToy:"]');
+    controls.forEach((btn) => {
+      try { btn.dataset.artToyId = String(id); } catch {}
+    });
+  } catch {}
+}
+
 // --- Toy-specific snapshotters ---
 
 function snapLoopGrid(panel){
@@ -944,6 +957,7 @@ export function applySceneSnapshot(snap){
           if (!existing || existing === artPanel) artPanel.id = a.id;
         } catch {}
       }
+      try { syncArtToyControlBindings(artPanel); } catch {}
       try { applyArtToyUI(artPanel, a.ui || {}); } catch {}
       try {
         const st = a.state || {};

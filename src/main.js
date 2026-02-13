@@ -3126,6 +3126,7 @@ function ensureDefaultInternalToyOnFirstEnter(artToyId, worldEl) {
   if (!artToyId || !worldEl) return null;
 
   const artPanel = getArtToyPanelById(artToyId);
+  if (!artPanel) return null;
   const already = artPanel?.dataset?.internalBootstrapped === '1';
   if (already) return null;
 
@@ -3852,7 +3853,7 @@ try {
 document.addEventListener('click', (e) => {
   const btn = e.target?.closest?.('button[data-action="artToy:music"]');
   if (!btn) return;
-  const artToyId = btn.dataset.artToyId || btn.closest?.('.art-toy-panel')?.id;
+  const artToyId = btn.closest?.('.art-toy-panel')?.id || btn.dataset.artToyId;
   if (!artToyId) return;
   e.preventDefault();
   e.stopPropagation();
@@ -4067,7 +4068,7 @@ function randomizeInternalToysForArtToy(artToyId, mode, opts = {}) {
 document.addEventListener('click', (e) => {
   const btn = e.target?.closest?.('button[data-action="artToy:randomAll"]');
   if (!btn) return;
-  const artToyId = btn.dataset.artToyId || btn.closest?.('.art-toy-panel')?.id;
+  const artToyId = btn.closest?.('.art-toy-panel')?.id || btn.dataset.artToyId;
   if (!artToyId) return;
   __artRandLog('click', { action: 'randomAll', artToyId });
   e.preventDefault();
@@ -4085,7 +4086,7 @@ document.addEventListener('click', (e) => {
 document.addEventListener('click', (e) => {
   const btn = e.target?.closest?.('button[data-action="artToy:randomMusic"]');
   if (!btn) return;
-  const artToyId = btn.dataset.artToyId || btn.closest?.('.art-toy-panel')?.id;
+  const artToyId = btn.closest?.('.art-toy-panel')?.id || btn.dataset.artToyId;
   if (!artToyId) return;
   __artRandLog('click', { action: 'randomMusic', artToyId });
   e.preventDefault();
@@ -5661,12 +5662,13 @@ try {
     console.warn('[internal-board] global helper registration failed', err);
 }
 
-function destroyToyPanel(panelOrId) {
+function destroyToyPanel(panelOrId, opts = {}) {
     const panel = typeof panelOrId === 'string' ? document.getElementById(panelOrId) : panelOrId;
     if (!panel) return false;
     if (!panel.classList || !panel.classList.contains('toy-panel')) return false;
+    const allowOffBoard = !!opts.allowOffBoard;
     const board = document.getElementById('board');
-    if (!board || !board.contains(panel)) return false;
+    if (!allowOffBoard && (!board || !board.contains(panel))) return false;
 
     const panelId = panel.id;
     const prevId = panel.dataset.prevToyId || '';
@@ -5762,6 +5764,51 @@ function destroyToyPanel(panelOrId) {
     return true;
 }
 
+function destroyArtToyPanel(panelOrId) {
+    const panel = typeof panelOrId === 'string' ? document.getElementById(panelOrId) : panelOrId;
+    if (!panel) return false;
+    if (!panel.classList || !panel.classList.contains('art-toy-panel')) return false;
+    if (panel.classList.contains('internal-art-anchor-ghost')) return false;
+
+    const artToyId = panel.id || '';
+
+    // If this art toy is currently open, close internal mode first so board identity
+    // and overlay state stay coherent while we delete owned content.
+    try {
+        if (g_artInternal?.active && g_artInternal?.artToyId === artToyId) {
+            exitInternalBoardImmediate();
+        }
+    } catch (err) {
+        console.warn('[destroyArtToyPanel] internal exit failed', err);
+    }
+
+    // Remove owned internal toys via the shared toy destroy path (off-board capable).
+    try {
+        const owned = getInternalPanelsForArtToy(artToyId);
+        for (const p of owned) {
+            try { destroyToyPanel(p, { allowOffBoard: true }); } catch {}
+        }
+    } catch (err) {
+        console.warn('[destroyArtToyPanel] destroy owned toys failed', err);
+    }
+
+    // Remove matching internal home ghost if present.
+    try {
+        const sel = `.internal-art-anchor-ghost[data-art-toy-id="${CSS.escape(String(artToyId))}"]`;
+        document.querySelectorAll(sel).forEach((el) => {
+            try { el.remove(); } catch {}
+        });
+    } catch {}
+
+    try { panel.remove(); } catch {}
+    try { updateChains(); } catch {}
+    try { updateAllChainUIs(); } catch {}
+    try { scheduleChainRedraw(); } catch {}
+    try { applyStackingOrder(); } catch {}
+    try { window.Persistence?.markDirty?.(); } catch {}
+    return true;
+}
+
 try {
     window.MusicToyFactory = Object.assign(window.MusicToyFactory || {}, {
         create: createToyPanelAt,
@@ -5770,6 +5817,9 @@ try {
         enableExperimentalToys: () => setExperimentalEnabled(true),
         disableExperimentalToys: () => setExperimentalEnabled(false),
         isExperimentalToysEnabled: () => isExperimentalEnabled(),
+    });
+    window.ArtToyFactory = Object.assign(window.ArtToyFactory || {}, {
+        destroy: destroyArtToyPanel,
     });
     if (window.ToySpawner && typeof window.ToySpawner.configure === 'function') {
         window.ToySpawner.configure({
@@ -5781,7 +5831,7 @@ try {
             window.ToySpawner.configureArt({
                 getCatalog: () => getArtCatalog(),
                 create: createArtToyAt,
-                // remove will be wired once art toys become draggable/deletable like panels.
+                remove: destroyArtToyPanel,
             });
         }
     }
@@ -7832,12 +7882,18 @@ async function boot(){
     if (isActivelyEditingToy()) return;
     if (e.target?.closest?.('.toy-chain-btn')) return;
 
-    const panel = e.target?.closest?.('.toy-panel');
+    const panel = e.target?.closest?.('.toy-panel, .art-toy-panel');
     if (!panel) return;
 
-    const header = panel.querySelector?.('.toy-header');
-    const inHeader = header && (header === e.target || header.contains(e.target));
-    if (!inHeader) return;
+    if (panel.classList.contains('art-toy-panel')) {
+      const handle = panel.querySelector?.('.art-toy-handle');
+      const inHandle = handle && (handle === e.target || handle.contains(e.target));
+      if (!inHandle) return;
+    } else {
+      const header = panel.querySelector?.('.toy-header');
+      const inHeader = header && (header === e.target || header.contains(e.target));
+      if (!inHeader) return;
+    }
 
     // Overview-mode uses its own drag handler which already wires ToySpawner begin/update/end.
     const board = document.getElementById('board');

@@ -624,6 +624,17 @@ function updatePanelDrag({ clientX, clientY } = {}) {
   try { window.__mtArtToys?.updateDropHover?.(clientX, clientY); } catch {}
 }
 
+function resolveRemoveHandler(panel) {
+  if (!panel) return null;
+  if (panel.classList?.contains('art-toy-panel')) {
+    return (typeof state.configArt?.remove === 'function') ? state.configArt.remove : null;
+  }
+  if (panel.classList?.contains('toy-panel')) {
+    return (typeof state.configMusic?.remove === 'function') ? state.configMusic.remove : null;
+  }
+  return (typeof state.config?.remove === 'function') ? state.config.remove : null;
+}
+
 function endPanelDrag({ clientX, clientY, pointerId, canceled } = {}) {
   if (!state.panelDrag) return false;
   ensureDock();
@@ -638,9 +649,10 @@ function endPanelDrag({ clientX, clientY, pointerId, canceled } = {}) {
   state.panelDrag = null;
 
   // Priority 1: trash delete
-  if (shouldRemove && typeof state.config.remove === 'function') {
+  const removeHandler = resolveRemoveHandler(panel);
+  if (shouldRemove && typeof removeHandler === 'function') {
     try {
-      return !!state.config.remove(panel);
+      return !!removeHandler(panel);
     } catch (err) {
       console.warn('[ToySpawner] remove failed', err);
     }
