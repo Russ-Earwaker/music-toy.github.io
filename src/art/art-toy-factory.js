@@ -6,6 +6,7 @@ import {
   ensureBaseArtToyUI,
   getBaseArtToyControlsHost,
 } from './base-art-toy.js';
+import { ensurePanelSpawnPlacement, panToSpawnedPanel } from '../baseToy/spawn-placement.js';
 
 const ART_TYPES = Object.freeze({
   FLASH_CIRCLE: 'flashCircle',
@@ -41,24 +42,17 @@ function resolveSpawnPlacement(board, centerX, centerY, size) {
   let cx = centerX;
   let cy = centerY;
   if (!Number.isFinite(cx) || !Number.isFinite(cy)) {
-    const rect = board.getBoundingClientRect();
-    cx = rect.width * 0.5;
-    cy = rect.height * 0.5;
+    cx = (board.offsetWidth || 0) * 0.5;
+    cy = (board.offsetHeight || 0) * 0.5;
   }
 
-  const rect = board.getBoundingClientRect();
   const jitter = () => (Math.random() - 0.5) * 18;
   const spawnOffsetX = size * 0.65;
   const spawnOffsetY = -size * 0.18;
 
-  const rawLeft = cx - size * 0.5 + spawnOffsetX + jitter();
-  const rawTop = cy - size * 0.5 + spawnOffsetY + jitter();
-
-  const maxLeft = Math.max(0, rect.width - size);
-  const maxTop = Math.max(0, rect.height - size);
   return {
-    left: Math.min(maxLeft, Math.max(0, rawLeft)),
-    top: Math.min(maxTop, Math.max(0, rawTop)),
+    left: Math.max(0, cx - size * 0.5 + spawnOffsetX + jitter()),
+    top: Math.max(0, cy - size * 0.5 + spawnOffsetY + jitter()),
   };
 }
 
@@ -127,6 +121,15 @@ function makePanelBase(type, opts = {}) {
   ensureBaseArtToyUI(panel, { artToyId: panel.id });
   installArtToyControls(panel);
   board.appendChild(panel);
+  ensurePanelSpawnPlacement(panel, {
+    baseLeft: pos.left,
+    baseTop: pos.top,
+    fallbackWidth: size,
+    fallbackHeight: size,
+  });
+  if (opts.autoCenter) {
+    panToSpawnedPanel(panel, { duration: 650 });
+  }
 
   try {
     if (window.__MT_DEBUG_ART_SPAWN) {
@@ -468,4 +471,3 @@ try {
 } catch (err) {
   console.warn('[ArtToyFactory] global registration failed', err);
 }
-

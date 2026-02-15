@@ -17,6 +17,7 @@ import './tutorial.js';
 import { startParticleStream } from './tutorial-fx.js';
 import './ui-highlights.js';
 import { updateParticleQualityFromFps, setActiveToyCount } from './baseMusicToy/index.js';
+import { ensurePanelSpawnPlacement as ensureSharedPanelSpawnPlacement, panToSpawnedPanel } from './baseToy/spawn-placement.js';
 // import { createBouncer } from './bouncer.main.js'; // This is now handled by bouncer-init.js
 import './debug-reflow.js';
 import { initDrawGrid } from './drawgrid/drawgrid-init.js';
@@ -5222,7 +5223,7 @@ function initToyChaining(panel) {
 
         board.appendChild(newPanel);
         // Place the new panel immediately using the standard gap, avoiding later snap adjustments.
-        const initialPlacement = ensurePanelSpawnPlacement(newPanel, {
+        const initialPlacement = ensureSharedPanelSpawnPlacement(newPanel, {
             baseLeft: normalLeft,
             baseTop: normalTop,
             fallbackWidth: sourceWidth,
@@ -5444,31 +5445,6 @@ function isPanelNearViewportEdge(panel, marginPx = 96) {
     );
 }
 
-function getSpawnSafeCenterFracX() {
-    // Keep toys away from the left guide button + right spawner dock, like focus centering.
-    const guide = document.querySelector('.guide-launcher');
-    const spawner = document.querySelector('.toy-spawner-dock');
-    const guideRight = guide ? getRect(guide).right : 0;
-    const spawnerLeft = spawner ? getRect(spawner).left : window.innerWidth;
-    const centerX = (guideRight + spawnerLeft) / 2;
-    const frac = centerX / Math.max(1, window.innerWidth || 1);
-    return Math.max(0.2, Math.min(0.8, frac));
-}
-
-function maybePanToSpawnedPanel(panel, { marginPx = 96, duration = 650 } = {}) {
-    if (!panel || !panel.isConnected) return false;
-    // We now pan for *all* spawned toys (not just offscreen / near-edge).
-    // `marginPx` is kept for backwards compatibility with callers but is no longer used here.
-    const desiredScale = (typeof window !== 'undefined' && Number.isFinite(window.__boardScale)) ? window.__boardScale : 1.0;
-    const centerFracX = getSpawnSafeCenterFracX();
-    try {
-        // Uses the board-viewport camera tween (lerped).
-        window.centerBoardOnElementSlow?.(panel, desiredScale, { duration, centerFracX, centerFracY: 0.5 });
-        return true;
-    } catch {}
-    return false;
-}
-
 function hintOffscreenSpawn(panel) {
     if (!panel || !panel.isConnected) return;
     // Disabled: we no longer spawn particles from the create-toy button when a toy
@@ -5613,7 +5589,7 @@ function createToyPanelAt(toyType, {
     panel.dataset.spawnScaleHint = '0.75';
 
     if (!skipSpawnPlacement) {
-        const initialPlacement = ensurePanelSpawnPlacement(panel, {
+        const initialPlacement = ensureSharedPanelSpawnPlacement(panel, {
             baseLeft: left,
             baseTop: top,
             fallbackWidth: width,
@@ -5639,7 +5615,7 @@ function createToyPanelAt(toyType, {
 
         const finalizePlacement = () => {
             if (!skipSpawnPlacement) {
-                const followUp = ensurePanelSpawnPlacement(panel, {
+                const followUp = ensureSharedPanelSpawnPlacement(panel, {
                     fallbackWidth: width,
                     fallbackHeight: height,
                     skipIfMoved: true,
@@ -5666,7 +5642,7 @@ function createToyPanelAt(toyType, {
                 setToyFocus(panel, { center: true });
                 // If the spawn ended up offscreen or hugging the edge, lerp the camera to it.
                 // This is global behaviour and is NOT tied to scene save/load.
-                maybePanToSpawnedPanel(panel, { marginPx: 96, duration: 650 });
+                panToSpawnedPanel(panel, { duration: 650 });
             }
             if (shouldHintOffscreenResolved) {
                 const rafCheck = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));
