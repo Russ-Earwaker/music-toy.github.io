@@ -5633,6 +5633,20 @@ function createToyPanelAt(toyType, {
     if (resolvedArtOwnerId) {
         panel.dataset.artOwnerId = String(resolvedArtOwnerId);
         panel.dataset.internalBoardOwner = String(resolvedArtOwnerId);
+        // Inherit current owner-level volume/mute so newly created internal toys
+        // immediately match the Art Toy slider state.
+        try {
+            const ownerPanel = document.getElementById(String(resolvedArtOwnerId));
+            if (ownerPanel) {
+                const ownerVol = Number(ownerPanel.dataset?.toyVolume);
+                const ownerMuted = ownerPanel.dataset?.toyMuted;
+                if (Number.isFinite(ownerVol)) panel.dataset.toyVolume = String(Math.max(0, Math.min(1, ownerVol)));
+                if (ownerMuted === '1' || ownerMuted === '0' || ownerMuted === 'true' || ownerMuted === 'false') {
+                    const isMuted = (ownerMuted === '1' || ownerMuted === 'true');
+                    panel.dataset.toyMuted = isMuted ? '1' : '0';
+                }
+            }
+        } catch {}
     }
 
     board.appendChild(panel);
