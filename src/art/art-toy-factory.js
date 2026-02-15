@@ -233,25 +233,225 @@ function setupFlashCircle(panel) {
 
 function setupFireworks(panel) {
   panel.classList.add('art-toy-fireworks');
-  const bg = document.createElement('div');
-  bg.className = 'art-toy-circle art-toy-circle-fireworks';
-  panel.appendChild(bg);
 
   const layer = document.createElement('div');
   layer.className = 'art-fireworks-layer';
   panel.appendChild(layer);
 
-  const anchors = [
-    { x: 0.20, y: 0.24 },
-    { x: 0.50, y: 0.17 },
-    { x: 0.80, y: 0.24 },
-    { x: 0.84, y: 0.50 },
-    { x: 0.80, y: 0.78 },
-    { x: 0.50, y: 0.84 },
-    { x: 0.20, y: 0.78 },
-    { x: 0.16, y: 0.50 },
-  ];
+  const activeGlowLayer = document.createElement('div');
+  activeGlowLayer.className = 'art-fireworks-active-glows';
+  panel.appendChild(activeGlowLayer);
+
+  const dragAreaEl = document.createElement('div');
+  dragAreaEl.className = 'art-fireworks-drag-area';
+  panel.appendChild(dragAreaEl);
+
+  const handlesLayer = document.createElement('div');
+  handlesLayer.className = 'art-fireworks-handles';
+  panel.appendChild(handlesLayer);
+
+  const anchors = Array.from({ length: ART_SLOT_COUNT }, () => ({ x: 110, y: 110 }));
   const palette = ['#ff6b6b', '#ffd166', '#06d6a0', '#4cc9f0', '#f72585', '#ff9f1c', '#9b5de5', '#80ed99'];
+  const FIREWORK_EFFECT_SCALE = 2;
+  const HANDLE_SIZE_PX = 62;
+  const PANEL_PX = 220;
+  const ACTIVE_GLOW_SIZE_PX = 180;
+  const AREA_MIN_X = -142; // align with left edge of the large drag button
+  const AREA_MIN_Y = 74;   // keep below top button row
+  // Keep the top/left lock, but preserve the larger workspace size.
+  const MAX_DRAG_SPAN = 1600;
+  const AREA_MAX_X = AREA_MIN_X + MAX_DRAG_SPAN;
+  const AREA_MAX_Y = AREA_MIN_Y + MAX_DRAG_SPAN;
+
+  const dragArea = {
+    x: AREA_MIN_X,
+    y: AREA_MIN_Y,
+    // 4x original area (192x138 => 384x276)
+    w: 384,
+    h: 276,
+  };
+
+  const handleEls = [];
+  const activeGlowEls = Array.from({ length: ART_SLOT_COUNT }, () => null);
+  const activeSlots = new Set();
+  const syncDragArea = () => {
+    dragAreaEl.style.left = `${dragArea.x.toFixed(2)}px`;
+    dragAreaEl.style.top = `${dragArea.y.toFixed(2)}px`;
+    dragAreaEl.style.width = `${dragArea.w.toFixed(2)}px`;
+    dragAreaEl.style.height = `${dragArea.h.toFixed(2)}px`;
+  };
+  const syncHandle = (slot) => {
+    const handle = handleEls[slot];
+    const a = anchors[slot];
+    if (!handle || !a) return;
+    handle.style.left = `${(a.x - HANDLE_SIZE_PX * 0.5).toFixed(2)}px`;
+    handle.style.top = `${(a.y - HANDLE_SIZE_PX * 0.5).toFixed(2)}px`;
+  };
+  const syncActiveGlow = (slot) => {
+    const glow = activeGlowEls[slot];
+    const a = anchors[slot];
+    if (!glow || !a) return;
+    glow.style.left = `${(a.x - ACTIVE_GLOW_SIZE_PX * 0.5).toFixed(2)}px`;
+    glow.style.top = `${(a.y - ACTIVE_GLOW_SIZE_PX * 0.5).toFixed(2)}px`;
+    glow.style.width = `${ACTIVE_GLOW_SIZE_PX}px`;
+    glow.style.height = `${ACTIVE_GLOW_SIZE_PX}px`;
+  };
+  const setSlotActive = (slot) => {
+    const i = normalizeSlot(slot);
+    activeSlots.add(i);
+    const handle = handleEls[i];
+    if (handle) handle.classList.add('is-active-firework');
+    const glow = activeGlowEls[i];
+    if (glow) glow.classList.add('is-active-firework');
+    syncActiveGlow(i);
+  };
+
+  const clampAnchorX = (v) => {
+    const n = Number(v) || 0;
+    return Math.max(AREA_MIN_X, Math.min(AREA_MAX_X, n));
+  };
+  const clampAnchorY = (v) => {
+    const n = Number(v) || 0;
+    return Math.max(AREA_MIN_Y, Math.min(AREA_MAX_Y, n));
+  };
+  const minGap = 96;
+
+  function randomizeAnchorsWithinArea() {
+    const placed = [];
+    const cols = Math.ceil(Math.sqrt(ART_SLOT_COUNT));
+    const rows = Math.ceil(ART_SLOT_COUNT / cols);
+    const cellW = dragArea.w / cols;
+    const cellH = dragArea.h / rows;
+    for (let i = 0; i < ART_SLOT_COUNT; i++) {
+      let picked = null;
+      let best = null;
+      let bestDist = -Infinity;
+      for (let attempts = 0; attempts < 140; attempts++) {
+        const x = dragArea.x + Math.random() * Math.max(1, dragArea.w);
+        const y = dragArea.y + Math.random() * Math.max(1, dragArea.h);
+        const nearest = placed.length
+          ? Math.min(...placed.map((p) => Math.hypot(p.x - x, p.y - y)))
+          : Infinity;
+        if (nearest >= minGap) {
+          picked = { x, y };
+          break;
+        }
+        if (nearest > bestDist) {
+          bestDist = nearest;
+          best = { x, y };
+        }
+      }
+      if (!picked) {
+        const row = Math.floor(i / cols);
+        const col = i % cols;
+        const gx = dragArea.x + cellW * (col + 0.5);
+        const gy = dragArea.y + cellH * (row + 0.5);
+        picked = best || { x: gx, y: gy };
+      }
+      anchors[i].x = clampAnchorX(picked.x);
+      anchors[i].y = clampAnchorY(picked.y);
+      placed.push({ ...anchors[i] });
+    }
+  };
+
+  randomizeAnchorsWithinArea();
+  syncDragArea();
+  for (let i = 0; i < ART_SLOT_COUNT; i++) {
+    const glow = document.createElement('span');
+    glow.className = 'art-firework-active-glow';
+    glow.style.background = palette[i % palette.length];
+    glow.style.color = palette[i % palette.length];
+    activeGlowLayer.appendChild(glow);
+    activeGlowEls[i] = glow;
+    syncActiveGlow(i);
+  }
+
+  for (let i = 0; i < ART_SLOT_COUNT; i++) {
+    const handleBtn = document.createElement('button');
+    handleBtn.type = 'button';
+    handleBtn.className = 'c-btn art-firework-handle-btn';
+    handleBtn.title = `Move Firework ${i + 1}`;
+    handleBtn.setAttribute('aria-label', `Move Firework ${i + 1}`);
+    handleBtn.style.setProperty('--c-btn-size', '62px');
+    handleBtn.innerHTML = BUTTON_ICON_HTML;
+    const core = handleBtn.querySelector('.c-btn-core');
+    if (core) core.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonHandle.png')");
+
+    let dragActive = false;
+    let dragPointerId = null;
+    let startClientX = 0;
+    let startClientY = 0;
+    let startX = 0;
+    let startY = 0;
+
+    handleBtn.addEventListener('pointerdown', (ev) => {
+      if (ev.button != null && ev.button !== 0) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      dragActive = true;
+      dragPointerId = ev.pointerId;
+      startClientX = ev.clientX;
+      startClientY = ev.clientY;
+      startX = anchors[i].x;
+      startY = anchors[i].y;
+      dragAreaEl.classList.add('is-dragging');
+      try { handleBtn.setPointerCapture(ev.pointerId); } catch {}
+    });
+
+    handleBtn.addEventListener('pointermove', (ev) => {
+      if (!dragActive) return;
+      if (dragPointerId != null && ev.pointerId !== dragPointerId) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      const rect = layer.getBoundingClientRect();
+      if (!rect || rect.width < 1 || rect.height < 1) return;
+      const dx = ((ev.clientX - startClientX) / rect.width) * PANEL_PX;
+      const dy = ((ev.clientY - startClientY) / rect.height) * PANEL_PX;
+      const nextX = clampAnchorX(startX + dx);
+      const nextY = clampAnchorY(startY + dy);
+
+      // Let users push/extend the active area by dragging beyond its bounds.
+      if (nextX < dragArea.x) {
+        const targetX = Math.max(AREA_MIN_X, nextX);
+        dragArea.w += (dragArea.x - targetX);
+        dragArea.x = targetX;
+      } else if (nextX > (dragArea.x + dragArea.w)) {
+        dragArea.w = nextX - dragArea.x;
+      }
+      if (nextY < dragArea.y) {
+        const targetY = Math.max(AREA_MIN_Y, nextY);
+        dragArea.h += (dragArea.y - targetY);
+        dragArea.y = targetY;
+      } else if (nextY > (dragArea.y + dragArea.h)) {
+        dragArea.h = nextY - dragArea.y;
+      }
+      syncDragArea();
+
+      // Keep effective handle area aligned with the visual drag-area limits.
+      anchors[i].x = Math.max(AREA_MIN_X, nextX);
+      anchors[i].y = Math.max(AREA_MIN_Y, nextY);
+      syncHandle(i);
+      syncActiveGlow(i);
+    });
+
+    const endDrag = (ev) => {
+      if (!dragActive) return;
+      if (dragPointerId != null && ev.pointerId !== dragPointerId) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      dragActive = false;
+      dragPointerId = null;
+      dragAreaEl.classList.remove('is-dragging');
+      try { handleBtn.releasePointerCapture(ev.pointerId); } catch {}
+    };
+
+    handleBtn.addEventListener('pointerup', endDrag);
+    handleBtn.addEventListener('pointercancel', endDrag);
+
+    handlesLayer.appendChild(handleBtn);
+    handleEls.push(handleBtn);
+    syncHandle(i);
+  }
 
   function spawnBurst(slotIndex, velocity = null) {
     const slot = normalizeSlot(slotIndex);
@@ -264,13 +464,13 @@ function setupFireworks(panel) {
     for (let i = 0; i < sparkCount; i++) {
       const spark = document.createElement('span');
       spark.className = 'art-firework-spark';
-      spark.style.left = `${Math.round(anchor.x * 100)}%`;
-      spark.style.top = `${Math.round(anchor.y * 100)}%`;
+      spark.style.left = `${Math.round(anchor.x)}px`;
+      spark.style.top = `${Math.round(anchor.y)}px`;
       spark.style.background = tone;
       layer.appendChild(spark);
 
       const angle = ((Math.PI * 2) / sparkCount) * i + (Math.random() - 0.5) * 0.5;
-      const dist = (22 + Math.random() * 52) * amp;
+      const dist = (22 + Math.random() * 52) * amp * FIREWORK_EFFECT_SCALE;
       const dx = Math.cos(angle) * dist;
       const dy = Math.sin(angle) * dist;
       const life = 460 + Math.random() * 260;
@@ -294,16 +494,16 @@ function setupFireworks(panel) {
     try {
       const glow = document.createElement('span');
       glow.className = 'art-firework-core';
-      glow.style.left = `${Math.round(anchor.x * 100)}%`;
-      glow.style.top = `${Math.round(anchor.y * 100)}%`;
+      glow.style.left = `${Math.round(anchor.x)}px`;
+      glow.style.top = `${Math.round(anchor.y)}px`;
       glow.style.background = tone;
       layer.appendChild(glow);
       const life = 300;
       const anim = glow.animate(
         [
-          { transform: 'translate(-50%, -50%) scale(0.2)', opacity: 0.95 },
-          { transform: 'translate(-50%, -50%) scale(1.9)', opacity: 0.2, offset: 0.5 },
-          { transform: 'translate(-50%, -50%) scale(2.4)', opacity: 0 },
+          { transform: `translate(-50%, -50%) scale(${0.2 * FIREWORK_EFFECT_SCALE})`, opacity: 0.95 },
+          { transform: `translate(-50%, -50%) scale(${1.9 * FIREWORK_EFFECT_SCALE})`, opacity: 0.2, offset: 0.5 },
+          { transform: `translate(-50%, -50%) scale(${2.4 * FIREWORK_EFFECT_SCALE})`, opacity: 0 },
         ],
         { duration: life, easing: 'ease-out' }
       );
@@ -314,12 +514,14 @@ function setupFireworks(panel) {
 
   panel.onArtTrigger = (trigger = null) => {
     const slot = normalizeSlot(trigger?.slotIndex);
+    setSlotActive(slot);
     spawnBurst(slot, trigger?.velocity ?? null);
     return true;
   };
 
   panel.flash = (meta = null) => {
     const slot = normalizeSlot(meta?.slotIndex);
+    setSlotActive(slot);
     spawnBurst(slot, meta?.velocity ?? null);
   };
 }

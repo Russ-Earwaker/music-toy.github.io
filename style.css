@@ -1453,25 +1453,47 @@ body.advanced-controls-disabled [data-adv] {
   animation: art-toy-flash 160ms ease-out;
 }
 
-.art-toy-circle-fireworks {
-  background:
-    radial-gradient(120px 120px at 50% 52%, rgba(255, 130, 80, 0.2), rgba(255, 130, 80, 0) 58%),
-    radial-gradient(200px 160px at 50% 100%, rgba(8, 22, 66, 0.9), rgba(8, 22, 66, 0.98) 70%);
-  border-color: rgba(255, 196, 84, 0.65);
-}
-
 .art-fireworks-layer {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  overflow: hidden;
-  border-radius: inherit;
+  overflow: visible;
+  border-radius: 0;
+  z-index: 2;
+}
+
+.art-fireworks-active-glows {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 1;
+}
+
+.art-firework-active-glow {
+  position: absolute;
+  border-radius: 999px;
+  opacity: 0;
+  filter: blur(14px) saturate(1.08);
+  box-shadow: 0 0 16px currentColor;
+  pointer-events: none;
+  transition: opacity 140ms ease;
+}
+
+.art-firework-active-glow.is-active-firework {
+  opacity: 0.12;
+}
+
+.art-toy-panel.art-toy-fireworks {
+  border-radius: 14px;
+  overflow: visible;
+  box-shadow: none;
 }
 
 .art-firework-spark {
   position: absolute;
-  width: 4px;
-  height: 18px;
+  width: 16px;
+  height: 72px;
   border-radius: 999px;
   transform: translate(-50%, -50%);
   opacity: 0;
@@ -1480,13 +1502,48 @@ body.advanced-controls-disabled [data-adv] {
 
 .art-firework-core {
   position: absolute;
-  width: 22px;
-  height: 22px;
+  width: 88px;
+  height: 88px;
   border-radius: 999px;
   transform: translate(-50%, -50%);
   opacity: 0;
   filter: blur(1px);
   pointer-events: none;
+}
+
+.art-fireworks-handles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+.art-fireworks-drag-area {
+  position: absolute;
+  border: 2px dashed rgba(122, 176, 255, 0.44);
+  background: rgba(70, 120, 255, 0.05);
+  border-radius: 14px;
+  opacity: 0;
+  transition: opacity 120ms ease, border-color 120ms ease, background 120ms ease;
+  pointer-events: none;
+}
+
+.art-toy-panel[data-controls-visible='1'] .art-fireworks-drag-area,
+.art-fireworks-drag-area.is-dragging {
+  opacity: 1;
+}
+
+.art-firework-handle-btn {
+  position: absolute;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.art-toy-panel[data-controls-visible='1'] .art-firework-handle-btn.is-active-firework {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .art-toy-circle-lasers {
@@ -1596,11 +1653,11 @@ body.advanced-controls-disabled [data-adv] {
 
 .art-toy-volume {
   position: absolute;
-  left: 50%;
-  bottom: -24px;
-  transform: translateX(-50%);
+  top: calc(-18px - var(--art-drag-size) + var(--art-control-size) + 12px);
+  left: calc(-18px + var(--art-drag-size) + 10px);
+  transform: none;
   z-index: 3;
-  width: min(280px, calc(100% + 76px));
+  width: min(320px, calc(100% + 76px));
 }
 
 .art-toy-volume .toy-volwrap {
