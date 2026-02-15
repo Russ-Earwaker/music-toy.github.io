@@ -262,6 +262,14 @@ function setupFireworks(panel) {
   const MAX_DRAG_SPAN = 1600;
   const AREA_MAX_X = AREA_MIN_X + MAX_DRAG_SPAN;
   const AREA_MAX_Y = AREA_MIN_Y + MAX_DRAG_SPAN;
+  const TOTAL_LIMIT_W = Math.max(1, AREA_MAX_X - AREA_MIN_X);
+  const TOTAL_LIMIT_H = Math.max(1, AREA_MAX_Y - AREA_MIN_Y);
+  const RANDOM_TOP_LEFT_QUARTER = {
+    x: AREA_MIN_X,
+    y: AREA_MIN_Y,
+    w: TOTAL_LIMIT_W * 0.5,
+    h: TOTAL_LIMIT_H * 0.5,
+  };
 
   const dragArea = {
     x: AREA_MIN_X,
@@ -270,6 +278,8 @@ function setupFireworks(panel) {
     w: 384,
     h: 276,
   };
+  const INITIAL_DRAG_W = dragArea.w;
+  const INITIAL_DRAG_H = dragArea.h;
 
   const handleEls = [];
   const activeGlowEls = Array.from({ length: ART_SLOT_COUNT }, () => null);
@@ -305,6 +315,14 @@ function setupFireworks(panel) {
     if (glow) glow.classList.add('is-active-firework');
     syncActiveGlow(i);
   };
+  const setSlotInactive = (slot) => {
+    const i = normalizeSlot(slot);
+    activeSlots.delete(i);
+    const handle = handleEls[i];
+    if (handle) handle.classList.remove('is-active-firework');
+    const glow = activeGlowEls[i];
+    if (glow) glow.classList.remove('is-active-firework');
+  };
 
   const clampAnchorX = (v) => {
     const n = Number(v) || 0;
@@ -316,19 +334,68 @@ function setupFireworks(panel) {
   };
   const minGap = 96;
 
-  function randomizeAnchorsWithinArea() {
+  const syncAllAnchors = () => {
+    for (let i = 0; i < ART_SLOT_COUNT; i++) {
+      syncHandle(i);
+      syncActiveGlow(i);
+    }
+  };
+
+  const activateAllSlots = () => {
+    for (let i = 0; i < ART_SLOT_COUNT; i++) setSlotActive(i);
+  };
+
+  const fitDragAreaToAnchors = () => {
+    const activeList = Array.from(activeSlots);
+    const useSlots = activeList.length ? activeList : Array.from({ length: ART_SLOT_COUNT }, (_, i) => i);
+    const coords = useSlots
+      .map((i) => anchors[i])
+      .filter(Boolean)
+      .map((a) => ({ x: clampAnchorX(a.x), y: clampAnchorY(a.y) }));
+    if (!coords.length) {
+      dragArea.x = AREA_MIN_X;
+      dragArea.y = AREA_MIN_Y;
+      dragArea.w = INITIAL_DRAG_W;
+      dragArea.h = INITIAL_DRAG_H;
+      syncDragArea();
+      return;
+    }
+
+    const pad = 28;
+    const minX = Math.min(...coords.map((p) => p.x));
+    const maxX = Math.max(...coords.map((p) => p.x));
+    const minY = Math.min(...coords.map((p) => p.y));
+    const maxY = Math.max(...coords.map((p) => p.y));
+
+    const x = Math.max(AREA_MIN_X, minX - pad);
+    const y = Math.max(AREA_MIN_Y, minY - pad);
+    const right = Math.min(AREA_MAX_X, maxX + pad);
+    const bottom = Math.min(AREA_MAX_Y, maxY + pad);
+
+    dragArea.x = x;
+    dragArea.y = y;
+    dragArea.w = Math.max(INITIAL_DRAG_W, right - x);
+    dragArea.h = Math.max(INITIAL_DRAG_H, bottom - y);
+    syncDragArea();
+  };
+
+  function randomizeAnchorsWithinArea(area = dragArea) {
+    const areaX = Number.isFinite(Number(area?.x)) ? Number(area.x) : dragArea.x;
+    const areaY = Number.isFinite(Number(area?.y)) ? Number(area.y) : dragArea.y;
+    const areaW = Math.max(1, Number.isFinite(Number(area?.w)) ? Number(area.w) : dragArea.w);
+    const areaH = Math.max(1, Number.isFinite(Number(area?.h)) ? Number(area.h) : dragArea.h);
     const placed = [];
     const cols = Math.ceil(Math.sqrt(ART_SLOT_COUNT));
     const rows = Math.ceil(ART_SLOT_COUNT / cols);
-    const cellW = dragArea.w / cols;
-    const cellH = dragArea.h / rows;
+    const cellW = areaW / cols;
+    const cellH = areaH / rows;
     for (let i = 0; i < ART_SLOT_COUNT; i++) {
       let picked = null;
       let best = null;
       let bestDist = -Infinity;
       for (let attempts = 0; attempts < 140; attempts++) {
-        const x = dragArea.x + Math.random() * Math.max(1, dragArea.w);
-        const y = dragArea.y + Math.random() * Math.max(1, dragArea.h);
+        const x = areaX + Math.random() * areaW;
+        const y = areaY + Math.random() * areaH;
         const nearest = placed.length
           ? Math.min(...placed.map((p) => Math.hypot(p.x - x, p.y - y)))
           : Infinity;
@@ -344,8 +411,8 @@ function setupFireworks(panel) {
       if (!picked) {
         const row = Math.floor(i / cols);
         const col = i % cols;
-        const gx = dragArea.x + cellW * (col + 0.5);
-        const gy = dragArea.y + cellH * (row + 0.5);
+        const gx = areaX + cellW * (col + 0.5);
+        const gy = areaY + cellH * (row + 0.5);
         picked = best || { x: gx, y: gy };
       }
       anchors[i].x = clampAnchorX(picked.x);
@@ -410,26 +477,9 @@ function setupFireworks(panel) {
       const nextX = clampAnchorX(startX + dx);
       const nextY = clampAnchorY(startY + dy);
 
-      // Let users push/extend the active area by dragging beyond its bounds.
-      if (nextX < dragArea.x) {
-        const targetX = Math.max(AREA_MIN_X, nextX);
-        dragArea.w += (dragArea.x - targetX);
-        dragArea.x = targetX;
-      } else if (nextX > (dragArea.x + dragArea.w)) {
-        dragArea.w = nextX - dragArea.x;
-      }
-      if (nextY < dragArea.y) {
-        const targetY = Math.max(AREA_MIN_Y, nextY);
-        dragArea.h += (dragArea.y - targetY);
-        dragArea.y = targetY;
-      } else if (nextY > (dragArea.y + dragArea.h)) {
-        dragArea.h = nextY - dragArea.y;
-      }
-      syncDragArea();
-
-      // Keep effective handle area aligned with the visual drag-area limits.
-      anchors[i].x = Math.max(AREA_MIN_X, nextX);
-      anchors[i].y = Math.max(AREA_MIN_Y, nextY);
+      anchors[i].x = nextX;
+      anchors[i].y = nextY;
+      fitDragAreaToAnchors();
       syncHandle(i);
       syncActiveGlow(i);
     });
@@ -452,6 +502,32 @@ function setupFireworks(panel) {
     handleEls.push(handleBtn);
     syncHandle(i);
   }
+
+  panel.onArtRandomMusic = () => {
+    activateAllSlots();
+    fitDragAreaToAnchors();
+    syncAllAnchors();
+  };
+
+  panel.onArtRandomAll = () => {
+    activateAllSlots();
+    randomizeAnchorsWithinArea(RANDOM_TOP_LEFT_QUARTER);
+    fitDragAreaToAnchors();
+    syncAllAnchors();
+  };
+
+  panel.onArtSetActiveSlots = (slots = []) => {
+    const wanted = new Set(
+      (Array.isArray(slots) ? slots : [])
+        .map((s) => normalizeSlot(s))
+    );
+    for (let i = 0; i < ART_SLOT_COUNT; i++) {
+      if (wanted.has(i)) setSlotActive(i);
+      else setSlotInactive(i);
+    }
+    fitDragAreaToAnchors();
+    syncAllAnchors();
+  };
 
   function spawnBurst(slotIndex, velocity = null) {
     const slot = normalizeSlot(slotIndex);

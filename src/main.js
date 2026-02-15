@@ -2891,10 +2891,42 @@ function isInternalBoardActiveForArtToy(artToyId) {
   return false;
 }
 
-function randomizeArtToyStateStub(artToyId) {
-  // Hook for future: randomise art-toy configuration (visual/art parameters).
-  // For now, do nothing.
-  void artToyId;
+function randomizeArtToyStateStub(artToyId, mode = 'all') {
+  const artPanel = getArtToyPanelById(artToyId);
+  if (!artPanel) return;
+  try {
+    if (mode === 'music') {
+      if (typeof artPanel.onArtRandomMusic === 'function') artPanel.onArtRandomMusic();
+      return;
+    }
+    if (typeof artPanel.onArtRandomAll === 'function') {
+      artPanel.onArtRandomAll();
+      return;
+    }
+    if (typeof artPanel.onArtRandomMusic === 'function') artPanel.onArtRandomMusic();
+  } catch {}
+}
+
+function collectAssociatedArtSlots(artToyId) {
+  const slots = new Set();
+  const panels = getInternalPanelsForArtToy(artToyId);
+  for (let col = 0; col < 8; col++) {
+    const hit = panels.some((p) => panelHasNotesAtColumn(p, col));
+    if (hit) slots.add(col);
+  }
+  return Array.from(slots);
+}
+
+function syncArtToySlotsFromInternalNotes(artToyId) {
+  if (!artToyId) return;
+  const artPanel = getArtToyPanelById(artToyId);
+  if (!artPanel) return;
+  try {
+    const slots = collectAssociatedArtSlots(artToyId);
+    if (typeof artPanel.onArtSetActiveSlots === 'function') {
+      artPanel.onArtSetActiveSlots(slots);
+    }
+  } catch {}
 }
 
 function randomizeToyMusic(panel, dbg = null) {
@@ -4019,6 +4051,10 @@ function randomizeInternalToysForArtToy(artToyId, mode, opts = {}) {
   const internalActiveForThis = isInternalBoardActiveForArtToy(artToyId);
   __artRandLog('randomizeInternalToysForArtToy:context', { artToyId, mode, allowDefer, internalActiveForThis, autoStartTransport });
 
+  try {
+    randomizeArtToyStateStub(artToyId, mode === 'all' ? 'all' : 'music');
+  } catch {}
+
   // If we actually apply a randomisation, clear any pending flags so we don't
   // accidentally re-randomise on enter (which feels like "tune changed on enter").
   const clearPendingFlags = () => {
@@ -4188,6 +4224,8 @@ function randomizeInternalToysForArtToy(artToyId, mode, opts = {}) {
   }
 
   try { window.Persistence?.markDirty?.(); } catch {}
+  try { syncArtToySlotsFromInternalNotes(artToyId); } catch {}
+  try { requestAnimationFrame(() => syncArtToySlotsFromInternalNotes(artToyId)); } catch {}
 }
 
 // Click delegate: Art Toy "Random All" button.
@@ -4199,8 +4237,6 @@ document.addEventListener('click', (e) => {
   __artRandLog('click', { action: 'randomAll', artToyId });
   e.preventDefault();
   e.stopPropagation();
-  // Hook for future: also randomise the art toy's own state.
-  try { randomizeArtToyStateStub(artToyId); } catch {}
   randomizeInternalToysForArtToy(artToyId, 'all', {
     allowDefer: true,
     source: 'randomAll',
