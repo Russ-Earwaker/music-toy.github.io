@@ -125,7 +125,17 @@ export function ensureBaseArtToyUI(panel, { artToyId } = {}) {
   // Hide controls when clicking elsewhere.
   const onDocDown = (ev) => {
     if (!g_openControlsPanel) return;
-    if (!g_openControlsPanel.contains(ev.target)) hideControls(g_openControlsPanel);
+    const target = ev?.target;
+    if (!target || g_openControlsPanel.contains(target)) return;
+
+    // Keep art controls open while pressing the board/viewport so camera pan
+    // gestures don't collapse the controls.
+    try {
+      const panSurface = target.closest?.('.board-viewport, #board, #board-wrap');
+      if (panSurface) return;
+    } catch {}
+
+    hideControls(g_openControlsPanel);
   };
   // Only attach once per page.
   if (!window.__MT_ART_TOY_OUTSIDE_CLICK_INSTALLED) {

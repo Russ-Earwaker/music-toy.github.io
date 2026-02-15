@@ -367,15 +367,14 @@ function setupFireworks(panel) {
     const minY = Math.min(...coords.map((p) => p.y));
     const maxY = Math.max(...coords.map((p) => p.y));
 
-    const x = Math.max(AREA_MIN_X, minX - pad);
-    const y = Math.max(AREA_MIN_Y, minY - pad);
     const right = Math.min(AREA_MAX_X, maxX + pad);
     const bottom = Math.min(AREA_MAX_Y, maxY + pad);
 
-    dragArea.x = x;
-    dragArea.y = y;
-    dragArea.w = Math.max(INITIAL_DRAG_W, right - x);
-    dragArea.h = Math.max(INITIAL_DRAG_H, bottom - y);
+    // Keep the rectangle anchored to the top-left drag-area limits.
+    dragArea.x = AREA_MIN_X;
+    dragArea.y = AREA_MIN_Y;
+    dragArea.w = Math.max(INITIAL_DRAG_W, right - AREA_MIN_X);
+    dragArea.h = Math.max(INITIAL_DRAG_H, bottom - AREA_MIN_Y);
     syncDragArea();
   };
 
