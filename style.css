@@ -1473,6 +1473,7 @@ body.advanced-controls-disabled [data-adv] {
 .art-firework-active-glow {
   position: absolute;
   border-radius: 999px;
+  background: radial-gradient(circle at 50% 50%, currentColor 0%, rgba(255, 255, 255, 0.35) 70%);
   opacity: 0;
   filter: blur(14px) saturate(1.08);
   box-shadow: 0 0 16px currentColor;

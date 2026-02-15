@@ -33,6 +33,10 @@ function artFlashDbg(tag, payload = {}) {
   try { console.log(`[ART][flash] ${tag}`, payload); } catch {}
 }
 
+function markSceneDirtySafe() {
+  try { window.Persistence?.markDirty?.(); } catch {}
+}
+
 function normalizeSlot(slotIndex) {
   const n = Number(slotIndex);
   if (!Number.isFinite(n)) return 0;
@@ -425,7 +429,6 @@ function setupFireworks(panel) {
   for (let i = 0; i < ART_SLOT_COUNT; i++) {
     const glow = document.createElement('span');
     glow.className = 'art-firework-active-glow';
-    glow.style.background = palette[i % palette.length];
     glow.style.color = palette[i % palette.length];
     activeGlowLayer.appendChild(glow);
     activeGlowEls[i] = glow;
@@ -449,6 +452,7 @@ function setupFireworks(panel) {
     let startClientY = 0;
     let startX = 0;
     let startY = 0;
+    let moved = false;
 
     handleBtn.addEventListener('pointerdown', (ev) => {
       if (ev.button != null && ev.button !== 0) return;
@@ -460,6 +464,7 @@ function setupFireworks(panel) {
       startClientY = ev.clientY;
       startX = anchors[i].x;
       startY = anchors[i].y;
+      moved = false;
       dragAreaEl.classList.add('is-dragging');
       try { handleBtn.setPointerCapture(ev.pointerId); } catch {}
     });
@@ -478,6 +483,7 @@ function setupFireworks(panel) {
 
       anchors[i].x = nextX;
       anchors[i].y = nextY;
+      moved = moved || Math.abs(nextX - startX) > 0.0001 || Math.abs(nextY - startY) > 0.0001;
       fitDragAreaToAnchors();
       syncHandle(i);
       syncActiveGlow(i);
@@ -492,6 +498,7 @@ function setupFireworks(panel) {
       dragPointerId = null;
       dragAreaEl.classList.remove('is-dragging');
       try { handleBtn.releasePointerCapture(ev.pointerId); } catch {}
+      if (moved) markSceneDirtySafe();
     };
 
     handleBtn.addEventListener('pointerup', endDrag);
@@ -506,6 +513,7 @@ function setupFireworks(panel) {
     activateAllSlots();
     fitDragAreaToAnchors();
     syncAllAnchors();
+    markSceneDirtySafe();
   };
 
   panel.onArtRandomAll = () => {
@@ -513,6 +521,7 @@ function setupFireworks(panel) {
     randomizeAnchorsWithinArea(RANDOM_TOP_LEFT_QUARTER);
     fitDragAreaToAnchors();
     syncAllAnchors();
+    markSceneDirtySafe();
   };
 
   panel.onArtSetActiveSlots = (slots = []) => {
@@ -526,6 +535,44 @@ function setupFireworks(panel) {
     }
     fitDragAreaToAnchors();
     syncAllAnchors();
+  };
+
+  panel.getArtToyPersistState = () => {
+    const active = Array.from(activeSlots.values())
+      .map((s) => normalizeSlot(s))
+      .sort((a, b) => a - b);
+    return {
+      type: ART_TYPES.FIREWORKS,
+      anchors: anchors.map((a) => ({ x: Number(a?.x) || 0, y: Number(a?.y) || 0 })),
+      activeSlots: active,
+      controlsVisible: panel.dataset.controlsVisible === '1',
+    };
+  };
+
+  panel.applyArtToyPersistState = (state = {}) => {
+    if (!state || typeof state !== 'object') return false;
+    const nextAnchors = Array.isArray(state.anchors) ? state.anchors : null;
+    if (nextAnchors && nextAnchors.length) {
+      for (let i = 0; i < ART_SLOT_COUNT; i++) {
+        const src = nextAnchors[i];
+        if (!src || typeof src !== 'object') continue;
+        anchors[i].x = clampAnchorX(src.x);
+        anchors[i].y = clampAnchorY(src.y);
+      }
+    }
+    if (Array.isArray(state.activeSlots)) {
+      const wanted = new Set(state.activeSlots.map((s) => normalizeSlot(s)));
+      for (let i = 0; i < ART_SLOT_COUNT; i++) {
+        if (wanted.has(i)) setSlotActive(i);
+        else setSlotInactive(i);
+      }
+    }
+    fitDragAreaToAnchors();
+    syncAllAnchors();
+    if (typeof state.controlsVisible === 'boolean') {
+      setBaseArtToyControlsVisible(panel, state.controlsVisible);
+    }
+    return true;
   };
 
   const isClientPointInsideDragArea = (clientX, clientY) => {

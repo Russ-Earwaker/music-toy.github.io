@@ -842,6 +842,12 @@ export function getSnapshot(){
             scale: (Number.isFinite(homeScale) && homeScale > 0) ? homeScale : undefined,
           }
         : null;
+      let toyState = null;
+      try {
+        if (typeof panel.getArtToyPersistState === 'function') {
+          toyState = panel.getArtToyPersistState() || null;
+        }
+      } catch {}
       return {
         id,
         artKind,
@@ -849,6 +855,7 @@ export function getSnapshot(){
         state: {
           internalBootstrapped,
           internalHome,
+          toyState,
         },
       };
     });
@@ -973,6 +980,9 @@ export function applySceneSnapshot(snap){
           } else {
             delete artPanel.dataset.internalHomeScale;
           }
+        }
+        if (typeof artPanel.applyArtToyPersistState === 'function' && st.toyState && typeof st.toyState === 'object') {
+          try { artPanel.applyArtToyPersistState(st.toyState); } catch {}
         }
       } catch {}
       usedArtPanels.add(artPanel);
