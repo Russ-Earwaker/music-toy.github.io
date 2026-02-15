@@ -63,6 +63,75 @@ function resolveSpawnPlacement(board, centerX, centerY, size) {
   };
 }
 
+function attachSlotHandleDrag({
+  handleBtn,
+  layer,
+  panelPx = 220,
+  getStartPos,
+  setPos,
+  clampX,
+  clampY,
+  onDragStateChange,
+  onCommit,
+} = {}) {
+  if (!handleBtn || !layer || typeof getStartPos !== 'function' || typeof setPos !== 'function') return;
+  let dragActive = false;
+  let dragPointerId = null;
+  let startClientX = 0;
+  let startClientY = 0;
+  let startX = 0;
+  let startY = 0;
+  let moved = false;
+
+  handleBtn.addEventListener('pointerdown', (ev) => {
+    if (ev.button != null && ev.button !== 0) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const start = getStartPos() || { x: 0, y: 0 };
+    dragActive = true;
+    dragPointerId = ev.pointerId;
+    startClientX = ev.clientX;
+    startClientY = ev.clientY;
+    startX = Number(start.x) || 0;
+    startY = Number(start.y) || 0;
+    moved = false;
+    try { onDragStateChange?.(true); } catch {}
+    try { handleBtn.setPointerCapture(ev.pointerId); } catch {}
+  });
+
+  handleBtn.addEventListener('pointermove', (ev) => {
+    if (!dragActive) return;
+    if (dragPointerId != null && ev.pointerId !== dragPointerId) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const rect = layer.getBoundingClientRect();
+    if (!rect || rect.width < 1 || rect.height < 1) return;
+    const dx = ((ev.clientX - startClientX) / rect.width) * panelPx;
+    const dy = ((ev.clientY - startClientY) / rect.height) * panelPx;
+    const nx = typeof clampX === 'function' ? clampX(startX + dx) : (startX + dx);
+    const ny = typeof clampY === 'function' ? clampY(startY + dy) : (startY + dy);
+    moved = moved || Math.abs(nx - startX) > 0.0001 || Math.abs(ny - startY) > 0.0001;
+    setPos(nx, ny);
+  });
+
+  const endDrag = (ev) => {
+    if (!dragActive) return;
+    if (dragPointerId != null && ev.pointerId !== dragPointerId) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    dragActive = false;
+    dragPointerId = null;
+    try { onDragStateChange?.(false); } catch {}
+    try { handleBtn.releasePointerCapture(ev.pointerId); } catch {}
+    if (moved) {
+      try { onCommit?.(); } catch {}
+    }
+  };
+
+  handleBtn.addEventListener('pointerup', endDrag);
+  handleBtn.addEventListener('pointercancel', endDrag);
+}
+
 function installArtToyControls(panel) {
   const controlsHost = getBaseArtToyControlsHost(panel);
   if (!controlsHost) return;
@@ -121,8 +190,8 @@ function installArtToyControls(panel) {
   randMusicBtn.dataset.artToyId = panel.id;
   controlsHost.appendChild(randMusicBtn);
 
-  // Fireworks only: current effect preview + picker grid.
-  if (panel?.dataset?.artToy === ART_TYPES.FIREWORKS) {
+  // Fireworks + Laser Trails: current effect preview + picker grid.
+  if (panel?.dataset?.artToy === ART_TYPES.FIREWORKS || panel?.dataset?.artToy === ART_TYPES.LASER_TRAILS) {
     const fxShell = document.createElement('div');
     fxShell.className = 'art-toy-fx-shell';
     fxShell.dataset.open = '0';
@@ -1004,63 +1073,25 @@ function setupFireworks(panel) {
     const core = handleBtn.querySelector('.c-btn-core');
     if (core) core.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonHandle.png')");
 
-    let dragActive = false;
-    let dragPointerId = null;
-    let startClientX = 0;
-    let startClientY = 0;
-    let startX = 0;
-    let startY = 0;
-    let moved = false;
-
-    handleBtn.addEventListener('pointerdown', (ev) => {
-      if (ev.button != null && ev.button !== 0) return;
-      ev.preventDefault();
-      ev.stopPropagation();
-      dragActive = true;
-      dragPointerId = ev.pointerId;
-      startClientX = ev.clientX;
-      startClientY = ev.clientY;
-      startX = anchors[i].x;
-      startY = anchors[i].y;
-      moved = false;
-      dragAreaEl.classList.add('is-dragging');
-      try { handleBtn.setPointerCapture(ev.pointerId); } catch {}
+    attachSlotHandleDrag({
+      handleBtn,
+      layer,
+      panelPx: PANEL_PX,
+      getStartPos: () => ({ x: anchors[i].x, y: anchors[i].y }),
+      setPos: (x, y) => {
+        anchors[i].x = x;
+        anchors[i].y = y;
+        fitDragAreaToAnchors();
+        syncHandle(i);
+        syncActiveGlow(i);
+      },
+      clampX: clampAnchorX,
+      clampY: clampAnchorY,
+      onDragStateChange: (active) => {
+        dragAreaEl.classList.toggle('is-dragging', !!active);
+      },
+      onCommit: () => markSceneDirtySafe(),
     });
-
-    handleBtn.addEventListener('pointermove', (ev) => {
-      if (!dragActive) return;
-      if (dragPointerId != null && ev.pointerId !== dragPointerId) return;
-      ev.preventDefault();
-      ev.stopPropagation();
-      const rect = layer.getBoundingClientRect();
-      if (!rect || rect.width < 1 || rect.height < 1) return;
-      const dx = ((ev.clientX - startClientX) / rect.width) * PANEL_PX;
-      const dy = ((ev.clientY - startClientY) / rect.height) * PANEL_PX;
-      const nextX = clampAnchorX(startX + dx);
-      const nextY = clampAnchorY(startY + dy);
-
-      anchors[i].x = nextX;
-      anchors[i].y = nextY;
-      moved = moved || Math.abs(nextX - startX) > 0.0001 || Math.abs(nextY - startY) > 0.0001;
-      fitDragAreaToAnchors();
-      syncHandle(i);
-      syncActiveGlow(i);
-    });
-
-    const endDrag = (ev) => {
-      if (!dragActive) return;
-      if (dragPointerId != null && ev.pointerId !== dragPointerId) return;
-      ev.preventDefault();
-      ev.stopPropagation();
-      dragActive = false;
-      dragPointerId = null;
-      dragAreaEl.classList.remove('is-dragging');
-      try { handleBtn.releasePointerCapture(ev.pointerId); } catch {}
-      if (moved) markSceneDirtySafe();
-    };
-
-    handleBtn.addEventListener('pointerup', endDrag);
-    handleBtn.addEventListener('pointercancel', endDrag);
 
     handlesLayer.appendChild(handleBtn);
     handleEls.push(handleBtn);
@@ -1684,9 +1715,13 @@ function buildLaserPath(points) {
 
 function setupLaserTrails(panel) {
   panel.classList.add('art-toy-lasers');
-  const bg = document.createElement('div');
-  bg.className = 'art-toy-circle art-toy-circle-lasers';
-  panel.appendChild(bg);
+
+  // Defensive cleanup in case this setup runs more than once on the same panel.
+  try {
+    panel.querySelectorAll('.art-laser-layer, .art-lasers-drag-area, .art-lasers-handles').forEach((el) => {
+      try { el.remove(); } catch {}
+    });
+  } catch {}
 
   const svgNS = 'http://www.w3.org/2000/svg';
   const layer = document.createElementNS(svgNS, 'svg');
@@ -1694,52 +1729,414 @@ function setupLaserTrails(panel) {
   layer.setAttribute('viewBox', '0 0 220 220');
   layer.setAttribute('preserveAspectRatio', 'none');
   panel.appendChild(layer);
+  const guidesLayer = document.createElementNS(svgNS, 'g');
+  guidesLayer.setAttribute('class', 'art-laser-guides');
+  layer.appendChild(guidesLayer);
+
+  const dragAreaEl = document.createElement('div');
+  dragAreaEl.className = 'art-lasers-drag-area';
+  panel.appendChild(dragAreaEl);
+
+  const handlesLayer = document.createElement('div');
+  handlesLayer.className = 'art-lasers-handles';
+  panel.appendChild(handlesLayer);
 
   const emitters = [
-    { x: 20, y: 28, a: 0.42 },
-    { x: 110, y: 16, a: 1.02 },
-    { x: 200, y: 28, a: 1.74 },
-    { x: 206, y: 110, a: 2.65 },
-    { x: 200, y: 192, a: 3.52 },
-    { x: 110, y: 204, a: 4.18 },
-    { x: 20, y: 192, a: 5.08 },
-    { x: 14, y: 110, a: 5.85 },
+    { x: 20, y: 28 },
+    { x: 110, y: 16 },
+    { x: 200, y: 28 },
+    { x: 206, y: 110 },
+    { x: 200, y: 192 },
+    { x: 110, y: 204 },
+    { x: 20, y: 192 },
+    { x: 14, y: 110 },
   ];
+  const targets = emitters.map((e) => ({
+    x: Math.max(22, Math.min(198, (e.x * 0.58) + 46)),
+    y: Math.max(22, Math.min(198, (e.y * 0.58) + 46)),
+  }));
   const palette = ['#7bf6ff', '#86efac', '#fde047', '#f9a8d4', '#c4b5fd', '#67e8f9', '#fca5a5', '#a7f3d0'];
   const active = [];
   const ACTIVE_CAP = 28;
+  const sourceHandleEls = [];
+  const targetHandleEls = [];
+  const guideEls = [];
+  const activeSlots = new Set();
+  const PANEL_PX = 220;
+  const HANDLE_SIZE_PX = 62;
+  const AREA_MIN_X = -142;
+  const AREA_MIN_Y = 74;
+  const MAX_DRAG_SPAN = 1600;
+  const AREA_MAX_X = AREA_MIN_X + MAX_DRAG_SPAN;
+  const AREA_MAX_Y = AREA_MIN_Y + MAX_DRAG_SPAN;
+  const TOTAL_LIMIT_W = Math.max(1, AREA_MAX_X - AREA_MIN_X);
+  const TOTAL_LIMIT_H = Math.max(1, AREA_MAX_Y - AREA_MIN_Y);
+  const RANDOM_TOP_LEFT_QUARTER = {
+    x: AREA_MIN_X,
+    y: AREA_MIN_Y,
+    w: TOTAL_LIMIT_W * 0.5,
+    h: TOTAL_LIMIT_H * 0.5,
+  };
+  const dragArea = {
+    x: AREA_MIN_X,
+    y: AREA_MIN_Y,
+    w: 384,
+    h: 276,
+  };
+  const INITIAL_DRAG_W = dragArea.w;
+  const INITIAL_DRAG_H = dragArea.h;
+
+  const LASER_FX = Object.freeze([
+    { id: 0, key: 'full', name: 'Full' },
+    { id: 1, key: 'short', name: 'Short' },
+    { id: 2, key: 'long', name: 'Long' },
+  ]);
+  const clampFxId = (v) => {
+    const n = Math.trunc(Number(v));
+    return Number.isFinite(n) && n >= 0 && n < LASER_FX.length ? n : 0;
+  };
+  let currentFxId = 0;
+  let syncFxUi = () => {};
+  const setFx = (nextId, { announce = true } = {}) => {
+    currentFxId = clampFxId(nextId);
+    panel.dataset.laserFx = String(currentFxId);
+    try { syncFxUi(); } catch {}
+    if (announce) markSceneDirtySafe();
+  };
+  setFx(0, { announce: false });
+
+  const clampAnchorX = (v) => {
+    const n = Number(v) || 0;
+    return Math.max(AREA_MIN_X, Math.min(AREA_MAX_X, n));
+  };
+  const clampAnchorY = (v) => {
+    const n = Number(v) || 0;
+    return Math.max(AREA_MIN_Y, Math.min(AREA_MAX_Y, n));
+  };
+  const syncActiveStateFlags = () => {
+    panel.dataset.hasActiveLasers = activeSlots.size > 0 ? '1' : '0';
+  };
+  const syncDragArea = () => {
+    dragAreaEl.style.left = `${dragArea.x.toFixed(2)}px`;
+    dragAreaEl.style.top = `${dragArea.y.toFixed(2)}px`;
+    dragAreaEl.style.width = `${dragArea.w.toFixed(2)}px`;
+    dragAreaEl.style.height = `${dragArea.h.toFixed(2)}px`;
+  };
+  const syncHandle = (slot, kind) => {
+    const i = normalizeSlot(slot);
+    const pos = kind === 'target' ? targets[i] : emitters[i];
+    const handle = kind === 'target' ? targetHandleEls[i] : sourceHandleEls[i];
+    if (!handle || !pos) return;
+    handle.style.left = `${(pos.x - HANDLE_SIZE_PX * 0.5).toFixed(2)}px`;
+    handle.style.top = `${(pos.y - HANDLE_SIZE_PX * 0.5).toFixed(2)}px`;
+  };
+  const syncGuide = (slot) => {
+    const i = normalizeSlot(slot);
+    const source = emitters[i];
+    const target = targets[i];
+    const guide = guideEls[i];
+    if (!guide || !source || !target) return;
+    guide.setAttribute('x1', source.x.toFixed(2));
+    guide.setAttribute('y1', source.y.toFixed(2));
+    guide.setAttribute('x2', target.x.toFixed(2));
+    guide.setAttribute('y2', target.y.toFixed(2));
+  };
+  const syncAllHandles = () => {
+    for (let i = 0; i < ART_SLOT_COUNT; i++) {
+      syncHandle(i, 'source');
+      syncHandle(i, 'target');
+      syncGuide(i);
+    }
+  };
+  const setSlotActive = (slot) => {
+    const i = normalizeSlot(slot);
+    activeSlots.add(i);
+    sourceHandleEls[i]?.classList.add('is-active-firework');
+    targetHandleEls[i]?.classList.add('is-active-firework');
+    guideEls[i]?.classList.add('is-active-firework');
+    syncActiveStateFlags();
+  };
+  const setSlotInactive = (slot) => {
+    const i = normalizeSlot(slot);
+    activeSlots.delete(i);
+    sourceHandleEls[i]?.classList.remove('is-active-firework');
+    targetHandleEls[i]?.classList.remove('is-active-firework');
+    guideEls[i]?.classList.remove('is-active-firework');
+    syncActiveStateFlags();
+  };
+  const activateAllSlots = () => {
+    for (let i = 0; i < ART_SLOT_COUNT; i++) setSlotActive(i);
+  };
+  const fitDragAreaToAnchors = () => {
+    const activeList = Array.from(activeSlots);
+    const useSlots = activeList.length ? activeList : Array.from({ length: ART_SLOT_COUNT }, (_, i) => i);
+    const coords = [];
+    for (const i of useSlots) {
+      const s = emitters[i];
+      const t = targets[i];
+      if (s) coords.push({ x: clampAnchorX(s.x), y: clampAnchorY(s.y) });
+      if (t) coords.push({ x: clampAnchorX(t.x), y: clampAnchorY(t.y) });
+    }
+    if (!coords.length) {
+      dragArea.x = AREA_MIN_X;
+      dragArea.y = AREA_MIN_Y;
+      dragArea.w = INITIAL_DRAG_W;
+      dragArea.h = INITIAL_DRAG_H;
+      syncDragArea();
+      return;
+    }
+    const pad = 28;
+    const maxX = Math.max(...coords.map((p) => p.x));
+    const maxY = Math.max(...coords.map((p) => p.y));
+    const right = Math.min(AREA_MAX_X, maxX + pad);
+    const bottom = Math.min(AREA_MAX_Y, maxY + pad);
+    dragArea.x = AREA_MIN_X;
+    dragArea.y = AREA_MIN_Y;
+    dragArea.w = Math.max(INITIAL_DRAG_W, right - AREA_MIN_X);
+    dragArea.h = Math.max(INITIAL_DRAG_H, bottom - AREA_MIN_Y);
+    syncDragArea();
+  };
+
+  const randomizeAnchorsWithinArea = (area = dragArea) => {
+    const areaX = Number.isFinite(Number(area?.x)) ? Number(area.x) : dragArea.x;
+    const areaY = Number.isFinite(Number(area?.y)) ? Number(area.y) : dragArea.y;
+    const areaW = Math.max(1, Number.isFinite(Number(area?.w)) ? Number(area.w) : dragArea.w);
+    const areaH = Math.max(1, Number.isFinite(Number(area?.h)) ? Number(area.h) : dragArea.h);
+    for (let i = 0; i < ART_SLOT_COUNT; i++) {
+      const sx = clampAnchorX(areaX + Math.random() * areaW);
+      const sy = clampAnchorY(areaY + Math.random() * areaH);
+      const tx = clampAnchorX(sx + (Math.random() - 0.5) * 92);
+      const ty = clampAnchorY(sy + (Math.random() - 0.5) * 92);
+      emitters[i].x = sx;
+      emitters[i].y = sy;
+      targets[i].x = tx;
+      targets[i].y = ty;
+    }
+  };
+
+  const makeHandle = (slot, kind) => {
+    const handleBtn = document.createElement('button');
+    handleBtn.type = 'button';
+    handleBtn.className = `c-btn art-laser-handle-btn art-laser-handle-${kind}`;
+    handleBtn.title = `${kind === 'target' ? 'Move Laser Target' : 'Move Laser Source'} ${slot + 1}`;
+    handleBtn.setAttribute('aria-label', `${kind === 'target' ? 'Move Laser Target' : 'Move Laser Source'} ${slot + 1}`);
+    handleBtn.style.setProperty('--c-btn-size', '62px');
+    handleBtn.innerHTML = BUTTON_ICON_HTML;
+    const core = handleBtn.querySelector('.c-btn-core');
+    if (core) core.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonHandle.png')");
+
+    const pos = kind === 'target' ? targets : emitters;
+    attachSlotHandleDrag({
+      handleBtn,
+      layer,
+      panelPx: PANEL_PX,
+      getStartPos: () => ({ x: pos[slot].x, y: pos[slot].y }),
+      setPos: (x, y) => {
+        pos[slot].x = x;
+        pos[slot].y = y;
+        fitDragAreaToAnchors();
+        syncHandle(slot, kind);
+        syncGuide(slot);
+      },
+      clampX: clampAnchorX,
+      clampY: clampAnchorY,
+      onDragStateChange: (active) => {
+        dragAreaEl.classList.toggle('is-dragging', !!active);
+      },
+      onCommit: () => markSceneDirtySafe(),
+    });
+
+    handlesLayer.appendChild(handleBtn);
+    if (kind === 'target') targetHandleEls[slot] = handleBtn;
+    else sourceHandleEls[slot] = handleBtn;
+    syncHandle(slot, kind);
+  };
+
+  randomizeAnchorsWithinArea();
+  syncDragArea();
+  syncActiveStateFlags();
+  for (let i = 0; i < ART_SLOT_COUNT; i++) {
+    const guide = document.createElementNS(svgNS, 'line');
+    guide.setAttribute('class', 'art-laser-guide');
+    guide.setAttribute('stroke', palette[i % palette.length]);
+    guidesLayer.appendChild(guide);
+    guideEls[i] = guide;
+    syncGuide(i);
+  }
+  for (let i = 0; i < ART_SLOT_COUNT; i++) {
+    makeHandle(i, 'source');
+    makeHandle(i, 'target');
+  }
+
+  try {
+    const controlsHost = getBaseArtToyControlsHost(panel);
+    const fxShell = controlsHost?.querySelector?.('.art-toy-fx-shell') || null;
+    const fxCurrentBtn = fxShell?.querySelector?.('.art-toy-fx-current') || null;
+    const fxCurrentStage = fxShell?.querySelector?.('.art-toy-fx-stage-current') || null;
+    const fxGrid = fxShell?.querySelector?.('.art-toy-fx-grid') || null;
+    const fxCards = [];
+
+    const previewLines = new WeakMap();
+    const PREVIEW_CAP = 24;
+    const trackPreviewLine = (stage, el) => {
+      let list = previewLines.get(stage);
+      if (!list) {
+        list = [];
+        previewLines.set(stage, list);
+      }
+      list.push(el);
+      while (list.length > PREVIEW_CAP) {
+        const old = list.shift();
+        try { old?.remove(); } catch {}
+      }
+    };
+    const spawnPreviewLaser = (stage, fxId) => {
+      if (!stage) return 720;
+      const id = clampFxId(fxId);
+      const tone = palette[id % palette.length];
+      const line = document.createElement('span');
+      line.className = 'art-laser-preview-line';
+      line.style.background = tone;
+      line.style.left = '50%';
+      line.style.top = '50%';
+      const baseLen = id === 1 ? 28 : id === 2 ? 58 : 44;
+      const width = id === 1 ? 3 : id === 2 ? 2.3 : 2.6;
+      const rot = (Math.random() - 0.5) * 1.2;
+      line.style.width = `${baseLen}px`;
+      line.style.height = `${width}px`;
+      stage.appendChild(line);
+      trackPreviewLine(stage, line);
+      const life = id === 2 ? 720 : id === 1 ? 480 : 600;
+      try {
+        const anim = line.animate(
+          [
+            { transform: `translate(-50%, -50%) rotate(${rot}rad) scaleX(0.02)`, opacity: 0.1 },
+            { transform: `translate(-50%, -50%) rotate(${rot}rad) scaleX(1.0)`, opacity: 0.95, offset: 0.26 },
+            { transform: `translate(-50%, -50%) rotate(${rot}rad) scaleX(${id === 2 ? 1.12 : 0.92})`, opacity: 0 },
+          ],
+          { duration: life, easing: 'cubic-bezier(0.22, 0.75, 0.18, 1)' }
+        );
+        anim.addEventListener('finish', () => { try { line.remove(); } catch {} }, { once: true });
+        anim.addEventListener('cancel', () => { try { line.remove(); } catch {} }, { once: true });
+      } catch {
+        setTimeout(() => { try { line.remove(); } catch {} }, life + 40);
+      }
+      return life;
+    };
+    const addPreviewLoop = (stage, fxResolver) => {
+      if (!stage) return;
+      let timer = 0;
+      const tick = () => {
+        if (!panel.isConnected || !stage.isConnected) {
+          if (timer) clearTimeout(timer);
+          return;
+        }
+        const nextId = typeof fxResolver === 'function' ? fxResolver() : fxResolver;
+        const cycleMs = Math.max(420, Number(spawnPreviewLaser(stage, nextId)) || 700);
+        timer = setTimeout(tick, cycleMs + 40);
+      };
+      tick();
+    };
+    const setFxPickerOpen = (open) => {
+      if (!fxShell || !fxGrid) return;
+      const isOpen = !!open;
+      fxShell.dataset.open = isOpen ? '1' : '0';
+      if (fxCurrentBtn) fxCurrentBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      fxGrid.hidden = !isOpen;
+    };
+    const fxById = new Map(LASER_FX.map((fx) => [fx.id, fx]));
+    syncFxUi = () => {
+      const fxId = clampFxId(panel?.dataset?.laserFx);
+      const fxName = fxById.get(fxId)?.name || 'Laser';
+      if (fxCurrentBtn) {
+        fxCurrentBtn.title = `Laser: ${fxName}`;
+        fxCurrentBtn.setAttribute('aria-label', `Current laser effect: ${fxName}`);
+      }
+      if (fxCurrentStage) fxCurrentStage.dataset.fxId = String(fxId);
+      for (const card of fxCards) {
+        card.classList.toggle('is-selected', card.dataset.fxId === String(fxId));
+      }
+    };
+
+    if (fxGrid && LASER_FX.length) {
+      fxGrid.innerHTML = '';
+      for (const fx of LASER_FX) {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'art-toy-fx-card';
+        card.dataset.fxId = String(fx.id);
+        card.title = fx.name;
+        card.setAttribute('aria-label', `Select ${fx.name} laser effect`);
+        const stage = document.createElement('span');
+        stage.className = 'art-toy-fx-stage';
+        card.appendChild(stage);
+        fxGrid.appendChild(card);
+        fxCards.push(card);
+        addPreviewLoop(stage, fx.id);
+        card.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          setFx(fx.id);
+          setFxPickerOpen(false);
+        });
+      }
+    }
+    if (fxCurrentBtn) {
+      fxCurrentBtn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        setFxPickerOpen(fxShell?.dataset?.open !== '1');
+      });
+    }
+    if (fxCurrentStage) addPreviewLoop(fxCurrentStage, () => clampFxId(panel?.dataset?.laserFx));
+    document.addEventListener('pointerdown', (ev) => {
+      if (!panel.isConnected) return;
+      if (!fxShell || fxShell.dataset.open !== '1') return;
+      const t = ev?.target;
+      if (t && fxShell.contains(t)) return;
+      setFxPickerOpen(false);
+    }, true);
+    setFxPickerOpen(false);
+    syncFxUi();
+  } catch {}
 
   function spawnLaser(slotIndex, velocity = null) {
     const slot = normalizeSlot(slotIndex);
-    const em = emitters[slot];
+    const source = emitters[slot];
+    const target = targets[slot];
     const tone = palette[slot % palette.length];
+    const fxId = clampFxId(panel?.dataset?.laserFx);
     const vel = Number(velocity);
     const amp = Number.isFinite(vel) ? Math.max(0.5, Math.min(1.25, vel)) : 0.95;
-    const maxLen = 82 * amp;
-    const segmentLen = 10;
+    const segmentLen = fxId === 1 ? 8 : fxId === 2 ? 12 : 10;
     const wobble = 9 + Math.random() * 7;
-    const points = [{ x: em.x, y: em.y }];
-    let dist = 0;
-    let angle = em.a + (Math.random() - 0.5) * 0.36;
-    while (dist < maxLen) {
-      dist += segmentLen;
-      const t = dist / Math.max(1, maxLen);
-      const w = Math.sin(t * Math.PI * (2.4 + Math.random() * 0.7)) * wobble * (1 - t * 0.68);
-      angle += (Math.random() - 0.5) * 0.28;
-      const prev = points[points.length - 1];
-      const nx = prev.x + Math.cos(angle) * segmentLen - Math.sin(angle) * (w * 0.06);
-      const ny = prev.y + Math.sin(angle) * segmentLen + Math.cos(angle) * (w * 0.06);
-      points.push({
-        x: Math.max(6, Math.min(214, nx)),
-        y: Math.max(6, Math.min(214, ny)),
-      });
+    const dx0 = target.x - source.x;
+    const dy0 = target.y - source.y;
+    const len0 = Math.max(6, Math.hypot(dx0, dy0));
+    const dirX = dx0 / len0;
+    const dirY = dy0 / len0;
+    const endLen = Math.max(18, (fxId === 1 ? len0 * 0.45 : fxId === 2 ? len0 * 1.35 : len0) * amp);
+    const endX = source.x + (dirX * endLen);
+    const endY = source.y + (dirY * endLen);
+    const normalX = -dirY;
+    const normalY = dirX;
+    const steps = Math.max(4, Math.round(endLen / Math.max(6, segmentLen)));
+    const points = [{ x: source.x, y: source.y }];
+    for (let s = 1; s <= steps; s++) {
+      const t = s / steps;
+      const wobbleAmt = Math.sin(t * Math.PI * (2.2 + Math.random() * 0.5)) * wobble * (1 - t * 0.72);
+      const jitter = (Math.random() - 0.5) * 2.0;
+      const px = source.x + (endX - source.x) * t + normalX * (wobbleAmt * 0.35 + jitter);
+      const py = source.y + (endY - source.y) * t + normalY * (wobbleAmt * 0.35 + jitter);
+      points.push({ x: px, y: py });
     }
 
     const path = document.createElementNS(svgNS, 'path');
     path.setAttribute('class', 'art-laser-path');
     path.setAttribute('d', buildLaserPath(points));
     path.setAttribute('stroke', tone);
-    path.setAttribute('stroke-width', String((1.7 + Math.random() * 1.4) * amp));
+    const width = fxId === 1 ? (5.4 + Math.random() * 3.1) : fxId === 2 ? (3.2 + Math.random() * 1.6) : (4.6 + Math.random() * 2.6);
+    path.setAttribute('stroke-width', String(width * amp));
     path.setAttribute('fill', 'none');
     path.setAttribute('stroke-linecap', 'round');
     path.setAttribute('stroke-linejoin', 'round');
@@ -1756,7 +2153,7 @@ function setupLaserTrails(panel) {
     path.style.strokeDasharray = `${total.toFixed(2)}`;
     path.style.strokeDashoffset = `${total.toFixed(2)}`;
 
-    const life = 440 + Math.random() * 210;
+    const life = fxId === 2 ? (560 + Math.random() * 260) : fxId === 1 ? (320 + Math.random() * 140) : (440 + Math.random() * 210);
     try {
       const anim = path.animate(
         [
@@ -1782,14 +2179,105 @@ function setupLaserTrails(panel) {
     }
   }
 
+  panel.onArtRandomMusic = () => {
+    activateAllSlots();
+    fitDragAreaToAnchors();
+    syncAllHandles();
+    markSceneDirtySafe();
+  };
+
+  panel.onArtRandomAll = () => {
+    activateAllSlots();
+    randomizeAnchorsWithinArea(RANDOM_TOP_LEFT_QUARTER);
+    fitDragAreaToAnchors();
+    syncAllHandles();
+    if (LASER_FX.length > 1) {
+      let next = Math.floor(Math.random() * LASER_FX.length);
+      if (next === currentFxId) next = (next + 1 + Math.floor(Math.random() * (LASER_FX.length - 1))) % LASER_FX.length;
+      setFx(next);
+    }
+    markSceneDirtySafe();
+  };
+
+  panel.onArtSetActiveSlots = (slots = []) => {
+    const wanted = new Set((Array.isArray(slots) ? slots : []).map((s) => normalizeSlot(s)));
+    for (let i = 0; i < ART_SLOT_COUNT; i++) {
+      if (wanted.has(i)) setSlotActive(i);
+      else setSlotInactive(i);
+    }
+    fitDragAreaToAnchors();
+    syncAllHandles();
+  };
+
+  panel.onArtClear = () => {
+    for (let i = 0; i < ART_SLOT_COUNT; i++) setSlotInactive(i);
+    try { layer.querySelectorAll('.art-laser-path').forEach((node) => { try { node.remove(); } catch {} }); } catch {}
+    fitDragAreaToAnchors();
+    syncAllHandles();
+    markSceneDirtySafe();
+    return true;
+  };
+
+  panel.getArtToyPersistState = () => {
+    const activeSlotsSorted = Array.from(activeSlots.values()).map((s) => normalizeSlot(s)).sort((a, b) => a - b);
+    return {
+      type: ART_TYPES.LASER_TRAILS,
+      emitters: emitters.map((a) => ({ x: Number(a?.x) || 0, y: Number(a?.y) || 0 })),
+      targets: targets.map((a) => ({ x: Number(a?.x) || 0, y: Number(a?.y) || 0 })),
+      activeSlots: activeSlotsSorted,
+      fx: clampFxId(panel?.dataset?.laserFx),
+      controlsVisible: panel.dataset.controlsVisible === '1',
+    };
+  };
+
+  panel.applyArtToyPersistState = (state = {}) => {
+    if (!state || typeof state !== 'object') return false;
+    const nextEmitters = Array.isArray(state.emitters) ? state.emitters : null;
+    if (nextEmitters && nextEmitters.length) {
+      for (let i = 0; i < ART_SLOT_COUNT; i++) {
+        const src = nextEmitters[i];
+        if (!src || typeof src !== 'object') continue;
+        emitters[i].x = clampAnchorX(src.x);
+        emitters[i].y = clampAnchorY(src.y);
+      }
+    }
+    const nextTargets = Array.isArray(state.targets) ? state.targets : null;
+    if (nextTargets && nextTargets.length) {
+      for (let i = 0; i < ART_SLOT_COUNT; i++) {
+        const src = nextTargets[i];
+        if (!src || typeof src !== 'object') continue;
+        targets[i].x = clampAnchorX(src.x);
+        targets[i].y = clampAnchorY(src.y);
+      }
+    }
+    if (Array.isArray(state.activeSlots)) {
+      const wanted = new Set(state.activeSlots.map((s) => normalizeSlot(s)));
+      for (let i = 0; i < ART_SLOT_COUNT; i++) {
+        if (wanted.has(i)) setSlotActive(i);
+        else setSlotInactive(i);
+      }
+    }
+    if (state.fx != null) setFx(state.fx, { announce: false });
+    else if (panel?.dataset?.laserFx != null) setFx(panel.dataset.laserFx, { announce: false });
+    fitDragAreaToAnchors();
+    syncAllHandles();
+    if (typeof state.controlsVisible === 'boolean') setBaseArtToyControlsVisible(panel, state.controlsVisible);
+    return true;
+  };
+
+  fitDragAreaToAnchors();
+  syncAllHandles();
+
   panel.onArtTrigger = (trigger = null) => {
     const slot = normalizeSlot(trigger?.slotIndex);
+    setSlotActive(slot);
     spawnLaser(slot, trigger?.velocity ?? null);
     return true;
   };
 
   panel.flash = (meta = null) => {
     const slot = normalizeSlot(meta?.slotIndex);
+    setSlotActive(slot);
     spawnLaser(slot, meta?.velocity ?? null);
   };
 }

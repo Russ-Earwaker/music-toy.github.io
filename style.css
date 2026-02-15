@@ -1590,7 +1590,36 @@ body.advanced-controls-disabled [data-adv] {
   opacity: 1;
 }
 
+.art-lasers-handles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+.art-lasers-drag-area {
+  position: absolute;
+  border: 2px dashed rgba(122, 176, 255, 0.44);
+  background: rgba(70, 120, 255, 0.05);
+  border-radius: 14px;
+  opacity: 0;
+  transition: opacity 120ms ease, border-color 120ms ease, background 120ms ease;
+  pointer-events: none;
+}
+
+.art-toy-panel[data-controls-visible='1'][data-has-active-lasers='1'] .art-lasers-drag-area,
+.art-lasers-drag-area.is-dragging {
+  opacity: 1;
+}
+
 .art-firework-handle-btn {
+  position: absolute;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.art-laser-handle-btn {
   position: absolute;
   pointer-events: none;
   z-index: 1;
@@ -1599,6 +1628,10 @@ body.advanced-controls-disabled [data-adv] {
 }
 
 .art-toy-panel[data-controls-visible='1'] .art-firework-handle-btn.is-active-firework {
+  opacity: 1;
+  pointer-events: auto;
+}
+.art-toy-panel[data-controls-visible='1'] .art-laser-handle-btn.is-active-firework {
   opacity: 1;
   pointer-events: auto;
 }
@@ -1620,11 +1653,9 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
   filter: brightness(1.2) saturate(1.15) drop-shadow(0 0 8px rgba(132, 198, 255, 0.65));
 }
 
-.art-toy-circle-lasers {
-  background:
-    radial-gradient(110px 90px at 50% 54%, rgba(22, 44, 86, 0.7), rgba(15, 18, 50, 0.95) 62%),
-    linear-gradient(150deg, rgba(18, 29, 71, 0.9), rgba(8, 12, 38, 0.98));
-  border-color: rgba(123, 246, 255, 0.55);
+.art-toy-panel[data-controls-visible='1'] .art-laser-handle-btn.is-active-firework:hover,
+.art-toy-panel[data-controls-visible='1'] .art-laser-handle-btn.is-active-firework:focus-visible {
+  filter: brightness(1.2) saturate(1.15) drop-shadow(0 0 8px rgba(132, 198, 255, 0.65));
 }
 
 .art-laser-layer {
@@ -1637,9 +1668,26 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
   border-radius: inherit;
 }
 
+.art-laser-guide {
+  opacity: 0;
+  stroke-width: 1.4;
+  stroke-dasharray: 2.8 6.2;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 2px currentColor);
+  transition: opacity 120ms ease;
+}
+
+.art-toy-panel[data-controls-visible='1'] .art-laser-guide.is-active-firework {
+  opacity: 0.48;
+}
+
 .art-laser-path {
   opacity: 0;
   filter: drop-shadow(0 0 3px currentColor);
+}
+
+.art-toy-panel.art-toy-lasers {
+  box-shadow: none;
 }
 
 /* Internal-board visual home anchor: art-toy ghost marker (non-interactive). */
@@ -1823,6 +1871,15 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
 .art-toy-fx-stage > .art-firework-ring,
 .art-toy-fx-stage > .art-firework-star,
 .art-toy-fx-stage > .art-firework-core {
+  pointer-events: none;
+}
+
+.art-laser-preview-line {
+  position: absolute;
+  border-radius: 999px;
+  transform-origin: left center;
+  opacity: 0;
+  filter: drop-shadow(0 0 6px currentColor);
   pointer-events: none;
 }
 
