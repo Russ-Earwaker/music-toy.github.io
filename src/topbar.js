@@ -1,7 +1,7 @@
 // src/topbar.js - wires page header buttons to board helpers
 import * as Core from './audio-core.js';
 import { resumeAudioContextIfNeeded } from './audio-core.js';
-import { syncVolumeUI } from './volume-ui.js';
+import { syncVolumeUI } from './baseToy/volume-ui.js';
 import {
   applySoundThemeToScene,
   getSoundThemeKey,

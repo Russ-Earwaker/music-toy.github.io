@@ -5,9 +5,11 @@ import {
   createBaseArtToyPanel,
   ensureBaseArtToyUI,
   getBaseArtToyControlsHost,
+  getBaseArtToyVolumeHost,
   setBaseArtToyControlsVisible,
 } from './base-art-toy.js';
 import { ensurePanelSpawnPlacement, panToSpawnedPanel } from '../baseToy/spawn-placement.js';
+import { installVolumeUI } from '../baseToy/volume-ui.js';
 
 const ART_TYPES = Object.freeze({
   FLASH_CIRCLE: 'flashCircle',
@@ -136,6 +138,10 @@ function makePanelBase(type, opts = {}) {
   });
   ensureBaseArtToyUI(panel, { artToyId: panel.id });
   installArtToyControls(panel);
+  const volumeHost = getBaseArtToyVolumeHost(panel);
+  if (volumeHost) {
+    try { installVolumeUI(volumeHost, { panel }); } catch {}
+  }
   if (opts.showControlsOnSpawn !== false) {
     setBaseArtToyControlsVisible(panel, true);
   }

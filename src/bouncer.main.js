@@ -9,7 +9,7 @@ import { randomizeRects, EDGE_PAD as EDGE, hitRect, whichThirdRect, drawThirdsGu
 import { drawBlocksSection } from './ripplesynth-blocks.js';
 // board scale via rect baseline (rippler-style)
 import { createImpactFX } from './bouncer-impact.js';
-import { installVolumeUI } from './volume-ui.js';
+import { installVolumeUI } from './baseToy/volume-ui.js';
 import { createBouncerDraw } from './bouncer-render.js';
 import { installAdvancedCubeUI } from './bouncer-adv-ui.js';
 import { installBouncerInteractions } from './bouncer-interactions.js';

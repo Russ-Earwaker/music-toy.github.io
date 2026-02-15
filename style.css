@@ -1594,6 +1594,19 @@ body.advanced-controls-disabled [data-adv] {
   z-index: 3;
 }
 
+.art-toy-volume {
+  position: absolute;
+  left: 50%;
+  bottom: -24px;
+  transform: translateX(-50%);
+  z-index: 3;
+  width: min(280px, calc(100% + 76px));
+}
+
+.art-toy-volume .toy-volwrap {
+  width: 100%;
+}
+
 /* Art toy controls should use the same circular buttons as the music toys. */
 .art-toy-controls .c-btn {
   --c-btn-size: var(--art-control-size);

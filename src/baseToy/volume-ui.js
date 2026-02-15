@@ -1,6 +1,6 @@
-// src/volume-ui.js
-import { getToyGain, setToyVolume, setToyMuted, isToyMuted, getToyVolumeRaw } from './audio-core.js';
-import { refreshHelpOverlay } from './help-overlay.js';
+// src/baseToy/volume-ui.js
+import { getToyGain, setToyVolume, setToyMuted, isToyMuted, getToyVolumeRaw } from '../audio-core.js';
+import { refreshHelpOverlay } from '../help-overlay.js';
 
 const clamp01 = (v) => Math.max(0, Math.min(1, Number(v)));
 const readPersistedMuted = (panel) => {
@@ -107,13 +107,13 @@ export function syncVolumeUI(panel, { volume, muted } = {}) {
  * @param {HTMLElement} footer The .toy-footer element to append to.
  * @returns {{gain: GainNode}} An object containing the gain node for the toy.
  */
-export function installVolumeUI(footer) {
+export function installVolumeUI(footer, opts = {}) {
   if (!footer) {
     console.warn('[volume-ui] install failed: no footer element provided.');
     return { gain: getToyGain('master') }; // Fallback
   }
 
-  const panel = footer.closest('.toy-panel');
+  const panel = opts.panel || footer.closest('.toy-panel, .art-toy-panel');
   const toyId = getEventToyId(panel);
   const audioToyId = getAudioToyId(panel);
 

@@ -1,7 +1,7 @@
 // src/toyui.js — panel chrome + events (<=300 lines)
 import { zoomInPanel, zoomOutPanel } from './zoom-overlay.js';
 import { getInstrumentNames } from './audio-samples.js';
-import { installVolumeUI } from './volume-ui.js';
+import { installVolumeUI } from './baseToy/volume-ui.js';
 import { getIdForDisplayName, getDisplayNameForId, getAllIds } from './instrument-catalog.js';
 import { openInstrumentPicker } from './instrument-picker.js';
 import { refreshHelpOverlay } from './help-overlay.js';

@@ -54,8 +54,10 @@ function setDragButtonActive(panel, active) {
 
 function hideControls(panel) {
   if (!panel) return;
-  const host = panel.querySelector('.art-toy-controls');
-  if (host) host.style.display = 'none';
+  const controlsHost = panel.querySelector('.art-toy-controls');
+  const volumeHost = panel.querySelector('.art-toy-volume');
+  if (controlsHost) controlsHost.style.display = 'none';
+  if (volumeHost) volumeHost.style.display = 'none';
   panel.dataset.controlsVisible = '0';
   setDragButtonActive(panel, false);
   if (g_openControlsPanel === panel) g_openControlsPanel = null;
@@ -64,8 +66,10 @@ function hideControls(panel) {
 function showControls(panel) {
   if (!panel) return;
   if (g_openControlsPanel && g_openControlsPanel !== panel) hideControls(g_openControlsPanel);
-  const host = panel.querySelector('.art-toy-controls');
-  if (host) host.style.display = '';
+  const controlsHost = panel.querySelector('.art-toy-controls');
+  const volumeHost = panel.querySelector('.art-toy-volume');
+  if (controlsHost) controlsHost.style.display = '';
+  if (volumeHost) volumeHost.style.display = '';
   panel.dataset.controlsVisible = '1';
   setDragButtonActive(panel, true);
   g_openControlsPanel = panel;
@@ -96,6 +100,11 @@ export function ensureBaseArtToyUI(panel, { artToyId } = {}) {
   controls.className = 'art-toy-controls';
   controls.style.display = 'none';
   panel.appendChild(controls);
+
+  const volume = document.createElement('div');
+  volume.className = 'art-toy-volume';
+  volume.style.display = 'none';
+  panel.appendChild(volume);
 
   // Store the "public" id used by internal-board entry handlers.
   if (artToyId) panel.dataset.artToyId = String(artToyId);
@@ -204,4 +213,8 @@ export function ensureBaseArtToyUI(panel, { artToyId } = {}) {
 
 export function getBaseArtToyControlsHost(panel) {
   return panel?.querySelector?.('.art-toy-controls') || null;
+}
+
+export function getBaseArtToyVolumeHost(panel) {
+  return panel?.querySelector?.('.art-toy-volume') || null;
 }

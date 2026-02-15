@@ -4,7 +4,7 @@
 import { bpm, setBpm, stop as stopTransport, setToyVolume, setToyMuted, getToyVolumeRaw, isToyMuted } from './audio-core.js';
 import { setGestureTransform as zcSetGestureTransform, commitGesture as zcCommitGesture, getZoomState as zcGetZoomState } from './zoom/ZoomCoordinator.js';
 import { getActiveThemeKey, setActiveThemeKey } from './theme-manager.js';
-import { syncVolumeUI } from './volume-ui.js';
+import { syncVolumeUI } from './baseToy/volume-ui.js';
 
 // ---- Persistence diagnostics ----
 const PERSIST_DIAG = (typeof window !== 'undefined') ? (window.__PERSIST_DIAG = window.__PERSIST_DIAG || {}) : {};

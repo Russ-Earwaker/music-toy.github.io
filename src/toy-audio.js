@@ -1,7 +1,7 @@
 // src/toy-audio.js — shared per-toy mute/volume policy (<=300 lines)
 import { ensureAudioContext, resumeAudioContextIfNeeded, setToyVolume, setToyMuted } from './audio-core.js';
 import { cancelScheduledToySources } from './audio-samples.js';
-import { syncVolumeUI } from './volume-ui.js';
+import { syncVolumeUI } from './baseToy/volume-ui.js';
 
 /** In-memory mirror so UI can query without hitting AudioParams */
 const __toyState = new Map(); // id -> { muted:boolean, volume:number }
@@ -115,7 +115,7 @@ function findToyPanel(id){
   if (!id || typeof document === 'undefined') return null;
   const byId = document.getElementById(id);
   if (byId) return byId;
-  return document.querySelector(`.toy-panel[data-toyid="${id}"], .toy-panel[data-toy="${id}"]`);
+  return document.querySelector(`.toy-panel[data-toyid="${id}"], .toy-panel[data-toy="${id}"], .art-toy-panel#${CSS.escape(String(id))}`);
 }
 
 function isChainHead(panel){
@@ -171,6 +171,30 @@ function applyChainVolumeMute(rootId, { volume, muted } = {}){
   }
 }
 
+function applyArtOwnedVolumeMute(artToyId, { volume, muted } = {}) {
+  const hasVolume = Number.isFinite(volume);
+  const hasMuted = typeof muted === 'boolean';
+  if (!artToyId || (!hasVolume && !hasMuted) || typeof document === 'undefined') return;
+  const sel = `.toy-panel[data-art-owner-id="${CSS.escape(String(artToyId))}"]`;
+  const panels = Array.from(document.querySelectorAll(sel));
+  for (const panel of panels) {
+    const audioId = getPanelAudioId(panel) || getPanelToyId(panel);
+    if (!audioId) continue;
+    const st = getState(audioId);
+    if (hasVolume) {
+      st.volume = clamp01(volume);
+      try { setToyVolume(audioId, st.volume); } catch {}
+      try { panel.dataset.toyVolume = String(st.volume); } catch {}
+    }
+    if (hasMuted) {
+      st.muted = !!muted;
+      try { setToyMuted(audioId, st.muted); } catch {}
+      try { panel.dataset.toyMuted = st.muted ? '1' : '0'; } catch {}
+    }
+    try { syncVolumeUI(panel, { volume: hasVolume ? st.volume : undefined, muted: hasMuted ? st.muted : undefined }); } catch {}
+  }
+}
+
 // Listen for UI events from toyui.js and drive audio-core
 try {
   window.addEventListener('toy-mute', (e)=>{
@@ -182,6 +206,9 @@ try {
     const st = getState(id);
     st.muted = !!d.muted;
     try { setToyMuted(id, st.muted); } catch {}
+    if (panel?.classList?.contains?.('art-toy-panel')) {
+      applyArtOwnedVolumeMute(getPanelToyId(panel), { muted: st.muted });
+    }
     if (panel && isChainHead(panel) && id !== 'master') {
       applyChainVolumeMute(getPanelToyId(panel), { muted: st.muted });
     }
@@ -200,6 +227,9 @@ try {
       const st = getState(id);
       st.volume = clamp01(v);
       try { setToyVolume(id, st.volume); } catch {}
+      if (panel?.classList?.contains?.('art-toy-panel')) {
+        applyArtOwnedVolumeMute(getPanelToyId(panel), { volume: st.volume });
+      }
       if (panel && isChainHead(panel) && id !== 'master') {
         applyChainVolumeMute(getPanelToyId(panel), { volume: st.volume });
       }
