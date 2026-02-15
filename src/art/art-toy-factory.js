@@ -1127,6 +1127,29 @@ function setupFireworks(panel) {
       } catch {}
     };
 
+    const spawnCoreFadeOut = (scale = 1, life = 340) => {
+      try {
+        const glow = document.createElement('span');
+        glow.className = 'art-firework-core';
+        glow.style.left = `${Math.round(anchor.x)}px`;
+        glow.style.top = `${Math.round(anchor.y)}px`;
+        glow.style.background = tone;
+        layer.appendChild(glow);
+        trackParticleEl(glow);
+        const fullScale = 2.6 * FIREWORK_EFFECT_SCALE * Math.max(0.05, Number(scale) || 1);
+        const anim = glow.animate(
+          [
+            { transform: `translate(-50%, -50%) scale(${fullScale})`, opacity: 1 },
+            { transform: `translate(-50%, -50%) scale(${fullScale})`, opacity: 0.95, offset: 0.22 },
+            { transform: `translate(-50%, -50%) scale(${fullScale * 0.92})`, opacity: 0 },
+          ],
+          { duration: life, easing: 'ease-out' }
+        );
+        anim.addEventListener('finish', () => { try { glow.remove(); } catch {} }, { once: true });
+        anim.addEventListener('cancel', () => { try { glow.remove(); } catch {} }, { once: true });
+      } catch {}
+    };
+
     const spawnLineSpark = ({ angle = 0, dist = 60, life = 520, width = 10, height = 64, gravity = 0, opacity = 1, scale0 = 0.25, scale1 = 1, toneOverride = null } = {}) => {
       const spark = document.createElement('span');
       spark.className = 'art-firework-spark';
@@ -1290,7 +1313,7 @@ function setupFireworks(panel) {
 
     if (fxId === 0) {
       // Simple bright flash circle (matches preview for effect 0).
-      spawnCoreFlash(0.54, 340);
+      spawnCoreFadeOut(0.54, 360);
       return;
     }
 
