@@ -5,6 +5,7 @@ import {
   createBaseArtToyPanel,
   ensureBaseArtToyUI,
   getBaseArtToyControlsHost,
+  setBaseArtToyControlsVisible,
 } from './base-art-toy.js';
 import { ensurePanelSpawnPlacement, panToSpawnedPanel } from '../baseToy/spawn-placement.js';
 
@@ -59,6 +60,21 @@ function resolveSpawnPlacement(board, centerX, centerY, size) {
 function installArtToyControls(panel) {
   const controlsHost = getBaseArtToyControlsHost(panel);
   if (!controlsHost) return;
+
+  const clearBtn = document.createElement('button');
+  clearBtn.className = 'art-toy-btn art-toy-clear-btn c-btn';
+  clearBtn.type = 'button';
+  clearBtn.setAttribute('aria-label', 'Reset this Art Toy');
+  clearBtn.title = 'Clear';
+  clearBtn.innerHTML = BUTTON_ICON_HTML;
+  const clearCore = clearBtn.querySelector('.c-btn-core');
+  if (clearCore) clearCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonClear.png')");
+  clearBtn.style.setProperty('--c-btn-size', '62px');
+  clearBtn.style.setProperty('--accent', '#f87171');
+  clearBtn.style.order = '99';
+  clearBtn.dataset.action = 'artToy:clear';
+  clearBtn.dataset.artToyId = panel.id;
+  controlsHost.appendChild(clearBtn);
 
   const enterBtn = document.createElement('button');
   enterBtn.className = 'art-toy-btn art-toy-enter-btn c-btn';
@@ -120,6 +136,9 @@ function makePanelBase(type, opts = {}) {
   });
   ensureBaseArtToyUI(panel, { artToyId: panel.id });
   installArtToyControls(panel);
+  if (opts.showControlsOnSpawn !== false) {
+    setBaseArtToyControlsVisible(panel, true);
+  }
   board.appendChild(panel);
   ensurePanelSpawnPlacement(panel, {
     baseLeft: pos.left,

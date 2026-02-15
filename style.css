@@ -1520,129 +1520,86 @@ body.advanced-controls-disabled [data-adv] {
     0 14px 36px rgba(0, 0, 0, 0.35);
 }
 
-/* Base Art Toy: handle + contextual controls (tap handle to reveal) */
-.art-toy-handle {
+/* Base Art Toy: drag button + contextual controls */
+.art-toy-panel {
+  --art-control-size: 62px;
+  --art-drag-size: 124px; /* 2x the regular art toy control buttons */
+}
+
+.art-toy-drag-btn {
   position: absolute;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 64%;
-  height: 22px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.45);
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
+  top: calc(-18px - var(--art-drag-size));
+  left: calc(-18px - var(--art-drag-size));
+  z-index: 4;
+  --c-btn-size: var(--art-drag-size);
+  width: var(--art-drag-size);
+  height: var(--art-drag-size);
+  padding: 0;
+  border: none;
+  background: transparent;
   cursor: grab;
   pointer-events: auto;
+  opacity: 1;
+  filter: none;
+  transition: opacity 150ms ease, filter 150ms ease, transform 120ms ease;
 }
 
-.art-toy-handle::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 34px;
-  height: 3px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.5);
-  transform: translate(-50%, -50%);
-  box-shadow:
-    0 -6px 0 rgba(255, 255, 255, 0.4),
-    0 6px 0 rgba(255, 255, 255, 0.4);
+.art-toy-drag-btn .c-btn-core {
+  background-size: 62%;
 }
 
-.art-toy-handle:hover {
-  filter: brightness(1.18) saturate(1.15);
-  box-shadow:
-    0 0 0 2px rgba(255, 255, 255, 0.12),
-    0 10px 22px rgba(0, 0, 0, 0.55);
+.art-toy-drag-btn.is-active,
+.art-toy-drag-btn[aria-pressed='true'] {
+  opacity: 1;
+  filter: brightness(1.86) saturate(1.55);
+  box-shadow: 0 0 0 3px rgba(95, 179, 255, 0.35), 0 18px 40px rgba(0, 0, 0, 0.55);
 }
 
-.art-toy-handle:focus-visible {
-  outline: none;
-  box-shadow:
-    0 0 0 3px rgba(95, 179, 255, 0.35),
-    0 10px 22px rgba(0, 0, 0, 0.55);
+.art-toy-drag-btn.is-active .c-btn-outer,
+.art-toy-drag-btn[aria-pressed='true'] .c-btn-outer {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 14px 32px rgba(0, 0, 0, 0.55);
 }
 
-.art-toy-handle:active {
+.art-toy-drag-btn.is-active .c-btn-glow,
+.art-toy-drag-btn[aria-pressed='true'] .c-btn-glow {
+  opacity: 0.85;
+  filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.55));
+}
+
+.art-toy-drag-btn.is-active .c-btn-core::before,
+.art-toy-drag-btn[aria-pressed='true'] .c-btn-core::before {
+  transform: translate(-50%, -50%) scale(1.04);
+  filter: brightness(1.12);
+}
+
+.art-toy-drag-btn.is-active .c-btn-core::after,
+.art-toy-drag-btn[aria-pressed='true'] .c-btn-core::after {
+  transform: translate(-50%, -50%) scale(1.08);
+  filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.55)) brightness(1.02);
+}
+
+.art-toy-drag-btn:active {
   cursor: grabbing;
+  transform: scale(0.98);
 }
 
 .art-toy-controls {
   position: absolute;
-  left: 50%;
-  bottom: -18px;
-  transform: translateX(-50%);
+  top: calc(-18px - var(--art-drag-size));
+  left: calc(-18px + var(--art-drag-size) + 10px);
+  transform: none;
   display: flex;
+  align-items: center;
   gap: 8px;
-  z-index: 2;
+  z-index: 3;
 }
 
 /* Art toy controls should use the same circular buttons as the music toys. */
 .art-toy-controls .c-btn {
-  --c-btn-size: 62px;
+  --c-btn-size: var(--art-control-size);
 }
 .art-toy-controls .c-btn .c-btn-core {
   background-size: 62%;
-}
-
-.art-toy-btn {
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(0, 0, 0, 0.55);
-  color: rgba(255, 255, 255, 0.92);
-  padding: 8px 12px;
-  font-weight: 700;
-  letter-spacing: 0.2px;
-  cursor: pointer;
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.55);
-  white-space: nowrap;
-}
-.art-toy-btn:hover { filter: brightness(1.1); }
-.art-toy-btn:active { transform: translateY(1px) scale(0.98); }
-
-.art-toy-handle {
-  position: absolute;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 64%;
-  height: 22px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.45);
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
-  cursor: grab;
-}
-
-.art-toy-handle::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 34px;
-  height: 3px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.5);
-  transform: translate(-50%, -50%);
-  box-shadow:
-    0 -6px 0 rgba(255, 255, 255, 0.4),
-    0 6px 0 rgba(255, 255, 255, 0.4);
-}
-
-.art-toy-handle:active {
-  cursor: grabbing;
-}
-
-.art-toy-controls {
-  position: absolute;
-  left: 50%;
-  bottom: -18px;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 8px;
-  z-index: 2;
 }
 
 .art-toy-btn {

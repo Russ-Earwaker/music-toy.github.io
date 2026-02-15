@@ -3930,6 +3930,62 @@ document.addEventListener('click', (e) => {
   enterInternalBoard(artToyId);
 }, true);
 
+function resetArtToyToDefaultState(artToyId) {
+  if (!artToyId) return false;
+  const artPanel = getArtToyPanelById(artToyId);
+  if (!artPanel) return false;
+
+  try {
+    if (g_artInternal?.active && g_artInternal?.artToyId === artToyId) {
+      exitInternalBoardImmediate();
+    }
+  } catch {}
+
+  try {
+    const owned = getInternalPanelsForArtToy(artToyId);
+    for (const p of owned) {
+      try { destroyToyPanel(p, { allowOffBoard: true }); } catch {}
+    }
+  } catch {}
+
+  try {
+    const sel = `.internal-art-anchor-ghost[data-art-toy-id="${CSS.escape(String(artToyId))}"]`;
+    document.querySelectorAll(sel).forEach((el) => {
+      try { el.remove(); } catch {}
+    });
+  } catch {}
+
+  try {
+    delete artPanel.dataset.internalBootstrapped;
+    delete artPanel.dataset.internalHomeX;
+    delete artPanel.dataset.internalHomeY;
+    delete artPanel.dataset.internalHomeScale;
+    delete artPanel.dataset.pendingRandMusic;
+    delete artPanel.dataset.pendingRandAll;
+  } catch {}
+
+  try { artPanel.classList.remove('flash'); } catch {}
+  try {
+    artPanel.querySelectorAll('.art-firework-spark, .art-firework-core, .art-laser-path').forEach((node) => {
+      try { node.remove(); } catch {}
+    });
+  } catch {}
+
+  try { window.Persistence?.markDirty?.(); } catch {}
+  return true;
+}
+
+// Click delegate: Art Toy "Clear" button.
+document.addEventListener('click', (e) => {
+  const btn = e.target?.closest?.('button[data-action="artToy:clear"]');
+  if (!btn) return;
+  const artToyId = btn.closest?.('.art-toy-panel')?.id || btn.dataset.artToyId;
+  if (!artToyId) return;
+  e.preventDefault();
+  e.stopPropagation();
+  resetArtToyToDefaultState(artToyId);
+}, true);
+
 function randomizeInternalToysForArtToy(artToyId, mode, opts = {}) {
   const source = opts.source || 'button';
   const autoStartTransport = opts.autoStartTransport !== false;
@@ -7931,9 +7987,9 @@ async function boot(){
     if (!panel) return;
 
     if (panel.classList.contains('art-toy-panel')) {
-      const handle = panel.querySelector?.('.art-toy-handle');
-      const inHandle = handle && (handle === e.target || handle.contains(e.target));
-      if (!inHandle) return;
+      const dragBtn = panel.querySelector?.('.art-toy-drag-btn') || panel.querySelector?.('.art-toy-handle');
+      const inDragBtn = dragBtn && (dragBtn === e.target || dragBtn.contains(e.target));
+      if (!inDragBtn) return;
     } else {
       const header = panel.querySelector?.('.toy-header');
       const inHeader = header && (header === e.target || header.contains(e.target));

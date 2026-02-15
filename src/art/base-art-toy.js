@@ -1,8 +1,8 @@
 // src/art/base-art-toy.js
 // Shared base for Art Toys.
 // This file owns the common container behaviors:
-// - handle/header area (tap to reveal controls)
-// - drag by handle (pointer capture)
+// - top-left drag button (tap to reveal controls)
+// - drag by drag button (pointer capture)
 // - outside click hides controls
 
 export function createBaseArtToyPanel({
@@ -45,11 +45,19 @@ function getViewportScaleForPanel(panel) {
 
 let g_openControlsPanel = null;
 
+function setDragButtonActive(panel, active) {
+  const dragButton = panel?.querySelector?.('.art-toy-drag-btn');
+  if (!dragButton) return;
+  dragButton.classList.toggle('is-active', !!active);
+  dragButton.setAttribute('aria-pressed', active ? 'true' : 'false');
+}
+
 function hideControls(panel) {
   if (!panel) return;
   const host = panel.querySelector('.art-toy-controls');
   if (host) host.style.display = 'none';
   panel.dataset.controlsVisible = '0';
+  setDragButtonActive(panel, false);
   if (g_openControlsPanel === panel) g_openControlsPanel = null;
 }
 
@@ -59,21 +67,30 @@ function showControls(panel) {
   const host = panel.querySelector('.art-toy-controls');
   if (host) host.style.display = '';
   panel.dataset.controlsVisible = '1';
+  setDragButtonActive(panel, true);
   g_openControlsPanel = panel;
+}
+
+export function setBaseArtToyControlsVisible(panel, visible) {
+  if (!panel) return;
+  if (visible) showControls(panel);
+  else hideControls(panel);
 }
 
 export function ensureBaseArtToyUI(panel, { artToyId } = {}) {
   if (!panel) return null;
-  if (panel.querySelector('.art-toy-handle')) return panel;
+  if (panel.querySelector('.art-toy-drag-btn')) return panel;
 
-  const handle = document.createElement('div');
-  handle.className = 'art-toy-handle';
-  handle.setAttribute('role', 'button');
-  handle.setAttribute('aria-label', 'Art toy handle');
-  handle.tabIndex = 0;
-  // Above any glow/anchor visuals *inside* the panel.
-  handle.style.zIndex = '3';
-  panel.appendChild(handle);
+  const dragButton = document.createElement('button');
+  dragButton.type = 'button';
+  dragButton.className = 'art-toy-drag-btn c-btn';
+  dragButton.setAttribute('aria-label', 'Drag art toy');
+  dragButton.title = 'Drag / Show Controls';
+  dragButton.setAttribute('aria-pressed', 'false');
+  dragButton.innerHTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
+  const dragCore = dragButton.querySelector('.c-btn-core');
+  if (dragCore) dragCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonDrag.png')");
+  panel.appendChild(dragButton);
 
   const controls = document.createElement('div');
   controls.className = 'art-toy-controls';
@@ -83,7 +100,7 @@ export function ensureBaseArtToyUI(panel, { artToyId } = {}) {
   // Store the "public" id used by internal-board entry handlers.
   if (artToyId) panel.dataset.artToyId = String(artToyId);
 
-  // Tap handle to toggle controls.
+  // Tap drag button to toggle controls.
   const toggleControls = (ev) => {
     ev.preventDefault();
     ev.stopPropagation();
@@ -92,7 +109,7 @@ export function ensureBaseArtToyUI(panel, { artToyId } = {}) {
     else showControls(panel);
   };
 
-  handle.addEventListener('keydown', (ev) => {
+  dragButton.addEventListener('keydown', (ev) => {
     if (ev.key === 'Enter' || ev.key === ' ') toggleControls(ev);
   });
 
@@ -107,7 +124,7 @@ export function ensureBaseArtToyUI(panel, { artToyId } = {}) {
     document.addEventListener('pointerdown', onDocDown, { capture: true });
   }
 
-  // Drag by handle (pointer capture).
+  // Drag by drag button (pointer capture).
   let dragActive = false;
   let dragPid = null;
   let startClientX = 0;
@@ -117,7 +134,7 @@ export function ensureBaseArtToyUI(panel, { artToyId } = {}) {
   let moved = false;
   const TAP_SLOP_PX = 6;
 
-  handle.addEventListener('pointerdown', (ev) => {
+  dragButton.addEventListener('pointerdown', (ev) => {
     // Primary button / touch only.
     if (ev.button != null && ev.button !== 0) return;
     ev.preventDefault();
@@ -132,13 +149,13 @@ export function ensureBaseArtToyUI(panel, { artToyId } = {}) {
     moved = false;
 
     try {
-      handle.setPointerCapture(ev.pointerId);
+      dragButton.setPointerCapture(ev.pointerId);
     } catch (err) {
       // ignore
     }
   });
 
-  handle.addEventListener('pointermove', (ev) => {
+  dragButton.addEventListener('pointermove', (ev) => {
     if (!dragActive) return;
     if (dragPid != null && ev.pointerId !== dragPid) return;
     ev.preventDefault();
@@ -174,13 +191,13 @@ export function ensureBaseArtToyUI(panel, { artToyId } = {}) {
     dragActive = false;
     dragPid = null;
     try {
-      handle.releasePointerCapture(ev.pointerId);
+      dragButton.releasePointerCapture(ev.pointerId);
     } catch (err) {
       // ignore
     }
   };
-  handle.addEventListener('pointerup', endDrag);
-  handle.addEventListener('pointercancel', endDrag);
+  dragButton.addEventListener('pointerup', endDrag);
+  dragButton.addEventListener('pointercancel', endDrag);
 
   return panel;
 }

@@ -941,6 +941,7 @@ export function applySceneSnapshot(snap){
           const opts = {};
           if (Number.isFinite(left) && Number.isFinite(width)) opts.centerX = left + width / 2;
           if (Number.isFinite(top) && Number.isFinite(height)) opts.centerY = top + height / 2;
+          opts.showControlsOnSpawn = false;
           artPanel = artFactory.create(kind, opts) || null;
           if (artPanel) {
             existingArtPanels.push(artPanel);
