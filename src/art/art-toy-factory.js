@@ -528,6 +528,91 @@ function setupFireworks(panel) {
     syncAllAnchors();
   };
 
+  const isClientPointInsideDragArea = (clientX, clientY) => {
+    const rect = panel.getBoundingClientRect();
+    if (!rect || rect.width < 1 || rect.height < 1) return false;
+    const scaleX = rect.width / PANEL_PX;
+    const scaleY = rect.height / PANEL_PX;
+    const left = rect.left + dragArea.x * scaleX;
+    const top = rect.top + dragArea.y * scaleY;
+    const right = left + dragArea.w * scaleX;
+    const bottom = top + dragArea.h * scaleY;
+    return clientX >= left && clientX <= right && clientY >= top && clientY <= bottom;
+  };
+
+  let outsideTapCandidate = false;
+  let outsideTapPointerId = null;
+  let outsideTapStartX = 0;
+  let outsideTapStartY = 0;
+  let outsideTapMoved = false;
+  const OUTSIDE_TAP_SLOP_PX = 6;
+
+  const resetOutsideTap = () => {
+    outsideTapCandidate = false;
+    outsideTapPointerId = null;
+    outsideTapStartX = 0;
+    outsideTapStartY = 0;
+    outsideTapMoved = false;
+  };
+
+  const removeOutsideTapListeners = () => {
+    document.removeEventListener('pointerdown', onDocPointerDownHideExtras, true);
+    document.removeEventListener('pointermove', onDocPointerMoveHideExtras, true);
+    document.removeEventListener('pointerup', onDocPointerUpHideExtras, true);
+    document.removeEventListener('pointercancel', onDocPointerCancelHideExtras, true);
+  };
+
+  const onDocPointerDownHideExtras = (ev) => {
+    if (!panel.isConnected) {
+      removeOutsideTapListeners();
+      return;
+    }
+    resetOutsideTap();
+    if (panel.dataset.controlsVisible !== '1') return;
+    const target = ev?.target;
+    if (target && panel.contains(target)) return;
+    if (isClientPointInsideDragArea(ev.clientX, ev.clientY)) return;
+    outsideTapCandidate = true;
+    outsideTapPointerId = ev.pointerId;
+    outsideTapStartX = ev.clientX;
+    outsideTapStartY = ev.clientY;
+  };
+
+  const onDocPointerMoveHideExtras = (ev) => {
+    if (!outsideTapCandidate) return;
+    if (outsideTapPointerId != null && ev.pointerId !== outsideTapPointerId) return;
+    const dx = ev.clientX - outsideTapStartX;
+    const dy = ev.clientY - outsideTapStartY;
+    if ((dx * dx + dy * dy) > (OUTSIDE_TAP_SLOP_PX * OUTSIDE_TAP_SLOP_PX)) {
+      outsideTapMoved = true;
+    }
+  };
+
+  const onDocPointerUpHideExtras = (ev) => {
+    if (!outsideTapCandidate) return;
+    if (outsideTapPointerId != null && ev.pointerId !== outsideTapPointerId) return;
+    const target = ev?.target;
+    const endedOutsidePanel = !(target && panel.contains(target));
+    const endedOutsideArea = !isClientPointInsideDragArea(ev.clientX, ev.clientY);
+    const shouldHide = !outsideTapMoved && endedOutsidePanel && endedOutsideArea;
+    resetOutsideTap();
+    if (!shouldHide) return;
+    if (!panel.isConnected) return;
+    if (panel.dataset.controlsVisible !== '1') return;
+    setBaseArtToyControlsVisible(panel, false);
+  };
+
+  const onDocPointerCancelHideExtras = (ev) => {
+    if (!outsideTapCandidate) return;
+    if (outsideTapPointerId != null && ev.pointerId !== outsideTapPointerId) return;
+    resetOutsideTap();
+  };
+
+  document.addEventListener('pointerdown', onDocPointerDownHideExtras, true);
+  document.addEventListener('pointermove', onDocPointerMoveHideExtras, true);
+  document.addEventListener('pointerup', onDocPointerUpHideExtras, true);
+  document.addEventListener('pointercancel', onDocPointerCancelHideExtras, true);
+
   function spawnBurst(slotIndex, velocity = null) {
     const slot = normalizeSlot(slotIndex);
     const anchor = anchors[slot];
