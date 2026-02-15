@@ -1585,7 +1585,7 @@ body.advanced-controls-disabled [data-adv] {
   pointer-events: none;
 }
 
-.art-toy-panel[data-controls-visible='1'] .art-fireworks-drag-area,
+.art-toy-panel[data-controls-visible='1'][data-has-active-fireworks='1'] .art-fireworks-drag-area,
 .art-fireworks-drag-area.is-dragging {
   opacity: 1;
 }

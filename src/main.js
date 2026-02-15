@@ -3997,8 +3997,9 @@ function resetArtToyToDefaultState(artToyId) {
   } catch {}
 
   try { artPanel.classList.remove('flash'); } catch {}
+  try { artPanel.onArtClear?.(); } catch {}
   try {
-    artPanel.querySelectorAll('.art-firework-spark, .art-firework-core, .art-laser-path').forEach((node) => {
+    artPanel.querySelectorAll('.art-firework-spark, .art-firework-core, .art-firework-dot, .art-firework-ring, .art-firework-star, .art-laser-path').forEach((node) => {
       try { node.remove(); } catch {}
     });
   } catch {}

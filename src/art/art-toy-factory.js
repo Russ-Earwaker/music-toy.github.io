@@ -317,6 +317,9 @@ function setupFireworks(panel) {
   const handleEls = [];
   const activeGlowEls = Array.from({ length: ART_SLOT_COUNT }, () => null);
   const activeSlots = new Set();
+  const syncActiveStateFlags = () => {
+    panel.dataset.hasActiveFireworks = activeSlots.size > 0 ? '1' : '0';
+  };
 
   // Effect selection.
   // 0 = Classic Chrysanthemum (default)
@@ -870,6 +873,7 @@ function setupFireworks(panel) {
     const glow = activeGlowEls[i];
     if (glow) glow.classList.add('is-active-firework');
     syncActiveGlow(i);
+    syncActiveStateFlags();
   };
   const setSlotInactive = (slot) => {
     const i = normalizeSlot(slot);
@@ -878,6 +882,7 @@ function setupFireworks(panel) {
     if (handle) handle.classList.remove('is-active-firework');
     const glow = activeGlowEls[i];
     if (glow) glow.classList.remove('is-active-firework');
+    syncActiveStateFlags();
   };
 
   const clampAnchorX = (v) => {
@@ -977,6 +982,7 @@ function setupFireworks(panel) {
   };
 
   randomizeAnchorsWithinArea();
+  syncActiveStateFlags();
   syncDragArea();
   for (let i = 0; i < ART_SLOT_COUNT; i++) {
     const glow = document.createElement('span');
@@ -1095,6 +1101,19 @@ function setupFireworks(panel) {
     syncAllAnchors();
   };
 
+  panel.onArtClear = () => {
+    for (let i = 0; i < ART_SLOT_COUNT; i++) setSlotInactive(i);
+    try {
+      layer.querySelectorAll('.art-firework-spark, .art-firework-core, .art-firework-dot, .art-firework-ring, .art-firework-star').forEach((node) => {
+        try { node.remove(); } catch {}
+      });
+    } catch {}
+    fitDragAreaToAnchors();
+    syncAllAnchors();
+    markSceneDirtySafe();
+    return true;
+  };
+
   panel.getArtToyPersistState = () => {
     const active = Array.from(activeSlots.values())
       .map((s) => normalizeSlot(s))
@@ -1143,6 +1162,9 @@ function setupFireworks(panel) {
   };
 
   const isClientPointInsideDragArea = (clientX, clientY) => {
+    // When no active fireworks are present, the drag area should not capture
+    // outside taps (it is visually hidden and effectively inactive).
+    if (activeSlots.size === 0 && !dragAreaEl.classList.contains('is-dragging')) return false;
     const rect = panel.getBoundingClientRect();
     if (!rect || rect.width < 1 || rect.height < 1) return false;
     const scaleX = rect.width / PANEL_PX;
