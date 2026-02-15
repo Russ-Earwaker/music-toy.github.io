@@ -455,7 +455,17 @@ function setupFireworks(panel) {
       }
     };
 
-    const spawnPreviewRing = (stage, tone, { life = 520, scale0 = 0.18, scale1 = 1.5, thickness = 2 } = {}) => {
+    const spawnPreviewRing = ({
+      stage,
+      tone,
+      life = 520,
+      scale0 = 0.18,
+      scale1 = 1.5,
+      thickness = 2,
+      burstIn = null,
+      lingerUntil = null,
+      lingerOpacity = 0.24
+    } = {}) => {
       const ring = document.createElement('span');
       ring.className = 'art-firework-ring';
       ring.style.left = '50%';
@@ -467,11 +477,24 @@ function setupFireworks(panel) {
       stage.appendChild(ring);
       trackPreviewParticle(stage, ring);
       try {
+        const hasBurst = Number.isFinite(burstIn) && burstIn > 0 && burstIn < 1;
+        const hasLinger = Number.isFinite(lingerUntil) && lingerUntil > 0 && lingerUntil < 1;
+        const burstOffset = hasBurst ? Math.max(0.14, Math.min(0.72, Number(burstIn))) : 0.36;
+        const lingerOffset = hasLinger ? Math.max(burstOffset + 0.08, Math.min(0.96, Number(lingerUntil))) : 0.78;
+        const lingerA = Math.max(0, Math.min(0.9, Number(lingerOpacity) || 0));
+        const keyframes = hasBurst || hasLinger
+          ? [
+              { transform: `translate(-50%, -50%) scale(${scale0})`, opacity: 0.9 },
+              { transform: `translate(-50%, -50%) scale(${scale1})`, opacity: 0.58, offset: burstOffset },
+              { transform: `translate(-50%, -50%) scale(${scale1})`, opacity: lingerA, offset: lingerOffset },
+              { transform: `translate(-50%, -50%) scale(${scale1})`, opacity: 0 },
+            ]
+          : [
+              { transform: `translate(-50%, -50%) scale(${scale0})`, opacity: 0.9 },
+              { transform: `translate(-50%, -50%) scale(${scale1})`, opacity: 0 },
+            ];
         const anim = ring.animate(
-          [
-            { transform: `translate(-50%, -50%) scale(${scale0})`, opacity: 0.9 },
-            { transform: `translate(-50%, -50%) scale(${scale1})`, opacity: 0 },
-          ],
+          keyframes,
           { duration: life, easing: 'ease-out' }
         );
         anim.addEventListener('finish', () => { try { ring.remove(); } catch {} }, { once: true });
@@ -481,7 +504,20 @@ function setupFireworks(panel) {
       }
     };
 
-    const spawnPreviewStar = (stage, tone, { angle = 0, dist = 20, life = 520, size = 8, spin = 1 } = {}) => {
+    const spawnPreviewStar = ({
+      stage,
+      tone,
+      angle = 0,
+      dist = 20,
+      life = 520,
+      size = 8,
+      spin = 1,
+      gravity = 0,
+      burstOffset = 0.6,
+      startScale = 0.46,
+      burstScale = 1,
+      endScale = 0.64
+    } = {}) => {
       const star = document.createElement('span');
       star.className = 'art-firework-star';
       star.style.left = '50%';
@@ -493,12 +529,17 @@ function setupFireworks(panel) {
       trackPreviewParticle(stage, star);
       const dx = Math.cos(angle) * dist;
       const dy = Math.sin(angle) * dist;
+      const dy2 = dy + gravity;
+      const outOffset = Math.max(0.14, Math.min(0.76, Number(burstOffset) || 0.6));
+      const s0 = Math.max(0.1, Number(startScale) || 0.46);
+      const sb = Math.max(0.1, Number(burstScale) || 1);
+      const se = Math.max(0.1, Number(endScale) || 0.64);
       try {
         const anim = star.animate(
           [
-            { transform: 'translate(-50%, -50%) rotate(0deg) scale(0.46)', opacity: 1 },
-            { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) rotate(${180 * spin}deg) scale(1)`, opacity: 0.9, offset: 0.6 },
-            { transform: `translate(calc(-50% + ${dx * 1.12}px), calc(-50% + ${dy * 1.12}px)) rotate(${360 * spin}deg) scale(0.64)`, opacity: 0 },
+            { transform: `translate(-50%, -50%) rotate(0deg) scale(${s0})`, opacity: 1 },
+            { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) rotate(${180 * spin}deg) scale(${sb})`, opacity: 0.9, offset: outOffset },
+            { transform: `translate(calc(-50% + ${dx * 1.1}px), calc(-50% + ${dy2 * 1.1}px)) rotate(${360 * spin}deg) scale(${se})`, opacity: 0 },
           ],
           { duration: life, easing: 'cubic-bezier(0.18, 0.72, 0.14, 1)' }
         );
@@ -571,9 +612,105 @@ function setupFireworks(panel) {
         return 420;
       }
       if (id === 4) {
-        spawnPreviewRing(stage, tone, { life: 500, scale0: 0.22, scale1: 1.7, thickness: 2 });
-        spawnPreviewRing(stage, tone, { life: 620, scale0: 0.16, scale1: 1.3, thickness: 2 });
-        return 720;
+        const RING_SIZE_SCALE = 2 / 3;
+        spawnPreviewRing({
+          stage,
+          tone,
+          life: 560,
+          scale0: 0.22 * RING_SIZE_SCALE,
+          scale1: 1.7 * RING_SIZE_SCALE,
+          thickness: 2,
+          burstIn: 0.24,
+          lingerUntil: 0.9,
+          lingerOpacity: 0.3
+        });
+        spawnPreviewRing({
+          stage,
+          tone,
+          life: 650,
+          scale0: 0.16 * RING_SIZE_SCALE,
+          scale1: 1.3 * RING_SIZE_SCALE,
+          thickness: 2,
+          burstIn: 0.28,
+          lingerUntil: 0.92,
+          lingerOpacity: 0.24
+        });
+        return 780;
+      }
+      if (id === 5) {
+        // Pinwheel preview to match in-scene behavior.
+        spawnPreviewStar({
+          stage,
+          tone,
+          angle: 0,
+          dist: 0,
+          life: 480,
+          size: 22,
+          spin: 2.6,
+          gravity: 5,
+          burstOffset: 0.18,
+          startScale: 0.2,
+          burstScale: 1.4,
+          endScale: 0.46
+        });
+
+        const impactCount = 10;
+        for (let i = 0; i < impactCount; i++) {
+          const impactAngle = (Math.PI * 2 * i) / impactCount + (Math.random() - 0.5) * 0.14;
+          const impactDist = 18 + Math.random() * 12;
+          spawnPreviewStar({
+            stage,
+            tone,
+            angle: impactAngle,
+            dist: impactDist,
+            life: 240 + Math.random() * 80,
+            size: 6 + Math.random() * 4,
+            spin: (Math.random() < 0.5 ? -1 : 1) * (2.1 + Math.random() * 1.2),
+            gravity: 5,
+            burstOffset: 0.16,
+            startScale: 0.34,
+            burstScale: 1.65,
+            endScale: 0.42
+          });
+        }
+
+        const arms = 5;
+        const waves = 4;
+        const spawnWindowMs = 230;
+        const waveStepMs = Math.round(spawnWindowMs / Math.max(1, waves - 1));
+        const baseAngle = Math.random() * Math.PI * 2;
+        const angularVelocity = 0.86;
+        for (let w = 0; w < waves; w++) {
+          const delay = w * waveStepMs;
+          setTimeout(() => {
+            if (!stage.isConnected) return;
+            const waveT = w / Math.max(1, waves - 1);
+            const burstBoost = delay < 200
+              ? (3.9 - (delay / 200) * 1.9)
+              : Math.max(1.0, 1.7 - ((delay - 200) / Math.max(1, spawnWindowMs - 200)) * 0.7);
+            const earlyBoost = (1.85 - (waveT * 0.75)) * burstBoost;
+            const finalScale = 0.5 + (waveT * 0.22);
+            for (let a = 0; a < arms; a++) {
+              const angle = baseAngle + ((Math.PI * 2) / arms) * a + (w * angularVelocity);
+              const dist = (10 + w * 4 + Math.random() * 8) * earlyBoost;
+              spawnPreviewStar({
+                stage,
+                tone,
+                angle,
+                dist,
+                life: 640 + Math.random() * 220,
+                size: 7 + Math.random() * 4,
+                spin: 1.1 + Math.random() * 0.9,
+                gravity: 11,
+                burstOffset: 0.2 + (waveT * 0.08),
+                startScale: 0.38,
+                burstScale: 2.0,
+                endScale: finalScale
+              });
+            }
+          }, delay);
+        }
+        return 980;
       }
       spawnPreviewCore(stage, tone, 220);
       if (id === 1) {
@@ -588,7 +725,7 @@ function setupFireworks(panel) {
         const count = 14;
         for (let i = 0; i < count; i++) {
           const angle = Math.random() * Math.PI * 2;
-          spawnPreviewDot(stage, tone, { angle, dist: 10 + Math.random() * 18, life: 360 + Math.random() * 190, size: 4 + Math.random() * 2, gravity: 8, flicker: true });
+          spawnPreviewDot(stage, tone, { angle, dist: 20 + Math.random() * 24, life: 360 + Math.random() * 190, size: 6 + Math.random() * 3, gravity: 11, flicker: true });
         }
         return 700;
       }
@@ -601,14 +738,6 @@ function setupFireworks(panel) {
           }
         }
         return 760;
-      }
-      if (id === 5) {
-        const count = 12;
-        for (let i = 0; i < count; i++) {
-          const angle = Math.random() * Math.PI * 2;
-          spawnPreviewStar(stage, tone, { angle, dist: 11 + Math.random() * 18, life: 460 + Math.random() * 220, size: 7 + Math.random() * 4, spin: (Math.random() - 0.5) * 2.2 });
-        }
-        return 820;
       }
       const count = 16;
       for (let i = 0; i < count; i++) {
@@ -1420,7 +1549,7 @@ function setupFireworks(panel) {
         angle: 0,
         dist: 0,
         life: 620,
-        size: 40,
+        size: 120,
         spin: 2.6,
         gravity: 8 * amp * FIREWORK_EFFECT_SCALE,
         burstOffset: 0.18,
