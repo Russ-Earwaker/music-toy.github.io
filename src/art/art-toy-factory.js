@@ -120,6 +120,35 @@ function installArtToyControls(panel) {
   randMusicBtn.dataset.action = 'artToy:randomMusic';
   randMusicBtn.dataset.artToyId = panel.id;
   controlsHost.appendChild(randMusicBtn);
+
+  // Fireworks only: current effect preview + picker grid.
+  if (panel?.dataset?.artToy === ART_TYPES.FIREWORKS) {
+    const fxShell = document.createElement('div');
+    fxShell.className = 'art-toy-fx-shell';
+    fxShell.dataset.open = '0';
+    fxShell.dataset.artToyId = panel.id;
+    fxShell.style.order = '100';
+
+    const fxCurrent = document.createElement('button');
+    fxCurrent.type = 'button';
+    fxCurrent.className = 'art-toy-fx-current';
+    fxCurrent.setAttribute('aria-label', 'Choose firework effect');
+    fxCurrent.setAttribute('aria-haspopup', 'true');
+    fxCurrent.setAttribute('aria-expanded', 'false');
+    fxCurrent.title = 'Current Effect';
+
+    const fxStage = document.createElement('span');
+    fxStage.className = 'art-toy-fx-stage art-toy-fx-stage-current';
+    fxCurrent.appendChild(fxStage);
+    fxShell.appendChild(fxCurrent);
+
+    const fxGrid = document.createElement('div');
+    fxGrid.className = 'art-toy-fx-grid';
+    fxGrid.hidden = true;
+    fxShell.appendChild(fxGrid);
+
+    controlsHost.appendChild(fxShell);
+  }
 }
 
 function makePanelBase(type, opts = {}) {
@@ -288,6 +317,400 @@ function setupFireworks(panel) {
   const handleEls = [];
   const activeGlowEls = Array.from({ length: ART_SLOT_COUNT }, () => null);
   const activeSlots = new Set();
+
+  // Effect selection.
+  // 0 = Classic Chrysanthemum (default)
+  // 1 = Palm
+  // 2 = Crackle
+  // 3 = Flower
+  // 4 = Wave Ring
+  // 5 = Star Scatter
+  const FIREWORK_FX = Object.freeze([
+    { id: 0, key: 'classic', name: 'Classic' },
+    { id: 1, key: 'palm', name: 'Palm' },
+    { id: 2, key: 'crackle', name: 'Crackle' },
+    { id: 3, key: 'flower', name: 'Flower' },
+    { id: 4, key: 'ring', name: 'Ring' },
+    { id: 5, key: 'star', name: 'Star' },
+  ]);
+  const clampFxId = (v) => {
+    const n = Math.trunc(Number(v));
+    return Number.isFinite(n) && n >= 0 && n < FIREWORK_FX.length ? n : 0;
+  };
+  let currentFxId = 0;
+  let syncFxUi = () => {};
+  const setFx = (nextId, { announce = true } = {}) => {
+    currentFxId = clampFxId(nextId);
+    panel.dataset.fireworkFx = String(currentFxId);
+    try { syncFxUi(); } catch {}
+    if (announce) markSceneDirtySafe();
+  };
+  // default
+  setFx(0, { announce: false });
+
+  // Keep DOM churn bounded.
+  const activeParticles = [];
+  const PARTICLE_CAP = 340;
+  const trackParticleEl = (el) => {
+    if (!el) return;
+    activeParticles.push(el);
+    while (activeParticles.length > PARTICLE_CAP) {
+      const old = activeParticles.shift();
+      try { old?.remove?.(); } catch {}
+    }
+  };
+
+  // Fireworks controls UI: current effect preview + picker grid.
+  try {
+    const controlsHost = getBaseArtToyControlsHost(panel);
+    let fxShell = controlsHost?.querySelector?.('.art-toy-fx-shell') || null;
+    if (!fxShell && controlsHost) {
+      fxShell = document.createElement('div');
+      fxShell.className = 'art-toy-fx-shell';
+      fxShell.dataset.open = '0';
+      controlsHost.appendChild(fxShell);
+    }
+    const fxCurrentBtn = fxShell?.querySelector?.('.art-toy-fx-current') || null;
+    const fxCurrentStage = fxShell?.querySelector?.('.art-toy-fx-stage-current') || null;
+    const fxGrid = fxShell?.querySelector?.('.art-toy-fx-grid') || null;
+    const fxCards = [];
+
+    const previewParticles = new WeakMap();
+    const PREVIEW_CAP = 56;
+    const trackPreviewParticle = (stage, el) => {
+      if (!stage || !el) return;
+      let list = previewParticles.get(stage);
+      if (!list) {
+        list = [];
+        previewParticles.set(stage, list);
+      }
+      list.push(el);
+      while (list.length > PREVIEW_CAP) {
+        const old = list.shift();
+        try { old?.remove?.(); } catch {}
+      }
+    };
+
+    const toneForFx = (fxId) => {
+      const i = clampFxId(fxId);
+      return palette[i % palette.length];
+    };
+
+    const spawnPreviewSpark = (stage, tone, { angle = 0, dist = 24, life = 520, width = 4, height = 22, gravity = 0 } = {}) => {
+      const spark = document.createElement('span');
+      spark.className = 'art-firework-spark';
+      spark.style.left = '50%';
+      spark.style.top = '50%';
+      spark.style.background = tone;
+      spark.style.width = `${Math.max(2, width)}px`;
+      spark.style.height = `${Math.max(6, height)}px`;
+      stage.appendChild(spark);
+      trackPreviewParticle(stage, spark);
+      const dx = Math.cos(angle) * dist;
+      const dy = Math.sin(angle) * dist;
+      const dy2 = dy + gravity;
+      try {
+        const anim = spark.animate(
+          [
+            { transform: `translate(-50%, -50%) rotate(${angle}rad) scale(0.2)`, opacity: 1 },
+            { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) rotate(${angle}rad) scale(1)`, opacity: 0.92, offset: 0.56 },
+            { transform: `translate(calc(-50% + ${dx * 1.14}px), calc(-50% + ${dy2 * 1.16}px)) rotate(${angle}rad) scale(0.72)`, opacity: 0 },
+          ],
+          { duration: life, easing: 'cubic-bezier(0.18, 0.72, 0.14, 1)' }
+        );
+        anim.addEventListener('finish', () => { try { spark.remove(); } catch {} }, { once: true });
+        anim.addEventListener('cancel', () => { try { spark.remove(); } catch {} }, { once: true });
+      } catch {
+        setTimeout(() => { try { spark.remove(); } catch {} }, life + 30);
+      }
+    };
+
+    const spawnPreviewDot = (stage, tone, { angle = 0, dist = 18, life = 420, size = 6, gravity = 0, flicker = false } = {}) => {
+      const dot = document.createElement('span');
+      dot.className = 'art-firework-dot';
+      dot.style.left = '50%';
+      dot.style.top = '50%';
+      dot.style.background = tone;
+      dot.style.width = `${Math.max(2, size)}px`;
+      dot.style.height = `${Math.max(2, size)}px`;
+      if (flicker) dot.classList.add('is-flicker');
+      stage.appendChild(dot);
+      trackPreviewParticle(stage, dot);
+      const dx = Math.cos(angle) * dist;
+      const dy = Math.sin(angle) * dist;
+      const dy2 = dy + gravity;
+      try {
+        const anim = dot.animate(
+          [
+            { transform: 'translate(-50%, -50%) scale(0.3)', opacity: 1 },
+            { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(1)`, opacity: 0.92, offset: 0.58 },
+            { transform: `translate(calc(-50% + ${dx * 1.12}px), calc(-50% + ${dy2 * 1.14}px)) scale(0.58)`, opacity: 0 },
+          ],
+          { duration: life, easing: 'cubic-bezier(0.18, 0.72, 0.14, 1)' }
+        );
+        anim.addEventListener('finish', () => { try { dot.remove(); } catch {} }, { once: true });
+        anim.addEventListener('cancel', () => { try { dot.remove(); } catch {} }, { once: true });
+      } catch {
+        setTimeout(() => { try { dot.remove(); } catch {} }, life + 30);
+      }
+    };
+
+    const spawnPreviewRing = (stage, tone, { life = 520, scale0 = 0.18, scale1 = 1.5, thickness = 2 } = {}) => {
+      const ring = document.createElement('span');
+      ring.className = 'art-firework-ring';
+      ring.style.left = '50%';
+      ring.style.top = '50%';
+      ring.style.color = tone;
+      ring.style.width = '36px';
+      ring.style.height = '36px';
+      ring.style.setProperty('--ring-thickness', `${thickness}px`);
+      stage.appendChild(ring);
+      trackPreviewParticle(stage, ring);
+      try {
+        const anim = ring.animate(
+          [
+            { transform: `translate(-50%, -50%) scale(${scale0})`, opacity: 0.9 },
+            { transform: `translate(-50%, -50%) scale(${scale1})`, opacity: 0 },
+          ],
+          { duration: life, easing: 'ease-out' }
+        );
+        anim.addEventListener('finish', () => { try { ring.remove(); } catch {} }, { once: true });
+        anim.addEventListener('cancel', () => { try { ring.remove(); } catch {} }, { once: true });
+      } catch {
+        setTimeout(() => { try { ring.remove(); } catch {} }, life + 30);
+      }
+    };
+
+    const spawnPreviewStar = (stage, tone, { angle = 0, dist = 20, life = 520, size = 8, spin = 1 } = {}) => {
+      const star = document.createElement('span');
+      star.className = 'art-firework-star';
+      star.style.left = '50%';
+      star.style.top = '50%';
+      star.style.background = tone;
+      star.style.width = `${Math.max(6, size)}px`;
+      star.style.height = `${Math.max(6, size)}px`;
+      stage.appendChild(star);
+      trackPreviewParticle(stage, star);
+      const dx = Math.cos(angle) * dist;
+      const dy = Math.sin(angle) * dist;
+      try {
+        const anim = star.animate(
+          [
+            { transform: 'translate(-50%, -50%) rotate(0deg) scale(0.46)', opacity: 1 },
+            { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) rotate(${180 * spin}deg) scale(1)`, opacity: 0.9, offset: 0.6 },
+            { transform: `translate(calc(-50% + ${dx * 1.12}px), calc(-50% + ${dy * 1.12}px)) rotate(${360 * spin}deg) scale(0.64)`, opacity: 0 },
+          ],
+          { duration: life, easing: 'cubic-bezier(0.18, 0.72, 0.14, 1)' }
+        );
+        anim.addEventListener('finish', () => { try { star.remove(); } catch {} }, { once: true });
+        anim.addEventListener('cancel', () => { try { star.remove(); } catch {} }, { once: true });
+      } catch {
+        setTimeout(() => { try { star.remove(); } catch {} }, life + 30);
+      }
+    };
+
+    const spawnPreviewCore = (stage, tone, life = 220) => {
+      const core = document.createElement('span');
+      core.className = 'art-firework-core';
+      core.style.left = '50%';
+      core.style.top = '50%';
+      core.style.background = tone;
+      core.style.width = '34px';
+      core.style.height = '34px';
+      stage.appendChild(core);
+      trackPreviewParticle(stage, core);
+      try {
+        const anim = core.animate(
+          [
+            { transform: 'translate(-50%, -50%) scale(0.14)', opacity: 0.95 },
+            { transform: 'translate(-50%, -50%) scale(1.35)', opacity: 0.2, offset: 0.45 },
+            { transform: 'translate(-50%, -50%) scale(1.85)', opacity: 0 },
+          ],
+          { duration: life, easing: 'ease-out' }
+        );
+        anim.addEventListener('finish', () => { try { core.remove(); } catch {} }, { once: true });
+        anim.addEventListener('cancel', () => { try { core.remove(); } catch {} }, { once: true });
+      } catch {
+        setTimeout(() => { try { core.remove(); } catch {} }, life + 30);
+      }
+    };
+
+    const spawnPreviewFlashCircle = (stage, tone, life = 320) => {
+      const flash = document.createElement('span');
+      flash.className = 'art-firework-core';
+      flash.style.left = '50%';
+      flash.style.top = '50%';
+      flash.style.background = tone;
+      flash.style.width = '46px';
+      flash.style.height = '46px';
+      stage.appendChild(flash);
+      trackPreviewParticle(stage, flash);
+      try {
+        const anim = flash.animate(
+          [
+            { transform: 'translate(-50%, -50%) scale(0.22)', opacity: 1, filter: 'blur(0.2px) brightness(1.35)' },
+            { transform: 'translate(-50%, -50%) scale(1.08)', opacity: 0.86, offset: 0.38, filter: 'blur(0.35px) brightness(1.5)' },
+            { transform: 'translate(-50%, -50%) scale(1.7)', opacity: 0, filter: 'blur(0.8px) brightness(1.1)' },
+          ],
+          { duration: life, easing: 'ease-out' }
+        );
+        anim.addEventListener('finish', () => { try { flash.remove(); } catch {} }, { once: true });
+        anim.addEventListener('cancel', () => { try { flash.remove(); } catch {} }, { once: true });
+      } catch {
+        setTimeout(() => { try { flash.remove(); } catch {} }, life + 30);
+      }
+    };
+
+    const playPreviewBurst = (stage, fxId) => {
+      if (!stage) return 900;
+      const id = clampFxId(fxId);
+      const tone = toneForFx(id);
+      if (id === 0) {
+        // Classic preview card: simple bright flash circle for clearer differentiation.
+        spawnPreviewFlashCircle(stage, tone, 320);
+        return 420;
+      }
+      if (id === 4) {
+        spawnPreviewRing(stage, tone, { life: 500, scale0: 0.22, scale1: 1.7, thickness: 2 });
+        spawnPreviewRing(stage, tone, { life: 620, scale0: 0.16, scale1: 1.3, thickness: 2 });
+        return 720;
+      }
+      spawnPreviewCore(stage, tone, 220);
+      if (id === 1) {
+        const count = 11;
+        for (let i = 0; i < count; i++) {
+          const angle = ((Math.PI * 2) / count) * i + (Math.random() - 0.5) * 0.3;
+          spawnPreviewSpark(stage, tone, { angle, dist: 24 + Math.random() * 14, life: 620 + Math.random() * 220, width: 4, height: 28, gravity: 14 });
+        }
+        return 940;
+      }
+      if (id === 2) {
+        const count = 14;
+        for (let i = 0; i < count; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          spawnPreviewDot(stage, tone, { angle, dist: 10 + Math.random() * 18, life: 360 + Math.random() * 190, size: 4 + Math.random() * 2, gravity: 8, flicker: true });
+        }
+        return 700;
+      }
+      if (id === 3) {
+        const petals = 6;
+        for (let p = 0; p < petals; p++) {
+          const baseA = ((Math.PI * 2) / petals) * p;
+          for (let k = 0; k < 3; k++) {
+            spawnPreviewDot(stage, tone, { angle: baseA + (Math.random() - 0.5) * 0.2, dist: 10 + (k * 8), life: 440 + Math.random() * 180, size: 4 + Math.random() * 2, gravity: 0 });
+          }
+        }
+        return 760;
+      }
+      if (id === 5) {
+        const count = 12;
+        for (let i = 0; i < count; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          spawnPreviewStar(stage, tone, { angle, dist: 11 + Math.random() * 18, life: 460 + Math.random() * 220, size: 7 + Math.random() * 4, spin: (Math.random() - 0.5) * 2.2 });
+        }
+        return 820;
+      }
+      const count = 16;
+      for (let i = 0; i < count; i++) {
+        const angle = ((Math.PI * 2) / count) * i + (Math.random() - 0.5) * 0.36;
+        spawnPreviewSpark(stage, tone, { angle, dist: 14 + Math.random() * 20, life: 430 + Math.random() * 180, width: 3 + Math.random() * 2, height: 20 + Math.random() * 7, gravity: 8 });
+      }
+      return 760;
+    };
+
+    const addPreviewLoop = (stage, fxResolver) => {
+      if (!stage) return;
+      let timer = 0;
+      const tick = () => {
+        if (!panel.isConnected || !stage.isConnected) {
+          if (timer) clearTimeout(timer);
+          return;
+        }
+        const nextId = typeof fxResolver === 'function' ? fxResolver() : fxResolver;
+        const cycleMs = Math.max(420, Number(playPreviewBurst(stage, nextId)) || 760);
+        timer = setTimeout(tick, cycleMs + 40);
+      };
+      tick();
+    };
+
+    const setFxPickerOpen = (open) => {
+      if (!fxShell || !fxGrid) return;
+      const isOpen = !!open;
+      fxShell.dataset.open = isOpen ? '1' : '0';
+      if (fxCurrentBtn) fxCurrentBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      fxGrid.hidden = !isOpen;
+    };
+
+    const fxById = new Map(FIREWORK_FX.map((fx) => [fx.id, fx]));
+    syncFxUi = () => {
+      const fxId = clampFxId(panel?.dataset?.fireworkFx);
+      const fxName = fxById.get(fxId)?.name || 'Effect';
+      if (fxCurrentBtn) {
+        fxCurrentBtn.title = `Effect: ${fxName}`;
+        fxCurrentBtn.setAttribute('aria-label', `Current firework effect: ${fxName}`);
+      }
+      if (fxCurrentStage) fxCurrentStage.dataset.fxId = String(fxId);
+      for (const card of fxCards) {
+        const selected = card.dataset.fxId === String(fxId);
+        card.classList.toggle('is-selected', selected);
+      }
+    };
+
+    if (fxGrid && FIREWORK_FX.length) {
+      fxGrid.innerHTML = '';
+      for (const fx of FIREWORK_FX) {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'art-toy-fx-card';
+        card.dataset.fxId = String(fx.id);
+        card.title = fx.name;
+        card.setAttribute('aria-label', `Select ${fx.name} firework effect`);
+
+        const stage = document.createElement('span');
+        stage.className = 'art-toy-fx-stage';
+        stage.dataset.fxId = String(fx.id);
+        card.appendChild(stage);
+        fxGrid.appendChild(card);
+        fxCards.push(card);
+
+        addPreviewLoop(stage, fx.id);
+        card.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          setFx(fx.id);
+          setFxPickerOpen(false);
+        });
+      }
+    }
+
+    if (fxCurrentBtn) {
+      fxCurrentBtn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        setFxPickerOpen(fxShell?.dataset?.open !== '1');
+      });
+    }
+
+    if (fxCurrentStage) {
+      addPreviewLoop(fxCurrentStage, () => clampFxId(panel?.dataset?.fireworkFx));
+    }
+
+    const onDocPointerDownClosePicker = (ev) => {
+      if (!panel.isConnected) {
+        document.removeEventListener('pointerdown', onDocPointerDownClosePicker, true);
+        return;
+      }
+      if (!fxShell || fxShell.dataset.open !== '1') return;
+      const t = ev?.target;
+      if (t && fxShell.contains(t)) return;
+      setFxPickerOpen(false);
+    };
+    document.addEventListener('pointerdown', onDocPointerDownClosePicker, true);
+
+    // Always start collapsed.
+    setFxPickerOpen(false);
+    syncFxUi();
+  } catch {}
   const syncDragArea = () => {
     dragAreaEl.style.left = `${dragArea.x.toFixed(2)}px`;
     dragAreaEl.style.top = `${dragArea.y.toFixed(2)}px`;
@@ -521,6 +944,12 @@ function setupFireworks(panel) {
     randomizeAnchorsWithinArea(RANDOM_TOP_LEFT_QUARTER);
     fitDragAreaToAnchors();
     syncAllAnchors();
+    // Random All also selects a random firework effect.
+    if (FIREWORK_FX.length > 1) {
+      let next = Math.floor(Math.random() * FIREWORK_FX.length);
+      if (next === currentFxId) next = (next + 1 + Math.floor(Math.random() * (FIREWORK_FX.length - 1))) % FIREWORK_FX.length;
+      setFx(next);
+    }
     markSceneDirtySafe();
   };
 
@@ -545,6 +974,7 @@ function setupFireworks(panel) {
       type: ART_TYPES.FIREWORKS,
       anchors: anchors.map((a) => ({ x: Number(a?.x) || 0, y: Number(a?.y) || 0 })),
       activeSlots: active,
+      fx: clampFxId(panel?.dataset?.fireworkFx),
       controlsVisible: panel.dataset.controlsVisible === '1',
     };
   };
@@ -567,6 +997,14 @@ function setupFireworks(panel) {
         else setSlotInactive(i);
       }
     }
+
+    // Restore effect.
+    if (state.fx != null) {
+      setFx(state.fx, { announce: false });
+    } else if (panel?.dataset?.fireworkFx != null) {
+      setFx(panel.dataset.fireworkFx, { announce: false });
+    }
+
     fitDragAreaToAnchors();
     syncAllAnchors();
     if (typeof state.controlsVisible === 'boolean') {
@@ -666,28 +1104,51 @@ function setupFireworks(panel) {
     const tone = palette[slot % palette.length];
     const vel = Number(velocity);
     const amp = Number.isFinite(vel) ? Math.max(0.4, Math.min(1.3, vel)) : 0.9;
-    const sparkCount = 14;
 
-    for (let i = 0; i < sparkCount; i++) {
+    const spawnCoreFlash = (scale = 1, life = 260) => {
+      try {
+        const glow = document.createElement('span');
+        glow.className = 'art-firework-core';
+        glow.style.left = `${Math.round(anchor.x)}px`;
+        glow.style.top = `${Math.round(anchor.y)}px`;
+        glow.style.background = tone;
+        layer.appendChild(glow);
+        trackParticleEl(glow);
+        const anim = glow.animate(
+          [
+            { transform: `translate(-50%, -50%) scale(${0.15 * FIREWORK_EFFECT_SCALE * scale})`, opacity: 0.98 },
+            { transform: `translate(-50%, -50%) scale(${2.0 * FIREWORK_EFFECT_SCALE * scale})`, opacity: 0.22, offset: 0.45 },
+            { transform: `translate(-50%, -50%) scale(${2.6 * FIREWORK_EFFECT_SCALE * scale})`, opacity: 0 },
+          ],
+          { duration: life, easing: 'ease-out' }
+        );
+        anim.addEventListener('finish', () => { try { glow.remove(); } catch {} }, { once: true });
+        anim.addEventListener('cancel', () => { try { glow.remove(); } catch {} }, { once: true });
+      } catch {}
+    };
+
+    const spawnLineSpark = ({ angle = 0, dist = 60, life = 520, width = 10, height = 64, gravity = 0, opacity = 1, scale0 = 0.25, scale1 = 1, toneOverride = null } = {}) => {
       const spark = document.createElement('span');
       spark.className = 'art-firework-spark';
       spark.style.left = `${Math.round(anchor.x)}px`;
       spark.style.top = `${Math.round(anchor.y)}px`;
-      spark.style.background = tone;
+      spark.style.background = (toneOverride || tone);
+      spark.style.width = `${Math.max(2, width)}px`;
+      spark.style.height = `${Math.max(6, height)}px`;
       layer.appendChild(spark);
+      trackParticleEl(spark);
 
-      const angle = ((Math.PI * 2) / sparkCount) * i + (Math.random() - 0.5) * 0.5;
-      const dist = (22 + Math.random() * 52) * amp * FIREWORK_EFFECT_SCALE;
       const dx = Math.cos(angle) * dist;
       const dy = Math.sin(angle) * dist;
-      const life = 460 + Math.random() * 260;
+      const g = gravity;
+      const dy2 = dy + g;
 
       try {
         const anim = spark.animate(
           [
-            { transform: 'translate(-50%, -50%) scale(0.4)', opacity: 1 },
-            { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(1)`, opacity: 0.96, offset: 0.55 },
-            { transform: `translate(calc(-50% + ${dx * 1.16}px), calc(-50% + ${dy * 1.16}px)) scale(0.7)`, opacity: 0 },
+            { transform: `translate(-50%, -50%) rotate(${angle}rad) scale(${scale0})`, opacity },
+            { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) rotate(${angle}rad) scale(${scale1})`, opacity: opacity * 0.95, offset: 0.55 },
+            { transform: `translate(calc(-50% + ${dx * 1.15}px), calc(-50% + ${dy2 * 1.18}px)) rotate(${angle}rad) scale(${scale1 * 0.7})`, opacity: 0 },
           ],
           { duration: life, easing: 'cubic-bezier(0.18, 0.72, 0.14, 1)' }
         );
@@ -696,28 +1157,333 @@ function setupFireworks(panel) {
       } catch {
         setTimeout(() => { try { spark.remove(); } catch {} }, life + 50);
       }
+    };
+
+    const spawnDotSpark = ({ angle = 0, dist = 60, life = 520, size = 8, gravity = 0, flicker = false } = {}) => {
+      const dot = document.createElement('span');
+      dot.className = 'art-firework-dot';
+      dot.style.left = `${Math.round(anchor.x)}px`;
+      dot.style.top = `${Math.round(anchor.y)}px`;
+      dot.style.background = tone;
+      dot.style.width = `${Math.max(2, size)}px`;
+      dot.style.height = `${Math.max(2, size)}px`;
+      layer.appendChild(dot);
+      trackParticleEl(dot);
+
+      const dx = Math.cos(angle) * dist;
+      const dy = Math.sin(angle) * dist;
+      const dy2 = dy + gravity;
+      const midScale = 1.0;
+      const endScale = 0.55;
+
+      const keyframes = [
+        { transform: 'translate(-50%, -50%) scale(0.35)', opacity: 1 },
+        { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(${midScale})`, opacity: 0.96, offset: 0.58 },
+        { transform: `translate(calc(-50% + ${dx * 1.12}px), calc(-50% + ${dy2 * 1.16}px)) scale(${endScale})`, opacity: 0 },
+      ];
+      try {
+        const anim = dot.animate(keyframes, { duration: life, easing: 'cubic-bezier(0.18, 0.72, 0.14, 1)' });
+        anim.addEventListener('finish', () => { try { dot.remove(); } catch {} }, { once: true });
+        anim.addEventListener('cancel', () => { try { dot.remove(); } catch {} }, { once: true });
+      } catch {
+        setTimeout(() => { try { dot.remove(); } catch {} }, life + 50);
+      }
+
+      if (flicker) {
+        try { dot.classList.add('is-flicker'); } catch {}
+      }
+    };
+
+    const spawnRing = ({
+      life = 520,
+      scale0 = 0.2,
+      scale1 = 2.7,
+      thickness = 3,
+      burstIn = null,
+      lingerUntil = null,
+      lingerOpacity = 0.28
+    } = {}) => {
+      const ring = document.createElement('span');
+      ring.className = 'art-firework-ring';
+      ring.style.left = `${Math.round(anchor.x)}px`;
+      ring.style.top = `${Math.round(anchor.y)}px`;
+      ring.style.color = tone;
+      ring.style.setProperty('--ring-thickness', `${thickness}px`);
+      layer.appendChild(ring);
+      trackParticleEl(ring);
+      try {
+        const hasBurst = Number.isFinite(burstIn) && burstIn > 0 && burstIn < 1;
+        const hasLinger = Number.isFinite(lingerUntil) && lingerUntil > 0 && lingerUntil < 1;
+        const burstOffset = hasBurst ? Math.max(0.12, Math.min(0.72, Number(burstIn))) : 0.35;
+        const lingerOffset = hasLinger ? Math.max(burstOffset + 0.08, Math.min(0.96, Number(lingerUntil))) : 0.78;
+        const lingerA = Math.max(0, Math.min(0.9, Number(lingerOpacity) || 0));
+        const keyframes = hasBurst || hasLinger
+          ? [
+              { transform: `translate(-50%, -50%) scale(${scale0})`, opacity: 0.95 },
+              { transform: `translate(-50%, -50%) scale(${scale1})`, opacity: 0.62, offset: burstOffset },
+              { transform: `translate(-50%, -50%) scale(${scale1})`, opacity: lingerA, offset: lingerOffset },
+              { transform: `translate(-50%, -50%) scale(${scale1})`, opacity: 0 },
+            ]
+          : [
+              { transform: `translate(-50%, -50%) scale(${scale0})`, opacity: 0.9 },
+              { transform: `translate(-50%, -50%) scale(${scale1})`, opacity: 0 },
+            ];
+        const anim = ring.animate(
+          keyframes,
+          { duration: life, easing: 'ease-out' }
+        );
+        anim.addEventListener('finish', () => { try { ring.remove(); } catch {} }, { once: true });
+        anim.addEventListener('cancel', () => { try { ring.remove(); } catch {} }, { once: true });
+      } catch {
+        setTimeout(() => { try { ring.remove(); } catch {} }, life + 50);
+      }
+    };
+
+    const spawnStar = ({
+      angle = 0,
+      dist = 60,
+      life = 540,
+      size = 14,
+      spin = 1,
+      gravity = 0,
+      burstOffset = 0.6,
+      startScale = 0.5,
+      burstScale = 1,
+      endScale = 0.7
+    } = {}) => {
+      const star = document.createElement('span');
+      star.className = 'art-firework-star';
+      star.style.left = `${Math.round(anchor.x)}px`;
+      star.style.top = `${Math.round(anchor.y)}px`;
+      star.style.background = tone;
+      star.style.width = `${Math.max(6, size)}px`;
+      star.style.height = `${Math.max(6, size)}px`;
+      layer.appendChild(star);
+      trackParticleEl(star);
+
+      const dx = Math.cos(angle) * dist;
+      const dy = Math.sin(angle) * dist;
+      const dy2 = dy + gravity;
+      const outOffset = Math.max(0.16, Math.min(0.72, Number(burstOffset) || 0.6));
+      const s0 = Math.max(0.1, Number(startScale) || 0.5);
+      const sb = Math.max(0.1, Number(burstScale) || 1);
+      const se = Math.max(0.1, Number(endScale) || 0.7);
+
+      try {
+        const anim = star.animate(
+          [
+            { transform: `translate(-50%, -50%) rotate(0deg) scale(${s0})`, opacity: 1 },
+            { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) rotate(${180 * spin}deg) scale(${sb})`, opacity: 0.92, offset: outOffset },
+            { transform: `translate(calc(-50% + ${dx * 1.08}px), calc(-50% + ${dy2 * 1.08}px)) rotate(${360 * spin}deg) scale(${se})`, opacity: 0 },
+          ],
+          { duration: life, easing: 'cubic-bezier(0.18, 0.72, 0.14, 1)' }
+        );
+        anim.addEventListener('finish', () => { try { star.remove(); } catch {} }, { once: true });
+        anim.addEventListener('cancel', () => { try { star.remove(); } catch {} }, { once: true });
+      } catch {
+        setTimeout(() => { try { star.remove(); } catch {} }, life + 50);
+      }
+    };
+
+    // --- Effect implementations ---
+    const fxId = clampFxId(panel?.dataset?.fireworkFx);
+
+    if (fxId === 0) {
+      // Simple bright flash circle (matches preview for effect 0).
+      spawnCoreFlash(0.54, 340);
+      return;
     }
 
-    try {
-      const glow = document.createElement('span');
-      glow.className = 'art-firework-core';
-      glow.style.left = `${Math.round(anchor.x)}px`;
-      glow.style.top = `${Math.round(anchor.y)}px`;
-      glow.style.background = tone;
-      layer.appendChild(glow);
-      const life = 300;
-      const anim = glow.animate(
-        [
-          { transform: `translate(-50%, -50%) scale(${0.2 * FIREWORK_EFFECT_SCALE})`, opacity: 0.95 },
-          { transform: `translate(-50%, -50%) scale(${1.9 * FIREWORK_EFFECT_SCALE})`, opacity: 0.2, offset: 0.5 },
-          { transform: `translate(-50%, -50%) scale(${2.4 * FIREWORK_EFFECT_SCALE})`, opacity: 0 },
-        ],
-        { duration: life, easing: 'ease-out' }
-      );
-      anim.addEventListener('finish', () => { try { glow.remove(); } catch {} }, { once: true });
-      anim.addEventListener('cancel', () => { try { glow.remove(); } catch {} }, { once: true });
-    } catch {}
+    if (fxId === 4) {
+      // Wave Ring (clean + cheap).
+      const RING_SIZE_SCALE = 2 / 3;
+      spawnRing({
+        life: 760 + Math.random() * 220,
+        scale0: 0.25 * FIREWORK_EFFECT_SCALE * RING_SIZE_SCALE,
+        scale1: (2.5 + Math.random() * 0.8) * FIREWORK_EFFECT_SCALE * RING_SIZE_SCALE,
+        thickness: 3,
+        burstIn: 0.24,
+        lingerUntil: 0.9,
+        lingerOpacity: 0.34
+      });
+      spawnRing({
+        life: 860 + Math.random() * 260,
+        scale0: 0.16 * FIREWORK_EFFECT_SCALE * RING_SIZE_SCALE,
+        scale1: (1.9 + Math.random() * 0.7) * FIREWORK_EFFECT_SCALE * RING_SIZE_SCALE,
+        thickness: 2,
+        burstIn: 0.28,
+        lingerUntil: 0.92,
+        lingerOpacity: 0.28
+      });
+      return;
+    }
+
+    // Always add a small core flash for non-ring styles, except star scatter.
+    if (fxId !== 5) {
+      spawnCoreFlash(1.0, 240);
+    }
+
+    if (fxId === 1) {
+      // Palm: fewer, longer trails + heavier gravity.
+      const sparkCount = 22;
+      for (let i = 0; i < sparkCount; i++) {
+        const angle = ((Math.PI * 2) / sparkCount) * i + (Math.random() - 0.5) * 0.35;
+        const dist = (32 + Math.random() * 62) * amp * FIREWORK_EFFECT_SCALE;
+        const life = 760 + Math.random() * 360;
+        spawnLineSpark({ angle, dist, life, width: 10, height: 86, gravity: 38 * amp * FIREWORK_EFFECT_SCALE, scale0: 0.22, scale1: 1.05 });
+      }
+      return;
+    }
+
+    if (fxId === 2) {
+      // Crackle: a compact burst + micro pops.
+      const CRACKLE_SIZE_SCALE = 2;
+      const sparkCount = 28;
+      for (let i = 0; i < sparkCount; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = (18 + Math.random() * 44) * amp * FIREWORK_EFFECT_SCALE * CRACKLE_SIZE_SCALE;
+        const life = 420 + Math.random() * 220;
+        spawnDotSpark({
+          angle,
+          dist,
+          life,
+          size: (7 + Math.random() * 4) * CRACKLE_SIZE_SCALE,
+          gravity: 18 * amp * FIREWORK_EFFECT_SCALE * CRACKLE_SIZE_SCALE,
+          flicker: true
+        });
+        // Secondary micro pop
+        const delay = 90 + Math.random() * 220;
+        setTimeout(() => {
+          try {
+            const microCount = 4 + Math.floor(Math.random() * 4);
+            for (let m = 0; m < microCount; m++) {
+              const a2 = angle + (Math.random() - 0.5) * 0.9;
+              const d2 = (8 + Math.random() * 16) * amp * FIREWORK_EFFECT_SCALE * CRACKLE_SIZE_SCALE;
+              spawnDotSpark({
+                angle: a2,
+                dist: d2,
+                life: 220 + Math.random() * 160,
+                size: (5 + Math.random() * 3) * CRACKLE_SIZE_SCALE,
+                gravity: 10 * amp * FIREWORK_EFFECT_SCALE * CRACKLE_SIZE_SCALE,
+                flicker: true
+              });
+            }
+          } catch {}
+        }, delay);
+      }
+      return;
+    }
+
+    if (fxId === 3) {
+      // Flower: petal clusters, no gravity.
+      const petals = 8;
+      const perPetal = 6;
+      for (let p = 0; p < petals; p++) {
+        const baseA = ((Math.PI * 2) / petals) * p;
+        for (let k = 0; k < perPetal; k++) {
+          const a = baseA + (Math.random() - 0.5) * 0.24;
+          const dist = (26 + k * (10 + Math.random() * 4)) * amp * FIREWORK_EFFECT_SCALE;
+          const life = 540 + Math.random() * 240;
+          spawnDotSpark({ angle: a, dist, life, size: 6 + Math.random() * 3, gravity: 0, flicker: false });
+        }
+      }
+      return;
+    }
+
+    if (fxId === 5) {
+      // Pinwheel: rotating star arms that emit over a short burst window.
+      // Single large central star at impact.
+      spawnStar({
+        angle: 0,
+        dist: 0,
+        life: 620,
+        size: 40,
+        spin: 2.6,
+        gravity: 8 * amp * FIREWORK_EFFECT_SCALE,
+        burstOffset: 0.18,
+        startScale: 0.2,
+        burstScale: 1.4,
+        endScale: 0.46
+      });
+      // Add a very brief impact burst using fast spinning stars (no core circle).
+      const impactCount = 12;
+      for (let i = 0; i < impactCount; i++) {
+        const impactAngle = (Math.PI * 2 * i) / impactCount + (Math.random() - 0.5) * 0.14;
+        const impactDist = (42 + Math.random() * 26) * amp * FIREWORK_EFFECT_SCALE;
+        spawnStar({
+          angle: impactAngle,
+          dist: impactDist,
+          life: 300 + Math.random() * 90,
+          size: 10 + Math.random() * 7,
+          spin: (Math.random() < 0.5 ? -1 : 1) * (2.1 + Math.random() * 1.4),
+          gravity: 12 * amp * FIREWORK_EFFECT_SCALE,
+          burstOffset: 0.16,
+          startScale: 0.34,
+          burstScale: 1.65,
+          endScale: 0.42
+        });
+      }
+      const arms = 5;
+      const waves = 5;
+      const spawnWindowMs = 300;
+      const waveStepMs = Math.round(spawnWindowMs / Math.max(1, waves - 1));
+      const baseAngle = Math.random() * Math.PI * 2;
+      const angularVelocity = 0.86; // radians per wave for visible spin.
+
+      for (let w = 0; w < waves; w++) {
+        const delay = w * waveStepMs;
+        setTimeout(() => {
+          const waveT = w / Math.max(1, waves - 1);
+          // Massive launch boost for the first 0.2s, then taper quickly.
+          const burstBoost = delay < 200
+            ? (3.9 - (delay / 200) * 1.9) // ~3.9x -> ~2.0x during the first 0.2s
+            : Math.max(1.0, 1.7 - ((delay - 200) / Math.max(1, spawnWindowMs - 200)) * 0.7);
+          const earlyBoost = (1.85 - (waveT * 0.75)) * burstBoost;
+          const finalScale = 0.5 + (waveT * 0.22);   // earliest waves shrink down more.
+          for (let a = 0; a < arms; a++) {
+            const angle = baseAngle + ((Math.PI * 2) / arms) * a + (w * angularVelocity);
+            const dist = (26 + w * 7 + Math.random() * 14) * amp * FIREWORK_EFFECT_SCALE * earlyBoost;
+            const life = 920 + Math.random() * 260;
+            spawnStar({
+              angle,
+              dist,
+              life,
+              size: 12 + Math.random() * 9,
+              spin: 1.1 + Math.random() * 0.9,
+              gravity: 26 * amp * FIREWORK_EFFECT_SCALE,
+              burstOffset: 0.2 + (waveT * 0.08),
+              startScale: 0.38,
+              burstScale: 2.0,
+              endScale: finalScale
+            });
+          }
+        }, delay);
+      }
+      return;
+    }
+
+    // Classic chrysanthemum: lots of rays + light gravity.
+    const sparkCount = 52;
+    for (let i = 0; i < sparkCount; i++) {
+      const angle = ((Math.PI * 2) / sparkCount) * i + (Math.random() - 0.5) * 0.42;
+      const dist = (30 + Math.random() * 76) * amp * FIREWORK_EFFECT_SCALE;
+      const life = 520 + Math.random() * 280;
+      const w = 7 + Math.random() * 5;
+      const h = 64 + Math.random() * 22;
+      spawnLineSpark({ angle, dist, life, width: w, height: h, gravity: 18 * amp * FIREWORK_EFFECT_SCALE, scale0: 0.18, scale1: 1.05 });
+    }
   }
+
+  // Public API for UI handlers.
+  panel.getFireworkEffectId = () => clampFxId(panel?.dataset?.fireworkFx);
+  panel.setFireworkEffectId = (fxId) => setFx(fxId);
+  panel.cycleFireworkEffect = (dir = 1) => {
+    const d = Number(dir);
+    const step = Number.isFinite(d) ? (d >= 0 ? 1 : -1) : 1;
+    const next = (clampFxId(panel?.dataset?.fireworkFx) + step + FIREWORK_FX.length) % FIREWORK_FX.length;
+    setFx(next);
+    return next;
+  };
 
   panel.onArtTrigger = (trigger = null) => {
     const slot = normalizeSlot(trigger?.slotIndex);

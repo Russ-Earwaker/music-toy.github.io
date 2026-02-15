@@ -1501,6 +1501,62 @@ body.advanced-controls-disabled [data-adv] {
   filter: drop-shadow(0 0 6px currentColor);
 }
 
+.art-firework-dot {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  filter: drop-shadow(0 0 8px currentColor);
+  pointer-events: none;
+}
+
+.art-firework-dot.is-flicker {
+  animation: art-firework-flicker 140ms linear infinite;
+}
+
+@keyframes art-firework-flicker {
+  0% { filter: drop-shadow(0 0 6px currentColor) brightness(1); }
+  50% { filter: drop-shadow(0 0 12px currentColor) brightness(1.35); }
+  100% { filter: drop-shadow(0 0 6px currentColor) brightness(1); }
+}
+
+.art-firework-ring {
+  position: absolute;
+  width: 88px;
+  height: 88px;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  border: var(--ring-thickness, 3px) solid currentColor;
+  box-shadow: 0 0 12px currentColor;
+  filter: blur(0.2px) saturate(1.1);
+  pointer-events: none;
+}
+
+.art-firework-star {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  filter: drop-shadow(0 0 10px currentColor);
+  pointer-events: none;
+  /* 5-point star shape (works fine in modern Chrome/Safari). */
+  clip-path: polygon(
+    50% 0%,
+    61% 35%,
+    98% 35%,
+    68% 57%,
+    79% 91%,
+    50% 70%,
+    21% 91%,
+    32% 57%,
+    2% 35%,
+    39% 35%
+  );
+}
 .art-firework-core {
   position: absolute;
   width: 88px;
@@ -1545,6 +1601,17 @@ body.advanced-controls-disabled [data-adv] {
 .art-toy-panel[data-controls-visible='1'] .art-firework-handle-btn.is-active-firework {
   opacity: 1;
   pointer-events: auto;
+}
+
+/* While scene audio is playing, fade active handles so fireworks remain visible. */
+body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-firework-handle-btn.is-active-firework {
+  opacity: 0.38;
+}
+
+body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-firework-handle-btn.is-active-firework:hover,
+body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-firework-handle-btn.is-active-firework:focus-visible,
+body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-fireworks-drag-area.is-dragging ~ .art-fireworks-handles .art-firework-handle-btn.is-active-firework {
+  opacity: 0.02;
 }
 
 .art-toy-circle-lasers {
@@ -1687,6 +1754,94 @@ body.advanced-controls-disabled [data-adv] {
 }
 .art-toy-btn:hover { filter: brightness(1.1); }
 .art-toy-btn:active { transform: translateY(1px) scale(0.98); }
+
+.art-toy-fx-shell {
+  position: relative;
+  margin-left: 6px;
+  z-index: 4;
+}
+
+.art-toy-fx-current,
+.art-toy-fx-card {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 68px;
+  height: 68px;
+  padding: 0;
+  border-radius: 12px;
+  border: 2px solid rgba(128, 175, 255, 0.45);
+  background: linear-gradient(160deg, rgba(11, 18, 42, 0.92), rgba(10, 14, 32, 0.96));
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.46), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+}
+
+.art-toy-fx-current {
+  width: 136px;
+  height: 136px;
+  border-radius: 16px;
+}
+
+.art-toy-fx-current:hover,
+.art-toy-fx-card:hover {
+  filter: brightness(1.08);
+}
+
+.art-toy-fx-current:active,
+.art-toy-fx-card:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+.art-toy-fx-stage {
+  position: relative;
+  display: block;
+  width: 58px;
+  height: 58px;
+  border-radius: 10px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(42, 62, 118, 0.36) 0%, rgba(13, 18, 41, 0.74) 58%, rgba(6, 10, 24, 0.98) 100%),
+    rgba(10, 12, 24, 0.95);
+  border: 1px solid rgba(143, 185, 255, 0.35);
+}
+
+.art-toy-fx-stage-current {
+  width: 122px;
+  height: 122px;
+  border-radius: 13px;
+}
+
+.art-toy-fx-stage > .art-firework-spark,
+.art-toy-fx-stage > .art-firework-dot,
+.art-toy-fx-stage > .art-firework-ring,
+.art-toy-fx-stage > .art-firework-star,
+.art-toy-fx-stage > .art-firework-core {
+  pointer-events: none;
+}
+
+.art-toy-fx-grid {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 10px);
+  display: grid;
+  grid-template-columns: repeat(3, 68px);
+  gap: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(133, 178, 255, 0.35);
+  background: rgba(6, 10, 24, 0.94);
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.6);
+  z-index: 30;
+}
+
+.art-toy-fx-grid[hidden] {
+  display: none !important;
+}
+
+.art-toy-fx-card.is-selected {
+  border-color: rgba(120, 241, 182, 0.95);
+  box-shadow: 0 0 0 2px rgba(68, 226, 151, 0.36), 0 10px 22px rgba(0, 0, 0, 0.46), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
 
 .art-toy-music-btn {
   position: absolute;

@@ -4260,6 +4260,27 @@ document.addEventListener('click', (e) => {
   });
 }, true);
 
+// Click delegate: Fireworks Art Toy "Effect" button (manual cycle).
+document.addEventListener('click', (e) => {
+  const btn = e.target?.closest?.('button[data-action="artToy:cycleFireworkFx"]');
+  if (!btn) return;
+  const artToyId = btn.closest?.('.art-toy-panel')?.id || btn.dataset.artToyId;
+  if (!artToyId) return;
+  e.preventDefault();
+  e.stopPropagation();
+  try {
+    const panel = getArtToyPanelById(artToyId);
+    if (!panel) return;
+    if (typeof panel.cycleFireworkEffect === 'function') {
+      panel.cycleFireworkEffect(+1);
+    } else if (typeof panel.setFireworkEffectId === 'function') {
+      const cur = Number(panel?.dataset?.fireworkFx) || 0;
+      panel.setFireworkEffectId(cur + 1);
+    }
+    try { window.Persistence?.markDirty?.(); } catch {}
+  } catch {}
+}, true);
+
 // Returns true if the given panel has any notes at the specified column.
 function panelHasNotesAtColumn(panel, col){
   if (!panel || !Number.isFinite(col)) return false;
