@@ -1611,7 +1611,13 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
 body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-firework-handle-btn.is-active-firework:hover,
 body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-firework-handle-btn.is-active-firework:focus-visible,
 body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-fireworks-drag-area.is-dragging ~ .art-fireworks-handles .art-firework-handle-btn.is-active-firework {
-  opacity: 0.02;
+  opacity: 0.38;
+  filter: brightness(1.35) saturate(1.25) drop-shadow(0 0 10px rgba(132, 198, 255, 0.85));
+}
+
+.art-toy-panel[data-controls-visible='1'] .art-firework-handle-btn.is-active-firework:hover,
+.art-toy-panel[data-controls-visible='1'] .art-firework-handle-btn.is-active-firework:focus-visible {
+  filter: brightness(1.2) saturate(1.15) drop-shadow(0 0 8px rgba(132, 198, 255, 0.65));
 }
 
 .art-toy-circle-lasers {
@@ -1710,7 +1716,7 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
 
 .art-toy-controls {
   position: absolute;
-  top: calc(-18px - var(--art-drag-size));
+  top: calc(-18px - var(--art-drag-size) - 44px);
   left: calc(-18px + var(--art-drag-size) + 10px);
   transform: none;
   display: flex;
@@ -1721,7 +1727,7 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
 
 .art-toy-volume {
   position: absolute;
-  top: calc(-18px - var(--art-drag-size) + var(--art-control-size) + 12px);
+  top: calc(-18px - var(--art-drag-size) + var(--art-control-size) + 30px);
   left: calc(-18px + var(--art-drag-size) + 10px);
   transform: none;
   z-index: 3;
@@ -1757,7 +1763,8 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
 
 .art-toy-fx-shell {
   position: relative;
-  margin-left: 6px;
+  margin-left: 44px;
+  top: 37px;
   z-index: 4;
 }
 
@@ -5258,4 +5265,5 @@ body.intro-open .topbar-menu-wrap {
   z-index: 800 !important;          /* below UI (topbar/menu/spawner), above main board */
   pointer-events: auto !important;
 }
+
 
