@@ -1792,7 +1792,7 @@ function setupLaserTrails(panel) {
     pulseOverlayWidthScale: 1.55,
     burstDurationMs: 520,
     burstGlowPx: 14,
-    runnerDurationMs: 4150,
+    runnerDurationMs: 300,
     runnerGlowPx: 14,
     runnerWidthScaleOpaque: 3.9,
     runnerWidthScaleSoft: 1.6,
@@ -2183,7 +2183,7 @@ function setupLaserTrails(panel) {
         } else {
           const drawState = drawStateBySlot[slot];
           if (drawState && !drawState.startedTargetPath) {
-            slotPaths[slot] = [{ x: clampAnchorX(emitters[slot].x), y: clampAnchorY(emitters[slot].y) }];
+            // Keep the existing curve and continue drawing from its current end.
             appendPathPoint(slot, x, y, 0);
             drawState.startedTargetPath = true;
           } else {
@@ -2285,34 +2285,151 @@ function setupLaserTrails(panel) {
       if (!stage) return 720;
       const id = clampFxId(fxId);
       const tone = palette[id % palette.length];
-      const line = document.createElement('span');
-      line.className = 'art-laser-preview-line';
-      line.style.background = tone;
-      line.style.left = '50%';
-      line.style.top = '50%';
-      const baseLen = id === 2 ? 56 : id === 3 ? 24 : 42;
-      const width = id === 0 ? 3.6 : id === 1 ? 2.8 : id === 4 ? 3.2 : 2.4;
-      const rot = (Math.random() - 0.5) * 1.2;
-      line.style.width = `${baseLen}px`;
-      line.style.height = `${width}px`;
-      stage.appendChild(line);
-      trackPreviewLine(stage, line);
-      const life = id === 3 ? 520 : id === 2 ? 700 : 560;
-      try {
-        const anim = line.animate(
+      const rot = 0;
+      const baseLen = 42;
+      const mkLine = ({ len = baseLen, width = 3, opacity = 1, glow = 6 } = {}) => {
+        const line = document.createElement('span');
+        line.className = 'art-laser-preview-line';
+        line.style.background = tone;
+        line.style.left = '50%';
+        line.style.top = '50%';
+        line.style.width = `${len}px`;
+        line.style.height = `${width}px`;
+        line.style.opacity = String(opacity);
+        line.style.filter = `drop-shadow(0 0 ${glow}px ${tone})`;
+        stage.appendChild(line);
+        trackPreviewLine(stage, line);
+        return line;
+      };
+      const animateAndRemove = (node, keyframes, timing, fallbackMs = 640) => {
+        try {
+          const anim = node.animate(keyframes, timing);
+          anim.addEventListener('finish', () => { try { node.remove(); } catch {} }, { once: true });
+          anim.addEventListener('cancel', () => { try { node.remove(); } catch {} }, { once: true });
+        } catch {
+          setTimeout(() => { try { node.remove(); } catch {} }, fallbackMs);
+        }
+      };
+      const spawnRunner = (life = 900, opaque = true) => {
+        const seg = mkLine({ len: 16, width: opaque ? 4.4 : 3.6, opacity: opaque ? 1 : 0.82, glow: opaque ? 10 : 7 });
+        animateAndRemove(
+          seg,
           [
-            { transform: `translate(-50%, -50%) rotate(${rot}rad) scaleX(0.02)`, opacity: 0.1 },
-            { transform: `translate(-50%, -50%) rotate(${rot}rad) scaleX(1.0)`, opacity: 0.95, offset: 0.26 },
-            { transform: `translate(-50%, -50%) rotate(${rot}rad) scaleX(${id === 2 ? 1.12 : 0.92})`, opacity: id === 0 || id === 1 || id === 4 || id === 5 ? 0.35 : 0 },
+            { transform: `translate(-50%, -50%) rotate(${rot}rad) translateX(-18px)`, opacity: opaque ? 1 : 0.82 },
+            { transform: `translate(-50%, -50%) rotate(${rot}rad) translateX(18px)`, opacity: opaque ? 1 : 0.82 },
           ],
-          { duration: life, easing: 'cubic-bezier(0.22, 0.75, 0.18, 1)' }
+          { duration: life, easing: 'linear' },
+          life + 40
         );
-        anim.addEventListener('finish', () => { try { line.remove(); } catch {} }, { once: true });
-        anim.addEventListener('cancel', () => { try { line.remove(); } catch {} }, { once: true });
-      } catch {
-        setTimeout(() => { try { line.remove(); } catch {} }, life + 40);
+      };
+
+      // 0 Solid Pulse
+      if (id === 0) {
+        const base = mkLine({ len: baseLen, width: 3.2, opacity: 0.95, glow: 8 });
+        animateAndRemove(
+          base,
+          [
+            { transform: `translate(-50%, -50%) rotate(${rot}rad) scaleX(1)`, opacity: 0.95, filter: `drop-shadow(0 0 8px ${tone})` },
+            { transform: `translate(-50%, -50%) rotate(${rot}rad) scaleX(1)`, opacity: 0.95, filter: `drop-shadow(0 0 8px ${tone})`, offset: 0.999 },
+            { transform: `translate(-50%, -50%) rotate(${rot}rad) scaleX(1)`, opacity: 0.95, filter: `drop-shadow(0 0 8px ${tone})` },
+          ],
+          { duration: 920, easing: 'linear' },
+          980
+        );
+        const pulse = mkLine({ len: baseLen, width: 5.8, opacity: 0.95, glow: 14 });
+        animateAndRemove(
+          pulse,
+          [
+            { transform: `translate(-50%, -50%) rotate(${rot}rad) scaleX(1)`, opacity: 0.95 },
+            { transform: `translate(-50%, -50%) rotate(${rot}rad) scaleX(1.03)`, opacity: 1, offset: 0.3 },
+            { transform: `translate(-50%, -50%) rotate(${rot}rad) scaleX(1)`, opacity: 0.05 },
+          ],
+          { duration: 620, easing: 'cubic-bezier(0.2, 0.78, 0.16, 1)' },
+          700
+        );
+        return 920;
       }
-      return life;
+
+      // 1 Soft Pulse
+      if (id === 1) {
+        const base = mkLine({ len: baseLen, width: 3.1, opacity: 0.38, glow: 6 });
+        animateAndRemove(
+          base,
+          [
+            { transform: `translate(-50%, -50%) rotate(${rot}rad)`, opacity: 0.38 },
+            { transform: `translate(-50%, -50%) rotate(${rot}rad)`, opacity: 0.38, offset: 0.999 },
+            { transform: `translate(-50%, -50%) rotate(${rot}rad)`, opacity: 0.38 },
+          ],
+          { duration: 920, easing: 'linear' },
+          980
+        );
+        const pulse = mkLine({ len: baseLen, width: 4.4, opacity: 0.92, glow: 11 });
+        animateAndRemove(
+          pulse,
+          [
+            { transform: `translate(-50%, -50%) rotate(${rot}rad)`, opacity: 0.9 },
+            { transform: `translate(-50%, -50%) rotate(${rot}rad)`, opacity: 1, offset: 0.28 },
+            { transform: `translate(-50%, -50%) rotate(${rot}rad)`, opacity: 0.05 },
+          ],
+          { duration: 620, easing: 'cubic-bezier(0.2, 0.78, 0.16, 1)' },
+          700
+        );
+        return 920;
+      }
+
+      // 2 Burst Thin
+      if (id === 2) {
+        const burst = mkLine({ len: 54, width: 6.2, opacity: 1, glow: 14 });
+        animateAndRemove(
+          burst,
+          [
+            { transform: `translate(-50%, -50%) rotate(${rot}rad) scaleX(1)`, opacity: 1, height: '6.2px' },
+            { transform: `translate(-50%, -50%) rotate(${rot}rad) scaleX(1.02)`, opacity: 0.95, height: '3.1px', offset: 0.5 },
+            { transform: `translate(-50%, -50%) rotate(${rot}rad) scaleX(1.02)`, opacity: 0, height: '0.8px' },
+          ],
+          { duration: 700, easing: 'cubic-bezier(0.2, 0.78, 0.16, 1)' },
+          760
+        );
+        return 720;
+      }
+
+      // 3 Runner
+      if (id === 3) {
+        spawnRunner(980, true);
+        return 980;
+      }
+
+      // 4 Solid + Runner
+      if (id === 4) {
+        const base = mkLine({ len: baseLen, width: 3.2, opacity: 0.95, glow: 8 });
+        animateAndRemove(
+          base,
+          [
+            { transform: `translate(-50%, -50%) rotate(${rot}rad)`, opacity: 0.95 },
+            { transform: `translate(-50%, -50%) rotate(${rot}rad)`, opacity: 0.95, offset: 0.999 },
+            { transform: `translate(-50%, -50%) rotate(${rot}rad)`, opacity: 0.95 },
+          ],
+          { duration: 980, easing: 'linear' },
+          1040
+        );
+        spawnRunner(980, true);
+        return 980;
+      }
+
+      // 5 Soft + Runner
+      const base = mkLine({ len: baseLen, width: 3.1, opacity: 0.38, glow: 6 });
+      animateAndRemove(
+        base,
+        [
+          { transform: `translate(-50%, -50%) rotate(${rot}rad)`, opacity: 0.38 },
+          { transform: `translate(-50%, -50%) rotate(${rot}rad)`, opacity: 0.38, offset: 0.999 },
+          { transform: `translate(-50%, -50%) rotate(${rot}rad)`, opacity: 0.38 },
+        ],
+        { duration: 980, easing: 'linear' },
+        1040
+      );
+      spawnRunner(980, true);
+      return 980;
     };
     const addPreviewLoop = (stage, fxResolver) => {
       if (!stage) return;
@@ -2514,7 +2631,7 @@ function setupLaserTrails(panel) {
         setTimeout(() => removeActiveNode(path), life + 40);
       }
     };
-    const spawnMovingSegment = ({ opaque = true, withTrailFade = true } = {}) => {
+    const spawnMovingSegment = ({ opaque = true } = {}) => {
       const seg = spawnTransientPath({
         widthScale: opaque ? LASER_STYLE.runnerWidthScaleOpaque : LASER_STYLE.runnerWidthScaleSoft,
         opacity: opaque ? 1 : 0.72,
@@ -2528,17 +2645,21 @@ function setupLaserTrails(panel) {
         LASER_STYLE.runnerSegmentMin,
         Math.min(total * LASER_STYLE.runnerSegmentFraction, LASER_STYLE.runnerSegmentMax)
       );
-      seg.style.strokeDasharray = `${segLen.toFixed(2)} ${(Math.max(1, total - segLen)).toFixed(2)}`;
-      seg.style.strokeDashoffset = `${total.toFixed(2)}`;
+      // Use a non-repeating dash pattern so the runner does not wrap back to start.
+      const gapLen = Math.max(1, total);
+      const startOffset = total + segLen;
+      // End at segLen (not 0) to avoid touching the wrap boundary, which can flash at path start.
+      const endOffset = segLen;
+      seg.style.strokeDasharray = `${segLen.toFixed(2)} ${gapLen.toFixed(2)}`;
+      seg.style.strokeDashoffset = `${startOffset.toFixed(2)}`;
       const life = LASER_STYLE.runnerDurationMs;
       try {
         const anim = seg.animate(
           [
-            { strokeDashoffset: `${total.toFixed(2)}`, opacity: opaque ? 1 : 0.72 },
-            { strokeDashoffset: `${(total * 0.18).toFixed(2)}`, opacity: opaque ? 1 : 0.76, offset: 0.28 },
-            { strokeDashoffset: `${(-segLen).toFixed(2)}`, opacity: withTrailFade ? 0 : (opaque ? 1 : 0.72) },
+            { strokeDashoffset: `${startOffset.toFixed(2)}`, opacity: opaque ? 1 : 0.72 },
+            { strokeDashoffset: `${endOffset.toFixed(2)}`, opacity: opaque ? 1 : 0.72 },
           ],
-          { duration: life, easing: 'cubic-bezier(0.2, 0.78, 0.16, 1)' }
+          { duration: life, easing: 'linear' }
         );
         anim.addEventListener('finish', () => removeActiveNode(seg), { once: true });
         anim.addEventListener('cancel', () => removeActiveNode(seg), { once: true });
@@ -2560,11 +2681,11 @@ function setupLaserTrails(panel) {
       return;
     }
     if (profile.beatMode === 'runner') {
-      spawnMovingSegment({ opaque: true, withTrailFade: true });
+      spawnMovingSegment({ opaque: true });
       return;
     }
     if (profile.beatMode === 'runner-opaque') {
-      spawnMovingSegment({ opaque: true, withTrailFade: true });
+      spawnMovingSegment({ opaque: true });
     }
   }
 
