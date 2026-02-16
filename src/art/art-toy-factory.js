@@ -1732,6 +1732,9 @@ function setupLaserTrails(panel) {
   const guidesLayer = document.createElementNS(svgNS, 'g');
   guidesLayer.setAttribute('class', 'art-laser-guides');
   layer.appendChild(guidesLayer);
+  const beamsLayer = document.createElementNS(svgNS, 'g');
+  beamsLayer.setAttribute('class', 'art-laser-beams');
+  layer.appendChild(beamsLayer);
 
   const dragAreaEl = document.createElement('div');
   dragAreaEl.className = 'art-lasers-drag-area';
@@ -1761,10 +1764,11 @@ function setupLaserTrails(panel) {
   ]));
   const palette = ['#7bf6ff', '#86efac', '#fde047', '#f9a8d4', '#c4b5fd', '#67e8f9', '#fca5a5', '#a7f3d0'];
   const active = [];
-  const ACTIVE_CAP = 28;
+  const ACTIVE_CAP = 56;
   const sourceHandleEls = [];
   const targetHandleEls = [];
   const guideEls = [];
+  const baseBeamEls = [];
   const drawStateBySlot = Array.from({ length: ART_SLOT_COUNT }, () => ({
     drawingTargetPath: false,
     startedTargetPath: false,
@@ -1773,7 +1777,30 @@ function setupLaserTrails(panel) {
   const PANEL_PX = 220;
   const HANDLE_SIZE_PX = 62;
   // Global laser stroke thickness multiplier. Tweak this to scale all laser effects.
-  const LASER_STROKE_MULTIPLIER = 15;
+  const LASER_STROKE_MULTIPLIER = 5;
+  // Laser style tuning (pulse/glow/runner). Keep these centralized for quick iteration.
+  const LASER_STYLE = Object.freeze({
+    baseOpacityOpaque: 0.95,
+    baseOpacitySemi: 0.36,
+    baseGlowOpaquePx: 10,
+    baseGlowSemiPx: 6,
+    pulseDurationMs: 500,
+    pulseWidthScale: 3.65,
+    pulseGlowPx: 80,
+    pulseOverlayOpacity: 0.95,
+    pulseOverlayFadeTo: 0.08,
+    pulseOverlayWidthScale: 1.55,
+    burstDurationMs: 520,
+    burstGlowPx: 14,
+    runnerDurationMs: 4150,
+    runnerGlowPx: 14,
+    runnerWidthScaleOpaque: 3.9,
+    runnerWidthScaleSoft: 1.6,
+    runnerSegmentFraction: 0.26,
+    runnerSegmentMin: 18,
+    runnerSegmentMax: 86,
+    transientGlowDefaultPx: 10,
+  });
   const AREA_MIN_X = -142;
   const AREA_MIN_Y = 74;
   const MAX_DRAG_SPAN = 1600;
@@ -1797,9 +1824,12 @@ function setupLaserTrails(panel) {
   const INITIAL_DRAG_H = dragArea.h;
 
   const LASER_FX = Object.freeze([
-    { id: 0, key: 'full', name: 'Full' },
-    { id: 1, key: 'short', name: 'Short' },
-    { id: 2, key: 'long', name: 'Long' },
+    { id: 0, key: 'solidPulse', name: 'Solid Pulse' },
+    { id: 1, key: 'softPulse', name: 'Soft Pulse' },
+    { id: 2, key: 'burstThin', name: 'Burst Thin' },
+    { id: 3, key: 'runner', name: 'Runner' },
+    { id: 4, key: 'solidRunner', name: 'Solid + Runner' },
+    { id: 5, key: 'softRunner', name: 'Soft + Runner' },
   ]);
   const clampFxId = (v) => {
     const n = Math.trunc(Number(v));
@@ -1810,6 +1840,7 @@ function setupLaserTrails(panel) {
   const setFx = (nextId, { announce = true } = {}) => {
     currentFxId = clampFxId(nextId);
     panel.dataset.laserFx = String(currentFxId);
+    try { syncAllBaseBeams(); } catch {}
     try { syncFxUi(); } catch {}
     if (announce) markSceneDirtySafe();
   };
@@ -1984,6 +2015,30 @@ function setupLaserTrails(panel) {
     setSlotPath(i, points);
     alignAnchorsFromPath(i);
   };
+  const getLaserBaseWidth = (fxId) => {
+    const id = clampFxId(fxId);
+    if (id === 2) return 6.6;
+    if (id === 3) return 5.0;
+    return 5.4;
+  };
+  const getFxProfile = (fxId) => {
+    switch (clampFxId(fxId)) {
+      case 0:
+        return { baseMode: 'opaque', beatMode: 'pulse-thicken' };
+      case 1:
+        return { baseMode: 'semi', beatMode: 'pulse-opaque' };
+      case 2:
+        return { baseMode: 'none', beatMode: 'burst-thin' };
+      case 3:
+        return { baseMode: 'none', beatMode: 'runner' };
+      case 4:
+        return { baseMode: 'opaque', beatMode: 'runner' };
+      case 5:
+        return { baseMode: 'semi', beatMode: 'runner-opaque' };
+      default:
+        return { baseMode: 'opaque', beatMode: 'pulse-thicken' };
+    }
+  };
   const syncActiveStateFlags = () => {
     panel.dataset.hasActiveLasers = activeSlots.size > 0 ? '1' : '0';
   };
@@ -2008,11 +2063,37 @@ function setupLaserTrails(panel) {
     const points = getSlotPath(i);
     guide.setAttribute('d', buildLaserPath(points));
   };
+  const syncBaseBeam = (slot) => {
+    const i = normalizeSlot(slot);
+    const beam = baseBeamEls[i];
+    if (!beam) return;
+    const points = getSlotPath(i);
+    beam.setAttribute('d', buildLaserPath(points));
+    beam.setAttribute('stroke', palette[i % palette.length]);
+    beam.setAttribute('fill', 'none');
+    beam.setAttribute('stroke-linecap', 'round');
+    beam.setAttribute('stroke-linejoin', 'round');
+    const fxId = clampFxId(panel?.dataset?.laserFx);
+    const profile = getFxProfile(fxId);
+    const visible = activeSlots.has(i) && profile.baseMode !== 'none';
+    const baseWidth = getLaserBaseWidth(fxId) * LASER_STROKE_MULTIPLIER;
+    const baseOpacity = profile.baseMode === 'semi' ? LASER_STYLE.baseOpacitySemi : LASER_STYLE.baseOpacityOpaque;
+    const glowPx = profile.baseMode === 'semi' ? LASER_STYLE.baseGlowSemiPx : LASER_STYLE.baseGlowOpaquePx;
+    beam.style.display = visible ? '' : 'none';
+    beam.style.opacity = String(baseOpacity);
+    beam.style.filter = `drop-shadow(0 0 ${glowPx}px currentColor)`;
+    beam.style.strokeWidth = `${baseWidth}`;
+    beam.setAttribute('stroke-width', String(baseWidth));
+  };
+  const syncAllBaseBeams = () => {
+    for (let i = 0; i < ART_SLOT_COUNT; i++) syncBaseBeam(i);
+  };
   const syncAllHandles = () => {
     for (let i = 0; i < ART_SLOT_COUNT; i++) {
       syncHandle(i, 'source');
       syncHandle(i, 'target');
       syncGuide(i);
+      syncBaseBeam(i);
     }
   };
   const setSlotActive = (slot) => {
@@ -2021,6 +2102,7 @@ function setupLaserTrails(panel) {
     sourceHandleEls[i]?.classList.add('is-active-firework');
     targetHandleEls[i]?.classList.add('is-active-firework');
     guideEls[i]?.classList.add('is-active-firework');
+    syncBaseBeam(i);
     syncActiveStateFlags();
   };
   const setSlotInactive = (slot) => {
@@ -2029,6 +2111,7 @@ function setupLaserTrails(panel) {
     sourceHandleEls[i]?.classList.remove('is-active-firework');
     targetHandleEls[i]?.classList.remove('is-active-firework');
     guideEls[i]?.classList.remove('is-active-firework');
+    syncBaseBeam(i);
     syncActiveStateFlags();
   };
   const activateAllSlots = () => {
@@ -2113,6 +2196,7 @@ function setupLaserTrails(panel) {
         if (kind === 'source') syncHandle(slot, 'target');
         else syncHandle(slot, 'source');
         syncGuide(slot);
+        syncBaseBeam(slot);
       },
       clampX: kind === 'target' ? clampAnchorX : undefined,
       clampY: kind === 'target' ? clampAnchorY : undefined,
@@ -2135,6 +2219,7 @@ function setupLaserTrails(panel) {
           syncHandle(slot, 'source');
           syncHandle(slot, 'target');
           syncGuide(slot);
+          syncBaseBeam(slot);
           drawState.drawingTargetPath = false;
           drawState.startedTargetPath = false;
         }
@@ -2151,6 +2236,13 @@ function setupLaserTrails(panel) {
   randomizeAnchorsWithinArea();
   syncDragArea();
   syncActiveStateFlags();
+  for (let i = 0; i < ART_SLOT_COUNT; i++) {
+    const beam = document.createElementNS(svgNS, 'path');
+    beam.setAttribute('class', 'art-laser-base-beam');
+    beamsLayer.appendChild(beam);
+    baseBeamEls[i] = beam;
+    syncBaseBeam(i);
+  }
   for (let i = 0; i < ART_SLOT_COUNT; i++) {
     const guide = document.createElementNS(svgNS, 'path');
     guide.setAttribute('class', 'art-laser-guide');
@@ -2198,20 +2290,20 @@ function setupLaserTrails(panel) {
       line.style.background = tone;
       line.style.left = '50%';
       line.style.top = '50%';
-      const baseLen = id === 1 ? 28 : id === 2 ? 58 : 44;
-      const width = id === 1 ? 3 : id === 2 ? 2.3 : 2.6;
+      const baseLen = id === 2 ? 56 : id === 3 ? 24 : 42;
+      const width = id === 0 ? 3.6 : id === 1 ? 2.8 : id === 4 ? 3.2 : 2.4;
       const rot = (Math.random() - 0.5) * 1.2;
       line.style.width = `${baseLen}px`;
       line.style.height = `${width}px`;
       stage.appendChild(line);
       trackPreviewLine(stage, line);
-      const life = id === 2 ? 720 : id === 1 ? 480 : 600;
+      const life = id === 3 ? 520 : id === 2 ? 700 : 560;
       try {
         const anim = line.animate(
           [
             { transform: `translate(-50%, -50%) rotate(${rot}rad) scaleX(0.02)`, opacity: 0.1 },
             { transform: `translate(-50%, -50%) rotate(${rot}rad) scaleX(1.0)`, opacity: 0.95, offset: 0.26 },
-            { transform: `translate(-50%, -50%) rotate(${rot}rad) scaleX(${id === 2 ? 1.12 : 0.92})`, opacity: 0 },
+            { transform: `translate(-50%, -50%) rotate(${rot}rad) scaleX(${id === 2 ? 1.12 : 0.92})`, opacity: id === 0 || id === 1 || id === 4 || id === 5 ? 0.35 : 0 },
           ],
           { duration: life, easing: 'cubic-bezier(0.22, 0.75, 0.18, 1)' }
         );
@@ -2306,57 +2398,173 @@ function setupLaserTrails(panel) {
     const fxId = clampFxId(panel?.dataset?.laserFx);
     const vel = Number(velocity);
     const amp = Number.isFinite(vel) ? Math.max(0.5, Math.min(1.25, vel)) : 0.95;
+    const profile = getFxProfile(fxId);
     const basePoints = getSlotPath(slot);
     const points = basePoints.map((p) => ({ x: p.x, y: p.y }));
     if (points.length < 2) return;
     points[0].x = source.x;
     points[0].y = source.y;
+    const pathD = buildLaserPath(points);
+    const beamBaseWidth = getLaserBaseWidth(fxId) * LASER_STROKE_MULTIPLIER;
+    const baseWidth = getLaserBaseWidth(fxId) * amp * LASER_STROKE_MULTIPLIER;
 
-    const path = document.createElementNS(svgNS, 'path');
-    path.setAttribute('class', 'art-laser-path');
-    path.setAttribute('d', buildLaserPath(points));
-    path.setAttribute('stroke', tone);
-    const baseWidth = fxId === 1 ? 4.8 : fxId === 2 ? 6.1 : 5.4;
-    path.setAttribute('stroke-width', String(baseWidth * amp * LASER_STROKE_MULTIPLIER));
-    path.setAttribute('fill', 'none');
-    path.setAttribute('stroke-linecap', 'round');
-    path.setAttribute('stroke-linejoin', 'round');
-    layer.appendChild(path);
-    active.push(path);
-
-    while (active.length > ACTIVE_CAP) {
-      const old = active.shift();
-      try { old?.remove(); } catch {}
-    }
-
-    let total = 120;
-    try { total = Math.max(12, path.getTotalLength()); } catch {}
-    path.style.strokeDasharray = `${total.toFixed(2)}`;
-    path.style.strokeDashoffset = `${total.toFixed(2)}`;
-
-    const life = fxId === 2 ? (560 + Math.random() * 260) : fxId === 1 ? (320 + Math.random() * 140) : (440 + Math.random() * 210);
-    try {
-      const anim = path.animate(
-        [
-          { strokeDashoffset: `${total.toFixed(2)}`, opacity: 0.0, filter: 'drop-shadow(0 0 0px currentColor)' },
-          { strokeDashoffset: `${(total * 0.18).toFixed(2)}`, opacity: 0.98, filter: 'drop-shadow(0 0 5px currentColor)', offset: 0.28 },
-          { strokeDashoffset: `${(-total * 0.42).toFixed(2)}`, opacity: 0.0, filter: 'drop-shadow(0 0 1px currentColor)' },
-        ],
-        { duration: life, easing: 'cubic-bezier(0.22, 0.75, 0.18, 1)' }
+    const trackActiveNode = (node) => {
+      if (!node) return;
+      active.push(node);
+      while (active.length > ACTIVE_CAP) {
+        const old = active.shift();
+        try { old?.remove(); } catch {}
+      }
+    };
+    const spawnTransientPath = ({
+      widthScale = 1,
+      opacity = 1,
+      filter = `drop-shadow(0 0 ${LASER_STYLE.transientGlowDefaultPx}px currentColor)`
+    } = {}) => {
+      const path = document.createElementNS(svgNS, 'path');
+      path.setAttribute('class', 'art-laser-path');
+      path.setAttribute('d', pathD);
+      path.setAttribute('stroke', tone);
+      path.setAttribute('stroke-width', String(baseWidth * widthScale));
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke-linecap', 'round');
+      path.setAttribute('stroke-linejoin', 'round');
+      path.style.opacity = String(opacity);
+      path.style.filter = filter;
+      layer.appendChild(path);
+      trackActiveNode(path);
+      return path;
+    };
+    const removeActiveNode = (node) => {
+      const idx = active.indexOf(node);
+      if (idx >= 0) active.splice(idx, 1);
+      try { node?.remove?.(); } catch {}
+    };
+    const animateBasePulse = (mode) => {
+      const beam = baseBeamEls[slot];
+      if (!beam || beam.style.display === 'none') return;
+      try {
+        beam.getAnimations?.().forEach((anim) => { try { anim.cancel(); } catch {} });
+      } catch {}
+      const baseOpacity = profile.baseMode === 'semi' ? LASER_STYLE.baseOpacitySemi : LASER_STYLE.baseOpacityOpaque;
+      if (mode === 'pulse-thicken') {
+        const w0 = beamBaseWidth;
+        const w1 = beamBaseWidth * LASER_STYLE.pulseWidthScale;
+        const overlay = spawnTransientPath({
+          widthScale: LASER_STYLE.pulseOverlayWidthScale,
+          opacity: LASER_STYLE.pulseOverlayOpacity,
+          filter: `drop-shadow(0 0 ${LASER_STYLE.pulseGlowPx}px currentColor)`
+        });
+        try {
+          beam.animate(
+            [
+              { strokeWidth: `${w0}`, opacity: baseOpacity, filter: `drop-shadow(0 0 ${LASER_STYLE.baseGlowOpaquePx}px currentColor)` },
+              { strokeWidth: `${w1}`, opacity: 1, filter: `drop-shadow(0 0 ${LASER_STYLE.pulseGlowPx}px currentColor)`, offset: 0.34 },
+              { strokeWidth: `${w0}`, opacity: baseOpacity, filter: `drop-shadow(0 0 ${LASER_STYLE.baseGlowOpaquePx}px currentColor)` },
+            ],
+            { duration: LASER_STYLE.pulseDurationMs, easing: 'cubic-bezier(0.2, 0.78, 0.16, 1)' }
+          );
+        } catch {}
+        try {
+          const anim = overlay.animate(
+            [
+              { opacity: LASER_STYLE.pulseOverlayOpacity },
+              { opacity: LASER_STYLE.pulseOverlayFadeTo, offset: 0.62 },
+              { opacity: 0 }
+            ],
+            { duration: LASER_STYLE.pulseDurationMs, easing: 'cubic-bezier(0.2, 0.78, 0.16, 1)' }
+          );
+          anim.addEventListener('finish', () => removeActiveNode(overlay), { once: true });
+          anim.addEventListener('cancel', () => removeActiveNode(overlay), { once: true });
+        } catch {
+          setTimeout(() => removeActiveNode(overlay), LASER_STYLE.pulseDurationMs + 40);
+        }
+        return;
+      }
+      try {
+        beam.animate(
+          [
+            { opacity: baseOpacity, filter: `drop-shadow(0 0 ${LASER_STYLE.baseGlowSemiPx}px currentColor)` },
+            { opacity: 1, filter: `drop-shadow(0 0 ${LASER_STYLE.pulseGlowPx}px currentColor)`, offset: 0.3 },
+            { opacity: baseOpacity, filter: `drop-shadow(0 0 ${LASER_STYLE.baseGlowSemiPx}px currentColor)` },
+          ],
+          { duration: LASER_STYLE.pulseDurationMs, easing: 'cubic-bezier(0.2, 0.78, 0.16, 1)' }
+        );
+      } catch {}
+    };
+    const spawnBurstThin = () => {
+      const path = spawnTransientPath({
+        widthScale: 1.15,
+        opacity: 1,
+        filter: `drop-shadow(0 0 ${LASER_STYLE.burstGlowPx}px currentColor)`
+      });
+      const life = LASER_STYLE.burstDurationMs;
+      try {
+        const anim = path.animate(
+          [
+            { opacity: 1, strokeWidth: `${baseWidth * 1.2}` },
+            { opacity: 0.95, strokeWidth: `${baseWidth * 0.55}`, offset: 0.45 },
+            { opacity: 0, strokeWidth: '0.1' },
+          ],
+          { duration: life, easing: 'cubic-bezier(0.2, 0.78, 0.16, 1)' }
+        );
+        anim.addEventListener('finish', () => removeActiveNode(path), { once: true });
+        anim.addEventListener('cancel', () => removeActiveNode(path), { once: true });
+      } catch {
+        setTimeout(() => removeActiveNode(path), life + 40);
+      }
+    };
+    const spawnMovingSegment = ({ opaque = true, withTrailFade = true } = {}) => {
+      const seg = spawnTransientPath({
+        widthScale: opaque ? LASER_STYLE.runnerWidthScaleOpaque : LASER_STYLE.runnerWidthScaleSoft,
+        opacity: opaque ? 1 : 0.72,
+        filter: opaque
+          ? `drop-shadow(0 0 ${LASER_STYLE.runnerGlowPx}px currentColor)`
+          : `drop-shadow(0 0 ${Math.max(2, LASER_STYLE.runnerGlowPx * 0.55)}px currentColor)`
+      });
+      let total = 120;
+      try { total = Math.max(18, seg.getTotalLength()); } catch {}
+      const segLen = Math.max(
+        LASER_STYLE.runnerSegmentMin,
+        Math.min(total * LASER_STYLE.runnerSegmentFraction, LASER_STYLE.runnerSegmentMax)
       );
-      const cleanup = () => {
-        const idx = active.indexOf(path);
-        if (idx >= 0) active.splice(idx, 1);
-        try { path.remove(); } catch {}
-      };
-      anim.addEventListener('finish', cleanup, { once: true });
-      anim.addEventListener('cancel', cleanup, { once: true });
-    } catch {
-      setTimeout(() => {
-        const idx = active.indexOf(path);
-        if (idx >= 0) active.splice(idx, 1);
-        try { path.remove(); } catch {}
-      }, life + 60);
+      seg.style.strokeDasharray = `${segLen.toFixed(2)} ${(Math.max(1, total - segLen)).toFixed(2)}`;
+      seg.style.strokeDashoffset = `${total.toFixed(2)}`;
+      const life = LASER_STYLE.runnerDurationMs;
+      try {
+        const anim = seg.animate(
+          [
+            { strokeDashoffset: `${total.toFixed(2)}`, opacity: opaque ? 1 : 0.72 },
+            { strokeDashoffset: `${(total * 0.18).toFixed(2)}`, opacity: opaque ? 1 : 0.76, offset: 0.28 },
+            { strokeDashoffset: `${(-segLen).toFixed(2)}`, opacity: withTrailFade ? 0 : (opaque ? 1 : 0.72) },
+          ],
+          { duration: life, easing: 'cubic-bezier(0.2, 0.78, 0.16, 1)' }
+        );
+        anim.addEventListener('finish', () => removeActiveNode(seg), { once: true });
+        anim.addEventListener('cancel', () => removeActiveNode(seg), { once: true });
+      } catch {
+        setTimeout(() => removeActiveNode(seg), life + 40);
+      }
+    };
+
+    if (profile.beatMode === 'pulse-thicken') {
+      animateBasePulse('pulse-thicken');
+      return;
+    }
+    if (profile.beatMode === 'pulse-opaque') {
+      animateBasePulse('pulse-opaque');
+      return;
+    }
+    if (profile.beatMode === 'burst-thin') {
+      spawnBurstThin();
+      return;
+    }
+    if (profile.beatMode === 'runner') {
+      spawnMovingSegment({ opaque: true, withTrailFade: true });
+      return;
+    }
+    if (profile.beatMode === 'runner-opaque') {
+      spawnMovingSegment({ opaque: true, withTrailFade: true });
     }
   }
 
