@@ -3124,10 +3124,10 @@ function getArtToyPanelById(artToyId) {
 }
 
 function pickDefaultInternalToyKindForArtToy(artToyId) {
-  // First pass: for now, allow only DrawGrid and Simple Rhythm (LoopGrid).
-  // Default to DrawGrid for Flash Circle.
+  // Default internal toy by Art Toy type.
   const artPanel = getArtToyPanelById(artToyId);
   const kind = artPanel?.dataset?.artToy || '';
+  if (kind === 'fireworks') return 'loopgrid'; // Simple Rhythm
   if (kind === 'flashCircle') return 'drawgrid';
   return 'drawgrid';
 }
