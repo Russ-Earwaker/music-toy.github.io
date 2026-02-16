@@ -1,5 +1,5 @@
 // src/art/art-hue-sat-picker.js
-// Reusable square hue/saturation picker (fixed lightness).
+// Reusable square hue + white picker with a vertical darkness slider.
 
 function clamp01(v) {
   const n = Number(v);
@@ -31,22 +31,36 @@ function hslToHex(h, s, l = 0.5) {
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
-function hexToHsl(hex) {
+function hexToRgb(hex) {
   const raw = String(hex || '').trim();
   const m = raw.match(/^#?([0-9a-f]{6})$/i);
-  if (!m) return { h: 0, s: 1, l: 0.5 };
+  if (!m) return { r: 0, g: 0, b: 0 };
   const v = m[1];
-  const r = parseInt(v.slice(0, 2), 16) / 255;
-  const g = parseInt(v.slice(2, 4), 16) / 255;
-  const b = parseInt(v.slice(4, 6), 16) / 255;
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
+  return {
+    r: parseInt(v.slice(0, 2), 16),
+    g: parseInt(v.slice(2, 4), 16),
+    b: parseInt(v.slice(4, 6), 16),
+  };
+}
+
+function rgbToHex(r, g, b) {
+  const toHex = (v) => Math.max(0, Math.min(255, Math.round(Number(v) || 0))).toString(16).padStart(2, '0');
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+function hexToHsl(hex) {
+  const { r, g, b } = hexToRgb(hex);
+  const rn = r / 255;
+  const gn = g / 255;
+  const bn = b / 255;
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
   const d = max - min;
   let h = 0;
   if (d > 0) {
-    if (max === r) h = ((g - b) / d) % 6;
-    else if (max === g) h = (b - r) / d + 2;
-    else h = (r - g) / d + 4;
+    if (max === rn) h = ((gn - bn) / d) % 6;
+    else if (max === gn) h = (bn - rn) / d + 2;
+    else h = (rn - gn) / d + 4;
     h *= 60;
     if (h < 0) h += 360;
   }
@@ -55,9 +69,17 @@ function hexToHsl(hex) {
   return { h, s, l };
 }
 
+function mixRgb(a, b, t) {
+  const tt = clamp01(t);
+  return {
+    r: a.r + (b.r - a.r) * tt,
+    g: a.g + (b.g - a.g) * tt,
+    b: a.b + (b.b - a.b) * tt,
+  };
+}
+
 export function createArtHueSatPicker({
   size = 150,
-  lightness = 0.5,
   color = '#7bf6ff',
   onChange = null,
   onCommit = null,
@@ -79,61 +101,83 @@ export function createArtHueSatPicker({
   marker.className = 'art-hs-picker-marker';
   surface.appendChild(marker);
 
-  const bright = document.createElement('input');
-  bright.type = 'range';
-  bright.min = '0';
-  bright.max = '1';
-  bright.step = '0.01';
-  bright.className = 'art-hs-brightness-slider';
-  root.appendChild(bright);
+  const darkSlider = document.createElement('input');
+  darkSlider.type = 'range';
+  darkSlider.min = '0';
+  darkSlider.max = '1';
+  darkSlider.step = '0.01';
+  darkSlider.className = 'art-hs-brightness-slider';
+  root.appendChild(darkSlider);
 
-  const parsedInitial = hexToHsl(color);
-  const fallbackL = Number.isFinite(Number(lightness)) ? clamp01(lightness) : parsedInitial.l;
   const state = {
     h: 0,
-    s: 1,
-    l: clamp01(fallbackL || 0.5),
+    whiteMix: 0, // 0 = vivid hue, 1 = white
+    darkness: 0, // 0 = base color, 1 = black
     drag: false,
     pid: null,
   };
 
   const ctx = canvas.getContext('2d');
+
+  const getBaseColorHex = () => {
+    const hueHex = hslToHex(state.h, 1, 0.5);
+    const hueRgb = hexToRgb(hueHex);
+    const mixed = mixRgb(hueRgb, { r: 255, g: 255, b: 255 }, state.whiteMix);
+    return rgbToHex(mixed.r, mixed.g, mixed.b);
+  };
+
+  const getFinalColorHex = () => {
+    const baseRgb = hexToRgb(getBaseColorHex());
+    const final = mixRgb(baseRgb, { r: 0, g: 0, b: 0 }, state.darkness);
+    return rgbToHex(final.r, final.g, final.b);
+  };
+
+  const syncDarkSliderGradient = () => {
+    const top = getBaseColorHex();
+    const grad = `linear-gradient(to top, #000000 0%, ${top} 100%)`;
+    darkSlider.style.setProperty('--hs-dark-gradient', grad);
+    darkSlider.style.background = grad;
+  };
+
   const drawGradient = () => {
     if (!ctx) return;
     const w = canvas.width;
     const h = canvas.height;
-    const img = ctx.createImageData(w, h);
-    const data = img.data;
-    for (let y = 0; y < h; y++) {
-      const sat = 1 - (y / Math.max(1, h - 1));
-      for (let x = 0; x < w; x++) {
-        const hue = (x / Math.max(1, w - 1)) * 360;
-        const hex = hslToHex(hue, sat, state.l);
-        const r = parseInt(hex.slice(1, 3), 16);
-        const g = parseInt(hex.slice(3, 5), 16);
-        const b = parseInt(hex.slice(5, 7), 16);
-        const i = (y * w + x) * 4;
-        data[i] = r;
-        data[i + 1] = g;
-        data[i + 2] = b;
-        data[i + 3] = 255;
-      }
+
+    const hueGrad = ctx.createLinearGradient(0, 0, w, 0);
+    for (let i = 0; i <= 6; i++) {
+      const t = i / 6;
+      hueGrad.addColorStop(t, hslToHex(t * 360, 1, 0.5));
     }
-    ctx.putImageData(img, 0, 0);
+    ctx.fillStyle = hueGrad;
+    ctx.fillRect(0, 0, w, h);
+
+    const whiteGrad = ctx.createLinearGradient(0, 0, 0, h);
+    whiteGrad.addColorStop(0, 'rgba(255,255,255,0)');
+    whiteGrad.addColorStop(1, 'rgba(255,255,255,1)');
+    ctx.fillStyle = whiteGrad;
+    ctx.fillRect(0, 0, w, h);
   };
 
   const syncMarker = () => {
     const w = canvas.width;
     const h = canvas.height;
     const x = (state.h / 360) * (w - 1);
-    const y = (1 - state.s) * (h - 1);
+    const y = state.whiteMix * (h - 1);
     marker.style.left = `${x.toFixed(2)}px`;
     marker.style.top = `${y.toFixed(2)}px`;
   };
 
   const emitChange = () => {
-    const hex = hslToHex(state.h, state.s, state.l);
-    try { onChange?.({ hex, h: state.h, s: state.s, l: state.l }); } catch {}
+    const baseHex = getBaseColorHex();
+    const hex = getFinalColorHex();
+    try { onChange?.({ hex, baseHex, h: state.h, whiteMix: state.whiteMix, darkness: state.darkness }); } catch {}
+  };
+
+  const emitCommit = () => {
+    const baseHex = getBaseColorHex();
+    const hex = getFinalColorHex();
+    try { onCommit?.({ hex, baseHex, h: state.h, whiteMix: state.whiteMix, darkness: state.darkness }); } catch {}
   };
 
   const setFromClient = (clientX, clientY, { commit = false } = {}) => {
@@ -142,13 +186,11 @@ export function createArtHueSatPicker({
     const x = Math.max(0, Math.min(rect.width - 1, clientX - rect.left));
     const y = Math.max(0, Math.min(rect.height - 1, clientY - rect.top));
     state.h = (x / Math.max(1, rect.width - 1)) * 360;
-    state.s = 1 - (y / Math.max(1, rect.height - 1));
+    state.whiteMix = y / Math.max(1, rect.height - 1);
     syncMarker();
+    syncDarkSliderGradient();
     emitChange();
-    if (commit) {
-      const hex = hslToHex(state.h, state.s, state.l);
-      try { onCommit?.({ hex, h: state.h, s: state.s, l: state.l }); } catch {}
-    }
+    if (commit) emitCommit();
   };
 
   canvas.addEventListener('pointerdown', (ev) => {
@@ -158,7 +200,6 @@ export function createArtHueSatPicker({
     state.drag = true;
     state.pid = ev.pointerId;
     try { canvas.setPointerCapture(ev.pointerId); } catch {}
-    // Start interaction on press, but defer color update until move/release.
   });
   canvas.addEventListener('pointermove', (ev) => {
     if (!state.drag) return;
@@ -183,39 +224,38 @@ export function createArtHueSatPicker({
     ev.preventDefault();
     ev.stopPropagation();
   });
-  bright.addEventListener('pointerdown', (ev) => {
+
+  darkSlider.addEventListener('pointerdown', (ev) => {
     ev.stopPropagation();
   });
-  bright.addEventListener('click', (ev) => {
+  darkSlider.addEventListener('click', (ev) => {
     ev.stopPropagation();
   });
-  bright.addEventListener('input', (ev) => {
+  darkSlider.addEventListener('input', (ev) => {
     ev.preventDefault();
     ev.stopPropagation();
-    state.l = clamp01(bright.value);
-    drawGradient();
+    // Map slider position to darkness so bottom corresponds to black.
+    state.darkness = 1 - clamp01(darkSlider.value);
     emitChange();
   });
-  bright.addEventListener('change', (ev) => {
+  darkSlider.addEventListener('change', (ev) => {
     ev.preventDefault();
     ev.stopPropagation();
-    state.l = clamp01(bright.value);
-    drawGradient();
-    const hex = hslToHex(state.h, state.s, state.l);
-    try { onCommit?.({ hex, h: state.h, s: state.s, l: state.l }); } catch {}
+    state.darkness = 1 - clamp01(darkSlider.value);
+    emitCommit();
   });
 
   const setColor = (nextHex) => {
     const hsl = hexToHsl(nextHex);
     state.h = hsl.h;
-    state.s = hsl.s;
-    state.l = clamp01(hsl.l);
-    bright.value = String(state.l);
-    drawGradient();
+    state.whiteMix = Math.max(0, Math.min(1, 1 - hsl.s));
+    state.darkness = 0;
+    darkSlider.value = String(1 - state.darkness);
     syncMarker();
+    syncDarkSliderGradient();
   };
 
-  bright.value = String(state.l);
+  darkSlider.value = String(1 - state.darkness);
   drawGradient();
   setColor(color);
 
@@ -224,7 +264,7 @@ export function createArtHueSatPicker({
     canvas,
     setColor,
     getColor() {
-      return hslToHex(state.h, state.s, state.l);
+      return getFinalColorHex();
     },
   };
 }

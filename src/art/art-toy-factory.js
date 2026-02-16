@@ -1846,6 +1846,7 @@ function setupLaserTrails(panel) {
     currentFxId = clampFxId(nextId);
     panel.dataset.laserFx = String(currentFxId);
     try { syncAllBaseBeams(); } catch {}
+    try { syncAllHandles(); } catch {}
     try { syncFxUi(); } catch {}
     if (announce) markSceneDirtySafe();
   };
@@ -2067,6 +2068,10 @@ function setupLaserTrails(panel) {
     if (!guide) return;
     const points = getSlotPath(i);
     guide.setAttribute('d', buildLaserPath(points));
+    const fxId = clampFxId(panel?.dataset?.laserFx);
+    const profile = getFxProfile(fxId);
+    const showGuide = profile.baseMode === 'none';
+    guide.style.display = showGuide ? '' : 'none';
   };
   const syncBaseBeam = (slot) => {
     const i = normalizeSlot(slot);
@@ -2351,6 +2356,10 @@ function setupLaserTrails(panel) {
   pickerWrap.hidden = true;
   customisePanel.appendChild(pickerWrap);
 
+  const pickerRow = document.createElement('div');
+  pickerRow.className = 'art-line-picker-row';
+  pickerWrap.appendChild(pickerRow);
+
   const pickerApi = createArtHueSatPicker({
     size: 296,
     color: palette[0],
@@ -2363,7 +2372,26 @@ function setupLaserTrails(panel) {
       updateSlotColor(selectedColorSlot, hex, { announce: true });
     },
   });
-  pickerWrap.appendChild(pickerApi.root);
+  pickerRow.appendChild(pickerApi.root);
+
+  const clearSlotLine = (slot) => {
+    const i = normalizeSlot(slot);
+    const sx = clampAnchorX(emitters[i].x);
+    const sy = clampAnchorY(emitters[i].y);
+    targets[i].x = sx;
+    targets[i].y = sy;
+    setSlotPath(i, [
+      { x: sx, y: sy },
+      { x: sx, y: sy },
+    ]);
+    alignAnchorsFromPath(i);
+    fitDragAreaToAnchors();
+    syncHandle(i, 'source');
+    syncHandle(i, 'target');
+    syncGuide(i);
+    syncBaseBeam(i);
+    markSceneDirtySafe();
+  };
 
   paintLineButtonColor = (slot, color) => {
     const i = normalizeSlot(slot);
@@ -2413,6 +2441,9 @@ function setupLaserTrails(panel) {
       stopPreviewLoop();
     }
     for (const i of active) {
+      const row = document.createElement('div');
+      row.className = 'art-line-color-row';
+
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'art-line-color-btn';
@@ -2430,7 +2461,25 @@ function setupLaserTrails(panel) {
         refreshCustomizeUi();
         startPreviewLoopForSlot(i);
       });
-      lineButtonsHost.appendChild(btn);
+      row.appendChild(btn);
+
+      const clearBtn = document.createElement('button');
+      clearBtn.type = 'button';
+      clearBtn.className = 'c-btn art-line-clear-btn';
+      clearBtn.setAttribute('aria-label', `Clear line ${i + 1}`);
+      clearBtn.title = `Clear line ${i + 1}`;
+      clearBtn.style.setProperty('--c-btn-size', '66px');
+      clearBtn.innerHTML = BUTTON_ICON_HTML;
+      const clearCore = clearBtn.querySelector('.c-btn-core');
+      if (clearCore) clearCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonClear.png')");
+      clearBtn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        clearSlotLine(i);
+      });
+      row.appendChild(clearBtn);
+
+      lineButtonsHost.appendChild(row);
     }
   };
 
