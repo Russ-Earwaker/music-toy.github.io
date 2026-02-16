@@ -1755,12 +1755,20 @@ function setupLaserTrails(panel) {
     x: Math.max(22, Math.min(198, (e.x * 0.58) + 46)),
     y: Math.max(22, Math.min(198, (e.y * 0.58) + 46)),
   }));
+  const slotPaths = emitters.map((source, i) => ([
+    { x: Number(source.x) || 0, y: Number(source.y) || 0 },
+    { x: Number(targets[i].x) || 0, y: Number(targets[i].y) || 0 },
+  ]));
   const palette = ['#7bf6ff', '#86efac', '#fde047', '#f9a8d4', '#c4b5fd', '#67e8f9', '#fca5a5', '#a7f3d0'];
   const active = [];
   const ACTIVE_CAP = 28;
   const sourceHandleEls = [];
   const targetHandleEls = [];
   const guideEls = [];
+  const drawStateBySlot = Array.from({ length: ART_SLOT_COUNT }, () => ({
+    drawingTargetPath: false,
+    startedTargetPath: false,
+  }));
   const activeSlots = new Set();
   const PANEL_PX = 220;
   const HANDLE_SIZE_PX = 62;
@@ -1813,6 +1821,101 @@ function setupLaserTrails(panel) {
     const n = Number(v) || 0;
     return Math.max(AREA_MIN_Y, Math.min(AREA_MAX_Y, n));
   };
+  const buildStraightPath = (slot) => {
+    const i = normalizeSlot(slot);
+    const source = emitters[i];
+    const target = targets[i];
+    if (!source || !target) return [];
+    return [
+      { x: clampAnchorX(source.x), y: clampAnchorY(source.y) },
+      { x: clampAnchorX(target.x), y: clampAnchorY(target.y) },
+    ];
+  };
+  const setSlotPath = (slot, points) => {
+    const i = normalizeSlot(slot);
+    const source = emitters[i];
+    const target = targets[i];
+    if (!source || !target) return;
+    const fallback = buildStraightPath(i);
+    if (!Array.isArray(points) || points.length < 2) {
+      slotPaths[i] = fallback;
+      return;
+    }
+    const normalized = [];
+    for (const point of points) {
+      if (!point || typeof point !== 'object') continue;
+      normalized.push({
+        x: clampAnchorX(point.x),
+        y: clampAnchorY(point.y),
+      });
+    }
+    if (normalized.length < 2) {
+      slotPaths[i] = fallback;
+      return;
+    }
+    normalized[0].x = clampAnchorX(source.x);
+    normalized[0].y = clampAnchorY(source.y);
+    normalized[normalized.length - 1].x = clampAnchorX(target.x);
+    normalized[normalized.length - 1].y = clampAnchorY(target.y);
+    slotPaths[i] = normalized;
+  };
+  const getSlotPath = (slot, { allowDraft = false } = {}) => {
+    const i = normalizeSlot(slot);
+    const points = slotPaths[i];
+    const minCount = allowDraft ? 1 : 2;
+    if (!Array.isArray(points) || points.length < minCount) {
+      const next = buildStraightPath(i);
+      slotPaths[i] = next;
+      return next;
+    }
+    return points;
+  };
+  const alignAnchorsFromPath = (slot) => {
+    const i = normalizeSlot(slot);
+    const points = getSlotPath(i);
+    if (!points.length) return;
+    const first = points[0];
+    const last = points[points.length - 1];
+    emitters[i].x = clampAnchorX(first.x);
+    emitters[i].y = clampAnchorY(first.y);
+    targets[i].x = clampAnchorX(last.x);
+    targets[i].y = clampAnchorY(last.y);
+  };
+  const appendPathPoint = (slot, x, y, minStep = 2.6) => {
+    const i = normalizeSlot(slot);
+    const points = getSlotPath(i, { allowDraft: true });
+    const px = clampAnchorX(x);
+    const py = clampAnchorY(y);
+    if (!points.length) {
+      points.push({ x: px, y: py });
+      return;
+    }
+    const last = points[points.length - 1];
+    const dist = Math.hypot(px - last.x, py - last.y);
+    if (!Number.isFinite(dist) || dist < minStep) {
+      last.x = px;
+      last.y = py;
+      return;
+    }
+    points.push({ x: px, y: py });
+  };
+  const moveWholePath = (slot, desiredDx, desiredDy) => {
+    const i = normalizeSlot(slot);
+    const points = getSlotPath(i);
+    if (!points.length) return;
+    const minX = Math.min(...points.map((p) => p.x));
+    const maxX = Math.max(...points.map((p) => p.x));
+    const minY = Math.min(...points.map((p) => p.y));
+    const maxY = Math.max(...points.map((p) => p.y));
+    const dx = Math.max(AREA_MIN_X - minX, Math.min(AREA_MAX_X - maxX, Number(desiredDx) || 0));
+    const dy = Math.max(AREA_MIN_Y - minY, Math.min(AREA_MAX_Y - maxY, Number(desiredDy) || 0));
+    if (Math.abs(dx) < 0.0001 && Math.abs(dy) < 0.0001) return;
+    for (const point of points) {
+      point.x += dx;
+      point.y += dy;
+    }
+    alignAnchorsFromPath(i);
+  };
   const syncActiveStateFlags = () => {
     panel.dataset.hasActiveLasers = activeSlots.size > 0 ? '1' : '0';
   };
@@ -1832,14 +1935,10 @@ function setupLaserTrails(panel) {
   };
   const syncGuide = (slot) => {
     const i = normalizeSlot(slot);
-    const source = emitters[i];
-    const target = targets[i];
     const guide = guideEls[i];
-    if (!guide || !source || !target) return;
-    guide.setAttribute('x1', source.x.toFixed(2));
-    guide.setAttribute('y1', source.y.toFixed(2));
-    guide.setAttribute('x2', target.x.toFixed(2));
-    guide.setAttribute('y2', target.y.toFixed(2));
+    if (!guide) return;
+    const points = getSlotPath(i);
+    guide.setAttribute('d', buildLaserPath(points));
   };
   const syncAllHandles = () => {
     for (let i = 0; i < ART_SLOT_COUNT; i++) {
@@ -1876,6 +1975,10 @@ function setupLaserTrails(panel) {
       const t = targets[i];
       if (s) coords.push({ x: clampAnchorX(s.x), y: clampAnchorY(s.y) });
       if (t) coords.push({ x: clampAnchorX(t.x), y: clampAnchorY(t.y) });
+      const points = getSlotPath(i);
+      for (const point of points) {
+        coords.push({ x: clampAnchorX(point.x), y: clampAnchorY(point.y) });
+      }
     }
     if (!coords.length) {
       dragArea.x = AREA_MIN_X;
@@ -1911,6 +2014,10 @@ function setupLaserTrails(panel) {
       emitters[i].y = sy;
       targets[i].x = tx;
       targets[i].y = ty;
+      setSlotPath(i, [
+        { x: sx, y: sy },
+        { x: tx, y: ty },
+      ]);
     }
   };
 
@@ -1924,6 +2031,7 @@ function setupLaserTrails(panel) {
     handleBtn.innerHTML = BUTTON_ICON_HTML;
     const core = handleBtn.querySelector('.c-btn-core');
     if (core) core.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonHandle.png')");
+    if (kind === 'source') handleBtn.style.setProperty('--accent', '#2f5fb7');
 
     const pos = kind === 'target' ? targets : emitters;
     attachSlotHandleDrag({
@@ -1932,16 +2040,51 @@ function setupLaserTrails(panel) {
       panelPx: PANEL_PX,
       getStartPos: () => ({ x: pos[slot].x, y: pos[slot].y }),
       setPos: (x, y) => {
-        pos[slot].x = x;
-        pos[slot].y = y;
+        if (kind === 'source') {
+          const dx = x - emitters[slot].x;
+          const dy = y - emitters[slot].y;
+          moveWholePath(slot, dx, dy);
+        } else {
+          const drawState = drawStateBySlot[slot];
+          if (drawState && !drawState.startedTargetPath) {
+            slotPaths[slot] = [{ x: clampAnchorX(emitters[slot].x), y: clampAnchorY(emitters[slot].y) }];
+            appendPathPoint(slot, x, y, 0);
+            drawState.startedTargetPath = true;
+          } else {
+            appendPathPoint(slot, x, y);
+          }
+          alignAnchorsFromPath(slot);
+        }
         fitDragAreaToAnchors();
         syncHandle(slot, kind);
+        if (kind === 'source') syncHandle(slot, 'target');
+        else syncHandle(slot, 'source');
         syncGuide(slot);
       },
-      clampX: clampAnchorX,
-      clampY: clampAnchorY,
+      clampX: kind === 'target' ? clampAnchorX : undefined,
+      clampY: kind === 'target' ? clampAnchorY : undefined,
       onDragStateChange: (active) => {
         dragAreaEl.classList.toggle('is-dragging', !!active);
+        if (kind !== 'target') return;
+        const drawState = drawStateBySlot[slot];
+        if (!drawState) return;
+        if (active) {
+          drawState.drawingTargetPath = true;
+          drawState.startedTargetPath = false;
+          return;
+        }
+        if (drawState.drawingTargetPath) {
+          const points = getSlotPath(slot);
+          if (points.length < 2) {
+            setSlotPath(slot, buildStraightPath(slot));
+          }
+          alignAnchorsFromPath(slot);
+          syncHandle(slot, 'source');
+          syncHandle(slot, 'target');
+          syncGuide(slot);
+          drawState.drawingTargetPath = false;
+          drawState.startedTargetPath = false;
+        }
       },
       onCommit: () => markSceneDirtySafe(),
     });
@@ -1956,9 +2099,12 @@ function setupLaserTrails(panel) {
   syncDragArea();
   syncActiveStateFlags();
   for (let i = 0; i < ART_SLOT_COUNT; i++) {
-    const guide = document.createElementNS(svgNS, 'line');
+    const guide = document.createElementNS(svgNS, 'path');
     guide.setAttribute('class', 'art-laser-guide');
     guide.setAttribute('stroke', palette[i % palette.length]);
+    guide.setAttribute('fill', 'none');
+    guide.setAttribute('stroke-linecap', 'round');
+    guide.setAttribute('stroke-linejoin', 'round');
     guidesLayer.appendChild(guide);
     guideEls[i] = guide;
     syncGuide(i);
@@ -2103,39 +2249,21 @@ function setupLaserTrails(panel) {
   function spawnLaser(slotIndex, velocity = null) {
     const slot = normalizeSlot(slotIndex);
     const source = emitters[slot];
-    const target = targets[slot];
     const tone = palette[slot % palette.length];
     const fxId = clampFxId(panel?.dataset?.laserFx);
     const vel = Number(velocity);
     const amp = Number.isFinite(vel) ? Math.max(0.5, Math.min(1.25, vel)) : 0.95;
-    const segmentLen = fxId === 1 ? 8 : fxId === 2 ? 12 : 10;
-    const wobble = 9 + Math.random() * 7;
-    const dx0 = target.x - source.x;
-    const dy0 = target.y - source.y;
-    const len0 = Math.max(6, Math.hypot(dx0, dy0));
-    const dirX = dx0 / len0;
-    const dirY = dy0 / len0;
-    const endLen = Math.max(18, (fxId === 1 ? len0 * 0.45 : fxId === 2 ? len0 * 1.35 : len0) * amp);
-    const endX = source.x + (dirX * endLen);
-    const endY = source.y + (dirY * endLen);
-    const normalX = -dirY;
-    const normalY = dirX;
-    const steps = Math.max(4, Math.round(endLen / Math.max(6, segmentLen)));
-    const points = [{ x: source.x, y: source.y }];
-    for (let s = 1; s <= steps; s++) {
-      const t = s / steps;
-      const wobbleAmt = Math.sin(t * Math.PI * (2.2 + Math.random() * 0.5)) * wobble * (1 - t * 0.72);
-      const jitter = (Math.random() - 0.5) * 2.0;
-      const px = source.x + (endX - source.x) * t + normalX * (wobbleAmt * 0.35 + jitter);
-      const py = source.y + (endY - source.y) * t + normalY * (wobbleAmt * 0.35 + jitter);
-      points.push({ x: px, y: py });
-    }
+    const basePoints = getSlotPath(slot);
+    const points = basePoints.map((p) => ({ x: p.x, y: p.y }));
+    if (points.length < 2) return;
+    points[0].x = source.x;
+    points[0].y = source.y;
 
     const path = document.createElementNS(svgNS, 'path');
     path.setAttribute('class', 'art-laser-path');
     path.setAttribute('d', buildLaserPath(points));
     path.setAttribute('stroke', tone);
-    const width = fxId === 1 ? (5.4 + Math.random() * 3.1) : fxId === 2 ? (3.2 + Math.random() * 1.6) : (4.6 + Math.random() * 2.6);
+    const width = fxId === 1 ? 4.8 : fxId === 2 ? 6.1 : 5.4;
     path.setAttribute('stroke-width', String(width * amp));
     path.setAttribute('fill', 'none');
     path.setAttribute('stroke-linecap', 'round');
@@ -2224,6 +2352,9 @@ function setupLaserTrails(panel) {
       type: ART_TYPES.LASER_TRAILS,
       emitters: emitters.map((a) => ({ x: Number(a?.x) || 0, y: Number(a?.y) || 0 })),
       targets: targets.map((a) => ({ x: Number(a?.x) || 0, y: Number(a?.y) || 0 })),
+      paths: slotPaths.map((points) => (Array.isArray(points)
+        ? points.map((point) => ({ x: Number(point?.x) || 0, y: Number(point?.y) || 0 }))
+        : [])),
       activeSlots: activeSlotsSorted,
       fx: clampFxId(panel?.dataset?.laserFx),
       controlsVisible: panel.dataset.controlsVisible === '1',
@@ -2248,6 +2379,18 @@ function setupLaserTrails(panel) {
         if (!src || typeof src !== 'object') continue;
         targets[i].x = clampAnchorX(src.x);
         targets[i].y = clampAnchorY(src.y);
+      }
+    }
+    const nextPaths = Array.isArray(state.paths) ? state.paths : null;
+    if (nextPaths && nextPaths.length) {
+      for (let i = 0; i < ART_SLOT_COUNT; i++) {
+        const points = nextPaths[i];
+        setSlotPath(i, points);
+        alignAnchorsFromPath(i);
+      }
+    } else {
+      for (let i = 0; i < ART_SLOT_COUNT; i++) {
+        setSlotPath(i, buildStraightPath(i));
       }
     }
     if (Array.isArray(state.activeSlots)) {
