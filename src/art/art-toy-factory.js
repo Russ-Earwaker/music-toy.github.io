@@ -2303,7 +2303,9 @@ function setupLaserTrails(panel) {
   customiseBtn.type = 'button';
   customiseBtn.className = 'c-btn art-toy-customize-btn';
   customiseBtn.setAttribute('aria-label', 'Customise Art');
+  customiseBtn.setAttribute('aria-pressed', 'false');
   customiseBtn.title = 'Customise Art';
+  customiseBtn.style.setProperty('--c-btn-size', '84px');
   customiseBtn.innerHTML = BUTTON_ICON_HTML;
   const customiseCore = customiseBtn.querySelector('.c-btn-core');
   if (customiseCore) customiseCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonPaintColour.png')");
@@ -2350,7 +2352,7 @@ function setupLaserTrails(panel) {
   customisePanel.appendChild(pickerWrap);
 
   const pickerApi = createArtHueSatPicker({
-    size: 148,
+    size: 296,
     color: palette[0],
     onChange: ({ hex } = {}) => {
       if (selectedColorSlot == null) return;
@@ -2375,6 +2377,7 @@ function setupLaserTrails(panel) {
     customisePanel.hidden = !nextOpen;
     customisePanel.classList.toggle('is-open', nextOpen);
     customiseBtn.classList.toggle('is-active', nextOpen);
+    customiseBtn.setAttribute('aria-pressed', nextOpen ? 'true' : 'false');
     if (nextOpen) {
       setBaseArtToyControlsVisible(panel, true);
       try { refreshCustomizeUi(); } catch {}
@@ -2414,7 +2417,6 @@ function setupLaserTrails(panel) {
       btn.type = 'button';
       btn.className = 'art-line-color-btn';
       btn.dataset.slot = String(i);
-      btn.textContent = String(i + 1);
       btn.title = `Edit Line ${i + 1}`;
       btn.setAttribute('aria-label', `Edit line ${i + 1} color`);
       btn.style.setProperty('--line-color', palette[i]);
@@ -2445,10 +2447,23 @@ function setupLaserTrails(panel) {
     }
     if (customisePanel.hidden) return;
     const t = ev?.target;
+    // Keep customise panel open while panning on board surfaces.
+    try {
+      const panSurface = t?.closest?.('.board-viewport, #board, #board-wrap');
+      if (panSurface) return;
+    } catch {}
     if (t && (customisePanel.contains(t) || customiseBtn.contains(t))) return;
     setCustomiseOpen(false);
   };
   document.addEventListener('pointerdown', onDocPointerDownCloseCustomise, true);
+
+  // Keep customise UI lifecycle aligned with the standard art controls visibility.
+  try {
+    const controlsVisMo = new MutationObserver(() => {
+      if (panel.dataset.controlsVisible !== '1') setCustomiseOpen(false);
+    });
+    controlsVisMo.observe(panel, { attributes: true, attributeFilter: ['data-controls-visible'] });
+  } catch {}
 
   try {
     const controlsHost = getBaseArtToyControlsHost(panel);

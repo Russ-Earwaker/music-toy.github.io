@@ -65,20 +65,34 @@ export function createArtHueSatPicker({
   const root = document.createElement('div');
   root.className = 'art-hs-picker';
 
+  const surface = document.createElement('div');
+  surface.className = 'art-hs-picker-surface';
+  root.appendChild(surface);
+
   const canvas = document.createElement('canvas');
   canvas.className = 'art-hs-picker-canvas';
   canvas.width = Math.max(64, Math.round(Number(size) || 150));
   canvas.height = Math.max(64, Math.round(Number(size) || 150));
-  root.appendChild(canvas);
+  surface.appendChild(canvas);
 
   const marker = document.createElement('div');
   marker.className = 'art-hs-picker-marker';
-  root.appendChild(marker);
+  surface.appendChild(marker);
 
+  const bright = document.createElement('input');
+  bright.type = 'range';
+  bright.min = '0';
+  bright.max = '1';
+  bright.step = '0.01';
+  bright.className = 'art-hs-brightness-slider';
+  root.appendChild(bright);
+
+  const parsedInitial = hexToHsl(color);
+  const fallbackL = Number.isFinite(Number(lightness)) ? clamp01(lightness) : parsedInitial.l;
   const state = {
     h: 0,
     s: 1,
-    l: clamp01(lightness || 0.5),
+    l: clamp01(fallbackL || 0.5),
     drag: false,
     pid: null,
   };
@@ -140,21 +154,24 @@ export function createArtHueSatPicker({
   canvas.addEventListener('pointerdown', (ev) => {
     if (ev.button != null && ev.button !== 0) return;
     ev.preventDefault();
+    ev.stopPropagation();
     state.drag = true;
     state.pid = ev.pointerId;
     try { canvas.setPointerCapture(ev.pointerId); } catch {}
-    setFromClient(ev.clientX, ev.clientY);
+    // Start interaction on press, but defer color update until move/release.
   });
   canvas.addEventListener('pointermove', (ev) => {
     if (!state.drag) return;
     if (state.pid != null && ev.pointerId !== state.pid) return;
     ev.preventDefault();
+    ev.stopPropagation();
     setFromClient(ev.clientX, ev.clientY);
   });
   const endDrag = (ev) => {
     if (!state.drag) return;
     if (state.pid != null && ev.pointerId !== state.pid) return;
     ev.preventDefault();
+    ev.stopPropagation();
     state.drag = false;
     state.pid = null;
     try { canvas.releasePointerCapture(ev.pointerId); } catch {}
@@ -162,15 +179,43 @@ export function createArtHueSatPicker({
   };
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
+  canvas.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+  });
+  bright.addEventListener('pointerdown', (ev) => {
+    ev.stopPropagation();
+  });
+  bright.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+  });
+  bright.addEventListener('input', (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    state.l = clamp01(bright.value);
+    drawGradient();
+    emitChange();
+  });
+  bright.addEventListener('change', (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    state.l = clamp01(bright.value);
+    drawGradient();
+    const hex = hslToHex(state.h, state.s, state.l);
+    try { onCommit?.({ hex, h: state.h, s: state.s, l: state.l }); } catch {}
+  });
 
   const setColor = (nextHex) => {
     const hsl = hexToHsl(nextHex);
     state.h = hsl.h;
     state.s = hsl.s;
-    state.l = clamp01(lightness || hsl.l || 0.5);
+    state.l = clamp01(hsl.l);
+    bright.value = String(state.l);
+    drawGradient();
     syncMarker();
   };
 
+  bright.value = String(state.l);
   drawGradient();
   setColor(color);
 
@@ -183,4 +228,3 @@ export function createArtHueSatPicker({
     },
   };
 }
-
