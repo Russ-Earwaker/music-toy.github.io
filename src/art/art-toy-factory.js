@@ -1772,6 +1772,8 @@ function setupLaserTrails(panel) {
   const activeSlots = new Set();
   const PANEL_PX = 220;
   const HANDLE_SIZE_PX = 62;
+  // Global laser stroke thickness multiplier. Tweak this to scale all laser effects.
+  const LASER_STROKE_MULTIPLIER = 15;
   const AREA_MIN_X = -142;
   const AREA_MIN_Y = 74;
   const MAX_DRAG_SPAN = 1600;
@@ -1916,6 +1918,72 @@ function setupLaserTrails(panel) {
     }
     alignAnchorsFromPath(i);
   };
+  const generateWindyPath = (slot, area = dragArea) => {
+    const i = normalizeSlot(slot);
+    const areaX = Number.isFinite(Number(area?.x)) ? Number(area.x) : dragArea.x;
+    const areaY = Number.isFinite(Number(area?.y)) ? Number(area.y) : dragArea.y;
+    const areaW = Math.max(1, Number.isFinite(Number(area?.w)) ? Number(area.w) : dragArea.w);
+    const areaH = Math.max(1, Number.isFinite(Number(area?.h)) ? Number(area.h) : dragArea.h);
+    const areaCx = areaX + areaW * 0.5;
+    const areaCy = areaY + areaH * 0.5;
+    const innerMarginX = Math.min(84, areaW * 0.22);
+    const innerMarginY = Math.min(84, areaH * 0.22);
+
+    const sx = clampAnchorX((areaCx - (areaW * 0.5 - innerMarginX)) + Math.random() * Math.max(1, areaW - innerMarginX * 2));
+    const sy = clampAnchorY((areaCy - (areaH * 0.5 - innerMarginY)) + Math.random() * Math.max(1, areaH - innerMarginY * 2));
+
+    const diag = Math.hypot(areaW, areaH);
+    const minLen = Math.max(260, diag * 0.28);
+    const maxLen = Math.max(minLen + 40, diag * 0.68);
+    let tx = sx;
+    let ty = sy;
+    let len = 0;
+    for (let tries = 0; tries < 7; tries++) {
+      const angle = Math.random() * Math.PI * 2;
+      const desiredLen = minLen + Math.random() * (maxLen - minLen);
+      const candidateX = clampAnchorX(sx + Math.cos(angle) * desiredLen);
+      const candidateY = clampAnchorY(sy + Math.sin(angle) * desiredLen);
+      const candidateLen = Math.hypot(candidateX - sx, candidateY - sy);
+      if (candidateLen > len) {
+        tx = candidateX;
+        ty = candidateY;
+        len = candidateLen;
+      }
+      if (candidateLen >= minLen * 0.9) break;
+    }
+    len = Math.max(16, len || Math.hypot(tx - sx, ty - sy));
+    const dirX = (tx - sx) / len;
+    const dirY = (ty - sy) / len;
+    const normalX = -dirY;
+    const normalY = dirX;
+    const turns = 1.0 + Math.random() * 1.2;
+    const phaseA = Math.random() * Math.PI * 2;
+    const phaseB = Math.random() * Math.PI * 2;
+    const bend = Math.min(96, Math.max(24, len * (0.14 + Math.random() * 0.2)));
+    const pointSpacing = 34 + Math.random() * 12;
+    const points = [{ x: sx, y: sy }];
+    const steps = Math.max(5, Math.min(14, Math.round(len / pointSpacing)));
+    for (let s = 1; s < steps; s++) {
+      const t = s / steps;
+      const baseX = sx + (tx - sx) * t;
+      const baseY = sy + (ty - sy) * t;
+      const envelope = Math.sin(Math.PI * t);
+      const waveA = Math.sin((t * Math.PI * 2 * turns) + phaseA) * bend * envelope;
+      const waveB = Math.sin((t * Math.PI * 2 * (turns * 0.55)) + phaseB) * bend * 0.34 * envelope;
+      const wave = waveA + waveB;
+      const px = clampAnchorX(baseX + normalX * wave);
+      const py = clampAnchorY(baseY + normalY * wave);
+      points.push({ x: px, y: py });
+    }
+    points.push({ x: tx, y: ty });
+
+    emitters[i].x = sx;
+    emitters[i].y = sy;
+    targets[i].x = tx;
+    targets[i].y = ty;
+    setSlotPath(i, points);
+    alignAnchorsFromPath(i);
+  };
   const syncActiveStateFlags = () => {
     panel.dataset.hasActiveLasers = activeSlots.size > 0 ? '1' : '0';
   };
@@ -2001,23 +2069,8 @@ function setupLaserTrails(panel) {
   };
 
   const randomizeAnchorsWithinArea = (area = dragArea) => {
-    const areaX = Number.isFinite(Number(area?.x)) ? Number(area.x) : dragArea.x;
-    const areaY = Number.isFinite(Number(area?.y)) ? Number(area.y) : dragArea.y;
-    const areaW = Math.max(1, Number.isFinite(Number(area?.w)) ? Number(area.w) : dragArea.w);
-    const areaH = Math.max(1, Number.isFinite(Number(area?.h)) ? Number(area.h) : dragArea.h);
     for (let i = 0; i < ART_SLOT_COUNT; i++) {
-      const sx = clampAnchorX(areaX + Math.random() * areaW);
-      const sy = clampAnchorY(areaY + Math.random() * areaH);
-      const tx = clampAnchorX(sx + (Math.random() - 0.5) * 92);
-      const ty = clampAnchorY(sy + (Math.random() - 0.5) * 92);
-      emitters[i].x = sx;
-      emitters[i].y = sy;
-      targets[i].x = tx;
-      targets[i].y = ty;
-      setSlotPath(i, [
-        { x: sx, y: sy },
-        { x: tx, y: ty },
-      ]);
+      generateWindyPath(i, area);
     }
   };
 
@@ -2263,8 +2316,8 @@ function setupLaserTrails(panel) {
     path.setAttribute('class', 'art-laser-path');
     path.setAttribute('d', buildLaserPath(points));
     path.setAttribute('stroke', tone);
-    const width = fxId === 1 ? 4.8 : fxId === 2 ? 6.1 : 5.4;
-    path.setAttribute('stroke-width', String(width * amp));
+    const baseWidth = fxId === 1 ? 4.8 : fxId === 2 ? 6.1 : 5.4;
+    path.setAttribute('stroke-width', String(baseWidth * amp * LASER_STROKE_MULTIPLIER));
     path.setAttribute('fill', 'none');
     path.setAttribute('stroke-linecap', 'round');
     path.setAttribute('stroke-linejoin', 'round');
