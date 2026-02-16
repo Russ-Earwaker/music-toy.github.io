@@ -75,6 +75,7 @@ function attachSlotHandleDrag({
   clampY,
   onDragStateChange,
   onCommit,
+  onTap,
 } = {}) {
   if (!handleBtn || !layer || typeof getStartPos !== 'function' || typeof setPos !== 'function') return;
   let dragActive = false;
@@ -127,6 +128,8 @@ function attachSlotHandleDrag({
     try { handleBtn.releasePointerCapture(ev.pointerId); } catch {}
     if (moved) {
       try { onCommit?.(); } catch {}
+    } else {
+      try { onTap?.(); } catch {}
     }
   };
 
@@ -1771,8 +1774,12 @@ function setupLaserTrails(panel) {
   const targetHandleEls = [];
   const guideEls = [];
   const baseBeamEls = [];
+  let selectedColorSlot = null;
   let refreshCustomizeUi = () => {};
   let closeCustomizeUi = () => {};
+  let setCustomiseOpen = () => {};
+  let selectLineForCustomise = () => {};
+  let syncSelectedHandleHighlight = () => {};
   let paintLineButtonColor = () => {};
   const drawStateBySlot = Array.from({ length: ART_SLOT_COUNT }, () => ({
     drawingTargetPath: false,
@@ -2109,6 +2116,14 @@ function setupLaserTrails(panel) {
   const syncAllBaseBeams = () => {
     for (let i = 0; i < ART_SLOT_COUNT; i++) syncBaseBeam(i);
   };
+  syncSelectedHandleHighlight = () => {
+    for (let i = 0; i < ART_SLOT_COUNT; i++) {
+      sourceHandleEls[i]?.classList.toggle(
+        'is-selected-line',
+        selectedColorSlot != null && normalizeSlot(selectedColorSlot) === i
+      );
+    }
+  };
   const syncAllHandles = () => {
     for (let i = 0; i < ART_SLOT_COUNT; i++) {
       syncHandle(i, 'source');
@@ -2116,6 +2131,7 @@ function setupLaserTrails(panel) {
       syncGuide(i);
       syncBaseBeam(i);
     }
+    syncSelectedHandleHighlight();
   };
   const setSlotActive = (slot) => {
     const i = normalizeSlot(slot);
@@ -2189,7 +2205,12 @@ function setupLaserTrails(panel) {
     handleBtn.style.setProperty('--c-btn-size', '62px');
     handleBtn.innerHTML = BUTTON_ICON_HTML;
     const core = handleBtn.querySelector('.c-btn-core');
-    if (core) core.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonHandle.png')");
+    if (core) core.style.setProperty(
+      '--c-btn-icon-url',
+      kind === 'source'
+        ? "url('./assets/UI/T_ButtonDrag.png')"
+        : "url('./assets/UI/T_ButtonHandle.png')"
+    );
     if (kind === 'source') handleBtn.style.setProperty('--accent', '#2f5fb7');
 
     const pos = kind === 'target' ? targets : emitters;
@@ -2248,6 +2269,10 @@ function setupLaserTrails(panel) {
         }
       },
       onCommit: () => markSceneDirtySafe(),
+      onTap: () => {
+        if (kind !== 'source') return;
+        selectLineForCustomise(slot, { openMenu: true });
+      },
     });
 
     handlesLayer.appendChild(handleBtn);
@@ -2284,7 +2309,6 @@ function setupLaserTrails(panel) {
 
   // Customise Art: thickness slider + active-line color picker.
   let thicknessControlApi = null;
-  let selectedColorSlot = null;
   let previewLoopTimer = 0;
 
   const stopPreviewLoop = () => {
@@ -2400,7 +2424,7 @@ function setupLaserTrails(panel) {
     btn.style.setProperty('--line-color', String(color || palette[i] || '#7bf6ff'));
   };
 
-  const setCustomiseOpen = (open) => {
+  setCustomiseOpen = (open) => {
     const nextOpen = !!open;
     customisePanel.hidden = !nextOpen;
     customisePanel.classList.toggle('is-open', nextOpen);
@@ -2421,6 +2445,16 @@ function setupLaserTrails(panel) {
     setCustomiseOpen(false);
   };
 
+  selectLineForCustomise = (slot, { openMenu = false } = {}) => {
+    const i = normalizeSlot(slot);
+    selectedColorSlot = i;
+    pickerWrap.hidden = false;
+    pickerApi.setColor(palette[i]);
+    if (openMenu) setCustomiseOpen(true);
+    refreshCustomizeUi();
+    startPreviewLoopForSlot(i);
+  };
+
   refreshCustomizeUi = () => {
     if (!lineButtonsHost) return;
     const active = Array.from(activeSlots.values()).map((s) => normalizeSlot(s)).sort((a, b) => a - b);
@@ -2433,6 +2467,7 @@ function setupLaserTrails(panel) {
       selectedColorSlot = null;
       pickerWrap.hidden = true;
       stopPreviewLoop();
+      syncSelectedHandleHighlight();
       return;
     }
     if (selectedColorSlot != null && !active.includes(normalizeSlot(selectedColorSlot))) {
@@ -2455,11 +2490,7 @@ function setupLaserTrails(panel) {
       btn.addEventListener('click', (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
-        selectedColorSlot = i;
-        pickerWrap.hidden = false;
-        pickerApi.setColor(palette[i]);
-        refreshCustomizeUi();
-        startPreviewLoopForSlot(i);
+        selectLineForCustomise(i, { openMenu: false });
       });
       row.appendChild(btn);
 
@@ -2481,6 +2512,7 @@ function setupLaserTrails(panel) {
 
       lineButtonsHost.appendChild(row);
     }
+    syncSelectedHandleHighlight();
   };
 
   customiseBtn.addEventListener('click', (ev) => {

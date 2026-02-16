@@ -1661,6 +1661,10 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
   filter: brightness(1.2) saturate(1.15) drop-shadow(0 0 8px rgba(132, 198, 255, 0.65));
 }
 
+.art-toy-panel[data-controls-visible='1'] .art-laser-handle-source.is-active-firework.is-selected-line {
+  filter: brightness(1.86) saturate(1.55);
+}
+
 .art-laser-layer {
   position: absolute;
   inset: 0;
@@ -1947,9 +1951,10 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
 .art-hs-brightness-slider {
   width: 24px;
   height: 296px;
-  writing-mode: bt-lr;
-  -webkit-appearance: slider-vertical;
-  appearance: slider-vertical;
+  writing-mode: vertical-lr;
+  direction: rtl;
+  -webkit-appearance: none;
+  appearance: none;
   --hs-dark-gradient: linear-gradient(to top, #000000 0%, #ffffff 100%);
   background: var(--hs-dark-gradient);
   border-radius: 8px;
