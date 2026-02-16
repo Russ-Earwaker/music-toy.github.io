@@ -361,6 +361,7 @@ function setupFireworks(panel) {
   const palette = ['#ff6b6b', '#ffd166', '#06d6a0', '#4cc9f0', '#f72585', '#ff9f1c', '#9b5de5', '#80ed99'];
   const FIREWORK_EFFECT_SCALE = 2;
   const HANDLE_SIZE_PX = 62;
+  const ROTATE_HANDLE_MIN_SEPARATION_PX = 16;
   const PANEL_PX = 220;
   const ACTIVE_GLOW_SIZE_PX = 180;
   const AREA_MIN_X = -142; // align with left edge of the large drag button
@@ -1772,6 +1773,7 @@ function setupLaserTrails(panel) {
   const ACTIVE_CAP = 56;
   const sourceHandleEls = [];
   const targetHandleEls = [];
+  const rotateHandleEls = [];
   const guideEls = [];
   const baseBeamEls = [];
   let selectedColorSlot = null;
@@ -1788,6 +1790,7 @@ function setupLaserTrails(panel) {
   const activeSlots = new Set();
   const PANEL_PX = 220;
   const HANDLE_SIZE_PX = 62;
+  const ROTATE_HANDLE_MIN_SEPARATION_PX = 16;
   // Global laser stroke thickness multiplier. Tweak this to scale all laser effects.
   let laserStrokeMultiplier = 5;
   // Laser style tuning (pulse/glow/runner). Keep these centralized for quick iteration.
@@ -1877,7 +1880,7 @@ function setupLaserTrails(panel) {
       { x: clampAnchorX(target.x), y: clampAnchorY(target.y) },
     ];
   };
-  const setSlotPath = (slot, points) => {
+  const setSlotPath = (slot, points, { lockEndpoints = true } = {}) => {
     const i = normalizeSlot(slot);
     const source = emitters[i];
     const target = targets[i];
@@ -1899,10 +1902,12 @@ function setupLaserTrails(panel) {
       slotPaths[i] = fallback;
       return;
     }
-    normalized[0].x = clampAnchorX(source.x);
-    normalized[0].y = clampAnchorY(source.y);
-    normalized[normalized.length - 1].x = clampAnchorX(target.x);
-    normalized[normalized.length - 1].y = clampAnchorY(target.y);
+    if (lockEndpoints) {
+      normalized[0].x = clampAnchorX(source.x);
+      normalized[0].y = clampAnchorY(source.y);
+      normalized[normalized.length - 1].x = clampAnchorX(target.x);
+      normalized[normalized.length - 1].y = clampAnchorY(target.y);
+    }
     slotPaths[i] = normalized;
   };
   const getSlotPath = (slot, { allowDraft = false } = {}) => {
@@ -1944,6 +1949,39 @@ function setupLaserTrails(panel) {
       return;
     }
     points.push({ x: px, y: py });
+  };
+  const clientToPanelPoint = (clientX, clientY) => {
+    const rect = layer.getBoundingClientRect();
+    if (!rect || rect.width < 1 || rect.height < 1) return null;
+    return {
+      x: ((clientX - rect.left) / rect.width) * PANEL_PX,
+      y: ((clientY - rect.top) / rect.height) * PANEL_PX,
+    };
+  };
+  const rotateSlotPath = (slot, deltaRad, basePoints = null) => {
+    const i = normalizeSlot(slot);
+    const source = emitters[i];
+    if (!source) return false;
+    const points = Array.isArray(basePoints) && basePoints.length
+      ? basePoints
+      : getSlotPath(i).map((p) => ({ x: p.x, y: p.y }));
+    if (!points || points.length < 2) return false;
+    const a = Number(deltaRad) || 0;
+    const cosA = Math.cos(a);
+    const sinA = Math.sin(a);
+    const sx = source.x;
+    const sy = source.y;
+    const rotated = points.map((p, idx) => {
+      if (idx === 0) return { x: clampAnchorX(sx), y: clampAnchorY(sy) };
+      const ox = p.x - sx;
+      const oy = p.y - sy;
+      const rx = sx + (ox * cosA - oy * sinA);
+      const ry = sy + (ox * sinA + oy * cosA);
+      return { x: clampAnchorX(rx), y: clampAnchorY(ry) };
+    });
+    setSlotPath(i, rotated, { lockEndpoints: false });
+    alignAnchorsFromPath(i);
+    return true;
   };
   const moveWholePath = (slot, desiredDx, desiredDy) => {
     const i = normalizeSlot(slot);
@@ -2061,6 +2099,14 @@ function setupLaserTrails(panel) {
     dragAreaEl.style.width = `${dragArea.w.toFixed(2)}px`;
     dragAreaEl.style.height = `${dragArea.h.toFixed(2)}px`;
   };
+  const setHandleIconFacing = (handle, facingAngleRad) => {
+    if (!handle) return;
+    const core = handle.querySelector('.c-btn-core');
+    if (!core) return;
+    const angle = (Number(facingAngleRad) || 0) - (Math.PI * 0.5);
+    core.style.transform = `rotate(${angle.toFixed(4)}rad)`;
+    core.style.transformOrigin = '50% 50%';
+  };
   const syncHandle = (slot, kind) => {
     const i = normalizeSlot(slot);
     const pos = kind === 'target' ? targets[i] : emitters[i];
@@ -2068,6 +2114,17 @@ function setupLaserTrails(panel) {
     if (!handle || !pos) return;
     handle.style.left = `${(pos.x - HANDLE_SIZE_PX * 0.5).toFixed(2)}px`;
     handle.style.top = `${(pos.y - HANDLE_SIZE_PX * 0.5).toFixed(2)}px`;
+    if (kind === 'target') {
+      const points = getSlotPath(i);
+      const last = points[points.length - 1];
+      const prev = points.length >= 2 ? points[points.length - 2] : null;
+      const dx = (last?.x ?? pos.x) - (prev?.x ?? pos.x);
+      const dy = (last?.y ?? pos.y) - (prev?.y ?? pos.y);
+      const angle = Math.hypot(dx, dy) > 0.1 ? Math.atan2(dy, dx) : 0;
+      setHandleIconFacing(handle, angle);
+      return;
+    }
+    setHandleIconFacing(handle, 0);
   };
   const syncGuide = (slot) => {
     const i = normalizeSlot(slot);
@@ -2102,6 +2159,45 @@ function setupLaserTrails(panel) {
     beam.style.strokeWidth = `${baseWidth}`;
     beam.setAttribute('stroke-width', String(baseWidth));
   };
+  const syncRotationHandle = (slot) => {
+    const i = normalizeSlot(slot);
+    const handle = rotateHandleEls[i];
+    if (!handle) return;
+    const source = emitters[i];
+    const points = getSlotPath(i);
+    if (!source || !points.length) return;
+    const target = targets[i] || points[points.length - 1];
+    let facing = target || points[points.length - 1];
+    if (!facing || Math.hypot(facing.x - source.x, facing.y - source.y) <= 0.8) {
+      for (let p = 1; p < points.length; p++) {
+        const probe = points[p];
+        if (Math.hypot(probe.x - source.x, probe.y - source.y) > 0.8) {
+          facing = probe;
+          break;
+        }
+      }
+    }
+    const dx = facing.x - source.x;
+    const dy = facing.y - source.y;
+    const len = Math.hypot(dx, dy);
+    const dirX = len > 0.8 ? (dx / len) : 1;
+    const dirY = len > 0.8 ? (dy / len) : 0;
+    const offset = 60;
+    const hx = source.x + dirX * offset;
+    const hy = source.y + dirY * offset;
+    handle.style.left = `${(hx - HANDLE_SIZE_PX * 0.5).toFixed(2)}px`;
+    handle.style.top = `${(hy - HANDLE_SIZE_PX * 0.5).toFixed(2)}px`;
+    const facingAngle = Math.atan2(dirY, dirX);
+    setHandleIconFacing(handle, facingAngle + Math.PI);
+    const endpointSeparation = target ? Math.hypot(target.x - source.x, target.y - source.y) : 0;
+    const visible =
+      panel.dataset.controlsVisible === '1' &&
+      selectedColorSlot != null &&
+      normalizeSlot(selectedColorSlot) === i &&
+      activeSlots.has(i) &&
+      endpointSeparation >= ROTATE_HANDLE_MIN_SEPARATION_PX;
+    handle.classList.toggle('is-visible', visible);
+  };
   const updateSlotColor = (slot, color, { announce = true } = {}) => {
     const i = normalizeSlot(slot);
     const hex = String(color || '').trim();
@@ -2122,6 +2218,7 @@ function setupLaserTrails(panel) {
         'is-selected-line',
         selectedColorSlot != null && normalizeSlot(selectedColorSlot) === i
       );
+      syncRotationHandle(i);
     }
   };
   const syncAllHandles = () => {
@@ -2130,6 +2227,7 @@ function setupLaserTrails(panel) {
       syncHandle(i, 'target');
       syncGuide(i);
       syncBaseBeam(i);
+      syncRotationHandle(i);
     }
     syncSelectedHandleHighlight();
   };
@@ -2241,6 +2339,7 @@ function setupLaserTrails(panel) {
         else syncHandle(slot, 'source');
         syncGuide(slot);
         syncBaseBeam(slot);
+        syncRotationHandle(slot);
       },
       clampX: kind === 'target' ? clampAnchorX : undefined,
       clampY: kind === 'target' ? clampAnchorY : undefined,
@@ -2264,6 +2363,7 @@ function setupLaserTrails(panel) {
           syncHandle(slot, 'target');
           syncGuide(slot);
           syncBaseBeam(slot);
+          syncRotationHandle(slot);
           drawState.drawingTargetPath = false;
           drawState.startedTargetPath = false;
         }
@@ -2279,6 +2379,83 @@ function setupLaserTrails(panel) {
     if (kind === 'target') targetHandleEls[slot] = handleBtn;
     else sourceHandleEls[slot] = handleBtn;
     syncHandle(slot, kind);
+  };
+
+  const makeRotateHandle = (slot) => {
+    const handleBtn = document.createElement('button');
+    handleBtn.type = 'button';
+    handleBtn.className = 'c-btn art-laser-handle-btn art-laser-rotate-btn';
+    handleBtn.title = `Rotate Laser ${slot + 1}`;
+    handleBtn.setAttribute('aria-label', `Rotate laser ${slot + 1}`);
+    handleBtn.style.setProperty('--c-btn-size', '58px');
+    handleBtn.innerHTML = BUTTON_ICON_HTML;
+    const core = handleBtn.querySelector('.c-btn-core');
+    if (core) core.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonRotate.png')");
+
+    let rotateActive = false;
+    let rotatePointerId = null;
+    let startAngle = 0;
+    let basePoints = [];
+    let moved = false;
+
+    const endRotate = (ev) => {
+      if (!rotateActive) return;
+      if (rotatePointerId != null && ev.pointerId !== rotatePointerId) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      rotateActive = false;
+      try { handleBtn.releasePointerCapture(ev.pointerId); } catch {}
+      rotatePointerId = null;
+      if (moved) markSceneDirtySafe();
+    };
+
+    handleBtn.addEventListener('pointerdown', (ev) => {
+      if (ev.button != null && ev.button !== 0) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      const source = emitters[slot];
+      const pt = clientToPanelPoint(ev.clientX, ev.clientY);
+      if (!source || !pt) return;
+      const dx = pt.x - source.x;
+      const dy = pt.y - source.y;
+      startAngle = Math.atan2(dy, dx);
+      basePoints = getSlotPath(slot).map((p) => ({ x: p.x, y: p.y }));
+      moved = false;
+      rotateActive = true;
+      rotatePointerId = ev.pointerId;
+      try { handleBtn.setPointerCapture(ev.pointerId); } catch {}
+      selectLineForCustomise(slot, { openMenu: true });
+    });
+
+    handleBtn.addEventListener('pointermove', (ev) => {
+      if (!rotateActive) return;
+      if (rotatePointerId != null && ev.pointerId !== rotatePointerId) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      const source = emitters[slot];
+      const pt = clientToPanelPoint(ev.clientX, ev.clientY);
+      if (!source || !pt) return;
+      const angle = Math.atan2(pt.y - source.y, pt.x - source.x);
+      let delta = angle - startAngle;
+      while (delta > Math.PI) delta -= Math.PI * 2;
+      while (delta < -Math.PI) delta += Math.PI * 2;
+      const didRotate = rotateSlotPath(slot, delta, basePoints);
+      if (!didRotate) return;
+      moved = moved || Math.abs(delta) > 0.0001;
+      fitDragAreaToAnchors();
+      syncHandle(slot, 'source');
+      syncHandle(slot, 'target');
+      syncGuide(slot);
+      syncBaseBeam(slot);
+      syncRotationHandle(slot);
+    });
+
+    handleBtn.addEventListener('pointerup', endRotate);
+    handleBtn.addEventListener('pointercancel', endRotate);
+
+    handlesLayer.appendChild(handleBtn);
+    rotateHandleEls[slot] = handleBtn;
+    syncRotationHandle(slot);
   };
 
   randomizeAnchorsWithinArea();
@@ -2305,6 +2482,7 @@ function setupLaserTrails(panel) {
   for (let i = 0; i < ART_SLOT_COUNT; i++) {
     makeHandle(i, 'source');
     makeHandle(i, 'target');
+    makeRotateHandle(i);
   }
 
   // Customise Art: thickness slider + active-line color picker.
@@ -2319,10 +2497,15 @@ function setupLaserTrails(panel) {
   const startPreviewLoopForSlot = (slot) => {
     stopPreviewLoop();
     const i = normalizeSlot(slot);
+    const PREVIEW_LOOP_VELOCITY = 0.5;
+    const isScenePlaying = () => {
+      try { return !!document.querySelector('.toy-panel.toy-playing'); } catch {}
+      return false;
+    };
     const tick = () => {
       if (!panel.isConnected) return;
       if (selectedColorSlot == null || normalizeSlot(selectedColorSlot) !== i) return;
-      spawnLaser(i, 1);
+      if (!isScenePlaying()) spawnLaser(i, PREVIEW_LOOP_VELOCITY);
       previewLoopTimer = setTimeout(tick, 760);
     };
     tick();
@@ -2414,6 +2597,7 @@ function setupLaserTrails(panel) {
     syncHandle(i, 'target');
     syncGuide(i);
     syncBaseBeam(i);
+    syncRotationHandle(i);
     markSceneDirtySafe();
   };
 
@@ -2421,7 +2605,7 @@ function setupLaserTrails(panel) {
     const i = normalizeSlot(slot);
     const btn = lineButtonsHost.querySelector(`button[data-slot="${i}"]`);
     if (!btn) return;
-    btn.style.setProperty('--line-color', String(color || palette[i] || '#7bf6ff'));
+    btn.style.setProperty('--accent', String(color || palette[i] || '#7bf6ff'));
   };
 
   setCustomiseOpen = (open) => {
@@ -2462,7 +2646,49 @@ function setupLaserTrails(panel) {
     if (!active.length) {
       const empty = document.createElement('div');
       empty.className = 'art-line-color-empty';
-      empty.textContent = 'No active lines yet';
+      const emptyText = document.createElement('div');
+      emptyText.className = 'art-line-color-empty-text';
+      emptyText.textContent = 'Add some music with:';
+      empty.appendChild(emptyText);
+
+      const emptyActions = document.createElement('div');
+      emptyActions.className = 'art-line-color-empty-actions';
+
+      const randomBtn = document.createElement('button');
+      randomBtn.type = 'button';
+      randomBtn.className = 'c-btn art-line-empty-action-btn';
+      randomBtn.setAttribute('aria-label', 'Randomize art toy music');
+      randomBtn.title = 'Random';
+      randomBtn.innerHTML = BUTTON_ICON_HTML;
+      const randomCore = randomBtn.querySelector('.c-btn-core');
+      if (randomCore) randomCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonRandomNotes.png')");
+      randomBtn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const randomActionBtn = panel.querySelector(`[data-action="artToy:randomAll"][data-art-toy-id="${panel.id}"]`)
+          || panel.querySelector(`[data-action="artToy:randomAll"]`);
+        try { randomActionBtn?.click?.(); } catch {}
+      });
+      emptyActions.appendChild(randomBtn);
+
+      const enterBtn = document.createElement('button');
+      enterBtn.type = 'button';
+      enterBtn.className = 'c-btn art-line-empty-action-btn';
+      enterBtn.setAttribute('aria-label', 'Enter internal view');
+      enterBtn.title = 'Enter';
+      enterBtn.innerHTML = BUTTON_ICON_HTML;
+      const enterCore = enterBtn.querySelector('.c-btn-core');
+      if (enterCore) enterCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonEnter.png')");
+      enterBtn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const enterActionBtn = panel.querySelector(`[data-action="artToy:music"][data-art-toy-id="${panel.id}"]`)
+          || panel.querySelector(`[data-action="artToy:music"]`);
+        try { enterActionBtn?.click?.(); } catch {}
+      });
+      emptyActions.appendChild(enterBtn);
+      empty.appendChild(emptyActions);
+
       lineButtonsHost.appendChild(empty);
       selectedColorSlot = null;
       pickerWrap.hidden = true;
@@ -2481,11 +2707,15 @@ function setupLaserTrails(panel) {
 
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'art-line-color-btn';
+      btn.className = 'c-btn art-line-color-btn';
       btn.dataset.slot = String(i);
       btn.title = `Edit Line ${i + 1}`;
       btn.setAttribute('aria-label', `Edit line ${i + 1} color`);
-      btn.style.setProperty('--line-color', palette[i]);
+      btn.style.setProperty('--c-btn-size', '112px');
+      btn.style.setProperty('--accent', palette[i]);
+      btn.innerHTML = BUTTON_ICON_HTML;
+      const colorCore = btn.querySelector('.c-btn-core');
+      if (colorCore) colorCore.style.setProperty('--c-btn-icon-url', 'none');
       btn.classList.toggle('is-selected', selectedColorSlot != null && normalizeSlot(selectedColorSlot) === i);
       btn.addEventListener('click', (ev) => {
         ev.preventDefault();
@@ -2500,6 +2730,7 @@ function setupLaserTrails(panel) {
       clearBtn.setAttribute('aria-label', `Clear line ${i + 1}`);
       clearBtn.title = `Clear line ${i + 1}`;
       clearBtn.style.setProperty('--c-btn-size', '66px');
+      clearBtn.style.setProperty('--accent', '#f87171');
       clearBtn.innerHTML = BUTTON_ICON_HTML;
       const clearCore = clearBtn.querySelector('.c-btn-core');
       if (clearCore) clearCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonClear.png')");
@@ -2598,12 +2829,12 @@ function setupLaserTrails(panel) {
         }
       };
       const spawnRunner = (life = 900, opaque = true) => {
-        const seg = mkLine({ len: 16, width: opaque ? 4.4 : 3.6, opacity: opaque ? 1 : 0.82, glow: opaque ? 10 : 7 });
+        const seg = mkLine({ len: 10, width: opaque ? 2.8 : 2.2, opacity: opaque ? 1 : 0.82, glow: opaque ? 8 : 6 });
         animateAndRemove(
           seg,
           [
-            { transform: `translate(-50%, -50%) rotate(${rot}rad) translateX(-18px)`, opacity: opaque ? 1 : 0.82 },
-            { transform: `translate(-50%, -50%) rotate(${rot}rad) translateX(18px)`, opacity: opaque ? 1 : 0.82 },
+            { transform: `translate(-50%, -50%) rotate(${rot}rad) translateX(-16px)`, opacity: opaque ? 1 : 0.82 },
+            { transform: `translate(-50%, -50%) rotate(${rot}rad) translateX(16px)`, opacity: opaque ? 1 : 0.82 },
           ],
           { duration: life, easing: 'linear' },
           life + 40
@@ -3056,10 +3287,14 @@ function setupLaserTrails(panel) {
     }
     if (profile.beatMode === 'runner') {
       spawnMovingSegment({ opaque: true });
+      if (profile.baseMode === 'opaque') animateBasePulse('pulse-thicken');
+      else if (profile.baseMode === 'semi') animateBasePulse('pulse-opaque');
       return;
     }
     if (profile.beatMode === 'runner-opaque') {
       spawnMovingSegment({ opaque: true });
+      if (profile.baseMode === 'opaque') animateBasePulse('pulse-thicken');
+      else if (profile.baseMode === 'semi') animateBasePulse('pulse-opaque');
     }
   }
 
