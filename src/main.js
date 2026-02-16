@@ -3206,6 +3206,125 @@ function ensureDefaultInternalToyExistsInHost(artToyId) {
   }
 }
 
+function ensureDefaultInternalToyChainExistsInHost(artToyId, count = 4) {
+  if (!artToyId) return null;
+  const wanted = Math.max(1, Math.trunc(Number(count) || 4));
+  const artPanel = getArtToyPanelById(artToyId);
+  if (!artPanel) return null;
+  const host = ensureArtInternalHost();
+  const kind = pickDefaultInternalToyKindForArtToy(artToyId);
+
+  let panels = getInternalPanelsForArtToy(artToyId);
+  const seedPanel = panels[0] || null;
+  let seedInstrument = String(seedPanel?.dataset?.instrument || '').trim();
+  if (!seedInstrument) {
+    const theme = getSoundThemeKey?.() || '';
+    const used = collectUsedInstruments();
+    const picked = pickInstrumentForToy(kind, { theme, usedIds: used, preferPriority: true });
+    seedInstrument = String(picked || '').trim();
+  }
+  const seedInstrumentNote = seedPanel?.dataset?.instrumentNote;
+  const seedInstrumentOctave = seedPanel?.dataset?.instrumentOctave;
+  const seedInstrumentPitchShift = seedPanel?.dataset?.instrumentPitchShift;
+  const needed = Math.max(0, wanted - panels.length);
+  if (needed > 0) {
+    try { artPanel.dataset.internalBootstrapped = '1'; } catch {}
+    const size = pickToyPanelSize(kind) || {};
+    const stepX = Math.max(160, (Number(size.width) || 380) + CHAIN_SPAWN_GAP);
+    const centerY = 0;
+    const startX = 0;
+    for (let i = 0; i < needed; i++) {
+      const index = panels.length + i;
+      try {
+        const p = createToyPanelAt(kind, {
+          centerX: startX + index * stepX,
+          centerY,
+          instrument: seedInstrument || undefined,
+          autoCenter: false,
+          allowOffscreen: true,
+          skipSpawnPlacement: true,
+          containerEl: host,
+          artOwnerId: artToyId,
+        });
+        if (!p) continue;
+        p.classList.add('art-internal-toy');
+        p.style.pointerEvents = 'none';
+        ensureToyPanelInitializedNow(p, 'ensureDefaultInternalToyChainExistsInHost');
+      } catch (err) {
+        console.warn('[InternalBoard] host chain toy spawn failed', err);
+      }
+    }
+    panels = getInternalPanelsForArtToy(artToyId);
+  }
+
+  if (!panels.length) return null;
+  const ordered = panels
+    .slice()
+    .sort((a, b) => {
+      const ax = Number.parseFloat(a?.style?.left || '0') || 0;
+      const bx = Number.parseFloat(b?.style?.left || '0') || 0;
+      return ax - bx;
+    })
+    .slice(0, wanted);
+
+  for (let i = 0; i < ordered.length; i++) {
+    const cur = ordered[i];
+    const prev = ordered[i - 1] || null;
+    if (!cur) continue;
+    if (!prev) {
+      delete cur.dataset.chainParent;
+      delete cur.dataset.prevToyId;
+      continue;
+    }
+    cur.dataset.chainParent = prev.id;
+    cur.dataset.prevToyId = prev.id;
+  }
+
+  // Force a consistent instrument across the whole chain.
+  if (seedInstrument) {
+    for (const p of ordered) {
+      try {
+        p.dataset.instrument = seedInstrument;
+        p.dataset.instrumentPersisted = '1';
+        if (seedInstrumentOctave != null && seedInstrumentOctave !== '') p.dataset.instrumentOctave = String(seedInstrumentOctave);
+        if (seedInstrumentPitchShift != null && seedInstrumentPitchShift !== '') p.dataset.instrumentPitchShift = String(seedInstrumentPitchShift);
+        if (seedInstrumentNote != null && seedInstrumentNote !== '') p.dataset.instrumentNote = String(seedInstrumentNote);
+        else delete p.dataset.instrumentNote;
+      } catch {}
+      try {
+        p.dispatchEvent(new CustomEvent('toy-instrument', {
+          detail: {
+            value: seedInstrument,
+            note: seedInstrumentNote,
+            octave: seedInstrumentOctave,
+            pitchShift: seedInstrumentPitchShift === '1' || seedInstrumentPitchShift === true,
+          },
+          bubbles: true,
+          composed: true,
+        }));
+      } catch {}
+      try {
+        p.dispatchEvent(new CustomEvent('toy:instrument', {
+          detail: {
+            name: seedInstrument,
+            value: seedInstrument,
+            note: seedInstrumentNote,
+            octave: seedInstrumentOctave,
+            pitchShift: seedInstrumentPitchShift === '1' || seedInstrumentPitchShift === true,
+          },
+          bubbles: true,
+          composed: true,
+        }));
+      } catch {}
+    }
+  }
+
+  try { updateChains(); } catch {}
+  try { updateAllChainUIs(); } catch {}
+  try { scheduleChainRedraw(); } catch {}
+  return ordered[0] || panels[0] || null;
+}
+
 // Force a toy panel to initialize immediately (guarded).
 // Needed for "Random" from the external Art Toy view, where we may spawn a brand new
 // internal toy and then immediately randomize/play it in the same click.
@@ -4025,7 +4144,7 @@ function randomizeInternalToysForArtToy(artToyId, mode, opts = {}) {
   __artRandLog('randomizeInternalToysForArtToy:begin', { artToyId, mode, source });
   // If the user presses random before ever entering the toy, we still want
   // a default internal toy to exist so randomisation can happen immediately.
-  try { ensureDefaultInternalToyExistsInHost(artToyId); } catch {}
+  try { ensureDefaultInternalToyChainExistsInHost(artToyId, 4); } catch {}
 
   const panels = getInternalPanelsForArtToy(artToyId);
   __artRandLog('randomizeInternalToysForArtToy:panels', {
