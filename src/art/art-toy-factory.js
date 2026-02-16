@@ -10,6 +10,8 @@ import {
 } from './base-art-toy.js';
 import { ensurePanelSpawnPlacement, panToSpawnedPanel } from '../baseToy/spawn-placement.js';
 import { installVolumeUI } from '../baseToy/volume-ui.js';
+import { createArtLineThicknessControl } from './art-line-thickness-control.js';
+import { createArtHueSatPicker } from './art-hue-sat-picker.js';
 
 const ART_TYPES = Object.freeze({
   FLASH_CIRCLE: 'flashCircle',
@@ -1769,6 +1771,9 @@ function setupLaserTrails(panel) {
   const targetHandleEls = [];
   const guideEls = [];
   const baseBeamEls = [];
+  let refreshCustomizeUi = () => {};
+  let closeCustomizeUi = () => {};
+  let paintLineButtonColor = () => {};
   const drawStateBySlot = Array.from({ length: ART_SLOT_COUNT }, () => ({
     drawingTargetPath: false,
     startedTargetPath: false,
@@ -1777,7 +1782,7 @@ function setupLaserTrails(panel) {
   const PANEL_PX = 220;
   const HANDLE_SIZE_PX = 62;
   // Global laser stroke thickness multiplier. Tweak this to scale all laser effects.
-  const LASER_STROKE_MULTIPLIER = 5;
+  let laserStrokeMultiplier = 5;
   // Laser style tuning (pulse/glow/runner). Keep these centralized for quick iteration.
   const LASER_STYLE = Object.freeze({
     baseOpacityOpaque: 0.95,
@@ -1801,7 +1806,7 @@ function setupLaserTrails(panel) {
     runnerSegmentMax: 86,
     transientGlowDefaultPx: 10,
   });
-  const AREA_MIN_X = -142;
+  const AREA_MIN_X = -94;
   const AREA_MIN_Y = 74;
   const MAX_DRAG_SPAN = 1600;
   const AREA_MAX_X = AREA_MIN_X + MAX_DRAG_SPAN;
@@ -2076,7 +2081,7 @@ function setupLaserTrails(panel) {
     const fxId = clampFxId(panel?.dataset?.laserFx);
     const profile = getFxProfile(fxId);
     const visible = activeSlots.has(i) && profile.baseMode !== 'none';
-    const baseWidth = getLaserBaseWidth(fxId) * LASER_STROKE_MULTIPLIER;
+    const baseWidth = getLaserBaseWidth(fxId) * laserStrokeMultiplier;
     const baseOpacity = profile.baseMode === 'semi' ? LASER_STYLE.baseOpacitySemi : LASER_STYLE.baseOpacityOpaque;
     const glowPx = profile.baseMode === 'semi' ? LASER_STYLE.baseGlowSemiPx : LASER_STYLE.baseGlowOpaquePx;
     beam.style.display = visible ? '' : 'none';
@@ -2084,6 +2089,17 @@ function setupLaserTrails(panel) {
     beam.style.filter = `drop-shadow(0 0 ${glowPx}px currentColor)`;
     beam.style.strokeWidth = `${baseWidth}`;
     beam.setAttribute('stroke-width', String(baseWidth));
+  };
+  const updateSlotColor = (slot, color, { announce = true } = {}) => {
+    const i = normalizeSlot(slot);
+    const hex = String(color || '').trim();
+    if (!/^#([0-9a-f]{6})$/i.test(hex)) return;
+    palette[i] = hex;
+    const guide = guideEls[i];
+    if (guide) guide.setAttribute('stroke', hex);
+    syncBaseBeam(i);
+    paintLineButtonColor(i, hex);
+    if (announce) markSceneDirtySafe();
   };
   const syncAllBaseBeams = () => {
     for (let i = 0; i < ART_SLOT_COUNT; i++) syncBaseBeam(i);
@@ -2104,6 +2120,7 @@ function setupLaserTrails(panel) {
     guideEls[i]?.classList.add('is-active-firework');
     syncBaseBeam(i);
     syncActiveStateFlags();
+    try { refreshCustomizeUi(); } catch {}
   };
   const setSlotInactive = (slot) => {
     const i = normalizeSlot(slot);
@@ -2113,6 +2130,7 @@ function setupLaserTrails(panel) {
     guideEls[i]?.classList.remove('is-active-firework');
     syncBaseBeam(i);
     syncActiveStateFlags();
+    try { refreshCustomizeUi(); } catch {}
   };
   const activateAllSlots = () => {
     for (let i = 0; i < ART_SLOT_COUNT; i++) setSlotActive(i);
@@ -2258,6 +2276,179 @@ function setupLaserTrails(panel) {
     makeHandle(i, 'source');
     makeHandle(i, 'target');
   }
+
+  // Customise Art: thickness slider + active-line color picker.
+  let thicknessControlApi = null;
+  let selectedColorSlot = null;
+  let previewLoopTimer = 0;
+
+  const stopPreviewLoop = () => {
+    if (previewLoopTimer) clearTimeout(previewLoopTimer);
+    previewLoopTimer = 0;
+  };
+
+  const startPreviewLoopForSlot = (slot) => {
+    stopPreviewLoop();
+    const i = normalizeSlot(slot);
+    const tick = () => {
+      if (!panel.isConnected) return;
+      if (selectedColorSlot == null || normalizeSlot(selectedColorSlot) !== i) return;
+      spawnLaser(i, 1);
+      previewLoopTimer = setTimeout(tick, 760);
+    };
+    tick();
+  };
+
+  const customiseBtn = document.createElement('button');
+  customiseBtn.type = 'button';
+  customiseBtn.className = 'c-btn art-toy-customize-btn';
+  customiseBtn.setAttribute('aria-label', 'Customise Art');
+  customiseBtn.title = 'Customise Art';
+  customiseBtn.innerHTML = BUTTON_ICON_HTML;
+  const customiseCore = customiseBtn.querySelector('.c-btn-core');
+  if (customiseCore) customiseCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonPaintColour.png')");
+  panel.appendChild(customiseBtn);
+
+  const customisePanel = document.createElement('div');
+  customisePanel.className = 'art-line-style-panel';
+  customisePanel.hidden = true;
+  panel.appendChild(customisePanel);
+
+  thicknessControlApi = createArtLineThicknessControl({
+    label: 'Line Thickness',
+    min: 1,
+    max: 20,
+    step: 0.1,
+    value: laserStrokeMultiplier,
+    onInput: (nextValue) => {
+      const n = Number(nextValue);
+      if (!Number.isFinite(n)) return;
+      laserStrokeMultiplier = Math.max(0.2, n);
+      syncAllBaseBeams();
+    },
+    onCommit: () => markSceneDirtySafe(),
+  });
+  customisePanel.appendChild(thicknessControlApi.root);
+
+  const lineButtonsTitle = document.createElement('div');
+  lineButtonsTitle.className = 'art-line-style-subhead';
+  lineButtonsTitle.textContent = 'Active Lines';
+  customisePanel.appendChild(lineButtonsTitle);
+
+  const lineButtonsHost = document.createElement('div');
+  lineButtonsHost.className = 'art-line-color-buttons';
+  customisePanel.appendChild(lineButtonsHost);
+
+  const pickerTitle = document.createElement('div');
+  pickerTitle.className = 'art-line-style-subhead';
+  pickerTitle.textContent = 'Line Color';
+  customisePanel.appendChild(pickerTitle);
+
+  const pickerWrap = document.createElement('div');
+  pickerWrap.className = 'art-line-color-picker-wrap';
+  pickerWrap.hidden = true;
+  customisePanel.appendChild(pickerWrap);
+
+  const pickerApi = createArtHueSatPicker({
+    size: 148,
+    color: palette[0],
+    onChange: ({ hex } = {}) => {
+      if (selectedColorSlot == null) return;
+      updateSlotColor(selectedColorSlot, hex, { announce: false });
+    },
+    onCommit: ({ hex } = {}) => {
+      if (selectedColorSlot == null) return;
+      updateSlotColor(selectedColorSlot, hex, { announce: true });
+    },
+  });
+  pickerWrap.appendChild(pickerApi.root);
+
+  paintLineButtonColor = (slot, color) => {
+    const i = normalizeSlot(slot);
+    const btn = lineButtonsHost.querySelector(`button[data-slot="${i}"]`);
+    if (!btn) return;
+    btn.style.setProperty('--line-color', String(color || palette[i] || '#7bf6ff'));
+  };
+
+  const setCustomiseOpen = (open) => {
+    const nextOpen = !!open;
+    customisePanel.hidden = !nextOpen;
+    customisePanel.classList.toggle('is-open', nextOpen);
+    customiseBtn.classList.toggle('is-active', nextOpen);
+    if (nextOpen) {
+      setBaseArtToyControlsVisible(panel, true);
+      try { refreshCustomizeUi(); } catch {}
+      return;
+    }
+    selectedColorSlot = null;
+    pickerWrap.hidden = true;
+    stopPreviewLoop();
+    try { refreshCustomizeUi(); } catch {}
+  };
+
+  closeCustomizeUi = () => {
+    setCustomiseOpen(false);
+  };
+
+  refreshCustomizeUi = () => {
+    if (!lineButtonsHost) return;
+    const active = Array.from(activeSlots.values()).map((s) => normalizeSlot(s)).sort((a, b) => a - b);
+    lineButtonsHost.innerHTML = '';
+    if (!active.length) {
+      const empty = document.createElement('div');
+      empty.className = 'art-line-color-empty';
+      empty.textContent = 'No active lines yet';
+      lineButtonsHost.appendChild(empty);
+      selectedColorSlot = null;
+      pickerWrap.hidden = true;
+      stopPreviewLoop();
+      return;
+    }
+    if (selectedColorSlot != null && !active.includes(normalizeSlot(selectedColorSlot))) {
+      selectedColorSlot = null;
+      pickerWrap.hidden = true;
+      stopPreviewLoop();
+    }
+    for (const i of active) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'art-line-color-btn';
+      btn.dataset.slot = String(i);
+      btn.textContent = String(i + 1);
+      btn.title = `Edit Line ${i + 1}`;
+      btn.setAttribute('aria-label', `Edit line ${i + 1} color`);
+      btn.style.setProperty('--line-color', palette[i]);
+      btn.classList.toggle('is-selected', selectedColorSlot != null && normalizeSlot(selectedColorSlot) === i);
+      btn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        selectedColorSlot = i;
+        pickerWrap.hidden = false;
+        pickerApi.setColor(palette[i]);
+        refreshCustomizeUi();
+        startPreviewLoopForSlot(i);
+      });
+      lineButtonsHost.appendChild(btn);
+    }
+  };
+
+  customiseBtn.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    setCustomiseOpen(customisePanel.hidden);
+  });
+
+  const onDocPointerDownCloseCustomise = (ev) => {
+    if (!panel.isConnected) {
+      document.removeEventListener('pointerdown', onDocPointerDownCloseCustomise, true);
+      return;
+    }
+    if (customisePanel.hidden) return;
+    const t = ev?.target;
+    if (t && (customisePanel.contains(t) || customiseBtn.contains(t))) return;
+    setCustomiseOpen(false);
+  };
+  document.addEventListener('pointerdown', onDocPointerDownCloseCustomise, true);
 
   try {
     const controlsHost = getBaseArtToyControlsHost(panel);
@@ -2508,6 +2699,93 @@ function setupLaserTrails(panel) {
     syncFxUi();
   } catch {}
 
+  const isClientPointInsideDragArea = (clientX, clientY) => {
+    // When no active lasers are present, the drag area should not capture outside taps.
+    if (activeSlots.size === 0 && !dragAreaEl.classList.contains('is-dragging')) return false;
+    const rect = panel.getBoundingClientRect();
+    if (!rect || rect.width < 1 || rect.height < 1) return false;
+    const scaleX = rect.width / PANEL_PX;
+    const scaleY = rect.height / PANEL_PX;
+    const left = rect.left + dragArea.x * scaleX;
+    const top = rect.top + dragArea.y * scaleY;
+    const right = left + dragArea.w * scaleX;
+    const bottom = top + dragArea.h * scaleY;
+    return clientX >= left && clientX <= right && clientY >= top && clientY <= bottom;
+  };
+
+  let outsideTapCandidate = false;
+  let outsideTapPointerId = null;
+  let outsideTapStartX = 0;
+  let outsideTapStartY = 0;
+  let outsideTapMoved = false;
+  const OUTSIDE_TAP_SLOP_PX = 6;
+
+  const resetOutsideTap = () => {
+    outsideTapCandidate = false;
+    outsideTapPointerId = null;
+    outsideTapStartX = 0;
+    outsideTapStartY = 0;
+    outsideTapMoved = false;
+  };
+
+  const removeOutsideTapListeners = () => {
+    document.removeEventListener('pointerdown', onDocPointerDownHideExtras, true);
+    document.removeEventListener('pointermove', onDocPointerMoveHideExtras, true);
+    document.removeEventListener('pointerup', onDocPointerUpHideExtras, true);
+    document.removeEventListener('pointercancel', onDocPointerCancelHideExtras, true);
+  };
+
+  const onDocPointerDownHideExtras = (ev) => {
+    if (!panel.isConnected) {
+      removeOutsideTapListeners();
+      return;
+    }
+    resetOutsideTap();
+    if (panel.dataset.controlsVisible !== '1') return;
+    const target = ev?.target;
+    if (target && panel.contains(target)) return;
+    if (isClientPointInsideDragArea(ev.clientX, ev.clientY)) return;
+    outsideTapCandidate = true;
+    outsideTapPointerId = ev.pointerId;
+    outsideTapStartX = ev.clientX;
+    outsideTapStartY = ev.clientY;
+  };
+
+  const onDocPointerMoveHideExtras = (ev) => {
+    if (!outsideTapCandidate) return;
+    if (outsideTapPointerId != null && ev.pointerId !== outsideTapPointerId) return;
+    const dx = ev.clientX - outsideTapStartX;
+    const dy = ev.clientY - outsideTapStartY;
+    if ((dx * dx + dy * dy) > (OUTSIDE_TAP_SLOP_PX * OUTSIDE_TAP_SLOP_PX)) {
+      outsideTapMoved = true;
+    }
+  };
+
+  const onDocPointerUpHideExtras = (ev) => {
+    if (!outsideTapCandidate) return;
+    if (outsideTapPointerId != null && ev.pointerId !== outsideTapPointerId) return;
+    const target = ev?.target;
+    const endedOutsidePanel = !(target && panel.contains(target));
+    const endedOutsideArea = !isClientPointInsideDragArea(ev.clientX, ev.clientY);
+    const shouldHide = !outsideTapMoved && endedOutsidePanel && endedOutsideArea;
+    resetOutsideTap();
+    if (!shouldHide) return;
+    if (!panel.isConnected) return;
+    if (panel.dataset.controlsVisible !== '1') return;
+    setBaseArtToyControlsVisible(panel, false);
+  };
+
+  const onDocPointerCancelHideExtras = (ev) => {
+    if (!outsideTapCandidate) return;
+    if (outsideTapPointerId != null && ev.pointerId !== outsideTapPointerId) return;
+    resetOutsideTap();
+  };
+
+  document.addEventListener('pointerdown', onDocPointerDownHideExtras, true);
+  document.addEventListener('pointermove', onDocPointerMoveHideExtras, true);
+  document.addEventListener('pointerup', onDocPointerUpHideExtras, true);
+  document.addEventListener('pointercancel', onDocPointerCancelHideExtras, true);
+
   function spawnLaser(slotIndex, velocity = null) {
     const slot = normalizeSlot(slotIndex);
     const source = emitters[slot];
@@ -2522,8 +2800,8 @@ function setupLaserTrails(panel) {
     points[0].x = source.x;
     points[0].y = source.y;
     const pathD = buildLaserPath(points);
-    const beamBaseWidth = getLaserBaseWidth(fxId) * LASER_STROKE_MULTIPLIER;
-    const baseWidth = getLaserBaseWidth(fxId) * amp * LASER_STROKE_MULTIPLIER;
+    const beamBaseWidth = getLaserBaseWidth(fxId) * laserStrokeMultiplier;
+    const baseWidth = getLaserBaseWidth(fxId) * amp * laserStrokeMultiplier;
 
     const trackActiveNode = (node) => {
       if (!node) return;
@@ -2737,6 +3015,8 @@ function setupLaserTrails(panel) {
       paths: slotPaths.map((points) => (Array.isArray(points)
         ? points.map((point) => ({ x: Number(point?.x) || 0, y: Number(point?.y) || 0 }))
         : [])),
+      lineColors: palette.map((c) => String(c || '#7bf6ff')),
+      lineThickness: Number(laserStrokeMultiplier) || 1,
       activeSlots: activeSlotsSorted,
       fx: clampFxId(panel?.dataset?.laserFx),
       controlsVisible: panel.dataset.controlsVisible === '1',
@@ -2774,6 +3054,18 @@ function setupLaserTrails(panel) {
       for (let i = 0; i < ART_SLOT_COUNT; i++) {
         setSlotPath(i, buildStraightPath(i));
       }
+    }
+    const nextColors = Array.isArray(state.lineColors) ? state.lineColors : null;
+    if (nextColors && nextColors.length) {
+      for (let i = 0; i < ART_SLOT_COUNT; i++) {
+        const color = nextColors[i];
+        if (typeof color !== 'string') continue;
+        updateSlotColor(i, color, { announce: false });
+      }
+    }
+    if (Number.isFinite(Number(state.lineThickness))) {
+      laserStrokeMultiplier = Math.max(0.2, Number(state.lineThickness));
+      try { thicknessControlApi?.setValue?.(laserStrokeMultiplier); } catch {}
     }
     if (Array.isArray(state.activeSlots)) {
       const wanted = new Set(state.activeSlots.map((s) => normalizeSlot(s)));
