@@ -1238,6 +1238,14 @@ function setupFireworks(panel) {
 
   selectLineForCustomise = (slot, { openMenu = false } = {}) => {
     const i = normalizeSlot(slot);
+    if (selectedColorSlot != null && normalizeSlot(selectedColorSlot) === i) {
+      selectedColorSlot = null;
+      pickerWrap.hidden = true;
+      pickerTitle.hidden = true;
+      stopPreviewLoop();
+      refreshCustomizeUi();
+      return;
+    }
     selectedColorSlot = i;
     pickerWrap.hidden = false;
     pickerTitle.hidden = false;
@@ -2874,6 +2882,14 @@ function setupLaserTrails(panel) {
 
   selectLineForCustomise = (slot, { openMenu = false } = {}) => {
     const i = normalizeSlot(slot);
+    if (selectedColorSlot != null && normalizeSlot(selectedColorSlot) === i) {
+      selectedColorSlot = null;
+      pickerWrap.hidden = true;
+      pickerTitle.hidden = true;
+      stopPreviewLoop();
+      refreshCustomizeUi();
+      return;
+    }
     selectedColorSlot = i;
     pickerWrap.hidden = false;
     pickerTitle.hidden = false;
