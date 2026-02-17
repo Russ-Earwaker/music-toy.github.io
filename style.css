@@ -1682,6 +1682,9 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
 .art-toy-panel[data-controls-visible='1'] .art-firework-handle-btn.is-active-firework:focus-visible {
   filter: brightness(1.2) saturate(1.15) drop-shadow(0 0 8px rgba(132, 198, 255, 0.65));
 }
+.art-toy-panel[data-controls-visible='1'] .art-firework-handle-btn.is-active-firework.is-selected-line {
+  filter: brightness(1.86) saturate(1.55);
+}
 
 .art-toy-panel[data-controls-visible='1'] .art-laser-handle-btn.is-active-firework:hover,
 .art-toy-panel[data-controls-visible='1'] .art-laser-handle-btn.is-active-firework:focus-visible {

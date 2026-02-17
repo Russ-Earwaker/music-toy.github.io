@@ -392,6 +392,12 @@ function setupFireworks(panel) {
   const handleEls = [];
   const activeGlowEls = Array.from({ length: ART_SLOT_COUNT }, () => null);
   const activeSlots = new Set();
+  let selectedColorSlot = null;
+  let refreshCustomizeUi = () => {};
+  let setCustomiseOpen = () => {};
+  let selectLineForCustomise = () => {};
+  let syncSelectedHandleHighlight = () => {};
+  let fireworkBurstSizeMultiplier = 1;
   const syncActiveStateFlags = () => {
     panel.dataset.hasActiveFireworks = activeSlots.size > 0 ? '1' : '0';
   };
@@ -931,6 +937,14 @@ function setupFireworks(panel) {
     handle.style.left = `${(a.x - HANDLE_SIZE_PX * 0.5).toFixed(2)}px`;
     handle.style.top = `${(a.y - HANDLE_SIZE_PX * 0.5).toFixed(2)}px`;
   };
+  syncSelectedHandleHighlight = () => {
+    for (let i = 0; i < ART_SLOT_COUNT; i++) {
+      handleEls[i]?.classList.toggle(
+        'is-selected-line',
+        selectedColorSlot != null && normalizeSlot(selectedColorSlot) === i
+      );
+    }
+  };
   const syncActiveGlow = (slot) => {
     const glow = activeGlowEls[slot];
     const a = anchors[slot];
@@ -949,6 +963,8 @@ function setupFireworks(panel) {
     if (glow) glow.classList.add('is-active-firework');
     syncActiveGlow(i);
     syncActiveStateFlags();
+    syncSelectedHandleHighlight();
+    try { refreshCustomizeUi(); } catch {}
   };
   const setSlotInactive = (slot) => {
     const i = normalizeSlot(slot);
@@ -958,6 +974,8 @@ function setupFireworks(panel) {
     const glow = activeGlowEls[i];
     if (glow) glow.classList.remove('is-active-firework');
     syncActiveStateFlags();
+    syncSelectedHandleHighlight();
+    try { refreshCustomizeUi(); } catch {}
   };
 
   const clampAnchorX = (v) => {
@@ -1077,7 +1095,7 @@ function setupFireworks(panel) {
     handleBtn.style.setProperty('--c-btn-size', '62px');
     handleBtn.innerHTML = BUTTON_ICON_HTML;
     const core = handleBtn.querySelector('.c-btn-core');
-    if (core) core.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonHandle.png')");
+    if (core) core.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonDrag.png')");
 
     attachSlotHandleDrag({
       handleBtn,
@@ -1097,12 +1115,231 @@ function setupFireworks(panel) {
         dragAreaEl.classList.toggle('is-dragging', !!active);
       },
       onCommit: () => markSceneDirtySafe(),
+      onTap: () => {
+        selectLineForCustomise(i, { openMenu: true });
+      },
     });
 
     handlesLayer.appendChild(handleBtn);
     handleEls.push(handleBtn);
     syncHandle(i);
   }
+
+  // Customise Art (Fireworks): burst size + active-burst color picker.
+  let thicknessControlApi = null;
+  let previewLoopTimer = 0;
+  const stopPreviewLoop = () => {
+    if (previewLoopTimer) clearTimeout(previewLoopTimer);
+    previewLoopTimer = 0;
+  };
+  const startPreviewLoopForSlot = (slot) => {
+    stopPreviewLoop();
+    const i = normalizeSlot(slot);
+    const isScenePlaying = () => {
+      try { return !!document.querySelector('.toy-panel.toy-playing'); } catch {}
+      return false;
+    };
+    const tick = () => {
+      if (!panel.isConnected) return;
+      if (selectedColorSlot == null || normalizeSlot(selectedColorSlot) !== i) return;
+      if (!isScenePlaying()) spawnBurst(i, 1);
+      previewLoopTimer = setTimeout(tick, 760);
+    };
+    tick();
+  };
+
+  const customisePanel = document.createElement('div');
+  customisePanel.className = 'art-line-style-panel';
+  customisePanel.hidden = true;
+  panel.appendChild(customisePanel);
+
+  thicknessControlApi = createArtLineThicknessControl({
+    label: 'Burst Size',
+    min: 0.5,
+    max: 3,
+    step: 0.05,
+    value: fireworkBurstSizeMultiplier,
+    onInput: (nextValue) => {
+      const n = Number(nextValue);
+      if (!Number.isFinite(n)) return;
+      fireworkBurstSizeMultiplier = Math.max(0.2, n);
+    },
+    onCommit: () => markSceneDirtySafe(),
+  });
+  customisePanel.appendChild(thicknessControlApi.root);
+
+  const lineButtonsTitle = document.createElement('div');
+  lineButtonsTitle.className = 'art-line-style-subhead art-line-style-subhead-active-lines';
+  lineButtonsTitle.textContent = 'Active Bursts';
+  customisePanel.appendChild(lineButtonsTitle);
+
+  const lineButtonsHost = document.createElement('div');
+  lineButtonsHost.className = 'art-line-color-buttons';
+  customisePanel.appendChild(lineButtonsHost);
+
+  const pickerTitle = document.createElement('div');
+  pickerTitle.className = 'art-line-style-subhead';
+  pickerTitle.textContent = 'Line Color';
+  pickerTitle.hidden = true;
+  customisePanel.appendChild(pickerTitle);
+
+  const pickerWrap = document.createElement('div');
+  pickerWrap.className = 'art-line-color-picker-wrap';
+  pickerWrap.hidden = true;
+  customisePanel.appendChild(pickerWrap);
+
+  const pickerRow = document.createElement('div');
+  pickerRow.className = 'art-line-picker-row';
+  pickerWrap.appendChild(pickerRow);
+
+  const pickerApi = createArtHueSatPicker({
+    size: 296,
+    color: palette[0],
+    onChange: ({ hex } = {}) => {
+      if (selectedColorSlot == null) return;
+      const i = normalizeSlot(selectedColorSlot);
+      const c = String(hex || '').trim();
+      if (!/^#([0-9a-f]{6})$/i.test(c)) return;
+      palette[i] = c;
+      const glow = activeGlowEls[i];
+      if (glow) glow.style.color = c;
+      const btn = lineButtonsHost.querySelector(`button[data-slot="${i}"]`);
+      if (btn) btn.style.setProperty('--accent', c);
+    },
+    onCommit: ({ hex } = {}) => {
+      if (selectedColorSlot == null) return;
+      const i = normalizeSlot(selectedColorSlot);
+      const c = String(hex || '').trim();
+      if (!/^#([0-9a-f]{6})$/i.test(c)) return;
+      palette[i] = c;
+      const glow = activeGlowEls[i];
+      if (glow) glow.style.color = c;
+      const btn = lineButtonsHost.querySelector(`button[data-slot="${i}"]`);
+      if (btn) btn.style.setProperty('--accent', c);
+      markSceneDirtySafe();
+    },
+  });
+  pickerRow.appendChild(pickerApi.root);
+
+  setCustomiseOpen = (open) => {
+    const nextOpen = !!open;
+    customisePanel.hidden = !nextOpen;
+    customisePanel.classList.toggle('is-open', nextOpen);
+    if (nextOpen) {
+      try { refreshCustomizeUi(); } catch {}
+      return;
+    }
+    selectedColorSlot = null;
+    pickerWrap.hidden = true;
+    pickerTitle.hidden = true;
+    stopPreviewLoop();
+    try { refreshCustomizeUi(); } catch {}
+  };
+
+  selectLineForCustomise = (slot, { openMenu = false } = {}) => {
+    const i = normalizeSlot(slot);
+    selectedColorSlot = i;
+    pickerWrap.hidden = false;
+    pickerTitle.hidden = false;
+    pickerApi.setColor(palette[i]);
+    if (openMenu) setCustomiseOpen(true);
+    refreshCustomizeUi();
+    startPreviewLoopForSlot(i);
+  };
+
+  refreshCustomizeUi = () => {
+    const active = Array.from(activeSlots.values()).map((s) => normalizeSlot(s)).sort((a, b) => a - b);
+    customisePanel.classList.toggle('is-empty-lines', active.length === 0);
+    lineButtonsHost.innerHTML = '';
+    if (!active.length) {
+      selectedColorSlot = null;
+      pickerWrap.hidden = true;
+      pickerTitle.hidden = true;
+      stopPreviewLoop();
+      syncSelectedHandleHighlight();
+      const empty = document.createElement('div');
+      empty.className = 'art-line-color-empty';
+      const emptyText = document.createElement('div');
+      emptyText.className = 'art-line-color-empty-text';
+      emptyText.textContent = 'Add some music with:';
+      empty.appendChild(emptyText);
+      const emptyActions = document.createElement('div');
+      emptyActions.className = 'art-line-color-empty-actions';
+      const randomBtn = document.createElement('button');
+      randomBtn.type = 'button';
+      randomBtn.className = 'c-btn art-line-empty-action-btn';
+      randomBtn.setAttribute('aria-label', 'Randomize art toy');
+      randomBtn.title = 'Random All';
+      randomBtn.innerHTML = BUTTON_ICON_HTML;
+      const randomCore = randomBtn.querySelector('.c-btn-core');
+      if (randomCore) randomCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonRandom.png')");
+      randomBtn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const randomActionBtn = panel.querySelector(`[data-action="artToy:randomAll"][data-art-toy-id="${panel.id}"]`)
+          || panel.querySelector(`[data-action="artToy:randomAll"]`);
+        try { randomActionBtn?.click?.(); } catch {}
+      });
+      emptyActions.appendChild(randomBtn);
+      const enterBtn = document.createElement('button');
+      enterBtn.type = 'button';
+      enterBtn.className = 'c-btn art-line-empty-action-btn';
+      enterBtn.setAttribute('aria-label', 'Enter internal view');
+      enterBtn.title = 'Enter';
+      enterBtn.innerHTML = BUTTON_ICON_HTML;
+      const enterCore = enterBtn.querySelector('.c-btn-core');
+      if (enterCore) enterCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonEnter.png')");
+      enterBtn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const enterActionBtn = panel.querySelector(`[data-action="artToy:music"][data-art-toy-id="${panel.id}"]`)
+          || panel.querySelector(`[data-action="artToy:music"]`);
+        try { enterActionBtn?.click?.(); } catch {}
+      });
+      emptyActions.appendChild(enterBtn);
+      empty.appendChild(emptyActions);
+      lineButtonsHost.appendChild(empty);
+      return;
+    }
+    if (selectedColorSlot != null && !active.includes(normalizeSlot(selectedColorSlot))) {
+      selectedColorSlot = null;
+      pickerWrap.hidden = true;
+      pickerTitle.hidden = true;
+      stopPreviewLoop();
+    }
+    for (const i of active) {
+      const row = document.createElement('div');
+      row.className = 'art-line-color-row';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'c-btn art-line-color-btn';
+      btn.dataset.slot = String(i);
+      btn.title = `Edit Burst ${i + 1}`;
+      btn.setAttribute('aria-label', `Edit burst ${i + 1} color`);
+      btn.style.setProperty('--c-btn-size', '112px');
+      btn.style.setProperty('--accent', palette[i]);
+      btn.innerHTML = BUTTON_ICON_HTML;
+      const colorCore = btn.querySelector('.c-btn-core');
+      if (colorCore) colorCore.style.setProperty('--c-btn-icon-url', 'none');
+      btn.classList.toggle('is-selected', selectedColorSlot != null && normalizeSlot(selectedColorSlot) === i);
+      btn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        selectLineForCustomise(i, { openMenu: false });
+      });
+      row.appendChild(btn);
+      lineButtonsHost.appendChild(row);
+    }
+    syncSelectedHandleHighlight();
+  };
+
+  try {
+    const controlsVisMo = new MutationObserver(() => {
+      setCustomiseOpen(panel.dataset.controlsVisible === '1');
+    });
+    controlsVisMo.observe(panel, { attributes: true, attributeFilter: ['data-controls-visible'] });
+  } catch {}
+  setCustomiseOpen(panel.dataset.controlsVisible === '1');
 
   panel.onArtRandomMusic = () => {
     activateAllSlots();
@@ -1160,6 +1397,8 @@ function setupFireworks(panel) {
       anchors: anchors.map((a) => ({ x: Number(a?.x) || 0, y: Number(a?.y) || 0 })),
       activeSlots: active,
       fx: clampFxId(panel?.dataset?.fireworkFx),
+      burstColors: palette.map((c) => String(c || '#ff6b6b')),
+      burstSize: Number(fireworkBurstSizeMultiplier) || 1,
       controlsVisible: panel.dataset.controlsVisible === '1',
     };
   };
@@ -1180,6 +1419,22 @@ function setupFireworks(panel) {
       for (let i = 0; i < ART_SLOT_COUNT; i++) {
         if (wanted.has(i)) setSlotActive(i);
         else setSlotInactive(i);
+      }
+    }
+    if (Array.isArray(state.burstColors)) {
+      for (let i = 0; i < ART_SLOT_COUNT; i++) {
+        const c = String(state.burstColors[i] || '').trim();
+        if (!/^#([0-9a-f]{6})$/i.test(c)) continue;
+        palette[i] = c;
+        const glow = activeGlowEls[i];
+        if (glow) glow.style.color = c;
+      }
+    }
+    if (state.burstSize != null) {
+      const n = Number(state.burstSize);
+      if (Number.isFinite(n)) {
+        fireworkBurstSizeMultiplier = Math.max(0.2, n);
+        try { thicknessControlApi?.setValue?.(fireworkBurstSizeMultiplier); } catch {}
       }
     }
 
@@ -1291,7 +1546,8 @@ function setupFireworks(panel) {
     const anchor = anchors[slot];
     const tone = palette[slot % palette.length];
     const vel = Number(velocity);
-    const amp = Number.isFinite(vel) ? Math.max(0.4, Math.min(1.3, vel)) : 0.9;
+    const ampBase = Number.isFinite(vel) ? Math.max(0.4, Math.min(1.3, vel)) : 0.9;
+    const amp = ampBase * Math.max(0.2, Number(fireworkBurstSizeMultiplier) || 1);
 
     const spawnCoreFlash = (scale = 1, life = 260) => {
       try {
@@ -1501,7 +1757,7 @@ function setupFireworks(panel) {
 
     if (fxId === 0) {
       // Simple bright flash circle (matches preview for effect 0).
-      spawnCoreFadeOut(0.54, 360);
+      spawnCoreFadeOut(0.54 * amp * 2, 360);
       return;
     }
 
@@ -1510,8 +1766,8 @@ function setupFireworks(panel) {
       const RING_SIZE_SCALE = 2 / 3;
       spawnRing({
         life: 760 + Math.random() * 220,
-        scale0: 0.25 * FIREWORK_EFFECT_SCALE * RING_SIZE_SCALE,
-        scale1: (2.5 + Math.random() * 0.8) * FIREWORK_EFFECT_SCALE * RING_SIZE_SCALE,
+        scale0: 0.25 * FIREWORK_EFFECT_SCALE * RING_SIZE_SCALE * amp * 2,
+        scale1: (2.5 + Math.random() * 0.8) * FIREWORK_EFFECT_SCALE * RING_SIZE_SCALE * amp * 2,
         thickness: 3,
         burstIn: 0.24,
         lingerUntil: 0.9,
@@ -1519,8 +1775,8 @@ function setupFireworks(panel) {
       });
       spawnRing({
         life: 860 + Math.random() * 260,
-        scale0: 0.16 * FIREWORK_EFFECT_SCALE * RING_SIZE_SCALE,
-        scale1: (1.9 + Math.random() * 0.7) * FIREWORK_EFFECT_SCALE * RING_SIZE_SCALE,
+        scale0: 0.16 * FIREWORK_EFFECT_SCALE * RING_SIZE_SCALE * amp * 2,
+        scale1: (1.9 + Math.random() * 0.7) * FIREWORK_EFFECT_SCALE * RING_SIZE_SCALE * amp * 2,
         thickness: 2,
         burstIn: 0.28,
         lingerUntil: 0.92,

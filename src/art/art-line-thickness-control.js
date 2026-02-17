@@ -24,7 +24,6 @@ export function createArtLineThicknessControl({
 
   const valueEl = document.createElement('span');
   valueEl.className = 'art-line-thickness-value';
-  row.appendChild(valueEl);
 
   const input = document.createElement('input');
   input.type = 'range';
@@ -36,8 +35,7 @@ export function createArtLineThicknessControl({
   root.appendChild(input);
 
   const updateValueReadout = () => {
-    const n = Number(input.value);
-    valueEl.textContent = Number.isFinite(n) ? n.toFixed(1) : String(input.value);
+    // Readout intentionally hidden globally; keep function for API compatibility.
   };
 
   input.addEventListener('input', () => {
@@ -67,4 +65,3 @@ export function createArtLineThicknessControl({
     },
   };
 }
-
