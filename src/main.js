@@ -2546,6 +2546,29 @@ function handleArtTriggerVisuals(trigger) {
     } catch {}
   }
 
+  if (internalActive) {
+    try {
+      const mirror = document.querySelector(`.internal-art-anchor-ghost[data-art-toy-id="${CSS.escape(String(artId))}"]`);
+      if (mirror && mirror !== art) {
+        const payload = {
+          source,
+          panelId,
+          toyId: trigger.toyId || null,
+          artId,
+          slotIndex: trigger.slotIndex,
+          note: trigger.note,
+          velocity: trigger.velocity,
+          timestamp: trigger.timestamp,
+        };
+        let handled = false;
+        try { handled = mirror.onArtTrigger?.(payload) === true; } catch {}
+        if (!handled) {
+          try { mirror.flash?.(payload); } catch {}
+        }
+      }
+    } catch {}
+  }
+
   try { if (flashInternalArtGhostForArtId(artId)) flashed = true; } catch {}
 
   artFlashDbg('owner:result', {
@@ -3212,9 +3235,27 @@ function ensureDefaultInternalToyChainExistsInHost(artToyId, count = 4) {
   const artPanel = getArtToyPanelById(artToyId);
   if (!artPanel) return null;
   const host = ensureArtInternalHost();
+  const internalActiveForThis = isInternalBoardActiveForArtToy(artToyId);
+  const internalWorld = internalActiveForThis
+    ? (document.getElementById('board') || document.getElementById('internal-board-world'))
+    : null;
   const kind = pickDefaultInternalToyKindForArtToy(artToyId);
 
   let panels = getInternalPanelsForArtToy(artToyId);
+  // If this art toy is currently open, ensure all owned toys are physically in the
+  // active internal world (not stashed offscreen in the hidden host).
+  if (internalActiveForThis && internalWorld) {
+    for (const p of panels) {
+      try {
+        if (internalWorld.contains(p)) continue;
+        p.classList.remove('art-internal-toy');
+        restoreInternalPanelAfterHiddenLayout(p);
+        p.style.pointerEvents = 'auto';
+        internalWorld.appendChild(p);
+      } catch {}
+    }
+    panels = getInternalPanelsForArtToy(artToyId);
+  }
   const seedPanel = panels[0] || null;
   let seedInstrument = String(seedPanel?.dataset?.instrument || '').trim();
   if (!seedInstrument) {
@@ -3243,12 +3284,17 @@ function ensureDefaultInternalToyChainExistsInHost(artToyId, count = 4) {
           autoCenter: false,
           allowOffscreen: true,
           skipSpawnPlacement: true,
-          containerEl: host,
+          containerEl: (internalActiveForThis && internalWorld) ? internalWorld : host,
           artOwnerId: artToyId,
         });
         if (!p) continue;
-        p.classList.add('art-internal-toy');
-        p.style.pointerEvents = 'none';
+        if (internalActiveForThis && internalWorld) {
+          p.classList.remove('art-internal-toy');
+          p.style.pointerEvents = 'auto';
+        } else {
+          p.classList.add('art-internal-toy');
+          p.style.pointerEvents = 'none';
+        }
         ensureToyPanelInitializedNow(p, 'ensureDefaultInternalToyChainExistsInHost');
       } catch (err) {
         console.warn('[InternalBoard] host chain toy spawn failed', err);
@@ -3451,7 +3497,105 @@ function getInternalViewportSize() {
 }
 
 function getInternalHomeGhostSize() {
-  return 180;
+  // Keep internal mirror at the normal art-toy size so UI/layout matches external.
+  return 220;
+}
+
+const g_internalArtAnchorSync = new Map();
+
+function cloneArtState(state) {
+  try { return JSON.parse(JSON.stringify(state || {})); } catch {}
+  return null;
+}
+
+function normalizeArtStateForSync(state) {
+  const next = cloneArtState(state) || {};
+  // Controls visibility is intentionally local to each surface. Mirroring this
+  // causes the shared "single open controls panel" base behavior to fight itself
+  // between external panel and internal mirror.
+  try { delete next.controlsVisible; } catch {}
+  return next;
+}
+
+function stopInternalArtAnchorSync(artToyId) {
+  const id = String(artToyId || '');
+  const ctx = g_internalArtAnchorSync.get(id);
+  if (!ctx) return;
+  try { if (ctx.raf) cancelAnimationFrame(ctx.raf); } catch {}
+  try { ctx.sourcePanel?.removeEventListener?.('pointerdown', ctx.onSourcePointerDown, true); } catch {}
+  try { ctx.mirrorPanel?.removeEventListener?.('pointerdown', ctx.onMirrorPointerDown, true); } catch {}
+  try { ctx.moMirrorControls?.disconnect?.(); } catch {}
+  try { ctx.moSourceControls?.disconnect?.(); } catch {}
+  g_internalArtAnchorSync.delete(id);
+}
+
+function startInternalArtAnchorSync(artToyId, sourcePanel, mirrorPanel) {
+  const id = String(artToyId || '');
+  if (!id || !sourcePanel || !mirrorPanel) return;
+  stopInternalArtAnchorSync(id);
+
+  const ctx = {
+    artToyId: id,
+    sourcePanel,
+    mirrorPanel,
+    raf: 0,
+    touched: 'source',
+    touchedAt: 0,
+  };
+
+  ctx.onSourcePointerDown = () => {
+    ctx.touched = 'source';
+    ctx.touchedAt = performance.now();
+  };
+  ctx.onMirrorPointerDown = () => {
+    ctx.touched = 'mirror';
+    ctx.touchedAt = performance.now();
+  };
+
+  try { sourcePanel.addEventListener('pointerdown', ctx.onSourcePointerDown, true); } catch {}
+  try { mirrorPanel.addEventListener('pointerdown', ctx.onMirrorPointerDown, true); } catch {}
+
+  const applyToMirror = () => {
+    const state = normalizeArtStateForSync(sourcePanel?.getArtToyPersistState?.());
+    if (!state) return;
+    try { mirrorPanel.applyArtToyPersistState?.(state); } catch {}
+  };
+  const applyToSource = () => {
+    const state = normalizeArtStateForSync(mirrorPanel?.getArtToyPersistState?.());
+    if (!state) return;
+    try { sourcePanel.applyArtToyPersistState?.(state); } catch {}
+  };
+
+  const tick = () => {
+    if (!g_artInternal?.active || String(g_artInternal?.artToyId || '') !== id) {
+      stopInternalArtAnchorSync(id);
+      return;
+    }
+    if (!sourcePanel.isConnected || !mirrorPanel.isConnected) {
+      stopInternalArtAnchorSync(id);
+      return;
+    }
+    const srcState = sourcePanel.getArtToyPersistState?.();
+    const mirState = mirrorPanel.getArtToyPersistState?.();
+    if (!srcState || !mirState) {
+      ctx.raf = requestAnimationFrame(tick);
+      return;
+    }
+    const srcSig = JSON.stringify(normalizeArtStateForSync(srcState));
+    const mirSig = JSON.stringify(normalizeArtStateForSync(mirState));
+    if (srcSig !== mirSig) {
+      const now = performance.now();
+      const recentTouch = (now - ctx.touchedAt) < 1800;
+      const dir = recentTouch ? ctx.touched : 'source';
+      if (dir === 'mirror') applyToSource();
+      else applyToMirror();
+    }
+    ctx.raf = requestAnimationFrame(tick);
+  };
+
+  applyToMirror();
+  ctx.raf = requestAnimationFrame(tick);
+  g_internalArtAnchorSync.set(id, ctx);
 }
 
 function ensureInternalHomeAnchorGhost(artToyId) {
@@ -3472,29 +3616,49 @@ function ensureInternalHomeAnchorGhost(artToyId) {
       .find(el => el?.dataset?.artToyId === String(artToyId)) || null;
   } catch {}
 
+  const sourcePanel = getArtToyPanelById(artToyId);
   if (!ghost) {
-    ghost = document.createElement('section');
-    ghost.className = 'art-toy-panel internal-art-anchor-ghost';
+    const type = sourcePanel?.dataset?.artToy || '';
+    const created = createArtToyAt(type, {
+      containerEl: world,
+      centerX: 240,
+      centerY: 180,
+      autoCenter: false,
+      showControlsOnSpawn: true,
+    });
+    if (!created) return null;
+    ghost = created;
+    ghost.classList.add('internal-art-anchor-ghost');
     ghost.dataset.artToyId = String(artToyId);
-    ghost.setAttribute('aria-hidden', 'true');
-    ghost.style.width = `${getInternalHomeGhostSize()}px`;
-    ghost.style.height = `${getInternalHomeGhostSize()}px`;
+    ghost.dataset.artToyMirrorSource = String(artToyId);
+    ghost.dataset.dragDisabled = '1';
     ghost.style.position = 'absolute';
-    ghost.style.pointerEvents = 'none';
-    ghost.style.zIndex = '0';
-    const circle = document.createElement('div');
-    circle.className = 'art-toy-circle';
-    ghost.appendChild(circle);
-    world.prepend(ghost);
-  } else {
-    // Keep the anchor marker behind internal toy panels.
-    try { world.prepend(ghost); } catch {}
+    ghost.style.zIndex = '1';
+    try {
+      const dragCore = ghost.querySelector('.art-toy-drag-btn .c-btn-core');
+      if (dragCore) dragCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonEmpty.png')");
+    } catch {}
   }
 
   const anchor = getInternalHomeAnchorForArtToy(artToyId);
   const size = getInternalHomeGhostSize();
-  ghost.style.left = `${Math.round(anchor.x - size * 0.5)}px`;
-  ghost.style.top = `${Math.round(anchor.y - size * 0.5)}px`;
+  ghost.style.width = `${size}px`;
+  ghost.style.height = `${size}px`;
+  // Base art-toy drag button center sits 80px up/left from panel origin.
+  // Position panel so that button center lands exactly on the anchor while all
+  // other UI keeps its default external-relative alignment.
+  ghost.style.left = `${Math.round(anchor.x + 80)}px`;
+  ghost.style.top = `${Math.round(anchor.y + 80)}px`;
+  ghost.dataset.dragDisabled = '1';
+  try {
+    const dragCore = ghost.querySelector('.art-toy-drag-btn .c-btn-core');
+    if (dragCore) dragCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonEmpty.png')");
+  } catch {}
+  try { world.prepend(ghost); } catch {}
+
+  if (sourcePanel) {
+    startInternalArtAnchorSync(artToyId, sourcePanel, ghost);
+  }
   return ghost;
 }
 
@@ -4011,6 +4175,7 @@ function exitInternalBoardImmediate() {
   const host = ensureArtInternalHost();
 
   const artToyId = g_artInternal.artToyId;
+  try { stopInternalArtAnchorSync(artToyId); } catch {}
   const panels = getInternalPanelsForArtToy(artToyId);
   for (const p of panels) {
     try {
@@ -4022,6 +4187,12 @@ function exitInternalBoardImmediate() {
       host.appendChild(p);
     } catch {}
   }
+
+  try {
+    document.querySelectorAll(`.internal-art-anchor-ghost[data-art-toy-id="${CSS.escape(String(artToyId))}"]`).forEach((el) => {
+      try { el.remove(); } catch {}
+    });
+  } catch {}
 
   // Revert the #board + .board-viewport identity swap.
   revertBoardIdentityAfterInternalMode();
@@ -4074,7 +4245,7 @@ try {
 document.addEventListener('click', (e) => {
   const btn = e.target?.closest?.('button[data-action="artToy:music"]');
   if (!btn) return;
-  const artToyId = btn.closest?.('.art-toy-panel')?.id || btn.dataset.artToyId;
+  const artToyId = resolveArtToyIdFromActionButton(btn);
   if (!artToyId) return;
   e.preventDefault();
   e.stopPropagation();
@@ -4100,6 +4271,7 @@ function resetArtToyToDefaultState(artToyId) {
   } catch {}
 
   try {
+    stopInternalArtAnchorSync(artToyId);
     const sel = `.internal-art-anchor-ghost[data-art-toy-id="${CSS.escape(String(artToyId))}"]`;
     document.querySelectorAll(sel).forEach((el) => {
       try { el.remove(); } catch {}
@@ -4131,14 +4303,24 @@ function resetArtToyToDefaultState(artToyId) {
 document.addEventListener('click', (e) => {
   const btn = e.target?.closest?.('button[data-action="artToy:clear"]');
   if (!btn) return;
-  const artToyId = btn.closest?.('.art-toy-panel')?.id || btn.dataset.artToyId;
+  const artToyId = resolveArtToyIdFromActionButton(btn);
   if (!artToyId) return;
   e.preventDefault();
   e.stopPropagation();
   resetArtToyToDefaultState(artToyId);
 }, true);
 
+const g_artInternalRandomInFlight = new Set();
+
 function randomizeInternalToysForArtToy(artToyId, mode, opts = {}) {
+  if (!artToyId) return;
+  const lockId = String(artToyId);
+  if (g_artInternalRandomInFlight.has(lockId)) {
+    __artRandLog('randomizeInternalToysForArtToy:skip:in-flight', { artToyId, mode });
+    return;
+  }
+  g_artInternalRandomInFlight.add(lockId);
+  try {
   const source = opts.source || 'button';
   const autoStartTransport = opts.autoStartTransport !== false;
   __artRandLog('randomizeInternalToysForArtToy:begin', { artToyId, mode, source });
@@ -4346,13 +4528,33 @@ function randomizeInternalToysForArtToy(artToyId, mode, opts = {}) {
   try { window.Persistence?.markDirty?.(); } catch {}
   try { syncArtToySlotsFromInternalNotes(artToyId); } catch {}
   try { requestAnimationFrame(() => syncArtToySlotsFromInternalNotes(artToyId)); } catch {}
+  } finally {
+    requestAnimationFrame(() => {
+      try { g_artInternalRandomInFlight.delete(lockId); } catch {}
+    });
+  }
+}
+
+function resolveArtToyIdFromActionButton(btn) {
+  if (!btn) return '';
+  try {
+    const panel = btn.closest?.('.art-toy-panel') || null;
+    const mirroredSource = panel?.dataset?.artToyMirrorSource;
+    if (mirroredSource) return String(mirroredSource);
+    if (panel?.id) return String(panel.id);
+  } catch {}
+  try {
+    const id = btn.dataset?.artToyId;
+    if (id) return String(id);
+  } catch {}
+  return '';
 }
 
 // Click delegate: Art Toy "Random All" button.
 document.addEventListener('click', (e) => {
   const btn = e.target?.closest?.('button[data-action="artToy:randomAll"]');
   if (!btn) return;
-  const artToyId = btn.closest?.('.art-toy-panel')?.id || btn.dataset.artToyId;
+  const artToyId = resolveArtToyIdFromActionButton(btn);
   if (!artToyId) return;
   __artRandLog('click', { action: 'randomAll', artToyId });
   e.preventDefault();
@@ -4368,7 +4570,7 @@ document.addEventListener('click', (e) => {
 document.addEventListener('click', (e) => {
   const btn = e.target?.closest?.('button[data-action="artToy:randomMusic"]');
   if (!btn) return;
-  const artToyId = btn.closest?.('.art-toy-panel')?.id || btn.dataset.artToyId;
+  const artToyId = resolveArtToyIdFromActionButton(btn);
   if (!artToyId) return;
   __artRandLog('click', { action: 'randomMusic', artToyId });
   e.preventDefault();
@@ -4384,7 +4586,7 @@ document.addEventListener('click', (e) => {
 document.addEventListener('click', (e) => {
   const btn = e.target?.closest?.('button[data-action="artToy:cycleFireworkFx"]');
   if (!btn) return;
-  const artToyId = btn.closest?.('.art-toy-panel')?.id || btn.dataset.artToyId;
+  const artToyId = resolveArtToyIdFromActionButton(btn);
   if (!artToyId) return;
   e.preventDefault();
   e.stopPropagation();
@@ -6085,12 +6287,13 @@ function destroyArtToyPanel(panelOrId) {
     }
 
     // Remove matching internal home ghost if present.
-    try {
-        const sel = `.internal-art-anchor-ghost[data-art-toy-id="${CSS.escape(String(artToyId))}"]`;
-        document.querySelectorAll(sel).forEach((el) => {
-            try { el.remove(); } catch {}
-        });
-    } catch {}
+  try {
+    stopInternalArtAnchorSync(artToyId);
+    const sel = `.internal-art-anchor-ghost[data-art-toy-id="${CSS.escape(String(artToyId))}"]`;
+    document.querySelectorAll(sel).forEach((el) => {
+      try { el.remove(); } catch {}
+    });
+  } catch {}
 
     try { panel.remove(); } catch {}
     try { updateChains(); } catch {}

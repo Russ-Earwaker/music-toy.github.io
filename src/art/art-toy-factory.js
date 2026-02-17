@@ -1283,7 +1283,7 @@ function setupFireworks(panel) {
       emptyActions.appendChild(randomBtn);
       const enterBtn = document.createElement('button');
       enterBtn.type = 'button';
-      enterBtn.className = 'c-btn art-line-empty-action-btn';
+      enterBtn.className = 'c-btn art-line-empty-action-btn art-line-empty-enter-btn';
       enterBtn.setAttribute('aria-label', 'Enter internal view');
       enterBtn.title = 'Enter';
       enterBtn.innerHTML = BUTTON_ICON_HTML;
@@ -2918,7 +2918,7 @@ function setupLaserTrails(panel) {
 
       const enterBtn = document.createElement('button');
       enterBtn.type = 'button';
-      enterBtn.className = 'c-btn art-line-empty-action-btn';
+      enterBtn.className = 'c-btn art-line-empty-action-btn art-line-empty-enter-btn';
       enterBtn.setAttribute('aria-label', 'Enter internal view');
       enterBtn.title = 'Enter';
       enterBtn.innerHTML = BUTTON_ICON_HTML;

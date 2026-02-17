@@ -1739,6 +1739,19 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
     0 0 0 2px rgba(255, 255, 255, 0.18),
     0 14px 36px rgba(0, 0, 0, 0.35);
 }
+.internal-art-anchor-ghost[data-art-toy-mirror-source] {
+  filter: none;
+  box-shadow: none;
+  pointer-events: auto;
+  z-index: 2;
+}
+.internal-art-anchor-ghost[data-art-toy-mirror-source] .art-toy-enter-btn {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+.internal-art-anchor-ghost[data-art-toy-mirror-source] .art-line-empty-enter-btn {
+  display: none !important;
+}
 
 /* Base Art Toy: drag button + contextual controls */
 .art-toy-panel {

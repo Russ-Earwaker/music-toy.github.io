@@ -77,6 +77,8 @@ function showControls(panel) {
 
 export function setBaseArtToyControlsVisible(panel, visible) {
   if (!panel) return;
+  const isVisible = panel.dataset.controlsVisible === '1';
+  if (!!visible === isVisible) return;
   if (visible) showControls(panel);
   else hideControls(panel);
 }
@@ -179,6 +181,9 @@ export function ensureBaseArtToyUI(panel, { artToyId } = {}) {
     if (dragPid != null && ev.pointerId !== dragPid) return;
     ev.preventDefault();
     ev.stopPropagation();
+    // Internal anchor mirrors can use the same drag/controls button for toggling
+    // without allowing the toy position to be dragged.
+    if (panel.dataset?.dragDisabled === '1') return;
 
     const scale = getViewportScaleForPanel(panel);
     const rawDx = (ev.clientX - startClientX);
