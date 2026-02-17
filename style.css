@@ -1877,7 +1877,7 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
 
 .art-line-style-panel {
   position: absolute;
-  top: calc(120px);
+  top: 74px;
   left: calc(-18px - var(--art-drag-size) - 444px);
   z-index: 4;
   width: 424px;
@@ -1895,6 +1895,14 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
   font-weight: 700;
   letter-spacing: 0.35px;
   text-transform: uppercase;
+}
+.art-line-style-panel.is-empty-lines .art-line-thickness-label {
+  display: none;
+}
+.art-line-style-panel.is-empty-lines .art-line-thickness-value,
+.art-line-style-panel.is-empty-lines .art-line-thickness-slider,
+.art-line-style-panel.is-empty-lines .art-line-style-subhead-active-lines {
+  display: none;
 }
 
 .art-line-thickness-control {

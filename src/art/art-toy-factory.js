@@ -2511,18 +2511,6 @@ function setupLaserTrails(panel) {
     tick();
   };
 
-  const customiseBtn = document.createElement('button');
-  customiseBtn.type = 'button';
-  customiseBtn.className = 'c-btn art-toy-customize-btn';
-  customiseBtn.setAttribute('aria-label', 'Customise Art');
-  customiseBtn.setAttribute('aria-pressed', 'false');
-  customiseBtn.title = 'Customise Art';
-  customiseBtn.style.setProperty('--c-btn-size', '84px');
-  customiseBtn.innerHTML = BUTTON_ICON_HTML;
-  const customiseCore = customiseBtn.querySelector('.c-btn-core');
-  if (customiseCore) customiseCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonPaintColour.png')");
-  panel.appendChild(customiseBtn);
-
   const customisePanel = document.createElement('div');
   customisePanel.className = 'art-line-style-panel';
   customisePanel.hidden = true;
@@ -2545,7 +2533,7 @@ function setupLaserTrails(panel) {
   customisePanel.appendChild(thicknessControlApi.root);
 
   const lineButtonsTitle = document.createElement('div');
-  lineButtonsTitle.className = 'art-line-style-subhead';
+  lineButtonsTitle.className = 'art-line-style-subhead art-line-style-subhead-active-lines';
   lineButtonsTitle.textContent = 'Active Lines';
   customisePanel.appendChild(lineButtonsTitle);
 
@@ -2556,6 +2544,7 @@ function setupLaserTrails(panel) {
   const pickerTitle = document.createElement('div');
   pickerTitle.className = 'art-line-style-subhead';
   pickerTitle.textContent = 'Line Color';
+  pickerTitle.hidden = true;
   customisePanel.appendChild(pickerTitle);
 
   const pickerWrap = document.createElement('div');
@@ -2612,15 +2601,13 @@ function setupLaserTrails(panel) {
     const nextOpen = !!open;
     customisePanel.hidden = !nextOpen;
     customisePanel.classList.toggle('is-open', nextOpen);
-    customiseBtn.classList.toggle('is-active', nextOpen);
-    customiseBtn.setAttribute('aria-pressed', nextOpen ? 'true' : 'false');
     if (nextOpen) {
-      setBaseArtToyControlsVisible(panel, true);
       try { refreshCustomizeUi(); } catch {}
       return;
     }
     selectedColorSlot = null;
     pickerWrap.hidden = true;
+    pickerTitle.hidden = true;
     stopPreviewLoop();
     try { refreshCustomizeUi(); } catch {}
   };
@@ -2633,6 +2620,7 @@ function setupLaserTrails(panel) {
     const i = normalizeSlot(slot);
     selectedColorSlot = i;
     pickerWrap.hidden = false;
+    pickerTitle.hidden = false;
     pickerApi.setColor(palette[i]);
     if (openMenu) setCustomiseOpen(true);
     refreshCustomizeUi();
@@ -2642,6 +2630,7 @@ function setupLaserTrails(panel) {
   refreshCustomizeUi = () => {
     if (!lineButtonsHost) return;
     const active = Array.from(activeSlots.values()).map((s) => normalizeSlot(s)).sort((a, b) => a - b);
+    customisePanel.classList.toggle('is-empty-lines', active.length === 0);
     lineButtonsHost.innerHTML = '';
     if (!active.length) {
       const empty = document.createElement('div');
@@ -2657,11 +2646,11 @@ function setupLaserTrails(panel) {
       const randomBtn = document.createElement('button');
       randomBtn.type = 'button';
       randomBtn.className = 'c-btn art-line-empty-action-btn';
-      randomBtn.setAttribute('aria-label', 'Randomize art toy music');
-      randomBtn.title = 'Random';
+      randomBtn.setAttribute('aria-label', 'Randomize art toy');
+      randomBtn.title = 'Random All';
       randomBtn.innerHTML = BUTTON_ICON_HTML;
       const randomCore = randomBtn.querySelector('.c-btn-core');
-      if (randomCore) randomCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonRandomNotes.png')");
+      if (randomCore) randomCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonRandom.png')");
       randomBtn.addEventListener('click', (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
@@ -2692,6 +2681,7 @@ function setupLaserTrails(panel) {
       lineButtonsHost.appendChild(empty);
       selectedColorSlot = null;
       pickerWrap.hidden = true;
+      pickerTitle.hidden = true;
       stopPreviewLoop();
       syncSelectedHandleHighlight();
       return;
@@ -2699,6 +2689,7 @@ function setupLaserTrails(panel) {
     if (selectedColorSlot != null && !active.includes(normalizeSlot(selectedColorSlot))) {
       selectedColorSlot = null;
       pickerWrap.hidden = true;
+      pickerTitle.hidden = true;
       stopPreviewLoop();
     }
     for (const i of active) {
@@ -2746,36 +2737,14 @@ function setupLaserTrails(panel) {
     syncSelectedHandleHighlight();
   };
 
-  customiseBtn.addEventListener('click', (ev) => {
-    ev.preventDefault();
-    ev.stopPropagation();
-    setCustomiseOpen(customisePanel.hidden);
-  });
-
-  const onDocPointerDownCloseCustomise = (ev) => {
-    if (!panel.isConnected) {
-      document.removeEventListener('pointerdown', onDocPointerDownCloseCustomise, true);
-      return;
-    }
-    if (customisePanel.hidden) return;
-    const t = ev?.target;
-    // Keep customise panel open while panning on board surfaces.
-    try {
-      const panSurface = t?.closest?.('.board-viewport, #board, #board-wrap');
-      if (panSurface) return;
-    } catch {}
-    if (t && (customisePanel.contains(t) || customiseBtn.contains(t))) return;
-    setCustomiseOpen(false);
-  };
-  document.addEventListener('pointerdown', onDocPointerDownCloseCustomise, true);
-
   // Keep customise UI lifecycle aligned with the standard art controls visibility.
   try {
     const controlsVisMo = new MutationObserver(() => {
-      if (panel.dataset.controlsVisible !== '1') setCustomiseOpen(false);
+      setCustomiseOpen(panel.dataset.controlsVisible === '1');
     });
     controlsVisMo.observe(panel, { attributes: true, attributeFilter: ['data-controls-visible'] });
   } catch {}
+  setCustomiseOpen(panel.dataset.controlsVisible === '1');
 
   try {
     const controlsHost = getBaseArtToyControlsHost(panel);
