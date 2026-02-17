@@ -2349,13 +2349,16 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
 }
 
 #internal-board-exit {
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(0, 0, 0, 0.55);
-  color: rgba(255, 255, 255, 0.92);
-  padding: 10px 14px;
-  font-weight: 800;
+  --c-btn-size: 78px;
+  width: var(--c-btn-size);
+  height: var(--c-btn-size);
+  padding: 0;
+  border: none;
+  background: transparent;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 
   /* Move Exit to bottom-right (always visible, above everything). */
   position: fixed;
@@ -2363,6 +2366,9 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
   bottom: calc(12px + var(--safe-bottom, 0px));
   z-index: 130000;
   pointer-events: auto;
+}
+#internal-board-exit .c-btn-core {
+  background-size: 62%;
 }
 
 /* ---- Internal Board: force Exit + primary UI to remain visible/usable (override older rules) ---- */
@@ -2419,6 +2425,7 @@ body.internal-board-active #board {
 /* Freeze the REAL main board while inside internal-board mode. */
 body.internal-board-active #board-main {
   pointer-events: none;
+  visibility: hidden;
 }
 
 /* While inside internal-board mode, keep the main UI visible and usable.

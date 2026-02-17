@@ -59,7 +59,9 @@ function resolveSlotIndex(input) {
     normalizeArtSlotIndex(input.step) ??
     normalizeArtSlotIndex(input.index);
   if (direct != null) return direct;
-  return mapNoteNameToSlot(input.note);
+  // Sequence-position mapping is authoritative for art triggers.
+  // Do not fall back to note-name mapping.
+  return null;
 }
 
 function makeTriggerPayload(panel, input) {
@@ -155,4 +157,3 @@ export function createArtTriggerRouter({
     normalizeSlotIndex: normalizeArtSlotIndex,
   };
 }
-

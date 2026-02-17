@@ -2496,6 +2496,24 @@ try {
     getActiveInternalArtToyId: () => (g_artInternal?.active ? g_artInternal?.artToyId : null),
   });
 } catch {}
+const g_recentArtSlotTriggers = new Map();
+const ART_SLOT_TRIGGER_DEDUPE_MS = 45;
+
+function artTriggerDbgEnabled() {
+  try {
+    if (window.__MT_DEBUG_ART_TRIGGER) return true;
+    return localStorage.getItem('MT_DEBUG_ART_TRIGGER') === '1';
+  } catch {}
+  return false;
+}
+
+function artTriggerDbg(tag, data = null) {
+  if (!artTriggerDbgEnabled()) return;
+  try {
+    // eslint-disable-next-line no-console
+    console.log('[ArtTrigger]', tag, data || {});
+  } catch {}
+}
 
 function handleArtTriggerVisuals(trigger) {
   if (!trigger || !trigger.artToyId) return false;
@@ -2504,6 +2522,51 @@ function handleArtTriggerVisuals(trigger) {
   const panelId = trigger.panelId || null;
   const internalActive = !!g_artInternal?.active;
   const sourceIsToyNote = source === 'toy:note';
+  const hasSlot = Number.isFinite(Number(trigger.slotIndex));
+  if (!hasSlot) {
+    artTriggerDbg('drop:no-slot', {
+      source,
+      artId,
+      panelId,
+      toyId: trigger?.toyId || null,
+      note: trigger?.note ?? null,
+      slotIndex: trigger?.slotIndex ?? null,
+      timestamp: trigger?.timestamp ?? null,
+    });
+    // Avoid accidental slot-0 fallback in art toys when a trigger does not
+    // carry a resolvable sequence position.
+    return false;
+  }
+  const slot = Math.trunc(Number(trigger.slotIndex)) % 8;
+  const triggerNow = Number.isFinite(Number(trigger.timestamp))
+    ? Number(trigger.timestamp)
+    : (performance?.now?.() ?? Date.now());
+  const dedupeKey = `${artId}|${slot}`;
+  const lastHit = Number(g_recentArtSlotTriggers.get(dedupeKey) || 0);
+  if (Number.isFinite(lastHit) && (triggerNow - lastHit) >= 0 && (triggerNow - lastHit) < ART_SLOT_TRIGGER_DEDUPE_MS) {
+    artTriggerDbg('drop:dedupe', {
+      source,
+      artId,
+      panelId,
+      toyId: trigger?.toyId || null,
+      slot,
+      dtMs: triggerNow - lastHit,
+      triggerNow,
+      lastHit,
+    });
+    return false;
+  }
+  g_recentArtSlotTriggers.set(dedupeKey, triggerNow);
+  artTriggerDbg('accept', {
+    source,
+    artId,
+    panelId,
+    toyId: trigger?.toyId || null,
+    slot,
+    note: trigger?.note ?? null,
+    velocity: trigger?.velocity ?? null,
+    timestamp: trigger?.timestamp ?? null,
+  });
 
   recordArtFlashIntent('owner:attempt', { source, artId, panelId });
   artFlashDbg('owner:attempt', {
@@ -2650,6 +2713,8 @@ try {
       const d = e?.detail || {};
       const toyId = d.toyId;
       if (!toyId || toyId === 'master') return;
+      const noteValue = (d.note != null) ? String(d.note).trim() : '';
+      const hasNote = noteValue.length > 0;
       let slotFromDetail = null;
       for (const candidate of [d.slotIndex, d.col, d.step, d.index]) {
         const n = Number(candidate);
@@ -2657,13 +2722,39 @@ try {
         slotFromDetail = Math.trunc(n);
         break;
       }
-      if (!Number.isFinite(slotFromDetail)) {
-        try {
-          const panel = resolveToyPanelByToyId(toyId);
-          const n = Number(panel?.__mtLastSequencerCol);
-          if (Number.isFinite(n)) slotFromDetail = Math.trunc(n);
-        } catch {}
+      // Strict toy:note routing:
+      // - must have an explicit slot index from the event payload
+      // - must carry an actual note value
+      // This avoids chain-handoff artifacts where fallback slot inference can
+      // incorrectly fire slot 0/first line on transition.
+      if (!Number.isFinite(slotFromDetail) || !hasNote) {
+        artTriggerDbg('toy:note:drop:strict', {
+          toyId,
+          hasNote,
+          note: hasNote ? noteValue : null,
+          slotFromDetail: Number.isFinite(slotFromDetail) ? slotFromDetail : null,
+          detail: {
+            slotIndex: d.slotIndex ?? null,
+            col: d.col ?? null,
+            step: d.step ?? null,
+            index: d.index ?? null,
+            note: d.note ?? null,
+            velocity: d.velocity ?? null,
+            when: d.when ?? d.at ?? null,
+          },
+        });
+        return;
       }
+      artTriggerDbg('toy:note:route', {
+        toyId,
+        hasNote,
+        note: hasNote ? noteValue : null,
+        slotFromDetail: Number.isFinite(slotFromDetail) ? slotFromDetail : null,
+        col: d.col ?? null,
+        step: d.step ?? null,
+        index: d.index ?? null,
+        when: d.when ?? d.at ?? null,
+      });
       artFlashDbg('toy:note', {
         toyId,
         slotIndex: Number.isFinite(slotFromDetail) ? slotFromDetail : null,
@@ -2680,7 +2771,7 @@ try {
           col: d.col,
           step: d.step,
           index: d.index,
-          note: d.note,
+          note: hasNote ? noteValue : null,
           velocity: d.velocity,
           timestamp: d.when ?? d.at ?? null,
           meta: { instrument: d.instrument || null },
@@ -2717,8 +2808,15 @@ function ensureInternalBoardOverlay() {
 
   const exitBtn = document.createElement('button');
   exitBtn.id = 'internal-board-exit';
+  exitBtn.className = 'c-btn';
   exitBtn.type = 'button';
-  exitBtn.textContent = 'Exit';
+  exitBtn.setAttribute('aria-label', 'Exit Internal View');
+  exitBtn.title = 'Exit';
+  exitBtn.innerHTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
+  try {
+    const exitCore = exitBtn.querySelector('.c-btn-core');
+    if (exitCore) exitCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonExit.png')");
+  } catch {}
 
   frame.appendChild(viewport);
   overlay.appendChild(frame);
@@ -2772,6 +2870,137 @@ function ensureInternalBoardOverlay() {
     startClientY: 0,
     startLeft: 0,
     startTop: 0,
+    originLeft: 0,
+    originTop: 0,
+    overlapping: false,
+  };
+  const DRAG_OVERLAP_CLASS = 'toy-overlap';
+  const DRAG_OVERLAP_FLASH_CLASS = 'toy-overlap-flash';
+  const DRAG_LERP_MS = 240;
+  const DRAG_OVERLAP_BUFFER = 40;
+  const SAFE_SEARCH_STEP = 16;
+  const SAFE_SEARCH_MAX = 360;
+
+  const isChainPanel = (panel) => {
+    if (!panel?.dataset) return false;
+    return !!(
+      panel.dataset.chainParent ||
+      panel.dataset.prevToyId ||
+      panel.dataset.nextToyId ||
+      panel.dataset.chainHasChild === '1'
+    );
+  };
+
+  const getPanelRectForOverlap = (panel, overrideX, overrideY) => {
+    const cs = getComputedStyle(panel);
+    const w = Math.max(1, panel.offsetWidth || parseFloat(cs.width) || 1);
+    const h = Math.max(1, panel.offsetHeight || parseFloat(cs.height) || 1);
+    let x = Number.isFinite(overrideX) ? overrideX : parseFloat(panel.style.left);
+    let y = Number.isFinite(overrideY) ? overrideY : parseFloat(panel.style.top);
+    if (!Number.isFinite(x)) x = panel.offsetLeft || 0;
+    if (!Number.isFinite(y)) y = panel.offsetTop || 0;
+    return { x, y, w, h };
+  };
+
+  const rectsOverlapForDrag = (a, b, pad = 0) => {
+    const ax1 = a.x - pad;
+    const ay1 = a.y - pad;
+    const ax2 = a.x + a.w + pad;
+    const ay2 = a.y + a.h + pad;
+    const bx1 = b.x - pad;
+    const by1 = b.y - pad;
+    const bx2 = b.x + b.w + pad;
+    const by2 = b.y + b.h + pad;
+    return (ax1 < bx2) && (ax2 > bx1) && (ay1 < by2) && (ay2 > by1);
+  };
+
+  const collectOtherRectsForDrag = (panel) => {
+    const activeOwner = String(g_artInternal?.artToyId || '');
+    const out = [];
+    world.querySelectorAll(':scope > .toy-panel').forEach((other) => {
+      if (other === panel) return;
+      if (other.classList.contains('toy-zoomed')) return;
+      const owner = String(other.dataset?.artOwnerId || '');
+      if (activeOwner && owner && owner !== activeOwner) return;
+      const r = getPanelRectForOverlap(other);
+      if (r.w <= 0 || r.h <= 0) return;
+      out.push(r);
+    });
+    return out;
+  };
+
+  const overlapsAnyForDrag = (rect, others) => {
+    for (let i = 0; i < others.length; i++) {
+      if (rectsOverlapForDrag(rect, others[i], DRAG_OVERLAP_BUFFER)) return true;
+    }
+    return false;
+  };
+
+  const findSafePositionForDrag = (startRect, others) => {
+    if (!overlapsAnyForDrag(startRect, others)) return { x: startRect.x, y: startRect.y };
+    const step = SAFE_SEARCH_STEP;
+    const maxR = Math.max(step, SAFE_SEARCH_MAX);
+    for (let r = step; r <= maxR; r += step) {
+      for (let dx = -r; dx <= r; dx += step) {
+        const top = { x: startRect.x + dx, y: startRect.y - r, w: startRect.w, h: startRect.h };
+        if (!overlapsAnyForDrag(top, others)) return { x: top.x, y: top.y };
+        const bot = { x: startRect.x + dx, y: startRect.y + r, w: startRect.w, h: startRect.h };
+        if (!overlapsAnyForDrag(bot, others)) return { x: bot.x, y: bot.y };
+      }
+      for (let dy = -r + step; dy <= r - step; dy += step) {
+        const left = { x: startRect.x - r, y: startRect.y + dy, w: startRect.w, h: startRect.h };
+        if (!overlapsAnyForDrag(left, others)) return { x: left.x, y: left.y };
+        const right = { x: startRect.x + r, y: startRect.y + dy, w: startRect.w, h: startRect.h };
+        if (!overlapsAnyForDrag(right, others)) return { x: right.x, y: right.y };
+      }
+    }
+    return null;
+  };
+
+  const setOverlapState = (panel, overlapping) => {
+    if (!panel) return;
+    panel.classList.toggle(DRAG_OVERLAP_CLASS, !!overlapping);
+  };
+
+  const flashOverlap = (panel) => {
+    if (!panel) return;
+    panel.classList.remove(DRAG_OVERLAP_CLASS);
+    panel.classList.add(DRAG_OVERLAP_FLASH_CLASS);
+    try { clearTimeout(panel.__overlapFlashTimer); } catch {}
+    panel.__overlapFlashTimer = setTimeout(() => {
+      panel.classList.remove(DRAG_OVERLAP_FLASH_CLASS);
+      panel.__overlapFlashTimer = null;
+    }, 420);
+  };
+
+  const lerpPanelTo = (panel, from, to, durationMs, onDone) => {
+    const start = performance?.now?.() ?? Date.now();
+    const dur = Math.max(60, durationMs || DRAG_LERP_MS);
+    const notifyChainMove = (typeof window !== 'undefined' && typeof window.__chainNotifyPanelMoved === 'function')
+      ? window.__chainNotifyPanelMoved
+      : null;
+    const beginChainMove = (typeof window !== 'undefined' && typeof window.__chainBeginPanelMove === 'function')
+      ? window.__chainBeginPanelMove
+      : null;
+    const shouldNotifyChain = !!notifyChainMove && isChainPanel(panel);
+    if (shouldNotifyChain && beginChainMove) {
+      beginChainMove(panel, { left: from?.x, top: from?.y });
+    }
+    const tick = (now) => {
+      const t = Math.min(1, (now - start) / dur);
+      const eased = 1 - Math.pow(1 - t, 3);
+      const x = from.x + (to.x - from.x) * eased;
+      const y = from.y + (to.y - from.y) * eased;
+      panel.style.left = `${x}px`;
+      panel.style.top = `${y}px`;
+      if (shouldNotifyChain) notifyChainMove(panel);
+      if (t < 1) {
+        requestAnimationFrame(tick);
+      } else if (typeof onDone === 'function') {
+        onDone();
+      }
+    };
+    requestAnimationFrame(tick);
   };
 
   const onHeaderPointerDown = (e) => {
@@ -2801,6 +3030,10 @@ function ensureInternalBoardOverlay() {
     dragState.startClientY = e.clientY;
     dragState.startLeft = parseFloat(panel.style.left) || 0;
     dragState.startTop = parseFloat(panel.style.top) || 0;
+    dragState.originLeft = dragState.startLeft;
+    dragState.originTop = dragState.startTop;
+    dragState.overlapping = false;
+    setOverlapState(panel, false);
 
     try { header.setPointerCapture?.(e.pointerId); } catch {}
     e.preventDefault();
@@ -2820,8 +3053,14 @@ function ensureInternalBoardOverlay() {
     const dxWorld = dxScreen / s;
     const dyWorld = dyScreen / s;
 
-    dragState.panel.style.left = `${dragState.startLeft + dxWorld}px`;
-    dragState.panel.style.top = `${dragState.startTop + dyWorld}px`;
+    const nx = dragState.startLeft + dxWorld;
+    const ny = dragState.startTop + dyWorld;
+    dragState.panel.style.left = `${nx}px`;
+    dragState.panel.style.top = `${ny}px`;
+    const rect = getPanelRectForOverlap(dragState.panel, nx, ny);
+    const overlap = overlapsAnyForDrag(rect, collectOtherRectsForDrag(dragState.panel));
+    dragState.overlapping = overlap;
+    setOverlapState(dragState.panel, overlap);
 
     e.preventDefault();
     e.stopPropagation();
@@ -2830,9 +3069,35 @@ function ensureInternalBoardOverlay() {
   const endHeaderDrag = (e) => {
     if (!dragState.active) return;
     if (e.pointerId !== dragState.pointerId) return;
+    const panel = dragState.panel;
+    const overlapping = !!dragState.overlapping;
+    const origin = { x: dragState.originLeft, y: dragState.originTop };
     dragState.active = false;
     dragState.pointerId = -1;
     dragState.panel = null;
+    dragState.overlapping = false;
+    dragState.originLeft = 0;
+    dragState.originTop = 0;
+    if (panel) {
+      if (overlapping) {
+        const currentRect = getPanelRectForOverlap(panel);
+        const others = collectOtherRectsForDrag(panel);
+        const safe = findSafePositionForDrag(currentRect, others);
+        const distOrigin = (currentRect.x - origin.x) ** 2 + (currentRect.y - origin.y) ** 2;
+        const distSafe = safe
+          ? (currentRect.x - safe.x) ** 2 + (currentRect.y - safe.y) ** 2
+          : Number.POSITIVE_INFINITY;
+        const target = (safe && distSafe < distOrigin) ? safe : origin;
+        flashOverlap(panel);
+        lerpPanelTo(panel, { x: currentRect.x, y: currentRect.y }, target, DRAG_LERP_MS, () => {
+          try { updateChains(); updateAllChainUIs(); } catch {}
+          try { rebuildChainSegments(); scheduleChainRedraw(true); } catch {}
+          try { window.Persistence?.markDirty?.(); } catch {}
+        });
+      } else {
+        setOverlapState(panel, false);
+      }
+    }
   };
 
   viewport.addEventListener('pointerdown', onHeaderPointerDown, { passive: false });
@@ -2933,19 +3198,48 @@ function isInternalBoardActiveForArtToy(artToyId) {
   return false;
 }
 
+function shouldRenderToyVisuals(panel) {
+  if (!panel) return false;
+  if (!g_artInternal?.active) return true;
+  const activeOwner = String(g_artInternal?.artToyId || '');
+  if (!activeOwner) return false;
+  const owner = String(panel.dataset?.artOwnerId || '');
+  return !!owner && owner === activeOwner;
+}
+
 function randomizeArtToyStateStub(artToyId, mode = 'all') {
   const artPanel = getArtToyPanelById(artToyId);
   if (!artPanel) return;
+  const syncId = String(artToyId || '');
+  const syncCtx = g_internalArtAnchorSync.get(syncId);
+  // Internal random from the mirror can mark "mirror touched", which makes sync
+  // push stale mirror state back onto source. Force source as the authority for
+  // this explicit randomization action.
+  if (syncCtx) {
+    try {
+      syncCtx.touched = 'source';
+      syncCtx.touchedAt = performance.now();
+    } catch {}
+  }
   try {
     if (mode === 'music') {
       if (typeof artPanel.onArtRandomMusic === 'function') artPanel.onArtRandomMusic();
+      // Music-only random does not change art geometry/colors.
       return;
     }
     if (typeof artPanel.onArtRandomAll === 'function') {
       artPanel.onArtRandomAll();
-      return;
+    } else if (typeof artPanel.onArtRandomMusic === 'function') {
+      artPanel.onArtRandomMusic();
     }
-    if (typeof artPanel.onArtRandomMusic === 'function') artPanel.onArtRandomMusic();
+    // Immediately mirror source -> internal ghost so random-all visuals update in
+    // the same interaction frame even when the button was clicked on the mirror.
+    if (syncCtx?.mirrorPanel && typeof artPanel.getArtToyPersistState === 'function') {
+      try {
+        const state = normalizeArtStateForSync(artPanel.getArtToyPersistState());
+        syncCtx.mirrorPanel.applyArtToyPersistState?.(state);
+      } catch {}
+    }
   } catch {}
 }
 
@@ -3346,7 +3640,7 @@ function ensureDefaultInternalToyChainExistsInHost(artToyId, count = 4) {
     const size = pickToyPanelSize(kind) || {};
     const spawnW = Math.max(240, Number(size.width) || 380);
     const spawnH = Math.max(200, Number(size.height) || 320);
-    const stepX = Math.max(spawnW + CHAIN_SPAWN_GAP, spawnW + 40);
+    const stepX = Math.max(spawnW + CHAIN_SPAWN_GAP + 180, spawnW + 220);
     let centerY = 0;
     let startX = 0;
     // Sequence layout rule:
@@ -3368,7 +3662,7 @@ function ensureDefaultInternalToyChainExistsInHost(artToyId, count = 4) {
           instrument: seedInstrument || undefined,
           autoCenter: false,
           allowOffscreen: true,
-          skipSpawnPlacement: true,
+          skipSpawnPlacement: false,
           containerEl: (internalActiveForThis && internalWorld) ? internalWorld : host,
           artOwnerId: artToyId,
         });
@@ -3497,6 +3791,8 @@ function ensureDefaultInternalToyOnFirstEnter(artToyId, worldEl) {
   // First toy in sequence: above art UI footprint, aligned to the anchor.
   let centerX = ax;
   let centerY = keepout.top - (spawnH * 0.5) - 44;
+  // Match random-chain safety behavior: run through shared spawn-placement.
+  // We still seed to the same "above UI" target, but allow collision resolver.
 
   try {
     const p = createToyPanelAt(kind, {
@@ -3504,9 +3800,9 @@ function ensureDefaultInternalToyOnFirstEnter(artToyId, worldEl) {
       centerY,
       // Enter camera is already snapped by internal-board logic; avoid late smooth pan.
       autoCenter: false,
-      // Do not run global spawn-placement passes for first internal toy:
-      // they can move the panel after we've centered the internal camera.
-      skipSpawnPlacement: true,
+      // Allow "safe above UI" placement even when that world Y is negative.
+      allowOffscreen: true,
+      skipSpawnPlacement: false,
       containerEl: worldEl,
       artOwnerId: artToyId,
     });
@@ -5353,6 +5649,7 @@ function queueBodyOutlineSync(panel) {
 function pulseToyBorder(panel, durationMs = 320) {
   if (!panel || !panel.isConnected) return;
   if (window.__PERF_DISABLE_PULSES) return;
+  if (!shouldRenderToyVisuals(panel)) return;
 
   window.__PERF_PULSE_COUNT = (window.__PERF_PULSE_COUNT || 0) + 1;
   const now = performance.now();
@@ -7509,6 +7806,7 @@ function scheduler(){
   let prevHadActiveToys = false;
   let prevRunning = false;
   let chainPreAdvanced = false;
+  let visualSuppressionAppliedForInternal = false;
   const CHAIN_PRE_ADVANCE_PHASE = 0.97;
   const CHAIN_PRE_ADVANCE_ENABLED = false;
   const debugFirstStep = () => !!window.__CHAIN_DEBUG_FIRST_STEP;
@@ -7549,6 +7847,17 @@ function scheduler(){
     try { autoQualityOnFrame(); } catch {}
     // While inside an Art Toy's internal board, the main board should not visually update.
     const __internalActive = !!(g_artInternal && g_artInternal.active);
+
+    if (__internalActive && !visualSuppressionAppliedForInternal) {
+      visualSuppressionAppliedForInternal = true;
+      try {
+        document.querySelectorAll('#board-main .toy-panel.toy-playing-pulse').forEach((p) => {
+          try { p.classList.remove('toy-playing-pulse'); } catch {}
+        });
+      } catch {}
+    } else if (!__internalActive && visualSuppressionAppliedForInternal) {
+      visualSuppressionAppliedForInternal = false;
+    }
 
     // Clear expired pulse classes without timers (visual-only; skip while inside internal board.)
     if (!__internalActive) {
@@ -7720,6 +8029,7 @@ function scheduler(){
         for (const activeToyId of activeToyIds) {
           const toy = document.getElementById(activeToyId);
           if (toy && typeof toy.__sequencerStep === 'function') {
+            if (!shouldRenderToyVisuals(toy)) continue;
             const steps = parseInt(toy.dataset.steps, 10) || NUM_STEPS;
             const col = Math.floor(info.phase01 * steps) % steps;
             if (col !== lastCol.get(toy.id)) {
@@ -7735,7 +8045,20 @@ function scheduler(){
                 console.warn(`Sequencer step failed for ${toy.id}`, e);
               }
               // If this toy actually has notes at this column, flash the normal-mode border
-              if (panelHasNotesAtColumn(toy, col)) {
+              const hasNotesAtCol = panelHasNotesAtColumn(toy, col);
+              if (artTriggerDbgEnabled()) {
+                artTriggerDbg('scheduler:step:probe', {
+                  toyId: toy.id,
+                  toyType: toy?.dataset?.toy || null,
+                  ownerArtToyId: toy?.dataset?.artOwnerId || null,
+                  col,
+                  hasNotesAtCol,
+                  chainJustActivated: !!toy.__chainJustActivated,
+                  phase01: info?.phase01 ?? null,
+                  source: 'scheduler:step',
+                });
+              }
+              if (hasNotesAtCol) {
                 pulseToyBorder(toy);
                 // First-pass: if this toy lives inside an Art Toy, flash the Art Toy.
                 flashOwningArtToyForPanel(toy, 'scheduler:step', { col, slotIndex: col });

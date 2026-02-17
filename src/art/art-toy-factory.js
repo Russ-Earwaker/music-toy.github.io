@@ -375,8 +375,8 @@ function setupFireworks(panel) {
   const RANDOM_TOP_LEFT_QUARTER = {
     x: AREA_MIN_X,
     y: AREA_MIN_Y,
-    w: TOTAL_LIMIT_W * 0.5,
-    h: TOTAL_LIMIT_H * 0.5,
+    w: TOTAL_LIMIT_W * 0.75,
+    h: TOTAL_LIMIT_H * 0.75,
   };
 
   const dragArea = {
@@ -2082,8 +2082,8 @@ function setupLaserTrails(panel) {
   const RANDOM_TOP_LEFT_QUARTER = {
     x: AREA_MIN_X,
     y: AREA_MIN_Y,
-    w: TOTAL_LIMIT_W * 0.5,
-    h: TOTAL_LIMIT_H * 0.5,
+    w: TOTAL_LIMIT_W * 0.75,
+    h: TOTAL_LIMIT_H * 0.75,
   };
   const dragArea = {
     x: AREA_MIN_X,
