@@ -61,6 +61,9 @@ function matchesRecommended(entry, toyType) {
   const key = String(toyType).toLowerCase();
   return Array.isArray(entry?.recommendedToys) && entry.recommendedToys.includes(key);
 }
+function matchesPriority(entry) {
+  return !!entry?.priority;
+}
 
 function pickFromList(entries, usedIds) {
   if (!entries.length) return '';
@@ -71,26 +74,45 @@ function pickFromList(entries, usedIds) {
   return choice?.id || '';
 }
 
-export function pickInstrumentForToy(toyType, { theme, usedIds } = {}) {
+export function pickInstrumentForToy(toyType, { theme, usedIds, preferPriority = true } = {}) {
   const entries = getInstrumentEntries ? getInstrumentEntries() : [];
   if (!entries.length) return 'tone';
 
   const themeKey = normalizeTheme(theme);
-  const themeEntries = entries.filter((entry) => matchesTheme(entry, themeKey));
-  const themeRecommended = themeEntries.filter((entry) => matchesRecommended(entry, toyType));
-  const recommendedAny = entries.filter((entry) => matchesRecommended(entry, toyType));
+  const used = usedIds instanceof Set ? usedIds : new Set(usedIds || []);
+  const unusedEntries = entries.filter((entry) => entry?.id && !used.has(entry.id));
 
-  const groups = [
-    themeRecommended,
-    themeEntries,
-    recommendedAny,
-    entries,
-  ];
+  const pickFromBucket = (bucket) => {
+    if (!Array.isArray(bucket) || !bucket.length) return '';
+    if (preferPriority) {
+      const pri = bucket.filter((entry) => matchesPriority(entry));
+      const pickedPri = pickFromList(pri, new Set());
+      if (pickedPri) return pickedPri;
+    }
+    return pickFromList(bucket, new Set());
+  };
 
-  for (const group of groups) {
-    const picked = pickFromList(group, usedIds);
-    if (picked) return picked;
-  }
+  const pickByRuleOrder = (pool) => {
+    if (!Array.isArray(pool) || !pool.length) return '';
+    const b1 = pool.filter((entry) => matchesTheme(entry, themeKey) && matchesRecommended(entry, toyType));
+    const picked1 = pickFromBucket(b1);
+    if (picked1) return picked1;
+
+    const b2 = pool.filter((entry) => matchesRecommended(entry, toyType));
+    const picked2 = pickFromBucket(b2);
+    if (picked2) return picked2;
+
+    return pickFromBucket(pool);
+  };
+
+  // Rule order:
+  // 1) Unused first
+  // 2) Within unused: theme+toy, then toy, then any remaining unused
+  // 3) If no unused choices remain: theme+toy, then toy, then any remaining
+  const pickedUnused = pickByRuleOrder(unusedEntries);
+  if (pickedUnused) return pickedUnused;
+  const pickedAny = pickByRuleOrder(entries);
+  if (pickedAny) return pickedAny;
 
   return 'tone';
 }
